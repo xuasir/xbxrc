@@ -1,0 +1,197 @@
+<script setup lang="ts">
+import type { Direction } from '@spatial-navigation/runtime'
+import { computed } from 'vue'
+import { Focusable } from '@spatial-navigation/vue'
+
+interface SpatialNavNodeIndex {
+  row?: number
+  col?: number
+  order?: number
+}
+
+type SpatialNavNeighbors = Partial<Record<Direction, string>>
+
+interface ConsoleStatusCardProps {
+  id: string
+  scopeId: string
+  title: string
+  status: string
+  description: string
+  imageSrc: string
+  imageAlt?: string
+  ariaLabel?: string
+  neighbors?: SpatialNavNeighbors
+  index?: SpatialNavNodeIndex
+  disabled?: boolean
+  onClick?: () => void
+  onConfirm?: () => void
+}
+
+const props = withDefaults(defineProps<ConsoleStatusCardProps>(), {
+  imageAlt: '',
+  ariaLabel: '',
+  neighbors: undefined,
+  index: undefined,
+  disabled: false,
+  onClick: undefined,
+  onConfirm: undefined
+})
+
+// 统一生成可读的无障碍文案，避免页面每次重复拼接。
+const resolvedAriaLabel = computed(() => {
+  return props.ariaLabel || `${props.title}. ${props.status}. ${props.description}.`
+})
+</script>
+
+<template>
+  <Focusable
+    :id="props.id"
+    as="button"
+    type="button"
+    class="console-status-card"
+    :scope-id="props.scopeId"
+    :neighbors="props.neighbors"
+    :index="props.index"
+    :disabled="props.disabled"
+    :aria-label="resolvedAriaLabel"
+    :on-confirm="props.onConfirm ?? props.onClick"
+    @click="props.onClick"
+  >
+    <span class="console-status-card__glow" aria-hidden="true"></span>
+
+    <span class="console-status-card__media" aria-hidden="true">
+      <img class="console-status-card__image" :src="props.imageSrc" :alt="props.imageAlt" />
+    </span>
+
+    <span class="console-status-card__body">
+      <span class="console-status-card__title">{{ props.title }}</span>
+      <span class="console-status-card__status">{{ props.status }}</span>
+      <span class="console-status-card__description">{{ props.description }}</span>
+    </span>
+  </Focusable>
+</template>
+
+<style scoped>
+.console-status-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  flex: 0 0 clamp(var(--ui-console-card-min-width), 24vw, var(--ui-console-card-width));
+  width: clamp(var(--ui-console-card-min-width), 24vw, var(--ui-console-card-width));
+  min-height: clamp(
+    var(--ui-console-card-min-height-min),
+    30vw,
+    var(--ui-console-card-min-height)
+  );
+  padding: var(--ui-console-card-padding);
+  border-radius: var(--ui-console-card-radius);
+  border: none;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0) 18%),
+    linear-gradient(160deg, rgba(62, 68, 82, 0.96), rgba(17, 20, 27, 0.96) 72%);
+  color: var(--ui-page-text);
+  text-align: left;
+  overflow: hidden;
+  cursor: pointer;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    0 20px 36px rgba(0, 0, 0, 0.24);
+  transition: box-shadow var(--ui-motion-fast);
+}
+
+.console-status-card::before {
+  content: '';
+  position: absolute;
+  inset: auto -8% -18% auto;
+  width: 64%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(24, 88, 201, 0.34), transparent 70%);
+  pointer-events: none;
+}
+
+.console-status-card[data-focused='true'] {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    var(--ui-focus-ring-shadow);
+}
+
+.console-status-card__glow {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at 50% 18%, rgba(255, 255, 255, 0.12), transparent 28%),
+    linear-gradient(180deg, transparent 0%, transparent 46%, rgba(8, 12, 19, 0.2) 100%);
+  pointer-events: none;
+}
+
+.console-status-card__media,
+.console-status-card__body {
+  position: relative;
+  z-index: 1;
+}
+
+.console-status-card__media {
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  min-height: var(--ui-console-card-media-height);
+  padding-top: 2px;
+}
+
+.console-status-card__image {
+  width: min(
+    100%,
+    clamp(var(--ui-console-card-image-min-width), 15vw, var(--ui-console-card-image-width))
+  );
+  height: auto;
+  object-fit: contain;
+  filter: drop-shadow(0 16px 18px rgba(0, 0, 0, 0.34)) drop-shadow(0 6px 8px rgba(0, 0, 0, 0.18));
+}
+
+.console-status-card__body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: auto;
+}
+
+.console-status-card__title {
+  font-size: var(--ui-console-card-title-size);
+  line-height: 1;
+  font-weight: var(--ui-font-weight-bold);
+  letter-spacing: -0.03em;
+  color: rgba(255, 255, 255, 0.98);
+}
+
+.console-status-card__status {
+  display: -webkit-box;
+  overflow: hidden;
+  font-size: var(--ui-console-card-status-size);
+  line-height: 1.2;
+  font-weight: var(--ui-font-weight-medium);
+  color: rgba(255, 255, 255, 0.72);
+  text-overflow: ellipsis;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.console-status-card__description {
+  display: -webkit-box;
+  overflow: hidden;
+  margin-top: 10px;
+  font-size: var(--ui-console-card-description-size);
+  line-height: 1.18;
+  font-weight: var(--ui-font-weight-medium);
+  color: rgba(255, 255, 255, 0.86);
+  text-overflow: ellipsis;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+:global(html[data-ui-density='compact']) .console-status-card__description,
+:global(html[data-ui-density='narrow']) .console-status-card__description {
+  margin-top: 8px;
+}
+</style>

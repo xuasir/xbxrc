@@ -1,0 +1,619 @@
+{
+  "hello": "Hello",
+  "home": "Home",
+  "homePage": {
+    "loading": "Loading consoles...",
+    "railTitle": "My Consoles",
+    "railHint": "{count} consoles found",
+    "railAriaLabel": "Console horizontal list",
+    "empty": "No available consoles were found. Make sure this account has an Xbox with remote features enabled.",
+    "refresh": "Refresh",
+    "consoleCard": {
+      "states": {
+        "availableOn": "Available: powered on",
+        "availableStandby": "Available: standby mode",
+        "unavailableOff": "Unavailable: powered off",
+        "unavailableUnknown": "Unavailable: unknown status"
+      },
+      "actions": {
+        "readyToPlay": "Ready to play",
+        "canWakeRemotely": "Can wake remotely to play",
+        "checkNetwork": "Check network and remote settings",
+        "notReady": "Not ready to play yet"
+      },
+      "ariaLabel": "Console {name}"
+    }
+  },
+  "xcloudPage": {
+    "ariaLabel": "Cloud gaming page",
+    "loading": "Loading cloud gaming catalog...",
+    "tabsAriaLabel": "Cloud gaming category tabs",
+    "limitedTitle": "This account cannot access cloud gaming",
+    "limitedBody": "Make sure XGPU is active for this account, or sign in again from a supported region.",
+    "emptyTitle": "No cloud games are available right now",
+    "emptyBody": "The current catalog is empty. Try refreshing again later.",
+    "emptySearchTitle": "No cloud games matched your search",
+    "emptySearchBody": "No cloud games were found for “{keyword}”. Try another search term.",
+    "searchLabel": "Search",
+    "searchPlaceholder": "Search games, people, and more",
+    "resultsCount": "{count} games",
+    "tabs": {
+      "all": "All",
+      "recent": "Recently Played",
+      "new": "New on Cloud"
+    },
+    "toolbar": {
+      "title": "Cloud Catalog",
+      "hint": "{count} games loaded"
+    },
+    "sections": {
+      "recent": {
+        "title": "Recently Played",
+        "hint": "{count} titles"
+      },
+      "new": {
+        "title": "New on Cloud",
+        "hint": "{count} titles"
+      },
+      "all": {
+        "title": "All Cloud Games",
+        "hint": "{count} titles"
+      }
+    },
+    "badges": {
+      "recent": "Recently played",
+      "new": "New",
+      "owned": "Owned game"
+    },
+    "meta": {
+      "categories": "Categories",
+      "input": "Input"
+    },
+    "inputs": {
+      "controller": "Controller",
+      "mouseKeyboard": "Keyboard & Mouse",
+      "touch": "Touch"
+    },
+    "actions": {
+      "refresh": "Refresh",
+      "clearSearch": "Clear Search",
+      "playNow": "Play Now",
+      "playSelected": "Play {name}"
+    }
+  },
+  "streamPage": {
+    "ariaLabel": "Stream {name}",
+    "errorTitle": "Stream Failed",
+    "targets": {
+      "home": "XHOME",
+      "cloud": "XCLOUD"
+    },
+    "status": {
+      "wakingConsole": "Waking console...",
+      "retryingTurn": "Direct connection failed, retrying with TURN relay...",
+      "creatingSession": "Creating stream session...",
+      "waitingSession": "Waiting for stream session readiness...",
+      "preparing": "Preparing stream...",
+      "startingPlayer": "Starting player...",
+      "exchangingOffer": "Exchanging stream offer/answer...",
+      "gatheringIce": "Gathering local ICE candidates...",
+      "exchangingIce": "Exchanging ICE candidates...",
+      "waitingResources": "Waiting for streaming resources...",
+      "waitingQueue": "Waiting in queue... {seconds}s",
+      "connected": "Connected",
+      "connecting": "Connecting..."
+    },
+    "actions": {
+      "menu": "Menu",
+      "fullscreen": "Toggle Fullscreen",
+      "display": "Display Settings",
+      "audio": "Audio Settings",
+      "showPerformance": "Show Performance Panel",
+      "hidePerformance": "Hide Performance Panel",
+      "openMic": "Open Mic",
+      "closeMic": "Close Mic",
+      "sendText": "Send Text",
+      "pressNexus": "Press Nexus",
+      "longPressNexus": "Long Press Nexus",
+      "powerOffExit": "Power Off & Exit",
+      "exit": "Exit",
+      "retry": "Retry",
+      "back": "Back"
+    },
+    "actionSheet": {
+      "title": "Stream Actions"
+    },
+    "display": {
+      "title": "Display Settings",
+      "hint": "Adjust sharpness, saturation, contrast, and brightness for the current stream in real time."
+    },
+    "audio": {
+      "eyebrow": "Audio",
+      "title": "Adjust Stream Volume",
+      "volume": "Volume",
+      "close": "Close"
+    },
+    "performance": {
+      "metrics": {
+        "Resolution": "Resolution",
+        "RTT": "RTT",
+        "JIT": "JIT",
+        "FPS": "FPS",
+        "FD": "FD",
+        "PL": "PL",
+        "Bitrate": "Bitrate",
+        "DT": "DT"
+      }
+    },
+    "failed": {
+      "title": "Connection Failed",
+      "body": "NAT connection failed. If you are streaming remotely, make sure the current network has a public IPv4/IPv6 address and that your router forwards ports 9002/3074."
+    },
+    "warning": {
+      "title": "No Video For Too Long",
+      "body": "The stream has been connected for a while but no picture has appeared yet. It is safer to exit and reconnect.",
+      "keepWaiting": "Keep Waiting"
+    },
+    "text": {
+      "eyebrow": "Text Input",
+      "title": "Send Text To Console",
+      "hint": "The text will be injected into the current focused field on the console.",
+      "placeholder": "Enter text",
+      "send": "Send",
+      "sending": "Sending..."
+    },
+    "errors": {
+      "invalidAnswer": "Streaming answer is invalid",
+      "invalidOffer": "Streaming local offer is invalid",
+      "unknown": "Unknown error",
+      "connectionFailed": "Streaming connection failed",
+      "connectionClosed": "Streaming connection closed",
+      "sessionMissing": "Streaming session is missing",
+      "startFailed": "Failed to start stream",
+      "targetMissing": "Stream target id is missing",
+      "powerOffFailed": "The power-off command was not accepted. Verify remote features are enabled and try again."
+    }
+  },
+  "login": {
+    "playLine": "Sign in to play games installed on your console and cloud games.",
+    "checkingStatusLine": "Restoring your session. Please wait.",
+    "signingStatusLine": "Signing in. Please wait.",
+    "remotePlay": "Remote Play",
+    "title": "Play Anytime",
+    "subtitle": "Here is what you need to connect and play games installed on your console.",
+    "requirementsTitle": "Remote Play Requirements",
+    "requirementNetwork": "Internet connection (at least 10 Mbps)",
+    "requirementAccount": "A Microsoft account with an Xbox profile",
+    "requirementConsole": "An Xbox Series X|S or Xbox One with remote features enabled",
+    "recommendedTitle": "Recommended",
+    "recommendedController": "A compatible Bluetooth Xbox Wireless Controller",
+    "signIn": "Sign in to complete setup",
+    "signInSimple": "Sign in",
+    "restoringSession": "Restoring session...",
+    "signingIn": "Signing in...",
+    "help": "Get help",
+    "loginError": "Sign-in failed. Please try again later."
+  },
+  "userMenu": {
+    "close": "Close user menu",
+    "unknownUser": "Xbox User",
+    "score": "G Score {value}",
+    "statusLabel": "Sign-in Status",
+    "loggedIn": "Signed in",
+    "loggedOut": "Signed out",
+    "logout": "Sign out",
+    "logoutHint": "Sign out of this account",
+    "loggingOut": "Signing out..."
+  },
+  "setting": {
+    "aria": {
+      "groups": "Setting groups",
+      "panel": "{group} settings",
+      "selectOption": "Select option"
+    },
+    "editor": {
+      "eyebrow": "Edit Setting",
+      "valueLabel": "Value",
+      "invalidNumber": "Enter a valid number",
+      "decrease": "Decrease value",
+      "increase": "Increase value",
+      "clear": "Clear input",
+      "clearShort": "Clear",
+      "cancel": "Cancel",
+      "save": "Save"
+    },
+    "effects": {
+      "restartConfirm": "This setting requires an app restart to take effect. Restart now?"
+    },
+    "displayOptions": {
+      "fields": {
+        "sharpness": "Sharpness",
+        "saturation": "Saturation",
+        "contrast": "Contrast",
+        "brightness": "Brightness"
+      }
+    },
+    "states": {
+      "loading": "Loading settings...",
+      "emptyGroup": "No settings in this group."
+    },
+    "values": {
+      "on": "On",
+      "off": "Off",
+      "default": "Default",
+      "notSet": "Not set",
+      "unknown": "Unknown"
+    },
+    "summaries": {
+      "entries": "{count} entries",
+      "items": "{count} items",
+      "displayOptions": "S {sharpness} / Sat {saturation} / C {contrast} / B {brightness}"
+    },
+    "groups": {
+      "app": "APP",
+      "auth": "AUTH",
+      "streaming": "STREAMING",
+      "input": "INPUT",
+      "xhome": "XHOME"
+    },
+    "sections": {
+      "app": {
+        "appearance": "Appearance",
+        "graphics": "Graphics",
+        "runtime": "Runtime"
+      },
+      "auth": {
+        "provider": "Provider",
+        "region": "Region"
+      },
+      "streaming": {
+        "video": "Video",
+        "bitrate": "Bitrate",
+        "audio": "Audio",
+        "session": "Session"
+      },
+      "input": {
+        "controller": "Controller",
+        "sticks": "Sticks",
+        "virtualController": "Virtual Controller",
+        "mouseKeyboard": "Mouse & Keyboard"
+      },
+      "xhome": {
+        "connection": "Connection",
+        "relay": "Relay"
+      }
+    },
+    "fields": {
+      "locale": {
+        "label": "Locale",
+        "description": "Language used by the current UI",
+        "options": {
+          "en": {
+            "label": "English",
+            "description": "Use English for the application interface"
+          },
+          "zh": {
+            "label": "Simplified Chinese",
+            "description": "Use Simplified Chinese for the application interface"
+          }
+        }
+      },
+      "use_msal": {
+        "label": "Use MSAL",
+        "description": "Switch between MSAL and XAL authentication"
+      },
+      "fullscreen": {
+        "label": "Fullscreen",
+        "description": "Launch and display in fullscreen mode"
+      },
+      "background_keepalive": {
+        "label": "Background Keepalive",
+        "description": "Keep the app session alive in the background"
+      },
+      "use_vulkan": {
+        "label": "Use Vulkan",
+        "description": "Enable the Vulkan rendering path"
+      },
+      "debug": {
+        "label": "Debug",
+        "description": "Enable debug mode"
+      },
+      "resolution": {
+        "label": "Resolution",
+        "description": "Each option shows the maximum streaming resolution available for that mode.",
+        "options": {
+          "1081": {
+            "label": "Auto (1440p Max Quality)",
+            "description": "Recommended for the current device and subscription tier"
+          },
+          "1080": {
+            "label": "1080p",
+            "meta": "7 GB/hr"
+          },
+          "720": {
+            "label": "720p",
+            "meta": "3 GB/hr"
+          }
+        }
+      },
+      "xhome_bitrate_mode": {
+        "label": "xHome Bitrate Mode",
+        "description": "Select automatic or manual bitrate for xHome",
+        "options": {
+          "auto": {
+            "label": "Auto",
+            "description": "Use automatic bitrate selection"
+          },
+          "custom": {
+            "label": "Custom",
+            "description": "Use a custom bitrate value below"
+          }
+        }
+      },
+      "xhome_bitrate": {
+        "label": "xHome Bitrate",
+        "description": "Target bitrate for xHome streaming in Mb/s"
+      },
+      "xhome_auto_connect_server_id": {
+        "label": "Auto Connect Host",
+        "description": "xHome host ID used for automatic connection"
+      },
+      "xhome_turn_fallback": {
+        "label": "xHome TURN Fallback",
+        "description": "Enable TURN fallback for xHome connectivity"
+      },
+      "xcloud_bitrate_mode": {
+        "label": "xCloud Bitrate Mode",
+        "description": "Select automatic or manual bitrate for xCloud",
+        "options": {
+          "auto": {
+            "label": "Auto",
+            "description": "Use automatic bitrate selection"
+          },
+          "custom": {
+            "label": "Custom",
+            "description": "Use a custom bitrate value below"
+          }
+        }
+      },
+      "xcloud_bitrate": {
+        "label": "xCloud Bitrate",
+        "description": "Target bitrate for xCloud streaming in Mb/s"
+      },
+      "audio_bitrate_mode": {
+        "label": "Audio Bitrate Mode",
+        "description": "Select automatic or manual audio bitrate",
+        "options": {
+          "auto": {
+            "label": "Auto",
+            "description": "Use automatic bitrate selection"
+          },
+          "custom": {
+            "label": "Custom",
+            "description": "Use a custom bitrate value below"
+          }
+        }
+      },
+      "audio_bitrate": {
+        "label": "Audio Bitrate",
+        "description": "Target audio bitrate in Mb/s"
+      },
+      "enable_audio_control": {
+        "label": "Audio Control",
+        "description": "Enable in-stream audio volume control"
+      },
+      "enable_audio_rumble": {
+        "label": "Audio Rumble",
+        "description": "Drive controller rumble from audio feedback"
+      },
+      "audio_rumble_threshold": {
+        "label": "Audio Rumble Threshold",
+        "description": "Threshold for triggering audio-driven rumble"
+      },
+      "preferred_game_language": {
+        "label": "Preferred Game Language",
+        "description": "Language preference passed into the game session",
+        "options": {
+          "empty": {
+            "label": "Default",
+            "description": "Follow the platform default language"
+          },
+          "ar_sa": { "label": "Arabic (Saudi Arabia)" },
+          "cs_cz": { "label": "Czech" },
+          "da_dk": { "label": "Danish" },
+          "de_de": { "label": "German" },
+          "el_gr": { "label": "Greek" },
+          "en_gb": { "label": "English (United Kingdom)" },
+          "en_us": { "label": "English (United States)" },
+          "es_es": { "label": "Spanish (Spain)" },
+          "es_mx": { "label": "Spanish (Mexico)" },
+          "fi_fi": { "label": "Finnish" },
+          "fr_fr": { "label": "French" },
+          "he_il": { "label": "Hebrew" },
+          "hu_hu": { "label": "Hungarian" },
+          "it_it": { "label": "Italian" },
+          "ja_jp": { "label": "Japanese" },
+          "ko_kr": { "label": "Korean" },
+          "nb_no": { "label": "Norwegian" },
+          "nl_nl": { "label": "Dutch" },
+          "pl_pl": { "label": "Polish" },
+          "pt_br": { "label": "Portuguese (Brazil)" },
+          "pt_pt": { "label": "Portuguese (Portugal)" },
+          "ru_ru": { "label": "Russian" },
+          "sk_sk": { "label": "Slovak" },
+          "sv_se": { "label": "Swedish" },
+          "tr_tr": { "label": "Turkish" },
+          "zh_cn": { "label": "Simplified Chinese" },
+          "zh_tw": { "label": "Traditional Chinese" }
+        }
+      },
+      "force_region_ip": {
+        "label": "Force Region IP",
+        "description": "Override automatic region selection with a specific IP",
+        "options": {
+          "empty": {
+            "label": "Default",
+            "description": "Use the default regional routing strategy"
+          },
+          "203_41_44_20": { "label": "Australia" },
+          "200_221_11_101": { "label": "Brazil" },
+          "194_25_0_68": { "label": "Europe" },
+          "210_131_113_123": { "label": "Japan" },
+          "168_126_63_1": { "label": "Korea" },
+          "4_2_2_2": { "label": "United States" },
+          "104_211_224_146": { "label": "South India" },
+          "104_211_96_159": { "label": "Central India" }
+        }
+      },
+      "codec": {
+        "label": "Codec",
+        "description": "Preferred video codec",
+        "options": {
+          "empty": {
+            "label": "Auto",
+            "description": "Automatically select the most suitable codec"
+          },
+          "video_h264_4d": { "label": "H264-High" },
+          "video_h264_42e": { "label": "H264-Medium" },
+          "video_h264_420": { "label": "H264-Low" }
+        }
+      },
+      "polling_rate": {
+        "label": "Polling Rate",
+        "description": "Controller polling rate in Hz",
+        "options": {
+          "250": { "label": "250 HZ" },
+          "83_33": { "label": "83.33 HZ" },
+          "62_5": { "label": "62.5 HZ" },
+          "50": { "label": "50 HZ" },
+          "41_67": { "label": "41.67 HZ" },
+          "35_71": { "label": "35.71 HZ" },
+          "31_25": { "label": "31.25 HZ" },
+          "27_78": { "label": "27.78 HZ" },
+          "25": { "label": "25 HZ" },
+          "22_73": { "label": "22.73 HZ" },
+          "20_83": { "label": "20.83 HZ" },
+          "19_23": { "label": "19.23 HZ" },
+          "17_86": { "label": "17.86 HZ" },
+          "16_67": { "label": "16.67 HZ" }
+        }
+      },
+      "video_format": {
+        "label": "Video Format",
+        "description": "Preferred video display format",
+        "options": {
+          "empty": {
+            "label": "Aspect Ratio",
+            "description": "Keep the original stream aspect ratio"
+          },
+          "stretch": { "label": "Stretch" },
+          "zoom": { "label": "Zoom" },
+          "16_10": { "label": "16:10" },
+          "18_9": { "label": "18:9" },
+          "21_9": { "label": "21:9" },
+          "4_3": { "label": "4:3" }
+        }
+      },
+      "ipv6": {
+        "label": "Prefer IPv6",
+        "description": "Prefer IPv6 candidates during streaming"
+      },
+      "performance_style": {
+        "label": "Performance Style",
+        "description": "Switch the performance overlay presentation style"
+      },
+      "display_options": {
+        "label": "Display Options",
+        "description": "Sharpness, saturation, contrast and brightness"
+      },
+      "vibration": {
+        "label": "Vibration",
+        "description": "Enable controller vibration output"
+      },
+      "vibration_mode": {
+        "label": "Vibration Mode",
+        "description": "Controller vibration implementation mode"
+      },
+      "gamepad_kernal": {
+        "label": "Gamepad Kernel",
+        "description": "Underlying gamepad kernel mode"
+      },
+      "gamepad_mix": {
+        "label": "Gamepad Mixed Input",
+        "description": "Allow mixed controller input handling"
+      },
+      "gamepad_index": {
+        "label": "Gamepad Index",
+        "description": "Controller index, where -1 means automatic selection",
+        "options": {
+          "_1": {
+            "label": "Auto",
+            "description": "Automatically select the active controller"
+          },
+          "0": { "label": "1" },
+          "1": { "label": "2" },
+          "2": { "label": "3" },
+          "3": { "label": "4" }
+        }
+      },
+      "dead_zone": {
+        "label": "Dead Zone",
+        "description": "Analog stick dead zone"
+      },
+      "edge_compensation": {
+        "label": "Edge Compensation",
+        "description": "Analog stick edge compensation"
+      },
+      "force_trigger_rumble": {
+        "label": "Trigger Rumble",
+        "description": "Choose which trigger receives rumble feedback",
+        "options": {
+          "empty": {
+            "label": "Off",
+            "description": "Disable trigger rumble override"
+          },
+          "all": {
+            "label": "All Triggers",
+            "description": "Apply rumble to both triggers"
+          },
+          "left": {
+            "label": "Left Trigger",
+            "description": "Apply rumble to the left trigger"
+          },
+          "right": {
+            "label": "Right Trigger",
+            "description": "Apply rumble to the right trigger"
+          }
+        }
+      },
+      "virtual_gamepad_opacity": {
+        "label": "Virtual Gamepad Opacity",
+        "description": "Opacity of the on-screen virtual gamepad"
+      },
+      "enable_native_mouse_keyboard": {
+        "label": "Native Mouse Keyboard",
+        "description": "Enable native mouse and keyboard input"
+      },
+      "mouse_sensitive": {
+        "label": "Mouse Sensitivity",
+        "description": "Sensitivity multiplier for mouse input"
+      },
+      "power_on": {
+        "label": "Power On",
+        "description": "Wake the host automatically before streaming"
+      },
+      "server_url": {
+        "label": "Server URL",
+        "description": "Custom relay or self-hosted server URL"
+      },
+      "server_username": {
+        "label": "Server Username",
+        "description": "Username for the custom server"
+      },
+      "server_credential": {
+        "label": "Server Credential",
+        "description": "Credential for the custom server"
+      }
+    }
+  }
+}

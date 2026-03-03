@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "skills": {
+    "asir": {
+      "source": "xuasir/skills",
+      "sourceType": "github",
+      "computedHash": "a996f1dd9e36f559bfce1660ea169ab25ca8326f37f336458ef65578d552307c"
+    },
+    "use-spatial-navigation": {
+      "source": "xuasir/skills",
+      "sourceType": "github",
+      "computedHash": "763addbcd11a3142bd8822e150a19cab5da1a04b969f5bde4cce46d3408282e8"
+    }
+  }
+}

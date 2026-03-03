@@ -1,0 +1,12 @@
+[workspace]
+members = [
+  "native/input-dto",
+  "native/input-core",
+  "native/input-bridge",
+]
+resolver = "2"
+
+[workspace.package]
+edition = "2021"
+license = "MIT"
+authors = ["xuasir"]

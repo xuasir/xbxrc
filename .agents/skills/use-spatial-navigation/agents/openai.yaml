@@ -1,0 +1,4 @@
+interface:
+  display_name: "Use Spatial Navigation"
+  short_description: "Integrate and debug spatial navigation across frameworks"
+  default_prompt: "Use $use-spatial-navigation to set up and troubleshoot spatial navigation in my app."

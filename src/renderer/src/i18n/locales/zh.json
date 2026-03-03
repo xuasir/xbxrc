@@ -1,0 +1,619 @@
+{
+  "hello": "你好",
+  "home": "首页",
+  "homePage": {
+    "loading": "正在获取主机列表...",
+    "railTitle": "我的主机",
+    "railHint": "共发现 {count} 台主机",
+    "railAriaLabel": "主机横向列表",
+    "empty": "暂未发现可用主机，请确认账号下已有启用远程功能的 Xbox 主机。",
+    "refresh": "刷新",
+    "consoleCard": {
+      "states": {
+        "availableOn": "可用: 已开机",
+        "availableStandby": "可用: 待机中",
+        "unavailableOff": "不可用: 已关机",
+        "unavailableUnknown": "不可用: 状态未知"
+      },
+      "actions": {
+        "readyToPlay": "已准备好开始游玩",
+        "canWakeRemotely": "可远程唤醒开始游玩",
+        "checkNetwork": "请检查网络与远程设置",
+        "notReady": "当前暂不可开始游玩"
+      },
+      "ariaLabel": "主机 {name}"
+    }
+  },
+  "xcloudPage": {
+    "ariaLabel": "云游戏页面",
+    "loading": "正在获取云游戏目录...",
+    "tabsAriaLabel": "云游戏分类切换",
+    "limitedTitle": "当前账号无法访问云游戏",
+    "limitedBody": "请确认账号已开通 XGPU，或在支持地区下重新登录后再试。",
+    "emptyTitle": "暂未获取到可用云游戏",
+    "emptyBody": "当前目录为空，请稍后刷新重试。",
+    "emptySearchTitle": "没有匹配的云游戏",
+    "emptySearchBody": "没有找到与“{keyword}”相关的云游戏，请尝试其他关键词。",
+    "searchLabel": "搜索",
+    "searchPlaceholder": "搜索游戏、人员等",
+    "resultsCount": "共 {count} 款游戏",
+    "tabs": {
+      "all": "全部",
+      "recent": "最近游玩",
+      "new": "新入库"
+    },
+    "toolbar": {
+      "title": "云游戏目录",
+      "hint": "共加载 {count} 款可浏览游戏"
+    },
+    "sections": {
+      "recent": {
+        "title": "最近游玩",
+        "hint": "{count} 款"
+      },
+      "new": {
+        "title": "新入库",
+        "hint": "{count} 款"
+      },
+      "all": {
+        "title": "全部云游戏",
+        "hint": "{count} 款"
+      }
+    },
+    "badges": {
+      "recent": "最近游玩",
+      "new": "新入库",
+      "owned": "需自购"
+    },
+    "meta": {
+      "categories": "分类",
+      "input": "输入方式"
+    },
+    "inputs": {
+      "controller": "手柄",
+      "mouseKeyboard": "键盘和鼠标",
+      "touch": "触控"
+    },
+    "actions": {
+      "refresh": "刷新",
+      "clearSearch": "清空搜索",
+      "playNow": "开始游玩",
+      "playSelected": "开始游玩 {name}"
+    }
+  },
+  "streamPage": {
+    "ariaLabel": "串流 {name}",
+    "errorTitle": "串流失败",
+    "targets": {
+      "home": "XHOME",
+      "cloud": "XCLOUD"
+    },
+    "status": {
+      "wakingConsole": "正在唤醒主机...",
+      "retryingTurn": "直连失败，正在切换 TURN 中继重试...",
+      "creatingSession": "正在创建串流会话...",
+      "waitingSession": "正在等待串流会话就绪...",
+      "preparing": "正在准备串流...",
+      "startingPlayer": "正在启动播放器...",
+      "exchangingOffer": "正在交换串流 Offer/Answer...",
+      "gatheringIce": "正在收集本地 ICE 候选...",
+      "exchangingIce": "正在交换 ICE 候选...",
+      "waitingResources": "正在等待串流资源...",
+      "waitingQueue": "正在排队，预计还需 {seconds} 秒",
+      "connected": "已连接",
+      "connecting": "正在连接..."
+    },
+    "actions": {
+      "menu": "串流菜单",
+      "fullscreen": "切换全屏",
+      "display": "显示设置",
+      "audio": "音频设置",
+      "showPerformance": "显示性能面板",
+      "hidePerformance": "隐藏性能面板",
+      "openMic": "开启麦克风",
+      "closeMic": "关闭麦克风",
+      "sendText": "发送文本",
+      "pressNexus": "按下 Nexus",
+      "longPressNexus": "长按 Nexus",
+      "powerOffExit": "关机并退出",
+      "exit": "退出",
+      "retry": "重试",
+      "back": "返回"
+    },
+    "actionSheet": {
+      "title": "串流操作"
+    },
+    "display": {
+      "title": "显示设置",
+      "hint": "实时调整当前串流画面的锐化、饱和度、对比度与亮度。"
+    },
+    "audio": {
+      "eyebrow": "音频",
+      "title": "调整串流音量",
+      "volume": "音量",
+      "close": "关闭"
+    },
+    "performance": {
+      "metrics": {
+        "Resolution": "分辨率",
+        "RTT": "RTT",
+        "JIT": "JIT",
+        "FPS": "FPS",
+        "FD": "FD",
+        "PL": "PL",
+        "Bitrate": "码率",
+        "DT": "解码"
+      }
+    },
+    "failed": {
+      "title": "连接失败",
+      "body": "NAT 连接失败。如果你正在远程串流，请确认当前网络具备公网 IPv4/IPv6 地址，并且路由器已为 9002/3074 端口配置转发。"
+    },
+    "warning": {
+      "title": "长时间无画面",
+      "body": "串流已连接较长时间但仍未出现画面，建议退出后重新连接。",
+      "keepWaiting": "继续等待"
+    },
+    "text": {
+      "eyebrow": "文本输入",
+      "title": "发送文本到主机",
+      "hint": "会将输入内容注入到当前主机焦点位置。",
+      "placeholder": "输入文本",
+      "send": "发送",
+      "sending": "发送中..."
+    },
+    "errors": {
+      "invalidAnswer": "远端串流应答无效",
+      "invalidOffer": "本地串流请求无效",
+      "unknown": "未知错误",
+      "connectionFailed": "串流连接失败",
+      "connectionClosed": "串流连接已关闭",
+      "sessionMissing": "串流会话不存在",
+      "startFailed": "串流启动失败",
+      "targetMissing": "缺少串流目标 ID",
+      "powerOffFailed": "主机关机命令未被接受，请确认已启用远程功能后重试"
+    }
+  },
+  "login": {
+    "playLine": "登录以游玩主机上安装的游戏与云游戏",
+    "checkingStatusLine": "正在恢复登录状态，请稍候",
+    "signingStatusLine": "正在登录，请稍候",
+    "remotePlay": "远程游戏",
+    "title": "随时可玩",
+    "subtitle": "下面是连接和玩主机上安装的游戏所需的内容",
+    "requirementsTitle": "远程游戏要求",
+    "requirementNetwork": "Internet 连接(至少 10 Mbps)",
+    "requirementAccount": "具有 Xbox 配置文件的 Microsoft 帐户",
+    "requirementConsole": "启用了远程功能的 Xbox Series X|S 或 Xbox One",
+    "recommendedTitle": "推荐配件",
+    "recommendedController": "兼容的蓝牙 Xbox Wireless Controller",
+    "signIn": "登录以完成设置",
+    "signInSimple": "登录",
+    "restoringSession": "正在恢复登录...",
+    "signingIn": "正在登录...",
+    "help": "获取帮助",
+    "loginError": "登录失败，请稍后重试。"
+  },
+  "userMenu": {
+    "close": "关闭用户菜单",
+    "unknownUser": "Xbox 用户",
+    "score": "G 分数 {value}",
+    "statusLabel": "登录状态",
+    "loggedIn": "已登录",
+    "loggedOut": "未登录",
+    "logout": "注销",
+    "logoutHint": "退出当前账号",
+    "loggingOut": "正在注销..."
+  },
+  "setting": {
+    "aria": {
+      "groups": "设置分组",
+      "panel": "{group} 设置",
+      "selectOption": "选择选项"
+    },
+    "editor": {
+      "eyebrow": "编辑设置",
+      "valueLabel": "当前值",
+      "invalidNumber": "请输入有效数字",
+      "decrease": "减少数值",
+      "increase": "增加数值",
+      "clear": "清空输入",
+      "clearShort": "清空",
+      "cancel": "取消",
+      "save": "保存"
+    },
+    "effects": {
+      "restartConfirm": "该设置需要重启应用后生效，是否现在重启？"
+    },
+    "displayOptions": {
+      "fields": {
+        "sharpness": "锐化",
+        "saturation": "饱和度",
+        "contrast": "对比度",
+        "brightness": "亮度"
+      }
+    },
+    "states": {
+      "loading": "正在加载设置...",
+      "emptyGroup": "该分组下暂无设置项。"
+    },
+    "values": {
+      "on": "开启",
+      "off": "关闭",
+      "default": "默认",
+      "notSet": "未设置",
+      "unknown": "未知"
+    },
+    "summaries": {
+      "entries": "{count} 项",
+      "items": "{count} 个",
+      "displayOptions": "锐化 {sharpness} / 饱和度 {saturation} / 对比度 {contrast} / 亮度 {brightness}"
+    },
+    "groups": {
+      "app": "应用",
+      "auth": "认证",
+      "streaming": "串流",
+      "input": "输入",
+      "xhome": "主机串流"
+    },
+    "sections": {
+      "app": {
+        "appearance": "外观",
+        "graphics": "图形",
+        "runtime": "运行"
+      },
+      "auth": {
+        "provider": "认证方式",
+        "region": "区域"
+      },
+      "streaming": {
+        "video": "视频",
+        "bitrate": "码率",
+        "audio": "音频",
+        "session": "会话"
+      },
+      "input": {
+        "controller": "手柄",
+        "sticks": "摇杆",
+        "virtualController": "虚拟手柄",
+        "mouseKeyboard": "键鼠"
+      },
+      "xhome": {
+        "connection": "连接",
+        "relay": "中继服务器"
+      }
+    },
+    "fields": {
+      "locale": {
+        "label": "界面语言",
+        "description": "当前界面使用的语言",
+        "options": {
+          "en": {
+            "label": "English",
+            "description": "应用界面使用英文"
+          },
+          "zh": {
+            "label": "简体中文",
+            "description": "应用界面使用简体中文"
+          }
+        }
+      },
+      "use_msal": {
+        "label": "使用 MSAL",
+        "description": "在 MSAL 和 XAL 认证方案之间切换"
+      },
+      "fullscreen": {
+        "label": "全屏",
+        "description": "以全屏模式启动并显示应用"
+      },
+      "background_keepalive": {
+        "label": "后台保活",
+        "description": "在后台保持应用会话存活"
+      },
+      "use_vulkan": {
+        "label": "使用 Vulkan",
+        "description": "启用 Vulkan 渲染路径"
+      },
+      "debug": {
+        "label": "调试模式",
+        "description": "开启调试模式"
+      },
+      "resolution": {
+        "label": "分辨率",
+        "description": "每个选项展示的是该模式下可用的最高串流分辨率。",
+        "options": {
+          "1081": {
+            "label": "自动（最高 1440p）",
+            "description": "会根据当前设备和订阅档位自动选择推荐值"
+          },
+          "1080": {
+            "label": "1080p",
+            "meta": "7 GB/小时"
+          },
+          "720": {
+            "label": "720p",
+            "meta": "3 GB/小时"
+          }
+        }
+      },
+      "xhome_bitrate_mode": {
+        "label": "xHome 码率模式",
+        "description": "为 xHome 选择自动或手动码率",
+        "options": {
+          "auto": {
+            "label": "自动",
+            "description": "自动选择码率"
+          },
+          "custom": {
+            "label": "自定义",
+            "description": "使用下方的自定义码率值"
+          }
+        }
+      },
+      "xhome_bitrate": {
+        "label": "xHome 码率",
+        "description": "xHome 串流目标码率（Mb/s）"
+      },
+      "xhome_auto_connect_server_id": {
+        "label": "自动连接主机",
+        "description": "用于自动连接的 xHome 主机 ID"
+      },
+      "xhome_turn_fallback": {
+        "label": "xHome TURN 回退",
+        "description": "为 xHome 连接启用 TURN 回退"
+      },
+      "xcloud_bitrate_mode": {
+        "label": "xCloud 码率模式",
+        "description": "为 xCloud 选择自动或手动码率",
+        "options": {
+          "auto": {
+            "label": "自动",
+            "description": "自动选择码率"
+          },
+          "custom": {
+            "label": "自定义",
+            "description": "使用下方的自定义码率值"
+          }
+        }
+      },
+      "xcloud_bitrate": {
+        "label": "xCloud 码率",
+        "description": "xCloud 串流目标码率（Mb/s）"
+      },
+      "audio_bitrate_mode": {
+        "label": "音频码率模式",
+        "description": "选择自动或手动音频码率",
+        "options": {
+          "auto": {
+            "label": "自动",
+            "description": "自动选择码率"
+          },
+          "custom": {
+            "label": "自定义",
+            "description": "使用下方的自定义码率值"
+          }
+        }
+      },
+      "audio_bitrate": {
+        "label": "音频码率",
+        "description": "目标音频码率（Mb/s）"
+      },
+      "enable_audio_control": {
+        "label": "音量控制",
+        "description": "在串流过程中启用音量控制"
+      },
+      "enable_audio_rumble": {
+        "label": "音频震动",
+        "description": "根据音频反馈驱动手柄震动"
+      },
+      "audio_rumble_threshold": {
+        "label": "音频震动阈值",
+        "description": "触发音频驱动震动的阈值"
+      },
+      "preferred_game_language": {
+        "label": "游戏偏好语言",
+        "description": "传递给游戏会话的语言偏好",
+        "options": {
+          "empty": {
+            "label": "默认",
+            "description": "跟随平台默认语言"
+          },
+          "ar_sa": { "label": "阿拉伯语（沙特）" },
+          "cs_cz": { "label": "捷克语" },
+          "da_dk": { "label": "丹麦语" },
+          "de_de": { "label": "德语" },
+          "el_gr": { "label": "希腊语" },
+          "en_gb": { "label": "英语（英国）" },
+          "en_us": { "label": "英语（美国）" },
+          "es_es": { "label": "西班牙语（西班牙）" },
+          "es_mx": { "label": "西班牙语（墨西哥）" },
+          "fi_fi": { "label": "芬兰语" },
+          "fr_fr": { "label": "法语" },
+          "he_il": { "label": "希伯来语" },
+          "hu_hu": { "label": "匈牙利语" },
+          "it_it": { "label": "意大利语" },
+          "ja_jp": { "label": "日语" },
+          "ko_kr": { "label": "韩语" },
+          "nb_no": { "label": "挪威语" },
+          "nl_nl": { "label": "荷兰语" },
+          "pl_pl": { "label": "波兰语" },
+          "pt_br": { "label": "葡萄牙语（巴西）" },
+          "pt_pt": { "label": "葡萄牙语（葡萄牙）" },
+          "ru_ru": { "label": "俄语" },
+          "sk_sk": { "label": "斯洛伐克语" },
+          "sv_se": { "label": "瑞典语" },
+          "tr_tr": { "label": "土耳其语" },
+          "zh_cn": { "label": "简体中文" },
+          "zh_tw": { "label": "繁體中文" }
+        }
+      },
+      "force_region_ip": {
+        "label": "强制区域 IP",
+        "description": "用指定 IP 覆盖自动区域选择",
+        "options": {
+          "empty": {
+            "label": "默认",
+            "description": "使用系统默认的区域路由策略"
+          },
+          "203_41_44_20": { "label": "澳大利亚" },
+          "200_221_11_101": { "label": "巴西" },
+          "194_25_0_68": { "label": "欧洲" },
+          "210_131_113_123": { "label": "日本" },
+          "168_126_63_1": { "label": "韩国" },
+          "4_2_2_2": { "label": "美国" },
+          "104_211_224_146": { "label": "印度南部" },
+          "104_211_96_159": { "label": "印度中部" }
+        }
+      },
+      "codec": {
+        "label": "编码格式",
+        "description": "首选视频编码格式",
+        "options": {
+          "empty": {
+            "label": "自动",
+            "description": "自动选择最合适的编码"
+          },
+          "video_h264_4d": { "label": "H264-高" },
+          "video_h264_42e": { "label": "H264-中" },
+          "video_h264_420": { "label": "H264-低" }
+        }
+      },
+      "polling_rate": {
+        "label": "轮询率",
+        "description": "手柄轮询频率（Hz）",
+        "options": {
+          "250": { "label": "250 HZ" },
+          "83_33": { "label": "83.33 HZ" },
+          "62_5": { "label": "62.5 HZ" },
+          "50": { "label": "50 HZ" },
+          "41_67": { "label": "41.67 HZ" },
+          "35_71": { "label": "35.71 HZ" },
+          "31_25": { "label": "31.25 HZ" },
+          "27_78": { "label": "27.78 HZ" },
+          "25": { "label": "25 HZ" },
+          "22_73": { "label": "22.73 HZ" },
+          "20_83": { "label": "20.83 HZ" },
+          "19_23": { "label": "19.23 HZ" },
+          "17_86": { "label": "17.86 HZ" },
+          "16_67": { "label": "16.67 HZ" }
+        }
+      },
+      "video_format": {
+        "label": "视频格式",
+        "description": "首选视频显示格式",
+        "options": {
+          "empty": {
+            "label": "保持比例",
+            "description": "保持原始串流画面比例"
+          },
+          "stretch": { "label": "拉伸" },
+          "zoom": { "label": "缩放" },
+          "16_10": { "label": "16:10" },
+          "18_9": { "label": "18:9" },
+          "21_9": { "label": "21:9" },
+          "4_3": { "label": "4:3" }
+        }
+      },
+      "ipv6": {
+        "label": "优先 IPv6",
+        "description": "串流时优先使用 IPv6 候选地址"
+      },
+      "performance_style": {
+        "label": "性能面板样式",
+        "description": "切换性能浮层的展示样式"
+      },
+      "display_options": {
+        "label": "画面参数",
+        "description": "锐化、饱和度、对比度和亮度"
+      },
+      "vibration": {
+        "label": "震动",
+        "description": "启用手柄震动输出"
+      },
+      "vibration_mode": {
+        "label": "震动模式",
+        "description": "手柄震动实现模式"
+      },
+      "gamepad_kernal": {
+        "label": "手柄内核",
+        "description": "底层手柄内核模式"
+      },
+      "gamepad_mix": {
+        "label": "混合输入",
+        "description": "允许混合处理多个手柄输入"
+      },
+      "gamepad_index": {
+        "label": "手柄索引",
+        "description": "手柄索引，-1 表示自动选择",
+        "options": {
+          "_1": {
+            "label": "自动",
+            "description": "自动选择当前活跃手柄"
+          },
+          "0": { "label": "1" },
+          "1": { "label": "2" },
+          "2": { "label": "3" },
+          "3": { "label": "4" }
+        }
+      },
+      "dead_zone": {
+        "label": "死区",
+        "description": "模拟摇杆死区"
+      },
+      "edge_compensation": {
+        "label": "边缘补偿",
+        "description": "模拟摇杆边缘补偿"
+      },
+      "force_trigger_rumble": {
+        "label": "扳机震动",
+        "description": "选择哪个扳机会接收震动反馈",
+        "options": {
+          "empty": {
+            "label": "关闭",
+            "description": "关闭扳机震动覆盖"
+          },
+          "all": {
+            "label": "双扳机",
+            "description": "同时作用到左右扳机"
+          },
+          "left": {
+            "label": "左扳机",
+            "description": "只作用到左扳机"
+          },
+          "right": {
+            "label": "右扳机",
+            "description": "只作用到右扳机"
+          }
+        }
+      },
+      "virtual_gamepad_opacity": {
+        "label": "虚拟手柄透明度",
+        "description": "屏幕虚拟手柄的不透明度"
+      },
+      "enable_native_mouse_keyboard": {
+        "label": "原生键鼠",
+        "description": "启用原生鼠标和键盘输入"
+      },
+      "mouse_sensitive": {
+        "label": "鼠标灵敏度",
+        "description": "鼠标输入灵敏度倍率"
+      },
+      "power_on": {
+        "label": "自动开机",
+        "description": "串流前自动唤醒主机"
+      },
+      "server_url": {
+        "label": "服务器地址",
+        "description": "自定义中继或自建服务器地址"
+      },
+      "server_username": {
+        "label": "服务器用户名",
+        "description": "自定义服务器使用的用户名"
+      },
+      "server_credential": {
+        "label": "服务器凭证",
+        "description": "自定义服务器使用的凭证"
+      }
+    }
+  }
+}
