@@ -719,7 +719,7 @@ onBeforeUnmount(() => {
   min-width: var(--ui-stream-top-action-min-width);
   padding: var(--ui-stream-top-action-padding);
   border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: var(--ui-radius-pill);
+  border-radius: var(--ui-action-pill-radius);
   background: rgba(8, 14, 10, 0.66);
   color: #fff;
   backdrop-filter: blur(12px);
@@ -807,7 +807,7 @@ onBeforeUnmount(() => {
   min-width: var(--ui-stream-error-action-min-width);
   padding: var(--ui-stream-error-action-padding);
   border: 1px solid rgba(255, 255, 255, 0.18);
-  border-radius: var(--ui-radius-pill);
+  border-radius: var(--ui-action-pill-radius);
   background: rgba(255, 255, 255, 0.04);
   color: #fff;
   cursor: pointer;

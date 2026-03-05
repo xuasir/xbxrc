@@ -482,14 +482,14 @@ onBeforeUnmount(() => {
   line-height: 1.08;
   font-weight: var(--ui-font-weight-bold);
   letter-spacing: -0.03em;
-  color: var(--ui-page-text);
+  color: var(--color-text-primary);
 }
 
 .xcloud-page__subtitle {
   max-width: 620px;
   font-size: 13px;
   line-height: 1.45;
-  color: var(--ui-page-text-soft);
+  color: var(--color-text-secondary);
 }
 
 .xcloud-page__search-shell {
@@ -499,9 +499,9 @@ onBeforeUnmount(() => {
   flex: 0 0 min(100%, 360px);
   min-height: var(--ui-xcloud-search-height);
   padding: 0 var(--ui-xcloud-search-padding-inline);
-  border: 1px solid var(--ui-border-subtle);
-  border-radius: var(--ui-radius-md);
-  background: color-mix(in srgb, var(--ui-surface-panel) 92%, transparent);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--btn-radius);
+  background: color-mix(in srgb, var(--color-surface-1) 92%, transparent);
 }
 
 .xcloud-page__search-icon {
@@ -510,7 +510,7 @@ onBeforeUnmount(() => {
   justify-content: center;
   width: 22px;
   height: 22px;
-  color: rgba(255, 255, 255, 0.82);
+  color: var(--color-text-secondary);
 }
 
 .xcloud-page__search-svg {
@@ -524,13 +524,13 @@ onBeforeUnmount(() => {
   margin-left: 10px;
   border: 0;
   background: transparent;
-  color: rgba(255, 255, 255, 0.98);
+  color: var(--color-text-primary);
   font-size: clamp(15px, 1.6vw, 18px);
   line-height: 1.2;
 }
 
 .xcloud-page__search-input::placeholder {
-  color: rgba(255, 255, 255, 0.5);
+  color: var(--color-text-tertiary);
 }
 
 .xcloud-page__search-input:focus {
@@ -549,7 +549,7 @@ onBeforeUnmount(() => {
   flex: 0 0 auto;
   font-size: 12px;
   line-height: 1.4;
-  color: rgba(255, 255, 255, 0.68);
+  color: var(--color-text-secondary);
   white-space: nowrap;
 }
 
@@ -597,10 +597,10 @@ onBeforeUnmount(() => {
   min-width: var(--ui-xcloud-action-min-width);
   min-height: var(--ui-xcloud-action-min-height);
   padding: 0 18px;
-  border: 1px solid transparent;
-  border-radius: var(--ui-radius-md);
-  background: linear-gradient(135deg, #16964e, #0f6f3d);
-  color: rgba(255, 255, 255, 0.98);
+  border: 1px solid var(--btn-border);
+  border-radius: var(--btn-radius);
+  background: var(--btn-primary-bg);
+  color: var(--btn-primary-text);
   font-size: 15px;
   line-height: 1;
   font-weight: var(--ui-font-weight-bold);
@@ -612,12 +612,13 @@ onBeforeUnmount(() => {
 }
 
 .xcloud-page__action-button:hover {
-  filter: brightness(1.04);
+  background: var(--btn-primary-bg-hover);
+  filter: brightness(1.01);
 }
 
 .xcloud-page__action-button[data-focused='true'] {
-  border-color: var(--ui-border-focus);
-  box-shadow: var(--ui-focus-ring-shadow);
+  border-color: var(--color-focus-ring);
+  box-shadow: 0 0 0 var(--focus-ring-width) var(--color-focus-ring-outer) inset;
 }
 
 :global(html[data-ui-density='compact']) .xcloud-page__filter-bar,

@@ -42,6 +42,16 @@ export type GamepadBindingModeDto = (typeof GAMEPAD_BINDING_MODES)[number]
 export const GAMEPAD_STREAM_PUSH_MODES = ['on-change', 'fixed-rate'] as const
 export type GamepadStreamPushModeDto = (typeof GAMEPAD_STREAM_PUSH_MODES)[number]
 
+export const GAMEPAD_SAMPLING_MODES = ['merge', 'primary-preferred'] as const
+export type GamepadSamplingModeDto = (typeof GAMEPAD_SAMPLING_MODES)[number]
+
+export const GAMEPAD_RUMBLE_REJECTION_REASONS = [
+  'target-not-found',
+  'unsupported',
+  'not-implemented'
+] as const
+export type GamepadRumbleRejectionReasonDto = (typeof GAMEPAD_RUMBLE_REJECTION_REASONS)[number]
+
 export interface GamepadCapabilityFlagsDto {
   basicRumble: boolean
   advancedHaptics: boolean
@@ -120,6 +130,38 @@ export interface GamepadSamplingConfigDto {
   streamPushRateHz: number | null
 }
 
+export interface GamepadSamplingStrategyDto {
+  mode: GamepadSamplingModeDto
+  primaryDeviceId: string | null
+  pausedDeviceIds: string[]
+  enableKeyboardFallback: boolean
+}
+
+export type GamepadRumbleTargetDto =
+  | { kind: 'logical-pad'; padId: LogicalPadId }
+  | { kind: 'device'; deviceId: string }
+
+export interface GamepadRumbleEffectDto {
+  startDelayMs: number
+  durationMs: number
+  strongMagnitude: number
+  weakMagnitude: number
+  leftTrigger: number
+  rightTrigger: number
+  repeat: number
+}
+
+export interface GamepadRumbleRequestDto {
+  target: GamepadRumbleTargetDto
+  effect: GamepadRumbleEffectDto
+}
+
+export interface GamepadRumbleResultDto {
+  accepted: boolean
+  reason: GamepadRumbleRejectionReasonDto | null
+  resolvedDeviceIds: string[]
+}
+
 export interface GamepadRuntimeSnapshotDto {
   devices: GamepadDeviceDto[]
   bindings: LogicalPadBindingDto[]
@@ -133,6 +175,12 @@ export type GamepadBridgeCommandDto =
   | { type: 'set-route-target'; target: GamepadRouteTargetDto }
   | { type: 'update-sampling'; sampling: GamepadSamplingConfigDto }
   | { type: 'rebind-logical-pad'; binding: LogicalPadBindingDto }
+  | { type: 'set-sampling-strategy'; strategy: GamepadSamplingStrategyDto }
+  | { type: 'set-primary-sampling-device'; deviceId: string | null }
+  | { type: 'pause-sampling-device'; deviceId: string }
+  | { type: 'resume-sampling-device'; deviceId: string }
+  | { type: 'play-rumble'; request: GamepadRumbleRequestDto }
+  | { type: 'stop-rumble'; target: GamepadRumbleTargetDto }
 
 export type GamepadBridgeEventDto =
   | { type: 'runtime-snapshot'; snapshot: GamepadRuntimeSnapshotDto }

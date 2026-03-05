@@ -79,25 +79,23 @@ const resolvedAriaLabel = computed(() => {
   justify-content: space-between;
   flex: 0 0 clamp(var(--ui-console-card-min-width), 24vw, var(--ui-console-card-width));
   width: clamp(var(--ui-console-card-min-width), 24vw, var(--ui-console-card-width));
-  min-height: clamp(
-    var(--ui-console-card-min-height-min),
-    30vw,
-    var(--ui-console-card-min-height)
-  );
+  min-height: clamp(var(--ui-console-card-min-height-min), 30vw, var(--ui-console-card-min-height));
   padding: var(--ui-console-card-padding);
   border-radius: var(--ui-console-card-radius);
-  border: none;
+  border: 1px solid var(--tile-border);
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0) 18%),
     linear-gradient(160deg, rgba(62, 68, 82, 0.96), rgba(17, 20, 27, 0.96) 72%);
-  color: var(--ui-page-text);
+  color: var(--color-text-primary);
   text-align: left;
   overflow: hidden;
   cursor: pointer;
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.05),
     0 20px 36px rgba(0, 0, 0, 0.24);
-  transition: box-shadow var(--ui-motion-fast);
+  transition:
+    border-color var(--ui-motion-fast),
+    box-shadow var(--ui-motion-fast);
 }
 
 .console-status-card::before {
@@ -112,9 +110,10 @@ const resolvedAriaLabel = computed(() => {
 }
 
 .console-status-card[data-focused='true'] {
+  border-color: var(--color-focus-ring);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.08),
-    var(--ui-focus-ring-shadow);
+    0 0 0 var(--focus-ring-width) var(--color-focus-ring-outer) inset;
 }
 
 .console-status-card__glow {
@@ -162,7 +161,7 @@ const resolvedAriaLabel = computed(() => {
   line-height: 1;
   font-weight: var(--ui-font-weight-bold);
   letter-spacing: -0.03em;
-  color: rgba(255, 255, 255, 0.98);
+  color: var(--color-text-primary);
 }
 
 .console-status-card__status {
@@ -171,7 +170,7 @@ const resolvedAriaLabel = computed(() => {
   font-size: var(--ui-console-card-status-size);
   line-height: 1.2;
   font-weight: var(--ui-font-weight-medium);
-  color: rgba(255, 255, 255, 0.72);
+  color: var(--color-text-secondary);
   text-overflow: ellipsis;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
@@ -184,7 +183,7 @@ const resolvedAriaLabel = computed(() => {
   font-size: var(--ui-console-card-description-size);
   line-height: 1.18;
   font-weight: var(--ui-font-weight-medium);
-  color: rgba(255, 255, 255, 0.86);
+  color: color-mix(in srgb, var(--color-text-primary) 86%, transparent);
   text-overflow: ellipsis;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;

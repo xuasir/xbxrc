@@ -50,7 +50,9 @@ function resolveConsoleImage(consoleType: string): string {
   return seriesXImage
 }
 
-function resolvePowerState(rawState: HostSummary['powerState']): 'on' | 'standby' | 'off' | 'unknown' {
+function resolvePowerState(
+  rawState: HostSummary['powerState']
+): 'on' | 'standby' | 'off' | 'unknown' {
   if (rawState === 'On') {
     return 'on'
   }
@@ -246,7 +248,7 @@ onMounted(() => {
   max-width: var(--ui-home-empty-copy-max-width);
   font-size: var(--ui-home-empty-copy-size);
   line-height: 1.55;
-  color: rgba(255, 255, 255, 0.76);
+  color: var(--color-text-secondary);
   text-align: center;
 }
 
@@ -254,10 +256,10 @@ onMounted(() => {
   min-width: var(--ui-home-action-min-width);
   min-height: var(--ui-home-action-min-height);
   padding: 0 18px;
-  border: 1px solid color-mix(in srgb, rgb(26, 198, 82) 82%, rgba(255, 255, 255, 0.08));
-  border-radius: var(--ui-radius-pill);
-  background: linear-gradient(180deg, rgba(39, 214, 96, 0.92), rgba(18, 148, 58, 0.96));
-  color: rgba(255, 255, 255, 0.98);
+  border: 1px solid var(--btn-border);
+  border-radius: var(--btn-radius);
+  background: var(--btn-primary-bg);
+  color: var(--btn-primary-text);
   font-size: 14px;
   font-weight: var(--ui-font-weight-semibold);
   line-height: 1;
@@ -271,15 +273,15 @@ onMounted(() => {
 
 .home-page__refresh-button:hover {
   transform: translateY(-1px);
-  background: linear-gradient(180deg, rgba(58, 228, 113, 0.96), rgba(25, 164, 67, 0.98));
+  background: var(--btn-primary-bg-hover);
   box-shadow: 0 12px 24px rgba(22, 132, 57, 0.22);
 }
 
 .home-page__refresh-button[data-focused='true'] {
-  border-color: var(--ui-border-focus);
-  background: linear-gradient(180deg, rgba(48, 198, 102, 0.94), rgba(22, 139, 64, 0.96));
-  color: rgba(255, 255, 255, 0.98);
-  box-shadow: var(--ui-focus-ring-shadow);
+  border-color: var(--color-focus-ring);
+  background: var(--btn-primary-bg-hover);
+  color: var(--btn-primary-text);
+  box-shadow: 0 0 0 var(--focus-ring-width) var(--color-focus-ring-outer) inset;
 }
 
 :global(html[data-ui-density='compact']) .home-page__content,

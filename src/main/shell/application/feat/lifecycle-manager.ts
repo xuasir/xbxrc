@@ -1,9 +1,13 @@
 import { app, powerSaveBlocker } from 'electron'
 import { electronApp, optimizer } from '@electron-toolkit/utils'
 import type { ShellLaunchSettings, ShellRpcAdapter, StartupFlags } from '../../domain/types'
+import { shutdownGamepadRuntimeController } from '../../../mods/gamepad'
+import { shutdownXbxEngineService } from '../../../mods/streaming'
 import { MainWindowManager } from './window-manager'
 import { SessionOrchestrator } from './session-orchestrator'
 import { registerAuthSessionReadyBridge } from './auth-session-ready-bridge'
+import { registerGamepadBridge } from './gamepad-bridge'
+import { registerXbxEngineBridge } from './xbxengine-bridge'
 
 interface ShellLifecycleManagerDeps {
   windowManager: MainWindowManager
@@ -45,6 +49,8 @@ export class ShellLifecycleManager {
       this.registerShellRpc(options.rpcController)
       this.createOrShowMainWindow(options.initialSettings, options.getStartupFlags())
       registerAuthSessionReadyBridge()
+      registerGamepadBridge()
+      registerXbxEngineBridge()
       this.sessionOrchestrator.onAppReady()
       this.startPreventDisplaySleep()
 
@@ -63,6 +69,8 @@ export class ShellLifecycleManager {
     app.on('before-quit', () => {
       this.windowManager.setQuitting(true)
       this.stopPreventDisplaySleep()
+      void shutdownGamepadRuntimeController()
+      void shutdownXbxEngineService()
     })
   }
 

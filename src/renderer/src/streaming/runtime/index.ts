@@ -1,20 +1,22 @@
-export { PlayerClient as StreamRuntimeClient } from '../../player'
-export { MouseKeyboardConfig } from '../../player'
-export type { RendererRuntimeConfig, StreamStats } from '../../player'
-export type { CodecPreferenceOptions, IceCandidateLike, TransportRuntimeConfig } from '../../player'
+export { createStreamRuntime } from './createStreamRuntime'
+export type { IceCandidateLike, StreamStats } from '../../player'
 export type {
   StreamControllerInputOwner,
-  StreamKeyboardPointerInputOwner,
   StreamRenderOwner,
   StreamRuntime,
   StreamRuntimeAudioController,
-  StreamRuntimeBindParams,
   StreamRuntimeCapabilities,
+  StreamRuntimeControllerInputController,
+  StreamRuntimeCreateInput,
+  StreamRuntimeDisplayState,
   StreamRuntimeEventMap,
   StreamRuntimeFactory,
-  StreamRuntimeInputController,
-  StreamRuntimeInputEvent,
   StreamRuntimeMode,
+  StreamRuntimePhase,
+  StreamRuntimeReconnectReason,
+  StreamRuntimeSessionContext,
+  StreamRuntimeStartContext,
   StreamRuntimeStatsController,
-  StreamSidecarClient
+  StreamRuntimeViewportController,
+  StreamRuntimeViewportHost
 } from './contracts'

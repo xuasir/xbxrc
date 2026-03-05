@@ -1,0 +1,15 @@
+[package]
+name = "ohmygamepad-hid-dualsense"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+publish = false
+
+[dependencies]
+ohmygamepad-core = { path = "../../core" }
+ohmygamepad-protocol = { path = "../../protocol" }
+
+[lib]
+path = "src/lib.rs"

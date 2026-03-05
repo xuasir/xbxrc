@@ -101,6 +101,7 @@
       "waitingResources": "正在等待串流资源...",
       "waitingQueue": "正在排队，预计还需 {seconds} 秒",
       "connected": "已连接",
+      "reconnecting": "正在尝试恢复连接...",
       "connecting": "正在连接..."
     },
     "actions": {
@@ -170,6 +171,7 @@
       "connectionClosed": "串流连接已关闭",
       "sessionMissing": "串流会话不存在",
       "startFailed": "串流启动失败",
+      "remoteConsoleNotReady": "主机尚未完成远程串流注册，请稍候再试。诊断信息：{details}",
       "targetMissing": "缺少串流目标 ID",
       "powerOffFailed": "主机关机命令未被接受，请确认已启用远程功能后重试"
     }
@@ -402,14 +404,6 @@
         "label": "音量控制",
         "description": "在串流过程中启用音量控制"
       },
-      "enable_audio_rumble": {
-        "label": "音频震动",
-        "description": "根据音频反馈驱动手柄震动"
-      },
-      "audio_rumble_threshold": {
-        "label": "音频震动阈值",
-        "description": "触发音频驱动震动的阈值"
-      },
       "preferred_game_language": {
         "label": "游戏偏好语言",
         "description": "传递给游戏会话的语言偏好",
@@ -522,6 +516,20 @@
         "label": "性能面板样式",
         "description": "切换性能浮层的展示样式"
       },
+      "stream_runtime_mode": {
+        "label": "运行时模式",
+        "description": "选择使用浏览器直出还是 Rust sidecar 串流内核",
+        "options": {
+          "webrtc_direct": {
+            "label": "WebRTC 直出",
+            "description": "由浏览器负责 WebRTC、解码与渲染"
+          },
+          "rust_owned": {
+            "label": "Rust 接管",
+            "description": "由 Rust sidecar 接管传输、解码、渲染与输入"
+          }
+        }
+      },
       "display_options": {
         "label": "画面参数",
         "description": "锐化、饱和度、对比度和亮度"
@@ -529,74 +537,6 @@
       "vibration": {
         "label": "震动",
         "description": "启用手柄震动输出"
-      },
-      "vibration_mode": {
-        "label": "震动模式",
-        "description": "手柄震动实现模式"
-      },
-      "gamepad_kernal": {
-        "label": "手柄内核",
-        "description": "底层手柄内核模式"
-      },
-      "gamepad_mix": {
-        "label": "混合输入",
-        "description": "允许混合处理多个手柄输入"
-      },
-      "gamepad_index": {
-        "label": "手柄索引",
-        "description": "手柄索引，-1 表示自动选择",
-        "options": {
-          "_1": {
-            "label": "自动",
-            "description": "自动选择当前活跃手柄"
-          },
-          "0": { "label": "1" },
-          "1": { "label": "2" },
-          "2": { "label": "3" },
-          "3": { "label": "4" }
-        }
-      },
-      "dead_zone": {
-        "label": "死区",
-        "description": "模拟摇杆死区"
-      },
-      "edge_compensation": {
-        "label": "边缘补偿",
-        "description": "模拟摇杆边缘补偿"
-      },
-      "force_trigger_rumble": {
-        "label": "扳机震动",
-        "description": "选择哪个扳机会接收震动反馈",
-        "options": {
-          "empty": {
-            "label": "关闭",
-            "description": "关闭扳机震动覆盖"
-          },
-          "all": {
-            "label": "双扳机",
-            "description": "同时作用到左右扳机"
-          },
-          "left": {
-            "label": "左扳机",
-            "description": "只作用到左扳机"
-          },
-          "right": {
-            "label": "右扳机",
-            "description": "只作用到右扳机"
-          }
-        }
-      },
-      "virtual_gamepad_opacity": {
-        "label": "虚拟手柄透明度",
-        "description": "屏幕虚拟手柄的不透明度"
-      },
-      "enable_native_mouse_keyboard": {
-        "label": "原生键鼠",
-        "description": "启用原生鼠标和键盘输入"
-      },
-      "mouse_sensitive": {
-        "label": "鼠标灵敏度",
-        "description": "鼠标输入灵敏度倍率"
       },
       "power_on": {
         "label": "自动开机",

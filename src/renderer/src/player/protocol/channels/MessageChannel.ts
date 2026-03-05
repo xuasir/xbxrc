@@ -1,90 +1,141 @@
-import { TypedEventEmitter } from '../../api/events'
+import { TypedEventEmitter, type PlayerEvents } from '../../api/events'
 import { BaseChannel, ChannelContext } from './BaseChannel'
+import {
+  STREAM_DEFAULT_VIEWPORT,
+  STREAM_MESSAGE_HANDSHAKE
+} from '../networkProfile'
 
 export interface MessageChannelOptions {
-  uiVersion: Array<number>;
-  uiSystem: Array<number>;
-  touchEnabled: boolean;
+  uiVersion: Array<number>
+  uiSystem: Array<number>
 }
 
 export interface MessageChannelDelegate {
-  onHandshakeAck(): void;
+  onHandshakeAck(): void
+}
+
+type MessagePayload = Record<string, unknown>
+
+type MessageEnvelope = {
+  type?: string
+  content?: string
+} & Record<string, unknown>
+
+type WindowWithXboxTitle = Window & {
+  _xboxTitleId?: number
+}
+
+function parseJsonMessage(value: string): MessageEnvelope {
+  return JSON.parse(value) as MessageEnvelope
 }
 
 export class MessageChannel extends BaseChannel {
-    constructor(
-        context: ChannelContext,
+  constructor(
+    context: ChannelContext,
     private readonly options: MessageChannelOptions,
     private readonly delegate: MessageChannelDelegate,
-    private readonly emitter: TypedEventEmitter<any>,
-    ) {
-        super(context)
-    }
+    private readonly emitter: TypedEventEmitter<PlayerEvents>
+  ) {
+    super(context)
+  }
 
-    onOpen(): void {
-        console.info('[player][message] open')
-        this.send(JSON.stringify({
-            type: 'Handshake',
-            version: 'messageV1',
-            id: 'f9c5f412-0e69-4ede-8e62-92c7f5358c56',
-            cv: '',
-        }))
-    }
+  onOpen(): void {
+    console.info('[player][message] open')
+    this.send(
+      JSON.stringify({
+        type: 'Handshake',
+        version: STREAM_MESSAGE_HANDSHAKE.version,
+        id: STREAM_MESSAGE_HANDSHAKE.id,
+        cv: ''
+      })
+    )
+  }
 
-    onMessage(event: MessageEvent): void {
-        const jsonMessage = JSON.parse(event.data)
-        if (jsonMessage.type === 'HandshakeAck') {
-            console.info('[player][message] HandshakeAck received')
-            this.delegate.onHandshakeAck()
-            this.send(JSON.stringify(this.generateMessage('/streaming/systemUi/configuration', {
-                version: this.options.uiVersion,
-                systemUis: this.options.uiSystem,
-            })))
-            this.send(JSON.stringify(this.generateMessage('/streaming/properties/clientappinstallidchanged', {
-                clientAppInstallId: 'c11ddb2e-c7e3-4f02-a62b-fd5448e0b851',
-            })))
-            this.send(JSON.stringify(this.generateMessage('/streaming/characteristics/orientationchanged', {
-                orientation: 0,
-            })))
-            this.send(JSON.stringify(this.generateMessage('/streaming/characteristics/touchinputenabledchanged', {
-                touchInputEnabled: this.options.touchEnabled,
-            })))
-            this.send(JSON.stringify(this.generateMessage('/streaming/characteristics/clientdevicecapabilities', {})))
-            this.send(JSON.stringify(this.generateMessage('/streaming/characteristics/dimensionschanged', {
-                horizontal: 1920,
-                vertical: 1080,
-                preferredWidth: 1920,
-                preferredHeight: 1080,
-                safeAreaLeft: 0,
-                safeAreaTop: 0,
-                safeAreaRight: 1920,
-                safeAreaBottom: 1080,
-                supportsCustomResolution: true,
-            })))
-        }
-        if (event.data.includes('/titleinfo')) {
-            const content = JSON.parse(jsonMessage.content);
-            (window as any)._xboxTitleId = parseInt(content.titleid, 16)
-        }
-        this.emitter.emit('channel.message', jsonMessage)
+  onMessage(event: MessageEvent): void {
+    if (typeof event.data !== 'string') {
+      return
     }
+    const jsonMessage = parseJsonMessage(event.data)
+    if (jsonMessage.type === 'HandshakeAck') {
+      console.info('[player][message] HandshakeAck received')
+      this.delegate.onHandshakeAck()
+      this.send(
+        JSON.stringify(
+          this.generateMessage('/streaming/systemUi/configuration', {
+            version: this.options.uiVersion,
+            systemUis: this.options.uiSystem
+          })
+        )
+      )
+      this.send(
+        JSON.stringify(
+            this.generateMessage('/streaming/properties/clientappinstallidchanged', {
+            clientAppInstallId: STREAM_MESSAGE_HANDSHAKE.clientAppInstallId
+          })
+        )
+      )
+      this.send(
+        JSON.stringify(
+          this.generateMessage('/streaming/characteristics/orientationchanged', {
+            orientation: 0
+          })
+        )
+      )
+      this.send(
+        JSON.stringify(
+          this.generateMessage('/streaming/characteristics/touchinputenabledchanged', {
+            touchInputEnabled: false
+          })
+        )
+      )
+      this.send(
+        JSON.stringify(
+          this.generateMessage('/streaming/characteristics/clientdevicecapabilities', {})
+        )
+      )
+      this.send(
+        JSON.stringify(
+          this.generateMessage('/streaming/characteristics/dimensionschanged', {
+            horizontal: STREAM_DEFAULT_VIEWPORT.width,
+            vertical: STREAM_DEFAULT_VIEWPORT.height,
+            preferredWidth: STREAM_DEFAULT_VIEWPORT.width,
+            preferredHeight: STREAM_DEFAULT_VIEWPORT.height,
+            safeAreaLeft: 0,
+            safeAreaTop: 0,
+            safeAreaRight: STREAM_DEFAULT_VIEWPORT.width,
+            safeAreaBottom: STREAM_DEFAULT_VIEWPORT.height,
+            supportsCustomResolution: true
+          })
+        )
+      )
+    }
+    if (event.data.includes('/titleinfo') && typeof jsonMessage.content === 'string') {
+      const content = JSON.parse(jsonMessage.content) as { titleid?: string }
+      if (typeof content.titleid === 'string') {
+        ;(window as WindowWithXboxTitle)._xboxTitleId = parseInt(content.titleid, 16)
+      }
+    }
+    this.emitter.emit('channel.message', jsonMessage)
+  }
 
-    private generateMessage(target: string, data: Record<string, any>): Record<string, any> {
-        return {
-            type: 'Message',
-            content: JSON.stringify(data),
-            id: '41f93d5a-900f-4d33-b7a1-2d4ca6747072',
-            target,
-            cv: '',
-        }
+  private generateMessage(target: string, data: MessagePayload): MessagePayload {
+    return {
+      type: 'Message',
+      content: JSON.stringify(data),
+      id: STREAM_MESSAGE_HANDSHAKE.transactionId,
+      target,
+      cv: ''
     }
+  }
 
-    sendTransaction(id: string, data: Record<string, any>): void {
-        this.send(JSON.stringify({
-            type: 'TransactionComplete',
-            content: JSON.stringify(data),
-            id,
-            cv: '',
-        }))
-    }
+  sendTransaction(id: string, data: MessagePayload): void {
+    this.send(
+      JSON.stringify({
+        type: 'TransactionComplete',
+        content: JSON.stringify(data),
+        id,
+        cv: ''
+      })
+    )
+  }
 }

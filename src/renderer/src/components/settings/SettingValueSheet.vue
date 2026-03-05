@@ -419,7 +419,7 @@ watch(
   min-height: var(--ui-settings-modal-action-min-height);
   padding: 0 16px;
   border: 1px solid transparent;
-  border-radius: var(--ui-radius-pill);
+  border-radius: var(--ui-action-pill-radius);
   transition:
     border-color var(--ui-motion-fast),
     background-color var(--ui-motion-fast),

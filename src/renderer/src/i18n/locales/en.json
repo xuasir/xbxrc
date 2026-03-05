@@ -101,6 +101,7 @@
       "waitingResources": "Waiting for streaming resources...",
       "waitingQueue": "Waiting in queue... {seconds}s",
       "connected": "Connected",
+      "reconnecting": "Restoring connection...",
       "connecting": "Connecting..."
     },
     "actions": {
@@ -170,6 +171,7 @@
       "connectionClosed": "Streaming connection closed",
       "sessionMissing": "Streaming session is missing",
       "startFailed": "Failed to start stream",
+      "remoteConsoleNotReady": "The console has not finished registering for remote streaming yet. Diagnostic details: {details}",
       "targetMissing": "Stream target id is missing",
       "powerOffFailed": "The power-off command was not accepted. Verify remote features are enabled and try again."
     }
@@ -402,14 +404,6 @@
         "label": "Audio Control",
         "description": "Enable in-stream audio volume control"
       },
-      "enable_audio_rumble": {
-        "label": "Audio Rumble",
-        "description": "Drive controller rumble from audio feedback"
-      },
-      "audio_rumble_threshold": {
-        "label": "Audio Rumble Threshold",
-        "description": "Threshold for triggering audio-driven rumble"
-      },
       "preferred_game_language": {
         "label": "Preferred Game Language",
         "description": "Language preference passed into the game session",
@@ -522,6 +516,20 @@
         "label": "Performance Style",
         "description": "Switch the performance overlay presentation style"
       },
+      "stream_runtime_mode": {
+        "label": "Runtime Mode",
+        "description": "Select whether streaming uses the browser runtime or the Rust sidecar",
+        "options": {
+          "webrtc_direct": {
+            "label": "WebRTC Direct",
+            "description": "Use the browser WebRTC, decode, and render path"
+          },
+          "rust_owned": {
+            "label": "Rust Owned",
+            "description": "Use the Rust sidecar for transport, decode, render, and input"
+          }
+        }
+      },
       "display_options": {
         "label": "Display Options",
         "description": "Sharpness, saturation, contrast and brightness"
@@ -529,74 +537,6 @@
       "vibration": {
         "label": "Vibration",
         "description": "Enable controller vibration output"
-      },
-      "vibration_mode": {
-        "label": "Vibration Mode",
-        "description": "Controller vibration implementation mode"
-      },
-      "gamepad_kernal": {
-        "label": "Gamepad Kernel",
-        "description": "Underlying gamepad kernel mode"
-      },
-      "gamepad_mix": {
-        "label": "Gamepad Mixed Input",
-        "description": "Allow mixed controller input handling"
-      },
-      "gamepad_index": {
-        "label": "Gamepad Index",
-        "description": "Controller index, where -1 means automatic selection",
-        "options": {
-          "_1": {
-            "label": "Auto",
-            "description": "Automatically select the active controller"
-          },
-          "0": { "label": "1" },
-          "1": { "label": "2" },
-          "2": { "label": "3" },
-          "3": { "label": "4" }
-        }
-      },
-      "dead_zone": {
-        "label": "Dead Zone",
-        "description": "Analog stick dead zone"
-      },
-      "edge_compensation": {
-        "label": "Edge Compensation",
-        "description": "Analog stick edge compensation"
-      },
-      "force_trigger_rumble": {
-        "label": "Trigger Rumble",
-        "description": "Choose which trigger receives rumble feedback",
-        "options": {
-          "empty": {
-            "label": "Off",
-            "description": "Disable trigger rumble override"
-          },
-          "all": {
-            "label": "All Triggers",
-            "description": "Apply rumble to both triggers"
-          },
-          "left": {
-            "label": "Left Trigger",
-            "description": "Apply rumble to the left trigger"
-          },
-          "right": {
-            "label": "Right Trigger",
-            "description": "Apply rumble to the right trigger"
-          }
-        }
-      },
-      "virtual_gamepad_opacity": {
-        "label": "Virtual Gamepad Opacity",
-        "description": "Opacity of the on-screen virtual gamepad"
-      },
-      "enable_native_mouse_keyboard": {
-        "label": "Native Mouse Keyboard",
-        "description": "Enable native mouse and keyboard input"
-      },
-      "mouse_sensitive": {
-        "label": "Mouse Sensitivity",
-        "description": "Sensitivity multiplier for mouse input"
       },
       "power_on": {
         "label": "Power On",

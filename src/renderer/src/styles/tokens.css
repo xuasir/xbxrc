@@ -1,0 +1,207 @@
+:root {
+  /* Token 真源：先落 RFC 命名，后续逐步替换组件消费。 */
+  --brand-primary: #107c10;
+  --brand-primary-strong: #16a316;
+  --brand-accent: #2bc24a;
+  --brand-on-primary: #ffffff;
+
+  --neutral-0: #000000;
+  --neutral-50: #0a0a0a;
+  --neutral-100: #0f0f10;
+  --neutral-150: #121214;
+  --neutral-200: #151518;
+  --neutral-250: #19191d;
+  --neutral-300: #1f1f24;
+  --neutral-350: #26262c;
+  --neutral-400: #2e2e36;
+  --neutral-500: #3a3a44;
+  --neutral-600: #52525e;
+  --neutral-700: #7a7a86;
+  --neutral-800: #a6a6b0;
+  --neutral-900: #d3d3da;
+  --neutral-1000: #ffffff;
+
+  --color-bg: var(--neutral-100);
+  --color-bg-elevated: var(--neutral-150);
+  --color-surface-0: var(--neutral-100);
+  --color-surface-1: var(--neutral-200);
+  --color-surface-2: var(--neutral-250);
+  --color-surface-3: var(--neutral-300);
+
+  --color-text-primary: var(--neutral-1000);
+  --color-text-secondary: #cfcfd6;
+  --color-text-tertiary: #9b9ba6;
+  --color-text-disabled: #6f6f7a;
+  --color-text-inverse: #0a0a0a;
+  --color-text-on-media: #ffffff;
+
+  --color-border-subtle: rgba(255, 255, 255, 0.08);
+  --color-border: rgba(255, 255, 255, 0.14);
+  --color-border-strong: rgba(255, 255, 255, 0.22);
+  --color-divider: rgba(255, 255, 255, 0.1);
+
+  --color-state-hover: rgba(255, 255, 255, 0.06);
+  --color-state-pressed: rgba(255, 255, 255, 0.1);
+  --color-state-selected: rgba(16, 124, 16, 0.22);
+  --color-state-disabled: rgba(255, 255, 255, 0.04);
+
+  --color-success: #2bc24a;
+  --color-warning: #f7b500;
+  --color-danger: #ff4d4f;
+  --color-info: #4da3ff;
+  --color-focus-ring: #7cff7c;
+  --color-focus-ring-outer: rgba(124, 255, 124, 0.4);
+
+  --font-family-sans:
+    ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial,
+    'Apple Color Emoji', 'Segoe UI Emoji';
+
+  --font-size-12: 12px;
+  --font-size-14: 14px;
+  --font-size-16: 16px;
+  --font-size-18: 18px;
+  --font-size-20: 20px;
+  --font-size-24: 24px;
+  --font-size-28: 28px;
+  --font-size-32: 32px;
+  --font-size-40: 40px;
+
+  --font-weight-regular: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+
+  --line-height-12: 16px;
+  --line-height-14: 20px;
+  --line-height-16: 24px;
+  --line-height-18: 26px;
+  --line-height-20: 28px;
+  --line-height-24: 32px;
+  --line-height-28: 36px;
+  --line-height-32: 40px;
+  --line-height-40: 48px;
+
+  --type-title-lg-size: var(--font-size-32);
+  --type-title-lg-line: var(--line-height-32);
+  --type-title-lg-weight: var(--font-weight-semibold);
+  --type-title-md-size: var(--font-size-24);
+  --type-title-md-line: var(--line-height-24);
+  --type-title-md-weight: var(--font-weight-semibold);
+  --type-title-sm-size: var(--font-size-20);
+  --type-title-sm-line: var(--line-height-20);
+  --type-title-sm-weight: var(--font-weight-semibold);
+  --type-body-size: var(--font-size-16);
+  --type-body-line: var(--line-height-16);
+  --type-body-weight: var(--font-weight-regular);
+  --type-body-sm-size: var(--font-size-14);
+  --type-body-sm-line: var(--line-height-14);
+  --type-body-sm-weight: var(--font-weight-regular);
+  --type-caption-size: var(--font-size-12);
+  --type-caption-line: var(--line-height-12);
+  --type-caption-weight: var(--font-weight-medium);
+
+  --space-0: 0px;
+  --space-2: 2px;
+  --space-4: 4px;
+  --space-6: 6px;
+  --space-8: 8px;
+  --space-10: 10px;
+  --space-12: 12px;
+  --space-16: 16px;
+  --space-20: 20px;
+  --space-24: 24px;
+  --space-28: 28px;
+  --space-32: 32px;
+  --space-40: 40px;
+  --space-48: 48px;
+  --space-64: 64px;
+
+  --radius-0: 0px;
+  --radius-6: 6px;
+  --radius-10: 10px;
+  --radius-12: 12px;
+  --radius-16: 16px;
+  --radius-20: 20px;
+  --radius-pill: 999px;
+
+  --shadow-0: none;
+  --shadow-1: 0 4px 16px rgba(0, 0, 0, 0.35);
+  --shadow-2: 0 10px 30px rgba(0, 0, 0, 0.45);
+  --shadow-3: 0 18px 60px rgba(0, 0, 0, 0.55);
+
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --ease-emphasized: cubic-bezier(0.2, 0, 0, 1.2);
+  --ease-linear: linear;
+  --duration-80: 80ms;
+  --duration-120: 120ms;
+  --duration-160: 160ms;
+  --duration-200: 200ms;
+  --duration-240: 240ms;
+  --duration-320: 320ms;
+  --scale-hover: 1.03;
+  --scale-focus: 1.04;
+  --scale-pressed: 0.99;
+  --blur-0: 0px;
+  --blur-8: 8px;
+  --blur-16: 16px;
+
+  --container-max: 1440px;
+  --nav-height: 56px;
+  --safe-padding-x: var(--space-16);
+
+  --z-base: 0;
+  --z-nav: 10;
+  --z-sticky: 20;
+  --z-overlay: 100;
+  --z-drawer: 120;
+  --z-modal: 140;
+  --z-toast: 200;
+
+  --tile-radius: var(--radius-16);
+  --tile-bg: var(--color-surface-1);
+  --tile-border: var(--color-border-subtle);
+  --tile-shadow: var(--shadow-1);
+  --tile-aspect-game: 16 / 9;
+  --tile-aspect-console: 3 / 2;
+  --tile-padding: var(--space-12);
+  --tile-gap: var(--space-10);
+  --tile-focus-ring-width: 2px;
+  --tile-focus-ring-offset: 2px;
+  --tile-meta-bg: rgba(0, 0, 0, 0.45);
+  --tile-meta-text: var(--color-text-on-media);
+
+  --shelf-title-gap: var(--space-12);
+  --shelf-row-gap: var(--space-16);
+  --shelf-scroll-padding: var(--space-16);
+  --shelf-snap: mandatory;
+
+  --btn-radius: var(--radius-12);
+  --btn-height-md: 40px;
+  --btn-height-lg: 48px;
+  --btn-primary-bg: var(--brand-primary);
+  --btn-primary-bg-hover: var(--brand-primary-strong);
+  --btn-primary-text: var(--brand-on-primary);
+  --btn-ghost-bg: transparent;
+  --btn-ghost-bg-hover: var(--color-state-hover);
+  --btn-ghost-text: var(--color-text-primary);
+  --btn-border: var(--color-border);
+
+  --pill-radius: var(--radius-pill);
+  --pill-bg: rgba(255, 255, 255, 0.08);
+  --pill-bg-strong: rgba(255, 255, 255, 0.14);
+  --pill-text: var(--color-text-secondary);
+
+  --settings-nav-width: 320px;
+  --settings-item-height: 56px;
+  --settings-item-radius: var(--radius-12);
+
+  --drawer-width: 360px;
+  --drawer-width-lg: 420px;
+  --drawer-bg: var(--color-surface-2);
+  --drawer-border: var(--color-border-subtle);
+  --drawer-shadow: var(--shadow-3);
+  --scrim-bg: rgba(0, 0, 0, 0.55);
+  --scrim-blur: var(--blur-8);
+
+  --focus-ring-width: 2px;
+  --focus-ring-radius: var(--radius-12);
+}

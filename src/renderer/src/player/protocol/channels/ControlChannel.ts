@@ -1,4 +1,5 @@
 import { BaseChannel, ChannelContext } from './BaseChannel'
+import { STREAM_CONTROL_PROFILE } from '../networkProfile'
 
 export interface ControlChannelDelegate {
   onClose(): void;
@@ -64,10 +65,16 @@ export class ControlChannel extends BaseChannel {
         this.started = true
         this.send(JSON.stringify({
             message: 'authorizationRequest',
-            accessKey: '4BDB3609-C1F1-4195-9B37-FEFF45DA8B8E',
+            accessKey: STREAM_CONTROL_PROFILE.accessKey,
         }))
         this.sendGamepadRemoved(0)
-        window.setTimeout(() => this.sendGamepadAdded(0), 500)
-        this.keyframeInterval = window.setInterval(() => this.requestKeyframe(), 5000)
+        window.setTimeout(
+          () => this.sendGamepadAdded(0),
+          STREAM_CONTROL_PROFILE.gamepadAddedDelayMs
+        )
+        this.keyframeInterval = window.setInterval(
+          () => this.requestKeyframe(),
+          STREAM_CONTROL_PROFILE.keyframeIntervalMs
+        )
     }
 }

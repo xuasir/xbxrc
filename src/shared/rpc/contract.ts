@@ -1,5 +1,15 @@
 import type { RpcMethod } from './types'
 import type {
+  GamepadRouteTargetDto,
+  GamepadRumbleRequestDto,
+  GamepadRumbleResultDto,
+  GamepadRumbleTargetDto,
+  GamepadRuntimeSnapshotDto,
+  GamepadSamplingStrategyDto,
+  GamepadSamplingConfigDto,
+  LogicalPadBindingDto
+} from '../gamepad/contract'
+import type {
   StreamingCloseSessionParams,
   StreamingCreateSessionParams,
   StreamingExchangeIceParams,
@@ -15,6 +25,27 @@ import type {
   StreamingTargetType,
   StreamingTurnServerConfig
 } from './streaming'
+import type {
+  StreamHostCloseSessionParams,
+  StreamHostExchangeIceParams,
+  StreamHostExchangeIceResult,
+  StreamHostExchangeOfferParams,
+  StreamHostExchangeOfferResult,
+  StreamHostKeepAliveParams
+} from './stream-host'
+import type {
+  XbxEngineAckResult,
+  XbxEngineApplyDisplayStateParams,
+  XbxEngineAttachViewportParams,
+  XbxEngineKeyboardPointerEnabledParams,
+  XbxEnginePressControllerButtonParams,
+  XbxEnginePushInputParams,
+  XbxEngineRequestReconnectParams,
+  XbxEngineRuntimeEventDto,
+  XbxEngineSetAudioVolumeParams,
+  XbxEngineStartRuntimeParams,
+  XbxEngineStatsDto
+} from './xbxengine'
 
 type RpcConfigGroup = Record<string, unknown>
 
@@ -83,6 +114,21 @@ export interface XBoxRpcSchema {
       }
     >
   }
+  gamepad: {
+    getRuntimeSnapshot: RpcMethod<void, GamepadRuntimeSnapshotDto>
+    setRouteTarget: RpcMethod<{ target: GamepadRouteTargetDto }, GamepadRuntimeSnapshotDto>
+    updateSampling: RpcMethod<{ sampling: GamepadSamplingConfigDto }, GamepadRuntimeSnapshotDto>
+    rebindLogicalPad: RpcMethod<{ binding: LogicalPadBindingDto }, GamepadRuntimeSnapshotDto>
+    setSamplingStrategy: RpcMethod<
+      { strategy: GamepadSamplingStrategyDto },
+      GamepadRuntimeSnapshotDto
+    >
+    setPrimarySamplingDevice: RpcMethod<{ deviceId: string | null }, GamepadRuntimeSnapshotDto>
+    pauseSamplingDevice: RpcMethod<{ deviceId: string }, GamepadRuntimeSnapshotDto>
+    resumeSamplingDevice: RpcMethod<{ deviceId: string }, GamepadRuntimeSnapshotDto>
+    playRumble: RpcMethod<{ request: GamepadRumbleRequestDto }, GamepadRumbleResultDto>
+    stopRumble: RpcMethod<{ target: GamepadRumbleTargetDto }, GamepadRumbleResultDto>
+  }
   data: {
     getUserProfile: RpcMethod<
       void,
@@ -150,7 +196,10 @@ export interface XBoxRpcSchema {
     >
     powerOnConsole: RpcMethod<{ consoleId: string }, { consoleId: string; accepted: boolean }>
     powerOffConsole: RpcMethod<{ consoleId: string }, { consoleId: string; accepted: boolean }>
-    sendTextToConsole: RpcMethod<{ consoleId: string; text: string }, { consoleId: string; accepted: boolean }>
+    sendTextToConsole: RpcMethod<
+      { consoleId: string; text: string },
+      { consoleId: string; accepted: boolean }
+    >
     getXcloudTitles: RpcMethod<
       void,
       Array<{
@@ -182,7 +231,35 @@ export interface XBoxRpcSchema {
     exchangeOffer: RpcMethod<StreamingExchangeOfferParams, StreamingExchangeOfferResult>
     exchangeIce: RpcMethod<StreamingExchangeIceParams, StreamingExchangeIceResult>
     sendKeepAlive: RpcMethod<StreamingKeepAliveParams, StreamingKeepAliveResult>
-    listActiveSessions: RpcMethod<StreamingListActiveSessionsParams, StreamingListActiveSessionsResult>
+    listActiveSessions: RpcMethod<
+      StreamingListActiveSessionsParams,
+      StreamingListActiveSessionsResult
+    >
+  }
+  streamHost: {
+    exchangeOffer: RpcMethod<StreamHostExchangeOfferParams, StreamHostExchangeOfferResult>
+    exchangeIce: RpcMethod<StreamHostExchangeIceParams, StreamHostExchangeIceResult>
+    keepAliveRemoteSession: RpcMethod<StreamHostKeepAliveParams, { accepted: boolean }>
+    closeRemoteSession: RpcMethod<StreamHostCloseSessionParams, { closed: boolean }>
+  }
+  xbxEngine: {
+    startRuntime: RpcMethod<XbxEngineStartRuntimeParams, XbxEngineAckResult>
+    requestReconnect: RpcMethod<XbxEngineRequestReconnectParams, XbxEngineAckResult>
+    stopRuntime: RpcMethod<void, XbxEngineAckResult>
+    attachViewport: RpcMethod<XbxEngineAttachViewportParams, XbxEngineAckResult>
+    detachViewport: RpcMethod<void, XbxEngineAckResult>
+    applyDisplayState: RpcMethod<XbxEngineApplyDisplayStateParams, XbxEngineAckResult>
+    pressControllerButton: RpcMethod<XbxEnginePressControllerButtonParams, XbxEngineAckResult>
+    setKeyboardPointerEnabled: RpcMethod<
+      XbxEngineKeyboardPointerEnabledParams,
+      XbxEngineAckResult
+    >
+    pushKeyboardPointerInput: RpcMethod<XbxEnginePushInputParams, XbxEngineAckResult>
+    setAudioVolume: RpcMethod<XbxEngineSetAudioVolumeParams, XbxEngineAckResult>
+    startMicrophone: RpcMethod<void, XbxEngineAckResult>
+    stopMicrophone: RpcMethod<void, XbxEngineAckResult>
+    snapshotStats: RpcMethod<void, XbxEngineStatsDto>
+    getLastRuntimeEvent: RpcMethod<void, XbxEngineRuntimeEventDto | null>
   }
   system: {
     openExternal: RpcMethod<{ url: string }, void>

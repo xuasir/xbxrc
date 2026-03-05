@@ -4,7 +4,10 @@ import { createAppHandlers } from './app'
 import { createAuthHandlers } from './auth'
 import { createConfigHandlers } from './config'
 import { createDataHandlers } from './data'
+import { createGamepadHandlers } from './gamepad'
+import { createStreamHostHandlers } from './stream-host'
 import { createStreamingHandlers } from './streaming'
+import { createXbxEngineHandlers } from './xbxengine'
 import { createSystemHandlers } from './system'
 import type { RpcRuntimeState } from './types'
 
@@ -13,8 +16,11 @@ export function createRpcHandlers(runtime: RpcRuntimeState): RpcHandlerMap<XBoxR
     app: createAppHandlers(runtime),
     auth: createAuthHandlers(),
     config: createConfigHandlers(),
+    gamepad: createGamepadHandlers(),
     data: createDataHandlers(),
     streaming: createStreamingHandlers(),
+    streamHost: createStreamHostHandlers(),
+    xbxEngine: createXbxEngineHandlers(),
     system: createSystemHandlers()
   }
 }

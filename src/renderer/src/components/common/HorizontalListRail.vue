@@ -84,7 +84,7 @@ onBeforeUnmount(() => {
 .horizontal-list-rail {
   display: flex;
   flex-direction: column;
-  gap: var(--ui-rail-gap);
+  gap: var(--shelf-row-gap);
   min-width: 0;
 }
 
@@ -98,7 +98,7 @@ onBeforeUnmount(() => {
 .horizontal-list-rail__copy {
   display: flex;
   flex-direction: column;
-  gap: var(--ui-rail-copy-gap);
+  gap: var(--shelf-title-gap);
   min-width: 0;
 }
 
@@ -106,24 +106,22 @@ onBeforeUnmount(() => {
   font-size: var(--ui-rail-title-size);
   font-weight: var(--ui-font-weight-bold);
   line-height: 1.1;
-  color: var(--ui-page-text);
+  color: var(--color-text-primary);
 }
 
 .horizontal-list-rail__hint {
   font-size: var(--ui-rail-hint-size);
   line-height: 1.4;
-  color: var(--ui-page-text-soft);
+  color: var(--color-text-secondary);
 }
 
 .horizontal-list-rail__viewport {
   overflow-x: auto;
   overflow-y: hidden;
-  padding:
-    var(--ui-rail-padding-block-start)
-    var(--ui-rail-padding-inline)
+  padding: var(--ui-rail-padding-block-start) var(--shelf-scroll-padding)
     var(--ui-rail-padding-block-end);
   scroll-behavior: smooth;
-  scroll-padding-inline: var(--ui-rail-padding-inline);
+  scroll-padding-inline: var(--shelf-scroll-padding);
   scrollbar-width: none;
   -ms-overflow-style: none;
 }
@@ -134,7 +132,7 @@ onBeforeUnmount(() => {
 
 .horizontal-list-rail__scroller {
   display: flex;
-  gap: var(--ui-rail-gap);
+  gap: var(--shelf-row-gap);
   min-width: max-content;
 }
 </style>

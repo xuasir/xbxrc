@@ -7,9 +7,6 @@ export interface DisplayOptions {
   brightness: number
 }
 
-export type InputMouseKeyboardMapping = Record<string, string>
-export type GamepadMapping = Record<string, unknown> | null
-
 export interface AppConfig {
   locale: string
   use_msal: boolean
@@ -24,33 +21,20 @@ export interface AppConfig {
   audio_bitrate_mode: ConfigBitrateMode
   audio_bitrate: number
   enable_audio_control: boolean
-  enable_audio_rumble: boolean
-  audio_rumble_threshold: number
   preferred_game_language: string
   force_region_ip: string
   codec: string
   polling_rate: number
   vibration: boolean
-  vibration_mode: string
-  gamepad_kernal: string
-  gamepad_mix: boolean
-  gamepad_index: number
-  dead_zone: number
-  edge_compensation: number
-  force_trigger_rumble: '' | 'all' | 'left' | 'right'
   power_on: boolean
   video_format: string
-  virtual_gamepad_opacity: number
-  gamepad_maping: GamepadMapping
   ipv6: boolean
-  enable_native_mouse_keyboard: boolean
-  mouse_sensitive: number
   performance_style: boolean
+  stream_runtime_mode: 'webrtc-direct' | 'rust-owned'
   server_url: string
   server_username: string
   server_credential: string
   background_keepalive: boolean
-  input_mousekeyboard_maping: InputMouseKeyboardMapping
   display_options: DisplayOptions
   use_vulkan: boolean
   debug: boolean
@@ -72,33 +56,20 @@ export const APP_CONFIG_KEYS = [
   'audio_bitrate_mode',
   'audio_bitrate',
   'enable_audio_control',
-  'enable_audio_rumble',
-  'audio_rumble_threshold',
   'preferred_game_language',
   'force_region_ip',
   'codec',
   'polling_rate',
   'vibration',
-  'vibration_mode',
-  'gamepad_kernal',
-  'gamepad_mix',
-  'gamepad_index',
-  'dead_zone',
-  'edge_compensation',
-  'force_trigger_rumble',
   'power_on',
   'video_format',
-  'virtual_gamepad_opacity',
-  'gamepad_maping',
   'ipv6',
-  'enable_native_mouse_keyboard',
-  'mouse_sensitive',
   'performance_style',
+  'stream_runtime_mode',
   'server_url',
   'server_username',
   'server_credential',
   'background_keepalive',
-  'input_mousekeyboard_maping',
   'display_options',
   'use_vulkan',
   'debug'
@@ -119,32 +90,16 @@ export type ConfigStreamingGroup = Pick<
   | 'audio_bitrate_mode'
   | 'audio_bitrate'
   | 'enable_audio_control'
-  | 'enable_audio_rumble'
-  | 'audio_rumble_threshold'
   | 'preferred_game_language'
   | 'codec'
   | 'polling_rate'
   | 'video_format'
   | 'ipv6'
   | 'performance_style'
+  | 'stream_runtime_mode'
   | 'display_options'
 >
-export type ConfigInputGroup = Pick<
-  AppConfig,
-  | 'vibration'
-  | 'vibration_mode'
-  | 'gamepad_kernal'
-  | 'gamepad_mix'
-  | 'gamepad_index'
-  | 'dead_zone'
-  | 'edge_compensation'
-  | 'force_trigger_rumble'
-  | 'virtual_gamepad_opacity'
-  | 'gamepad_maping'
-  | 'enable_native_mouse_keyboard'
-  | 'mouse_sensitive'
-  | 'input_mousekeyboard_maping'
->
+export type ConfigInputGroup = Pick<AppConfig, 'vibration'>
 export type ConfigXhomeGroup = Pick<
   AppConfig,
   | 'xhome_auto_connect_server_id'

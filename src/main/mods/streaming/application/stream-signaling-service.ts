@@ -46,12 +46,19 @@ export class StreamSignalingService {
   ): Promise<StreamingIceCandidate[]> {
     for (;;) {
       const candidates = await api.getIceExchangeResponse(sessionId)
-      if (candidates !== null) {
+      if (candidates !== null && this.hasUsableIceCandidates(candidates)) {
         return candidates
       }
       await this.delay(1000)
       this.getSessionRecord(sessionId)
     }
+  }
+
+  private hasUsableIceCandidates(candidates: StreamingIceCandidate[]): boolean {
+    return candidates.some((candidate) => {
+      const normalizedCandidate = candidate.candidate.trim()
+      return normalizedCandidate.length > 0 && normalizedCandidate !== 'a=end-of-candidates'
+    })
   }
 
   private async delay(ms: number): Promise<void> {

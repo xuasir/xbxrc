@@ -1,10 +1,14 @@
 import { nextTick, ref, shallowRef } from 'vue'
-import type { StreamStats } from './index'
+import type {
+  StreamRuntime,
+  StreamRuntimeMode,
+  StreamRuntimePhase,
+  StreamRuntimeReconnectReason,
+  StreamStats
+} from './index'
 import type { DisplayOptionsValue, StreamConfigSnapshot, TurnServerConfig } from '../types'
-import { normalizeDisplayOptions, sleep } from '../utils'
-import { createWebStreamRuntime, getDefaultStreamDisplayOptions } from './createWebStreamRuntime'
-import { applyStreamVideoDisplay, bindRuntimeVideoFrameTracking } from './video-display'
-import type { StreamRuntimeClient } from './index'
+import { DEFAULT_DISPLAY_OPTIONS, normalizeDisplayOptions, sleep } from '../utils'
+import { createStreamRuntime } from './createStreamRuntime'
 
 type BrowserInterval = number
 
@@ -13,32 +17,47 @@ interface UseStreamRuntimeOptions {
   getStreamConfig: () => StreamConfigSnapshot
   onConnectionStateChange: (state: RTCPeerConnectionState) => void
   onRuntimeError: (message: string) => void
+  onRuntimePhaseChange: (phase: StreamRuntimePhase) => void
 }
 
 interface StartStreamRuntimeInput {
+  mode: StreamRuntimeMode
+  sessionId: string
   targetType: 'home' | 'cloud'
   turnServer: TurnServerConfig | null
 }
 
-// 本地串流 runtime：只负责端点生命周期、媒体/输入控制与本地观测。
+// 本地串流 runtime 宿主：只负责托管 mode-specific runtime 与页面侧观测。
 export function useStreamRuntime(options: UseStreamRuntimeOptions) {
-  // PlayerClient 是类实例，使用 shallowRef 避免被 Vue 深度解包后丢失实例类型。
-  const runtime = shallowRef<StreamRuntimeClient | null>(null)
+  const runtime = shallowRef<StreamRuntime | null>(null)
   const runtimeStarted = ref(false)
   const performanceTimer = ref<BrowserInterval | null>(null)
   const audioVolume = ref(1)
   const microphoneOpen = ref(false)
   const performanceEnabled = ref(false)
   const performanceSnapshot = ref<StreamStats | null>(null)
-  const displayOptions = ref<DisplayOptionsValue>(getDefaultStreamDisplayOptions())
+  const displayOptions = ref<DisplayOptionsValue>({ ...DEFAULT_DISPLAY_OPTIONS })
   const lastFrameAt = ref<number | null>(null)
   const runtimeCleanups: Array<() => void> = []
+  let frameTrackingCleanup: (() => void) | null = null
+  let frameTrackingTimer: BrowserInterval | null = null
   let runtimeToken = 0
 
   function clearPerformancePolling(): void {
     if (performanceTimer.value !== null) {
       clearInterval(performanceTimer.value)
       performanceTimer.value = null
+    }
+  }
+
+  function clearFrameTracking(): void {
+    if (frameTrackingTimer !== null) {
+      window.clearTimeout(frameTrackingTimer)
+      frameTrackingTimer = null
+    }
+    if (frameTrackingCleanup !== null) {
+      frameTrackingCleanup()
+      frameTrackingCleanup = null
     }
   }
 
@@ -56,25 +75,23 @@ export function useStreamRuntime(options: UseStreamRuntimeOptions) {
     return token === runtimeToken
   }
 
-  function currentRuntimeToken(): number {
-    return runtimeToken
-  }
-
-  function closeRuntime(): void {
+  async function closeRuntime(): Promise<void> {
     runtimeToken += 1
     clearPerformancePolling()
+    clearFrameTracking()
     clearRuntimeSubscriptions()
-    runtime.value?.close()
+    const currentRuntime = runtime.value
     runtime.value = null
     runtimeStarted.value = false
     microphoneOpen.value = false
     performanceSnapshot.value = null
     lastFrameAt.value = null
+    currentRuntime?.viewport().detach()
+    await currentRuntime?.stop()
   }
 
-  function applyVideoDisplay(): void {
-    applyStreamVideoDisplay({
-      playerElementId: options.playerElementId,
+  function applyRuntimeDisplayState(nextRuntime: StreamRuntime): void {
+    nextRuntime.viewport().applyDisplayState({
       displayOptions: displayOptions.value,
       config: options.getStreamConfig()
     })
@@ -109,24 +126,32 @@ export function useStreamRuntime(options: UseStreamRuntimeOptions) {
     performanceTimer.value = window.setInterval(refresh, 2_000)
   }
 
-  function handleRuntimeConnected(nextRuntime: StreamRuntimeClient, token: number): void {
-    window.setTimeout(() => {
+  function handleRuntimeConnected(nextRuntime: StreamRuntime, token: number): void {
+    // connected 可能在重连后再次到来，这里要先清掉上一轮的帧追踪。
+    clearFrameTracking()
+    frameTrackingTimer = window.setTimeout(() => {
+      frameTrackingTimer = null
       if (!isRuntimeTokenActive(token)) {
         return
       }
-      applyVideoDisplay()
-      bindRuntimeVideoFrameTracking({
-        playerElementId: options.playerElementId,
-        runtime: nextRuntime,
-        onFrame: () => {
-          lastFrameAt.value = Date.now()
-        }
-      }).forEach(registerCleanup)
+      applyRuntimeDisplayState(nextRuntime)
+      frameTrackingCleanup = nextRuntime.viewport().bindFrameTracking(() => {
+        lastFrameAt.value = Date.now()
+      })
     }, 1_000)
     startPerformancePolling()
   }
 
-  function bindRuntimeEvents(nextRuntime: StreamRuntimeClient, token: number): void {
+  function bindRuntimeEvents(nextRuntime: StreamRuntime, token: number): void {
+    registerCleanup(
+      nextRuntime.events().on('runtime.phaseChanged', ({ phase }) => {
+        if (!isRuntimeTokenActive(token)) {
+          return
+        }
+        options.onRuntimePhaseChange(phase)
+      })
+    )
+
     registerCleanup(
       nextRuntime.events().on('transport.connectionState', ({ state }) => {
         if (!isRuntimeTokenActive(token)) {
@@ -136,7 +161,10 @@ export function useStreamRuntime(options: UseStreamRuntimeOptions) {
           handleRuntimeConnected(nextRuntime, token)
         }
         if (state === 'closed' || state === 'failed') {
+          // 旧连接一旦断开，要立刻丢掉它留下的帧时间戳和轮询状态。
           clearPerformancePolling()
+          clearFrameTracking()
+          lastFrameAt.value = null
         }
         options.onConnectionStateChange(state)
       })
@@ -161,15 +189,9 @@ export function useStreamRuntime(options: UseStreamRuntimeOptions) {
     )
   }
 
-  async function startRuntime(input: StartStreamRuntimeInput): Promise<{
-    runtime: StreamRuntimeClient
-    runtimeToken: number
-  }> {
+  async function startRuntime(input: StartStreamRuntimeInput): Promise<void> {
     if (runtimeStarted.value && runtime.value !== null) {
-      return {
-        runtime: runtime.value,
-        runtimeToken: currentRuntimeToken()
-      }
+      return
     }
 
     runtimeStarted.value = true
@@ -179,39 +201,40 @@ export function useStreamRuntime(options: UseStreamRuntimeOptions) {
     try {
       runtimeToken += 1
       const token = runtimeToken
-      const createdRuntime = createWebStreamRuntime({
-        playerElementId: options.playerElementId,
+      displayOptions.value = normalizeDisplayOptions(options.getStreamConfig().display_options)
+      const nextRuntime = await createStreamRuntime({
+        mode: input.mode,
+        viewportElementId: options.playerElementId,
         targetType: input.targetType,
         config: options.getStreamConfig(),
         audioVolume: audioVolume.value
       })
-      displayOptions.value = createdRuntime.displayOptions
-      const nextRuntime = createdRuntime.runtime
+      nextRuntime.viewport().attach({
+        elementId: options.playerElementId
+      })
       runtime.value = nextRuntime
       bindRuntimeEvents(nextRuntime, token)
-      nextRuntime.bind(
-        input.turnServer !== null
-          ? {
-              turnServer: input.turnServer
-            }
-          : undefined
-      )
+      await nextRuntime.start({
+        session: {
+          sessionId: input.sessionId,
+          targetType: input.targetType,
+          turnServer: input.turnServer
+        },
+        viewportHost: {
+          elementId: options.playerElementId
+        },
+        config: options.getStreamConfig(),
+        audioVolume: audioVolume.value
+      })
 
-      return {
-        runtime: nextRuntime,
-        runtimeToken: token
-      }
+      return
     } catch (error) {
-      closeRuntime()
+      await closeRuntime()
       throw error
     }
   }
 
-  function getRuntimeClient(): StreamRuntimeClient | null {
-    return runtime.value
-  }
-
-  function assertRuntimeClient(): StreamRuntimeClient {
+  function assertRuntime(): StreamRuntime {
     if (runtime.value === null) {
       throw new Error('streamRuntimeMissing')
     }
@@ -225,20 +248,8 @@ export function useStreamRuntime(options: UseStreamRuntimeOptions) {
     lastFrameAt,
     closeRuntime,
     startRuntime,
-    getRuntimeClient,
-    currentRuntimeToken,
-    isRuntimeTokenActive,
-    createOffer() {
-      return assertRuntimeClient().createOffer()
-    },
-    setRemoteDescription(answerSdp: string) {
-      return assertRuntimeClient().setRemoteDescription(answerSdp)
-    },
-    addIceCandidates(candidates: Parameters<StreamRuntimeClient['addIceCandidates']>[0]) {
-      return assertRuntimeClient().addIceCandidates(candidates)
-    },
-    waitForIceCandidates(timeoutMs = 4_000) {
-      return assertRuntimeClient().waitForIceCandidates(timeoutMs)
+    async requestReconnect(reason: StreamRuntimeReconnectReason): Promise<void> {
+      await assertRuntime().requestReconnect(reason)
     },
     setPerformanceEnabled(enabled: boolean) {
       performanceEnabled.value = enabled
@@ -246,14 +257,18 @@ export function useStreamRuntime(options: UseStreamRuntimeOptions) {
     },
     applyDisplayOptions(nextValue: DisplayOptionsValue) {
       displayOptions.value = normalizeDisplayOptions(nextValue)
-      applyVideoDisplay()
+      const nextRuntime = runtime.value
+      if (nextRuntime === null) {
+        return
+      }
+      applyRuntimeDisplayState(nextRuntime)
     },
     setAudioVolume(value: number) {
       audioVolume.value = value
       runtime.value?.audio().setVolumeDirect(value)
     },
     async toggleMicrophone(): Promise<boolean> {
-      const nextRuntime = assertRuntimeClient()
+      const nextRuntime = assertRuntime()
       const audioController = nextRuntime.audio()
       const micState = audioController.getMicState()
       if (!micState.capturing || micState.paused) {
@@ -272,10 +287,7 @@ export function useStreamRuntime(options: UseStreamRuntimeOptions) {
         return
       }
 
-      nextRuntime.input().pressButton('Nexus', durationMs)
-    },
-    setKeyboardInputEnabled(enabled: boolean) {
-      runtime.value?.input().setKeyboardInputEnabled(enabled)
+      nextRuntime.controllerInput().pressButton('home', durationMs)
     }
   }
 }

@@ -73,9 +73,9 @@ const props = withDefaults(defineProps<SpatialNavIconButtonProps>(), {
   height: var(--ui-size-control-lg);
   padding: 3px;
   border: 1px solid transparent;
-  border-radius: var(--ui-radius-sm);
+  border-radius: var(--btn-radius);
   background: transparent;
-  color: var(--ui-page-text);
+  color: var(--color-text-primary);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -91,13 +91,13 @@ const props = withDefaults(defineProps<SpatialNavIconButtonProps>(), {
 }
 
 .sn-icon-button[data-focused='true'] {
-  border-color: var(--ui-border-focus);
-  background: color-mix(in srgb, var(--ui-focus-surface) 32%, transparent);
-  box-shadow: var(--ui-focus-ring-shadow);
+  border-color: var(--color-focus-ring);
+  background: color-mix(in srgb, var(--color-state-hover) 72%, transparent);
+  box-shadow: 0 0 0 var(--focus-ring-width) var(--color-focus-ring-outer) inset;
 }
 
 .sn-icon-button--active {
-  background: var(--ui-focus-surface);
+  background: var(--color-state-selected);
 }
 
 .sn-icon-button__icon-shell {
@@ -119,8 +119,8 @@ const props = withDefaults(defineProps<SpatialNavIconButtonProps>(), {
 .sn-icon-button__icon-empty {
   width: var(--ui-size-icon-sm);
   height: var(--ui-size-icon-sm);
-  border-radius: var(--ui-radius-pill);
-  border: 1px dashed var(--ui-border-placeholder);
-  background: var(--ui-surface-placeholder);
+  border-radius: var(--pill-radius);
+  border: 1px dashed var(--color-border-subtle);
+  background: var(--color-surface-2);
 }
 </style>

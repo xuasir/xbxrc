@@ -1,9 +1,10 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { Router, RouteLocationNormalizedLoaded } from 'vue-router'
 import type { DisplayOptionsValue } from '../types'
+import type { StreamRuntimePhase } from '../runtime'
 import { rpc } from '../../services/rpc'
 import { useStreamRuntime } from '../runtime/useStreamRuntime'
-import { connectStreamRuntime, exchangeStreamRuntimeOffer } from './stream-runtime-signaling'
+import { resolveStreamRuntimeMode } from './resolveStreamRuntimeMode'
 import { useStreamSession } from './useStreamSession'
 
 type BrowserTimeout = number
@@ -13,6 +14,15 @@ interface UseStreamControllerOptions {
   route: RouteLocationNormalizedLoaded
   router: Router
   t: (key: string, params?: Record<string, unknown>) => string
+}
+
+const RUNTIME_PHASE_STATUS_KEYS: Record<StreamRuntimePhase, string> = {
+  binding: 'streamPage.status.startingPlayer',
+  exchangingOffer: 'streamPage.status.exchangingOffer',
+  gatheringIce: 'streamPage.status.gatheringIce',
+  exchangingIce: 'streamPage.status.exchangingIce',
+  connecting: 'streamPage.status.connecting',
+  reconnecting: 'streamPage.status.reconnecting'
 }
 
 // 串流应用控制器：统一协调页面生命周期、远端会话与本地 runtime。
@@ -31,6 +41,14 @@ export function useStreamController(options: UseStreamControllerOptions) {
     },
     onRuntimeError: (message) => {
       session.handlePlayerError(message)
+    },
+    onRuntimePhaseChange: (phase) => {
+      if (phase === 'reconnecting') {
+        // runtime 已经进入恢复流程时，页面 warning 应该立刻让位给状态文案。
+        clearWarningTimer()
+        warningVisible.value = false
+      }
+      session.setStatusText(options.t(RUNTIME_PHASE_STATUS_KEYS[phase]))
     }
   })
 
@@ -106,14 +124,24 @@ export function useStreamController(options: UseStreamControllerOptions) {
     if (state === 'connected') {
       session.handlePlayerConnected()
       session.setStatusText(options.t('streamPage.status.connected'))
+      warningVisible.value = false
+      scheduleNoFrameWarning()
       startKeepAlive()
       return
     }
 
     if (state === 'failed') {
       clearKeepAliveTimer()
+      clearWarningTimer()
+      warningVisible.value = false
       if (session.isClosing.value) {
         return
+      }
+      try {
+        await runtime.requestReconnect('ice-failed')
+        return
+      } catch {
+        // 重连失败后再回到业务层兜底策略。
       }
       if (session.canRetryWithFallbackTurn()) {
         await restartStreamWithFallbackTurn()
@@ -127,8 +155,17 @@ export function useStreamController(options: UseStreamControllerOptions) {
 
     if (state === 'closed') {
       clearKeepAliveTimer()
+      clearWarningTimer()
+      warningVisible.value = false
       if (session.isClosing.value) {
         return
+      }
+
+      try {
+        await runtime.requestReconnect('network-lost')
+        return
+      } catch {
+        // 浏览器侧本地重建失败后，再把错误收敛回业务层。
       }
 
       session.handlePlayerDisconnected()
@@ -138,19 +175,19 @@ export function useStreamController(options: UseStreamControllerOptions) {
 
   async function disconnectStream(input?: { navigateBack?: boolean }): Promise<void> {
     clearKeepAliveTimer()
-    runtime.closeRuntime()
+    await runtime.closeRuntime()
     await session.disconnectStream(input)
   }
 
   async function restartStreamWithFallbackTurn(): Promise<void> {
     clearKeepAliveTimer()
-    runtime.closeRuntime()
+    await runtime.closeRuntime()
     await session.restartStreamWithFallbackTurn()
   }
 
   async function handleRetry(): Promise<void> {
     clearKeepAliveTimer()
-    runtime.closeRuntime()
+    await runtime.closeRuntime()
     await session.handleRetry()
   }
 
@@ -160,7 +197,7 @@ export function useStreamController(options: UseStreamControllerOptions) {
 
   async function powerOffAndDisconnect(): Promise<void> {
     clearKeepAliveTimer()
-    runtime.closeRuntime()
+    await runtime.closeRuntime()
     await session.disconnectStream()
     const accepted = await session.powerOffConsole()
     if (!accepted) {
@@ -189,18 +226,7 @@ export function useStreamController(options: UseStreamControllerOptions) {
   }
 
   async function toggleMicrophone(): Promise<boolean> {
-    const nextState = await runtime.toggleMicrophone()
-    const nextRuntime = runtime.getRuntimeClient()
-    if (nextRuntime === null || session.sessionId.value === '') {
-      return nextState
-    }
-
-    await exchangeStreamRuntimeOffer({
-      runtime: nextRuntime,
-      sessionId: session.sessionId.value,
-      channel: 'chat'
-    })
-    return nextState
+    return await runtime.toggleMicrophone()
   }
 
   function pressNexus(): void {
@@ -217,7 +243,8 @@ export function useStreamController(options: UseStreamControllerOptions) {
   }
 
   function setTextInputActive(active: boolean): void {
-    runtime.setKeyboardInputEnabled(!active)
+    // player 输入已完全收口到 Rust，这里仅保留文本输入态切换的 UI 钩子。
+    void active
   }
 
   function handleKeydown(event: KeyboardEvent): void {
@@ -233,25 +260,19 @@ export function useStreamController(options: UseStreamControllerOptions) {
         return
       }
 
+      console.info('[Stream][RuntimeStart] requested', {
+        sessionId: session.sessionId.value,
+        targetType: session.targetType.value,
+        mode: resolveStreamRuntimeMode(session.streamConfig.value)
+      })
       session.consumePlayerStartRequest()
       session.setStatusText(options.t('streamPage.status.startingPlayer'))
       void runtime
         .startRuntime({
+          mode: resolveStreamRuntimeMode(session.streamConfig.value),
+          sessionId: session.sessionId.value,
           targetType: session.targetType.value,
           turnServer: session.resolveTurnServerConfig()
-        })
-        .then(async ({ runtime: nextRuntime, runtimeToken }) => {
-          await connectStreamRuntime({
-            t: options.t,
-            runtime: nextRuntime,
-            runtimeToken,
-            sessionId: session.sessionId.value,
-            isRuntimeTokenActive: runtime.isRuntimeTokenActive,
-            onStatusChange: (message) => {
-              session.setStatusText(message)
-            },
-            channel: 'media'
-          })
         })
         .catch((error: unknown) => {
           session.handlePlayerError(error instanceof Error ? error.message : String(error))

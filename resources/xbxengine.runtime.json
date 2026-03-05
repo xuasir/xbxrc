@@ -1,0 +1,14 @@
+{
+  "runtimeName": "rust-owned",
+  "webrtc": {
+    "videoPipeline": {
+      "nackWindowMs": 600,
+      "nackRetryIntervalMs": 60,
+      "nackMaxRetryCount": 8
+    },
+    "rttDiagnostics": {
+      "enabled": true,
+      "logIntervalMs": 5000
+    }
+  }
+}

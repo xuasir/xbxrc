@@ -44,10 +44,6 @@ interface XcloudNewestTitleEntry {
   id?: string
 }
 
-interface XcloudOfficialTitlesResponse {
-  Products?: string[]
-}
-
 interface XcloudCatalogProductsResponse {
   Products?: Record<string, XcloudCatalogProduct>
 }
@@ -69,7 +65,6 @@ interface XcloudTitlesCachePayload {
 
 const XCLOUD_TITLES_CACHE_TTL_MS = 10 * 60 * 1000
 const XCLOUD_TITLES_CACHE_STALE_MAX_MS = 24 * 60 * 60 * 1000
-const XCLOUD_OFFICIAL_TITLES_URL = ['https://cdn.jsdelivr.net/gh/Geocld/', 'X', 'Streaming', '@main/titles.json'].join('')
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
@@ -166,14 +161,6 @@ function extractNewestProductIds(rawResponse: unknown): string[] {
       return normalizeProductId(item.id)
     })
   )
-}
-
-function extractOfficialProductIds(rawResponse: unknown): string[] {
-  if (!isRecord(rawResponse) || !Array.isArray(rawResponse.Products)) {
-    return []
-  }
-
-  return uniqueStrings(rawResponse.Products.map((item) => normalizeProductId(item)))
 }
 
 function extractCatalogProducts(rawResponse: unknown): Record<string, XcloudCatalogProduct> {
@@ -340,46 +327,37 @@ export class XcloudService {
     }
 
     try {
-      const [streamingTitlesResponse, recentTitlesResponse, newestTitlesResponse, officialTitles] =
-        await Promise.all([
-          fetchJson<XcloudTitlesResponse>(`https://${region.host}/v2/titles`, {
+      const [streamingTitlesResponse, recentTitlesResponse, newestTitlesResponse] = await Promise.all([
+        fetchJson<XcloudTitlesResponse>(`https://${region.host}/v2/titles`, {
+          headers: {
+            Authorization: `Bearer ${region.bearerToken}`,
+            'Content-Type': 'application/json'
+          }
+        }, {
+          timeoutMs: 25000
+        }),
+        fetchJsonOrFallback<XcloudRecentTitlesResponse>(
+          `https://${region.host}/v2/titles/mru?mr=25`,
+          { results: [] },
+          {
             headers: {
               Authorization: `Bearer ${region.bearerToken}`,
               'Content-Type': 'application/json'
             }
-          }, {
-            timeoutMs: 25000
-          }),
-          fetchJsonOrFallback<XcloudRecentTitlesResponse>(
-            `https://${region.host}/v2/titles/mru?mr=25`,
-            { results: [] },
-            {
-              headers: {
-                Authorization: `Bearer ${region.bearerToken}`,
-                'Content-Type': 'application/json'
-              }
-            },
-            {
-              timeoutMs: 12000
-            }
-          ),
-          fetchJsonOrFallback<XcloudNewestTitleEntry[]>(
-            'https://catalog.gamepass.com/sigls/v2?id=f13cf6b4-57e6-4459-89df-6aec18cf0538&market=US&language=en-US',
-            [],
-            undefined,
-            {
-              timeoutMs: 10000
-            }
-          ),
-          fetchJsonOrFallback<XcloudOfficialTitlesResponse>(
-            XCLOUD_OFFICIAL_TITLES_URL,
-            { Products: [] },
-            undefined,
-            {
-              timeoutMs: 10000
-            }
-          )
-        ])
+          },
+          {
+            timeoutMs: 12000
+          }
+        ),
+        fetchJsonOrFallback<XcloudNewestTitleEntry[]>(
+          'https://catalog.gamepass.com/sigls/v2?id=f13cf6b4-57e6-4459-89df-6aec18cf0538&market=US&language=en-US',
+          [],
+          undefined,
+          {
+            timeoutMs: 10000
+          }
+        )
+      ])
 
       const streamingTitles = extractStreamingTitles(streamingTitlesResponse)
       const liveTitleMap = new Map<string, XcloudStreamingTitle>()
@@ -390,10 +368,9 @@ export class XcloudService {
         }
       })
 
-      const productIds = uniqueStrings([
-        ...streamingTitles.map((title) => normalizeProductId(title.details?.productId)),
-        ...extractOfficialProductIds(officialTitles)
-      ])
+      const productIds = uniqueStrings(
+        streamingTitles.map((title) => normalizeProductId(title.details?.productId))
+      )
 
       const catalogProducts = await this.loadCatalogProducts(productIds)
       const recentProductIds = new Set(extractRecentProductIds(recentTitlesResponse))

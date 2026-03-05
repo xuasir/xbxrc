@@ -27,10 +27,6 @@ export const DEFAULT_APP_CONFIG: AppConfig = {
   audio_bitrate: 20,
   // 是否启用音量控制
   enable_audio_control: false,
-  // 是否启用音频驱动震动
-  enable_audio_rumble: false,
-  // 音频驱动震动阈值
-  audio_rumble_threshold: 0.15,
   // 游戏偏好语言（如 en-US）
   preferred_game_language: 'en-US',
   // 强制区域 IP
@@ -41,36 +37,16 @@ export const DEFAULT_APP_CONFIG: AppConfig = {
   polling_rate: 250,
   // 是否启用手柄震动
   vibration: true,
-  // 手柄震动模式
-  vibration_mode: 'Native',
-  // 手柄内核模式
-  gamepad_kernal: 'Native',
-  // 是否启用手柄混合输入
-  gamepad_mix: false,
-  // 指定手柄索引（-1 自动）
-  gamepad_index: -1,
-  // 摇杆死区
-  dead_zone: 0.1,
-  // 摇杆边缘补偿
-  edge_compensation: 0,
-  // 扳机震动方向
-  force_trigger_rumble: '',
   // 串流时自动开机
   power_on: false,
   // 视频显示格式
   video_format: '',
-  // 虚拟手柄透明度
-  virtual_gamepad_opacity: 0.6,
-  // 自定义手柄映射
-  gamepad_maping: null,
   // 是否优先 IPv6
   ipv6: false,
-  // 是否启用原生键鼠
-  enable_native_mouse_keyboard: false,
-  // 鼠标灵敏度
-  mouse_sensitive: 0.5,
   // 性能面板展示样式
   performance_style: false,
+  // 串流 runtime 模式
+  stream_runtime_mode: 'webrtc-direct',
   // 自建服务器地址
   server_url: '',
   // 自建服务器用户名
@@ -79,36 +55,6 @@ export const DEFAULT_APP_CONFIG: AppConfig = {
   server_credential: '',
   // 后台保活
   background_keepalive: false,
-  // 键鼠映射表
-  input_mousekeyboard_maping: {
-    ArrowLeft: 'DPadLeft',
-    ArrowUp: 'DPadUp',
-    ArrowRight: 'DPadRight',
-    ArrowDown: 'DPadDown',
-    Enter: 'A',
-    k: 'A',
-    Backspace: 'B',
-    l: 'B',
-    j: 'X',
-    i: 'Y',
-    '2': 'LeftShoulder',
-    '3': 'RightShoulder',
-    '1': 'LeftTrigger',
-    '4': 'RightTrigger',
-    '5': 'LeftThumb',
-    '6': 'RightThumb',
-    a: 'LeftThumbXAxisPlus',
-    d: 'LeftThumbXAxisMinus',
-    w: 'LeftThumbYAxisPlus',
-    s: 'LeftThumbYAxisMinus',
-    f: 'RightThumbXAxisPlus',
-    h: 'RightThumbXAxisMinus',
-    t: 'RightThumbYAxisPlus',
-    g: 'RightThumbYAxisMinus',
-    v: 'View',
-    m: 'Menu',
-    n: 'Nexus'
-  },
   display_options: {
     // 画面锐化强度
     sharpness: 2,

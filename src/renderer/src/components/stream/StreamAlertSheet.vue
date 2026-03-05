@@ -133,7 +133,7 @@ function resolveNeighbors(index: number): Record<'left' | 'right', string | unde
   min-width: var(--ui-stream-dialog-action-min-width);
   padding: 12px 18px;
   border: 1px solid rgba(255, 255, 255, 0.18);
-  border-radius: var(--ui-radius-pill);
+  border-radius: var(--ui-action-pill-radius);
   background: rgba(255, 255, 255, 0.04);
   color: #fff;
   cursor: pointer;

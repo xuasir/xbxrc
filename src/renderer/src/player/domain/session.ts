@@ -24,6 +24,10 @@ export interface ConnectParams {
   turnServer?: TurnServerConfig;
 }
 
+export interface CreateOfferOptions {
+  iceRestart?: boolean;
+}
+
 export interface CodecPreferenceOptions {
   mimeType: string;
   profiles: Array<string>;

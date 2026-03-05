@@ -3,39 +3,34 @@
 ## Entry
 
 ```ts
-import { PlayerClient, MouseKeyboardConfig } from './new'
+import { PlayerClient } from './new'
 ```
 
 ## Create
 
 ```ts
 const client = new PlayerClient({
-    container: 'player-root',
-    uiSystem: [10, 19, 31, 27, 32, -41],
-    uiVersion: [0, 2, 0],
-    input: {
-        touch: true,
-        mouseKeyboard: true,
-        legacyKeyboard: true,
-        pollingRate: 250,
-    },
-    audio: {
-        enableAudioControl: true,
-        enableAudioRumble: false,
-        volume: 1,
-    },
-    renderer: {
-        enabled: false,
-        mode: 'webgl2',
-        sharpness: 2,
-        format: 'Contain',
-    },
-    transport: {
-        maxVideoBitrateKbps: 0,
-        maxAudioBitrateKbps: 0,
-        forceMonoAudio: false,
-    },
-    mouseKeyboardConfig: MouseKeyboardConfig.default(),
+  container: 'player-root',
+  uiSystem: [10, 19, 31, 27, 32, -41],
+  uiVersion: [0, 2, 0],
+  input: {
+    pollingRate: 250
+  },
+  audio: {
+    enableAudioControl: true,
+    volume: 1
+  },
+  renderer: {
+    enabled: false,
+    mode: 'webgl2',
+    sharpness: 2,
+    format: 'Contain'
+  },
+  transport: {
+    maxVideoBitrateKbps: 0,
+    maxAudioBitrateKbps: 0,
+    forceMonoAudio: false
+  }
 })
 ```
 
@@ -43,11 +38,11 @@ const client = new PlayerClient({
 
 ```ts
 client.bind({
-    turnServer: {
-        url: 'turn:example.com:3478',
-        username: 'user',
-        credential: 'pass',
-    },
+  turnServer: {
+    url: 'turn:example.com:3478',
+    username: 'user',
+    credential: 'pass'
+  }
 })
 
 const offer = await client.createOffer()
@@ -63,7 +58,6 @@ await client.addIceCandidates(remoteCandidates)
 
 - `updateConfig(partial)`
 - `setGamepadState(state)`
-- `setKeyboardInputEnabled(enabled)`
 - `pressButton(button, durationMs)`
 - `pressButtonStart(button)`
 - `pressButtonEnd(button)`

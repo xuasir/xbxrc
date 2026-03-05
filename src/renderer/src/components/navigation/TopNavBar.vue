@@ -233,17 +233,17 @@ function getPrimaryTabIndex(node: TopNavNodeKey): number | undefined {
 }
 
 .top-nav :deep(.sn-icon-button--active) {
-  background: color-mix(in srgb, var(--ui-focus-surface) 58%, transparent);
+  background: color-mix(in srgb, var(--color-state-selected) 58%, transparent);
   backdrop-filter: blur(12px) saturate(118%);
   -webkit-backdrop-filter: blur(12px) saturate(118%);
   box-shadow:
-    inset 0 0 0 1px rgba(255, 255, 255, 0.08),
+    inset 0 0 0 1px var(--color-border-subtle),
     0 6px 16px rgba(0, 0, 0, 0.12);
 }
 
 .top-nav :deep(.sn-icon-button--active[data-focused='true']) {
-  background: color-mix(in srgb, var(--ui-focus-surface) 34%, transparent);
-  box-shadow: var(--ui-focus-ring-shadow);
+  background: color-mix(in srgb, var(--color-state-selected) 34%, transparent);
+  box-shadow: 0 0 0 var(--focus-ring-width) var(--color-focus-ring-outer) inset;
 }
 
 .top-nav :deep(.sn-icon-button__icon-shell),
@@ -266,8 +266,8 @@ function getPrimaryTabIndex(node: TopNavNodeKey): number | undefined {
 }
 
 .top-nav__avatar-placeholder {
-  border: 1px dashed var(--ui-border-placeholder);
-  background: var(--ui-surface-placeholder);
+  border: 1px dashed var(--color-border-subtle);
+  background: var(--color-surface-2);
 }
 
 :global(html[data-ui-density='compact']) .top-nav,

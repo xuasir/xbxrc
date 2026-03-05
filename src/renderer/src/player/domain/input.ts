@@ -1,93 +1,80 @@
-export interface InputFrame {
-  GamepadIndex: number;
-  Nexus: number;
-  Menu: number;
-  View: number;
-  A: number;
-  B: number;
-  X: number;
-  Y: number;
-  DPadUp: number;
-  DPadDown: number;
-  DPadLeft: number;
-  DPadRight: number;
-  LeftShoulder: number;
-  RightShoulder: number;
-  LeftThumb: number;
-  RightThumb: number;
-  LeftThumbXAxis: number;
-  LeftThumbYAxis: number;
-  RightThumbXAxis: number;
-  RightThumbYAxis: number;
-  LeftTrigger: number;
-  RightTrigger: number;
+import type {
+  LogicalButtonsStateDto,
+  LogicalPadStateDto
+} from '../../../../shared/gamepad/contract'
+
+export interface GamepadFrame {
+  gamepadIndex: number
+  state: LogicalPadStateDto
 }
 
 export interface PointerFrame {
-  events: Array<any>;
+  events: Array<PointerEvent>
 }
 
 export interface MouseFrame {
-  X: number;
-  Y: number;
-  WheelX: number;
-  WheelY: number;
-  Buttons: number;
-  Relative: number;
+  X: number
+  Y: number
+  WheelX: number
+  WheelY: number
+  Buttons: number
+  Relative: number
 }
 
 export interface KeyboardFrame {
-  pressed: boolean;
-  keyCode: number;
-  key: string;
+  pressed: boolean
+  keyCode: number
+  key: string
 }
 
 export interface ProcessedVideoFrameMetadata {
-  serverDataKey: number;
-  firstFramePacketArrivalTimeMs: number;
-  frameSubmittedTimeMs: number;
-  frameDecodedTimeMs: number;
-  frameRenderedTimeMs: number;
+  serverDataKey: number
+  firstFramePacketArrivalTimeMs: number
+  frameSubmittedTimeMs: number
+  frameDecodedTimeMs: number
+  frameRenderedTimeMs: number
 }
 
 export interface InputRuntimeConfig {
-  pollingRate: number;
-  mouseSensitivity: number;
-  legacyKeyboard: boolean;
-  mouseKeyboard: boolean;
-  touch: boolean;
-  vibrationEnabled: boolean;
-  vibrationMode: 'Native' | 'Device' | 'Webview';
-  gamepadKernel: string;
-  gamepadIndex: number;
-  gamepadMix: boolean;
-  gamepadDeadZone: number;
-  edgeCompensation: number;
-  customGamepadMapping: Record<string, string> | null;
-  forceTriggerRumble: string;
+  pollingRate: number
+  vibrationEnabled: boolean
 }
 
-export const DEFAULT_INPUT_FRAME = (): InputFrame => ({
-    GamepadIndex: 0,
-    Nexus: 0,
-    Menu: 0,
-    View: 0,
-    A: 0,
-    B: 0,
-    X: 0,
-    Y: 0,
-    DPadUp: 0,
-    DPadDown: 0,
-    DPadLeft: 0,
-    DPadRight: 0,
-    LeftShoulder: 0,
-    RightShoulder: 0,
-    LeftThumb: 0,
-    RightThumb: 0,
-    LeftThumbXAxis: 0,
-    LeftThumbYAxis: 0,
-    RightThumbXAxis: 0,
-    RightThumbYAxis: 0,
-    LeftTrigger: 0,
-    RightTrigger: 0,
+export const DEFAULT_LOGICAL_BUTTONS_STATE = (): LogicalButtonsStateDto => ({
+  south: 0,
+  east: 0,
+  west: 0,
+  north: 0,
+  l1: 0,
+  r1: 0,
+  l2: 0,
+  r2: 0,
+  l3: 0,
+  r3: 0,
+  view: 0,
+  menu: 0,
+  home: 0,
+  dpadUp: 0,
+  dpadDown: 0,
+  dpadLeft: 0,
+  dpadRight: 0
+})
+
+export const DEFAULT_LOGICAL_PAD_STATE = (): LogicalPadStateDto => ({
+  buttons: DEFAULT_LOGICAL_BUTTONS_STATE(),
+  leftStick: {
+    x: 0,
+    y: 0
+  },
+  rightStick: {
+    x: 0,
+    y: 0
+  },
+  leftTrigger: 0,
+  rightTrigger: 0
+})
+
+export const DEFAULT_GAMEPAD_FRAME = (gamepadIndex = 0): GamepadFrame => ({
+  gamepadIndex,
+  state: DEFAULT_LOGICAL_PAD_STATE()
 })

@@ -23,6 +23,7 @@ import {
   persistStreamDisplayOptions,
   powerOffRemoteConsole,
   powerOnRemoteConsole,
+  waitForRemoteConsoleReady,
   sendRemoteStreamKeepAlive,
   sendTextToRemoteConsole
 } from './stream-session-remote'
@@ -159,6 +160,7 @@ export function useStreamSession(options: UseStreamSessionOptions) {
     }
 
     try {
+      let shouldWaitForReadyAfterWake = false
       await loadStreamConfig()
       if (
         routeState.targetType.value === 'home' &&
@@ -171,7 +173,32 @@ export function useStreamSession(options: UseStreamSessionOptions) {
 
       if (canWakeConsole.value) {
         statusText.value = options.t('streamPage.status.wakingConsole')
-        await powerOnRemoteConsole(routeState.targetId.value)
+        const wakeAccepted = await powerOnRemoteConsole(routeState.targetId.value)
+        shouldWaitForReadyAfterWake = wakeAccepted
+        console.info('[Stream] wake console result', {
+          targetId: routeState.targetId.value,
+          wakeAccepted
+        })
+      }
+
+      if (routeState.targetType.value === 'home' && shouldWaitForReadyAfterWake) {
+        statusText.value = options.t('streamPage.status.preparing')
+        const readyResult = await waitForRemoteConsoleReady(routeState.targetId.value)
+        if (!readyResult.ready) {
+          console.warn('[Stream] remote console preflight failed', {
+            targetId: routeState.targetId.value,
+            checks: readyResult.checks,
+            matched: readyResult.matched,
+            snapshot: readyResult.snapshot
+          })
+          throw new Error(
+            `remoteConsoleNotReady:${JSON.stringify({
+              checks: readyResult.checks,
+              matched: readyResult.matched,
+              snapshot: readyResult.snapshot
+            })}`
+          )
+        }
       }
 
       statusText.value = options.t('streamPage.status.creatingSession')

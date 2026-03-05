@@ -108,14 +108,6 @@ const VIDEO_FORMAT_OPTIONS = [
   { value: '4:3', label: '4:3' }
 ] as const satisfies readonly SettingSelectOptionDefinition[]
 
-const GAMEPAD_INDEX_OPTIONS = [
-  { value: -1, label: 'Auto', description: 'Automatically select the active controller' },
-  { value: 0, label: '1' },
-  { value: 1, label: '2' },
-  { value: 2, label: '3' },
-  { value: 3, label: '4' }
-] as const satisfies readonly SettingSelectOptionDefinition[]
-
 export interface SettingSectionDefinition {
   key: string
   label: string
@@ -170,13 +162,7 @@ export const CONFIG_GROUP_DEFINITIONS: Record<string, SettingGroupDefinition> = 
       {
         key: 'video',
         label: 'Video',
-        keys: [
-          'resolution',
-          'codec',
-          'video_format',
-          'display_options',
-          'performance_style'
-        ]
+        keys: ['resolution', 'codec', 'video_format', 'display_options', 'performance_style']
       },
       {
         key: 'bitrate',
@@ -193,12 +179,12 @@ export const CONFIG_GROUP_DEFINITIONS: Record<string, SettingGroupDefinition> = 
       {
         key: 'audio',
         label: 'Audio',
-        keys: ['enable_audio_control', 'enable_audio_rumble', 'audio_rumble_threshold']
+        keys: ['enable_audio_control']
       },
       {
         key: 'session',
         label: 'Session',
-        keys: ['preferred_game_language', 'polling_rate', 'ipv6']
+        keys: ['preferred_game_language', 'polling_rate', 'ipv6', 'stream_runtime_mode']
       }
     ]
   },
@@ -208,29 +194,7 @@ export const CONFIG_GROUP_DEFINITIONS: Record<string, SettingGroupDefinition> = 
       {
         key: 'controller',
         label: 'Controller',
-        keys: [
-          'vibration',
-          'vibration_mode',
-          'gamepad_kernal',
-          'gamepad_mix',
-          'gamepad_index',
-          'force_trigger_rumble'
-        ]
-      },
-      {
-        key: 'sticks',
-        label: 'Sticks',
-        keys: ['dead_zone', 'edge_compensation']
-      },
-      {
-        key: 'virtualController',
-        label: 'Virtual Controller',
-        keys: ['virtual_gamepad_opacity']
-      },
-      {
-        key: 'mouseKeyboard',
-        label: 'Mouse & Keyboard',
-        keys: ['enable_native_mouse_keyboard', 'mouse_sensitive']
+        keys: ['vibration']
       }
     ]
   },
@@ -357,21 +321,6 @@ export const CONFIG_FIELD_DEFINITIONS: Record<string, SettingFieldDefinition> = 
     description: 'Enable in-stream audio volume control',
     control: 'toggle'
   },
-  enable_audio_rumble: {
-    label: 'Audio Rumble',
-    description: 'Drive controller rumble from audio feedback',
-    control: 'toggle'
-  },
-  audio_rumble_threshold: {
-    label: 'Audio Rumble Threshold',
-    description: 'Threshold for triggering audio-driven rumble',
-    control: 'numberInput',
-    input: {
-      min: 0.01,
-      max: 0.5,
-      step: 0.01
-    }
-  },
   preferred_game_language: {
     label: 'Preferred Game Language',
     description: 'Language preference passed to the game session',
@@ -401,62 +350,6 @@ export const CONFIG_FIELD_DEFINITIONS: Record<string, SettingFieldDefinition> = 
     description: 'Enable controller vibration output',
     control: 'toggle'
   },
-  vibration_mode: {
-    label: 'Vibration Mode',
-    description: 'Controller vibration implementation mode',
-    control: 'textInput'
-  },
-  gamepad_kernal: {
-    label: 'Gamepad Kernel',
-    description: 'Underlying gamepad kernel mode',
-    control: 'textInput'
-  },
-  gamepad_mix: {
-    label: 'Gamepad Mixed Input',
-    description: 'Allow mixed controller input handling',
-    control: 'toggle'
-  },
-  gamepad_index: {
-    label: 'Gamepad Index',
-    description: 'Controller index, -1 means automatic selection',
-    control: 'singleSelect',
-    options: GAMEPAD_INDEX_OPTIONS
-  },
-  dead_zone: {
-    label: 'Dead Zone',
-    description: 'Analog stick dead zone',
-    control: 'numberInput',
-    input: {
-      min: 0.1,
-      max: 0.9,
-      step: 0.01
-    }
-  },
-  edge_compensation: {
-    label: 'Edge Compensation',
-    description: 'Analog stick edge compensation',
-    control: 'numberInput',
-    input: {
-      min: 0,
-      max: 0.2,
-      step: 0.01
-    }
-  },
-  force_trigger_rumble: {
-    label: 'Trigger Rumble',
-    description: 'Choose which trigger receives rumble feedback',
-    control: 'singleSelect',
-    options: [
-      { value: '', label: 'Off', description: 'Disable trigger rumble override' },
-      { value: 'all', label: 'All Triggers', description: 'Apply rumble to both triggers' },
-      { value: 'left', label: 'Left Trigger', description: 'Apply rumble to the left trigger' },
-      {
-        value: 'right',
-        label: 'Right Trigger',
-        description: 'Apply rumble to the right trigger'
-      }
-    ]
-  },
   power_on: {
     label: 'Power On',
     description: 'Wake the host automatically before streaming',
@@ -468,40 +361,32 @@ export const CONFIG_FIELD_DEFINITIONS: Record<string, SettingFieldDefinition> = 
     control: 'singleSelect',
     options: VIDEO_FORMAT_OPTIONS
   },
-  virtual_gamepad_opacity: {
-    label: 'Virtual Gamepad Opacity',
-    description: 'Opacity of the on-screen virtual gamepad',
-    control: 'numberInput',
-    input: {
-      min: 0,
-      max: 1,
-      step: 0.05
-    }
-  },
   ipv6: {
     label: 'Prefer IPv6',
     description: 'Prefer IPv6 candidates during streaming',
     control: 'toggle'
   },
-  enable_native_mouse_keyboard: {
-    label: 'Native Mouse Keyboard',
-    description: 'Enable native mouse and keyboard input',
-    control: 'toggle'
-  },
-  mouse_sensitive: {
-    label: 'Mouse Sensitivity',
-    description: 'Sensitivity multiplier for mouse input',
-    control: 'numberInput',
-    input: {
-      min: 0.1,
-      max: 5,
-      step: 0.1
-    }
-  },
   performance_style: {
     label: 'Performance Style',
     description: 'Switch performance overlay presentation style',
     control: 'toggle'
+  },
+  stream_runtime_mode: {
+    label: 'Runtime Mode',
+    description: 'Select whether streaming runs in the browser runtime or the Rust xbxEngine',
+    control: 'singleSelect',
+    options: [
+      {
+        value: 'webrtc-direct',
+        label: 'WebRTC Direct',
+        description: 'Use the browser WebRTC / decode / render path'
+      },
+      {
+        value: 'rust-owned',
+        label: 'Rust Owned',
+        description: 'Use the Rust xbxEngine for transport, decode, render and input'
+      }
+    ]
   },
   server_url: {
     label: 'Server URL',

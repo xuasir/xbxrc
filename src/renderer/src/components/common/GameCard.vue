@@ -72,10 +72,10 @@ function handleSelect(): void {
   width: var(--ui-game-card-size);
   height: var(--ui-game-card-size);
   padding: 0;
-  border: 1px solid color-mix(in srgb, var(--ui-border-subtle) 86%, rgba(255, 255, 255, 0.06));
+  border: 1px solid color-mix(in srgb, var(--color-border-subtle) 86%, rgba(255, 255, 255, 0.06));
   border-radius: var(--ui-game-card-radius);
-  background: color-mix(in srgb, var(--ui-surface-panel-strong) 94%, rgba(0, 0, 0, 0.12));
-  color: var(--ui-page-text);
+  background: color-mix(in srgb, var(--color-surface-2) 94%, rgba(0, 0, 0, 0.12));
+  color: var(--color-text-primary);
   text-align: left;
   cursor: pointer;
   overflow: hidden;
@@ -105,9 +105,9 @@ function handleSelect(): void {
 }
 
 .game-card[data-focused='true'] {
-  border-color: var(--ui-border-focus);
-  background: color-mix(in srgb, var(--ui-focus-surface) 24%, rgba(0, 0, 0, 0.12));
-  box-shadow: var(--ui-focus-ring-shadow);
+  border-color: var(--color-focus-ring);
+  background: color-mix(in srgb, var(--color-state-selected) 32%, rgba(0, 0, 0, 0.12));
+  box-shadow: 0 0 0 var(--focus-ring-width) var(--color-focus-ring-outer) inset;
 }
 
 .game-card__image-shell,
@@ -125,12 +125,14 @@ function handleSelect(): void {
 .game-card__image {
   position: relative;
   z-index: 1;
-  background-color: color-mix(in srgb, var(--ui-surface-panel-strong) 94%, rgba(0, 0, 0, 0.18));
+  background-color: color-mix(in srgb, var(--color-surface-3) 94%, rgba(0, 0, 0, 0.18));
   background-position: center;
   background-repeat: no-repeat;
   background-size: cover;
   transform: scale(1.01);
-  transition: transform 220ms ease, filter 220ms ease;
+  transition:
+    transform 220ms ease,
+    filter 220ms ease;
 }
 
 .game-card__title-overlay {
@@ -159,7 +161,7 @@ function handleSelect(): void {
   font-size: var(--ui-game-card-title-font-size);
   line-height: 1.2;
   font-weight: var(--ui-font-weight-bold);
-  color: rgba(255, 255, 255, 0.96);
+  color: var(--color-text-on-media);
   text-overflow: ellipsis;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;

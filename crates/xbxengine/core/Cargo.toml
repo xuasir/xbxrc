@@ -1,0 +1,23 @@
+[package]
+name = "xbxengine"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+publish = false
+
+[dependencies]
+bytes = "1.10.1"
+ohmygamepad-host = { path = "../../ohmygamepad/bridge/host" }
+ohmygamepad-protocol = { path = "../../ohmygamepad/protocol" }
+openh264 = "0.9.3"
+rtp = "0.8.0"
+serde_json = "1.0"
+xbxengine-protocol = { path = "../protocol" }
+tokio = { version = "1.48.0", features = ["rt-multi-thread", "sync", "time"] }
+webrtc = "0.8.0"
+webrtc-media = "0.6.1"
+
+[lib]
+path = "src/lib.rs"

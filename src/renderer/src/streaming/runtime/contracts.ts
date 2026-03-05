@@ -1,72 +1,63 @@
+import type { StreamingTargetType } from '../../../../shared/rpc/streaming'
+import type { LogicalButtonDto } from '../../../../shared/gamepad/contract'
+import type { StreamStats } from '../../player'
 import type { TypedEventEmitter } from '../../player/api/events'
-import type { TurnServerConfig } from '../types'
-import type { StreamStats } from './index'
-import type { IceCandidateLike } from '../../player'
+import type { DisplayOptionsValue, StreamConfigSnapshot, TurnServerConfig } from '../types'
 
 export type StreamRuntimeMode = 'webrtc-direct' | 'rust-owned'
 
 export type StreamTransportOwner = 'browser' | 'sidecar'
 export type StreamDecodeOwner = 'browser' | 'sidecar'
 export type StreamRenderOwner = 'browser' | 'sidecar'
-export type StreamControllerInputOwner = 'sidecar'
-export type StreamKeyboardPointerInputOwner = 'browser' | 'sidecar'
+export type StreamControllerInputOwner = 'browser' | 'sidecar'
+export type StreamRuntimePhase =
+  | 'binding'
+  | 'exchangingOffer'
+  | 'gatheringIce'
+  | 'exchangingIce'
+  | 'connecting'
+  | 'reconnecting'
+export type StreamRuntimeReconnectReason = 'network-lost' | 'ice-failed' | 'media-stalled'
 
 export interface StreamRuntimeCapabilities {
   transportOwner: StreamTransportOwner
   decodeOwner: StreamDecodeOwner
   renderOwner: StreamRenderOwner
   controllerInputOwner: StreamControllerInputOwner
-  keyboardPointerInputOwner: StreamKeyboardPointerInputOwner
 }
 
-export interface StreamRuntimeBindParams {
+export interface StreamRuntimeCreateInput {
+  mode: StreamRuntimeMode
+  viewportElementId: string
+  targetType: StreamingTargetType
+  config: StreamConfigSnapshot
+  audioVolume: number
+}
+
+export interface StreamRuntimeSessionContext {
+  sessionId: string
+  targetType: StreamingTargetType
   turnServer?: TurnServerConfig | null
 }
 
-export interface StreamRuntimeInputEventBase {
-  atMs: number
+export interface StreamRuntimeStartContext {
+  session: StreamRuntimeSessionContext
+  viewportHost: StreamRuntimeViewportHost
+  config: StreamConfigSnapshot
+  audioVolume: number
 }
 
-export interface StreamRuntimePointerEvent extends StreamRuntimeInputEventBase {
-  kind: 'pointer'
-  event: 'move' | 'down' | 'up' | 'wheel'
-  pointerType: 'mouse' | 'touch' | 'pen'
-  x: number
-  y: number
-  deltaX?: number
-  deltaY?: number
-  button?: number
+export interface StreamRuntimeViewportHost {
+  elementId: string
 }
 
-export interface StreamRuntimeKeyboardEvent extends StreamRuntimeInputEventBase {
-  kind: 'keyboard'
-  event: 'down' | 'up'
-  code: string
-  key: string
-  repeat: boolean
-  ctrlKey: boolean
-  shiftKey: boolean
-  altKey: boolean
-  metaKey: boolean
+export interface StreamRuntimeDisplayState {
+  displayOptions: DisplayOptionsValue
+  config: StreamConfigSnapshot
 }
 
-export interface StreamRuntimeGamepadEvent extends StreamRuntimeInputEventBase {
-  kind: 'gamepad'
-  index: number
-  axes: number[]
-  buttons: number[]
-  connected: boolean
-}
-
-export type StreamRuntimeInputEvent =
-  | StreamRuntimePointerEvent
-  | StreamRuntimeKeyboardEvent
-  | StreamRuntimeGamepadEvent
-
-export interface StreamRuntimeInputController {
-  setKeyboardInputEnabled(enabled: boolean): void
-  pushInputEvent(event: StreamRuntimeInputEvent): void
-  pressButton(button: string, durationMs: number): void
+export interface StreamRuntimeControllerInputController {
+  pressButton(button: LogicalButtonDto, durationMs: number): void
 }
 
 export interface StreamRuntimeAudioController {
@@ -81,6 +72,7 @@ export interface StreamRuntimeStatsController {
 }
 
 export interface StreamRuntimeEventMap {
+  'runtime.phaseChanged': { phase: StreamRuntimePhase }
   'transport.connectionState': { state: RTCPeerConnectionState }
   'chat.stateChanged': { capturing: boolean; paused: boolean }
   'media.videoReady': { width: number; height: number }
@@ -90,33 +82,30 @@ export interface StreamRuntimeEventMap {
     frameDecodedTimeMs: number
     frameRenderedTimeMs: number
   }
-  'error': { error: unknown }
+  error: { error: unknown }
+}
+
+export interface StreamRuntimeViewportController {
+  attach(host: StreamRuntimeViewportHost): void
+  detach(): void
+  applyDisplayState(state: StreamRuntimeDisplayState): void
+  bindFrameTracking(onFrame: () => void): () => void
 }
 
 export interface StreamRuntime {
   readonly mode: StreamRuntimeMode
   readonly capabilities: StreamRuntimeCapabilities
-  bind(params?: StreamRuntimeBindParams): void | Promise<void>
-  createOffer(): Promise<RTCSessionDescriptionInit>
-  setRemoteDescription(answerSdp: string): Promise<void>
-  addIceCandidates(candidates: Array<IceCandidateLike>): Promise<void>
-  waitForIceCandidates(timeoutMs?: number): Promise<Array<IceCandidateLike>>
-  input(): StreamRuntimeInputController
+  start(context: StreamRuntimeStartContext): Promise<void>
+  requestReconnect(reason: StreamRuntimeReconnectReason): Promise<void>
+  stop(): Promise<void>
+  viewport(): StreamRuntimeViewportController
+  controllerInput(): StreamRuntimeControllerInputController
   audio(): StreamRuntimeAudioController
   stats(): StreamRuntimeStatsController
   events(): TypedEventEmitter<StreamRuntimeEventMap>
-  close(): void
-}
-
-export interface StreamSidecarClient {
-  start(): Promise<void>
-  stop(): Promise<void>
-  ensureRenderSurface(surfaceId: string): Promise<void>
-  destroyRenderSurface(surfaceId: string): Promise<void>
-  pushInputEvent(event: StreamRuntimeInputEvent): void
 }
 
 export interface StreamRuntimeFactory {
   supports(mode: StreamRuntimeMode): boolean
-  createRuntime(mode: StreamRuntimeMode): Promise<StreamRuntime>
+  createRuntime(input: StreamRuntimeCreateInput): Promise<StreamRuntime>
 }

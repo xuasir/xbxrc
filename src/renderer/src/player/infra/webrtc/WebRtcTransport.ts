@@ -1,5 +1,5 @@
 import { TypedEventEmitter } from '../../api/events'
-import { IceCandidateLike } from '../../domain/session'
+import { CreateOfferOptions, IceCandidateLike } from '../../domain/session'
 
 export interface WebRtcTransportEvents {
   iceCandidate: IceCandidateLike;
@@ -43,11 +43,19 @@ export class WebRtcTransport {
 
     bind(): RTCPeerConnection {
         this.peer = new RTCPeerConnection(this.configuration)
+        console.info('[player][webrtc] bind peer', {
+            iceServerCount: this.configuration.iceServers?.length ?? 0,
+        })
         this.peer.ontrack = (event) => {
             const stream = event.streams[0]
             if (!stream) {
                 return
             }
+            console.info('[player][webrtc] remote track', {
+                kind: event.track.kind,
+                trackId: event.track.id,
+                streamId: stream.id,
+            })
             this.emitter.emit('track', { kind: event.track.kind as 'audio' | 'video', stream })
         }
         this.peer.addEventListener('icecandidate', (event) => {
@@ -60,21 +68,34 @@ export class WebRtcTransport {
                 sdpMLineIndex: event.candidate.sdpMLineIndex,
             }
             this.iceCandidates.push(candidate)
+            console.info('[player][webrtc] local ice candidate gathered', {
+                mline: candidate.sdpMLineIndex ?? null,
+                total: this.iceCandidates.length,
+            })
             this.emitter.emit('iceCandidate', candidate)
         })
         this.peer.addEventListener('connectionstatechange', () => {
             if (!this.peer) {
                 return
             }
+            console.info('[player][webrtc] connection state', {
+                state: this.peer.connectionState,
+            })
             this.emitter.emit('connectionState', { state: this.peer.connectionState })
         })
         this.peer.addTransceiver('audio', { direction: 'sendrecv' })
         this.peer.addTransceiver('video', { direction: 'recvonly' })
+        console.info('[player][webrtc] transceivers ready', summarizeTransceivers(this.peer))
         return this.peer
     }
 
     createDataChannel(name: string, init: RTCDataChannelInit): RTCDataChannel {
         const channel = this.ensurePeer().createDataChannel(name, init)
+        console.info('[player][webrtc] local data channel created', {
+            label: name,
+            ordered: init.ordered ?? true,
+            protocol: init.protocol ?? '',
+        })
         this.channels.set(name, channel)
         return channel
     }
@@ -83,16 +104,31 @@ export class WebRtcTransport {
         return this.channels.get(name)
     }
 
-    createOffer(): Promise<RTCSessionDescriptionInit> {
-        return this.ensurePeer().createOffer({ offerToReceiveAudio: true, offerToReceiveVideo: true })
+    createOffer(options?: CreateOfferOptions): Promise<RTCSessionDescriptionInit> {
+        const peer = this.ensurePeer()
+        const normalizedOptions = {
+            offerToReceiveAudio: true,
+            offerToReceiveVideo: true,
+            iceRestart: options?.iceRestart === true,
+        }
+        console.info('[player][webrtc] create offer request', {
+            options: normalizedOptions,
+            transceivers: summarizeTransceivers(peer),
+        })
+        return peer.createOffer(normalizedOptions).then((offer) => {
+            console.info('[player][webrtc] local offer created', summarizeSdp(offer.sdp))
+            return offer
+        })
     }
 
     async setLocalDescription(offer: RTCSessionDescriptionInit): Promise<void> {
         await this.ensurePeer().setLocalDescription(offer)
+        console.info('[player][webrtc] local description applied', summarizeSdp(offer.sdp))
     }
 
     async setRemoteAnswer(sdp: string): Promise<void> {
         await this.ensurePeer().setRemoteDescription({ type: 'answer', sdp })
+        console.info('[player][webrtc] remote answer applied', summarizeSdp(sdp))
     }
 
     async addIceCandidate(candidate: IceCandidateLike): Promise<void> {
@@ -104,10 +140,18 @@ export class WebRtcTransport {
             return
         }
         await this.ensurePeer().addIceCandidate(candidate)
+        console.info('[player][webrtc] remote ice candidate applied', {
+            mline: candidate.sdpMLineIndex ?? null,
+            mid: candidate.sdpMid ?? null,
+        })
     }
 
     getIceCandidates(): Array<IceCandidateLike> {
         return [...this.iceCandidates]
+    }
+
+    resetIceCandidates(): void {
+        this.iceCandidates.length = 0
     }
 
     addTrack(track: MediaStreamTrack, stream: MediaStream): void {
@@ -120,6 +164,7 @@ export class WebRtcTransport {
 
     close(): void {
         this.channels.clear()
+        this.iceCandidates.length = 0
         this.peer?.close()
         this.peer = undefined
     }
@@ -130,4 +175,37 @@ export class WebRtcTransport {
         }
         return this.peer
     }
+}
+
+function summarizeSdp(sdp: string | null | undefined): {
+    audio: boolean
+    video: boolean
+    application: boolean
+    length: number
+    preview: string
+} {
+    const text = sdp ?? ''
+    return {
+        audio: text.includes('\r\nm=audio ') || text.startsWith('m=audio '),
+        video: text.includes('\r\nm=video ') || text.startsWith('m=video '),
+        application: text.includes('\r\nm=application ') || text.startsWith('m=application '),
+        length: text.length,
+        preview: text.replaceAll('\r\n', ' | ').slice(0, 240),
+    }
+}
+
+function summarizeTransceivers(peer: RTCPeerConnection): Array<{
+    mid: string | null
+    direction: RTCRtpTransceiverDirection
+    currentDirection: RTCRtpTransceiverDirection | null
+    senderTrackKind: string | null
+    receiverTrackKind: string | null
+}> {
+    return peer.getTransceivers().map((transceiver) => ({
+        mid: transceiver.mid,
+        direction: transceiver.direction,
+        currentDirection: transceiver.currentDirection,
+        senderTrackKind: transceiver.sender.track?.kind ?? null,
+        receiverTrackKind: transceiver.receiver.track?.kind ?? null,
+    }))
 }

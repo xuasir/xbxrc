@@ -54,7 +54,13 @@ export class HttpClient {
 
     const responseText = await response.text()
     if (!response.ok) {
-      throw new Error(`HTTP request failed: ${host}${path} (${response.status}) ${responseText}`)
+      const error = new Error(`HTTP request failed: ${host}${path} (${response.status}) ${responseText}`)
+      Object.assign(error, {
+        status: response.status,
+        body: responseText,
+        url: path
+      })
+      throw error
     }
 
     let parsedBody: unknown = {}

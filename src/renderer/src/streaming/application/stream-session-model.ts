@@ -11,8 +11,6 @@ import type {
 import { extractQueueSeconds, normalizeErrorMessage } from '../utils'
 
 export const STREAM_CONFIG_KEYS = [
-  'enable_native_mouse_keyboard',
-  'input_mousekeyboard_maping',
   'xhome_bitrate_mode',
   'xhome_bitrate',
   'xcloud_bitrate_mode',
@@ -20,24 +18,14 @@ export const STREAM_CONFIG_KEYS = [
   'audio_bitrate_mode',
   'audio_bitrate',
   'enable_audio_control',
-  'enable_audio_rumble',
-  'audio_rumble_threshold',
   'resolution',
   'polling_rate',
   'vibration',
-  'vibration_mode',
-  'gamepad_kernal',
-  'gamepad_mix',
-  'gamepad_index',
-  'dead_zone',
-  'edge_compensation',
-  'gamepad_maping',
-  'force_trigger_rumble',
   'codec',
   'video_format',
   'display_options',
   'performance_style',
-  'mouse_sensitive',
+  'stream_runtime_mode',
   'server_url',
   'server_username',
   'server_credential',
@@ -101,9 +89,7 @@ export function createStreamRouteState(route: RouteLocationNormalizedLoaded) {
     const value = route.query.powerState
     return typeof value === 'string' ? value : ''
   })
-  const initialRemoteManagementEnabled = computed(
-    () => route.query.remoteManagementEnabled === '1'
-  )
+  const initialRemoteManagementEnabled = computed(() => route.query.remoteManagementEnabled === '1')
 
   return {
     targetType,
@@ -120,6 +106,15 @@ export function resolveStreamError(input: StreamErrorInput): {
   message: string
 } {
   const message = normalizeErrorMessage(input.error)
+  if (message.startsWith('remoteConsoleNotReady:')) {
+    const details = message.slice('remoteConsoleNotReady:'.length)
+    return {
+      kind: 'startFailed',
+      message: input.t('streamPage.errors.remoteConsoleNotReady', {
+        details
+      })
+    }
+  }
   if (message === 'invalidAnswer') {
     return { kind: 'invalidAnswer', message: input.t('streamPage.errors.invalidAnswer') }
   }

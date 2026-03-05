@@ -22,30 +22,17 @@ export function splitConfigGroups(config: AppConfig): AppConfigGroups {
       audio_bitrate_mode: config.audio_bitrate_mode,
       audio_bitrate: config.audio_bitrate,
       enable_audio_control: config.enable_audio_control,
-      enable_audio_rumble: config.enable_audio_rumble,
-      audio_rumble_threshold: config.audio_rumble_threshold,
       preferred_game_language: config.preferred_game_language,
       codec: config.codec,
       polling_rate: config.polling_rate,
       video_format: config.video_format,
       ipv6: config.ipv6,
       performance_style: config.performance_style,
+      stream_runtime_mode: config.stream_runtime_mode,
       display_options: { ...config.display_options }
     },
     input: {
-      vibration: config.vibration,
-      vibration_mode: config.vibration_mode,
-      gamepad_kernal: config.gamepad_kernal,
-      gamepad_mix: config.gamepad_mix,
-      gamepad_index: config.gamepad_index,
-      dead_zone: config.dead_zone,
-      edge_compensation: config.edge_compensation,
-      force_trigger_rumble: config.force_trigger_rumble,
-      virtual_gamepad_opacity: config.virtual_gamepad_opacity,
-      gamepad_maping: config.gamepad_maping === null ? null : { ...config.gamepad_maping },
-      enable_native_mouse_keyboard: config.enable_native_mouse_keyboard,
-      mouse_sensitive: config.mouse_sensitive,
-      input_mousekeyboard_maping: { ...config.input_mousekeyboard_maping }
+      vibration: config.vibration
     },
     xhome: {
       xhome_auto_connect_server_id: config.xhome_auto_connect_server_id,

@@ -79,6 +79,10 @@ export class StreamingSignalingApi {
 
     const payload = JSON.parse(result.exchangeResponse) as Partial<StreamingAnswerPayload>
     if (typeof payload.sdp !== 'string' || payload.sdp.length === 0) {
+      console.warn('[Streaming][ExchangeOffer] answer payload missing sdp', {
+        sessionId,
+        exchangeResponse: result.exchangeResponse.slice(0, 500)
+      })
       throw new Error('Streaming answer SDP is missing.')
     }
 

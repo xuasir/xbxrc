@@ -1,0 +1,19 @@
+[package]
+name = "xbxengine-app"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+publish = false
+
+[dependencies]
+pollster = "0.3.0"
+serde_json = "1.0"
+xbxengine-protocol = { path = "../protocol" }
+xbxengine = { path = "../core" }
+wgpu = "0.19.4"
+winit = "0.29.15"
+
+[[bin]]
+name = "xbxengine-app"
+path = "src/main.rs"
