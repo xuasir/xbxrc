@@ -1,9 +1,9 @@
-export type SettingFieldControl =
-  | 'toggle'
-  | 'singleSelect'
-  | 'textInput'
-  | 'numberInput'
-  | 'displayOptions'
+export type SettingFieldControl
+  = | 'toggle'
+    | 'singleSelect'
+    | 'textInput'
+    | 'numberInput'
+    | 'displayOptions'
 
 export interface SettingSelectOptionDefinition {
   value: string | number
@@ -28,7 +28,7 @@ export interface SettingFieldInputDefinition {
 
 const BITRATE_MODE_OPTIONS = [
   { value: 'Auto', label: 'Auto', description: 'Use automatic bitrate selection' },
-  { value: 'Custom', label: 'Custom', description: 'Use a custom bitrate value below' }
+  { value: 'Custom', label: 'Custom', description: 'Use a custom bitrate value below' },
 ] as const satisfies readonly SettingSelectOptionDefinition[]
 
 const PREFERRED_GAME_LANGUAGE_OPTIONS = [
@@ -59,7 +59,7 @@ const PREFERRED_GAME_LANGUAGE_OPTIONS = [
   { value: 'sv-SE', label: 'Swedish' },
   { value: 'tr-TR', label: 'Turkish' },
   { value: 'zh-CN', label: '简体中文' },
-  { value: 'zh-TW', label: '繁體中文' }
+  { value: 'zh-TW', label: '繁體中文' },
 ] as const satisfies readonly SettingSelectOptionDefinition[]
 
 const FORCE_REGION_IP_OPTIONS = [
@@ -71,14 +71,14 @@ const FORCE_REGION_IP_OPTIONS = [
   { value: '168.126.63.1', label: 'Korea' },
   { value: '4.2.2.2', label: 'United States' },
   { value: '104.211.224.146', label: 'South India' },
-  { value: '104.211.96.159', label: 'Central India' }
+  { value: '104.211.96.159', label: 'Central India' },
 ] as const satisfies readonly SettingSelectOptionDefinition[]
 
 const CODEC_OPTIONS = [
   { value: '', label: 'Auto', description: 'Automatically select the most suitable codec' },
   { value: 'video/H264-4d', label: 'H264-High' },
   { value: 'video/H264-42e', label: 'H264-Medium' },
-  { value: 'video/H264-420', label: 'H264-Low' }
+  { value: 'video/H264-420', label: 'H264-Low' },
 ] as const satisfies readonly SettingSelectOptionDefinition[]
 
 const POLLING_RATE_OPTIONS = [
@@ -95,7 +95,7 @@ const POLLING_RATE_OPTIONS = [
   { value: 20.83, label: '20.83 HZ' },
   { value: 19.23, label: '19.23 HZ' },
   { value: 17.86, label: '17.86 HZ' },
-  { value: 16.67, label: '16.67 HZ' }
+  { value: 16.67, label: '16.67 HZ' },
 ] as const satisfies readonly SettingSelectOptionDefinition[]
 
 const VIDEO_FORMAT_OPTIONS = [
@@ -105,7 +105,7 @@ const VIDEO_FORMAT_OPTIONS = [
   { value: '16:10', label: '16:10' },
   { value: '18:9', label: '18:9' },
   { value: '21:9', label: '21:9' },
-  { value: '4:3', label: '4:3' }
+  { value: '4:3', label: '4:3' },
 ] as const satisfies readonly SettingSelectOptionDefinition[]
 
 export interface SettingSectionDefinition {
@@ -127,74 +127,66 @@ export const CONFIG_GROUP_DEFINITIONS: Record<string, SettingGroupDefinition> = 
       {
         key: 'appearance',
         label: 'Appearance',
-        keys: ['locale', 'fullscreen']
+        keys: ['locale', 'fullscreen'],
       },
       {
         key: 'graphics',
         label: 'Graphics',
-        keys: ['use_vulkan']
+        keys: ['use_vulkan'],
       },
       {
         key: 'runtime',
         label: 'Runtime',
-        keys: ['background_keepalive']
-      }
-    ]
+        keys: ['background_keepalive', 'debug'],
+      },
+    ],
+  },
+  auth: {
+    label: 'AUTH',
+    sections: [
+      {
+        key: 'provider',
+        label: 'Provider',
+        keys: ['use_msal'],
+      },
+      {
+        key: 'region',
+        label: 'Region',
+        keys: ['force_region_ip'],
+      },
+    ],
   },
   streaming: {
     label: 'STREAMING',
     sections: [
       {
-        key: 'auth',
-        label: 'Authentication',
-        keys: ['use_msal', 'force_region_ip']
-      },
-      {
         key: 'video',
         label: 'Video',
-        keys: ['resolution', 'codec', 'video_format', 'display_options', 'performance_style']
+        keys: ['resolution', 'codec', 'video_format', 'display_options', 'performance_style'],
+      },
+      {
+        key: 'bitrate',
+        label: 'Bitrate',
+        keys: [
+          'xhome_bitrate_mode',
+          'xhome_bitrate',
+          'xcloud_bitrate_mode',
+          'xcloud_bitrate',
+          'audio_bitrate_mode',
+          'audio_bitrate',
+        ],
       },
       {
         key: 'audio',
         label: 'Audio',
-        keys: ['enable_audio_control', 'audio_bitrate_mode', 'audio_bitrate']
+        keys: ['enable_audio_control'],
       },
       {
         key: 'session',
         label: 'Session',
-        keys: ['preferred_game_language', 'ipv6', 'stream_runtime_mode']
-      }
-    ]
-  },
-  host: {
-    label: 'HOST',
-    sections: [
-      {
-        key: 'bitrate',
-        label: 'Bitrate',
-        keys: ['xhome_bitrate_mode', 'xhome_bitrate']
+        keys: ['preferred_game_language', 'polling_rate', 'ipv6', 'stream_runtime_mode'],
       },
-      {
-        key: 'connection',
-        label: 'Connection',
-        keys: ['xhome_turn_fallback', 'power_on']
-      },
-      {
-        key: 'relay',
-        label: 'Relay',
-        keys: ['server_url', 'server_username', 'server_credential']
-      }
-    ]
-  },
-  xcloud: {
-    label: 'XCLOUD',
-    sections: [
-      {
-        key: 'bitrate',
-        label: 'Bitrate',
-        keys: ['xcloud_bitrate_mode', 'xcloud_bitrate']
-      }
-    ]
+    ],
   },
   input: {
     label: 'INPUT',
@@ -202,10 +194,35 @@ export const CONFIG_GROUP_DEFINITIONS: Record<string, SettingGroupDefinition> = 
       {
         key: 'controller',
         label: 'Controller',
-        keys: ['polling_rate', 'vibration']
-      }
-    ]
-  }
+        keys: ['vibration'],
+      },
+    ],
+  },
+  xcloud: {
+    label: 'XCLOUD',
+    sections: [
+      {
+        key: 'connection',
+        label: 'Connection',
+        keys: [],
+      },
+    ],
+  },
+  host: {
+    label: 'HOST',
+    sections: [
+      {
+        key: 'connection',
+        label: 'Connection',
+        keys: ['xhome_auto_connect_server_id', 'xhome_turn_fallback', 'power_on'],
+      },
+      {
+        key: 'relay',
+        label: 'Relay',
+        keys: ['server_url', 'server_username', 'server_credential'],
+      },
+    ],
+  },
 }
 
 export const CONFIG_FIELD_DEFINITIONS: Record<string, SettingFieldDefinition> = {
@@ -217,24 +234,24 @@ export const CONFIG_FIELD_DEFINITIONS: Record<string, SettingFieldDefinition> = 
       {
         value: 'en',
         label: 'English',
-        description: 'Use English for the application interface'
+        description: 'Use English for the application interface',
       },
       {
         value: 'zh',
         label: '简体中文',
-        description: '应用界面使用简体中文'
-      }
-    ]
+        description: '应用界面使用简体中文',
+      },
+    ],
   },
   use_msal: {
     label: 'Use MSAL',
     description: 'Switch between MSAL and XAL authentication',
-    control: 'toggle'
+    control: 'toggle',
   },
   fullscreen: {
     label: 'Fullscreen',
     description: 'Launch and display in fullscreen mode',
-    control: 'toggle'
+    control: 'toggle',
   },
   resolution: {
     label: 'Resolution',
@@ -244,18 +261,23 @@ export const CONFIG_FIELD_DEFINITIONS: Record<string, SettingFieldDefinition> = 
     options: [
       {
         value: 1081,
-        label: 'Auto (1080p HQ)',
-        description: "The recommended setting for the user's device and subscription tier"
+        label: 'Auto (1440p Max Quality)',
+        description: 'The recommended setting for the user\'s device and subscription tier',
       },
       { value: 1080, label: '1080p', meta: '7 GB/hr' },
-      { value: 720, label: '720p', meta: '3 GB/hr' }
-    ]
+      { value: 720, label: '720p', meta: '3 GB/hr' },
+    ],
+  },
+  xhome_auto_connect_server_id: {
+    label: 'Auto Connect Host',
+    description: 'xHome host ID for automatic connection',
+    control: 'textInput',
   },
   xhome_bitrate_mode: {
     label: 'xHome Bitrate Mode',
     description: 'Select automatic or manual bitrate for xHome',
     control: 'singleSelect',
-    options: BITRATE_MODE_OPTIONS
+    options: BITRATE_MODE_OPTIONS,
   },
   xhome_bitrate: {
     label: 'xHome Bitrate',
@@ -264,19 +286,19 @@ export const CONFIG_FIELD_DEFINITIONS: Record<string, SettingFieldDefinition> = 
     input: {
       min: 0,
       max: 200,
-      step: 1
-    }
+      step: 1,
+    },
   },
   xhome_turn_fallback: {
     label: 'xHome TURN Fallback',
     description: 'Enable TURN fallback for xHome connectivity',
-    control: 'toggle'
+    control: 'toggle',
   },
   xcloud_bitrate_mode: {
     label: 'xCloud Bitrate Mode',
     description: 'Select automatic or manual bitrate for xCloud',
     control: 'singleSelect',
-    options: BITRATE_MODE_OPTIONS
+    options: BITRATE_MODE_OPTIONS,
   },
   xcloud_bitrate: {
     label: 'xCloud Bitrate',
@@ -285,14 +307,14 @@ export const CONFIG_FIELD_DEFINITIONS: Record<string, SettingFieldDefinition> = 
     input: {
       min: 0,
       max: 200,
-      step: 1
-    }
+      step: 1,
+    },
   },
   audio_bitrate_mode: {
     label: 'Audio Bitrate Mode',
     description: 'Select automatic or manual audio bitrate',
     control: 'singleSelect',
-    options: BITRATE_MODE_OPTIONS
+    options: BITRATE_MODE_OPTIONS,
   },
   audio_bitrate: {
     label: 'Audio Bitrate',
@@ -301,63 +323,63 @@ export const CONFIG_FIELD_DEFINITIONS: Record<string, SettingFieldDefinition> = 
     input: {
       min: 0,
       max: 200,
-      step: 1
-    }
+      step: 1,
+    },
   },
   enable_audio_control: {
     label: 'Audio Control',
     description: 'Enable in-stream audio volume control',
-    control: 'toggle'
+    control: 'toggle',
   },
   preferred_game_language: {
     label: 'Preferred Game Language',
     description: 'Language preference passed to the game session',
     control: 'singleSelect',
-    options: PREFERRED_GAME_LANGUAGE_OPTIONS
+    options: PREFERRED_GAME_LANGUAGE_OPTIONS,
   },
   force_region_ip: {
     label: 'Force Region IP',
     description: 'Override network region selection with a specific IP',
     control: 'singleSelect',
-    options: FORCE_REGION_IP_OPTIONS
+    options: FORCE_REGION_IP_OPTIONS,
   },
   codec: {
     label: 'Codec',
     description: 'Preferred video codec',
     control: 'singleSelect',
-    options: CODEC_OPTIONS
+    options: CODEC_OPTIONS,
   },
   polling_rate: {
     label: 'Polling Rate',
     description: 'Controller polling rate in Hz',
     control: 'singleSelect',
-    options: POLLING_RATE_OPTIONS
+    options: POLLING_RATE_OPTIONS,
   },
   vibration: {
     label: 'Vibration',
     description: 'Enable controller vibration output',
-    control: 'toggle'
+    control: 'toggle',
   },
   power_on: {
     label: 'Power On',
     description: 'Wake the host automatically before streaming',
-    control: 'toggle'
+    control: 'toggle',
   },
   video_format: {
     label: 'Video Format',
     description: 'Preferred video display format',
     control: 'singleSelect',
-    options: VIDEO_FORMAT_OPTIONS
+    options: VIDEO_FORMAT_OPTIONS,
   },
   ipv6: {
     label: 'Prefer IPv6',
     description: 'Prefer IPv6 candidates during streaming',
-    control: 'toggle'
+    control: 'toggle',
   },
   performance_style: {
     label: 'Performance Style',
     description: 'Switch performance overlay presentation style',
-    control: 'toggle'
+    control: 'toggle',
   },
   stream_runtime_mode: {
     label: 'Runtime Mode',
@@ -367,43 +389,48 @@ export const CONFIG_FIELD_DEFINITIONS: Record<string, SettingFieldDefinition> = 
       {
         value: 'webrtc-direct',
         label: 'WebRTC Direct',
-        description: 'Use the browser WebRTC / decode / render path'
+        description: 'Use the browser WebRTC / decode / render path',
       },
       {
         value: 'rust-owned',
         label: 'Rust Owned',
-        description: 'Use the Rust xbxEngine for transport, decode, render and input'
-      }
-    ]
+        description: 'Use the Rust xbxEngine for transport, decode, render and input',
+      },
+    ],
   },
   server_url: {
     label: 'Server URL',
     description: 'Custom relay or self-hosted server URL',
-    control: 'textInput'
+    control: 'textInput',
   },
   server_username: {
     label: 'Server Username',
     description: 'Username for the custom server',
-    control: 'textInput'
+    control: 'textInput',
   },
   server_credential: {
     label: 'Server Credential',
     description: 'Credential for the custom server',
-    control: 'textInput'
+    control: 'textInput',
   },
   background_keepalive: {
     label: 'Background Keepalive',
     description: 'Keep the application session alive in background',
-    control: 'toggle'
+    control: 'toggle',
   },
   display_options: {
     label: 'Display Options',
     description: 'Sharpness, saturation, contrast and brightness',
-    control: 'displayOptions'
+    control: 'displayOptions',
   },
   use_vulkan: {
     label: 'Use Vulkan',
     description: 'Enable the Vulkan rendering path',
-    control: 'toggle'
-  }
+    control: 'toggle',
+  },
+  debug: {
+    label: 'Debug',
+    description: 'Enable debug mode',
+    control: 'toggle',
+  },
 }

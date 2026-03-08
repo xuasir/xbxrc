@@ -16,8 +16,6 @@ use crate::{
     XbxEngineRenderFrame, XbxEngineRuntimeHealth, XbxEngineTransportSignal,
 };
 
-
-
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum XbxEngineRuntimeState {
     Idle,
@@ -31,7 +29,7 @@ pub enum XbxEngineRuntimeState {
 pub enum XbxStreamingMode {
     CloudGaming, // 云游戏: 典型公网环境，有抖动和丢包，需要稳定的抗性。
     #[default]
-    LocalHost,   // 本地主机: 典型局域网环境，极低延迟，极高带宽，无需冗余。
+    LocalHost, // 本地主机: 典型局域网环境，极低延迟，极高带宽，无需冗余。
     CloudHost,   // 云主机: 典型 VPS 对等网络，带宽恒定，可能存在长 RTT，需要稳健性。
 }
 
@@ -346,7 +344,7 @@ where
         mode: Option<XbxStreamingMode>,
     ) -> Result<(), XbxEngineRuntimeError> {
         if let Some(mode) = mode {
-             self.config.webrtc = XbxEngineWebRtcRuntimeConfig::from_mode(mode);
+            self.config.webrtc = XbxEngineWebRtcRuntimeConfig::from_mode(mode);
         }
         let previous_state = self.state.clone();
         let previous_session = self.session.clone();
@@ -358,7 +356,7 @@ where
         self.snapshot.viewport = Some(viewport);
         self.snapshot.audio_volume = audio_volume;
 
-    let start_result = (|| {
+        let start_result = (|| {
             self.media_backend.set_audio_volume(audio_volume)?;
             self.emit_phase(XbxEngineRuntimePhaseDto::Binding);
             self.negotiate_remote(false)?;
@@ -782,8 +780,6 @@ where
             self.snapshot.first_frame_packet_arrival_time_ms = Some(arrived_at_ms);
         }
     }
-
-
 
     fn maybe_recover_media_stall(&mut self, stats: &XbxEngineMediaRuntimeStats) {
         let now = now_ms_f64();

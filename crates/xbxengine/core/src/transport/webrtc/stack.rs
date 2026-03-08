@@ -56,14 +56,18 @@ pub(crate) struct XbxActiveMediaStack {
 
 impl XbxActiveMediaStack {
     pub(crate) fn new(runtime_config: XbxEngineRuntimeConfig) -> Self {
-        Self::with_control(Arc::new(Mutex::new(Box::<XbxDataChannelMediaControl>::default())), runtime_config)
+        Self::with_control(
+            Arc::new(Mutex::new(Box::<XbxDataChannelMediaControl>::default())),
+            runtime_config,
+        )
     }
 
     pub(crate) fn with_control(
         control: Arc<Mutex<Box<dyn XbxMediaControlPort>>>,
         runtime_config: XbxEngineRuntimeConfig,
     ) -> Self {
-        let (tx, mut rx) = tokio::sync::mpsc::channel::<Box<dyn crate::transport::adapter::FrameSource>>(1);
+        let (tx, mut rx) =
+            tokio::sync::mpsc::channel::<Box<dyn crate::transport::adapter::FrameSource>>(1);
         let mut transport = XbxTransportState::default();
         transport.frame_source_tx = Arc::new(Mutex::new(Some(tx)));
 
@@ -71,14 +75,17 @@ impl XbxActiveMediaStack {
         let supervisor_render_state = render_state.clone();
 
         let control_for_keyframe = control.clone();
-        
-        let runtime = Arc::new(tokio::runtime::Builder::new_multi_thread()
-            .enable_all()
-            .build()
-            .expect("build webrtc-rs runtime"));
+
+        let runtime = Arc::new(
+            tokio::runtime::Builder::new_multi_thread()
+                .enable_all()
+                .build()
+                .expect("build webrtc-rs runtime"),
+        );
 
         let handle = runtime.handle().clone();
-        let runtime_stats_for_supervisor = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default())); // 这里先预创建，后面传入
+        let runtime_stats_for_supervisor =
+            Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default())); // 这里先预创建，后面传入
         let runtime_stats_for_spawn = runtime_stats_for_supervisor.clone(); // clone 给 spawn 使用
         let video_pipeline_config = runtime_config.webrtc.video_pipeline.clone();
 
@@ -241,8 +248,11 @@ impl XbxMediaStackPort for XbxActiveMediaStack {
         answer_sdp: &str,
         remote_candidates: &[XbxEngineIceCandidateDto],
     ) -> Result<(), XbxEngineRuntimeError> {
-        self.transport
-            .apply_remote_description(&self.runtime.handle(), answer_sdp, remote_candidates)
+        self.transport.apply_remote_description(
+            &self.runtime.handle(),
+            answer_sdp,
+            remote_candidates,
+        )
     }
 
     fn local_candidates_snapshot(&self) -> Vec<XbxEngineIceCandidateDto> {

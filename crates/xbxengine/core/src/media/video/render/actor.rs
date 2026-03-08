@@ -2,8 +2,8 @@ use std::sync::mpsc::{self, Receiver, SyncSender, TrySendError};
 use std::sync::{Arc, Mutex};
 use std::thread;
 
-use crate::media::video::types::DecodedFrame;
 use crate::media::video::render::renderer::XbxRenderState;
+use crate::media::video::types::DecodedFrame;
 
 pub enum RendererMsg {
     Frame(DecodedFrame),
@@ -37,10 +37,7 @@ impl RendererActorHandle {
     }
 }
 
-fn run_renderer_loop(
-    rx: Receiver<RendererMsg>,
-    render_state: Arc<Mutex<XbxRenderState>>,
-) {
+fn run_renderer_loop(rx: Receiver<RendererMsg>, render_state: Arc<Mutex<XbxRenderState>>) {
     while let Ok(msg) = rx.recv() {
         match msg {
             RendererMsg::Frame(frame) => {
@@ -48,14 +45,14 @@ fn run_renderer_loop(
                     Ok(guard) => guard,
                     Err(_) => continue,
                 };
-                
+
                 // Set the current real-time ms before presenting so metrics are correct
                 let mut render_frame = frame.surface;
                 render_frame.rendered_at_ms = std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)
                     .map(|d| d.as_millis() as f64)
                     .unwrap_or(0.0);
-                
+
                 if let Err(e) = state.present_frame(render_frame) {
                     crate::xbx_log_error!("[XbxRendererActor] present_frame error: {:?}", e);
                 }

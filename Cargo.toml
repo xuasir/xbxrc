@@ -12,8 +12,9 @@ members = [
   "crates/xbxengine/api",
   "crates/xbxengine/app",
   "crates/xbox-webapi",
-  "tauri/src-tauri",
+  "src-tauri",
 ]
+default-members = ["src-tauri"]
 resolver = "2"
 
 [workspace.package]
@@ -22,3 +23,42 @@ edition = "2021"
 rust-version = "1.93"
 license = "MIT"
 authors = ["xuasir"]
+
+[workspace.dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["full"] }
+thiserror = "2"
+log = "0.4"
+reqwest = { version = "0.13.2", features = ["json", "blocking"] }
+chrono = { version = "0.4.44", features = ["serde"] }
+uuid = "1.22.0"
+base64 = "0.22.1"
+rand = "0.10.0"
+rand_core = "0.10.0"
+url = "2.5.8"
+parking_lot = "0.12.5"
+bytes = "1.10.1"
+cpal = "0.15.3"
+opus = "0.3.0"
+rtp = "0.8.0"
+webrtc = "0.8.0"
+webrtc-media = "0.6.1"
+p256 = { version = "0.13.2", features = ["jwk", "pkcs8", "std", "sha256"] }
+ring = "0.17.14"
+openssl = { version = "0.10.75", features = ["v110"] }
+hmac = "0.12.1"
+sha2 = "0.10.9"
+hex-literal = "1.1.0"
+async-trait = "0.1"
+env_logger = "0.11.9"
+
+[profile.dev]
+debug = true
+opt-level = 0
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true

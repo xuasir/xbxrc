@@ -2,8 +2,8 @@ use std::sync::mpsc::{self, Receiver, SyncSender, TrySendError};
 use std::thread;
 use std::time::{Duration, Instant};
 
-use crate::media::video::types::DecodedFrame;
 use crate::media::video::render::actor::RendererActorHandle;
+use crate::media::video::types::DecodedFrame;
 use std::sync::Arc;
 
 pub enum PacerMsg {

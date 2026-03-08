@@ -1,24 +1,25 @@
-import { AUTH_SESSION_READY_CHANNEL, type AuthSessionReadyRendererEvent } from './auth'
+import type { AuthSessionReadyRendererEvent } from './auth'
+import type { GamepadDevicesChangedRendererEvent, GamepadPadSnapshotRendererEvent, GamepadRouteChangedRendererEvent, GamepadRuntimeSnapshotRendererEvent } from './gamepad'
+import type { XbxEngineRuntimeEventRendererEvent } from './xbxengine'
+import { AUTH_SESSION_READY_CHANNEL } from './auth'
 import {
   GAMEPAD_DEVICES_CHANGED_CHANNEL,
   GAMEPAD_PAD_SNAPSHOT_CHANNEL,
   GAMEPAD_ROUTE_CHANGED_CHANNEL,
   GAMEPAD_RUNTIME_SNAPSHOT_CHANNEL,
-  type GamepadDevicesChangedRendererEvent,
-  type GamepadPadSnapshotRendererEvent,
-  type GamepadRouteChangedRendererEvent,
-  type GamepadRuntimeSnapshotRendererEvent
+
 } from './gamepad'
 import {
   STREAMING_XBXENGINE_RUNTIME_EVENT_CHANNEL,
-  type XbxEngineRuntimeEventRendererEvent
+
 } from './xbxengine'
+
 export type { AuthSessionReadyRendererEvent } from './auth'
 export type {
   GamepadDevicesChangedRendererEvent,
   GamepadPadSnapshotRendererEvent,
   GamepadRouteChangedRendererEvent,
-  GamepadRuntimeSnapshotRendererEvent
+  GamepadRuntimeSnapshotRendererEvent,
 } from './gamepad'
 export type { XbxEngineRuntimeEventRendererEvent } from './xbxengine'
 
@@ -47,5 +48,5 @@ export const EVENT_CHANNEL_MAP: Record<XBoxEventName, string> = {
   'gamepad.devicesChanged': GAMEPAD_DEVICES_CHANGED_CHANNEL,
   'gamepad.padSnapshot': GAMEPAD_PAD_SNAPSHOT_CHANNEL,
   'gamepad.routeChanged': GAMEPAD_ROUTE_CHANGED_CHANNEL,
-  'streaming.xbxEngineRuntimeEvent': STREAMING_XBXENGINE_RUNTIME_EVENT_CHANNEL
+  'streaming.xbxEngineRuntimeEvent': STREAMING_XBXENGINE_RUNTIME_EVENT_CHANNEL,
 }

@@ -32,15 +32,15 @@ export function createRpcClient<TSchema>(invoke: RpcInvoke): RpcClient<TSchema> 
                 invoke({
                   namespace,
                   method,
-                  params
+                  params,
                 })
-            }
-          }
+            },
+          },
         )
 
         namespaceCache.set(namespace, namespaceProxy)
         return namespaceProxy
-      }
-    }
+      },
+    },
   ) as RpcClient<TSchema>
 }

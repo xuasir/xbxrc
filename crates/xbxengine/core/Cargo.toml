@@ -8,17 +8,17 @@ authors.workspace = true
 publish = false
 
 [dependencies]
-bytes = "1.10.1"
-cpal = "0.15.3"
+bytes.workspace = true
+cpal.workspace = true
 ohmygamepad-host = { path = "../../ohmygamepad/bridge/host" }
 ohmygamepad-protocol = { path = "../../ohmygamepad/protocol" }
-opus = "0.3.0"
-rtp = "0.8.0"
-serde_json = "1.0"
+opus.workspace = true
+rtp.workspace = true
+serde_json.workspace = true
 xbxengine-protocol = { path = "../protocol" }
-tokio = { version = "1.48.0", features = ["rt-multi-thread", "sync", "time"] }
-webrtc = "0.8.0"
-webrtc-media = "0.6.1"
+tokio.workspace = true
+webrtc.workspace = true
+webrtc-media.workspace = true
 
 [lib]
 path = "src/lib.rs"

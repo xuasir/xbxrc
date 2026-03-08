@@ -1,14 +1,21 @@
-import type { RpcMethod } from './types'
 import type {
   GamepadRouteTargetDto,
   GamepadRumbleRequestDto,
   GamepadRumbleResultDto,
   GamepadRumbleTargetDto,
   GamepadRuntimeSnapshotDto,
-  GamepadSamplingStrategyDto,
   GamepadSamplingConfigDto,
-  LogicalPadBindingDto
+  GamepadSamplingStrategyDto,
+  LogicalPadBindingDto,
 } from '../gamepad/contract'
+import type {
+  StreamHostCloseSessionParams,
+  StreamHostExchangeIceParams,
+  StreamHostExchangeIceResult,
+  StreamHostExchangeOfferParams,
+  StreamHostExchangeOfferResult,
+  StreamHostKeepAliveParams,
+} from './stream-host'
 import type {
   StreamingCloseSessionParams,
   StreamingCreateSessionParams,
@@ -23,16 +30,9 @@ import type {
   StreamingListActiveSessionsResult,
   StreamingSessionSnapshot,
   StreamingTargetType,
-  StreamingTurnServerConfig
+  StreamingTurnServerConfig,
 } from './streaming'
-import type {
-  StreamHostCloseSessionParams,
-  StreamHostExchangeIceParams,
-  StreamHostExchangeIceResult,
-  StreamHostExchangeOfferParams,
-  StreamHostExchangeOfferResult,
-  StreamHostKeepAliveParams
-} from './stream-host'
+import type { RpcMethod } from './types'
 import type {
   XbxEngineAckResult,
   XbxEngineApplyDisplayStateParams,
@@ -44,7 +44,7 @@ import type {
   XbxEngineRuntimeEventDto,
   XbxEngineSetAudioVolumeParams,
   XbxEngineStartRuntimeParams,
-  XbxEngineStatsDto
+  XbxEngineStatsDto,
 } from './xbxengine'
 
 type RpcConfigGroup = Record<string, unknown>
@@ -52,17 +52,17 @@ type RpcConfigGroup = Record<string, unknown>
 export interface XBoxRpcSchema {
   app: {
     getVersion: RpcMethod<void, string>
-    ping: RpcMethod<{ message: string }, { message: string; at: string }>
+    ping: RpcMethod<{ message: string }, { message: string, at: string }>
     isFullscreen: RpcMethod<void, boolean>
     toggleFullscreen: RpcMethod<void, boolean>
     enterFullscreen: RpcMethod<void, boolean>
     exitFullscreen: RpcMethod<void, boolean>
-    getStartupFlags: RpcMethod<void, { fullscreen: boolean; autoConnect: string }>
+    getStartupFlags: RpcMethod<void, { fullscreen: boolean, autoConnect: string }>
     resetAutoConnect: RpcMethod<void, { reset: boolean }>
     clearUserData: RpcMethod<void, { cleared: boolean }>
     clearData: RpcMethod<
       void,
-      { cleared: boolean; legacyStateCleared: boolean; restarted: boolean }
+      { cleared: boolean, legacyStateCleared: boolean, restarted: boolean }
     >
     quit: RpcMethod<void, { accepted: boolean }>
     restart: RpcMethod<void, { accepted: boolean }>
@@ -77,13 +77,13 @@ export interface XBoxRpcSchema {
         appLevel: number
       }
     >
-    checkAuthentication: RpcMethod<void, { provider: 'xal' | 'msal'; startedSilentFlow: boolean }>
+    checkAuthentication: RpcMethod<void, { provider: 'xal' | 'msal', startedSilentFlow: boolean }>
     login: RpcMethod<
       void,
       {
         provider: 'xal' | 'msal'
         mode: 'oauth-window' | 'device-code'
-        oauth?: { url: string; state: string }
+        oauth?: { url: string, state: string }
         deviceCode?: {
           userCode: string
           deviceCode: string
@@ -96,7 +96,7 @@ export interface XBoxRpcSchema {
     >
     clearAuthCache: RpcMethod<
       { scope: 'ephemeral' | 'all' },
-      { cleared: boolean; scope: 'ephemeral' | 'all' }
+      { cleared: boolean, scope: 'ephemeral' | 'all' }
     >
     logout: RpcMethod<void, { loggedOut: boolean }>
   }
@@ -107,10 +107,10 @@ export interface XBoxRpcSchema {
       void,
       {
         app: RpcConfigGroup
+        auth: RpcConfigGroup
         streaming: RpcConfigGroup
-        host: RpcConfigGroup
-        xcloud: RpcConfigGroup
         input: RpcConfigGroup
+        xhome: RpcConfigGroup
       }
     >
   }
@@ -192,13 +192,13 @@ export interface XBoxRpcSchema {
     >
     getStreamingTitleInputConfig: RpcMethod<
       { xboxTitleId: string },
-      { xboxTitleId: string; config: Record<string, unknown> }
+      { xboxTitleId: string, config: Record<string, unknown> }
     >
-    powerOnConsole: RpcMethod<{ consoleId: string }, { consoleId: string; accepted: boolean }>
-    powerOffConsole: RpcMethod<{ consoleId: string }, { consoleId: string; accepted: boolean }>
+    powerOnConsole: RpcMethod<{ consoleId: string }, { consoleId: string, accepted: boolean }>
+    powerOffConsole: RpcMethod<{ consoleId: string }, { consoleId: string, accepted: boolean }>
     sendTextToConsole: RpcMethod<
-      { consoleId: string; text: string },
-      { consoleId: string; accepted: boolean }
+      { consoleId: string, text: string },
+      { consoleId: string, accepted: boolean }
     >
     getXcloudTitles: RpcMethod<
       void,

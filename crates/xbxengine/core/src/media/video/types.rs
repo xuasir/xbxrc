@@ -34,4 +34,3 @@ pub struct DecodedFrame {
 
     pub surface: crate::media::video::render::renderer::XbxRenderFrame,
 }
-

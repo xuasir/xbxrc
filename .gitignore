@@ -70,5 +70,11 @@ yarn-error.log
 # ai
 .trae
 
+# Tauri
+/src-tauri/target
+/src-tauri/Cargo.lock
+/dist
+
 rfc
 docs
+archived

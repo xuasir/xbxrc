@@ -813,8 +813,10 @@ fn resolve_runtime_config(input: TsXbxEngineRuntimeConfig) -> XbxEngineRuntimeCo
                 resolve_negotiation_runtime_config(negotiation, &runtime_config.webrtc.negotiation);
         }
         if let Some(video_pipeline) = webrtc.video_pipeline {
-            runtime_config.webrtc.video_pipeline =
-                resolve_video_pipeline_runtime_config(video_pipeline, &runtime_config.webrtc.video_pipeline);
+            runtime_config.webrtc.video_pipeline = resolve_video_pipeline_runtime_config(
+                video_pipeline,
+                &runtime_config.webrtc.video_pipeline,
+            );
         }
         if let Some(rtt_diagnostics) = webrtc.rtt_diagnostics {
             runtime_config.webrtc.rtt_diagnostics =
@@ -845,11 +847,21 @@ fn resolve_negotiation_runtime_config(
     default: &XbxEngineNegotiationRuntimeConfig,
 ) -> XbxEngineNegotiationRuntimeConfig {
     XbxEngineNegotiationRuntimeConfig {
-        target_resolution_width: input.target_resolution_width.unwrap_or(default.target_resolution_width),
-        target_resolution_height: input.target_resolution_height.unwrap_or(default.target_resolution_height),
-        video_bitrate_kbps: input.video_bitrate_kbps.unwrap_or(default.video_bitrate_kbps),
-        audio_bitrate_kbps: input.audio_bitrate_kbps.unwrap_or(default.audio_bitrate_kbps),
-        offer_profile: input.offer_profile.unwrap_or_else(|| default.offer_profile.clone()),
+        target_resolution_width: input
+            .target_resolution_width
+            .unwrap_or(default.target_resolution_width),
+        target_resolution_height: input
+            .target_resolution_height
+            .unwrap_or(default.target_resolution_height),
+        video_bitrate_kbps: input
+            .video_bitrate_kbps
+            .unwrap_or(default.video_bitrate_kbps),
+        audio_bitrate_kbps: input
+            .audio_bitrate_kbps
+            .unwrap_or(default.audio_bitrate_kbps),
+        offer_profile: input
+            .offer_profile
+            .unwrap_or_else(|| default.offer_profile.clone()),
     }
 }
 
@@ -859,13 +871,34 @@ fn resolve_video_pipeline_runtime_config(
     default: &XbxEngineVideoPipelineRuntimeConfig,
 ) -> XbxEngineVideoPipelineRuntimeConfig {
     XbxEngineVideoPipelineRuntimeConfig {
-        nack_window_ms: input.nack_window_ms.unwrap_or(default.nack_window_ms).max(1),
-        nack_retry_interval_ms: input.nack_retry_interval_ms.unwrap_or(default.nack_retry_interval_ms).max(1),
-        nack_max_retry_count: input.nack_max_retry_count.unwrap_or(default.nack_max_retry_count).max(1),
-        jitter_buffer_min_delay_ms: input.jitter_buffer_min_delay_ms.unwrap_or(default.jitter_buffer_min_delay_ms).max(1),
-        jitter_buffer_max_delay_ms: input.jitter_buffer_max_delay_ms.unwrap_or(default.jitter_buffer_max_delay_ms).max(1),
-        jitter_buffer_max_packets: input.jitter_buffer_max_packets.unwrap_or(default.jitter_buffer_max_packets).max(1),
-        idle_timeout_ms: input.idle_timeout_ms.unwrap_or(default.idle_timeout_ms).max(1),
+        nack_window_ms: input
+            .nack_window_ms
+            .unwrap_or(default.nack_window_ms)
+            .max(1),
+        nack_retry_interval_ms: input
+            .nack_retry_interval_ms
+            .unwrap_or(default.nack_retry_interval_ms)
+            .max(1),
+        nack_max_retry_count: input
+            .nack_max_retry_count
+            .unwrap_or(default.nack_max_retry_count)
+            .max(1),
+        jitter_buffer_min_delay_ms: input
+            .jitter_buffer_min_delay_ms
+            .unwrap_or(default.jitter_buffer_min_delay_ms)
+            .max(1),
+        jitter_buffer_max_delay_ms: input
+            .jitter_buffer_max_delay_ms
+            .unwrap_or(default.jitter_buffer_max_delay_ms)
+            .max(1),
+        jitter_buffer_max_packets: input
+            .jitter_buffer_max_packets
+            .unwrap_or(default.jitter_buffer_max_packets)
+            .max(1),
+        idle_timeout_ms: input
+            .idle_timeout_ms
+            .unwrap_or(default.idle_timeout_ms)
+            .max(1),
     }
 }
 

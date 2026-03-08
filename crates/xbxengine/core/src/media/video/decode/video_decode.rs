@@ -132,26 +132,35 @@ impl XbxVideoDecodeState {
         let should_release = self
             .frame_release_policy
             .should_release(queue_delay_ms, self.decoded_frame_queue.len());
-        
+
         if !should_release {
             return None;
         }
-        
-        crate::xbx_log_warn!("[xbxengine][vt] pop_decoded_frame: delay={:.2}ms qlen={}", queue_delay_ms, self.decoded_frame_queue.len());
+
+        crate::xbx_log_warn!(
+            "[xbxengine][vt] pop_decoded_frame: delay={:.2}ms qlen={}",
+            queue_delay_ms,
+            self.decoded_frame_queue.len()
+        );
         self.decoded_frame_queue.pop_front().map(|item| item.frame)
     }
-
-
 
     fn enqueue_decoded_frame(&mut self, frame: QueuedDecodedFrame) {
         while self.decoded_frame_queue.len() >= MAX_DECODED_FRAME_QUEUE_LEN {
             let dropped = self.decoded_frame_queue.pop_front();
             if let Some(d) = dropped {
-                crate::xbx_log_warn!("[xbxengine][vt] enqueue_decoded_frame: queue FULL, dropping old frame seq={}", d.frame.frame_seq);
+                crate::xbx_log_warn!(
+                    "[xbxengine][vt] enqueue_decoded_frame: queue FULL, dropping old frame seq={}",
+                    d.frame.frame_seq
+                );
             }
             self.decoded_frame_drop_count = self.decoded_frame_drop_count.saturating_add(1);
         }
-        crate::xbx_log_warn!("[xbxengine][vt] enqueue_decoded_frame: seq={} qlen={}", frame.frame.frame_seq, self.decoded_frame_queue.len() + 1);
+        crate::xbx_log_warn!(
+            "[xbxengine][vt] enqueue_decoded_frame: seq={} qlen={}",
+            frame.frame.frame_seq,
+            self.decoded_frame_queue.len() + 1
+        );
         self.decoded_frame_queue.push_back(frame);
     }
 }
@@ -185,7 +194,6 @@ impl XbxVideoDecodeState {
     }
 }
 
-
 pub(crate) fn now_ms_f64() -> f64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -217,7 +225,10 @@ impl MacOsVideoToolboxDecoder {
 
     fn ensure_decoder_session(&mut self, payload: &[u8]) -> Result<bool, XbxEngineRuntimeError> {
         let nals = split_annex_b_nals(payload);
-        crate::xbx_log_warn!("[xbxengine][vt] ensure_decoder_session: found {} nals", nals.len());
+        crate::xbx_log_warn!(
+            "[xbxengine][vt] ensure_decoder_session: found {} nals",
+            nals.len()
+        );
         for nal in &nals {
             if nal.is_empty() {
                 continue;
@@ -227,14 +238,18 @@ impl MacOsVideoToolboxDecoder {
             match nal_type {
                 7 => {
                     if self.last_sps != *nal {
-                        crate::xbx_log_warn!("[xbxengine][vt] SPS changed, forcing session recreate");
+                        crate::xbx_log_warn!(
+                            "[xbxengine][vt] SPS changed, forcing session recreate"
+                        );
                         self.last_sps = nal.to_vec();
                         self.release_session();
                     }
                 }
                 8 => {
                     if self.last_pps != *nal {
-                        crate::xbx_log_warn!("[xbxengine][vt] PPS changed, forcing session recreate");
+                        crate::xbx_log_warn!(
+                            "[xbxengine][vt] PPS changed, forcing session recreate"
+                        );
                         self.last_pps = nal.to_vec();
                         self.release_session();
                     }
@@ -247,7 +262,8 @@ impl MacOsVideoToolboxDecoder {
             return Ok(!self.decompression_session.is_null());
         }
 
-        if !self.decompression_session.is_null() && self.format_description != std::ptr::null_mut() {
+        if !self.decompression_session.is_null() && self.format_description != std::ptr::null_mut()
+        {
             // 已有会话且参数未变（逻辑简化：这里假设 format_description 也是基于最新的 SPS/PPS）
             // 实际上我们应该检查 SPS/PPS 是否真的改变了再重建。
             // 为了稳健性，我们在 NAL 循环里已经更新了 self.last_sps/pps。
@@ -258,7 +274,9 @@ impl MacOsVideoToolboxDecoder {
             return Ok(true);
         }
 
-        crate::xbx_log_warn!("[xbxengine][webrtc-rs][vt] creating decoder session with stored SPS/PPS");
+        crate::xbx_log_warn!(
+            "[xbxengine][webrtc-rs][vt] creating decoder session with stored SPS/PPS"
+        );
         self.release_session();
 
         let parameter_set_pointers = [self.last_sps.as_ptr(), self.last_pps.as_ptr()];
@@ -310,7 +328,9 @@ impl MacOsVideoToolboxDecoder {
             }
 
             if pixel_buffer_attributes.is_null() {
-                crate::xbx_log_error!("[xbxengine][webrtc-rs][vt] create pixel buffer attributes failed");
+                crate::xbx_log_error!(
+                    "[xbxengine][webrtc-rs][vt] create pixel buffer attributes failed"
+                );
             }
 
             crate::xbx_log_warn!("[xbxengine][webrtc-rs][vt] calling VTDecompressionSessionCreate");
@@ -390,7 +410,9 @@ impl XbxHardwareVideoDecoder for MacOsVideoToolboxDecoder {
         let nals = split_annex_b_nals(&encoded_frame.payload);
         let mut avcc_payload = Vec::with_capacity(encoded_frame.payload.len() + nals.len() * 4);
         for nal in nals {
-            if nal.is_empty() { continue; }
+            if nal.is_empty() {
+                continue;
+            }
             let nal_type = nal[0] & 0x1f;
             // AVCC 模式下，SPS/PPS/AUD 不应在 SampleData 中，它们在 FormatDescription 里。
             // 某些解码器对 in-band parameter sets 敏感，返回 -12909。
@@ -438,7 +460,9 @@ impl XbxHardwareVideoDecoder for MacOsVideoToolboxDecoder {
             )
         };
         if status != NO_ERR {
-            unsafe { CFRelease(block_buffer as CFTypeRef); }
+            unsafe {
+                CFRelease(block_buffer as CFTypeRef);
+            }
             return Err(XbxEngineRuntimeError::new(format!(
                 "xbxEngineFillBlockBufferFailed:status={status}"
             )));
@@ -484,7 +508,10 @@ impl XbxHardwareVideoDecoder for MacOsVideoToolboxDecoder {
                 &mut decode_info_flags,
             )
         };
-        crate::xbx_log_warn!("[xbxengine][vt] VTDecompressionSessionDecodeFrame status={}", status);
+        crate::xbx_log_warn!(
+            "[xbxengine][vt] VTDecompressionSessionDecodeFrame status={}",
+            status
+        );
 
         unsafe {
             CFRelease(sample_buffer as CFTypeRef);
@@ -500,7 +527,9 @@ impl XbxHardwareVideoDecoder for MacOsVideoToolboxDecoder {
         let result_state = match sync_rx.recv_timeout(std::time::Duration::from_secs(1)) {
             Ok(state_ptr) => unsafe { Box::from_raw(state_ptr) },
             Err(_) => {
-                crate::xbx_log_error!("[xbxengine][webrtc-rs][vt] decode session timed out or callback never fired");
+                crate::xbx_log_error!(
+                    "[xbxengine][webrtc-rs][vt] decode session timed out or callback never fired"
+                );
                 return Err(XbxEngineRuntimeError::new(
                     "xbxEngineVideoToolboxDecodeTimeout".to_string(),
                 ));
@@ -588,7 +617,11 @@ extern "C" fn vt_decompression_output_callback(
         }
         output.pixel_buffer = image_buffer;
     } else {
-        crate::xbx_log_warn!("[xbxengine][vt] callback fired with status={} buffer_is_null={}", status, image_buffer.is_null());
+        crate::xbx_log_warn!(
+            "[xbxengine][vt] callback fired with status={} buffer_is_null={}",
+            status,
+            image_buffer.is_null()
+        );
         output.pixel_buffer = std::ptr::null_mut();
     }
 
@@ -597,8 +630,6 @@ extern "C" fn vt_decompression_output_callback(
         let _ = tx.send(output_ptr);
     }
 }
-
-
 
 #[cfg(target_os = "macos")]
 fn split_annex_b_nals(data: &[u8]) -> Vec<&[u8]> {

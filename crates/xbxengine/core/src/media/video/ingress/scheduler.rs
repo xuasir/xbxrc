@@ -84,7 +84,11 @@ impl FrameScheduler for VideoIngress {
         // Rule 2: Delta 晚到即丢弃 (now > target_playout + 500ms)
         // 放宽限制：低延迟场景宁可播晚帧也不愿意频繁断流等待关键帧。
         if now > frame.target_playout_time + Duration::from_millis(500) {
-            crate::xbx_log_warn!("[VideoIngress] frame too late, dropping. now={:?}, target={:?}", now, frame.target_playout_time);
+            crate::xbx_log_warn!(
+                "[VideoIngress] frame too late, dropping. now={:?}, target={:?}",
+                now,
+                frame.target_playout_time
+            );
             return IngressDecision::DropLate;
         }
 

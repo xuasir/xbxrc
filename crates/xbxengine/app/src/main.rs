@@ -108,7 +108,10 @@ fn main() {
                             .map(|latest_seq| latest_seq != frame_seq)
                             .unwrap_or(true);
                         if is_new_frame {
-                            xbxengine::xbx_log_warn!("[xbxengine-app] received new frame seq={}", frame_seq);
+                            xbxengine::xbx_log_warn!(
+                                "[xbxengine-app] received new frame seq={}",
+                                frame_seq
+                            );
                             renderer.update_frame(frame);
                             rendered_real_frame = true;
                             has_received_remote_frame = true;
@@ -120,7 +123,7 @@ fn main() {
                 // 测试图案只用于“首帧到来前”的占位。
                 // 仅在未收到真实帧且到达 33ms 周期时才请求更新。
                 let mut next_wait = now + std::time::Duration::from_millis(100); // 默认 100ms 后再 tick
-                
+
                 if !rendered_real_frame && !has_received_remote_frame {
                     let elapsed = last_bootstrap_update.elapsed();
                     if elapsed.as_millis() >= 33 {
@@ -130,7 +133,10 @@ fn main() {
                         window.request_redraw();
                         next_wait = now + std::time::Duration::from_millis(33);
                     } else {
-                        next_wait = now + std::time::Duration::from_millis(33u128.saturating_sub(elapsed.as_millis()) as u64);
+                        next_wait = now
+                            + std::time::Duration::from_millis(
+                                33u128.saturating_sub(elapsed.as_millis()) as u64,
+                            );
                     }
                 }
 

@@ -1,7 +1,7 @@
 use std::borrow::Cow;
 
-use winit::{dpi::PhysicalSize, window::Window};
 use metal::foreign_types::ForeignType;
+use winit::{dpi::PhysicalSize, window::Window};
 use xbxengine::{XbxEngineRenderFrame, XbxEngineRenderPixelData};
 
 const COPY_SHADER: &str = r#"
@@ -108,7 +108,10 @@ struct Nv12TextureBundle {
     uv_texture: wgpu::Texture,
     bind_group: wgpu::BindGroup,
     #[cfg(target_os = "macos")]
-    cv_textures: Option<(macos_bindings::CVMetalTextureRef, macos_bindings::CVMetalTextureRef)>,
+    cv_textures: Option<(
+        macos_bindings::CVMetalTextureRef,
+        macos_bindings::CVMetalTextureRef,
+    )>,
 }
 
 impl Drop for Nv12TextureBundle {
@@ -116,7 +119,9 @@ impl Drop for Nv12TextureBundle {
         #[cfg(target_os = "macos")]
         if let Some((y, uv)) = self.cv_textures.take() {
             unsafe {
-                xbxengine::xbx_log_warn!("[xbxengine-app] dropping Nv12TextureBundle, releasing CVMetalTextureRef");
+                xbxengine::xbx_log_warn!(
+                    "[xbxengine-app] dropping Nv12TextureBundle, releasing CVMetalTextureRef"
+                );
                 macos_bindings::CFRelease(y);
                 macos_bindings::CFRelease(uv);
             }
@@ -137,7 +142,7 @@ mod macos_bindings {
     pub type CVMetalTextureCacheRef = *mut c_void;
     pub type CVMetalTextureRef = *mut c_void;
     pub type CVImageBufferRef = *mut c_void;
-    
+
     #[link(name = "CoreVideo", kind = "framework")]
     extern "C" {
         pub fn CVMetalTextureCacheCreate(
@@ -147,7 +152,7 @@ mod macos_bindings {
             textureAttributes: *mut c_void,
             cacheOut: *mut CVMetalTextureCacheRef,
         ) -> CVReturn;
-        
+
         pub fn CVMetalTextureCacheCreateTextureFromImage(
             allocator: *mut c_void,
             textureCache: CVMetalTextureCacheRef,
@@ -159,7 +164,7 @@ mod macos_bindings {
             planeIndex: usize,
             textureOut: *mut CVMetalTextureRef,
         ) -> CVReturn;
-        
+
         pub fn CVMetalTextureGetTexture(image: CVMetalTextureRef) -> *mut c_void;
     }
 
@@ -184,7 +189,13 @@ pub struct WgpuFrameRenderer<'window> {
     #[cfg(target_os = "macos")]
     texture_cache: Option<macos_bindings::CVMetalTextureCacheRef>,
     #[cfg(target_os = "macos")]
-    pending_releases: std::collections::VecDeque<(u64, (macos_bindings::CVMetalTextureRef, macos_bindings::CVMetalTextureRef))>,
+    pending_releases: std::collections::VecDeque<(
+        u64,
+        (
+            macos_bindings::CVMetalTextureRef,
+            macos_bindings::CVMetalTextureRef,
+        ),
+    )>,
 }
 
 impl<'window> WgpuFrameRenderer<'window> {
@@ -376,7 +387,11 @@ impl<'window> WgpuFrameRenderer<'window> {
                     );
                 }
             });
-            if cache.is_null() { None } else { Some(cache) }
+            if cache.is_null() {
+                None
+            } else {
+                Some(cache)
+            }
         };
 
         Ok(Self {
@@ -399,7 +414,11 @@ impl<'window> WgpuFrameRenderer<'window> {
     }
 
     pub fn update_frame(&mut self, frame: XbxEngineRenderFrame) {
-        xbxengine::xbx_log_warn!("[xbxengine-app] update_frame seq={} data={:?}", frame.frame_seq, frame.pixel_data);
+        xbxengine::xbx_log_warn!(
+            "[xbxengine-app] update_frame seq={} data={:?}",
+            frame.frame_seq,
+            frame.pixel_data
+        );
         self.latest_frame = Some(frame);
     }
 
@@ -417,15 +436,23 @@ impl<'window> WgpuFrameRenderer<'window> {
         if let Some(frame) = self.latest_frame.take() {
             xbxengine::xbx_log_warn!("[xbxengine-app] rendering frame seq={}", frame.frame_seq);
             self.upload_frame(&frame)?;
-            
+
             #[cfg(target_os = "macos")]
             {
                 // 逐帧清理：释放 5 帧之前的纹理，确保 GPU 已渲染完。
                 let current_seq = frame.frame_seq;
-                while self.pending_releases.front().map(|f| f.0 < current_seq.saturating_sub(5)).unwrap_or(false) {
+                while self
+                    .pending_releases
+                    .front()
+                    .map(|f| f.0 < current_seq.saturating_sub(5))
+                    .unwrap_or(false)
+                {
                     let (seq, (y, uv)) = self.pending_releases.pop_front().unwrap();
                     unsafe {
-                        xbxengine::xbx_log_warn!("[xbxengine-app] deferred release CVMetalTextureRef for seq={}", seq);
+                        xbxengine::xbx_log_warn!(
+                            "[xbxengine-app] deferred release CVMetalTextureRef for seq={}",
+                            seq
+                        );
                         macos_bindings::CFRelease(y);
                         macos_bindings::CFRelease(uv);
                     }
@@ -627,12 +654,15 @@ impl<'window> WgpuFrameRenderer<'window> {
             XbxEngineRenderPixelData::Descriptor { handle } => {
                 #[cfg(target_os = "macos")]
                 {
-                    if let Some(desc) = handle.downcast_ref::<xbxengine::api::backend::MacOsCVPixelBufferDescriptor>() {
+                    if let Some(desc) = handle
+                        .downcast_ref::<xbxengine::api::backend::MacOsCVPixelBufferDescriptor>()
+                    {
                         if let Some(cache) = self.texture_cache {
                             let pixel_buffer = desc.ptr;
-                            
+
                             // Plane 0: Y
-                            let mut cv_y_tex: macos_bindings::CVMetalTextureRef = std::ptr::null_mut();
+                            let mut cv_y_tex: macos_bindings::CVMetalTextureRef =
+                                std::ptr::null_mut();
                             unsafe {
                                 macos_bindings::CVMetalTextureCacheCreateTextureFromImage(
                                     std::ptr::null_mut(),
@@ -646,9 +676,10 @@ impl<'window> WgpuFrameRenderer<'window> {
                                     &mut cv_y_tex,
                                 );
                             }
-                            
+
                             // Plane 1: UV
-                            let mut cv_uv_tex: macos_bindings::CVMetalTextureRef = std::ptr::null_mut();
+                            let mut cv_uv_tex: macos_bindings::CVMetalTextureRef =
+                                std::ptr::null_mut();
                             unsafe {
                                 macos_bindings::CVMetalTextureCacheCreateTextureFromImage(
                                     std::ptr::null_mut(),
@@ -662,7 +693,7 @@ impl<'window> WgpuFrameRenderer<'window> {
                                     &mut cv_uv_tex,
                                 );
                             }
-                            
+
                             if cv_y_tex.is_null() || cv_uv_tex.is_null() {
                                 if !cv_y_tex.is_null() {
                                     unsafe { macos_bindings::CFRelease(cv_y_tex) };
@@ -672,94 +703,131 @@ impl<'window> WgpuFrameRenderer<'window> {
                                 }
                                 return Err("xbxengineAppCreateMetalTextureFailed".to_string());
                             }
-                            
-                            let mtl_y_tex = unsafe { macos_bindings::CVMetalTextureGetTexture(cv_y_tex) };
-                            let mtl_uv_tex = unsafe { macos_bindings::CVMetalTextureGetTexture(cv_uv_tex) };
+
+                            let mtl_y_tex =
+                                unsafe { macos_bindings::CVMetalTextureGetTexture(cv_y_tex) };
+                            let mtl_uv_tex =
+                                unsafe { macos_bindings::CVMetalTextureGetTexture(cv_uv_tex) };
                             xbxengine::xbx_log_warn!("[xbxengine-app] CVMetalTextureCacheCreateTextureFromImage success, planes extracted");
-                            
-                            if let Some(FrameTextureBundle::Nv12(bundle)) = self.frame_texture.as_mut() {
+
+                            if let Some(FrameTextureBundle::Nv12(bundle)) =
+                                self.frame_texture.as_mut()
+                            {
                                 if let Some(textures) = bundle.cv_textures.take() {
                                     self.pending_releases.push_back((frame.frame_seq, textures));
                                 }
                                 bundle.cv_textures = Some((cv_y_tex, cv_uv_tex));
                             }
-                            
+
                             let (y_texture, uv_texture) = unsafe {
-                                use wgpu_hal::api::Metal;
                                 use metal::foreign_types::ForeignType;
-                                
-                                let raw_y = metal::Texture::from_ptr(mtl_y_tex as *mut _).to_owned();
+                                use wgpu_hal::api::Metal;
+
+                                let raw_y =
+                                    metal::Texture::from_ptr(mtl_y_tex as *mut _).to_owned();
                                 let hal_y = <Metal as wgpu_hal::Api>::Device::texture_from_raw(
                                     raw_y,
                                     wgpu::TextureFormat::R8Unorm,
                                     metal::MTLTextureType::D2,
                                     1,
                                     1,
-                                    wgpu_hal::CopyExtent { width: frame.width, height: frame.height, depth: 1 }
+                                    wgpu_hal::CopyExtent {
+                                        width: frame.width,
+                                        height: frame.height,
+                                        depth: 1,
+                                    },
                                 );
                                 let wgpu_y = self.device.create_texture_from_hal::<Metal>(
                                     hal_y,
                                     &wgpu::TextureDescriptor {
                                         label: Some("xbxengine-app-frame-y-texture-cv"),
-                                        size: wgpu::Extent3d { width: frame.width, height: frame.height, depth_or_array_layers: 1 },
+                                        size: wgpu::Extent3d {
+                                            width: frame.width,
+                                            height: frame.height,
+                                            depth_or_array_layers: 1,
+                                        },
                                         mip_level_count: 1,
                                         sample_count: 1,
                                         dimension: wgpu::TextureDimension::D2,
                                         format: wgpu::TextureFormat::R8Unorm,
-                                        usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+                                        usage: wgpu::TextureUsages::TEXTURE_BINDING
+                                            | wgpu::TextureUsages::COPY_DST,
                                         view_formats: &[],
-                                    }
+                                    },
                                 );
-                                
-                                let raw_uv = metal::Texture::from_ptr(mtl_uv_tex as *mut _).to_owned();
+
+                                let raw_uv =
+                                    metal::Texture::from_ptr(mtl_uv_tex as *mut _).to_owned();
                                 let hal_uv = <Metal as wgpu_hal::Api>::Device::texture_from_raw(
                                     raw_uv,
                                     wgpu::TextureFormat::Rg8Unorm,
                                     metal::MTLTextureType::D2,
                                     1,
                                     1,
-                                    wgpu_hal::CopyExtent { width: frame.width/2, height: frame.height.div_ceil(2), depth: 1 }
+                                    wgpu_hal::CopyExtent {
+                                        width: frame.width / 2,
+                                        height: frame.height.div_ceil(2),
+                                        depth: 1,
+                                    },
                                 );
                                 let wgpu_uv = self.device.create_texture_from_hal::<Metal>(
                                     hal_uv,
                                     &wgpu::TextureDescriptor {
                                         label: Some("xbxengine-app-frame-uv-texture-cv"),
-                                        size: wgpu::Extent3d { width: frame.width/2, height: frame.height.div_ceil(2), depth_or_array_layers: 1 },
+                                        size: wgpu::Extent3d {
+                                            width: frame.width / 2,
+                                            height: frame.height.div_ceil(2),
+                                            depth_or_array_layers: 1,
+                                        },
                                         mip_level_count: 1,
                                         sample_count: 1,
                                         dimension: wgpu::TextureDimension::D2,
                                         format: wgpu::TextureFormat::Rg8Unorm,
-                                        usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+                                        usage: wgpu::TextureUsages::TEXTURE_BINDING
+                                            | wgpu::TextureUsages::COPY_DST,
                                         view_formats: &[],
-                                    }
+                                    },
                                 );
-                                
+
                                 (wgpu_y, wgpu_uv)
                             };
-                            
-                            let y_view = y_texture.create_view(&wgpu::TextureViewDescriptor::default());
-                            let uv_view = uv_texture.create_view(&wgpu::TextureViewDescriptor::default());
-                            let bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
-                                label: Some("xbxengine-app-nv12-bind-group-cv"),
-                                layout: &self.nv12_bind_group_layout,
-                                entries: &[
-                                    wgpu::BindGroupEntry { binding: 0, resource: wgpu::BindingResource::TextureView(&y_view) },
-                                    wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::TextureView(&uv_view) },
-                                    wgpu::BindGroupEntry { binding: 2, resource: wgpu::BindingResource::Sampler(&self.sampler) },
-                                ],
-                            });
-                            
-                            self.frame_texture = Some(FrameTextureBundle::Nv12(Nv12TextureBundle {
-                                width: frame.width,
-                                height: frame.height,
-                                y_texture,
-                                uv_texture,
-                                bind_group,
-                                #[cfg(target_os = "macos")]
-                                cv_textures: Some((cv_y_tex, cv_uv_tex)),
-                            }));
-                            
-                            // NOTE: CFRelease is now handled in Nv12TextureBundle::drop to ensure 
+
+                            let y_view =
+                                y_texture.create_view(&wgpu::TextureViewDescriptor::default());
+                            let uv_view =
+                                uv_texture.create_view(&wgpu::TextureViewDescriptor::default());
+                            let bind_group =
+                                self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+                                    label: Some("xbxengine-app-nv12-bind-group-cv"),
+                                    layout: &self.nv12_bind_group_layout,
+                                    entries: &[
+                                        wgpu::BindGroupEntry {
+                                            binding: 0,
+                                            resource: wgpu::BindingResource::TextureView(&y_view),
+                                        },
+                                        wgpu::BindGroupEntry {
+                                            binding: 1,
+                                            resource: wgpu::BindingResource::TextureView(&uv_view),
+                                        },
+                                        wgpu::BindGroupEntry {
+                                            binding: 2,
+                                            resource: wgpu::BindingResource::Sampler(&self.sampler),
+                                        },
+                                    ],
+                                });
+
+                            self.frame_texture =
+                                Some(FrameTextureBundle::Nv12(Nv12TextureBundle {
+                                    width: frame.width,
+                                    height: frame.height,
+                                    y_texture,
+                                    uv_texture,
+                                    bind_group,
+                                    #[cfg(target_os = "macos")]
+                                    cv_textures: Some((cv_y_tex, cv_uv_tex)),
+                                }));
+
+                            // NOTE: CFRelease is now handled in Nv12TextureBundle::drop to ensure
                             // textures are valid as long as the wgpu texture exists.
                         } else {
                             return Err("xbxengineAppTextureCacheMissing".to_string());

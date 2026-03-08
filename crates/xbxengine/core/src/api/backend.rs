@@ -51,7 +51,14 @@ impl std::fmt::Debug for MacOsCVPixelBufferDescriptor {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("MacOsCVPixelBufferDescriptor")
             .field("ptr", &self.ptr)
-            .field("drop_fn", &if self.drop_fn.is_some() { "Some(<closure>)" } else { "None" })
+            .field(
+                "drop_fn",
+                &if self.drop_fn.is_some() {
+                    "Some(<closure>)"
+                } else {
+                    "None"
+                },
+            )
             .finish()
     }
 }

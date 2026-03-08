@@ -2,13 +2,13 @@ export type StreamingTargetType = 'home' | 'cloud'
 
 export type StreamingPlayerState = 'pending' | 'started' | 'queued' | 'failed'
 
-export type StreamingStreamState =
-  | 'Provisioning'
-  | 'Provisioned'
-  | 'ReadyToConnect'
-  | 'WaitingForResources'
-  | 'Failed'
-  | (string & {})
+export type StreamingStreamState
+  = | 'Provisioning'
+    | 'Provisioned'
+    | 'ReadyToConnect'
+    | 'WaitingForResources'
+    | 'Failed'
+    | (string & {})
 
 export type StreamingErrorCode = string | number
 

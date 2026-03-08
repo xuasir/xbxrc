@@ -16,9 +16,7 @@ pub enum FrameSourceEvent {
 pub trait FrameSource: Send {
     fn recv_frame<'a>(
         &'a mut self,
-    ) -> std::pin::Pin<
-        Box<dyn std::future::Future<Output = Option<FrameSourceEvent>> + Send + 'a>,
-    >;
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Option<FrameSourceEvent>> + Send + 'a>>;
 }
 
 pub struct WebrtcVideoAdapter {
@@ -34,7 +32,11 @@ pub struct WebrtcVideoAdapter {
 }
 
 impl WebrtcVideoAdapter {
-    pub fn new(track: Arc<TrackRemote>, max_late_packets: u16, idle_timeout: std::time::Duration) -> Self {
+    pub fn new(
+        track: Arc<TrackRemote>,
+        max_late_packets: u16,
+        idle_timeout: std::time::Duration,
+    ) -> Self {
         Self {
             track,
             sample_builder: SampleBuilder::new(max_late_packets, H264Packet::default(), 90_000),
@@ -105,9 +107,8 @@ fn parse_idr_and_sps(payload: &[u8]) -> (bool, Option<(u32, u32)>) {
 impl FrameSource for WebrtcVideoAdapter {
     fn recv_frame<'a>(
         &'a mut self,
-    ) -> std::pin::Pin<
-        Box<dyn std::future::Future<Output = Option<FrameSourceEvent>> + Send + 'a>,
-    > {
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Option<FrameSourceEvent>> + Send + 'a>>
+    {
         Box::pin(async {
             loop {
                 if let Some(sample) = self.sample_builder.pop() {
@@ -159,11 +160,14 @@ impl FrameSource for WebrtcVideoAdapter {
 
                 if idle_timeout {
                     let reason = format!("Network idle timeout (>{:?})", self.idle_timeout);
-                    self.sample_builder = SampleBuilder::new(self.max_late_packets, H264Packet::default(), 90_000);
+                    self.sample_builder =
+                        SampleBuilder::new(self.max_late_packets, H264Packet::default(), 90_000);
                     self.assembling_frame_start = None;
                     self.last_packet_time = now;
-                    
-                    if self.last_keyframe_request_time.map_or(true, |t| now.duration_since(t) > std::time::Duration::from_millis(500)) {
+
+                    if self.last_keyframe_request_time.map_or(true, |t| {
+                        now.duration_since(t) > std::time::Duration::from_millis(500)
+                    }) {
                         self.last_keyframe_request_time = Some(now);
                         return Some(FrameSourceEvent::RequestKeyframe(reason));
                     }
@@ -180,7 +184,11 @@ impl FrameSource for WebrtcVideoAdapter {
                         }
                         let seq = rtp.header.sequence_number;
                         if seq % 100 == 0 {
-                            crate::xbx_log_info!("[WebrtcVideoAdapter] RTP packet received: seq={}, ts={}", seq, rtp.header.timestamp);
+                            crate::xbx_log_info!(
+                                "[WebrtcVideoAdapter] RTP packet received: seq={}, ts={}",
+                                seq,
+                                rtp.header.timestamp
+                            );
                         }
                         self.sample_builder.push(rtp);
                     }

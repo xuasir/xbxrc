@@ -27,7 +27,6 @@ use webrtc::{
 };
 
 use crate::{
-
     media::video::render::renderer::XbxRenderState,
     transport::adapter::{FrameSource, WebrtcVideoAdapter},
     transport::webrtc::data_channel::{
@@ -35,8 +34,8 @@ use crate::{
         request_video_keyframe_on_control_channel, XbxDataChannelState,
     },
     transport::webrtc::microphone::XbxMicrophoneSession,
-    XbxEngineMediaNegotiationRequest, XbxEngineMediaRuntimeStats,
-    XbxEngineRuntimeError, XbxEngineWebRtcRuntimeConfig,
+    XbxEngineMediaNegotiationRequest, XbxEngineMediaRuntimeStats, XbxEngineRuntimeError,
+    XbxEngineWebRtcRuntimeConfig,
 };
 use xbxengine_protocol::{
     XbxEngineIceCandidateDto, XbxEngineTransportStateDto, XbxEngineTurnServerDto,
@@ -265,7 +264,7 @@ impl XbxTransportState {
             let _ = runtime.block_on(async { peer_connection.close().await });
         }
         self.data_channels.clear();
-        // Warning: Do NOT take frame_source_tx here, rebuild_peer_connection calls stop_peer_connection 
+        // Warning: Do NOT take frame_source_tx here, rebuild_peer_connection calls stop_peer_connection
         // and we want the same tx to be used for the next connection.
     }
 

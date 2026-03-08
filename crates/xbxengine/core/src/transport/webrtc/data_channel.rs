@@ -4,7 +4,6 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-
 use bytes::Bytes;
 use ohmygamepad_host::GamepadRuntimeHost;
 use ohmygamepad_protocol::{LogicalPadSnapshotDto, OhMyGamepadRouteTargetDto};
@@ -346,7 +345,9 @@ fn start_input_stream_loop(input_channel: Arc<RTCDataChannel>) -> JoinHandle<()>
             }
 
             // channel 拥塞时丢旧帧，避免 buffered amount 持续上升导致输入延迟。
-            if input_channel.buffered_amount().await > STREAM_INPUT_MAX_BUFFERED_AMOUNT_BYTES as usize {
+            if input_channel.buffered_amount().await
+                > STREAM_INPUT_MAX_BUFFERED_AMOUNT_BYTES as usize
+            {
                 continue;
             }
 
@@ -414,7 +415,6 @@ fn abort_task_handle(slot: &mut Option<JoinHandle<()>>) {
     }
 }
 
-
 // 协议常量 (从已删除的 network_profile.rs 迁移)
 const STREAM_INPUT_POLL_INTERVAL_MS: u64 = 8;
 const STREAM_INPUT_MAX_BUFFERED_AMOUNT_BYTES: u64 = 1024;
@@ -458,7 +458,9 @@ fn build_input_gamepad_packet(_seq: u32, _time: f64, _frames: &[LogicalPadSnapsh
     vec![0] // 占位实现
 }
 
-fn parse_input_rumble_packet(_payload: &[u8]) -> Option<ohmygamepad_protocol::OhMyGamepadRumbleRequestDto> {
+fn parse_input_rumble_packet(
+    _payload: &[u8],
+) -> Option<ohmygamepad_protocol::OhMyGamepadRumbleRequestDto> {
     None // 占位实现
 }
 
