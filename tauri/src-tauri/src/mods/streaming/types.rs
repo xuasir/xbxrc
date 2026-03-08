@@ -165,3 +165,9 @@ pub struct StreamingConfigSnapshot {
     pub ipv6: bool,
     pub force_region_ip: String,
 }
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StreamingCloseSessionResult {
+    pub closed: bool,
+}

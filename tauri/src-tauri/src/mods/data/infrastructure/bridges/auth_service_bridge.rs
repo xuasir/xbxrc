@@ -13,8 +13,7 @@ impl AuthServiceBridge {
 
     pub async fn get_state(&self) -> Result<DataAuthState, String> {
         let state = self.app_handle.state::<AppState>();
-        let auth = state.auth.read().await;
-        let auth_state = auth.get_state();
+        let auth_state = state.auth.get_state();
 
         Ok(DataAuthState {
             provider: auth_state.provider,
@@ -26,14 +25,21 @@ impl AuthServiceBridge {
 
     pub async fn check_authentication(&self) -> Result<(), String> {
         let state = self.app_handle.state::<AppState>();
-        let mut auth = state.auth.write().await;
-        auth.check_authentication().await.map(|_| ())
+        state
+            .auth
+            .check_authentication()
+            .await
+            .map(|_| ())
+            .map_err(|error| error.to_string())
     }
 
     pub async fn get_active_session(&self) -> Result<Option<DataSessionContext>, String> {
         let state = self.app_handle.state::<AppState>();
-        let auth = state.auth.read().await;
-        let Some(session) = auth.get_active_session()? else {
+        let Some(session) = state
+            .auth
+            .get_active_session()
+            .map_err(|error| error.to_string())?
+        else {
             return Ok(None);
         };
 

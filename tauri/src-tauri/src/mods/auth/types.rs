@@ -82,3 +82,17 @@ pub struct AuthSessionReadyEvent {
     pub streaming_tokens: serde_json::Value,
     pub web_token: serde_json::Value,
 }
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LoginResponse {
+    pub mode: String,
+    pub url: String,
+    pub state: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CheckAuthResponse {
+    pub provider: String,
+    pub started_silent_flow: bool,
+}

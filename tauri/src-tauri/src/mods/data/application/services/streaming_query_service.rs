@@ -1,15 +1,14 @@
+use crate::mods::config::ConfigProviderRef;
 use crate::mods::data::domain::web_token::resolve_web_token_claims;
 use crate::mods::data::domain::DataSessionContext;
 use crate::mods::data::types::{
     DataConsolePowerResult, DataHostSummary, DataSendTextResult, DataStreamingTitleInputConfig,
 };
 use crate::mods::streaming::api_provider::StreamingApiProvider;
-use crate::mods::streaming::config_bridge::ConfigServiceBridge;
 use crate::mods::streaming::session_api::StreamingSessionApi;
 use reqwest::header::{HeaderMap, HeaderValue, AUTHORIZATION, CONTENT_TYPE};
 use reqwest::Client;
 use serde_json::{json, Value};
-use tauri::AppHandle;
 use uuid::Uuid;
 
 const XBOX_CLIENT_VERSION: &str = "39.39.22001.0";
@@ -20,11 +19,10 @@ pub struct StreamingQueryService {
 }
 
 impl StreamingQueryService {
-    pub fn new(app_handle: AppHandle) -> Self {
-        let config_bridge = ConfigServiceBridge::new(app_handle);
+    pub fn new(config_provider: ConfigProviderRef) -> Self {
         Self {
             client: Client::new(),
-            streaming_api_provider: StreamingApiProvider::new(config_bridge),
+            streaming_api_provider: StreamingApiProvider::new(config_provider),
         }
     }
 

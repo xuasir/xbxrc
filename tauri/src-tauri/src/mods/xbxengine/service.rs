@@ -1,3 +1,6 @@
+use crate::error::{AppError, AppResult};
+use crate::mods::xbxengine::XbxEngineProvider;
+use async_trait::async_trait;
 use serde_json::{json, Value};
 use std::sync::{Arc, Mutex as StdMutex};
 use tokio::sync::Mutex;
@@ -7,6 +10,46 @@ use xbxengine_protocol::XbxEngineControlCommandDto;
 pub struct XbxEngineService {
     engine: Arc<Mutex<XbxEngineApp>>,
     last_runtime_event: Arc<StdMutex<Option<Value>>>,
+}
+
+#[async_trait]
+impl XbxEngineProvider for XbxEngineService {
+    async fn dispatch_control(&self, command_name: &str, params: Option<Value>) -> AppResult<()> {
+        self.dispatch_control_internal(command_name, params).await
+    }
+
+    async fn snapshot_stats(&self) -> AppResult<Value> {
+        let engine = self.engine.lock().await;
+        let stats = engine.snapshot_stats();
+        Ok(serde_json::to_value(stats).map_err(|e| AppError::XbxEngine(e.to_string()))?)
+    }
+
+    fn bind_tasks(&self, is_quitting: std::sync::Arc<std::sync::atomic::AtomicBool>) {
+        let engine = self.engine.clone();
+        tauri::async_runtime::spawn(async move {
+            let mut interval = tokio::time::interval(std::time::Duration::from_millis(50));
+            while !is_quitting.load(std::sync::atomic::Ordering::Relaxed) {
+                interval.tick().await;
+                let mut lock = engine.lock().await;
+                lock.tick();
+            }
+            log::info!("Engine tick loop stopped.");
+        });
+    }
+
+    fn get_last_runtime_event(&self) -> AppResult<Value> {
+        let event = self
+            .last_runtime_event
+            .lock()
+            .map_err(|_| AppError::XbxEngine("Failed to lock last runtime event".to_string()))?
+            .clone();
+
+        Ok(event.unwrap_or(Value::Null))
+    }
+
+    async fn shutdown(&self) {
+        let _ = self.dispatch_control("StopRuntime", None).await;
+    }
 }
 
 impl XbxEngineService {
@@ -20,42 +63,23 @@ impl XbxEngineService {
         }
     }
 
-    // 统一分发控制命令，保持 RPC 层只做参数编排。
-    pub async fn dispatch_control(
+    pub async fn dispatch_control_internal(
         &self,
         command_name: &str,
         params: Option<Value>,
-    ) -> Result<(), String> {
+    ) -> AppResult<()> {
         let value = match params {
             Some(payload) => json!({ command_name: payload }),
             None => json!(command_name),
         };
 
-        let command = serde_json::from_value::<XbxEngineControlCommandDto>(value)
-            .map_err(|error| format!("Invalid xbxEngine command payload: {}", error))?;
+        let command =
+            serde_json::from_value::<XbxEngineControlCommandDto>(value).map_err(|error| {
+                AppError::InvalidParams(format!("Invalid xbxEngine command payload: {}", error))
+            })?;
         let mut engine = self.engine.lock().await;
         engine
             .handle_control(command)
-            .map_err(|error| error.to_string())
-    }
-
-    pub async fn snapshot_stats(&self) -> Value {
-        let engine = self.engine.lock().await;
-        let stats = engine.snapshot_stats();
-        serde_json::to_value(stats).unwrap_or_else(|_| json!({}))
-    }
-
-    pub fn get_last_runtime_event(&self) -> Result<Value, String> {
-        let event = self
-            .last_runtime_event
-            .lock()
-            .map_err(|_| "Failed to lock last runtime event".to_string())?
-            .clone();
-
-        Ok(event.unwrap_or(Value::Null))
-    }
-
-    pub async fn shutdown(&self) {
-        let _ = self.dispatch_control("StopRuntime", None).await;
+            .map_err(|error| AppError::XbxEngine(error.to_string()))
     }
 }

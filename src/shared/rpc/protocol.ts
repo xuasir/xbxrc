@@ -5,3 +5,15 @@ export interface RpcInvokePayload {
   method: string
   params?: unknown
 }
+
+export interface RpcError {
+  code: string
+  message: string
+  details?: unknown
+}
+
+export interface RpcEnvelope {
+  ok: boolean
+  data?: unknown
+  error?: RpcError
+}

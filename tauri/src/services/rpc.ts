@@ -1,10 +1,15 @@
 import { invoke } from '@tauri-apps/api/core'
 import { createRpcClient } from '@shared/rpc/client'
 import type { XBoxRpcSchema } from '@shared/rpc/contract'
-import type { RpcInvokePayload } from '@shared/rpc/protocol'
+import type { RpcInvokePayload, RpcEnvelope } from '@shared/rpc/protocol'
 import type { RpcClient } from '@shared/rpc/types'
 
 let rpcRequestSeq = 0
+
+interface RpcCallError extends Error {
+  code?: string
+  details?: unknown
+}
 
 async function invokeByPreload(payload: RpcInvokePayload): Promise<unknown> {
   const requestId = ++rpcRequestSeq
@@ -16,15 +21,33 @@ async function invokeByPreload(payload: RpcInvokePayload): Promise<unknown> {
 
   // call rust command: rpc_invoke
   try {
-    const result = await invoke('rpc_invoke', { payload })
-    console.info(
-      `[ui->rust][rpc][out][#${requestId}] ${payload.namespace}.${payload.method} ok ${Math.round(performance.now() - startedAt)}ms`,
-      result
-    )
-    return result
+    const envelope = (await invoke('rpc_invoke', { payload })) as RpcEnvelope
+    const duration = Math.round(performance.now() - startedAt)
+
+    if (envelope.ok) {
+      console.info(
+        `[ui->rust][rpc][out][#${requestId}] ${payload.namespace}.${payload.method} ok ${duration}ms`,
+        envelope.data
+      )
+      return envelope.data
+    } else {
+      const error = new Error(envelope.error?.message ?? 'Unknown RPC error') as RpcCallError
+      error.code = envelope.error?.code
+      error.details = envelope.error?.details
+
+      console.error(
+        `[ui->rust][rpc][out][#${requestId}] ${payload.namespace}.${payload.method} err ${duration}ms`,
+        envelope.error
+      )
+      throw error
+    }
   } catch (error) {
+    if (error instanceof Error) {
+      throw error
+    }
+    const duration = Math.round(performance.now() - startedAt)
     console.error(
-      `[ui->rust][rpc][out][#${requestId}] ${payload.namespace}.${payload.method} err ${Math.round(performance.now() - startedAt)}ms`,
+      `[ui->rust][rpc][out][#${requestId}] ${payload.namespace}.${payload.method} fatal ${duration}ms`,
       error
     )
     throw error

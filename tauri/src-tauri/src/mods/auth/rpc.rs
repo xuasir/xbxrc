@@ -1,121 +1,114 @@
+use crate::error::AppResult;
 use crate::mods::auth::service::AUTH_WINDOW_LABEL;
-use crate::{event_bridge, AppState};
+use crate::{mods::auth::events, AppState};
+use serde::Deserialize;
 use serde_json::{json, Value};
 use tauri::{Manager, WebviewUrl, WebviewWindowBuilder, WindowEvent};
 
 const XAL_REDIRECT_URI_PREFIX: &str = "ms-xal-000000004c20a908://auth";
 
-pub async fn handle_auth_rpc(
+#[derive(Debug, Deserialize)]
+#[serde(tag = "method", content = "params", rename_all = "camelCase")]
+pub enum AuthCommand {
+    GetState,
+    Login,
+    CheckAuthentication,
+    ClearAuthCache { scope: Option<String> },
+    Logout,
+    HandleOAuthCallback { url: String },
+}
+
+pub async fn handle_rpc(
     method: &str,
     params: Option<Value>,
     app_handle: tauri::AppHandle,
-) -> Result<Value, String> {
+) -> AppResult<Value> {
     let state = app_handle.state::<AppState>();
+    let auth = state.auth.clone();
 
-    match method {
-        "getState" => {
-            let auth = state.auth.read().await;
-            Ok(serde_json::to_value(auth.get_state()).map_err(|e| e.to_string())?)
-        }
-        "login" => {
-            let mut auth = state.auth.write().await;
+    // 转换到强类型命令
+    let json_cmd = match params {
+        Some(p) => json!({ "method": method, "params": p }),
+        None => json!({ "method": method }),
+    };
+
+    let command: AuthCommand = serde_json::from_value(json_cmd).map_err(|e| {
+        crate::error::AppError::InvalidParams(format!("Invalid auth command params: {}", e))
+    })?;
+
+    match command {
+        AuthCommand::GetState => Ok(serde_json::to_value(auth.get_state())?),
+        AuthCommand::Login => {
             let login_result = auth.login().await?;
             let auth_state = auth.get_state();
-            drop(auth);
 
-            let mode = login_result
-                .get("mode")
-                .and_then(|value| value.as_str())
-                .unwrap_or("oauth-window");
-
-            if mode == "oauth-window" {
-                let oauth_url = login_result
-                    .get("url")
-                    .and_then(|value| value.as_str())
-                    .unwrap_or_default();
-                open_oauth_window(&app_handle, oauth_url)?;
+            if login_result.mode == "oauth-window" {
+                open_oauth_window(&app_handle, &login_result.url)?;
 
                 return Ok(json!({
                     "provider": auth_state.provider,
                     "mode": "oauth-window",
                     "oauth": {
-                        "url": oauth_url,
-                        "state": login_result.get("state").and_then(|value| value.as_str()).unwrap_or_default()
+                        "url": login_result.url,
+                        "state": login_result.state
                     }
                 }));
             }
 
             Ok(json!({
                 "provider": auth_state.provider,
-                "mode": mode
+                "mode": login_result.mode
             }))
         }
-        "checkAuthentication" => {
-            let mut auth = state.auth.write().await;
+        AuthCommand::CheckAuthentication => {
             let result = auth.check_authentication().await?;
             let auth_state = auth.get_state();
-            drop(auth);
 
             if auth_state.is_authenticated {
-                let _ = event_bridge::emit_auth_session_ready(
+                let _ = events::emit_session_ready(
                     &app_handle,
                     &auth_state.provider,
                     auth_state.app_level,
                 );
             }
 
-            Ok(result)
+            Ok(serde_json::to_value(result)?)
         }
-        "clearAuthCache" => {
-            let scope = params
-                .as_ref()
-                .and_then(|payload| payload.get("scope"))
-                .and_then(|value| value.as_str())
-                .unwrap_or("ephemeral");
-
-            let mut auth = state.auth.write().await;
-            auth.clear_auth_cache(scope)?;
+        AuthCommand::ClearAuthCache { scope } => {
+            let scope = scope.unwrap_or_else(|| "ephemeral".to_string());
+            auth.clear_auth_cache(&scope).await?;
 
             Ok(json!({
                 "cleared": true,
                 "scope": scope
             }))
         }
-        "logout" => {
-            let mut auth = state.auth.write().await;
-            auth.logout()?;
+        AuthCommand::Logout => {
+            auth.logout().await?;
             Ok(json!({ "loggedOut": true }))
         }
-        // 非 shared contract 方法，保留给 OAuth 回调桥接使用。
-        "handleOAuthCallback" => {
-            let callback_url = params
-                .as_ref()
-                .and_then(|payload| payload.get("url"))
-                .and_then(|value| value.as_str())
-                .ok_or("Missing url parameter")?;
-
-            let mut auth = state.auth.write().await;
-            auth.handle_oauth_callback(callback_url).await?;
+        AuthCommand::HandleOAuthCallback { url } => {
+            auth.handle_oauth_callback(&url).await?;
             let auth_state = auth.get_state();
-            drop(auth);
 
             if auth_state.is_authenticated {
-                let _ = event_bridge::emit_auth_session_ready(
+                let _ = events::emit_session_ready(
                     &app_handle,
                     &auth_state.provider,
                     auth_state.app_level,
                 );
             }
 
-            Ok(serde_json::to_value(auth_state).map_err(|e| e.to_string())?)
+            Ok(json!({ "success": true }))
         }
-        _ => Err(format!("Unknown method in auth: {}", method)),
     }
 }
 
-fn open_oauth_window(app_handle: &tauri::AppHandle, oauth_url: &str) -> Result<(), String> {
+fn open_oauth_window(app_handle: &tauri::AppHandle, oauth_url: &str) -> AppResult<()> {
     if oauth_url.trim().is_empty() {
-        return Err("Missing OAuth URL".to_string());
+        return Err(crate::error::AppError::Data(
+            "Missing OAuth URL".to_string(),
+        ));
     }
 
     if let Some(existing) = app_handle.get_webview_window(AUTH_WINDOW_LABEL) {
@@ -148,14 +141,13 @@ fn open_oauth_window(app_handle: &tauri::AppHandle, oauth_url: &str) -> Result<(
         let app_handle = app_handle_for_nav.clone();
         tauri::async_runtime::spawn(async move {
             let state = app_handle.state::<AppState>();
-            let mut auth = state.auth.write().await;
+            let auth = state.auth.clone();
             let callback_result = auth.handle_oauth_callback(&callback_url).await;
             let auth_state = auth.get_state();
-            drop(auth);
 
             if callback_result.is_ok() && auth_state.is_authenticated {
                 eprintln!("[auth][window] callback handled and authenticated");
-                let _ = event_bridge::emit_auth_session_ready(
+                let _ = events::emit_session_ready(
                     &app_handle,
                     &auth_state.provider,
                     auth_state.app_level,
@@ -182,8 +174,8 @@ fn open_oauth_window(app_handle: &tauri::AppHandle, oauth_url: &str) -> Result<(
             let app_handle = app_handle_for_close.clone();
             tauri::async_runtime::spawn(async move {
                 let state = app_handle.state::<AppState>();
-                let mut auth = state.auth.write().await;
-                auth.cancel_pending_login();
+                let auth = state.auth.clone();
+                auth.cancel_pending_login().await;
             });
         }
     });

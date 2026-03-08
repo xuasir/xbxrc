@@ -1,6 +1,7 @@
+use crate::error::{AppError, AppResult};
+use crate::mods::auth::AuthProviderRef;
+use crate::mods::config::ConfigProviderRef;
 use crate::mods::streaming::api_provider::StreamingApiProvider;
-use crate::mods::streaming::auth_bridge::AuthServiceBridge;
-use crate::mods::streaming::config_bridge::ConfigServiceBridge;
 use crate::mods::streaming::fallback_turn_server_provider::FallbackTurnServerProvider;
 use crate::mods::streaming::http_client::StreamingHttpError;
 use crate::mods::streaming::types::*;
@@ -8,7 +9,6 @@ use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-use tauri::AppHandle;
 
 const SESSION_MONITOR_INTERVAL_MS: u64 = 1000;
 const SESSION_STALL_TIMEOUT_MS: u64 = 45_000;
@@ -19,7 +19,7 @@ pub struct StreamingService {
 }
 
 struct StreamingServiceInner {
-    auth_bridge: AuthServiceBridge,
+    auth_provider: AuthProviderRef,
     api_provider: StreamingApiProvider,
     fallback_turn_server_provider: tokio::sync::Mutex<FallbackTurnServerProvider>,
     sessions: tokio::sync::RwLock<HashMap<String, StreamingSessionRecord>>,
@@ -37,11 +37,11 @@ struct StreamingSessionRecord {
 }
 
 impl StreamingService {
-    pub fn new(app_handle: AppHandle) -> Self {
+    pub fn new(auth_provider: AuthProviderRef, config_provider: ConfigProviderRef) -> Self {
         Self {
             inner: Arc::new(StreamingServiceInner {
-                auth_bridge: AuthServiceBridge::new(app_handle.clone()),
-                api_provider: StreamingApiProvider::new(ConfigServiceBridge::new(app_handle)),
+                auth_provider,
+                api_provider: StreamingApiProvider::new(config_provider),
                 fallback_turn_server_provider: tokio::sync::Mutex::new(
                     FallbackTurnServerProvider::new(),
                 ),
@@ -49,32 +49,38 @@ impl StreamingService {
             }),
         }
     }
+}
 
-    pub async fn get_fallback_turn_server(
+#[async_trait::async_trait]
+impl crate::mods::streaming::StreamingProvider for StreamingService {
+    async fn get_fallback_turn_server(
         &self,
         target_type: &str,
-    ) -> Result<Option<StreamingTurnServerConfig>, String> {
+    ) -> AppResult<Option<StreamingTurnServerConfig>> {
         let mut provider = self.inner.fallback_turn_server_provider.lock().await;
-        provider.get_by_target_type(target_type).await
+        provider
+            .get_by_target_type(target_type)
+            .await
+            .map_err(AppError::Streaming)
     }
 
-    pub async fn create_session(
+    async fn create_session(
         &self,
         params: StreamingCreateSessionParams,
-    ) -> Result<StreamingSessionSnapshot, String> {
+    ) -> AppResult<StreamingSessionSnapshot> {
         let target_type = StreamingTargetType::from_value(&params.target_type);
         let session_api = self.create_session_api(target_type.as_str()).await?;
         let session_path = session_api
             .start_stream(&params.target_id)
             .await
-            .map_err(to_err)?;
+            .map_err(|e| AppError::Streaming(to_err(e)))?;
 
         let session_id = session_path
             .split('/')
             .nth(3)
             .map(|value| value.to_string())
             .filter(|value| !value.is_empty())
-            .ok_or("Streaming session id is missing")?;
+            .ok_or_else(|| AppError::Streaming("Streaming session id is missing".to_string()))?;
 
         let snapshot = StreamingSessionSnapshot {
             id: session_id.clone(),
@@ -112,27 +118,27 @@ impl StreamingService {
         Ok(snapshot)
     }
 
-    pub async fn get_session(
+    async fn get_session(
         &self,
         params: StreamingGetSessionParams,
-    ) -> Result<Option<StreamingSessionSnapshot>, String> {
+    ) -> AppResult<Option<StreamingSessionSnapshot>> {
         let sessions = self.inner.sessions.read().await;
         Ok(sessions
             .get(&params.session_id)
             .map(|record| record.snapshot.clone()))
     }
 
-    pub async fn close_session(
+    async fn close_session(
         &self,
         params: StreamingCloseSessionParams,
-    ) -> Result<serde_json::Value, String> {
+    ) -> AppResult<StreamingCloseSessionResult> {
         let session = {
             let sessions = self.inner.sessions.read().await;
             sessions.get(&params.session_id).cloned()
         };
 
         let Some(session) = session else {
-            return Ok(serde_json::json!({ "closed": false }));
+            return Ok(StreamingCloseSessionResult { closed: false });
         };
 
         let session_api = self
@@ -143,20 +149,24 @@ impl StreamingService {
         self.clear_session(&params.session_id).await;
 
         match result {
-            Ok(_) => Ok(serde_json::json!({ "closed": true })),
-            Err(error) if error.status == Some(404) => Ok(serde_json::json!({ "closed": false })),
-            Err(error) => Err(to_err(error)),
+            Ok(_) => Ok(StreamingCloseSessionResult { closed: true }),
+            Err(error) if error.status == Some(404) => {
+                Ok(StreamingCloseSessionResult { closed: false })
+            }
+            Err(error) => Err(AppError::Streaming(to_err(error))),
         }
     }
 
-    pub async fn exchange_offer(
+    async fn exchange_offer(
         &self,
         params: StreamingExchangeOfferParams,
-    ) -> Result<StreamingExchangeOfferResult, String> {
+    ) -> AppResult<StreamingExchangeOfferResult> {
         let session = self
             .get_session_record(&params.session_id)
             .await
-            .ok_or_else(|| format!("Session not found: {}", params.session_id))?;
+            .ok_or_else(|| {
+                AppError::Streaming(format!("Session not found: {}", params.session_id))
+            })?;
         let signaling_api = self
             .create_signaling_api(&session.snapshot.target_type)
             .await?;
@@ -165,37 +175,40 @@ impl StreamingService {
             signaling_api
                 .send_chat_sdp(&params.session_id, &params.sdp)
                 .await
-                .map_err(to_err)?;
+                .map_err(|e| AppError::Streaming(to_err(e)))?;
         } else {
             signaling_api
                 .send_sdp(&params.session_id, &params.sdp)
                 .await
-                .map_err(to_err)?;
+                .map_err(|e| AppError::Streaming(to_err(e)))?;
         }
 
         loop {
             let answer = signaling_api
                 .get_sdp_exchange_response(&params.session_id)
                 .await
-                .map_err(to_err)?;
+                .map_err(|e| AppError::Streaming(to_err(e)))?;
             if let Some(answer) = answer {
                 return Ok(StreamingExchangeOfferResult { answer });
             }
 
             if self.get_session_record(&params.session_id).await.is_none() {
-                return Err(format!("Session not found: {}", params.session_id));
+                return Err(AppError::Streaming(format!(
+                    "Session not found: {}",
+                    params.session_id
+                )));
             }
 
             tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
         }
     }
 
-    pub async fn exchange_offer_sdp(
+    async fn exchange_offer_sdp(
         &self,
         session_id: String,
         channel: Option<String>,
         sdp: String,
-    ) -> Result<String, String> {
+    ) -> AppResult<String> {
         let result = self
             .exchange_offer(StreamingExchangeOfferParams {
                 session_id,
@@ -206,14 +219,16 @@ impl StreamingService {
         Ok(result.answer.sdp)
     }
 
-    pub async fn exchange_ice(
+    async fn exchange_ice(
         &self,
         params: StreamingExchangeIceParams,
-    ) -> Result<StreamingExchangeIceResult, String> {
+    ) -> AppResult<StreamingExchangeIceResult> {
         let session = self
             .get_session_record(&params.session_id)
             .await
-            .ok_or_else(|| format!("Session not found: {}", params.session_id))?;
+            .ok_or_else(|| {
+                AppError::Streaming(format!("Session not found: {}", params.session_id))
+            })?;
         let signaling_api = self
             .create_signaling_api(&session.snapshot.target_type)
             .await?;
@@ -221,13 +236,13 @@ impl StreamingService {
         signaling_api
             .send_ice(&params.session_id, &params.candidate)
             .await
-            .map_err(to_err)?;
+            .map_err(|e| AppError::Streaming(to_err(e)))?;
 
         loop {
             let candidates = signaling_api
                 .get_ice_exchange_response(&params.session_id)
                 .await
-                .map_err(to_err)?;
+                .map_err(|e| AppError::Streaming(to_err(e)))?;
 
             if let Some(candidates) = candidates {
                 if has_usable_ice_candidates(&candidates) {
@@ -236,18 +251,21 @@ impl StreamingService {
             }
 
             if self.get_session_record(&params.session_id).await.is_none() {
-                return Err(format!("Session not found: {}", params.session_id));
+                return Err(AppError::Streaming(format!(
+                    "Session not found: {}",
+                    params.session_id
+                )));
             }
 
             tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
         }
     }
 
-    pub async fn exchange_ice_candidates(
+    async fn exchange_ice_candidates(
         &self,
         session_id: String,
         candidates: Vec<StreamingIceCandidate>,
-    ) -> Result<Vec<StreamingIceCandidate>, String> {
+    ) -> AppResult<Vec<StreamingIceCandidate>> {
         let result = self
             .exchange_ice(StreamingExchangeIceParams {
                 session_id,
@@ -257,10 +275,10 @@ impl StreamingService {
         Ok(result.candidates)
     }
 
-    pub async fn send_keepalive(
+    async fn send_keepalive(
         &self,
         params: StreamingKeepAliveParams,
-    ) -> Result<StreamingKeepAliveResult, String> {
+    ) -> AppResult<StreamingKeepAliveResult> {
         let session = self.get_session_record(&params.session_id).await;
         let Some(session) = session else {
             return Ok(StreamingKeepAliveResult { accepted: false });
@@ -274,30 +292,27 @@ impl StreamingService {
             Err(error) if should_ignore_keepalive_error(&error) => {
                 Ok(StreamingKeepAliveResult { accepted: false })
             }
-            Err(error) => Err(to_err(error)),
+            Err(error) => Err(AppError::Streaming(to_err(error))),
         }
     }
 
-    pub async fn keep_alive_remote_session(&self, session_id: String) -> Result<bool, String> {
+    async fn keep_alive_remote_session(&self, session_id: String) -> AppResult<bool> {
         let result = self
             .send_keepalive(StreamingKeepAliveParams { session_id })
             .await?;
         Ok(result.accepted)
     }
 
-    pub async fn close_remote_session(&self, session_id: String) -> Result<bool, String> {
+    async fn close_remote_session(&self, session_id: String) -> AppResult<bool> {
         let result = self
             .close_session(StreamingCloseSessionParams { session_id })
             .await?;
 
-        Ok(result
-            .get("closed")
-            .and_then(|value| value.as_bool())
-            .unwrap_or(false))
+        Ok(result.closed)
     }
 
     // 进程退出前 best-effort 关闭会话，避免服务端残留活跃会话。
-    pub async fn shutdown(&self) {
+    async fn shutdown(&self) {
         let session_ids = {
             let sessions = self.inner.sessions.read().await;
             sessions.keys().cloned().collect::<Vec<_>>()
@@ -313,11 +328,17 @@ impl StreamingService {
         }
     }
 
-    pub async fn list_active_sessions(
+    async fn list_active_sessions(
         &self,
         params: StreamingListActiveSessionsParams,
-    ) -> Result<StreamingListActiveSessionsResult, String> {
-        let target_type = params.target_type.unwrap_or_else(|| "cloud".to_string());
+    ) -> AppResult<StreamingListActiveSessionsResult> {
+        let target_type = match params.target_type {
+            Some(t) => t,
+            None => {
+                log::warn!("list_active_sessions: target_type missing, using default: cloud");
+                "cloud".to_string()
+            }
+        };
         let sessions = self
             .inner
             .sessions
@@ -330,7 +351,9 @@ impl StreamingService {
 
         Ok(StreamingListActiveSessionsResult { sessions })
     }
+}
 
+impl StreamingService {
     async fn monitor_session_loop(&self, session_id: String, cancelled: Arc<AtomicBool>) {
         loop {
             if cancelled.load(Ordering::Relaxed) {
@@ -409,7 +432,7 @@ impl StreamingService {
                 session.snapshot.error_details = None;
                 self.upsert_session(session_id, session.clone()).await;
 
-                let transfer_token = match self.inner.auth_bridge.get_transfer_token().await {
+                let transfer_token = match self.inner.auth_provider.get_transfer_token().await {
                     Ok(token) => token,
                     Err(_) => return true,
                 };
@@ -425,9 +448,12 @@ impl StreamingService {
                     .await
                 {
                     Ok(queue) => StreamingQueueSnapshot { details: queue },
-                    Err(_) => session.snapshot.queue.unwrap_or(StreamingQueueSnapshot {
-                        details: StreamingQueueDetails::default(),
-                    }),
+                    Err(e) => {
+                        log::warn!("Failed to get waiting times for session {}: {}, using default", session_id, e);
+                        session.snapshot.queue.unwrap_or(StreamingQueueSnapshot {
+                            details: StreamingQueueDetails::default(),
+                        })
+                    }
                 };
 
                 session.snapshot.player_state = "queued".to_string();
@@ -456,35 +482,39 @@ impl StreamingService {
     async fn create_session_api(
         &self,
         target_type: &str,
-    ) -> Result<crate::mods::streaming::session_api::StreamingSessionApi, String> {
+    ) -> AppResult<crate::mods::streaming::session_api::StreamingSessionApi> {
         let token = self
             .inner
-            .auth_bridge
-            .get_streaming_token(target_type)
-            .await?
-            .ok_or_else(|| format!("Streaming token is unavailable for {target_type}"))?;
+            .auth_provider
+            .get_streaming_token(target_type)?
+            .ok_or_else(|| {
+                AppError::Streaming(format!("Streaming token is unavailable for {target_type}"))
+            })?;
 
         self.inner
             .api_provider
             .create_session_api(&token, target_type)
             .await
+            .map_err(AppError::Streaming)
     }
 
     async fn create_signaling_api(
         &self,
         target_type: &str,
-    ) -> Result<crate::mods::streaming::signaling_api::StreamingSignalingApi, String> {
+    ) -> AppResult<crate::mods::streaming::signaling_api::StreamingSignalingApi> {
         let token = self
             .inner
-            .auth_bridge
-            .get_streaming_token(target_type)
-            .await?
-            .ok_or_else(|| format!("Streaming token is unavailable for {target_type}"))?;
+            .auth_provider
+            .get_streaming_token(target_type)?
+            .ok_or_else(|| {
+                AppError::Streaming(format!("Streaming token is unavailable for {target_type}"))
+            })?;
 
         self.inner
             .api_provider
             .create_signaling_api(&token, target_type)
             .await
+            .map_err(AppError::Streaming)
     }
 
     async fn get_session_record(&self, session_id: &str) -> Option<StreamingSessionRecord> {
@@ -525,7 +555,10 @@ fn get_state_timeout_error(
 
     let started = session
         .state_observed_at_ms
-        .unwrap_or(session.created_at_ms);
+        .unwrap_or_else(|| {
+            log::warn!("Session state_observed_at_ms missing, using created_at_ms");
+            session.created_at_ms
+        });
     let elapsed = now_ms().saturating_sub(started);
     if elapsed < SESSION_STALL_TIMEOUT_MS {
         return None;
@@ -535,7 +568,10 @@ fn get_state_timeout_error(
         code: Some(Value::String("SessionStateTimeout".to_string())),
         message: Some(format!(
             "Streaming session stayed in {} for {}ms.",
-            state.unwrap_or("unknown"),
+            state.unwrap_or_else(|| {
+                log::warn!("Session state missing in timeout error");
+                "unknown"
+            }),
             elapsed
         )),
     })
@@ -554,15 +590,27 @@ fn should_ignore_keepalive_error(error: &StreamingHttpError) -> bool {
         return false;
     };
 
-    let parsed = serde_json::from_str::<Value>(body).unwrap_or(Value::Null);
+    let parsed = match serde_json::from_str::<Value>(body) {
+        Ok(val) => val,
+        Err(e) => {
+            log::warn!("Failed to parse keepalive error body: {}", e);
+            Value::Null
+        }
+    };
     let code = parsed
         .get("code")
         .and_then(Value::as_str)
-        .unwrap_or_default();
+        .unwrap_or_else(|| {
+            log::warn!("Keepalive error missing 'code' field");
+            ""
+        });
     let message = parsed
         .get("message")
         .and_then(Value::as_str)
-        .unwrap_or_default();
+        .unwrap_or_else(|| {
+            log::warn!("Keepalive error missing 'message' field");
+            ""
+        });
 
     code == "SessionUnexpectedState"
         && (message.contains("ServerSdpExchangeCommandSent") || message.contains("UnexpectedState"))

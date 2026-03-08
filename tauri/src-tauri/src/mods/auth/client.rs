@@ -131,8 +131,8 @@ impl XboxWebApiClient {
                     "crv": "P-256",
                     "kty": "EC",
                     "use": "sig",
-                    "x": private_jwk.get("x").unwrap().as_str().unwrap(),
-                    "y": private_jwk.get("y").unwrap().as_str().unwrap()
+                    "x": private_jwk.get("x").and_then(|v| v.as_str()).ok_or("Missing x in JWK")?,
+                    "y": private_jwk.get("y").and_then(|v| v.as_str()).ok_or("Missing y in JWK")?
                 },
                 "Version": device_version
             },
@@ -140,15 +140,19 @@ impl XboxWebApiClient {
             "TokenType": "JWT"
         });
 
-        let payload_str = serde_json::to_string(&payload).unwrap();
+        let payload_str = serde_json::to_string(&payload).map_err(|e| e.to_string())?;
 
-        let d_b64 = private_jwk.get("d").unwrap().as_str().unwrap();
+        let d_b64 = private_jwk
+            .get("d")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| "Missing d in JWK".to_string())?;
         let d_bytes = URL_SAFE_NO_PAD.decode(d_b64).map_err(|e| e.to_string())?;
         let signing_key =
             p256::ecdsa::SigningKey::from_slice(&d_bytes).map_err(|e| e.to_string())?;
 
         let signature =
-            XboxSignature::sign_request("/device/authenticate", "", &payload_str, &signing_key);
+            XboxSignature::sign_request("/device/authenticate", "", &payload_str, &signing_key)
+                .map_err(|e| e.to_string())?;
 
         let res = self
             .http
@@ -194,7 +198,8 @@ impl XboxWebApiClient {
             p256::ecdsa::SigningKey::from_slice(&d_bytes).map_err(|e| e.to_string())?;
 
         let signature =
-            XboxSignature::sign_request("/authenticate", "", &payload_str, &signing_key);
+            XboxSignature::sign_request("/authenticate", "", &payload_str, &signing_key)
+                .map_err(|e| e.to_string())?;
 
         let res = self
             .http
@@ -293,18 +298,22 @@ impl XboxWebApiClient {
                 "alg": "ES256",
                 "kty": "EC",
                 "crv": "P-256",
-                "x": private_jwk.get("x").unwrap().as_str().unwrap(),
-                "y": private_jwk.get("y").unwrap().as_str().unwrap()
+                "x": private_jwk.get("x").and_then(|v| v.as_str()).ok_or_else(|| "Missing x in JWK".to_string())?,
+                "y": private_jwk.get("y").and_then(|v| v.as_str()).ok_or_else(|| "Missing y in JWK".to_string())?
             }
         });
 
-        let payload_str = serde_json::to_string(&payload).unwrap();
-        let d_b64 = private_jwk.get("d").unwrap().as_str().unwrap();
+        let payload_str = serde_json::to_string(&payload).map_err(|e| e.to_string())?;
+        let d_b64 = private_jwk
+            .get("d")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| "Missing d in JWK".to_string())?;
         let d_bytes = URL_SAFE_NO_PAD.decode(d_b64).map_err(|e| e.to_string())?;
         let signing_key =
             p256::ecdsa::SigningKey::from_slice(&d_bytes).map_err(|e| e.to_string())?;
 
-        let signature = XboxSignature::sign_request("/authorize", "", &payload_str, &signing_key);
+        let signature = XboxSignature::sign_request("/authorize", "", &payload_str, &signing_key)
+            .map_err(|e| e.to_string())?;
 
         let res = self
             .http
@@ -395,7 +404,8 @@ impl XboxWebApiClient {
             p256::ecdsa::SigningKey::from_slice(&d_bytes).map_err(|e| e.to_string())?;
 
         let signature =
-            XboxSignature::sign_request("/xsts/authorize", "", &payload_str, &signing_key);
+            XboxSignature::sign_request("/xsts/authorize", "", &payload_str, &signing_key)
+                .map_err(|e| e.to_string())?;
 
         let res = self
             .http

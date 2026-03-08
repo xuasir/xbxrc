@@ -1,4 +1,4 @@
-use crate::mods::streaming::config_bridge::ConfigServiceBridge;
+use crate::mods::config::ConfigProviderRef;
 use crate::mods::streaming::http_client::StreamingHttpClient;
 use crate::mods::streaming::ice_normalizer::StreamingIceNormalizer;
 use crate::mods::streaming::session_api::StreamingSessionApi;
@@ -7,12 +7,12 @@ use crate::mods::streaming::types::StreamingConfigSnapshot;
 use serde_json::Value;
 
 pub struct StreamingApiProvider {
-    config_bridge: ConfigServiceBridge,
+    config_provider: ConfigProviderRef,
 }
 
 impl StreamingApiProvider {
-    pub fn new(config_bridge: ConfigServiceBridge) -> Self {
-        Self { config_bridge }
+    pub fn new(config_provider: ConfigProviderRef) -> Self {
+        Self { config_provider }
     }
 
     pub async fn create_session_api(
@@ -20,7 +20,7 @@ impl StreamingApiProvider {
         token: &Value,
         target_type: &str,
     ) -> Result<StreamingSessionApi, String> {
-        let config = self.config_bridge.get_streaming_config().await?;
+        let config = self.config_provider.get_streaming_config();
         let (host, gs_token) = resolve_host_and_token(token, target_type, &config)?;
         let http_client = StreamingHttpClient::new(host, gs_token);
 
@@ -37,7 +37,7 @@ impl StreamingApiProvider {
         token: &Value,
         target_type: &str,
     ) -> Result<StreamingSignalingApi, String> {
-        let config = self.config_bridge.get_streaming_config().await?;
+        let config = self.config_provider.get_streaming_config();
         let (host, gs_token) = resolve_host_and_token(token, target_type, &config)?;
         let http_client = StreamingHttpClient::new(host, gs_token);
 
