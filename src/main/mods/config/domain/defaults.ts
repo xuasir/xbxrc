@@ -9,8 +9,6 @@ export const DEFAULT_APP_CONFIG: AppConfig = {
   fullscreen: false,
   // 串流分辨率（720 / 1080 / 1081）
   resolution: 720,
-  // xHome 自动连接的主机 ID
-  xhome_auto_connect_server_id: '',
   // xHome 码率模式（Auto / Custom）
   xhome_bitrate_mode: 'Auto',
   // xHome 目标码率（Mb/s）
@@ -66,9 +64,7 @@ export const DEFAULT_APP_CONFIG: AppConfig = {
     brightness: 100
   },
   // 是否启用 Vulkan 渲染路径
-  use_vulkan: false,
-  // 调试模式开关
-  debug: false
+  use_vulkan: false
 }
 
 export function getDefaultConfig(): AppConfig {

@@ -1,10 +1,14 @@
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+use serde::{Deserialize, Serialize};
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "kebab-case")]
 pub enum OhMyGamepadBackendKindDto {
     Gilrs,
     Mock,
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "kebab-case")]
 pub enum OhMyGamepadConnectionKindDto {
     Usb,
     Bluetooth,
@@ -12,14 +16,16 @@ pub enum OhMyGamepadConnectionKindDto {
     Unknown,
 }
 
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct OhMyGamepadCapabilityFlagsDto {
     pub basic_rumble: bool,
     pub advanced_haptics: bool,
     pub battery: bool,
 }
 
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct OhMyGamepadDeviceDto {
     pub device_id: String,
     pub name: String,

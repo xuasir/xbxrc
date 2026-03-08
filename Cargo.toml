@@ -11,6 +11,8 @@ members = [
   "crates/xbxengine/core",
   "crates/xbxengine/api",
   "crates/xbxengine/app",
+  "crates/xbox-webapi",
+  "tauri/src-tauri",
 ]
 resolver = "2"
 

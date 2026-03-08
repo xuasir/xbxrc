@@ -13,6 +13,10 @@ xbxengine-protocol = { path = "../protocol" }
 xbxengine = { path = "../core" }
 wgpu = "0.19.4"
 winit = "0.29.15"
+wgpu-hal = "0.19.4"
+metal = "0.27.0"
+core-video-sys = "0.1.4"
+core-foundation = "0.9"
 
 [[bin]]
 name = "xbxengine-app"

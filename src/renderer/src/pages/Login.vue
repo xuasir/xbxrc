@@ -59,6 +59,7 @@ function stopAuthStatePolling(): void {
 
 async function redirectIfAuthenticated(): Promise<boolean> {
   const authState = await rpc.auth.getState()
+  console.log('[LoginVue] redirectIfAuthenticated: authState =', authState)
   if (authState.isAuthenticated) {
     stopAuthStatePolling()
     await router.replace(redirectTarget.value)
@@ -73,6 +74,7 @@ function applyAuthStateView(
     preserveSubmitting?: boolean
   } = {}
 ): void {
+  console.log('[LoginVue] applyAuthStateView: state =', authState, 'options =', options)
   if (authState.isAuthenticated) {
     viewState.value = 'idle'
     return
@@ -121,6 +123,7 @@ function startAuthStatePolling(): void {
 
 async function bootstrapLoginState(): Promise<void> {
   const currentState = await rpc.auth.getState()
+  console.log('[LoginVue] bootstrapLoginState: initial state =', currentState)
   if (currentState.isAuthenticated) {
     await redirectIfAuthenticated()
     return
@@ -134,13 +137,16 @@ async function bootstrapLoginState(): Promise<void> {
 
   viewState.value = 'checking'
   try {
+    console.log('[LoginVue] bootstrapLoginState: checking authentication...')
     await rpc.auth.checkAuthentication()
-  } catch {
+  } catch (err) {
+    console.warn('[LoginVue] bootstrapLoginState: checkAuthentication failed', err)
     viewState.value = 'idle'
     return
   }
 
   const nextState = await rpc.auth.getState()
+  console.log('[LoginVue] bootstrapLoginState: nextState =', nextState)
   if (nextState.isAuthenticated) {
     await redirectIfAuthenticated()
     return
@@ -153,12 +159,14 @@ async function bootstrapLoginState(): Promise<void> {
 }
 
 async function handleSignIn(): Promise<void> {
+  console.log('[LoginVue] handleSignIn: current viewState =', viewState.value)
   // 防止重复触发登录流程，也避免与静默恢复并发
   if (viewState.value !== 'idle') {
     return
   }
 
   const authState = await rpc.auth.getState()
+  console.log('[LoginVue] handleSignIn: authState =', authState)
   if (authState.isAuthenticated) {
     await redirectIfAuthenticated()
     return
@@ -171,11 +179,14 @@ async function handleSignIn(): Promise<void> {
 
   viewState.value = 'submitting'
   try {
+    console.log('[LoginVue] handleSignIn: triggering rpc.auth.login')
     await rpc.auth.login()
+    console.log('[LoginVue] handleSignIn: login rpc call returned')
     if (!(await redirectIfAuthenticated())) {
       startAuthStatePolling()
     }
-  } catch {
+  } catch (err) {
+    console.warn('[LoginVue] handleSignIn: login failed', err)
     stopAuthStatePolling()
     viewState.value = 'idle'
   } finally {
@@ -186,8 +197,10 @@ async function handleSignIn(): Promise<void> {
 }
 
 onMounted(() => {
+  console.log('[LoginVue] mounted, calling bootstrapLoginState')
   void bootstrapLoginState()
-  disposeAuthSessionReady = events.on('auth.sessionReady', () => {
+  disposeAuthSessionReady = events.on('auth.sessionReady', (eventPayload) => {
+    console.log('[LoginVue] Received auth.sessionReady event:', eventPayload)
     void redirectIfAuthenticated()
   })
 })
@@ -205,32 +218,18 @@ onUnmounted(() => {
   <section class="login-page" :style="loginStyleVars">
     <div class="login-page__overlay"></div>
 
-    <FocusScope
-      :id="SPATIAL_NAV_SCOPE_IDS.login"
-      :default-focus-id="SPATIAL_NAV_NODE_IDS.login.signIn"
-    >
+    <FocusScope :id="SPATIAL_NAV_SCOPE_IDS.login" :default-focus-id="SPATIAL_NAV_NODE_IDS.login.signIn">
       <main class="login-content">
         <p class="login-content__desc">
           {{ loginStatusLine }}
         </p>
 
-        <BrandedLoading
-          v-if="isLoading"
-          class="login-content__loading"
-          :label="loginActionLabel"
-        />
+        <BrandedLoading v-if="isLoading" class="login-content__loading" :label="loginActionLabel" />
 
-        <Focusable
-          v-else
-          :id="SPATIAL_NAV_NODE_IDS.login.signIn"
-          :scope-id="SPATIAL_NAV_SCOPE_IDS.login"
-          :disabled="isLoginSubmitting"
-          :on-confirm="() => void handleSignIn()"
-          as="button"
-          class="login-content__sign-in ui-action-button ui-action-button--brand"
-          type="button"
-          @click="() => void handleSignIn()"
-        >
+        <Focusable v-else :id="SPATIAL_NAV_NODE_IDS.login.signIn" :scope-id="SPATIAL_NAV_SCOPE_IDS.login"
+          :disabled="isLoginSubmitting" :on-confirm="() => void handleSignIn()" as="button"
+          class="login-content__sign-in ui-action-button ui-action-button--brand" type="button"
+          @click="() => void handleSignIn()">
           {{ loginActionLabel }}
         </Focusable>
       </main>
@@ -254,11 +253,9 @@ onUnmounted(() => {
   inset: 0;
   background:
     radial-gradient(circle at 24% 24%, var(--ui-login-overlay-glow), transparent 48%),
-    linear-gradient(
-      180deg,
+    linear-gradient(180deg,
       var(--ui-login-overlay-gradient-top),
-      var(--ui-login-overlay-gradient-bottom)
-    );
+      var(--ui-login-overlay-gradient-bottom));
 }
 
 .login-content {
@@ -273,9 +270,7 @@ onUnmounted(() => {
   justify-content: center;
   gap: var(--ui-login-content-gap);
   padding:
-    var(--ui-login-content-padding-top)
-    var(--ui-page-inset)
-    var(--ui-login-content-padding-bottom);
+    var(--ui-login-content-padding-top) var(--ui-page-inset) var(--ui-login-content-padding-bottom);
 }
 
 .login-content__desc {
@@ -316,5 +311,4 @@ onUnmounted(() => {
 :global(html[data-ui-density='narrow']) .login-content__desc {
   font-size: 14px;
 }
-
 </style>

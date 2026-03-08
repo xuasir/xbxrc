@@ -1,12 +1,21 @@
 use crate::LogicalPadId;
+use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(tag = "kind", rename_all = "kebab-case")]
 pub enum OhMyGamepadRumbleTargetDto {
-    LogicalPad { pad_id: LogicalPadId },
-    Device { device_id: String },
+    LogicalPad {
+        #[serde(rename = "padId")]
+        pad_id: LogicalPadId,
+    },
+    Device {
+        #[serde(rename = "deviceId")]
+        device_id: String,
+    },
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct OhMyGamepadRumbleEffectDto {
     pub start_delay_ms: u16,
     pub duration_ms: u16,
@@ -31,20 +40,23 @@ impl Default for OhMyGamepadRumbleEffectDto {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct OhMyGamepadRumbleRequestDto {
     pub target: OhMyGamepadRumbleTargetDto,
     pub effect: OhMyGamepadRumbleEffectDto,
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "kebab-case")]
 pub enum OhMyGamepadRumbleRejectionReasonDto {
     TargetNotFound,
     Unsupported,
     NotImplemented,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct OhMyGamepadRumbleResultDto {
     pub accepted: bool,
     pub reason: Option<OhMyGamepadRumbleRejectionReasonDto>,

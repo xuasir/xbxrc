@@ -79,12 +79,15 @@ export type XbxEngineRuntimeEventDto =
     }
   | { type: 'error'; code: string; message: string }
 
+export type XbxStreamingMode = 'cloudGaming' | 'localHost' | 'cloudHost'
+
 export interface XbxEngineStartRuntimeParams {
   sessionId: string
   targetType: StreamingTargetType
   turnServer?: StreamingTurnServerConfig | null
   viewportId: string
   audioVolume: number
+  streamingMode: XbxStreamingMode
 }
 
 export interface XbxEngineAttachViewportParams {

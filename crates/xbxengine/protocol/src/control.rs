@@ -46,12 +46,21 @@ pub enum XbxEngineInputEventDto {
     },
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub enum XbxStreamingModeDto {
+    #[default]
+    CloudGaming,
+    LocalHost,
+    CloudHost,
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum XbxEngineControlCommandDto {
     StartRuntime {
         session: XbxEngineSessionDto,
         viewport: XbxEngineViewportDto,
         audio_volume: f32,
+        mode: Option<XbxStreamingModeDto>,
     },
     StopRuntime,
     RequestReconnect {

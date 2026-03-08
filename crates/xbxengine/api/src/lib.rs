@@ -40,9 +40,11 @@ use std::time::Duration;
 
 #[cfg(feature = "napi")]
 use xbxengine::{
-    create_active_media_backend, OhMyGamepadXbxEngineInputBackend, XbxEngineEventSink,
-    XbxEngineHostBridge, XbxEngineRttDiagnosticsRuntimeConfig, XbxEngineRuntime,
-    XbxEngineRuntimeConfig, XbxEngineRuntimeError, XbxEngineVideoPipelineRuntimeConfig,
+    create_active_media_backend, logging, OhMyGamepadXbxEngineInputBackend, XbxEngineEventSink,
+    XbxEngineHostBridge, XbxEngineNegotiationRuntimeConfig, XbxEngineRecoveryPreset,
+    XbxEngineRecoveryRuntimeConfig, XbxEngineRecoveryRuntimeConfigOverride,
+    XbxEngineRttDiagnosticsRuntimeConfig, XbxEngineRuntime, XbxEngineRuntimeConfig,
+    XbxEngineRuntimeError, XbxEngineVideoPipelineRuntimeConfig,
 };
 #[cfg(feature = "napi")]
 use xbxengine_protocol::{
@@ -74,6 +76,7 @@ struct TsGamepadButtonPressPayload {
 #[serde(rename_all = "camelCase")]
 struct TsXbxEngineRuntimeConfig {
     runtime_name: Option<String>,
+    log_level: Option<String>,
     webrtc: Option<TsXbxEngineWebRtcRuntimeConfig>,
 }
 
@@ -83,8 +86,22 @@ struct TsXbxEngineRuntimeConfig {
 struct TsXbxEngineWebRtcRuntimeConfig {
     forced_remb_kbps: Option<u32>,
     adaptive_remb_enabled: Option<bool>,
+    negotiation: Option<TsXbxEngineNegotiationRuntimeConfig>,
     video_pipeline: Option<TsXbxEngineVideoPipelineRuntimeConfig>,
     rtt_diagnostics: Option<TsXbxEngineRttDiagnosticsRuntimeConfig>,
+    recovery_preset: Option<String>,
+    recovery: Option<TsXbxEngineRecoveryRuntimeConfig>,
+}
+
+#[cfg(feature = "napi")]
+#[derive(Clone, Debug, Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct TsXbxEngineNegotiationRuntimeConfig {
+    target_resolution_width: Option<u32>,
+    target_resolution_height: Option<u32>,
+    video_bitrate_kbps: Option<u32>,
+    audio_bitrate_kbps: Option<u32>,
+    offer_profile: Option<String>,
 }
 
 #[cfg(feature = "napi")]
@@ -94,6 +111,10 @@ struct TsXbxEngineVideoPipelineRuntimeConfig {
     nack_window_ms: Option<u64>,
     nack_retry_interval_ms: Option<u64>,
     nack_max_retry_count: Option<u8>,
+    jitter_buffer_min_delay_ms: Option<u64>,
+    jitter_buffer_max_delay_ms: Option<u64>,
+    jitter_buffer_max_packets: Option<u16>,
+    idle_timeout_ms: Option<u64>,
 }
 
 #[cfg(feature = "napi")]
@@ -105,6 +126,18 @@ struct TsXbxEngineRttDiagnosticsRuntimeConfig {
 }
 
 #[cfg(feature = "napi")]
+#[derive(Clone, Debug, Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct TsXbxEngineRecoveryRuntimeConfig {
+    first_frame_grace_ms: Option<u64>,
+    keyframe_request_stall_ms: Option<u64>,
+    decoder_reset_after_keyframe_wait_ms: Option<u64>,
+    decoder_reset_request_cooldown_ms: Option<u64>,
+    reconnect_stall_ms: Option<u64>,
+    stall_recovery_cooldown_ms: Option<u64>,
+}
+
+#[cfg(feature = "napi")]
 #[derive(Default)]
 struct SharedOutgoingMessages {
     messages: Mutex<Vec<XbxEngineOutgoingMessageDto>>,
@@ -113,18 +146,16 @@ struct SharedOutgoingMessages {
 #[cfg(feature = "napi")]
 impl SharedOutgoingMessages {
     fn push(&self, message: XbxEngineOutgoingMessageDto) {
-        self.messages
-            .lock()
-            .expect("lock outgoing messages")
-            .push(message);
+        if let Ok(mut messages) = self.messages.lock() {
+            messages.push(message);
+        }
     }
 
     fn drain(&self) -> Vec<XbxEngineOutgoingMessageDto> {
-        self.messages
-            .lock()
-            .expect("lock outgoing messages")
-            .drain(..)
-            .collect()
+        if let Ok(mut messages) = self.messages.lock() {
+            return messages.drain(..).collect();
+        }
+        Vec::new()
     }
 }
 
@@ -153,10 +184,13 @@ impl XbxEngineHostBridge for NativeHostBridge {
             self.next_request_id.fetch_add(1, Ordering::Relaxed) + 1
         );
         let (sender, receiver) = mpsc::channel::<HostResponseResult>();
-        self.pending_host_responses
-            .lock()
-            .expect("lock pending host responses")
-            .insert(request_id.clone(), sender);
+        if let Ok(mut pending) = self.pending_host_responses.lock() {
+            pending.insert(request_id.clone(), sender);
+        } else {
+            return Err(XbxEngineRuntimeError::new(
+                "xbxEnginePendingHostResponsesLockFailed",
+            ));
+        }
         self.outgoing_messages
             .push(XbxEngineOutgoingMessageDto::HostRequest {
                 request_id: request_id.clone(),
@@ -168,16 +202,16 @@ impl XbxEngineHostBridge for NativeHostBridge {
             if self.shutdown_flag.load(Ordering::Relaxed) {
                 self.pending_host_responses
                     .lock()
-                    .expect("lock pending host responses")
-                    .remove(&request_id);
+                    .ok()
+                    .and_then(|mut pending| pending.remove(&request_id));
                 return Err(XbxEngineRuntimeError::new("xbxEngineNativeBindingClosed"));
             }
 
             if std::time::Instant::now() >= deadline {
                 self.pending_host_responses
                     .lock()
-                    .expect("lock pending host responses")
-                    .remove(&request_id);
+                    .ok()
+                    .and_then(|mut pending| pending.remove(&request_id));
                 return Err(XbxEngineRuntimeError::new(format!(
                     "xbxEngineHostRequestTimedOut:{request_name}:{request_id}"
                 )));
@@ -209,7 +243,7 @@ impl XbxEngineEventSink for NativeEventSink {
         *self
             .last_runtime_event
             .lock()
-            .expect("lock last runtime event") = Some(event.clone());
+            .unwrap_or_else(|poison| poison.into_inner()) = Some(event.clone());
         self.outgoing_messages
             .push(XbxEngineOutgoingMessageDto::RuntimeEvent { event });
     }
@@ -343,7 +377,7 @@ impl XbxEngineNativeWorker {
                 if let Some(sender) = self
                     .pending_host_responses
                     .lock()
-                    .expect("lock pending host responses")
+                    .unwrap_or_else(|poison| poison.into_inner())
                     .remove(request_id)
                 {
                     let _ = sender.send(Ok(response.clone()));
@@ -357,7 +391,7 @@ impl XbxEngineNativeWorker {
                 if let Some(sender) = self
                     .pending_host_responses
                     .lock()
-                    .expect("lock pending host responses")
+                    .unwrap_or_else(|poison| poison.into_inner())
                     .remove(request_id)
                 {
                     let _ = sender.send(Err(message.clone()));
@@ -385,7 +419,7 @@ impl XbxEngineNativeWorker {
     fn last_runtime_event(&self) -> Option<XbxEngineRuntimeEventDto> {
         self.last_runtime_event
             .lock()
-            .expect("lock last runtime event")
+            .unwrap_or_else(|poison| poison.into_inner())
             .clone()
     }
 
@@ -608,10 +642,9 @@ impl XbxEngineGamepadNativeBinding {
         let snapshot_rx = self.host()?.subscribe_runtime_snapshot();
         let subscription =
             spawn_runtime_snapshot_subscription(snapshot_rx, snapshot_push, error_push);
-        *self
-            .runtime_snapshot_subscription
-            .lock()
-            .expect("lock runtime snapshot subscription") = Some(subscription);
+        if let Ok(mut slot) = self.runtime_snapshot_subscription.lock() {
+            *slot = Some(subscription);
+        }
         Ok(())
     }
 
@@ -645,13 +678,10 @@ impl XbxEngineGamepadNativeBinding {
     }
 
     fn stop_runtime_snapshot_subscription(&self) {
-        if let Some(subscription) = self
-            .runtime_snapshot_subscription
-            .lock()
-            .expect("lock runtime snapshot subscription")
-            .take()
-        {
-            subscription.stop();
+        if let Ok(mut subscription_slot) = self.runtime_snapshot_subscription.lock() {
+            if let Some(subscription) = subscription_slot.take() {
+                subscription.stop();
+            }
         }
     }
 }
@@ -679,10 +709,13 @@ impl XbxEngineNativeBinding {
     pub fn set_runtime_config_json(&self, runtime_config_json: String) -> NapiResult<()> {
         let config = parse_ts_json::<TsXbxEngineRuntimeConfig>(&runtime_config_json)?;
         let runtime_config = resolve_runtime_config(config);
-        *self
+        // NAPI 边界禁止 panic；配置锁失败时返回 JS 可见错误，避免进程直接 abort。
+        let mut runtime_config_guard = self
             .runtime_config
             .lock()
-            .expect("lock xbxengine runtime config") = runtime_config.clone();
+            .map_err(|_| map_napi_error("lockXbxEngineRuntimeConfigFailed".to_string()))?;
+        *runtime_config_guard = runtime_config.clone();
+        drop(runtime_config_guard);
 
         let mut worker = self.worker()?;
         if let Some(worker) = worker.as_mut() {
@@ -748,7 +781,9 @@ impl XbxEngineNativeBinding {
 #[cfg(feature = "napi")]
 impl XbxEngineNativeBinding {
     fn worker(&self) -> NapiResult<std::sync::MutexGuard<'_, Option<XbxEngineNativeWorker>>> {
-        Ok(self.worker.lock().expect("lock xbxengine worker"))
+        self.worker
+            .lock()
+            .map_err(|_| map_napi_error("lockXbxEngineWorkerFailed".to_string()))
     }
 }
 
@@ -762,6 +797,10 @@ fn resolve_runtime_config(input: TsXbxEngineRuntimeConfig) -> XbxEngineRuntimeCo
         }
     }
 
+    if let Some(log_level_str) = input.log_level {
+        logging::set_configured_level(logging::parse_level(&log_level_str));
+    }
+
     if let Some(webrtc) = input.webrtc {
         if let Some(forced_remb_kbps) = webrtc.forced_remb_kbps {
             runtime_config.webrtc.forced_remb_kbps = Some(forced_remb_kbps);
@@ -769,36 +808,64 @@ fn resolve_runtime_config(input: TsXbxEngineRuntimeConfig) -> XbxEngineRuntimeCo
         if let Some(adaptive_remb_enabled) = webrtc.adaptive_remb_enabled {
             runtime_config.webrtc.adaptive_remb_enabled = adaptive_remb_enabled;
         }
+        if let Some(negotiation) = webrtc.negotiation {
+            runtime_config.webrtc.negotiation =
+                resolve_negotiation_runtime_config(negotiation, &runtime_config.webrtc.negotiation);
+        }
         if let Some(video_pipeline) = webrtc.video_pipeline {
             runtime_config.webrtc.video_pipeline =
-                resolve_video_pipeline_runtime_config(video_pipeline);
+                resolve_video_pipeline_runtime_config(video_pipeline, &runtime_config.webrtc.video_pipeline);
         }
         if let Some(rtt_diagnostics) = webrtc.rtt_diagnostics {
             runtime_config.webrtc.rtt_diagnostics =
                 resolve_rtt_diagnostics_runtime_config(rtt_diagnostics);
+        }
+        if let Some(recovery_preset) = webrtc
+            .recovery_preset
+            .as_deref()
+            .and_then(XbxEngineRecoveryPreset::from_label)
+        {
+            runtime_config.webrtc.recovery_preset = recovery_preset;
+            runtime_config.webrtc.recovery =
+                XbxEngineRecoveryRuntimeConfig::from_preset(recovery_preset);
+        }
+        if let Some(recovery) = webrtc.recovery {
+            runtime_config.webrtc.recovery = runtime_config
+                .webrtc
+                .recovery
+                .with_override(resolve_recovery_runtime_override(recovery));
         }
     }
     runtime_config
 }
 
 #[cfg(feature = "napi")]
+fn resolve_negotiation_runtime_config(
+    input: TsXbxEngineNegotiationRuntimeConfig,
+    default: &XbxEngineNegotiationRuntimeConfig,
+) -> XbxEngineNegotiationRuntimeConfig {
+    XbxEngineNegotiationRuntimeConfig {
+        target_resolution_width: input.target_resolution_width.unwrap_or(default.target_resolution_width),
+        target_resolution_height: input.target_resolution_height.unwrap_or(default.target_resolution_height),
+        video_bitrate_kbps: input.video_bitrate_kbps.unwrap_or(default.video_bitrate_kbps),
+        audio_bitrate_kbps: input.audio_bitrate_kbps.unwrap_or(default.audio_bitrate_kbps),
+        offer_profile: input.offer_profile.unwrap_or_else(|| default.offer_profile.clone()),
+    }
+}
+
+#[cfg(feature = "napi")]
 fn resolve_video_pipeline_runtime_config(
     input: TsXbxEngineVideoPipelineRuntimeConfig,
+    default: &XbxEngineVideoPipelineRuntimeConfig,
 ) -> XbxEngineVideoPipelineRuntimeConfig {
-    let default = XbxEngineVideoPipelineRuntimeConfig::default();
     XbxEngineVideoPipelineRuntimeConfig {
-        nack_window_ms: input
-            .nack_window_ms
-            .unwrap_or(default.nack_window_ms)
-            .max(1),
-        nack_retry_interval_ms: input
-            .nack_retry_interval_ms
-            .unwrap_or(default.nack_retry_interval_ms)
-            .max(1),
-        nack_max_retry_count: input
-            .nack_max_retry_count
-            .unwrap_or(default.nack_max_retry_count)
-            .max(1),
+        nack_window_ms: input.nack_window_ms.unwrap_or(default.nack_window_ms).max(1),
+        nack_retry_interval_ms: input.nack_retry_interval_ms.unwrap_or(default.nack_retry_interval_ms).max(1),
+        nack_max_retry_count: input.nack_max_retry_count.unwrap_or(default.nack_max_retry_count).max(1),
+        jitter_buffer_min_delay_ms: input.jitter_buffer_min_delay_ms.unwrap_or(default.jitter_buffer_min_delay_ms).max(1),
+        jitter_buffer_max_delay_ms: input.jitter_buffer_max_delay_ms.unwrap_or(default.jitter_buffer_max_delay_ms).max(1),
+        jitter_buffer_max_packets: input.jitter_buffer_max_packets.unwrap_or(default.jitter_buffer_max_packets).max(1),
+        idle_timeout_ms: input.idle_timeout_ms.unwrap_or(default.idle_timeout_ms).max(1),
     }
 }
 
@@ -813,6 +880,31 @@ fn resolve_rtt_diagnostics_runtime_config(
             .log_interval_ms
             .unwrap_or(default.log_interval_ms)
             .max(500),
+    }
+}
+
+#[cfg(feature = "napi")]
+fn resolve_recovery_runtime_override(
+    input: TsXbxEngineRecoveryRuntimeConfig,
+) -> XbxEngineRecoveryRuntimeConfigOverride {
+    let keyframe_request_stall_ms = input.keyframe_request_stall_ms.map(|value| value.max(200));
+    let decoder_reset_after_keyframe_wait_ms = input
+        .decoder_reset_after_keyframe_wait_ms
+        .map(|value| value.max(50));
+    let decoder_reset_request_cooldown_ms = input
+        .decoder_reset_request_cooldown_ms
+        .map(|value| value.max(decoder_reset_after_keyframe_wait_ms.unwrap_or(50)));
+    let reconnect_stall_ms = input
+        .reconnect_stall_ms
+        .map(|value| value.max(keyframe_request_stall_ms.unwrap_or(200).saturating_add(500)));
+
+    XbxEngineRecoveryRuntimeConfigOverride {
+        first_frame_grace_ms: input.first_frame_grace_ms.map(|value| value.max(1_000)),
+        keyframe_request_stall_ms,
+        decoder_reset_after_keyframe_wait_ms,
+        decoder_reset_request_cooldown_ms,
+        reconnect_stall_ms,
+        stall_recovery_cooldown_ms: input.stall_recovery_cooldown_ms.map(|value| value.max(500)),
     }
 }
 

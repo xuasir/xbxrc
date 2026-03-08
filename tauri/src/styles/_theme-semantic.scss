@@ -1,0 +1,562 @@
+@use './theme-foundation' as *;
+
+:root {
+  color-scheme: dark;
+
+  // 基础 token
+  --ui-font-family: #{$ui-font-family};
+  --ui-space-1: #{$ui-space-1};
+  --ui-space-2: #{$ui-space-2};
+  --ui-space-3: #{$ui-space-3};
+  --ui-space-4: #{$ui-space-4};
+  --ui-space-2xs: #{$ui-space-2xs};
+  --ui-space-xs: #{$ui-space-xs};
+  --ui-space-sm: #{$ui-space-sm};
+  --ui-space-md: #{$ui-space-md};
+  --ui-space-lg: #{$ui-space-lg};
+  --ui-space-xl: #{$ui-space-xl};
+  --ui-space-2xl: #{$ui-space-2xl};
+  --ui-space-3xl: #{$ui-space-3xl};
+  --ui-space-4xl: #{$ui-space-4xl};
+  --ui-space-5xl: #{$ui-space-5xl};
+
+  --ui-radius-sm: #{$ui-radius-sm};
+  --ui-radius-md: #{$ui-radius-md};
+  --ui-radius-lg: #{$ui-radius-lg};
+  --ui-radius-pill: #{$ui-radius-pill};
+
+  --ui-text-body-sm: #{$ui-text-body-sm};
+  --ui-text-body-xl: #{$ui-text-body-xl};
+  --ui-text-body-md: #{$ui-text-body-md};
+  --ui-text-body-lg: #{$ui-text-body-lg};
+  --ui-text-title-md: #{$ui-text-title-md};
+  --ui-text-title-lg: #{$ui-text-title-lg};
+  --ui-line-height-tight: #{$ui-line-height-tight};
+  --ui-line-height-default: #{$ui-line-height-default};
+  --ui-line-height-relaxed: #{$ui-line-height-relaxed};
+  --ui-font-weight-medium: #{$ui-font-weight-medium};
+  --ui-font-weight-semibold: #{$ui-font-weight-semibold};
+  --ui-font-weight-bold: #{$ui-font-weight-bold};
+  --ui-content-max-sm: #{$ui-content-max-sm};
+  --ui-content-max-lg: #{$ui-content-max-lg};
+  --ui-content-max-xl: #{$ui-content-max-xl};
+  --ui-size-nav-height: #{$ui-size-nav-height};
+  --ui-size-panel-min: #{$ui-size-panel-min};
+  --ui-size-control-sm: #{$ui-size-control-sm};
+  --ui-size-control-lg: #{$ui-size-control-lg};
+  --ui-size-control-xl: #{$ui-size-control-xl};
+  --ui-size-icon-sm: #{$ui-size-icon-sm};
+  --ui-size-icon-md: #{$ui-size-icon-md};
+  --ui-size-icon-lg: #{$ui-size-icon-lg};
+  --ui-stroke-thin: #{$ui-stroke-thin};
+  --ui-stroke-base: #{$ui-stroke-base};
+
+  // 语义 token
+  --ui-page-text: #{$ui-page-text-dark};
+  --ui-page-text-soft: #{$ui-page-text-soft-dark};
+  --ui-page-glow: #{$ui-page-glow-dark};
+  --ui-page-glow-soft: #{$ui-page-glow-soft-dark};
+  --ui-page-glow-strong: #{$ui-page-glow-strong-dark};
+
+  --ui-surface-panel: #{$ui-surface-panel-dark};
+  --ui-surface-panel-strong: #{$ui-surface-panel-strong-dark};
+  --ui-border-subtle: #{$ui-border-panel-dark};
+  --ui-border-focus: #{$ui-focus-border-dark};
+  --ui-focus-surface: #{$ui-focus-bg-dark};
+  --ui-focus-shadow: #{$ui-focus-shadow-dark};
+  --ui-focus-ring-shadow: inset 0 0 0 1px var(--ui-focus-shadow);
+  --ui-border-placeholder: #{$ui-icon-placeholder-border-dark};
+  --ui-surface-placeholder: #{$ui-icon-placeholder-bg-dark};
+  --ui-status-positive: #{$ui-status-online};
+
+  // 通用布局与页面 token
+  --ui-page-inset: #{$ui-layout-side-gap};
+  --ui-page-stack-gap: #{$ui-space-xl};
+  --ui-app-shell-content-padding-top: #{$ui-space-xs};
+  --ui-rail-gap: 14px;
+  --ui-rail-copy-gap: 6px;
+  --ui-rail-title-size: 22px;
+  --ui-rail-hint-size: 13px;
+  --ui-rail-padding-inline: 16px;
+  --ui-rail-padding-block-start: 12px;
+  --ui-rail-padding-block-end: 24px;
+  --ui-loading-width: var(--ui-content-max-sm);
+  --ui-loading-gap: var(--ui-space-md);
+  --ui-loading-font-size: calc(var(--ui-text-body-sm) * 0.82);
+  --ui-loading-visual-size: calc(var(--ui-size-control-xl) * 1.7);
+  --ui-game-card-size: 176px;
+  --ui-game-card-radius: 12px;
+  --ui-game-card-title-min-height: 64px;
+  --ui-game-card-title-padding: 24px 14px 14px;
+  --ui-game-card-title-font-size: 15px;
+  --ui-console-card-width: 304px;
+  --ui-console-card-min-width: 232px;
+  --ui-console-card-min-height: 372px;
+  --ui-console-card-min-height-min: 296px;
+  --ui-console-card-padding: 22px 22px 24px;
+  --ui-console-card-radius: 16px;
+  --ui-console-card-media-height: 190px;
+  --ui-console-card-image-width: 186px;
+  --ui-console-card-image-min-width: 140px;
+  --ui-console-card-title-size: 25px;
+  --ui-console-card-status-size: 18px;
+  --ui-console-card-description-size: 20px;
+  --ui-home-empty-width: 560px;
+  --ui-home-empty-copy-max-width: 520px;
+  --ui-home-empty-copy-size: 16px;
+  --ui-home-action-min-width: 128px;
+  --ui-home-action-min-height: 42px;
+  --ui-settings-shell-max-width: 1180px;
+  --ui-settings-side-padding: 56px;
+  --ui-settings-list-max-width: 100%;
+  --ui-settings-section-gap: 24px;
+  --ui-settings-row-gap: 24px;
+  --ui-settings-row-min-height: 50px;
+  --ui-settings-section-title-size: 12px;
+  --ui-settings-row-label-size: 13px;
+  --ui-settings-row-description-size: 11px;
+  --ui-settings-row-value-size: 12px;
+  --ui-settings-toggle-track-width: 48px;
+  --ui-settings-toggle-track-height: 22px;
+  --ui-settings-toggle-thumb-size: 14px;
+  --ui-settings-toggle-thumb-offset: 28px;
+  --ui-settings-modal-padding: 24px;
+  --ui-settings-modal-panel-padding: 24px;
+  --ui-settings-modal-title-size: 22px;
+  --ui-settings-modal-action-min-width: 112px;
+  --ui-settings-modal-action-min-height: 42px;
+  --ui-settings-modal-control-min-height: 46px;
+  --ui-settings-modal-mini-action-min-width: 54px;
+  --ui-settings-single-select-width: 960px;
+  --ui-settings-single-select-max-height: 560px;
+  --ui-settings-single-select-option-min-height: 44px;
+  --ui-settings-single-select-indicator-size: 16px;
+  --ui-xcloud-header-gap: 12px;
+  --ui-xcloud-grid-gap: 16px;
+  --ui-xcloud-search-height: 60px;
+  --ui-xcloud-search-padding-inline: 20px;
+  --ui-xcloud-state-min-height: 220px;
+  --ui-xcloud-action-min-width: 144px;
+  --ui-xcloud-action-min-height: 48px;
+  --ui-action-pill-radius: 8px;
+  --ui-tabs-gap: var(--ui-space-lg);
+  --ui-tabs-font-size: var(--ui-text-body-sm);
+  --ui-tabs-padding: calc(var(--ui-space-xs) + 2px) calc(var(--ui-space-lg) + 2px)
+    calc(var(--ui-space-md) + 1px);
+  --ui-tabs-underline-height: 3px;
+  --ui-tabs-underline-inset: 8px;
+  --ui-tabs-underline-bottom-gap: 3px;
+  --ui-user-menu-panel-width: 233px;
+  --ui-user-menu-panel-padding: 16px 12px 10px;
+  --ui-user-menu-panel-radius: 8px;
+  --ui-user-menu-avatar-size: 38px;
+  --ui-user-menu-display-name-size: 16px;
+  --ui-user-menu-secondary-size: 10px;
+  --ui-user-menu-close-size: 17px;
+  --ui-user-menu-status-min-height: 28px;
+  --ui-user-menu-logout-min-height: 34px;
+  --ui-login-content-gap: var(--ui-space-3xl);
+  --ui-login-content-padding-top: var(--ui-space-5xl);
+  --ui-login-content-padding-bottom: var(--ui-space-4xl);
+  --ui-login-content-width: var(--ui-content-max-xl);
+  --ui-login-desc-width: var(--ui-content-max-lg);
+  --ui-login-signin-width: var(--ui-content-max-sm);
+  --ui-stream-topbar-padding: 20px 24px;
+  --ui-stream-meta-gap: 4px;
+  --ui-stream-eyebrow-size: 11px;
+  --ui-stream-title-size: 22px;
+  --ui-stream-top-action-min-width: 96px;
+  --ui-stream-top-action-padding: 10px 16px;
+  --ui-stream-overlay-padding: 24px;
+  --ui-stream-error-panel-width: 460px;
+  --ui-stream-error-panel-padding: 28px;
+  --ui-stream-error-title-size: 24px;
+  --ui-stream-error-action-min-width: 112px;
+  --ui-stream-error-action-padding: 12px 18px;
+  --ui-stream-action-sheet-padding: 80px 24px 24px;
+  --ui-stream-action-sheet-width: 320px;
+  --ui-stream-action-sheet-panel-padding: 20px;
+  --ui-stream-action-item-padding: 14px 16px;
+  --ui-stream-dialog-width: 520px;
+  --ui-stream-dialog-padding: 28px;
+  --ui-stream-dialog-title-size: 24px;
+  --ui-stream-dialog-action-min-width: 132px;
+  --ui-stream-audio-width: 440px;
+  --ui-stream-audio-control-width: 72px;
+  --ui-stream-audio-control-min-height: 52px;
+  --ui-stream-text-input-min-height: 52px;
+  --ui-stream-performance-top: 88px;
+  --ui-stream-performance-left: 24px;
+  --ui-stream-performance-min-width: 168px;
+  --ui-stream-performance-padding: 14px 16px;
+
+  // 品牌/皮肤特例
+  --ui-nav-icon-filter: #{$ui-nav-icon-filter-dark};
+
+  // 登录页保留品牌/皮肤特例
+  --ui-login-button-text: #{$ui-login-button-text-dark};
+  --ui-login-button-border: #{$ui-login-button-border-dark};
+  --ui-login-button-bg: #{$ui-login-button-bg-dark};
+  --ui-login-button-bg-focused: #{$ui-login-button-bg-focused-dark};
+  --ui-login-overlay-glow: #{$ui-login-overlay-glow-dark};
+  --ui-login-overlay-gradient-top: #{$ui-login-overlay-gradient-top-dark};
+  --ui-login-overlay-gradient-bottom: #{$ui-login-overlay-gradient-bottom-dark};
+
+  --ui-motion-fast: #{$ui-motion-fast};
+}
+
+:root[data-ui-density='comfortable'] {
+  --ui-page-inset: 24px;
+  --ui-rail-gap: 16px;
+  --ui-rail-padding-inline: 20px;
+  --ui-rail-padding-block-start: 14px;
+  --ui-rail-padding-block-end: 28px;
+  --ui-console-card-width: 320px;
+  --ui-console-card-min-width: 252px;
+  --ui-console-card-min-height: 390px;
+  --ui-console-card-min-height-min: 314px;
+  --ui-console-card-radius: 18px;
+  --ui-console-card-image-width: 196px;
+  --ui-console-card-image-min-width: 152px;
+  --ui-settings-shell-max-width: 1280px;
+  --ui-settings-side-padding: 64px;
+  --ui-settings-list-max-width: 100%;
+  --ui-xcloud-grid-gap: 18px;
+  --ui-xcloud-search-height: 64px;
+  --ui-tabs-underline-height: 4px;
+  --ui-tabs-underline-inset: 10px;
+  }
+
+:root[data-ui-density='compact'] {
+  --ui-page-inset: 12px;
+  --ui-page-stack-gap: 14px;
+  --ui-size-nav-height: 64px;
+  --ui-size-control-xl: 32px;
+  --ui-size-icon-lg: 18px;
+  --ui-rail-gap: 12px;
+  --ui-rail-title-size: 18px;
+  --ui-rail-hint-size: 12px;
+  --ui-rail-padding-inline: 12px;
+  --ui-rail-padding-block-start: 10px;
+  --ui-rail-padding-block-end: 20px;
+  --ui-loading-width: calc(var(--ui-content-max-sm) * 0.88);
+  --ui-loading-gap: calc(var(--ui-space-md) * 0.62);
+  --ui-loading-font-size: calc(var(--ui-text-body-sm) * 0.58);
+  --ui-loading-visual-size: calc(var(--ui-size-control-xl) * 1.15);
+  --ui-game-card-size: 152px;
+  --ui-game-card-radius: 10px;
+  --ui-game-card-title-min-height: 56px;
+  --ui-game-card-title-padding: 18px 12px 12px;
+  --ui-game-card-title-font-size: 13px;
+  --ui-console-card-width: 252px;
+  --ui-console-card-min-width: 208px;
+  --ui-console-card-min-height: 316px;
+  --ui-console-card-min-height-min: 264px;
+  --ui-console-card-padding: 18px 18px 20px;
+  --ui-console-card-radius: 14px;
+  --ui-console-card-media-height: 160px;
+  --ui-console-card-image-width: 156px;
+  --ui-console-card-image-min-width: 124px;
+  --ui-console-card-title-size: 22px;
+  --ui-console-card-status-size: 16px;
+  --ui-console-card-description-size: 18px;
+  --ui-home-action-min-width: 116px;
+  --ui-home-action-min-height: 38px;
+  --ui-settings-shell-max-width: 1040px;
+  --ui-settings-side-padding: 32px;
+  --ui-settings-section-gap: 20px;
+  --ui-settings-row-gap: 12px;
+  --ui-settings-row-min-height: 44px;
+  --ui-settings-section-title-size: 11px;
+  --ui-settings-row-label-size: 12px;
+  --ui-settings-row-description-size: 10px;
+  --ui-settings-row-value-size: 11px;
+  --ui-settings-toggle-track-width: 42px;
+  --ui-settings-toggle-track-height: 20px;
+  --ui-settings-toggle-thumb-size: 12px;
+  --ui-settings-toggle-thumb-offset: 24px;
+  --ui-settings-modal-padding: 16px;
+  --ui-settings-modal-panel-padding: 18px;
+  --ui-settings-modal-title-size: 18px;
+  --ui-settings-modal-control-min-height: 42px;
+  --ui-settings-single-select-max-height: 520px;
+  --ui-settings-single-select-option-min-height: 42px;
+  --ui-settings-single-select-indicator-size: 15px;
+  --ui-xcloud-grid-gap: 8px;
+  --ui-xcloud-search-height: 52px;
+  --ui-xcloud-search-padding-inline: 16px;
+  --ui-tabs-gap: var(--ui-space-md);
+  --ui-tabs-font-size: 11px;
+  --ui-tabs-padding:
+    calc((var(--ui-space-xs) * 0.72) + 1px)
+    calc((var(--ui-space-lg) * 0.72) + 2px)
+    calc((var(--ui-space-md) * 0.72) + 1px);
+  --ui-tabs-underline-height: 2px;
+  --ui-tabs-underline-inset: 6px;
+  --ui-tabs-underline-bottom-gap: 2px;
+  --ui-user-menu-panel-padding: var(--ui-space-4xl) var(--ui-space-md) var(--ui-space-lg);
+  --ui-user-menu-avatar-size: 32px;
+  --ui-user-menu-display-name-size: 13px;
+  --ui-user-menu-secondary-size: 9px;
+  --ui-login-content-gap: calc(var(--ui-space-3xl) * 0.72);
+  --ui-login-content-padding-top: calc(var(--ui-space-5xl) * 0.55);
+  --ui-login-signin-width: calc(var(--ui-content-max-sm) * 0.88);
+  --ui-stream-topbar-padding: 16px 18px;
+  --ui-stream-title-size: 18px;
+  --ui-stream-top-action-min-width: 84px;
+  --ui-stream-top-action-padding: 9px 14px;
+  --ui-stream-overlay-padding: 18px;
+  --ui-stream-error-panel-width: 400px;
+  --ui-stream-error-panel-padding: 22px;
+  --ui-stream-error-title-size: 22px;
+  --ui-stream-error-action-min-width: 104px;
+  --ui-stream-action-sheet-padding: 72px 18px 18px;
+  --ui-stream-action-sheet-width: 300px;
+  --ui-stream-dialog-width: 460px;
+  --ui-stream-dialog-padding: 22px;
+  --ui-stream-dialog-title-size: 22px;
+  --ui-stream-audio-width: 400px;
+  --ui-stream-performance-top: 76px;
+  --ui-stream-performance-left: 18px;
+  --ui-stream-performance-padding: 12px 14px;
+}
+
+:root[data-ui-density='narrow'] {
+  --ui-page-inset: 10px;
+  --ui-page-stack-gap: 12px;
+  --ui-size-nav-height: 60px;
+  --ui-size-control-xl: 32px;
+  --ui-size-icon-lg: 18px;
+  --ui-rail-gap: 10px;
+  --ui-rail-copy-gap: 4px;
+  --ui-rail-title-size: 17px;
+  --ui-rail-hint-size: 12px;
+  --ui-rail-padding-inline: 10px;
+  --ui-rail-padding-block-start: 8px;
+  --ui-rail-padding-block-end: 16px;
+  --ui-loading-width: calc(var(--ui-content-max-sm) * 0.88);
+  --ui-loading-gap: calc(var(--ui-space-md) * 0.62);
+  --ui-loading-font-size: calc(var(--ui-text-body-sm) * 0.58);
+  --ui-loading-visual-size: calc(var(--ui-size-control-xl) * 1.15);
+  --ui-game-card-size: 140px;
+  --ui-game-card-radius: 10px;
+  --ui-console-card-width: 228px;
+  --ui-console-card-min-width: 188px;
+  --ui-console-card-min-height: 290px;
+  --ui-console-card-min-height-min: 244px;
+  --ui-console-card-padding: 16px 16px 18px;
+  --ui-console-card-radius: 12px;
+  --ui-console-card-media-height: 150px;
+  --ui-console-card-image-width: 148px;
+  --ui-console-card-image-min-width: 116px;
+  --ui-console-card-title-size: 20px;
+  --ui-console-card-status-size: 15px;
+  --ui-console-card-description-size: 17px;
+  --ui-home-empty-width: 420px;
+  --ui-home-empty-copy-max-width: 420px;
+  --ui-home-empty-copy-size: 15px;
+  --ui-settings-shell-max-width: 100%;
+  --ui-settings-side-padding: 18px;
+  --ui-settings-list-max-width: 100%;
+  --ui-settings-section-gap: 18px;
+  --ui-settings-row-gap: 10px;
+  --ui-settings-row-min-height: 44px;
+  --ui-settings-toggle-track-width: 42px;
+  --ui-settings-toggle-track-height: 20px;
+  --ui-settings-toggle-thumb-size: 12px;
+  --ui-settings-toggle-thumb-offset: 24px;
+  --ui-settings-modal-padding: 14px;
+  --ui-settings-modal-panel-padding: 16px;
+  --ui-settings-modal-title-size: 18px;
+  --ui-settings-modal-action-min-width: 100%;
+  --ui-settings-modal-control-min-height: 42px;
+  --ui-settings-modal-mini-action-min-width: 0;
+  --ui-settings-single-select-width: 100%;
+  --ui-settings-single-select-max-height: 500px;
+  --ui-settings-single-select-option-min-height: 42px;
+  --ui-settings-single-select-indicator-size: 15px;
+  --ui-xcloud-header-gap: 10px;
+  --ui-xcloud-grid-gap: 8px;
+  --ui-xcloud-search-height: 48px;
+  --ui-xcloud-search-padding-inline: 14px;
+  --ui-tabs-gap: var(--ui-space-md);
+  --ui-tabs-font-size: 11px;
+  --ui-tabs-padding:
+    calc((var(--ui-space-xs) * 0.72) + 1px)
+    calc((var(--ui-space-lg) * 0.72) + 2px)
+    calc((var(--ui-space-md) * 0.72) + 1px);
+  --ui-tabs-underline-height: 2px;
+  --ui-tabs-underline-inset: 6px;
+  --ui-tabs-underline-bottom-gap: 2px;
+  --ui-xcloud-state-min-height: 200px;
+  --ui-xcloud-action-min-width: 132px;
+  --ui-xcloud-action-min-height: 44px;
+  --ui-user-menu-panel-width: calc(100vw - (var(--ui-space-3) * 2));
+  --ui-user-menu-panel-padding: var(--ui-space-4xl) var(--ui-space-md) var(--ui-space-lg);
+  --ui-user-menu-avatar-size: 32px;
+  --ui-user-menu-display-name-size: 13px;
+  --ui-user-menu-secondary-size: 9px;
+  --ui-login-content-gap: calc(var(--ui-space-3xl) * 0.65);
+  --ui-login-content-padding-top: calc(var(--ui-space-5xl) * 0.55);
+  --ui-login-content-width: 100%;
+  --ui-login-desc-width: min(100%, calc(var(--ui-content-max-lg) * 0.88));
+  --ui-login-signin-width: calc(var(--ui-content-max-sm) * 0.88);
+  --ui-stream-topbar-padding: 14px 14px;
+  --ui-stream-meta-gap: 3px;
+  --ui-stream-eyebrow-size: 10px;
+  --ui-stream-title-size: 16px;
+  --ui-stream-top-action-min-width: 80px;
+  --ui-stream-top-action-padding: 8px 12px;
+  --ui-stream-overlay-padding: 14px;
+  --ui-stream-error-panel-width: 100%;
+  --ui-stream-error-panel-padding: 18px;
+  --ui-stream-error-title-size: 20px;
+  --ui-stream-error-action-min-width: 0;
+  --ui-stream-error-action-padding: 12px 16px;
+  --ui-stream-action-sheet-padding: 68px 14px 14px;
+  --ui-stream-action-sheet-width: 100%;
+  --ui-stream-action-sheet-panel-padding: 16px;
+  --ui-stream-action-item-padding: 12px 14px;
+  --ui-stream-dialog-width: 100%;
+  --ui-stream-dialog-padding: 18px;
+  --ui-stream-dialog-title-size: 20px;
+  --ui-stream-dialog-action-min-width: 0;
+  --ui-stream-audio-width: 100%;
+  --ui-stream-audio-control-width: 1fr;
+  --ui-stream-audio-control-min-height: 48px;
+  --ui-stream-text-input-min-height: 48px;
+  --ui-stream-performance-top: 66px;
+  --ui-stream-performance-left: 12px;
+  --ui-stream-performance-min-width: 0;
+  --ui-stream-performance-padding: 10px 12px;
+}
+
+:root[data-theme='light'] {
+  color-scheme: light;
+
+  --ui-page-text: #{$ui-page-text-light};
+  --ui-page-text-soft: #{$ui-page-text-soft-light};
+  --ui-page-glow: #{$ui-page-glow-light};
+  --ui-page-glow-soft: #{$ui-page-glow-soft-light};
+  --ui-page-glow-strong: #{$ui-page-glow-strong-light};
+
+  --ui-surface-panel: #{$ui-surface-panel-light};
+  --ui-surface-panel-strong: #{$ui-surface-panel-strong-light};
+  --ui-border-subtle: #{$ui-border-panel-light};
+  --ui-border-focus: #{$ui-focus-border-light};
+  --ui-focus-surface: #{$ui-focus-bg-light};
+  --ui-focus-shadow: #{$ui-focus-shadow-light};
+  --ui-border-placeholder: #{$ui-icon-placeholder-border-light};
+  --ui-surface-placeholder: #{$ui-icon-placeholder-bg-light};
+
+  --ui-nav-icon-filter: #{$ui-nav-icon-filter-light};
+
+  --ui-login-button-text: #{$ui-login-button-text-light};
+  --ui-login-button-border: #{$ui-login-button-border-light};
+  --ui-login-button-bg: #{$ui-login-button-bg-light};
+  --ui-login-button-bg-focused: #{$ui-login-button-bg-focused-light};
+  --ui-login-overlay-glow: #{$ui-login-overlay-glow-light};
+  --ui-login-overlay-gradient-top: #{$ui-login-overlay-gradient-top-light};
+  --ui-login-overlay-gradient-bottom: #{$ui-login-overlay-gradient-bottom-light};
+}
+
+// 公共页面骨架：页面只描述结构，不重复拼边框/背景/字号
+.ui-page-shell {
+  min-height: 100%;
+  padding-top: var(--ui-space-1);
+}
+
+.ui-page-section {
+  margin-bottom: var(--ui-space-2xl);
+}
+
+.ui-page-panel {
+  min-height: var(--ui-size-panel-min);
+  padding: var(--ui-space-lg);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--tile-radius);
+  background: var(--color-surface-1);
+}
+
+.ui-page-panel--spacious {
+  padding: var(--ui-space-xl);
+}
+
+.ui-page-panel[data-focused='true'] {
+  border-color: var(--color-focus-ring);
+  box-shadow: 0 0 0 var(--focus-ring-width) var(--color-focus-ring-outer) inset;
+}
+
+.ui-page-title {
+  font-size: var(--ui-text-title-md);
+  line-height: var(--ui-line-height-tight);
+  font-weight: var(--ui-font-weight-bold);
+  color: var(--ui-page-text);
+}
+
+.ui-page-body {
+  font-size: var(--ui-text-body-xl);
+  line-height: var(--ui-line-height-relaxed);
+  color: var(--ui-page-text-soft);
+}
+
+// 浮层与动作块：菜单、弹窗和登录动作区共用
+.ui-overlay-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ui-space-lg);
+  padding: var(--ui-space-5xl) var(--ui-space-5xl) var(--ui-space-4xl);
+  border: 1px solid var(--ui-border-subtle);
+  border-radius: calc(var(--ui-radius-lg) + var(--ui-space-1));
+  background: var(--ui-surface-panel-strong);
+  box-shadow:
+    0 19px 44px rgba(0, 0, 0, 0.42),
+    inset 0 -4px 13px rgba(255, 255, 255, 0.02);
+}
+
+.ui-action-block {
+  width: 100%;
+  border: 1px solid transparent;
+  border-radius: var(--btn-radius);
+  background: transparent;
+  color: var(--color-text-primary);
+  transition:
+    border-color var(--ui-motion-fast),
+    background-color var(--ui-motion-fast),
+    box-shadow var(--ui-motion-fast);
+}
+
+.ui-action-block[data-focused='true'] {
+  border-color: var(--color-focus-ring);
+  background: color-mix(in srgb, var(--color-state-hover) 72%, transparent);
+  box-shadow: 0 0 0 var(--focus-ring-width) var(--color-focus-ring-outer) inset;
+}
+
+.ui-action-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--ui-space-sm);
+  min-width: min(100%, var(--ui-content-max-sm));
+  height: var(--btn-height-md);
+  padding: 0 var(--ui-space-lg);
+  border: 1px solid var(--btn-border);
+  border-radius: var(--btn-radius);
+  background: var(--color-surface-1);
+  color: var(--color-text-primary);
+  font-size: var(--ui-text-body-sm);
+  font-weight: var(--ui-font-weight-bold);
+  line-height: var(--ui-line-height-tight);
+}
+
+.ui-action-button--brand {
+  border-color: var(--btn-border);
+  background: var(--btn-primary-bg);
+  color: var(--btn-primary-text);
+}
+
+.ui-action-button--brand[data-focused='true'] {
+  border-color: var(--color-focus-ring);
+  background: var(--btn-primary-bg-hover);
+  box-shadow: 0 0 0 var(--focus-ring-width) var(--color-focus-ring-outer) inset;
+}

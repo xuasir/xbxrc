@@ -2,15 +2,18 @@ use crate::{
     LogicalPadStateDto, OhMyGamepadKeyboardMappingDto, OhMyGamepadRouteTargetDto,
     OhMyGamepadSamplingConfigDto, OhMyGamepadSamplingPresetDto,
 };
+use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "kebab-case")]
 pub enum MultiControllerSamplingModeDto {
     #[default]
     Merge,
     PrimaryPreferred,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct MultiControllerSamplingStrategyDto {
     pub mode: MultiControllerSamplingModeDto,
     pub primary_device_id: Option<String>,
@@ -29,7 +32,8 @@ impl Default for MultiControllerSamplingStrategyDto {
     }
 }
 
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SimulatedGamepadDescriptorDto {
     pub device_id: String,
     pub name: String,

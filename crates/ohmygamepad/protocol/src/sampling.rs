@@ -1,11 +1,15 @@
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+use serde::{Deserialize, Serialize};
+
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "kebab-case")]
 pub enum OhMyGamepadStreamPushModeDto {
     #[default]
     OnChange,
     FixedRate,
 }
 
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "kebab-case")]
 pub enum OhMyGamepadSamplingPresetDto {
     PowerSaver,
     #[default]
@@ -14,7 +18,8 @@ pub enum OhMyGamepadSamplingPresetDto {
     MaxPrecision,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct OhMyGamepadSamplingConfigDto {
     pub backend_poll_rate_hz: u16,
     pub logical_pad_sample_rate_hz: u16,

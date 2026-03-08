@@ -11,7 +11,7 @@ use winit::{
     event_loop::{ControlFlow, EventLoop},
     window::WindowBuilder,
 };
-use xbxengine::XbxEngineRenderFrame;
+use xbxengine::{XbxEngineRenderFrame, XbxEngineRenderPixelData};
 use xbxengine_app::{
     build_window_title, SharedStateXbxEngineWindowHost, SharedXbxEngineWindowState, XbxEngineApp,
     XbxEngineAppHostBridge,
@@ -22,6 +22,11 @@ use xbxengine_protocol::{
 };
 
 fn main() {
+    xbxengine::set_configured_level(Some(xbxengine::XbxLogLevel::Info));
+    std::panic::set_hook(Box::new(|panic_info| {
+        xbxengine::xbx_log_error!("[xbxengine-app] FATAL PANIC: {}", panic_info);
+    }));
+
     let event_loop = EventLoop::new().expect("xbxengine event loop should initialize");
     let shared_window_state = SharedXbxEngineWindowState::default();
     let stdio_enabled = std::env::args().any(|arg| arg == "--stdio");
@@ -50,6 +55,7 @@ fn main() {
                         viewport_id: "bootstrap-viewport".to_string(),
                     },
                     audio_volume: 1.0,
+                    mode: None,
                 });
             if let Err(error) = runtime_start_result {
                 eprintln!("[xbxengine-app] runtime bootstrap failed: {error}");
@@ -70,52 +76,81 @@ fn main() {
         pollster::block_on(WgpuFrameRenderer::new(window)).expect("wgpu renderer should start");
     let mut bootstrap_frame_seq = 0_u64;
     let mut has_received_remote_frame = false;
+    let mut latest_uploaded_remote_frame_seq: Option<u64> = None;
     let mut stdio_mode = stdio_mode;
+
+    let mut last_bootstrap_update = std::time::Instant::now();
+    let mut last_tick_at = std::time::Instant::now();
 
     let _ = event_loop.run(move |event, event_loop_window_target| {
         event_loop_window_target.set_control_flow(ControlFlow::Wait);
 
         match event {
             Event::AboutToWait => {
-                if stdio_mode.is_none() {
-                    if let Ok(mut app) = app.lock() {
-                        app.tick();
-                        for runtime_event in app.drain_events() {
-                            eprintln!("runtime-event: {runtime_event:?}");
+                let now = std::time::Instant::now();
+                let mut rendered_real_frame = false;
+
+                if let Ok(mut app) = app.lock() {
+                    // 限制 tick 频率，每 100ms 一次即可，大幅减少主循环锁竞争。
+                    if now.duration_since(last_tick_at) >= std::time::Duration::from_millis(100) {
+                        if stdio_mode.is_none() {
+                            xbxengine::xbx_log_warn!("[xbxengine-app] app.tick start");
+                            app.tick();
+                            let _ = app.drain_events();
+                            last_tick_at = now;
+                            xbxengine::xbx_log_warn!("[xbxengine-app] app.tick end");
+                        }
+                    }
+
+                    if let Ok(Some(frame)) = app.take_latest_render_frame() {
+                        let frame_seq = frame.frame_seq;
+                        let is_new_frame = latest_uploaded_remote_frame_seq
+                            .map(|latest_seq| latest_seq != frame_seq)
+                            .unwrap_or(true);
+                        if is_new_frame {
+                            xbxengine::xbx_log_warn!("[xbxengine-app] received new frame seq={}", frame_seq);
+                            renderer.update_frame(frame);
+                            rendered_real_frame = true;
+                            has_received_remote_frame = true;
+                            latest_uploaded_remote_frame_seq = Some(frame_seq);
                         }
                     }
                 }
 
-                let window_state = shared_window_state.snapshot();
-
-                let mut rendered_real_frame = false;
-                if let Ok(mut app) = app.lock() {
-                    if let Ok(Some(frame)) = app.take_latest_render_frame() {
-                        renderer.update_frame(frame);
-                        rendered_real_frame = true;
-                        has_received_remote_frame = true;
+                // 测试图案只用于“首帧到来前”的占位。
+                // 仅在未收到真实帧且到达 33ms 周期时才请求更新。
+                let mut next_wait = now + std::time::Duration::from_millis(100); // 默认 100ms 后再 tick
+                
+                if !rendered_real_frame && !has_received_remote_frame {
+                    let elapsed = last_bootstrap_update.elapsed();
+                    if elapsed.as_millis() >= 33 {
+                        bootstrap_frame_seq = bootstrap_frame_seq.saturating_add(1);
+                        renderer.update_frame(build_bootstrap_frame(bootstrap_frame_seq));
+                        last_bootstrap_update = now;
+                        window.request_redraw();
+                        next_wait = now + std::time::Duration::from_millis(33);
+                    } else {
+                        next_wait = now + std::time::Duration::from_millis(33u128.saturating_sub(elapsed.as_millis()) as u64);
                     }
                 }
 
-                // 测试图案只用于“首帧到来前”的占位。
-                // 一旦已经收到远端真实帧，就继续保留上一张真实帧，避免因某一拍没有新帧而闪回 bootstrap。
-                if !rendered_real_frame && !has_received_remote_frame {
-                    bootstrap_frame_seq = bootstrap_frame_seq.saturating_add(1);
-                    renderer.update_frame(build_bootstrap_frame(bootstrap_frame_seq));
+                // 真实帧到来时立即请求重绘并保持唤醒
+                if rendered_real_frame {
+                    window.request_redraw();
+                    next_wait = now; // 尽可能快地处理下一帧
                 }
 
+                event_loop_window_target.set_control_flow(ControlFlow::WaitUntil(next_wait));
+
+                let window_state = shared_window_state.snapshot();
                 window.set_title(&build_window_title(&window_state));
-                // 仅在有新帧（真实帧或 bootstrap 动画帧）时请求 redraw，避免空转重绘。
-                if rendered_real_frame || !has_received_remote_frame {
-                    window.request_redraw();
-                }
             }
             Event::WindowEvent {
                 window_id,
                 event: WindowEvent::RedrawRequested,
             } if window_id == window.id() => {
                 if let Err(error) = renderer.render() {
-                    eprintln!("[xbxengine-app] render failed: {error}");
+                    xbxengine::xbx_log_error!("[xbxengine-app] render failed: {error}");
                 }
             }
             Event::WindowEvent { window_id, event } if window_id == window.id() => match event {
@@ -160,7 +195,9 @@ fn build_bootstrap_frame(frame_seq: u64) -> XbxEngineRenderFrame {
         height,
         frame_seq,
         rendered_at_ms: frame_seq as f64,
-        rgba_bytes: Arc::from(rgba_bytes),
+        pixel_data: XbxEngineRenderPixelData::Rgba {
+            bytes: Arc::from(rgba_bytes),
+        },
     }
 }
 
@@ -171,7 +208,6 @@ impl XbxEngineAppHostBridge for PrintlnHostBridge {
         &mut self,
         request: XbxEngineHostRequestDto,
     ) -> Result<XbxEngineHostResponseDto, xbxengine::XbxEngineRuntimeError> {
-        eprintln!("host-bridge request: {request:?}");
         match request {
             XbxEngineHostRequestDto::ExchangeOffer { .. } => {
                 Ok(XbxEngineHostResponseDto::OfferExchanged {

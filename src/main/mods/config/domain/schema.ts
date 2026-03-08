@@ -110,8 +110,6 @@ function createAppConfigSchema(fallback: AppConfig): z.ZodType<AppConfig> {
       integer: true,
       allowed: VALID_RESOLUTIONS
     }),
-    // xHome 自动连接主机 ID
-    xhome_auto_connect_server_id: createStringSchema(fallback.xhome_auto_connect_server_id),
     // xHome 码率模式（Auto / Custom）
     xhome_bitrate_mode: z.enum(['Auto', 'Custom']).default(fallback.xhome_bitrate_mode),
     // xHome 目标码率（Mb/s）
@@ -166,9 +164,7 @@ function createAppConfigSchema(fallback: AppConfig): z.ZodType<AppConfig> {
       )
       .default({ ...fallback.display_options }),
     // 是否启用 Vulkan
-    use_vulkan: createBooleanSchema(fallback.use_vulkan),
-    // 是否开启调试模式
-    debug: createBooleanSchema(fallback.debug)
+    use_vulkan: createBooleanSchema(fallback.use_vulkan)
   })
 }
 

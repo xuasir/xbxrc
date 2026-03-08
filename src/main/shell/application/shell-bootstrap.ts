@@ -51,9 +51,7 @@ export class ShellBootstrap {
 
     const launchSettings = this.getLaunchSettings()
     this.applyGpuSwitches(launchSettings.useVulkan)
-    this.rpcController.setStartupFlags(
-      resolveStartupFlags(process.argv, launchSettings.xhomeAutoConnectServerId)
-    )
+    this.rpcController.setStartupFlags(resolveStartupFlags(process.argv, ''))
 
     this.lifecycleManager.bind({
       rpcController: this.rpcController,
@@ -70,18 +68,13 @@ export class ShellBootstrap {
     const config = getConfigService().getByKeys([
       'fullscreen',
       'background_keepalive',
-      'use_vulkan',
-      'xhome_auto_connect_server_id'
+      'use_vulkan'
     ])
 
     return {
       fullscreen: config.fullscreen === true,
       backgroundKeepalive: config.background_keepalive === true,
-      useVulkan: config.use_vulkan === true,
-      xhomeAutoConnectServerId:
-        typeof config.xhome_auto_connect_server_id === 'string'
-          ? config.xhome_auto_connect_server_id
-          : ''
+      useVulkan: config.use_vulkan === true
     }
   }
 

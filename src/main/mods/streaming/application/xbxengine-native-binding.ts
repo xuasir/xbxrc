@@ -44,6 +44,15 @@ const XBXENGINE_NACK_RETRY_INTERVAL_MS_ENV = 'XBXENGINE_NACK_RETRY_INTERVAL_MS'
 const XBXENGINE_NACK_MAX_RETRY_COUNT_ENV = 'XBXENGINE_NACK_MAX_RETRY_COUNT'
 const XBXENGINE_RTT_DIAGNOSTICS_ENABLED_ENV = 'XBXENGINE_RTT_DIAGNOSTICS_ENABLED'
 const XBXENGINE_RTT_DIAGNOSTICS_LOG_INTERVAL_MS_ENV = 'XBXENGINE_RTT_DIAGNOSTICS_LOG_INTERVAL_MS'
+const XBXENGINE_RECOVERY_PRESET_ENV = 'XBXENGINE_RECOVERY_PRESET'
+
+const XBXENGINE_LOG_LEVEL_ENV = 'XBXENGINE_LOG_LEVEL'
+const XBXENGINE_NEGOTIATION_RESOLUTION_ENV = 'XBXENGINE_NEGOTIATION_RESOLUTION'
+const XBXENGINE_NEGOTIATION_BITRATE_KBPS_ENV = 'XBXENGINE_NEGOTIATION_BITRATE_KBPS'
+const XBXENGINE_VIDEO_JITTER_BUFFER_MIN_MS_ENV = 'XBXENGINE_VIDEO_JITTER_BUFFER_MIN_MS'
+const XBXENGINE_VIDEO_JITTER_BUFFER_MAX_MS_ENV = 'XBXENGINE_VIDEO_JITTER_BUFFER_MAX_MS'
+const XBXENGINE_VIDEO_JITTER_BUFFER_MAX_PACKETS_ENV = 'XBXENGINE_VIDEO_JITTER_BUFFER_MAX_PACKETS'
+
 const requireNativeModule = createRequire(import.meta.url)
 
 /**
@@ -146,7 +155,9 @@ class NapiXbxEngineNativeBinding implements XbxEngineNativeBinding {
       forcedRembKbps: webrtcConfig.forcedRembKbps ?? null,
       adaptiveRembEnabled: webrtcConfig.adaptiveRembEnabled ?? null,
       videoPipeline: webrtcConfig.videoPipeline ?? null,
-      rttDiagnostics: webrtcConfig.rttDiagnostics ?? null
+      rttDiagnostics: webrtcConfig.rttDiagnostics ?? null,
+      recoveryPreset: webrtcConfig.recoveryPreset ?? null,
+      recovery: webrtcConfig.recovery ?? null
     })
     this.addonBinding.setRuntimeConfigJson(JSON.stringify(runtimeConfig))
   }
@@ -363,10 +374,60 @@ function resolveXbxEngineRuntimeConfig(): Record<string, unknown> {
       typeof fileConfig.runtimeName === 'string' && fileConfig.runtimeName.trim().length > 0
         ? fileConfig.runtimeName
         : 'rust-owned',
+    logLevel:
+      parseEnvString(XBXENGINE_LOG_LEVEL_ENV) ??
+      parseConfigString(fileConfig, ['logLevel']) ??
+      'warn',
     webrtc: {
       // 强控码率仅接受 main 环境变量，不从文件继承，避免历史字段残留误限速。
       forcedRembKbps: parseEnvNumber(XBXENGINE_FORCE_REMB_KBPS_ENV),
       adaptiveRembEnabled: parseEnvBoolean(XBXENGINE_ADAPTIVE_REMB_ENABLED_ENV) ?? true,
+      negotiation: {
+        ...(isRecord(fileConfig.webrtc) && isRecord(fileConfig.webrtc.negotiation)
+          ? fileConfig.webrtc.negotiation
+          : {}),
+        targetResolutionWidth: (() => {
+          const res = parseEnvString(XBXENGINE_NEGOTIATION_RESOLUTION_ENV)
+          if (res) {
+            const parts = res.toLowerCase().split('x')
+            if (parts.length === 2) {
+              const width = parseInt(parts[0], 10)
+              if (!isNaN(width)) return width
+            }
+          }
+          return (
+            parseConfigNumber(fileConfig, ['webrtc', 'negotiation', 'targetResolutionWidth']) ??
+            1920
+          )
+        })(),
+        targetResolutionHeight: (() => {
+          const res = parseEnvString(XBXENGINE_NEGOTIATION_RESOLUTION_ENV)
+          if (res) {
+            const parts = res.toLowerCase().split('x')
+            if (parts.length === 2) {
+              const height = parseInt(parts[1], 10)
+              if (!isNaN(height)) return height
+            }
+          }
+          return (
+            parseConfigNumber(fileConfig, ['webrtc', 'negotiation', 'targetResolutionHeight']) ??
+            1080
+          )
+        })(),
+        videoBitrateKbps: (() => {
+          const envVal = parseEnvString(XBXENGINE_NEGOTIATION_BITRATE_KBPS_ENV)
+          if (envVal) {
+            const parts = envVal.split(',')
+            if (parts.length === 1) return parseInt(parts[0], 10)
+            if (parts.length === 3) return parseInt(parts[1], 10)
+          }
+          return (
+            parseConfigNumber(fileConfig, ['webrtc', 'negotiation', 'videoBitrateKbps']) ?? 15000
+          )
+        })(),
+        audioBitrateKbps:
+          parseConfigNumber(fileConfig, ['webrtc', 'negotiation', 'audioBitrateKbps']) ?? 128
+      },
       videoPipeline: {
         ...(isRecord(fileConfig.webrtc) && isRecord(fileConfig.webrtc.videoPipeline)
           ? fileConfig.webrtc.videoPipeline
@@ -382,7 +443,19 @@ function resolveXbxEngineRuntimeConfig(): Record<string, unknown> {
         nackMaxRetryCount:
           parseEnvNumber(XBXENGINE_NACK_MAX_RETRY_COUNT_ENV) ??
           parseConfigNumber(fileConfig, ['webrtc', 'videoPipeline', 'nackMaxRetryCount']) ??
-          5
+          5,
+        jitterBufferMinDelayMs:
+          parseEnvNumber(XBXENGINE_VIDEO_JITTER_BUFFER_MIN_MS_ENV) ??
+          parseConfigNumber(fileConfig, ['webrtc', 'videoPipeline', 'jitterBufferMinDelayMs']) ??
+          20,
+        jitterBufferMaxDelayMs:
+          parseEnvNumber(XBXENGINE_VIDEO_JITTER_BUFFER_MAX_MS_ENV) ??
+          parseConfigNumber(fileConfig, ['webrtc', 'videoPipeline', 'jitterBufferMaxDelayMs']) ??
+          30,
+        jitterBufferMaxPackets:
+          parseEnvNumber(XBXENGINE_VIDEO_JITTER_BUFFER_MAX_PACKETS_ENV) ??
+          parseConfigNumber(fileConfig, ['webrtc', 'videoPipeline', 'jitterBufferMaxPackets']) ??
+          1024
       },
       rttDiagnostics: {
         ...(isRecord(fileConfig.webrtc) && isRecord(fileConfig.webrtc.rttDiagnostics)
@@ -396,6 +469,32 @@ function resolveXbxEngineRuntimeConfig(): Record<string, unknown> {
           parseEnvNumber(XBXENGINE_RTT_DIAGNOSTICS_LOG_INTERVAL_MS_ENV) ??
           parseConfigNumber(fileConfig, ['webrtc', 'rttDiagnostics', 'logIntervalMs']) ??
           5000
+      },
+      recoveryPreset:
+        parseEnvString(XBXENGINE_RECOVERY_PRESET_ENV) ??
+        parseConfigString(fileConfig, ['webrtc', 'recoveryPreset']) ??
+        'cloud-conservative',
+      recovery: {
+        ...(isRecord(fileConfig.webrtc) && isRecord(fileConfig.webrtc.recovery)
+          ? fileConfig.webrtc.recovery
+          : {}),
+        firstFrameGraceMs:
+          parseConfigNumber(fileConfig, ['webrtc', 'recovery', 'firstFrameGraceMs']) ?? 8000,
+        keyframeRequestStallMs:
+          parseConfigNumber(fileConfig, ['webrtc', 'recovery', 'keyframeRequestStallMs']) ?? 1500,
+        decoderResetAfterKeyframeWaitMs:
+          parseConfigNumber(fileConfig, [
+            'webrtc',
+            'recovery',
+            'decoderResetAfterKeyframeWaitMs'
+          ]) ?? 500,
+        decoderResetRequestCooldownMs:
+          parseConfigNumber(fileConfig, ['webrtc', 'recovery', 'decoderResetRequestCooldownMs']) ??
+          1500,
+        reconnectStallMs:
+          parseConfigNumber(fileConfig, ['webrtc', 'recovery', 'reconnectStallMs']) ?? 4000,
+        stallRecoveryCooldownMs:
+          parseConfigNumber(fileConfig, ['webrtc', 'recovery', 'stallRecoveryCooldownMs']) ?? 6000
       }
     }
   }
@@ -450,6 +549,14 @@ function parseEnvBoolean(key: string): boolean | null {
   return null
 }
 
+function parseEnvString(key: string): string | null {
+  const value = process.env[key]
+  if (value === undefined || value.trim().length === 0) {
+    return null
+  }
+  return value.trim()
+}
+
 function parseConfigNumber(source: Record<string, unknown>, pathChain: string[]): number | null {
   const value = readNestedValue(source, pathChain)
   return typeof value === 'number' && Number.isFinite(value) ? value : null
@@ -458,6 +565,15 @@ function parseConfigNumber(source: Record<string, unknown>, pathChain: string[])
 function parseConfigBoolean(source: Record<string, unknown>, pathChain: string[]): boolean | null {
   const value = readNestedValue(source, pathChain)
   return typeof value === 'boolean' ? value : null
+}
+
+function parseConfigString(source: Record<string, unknown>, pathChain: string[]): string | null {
+  const value = readNestedValue(source, pathChain)
+  if (typeof value !== 'string') {
+    return null
+  }
+  const trimmed = value.trim()
+  return trimmed.length > 0 ? trimmed : null
 }
 
 function readNestedValue(source: Record<string, unknown>, pathChain: string[]): unknown {

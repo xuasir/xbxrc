@@ -137,22 +137,7 @@ export const CONFIG_GROUP_DEFINITIONS: Record<string, SettingGroupDefinition> = 
       {
         key: 'runtime',
         label: 'Runtime',
-        keys: ['background_keepalive', 'debug']
-      }
-    ]
-  },
-  auth: {
-    label: 'AUTH',
-    sections: [
-      {
-        key: 'provider',
-        label: 'Provider',
-        keys: ['use_msal']
-      },
-      {
-        key: 'region',
-        label: 'Region',
-        keys: ['force_region_ip']
+        keys: ['background_keepalive']
       }
     ]
   },
@@ -160,31 +145,54 @@ export const CONFIG_GROUP_DEFINITIONS: Record<string, SettingGroupDefinition> = 
     label: 'STREAMING',
     sections: [
       {
+        key: 'auth',
+        label: 'Authentication',
+        keys: ['use_msal', 'force_region_ip']
+      },
+      {
         key: 'video',
         label: 'Video',
         keys: ['resolution', 'codec', 'video_format', 'display_options', 'performance_style']
       },
       {
-        key: 'bitrate',
-        label: 'Bitrate',
-        keys: [
-          'xhome_bitrate_mode',
-          'xhome_bitrate',
-          'xcloud_bitrate_mode',
-          'xcloud_bitrate',
-          'audio_bitrate_mode',
-          'audio_bitrate'
-        ]
-      },
-      {
         key: 'audio',
         label: 'Audio',
-        keys: ['enable_audio_control']
+        keys: ['enable_audio_control', 'audio_bitrate_mode', 'audio_bitrate']
       },
       {
         key: 'session',
         label: 'Session',
-        keys: ['preferred_game_language', 'polling_rate', 'ipv6', 'stream_runtime_mode']
+        keys: ['preferred_game_language', 'ipv6', 'stream_runtime_mode']
+      }
+    ]
+  },
+  host: {
+    label: 'HOST',
+    sections: [
+      {
+        key: 'bitrate',
+        label: 'Bitrate',
+        keys: ['xhome_bitrate_mode', 'xhome_bitrate']
+      },
+      {
+        key: 'connection',
+        label: 'Connection',
+        keys: ['xhome_turn_fallback', 'power_on']
+      },
+      {
+        key: 'relay',
+        label: 'Relay',
+        keys: ['server_url', 'server_username', 'server_credential']
+      }
+    ]
+  },
+  xcloud: {
+    label: 'XCLOUD',
+    sections: [
+      {
+        key: 'bitrate',
+        label: 'Bitrate',
+        keys: ['xcloud_bitrate_mode', 'xcloud_bitrate']
       }
     ]
   },
@@ -194,22 +202,7 @@ export const CONFIG_GROUP_DEFINITIONS: Record<string, SettingGroupDefinition> = 
       {
         key: 'controller',
         label: 'Controller',
-        keys: ['vibration']
-      }
-    ]
-  },
-  xhome: {
-    label: 'XHOME',
-    sections: [
-      {
-        key: 'connection',
-        label: 'Connection',
-        keys: ['xhome_auto_connect_server_id', 'xhome_turn_fallback', 'power_on']
-      },
-      {
-        key: 'relay',
-        label: 'Relay',
-        keys: ['server_url', 'server_username', 'server_credential']
+        keys: ['polling_rate', 'vibration']
       }
     ]
   }
@@ -251,17 +244,12 @@ export const CONFIG_FIELD_DEFINITIONS: Record<string, SettingFieldDefinition> = 
     options: [
       {
         value: 1081,
-        label: 'Auto (1440p Max Quality)',
+        label: 'Auto (1080p HQ)',
         description: "The recommended setting for the user's device and subscription tier"
       },
       { value: 1080, label: '1080p', meta: '7 GB/hr' },
       { value: 720, label: '720p', meta: '3 GB/hr' }
     ]
-  },
-  xhome_auto_connect_server_id: {
-    label: 'Auto Connect Host',
-    description: 'xHome host ID for automatic connection',
-    control: 'textInput'
   },
   xhome_bitrate_mode: {
     label: 'xHome Bitrate Mode',
@@ -416,11 +404,6 @@ export const CONFIG_FIELD_DEFINITIONS: Record<string, SettingFieldDefinition> = 
   use_vulkan: {
     label: 'Use Vulkan',
     description: 'Enable the Vulkan rendering path',
-    control: 'toggle'
-  },
-  debug: {
-    label: 'Debug',
-    description: 'Enable debug mode',
     control: 'toggle'
   }
 }

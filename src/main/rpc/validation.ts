@@ -230,6 +230,30 @@ const rpcParamSchemas: Record<string, Record<string, ZodType>> = {
       .strict()
       .optional()
   },
+  streamHost: {
+    exchangeOffer: z
+      .object({
+        sessionId: z.string().min(1),
+        channel: z.enum(['media', 'chat']),
+        sdp: z.string().min(1),
+        restart: z.boolean().optional()
+      })
+      .strict(),
+    exchangeIce: z
+      .object({
+        sessionId: z.string().min(1),
+        candidates: z.array(streamingIceCandidateSchema),
+        restart: z.boolean().optional()
+      })
+      .strict(),
+    keepAliveRemoteSession: z.object({ sessionId: z.string().min(1) }).strict(),
+    closeRemoteSession: z
+      .object({
+        sessionId: z.string().min(1),
+        reason: z.string().optional()
+      })
+      .strict()
+  },
   xbxEngine: {
     startRuntime: z
       .object({

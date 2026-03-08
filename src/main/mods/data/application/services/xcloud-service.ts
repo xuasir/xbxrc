@@ -239,7 +239,8 @@ async function fetchJsonOrFallback<T>(
   try {
     return await fetchJson<T>(url, init, options)
   } catch (error) {
-    console.warn(`[Data] fallback to cached/default payload for ${url}:`, error)
+    // 目录接口网络波动时允许使用缓存/默认值兜底，测试阶段降级为 debug 避免噪声误导。
+    console.debug(`[Data] fallback to cached/default payload for ${url}:`, error)
     return fallback
   }
 }

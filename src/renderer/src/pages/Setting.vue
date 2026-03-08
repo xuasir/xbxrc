@@ -2,7 +2,6 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { Focusable } from '@spatial-navigation/vue'
 import { useI18n } from 'vue-i18n'
-import SpatialNavTabs from '../components/navigation/SpatialNavTabs.vue'
 import SettingDisplayOptionsSheet from '../components/settings/SettingDisplayOptionsSheet.vue'
 import SettingSingleSelectSheet from '../components/settings/SettingSingleSelectSheet.vue'
 import SettingToggleRow from '../components/settings/SettingToggleRow.vue'
@@ -31,6 +30,13 @@ interface SettingTabItem {
   key: SettingTabKey
   label: string
   nodeId: string
+}
+
+interface SettingTabNavItem extends SettingTabItem {
+  order: number
+  upNeighborId: string
+  downNeighborId?: string
+  rightNeighborId?: string
 }
 
 interface SettingRow {
@@ -88,18 +94,21 @@ function translateOrFallback(key: string, fallback: string): string {
 }
 
 function normalizeOptionValueForKey(value: string | number): string {
-  const normalizedValue = String(value).trim().toLowerCase().replace(/[^a-z0-9]+/g, '_')
+  const normalizedValue = String(value)
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
   return normalizedValue.length > 0 ? normalizedValue : 'empty'
 }
 
 function getTranslatedGroupLabel(groupKey: SettingTabKey): string {
-  return translateOrFallback(
-    `setting.groups.${groupKey}`,
-    CONFIG_GROUP_DEFINITIONS[groupKey].label
-  )
+  return translateOrFallback(`setting.groups.${groupKey}`, CONFIG_GROUP_DEFINITIONS[groupKey].label)
 }
 
-function getTranslatedSectionLabel(groupKey: SettingTabKey, section: SettingSectionDefinition): string {
+function getTranslatedSectionLabel(
+  groupKey: SettingTabKey,
+  section: SettingSectionDefinition
+): string {
   return translateOrFallback(`setting.sections.${groupKey}.${section.key}`, section.label)
 }
 
@@ -150,24 +159,24 @@ const tabs = computed<SettingTabItem[]>(() => [
     nodeId: SPATIAL_NAV_NODE_IDS.settingTabs.app
   },
   {
-    key: 'auth',
-    label: getTranslatedGroupLabel('auth'),
-    nodeId: SPATIAL_NAV_NODE_IDS.settingTabs.auth
-  },
-  {
     key: 'streaming',
     label: getTranslatedGroupLabel('streaming'),
     nodeId: SPATIAL_NAV_NODE_IDS.settingTabs.streaming
   },
   {
+    key: 'host',
+    label: getTranslatedGroupLabel('host'),
+    nodeId: SPATIAL_NAV_NODE_IDS.settingTabs.host
+  },
+  {
+    key: 'xcloud',
+    label: getTranslatedGroupLabel('xcloud'),
+    nodeId: SPATIAL_NAV_NODE_IDS.settingTabs.xcloud
+  },
+  {
     key: 'input',
     label: getTranslatedGroupLabel('input'),
     nodeId: SPATIAL_NAV_NODE_IDS.settingTabs.input
-  },
-  {
-    key: 'xhome',
-    label: getTranslatedGroupLabel('xhome'),
-    nodeId: SPATIAL_NAV_NODE_IDS.settingTabs.xhome
   }
 ])
 
@@ -229,6 +238,18 @@ const activeSectionRows = computed(() =>
 
 const activeGroupLabel = computed(() => getTranslatedGroupLabel(activeTabKey.value))
 const firstFocusableNodeId = computed(() => activeRows.value[0]?.nodeId)
+const tabNavItems = computed<SettingTabNavItem[]>(() => {
+  return tabs.value.map((tab, index, tabList) => ({
+    ...tab,
+    order: index,
+    upNeighborId:
+      index === 0
+        ? SPATIAL_NAV_NODE_IDS.topNav.setting
+        : (tabList[index - 1]?.nodeId ?? tab.nodeId),
+    downNeighborId: tabList[index + 1]?.nodeId ?? firstFocusableNodeId.value,
+    rightNeighborId: firstFocusableNodeId.value
+  }))
+})
 const activeValueEditorScopeId = computed(() =>
   activeValueEditorRow.value === null
     ? 'setting.value-editor.idle'
@@ -272,7 +293,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
-async function persistRowValue(row: SettingRow, nextValue: string | number | boolean): Promise<void> {
+async function persistRowValue(
+  row: SettingRow,
+  nextValue: string | number | boolean
+): Promise<void> {
   pendingActionKey.value = row.key
   try {
     await rpc.config.set({
@@ -404,10 +428,7 @@ async function handleValueEditorSubmit(rawValue: string): Promise<void> {
     return
   }
 
-  const nextValue =
-    row.control === 'numberInput'
-      ? Number(rawValue)
-      : rawValue
+  const nextValue = row.control === 'numberInput' ? Number(rawValue) : rawValue
 
   if (row.control === 'numberInput' && !Number.isFinite(nextValue)) {
     return
@@ -482,96 +503,121 @@ onUnmounted(() => {
 
 <template>
   <section class="setting-page ui-page-shell">
-    <div
-      class="setting-page__tabs-wrap"
-      :class="{ 'setting-page__tabs-wrap--scrolled': isContentScrolled }"
-    >
-      <div class="setting-page__tabs-inner">
-        <SpatialNavTabs
-          class="setting-page__tabs"
-          :scope-id="SPATIAL_NAV_SCOPE_IDS.appShell"
-          :tabs="tabs"
-          :active-key="activeTabKey"
-          :up-neighbor-id="SPATIAL_NAV_NODE_IDS.topNav.setting"
-          :down-neighbor-id="firstFocusableNodeId"
-          :aria-label="t('setting.aria.groups')"
-          @update:active-key="handleTabChange"
-        />
-      </div>
-    </div>
+    <div class="setting-page__layout">
+      <aside class="setting-sidebar" :aria-label="t('setting.aria.groups')">
+        <header class="setting-sidebar__header">
+          <h1 class="setting-sidebar__title">{{ t('setting.title') }}</h1>
+        </header>
 
-    <section
-      ref="settingPanelRef"
-      class="setting-panel"
-      :aria-label="t('setting.aria.panel', { group: activeGroupLabel })"
-      @scroll="syncScrolledState"
-    >
-      <div v-if="isLoading" class="setting-panel__state">{{ t('setting.states.loading') }}</div>
+        <nav class="setting-sidebar__nav">
+          <Focusable
+            v-for="tab in tabNavItems"
+            :id="tab.nodeId"
+            :key="tab.key"
+            as="button"
+            type="button"
+            class="setting-sidebar__tab"
+            :class="{ 'setting-sidebar__tab--active': activeTabKey === tab.key }"
+            :scope-id="SPATIAL_NAV_SCOPE_IDS.appShell"
+            :neighbors="{
+              up: tab.upNeighborId,
+              down: tab.downNeighborId,
+              right: tab.rightNeighborId
+            }"
+            :index="{ order: tab.order }"
+            :aria-label="tab.label"
+            :on-confirm="() => handleTabChange(tab.key)"
+            @click="() => handleTabChange(tab.key)"
+          >
+            <span class="setting-sidebar__tab-label">{{ tab.label }}</span>
+          </Focusable>
+        </nav>
+      </aside>
 
-      <div v-else-if="activeRows.length === 0" class="setting-panel__state">
-        {{ t('setting.states.emptyGroup') }}
-      </div>
-
-      <div v-else class="setting-panel__list">
-        <section
-          v-for="section in activeSectionRows"
-          :key="section.key"
-          class="setting-panel__section"
-          :aria-label="section.label"
+      <section
+        ref="settingPanelRef"
+        class="setting-panel"
+        :aria-label="t('setting.aria.panel', { group: activeGroupLabel })"
+        @scroll="syncScrolledState"
+      >
+        <header
+          class="setting-panel__header"
+          :class="{ 'setting-panel__header--scrolled': isContentScrolled }"
         >
-          <header class="setting-panel__section-header">
-            <h2 class="setting-panel__section-title">{{ section.label }}</h2>
-          </header>
+          <h1 class="setting-panel__group-title">{{ activeGroupLabel }}</h1>
+        </header>
 
-          <div class="setting-panel__section-body">
-            <template v-for="row in section.rows" :key="row.nodeId">
-              <SettingToggleRow
-                v-if="row.control === 'toggle'"
-                :id="row.nodeId"
-                :scope-id="SPATIAL_NAV_SCOPE_IDS.appShell"
-                :label="row.label"
-                :enabled="row.value === true"
-                :up-neighbor-id="
-                  row.index === 0
-                    ? SPATIAL_NAV_NODE_IDS.settingTabs[activeTabKey]
-                    : activeRows[row.index - 1]?.nodeId
-                "
-                :down-neighbor-id="activeRows[row.index + 1]?.nodeId"
-                :order="row.index"
-                @confirm="() => void handleRowConfirm(row)"
-              />
+        <div v-if="isLoading" class="setting-panel__state">{{ t('setting.states.loading') }}</div>
 
-              <Focusable
-                v-else
-                :id="row.nodeId"
-                as="button"
-                type="button"
-                class="setting-row"
-                :class="{ 'setting-row--select': row.control === 'singleSelect' }"
-                :scope-id="SPATIAL_NAV_SCOPE_IDS.appShell"
-                :neighbors="{
-                  up:
+        <div v-else-if="activeRows.length === 0" class="setting-panel__state">
+          {{ t('setting.states.emptyGroup') }}
+        </div>
+
+        <div v-else class="setting-panel__list">
+          <section
+            v-for="section in activeSectionRows"
+            :key="section.key"
+            class="setting-panel__section"
+            :aria-label="section.label"
+          >
+            <header class="setting-panel__section-header">
+              <h2 class="setting-panel__section-title">{{ section.label }}</h2>
+            </header>
+
+            <div class="setting-panel__section-body">
+              <template v-for="row in section.rows" :key="row.nodeId">
+                <SettingToggleRow
+                  v-if="row.control === 'toggle'"
+                  :id="row.nodeId"
+                  :scope-id="SPATIAL_NAV_SCOPE_IDS.appShell"
+                  :label="row.label"
+                  :enabled="row.value === true"
+                  :left-neighbor-id="SPATIAL_NAV_NODE_IDS.settingTabs[activeTabKey]"
+                  :up-neighbor-id="
                     row.index === 0
                       ? SPATIAL_NAV_NODE_IDS.settingTabs[activeTabKey]
-                      : activeRows[row.index - 1]?.nodeId,
-                  down: activeRows[row.index + 1]?.nodeId
-                }"
-                :index="{ order: row.index }"
-                :aria-label="row.label"
-                :on-confirm="() => void handleRowConfirm(row)"
-                @click="() => void handleRowConfirm(row)"
-              >
-                <span class="setting-row__copy">
-                  <span class="setting-row__label">{{ row.label }}</span>
-                  <span v-if="row.description" class="setting-row__desc">{{ row.description }}</span>
-                </span>
-                <span class="setting-row__value">{{ row.valueText }}</span>
-              </Focusable>
-            </template>
-          </div>
-        </section>
-      </div>
-    </section>
+                      : activeRows[row.index - 1]?.nodeId
+                  "
+                  :down-neighbor-id="activeRows[row.index + 1]?.nodeId"
+                  :order="row.index"
+                  @confirm="() => void handleRowConfirm(row)"
+                />
+
+                <Focusable
+                  v-else
+                  :id="row.nodeId"
+                  as="button"
+                  type="button"
+                  class="setting-row"
+                  :class="{ 'setting-row--select': row.control === 'singleSelect' }"
+                  :scope-id="SPATIAL_NAV_SCOPE_IDS.appShell"
+                  :neighbors="{
+                    up:
+                      row.index === 0
+                        ? SPATIAL_NAV_NODE_IDS.settingTabs[activeTabKey]
+                        : activeRows[row.index - 1]?.nodeId,
+                    down: activeRows[row.index + 1]?.nodeId,
+                    left: SPATIAL_NAV_NODE_IDS.settingTabs[activeTabKey]
+                  }"
+                  :index="{ order: row.index }"
+                  :aria-label="row.label"
+                  :on-confirm="() => void handleRowConfirm(row)"
+                  @click="() => void handleRowConfirm(row)"
+                >
+                  <span class="setting-row__copy">
+                    <span class="setting-row__label">{{ row.label }}</span>
+                    <span v-if="row.description" class="setting-row__desc">{{
+                      row.description
+                    }}</span>
+                  </span>
+                  <span class="setting-row__value">{{ row.valueText }}</span>
+                </Focusable>
+              </template>
+            </div>
+          </section>
+        </div>
+      </section>
+    </div>
 
     <SettingSingleSelectSheet
       :open="activeSingleSelectRow !== null"
@@ -644,77 +690,139 @@ onUnmounted(() => {
 <style scoped>
 .setting-page {
   position: relative;
-  display: flex;
-  flex-direction: column;
   min-height: 100%;
   height: 100%;
   overflow: hidden;
 }
 
-.setting-page__tabs-wrap {
-  position: relative;
-  z-index: 1;
-  flex: 0 0 auto;
-  padding: 0 var(--ui-page-inset);
+.setting-page__layout {
+  display: grid;
+  grid-template-columns: clamp(260px, 28vw, 340px) minmax(0, 1fr);
+  gap: 0;
+  min-height: 0;
+  height: 100%;
+  padding: 0;
+}
+
+.setting-sidebar {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 22px 16px 18px;
+  border-right: 1px solid var(--color-border-subtle);
+  background: color-mix(in srgb, var(--color-surface-2) 96%, #0a0f16 4%);
+}
+
+.setting-sidebar__header {
+  padding: 0 10px;
+}
+
+.setting-sidebar__title {
+  margin: 0;
+  font-size: clamp(34px, 3.6vw, 48px);
+  line-height: 1;
+  letter-spacing: -0.03em;
+  color: var(--color-text-primary);
+}
+
+.setting-sidebar__nav {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  overflow-y: auto;
+}
+
+.setting-sidebar__tab {
+  display: inline-flex;
+  align-items: center;
+  width: 100%;
+  min-height: 58px;
+  padding: 0 16px;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--color-text-secondary);
+  text-align: left;
   transition:
+    border-color var(--ui-motion-fast),
     background-color var(--ui-motion-fast),
     box-shadow var(--ui-motion-fast),
-    backdrop-filter var(--ui-motion-fast);
+    color var(--ui-motion-fast);
 }
 
-.setting-page__tabs-inner {
-  width: min(100%, var(--ui-settings-shell-max-width));
-  margin: 0 auto;
-  padding: 0 var(--ui-settings-side-padding);
+.setting-sidebar__tab:hover {
+  background: var(--color-state-hover);
 }
 
-.setting-page__tabs-wrap--scrolled {
-  background: color-mix(in srgb, var(--ui-surface-panel) 14%, transparent);
-  backdrop-filter: blur(12px) saturate(108%);
-  -webkit-backdrop-filter: blur(12px) saturate(108%);
-  box-shadow: inset 0 -1px 0 rgba(255, 255, 255, 0.04);
+.setting-sidebar__tab--active {
+  background: color-mix(in srgb, var(--color-surface-3) 82%, #5e6671 18%);
+  color: var(--color-text-primary);
 }
 
-.setting-page__tabs {
-  display: flex;
-  width: 100%;
-  padding: 0;
-  background: transparent;
-  overflow-x: auto;
+.setting-sidebar__tab[data-focused='true'] {
+  border-color: var(--color-focus-ring);
+  box-shadow: 0 0 0 var(--focus-ring-width) var(--color-focus-ring-outer) inset;
+}
+
+.setting-sidebar__tab-label {
+  font-size: 16px;
+  line-height: 1.2;
+  font-weight: var(--ui-font-weight-semibold);
 }
 
 .setting-panel {
-  flex: 1 1 auto;
   min-height: 0;
+  height: 100%;
   overflow-y: auto;
   overflow-x: hidden;
-  padding-top: 18px;
+  background: color-mix(in srgb, var(--color-bg) 86%, #0a1018 14%);
+}
+
+.setting-panel__header {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 44px 56px 16px;
+  background: color-mix(in srgb, var(--color-bg) 92%, transparent);
+}
+
+.setting-panel__header--scrolled {
+  box-shadow: inset 0 -1px 0 color-mix(in srgb, var(--color-border-subtle) 80%, transparent);
+}
+
+.setting-panel__group-title {
+  margin: 0;
+  font-size: clamp(28px, 3vw, 44px);
+  line-height: 1.02;
+  font-weight: var(--ui-font-weight-bold);
+  letter-spacing: -0.03em;
+  color: var(--color-text-primary);
 }
 
 .setting-panel__list {
-  width: min(100%, var(--ui-settings-shell-max-width));
-  margin: 0 auto;
-  padding: 0 var(--ui-settings-side-padding) 28px;
-  padding-bottom: 28px;
+  width: 100%;
+  margin: 0;
+  padding: 8px 56px 44px;
 }
 
 .setting-panel__section + .setting-panel__section {
-  margin-top: var(--ui-settings-section-gap);
+  margin-top: 28px;
 }
 
 .setting-panel__section-header {
-  margin-bottom: 8px;
-  padding: 0 12px;
+  margin-bottom: 10px;
+  padding: 0;
 }
 
 .setting-panel__section-title {
   margin: 0;
-  font-size: var(--ui-settings-section-title-size);
-  line-height: 1.2;
+  font-size: clamp(24px, 2.2vw, 34px);
+  line-height: 1.1;
   font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.48);
+  letter-spacing: -0.02em;
+  color: var(--color-text-primary);
 }
 
 .setting-panel__section-body {
@@ -723,11 +831,11 @@ onUnmounted(() => {
 }
 
 .setting-panel__state {
-  width: min(100%, var(--ui-settings-shell-max-width));
-  margin: 0 auto;
-  padding: 18px var(--ui-settings-side-padding) 0;
+  width: 100%;
+  margin: 0;
+  padding: 24px 56px;
   font-size: 13px;
-  color: var(--ui-page-text-soft);
+  color: var(--color-text-secondary);
 }
 
 .setting-row {
@@ -736,12 +844,12 @@ onUnmounted(() => {
   justify-content: space-between;
   gap: var(--ui-settings-row-gap);
   width: 100%;
-  min-height: var(--ui-settings-row-min-height);
-  padding: 6px 12px;
-  border: 1px solid transparent;
-  border-radius: var(--ui-radius-md);
+  min-height: 66px;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 10px;
   background: transparent;
-  color: var(--ui-page-text);
+  color: var(--color-text-primary);
   text-align: left;
   transition:
     border-color var(--ui-motion-fast),
@@ -760,55 +868,118 @@ onUnmounted(() => {
   font-size: var(--ui-settings-row-label-size);
   line-height: 1.15;
   font-weight: var(--ui-font-weight-medium);
-  color: rgba(255, 255, 255, 0.94);
+  color: var(--color-text-primary);
 }
 
 .setting-row__desc {
   font-size: var(--ui-settings-row-description-size);
   line-height: 1.3;
-  color: rgba(255, 255, 255, 0.54);
+  color: var(--color-text-tertiary);
 }
 
 .setting-row__value {
   flex: 0 0 auto;
   font-size: var(--ui-settings-row-value-size);
   line-height: 1.2;
-  color: rgba(255, 255, 255, 0.7);
+  color: var(--color-text-secondary);
 }
 
 .setting-row--select .setting-row__value {
-  color: rgba(255, 255, 255, 0.92);
+  color: var(--color-text-primary);
+}
+
+.setting-row--select .setting-row__value::after {
+  content: '›';
+  display: inline-block;
+  margin-left: 10px;
+  font-size: 20px;
+  line-height: 1;
+  color: var(--color-text-secondary);
+  transform: translateY(1px);
 }
 
 .setting-row:hover {
-  background: rgba(255, 255, 255, 0.04);
+  background: color-mix(in srgb, var(--color-state-hover) 66%, transparent);
 }
 
 .setting-row[data-focused='true'] {
-  border-color: var(--ui-border-focus);
-  background: color-mix(in srgb, var(--ui-focus-surface) 36%, transparent);
-  box-shadow: var(--ui-focus-ring-shadow);
+  background: color-mix(in srgb, var(--color-state-selected) 46%, transparent);
+  box-shadow: 0 0 0 var(--focus-ring-width) var(--color-focus-ring-outer) inset;
 }
 
-:global(html[data-ui-density='compact']) .setting-panel__list,
-:global(html[data-ui-density='narrow']) .setting-panel__list {
-  padding-bottom: 20px;
+:global(html[data-ui-density='compact']) .setting-page__layout {
+  grid-template-columns: clamp(220px, 26vw, 280px) minmax(0, 1fr);
 }
 
-:global(html[data-ui-density='compact']) .setting-panel__section-header,
-:global(html[data-ui-density='narrow']) .setting-panel__section-header {
-  margin-bottom: 6px;
+:global(html[data-ui-density='compact']) .setting-sidebar {
+  padding: 12px 10px;
+}
+
+:global(html[data-ui-density='compact']) .setting-sidebar__tab {
+  min-height: 46px;
   padding: 0 10px;
 }
 
-:global(html[data-ui-density='compact']) .setting-panel,
-:global(html[data-ui-density='narrow']) .setting-panel {
-  min-height: 100%;
+:global(html[data-ui-density='compact']) .setting-panel__header {
+  padding: 24px 28px 12px;
 }
 
-:global(html[data-ui-density='compact']) .setting-row,
-:global(html[data-ui-density='narrow']) .setting-row {
+:global(html[data-ui-density='compact']) .setting-panel__list {
+  padding: 10px 28px 20px;
+}
+
+:global(html[data-ui-density='compact']) .setting-panel__section-header {
+  margin-bottom: 6px;
+  padding: 0;
+}
+
+:global(html[data-ui-density='compact']) .setting-row {
   padding: 6px 10px;
+}
+
+:global(html[data-ui-density='narrow']) .setting-page__layout {
+  grid-template-columns: 1fr;
+}
+
+:global(html[data-ui-density='narrow']) .setting-sidebar {
+  gap: 10px;
+  border-right: 0;
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+
+:global(html[data-ui-density='narrow']) .setting-sidebar__header {
+  padding: 0 6px;
+}
+
+:global(html[data-ui-density='narrow']) .setting-sidebar__title {
+  font-size: 28px;
+}
+
+:global(html[data-ui-density='narrow']) .setting-sidebar__nav {
+  flex-direction: row;
+  gap: 8px;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+:global(html[data-ui-density='narrow']) .setting-sidebar__tab {
+  width: auto;
+  min-width: max-content;
+  min-height: 42px;
+  padding: 0 12px;
+}
+
+:global(html[data-ui-density='narrow']) .setting-sidebar__tab-label {
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+:global(html[data-ui-density='narrow']) .setting-panel__header {
+  padding: 18px 16px 10px;
+}
+
+:global(html[data-ui-density='narrow']) .setting-panel__list {
+  padding: 8px 16px 18px;
 }
 
 :global(html[data-ui-density='narrow']) .setting-row {

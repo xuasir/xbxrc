@@ -7,7 +7,6 @@ export interface ShellLaunchSettings {
   fullscreen: boolean
   backgroundKeepalive: boolean
   useVulkan: boolean
-  xhomeAutoConnectServerId: string
 }
 
 /**

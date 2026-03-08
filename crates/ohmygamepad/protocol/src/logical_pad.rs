@@ -1,15 +1,21 @@
 use crate::OhMyGamepadRouteTargetDto;
+use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 pub enum LogicalPadId {
     #[default]
+    #[serde(rename = "pad-0")]
     Pad0,
+    #[serde(rename = "pad-1")]
     Pad1,
+    #[serde(rename = "pad-2")]
     Pad2,
+    #[serde(rename = "pad-3")]
     Pad3,
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "kebab-case")]
 pub enum LogicalButtonDto {
     South,
     East,
@@ -30,13 +36,15 @@ pub enum LogicalButtonDto {
     DpadRight,
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct LogicalStickDto {
     pub x: f32,
     pub y: f32,
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct LogicalButtonsStateDto {
     pub south: f32,
     pub east: f32,
@@ -57,7 +65,8 @@ pub struct LogicalButtonsStateDto {
     pub dpad_right: f32,
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct LogicalPadStateDto {
     pub buttons: LogicalButtonsStateDto,
     pub left_stick: LogicalStickDto,
@@ -66,7 +75,8 @@ pub struct LogicalPadStateDto {
     pub right_trigger: f32,
 }
 
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default, Deserialize, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct LogicalPadSnapshotDto {
     pub pad_id: LogicalPadId,
     pub device_ids: Vec<String>,

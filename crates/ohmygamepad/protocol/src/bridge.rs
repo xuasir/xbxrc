@@ -3,8 +3,10 @@ use crate::{
     OhMyGamepadDeviceDto, OhMyGamepadKeyboardMappingDto, OhMyGamepadRouteTargetDto,
     OhMyGamepadSamplingConfigDto, SimulatedGamepadDescriptorDto,
 };
+use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default, Deserialize, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct OhMyGamepadRuntimeSnapshotDto {
     pub devices: Vec<OhMyGamepadDeviceDto>,
     pub bindings: Vec<LogicalPadBindingDto>,

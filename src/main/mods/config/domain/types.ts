@@ -12,7 +12,6 @@ export interface AppConfig {
   use_msal: boolean
   fullscreen: boolean
   resolution: number
-  xhome_auto_connect_server_id: string
   xhome_bitrate_mode: ConfigBitrateMode
   xhome_bitrate: number
   xhome_turn_fallback: boolean
@@ -37,7 +36,6 @@ export interface AppConfig {
   background_keepalive: boolean
   display_options: DisplayOptions
   use_vulkan: boolean
-  debug: boolean
 }
 
 export type AppConfigKey = keyof AppConfig
@@ -47,7 +45,6 @@ export const APP_CONFIG_KEYS = [
   'use_msal',
   'fullscreen',
   'resolution',
-  'xhome_auto_connect_server_id',
   'xhome_bitrate_mode',
   'xhome_bitrate',
   'xhome_turn_fallback',
@@ -71,49 +68,43 @@ export const APP_CONFIG_KEYS = [
   'server_credential',
   'background_keepalive',
   'display_options',
-  'use_vulkan',
-  'debug'
+  'use_vulkan'
 ] as const satisfies readonly AppConfigKey[]
 
-export type ConfigAppGroup = Pick<
-  AppConfig,
-  'locale' | 'fullscreen' | 'background_keepalive' | 'use_vulkan' | 'debug'
->
-export type ConfigAuthGroup = Pick<AppConfig, 'use_msal' | 'force_region_ip'>
+export type ConfigAppGroup = Pick<AppConfig, 'locale' | 'fullscreen' | 'background_keepalive' | 'use_vulkan'>
 export type ConfigStreamingGroup = Pick<
   AppConfig,
   | 'resolution'
-  | 'xhome_bitrate_mode'
-  | 'xhome_bitrate'
-  | 'xcloud_bitrate_mode'
-  | 'xcloud_bitrate'
+  | 'use_msal'
+  | 'force_region_ip'
   | 'audio_bitrate_mode'
   | 'audio_bitrate'
   | 'enable_audio_control'
   | 'preferred_game_language'
   | 'codec'
-  | 'polling_rate'
   | 'video_format'
   | 'ipv6'
   | 'performance_style'
   | 'stream_runtime_mode'
   | 'display_options'
 >
-export type ConfigInputGroup = Pick<AppConfig, 'vibration'>
-export type ConfigXhomeGroup = Pick<
+export type ConfigHostGroup = Pick<
   AppConfig,
-  | 'xhome_auto_connect_server_id'
+  | 'xhome_bitrate_mode'
+  | 'xhome_bitrate'
   | 'xhome_turn_fallback'
   | 'power_on'
   | 'server_url'
   | 'server_username'
   | 'server_credential'
 >
+export type ConfigXcloudGroup = Pick<AppConfig, 'xcloud_bitrate_mode' | 'xcloud_bitrate'>
+export type ConfigInputGroup = Pick<AppConfig, 'polling_rate' | 'vibration'>
 
 export interface AppConfigGroups {
   app: ConfigAppGroup
-  auth: ConfigAuthGroup
   streaming: ConfigStreamingGroup
+  host: ConfigHostGroup
+  xcloud: ConfigXcloudGroup
   input: ConfigInputGroup
-  xhome: ConfigXhomeGroup
 }

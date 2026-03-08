@@ -9,7 +9,7 @@ use xbxengine::{
 };
 use xbxengine_protocol::{
     XbxEngineControlCommandDto, XbxEngineHostRequestDto, XbxEngineHostResponseDto,
-    XbxEngineRuntimeEventDto,
+    XbxEngineRuntimeEventDto, XbxEngineStatsDto,
 };
 
 pub use window::*;
@@ -144,6 +144,10 @@ impl XbxEngineApp {
 
     pub fn snapshot(&self) -> &XbxEngineRuntimeSnapshot {
         self.runtime.snapshot()
+    }
+
+    pub fn snapshot_stats(&self) -> XbxEngineStatsDto {
+        self.runtime.snapshot_stats()
     }
 
     pub fn tick(&mut self) {

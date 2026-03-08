@@ -1,0 +1,17 @@
+<!doctype html>
+<html>
+
+<head>
+  <meta charset="UTF-8" />
+  <title>Electron</title>
+  <!-- https://developer.mozilla.org/en-US/docs/Web/HTTP/CSP -->
+  <meta http-equiv="Content-Security-Policy"
+    content="default-src 'self' ipc: http://ipc.localhost:*; connect-src 'self' ipc: http://ipc.localhost:*; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' https: data: blob: asset:;" />
+</head>
+
+<body>
+  <div id="app"></div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+
+</html>
