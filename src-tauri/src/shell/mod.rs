@@ -1,6 +1,5 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex as StdMutex};
-use std::time::Duration;
 use tauri::{AppHandle, Manager};
 use tauri_plugin_keepawake::TauriPluginKeepawakeExt;
 use tokio::sync::{Mutex, RwLock};
@@ -57,15 +56,21 @@ async fn load_startup_flags(app: &tauri::App) -> AppResult<Arc<RwLock<StartupFla
         "use_vulkan".to_string(),
     ];
 
-    if let Ok(config_values) = config_service.get_by_keys(&keys) {
-        let cfg_fullscreen = config_values
-            .get("fullscreen")
-            .and_then(|value| value.as_bool())
-            .unwrap_or_else(|| {
-                log::warn!("Config 'fullscreen' missing or invalid, using default: false");
-                false
-            });
-        flags.fullscreen = flags.fullscreen || cfg_fullscreen;
+    match config_service.get_by_keys(&keys) {
+        Ok(config_values) => {
+            let cfg_fullscreen = config_values
+                .get("fullscreen")
+                .and_then(|value| value.as_bool())
+                .unwrap_or_else(|| {
+                    log::warn!("Config 'fullscreen' missing or invalid, using default: false");
+                    false
+                });
+            flags.fullscreen = flags.fullscreen || cfg_fullscreen;
+        }
+        Err(error) => {
+            // 配置读取失败不阻断启动，使用启动参数默认值继续运行。
+            log::warn!("Failed to load startup config values: {}", error);
+        }
     }
 
     Ok(Arc::new(RwLock::new(flags)))
@@ -246,11 +251,22 @@ async fn bind_background_tasks(app_handle: &AppHandle, state: &AppState) -> AppR
 pub async fn terminate(app_handle: &AppHandle) {
     log::info!("Starting application termination...");
 
-    // 获取全局状态
-    let state = app_handle.state::<AppState>();
+    // setup 失败等极端场景下，状态可能尚未注入，直接释放 OS 资源后返回。
+    let Some(state) = app_handle.try_state::<AppState>() else {
+        let _ = app_handle.tauri_plugin_keepawake().stop(app_handle);
+        log::warn!("AppState is not available during terminate, skipped runtime shutdown.");
+        return;
+    };
 
-    // 1. set_quitting_flag
-    state.is_quitting.store(true, Ordering::Relaxed);
+    // 幂等退出：只允许第一条路径执行完整收敛流程。
+    if state
+        .is_quitting
+        .compare_exchange(false, true, Ordering::Relaxed, Ordering::Relaxed)
+        .is_err()
+    {
+        log::info!("Termination already in progress, skipping duplicated request.");
+        return;
+    }
 
     // 2. shutdown_runtime_services (按依赖反序关闭)
     state.gamepad.shutdown();

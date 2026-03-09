@@ -1,5 +1,4 @@
 use tauri::Manager;
-use tauri_plugin_keepawake::TauriPluginKeepawakeExt;
 
 pub mod error;
 pub mod event_bridge;
@@ -18,7 +17,7 @@ fn greet(name: &str) -> String {
 pub fn run() {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
 
-    tauri::Builder::default()
+    let app = tauri::Builder::default()
         .plugin(tauri_plugin_store::Builder::new().build())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_fs::init())
@@ -40,24 +39,32 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![greet, shell::rpc::rpc_invoke])
-        .build(tauri::generate_context!())
-        .expect("error while building tauri application")
-        .run(|app_handle, event| {
-            #[cfg(target_os = "macos")]
-            {
-                if let tauri::RunEvent::Reopen { .. } = event {
-                    if let Some(window) = app_handle.get_webview_window("main") {
-                        let _ = window.show();
-                        let _ = window.set_focus();
-                    }
+        .build(tauri::generate_context!());
+
+    let app = match app {
+        Ok(app) => app,
+        Err(error) => {
+            log::error!("Failed to build tauri application: {}", error);
+            return;
+        }
+    };
+
+    app.run(|app_handle, event| {
+        #[cfg(target_os = "macos")]
+        {
+            if let tauri::RunEvent::Reopen { .. } = event {
+                if let Some(window) = app_handle.get_webview_window("main") {
+                    let _ = window.show();
+                    let _ = window.set_focus();
                 }
             }
+        }
 
-            if matches!(
-                event,
-                tauri::RunEvent::ExitRequested { .. } | tauri::RunEvent::Exit
-            ) {
+        match event {
+            tauri::RunEvent::ExitRequested { .. } | tauri::RunEvent::Exit => {
                 tauri::async_runtime::block_on(shell::terminate(app_handle));
             }
-        });
+            _ => {}
+        }
+    });
 }
