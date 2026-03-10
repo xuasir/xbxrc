@@ -67,7 +67,6 @@ tauri-plugin-keepawake = "0.1.1"
 tokio.workspace = true
 
 xbxengine = { path = "../crates/xbxengine/core" }
-xbxengine-app = { path = "../crates/xbxengine/app" }
 xbxengine-protocol = { path = "../crates/xbxengine/protocol" }
 xbox-webapi = { path = "../crates/xbox-webapi" }
 ohmygamepad-host = { path = "../crates/ohmygamepad/bridge/host" }

@@ -2,8 +2,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex as StdMutex};
 use tauri::{AppHandle, Manager};
 use tauri_plugin_keepawake::TauriPluginKeepawakeExt;
-use tokio::sync::{Mutex, RwLock};
-use xbxengine_app::NoopXbxEngineAppHostBridge;
+use tokio::sync::RwLock;
 
 use crate::error::{AppError, AppResult};
 use crate::mods;
@@ -16,7 +15,7 @@ pub mod rpc;
 pub mod state;
 pub mod window;
 
-pub use bridge::PrintlnHostBridge;
+pub use bridge::{NoopTauriEngineWindowHost, TauriEngineEventBridge, TauriEngineWindowHost};
 pub use cli::parse_startup_flags;
 pub use state::{AppState, StartupFlagsState};
 pub use window::build_external_link_patch_script;
@@ -24,29 +23,23 @@ pub use window::build_external_link_patch_script;
 #[cfg(target_os = "macos")]
 pub use window::handle_macos_window_event;
 
-/// 初始化所有服务和状态
 pub async fn init_services(app: &mut tauri::App) -> AppResult<()> {
     log::info!("Starting application initialization...");
 
-    // 1. load_startup_flags
     let startup_flags = load_startup_flags(app).await?;
 
-    // 2. build_services
     let state = build_services(app, startup_flags.clone()).await?;
 
-    // 3. bind_background_tasks
     bind_background_tasks(app.handle(), &state).await?;
     log::info!("Application initialization completed.");
 
     Ok(())
 }
 
-/// 1. 加载启动标志与配置
 async fn load_startup_flags(app: &tauri::App) -> AppResult<Arc<RwLock<StartupFlagsState>>> {
     let mut flags = parse_startup_flags();
     let app_handle = app.handle();
 
-    // 从配置中读取持久化设置
     let config_repository = ConfigRepository::new(app_handle.clone());
     let config_service = mods::config::ConfigService::new(config_repository);
 
@@ -68,7 +61,6 @@ async fn load_startup_flags(app: &tauri::App) -> AppResult<Arc<RwLock<StartupFla
             flags.fullscreen = flags.fullscreen || cfg_fullscreen;
         }
         Err(error) => {
-            // 配置读取失败不阻断启动，使用启动参数默认值继续运行。
             log::warn!("Failed to load startup config values: {}", error);
         }
     }
@@ -76,7 +68,6 @@ async fn load_startup_flags(app: &tauri::App) -> AppResult<Arc<RwLock<StartupFla
     Ok(Arc::new(RwLock::new(flags)))
 }
 
-/// 2. 构建服务并同步依赖
 async fn build_services(
     app: &mut tauri::App,
     startup_flags: Arc<RwLock<StartupFlagsState>>,
@@ -85,7 +76,6 @@ async fn build_services(
     let is_quitting = Arc::new(AtomicBool::new(false));
     let last_runtime_event = Arc::new(StdMutex::new(None));
 
-    // a. 基础配置与认证
     let config_repository = ConfigRepository::new(app_handle.clone());
     let config_service = Arc::new(mods::config::ConfigService::new(config_repository));
     let config_provider: mods::config::ConfigProviderRef = config_service.clone();
@@ -96,7 +86,6 @@ async fn build_services(
     ));
     let auth_provider: mods::auth::AuthProviderRef = auth_service.clone();
 
-    // b. 数据与流控
     let data_service = Arc::new(mods::data::DataService::new(
         app_handle.clone(),
         auth_provider.clone(),
@@ -107,18 +96,7 @@ async fn build_services(
         config_provider.clone(),
     ));
 
-    // c. 引擎与输入
-    let engine = Arc::new(Mutex::new(xbxengine_app::XbxEngineApp::with_runtime_hosts(
-        Box::new(NoopXbxEngineAppHostBridge),
-        Box::new(xbxengine::OhMyGamepadXbxEngineInputBackend::new()),
-        Box::new(PrintlnHostBridge {
-            app_handle: app_handle.clone(),
-            state: Default::default(),
-            last_runtime_event: last_runtime_event.clone(),
-        }),
-    )));
-    let xbxengine_service = Arc::new(mods::xbxengine::XbxEngineService::new(
-        engine.clone(),
+    let xbxengine_service = Arc::new(mods::xbxengine::PlaceholderXbxEngineService::new(
         last_runtime_event.clone(),
     ));
 
@@ -129,7 +107,6 @@ async fn build_services(
         gamepad_host.clone(),
     ));
 
-    // d. 全局状态编排器
     let app_state_service: mods::app_state::AppStateProviderRef =
         Arc::new(mods::app_state::AppStateService::new(
             app_handle.clone(),
@@ -149,10 +126,8 @@ async fn build_services(
         is_quitting,
     };
 
-    // 注入 Tauri 状态
     app.manage(state.clone());
 
-    // 应用窗口初始状态
     if let Some(main_window) = app_handle.get_webview_window("main") {
         let fullscreen = state.startup_flags.read().await.fullscreen;
         let _ = main_window.set_fullscreen(fullscreen);
@@ -161,9 +136,7 @@ async fn build_services(
     Ok(state)
 }
 
-/// 3. 绑定后台任务与订阅
 async fn bind_background_tasks(app_handle: &AppHandle, state: &AppState) -> AppResult<()> {
-    // a. 异步认证恢复
     let auth = state.auth.clone();
     let app_handle_clone = app_handle.clone();
     tauri::async_runtime::spawn(async move {
@@ -181,10 +154,8 @@ async fn bind_background_tasks(app_handle: &AppHandle, state: &AppState) -> AppR
         }
     });
 
-    // b. 引擎 Tick 循环 (具备退出检查)
     state.xbxengine.bind_tasks(state.is_quitting.clone());
 
-    // c. Gamepad 事件订阅 (具备退出检查)
     let gamepad_host = ohmygamepad_host::GamepadRuntimeHost::shared()
         .map_err(|e| AppError::Internal(format!("Failed to get gamepad host: {}", e)))?;
     let app_handle_gamepad = app_handle.clone();
@@ -192,7 +163,7 @@ async fn bind_background_tasks(app_handle: &AppHandle, state: &AppState) -> AppR
     tauri::async_runtime::spawn(async move {
         let rx = gamepad_host.subscribe_runtime_snapshot();
         let mut last_high_freq_emit = std::time::Instant::now();
-        let throttle_ms = 20; // 约 50Hz，对于 UI 反馈足够
+        let throttle_ms = 20;
 
         while !is_quitting_gamepad.load(Ordering::Relaxed) {
             if let Ok(snapshot) = rx.recv() {
@@ -237,7 +208,6 @@ async fn bind_background_tasks(app_handle: &AppHandle, state: &AppState) -> AppR
         log::info!("Gamepad subscription loop stopped.");
     });
 
-    // d. 阻止休眠
     let _ = app_handle.tauri_plugin_keepawake().start(
         app_handle,
         Some(tauri_plugin_keepawake::KeepAwakeConfig {
@@ -250,18 +220,15 @@ async fn bind_background_tasks(app_handle: &AppHandle, state: &AppState) -> AppR
     Ok(())
 }
 
-/// 退出流程收敛函数
 pub async fn terminate(app_handle: &AppHandle) {
     log::info!("Starting application termination...");
 
-    // setup 失败等极端场景下，状态可能尚未注入，直接释放 OS 资源后返回。
     let Some(state) = app_handle.try_state::<AppState>() else {
         let _ = app_handle.tauri_plugin_keepawake().stop(app_handle);
         log::warn!("AppState is not available during terminate, skipped runtime shutdown.");
         return;
     };
 
-    // 幂等退出：只允许第一条路径执行完整收敛流程。
     if state
         .is_quitting
         .compare_exchange(false, true, Ordering::Relaxed, Ordering::Relaxed)
@@ -271,12 +238,10 @@ pub async fn terminate(app_handle: &AppHandle) {
         return;
     }
 
-    // 2. shutdown_runtime_services (按依赖反序关闭)
     state.gamepad.shutdown();
     state.xbxengine.shutdown().await;
     state.streaming.shutdown().await;
 
-    // 3. release_os_resources
     let _ = app_handle.tauri_plugin_keepawake().stop(app_handle);
 
     log::info!("Application termination completed.");

@@ -2,10 +2,9 @@ pub mod events;
 pub mod rpc;
 pub mod service;
 
-pub use service::XbxEngineService;
+pub use service::PlaceholderXbxEngineService;
 
 use async_trait::async_trait;
-use serde_json::Value;
 use std::sync::Arc;
 
 use crate::error::AppResult;

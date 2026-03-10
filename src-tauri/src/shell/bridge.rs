@@ -2,16 +2,48 @@ use crate::event_bridge;
 use crate::mods::xbxengine::events;
 use std::sync::{Arc, Mutex as StdMutex};
 use tauri::AppHandle;
-use xbxengine_app::{XbxEngineWindowHost, XbxEngineWindowState};
 use xbxengine_protocol::XbxEngineRuntimeEventDto;
 
-pub struct PrintlnHostBridge {
+#[derive(Clone, Debug, Default)]
+pub struct TauriEngineWindowState {
+    pub title: String,
+    pub surface_id: Option<String>,
+    pub video_size: Option<(u32, u32)>,
+    pub runtime_phase: Option<xbxengine_protocol::XbxEngineRuntimePhaseDto>,
+    pub transport_state: Option<xbxengine_protocol::XbxEngineTransportStateDto>,
+    pub last_error: Option<String>,
+}
+
+pub trait TauriEngineWindowHost: Send {
+    fn open_window(&mut self, title: &str);
+    fn apply_event(&mut self, event: &XbxEngineRuntimeEventDto);
+    fn snapshot(&self) -> TauriEngineWindowState;
+}
+
+#[derive(Default)]
+pub struct NoopTauriEngineWindowHost {
+    state: TauriEngineWindowState,
+}
+
+impl TauriEngineWindowHost for NoopTauriEngineWindowHost {
+    fn open_window(&mut self, title: &str) {
+        self.state.title = title.to_string();
+    }
+
+    fn apply_event(&mut self, _event: &XbxEngineRuntimeEventDto) {}
+
+    fn snapshot(&self) -> TauriEngineWindowState {
+        self.state.clone()
+    }
+}
+
+pub struct TauriEngineEventBridge {
     pub app_handle: AppHandle,
-    pub state: XbxEngineWindowState,
+    pub state: TauriEngineWindowState,
     pub last_runtime_event: Arc<StdMutex<Option<serde_json::Value>>>,
 }
 
-impl XbxEngineWindowHost for PrintlnHostBridge {
+impl TauriEngineWindowHost for TauriEngineEventBridge {
     fn open_window(&mut self, title: &str) {
         self.state.title = title.to_string();
     }
@@ -45,7 +77,7 @@ impl XbxEngineWindowHost for PrintlnHostBridge {
         }
     }
 
-    fn snapshot(&self) -> XbxEngineWindowState {
+    fn snapshot(&self) -> TauriEngineWindowState {
         self.state.clone()
     }
 }

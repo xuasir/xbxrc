@@ -4,22 +4,19 @@ members = [
   "crates/ohmygamepad/core",
   "crates/ohmygamepad/bridge/host",
   "crates/ohmygamepad/backends/gilrs",
-  "crates/ohmygamepad/bridge/napi",
   "crates/ohmygamepad/backends/hid-dualsense",
   "crates/ohmygamepad/backends/win-xbox-haptics",
   "crates/xbxengine/protocol",
   "crates/xbxengine/core",
-  "crates/xbxengine/api",
-  "crates/xbxengine/app",
   "crates/xbox-webapi",
   "src-tauri",
+  "archived/xbxengine-app",
 ]
 default-members = [ "src-tauri" ]
 resolver = "2"
 
 [workspace.package]
 edition = "2021"
-# 跟随当前已验证通过的工具链，避免本地 Rust 版本继续漂移。
 rust-version = "1.93"
 license = "MIT"
 authors = [ "xuasir" ]
