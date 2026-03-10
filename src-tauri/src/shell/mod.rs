@@ -6,7 +6,6 @@ use tokio::sync::RwLock;
 
 use crate::error::{AppError, AppResult};
 use crate::mods;
-use crate::mods::config::repository::ConfigRepository;
 use crate::mods::{auth::events as auth_events, gamepad::events as gamepad_events};
 
 pub mod bridge;
@@ -40,8 +39,7 @@ async fn load_startup_flags(app: &tauri::App) -> AppResult<Arc<RwLock<StartupFla
     let mut flags = parse_startup_flags();
     let app_handle = app.handle();
 
-    let config_repository = ConfigRepository::new(app_handle.clone());
-    let config_service = mods::config::ConfigService::new(config_repository);
+    let config_service = mods::config::ConfigService::new(app_handle.clone());
 
     let keys = vec![
         "fullscreen".to_string(),
@@ -76,8 +74,7 @@ async fn build_services(
     let is_quitting = Arc::new(AtomicBool::new(false));
     let last_runtime_event = Arc::new(StdMutex::new(None));
 
-    let config_repository = ConfigRepository::new(app_handle.clone());
-    let config_service = Arc::new(mods::config::ConfigService::new(config_repository));
+    let config_service = Arc::new(mods::config::ConfigService::new(app_handle.clone()));
     let config_provider: mods::config::ConfigProviderRef = config_service.clone();
 
     let auth_service = Arc::new(mods::auth::AuthService::new(

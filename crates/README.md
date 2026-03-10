@@ -66,10 +66,13 @@
 
 - 输入继续复用 `ohmygamepad-*`
 - gamepad owner 当前固定为 Rust 侧单实例 `ohmygamepad-host`
-- 宿主桥固定为 `Tauri`
+- 主线宿主目标固定为 `Tauri`
 - transport 主线固定为 `webrtc-rs`
 - 当前 active 视频链固定为 `openh264` 软解 + 最小 headless `wgpu` render backend
 - render 目标固定为 `wgpu + winit`
+
+当前 `src-tauri` 已接回 `ohmygamepad-host` 这条共享 gamepad 链路，但 `xbxengine` 宿主桥仍处于收口阶段；
+也就是说，Tauri 是明确的主线宿主方向，但 `xbxengine` 侧接线当前还没有完全替换到最终实现。
 
 `OhMyGamepadService` 当前额外提供了两类更稳定的外部入口：
 

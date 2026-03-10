@@ -48,7 +48,7 @@ impl From<XbxRenderFrame> for XbxEngineRenderFrame {
 
 /**
  * `core` 只负责“最新帧缓存”和显示状态同步，不在这里做 GPU 上传。
- * 真实上传/present 留在 `xbxengine-app` 渲染器，避免同一帧在 Rust 内重复上传。
+ * 真实上传/present 由宿主侧渲染器负责，避免同一帧在 Rust 内重复上传。
  */
 #[derive(Default)]
 pub(crate) struct XbxRenderState {

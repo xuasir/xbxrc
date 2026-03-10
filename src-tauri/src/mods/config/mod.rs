@@ -1,8 +1,9 @@
+pub mod config_policy;
 pub mod defaults;
 pub mod grouping;
-pub mod repository;
 pub mod rpc;
 pub mod service;
+pub mod storage_repository;
 
 pub use service::ConfigService;
 

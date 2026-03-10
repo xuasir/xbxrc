@@ -11,7 +11,9 @@ pub struct PlaceholderXbxEngineService {
 #[async_trait]
 impl XbxEngineProvider for PlaceholderXbxEngineService {
     async fn dispatch_control(&self, _command_name: &str, _params: Option<Value>) -> AppResult<()> {
-        log::warn!("PlaceholderXbxEngineService::dispatch_control called - xbxengine-app dependency removed");
+        log::warn!(
+            "PlaceholderXbxEngineService::dispatch_control called - xbxengine host bridge is not connected yet"
+        );
         Ok(())
     }
 

@@ -1,11 +1,11 @@
 use crate::mods::app_state::AppStateProvider;
 use crate::mods::auth::AuthProviderRef;
+use crate::settings_store::SettingsStoreResolver;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tauri::{AppHandle, Manager};
 use tauri_plugin_opener::OpenerExt;
-use tauri_plugin_store::StoreExt;
 use tokio::sync::RwLock;
 use tokio::time::Duration;
 
@@ -50,6 +50,7 @@ pub struct PingPayload {
 pub struct AppStateService {
     app_handle: AppHandle,
     auth_provider: AuthProviderRef,
+    settings_store: SettingsStoreResolver,
     startup_flags: Arc<RwLock<crate::shell::state::StartupFlagsState>>,
 }
 
@@ -67,15 +68,12 @@ impl AppStateProvider for AppStateService {
     async fn clear_data(&self) -> Result<ClearDataResult, String> {
         self.clear_renderer_storage();
 
-        let store = self
-            .app_handle
-            .store("settings.json")
-            .map_err(|error| error.to_string())?;
+        let store = self.settings_store.open_write()?;
 
         for key in STORE_DATA_RESET_KEYS {
-            store.delete(*key);
+            store.store().delete(*key);
         }
-        store.save().map_err(|error| error.to_string())?;
+        store.save()?;
 
         self.auth_provider.reset_runtime_after_store_purge().await;
 
@@ -185,9 +183,11 @@ impl AppStateService {
         auth_provider: AuthProviderRef,
         startup_flags: Arc<RwLock<crate::shell::state::StartupFlagsState>>,
     ) -> Self {
+        let settings_store = SettingsStoreResolver::new(app_handle.clone());
         Self {
             app_handle,
             auth_provider,
+            settings_store,
             startup_flags,
         }
     }

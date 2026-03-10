@@ -1,34 +1,45 @@
-use crate::mods::data::types::{DataHostStorageDeviceSummary, DataHostSummary};
+use crate::mods::data::session_resolver::resolve_web_token_claims;
+use crate::mods::data::types::{DataHostStorageDeviceSummary, DataHostSummary, DataSessionContext};
 use serde_json::Value;
-use xbox_webapi::{ProfileApi, SmartglassApi};
+use xbox_webapi::SmartglassApi;
 
-pub struct XboxWebApiClient {
-    smartglass: SmartglassApi,
-    profile: ProfileApi,
-}
+pub struct HostService;
 
-impl XboxWebApiClient {
-    pub fn new(uhs: String, token: String) -> Self {
-        Self {
-            smartglass: SmartglassApi::new(uhs.clone(), token.clone()),
-            profile: ProfileApi::new(uhs, token),
+impl HostService {
+    pub fn new() -> Self {
+        Self
+    }
+
+    // 与 Electron 语义一致：主机列表来自 smartglass provider。
+    pub async fn get_hosts(
+        &self,
+        session: &DataSessionContext,
+    ) -> Result<Vec<DataHostSummary>, String> {
+        let Some(claims) = resolve_web_token_claims(&session.web_token) else {
+            return Ok(Vec::new());
+        };
+        let smartglass = SmartglassApi::new(claims.uhs, claims.user_token);
+
+        match tokio::time::timeout(
+            std::time::Duration::from_secs(8),
+            smartglass.get_consoles_list(),
+        )
+        .await
+        {
+            Ok(Ok(payload)) => Ok(extract_consoles(&payload)),
+            Ok(Err(error)) => {
+                // 与迁移前 JS 行为保持一致：网络波动时降级为空数组，避免把 hosts 查询变成致命错误。
+                log::warn!(
+                    "[Data] load hosts failed, fallback to empty list: {}",
+                    error
+                );
+                Ok(Vec::new())
+            }
+            Err(_) => {
+                log::warn!("[Data] load hosts timeout, fallback to empty list");
+                Ok(Vec::new())
+            }
         }
-    }
-
-    pub async fn get_consoles_list(&self) -> Result<Vec<DataHostSummary>, String> {
-        let payload = self
-            .smartglass
-            .get_consoles_list()
-            .await
-            .map_err(|e| e.to_string())?;
-        Ok(extract_consoles(&payload))
-    }
-
-    pub async fn get_current_user_profile(&self) -> Result<Value, String> {
-        self.profile
-            .get_current_user()
-            .await
-            .map_err(|e| e.to_string())
     }
 }
 

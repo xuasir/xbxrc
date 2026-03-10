@@ -3,6 +3,7 @@ use tauri::Manager;
 pub mod error;
 pub mod event_bridge;
 pub mod mods;
+pub mod settings_store;
 pub mod shell;
 
 // 重导出以保持兼容性

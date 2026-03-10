@@ -112,9 +112,9 @@ impl XbxEngineInputBackend for OhMyGamepadXbxEngineInputBackend {
         let host = self.ensure_host()?;
         let pressed_state = logical_state_for_button(button, duration_ms)?;
         host.submit_simulated_state(XBXENGINE_VIRTUAL_DEVICE_ID, pressed_state)
-            .map_err(map_sidecar_host_error("submitSimulatedButtonPressed"))?;
+            .map_err(map_gamepad_host_error("submitSimulatedButtonPressed"))?;
         host.submit_simulated_state(XBXENGINE_VIRTUAL_DEVICE_ID, LogicalPadStateDto::default())
-            .map_err(map_sidecar_host_error("submitSimulatedButtonReleased"))?;
+            .map_err(map_gamepad_host_error("submitSimulatedButtonReleased"))?;
         self.snapshot_status()
     }
 
@@ -147,7 +147,7 @@ impl XbxEngineInputBackend for OhMyGamepadXbxEngineInputBackend {
     }
 }
 
-fn map_sidecar_host_error(
+fn map_gamepad_host_error(
     action: &'static str,
 ) -> impl FnOnce(GamepadRuntimeHostError) -> XbxEngineRuntimeError {
     move |error| XbxEngineRuntimeError::new(format!("{action}:{error:?}"))

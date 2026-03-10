@@ -1,11 +1,11 @@
-pub mod application;
-pub mod client;
-pub mod domain;
-pub mod infrastructure;
+pub mod cache_repository;
 pub mod rpc;
+pub mod service;
+pub mod services;
+pub mod session_resolver;
 pub mod types;
 
-pub use application::DataService;
+pub use service::DataService;
 pub use types::*;
 
 use async_trait::async_trait;

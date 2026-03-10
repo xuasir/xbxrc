@@ -1,112 +1,51 @@
-use crate::mods::data::domain::DataSessionContext;
-use crate::mods::data::types::DataXcloudTitleSummary;
+use crate::mods::data::cache_repository::DataCacheRepository;
+use crate::mods::data::types::{DataSessionContext, DataXcloudTitleSummary};
 use reqwest::header::{HeaderMap, HeaderValue, ACCEPT, CONTENT_TYPE};
 use reqwest::Client;
 use serde_json::{json, Value};
 use std::collections::{HashMap, HashSet};
-use tauri::AppHandle;
-use tauri_plugin_store::StoreExt;
 use xbox_webapi::XcloudApi;
 
-const XCLOUD_TITLES_CACHE_KEY: &str = "data.xcloudTitlesCache";
 const XCLOUD_TITLES_CACHE_TTL_MS: u64 = 10 * 60 * 1000;
-const XCLOUD_TITLES_CACHE_STALE_MAX_MS: u64 = 24 * 60 * 60 * 1000;
 
 pub struct XcloudService {
-    app_handle: AppHandle,
     client: Client,
-    in_memory_cache: Option<XcloudTitlesCachePayload>,
-}
-
-#[derive(Debug, Clone)]
-struct XcloudTitlesCachePayload {
-    updated_at: u64,
-    titles: Vec<DataXcloudTitleSummary>,
 }
 
 impl XcloudService {
-    pub fn new(app_handle: AppHandle) -> Self {
+    pub fn new() -> Self {
         Self {
-            app_handle,
             client: Client::new(),
-            in_memory_cache: None,
         }
     }
 
     pub async fn get_titles(
-        &mut self,
+        &self,
         session: &DataSessionContext,
+        cache_repository: &DataCacheRepository,
     ) -> Result<Vec<DataXcloudTitleSummary>, String> {
-        if let Some(cached) = self.get_cached_titles()? {
+        if let Some(cached) = cache_repository.get_cached_xcloud_titles()? {
             let age = Self::now_ms().saturating_sub(cached.updated_at);
             if age <= XCLOUD_TITLES_CACHE_TTL_MS {
                 return Ok(cached.titles);
             }
 
-            match self.fetch_and_cache_titles(session).await {
+            match self.fetch_and_cache_titles(session, cache_repository).await {
                 Ok(titles) if !titles.is_empty() => return Ok(titles),
                 _ => return Ok(cached.titles),
             }
         }
 
-        match self.fetch_and_cache_titles(session).await {
+        match self.fetch_and_cache_titles(session, cache_repository).await {
             Ok(titles) => Ok(titles),
             Err(_) => Ok(Vec::new()),
         }
     }
 
-    fn get_cached_titles(&mut self) -> Result<Option<XcloudTitlesCachePayload>, String> {
-        if let Some(cache) = &self.in_memory_cache {
-            if self.is_cache_usable(cache) {
-                return Ok(Some(cache.clone()));
-            }
-        }
-
-        let store = self
-            .app_handle
-            .store("settings.json")
-            .map_err(|error| error.to_string())?;
-        let Some(raw) = store.get(XCLOUD_TITLES_CACHE_KEY) else {
-            return Ok(None);
-        };
-
-        let Some(object) = raw.as_object() else {
-            return Ok(None);
-        };
-
-        let updated_at = object
-            .get("updatedAt")
-            .and_then(|value| value.as_u64())
-            .unwrap_or(0);
-        let Some(raw_titles) = object.get("titles").and_then(|value| value.as_array()) else {
-            return Ok(None);
-        };
-
-        let titles = raw_titles
-            .iter()
-            .filter_map(|item| serde_json::from_value::<DataXcloudTitleSummary>(item.clone()).ok())
-            .collect::<Vec<_>>();
-
-        if titles.is_empty() {
-            return Ok(None);
-        }
-
-        let payload = XcloudTitlesCachePayload { updated_at, titles };
-        if !self.is_cache_usable(&payload) {
-            return Ok(None);
-        }
-
-        self.in_memory_cache = Some(payload.clone());
-        Ok(Some(payload))
-    }
-
-    fn is_cache_usable(&self, payload: &XcloudTitlesCachePayload) -> bool {
-        Self::now_ms().saturating_sub(payload.updated_at) <= XCLOUD_TITLES_CACHE_STALE_MAX_MS
-    }
-
     async fn fetch_and_cache_titles(
-        &mut self,
+        &self,
         session: &DataSessionContext,
+        cache_repository: &DataCacheRepository,
     ) -> Result<Vec<DataXcloudTitleSummary>, String> {
         let Some(region) = Self::resolve_xcloud_region(session) else {
             return Ok(Vec::new());
@@ -279,39 +218,8 @@ impl XcloudService {
         }
 
         titles.sort_by(|left, right| left.name.cmp(&right.name));
-        self.set_cached_titles(titles.clone())?;
+        cache_repository.set_cached_xcloud_titles(titles.clone())?;
         Ok(titles)
-    }
-
-    fn set_cached_titles(&mut self, titles: Vec<DataXcloudTitleSummary>) -> Result<(), String> {
-        if titles.is_empty() {
-            return Ok(());
-        }
-
-        let payload = XcloudTitlesCachePayload {
-            updated_at: Self::now_ms(),
-            titles,
-        };
-
-        let serialized_titles = payload
-            .titles
-            .iter()
-            .filter_map(|title| serde_json::to_value(title).ok())
-            .collect::<Vec<_>>();
-        let serialized_payload = json!({
-            "updatedAt": payload.updated_at,
-            "titles": serialized_titles
-        });
-
-        let store = self
-            .app_handle
-            .store("settings.json")
-            .map_err(|error| error.to_string())?;
-        store.set(XCLOUD_TITLES_CACHE_KEY, serialized_payload);
-        store.save().map_err(|error| error.to_string())?;
-
-        self.in_memory_cache = Some(payload);
-        Ok(())
     }
 
     async fn load_catalog_products(

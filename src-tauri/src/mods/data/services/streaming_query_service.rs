@@ -1,8 +1,8 @@
 use crate::mods::config::ConfigProviderRef;
-use crate::mods::data::domain::web_token::resolve_web_token_claims;
-use crate::mods::data::domain::DataSessionContext;
+use crate::mods::data::session_resolver::resolve_web_token_claims;
 use crate::mods::data::types::{
-    DataConsolePowerResult, DataHostSummary, DataSendTextResult, DataStreamingTitleInputConfig,
+    DataConsolePowerResult, DataHostSummary, DataSendTextResult, DataSessionContext,
+    DataStreamingTitleInputConfig,
 };
 use crate::mods::streaming::api_provider::StreamingApiProvider;
 use crate::mods::streaming::session_api::StreamingSessionApi;
