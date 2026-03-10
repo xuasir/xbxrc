@@ -75,7 +75,8 @@ async function listAchievements(uhs: string, xsts: string, xuid: string) {
   try {
     const next = await page.next()
     console.log(next.data)
-  } catch {
+  }
+  catch {
     // no more pages
   }
 }

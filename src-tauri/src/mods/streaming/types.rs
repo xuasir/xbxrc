@@ -171,3 +171,18 @@ pub struct StreamingConfigSnapshot {
 pub struct StreamingCloseSessionResult {
     pub closed: bool,
 }
+
+#[derive(Debug, Clone)]
+pub struct StreamingHttpError {
+    pub status: Option<u16>,
+    pub body: Option<String>,
+    pub message: String,
+}
+
+impl std::fmt::Display for StreamingHttpError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.message)
+    }
+}
+
+impl std::error::Error for StreamingHttpError {}

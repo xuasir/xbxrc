@@ -1,10 +1,10 @@
 use crate::mods::config::ConfigProviderRef;
-use crate::mods::streaming::http_client::StreamingHttpClient;
 use crate::mods::streaming::ice_normalizer::StreamingIceNormalizer;
 use crate::mods::streaming::session_api::StreamingSessionApi;
 use crate::mods::streaming::signaling_api::StreamingSignalingApi;
 use crate::mods::streaming::types::StreamingConfigSnapshot;
 use serde_json::Value;
+use xbox_webapi::{SessionApi, SignalingApi};
 
 pub struct StreamingApiProvider {
     config_provider: ConfigProviderRef,
@@ -21,12 +21,17 @@ impl StreamingApiProvider {
         target_type: &str,
     ) -> Result<StreamingSessionApi, String> {
         let config = self.config_provider.get_streaming_config();
-        let (host, gs_token) = resolve_host_and_token(token, target_type, &config)?;
-        let http_client = StreamingHttpClient::new(host, gs_token);
+        let resolved = resolve_token(token, target_type, &config)?;
+        let session_api = SessionApi::new(
+            target_type.to_string(),
+            resolved.base_url.clone(),
+            resolved.gs_token.clone(),
+            config.resolution,
+        );
 
         Ok(StreamingSessionApi::new(
             target_type.to_string(),
-            http_client,
+            session_api,
             config.preferred_game_language,
             config.resolution,
         ))
@@ -38,22 +43,28 @@ impl StreamingApiProvider {
         target_type: &str,
     ) -> Result<StreamingSignalingApi, String> {
         let config = self.config_provider.get_streaming_config();
-        let (host, gs_token) = resolve_host_and_token(token, target_type, &config)?;
-        let http_client = StreamingHttpClient::new(host, gs_token);
+        let resolved = resolve_token(token, target_type, &config)?;
+        let session_base_path = format!("{}/v5/sessions/{target_type}", resolved.base_url);
+        let signaling_api = SignalingApi::new(session_base_path.clone(), resolved.gs_token);
 
         Ok(StreamingSignalingApi::new(
-            format!("/v5/sessions/{target_type}"),
-            http_client,
+            session_base_path,
+            signaling_api,
             StreamingIceNormalizer::new(config.ipv6),
         ))
     }
 }
 
-fn resolve_host_and_token(
+struct ResolvedStreamingToken {
+    gs_token: String,
+    base_url: String,
+}
+
+fn resolve_token(
     token: &Value,
     target_type: &str,
     config: &StreamingConfigSnapshot,
-) -> Result<(String, String), String> {
+) -> Result<ResolvedStreamingToken, String> {
     let data = token.get("data").unwrap_or(token);
 
     let gs_token = data
@@ -91,15 +102,28 @@ fn resolve_host_and_token(
         .and_then(Value::as_str)
         .ok_or_else(|| format!("Streaming region uri is missing for {target_type}"))?;
 
-    let host = base_uri
-        .trim_start_matches("https://")
-        .trim_start_matches("http://")
-        .trim_end_matches('/')
-        .to_string();
+    let base_url = normalize_base_url(base_uri)
+        .ok_or_else(|| format!("Streaming region uri is invalid for {target_type}: {base_uri}"))?;
 
-    if host.is_empty() {
-        return Err(format!("Streaming region host is empty for {target_type}"));
+    Ok(ResolvedStreamingToken { gs_token, base_url })
+}
+
+fn normalize_base_url(base_uri: &str) -> Option<String> {
+    let trimmed = base_uri.trim().trim_end_matches('/');
+    if trimmed.is_empty() {
+        return None;
     }
 
-    Ok((host, gs_token))
+    // 统一转成带协议的绝对 URL，避免 reqwest builder error。
+    let normalized = if trimmed.starts_with("http://") || trimmed.starts_with("https://") {
+        trimmed.to_string()
+    } else {
+        format!("https://{trimmed}")
+    };
+
+    if normalized == "https://" || normalized == "http://" {
+        return None;
+    }
+
+    Some(normalized)
 }

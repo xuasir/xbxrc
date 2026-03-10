@@ -21,25 +21,8 @@ impl ProfileService {
         _session: &DataSessionContext,
         web_api: &XboxWebApiClient,
     ) -> Result<(), String> {
-        println!("[DEBUG] refresh_profile: Calling web_api.get_current_user_profile()");
-        let response = match web_api.get_current_user_profile().await {
-            Ok(res) => res,
-            Err(e) => {
-                println!("[DEBUG] get_current_user_profile failed: {:?}", e);
-                return Err(e);
-            }
-        };
-
-        println!("[DEBUG] refresh_profile: parsing response");
-        let root = response.get("data").unwrap_or(&response);
-        let settings = root
-            .get("profileUsers")
-            .and_then(|value| value.as_array())
-            .and_then(|users| users.first())
-            .and_then(|first| first.get("settings"))
-            .and_then(|value| value.as_array())
-            .cloned()
-            .unwrap_or_default();
+        let response = web_api.get_current_user_profile().await?;
+        let settings = extract_profile_settings(&response).unwrap_or_default();
 
         let mut profile_patch = Map::new();
         for entry in settings {
@@ -52,17 +35,19 @@ impl ProfileService {
             profile_patch.insert(id.to_string(), Value::String(value.to_string()));
         }
 
-        println!("[DEBUG] refresh_profile: writing to store");
-        let store = self.app_handle.store("settings.json").map_err(|error| {
-            println!("[DEBUG] get store err: {:?}", error);
-            error.to_string()
-        })?;
+        // 防御：若响应结构异常，不覆盖已有缓存，避免把已登录态资料写空。
+        if profile_patch.is_empty() {
+            return Err("Invalid profile response: empty settings".to_string());
+        }
+
+        let store = self
+            .app_handle
+            .store("settings.json")
+            .map_err(|error| error.to_string())?;
         store.set(PROFILE_CACHE_KEY, Value::Object(profile_patch));
         if let Err(e) = store.save() {
-            println!("[DEBUG] store save err: {:?}", e);
             return Err(e.to_string());
         }
-        println!("[DEBUG] refresh_profile: success");
         Ok(())
     }
 
@@ -108,4 +93,21 @@ impl ProfileService {
             app_level,
         })
     }
+}
+
+fn extract_profile_settings(response: &Value) -> Option<Vec<Value>> {
+    // 兼容两种结构：
+    // 1) { profileUsers: [{ settings: [...] }] }
+    // 2) { settings: [...] }（调用方已下钻到 profileUsers[0]）
+    if let Some(settings) = response.get("settings").and_then(|value| value.as_array()) {
+        return Some(settings.clone());
+    }
+
+    let root = response.get("data").unwrap_or(response);
+    root.get("profileUsers")
+        .and_then(|value| value.as_array())
+        .and_then(|users| users.first())
+        .and_then(|first| first.get("settings"))
+        .and_then(|value| value.as_array())
+        .cloned()
 }

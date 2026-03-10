@@ -1,25 +1,34 @@
 use crate::mods::data::types::{DataHostStorageDeviceSummary, DataHostSummary};
 use serde_json::Value;
-use xbox_webapi::XboxWebApi;
+use xbox_webapi::{ProfileApi, SmartglassApi};
 
 pub struct XboxWebApiClient {
-    inner: XboxWebApi,
+    smartglass: SmartglassApi,
+    profile: ProfileApi,
 }
 
 impl XboxWebApiClient {
     pub fn new(uhs: String, token: String) -> Self {
         Self {
-            inner: XboxWebApi::new(uhs, token),
+            smartglass: SmartglassApi::new(uhs.clone(), token.clone()),
+            profile: ProfileApi::new(uhs, token),
         }
     }
 
     pub async fn get_consoles_list(&self) -> Result<Vec<DataHostSummary>, String> {
-        let payload = self.inner.smartglass().get_consoles_list().await?;
+        let payload = self
+            .smartglass
+            .get_consoles_list()
+            .await
+            .map_err(|e| e.to_string())?;
         Ok(extract_consoles(&payload))
     }
 
     pub async fn get_current_user_profile(&self) -> Result<Value, String> {
-        self.inner.profile().get_current_user().await
+        self.profile
+            .get_current_user()
+            .await
+            .map_err(|e| e.to_string())
     }
 }
 

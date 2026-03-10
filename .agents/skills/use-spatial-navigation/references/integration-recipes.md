@@ -3,7 +3,7 @@
 ## React Quick Start
 
 ```tsx
-import { ConsoleUIProvider, FocusScope, Focusable } from '@spatial-navigation/react'
+import { ConsoleUIProvider, Focusable, FocusScope } from '@spatial-navigation/react'
 
 export default function Page() {
   return (
@@ -37,7 +37,7 @@ Implementation notes:
 
 ```vue
 <script setup lang="ts">
-import { ConsoleUIProvider, FocusScope, Focusable } from '@spatial-navigation/vue'
+import { ConsoleUIProvider, Focusable, FocusScope } from '@spatial-navigation/vue'
 </script>
 
 <template>

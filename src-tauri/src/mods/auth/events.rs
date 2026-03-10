@@ -1,7 +1,7 @@
 use serde_json::json;
 use tauri::AppHandle;
 
-pub const AUTH_SESSION_READY_CHANNEL: &str = "auth.sessionReady";
+pub const AUTH_SESSION_READY_CHANNEL: &str = "xbxrc:auth:session-ready";
 
 fn normalize_provider(provider: &str) -> &str {
     if provider == "xal" {

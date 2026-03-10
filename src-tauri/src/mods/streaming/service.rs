@@ -3,8 +3,7 @@ use crate::mods::auth::AuthProviderRef;
 use crate::mods::config::ConfigProviderRef;
 use crate::mods::streaming::api_provider::StreamingApiProvider;
 use crate::mods::streaming::fallback_turn_server_provider::FallbackTurnServerProvider;
-use crate::mods::streaming::http_client::StreamingHttpError;
-use crate::mods::streaming::types::*;
+use crate::mods::streaming::types::{StreamingHttpError, *};
 use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -78,8 +77,8 @@ impl crate::mods::streaming::StreamingProvider for StreamingService {
         let session_id = session_path
             .split('/')
             .nth(3)
-            .map(|value| value.to_string())
-            .filter(|value| !value.is_empty())
+            .map(|value: &str| value.to_string())
+            .filter(|value: &String| !value.is_empty())
             .ok_or_else(|| AppError::Streaming("Streaming session id is missing".to_string()))?;
 
         let snapshot = StreamingSessionSnapshot {
@@ -246,7 +245,9 @@ impl crate::mods::streaming::StreamingProvider for StreamingService {
 
             if let Some(candidates) = candidates {
                 if has_usable_ice_candidates(&candidates) {
-                    return Ok(StreamingExchangeIceResult { candidates });
+                    return Ok(StreamingExchangeIceResult {
+                        candidates: candidates.to_vec(),
+                    });
                 }
             }
 

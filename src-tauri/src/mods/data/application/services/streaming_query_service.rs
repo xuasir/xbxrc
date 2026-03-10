@@ -6,6 +6,7 @@ use crate::mods::data::types::{
 };
 use crate::mods::streaming::api_provider::StreamingApiProvider;
 use crate::mods::streaming::session_api::StreamingSessionApi;
+use crate::mods::streaming::types::StreamingHttpError;
 use reqwest::header::{HeaderMap, HeaderValue, AUTHORIZATION, CONTENT_TYPE};
 use reqwest::Client;
 use serde_json::{json, Value};
@@ -37,7 +38,7 @@ impl StreamingQueryService {
         let consoles = api
             .get_consoles()
             .await
-            .map_err(|error| error.to_string())?;
+            .map_err(|error: StreamingHttpError| error.to_string())?;
 
         let mut summaries = Vec::new();
         for console in consoles {
@@ -64,7 +65,7 @@ impl StreamingQueryService {
         let config = api
             .input_configs(xbox_title_id)
             .await
-            .map_err(|error| error.to_string())?;
+            .map_err(|error: StreamingHttpError| error.to_string())?;
 
         Ok(DataStreamingTitleInputConfig {
             xbox_title_id: xbox_title_id.to_string(),

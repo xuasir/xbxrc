@@ -1,11 +1,16 @@
-use crate::mods::streaming::http_client::{StreamingHttpClient, StreamingHttpError};
-use crate::mods::streaming::types::{StreamingErrorDetails, StreamingQueueDetails};
+use crate::mods::streaming::types::{
+    StreamingErrorDetails, StreamingHttpError, StreamingQueueDetails,
+};
 use serde_json::{json, Value};
+use xbox_webapi::{
+    ConsoleInfo, InputConfigResponse, SessionApi as CrateSessionApi, StartStreamResponse,
+    StreamStateResponse, WaitingTimesResponse, WebApiError,
+};
 
 #[derive(Clone)]
 pub struct StreamingSessionApi {
     target_type: String,
-    http_client: StreamingHttpClient,
+    session_api: CrateSessionApi,
     preferred_game_language: String,
     resolution: i64,
 }
@@ -13,13 +18,13 @@ pub struct StreamingSessionApi {
 impl StreamingSessionApi {
     pub fn new(
         target_type: String,
-        http_client: StreamingHttpClient,
+        session_api: CrateSessionApi,
         preferred_game_language: String,
         resolution: i64,
     ) -> Self {
         Self {
             target_type,
-            http_client,
+            session_api,
             preferred_game_language,
             resolution,
         }
@@ -27,7 +32,7 @@ impl StreamingSessionApi {
 
     pub async fn start_stream(&self, target_id: &str) -> Result<String, StreamingHttpError> {
         let os_name = resolve_os_name(self.resolution);
-        let device_info = create_device_info(os_name);
+        let _device_info = create_device_info(os_name);
 
         let payload = json!({
             "titleId": if self.target_type == "cloud" { target_id } else { "" },
@@ -47,67 +52,52 @@ impl StreamingSessionApi {
             "fallbackRegionNames": []
         });
 
-        let value = self
-            .http_client
-            .request_json(
-                "POST",
-                &format!("/v5/sessions/{}/play", self.target_type),
-                Some(payload),
-                &[("X-MS-Device-Info", device_info)],
-            )
-            .await?;
+        let response = self
+            .session_api
+            .start_stream_with_payload(&payload)
+            .await
+            .map_err(|e| StreamingHttpError {
+                status: None,
+                body: None,
+                message: e.to_string(),
+            })?;
 
-        let session_path = value
-            .get("sessionPath")
-            .and_then(Value::as_str)
-            .unwrap_or_default()
-            .to_string();
-
-        Ok(session_path)
+        Ok(response.session_path)
     }
 
     pub async fn stop_stream(&self, session_id: &str) -> Result<(), StreamingHttpError> {
-        self.http_client
-            .request_json(
-                "DELETE",
-                &format!("/v5/sessions/{}/{}", self.target_type, session_id),
-                None,
-                &[],
-            )
+        self.session_api
+            .stop_stream(session_id)
             .await
-            .map(|_| ())
+            .map_err(|e| StreamingHttpError {
+                status: None,
+                body: None,
+                message: e.to_string(),
+            })
     }
 
     pub async fn get_stream_state(
         &self,
         session_id: &str,
     ) -> Result<(Option<String>, Option<StreamingErrorDetails>), StreamingHttpError> {
-        let value = self
-            .http_client
-            .request_json(
-                "GET",
-                &format!("/v5/sessions/{}/{}/state", self.target_type, session_id),
-                None,
-                &[],
-            )
-            .await?;
+        let response = self
+            .session_api
+            .get_stream_state(session_id)
+            .await
+            .map_err(|e| StreamingHttpError {
+                status: None,
+                body: None,
+                message: e.to_string(),
+            })?;
 
-        let state = value
-            .get("state")
-            .and_then(Value::as_str)
-            .map(|text| text.to_string());
-
-        let error_details = value.get("errorDetails").and_then(|details| {
+        let error_details = response.error_details.and_then(|details| {
             Some(StreamingErrorDetails {
-                code: details.get("code").cloned(),
-                message: details
-                    .get("message")
-                    .and_then(Value::as_str)
-                    .map(|text| text.to_string()),
+                code: details.code,
+                message: details.message,
             })
         });
 
-        Ok((state, error_details))
+        Ok((response.state, error_details))
     }
 
     pub async fn send_connect_token(
@@ -115,76 +105,87 @@ impl StreamingSessionApi {
         session_id: &str,
         user_token: &str,
     ) -> Result<(), StreamingHttpError> {
-        self.http_client
-            .request_json(
-                "POST",
-                &format!("/v5/sessions/{}/{}/connect", self.target_type, session_id),
-                Some(json!({ "userToken": user_token })),
-                &[],
-            )
+        self.session_api
+            .send_connect_token(session_id, user_token)
             .await
-            .map(|_| ())
+            .map_err(|e| StreamingHttpError {
+                status: None,
+                body: None,
+                message: e.to_string(),
+            })
     }
 
     pub async fn send_keepalive(&self, session_id: &str) -> Result<(), StreamingHttpError> {
-        self.http_client
-            .request_json(
-                "POST",
-                &format!("/v5/sessions/{}/{}/keepalive", self.target_type, session_id),
-                None,
-                &[],
-            )
+        self.session_api
+            .send_keepalive(session_id)
             .await
-            .map(|_| ())
+            .map_err(|e| StreamingHttpError {
+                status: None,
+                body: None,
+                message: e.to_string(),
+            })
     }
 
     pub async fn get_waiting_times(
         &self,
         title_id: &str,
     ) -> Result<StreamingQueueDetails, StreamingHttpError> {
-        let value = self
-            .http_client
-            .request_json("GET", &format!("/v1/waittime/{title_id}"), None, &[])
-            .await?;
+        let response = self
+            .session_api
+            .get_waiting_times(title_id)
+            .await
+            .map_err(|e| StreamingHttpError {
+                status: None,
+                body: None,
+                message: e.to_string(),
+            })?;
 
-        Ok(serde_json::from_value::<StreamingQueueDetails>(value).unwrap_or_default())
+        Ok(StreamingQueueDetails {
+            estimated_total_wait_time_in_seconds: response.estimated_total_wait_time_in_seconds,
+            estimated_allocation_time_in_seconds: response.estimated_allocation_time_in_seconds,
+            estimated_provisioning_time_in_seconds: response.estimated_provisioning_time_in_seconds,
+        })
     }
 
     pub async fn get_consoles(&self) -> Result<Vec<Value>, StreamingHttpError> {
-        // home 控制台列表查询沿用固定 windows device info，与 Electron 保持一致。
-        let value = self
-            .http_client
-            .request_json(
-                "GET",
-                "/v6/servers/home?mr=50",
-                None,
-                &[("X-MS-Device-Info", create_device_info("windows"))],
-            )
-            .await?;
+        let consoles = self
+            .session_api
+            .get_consoles()
+            .await
+            .map_err(|e| StreamingHttpError {
+                status: None,
+                body: None,
+                message: e.to_string(),
+            })?;
 
-        let consoles = value
-            .get("results")
-            .and_then(Value::as_array)
-            .cloned()
-            .unwrap_or_default();
-        Ok(consoles)
+        Ok(consoles
+            .into_iter()
+            .map(|console| {
+                json!({
+                    "id": console.id,
+                    "name": console.name,
+                    "deviceType": console.device_type,
+                    "isActive": console.is_active
+                })
+            })
+            .collect())
     }
 
     pub async fn input_configs(&self, xbox_title_id: &str) -> Result<Value, StreamingHttpError> {
-        // 标题输入配置查询复用当前分辨率推导的 osName，与串流主链路保持同源配置。
-        let os_name = resolve_os_name(self.resolution);
-        let device_info = create_device_info(os_name);
-        self.http_client
-            .request_json(
-                "POST",
-                "/v2/titles/inputconfigs",
-                Some(json!({
-                    "titleIds": [xbox_title_id],
-                    "titleIdType": "xboxTitleId"
-                })),
-                &[("X-MS-Device-Info", device_info)],
-            )
+        let response = self
+            .session_api
+            .input_configs(xbox_title_id)
             .await
+            .map_err(|e| StreamingHttpError {
+                status: None,
+                body: None,
+                message: e.to_string(),
+            })?;
+
+        Ok(json!({
+            "titleId": response.title_id,
+            "config": response.config
+        }))
     }
 }
 

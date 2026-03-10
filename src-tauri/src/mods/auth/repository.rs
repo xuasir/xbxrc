@@ -57,7 +57,6 @@ impl CoreTokenRepository {
     pub fn set_user_token(&self, user_token: UserTokenData) -> Result<(), String> {
         let mut payload = self.get_payload()?;
         payload.user_token = Some(user_token);
-        eprintln!("[auth][store] set auth.tokens.core.userToken");
         self.set_payload(&payload)
     }
 
@@ -69,7 +68,6 @@ impl CoreTokenRepository {
     pub fn set_sisu_token(&self, sisu_token: SisuTokenData) -> Result<(), String> {
         let mut payload = self.get_payload()?;
         payload.sisu_token = Some(sisu_token);
-        eprintln!("[auth][store] set auth.tokens.core.sisuToken");
         self.set_payload(&payload)
     }
 
@@ -91,7 +89,6 @@ impl CoreTokenRepository {
         let val = serde_json::to_value(payload).map_err(|e| e.to_string())?;
         store.set("auth.tokens.core", val);
         store.save().map_err(|e| e.to_string())?;
-        eprintln!("[auth][store] set auth.tokens.core.jwtKeys");
         Ok(())
     }
 
@@ -110,7 +107,6 @@ impl CoreTokenRepository {
             .map_err(|e| e.to_string())?;
         store.set("auth.tokens.stream", val);
         store.save().map_err(|e| e.to_string())?;
-        eprintln!("[auth][store] set auth.tokens.stream");
         Ok(())
     }
 
@@ -129,7 +125,6 @@ impl CoreTokenRepository {
             .map_err(|e| e.to_string())?;
         store.set("auth.tokens.web", val);
         store.save().map_err(|e| e.to_string())?;
-        eprintln!("[auth][store] set auth.tokens.web");
         Ok(())
     }
 
@@ -156,7 +151,6 @@ impl CoreTokenRepository {
         store.delete("auth.tokens.stream");
         store.delete("auth.tokens.web");
         store.save().map_err(|e| e.to_string())?;
-        eprintln!("[auth][store] clear all tokens");
         Ok(())
     }
 
@@ -168,7 +162,6 @@ impl CoreTokenRepository {
         store.delete("auth.tokens.stream");
         store.delete("auth.tokens.web");
         store.save().map_err(|e| e.to_string())?;
-        eprintln!("[auth][store] clear ephemeral tokens");
         Ok(())
     }
 }

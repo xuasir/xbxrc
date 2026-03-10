@@ -99,7 +99,11 @@ pub async fn handle_rpc(
                 );
             }
 
-            Ok(json!({ "success": true }))
+            Ok(json!({
+                "provider": auth_state.provider,
+                "isAuthenticated": auth_state.is_authenticated,
+                "appLevel": auth_state.app_level
+            }))
         }
     }
 }
@@ -112,7 +116,6 @@ fn open_oauth_window(app_handle: &tauri::AppHandle, oauth_url: &str) -> AppResul
     }
 
     if let Some(existing) = app_handle.get_webview_window(AUTH_WINDOW_LABEL) {
-        eprintln!("[auth][window] close existing auth window");
         let _ = existing.close();
     }
 
@@ -132,33 +135,43 @@ fn open_oauth_window(app_handle: &tauri::AppHandle, oauth_url: &str) -> AppResul
         if !is_oauth_callback_target(target_url) {
             return true;
         }
-        eprintln!(
-            "[auth][window] capture callback target={}",
-            target_url.as_str()
-        );
 
         let callback_url = target_url.as_str().to_string();
-        let app_handle = app_handle_for_nav.clone();
-        tauri::async_runtime::spawn(async move {
-            let state = app_handle.state::<AppState>();
-            let auth = state.auth.clone();
-            let callback_result = auth.handle_oauth_callback(&callback_url).await;
-            let auth_state = auth.get_state();
+        let app_handle_for_nav = app_handle_for_nav.clone();
 
-            if callback_result.is_ok() && auth_state.is_authenticated {
-                eprintln!("[auth][window] callback handled and authenticated");
-                let _ = events::emit_session_ready(
-                    &app_handle,
-                    &auth_state.provider,
-                    auth_state.app_level,
-                );
-            }
+        // 标记为正在处理回调
+        let state = app_handle_for_nav.state::<AppState>();
+        let auth = state.auth.clone();
+        let _ = auth.mark_callback_processing();
 
-            if let Some(window) = app_handle.get_webview_window(AUTH_WINDOW_LABEL) {
-                eprintln!("[auth][window] close auth window after callback");
-                let _ = window.close();
+        // 使用 tauri::async_runtime::block_on 同步执行异步回调
+        let callback_result = tauri::async_runtime::block_on({
+            let app_handle = app_handle_for_nav.clone();
+            let url = callback_url.clone();
+            async move {
+                let state = app_handle.state::<AppState>();
+                let auth = state.auth.clone();
+                auth.handle_oauth_callback(&url).await
             }
         });
+
+        let auth_state = auth.get_state();
+
+        // 取消标记
+        let _ = auth.unmark_callback_processing();
+
+        if callback_result.is_ok() && auth_state.is_authenticated {
+            let _ = events::emit_session_ready(
+                &app_handle_for_nav,
+                &auth_state.provider,
+                auth_state.app_level,
+            );
+        }
+
+        if let Some(window) = app_handle_for_nav.get_webview_window(AUTH_WINDOW_LABEL) {
+            let _ = window.close();
+        }
+
         false
     })
     .build()
@@ -170,7 +183,6 @@ fn open_oauth_window(app_handle: &tauri::AppHandle, oauth_url: &str) -> AppResul
             event,
             WindowEvent::CloseRequested { .. } | WindowEvent::Destroyed
         ) {
-            eprintln!("[auth][window] user closed auth window");
             let app_handle = app_handle_for_close.clone();
             tauri::async_runtime::spawn(async move {
                 let state = app_handle.state::<AppState>();
@@ -182,7 +194,6 @@ fn open_oauth_window(app_handle: &tauri::AppHandle, oauth_url: &str) -> AppResul
 
     let _ = auth_window.show();
     let _ = auth_window.set_focus();
-    eprintln!("[auth][window] opened oauth window");
     Ok(())
 }
 

@@ -11,6 +11,7 @@ use crate::mods::data::types::{
 };
 use crate::mods::data::DataProvider;
 use async_trait::async_trait;
+use serde_json::{json, Value};
 use tokio::sync::Mutex;
 
 pub struct DataService {
@@ -51,10 +52,23 @@ impl DataProvider for DataService {
         };
 
         if let Some(web_api) = self.resolve_web_api_client(&session).await {
-            let _ = self
-                .profile_service
-                .refresh_profile(&session, &web_api)
-                .await;
+            match tokio::time::timeout(
+                std::time::Duration::from_secs(6),
+                self.profile_service.refresh_profile(&session, &web_api),
+            )
+            .await
+            {
+                Ok(Ok(())) => {}
+                Ok(Err(error)) => {
+                    log::warn!(
+                        "[Data] refresh profile failed, fallback to cached profile: {}",
+                        error
+                    );
+                }
+                Err(_) => {
+                    log::warn!("[Data] refresh profile timeout, fallback to cached profile");
+                }
+            }
         }
 
         self.profile_service.get_cached_profile(session.app_level)
@@ -163,6 +177,24 @@ impl DataProvider for DataService {
 }
 
 impl DataService {
+    // 对齐迁移前语义：当 stream 快照暂不可用时，允许用 web token 先提供 profile/hosts 查询。
+    fn build_web_only_session(&self, uhs: &str, token: &str) -> DataSessionContext {
+        let state = self.auth_provider.get_state();
+        DataSessionContext {
+            provider: state.provider,
+            app_level: 0,
+            streaming_tokens: Value::Object(serde_json::Map::new()),
+            web_token: json!({
+                "data": {
+                    "Token": token,
+                    "DisplayClaims": {
+                        "xui": [{ "uhs": uhs }]
+                    }
+                }
+            }),
+        }
+    }
+
     async fn ensure_authenticated_session(&self) -> Result<Option<DataSessionContext>, String> {
         if let Some(event) = self
             .auth_provider
@@ -175,6 +207,14 @@ impl DataService {
                 streaming_tokens: event.streaming_tokens,
                 web_token: event.web_token,
             }));
+        }
+
+        if let Some((uhs, token)) = self
+            .auth_provider
+            .get_web_api_tokens()
+            .map_err(|error| error.to_string())?
+        {
+            return Ok(Some(self.build_web_only_session(&uhs, &token)));
         }
 
         let _ = self
@@ -193,6 +233,14 @@ impl DataService {
                 streaming_tokens: event.streaming_tokens,
                 web_token: event.web_token,
             }));
+        }
+
+        if let Some((uhs, token)) = self
+            .auth_provider
+            .get_web_api_tokens()
+            .map_err(|error| error.to_string())?
+        {
+            return Ok(Some(self.build_web_only_session(&uhs, &token)));
         }
 
         Ok(None)

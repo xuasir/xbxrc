@@ -1,6 +1,5 @@
 pub mod api_provider;
 pub mod fallback_turn_server_provider;
-pub mod http_client;
 pub mod ice_normalizer;
 pub mod rpc;
 pub mod service;

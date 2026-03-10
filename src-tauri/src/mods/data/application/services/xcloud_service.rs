@@ -1,12 +1,12 @@
 use crate::mods::data::domain::DataSessionContext;
 use crate::mods::data::types::DataXcloudTitleSummary;
-use crate::mods::streaming::http_client::StreamingHttpClient;
 use reqwest::header::{HeaderMap, HeaderValue, ACCEPT, CONTENT_TYPE};
 use reqwest::Client;
 use serde_json::{json, Value};
 use std::collections::{HashMap, HashSet};
 use tauri::AppHandle;
 use tauri_plugin_store::StoreExt;
+use xbox_webapi::XcloudApi;
 
 const XCLOUD_TITLES_CACHE_KEY: &str = "data.xcloudTitlesCache";
 const XCLOUD_TITLES_CACHE_TTL_MS: u64 = 10 * 60 * 1000;
@@ -111,22 +111,15 @@ impl XcloudService {
         let Some(region) = Self::resolve_xcloud_region(session) else {
             return Ok(Vec::new());
         };
-        // xCloud token 驱动的 region 请求复用 streaming HTTP 客户端，避免 data 域重复实现。
-        let streaming_http =
-            StreamingHttpClient::new(region.host.clone(), region.bearer_token.clone());
+        // xCloud token 驱动的 region 请求复用 XcloudApi，避免 data 域重复实现。
+        let xcloud_api = XcloudApi::new(region.host.clone(), region.bearer_token.clone());
 
-        let streaming_titles_response = self
-            .fetch_streaming_json(&streaming_http, "/v2/titles", None)
-            .await?;
+        let streaming_titles_response = xcloud_api.get_titles().await.map_err(|e| e.to_string())?;
 
-        let recent_titles_response = self
-            .fetch_streaming_json_or_fallback(
-                &streaming_http,
-                "/v2/titles/mru?mr=25",
-                json!({ "results": [] }),
-                None,
-            )
-            .await;
+        let recent_titles_response = xcloud_api
+            .get_recent_titles(25)
+            .await
+            .unwrap_or_else(|_| json!({ "results": [] }));
 
         let newest_titles_response = self
             .fetch_json_or_fallback(
@@ -396,31 +389,6 @@ impl XcloudService {
         body: Option<Value>,
     ) -> Value {
         match self.fetch_json(url, headers, body).await {
-            Ok(payload) => payload,
-            Err(_) => fallback,
-        }
-    }
-
-    async fn fetch_streaming_json(
-        &self,
-        http: &StreamingHttpClient,
-        path: &str,
-        body: Option<Value>,
-    ) -> Result<Value, String> {
-        let method = if body.is_some() { "POST" } else { "GET" };
-        http.request_json(method, path, body, &[])
-            .await
-            .map_err(|error| error.to_string())
-    }
-
-    async fn fetch_streaming_json_or_fallback(
-        &self,
-        http: &StreamingHttpClient,
-        path: &str,
-        fallback: Value,
-        body: Option<Value>,
-    ) -> Value {
-        match self.fetch_streaming_json(http, path, body).await {
             Ok(payload) => payload,
             Err(_) => fallback,
         }

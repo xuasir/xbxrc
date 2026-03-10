@@ -13,7 +13,7 @@ Use pnpm workspaces for monorepo management:
 # pnpm-workspace.yaml
 packages:
   - 'packages/*'
-  - 'docs'
+  - docs
   - 'playground/*'
 ```
 
@@ -43,7 +43,7 @@ Have scripts in each package, and use `-r` (recursive) at root. Enable ESLint ca
     "docs": "pnpm -C docs run docs:dev",
     "docs:build": "pnpm -C docs run docs:build",
     "version": "bumpp -r",
-    "release": "pnpm -r --filter \"./packages/*\" publish",
+    "release": "pnpm -r --filter \"./packages/*\" publish"
   }
 }
 ```

@@ -6,15 +6,16 @@
 
 # Development Policy
 
-- `src/main`、`src/preload`、`src/renderer` 是当前应用的唯一活跃代码库，应直接在这些目录上持续开发。
+- `src` (Vue 3/TypeScript Frontend), `src-tauri` (Tauri Rust application), and `crates/*` (Rust libraries) are the active codebases.
 
 Stack requirements:
 
-- Electron
+- Tauri
+- Rust
 - Vue 3
 - TypeScript
 
-Primary objective: Continue developing the current Electron/Vue 3/TypeScript application as the canonical codebase, improving code quality, maintainability, and feature delivery efficiency.
+Primary objective: Continue developing the current Tauri/Vue 3/TypeScript application as the canonical codebase, improving code quality, maintainability, and feature delivery efficiency.
 
 # Planning & Tracking Policy
 

@@ -38,6 +38,9 @@ pub enum AppError {
 
     #[error("Network error: {0}")]
     Network(String),
+
+    #[error("WebApi error: {0}")]
+    WebApi(#[from] xbox_webapi::WebApiError),
 }
 
 impl AppError {
@@ -55,6 +58,7 @@ impl AppError {
             AppError::Io(_) => "IO_ERROR",
             AppError::Tauri(_) => "TAURI_ERROR",
             AppError::Network(_) => "NETWORK_ERROR",
+            AppError::WebApi(_) => "WEBAPI_ERROR",
         }
     }
 }

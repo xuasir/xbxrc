@@ -1,5 +1,4 @@
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UserTokenData {
@@ -26,26 +25,21 @@ pub struct SisuTokenData {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "PascalCase")]
 pub struct TokenDetails<T> {
-    pub issue_instant: String,
-    pub not_after: String,
-    pub token: String,
+    #[serde(rename = "IssueInstant")]
+    pub issue_instant: Option<String>,
+    #[serde(rename = "NotAfter")]
+    pub not_after: Option<String>,
+    #[serde(rename = "Token")]
+    pub token: Option<String>,
+    #[serde(rename = "DisplayClaims")]
     pub display_claims: T,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TitleClaims {
-    pub xti: HashMap<String, String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct UserClaims {
-    pub xui: Vec<HashMap<String, String>>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct AuthClaims {
-    pub xui: Vec<HashMap<String, String>>,
-}
+// Sisu 的 DisplayClaims 在不同账号/区域下字段形态不稳定（可能出现 null/动态结构），
+// 这里统一放宽为 Value，避免静默流程因强类型反序列化失败。
+pub type TitleClaims = serde_json::Value;
+pub type UserClaims = serde_json::Value;
+pub type AuthClaims = serde_json::Value;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct JwtKeysPayload {
@@ -91,7 +85,6 @@ pub struct LoginResponse {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub struct CheckAuthResponse {
     pub provider: String,
     pub started_silent_flow: bool,

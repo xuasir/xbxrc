@@ -1,5 +1,3 @@
-pub mod client;
-pub mod crypto;
 pub mod events;
 pub mod repository;
 pub mod rpc;
@@ -8,7 +6,6 @@ pub mod token_repository;
 pub mod transfer_token_service;
 pub mod types;
 
-pub use client::XboxWebApiClient;
 pub use repository::CoreTokenRepository;
 pub use service::AuthService;
 pub use types::*;
@@ -32,6 +29,8 @@ pub trait AuthProvider: Send + Sync {
     async fn handle_oauth_callback(&self, callback_url: &str) -> AppResult<()>;
     async fn cancel_pending_login(&self);
     async fn reset_runtime_after_store_purge(&self);
+    fn mark_callback_processing(&self) -> AppResult<()>;
+    fn unmark_callback_processing(&self) -> AppResult<()>;
 }
 
 pub type AuthProviderRef = Arc<dyn AuthProvider>;

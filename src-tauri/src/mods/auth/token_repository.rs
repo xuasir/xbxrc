@@ -1,3 +1,5 @@
+use base64::engine::general_purpose::{URL_SAFE, URL_SAFE_NO_PAD};
+use base64::Engine;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -56,10 +58,16 @@ impl AuthTokenRepository {
             return Ok(0);
         };
 
-        if stream_tokens.get("xCloudToken").is_some() {
+        if stream_tokens
+            .get("xCloudToken")
+            .is_some_and(|value| !value.is_null())
+        {
             return Ok(2);
         }
-        if stream_tokens.get("xHomeToken").is_some() {
+        if stream_tokens
+            .get("xHomeToken")
+            .is_some_and(|value| !value.is_null())
+        {
             return Ok(1);
         }
         Ok(0)
@@ -69,30 +77,17 @@ impl AuthTokenRepository {
         let Some(token) = token else {
             return false;
         };
-
-        let create_time = token
-            .get("_objectCreateTime")
-            .and_then(|value| value.as_i64())
-            .unwrap_or(0);
-
-        let duration = token
-            .get("data")
-            .and_then(|data| data.get("durationInSeconds"))
-            .and_then(|value| value.as_i64())
-            .or_else(|| {
-                token
-                    .get("durationInSeconds")
-                    .and_then(|value| value.as_i64())
-            })
-            .unwrap_or(0);
-
-        if create_time <= 0 || duration <= 0 {
+        if token.is_null() {
             return false;
         }
 
-        let expires_at = create_time + duration * 1000;
+        let Some(expires_at) = resolve_stream_token_expiry_ms(token) else {
+            return false;
+        };
+
         let now = chrono::Utc::now().timestamp_millis();
-        expires_at - now > TOKEN_EXPIRY_SKEW_MS
+        let valid = expires_at - now > TOKEN_EXPIRY_SKEW_MS;
+        valid
     }
 
     pub fn is_web_token_valid(&self, token: Option<&Value>) -> bool {
@@ -104,18 +99,27 @@ impl AuthTokenRepository {
             .get("data")
             .and_then(|data| data.get("NotAfter"))
             .and_then(|value| value.as_str())
-            .or_else(|| token.get("NotAfter").and_then(|value| value.as_str()));
+            .or_else(|| token.get("NotAfter").and_then(|value| value.as_str()))
+            .or_else(|| {
+                token
+                    .get("data")
+                    .and_then(|data| data.get("not_after"))
+                    .and_then(|value| value.as_str())
+            })
+            .or_else(|| token.get("not_after").and_then(|value| value.as_str()));
 
         let Some(not_after) = not_after else {
             return false;
         };
 
-        let Ok(expires_at) = chrono::DateTime::parse_from_rfc3339(not_after) else {
+        let Some(expires_at_ms) = parse_datetime_to_timestamp_millis(not_after) else {
             return false;
         };
 
         let now = chrono::Utc::now().timestamp_millis();
-        expires_at.timestamp_millis() - now > TOKEN_EXPIRY_SKEW_MS
+        let diff = expires_at_ms - now;
+        let valid = diff > TOKEN_EXPIRY_SKEW_MS;
+        valid
     }
 
     pub fn get_valid_session_snapshot(&self) -> Result<Option<ValidSessionSnapshot>, String> {
@@ -126,18 +130,13 @@ impl AuthTokenRepository {
             return Ok(None);
         };
 
-        if !self.is_web_token_valid(Some(&web_token)) {
+        let web_valid = self.is_web_token_valid(Some(&web_token));
+        if !web_valid {
             return Ok(None);
         }
 
         let xhome_valid = self.is_stream_token_valid(stream_tokens.get("xHomeToken"));
         let xcloud_valid = self.is_stream_token_valid(stream_tokens.get("xCloudToken"));
-        eprintln!(
-            "[auth][token] snapshot validate web={} xhome={} xcloud={}",
-            self.is_web_token_valid(Some(&web_token)),
-            xhome_valid,
-            xcloud_valid
-        );
 
         if !xhome_valid && !xcloud_valid {
             return Ok(None);
@@ -149,4 +148,85 @@ impl AuthTokenRepository {
             web_token,
         }))
     }
+}
+
+fn parse_i64_value(value: &Value) -> Option<i64> {
+    if let Some(number) = value.as_i64() {
+        return Some(number);
+    }
+
+    value.as_str().and_then(|raw| raw.parse::<i64>().ok())
+}
+
+fn extract_stream_duration_seconds(token: &Value) -> Option<i64> {
+    token
+        .get("data")
+        .and_then(|data| data.get("durationInSeconds"))
+        .and_then(parse_i64_value)
+        .or_else(|| token.get("durationInSeconds").and_then(parse_i64_value))
+        .or_else(|| {
+            token
+                .get("data")
+                .and_then(|data| data.get("duration_in_seconds"))
+                .and_then(parse_i64_value)
+        })
+}
+
+fn extract_stream_create_time_ms(token: &Value) -> Option<i64> {
+    token
+        .get("_objectCreateTime")
+        .and_then(parse_i64_value)
+        .or_else(|| {
+            token
+                .get("data")
+                .and_then(|data| data.get("_objectCreateTime"))
+                .and_then(parse_i64_value)
+        })
+}
+
+fn extract_gs_token(token: &Value) -> Option<&str> {
+    token
+        .get("data")
+        .and_then(|data| data.get("gsToken"))
+        .and_then(|value| value.as_str())
+        .or_else(|| token.get("gsToken").and_then(|value| value.as_str()))
+}
+
+// 兼容迁移后响应差异：优先用 duration，再降级读取 gsToken(jwt) 的 exp。
+fn resolve_stream_token_expiry_ms(token: &Value) -> Option<i64> {
+    if let (Some(create_time), Some(duration_seconds)) = (
+        extract_stream_create_time_ms(token),
+        extract_stream_duration_seconds(token),
+    ) {
+        if create_time > 0 && duration_seconds > 0 {
+            return Some(create_time.saturating_add(duration_seconds.saturating_mul(1000)));
+        }
+    }
+
+    let gs_token = extract_gs_token(token)?;
+    let payload_segment = gs_token.split('.').nth(1)?;
+    let payload_bytes = URL_SAFE_NO_PAD
+        .decode(payload_segment)
+        .or_else(|_| URL_SAFE.decode(payload_segment))
+        .ok()?;
+    let payload: Value = serde_json::from_slice(&payload_bytes).ok()?;
+    let exp_seconds = payload.get("exp").and_then(parse_i64_value)?;
+    Some(exp_seconds.saturating_mul(1000))
+}
+
+// 与迁移前 JS `new Date(...)` 的兼容语义对齐：支持多种常见时间格式。
+fn parse_datetime_to_timestamp_millis(input: &str) -> Option<i64> {
+    if let Ok(parsed) = chrono::DateTime::parse_from_rfc3339(input) {
+        return Some(parsed.timestamp_millis());
+    }
+
+    if let Ok(parsed) = chrono::DateTime::parse_from_str(input, "%Y-%m-%dT%H:%M:%S%.f%z") {
+        return Some(parsed.timestamp_millis());
+    }
+
+    if let Ok(parsed) = chrono::NaiveDateTime::parse_from_str(input, "%Y-%m-%dT%H:%M:%S%.f") {
+        return Some(parsed.and_utc().timestamp_millis());
+    }
+
+    None
 }

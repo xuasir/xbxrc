@@ -167,7 +167,10 @@ async fn bind_background_tasks(app_handle: &AppHandle, state: &AppState) -> AppR
     let auth = state.auth.clone();
     let app_handle_clone = app_handle.clone();
     tauri::async_runtime::spawn(async move {
-        let _ = auth.check_authentication().await;
+        let initial_state = auth.get_state();
+        if !initial_state.is_authenticated && !initial_state.is_authenticating {
+            let _ = auth.check_authentication().await;
+        }
         let auth_state = auth.get_state();
         if auth_state.is_authenticated {
             let _ = auth_events::emit_session_ready(

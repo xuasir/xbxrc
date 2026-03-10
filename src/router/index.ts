@@ -74,13 +74,6 @@ export const router = createRouter({
 })
 
 async function resolveAuthState(): Promise<Awaited<ReturnType<typeof rpc.auth.getState>>> {
-  const currentState = await rpc.auth.getState()
-  if (currentState.isAuthenticated || currentState.isAuthenticating) {
-    return currentState
-  }
-
-  // 在导航守卫里补一次静默认证，减少误跳登录页
-  await rpc.auth.checkAuthentication()
   return await rpc.auth.getState()
 }
 

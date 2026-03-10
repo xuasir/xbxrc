@@ -52,7 +52,7 @@ pub async fn rpc_invoke(payload: RpcInvokePayload, app_handle: tauri::AppHandle)
     let namespace = payload.namespace.clone();
     let method = payload.method.clone();
 
-    log::info!("[RPC][IN] {}.{}", namespace, method);
+    // log::info!("[RPC][IN] {}.{}", namespace, method);
 
     let result = match payload.namespace.as_str() {
         "app" => {
@@ -109,12 +109,12 @@ pub async fn rpc_invoke(payload: RpcInvokePayload, app_handle: tauri::AppHandle)
     let duration_ms = start.elapsed().as_millis();
     match result {
         Ok(data) => {
-            log::info!(
-                "[RPC][OUT] {}.{} ok duration={}ms",
-                namespace,
-                method,
-                duration_ms
-            );
+            // log::info!(
+            //     "[RPC][OUT] {}.{} ok duration={}ms",
+            //     namespace,
+            //     method,
+            //     duration_ms
+            // );
             RpcEnvelope::success(data)
         }
         Err(error) => {
