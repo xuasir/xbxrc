@@ -222,7 +222,12 @@ mod tests {
 
         assert!(should_retry(&Method::GET, &error, 1, RetryMode::SafeOnly));
         assert!(!should_retry(&Method::POST, &error, 1, RetryMode::SafeOnly));
-        assert!(!should_retry(&Method::DELETE, &error, 1, RetryMode::SafeOnly));
+        assert!(!should_retry(
+            &Method::DELETE,
+            &error,
+            1,
+            RetryMode::SafeOnly
+        ));
     }
 
     #[test]
@@ -238,7 +243,12 @@ mod tests {
         let retriable = WebApiError::network("timeout");
         let non_retriable = WebApiError::parse("invalid json");
 
-        assert!(should_retry(&Method::POST, &retriable, 1, RetryMode::Always));
+        assert!(should_retry(
+            &Method::POST,
+            &retriable,
+            1,
+            RetryMode::Always
+        ));
         assert!(!should_retry(
             &Method::POST,
             &non_retriable,

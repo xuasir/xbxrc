@@ -7,6 +7,7 @@
 # Development Policy
 
 - `src` (Vue 3/TypeScript Frontend), `src-tauri` (Tauri Rust application), and `crates/*` (Rust libraries) are the active codebases.
+- Rust module organization follows [`dev-docs/rust-mod-organization.md`](/Users/guo.xu/Documents/code/games/xbxrc/dev-docs/rust-mod-organization.md); any new additions or refactors under `src-tauri/src/mods/*` must adhere to this document.
 
 Stack requirements:
 

@@ -24,11 +24,7 @@ impl StreamingSignalingApi {
         self.signaling_api.send_sdp(session_id, sdp).await
     }
 
-    pub async fn send_chat_sdp(
-        &self,
-        session_id: &str,
-        sdp: &str,
-    ) -> Result<(), WebApiError> {
+    pub async fn send_chat_sdp(&self, session_id: &str, sdp: &str) -> Result<(), WebApiError> {
         self.signaling_api.send_chat_sdp(session_id, sdp).await
     }
 
@@ -36,7 +32,10 @@ impl StreamingSignalingApi {
         &self,
         session_id: &str,
     ) -> Result<Option<StreamingAnswerPayload>, WebApiError> {
-        let response = self.signaling_api.get_sdp_exchange_response(session_id).await?;
+        let response = self
+            .signaling_api
+            .get_sdp_exchange_response(session_id)
+            .await?;
 
         Ok(response.map(|r| StreamingAnswerPayload {
             sdp: r.sdp,
@@ -48,7 +47,10 @@ impl StreamingSignalingApi {
         &self,
         session_id: &str,
     ) -> Result<Option<Vec<StreamingIceCandidate>>, WebApiError> {
-        let response = self.signaling_api.get_ice_exchange_response(session_id).await?;
+        let response = self
+            .signaling_api
+            .get_ice_exchange_response(session_id)
+            .await?;
 
         Ok(response.map(|candidates| self.normalize_ice_candidates(candidates)))
     }
@@ -72,7 +74,10 @@ impl StreamingSignalingApi {
         self.signaling_api.send_ice(session_id, &candidates).await
     }
 
-    fn normalize_ice_candidates(&self, candidates: Vec<IceCandidate>) -> Vec<StreamingIceCandidate> {
+    fn normalize_ice_candidates(
+        &self,
+        candidates: Vec<IceCandidate>,
+    ) -> Vec<StreamingIceCandidate> {
         let tauri_candidates = candidates
             .into_iter()
             .map(|candidate| StreamingIceCandidate {

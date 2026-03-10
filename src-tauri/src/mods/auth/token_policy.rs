@@ -3,7 +3,7 @@ use base64::Engine;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::mods::auth::repository::CoreTokenRepository;
+use crate::mods::auth::storage_repository::AuthStorageRepository;
 
 const TOKEN_EXPIRY_SKEW_MS: i64 = 60 * 1000;
 
@@ -15,41 +15,33 @@ pub struct ValidSessionSnapshot {
     pub web_token: Value,
 }
 
-pub struct AuthTokenRepository {
-    core_repository: CoreTokenRepository,
+pub struct AuthTokenPolicy {
+    storage_repository: AuthStorageRepository,
 }
 
-impl AuthTokenRepository {
-    pub fn new(core_repository: CoreTokenRepository) -> Self {
-        Self { core_repository }
+impl AuthTokenPolicy {
+    pub fn new(storage_repository: AuthStorageRepository) -> Self {
+        Self { storage_repository }
     }
 
     pub fn get_stream_tokens(&self) -> Result<Option<Value>, String> {
-        self.core_repository.get_stream_tokens()
+        self.storage_repository.get_stream_tokens()
     }
 
     pub fn set_stream_tokens(&self, tokens: Value) -> Result<(), String> {
-        self.core_repository.set_stream_tokens(tokens)
+        self.storage_repository.set_stream_tokens(tokens)
     }
 
     pub fn get_web_token(&self) -> Result<Option<Value>, String> {
-        self.core_repository.get_web_token()
+        self.storage_repository.get_web_token()
     }
 
     pub fn set_web_token(&self, token: Value) -> Result<(), String> {
-        self.core_repository.set_web_token(token)
+        self.storage_repository.set_web_token(token)
     }
 
     pub fn clear_ephemeral_tokens(&self) -> Result<(), String> {
-        self.core_repository.clear_ephemeral_tokens()
-    }
-
-    pub fn clear_all_tokens(&self) -> Result<(), String> {
-        self.core_repository.clear_all_tokens()
-    }
-
-    pub fn has_identity_token(&self) -> Result<bool, String> {
-        Ok(self.core_repository.get_user_token()?.is_some())
+        self.storage_repository.clear_ephemeral_tokens()
     }
 
     pub fn get_cached_app_level(&self) -> Result<u32, String> {
@@ -86,8 +78,7 @@ impl AuthTokenRepository {
         };
 
         let now = chrono::Utc::now().timestamp_millis();
-        let valid = expires_at - now > TOKEN_EXPIRY_SKEW_MS;
-        valid
+        expires_at - now > TOKEN_EXPIRY_SKEW_MS
     }
 
     pub fn is_web_token_valid(&self, token: Option<&Value>) -> bool {
@@ -117,9 +108,7 @@ impl AuthTokenRepository {
         };
 
         let now = chrono::Utc::now().timestamp_millis();
-        let diff = expires_at_ms - now;
-        let valid = diff > TOKEN_EXPIRY_SKEW_MS;
-        valid
+        expires_at_ms - now > TOKEN_EXPIRY_SKEW_MS
     }
 
     pub fn get_valid_session_snapshot(&self) -> Result<Option<ValidSessionSnapshot>, String> {
@@ -192,7 +181,6 @@ fn extract_gs_token(token: &Value) -> Option<&str> {
         .or_else(|| token.get("gsToken").and_then(|value| value.as_str()))
 }
 
-// 兼容迁移后响应差异：优先用 duration，再降级读取 gsToken(jwt) 的 exp。
 fn resolve_stream_token_expiry_ms(token: &Value) -> Option<i64> {
     if let (Some(create_time), Some(duration_seconds)) = (
         extract_stream_create_time_ms(token),
@@ -214,7 +202,6 @@ fn resolve_stream_token_expiry_ms(token: &Value) -> Option<i64> {
     Some(exp_seconds.saturating_mul(1000))
 }
 
-// 与迁移前 JS `new Date(...)` 的兼容语义对齐：支持多种常见时间格式。
 fn parse_datetime_to_timestamp_millis(input: &str) -> Option<i64> {
     if let Ok(parsed) = chrono::DateTime::parse_from_rfc3339(input) {
         return Some(parsed.timestamp_millis());

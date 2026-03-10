@@ -9,6 +9,7 @@ members = [
   "crates/ohmygamepad/backends/win-xbox-haptics",
   "crates/xbxengine/protocol",
   "crates/xbxengine/core",
+  "crates/xbox-auth-flow",
   "crates/xbox-webapi",
   "src-tauri",
   "archived/xbxengine-app",

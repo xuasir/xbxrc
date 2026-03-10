@@ -10,6 +10,8 @@ use serde_json::Value;
 const APP_CONFIG_APP_ID: &str = "000000004c20a908";
 const APP_CONFIG_TITLE_ID: &str = "328178078";
 const APP_CONFIG_REDIRECT_URI: &str = "ms-xal-000000004c20a908://auth";
+const CLOUD_TRANSFER_SCOPE: &str =
+    "service::http://Passport.NET/purpose::PURPOSE_XBOX_CLOUD_CONSOLE_TRANSFER_TOKEN";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[allow(non_snake_case)]
@@ -304,6 +306,56 @@ impl AuthApi {
             .await?;
 
         serde_json::from_value(response).map_err(|e| WebApiError::parse(e.to_string()))
+    }
+
+    pub async fn get_cloud_transfer_token(
+        &self,
+        refresh_token: &str,
+    ) -> Result<String, WebApiError> {
+        let body = reqwest::Url::parse_with_params(
+            "https://login.live.com/oauth20_token.srf",
+            &[
+                ("client_id", APP_CONFIG_APP_ID),
+                ("scope", CLOUD_TRANSFER_SCOPE),
+                ("grant_type", "refresh_token"),
+                ("refresh_token", refresh_token),
+                ("code", ""),
+                ("code_verifier", ""),
+                ("redirect_uri", ""),
+            ],
+        )
+        .map_err(|e| WebApiError::parse(e.to_string()))?
+        .query()
+        .unwrap_or_default()
+        .to_string();
+
+        let headers = HttpTransport::create_header_map(&[(
+            "Content-Type",
+            "application/x-www-form-urlencoded",
+        )])?;
+
+        let response = self
+            .transport
+            .post(
+                "https://login.live.com/oauth20_token.srf",
+                Value::String(body),
+                Some(headers),
+            )
+            .await?;
+
+        response
+            .get("access_token")
+            .and_then(|value| value.as_str())
+            .filter(|value| !value.is_empty())
+            .map(str::to_string)
+            .or_else(|| {
+                response
+                    .get("lpt")
+                    .and_then(|value| value.as_str())
+                    .filter(|value| !value.is_empty())
+                    .map(str::to_string)
+            })
+            .ok_or_else(|| WebApiError::parse("Cloud transfer token response is invalid."))
     }
 
     pub async fn sisu_authorize(

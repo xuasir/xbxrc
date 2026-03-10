@@ -1,6 +1,4 @@
-use crate::mods::streaming::types::{
-    StreamingErrorDetails, StreamingQueueDetails,
-};
+use crate::mods::streaming::types::{StreamingErrorDetails, StreamingQueueDetails};
 use serde_json::{json, Value};
 use xbox_webapi::{SessionApi as CrateSessionApi, WebApiError};
 
@@ -48,10 +46,7 @@ impl StreamingSessionApi {
             "fallbackRegionNames": []
         });
 
-        let response = self
-            .session_api
-            .start_stream_with_payload(&payload)
-            .await?;
+        let response = self.session_api.start_stream_with_payload(&payload).await?;
 
         Ok(response.session_path)
     }
@@ -81,7 +76,9 @@ impl StreamingSessionApi {
         session_id: &str,
         user_token: &str,
     ) -> Result<(), WebApiError> {
-        self.session_api.send_connect_token(session_id, user_token).await
+        self.session_api
+            .send_connect_token(session_id, user_token)
+            .await
     }
 
     pub async fn send_keepalive(&self, session_id: &str) -> Result<(), WebApiError> {

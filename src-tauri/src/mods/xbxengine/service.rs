@@ -27,7 +27,9 @@ impl XbxEngineProvider for PlaceholderXbxEngineService {
         let event = self
             .last_runtime_event
             .lock()
-            .map_err(|_| crate::error::AppError::XbxEngine("Failed to lock last runtime event".to_string()))?
+            .map_err(|_| {
+                crate::error::AppError::XbxEngine("Failed to lock last runtime event".to_string())
+            })?
             .clone();
 
         Ok(event.unwrap_or(Value::Null))

@@ -3,11 +3,11 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::AppHandle;
 use tauri_plugin_store::StoreExt;
 
-pub struct CoreTokenRepository {
+pub struct AuthStorageRepository {
     app_handle: AppHandle,
 }
 
-impl CoreTokenRepository {
+impl AuthStorageRepository {
     pub fn new(app_handle: AppHandle) -> Self {
         Self { app_handle }
     }
@@ -81,7 +81,7 @@ impl CoreTokenRepository {
         payload.jwt_keys = Some(JwtKeysPayload {
             private_jwk: Some(private_jwk),
         });
-        // Save without update_time wrapper to mimic TS behavior for just keys
+
         let store = self
             .app_handle
             .store("settings.json")
@@ -136,10 +136,6 @@ impl CoreTokenRepository {
     pub fn get_token_update_time(&self) -> u64 {
         let payload = self.get_payload().unwrap_or(CoreTokenPayload::default());
         payload.token_update_time.unwrap_or(0)
-    }
-
-    pub fn clear(&self) -> Result<(), String> {
-        self.clear_all_tokens()
     }
 
     pub fn clear_all_tokens(&self) -> Result<(), String> {

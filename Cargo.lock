@@ -9419,6 +9419,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "xbox-auth-flow"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "url",
+ "uuid",
+ "xbox-webapi",
+]
+
+[[package]]
 name = "xbox-webapi"
 version = "0.1.0"
 dependencies = [
@@ -9510,6 +9522,7 @@ dependencies = [
  "tokio",
  "url",
  "uuid",
+ "xbox-auth-flow",
  "xbox-webapi",
  "xbxengine",
  "xbxengine-protocol",
