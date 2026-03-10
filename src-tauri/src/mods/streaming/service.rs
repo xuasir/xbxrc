@@ -3,11 +3,12 @@ use crate::mods::auth::AuthProviderRef;
 use crate::mods::config::ConfigProviderRef;
 use crate::mods::streaming::api_provider::StreamingApiProvider;
 use crate::mods::streaming::fallback_turn_server_provider::FallbackTurnServerProvider;
-use crate::mods::streaming::types::{StreamingHttpError, *};
+use crate::mods::streaming::types::*;
 use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use xbox_webapi::WebApiError;
 
 const SESSION_MONITOR_INTERVAL_MS: u64 = 1000;
 const SESSION_STALL_TIMEOUT_MS: u64 = 45_000;
@@ -149,7 +150,7 @@ impl crate::mods::streaming::StreamingProvider for StreamingService {
 
         match result {
             Ok(_) => Ok(StreamingCloseSessionResult { closed: true }),
-            Err(error) if error.status == Some(404) => {
+            Err(error) if status_of(&error) == Some(404) => {
                 Ok(StreamingCloseSessionResult { closed: false })
             }
             Err(error) => Err(AppError::Streaming(to_err(error))),
@@ -387,7 +388,7 @@ impl StreamingService {
         let state_response = session_api.get_stream_state(session_id).await;
         let (state, error_details) = match state_response {
             Ok(value) => value,
-            Err(error) if error.status == Some(404) => {
+            Err(error) if status_of(&error) == Some(404) => {
                 self.clear_session(session_id).await;
                 return false;
             }
@@ -580,16 +581,16 @@ fn get_state_timeout_error(
     })
 }
 
-fn should_ignore_keepalive_error(error: &StreamingHttpError) -> bool {
-    if error.status == Some(404) {
+fn should_ignore_keepalive_error(error: &WebApiError) -> bool {
+    if status_of(error) == Some(404) {
         return true;
     }
 
-    if error.status != Some(400) {
+    if status_of(error) != Some(400) {
         return false;
     }
 
-    let Some(body) = &error.body else {
+    let Some(body) = http_message(error) else {
         return false;
     };
 
@@ -619,13 +620,28 @@ fn should_ignore_keepalive_error(error: &StreamingHttpError) -> bool {
         && (message.contains("ServerSdpExchangeCommandSent") || message.contains("UnexpectedState"))
 }
 
-fn to_err(error: StreamingHttpError) -> String {
-    match (error.status, error.body) {
-        (Some(status), Some(body)) => {
-            format!("{} (status: {}, body: {})", error.message, status, body)
+fn to_err(error: WebApiError) -> String {
+    match error {
+        WebApiError::Http {
+            status, message, ..
+        } => {
+            format!("HTTP {}: {}", status, message)
         }
-        (Some(status), None) => format!("{} (status: {})", error.message, status),
-        _ => error.message,
+        other => other.to_string(),
+    }
+}
+
+fn status_of(error: &WebApiError) -> Option<u16> {
+    match error {
+        WebApiError::Http { status, .. } => Some(*status),
+        _ => None,
+    }
+}
+
+fn http_message(error: &WebApiError) -> Option<&str> {
+    match error {
+        WebApiError::Http { message, .. } => Some(message.as_str()),
+        _ => None,
     }
 }
 
@@ -634,4 +650,43 @@ fn now_ms() -> u64 {
         .duration_since(std::time::UNIX_EPOCH)
         .map(|duration| duration.as_millis() as u64)
         .unwrap_or(0)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{should_ignore_keepalive_error, to_err};
+    use xbox_webapi::WebApiError;
+
+    #[test]
+    fn ignores_keepalive_404_and_expected_400_state_errors() {
+        let not_found = WebApiError::Http {
+            status: 404,
+            code: None,
+            message: "not found".to_string(),
+            retriable: false,
+        };
+        let unexpected_state = WebApiError::Http {
+            status: 400,
+            code: Some("SessionUnexpectedState".to_string()),
+            message:
+                "{\"code\":\"SessionUnexpectedState\",\"message\":\"ServerSdpExchangeCommandSent\"}"
+                    .to_string(),
+            retriable: false,
+        };
+
+        assert!(should_ignore_keepalive_error(&not_found));
+        assert!(should_ignore_keepalive_error(&unexpected_state));
+    }
+
+    #[test]
+    fn formats_http_error_without_streaming_wrapper() {
+        let error = WebApiError::Http {
+            status: 503,
+            code: None,
+            message: "temporarily unavailable".to_string(),
+            retriable: true,
+        };
+
+        assert_eq!(to_err(error), "HTTP 503: temporarily unavailable");
+    }
 }

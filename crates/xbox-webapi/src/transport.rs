@@ -10,9 +10,23 @@ const MAX_RETRY_ATTEMPTS: usize = 3;
 const BASE_RETRY_DELAY_MS: u64 = 250;
 const MAX_RETRY_DELAY_MS: u64 = 1500;
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum RetryMode {
+    Never,
+    SafeOnly,
+    Always,
+}
+
+impl Default for RetryMode {
+    fn default() -> Self {
+        RetryMode::SafeOnly
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct HttpTransport {
     client: Client,
+    retry_mode: RetryMode,
 }
 
 impl HttpTransport {
@@ -22,12 +36,24 @@ impl HttpTransport {
                 .timeout(Duration::from_secs(DEFAULT_TIMEOUT_SECS))
                 .build()
                 .unwrap(),
+            retry_mode: RetryMode::SafeOnly,
         }
     }
 
     pub fn with_timeout(timeout: Duration) -> Self {
         Self {
             client: Client::builder().timeout(timeout).build().unwrap(),
+            retry_mode: RetryMode::SafeOnly,
+        }
+    }
+
+    pub fn with_retry_mode(retry_mode: RetryMode) -> Self {
+        Self {
+            client: Client::builder()
+                .timeout(Duration::from_secs(DEFAULT_TIMEOUT_SECS))
+                .build()
+                .unwrap(),
+            retry_mode,
         }
     }
 
@@ -44,6 +70,7 @@ impl HttpTransport {
             .and_then(|header_value| header_value.to_str().ok())
             .map(|value| value.to_ascii_lowercase());
 
+        let method_clone = method.clone();
         let mut last_error: Option<WebApiError> = None;
         for attempt in 1..=MAX_RETRY_ATTEMPTS {
             let mut request = self.client.request(method.clone(), url);
@@ -70,7 +97,7 @@ impl HttpTransport {
                 Ok(response) => response,
                 Err(error) => {
                     let web_error = WebApiError::from(error);
-                    if should_retry(&web_error, attempt) {
+                    if should_retry(&method_clone, &web_error, attempt, self.retry_mode) {
                         sleep(Duration::from_millis(compute_retry_delay_ms(attempt))).await;
                         last_error = Some(web_error);
                         continue;
@@ -84,7 +111,7 @@ impl HttpTransport {
                 Ok(text) => text,
                 Err(error) => {
                     let web_error = WebApiError::from(error);
-                    if should_retry(&web_error, attempt) {
+                    if should_retry(&method_clone, &web_error, attempt, self.retry_mode) {
                         sleep(Duration::from_millis(compute_retry_delay_ms(attempt))).await;
                         last_error = Some(web_error);
                         continue;
@@ -95,7 +122,7 @@ impl HttpTransport {
 
             if !status.is_success() {
                 let web_error = WebApiError::http(status.as_u16(), text);
-                if should_retry(&web_error, attempt) {
+                if should_retry(&method_clone, &web_error, attempt, self.retry_mode) {
                     sleep(Duration::from_millis(compute_retry_delay_ms(attempt))).await;
                     last_error = Some(web_error);
                     continue;
@@ -148,8 +175,27 @@ impl HttpTransport {
     }
 }
 
-fn should_retry(error: &WebApiError, attempt: usize) -> bool {
-    attempt < MAX_RETRY_ATTEMPTS && error.is_retriable()
+fn should_retry(
+    method: &Method,
+    error: &WebApiError,
+    attempt: usize,
+    retry_mode: RetryMode,
+) -> bool {
+    if attempt >= MAX_RETRY_ATTEMPTS {
+        return false;
+    }
+
+    match retry_mode {
+        RetryMode::Never => false,
+        RetryMode::Always => error.is_retriable(),
+        RetryMode::SafeOnly => {
+            if *method == Method::GET {
+                error.is_retriable()
+            } else {
+                false
+            }
+        }
+    }
 }
 
 fn compute_retry_delay_ms(attempt: usize) -> u64 {
@@ -161,5 +207,55 @@ fn compute_retry_delay_ms(attempt: usize) -> u64 {
 impl Default for HttpTransport {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{should_retry, RetryMode, MAX_RETRY_ATTEMPTS};
+    use crate::error::WebApiError;
+    use reqwest::Method;
+
+    #[test]
+    fn safe_only_retries_get_requests() {
+        let error = WebApiError::network("timeout");
+
+        assert!(should_retry(&Method::GET, &error, 1, RetryMode::SafeOnly));
+        assert!(!should_retry(&Method::POST, &error, 1, RetryMode::SafeOnly));
+        assert!(!should_retry(&Method::DELETE, &error, 1, RetryMode::SafeOnly));
+    }
+
+    #[test]
+    fn never_mode_disables_retry() {
+        let error = WebApiError::network("timeout");
+
+        assert!(!should_retry(&Method::GET, &error, 1, RetryMode::Never));
+        assert!(!should_retry(&Method::POST, &error, 1, RetryMode::Never));
+    }
+
+    #[test]
+    fn always_mode_still_respects_retriable_flag() {
+        let retriable = WebApiError::network("timeout");
+        let non_retriable = WebApiError::parse("invalid json");
+
+        assert!(should_retry(&Method::POST, &retriable, 1, RetryMode::Always));
+        assert!(!should_retry(
+            &Method::POST,
+            &non_retriable,
+            1,
+            RetryMode::Always
+        ));
+    }
+
+    #[test]
+    fn retry_stops_at_max_attempts() {
+        let error = WebApiError::network("timeout");
+
+        assert!(!should_retry(
+            &Method::GET,
+            &error,
+            MAX_RETRY_ATTEMPTS,
+            RetryMode::SafeOnly
+        ));
     }
 }

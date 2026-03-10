@@ -1,11 +1,8 @@
 use crate::mods::streaming::types::{
-    StreamingErrorDetails, StreamingHttpError, StreamingQueueDetails,
+    StreamingErrorDetails, StreamingQueueDetails,
 };
 use serde_json::{json, Value};
-use xbox_webapi::{
-    ConsoleInfo, InputConfigResponse, SessionApi as CrateSessionApi, StartStreamResponse,
-    StreamStateResponse, WaitingTimesResponse, WebApiError,
-};
+use xbox_webapi::{SessionApi as CrateSessionApi, WebApiError};
 
 #[derive(Clone)]
 pub struct StreamingSessionApi {
@@ -30,9 +27,8 @@ impl StreamingSessionApi {
         }
     }
 
-    pub async fn start_stream(&self, target_id: &str) -> Result<String, StreamingHttpError> {
+    pub async fn start_stream(&self, target_id: &str) -> Result<String, WebApiError> {
         let os_name = resolve_os_name(self.resolution);
-        let _device_info = create_device_info(os_name);
 
         let payload = json!({
             "titleId": if self.target_type == "cloud" { target_id } else { "" },
@@ -55,40 +51,20 @@ impl StreamingSessionApi {
         let response = self
             .session_api
             .start_stream_with_payload(&payload)
-            .await
-            .map_err(|e| StreamingHttpError {
-                status: None,
-                body: None,
-                message: e.to_string(),
-            })?;
+            .await?;
 
         Ok(response.session_path)
     }
 
-    pub async fn stop_stream(&self, session_id: &str) -> Result<(), StreamingHttpError> {
-        self.session_api
-            .stop_stream(session_id)
-            .await
-            .map_err(|e| StreamingHttpError {
-                status: None,
-                body: None,
-                message: e.to_string(),
-            })
+    pub async fn stop_stream(&self, session_id: &str) -> Result<(), WebApiError> {
+        self.session_api.stop_stream(session_id).await
     }
 
     pub async fn get_stream_state(
         &self,
         session_id: &str,
-    ) -> Result<(Option<String>, Option<StreamingErrorDetails>), StreamingHttpError> {
-        let response = self
-            .session_api
-            .get_stream_state(session_id)
-            .await
-            .map_err(|e| StreamingHttpError {
-                status: None,
-                body: None,
-                message: e.to_string(),
-            })?;
+    ) -> Result<(Option<String>, Option<StreamingErrorDetails>), WebApiError> {
+        let response = self.session_api.get_stream_state(session_id).await?;
 
         let error_details = response.error_details.and_then(|details| {
             Some(StreamingErrorDetails {
@@ -104,41 +80,19 @@ impl StreamingSessionApi {
         &self,
         session_id: &str,
         user_token: &str,
-    ) -> Result<(), StreamingHttpError> {
-        self.session_api
-            .send_connect_token(session_id, user_token)
-            .await
-            .map_err(|e| StreamingHttpError {
-                status: None,
-                body: None,
-                message: e.to_string(),
-            })
+    ) -> Result<(), WebApiError> {
+        self.session_api.send_connect_token(session_id, user_token).await
     }
 
-    pub async fn send_keepalive(&self, session_id: &str) -> Result<(), StreamingHttpError> {
-        self.session_api
-            .send_keepalive(session_id)
-            .await
-            .map_err(|e| StreamingHttpError {
-                status: None,
-                body: None,
-                message: e.to_string(),
-            })
+    pub async fn send_keepalive(&self, session_id: &str) -> Result<(), WebApiError> {
+        self.session_api.send_keepalive(session_id).await
     }
 
     pub async fn get_waiting_times(
         &self,
         title_id: &str,
-    ) -> Result<StreamingQueueDetails, StreamingHttpError> {
-        let response = self
-            .session_api
-            .get_waiting_times(title_id)
-            .await
-            .map_err(|e| StreamingHttpError {
-                status: None,
-                body: None,
-                message: e.to_string(),
-            })?;
+    ) -> Result<StreamingQueueDetails, WebApiError> {
+        let response = self.session_api.get_waiting_times(title_id).await?;
 
         Ok(StreamingQueueDetails {
             estimated_total_wait_time_in_seconds: response.estimated_total_wait_time_in_seconds,
@@ -147,16 +101,8 @@ impl StreamingSessionApi {
         })
     }
 
-    pub async fn get_consoles(&self) -> Result<Vec<Value>, StreamingHttpError> {
-        let consoles = self
-            .session_api
-            .get_consoles()
-            .await
-            .map_err(|e| StreamingHttpError {
-                status: None,
-                body: None,
-                message: e.to_string(),
-            })?;
+    pub async fn get_consoles(&self) -> Result<Vec<Value>, WebApiError> {
+        let consoles = self.session_api.get_consoles().await?;
 
         Ok(consoles
             .into_iter()
@@ -171,21 +117,10 @@ impl StreamingSessionApi {
             .collect())
     }
 
-    pub async fn input_configs(&self, xbox_title_id: &str) -> Result<Value, StreamingHttpError> {
-        let response = self
-            .session_api
-            .input_configs(xbox_title_id)
-            .await
-            .map_err(|e| StreamingHttpError {
-                status: None,
-                body: None,
-                message: e.to_string(),
-            })?;
+    pub async fn input_configs(&self, xbox_title_id: &str) -> Result<Value, WebApiError> {
+        let response = self.session_api.input_configs(xbox_title_id).await?;
 
-        Ok(json!({
-            "titleId": response.title_id,
-            "config": response.config
-        }))
+        Ok(to_legacy_input_config(response.config))
     }
 }
 
@@ -199,44 +134,26 @@ fn resolve_os_name(resolution: i64) -> &'static str {
     "android"
 }
 
-fn create_device_info(os_name: &str) -> String {
-    json!({
-        "appInfo": {
-            "env": {
-                "clientAppId": "www.xbox.com",
-                "clientAppType": "browser",
-                "clientAppVersion": "26.1.97",
-                "clientSdkVersion": "10.3.7",
-                "httpEnvironment": "prod",
-                "sdkInstallId": ""
-            }
-        },
-        "dev": {
-            "hw": {
-                "make": "Microsoft",
-                "model": "unknown",
-                "sdktype": "web"
-            },
-            "os": {
-                "name": os_name,
-                "ver": "22631.2715",
-                "platform": "desktop"
-            },
-            "displayInfo": {
-                "dimensions": {
-                    "widthInPixels": 1920,
-                    "heightInPixels": 1080
-                },
-                "pixelDensity": {
-                    "dpiX": 1,
-                    "dpiY": 1
+fn to_legacy_input_config(config: Value) -> Value {
+    config
+}
+
+#[cfg(test)]
+mod tests {
+    use super::to_legacy_input_config;
+    use serde_json::json;
+
+    #[test]
+    fn keeps_input_config_payload_in_legacy_shape() {
+        let payload = json!({
+            "inputConfigs": [
+                {
+                    "titleId": "12345",
+                    "supportsTouch": true
                 }
-            },
-            "browser": {
-                "browserName": "chrome",
-                "browserVersion": "130.0"
-            }
-        }
-    })
-    .to_string()
+            ]
+        });
+
+        assert_eq!(to_legacy_input_config(payload.clone()), payload);
+    }
 }
