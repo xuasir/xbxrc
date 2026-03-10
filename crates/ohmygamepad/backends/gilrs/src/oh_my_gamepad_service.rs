@@ -9,8 +9,8 @@ use std::{
 };
 
 use ohmygamepad_core::{
-    DeviceProfile, InputCoreConfig, InputRuntimeError, InputRuntimeHandle, NoopStreamSink,
-    NoopUiSink,
+    DeviceProfile, HapticsProvider, InputCoreConfig, InputRuntimeError, InputRuntimeHandle,
+    NoopStreamSink, NoopUiSink,
 };
 use ohmygamepad_protocol::{
     LogicalPadBindingDto, LogicalPadId, LogicalPadStateDto, MultiControllerSamplingModeDto,
@@ -26,8 +26,8 @@ use crate::service_keyboard::{
     KEYBOARD_FALLBACK_DEVICE_NAME,
 };
 use crate::service_rumble::{
-    prepare_rumble_dispatch, resolve_connected_target_devices, PreparedRumbleRequest,
-    ServiceRumbleBackend,
+    prepare_rumble_dispatch, resolve_connected_target_devices,
+    rumble_backend_from_haptics_provider, PreparedRumbleRequest, ServiceRumbleBackend,
 };
 use crate::service_source::OhMyGamepadServiceSource;
 use crate::{
@@ -94,7 +94,7 @@ impl OhMyGamepadService {
         Ok(Self::spawn_with_source_and_rumble(
             config,
             physical_source,
-            Some(Box::new(rumble_handle)),
+            rumble_handle.map(|handle| Box::new(handle) as Box<dyn ServiceRumbleBackend>),
         ))
     }
 
@@ -106,6 +106,18 @@ impl OhMyGamepadService {
         TSource: GilrsSource + Send + 'static,
     {
         Self::spawn_with_source_and_rumble(config, physical_source, None)
+    }
+
+    pub fn spawn_with_haptics_provider(
+        config: OhMyGamepadServiceConfig,
+        haptics_provider: Box<dyn HapticsProvider>,
+    ) -> Result<Self, GilrsSourceInitError> {
+        let (physical_source, _gilrs_rumble_handle) = RealGilrsSource::new()?;
+        Ok(Self::spawn_with_source_and_rumble(
+            config,
+            physical_source,
+            Some(rumble_backend_from_haptics_provider(haptics_provider)),
+        ))
     }
 
     fn spawn_with_source_and_rumble<TSource>(

@@ -101,6 +101,8 @@ pub enum InputRuntimeError {
     CommandChannelClosed,
     ResponseChannelClosed,
     ThreadJoinFailed,
+    HapticsUnavailable,
+    HapticsTransportFailed,
 }
 
 pub struct InputRuntimeHandle {

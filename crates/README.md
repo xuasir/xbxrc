@@ -10,6 +10,8 @@
   - `ohmygamepad` 域内的单实例 owner 层，负责在当前进程中懒初始化并共享唯一 `OhMyGamepadService`
 - `backends/ohmygamepad-gilrs`
   - 桌面手柄后端、`OhMyGamepadService` 门面与 runtime 入口，当前已接入真实 `gilrs`，并支持多手柄采样策略、键盘 fallback 与外部模拟输入；服务内的键盘监听与 rumble 判定逻辑也已拆到独立内部模块
+- `backends/ohmygamepad-macos-gccontroller-haptics`
+  - macOS Xbox 手柄震动主线的占位 crate，明确后续走 `GameController + Core Haptics`，当前先固定装配边界与默认策略
 - `backends/ohmygamepad-hid-dualsense`
   - DualSense 高级触觉 backend 占位 crate，当前统一返回 `Unsupported`
 - `backends/ohmygamepad-win-xbox-haptics`
@@ -23,6 +25,7 @@
 
 同时 RFC 里提到但尚未正式实现的几块当前仍保留为占位工程：
 
+- `backends/macos-gccontroller-haptics`
 - `backends/hid-dualsense`
 - `backends/win-xbox-haptics`
 

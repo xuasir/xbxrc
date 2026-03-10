@@ -8,6 +8,7 @@ pub enum DesktopInputProviderKind {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum DesktopHapticsProviderKind {
     GilrsBasic,
+    MacosGcController,
     None,
 }
 
@@ -25,9 +26,14 @@ pub struct DesktopDriverSelector;
 
 impl DesktopDriverSelector {
     pub fn select(_config: &InputCoreConfig) -> SelectedDesktopRuntimeProviders {
+        #[cfg(target_os = "macos")]
+        let haptics_provider = DesktopHapticsProviderKind::MacosGcController;
+        #[cfg(not(target_os = "macos"))]
+        let haptics_provider = DesktopHapticsProviderKind::GilrsBasic;
+
         SelectedDesktopRuntimeProviders {
             input_provider: DesktopInputProviderKind::Gilrs,
-            haptics_provider: DesktopHapticsProviderKind::GilrsBasic,
+            haptics_provider,
         }
     }
 }
@@ -40,10 +46,16 @@ mod tests {
     };
 
     #[test]
-    fn selector_chooses_gilrs_and_basic_haptics_by_default() {
+    fn selector_chooses_expected_default_haptics_provider() {
         let selection = DesktopDriverSelector::select(&InputCoreConfig::default());
 
         assert_eq!(selection.input_provider, DesktopInputProviderKind::Gilrs);
+        #[cfg(target_os = "macos")]
+        assert_eq!(
+            selection.haptics_provider,
+            DesktopHapticsProviderKind::MacosGcController
+        );
+        #[cfg(not(target_os = "macos"))]
         assert_eq!(
             selection.haptics_provider,
             DesktopHapticsProviderKind::GilrsBasic

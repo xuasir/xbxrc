@@ -1,7 +1,10 @@
 use std::sync::{mpsc::Receiver, Arc, OnceLock};
 
-use ohmygamepad_core::{DeviceProfile, InputRuntimeError};
+use ohmygamepad_core::{
+    DesktopDriverSelector, DesktopHapticsProviderKind, DeviceProfile, InputRuntimeError,
+};
 use ohmygamepad_gilrs::{OhMyGamepadService, OhMyGamepadServiceConfig};
+use ohmygamepad_macos_gccontroller_haptics::MacosGcControllerHapticsProvider;
 use ohmygamepad_protocol::{
     LogicalPadBindingDto, LogicalPadStateDto, MultiControllerSamplingStrategyDto,
     OhMyGamepadRouteTargetDto, OhMyGamepadRumbleRequestDto, OhMyGamepadRumbleResultDto,
@@ -40,7 +43,7 @@ impl GamepadRuntimeHost {
     pub fn shared() -> Result<Self, GamepadRuntimeHostError> {
         let runtime = SHARED_GAMEPAD_RUNTIME
             .get_or_init(|| {
-                OhMyGamepadService::spawn(OhMyGamepadServiceConfig::default())
+                bootstrap_gamepad_runtime()
                     .map(Arc::new)
                     .map_err(|error| format!("bootstrapOhMyGamepadHost:{error}"))
             })
@@ -134,5 +137,23 @@ impl GamepadRuntimeHost {
         profiles: Vec<DeviceProfile>,
     ) -> Result<(), InputRuntimeError> {
         self.runtime.replace_device_profiles(profiles)
+    }
+}
+
+fn bootstrap_gamepad_runtime() -> Result<OhMyGamepadService, String> {
+    let config = OhMyGamepadServiceConfig::default();
+    let selected_providers = DesktopDriverSelector::select(&config.core);
+
+    match selected_providers.haptics_provider {
+        DesktopHapticsProviderKind::MacosGcController => {
+            OhMyGamepadService::spawn_with_haptics_provider(
+                config,
+                Box::new(MacosGcControllerHapticsProvider::default()),
+            )
+            .map_err(|error| error.to_string())
+        }
+        DesktopHapticsProviderKind::GilrsBasic | DesktopHapticsProviderKind::None => {
+            OhMyGamepadService::spawn(config).map_err(|error| error.to_string())
+        }
     }
 }

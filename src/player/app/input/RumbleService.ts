@@ -1,5 +1,6 @@
 import type {
   GamepadRumbleEffectDto,
+  GamepadRumbleResultDto,
   GamepadRumbleTargetDto,
   LogicalPadId,
 } from '@shared/gamepad/contract'
@@ -24,6 +25,26 @@ interface TargetRumbleState {
   packetEffect: GamepadRumbleEffectDto | null
   packetStopTimer: number | null
   packetRepeatTimer: number | null
+}
+
+interface BrowserRumbleActuator {
+  playEffect?: (
+    type: 'dual-rumble',
+    params: {
+      startDelay: number
+      duration: number
+      weakMagnitude: number
+      strongMagnitude: number
+    },
+  ) => Promise<unknown>
+  pulse?: (value: number, duration: number) => Promise<unknown>
+  reset?: () => Promise<unknown>
+}
+
+interface BrowserRumbleGamepad {
+  connected: boolean
+  vibrationActuator?: BrowserRumbleActuator | null
+  hapticActuators?: BrowserRumbleActuator[]
 }
 
 function createTargetState(): TargetRumbleState {
@@ -113,8 +134,8 @@ function parsePacketRumble(
 }
 
 /**
- * renderer 只负责把 rumble 意图交给主进程/Rust。
- * 具体设备能力、路由和降级策略统一由 OhMyGamepad 处理。
+ * renderer 以 native rumble 为主。
+ * 当宿主明确返回未实现时，再退回浏览器 haptics，避免 macOS 上完全无震动。
  */
 export class RumbleService {
   private readonly targetStates = new Map<string, TargetRumbleState>()
@@ -233,24 +254,67 @@ export class RumbleService {
     requestSeq: number,
   ): Promise<void> {
     try {
-      if (effect === null) {
-        await rpc.gamepad.stopRumble({ target })
+      const result = effect === null
+        ? await rpc.gamepad.stopRumble({ target })
+        : await rpc.gamepad.playRumble({
+            request: {
+              target,
+              effect,
+            },
+          })
+
+      if (result.accepted) {
+        return
       }
-      else {
-        await rpc.gamepad.playRumble({
-          request: {
-            target,
-            effect,
-          },
+
+      const fallbackApplied = await this.tryBrowserRumbleFallback(target, effect, result)
+      const state = this.targetStates.get(targetKey(target))
+      if (state && requestSeq === state.requestSeq && !fallbackApplied) {
+        console.warn('[player][rumble] native rumble unavailable', {
+          target,
+          effect,
+          reason: result.reason,
+          resolvedDeviceIds: result.resolvedDeviceIds,
         })
       }
     }
     catch (error) {
+      const fallbackApplied = await this.tryBrowserRumbleFallback(target, effect, null)
       const state = this.targetStates.get(targetKey(target))
-      if (state && requestSeq === state.requestSeq) {
+      if (state && requestSeq === state.requestSeq && !fallbackApplied) {
         console.warn('[player][rumble] native rumble request failed', error)
       }
     }
+  }
+
+  private async tryBrowserRumbleFallback(
+    target: GamepadRumbleTargetDto,
+    effect: GamepadRumbleEffectDto | null,
+    result: GamepadRumbleResultDto | null,
+  ): Promise<boolean> {
+    if (result !== null && !this.shouldUseBrowserFallback(result)) {
+      return false
+    }
+
+    try {
+      if (effect === null) {
+        return await stopBrowserRumble(target)
+      }
+
+      return await playBrowserRumble(target, effect)
+    }
+    catch (error) {
+      console.warn('[player][rumble] browser rumble fallback failed', {
+        target,
+        effect,
+        error,
+      })
+      return false
+    }
+  }
+
+  private shouldUseBrowserFallback(result: GamepadRumbleResultDto): boolean {
+    return result.reason === 'not-implemented' || result.reason === 'unsupported'
   }
 
   private pruneTargetState(target: GamepadRumbleTargetDto, state: TargetRumbleState): void {
@@ -283,4 +347,98 @@ export class RumbleService {
       state.packetRepeatTimer = null
     }
   }
+}
+
+function getBrowserGamepad(target: GamepadRumbleTargetDto): BrowserRumbleGamepad | null {
+  if (target.kind !== 'logical-pad') {
+    return null
+  }
+
+  if (typeof navigator.getGamepads !== 'function') {
+    return null
+  }
+
+  const gamepadIndex = LOGICAL_PAD_IDS.indexOf(target.padId)
+  if (gamepadIndex < 0) {
+    return null
+  }
+
+  const gamepad = navigator.getGamepads()[gamepadIndex] as BrowserRumbleGamepad | null
+  return gamepad?.connected ? gamepad : null
+}
+
+function clampMagnitude(value: number): number {
+  return Math.max(0, Math.min(1, value))
+}
+
+function resolveBrowserActuator(
+  gamepad: BrowserRumbleGamepad,
+): BrowserRumbleActuator | null {
+  return gamepad.vibrationActuator ?? gamepad.hapticActuators?.[0] ?? null
+}
+
+async function playBrowserRumble(
+  target: GamepadRumbleTargetDto,
+  effect: GamepadRumbleEffectDto,
+): Promise<boolean> {
+  const gamepad = getBrowserGamepad(target)
+  if (gamepad === null) {
+    return false
+  }
+
+  const actuator = resolveBrowserActuator(gamepad)
+  if (typeof actuator?.playEffect === 'function') {
+    await actuator.playEffect('dual-rumble', {
+      startDelay: effect.startDelayMs,
+      duration: Math.max(1, effect.durationMs),
+      strongMagnitude: clampMagnitude(Math.max(effect.strongMagnitude, effect.leftTrigger)),
+      weakMagnitude: clampMagnitude(Math.max(effect.weakMagnitude, effect.rightTrigger)),
+    })
+    return true
+  }
+
+  if (typeof actuator?.pulse === 'function') {
+    const value = clampMagnitude(
+      Math.max(
+        effect.strongMagnitude,
+        effect.weakMagnitude,
+        effect.leftTrigger,
+        effect.rightTrigger,
+      ),
+    )
+    await actuator.pulse(value, Math.max(1, effect.durationMs))
+    return true
+  }
+
+  return false
+}
+
+async function stopBrowserRumble(target: GamepadRumbleTargetDto): Promise<boolean> {
+  const gamepad = getBrowserGamepad(target)
+  if (gamepad === null) {
+    return false
+  }
+
+  const actuator = resolveBrowserActuator(gamepad)
+  if (typeof actuator?.reset === 'function') {
+    await actuator.reset()
+    return true
+  }
+
+  if (typeof actuator?.playEffect === 'function') {
+    await actuator.playEffect('dual-rumble', {
+      startDelay: 0,
+      duration: 1,
+      strongMagnitude: 0,
+      weakMagnitude: 0,
+    })
+    return true
+  }
+
+  if (typeof actuator?.pulse === 'function') {
+    await actuator.pulse(0, 1)
+    return true
+  }
+
+  return false
 }

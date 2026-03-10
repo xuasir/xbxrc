@@ -4,6 +4,7 @@ members = [
   "crates/ohmygamepad/core",
   "crates/ohmygamepad/bridge/host",
   "crates/ohmygamepad/backends/gilrs",
+  "crates/ohmygamepad/backends/macos-gccontroller-haptics",
   "crates/ohmygamepad/backends/hid-dualsense",
   "crates/ohmygamepad/backends/win-xbox-haptics",
   "crates/xbxengine/protocol",

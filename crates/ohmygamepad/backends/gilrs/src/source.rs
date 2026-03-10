@@ -107,10 +107,13 @@ pub struct RealGilrsSource {
 }
 
 impl RealGilrsSource {
-    pub fn new() -> Result<(Self, GilrsRumbleHandle), GilrsSourceInitError> {
-        let gilrs = match GilrsBuilder::new().with_force_feedback(true).build() {
-            Ok(gilrs) => gilrs,
-            Err(gilrs::Error::NotImplemented(gilrs)) => gilrs,
+    pub fn new() -> Result<(Self, Option<GilrsRumbleHandle>), GilrsSourceInitError> {
+        let (gilrs, rumble_supported) = match GilrsBuilder::new().with_force_feedback(true).build()
+        {
+            Ok(gilrs) => (gilrs, true),
+            // force feedback 在部分平台（尤其 macOS）会退回 NotImplemented。
+            // 这里保留输入采集，但显式关闭 rumble backend，避免上层把无效请求误报成 accepted。
+            Err(gilrs::Error::NotImplemented(gilrs)) => (gilrs, false),
             Err(error) => {
                 return Err(GilrsSourceInitError::new(format!(
                     "failed to initialize gilrs: {error}"
@@ -118,15 +121,20 @@ impl RealGilrsSource {
             }
         };
 
-        Ok(Self::from_gilrs(gilrs))
+        Ok(Self::from_gilrs(gilrs, rumble_supported))
     }
 
-    fn from_gilrs(gilrs: Gilrs) -> (Self, GilrsRumbleHandle) {
+    fn from_gilrs(gilrs: Gilrs, rumble_supported: bool) -> (Self, Option<GilrsRumbleHandle>) {
         let (command_tx, rumble_command_rx) = mpsc::channel();
         let pending_events = gilrs
             .gamepads()
             .map(|(id, gamepad)| connected_event(id.to_string(), &gamepad, now_ms()))
             .collect();
+        let rumble_handle = if rumble_supported {
+            Some(GilrsRumbleHandle { command_tx })
+        } else {
+            None
+        };
 
         (
             Self {
@@ -135,7 +143,7 @@ impl RealGilrsSource {
                 rumble_command_rx,
                 active_rumble_effects: HashMap::new(),
             },
-            GilrsRumbleHandle { command_tx },
+            rumble_handle,
         )
     }
 

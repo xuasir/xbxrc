@@ -1,4 +1,4 @@
-use ohmygamepad_core::InputRuntimeError;
+use ohmygamepad_core::{HapticsProvider, HapticsProviderError, InputRuntimeError};
 use ohmygamepad_protocol::{
     OhMyGamepadBackendKindDto, OhMyGamepadDeviceDto, OhMyGamepadRumbleEffectDto,
     OhMyGamepadRumbleRejectionReasonDto, OhMyGamepadRumbleResultDto, OhMyGamepadRumbleTargetDto,
@@ -30,6 +30,41 @@ impl ServiceRumbleBackend for GilrsRumbleHandle {
     fn stop_rumble(&self, device_ids: &[String]) -> Result<(), InputRuntimeError> {
         self.stop_rumble(device_ids.to_vec())
             .map_err(|_| InputRuntimeError::CommandChannelClosed)
+    }
+}
+
+pub(crate) fn rumble_backend_from_haptics_provider(
+    provider: Box<dyn HapticsProvider>,
+) -> Box<dyn ServiceRumbleBackend> {
+    Box::new(HapticsProviderRumbleBackend { provider })
+}
+
+struct HapticsProviderRumbleBackend {
+    provider: Box<dyn HapticsProvider>,
+}
+
+impl ServiceRumbleBackend for HapticsProviderRumbleBackend {
+    fn play_rumble(
+        &self,
+        device_ids: &[String],
+        effect: &OhMyGamepadRumbleEffectDto,
+    ) -> Result<(), InputRuntimeError> {
+        self.provider
+            .play_rumble(device_ids, effect)
+            .map_err(map_haptics_provider_error)
+    }
+
+    fn stop_rumble(&self, device_ids: &[String]) -> Result<(), InputRuntimeError> {
+        self.provider
+            .stop_rumble(device_ids)
+            .map_err(map_haptics_provider_error)
+    }
+}
+
+fn map_haptics_provider_error(error: HapticsProviderError) -> InputRuntimeError {
+    match error {
+        HapticsProviderError::Unsupported => InputRuntimeError::HapticsUnavailable,
+        HapticsProviderError::TransportClosed => InputRuntimeError::HapticsTransportFailed,
     }
 }
 
