@@ -47,6 +47,10 @@ pub fn has_usable_ice_candidates(candidates: &[IceCandidate]) -> bool {
     })
 }
 
+const ERROR_CODE_UNEXPECTED_STATE: &str = "SessionUnexpectedState";
+const ERROR_MESSAGE_SDP_EXCHANGE_SENT: &str = "ServerSdpExchangeCommandSent";
+const ERROR_MESSAGE_UNEXPECTED_STATE: &str = "UnexpectedState";
+
 /// keepalive 错误忽略策略：404 直接忽略；400 仅忽略已知状态冲突。
 pub fn should_ignore_keepalive_error(status: Option<u16>, body: Option<&str>) -> bool {
     if status == Some(404) {
@@ -67,8 +71,9 @@ pub fn should_ignore_keepalive_error(status: Option<u16>, body: Option<&str>) ->
     let code = parsed.get("code").and_then(Value::as_str).unwrap_or("");
     let message = parsed.get("message").and_then(Value::as_str).unwrap_or("");
 
-    code == "SessionUnexpectedState"
-        && (message.contains("ServerSdpExchangeCommandSent") || message.contains("UnexpectedState"))
+    code == ERROR_CODE_UNEXPECTED_STATE
+        && (message.contains(ERROR_MESSAGE_SDP_EXCHANGE_SENT)
+            || message.contains(ERROR_MESSAGE_UNEXPECTED_STATE))
 }
 
 #[cfg(test)]

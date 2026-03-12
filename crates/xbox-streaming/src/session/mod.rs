@@ -4,6 +4,7 @@ pub mod flow;
 pub mod lifecycle;
 pub mod monitor;
 pub mod recovery;
+pub mod scheduler;
 pub mod signaling;
 pub mod store;
 

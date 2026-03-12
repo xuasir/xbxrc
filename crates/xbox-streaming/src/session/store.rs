@@ -3,6 +3,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 use crate::policy::Plan;
+use crate::session::monitor::SessionMonitorMetadata;
 
 /// 会话取消令牌：监控循环只读这个标记，不关心存储实现。
 #[derive(Debug, Clone, Default)]
@@ -26,11 +27,7 @@ impl SessionCancelToken {
 pub struct SessionRuntimeRecord<T: Clone> {
     pub snapshot: T,
     pub plan: Plan,
-    pub created_at_ms: u64,
-    pub last_observed_state: Option<String>,
-    pub state_observed_at_ms: Option<u64>,
-    pub repeated_state_count: u32,
-    pub monitor_attempt_count: u32,
+    pub metadata: SessionMonitorMetadata,
     pub cancelled: SessionCancelToken,
 }
 
@@ -39,11 +36,13 @@ impl<T: Clone> SessionRuntimeRecord<T> {
         Self {
             snapshot,
             plan,
-            created_at_ms,
-            last_observed_state: None,
-            state_observed_at_ms: None,
-            repeated_state_count: 0,
-            monitor_attempt_count: 0,
+            metadata: SessionMonitorMetadata {
+                created_at_ms,
+                last_observed_state: None,
+                state_observed_at_ms: None,
+                repeated_state_count: 0,
+                monitor_attempt_count: 0,
+            },
             cancelled: SessionCancelToken::default(),
         }
     }
@@ -87,8 +86,8 @@ impl<T: Clone> SessionRuntimeStore<T> {
 
     pub fn upsert(&mut self, session_id: String, mut record: SessionRuntimeRecord<T>) {
         if let Some(old) = self.records.remove(&session_id) {
-            // 同一 session 的状态更新必须复用原 cancel token，
-            // 否则后台 monitor/keepalive loop 会在第一次 upsert 后把自己误取消。
+            // 同一 session 的状态回写必须沿用既有 cancel token，
+            // 否则后台 monitor/keepalive loop 会被自己的 upsert 提前取消。
             record.cancelled = old.cancelled;
         }
         self.records.insert(session_id, record);
@@ -136,13 +135,14 @@ mod tests {
             crate::policy::Plan::default(),
             2,
         );
-        updated.repeated_state_count = 3;
+        updated.metadata.repeated_state_count = 3;
 
         store.upsert("session-1".to_string(), updated);
 
         let record = store.get("session-1").expect("record should exist");
         assert_eq!(record.snapshot, "snapshot-2");
-        assert_eq!(record.repeated_state_count, 3);
+        assert_eq!(record.metadata.repeated_state_count, 3);
         assert!(!cancel.is_cancelled());
+        assert!(!record.cancelled.is_cancelled());
     }
 }

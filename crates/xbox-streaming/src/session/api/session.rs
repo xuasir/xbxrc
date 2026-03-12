@@ -2,6 +2,7 @@ use serde_json::{json, Value};
 use xbox_webapi::{SessionApi as CrateSessionApi, WebApiError};
 
 use crate::policy::Plan;
+use crate::session::access::StreamingToken;
 use crate::session::monitor::{QueueDetails, SessionErrorDetails};
 
 /// 基于 xbox-webapi 的会话网关：封装 payload 细节与返回值适配。
@@ -14,34 +15,17 @@ pub struct WebApiSessionGateway {
 impl WebApiSessionGateway {
     /// RFC: 凭证属于执行层，结合 Plan 策略构建 Gateway。
     /// 执行层不再自行推导设备画像，统一消费编译产出的 headers。
-    pub fn from_plan_with_token(
-        plan: Plan,
-        token: Value,
-    ) -> Result<Self, crate::session::SessionFlowError> {
-        let target_type = if plan.session.target.is_home() {
-            "home"
-        } else {
-            "cloud"
-        };
-
-        let gs_token = token
-            .get("data")
-            .unwrap_or(&token)
-            .get("gsToken")
-            .and_then(Value::as_str)
-            .ok_or_else(|| {
-                crate::session::SessionFlowError::message("gsToken missing in credential")
-            })?
-            .to_string();
+    pub fn new(plan: Plan, token: StreamingToken) -> Self {
+        let target_type = plan.session.target.as_str();
 
         let session_api = CrateSessionApi::new(
             target_type.to_string(),
             plan.session.base_url.clone(),
-            gs_token,
+            token.gs_token,
             plan.session.headers.clone(),
         );
 
-        Ok(Self { plan, session_api })
+        Self { plan, session_api }
     }
 
     pub async fn start_stream(&self) -> Result<String, WebApiError> {

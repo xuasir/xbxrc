@@ -218,11 +218,14 @@ impl StreamingQueryService {
         })
         .map_err(|e| e.to_string())?;
 
-        // 既然已经有 token 了，直接使用 from_plan_with_token 构造。
-        Ok(Some(
-            WebApiSessionGateway::from_plan_with_token(output.plan, token.clone())
-                .map_err(|e| e.to_string())?,
-        ))
+        let streaming_token =
+            xbox_streaming::session::access::StreamingToken::parse(token).map_err(|e| e.to_string())?;
+
+        // 既然已经有 token 了，直接使用 new 构造。
+        Ok(Some(WebApiSessionGateway::new(
+            output.plan,
+            streaming_token,
+        )))
     }
 }
 

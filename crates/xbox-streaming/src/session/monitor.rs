@@ -16,16 +16,23 @@ pub struct SessionRuntimeSnapshot {
     pub error_details: Option<SessionErrorDetails>,
 }
 
-/// 会话监控的内部状态，供 adapter 持久保存并在每次 tick 后回写。
+/// 会话监控元数据：供 adapter 持久保存并在每次 tick 后回写。
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
-pub struct SessionMonitorState {
-    pub runtime: SessionRuntimeSnapshot,
+pub struct SessionMonitorMetadata {
     pub created_at_ms: u64,
     pub last_observed_state: Option<String>,
     pub state_observed_at_ms: Option<u64>,
     pub repeated_state_count: u32,
     pub monitor_attempt_count: u32,
+}
+
+/// 会话监控的内部状态，由运行时快照与元数据组合而成。
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionMonitorState {
+    pub runtime: SessionRuntimeSnapshot,
+    pub metadata: SessionMonitorMetadata,
 }
 
 /// 一次监控 tick 的输入数据。
@@ -45,7 +52,8 @@ pub struct SessionMonitorInput {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct SessionMonitorResult {
-    pub state: SessionMonitorState,
+    pub runtime: SessionRuntimeSnapshot,
+    pub metadata: SessionMonitorMetadata,
     pub should_continue: bool,
     pub should_send_connect_token: bool,
 }
@@ -90,14 +98,14 @@ pub fn apply_monitor_tick(
     mut state: SessionMonitorState,
     input: SessionMonitorInput,
 ) -> SessionMonitorResult {
-    state.monitor_attempt_count += 1;
+    state.metadata.monitor_attempt_count += 1;
 
-    if state.last_observed_state == input.stream_state {
-        state.repeated_state_count += 1;
+    if state.metadata.last_observed_state == input.stream_state {
+        state.metadata.repeated_state_count += 1;
     } else {
-        state.last_observed_state = input.stream_state.clone();
-        state.state_observed_at_ms = Some(input.now_ms);
-        state.repeated_state_count = 1;
+        state.metadata.last_observed_state = input.stream_state.clone();
+        state.metadata.state_observed_at_ms = Some(input.now_ms);
+        state.metadata.repeated_state_count = 1;
     }
 
     if let Some(timeout_error) =
@@ -112,7 +120,8 @@ pub fn apply_monitor_tick(
         state.runtime.stream_state = input.stream_state;
         state.runtime.error_details = Some(timeout_error);
         return SessionMonitorResult {
-            state,
+            runtime: state.runtime,
+            metadata: state.metadata,
             should_continue: false,
             should_send_connect_token: false,
         };
@@ -125,7 +134,8 @@ pub fn apply_monitor_tick(
             state.runtime.queue = None;
             state.runtime.error_details = None;
             SessionMonitorResult {
-                state,
+                runtime: state.runtime,
+                metadata: state.metadata,
                 should_continue: false,
                 should_send_connect_token: false,
             }
@@ -135,7 +145,8 @@ pub fn apply_monitor_tick(
             state.runtime.stream_state = input.stream_state;
             state.runtime.error_details = None;
             SessionMonitorResult {
-                state,
+                runtime: state.runtime,
+                metadata: state.metadata,
                 should_continue: true,
                 should_send_connect_token: false,
             }
@@ -145,7 +156,8 @@ pub fn apply_monitor_tick(
             state.runtime.stream_state = input.stream_state;
             state.runtime.error_details = None;
             SessionMonitorResult {
-                state,
+                runtime: state.runtime,
+                metadata: state.metadata,
                 should_continue: true,
                 should_send_connect_token: true,
             }
@@ -158,7 +170,8 @@ pub fn apply_monitor_tick(
             });
             state.runtime.error_details = None;
             SessionMonitorResult {
-                state,
+                runtime: state.runtime,
+                metadata: state.metadata,
                 should_continue: true,
                 should_send_connect_token: false,
             }
@@ -168,7 +181,8 @@ pub fn apply_monitor_tick(
             state.runtime.stream_state = input.stream_state;
             state.runtime.error_details = input.error_details;
             SessionMonitorResult {
-                state,
+                runtime: state.runtime,
+                metadata: state.metadata,
                 should_continue: false,
                 should_send_connect_token: false,
             }
@@ -177,7 +191,8 @@ pub fn apply_monitor_tick(
             state.runtime.player_state = "pending".to_string();
             state.runtime.stream_state = input.stream_state;
             SessionMonitorResult {
-                state,
+                runtime: state.runtime,
+                metadata: state.metadata,
                 should_continue: true,
                 should_send_connect_token: false,
             }
@@ -195,22 +210,14 @@ where
 {
     let state = SessionMonitorState {
         runtime: record.snapshot.runtime_snapshot(),
-        created_at_ms: record.created_at_ms,
-        last_observed_state: record.last_observed_state.clone(),
-        state_observed_at_ms: record.state_observed_at_ms,
-        repeated_state_count: record.repeated_state_count,
-        monitor_attempt_count: record.monitor_attempt_count,
+        metadata: record.metadata.clone(),
     };
     let result = apply_monitor_tick(state, input);
 
     record
         .snapshot
-        .replace_runtime_snapshot(result.state.runtime);
-    record.created_at_ms = result.state.created_at_ms;
-    record.last_observed_state = result.state.last_observed_state;
-    record.state_observed_at_ms = result.state.state_observed_at_ms;
-    record.repeated_state_count = result.state.repeated_state_count;
-    record.monitor_attempt_count = result.state.monitor_attempt_count;
+        .replace_runtime_snapshot(result.runtime);
+    record.metadata = result.metadata;
 
     SessionMonitorControl {
         should_continue: result.should_continue,
@@ -228,7 +235,7 @@ fn get_state_timeout_error(
         return None;
     }
 
-    let started = state.state_observed_at_ms.unwrap_or(state.created_at_ms);
+    let started = state.metadata.state_observed_at_ms.unwrap_or(state.metadata.created_at_ms);
     let elapsed = now_ms.saturating_sub(started);
     if elapsed < state_timeout_ms.max(1_000) {
         return None;
@@ -248,7 +255,8 @@ fn get_state_timeout_error(
 mod tests {
     use super::{
         apply_monitor_tick, apply_monitor_tick_to_record, QueueDetails, SessionMonitorInput,
-        SessionMonitorState, SessionRuntimeBinding, SessionRuntimeSnapshot,
+        SessionMonitorMetadata, SessionMonitorState, SessionRuntimeBinding,
+        SessionRuntimeSnapshot,
     };
     use crate::session::store::SessionRuntimeRecord;
 
@@ -262,11 +270,13 @@ mod tests {
                 queue: None,
                 error_details: None,
             },
-            created_at_ms: 1000,
-            last_observed_state: None,
-            state_observed_at_ms: None,
-            repeated_state_count: 0,
-            monitor_attempt_count: 0,
+            metadata: SessionMonitorMetadata {
+                created_at_ms: 1000,
+                last_observed_state: None,
+                state_observed_at_ms: None,
+                repeated_state_count: 0,
+                monitor_attempt_count: 0,
+            },
         }
     }
 
@@ -303,8 +313,8 @@ mod tests {
             },
         );
 
-        assert_eq!(result.state.runtime.player_state, "queued");
-        assert!(result.state.runtime.queue.is_some());
+        assert_eq!(result.runtime.player_state, "queued");
+        assert!(result.runtime.queue.is_some());
         assert!(result.should_continue);
     }
 
@@ -329,8 +339,8 @@ mod tests {
     #[test]
     fn provisioning_timeout_marks_failed_and_stops() {
         let mut state = sample_state();
-        state.state_observed_at_ms = Some(1000);
-        state.last_observed_state = Some("Provisioning".to_string());
+        state.metadata.state_observed_at_ms = Some(1000);
+        state.metadata.last_observed_state = Some("Provisioning".to_string());
 
         let result = apply_monitor_tick(
             state,
@@ -343,9 +353,9 @@ mod tests {
             },
         );
 
-        assert_eq!(result.state.runtime.player_state, "failed");
+        assert_eq!(result.runtime.player_state, "failed");
         assert!(!result.should_continue);
-        assert!(result.state.runtime.error_details.is_some());
+        assert!(result.runtime.error_details.is_some());
     }
 
     #[test]
@@ -374,7 +384,7 @@ mod tests {
         assert!(!control.should_continue);
         assert!(!control.should_send_connect_token);
         assert_eq!(record.snapshot.runtime.player_state, "started");
-        assert_eq!(record.last_observed_state.as_deref(), Some("Provisioned"));
-        assert_eq!(record.monitor_attempt_count, 1);
+        assert_eq!(record.metadata.last_observed_state.as_deref(), Some("Provisioned"));
+        assert_eq!(record.metadata.monitor_attempt_count, 1);
     }
 }

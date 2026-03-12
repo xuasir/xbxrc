@@ -13,7 +13,6 @@ members = [
   "crates/xbox-streaming",
   "crates/xbox-webapi",
   "src-tauri",
-  "archived/xbxengine-app",
 ]
 default-members = [ "src-tauri" ]
 resolver = "2"

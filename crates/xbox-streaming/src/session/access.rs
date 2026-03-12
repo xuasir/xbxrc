@@ -1,3 +1,4 @@
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::policy::compiler::resolve_session_access;
@@ -6,18 +7,33 @@ use crate::policy::context::Context;
 use crate::policy::session::{ResolvedSessionAccess, SessionAccessContext};
 use crate::policy::types::{CompileError, Region, Target};
 
+/// 强类型凭证：屏蔽原始 JSON 解析细节。
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct StreamingToken {
+    pub gs_token: String,
+}
+
+impl StreamingToken {
+    pub fn parse(token: &Value) -> Result<Self, CompileError> {
+        let data = token.get("data").unwrap_or(token);
+        let gs_token = data
+            .get("gsToken")
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(ToOwned::to_owned)
+            .ok_or(CompileError::MissingGsToken)?;
+
+        Ok(Self { gs_token })
+    }
+}
+
 /// 从认证 token 中提取会话接入上下文，供 compiler 做统一解析。
 pub fn parse_session_access_context(token: &Value) -> Result<SessionAccessContext, CompileError> {
+    let streaming_token = StreamingToken::parse(token)?;
+
     let data = token.get("data").unwrap_or(token);
-
-    let gs_token = data
-        .get("gsToken")
-        .and_then(Value::as_str)
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .map(ToOwned::to_owned)
-        .ok_or(CompileError::MissingGsToken)?;
-
     let raw_regions = data
         .get("offeringSettings")
         .and_then(|value| value.get("regions"))
@@ -33,7 +49,7 @@ pub fn parse_session_access_context(token: &Value) -> Result<SessionAccessContex
     }
 
     Ok(SessionAccessContext {
-        gs_token: Some(gs_token),
+        gs_token: Some(streaming_token.gs_token),
         regions,
     })
 }

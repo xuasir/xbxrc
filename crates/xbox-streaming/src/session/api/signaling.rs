@@ -1,9 +1,9 @@
-use serde_json::Value;
 use xbox_webapi::{
     IceCandidate as WebApiIceCandidate, SignalingApi as CrateSignalingApi, WebApiError,
 };
 
 use crate::policy::Plan;
+use crate::session::access::StreamingToken;
 use crate::session::signaling::ice::{IceCandidate, IcePolicy};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -21,33 +21,16 @@ pub struct WebApiSignalingGateway {
 
 impl WebApiSignalingGateway {
     /// RFC: 凭证属于执行层，结合 Plan 策略构建 Gateway。
-    pub fn from_plan_with_token(
-        plan: Plan,
-        token: Value,
-    ) -> Result<Self, crate::session::SessionFlowError> {
-        let target_type = if plan.session.target.is_home() {
-            "home"
-        } else {
-            "cloud"
-        };
-
-        let gs_token = token
-            .get("data")
-            .unwrap_or(&token)
-            .get("gsToken")
-            .and_then(Value::as_str)
-            .ok_or_else(|| {
-                crate::session::SessionFlowError::message("gsToken missing in credential")
-            })?
-            .to_string();
+    pub fn new(plan: Plan, token: StreamingToken) -> Self {
+        let target_type = plan.session.target.as_str();
 
         let session_base_path = format!("{}/v5/sessions/{target_type}", plan.session.base_url);
-        let signaling_api = CrateSignalingApi::new(session_base_path, gs_token);
+        let signaling_api = CrateSignalingApi::new(session_base_path, token.gs_token);
 
-        Ok(Self {
+        Self {
             signaling_api,
             ice_policy: IcePolicy::new(plan.negotiation.prefer_ipv6),
-        })
+        }
     }
 
     pub async fn send_sdp(&self, session_id: &str, sdp: &str) -> Result<(), WebApiError> {

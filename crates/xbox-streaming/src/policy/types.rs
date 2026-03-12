@@ -31,6 +31,13 @@ impl Target {
     pub fn is_home(self) -> bool {
         matches!(self, Self::Home)
     }
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Home => "home",
+            Self::Cloud => "cloud",
+        }
+    }
 }
 
 /// owner 用于描述某段能力归浏览器还是 sidecar。

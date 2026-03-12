@@ -5,19 +5,19 @@ use std::fmt::{Display, Formatter};
 use std::sync::Arc;
 
 use crate::policy::Plan;
+use crate::session::access::StreamingToken;
 use crate::session::api::session::WebApiSessionGateway;
 use crate::session::api::signaling::{AnswerPayload, WebApiSignalingGateway};
 use crate::session::lifecycle::{
     is_remote_session_not_found, parse_session_id_from_path, resolve_active_target_type,
 };
-use crate::session::monitor::{
-    apply_monitor_tick_to_record, SessionMonitorInput, SessionRuntimeBinding,
-};
+use crate::session::monitor::SessionRuntimeBinding;
+use crate::session::scheduler::SessionScheduler;
 use crate::session::signaling::ice::IceCandidate;
 use crate::session::signaling::logic::{
-    decide_ice_poll, decide_offer_poll, should_ignore_keepalive_error, PollDecision,
+    decide_ice_poll, decide_offer_poll, PollDecision,
 };
-use crate::session::store::{SessionCancelToken, SessionRuntimeRecord, SessionRuntimeStore};
+use crate::session::store::{SessionRuntimeRecord, SessionRuntimeStore};
 
 /// session flow 的统一错误，便于 adapter 只做一次映射。
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -143,16 +143,16 @@ where
     S: SessionFlowSnapshot,
     P: SessionFlowProvider,
 {
-    inner: Arc<SessionFlowServiceInner<S, P>>,
+    pub(crate) inner: Arc<SessionFlowServiceInner<S, P>>,
 }
 
-struct SessionFlowServiceInner<S, P>
+pub(crate) struct SessionFlowServiceInner<S, P>
 where
     S: SessionFlowSnapshot,
     P: SessionFlowProvider,
 {
-    provider: P,
-    sessions: tokio::sync::RwLock<SessionRuntimeStore<S>>,
+    pub(crate) provider: P,
+    pub(crate) sessions: tokio::sync::RwLock<SessionRuntimeStore<S>>,
 }
 
 impl<S, P> SessionFlowService<S, P>
@@ -178,11 +178,7 @@ where
         let session_id = parse_session_id_from_path(&session_path)
             .map_err(|error| SessionFlowError::message(error.to_string()))?;
 
-        let target_type = if plan.session.target.is_home() {
-            "home"
-        } else {
-            "cloud"
-        };
+        let target_type = plan.session.target.as_str();
         let snapshot = S::new_pending(
             session_id.clone(),
             session_path,
@@ -194,25 +190,15 @@ where
             sessions.insert_new_with_plan(session_id.clone(), snapshot.clone(), plan, now_ms())
         };
 
-        let service = Self {
-            inner: Arc::clone(&self.inner),
-        };
-        let monitor_cancelled = cancelled.clone();
-        tokio::spawn(async move {
-            service
-                .monitor_session_loop(session_id, monitor_cancelled, monitor_interval_ms)
-                .await;
-        });
-
-        let keepalive_service = Self {
-            inner: Arc::clone(&self.inner),
-        };
-        let keepalive_session_id = snapshot.session_id().to_string();
-        tokio::spawn(async move {
-            keepalive_service
-                .keepalive_session_loop(keepalive_session_id, cancelled, keepalive_interval_ms)
-                .await;
-        });
+        let scheduler = SessionScheduler::new(Arc::clone(&self.inner));
+        scheduler
+            .start_loops(
+                session_id,
+                cancelled,
+                monitor_interval_ms,
+                keepalive_interval_ms,
+            )
+            .await;
 
         Ok(snapshot)
     }
@@ -415,24 +401,8 @@ where
     }
 
     pub async fn send_keepalive(&self, session_id: &str) -> Result<bool, SessionFlowError> {
-        let record = self.get_session_record(session_id).await;
-        let Some(record) = record else {
-            return Ok(false);
-        };
-
-        let api = self.create_session_api(&record.plan).await?;
-        let result = api.send_keepalive(session_id).await;
-        match result {
-            Ok(()) => Ok(true),
-            Err(error) => {
-                let flow_error = map_webapi_error(error);
-                if should_ignore_keepalive_error(flow_error.status, flow_error.body.as_deref()) {
-                    Ok(false)
-                } else {
-                    Err(flow_error)
-                }
-            }
-        }
+        let scheduler = SessionScheduler::new(Arc::clone(&self.inner));
+        scheduler.send_keepalive(session_id).await
     }
 
     pub async fn list_active_sessions(&self, target_type: Option<String>) -> ListActiveSessions<S> {
@@ -485,30 +455,30 @@ where
         target_id: &str,
         schedule: &crate::policy::session::SessionSchedulePlan,
     ) -> Result<(), SessionFlowError> {
-        let started_at_ms = now_ms();
-        let ready_timeout_ms = schedule.ready_timeout_ms;
         let interval_ms = schedule.monitor_interval_ms.max(200);
 
-        loop {
-            let consoles = self.inner.provider.get_remote_consoles().await?;
-            let matched = consoles
-                .iter()
-                .find(|console| matches_remote_console_id(target_id, console));
-            if let Some(console) = matched {
-                if is_remote_console_ready(console) {
-                    return Ok(());
+        wait_until(
+            interval_ms,
+            schedule.ready_timeout_ms,
+            || async {
+                let consoles = self.inner.provider.get_remote_consoles().await?;
+                let matched = consoles
+                    .iter()
+                    .find(|console| matches_remote_console_id(target_id, console));
+                if let Some(console) = matched {
+                    if is_remote_console_ready(console) {
+                        return Ok(Some(()));
+                    }
                 }
-            }
-
-            let elapsed_ms = now_ms().saturating_sub(started_at_ms);
-            if elapsed_ms >= ready_timeout_ms {
-                return Err(SessionFlowError::message(format!(
-                    "remoteConsoleNotReady:targetId={target_id}, elapsedMs={elapsed_ms}"
-                )));
-            }
-
-            tokio::time::sleep(std::time::Duration::from_millis(interval_ms)).await;
-        }
+                Ok(None)
+            },
+            || {
+                SessionFlowError::message(format!(
+                    "remoteConsoleNotReady:targetId={target_id}"
+                ))
+            },
+        )
+        .await
     }
 
     async fn wait_until_session_started_or_failed(
@@ -516,175 +486,45 @@ where
         session_id: &str,
         schedule: &crate::policy::session::SessionSchedulePlan,
     ) -> Result<SessionProgressSnapshot, SessionFlowError> {
-        let started_at_ms = now_ms();
-        let startup_timeout_ms = schedule.startup_timeout_ms;
         let interval_ms = schedule.monitor_interval_ms.max(200);
         // 给 monitor 一次额外 tick，把精确踩线的“卡住”状态先收敛成 failed，
         // 避免这里抢先抛出通用 timeout，丢掉更具体的上下文。
-        let timeout_with_grace_ms = startup_timeout_ms.saturating_add(interval_ms);
+        let timeout_with_grace_ms = schedule.startup_timeout_ms.saturating_add(interval_ms);
+        let session_id_owned = session_id.to_string();
 
-        loop {
-            let progress = self
-                .get_session_progress(session_id)
-                .await
-                .ok_or_else(|| missing_session_error(session_id))?;
+        wait_until(
+            interval_ms,
+            timeout_with_grace_ms,
+            || async {
+                let progress = self
+                    .get_session_progress(&session_id_owned)
+                    .await
+                    .ok_or_else(|| missing_session_error(&session_id_owned))?;
 
-            if progress.phase == SessionPhase::SessionReady {
-                return Ok(progress);
-            }
-            if progress.phase == SessionPhase::Failed || progress.phase == SessionPhase::Closed {
-                let message = progress
-                    .error_message
-                    .clone()
-                    .unwrap_or_else(|| "streamingStartFailed".to_string());
-                return Err(SessionFlowError::message(message));
-            }
-
-            let elapsed_ms = now_ms().saturating_sub(started_at_ms);
-            if elapsed_ms >= timeout_with_grace_ms {
-                return Err(SessionFlowError::message(format!(
-                    "streamingStartTimeout:sessionId={session_id}, elapsedMs={elapsed_ms}"
-                )));
-            }
-
-            tokio::time::sleep(std::time::Duration::from_millis(interval_ms)).await;
-        }
-    }
-
-    async fn monitor_session_loop(
-        &self,
-        session_id: String,
-        cancelled: SessionCancelToken,
-        monitor_interval_ms: u64,
-    ) {
-        loop {
-            if cancelled.is_cancelled() {
-                return;
-            }
-
-            let should_continue = self.monitor_session_tick(&session_id).await;
-            if !should_continue {
-                return;
-            }
-
-            tokio::time::sleep(std::time::Duration::from_millis(monitor_interval_ms)).await;
-        }
-    }
-
-    async fn keepalive_session_loop(
-        &self,
-        session_id: String,
-        cancelled: SessionCancelToken,
-        keepalive_interval_ms: u64,
-    ) {
-        loop {
-            if cancelled.is_cancelled() {
-                return;
-            }
-
-            tokio::time::sleep(std::time::Duration::from_millis(keepalive_interval_ms)).await;
-
-            if cancelled.is_cancelled() {
-                return;
-            }
-
-            let progress = self.get_session_progress(&session_id).await;
-            let Some(progress) = progress else {
-                return;
-            };
-            if progress.phase != SessionPhase::SessionReady
-                && progress.phase != SessionPhase::Recovering
-            {
-                continue;
-            }
-
-            match self.send_keepalive(&session_id).await {
-                Ok(true) => {}
-                Ok(false) => {
-                    if self.get_session_record(&session_id).await.is_none() {
-                        return;
-                    }
+                if progress.phase == SessionPhase::SessionReady {
+                    return Ok(Some(progress));
                 }
-                Err(_) => {
-                    // keepalive 失败不应中断循环，等待下一轮再尝试。
+                if progress.phase == SessionPhase::Failed || progress.phase == SessionPhase::Closed {
+                    let message = progress
+                        .error_message
+                        .clone()
+                        .unwrap_or_else(|| "streamingStartFailed".to_string());
+                    return Err(SessionFlowError::message(message));
                 }
-            }
-        }
-    }
-
-    async fn monitor_session_tick(&self, session_id: &str) -> bool {
-        let mut record = match self.get_session_record(session_id).await {
-            Some(record) => record,
-            None => return false,
-        };
-        // 提前克隆 plan 以规避生命周期借用冲突。
-        let plan = record.plan.clone();
-        let api = match self.create_session_api(&plan).await {
-            Ok(api) => api,
-            Err(_) => return true, // 临时凭证错误不中断监控，等待下次重试
-        };
-
-        let state_response = api.get_stream_state(session_id).await;
-        let (state, error_details) = match state_response {
-            Ok(value) => value,
-            Err(error) => {
-                let flow_error = map_webapi_error(error);
-                if flow_error.status == Some(404) {
-                    self.clear_session(session_id).await;
-                    return false;
-                }
-                return true;
-            }
-        };
-
-        let waiting_queue = if state.as_deref() == Some("WaitingForResources") {
-            match api.get_waiting_times().await {
-                Ok(queue) => Some(queue),
-                Err(_) => {
-                    let runtime = record.snapshot.runtime_snapshot();
-                    Some(runtime.queue.map(|queue| queue.details).unwrap_or_default())
-                }
-            }
-        } else {
-            None
-        };
-
-        let monitor_input = SessionMonitorInput {
-            now_ms: now_ms(),
-            state_timeout_ms: plan.session.schedule.startup_timeout_ms,
-            stream_state: state,
-            error_details,
-            waiting_queue,
-        };
-        let monitor_control = apply_monitor_tick_to_record(&mut record, monitor_input);
-        self.upsert_session(session_id, record).await;
-
-        if monitor_control.should_send_connect_token {
-            let transfer_token = match self.inner.provider.transfer_token().await {
-                Ok(token) => token,
-                Err(_) => return true,
-            };
-
-            match api.send_connect_token(session_id, &transfer_token).await {
-                Ok(()) => {}
-                Err(_) => {}
-            }
-        }
-
-        monitor_control.should_continue
+                Ok(None)
+            },
+            || {
+                SessionFlowError::message(format!(
+                    "streamingStartTimeout:sessionId={session_id_owned}"
+                ))
+            },
+        )
+        .await
     }
 
     async fn get_session_record(&self, session_id: &str) -> Option<SessionRuntimeRecord<S>> {
         let sessions = self.inner.sessions.read().await;
         sessions.get(session_id)
-    }
-
-    async fn upsert_session(&self, session_id: &str, record: SessionRuntimeRecord<S>) {
-        self.inner
-            .sessions
-            .write()
-            .await
-            .upsert(session_id.to_string(), record);
     }
 
     async fn clear_session(&self, session_id: &str) {
@@ -695,34 +535,32 @@ where
         &self,
         plan: &Plan,
     ) -> Result<WebApiSessionGateway, SessionFlowError> {
-        let target_type = if plan.session.target.is_home() {
-            "home"
-        } else {
-            "cloud"
-        };
-        let token = self.inner.provider.get_streaming_token(target_type).await?;
-        WebApiSessionGateway::from_plan_with_token(plan.clone(), token)
+        let target_type = plan.session.target.as_str();
+        let token_value = self.inner.provider.get_streaming_token(target_type).await?;
+        let token = StreamingToken::parse(&token_value)
+            .map_err(|e| SessionFlowError::message(e.to_string()))?;
+
+        Ok(WebApiSessionGateway::new(plan.clone(), token))
     }
 
     async fn create_signaling_api(
         &self,
         plan: &Plan,
     ) -> Result<WebApiSignalingGateway, SessionFlowError> {
-        let target_type = if plan.session.target.is_home() {
-            "home"
-        } else {
-            "cloud"
-        };
-        let token = self.inner.provider.get_streaming_token(target_type).await?;
-        WebApiSignalingGateway::from_plan_with_token(plan.clone(), token)
+        let target_type = plan.session.target.as_str();
+        let token_value = self.inner.provider.get_streaming_token(target_type).await?;
+        let token = StreamingToken::parse(&token_value)
+            .map_err(|e| SessionFlowError::message(e.to_string()))?;
+
+        Ok(WebApiSignalingGateway::new(plan.clone(), token))
     }
 }
 
-fn missing_session_error(session_id: &str) -> SessionFlowError {
+pub(crate) fn missing_session_error(session_id: &str) -> SessionFlowError {
     SessionFlowError::message(format!("Session not found: {session_id}"))
 }
 
-fn map_webapi_error(error: xbox_webapi::WebApiError) -> SessionFlowError {
+pub(crate) fn map_webapi_error(error: xbox_webapi::WebApiError) -> SessionFlowError {
     use xbox_webapi::WebApiError;
     match error {
         WebApiError::Http {
@@ -732,7 +570,7 @@ fn map_webapi_error(error: xbox_webapi::WebApiError) -> SessionFlowError {
     }
 }
 
-fn build_session_progress_snapshot<S: SessionFlowSnapshot>(
+pub(crate) fn build_session_progress_snapshot<S: SessionFlowSnapshot>(
     record: SessionRuntimeRecord<S>,
 ) -> SessionProgressSnapshot {
     let runtime = record.snapshot.runtime_snapshot();
@@ -811,6 +649,32 @@ fn now_ms() -> u64 {
         .duration_since(std::time::UNIX_EPOCH)
         .map(|duration| duration.as_millis() as u64)
         .unwrap_or(0)
+}
+
+async fn wait_until<F, Fut, T, E>(
+    interval_ms: u64,
+    timeout_ms: u64,
+    check: F,
+    timeout_error: E,
+) -> Result<T, SessionFlowError>
+where
+    F: Fn() -> Fut,
+    Fut: std::future::Future<Output = Result<Option<T>, SessionFlowError>>,
+    E: Fn() -> SessionFlowError,
+{
+    let started_at_ms = now_ms();
+    loop {
+        if let Some(result) = check().await? {
+            return Ok(result);
+        }
+
+        let elapsed_ms = now_ms().saturating_sub(started_at_ms);
+        if elapsed_ms >= timeout_ms {
+            return Err(timeout_error());
+        }
+
+        tokio::time::sleep(std::time::Duration::from_millis(interval_ms)).await;
+    }
 }
 
 #[cfg(test)]
