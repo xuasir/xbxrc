@@ -1,6 +1,22 @@
-import type { StreamingTargetType, StreamingTurnServerConfig } from './streaming'
+import type {
+  StreamingRenderProjection,
+  StreamingRuntimeProjection,
+  StreamingTargetType,
+  StreamingTurnServerConfig,
+} from './streaming'
 
 export type XbxEngineReconnectReason = 'networkLost' | 'iceFailed' | 'mediaStalled'
+export type XbxEngineStreamingMode = 'cloudGaming' | 'localHost' | 'cloudHost'
+
+export interface XbxEngineSessionDto {
+  sessionId: string
+  targetType: StreamingTargetType
+  turnServer?: StreamingTurnServerConfig | null
+}
+
+export interface XbxEngineViewportDto {
+  viewportId: string
+}
 
 export interface XbxEngineDisplayOptionsDto {
   sharpness: number
@@ -80,11 +96,11 @@ export type XbxEngineRuntimeEventDto
     | { type: 'error', code: string, message: string }
 
 export interface XbxEngineStartRuntimeParams {
-  sessionId: string
-  streamingMode: 'localHost' | 'remote'
-  targetType: StreamingTargetType
-  turnServer?: StreamingTurnServerConfig | null
-  viewportId: string
+  session: XbxEngineSessionDto
+  viewport: XbxEngineViewportDto
+  mode?: XbxEngineStreamingMode | null
+  runtime: StreamingRuntimeProjection
+  render: StreamingRenderProjection
   audioVolume: number
 }
 

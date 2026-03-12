@@ -2,7 +2,6 @@ import type { LogicalButtonDto } from '@shared/gamepad/contract'
 import type { PlayerEvents, TypedEventEmitter } from '../../api/events'
 import type { GamepadFrame, InputRuntimeConfig, ProcessedVideoFrameMetadata } from '../../domain/input'
 import { InputPacketEncoder } from '../../protocol/input/InputPacketEncoder'
-import { STREAM_INPUT_PROFILE } from '../../protocol/networkProfile'
 import { RumbleService } from './RumbleService'
 
 export interface InputDriverLike {
@@ -30,12 +29,8 @@ export interface ControlTransport {
 export class InputService {
   private inputSequenceNum = 0
   private frameMetadataQueue: Array<ProcessedVideoFrameMetadata> = []
-  private gamepadFrames: Array<GamepadFrame> = []
-  private inputInterval?: number
   private currentInputTransport?: InputTransport
-  private currentControlTransport?: ControlTransport
   private readonly rumbleService: RumbleService
-  private debugInputPacketCount = 0
 
   readonly gamepadDriver: InputDriverLike
 
@@ -49,75 +44,58 @@ export class InputService {
   }
 
   updateRuntime(runtime: Partial<InputRuntimeConfig>): void {
-    const previousPollingRate = this.runtime.pollingRate
     this.runtime = { ...this.runtime, ...runtime }
-    if (
-      runtime.pollingRate
-      && runtime.pollingRate !== previousPollingRate
-      && this.currentInputTransport
-      && this.currentControlTransport
-    ) {
-      this.start(this.currentInputTransport, this.currentControlTransport)
-    }
   }
 
   start(inputTransport: InputTransport, controlTransport: ControlTransport): void {
     this.currentInputTransport = inputTransport
-    this.currentControlTransport = controlTransport
+    void controlTransport
     this.stop()
-    this.debugInputPacketCount = 0
-    const metadataPacket = new InputPacketEncoder(this.inputSequenceNum)
-    metadataPacket.setMetadata(STREAM_INPUT_PROFILE.initialMaxTouchpoints)
-    console.info('[player][input-service] send metadata packet')
-    inputTransport.send(metadataPacket.toBuffer())
+
     this.gamepadDriver.start()
-    this.gamepadDriver.run?.()
-    this.inputInterval = window.setInterval(() => {
-      const metadataQueue = this.frameMetadataQueue.splice(0, 29)
-      const gamepadQueue = this.gamepadFrames.splice(0, 29)
-      if (metadataQueue.length === 0 && gamepadQueue.length === 0) {
-        return
-      }
-      this.inputSequenceNum++
-      const packet = new InputPacketEncoder(this.inputSequenceNum)
-      packet.setData(metadataQueue, gamepadQueue, [], [], [])
-      if (inputTransport.getReadyState() === 'open') {
-        const buffer = packet.toBuffer()
-        if (this.debugInputPacketCount < 5) {
-          console.info('[player][input-service] send packet', {
-            metadataFrames: metadataQueue.length,
-            gamepadFrames: gamepadQueue.length,
-          })
-          this.debugInputPacketCount += 1
-        }
-        inputTransport.send(buffer)
-        this.emitter.emit('stats.inputPacket', {
-          packetBytes: buffer.byteLength,
-          metadataFrames: metadataQueue.length,
-          gamepadFrames: gamepadQueue.length,
-          pointerFrames: 0,
-          mouseFrames: 0,
-          keyboardFrames: 0,
-        })
-      }
-    }, 1000 / this.runtime.pollingRate)
+
+    const metadataPacket = new InputPacketEncoder(this.inputSequenceNum)
+    metadataPacket.setMetadata(64) // 默认值
+    inputTransport.send(metadataPacket.toBuffer())
   }
 
   stop(): void {
     this.gamepadDriver.stop()
-    if (this.inputInterval) {
-      window.clearInterval(this.inputInterval)
-      this.inputInterval = undefined
-    }
     this.rumbleService.destroy()
   }
 
   handleRumble(event: MessageEvent<ArrayBuffer>): void {
-    this.rumbleService.handlePacket(event, this.runtime)
+    const payload = event.data
+    if (!(payload instanceof ArrayBuffer)) {
+      return
+    }
+    this.rumbleService.onMessage(new DataView(payload))
   }
 
   queueGamepadState(frame: GamepadFrame): void {
-    this.gamepadFrames.push(frame)
+    if (!this.currentInputTransport || this.currentInputTransport.getReadyState() !== 'open') {
+      return
+    }
+
+    // 每次收到手柄帧时，立即打包发送（包含当前的 metadata 队列）
+    const metadataQueue = this.frameMetadataQueue.splice(0, 29)
+    const gamepadQueue = [frame]
+
+    this.inputSequenceNum++
+    const packet = new InputPacketEncoder(this.inputSequenceNum)
+    packet.setData(metadataQueue, gamepadQueue, [], [], [])
+
+    const buffer = packet.toBuffer()
+    this.currentInputTransport.send(buffer)
+
+    this.emitter.emit('stats.inputPacket', {
+      packetBytes: buffer.byteLength,
+      metadataFrames: metadataQueue.length,
+      gamepadFrames: gamepadQueue.length,
+      pointerFrames: 0,
+      mouseFrames: 0,
+      keyboardFrames: 0,
+    })
   }
 
   setGamepadState(frame: GamepadFrame): void {
@@ -144,5 +122,27 @@ export class InputService {
     frame.frameRenderedTimeMs = performance.now()
     this.frameMetadataQueue.push(frame)
     this.emitter.emit('stats.videoFrameProcessed', frame)
+
+    // 如果长时间没有手柄输入，为了保证 metadata 也能发出去，
+    // 可能还是需要一个保底逻辑，但在高性能串流中，Metadata 通常随输入一起发送。
+    // 如果队列堆积过深，可以考虑在此处触发发送。
+    if (this.frameMetadataQueue.length > 30) {
+      this.flushMetadataOnly()
+    }
+  }
+
+  private flushMetadataOnly(): void {
+    if (!this.currentInputTransport || this.currentInputTransport.getReadyState() !== 'open') {
+      return
+    }
+    const metadataQueue = this.frameMetadataQueue.splice(0, 29)
+    if (metadataQueue.length === 0) {
+      return
+    }
+
+    this.inputSequenceNum++
+    const packet = new InputPacketEncoder(this.inputSequenceNum)
+    packet.setData(metadataQueue, [], [], [], [])
+    this.currentInputTransport.send(packet.toBuffer())
   }
 }

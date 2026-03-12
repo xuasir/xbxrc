@@ -1,74 +1,64 @@
 :root {
   /* Token 真源：先落 RFC 命名，后续逐步替换组件消费。 */
   --brand-primary: #107c10;
-  --brand-primary-strong: #16a316;
+  --brand-primary-strong: #158f15;
   --brand-accent: #2bc24a;
   --brand-on-primary: #ffffff;
 
   --neutral-0: #000000;
-  --neutral-50: #0a0a0a;
-  --neutral-100: #0f0f10;
-  --neutral-150: #121214;
-  --neutral-200: #151518;
-  --neutral-250: #19191d;
-  --neutral-300: #1f1f24;
-  --neutral-350: #26262c;
-  --neutral-400: #2e2e36;
-  --neutral-500: #3a3a44;
-  --neutral-600: #52525e;
-  --neutral-700: #7a7a86;
-  --neutral-800: #a6a6b0;
-  --neutral-900: #d3d3da;
+  --neutral-50: #050505;
+  --neutral-100: #0a0a0b;
+  --neutral-150: #0e0e10;
+  --neutral-200: #121215;
+  --neutral-250: #18181b;
+  --neutral-300: #1f1f23;
+  --neutral-350: #27272c;
+  --neutral-400: #2f2f35;
+  --neutral-500: #3c3c43;
+  --neutral-600: #55555e;
+  --neutral-700: #7c7c88;
+  --neutral-800: #a9a9b2;
+  --neutral-900: #d6d6db;
   --neutral-1000: #ffffff;
 
-  --color-bg: var(--neutral-100);
-  --color-bg-elevated: var(--neutral-150);
-  --color-surface-0: var(--neutral-100);
-  --color-surface-1: var(--neutral-200);
-  --color-surface-2: var(--neutral-250);
-  --color-surface-3: var(--neutral-300);
+  --color-bg: #1a1b1e;
+  --color-bg-elevated: #252423;
+  --color-surface-0: #1a1b1e;
+  --color-surface-1: #2b2b2b;
+  --color-surface-2: #3a3a3a;
+  --color-surface-3: #4a4a4a;
 
   --color-text-primary: var(--neutral-1000);
-  --color-text-secondary: #cfcfd6;
-  --color-text-tertiary: #9b9ba6;
-  --color-text-disabled: #6f6f7a;
-  --color-text-inverse: #0a0a0a;
+  --color-text-secondary: #d1d1d6;
+  --color-text-tertiary: #a1a1aa;
+  --color-text-disabled: #71717a;
+  --color-text-inverse: #050505;
   --color-text-on-media: #ffffff;
 
-  --color-border-subtle: rgba(255, 255, 255, 0.08);
-  --color-border: rgba(255, 255, 255, 0.14);
-  --color-border-strong: rgba(255, 255, 255, 0.22);
-  --color-divider: rgba(255, 255, 255, 0.1);
+  --color-border-subtle: rgba(255, 255, 255, 0.06);
+  --color-border: rgba(255, 255, 255, 0.12);
+  --color-border-strong: rgba(255, 255, 255, 0.2);
+  --color-divider: rgba(255, 255, 255, 0.08);
 
-  --color-state-hover: rgba(255, 255, 255, 0.06);
-  --color-state-pressed: rgba(255, 255, 255, 0.1);
-  --color-state-selected: rgba(16, 124, 16, 0.22);
+  --color-state-hover: rgba(255, 255, 255, 0.08);
+  --color-state-pressed: rgba(255, 255, 255, 0.12);
+  --color-state-selected: rgba(16, 124, 16, 0.28);
   --color-state-disabled: rgba(255, 255, 255, 0.04);
 
   --color-success: #2bc24a;
-  --color-warning: #f7b500;
-  --color-danger: #ff4d4f;
-  --color-info: #4da3ff;
-  --color-focus-ring: #7cff7c;
-  --color-focus-ring-outer: rgba(124, 255, 124, 0.4);
+  --color-warning: #fdb900;
+  --color-danger: #ff5252;
+  --color-info: #52aaff;
+  --color-focus-ring: #ffffff;
+  --color-focus-ring-outer: transparent;
+  --color-focus-glow: transparent;
 
-  --font-family-sans:
-    ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial,
-    'Apple Color Emoji', 'Segoe UI Emoji';
+  --shadow-xbox-focus: 0 0 0 2px var(--color-focus-ring);
+  --shadow-xbox-panel: 0 24px 48px rgba(0, 0, 0, 0.8), inset 0 1px 1px rgba(255, 255, 255, 0.1);
 
-  --font-size-12: 12px;
-  --font-size-14: 14px;
-  --font-size-16: 16px;
-  --font-size-18: 18px;
-  --font-size-20: 20px;
-  --font-size-24: 24px;
-  --font-size-28: 28px;
-  --font-size-32: 32px;
-  --font-size-40: 40px;
-
-  --font-weight-regular: 400;
-  --font-weight-medium: 500;
-  --font-weight-semibold: 600;
+  --font-weight-black: 900;
+  --letter-spacing-tight: -0.04em;
+  --letter-spacing-loose: 0.02em;
 
   --line-height-12: 16px;
   --line-height-14: 20px;
@@ -116,11 +106,11 @@
   --space-64: 64px;
 
   --radius-0: 0px;
-  --radius-6: 6px;
-  --radius-10: 10px;
+  --radius-6: 4px;
+  --radius-10: 8px;
   --radius-12: 12px;
-  --radius-16: 16px;
-  --radius-20: 20px;
+  --radius-16: 12px;
+  --radius-20: 12px;
   --radius-pill: 999px;
 
   --shadow-0: none;

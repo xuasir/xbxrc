@@ -91,9 +91,9 @@ const props = withDefaults(defineProps<SpatialNavIconButtonProps>(), {
 }
 
 .sn-icon-button[data-focused='true'] {
-  border-color: var(--color-focus-ring);
-  background: color-mix(in srgb, var(--color-state-hover) 72%, transparent);
-  box-shadow: 0 0 0 var(--focus-ring-width) var(--color-focus-ring-outer) inset;
+  background: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+  box-shadow: var(--shadow-xbox-focus);
 }
 
 .sn-icon-button--active {

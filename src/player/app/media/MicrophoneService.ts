@@ -1,4 +1,4 @@
-import type { type PlayerEvents, TypedEventEmitter } from '../../api/events'
+import type { PlayerEvents, TypedEventEmitter } from '../../api/events'
 
 export class MicrophoneService {
   private stream: MediaStream | null = null

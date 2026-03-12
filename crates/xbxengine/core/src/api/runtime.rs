@@ -4,8 +4,9 @@ use std::fmt::{Display, Formatter};
 use xbxengine_protocol::{
     XbxEngineControlCommandDto, XbxEngineDisplayStateDto, XbxEngineHostRequestDto,
     XbxEngineHostResponseDto, XbxEngineIceCandidateDto, XbxEngineInputEventDto,
-    XbxEngineReconnectReasonDto, XbxEngineRuntimeEventDto, XbxEngineRuntimePhaseDto,
-    XbxEngineSessionDto, XbxEngineStatsDto, XbxEngineTransportStateDto, XbxEngineViewportDto,
+    XbxEngineReconnectReasonDto, XbxEngineRenderProjectionDto, XbxEngineRuntimeEventDto,
+    XbxEngineRuntimePhaseDto, XbxEngineRuntimeProjectionDto, XbxEngineSessionDto,
+    XbxEngineStatsDto, XbxEngineTransportStateDto, XbxEngineViewportDto,
 };
 
 use crate::{
@@ -342,7 +343,10 @@ where
         viewport: XbxEngineViewportDto,
         audio_volume: f32,
         mode: Option<XbxStreamingMode>,
+        runtime: Option<XbxEngineRuntimeProjectionDto>,
+        render: Option<XbxEngineRenderProjectionDto>,
     ) -> Result<(), XbxEngineRuntimeError> {
+        let previous_config = self.config.clone();
         if let Some(mode) = mode {
             self.config.webrtc = XbxEngineWebRtcRuntimeConfig::from_mode(mode);
         }
@@ -357,6 +361,7 @@ where
         self.snapshot.audio_volume = audio_volume;
 
         let start_result = (|| {
+            self.apply_execution_spec(runtime.as_ref(), render.as_ref())?;
             self.media_backend.set_audio_volume(audio_volume)?;
             self.emit_phase(XbxEngineRuntimePhaseDto::Binding);
             self.negotiate_remote(false)?;
@@ -371,6 +376,7 @@ where
             Err(error) => {
                 // 启动失败后回到上一个稳定态，避免 runtime 卡死在中间态。
                 let _ = self.media_backend.stop();
+                self.config = previous_config;
                 self.state = previous_state;
                 self.session = previous_session;
                 self.snapshot = previous_snapshot;
@@ -479,9 +485,11 @@ where
                 viewport,
                 audio_volume,
                 mode,
+                runtime,
+                render,
             } => {
                 let mode = mode.map(map_streaming_mode);
-                self.start(session, viewport, audio_volume, mode)
+                self.start(session, viewport, audio_volume, mode, runtime, render)
             }
             XbxEngineControlCommandDto::StopRuntime => {
                 self.stop();
@@ -563,6 +571,37 @@ where
                 Ok(())
             }
         }
+    }
+
+    // execution spec 只在启动前应用一次：协商参数进 config，显示参数进 media backend/snapshot。
+    fn apply_execution_spec(
+        &mut self,
+        runtime: Option<&XbxEngineRuntimeProjectionDto>,
+        render: Option<&XbxEngineRenderProjectionDto>,
+    ) -> Result<(), XbxEngineRuntimeError> {
+        if let Some(runtime) = runtime {
+            if let Some(video_bitrate_kbps) = runtime.max_video_bitrate_kbps {
+                self.config.webrtc.negotiation.video_bitrate_kbps = video_bitrate_kbps;
+            }
+            if let Some(audio_bitrate_kbps) = runtime.max_audio_bitrate_kbps {
+                self.config.webrtc.negotiation.audio_bitrate_kbps = audio_bitrate_kbps;
+            }
+            if let Some(codec) = runtime.codec.as_ref() {
+                if let Some(profile) = codec.profiles.first() {
+                    self.config.webrtc.negotiation.offer_profile = profile.clone();
+                }
+            }
+        }
+
+        if let Some(render) = render {
+            let display_state = XbxEngineDisplayStateDto {
+                display_options: render.display_options.clone(),
+            };
+            self.media_backend.apply_display_state(display_state.clone())?;
+            self.snapshot.display_state = Some(display_state);
+        }
+
+        Ok(())
     }
 
     fn renegotiate_chat_channel(&mut self) -> Result<(), XbxEngineRuntimeError> {
@@ -901,8 +940,9 @@ mod tests {
     use xbxengine_protocol::{
         XbxEngineControlCommandDto, XbxEngineDisplayOptionsDto, XbxEngineDisplayStateDto,
         XbxEngineHostRequestDto, XbxEngineHostResponseDto, XbxEngineIceCandidateDto,
-        XbxEngineInputEventDto, XbxEngineReconnectReasonDto, XbxEngineRuntimeEventDto,
-        XbxEngineRuntimePhaseDto, XbxEngineSessionDto, XbxEngineTargetTypeDto,
+        XbxEngineInputEventDto, XbxEngineReconnectReasonDto, XbxEngineRenderProjectionDto,
+        XbxEngineRuntimeCodecPreferenceDto, XbxEngineRuntimeEventDto, XbxEngineRuntimePhaseDto,
+        XbxEngineRuntimeProjectionDto, XbxEngineSessionDto, XbxEngineTargetTypeDto,
         XbxEngineTransportStateDto, XbxEngineViewportDto,
     };
 
@@ -1213,7 +1253,7 @@ mod tests {
         let mut runtime = create_runtime(requests.clone(), events.clone());
 
         runtime
-            .start(session(), viewport(), 0.75, None)
+            .start(session(), viewport(), 0.75, None, None, None)
             .expect("runtime start should succeed");
 
         assert_eq!(runtime.state(), &XbxEngineRuntimeState::Running);
@@ -1277,13 +1317,66 @@ mod tests {
     }
 
     #[test]
+    fn start_runtime_control_consumes_execution_spec() {
+        let requests = Rc::new(RefCell::new(Vec::new()));
+        let events = Rc::new(RefCell::new(Vec::new()));
+        let mut runtime = create_runtime(requests, events);
+
+        runtime
+            .apply_control(XbxEngineControlCommandDto::StartRuntime {
+                session: session(),
+                viewport: viewport(),
+                audio_volume: 0.6,
+                mode: None,
+                runtime: Some(XbxEngineRuntimeProjectionDto {
+                    codec: Some(XbxEngineRuntimeCodecPreferenceDto {
+                        mime_type: "video/H264".to_string(),
+                        profiles: vec!["42e01f".to_string()],
+                    }),
+                    max_video_bitrate_kbps: Some(42_000),
+                    max_audio_bitrate_kbps: Some(192),
+                    force_mono_audio: false,
+                    polling_rate_hz: 120,
+                    vibration: true,
+                }),
+                render: Some(XbxEngineRenderProjectionDto {
+                    enable_audio_control: true,
+                    video_format: Some("nv12".to_string()),
+                    display_options: XbxEngineDisplayOptionsDto {
+                        sharpness: 1.1,
+                        saturation: 1.2,
+                        contrast: 1.3,
+                        brightness: 1.4,
+                    },
+                }),
+            })
+            .expect("start runtime control should succeed");
+
+        assert_eq!(runtime.state(), &XbxEngineRuntimeState::Running);
+        assert_eq!(runtime.config.webrtc.negotiation.video_bitrate_kbps, 42_000);
+        assert_eq!(runtime.config.webrtc.negotiation.audio_bitrate_kbps, 192);
+        assert_eq!(runtime.config.webrtc.negotiation.offer_profile, "42e01f");
+        assert_eq!(
+            runtime.snapshot().display_state,
+            Some(XbxEngineDisplayStateDto {
+                display_options: XbxEngineDisplayOptionsDto {
+                    sharpness: 1.1,
+                    saturation: 1.2,
+                    contrast: 1.3,
+                    brightness: 1.4,
+                },
+            })
+        );
+    }
+
+    #[test]
     fn reconnect_keeps_remote_session_alive_before_restart_negotiation() {
         let requests = Rc::new(RefCell::new(Vec::new()));
         let events = Rc::new(RefCell::new(Vec::new()));
         let mut runtime = create_runtime(requests.clone(), events.clone());
 
         runtime
-            .start(session(), viewport(), 1.0, None)
+            .start(session(), viewport(), 1.0, None, None, None)
             .expect("runtime start should succeed");
         requests.borrow_mut().clear();
         events.borrow_mut().clear();
@@ -1395,7 +1488,7 @@ mod tests {
         let events = Rc::new(RefCell::new(Vec::new()));
         let mut runtime = create_runtime(requests.clone(), events.clone());
         runtime
-            .start(session(), viewport(), 1.0, None)
+            .start(session(), viewport(), 1.0, None, None, None)
             .expect("runtime start should succeed");
         requests.borrow_mut().clear();
         events.borrow_mut().clear();
@@ -1452,7 +1545,7 @@ mod tests {
         );
 
         runtime
-            .start(session(), viewport(), 0.3, None)
+            .start(session(), viewport(), 0.3, None, None, None)
             .expect("runtime start should succeed");
         runtime
             .apply_control(XbxEngineControlCommandDto::StopMicrophone)
@@ -1482,7 +1575,7 @@ mod tests {
         );
 
         runtime
-            .start(session(), viewport(), 1.0, None)
+            .start(session(), viewport(), 1.0, None, None, None)
             .expect("runtime start should succeed");
         runtime
             .apply_control(XbxEngineControlCommandDto::PressControllerButton {
@@ -1528,7 +1621,7 @@ mod tests {
         );
 
         let error = runtime
-            .start(session(), viewport(), 0.75, None)
+            .start(session(), viewport(), 0.75, None, None, None)
             .expect_err("runtime start should fail");
 
         assert_eq!(error.to_string(), "hostBridgeFailure:ExchangeOffer");
@@ -1561,7 +1654,7 @@ mod tests {
         );
 
         runtime
-            .start(session(), viewport(), 1.0, None)
+            .start(session(), viewport(), 1.0, None, None, None)
             .expect("runtime start should succeed");
         *fail_request_kind.borrow_mut() = Some("KeepAliveRemoteSession");
 
@@ -1588,7 +1681,7 @@ mod tests {
         let mut runtime = create_runtime(requests.clone(), events);
 
         runtime
-            .start(session(), viewport(), 1.0, None)
+            .start(session(), viewport(), 1.0, None, None, None)
             .expect("runtime start should succeed");
         runtime
             .apply_control(XbxEngineControlCommandDto::StartMicrophone)
@@ -1640,7 +1733,7 @@ mod tests {
         );
 
         runtime
-            .start(session(), viewport(), 1.0, None)
+            .start(session(), viewport(), 1.0, None, None, None)
             .expect("runtime start should succeed");
         runtime
             .apply_control(XbxEngineControlCommandDto::StartMicrophone)
@@ -1707,7 +1800,7 @@ mod tests {
         );
 
         runtime
-            .start(session(), viewport(), 1.0, None)
+            .start(session(), viewport(), 1.0, None, None, None)
             .expect("runtime start should succeed");
         runtime.health.connected_at_ms = Some(now_ms - 10_000.0);
         runtime.health.last_frame_seq = 10;
@@ -1777,7 +1870,7 @@ mod tests {
         );
 
         runtime
-            .start(session(), viewport(), 1.0, None)
+            .start(session(), viewport(), 1.0, None, None, None)
             .expect("runtime start should succeed");
         runtime.health.connected_at_ms = Some(now_ms - 10_000.0);
         runtime.health.last_frame_seq = 20;
@@ -1849,7 +1942,7 @@ mod tests {
         );
 
         runtime
-            .start(session(), viewport(), 1.0, None)
+            .start(session(), viewport(), 1.0, None, None, None)
             .expect("runtime start should succeed");
         requests.borrow_mut().clear();
         runtime.health.connected_at_ms = Some(now_ms - 10_000.0);
@@ -1939,7 +2032,7 @@ mod tests {
         );
 
         runtime
-            .start(session(), viewport(), 1.0, None)
+            .start(session(), viewport(), 1.0, None, None, None)
             .expect("runtime start should succeed");
 
         assert_eq!(runtime.snapshot().first_frame_packet_arrival_time_ms, None);

@@ -136,6 +136,9 @@ pub(crate) fn spawn_keyboard_listener_thread(
     let join_handle = thread::spawn(move || {
         let Ok(mut listener) = OhMyGamepadDesktopKeyboardListener::try_new(config) else {
             // 桌面键盘监听不是核心路径；权限缺失时直接降级为“无键盘 fallback”。
+            log::warn!(
+                "ohmygamepad keyboard listener unavailable; desktop keyboard fallback disabled"
+            );
             return;
         };
         let mut last_state = LogicalPadStateDto::default();
@@ -153,10 +156,12 @@ pub(crate) fn spawn_keyboard_listener_thread(
 
             let Ok(state) = std::panic::catch_unwind(AssertUnwindSafe(|| listener.poll_state()))
             else {
+                log::warn!("ohmygamepad keyboard listener poll panicked; stopping listener");
                 break;
             };
             if state != last_state {
                 if send_keyboard_state_events(&virtual_input_tx, state.clone(), now_ms).is_err() {
+                    log::warn!("ohmygamepad keyboard state dispatch failed; stopping listener");
                     break;
                 }
                 last_state = state;

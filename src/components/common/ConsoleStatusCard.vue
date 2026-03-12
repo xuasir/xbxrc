@@ -57,8 +57,6 @@ const resolvedAriaLabel = computed(() => {
     :on-confirm="props.onConfirm ?? props.onClick"
     @click="props.onClick"
   >
-    <span class="console-status-card__glow" aria-hidden="true" />
-
     <span class="console-status-card__media" aria-hidden="true">
       <img class="console-status-card__image" :src="props.imageSrc" :alt="props.imageAlt">
     </span>
@@ -83,46 +81,22 @@ const resolvedAriaLabel = computed(() => {
   padding: var(--ui-console-card-padding);
   border-radius: var(--ui-console-card-radius);
   border: 1px solid var(--tile-border);
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0) 18%),
-    linear-gradient(160deg, rgba(62, 68, 82, 0.96), rgba(17, 20, 27, 0.96) 72%);
+  background: #2b2b2b;
   color: var(--color-text-primary);
   text-align: left;
   overflow: hidden;
   cursor: pointer;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.05),
-    0 20px 36px rgba(0, 0, 0, 0.24);
+  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
   transition:
     border-color var(--ui-motion-fast),
-    box-shadow var(--ui-motion-fast);
-}
-
-.console-status-card::before {
-  content: '';
-  position: absolute;
-  inset: auto -8% -18% auto;
-  width: 64%;
-  aspect-ratio: 1;
-  border-radius: 50%;
-  background: radial-gradient(circle, rgba(24, 88, 201, 0.34), transparent 70%);
-  pointer-events: none;
+    box-shadow var(--ui-motion-fast),
+    transform var(--ui-motion-fast);
 }
 
 .console-status-card[data-focused='true'] {
-  border-color: var(--color-focus-ring);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.08),
-    0 0 0 var(--focus-ring-width) var(--color-focus-ring-outer) inset;
-}
-
-.console-status-card__glow {
-  position: absolute;
-  inset: 0;
-  background:
-    radial-gradient(circle at 50% 18%, rgba(255, 255, 255, 0.12), transparent 28%),
-    linear-gradient(180deg, transparent 0%, transparent 46%, rgba(8, 12, 19, 0.2) 100%);
-  pointer-events: none;
+  box-shadow: var(--shadow-xbox-focus);
+  transform: scale(1.04);
+  z-index: 10;
 }
 
 .console-status-card__media,

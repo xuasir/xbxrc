@@ -69,14 +69,11 @@ const metrics = computed(() => [
   padding: var(--ui-stream-performance-padding);
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: calc(var(--ui-radius-lg) + var(--ui-space-1));
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.01)),
-    rgba(9, 16, 12, 0.76);
+  background: #252423;
   color: #fff;
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.04),
     0 14px 28px rgba(0, 0, 0, 0.22);
-  backdrop-filter: blur(14px);
 }
 
 .stream-performance--compact {

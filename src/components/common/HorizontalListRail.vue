@@ -121,9 +121,11 @@ onBeforeUnmount(() => {
 
 .horizontal-list-rail__viewport {
   overflow-x: auto;
-  overflow-y: hidden;
-  padding: var(--ui-rail-padding-block-start) var(--shelf-scroll-padding)
-    var(--ui-rail-padding-block-end);
+  overflow-y: visible; /* Allow scaling to overflow vertically */
+  padding: calc(var(--ui-rail-padding-block-start) + 8px) var(--shelf-scroll-padding)
+    calc(var(--ui-rail-padding-block-end) + 8px);
+  margin-top: -8px; /* Offset the extra padding */
+  margin-bottom: -8px;
   scroll-behavior: smooth;
   scroll-padding-inline: var(--shelf-scroll-padding);
   scrollbar-width: none;

@@ -1,4 +1,4 @@
-import type { type PlayerEvents, TypedEventEmitter } from '../../api/events'
+import type { PlayerEvents, TypedEventEmitter } from '../../api/events'
 import type { StreamStats } from '../../domain/media'
 import type { DecodeStats, FpsStats, InputPacketStats, NetworkStats } from '../../domain/stats'
 

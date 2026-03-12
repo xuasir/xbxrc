@@ -28,7 +28,6 @@ export class GamepadDriver {
   private nativeRuntimeSnapshot?: GamepadRuntimeSnapshotDto
   private nativeControllerConnected = false
   private nativeUnsubscribe?: () => void
-  private runTimer?: number
   private isVirtualButtonPressing = false
 
   constructor(private readonly delegate: GamepadDriverDelegate) {}
@@ -36,14 +35,9 @@ export class GamepadDriver {
   start(): void {
     this.nativeControllerConnected = false
     this.startNativeSnapshotBridge()
-    this.run()
   }
 
   stop(): void {
-    if (this.runTimer) {
-      window.clearTimeout(this.runTimer)
-      this.runTimer = undefined
-    }
     if (this.nativeUnsubscribe) {
       this.nativeUnsubscribe()
       this.nativeUnsubscribe = undefined
@@ -84,26 +78,30 @@ export class GamepadDriver {
   }
 
   requestStates(): Array<GamepadFrame> {
-    return this.requestNativeStates()
-  }
-
-  run(): void {
-    const frames = this.requestStates()
-
-    if (!this.isVirtualButtonPressing) {
-      for (const frame of frames) {
-        this.delegate.onFrame(frame)
-      }
+    const snapshot = this.nativeRuntimeSnapshot
+    if (!snapshot) {
+      return [DEFAULT_GAMEPAD_FRAME()]
     }
-    this.runTimer = window.setTimeout(
-      () => this.run(),
-      1000 / this.delegate.getRuntimeConfig().pollingRate,
-    )
+
+    const pads = this.getNativePadSnapshots(snapshot)
+    if (pads.length === 0) {
+      return [DEFAULT_GAMEPAD_FRAME()]
+    }
+
+    return pads.map((pad, index) => this.mapNativePadState(pad, index))
   }
 
   private startNativeSnapshotBridge(): void {
     this.nativeUnsubscribe = events.on('gamepad.runtimeSnapshot', (snapshot) => {
       this.applyNativeRuntimeSnapshot(snapshot)
+
+      // 当非虚拟按键操作时，直接透传原生手柄事件
+      if (!this.isVirtualButtonPressing) {
+        const frames = this.requestNativeStates()
+        for (const frame of frames) {
+          this.delegate.onFrame(frame)
+        }
+      }
     })
 
     void rpc.gamepad
@@ -111,9 +109,7 @@ export class GamepadDriver {
       .then((snapshot) => {
         this.applyNativeRuntimeSnapshot(snapshot)
       })
-      .catch((error) => {
-        console.warn('[player][gamepad] failed to hydrate native snapshot', error)
-      })
+      .catch(() => {})
   }
 
   private applyNativeRuntimeSnapshot(snapshot: GamepadRuntimeSnapshotDto): void {

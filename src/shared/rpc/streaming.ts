@@ -46,6 +46,43 @@ export interface StreamingTurnServerConfig {
   credential: string
 }
 
+export interface StreamingRuntimeCodecPreference {
+  mimeType: string
+  profiles: string[]
+}
+
+export interface StreamingDisplayOptionsValue {
+  sharpness: number
+  saturation: number
+  contrast: number
+  brightness: number
+}
+
+export type StreamingRuntimeMode = 'webrtc-direct' | 'rust-owned'
+export type StreamingRuntimeOwner = 'browser' | 'sidecar'
+
+export interface StreamingRuntimeProjection {
+  mode: StreamingRuntimeMode
+  transport: StreamingRuntimeOwner
+  decode: StreamingRuntimeOwner
+  render: StreamingRuntimeOwner
+  input: StreamingRuntimeOwner
+  microphone: StreamingRuntimeOwner
+  turnServer?: StreamingTurnServerConfig | null
+  codec?: StreamingRuntimeCodecPreference | null
+  maxVideoBitrateKbps?: number | null
+  maxAudioBitrateKbps?: number | null
+  forceMonoAudio: boolean
+  pollingRateHz: number
+  vibration: boolean
+}
+
+export interface StreamingRenderProjection {
+  enableAudioControl: boolean
+  videoFormat?: string | null
+  displayOptions: StreamingDisplayOptionsValue
+}
+
 export interface StreamingSessionSnapshot {
   id: string
   targetId: string
@@ -57,12 +94,43 @@ export interface StreamingSessionSnapshot {
   errorDetails?: StreamingErrorDetails
 }
 
-export interface StreamingCreateSessionParams {
+export interface StreamingSessionExecutionSnapshot {
+  session: StreamingSessionSnapshot
+  runtime: StreamingRuntimeProjection
+  render: StreamingRenderProjection
+}
+
+export type StreamingSessionPhase
+  = | 'creating'
+    | 'waitingSessionReady'
+    | 'runtimeStarting'
+    | 'sessionReady'
+    | 'recovering'
+    | 'closing'
+    | 'closed'
+    | 'failed'
+
+export interface StreamingSessionProgressSnapshot {
+  sessionId: string
+  phase: StreamingSessionPhase
+  statusTextKey: string
+  retryCount: number
+  queueSeconds?: number
+  errorCode?: string
+  errorMessage?: string
+}
+
+export interface StreamingStartSessionParams {
   targetType: StreamingTargetType
   targetId: string
 }
 
-export interface StreamingGetSessionParams {
+export interface StreamingStartSessionResult {
+  execution: StreamingSessionExecutionSnapshot
+  progress: StreamingSessionProgressSnapshot
+}
+
+export interface StreamingGetSessionProgressParams {
   sessionId: string
 }
 
@@ -89,18 +157,38 @@ export interface StreamingExchangeIceResult {
   candidates: StreamingIceCandidate[]
 }
 
-export interface StreamingKeepAliveParams {
-  sessionId: string
-}
-
-export interface StreamingKeepAliveResult {
-  accepted: boolean
-}
-
 export interface StreamingListActiveSessionsParams {
   targetType?: StreamingTargetType
 }
 
 export interface StreamingListActiveSessionsResult {
   sessions: StreamingSessionSnapshot[]
+}
+
+export interface StreamingCloseSessionResult {
+  closed: boolean
+}
+
+export type StreamingRuntimeFact
+  = | {
+    type: 'transportConnectionState'
+    connectionState: 'new' | 'connecting' | 'connected' | 'disconnected' | 'failed' | 'closed'
+  }
+    | {
+      type: 'mediaHealth'
+      connectionState: 'new' | 'connecting' | 'connected' | 'disconnected' | 'failed' | 'closed'
+      connectedElapsedMs: number
+      inactivityElapsedMs: number
+    }
+    | { type: 'mediaStalled' }
+
+export interface StreamingDecideRecoveryParams {
+  sessionId: string
+  fact: StreamingRuntimeFact
+  isClosing: boolean
+}
+
+export interface StreamingDecideRecoveryResult {
+  shouldReconnect: boolean
+  reason?: 'network-lost' | 'ice-failed' | 'media-stalled'
 }

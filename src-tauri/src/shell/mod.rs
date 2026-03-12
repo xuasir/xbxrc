@@ -91,6 +91,7 @@ async fn build_services(
     let streaming_service = Arc::new(mods::streaming::StreamingService::new(
         auth_provider.clone(),
         config_provider.clone(),
+        data_service.clone(),
     ));
 
     let xbxengine_service = Arc::new(mods::xbxengine::PlaceholderXbxEngineService::new(
@@ -159,31 +160,21 @@ async fn bind_background_tasks(app_handle: &AppHandle, state: &AppState) -> AppR
     let is_quitting_gamepad = state.is_quitting.clone();
     tauri::async_runtime::spawn(async move {
         let rx = gamepad_host.subscribe_runtime_snapshot();
-        let mut last_high_freq_emit = std::time::Instant::now();
-        let throttle_ms = 20;
 
         while !is_quitting_gamepad.load(Ordering::Relaxed) {
             if let Ok(snapshot) = rx.recv() {
-                let now = std::time::Instant::now();
-                let should_emit_high_freq =
-                    now.duration_since(last_high_freq_emit).as_millis() >= throttle_ms;
+                let snapshot_value = serde_json::to_value(&snapshot).unwrap_or_else(|e| {
+                    log::warn!("Failed to serialize gamepad runtime snapshot: {}", e);
+                    serde_json::json!({})
+                });
+                let _ = gamepad_events::emit_runtime_snapshot(&app_handle_gamepad, &snapshot_value);
 
-                if should_emit_high_freq {
-                    let snapshot_value = serde_json::to_value(&snapshot).unwrap_or_else(|e| {
-                        log::warn!("Failed to serialize gamepad runtime snapshot: {}", e);
+                for pad in &snapshot.pads {
+                    let pad_value = serde_json::to_value(pad).unwrap_or_else(|e| {
+                        log::warn!("Failed to serialize gamepad pad snapshot: {}", e);
                         serde_json::json!({})
                     });
-                    let _ =
-                        gamepad_events::emit_runtime_snapshot(&app_handle_gamepad, &snapshot_value);
-
-                    for pad in &snapshot.pads {
-                        let pad_value = serde_json::to_value(pad).unwrap_or_else(|e| {
-                            log::warn!("Failed to serialize gamepad pad snapshot: {}", e);
-                            serde_json::json!({})
-                        });
-                        let _ = gamepad_events::emit_pad_snapshot(&app_handle_gamepad, &pad_value);
-                    }
-                    last_high_freq_emit = now;
+                    let _ = gamepad_events::emit_pad_snapshot(&app_handle_gamepad, &pad_value);
                 }
 
                 let devices_value = serde_json::to_value(&snapshot.devices).unwrap_or_else(|e| {

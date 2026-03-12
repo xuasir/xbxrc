@@ -3,6 +3,7 @@ use crate::transport::HttpTransport;
 use reqwest::header::{HeaderMap, HeaderValue, AUTHORIZATION, CONTENT_TYPE};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
+use std::collections::BTreeMap;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StartStreamResponse {
@@ -49,25 +50,23 @@ pub struct SessionApi {
     target_type: String,
     base_url: String,
     bearer_token: String,
-    device_info: String,
+    header_overrides: BTreeMap<String, String>,
 }
 
 impl SessionApi {
+    /// RFC: 执行层不再自行推导 device_info，统一消费编译产出的 headers。
     pub fn new(
         target_type: String,
         base_url: String,
         bearer_token: String,
-        resolution: i64,
+        header_overrides: BTreeMap<String, String>,
     ) -> Self {
-        let os_name = resolve_os_name(resolution);
-        let device_info = create_device_info(os_name);
-
         Self {
             transport: HttpTransport::new(),
             target_type,
             base_url: base_url.trim_end_matches('/').to_string(),
             bearer_token,
-            device_info,
+            header_overrides,
         }
     }
 
@@ -76,51 +75,22 @@ impl SessionApi {
         target_type: String,
         base_url: String,
         bearer_token: String,
-        resolution: i64,
+        header_overrides: BTreeMap<String, String>,
     ) -> Self {
-        let os_name = resolve_os_name(resolution);
-        let device_info = create_device_info(os_name);
-
         Self {
             transport,
             target_type,
             base_url: base_url.trim_end_matches('/').to_string(),
             bearer_token,
-            device_info,
+            header_overrides,
         }
-    }
-
-    pub async fn start_stream(&self, target_id: &str) -> Result<StartStreamResponse, WebApiError> {
-        let payload = json!({
-            "titleId": if self.target_type == "cloud" { target_id } else { "" },
-            "systemUpdateGroup": "",
-            "clientSessionId": "",
-            "settings": {
-                "nanoVersion": "V3;WebrtcTransport.dll",
-                "enableTextToSpeech": false,
-                "highContrast": 0,
-                "locale": "en-US",
-                "useIceConnection": false,
-                "timezoneOffsetMinutes": 120,
-                "sdkType": "web",
-                "osName": "windows"
-            },
-            "serverId": if self.target_type == "home" { target_id } else { "" },
-            "fallbackRegionNames": []
-        });
-
-        self.start_stream_with_payload(&payload).await
     }
 
     pub async fn start_stream_with_payload(
         &self,
         payload: &Value,
     ) -> Result<StartStreamResponse, WebApiError> {
-        let mut headers = self.create_common_headers()?;
-        headers.insert(
-            "X-MS-Device-Info",
-            HeaderValue::from_str(&self.device_info)?,
-        );
+        let headers = self.create_headers()?;
 
         let response = self
             .transport
@@ -141,7 +111,7 @@ impl SessionApi {
     }
 
     pub async fn stop_stream(&self, session_id: &str) -> Result<(), WebApiError> {
-        let headers = self.create_common_headers()?;
+        let headers = self.create_headers()?;
         self.transport
             .delete(
                 &self.endpoint(&format!("/v5/sessions/{}/{}", self.target_type, session_id)),
@@ -155,7 +125,7 @@ impl SessionApi {
         &self,
         session_id: &str,
     ) -> Result<StreamStateResponse, WebApiError> {
-        let headers = self.create_common_headers()?;
+        let headers = self.create_headers()?;
         let response = self
             .transport
             .get(
@@ -191,7 +161,7 @@ impl SessionApi {
         user_token: &str,
     ) -> Result<(), WebApiError> {
         let payload = json!({ "userToken": user_token });
-        let headers = self.create_common_headers()?;
+        let headers = self.create_headers()?;
         self.transport
             .post(
                 &self.endpoint(&format!(
@@ -206,7 +176,7 @@ impl SessionApi {
     }
 
     pub async fn send_keepalive(&self, session_id: &str) -> Result<(), WebApiError> {
-        let headers = self.create_common_headers()?;
+        let headers = self.create_headers()?;
         self.transport
             .post(
                 &self.endpoint(&format!(
@@ -224,7 +194,7 @@ impl SessionApi {
         &self,
         title_id: &str,
     ) -> Result<WaitingTimesResponse, WebApiError> {
-        let headers = self.create_common_headers()?;
+        let headers = self.create_headers()?;
         let response = self
             .transport
             .get(
@@ -236,13 +206,8 @@ impl SessionApi {
         serde_json::from_value(response).map_err(|e| WebApiError::parse(e.to_string()))
     }
 
-    pub async fn get_consoles(&self) -> Result<Vec<ConsoleInfo>, WebApiError> {
-        let mut headers = self.create_common_headers()?;
-        let windows_device_info = create_device_info("windows");
-        headers.insert(
-            "X-MS-Device-Info",
-            HeaderValue::from_str(&windows_device_info)?,
-        );
+    pub async fn get_consoles(&self) -> Result<Vec<Value>, WebApiError> {
+        let headers = self.create_headers()?;
 
         let response = self
             .transport
@@ -254,8 +219,7 @@ impl SessionApi {
             .and_then(|v| v.as_array())
             .ok_or_else(|| WebApiError::parse("Missing results in response"))?;
 
-        serde_json::from_value::<Vec<ConsoleInfo>>(serde_json::Value::Array(consoles.clone()))
-            .map_err(|e| WebApiError::parse(e.to_string()))
+        Ok(consoles.clone())
     }
 
     pub async fn input_configs(
@@ -267,16 +231,7 @@ impl SessionApi {
             "titleIdType": "xboxTitleId"
         });
 
-        let mut headers = HeaderMap::new();
-        headers.insert(
-            AUTHORIZATION,
-            HeaderValue::from_str(&self.authorization_header())?,
-        );
-        headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
-        headers.insert(
-            "X-MS-Device-Info",
-            HeaderValue::from_str(&self.device_info)?,
-        );
+        let headers = self.create_headers()?;
 
         let response = self
             .transport
@@ -301,65 +256,22 @@ impl SessionApi {
         format!("Bearer {}", self.bearer_token)
     }
 
-    fn create_common_headers(&self) -> Result<HeaderMap, WebApiError> {
+    fn create_headers(&self) -> Result<HeaderMap, WebApiError> {
         let mut headers = HeaderMap::new();
         headers.insert(
             AUTHORIZATION,
             HeaderValue::from_str(&self.authorization_header())?,
         );
         headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
+
+        for (key, value) in &self.header_overrides {
+            headers.insert(
+                reqwest::header::HeaderName::from_bytes(key.as_bytes())
+                    .map_err(|_| WebApiError::parse("Invalid header name"))?,
+                HeaderValue::from_str(value)?,
+            );
+        }
+
         Ok(headers)
     }
-}
-
-fn resolve_os_name(resolution: i64) -> &'static str {
-    if resolution == 1081 {
-        return "tizen";
-    }
-    if resolution == 1080 {
-        return "windows";
-    }
-    "android"
-}
-
-fn create_device_info(os_name: &str) -> String {
-    json!({
-        "appInfo": {
-            "env": {
-                "clientAppId": "www.xbox.com",
-                "clientAppType": "browser",
-                "clientAppVersion": "26.1.97",
-                "clientSdkVersion": "10.3.7",
-                "httpEnvironment": "prod",
-                "sdkInstallId": ""
-            }
-        },
-        "dev": {
-            "hw": {
-                "make": "Microsoft",
-                "model": "unknown",
-                "sdktype": "web"
-            },
-            "os": {
-                "name": os_name,
-                "ver": "22631.2715",
-                "platform": "desktop"
-            },
-            "displayInfo": {
-                "dimensions": {
-                    "widthInPixels": 1920,
-                    "heightInPixels": 1080
-                },
-                "pixelDensity": {
-                    "dpiX": 1,
-                    "dpiY": 1
-                }
-            },
-            "browser": {
-                "browserName": "chrome",
-                "browserVersion": "130.0"
-            }
-        }
-    })
-    .to_string()
 }

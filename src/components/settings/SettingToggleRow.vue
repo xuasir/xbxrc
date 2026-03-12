@@ -61,8 +61,8 @@ function handleConfirm(): void {
   gap: var(--ui-settings-row-gap);
   width: 100%;
   min-height: var(--ui-settings-row-min-height);
-  padding: 6px 12px;
-  border: 1px solid transparent;
+  padding: 10px 16px;
+  border: 2px solid transparent;
   border-radius: var(--settings-item-radius);
   background: transparent;
   color: var(--color-text-primary);
@@ -75,7 +75,7 @@ function handleConfirm(): void {
 
 .setting-toggle-row__label {
   font-size: var(--ui-settings-row-label-size);
-  line-height: 1.15;
+  line-height: 1.2;
   font-weight: var(--ui-font-weight-medium);
   color: var(--color-text-primary);
 }
@@ -89,7 +89,7 @@ function handleConfirm(): void {
   display: block;
   width: var(--ui-settings-toggle-track-width);
   height: var(--ui-settings-toggle-track-height);
-  border: 2px solid color-mix(in srgb, var(--color-text-secondary) 88%, transparent);
+  border: 2px solid var(--color-text-tertiary);
   border-radius: var(--ui-radius-pill);
   background: transparent;
   transition:
@@ -101,7 +101,7 @@ function handleConfirm(): void {
 .setting-toggle-row__thumb {
   position: absolute;
   top: 50%;
-  left: 2px;
+  left: 4px;
   width: var(--ui-settings-toggle-thumb-size);
   height: var(--ui-settings-toggle-thumb-size);
   border-radius: 50%;
@@ -124,13 +124,26 @@ function handleConfirm(): void {
 }
 
 .setting-toggle-row[data-focused='true'] {
-  border-color: var(--color-focus-ring);
-  background: color-mix(in srgb, var(--color-state-selected) 32%, transparent);
-  box-shadow: 0 0 0 var(--focus-ring-width) var(--color-focus-ring-outer) inset;
+  background: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+  box-shadow: var(--shadow-xbox-focus);
+}
+
+.setting-toggle-row[data-focused='true'] .setting-toggle-row__label {
+  color: #ffffff;
 }
 
 .setting-toggle-row[data-focused='true'] .setting-toggle-row__track {
-  box-shadow: none;
+  border-color: var(--color-text-tertiary);
+}
+
+.setting-toggle-row[data-focused='true'] .setting-toggle-row__thumb {
+  background: #ffffff;
+}
+
+.setting-toggle-row[data-focused='true'].setting-toggle-row--active .setting-toggle-row__track {
+  background: #107c10;
+  border-color: #107c10;
 }
 
 :global(html[data-ui-density='compact']) .setting-toggle-row,

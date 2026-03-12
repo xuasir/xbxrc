@@ -1,14 +1,27 @@
-import type { StreamingTargetType, StreamingTurnServerConfig } from '@shared/rpc/streaming'
-import type { rpc } from '../services/rpc'
+import type {
+  StreamingDisplayOptionsValue,
+  StreamingRenderProjection,
+  StreamingRuntimeProjection,
+  StreamingSessionExecutionSnapshot,
+  StreamingSessionProgressSnapshot,
+  StreamingSessionSnapshot,
+  StreamingTargetType,
+  StreamingTurnServerConfig,
+} from '@shared/rpc/streaming'
 
-export type StreamingSession = Awaited<ReturnType<typeof rpc.streaming.getSession>>
-
-export interface DisplayOptionsValue {
-  sharpness: number
-  saturation: number
-  contrast: number
-  brightness: number
+export type StreamingSession = StreamingSessionSnapshot
+export type StreamingSessionExecution = StreamingSessionExecutionSnapshot
+export type StreamingSessionProgress = StreamingSessionProgressSnapshot
+export type StreamRuntimeProjection = StreamingRuntimeProjection
+export type StreamRenderProjection = StreamingRenderProjection
+export interface RuntimeLaunchSpec {
+  sessionId: string
+  targetType: StreamingTargetType
+  runtime: StreamRuntimeProjection
+  render: StreamRenderProjection
 }
+
+export type DisplayOptionsValue = StreamingDisplayOptionsValue
 
 export interface StreamPerformanceSnapshot {
   resolution?: string

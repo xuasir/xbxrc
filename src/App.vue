@@ -15,10 +15,48 @@ let disposeAuthSessionReady: (() => void) | undefined
 let disposeUiDensity: (() => void) | undefined
 let xcloudWarmupPromise: Promise<unknown> | undefined
 const streamUiInputEnabled = ref(false)
+const STREAM_GAMEPLAY_GUARD_KEYS = new Set([
+  'ArrowUp',
+  'ArrowDown',
+  'ArrowLeft',
+  'ArrowRight',
+  'Tab',
+  'Enter',
+  ' ',
+])
 
 function handleStreamUiInputMode(event: Event): void {
   const detail = (event as CustomEvent<{ enabled?: boolean }>).detail
   streamUiInputEnabled.value = detail?.enabled === true
+}
+
+function isEditableTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) {
+    return false
+  }
+  return (
+    target instanceof HTMLInputElement
+    || target instanceof HTMLTextAreaElement
+    || target instanceof HTMLSelectElement
+    || target.isContentEditable
+    || target.closest('[contenteditable="true"]') !== null
+  )
+}
+
+function handleStreamGameplayKeyboardCapture(event: KeyboardEvent): void {
+  if (!isStreamRoute.value || streamUiInputEnabled.value) {
+    return
+  }
+  if (event.altKey || event.ctrlKey || event.metaKey) {
+    return
+  }
+  if (!STREAM_GAMEPLAY_GUARD_KEYS.has(event.key) || isEditableTarget(event.target)) {
+    return
+  }
+
+  // stream gameplay 态下不让方向键/确认键再落入 spatial navigation。
+  event.preventDefault()
+  event.stopPropagation()
 }
 
 const isStreamRoute = computed(
@@ -97,6 +135,7 @@ onMounted(() => {
     warmupXcloudCatalog()
   })
   window.addEventListener('stream-ui-input-mode', handleStreamUiInputMode)
+  window.addEventListener('keydown', handleStreamGameplayKeyboardCapture, { capture: true })
 })
 
 onUnmounted(() => {
@@ -109,6 +148,7 @@ onUnmounted(() => {
     disposeAuthSessionReady = undefined
   }
   window.removeEventListener('stream-ui-input-mode', handleStreamUiInputMode)
+  window.removeEventListener('keydown', handleStreamGameplayKeyboardCapture, { capture: true })
 })
 </script>
 
@@ -121,35 +161,35 @@ onUnmounted(() => {
     <SpatialNavGlobalHotkeys v-if="!isStreamRoute || streamUiInputEnabled" />
 
     <RouterView v-slot="{ Component, route: currentRoute }">
-      <AppShellLayout v-if="currentRoute.meta.layout !== 'plain'">
-        <KeepAlive>
-          <component
-            :is="Component"
-            v-if="currentRoute.meta.keepAlive"
-            :key="resolveRouteViewKey(currentRoute)"
-          />
-        </KeepAlive>
-        <component
-          :is="Component"
-          v-if="!currentRoute.meta.keepAlive"
-          :key="resolveRouteViewKey(currentRoute)"
-        />
-      </AppShellLayout>
+      <Transition name="page-fade" mode="out-in">
+        <div :key="resolveRouteViewKey(currentRoute)" class="app-view-container">
+          <AppShellLayout v-if="currentRoute.meta.layout !== 'plain'">
+            <KeepAlive>
+              <component
+                :is="Component"
+                v-if="currentRoute.meta.keepAlive"
+              />
+            </KeepAlive>
+            <component
+              :is="Component"
+              v-if="!currentRoute.meta.keepAlive"
+            />
+          </AppShellLayout>
 
-      <template v-else>
-        <KeepAlive>
-          <component
-            :is="Component"
-            v-if="currentRoute.meta.keepAlive"
-            :key="resolveRouteViewKey(currentRoute)"
-          />
-        </KeepAlive>
-        <component
-          :is="Component"
-          v-if="!currentRoute.meta.keepAlive"
-          :key="resolveRouteViewKey(currentRoute)"
-        />
-      </template>
+          <div v-else class="app-view-plain">
+            <KeepAlive>
+              <component
+                :is="Component"
+                v-if="currentRoute.meta.keepAlive"
+              />
+            </KeepAlive>
+            <component
+              :is="Component"
+              v-if="!currentRoute.meta.keepAlive"
+            />
+          </div>
+        </div>
+      </Transition>
     </RouterView>
   </ConsoleUIProvider>
 </template>

@@ -7,7 +7,6 @@ function subscribeByPreload<TEvent extends keyof XBoxEventSchema & string>(event
   const channel = EVENT_CHANNEL_MAP[event]
 
   const unlistenPromise = listen<XBoxEventSchema[TEvent]>(channel, (tauriEvent) => {
-    console.info(`[rust->ui][event] ${event} (${channel})`, tauriEvent.payload)
     listener(tauriEvent.payload)
   })
 

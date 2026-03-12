@@ -1,5 +1,9 @@
-import type { StreamingAnswerPayload, StreamingQueueDetails } from '@shared/rpc/streaming'
-import type { DisplayOptionsValue, StreamingSession } from './types'
+import type {
+  StreamingAnswerPayload,
+  StreamingQueueDetails,
+  StreamingSessionSnapshot,
+} from '@shared/rpc/streaming'
+import type { DisplayOptionsValue } from './types'
 
 export const DEFAULT_DISPLAY_OPTIONS: DisplayOptionsValue = {
   sharpness: 0,
@@ -22,7 +26,7 @@ export function extractAnswerSdp(payload: StreamingAnswerPayload): string {
   return payload.sdp
 }
 
-export function extractQueueSeconds(session: StreamingSession): number | null {
+export function extractQueueSeconds(session: StreamingSessionSnapshot): number | null {
   const details = session?.queue?.details
   if (details === undefined) {
     return null

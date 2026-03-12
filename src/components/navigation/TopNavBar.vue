@@ -234,17 +234,13 @@ function getPrimaryTabIndex(node: TopNavNodeKey): number | undefined {
 }
 
 .top-nav :deep(.sn-icon-button--active) {
-  background: color-mix(in srgb, var(--color-state-selected) 58%, transparent);
-  backdrop-filter: blur(12px) saturate(118%);
-  -webkit-backdrop-filter: blur(12px) saturate(118%);
-  box-shadow:
-    inset 0 0 0 1px var(--color-border-subtle),
-    0 6px 16px rgba(0, 0, 0, 0.12);
+  background: var(--color-state-selected);
+  box-shadow: inset 0 0 0 1px var(--color-border-subtle);
 }
 
 .top-nav :deep(.sn-icon-button--active[data-focused='true']) {
-  background: color-mix(in srgb, var(--color-state-selected) 34%, transparent);
-  box-shadow: 0 0 0 var(--focus-ring-width) var(--color-focus-ring-outer) inset;
+  background: var(--color-state-selected);
+  box-shadow: var(--shadow-xbox-focus);
 }
 
 .top-nav :deep(.sn-icon-button__icon-shell),

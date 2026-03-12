@@ -171,18 +171,17 @@ function isActiveTab(tabKey: string): boolean {
 }
 
 .sn-tabs__item--active::after {
-  background: var(--ui-page-text);
+  background: #107c10;
 }
 
 .sn-tabs__item[data-focused='true'] {
-  border-color: var(--ui-border-focus);
-  background: color-mix(in srgb, var(--ui-focus-surface) 36%, transparent);
+  background: transparent;
   box-shadow: var(--ui-focus-ring-shadow);
   color: var(--ui-page-text);
 }
 
 .sn-tabs__item[data-focused='true']:not(.sn-tabs__item--active)::after {
-  background: var(--ui-page-text-soft);
+  background: #ffffff;
 }
 
 .sn-tabs__item:disabled {

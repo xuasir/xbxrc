@@ -148,16 +148,15 @@ watch(
   align-items: center;
   justify-content: center;
   padding: var(--ui-stream-overlay-padding);
-  background: rgba(2, 7, 5, 0.72);
-  backdrop-filter: blur(18px);
+  background: rgba(0, 0, 0, 0.8);
 }
 
 .stream-text-sheet__panel {
   width: min(100%, var(--ui-stream-dialog-width));
   padding: var(--ui-stream-dialog-padding);
   border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: calc(var(--ui-radius-lg) + var(--ui-space-1));
-  background: linear-gradient(180deg, rgba(17, 26, 20, 0.96), rgba(9, 16, 12, 0.98));
+  border-radius: var(--ui-radius-lg);
+  background: #252423;
   color: #fff;
   box-shadow: 0 24px 80px rgba(0, 0, 0, 0.35);
 }
@@ -221,8 +220,8 @@ watch(
 }
 
 .stream-text-sheet__action--primary {
-  border-color: rgba(120, 232, 135, 0.36);
-  background: linear-gradient(180deg, #2f9d42, #227633);
+  border-color: #107c10;
+  background: #107c10;
 }
 
 .stream-text-sheet__action:disabled {

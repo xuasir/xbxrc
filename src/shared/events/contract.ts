@@ -1,7 +1,7 @@
-import type { AuthSessionReadyRendererEvent } from './auth'
+import type { AuthSessionReadyRendererEvent, AuthStateRendererEvent } from './auth'
 import type { GamepadDevicesChangedRendererEvent, GamepadPadSnapshotRendererEvent, GamepadRouteChangedRendererEvent, GamepadRuntimeSnapshotRendererEvent } from './gamepad'
 import type { XbxEngineRuntimeEventRendererEvent } from './xbxengine'
-import { AUTH_SESSION_READY_CHANNEL } from './auth'
+import { AUTH_SESSION_READY_CHANNEL, AUTH_STATE_CHANGED_CHANNEL } from './auth'
 import {
   GAMEPAD_DEVICES_CHANGED_CHANNEL,
   GAMEPAD_PAD_SNAPSHOT_CHANNEL,
@@ -14,7 +14,7 @@ import {
 
 } from './xbxengine'
 
-export type { AuthSessionReadyRendererEvent } from './auth'
+export type { AuthSessionReadyRendererEvent, AuthStateRendererEvent } from './auth'
 export type {
   GamepadDevicesChangedRendererEvent,
   GamepadPadSnapshotRendererEvent,
@@ -29,6 +29,7 @@ export type { XbxEngineRuntimeEventRendererEvent } from './xbxengine'
  */
 export interface XBoxEventSchema {
   'auth.sessionReady': AuthSessionReadyRendererEvent
+  'auth.stateChanged': AuthStateRendererEvent
   'gamepad.runtimeSnapshot': GamepadRuntimeSnapshotRendererEvent
   'gamepad.devicesChanged': GamepadDevicesChangedRendererEvent
   'gamepad.padSnapshot': GamepadPadSnapshotRendererEvent
@@ -44,6 +45,7 @@ export type XBoxEventName = keyof XBoxEventSchema
  */
 export const EVENT_CHANNEL_MAP: Record<XBoxEventName, string> = {
   'auth.sessionReady': AUTH_SESSION_READY_CHANNEL,
+  'auth.stateChanged': AUTH_STATE_CHANGED_CHANNEL,
   'gamepad.runtimeSnapshot': GAMEPAD_RUNTIME_SNAPSHOT_CHANNEL,
   'gamepad.devicesChanged': GAMEPAD_DEVICES_CHANGED_CHANNEL,
   'gamepad.padSnapshot': GAMEPAD_PAD_SNAPSHOT_CHANNEL,

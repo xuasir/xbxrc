@@ -1,4 +1,4 @@
-import type { type PlayerEvents, TypedEventEmitter } from '../../api/events'
+import type { PlayerEvents, TypedEventEmitter } from '../../api/events'
 import type { PlayerClientOptions } from '../../domain/config'
 import type { CreateOfferOptions, IceCandidateLike, SessionState } from '../../domain/session'
 import type { InputService } from '../input/InputService'

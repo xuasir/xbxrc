@@ -9,28 +9,20 @@ import type {
   LogicalPadBindingDto,
 } from '../gamepad/contract'
 import type {
-  StreamHostCloseSessionParams,
-  StreamHostExchangeIceParams,
-  StreamHostExchangeIceResult,
-  StreamHostExchangeOfferParams,
-  StreamHostExchangeOfferResult,
-  StreamHostKeepAliveParams,
-} from './stream-host'
-import type {
   StreamingCloseSessionParams,
-  StreamingCreateSessionParams,
+  StreamingCloseSessionResult,
+  StreamingDecideRecoveryParams,
+  StreamingDecideRecoveryResult,
   StreamingExchangeIceParams,
   StreamingExchangeIceResult,
   StreamingExchangeOfferParams,
   StreamingExchangeOfferResult,
-  StreamingGetSessionParams,
-  StreamingKeepAliveParams,
-  StreamingKeepAliveResult,
+  StreamingGetSessionProgressParams,
   StreamingListActiveSessionsParams,
   StreamingListActiveSessionsResult,
-  StreamingSessionSnapshot,
-  StreamingTargetType,
-  StreamingTurnServerConfig,
+  StreamingSessionProgressSnapshot,
+  StreamingStartSessionParams,
+  StreamingStartSessionResult,
 } from './streaming'
 import type { RpcMethod } from './types'
 import type {
@@ -221,26 +213,20 @@ export interface XBoxRpcSchema {
     >
   }
   streaming: {
-    getFallbackTurnServer: RpcMethod<
-      { targetType: StreamingTargetType },
-      StreamingTurnServerConfig | null
+    startSession: RpcMethod<StreamingStartSessionParams, StreamingStartSessionResult>
+    getSessionProgress: RpcMethod<
+      StreamingGetSessionProgressParams,
+      StreamingSessionProgressSnapshot | null
     >
-    createSession: RpcMethod<StreamingCreateSessionParams, StreamingSessionSnapshot>
-    getSession: RpcMethod<StreamingGetSessionParams, StreamingSessionSnapshot | null>
-    closeSession: RpcMethod<StreamingCloseSessionParams, { closed: boolean }>
+    closeSession: RpcMethod<StreamingCloseSessionParams, StreamingCloseSessionResult>
     exchangeOffer: RpcMethod<StreamingExchangeOfferParams, StreamingExchangeOfferResult>
+
     exchangeIce: RpcMethod<StreamingExchangeIceParams, StreamingExchangeIceResult>
-    sendKeepAlive: RpcMethod<StreamingKeepAliveParams, StreamingKeepAliveResult>
     listActiveSessions: RpcMethod<
       StreamingListActiveSessionsParams,
       StreamingListActiveSessionsResult
     >
-  }
-  streamHost: {
-    exchangeOffer: RpcMethod<StreamHostExchangeOfferParams, StreamHostExchangeOfferResult>
-    exchangeIce: RpcMethod<StreamHostExchangeIceParams, StreamHostExchangeIceResult>
-    keepAliveRemoteSession: RpcMethod<StreamHostKeepAliveParams, { accepted: boolean }>
-    closeRemoteSession: RpcMethod<StreamHostCloseSessionParams, { closed: boolean }>
+    decideRecovery: RpcMethod<StreamingDecideRecoveryParams, StreamingDecideRecoveryResult>
   }
   xbxEngine: {
     startRuntime: RpcMethod<XbxEngineStartRuntimeParams, XbxEngineAckResult>

@@ -21,6 +21,29 @@ pub struct XbxEngineDisplayStateDto {
     pub display_options: XbxEngineDisplayOptionsDto,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct XbxEngineRuntimeCodecPreferenceDto {
+    pub mime_type: String,
+    pub profiles: Vec<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct XbxEngineRuntimeProjectionDto {
+    pub codec: Option<XbxEngineRuntimeCodecPreferenceDto>,
+    pub max_video_bitrate_kbps: Option<u32>,
+    pub max_audio_bitrate_kbps: Option<u32>,
+    pub force_mono_audio: bool,
+    pub polling_rate_hz: u32,
+    pub vibration: bool,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct XbxEngineRenderProjectionDto {
+    pub enable_audio_control: bool,
+    pub video_format: Option<String>,
+    pub display_options: XbxEngineDisplayOptionsDto,
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum XbxEngineInputEventDto {
     Pointer {
@@ -61,6 +84,8 @@ pub enum XbxEngineControlCommandDto {
         viewport: XbxEngineViewportDto,
         audio_volume: f32,
         mode: Option<XbxStreamingModeDto>,
+        runtime: Option<XbxEngineRuntimeProjectionDto>,
+        render: Option<XbxEngineRenderProjectionDto>,
     },
     StopRuntime,
     RequestReconnect {

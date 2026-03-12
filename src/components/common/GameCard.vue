@@ -87,27 +87,15 @@ function handleSelect(): void {
     filter var(--ui-motion-fast);
 }
 
-.game-card::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  background:
-    linear-gradient(150deg, rgba(255, 255, 255, 0.14), transparent 26%),
-    radial-gradient(circle at 18% 16%, rgba(101, 150, 255, 0.2), transparent 34%);
-  opacity: 0.55;
-  pointer-events: none;
-}
-
 .game-card:hover {
-  transform: translateY(-4px);
   filter: brightness(1.03);
 }
 
 .game-card[data-focused='true'] {
-  border-color: var(--color-focus-ring);
-  background: color-mix(in srgb, var(--color-state-selected) 32%, rgba(0, 0, 0, 0.12));
-  box-shadow: 0 0 0 var(--focus-ring-width) var(--color-focus-ring-outer) inset;
+  background: var(--color-surface-2);
+  box-shadow: var(--shadow-xbox-focus);
+  transform: scale(1.04);
+  z-index: 10;
 }
 
 .game-card__image-shell,
@@ -145,9 +133,7 @@ function handleSelect(): void {
   align-items: flex-end;
   min-height: var(--ui-game-card-title-min-height);
   padding: var(--ui-game-card-title-padding);
-  background:
-    linear-gradient(180deg, transparent, rgba(8, 12, 20, 0.12) 22%, rgba(12, 18, 30, 0.88)),
-    linear-gradient(180deg, transparent, rgba(42, 94, 202, 0.18) 74%, rgba(42, 94, 202, 0.08));
+  background: linear-gradient(180deg, transparent, rgba(0, 0, 0, 0.72) 40%, rgba(0, 0, 0, 0.94));
   opacity: 0.92;
   transform: translateY(6px);
   transition:
@@ -175,7 +161,6 @@ function handleSelect(): void {
 
 .game-card:hover .game-card__image,
 .game-card[data-focused='true'] .game-card__image {
-  transform: scale(1.06);
   filter: saturate(1.08);
 }
 </style>

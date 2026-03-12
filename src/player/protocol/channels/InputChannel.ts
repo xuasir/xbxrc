@@ -8,7 +8,6 @@ export class InputChannel extends BaseChannel {
   private started = false
   private pendingStart = false
   private pendingControlTransport: ControlTransport | null = null
-  private frameLogCount = 0
 
   constructor(
     context: ChannelContext,
@@ -23,7 +22,6 @@ export class InputChannel extends BaseChannel {
       return
     }
     if (this.context.readyState() !== 'open') {
-      console.info('[player][input] start deferred until open')
       this.pendingStart = true
       return
     }
@@ -33,24 +31,18 @@ export class InputChannel extends BaseChannel {
       send: data => this.send(data),
       getReadyState: () => this.context.readyState(),
     }
-    console.info('[player][input] start input service')
     this.inputService.start(inputTransport, controlTransport)
     this.started = true
     this.pendingStart = false
   }
 
   onOpen(): void {
-    console.info('[player][input] open')
     if (this.pendingStart && this.pendingControlTransport !== null) {
       this.start(this.pendingControlTransport)
     }
   }
 
   queueGamepadState(frame: GamepadFrame): void {
-    if (this.frameLogCount < 5) {
-      console.info('[player][input] queue frame', frame)
-      this.frameLogCount += 1
-    }
     this.inputService.queueGamepadState(frame)
   }
 
@@ -81,11 +73,9 @@ export class InputChannel extends BaseChannel {
   }
 
   onClose(): void {
-    console.info('[player][input] close')
     this.started = false
     this.pendingStart = false
     this.pendingControlTransport = null
-    this.frameLogCount = 0
     this.inputService.stop()
   }
 }

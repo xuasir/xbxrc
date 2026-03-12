@@ -276,7 +276,6 @@ onMounted(() => {
 }
 
 .home-page__refresh-button:hover {
-  transform: translateY(-1px);
   background: var(--btn-primary-bg-hover);
   box-shadow: 0 12px 24px rgba(22, 132, 57, 0.22);
 }
@@ -285,7 +284,7 @@ onMounted(() => {
   border-color: var(--color-focus-ring);
   background: var(--btn-primary-bg-hover);
   color: var(--btn-primary-text);
-  box-shadow: 0 0 0 var(--focus-ring-width) var(--color-focus-ring-outer) inset;
+  box-shadow: var(--shadow-xbox-focus);
 }
 
 :global(html[data-ui-density='compact']) .home-page__content,

@@ -3,8 +3,8 @@ $color-neutral-1000: #000000;
 
 // 基础色板：只保留可复用的原始色，不直接绑定具体组件或页面
 $color-slate-50: #f6f7fb;
-$color-slate-820: #22272f;
-$color-slate-950: #152033;
+$color-slate-820: #1a1b1e;
+$color-slate-950: #0f0f10;
 
 $color-blue-100: #f5f8ff;
 $color-blue-550: #4177db;
@@ -22,9 +22,9 @@ $color-frost-blue-740: #427af6;
 
 $color-steel-500: #3a537e;
 
-$color-brand-green: rgb(0, 155, 0);
-$color-brand-green-600: #0d9d4f;
-$color-brand-green-500: #11b15a;
+$color-brand-green: #107c10;
+$color-brand-green-600: #107c10;
+$color-brand-green-500: #158f15;
 $color-status-online: #24d158;
 
 // 透明度刻度：透明色规则优先在这里统一定义
@@ -49,9 +49,8 @@ $alpha-88: 0.88;
 $alpha-92: 0.92;
 
 $ui-font-family:
-  'DIN Alternate',
-  'Avenir Next Condensed',
-  'PingFang SC',
+  'Segoe UI',
+  'WestEuropean',
   'Microsoft YaHei',
   sans-serif;
 
@@ -79,9 +78,9 @@ $ui-space-4xl: $ui-space-8;
 $ui-space-5xl: $ui-space-9;
 
 $ui-radius-sm: 4px;
-$ui-radius-md: 6px;
-$ui-radius-lg: 7px;
-$ui-radius-pill: 10px;
+$ui-radius-md: 8px;
+$ui-radius-lg: 12px;
+$ui-radius-pill: 999px;
 
 $ui-text-body-sm: 13px;
 $ui-text-body-md: 17px;

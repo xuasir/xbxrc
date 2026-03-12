@@ -4,7 +4,7 @@ use crate::mods::auth::runtime_state::{AuthRuntimeState, BeginCheckOutcome};
 use crate::mods::auth::types::{
     AuthSessionReadyEvent, AuthState, CheckAuthResponse, LoginResponse,
 };
-use crate::mods::auth::AuthProvider;
+use crate::mods::auth::{events, AuthProvider};
 use crate::mods::config::ConfigProviderRef;
 use async_trait::async_trait;
 use serde_json::Value;
@@ -80,6 +80,8 @@ impl AuthService {
             self.runtime.fail_login()?;
         }
 
+        self.sync_auth_state();
+
         result
     }
 
@@ -89,6 +91,8 @@ impl AuthService {
         self.persistence.clear_all_tokens()?;
         self.runtime.clear_auth_state()?;
         log::info!("Auth: 注销完成, 所有 Token 和状态已重置");
+
+        self.sync_auth_state();
         Ok(())
     }
 
@@ -103,12 +107,15 @@ impl AuthService {
 
         self.runtime.clear_auth_state()?;
         log::info!("Auth: 清理认证缓存完成");
+
+        self.sync_auth_state();
         Ok(())
     }
 
     async fn reset_runtime_after_store_purge_impl(&self) {
         self.close_auth_window();
         self.runtime.reset_after_store_purge();
+        self.sync_auth_state();
     }
 
     async fn check_authentication_impl(&self) -> AppResult<CheckAuthResponse> {
@@ -118,7 +125,17 @@ impl AuthService {
             BeginCheckOutcome::ShortCircuit(response) => return Ok(response),
             BeginCheckOutcome::Proceed { previous_state } => previous_state,
         };
+        self.sync_auth_state();
 
+        let result = self.check_authentication_internal(previous_state).await;
+        self.sync_auth_state();
+        result
+    }
+
+    async fn check_authentication_internal(
+        &self,
+        previous_state: AuthState,
+    ) -> AppResult<CheckAuthResponse> {
         if let Some(snapshot) = self.persistence.get_valid_session_snapshot()? {
             log::info!("Auth: 发现有效的会话快照, 直接完成认证");
             return self.runtime.finish_check_from_snapshot(&snapshot);
@@ -196,10 +213,12 @@ impl AuthService {
                 self.runtime
                     .mark_authenticated(output.auth_bundle.app_level)?;
                 log::info!("Auth: 交互式登录完成，下游 token 已全部就绪");
+                self.sync_auth_state();
                 Ok(())
             }
             Err(error) => {
                 self.runtime.mark_authenticating_idle()?;
+                self.sync_auth_state();
                 Err(error)
             }
         }
@@ -207,14 +226,19 @@ impl AuthService {
 
     async fn cancel_pending_login_impl(&self) {
         self.runtime.cancel_pending_login();
+        self.sync_auth_state();
     }
 
     fn mark_callback_processing_impl(&self) -> AppResult<()> {
-        self.runtime.mark_callback_processing()
+        self.runtime.mark_callback_processing()?;
+        self.sync_auth_state();
+        Ok(())
     }
 
     fn unmark_callback_processing_impl(&self) -> AppResult<()> {
-        self.runtime.unmark_callback_processing()
+        self.runtime.unmark_callback_processing()?;
+        self.sync_auth_state();
+        Ok(())
     }
 
     async fn start_silent_flow_impl(&self) -> Result<(), String> {
@@ -314,6 +338,15 @@ impl AuthService {
             .map_err(|error| error.to_string())?;
         log::info!("Auth: 复用已有核心 token 的下游令牌收口完成");
         Ok(())
+    }
+
+    fn sync_auth_state(&self) {
+        let state = self.get_state();
+        let _ = events::emit_auth_state_changed(&self.app_handle, &state);
+
+        if state.is_authenticated {
+            let _ = events::emit_session_ready(&self.app_handle, &state.provider, state.app_level);
+        }
     }
 }
 

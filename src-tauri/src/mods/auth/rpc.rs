@@ -62,16 +62,6 @@ pub async fn handle_rpc(
         }
         AuthCommand::CheckAuthentication => {
             let result = auth.check_authentication().await?;
-            let auth_state = auth.get_state();
-
-            if auth_state.is_authenticated {
-                let _ = events::emit_session_ready(
-                    &app_handle,
-                    &auth_state.provider,
-                    auth_state.app_level,
-                );
-            }
-
             Ok(serde_json::to_value(result)?)
         }
         AuthCommand::ClearAuthCache { scope } => {
@@ -90,14 +80,6 @@ pub async fn handle_rpc(
         AuthCommand::HandleOAuthCallback { url } => {
             auth.handle_oauth_callback(&url).await?;
             let auth_state = auth.get_state();
-
-            if auth_state.is_authenticated {
-                let _ = events::emit_session_ready(
-                    &app_handle,
-                    &auth_state.provider,
-                    auth_state.app_level,
-                );
-            }
 
             Ok(json!({
                 "provider": auth_state.provider,
@@ -145,7 +127,7 @@ fn open_oauth_window(app_handle: &tauri::AppHandle, oauth_url: &str) -> AppResul
         let _ = auth.mark_callback_processing();
 
         // 使用 tauri::async_runtime::block_on 同步执行异步回调
-        let callback_result = tauri::async_runtime::block_on({
+        let _ = tauri::async_runtime::block_on({
             let app_handle = app_handle_for_nav.clone();
             let url = callback_url.clone();
             async move {
@@ -155,18 +137,8 @@ fn open_oauth_window(app_handle: &tauri::AppHandle, oauth_url: &str) -> AppResul
             }
         });
 
-        let auth_state = auth.get_state();
-
         // 取消标记
         let _ = auth.unmark_callback_processing();
-
-        if callback_result.is_ok() && auth_state.is_authenticated {
-            let _ = events::emit_session_ready(
-                &app_handle_for_nav,
-                &auth_state.provider,
-                auth_state.app_level,
-            );
-        }
 
         if let Some(window) = app_handle_for_nav.get_webview_window(AUTH_WINDOW_LABEL) {
             let _ = window.close();

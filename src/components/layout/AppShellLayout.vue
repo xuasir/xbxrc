@@ -65,11 +65,6 @@ const profileDownNeighborId = computed<string | undefined>(() => {
   return isProfileMenuOpen.value ? SPATIAL_NAV_NODE_IDS.userMenu.logout : currentPageFocusNodeId.value
 })
 
-// 通过 CSS 变量注入背景图，方便后续主题或皮肤替换
-const shellStyleVars = computed(() => ({
-  '--app-shell-bg-image': `url(${mainBgImage})`,
-}))
-
 const resolvedDisplayName = computed(() => {
   return (
     userProfile.value?.gameDisplayName
@@ -192,14 +187,12 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <section class="app-shell" :style="shellStyleVars">
+  <section class="app-shell">
     <FocusScope
       :id="SPATIAL_NAV_SCOPE_IDS.appShell"
       :default-focus-id="SPATIAL_NAV_NODE_IDS.topNav.brand"
       :active="!isProfileMenuOpen"
     >
-      <div class="app-shell__bg-glow" aria-hidden="true" />
-
       <TopNavBar
         :scope-id="SPATIAL_NAV_SCOPE_IDS.appShell"
         :down-neighbor-id="currentPageFocusNodeId"
@@ -242,22 +235,8 @@ onUnmounted(() => {
   height: 100vh;
   color: var(--ui-page-text);
   font-family: var(--ui-font-family);
-  background-color: #06110d;
-  background-image:
-    linear-gradient(180deg, rgba(0, 0, 0, 0.44), rgba(0, 0, 0, 0.72)), var(--app-shell-bg-image);
-  background-size: cover;
-  background-position: center;
-  background-repeat: no-repeat;
+  background-color: #1a1b1e;
   overflow: hidden;
-}
-
-.app-shell__bg-glow {
-  position: absolute;
-  inset: 0;
-  background:
-    radial-gradient(circle at 50% 50%, var(--ui-page-glow-soft), transparent 48%),
-    radial-gradient(circle at 50% 20%, var(--ui-page-glow-strong), transparent 32%);
-  pointer-events: none;
 }
 
 .app-shell__content {

@@ -4,25 +4,28 @@ use crate::mods::data::types::{
     DataConsolePowerResult, DataHostSummary, DataSendTextResult, DataSessionContext,
     DataStreamingTitleInputConfig,
 };
-use crate::mods::streaming::api_provider::StreamingApiProvider;
-use crate::mods::streaming::session_api::StreamingSessionApi;
 use reqwest::header::{HeaderMap, HeaderValue, AUTHORIZATION, CONTENT_TYPE};
 use reqwest::Client;
 use serde_json::{json, Value};
 use uuid::Uuid;
+use xbox_streaming::{
+    compile as compile_plan, parse_session_access_context, CompilerInput as DomainCompilerInput,
+    Config as DomainStreamingConfig, Context as DomainContext, Target as DomainTarget,
+    WebApiSessionGateway,
+};
 
 const XBOX_CLIENT_VERSION: &str = "39.39.22001.0";
 
 pub struct StreamingQueryService {
     client: Client,
-    streaming_api_provider: StreamingApiProvider,
+    config_provider: ConfigProviderRef,
 }
 
 impl StreamingQueryService {
     pub fn new(config_provider: ConfigProviderRef) -> Self {
         Self {
             client: Client::new(),
-            streaming_api_provider: StreamingApiProvider::new(config_provider),
+            config_provider,
         }
     }
 
@@ -35,7 +38,7 @@ impl StreamingQueryService {
         };
 
         let consoles = api
-            .get_consoles()
+            .get_remote_consoles()
             .await
             .map_err(|error| error.to_string())?;
 
@@ -189,16 +192,37 @@ impl StreamingQueryService {
     async fn create_home_session_api(
         &self,
         session: &DataSessionContext,
-    ) -> Result<Option<StreamingSessionApi>, String> {
-        // data 域对齐 Electron 语义：home 查询统一复用 streaming 基础设施。
+    ) -> Result<Option<WebApiSessionGateway>, String> {
+        // RFC: 拆除横向依赖。mods/data 直接扁平依赖 crate，不横向依赖 mods/streaming。
         let Some(token) = resolve_xhome_token(session) else {
             return Ok(None);
         };
-        let api = self
-            .streaming_api_provider
-            .create_session_api(token, "home")
-            .await?;
-        Ok(Some(api))
+
+        let access_context = parse_session_access_context(token).map_err(|e| e.to_string())?;
+        let config_snapshot = self.config_provider.get_streaming_config();
+        let domain_config = DomainStreamingConfig::new_home_config(
+            config_snapshot.preferred_game_language.clone(),
+            config_snapshot.force_region_ip.clone(),
+        );
+
+        let context = DomainContext {
+            target: DomainTarget::Home,
+            target_id: String::new(),
+            session: access_context,
+            ..Default::default()
+        };
+
+        let output = compile_plan(DomainCompilerInput {
+            config: domain_config,
+            context,
+        })
+        .map_err(|e| e.to_string())?;
+
+        // 既然已经有 token 了，直接使用 from_plan_with_token 构造。
+        Ok(Some(
+            WebApiSessionGateway::from_plan_with_token(output.plan, token.clone())
+                .map_err(|e| e.to_string())?,
+        ))
     }
 }
 

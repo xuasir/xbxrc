@@ -92,16 +92,15 @@ function resolveNeighbors(index: number): Record<'up' | 'down', string | undefin
   align-items: flex-start;
   justify-content: flex-end;
   padding: var(--ui-stream-action-sheet-padding);
-  background: rgba(2, 7, 5, 0.32);
-  backdrop-filter: blur(10px);
+  background: rgba(0, 0, 0, 0.6);
 }
 
 .stream-action-sheet__panel {
   width: min(100%, var(--ui-stream-action-sheet-width));
   padding: var(--ui-stream-action-sheet-panel-padding);
   border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: calc(var(--ui-radius-lg) + var(--ui-space-1));
-  background: linear-gradient(180deg, rgba(17, 26, 20, 0.96), rgba(9, 16, 12, 0.98));
+  border-radius: var(--ui-radius-lg);
+  background: #252423;
   color: #fff;
   box-shadow: 0 24px 80px rgba(0, 0, 0, 0.35);
 }

@@ -1,4 +1,4 @@
-import type { type PlayerEvents, TypedEventEmitter } from '../../api/events'
+import type { PlayerEvents, TypedEventEmitter } from '../../api/events'
 import type { AudioRuntimeConfig, RendererRuntimeConfig } from '../../domain/media'
 import type { InputService } from '../input/InputService'
 import { AudioEffectsService } from './AudioEffectsService'

@@ -18,12 +18,7 @@ type LoginViewState = 'checking' | 'idle' | 'submitting'
 const viewState = ref<LoginViewState>('checking')
 
 let disposeAuthSessionReady: (() => void) | undefined
-let authStatePollTimer: number | undefined
-let isAuthStatePolling = false
-
-const loginStyleVars = computed(() => ({
-  '--login-bg-image': `url(${mainBgImage})`,
-}))
+let disposeAuthStateChanged: (() => void) | undefined
 
 const redirectTarget = computed(() => {
   return typeof route.query.redirect === 'string' ? route.query.redirect : '/xhome'
@@ -50,17 +45,9 @@ const loginActionLabel = computed(() => {
   return t('login.signInSimple')
 })
 
-function stopAuthStatePolling(): void {
-  if (authStatePollTimer !== undefined) {
-    window.clearInterval(authStatePollTimer)
-    authStatePollTimer = undefined
-  }
-}
-
 async function redirectIfAuthenticated(): Promise<boolean> {
   const authState = await rpc.auth.getState()
   if (authState.isAuthenticated) {
-    stopAuthStatePolling()
     await router.replace(redirectTarget.value)
     return true
   }
@@ -74,49 +61,18 @@ function applyAuthStateView(
   } = {},
 ): void {
   if (authState.isAuthenticated) {
-    viewState.value = 'idle'
+    // 成功后由 redirectIfAuthenticated 处理
     return
   }
 
   if (authState.isAuthenticating) {
-    // 显式登录后的轮询阶段继续保持“正在登录”语义，避免误显示成“恢复登录”
+    // 显式登录期间继续保持“正在登录”语义，避免误显示成“恢复登录”
     viewState.value
       = options.preserveSubmitting && viewState.value === 'submitting' ? 'submitting' : 'checking'
     return
   }
 
   viewState.value = 'idle'
-}
-
-function startAuthStatePolling(): void {
-  if (authStatePollTimer !== undefined) {
-    return
-  }
-
-  // 静默登录/显式登录期间轮询主进程状态，结束后再决定是否展示登录入口
-  authStatePollTimer = window.setInterval(() => {
-    if (isAuthStatePolling) {
-      return
-    }
-
-    isAuthStatePolling = true
-    void rpc.auth
-      .getState()
-      .then(async (authState) => {
-        if (authState.isAuthenticated) {
-          await redirectIfAuthenticated()
-          return
-        }
-
-        if (!authState.isAuthenticating) {
-          stopAuthStatePolling()
-        }
-        applyAuthStateView(authState, { preserveSubmitting: true })
-      })
-      .finally(() => {
-        isAuthStatePolling = false
-      })
-  }, 400)
 }
 
 async function bootstrapLoginState(): Promise<void> {
@@ -128,7 +84,6 @@ async function bootstrapLoginState(): Promise<void> {
 
   if (currentState.isAuthenticating) {
     applyAuthStateView(currentState)
-    startAuthStatePolling()
     return
   }
 
@@ -148,9 +103,6 @@ async function bootstrapLoginState(): Promise<void> {
   }
 
   applyAuthStateView(nextState)
-  if (nextState.isAuthenticating) {
-    startAuthStatePolling()
-  }
 }
 
 async function handleSignIn(): Promise<void> {
@@ -166,23 +118,22 @@ async function handleSignIn(): Promise<void> {
   }
   if (authState.isAuthenticating) {
     viewState.value = 'checking'
-    startAuthStatePolling()
     return
   }
 
   viewState.value = 'submitting'
   try {
     await rpc.auth.login()
-    if (!(await redirectIfAuthenticated())) {
-      startAuthStatePolling()
-    }
+    await redirectIfAuthenticated()
   }
   catch {
-    stopAuthStatePolling()
     viewState.value = 'idle'
   }
   finally {
-    if (viewState.value === 'submitting' && authStatePollTimer === undefined) {
+    // 如果 login 调用返回后仍未跳转（例如打开了 OAuth 窗口），状态会由事件通知维护
+    // 如果没有打开窗口且未认证，则重置为 idle
+    const finalState = await rpc.auth.getState()
+    if (!finalState.isAuthenticating && !finalState.isAuthenticated) {
       viewState.value = 'idle'
     }
   }
@@ -190,24 +141,34 @@ async function handleSignIn(): Promise<void> {
 
 onMounted(() => {
   void bootstrapLoginState()
+
   disposeAuthSessionReady = events.on('auth.sessionReady', () => {
     void redirectIfAuthenticated()
+  })
+
+  disposeAuthStateChanged = events.on('auth.stateChanged', (state) => {
+    if (state.isAuthenticated) {
+      void redirectIfAuthenticated()
+      return
+    }
+    applyAuthStateView(state, { preserveSubmitting: true })
   })
 })
 
 onUnmounted(() => {
-  stopAuthStatePolling()
   if (disposeAuthSessionReady !== undefined) {
     disposeAuthSessionReady()
     disposeAuthSessionReady = undefined
+  }
+  if (disposeAuthStateChanged !== undefined) {
+    disposeAuthStateChanged()
+    disposeAuthStateChanged = undefined
   }
 })
 </script>
 
 <template>
-  <section class="login-page" :style="loginStyleVars">
-    <div class="login-page__overlay" />
-
+  <section class="login-page">
     <FocusScope
       :id="SPATIAL_NAV_SCOPE_IDS.login"
       :default-focus-id="SPATIAL_NAV_NODE_IDS.login.signIn"
@@ -246,22 +207,7 @@ onUnmounted(() => {
   position: relative;
   min-height: 100vh;
   color: var(--ui-page-text);
-  background-image: var(--login-bg-image);
-  background-size: cover;
-  background-position: center;
-  background-repeat: no-repeat;
-}
-
-.login-page__overlay {
-  position: absolute;
-  inset: 0;
-  background:
-    radial-gradient(circle at 24% 24%, var(--ui-login-overlay-glow), transparent 48%),
-    linear-gradient(
-      180deg,
-      var(--ui-login-overlay-gradient-top),
-      var(--ui-login-overlay-gradient-bottom)
-    );
+  background-color: #1a1b1e;
 }
 
 .login-content {

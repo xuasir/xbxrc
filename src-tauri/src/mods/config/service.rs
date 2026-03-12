@@ -4,7 +4,7 @@ use tauri::AppHandle;
 use super::config_policy::{filter_patch, normalize_config, split_groups};
 use super::storage_repository::ConfigStorageRepository;
 use super::ConfigProvider;
-use crate::mods::streaming::types::StreamingConfigSnapshot;
+use crate::mods::streaming::types::{StreamingConfigSnapshot, StreamingDisplayOptionsValue};
 
 pub struct ConfigService {
     storage_repository: ConfigStorageRepository,
@@ -85,6 +85,110 @@ impl ConfigProvider for ConfigService {
                 .and_then(Value::as_str)
                 .unwrap_or_default()
                 .to_string(),
+            xhome_bitrate_mode: normalized
+                .get("xhome_bitrate_mode")
+                .and_then(Value::as_str)
+                .unwrap_or("Auto")
+                .to_string(),
+            xhome_bitrate: normalized
+                .get("xhome_bitrate")
+                .and_then(Value::as_i64)
+                .unwrap_or(20),
+            xcloud_bitrate_mode: normalized
+                .get("xcloud_bitrate_mode")
+                .and_then(Value::as_str)
+                .unwrap_or("Auto")
+                .to_string(),
+            xcloud_bitrate: normalized
+                .get("xcloud_bitrate")
+                .and_then(Value::as_i64)
+                .unwrap_or(20),
+            audio_bitrate_mode: normalized
+                .get("audio_bitrate_mode")
+                .and_then(Value::as_str)
+                .unwrap_or("Auto")
+                .to_string(),
+            audio_bitrate: normalized
+                .get("audio_bitrate")
+                .and_then(Value::as_i64)
+                .unwrap_or(20),
+            codec: normalized
+                .get("codec")
+                .and_then(Value::as_str)
+                .unwrap_or_default()
+                .to_string(),
+            polling_rate: normalized
+                .get("polling_rate")
+                .and_then(Value::as_i64)
+                .unwrap_or(250),
+            vibration: normalized
+                .get("vibration")
+                .and_then(Value::as_bool)
+                .unwrap_or(true),
+            stream_runtime_mode: normalized
+                .get("stream_runtime_mode")
+                .and_then(Value::as_str)
+                .unwrap_or("webrtc-direct")
+                .to_string(),
+            power_on: normalized
+                .get("power_on")
+                .and_then(Value::as_bool)
+                .unwrap_or(false),
+            server_url: normalized
+                .get("server_url")
+                .and_then(Value::as_str)
+                .unwrap_or_default()
+                .to_string(),
+            server_username: normalized
+                .get("server_username")
+                .and_then(Value::as_str)
+                .unwrap_or_default()
+                .to_string(),
+            server_credential: normalized
+                .get("server_credential")
+                .and_then(Value::as_str)
+                .unwrap_or_default()
+                .to_string(),
+            xhome_turn_fallback: normalized
+                .get("xhome_turn_fallback")
+                .and_then(Value::as_bool)
+                .unwrap_or(false),
+            enable_audio_control: normalized
+                .get("enable_audio_control")
+                .and_then(Value::as_bool)
+                .unwrap_or(false),
+            video_format: normalized
+                .get("video_format")
+                .and_then(Value::as_str)
+                .unwrap_or_default()
+                .to_string(),
+            display_options: normalized
+                .get("display_options")
+                .and_then(Value::as_object)
+                .map(|display| StreamingDisplayOptionsValue {
+                    sharpness: display
+                        .get("sharpness")
+                        .and_then(Value::as_i64)
+                        .unwrap_or(2) as i16,
+                    saturation: display
+                        .get("saturation")
+                        .and_then(Value::as_i64)
+                        .unwrap_or(100) as i16,
+                    contrast: display
+                        .get("contrast")
+                        .and_then(Value::as_i64)
+                        .unwrap_or(100) as i16,
+                    brightness: display
+                        .get("brightness")
+                        .and_then(Value::as_i64)
+                        .unwrap_or(100) as i16,
+                })
+                .unwrap_or(StreamingDisplayOptionsValue {
+                    sharpness: 2,
+                    saturation: 100,
+                    contrast: 100,
+                    brightness: 100,
+                }),
         }
     }
 

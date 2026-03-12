@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { DisplayOptionsValue } from '../streaming/types'
 import { Focusable, FocusScope } from '@spatial-navigation/vue'
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import BrandedLoading from '../components/common/BrandedLoading.vue'
@@ -12,35 +12,35 @@ import StreamAudioSheet from '../components/stream/StreamAudioSheet.vue'
 import StreamPerformancePanel from '../components/stream/StreamPerformancePanel.vue'
 import StreamTextSheet from '../components/stream/StreamTextSheet.vue'
 import { SPATIAL_NAV_NODE_IDS, SPATIAL_NAV_SCOPE_IDS } from '../navigation/spatial-nav.constants'
-import { useStreamController } from '../streaming/application/useStreamController'
-
-type BrowserTimeout = number
+import { useStreamExecution } from '../streaming/useStreamExecution'
+import { useXStreamPageUi } from '../streaming/xstream-page-ui'
 
 const { t } = useI18n()
 const router = useRouter()
 const route = useRoute()
 
-const controller = useStreamController({
+const controller = useStreamExecution({
   route,
   router,
   t,
 })
 const {
+  route: streamRoute,
+  ability,
+  execution,
+  actions,
+} = controller
+const {
   eyebrow,
   displayName,
-  canPowerOffConsole,
-  canSendText,
-  canOpenPerformance,
-  canOpenDisplaySettings,
-  canOpenAudioSettings,
-  canToggleMicrophone,
-  canPressNexus,
-  canLongPressNexus,
-  isLoading,
+} = streamRoute
+const {
   isConnected,
+  isLoading,
   statusText,
   errorText,
   errorKind,
+  hasError,
   warningVisible,
   displayOptions,
   resolutionMode,
@@ -49,14 +49,9 @@ const {
   performanceSnapshot,
   audioVolume,
   microphoneOpen,
-} = controller
-const actionSheetOpen = ref(false)
-const displaySheetOpen = ref(false)
-const audioSheetOpen = ref(false)
-const textSheetOpen = ref(false)
+} = execution
+const dismissWarning = actions.dismissWarning
 const sendingText = ref(false)
-const chromeVisible = ref(true)
-const chromeTimer = ref<BrowserTimeout | null>(null)
 
 interface StreamActionViewModel {
   id: string
@@ -73,32 +68,32 @@ interface StreamMenuActionViewModel {
   disabled?: boolean
 }
 
-const hasError = computed(() => errorText.value !== '')
-const showFailedSheet = computed(() => hasError.value && errorKind.value === 'connectionFailed')
-const showWarningSheet = computed(() => warningVisible.value && !hasError.value)
-const hasOverlay = computed(
-  () =>
-    isLoading.value
-    || hasError.value
-    || showFailedSheet.value
-    || showWarningSheet.value
-    || actionSheetOpen.value
-    || displaySheetOpen.value
-    || audioSheetOpen.value
-    || textSheetOpen.value,
-)
-const shouldShowChrome = computed(
-  () => !isConnected.value || hasOverlay.value || chromeVisible.value,
-)
-const shouldEnableSpatialInput = computed(() => !isConnected.value || hasOverlay.value)
-
-function syncStreamUiInputMode(enabled: boolean): void {
-  window.dispatchEvent(
-    new CustomEvent('stream-ui-input-mode', {
-      detail: { enabled },
-    }),
-  )
-}
+const pageUi = useXStreamPageUi({
+  getIsConnected: () => isConnected.value,
+  getIsLoading: () => isLoading.value,
+  getHasError: () => hasError.value,
+  getErrorKind: () => errorKind.value,
+  getWarningVisible: () => warningVisible.value,
+})
+const {
+  state: pageState,
+  actions: pageActions,
+} = pageUi
+const {
+  overlayState,
+  showFailedSheet,
+  showWarningSheet,
+  shouldShowChrome,
+  isMenuSheetOpen,
+  isDisplaySheetOpen,
+  isAudioSheetOpen,
+  isTextSheetOpen,
+} = pageState
+const {
+  revealChrome,
+  openSheet,
+  closeSheet,
+} = pageActions
 
 // 串流页是 plain layout，需要自己提供独立焦点域和默认焦点。
 const defaultFocusId = computed(() =>
@@ -139,7 +134,7 @@ function resolveActionNeighbors(index: number): Record<'left' | 'right', string 
 const streamMenuActions = computed<StreamMenuActionViewModel[]>(() => {
   const items: StreamMenuActionViewModel[] = []
 
-  if (canOpenPerformance.value) {
+  if (ability.canOpenPerformance.value) {
     items.push({
       id: 'performance',
       label: performanceVisible.value
@@ -148,21 +143,21 @@ const streamMenuActions = computed<StreamMenuActionViewModel[]>(() => {
     })
   }
 
-  if (canOpenDisplaySettings.value) {
+  if (ability.canOpenDisplaySettings.value) {
     items.push({
       id: 'display',
       label: t('streamPage.actions.display'),
     })
   }
 
-  if (canOpenAudioSettings.value) {
+  if (ability.canOpenAudioSettings.value) {
     items.push({
       id: 'audio',
       label: t('streamPage.actions.audio'),
     })
   }
 
-  if (canToggleMicrophone.value) {
+  if (ability.canToggleMicrophone.value) {
     items.push({
       id: 'microphone',
       label: microphoneOpen.value
@@ -171,28 +166,28 @@ const streamMenuActions = computed<StreamMenuActionViewModel[]>(() => {
     })
   }
 
-  if (canSendText.value) {
+  if (ability.canSendText.value) {
     items.push({
       id: 'sendText',
       label: t('streamPage.actions.sendText'),
     })
   }
 
-  if (canPressNexus.value) {
+  if (ability.canPressNexus.value) {
     items.push({
       id: 'pressNexus',
       label: t('streamPage.actions.pressNexus'),
     })
   }
 
-  if (canLongPressNexus.value) {
+  if (ability.canLongPressNexus.value) {
     items.push({
       id: 'longPressNexus',
       label: t('streamPage.actions.longPressNexus'),
     })
   }
 
-  if (canPowerOffConsole.value) {
+  if (ability.canPowerOffConsole.value) {
     items.push({
       id: 'powerOffExit',
       label: t('streamPage.actions.powerOffExit'),
@@ -232,88 +227,60 @@ const warningSheetActions = computed(() => [
 ])
 
 async function toggleFullscreen(): Promise<void> {
-  await controller.toggleFullscreen()
+  await actions.toggleFullscreen()
 }
 
 async function powerOffAndDisconnect(): Promise<void> {
-  await controller.powerOffAndDisconnect()
-}
-
-function clearChromeTimer(): void {
-  if (chromeTimer.value !== null) {
-    window.clearTimeout(chromeTimer.value)
-    chromeTimer.value = null
-  }
-}
-
-function scheduleChromeHide(): void {
-  clearChromeTimer()
-  if (!isConnected.value || hasOverlay.value) {
-    chromeVisible.value = true
-    return
-  }
-
-  chromeTimer.value = window.setTimeout(() => {
-    chromeVisible.value = false
-  }, 2_000)
-}
-
-function revealChrome(): void {
-  chromeVisible.value = true
-  scheduleChromeHide()
+  await actions.powerOffAndDisconnect()
 }
 
 function openActionSheet(): void {
-  revealChrome()
-  actionSheetOpen.value = true
+  openSheet('menu')
 }
 
 function closeActionSheet(): void {
-  actionSheetOpen.value = false
+  closeSheet('menu')
 }
 
 function openDisplaySheet(): void {
-  revealChrome()
-  displaySheetOpen.value = true
+  openSheet('display')
 }
 
 function closeDisplaySheet(): void {
-  displaySheetOpen.value = false
+  closeSheet('display')
   if (displayOptions.value !== null) {
-    controller.previewDisplayOptions(displayOptions.value)
+    actions.previewDisplayOptions(displayOptions.value)
   }
 }
 
 function openAudioSheet(): void {
-  revealChrome()
-  audioSheetOpen.value = true
+  openSheet('audio')
 }
 
 function closeAudioSheet(): void {
-  audioSheetOpen.value = false
+  closeSheet('audio')
 }
 
 function openTextSheet(): void {
-  revealChrome()
-  controller.setTextInputActive(true)
-  textSheetOpen.value = true
+  openSheet('text')
+  actions.setTextInputActive(true)
 }
 
 function closeTextSheet(): void {
   if (sendingText.value) {
     return
   }
-  textSheetOpen.value = false
-  controller.setTextInputActive(false)
+  closeSheet('text')
+  actions.setTextInputActive(false)
 }
 
 async function disconnectStream(options?: { navigateBack?: boolean }): Promise<void> {
-  await controller.disconnectStream(options)
+  await actions.disconnectStream(options)
 }
 
 async function handleRetry(): Promise<void> {
   revealChrome()
-  await controller.handleRetry()
+  await actions.handleRetry()
 }
 
 async function handleFailedSheetAction(): Promise<void> {
@@ -322,7 +289,7 @@ async function handleFailedSheetAction(): Promise<void> {
 
 async function handleWarningSheetAction(id: string): Promise<void> {
   if (id === 'stream.alert.warning.wait') {
-    controller.dismissWarning()
+    actions.dismissWarning()
     return
   }
 
@@ -332,10 +299,10 @@ async function handleWarningSheetAction(id: string): Promise<void> {
 async function handleSendText(text: string): Promise<void> {
   sendingText.value = true
   try {
-    const accepted = await controller.sendText(text)
+    const accepted = await actions.sendText(text)
     if (accepted) {
-      textSheetOpen.value = false
-      controller.setTextInputActive(false)
+      closeSheet('text')
+      actions.setTextInputActive(false)
     }
   }
   finally {
@@ -345,115 +312,53 @@ async function handleSendText(text: string): Promise<void> {
 
 function handleDisplayPreview(value: DisplayOptionsValue): void {
   revealChrome()
-  controller.previewDisplayOptions(value)
+  actions.previewDisplayOptions(value)
 }
 
 async function handleDisplaySubmit(value: DisplayOptionsValue): Promise<void> {
-  await controller.saveDisplayOptions(value)
-  displaySheetOpen.value = false
+  await actions.saveDisplayOptions(value)
+  closeSheet('display')
 }
 
 function handleAudioChange(value: number): void {
   revealChrome()
-  controller.setAudioVolume(value)
+  actions.setAudioVolume(value)
 }
 
 async function handleStreamMenuAction(id: string): Promise<void> {
   closeActionSheet()
-
-  if (id === 'performance') {
-    revealChrome()
-    controller.togglePerformance()
-    return
+  const handlers: Record<string, () => void | Promise<void>> = {
+    performance: () => {
+      revealChrome()
+      actions.togglePerformance()
+    },
+    display: () => {
+      openDisplaySheet()
+    },
+    audio: () => {
+      openAudioSheet()
+    },
+    microphone: async () => {
+      revealChrome()
+      await actions.toggleMicrophone()
+    },
+    sendText: () => {
+      openTextSheet()
+    },
+    pressNexus: () => {
+      revealChrome()
+      actions.pressNexus()
+    },
+    longPressNexus: () => {
+      revealChrome()
+      actions.longPressNexus()
+    },
+    powerOffExit: async () => {
+      await powerOffAndDisconnect()
+    },
   }
-
-  if (id === 'display') {
-    openDisplaySheet()
-    return
-  }
-
-  if (id === 'audio') {
-    openAudioSheet()
-    return
-  }
-
-  if (id === 'microphone') {
-    revealChrome()
-    await controller.toggleMicrophone()
-    return
-  }
-
-  if (id === 'sendText') {
-    openTextSheet()
-    return
-  }
-
-  if (id === 'pressNexus') {
-    revealChrome()
-    controller.pressNexus()
-    return
-  }
-
-  if (id === 'longPressNexus') {
-    revealChrome()
-    controller.longPressNexus()
-    return
-  }
-
-  if (id === 'powerOffExit') {
-    await powerOffAndDisconnect()
-  }
+  await handlers[id]?.()
 }
-
-watch(
-  () => [isConnected.value, hasOverlay.value] as const,
-  ([connected]) => {
-    if (!connected) {
-      clearChromeTimer()
-      chromeVisible.value = true
-      return
-    }
-
-    scheduleChromeHide()
-  },
-  { immediate: true },
-)
-
-watch(
-  () => shouldEnableSpatialInput.value,
-  (enabled) => {
-    syncStreamUiInputMode(enabled)
-  },
-  { immediate: true },
-)
-
-onMounted(() => {
-  const revealEvents: Array<keyof WindowEventMap> = [
-    'mousemove',
-    'mousedown',
-    'touchstart',
-    'touchmove',
-    'keydown',
-  ]
-  for (const eventName of revealEvents) {
-    window.addEventListener(eventName, revealChrome)
-  }
-})
-
-onBeforeUnmount(() => {
-  const revealEvents: Array<keyof WindowEventMap> = [
-    'mousemove',
-    'mousedown',
-    'touchstart',
-    'touchmove',
-    'keydown',
-  ]
-  clearChromeTimer()
-  syncStreamUiInputMode(true)
-  for (const eventName of revealEvents) {
-    window.removeEventListener(eventName, revealChrome)
-  }
-})
 </script>
 
 <template>
@@ -510,11 +415,11 @@ onBeforeUnmount(() => {
         </div>
       </div>
 
-      <div v-if="isLoading" class="stream-page__overlay">
+      <div v-if="overlayState === 'loading'" class="stream-page__overlay">
         <BrandedLoading :label="statusText || t('streamPage.status.preparing')" />
       </div>
 
-      <div v-else-if="hasError && !showFailedSheet" class="stream-page__overlay">
+      <div v-else-if="overlayState === 'error'" class="stream-page__overlay">
         <div class="stream-page__error-panel">
           <p class="stream-page__error-title">
             {{ t('streamPage.errorTitle') }}
@@ -551,19 +456,22 @@ onBeforeUnmount(() => {
         </div>
       </div>
 
-      <div v-else-if="!isConnected" class="stream-page__overlay stream-page__overlay--subtle">
+      <div
+        v-else-if="overlayState === 'connecting'"
+        class="stream-page__overlay stream-page__overlay--subtle"
+      >
         <BrandedLoading :label="statusText || t('streamPage.status.connecting')" />
       </div>
 
       <StreamTextSheet
-        :open="textSheetOpen"
+        :open="isTextSheetOpen"
         scope-id="stream.text-sheet"
         :loading="sendingText"
         @close="closeTextSheet"
         @submit="handleSendText"
       />
       <StreamActionSheet
-        :open="actionSheetOpen"
+        :open="isMenuSheetOpen"
         scope-id="stream.action-sheet"
         :title="t('streamPage.actionSheet.title')"
         :items="streamMenuActions"
@@ -571,7 +479,7 @@ onBeforeUnmount(() => {
         @select="handleStreamMenuAction"
       />
       <SettingDisplayOptionsSheet
-        :open="displaySheetOpen"
+        :open="isDisplaySheetOpen"
         scope-id="stream.display-sheet"
         :title="t('streamPage.display.title')"
         :hint="t('streamPage.display.hint')"
@@ -581,7 +489,7 @@ onBeforeUnmount(() => {
         @submit="handleDisplaySubmit"
       />
       <StreamAudioSheet
-        :open="audioSheetOpen"
+        :open="isAudioSheetOpen"
         scope-id="stream.audio-sheet"
         :value="audioVolume"
         @close="closeAudioSheet"
@@ -602,7 +510,7 @@ onBeforeUnmount(() => {
         :title="t('streamPage.warning.title')"
         :body="t('streamPage.warning.body')"
         :actions="warningSheetActions"
-        @close="controller.dismissWarning"
+        @close="dismissWarning"
         @select="handleWarningSheetAction"
       />
 
@@ -623,7 +531,7 @@ onBeforeUnmount(() => {
   width: 100vw;
   height: 100vh;
   overflow: hidden;
-  background: radial-gradient(circle at top, rgba(72, 187, 88, 0.2), transparent 36%), #040806;
+  background: #000000;
 }
 
 .stream-page__video {
@@ -655,13 +563,10 @@ onBeforeUnmount(() => {
   padding: 10px 12px;
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: calc(var(--ui-radius-lg) + var(--ui-space-1));
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.02)),
-    rgba(8, 14, 10, 0.62);
+  background: #252423;
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.05),
     0 18px 40px rgba(0, 0, 0, 0.22);
-  backdrop-filter: blur(16px);
 }
 
 .stream-page__topbar--hidden {
@@ -725,9 +630,8 @@ onBeforeUnmount(() => {
   padding: var(--ui-stream-top-action-padding);
   border: 1px solid rgba(255, 255, 255, 0.2);
   border-radius: var(--ui-action-pill-radius);
-  background: rgba(8, 14, 10, 0.66);
+  background: #3a3a3a;
   color: #fff;
-  backdrop-filter: blur(12px);
   cursor: pointer;
   transition:
     border-color var(--ui-motion-fast),
@@ -742,24 +646,22 @@ onBeforeUnmount(() => {
 }
 
 .stream-page__top-action--primary {
-  border-color: rgba(120, 232, 135, 0.32);
-  background: linear-gradient(180deg, rgba(45, 145, 63, 0.86), rgba(24, 92, 39, 0.94));
+  border-color: #107c10;
+  background: #107c10;
 }
 
 .stream-page__top-action[data-focused='true'] {
   border-color: var(--ui-border-focus);
-  background: color-mix(in srgb, var(--ui-focus-surface) 34%, rgba(8, 14, 10, 0.66));
   box-shadow: var(--ui-focus-ring-shadow);
 }
 
 .stream-page__top-action--danger {
-  border-color: rgba(255, 125, 125, 0.28);
-  background: rgba(46, 10, 10, 0.72);
+  border-color: #e81123;
+  background: #e81123;
 }
 
 .stream-page__top-action--danger[data-focused='true'] {
   border-color: var(--ui-border-focus);
-  background: rgba(68, 14, 14, 0.84);
   box-shadow: var(--ui-focus-ring-shadow);
 }
 
@@ -771,12 +673,11 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: center;
   padding: var(--ui-stream-overlay-padding);
-  background: rgba(2, 7, 5, 0.72);
-  backdrop-filter: blur(18px);
+  background: rgba(0, 0, 0, 0.8);
 }
 
 .stream-page__overlay--subtle {
-  background: rgba(2, 7, 5, 0.38);
+  background: rgba(0, 0, 0, 0.4);
 }
 
 .stream-page__error-panel {
@@ -784,7 +685,7 @@ onBeforeUnmount(() => {
   padding: var(--ui-stream-error-panel-padding);
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: calc(var(--ui-radius-lg) + var(--ui-space-1));
-  background: linear-gradient(180deg, rgba(17, 26, 20, 0.94), rgba(9, 16, 12, 0.98));
+  background: #252423;
   color: #fff;
   box-shadow: 0 24px 80px rgba(0, 0, 0, 0.35);
 }

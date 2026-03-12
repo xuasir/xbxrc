@@ -4496,6 +4496,7 @@ version = "0.1.0"
 dependencies = [
  "device_query",
  "gilrs",
+ "log",
  "ohmygamepad-core",
  "ohmygamepad-protocol",
 ]
@@ -9431,6 +9432,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "xbox-streaming"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "log",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tokio",
+ "xbox-webapi",
+]
+
+[[package]]
 name = "xbox-webapi"
 version = "0.1.0"
 dependencies = [
@@ -9523,6 +9538,7 @@ dependencies = [
  "url",
  "uuid",
  "xbox-auth-flow",
+ "xbox-streaming",
  "xbox-webapi",
  "xbxengine",
  "xbxengine-protocol",

@@ -81,13 +81,6 @@ pub async fn rpc_invoke(payload: RpcInvokePayload, app_handle: tauri::AppHandle)
                 .await
                 .map_err(Into::into)
         }
-        "streamHost" => mods::streaming::rpc::handle_stream_host_rpc(
-            payload.method.as_str(),
-            payload.params,
-            app_handle,
-        )
-        .await
-        .map_err(Into::into),
         "xbxEngine" => {
             mods::xbxengine::rpc::handle_rpc(payload.method.as_str(), payload.params, app_handle)
                 .await

@@ -153,47 +153,72 @@ onBeforeUnmount(() => {
             :aria-label="t('setting.aria.selectOption')"
           />
 
-          <div ref="listRef" class="setting-single-select-sheet__list">
+          <header class="setting-single-select-sheet__header">
+            <div class="setting-single-select-sheet__header-copy">
+              <p class="setting-single-select-sheet__eyebrow">{{ t('setting.editor.eyebrow') }}</p>
+              <h2 class="setting-single-select-sheet__title">{{ props.title }}</h2>
+              <p v-if="props.hint" class="setting-single-select-sheet__hint">{{ props.hint }}</p>
+            </div>
+
             <Focusable
-              v-for="(option, index) in props.options"
-              :id="createOptionNodeId(index)"
-              :key="String(option.value)"
+              :id="`${props.scopeId}.close`"
               as="button"
               type="button"
-              class="setting-single-select-sheet__option"
-              :class="{
-                'setting-single-select-sheet__option--active': props.currentValue === option.value,
-              }"
+              class="setting-single-select-sheet__close"
               :scope-id="props.scopeId"
-              :neighbors="{
-                up: index > 0 ? createOptionNodeId(index - 1) : undefined,
-                down: index < props.options.length - 1 ? createOptionNodeId(index + 1) : undefined,
-              }"
-              :index="{ order: index }"
-              :aria-label="option.label"
-              :on-confirm="() => handleSelect(option.value)"
+              :neighbors="{ left: selectedCandidateNodeId, down: selectedCandidateNodeId }"
+              :on-confirm="handleClose"
               :on-back="handleClose"
-              @click="handleSelect(option.value)"
+              :aria-label="t('setting.editor.cancel')"
+              @click="handleClose"
             >
-              <span
-                class="setting-single-select-sheet__indicator"
-                :class="{
-                  'setting-single-select-sheet__indicator--active':
-                    props.currentValue === option.value,
-                }"
-                aria-hidden="true"
-              />
-
-              <span class="setting-single-select-sheet__copy">
-                <span class="setting-single-select-sheet__option-title">{{ option.label }}</span>
-                <span v-if="option.description" class="setting-single-select-sheet__option-desc">
-                  {{ option.description }}
-                </span>
-                <span v-if="option.meta" class="setting-single-select-sheet__option-desc">
-                  {{ option.meta }}
-                </span>
-              </span>
+              <span class="setting-single-select-sheet__close-icon" aria-hidden="true">✕</span>
             </Focusable>
+          </header>
+
+          <div class="setting-single-select-sheet__body">
+            <div ref="listRef" class="setting-single-select-sheet__list">
+              <Focusable
+                v-for="(option, index) in props.options"
+                :id="createOptionNodeId(index)"
+                :key="String(option.value)"
+                as="button"
+                type="button"
+                class="setting-single-select-sheet__option"
+                :class="{
+                  'setting-single-select-sheet__option--active': props.currentValue === option.value,
+                }"
+                :scope-id="props.scopeId"
+                :neighbors="{
+                  up: index > 0 ? createOptionNodeId(index - 1) : `${props.scopeId}.close`,
+                  down: index < props.options.length - 1 ? createOptionNodeId(index + 1) : undefined,
+                }"
+                :index="{ order: index }"
+                :aria-label="option.label"
+                :on-confirm="() => handleSelect(option.value)"
+                :on-back="handleClose"
+                @click="handleSelect(option.value)"
+              >
+                <span
+                  class="setting-single-select-sheet__indicator"
+                  :class="{
+                    'setting-single-select-sheet__indicator--active':
+                      props.currentValue === option.value,
+                  }"
+                  aria-hidden="true"
+                />
+
+                <span class="setting-single-select-sheet__copy">
+                  <span class="setting-single-select-sheet__option-title">{{ option.label }}</span>
+                  <span v-if="option.description" class="setting-single-select-sheet__option-desc">
+                    {{ option.description }}
+                  </span>
+                  <span v-if="option.meta" class="setting-single-select-sheet__option-desc">
+                    {{ option.meta }}
+                  </span>
+                </span>
+              </Focusable>
+            </div>
           </div>
         </div>
       </FocusScope>
@@ -205,35 +230,27 @@ onBeforeUnmount(() => {
 .setting-single-select-sheet {
   position: fixed;
   inset: 0;
-  z-index: 5;
+  z-index: 100;
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   justify-content: center;
-  padding: var(--ui-settings-modal-padding) var(--ui-settings-modal-padding) 0;
-  background:
-    linear-gradient(180deg, rgba(8, 10, 18, 0.04), rgba(8, 10, 18, 0.14)),
-    color-mix(in srgb, var(--ui-surface-page) 10%, transparent);
-  backdrop-filter: blur(2px) saturate(104%);
-  -webkit-backdrop-filter: blur(2px) saturate(104%);
+  padding: 40px;
+  background: rgba(0, 0, 0, 0.8);
 }
 
 .setting-single-select-sheet__panel {
-  width: min(100%, var(--ui-settings-single-select-width));
-  max-width: min(var(--ui-settings-single-select-width), calc(100vw - (var(--ui-settings-modal-padding) * 2)));
-  max-height: min(72vh, var(--ui-settings-single-select-max-height));
-  padding: 18px 12px 16px;
-  border: 1px solid var(--ui-border-subtle);
-  border-radius: var(--ui-radius-lg) var(--ui-radius-lg) 0 0;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.02)),
-    radial-gradient(circle at top right, var(--ui-page-glow-soft), transparent 48%),
-    var(--ui-surface-panel-strong);
-  box-shadow:
-    0 18px 32px rgba(0, 0, 0, 0.24),
-    0 0 0 1px rgba(255, 255, 255, 0.02);
-  backdrop-filter: blur(12px) saturate(108%);
-  -webkit-backdrop-filter: blur(12px) saturate(108%);
-  color: var(--ui-page-text);
+  position: relative;
+  width: min(100%, 640px);
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  background: #1a1a1a;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6);
+  color: var(--color-text-primary);
+  overflow: hidden;
 }
 
 .setting-single-select-sheet__idle-focus {
@@ -247,19 +264,74 @@ onBeforeUnmount(() => {
   pointer-events: none;
 }
 
+.setting-single-select-sheet__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 32px 32px 16px;
+  background: transparent;
+}
+
+.setting-single-select-sheet__header-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.setting-single-select-sheet__close {
+  flex: 0 0 auto;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.08);
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all var(--ui-motion-fast);
+}
+
+.setting-single-select-sheet__close[data-focused='true'] {
+  background: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+  box-shadow: var(--shadow-xbox-focus);
+}
+
+.setting-single-select-sheet__close-icon {
+  font-size: 16px;
+  line-height: 1;
+}
+
+.setting-single-select-sheet__eyebrow {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #107c10;
+}
+
 .setting-single-select-sheet__title {
   margin: 0;
-  font-size: 15px;
+  font-size: 28px;
   line-height: 1.2;
-  font-weight: var(--ui-font-weight-bold);
-  color: var(--ui-page-text);
+  font-weight: 700;
 }
 
 .setting-single-select-sheet__hint {
-  margin: 10px 0 0;
-  font-size: 12px;
-  line-height: 1.45;
-  color: var(--ui-page-text-soft);
+  margin: 4px 0 0;
+  font-size: 14px;
+  line-height: 1.4;
+  color: var(--color-text-secondary);
+}
+
+.setting-single-select-sheet__body {
+  padding: 0 32px 32px;
+  overflow-y: auto;
 }
 
 .setting-single-select-sheet__list {
@@ -267,80 +339,80 @@ onBeforeUnmount(() => {
   flex-direction: column;
   gap: 8px;
   max-height: var(--setting-single-select-sheet-max-height);
-  overflow-y: auto;
-  overflow-x: hidden;
-  padding-right: 4px;
+  padding: 16px 0;
 }
 
 .setting-single-select-sheet__option {
   display: flex;
   align-items: center;
-  gap: 14px;
-  width: 100%;
-  min-height: var(--ui-settings-single-select-option-min-height);
-  padding: 8px 12px;
-  border: 1px solid transparent;
-  border-radius: var(--ui-radius-md);
-  background: color-mix(in srgb, var(--ui-surface-panel) 74%, transparent);
+  gap: 12px;
+  padding: 12px 16px;
+  border: 2px solid transparent;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.04);
   text-align: left;
-  transition:
-    border-color var(--ui-motion-fast),
-    background-color var(--ui-motion-fast),
-    box-shadow var(--ui-motion-fast);
-}
-
-.setting-single-select-sheet__option:hover {
-  background: color-mix(in srgb, var(--ui-focus-surface) 42%, var(--ui-surface-panel) 58%);
+  transition: all var(--ui-motion-fast);
 }
 
 .setting-single-select-sheet__option--active {
-  border-color: color-mix(in srgb, var(--ui-border-subtle) 80%, transparent);
-  background: color-mix(in srgb, var(--ui-focus-surface) 54%, var(--ui-surface-panel) 46%);
+  background: rgba(16, 124, 16, 0.15);
 }
 
 .setting-single-select-sheet__indicator {
   flex: 0 0 auto;
-  width: var(--ui-settings-single-select-indicator-size);
-  height: var(--ui-settings-single-select-indicator-size);
+  width: 10px;
+  height: 10px;
   border-radius: 50%;
-  background: color-mix(in srgb, var(--ui-page-text-soft) 42%, transparent);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ui-page-text) 18%, transparent);
+  background: transparent;
+  border: 2px solid #ffffff;
 }
 
 .setting-single-select-sheet__indicator--active {
-  background: var(--ui-status-positive);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--ui-status-positive) 14%, transparent);
+  background: #107c10;
+  border-color: #107c10;
 }
 
 .setting-single-select-sheet__copy {
   display: flex;
   flex-direction: column;
-  gap: 3px;
   min-width: 0;
 }
 
 .setting-single-select-sheet__option-title {
-  font-size: 12px;
+  font-size: 16px;
   line-height: 1.2;
-  font-weight: var(--ui-font-weight-medium);
-  color: var(--ui-page-text);
+  font-weight: 600;
 }
 
 .setting-single-select-sheet__option-desc {
-  font-size: 11px;
-  line-height: 1.3;
-  color: var(--ui-page-text-soft);
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--color-text-secondary);
 }
 
 .setting-single-select-sheet__option[data-focused='true'] {
-  border-color: var(--ui-border-focus);
-  background: color-mix(in srgb, var(--ui-focus-surface) 36%, var(--ui-surface-panel) 64%);
-  box-shadow: var(--ui-focus-ring-shadow);
+  background: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+  box-shadow: var(--shadow-xbox-focus);
+  transform: scale(1.02);
+}
+
+.setting-single-select-sheet__option[data-focused='true'] .setting-single-select-sheet__indicator {
+  border-color: #ffffff;
+}
+
+.setting-single-select-sheet__option[data-focused='true'] .setting-single-select-sheet__indicator--active {
+  background: #107c10;
+  border-color: #107c10;
+}
+
+.setting-single-select-sheet__option[data-focused='true'] .setting-single-select-sheet__option-desc {
+  color: var(--color-text-secondary);
 }
 
 .setting-single-select-sheet-transition-enter-active,
 .setting-single-select-sheet-transition-leave-active {
-  transition: opacity 180ms ease-out;
+  transition: opacity 300ms var(--ease-standard);
 }
 
 .setting-single-select-sheet-transition-enter-from,
@@ -350,38 +422,24 @@ onBeforeUnmount(() => {
 
 .setting-single-select-sheet-transition-enter-active .setting-single-select-sheet__panel,
 .setting-single-select-sheet-transition-leave-active .setting-single-select-sheet__panel {
-  transition:
-    opacity 220ms ease-out,
-    transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  transition: all 400ms var(--ease-standard);
 }
 
-.setting-single-select-sheet-transition-enter-from .setting-single-select-sheet__panel,
+.setting-single-select-sheet-transition-enter-from .setting-single-select-sheet__panel {
+  opacity: 0;
+  transform: scale(0.95);
+}
+
 .setting-single-select-sheet-transition-leave-to .setting-single-select-sheet__panel {
   opacity: 0;
-  transform: translateY(28px);
-}
-
-:global(html[data-ui-density='compact']) .setting-single-select-sheet__panel,
-:global(html[data-ui-density='narrow']) .setting-single-select-sheet__panel {
-  padding: 14px 10px 12px;
-}
-
-:global(html[data-ui-density='compact']) .setting-single-select-sheet__option,
-:global(html[data-ui-density='narrow']) .setting-single-select-sheet__option {
-  gap: 12px;
-  padding: 7px 10px;
-}
-
-:global(html[data-ui-density='compact']) .setting-single-select-sheet__option-desc,
-:global(html[data-ui-density='narrow']) .setting-single-select-sheet__option-desc {
-  font-size: 10px;
+  transform: scale(1.02);
 }
 
 :global(html[data-ui-density='narrow']) .setting-single-select-sheet__list {
-  gap: 8px;
+  grid-template-columns: 1fr;
 }
 
-:global(html[data-ui-density='narrow']) .setting-single-select-sheet__option-title {
-  font-size: 12px;
+:global(html[data-ui-density='narrow']) .setting-single-select-sheet__panel {
+  padding: 24px 16px;
 }
 </style>

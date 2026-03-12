@@ -511,7 +511,7 @@ onBeforeUnmount(() => {
   padding: 0 var(--ui-xcloud-search-padding-inline);
   border: 1px solid var(--color-border-subtle);
   border-radius: var(--btn-radius);
-  background: color-mix(in srgb, var(--color-surface-1) 92%, transparent);
+  background: var(--color-surface-1);
 }
 
 .xcloud-page__search-icon {
@@ -568,6 +568,7 @@ onBeforeUnmount(() => {
   grid-template-columns: repeat(var(--xcloud-grid-columns), minmax(0, 1fr));
   gap: var(--ui-xcloud-grid-gap);
   align-items: start;
+  padding: 12px 4px; /* Room for scaling at the edges */
 }
 
 .xcloud-page__load-more-sentinel {
@@ -627,8 +628,7 @@ onBeforeUnmount(() => {
 }
 
 .xcloud-page__action-button[data-focused='true'] {
-  border-color: var(--color-focus-ring);
-  box-shadow: 0 0 0 var(--focus-ring-width) var(--color-focus-ring-outer) inset;
+  box-shadow: var(--shadow-xbox-focus);
 }
 
 :global(html[data-ui-density='compact']) .xcloud-page__filter-bar,

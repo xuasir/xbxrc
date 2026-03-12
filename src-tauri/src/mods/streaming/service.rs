@@ -1,692 +1,527 @@
 use crate::error::{AppError, AppResult};
 use crate::mods::auth::AuthProviderRef;
 use crate::mods::config::ConfigProviderRef;
-use crate::mods::streaming::api_provider::StreamingApiProvider;
-use crate::mods::streaming::fallback_turn_server_provider::FallbackTurnServerProvider;
+use crate::mods::data::DataProviderRef;
 use crate::mods::streaming::types::*;
-use serde_json::Value;
-use std::collections::HashMap;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-use xbox_webapi::WebApiError;
-
-const SESSION_MONITOR_INTERVAL_MS: u64 = 1000;
-const SESSION_STALL_TIMEOUT_MS: u64 = 45_000;
+use xbox_streaming::{
+    compile as compile_plan, decide_runtime_recovery, parse_session_access_context,
+    project_render_plan, project_runtime_plan, AnswerPayload as DomainAnswerPayload, AudioChannels,
+    BitratePreference, CodecPreference, CompilerInput as DomainCompilerInput,
+    Config as DomainStreamingConfig, Context as DomainContext,
+    DisplayOptions as DomainDisplayOptions, IceCandidate as DomainIceCandidate,
+    Plan as StreamingPlan, RemoteConsoleSnapshot, RuntimeFact, RuntimePreference,
+    SessionFlowError, SessionFlowProvider, SessionFlowService, Target as DomainTarget, TurnServer,
+};
 
 #[derive(Clone)]
 pub struct StreamingService {
+    auth_provider: AuthProviderRef,
+    config_provider: ConfigProviderRef,
     inner: Arc<StreamingServiceInner>,
 }
 
 struct StreamingServiceInner {
-    auth_provider: AuthProviderRef,
-    api_provider: StreamingApiProvider,
-    fallback_turn_server_provider: tokio::sync::Mutex<FallbackTurnServerProvider>,
-    sessions: tokio::sync::RwLock<HashMap<String, StreamingSessionRecord>>,
+    flow: SessionFlowService<StreamingSessionSnapshot, TauriSessionFlowProvider>,
 }
 
+/// tauri 侧 flow adapter：仅负责提供凭证。
+/// RFC: 策略与执行层已下沉 crate，adapter 彻底退化。
 #[derive(Clone)]
-struct StreamingSessionRecord {
-    snapshot: StreamingSessionSnapshot,
-    created_at_ms: u64,
-    last_observed_state: Option<String>,
-    state_observed_at_ms: Option<u64>,
-    repeated_state_count: u32,
-    monitor_attempt_count: u32,
-    cancelled: Arc<AtomicBool>,
+struct TauriSessionFlowProvider {
+    auth_provider: AuthProviderRef,
+    data_provider: DataProviderRef,
+}
+
+#[async_trait::async_trait]
+impl SessionFlowProvider for TauriSessionFlowProvider {
+    async fn get_streaming_token(
+        &self,
+        target_type: &str,
+    ) -> Result<serde_json::Value, SessionFlowError> {
+        self.auth_provider
+            .get_streaming_token(target_type)
+            .map_err(|e| SessionFlowError::message(e.to_string()))?
+            .ok_or_else(|| SessionFlowError::message("token missing"))
+    }
+
+    async fn transfer_token(&self) -> Result<String, SessionFlowError> {
+        self.auth_provider
+            .get_transfer_token()
+            .await
+            .map_err(|error| SessionFlowError::message(error.to_string()))
+    }
+
+    async fn power_on_console(&self, console_id: &str) -> Result<bool, SessionFlowError> {
+        let result = self
+            .data_provider
+            .power_on_console(console_id)
+            .await
+            .map_err(SessionFlowError::message)?;
+        Ok(result.accepted)
+    }
+
+    async fn get_remote_consoles(&self) -> Result<Vec<RemoteConsoleSnapshot>, SessionFlowError> {
+        let consoles = self
+            .data_provider
+            .get_remote_consoles()
+            .await
+            .map_err(SessionFlowError::message)?;
+        Ok(consoles
+            .into_iter()
+            .map(|console| RemoteConsoleSnapshot {
+                id: console.id,
+                device_id: console.device_id,
+                server_id: console.server_id,
+                power_state: console.power_state,
+                console_streaming_enabled: console.console_streaming_enabled,
+            })
+            .collect())
+    }
 }
 
 impl StreamingService {
-    pub fn new(auth_provider: AuthProviderRef, config_provider: ConfigProviderRef) -> Self {
+    pub fn new(
+        auth_provider: AuthProviderRef,
+        config_provider: ConfigProviderRef,
+        data_provider: DataProviderRef,
+    ) -> Self {
+        let flow_provider = TauriSessionFlowProvider {
+            auth_provider: auth_provider.clone(),
+            data_provider,
+        };
+
         Self {
+            auth_provider,
+            config_provider,
             inner: Arc::new(StreamingServiceInner {
-                auth_provider,
-                api_provider: StreamingApiProvider::new(config_provider),
-                fallback_turn_server_provider: tokio::sync::Mutex::new(
-                    FallbackTurnServerProvider::new(),
-                ),
-                sessions: tokio::sync::RwLock::new(HashMap::new()),
+                flow: SessionFlowService::new(flow_provider),
             }),
         }
+    }
+
+    async fn resolve_streaming_plan(
+        &self,
+        target_type: &str,
+        target_id: &str,
+    ) -> AppResult<StreamingPlan> {
+        let target_type = StreamingTargetType::from_value(target_type);
+        let target = if matches!(target_type, StreamingTargetType::Home) {
+            DomainTarget::Home
+        } else {
+            DomainTarget::Cloud
+        };
+
+        let config_snapshot = self.config_provider.get_streaming_config();
+
+        let mut domain_config = DomainStreamingConfig::default();
+        // RFC: 映射完整性。Facade 仅负责搬运原始值，不负责解释分辨率等字段语义。
+        domain_config.update_from_raw_values(
+            Some(config_snapshot.preferred_game_language.clone()),
+            normalize_optional(&config_snapshot.force_region_ip),
+            config_snapshot.ipv6,
+            config_snapshot.resolution,
+        );
+        apply_streaming_preferences(&mut domain_config, &config_snapshot);
+
+        let token = self
+            .auth_provider
+            .get_streaming_token(target_type.as_str())
+            .map_err(|error| AppError::Streaming(error.to_string()))?
+            .ok_or_else(|| {
+                AppError::Streaming(format!(
+                    "Streaming token is unavailable for {}",
+                    target_type.as_str()
+                ))
+            })?;
+
+        let access_context = parse_session_access_context(&token)
+            .map_err(|error| AppError::Streaming(error.to_string()))?;
+
+        let context = DomainContext {
+            target,
+            target_id: target_id.to_string(),
+            session: access_context,
+            ..Default::default()
+        };
+
+        let output = compile_plan(DomainCompilerInput {
+            config: domain_config,
+            context,
+        })
+        .map_err(|error| AppError::Streaming(error.to_string()))?;
+
+        Ok(output.plan)
     }
 }
 
 #[async_trait::async_trait]
 impl crate::mods::streaming::StreamingProvider for StreamingService {
-    async fn get_fallback_turn_server(
+    async fn start_session(
         &self,
-        target_type: &str,
-    ) -> AppResult<Option<StreamingTurnServerConfig>> {
-        let mut provider = self.inner.fallback_turn_server_provider.lock().await;
-        provider
-            .get_by_target_type(target_type)
+        params: StreamingStartSessionParams,
+    ) -> AppResult<StreamingStartSessionResult> {
+        let plan = self
+            .resolve_streaming_plan(&params.target_type, &params.target_id)
+            .await?;
+        let execution = self
+            .inner
+            .flow
+            .start_session_execution(plan, project_runtime_plan, project_render_plan)
             .await
-            .map_err(AppError::Streaming)
-    }
-
-    async fn create_session(
-        &self,
-        params: StreamingCreateSessionParams,
-    ) -> AppResult<StreamingSessionSnapshot> {
-        let target_type = StreamingTargetType::from_value(&params.target_type);
-        let session_api = self.create_session_api(target_type.as_str()).await?;
-        let session_path = session_api
-            .start_stream(&params.target_id)
-            .await
-            .map_err(|e| AppError::Streaming(to_err(e)))?;
-
-        let session_id = session_path
-            .split('/')
-            .nth(3)
-            .map(|value: &str| value.to_string())
-            .filter(|value: &String| !value.is_empty())
-            .ok_or_else(|| AppError::Streaming("Streaming session id is missing".to_string()))?;
-
-        let snapshot = StreamingSessionSnapshot {
-            id: session_id.clone(),
-            target_id: params.target_id,
-            path: session_path,
-            target_type: target_type.as_str().to_string(),
-            stream_state: None,
-            player_state: "pending".to_string(),
-            queue: None,
-            error_details: None,
+            .map_err(map_flow_error)?;
+        let execution = StreamingSessionExecutionSnapshot {
+            session: execution.session,
+            runtime: execution.runtime.into(),
+            render: execution.render.into(),
         };
 
-        let cancelled = Arc::new(AtomicBool::new(false));
-        let record = StreamingSessionRecord {
-            snapshot: snapshot.clone(),
-            created_at_ms: now_ms(),
-            last_observed_state: None,
-            state_observed_at_ms: None,
-            repeated_state_count: 0,
-            monitor_attempt_count: 0,
-            cancelled: cancelled.clone(),
-        };
-
-        self.inner
-            .sessions
-            .write()
+        let progress = self
+            .inner
+            .flow
+            .get_session_progress(&execution.session.id)
             .await
-            .insert(session_id.clone(), record);
+            .map(Into::into)
+            .unwrap_or_else(|| {
+                StreamingSessionProgressSnapshot::from_session_snapshot(&execution.session)
+            });
 
-        let service = self.clone();
-        tauri::async_runtime::spawn(async move {
-            service.monitor_session_loop(session_id, cancelled).await;
-        });
-
-        Ok(snapshot)
+        Ok(StreamingStartSessionResult {
+            execution,
+            progress,
+        })
     }
 
-    async fn get_session(
+    async fn get_session_progress(
         &self,
-        params: StreamingGetSessionParams,
-    ) -> AppResult<Option<StreamingSessionSnapshot>> {
-        let sessions = self.inner.sessions.read().await;
-        Ok(sessions
-            .get(&params.session_id)
-            .map(|record| record.snapshot.clone()))
+        params: StreamingGetSessionProgressParams,
+    ) -> AppResult<Option<StreamingSessionProgressSnapshot>> {
+        Ok(self
+            .inner
+            .flow
+            .get_session_progress(&params.session_id)
+            .await
+            .map(Into::into))
     }
 
     async fn close_session(
         &self,
         params: StreamingCloseSessionParams,
     ) -> AppResult<StreamingCloseSessionResult> {
-        let session = {
-            let sessions = self.inner.sessions.read().await;
-            sessions.get(&params.session_id).cloned()
-        };
+        let closed = self
+            .inner
+            .flow
+            .close_session(&params.session_id)
+            .await
+            .map_err(map_flow_error)?;
 
-        let Some(session) = session else {
-            return Ok(StreamingCloseSessionResult { closed: false });
-        };
-
-        let session_api = self
-            .create_session_api(&session.snapshot.target_type)
-            .await?;
-        let result = session_api.stop_stream(&params.session_id).await;
-
-        self.clear_session(&params.session_id).await;
-
-        match result {
-            Ok(_) => Ok(StreamingCloseSessionResult { closed: true }),
-            Err(error) if status_of(&error) == Some(404) => {
-                Ok(StreamingCloseSessionResult { closed: false })
-            }
-            Err(error) => Err(AppError::Streaming(to_err(error))),
-        }
+        Ok(StreamingCloseSessionResult { closed })
     }
 
     async fn exchange_offer(
         &self,
         params: StreamingExchangeOfferParams,
     ) -> AppResult<StreamingExchangeOfferResult> {
-        let session = self
-            .get_session_record(&params.session_id)
+        let answer = self
+            .inner
+            .flow
+            .exchange_offer(&params.session_id, params.channel.as_deref(), &params.sdp)
             .await
-            .ok_or_else(|| {
-                AppError::Streaming(format!("Session not found: {}", params.session_id))
-            })?;
-        let signaling_api = self
-            .create_signaling_api(&session.snapshot.target_type)
-            .await?;
+            .map_err(map_flow_error)?;
 
-        if params.channel.as_deref() == Some("chat") {
-            signaling_api
-                .send_chat_sdp(&params.session_id, &params.sdp)
-                .await
-                .map_err(|e| AppError::Streaming(to_err(e)))?;
-        } else {
-            signaling_api
-                .send_sdp(&params.session_id, &params.sdp)
-                .await
-                .map_err(|e| AppError::Streaming(to_err(e)))?;
-        }
-
-        loop {
-            let answer = signaling_api
-                .get_sdp_exchange_response(&params.session_id)
-                .await
-                .map_err(|e| AppError::Streaming(to_err(e)))?;
-            if let Some(answer) = answer {
-                return Ok(StreamingExchangeOfferResult { answer });
-            }
-
-            if self.get_session_record(&params.session_id).await.is_none() {
-                return Err(AppError::Streaming(format!(
-                    "Session not found: {}",
-                    params.session_id
-                )));
-            }
-
-            tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
-        }
-    }
-
-    async fn exchange_offer_sdp(
-        &self,
-        session_id: String,
-        channel: Option<String>,
-        sdp: String,
-    ) -> AppResult<String> {
-        let result = self
-            .exchange_offer(StreamingExchangeOfferParams {
-                session_id,
-                channel,
-                sdp,
-            })
-            .await?;
-        Ok(result.answer.sdp)
+        Ok(StreamingExchangeOfferResult {
+            answer: from_domain_answer_payload(answer),
+        })
     }
 
     async fn exchange_ice(
         &self,
         params: StreamingExchangeIceParams,
     ) -> AppResult<StreamingExchangeIceResult> {
-        let session = self
-            .get_session_record(&params.session_id)
+        let local_candidates = params
+            .candidate
+            .iter()
+            .map(to_domain_ice_candidate)
+            .collect::<Vec<_>>();
+        let remote_candidates = self
+            .inner
+            .flow
+            .exchange_ice(&params.session_id, &local_candidates)
             .await
-            .ok_or_else(|| {
-                AppError::Streaming(format!("Session not found: {}", params.session_id))
-            })?;
-        let signaling_api = self
-            .create_signaling_api(&session.snapshot.target_type)
-            .await?;
+            .map_err(map_flow_error)?;
 
-        signaling_api
-            .send_ice(&params.session_id, &params.candidate)
-            .await
-            .map_err(|e| AppError::Streaming(to_err(e)))?;
-
-        loop {
-            let candidates = signaling_api
-                .get_ice_exchange_response(&params.session_id)
-                .await
-                .map_err(|e| AppError::Streaming(to_err(e)))?;
-
-            if let Some(candidates) = candidates {
-                if has_usable_ice_candidates(&candidates) {
-                    return Ok(StreamingExchangeIceResult {
-                        candidates: candidates.to_vec(),
-                    });
-                }
-            }
-
-            if self.get_session_record(&params.session_id).await.is_none() {
-                return Err(AppError::Streaming(format!(
-                    "Session not found: {}",
-                    params.session_id
-                )));
-            }
-
-            tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
-        }
-    }
-
-    async fn exchange_ice_candidates(
-        &self,
-        session_id: String,
-        candidates: Vec<StreamingIceCandidate>,
-    ) -> AppResult<Vec<StreamingIceCandidate>> {
-        let result = self
-            .exchange_ice(StreamingExchangeIceParams {
-                session_id,
-                candidate: candidates,
-            })
-            .await?;
-        Ok(result.candidates)
-    }
-
-    async fn send_keepalive(
-        &self,
-        params: StreamingKeepAliveParams,
-    ) -> AppResult<StreamingKeepAliveResult> {
-        let session = self.get_session_record(&params.session_id).await;
-        let Some(session) = session else {
-            return Ok(StreamingKeepAliveResult { accepted: false });
-        };
-
-        let session_api = self
-            .create_session_api(&session.snapshot.target_type)
-            .await?;
-        match session_api.send_keepalive(&params.session_id).await {
-            Ok(_) => Ok(StreamingKeepAliveResult { accepted: true }),
-            Err(error) if should_ignore_keepalive_error(&error) => {
-                Ok(StreamingKeepAliveResult { accepted: false })
-            }
-            Err(error) => Err(AppError::Streaming(to_err(error))),
-        }
-    }
-
-    async fn keep_alive_remote_session(&self, session_id: String) -> AppResult<bool> {
-        let result = self
-            .send_keepalive(StreamingKeepAliveParams { session_id })
-            .await?;
-        Ok(result.accepted)
-    }
-
-    async fn close_remote_session(&self, session_id: String) -> AppResult<bool> {
-        let result = self
-            .close_session(StreamingCloseSessionParams { session_id })
-            .await?;
-
-        Ok(result.closed)
-    }
-
-    // 进程退出前 best-effort 关闭会话，避免服务端残留活跃会话。
-    async fn shutdown(&self) {
-        let session_ids = {
-            let sessions = self.inner.sessions.read().await;
-            sessions.keys().cloned().collect::<Vec<_>>()
-        };
-
-        for session_id in session_ids {
-            let _ = self
-                .close_session(StreamingCloseSessionParams {
-                    session_id: session_id.clone(),
-                })
-                .await;
-            self.clear_session(&session_id).await;
-        }
+        Ok(StreamingExchangeIceResult {
+            candidates: remote_candidates
+                .into_iter()
+                .map(from_domain_ice_candidate)
+                .collect(),
+        })
     }
 
     async fn list_active_sessions(
         &self,
         params: StreamingListActiveSessionsParams,
     ) -> AppResult<StreamingListActiveSessionsResult> {
-        let target_type = match params.target_type {
-            Some(t) => t,
-            None => {
-                log::warn!("list_active_sessions: target_type missing, using default: cloud");
-                "cloud".to_string()
-            }
-        };
-        let sessions = self
+        let result = self
             .inner
-            .sessions
-            .read()
-            .await
-            .values()
-            .filter(|session| session.snapshot.target_type == target_type)
-            .map(|session| session.snapshot.clone())
-            .collect::<Vec<_>>();
-
-        Ok(StreamingListActiveSessionsResult { sessions })
-    }
-}
-
-impl StreamingService {
-    async fn monitor_session_loop(&self, session_id: String, cancelled: Arc<AtomicBool>) {
-        loop {
-            if cancelled.load(Ordering::Relaxed) {
-                return;
-            }
-
-            let should_continue = self.monitor_session_tick(&session_id).await;
-            if !should_continue {
-                return;
-            }
-
-            tokio::time::sleep(std::time::Duration::from_millis(
-                SESSION_MONITOR_INTERVAL_MS,
-            ))
+            .flow
+            .list_active_sessions(params.target_type)
             .await;
+        if result.used_default_target_type {
+            log::warn!(
+                "list_active_sessions: target_type missing, using default: {}",
+                result.target_type
+            );
         }
+
+        Ok(StreamingListActiveSessionsResult {
+            sessions: result.sessions,
+        })
     }
 
-    async fn monitor_session_tick(&self, session_id: &str) -> bool {
-        let mut session = match self.get_session_record(session_id).await {
-            Some(session) => session,
-            None => return false,
-        };
-
-        let session_api = match self.create_session_api(&session.snapshot.target_type).await {
-            Ok(api) => api,
-            Err(_) => return true,
-        };
-
-        let state_response = session_api.get_stream_state(session_id).await;
-        let (state, error_details) = match state_response {
-            Ok(value) => value,
-            Err(error) if status_of(&error) == Some(404) => {
-                self.clear_session(session_id).await;
-                return false;
-            }
-            Err(_) => return true,
-        };
-
-        session.monitor_attempt_count += 1;
-        if session.last_observed_state == state {
-            session.repeated_state_count += 1;
-        } else {
-            session.last_observed_state = state.clone();
-            session.state_observed_at_ms = Some(now_ms());
-            session.repeated_state_count = 1;
-        }
-
-        if let Some(timeout_error) = get_state_timeout_error(&session, state.as_deref()) {
-            session.snapshot.player_state = "failed".to_string();
-            session.snapshot.stream_state = state;
-            session.snapshot.error_details = Some(timeout_error);
-            self.upsert_session(session_id, session).await;
-            return false;
-        }
-
-        match state.as_deref() {
-            Some("Provisioned") => {
-                session.snapshot.player_state = "started".to_string();
-                session.snapshot.stream_state = state;
-                session.snapshot.queue = None;
-                session.snapshot.error_details = None;
-                self.upsert_session(session_id, session).await;
-                false
-            }
-            Some("Provisioning") => {
-                session.snapshot.player_state = "pending".to_string();
-                session.snapshot.stream_state = state;
-                session.snapshot.error_details = None;
-                self.upsert_session(session_id, session).await;
-                true
-            }
-            Some("ReadyToConnect") => {
-                session.snapshot.player_state = "pending".to_string();
-                session.snapshot.stream_state = state;
-                session.snapshot.error_details = None;
-                self.upsert_session(session_id, session.clone()).await;
-
-                let transfer_token = match self.inner.auth_provider.get_transfer_token().await {
-                    Ok(token) => token,
-                    Err(_) => return true,
-                };
-
-                let _ = session_api
-                    .send_connect_token(session_id, &transfer_token)
-                    .await;
-                true
-            }
-            Some("WaitingForResources") => {
-                let queue = match session_api
-                    .get_waiting_times(&session.snapshot.target_id)
-                    .await
-                {
-                    Ok(queue) => StreamingQueueSnapshot { details: queue },
-                    Err(e) => {
-                        log::warn!(
-                            "Failed to get waiting times for session {}: {}, using default",
-                            session_id,
-                            e
-                        );
-                        session.snapshot.queue.unwrap_or(StreamingQueueSnapshot {
-                            details: StreamingQueueDetails::default(),
-                        })
-                    }
-                };
-
-                session.snapshot.player_state = "queued".to_string();
-                session.snapshot.stream_state = state;
-                session.snapshot.queue = Some(queue);
-                session.snapshot.error_details = None;
-                self.upsert_session(session_id, session).await;
-                true
-            }
-            Some("Failed") => {
-                session.snapshot.player_state = "failed".to_string();
-                session.snapshot.stream_state = state;
-                session.snapshot.error_details = error_details;
-                self.upsert_session(session_id, session).await;
-                false
-            }
-            _ => {
-                session.snapshot.player_state = "pending".to_string();
-                session.snapshot.stream_state = state;
-                self.upsert_session(session_id, session).await;
-                true
-            }
-        }
-    }
-
-    async fn create_session_api(
+    async fn decide_recovery(
         &self,
-        target_type: &str,
-    ) -> AppResult<crate::mods::streaming::session_api::StreamingSessionApi> {
-        let token = self
-            .inner
-            .auth_provider
-            .get_streaming_token(target_type)?
-            .ok_or_else(|| {
-                AppError::Streaming(format!("Streaming token is unavailable for {target_type}"))
-            })?;
-
-        self.inner
-            .api_provider
-            .create_session_api(&token, target_type)
-            .await
-            .map_err(AppError::Streaming)
+        params: StreamingDecideRecoveryParams,
+    ) -> AppResult<StreamingDecideRecoveryResult> {
+        // 恢复判定统一在 crate session 内完成，tauri 仅做运行事实映射。
+        let reason = match params.fact {
+            StreamingRuntimeFact::TransportConnectionState { connection_state } => {
+                decide_runtime_recovery(
+                    RuntimeFact::TransportConnectionState(connection_state.as_str()),
+                    params.is_closing,
+                )
+            }
+            StreamingRuntimeFact::MediaHealth {
+                connection_state,
+                connected_elapsed_ms,
+                inactivity_elapsed_ms,
+            } => decide_runtime_recovery(
+                RuntimeFact::MediaHealth {
+                    connection_state: connection_state.as_str(),
+                    connected_elapsed_ms,
+                    inactivity_elapsed_ms,
+                },
+                params.is_closing,
+            ),
+            StreamingRuntimeFact::MediaStalled => {
+                decide_runtime_recovery(RuntimeFact::MediaStalled, params.is_closing)
+            }
+        };
+        let reason = reason.map(|value| value.as_str().to_string());
+        Ok(StreamingDecideRecoveryResult {
+            should_reconnect: reason.is_some(),
+            reason,
+        })
     }
 
-    async fn create_signaling_api(
-        &self,
-        target_type: &str,
-    ) -> AppResult<crate::mods::streaming::signaling_api::StreamingSignalingApi> {
-        let token = self
-            .inner
-            .auth_provider
-            .get_streaming_token(target_type)?
-            .ok_or_else(|| {
-                AppError::Streaming(format!("Streaming token is unavailable for {target_type}"))
-            })?;
-
-        self.inner
-            .api_provider
-            .create_signaling_api(&token, target_type)
-            .await
-            .map_err(AppError::Streaming)
-    }
-
-    async fn get_session_record(&self, session_id: &str) -> Option<StreamingSessionRecord> {
-        let sessions = self.inner.sessions.read().await;
-        sessions.get(session_id).cloned()
-    }
-
-    async fn upsert_session(&self, session_id: &str, record: StreamingSessionRecord) {
-        self.inner
-            .sessions
-            .write()
-            .await
-            .insert(session_id.to_string(), record);
-    }
-
-    async fn clear_session(&self, session_id: &str) {
-        let removed = self.inner.sessions.write().await.remove(session_id);
-        if let Some(record) = removed {
-            record.cancelled.store(true, Ordering::Relaxed);
-        }
+    async fn shutdown(&self) {
+        self.inner.flow.shutdown().await;
     }
 }
 
-fn has_usable_ice_candidates(candidates: &[StreamingIceCandidate]) -> bool {
-    candidates.iter().any(|candidate| {
-        let normalized = candidate.candidate.trim();
-        !normalized.is_empty() && normalized != "a=end-of-candidates"
-    })
+fn map_flow_error(error: SessionFlowError) -> AppError {
+    AppError::Streaming(error.to_string())
 }
 
-fn get_state_timeout_error(
-    session: &StreamingSessionRecord,
-    state: Option<&str>,
-) -> Option<StreamingErrorDetails> {
-    if state != Some("Provisioning") && state != Some("ReadyToConnect") {
-        return None;
+fn to_domain_ice_candidate(candidate: &StreamingIceCandidate) -> DomainIceCandidate {
+    DomainIceCandidate {
+        candidate: candidate.candidate.clone(),
+        sdp_m_line_index: candidate.sdp_m_line_index,
+        sdp_mid: candidate.sdp_mid.clone(),
+        username_fragment: candidate.username_fragment.clone(),
+        message_type: candidate.message_type.clone(),
     }
-
-    let started = session.state_observed_at_ms.unwrap_or_else(|| {
-        log::warn!("Session state_observed_at_ms missing, using created_at_ms");
-        session.created_at_ms
-    });
-    let elapsed = now_ms().saturating_sub(started);
-    if elapsed < SESSION_STALL_TIMEOUT_MS {
-        return None;
-    }
-
-    Some(StreamingErrorDetails {
-        code: Some(Value::String("SessionStateTimeout".to_string())),
-        message: Some(format!(
-            "Streaming session stayed in {} for {}ms.",
-            state.unwrap_or_else(|| {
-                log::warn!("Session state missing in timeout error");
-                "unknown"
-            }),
-            elapsed
-        )),
-    })
 }
 
-fn should_ignore_keepalive_error(error: &WebApiError) -> bool {
-    if status_of(error) == Some(404) {
-        return true;
+fn from_domain_ice_candidate(candidate: DomainIceCandidate) -> StreamingIceCandidate {
+    StreamingIceCandidate {
+        candidate: candidate.candidate,
+        sdp_m_line_index: candidate.sdp_m_line_index,
+        sdp_mid: candidate.sdp_mid,
+        username_fragment: candidate.username_fragment,
+        message_type: candidate.message_type,
     }
+}
 
-    if status_of(error) != Some(400) {
-        return false;
+fn from_domain_answer_payload(payload: DomainAnswerPayload) -> StreamingAnswerPayload {
+    StreamingAnswerPayload {
+        sdp: payload.sdp,
+        message_type: payload.message_type,
     }
+}
 
-    let Some(body) = http_message(error) else {
-        return false;
+fn normalize_optional(value: &str) -> Option<String> {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        None
+    } else {
+        Some(trimmed.to_string())
+    }
+}
+
+fn apply_streaming_preferences(
+    config: &mut DomainStreamingConfig,
+    snapshot: &StreamingConfigSnapshot,
+) {
+    // 这里只做原始设置到 crate 偏好的搬运，不在 tauri 层解释执行策略。
+    config.negotiation.video_codec = parse_codec_preference(&snapshot.codec);
+    config.negotiation.home_video_bitrate =
+        parse_bitrate_preference(&snapshot.xhome_bitrate_mode, snapshot.xhome_bitrate);
+    config.negotiation.cloud_video_bitrate =
+        parse_bitrate_preference(&snapshot.xcloud_bitrate_mode, snapshot.xcloud_bitrate);
+    config.negotiation.audio_bitrate =
+        parse_bitrate_preference(&snapshot.audio_bitrate_mode, snapshot.audio_bitrate);
+    config.negotiation.audio_channels = AudioChannels::Auto;
+
+    config.input.polling_rate_hz = snapshot.polling_rate.clamp(1, u16::MAX as i64) as u16;
+    config.input.vibration = snapshot.vibration;
+    config.session.power_on = snapshot.power_on;
+
+    config.runtime.mode = parse_runtime_preference(&snapshot.stream_runtime_mode);
+    config.runtime.custom_turn = resolve_custom_turn(snapshot);
+    config.runtime.home_fallback_turn = snapshot.xhome_turn_fallback;
+
+    config.render.enable_audio_control = snapshot.enable_audio_control;
+    config.render.video_format = normalize_optional(&snapshot.video_format);
+    config.render.display_options = DomainDisplayOptions {
+        sharpness: snapshot.display_options.sharpness,
+        saturation: snapshot.display_options.saturation,
+        contrast: snapshot.display_options.contrast,
+        brightness: snapshot.display_options.brightness,
     };
-
-    let parsed = match serde_json::from_str::<Value>(body) {
-        Ok(val) => val,
-        Err(e) => {
-            log::warn!("Failed to parse keepalive error body: {}", e);
-            Value::Null
-        }
-    };
-    let code = parsed
-        .get("code")
-        .and_then(Value::as_str)
-        .unwrap_or_else(|| {
-            log::warn!("Keepalive error missing 'code' field");
-            ""
-        });
-    let message = parsed
-        .get("message")
-        .and_then(Value::as_str)
-        .unwrap_or_else(|| {
-            log::warn!("Keepalive error missing 'message' field");
-            ""
-        });
-
-    code == "SessionUnexpectedState"
-        && (message.contains("ServerSdpExchangeCommandSent") || message.contains("UnexpectedState"))
 }
 
-fn to_err(error: WebApiError) -> String {
-    match error {
-        WebApiError::Http {
-            status, message, ..
-        } => {
-            format!("HTTP {}: {}", status, message)
-        }
-        other => other.to_string(),
+fn parse_bitrate_preference(mode: &str, bitrate_mbps: i64) -> BitratePreference {
+    if mode != "Custom" || bitrate_mbps <= 0 {
+        return BitratePreference::Auto;
+    }
+
+    let kbps = bitrate_mbps.saturating_mul(1000);
+    BitratePreference::CustomKbps {
+        kbps: kbps.clamp(1, u32::MAX as i64) as u32,
     }
 }
 
-fn status_of(error: &WebApiError) -> Option<u16> {
-    match error {
-        WebApiError::Http { status, .. } => Some(*status),
-        _ => None,
+fn parse_codec_preference(value: &str) -> CodecPreference {
+    match value.trim() {
+        "" => CodecPreference::Auto,
+        "video/H264-420" => CodecPreference::H264Low,
+        "video/H264-42e" => CodecPreference::H264Normal,
+        "video/H264-4d" => CodecPreference::H264High,
+        mime_type => CodecPreference::MimeType {
+            mime_type: mime_type.to_string(),
+        },
     }
 }
 
-fn http_message(error: &WebApiError) -> Option<&str> {
-    match error {
-        WebApiError::Http { message, .. } => Some(message.as_str()),
-        _ => None,
+fn parse_runtime_preference(value: &str) -> RuntimePreference {
+    match value.trim() {
+        "webrtc-direct" => RuntimePreference::WebRtcDirect,
+        "rust-owned" => RuntimePreference::RustOwned,
+        _ => RuntimePreference::Auto,
     }
 }
 
-fn now_ms() -> u64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|duration| duration.as_millis() as u64)
-        .unwrap_or(0)
+fn resolve_custom_turn(snapshot: &StreamingConfigSnapshot) -> Option<TurnServer> {
+    Some(TurnServer {
+        url: normalize_optional(&snapshot.server_url)?,
+        username: normalize_optional(&snapshot.server_username)?,
+        credential: normalize_optional(&snapshot.server_credential)?,
+    })
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{should_ignore_keepalive_error, to_err};
-    use xbox_webapi::WebApiError;
+    use super::{
+        apply_streaming_preferences, parse_bitrate_preference, parse_codec_preference,
+        parse_runtime_preference,
+    };
+    use crate::mods::streaming::types::{StreamingConfigSnapshot, StreamingDisplayOptionsValue};
+    use xbox_streaming::SessionFlowError;
+    use xbox_streaming::{
+        BitratePreference, CodecPreference, Config as DomainStreamingConfig, RuntimePreference,
+    };
 
     #[test]
-    fn ignores_keepalive_404_and_expected_400_state_errors() {
-        let not_found = WebApiError::Http {
-            status: 404,
-            code: None,
-            message: "not found".to_string(),
-            retriable: false,
-        };
-        let unexpected_state = WebApiError::Http {
-            status: 400,
-            code: Some("SessionUnexpectedState".to_string()),
-            message:
-                "{\"code\":\"SessionUnexpectedState\",\"message\":\"ServerSdpExchangeCommandSent\"}"
-                    .to_string(),
-            retriable: false,
-        };
-
-        assert!(should_ignore_keepalive_error(&not_found));
-        assert!(should_ignore_keepalive_error(&unexpected_state));
+    fn maps_http_error_with_status_and_body() {
+        let error = SessionFlowError::http(503, "HTTP 503: error", Some("body".to_string()));
+        assert_eq!(error.status, Some(503));
+        assert_eq!(error.body.as_deref(), Some("body"));
     }
 
     #[test]
-    fn formats_http_error_without_streaming_wrapper() {
-        let error = WebApiError::Http {
-            status: 503,
-            code: None,
-            message: "temporarily unavailable".to_string(),
-            retriable: true,
+    fn apply_streaming_preferences_maps_runtime_and_negotiation_fields() {
+        let mut config = DomainStreamingConfig::default();
+        let snapshot = StreamingConfigSnapshot {
+            resolution: 1080,
+            preferred_game_language: "en-US".to_string(),
+            ipv6: false,
+            force_region_ip: String::new(),
+            xhome_bitrate_mode: "Custom".to_string(),
+            xhome_bitrate: 35,
+            xcloud_bitrate_mode: "Custom".to_string(),
+            xcloud_bitrate: 18,
+            audio_bitrate_mode: "Custom".to_string(),
+            audio_bitrate: 2,
+            codec: "video/H264-42e".to_string(),
+            polling_rate: 333,
+            vibration: false,
+            stream_runtime_mode: "rust-owned".to_string(),
+            power_on: true,
+            server_url: "turn:example.test:3478".to_string(),
+            server_username: "user".to_string(),
+            server_credential: "secret".to_string(),
+            xhome_turn_fallback: true,
+            enable_audio_control: true,
+            video_format: "Zoom".to_string(),
+            display_options: StreamingDisplayOptionsValue {
+                sharpness: 5,
+                saturation: 110,
+                contrast: 90,
+                brightness: 105,
+            },
         };
 
-        assert_eq!(to_err(error), "HTTP 503: temporarily unavailable");
+        apply_streaming_preferences(&mut config, &snapshot);
+
+        assert_eq!(config.negotiation.video_codec, CodecPreference::H264Normal);
+        assert_eq!(
+            config.negotiation.home_video_bitrate,
+            BitratePreference::CustomKbps { kbps: 35_000 }
+        );
+        assert_eq!(
+            config.negotiation.cloud_video_bitrate,
+            BitratePreference::CustomKbps { kbps: 18_000 }
+        );
+        assert_eq!(
+            config.negotiation.audio_bitrate,
+            BitratePreference::CustomKbps { kbps: 2_000 }
+        );
+        assert_eq!(config.input.polling_rate_hz, 333);
+        assert!(!config.input.vibration);
+        assert!(config.session.power_on);
+        assert_eq!(config.runtime.mode, RuntimePreference::RustOwned);
+        assert_eq!(config.runtime.home_fallback_turn, true);
+        assert!(config.render.enable_audio_control);
+        assert_eq!(config.render.video_format.as_deref(), Some("Zoom"));
+        assert_eq!(config.render.display_options.sharpness, 5);
+        assert_eq!(
+            config
+                .runtime
+                .custom_turn
+                .as_ref()
+                .map(|turn| turn.url.as_str()),
+            Some("turn:example.test:3478")
+        );
+    }
+
+    #[test]
+    fn parse_helpers_fall_back_to_auto_when_values_are_empty() {
+        assert_eq!(
+            parse_bitrate_preference("Auto", 20),
+            BitratePreference::Auto
+        );
+        assert_eq!(parse_codec_preference(""), CodecPreference::Auto);
+        assert_eq!(parse_runtime_preference(""), RuntimePreference::Auto);
     }
 }

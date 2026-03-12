@@ -544,88 +544,92 @@ onUnmounted(() => {
         :aria-label="t('setting.aria.panel', { group: activeGroupLabel })"
         @scroll="syncScrolledState"
       >
-        <header
-          class="setting-panel__header"
-          :class="{ 'setting-panel__header--scrolled': isContentScrolled }"
-        >
-          <h1 class="setting-panel__group-title">
-            {{ activeGroupLabel }}
-          </h1>
-        </header>
-
-        <div v-if="isLoading" class="setting-panel__state">
-          {{ t('setting.states.loading') }}
-        </div>
-
-        <div v-else-if="activeRows.length === 0" class="setting-panel__state">
-          {{ t('setting.states.emptyGroup') }}
-        </div>
-
-        <div v-else class="setting-panel__list">
-          <section
-            v-for="section in activeSectionRows"
-            :key="section.key"
-            class="setting-panel__section"
-            :aria-label="section.label"
-          >
-            <header class="setting-panel__section-header">
-              <h2 class="setting-panel__section-title">
-                {{ section.label }}
-              </h2>
+        <Transition name="setting-content-fade" mode="out-in">
+          <div :key="activeTabKey" class="setting-panel__content">
+            <header
+              class="setting-panel__header"
+              :class="{ 'setting-panel__header--scrolled': isContentScrolled }"
+            >
+              <h1 class="setting-panel__group-title">
+                {{ activeGroupLabel }}
+              </h1>
             </header>
 
-            <div class="setting-panel__section-body">
-              <template v-for="row in section.rows" :key="row.nodeId">
-                <SettingToggleRow
-                  v-if="row.control === 'toggle'"
-                  :id="row.nodeId"
-                  :scope-id="SPATIAL_NAV_SCOPE_IDS.appShell"
-                  :label="row.label"
-                  :enabled="row.value === true"
-                  :left-neighbor-id="SPATIAL_NAV_NODE_IDS.settingTabs[activeTabKey]"
-                  :up-neighbor-id="
-                    row.index === 0
-                      ? SPATIAL_NAV_NODE_IDS.settingTabs[activeTabKey]
-                      : activeRows[row.index - 1]?.nodeId
-                  "
-                  :down-neighbor-id="activeRows[row.index + 1]?.nodeId"
-                  :order="row.index"
-                  @confirm="() => void handleRowConfirm(row)"
-                />
-
-                <Focusable
-                  v-else
-                  :id="row.nodeId"
-                  as="button"
-                  type="button"
-                  class="setting-row"
-                  :class="{ 'setting-row--select': row.control === 'singleSelect' }"
-                  :scope-id="SPATIAL_NAV_SCOPE_IDS.appShell"
-                  :neighbors="{
-                    up:
-                      row.index === 0
-                        ? SPATIAL_NAV_NODE_IDS.settingTabs[activeTabKey]
-                        : activeRows[row.index - 1]?.nodeId,
-                    down: activeRows[row.index + 1]?.nodeId,
-                    left: SPATIAL_NAV_NODE_IDS.settingTabs[activeTabKey],
-                  }"
-                  :index="{ order: row.index }"
-                  :aria-label="row.label"
-                  :on-confirm="() => void handleRowConfirm(row)"
-                  @click="() => void handleRowConfirm(row)"
-                >
-                  <span class="setting-row__copy">
-                    <span class="setting-row__label">{{ row.label }}</span>
-                    <span v-if="row.description" class="setting-row__desc">{{
-                      row.description
-                    }}</span>
-                  </span>
-                  <span class="setting-row__value">{{ row.valueText }}</span>
-                </Focusable>
-              </template>
+            <div v-if="isLoading" class="setting-panel__state">
+              {{ t('setting.states.loading') }}
             </div>
-          </section>
-        </div>
+
+            <div v-else-if="activeRows.length === 0" class="setting-panel__state">
+              {{ t('setting.states.emptyGroup') }}
+            </div>
+
+            <div v-else class="setting-panel__list">
+              <section
+                v-for="section in activeSectionRows"
+                :key="section.key"
+                class="setting-panel__section"
+                :aria-label="section.label"
+              >
+                <header class="setting-panel__section-header">
+                  <h2 class="setting-panel__section-title">
+                    {{ section.label }}
+                  </h2>
+                </header>
+
+                <div class="setting-panel__section-body">
+                  <template v-for="row in section.rows" :key="row.nodeId">
+                    <SettingToggleRow
+                      v-if="row.control === 'toggle'"
+                      :id="row.nodeId"
+                      :scope-id="SPATIAL_NAV_SCOPE_IDS.appShell"
+                      :label="row.label"
+                      :enabled="row.value === true"
+                      :left-neighbor-id="SPATIAL_NAV_NODE_IDS.settingTabs[activeTabKey]"
+                      :up-neighbor-id="
+                        row.index === 0
+                          ? SPATIAL_NAV_NODE_IDS.settingTabs[activeTabKey]
+                          : activeRows[row.index - 1]?.nodeId
+                      "
+                      :down-neighbor-id="activeRows[row.index + 1]?.nodeId"
+                      :order="row.index"
+                      @confirm="() => void handleRowConfirm(row)"
+                    />
+
+                    <Focusable
+                      v-else
+                      :id="row.nodeId"
+                      as="button"
+                      type="button"
+                      class="setting-row"
+                      :class="{ 'setting-row--select': row.control === 'singleSelect' }"
+                      :scope-id="SPATIAL_NAV_SCOPE_IDS.appShell"
+                      :neighbors="{
+                        up:
+                          row.index === 0
+                            ? SPATIAL_NAV_NODE_IDS.settingTabs[activeTabKey]
+                            : activeRows[row.index - 1]?.nodeId,
+                        down: activeRows[row.index + 1]?.nodeId,
+                        left: SPATIAL_NAV_NODE_IDS.settingTabs[activeTabKey],
+                      }"
+                      :index="{ order: row.index }"
+                      :aria-label="row.label"
+                      :on-confirm="() => void handleRowConfirm(row)"
+                      @click="() => void handleRowConfirm(row)"
+                    >
+                      <span class="setting-row__copy">
+                        <span class="setting-row__label">{{ row.label }}</span>
+                        <span v-if="row.description" class="setting-row__desc">{{
+                          row.description
+                        }}</span>
+                      </span>
+                      <span class="setting-row__value">{{ row.valueText }}</span>
+                    </Focusable>
+                  </template>
+                </div>
+              </section>
+            </div>
+          </div>
+        </Transition>
       </section>
     </div>
 
@@ -644,7 +648,7 @@ onUnmounted(() => {
             : activeSingleSelectRow.value
           : null
       "
-      max-list-height="280px"
+      max-list-height="480px"
       @close="activeSingleSelectRow = null"
       @select="(value) => void handleSingleSelectChange(value)"
     />
@@ -703,12 +707,13 @@ onUnmounted(() => {
   min-height: 100%;
   height: 100%;
   overflow: hidden;
+  background: transparent;
 }
 
 .setting-page__layout {
   display: grid;
-  grid-template-columns: clamp(260px, 28vw, 340px) minmax(0, 1fr);
-  gap: 0;
+  grid-template-columns: clamp(280px, 30vw, 360px) minmax(0, 1fr);
+  gap: 4px;
   min-height: 0;
   height: 100%;
   padding: 0;
@@ -718,21 +723,24 @@ onUnmounted(() => {
   min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: 18px;
-  padding: 22px 16px 18px;
-  border-right: 1px solid var(--color-border-subtle);
-  background: color-mix(in srgb, var(--color-surface-2) 96%, #0a0f16 4%);
+  gap: 32px;
+  padding: 44px 20px 32px; /* Reduced from 32px to account for nav padding */
+  background: #1a1b1e;
+  position: relative;
+  z-index: 2;
+  border-right: 1px solid rgba(255, 255, 255, 0.05);
 }
 
 .setting-sidebar__header {
-  padding: 0 10px;
+  padding: 0 16px;
 }
 
 .setting-sidebar__title {
   margin: 0;
-  font-size: clamp(34px, 3.6vw, 48px);
-  line-height: 1;
-  letter-spacing: -0.03em;
+  font-size: clamp(24px, 3vw, 32px);
+  line-height: 1.1;
+  font-weight: 900;
+  letter-spacing: -0.02em;
   color: var(--color-text-primary);
 }
 
@@ -742,44 +750,70 @@ onUnmounted(() => {
   flex-direction: column;
   gap: 4px;
   overflow-y: auto;
+  overflow-x: visible; /* Allow horizontal overflow for scale */
+  padding: 12px 16px; /* Safe zone for focus scale */
+  margin: 0 -4px; /* Slight offset adjustment */
 }
 
 .setting-sidebar__tab {
+  position: relative;
   display: inline-flex;
   align-items: center;
   width: 100%;
-  min-height: 58px;
-  padding: 0 16px;
-  border: 1px solid transparent;
-  border-radius: 12px;
+  min-height: 52px;
+  padding: 0 20px;
+  border: 2px solid transparent;
+  border-radius: 8px;
   background: transparent;
   color: var(--color-text-secondary);
   text-align: left;
-  transition:
-    border-color var(--ui-motion-fast),
-    background-color var(--ui-motion-fast),
-    box-shadow var(--ui-motion-fast),
-    color var(--ui-motion-fast);
+  transition: all var(--ui-motion-fast);
+  transform-origin: left center;
 }
 
 .setting-sidebar__tab:hover {
-  background: var(--color-state-hover);
-}
-
-.setting-sidebar__tab--active {
-  background: color-mix(in srgb, var(--color-surface-3) 82%, #5e6671 18%);
+  background: rgba(255, 255, 255, 0.05);
   color: var(--color-text-primary);
 }
 
+.setting-sidebar__tab::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 12px;
+  bottom: 12px;
+  width: 4px;
+  background: #107c10;
+  border-radius: 0 2px 2px 0;
+  opacity: 0;
+  transition: opacity var(--ui-motion-fast);
+}
+
+.setting-sidebar__tab--active {
+  background: rgba(255, 255, 255, 0.03);
+  color: #ffffff;
+}
+
+.setting-sidebar__tab--active::before {
+  opacity: 1;
+}
+
 .setting-sidebar__tab[data-focused='true'] {
-  border-color: var(--color-focus-ring);
-  box-shadow: 0 0 0 var(--focus-ring-width) var(--color-focus-ring-outer) inset;
+  background: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+  box-shadow: var(--shadow-xbox-focus);
+  transform: scale(1.02);
+  z-index: 10;
+}
+
+.setting-sidebar__tab[data-focused='true']::before {
+  background: #107c10;
 }
 
 .setting-sidebar__tab-label {
   font-size: 16px;
   line-height: 1.2;
-  font-weight: var(--ui-font-weight-semibold);
+  font-weight: 700;
 }
 
 .setting-panel {
@@ -787,65 +821,63 @@ onUnmounted(() => {
   height: 100%;
   overflow-y: auto;
   overflow-x: hidden;
-  background: color-mix(in srgb, var(--color-bg) 86%, #0a1018 14%);
+  background: transparent;
+  position: relative;
 }
 
 .setting-panel__header {
   position: sticky;
   top: 0;
   z-index: 1;
-  padding: 44px 56px 16px;
-  background: color-mix(in srgb, var(--color-bg) 92%, transparent);
+  padding: 44px 64px 20px;
+  background: transparent;
+  transition: all var(--ui-motion-fast);
 }
 
 .setting-panel__header--scrolled {
-  box-shadow: inset 0 -1px 0 color-mix(in srgb, var(--color-border-subtle) 80%, transparent);
+  background: #1a1b1e;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
 }
 
 .setting-panel__group-title {
   margin: 0;
-  font-size: clamp(28px, 3vw, 44px);
-  line-height: 1.02;
-  font-weight: var(--ui-font-weight-bold);
-  letter-spacing: -0.03em;
+  font-size: clamp(32px, 4vw, 44px);
+  line-height: 1;
+  font-weight: 900;
+  letter-spacing: -0.02em;
   color: var(--color-text-primary);
 }
 
 .setting-panel__list {
   width: 100%;
   margin: 0;
-  padding: 8px 56px 44px;
+  padding: 16px 64px 80px;
 }
 
 .setting-panel__section + .setting-panel__section {
-  margin-top: 28px;
+  margin-top: 56px;
 }
 
 .setting-panel__section-header {
-  margin-bottom: 10px;
+  margin-bottom: 16px;
   padding: 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .setting-panel__section-title {
-  margin: 0;
-  font-size: clamp(24px, 2.2vw, 34px);
-  line-height: 1.1;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  color: var(--color-text-primary);
+  margin: 0 0 12px;
+  font-size: 14px;
+  font-weight: var(--ui-font-weight-black);
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  color: var(--brand-primary);
+  text-shadow: 0 0 12px rgba(16, 124, 16, 0.3);
 }
 
 .setting-panel__section-body {
   display: flex;
   flex-direction: column;
-}
-
-.setting-panel__state {
-  width: 100%;
-  margin: 0;
-  padding: 24px 56px;
-  font-size: 13px;
-  color: var(--color-text-secondary);
+  gap: 8px;
 }
 
 .setting-row {
@@ -854,97 +886,104 @@ onUnmounted(() => {
   justify-content: space-between;
   gap: var(--ui-settings-row-gap);
   width: 100%;
-  min-height: 66px;
-  padding: 10px 12px;
-  border: 0;
-  border-radius: 10px;
-  background: transparent;
+  min-height: 72px;
+  padding: 12px 20px;
+  border: 2px solid transparent;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.03);
   color: var(--color-text-primary);
   text-align: left;
-  transition:
-    border-color var(--ui-motion-fast),
-    background-color var(--ui-motion-fast),
-    box-shadow var(--ui-motion-fast);
+  transition: all var(--ui-motion-fast) var(--ease-standard);
+}
+
+.setting-row:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.setting-row[data-focused='true'] {
+  background: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+  box-shadow: var(--shadow-xbox-focus);
+  transform: scale(1.02);
+  z-index: 5;
+}
+
+.setting-row[data-focused='true'] .setting-row__label {
+  color: #ffffff;
+}
+
+.setting-row[data-focused='true'] .setting-row__desc {
+  color: var(--color-text-secondary);
+}
+
+.setting-row[data-focused='true'] .setting-row__value {
+  color: #107c10;
+  text-shadow: 0 0 12px rgba(16, 124, 16, 0.4);
 }
 
 .setting-row__copy {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 4px;
   min-width: 0;
 }
 
 .setting-row__label {
-  font-size: var(--ui-settings-row-label-size);
-  line-height: 1.15;
-  font-weight: var(--ui-font-weight-medium);
+  font-size: 18px;
+  line-height: 1.2;
+  font-weight: var(--ui-font-weight-bold);
   color: var(--color-text-primary);
 }
 
 .setting-row__desc {
-  font-size: var(--ui-settings-row-description-size);
-  line-height: 1.3;
+  font-size: 14px;
+  line-height: 1.5;
   color: var(--color-text-tertiary);
+  opacity: 0.8;
 }
 
 .setting-row__value {
   flex: 0 0 auto;
-  font-size: var(--ui-settings-row-value-size);
-  line-height: 1.2;
-  color: var(--color-text-secondary);
+  font-size: 16px;
+  font-weight: var(--ui-font-weight-black);
+  letter-spacing: var(--letter-spacing-loose);
+  color: var(--brand-primary);
+  text-shadow: 0 0 12px rgba(16, 124, 16, 0.4);
 }
 
 .setting-row--select .setting-row__value {
-  color: var(--color-text-primary);
+  color: var(--color-text-secondary);
 }
 
 .setting-row--select .setting-row__value::after {
   content: '›';
   display: inline-block;
-  margin-left: 10px;
-  font-size: 20px;
+  margin-left: 12px;
+  font-size: 22px;
   line-height: 1;
-  color: var(--color-text-secondary);
-  transform: translateY(1px);
+  color: var(--color-text-tertiary);
+  vertical-align: middle;
 }
 
-.setting-row:hover {
-  background: color-mix(in srgb, var(--color-state-hover) 66%, transparent);
+.setting-content-fade-enter-active,
+.setting-content-fade-leave-active {
+  transition:
+    opacity 250ms var(--ease-standard),
+    transform 250ms var(--ease-standard);
 }
 
-.setting-row[data-focused='true'] {
-  background: color-mix(in srgb, var(--color-state-selected) 46%, transparent);
-  box-shadow: 0 0 0 var(--focus-ring-width) var(--color-focus-ring-outer) inset;
+.setting-content-fade-enter-from {
+  opacity: 0;
+  transform: translateY(12px) scale(0.99);
+}
+
+.setting-content-fade-leave-to {
+  opacity: 0;
+  transform: translateY(-12px) scale(0.99);
 }
 
 :global(html[data-ui-density='compact']) .setting-page__layout {
-  grid-template-columns: clamp(220px, 26vw, 280px) minmax(0, 1fr);
-}
-
-:global(html[data-ui-density='compact']) .setting-sidebar {
-  padding: 12px 10px;
-}
-
-:global(html[data-ui-density='compact']) .setting-sidebar__tab {
-  min-height: 46px;
-  padding: 0 10px;
-}
-
-:global(html[data-ui-density='compact']) .setting-panel__header {
-  padding: 24px 28px 12px;
-}
-
-:global(html[data-ui-density='compact']) .setting-panel__list {
-  padding: 10px 28px 20px;
-}
-
-:global(html[data-ui-density='compact']) .setting-panel__section-header {
-  margin-bottom: 6px;
-  padding: 0;
-}
-
-:global(html[data-ui-density='compact']) .setting-row {
-  padding: 6px 10px;
+  grid-template-columns: clamp(240px, 28vw, 300px) minmax(0, 1fr);
 }
 
 :global(html[data-ui-density='narrow']) .setting-page__layout {
@@ -952,51 +991,7 @@ onUnmounted(() => {
 }
 
 :global(html[data-ui-density='narrow']) .setting-sidebar {
-  gap: 10px;
-  border-right: 0;
-  border-bottom: 1px solid var(--color-border-subtle);
-}
-
-:global(html[data-ui-density='narrow']) .setting-sidebar__header {
-  padding: 0 6px;
-}
-
-:global(html[data-ui-density='narrow']) .setting-sidebar__title {
-  font-size: 28px;
-}
-
-:global(html[data-ui-density='narrow']) .setting-sidebar__nav {
-  flex-direction: row;
-  gap: 8px;
-  overflow-x: auto;
-  overflow-y: hidden;
-}
-
-:global(html[data-ui-density='narrow']) .setting-sidebar__tab {
-  width: auto;
-  min-width: max-content;
-  min-height: 42px;
-  padding: 0 12px;
-}
-
-:global(html[data-ui-density='narrow']) .setting-sidebar__tab-label {
-  font-size: 14px;
-  white-space: nowrap;
-}
-
-:global(html[data-ui-density='narrow']) .setting-panel__header {
-  padding: 18px 16px 10px;
-}
-
-:global(html[data-ui-density='narrow']) .setting-panel__list {
-  padding: 8px 16px 18px;
-}
-
-:global(html[data-ui-density='narrow']) .setting-row {
-  align-items: flex-start;
-}
-
-:global(html[data-ui-density='narrow']) .setting-row__value {
-  padding-top: 2px;
+  mask-image: none;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
 </style>
