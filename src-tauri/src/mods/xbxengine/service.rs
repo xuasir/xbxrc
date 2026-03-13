@@ -25,6 +25,10 @@ impl XbxEngineProvider for PlaceholderXbxEngineService {
         log::info!("PlaceholderXbxEngineService::bind_tasks - no-op");
     }
 
+    fn is_runtime_available(&self) -> bool {
+        false
+    }
+
     fn get_last_runtime_event(&self) -> AppResult<Value> {
         let event = self
             .last_runtime_event

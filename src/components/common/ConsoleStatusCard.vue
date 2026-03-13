@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import type { Direction } from '@spatial-navigation/runtime'
-import { Focusable } from '@spatial-navigation/vue'
+import type { Direction } from '@/navigation/core'
+import { Focusable } from '@/navigation/core/vue'
 import { computed } from 'vue'
 
 interface SpatialNavNodeIndex {
@@ -50,8 +50,6 @@ const resolvedAriaLabel = computed(() => {
     type="button"
     class="console-status-card"
     :scope-id="props.scopeId"
-    :neighbors="props.neighbors"
-    :index="props.index"
     :disabled="props.disabled"
     :aria-label="resolvedAriaLabel"
     :on-confirm="props.onConfirm ?? props.onClick"
@@ -94,8 +92,9 @@ const resolvedAriaLabel = computed(() => {
 }
 
 .console-status-card[data-focused='true'] {
+  background: var(--color-focus-bg);
   box-shadow: var(--shadow-xbox-focus);
-  transform: scale(1.04);
+  transform: scale(1.02);
   z-index: 10;
 }
 

@@ -187,5 +187,6 @@ fn to_host_summary(value: &Value) -> Option<DataHostSummary> {
         wireless_warning: object.get("wirelessWarning").and_then(Value::as_bool),
         out_of_home_warning: object.get("outOfHomeWarning").and_then(Value::as_bool),
         storage_devices,
+        console_addrs: None,
     })
 }

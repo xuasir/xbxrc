@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Focusable } from '@spatial-navigation/vue'
+import { Focusable } from '@/navigation/core/vue'
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
@@ -127,14 +127,6 @@ async function loadHosts(): Promise<void> {
   }
 }
 
-function buildHostNeighbors(index: number): Record<'up' | 'left' | 'right', string | undefined> {
-  return {
-    up: SPATIAL_NAV_NODE_IDS.topNav.xhome,
-    left: index > 0 ? hostCards.value[index - 1]?.nodeId : undefined,
-    right: index < hostCards.value.length - 1 ? hostCards.value[index + 1]?.nodeId : undefined,
-  }
-}
-
 function handleSelectHost(host: HostSummary, index: number): void {
   void router.push({
     name: 'xhome-stream',
@@ -181,9 +173,7 @@ onMounted(() => {
         :description="card.description"
         :image-src="card.imageSrc"
         :image-alt="card.title"
-        :neighbors="buildHostNeighbors(index)"
         :aria-label="t('homePage.consoleCard.ariaLabel', { name: card.title })"
-        :index="{ row: 0, col: index, order: index }"
         :on-click="() => handleSelectHost(card.host, index)"
       />
     </HorizontalListRail>
@@ -199,7 +189,6 @@ onMounted(() => {
         type="button"
         class="home-page__refresh-button"
         :scope-id="SPATIAL_NAV_SCOPE_IDS.appShell"
-        :neighbors="{ up: SPATIAL_NAV_NODE_IDS.topNav.xhome }"
         :aria-label="t('homePage.refresh')"
         :on-confirm="handleRefresh"
         @click="handleRefresh"
@@ -281,7 +270,6 @@ onMounted(() => {
 }
 
 .home-page__refresh-button[data-focused='true'] {
-  border-color: var(--color-focus-ring);
   background: var(--btn-primary-bg-hover);
   color: var(--btn-primary-text);
   box-shadow: var(--shadow-xbox-focus);

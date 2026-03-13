@@ -130,11 +130,8 @@ mod tests {
             1,
         );
 
-        let mut updated = SessionRuntimeRecord::new(
-            "snapshot-2".to_string(),
-            crate::policy::Plan::default(),
-            2,
-        );
+        let mut updated =
+            SessionRuntimeRecord::new("snapshot-2".to_string(), crate::policy::Plan::default(), 2);
         updated.metadata.repeated_state_count = 3;
 
         store.upsert("session-1".to_string(), updated);

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Focusable } from '@spatial-navigation/vue'
+import { Focusable } from '@/navigation/core/vue'
 
 interface SettingToggleRowProps {
   id: string
@@ -37,8 +37,6 @@ function handleConfirm(): void {
     class="setting-toggle-row"
     :class="{ 'setting-toggle-row--active': props.enabled }"
     :scope-id="props.scopeId"
-    :neighbors="{ up: props.upNeighborId, down: props.downNeighborId, left: props.leftNeighborId }"
-    :index="{ order: props.order }"
     :aria-label="props.label"
     :on-confirm="handleConfirm"
     @click="handleConfirm"
@@ -124,7 +122,7 @@ function handleConfirm(): void {
 }
 
 .setting-toggle-row[data-focused='true'] {
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--color-focus-bg);
   color: #ffffff;
   box-shadow: var(--shadow-xbox-focus);
 }
@@ -134,7 +132,7 @@ function handleConfirm(): void {
 }
 
 .setting-toggle-row[data-focused='true'] .setting-toggle-row__track {
-  border-color: var(--color-text-tertiary);
+  border-color: rgba(255, 255, 255, 0.6);
 }
 
 .setting-toggle-row[data-focused='true'] .setting-toggle-row__thumb {
@@ -142,8 +140,8 @@ function handleConfirm(): void {
 }
 
 .setting-toggle-row[data-focused='true'].setting-toggle-row--active .setting-toggle-row__track {
-  background: #107c10;
-  border-color: #107c10;
+  background: var(--brand-primary);
+  border-color: transparent;
 }
 
 :global(html[data-ui-density='compact']) .setting-toggle-row,

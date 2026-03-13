@@ -8,12 +8,6 @@ importers:
 
   .:
     dependencies:
-      '@spatial-navigation/runtime':
-        specifier: ^0.2.0
-        version: 0.2.0
-      '@spatial-navigation/vue':
-        specifier: ^0.2.0
-        version: 0.2.0(vue@3.5.29(typescript@5.9.3))
       '@tauri-apps/api':
         specifier: ^2
         version: 2.10.1
@@ -647,17 +641,6 @@ packages:
     resolution: {integrity: sha512-2HRCml6OztYXyJXAvdDXPKcawukWY2GpR5/nxKp4iBgiO3wcoEGkAaqctIbZcNB6KlUQBIqt8VYkNSj2397EfA==}
     cpu: [x64]
     os: [win32]
-
-  '@spatial-navigation/dom@0.2.0':
-    resolution: {integrity: sha512-1sHqDAIYK+DzAS3nT5Hxzexu+pLBf7g1+bkQQYRRuPpen9Ef7hQS9XsrKlT4h4J3Oh1k40QIr6YFA3ORy2KgEg==}
-
-  '@spatial-navigation/runtime@0.2.0':
-    resolution: {integrity: sha512-or1yyG5QTL3+SepAoAjHOSajWXCsn7CM3FOrHwBuuHKjRGLuJKvLWcBZjTQ4dFrQG2fFu8tZmA9ZlO82BUpl4w==}
-
-  '@spatial-navigation/vue@0.2.0':
-    resolution: {integrity: sha512-aJPasqLo0GMe1l93GyJiKUblgK9l15AqETmuSegpXfhdgx1JOmom26wR9HqwJnDE+zq/GZu6qSC1QP0gI44UsQ==}
-    peerDependencies:
-      vue: '>=3'
 
   '@stylistic/eslint-plugin@5.10.0':
     resolution: {integrity: sha512-nPK52ZHvot8Ju/0A4ucSX1dcPV2/1clx0kLcH5wDmrE4naKso7TUC/voUyU1O9OTKTrR6MYip6LP0ogEMQ9jPQ==}
@@ -2480,18 +2463,6 @@ snapshots:
 
   '@rollup/rollup-win32-x64-msvc@4.59.0':
     optional: true
-
-  '@spatial-navigation/dom@0.2.0':
-    dependencies:
-      '@spatial-navigation/runtime': 0.2.0
-
-  '@spatial-navigation/runtime@0.2.0': {}
-
-  '@spatial-navigation/vue@0.2.0(vue@3.5.29(typescript@5.9.3))':
-    dependencies:
-      '@spatial-navigation/dom': 0.2.0
-      '@spatial-navigation/runtime': 0.2.0
-      vue: 3.5.29(typescript@5.9.3)
 
   '@stylistic/eslint-plugin@5.10.0(eslint@9.39.3(jiti@2.6.1))':
     dependencies:

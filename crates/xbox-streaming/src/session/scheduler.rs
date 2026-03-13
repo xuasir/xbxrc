@@ -1,9 +1,12 @@
-use std::sync::Arc;
-use crate::session::flow::{SessionFlowSnapshot, SessionFlowProvider, map_webapi_error, SessionFlowError, build_session_progress_snapshot, SessionFlowServiceInner};
-use crate::session::store::{SessionCancelToken, SessionRuntimeRecord};
-use crate::session::monitor::{apply_monitor_tick_to_record, SessionMonitorInput};
-use crate::session::api::session::WebApiSessionGateway;
 use crate::policy::Plan;
+use crate::session::api::session::WebApiSessionGateway;
+use crate::session::flow::{
+    build_session_progress_snapshot, map_webapi_error, SessionFlowError, SessionFlowProvider,
+    SessionFlowServiceInner, SessionFlowSnapshot,
+};
+use crate::session::monitor::{apply_monitor_tick_to_record, SessionMonitorInput};
+use crate::session::store::{SessionCancelToken, SessionRuntimeRecord};
+use std::sync::Arc;
 
 pub(crate) struct SessionScheduler<S, P>
 where
@@ -88,7 +91,7 @@ where
             let Some(progress) = progress else {
                 return;
             };
-            
+
             use crate::session::flow::SessionPhase;
             if progress.phase != SessionPhase::SessionReady
                 && progress.phase != SessionPhase::Recovering
@@ -115,7 +118,7 @@ where
             Some(record) => record,
             None => return false,
         };
-        
+
         let plan = record.plan.clone();
         let api = match self.create_session_api(&plan).await {
             Ok(api) => api,
@@ -197,7 +200,8 @@ where
     }
 
     async fn upsert_session(&self, session_id: &str, record: SessionRuntimeRecord<S>) {
-        self.inner.sessions
+        self.inner
+            .sessions
             .write()
             .await
             .upsert(session_id.to_string(), record);
@@ -207,7 +211,10 @@ where
         let _ = self.inner.sessions.write().await.remove(session_id);
     }
 
-    async fn get_session_progress(&self, session_id: &str) -> Option<crate::session::flow::SessionProgressSnapshot> {
+    async fn get_session_progress(
+        &self,
+        session_id: &str,
+    ) -> Option<crate::session::flow::SessionProgressSnapshot> {
         self.get_session_record(session_id)
             .await
             .map(build_session_progress_snapshot)

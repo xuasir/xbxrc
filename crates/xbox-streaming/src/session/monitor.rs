@@ -108,14 +108,12 @@ pub fn apply_monitor_tick(
         state.metadata.repeated_state_count = 1;
     }
 
-    if let Some(timeout_error) =
-        get_state_timeout_error(
-            &state,
-            input.now_ms,
-            input.stream_state.as_deref(),
-            input.state_timeout_ms,
-        )
-    {
+    if let Some(timeout_error) = get_state_timeout_error(
+        &state,
+        input.now_ms,
+        input.stream_state.as_deref(),
+        input.state_timeout_ms,
+    ) {
         state.runtime.player_state = "failed".to_string();
         state.runtime.stream_state = input.stream_state;
         state.runtime.error_details = Some(timeout_error);
@@ -214,9 +212,7 @@ where
     };
     let result = apply_monitor_tick(state, input);
 
-    record
-        .snapshot
-        .replace_runtime_snapshot(result.runtime);
+    record.snapshot.replace_runtime_snapshot(result.runtime);
     record.metadata = result.metadata;
 
     SessionMonitorControl {
@@ -235,7 +231,10 @@ fn get_state_timeout_error(
         return None;
     }
 
-    let started = state.metadata.state_observed_at_ms.unwrap_or(state.metadata.created_at_ms);
+    let started = state
+        .metadata
+        .state_observed_at_ms
+        .unwrap_or(state.metadata.created_at_ms);
     let elapsed = now_ms.saturating_sub(started);
     if elapsed < state_timeout_ms.max(1_000) {
         return None;
@@ -255,8 +254,7 @@ fn get_state_timeout_error(
 mod tests {
     use super::{
         apply_monitor_tick, apply_monitor_tick_to_record, QueueDetails, SessionMonitorInput,
-        SessionMonitorMetadata, SessionMonitorState, SessionRuntimeBinding,
-        SessionRuntimeSnapshot,
+        SessionMonitorMetadata, SessionMonitorState, SessionRuntimeBinding, SessionRuntimeSnapshot,
     };
     use crate::session::store::SessionRuntimeRecord;
 
@@ -384,7 +382,10 @@ mod tests {
         assert!(!control.should_continue);
         assert!(!control.should_send_connect_token);
         assert_eq!(record.snapshot.runtime.player_state, "started");
-        assert_eq!(record.metadata.last_observed_state.as_deref(), Some("Provisioned"));
+        assert_eq!(
+            record.metadata.last_observed_state.as_deref(),
+            Some("Provisioned")
+        );
         assert_eq!(record.metadata.monitor_attempt_count, 1);
     }
 }

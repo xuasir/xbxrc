@@ -1,21 +1,13 @@
 <script setup lang="ts">
-import type { NodeDef } from '@spatial-navigation/runtime'
 import type { TopNavNodeKey } from '../../navigation/spatial-nav.constants'
-import { computed } from 'vue'
 import {
   SPATIAL_NAV_NODE_IDS,
-  SPATIAL_NAV_PRIMARY_TAB_ORDER,
-  SPATIAL_NAV_TAB_LEVELS,
-
 } from '../../navigation/spatial-nav.constants'
 import SpatialNavIconButton from './SpatialNavIconButton.vue'
 
 type TopNavIcons = Partial<Record<TopNavNodeKey, string>>
 
 interface TopNavBarProps {
-  scopeId: string
-  downNeighborId?: string
-  profileDownNeighborId?: string
   icons?: TopNavIcons
   activeNav?: 'xhome' | 'xcloud' | 'setting'
   profileImageUrl?: string
@@ -31,67 +23,12 @@ const emit = defineEmits<{
   (event: 'select', node: TopNavNodeKey): void
 }>()
 
-function buildNeighbors(options: {
-  left?: string
-  right?: string
-  down?: string
-}): NodeDef['neighbors'] {
-  const neighbors: NodeDef['neighbors'] = {}
-  if (options.left !== undefined) {
-    neighbors.left = options.left
-  }
-  if (options.right !== undefined) {
-    neighbors.right = options.right
-  }
-  if (options.down !== undefined) {
-    neighbors.down = options.down
-  }
-  return neighbors
-}
-
-// 顶部导航采用显式邻接，确保键盘/手柄移动稳定
-const navNeighbors = computed(() => ({
-  brand: buildNeighbors({
-    right: SPATIAL_NAV_NODE_IDS.topNav.xhome,
-    down: props.downNeighborId,
-  }),
-  xhome: buildNeighbors({
-    left: SPATIAL_NAV_NODE_IDS.topNav.brand,
-    right: SPATIAL_NAV_NODE_IDS.topNav.xcloud,
-    down: props.downNeighborId,
-  }),
-  xcloud: buildNeighbors({
-    left: SPATIAL_NAV_NODE_IDS.topNav.xhome,
-    right: SPATIAL_NAV_NODE_IDS.topNav.setting,
-    down: props.downNeighborId,
-  }),
-  setting: buildNeighbors({
-    left: SPATIAL_NAV_NODE_IDS.topNav.xcloud,
-    right: SPATIAL_NAV_NODE_IDS.topNav.controller,
-    down: props.downNeighborId,
-  }),
-  controller: buildNeighbors({
-    left: SPATIAL_NAV_NODE_IDS.topNav.setting,
-    right: SPATIAL_NAV_NODE_IDS.topNav.profile,
-    down: props.downNeighborId,
-  }),
-  profile: buildNeighbors({
-    left: SPATIAL_NAV_NODE_IDS.topNav.controller,
-    down: props.profileDownNeighborId ?? props.downNeighborId,
-  }),
-}))
-
 function getIcon(node: TopNavNodeKey): string {
   return props.icons[node] ?? ''
 }
 
 function emitSelect(node: TopNavNodeKey): void {
   emit('select', node)
-}
-
-// 顶部主导航挂到 primary tab 级别，供 LB/RB 切换
-function getPrimaryTabIndex(node: TopNavNodeKey): number | undefined {
-  return SPATIAL_NAV_PRIMARY_TAB_ORDER[node as keyof typeof SPATIAL_NAV_PRIMARY_TAB_ORDER]
 }
 </script>
 
@@ -100,9 +37,7 @@ function getPrimaryTabIndex(node: TopNavNodeKey): number | undefined {
     <div class="top-nav__group top-nav__group--left">
       <SpatialNavIconButton
         :id="SPATIAL_NAV_NODE_IDS.topNav.brand"
-        :scope-id="props.scopeId"
         label="Xbox Logo"
-        :neighbors="navNeighbors.brand"
         :icon-src="getIcon('brand')"
         :round="true"
         :on-click="() => emitSelect('brand')"
@@ -113,11 +48,7 @@ function getPrimaryTabIndex(node: TopNavNodeKey): number | undefined {
     <nav class="top-nav__group top-nav__group--center" aria-label="Top Navigation">
       <SpatialNavIconButton
         :id="SPATIAL_NAV_NODE_IDS.topNav.xhome"
-        :scope-id="props.scopeId"
         label="XHome"
-        :neighbors="navNeighbors.xhome"
-        :tab-level="SPATIAL_NAV_TAB_LEVELS.primary"
-        :index="{ order: getPrimaryTabIndex('xhome') }"
         :icon-src="getIcon('xhome')"
         :round="true"
         :active="props.activeNav === 'xhome'"
@@ -126,11 +57,7 @@ function getPrimaryTabIndex(node: TopNavNodeKey): number | undefined {
       />
       <SpatialNavIconButton
         :id="SPATIAL_NAV_NODE_IDS.topNav.xcloud"
-        :scope-id="props.scopeId"
         label="XCloud"
-        :neighbors="navNeighbors.xcloud"
-        :tab-level="SPATIAL_NAV_TAB_LEVELS.primary"
-        :index="{ order: getPrimaryTabIndex('xcloud') }"
         :icon-src="getIcon('xcloud')"
         :round="true"
         :active="props.activeNav === 'xcloud'"
@@ -139,11 +66,7 @@ function getPrimaryTabIndex(node: TopNavNodeKey): number | undefined {
       />
       <SpatialNavIconButton
         :id="SPATIAL_NAV_NODE_IDS.topNav.setting"
-        :scope-id="props.scopeId"
         label="Setting"
-        :neighbors="navNeighbors.setting"
-        :tab-level="SPATIAL_NAV_TAB_LEVELS.primary"
-        :index="{ order: getPrimaryTabIndex('setting') }"
         :icon-src="getIcon('setting')"
         :round="true"
         :active="props.activeNav === 'setting'"
@@ -155,9 +78,7 @@ function getPrimaryTabIndex(node: TopNavNodeKey): number | undefined {
     <div class="top-nav__group top-nav__group--right">
       <SpatialNavIconButton
         :id="SPATIAL_NAV_NODE_IDS.topNav.controller"
-        :scope-id="props.scopeId"
         label="Controller Status"
-        :neighbors="navNeighbors.controller"
         :icon-src="getIcon('controller')"
         :round="true"
         :on-click="() => emitSelect('controller')"
@@ -167,9 +88,7 @@ function getPrimaryTabIndex(node: TopNavNodeKey): number | undefined {
       <div class="top-nav__avatar">
         <SpatialNavIconButton
           :id="SPATIAL_NAV_NODE_IDS.topNav.profile"
-          :scope-id="props.scopeId"
           label="Profile"
-          :neighbors="navNeighbors.profile"
           :round="true"
           :on-click="() => emitSelect('profile')"
           :on-confirm="() => emitSelect('profile')"

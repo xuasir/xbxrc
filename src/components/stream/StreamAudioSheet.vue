@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Focusable, FocusScope } from '@spatial-navigation/vue'
+import { Focusable, FocusScope } from '@/navigation/core/vue'
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
@@ -51,90 +51,80 @@ watch(
     <div v-if="props.open" class="stream-audio-sheet" @click.self="handleClose">
       <FocusScope
         :id="props.scopeId"
+        as="div"
+        class="stream-audio-sheet__panel"
         :active="props.open"
-        :trap="true"
-        :restore-focus="true"
         :default-focus-id="decreaseNodeId"
       >
-        <div class="stream-audio-sheet__panel">
-          <header class="stream-audio-sheet__header">
-            <p class="stream-audio-sheet__eyebrow">
-              {{ t('streamPage.audio.eyebrow') }}
-            </p>
-            <h2 class="stream-audio-sheet__title">
-              {{ t('streamPage.audio.title') }}
-            </h2>
-          </header>
+        <header class="stream-audio-sheet__header">
+          <p class="stream-audio-sheet__eyebrow">
+            {{ t('streamPage.audio.eyebrow') }}
+          </p>
+          <h2 class="stream-audio-sheet__title">
+            {{ t('streamPage.audio.title') }}
+          </h2>
+        </header>
 
-          <div class="stream-audio-sheet__controls">
-            <Focusable
-              :id="decreaseNodeId"
-              as="button"
-              type="button"
-              class="stream-audio-sheet__step"
-              :scope-id="props.scopeId"
-              :neighbors="{ right: valueNodeId, down: closeNodeId }"
-              :on-confirm="() => updateValue(draftValue - 1)"
-              :on-back="handleClose"
-              :aria-label="t('setting.editor.decrease')"
-              @click="updateValue(draftValue - 1)"
-            >
-              -
-            </Focusable>
-
-            <Focusable
-              :id="valueNodeId"
-              as="label"
-              class="stream-audio-sheet__value"
-              :scope-id="props.scopeId"
-              :neighbors="{ left: decreaseNodeId, right: increaseNodeId, down: closeNodeId }"
-              :on-back="handleClose"
-            >
-              <span class="stream-audio-sheet__label">{{ t('streamPage.audio.volume') }}</span>
-              <input
-                class="stream-audio-sheet__input"
-                type="number"
-                inputmode="numeric"
-                min="0"
-                max="10"
-                step="1"
-                :value="draftValue"
-                :aria-label="t('streamPage.audio.volume')"
-                @click.stop
-                @input="(event) => updateValue(Number((event.target as HTMLInputElement).value))"
-              >
-            </Focusable>
-
-            <Focusable
-              :id="increaseNodeId"
-              as="button"
-              type="button"
-              class="stream-audio-sheet__step"
-              :scope-id="props.scopeId"
-              :neighbors="{ left: valueNodeId, down: closeNodeId }"
-              :on-confirm="() => updateValue(draftValue + 1)"
-              :on-back="handleClose"
-              :aria-label="t('setting.editor.increase')"
-              @click="updateValue(draftValue + 1)"
-            >
-              +
-            </Focusable>
-          </div>
-
+        <div class="stream-audio-sheet__controls">
           <Focusable
-            :id="closeNodeId"
+            :id="decreaseNodeId"
             as="button"
             type="button"
-            class="stream-audio-sheet__close"
-            :scope-id="props.scopeId"
-            :neighbors="{ up: valueNodeId }"
-            :on-confirm="handleClose"
+            class="stream-audio-sheet__step"
+            :on-confirm="() => updateValue(draftValue - 1)"
             :on-back="handleClose"
-            @click="handleClose"
+            :aria-label="t('setting.editor.decrease')"
+            @click="updateValue(draftValue - 1)"
           >
-            {{ t('streamPage.audio.close') }}
+            -
+          </Focusable>
+
+          <Focusable
+            :id="valueNodeId"
+            as="label"
+            class="stream-audio-sheet__value"
+            :on-back="handleClose"
+          >
+            <span class="stream-audio-sheet__label">{{ t('streamPage.audio.volume') }}</span>
+            <input
+              class="stream-audio-sheet__input"
+              type="number"
+              inputmode="numeric"
+              min="0"
+              max="10"
+              step="1"
+              :value="draftValue"
+              :aria-label="t('streamPage.audio.volume')"
+              @click.stop
+              @input="(event) => updateValue(Number((event.target as HTMLInputElement).value))"
+            >
+          </Focusable>
+
+          <Focusable
+            :id="increaseNodeId"
+            as="button"
+            type="button"
+            class="stream-audio-sheet__step"
+            :on-confirm="() => updateValue(draftValue + 1)"
+            :on-back="handleClose"
+            :aria-label="t('setting.editor.increase')"
+            @click="updateValue(draftValue + 1)"
+          >
+            +
           </Focusable>
         </div>
+
+        <Focusable
+          :id="closeNodeId"
+          as="button"
+          type="button"
+          class="stream-audio-sheet__close"
+          :on-confirm="handleClose"
+          :on-back="handleClose"
+          @click="handleClose"
+        >
+          {{ t('streamPage.audio.close') }}
+        </Focusable>
       </FocusScope>
     </div>
   </Transition>
@@ -231,8 +221,9 @@ watch(
 .stream-audio-sheet__step[data-focused='true'],
 .stream-audio-sheet__value[data-focused='true'],
 .stream-audio-sheet__close[data-focused='true'] {
-  border-color: var(--ui-border-focus);
-  box-shadow: var(--ui-focus-ring-shadow);
+  background: var(--color-focus-bg-strong);
+  box-shadow: var(--shadow-xbox-focus);
+  color: #fff;
 }
 
 .stream-audio-sheet-transition-enter-active,

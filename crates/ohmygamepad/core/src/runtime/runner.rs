@@ -93,6 +93,9 @@ enum RuntimeCommand {
     ReplaceDeviceProfiles {
         profiles: Vec<DeviceProfile>,
     },
+    SetSuspended {
+        suspended: bool,
+    },
     Shutdown,
 }
 
@@ -155,6 +158,12 @@ impl InputRuntimeHandle {
     ) -> Result<(), InputRuntimeError> {
         self.command_tx
             .send(RuntimeCommand::ReplaceDeviceProfiles { profiles })
+            .map_err(|_| InputRuntimeError::CommandChannelClosed)
+    }
+
+    pub fn set_suspended(&self, suspended: bool) -> Result<(), InputRuntimeError> {
+        self.command_tx
+            .send(RuntimeCommand::SetSuspended { suspended })
             .map_err(|_| InputRuntimeError::CommandChannelClosed)
     }
 
@@ -221,38 +230,71 @@ fn run_runtime_loop<TBackend, TUiSink, TStreamSink>(
     TUiSink: UiSink,
     TStreamSink: StreamSink,
 {
+    let mut suspended = false;
     loop {
         let now = origin.elapsed();
-        if apply_due_actions(core, schedule.take_due(now), snapshot_broadcaster) {
+
+        if suspended {
+            // 挂起状态下：
+            // 1. 不执行逻辑采样 (sample_pads)
+            // 2. 依然执行后端轮询 (poll_backend) 以排空系统事件队列，防止切回时产生指令积压（Backlog）。
+            // 3. 但不更新 logical pads 或发布新快照。
+            core.poll_backend();
+        } else if apply_due_actions(core, schedule.take_due(now), snapshot_broadcaster) {
             continue;
         }
 
-        let timeout = schedule
-            .next_deadline()
-            .checked_sub(origin.elapsed())
-            .unwrap_or_default();
+        let timeout = if suspended {
+            Duration::from_millis(100) // 挂起时大幅降低检查频率
+        } else {
+            schedule
+                .next_deadline()
+                .checked_sub(origin.elapsed())
+                .unwrap_or_default()
+        };
 
         match command_rx.recv_timeout(timeout) {
             Ok(command) => {
+                let was_suspended = suspended;
                 if handle_runtime_command(
                     core,
                     schedule,
                     origin.elapsed(),
                     command,
                     snapshot_broadcaster,
+                    &mut suspended,
                 ) {
                     break;
                 }
 
+                // 状态转换逻辑：切入挂起时立即重置
+                if !was_suspended && suspended {
+                    core.reset_state();
+                    snapshot_broadcaster.publish(core.runtime_snapshot());
+                }
+                // 切回活跃时：重置调度器，从当前时间点重新起跳
+                else if was_suspended && !suspended {
+                    schedule.update_sampling(origin.elapsed(), &core.config().sampling);
+                }
+
                 while let Ok(command) = command_rx.try_recv() {
+                    let was_suspended_inner = suspended;
                     if handle_runtime_command(
                         core,
                         schedule,
                         origin.elapsed(),
                         command,
                         snapshot_broadcaster,
+                        &mut suspended,
                     ) {
                         return;
+                    }
+
+                    if !was_suspended_inner && suspended {
+                        core.reset_state();
+                        snapshot_broadcaster.publish(core.runtime_snapshot());
+                    } else if was_suspended_inner && !suspended {
+                        schedule.update_sampling(origin.elapsed(), &core.config().sampling);
                     }
                 }
             }
@@ -293,6 +335,7 @@ fn handle_runtime_command<TBackend, TUiSink, TStreamSink>(
     now: Duration,
     command: RuntimeCommand,
     snapshot_broadcaster: &RuntimeSnapshotBroadcaster,
+    suspended: &mut bool,
 ) -> bool
 where
     TBackend: InputBackend,
@@ -332,6 +375,12 @@ where
         RuntimeCommand::ReplaceDeviceProfiles { profiles } => {
             core.replace_device_profiles(profiles);
             snapshot_broadcaster.publish(core.runtime_snapshot());
+            false
+        }
+        RuntimeCommand::SetSuspended {
+            suspended: next_suspended,
+        } => {
+            *suspended = next_suspended;
             false
         }
         RuntimeCommand::Shutdown => true,

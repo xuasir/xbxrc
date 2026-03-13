@@ -3,6 +3,7 @@
 1. Emphasize readability and maintainability.
 2. Modules should be properly designed.
 3. Code should include comments explaining its functionality and implementation details (light comments, use Chinese).
+4. **Gamepad Navigation**: Handled exclusively via the geometric pathfinding engine. Refer to [`dev-docs/gamepad-navigation.md`](dev-docs/gamepad-navigation.md) for architecture and usage rules.
 
 # Development Policy
 

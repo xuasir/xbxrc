@@ -31,6 +31,16 @@ pub fn run() {
             let _ = webview.eval(shell::build_external_link_patch_script());
         })
         .on_window_event(|window, event| {
+            match event {
+                tauri::WindowEvent::Focused(focused) => {
+                    let app_state = window.state::<shell::state::AppState>();
+                    if let Err(e) = app_state.gamepad.set_suspended(!focused) {
+                        log::warn!("Failed to toggle gamepad suspension on focus change: {}", e);
+                    }
+                }
+                _ => {}
+            }
+
             #[cfg(target_os = "macos")]
             shell::handle_macos_window_event(window, event);
         })

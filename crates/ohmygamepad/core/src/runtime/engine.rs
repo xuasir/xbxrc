@@ -117,6 +117,20 @@ where
         self.pads.iter().find(|snapshot| snapshot.pad_id == pad_id)
     }
 
+    pub fn reset_state(&mut self) {
+        // 清理原始采样，防止恢复时使用过期的硬件状态
+        self.raw_samples.clear();
+        self.last_active_at.clear();
+
+        // 将所有逻辑手柄重置为中性状态
+        for snapshot in &mut self.pads {
+            snapshot.state = default_logical_pad_state();
+            // 立即向接收端同步“按键全部弹起”的状态，防止 UI 粘滞。
+            self.ui_sink.emit_pad_snapshot(snapshot);
+            self.stream_sink.emit_pad_snapshot(snapshot);
+        }
+    }
+
     fn apply_backend_poll(&mut self, poll: BackendPollResult) {
         let BackendPollResult {
             device_events,

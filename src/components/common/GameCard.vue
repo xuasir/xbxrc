@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import type { Direction } from '@spatial-navigation/runtime'
-import { Focusable } from '@spatial-navigation/vue'
+import type { Direction } from '@/navigation/core'
+import { Focusable } from '@/navigation/core/vue'
 
 type SpatialNavNeighbors = Partial<Record<Direction, string>>
 
@@ -47,8 +47,6 @@ function handleSelect(): void {
     class="game-card"
     :scope-id="props.scopeId"
     :disabled="props.disabled"
-    :neighbors="props.neighbors"
-    :index="props.index"
     :aria-label="props.ariaLabel || props.title"
     :on-confirm="handleSelect"
     @click="handleSelect"
@@ -92,9 +90,9 @@ function handleSelect(): void {
 }
 
 .game-card[data-focused='true'] {
-  background: var(--color-surface-2);
+  background: var(--color-focus-bg);
   box-shadow: var(--shadow-xbox-focus);
-  transform: scale(1.04);
+  transform: scale(1.02);
   z-index: 10;
 }
 

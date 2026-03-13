@@ -1,6 +1,5 @@
 <script setup lang="ts">
-import type { NodeDef } from '@spatial-navigation/runtime'
-import { Focusable, FocusScope } from '@spatial-navigation/vue'
+import { Focusable, FocusScope } from '@/navigation/core/vue'
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
@@ -40,36 +39,13 @@ function handleClose(): void {
   emit('close')
 }
 
-function handleSelect(value: string | number): void {
-  emit('select', value)
-}
-
 function createOptionNodeId(index: number): string {
   return `${props.scopeId}.option.${index}`
 }
 
-const selectedCandidateNodeId = computed(() => {
-  const currentIndex = props.options.findIndex(option => option.value === props.currentValue)
-  const resolvedIndex = currentIndex >= 0 ? currentIndex : 0
-  return props.options.length > 0 ? createOptionNodeId(resolvedIndex) : undefined
-})
-
 const idleFocusNodeId = computed(() => `${props.scopeId}.idle`)
 
 const defaultFocusId = computed(() => idleFocusNodeId.value)
-
-const idleNeighbors = computed<NodeDef['neighbors']>(() => {
-  const candidateNodeId = selectedCandidateNodeId.value
-  if (candidateNodeId === undefined) {
-    return {}
-  }
-  return {
-    up: candidateNodeId,
-    down: candidateNodeId,
-    left: candidateNodeId,
-    right: candidateNodeId,
-  }
-})
 
 function scrollFocusedOptionIntoView(): void {
   const listElement = listRef.value
@@ -148,7 +124,6 @@ onBeforeUnmount(() => {
             type="button"
             class="setting-single-select-sheet__idle-focus"
             :scope-id="props.scopeId"
-            :neighbors="idleNeighbors"
             :on-back="handleClose"
             :aria-label="t('setting.aria.selectOption')"
           />
@@ -166,7 +141,6 @@ onBeforeUnmount(() => {
               type="button"
               class="setting-single-select-sheet__close"
               :scope-id="props.scopeId"
-              :neighbors="{ left: selectedCandidateNodeId, down: selectedCandidateNodeId }"
               :on-confirm="handleClose"
               :on-back="handleClose"
               :aria-label="t('setting.editor.cancel')"
@@ -189,15 +163,10 @@ onBeforeUnmount(() => {
                   'setting-single-select-sheet__option--active': props.currentValue === option.value,
                 }"
                 :scope-id="props.scopeId"
-                :neighbors="{
-                  up: index > 0 ? createOptionNodeId(index - 1) : `${props.scopeId}.close`,
-                  down: index < props.options.length - 1 ? createOptionNodeId(index + 1) : undefined,
-                }"
-                :index="{ order: index }"
                 :aria-label="option.label"
-                :on-confirm="() => handleSelect(option.value)"
+                :on-confirm="() => emit('select', option.value)"
                 :on-back="handleClose"
-                @click="handleSelect(option.value)"
+                @click="emit('select', option.value)"
               >
                 <span
                   class="setting-single-select-sheet__indicator"
@@ -296,7 +265,7 @@ onBeforeUnmount(() => {
 }
 
 .setting-single-select-sheet__close[data-focused='true'] {
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--color-focus-bg);
   color: #ffffff;
   box-shadow: var(--shadow-xbox-focus);
 }
@@ -312,7 +281,7 @@ onBeforeUnmount(() => {
   font-weight: 700;
   letter-spacing: 0.05em;
   text-transform: uppercase;
-  color: #107c10;
+  color: var(--brand-primary);
 }
 
 .setting-single-select-sheet__title {
@@ -368,8 +337,8 @@ onBeforeUnmount(() => {
 }
 
 .setting-single-select-sheet__indicator--active {
-  background: #107c10;
-  border-color: #107c10;
+  background: var(--brand-primary);
+  border-color: var(--brand-primary);
 }
 
 .setting-single-select-sheet__copy {
@@ -391,10 +360,9 @@ onBeforeUnmount(() => {
 }
 
 .setting-single-select-sheet__option[data-focused='true'] {
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--color-focus-bg-strong);
   color: #ffffff;
   box-shadow: var(--shadow-xbox-focus);
-  transform: scale(1.02);
 }
 
 .setting-single-select-sheet__option[data-focused='true'] .setting-single-select-sheet__indicator {
@@ -402,8 +370,8 @@ onBeforeUnmount(() => {
 }
 
 .setting-single-select-sheet__option[data-focused='true'] .setting-single-select-sheet__indicator--active {
-  background: #107c10;
-  border-color: #107c10;
+  background: var(--brand-primary);
+  border-color: var(--brand-primary);
 }
 
 .setting-single-select-sheet__option[data-focused='true'] .setting-single-select-sheet__option-desc {

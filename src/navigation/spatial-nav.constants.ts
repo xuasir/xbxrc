@@ -1,16 +1,9 @@
-import type { TabLevel } from '@spatial-navigation/runtime'
-
 export const SPATIAL_NAV_SCOPE_IDS = {
   appShell: 'app.shell',
   userMenu: 'user.menu',
   login: 'login.scope',
   settingSingleSelect: 'setting.single-select',
   streamPage: 'stream.page',
-} as const
-
-export const SPATIAL_NAV_TAB_LEVELS: Record<'primary' | 'secondary', TabLevel> = {
-  primary: 'primary',
-  secondary: 'secondary',
 } as const
 
 export const SPATIAL_NAV_NODE_IDS = {
@@ -52,23 +45,6 @@ export const SPATIAL_NAV_NODE_IDS = {
     retry: 'stream.action.retry',
     back: 'stream.action.back',
   },
-} as const
-
-export const SPATIAL_NAV_PRIMARY_TAB_ORDER = {
-  xhome: 0,
-  xcloud: 1,
-  setting: 2,
-} as const
-
-export const SPATIAL_NAV_KEYBOARD_SHORTCUTS = {
-  primaryPrev: 'q',
-  primaryNext: 'e',
-  secondaryPrev: 'z',
-  secondaryNext: 'c',
-} as const
-
-export const SPATIAL_NAV_RUNTIME_EVENTS = {
-  tabNavAction: 'spatial-nav:tab-nav-action',
 } as const
 
 export type TopNavNodeKey = keyof typeof SPATIAL_NAV_NODE_IDS.topNav

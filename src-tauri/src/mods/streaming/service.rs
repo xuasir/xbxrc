@@ -3,26 +3,38 @@ use crate::mods::auth::AuthProviderRef;
 use crate::mods::config::ConfigProviderRef;
 use crate::mods::data::DataProviderRef;
 use crate::mods::streaming::types::*;
+use crate::mods::xbxengine::XbxEngineProviderRef;
 use std::sync::Arc;
+use xbox_streaming::input::{
+    SupportedInput as DomainSupportedInput, TitleCapabilities as DomainTitleCapabilities,
+};
+use xbox_streaming::policy::session::SessionAccessContext as DomainSessionAccessContext;
+use xbox_streaming::runtime::{
+    RuntimeCapabilities as DomainRuntimeCapabilities, TurnContext as DomainTurnContext,
+};
 use xbox_streaming::{
     compile as compile_plan, decide_runtime_recovery, parse_session_access_context,
     project_render_plan, project_runtime_plan, AnswerPayload as DomainAnswerPayload, AudioChannels,
     BitratePreference, CodecPreference, CompilerInput as DomainCompilerInput,
     Config as DomainStreamingConfig, Context as DomainContext,
-    DisplayOptions as DomainDisplayOptions, IceCandidate as DomainIceCandidate,
-    Plan as StreamingPlan, RemoteConsoleSnapshot, RuntimeFact, RuntimePreference,
-    SessionFlowError, SessionFlowProvider, SessionFlowService, Target as DomainTarget, TurnServer,
+    DisplayOptions as DomainDisplayOptions, FallbackTurnProvider, HostAddr as DomainHostAddr,
+    IceCandidate as DomainIceCandidate, Plan as StreamingPlan, RemoteConsoleSnapshot, RuntimeFact,
+    RuntimePreference, SessionFlowError, SessionFlowProvider, SessionFlowService,
+    Target as DomainTarget, TurnServer,
 };
 
 #[derive(Clone)]
 pub struct StreamingService {
     auth_provider: AuthProviderRef,
     config_provider: ConfigProviderRef,
+    data_provider: DataProviderRef,
+    xbxengine_provider: XbxEngineProviderRef,
     inner: Arc<StreamingServiceInner>,
 }
 
 struct StreamingServiceInner {
     flow: SessionFlowService<StreamingSessionSnapshot, TauriSessionFlowProvider>,
+    fallback_turn_provider: tokio::sync::Mutex<FallbackTurnProvider>,
 }
 
 /// tauri 侧 flow adapter：仅负责提供凭证。
@@ -85,17 +97,21 @@ impl StreamingService {
         auth_provider: AuthProviderRef,
         config_provider: ConfigProviderRef,
         data_provider: DataProviderRef,
+        xbxengine_provider: XbxEngineProviderRef,
     ) -> Self {
         let flow_provider = TauriSessionFlowProvider {
             auth_provider: auth_provider.clone(),
-            data_provider,
+            data_provider: data_provider.clone(),
         };
 
         Self {
             auth_provider,
             config_provider,
+            data_provider,
+            xbxengine_provider,
             inner: Arc::new(StreamingServiceInner {
                 flow: SessionFlowService::new(flow_provider),
+                fallback_turn_provider: tokio::sync::Mutex::new(FallbackTurnProvider::new()),
             }),
         }
     }
@@ -138,12 +154,9 @@ impl StreamingService {
         let access_context = parse_session_access_context(&token)
             .map_err(|error| AppError::Streaming(error.to_string()))?;
 
-        let context = DomainContext {
-            target,
-            target_id: target_id.to_string(),
-            session: access_context,
-            ..Default::default()
-        };
+        let context = self
+            .build_domain_context(target, target_id, target_type.as_str(), access_context)
+            .await;
 
         let output = compile_plan(DomainCompilerInput {
             config: domain_config,
@@ -152,6 +165,225 @@ impl StreamingService {
         .map_err(|error| AppError::Streaming(error.to_string()))?;
 
         Ok(output.plan)
+    }
+
+    async fn build_domain_context(
+        &self,
+        target: DomainTarget,
+        target_id: &str,
+        target_type: &str,
+        session: DomainSessionAccessContext,
+    ) -> DomainContext {
+        DomainContext {
+            target,
+            target_id: target_id.to_string(),
+            session,
+            // input 用户配置面暂不开放，但 title 能力事实仍需来自真实数据源。
+            input: self.resolve_title_capabilities(target, target_id).await,
+            // runtime 能力按当前宿主真实 provider 状态计算，避免硬编码。
+            runtime: resolve_runtime_capabilities(self.xbxengine_provider.is_runtime_available()),
+            // xHome fallback TURN 由 provider 提供，失败时保守降级为 None。
+            turn: DomainTurnContext {
+                fallback: self.resolve_fallback_turn_server(target_type).await,
+            },
+            // remote play 地址注入来自 data provider；缺失时显式为空。
+            remote_play: xbox_streaming::RemotePlayContext {
+                console_addrs: self
+                    .resolve_remote_play_console_addrs(target, target_id)
+                    .await,
+            },
+        }
+    }
+
+    async fn resolve_fallback_turn_server(&self, target_type: &str) -> Option<TurnServer> {
+        let mut provider = self.inner.fallback_turn_provider.lock().await;
+        match provider.get_by_target_type(target_type).await {
+            Ok(server) => server,
+            Err(error) => {
+                log::warn!(
+                    "streaming fallback turn resolve failed for target={target_type}: {error}"
+                );
+                None
+            }
+        }
+    }
+
+    async fn resolve_title_capabilities(
+        &self,
+        target: DomainTarget,
+        target_id: &str,
+    ) -> DomainTitleCapabilities {
+        if target.is_home() {
+            return DomainTitleCapabilities::default();
+        }
+
+        let mut capabilities = resolve_min_title_capabilities(target_id);
+        match self
+            .data_provider
+            .get_streaming_title_input_config(target_id)
+            .await
+        {
+            Ok(config) => {
+                let parsed = parse_title_capabilities_from_input_config(&config.config);
+                merge_title_capabilities(&mut capabilities, parsed);
+            }
+            Err(error) => {
+                log::warn!(
+                    "streaming title capability resolve failed for title={target_id}: {error}"
+                );
+            }
+        }
+        capabilities
+    }
+
+    async fn resolve_remote_play_console_addrs(
+        &self,
+        target: DomainTarget,
+        target_id: &str,
+    ) -> Vec<DomainHostAddr> {
+        if !target.is_home() || target_id.trim().is_empty() {
+            return Vec::new();
+        }
+
+        let consoles = match self.data_provider.get_remote_consoles().await {
+            Ok(value) => value,
+            Err(error) => {
+                log::warn!("streaming console addrs resolve failed: {error}");
+                return Vec::new();
+            }
+        };
+
+        let Some(console) = consoles.into_iter().find(|item| {
+            item.server_id.as_deref() == Some(target_id)
+                || item.id.as_deref() == Some(target_id)
+                || item.device_id.as_deref() == Some(target_id)
+        }) else {
+            return Vec::new();
+        };
+
+        console
+            .console_addrs
+            .unwrap_or_default()
+            .into_iter()
+            .map(|item| DomainHostAddr {
+                ip: item.ip,
+                port: item.port,
+            })
+            .collect()
+    }
+}
+
+fn resolve_runtime_capabilities(xbxengine_runtime_available: bool) -> DomainRuntimeCapabilities {
+    DomainRuntimeCapabilities {
+        browser_webrtc: true,
+        rust_owned: xbxengine_runtime_available,
+        native_mkb: false,
+        touch_surface: false,
+        prefer_browser: true,
+    }
+}
+
+fn resolve_min_title_capabilities(target_id: &str) -> DomainTitleCapabilities {
+    let mut capabilities = DomainTitleCapabilities::default();
+
+    // 云游戏标题默认至少支持手柄；title 细粒度输入能力后续由 data provider 注入。
+    capabilities
+        .supported_inputs
+        .push(DomainSupportedInput::Gamepad);
+    capabilities.has_touch = true;
+
+    // 仅在有合法 title id 时，才启用最小触控能力兜底，避免把异常路由误判成 touch title。
+    if target_id.trim().parse::<u64>().is_ok() {
+        capabilities.has_native_touch = true;
+        capabilities
+            .supported_inputs
+            .push(DomainSupportedInput::NativeTouch);
+    }
+
+    capabilities
+}
+
+fn parse_title_capabilities_from_input_config(
+    config: &serde_json::Value,
+) -> DomainTitleCapabilities {
+    let mut capabilities = DomainTitleCapabilities::default();
+    let mut tokens = Vec::new();
+    collect_string_tokens(config, &mut tokens);
+
+    for token in tokens {
+        let normalized = token.trim().to_ascii_lowercase();
+        if normalized.is_empty() {
+            continue;
+        }
+
+        if normalized.contains("native") && normalized.contains("touch") {
+            capabilities.has_touch = true;
+            capabilities.has_native_touch = true;
+            push_supported_input(&mut capabilities, DomainSupportedInput::NativeTouch);
+            continue;
+        }
+        if normalized.contains("touch") {
+            capabilities.has_touch = true;
+            push_supported_input(&mut capabilities, DomainSupportedInput::GenericTouch);
+            continue;
+        }
+        if normalized == "mkb" || normalized.contains("mousekeyboard") {
+            capabilities.has_mkb = true;
+            push_supported_input(&mut capabilities, DomainSupportedInput::Mkb);
+            continue;
+        }
+        if normalized.contains("keyboard") {
+            capabilities.has_mkb = true;
+            push_supported_input(&mut capabilities, DomainSupportedInput::Keyboard);
+            continue;
+        }
+        if normalized.contains("mouse") {
+            capabilities.has_mkb = true;
+            push_supported_input(&mut capabilities, DomainSupportedInput::Mouse);
+            continue;
+        }
+        if normalized.contains("gamepad") {
+            push_supported_input(&mut capabilities, DomainSupportedInput::Gamepad);
+        }
+    }
+
+    capabilities
+}
+
+fn collect_string_tokens(value: &serde_json::Value, output: &mut Vec<String>) {
+    match value {
+        serde_json::Value::String(text) => output.push(text.to_string()),
+        serde_json::Value::Array(items) => {
+            for item in items {
+                collect_string_tokens(item, output);
+            }
+        }
+        serde_json::Value::Object(map) => {
+            for (key, item) in map {
+                output.push(key.to_string());
+                collect_string_tokens(item, output);
+            }
+        }
+        _ => {}
+    }
+}
+
+fn merge_title_capabilities(target: &mut DomainTitleCapabilities, source: DomainTitleCapabilities) {
+    target.has_mkb = target.has_mkb || source.has_mkb;
+    target.has_touch = target.has_touch || source.has_touch;
+    target.has_native_touch = target.has_native_touch || source.has_native_touch;
+    for input in source.supported_inputs {
+        push_supported_input(target, input);
+    }
+}
+
+fn push_supported_input(capabilities: &mut DomainTitleCapabilities, input: DomainSupportedInput) {
+    if !capabilities
+        .supported_inputs
+        .iter()
+        .any(|item| item == &input)
+    {
+        capabilities.supported_inputs.push(input);
     }
 }
 

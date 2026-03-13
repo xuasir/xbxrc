@@ -1,12 +1,9 @@
-use crate::policy::types::{CompileError, Owner, TurnSource};
 use crate::policy::config::Config;
 use crate::policy::context::Context;
 use crate::policy::runtime::{RuntimeMode, RuntimePlan, RuntimePreference, TurnPlan};
+use crate::policy::types::{CompileError, Owner, TurnSource};
 
-pub fn compile_runtime(
-    config: &Config,
-    context: &Context,
-) -> Result<RuntimePlan, CompileError> {
+pub fn compile_runtime(config: &Config, context: &Context) -> Result<RuntimePlan, CompileError> {
     let mode = resolve_runtime_mode(config, context)?;
     let owner = match mode {
         RuntimeMode::WebRtcDirect => Owner::Browser,

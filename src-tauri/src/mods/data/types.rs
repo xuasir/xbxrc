@@ -33,6 +33,13 @@ pub struct DataHostStorageDeviceSummary {
     pub total_bytes: Option<u64>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct DataHostAddr {
+    pub ip: String,
+    pub port: u16,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct DataHostSummary {
@@ -51,6 +58,7 @@ pub struct DataHostSummary {
     pub wireless_warning: Option<bool>,
     pub out_of_home_warning: Option<bool>,
     pub storage_devices: Option<Vec<DataHostStorageDeviceSummary>>,
+    pub console_addrs: Option<Vec<DataHostAddr>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

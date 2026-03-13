@@ -98,7 +98,10 @@ fn normalize_value(key: &str, value: &Value, fallback: &Value) -> Value {
         | "ipv6"
         | "performance_style"
         | "background_keepalive"
-        | "use_vulkan" => {
+        | "use_vulkan"
+        | "ui_haptics"
+        | "ui_audio"
+        | "debug" => {
             if let Some(val) = value.as_bool() {
                 Value::from(val)
             } else {

@@ -1,12 +1,14 @@
 use crate::mods::config::ConfigProviderRef;
 use crate::mods::data::session_resolver::resolve_web_token_claims;
 use crate::mods::data::types::{
-    DataConsolePowerResult, DataHostSummary, DataSendTextResult, DataSessionContext,
+    DataConsolePowerResult, DataHostAddr, DataHostSummary, DataSendTextResult, DataSessionContext,
     DataStreamingTitleInputConfig,
 };
 use reqwest::header::{HeaderMap, HeaderValue, AUTHORIZATION, CONTENT_TYPE};
 use reqwest::Client;
 use serde_json::{json, Value};
+use std::collections::BTreeSet;
+use std::net::IpAddr;
 use uuid::Uuid;
 use xbox_streaming::{
     compile as compile_plan, parse_session_access_context, CompilerInput as DomainCompilerInput,
@@ -44,7 +46,10 @@ impl StreamingQueryService {
 
         let mut summaries = Vec::new();
         for console in consoles {
-            if let Ok(summary) = serde_json::from_value::<DataHostSummary>(console) {
+            if let Ok(mut summary) = serde_json::from_value::<DataHostSummary>(console.clone()) {
+                if summary.console_addrs.is_none() {
+                    summary.console_addrs = extract_console_addrs(&console);
+                }
                 summaries.push(summary);
             }
         }
@@ -218,8 +223,8 @@ impl StreamingQueryService {
         })
         .map_err(|e| e.to_string())?;
 
-        let streaming_token =
-            xbox_streaming::session::access::StreamingToken::parse(token).map_err(|e| e.to_string())?;
+        let streaming_token = xbox_streaming::session::access::StreamingToken::parse(token)
+            .map_err(|e| e.to_string())?;
 
         // 既然已经有 token 了，直接使用 new 构造。
         Ok(Some(WebApiSessionGateway::new(
@@ -234,4 +239,190 @@ fn resolve_xhome_token(session: &DataSessionContext) -> Option<&Value> {
         .streaming_tokens
         .get("xHomeToken")
         .or_else(|| session.streaming_tokens.get("xhomeToken"))
+}
+
+fn extract_console_addrs(raw: &Value) -> Option<Vec<DataHostAddr>> {
+    // 仅沿已知 streaming/endpoint/candidate 路径提取，避免全量递归误抓非媒体地址。
+    let mut found = Vec::new();
+    collect_console_addrs_from_known_paths(raw, 0, &mut found);
+    if found.is_empty() {
+        return None;
+    }
+
+    let mut dedup = BTreeSet::new();
+    let mut result = Vec::new();
+    for addr in found {
+        let key = format!("{}:{}", addr.ip, addr.port);
+        if dedup.insert(key) {
+            result.push(addr);
+        }
+    }
+    (!result.is_empty()).then_some(result)
+}
+
+fn collect_console_addrs_from_known_paths(
+    value: &Value,
+    depth: usize,
+    output: &mut Vec<DataHostAddr>,
+) {
+    if depth > 6 {
+        return;
+    }
+
+    let Some(map) = value.as_object() else {
+        return;
+    };
+
+    for (key, child) in map {
+        if is_addr_candidate_list_key(key) {
+            collect_console_addrs_from_candidate_value(child, output);
+            continue;
+        }
+        if is_addr_container_key(key) {
+            match child {
+                Value::Object(_) => {
+                    collect_console_addrs_from_known_paths(child, depth + 1, output)
+                }
+                Value::Array(items) => {
+                    for item in items {
+                        collect_console_addrs_from_known_paths(item, depth + 1, output);
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+}
+
+fn collect_console_addrs_from_candidate_value(value: &Value, output: &mut Vec<DataHostAddr>) {
+    match value {
+        Value::Array(items) => {
+            for item in items {
+                if let Value::Object(map) = item {
+                    if let Some(addr) = try_parse_console_addr(map) {
+                        output.push(addr);
+                    }
+                }
+            }
+        }
+        Value::Object(map) => {
+            if let Some(addr) = try_parse_console_addr(map) {
+                output.push(addr);
+                return;
+            }
+            for nested in map.values() {
+                if let Value::Object(candidate) = nested {
+                    if let Some(addr) = try_parse_console_addr(candidate) {
+                        output.push(addr);
+                    }
+                }
+            }
+        }
+        _ => {}
+    }
+}
+
+fn is_addr_candidate_list_key(key: &str) -> bool {
+    matches!(
+        key,
+        "streamingEndpoints"
+            | "streamingAddresses"
+            | "streamingCandidates"
+            | "connectionCandidates"
+            | "endpointCandidates"
+            | "remotePlayEndpoints"
+            | "consoleStreamingEndpoints"
+            | "consoleAddrs"
+            | "consoleAddresses"
+            | "endpoints"
+    )
+}
+
+fn is_addr_container_key(key: &str) -> bool {
+    matches!(
+        key,
+        "serverDetails"
+            | "streaming"
+            | "remotePlay"
+            | "network"
+            | "configuration"
+            | "connection"
+            | "ice"
+    )
+}
+
+fn try_parse_console_addr(map: &serde_json::Map<String, Value>) -> Option<DataHostAddr> {
+    let ip = map
+        .get("ipAddress")
+        .or_else(|| map.get("ip"))
+        .or_else(|| map.get("address"))
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .filter(|value| value.parse::<IpAddr>().is_ok())?
+        .to_string();
+
+    let port = map
+        .get("port")
+        .or_else(|| map.get("portNumber"))
+        .or_else(|| map.get("streamingPort"))
+        .and_then(|value| {
+            value
+                .as_u64()
+                .or_else(|| value.as_str().and_then(|text| text.parse::<u64>().ok()))
+        })
+        .filter(|value| *value > 0 && *value <= u16::MAX as u64)? as u16;
+
+    Some(DataHostAddr { ip, port })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::extract_console_addrs;
+    use serde_json::json;
+
+    #[test]
+    fn extracts_addrs_only_from_known_streaming_paths() {
+        let payload = json!({
+            "serverDetails": {
+                "streamingEndpoints": [
+                    { "ipAddress": "10.0.0.8", "port": 9002 }
+                ]
+            }
+        });
+
+        let addrs = extract_console_addrs(&payload).expect("should extract");
+        assert_eq!(addrs.len(), 1);
+        assert_eq!(addrs[0].ip, "10.0.0.8");
+        assert_eq!(addrs[0].port, 9002);
+    }
+
+    #[test]
+    fn ignores_unrelated_address_port_objects() {
+        let payload = json!({
+            "telemetry": {
+                "networkProbe": { "address": "192.168.1.9", "port": 443 }
+            },
+            "meta": {
+                "streamingPort": 9002
+            }
+        });
+
+        assert!(extract_console_addrs(&payload).is_none());
+    }
+
+    #[test]
+    fn deduplicates_same_ip_port() {
+        let payload = json!({
+            "remotePlay": {
+                "endpointCandidates": [
+                    { "ip": "10.0.0.10", "portNumber": 9002 },
+                    { "ipAddress": "10.0.0.10", "streamingPort": "9002" }
+                ]
+            }
+        });
+
+        let addrs = extract_console_addrs(&payload).expect("should extract");
+        assert_eq!(addrs.len(), 1);
+    }
 }

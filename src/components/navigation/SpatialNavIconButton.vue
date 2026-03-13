@@ -1,22 +1,9 @@
 <script setup lang="ts">
-import type { Direction, TabLevel } from '@spatial-navigation/runtime'
-import { Focusable } from '@spatial-navigation/vue'
-
-interface SpatialNavNodeIndex {
-  row?: number
-  col?: number
-  order?: number
-}
-
-type SpatialNavNeighbors = Partial<Record<Direction, string>>
+import { Focusable } from '@/navigation/core/vue'
 
 interface SpatialNavIconButtonProps {
   id: string
-  scopeId: string
   label: string
-  neighbors?: SpatialNavNeighbors
-  tabLevel?: TabLevel
-  index?: SpatialNavNodeIndex
   iconSrc?: string
   iconAlt?: string
   round?: boolean
@@ -26,9 +13,6 @@ interface SpatialNavIconButtonProps {
 }
 
 const props = withDefaults(defineProps<SpatialNavIconButtonProps>(), {
-  neighbors: undefined,
-  tabLevel: undefined,
-  index: undefined,
   iconSrc: '',
   iconAlt: '',
   round: false,
@@ -45,10 +29,6 @@ const props = withDefaults(defineProps<SpatialNavIconButtonProps>(), {
     type="button"
     class="sn-icon-button"
     :class="{ 'sn-icon-button--round': props.round, 'sn-icon-button--active': props.active }"
-    :scope-id="props.scopeId"
-    :neighbors="props.neighbors"
-    :tab-level="props.tabLevel"
-    :index="props.index"
     :on-confirm="props.onConfirm"
     :aria-label="props.label"
     @click="props.onClick"

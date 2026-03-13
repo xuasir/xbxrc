@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Focusable } from '@spatial-navigation/vue'
+import { Focusable } from '@/navigation/core/vue'
 import { computed, nextTick, onActivated, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
@@ -7,6 +7,7 @@ import { resolveUiDensity } from '../app/ui-density'
 import BrandedLoading from '../components/common/BrandedLoading.vue'
 import GameCard from '../components/common/GameCard.vue'
 import SpatialNavTabs from '../components/navigation/SpatialNavTabs.vue'
+import { inputDispatcher, NavigationIntent } from '../navigation/core'
 import { SPATIAL_NAV_NODE_IDS, SPATIAL_NAV_SCOPE_IDS } from '../navigation/spatial-nav.constants'
 import { rpc } from '../services/rpc'
 
@@ -16,8 +17,6 @@ type XcloudTabKey = 'all' | 'recent' | 'new'
 interface XcloudGridCardViewModel {
   title: XcloudTitle
   nodeId: string
-  row: number
-  col: number
   imageUrl: string
 }
 
@@ -39,6 +38,7 @@ const viewportWidth = ref(typeof window === 'undefined' ? 1440 : window.innerWid
 const renderedTitleCount = ref(0)
 const loadMoreSentinelRef = ref<HTMLElement | null>(null)
 let loadMoreObserver: IntersectionObserver | null = null
+let stopInputSubscription: (() => void) | null = null
 
 const normalizedSearchKeyword = computed(() => searchKeyword.value.trim().toLowerCase())
 const hasFullAccess = computed(() => appLevel.value >= 2)
@@ -114,12 +114,9 @@ const gridCards = computed<XcloudGridCardViewModel[]>(() =>
     title,
     imageUrl: resolveTitleImage(title),
     nodeId: `xcloud.grid.${activeTabKey.value}.${index}.${title.productId}`,
-    row: Math.floor(index / gridColumnCount.value),
-    col: index % gridColumnCount.value,
   })),
 )
 
-const currentTabNodeId = computed(() => XCLOUD_TAB_NODE_IDS[activeTabKey.value])
 const resultCountLabel = computed(() =>
   t('xcloudPage.resultsCount', {
     count: visibleTitles.value.length,
@@ -190,21 +187,6 @@ function setupLoadMoreObserver(): void {
     },
   )
   loadMoreObserver.observe(sentinelElement)
-}
-
-function findCardNodeId(row: number, col: number): string | undefined {
-  return gridCards.value.find(card => card.row === row && card.col === col)?.nodeId
-}
-
-function buildCardNeighbors(
-  card: XcloudGridCardViewModel,
-): Record<'up' | 'down' | 'left' | 'right', string | undefined> {
-  return {
-    up: card.row === 0 ? currentTabNodeId.value : findCardNodeId(card.row - 1, card.col),
-    down: findCardNodeId(card.row + 1, card.col),
-    left: findCardNodeId(card.row, card.col - 1),
-    right: findCardNodeId(card.row, card.col + 1),
-  }
 }
 
 function startStream(title: XcloudTitle): void {
@@ -279,6 +261,21 @@ onMounted(() => {
   window.addEventListener('resize', handleResize)
   void loadTitles()
   void nextTick(setupLoadMoreObserver)
+
+  stopInputSubscription = inputDispatcher.subscribe((intent) => {
+    if (intent === NavigationIntent.TabPrev) {
+      const index = tabItems.value.findIndex(t => t.key === activeTabKey.value)
+      if (index > 0) {
+        activeTabKey.value = tabItems.value[index - 1].key as XcloudTabKey
+      }
+    }
+    else if (intent === NavigationIntent.TabNext) {
+      const index = tabItems.value.findIndex(t => t.key === activeTabKey.value)
+      if (index < tabItems.value.length - 1) {
+        activeTabKey.value = tabItems.value[index + 1].key as XcloudTabKey
+      }
+    }
+  })
 })
 
 onActivated(() => {
@@ -292,6 +289,11 @@ onBeforeUnmount(() => {
   window.removeEventListener('resize', handleResize)
   loadMoreObserver?.disconnect()
   loadMoreObserver = null
+
+  if (stopInputSubscription) {
+    stopInputSubscription()
+    stopInputSubscription = null
+  }
 })
 </script>
 
@@ -318,7 +320,6 @@ onBeforeUnmount(() => {
         type="button"
         class="xcloud-page__action-button"
         :scope-id="SPATIAL_NAV_SCOPE_IDS.appShell"
-        :neighbors="{ up: SPATIAL_NAV_NODE_IDS.topNav.xcloud }"
         :aria-label="t('xcloudPage.actions.refresh')"
         :on-confirm="handlePrimaryAction"
         @click="handlePrimaryAction"
@@ -362,8 +363,6 @@ onBeforeUnmount(() => {
             :scope-id="SPATIAL_NAV_SCOPE_IDS.appShell"
             :tabs="tabItems"
             id-prefix="xcloud.tabs"
-            :up-neighbor-id="SPATIAL_NAV_NODE_IDS.topNav.xcloud"
-            :down-neighbor-id="gridCards[0]?.nodeId"
             :aria-label="t('xcloudPage.tabsAriaLabel')"
           />
 
@@ -398,7 +397,6 @@ onBeforeUnmount(() => {
           type="button"
           class="xcloud-page__action-button"
           :scope-id="SPATIAL_NAV_SCOPE_IDS.appShell"
-          :neighbors="{ up: SPATIAL_NAV_NODE_IDS.topNav.xcloud }"
           :aria-label="
             normalizedSearchKeyword === ''
               ? t('xcloudPage.actions.refresh')
@@ -429,8 +427,6 @@ onBeforeUnmount(() => {
           :image-url="card.imageUrl"
           :aria-label="t('xcloudPage.actions.playSelected', { name: card.title.name })"
           :disabled="card.title.titleId.trim() === ''"
-          :neighbors="buildCardNeighbors(card)"
-          :index="{ row: card.row, col: card.col, order: card.row * gridColumnCount + card.col }"
           @select="startStream(card.title)"
         />
 

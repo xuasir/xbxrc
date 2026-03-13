@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Focusable, FocusScope } from '@spatial-navigation/vue'
+import { Focusable, FocusScope } from '@/navigation/core/vue'
 import { computed, nextTick, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
@@ -147,7 +147,6 @@ watch(
               type="button"
               class="setting-value-sheet__close"
               :scope-id="props.scopeId"
-              :neighbors="{ left: fieldNodeId, down: fieldNodeId }"
               :on-confirm="handleClose"
               :on-back="handleClose"
               :aria-label="t('setting.editor.cancel')"
@@ -177,7 +176,6 @@ watch(
                   type="button"
                   class="setting-value-sheet__mini-action"
                   :scope-id="props.scopeId"
-                  :neighbors="{ right: fieldNodeId, down: cancelNodeId, up: `${props.scopeId}.close` }"
                   :on-confirm="() => handleStep(-1)"
                   :on-back="handleClose"
                   :aria-label="t('setting.editor.decrease')"
@@ -190,13 +188,6 @@ watch(
                   :id="fieldNodeId"
                   as="div"
                   class="setting-value-sheet__field-focus"
-                  :scope-id="props.scopeId"
-                  :neighbors="{
-                    left: props.mode === 'number' ? decreaseNodeId : undefined,
-                    right: props.mode === 'number' ? increaseNodeId : clearNodeId,
-                    down: cancelNodeId,
-                    up: `${props.scopeId}.close`
-                  }"
                   :on-confirm="handleFocusField"
                   :on-back="handleClose"
                   @click="handleFocusField"
@@ -223,7 +214,6 @@ watch(
                   type="button"
                   class="setting-value-sheet__mini-action"
                   :scope-id="props.scopeId"
-                  :neighbors="{ left: fieldNodeId, down: submitNodeId, up: `${props.scopeId}.close` }"
                   :on-confirm="() => handleStep(1)"
                   :on-back="handleClose"
                   :aria-label="t('setting.editor.increase')"
@@ -239,7 +229,6 @@ watch(
                   type="button"
                   class="setting-value-sheet__mini-action"
                   :scope-id="props.scopeId"
-                  :neighbors="{ left: fieldNodeId, down: submitNodeId, up: `${props.scopeId}.close` }"
                   :on-confirm="handleClear"
                   :on-back="handleClose"
                   :aria-label="t('setting.editor.clear')"
@@ -263,7 +252,6 @@ watch(
                 type="button"
                 class="setting-value-sheet__action setting-value-sheet__action--secondary"
                 :scope-id="props.scopeId"
-                :neighbors="{ right: submitNodeId, up: fieldNodeId }"
                 :on-confirm="handleClose"
                 :on-back="handleClose"
                 @click="handleClose"
@@ -277,7 +265,6 @@ watch(
                 type="button"
                 class="setting-value-sheet__action setting-value-sheet__action--primary"
                 :scope-id="props.scopeId"
-                :neighbors="{ left: cancelNodeId, up: fieldNodeId }"
                 :on-confirm="handleSubmit"
                 :on-back="handleClose"
                 @click="handleSubmit"
@@ -350,7 +337,7 @@ watch(
 }
 
 .setting-value-sheet__close[data-focused='true'] {
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--color-focus-bg);
   color: #ffffff;
   box-shadow: var(--shadow-xbox-focus);
 }
@@ -436,7 +423,7 @@ watch(
 
 .setting-value-sheet__field-focus[data-focused='true'],
 .setting-value-sheet__mini-action[data-focused='true'] {
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--color-focus-bg);
   box-shadow: var(--shadow-xbox-focus);
 }
 
@@ -491,18 +478,18 @@ watch(
 }
 
 .setting-value-sheet__action--primary {
-  background: #107c10;
+  background: var(--brand-primary);
   color: #ffffff;
 }
 
 .setting-value-sheet__action[data-focused='true'] {
-  background: rgba(255, 255, 255, 0.15);
+  background: var(--color-focus-bg-strong);
   box-shadow: var(--shadow-xbox-focus);
-  transform: scale(1.05);
+  transform: scale(1.02);
 }
 
 .setting-value-sheet__action--primary[data-focused='true'] {
-  background: #107c10;
+  background: var(--brand-primary-strong);
 }
 
 .setting-value-sheet-transition-enter-active,

@@ -1,11 +1,10 @@
 <script setup lang="ts">
 import type { EventUnsubscribe } from '@shared/events/client'
 import type { AppPageRouteName, TopNavNodeKey } from '../../navigation/spatial-nav.constants'
-import { FocusScope } from '@spatial-navigation/vue'
+import { FocusScope } from '@/navigation/core/vue'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
-import mainBgImage from '../../assets/main-bg.jpg'
 import controllerStatusIcon from '../../assets/nav/no-ctrl.svg'
 import settingIcon from '../../assets/nav/setting.svg'
 import xboxLogoIcon from '../../assets/nav/xbox-logo.svg'
@@ -51,18 +50,6 @@ const activeNav = computed<'xhome' | 'xcloud' | 'setting'>(() => {
     return 'setting'
   }
   return 'xhome'
-})
-
-const currentPageFocusNodeId = computed<string | undefined>(() => {
-  const routeName = route.name
-  if (routeName !== 'xhome' && routeName !== 'xcloud' && routeName !== 'setting') {
-    return undefined
-  }
-  return SPATIAL_NAV_NODE_IDS.pagePrimary[routeName as AppPageRouteName]
-})
-
-const profileDownNeighborId = computed<string | undefined>(() => {
-  return isProfileMenuOpen.value ? SPATIAL_NAV_NODE_IDS.userMenu.logout : currentPageFocusNodeId.value
 })
 
 const resolvedDisplayName = computed(() => {
@@ -162,6 +149,38 @@ function handleTopNavSelect(node: TopNavNodeKey): void {
   }
 }
 
+// --- 触摸滑动切换逻辑 (Touch Swipe Navigation) ---
+let touchStartX = 0
+let touchStartTime = 0
+const SWIPE_THRESHOLD = 80 // 最小滑动位移
+const SWIPE_TIMEOUT = 300 // 最大滑动时间
+
+function handleTouchStart(e: TouchEvent): void {
+  touchStartX = e.touches[0].clientX
+  touchStartTime = Date.now()
+}
+
+function handleTouchEnd(e: TouchEvent): void {
+  const touchEndX = e.changedTouches[0].clientX
+  const touchEndTime = Date.now()
+  const distance = touchEndX - touchStartX
+  const duration = touchEndTime - touchStartTime
+
+  if (duration < SWIPE_TIMEOUT && Math.abs(distance) > SWIPE_THRESHOLD) {
+    const navOrder: AppPageRouteName[] = ['xhome', 'xcloud', 'setting']
+    const currentIndex = navOrder.indexOf(activeNav.value as any)
+
+    if (distance > 0 && currentIndex > 0) {
+      // 向右划，回退到上一个标签
+      void router.push({ name: navOrder[currentIndex - 1] })
+    }
+    else if (distance < 0 && currentIndex < navOrder.length - 1) {
+      // 向左划，前进到下一个标签
+      void router.push({ name: navOrder[currentIndex + 1] })
+    }
+  }
+}
+
 watch(
   () => route.fullPath,
   () => {
@@ -194,23 +213,23 @@ onUnmounted(() => {
       :active="!isProfileMenuOpen"
     >
       <TopNavBar
-        :scope-id="SPATIAL_NAV_SCOPE_IDS.appShell"
-        :down-neighbor-id="currentPageFocusNodeId"
-        :profile-down-neighbor-id="profileDownNeighborId"
         :icons="topNavIcons"
         :active-nav="activeNav"
         :profile-image-url="resolvedAvatarUrl"
         @select="handleTopNavSelect"
       />
 
-      <main class="app-shell__content">
+      <main
+        class="app-shell__content"
+        @touchstart="handleTouchStart"
+        @touchend="handleTouchEnd"
+      >
         <slot />
       </main>
     </FocusScope>
 
+
     <UserProfileMenu
-      :scope-id="SPATIAL_NAV_SCOPE_IDS.appShell"
-      :logout-up-neighbor-id="SPATIAL_NAV_NODE_IDS.topNav.profile"
       :open="isProfileMenuOpen"
       :display-name="resolvedDisplayName"
       :secondary-name="resolvedSecondaryName"
@@ -248,5 +267,7 @@ onUnmounted(() => {
   overflow-x: visible;
   padding: var(--ui-page-inset);
   padding-top: var(--ui-app-shell-content-padding-top);
+  /* 允许垂直滚动，但让出水平滑动权限给我们的 JS 逻辑 */
+  touch-action: pan-y;
 }
 </style>

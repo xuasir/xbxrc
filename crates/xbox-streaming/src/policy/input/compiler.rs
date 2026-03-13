@@ -1,8 +1,10 @@
-use crate::policy::types::{CompileError, Switch};
 use crate::policy::config::Config;
 use crate::policy::context::Context;
+use crate::policy::input::{
+    InputMode, InputPlan, InputPreference, MicrophonePreference, TouchPreference,
+};
 use crate::policy::runtime::RuntimePlan;
-use crate::policy::input::{InputMode, InputPlan, InputPreference, MicrophonePreference, TouchPreference};
+use crate::policy::types::{CompileError, Switch};
 
 pub fn compile_input(
     config: &Config,
@@ -29,10 +31,7 @@ pub fn compile_input(
     })
 }
 
-pub fn resolve_input_mode(
-    config: &Config,
-    context: &Context,
-) -> Result<InputMode, CompileError> {
+pub fn resolve_input_mode(config: &Config, context: &Context) -> Result<InputMode, CompileError> {
     match config.input.mode {
         InputPreference::PhysicalGamepad => Ok(InputMode::PhysicalGamepad),
         InputPreference::VirtualGamepad => Ok(InputMode::VirtualGamepad),

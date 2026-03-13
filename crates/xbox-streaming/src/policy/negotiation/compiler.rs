@@ -1,7 +1,9 @@
 use crate::policy::config::Config;
 use crate::policy::context::Context;
+use crate::policy::negotiation::{
+    AudioChannels, BitratePreference, Codec, CodecPreference, NegotiationPlan,
+};
 use crate::policy::runtime::RuntimeMode;
-use crate::policy::negotiation::{AudioChannels, BitratePreference, Codec, CodecPreference, NegotiationPlan};
 use crate::policy::types::Target;
 
 pub fn compile_negotiation(

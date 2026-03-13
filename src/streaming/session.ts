@@ -47,7 +47,7 @@ type BrowserInterval = number
 
 const SESSION_PROGRESS_POLL_INTERVAL_MS = 1_000
 
-export const STREAM_CONFIG_KEYS = [
+export const STREAM_POLICY_CONFIG_KEYS = [
   'xhome_bitrate_mode',
   'xhome_bitrate',
   'xcloud_bitrate_mode',
@@ -56,17 +56,21 @@ export const STREAM_CONFIG_KEYS = [
   'audio_bitrate',
   'enable_audio_control',
   'resolution',
-  'polling_rate',
-  'vibration',
   'codec',
   'video_format',
   'display_options',
-  'performance_style',
   'server_url',
   'server_username',
   'server_credential',
   'xhome_turn_fallback',
   'power_on',
+] as const
+
+export const STREAM_VIEW_CONFIG_KEYS = ['performance_style'] as const
+
+export const STREAM_CONFIG_KEYS = [
+  ...STREAM_POLICY_CONFIG_KEYS,
+  ...STREAM_VIEW_CONFIG_KEYS,
 ] as const
 
 function resolveRouteDescriptor(route: RouteLocationNormalizedLoaded): StreamRouteDescriptor {

@@ -95,6 +95,12 @@ impl GamepadProvider for GamepadService {
         self.get_runtime_snapshot()
     }
 
+    fn set_suspended(&self, suspended: bool) -> Result<(), String> {
+        self.host
+            .set_suspended(suspended)
+            .map_err(|error| format!("{:?}", error))
+    }
+
     fn play_rumble(
         &self,
         request: OhMyGamepadRumbleRequestDto,

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Focusable, FocusScope } from '@spatial-navigation/vue'
+import { Focusable, FocusScope } from '@/navigation/core/vue'
 import { computed } from 'vue'
 
 interface StreamActionItem {
@@ -32,13 +32,6 @@ function handleClose(): void {
 function handleSelect(id: string): void {
   emit('select', id)
 }
-
-function resolveNeighbors(index: number): Record<'up' | 'down', string | undefined> {
-  return {
-    up: props.items[index - 1]?.id,
-    down: props.items[index + 1]?.id,
-  }
-}
 </script>
 
 <template>
@@ -46,37 +39,33 @@ function resolveNeighbors(index: number): Record<'up' | 'down', string | undefin
     <div v-if="props.open" class="stream-action-sheet" @click.self="handleClose">
       <FocusScope
         :id="props.scopeId"
+        as="div"
+        class="stream-action-sheet__panel"
         :active="props.open"
-        :trap="true"
-        :restore-focus="true"
         :default-focus-id="defaultFocusId"
       >
-        <div class="stream-action-sheet__panel">
-          <header class="stream-action-sheet__header">
-            <p class="stream-action-sheet__eyebrow">
-              {{ props.title }}
-            </p>
-          </header>
+        <header class="stream-action-sheet__header">
+          <p class="stream-action-sheet__eyebrow">
+            {{ props.title }}
+          </p>
+        </header>
 
-          <div class="stream-action-sheet__list">
-            <Focusable
-              v-for="(item, index) in props.items"
-              :id="item.id"
-              :key="item.id"
-              as="button"
-              type="button"
-              class="stream-action-sheet__item"
-              :class="{ 'stream-action-sheet__item--danger': item.danger }"
-              :scope-id="props.scopeId"
-              :disabled="item.disabled"
-              :neighbors="resolveNeighbors(index)"
-              :on-confirm="() => handleSelect(item.id)"
-              :on-back="handleClose"
-              @click="handleSelect(item.id)"
-            >
-              {{ item.label }}
-            </Focusable>
-          </div>
+        <div class="stream-action-sheet__list">
+          <Focusable
+            v-for="item in props.items"
+            :id="item.id"
+            :key="item.id"
+            as="button"
+            type="button"
+            class="stream-action-sheet__item"
+            :class="{ 'stream-action-sheet__item--danger': item.danger }"
+            :disabled="item.disabled"
+            :on-confirm="() => handleSelect(item.id)"
+            :on-back="handleClose"
+            @click="handleSelect(item.id)"
+          >
+            {{ item.label }}
+          </Focusable>
         </div>
       </FocusScope>
     </div>
@@ -135,9 +124,9 @@ function resolveNeighbors(index: number): Record<'up' | 'down', string | undefin
 }
 
 .stream-action-sheet__item[data-focused='true'] {
-  border-color: var(--ui-border-focus);
-  background: color-mix(in srgb, var(--ui-focus-surface) 34%, rgba(255, 255, 255, 0.04));
-  box-shadow: var(--ui-focus-ring-shadow);
+  background: var(--color-focus-bg-strong);
+  box-shadow: var(--shadow-xbox-focus);
+  color: #fff;
 }
 
 .stream-action-sheet__item--danger {
@@ -146,9 +135,8 @@ function resolveNeighbors(index: number): Record<'up' | 'down', string | undefin
 }
 
 .stream-action-sheet__item--danger[data-focused='true'] {
-  border-color: var(--ui-border-focus);
-  background: rgba(68, 14, 14, 0.84);
-  box-shadow: var(--ui-focus-ring-shadow);
+  background: #ff5252;
+  box-shadow: var(--shadow-xbox-focus);
 }
 
 .stream-action-sheet-transition-enter-active,

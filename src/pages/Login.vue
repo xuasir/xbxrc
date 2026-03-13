@@ -1,9 +1,8 @@
 <script setup lang="ts">
-import { Focusable, FocusScope } from '@spatial-navigation/vue'
+import { Focusable, FocusScope } from '@/navigation/core/vue'
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
-import mainBgImage from '../assets/main-bg.jpg'
 import BrandedLoading from '../components/common/BrandedLoading.vue'
 import { SPATIAL_NAV_NODE_IDS, SPATIAL_NAV_SCOPE_IDS } from '../navigation/spatial-nav.constants'
 import { events } from '../services/events'
@@ -151,7 +150,7 @@ onMounted(() => {
       void redirectIfAuthenticated()
       return
     }
-    applyAuthStateView(state, { preserveSubmitting: true })
+    applyAuthStateView(state as any, { preserveSubmitting: true })
   })
 })
 
@@ -181,6 +180,7 @@ onUnmounted(() => {
         <BrandedLoading
           v-if="isLoading"
           class="login-content__loading"
+          size="lg"
           :label="loginActionLabel"
         />
 
@@ -254,6 +254,7 @@ onUnmounted(() => {
 
 .login-content__sign-in[data-focused='true'] {
   transform: none;
+  box-shadow: var(--shadow-xbox-focus);
 }
 
 .login-content__sign-in:disabled {

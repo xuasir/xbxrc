@@ -139,6 +139,11 @@ export const CONFIG_GROUP_DEFINITIONS: Record<string, SettingGroupDefinition> = 
         label: 'Runtime',
         keys: ['background_keepalive', 'debug'],
       },
+      {
+        key: 'navigation',
+        label: 'Navigation',
+        keys: ['ui_haptics', 'ui_audio'],
+      },
     ],
   },
   auth: {
@@ -160,31 +165,39 @@ export const CONFIG_GROUP_DEFINITIONS: Record<string, SettingGroupDefinition> = 
     label: 'STREAMING',
     sections: [
       {
-        key: 'video',
-        label: 'Video',
-        keys: ['resolution', 'codec', 'video_format', 'display_options', 'performance_style'],
+        key: 'default',
+        label: 'Default',
+        keys: [
+          'resolution',
+          'preferred_game_language',
+          'power_on',
+          'enable_audio_control',
+          'video_format',
+          'performance_style',
+        ],
       },
       {
-        key: 'bitrate',
-        label: 'Bitrate',
+        key: 'advanced',
+        label: 'Advanced',
         keys: [
+          'force_region_ip',
+          'ipv6',
+          'codec',
           'xhome_bitrate_mode',
           'xhome_bitrate',
           'xcloud_bitrate_mode',
           'xcloud_bitrate',
           'audio_bitrate_mode',
           'audio_bitrate',
+          'stream_runtime_mode',
+          'xhome_turn_fallback',
+          'display_options',
         ],
       },
       {
-        key: 'audio',
-        label: 'Audio',
-        keys: ['enable_audio_control'],
-      },
-      {
-        key: 'session',
-        label: 'Session',
-        keys: ['preferred_game_language', 'polling_rate', 'ipv6', 'stream_runtime_mode'],
+        key: 'expert',
+        label: 'Expert',
+        keys: ['server_url', 'server_username', 'server_credential'],
       },
     ],
   },
@@ -214,12 +227,7 @@ export const CONFIG_GROUP_DEFINITIONS: Record<string, SettingGroupDefinition> = 
       {
         key: 'connection',
         label: 'Connection',
-        keys: ['xhome_auto_connect_server_id', 'xhome_turn_fallback', 'power_on'],
-      },
-      {
-        key: 'relay',
-        label: 'Relay',
-        keys: ['server_url', 'server_username', 'server_credential'],
+        keys: ['xhome_auto_connect_server_id'],
       },
     ],
   },
@@ -426,6 +434,16 @@ export const CONFIG_FIELD_DEFINITIONS: Record<string, SettingFieldDefinition> = 
   use_vulkan: {
     label: 'Use Vulkan',
     description: 'Enable the Vulkan rendering path',
+    control: 'toggle',
+  },
+  ui_haptics: {
+    label: 'UI Haptics',
+    description: 'Enable controller vibration feedback for UI navigation',
+    control: 'toggle',
+  },
+  ui_audio: {
+    label: 'UI Audio',
+    description: 'Enable sound feedback for UI navigation',
     control: 'toggle',
   },
   debug: {

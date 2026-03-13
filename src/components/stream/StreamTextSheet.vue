@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Focusable, FocusScope } from '@spatial-navigation/vue'
+import { Focusable, FocusScope } from '@/navigation/core/vue'
 import { computed, nextTick, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
@@ -63,76 +63,68 @@ watch(
     <div v-if="props.open" class="stream-text-sheet" @click.self="handleClose">
       <FocusScope
         :id="props.scopeId"
+        as="div"
+        class="stream-text-sheet__panel"
         :active="props.open"
-        :trap="true"
-        :restore-focus="true"
         :default-focus-id="defaultFocusId"
       >
-        <div class="stream-text-sheet__panel">
-          <header class="stream-text-sheet__header">
-            <p class="stream-text-sheet__eyebrow">
-              {{ t('streamPage.text.eyebrow') }}
-            </p>
-            <h2 class="stream-text-sheet__title">
-              {{ t('streamPage.text.title') }}
-            </h2>
-            <p class="stream-text-sheet__hint">
-              {{ t('streamPage.text.hint') }}
-            </p>
-          </header>
+        <header class="stream-text-sheet__header">
+          <p class="stream-text-sheet__eyebrow">
+            {{ t('streamPage.text.eyebrow') }}
+          </p>
+          <h2 class="stream-text-sheet__title">
+            {{ t('streamPage.text.title') }}
+          </h2>
+          <p class="stream-text-sheet__hint">
+            {{ t('streamPage.text.hint') }}
+          </p>
+        </header>
 
-          <Focusable
-            :id="fieldNodeId"
-            as="div"
-            class="stream-text-sheet__field-focus"
-            :scope-id="props.scopeId"
-            :neighbors="{ down: cancelNodeId }"
-            :on-confirm="focusInput"
-            :on-back="handleClose"
-            @click="focusInput"
+        <Focusable
+          :id="fieldNodeId"
+          as="div"
+          class="stream-text-sheet__field-focus"
+          :on-confirm="focusInput"
+          :on-back="handleClose"
+          @click="focusInput"
+        >
+          <input
+            ref="inputRef"
+            v-model="draftValue"
+            class="stream-text-sheet__input"
+            type="text"
+            :placeholder="t('streamPage.text.placeholder')"
+            :aria-label="t('streamPage.text.title')"
+            @click.stop
+            @keydown.enter.prevent="handleSubmit"
           >
-            <input
-              ref="inputRef"
-              v-model="draftValue"
-              class="stream-text-sheet__input"
-              type="text"
-              :placeholder="t('streamPage.text.placeholder')"
-              :aria-label="t('streamPage.text.title')"
-              @click.stop
-              @keydown.enter.prevent="handleSubmit"
-            >
+        </Focusable>
+
+        <div class="stream-text-sheet__actions">
+          <Focusable
+            :id="cancelNodeId"
+            as="button"
+            type="button"
+            class="stream-text-sheet__action stream-text-sheet__action--secondary"
+            :on-confirm="handleClose"
+            :on-back="handleClose"
+            @click="handleClose"
+          >
+            {{ t('streamPage.actions.back') }}
           </Focusable>
 
-          <div class="stream-text-sheet__actions">
-            <Focusable
-              :id="cancelNodeId"
-              as="button"
-              type="button"
-              class="stream-text-sheet__action stream-text-sheet__action--secondary"
-              :scope-id="props.scopeId"
-              :neighbors="{ right: submitNodeId, up: fieldNodeId }"
-              :on-confirm="handleClose"
-              :on-back="handleClose"
-              @click="handleClose"
-            >
-              {{ t('streamPage.actions.back') }}
-            </Focusable>
-
-            <Focusable
-              :id="submitNodeId"
-              as="button"
-              type="button"
-              class="stream-text-sheet__action stream-text-sheet__action--primary"
-              :scope-id="props.scopeId"
-              :disabled="isEmpty || props.loading"
-              :neighbors="{ left: cancelNodeId, up: fieldNodeId }"
-              :on-confirm="handleSubmit"
-              :on-back="handleClose"
-              @click="handleSubmit"
-            >
-              {{ props.loading ? t('streamPage.text.sending') : t('streamPage.text.send') }}
-            </Focusable>
-          </div>
+          <Focusable
+            :id="submitNodeId"
+            as="button"
+            type="button"
+            class="stream-text-sheet__action stream-text-sheet__action--primary"
+            :disabled="isEmpty || props.loading"
+            :on-confirm="handleSubmit"
+            :on-back="handleClose"
+            @click="handleSubmit"
+          >
+            {{ props.loading ? t('streamPage.text.sending') : t('streamPage.text.send') }}
+          </Focusable>
         </div>
       </FocusScope>
     </div>
@@ -219,14 +211,15 @@ watch(
   cursor: pointer;
 }
 
-.stream-text-sheet__action--primary {
-  border-color: #107c10;
-  background: #107c10;
+.stream-text-sheet__action[data-focused='true'] {
+  background: var(--color-focus-bg-strong);
+  border-color: var(--color-focus-ring);
+  box-shadow: var(--shadow-xbox-focus);
 }
 
-.stream-text-sheet__action:disabled {
-  opacity: 0.48;
-  cursor: default;
+.stream-text-sheet__field-focus[data-focused='true'] .stream-text-sheet__input {
+  border-color: var(--color-focus-ring);
+  box-shadow: var(--shadow-xbox-focus);
 }
 
 :global(html[data-ui-density='narrow']) .stream-text-sheet__actions {

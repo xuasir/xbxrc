@@ -91,6 +91,10 @@ impl GamepadRuntimeHost {
         self.runtime.set_sampling_strategy(strategy)
     }
 
+    pub fn set_suspended(&self, suspended: bool) -> Result<(), InputRuntimeError> {
+        self.runtime.set_suspended(suspended)
+    }
+
     pub fn set_primary_sampling_device(
         &self,
         device_id: Option<String>,

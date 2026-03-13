@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { DisplayOptionsValue } from '../streaming/types'
-import { Focusable, FocusScope } from '@spatial-navigation/vue'
+import { Focusable, FocusScope } from '@/navigation/core/vue'
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
@@ -124,13 +124,6 @@ const topActions = computed<StreamActionViewModel[]>(() => {
   return actions
 })
 
-function resolveActionNeighbors(index: number): Record<'left' | 'right', string | undefined> {
-  return {
-    left: topActions.value[index - 1]?.id,
-    right: topActions.value[index + 1]?.id,
-  }
-}
-
 const streamMenuActions = computed<StreamMenuActionViewModel[]>(() => {
   const items: StreamMenuActionViewModel[] = []
 
@@ -197,14 +190,6 @@ const streamMenuActions = computed<StreamMenuActionViewModel[]>(() => {
 
   return items
 })
-
-const retryActionNeighbors = computed(() => ({
-  right: SPATIAL_NAV_NODE_IDS.streamPage.back,
-}))
-
-const backActionNeighbors = computed(() => ({
-  left: SPATIAL_NAV_NODE_IDS.streamPage.retry,
-}))
 
 const failedSheetActions = computed(() => [
   {
@@ -392,7 +377,7 @@ async function handleStreamMenuAction(id: string): Promise<void> {
         <div class="stream-page__actions-shell">
           <div class="stream-page__actions">
             <Focusable
-              v-for="(action, index) in topActions"
+              v-for="action in topActions"
               :id="action.id"
               :key="action.id"
               as="button"
@@ -403,7 +388,6 @@ async function handleStreamMenuAction(id: string): Promise<void> {
                 'stream-page__top-action--primary': action.id === SPATIAL_NAV_NODE_IDS.streamPage.menu,
               }"
               :scope-id="SPATIAL_NAV_SCOPE_IDS.streamPage"
-              :neighbors="resolveActionNeighbors(index)"
               :disabled="hasError || action.disabled || !shouldShowChrome"
               :aria-label="action.label"
               :on-confirm="action.onConfirm"
@@ -416,7 +400,7 @@ async function handleStreamMenuAction(id: string): Promise<void> {
       </div>
 
       <div v-if="overlayState === 'loading'" class="stream-page__overlay">
-        <BrandedLoading :label="statusText || t('streamPage.status.preparing')" />
+        <BrandedLoading size="lg" :label="statusText || t('streamPage.status.preparing')" />
       </div>
 
       <div v-else-if="overlayState === 'error'" class="stream-page__overlay">
@@ -434,7 +418,6 @@ async function handleStreamMenuAction(id: string): Promise<void> {
               type="button"
               class="stream-page__action stream-page__action--primary"
               :scope-id="SPATIAL_NAV_SCOPE_IDS.streamPage"
-              :neighbors="retryActionNeighbors"
               :on-confirm="handleRetry"
               @click="handleRetry"
             >
@@ -446,7 +429,6 @@ async function handleStreamMenuAction(id: string): Promise<void> {
               type="button"
               class="stream-page__action"
               :scope-id="SPATIAL_NAV_SCOPE_IDS.streamPage"
-              :neighbors="backActionNeighbors"
               :on-confirm="() => disconnectStream({ navigateBack: true })"
               @click="disconnectStream({ navigateBack: true })"
             >
@@ -460,7 +442,7 @@ async function handleStreamMenuAction(id: string): Promise<void> {
         v-else-if="overlayState === 'connecting'"
         class="stream-page__overlay stream-page__overlay--subtle"
       >
-        <BrandedLoading :label="statusText || t('streamPage.status.connecting')" />
+        <BrandedLoading size="lg" :label="statusText || t('streamPage.status.connecting')" />
       </div>
 
       <StreamTextSheet
@@ -651,8 +633,7 @@ async function handleStreamMenuAction(id: string): Promise<void> {
 }
 
 .stream-page__top-action[data-focused='true'] {
-  border-color: var(--ui-border-focus);
-  box-shadow: var(--ui-focus-ring-shadow);
+  box-shadow: var(--shadow-xbox-focus);
 }
 
 .stream-page__top-action--danger {
@@ -661,8 +642,7 @@ async function handleStreamMenuAction(id: string): Promise<void> {
 }
 
 .stream-page__top-action--danger[data-focused='true'] {
-  border-color: var(--ui-border-focus);
-  box-shadow: var(--ui-focus-ring-shadow);
+  box-shadow: var(--shadow-xbox-focus);
 }
 
 .stream-page__overlay {
@@ -725,8 +705,7 @@ async function handleStreamMenuAction(id: string): Promise<void> {
 }
 
 .stream-page__action[data-focused='true'] {
-  border-color: var(--ui-border-focus);
-  box-shadow: var(--ui-focus-ring-shadow);
+  box-shadow: var(--shadow-xbox-focus);
 }
 
 .stream-page__filters {

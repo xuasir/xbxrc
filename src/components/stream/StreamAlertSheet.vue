@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Focusable, FocusScope } from '@spatial-navigation/vue'
+import { Focusable, FocusScope } from '@/navigation/core/vue'
 import { computed } from 'vue'
 
 interface StreamAlertAction {
@@ -32,13 +32,6 @@ function handleClose(): void {
 function handleSelect(id: string): void {
   emit('select', id)
 }
-
-function resolveNeighbors(index: number): Record<'left' | 'right', string | undefined> {
-  return {
-    left: props.actions[index - 1]?.id,
-    right: props.actions[index + 1]?.id,
-  }
-}
 </script>
 
 <template>
@@ -46,39 +39,35 @@ function resolveNeighbors(index: number): Record<'left' | 'right', string | unde
     <div v-if="props.open" class="stream-alert-sheet" @click.self="handleClose">
       <FocusScope
         :id="props.scopeId"
+        as="div"
+        class="stream-alert-sheet__panel"
         :active="props.open"
-        :trap="true"
-        :restore-focus="true"
         :default-focus-id="defaultFocusId"
       >
-        <div class="stream-alert-sheet__panel">
-          <header class="stream-alert-sheet__header">
-            <h2 class="stream-alert-sheet__title">
-              {{ props.title }}
-            </h2>
-            <p class="stream-alert-sheet__body">
-              {{ props.body }}
-            </p>
-          </header>
+        <header class="stream-alert-sheet__header">
+          <h2 class="stream-alert-sheet__title">
+            {{ props.title }}
+          </h2>
+          <p class="stream-alert-sheet__body">
+            {{ props.body }}
+          </p>
+        </header>
 
-          <div class="stream-alert-sheet__actions">
-            <Focusable
-              v-for="(action, index) in props.actions"
-              :id="action.id"
-              :key="action.id"
-              as="button"
-              type="button"
-              class="stream-alert-sheet__action"
-              :class="{ 'stream-alert-sheet__action--danger': action.danger }"
-              :scope-id="props.scopeId"
-              :neighbors="resolveNeighbors(index)"
-              :on-confirm="() => handleSelect(action.id)"
-              :on-back="handleClose"
-              @click="handleSelect(action.id)"
-            >
-              {{ action.label }}
-            </Focusable>
-          </div>
+        <div class="stream-alert-sheet__actions">
+          <Focusable
+            v-for="action in props.actions"
+            :id="action.id"
+            :key="action.id"
+            as="button"
+            type="button"
+            class="stream-alert-sheet__action"
+            :class="{ 'stream-alert-sheet__action--danger': action.danger }"
+            :on-confirm="() => handleSelect(action.id)"
+            :on-back="handleClose"
+            @click="handleSelect(action.id)"
+          >
+            {{ action.label }}
+          </Focusable>
         </div>
       </FocusScope>
     </div>
@@ -148,13 +137,19 @@ function resolveNeighbors(index: number): Record<'left' | 'right', string | unde
 }
 
 .stream-alert-sheet__action[data-focused='true'] {
-  border-color: var(--ui-border-focus);
-  box-shadow: var(--ui-focus-ring-shadow);
+  background: var(--color-focus-bg-strong);
+  box-shadow: var(--shadow-xbox-focus);
+  color: #fff;
+}
+
+.stream-alert-sheet__action--danger {
+  border-color: rgba(255, 125, 125, 0.28);
+  background: rgba(46, 10, 10, 0.72);
 }
 
 .stream-alert-sheet__action--danger[data-focused='true'] {
-  border-color: var(--ui-border-focus);
-  box-shadow: var(--ui-focus-ring-shadow);
+  background: #ff5252;
+  box-shadow: var(--shadow-xbox-focus);
 }
 
 .stream-alert-sheet-transition-enter-active,

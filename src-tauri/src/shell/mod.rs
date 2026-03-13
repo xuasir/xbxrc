@@ -88,14 +88,14 @@ async fn build_services(
         auth_provider.clone(),
         config_provider.clone(),
     ));
+    let xbxengine_service = Arc::new(mods::xbxengine::PlaceholderXbxEngineService::new(
+        last_runtime_event.clone(),
+    ));
     let streaming_service = Arc::new(mods::streaming::StreamingService::new(
         auth_provider.clone(),
         config_provider.clone(),
         data_service.clone(),
-    ));
-
-    let xbxengine_service = Arc::new(mods::xbxengine::PlaceholderXbxEngineService::new(
-        last_runtime_event.clone(),
+        xbxengine_service.clone(),
     ));
 
     let gamepad_host = ohmygamepad_host::GamepadRuntimeHost::shared()

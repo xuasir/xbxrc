@@ -263,13 +263,13 @@
       "app": {
         "appearance": "Appearance",
         "graphics": "Graphics",
-        "runtime": "Runtime"
+        "runtime": "Runtime",
+        "navigation": "Navigation"
       },
       "streaming": {
-        "auth": "Authentication",
-        "video": "Video",
-        "audio": "Audio",
-        "session": "Session"
+        "default": "Default",
+        "advanced": "Advanced",
+        "expert": "Expert"
       },
       "host": {
         "bitrate": "Bitrate",
@@ -277,10 +277,38 @@
         "relay": "Relay"
       },
       "xcloud": {
-        "bitrate": "Bitrate"
+        "bitrate": "Bitrate",
+        "connection": "Connection"
       },
       "input": {
         "controller": "Controller"
+      }
+    },
+    "streaming": {
+      "presets": {
+        "title": "Policy Presets",
+        "description": "Apply a preset first, then fine-tune in Advanced or Expert sections.",
+        "default": {
+          "label": "Default",
+          "description": "Balanced baseline tuned for stability"
+        },
+        "qualityFirst": {
+          "label": "Quality First",
+          "description": "Increase video/audio bitrate for better visual clarity"
+        },
+        "latencyFirst": {
+          "label": "Latency First",
+          "description": "Lower bitrate and faster decode preference for lower input latency"
+        }
+      },
+      "expert": {
+        "enter": "Enter Expert Settings",
+        "collapse": "Collapse Expert Settings",
+        "enterConfirm": "Expert settings contain high-risk options and may break streaming if misconfigured. Continue?",
+        "riskHint": "Custom TURN server overrides automatic TURN resolution. Change this only when your network topology is understood.",
+        "reset": "Reset Expert Defaults",
+        "resetting": "Resetting...",
+        "resetConfirm": "Reset all expert settings back to defaults?"
       }
     },
     "fields": {
@@ -313,6 +341,14 @@
       "use_vulkan": {
         "label": "Use Vulkan",
         "description": "Enable the Vulkan rendering path"
+      },
+      "ui_haptics": {
+        "label": "UI Haptics",
+        "description": "Enable controller vibration feedback for UI navigation"
+      },
+      "ui_audio": {
+        "label": "UI Audio",
+        "description": "Enable sound feedback for UI navigation"
       },
       "resolution": {
         "label": "Resolution",

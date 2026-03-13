@@ -41,6 +41,7 @@ pub trait GamepadProvider: Send + Sync {
         &self,
         device_id: &str,
     ) -> Result<OhMyGamepadRuntimeSnapshotDto, String>;
+    fn set_suspended(&self, suspended: bool) -> Result<(), String>;
     fn play_rumble(
         &self,
         request: OhMyGamepadRumbleRequestDto,

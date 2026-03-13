@@ -29,6 +29,9 @@ pub const APP_CONFIG_KEYS: [&str; 28] = [
     "background_keepalive",
     "display_options",
     "use_vulkan",
+    "ui_haptics",
+    "ui_audio",
+    "debug",
 ];
 
 pub fn default_config_map() -> Map<String, Value> {
@@ -65,7 +68,10 @@ pub fn default_config_map() -> Map<String, Value> {
             "contrast": 100,
             "brightness": 100
         },
-        "use_vulkan": false
+        "use_vulkan": false,
+        "ui_haptics": true,
+        "ui_audio": true,
+        "debug": false
     });
 
     value.as_object().cloned().unwrap_or_default()

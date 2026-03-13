@@ -14,9 +14,7 @@ use crate::session::lifecycle::{
 use crate::session::monitor::SessionRuntimeBinding;
 use crate::session::scheduler::SessionScheduler;
 use crate::session::signaling::ice::IceCandidate;
-use crate::session::signaling::logic::{
-    decide_ice_poll, decide_offer_poll, PollDecision,
-};
+use crate::session::signaling::logic::{decide_ice_poll, decide_offer_poll, PollDecision};
 use crate::session::store::{SessionRuntimeRecord, SessionRuntimeStore};
 
 /// session flow 的统一错误，便于 adapter 只做一次映射。
@@ -472,11 +470,7 @@ where
                 }
                 Ok(None)
             },
-            || {
-                SessionFlowError::message(format!(
-                    "remoteConsoleNotReady:targetId={target_id}"
-                ))
-            },
+            || SessionFlowError::message(format!("remoteConsoleNotReady:targetId={target_id}")),
         )
         .await
     }
@@ -504,7 +498,8 @@ where
                 if progress.phase == SessionPhase::SessionReady {
                     return Ok(Some(progress));
                 }
-                if progress.phase == SessionPhase::Failed || progress.phase == SessionPhase::Closed {
+                if progress.phase == SessionPhase::Failed || progress.phase == SessionPhase::Closed
+                {
                     let message = progress
                         .error_message
                         .clone()

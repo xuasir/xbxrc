@@ -67,7 +67,10 @@ pub fn decide_transport_recovery(
     connection_state: &str,
     is_closing: bool,
 ) -> Option<RuntimeReconnectReason> {
-    decide_runtime_recovery(RuntimeFact::TransportConnectionState(connection_state), is_closing)
+    decide_runtime_recovery(
+        RuntimeFact::TransportConnectionState(connection_state),
+        is_closing,
+    )
 }
 
 fn map_transport_recovery_reason(connection_state: &str) -> Option<RuntimeReconnectReason> {
@@ -130,10 +133,8 @@ mod tests {
 
     #[test]
     fn decide_runtime_recovery_ignores_unknown_transport_state() {
-        let reason = decide_runtime_recovery(
-            RuntimeFact::TransportConnectionState("connecting"),
-            false,
-        );
+        let reason =
+            decide_runtime_recovery(RuntimeFact::TransportConnectionState("connecting"), false);
         assert_eq!(reason, None);
     }
 

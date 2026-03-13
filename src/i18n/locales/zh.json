@@ -263,13 +263,13 @@
       "app": {
         "appearance": "外观",
         "graphics": "图形",
-        "runtime": "运行"
+        "runtime": "运行",
+        "navigation": "导航"
       },
       "streaming": {
-        "auth": "认证",
-        "video": "视频",
-        "audio": "音频",
-        "session": "会话"
+        "default": "默认",
+        "advanced": "高级",
+        "expert": "专家"
       },
       "host": {
         "bitrate": "码率",
@@ -277,10 +277,38 @@
         "relay": "中继服务器"
       },
       "xcloud": {
-        "bitrate": "码率"
+        "bitrate": "码率",
+        "connection": "连接"
       },
       "input": {
         "controller": "手柄"
+      }
+    },
+    "streaming": {
+      "presets": {
+        "title": "策略预设",
+        "description": "先应用预设，再按需在高级或专家层微调。",
+        "default": {
+          "label": "默认",
+          "description": "平衡稳定性与画质的基础策略"
+        },
+        "qualityFirst": {
+          "label": "画质优先",
+          "description": "提高视频/音频码率以追求更清晰画面"
+        },
+        "latencyFirst": {
+          "label": "延迟优先",
+          "description": "降低码率并偏向更快解码以缩短输入延迟"
+        }
+      },
+      "expert": {
+        "enter": "进入专家设置",
+        "collapse": "收起专家设置",
+        "enterConfirm": "专家设置包含高风险项，错误配置可能导致串流失败。是否继续？",
+        "riskHint": "自定义 TURN 服务器会覆盖自动 TURN 解析，仅在你明确了解网络拓扑时修改。",
+        "reset": "恢复专家默认",
+        "resetting": "恢复中...",
+        "resetConfirm": "确定将专家层配置恢复为默认值吗？"
       }
     },
     "fields": {
@@ -313,6 +341,14 @@
       "use_vulkan": {
         "label": "使用 Vulkan",
         "description": "启用 Vulkan 渲染路径"
+      },
+      "ui_haptics": {
+        "label": "手柄震动",
+        "description": "为界面导航提供手柄震动反馈"
+      },
+      "ui_audio": {
+        "label": "界面音效",
+        "description": "为界面导航提供音效反馈"
       },
       "resolution": {
         "label": "分辨率",

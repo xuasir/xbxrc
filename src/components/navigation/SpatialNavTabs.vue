@@ -1,8 +1,6 @@
 <script setup lang="ts">
-import type { NodeDef } from '@spatial-navigation/runtime'
-import { Focusable } from '@spatial-navigation/vue'
+import { Focusable } from '@/navigation/core/vue'
 import { computed } from 'vue'
-import { SPATIAL_NAV_TAB_LEVELS } from '../../navigation/spatial-nav.constants'
 
 interface SpatialNavTabItem {
   key: string
@@ -12,21 +10,14 @@ interface SpatialNavTabItem {
 }
 
 interface SpatialNavTabsProps {
-  scopeId: string
   tabs: SpatialNavTabItem[]
   activeKey: string
   idPrefix?: string
-  tabLevel?: NodeDef['tabLevel']
-  upNeighborId?: string
-  downNeighborId?: string
   ariaLabel?: string
 }
 
 const props = withDefaults(defineProps<SpatialNavTabsProps>(), {
   idPrefix: 'tabs',
-  tabLevel: SPATIAL_NAV_TAB_LEVELS.secondary,
-  upNeighborId: undefined,
-  downNeighborId: undefined,
   ariaLabel: 'Tabs',
 })
 
@@ -46,48 +37,6 @@ const resolvedTabs = computed<ResolvedTabItem[]>(() =>
   })),
 )
 
-function findPrevEnabledNodeId(startIndex: number): string | undefined {
-  for (let index = startIndex; index >= 0; index -= 1) {
-    const tab = resolvedTabs.value[index]
-    if (!tab.disabled) {
-      return tab.nodeId
-    }
-  }
-  return undefined
-}
-
-function findNextEnabledNodeId(startIndex: number): string | undefined {
-  for (let index = startIndex; index < resolvedTabs.value.length; index += 1) {
-    const tab = resolvedTabs.value[index]
-    if (!tab.disabled) {
-      return tab.nodeId
-    }
-  }
-  return undefined
-}
-
-// 通过显式邻接关系保证方向键行为可预测，同时保留 TAB_NAV（LT/RT）切换
-function buildNeighbors(index: number): NodeDef['neighbors'] {
-  const neighbors: NodeDef['neighbors'] = {}
-  const leftId = findPrevEnabledNodeId(index - 1)
-  const rightId = findNextEnabledNodeId(index + 1)
-
-  if (leftId !== undefined) {
-    neighbors.left = leftId
-  }
-  if (rightId !== undefined) {
-    neighbors.right = rightId
-  }
-  if (props.upNeighborId !== undefined) {
-    neighbors.up = props.upNeighborId
-  }
-  if (props.downNeighborId !== undefined) {
-    neighbors.down = props.downNeighborId
-  }
-
-  return neighbors
-}
-
 function handleSelect(tabKey: string): void {
   emit('update:activeKey', tabKey)
   emit('change', tabKey)
@@ -101,18 +50,14 @@ function isActiveTab(tabKey: string): boolean {
 <template>
   <nav class="sn-tabs" :aria-label="props.ariaLabel">
     <Focusable
-      v-for="(tab, index) in resolvedTabs"
+      v-for="tab in resolvedTabs"
       :id="tab.nodeId"
       :key="tab.key"
       as="button"
       type="button"
       class="sn-tabs__item"
       :class="{ 'sn-tabs__item--active': isActiveTab(tab.key) }"
-      :scope-id="props.scopeId"
       :disabled="tab.disabled"
-      :neighbors="buildNeighbors(index)"
-      :tab-level="props.tabLevel"
-      :index="{ order: index }"
       :aria-label="tab.label"
       :on-confirm="() => handleSelect(tab.key)"
       @click="handleSelect(tab.key)"
@@ -175,8 +120,8 @@ function isActiveTab(tabKey: string): boolean {
 }
 
 .sn-tabs__item[data-focused='true'] {
-  background: transparent;
-  box-shadow: var(--ui-focus-ring-shadow);
+  background: var(--color-focus-bg);
+  box-shadow: var(--shadow-xbox-focus);
   color: var(--ui-page-text);
 }
 

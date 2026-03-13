@@ -32,9 +32,19 @@ pub struct SessionAccessOutput {
 pub fn compile(input: CompilerInput) -> Result<CompilerOutput, CompileError> {
     let access = resolve_session_access(&input.config, &input.context)?;
     let runtime = crate::policy::runtime::compiler::compile_runtime(&input.config, &input.context)?;
-    let session = crate::policy::session::compiler::compile_session(&input.config, &input.context, &access);
-    let negotiation = crate::policy::negotiation::compiler::compile_negotiation(&input.config, &input.context, runtime.mode);
-    let input_plan = crate::policy::input::compiler::compile_input(&input.config, &input.context, &runtime)?;
+    let session = crate::policy::session::compiler::compile_session(
+        &input.config,
+        &input.context,
+        &access,
+        runtime.mode,
+    );
+    let negotiation = crate::policy::negotiation::compiler::compile_negotiation(
+        &input.config,
+        &input.context,
+        runtime.mode,
+    );
+    let input_plan =
+        crate::policy::input::compiler::compile_input(&input.config, &input.context, &runtime)?;
     let render = crate::policy::render::compiler::compile_render(&input.config);
 
     Ok(CompilerOutput {
@@ -70,13 +80,13 @@ mod tests {
     use super::*;
     use crate::policy::config::Config;
     use crate::policy::context::Context;
-    use crate::policy::session::ResolutionPreference;
-    use crate::policy::negotiation::CodecPreference;
-    use crate::policy::runtime::RuntimePreference;
-    use crate::policy::input::InputPreference;
-    use crate::policy::types::{Region, Target, TurnServer, HostAddr, TurnSource, Switch};
-    use crate::policy::runtime::RuntimeMode;
     use crate::policy::input::InputMode;
+    use crate::policy::input::InputPreference;
+    use crate::policy::negotiation::CodecPreference;
+    use crate::policy::runtime::RuntimeMode;
+    use crate::policy::runtime::RuntimePreference;
+    use crate::policy::session::ResolutionPreference;
+    use crate::policy::types::{HostAddr, Region, Switch, Target, TurnServer, TurnSource};
 
     fn sample_region(name: &str, base_uri: &str, is_default: bool) -> Region {
         Region {
@@ -106,13 +116,15 @@ mod tests {
     fn runtime_auto_prefers_browser_then_rust_owned() {
         let config = Config::default();
         let context = Context::default();
-        let runtime_plan = crate::policy::runtime::compiler::compile_runtime(&config, &context).unwrap();
+        let runtime_plan =
+            crate::policy::runtime::compiler::compile_runtime(&config, &context).unwrap();
         assert_eq!(runtime_plan.mode, RuntimeMode::WebRtcDirect);
 
         let mut fallback_context = Context::default();
         fallback_context.runtime.browser_webrtc = false;
         fallback_context.runtime.rust_owned = true;
-        let runtime_plan = crate::policy::runtime::compiler::compile_runtime(&config, &fallback_context).unwrap();
+        let runtime_plan =
+            crate::policy::runtime::compiler::compile_runtime(&config, &fallback_context).unwrap();
         assert_eq!(runtime_plan.mode, RuntimeMode::RustOwned);
     }
 
@@ -122,17 +134,20 @@ mod tests {
         config.runtime.mode = RuntimePreference::RustOwned;
 
         let context = Context::default();
-        let error = crate::policy::runtime::compiler::compile_runtime(&config, &context).unwrap_err();
+        let error =
+            crate::policy::runtime::compiler::compile_runtime(&config, &context).unwrap_err();
         assert_eq!(error, CompileError::RuntimeUnavailable);
     }
 
     #[test]
     fn codec_preference_maps_h264_profiles() {
-        let low = crate::policy::negotiation::compiler::compile_codec(CodecPreference::H264Low).unwrap();
+        let low =
+            crate::policy::negotiation::compiler::compile_codec(CodecPreference::H264Low).unwrap();
         assert_eq!(low.mime_type, "video/H264");
         assert_eq!(low.profiles, vec!["420".to_string()]);
 
-        let high = crate::policy::negotiation::compiler::compile_codec(CodecPreference::H264High).unwrap();
+        let high =
+            crate::policy::negotiation::compiler::compile_codec(CodecPreference::H264High).unwrap();
         assert_eq!(high.profiles, vec!["4d".to_string()]);
     }
 
@@ -156,7 +171,8 @@ mod tests {
         config.input.mode = InputPreference::NativeMkb;
 
         let context = Context::default();
-        let error = crate::policy::input::compiler::resolve_input_mode(&config, &context).unwrap_err();
+        let error =
+            crate::policy::input::compiler::resolve_input_mode(&config, &context).unwrap_err();
         assert_eq!(error, CompileError::NativeMkbUnavailable);
     }
 

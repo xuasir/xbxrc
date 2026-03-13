@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Focusable, FocusScope } from '@spatial-navigation/vue'
+import { Focusable, FocusScope } from '@/navigation/core/vue'
 import { computed, reactive, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
@@ -138,7 +138,6 @@ watch(
               type="button"
               class="setting-display-options-sheet__close"
               :scope-id="props.scopeId"
-              :neighbors="{ left: `${props.scopeId}.field.0`, down: `${props.scopeId}.field.0` }"
               :on-confirm="handleClose"
               :on-back="handleClose"
               :aria-label="t('setting.editor.cancel')"
@@ -166,14 +165,6 @@ watch(
                     type="button"
                     class="setting-display-options-sheet__step"
                     :scope-id="props.scopeId"
-                    :neighbors="{
-                      right: createFieldNodeId(index),
-                      up: index > 0 ? createDecreaseNodeId(index - 1) : `${props.scopeId}.close`,
-                      down:
-                        index < DISPLAY_FIELDS.length - 1
-                          ? createDecreaseNodeId(index + 1)
-                          : cancelNodeId,
-                    }"
                     :on-confirm="() => stepField(field, -1)"
                     :on-back="handleClose"
                     :aria-label="t('setting.editor.decrease')"
@@ -187,13 +178,6 @@ watch(
                     as="label"
                     class="setting-display-options-sheet__value"
                     :scope-id="props.scopeId"
-                    :neighbors="{
-                      left: createDecreaseNodeId(index),
-                      right: createIncreaseNodeId(index),
-                      up: index > 0 ? createFieldNodeId(index - 1) : `${props.scopeId}.close`,
-                      down:
-                        index < DISPLAY_FIELDS.length - 1 ? createFieldNodeId(index + 1) : cancelNodeId,
-                    }"
                     :on-back="handleClose"
                   >
                     <input
@@ -216,14 +200,6 @@ watch(
                     type="button"
                     class="setting-display-options-sheet__step"
                     :scope-id="props.scopeId"
-                    :neighbors="{
-                      left: createFieldNodeId(index),
-                      up: index > 0 ? createIncreaseNodeId(index - 1) : `${props.scopeId}.close`,
-                      down:
-                        index < DISPLAY_FIELDS.length - 1
-                          ? createIncreaseNodeId(index + 1)
-                          : submitNodeId,
-                    }"
                     :on-confirm="() => stepField(field, 1)"
                     :on-back="handleClose"
                     :aria-label="t('setting.editor.increase')"
@@ -244,7 +220,6 @@ watch(
                 type="button"
                 class="setting-display-options-sheet__action setting-display-options-sheet__action--secondary"
                 :scope-id="props.scopeId"
-                :neighbors="{ right: submitNodeId, up: createFieldNodeId(DISPLAY_FIELDS.length - 1) }"
                 :on-confirm="handleClose"
                 :on-back="handleClose"
                 @click="handleClose"
@@ -258,7 +233,6 @@ watch(
                 type="button"
                 class="setting-display-options-sheet__action setting-display-options-sheet__action--primary"
                 :scope-id="props.scopeId"
-                :neighbors="{ left: cancelNodeId, up: createIncreaseNodeId(DISPLAY_FIELDS.length - 1) }"
                 :on-confirm="handleSubmit"
                 :on-back="handleClose"
                 @click="handleSubmit"
@@ -332,7 +306,7 @@ watch(
 }
 
 .setting-display-options-sheet__close[data-focused='true'] {
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--color-focus-bg);
   color: #ffffff;
   box-shadow: var(--shadow-xbox-focus);
 }
@@ -422,7 +396,7 @@ watch(
 
 .setting-display-options-sheet__value[data-focused='true'],
 .setting-display-options-sheet__step[data-focused='true'] {
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--color-focus-bg);
   box-shadow: var(--shadow-xbox-focus);
 }
 
@@ -471,18 +445,18 @@ watch(
 }
 
 .setting-display-options-sheet__action--primary {
-  background: #107c10;
+  background: var(--brand-primary);
   color: #ffffff;
 }
 
 .setting-display-options-sheet__action[data-focused='true'] {
-  background: rgba(255, 255, 255, 0.15);
+  background: var(--color-focus-bg-strong);
   box-shadow: var(--shadow-xbox-focus);
-  transform: scale(1.05);
+  transform: scale(1.02);
 }
 
 .setting-display-options-sheet__action--primary[data-focused='true'] {
-  background: #107c10;
+  background: var(--brand-primary-strong);
 }
 
 .setting-display-options-sheet-transition-enter-active,
