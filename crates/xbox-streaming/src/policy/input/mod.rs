@@ -97,6 +97,24 @@ pub struct TitleCapabilities {
     pub has_native_touch: bool,
 }
 
+/// capability 解释结果：统一收口 inputconfigs、配置阶段事实和本地兜底后的有效能力。
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct EffectiveInputCapabilities {
+    pub source: InputCapabilitySource,
+    pub title_supports_mkb: bool,
+    pub title_supports_touch: bool,
+    pub title_supports_native_touch: bool,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "camelCase")]
+pub enum InputCapabilitySource {
+    #[default]
+    Fallback,
+    InputConfig,
+}
+
 /// 输入 plan 明确谁来接管输入，以及浏览器/sidecar 侧该开哪些能力。
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]

@@ -1,5 +1,5 @@
 export interface ChannelContext {
-  send: (data: ArrayBuffer | string) => void
+  send: (data: ArrayBuffer | string) => boolean
   readyState: () => RTCDataChannelState
 }
 
@@ -23,14 +23,10 @@ export abstract class BaseChannel {
   }
   abstract onMessage(event: MessageEvent): void
 
-  protected send(data: ArrayBuffer | string): void {
+  protected send(data: ArrayBuffer | string): boolean {
     if (this.context.readyState() !== 'open') {
-      return
+      return false
     }
-    if (typeof data === 'string') {
-      this.context.send(new TextEncoder().encode(data).buffer)
-      return
-    }
-    this.context.send(data)
+    return this.context.send(data)
   }
 }

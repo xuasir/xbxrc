@@ -116,17 +116,17 @@ function isActiveTab(tabKey: string): boolean {
 }
 
 .sn-tabs__item--active::after {
-  background: #107c10;
+  background: var(--brand-primary);
 }
 
 .sn-tabs__item[data-focused='true'] {
-  background: var(--color-focus-bg);
+  background: var(--color-focus-bg-strong);
+  color: var(--ui-focus-text);
   box-shadow: var(--shadow-xbox-focus);
-  color: var(--ui-page-text);
 }
 
 .sn-tabs__item[data-focused='true']:not(.sn-tabs__item--active)::after {
-  background: #ffffff;
+  background: var(--ui-focus-text);
 }
 
 .sn-tabs__item:disabled {

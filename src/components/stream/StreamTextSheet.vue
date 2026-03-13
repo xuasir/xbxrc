@@ -60,10 +60,12 @@ watch(
 
 <template>
   <Transition name="stream-text-sheet-transition">
-    <div v-if="props.open" class="stream-text-sheet" @click.self="handleClose">
+    <div v-if="props.open" class="stream-text-sheet-layer">
+      <div class="stream-text-sheet-backdrop" @click="handleClose" />
+      
       <FocusScope
         :id="props.scopeId"
-        as="div"
+        as="section"
         class="stream-text-sheet__panel"
         :active="props.open"
         :default-focus-id="defaultFocusId"
@@ -105,7 +107,7 @@ watch(
             :id="cancelNodeId"
             as="button"
             type="button"
-            class="stream-text-sheet__action stream-text-sheet__action--secondary"
+            class="stream-text-sheet__action"
             :on-confirm="handleClose"
             :on-back="handleClose"
             @click="handleClose"
@@ -132,94 +134,148 @@ watch(
 </template>
 
 <style scoped>
-.stream-text-sheet {
+.stream-text-sheet-layer {
   position: fixed;
   inset: 0;
-  z-index: 30;
+  z-index: var(--z-overlay);
   display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: var(--ui-stream-overlay-padding);
-  background: rgba(0, 0, 0, 0.8);
+  align-items: stretch;
+  justify-content: flex-start;
+}
+
+.stream-text-sheet-backdrop {
+  position: absolute;
+  inset: 0;
+  background: var(--ui-scrim-bg);
+  backdrop-filter: blur(4px);
 }
 
 .stream-text-sheet__panel {
-  width: min(100%, var(--ui-stream-dialog-width));
-  padding: var(--ui-stream-dialog-padding);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: var(--ui-radius-lg);
-  background: #252423;
-  color: #fff;
-  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.35);
+  position: relative;
+  z-index: 1;
+  width: min(calc(100vw - 48px), 480px);
+  height: calc(100% - 48px);
+  margin: 24px;
+  padding: 32px 24px;
+  background: var(--ui-surface-overlay);
+  border: 1px solid var(--ui-border-subtle);
+  border-radius: 16px;
+  box-shadow: var(--ui-shadow-overlay);
+  display: flex;
+  flex-direction: column;
+  color: var(--ui-page-text);
 }
 
 .stream-text-sheet__header {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+  margin-bottom: 24px;
 }
 
 .stream-text-sheet__eyebrow {
-  margin: 0;
-  font-size: 12px;
-  letter-spacing: 0.08em;
+  margin: 0 0 4px;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.15em;
   text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.56);
+  color: var(--ui-page-text-soft);
 }
 
 .stream-text-sheet__title {
-  margin: 0;
-  font-size: var(--ui-stream-dialog-title-size);
-  font-weight: 700;
+  margin: 0 0 12px;
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
 }
 
 .stream-text-sheet__hint {
   margin: 0;
-  font-size: 14px;
+  font-size: 15px;
   line-height: 1.6;
-  color: rgba(255, 255, 255, 0.74);
+  color: var(--ui-page-text-soft);
 }
 
 .stream-text-sheet__field-focus {
-  margin-top: 20px;
+  margin-top: 8px;
 }
 
 .stream-text-sheet__input {
   width: 100%;
-  min-height: var(--ui-stream-text-input-min-height);
-  padding: 0 16px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  border-radius: var(--ui-radius-md);
-  background: rgba(255, 255, 255, 0.04);
-  color: #fff;
+  padding: 16px;
+  border: 2px solid var(--ui-border-subtle);
+  border-radius: 12px;
+  background: var(--color-state-hover);
+  color: var(--ui-page-text);
   font-size: 16px;
+  transition: all var(--ui-motion-fast);
+}
+
+.stream-text-sheet__field-focus[data-focused='true'] .stream-text-sheet__input {
+  border-color: var(--color-focus-ring);
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--ui-focus-text);
+  box-shadow: var(--shadow-xbox-focus);
 }
 
 .stream-text-sheet__actions {
   display: flex;
   gap: 12px;
-  margin-top: 20px;
+  margin-top: 24px;
 }
 
 .stream-text-sheet__action {
-  min-width: var(--ui-stream-dialog-action-min-width);
-  padding: 12px 18px;
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  border-radius: var(--ui-action-pill-radius);
-  background: rgba(255, 255, 255, 0.04);
-  color: #fff;
+  flex: 1;
+  padding: 14px;
+  border: 0;
+  border-radius: 12px;
+  background: var(--color-focus-bg);
+  color: var(--ui-page-text);
+  font-size: 16px;
+  font-weight: 700;
   cursor: pointer;
+  transition: all var(--ui-motion-fast);
+}
+
+.stream-text-sheet__action--primary {
+  background: var(--brand-primary);
 }
 
 .stream-text-sheet__action[data-focused='true'] {
   background: var(--color-focus-bg-strong);
-  border-color: var(--color-focus-ring);
+  color: var(--ui-focus-text);
   box-shadow: var(--shadow-xbox-focus);
+  transform: scale(1.02);
 }
 
-.stream-text-sheet__field-focus[data-focused='true'] .stream-text-sheet__input {
-  border-color: var(--color-focus-ring);
-  box-shadow: var(--shadow-xbox-focus);
+.stream-text-sheet__action--primary[data-focused='true'] {
+  background: var(--brand-primary-strong);
+}
+
+.stream-text-sheet__action:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* 动画 */
+.stream-text-sheet-transition-enter-active,
+.stream-text-sheet-transition-leave-active {
+  transition: opacity 250ms ease;
+}
+
+.stream-text-sheet-transition-enter-active .stream-text-sheet__panel,
+.stream-text-sheet-transition-leave-active .stream-text-sheet__panel {
+  transition: transform 350ms cubic-bezier(0.2, 0, 0, 1);
+}
+
+.stream-text-sheet-transition-enter-from .stream-text-sheet__panel {
+  transform: translateX(calc(-100% - 48px));
+}
+
+.stream-text-sheet-transition-leave-to .stream-text-sheet__panel {
+  transform: translateX(calc(-100% - 48px));
+}
+
+.stream-text-sheet-transition-enter-from,
+.stream-text-sheet-transition-leave-to {
+  opacity: 0;
 }
 
 :global(html[data-ui-density='narrow']) .stream-text-sheet__actions {

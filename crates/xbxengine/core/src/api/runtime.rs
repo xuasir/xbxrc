@@ -586,6 +586,8 @@ where
             if let Some(audio_bitrate_kbps) = runtime.max_audio_bitrate_kbps {
                 self.config.webrtc.negotiation.audio_bitrate_kbps = audio_bitrate_kbps;
             }
+            self.config.webrtc.negotiation.target_resolution_width = runtime.target_video_width;
+            self.config.webrtc.negotiation.target_resolution_height = runtime.target_video_height;
             if let Some(codec) = runtime.codec.as_ref() {
                 if let Some(profile) = codec.profiles.first() {
                     self.config.webrtc.negotiation.offer_profile = profile.clone();

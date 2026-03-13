@@ -21,4 +21,5 @@ export interface StreamStats {
   jit: string
   br: string
   decode: string
+  transportPath?: string
 }

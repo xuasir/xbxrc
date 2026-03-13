@@ -104,6 +104,11 @@
       "reconnecting": "正在尝试恢复连接...",
       "connecting": "正在连接..."
     },
+    "queue": {
+      "total": "总等待",
+      "allocation": "分配",
+      "provisioning": "准备"
+    },
     "actions": {
       "menu": "串流菜单",
       "fullscreen": "切换全屏",
@@ -111,6 +116,8 @@
       "audio": "音频设置",
       "showPerformance": "显示性能面板",
       "hidePerformance": "隐藏性能面板",
+      "showDiagnostics": "显示诊断信息",
+      "hideDiagnostics": "隐藏诊断信息",
       "openMic": "开启麦克风",
       "closeMic": "关闭麦克风",
       "sendText": "发送文本",
@@ -134,9 +141,21 @@
       "volume": "音量",
       "close": "关闭"
     },
+    "microphone": {
+      "open": "麦克风已开启",
+      "closed": "麦克风已关闭",
+      "starting": "麦克风正在启动",
+      "paused": "麦克风已暂停",
+      "sources": {
+        "policy": "自动开启",
+        "user": "手动开启"
+      }
+    },
     "performance": {
+      "title": "性能面板",
       "metrics": {
         "Resolution": "分辨率",
+        "Path": "路径",
         "RTT": "RTT",
         "JIT": "JIT",
         "FPS": "FPS",
@@ -144,6 +163,43 @@
         "PL": "PL",
         "Bitrate": "码率",
         "DT": "解码"
+      }
+    },
+    "badges": {
+      "title": "串流诊断信息",
+      "region": "区服",
+      "relay": "中继",
+      "path": "路径",
+      "server": "入口",
+      "turnSources": {
+        "custom": "自定义 TURN",
+        "fallback": "回退 TURN"
+      }
+    },
+    "diagnostics": {
+      "panel": {
+        "eyebrow": "会话状态",
+        "title": "诊断信息"
+      },
+      "fields": {
+        "region": "区服",
+        "server": "入口",
+        "relay": "TURN",
+        "path": "路径",
+        "status": "状态"
+      },
+      "values": {
+        "unknown": "--",
+        "none": "未使用",
+        "stable": "正常",
+        "recovering": "恢复中",
+        "inactive": "未激活",
+        "noVideo": "无画面告警"
+      },
+      "notices": {
+        "recovering": "连接正在恢复中，画面质量可能会短暂波动。",
+        "relayPath": "当前媒体链路正在使用中继传输。",
+        "noVideo": "连接已建立一段时间但仍无画面，退出后重新连接会更稳妥。"
       }
     },
     "failed": {
@@ -206,6 +262,40 @@
     "logout": "注销",
     "logoutHint": "退出当前账号",
     "loggingOut": "正在注销..."
+  },
+  "gamepadCard": {
+    "close": "关闭手柄卡片",
+    "eyebrow": "已发现手柄",
+    "title": "手柄档案",
+    "connectedSummary": "已连接 {count} 个",
+    "provider": "震动提供器",
+    "autoTarget": "自动目标",
+    "defaultTarget": "默认目标",
+    "defaultBadge": "默认",
+    "empty": "当前未发现已连接手柄。",
+    "values": {
+      "yes": "支持",
+      "no": "不支持",
+      "none": "无",
+      "unknown": "未知"
+    },
+    "providers": {
+      "gilrsBasic": "gilrs 基础模式",
+      "macosGcController": "macOS GameController",
+      "windowsXbox": "Windows Xbox",
+      "none": "无"
+    },
+    "connections": {
+      "usb": "USB",
+      "bluetooth": "蓝牙",
+      "wirelessDongle": "无线接收器",
+      "unknown": "未知"
+    },
+    "capabilities": {
+      "basicRumble": "基础震动",
+      "advancedHaptics": "高级震动",
+      "battery": "电池信息"
+    }
   },
   "setting": {
     "title": "设置",
@@ -326,6 +416,20 @@
           }
         }
       },
+      "theme": {
+        "label": "界面主题",
+        "description": "应用界面的视觉主题样式",
+        "options": {
+          "dark": {
+            "label": "深色",
+            "description": "Xbox 传统的深色模式"
+          },
+          "light": {
+            "label": "浅色",
+            "description": "清爽明亮的浅色模式"
+          }
+        }
+      },
       "use_msal": {
         "label": "使用 MSAL",
         "description": "在 MSAL 和 XAL 认证方案之间切换"
@@ -354,9 +458,14 @@
         "label": "分辨率",
         "description": "每个选项展示的是该模式下可用的最高串流分辨率。",
         "options": {
+          "1440": {
+            "label": "1440p",
+            "description": "使用 Tizen HQ 设备画像，在服务端支持时请求最高 1440p",
+            "meta": "更高带宽"
+          },
           "1081": {
             "label": "自动（1080p HQ）",
-            "description": "会根据当前设备和订阅档位自动选择推荐值"
+            "description": "使用当前链路可支持的最高质量 1080p 档位"
           },
           "1080": {
             "label": "1080p",
@@ -365,6 +474,24 @@
           "720": {
             "label": "720p",
             "meta": "3 GB/小时"
+          }
+        }
+      },
+      "xhome_resolution": {
+        "label": "主机分辨率",
+        "description": "单独指定 xHome 本地主机串流请求的最高分辨率。",
+        "options": {
+          "1081": {
+            "label": "自动（1080p HQ）",
+            "description": "使用当前主机链路可支持的最高质量 xHome 档位"
+          },
+          "1080": {
+            "label": "1080p",
+            "meta": "推荐"
+          },
+          "720": {
+            "label": "720p",
+            "meta": "更低带宽"
           }
         }
       },

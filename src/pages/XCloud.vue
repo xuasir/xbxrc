@@ -1,29 +1,21 @@
 <script setup lang="ts">
-import { Focusable } from '@/navigation/core/vue'
 import { computed, nextTick, onActivated, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
+import { Focusable } from '@/navigation/core/vue'
 import { resolveUiDensity } from '../app/ui-density'
 import BrandedLoading from '../components/common/BrandedLoading.vue'
 import GameCard from '../components/common/GameCard.vue'
-import SpatialNavTabs from '../components/navigation/SpatialNavTabs.vue'
-import { inputDispatcher, NavigationIntent } from '../navigation/core'
+import HorizontalListRail from '../components/common/HorizontalListRail.vue'
 import { SPATIAL_NAV_NODE_IDS, SPATIAL_NAV_SCOPE_IDS } from '../navigation/spatial-nav.constants'
 import { rpc } from '../services/rpc'
 
 type XcloudTitle = Awaited<ReturnType<typeof rpc.data.getXcloudTitles>>[number]
-type XcloudTabKey = 'all' | 'recent' | 'new'
 
 interface XcloudGridCardViewModel {
   title: XcloudTitle
   nodeId: string
   imageUrl: string
-}
-
-const XCLOUD_TAB_NODE_IDS: Record<XcloudTabKey, string> = {
-  all: SPATIAL_NAV_NODE_IDS.pagePrimary.xcloud,
-  recent: 'xcloud.tabs.recent',
-  new: 'xcloud.tabs.new',
 }
 
 const { t } = useI18n()
@@ -33,34 +25,15 @@ const isLoading = ref(false)
 const appLevel = ref(0)
 const titles = ref<XcloudTitle[]>([])
 const searchKeyword = ref('')
-const activeTabKey = ref<XcloudTabKey>('all')
 const viewportWidth = ref(typeof window === 'undefined' ? 1440 : window.innerWidth)
 const renderedTitleCount = ref(0)
 const loadMoreSentinelRef = ref<HTMLElement | null>(null)
 let loadMoreObserver: IntersectionObserver | null = null
-let stopInputSubscription: (() => void) | null = null
 
 const normalizedSearchKeyword = computed(() => searchKeyword.value.trim().toLowerCase())
+const isSearching = computed(() => normalizedSearchKeyword.value !== '')
 const hasFullAccess = computed(() => appLevel.value >= 2)
 const uiDensity = computed(() => resolveUiDensity(viewportWidth.value))
-
-const tabItems = computed(() => [
-  {
-    key: 'all',
-    label: t('xcloudPage.tabs.all'),
-    nodeId: XCLOUD_TAB_NODE_IDS.all,
-  },
-  {
-    key: 'recent',
-    label: t('xcloudPage.tabs.recent'),
-    nodeId: XCLOUD_TAB_NODE_IDS.recent,
-  },
-  {
-    key: 'new',
-    label: t('xcloudPage.tabs.new'),
-    nodeId: XCLOUD_TAB_NODE_IDS.new,
-  },
-])
 
 const gridColumnCount = computed(() => {
   if (uiDensity.value === 'comfortable') {
@@ -95,54 +68,51 @@ const searchedTitles = computed(() =>
   titles.value.filter(title => titleMatchesSearch(title, normalizedSearchKeyword.value)),
 )
 
-const visibleTitles = computed(() => {
-  if (activeTabKey.value === 'recent') {
-    return searchedTitles.value.filter(title => title.isRecentlyPlayed)
-  }
-  if (activeTabKey.value === 'new') {
-    return searchedTitles.value.filter(title => title.isNew)
-  }
-  return searchedTitles.value
-})
+const recentTitles = computed(() => titles.value.filter(title => title.isRecentlyPlayed))
+const newTitles = computed(() => titles.value.filter(title => title.isNew))
 
 const initialRenderCount = computed(() => gridColumnCount.value * 4)
 const loadMoreBatchSize = computed(() => gridColumnCount.value * 3)
-const renderedTitles = computed(() => visibleTitles.value.slice(0, renderedTitleCount.value))
+
+const gridSourceTitles = computed(() => isSearching.value ? searchedTitles.value : titles.value)
+const renderedGridTitles = computed(() => gridSourceTitles.value.slice(0, renderedTitleCount.value))
 
 const gridCards = computed<XcloudGridCardViewModel[]>(() =>
-  renderedTitles.value.map((title, index) => ({
+  renderedGridTitles.value.map((title, index) => ({
     title,
     imageUrl: resolveTitleImage(title),
-    nodeId: `xcloud.grid.${activeTabKey.value}.${index}.${title.productId}`,
+    nodeId: `xcloud.grid.all.${index}.${title.productId}`,
+  })),
+)
+
+const recentCards = computed<XcloudGridCardViewModel[]>(() =>
+  recentTitles.value.map((title, index) => ({
+    title,
+    imageUrl: resolveTitleImage(title),
+    nodeId: `xcloud.rail.recent.${index}.${title.productId}`,
+  })),
+)
+
+const newCards = computed<XcloudGridCardViewModel[]>(() =>
+  newTitles.value.map((title, index) => ({
+    title,
+    imageUrl: resolveTitleImage(title),
+    nodeId: `xcloud.rail.new.${index}.${title.productId}`,
   })),
 )
 
 const resultCountLabel = computed(() =>
   t('xcloudPage.resultsCount', {
-    count: visibleTitles.value.length,
+    count: gridSourceTitles.value.length,
   }),
 )
-const activeSectionTitle = computed(() => t(`xcloudPage.sections.${activeTabKey.value}.title`))
-const activeSectionHint = computed(() =>
-  t(`xcloudPage.sections.${activeTabKey.value}.hint`, {
-    count: visibleTitles.value.length,
-  }),
-)
-const hasMoreTitles = computed(() => renderedTitleCount.value < visibleTitles.value.length)
 
-watch(visibleTitles, (nextTitles) => {
-  if (nextTitles.length === 0 && activeTabKey.value !== 'all') {
-    const fallbackTitles = searchedTitles.value
-    if (fallbackTitles.length > 0) {
-      activeTabKey.value = 'all'
-    }
-  }
-})
+const hasMoreTitles = computed(() => renderedTitleCount.value < gridSourceTitles.value.length)
 
 watch(
-  [visibleTitles, gridColumnCount],
+  [gridSourceTitles, gridColumnCount],
   async () => {
-    renderedTitleCount.value = Math.min(visibleTitles.value.length, initialRenderCount.value)
+    renderedTitleCount.value = Math.min(gridSourceTitles.value.length, initialRenderCount.value)
     await nextTick()
     setupLoadMoreObserver()
   },
@@ -159,7 +129,7 @@ function loadMoreTitles(): void {
   }
 
   renderedTitleCount.value = Math.min(
-    visibleTitles.value.length,
+    gridSourceTitles.value.length,
     renderedTitleCount.value + loadMoreBatchSize.value,
   )
 }
@@ -193,18 +163,6 @@ function startStream(title: XcloudTitle): void {
   if (title.titleId.trim() === '') {
     return
   }
-
-  // 临时在点击云游戏标题时打印输入配置，便于确认真实返回结构。
-  void rpc.data
-    .getStreamingTitleInputConfig({
-      xboxTitleId: title.titleId,
-    })
-    .then((result) => {
-      console.log('[XCloud] getStreamingTitleInputConfig result:', result)
-    })
-    .catch((error) => {
-      console.warn('[XCloud] getStreamingTitleInputConfig failed:', error)
-    })
 
   void router.push({
     name: 'xcloud-stream',
@@ -261,21 +219,6 @@ onMounted(() => {
   window.addEventListener('resize', handleResize)
   void loadTitles()
   void nextTick(setupLoadMoreObserver)
-
-  stopInputSubscription = inputDispatcher.subscribe((intent) => {
-    if (intent === NavigationIntent.TabPrev) {
-      const index = tabItems.value.findIndex(t => t.key === activeTabKey.value)
-      if (index > 0) {
-        activeTabKey.value = tabItems.value[index - 1].key as XcloudTabKey
-      }
-    }
-    else if (intent === NavigationIntent.TabNext) {
-      const index = tabItems.value.findIndex(t => t.key === activeTabKey.value)
-      if (index < tabItems.value.length - 1) {
-        activeTabKey.value = tabItems.value[index + 1].key as XcloudTabKey
-      }
-    }
-  })
 })
 
 onActivated(() => {
@@ -289,11 +232,6 @@ onBeforeUnmount(() => {
   window.removeEventListener('resize', handleResize)
   loadMoreObserver?.disconnect()
   loadMoreObserver = null
-
-  if (stopInputSubscription) {
-    stopInputSubscription()
-    stopInputSubscription = null
-  }
 })
 </script>
 
@@ -333,10 +271,10 @@ onBeforeUnmount(() => {
         <div class="xcloud-page__toolbar">
           <div class="xcloud-page__title-block">
             <p class="xcloud-page__title">
-              {{ activeSectionTitle }}
+              {{ t('xcloudPage.toolbar.title') }}
             </p>
             <p class="xcloud-page__subtitle">
-              {{ normalizedSearchKeyword === '' ? activeSectionHint : resultCountLabel }}
+              {{ t('xcloudPage.toolbar.hint', { count: titles.length }) }}
             </p>
           </div>
           <label class="xcloud-page__search-shell" :aria-label="t('xcloudPage.searchLabel')">
@@ -356,38 +294,24 @@ onBeforeUnmount(() => {
             >
           </label>
         </div>
-
-        <div class="xcloud-page__filter-bar">
-          <SpatialNavTabs
-            v-model:active-key="activeTabKey"
-            :scope-id="SPATIAL_NAV_SCOPE_IDS.appShell"
-            :tabs="tabItems"
-            id-prefix="xcloud.tabs"
-            :aria-label="t('xcloudPage.tabsAriaLabel')"
-          />
-
-          <p class="xcloud-page__results">
-            {{ resultCountLabel }}
-          </p>
-        </div>
       </header>
 
       <section
-        v-if="gridCards.length === 0"
+        v-if="gridSourceTitles.length === 0"
         class="xcloud-page__state ui-page-panel ui-page-panel--spacious"
       >
         <p class="ui-page-title">
           {{
-            normalizedSearchKeyword === ''
-              ? t('xcloudPage.emptyTitle')
-              : t('xcloudPage.emptySearchTitle')
+            isSearching
+              ? t('xcloudPage.emptySearchTitle')
+              : t('xcloudPage.emptyTitle')
           }}
         </p>
         <p class="ui-page-body">
           {{
-            normalizedSearchKeyword === ''
-              ? t('xcloudPage.emptyBody')
-              : t('xcloudPage.emptySearchBody', { keyword: searchKeyword })
+            isSearching
+              ? t('xcloudPage.emptySearchBody', { keyword: searchKeyword })
+              : t('xcloudPage.emptyBody')
           }}
         </p>
 
@@ -398,45 +322,101 @@ onBeforeUnmount(() => {
           class="xcloud-page__action-button"
           :scope-id="SPATIAL_NAV_SCOPE_IDS.appShell"
           :aria-label="
-            normalizedSearchKeyword === ''
-              ? t('xcloudPage.actions.refresh')
-              : t('xcloudPage.actions.clearSearch')
+            isSearching
+              ? t('xcloudPage.actions.clearSearch')
+              : t('xcloudPage.actions.refresh')
           "
           :on-confirm="handlePrimaryAction"
           @click="handlePrimaryAction"
         >
           {{
-            normalizedSearchKeyword === ''
-              ? t('xcloudPage.actions.refresh')
-              : t('xcloudPage.actions.clearSearch')
+            isSearching
+              ? t('xcloudPage.actions.clearSearch')
+              : t('xcloudPage.actions.refresh')
           }}
         </Focusable>
       </section>
 
-      <section
-        v-else
-        class="xcloud-page__grid"
-        :style="{ '--xcloud-grid-columns': String(gridColumnCount) }"
-      >
-        <GameCard
-          v-for="card in gridCards"
-          :id="card.nodeId"
-          :key="card.nodeId"
-          :scope-id="SPATIAL_NAV_SCOPE_IDS.appShell"
-          :title="card.title.name"
-          :image-url="card.imageUrl"
-          :aria-label="t('xcloudPage.actions.playSelected', { name: card.title.name })"
-          :disabled="card.title.titleId.trim() === ''"
-          @select="startStream(card.title)"
-        />
+      <div v-else class="xcloud-page__content">
+        <!-- 横向轨道 (仅非搜索状态显示) -->
+        <template v-if="!isSearching">
+          <HorizontalListRail
+            v-if="recentCards.length > 0"
+            class="xcloud-page__rail"
+            :title="t('xcloudPage.sections.recent.title')"
+            :hint="t('xcloudPage.sections.recent.hint', { count: recentCards.length })"
+            :aria-label="t('xcloudPage.sections.recent.title')"
+          >
+            <GameCard
+              v-for="card in recentCards"
+              :id="card.nodeId"
+              :key="card.nodeId"
+              :scope-id="SPATIAL_NAV_SCOPE_IDS.appShell"
+              :title="card.title.name"
+              :image-url="card.imageUrl"
+              :aria-label="t('xcloudPage.actions.playSelected', { name: card.title.name })"
+              :disabled="card.title.titleId.trim() === ''"
+              @select="startStream(card.title)"
+            />
+          </HorizontalListRail>
 
-        <div
-          v-if="hasMoreTitles"
-          ref="loadMoreSentinelRef"
-          class="xcloud-page__load-more-sentinel"
-          aria-hidden="true"
-        />
-      </section>
+          <HorizontalListRail
+            v-if="newCards.length > 0"
+            class="xcloud-page__rail"
+            :title="t('xcloudPage.sections.new.title')"
+            :hint="t('xcloudPage.sections.new.hint', { count: newCards.length })"
+            :aria-label="t('xcloudPage.sections.new.title')"
+          >
+            <GameCard
+              v-for="card in newCards"
+              :id="card.nodeId"
+              :key="card.nodeId"
+              :scope-id="SPATIAL_NAV_SCOPE_IDS.appShell"
+              :title="card.title.name"
+              :image-url="card.imageUrl"
+              :aria-label="t('xcloudPage.actions.playSelected', { name: card.title.name })"
+              :disabled="card.title.titleId.trim() === ''"
+              @select="startStream(card.title)"
+            />
+          </HorizontalListRail>
+        </template>
+
+        <!-- 所有游戏/搜索结果 网格 -->
+        <section class="xcloud-page__grid-section">
+          <header class="xcloud-page__grid-header">
+            <h2 class="xcloud-page__grid-title">
+              {{ isSearching ? t('xcloudPage.searchLabel') : t('xcloudPage.sections.all.title') }}
+            </h2>
+            <p class="xcloud-page__results">
+              {{ resultCountLabel }}
+            </p>
+          </header>
+
+          <div
+            class="xcloud-page__grid"
+            :style="{ '--xcloud-grid-columns': String(gridColumnCount) }"
+          >
+            <GameCard
+              v-for="card in gridCards"
+              :id="card.nodeId"
+              :key="card.nodeId"
+              :scope-id="SPATIAL_NAV_SCOPE_IDS.appShell"
+              :title="card.title.name"
+              :image-url="card.imageUrl"
+              :aria-label="t('xcloudPage.actions.playSelected', { name: card.title.name })"
+              :disabled="card.title.titleId.trim() === ''"
+              @select="startStream(card.title)"
+            />
+
+            <div
+              v-if="hasMoreTitles"
+              ref="loadMoreSentinelRef"
+              class="xcloud-page__load-more-sentinel"
+              aria-hidden="true"
+            />
+          </div>
+        </section>
+      </div>
     </template>
   </section>
 </template>
@@ -543,17 +523,46 @@ onBeforeUnmount(() => {
   outline: none;
 }
 
-.xcloud-page__filter-bar {
+.xcloud-page__content {
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  gap: var(--ui-space-4xl);
+}
+
+.xcloud-page__rail {
+  /* Offset inside padding if needed, but HorizontalListRail handles its own scroll padding */
+}
+
+.xcloud-page__rail :deep(.game-card) {
+  /* The default width/height defined in GameCard are used here,
+     but we ensure it doesn't get overridden by anything else */
+}
+
+.xcloud-page__grid-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ui-space-md);
+}
+
+.xcloud-page__grid-header {
+  display: flex;
+  align-items: flex-end;
   justify-content: space-between;
-  gap: 12px;
-  padding-bottom: 4px;
+  gap: 16px;
+  padding: 0 4px; /* match grid's padding to align text */
+}
+
+.xcloud-page__grid-title {
+  margin: 0;
+  font-size: var(--ui-rail-title-size);
+  font-weight: var(--ui-font-weight-bold);
+  line-height: 1.1;
+  color: var(--color-text-primary);
 }
 
 .xcloud-page__results {
   flex: 0 0 auto;
-  font-size: 12px;
+  font-size: var(--ui-rail-hint-size);
   line-height: 1.4;
   color: var(--color-text-secondary);
   white-space: nowrap;
@@ -625,12 +634,6 @@ onBeforeUnmount(() => {
 
 .xcloud-page__action-button[data-focused='true'] {
   box-shadow: var(--shadow-xbox-focus);
-}
-
-:global(html[data-ui-density='compact']) .xcloud-page__filter-bar,
-:global(html[data-ui-density='narrow']) .xcloud-page__filter-bar {
-  flex-direction: column;
-  align-items: stretch;
 }
 
 :global(html[data-ui-density='compact']) .xcloud-page__toolbar,

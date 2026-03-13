@@ -10,7 +10,6 @@ const configState: HapticsConfig = {
   audioEnabled: true,
 }
 
-let lastActivePadId: string = 'pad-0'
 let isInitialized = false
 
 async function initConfig() {
@@ -34,8 +33,7 @@ export function syncHapticsConfig(haptics: boolean, audio: boolean) {
   isInitialized = true
 }
 
-export function setLastActivePadId(padId: string) {
-  lastActivePadId = padId
+export function setLastActivePadId(_padId: string) {
 }
 
 export function playNavSound(_type: 'move' | 'action' | 'back' | 'boundary') {
@@ -77,7 +75,9 @@ export function triggerNavHaptic(type: 'move' | 'action' | 'back' | 'boundary') 
   // 震动属于增强型体验，不应因为硬件不支持而导致整个导航逻辑报错。
   rpc.gamepad.playRumble({
     request: {
-      target: { kind: 'logical-pad', padId: lastActivePadId as any },
+      // UI 导航震动默认交给宿主自动挑选当前最合适的手柄，
+      // 避免前端长期维护 active pad id。
+      target: { kind: 'auto' },
       effect: {
         startDelayMs: 0,
         durationMs,

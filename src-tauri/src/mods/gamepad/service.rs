@@ -3,8 +3,8 @@ use crate::mods::gamepad::GamepadProvider;
 use ohmygamepad_host::GamepadRuntimeHost;
 use ohmygamepad_protocol::{
     LogicalPadBindingDto, MultiControllerSamplingStrategyDto, OhMyGamepadRouteTargetDto,
-    OhMyGamepadRumbleRequestDto, OhMyGamepadRumbleResultDto, OhMyGamepadRumbleTargetDto,
-    OhMyGamepadRuntimeSnapshotDto, OhMyGamepadSamplingConfigDto,
+    OhMyGamepadRumbleRejectionReasonDto, OhMyGamepadRumbleRequestDto, OhMyGamepadRumbleResultDto,
+    OhMyGamepadRumbleTargetDto, OhMyGamepadRuntimeSnapshotDto, OhMyGamepadSamplingConfigDto,
 };
 use tauri::AppHandle;
 
@@ -107,7 +107,7 @@ impl GamepadProvider for GamepadService {
     ) -> Result<OhMyGamepadRumbleResultDto, String> {
         self.host
             .play_rumble(request)
-            .map_err(|error| format!("{:?}", error))
+            .or_else(|error| map_rumble_runtime_error(error, Vec::new()))
     }
 
     fn stop_rumble(
@@ -116,7 +116,7 @@ impl GamepadProvider for GamepadService {
     ) -> Result<OhMyGamepadRumbleResultDto, String> {
         self.host
             .stop_rumble(target)
-            .map_err(|error| format!("{:?}", error))
+            .or_else(|error| map_rumble_runtime_error(error, Vec::new()))
     }
 
     fn shutdown(&self) {
@@ -124,6 +124,27 @@ impl GamepadProvider for GamepadService {
             .host
             .set_route_target(OhMyGamepadRouteTargetDto::ShellUi);
     }
+}
+
+fn map_rumble_runtime_error(
+    error: impl std::fmt::Debug,
+    resolved_device_ids: Vec<String>,
+) -> Result<OhMyGamepadRumbleResultDto, String> {
+    let error_message = format!("{:?}", error);
+
+    // 震动属于增强体验。当前设备/系统暂时不支持时，返回结构化拒绝结果，
+    // 避免 shell RPC 把它记成真正的调用失败。
+    if matches!(
+        error_message.as_str(),
+        "HapticsUnavailable" | "NotImplemented"
+    ) {
+        return Ok(OhMyGamepadRumbleResultDto::rejected(
+            OhMyGamepadRumbleRejectionReasonDto::Unsupported,
+            resolved_device_ids,
+        ));
+    }
+
+    Err(error_message)
 }
 
 impl GamepadService {

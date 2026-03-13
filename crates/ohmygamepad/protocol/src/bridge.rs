@@ -1,7 +1,7 @@
 use crate::{
     LogicalPadBindingDto, LogicalPadSnapshotDto, MultiControllerSamplingStrategyDto,
     OhMyGamepadDeviceDto, OhMyGamepadKeyboardMappingDto, OhMyGamepadRouteTargetDto,
-    OhMyGamepadSamplingConfigDto, SimulatedGamepadDescriptorDto,
+    OhMyGamepadRuntimeHapticsDto, OhMyGamepadSamplingConfigDto, SimulatedGamepadDescriptorDto,
 };
 use serde::{Deserialize, Serialize};
 
@@ -13,6 +13,7 @@ pub struct OhMyGamepadRuntimeSnapshotDto {
     pub route_target: OhMyGamepadRouteTargetDto,
     pub sampling: OhMyGamepadSamplingConfigDto,
     pub pads: Vec<LogicalPadSnapshotDto>,
+    pub haptics: OhMyGamepadRuntimeHapticsDto,
 }
 
 #[derive(Clone, Debug, PartialEq)]

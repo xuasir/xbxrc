@@ -148,7 +148,7 @@ function emitLogout(): void {
   position: absolute;
   inset: 0;
   border: 0;
-  background: rgba(0, 0, 0, 0.45);
+  background: var(--ui-scrim-bg);
   backdrop-filter: blur(4px);
   cursor: default;
 }
@@ -167,10 +167,10 @@ function emitLogout(): void {
   width: min(calc(100vw - 48px), 340px);
   pointer-events: auto;
   position: relative;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--ui-border-subtle);
   border-radius: 16px;
-  background: #252423;
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.7);
+  background: var(--ui-surface-overlay);
+  box-shadow: var(--ui-shadow-overlay);
   color: var(--ui-page-text);
   display: flex;
   flex-direction: column;
@@ -196,7 +196,8 @@ function emitLogout(): void {
 }
 
 .user-menu__close[data-focused='true'] {
-  background: var(--color-focus-bg);
+  background: var(--color-focus-bg-strong);
+  color: var(--ui-focus-text);
   box-shadow: var(--shadow-xbox-focus);
 }
 
@@ -209,7 +210,7 @@ function emitLogout(): void {
 }
 
 .user-menu__close[data-focused='true'] .user-menu__close-line {
-  background: #ffffff;
+  background: var(--ui-focus-text);
 }
 
 .user-menu__close-line--first {
@@ -240,11 +241,11 @@ function emitLogout(): void {
   height: 88px;
   border-radius: var(--ui-radius-pill);
   object-fit: cover;
-  border: 3px solid rgba(255, 255, 255, 0.1);
+  border: 3px solid var(--ui-border-subtle);
 }
 
 .user-menu__avatar--placeholder {
-  background: #3a3a3a;
+  background: var(--color-state-hover);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -258,7 +259,7 @@ function emitLogout(): void {
   bottom: 6px;
   width: 16px;
   height: 16px;
-  border: 3px solid #252423;
+  border: 3px solid var(--ui-surface-overlay);
   border-radius: var(--ui-radius-pill);
   background: var(--ui-status-positive);
 }
@@ -281,7 +282,7 @@ function emitLogout(): void {
   display: flex;
   align-items: center;
   gap: 8px;
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--color-state-hover);
   padding: 6px 16px;
   border-radius: 999px;
 }
@@ -290,8 +291,8 @@ function emitLogout(): void {
   width: 18px;
   height: 18px;
   border-radius: var(--ui-radius-pill);
-  background: #ffffff;
-  color: #000000;
+  background: var(--brand-primary);
+  color: #ffffff;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -328,7 +329,7 @@ function emitLogout(): void {
 .user-menu__divider {
   height: 1px;
   margin: 24px 0;
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--ui-border-subtle);
 }
 
 .user-menu__actions {
@@ -345,8 +346,8 @@ function emitLogout(): void {
   padding: 16px 20px;
   border: 2px solid transparent;
   border-radius: 12px;
-  background: rgba(255, 255, 255, 0.04);
-  color: #ffffff;
+  background: var(--color-state-hover);
+  color: var(--ui-page-text);
   cursor: pointer;
   transition: all var(--ui-motion-fast);
   text-align: left;
@@ -354,13 +355,14 @@ function emitLogout(): void {
 
 .user-menu__logout[data-focused='true'] {
   background: var(--color-focus-bg-strong);
+  color: var(--ui-focus-text);
   box-shadow: var(--shadow-xbox-focus);
 }
 
 .user-menu__logout-icon {
   width: 20px;
   height: 20px;
-  filter: brightness(0) invert(1);
+  filter: var(--ui-nav-icon-filter);
 }
 
 .user-menu__logout-label {

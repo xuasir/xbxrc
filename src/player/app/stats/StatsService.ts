@@ -21,6 +21,17 @@ interface CandidatePairStat extends RTCStats {
   type: 'candidate-pair'
   state: 'succeeded'
   currentRoundTripTime?: number
+  selected?: boolean
+  nominated?: boolean
+  localCandidateId?: string
+  remoteCandidateId?: string
+}
+
+interface IceCandidateStat extends RTCStats {
+  type: 'local-candidate' | 'remote-candidate'
+  candidateType?: string
+  protocol?: string
+  relayProtocol?: string
 }
 
 type ResolutionGlobal = typeof globalThis & {
@@ -33,6 +44,10 @@ function isInboundVideoRtpStat(stat: RTCStats): stat is InboundVideoRtpStat {
 
 function isSucceededCandidatePairStat(stat: RTCStats): stat is CandidatePairStat {
   return stat.type === 'candidate-pair' && 'state' in stat && stat.state === 'succeeded'
+}
+
+function isIceCandidateStat(stat: RTCStats): stat is IceCandidateStat {
+  return stat.type === 'local-candidate' || stat.type === 'remote-candidate'
 }
 
 export class StatsService {
@@ -108,6 +123,7 @@ export class StatsService {
       jit: '-1',
       br: '',
       decode: '',
+      transportPath: '',
     }
     if (!peer) {
       return performanceState
@@ -182,6 +198,7 @@ export class StatsService {
         networkStats.roundTripTime = performanceState.rtt
       }
     })
+    performanceState.transportPath = resolveTransportPath(stats) ?? ''
     networkStats.packetLoss = performanceState.pl
     networkStats.frameLoss = performanceState.fl
     void networkStats
@@ -189,4 +206,63 @@ export class StatsService {
     this.emitter.emit('stats.updated', performanceState)
     return performanceState
   }
+}
+
+function resolveTransportPath(stats: RTCStatsReport): string | undefined {
+  const candidatePairs = Array.from(stats.values())
+    .filter(isSucceededCandidatePairStat)
+    .sort((left, right) => {
+      const leftScore = Number(left.selected === true) + Number(left.nominated === true)
+      const rightScore = Number(right.selected === true) + Number(right.nominated === true)
+      return rightScore - leftScore
+    })
+
+  const selectedPair = candidatePairs[0]
+  if (!selectedPair) {
+    return undefined
+  }
+
+  const localCandidate = selectedPair.localCandidateId
+    ? stats.get(selectedPair.localCandidateId)
+    : undefined
+  const remoteCandidate = selectedPair.remoteCandidateId
+    ? stats.get(selectedPair.remoteCandidateId)
+    : undefined
+  if (!localCandidate || !remoteCandidate) {
+    return undefined
+  }
+  if (!isIceCandidateStat(localCandidate) || !isIceCandidateStat(remoteCandidate)) {
+    return undefined
+  }
+
+  const localType = normalizeCandidateType(localCandidate.candidateType)
+  const remoteType = normalizeCandidateType(remoteCandidate.candidateType)
+  const transportKind = localType === 'relay' || remoteType === 'relay' ? 'Relay' : 'Direct'
+  const pairText = [localType, remoteType].filter(Boolean).join(' -> ')
+  const protocol = (localCandidate.relayProtocol
+    ?? remoteCandidate.relayProtocol
+    ?? localCandidate.protocol
+    ?? remoteCandidate.protocol
+    ?? '')
+    .trim()
+    .toUpperCase()
+
+  if (pairText !== '' && protocol !== '') {
+    return `${transportKind} (${pairText}, ${protocol})`
+  }
+  if (pairText !== '') {
+    return `${transportKind} (${pairText})`
+  }
+  if (protocol !== '') {
+    return `${transportKind} (${protocol})`
+  }
+  return transportKind
+}
+
+function normalizeCandidateType(value: string | undefined): string {
+  const normalized = value?.trim().toLowerCase() ?? ''
+  if (normalized === 'host' || normalized === 'srflx' || normalized === 'prflx' || normalized === 'relay') {
+    return normalized
+  }
+  return normalized
 }

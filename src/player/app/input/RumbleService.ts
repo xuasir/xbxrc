@@ -6,8 +6,16 @@ import { LOGICAL_PAD_IDS } from '@shared/gamepad/contract'
 import { rpc } from '../../../services/rpc'
 
 const GAMEPAD_RUMBLE_REPORT_TYPE = 128
-const GAMEPAD_RUMBLE_HEADER_SIZE = 2
-const GAMEPAD_RUMBLE_PAYLOAD_SIZE = 11
+const GAMEPAD_RUMBLE_MESSAGE_TYPE_SIZE = 1
+const GAMEPAD_RUMBLE_MESSAGE_TYPE_SIZE_V8 = 2
+const GAMEPAD_RUMBLE_KIND_FOUR_MOTOR = 0
+const GAMEPAD_RUMBLE_KIND_SIZE = 1
+const GAMEPAD_RUMBLE_PACKET_SIZE_V8 = 13
+const GAMEPAD_RUMBLE_HEADER_SIZE_LEGACY = 2
+// 单条 legacy rumble 记录会读到 offset+10 的 Uint16，因此最少需要 12 字节而不是 11。
+const GAMEPAD_RUMBLE_PAYLOAD_SIZE_LEGACY = 12
+const STREAM_RUMBLE_IGNORE_DURATION_MS = 8
+const STREAM_RUMBLE_IGNORE_MAGNITUDE = 0.02
 
 interface TargetRumbleState {
   requestSeq: number
@@ -17,15 +25,19 @@ interface TargetRumbleState {
 }
 
 function targetKey(target: GamepadRumbleTargetDto): string {
-  return target.kind === 'logical-pad'
-    ? `${target.kind}:${target.padId}`
-    : `${target.kind}:${target.deviceId}`
+  if (target.kind === 'logical-pad') {
+    return `${target.kind}:${target.padId}`
+  }
+  if (target.kind === 'device') {
+    return `${target.kind}:${target.deviceId}`
+  }
+  return 'auto'
 }
 
 function logicalPadTargetFromIndex(gamepadIndex: number): GamepadRumbleTargetDto | null {
   const padId = LOGICAL_PAD_IDS[gamepadIndex]
   if (padId === undefined) {
-    return null
+    return { kind: 'auto' }
   }
   return {
     kind: 'logical-pad',
@@ -37,36 +49,143 @@ export class RumbleService {
   private targetStates = new Map<string, TargetRumbleState>()
 
   onMessage(dataView: DataView): void {
-    if (dataView.byteLength < GAMEPAD_RUMBLE_HEADER_SIZE + GAMEPAD_RUMBLE_PAYLOAD_SIZE) {
+    const parsedEffects = this.parseBetterXcloudPacket(dataView)
+      ?? this.parseLegacyPacket(dataView)
+    if (parsedEffects === null) {
       return
+    }
+
+    for (const effect of parsedEffects) {
+      this.onRumbleEffect(effect.target, effect.effect)
+    }
+  }
+
+  private parseBetterXcloudPacket(dataView: DataView): Array<{
+    target: GamepadRumbleTargetDto
+    effect: GamepadRumbleEffectDto
+  }> | null {
+    if (dataView.byteLength < GAMEPAD_RUMBLE_PACKET_SIZE_V8) {
+      return null
+    }
+
+    let offset = 0
+    let messageType = dataView.getUint8(offset)
+    let messageTypeSize = GAMEPAD_RUMBLE_MESSAGE_TYPE_SIZE
+
+    // Better xCloud 在较新的协议版本里把 messageType 扩成了 Uint16。
+    const v8MessageType = dataView.getUint16(offset, true)
+    if ((v8MessageType & GAMEPAD_RUMBLE_REPORT_TYPE) !== 0 && dataView.byteLength >= GAMEPAD_RUMBLE_PACKET_SIZE_V8) {
+      messageType = v8MessageType
+      messageTypeSize = GAMEPAD_RUMBLE_MESSAGE_TYPE_SIZE_V8
+    }
+
+    if ((messageType & GAMEPAD_RUMBLE_REPORT_TYPE) === 0) {
+      return null
+    }
+
+    offset += messageTypeSize
+    if (offset + GAMEPAD_RUMBLE_KIND_SIZE > dataView.byteLength) {
+      return null
+    }
+
+    const vibrationType = dataView.getUint8(offset)
+    offset += GAMEPAD_RUMBLE_KIND_SIZE
+    if (vibrationType !== GAMEPAD_RUMBLE_KIND_FOUR_MOTOR) {
+      return null
+    }
+
+    if (offset + 7 > dataView.byteLength) {
+      return null
+    }
+
+    const gamepadIndex = dataView.getUint8(offset)
+    const target = logicalPadTargetFromIndex(gamepadIndex)
+    if (target === null) {
+      return []
+    }
+
+    const effect: GamepadRumbleEffectDto = {
+      leftTrigger: this.normalizePercentMotor(dataView.getUint8(offset + 3)),
+      rightTrigger: this.normalizePercentMotor(dataView.getUint8(offset + 4)),
+      weakMagnitude: this.normalizePercentMotor(dataView.getUint8(offset + 2)),
+      strongMagnitude: this.normalizePercentMotor(dataView.getUint8(offset + 1)),
+      durationMs: dataView.getUint16(offset + 5, true),
+      startDelayMs: 0,
+      repeat: 0,
+    }
+
+    if (this.shouldIgnoreEffect(effect)) {
+      return []
+    }
+
+    return [{ target, effect }]
+  }
+
+  private parseLegacyPacket(dataView: DataView): Array<{
+    target: GamepadRumbleTargetDto
+    effect: GamepadRumbleEffectDto
+  }> | null {
+    if (dataView.byteLength < GAMEPAD_RUMBLE_HEADER_SIZE_LEGACY + GAMEPAD_RUMBLE_PAYLOAD_SIZE_LEGACY) {
+      return null
     }
 
     if (dataView.getUint8(0) !== GAMEPAD_RUMBLE_REPORT_TYPE) {
-      return
+      return null
     }
 
-    let offset = GAMEPAD_RUMBLE_HEADER_SIZE
-    while (offset + GAMEPAD_RUMBLE_PAYLOAD_SIZE <= dataView.byteLength) {
+    const effects: Array<{
+      target: GamepadRumbleTargetDto
+      effect: GamepadRumbleEffectDto
+    }> = []
+    let offset = GAMEPAD_RUMBLE_HEADER_SIZE_LEGACY
+    while (offset + GAMEPAD_RUMBLE_PAYLOAD_SIZE_LEGACY <= dataView.byteLength) {
+      if (offset + 11 >= dataView.byteLength) {
+        break
+      }
+
       const gamepadIndex = dataView.getUint8(offset + 1)
       const target = logicalPadTargetFromIndex(gamepadIndex)
       if (target === null) {
-        offset += GAMEPAD_RUMBLE_PAYLOAD_SIZE
+        offset += GAMEPAD_RUMBLE_PAYLOAD_SIZE_LEGACY
         continue
       }
 
       const effect: GamepadRumbleEffectDto = {
-        leftTrigger: dataView.getUint16(offset + 2, true) / 1023,
-        rightTrigger: dataView.getUint16(offset + 4, true) / 1023,
-        weakMagnitude: dataView.getUint16(offset + 6, true) / 1023,
-        strongMagnitude: dataView.getUint16(offset + 8, true) / 1023,
-        durationMs: dataView.getUint16(offset + 10, true),
-        startDelayMs: 0,
-        repeat: 0,
+          leftTrigger: dataView.getUint16(offset + 2, true) / 1023,
+          rightTrigger: dataView.getUint16(offset + 4, true) / 1023,
+          weakMagnitude: dataView.getUint16(offset + 6, true) / 1023,
+          strongMagnitude: dataView.getUint16(offset + 8, true) / 1023,
+          durationMs: dataView.getUint16(offset + 10, true),
+          startDelayMs: 0,
+          repeat: 0,
       }
-
-      this.onRumbleEffect(target, effect)
-      offset += GAMEPAD_RUMBLE_PAYLOAD_SIZE
+      if (!this.shouldIgnoreEffect(effect)) {
+        effects.push({
+          target,
+          effect,
+        })
+      }
+      offset += GAMEPAD_RUMBLE_PAYLOAD_SIZE_LEGACY
     }
+
+    return effects
+  }
+
+  private normalizePercentMotor(value: number): number {
+    return Math.max(0, Math.min(100, value)) / 100
+  }
+
+  private shouldIgnoreEffect(effect: GamepadRumbleEffectDto): boolean {
+    if (effect.durationMs >= STREAM_RUMBLE_IGNORE_DURATION_MS) {
+      return false
+    }
+
+    return Math.max(
+      effect.leftTrigger,
+      effect.rightTrigger,
+      effect.weakMagnitude,
+      effect.strongMagnitude,
+    ) <= STREAM_RUMBLE_IGNORE_MAGNITUDE
   }
 
   destroy(): void {

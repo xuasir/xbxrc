@@ -48,10 +48,12 @@ watch(
 
 <template>
   <Transition name="stream-audio-sheet-transition">
-    <div v-if="props.open" class="stream-audio-sheet" @click.self="handleClose">
+    <div v-if="props.open" class="stream-audio-sheet-layer">
+      <div class="stream-audio-sheet-backdrop" @click="handleClose" />
+      
       <FocusScope
         :id="props.scopeId"
-        as="div"
+        as="section"
         class="stream-audio-sheet__panel"
         :active="props.open"
         :default-focus-id="decreaseNodeId"
@@ -131,104 +133,140 @@ watch(
 </template>
 
 <style scoped>
-.stream-audio-sheet {
+.stream-audio-sheet-layer {
   position: fixed;
   inset: 0;
-  z-index: 26;
+  z-index: var(--z-overlay);
   display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: var(--ui-stream-overlay-padding);
-  background: rgba(0, 0, 0, 0.8);
+  align-items: stretch;
+  justify-content: flex-start;
+}
+
+.stream-audio-sheet-backdrop {
+  position: absolute;
+  inset: 0;
+  background: var(--ui-scrim-bg);
+  backdrop-filter: blur(4px);
 }
 
 .stream-audio-sheet__panel {
-  width: min(100%, var(--ui-stream-audio-width));
-  padding: var(--ui-stream-dialog-padding);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: var(--ui-radius-lg);
-  background: #252423;
-  color: #fff;
-  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.35);
+  position: relative;
+  z-index: 1;
+  width: min(calc(100vw - 48px), 360px);
+  height: calc(100% - 48px);
+  margin: 24px;
+  padding: 32px 24px;
+  background: var(--ui-surface-overlay);
+  border: 1px solid var(--ui-border-subtle);
+  border-radius: 16px;
+  box-shadow: var(--ui-shadow-overlay);
+  display: flex;
+  flex-direction: column;
+  color: var(--ui-page-text);
 }
 
 .stream-audio-sheet__header {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+  margin-bottom: 32px;
 }
 
 .stream-audio-sheet__eyebrow {
-  margin: 0;
-  font-size: 12px;
-  letter-spacing: 0.08em;
+  margin: 0 0 4px;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.15em;
   text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.56);
+  color: var(--ui-page-text-soft);
 }
 
 .stream-audio-sheet__title {
   margin: 0;
-  font-size: var(--ui-stream-dialog-title-size);
-  font-weight: 700;
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
 }
 
 .stream-audio-sheet__controls {
   display: grid;
-  grid-template-columns: var(--ui-stream-audio-control-width) 1fr var(--ui-stream-audio-control-width);
+  grid-template-columns: 60px 1fr 60px;
   gap: 12px;
-  margin-top: 22px;
+  margin-top: 8px;
 }
 
 .stream-audio-sheet__step,
 .stream-audio-sheet__close {
-  min-height: var(--ui-stream-audio-control-min-height);
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  border-radius: var(--ui-radius-md);
-  background: rgba(255, 255, 255, 0.04);
-  color: #fff;
+  min-height: 56px;
+  border: 2px solid transparent;
+  border-radius: 12px;
+  background: var(--color-state-hover);
+  color: var(--ui-page-text);
+  font-size: 20px;
+  font-weight: 700;
   cursor: pointer;
+  transition: all var(--ui-motion-fast);
 }
 
 .stream-audio-sheet__value {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 12px 14px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  border-radius: var(--ui-radius-md);
-  background: rgba(255, 255, 255, 0.04);
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 10px;
+  border: 2px solid transparent;
+  border-radius: 12px;
+  background: var(--color-state-hover);
+  transition: all var(--ui-motion-fast);
 }
 
 .stream-audio-sheet__label {
-  font-size: 13px;
-  color: rgba(255, 255, 255, 0.68);
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--ui-page-text-soft);
 }
 
 .stream-audio-sheet__input {
   width: 100%;
   border: 0;
   background: transparent;
-  color: #fff;
-  font-size: 22px;
-  font-weight: 700;
+  color: var(--ui-page-text);
+  font-size: 24px;
+  font-weight: 800;
+  text-align: center;
 }
 
 .stream-audio-sheet__close {
   width: 100%;
-  margin-top: 18px;
+  margin-top: auto;
+  font-size: 16px;
 }
 
 .stream-audio-sheet__step[data-focused='true'],
 .stream-audio-sheet__value[data-focused='true'],
 .stream-audio-sheet__close[data-focused='true'] {
   background: var(--color-focus-bg-strong);
+  color: var(--ui-focus-text);
   box-shadow: var(--shadow-xbox-focus);
-  color: #fff;
+  transform: scale(1.02);
 }
 
+/* 动画 */
 .stream-audio-sheet-transition-enter-active,
 .stream-audio-sheet-transition-leave-active {
-  transition: opacity 180ms ease;
+  transition: opacity 250ms ease;
+}
+
+.stream-audio-sheet-transition-enter-active .stream-audio-sheet__panel,
+.stream-audio-sheet-transition-leave-active .stream-audio-sheet__panel {
+  transition: transform 350ms cubic-bezier(0.2, 0, 0, 1);
+}
+
+.stream-audio-sheet-transition-enter-from .stream-audio-sheet__panel {
+  transform: translateX(calc(-100% - 48px));
+}
+
+.stream-audio-sheet-transition-leave-to .stream-audio-sheet__panel {
+  transform: translateX(calc(-100% - 48px));
 }
 
 .stream-audio-sheet-transition-enter-from,

@@ -106,6 +106,7 @@ pub struct SessionProgressSnapshot {
     pub status_text_key: String,
     pub retry_count: u8,
     pub queue_seconds: Option<u64>,
+    pub queue: Option<crate::session::monitor::QueueDetails>,
     pub error_code: Option<String>,
     pub error_message: Option<String>,
 }
@@ -574,6 +575,7 @@ pub(crate) fn build_session_progress_snapshot<S: SessionFlowSnapshot>(
         .queue
         .as_ref()
         .and_then(|queue| queue.details.estimated_total_wait_time_in_seconds);
+    let queue = runtime.queue.as_ref().map(|queue| queue.details.clone());
 
     SessionProgressSnapshot {
         session_id: record.snapshot.session_id().to_string(),
@@ -582,6 +584,7 @@ pub(crate) fn build_session_progress_snapshot<S: SessionFlowSnapshot>(
         // 当前尚无独立重试计数器，M1 先占位为 0，后续由 orchestrator 接管。
         retry_count: 0,
         queue_seconds,
+        queue,
         error_code: runtime
             .error_details
             .as_ref()

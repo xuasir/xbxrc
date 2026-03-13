@@ -1,6 +1,7 @@
 export const SPATIAL_NAV_SCOPE_IDS = {
   appShell: 'app.shell',
   userMenu: 'user.menu',
+  gamepadMenu: 'gamepad.menu',
   login: 'login.scope',
   settingSingleSelect: 'setting.single-select',
   streamPage: 'stream.page',
@@ -20,6 +21,9 @@ export const SPATIAL_NAV_NODE_IDS = {
     info: 'user-menu.info',
     status: 'user-menu.status',
     logout: 'user-menu.logout',
+  },
+  gamepadMenu: {
+    close: 'gamepad-menu.close',
   },
   settingTabs: {
     app: 'setting.tabs.app',

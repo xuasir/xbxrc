@@ -71,6 +71,10 @@ impl ConfigProvider for ConfigService {
                 .get("resolution")
                 .and_then(Value::as_i64)
                 .unwrap_or(1080),
+            xhome_resolution: normalized
+                .get("xhome_resolution")
+                .and_then(Value::as_i64)
+                .unwrap_or(1080),
             preferred_game_language: normalized
                 .get("preferred_game_language")
                 .and_then(Value::as_str)

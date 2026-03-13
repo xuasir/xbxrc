@@ -16,5 +16,9 @@ publish = false
 ohmygamepad-core = { path = "../../core" }
 ohmygamepad-protocol = { path = "../../protocol" }
 
+[target.'cfg(target_os = "windows")'.dependencies]
+windows-sys = { version = "0.61.2", features = ["Win32_Gaming"] }
+windows = { version = "0.61.3", features = ["Gaming_Input"] }
+
 [lib]
 path = "src/lib.rs"

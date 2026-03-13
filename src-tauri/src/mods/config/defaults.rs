@@ -1,10 +1,12 @@
 use serde_json::{json, Map, Value};
 
-pub const APP_CONFIG_KEYS: [&str; 31] = [
+pub const APP_CONFIG_KEYS: [&str; 33] = [
     "locale",
+    "theme",
     "use_msal",
     "fullscreen",
     "resolution",
+    "xhome_resolution",
     "xhome_bitrate_mode",
     "xhome_bitrate",
     "xhome_turn_fallback",
@@ -37,9 +39,11 @@ pub const APP_CONFIG_KEYS: [&str; 31] = [
 pub fn default_config_map() -> Map<String, Value> {
     let value = json!({
         "locale": "en",
+        "theme": "dark",
         "use_msal": false,
         "fullscreen": false,
         "resolution": 720,
+        "xhome_resolution": 1080,
         "xhome_bitrate_mode": "Auto",
         "xhome_bitrate": 20,
         "xhome_turn_fallback": false,

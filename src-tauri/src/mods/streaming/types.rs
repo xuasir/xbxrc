@@ -5,9 +5,12 @@ use xbox_streaming::{
     RenderPlanProjection as DomainRenderPlanProjection,
     RuntimeCodecProjection as DomainRuntimeCodecProjection,
     RuntimePlanProjection as DomainRuntimePlanProjection,
+    SessionCapabilitiesProjection as DomainSessionCapabilitiesProjection,
     SessionErrorDetails as MonitorErrorDetails, SessionFlowSnapshot,
+    SessionMetadataProjection as DomainSessionMetadataProjection,
     SessionPhase as DomainSessionPhase, SessionProgressSnapshot as DomainSessionProgressSnapshot,
-    SessionRuntimeBinding, SessionRuntimeSnapshot,
+    SessionRegionProjection as DomainSessionRegionProjection, SessionRuntimeBinding,
+    SessionRuntimeSnapshot,
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -175,6 +178,9 @@ pub struct StreamingRuntimeProjection {
     pub render: StreamingRuntimeOwner,
     pub input: StreamingRuntimeOwner,
     pub microphone: StreamingRuntimeOwner,
+    pub target_video_width: u32,
+    pub target_video_height: u32,
+    pub microphone_start_with_session: bool,
     pub turn_server: Option<StreamingTurnServerConfig>,
     pub codec: Option<StreamingRuntimeCodecPreference>,
     pub max_video_bitrate_kbps: Option<u32>,
@@ -192,6 +198,59 @@ pub struct StreamingRenderProjection {
     pub display_options: StreamingDisplayOptionsValue,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum StreamingTurnSource {
+    None,
+    Custom,
+    Fallback,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct StreamingSessionRegionProjection {
+    pub name: String,
+    pub short_name: Option<String>,
+    pub display_name: Option<String>,
+    pub continent: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct StreamingSessionMetadataProjection {
+    pub server_base_url: String,
+    pub region: Option<StreamingSessionRegionProjection>,
+    pub turn_source: StreamingTurnSource,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct StreamingSessionCapabilitiesProjection {
+    pub supported_inputs: Vec<String>,
+    pub title_supports_mkb: bool,
+    pub title_supports_touch: bool,
+    pub title_supports_native_touch: bool,
+    pub input_config_resolved: bool,
+    pub input_config_supports_mkb: bool,
+    pub input_config_supports_touch: bool,
+    pub input_config_supports_native_touch: bool,
+    pub effective_capability_source: String,
+    pub effective_title_supports_mkb: bool,
+    pub effective_title_supports_touch: bool,
+    pub effective_title_supports_native_touch: bool,
+    pub runtime_supports_native_mkb: bool,
+    pub runtime_supports_touch_surface: bool,
+    pub remote_play_configuration_resolved: bool,
+    pub remote_play_remote_management_enabled: bool,
+    pub remote_play_console_streaming_enabled: bool,
+    pub effective_remote_play_capability_source: String,
+    pub effective_remote_play_allows_streaming: bool,
+    pub remote_play_console_addrs_count: u32,
+    pub input_mode: String,
+    pub touch_enabled: bool,
+    pub microphone_start_with_session: bool,
+}
+
 impl From<DomainRuntimePlanProjection> for StreamingRuntimeProjection {
     fn from(projection: DomainRuntimePlanProjection) -> Self {
         Self {
@@ -204,6 +263,9 @@ impl From<DomainRuntimePlanProjection> for StreamingRuntimeProjection {
             render: map_runtime_owner(projection.render),
             input: map_runtime_owner(projection.input),
             microphone: map_runtime_owner(projection.microphone),
+            target_video_width: projection.target_video_width,
+            target_video_height: projection.target_video_height,
+            microphone_start_with_session: projection.microphone_start_with_session,
             turn_server: projection.turn_server.map(Into::into),
             codec: projection.codec.map(Into::into),
             max_video_bitrate_kbps: projection.max_video_bitrate_kbps,
@@ -221,6 +283,8 @@ pub struct StreamingSessionExecutionSnapshot {
     pub session: StreamingSessionSnapshot,
     pub runtime: StreamingRuntimeProjection,
     pub render: StreamingRenderProjection,
+    pub metadata: StreamingSessionMetadataProjection,
+    pub capabilities: StreamingSessionCapabilitiesProjection,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -244,6 +308,7 @@ pub struct StreamingSessionProgressSnapshot {
     pub status_text_key: String,
     pub retry_count: u8,
     pub queue_seconds: Option<u64>,
+    pub queue: Option<StreamingQueueDetails>,
     pub error_code: Option<String>,
     pub error_message: Option<String>,
 }
@@ -292,6 +357,7 @@ impl StreamingSessionProgressSnapshot {
             },
             retry_count: 0,
             queue_seconds,
+            queue: session.queue.as_ref().map(|queue| queue.details.clone()),
             error_code: session.error_details.as_ref().and_then(|details| {
                 details.code.as_ref().map(|code| match code {
                     serde_json::Value::String(raw) => raw.clone(),
@@ -481,6 +547,7 @@ pub struct StreamingSessionPathPayload {
 #[derive(Debug, Clone)]
 pub struct StreamingConfigSnapshot {
     pub resolution: i64,
+    pub xhome_resolution: i64,
     pub preferred_game_language: String,
     pub ipv6: bool,
     pub force_region_ip: String,
@@ -546,6 +613,69 @@ impl From<DomainRenderPlanProjection> for StreamingRenderProjection {
     }
 }
 
+impl From<DomainSessionMetadataProjection> for StreamingSessionMetadataProjection {
+    fn from(projection: DomainSessionMetadataProjection) -> Self {
+        Self {
+            server_base_url: projection.server_base_url,
+            region: projection.region.map(Into::into),
+            turn_source: projection.turn_source.into(),
+        }
+    }
+}
+
+impl From<DomainSessionCapabilitiesProjection> for StreamingSessionCapabilitiesProjection {
+    fn from(projection: DomainSessionCapabilitiesProjection) -> Self {
+        Self {
+            supported_inputs: projection.supported_inputs,
+            title_supports_mkb: projection.title_supports_mkb,
+            title_supports_touch: projection.title_supports_touch,
+            title_supports_native_touch: projection.title_supports_native_touch,
+            input_config_resolved: projection.input_config_resolved,
+            input_config_supports_mkb: projection.input_config_supports_mkb,
+            input_config_supports_touch: projection.input_config_supports_touch,
+            input_config_supports_native_touch: projection.input_config_supports_native_touch,
+            effective_capability_source: projection.effective_capability_source,
+            effective_title_supports_mkb: projection.effective_title_supports_mkb,
+            effective_title_supports_touch: projection.effective_title_supports_touch,
+            effective_title_supports_native_touch: projection.effective_title_supports_native_touch,
+            runtime_supports_native_mkb: projection.runtime_supports_native_mkb,
+            runtime_supports_touch_surface: projection.runtime_supports_touch_surface,
+            remote_play_configuration_resolved: projection.remote_play_configuration_resolved,
+            remote_play_remote_management_enabled: projection.remote_play_remote_management_enabled,
+            remote_play_console_streaming_enabled: projection.remote_play_console_streaming_enabled,
+            effective_remote_play_capability_source: projection
+                .effective_remote_play_capability_source,
+            effective_remote_play_allows_streaming: projection
+                .effective_remote_play_allows_streaming,
+            remote_play_console_addrs_count: projection.remote_play_console_addrs_count,
+            input_mode: projection.input_mode,
+            touch_enabled: projection.touch_enabled,
+            microphone_start_with_session: projection.microphone_start_with_session,
+        }
+    }
+}
+
+impl From<DomainSessionRegionProjection> for StreamingSessionRegionProjection {
+    fn from(projection: DomainSessionRegionProjection) -> Self {
+        Self {
+            name: projection.name,
+            short_name: projection.short_name,
+            display_name: projection.display_name,
+            continent: projection.continent,
+        }
+    }
+}
+
+impl From<xbox_streaming::TurnSource> for StreamingTurnSource {
+    fn from(value: xbox_streaming::TurnSource) -> Self {
+        match value {
+            xbox_streaming::TurnSource::None => Self::None,
+            xbox_streaming::TurnSource::Custom => Self::Custom,
+            xbox_streaming::TurnSource::Fallback => Self::Fallback,
+        }
+    }
+}
+
 impl From<DomainRenderDisplayOptionsProjection> for StreamingDisplayOptionsValue {
     fn from(options: DomainRenderDisplayOptionsProjection) -> Self {
         Self {
@@ -576,6 +706,7 @@ impl From<DomainSessionProgressSnapshot> for StreamingSessionProgressSnapshot {
             status_text_key: progress.status_text_key,
             retry_count: progress.retry_count,
             queue_seconds: progress.queue_seconds,
+            queue: progress.queue.map(Into::into),
             error_code: progress.error_code,
             error_message: progress.error_message,
         }

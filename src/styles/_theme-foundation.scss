@@ -148,6 +148,7 @@ $color-login-button-border-light-base: #39578a;
 
 $ui-page-text-dark: $color-slate-50;
 $ui-page-text-soft-dark: rgba($ui-page-text-dark, $alpha-72);
+$ui-page-bg-dark: $color-slate-950;
 $ui-page-glow-dark: rgba($color-page-glow-dark-base, $alpha-28);
 $ui-page-glow-soft-dark: rgba($color-page-glow-soft-dark-base, $alpha-14);
 $ui-page-glow-strong-dark: rgba($color-page-glow-strong-dark-base, $alpha-26);
@@ -165,6 +166,7 @@ $ui-icon-placeholder-bg-dark: rgba($color-icon-placeholder-bg-dark-base, $alpha-
 
 $ui-page-text-light: $color-slate-950;
 $ui-page-text-soft-light: rgba($ui-page-text-light, $alpha-72);
+$ui-page-bg-light: $color-slate-50;
 $ui-page-glow-light: rgba($color-page-glow-light-base, $alpha-28);
 $ui-page-glow-soft-light: rgba($color-page-glow-soft-light-base, $alpha-18);
 $ui-page-glow-strong-light: rgba($color-page-glow-strong-light-base, $alpha-28);
@@ -178,6 +180,11 @@ $ui-focus-bg-light: rgba($color-focus-surface-light-base, 0.08);
 $ui-focus-shadow-light: rgba($color-focus-shadow-light-base, 0.16);
 $ui-icon-placeholder-border-light: rgba($color-icon-placeholder-border-light-base, $alpha-26);
 $ui-icon-placeholder-bg-light: rgba($color-icon-placeholder-bg-light-base, $alpha-66);
+
+$ui-scrollbar-thumb-dark: rgba($color-neutral-0, 0.22);
+$ui-scrollbar-thumb-hover-dark: rgba($color-neutral-0, 0.34);
+$ui-scrollbar-thumb-light: rgba($color-neutral-1000, 0.16);
+$ui-scrollbar-thumb-hover-light: rgba($color-neutral-1000, 0.24);
 
 $ui-nav-icon-filter-dark: brightness(0) invert(1);
 $ui-nav-icon-filter-light: none;
@@ -193,10 +200,10 @@ $ui-login-overlay-glow-dark: rgba($color-login-overlay-glow-dark-base, $alpha-16
 $ui-login-overlay-gradient-top-dark: rgba($color-login-overlay-gradient-dark-base, $alpha-24);
 $ui-login-overlay-gradient-bottom-dark: rgba($color-login-overlay-gradient-dark-base, $alpha-62);
 
-$ui-login-button-text-light: $color-blue-100;
-$ui-login-button-border-light: rgba($color-login-button-border-light-base, $alpha-24);
-$ui-login-button-bg-light: $color-blue-650;
-$ui-login-button-bg-focused-light: $color-blue-600;
+$ui-login-button-text-light: $color-neutral-0;
+$ui-login-button-border-light: rgba($color-brand-green-600, $alpha-24);
+$ui-login-button-bg-light: $color-brand-green-600;
+$ui-login-button-bg-focused-light: $color-brand-green-500;
 $ui-login-overlay-glow-light: rgba($color-login-overlay-glow-light-base, $alpha-18);
 $ui-login-overlay-gradient-top-light: rgba($color-login-overlay-gradient-top-light-base, $alpha-6);
 $ui-login-overlay-gradient-bottom-light: rgba($color-login-overlay-gradient-bottom-light-base, $alpha-44);

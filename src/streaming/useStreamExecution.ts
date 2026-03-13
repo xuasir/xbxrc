@@ -5,12 +5,18 @@ import type {
   DisplayOptionsValue,
   RuntimeLaunchSpec,
   StreamConfigSnapshot,
+  StreamEnhancementMountSnapshot,
+  StreamSessionCapabilitiesProjection,
+  StreamSessionDiagnosticsSnapshot,
   StreamErrorKind,
+  StreamSessionLifecyclePhase,
+  StreamSessionMetadataProjection,
   StreamingSessionExecution,
   StreamingSessionProgress,
 } from './types'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { rpc } from '../services/rpc'
+import { bindStreamEnhancements, resolveStreamEnhancementMounts } from './enhancements'
 import { useStreamRuntimeHost } from './runtime/runtime-host'
 import {
   buildSessionHealthSnapshot,
@@ -59,6 +65,7 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
   const statusText = ref('')
   const errorText = ref('')
   const errorKind = ref<StreamErrorKind>('none')
+  const lifecyclePhase = ref<StreamSessionLifecyclePhase>('idle')
   const sessionId = ref('')
   const sessionExecution = ref<StreamingSessionExecution | null>(null)
   const streamConfig = ref<StreamConfigSnapshot>({})
@@ -66,10 +73,48 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
   const sessionReportingEnabled = ref(false)
   const closing = ref(false)
   const performanceVisible = ref(false)
+  const diagnosticsVisible = ref(false)
   const warningVisible = ref(false)
   let warningTimer: BrowserTimeout | null = null
 
   const renderProjection = computed(() => sessionExecution.value?.render ?? null)
+  const sessionMetadata = computed<StreamSessionMetadataProjection | null>(
+    () => sessionExecution.value?.metadata ?? null,
+  )
+  const sessionCapabilities = computed<StreamSessionCapabilitiesProjection | null>(
+    () => sessionExecution.value?.capabilities ?? null,
+  )
+  const diagnostics = computed<StreamSessionDiagnosticsSnapshot>(() => {
+    const metadata = sessionMetadata.value
+    const region = metadata?.region
+    const regionName = region?.displayName ?? region?.shortName ?? region?.name ?? undefined
+    const transportPath = runtimeHost.performanceSnapshot.value?.transportPath?.trim() || undefined
+    const turnSource = metadata?.turnSource ?? 'none'
+
+    const serverHost = parseServerHost(metadata?.serverBaseUrl)
+    const isRecovering = lifecyclePhase.value === 'recovering'
+    const isRelayPath = transportPath?.toLowerCase().startsWith('relay') === true
+
+    return {
+      isActive: lifecyclePhase.value === 'playing' || lifecyclePhase.value === 'recovering',
+      regionName,
+      serverHost,
+      turnSource,
+      transportPath,
+      isRelayPath,
+      isRecovering,
+      hasNoVideoWarning: warningVisible.value,
+    }
+  })
+  const enhancements = computed<StreamEnhancementMountSnapshot>(() => {
+    return resolveStreamEnhancementMounts({
+      lifecyclePhase: lifecyclePhase.value,
+      connected: isConnected.value,
+      performanceRequested: performanceVisible.value,
+      diagnosticsRequested: diagnosticsVisible.value,
+    })
+  })
+  const enhancementBindings = computed(() => bindStreamEnhancements(enhancements.value))
   const runtimeLaunchSpec = computed<RuntimeLaunchSpec | null>(() => {
     const execution = sessionExecution.value
     if (execution === null || sessionHealth.value?.phase !== 'sessionReady') {
@@ -118,9 +163,18 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
     },
     onRuntimePhaseChange: (phase) => {
       if (phase === 'reconnecting') {
+        lifecyclePhase.value = 'recovering'
         resetExecutionWarning()
       }
+      else if (lifecyclePhase.value !== 'playing') {
+        lifecyclePhase.value = 'starting'
+      }
       setStatusText(options.t(RUNTIME_PHASE_STATUS_KEYS[phase]))
+    },
+    onFramePresented: () => {
+      if (!closing.value && lifecyclePhase.value !== 'failed') {
+        lifecyclePhase.value = 'playing'
+      }
     },
   })
 
@@ -173,6 +227,7 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
     })
     errorKind.value = resolved.kind
     errorText.value = resolved.message
+    lifecyclePhase.value = 'failed'
     sessionUiPhase.value = 'failed'
   }
 
@@ -199,6 +254,9 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
   ): void {
     sessionHealth.value = buildSessionHealthSnapshot(progress)
     sessionUiPhase.value = mapProgressToSessionUiPhase(progress)
+    if (progress.phase === 'recovering') {
+      lifecyclePhase.value = 'recovering'
+    }
     // 媒体已连通后，页面文案由 runtime 连接态驱动；
     // session progress 继续更新健康信息，但不再把状态文案刷回“启动播放器”。
     if (!isConnected.value || progress.phase === 'failed' || progress.phase === 'closed') {
@@ -208,6 +266,7 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
     if (progress.phase === 'failed') {
       disableSessionHealthReporting()
       isConnected.value = false
+      lifecyclePhase.value = 'failed'
       errorKind.value = 'startFailed'
       errorText.value
         = progress.errorMessage ?? options.t('streamPage.errors.connectionFailed')
@@ -218,6 +277,7 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
     if (progress.phase === 'closed') {
       disableSessionHealthReporting()
       isConnected.value = false
+      lifecyclePhase.value = 'stopped'
       isLoading.value = false
       if (source === 'subscription') {
         sessionUiPhase.value = 'closed'
@@ -231,6 +291,7 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
     }
 
     closing.value = true
+    lifecyclePhase.value = 'stopped'
     sessionUiPhase.value = 'closing'
     disableSessionHealthReporting()
     resetExecutionWarning()
@@ -276,6 +337,7 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
     try {
       disableSessionHealthReporting()
       sessionUiPhase.value = 'subscribing'
+      lifecyclePhase.value = 'loading'
       isLoading.value = true
       isConnected.value = false
       errorKind.value = 'none'
@@ -314,6 +376,7 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
     sessionHealth.value = null
     closing.value = false
     sessionUiPhase.value = 'idle'
+    lifecyclePhase.value = 'idle'
     await runtimeHost.closeRuntime()
     await startStream()
   }
@@ -354,6 +417,9 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
     errorKind.value = 'none'
     errorText.value = ''
     sessionUiPhase.value = 'connected'
+    if (lifecyclePhase.value !== 'recovering' && lifecyclePhase.value !== 'playing') {
+      lifecyclePhase.value = 'starting'
+    }
   }
 
   function handlePlayerDisconnected(): void {
@@ -362,6 +428,9 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
     }
     isConnected.value = false
     isLoading.value = false
+    if (lifecyclePhase.value !== 'failed') {
+      lifecyclePhase.value = 'stopped'
+    }
   }
 
   function handlePlayerError(message: string): void {
@@ -423,6 +492,10 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
     runtimeHost.setPerformanceEnabled(performanceVisible.value)
   }
 
+  function toggleDiagnostics(): void {
+    diagnosticsVisible.value = !diagnosticsVisible.value
+  }
+
   function setTextInputActive(active: boolean): void {
     void active
   }
@@ -445,6 +518,7 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
       }
 
       setStatusText(options.t('streamPage.status.startingPlayer'))
+      lifecyclePhase.value = 'starting'
       void runtimeHost.startRuntime(spec).catch((error: unknown) => {
         handlePlayerError(error instanceof Error ? error.message : String(error))
         handlePlayerDisconnected()
@@ -462,8 +536,17 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
       }
       resetExecutionWarning()
       performanceVisible.value = false
+      diagnosticsVisible.value = false
       runtimeHost.setPerformanceEnabled(false)
     },
+  )
+
+  watch(
+    () => enhancements.value.performance.phase,
+    (phase) => {
+      runtimeHost.setPerformanceEnabled(phase === 'mounted')
+    },
+    { immediate: true },
   )
 
   watch(
@@ -502,11 +585,14 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
       canPowerOffConsole,
       canSendText,
       canOpenPerformance: computed(() => isConnected.value),
+      canOpenDiagnostics: computed(() => isConnected.value),
       canOpenDisplaySettings: computed(() => isConnected.value),
       canOpenAudioSettings: computed(
         () => isConnected.value && renderProjection.value?.enableAudioControl === true,
       ),
-      canToggleMicrophone: computed(() => isConnected.value),
+      canToggleMicrophone: computed(
+        () => enhancements.value.microphone.phase === 'mounted',
+      ),
       canPressNexus: computed(() => isConnected.value),
       canLongPressNexus: computed(
         () => isConnected.value && routeState.targetType.value === 'home',
@@ -519,16 +605,29 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
       errorText,
       errorKind,
       hasError: computed(() => errorText.value !== ''),
+      lifecyclePhase,
       warningVisible,
       displayOptions: computed(() => streamConfig.value.display_options ?? null),
-      resolutionMode: computed(() => streamConfig.value.resolution),
+      resolutionMode: computed(() =>
+        routeState.targetType.value === 'home'
+          ? streamConfig.value.xhome_resolution
+          : streamConfig.value.resolution,
+      ),
       performanceStyle: computed(() => streamConfig.value.performance_style === true),
+      metadata: sessionMetadata,
+      capabilities: sessionCapabilities,
+      diagnostics,
+      enhancements,
+      enhancementBindings,
       sessionHealth,
       sessionReportingEnabled,
       sessionUiPhase,
+      sessionId,
       performanceVisible,
+      diagnosticsVisible,
       performanceSnapshot: runtimeHost.performanceSnapshot,
       audioVolume: runtimeHost.audioVolume,
+      microphone: runtimeHost.microphoneState,
       microphoneOpen: runtimeHost.microphoneOpen,
     },
     actions: {
@@ -544,10 +643,24 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
       pressNexus,
       longPressNexus,
       togglePerformance,
+      toggleDiagnostics,
       setTextInputActive,
       dismissWarning: () => {
         warningVisible.value = false
       },
     },
+  }
+}
+
+function parseServerHost(baseUrl?: string | null): string | undefined {
+  if (baseUrl === undefined || baseUrl === null || baseUrl.trim() === '') {
+    return undefined
+  }
+
+  try {
+    return new URL(baseUrl).host || undefined
+  }
+  catch {
+    return undefined
   }
 }

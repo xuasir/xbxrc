@@ -204,7 +204,7 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: center;
   padding: 40px;
-  background: rgba(0, 0, 0, 0.8);
+  background: var(--ui-scrim-bg);
 }
 
 .setting-single-select-sheet__panel {
@@ -214,11 +214,11 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   padding: 0;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 4px;
-  background: #1a1a1a;
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6);
-  color: var(--color-text-primary);
+  border: 1px solid var(--ui-border-subtle);
+  border-radius: var(--ui-radius-md);
+  background: var(--ui-surface-overlay);
+  box-shadow: var(--ui-shadow-overlay);
+  color: var(--ui-page-text);
   overflow: hidden;
 }
 
@@ -255,8 +255,8 @@ onBeforeUnmount(() => {
   height: 32px;
   border: 0;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.08);
-  color: #ffffff;
+  background: var(--color-state-hover);
+  color: var(--ui-page-text);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -265,8 +265,8 @@ onBeforeUnmount(() => {
 }
 
 .setting-single-select-sheet__close[data-focused='true'] {
-  background: var(--color-focus-bg);
-  color: #ffffff;
+  background: var(--color-focus-bg-strong);
+  color: var(--ui-focus-text);
   box-shadow: var(--shadow-xbox-focus);
 }
 
@@ -317,14 +317,14 @@ onBeforeUnmount(() => {
   gap: 12px;
   padding: 12px 16px;
   border: 2px solid transparent;
-  border-radius: 4px;
-  background: rgba(255, 255, 255, 0.04);
+  border-radius: var(--ui-radius-sm);
+  background: var(--color-state-hover);
   text-align: left;
   transition: all var(--ui-motion-fast);
 }
 
 .setting-single-select-sheet__option--active {
-  background: rgba(16, 124, 16, 0.15);
+  background: color-mix(in srgb, var(--brand-primary) 15%, transparent);
 }
 
 .setting-single-select-sheet__indicator {
@@ -333,7 +333,7 @@ onBeforeUnmount(() => {
   height: 10px;
   border-radius: 50%;
   background: transparent;
-  border: 2px solid #ffffff;
+  border: 2px solid var(--ui-page-text-soft);
 }
 
 .setting-single-select-sheet__indicator--active {
@@ -351,31 +351,28 @@ onBeforeUnmount(() => {
   font-size: 16px;
   line-height: 1.2;
   font-weight: 600;
+  color: var(--ui-page-text);
 }
 
 .setting-single-select-sheet__option-desc {
   font-size: 13px;
   line-height: 1.4;
-  color: var(--color-text-secondary);
+  color: var(--ui-page-text-soft);
 }
 
 .setting-single-select-sheet__option[data-focused='true'] {
   background: var(--color-focus-bg-strong);
-  color: #ffffff;
+  color: var(--ui-focus-text);
   box-shadow: var(--shadow-xbox-focus);
 }
 
-.setting-single-select-sheet__option[data-focused='true'] .setting-single-select-sheet__indicator {
-  border-color: #ffffff;
-}
-
-.setting-single-select-sheet__option[data-focused='true'] .setting-single-select-sheet__indicator--active {
-  background: var(--brand-primary);
-  border-color: var(--brand-primary);
-}
-
+.setting-single-select-sheet__option[data-focused='true'] .setting-single-select-sheet__option-title,
 .setting-single-select-sheet__option[data-focused='true'] .setting-single-select-sheet__option-desc {
-  color: var(--color-text-secondary);
+  color: var(--ui-focus-text);
+}
+
+.setting-single-select-sheet__option[data-focused='true'] .setting-single-select-sheet__indicator {
+  border-color: var(--ui-focus-text);
 }
 
 .setting-single-select-sheet-transition-enter-active,

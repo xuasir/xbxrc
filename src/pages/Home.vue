@@ -266,7 +266,7 @@ onMounted(() => {
 
 .home-page__refresh-button:hover {
   background: var(--btn-primary-bg-hover);
-  box-shadow: 0 12px 24px rgba(22, 132, 57, 0.22);
+  box-shadow: 0 12px 24px color-mix(in srgb, var(--brand-primary), transparent 78%);
 }
 
 .home-page__refresh-button[data-focused='true'] {

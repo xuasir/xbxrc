@@ -1,17 +1,23 @@
 <script setup lang="ts">
 import type { DisplayOptionsValue } from '../streaming/types'
-import { Focusable, FocusScope } from '@/navigation/core/vue'
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
+import { Focusable, FocusScope } from '@/navigation/core/vue'
+import { rpc } from '../services/rpc'
+import xboxLogoIcon from '../assets/nav/xbox-logo.svg'
 import BrandedLoading from '../components/common/BrandedLoading.vue'
+import SpatialNavIconButton from '../components/navigation/SpatialNavIconButton.vue'
 import SettingDisplayOptionsSheet from '../components/settings/SettingDisplayOptionsSheet.vue'
 import StreamActionSheet from '../components/stream/StreamActionSheet.vue'
 import StreamAlertSheet from '../components/stream/StreamAlertSheet.vue'
 import StreamAudioSheet from '../components/stream/StreamAudioSheet.vue'
+import StreamDiagnosticsPanel from '../components/stream/StreamDiagnosticsPanel.vue'
+import StreamMicrophoneStatus from '../components/stream/StreamMicrophoneStatus.vue'
 import StreamPerformancePanel from '../components/stream/StreamPerformancePanel.vue'
 import StreamTextSheet from '../components/stream/StreamTextSheet.vue'
 import { SPATIAL_NAV_NODE_IDS, SPATIAL_NAV_SCOPE_IDS } from '../navigation/spatial-nav.constants'
+import { resolveEnhancementBinding } from '../streaming/enhancements'
 import { useStreamExecution } from '../streaming/useStreamExecution'
 import { useXStreamPageUi } from '../streaming/xstream-page-ui'
 
@@ -46,20 +52,17 @@ const {
   resolutionMode,
   performanceStyle,
   performanceVisible,
+  diagnosticsVisible,
   performanceSnapshot,
+  diagnostics,
+  enhancementBindings,
+  sessionHealth,
   audioVolume,
+  microphone,
   microphoneOpen,
 } = execution
 const dismissWarning = actions.dismissWarning
 const sendingText = ref(false)
-
-interface StreamActionViewModel {
-  id: string
-  label: string
-  danger?: boolean
-  disabled?: boolean
-  onConfirm: () => void | Promise<void>
-}
 
 interface StreamMenuActionViewModel {
   id: string
@@ -95,42 +98,101 @@ const {
   closeSheet,
 } = pageActions
 
-// 串流页是 plain layout，需要自己提供独立焦点域和默认焦点。
-const defaultFocusId = computed(() =>
-  hasError.value ? SPATIAL_NAV_NODE_IDS.streamPage.retry : topActions.value[0]?.id,
+// 精细化管理手柄输入路由：当 UI 覆盖层（菜单、设置等）打开时，将手柄路由至 shell-ui；关闭后切回 stream-session。
+watch(
+  () => ({
+    isAnySheetOpen: isMenuSheetOpen.value
+      || isDisplaySheetOpen.value
+      || isAudioSheetOpen.value
+      || isTextSheetOpen.value
+      || showFailedSheet.value
+      || showWarningSheet.value,
+    sessionId: execution.sessionId.value,
+  }),
+  (next, prev) => {
+    // 只有在 sessionId 存在且有效时才进行切换逻辑
+    if (next.sessionId === '') {
+      return
+    }
+
+    if (next.isAnySheetOpen) {
+      // 打开任意覆盖层，切到 UI 模式
+      void rpc.gamepad.setRouteTarget({
+        target: { kind: 'shell-ui' },
+      })
+    }
+    else if (prev?.isAnySheetOpen === true && !next.isAnySheetOpen) {
+      // 覆盖层全部关闭，切回游戏模式
+      void rpc.gamepad.setRouteTarget({
+        target: {
+          kind: 'stream-session',
+          sessionId: next.sessionId,
+        },
+      })
+    }
+  },
 )
 
-const topActions = computed<StreamActionViewModel[]>(() => {
-  const actions: StreamActionViewModel[] = [
+// 串流页是 plain layout，需要自己提供独立焦点域和默认焦点。
+const defaultFocusId = computed(() =>
+  hasError.value ? SPATIAL_NAV_NODE_IDS.streamPage.retry : SPATIAL_NAV_NODE_IDS.streamPage.menu,
+)
+
+const queueDetails = computed(() => sessionHealth.value?.queue)
+
+const queueMetrics = computed(() => {
+  const details = queueDetails.value
+  if (details == null) {
+    return []
+  }
+
+  return [
     {
-      id: SPATIAL_NAV_NODE_IDS.streamPage.menu,
-      label: t('streamPage.actions.menu'),
-      disabled: !isConnected.value,
-      onConfirm: openActionSheet,
+      id: 'total',
+      label: t('streamPage.queue.total'),
+      seconds: details.estimatedTotalWaitTimeInSeconds,
     },
     {
-      id: SPATIAL_NAV_NODE_IDS.streamPage.fullscreen,
-      label: t('streamPage.actions.fullscreen'),
-      onConfirm: toggleFullscreen,
+      id: 'allocation',
+      label: t('streamPage.queue.allocation'),
+      seconds: details.estimatedAllocationTimeInSeconds,
     },
-  ]
-
-  actions.push({
-    id: SPATIAL_NAV_NODE_IDS.streamPage.exit,
-    label: t('streamPage.actions.exit'),
-    onConfirm: () => disconnectStream({ navigateBack: true }),
-  })
-
-  return actions
+    {
+      id: 'provisioning',
+      label: t('streamPage.queue.provisioning'),
+      seconds: details.estimatedProvisioningTimeInSeconds,
+    },
+  ].filter(item => typeof item.seconds === 'number')
 })
+
+const diagnosticsBinding = computed(() =>
+  resolveEnhancementBinding(enhancementBindings.value, 'diagnostics'),
+)
+
+const performanceBinding = computed(() =>
+  resolveEnhancementBinding(enhancementBindings.value, 'performance'),
+)
+
+const microphoneBinding = computed(() =>
+  resolveEnhancementBinding(enhancementBindings.value, 'microphone'),
+)
 
 const streamMenuActions = computed<StreamMenuActionViewModel[]>(() => {
   const items: StreamMenuActionViewModel[] = []
 
+  if (ability.canOpenDiagnostics.value) {
+    items.push({
+      id: 'diagnostics',
+      label: execution.diagnosticsVisible.value
+        ? t('streamPage.actions.hideDiagnostics')
+        : t('streamPage.actions.showDiagnostics'),
+    })
+  }
+
   if (ability.canOpenPerformance.value) {
     items.push({
       id: 'performance',
-      label: performanceVisible.value
+      label: execution.performanceVisible.value
         ? t('streamPage.actions.hidePerformance')
         : t('streamPage.actions.showPerformance'),
     })
@@ -153,7 +215,7 @@ const streamMenuActions = computed<StreamMenuActionViewModel[]>(() => {
   if (ability.canToggleMicrophone.value) {
     items.push({
       id: 'microphone',
-      label: microphoneOpen.value
+      label: microphone.value.desiredEnabled || microphoneOpen.value
         ? t('streamPage.actions.closeMic')
         : t('streamPage.actions.openMic'),
     })
@@ -180,6 +242,11 @@ const streamMenuActions = computed<StreamMenuActionViewModel[]>(() => {
     })
   }
 
+  items.push({
+    id: 'fullscreen',
+    label: t('streamPage.actions.fullscreen'),
+  })
+
   if (ability.canPowerOffConsole.value) {
     items.push({
       id: 'powerOffExit',
@@ -187,6 +254,12 @@ const streamMenuActions = computed<StreamMenuActionViewModel[]>(() => {
       danger: true,
     })
   }
+
+  items.push({
+    id: 'exit',
+    label: t('streamPage.actions.exit'),
+    danger: true,
+  })
 
   return items
 })
@@ -210,6 +283,20 @@ const warningSheetActions = computed(() => [
     danger: true,
   },
 ])
+
+function formatQueueSeconds(seconds: number): string {
+  if (seconds < 60) {
+    return `${seconds}s`
+  }
+
+  const minutes = Math.floor(seconds / 60)
+  const remainingSeconds = seconds % 60
+  if (remainingSeconds === 0) {
+    return `${minutes}m`
+  }
+
+  return `${minutes}m ${remainingSeconds}s`
+}
 
 async function toggleFullscreen(): Promise<void> {
   await actions.toggleFullscreen()
@@ -311,8 +398,11 @@ function handleAudioChange(value: number): void {
 }
 
 async function handleStreamMenuAction(id: string): Promise<void> {
-  closeActionSheet()
   const handlers: Record<string, () => void | Promise<void>> = {
+    diagnostics: () => {
+      revealChrome()
+      actions.toggleDiagnostics()
+    },
     performance: () => {
       revealChrome()
       actions.togglePerformance()
@@ -338,11 +428,21 @@ async function handleStreamMenuAction(id: string): Promise<void> {
       revealChrome()
       actions.longPressNexus()
     },
+    fullscreen: async () => {
+      await toggleFullscreen()
+    },
     powerOffExit: async () => {
       await powerOffAndDisconnect()
     },
+    exit: async () => {
+      await disconnectStream({ navigateBack: true })
+    },
   }
-  await handlers[id]?.()
+
+  if (handlers[id]) {
+    closeActionSheet()
+    await handlers[id]?.()
+  }
 }
 </script>
 
@@ -353,97 +453,111 @@ async function handleStreamMenuAction(id: string): Promise<void> {
     :restore-focus="true"
     :default-focus-id="defaultFocusId"
   >
-    <section class="stream-page" :aria-label="t('streamPage.ariaLabel', { name: displayName })">
+    <section
+      class="stream-page"
+      data-theme="dark"
+      :aria-label="t('streamPage.ariaLabel', { name: displayName })"
+    >
       <div id="stream-page-video" class="stream-page__video" />
+      <StreamDiagnosticsPanel
+        :visible="diagnosticsVisible"
+        :diagnostics="diagnostics"
+        :mount="diagnosticsBinding"
+      />
       <StreamPerformancePanel
-        :visible="performanceVisible"
+        :visible="performanceVisible && (isConnected || performanceBinding.phase === 'mounted')"
         :compact="performanceStyle"
         :snapshot="performanceSnapshot"
         :resolution-mode="resolutionMode"
       />
+      <StreamMicrophoneStatus
+        :mount="microphoneBinding"
+        :microphone="microphone"
+      />
 
+      <!-- 快捷功能按钮 (The Shortcut) -->
       <div
-        class="stream-page__topbar"
-        :class="{ 'stream-page__topbar--hidden': !shouldShowChrome }"
+        class="stream-page__chrome-container"
+        :class="{ 'stream-page__chrome-container--hidden': !shouldShowChrome }"
       >
-        <div class="stream-page__meta-card">
-          <div class="stream-page__meta">
-            <span class="stream-page__eyebrow">{{ eyebrow }}</span>
-            <strong class="stream-page__title">{{ displayName }}</strong>
-            <span v-if="statusText" class="stream-page__status-chip">{{ statusText }}</span>
+        <SpatialNavIconButton
+          :id="SPATIAL_NAV_NODE_IDS.streamPage.menu"
+          class="stream-page__chrome"
+          :label="t('streamPage.actions.menu')"
+          :icon-src="xboxLogoIcon"
+          :round="true"
+          :disabled="!shouldShowChrome"
+          :on-confirm="openActionSheet"
+          @click="openActionSheet"
+        />
+      </div>
+
+      <!-- 沉浸式加载层 -->
+      <Transition name="overlay-fade">
+        <div v-if="overlayState === 'loading'" class="stream-page__overlay stream-page__overlay--immersive">
+          <div class="stream-page__loading-stack">
+            <BrandedLoading size="xl" :label="statusText || t('streamPage.status.preparing')" />
+            <div v-if="queueMetrics.length > 0" class="stream-page__queue-panel">
+              <div
+                v-for="metric in queueMetrics"
+                :key="metric.id"
+                class="stream-page__queue-row"
+              >
+                <span>{{ metric.label }}</span>
+                <strong>{{ formatQueueSeconds(metric.seconds as number) }}</strong>
+              </div>
+            </div>
           </div>
         </div>
+      </Transition>
 
-        <div class="stream-page__actions-shell">
-          <div class="stream-page__actions">
-            <Focusable
-              v-for="action in topActions"
-              :id="action.id"
-              :key="action.id"
-              as="button"
-              type="button"
-              class="stream-page__top-action"
-              :class="{
-                'stream-page__top-action--danger': action.danger,
-                'stream-page__top-action--primary': action.id === SPATIAL_NAV_NODE_IDS.streamPage.menu,
-              }"
-              :scope-id="SPATIAL_NAV_SCOPE_IDS.streamPage"
-              :disabled="hasError || action.disabled || !shouldShowChrome"
-              :aria-label="action.label"
-              :on-confirm="action.onConfirm"
-              @click="action.onConfirm"
-            >
-              {{ action.label }}
-            </Focusable>
+      <!-- 连接失败/断开层 -->
+      <Transition name="overlay-fade">
+        <div v-if="overlayState === 'error'" class="stream-page__overlay stream-page__overlay--immersive">
+          <div class="stream-page__error-panel">
+            <header class="stream-page__error-header">
+              <h2 class="stream-page__error-title">
+                {{ t('streamPage.errorTitle') }}
+              </h2>
+            </header>
+            <p class="stream-page__error-copy">
+              {{ errorText }}
+            </p>
+            <div class="stream-page__error-actions">
+              <Focusable
+                :id="SPATIAL_NAV_NODE_IDS.streamPage.retry"
+                as="button"
+                type="button"
+                class="stream-page__action stream-page__action--primary"
+                :on-confirm="handleRetry"
+                @click="handleRetry"
+              >
+                {{ t('streamPage.actions.retry') }}
+              </Focusable>
+              <Focusable
+                :id="SPATIAL_NAV_NODE_IDS.streamPage.back"
+                as="button"
+                type="button"
+                class="stream-page__action"
+                :on-confirm="() => disconnectStream({ navigateBack: true })"
+                @click="disconnectStream({ navigateBack: true })"
+              >
+                {{ t('streamPage.actions.back') }}
+              </Focusable>
+            </div>
           </div>
         </div>
-      </div>
+      </Transition>
 
-      <div v-if="overlayState === 'loading'" class="stream-page__overlay">
-        <BrandedLoading size="lg" :label="statusText || t('streamPage.status.preparing')" />
-      </div>
-
-      <div v-else-if="overlayState === 'error'" class="stream-page__overlay">
-        <div class="stream-page__error-panel">
-          <p class="stream-page__error-title">
-            {{ t('streamPage.errorTitle') }}
-          </p>
-          <p class="stream-page__error-copy">
-            {{ errorText }}
-          </p>
-          <div class="stream-page__error-actions">
-            <Focusable
-              :id="SPATIAL_NAV_NODE_IDS.streamPage.retry"
-              as="button"
-              type="button"
-              class="stream-page__action stream-page__action--primary"
-              :scope-id="SPATIAL_NAV_SCOPE_IDS.streamPage"
-              :on-confirm="handleRetry"
-              @click="handleRetry"
-            >
-              {{ t('streamPage.actions.retry') }}
-            </Focusable>
-            <Focusable
-              :id="SPATIAL_NAV_NODE_IDS.streamPage.back"
-              as="button"
-              type="button"
-              class="stream-page__action"
-              :scope-id="SPATIAL_NAV_SCOPE_IDS.streamPage"
-              :on-confirm="() => disconnectStream({ navigateBack: true })"
-              @click="disconnectStream({ navigateBack: true })"
-            >
-              {{ t('streamPage.actions.back') }}
-            </Focusable>
-          </div>
+      <!-- 弱侵入连接中状态 -->
+      <Transition name="overlay-fade">
+        <div
+          v-if="overlayState === 'connecting'"
+          class="stream-page__overlay stream-page__overlay--subtle"
+        >
+          <BrandedLoading size="lg" :label="statusText || t('streamPage.status.connecting')" />
         </div>
-      </div>
-
-      <div
-        v-else-if="overlayState === 'connecting'"
-        class="stream-page__overlay stream-page__overlay--subtle"
-      >
-        <BrandedLoading size="lg" :label="statusText || t('streamPage.status.connecting')" />
-      </div>
+      </Transition>
 
       <StreamTextSheet
         :open="isTextSheetOpen"
@@ -454,8 +568,10 @@ async function handleStreamMenuAction(id: string): Promise<void> {
       />
       <StreamActionSheet
         :open="isMenuSheetOpen"
+        data-theme="dark"
         scope-id="stream.action-sheet"
-        :title="t('streamPage.actionSheet.title')"
+        :title="displayName"
+        :eyebrow="eyebrow"
         :items="streamMenuActions"
         @close="closeActionSheet"
         @select="handleStreamMenuAction"
@@ -519,193 +635,157 @@ async function handleStreamMenuAction(id: string): Promise<void> {
 .stream-page__video {
   position: absolute;
   inset: 0;
+  z-index: 0;
 }
 
-.stream-page__topbar {
+/* 快捷功能按钮 Chrome */
+.stream-page__chrome-container {
   position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  z-index: 2;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: var(--ui-stream-topbar-padding);
+  top: 24px;
+  left: 24px;
+  z-index: 20;
   pointer-events: none;
-  transition:
-    opacity 180ms ease,
-    transform 180ms ease;
+  transition: all 0.3s cubic-bezier(0.2, 0, 0, 1);
 }
 
-.stream-page__meta-card,
-.stream-page__actions-shell {
-  display: flex;
-  align-items: center;
-  min-height: 56px;
-  padding: 10px 12px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: calc(var(--ui-radius-lg) + var(--ui-space-1));
-  background: #252423;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.05),
-    0 18px 40px rgba(0, 0, 0, 0.22);
-}
-
-.stream-page__topbar--hidden {
+.stream-page__chrome-container--hidden {
   opacity: 0;
-  transform: translateY(-12px);
+  transform: translateX(-20px) scale(0.9);
 }
 
-.stream-page__meta-card {
-  max-width: min(48vw, 420px);
-}
-
-.stream-page__actions-shell {
-  justify-content: flex-end;
-  max-width: min(52vw, 720px);
-}
-
-.stream-page__actions {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 10px;
+.stream-page__chrome {
   pointer-events: auto;
+  /* 匹配 TopNavBar 的尺寸 */
+  width: var(--ui-size-control-xl) !important;
+  height: var(--ui-size-control-xl) !important;
+  background: var(--ui-scrim-bg);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
 }
 
-.stream-page__meta {
-  display: flex;
-  flex-direction: column;
-  gap: var(--ui-stream-meta-gap);
-  color: rgba(255, 255, 255, 0.94);
-  text-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+.stream-page__chrome :deep(.sn-icon-button__icon-shell),
+.stream-page__chrome :deep(.sn-icon-button__icon) {
+  /* 匹配 TopNavBar 的图标尺寸 */
+  width: var(--ui-size-icon-lg) !important;
+  height: var(--ui-size-icon-lg) !important;
 }
 
-.stream-page__eyebrow {
-  font-size: var(--ui-stream-eyebrow-size);
-  font-weight: 700;
-  letter-spacing: 0.18em;
-  opacity: 0.72;
-}
-
-.stream-page__title {
-  font-size: var(--ui-stream-title-size);
-  font-weight: 700;
-  letter-spacing: -0.02em;
-}
-
-.stream-page__status-chip {
-  display: inline-flex;
-  align-items: center;
-  width: fit-content;
-  min-height: 24px;
-  padding: 0 10px;
-  border-radius: var(--ui-radius-pill);
-  background: rgba(255, 255, 255, 0.08);
-  color: rgba(255, 255, 255, 0.78);
-  font-size: 11px;
-  font-weight: var(--ui-font-weight-semibold);
-}
-
-.stream-page__top-action {
-  min-width: var(--ui-stream-top-action-min-width);
-  padding: var(--ui-stream-top-action-padding);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: var(--ui-action-pill-radius);
-  background: #3a3a3a;
-  color: #fff;
-  cursor: pointer;
-  transition:
-    border-color var(--ui-motion-fast),
-    background-color var(--ui-motion-fast),
-    box-shadow var(--ui-motion-fast),
-    transform var(--ui-motion-fast);
-}
-
-.stream-page__top-action:disabled {
-  opacity: 0.4;
-  cursor: default;
-}
-
-.stream-page__top-action--primary {
-  border-color: #107c10;
-  background: #107c10;
-}
-
-.stream-page__top-action[data-focused='true'] {
-  box-shadow: var(--shadow-xbox-focus);
-}
-
-.stream-page__top-action--danger {
-  border-color: #e81123;
-  background: #e81123;
-}
-
-.stream-page__top-action--danger[data-focused='true'] {
-  box-shadow: var(--shadow-xbox-focus);
-}
-
+/* 覆盖层 Overlays */
 .stream-page__overlay {
   position: absolute;
   inset: 0;
-  z-index: 1;
+  z-index: 100;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: var(--ui-stream-overlay-padding);
-  background: rgba(0, 0, 0, 0.8);
+}
+
+.stream-page__overlay--immersive {
+  background: #000000;
+}
+
+.stream-page__loading-stack {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+}
+
+.stream-page__queue-panel {
+  width: min(320px, calc(100vw - 48px));
+  padding: 14px 16px;
+  background: var(--ui-surface-overlay);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  backdrop-filter: blur(12px);
+  color: var(--ui-page-text-soft);
+}
+
+.stream-page__queue-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.stream-page__queue-row + .stream-page__queue-row {
+  margin-top: 8px;
+}
+
+.stream-page__queue-row strong {
+  color: var(--ui-page-text);
+  font-family: var(--ui-font-family-mono, monospace);
 }
 
 .stream-page__overlay--subtle {
-  background: rgba(0, 0, 0, 0.4);
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(8px);
 }
 
 .stream-page__error-panel {
-  width: min(100%, var(--ui-stream-error-panel-width));
-  padding: var(--ui-stream-error-panel-padding);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: calc(var(--ui-radius-lg) + var(--ui-space-1));
-  background: #252423;
-  color: #fff;
-  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.35);
+  width: min(calc(100vw - 48px), 480px);
+  padding: 32px;
+  background: var(--ui-surface-overlay);
+  border: 1px solid var(--ui-border-subtle);
+  border-radius: 16px;
+  box-shadow: var(--shadow-xbox-panel);
+  color: var(--ui-page-text);
+  text-align: left;
+}
+
+.stream-page__error-header {
+  margin-bottom: 16px;
 }
 
 .stream-page__error-title {
-  margin: 0 0 10px;
-  font-size: var(--ui-stream-error-title-size);
-  font-weight: 700;
+  margin: 0;
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
 }
 
 .stream-page__error-copy {
-  margin: 0;
-  font-size: 14px;
+  margin: 0 0 32px;
+  font-size: 15px;
   line-height: 1.6;
-  color: rgba(255, 255, 255, 0.74);
+  color: var(--ui-page-text-soft);
+}
+.stream-page__chrome-btn--danger[data-focused='true'] {
+  background: #e81123;
+  color: var(--ui-focus-text);
 }
 
-.stream-page__error-actions {
-  display: flex;
-  gap: 12px;
-  margin-top: 20px;
-}
-
+/* 覆盖层 Overlays */
 .stream-page__action {
-  min-width: var(--ui-stream-error-action-min-width);
-  padding: var(--ui-stream-error-action-padding);
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  border-radius: var(--ui-action-pill-radius);
-  background: rgba(255, 255, 255, 0.04);
-  color: #fff;
+  flex: 1;
+  padding: 14px;
+  border: 0;
+  border-radius: 12px;
+  background: var(--ui-surface-overlay);
+  color: var(--ui-page-text);
+  font-size: 16px;
+  font-weight: 700;
   cursor: pointer;
+  transition: all var(--ui-motion-fast);
 }
 
 .stream-page__action--primary {
-  border-color: rgba(120, 232, 135, 0.36);
-  background: linear-gradient(180deg, #2f9d42, #227633);
+  background: var(--brand-primary);
 }
 
 .stream-page__action[data-focused='true'] {
   box-shadow: var(--shadow-xbox-focus);
+  transform: scale(1.02);
+  background: var(--color-focus-bg-strong);
+  color: var(--ui-focus-text);
+}
+
+.stream-page__action--primary[data-focused='true'] {
+  background: var(--brand-primary-strong);
+  color: var(--ui-focus-text);
 }
 
 .stream-page__filters {
@@ -716,39 +796,18 @@ async function handleStreamMenuAction(id: string): Promise<void> {
   pointer-events: none;
 }
 
+/* 动画 */
+.overlay-fade-enter-active,
+.overlay-fade-leave-active {
+  transition: opacity 0.4s ease;
+}
+
+.overlay-fade-enter-from,
+.overlay-fade-leave-to {
+  opacity: 0;
+}
+
 :global(html[data-ui-density='narrow']) .stream-page__error-actions {
   flex-direction: column;
-}
-
-:global(html[data-ui-density='compact']) .stream-page__topbar,
-:global(html[data-ui-density='narrow']) .stream-page__topbar {
-  gap: 10px;
-}
-
-:global(html[data-ui-density='compact']) .stream-page__meta-card,
-:global(html[data-ui-density='compact']) .stream-page__actions-shell,
-:global(html[data-ui-density='narrow']) .stream-page__meta-card,
-:global(html[data-ui-density='narrow']) .stream-page__actions-shell {
-  min-height: 50px;
-  padding: 8px 10px;
-  border-radius: calc(var(--ui-radius-lg) + var(--ui-space-1));
-}
-
-:global(html[data-ui-density='narrow']) .stream-page__topbar {
-  flex-direction: column;
-  align-items: stretch;
-}
-
-:global(html[data-ui-density='narrow']) .stream-page__meta-card,
-:global(html[data-ui-density='narrow']) .stream-page__actions-shell {
-  max-width: none;
-}
-
-:global(html[data-ui-density='narrow']) .stream-page__actions-shell {
-  justify-content: flex-start;
-}
-
-:global(html[data-ui-density='narrow']) .stream-page__actions {
-  width: 100%;
 }
 </style>

@@ -6,6 +6,14 @@ export type GamepadBackendKindDto = (typeof GAMEPAD_BACKEND_KINDS)[number]
 export const GAMEPAD_CONNECTION_KINDS = ['usb', 'bluetooth', 'wireless-dongle', 'unknown'] as const
 export type GamepadConnectionKindDto = (typeof GAMEPAD_CONNECTION_KINDS)[number]
 
+export const GAMEPAD_HAPTICS_PROVIDER_KINDS = [
+  'gilrs-basic',
+  'macos-gccontroller',
+  'windows-xbox',
+  'none',
+] as const
+export type GamepadHapticsProviderKindDto = (typeof GAMEPAD_HAPTICS_PROVIDER_KINDS)[number]
+
 export const LOGICAL_PAD_IDS = ['pad-0', 'pad-1', 'pad-2', 'pad-3'] as const
 export type LogicalPadId = (typeof LOGICAL_PAD_IDS)[number]
 
@@ -68,6 +76,8 @@ export interface GamepadDeviceDto {
   connected: boolean
   lastSeenAtMs: number
   capabilities: GamepadCapabilityFlagsDto
+  effectiveCapabilities: GamepadCapabilityFlagsDto
+  isDefaultTarget: boolean
 }
 
 export interface LogicalStickDto {
@@ -138,7 +148,8 @@ export interface GamepadSamplingStrategyDto {
 }
 
 export type GamepadRumbleTargetDto
-  = | { kind: 'logical-pad', padId: LogicalPadId }
+  = | { kind: 'auto' }
+    | { kind: 'logical-pad', padId: LogicalPadId }
     | { kind: 'device', deviceId: string }
 
 export interface GamepadRumbleEffectDto {
@@ -168,6 +179,13 @@ export interface GamepadRuntimeSnapshotDto {
   routeTarget: GamepadRouteTargetDto
   sampling: GamepadSamplingConfigDto
   pads: LogicalPadSnapshotDto[]
+  haptics: {
+    provider: GamepadHapticsProviderKindDto
+    supportsAutoTarget: boolean
+    supportsBasicRumble: boolean
+    supportsAdvancedHaptics: boolean
+    defaultDeviceId: string | null
+  }
 }
 
 export type GamepadBridgeCommandDto

@@ -160,8 +160,11 @@ mod tests {
         let mut context = Context::default();
         context.input.has_mkb = true;
         context.runtime.native_mkb = true;
+        let capabilities = crate::policy::input::compiler::interpret_input_capabilities(&context);
 
-        let mode = crate::policy::input::compiler::resolve_input_mode(&config, &context).unwrap();
+        let mode =
+            crate::policy::input::compiler::resolve_input_mode(&config, &context, &capabilities)
+                .unwrap();
         assert_eq!(mode, InputMode::NativeMkb);
     }
 
@@ -171,9 +174,25 @@ mod tests {
         config.input.mode = InputPreference::NativeMkb;
 
         let context = Context::default();
+        let capabilities = crate::policy::input::compiler::interpret_input_capabilities(&context);
         let error =
-            crate::policy::input::compiler::resolve_input_mode(&config, &context).unwrap_err();
+            crate::policy::input::compiler::resolve_input_mode(&config, &context, &capabilities)
+                .unwrap_err();
         assert_eq!(error, CompileError::NativeMkbUnavailable);
+    }
+
+    #[test]
+    fn input_config_capabilities_override_fallback_touch_fact() {
+        let mut context = Context::default();
+        context.input.has_touch = true;
+        context.input.has_native_touch = true;
+        context.input_capability.input_config_resolved = true;
+        context.input_capability.input_config_supports_touch = false;
+        context.input_capability.input_config_supports_native_touch = false;
+
+        let effective = crate::policy::input::compiler::interpret_input_capabilities(&context);
+        assert!(!effective.title_supports_touch);
+        assert!(!effective.title_supports_native_touch);
     }
 
     #[test]
@@ -206,6 +225,37 @@ mod tests {
         assert!(output.plan.negotiation.inject_console_addrs);
         assert_eq!(output.plan.runtime.turn.source, TurnSource::Fallback);
         assert_eq!(output.plan.runtime.mode, RuntimeMode::WebRtcDirect);
+    }
+
+    #[test]
+    fn configuration_facts_override_remote_play_fallback_capability() {
+        let mut config = Config::default();
+        config.session.home_resolution = ResolutionPreference::P1080;
+
+        let mut context = Context::default();
+        context.target = Target::Home;
+        context.session.gs_token = Some("token".to_string());
+        context.session.regions = vec![sample_region("HOME", "home.example.com", true)];
+        context.remote_play.configuration_resolved = true;
+        context.remote_play.console_streaming_enabled = Some(false);
+        context.remote_play.console_addrs.push(HostAddr {
+            ip: "10.0.0.10".to_string(),
+            port: 9002,
+        });
+
+        let output = compile(CompilerInput {
+            config,
+            context: context.clone(),
+        })
+        .unwrap();
+        let projection =
+            crate::policy::projection::project_session_capabilities(&context, &output.plan);
+
+        assert_eq!(
+            projection.effective_remote_play_capability_source,
+            "configuration"
+        );
+        assert!(!projection.effective_remote_play_allows_streaming);
     }
 
     #[test]

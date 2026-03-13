@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { EventUnsubscribe } from '@shared/events/client'
+import type { GamepadRuntimeSnapshotDto } from '@shared/gamepad/contract'
 import type { AppPageRouteName, TopNavNodeKey } from '../../navigation/spatial-nav.constants'
 import { FocusScope } from '@/navigation/core/vue'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
@@ -18,6 +19,7 @@ import {
 } from '../../navigation/spatial-nav.constants'
 import { events } from '../../services/events'
 import { rpc } from '../../services/rpc'
+import GamepadProfileCard from '../navigation/GamepadProfileCard.vue'
 import TopNavBar from '../navigation/TopNavBar.vue'
 import UserProfileMenu from '../navigation/UserProfileMenu.vue'
 
@@ -39,8 +41,11 @@ const topNavIcons = {
 const authState = ref<AuthState | null>(null)
 const userProfile = ref<UserProfile | null>(null)
 const isProfileMenuOpen = ref(false)
+const isGamepadCardOpen = ref(false)
 const isLoggingOut = ref(false)
 let disposeAuthSessionReady: EventUnsubscribe | undefined
+let disposeGamepadRuntimeSnapshot: EventUnsubscribe | undefined
+const gamepadSnapshot = ref<GamepadRuntimeSnapshotDto | null>(null)
 
 const activeNav = computed<'xhome' | 'xcloud' | 'setting'>(() => {
   if (route.name === 'xcloud') {
@@ -69,6 +74,9 @@ const resolvedSecondaryName = computed(() => {
 
 const resolvedScore = computed(() => userProfile.value?.gamerscore || '0')
 const resolvedAvatarUrl = computed(() => userProfile.value?.gameDisplayPicRaw || '')
+const hasConnectedGamepad = computed(() =>
+  (gamepadSnapshot.value?.devices ?? []).some(device => device.connected),
+)
 const resolvedStatusText = computed(() => {
   return authState.value?.isAuthenticated ? t('userMenu.loggedIn') : t('userMenu.loggedOut')
 })
@@ -87,19 +95,43 @@ async function loadShellUserState(): Promise<void> {
   }
 }
 
+async function loadGamepadSnapshot(): Promise<void> {
+  try {
+    gamepadSnapshot.value = await rpc.gamepad.getRuntimeSnapshot()
+  }
+  catch (error) {
+    console.warn('[AppShell] load gamepad snapshot failed:', error)
+  }
+}
+
 function closeProfileMenu(): void {
   isProfileMenuOpen.value = false
 }
 
 function openProfileMenu(): void {
+  closeGamepadCard()
   isProfileMenuOpen.value = true
 }
 
+function closeGamepadCard(): void {
+  isGamepadCardOpen.value = false
+}
+
+function openGamepadCard(): void {
+  closeProfileMenu()
+  isGamepadCardOpen.value = true
+}
+
 function handleEscapeKeydown(event: KeyboardEvent): void {
-  if (event.key !== 'Escape' || !isProfileMenuOpen.value) {
+  if (event.key !== 'Escape') {
     return
   }
-  closeProfileMenu()
+  if (isProfileMenuOpen.value) {
+    closeProfileMenu()
+  }
+  if (isGamepadCardOpen.value) {
+    closeGamepadCard()
+  }
 }
 
 async function handleLogout(): Promise<void> {
@@ -131,6 +163,9 @@ function handleTopNavSelect(node: TopNavNodeKey): void {
   if (node !== 'profile') {
     closeProfileMenu()
   }
+  if (node !== 'controller') {
+    closeGamepadCard()
+  }
 
   if (node === 'brand' || node === 'xhome') {
     void router.push('/xhome')
@@ -146,6 +181,10 @@ function handleTopNavSelect(node: TopNavNodeKey): void {
   }
   if (node === 'profile') {
     openProfileMenu()
+    return
+  }
+  if (node === 'controller') {
+    openGamepadCard()
   }
 }
 
@@ -185,13 +224,18 @@ watch(
   () => route.fullPath,
   () => {
     closeProfileMenu()
+    closeGamepadCard()
   },
 )
 
 onMounted(() => {
   void loadShellUserState()
+  void loadGamepadSnapshot()
   disposeAuthSessionReady = events.on('auth.sessionReady', () => {
     void loadShellUserState()
+  })
+  disposeGamepadRuntimeSnapshot = events.on('gamepad.runtimeSnapshot', (snapshot) => {
+    gamepadSnapshot.value = snapshot
   })
   window.addEventListener('keydown', handleEscapeKeydown)
 })
@@ -200,6 +244,10 @@ onUnmounted(() => {
   if (disposeAuthSessionReady !== undefined) {
     disposeAuthSessionReady()
     disposeAuthSessionReady = undefined
+  }
+  if (disposeGamepadRuntimeSnapshot !== undefined) {
+    disposeGamepadRuntimeSnapshot()
+    disposeGamepadRuntimeSnapshot = undefined
   }
   window.removeEventListener('keydown', handleEscapeKeydown)
 })
@@ -216,6 +264,7 @@ onUnmounted(() => {
         :icons="topNavIcons"
         :active-nav="activeNav"
         :profile-image-url="resolvedAvatarUrl"
+        :controller-active="isGamepadCardOpen || hasConnectedGamepad"
         @select="handleTopNavSelect"
       />
 
@@ -228,6 +277,12 @@ onUnmounted(() => {
       </main>
     </FocusScope>
 
+
+    <GamepadProfileCard
+      :open="isGamepadCardOpen"
+      :snapshot="gamepadSnapshot"
+      @close="closeGamepadCard"
+    />
 
     <UserProfileMenu
       :open="isProfileMenuOpen"
@@ -254,7 +309,7 @@ onUnmounted(() => {
   height: 100vh;
   color: var(--ui-page-text);
   font-family: var(--ui-font-family);
-  background-color: #1a1b1e;
+  background-color: var(--ui-page-bg);
   overflow: hidden;
 }
 

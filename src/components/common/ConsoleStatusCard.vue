@@ -78,13 +78,13 @@ const resolvedAriaLabel = computed(() => {
   min-height: clamp(var(--ui-console-card-min-height-min), 30vw, var(--ui-console-card-min-height));
   padding: var(--ui-console-card-padding);
   border-radius: var(--ui-console-card-radius);
-  border: 1px solid var(--tile-border);
-  background: #2b2b2b;
-  color: var(--color-text-primary);
+  border: 1px solid var(--ui-border-subtle);
+  background: var(--ui-surface-panel);
+  color: var(--ui-page-text);
   text-align: left;
   overflow: hidden;
   cursor: pointer;
-  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.12);
   transition:
     border-color var(--ui-motion-fast),
     box-shadow var(--ui-motion-fast),
@@ -92,10 +92,17 @@ const resolvedAriaLabel = computed(() => {
 }
 
 .console-status-card[data-focused='true'] {
-  background: var(--color-focus-bg);
+  background: var(--color-focus-bg-strong);
+  color: var(--ui-focus-text);
   box-shadow: var(--shadow-xbox-focus);
   transform: scale(1.02);
   z-index: 10;
+}
+
+.console-status-card[data-focused='true'] .console-status-card__title,
+.console-status-card[data-focused='true'] .console-status-card__status,
+.console-status-card[data-focused='true'] .console-status-card__description {
+  color: var(--ui-focus-text);
 }
 
 .console-status-card__media,
@@ -134,7 +141,7 @@ const resolvedAriaLabel = computed(() => {
   line-height: 1;
   font-weight: var(--ui-font-weight-bold);
   letter-spacing: -0.03em;
-  color: var(--color-text-primary);
+  color: var(--ui-page-text);
 }
 
 .console-status-card__status {
@@ -143,7 +150,7 @@ const resolvedAriaLabel = computed(() => {
   font-size: var(--ui-console-card-status-size);
   line-height: 1.2;
   font-weight: var(--ui-font-weight-medium);
-  color: var(--color-text-secondary);
+  color: var(--ui-page-text-soft);
   text-overflow: ellipsis;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
@@ -156,7 +163,8 @@ const resolvedAriaLabel = computed(() => {
   font-size: var(--ui-console-card-description-size);
   line-height: 1.18;
   font-weight: var(--ui-font-weight-medium);
-  color: color-mix(in srgb, var(--color-text-primary) 86%, transparent);
+  color: var(--ui-page-text-soft);
+  opacity: 0.82;
   text-overflow: ellipsis;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;

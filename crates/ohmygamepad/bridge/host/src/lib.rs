@@ -1,4 +1,7 @@
-use std::sync::{mpsc::Receiver, Arc, OnceLock};
+use std::sync::{
+    mpsc::{self, Receiver},
+    Arc, OnceLock,
+};
 
 use ohmygamepad_core::{
     DesktopDriverSelector, DesktopHapticsProviderKind, DeviceProfile, InputRuntimeError,
@@ -7,15 +10,24 @@ use ohmygamepad_gilrs::{OhMyGamepadService, OhMyGamepadServiceConfig};
 use ohmygamepad_macos_gccontroller_haptics::MacosGcControllerHapticsProvider;
 use ohmygamepad_protocol::{
     LogicalPadBindingDto, LogicalPadStateDto, MultiControllerSamplingStrategyDto,
+    OhMyGamepadBackendKindDto, OhMyGamepadCapabilityFlagsDto, OhMyGamepadHapticsProviderKindDto,
     OhMyGamepadRouteTargetDto, OhMyGamepadRumbleRequestDto, OhMyGamepadRumbleResultDto,
-    OhMyGamepadRumbleTargetDto, OhMyGamepadRuntimeSnapshotDto, OhMyGamepadSamplingConfigDto,
+    OhMyGamepadRumbleTargetDto, OhMyGamepadRuntimeHapticsDto, OhMyGamepadRuntimeSnapshotDto,
+    OhMyGamepadSamplingConfigDto,
 };
+use ohmygamepad_win_xbox_haptics::WindowsXboxHapticsProvider;
 
-static SHARED_GAMEPAD_RUNTIME: OnceLock<Result<Arc<OhMyGamepadService>, String>> = OnceLock::new();
+static SHARED_GAMEPAD_RUNTIME: OnceLock<Result<SharedGamepadRuntime, String>> = OnceLock::new();
+
+struct SharedGamepadRuntime {
+    runtime: Arc<OhMyGamepadService>,
+    haptics_provider: DesktopHapticsProviderKind,
+}
 
 #[derive(Clone)]
 pub struct GamepadRuntimeHost {
     runtime: Arc<OhMyGamepadService>,
+    haptics_provider: DesktopHapticsProviderKind,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -44,23 +56,40 @@ impl GamepadRuntimeHost {
         let runtime = SHARED_GAMEPAD_RUNTIME
             .get_or_init(|| {
                 bootstrap_gamepad_runtime()
-                    .map(Arc::new)
                     .map_err(|error| format!("bootstrapOhMyGamepadHost:{error}"))
             })
             .as_ref()
             .map_err(|message| GamepadRuntimeHostError::new(message.clone()))?;
 
         Ok(Self {
-            runtime: Arc::clone(runtime),
+            runtime: Arc::clone(&runtime.runtime),
+            haptics_provider: runtime.haptics_provider,
         })
     }
 
     pub fn snapshot(&self) -> Result<OhMyGamepadRuntimeSnapshotDto, InputRuntimeError> {
-        self.runtime.snapshot()
+        self.runtime
+            .snapshot()
+            .map(|snapshot| enrich_runtime_snapshot(snapshot, self.haptics_provider))
     }
 
     pub fn subscribe_runtime_snapshot(&self) -> Receiver<OhMyGamepadRuntimeSnapshotDto> {
-        self.runtime.subscribe_runtime_snapshot()
+        let source_rx = self.runtime.subscribe_runtime_snapshot();
+        let (tx, rx) = mpsc::channel();
+        let haptics_provider = self.haptics_provider;
+
+        std::thread::spawn(move || {
+            while let Ok(snapshot) = source_rx.recv() {
+                if tx
+                    .send(enrich_runtime_snapshot(snapshot, haptics_provider))
+                    .is_err()
+                {
+                    break;
+                }
+            }
+        });
+
+        rx
     }
 
     pub fn set_route_target(
@@ -144,11 +173,11 @@ impl GamepadRuntimeHost {
     }
 }
 
-fn bootstrap_gamepad_runtime() -> Result<OhMyGamepadService, String> {
+fn bootstrap_gamepad_runtime() -> Result<SharedGamepadRuntime, String> {
     let config = OhMyGamepadServiceConfig::default();
     let selected_providers = DesktopDriverSelector::select(&config.core);
 
-    match selected_providers.haptics_provider {
+    let runtime = match selected_providers.haptics_provider {
         DesktopHapticsProviderKind::MacosGcController => {
             OhMyGamepadService::spawn_with_haptics_provider(
                 config,
@@ -156,8 +185,101 @@ fn bootstrap_gamepad_runtime() -> Result<OhMyGamepadService, String> {
             )
             .map_err(|error| error.to_string())
         }
+        DesktopHapticsProviderKind::WindowsXbox => OhMyGamepadService::spawn_with_haptics_provider(
+            config,
+            Box::new(WindowsXboxHapticsProvider::default()),
+        )
+        .map_err(|error| error.to_string()),
         DesktopHapticsProviderKind::GilrsBasic | DesktopHapticsProviderKind::None => {
             OhMyGamepadService::spawn(config).map_err(|error| error.to_string())
         }
+    }?;
+
+    Ok(SharedGamepadRuntime {
+        runtime: Arc::new(runtime),
+        haptics_provider: selected_providers.haptics_provider,
+    })
+}
+
+fn enrich_runtime_snapshot(
+    mut snapshot: OhMyGamepadRuntimeSnapshotDto,
+    haptics_provider: DesktopHapticsProviderKind,
+) -> OhMyGamepadRuntimeSnapshotDto {
+    let default_device_id = resolve_default_device_id(&snapshot);
+
+    for device in &mut snapshot.devices {
+        device.effective_capabilities = infer_effective_capabilities(device, haptics_provider);
+        device.is_default_target = default_device_id.as_deref() == Some(device.device_id.as_str());
+    }
+
+    snapshot.haptics = OhMyGamepadRuntimeHapticsDto {
+        provider: map_haptics_provider_kind(haptics_provider),
+        supports_auto_target: true,
+        supports_basic_rumble: snapshot
+            .devices
+            .iter()
+            .any(|device| device.effective_capabilities.basic_rumble),
+        supports_advanced_haptics: snapshot
+            .devices
+            .iter()
+            .any(|device| device.effective_capabilities.advanced_haptics),
+        default_device_id,
+    };
+    snapshot
+}
+
+fn resolve_default_device_id(snapshot: &OhMyGamepadRuntimeSnapshotDto) -> Option<String> {
+    snapshot
+        .pads
+        .iter()
+        .find_map(|pad| pad.device_ids.first().cloned())
+        .or_else(|| {
+            snapshot
+                .devices
+                .iter()
+                .find(|device| device.connected)
+                .map(|device| device.device_id.clone())
+        })
+}
+
+fn infer_effective_capabilities(
+    device: &ohmygamepad_protocol::OhMyGamepadDeviceDto,
+    haptics_provider: DesktopHapticsProviderKind,
+) -> OhMyGamepadCapabilityFlagsDto {
+    let mut effective = device.capabilities;
+    if !device.connected || !is_physical_gamepad_candidate(device) {
+        return effective;
+    }
+
+    match haptics_provider {
+        DesktopHapticsProviderKind::MacosGcController | DesktopHapticsProviderKind::WindowsXbox => {
+            effective.basic_rumble = true;
+            effective.advanced_haptics = true;
+        }
+        DesktopHapticsProviderKind::GilrsBasic => {
+            effective.basic_rumble = true;
+            effective.advanced_haptics = false;
+        }
+        DesktopHapticsProviderKind::None => {}
+    }
+
+    effective
+}
+
+fn is_physical_gamepad_candidate(device: &ohmygamepad_protocol::OhMyGamepadDeviceDto) -> bool {
+    device.backend == Some(OhMyGamepadBackendKindDto::Gilrs)
+        && device.device_id != "virtual:keyboard"
+}
+
+fn map_haptics_provider_kind(
+    provider: DesktopHapticsProviderKind,
+) -> OhMyGamepadHapticsProviderKindDto {
+    match provider {
+        DesktopHapticsProviderKind::GilrsBasic => OhMyGamepadHapticsProviderKindDto::GilrsBasic,
+        DesktopHapticsProviderKind::MacosGcController => {
+            OhMyGamepadHapticsProviderKindDto::MacosGcController
+        }
+        DesktopHapticsProviderKind::WindowsXbox => OhMyGamepadHapticsProviderKindDto::WindowsXbox,
+        DesktopHapticsProviderKind::None => OhMyGamepadHapticsProviderKindDto::None,
     }
 }

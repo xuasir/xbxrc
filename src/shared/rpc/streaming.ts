@@ -68,6 +68,9 @@ export interface StreamingRuntimeProjection {
   render: StreamingRuntimeOwner
   input: StreamingRuntimeOwner
   microphone: StreamingRuntimeOwner
+  targetVideoWidth: number
+  targetVideoHeight: number
+  microphoneStartWithSession: boolean
   turnServer?: StreamingTurnServerConfig | null
   codec?: StreamingRuntimeCodecPreference | null
   maxVideoBitrateKbps?: number | null
@@ -81,6 +84,47 @@ export interface StreamingRenderProjection {
   enableAudioControl: boolean
   videoFormat?: string | null
   displayOptions: StreamingDisplayOptionsValue
+}
+
+export type StreamingTurnSource = 'none' | 'custom' | 'fallback'
+
+export interface StreamingSessionRegionProjection {
+  name: string
+  shortName?: string | null
+  displayName?: string | null
+  continent?: string | null
+}
+
+export interface StreamingSessionMetadataProjection {
+  serverBaseUrl: string
+  region?: StreamingSessionRegionProjection | null
+  turnSource: StreamingTurnSource
+}
+
+export interface StreamingSessionCapabilitiesProjection {
+  supportedInputs: string[]
+  titleSupportsMkb: boolean
+  titleSupportsTouch: boolean
+  titleSupportsNativeTouch: boolean
+  inputConfigResolved: boolean
+  inputConfigSupportsMkb: boolean
+  inputConfigSupportsTouch: boolean
+  inputConfigSupportsNativeTouch: boolean
+  effectiveCapabilitySource: string
+  effectiveTitleSupportsMkb: boolean
+  effectiveTitleSupportsTouch: boolean
+  effectiveTitleSupportsNativeTouch: boolean
+  runtimeSupportsNativeMkb: boolean
+  runtimeSupportsTouchSurface: boolean
+  remotePlayConfigurationResolved: boolean
+  remotePlayRemoteManagementEnabled: boolean
+  remotePlayConsoleStreamingEnabled: boolean
+  effectiveRemotePlayCapabilitySource: string
+  effectiveRemotePlayAllowsStreaming: boolean
+  remotePlayConsoleAddrsCount: number
+  inputMode: string
+  touchEnabled: boolean
+  microphoneStartWithSession: boolean
 }
 
 export interface StreamingSessionSnapshot {
@@ -98,6 +142,8 @@ export interface StreamingSessionExecutionSnapshot {
   session: StreamingSessionSnapshot
   runtime: StreamingRuntimeProjection
   render: StreamingRenderProjection
+  metadata: StreamingSessionMetadataProjection
+  capabilities: StreamingSessionCapabilitiesProjection
 }
 
 export type StreamingSessionPhase
@@ -116,6 +162,7 @@ export interface StreamingSessionProgressSnapshot {
   statusTextKey: string
   retryCount: number
   queueSeconds?: number
+  queue?: StreamingQueueDetails
   errorCode?: string
   errorMessage?: string
 }

@@ -8,13 +8,17 @@ use std::sync::Arc;
 use xbox_streaming::input::{
     SupportedInput as DomainSupportedInput, TitleCapabilities as DomainTitleCapabilities,
 };
-use xbox_streaming::policy::session::SessionAccessContext as DomainSessionAccessContext;
+use xbox_streaming::policy::{
+    session::SessionAccessContext as DomainSessionAccessContext,
+    InputCapabilityContext as DomainInputCapabilityContext,
+};
 use xbox_streaming::runtime::{
     RuntimeCapabilities as DomainRuntimeCapabilities, TurnContext as DomainTurnContext,
 };
 use xbox_streaming::{
     compile as compile_plan, decide_runtime_recovery, parse_session_access_context,
-    project_render_plan, project_runtime_plan, AnswerPayload as DomainAnswerPayload, AudioChannels,
+    project_render_plan, project_runtime_plan, project_session_capabilities,
+    project_session_metadata, AnswerPayload as DomainAnswerPayload, AudioChannels,
     BitratePreference, CodecPreference, CompilerInput as DomainCompilerInput,
     Config as DomainStreamingConfig, Context as DomainContext,
     DisplayOptions as DomainDisplayOptions, FallbackTurnProvider, HostAddr as DomainHostAddr,
@@ -35,6 +39,20 @@ pub struct StreamingService {
 struct StreamingServiceInner {
     flow: SessionFlowService<StreamingSessionSnapshot, TauriSessionFlowProvider>,
     fallback_turn_provider: tokio::sync::Mutex<FallbackTurnProvider>,
+}
+
+#[derive(Default)]
+struct ResolvedTitleCapabilitySnapshot {
+    capabilities: DomainTitleCapabilities,
+    input_capability: DomainInputCapabilityContext,
+}
+
+#[derive(Default)]
+struct ResolvedRemotePlayContext {
+    configuration_resolved: bool,
+    remote_management_enabled: Option<bool>,
+    console_streaming_enabled: Option<bool>,
+    console_addrs: Vec<DomainHostAddr>,
 }
 
 /// tauri 侧 flow adapter：仅负责提供凭证。
@@ -120,7 +138,7 @@ impl StreamingService {
         &self,
         target_type: &str,
         target_id: &str,
-    ) -> AppResult<StreamingPlan> {
+    ) -> AppResult<(StreamingPlan, DomainContext)> {
         let target_type = StreamingTargetType::from_value(target_type);
         let target = if matches!(target_type, StreamingTargetType::Home) {
             DomainTarget::Home
@@ -138,6 +156,11 @@ impl StreamingService {
             config_snapshot.ipv6,
             config_snapshot.resolution,
         );
+        // xHome 分辨率独立于全局 resolution，避免本地主机串流被云串流默认值拖成 720p。
+        domain_config.session.home_resolution =
+            xbox_streaming::policy::config::parse_resolution_preference(
+                config_snapshot.xhome_resolution,
+            );
         apply_streaming_preferences(&mut domain_config, &config_snapshot);
 
         let token = self
@@ -158,13 +181,24 @@ impl StreamingService {
             .build_domain_context(target, target_id, target_type.as_str(), access_context)
             .await;
 
+        let compiler_context = context.clone();
         let output = compile_plan(DomainCompilerInput {
             config: domain_config,
             context,
         })
         .map_err(|error| AppError::Streaming(error.to_string()))?;
 
-        Ok(output.plan)
+        log::info!(
+            "streaming plan resolved: target={} target_id={} device_profile={:?} resolution={}x{} os={}",
+            target_type.as_str(),
+            target_id,
+            output.plan.session.device.kind,
+            output.plan.session.device.max_width,
+            output.plan.session.device.max_height,
+            output.plan.session.device.os_name,
+        );
+
+        Ok((output.plan, compiler_context))
     }
 
     async fn build_domain_context(
@@ -174,12 +208,16 @@ impl StreamingService {
         target_type: &str,
         session: DomainSessionAccessContext,
     ) -> DomainContext {
+        let title_capability = self.resolve_title_capabilities(target, target_id).await;
+        let remote_play = self.resolve_remote_play_context(target, target_id).await;
+
         DomainContext {
             target,
             target_id: target_id.to_string(),
             session,
             // input 用户配置面暂不开放，但 title 能力事实仍需来自真实数据源。
-            input: self.resolve_title_capabilities(target, target_id).await,
+            input: title_capability.capabilities,
+            input_capability: title_capability.input_capability,
             // runtime 能力按当前宿主真实 provider 状态计算，避免硬编码。
             runtime: resolve_runtime_capabilities(self.xbxengine_provider.is_runtime_available()),
             // xHome fallback TURN 由 provider 提供，失败时保守降级为 None。
@@ -188,9 +226,10 @@ impl StreamingService {
             },
             // remote play 地址注入来自 data provider；缺失时显式为空。
             remote_play: xbox_streaming::RemotePlayContext {
-                console_addrs: self
-                    .resolve_remote_play_console_addrs(target, target_id)
-                    .await,
+                configuration_resolved: remote_play.configuration_resolved,
+                remote_management_enabled: remote_play.remote_management_enabled,
+                console_streaming_enabled: remote_play.console_streaming_enabled,
+                console_addrs: remote_play.console_addrs,
             },
         }
     }
@@ -212,12 +251,13 @@ impl StreamingService {
         &self,
         target: DomainTarget,
         target_id: &str,
-    ) -> DomainTitleCapabilities {
+    ) -> ResolvedTitleCapabilitySnapshot {
         if target.is_home() {
-            return DomainTitleCapabilities::default();
+            return ResolvedTitleCapabilitySnapshot::default();
         }
 
         let mut capabilities = resolve_min_title_capabilities(target_id);
+        let mut input_capability = DomainInputCapabilityContext::default();
         match self
             .data_provider
             .get_streaming_title_input_config(target_id)
@@ -225,7 +265,11 @@ impl StreamingService {
         {
             Ok(config) => {
                 let parsed = parse_title_capabilities_from_input_config(&config.config);
-                merge_title_capabilities(&mut capabilities, parsed);
+                input_capability.input_config_resolved = true;
+                input_capability.input_config_supports_mkb = parsed.has_mkb;
+                input_capability.input_config_supports_touch = parsed.has_touch;
+                input_capability.input_config_supports_native_touch = parsed.has_native_touch;
+                apply_input_config_title_capabilities(&mut capabilities, parsed);
             }
             Err(error) => {
                 log::warn!(
@@ -233,23 +277,26 @@ impl StreamingService {
                 );
             }
         }
-        capabilities
+        ResolvedTitleCapabilitySnapshot {
+            capabilities,
+            input_capability,
+        }
     }
 
-    async fn resolve_remote_play_console_addrs(
+    async fn resolve_remote_play_context(
         &self,
         target: DomainTarget,
         target_id: &str,
-    ) -> Vec<DomainHostAddr> {
+    ) -> ResolvedRemotePlayContext {
         if !target.is_home() || target_id.trim().is_empty() {
-            return Vec::new();
+            return ResolvedRemotePlayContext::default();
         }
 
         let consoles = match self.data_provider.get_remote_consoles().await {
             Ok(value) => value,
             Err(error) => {
                 log::warn!("streaming console addrs resolve failed: {error}");
-                return Vec::new();
+                return ResolvedRemotePlayContext::default();
             }
         };
 
@@ -258,18 +305,23 @@ impl StreamingService {
                 || item.id.as_deref() == Some(target_id)
                 || item.device_id.as_deref() == Some(target_id)
         }) else {
-            return Vec::new();
+            return ResolvedRemotePlayContext::default();
         };
 
-        console
-            .console_addrs
-            .unwrap_or_default()
-            .into_iter()
-            .map(|item| DomainHostAddr {
-                ip: item.ip,
-                port: item.port,
-            })
-            .collect()
+        ResolvedRemotePlayContext {
+            configuration_resolved: true,
+            remote_management_enabled: console.remote_management_enabled,
+            console_streaming_enabled: console.console_streaming_enabled,
+            console_addrs: console
+                .console_addrs
+                .unwrap_or_default()
+                .into_iter()
+                .map(|item| DomainHostAddr {
+                    ip: item.ip,
+                    port: item.port,
+                })
+                .collect(),
+        }
     }
 }
 
@@ -368,10 +420,19 @@ fn collect_string_tokens(value: &serde_json::Value, output: &mut Vec<String>) {
     }
 }
 
-fn merge_title_capabilities(target: &mut DomainTitleCapabilities, source: DomainTitleCapabilities) {
-    target.has_mkb = target.has_mkb || source.has_mkb;
-    target.has_touch = target.has_touch || source.has_touch;
-    target.has_native_touch = target.has_native_touch || source.has_native_touch;
+fn apply_input_config_title_capabilities(
+    target: &mut DomainTitleCapabilities,
+    source: DomainTitleCapabilities,
+) {
+    // inputconfigs 是标题输入能力的显式来源；一旦命中，touch/MKB 事实应以它为准，
+    // 仅保留最小 gamepad 兜底，避免本地默认值把“官方未声明支持”的标题误判成 touch title。
+    target.has_mkb = source.has_mkb;
+    target.has_touch = source.has_touch;
+    target.has_native_touch = source.has_native_touch;
+    target
+        .supported_inputs
+        .retain(|item| matches!(item, DomainSupportedInput::Gamepad));
+
     for input in source.supported_inputs {
         push_supported_input(target, input);
     }
@@ -393,9 +454,12 @@ impl crate::mods::streaming::StreamingProvider for StreamingService {
         &self,
         params: StreamingStartSessionParams,
     ) -> AppResult<StreamingStartSessionResult> {
-        let plan = self
+        let (plan, compiler_context) = self
             .resolve_streaming_plan(&params.target_type, &params.target_id)
             .await?;
+        // 执行快照会消费 plan，这里先投影出页面侧需要的稳定元数据。
+        let metadata = project_session_metadata(&plan);
+        let capabilities = project_session_capabilities(&compiler_context, &plan);
         let execution = self
             .inner
             .flow
@@ -406,6 +470,8 @@ impl crate::mods::streaming::StreamingProvider for StreamingService {
             session: execution.session,
             runtime: execution.runtime.into(),
             render: execution.render.into(),
+            metadata: metadata.into(),
+            capabilities: capabilities.into(),
         };
 
         let progress = self
@@ -686,6 +752,7 @@ mod tests {
         let mut config = DomainStreamingConfig::default();
         let snapshot = StreamingConfigSnapshot {
             resolution: 1080,
+            xhome_resolution: 1080,
             preferred_game_language: "en-US".to_string(),
             ipv6: false,
             force_region_ip: String::new(),

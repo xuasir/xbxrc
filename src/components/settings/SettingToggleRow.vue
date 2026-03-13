@@ -122,21 +122,21 @@ function handleConfirm(): void {
 }
 
 .setting-toggle-row[data-focused='true'] {
-  background: var(--color-focus-bg);
-  color: #ffffff;
+  background: var(--color-focus-bg-strong);
+  color: var(--ui-focus-text);
   box-shadow: var(--shadow-xbox-focus);
 }
 
 .setting-toggle-row[data-focused='true'] .setting-toggle-row__label {
-  color: #ffffff;
+  color: var(--ui-focus-text);
 }
 
 .setting-toggle-row[data-focused='true'] .setting-toggle-row__track {
-  border-color: rgba(255, 255, 255, 0.6);
+  border-color: color-mix(in srgb, var(--ui-focus-text) 60%, transparent);
 }
 
 .setting-toggle-row[data-focused='true'] .setting-toggle-row__thumb {
-  background: #ffffff;
+  background: var(--ui-focus-text);
 }
 
 .setting-toggle-row[data-focused='true'].setting-toggle-row--active .setting-toggle-row__track {

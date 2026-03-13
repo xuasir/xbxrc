@@ -4,6 +4,7 @@ use crate::policy::negotiation::{
     AudioChannels, BitratePreference, Codec, CodecPreference, NegotiationPlan,
 };
 use crate::policy::runtime::RuntimeMode;
+use crate::policy::session::ResolutionPreference;
 use crate::policy::types::Target;
 
 pub fn compile_negotiation(
@@ -16,11 +17,8 @@ pub fn compile_negotiation(
         Target::Cloud => config.negotiation.cloud_prefer_ipv6,
     };
     let codec = compile_codec(config.negotiation.video_codec.clone());
-    let video_bitrate_kbps = match context.target {
-        Target::Home => compile_bitrate(config.negotiation.home_video_bitrate),
-        Target::Cloud => compile_bitrate(config.negotiation.cloud_video_bitrate),
-    };
-    let audio_bitrate_kbps = compile_bitrate(config.negotiation.audio_bitrate);
+    let video_bitrate_kbps = compile_video_bitrate(config, context.target);
+    let audio_bitrate_kbps = compile_audio_bitrate(config.negotiation.audio_bitrate);
     let stereo_audio = match config.negotiation.audio_channels {
         AudioChannels::Auto | AudioChannels::Stereo => true,
         AudioChannels::Mono => false,
@@ -81,5 +79,39 @@ pub fn compile_bitrate(preference: BitratePreference) -> Option<u32> {
         BitratePreference::Auto => None,
         BitratePreference::CustomKbps { kbps } if kbps > 0 => Some(kbps),
         BitratePreference::CustomKbps { .. } => None,
+    }
+}
+
+fn compile_video_bitrate(config: &Config, target: Target) -> Option<u32> {
+    let preference = match target {
+        Target::Home => config.negotiation.home_video_bitrate,
+        Target::Cloud => config.negotiation.cloud_video_bitrate,
+    };
+
+    compile_bitrate(preference).or_else(|| {
+        let resolution = match target {
+            Target::Home => config.session.home_resolution,
+            Target::Cloud => config.session.cloud_resolution,
+        };
+        Some(default_video_bitrate_kbps(target, resolution))
+    })
+}
+
+fn compile_audio_bitrate(preference: BitratePreference) -> Option<u32> {
+    compile_bitrate(preference).or(Some(128))
+}
+
+fn default_video_bitrate_kbps(target: Target, resolution: ResolutionPreference) -> u32 {
+    match (target, resolution) {
+        (Target::Cloud, ResolutionPreference::P720) => 10_000,
+        (Target::Cloud, ResolutionPreference::P1080) => 20_000,
+        (Target::Cloud, ResolutionPreference::P1080Hq) => 35_000,
+        (Target::Cloud, ResolutionPreference::P1440) => 50_000,
+        (Target::Cloud, ResolutionPreference::Auto) => 20_000,
+        (Target::Home, ResolutionPreference::P720) => 20_000,
+        (Target::Home, ResolutionPreference::P1080) => 35_000,
+        (Target::Home, ResolutionPreference::P1080Hq) => 50_000,
+        (Target::Home, ResolutionPreference::P1440) => 65_000,
+        (Target::Home, ResolutionPreference::Auto) => 35_000,
     }
 }

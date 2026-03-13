@@ -38,4 +38,6 @@ export interface TransportRuntimeConfig {
   maxVideoBitrateKbps: number
   maxAudioBitrateKbps: number
   forceMonoAudio: boolean
+  targetVideoWidth: number
+  targetVideoHeight: number
 }

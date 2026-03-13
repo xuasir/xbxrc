@@ -56,7 +56,12 @@ impl HapticsProvider for MacosGcControllerHapticsProvider {
 
 #[cfg(target_os = "macos")]
 mod platform {
-    use objc2::{msg_send, rc::Retained, sel, AnyThread};
+    use std::cell::RefCell;
+    use std::collections::HashMap;
+    use std::sync::Once;
+    use std::time::{Duration, Instant};
+
+    use objc2::{msg_send, rc::Retained, runtime::ProtocolObject, sel, AnyThread};
     use objc2_core_haptics::{
         CHHapticEngine, CHHapticEvent, CHHapticEventParameter,
         CHHapticEventParameterIDHapticIntensity, CHHapticEventParameterIDHapticSharpness,
@@ -64,11 +69,24 @@ mod platform {
         CHHapticTimeImmediate,
     };
     use objc2_foundation::NSArray;
-    use objc2_game_controller::{GCController, GCDeviceHaptics, GCHapticsLocalityDefault};
+    use objc2_game_controller::{
+        GCController, GCDevice, GCDeviceHaptics, GCHapticsLocality,
+        GCHapticsLocalityDefault, GCHapticsLocalityHandles, GCHapticsLocalityLeftHandle,
+        GCHapticsLocalityLeftTrigger, GCHapticsLocalityRightHandle,
+        GCHapticsLocalityRightTrigger, GCHapticsLocalityTriggers,
+    };
     use ohmygamepad_core::HapticsProviderError;
     use ohmygamepad_protocol::OhMyGamepadRumbleEffectDto;
 
     use super::MacosGcControllerHapticsConfig;
+
+    static LOGGED_HAPTICS_CAPABILITIES: Once = Once::new();
+    const LOCALITY_MERGE_WINDOW_MS: u64 = 18;
+    const LOCALITY_MIN_DURATION_MS: u16 = 24;
+    const LOCALITY_REPLACE_EPSILON: f32 = 0.08;
+    thread_local! {
+        static LOCALITY_PLAYBACK_CACHE: RefCell<HashMap<String, LocalityPlaybackState>> = RefCell::new(HashMap::new());
+    }
 
     pub(super) fn play_rumble(
         _config: &MacosGcControllerHapticsConfig,
@@ -86,28 +104,73 @@ mod platform {
         let Some(haptics) = (unsafe { controller.haptics() }) else {
             return Err(HapticsProviderError::Unsupported);
         };
+        log_haptics_capabilities_once(&controller, &haptics);
         if !supports_gc_haptics_engine(&haptics) {
             return Err(HapticsProviderError::Unsupported);
         }
 
-        let engine =
-            unsafe { create_default_engine(&haptics) }.ok_or(HapticsProviderError::Unsupported)?;
-        unsafe { engine.startAndReturnError() }
-            .map_err(|_| HapticsProviderError::TransportClosed)?;
+        let supported_localities = unsafe { haptics.supportedLocalities() };
+        let mut dispatched = false;
 
-        let pattern = build_basic_rumble_pattern(effect)?;
-        let player = unsafe { engine.createPlayerWithPattern_error(&pattern) }
-            .map_err(|_| HapticsProviderError::TransportClosed)?;
-        unsafe { player.startAtTime_error(CHHapticTimeImmediate) }
-            .map_err(|_| HapticsProviderError::TransportClosed)
+        // Xbox rumble 的四路语义应该尽量保留到 macOS locality，而不是继续压回 Default。
+        dispatched |= dispatch_channel(
+            &haptics,
+            &supported_localities,
+            locality_left_handle(),
+            LocalityProfileKind::HandleLeft,
+            effect.strong_magnitude,
+            effect,
+        )?;
+        dispatched |= dispatch_channel(
+            &haptics,
+            &supported_localities,
+            locality_right_handle(),
+            LocalityProfileKind::HandleRight,
+            effect.weak_magnitude,
+            effect,
+        )?;
+        dispatched |= dispatch_channel(
+            &haptics,
+            &supported_localities,
+            locality_left_trigger(),
+            LocalityProfileKind::TriggerLeft,
+            effect.left_trigger,
+            effect,
+        )?;
+        dispatched |= dispatch_channel(
+            &haptics,
+            &supported_localities,
+            locality_right_trigger(),
+            LocalityProfileKind::TriggerRight,
+            effect.right_trigger,
+            effect,
+        )?;
+
+        if dispatched {
+            return Ok(());
+        }
+
+        if let Some(locality) = resolve_fallback_locality(&supported_localities, effect) {
+            return dispatch_locality(
+                &haptics,
+                locality,
+                localized_effect_from_combined(effect),
+            )
+            .map(|_| ());
+        }
+
+        Err(HapticsProviderError::Unsupported)
     }
 
     pub(super) fn stop_rumble(
         _config: &MacosGcControllerHapticsConfig,
         _device_ids: &[String],
     ) -> Result<(), HapticsProviderError> {
-        // 当前最小实现使用固定时长 pattern，不做 engine/player 常驻缓存。
-        // 因此 stop 先退化成 no-op，后续接入 registry + player cache 后再补真停振。
+        LOCALITY_PLAYBACK_CACHE.with(|cache| {
+            for state in cache.borrow_mut().values_mut() {
+                let _ = stop_locality_player(state);
+            }
+        });
         Ok(())
     }
 
@@ -125,25 +188,164 @@ mod platform {
         unsafe { msg_send![haptics, respondsToSelector: sel!(createEngineWithLocality:)] }
     }
 
-    unsafe fn create_default_engine(haptics: &GCDeviceHaptics) -> Option<Retained<CHHapticEngine>> {
-        unsafe { msg_send![haptics, createEngineWithLocality: GCHapticsLocalityDefault] }
+    fn log_haptics_capabilities_once(controller: &GCController, haptics: &GCDeviceHaptics) {
+        LOGGED_HAPTICS_CAPABILITIES.call_once(|| {
+            let controller_name = unsafe { controller.vendorName() }
+                .map(|value| value.to_string())
+                .unwrap_or_else(|| "unknown".to_string());
+            let product_category = unsafe { controller.productCategory() }.to_string();
+            let mut localities = unsafe { haptics.supportedLocalities() }
+                .iter()
+                .map(|value| value.to_string())
+                .collect::<Vec<_>>();
+            localities.sort();
+
+            log::info!(
+                "[ohmygamepad][macos-haptics] controller={} product_category={} supported_localities={:?}",
+                controller_name,
+                product_category,
+                localities
+            );
+        });
+    }
+
+    fn dispatch_channel(
+        haptics: &GCDeviceHaptics,
+        supported_localities: &objc2_foundation::NSSet<GCHapticsLocality>,
+        locality: &GCHapticsLocality,
+        profile: LocalityProfileKind,
+        magnitude: f32,
+        effect: &OhMyGamepadRumbleEffectDto,
+    ) -> Result<bool, HapticsProviderError> {
+        let localized_effect = localized_effect_for_profile(profile, magnitude, effect.duration_ms);
+        if localized_effect.intensity <= 0.0 {
+            return Ok(false);
+        }
+        if !supports_locality(supported_localities, locality) {
+            return Ok(false);
+        }
+
+        dispatch_locality(haptics, locality, localized_effect)?;
+        Ok(true)
+    }
+
+    fn dispatch_locality(
+        haptics: &GCDeviceHaptics,
+        locality: &GCHapticsLocality,
+        localized_effect: LocalizedRumbleEffect,
+    ) -> Result<(), HapticsProviderError> {
+        let locality_key = locality.to_string();
+        LOCALITY_PLAYBACK_CACHE.with(|cache| {
+            let mut cache = cache.borrow_mut();
+            let state = cache
+                .entry(locality_key)
+                .or_insert_with(|| LocalityPlaybackState {
+                    engine: None,
+                    player: None,
+                    last_effect: None,
+                    last_started_at: None,
+                });
+
+            let engine = ensure_locality_engine(haptics, locality, state)?;
+            if should_keep_current_player(state, localized_effect) {
+                return Ok(());
+            }
+            let _ = stop_locality_player(state);
+
+            let pattern = build_basic_rumble_pattern(localized_effect)?;
+            let player = unsafe { engine.createPlayerWithPattern_error(&pattern) }
+                .map_err(|_| HapticsProviderError::TransportClosed)?;
+            unsafe { player.startAtTime_error(CHHapticTimeImmediate) }
+                .map_err(|_| HapticsProviderError::TransportClosed)?;
+            state.player = Some(player);
+            state.last_effect = Some(localized_effect);
+            state.last_started_at = Some(Instant::now());
+            Ok(())
+        })
+    }
+
+    fn resolve_fallback_locality(
+        supported_localities: &objc2_foundation::NSSet<GCHapticsLocality>,
+        effect: &OhMyGamepadRumbleEffectDto,
+    ) -> Option<&'static GCHapticsLocality> {
+        if (effect.strong_magnitude > 0.0 || effect.weak_magnitude > 0.0)
+            && supports_locality(supported_localities, locality_handles())
+        {
+            return Some(locality_handles());
+        }
+
+        if (effect.left_trigger > 0.0 || effect.right_trigger > 0.0)
+            && supports_locality(supported_localities, locality_triggers())
+        {
+            return Some(locality_triggers());
+        }
+
+        if supports_locality(supported_localities, locality_default()) {
+            return Some(locality_default());
+        }
+
+        None
+    }
+
+    fn supports_locality(
+        supported_localities: &objc2_foundation::NSSet<GCHapticsLocality>,
+        locality: &GCHapticsLocality,
+    ) -> bool {
+        supported_localities
+            .iter()
+            .any(|value| value.to_string() == locality.to_string())
+    }
+
+    unsafe fn create_engine(
+        haptics: &GCDeviceHaptics,
+        locality: &GCHapticsLocality,
+    ) -> Option<Retained<CHHapticEngine>> {
+        unsafe { msg_send![haptics, createEngineWithLocality: locality] }
+    }
+
+    fn locality_default() -> &'static GCHapticsLocality {
+        unsafe { GCHapticsLocalityDefault }
+    }
+
+    fn locality_handles() -> &'static GCHapticsLocality {
+        unsafe { GCHapticsLocalityHandles }
+    }
+
+    fn locality_left_handle() -> &'static GCHapticsLocality {
+        unsafe { GCHapticsLocalityLeftHandle }
+    }
+
+    fn locality_right_handle() -> &'static GCHapticsLocality {
+        unsafe { GCHapticsLocalityRightHandle }
+    }
+
+    fn locality_triggers() -> &'static GCHapticsLocality {
+        unsafe { GCHapticsLocalityTriggers }
+    }
+
+    fn locality_left_trigger() -> &'static GCHapticsLocality {
+        unsafe { GCHapticsLocalityLeftTrigger }
+    }
+
+    fn locality_right_trigger() -> &'static GCHapticsLocality {
+        unsafe { GCHapticsLocalityRightTrigger }
     }
 
     fn build_basic_rumble_pattern(
-        effect: &OhMyGamepadRumbleEffectDto,
+        localized_effect: LocalizedRumbleEffect,
     ) -> Result<Retained<CHHapticPattern>, HapticsProviderError> {
         let intensity_parameter = unsafe {
             CHHapticEventParameter::initWithParameterID_value(
                 CHHapticEventParameter::alloc(),
                 CHHapticEventParameterIDHapticIntensity,
-                normalized_intensity(effect),
+                localized_effect.intensity,
             )
         };
         let sharpness_parameter = unsafe {
             CHHapticEventParameter::initWithParameterID_value(
                 CHHapticEventParameter::alloc(),
                 CHHapticEventParameterIDHapticSharpness,
-                normalized_sharpness(effect),
+                localized_effect.sharpness,
             )
         };
         let parameters = NSArray::from_retained_slice(&[intensity_parameter, sharpness_parameter]);
@@ -153,8 +355,8 @@ mod platform {
                 CHHapticEvent::alloc(),
                 CHHapticEventTypeHapticContinuous,
                 &parameters,
-                f64::from(effect.start_delay_ms) / 1000.0,
-                normalized_duration_seconds(effect),
+                0.0,
+                normalized_duration_seconds(localized_effect.duration_ms),
             )
         };
         let events = NSArray::from_retained_slice(&[event]);
@@ -168,6 +370,114 @@ mod platform {
             )
         }
         .map_err(|_| HapticsProviderError::TransportClosed)
+    }
+
+    #[derive(Clone, Copy)]
+    struct LocalizedRumbleEffect {
+        intensity: f32,
+        sharpness: f32,
+        duration_ms: u16,
+    }
+
+    #[derive(Clone, Copy)]
+    enum LocalityProfileKind {
+        HandleLeft,
+        HandleRight,
+        TriggerLeft,
+        TriggerRight,
+    }
+
+    struct LocalityPlaybackState {
+        engine: Option<Retained<CHHapticEngine>>,
+        player: Option<Retained<ProtocolObject<dyn CHHapticPatternPlayer>>>,
+        last_effect: Option<LocalizedRumbleEffect>,
+        last_started_at: Option<Instant>,
+    }
+
+    fn ensure_locality_engine(
+        haptics: &GCDeviceHaptics,
+        locality: &GCHapticsLocality,
+        state: &mut LocalityPlaybackState,
+    ) -> Result<Retained<CHHapticEngine>, HapticsProviderError> {
+        if let Some(engine) = state.engine.as_ref() {
+            unsafe { engine.startAndReturnError() }.map_err(|_| HapticsProviderError::TransportClosed)?;
+            return Ok(engine.clone());
+        }
+
+        let engine =
+            unsafe { create_engine(haptics, locality) }.ok_or(HapticsProviderError::Unsupported)?;
+        unsafe { engine.setPlaysHapticsOnly(true) };
+        unsafe { engine.startAndReturnError() }.map_err(|_| HapticsProviderError::TransportClosed)?;
+        state.engine = Some(engine.clone());
+        Ok(engine)
+    }
+
+    fn stop_locality_player(state: &mut LocalityPlaybackState) -> Result<(), HapticsProviderError> {
+        let Some(player) = state.player.take() else {
+            return Ok(());
+        };
+        state.last_effect = None;
+        state.last_started_at = None;
+
+        unsafe { player.stopAtTime_error(CHHapticTimeImmediate) }
+            .or_else(|_| unsafe { player.cancelAndReturnError() })
+            .map_err(|_| HapticsProviderError::TransportClosed)
+    }
+
+    fn should_keep_current_player(
+        state: &LocalityPlaybackState,
+        next_effect: LocalizedRumbleEffect,
+    ) -> bool {
+        let Some(previous_effect) = state.last_effect else {
+            return false;
+        };
+        let Some(last_started_at) = state.last_started_at else {
+            return false;
+        };
+        if last_started_at.elapsed() > Duration::from_millis(LOCALITY_MERGE_WINDOW_MS) {
+            return false;
+        }
+
+        next_effect.intensity <= previous_effect.intensity + LOCALITY_REPLACE_EPSILON
+            && next_effect.sharpness <= previous_effect.sharpness + LOCALITY_REPLACE_EPSILON
+    }
+
+    fn localized_effect_from_combined(effect: &OhMyGamepadRumbleEffectDto) -> LocalizedRumbleEffect {
+        LocalizedRumbleEffect {
+            intensity: normalized_intensity(effect),
+            sharpness: normalized_sharpness(effect),
+            duration_ms: normalized_duration_ms(effect.duration_ms, false),
+        }
+    }
+
+    fn localized_effect_for_profile(
+        profile: LocalityProfileKind,
+        magnitude: f32,
+        duration_ms: u16,
+    ) -> LocalizedRumbleEffect {
+        let normalized_magnitude = clamp_unit(magnitude);
+        let is_trigger = matches!(
+            profile,
+            LocalityProfileKind::TriggerLeft | LocalityProfileKind::TriggerRight
+        );
+        let intensity = if is_trigger {
+            clamp_unit(normalized_magnitude.powf(0.92))
+        } else {
+            clamp_unit(normalized_magnitude.powf(1.18))
+        };
+        let sharpness = match profile {
+            LocalityProfileKind::HandleLeft => localized_sharpness(intensity, 0.78),
+            LocalityProfileKind::HandleRight => localized_sharpness(intensity, 0.42),
+            LocalityProfileKind::TriggerLeft | LocalityProfileKind::TriggerRight => {
+                localized_sharpness(intensity, 0.92)
+            }
+        };
+
+        LocalizedRumbleEffect {
+            intensity,
+            sharpness,
+            duration_ms: normalized_duration_ms(duration_ms, is_trigger),
+        }
     }
 
     fn normalized_intensity(effect: &OhMyGamepadRumbleEffectDto) -> f32 {
@@ -186,8 +496,21 @@ mod platform {
         clamp_unit(0.2 + strong * 0.6 + weak * 0.2)
     }
 
-    fn normalized_duration_seconds(effect: &OhMyGamepadRumbleEffectDto) -> f64 {
-        f64::from(effect.duration_ms.max(1)) / 1000.0
+    fn localized_sharpness(magnitude: f32, bias: f32) -> f32 {
+        clamp_unit(0.15 + clamp_unit(magnitude) * 0.35 + bias * 0.5)
+    }
+
+    fn normalized_duration_ms(duration_ms: u16, trigger_preferred: bool) -> u16 {
+        if trigger_preferred {
+            duration_ms.max(18)
+        }
+        else {
+            duration_ms.max(LOCALITY_MIN_DURATION_MS)
+        }
+    }
+
+    fn normalized_duration_seconds(duration_ms: u16) -> f64 {
+        f64::from(duration_ms.max(1)) / 1000.0
     }
 
     fn clamp_unit(value: f32) -> f32 {
@@ -198,7 +521,12 @@ mod platform {
     mod tests {
         use ohmygamepad_protocol::OhMyGamepadRumbleEffectDto;
 
-        use super::{normalized_duration_seconds, normalized_intensity, normalized_sharpness};
+        use super::{
+            localized_effect_for_profile, localized_effect_from_combined, localized_sharpness,
+            normalized_duration_ms,
+            normalized_duration_seconds, normalized_intensity, normalized_sharpness,
+            LocalityProfileKind,
+        };
 
         #[test]
         fn normalized_intensity_uses_strongest_channel() {
@@ -220,7 +548,10 @@ mod platform {
                 ..OhMyGamepadRumbleEffectDto::default()
             };
 
-            assert_eq!(normalized_duration_seconds(&effect), 0.001);
+            assert_eq!(
+                normalized_duration_seconds(normalized_duration_ms(effect.duration_ms, false)),
+                f64::from(LOCALITY_MIN_DURATION_MS) / 1000.0
+            );
         }
 
         #[test]
@@ -234,6 +565,34 @@ mod platform {
             };
 
             assert!(normalized_sharpness(&effect) <= 1.0);
+        }
+
+        #[test]
+        fn localized_sharpness_stays_within_unit_range() {
+            assert!(localized_sharpness(1.0, 1.0) <= 1.0);
+            assert!(localized_sharpness(0.0, 0.0) >= 0.0);
+        }
+
+        #[test]
+        fn combined_localized_effect_matches_previous_normalization() {
+            let effect = OhMyGamepadRumbleEffectDto {
+                strong_magnitude: 0.7,
+                weak_magnitude: 0.3,
+                left_trigger: 0.2,
+                right_trigger: 0.1,
+                ..OhMyGamepadRumbleEffectDto::default()
+            };
+
+            let localized = localized_effect_from_combined(&effect);
+            assert_eq!(localized.intensity, normalized_intensity(&effect));
+            assert_eq!(localized.sharpness, normalized_sharpness(&effect));
+        }
+
+        #[test]
+        fn trigger_profile_keeps_shorter_min_duration_and_higher_sharpness() {
+            let localized = localized_effect_for_profile(LocalityProfileKind::TriggerLeft, 0.5, 0);
+            assert_eq!(localized.duration_ms, 18);
+            assert!(localized.sharpness > 0.5);
         }
     }
 }

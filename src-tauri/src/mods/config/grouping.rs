@@ -13,9 +13,10 @@ fn pick_group_values(config: &Map<String, Value>, keys: &[&str]) -> Value {
 pub fn split_config_groups(config: &Map<String, Value>) -> Value {
     // 分组键保持与 renderer 端一致；streaming 组明确承载 policy + view 配置。
     json!({
-        "app": pick_group_values(config, &["locale", "fullscreen", "background_keepalive", "use_vulkan", "ui_haptics", "ui_audio", "debug"]),
+        "app": pick_group_values(config, &["locale", "theme", "fullscreen", "background_keepalive", "use_vulkan", "ui_haptics", "ui_audio", "debug"]),
         "streaming": pick_group_values(config, &[
             "resolution",
+            "xhome_resolution",
             "force_region_ip",
             "xhome_bitrate_mode",
             "xhome_bitrate",

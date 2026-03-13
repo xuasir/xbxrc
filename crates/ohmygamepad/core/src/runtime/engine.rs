@@ -2,8 +2,8 @@ use std::collections::{HashMap, HashSet};
 
 use ohmygamepad_protocol::{
     LogicalPadBindingDto, LogicalPadId, LogicalPadSnapshotDto, OhMyGamepadBindingModeDto,
-    OhMyGamepadDeviceDto, OhMyGamepadRouteTargetDto, OhMyGamepadRuntimeSnapshotDto,
-    OhMyGamepadSamplingConfigDto,
+    OhMyGamepadDeviceDto, OhMyGamepadRouteTargetDto, OhMyGamepadRuntimeHapticsDto,
+    OhMyGamepadRuntimeSnapshotDto, OhMyGamepadSamplingConfigDto,
 };
 
 use crate::{
@@ -62,6 +62,7 @@ where
             route_target: self.config.route_target.clone(),
             sampling: self.config.sampling.clone(),
             pads: self.pads.clone(),
+            haptics: OhMyGamepadRuntimeHapticsDto::default(),
         }
     }
 

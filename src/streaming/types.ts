@@ -2,6 +2,8 @@ import type {
   StreamingDisplayOptionsValue,
   StreamingRenderProjection,
   StreamingRuntimeProjection,
+  StreamingSessionCapabilitiesProjection,
+  StreamingSessionMetadataProjection,
   StreamingSessionExecutionSnapshot,
   StreamingSessionProgressSnapshot,
   StreamingSessionSnapshot,
@@ -14,6 +16,22 @@ export type StreamingSessionExecution = StreamingSessionExecutionSnapshot
 export type StreamingSessionProgress = StreamingSessionProgressSnapshot
 export type StreamRuntimeProjection = StreamingRuntimeProjection
 export type StreamRenderProjection = StreamingRenderProjection
+export type StreamSessionMetadataProjection = StreamingSessionMetadataProjection
+export type StreamSessionCapabilitiesProjection = StreamingSessionCapabilitiesProjection
+export type StreamRuntimeOwner = StreamingRuntimeProjection['microphone']
+
+/**
+ * session 统一生命周期相位：收口 progress、runtime 协商和首帧事件，供增强模块稳定挂载。
+ */
+export type StreamSessionLifecyclePhase
+  = | 'idle'
+    | 'loading'
+    | 'starting'
+    | 'playing'
+    | 'recovering'
+    | 'stopped'
+    | 'failed'
+
 export interface RuntimeLaunchSpec {
   sessionId: string
   targetType: StreamingTargetType
@@ -32,6 +50,57 @@ export interface StreamPerformanceSnapshot {
   pl?: string | number
   br?: string | number
   decode?: string | number
+  transportPath?: string
+}
+
+export interface StreamSessionDiagnosticsSnapshot {
+  isActive: boolean
+  regionName?: string
+  serverHost?: string
+  turnSource: 'none' | 'custom' | 'fallback'
+  transportPath?: string
+  isRelayPath: boolean
+  isRecovering: boolean
+  hasNoVideoWarning: boolean
+}
+
+export type StreamMicrophoneActivationSource = 'none' | 'policy' | 'user'
+export type StreamMicrophonePhase = 'closed' | 'starting' | 'live' | 'paused'
+
+export interface StreamMicrophoneSnapshot {
+  owner: StreamRuntimeOwner
+  startWithSession: boolean
+  desiredEnabled: boolean
+  open: boolean
+  capturing: boolean
+  paused: boolean
+  phase: StreamMicrophonePhase
+  activationSource: StreamMicrophoneActivationSource
+}
+
+export type StreamEnhancementMountPhase = 'inactive' | 'mounted' | 'suspended'
+export type StreamEnhancementId = 'diagnostics' | 'performance' | 'microphone'
+
+export interface StreamEnhancementMountState {
+  phase: StreamEnhancementMountPhase
+  reason?: 'lifecycle' | 'recovering' | 'hidden'
+}
+
+export interface StreamEnhancementContract {
+  id: StreamEnhancementId
+}
+
+export interface StreamEnhancementBinding {
+  id: StreamEnhancementId
+  state: StreamEnhancementMountState
+}
+
+export interface StreamEnhancementMountSnapshot {
+  playingReady: boolean
+  order: StreamEnhancementId[]
+  diagnostics: StreamEnhancementMountState
+  performance: StreamEnhancementMountState
+  microphone: StreamEnhancementMountState
 }
 
 export type StreamErrorKind
@@ -47,6 +116,7 @@ export type StreamErrorKind
 
 export interface StreamConfigSnapshot {
   resolution?: number
+  xhome_resolution?: number
   xhome_bitrate_mode?: string
   xhome_bitrate?: number
   xcloud_bitrate_mode?: string

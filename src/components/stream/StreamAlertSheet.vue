@@ -36,10 +36,12 @@ function handleSelect(id: string): void {
 
 <template>
   <Transition name="stream-alert-sheet-transition">
-    <div v-if="props.open" class="stream-alert-sheet" @click.self="handleClose">
+    <div v-if="props.open" class="stream-alert-sheet-layer">
+      <div class="stream-alert-sheet-backdrop" @click="handleClose" />
+      
       <FocusScope
         :id="props.scopeId"
-        as="div"
+        as="section"
         class="stream-alert-sheet__panel"
         :active="props.open"
         :default-focus-id="defaultFocusId"
@@ -75,86 +77,102 @@ function handleSelect(id: string): void {
 </template>
 
 <style scoped>
-.stream-alert-sheet {
+.stream-alert-sheet-layer {
   position: fixed;
   inset: 0;
-  z-index: 28;
+  z-index: var(--z-overlay);
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: var(--ui-stream-overlay-padding);
-  background: rgba(0, 0, 0, 0.8);
+}
+
+.stream-alert-sheet-backdrop {
+  position: absolute;
+  inset: 0;
+  background: var(--ui-scrim-bg);
+  backdrop-filter: blur(4px);
 }
 
 .stream-alert-sheet__panel {
-  width: min(100%, var(--ui-stream-dialog-width));
-  padding: var(--ui-stream-dialog-padding);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: var(--ui-radius-lg);
-  background: #252423;
-  color: #fff;
-  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.35);
+  position: relative;
+  z-index: 1;
+  width: min(calc(100vw - 48px), 480px);
+  padding: 32px;
+  background: var(--ui-surface-overlay);
+  border: 1px solid var(--ui-border-subtle);
+  border-radius: 16px;
+  box-shadow: var(--ui-shadow-overlay);
+  color: var(--ui-page-text);
+  text-align: left;
 }
 
 .stream-alert-sheet__header {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
+  margin-bottom: 32px;
 }
 
 .stream-alert-sheet__title {
-  margin: 0;
-  font-size: var(--ui-stream-dialog-title-size);
-  font-weight: 700;
+  margin: 0 0 12px;
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
 }
 
 .stream-alert-sheet__body {
   margin: 0;
-  font-size: 14px;
+  font-size: 15px;
   line-height: 1.6;
-  color: rgba(255, 255, 255, 0.74);
+  color: var(--ui-page-text-soft);
 }
 
 .stream-alert-sheet__actions {
   display: flex;
   gap: 12px;
-  margin-top: 22px;
 }
 
 .stream-alert-sheet__action {
-  min-width: var(--ui-stream-dialog-action-min-width);
-  padding: 12px 18px;
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  border-radius: var(--ui-action-pill-radius);
-  background: rgba(255, 255, 255, 0.04);
-  color: #fff;
+  flex: 1;
+  padding: 14px;
+  border: 0;
+  border-radius: 12px;
+  background: var(--color-focus-bg);
+  color: var(--ui-page-text);
+  font-size: 16px;
+  font-weight: 700;
   cursor: pointer;
-}
-
-.stream-alert-sheet__action--danger {
-  border-color: rgba(255, 125, 125, 0.28);
-  background: rgba(46, 10, 10, 0.72);
+  transition: all var(--ui-motion-fast);
 }
 
 .stream-alert-sheet__action[data-focused='true'] {
   background: var(--color-focus-bg-strong);
+  color: var(--ui-focus-text);
   box-shadow: var(--shadow-xbox-focus);
-  color: #fff;
+  transform: scale(1.02);
 }
 
 .stream-alert-sheet__action--danger {
-  border-color: rgba(255, 125, 125, 0.28);
-  background: rgba(46, 10, 10, 0.72);
+  background: rgba(232, 17, 35, 0.1);
+  color: #ff5252;
 }
 
 .stream-alert-sheet__action--danger[data-focused='true'] {
-  background: #ff5252;
-  box-shadow: var(--shadow-xbox-focus);
+  background: #e81123;
+  color: var(--ui-focus-text);
 }
 
+/* 动画 */
 .stream-alert-sheet-transition-enter-active,
 .stream-alert-sheet-transition-leave-active {
-  transition: opacity 180ms ease;
+  transition: opacity 250ms ease;
+}
+
+.stream-alert-sheet-transition-enter-active .stream-alert-sheet__panel,
+.stream-alert-sheet-transition-leave-active .stream-alert-sheet__panel {
+  transition: transform 300ms cubic-bezier(0.2, 0, 0, 1);
+}
+
+.stream-alert-sheet-transition-enter-from .stream-alert-sheet__panel,
+.stream-alert-sheet-transition-leave-to .stream-alert-sheet__panel {
+  transform: scale(0.95);
 }
 
 .stream-alert-sheet-transition-enter-from,

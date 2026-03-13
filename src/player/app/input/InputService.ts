@@ -4,6 +4,8 @@ import type { GamepadFrame, InputRuntimeConfig, ProcessedVideoFrameMetadata } fr
 import { InputPacketEncoder } from '../../protocol/input/InputPacketEncoder'
 import { RumbleService } from './RumbleService'
 
+const MAX_DECODE_TIME_MS = 10
+
 export interface InputDriverLike {
   start: () => void
   stop: () => void
@@ -119,9 +121,9 @@ export class InputService {
   }
 
   addProcessedFrame(frame: ProcessedVideoFrameMetadata): void {
-    frame.frameRenderedTimeMs = performance.now()
-    this.frameMetadataQueue.push(frame)
-    this.emitter.emit('stats.videoFrameProcessed', frame)
+    const normalizedFrame = this.normalizeFrameMetadata(frame)
+    this.frameMetadataQueue.push(normalizedFrame)
+    this.emitter.emit('stats.videoFrameProcessed', normalizedFrame)
 
     // 如果长时间没有手柄输入，为了保证 metadata 也能发出去，
     // 可能还是需要一个保底逻辑，但在高性能串流中，Metadata 通常随输入一起发送。
@@ -129,6 +131,24 @@ export class InputService {
     if (this.frameMetadataQueue.length > 30) {
       this.flushMetadataOnly()
     }
+  }
+
+  private normalizeFrameMetadata(frame: ProcessedVideoFrameMetadata): ProcessedVideoFrameMetadata {
+    const normalizedFrame = {
+      ...frame,
+      frameRenderedTimeMs: performance.now(),
+    }
+
+    // 浏览器 requestVideoFrameCallback 在抖动时可能给出偏大的 decode/render 时间，
+    // 远端会把这类 metadata 解释成“客户端解码吃不消”，从而主动降到 720p。
+    const decodedDelta = normalizedFrame.frameDecodedTimeMs - normalizedFrame.frameSubmittedTimeMs
+    if (decodedDelta > MAX_DECODE_TIME_MS) {
+      const renderDelta = normalizedFrame.frameRenderedTimeMs - normalizedFrame.frameDecodedTimeMs
+      normalizedFrame.frameDecodedTimeMs = normalizedFrame.frameSubmittedTimeMs + MAX_DECODE_TIME_MS
+      normalizedFrame.frameRenderedTimeMs = normalizedFrame.frameDecodedTimeMs + Math.max(0, renderDelta)
+    }
+
+    return normalizedFrame
   }
 
   private flushMetadataOnly(): void {

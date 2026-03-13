@@ -32,6 +32,8 @@ pub struct XbxEngineRuntimeProjectionDto {
     pub codec: Option<XbxEngineRuntimeCodecPreferenceDto>,
     pub max_video_bitrate_kbps: Option<u32>,
     pub max_audio_bitrate_kbps: Option<u32>,
+    pub target_video_width: u32,
+    pub target_video_height: u32,
     pub force_mono_audio: bool,
     pub polling_rate_hz: u32,
     pub vibration: bool,

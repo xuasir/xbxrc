@@ -97,6 +97,9 @@ pub(crate) fn resolve_connected_target_devices(
     empty_sampling_device_id: &str,
 ) -> Vec<OhMyGamepadDeviceDto> {
     let resolved_device_ids = match target {
+        OhMyGamepadRumbleTargetDto::Auto => {
+            resolve_default_target_device_ids(snapshot, empty_sampling_device_id)
+        }
         OhMyGamepadRumbleTargetDto::Device { device_id } => snapshot
             .devices
             .iter()
@@ -128,6 +131,41 @@ pub(crate) fn resolve_connected_target_devices(
         })
         .cloned()
         .collect()
+}
+
+fn resolve_default_target_device_ids(
+    snapshot: &OhMyGamepadRuntimeSnapshotDto,
+    empty_sampling_device_id: &str,
+) -> Vec<String> {
+    if let Some(device_ids) = snapshot.pads.iter().find_map(|pad| {
+        let resolved = pad
+            .device_ids
+            .iter()
+            .filter(|device_id| device_id.as_str() != empty_sampling_device_id)
+            .cloned()
+            .collect::<Vec<_>>();
+        (!resolved.is_empty()).then_some(resolved)
+    }) {
+        return device_ids;
+    }
+
+    snapshot
+        .devices
+        .iter()
+        .find(|device| device.connected && device.is_default_target)
+        .map(|device| vec![device.device_id.clone()])
+        .or_else(|| {
+            snapshot
+                .devices
+                .iter()
+                .find(|device| {
+                    device.connected
+                        && (device.effective_capabilities.basic_rumble
+                            || device.effective_capabilities.advanced_haptics)
+                })
+                .map(|device| vec![device.device_id.clone()])
+        })
+        .unwrap_or_default()
 }
 
 pub(crate) fn prepare_rumble_dispatch(
@@ -183,11 +221,12 @@ fn supports_service_rumble(device: &OhMyGamepadDeviceDto, has_rumble_backend: bo
 #[cfg(test)]
 mod tests {
     use ohmygamepad_protocol::{
-        OhMyGamepadBackendKindDto, OhMyGamepadCapabilityFlagsDto,
-        OhMyGamepadRumbleRejectionReasonDto,
+        LogicalPadId, LogicalPadSnapshotDto, OhMyGamepadBackendKindDto,
+        OhMyGamepadCapabilityFlagsDto, OhMyGamepadRumbleRejectionReasonDto,
+        OhMyGamepadRuntimeHapticsDto,
     };
 
-    use super::{prepare_rumble_dispatch, PreparedRumbleRequest};
+    use super::{prepare_rumble_dispatch, resolve_connected_target_devices, PreparedRumbleRequest};
 
     fn device(device_id: &str) -> ohmygamepad_protocol::OhMyGamepadDeviceDto {
         ohmygamepad_protocol::OhMyGamepadDeviceDto {
@@ -200,13 +239,43 @@ mod tests {
             connected: true,
             last_seen_at_ms: 0,
             capabilities: OhMyGamepadCapabilityFlagsDto::default(),
+            effective_capabilities: OhMyGamepadCapabilityFlagsDto::default(),
+            is_default_target: false,
         }
     }
 
     fn rumble_device(device_id: &str) -> ohmygamepad_protocol::OhMyGamepadDeviceDto {
         let mut device = device(device_id);
         device.capabilities.basic_rumble = true;
+        device.effective_capabilities.basic_rumble = true;
         device
+    }
+
+    #[test]
+    fn auto_target_prefers_first_pad_with_connected_devices() {
+        let devices = vec![rumble_device("pad-a"), rumble_device("pad-b")];
+        let snapshot = ohmygamepad_protocol::OhMyGamepadRuntimeSnapshotDto {
+            devices,
+            pads: vec![LogicalPadSnapshotDto {
+                pad_id: LogicalPadId::Pad0,
+                device_ids: vec!["pad-b".to_owned()],
+                sampled_at_ms: 1,
+                sample_seq: 1,
+                route_target: ohmygamepad_protocol::OhMyGamepadRouteTargetDto::ShellUi,
+                state: Default::default(),
+            }],
+            haptics: OhMyGamepadRuntimeHapticsDto::default(),
+            ..Default::default()
+        };
+
+        let resolved = resolve_connected_target_devices(
+            &snapshot,
+            &ohmygamepad_protocol::OhMyGamepadRumbleTargetDto::Auto,
+            "__service:none__",
+        );
+
+        assert_eq!(resolved.len(), 1);
+        assert_eq!(resolved[0].device_id, "pad-b");
     }
 
     #[test]

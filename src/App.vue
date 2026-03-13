@@ -2,6 +2,7 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { setupUiDensity } from './app/ui-density'
+import { applyTheme, setupTheme } from './app/theme'
 import AppShellLayout from './components/layout/AppShellLayout.vue'
 import SpatialNavGlobalHotkeys from './components/navigation/SpatialNavGlobalHotkeys.vue'
 import { useGamepadNavigation } from './navigation/core'
@@ -55,6 +56,14 @@ function warmupXcloudCatalog(): void {
 
 async function bootstrapAppWarmups(): Promise<void> {
   try {
+    const config = await rpc.config.get({ keys: ['theme'] })
+    if (isRecord(config) && typeof config.theme === 'string') {
+      setupTheme(config.theme as any)
+    }
+    else {
+      setupTheme('dark')
+    }
+
     const authState = await rpc.auth.getState()
     if (authState.isAuthenticated) {
       warmupXcloudCatalog()

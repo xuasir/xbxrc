@@ -11,12 +11,14 @@ interface TopNavBarProps {
   icons?: TopNavIcons
   activeNav?: 'xhome' | 'xcloud' | 'setting'
   profileImageUrl?: string
+  controllerActive?: boolean
 }
 
 const props = withDefaults(defineProps<TopNavBarProps>(), {
   icons: () => ({}),
   activeNav: 'xhome',
   profileImageUrl: '',
+  controllerActive: false,
 })
 
 const emit = defineEmits<{
@@ -81,6 +83,7 @@ function emitSelect(node: TopNavNodeKey): void {
         label="Controller Status"
         :icon-src="getIcon('controller')"
         :round="true"
+        :active="props.controllerActive"
         :on-click="() => emitSelect('controller')"
         :on-confirm="() => emitSelect('controller')"
       />

@@ -59,8 +59,8 @@ withDefaults(defineProps<Props>(), {
   border-radius: 50%;
   background: radial-gradient(
     circle,
-    rgba(16, 124, 16, 0.15) 0%,
-    rgba(16, 124, 16, 0.05) 50%,
+    rgba(16, 124, 16, 0.22) 0%,
+    rgba(16, 124, 16, 0.08) 50%,
     transparent 70%
   );
   animation: aura-pulse 3s ease-in-out infinite;
@@ -74,9 +74,9 @@ withDefaults(defineProps<Props>(), {
   padding: 3px; /* 环的粗细 */
   background: conic-gradient(
     from 0deg,
-    rgba(255, 255, 255, 0.8) 0deg,
-    rgba(255, 255, 255, 0.4) 60deg,
-    rgba(255, 255, 255, 0.1) 120deg,
+    var(--brand-primary) 0deg,
+    color-mix(in srgb, var(--brand-primary) 60%, transparent) 60deg,
+    color-mix(in srgb, var(--brand-primary) 20%, transparent) 120deg,
     transparent 240deg
   );
   -webkit-mask: 
@@ -103,15 +103,15 @@ withDefaults(defineProps<Props>(), {
 .branded-loading__logo {
   width: calc(100% * var(--logo-scale));
   height: calc(100% * var(--logo-scale));
-  background-color: #ffffff;
+  background-color: var(--brand-primary);
   mask: url('../../assets/nav/xbox-logo.svg') center / contain no-repeat;
   -webkit-mask: url('../../assets/nav/xbox-logo.svg') center / contain no-repeat;
   animation: logo-breathe 2.5s ease-in-out infinite;
-  filter: drop-shadow(0 0 12px rgba(255, 255, 255, 0.4));
+  filter: drop-shadow(0 0 12px color-mix(in srgb, var(--brand-primary) 40%, transparent));
 }
 
 .branded-loading__label {
-  color: var(--color-text-secondary);
+  color: var(--ui-page-text);
   font-size: var(--font-size);
   font-weight: 600;
   letter-spacing: 0.05em;

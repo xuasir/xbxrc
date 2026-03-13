@@ -104,6 +104,11 @@
       "reconnecting": "Restoring connection...",
       "connecting": "Connecting..."
     },
+    "queue": {
+      "total": "Total",
+      "allocation": "Allocation",
+      "provisioning": "Provisioning"
+    },
     "actions": {
       "menu": "Menu",
       "fullscreen": "Toggle Fullscreen",
@@ -111,6 +116,8 @@
       "audio": "Audio Settings",
       "showPerformance": "Show Performance Panel",
       "hidePerformance": "Hide Performance Panel",
+      "showDiagnostics": "Show Diagnostics",
+      "hideDiagnostics": "Hide Diagnostics",
       "openMic": "Open Mic",
       "closeMic": "Close Mic",
       "sendText": "Send Text",
@@ -134,9 +141,21 @@
       "volume": "Volume",
       "close": "Close"
     },
+    "microphone": {
+      "open": "Microphone On",
+      "closed": "Microphone Off",
+      "starting": "Microphone Starting",
+      "paused": "Microphone Paused",
+      "sources": {
+        "policy": "Auto",
+        "user": "Manual"
+      }
+    },
     "performance": {
+      "title": "Performance",
       "metrics": {
         "Resolution": "Resolution",
+        "Path": "Path",
         "RTT": "RTT",
         "JIT": "JIT",
         "FPS": "FPS",
@@ -144,6 +163,43 @@
         "PL": "PL",
         "Bitrate": "Bitrate",
         "DT": "DT"
+      }
+    },
+    "badges": {
+      "title": "Stream Diagnostics",
+      "region": "Region",
+      "relay": "Relay",
+      "path": "Path",
+      "server": "Server",
+      "turnSources": {
+        "custom": "Custom TURN",
+        "fallback": "Fallback TURN"
+      }
+    },
+    "diagnostics": {
+      "panel": {
+        "eyebrow": "Session State",
+        "title": "Diagnostics"
+      },
+      "fields": {
+        "region": "Region",
+        "server": "Server",
+        "relay": "TURN",
+        "path": "Path",
+        "status": "Status"
+      },
+      "values": {
+        "unknown": "--",
+        "none": "None",
+        "stable": "Stable",
+        "recovering": "Recovering",
+        "inactive": "Inactive",
+        "noVideo": "No Video Warning"
+      },
+      "notices": {
+        "recovering": "Connection is recovering. Stream quality may fluctuate briefly.",
+        "relayPath": "The current media path is using relay transport.",
+        "noVideo": "Connected for a while but still no picture. Exiting and reconnecting is safer."
       }
     },
     "failed": {
@@ -206,6 +262,40 @@
     "logout": "Sign out",
     "logoutHint": "Sign out of this account",
     "loggingOut": "Signing out..."
+  },
+  "gamepadCard": {
+    "close": "Close gamepad card",
+    "eyebrow": "Detected Controllers",
+    "title": "Gamepad Profile",
+    "connectedSummary": "{count} connected",
+    "provider": "Haptics Provider",
+    "autoTarget": "Auto Target",
+    "defaultTarget": "Default Target",
+    "defaultBadge": "Default",
+    "empty": "No connected controller detected.",
+    "values": {
+      "yes": "Yes",
+      "no": "No",
+      "none": "None",
+      "unknown": "Unknown"
+    },
+    "providers": {
+      "gilrsBasic": "gilrs basic",
+      "macosGcController": "macOS GameController",
+      "windowsXbox": "Windows Xbox",
+      "none": "None"
+    },
+    "connections": {
+      "usb": "USB",
+      "bluetooth": "Bluetooth",
+      "wirelessDongle": "Wireless dongle",
+      "unknown": "Unknown"
+    },
+    "capabilities": {
+      "basicRumble": "Basic rumble",
+      "advancedHaptics": "Advanced haptics",
+      "battery": "Battery info"
+    }
   },
   "setting": {
     "title": "Settings",
@@ -326,6 +416,20 @@
           }
         }
       },
+      "theme": {
+        "label": "Theme",
+        "description": "Appearance of the application interface",
+        "options": {
+          "dark": {
+            "label": "Dark",
+            "description": "Xbox traditional deep mode"
+          },
+          "light": {
+            "label": "Light",
+            "description": "Clean and bright mode"
+          }
+        }
+      },
       "use_msal": {
         "label": "Use MSAL",
         "description": "Switch between MSAL and XAL authentication"
@@ -354,9 +458,14 @@
         "label": "Resolution",
         "description": "Each option shows the maximum streaming resolution available for that mode.",
         "options": {
+          "1440": {
+            "label": "1440p",
+            "description": "Use the Tizen HQ device profile to request up to 1440p when supported",
+            "meta": "Higher bandwidth"
+          },
           "1081": {
             "label": "Auto (1080p HQ)",
-            "description": "Recommended for the current device and subscription tier"
+            "description": "Use the highest quality 1080p profile supported by the current path"
           },
           "1080": {
             "label": "1080p",
@@ -365,6 +474,24 @@
           "720": {
             "label": "720p",
             "meta": "3 GB/hr"
+          }
+        }
+      },
+      "xhome_resolution": {
+        "label": "Host Resolution",
+        "description": "Maximum resolution to request specifically for xHome local streaming.",
+        "options": {
+          "1081": {
+            "label": "Auto (1080p HQ)",
+            "description": "Use the highest quality xHome profile supported by the current host path"
+          },
+          "1080": {
+            "label": "1080p",
+            "meta": "Recommended"
+          },
+          "720": {
+            "label": "720p",
+            "meta": "Lower bandwidth"
           }
         }
       },

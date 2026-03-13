@@ -12,6 +12,8 @@ import { InputChannel } from '../../protocol/channels/InputChannel'
 import { MessageChannel } from '../../protocol/channels/MessageChannel'
 import { STREAM_DATA_CHANNEL_PROFILES } from '../../protocol/networkProfile'
 
+const H264_MAX_FRAME_RATE = 60
+
 export class SessionService {
   private state: SessionState = 'idle'
   private readonly transport = new WebRtcTransport()
@@ -136,6 +138,15 @@ export class SessionService {
     }
     if (initialSdp) {
       let nextSdp = initialSdp
+      const transportProfile = resolveTransportVideoProfile(this.options.transport)
+      // 分辨率档位必须同时驱动 device/UA 与浏览器 SDP，避免浏览器 offer 继续固定在 1080 档。
+      nextSdp = this.sdpManipulator.setH264VideoConstraints(nextSdp, {
+        maxFrameSize: transportProfile.maxFrameSize,
+        maxFrameRate: H264_MAX_FRAME_RATE,
+        minBitrateKbps: transportProfile.minBitrateKbps,
+        startBitrateKbps: transportProfile.startBitrateKbps,
+        maxBitrateKbps: transportProfile.maxBitrateKbps,
+      })
       if (this.options.transport.codecPreference) {
         nextSdp = this.sdpManipulator.setCodec(nextSdp, this.options.transport.codecPreference)
       }
@@ -143,14 +154,14 @@ export class SessionService {
         nextSdp = this.sdpManipulator.setBitrate(
           nextSdp,
           'video',
-          this.options.transport.maxVideoBitrateKbps * 1024,
+          this.options.transport.maxVideoBitrateKbps,
         )
       }
       if (this.options.transport.maxAudioBitrateKbps > 0) {
         nextSdp = this.sdpManipulator.setBitrate(
           nextSdp,
           'audio',
-          this.options.transport.maxAudioBitrateKbps * 1024,
+          this.options.transport.maxAudioBitrateKbps,
         )
       }
       if (!this.options.transport.forceMonoAudio) {
@@ -219,6 +230,43 @@ export class SessionService {
     if (!allowed.includes(this.state)) {
       throw new Error(`Cannot ${action} while session is ${this.state}`)
     }
+  }
+}
+
+function resolveTransportVideoProfile(transport: PlayerClientOptions['transport']): {
+  maxFrameSize: number
+  minBitrateKbps: number
+  startBitrateKbps: number
+  maxBitrateKbps: number
+} {
+  const width = Math.max(16, transport.targetVideoWidth)
+  const height = Math.max(16, transport.targetVideoHeight)
+  const maxFrameSize = Math.ceil(width / 16) * Math.ceil(height / 16)
+  const configuredMaxBitrateKbps = Math.max(0, transport.maxVideoBitrateKbps)
+
+  if (height <= 720) {
+    return {
+      maxFrameSize,
+      minBitrateKbps: 3_000,
+      startBitrateKbps: configuredMaxBitrateKbps > 0 ? Math.min(configuredMaxBitrateKbps, 10_000) : 8_000,
+      maxBitrateKbps: configuredMaxBitrateKbps > 0 ? configuredMaxBitrateKbps : 20_000,
+    }
+  }
+
+  if (height > 1080 || width > 1920) {
+    return {
+      maxFrameSize,
+      minBitrateKbps: 8_000,
+      startBitrateKbps: configuredMaxBitrateKbps > 0 ? Math.min(configuredMaxBitrateKbps, 35_000) : 35_000,
+      maxBitrateKbps: configuredMaxBitrateKbps > 0 ? configuredMaxBitrateKbps : 75_000,
+    }
+  }
+
+  return {
+    maxFrameSize,
+    minBitrateKbps: 5_000,
+    startBitrateKbps: configuredMaxBitrateKbps > 0 ? Math.min(configuredMaxBitrateKbps, 20_000) : 20_000,
+    maxBitrateKbps: configuredMaxBitrateKbps > 0 ? configuredMaxBitrateKbps : 50_000,
   }
 }
 

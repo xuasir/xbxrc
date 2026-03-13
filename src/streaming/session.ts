@@ -25,6 +25,11 @@ export interface SessionHealthSnapshot {
   phase: StreamingSessionProgress['phase']
   retryCount: number
   queueSeconds?: number
+  queue?: {
+    estimatedTotalWaitTimeInSeconds?: number
+    estimatedAllocationTimeInSeconds?: number
+    estimatedProvisioningTimeInSeconds?: number
+  }
   errorCode?: string
   errorMessage?: string
   updatedAt: number
@@ -56,6 +61,7 @@ export const STREAM_POLICY_CONFIG_KEYS = [
   'audio_bitrate',
   'enable_audio_control',
   'resolution',
+  'xhome_resolution',
   'codec',
   'video_format',
   'display_options',
@@ -208,6 +214,7 @@ export function buildSessionHealthSnapshot(
     phase: progress.phase,
     retryCount: progress.retryCount,
     queueSeconds: progress.queueSeconds,
+    queue: progress.queue,
     errorCode: progress.errorCode,
     errorMessage: progress.errorMessage,
     updatedAt: Date.now(),

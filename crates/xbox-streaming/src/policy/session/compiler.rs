@@ -16,6 +16,10 @@ const SCHEDULE_ICE_POLL_INTERVAL_MS: u64 = 1_000;
 const SCHEDULE_STARTUP_TIMEOUT_MS: u64 = 45_000;
 const SCHEDULE_READY_TIMEOUT_MS: u64 = 45_000;
 const SCHEDULE_RETRY_BACKOFF_MS: [u64; 3] = [1_000, 3_000, 5_000];
+const SPOOFED_CHROMIUM_VERSION: &str = "140.0.3485.54";
+const SPOOFED_TIZEN_USER_AGENT: &str = "Mozilla/5.0 (SMART-TV; LINUX; Tizen 7.0) AppleWebKit/537.36 (KHTML, like Gecko) 140.0.3485.54/7.0 TV Safari/537.36 FC4A1DA2-711C-4E9C-BC7F-047AF8A672EA";
+const SPOOFED_WINDOWS_EDGE_USER_AGENT: &str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.3485.54 Safari/537.36 Edg/140.0.3485.54";
+const SPOOFED_ANDROID_USER_AGENT: &str = "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.3485.54 Mobile Safari/537.36";
 
 pub fn compile_session(
     config: &Config,
@@ -32,6 +36,8 @@ pub fn compile_session(
         "x-ms-device-info".to_string(),
         build_ms_device_info_header_value(&ms_device_info),
     );
+    // 仅改 x-ms-device-info 还不够，服务端还会参考 User-Agent 做设备画像分流。
+    headers.insert("User-Agent".to_string(), build_user_agent(&device));
     if let Some(client_ip) = normalize_optional_string(&config.session.client_ip_override) {
         headers.insert("X-Forwarded-For".to_string(), client_ip);
     }
@@ -162,8 +168,8 @@ fn compile_device_profile(config: &Config, target: Target) -> DeviceProfile {
         DeviceProfileKind::Tizen => DeviceProfile {
             kind: DeviceProfileKind::Tizen,
             os_name: "tizen".to_string(),
-            max_width: 1920,
-            max_height: 1080,
+            max_width: resolve_tizen_resolution(config, target).0,
+            max_height: resolve_tizen_resolution(config, target).1,
         },
         DeviceProfileKind::Custom { name } => DeviceProfile {
             kind: DeviceProfileKind::Custom { name: name.clone() },
@@ -183,9 +189,19 @@ fn select_resolution(config: &Config, target: Target) -> ResolutionPreference {
 
 fn resolution_to_device_kind(resolution: ResolutionPreference) -> DeviceProfileKind {
     match resolution {
-        ResolutionPreference::P1080Hq => DeviceProfileKind::Tizen,
+        ResolutionPreference::P1080Hq | ResolutionPreference::P1440 => DeviceProfileKind::Tizen,
         ResolutionPreference::P1080 => DeviceProfileKind::Windows,
         ResolutionPreference::Auto | ResolutionPreference::P720 => DeviceProfileKind::Android,
+    }
+}
+
+fn resolve_tizen_resolution(config: &Config, target: Target) -> (u32, u32) {
+    match select_resolution(config, target) {
+        ResolutionPreference::P1440 => (2560, 1440),
+        ResolutionPreference::P1080Hq
+        | ResolutionPreference::Auto
+        | ResolutionPreference::P720
+        | ResolutionPreference::P1080 => (1920, 1080),
     }
 }
 
@@ -196,11 +212,12 @@ fn build_ms_device_info(device: &DeviceProfile) -> MsDeviceInfo {
         device_model: "unknown".to_string(),
         sdk_type: "web".to_string(),
         os_name: device.os_name.clone(),
-        os_version: None,
-        browser_name: "unknown".to_string(),
-        browser_version: None,
-        display_width_pixels: device.max_width,
-        display_height_pixels: device.max_height,
+        os_version: Some("22631.2715".to_string()),
+        browser_name: "chrome".to_string(),
+        browser_version: Some(SPOOFED_CHROMIUM_VERSION.to_string()),
+        // Better xCloud 这里不会把显示尺寸卡死在目标档位，而是统一给一个更高的展示画像。
+        display_width_pixels: 4096,
+        display_height_pixels: 2160,
         dpi_x: 1,
         dpi_y: 1,
     }
@@ -276,19 +293,55 @@ fn compile_retry_backoff(target: Target, runtime_mode: RuntimeMode) -> Vec<u64> 
 }
 
 fn build_ms_device_info_header_value(info: &MsDeviceInfo) -> String {
-    format!(
-        "{{\"clientAppType\":\"{}\",\"deviceInfo\":{{\"make\":\"{}\",\"model\":\"{}\",\"sdktype\":\"{}\"}},\"os\":{{\"name\":\"{}\"}},\"browser\":{{\"browserName\":\"{}\"}},\"displayInfo\":{{\"dimensions\":{{\"widthInPixels\":{},\"heightInPixels\":{}}},\"pixelDensity\":{{\"dpiX\":{},\"dpiY\":{}}}}}}}",
-        info.client_app_type,
-        info.device_make,
-        info.device_model,
-        info.sdk_type,
-        info.os_name,
-        info.browser_name,
-        info.display_width_pixels,
-        info.display_height_pixels,
-        info.dpi_x,
-        info.dpi_y,
-    )
+    serde_json::json!({
+        "appInfo": {
+            "env": {
+                "clientAppId": "com.xuasir.xbxrc",
+                "clientAppType": info.client_app_type,
+                "clientAppVersion": "26.1.97",
+                "clientSdkVersion": "10.3.7",
+                "httpEnvironment": "prod",
+                "sdkInstallId": ""
+            }
+        },
+        "dev": {
+            "os": {
+                "name": info.os_name,
+                "ver": info.os_version.clone().unwrap_or_default(),
+                "platform": "desktop"
+            },
+            "hw": {
+                "make": info.device_make,
+                "model": info.device_model,
+                "sdktype": info.sdk_type
+            },
+            "browser": {
+                "browserName": info.browser_name,
+                "browserVersion": info.browser_version.clone().unwrap_or_default()
+            },
+            "displayInfo": {
+                "dimensions": {
+                    "widthInPixels": info.display_width_pixels,
+                    "heightInPixels": info.display_height_pixels
+                },
+                "pixelDensity": {
+                    "dpiX": info.dpi_x,
+                    "dpiY": info.dpi_y
+                }
+            }
+        }
+    })
+    .to_string()
+}
+
+fn build_user_agent(device: &DeviceProfile) -> String {
+    match device.kind {
+        DeviceProfileKind::Tizen => SPOOFED_TIZEN_USER_AGENT.to_string(),
+        DeviceProfileKind::Windows | DeviceProfileKind::Custom { .. } => {
+            SPOOFED_WINDOWS_EDGE_USER_AGENT.to_string()
+        }
+        DeviceProfileKind::Android => SPOOFED_ANDROID_USER_AGENT.to_string(),
+    }
 }
 
 fn normalize_optional_string(value: &Option<String>) -> Option<String> {

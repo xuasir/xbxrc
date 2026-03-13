@@ -17,7 +17,7 @@ body {
     Inter,
     sans-serif;
   min-width: 0;
-  background: #1a1b1e;
+  background: var(--ui-page-bg);
   color: var(--ui-page-text);
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -46,7 +46,7 @@ body {
 /* 全局统一滚动条观感：保持透明轨道和轻量 thumb，贴近 macOS 的悬浮感。 */
 * {
   scrollbar-width: thin;
-  scrollbar-color: rgba(255, 255, 255, 0.24) transparent;
+  scrollbar-color: var(--ui-scrollbar-thumb) transparent;
 }
 
 *::-webkit-scrollbar {
@@ -62,16 +62,16 @@ body {
   min-height: 40px;
   border: 3px solid transparent;
   border-radius: 999px;
-  background-color: rgba(255, 255, 255, 0.22);
+  background-color: var(--ui-scrollbar-thumb);
   background-clip: padding-box;
 }
 
 *::-webkit-scrollbar-thumb:hover {
-  background-color: rgba(255, 255, 255, 0.34);
+  background-color: var(--ui-scrollbar-thumb-hover);
 }
 
 *::-webkit-scrollbar-thumb:active {
-  background-color: rgba(255, 255, 255, 0.42);
+  background-color: var(--ui-scrollbar-thumb-hover);
 }
 
 *::-webkit-scrollbar-corner {

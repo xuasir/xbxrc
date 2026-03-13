@@ -288,7 +288,7 @@ watch(
   align-items: center;
   justify-content: center;
   padding: 40px;
-  background: rgba(0, 0, 0, 0.8);
+  background: var(--ui-scrim-bg);
 }
 
 .setting-value-sheet__panel {
@@ -297,11 +297,11 @@ watch(
   display: flex;
   flex-direction: column;
   padding: 0;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 4px;
-  background: #1a1a1a;
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6);
-  color: var(--color-text-primary);
+  border: 1px solid var(--ui-border-subtle);
+  border-radius: var(--ui-radius-md);
+  background: var(--ui-surface-overlay);
+  box-shadow: var(--ui-shadow-overlay);
+  color: var(--ui-page-text);
   overflow: hidden;
 }
 
@@ -327,8 +327,8 @@ watch(
   height: 32px;
   border: 0;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.08);
-  color: #ffffff;
+  background: var(--color-state-hover);
+  color: var(--ui-page-text);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -337,8 +337,8 @@ watch(
 }
 
 .setting-value-sheet__close[data-focused='true'] {
-  background: var(--color-focus-bg);
-  color: #ffffff;
+  background: var(--color-focus-bg-strong);
+  color: var(--ui-focus-text);
   box-shadow: var(--shadow-xbox-focus);
 }
 
@@ -353,7 +353,7 @@ watch(
   font-weight: 700;
   letter-spacing: 0.05em;
   text-transform: uppercase;
-  color: #107c10;
+  color: var(--brand-primary);
 }
 
 .setting-value-sheet__title {
@@ -405,9 +405,9 @@ watch(
 .setting-value-sheet__mini-action {
   min-height: 48px;
   border: 2px solid transparent;
-  border-radius: 4px;
-  background: rgba(255, 255, 255, 0.05);
-  color: var(--color-text-primary);
+  border-radius: var(--ui-radius-sm);
+  background: var(--color-state-hover);
+  color: var(--ui-page-text);
   transition: all var(--ui-motion-fast);
 }
 
@@ -423,7 +423,8 @@ watch(
 
 .setting-value-sheet__field-focus[data-focused='true'],
 .setting-value-sheet__mini-action[data-focused='true'] {
-  background: var(--color-focus-bg);
+  background: var(--color-focus-bg-strong);
+  color: var(--ui-focus-text);
   box-shadow: var(--shadow-xbox-focus);
 }
 
@@ -473,8 +474,8 @@ watch(
 }
 
 .setting-value-sheet__action--secondary {
-  background: rgba(255, 255, 255, 0.08);
-  color: #ffffff;
+  background: var(--color-state-hover);
+  color: var(--ui-page-text);
 }
 
 .setting-value-sheet__action--primary {
@@ -484,12 +485,14 @@ watch(
 
 .setting-value-sheet__action[data-focused='true'] {
   background: var(--color-focus-bg-strong);
+  color: var(--ui-focus-text);
   box-shadow: var(--shadow-xbox-focus);
   transform: scale(1.02);
 }
 
 .setting-value-sheet__action--primary[data-focused='true'] {
   background: var(--brand-primary-strong);
+  color: #ffffff;
 }
 
 .setting-value-sheet-transition-enter-active,

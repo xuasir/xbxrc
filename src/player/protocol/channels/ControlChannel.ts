@@ -7,7 +7,6 @@ export interface ControlChannelDelegate {
 }
 
 export class ControlChannel extends BaseChannel {
-  private keyframeInterval?: number
   private started = false
   private pendingStart = false
 
@@ -33,10 +32,6 @@ export class ControlChannel extends BaseChannel {
   }
 
   onClose(): void {
-    if (this.keyframeInterval) {
-      window.clearInterval(this.keyframeInterval)
-      this.keyframeInterval = undefined
-    }
     this.started = false
     this.pendingStart = false
     this.delegate.onClose()
@@ -70,13 +65,12 @@ export class ControlChannel extends BaseChannel {
       accessKey: STREAM_CONTROL_PROFILE.accessKey,
     }))
     this.sendGamepadRemoved(0)
+    // 浏览器 runtime 这里仅做一次性关键帧请求，用于缩短首帧空窗。
+    // 周期性轮询在部分浏览器/远端组合上会持续触发 data channel send 错误。
+    this.requestKeyframe()
     window.setTimeout(
       () => this.sendGamepadAdded(0),
       STREAM_CONTROL_PROFILE.gamepadAddedDelayMs,
-    )
-    this.keyframeInterval = window.setInterval(
-      () => this.requestKeyframe(),
-      STREAM_CONTROL_PROFILE.keyframeIntervalMs,
     )
   }
 }

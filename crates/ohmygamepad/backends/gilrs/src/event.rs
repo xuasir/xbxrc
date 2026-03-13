@@ -25,6 +25,8 @@ impl GilrsDeviceDescriptor {
             connected: true,
             last_seen_at_ms: observed_at_ms,
             capabilities: self.capabilities,
+            effective_capabilities: self.capabilities,
+            is_default_target: false,
         }
     }
 }

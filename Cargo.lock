@@ -3948,12 +3948,14 @@ dependencies = [
  "ohmygamepad-gilrs",
  "ohmygamepad-macos-gccontroller-haptics",
  "ohmygamepad-protocol",
+ "ohmygamepad-win-xbox-haptics",
 ]
 
 [[package]]
 name = "ohmygamepad-macos-gccontroller-haptics"
 version = "0.1.0"
 dependencies = [
+ "log",
  "objc2",
  "objc2-core-haptics",
  "objc2-foundation",
@@ -3975,6 +3977,8 @@ version = "0.1.0"
 dependencies = [
  "ohmygamepad-core",
  "ohmygamepad-protocol",
+ "windows 0.61.3",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]

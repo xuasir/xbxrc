@@ -207,7 +207,7 @@ onUnmounted(() => {
   position: relative;
   min-height: 100vh;
   color: var(--ui-page-text);
-  background-color: #1a1b1e;
+  background-color: var(--ui-page-bg);
 }
 
 .login-content {

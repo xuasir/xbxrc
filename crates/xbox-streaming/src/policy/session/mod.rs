@@ -49,6 +49,7 @@ pub enum ResolutionPreference {
     P720,
     P1080,
     P1080Hq,
+    P1440,
 }
 
 /// 设备画像是从分辨率或 override 编译出来的具体结果。

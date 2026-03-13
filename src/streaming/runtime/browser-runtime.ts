@@ -77,6 +77,8 @@ function createPlayerClient(
       maxVideoBitrateKbps: spec.runtime.maxVideoBitrateKbps ?? 0,
       maxAudioBitrateKbps: spec.runtime.maxAudioBitrateKbps ?? 0,
       forceMonoAudio: spec.runtime.forceMonoAudio,
+      targetVideoWidth: spec.runtime.targetVideoWidth,
+      targetVideoHeight: spec.runtime.targetVideoHeight,
     },
   })
 }

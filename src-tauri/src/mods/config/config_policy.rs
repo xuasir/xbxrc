@@ -76,6 +76,7 @@ fn normalize_display_options(key: &str, value: &Value, fallback: &Value) -> Valu
 fn normalize_value(key: &str, value: &Value, fallback: &Value) -> Value {
     match key {
         "locale"
+        | "theme"
         | "preferred_game_language"
         | "force_region_ip"
         | "codec"
@@ -108,7 +109,10 @@ fn normalize_value(key: &str, value: &Value, fallback: &Value) -> Value {
                 Value::from(fallback.as_bool().unwrap_or(false))
             }
         }
-        "resolution" => normalize_number(key, value, fallback.as_i64().unwrap_or(720), 720, 1081),
+        "resolution" => normalize_number(key, value, fallback.as_i64().unwrap_or(720), 720, 1440),
+        "xhome_resolution" => {
+            normalize_number(key, value, fallback.as_i64().unwrap_or(720), 720, 1081)
+        }
         "xhome_bitrate" | "xcloud_bitrate" | "audio_bitrate" => {
             normalize_number(key, value, fallback.as_i64().unwrap_or(20), 0, 200)
         }

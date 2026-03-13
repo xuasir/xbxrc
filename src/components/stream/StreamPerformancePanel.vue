@@ -27,6 +27,7 @@ const resolutionText = computed(() => {
 })
 
 const metrics = computed(() => [
+  { key: 'Path', value: props.snapshot?.transportPath ?? '--' },
   { key: 'RTT', value: props.snapshot?.rtt ?? '--' },
   { key: 'JIT', value: props.snapshot?.jit ?? '--' },
   { key: 'FPS', value: props.snapshot?.fps ?? '--' },
@@ -39,6 +40,9 @@ const metrics = computed(() => [
 
 <template>
   <div v-if="props.visible" class="stream-performance" :class="{ 'stream-performance--compact': props.compact }">
+    <strong v-if="!props.compact" class="stream-performance__title">
+      {{ t('streamPage.performance.title') }}
+    </strong>
     <template v-if="props.compact">
       <span class="stream-performance__metric">{{ resolutionText }}</span>
       <span v-for="metric in metrics" :key="metric.key" class="stream-performance__metric">
@@ -62,47 +66,50 @@ const metrics = computed(() => [
 <style scoped>
 .stream-performance {
   position: absolute;
-  top: var(--ui-stream-performance-top);
-  left: var(--ui-stream-performance-left);
-  z-index: 2;
-  min-width: var(--ui-stream-performance-min-width);
-  padding: var(--ui-stream-performance-padding);
+  top: 24px;
+  right: 24px;
+  z-index: 14;
+  padding: 12px 14px;
+  background: rgba(8, 12, 18, 0.84);
+  backdrop-filter: blur(14px);
   border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: calc(var(--ui-radius-lg) + var(--ui-space-1));
-  background: #252423;
-  color: #fff;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.04),
-    0 14px 28px rgba(0, 0, 0, 0.22);
+  border-radius: 14px;
+  color: #ffffff;
+  font-family: var(--ui-font-family-mono, monospace);
+  font-size: 11px;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.36);
 }
 
 .stream-performance--compact {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  min-width: 0;
-  max-width: calc(100vw - 48px);
+  flex-direction: row;
+  gap: 12px;
+}
+
+.stream-performance__title {
+  margin-bottom: 4px;
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.72);
 }
 
 .stream-performance__metric {
-  font-size: 12px;
   white-space: nowrap;
-  color: rgba(255, 255, 255, 0.84);
+  opacity: 0.9;
 }
 
 .stream-performance__row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 18px;
-  font-size: 12px;
-}
-
-.stream-performance__row + .stream-performance__row {
-  margin-top: 6px;
+  gap: 12px;
 }
 
 .stream-performance__row strong {
-  color: rgba(255, 255, 255, 0.96);
+  color: var(--brand-accent);
 }
 </style>

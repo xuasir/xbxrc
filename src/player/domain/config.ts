@@ -36,6 +36,8 @@ export function DEFAULT_PLAYER_OPTIONS(): PlayerClientOptions {
       maxVideoBitrateKbps: 0,
       maxAudioBitrateKbps: 0,
       forceMonoAudio: false,
+      targetVideoWidth: 1920,
+      targetVideoHeight: 1080,
     },
   }
 }

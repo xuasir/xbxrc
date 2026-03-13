@@ -15,6 +15,7 @@ publish = false
 [dependencies]
 ohmygamepad-gilrs = { path = "../../backends/gilrs" }
 ohmygamepad-macos-gccontroller-haptics = { path = "../../backends/macos-gccontroller-haptics" }
+ohmygamepad-win-xbox-haptics = { path = "../../backends/win-xbox-haptics" }
 ohmygamepad-core = { path = "../../core" }
 ohmygamepad-protocol = { path = "../../protocol" }
 

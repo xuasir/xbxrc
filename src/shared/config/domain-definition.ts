@@ -127,7 +127,7 @@ export const CONFIG_GROUP_DEFINITIONS: Record<string, SettingGroupDefinition> = 
       {
         key: 'appearance',
         label: 'Appearance',
-        keys: ['locale', 'fullscreen'],
+        keys: ['locale', 'theme', 'fullscreen'],
       },
       {
         key: 'graphics',
@@ -169,6 +169,7 @@ export const CONFIG_GROUP_DEFINITIONS: Record<string, SettingGroupDefinition> = 
         label: 'Default',
         keys: [
           'resolution',
+          'xhome_resolution',
           'preferred_game_language',
           'power_on',
           'enable_audio_control',
@@ -251,6 +252,23 @@ export const CONFIG_FIELD_DEFINITIONS: Record<string, SettingFieldDefinition> = 
       },
     ],
   },
+  theme: {
+    label: 'Theme',
+    description: 'Appearance of the application interface',
+    control: 'singleSelect',
+    options: [
+      {
+        value: 'dark',
+        label: 'Dark',
+        description: 'Xbox traditional deep mode',
+      },
+      {
+        value: 'light',
+        label: 'Light',
+        description: 'Clean and bright mode',
+      },
+    ],
+  },
   use_msal: {
     label: 'Use MSAL',
     description: 'Switch between MSAL and XAL authentication',
@@ -264,16 +282,36 @@ export const CONFIG_FIELD_DEFINITIONS: Record<string, SettingFieldDefinition> = 
   resolution: {
     label: 'Resolution',
     description:
-      'All resolutions listed in this section represent maximum values as specified for each option; therefore, "1080p" denotes support for up to 1080p resolution.',
+      'All resolutions listed in this section represent maximum values as specified for each option.',
+    control: 'singleSelect',
+    options: [
+      {
+        value: 1440,
+        label: '1440p',
+        description: 'Use the Tizen HQ device profile to request up to 1440p when supported',
+        meta: 'Higher bandwidth',
+      },
+      {
+        value: 1081,
+        label: 'Auto (1080p HQ)',
+        description: 'Use the highest quality 1080p profile supported by the current path',
+      },
+      { value: 1080, label: '1080p', meta: '7 GB/hr' },
+      { value: 720, label: '720p', meta: '3 GB/hr' },
+    ],
+  },
+  xhome_resolution: {
+    label: 'Host Resolution',
+    description: 'Maximum resolution to request specifically for xHome local streaming.',
     control: 'singleSelect',
     options: [
       {
         value: 1081,
-        label: 'Auto (1440p Max Quality)',
-        description: 'The recommended setting for the user\'s device and subscription tier',
+        label: 'Auto (1080p HQ)',
+        description: 'Use the highest quality xHome profile supported by the current host path',
       },
-      { value: 1080, label: '1080p', meta: '7 GB/hr' },
-      { value: 720, label: '720p', meta: '3 GB/hr' },
+      { value: 1080, label: '1080p', meta: 'Recommended' },
+      { value: 720, label: '720p', meta: 'Lower bandwidth' },
     ],
   },
   xhome_auto_connect_server_id: {

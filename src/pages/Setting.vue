@@ -14,6 +14,7 @@ import SettingToggleRow from '../components/settings/SettingToggleRow.vue'
 import SettingValueSheet from '../components/settings/SettingValueSheet.vue'
 import BrandedLoading from '../components/common/BrandedLoading.vue'
 import { resolveUiLocale, setUiLocale } from '../i18n'
+import { applyTheme } from '../app/theme'
 import { syncHapticsConfig } from '@/navigation/core'
 import {
   SPATIAL_NAV_NODE_IDS,
@@ -104,6 +105,7 @@ const STREAMING_PRESET_DEFINITIONS = [
     descriptionFallback: 'Balanced baseline tuned for stability',
     patch: {
       resolution: 720,
+      xhome_resolution: 1080,
       xhome_bitrate_mode: 'Auto',
       xhome_bitrate: 20,
       xcloud_bitrate_mode: 'Auto',
@@ -124,7 +126,8 @@ const STREAMING_PRESET_DEFINITIONS = [
     descriptionKey: 'setting.streaming.presets.qualityFirst.description',
     descriptionFallback: 'Higher bitrate profile for image quality',
     patch: {
-      resolution: 1081,
+      resolution: 1440,
+      xhome_resolution: 1081,
       xhome_bitrate_mode: 'Custom',
       xhome_bitrate: 40,
       xcloud_bitrate_mode: 'Custom',
@@ -146,6 +149,7 @@ const STREAMING_PRESET_DEFINITIONS = [
     descriptionFallback: 'Lower bitrate and faster decode preference',
     patch: {
       resolution: 720,
+      xhome_resolution: 720,
       xhome_bitrate_mode: 'Custom',
       xhome_bitrate: 12,
       xcloud_bitrate_mode: 'Custom',
@@ -382,6 +386,7 @@ async function syncConfigGroups(): Promise<void> {
   groupState.value = nextGroupState
   const appConfig = nextGroupState.app as Record<string, unknown>
   setUiLocale(appConfig.locale as string)
+  applyTheme(appConfig.theme as any)
   syncHapticsConfig(appConfig.ui_haptics !== false, appConfig.ui_audio !== false)
 }
 
@@ -969,10 +974,10 @@ onUnmounted(() => {
   flex-direction: column;
   gap: 32px;
   padding: 44px 20px 32px; /* Reduced from 32px to account for nav padding */
-  background: #1a1b1e;
+  background: var(--ui-page-bg);
   position: relative;
   z-index: 2;
-  border-right: 1px solid rgba(255, 255, 255, 0.05);
+  border-right: 1px solid var(--ui-border-subtle);
 }
 
 .setting-sidebar__header {
@@ -1016,7 +1021,7 @@ onUnmounted(() => {
 }
 
 .setting-sidebar__tab:hover {
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--color-state-hover);
   color: var(--color-text-primary);
 }
 
@@ -1027,15 +1032,15 @@ onUnmounted(() => {
   top: 12px;
   bottom: 12px;
   width: 4px;
-  background: #107c10;
+  background: var(--brand-primary);
   border-radius: 0 2px 2px 0;
   opacity: 0;
   transition: opacity var(--ui-motion-fast);
 }
 
 .setting-sidebar__tab--active {
-  background: rgba(255, 255, 255, 0.03);
-  color: #ffffff;
+  background: var(--color-state-selected);
+  color: var(--ui-page-text);
 }
 
 .setting-sidebar__tab--active::before {
@@ -1043,8 +1048,8 @@ onUnmounted(() => {
 }
 
 .setting-sidebar__tab[data-focused='true'] {
-  background: var(--color-focus-bg);
-  color: #ffffff;
+  background: var(--color-focus-bg-strong);
+  color: var(--ui-focus-text);
   box-shadow: var(--shadow-xbox-focus);
   z-index: 10;
 }
@@ -1078,8 +1083,8 @@ onUnmounted(() => {
 }
 
 .setting-panel__header--scrolled {
-  background: #1a1b1e;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  background: var(--ui-page-bg);
+  box-shadow: 0 8px 32px color-mix(in srgb, var(--neutral-0), transparent 60%);
 }
 
 .setting-panel__group-title {
@@ -1094,12 +1099,12 @@ onUnmounted(() => {
 .setting-panel__streaming-actions {
   margin: 0 64px 12px;
   padding: 20px;
-  border: 1px solid rgba(16, 124, 16, 0.35);
+  border: 1px solid color-mix(in srgb, var(--brand-primary), transparent 65%);
   border-radius: 12px;
   background: linear-gradient(
     130deg,
-    rgba(16, 124, 16, 0.18),
-    rgba(16, 124, 16, 0.04)
+    color-mix(in srgb, var(--brand-primary), transparent 85%),
+    color-mix(in srgb, var(--brand-primary), transparent 95%)
   );
 }
 
@@ -1141,18 +1146,19 @@ onUnmounted(() => {
   padding: 12px 14px;
   border: 2px solid transparent;
   border-radius: 10px;
-  background: rgba(0, 0, 0, 0.22);
+  background: var(--ui-surface-overlay);
   color: var(--color-text-primary);
   text-align: left;
   transition: all var(--ui-motion-fast) var(--ease-standard);
 }
 
 .setting-preset-button:hover {
-  background: rgba(0, 0, 0, 0.32);
+  background: color-mix(in srgb, var(--ui-surface-overlay), var(--neutral-1000) 5%);
 }
 
 .setting-preset-button[data-focused='true'] {
   background: var(--color-focus-bg-strong);
+  color: var(--ui-focus-text);
   box-shadow: var(--shadow-xbox-focus);
 }
 
@@ -1176,9 +1182,9 @@ onUnmounted(() => {
   margin-top: 12px;
   min-height: 40px;
   padding: 0 14px;
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  border: 1px solid var(--ui-border-subtle);
   border-radius: 8px;
-  background: rgba(0, 0, 0, 0.18);
+  background: color-mix(in srgb, var(--neutral-0), transparent 82%);
   color: var(--color-text-secondary);
   font-size: 13px;
   font-weight: var(--ui-font-weight-bold);
@@ -1188,8 +1194,8 @@ onUnmounted(() => {
 }
 
 .setting-panel__expert-toggle[data-focused='true'] {
-  background: var(--color-focus-bg);
-  color: #fff;
+  background: var(--color-focus-bg-strong);
+  color: var(--ui-focus-text);
   box-shadow: var(--shadow-xbox-focus);
 }
 
@@ -1206,7 +1212,7 @@ onUnmounted(() => {
 .setting-panel__section-header {
   margin-bottom: 16px;
   padding: 0;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  border-bottom: 1px solid var(--ui-border-subtle);
 }
 
 .setting-panel__section-header--expert {
@@ -1224,14 +1230,14 @@ onUnmounted(() => {
   text-transform: uppercase;
   letter-spacing: 0.15em;
   color: var(--brand-primary);
-  text-shadow: 0 0 12px rgba(16, 124, 16, 0.3);
+  text-shadow: 0 0 12px color-mix(in srgb, var(--brand-primary), transparent 70%);
 }
 
 .setting-panel__expert-reset {
   margin-bottom: 10px;
   min-height: 34px;
   padding: 0 12px;
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  border: 1px solid var(--ui-border-subtle);
   border-radius: 8px;
   background: transparent;
   color: var(--color-text-secondary);
@@ -1243,9 +1249,9 @@ onUnmounted(() => {
 }
 
 .setting-panel__expert-reset[data-focused='true'] {
-  background: var(--color-focus-bg);
-  color: #ff9b9b;
-  border-color: rgba(255, 155, 155, 0.5);
+  background: var(--color-focus-bg-strong);
+  color: var(--ui-focus-text);
+  border-color: color-mix(in srgb, var(--color-danger), transparent 50%);
   box-shadow: var(--shadow-xbox-focus);
 }
 
@@ -1256,9 +1262,9 @@ onUnmounted(() => {
 .setting-panel__expert-risk {
   margin: -4px 0 14px;
   padding: 10px 12px;
-  border-left: 3px solid #ff8b5a;
-  background: rgba(255, 139, 90, 0.14);
-  color: #ffd9c9;
+  border-left: 3px solid var(--color-warning);
+  background: color-mix(in srgb, var(--color-warning), transparent 86%);
+  color: color-mix(in srgb, var(--color-warning), var(--neutral-0) 20%);
   font-size: 13px;
   line-height: 1.5;
 }
@@ -1279,25 +1285,25 @@ onUnmounted(() => {
   padding: 12px 20px;
   border: 2px solid transparent;
   border-radius: 12px;
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--color-state-hover);
   color: var(--color-text-primary);
   text-align: left;
   transition: all var(--ui-motion-fast) var(--ease-standard);
 }
 
 .setting-row:hover {
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--color-state-hover);
 }
 
 .setting-row[data-focused='true'] {
   background: var(--color-focus-bg-strong);
-  color: #ffffff;
+  color: var(--ui-focus-text);
   box-shadow: var(--shadow-xbox-focus);
   z-index: 5;
 }
 
 .setting-row[data-focused='true'] .setting-row__label {
-  color: #ffffff;
+  color: var(--ui-focus-text);
 }
 
 .setting-row[data-focused='true'] .setting-row__desc {
@@ -1335,7 +1341,7 @@ onUnmounted(() => {
   font-weight: var(--ui-font-weight-black);
   letter-spacing: var(--letter-spacing-loose);
   color: var(--brand-primary);
-  text-shadow: 0 0 12px rgba(16, 124, 16, 0.4);
+  text-shadow: 0 0 12px color-mix(in srgb, var(--brand-primary), transparent 60%);
 }
 
 .setting-row--select .setting-row__value {
@@ -1379,6 +1385,6 @@ onUnmounted(() => {
 
 :global(html[data-ui-density='narrow']) .setting-sidebar {
   mask-image: none;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  border-bottom: 1px solid var(--ui-border-subtle);
 }
 </style>

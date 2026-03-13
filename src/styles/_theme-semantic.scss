@@ -52,6 +52,7 @@
   --ui-stroke-base: #{$ui-stroke-base};
 
   // 语义 token
+  --ui-page-bg: #{$ui-page-bg-dark};
   --ui-page-text: #{$ui-page-text-dark};
   --ui-page-text-soft: #{$ui-page-text-soft-dark};
   --ui-page-glow: #{$ui-page-glow-dark};
@@ -60,14 +61,21 @@
 
   --ui-surface-panel: #{$ui-surface-panel-dark};
   --ui-surface-panel-strong: #{$ui-surface-panel-strong-dark};
+  --ui-surface-overlay: #{$color-slate-820};
   --ui-border-subtle: #{$ui-border-panel-dark};
   --ui-border-focus: #{$ui-focus-border-dark};
   --ui-focus-surface: #{$ui-focus-bg-dark};
   --ui-focus-shadow: #{$ui-focus-shadow-dark};
+  --ui-focus-text: #{$color-neutral-0};
+  --color-focus-bg-strong: var(--color-state-selected);
+  --color-focus-bg-strong-text: #{$color-neutral-0};
   --ui-focus-ring-shadow: var(--shadow-xbox-focus);
   --ui-border-placeholder: #{$ui-icon-placeholder-border-dark};
   --ui-surface-placeholder: #{$ui-icon-placeholder-bg-dark};
   --ui-status-positive: #{$ui-status-online};
+
+  --ui-scrollbar-thumb: #{$ui-scrollbar-thumb-dark};
+  --ui-scrollbar-thumb-hover: #{$ui-scrollbar-thumb-hover-dark};
 
   // 通用布局与页面 token
   --ui-page-inset: #{$ui-layout-side-gap};
@@ -429,11 +437,14 @@
   --ui-stream-performance-left: 12px;
   --ui-stream-performance-min-width: 0;
   --ui-stream-performance-padding: 10px 12px;
+  --ui-shadow-overlay: 0 19px 44px rgba(0, 0, 0, 0.42);
+  --ui-scrim-bg: rgba(0, 0, 0, 0.72);
 }
 
 :root[data-theme='light'] {
   color-scheme: light;
 
+  --ui-page-bg: #{$ui-page-bg-light};
   --ui-page-text: #{$ui-page-text-light};
   --ui-page-text-soft: #{$ui-page-text-soft-light};
   --ui-page-glow: #{$ui-page-glow-light};
@@ -442,12 +453,19 @@
 
   --ui-surface-panel: #{$ui-surface-panel-light};
   --ui-surface-panel-strong: #{$ui-surface-panel-strong-light};
+  --ui-surface-overlay: #{$color-neutral-0};
   --ui-border-subtle: #{$ui-border-panel-light};
   --ui-border-focus: #{$ui-focus-border-light};
-  --ui-focus-surface: #{$ui-focus-bg-light};
+  --ui-focus-surface: #{$color-blue-100};
   --ui-focus-shadow: #{$ui-focus-shadow-light};
+  --ui-focus-text: #{$color-slate-950};
+  --color-focus-bg-strong: var(--color-state-selected);
+  --color-focus-bg-strong-text: #{$color-slate-950};
   --ui-border-placeholder: #{$ui-icon-placeholder-border-light};
   --ui-surface-placeholder: #{$ui-icon-placeholder-bg-light};
+
+  --ui-scrollbar-thumb: #{$ui-scrollbar-thumb-light};
+  --ui-scrollbar-thumb-hover: #{$ui-scrollbar-thumb-hover-light};
 
   --ui-nav-icon-filter: #{$ui-nav-icon-filter-light};
 
@@ -458,6 +476,9 @@
   --ui-login-overlay-glow: #{$ui-login-overlay-glow-light};
   --ui-login-overlay-gradient-top: #{$ui-login-overlay-gradient-top-light};
   --ui-login-overlay-gradient-bottom: #{$ui-login-overlay-gradient-bottom-light};
+
+  --ui-shadow-overlay: 0 12px 32px rgba(0, 0, 0, 0.12);
+  --ui-scrim-bg: rgba(0, 0, 0, 0.35);
 }
 
 // 公共页面骨架：页面只描述结构，不重复拼边框/背景/字号
@@ -508,10 +529,8 @@
   padding: var(--ui-space-5xl) var(--ui-space-5xl) var(--ui-space-4xl);
   border: 1px solid var(--ui-border-subtle);
   border-radius: calc(var(--ui-radius-lg) + var(--ui-space-1));
-  background: var(--ui-surface-panel-strong);
-  box-shadow:
-    0 19px 44px rgba(0, 0, 0, 0.42),
-    inset 0 -4px 13px rgba(255, 255, 255, 0.02);
+  background: var(--ui-surface-overlay);
+  box-shadow: var(--ui-shadow-overlay);
 }
 
 .ui-action-block {
@@ -528,7 +547,8 @@
 
 .ui-action-block[data-focused='true'] {
   border-color: var(--color-focus-ring);
-  background: color-mix(in srgb, var(--color-state-hover) 72%, transparent);
+  background: var(--color-focus-bg-strong);
+  color: var(--color-focus-bg-strong-text);
   box-shadow: 0 0 0 var(--focus-ring-width) var(--color-focus-ring-outer) inset;
 }
 

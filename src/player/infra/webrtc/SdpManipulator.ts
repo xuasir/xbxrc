@@ -81,4 +81,83 @@ export class SdpManipulator {
     }
     return lines.join('\r\n')
   }
+
+  setH264VideoConstraints(
+    sdp: string,
+    options: {
+      maxFrameSize: number
+      maxFrameRate: number
+      minBitrateKbps?: number
+      startBitrateKbps?: number
+      maxBitrateKbps?: number
+    },
+  ): string {
+    const lines = sdp.split('\r\n')
+    const videoPayloadTypes = new Set<string>()
+    const h264PayloadTypes = new Set<string>()
+
+    for (const line of lines) {
+      if (line.startsWith('m=video ')) {
+        const parts = line.trim().split(/\s+/)
+        for (const payloadType of parts.slice(3)) {
+          videoPayloadTypes.add(payloadType)
+        }
+        continue
+      }
+      if (!line.startsWith('a=rtpmap:')) {
+        continue
+      }
+      const match = /^a=rtpmap:(\d+)\s+([^/]+)/i.exec(line)
+      if (!match) {
+        continue
+      }
+      const payloadType = match[1]
+      const codecName = match[2]?.toLowerCase() ?? ''
+      if (videoPayloadTypes.has(payloadType) && codecName === 'h264') {
+        h264PayloadTypes.add(payloadType)
+      }
+    }
+
+    if (h264PayloadTypes.size === 0) {
+      return sdp
+    }
+
+    return lines
+      .map((line) => {
+        const match = /^a=fmtp:(\d+)\s+(.+)$/.exec(line)
+        if (!match || !h264PayloadTypes.has(match[1])) {
+          return line
+        }
+
+        const params = match[2]
+          .split(';')
+          .map(part => part.trim())
+          .filter(Boolean)
+        const normalized = new Map<string, string>()
+        for (const param of params) {
+          const separatorIndex = param.indexOf('=')
+          if (separatorIndex === -1) {
+            normalized.set(param.toLowerCase(), param)
+            continue
+          }
+          const key = param.slice(0, separatorIndex).trim().toLowerCase()
+          normalized.set(key, `${key}=${param.slice(separatorIndex + 1).trim()}`)
+        }
+
+        normalized.set('max-fs', `max-fs=${options.maxFrameSize}`)
+        normalized.set('max-fr', `max-fr=${options.maxFrameRate}`)
+        if (options.minBitrateKbps !== undefined) {
+          normalized.set('x-google-min-bitrate', `x-google-min-bitrate=${options.minBitrateKbps}`)
+        }
+        if (options.startBitrateKbps !== undefined) {
+          normalized.set('x-google-start-bitrate', `x-google-start-bitrate=${options.startBitrateKbps}`)
+        }
+        if (options.maxBitrateKbps !== undefined) {
+          normalized.set('x-google-max-bitrate', `x-google-max-bitrate=${options.maxBitrateKbps}`)
+        }
+
+        return `a=fmtp:${match[1]} ${Array.from(normalized.values()).join(';')}`
+      })
+      .join('\r\n')
+  }
 }

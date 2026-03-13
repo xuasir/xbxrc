@@ -208,6 +208,7 @@ impl StreamingQueryService {
         let domain_config = DomainStreamingConfig::new_home_config(
             config_snapshot.preferred_game_language.clone(),
             config_snapshot.force_region_ip.clone(),
+            config_snapshot.xhome_resolution,
         );
 
         let context = DomainContext {
@@ -222,6 +223,14 @@ impl StreamingQueryService {
             context,
         })
         .map_err(|e| e.to_string())?;
+
+        log::info!(
+            "xhome query gateway resolved: device_profile={:?} resolution={}x{} os={}",
+            output.plan.session.device.kind,
+            output.plan.session.device.max_width,
+            output.plan.session.device.max_height,
+            output.plan.session.device.os_name,
+        );
 
         let streaming_token = xbox_streaming::session::access::StreamingToken::parse(token)
             .map_err(|e| e.to_string())?;

@@ -256,7 +256,7 @@ watch(
   align-items: center;
   justify-content: center;
   padding: 40px;
-  background: rgba(0, 0, 0, 0.8);
+  background: var(--ui-scrim-bg);
 }
 
 .setting-display-options-sheet__panel {
@@ -266,11 +266,11 @@ watch(
   display: flex;
   flex-direction: column;
   padding: 0;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 4px;
-  background: #1a1a1a;
-  box-shadow: 0 32px 64px rgba(0, 0, 0, 0.8);
-  color: var(--color-text-primary);
+  border: 1px solid var(--ui-border-subtle);
+  border-radius: var(--ui-radius-md);
+  background: var(--ui-surface-overlay);
+  box-shadow: var(--ui-shadow-overlay);
+  color: var(--ui-page-text);
   overflow: hidden;
 }
 
@@ -296,8 +296,8 @@ watch(
   height: 32px;
   border: 0;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.08);
-  color: #ffffff;
+  background: var(--color-state-hover);
+  color: var(--ui-page-text);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -306,8 +306,8 @@ watch(
 }
 
 .setting-display-options-sheet__close[data-focused='true'] {
-  background: var(--color-focus-bg);
-  color: #ffffff;
+  background: var(--color-focus-bg-strong);
+  color: var(--ui-focus-text);
   box-shadow: var(--shadow-xbox-focus);
 }
 
@@ -322,7 +322,7 @@ watch(
   font-weight: 700;
   letter-spacing: 0.05em;
   text-transform: uppercase;
-  color: #107c10;
+  color: var(--brand-primary);
 }
 
 .setting-display-options-sheet__title {
@@ -373,9 +373,9 @@ watch(
 .setting-display-options-sheet__value {
   min-height: 48px;
   border: 2px solid transparent;
-  border-radius: 4px;
-  background: rgba(255, 255, 255, 0.05);
-  color: var(--color-text-primary);
+  border-radius: var(--ui-radius-sm);
+  background: var(--color-state-hover);
+  color: var(--ui-page-text);
   transition: all var(--ui-motion-fast);
 }
 
@@ -396,7 +396,8 @@ watch(
 
 .setting-display-options-sheet__value[data-focused='true'],
 .setting-display-options-sheet__step[data-focused='true'] {
-  background: var(--color-focus-bg);
+  background: var(--color-focus-bg-strong);
+  color: var(--ui-focus-text);
   box-shadow: var(--shadow-xbox-focus);
 }
 
@@ -440,8 +441,8 @@ watch(
 }
 
 .setting-display-options-sheet__action--secondary {
-  background: rgba(255, 255, 255, 0.08);
-  color: #ffffff;
+  background: var(--color-state-hover);
+  color: var(--ui-page-text);
 }
 
 .setting-display-options-sheet__action--primary {
@@ -451,12 +452,14 @@ watch(
 
 .setting-display-options-sheet__action[data-focused='true'] {
   background: var(--color-focus-bg-strong);
+  color: var(--ui-focus-text);
   box-shadow: var(--shadow-xbox-focus);
   transform: scale(1.02);
 }
 
 .setting-display-options-sheet__action--primary[data-focused='true'] {
   background: var(--brand-primary-strong);
+  color: #ffffff;
 }
 
 .setting-display-options-sheet-transition-enter-active,
