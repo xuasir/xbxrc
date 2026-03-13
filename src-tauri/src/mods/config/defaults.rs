@@ -1,6 +1,6 @@
 use serde_json::{json, Map, Value};
 
-pub const APP_CONFIG_KEYS: [&str; 28] = [
+pub const APP_CONFIG_KEYS: [&str; 31] = [
     "locale",
     "use_msal",
     "fullscreen",
