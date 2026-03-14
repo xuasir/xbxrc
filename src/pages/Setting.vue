@@ -5,17 +5,17 @@ import {
   CONFIG_FIELD_DEFINITIONS,
   CONFIG_GROUP_DEFINITIONS,
 } from '@shared/config/domain-definition'
-import { Focusable } from '@/navigation/core/vue'
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { syncHapticsConfig } from '@/navigation/core'
+import { Focusable } from '@/navigation/core/vue'
+import { applyTheme } from '../app/theme'
+import BrandedLoading from '../components/common/BrandedLoading.vue'
 import SettingDisplayOptionsSheet from '../components/settings/SettingDisplayOptionsSheet.vue'
 import SettingSingleSelectSheet from '../components/settings/SettingSingleSelectSheet.vue'
 import SettingToggleRow from '../components/settings/SettingToggleRow.vue'
 import SettingValueSheet from '../components/settings/SettingValueSheet.vue'
-import BrandedLoading from '../components/common/BrandedLoading.vue'
 import { resolveUiLocale, setUiLocale } from '../i18n'
-import { applyTheme } from '../app/theme'
-import { syncHapticsConfig } from '@/navigation/core'
 import {
   SPATIAL_NAV_NODE_IDS,
   SPATIAL_NAV_SCOPE_IDS,
@@ -64,18 +64,6 @@ interface DisplayOptionsValue {
   brightness: number
 }
 
-type StreamingPresetKey = 'default' | 'qualityFirst' | 'latencyFirst'
-
-interface StreamingPresetDefinition {
-  key: StreamingPresetKey
-  nodeId: string
-  labelKey: string
-  labelFallback: string
-  descriptionKey: string
-  descriptionFallback: string
-  patch: Record<string, string | number | boolean>
-}
-
 const RESTART_REQUIRED_KEYS = new Set([
   'use_msal',
   'locale',
@@ -84,9 +72,7 @@ const RESTART_REQUIRED_KEYS = new Set([
   'force_region_ip',
 ])
 
-const STREAMING_PRESET_ACTION_KEY = 'streaming.__preset__'
 const STREAMING_EXPERT_RESET_ACTION_KEY = 'streaming.__expert_reset__'
-const STREAMING_EXPERT_TOGGLE_NODE_ID = 'setting.actions.streaming.expert.toggle'
 const STREAMING_EXPERT_RESET_NODE_ID = 'setting.actions.streaming.expert.reset'
 
 const STREAMING_EXPERT_RESET_PATCH = {
@@ -94,75 +80,6 @@ const STREAMING_EXPERT_RESET_PATCH = {
   server_username: '',
   server_credential: '',
 } as const satisfies Record<string, string>
-
-const STREAMING_PRESET_DEFINITIONS = [
-  {
-    key: 'default',
-    nodeId: 'setting.actions.streaming.preset.default',
-    labelKey: 'setting.streaming.presets.default.label',
-    labelFallback: 'Default',
-    descriptionKey: 'setting.streaming.presets.default.description',
-    descriptionFallback: 'Balanced baseline tuned for stability',
-    patch: {
-      resolution: 720,
-      xhome_resolution: 1080,
-      xhome_bitrate_mode: 'Auto',
-      xhome_bitrate: 20,
-      xcloud_bitrate_mode: 'Auto',
-      xcloud_bitrate: 20,
-      audio_bitrate_mode: 'Auto',
-      audio_bitrate: 20,
-      codec: '',
-      ipv6: false,
-      stream_runtime_mode: 'webrtc-direct',
-      xhome_turn_fallback: false,
-    },
-  },
-  {
-    key: 'qualityFirst',
-    nodeId: 'setting.actions.streaming.preset.quality-first',
-    labelKey: 'setting.streaming.presets.qualityFirst.label',
-    labelFallback: 'Quality First',
-    descriptionKey: 'setting.streaming.presets.qualityFirst.description',
-    descriptionFallback: 'Higher bitrate profile for image quality',
-    patch: {
-      resolution: 1440,
-      xhome_resolution: 1081,
-      xhome_bitrate_mode: 'Custom',
-      xhome_bitrate: 40,
-      xcloud_bitrate_mode: 'Custom',
-      xcloud_bitrate: 35,
-      audio_bitrate_mode: 'Custom',
-      audio_bitrate: 24,
-      codec: '',
-      ipv6: true,
-      stream_runtime_mode: 'webrtc-direct',
-      xhome_turn_fallback: true,
-    },
-  },
-  {
-    key: 'latencyFirst',
-    nodeId: 'setting.actions.streaming.preset.latency-first',
-    labelKey: 'setting.streaming.presets.latencyFirst.label',
-    labelFallback: 'Latency First',
-    descriptionKey: 'setting.streaming.presets.latencyFirst.description',
-    descriptionFallback: 'Lower bitrate and faster decode preference',
-    patch: {
-      resolution: 720,
-      xhome_resolution: 720,
-      xhome_bitrate_mode: 'Custom',
-      xhome_bitrate: 12,
-      xcloud_bitrate_mode: 'Custom',
-      xcloud_bitrate: 10,
-      audio_bitrate_mode: 'Custom',
-      audio_bitrate: 8,
-      codec: 'video/H264-420',
-      ipv6: false,
-      stream_runtime_mode: 'webrtc-direct',
-      xhome_turn_fallback: false,
-    },
-  },
-] as const satisfies readonly StreamingPresetDefinition[]
 
 const CLEAR_AUTH_CACHE_KEYS = new Map<string, 'ephemeral' | 'all'>([
   ['use_msal', 'all'],
@@ -174,12 +91,10 @@ const activeTabKey = ref<SettingTabKey>('app')
 const groupState = ref<SettingGroupMap | null>(null)
 const isLoading = ref(false)
 const pendingActionKey = ref<string | null>(null)
-const isContentScrolled = ref(false)
 const settingPanelRef = ref<HTMLElement | null>(null)
 const activeSingleSelectRow = ref<SettingRow | null>(null)
 const activeValueEditorRow = ref<SettingRow | null>(null)
 const activeDisplayOptionsRow = ref<SettingRow | null>(null)
-const isStreamingExpertExpanded = ref(false)
 const { t, te } = useI18n()
 
 function translateOrFallback(key: string, fallback: string): string {
@@ -299,13 +214,6 @@ const activeSections = computed<SettingSection[]>(() => {
   const group = groups[groupKey] as Record<string, unknown>
 
   return groupDefinition.sections
-    .filter((section) => {
-      // 专家层默认隐藏，避免高风险字段直接暴露给普通用户
-      if (groupKey !== 'streaming' || section.key !== 'expert') {
-        return true
-      }
-      return isStreamingExpertExpanded.value
-    })
     .map((section) => {
       const rows = section.keys.map(key => buildSettingRow(activeTabKey.value, key, group[key]))
 
@@ -337,22 +245,7 @@ const activeSectionRows = computed(() =>
 )
 
 const activeGroupLabel = computed(() => getTranslatedGroupLabel(activeTabKey.value))
-const streamingPresetItems = computed(() =>
-  STREAMING_PRESET_DEFINITIONS.map(definition => ({
-    key: definition.key,
-    nodeId: definition.nodeId,
-    label: translateOrFallback(definition.labelKey, definition.labelFallback),
-    description: translateOrFallback(
-      definition.descriptionKey,
-      definition.descriptionFallback,
-    ),
-    patch: definition.patch,
-  })),
-)
 const firstFocusableNodeId = computed(() => {
-  if (activeTabKey.value === 'streaming' && !isLoading.value) {
-    return STREAMING_PRESET_DEFINITIONS[0].nodeId
-  }
   return activeRows.value[0]?.nodeId
 })
 const tabNavItems = computed<SettingTabNavItem[]>(() => {
@@ -406,9 +299,6 @@ function handleTabChange(tabKey: string): void {
     activeSingleSelectRow.value = null
     activeValueEditorRow.value = null
     activeDisplayOptionsRow.value = null
-    if (tabKey !== 'streaming') {
-      isStreamingExpertExpanded.value = false
-    }
   }
 }
 
@@ -594,42 +484,6 @@ async function handleDisplayOptionsSubmit(nextValue: DisplayOptionsValue): Promi
   }
 }
 
-async function handleApplyStreamingPreset(presetKey: StreamingPresetKey): Promise<void> {
-  if (pendingActionKey.value !== null) {
-    return
-  }
-
-  const preset = streamingPresetItems.value.find(item => item.key === presetKey)
-  if (preset === undefined) {
-    return
-  }
-
-  pendingActionKey.value = STREAMING_PRESET_ACTION_KEY
-  try {
-    // 预设只写 policy 字段，不覆盖 view 字段（如 performance_style）
-    await rpc.config.set({
-      patch: { ...preset.patch },
-    })
-
-    await syncConfigGroups()
-  }
-  finally {
-    pendingActionKey.value = null
-  }
-}
-
-function handleToggleStreamingExpert(): void {
-  if (isStreamingExpertExpanded.value) {
-    isStreamingExpertExpanded.value = false
-    return
-  }
-
-  const accepted = window.confirm(t('setting.streaming.expert.enterConfirm'))
-  if (accepted) {
-    isStreamingExpertExpanded.value = true
-  }
-}
-
 async function handleResetStreamingExpert(): Promise<void> {
   if (pendingActionKey.value !== null) {
     return
@@ -653,10 +507,6 @@ async function handleResetStreamingExpert(): Promise<void> {
   }
 }
 
-function syncScrolledState(): void {
-  isContentScrolled.value = (settingPanelRef.value?.scrollTop ?? 0) > 4
-}
-
 function handleWindowKeydown(event: KeyboardEvent): void {
   if (event.key !== 'Escape') {
     return
@@ -677,16 +527,13 @@ function handleWindowKeydown(event: KeyboardEvent): void {
 
 onMounted(() => {
   void loadConfigGroups()
-  syncScrolledState()
   window.addEventListener('keydown', handleWindowKeydown)
 })
 
 onUnmounted(() => {
-  isContentScrolled.value = false
   activeSingleSelectRow.value = null
   activeValueEditorRow.value = null
   activeDisplayOptionsRow.value = null
-  isStreamingExpertExpanded.value = false
   window.removeEventListener('keydown', handleWindowKeydown)
 })
 </script>
@@ -712,7 +559,6 @@ onUnmounted(() => {
             :class="{ 'setting-sidebar__tab--active': activeTabKey === tab.key }"
             :scope-id="SPATIAL_NAV_SCOPE_IDS.appShell"
             :aria-label="tab.label"
-            :on-confirm="() => handleTabChange(tab.key)"
             @click="() => handleTabChange(tab.key)"
           >
             <span class="setting-sidebar__tab-label">{{ tab.label }}</span>
@@ -724,70 +570,14 @@ onUnmounted(() => {
         ref="settingPanelRef"
         class="setting-panel"
         :aria-label="t('setting.aria.panel', { group: activeGroupLabel })"
-        @scroll="syncScrolledState"
       >
         <Transition name="setting-content-fade" mode="out-in">
           <div :key="activeTabKey" class="setting-panel__content">
-            <header
-              class="setting-panel__header"
-              :class="{ 'setting-panel__header--scrolled': isContentScrolled }"
-            >
+            <header class="setting-panel__header">
               <h1 class="setting-panel__group-title">
                 {{ activeGroupLabel }}
               </h1>
             </header>
-
-            <section
-              v-if="activeTabKey === 'streaming' && !isLoading"
-              class="setting-panel__streaming-actions"
-              :aria-label="t('setting.streaming.presets.title')"
-            >
-              <header class="setting-panel__streaming-actions-header">
-                <h2 class="setting-panel__streaming-actions-title">
-                  {{ t('setting.streaming.presets.title') }}
-                </h2>
-                <p class="setting-panel__streaming-actions-description">
-                  {{ t('setting.streaming.presets.description') }}
-                </p>
-              </header>
-
-              <div class="setting-panel__preset-list">
-                <Focusable
-                  v-for="preset in streamingPresetItems"
-                  :id="preset.nodeId"
-                  :key="preset.nodeId"
-                  as="button"
-                  type="button"
-                  class="setting-preset-button"
-                  :scope-id="SPATIAL_NAV_SCOPE_IDS.appShell"
-                  :aria-label="preset.label"
-                  :disabled="pendingActionKey !== null"
-                  :on-confirm="() => void handleApplyStreamingPreset(preset.key)"
-                  @click="() => void handleApplyStreamingPreset(preset.key)"
-                >
-                  <span class="setting-preset-button__label">{{ preset.label }}</span>
-                  <span class="setting-preset-button__desc">{{ preset.description }}</span>
-                </Focusable>
-              </div>
-
-              <Focusable
-                :id="STREAMING_EXPERT_TOGGLE_NODE_ID"
-                as="button"
-                type="button"
-                class="setting-panel__expert-toggle"
-                :scope-id="SPATIAL_NAV_SCOPE_IDS.appShell"
-                :aria-label="t('setting.streaming.expert.enter')"
-                :disabled="pendingActionKey !== null"
-                :on-confirm="() => handleToggleStreamingExpert()"
-                @click="() => handleToggleStreamingExpert()"
-              >
-                {{
-                  isStreamingExpertExpanded
-                    ? t('setting.streaming.expert.collapse')
-                    : t('setting.streaming.expert.enter')
-                }}
-              </Focusable>
-            </section>
 
             <div v-if="isLoading" class="setting-panel__state">
               <BrandedLoading :label="t('setting.states.loading')" size="lg" />
@@ -824,7 +614,6 @@ onUnmounted(() => {
                     :scope-id="SPATIAL_NAV_SCOPE_IDS.appShell"
                     :aria-label="t('setting.streaming.expert.reset')"
                     :disabled="pendingActionKey !== null"
-                    :on-confirm="() => void handleResetStreamingExpert()"
                     @click="() => void handleResetStreamingExpert()"
                   >
                     {{
@@ -862,7 +651,6 @@ onUnmounted(() => {
                       :class="{ 'setting-row--select': row.control === 'singleSelect' }"
                       :scope-id="SPATIAL_NAV_SCOPE_IDS.appShell"
                       :aria-label="row.label"
-                      :on-confirm="() => void handleRowConfirm(row)"
                       @click="() => void handleRowConfirm(row)"
                     >
                       <span class="setting-row__copy">
@@ -1076,15 +864,12 @@ onUnmounted(() => {
 .setting-panel__header {
   position: sticky;
   top: 0;
-  z-index: 1;
-  padding: 44px 64px 20px;
-  background: transparent;
-  transition: all var(--ui-motion-fast);
-}
-
-.setting-panel__header--scrolled {
-  background: var(--ui-page-bg);
-  box-shadow: 0 8px 32px color-mix(in srgb, var(--neutral-0), transparent 60%);
+  z-index: 10;
+  padding: 44px 64px 24px;
+  background: color-mix(in srgb, var(--ui-page-bg), transparent 15%);
+  backdrop-filter: blur(20px);
+  border-bottom: 1px solid var(--ui-border-subtle);
+  margin-bottom: 24px;
 }
 
 .setting-panel__group-title {
@@ -1096,113 +881,10 @@ onUnmounted(() => {
   color: var(--color-text-primary);
 }
 
-.setting-panel__streaming-actions {
-  margin: 0 64px 12px;
-  padding: 20px;
-  border: 1px solid color-mix(in srgb, var(--brand-primary), transparent 65%);
-  border-radius: 12px;
-  background: linear-gradient(
-    130deg,
-    color-mix(in srgb, var(--brand-primary), transparent 85%),
-    color-mix(in srgb, var(--brand-primary), transparent 95%)
-  );
-}
-
-.setting-panel__streaming-actions-header {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin-bottom: 14px;
-}
-
-.setting-panel__streaming-actions-title {
-  margin: 0;
-  font-size: 16px;
-  font-weight: var(--ui-font-weight-black);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--brand-primary);
-}
-
-.setting-panel__streaming-actions-description {
-  margin: 0;
-  font-size: 14px;
-  color: var(--color-text-secondary);
-}
-
-.setting-panel__preset-list {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 10px;
-}
-
-.setting-preset-button {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  justify-content: flex-start;
-  gap: 4px;
-  min-height: 88px;
-  padding: 12px 14px;
-  border: 2px solid transparent;
-  border-radius: 10px;
-  background: var(--ui-surface-overlay);
-  color: var(--color-text-primary);
-  text-align: left;
-  transition: all var(--ui-motion-fast) var(--ease-standard);
-}
-
-.setting-preset-button:hover {
-  background: color-mix(in srgb, var(--ui-surface-overlay), var(--neutral-1000) 5%);
-}
-
-.setting-preset-button[data-focused='true'] {
-  background: var(--color-focus-bg-strong);
-  color: var(--ui-focus-text);
-  box-shadow: var(--shadow-xbox-focus);
-}
-
-.setting-preset-button:disabled {
-  opacity: 0.65;
-}
-
-.setting-preset-button__label {
-  font-size: 15px;
-  line-height: 1.2;
-  font-weight: var(--ui-font-weight-black);
-}
-
-.setting-preset-button__desc {
-  font-size: 12px;
-  line-height: 1.4;
-  color: var(--color-text-secondary);
-}
-
-.setting-panel__expert-toggle {
-  margin-top: 12px;
-  min-height: 40px;
-  padding: 0 14px;
-  border: 1px solid var(--ui-border-subtle);
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--neutral-0), transparent 82%);
-  color: var(--color-text-secondary);
-  font-size: 13px;
-  font-weight: var(--ui-font-weight-bold);
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  transition: all var(--ui-motion-fast);
-}
-
-.setting-panel__expert-toggle[data-focused='true'] {
-  background: var(--color-focus-bg-strong);
-  color: var(--ui-focus-text);
-  box-shadow: var(--shadow-xbox-focus);
-}
-
 .setting-panel__list {
   width: 100%;
   margin: 0;
-  padding: 16px 64px 80px;
+  padding: 0 64px 80px;
 }
 
 .setting-panel__section + .setting-panel__section {

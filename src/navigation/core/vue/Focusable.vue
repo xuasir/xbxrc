@@ -5,7 +5,6 @@ interface Props {
   as?: string
   id?: string
   disabled?: boolean
-  onConfirm?: () => void
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -25,9 +24,6 @@ function handleClick(event: MouseEvent) {
     return
   }
   emit('click', event)
-  if (props.onConfirm) {
-    props.onConfirm()
-  }
 }
 </script>
 

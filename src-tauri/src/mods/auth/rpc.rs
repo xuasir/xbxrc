@@ -1,6 +1,6 @@
 use crate::error::AppResult;
 use crate::mods::auth::service::AUTH_WINDOW_LABEL;
-use crate::{mods::auth::events, AppState};
+use crate::AppState;
 use serde::Deserialize;
 use serde_json::{json, Value};
 use tauri::{Manager, WebviewUrl, WebviewWindowBuilder, WindowEvent};
@@ -97,11 +97,18 @@ fn open_oauth_window(app_handle: &tauri::AppHandle, oauth_url: &str) -> AppResul
         ));
     }
 
+    let external_url = url::Url::parse(oauth_url).map_err(|error| error.to_string())?;
+
     if let Some(existing) = app_handle.get_webview_window(AUTH_WINDOW_LABEL) {
-        let _ = existing.close();
+        // 复用已有 OAuth 窗口，避免 close/destroy 尚未完成时重复创建同名窗口。
+        existing
+            .navigate(external_url)
+            .map_err(|error| error.to_string())?;
+        let _ = existing.show();
+        let _ = existing.set_focus();
+        return Ok(());
     }
 
-    let external_url = url::Url::parse(oauth_url).map_err(|error| error.to_string())?;
     let app_handle_for_nav = app_handle.clone();
 
     let auth_window = WebviewWindowBuilder::new(
@@ -109,6 +116,8 @@ fn open_oauth_window(app_handle: &tauri::AppHandle, oauth_url: &str) -> AppResul
         AUTH_WINDOW_LABEL,
         WebviewUrl::External(external_url),
     )
+    // OAuth 窗口使用无痕会话，避免复用上一次微软登录态。
+    .incognito(true)
     .title("Authentication")
     .inner_size(540.0, 740.0)
     .resizable(true)

@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { Focusable, FocusScope } from '@/navigation/core/vue'
 import { computed, reactive, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { Focusable, FocusScope } from '@/navigation/core/vue'
 
 interface DisplayOptionsValue {
   sharpness: number
@@ -138,7 +138,6 @@ watch(
               type="button"
               class="setting-display-options-sheet__close"
               :scope-id="props.scopeId"
-              :on-confirm="handleClose"
               :on-back="handleClose"
               :aria-label="t('setting.editor.cancel')"
               @click="handleClose"
@@ -165,7 +164,6 @@ watch(
                     type="button"
                     class="setting-display-options-sheet__step"
                     :scope-id="props.scopeId"
-                    :on-confirm="() => stepField(field, -1)"
                     :on-back="handleClose"
                     :aria-label="t('setting.editor.decrease')"
                     @click="stepField(field, -1)"
@@ -200,7 +198,6 @@ watch(
                     type="button"
                     class="setting-display-options-sheet__step"
                     :scope-id="props.scopeId"
-                    :on-confirm="() => stepField(field, 1)"
                     :on-back="handleClose"
                     :aria-label="t('setting.editor.increase')"
                     @click="stepField(field, 1)"
@@ -220,7 +217,6 @@ watch(
                 type="button"
                 class="setting-display-options-sheet__action setting-display-options-sheet__action--secondary"
                 :scope-id="props.scopeId"
-                :on-confirm="handleClose"
                 :on-back="handleClose"
                 @click="handleClose"
               >
@@ -233,7 +229,6 @@ watch(
                 type="button"
                 class="setting-display-options-sheet__action setting-display-options-sheet__action--primary"
                 :scope-id="props.scopeId"
-                :on-confirm="handleSubmit"
                 :on-back="handleClose"
                 @click="handleSubmit"
               >

@@ -363,43 +363,177 @@ export function createBrowserRuntime(options: {
     negotiation: NegotiationAttempt
     channel: ProtocolChannel
     offerSdp: string
+    restart: boolean
   }): Promise<void> {
     const answer = await rpc.streaming.exchangeOffer({
       sessionId: input.spec.sessionId,
       channel: input.channel,
       sdp: input.offerSdp,
+      restart: input.restart,
     })
+    console.info(`[streaming][browser-runtime] remote ${input.channel} answer raw\n${answer.answer.sdp}`)
     if (!isAttemptActive(input.negotiation.attempt)) {
       return
     }
     await input.negotiation.client.setRemoteDescription(answer.answer.sdp)
   }
 
-  async function collectLocalIceCandidates(
-    negotiation: NegotiationAttempt,
-  ): Promise<Array<Parameters<PlayerClient['addIceCandidates']>[0][number]>> {
-    publishPhase('gatheringIce')
-    const localCandidates = await negotiation.client.waitForIceCandidates(4_000)
-    if (!isAttemptActive(negotiation.attempt)) {
-      return []
-    }
-    return localCandidates
+  function iceCandidateKey(candidate: Parameters<PlayerClient['addIceCandidates']>[0][number]): string {
+    return [
+      candidate.candidate,
+      candidate.sdpMid ?? '',
+      candidate.sdpMLineIndex ?? '',
+    ].join('|')
   }
 
-  async function exchangeRemoteIceCandidates(input: {
+  async function exchangeIceCandidatesIncrementally(input: {
     spec: RuntimeLaunchSpec
     negotiation: NegotiationAttempt
-    localCandidates: Array<Parameters<PlayerClient['addIceCandidates']>[0][number]>
-  }): Promise<Array<Parameters<PlayerClient['addIceCandidates']>[0][number]>> {
-    publishPhase('exchangingIce')
-    const remoteCandidates = await rpc.streaming.exchangeIce({
-      sessionId: input.spec.sessionId,
-      candidate: input.localCandidates,
-    })
-    if (!isAttemptActive(input.negotiation.attempt)) {
-      return []
+    restart: boolean
+  }): Promise<void> {
+    const peer = input.negotiation.client.getPeer()
+    if (peer === undefined) {
+      await completeConnecting({
+        negotiation: input.negotiation,
+        remoteCandidates: [],
+      })
+      return
     }
-    return remoteCandidates.candidates
+
+    publishPhase('gatheringIce')
+    let flushTimer: number | null = null
+    let settled = false
+    let flushInFlight = false
+    let gatheringComplete = peer.iceGatheringState === 'complete'
+    let finalPollSent = false
+    const pendingLocalCandidates: Array<Parameters<PlayerClient['addIceCandidates']>[0][number]> = []
+    const appliedRemoteCandidates = new Set<string>()
+
+    const clearFlushTimer = (): void => {
+      if (flushTimer !== null) {
+        window.clearTimeout(flushTimer)
+        flushTimer = null
+      }
+    }
+
+    const applyRemoteCandidates = async (
+      candidates: Array<Parameters<PlayerClient['addIceCandidates']>[0][number]>,
+    ): Promise<void> => {
+      const nextCandidates = candidates.filter((candidate) => {
+        const key = iceCandidateKey(candidate)
+        if (appliedRemoteCandidates.has(key)) {
+          return false
+        }
+        appliedRemoteCandidates.add(key)
+        return true
+      })
+      if (nextCandidates.length === 0 || !isAttemptActive(input.negotiation.attempt)) {
+        return
+      }
+      await input.negotiation.client.addIceCandidates(nextCandidates)
+    }
+
+    const finishIfIdle = (resolve: () => void): void => {
+      if (settled || flushInFlight || pendingLocalCandidates.length > 0 || !gatheringComplete) {
+        return
+      }
+      settled = true
+      clearFlushTimer()
+      peer.removeEventListener('icecandidate', handleIceCandidate)
+      peer.removeEventListener('icegatheringstatechange', handleGatheringStateChange)
+      resolve()
+    }
+
+    const flushPendingCandidates = async (resolve: () => void): Promise<void> => {
+      if (settled || flushInFlight || !isAttemptActive(input.negotiation.attempt)) {
+        return
+      }
+      const localCandidates = pendingLocalCandidates.splice(0)
+      if (localCandidates.length === 0) {
+        if (gatheringComplete && !finalPollSent) {
+          finalPollSent = true
+        }
+        else {
+          finishIfIdle(resolve)
+          return
+        }
+      }
+
+      flushInFlight = true
+      publishPhase('exchangingIce')
+      try {
+        await rpc.streaming.submitIce({
+          sessionId: input.spec.sessionId,
+          candidate: localCandidates,
+          restart: input.restart,
+        })
+        const remoteCandidates = await rpc.streaming.pollIce({
+          sessionId: input.spec.sessionId,
+          restart: input.restart,
+        })
+        await applyRemoteCandidates(remoteCandidates.candidates)
+        if (isAttemptActive(input.negotiation.attempt)) {
+          publishPhase('connecting')
+        }
+      }
+      finally {
+        flushInFlight = false
+        if (pendingLocalCandidates.length > 0) {
+          void flushPendingCandidates(resolve)
+          return
+        }
+        finishIfIdle(resolve)
+      }
+    }
+
+    const scheduleFlush = (resolve: () => void): void => {
+      if (settled || flushInFlight) {
+        return
+      }
+      clearFlushTimer()
+      flushTimer = window.setTimeout(() => {
+        flushTimer = null
+        void flushPendingCandidates(resolve)
+      }, 60)
+    }
+
+    const handleIceCandidate = (event: RTCPeerConnectionIceEvent): void => {
+      if (!isAttemptActive(input.negotiation.attempt)) {
+        return
+      }
+      if (event.candidate === null) {
+        gatheringComplete = true
+        scheduleFlush(resolvePromise)
+        return
+      }
+      pendingLocalCandidates.push({
+        candidate: event.candidate.candidate,
+        sdpMid: event.candidate.sdpMid,
+        sdpMLineIndex: event.candidate.sdpMLineIndex,
+      })
+      scheduleFlush(resolvePromise)
+    }
+
+    const handleGatheringStateChange = (): void => {
+      if (peer.iceGatheringState === 'complete') {
+        gatheringComplete = true
+        scheduleFlush(resolvePromise)
+      }
+    }
+
+    let resolvePromise = () => {}
+    await new Promise<void>((resolve) => {
+      resolvePromise = resolve
+      peer.addEventListener('icecandidate', handleIceCandidate)
+      peer.addEventListener('icegatheringstatechange', handleGatheringStateChange)
+
+      for (const candidate of input.negotiation.client.getIceCandidates()) {
+        pendingLocalCandidates.push(candidate)
+      }
+      if (pendingLocalCandidates.length > 0 || gatheringComplete) {
+        scheduleFlush(resolve)
+      }
+    })
   }
 
   async function completeConnecting(input: {
@@ -427,16 +561,12 @@ export function createBrowserRuntime(options: {
       negotiation,
       channel: 'media',
       offerSdp: offer.sdp,
+      restart: input.restart,
     })
-    const localCandidates = await collectLocalIceCandidates(negotiation)
-    const remoteCandidates = await exchangeRemoteIceCandidates({
+    await exchangeIceCandidatesIncrementally({
       spec,
       negotiation,
-      localCandidates,
-    })
-    await completeConnecting({
-      negotiation,
-      remoteCandidates,
+      restart: input.restart,
     })
   }
 
@@ -451,6 +581,7 @@ export function createBrowserRuntime(options: {
       negotiation,
       channel: 'chat',
       offerSdp: offer.sdp,
+      restart: false,
     })
   }
 

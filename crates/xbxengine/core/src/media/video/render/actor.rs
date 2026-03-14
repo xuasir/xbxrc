@@ -2,6 +2,7 @@ use std::sync::mpsc::{self, Receiver, SyncSender, TrySendError};
 use std::sync::{Arc, Mutex};
 use std::thread;
 
+use crate::api::backend::XbxEngineMediaRuntimeStats;
 use crate::media::video::render::renderer::XbxRenderState;
 use crate::media::video::types::DecodedFrame;
 
@@ -15,13 +16,16 @@ pub struct RendererActorHandle {
 }
 
 impl RendererActorHandle {
-    pub fn new(render_state: Arc<Mutex<XbxRenderState>>) -> Self {
+    pub fn new(
+        render_state: Arc<Mutex<XbxRenderState>>,
+        runtime_stats: Arc<Mutex<XbxEngineMediaRuntimeStats>>,
+    ) -> Self {
         let (tx, rx) = mpsc::sync_channel(1);
 
         thread::Builder::new()
             .name("XbxRendererActor".into())
             .spawn(move || {
-                run_renderer_loop(rx, render_state);
+                run_renderer_loop(rx, render_state, runtime_stats);
             })
             .expect("Failed to spawn renderer actor thread");
 
@@ -37,13 +41,27 @@ impl RendererActorHandle {
     }
 }
 
-fn run_renderer_loop(rx: Receiver<RendererMsg>, render_state: Arc<Mutex<XbxRenderState>>) {
+fn run_renderer_loop(
+    rx: Receiver<RendererMsg>,
+    render_state: Arc<Mutex<XbxRenderState>>,
+    runtime_stats: Arc<Mutex<XbxEngineMediaRuntimeStats>>,
+) {
     while let Ok(msg) = rx.recv() {
         match msg {
             RendererMsg::Frame(frame) => {
+                if let Ok(mut stats) = runtime_stats.lock() {
+                    stats.video_renderer_submit_count_total =
+                        stats.video_renderer_submit_count_total.saturating_add(1);
+                }
                 let mut state = match render_state.lock() {
                     Ok(guard) => guard,
-                    Err(_) => continue,
+                    Err(_) => {
+                        if let Ok(mut stats) = runtime_stats.lock() {
+                            stats.video_renderer_drop_count_total =
+                                stats.video_renderer_drop_count_total.saturating_add(1);
+                        }
+                        continue;
+                    }
                 };
 
                 // Set the current real-time ms before presenting so metrics are correct
@@ -54,6 +72,10 @@ fn run_renderer_loop(rx: Receiver<RendererMsg>, render_state: Arc<Mutex<XbxRende
                     .unwrap_or(0.0);
 
                 if let Err(e) = state.present_frame(render_frame) {
+                    if let Ok(mut stats) = runtime_stats.lock() {
+                        stats.video_renderer_drop_count_total =
+                            stats.video_renderer_drop_count_total.saturating_add(1);
+                    }
                     crate::xbx_log_error!("[XbxRendererActor] present_frame error: {:?}", e);
                 }
             }

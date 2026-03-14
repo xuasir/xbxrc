@@ -126,6 +126,10 @@ impl XbxVideoDecodeState {
         });
     }
 
+    pub(crate) fn last_decode_ok_time_ms(&self) -> Option<f64> {
+        self.last_decode_ok_time_ms
+    }
+
     pub(crate) fn pop_decoded_frame(&mut self, now_ms: f64) -> Option<XbxRenderFrame> {
         let queued = self.decoded_frame_queue.front()?;
         let queue_delay_ms = (now_ms - queued.queued_at_ms).max(0.0);

@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { Focusable, FocusScope } from '@/navigation/core/vue'
 import { useI18n } from 'vue-i18n'
+import { Focusable, FocusScope } from '@/navigation/core/vue'
+import BrandedLoading from '../common/BrandedLoading.vue'
 import exitIcon from '../../assets/nav/exit.svg'
 import { SPATIAL_NAV_NODE_IDS, SPATIAL_NAV_SCOPE_IDS } from '../../navigation/spatial-nav.constants'
 
@@ -59,7 +60,6 @@ function emitLogout(): void {
             as="button"
             type="button"
             class="user-menu__close"
-            :on-confirm="emitClose"
             :on-back="emitClose"
             :aria-label="t('userMenu.close')"
             @click="emitClose"
@@ -123,11 +123,11 @@ function emitLogout(): void {
               type="button"
               class="user-menu__logout"
               :disabled="props.loggingOut"
-              :on-confirm="emitLogout"
               :on-back="emitClose"
               @click="emitLogout"
             >
-              <img class="user-menu__logout-icon" :src="exitIcon" alt="" aria-hidden="true">
+              <BrandedLoading v-if="props.loggingOut" size="xs" />
+              <img v-else class="user-menu__logout-icon" :src="exitIcon" alt="" aria-hidden="true">
               <span class="user-menu__logout-label">{{ t('userMenu.logout') }}</span>
             </Focusable>
           </div>

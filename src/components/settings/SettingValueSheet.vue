@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { Focusable, FocusScope } from '@/navigation/core/vue'
 import { computed, nextTick, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { Focusable, FocusScope } from '@/navigation/core/vue'
 
 interface SettingValueSheetProps {
   open: boolean
@@ -101,6 +101,7 @@ function handleStep(direction: -1 | 1): void {
   const step = resolvedStep.value ?? 1
   const nextValue = clampNumber(safeCurrentValue + direction * step)
   const precision = step.toString().includes('.') ? step.toString().split('.')[1]?.length ?? 0 : 0
+  // eslint-disable-next-line regexp/no-super-linear-backtracking
   draftValue.value = nextValue.toFixed(precision).replace(/\.0+$/, '').replace(/(\.\d*?)0+$/, '$1')
 }
 
@@ -147,7 +148,6 @@ watch(
               type="button"
               class="setting-value-sheet__close"
               :scope-id="props.scopeId"
-              :on-confirm="handleClose"
               :on-back="handleClose"
               :aria-label="t('setting.editor.cancel')"
               @click="handleClose"
@@ -176,7 +176,6 @@ watch(
                   type="button"
                   class="setting-value-sheet__mini-action"
                   :scope-id="props.scopeId"
-                  :on-confirm="() => handleStep(-1)"
                   :on-back="handleClose"
                   :aria-label="t('setting.editor.decrease')"
                   @click="handleStep(-1)"
@@ -188,7 +187,6 @@ watch(
                   :id="fieldNodeId"
                   as="div"
                   class="setting-value-sheet__field-focus"
-                  :on-confirm="handleFocusField"
                   :on-back="handleClose"
                   @click="handleFocusField"
                 >
@@ -214,7 +212,6 @@ watch(
                   type="button"
                   class="setting-value-sheet__mini-action"
                   :scope-id="props.scopeId"
-                  :on-confirm="() => handleStep(1)"
                   :on-back="handleClose"
                   :aria-label="t('setting.editor.increase')"
                   @click="handleStep(1)"
@@ -229,7 +226,6 @@ watch(
                   type="button"
                   class="setting-value-sheet__mini-action"
                   :scope-id="props.scopeId"
-                  :on-confirm="handleClear"
                   :on-back="handleClose"
                   :aria-label="t('setting.editor.clear')"
                   @click="handleClear"
@@ -252,7 +248,6 @@ watch(
                 type="button"
                 class="setting-value-sheet__action setting-value-sheet__action--secondary"
                 :scope-id="props.scopeId"
-                :on-confirm="handleClose"
                 :on-back="handleClose"
                 @click="handleClose"
               >
@@ -265,7 +260,6 @@ watch(
                 type="button"
                 class="setting-value-sheet__action setting-value-sheet__action--primary"
                 :scope-id="props.scopeId"
-                :on-confirm="handleSubmit"
                 :on-back="handleClose"
                 @click="handleSubmit"
               >

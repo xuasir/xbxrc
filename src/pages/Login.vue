@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { Focusable, FocusScope } from '@/navigation/core/vue'
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
+import { Focusable, FocusScope } from '@/navigation/core/vue'
 import BrandedLoading from '../components/common/BrandedLoading.vue'
 import { SPATIAL_NAV_NODE_IDS, SPATIAL_NAV_SCOPE_IDS } from '../navigation/spatial-nav.constants'
 import { events } from '../services/events'
@@ -180,7 +180,7 @@ onUnmounted(() => {
         <BrandedLoading
           v-if="isLoading"
           class="login-content__loading"
-          size="lg"
+          size="sm"
           :label="loginActionLabel"
         />
 
@@ -189,7 +189,6 @@ onUnmounted(() => {
           :id="SPATIAL_NAV_NODE_IDS.login.signIn"
           :scope-id="SPATIAL_NAV_SCOPE_IDS.login"
           :disabled="isLoginSubmitting"
-          :on-confirm="() => void handleSignIn()"
           as="button"
           class="login-content__sign-in ui-action-button ui-action-button--brand"
           type="button"

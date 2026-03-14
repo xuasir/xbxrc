@@ -86,6 +86,15 @@ pub struct RuntimePlan {
     pub input: Owner,
     pub microphone: Owner,
     pub turn: TurnPlan,
+    pub bwe_mode: RuntimeBweMode,
+    pub forced_remb_kbps: Option<u32>,
+    pub adaptive_remb_enabled: bool,
+    pub remb_floor_kbps: u32,
+    pub remb_ceiling_kbps: u32,
+    pub remb_ramp_up_step_kbps: u32,
+    pub remb_ramp_down_factor: u16,
+    pub video_pipeline: RuntimeVideoPipelinePlan,
+    pub recovery: RuntimeRecoveryPlan,
 }
 
 /// runtime 最终模式不再允许 Auto。
@@ -97,6 +106,15 @@ pub enum RuntimeMode {
     RustOwned,
 }
 
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "kebab-case")]
+pub enum RuntimeBweMode {
+    #[default]
+    FixedRemb,
+    ObservedRemb,
+    Hybrid,
+}
+
 /// TURN plan 记录 custom/fallback/resolved 三层结果，便于调试和回放。
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
@@ -105,5 +123,34 @@ pub struct TurnPlan {
     pub fallback: Option<TurnServer>,
     pub resolved: Option<TurnServer>,
     pub source: TurnSource,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct RuntimeVideoPipelinePlan {
+    pub feedback_interval_ms: u64,
+    pub nack_window_ms: u64,
+    pub nack_burst_count: u16,
+    pub nack_max_age_ms: u64,
+    pub nack_retry_interval_ms: u64,
+    pub nack_max_retry_count: u8,
+    pub jitter_buffer_min_delay_ms: u64,
+    pub jitter_buffer_max_delay_ms: u64,
+    pub jitter_buffer_max_packets: u16,
+    pub idle_timeout_ms: u64,
+    pub late_frame_drop_threshold_ms: u64,
+    pub backlog_drop_threshold_packets: u16,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct RuntimeRecoveryPlan {
+    pub first_frame_grace_ms: u64,
+    pub keyframe_request_stall_ms: u64,
+    pub keyframe_loss_burst_threshold: u8,
+    pub decoder_reset_after_keyframe_wait_ms: u64,
+    pub decoder_reset_request_cooldown_ms: u64,
+    pub reconnect_stall_ms: u64,
+    pub stall_recovery_cooldown_ms: u64,
 }
 pub mod compiler;

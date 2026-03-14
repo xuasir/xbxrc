@@ -1,7 +1,7 @@
 <script setup lang="ts">
 interface Props {
   label?: string
-  size?: 'md' | 'lg' | 'xl'
+  size?: 'xs' | 'sm' | 'md' | 'lg' | 'xl'
 }
 
 withDefaults(defineProps<Props>(), {
@@ -16,7 +16,7 @@ withDefaults(defineProps<Props>(), {
       <!-- 外圈发光环 -->
       <div class="branded-loading__aura" />
       
-      <!-- 旋转进度环 (Xbox 风格：带有渐变尾迹的圆环) -->
+      <!-- 旋转进度环 -->
       <div class="branded-loading__ring" />
       
       <!-- 核心 Logo: 呼吸灯效果 -->
@@ -34,14 +34,19 @@ withDefaults(defineProps<Props>(), {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 24px;
   user-select: none;
 }
 
-/* 尺寸定义 */
-.branded-loading--md { --visual-size: 80px; --logo-scale: 0.5; --font-size: 14px; }
-.branded-loading--lg { --visual-size: 120px; --logo-scale: 0.55; --font-size: 16px; }
-.branded-loading--xl { --visual-size: 180px; --logo-scale: 0.6; --font-size: 18px; }
+/* 尺寸精细定义 */
+.branded-loading--xs { --visual-size: 32px; --logo-scale: 0.6; --font-size: 11px; --gap: 8px; --ring-width: 2px; }
+.branded-loading--sm { --visual-size: 48px; --logo-scale: 0.6; --font-size: 12px; --gap: 12px; --ring-width: 2.5px; }
+.branded-loading--md { --visual-size: 64px; --logo-scale: 0.6; --font-size: 13px; --gap: 16px; --ring-width: 3px; }
+.branded-loading--lg { --visual-size: 96px; --logo-scale: 0.6; --font-size: 15px; --gap: 20px; --ring-width: 4px; }
+.branded-loading--xl { --visual-size: 144px; --logo-scale: 0.6; --font-size: 17px; --gap: 24px; --ring-width: 5px; }
+
+.branded-loading {
+  gap: var(--gap);
+}
 
 .branded-loading__visual {
   position: relative;
@@ -66,12 +71,12 @@ withDefaults(defineProps<Props>(), {
   animation: aura-pulse 3s ease-in-out infinite;
 }
 
-/* 旋转进度环：使用 conic-gradient 模拟流动感 */
+/* 旋转进度环 */
 .branded-loading__ring {
   position: absolute;
   inset: 0;
   border-radius: 50%;
-  padding: 3px; /* 环的粗细 */
+  padding: var(--ring-width); 
   background: conic-gradient(
     from 0deg,
     var(--brand-primary) 0deg,
@@ -113,14 +118,14 @@ withDefaults(defineProps<Props>(), {
 .branded-loading__label {
   color: var(--ui-page-text);
   font-size: var(--font-size);
-  font-weight: 600;
-  letter-spacing: 0.05em;
+  font-weight: 700;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
   opacity: 0.8;
   animation: text-fade 2.5s ease-in-out infinite;
+  text-align: center;
+  max-width: 200px;
 }
-
-/* 动画定义 */
 
 @keyframes ring-rotate {
   from { transform: rotate(0deg); }
@@ -130,23 +135,21 @@ withDefaults(defineProps<Props>(), {
 @keyframes logo-breathe {
   0%, 100% {
     transform: scale(1);
-    filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.3));
-    opacity: 0.85;
+    opacity: 0.8;
   }
   50% {
-    transform: scale(1.05);
-    filter: drop-shadow(0 0 20px rgba(255, 255, 255, 0.6));
+    transform: scale(1.08);
     opacity: 1;
   }
 }
 
 @keyframes aura-pulse {
   0%, 100% { transform: scale(1); opacity: 0.5; }
-  50% { transform: scale(1.2); opacity: 1; }
+  50% { transform: scale(1.15); opacity: 0.9; }
 }
 
 @keyframes text-fade {
-  0%, 100% { opacity: 0.6; }
+  0%, 100% { opacity: 0.5; }
   50% { opacity: 0.9; }
 }
 </style>

@@ -59,6 +59,15 @@ impl XbxNegotiationBackend {
 }
 
 impl XbxEngineMediaBackend for XbxNegotiationBackend {
+    fn sync_runtime_config(
+        &mut self,
+        runtime_config: &XbxEngineRuntimeConfig,
+    ) -> Result<(), XbxEngineRuntimeError> {
+        self.negotiation_config = runtime_config.webrtc.negotiation.clone();
+        self.stack.sync_runtime_config(runtime_config.clone());
+        Ok(())
+    }
+
     fn negotiate(
         &mut self,
         request: XbxEngineMediaNegotiationRequest,
@@ -93,6 +102,25 @@ impl XbxEngineMediaBackend for XbxNegotiationBackend {
         self.apply_remote_description_to_peer_connection(&answer_sdp, &remote_candidates)
     }
 
+    fn add_remote_ice_candidates(
+        &mut self,
+        remote_candidates: Vec<XbxEngineIceCandidateDto>,
+    ) -> Result<(), XbxEngineRuntimeError> {
+        self.inner
+            .add_remote_ice_candidates(remote_candidates.clone())?;
+        self.stack.add_remote_ice_candidates(&remote_candidates)
+    }
+
+    fn local_candidates_snapshot(
+        &self,
+    ) -> Result<Vec<XbxEngineIceCandidateDto>, XbxEngineRuntimeError> {
+        Ok(self.stack.local_candidates_snapshot())
+    }
+
+    fn local_ice_gathering_complete(&self) -> Result<bool, XbxEngineRuntimeError> {
+        Ok(self.stack.local_ice_gathering_complete())
+    }
+
     fn apply_display_state(
         &mut self,
         state: XbxEngineDisplayStateDto,
@@ -119,6 +147,7 @@ impl XbxEngineMediaBackend for XbxNegotiationBackend {
     }
 
     fn set_keyboard_pointer_enabled(&mut self, enabled: bool) -> Result<(), XbxEngineRuntimeError> {
+        self.stack.set_keyboard_pointer_enabled(enabled)?;
         self.inner.set_keyboard_pointer_enabled(enabled)
     }
 
@@ -126,6 +155,7 @@ impl XbxEngineMediaBackend for XbxNegotiationBackend {
         &mut self,
         event: XbxEngineInputEventDto,
     ) -> Result<(), XbxEngineRuntimeError> {
+        self.stack.push_keyboard_pointer_input(event.clone())?;
         self.inner.push_keyboard_pointer_input(event)
     }
 

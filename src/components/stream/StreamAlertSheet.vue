@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { Focusable, FocusScope } from '@/navigation/core/vue'
 import { computed } from 'vue'
+import { Focusable, FocusScope } from '@/navigation/core/vue'
 
 interface StreamAlertAction {
   id: string
@@ -38,7 +38,7 @@ function handleSelect(id: string): void {
   <Transition name="stream-alert-sheet-transition">
     <div v-if="props.open" class="stream-alert-sheet-layer">
       <div class="stream-alert-sheet-backdrop" @click="handleClose" />
-      
+
       <FocusScope
         :id="props.scopeId"
         as="section"
@@ -64,7 +64,6 @@ function handleSelect(id: string): void {
             type="button"
             class="stream-alert-sheet__action"
             :class="{ 'stream-alert-sheet__action--danger': action.danger }"
-            :on-confirm="() => handleSelect(action.id)"
             :on-back="handleClose"
             @click="handleSelect(action.id)"
           >

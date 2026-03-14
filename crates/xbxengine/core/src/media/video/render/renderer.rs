@@ -1,6 +1,7 @@
 use crate::{
     XbxEngineRenderFrame, XbxEngineRenderPixelData, XbxEngineRuntimeError, XbxEngineVideoFrameStats,
 };
+use std::collections::VecDeque;
 use xbxengine_protocol::XbxEngineDisplayStateDto;
 #[allow(dead_code)]
 const RENDER_STALL_THRESHOLD_MS: f64 = 1_500.0;
@@ -10,6 +11,9 @@ const RENDER_STALL_THRESHOLD_MS: f64 = 1_500.0;
 pub(crate) struct XbxRenderSignalSnapshot {
     pub latest_present_time_ms: Option<f64>,
     pub renderer_stalled: Option<bool>,
+    pub fps: f64,
+    pub present_submit_count_total: u64,
+    pub present_overwrite_count_total: u64,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -54,12 +58,18 @@ impl From<XbxRenderFrame> for XbxEngineRenderFrame {
 pub(crate) struct XbxRenderState {
     latest_display_state: Option<XbxEngineDisplayStateDto>,
     latest_frame: Option<XbxEngineRenderFrame>,
+    recent_present_times_ms: VecDeque<f64>,
+    present_submit_count_total: u64,
+    present_overwrite_count_total: u64,
 }
 
 impl XbxRenderState {
     pub(crate) fn reset(&mut self) -> Result<(), XbxEngineRuntimeError> {
         self.latest_display_state = None;
         self.latest_frame = None;
+        self.recent_present_times_ms.clear();
+        self.present_submit_count_total = 0;
+        self.present_overwrite_count_total = 0;
         Ok(())
     }
 
@@ -109,13 +119,25 @@ impl XbxRenderState {
             }
         }
         let frame_stats = frame.video_stats();
+        self.record_present_time(frame.rendered_at_ms);
+        self.present_submit_count_total = self.present_submit_count_total.saturating_add(1);
+        if self.latest_frame.is_some() {
+            self.present_overwrite_count_total =
+                self.present_overwrite_count_total.saturating_add(1);
+        }
         self.latest_frame = Some(frame.into());
-        Ok(frame_stats)
+        Ok(XbxEngineVideoFrameStats {
+            fps: self.current_fps(),
+            ..frame_stats
+        })
     }
 
     pub(crate) fn stop(&mut self) {
         self.latest_display_state = None;
         self.latest_frame = None;
+        self.recent_present_times_ms.clear();
+        self.present_submit_count_total = 0;
+        self.present_overwrite_count_total = 0;
     }
 
     pub(crate) fn take_latest_frame(&mut self) -> Option<XbxEngineRenderFrame> {
@@ -152,7 +174,42 @@ impl XbxRenderState {
         XbxRenderSignalSnapshot {
             latest_present_time_ms,
             renderer_stalled,
+            fps: self.current_fps(),
+            present_submit_count_total: self.present_submit_count_total,
+            present_overwrite_count_total: self.present_overwrite_count_total,
         }
+    }
+
+    fn record_present_time(&mut self, rendered_at_ms: f64) {
+        self.recent_present_times_ms.push_back(rendered_at_ms);
+        while self.recent_present_times_ms.len() > 120 {
+            self.recent_present_times_ms.pop_front();
+        }
+        while let Some(front) = self.recent_present_times_ms.front().copied() {
+            if rendered_at_ms - front <= 1_000.0 {
+                break;
+            }
+            self.recent_present_times_ms.pop_front();
+        }
+    }
+
+    fn current_fps(&self) -> f64 {
+        let len = self.recent_present_times_ms.len();
+        if len < 2 {
+            return 0.0;
+        }
+        let first = self
+            .recent_present_times_ms
+            .front()
+            .copied()
+            .unwrap_or_default();
+        let last = self
+            .recent_present_times_ms
+            .back()
+            .copied()
+            .unwrap_or(first);
+        let window_ms = (last - first).max(1.0);
+        ((len.saturating_sub(1)) as f64 * 1_000.0 / window_ms).max(0.0)
     }
 }
 
@@ -230,5 +287,26 @@ mod tests {
         let snapshot = state.render_signal_snapshot(2_700.0);
         assert_eq!(snapshot.latest_present_time_ms, Some(1_000.0));
         assert_eq!(snapshot.renderer_stalled, Some(true));
+    }
+
+    #[test]
+    fn render_signal_snapshot_reports_recent_fps() {
+        let mut state = XbxRenderState::default();
+        for index in 0..4u64 {
+            state
+                .present_frame(XbxRenderFrame {
+                    width: 2,
+                    height: 2,
+                    frame_seq: index + 1,
+                    rendered_at_ms: 1_000.0 + index as f64 * 16.0,
+                    pixel_data: XbxEngineRenderPixelData::Rgba {
+                        bytes: Arc::<[u8]>::from([0u8; 16]),
+                    },
+                })
+                .expect("present frame should work");
+        }
+
+        let snapshot = state.render_signal_snapshot(1_050.0);
+        assert!(snapshot.fps > 50.0);
     }
 }

@@ -42,8 +42,7 @@ function emitSelect(node: TopNavNodeKey): void {
         label="Xbox Logo"
         :icon-src="getIcon('brand')"
         :round="true"
-        :on-click="() => emitSelect('brand')"
-        :on-confirm="() => emitSelect('brand')"
+        @click="() => emitSelect('brand')"
       />
     </div>
 
@@ -54,8 +53,7 @@ function emitSelect(node: TopNavNodeKey): void {
         :icon-src="getIcon('xhome')"
         :round="true"
         :active="props.activeNav === 'xhome'"
-        :on-click="() => emitSelect('xhome')"
-        :on-confirm="() => emitSelect('xhome')"
+        @click="() => emitSelect('xhome')"
       />
       <SpatialNavIconButton
         :id="SPATIAL_NAV_NODE_IDS.topNav.xcloud"
@@ -63,8 +61,7 @@ function emitSelect(node: TopNavNodeKey): void {
         :icon-src="getIcon('xcloud')"
         :round="true"
         :active="props.activeNav === 'xcloud'"
-        :on-click="() => emitSelect('xcloud')"
-        :on-confirm="() => emitSelect('xcloud')"
+        @click="() => emitSelect('xcloud')"
       />
       <SpatialNavIconButton
         :id="SPATIAL_NAV_NODE_IDS.topNav.setting"
@@ -72,8 +69,7 @@ function emitSelect(node: TopNavNodeKey): void {
         :icon-src="getIcon('setting')"
         :round="true"
         :active="props.activeNav === 'setting'"
-        :on-click="() => emitSelect('setting')"
-        :on-confirm="() => emitSelect('setting')"
+        @click="() => emitSelect('setting')"
       />
     </nav>
 
@@ -84,8 +80,7 @@ function emitSelect(node: TopNavNodeKey): void {
         :icon-src="getIcon('controller')"
         :round="true"
         :active="props.controllerActive"
-        :on-click="() => emitSelect('controller')"
-        :on-confirm="() => emitSelect('controller')"
+        @click="() => emitSelect('controller')"
       />
 
       <div class="top-nav__avatar">
@@ -93,8 +88,7 @@ function emitSelect(node: TopNavNodeKey): void {
           :id="SPATIAL_NAV_NODE_IDS.topNav.profile"
           label="Profile"
           :round="true"
-          :on-click="() => emitSelect('profile')"
-          :on-confirm="() => emitSelect('profile')"
+          @click="() => emitSelect('profile')"
         >
           <template #default>
             <img

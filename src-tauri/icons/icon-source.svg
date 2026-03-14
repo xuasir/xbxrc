@@ -1,52 +1,41 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <!-- 黑底徽记，X 用 Xbox 绿色，R 用 Rust 橙色，整体线条收细。 -->
-  <rect width="512" height="512" rx="112" fill="#050505"/>
+  <!-- Xbox 主题绿底，圆角保持应用图标观感。 -->
+  <rect width="512" height="512" rx="112" fill="#107c10"/>
 
-  <circle cx="256" cy="256" r="172" fill="none" stroke="#ffffff" stroke-width="26"/>
+  <defs>
+    <!-- 外圈保留较多齿数，但统一收细线条，避免视觉过重。 -->
+    <mask id="gear-ring-mask">
+      <rect width="512" height="512" fill="#000"/>
+      <g fill="#fff">
+        <circle cx="256" cy="256" r="172"/>
+        <rect x="244" y="30" width="24" height="72" rx="6"/>
+        <rect x="244" y="30" width="24" height="72" rx="6" transform="rotate(30 256 256)"/>
+        <rect x="244" y="30" width="24" height="72" rx="6" transform="rotate(60 256 256)"/>
+        <rect x="244" y="30" width="24" height="72" rx="6" transform="rotate(90 256 256)"/>
+        <rect x="244" y="30" width="24" height="72" rx="6" transform="rotate(120 256 256)"/>
+        <rect x="244" y="30" width="24" height="72" rx="6" transform="rotate(150 256 256)"/>
+        <rect x="244" y="30" width="24" height="72" rx="6" transform="rotate(180 256 256)"/>
+        <rect x="244" y="30" width="24" height="72" rx="6" transform="rotate(210 256 256)"/>
+        <rect x="244" y="30" width="24" height="72" rx="6" transform="rotate(240 256 256)"/>
+        <rect x="244" y="30" width="24" height="72" rx="6" transform="rotate(270 256 256)"/>
+        <rect x="244" y="30" width="24" height="72" rx="6" transform="rotate(300 256 256)"/>
+        <rect x="244" y="30" width="24" height="72" rx="6" transform="rotate(330 256 256)"/>
+      </g>
+      <circle cx="256" cy="256" r="146" fill="#000"/>
+    </mask>
+  </defs>
 
-  <!-- X：两条更纤细的斜臂，承担主视觉动势。 -->
-  <path
-    d="M170 158
-       C181 147 198 147 209 158
-       L256 205
-       L303 158
-       C314 147 331 147 342 158
-       C353 169 353 186 342 197
-       L295 244
-       L342 291
-       C353 302 353 319 342 330
-       C331 341 314 341 303 330
-       L256 283
-       L209 330
-       C198 341 181 341 170 330
-       C159 319 159 302 170 291
-       L217 244
-       L170 197
-       C159 186 159 169 170 158Z"
-    fill="#7ddc6f"
-  />
+  <!-- 白色齿轮环保持纤细，避免压过中心 X。 -->
+  <circle cx="256" cy="256" r="196" fill="#fff" mask="url(#gear-ring-mask)"/>
 
-  <!-- R：通过中竖、上碗和斜腿叠加到 X 中心，颜色独立但轮廓更轻。 -->
-  <path
-    d="M216 164
-       H254
-       V226
-       H282
-       C316 226 340 250 340 282
-       C340 305 327 323 304 332
-       L341 374
-       H296
-       L264 338
-       H254
-       V374
-       H216
-       Z
-       M254 258
-       V306
-       H279
-       C294 306 302 298 302 282
-       C302 267 294 258 279 258
-       Z"
-    fill="#f08a38"
-  />
+  <!-- 中心 X 使用两条严格过圆心的笔画，与内圈只留极窄绿边。 -->
+  <g
+    fill="none"
+    stroke="#fff"
+    stroke-width="42"
+    stroke-linecap="round"
+  >
+    <path d="M178 178 L334 334"/>
+    <path d="M334 178 L178 334"/>
+  </g>
 </svg>

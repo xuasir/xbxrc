@@ -4,7 +4,9 @@ use std::thread;
 use crate::media::video::decode::video_decode::XbxVideoDecodeState;
 use crate::media::video::pacer::actor::PacerActorHandle;
 use crate::media::video::types::{DecodedFrame, EncodedFrame};
+use crate::XbxEngineMediaRuntimeStats;
 use std::sync::Arc;
+use std::sync::Mutex;
 
 pub enum DecodeMsg {
     Frame(EncodedFrame),
@@ -17,13 +19,18 @@ pub struct DecodeActorHandle {
 }
 
 impl DecodeActorHandle {
-    pub fn new(pacer: Arc<PacerActorHandle>, min_delay_ms: u64, max_delay_ms: u64) -> Self {
+    pub fn new(
+        pacer: Arc<PacerActorHandle>,
+        runtime_stats: Arc<Mutex<XbxEngineMediaRuntimeStats>>,
+        min_delay_ms: u64,
+        max_delay_ms: u64,
+    ) -> Self {
         let (tx, rx) = mpsc::sync_channel(2);
 
         thread::Builder::new()
             .name("XbxDecodeActor".into())
             .spawn(move || {
-                run_decode_loop(rx, pacer, min_delay_ms, max_delay_ms);
+                run_decode_loop(rx, pacer, runtime_stats, min_delay_ms, max_delay_ms);
             })
             .expect("Failed to spawn decode actor thread");
 
@@ -57,6 +64,7 @@ impl DecodeActorHandle {
 fn run_decode_loop(
     rx: Receiver<DecodeMsg>,
     pacer: Arc<PacerActorHandle>,
+    runtime_stats: Arc<Mutex<XbxEngineMediaRuntimeStats>>,
     min_delay_ms: u64,
     max_delay_ms: u64,
 ) {
@@ -83,6 +91,7 @@ fn run_decode_loop(
             return;
         }
     };
+    let mut recent_decode_times_ms = std::collections::VecDeque::<f64>::new();
 
     while let Ok(msg) = rx.recv() {
         match msg {
@@ -95,6 +104,19 @@ fn run_decode_loop(
                     frame.payload.len()
                 );
                 decode_state.process_encoded_frame(frame, now_ms);
+                if decode_state.last_decode_ok_time_ms() == Some(now_ms) {
+                    recent_decode_times_ms.push_back(now_ms);
+                    while let Some(front) = recent_decode_times_ms.front().copied() {
+                        if now_ms - front <= 1_000.0 {
+                            break;
+                        }
+                        recent_decode_times_ms.pop_front();
+                    }
+                    if let Ok(mut stats) = runtime_stats.lock() {
+                        stats.latest_video_decode_ok_time_ms = Some(now_ms);
+                        stats.video_decode_fps = recent_window_fps(&recent_decode_times_ms);
+                    }
+                }
                 while let Some(render_frame) = decode_state.pop_decoded_frame(now_ms) {
                     let decoded_frame = DecodedFrame {
                         width: render_frame.width,
@@ -117,4 +139,15 @@ fn run_decode_loop(
             }
         }
     }
+}
+
+fn recent_window_fps(times: &std::collections::VecDeque<f64>) -> f64 {
+    let len = times.len();
+    if len < 2 {
+        return 0.0;
+    }
+    let first = times.front().copied().unwrap_or_default();
+    let last = times.back().copied().unwrap_or(first);
+    let window_ms = (last - first).max(1.0);
+    ((len.saturating_sub(1)) as f64 * 1_000.0 / window_ms).max(0.0)
 }

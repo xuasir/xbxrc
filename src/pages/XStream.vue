@@ -487,7 +487,6 @@ async function handleStreamMenuAction(id: string): Promise<void> {
           :icon-src="xboxLogoIcon"
           :round="true"
           :disabled="!shouldShowChrome"
-          :on-confirm="openActionSheet"
           @click="openActionSheet"
         />
       </div>
@@ -529,7 +528,6 @@ async function handleStreamMenuAction(id: string): Promise<void> {
                 as="button"
                 type="button"
                 class="stream-page__action stream-page__action--primary"
-                :on-confirm="handleRetry"
                 @click="handleRetry"
               >
                 {{ t('streamPage.actions.retry') }}
@@ -539,7 +537,6 @@ async function handleStreamMenuAction(id: string): Promise<void> {
                 as="button"
                 type="button"
                 class="stream-page__action"
-                :on-confirm="() => disconnectStream({ navigateBack: true })"
                 @click="disconnectStream({ navigateBack: true })"
               >
                 {{ t('streamPage.actions.back') }}

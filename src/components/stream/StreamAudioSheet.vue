@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { Focusable, FocusScope } from '@/navigation/core/vue'
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { Focusable, FocusScope } from '@/navigation/core/vue'
 
 interface StreamAudioSheetProps {
   open: boolean
@@ -50,7 +50,7 @@ watch(
   <Transition name="stream-audio-sheet-transition">
     <div v-if="props.open" class="stream-audio-sheet-layer">
       <div class="stream-audio-sheet-backdrop" @click="handleClose" />
-      
+
       <FocusScope
         :id="props.scopeId"
         as="section"
@@ -73,7 +73,6 @@ watch(
             as="button"
             type="button"
             class="stream-audio-sheet__step"
-            :on-confirm="() => updateValue(draftValue - 1)"
             :on-back="handleClose"
             :aria-label="t('setting.editor.decrease')"
             @click="updateValue(draftValue - 1)"
@@ -107,7 +106,6 @@ watch(
             as="button"
             type="button"
             class="stream-audio-sheet__step"
-            :on-confirm="() => updateValue(draftValue + 1)"
             :on-back="handleClose"
             :aria-label="t('setting.editor.increase')"
             @click="updateValue(draftValue + 1)"
@@ -121,7 +119,6 @@ watch(
           as="button"
           type="button"
           class="stream-audio-sheet__close"
-          :on-confirm="handleClose"
           :on-back="handleClose"
           @click="handleClose"
         >

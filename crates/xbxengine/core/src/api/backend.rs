@@ -9,7 +9,7 @@ use xbxengine_protocol::{
 };
 
 use crate::api::input::{NoopXbxEngineInputBackend, XbxEngineInputBackend, XbxEngineInputStatus};
-use crate::api::runtime::XbxEngineRuntimeError;
+use crate::api::runtime::{XbxEngineRuntimeConfig, XbxEngineRuntimeError};
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct XbxEngineMediaNegotiationRequest {
@@ -128,13 +128,68 @@ pub struct XbxEngineRenderFrame {
 }
 
 #[derive(Clone, Debug, PartialEq)]
+pub struct XbxEngineVideoPacketGapObservation {
+    pub observation_id: u64,
+    pub expected_sequence: u16,
+    pub received_sequence: u16,
+    pub missing_count: u16,
+    pub observed_at_ms: f64,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct XbxEngineVideoFrameDropObservation {
+    pub observation_id: u64,
+    pub reason: String,
+    pub observed_at_ms: f64,
+    pub width: u32,
+    pub height: u32,
+    pub is_keyframe: bool,
+    pub queue_depth: usize,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct XbxEngineVideoNackObservation {
+    pub observation_id: u64,
+    pub action: String,
+    pub first_sequence: u16,
+    pub last_sequence: u16,
+    pub packet_count: u16,
+    pub retry_count: u8,
+    pub observed_at_ms: f64,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct XbxEngineVideoEscalationObservation {
+    pub observation_id: u64,
+    pub reason: String,
+    pub action: String,
+    pub observed_at_ms: f64,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct XbxEngineVideoBweObservation {
+    pub observation_id: u64,
+    pub mode: String,
+    pub decision_reason: String,
+    pub target_remb_kbps: u32,
+    pub observed_remb_kbps: Option<u32>,
+    pub actual_video_bitrate_kbps: f64,
+    pub loss_ratio: f64,
+    pub rtt_ms: Option<f64>,
+    pub transport_path: Option<String>,
+    pub observed_at_ms: f64,
+}
+
+#[derive(Clone, Debug, PartialEq)]
 pub struct XbxEngineMediaRuntimeStats {
     pub transport_state: XbxEngineTransportStateDto,
     pub latest_video_frame: Option<XbxEngineVideoFrameStats>,
     pub latest_video_stream_width: Option<u32>,
     pub latest_video_stream_height: Option<u32>,
     pub latest_video_packet_arrival_time_ms: Option<f64>,
+    pub inbound_video_frame_rate_fps: f64,
     pub latest_video_packet_sequence: Option<u16>,
+    pub latest_video_packet_gap: Option<XbxEngineVideoPacketGapObservation>,
     pub inbound_video_packet_count_total: u64,
     pub inbound_video_packet_loss_estimate_total: u64,
     pub inbound_video_loss_ratio_1s: f64,
@@ -143,6 +198,9 @@ pub struct XbxEngineMediaRuntimeStats {
     pub video_nack_request_count_total: u64,
     pub video_nack_batch_count_total: u64,
     pub video_nack_per_sec: f64,
+    pub latest_video_nack_observation: Option<XbxEngineVideoNackObservation>,
+    pub latest_video_escalation_observation: Option<XbxEngineVideoEscalationObservation>,
+    pub latest_video_bwe_observation: Option<XbxEngineVideoBweObservation>,
     pub video_pli_request_count_total: u64,
     pub video_pli_per_min: f64,
     pub video_pending_missing_packets: usize,
@@ -153,15 +211,28 @@ pub struct XbxEngineMediaRuntimeStats {
     pub video_rtt_ms: Option<f64>,
     pub video_rtt_source: Option<String>,
     pub video_remb_bps: Option<u32>,
+    pub inbound_bitrate_kbps: Option<f64>,
+    pub inbound_video_bitrate_kbps: Option<f64>,
+    pub inbound_audio_bitrate_kbps: Option<f64>,
+    pub transport_path: Option<String>,
     pub latest_video_decode_ok_time_ms: Option<f64>,
+    pub video_decode_fps: f64,
     pub video_decoder_stalled: Option<bool>,
     pub video_decoder_backend_name: Option<String>,
     pub video_decoder_reset_count: u64,
     pub latest_video_decoder_reset_time_ms: Option<f64>,
     pub video_decode_input_drop_count_total: u64,
     pub video_decode_output_drop_count_total: u64,
+    pub video_pacer_submit_count_total: u64,
+    pub video_pacer_drop_count_total: u64,
+    pub video_renderer_submit_count_total: u64,
+    pub video_renderer_drop_count_total: u64,
+    pub video_present_overwrite_count_total: u64,
+    pub video_present_submit_count_total: u64,
     pub latest_video_present_time_ms: Option<f64>,
+    pub video_present_fps: f64,
     pub video_renderer_stalled: Option<bool>,
+    pub latest_video_frame_drop: Option<XbxEngineVideoFrameDropObservation>,
     pub inbound_bytes_total: u64,
     pub inbound_video_bytes_total: u64,
     pub inbound_primary_video_bytes_total: u64,
@@ -176,7 +247,9 @@ impl Default for XbxEngineMediaRuntimeStats {
             latest_video_stream_width: None,
             latest_video_stream_height: None,
             latest_video_packet_arrival_time_ms: None,
+            inbound_video_frame_rate_fps: 0.0,
             latest_video_packet_sequence: None,
+            latest_video_packet_gap: None,
             inbound_video_packet_count_total: 0,
             inbound_video_packet_loss_estimate_total: 0,
             inbound_video_loss_ratio_1s: 0.0,
@@ -185,6 +258,9 @@ impl Default for XbxEngineMediaRuntimeStats {
             video_nack_request_count_total: 0,
             video_nack_batch_count_total: 0,
             video_nack_per_sec: 0.0,
+            latest_video_nack_observation: None,
+            latest_video_escalation_observation: None,
+            latest_video_bwe_observation: None,
             video_pli_request_count_total: 0,
             video_pli_per_min: 0.0,
             video_pending_missing_packets: 0,
@@ -195,15 +271,28 @@ impl Default for XbxEngineMediaRuntimeStats {
             video_rtt_ms: None,
             video_rtt_source: None,
             video_remb_bps: None,
+            inbound_bitrate_kbps: None,
+            inbound_video_bitrate_kbps: None,
+            inbound_audio_bitrate_kbps: None,
+            transport_path: None,
             latest_video_decode_ok_time_ms: None,
+            video_decode_fps: 0.0,
             video_decoder_stalled: None,
             video_decoder_backend_name: None,
             video_decoder_reset_count: 0,
             latest_video_decoder_reset_time_ms: None,
             video_decode_input_drop_count_total: 0,
             video_decode_output_drop_count_total: 0,
+            video_pacer_submit_count_total: 0,
+            video_pacer_drop_count_total: 0,
+            video_renderer_submit_count_total: 0,
+            video_renderer_drop_count_total: 0,
+            video_present_overwrite_count_total: 0,
+            video_present_submit_count_total: 0,
             latest_video_present_time_ms: None,
+            video_present_fps: 0.0,
             video_renderer_stalled: None,
+            latest_video_frame_drop: None,
             inbound_bytes_total: 0,
             inbound_video_bytes_total: 0,
             inbound_primary_video_bytes_total: 0,
@@ -213,6 +302,13 @@ impl Default for XbxEngineMediaRuntimeStats {
 }
 
 pub trait XbxEngineMediaBackend: Send {
+    fn sync_runtime_config(
+        &mut self,
+        _runtime_config: &XbxEngineRuntimeConfig,
+    ) -> Result<(), XbxEngineRuntimeError> {
+        Ok(())
+    }
+
     fn negotiate(
         &mut self,
         request: XbxEngineMediaNegotiationRequest,
@@ -223,6 +319,14 @@ pub trait XbxEngineMediaBackend: Send {
         answer_sdp: String,
         remote_candidates: Vec<XbxEngineIceCandidateDto>,
     ) -> Result<(), XbxEngineRuntimeError>;
+    fn add_remote_ice_candidates(
+        &mut self,
+        remote_candidates: Vec<XbxEngineIceCandidateDto>,
+    ) -> Result<(), XbxEngineRuntimeError>;
+    fn local_candidates_snapshot(
+        &self,
+    ) -> Result<Vec<XbxEngineIceCandidateDto>, XbxEngineRuntimeError>;
+    fn local_ice_gathering_complete(&self) -> Result<bool, XbxEngineRuntimeError>;
     fn apply_display_state(
         &mut self,
         state: XbxEngineDisplayStateDto,
@@ -253,6 +357,13 @@ impl<TMediaBackend> XbxEngineMediaBackend for Box<TMediaBackend>
 where
     TMediaBackend: XbxEngineMediaBackend + ?Sized,
 {
+    fn sync_runtime_config(
+        &mut self,
+        runtime_config: &XbxEngineRuntimeConfig,
+    ) -> Result<(), XbxEngineRuntimeError> {
+        self.as_mut().sync_runtime_config(runtime_config)
+    }
+
     fn negotiate(
         &mut self,
         request: XbxEngineMediaNegotiationRequest,
@@ -271,6 +382,23 @@ where
     ) -> Result<(), XbxEngineRuntimeError> {
         self.as_mut()
             .apply_remote_description(answer_sdp, remote_candidates)
+    }
+
+    fn add_remote_ice_candidates(
+        &mut self,
+        remote_candidates: Vec<XbxEngineIceCandidateDto>,
+    ) -> Result<(), XbxEngineRuntimeError> {
+        self.as_mut().add_remote_ice_candidates(remote_candidates)
+    }
+
+    fn local_candidates_snapshot(
+        &self,
+    ) -> Result<Vec<XbxEngineIceCandidateDto>, XbxEngineRuntimeError> {
+        self.as_ref().local_candidates_snapshot()
+    }
+
+    fn local_ice_gathering_complete(&self) -> Result<bool, XbxEngineRuntimeError> {
+        self.as_ref().local_ice_gathering_complete()
     }
 
     fn apply_display_state(
@@ -377,6 +505,13 @@ impl PlaceholderXbxEngineMediaBackend {
 }
 
 impl XbxEngineMediaBackend for PlaceholderXbxEngineMediaBackend {
+    fn sync_runtime_config(
+        &mut self,
+        _runtime_config: &XbxEngineRuntimeConfig,
+    ) -> Result<(), XbxEngineRuntimeError> {
+        Ok(())
+    }
+
     fn negotiate(
         &mut self,
         request: XbxEngineMediaNegotiationRequest,
@@ -432,6 +567,24 @@ impl XbxEngineMediaBackend for PlaceholderXbxEngineMediaBackend {
         self.last_answer_sdp = Some(answer_sdp);
         self.last_remote_candidates = remote_candidates;
         Ok(())
+    }
+
+    fn add_remote_ice_candidates(
+        &mut self,
+        remote_candidates: Vec<XbxEngineIceCandidateDto>,
+    ) -> Result<(), XbxEngineRuntimeError> {
+        self.last_remote_candidates.extend(remote_candidates);
+        Ok(())
+    }
+
+    fn local_candidates_snapshot(
+        &self,
+    ) -> Result<Vec<XbxEngineIceCandidateDto>, XbxEngineRuntimeError> {
+        Ok(Vec::new())
+    }
+
+    fn local_ice_gathering_complete(&self) -> Result<bool, XbxEngineRuntimeError> {
+        Ok(true)
     }
 
     fn create_offer(&mut self) -> Result<String, XbxEngineRuntimeError> {

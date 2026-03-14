@@ -1,8 +1,9 @@
 pub mod events;
 pub mod rpc;
+pub mod runtime_state;
 pub mod service;
 
-pub use service::PlaceholderXbxEngineService;
+pub use service::XbxEngineService;
 
 use async_trait::async_trait;
 use std::sync::Arc;

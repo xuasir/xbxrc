@@ -2,6 +2,7 @@ use crate::error::{AppError, AppResult};
 use crate::mods::auth::AuthProviderRef;
 use crate::mods::config::ConfigProviderRef;
 use crate::mods::data::DataProviderRef;
+use crate::mods::runtime_trace::RuntimeTraceRecorderRef;
 use crate::mods::streaming::types::*;
 use crate::mods::xbxengine::XbxEngineProviderRef;
 use std::sync::Arc;
@@ -33,6 +34,7 @@ pub struct StreamingService {
     config_provider: ConfigProviderRef,
     data_provider: DataProviderRef,
     xbxengine_provider: XbxEngineProviderRef,
+    runtime_trace: RuntimeTraceRecorderRef,
     inner: Arc<StreamingServiceInner>,
 }
 
@@ -116,6 +118,7 @@ impl StreamingService {
         config_provider: ConfigProviderRef,
         data_provider: DataProviderRef,
         xbxengine_provider: XbxEngineProviderRef,
+        runtime_trace: RuntimeTraceRecorderRef,
     ) -> Self {
         let flow_provider = TauriSessionFlowProvider {
             auth_provider: auth_provider.clone(),
@@ -127,6 +130,7 @@ impl StreamingService {
             config_provider,
             data_provider,
             xbxengine_provider,
+            runtime_trace,
             inner: Arc::new(StreamingServiceInner {
                 flow: SessionFlowService::new(flow_provider),
                 fallback_turn_provider: tokio::sync::Mutex::new(FallbackTurnProvider::new()),
@@ -147,6 +151,16 @@ impl StreamingService {
         };
 
         let config_snapshot = self.config_provider.get_streaming_config();
+        self.runtime_trace.record(
+            "streaming",
+            "configSnapshot",
+            None,
+            serde_json::json!({
+                "targetType": target_type.as_str(),
+                "targetId": target_id,
+                "config": config_snapshot,
+            }),
+        );
 
         let mut domain_config = DomainStreamingConfig::default();
         // RFC: 映射完整性。Facade 仅负责搬运原始值，不负责解释分辨率等字段语义。
@@ -187,6 +201,16 @@ impl StreamingService {
             context,
         })
         .map_err(|error| AppError::Streaming(error.to_string()))?;
+        self.runtime_trace.record(
+            "streaming",
+            "compiledPlan",
+            None,
+            serde_json::json!({
+                "targetType": target_type.as_str(),
+                "targetId": target_id,
+                "plan": output.plan,
+            }),
+        );
 
         log::info!(
             "streaming plan resolved: target={} target_id={} device_profile={:?} resolution={}x{} os={}",
@@ -473,6 +497,12 @@ impl crate::mods::streaming::StreamingProvider for StreamingService {
             metadata: metadata.into(),
             capabilities: capabilities.into(),
         };
+        self.runtime_trace.record(
+            "streaming",
+            "sessionExecutionStarted",
+            Some(&execution.session.id),
+            &execution,
+        );
 
         let progress = self
             .inner
@@ -483,6 +513,12 @@ impl crate::mods::streaming::StreamingProvider for StreamingService {
             .unwrap_or_else(|| {
                 StreamingSessionProgressSnapshot::from_session_snapshot(&execution.session)
             });
+        self.runtime_trace.record(
+            "streaming",
+            "sessionProgress",
+            Some(&execution.session.id),
+            &progress,
+        );
 
         Ok(StreamingStartSessionResult {
             execution,
@@ -506,49 +542,140 @@ impl crate::mods::streaming::StreamingProvider for StreamingService {
         &self,
         params: StreamingCloseSessionParams,
     ) -> AppResult<StreamingCloseSessionResult> {
+        self.runtime_trace.record(
+            "streaming",
+            "closeSessionRequested",
+            Some(&params.session_id),
+            &params,
+        );
         let closed = self
             .inner
             .flow
             .close_session(&params.session_id)
             .await
             .map_err(map_flow_error)?;
+        self.runtime_trace.record(
+            "streaming",
+            "closeSessionResult",
+            Some(&params.session_id),
+            serde_json::json!({ "closed": closed }),
+        );
 
         Ok(StreamingCloseSessionResult { closed })
+    }
+
+    async fn send_keepalive(&self, session_id: String) -> AppResult<bool> {
+        self.runtime_trace.record(
+            "streaming",
+            "keepaliveRequested",
+            Some(&session_id),
+            serde_json::json!({}),
+        );
+        let result = self
+            .inner
+            .flow
+            .send_keepalive(&session_id)
+            .await
+            .map_err(map_flow_error)?;
+        self.runtime_trace.record(
+            "streaming",
+            "keepaliveResult",
+            Some(&session_id),
+            serde_json::json!({ "accepted": result }),
+        );
+        Ok(result)
     }
 
     async fn exchange_offer(
         &self,
         params: StreamingExchangeOfferParams,
     ) -> AppResult<StreamingExchangeOfferResult> {
+        self.runtime_trace.record(
+            "streaming",
+            "exchangeOfferRequested",
+            Some(&params.session_id),
+            &params,
+        );
         let answer = self
             .inner
             .flow
-            .exchange_offer(&params.session_id, params.channel.as_deref(), &params.sdp)
+            .exchange_offer(
+                &params.session_id,
+                params.channel.as_deref(),
+                &params.sdp,
+                params.restart,
+            )
             .await
             .map_err(map_flow_error)?;
+        self.runtime_trace.record(
+            "streaming",
+            "exchangeOfferResult",
+            Some(&params.session_id),
+            serde_json::json!({
+                "channel": params.channel,
+                "restart": params.restart,
+                "answer": from_domain_answer_payload(answer.clone()),
+            }),
+        );
 
         Ok(StreamingExchangeOfferResult {
             answer: from_domain_answer_payload(answer),
         })
     }
 
-    async fn exchange_ice(
+    async fn submit_ice(
         &self,
-        params: StreamingExchangeIceParams,
-    ) -> AppResult<StreamingExchangeIceResult> {
+        params: StreamingSubmitIceParams,
+    ) -> AppResult<StreamingSubmitIceResult> {
+        self.runtime_trace.record(
+            "streaming",
+            "submitIceRequested",
+            Some(&params.session_id),
+            &params,
+        );
         let local_candidates = params
             .candidate
             .iter()
             .map(to_domain_ice_candidate)
             .collect::<Vec<_>>();
+        self.inner
+            .flow
+            .submit_ice(&params.session_id, &local_candidates, params.restart)
+            .await
+            .map_err(map_flow_error)?;
+        self.runtime_trace.record(
+            "streaming",
+            "submitIceResult",
+            Some(&params.session_id),
+            serde_json::json!({ "accepted": true, "restart": params.restart }),
+        );
+        Ok(StreamingSubmitIceResult { accepted: true })
+    }
+
+    async fn poll_ice(&self, params: StreamingPollIceParams) -> AppResult<StreamingPollIceResult> {
+        self.runtime_trace.record(
+            "streaming",
+            "pollIceRequested",
+            Some(&params.session_id),
+            &params,
+        );
         let remote_candidates = self
             .inner
             .flow
-            .exchange_ice(&params.session_id, &local_candidates)
+            .poll_ice(&params.session_id, params.restart)
             .await
             .map_err(map_flow_error)?;
+        self.runtime_trace.record(
+            "streaming",
+            "pollIceResult",
+            Some(&params.session_id),
+            serde_json::json!({
+                "restart": params.restart,
+                "candidates": remote_candidates,
+            }),
+        );
 
-        Ok(StreamingExchangeIceResult {
+        Ok(StreamingPollIceResult {
             candidates: remote_candidates
                 .into_iter()
                 .map(from_domain_ice_candidate)
@@ -581,6 +708,7 @@ impl crate::mods::streaming::StreamingProvider for StreamingService {
         &self,
         params: StreamingDecideRecoveryParams,
     ) -> AppResult<StreamingDecideRecoveryResult> {
+        let fact_value = serde_json::to_value(&params.fact).unwrap_or(serde_json::Value::Null);
         // 恢复判定统一在 crate session 内完成，tauri 仅做运行事实映射。
         let reason = match params.fact {
             StreamingRuntimeFact::TransportConnectionState { connection_state } => {
@@ -606,6 +734,16 @@ impl crate::mods::streaming::StreamingProvider for StreamingService {
             }
         };
         let reason = reason.map(|value| value.as_str().to_string());
+        self.runtime_trace.record(
+            "streaming",
+            "decideRecovery",
+            Some(&params.session_id),
+            serde_json::json!({
+                "fact": fact_value,
+                "isClosing": params.is_closing,
+                "reason": reason,
+            }),
+        );
         Ok(StreamingDecideRecoveryResult {
             should_reconnect: reason.is_some(),
             reason,
@@ -668,7 +806,7 @@ fn apply_streaming_preferences(
     config.negotiation.cloud_video_bitrate =
         parse_bitrate_preference(&snapshot.xcloud_bitrate_mode, snapshot.xcloud_bitrate);
     config.negotiation.audio_bitrate =
-        parse_bitrate_preference(&snapshot.audio_bitrate_mode, snapshot.audio_bitrate);
+        parse_audio_bitrate_preference(&snapshot.audio_bitrate_mode, snapshot.audio_bitrate);
     config.negotiation.audio_channels = AudioChannels::Auto;
 
     config.input.polling_rate_hz = snapshot.polling_rate.clamp(1, u16::MAX as i64) as u16;
@@ -697,6 +835,16 @@ fn parse_bitrate_preference(mode: &str, bitrate_mbps: i64) -> BitratePreference 
     let kbps = bitrate_mbps.saturating_mul(1000);
     BitratePreference::CustomKbps {
         kbps: kbps.clamp(1, u32::MAX as i64) as u32,
+    }
+}
+
+fn parse_audio_bitrate_preference(mode: &str, bitrate_kbps: i64) -> BitratePreference {
+    if mode != "Custom" || bitrate_kbps <= 0 {
+        return BitratePreference::Auto;
+    }
+
+    BitratePreference::CustomKbps {
+        kbps: bitrate_kbps.clamp(1, u32::MAX as i64) as u32,
     }
 }
 
@@ -731,8 +879,8 @@ fn resolve_custom_turn(snapshot: &StreamingConfigSnapshot) -> Option<TurnServer>
 #[cfg(test)]
 mod tests {
     use super::{
-        apply_streaming_preferences, parse_bitrate_preference, parse_codec_preference,
-        parse_runtime_preference,
+        apply_streaming_preferences, parse_audio_bitrate_preference, parse_bitrate_preference,
+        parse_codec_preference, parse_runtime_preference,
     };
     use crate::mods::streaming::types::{StreamingConfigSnapshot, StreamingDisplayOptionsValue};
     use xbox_streaming::SessionFlowError;
@@ -794,7 +942,7 @@ mod tests {
         );
         assert_eq!(
             config.negotiation.audio_bitrate,
-            BitratePreference::CustomKbps { kbps: 2_000 }
+            BitratePreference::CustomKbps { kbps: 2 }
         );
         assert_eq!(config.input.polling_rate_hz, 333);
         assert!(!config.input.vibration);
@@ -819,6 +967,14 @@ mod tests {
         assert_eq!(
             parse_bitrate_preference("Auto", 20),
             BitratePreference::Auto
+        );
+        assert_eq!(
+            parse_audio_bitrate_preference("Auto", 24),
+            BitratePreference::Auto
+        );
+        assert_eq!(
+            parse_audio_bitrate_preference("Custom", 24),
+            BitratePreference::CustomKbps { kbps: 24 }
         );
         assert_eq!(parse_codec_preference(""), CodecPreference::Auto);
         assert_eq!(parse_runtime_preference(""), RuntimePreference::Auto);

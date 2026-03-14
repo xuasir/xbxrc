@@ -3,7 +3,7 @@ use xbxengine_protocol::{
     XbxEngineRuntimeEventDto, XbxEngineRuntimePhaseDto, XbxEngineTransportStateDto,
 };
 
-pub const STREAMING_XBXENGINE_RUNTIME_EVENT_CHANNEL: &str = "streaming.runtimeEvent";
+pub const STREAMING_XBXENGINE_RUNTIME_EVENT_CHANNEL: &str = "streaming:xbxengine-runtime-event";
 
 fn map_runtime_phase(phase: &XbxEngineRuntimePhaseDto) -> &'static str {
     match phase {

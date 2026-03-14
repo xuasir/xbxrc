@@ -7,7 +7,7 @@ use crate::policy::input::SupportedInput;
 use crate::policy::negotiation::Codec;
 use crate::policy::plan::Plan;
 use crate::policy::render::RenderDisplayOptions;
-use crate::policy::runtime::RuntimeMode;
+use crate::policy::runtime::{RuntimeBweMode, RuntimeMode};
 use crate::policy::session::SessionSchedulePlan;
 use crate::policy::types::{Owner, Region, TurnServer, TurnSource};
 
@@ -16,6 +16,35 @@ use crate::policy::types::{Owner, Region, TurnServer, TurnSource};
 pub struct RuntimeCodecProjection {
     pub mime_type: String,
     pub profiles: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct RuntimeVideoPipelineProjection {
+    pub feedback_interval_ms: u64,
+    pub nack_window_ms: u64,
+    pub nack_burst_count: u16,
+    pub nack_max_age_ms: u64,
+    pub nack_retry_interval_ms: u64,
+    pub nack_max_retry_count: u8,
+    pub jitter_buffer_min_delay_ms: u64,
+    pub jitter_buffer_max_delay_ms: u64,
+    pub jitter_buffer_max_packets: u16,
+    pub idle_timeout_ms: u64,
+    pub late_frame_drop_threshold_ms: u64,
+    pub backlog_drop_threshold_packets: u16,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct RuntimeRecoveryProjection {
+    pub first_frame_grace_ms: u64,
+    pub keyframe_request_stall_ms: u64,
+    pub keyframe_loss_burst_threshold: u8,
+    pub decoder_reset_after_keyframe_wait_ms: u64,
+    pub decoder_reset_request_cooldown_ms: u64,
+    pub reconnect_stall_ms: u64,
+    pub stall_recovery_cooldown_ms: u64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -93,6 +122,15 @@ pub struct RuntimePlanProjection {
     pub max_video_bitrate_kbps: Option<u32>,
     pub max_audio_bitrate_kbps: Option<u32>,
     pub force_mono_audio: bool,
+    pub bwe_mode: RuntimeBweMode,
+    pub forced_remb_kbps: Option<u32>,
+    pub adaptive_remb_enabled: bool,
+    pub remb_floor_kbps: u32,
+    pub remb_ceiling_kbps: u32,
+    pub remb_ramp_up_step_kbps: u32,
+    pub remb_ramp_down_factor: u16,
+    pub video_pipeline: RuntimeVideoPipelineProjection,
+    pub recovery: RuntimeRecoveryProjection,
     pub polling_rate_hz: u16,
     pub vibration: bool,
 }
@@ -137,6 +175,15 @@ pub fn project_runtime_plan(plan: &Plan) -> RuntimePlanProjection {
         max_video_bitrate_kbps: plan.negotiation.video_bitrate_kbps,
         max_audio_bitrate_kbps: plan.negotiation.audio_bitrate_kbps,
         force_mono_audio: !plan.negotiation.stereo_audio,
+        bwe_mode: plan.runtime.bwe_mode,
+        forced_remb_kbps: plan.runtime.forced_remb_kbps,
+        adaptive_remb_enabled: plan.runtime.adaptive_remb_enabled,
+        remb_floor_kbps: plan.runtime.remb_floor_kbps,
+        remb_ceiling_kbps: plan.runtime.remb_ceiling_kbps,
+        remb_ramp_up_step_kbps: plan.runtime.remb_ramp_up_step_kbps,
+        remb_ramp_down_factor: plan.runtime.remb_ramp_down_factor,
+        video_pipeline: project_video_pipeline(&plan.runtime.video_pipeline),
+        recovery: project_recovery(&plan.runtime.recovery),
         polling_rate_hz: plan.input.polling_rate_hz,
         vibration: plan.input.vibration,
     }
@@ -224,6 +271,39 @@ fn project_display_options(options: &RenderDisplayOptions) -> RenderDisplayOptio
         saturation: options.saturation,
         contrast: options.contrast,
         brightness: options.brightness,
+    }
+}
+
+fn project_video_pipeline(
+    plan: &crate::policy::runtime::RuntimeVideoPipelinePlan,
+) -> RuntimeVideoPipelineProjection {
+    RuntimeVideoPipelineProjection {
+        feedback_interval_ms: plan.feedback_interval_ms,
+        nack_window_ms: plan.nack_window_ms,
+        nack_burst_count: plan.nack_burst_count,
+        nack_max_age_ms: plan.nack_max_age_ms,
+        nack_retry_interval_ms: plan.nack_retry_interval_ms,
+        nack_max_retry_count: plan.nack_max_retry_count,
+        jitter_buffer_min_delay_ms: plan.jitter_buffer_min_delay_ms,
+        jitter_buffer_max_delay_ms: plan.jitter_buffer_max_delay_ms,
+        jitter_buffer_max_packets: plan.jitter_buffer_max_packets,
+        idle_timeout_ms: plan.idle_timeout_ms,
+        late_frame_drop_threshold_ms: plan.late_frame_drop_threshold_ms,
+        backlog_drop_threshold_packets: plan.backlog_drop_threshold_packets,
+    }
+}
+
+fn project_recovery(
+    plan: &crate::policy::runtime::RuntimeRecoveryPlan,
+) -> RuntimeRecoveryProjection {
+    RuntimeRecoveryProjection {
+        first_frame_grace_ms: plan.first_frame_grace_ms,
+        keyframe_request_stall_ms: plan.keyframe_request_stall_ms,
+        keyframe_loss_burst_threshold: plan.keyframe_loss_burst_threshold,
+        decoder_reset_after_keyframe_wait_ms: plan.decoder_reset_after_keyframe_wait_ms,
+        decoder_reset_request_cooldown_ms: plan.decoder_reset_request_cooldown_ms,
+        reconnect_stall_ms: plan.reconnect_stall_ms,
+        stall_recovery_cooldown_ms: plan.stall_recovery_cooldown_ms,
     }
 }
 

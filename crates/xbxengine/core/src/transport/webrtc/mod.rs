@@ -1,6 +1,9 @@
 pub mod backend;
 pub mod control;
 pub mod data_channel;
+pub mod escalation;
+pub mod frame_deadline;
 pub mod microphone;
+pub mod nack_scheduler;
 pub mod stack;
 pub mod transport;

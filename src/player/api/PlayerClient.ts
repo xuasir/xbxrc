@@ -129,6 +129,10 @@ export class PlayerClient {
     return this.sessionService.getIceCandidates()
   }
 
+  getPeer(): RTCPeerConnection | undefined {
+    return this.sessionService.getPeer()
+  }
+
   async waitForIceCandidates(timeoutMs = 4000): Promise<Array<IceCandidateLike>> {
     const peer = this.sessionService.getPeer()
     if (!peer || peer.iceGatheringState === 'complete') {
@@ -137,22 +141,42 @@ export class PlayerClient {
 
     return await new Promise<Array<IceCandidateLike>>((resolve) => {
       let settled = false
+      let quietTimerId: number | null = null
+
+      const clearQuietTimer = (): void => {
+        if (quietTimerId !== null) {
+          window.clearTimeout(quietTimerId)
+          quietTimerId = null
+        }
+      }
 
       const finish = (): void => {
         if (settled) {
           return
         }
         settled = true
+        clearQuietTimer()
         window.clearTimeout(timeoutId)
         peer.removeEventListener('icecandidate', handleIceCandidate)
         peer.removeEventListener('icegatheringstatechange', handleGatheringStateChange)
         resolve(this.getIceCandidates())
       }
 
+      const scheduleQuietFinish = (): void => {
+        if (this.getIceCandidates().length === 0) {
+          return
+        }
+        clearQuietTimer()
+        // 收到首批候选后只等一个短静默窗口，避免仍然被固定 4s gather timeout 拖慢。
+        quietTimerId = window.setTimeout(finish, 150)
+      }
+
       const handleIceCandidate = (event: RTCPeerConnectionIceEvent): void => {
         if (event.candidate === null) {
           finish()
+          return
         }
+        scheduleQuietFinish()
       }
 
       const handleGatheringStateChange = (): void => {
@@ -164,6 +188,7 @@ export class PlayerClient {
       const timeoutId = window.setTimeout(finish, timeoutMs)
       peer.addEventListener('icecandidate', handleIceCandidate)
       peer.addEventListener('icegatheringstatechange', handleGatheringStateChange)
+      scheduleQuietFinish()
     })
   }
 

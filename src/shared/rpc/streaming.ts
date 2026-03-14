@@ -51,6 +51,31 @@ export interface StreamingRuntimeCodecPreference {
   profiles: string[]
 }
 
+export interface StreamingRuntimeVideoPipelineProjection {
+  feedbackIntervalMs: number
+  nackWindowMs: number
+  nackBurstCount: number
+  nackMaxAgeMs: number
+  nackRetryIntervalMs: number
+  nackMaxRetryCount: number
+  jitterBufferMinDelayMs: number
+  jitterBufferMaxDelayMs: number
+  jitterBufferMaxPackets: number
+  idleTimeoutMs: number
+  lateFrameDropThresholdMs: number
+  backlogDropThresholdPackets: number
+}
+
+export interface StreamingRuntimeRecoveryProjection {
+  firstFrameGraceMs: number
+  keyframeRequestStallMs: number
+  keyframeLossBurstThreshold: number
+  decoderResetAfterKeyframeWaitMs: number
+  decoderResetRequestCooldownMs: number
+  reconnectStallMs: number
+  stallRecoveryCooldownMs: number
+}
+
 export interface StreamingDisplayOptionsValue {
   sharpness: number
   saturation: number
@@ -60,6 +85,7 @@ export interface StreamingDisplayOptionsValue {
 
 export type StreamingRuntimeMode = 'webrtc-direct' | 'rust-owned'
 export type StreamingRuntimeOwner = 'browser' | 'sidecar'
+export type StreamingBweMode = 'fixed-remb' | 'observed-remb' | 'hybrid'
 
 export interface StreamingRuntimeProjection {
   mode: StreamingRuntimeMode
@@ -76,9 +102,19 @@ export interface StreamingRuntimeProjection {
   maxVideoBitrateKbps?: number | null
   maxAudioBitrateKbps?: number | null
   forceMonoAudio: boolean
+  bweMode: StreamingBweMode
+  forcedRembKbps?: number | null
+  adaptiveRembEnabled: boolean
+  rembFloorKbps: number
+  rembCeilingKbps: number
+  rembRampUpStepKbps: number
+  rembRampDownFactor: number
+  videoPipeline: StreamingRuntimeVideoPipelineProjection
+  recovery: StreamingRuntimeRecoveryProjection
   pollingRateHz: number
   vibration: boolean
 }
+
 
 export interface StreamingRenderProjection {
   enableAudioControl: boolean
@@ -189,18 +225,29 @@ export interface StreamingExchangeOfferParams {
   sessionId: string
   sdp: string
   channel?: 'media' | 'chat'
+  restart: boolean
 }
 
 export interface StreamingExchangeOfferResult {
   answer: StreamingAnswerPayload
 }
 
-export interface StreamingExchangeIceParams {
+export interface StreamingSubmitIceParams {
   sessionId: string
   candidate: StreamingIceCandidate[]
+  restart: boolean
 }
 
-export interface StreamingExchangeIceResult {
+export interface StreamingSubmitIceResult {
+  accepted: boolean
+}
+
+export interface StreamingPollIceParams {
+  sessionId: string
+  restart: boolean
+}
+
+export interface StreamingPollIceResult {
   candidates: StreamingIceCandidate[]
 }
 

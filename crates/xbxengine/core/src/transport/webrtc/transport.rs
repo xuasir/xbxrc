@@ -1,4 +1,5 @@
 use std::collections::{BTreeMap, HashSet};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
 use tokio::runtime::Handle;
@@ -24,9 +25,11 @@ use webrtc::{
         RTCPFeedback, RTCRtpTransceiverInit, TYPE_RTCP_FB_CCM, TYPE_RTCP_FB_GOOG_REMB,
         TYPE_RTCP_FB_NACK,
     },
+    stats::{ICECandidateStats, StatsReport},
 };
 
 use crate::{
+    api::runtime::XbxEngineNegotiationRuntimeConfig,
     media::video::render::renderer::XbxRenderState,
     transport::adapter::{FrameSource, WebrtcVideoAdapter},
     transport::webrtc::data_channel::{
@@ -35,7 +38,7 @@ use crate::{
     },
     transport::webrtc::microphone::XbxMicrophoneSession,
     XbxEngineMediaNegotiationRequest, XbxEngineMediaRuntimeStats, XbxEngineRuntimeError,
-    XbxEngineWebRtcRuntimeConfig,
+    XbxEngineVideoBweObservation, XbxEngineWebRtcRuntimeConfig,
 };
 use xbxengine_protocol::{
     XbxEngineIceCandidateDto, XbxEngineTransportStateDto, XbxEngineTurnServerDto,
@@ -58,7 +61,10 @@ pub(crate) struct XbxTransportState {
     peer_connection: Option<Arc<RTCPeerConnection>>,
     data_channels: BTreeMap<String, Arc<RTCDataChannel>>,
     local_candidates: Arc<Mutex<Vec<XbxEngineIceCandidateDto>>>,
+    local_ice_gathering_complete: Arc<Mutex<bool>>,
     microphone_session: Option<XbxMicrophoneSession>,
+    runtime_stats: Option<Arc<Mutex<XbxEngineMediaRuntimeStats>>>,
+    task_generation: Arc<AtomicU64>,
     pub(crate) frame_source_tx: Arc<Mutex<Option<mpsc::Sender<Box<dyn FrameSource>>>>>,
 }
 
@@ -74,6 +80,7 @@ impl XbxTransportState {
     ) -> Result<(), XbxEngineRuntimeError> {
         self.stop_peer_connection(runtime);
         self.clear_local_candidates();
+        self.set_local_ice_gathering_complete(false);
         self.data_channels.clear();
         if let Ok(mut stats) = runtime_stats.lock() {
             *stats = XbxEngineMediaRuntimeStats {
@@ -81,6 +88,8 @@ impl XbxTransportState {
                 ..Default::default()
             };
         }
+        self.runtime_stats = Some(runtime_stats.clone());
+        let task_generation = self.task_generation.fetch_add(1, Ordering::SeqCst) + 1;
 
         let peer_connection = Arc::new(runtime.block_on(async {
             let mut media_engine = MediaEngine::default();
@@ -105,10 +114,13 @@ impl XbxTransportState {
         install_peer_connection_callbacks(
             &peer_connection,
             self.local_candidates.clone(),
-            runtime_stats,
+            self.local_ice_gathering_complete.clone(),
+            runtime_stats.clone(),
             render_state,
             webrtc_config.clone(),
             self.frame_source_tx.clone(),
+            self.task_generation.clone(),
+            task_generation,
         );
         configure_peer_connection_offer_primitives(runtime, &peer_connection)?;
         create_initial_data_channels(
@@ -116,35 +128,48 @@ impl XbxTransportState {
             &peer_connection,
             &mut self.data_channels,
             data_channel_state,
+            runtime_stats.clone(),
         )?;
         self.peer_connection = Some(peer_connection);
         Ok(())
     }
 
-    pub(crate) fn create_offer(&self, runtime: &Handle) -> Result<String, XbxEngineRuntimeError> {
+    pub(crate) fn create_offer(
+        &self,
+        runtime: &Handle,
+        negotiation_config: &XbxEngineNegotiationRuntimeConfig,
+    ) -> Result<String, XbxEngineRuntimeError> {
         let peer_connection = self.require_peer_connection()?;
-        let local_offer = runtime.block_on(async {
-            let mut gather_complete = peer_connection.gathering_complete_promise().await;
+        let (local_offer, patched_offer_sdp) = runtime.block_on(async {
             let offer = peer_connection
                 .create_offer(None)
                 .await
                 .map_err(map_webrtc_error("createOfferFailed"))?;
+            let patched_offer_sdp = apply_offer_policy_contract(&offer.sdp, negotiation_config);
+            validate_local_offer_sdp(&patched_offer_sdp)?;
+            // webrtc-rs 会校验 set_local_description 的 SDP 必须与 create_offer 产物一致，
+            // 因此这里先使用原始 offer 建立本地状态，再把 patched SDP 单独作为上送文本返回。
+            let local_offer = RTCSessionDescription::offer(offer.sdp.clone())
+                .map_err(map_webrtc_error("buildLocalOfferFailed"))?;
             peer_connection
-                .set_local_description(offer)
+                .set_local_description(local_offer)
                 .await
                 .map_err(map_webrtc_error("setLocalDescriptionFailed"))?;
-            let _ = gather_complete.recv().await;
-            peer_connection
+            let local_description = peer_connection
                 .local_description()
                 .await
-                .ok_or_else(|| XbxEngineRuntimeError::new("localDescriptionMissing"))
+                .ok_or_else(|| XbxEngineRuntimeError::new("localDescriptionMissing"))?;
+            Ok::<_, XbxEngineRuntimeError>((local_description, patched_offer_sdp))
         })?;
-        let patched_offer_sdp = apply_offer_policy_contract(&local_offer.sdp);
-        validate_local_offer_sdp(&patched_offer_sdp)?;
         crate::xbx_log_info!(
             "[xbxengine][webrtc-rs] local offer created {}",
             summarize_sdp(&patched_offer_sdp)
         );
+        crate::xbx_log_info!(
+            "[xbxengine][webrtc-rs] local offer raw\n{}",
+            patched_offer_sdp
+        );
+        let _ = local_offer;
         Ok(patched_offer_sdp)
     }
 
@@ -167,7 +192,45 @@ impl XbxTransportState {
                 "[xbxengine][webrtc-rs] remote answer applied {}",
                 summarize_sdp(answer_sdp)
             );
+            crate::xbx_log_info!("[xbxengine][webrtc-rs] remote answer raw\n{}", answer_sdp);
 
+            for candidate in remote_candidates {
+                let Some(normalized_candidate) =
+                    normalize_remote_ice_candidate(&candidate.candidate)
+                else {
+                    crate::xbx_log_debug!(
+                        "[xbxengine][webrtc-rs] remote ice candidate skipped raw={}",
+                        candidate.candidate.chars().take(160).collect::<String>()
+                    );
+                    continue;
+                };
+                peer_connection
+                    .add_ice_candidate(RTCIceCandidateInit {
+                        candidate: normalized_candidate,
+                        sdp_mid: candidate.sdp_mid.clone(),
+                        sdp_mline_index: candidate.sdp_m_line_index,
+                        username_fragment: None,
+                    })
+                    .await
+                    .map_err(map_webrtc_error("addRemoteIceCandidateFailed"))?;
+                crate::xbx_log_debug!(
+                    "[xbxengine][webrtc-rs] remote ice candidate applied mline={} mid={} raw={}",
+                    candidate.sdp_m_line_index.unwrap_or_default(),
+                    candidate.sdp_mid.as_deref().unwrap_or(""),
+                    candidate.candidate.chars().take(160).collect::<String>()
+                );
+            }
+            Ok(())
+        })
+    }
+
+    pub(crate) fn add_remote_ice_candidates(
+        &self,
+        runtime: &Handle,
+        remote_candidates: &[XbxEngineIceCandidateDto],
+    ) -> Result<(), XbxEngineRuntimeError> {
+        let peer_connection = self.require_peer_connection()?;
+        runtime.block_on(async {
             for candidate in remote_candidates {
                 let Some(normalized_candidate) =
                     normalize_remote_ice_candidate(&candidate.candidate)
@@ -204,6 +267,14 @@ impl XbxTransportState {
             .ok()
             .map(|guard| guard.clone())
             .unwrap_or_default()
+    }
+
+    pub(crate) fn local_ice_gathering_complete(&self) -> bool {
+        self.local_ice_gathering_complete
+            .lock()
+            .ok()
+            .map(|guard| *guard)
+            .unwrap_or(false)
     }
 
     pub(crate) fn request_video_keyframe(
@@ -250,6 +321,7 @@ impl XbxTransportState {
     }
 
     pub(crate) fn stop_peer_connection(&mut self, runtime: &Handle) {
+        self.task_generation.fetch_add(1, Ordering::SeqCst);
         if let (Some(session), Some(peer_connection)) = (
             self.microphone_session.take(),
             self.peer_connection.as_ref().cloned(),
@@ -264,6 +336,24 @@ impl XbxTransportState {
             let _ = runtime.block_on(async { peer_connection.close().await });
         }
         self.data_channels.clear();
+        if let Some(runtime_stats) = self.runtime_stats.as_ref() {
+            if let Ok(mut stats) = runtime_stats.lock() {
+                // stop 后立即清掉会污染后续 trace 的瞬态观测，避免 Closed 会话继续冒泡旧数据。
+                stats.transport_state = XbxEngineTransportStateDto::Closed;
+                stats.transport_path = None;
+                stats.video_remb_bps = None;
+                stats.video_rtt_ms = None;
+                stats.video_rtt_source = None;
+                stats.inbound_bitrate_kbps = None;
+                stats.inbound_video_bitrate_kbps = None;
+                stats.latest_video_bwe_observation = None;
+                stats.latest_video_packet_gap = None;
+                stats.latest_video_nack_observation = None;
+                stats.latest_video_escalation_observation = None;
+                stats.latest_video_packet_arrival_time_ms = None;
+                stats.latest_video_frame = None;
+            }
+        }
         // Warning: Do NOT take frame_source_tx here, rebuild_peer_connection calls stop_peer_connection
         // and we want the same tx to be used for the next connection.
     }
@@ -271,6 +361,12 @@ impl XbxTransportState {
     fn clear_local_candidates(&self) {
         if let Ok(mut candidates) = self.local_candidates.lock() {
             candidates.clear();
+        }
+    }
+
+    fn set_local_ice_gathering_complete(&self, complete: bool) {
+        if let Ok(mut state) = self.local_ice_gathering_complete.lock() {
+            *state = complete;
         }
     }
 
@@ -285,15 +381,22 @@ impl XbxTransportState {
 fn install_peer_connection_callbacks(
     peer_connection: &Arc<RTCPeerConnection>,
     local_candidates: Arc<Mutex<Vec<XbxEngineIceCandidateDto>>>,
+    local_ice_gathering_complete: Arc<Mutex<bool>>,
     runtime_stats: Arc<Mutex<XbxEngineMediaRuntimeStats>>,
     _render_state: Arc<Mutex<XbxRenderState>>,
     webrtc_config: XbxEngineWebRtcRuntimeConfig,
     frame_source_tx: Arc<Mutex<Option<mpsc::Sender<Box<dyn FrameSource>>>>>,
+    task_generation: Arc<AtomicU64>,
+    current_generation: u64,
 ) {
     peer_connection.on_ice_candidate(Box::new(move |candidate: Option<RTCIceCandidate>| {
         let local_candidates = local_candidates.clone();
+        let local_ice_gathering_complete = local_ice_gathering_complete.clone();
         Box::pin(async move {
             let Some(candidate) = candidate else {
+                if let Ok(mut complete) = local_ice_gathering_complete.lock() {
+                    *complete = true;
+                }
                 crate::xbx_log_debug!("[xbxengine][webrtc-rs] local ice gathering complete");
                 return;
             };
@@ -351,28 +454,45 @@ fn install_peer_connection_callbacks(
 
     peer_connection.on_track(Box::new(move |track, _, _transceiver| {
         let frame_source_tx = frame_source_tx.clone();
-        let pc_captured = peer_connection_for_track.clone(); 
+        let pc_captured = peer_connection_for_track.clone();
         let config_captured = webrtc_config_for_track.clone();
         let _stats_captured = runtime_stats_for_track.clone();
-        
+        let task_generation_for_track = task_generation.clone();
+
         Box::pin(async move {
             crate::xbx_log_info!("[xbxengine][webrtc-rs] ON_TRACK received: kind={} ssrc={} mime={}", track.kind(), track.ssrc(), track.codec().capability.mime_type);
             crate::xbx_log_debug!("[xbxengine][webrtc-rs] remote track kind={} mime={}", track.kind(), track.codec().capability.mime_type);
-            
+
+            let is_audio = track.kind() == webrtc::rtp_transceiver::rtp_codec::RTPCodecType::Audio;
             let is_video = track.kind() == webrtc::rtp_transceiver::rtp_codec::RTPCodecType::Video;
             let video_mime_type = track.codec().capability.mime_type.to_ascii_lowercase();
             let is_primary_video_track = is_video && video_mime_type == "video/h264";
-            
+
             if is_primary_video_track {
                 let jitter_buffer_size = config_captured.video_pipeline.jitter_buffer_max_packets;
                 let idle_timeout = std::time::Duration::from_millis(config_captured.video_pipeline.idle_timeout_ms);
-                
+
                 crate::xbx_log_info!(
-                    "[xbxengine][webrtc-rs] mounting video track with mode={:?} jitter_buffer={} idle_timeout={:?}",
-                    config_captured.mode, jitter_buffer_size, idle_timeout
+                    "[xbxengine][webrtc-rs] mounting video track with jitter_buffer={} idle_timeout={:?}",
+                    jitter_buffer_size, idle_timeout
                 );
 
-                let adapter = WebrtcVideoAdapter::new(track.clone(), jitter_buffer_size, idle_timeout);
+                let adapter = WebrtcVideoAdapter::new(
+                    track.clone(),
+                    pc_captured.clone(),
+                    _stats_captured.clone(),
+                    jitter_buffer_size,
+                    idle_timeout,
+                    crate::transport::webrtc::nack_scheduler::NackSchedulerConfig {
+                        max_age_ms: config_captured.video_pipeline.nack_max_age_ms,
+                        frame_deadline_ms: config_captured
+                            .video_pipeline
+                            .late_frame_drop_threshold_ms,
+                        burst_count: config_captured.video_pipeline.nack_burst_count,
+                        retry_interval_ms: config_captured.video_pipeline.nack_retry_interval_ms,
+                        max_retry_count: config_captured.video_pipeline.nack_max_retry_count,
+                    },
+                );
                 let source: Box<dyn FrameSource> = Box::new(adapter);
                 if let Ok(guard) = frame_source_tx.lock() {
                     if let Some(tx) = guard.as_ref() {
@@ -383,16 +503,30 @@ fn install_peer_connection_callbacks(
                         crate::xbx_log_error!("[xbxengine][webrtc-rs] frame_source_tx is None! Supervisor task is dead?");
                     }
                 }
-                
+
                 // --- 增加对该主视频轨道的指标轮询监控 ---
                 let stats_track = track.clone();
                 let pc_for_stats = pc_captured;
                 tokio::spawn(async move {
-                    let mut interval = tokio::time::interval(std::time::Duration::from_secs(1));
+                    let feedback_interval = std::time::Duration::from_millis(
+                        config_captured.video_pipeline.feedback_interval_ms.max(50),
+                    );
+                    let mut interval = tokio::time::interval(feedback_interval);
                     let mut last_bytes_received = 0;
+                    let mut last_packets_received = 0u64;
+                    let mut last_loss_estimate_total = 0u64;
+                    let mut last_loss_recovered_total = 0u64;
+                    let mut last_loss_finalized_total = 0u64;
                     let mut tick_count = 0u64;
+                    let mut bwe_observation_id = 0u64;
+                    let mut last_sent_remb_kbps =
+                        config_captured.forced_remb_kbps.unwrap_or(config_captured.remb_floor_kbps);
+                    let mut hybrid_ramp_cooldown_ticks = 0u8;
                     loop {
                         interval.tick().await;
+                        if task_generation_for_track.load(Ordering::SeqCst) != current_generation {
+                            break;
+                        }
                         tick_count += 1;
                         // 这里我们使用 pc 统一拉取 stats
                         let stats = pc_for_stats.get_stats().await;
@@ -402,12 +536,16 @@ fn install_peer_connection_callbacks(
                         let mut rtt = 0.0f64;
                         let mut rtt_source: Option<&'static str> = None;
                         let mut fraction_lost = 0.0f64;
-                        
+                        let mut candidate_pair_rtt = 0.0f64;
+                        let mut synthetic_loss_ratio = 0.0f64;
+
                         let mut report_counts = std::collections::HashMap::<String, usize>::new();
                         // ICE 层可用带宽（nominated pair 的 available_outgoing_bitrate，
                         // 基于 REMB 信令计算，反映网络容量上限）
                         let mut avail_bps = 0.0f64;
                         let mut avail_in_bps = 0.0f64;
+                        let transport_path = resolve_transport_path(&stats);
+                        let selected_candidate_pair = select_preferred_candidate_pair(&stats);
                         for (_id, report) in stats.reports.iter() {
                             let type_name = format!("{:?}", report).split('(').next().unwrap_or("Unknown").to_string();
                             *report_counts.entry(type_name).or_insert(0) += 1;
@@ -429,10 +567,12 @@ fn install_peer_connection_callbacks(
                                     if pair.available_incoming_bitrate > avail_in_bps {
                                         avail_in_bps = pair.available_incoming_bitrate;
                                     }
-                                    // RemoteInboundRTP 在部分链路下不可用，RTT 回退到已提名 candidate pair。
-                                    if pair.nominated && pair.current_round_trip_time > 0.0 {
-                                        rtt = pair.current_round_trip_time;
-                                        rtt_source = Some("candidate-pair");
+                                    if let Some(selected_pair) = selected_candidate_pair {
+                                        if pair.id == selected_pair.id
+                                            && pair.current_round_trip_time > 0.0
+                                        {
+                                            candidate_pair_rtt = pair.current_round_trip_time;
+                                        }
                                     }
                                 }
                                 webrtc::stats::StatsReportType::RemoteInboundRTP(remote_inbound) => {
@@ -449,80 +589,191 @@ fn install_peer_connection_callbacks(
                                 _ => {}
                             }
                         }
-                        
+
                         if tick_count % 50 == 0 {
                             crate::xbx_log_info!("[xbxengine][stats-debug] report counts: {:?}", report_counts);
                         }
-                        
+
                         // webrtc-rs 暂未在 InboundRTP 暴露 packetsLost，只有 fraction_lost 时做估算显示。
                         if packets_lost == 0 && fraction_lost > 0.0 && packets_received > 0 {
                             packets_lost = (fraction_lost * packets_received as f64).round() as i64;
                         }
 
+                        if rtt <= 0.0 && candidate_pair_rtt > 0.0 {
+                            rtt = candidate_pair_rtt;
+                            rtt_source = Some("candidate-pair");
+                        }
+
+                        let delta_bytes = current_bytes.saturating_sub(last_bytes_received);
+                        last_bytes_received = current_bytes;
+                        let delta_packets_received =
+                            packets_received.saturating_sub(last_packets_received);
+                        last_packets_received = packets_received;
+                        let actual_kbps = (delta_bytes * 8) as f64 / 1000.0;
+
+                        if let Ok(shared) = _stats_captured.lock() {
+                            let delta_loss_estimate = shared
+                                .inbound_video_packet_loss_estimate_total
+                                .saturating_sub(last_loss_estimate_total);
+                            let delta_loss_recovered = shared
+                                .video_loss_recovered_count_total
+                                .saturating_sub(last_loss_recovered_total);
+                            let delta_loss_finalized = shared
+                                .video_loss_finalized_count_total
+                                .saturating_sub(last_loss_finalized_total);
+                            last_loss_estimate_total = shared.inbound_video_packet_loss_estimate_total;
+                            last_loss_recovered_total = shared.video_loss_recovered_count_total;
+                            last_loss_finalized_total = shared.video_loss_finalized_count_total;
+
+                            let effective_loss_packets = delta_loss_finalized.max(
+                                delta_loss_estimate.saturating_sub(delta_loss_recovered),
+                            );
+                            let loss_denominator =
+                                delta_packets_received.saturating_add(effective_loss_packets);
+                            if loss_denominator > 0 {
+                                synthetic_loss_ratio =
+                                    effective_loss_packets as f64 / loss_denominator as f64;
+                            }
+                            if fraction_lost <= 0.0 && synthetic_loss_ratio > 0.0 {
+                                fraction_lost = synthetic_loss_ratio;
+                                packets_lost = effective_loss_packets as i64;
+                            }
+                            if rtt <= 0.0 {
+                                if let Some(nack_rtt_ms) = shared.video_nack_recovery_rtt_ms {
+                                    rtt = nack_rtt_ms / 1000.0;
+                                    rtt_source = Some("nack-recovery");
+                                }
+                            }
+                        }
+
+                        let observed_remb_kbps = if avail_bps > 0.0 {
+                            Some((avail_bps / 1000.0).round().max(0.0) as u32)
+                        } else {
+                            None
+                        };
+                        let bwe_decision = resolve_target_remb_kbps(
+                            &config_captured,
+                            observed_remb_kbps,
+                            actual_kbps,
+                            fraction_lost,
+                            &mut last_sent_remb_kbps,
+                            &mut hybrid_ramp_cooldown_ticks,
+                        );
+                        let target_remb_kbps = bwe_decision.target_kbps;
+                        let observed_at_ms = now_ms_f64();
+
                         // 写回共享 stats
                         if let Ok(mut shared) = _stats_captured.lock() {
-                            // Ceiling: 优先用 BWE (avail_bps)，如果为 0 则回退到 forced_remb_kbps
-                            shared.video_remb_bps = if avail_bps > 0.0 { 
-                                Some(avail_bps as u32) 
-                            } else { 
-                                config_captured.forced_remb_kbps.map(|k| k * 1000) 
-                            };
+                            bwe_observation_id = bwe_observation_id.saturating_add(1);
+                            shared.video_remb_bps = Some(target_remb_kbps.saturating_mul(1000));
+                            shared.inbound_video_bitrate_kbps = Some(actual_kbps.max(0.0));
+                            shared.inbound_bitrate_kbps = Some(
+                                actual_kbps.max(0.0)
+                                    + shared.inbound_audio_bitrate_kbps.unwrap_or(0.0),
+                            );
                             shared.video_rtt_ms = if rtt > 0.0 { Some(rtt * 1000.0) } else { None };
                             shared.video_rtt_source = rtt_source.map(str::to_string);
                             shared.inbound_video_loss_ratio_5s = fraction_lost;
+                            shared.inbound_video_loss_ratio_1s = synthetic_loss_ratio.max(fraction_lost);
+                            shared.transport_path = transport_path.clone();
+                            shared.inbound_primary_video_bytes_total = current_bytes;
+                            shared.inbound_video_bytes_total = current_bytes;
+                            shared.inbound_bytes_total =
+                                shared.inbound_video_bytes_total + shared.inbound_audio_bytes_total;
+                            shared.latest_video_bwe_observation =
+                                Some(XbxEngineVideoBweObservation {
+                                    observation_id: bwe_observation_id,
+                                    mode: config_captured.bwe_mode.clone(),
+                                    decision_reason: bwe_decision.reason.clone(),
+                                    target_remb_kbps,
+                                    observed_remb_kbps,
+                                    actual_video_bitrate_kbps: actual_kbps.max(0.0),
+                                    loss_ratio: fraction_lost,
+                                    rtt_ms: if rtt > 0.0 {
+                                        Some(rtt * 1000.0)
+                                    } else {
+                                        None
+                                    },
+                                    transport_path: transport_path.clone(),
+                                    observed_at_ms,
+                                });
                         }
 
-                        // --- GCC 欺骗与码率锁死实装 ---
-                        // 根据配置注入 REMB 值。只有配置了 forced_remb_kbps 且未开启 adaptive 时才强制注入。
-                        let mut inject_result = Ok(0usize);
-                        if let Some(kbps) = config_captured.forced_remb_kbps {
-                            use webrtc::rtcp::payload_feedbacks::receiver_estimated_maximum_bitrate::*;
-                            let remb = ReceiverEstimatedMaximumBitrate {
-                                bitrate: (kbps as f32) * 1000.0, 
-                                ssrcs: vec![stats_track.ssrc()],
-                                ..Default::default()
-                            };
-                            inject_result = pc_for_stats.write_rtcp(&[Box::new(remb)]).await;
-                        }
-                        
-                        let delta_bytes = current_bytes.saturating_sub(last_bytes_received);
-                        last_bytes_received = current_bytes;
-                        let actual_kbps = (delta_bytes * 8) as f64 / 1000.0;
-                        
-                        // 逻辑：如果 avail_bps 为 0，日志中显示强制码率值，以防用户困惑
-                        let display_avail_kbps = if avail_bps > 0.0 {
-                            avail_bps / 1000.0
-                        } else {
-                            config_captured.forced_remb_kbps.map(|k| k as f64).unwrap_or(0.0)
+                        // 上层 BWE controller：根据模式输出 REMB target。
+                        use webrtc::rtcp::payload_feedbacks::receiver_estimated_maximum_bitrate::*;
+                        let remb = ReceiverEstimatedMaximumBitrate {
+                            bitrate: (target_remb_kbps as f32) * 1000.0,
+                            ssrcs: vec![stats_track.ssrc()],
+                            ..Default::default()
                         };
+                        let inject_result = pc_for_stats.write_rtcp(&[Box::new(remb)]).await;
+
+                        let display_observed_kbps =
+                            observed_remb_kbps.map(|kbps| kbps as f64).unwrap_or(0.0);
                         let avail_in_kbps = avail_in_bps / 1000.0;
-                        
+
                         // 定期打印注入状态确认
-                        if tick_count % 30 == 0 && config_captured.forced_remb_kbps.is_some() {
+                        if tick_count % 30 == 0 {
                              if inject_result.is_ok() {
                                  crate::xbx_log_info!(
-                                     "[xbxengine][Deception] {:?}bps REMB is being injected (mode={:?})", 
-                                     config_captured.forced_remb_kbps.unwrap() * 1000,
-                                     config_captured.mode
+                                     "[xbxengine][BWE] target={}kbps mode={} observed={}kbps",
+                                     target_remb_kbps,
+                                     config_captured.bwe_mode,
+                                     display_observed_kbps as u32
                                  );
                              } else {
-                                 crate::xbx_log_warn!("[xbxengine][Deception] REMB injection failed: {:?}", inject_result.err());
+                                 crate::xbx_log_warn!("[xbxengine][BWE] REMB injection failed: {:?}", inject_result.err());
                              }
                         }
 
                         crate::xbx_log_info!(
-                            "[NetworkStats] Video: {:.0} Kbps | Ceiling: {:.0} Kbps (in:{:.0}) | Lost: {} | RTT: {:.1}ms",
+                            "[NetworkStats] Video: {:.0} Kbps | Target: {} Kbps | Observed: {:.0} Kbps (in:{:.0}) | Lost: {} | RTT: {:.1}ms | Reason: {}",
                             actual_kbps,
-                            display_avail_kbps,
+                            target_remb_kbps,
+                            display_observed_kbps,
                             avail_in_kbps,
                             packets_lost,
-                            rtt * 1000.0
+                            rtt * 1000.0,
+                            bwe_decision.reason
                         );
                     }
                 });
 
+            } else if is_audio {
+                crate::xbx_log_info!(
+                    "[xbxengine][webrtc-rs] mounting audio drain track mime={}",
+                    track.codec().capability.mime_type
+                );
+                tokio::spawn(async move {
+                    let mut total_audio_bytes = 0u64;
+                    let mut last_audio_sample_bytes = 0u64;
+                    let mut last_audio_sample_at_ms = now_ms_f64();
+                    while let Ok((rtp, _)) = track.read_rtp().await {
+                        total_audio_bytes =
+                            total_audio_bytes.saturating_add(rtp.payload.len() as u64);
+                        let now_ms = now_ms_f64();
+                        let elapsed_ms = (now_ms - last_audio_sample_at_ms).max(0.0);
+                        if let Ok(mut shared) = _stats_captured.lock() {
+                            shared.inbound_audio_bytes_total = total_audio_bytes;
+                            if elapsed_ms >= 250.0 {
+                                let delta_bytes =
+                                    total_audio_bytes.saturating_sub(last_audio_sample_bytes);
+                                let audio_kbps = (delta_bytes * 8) as f64 / elapsed_ms.max(1.0);
+                                shared.inbound_audio_bitrate_kbps = Some(audio_kbps.max(0.0));
+                                shared.inbound_bitrate_kbps = Some(
+                                    shared.inbound_video_bitrate_kbps.unwrap_or(0.0)
+                                        + audio_kbps.max(0.0),
+                                );
+                                last_audio_sample_bytes = total_audio_bytes;
+                                last_audio_sample_at_ms = now_ms;
+                            }
+                            shared.inbound_bytes_total =
+                                shared.inbound_video_bytes_total + shared.inbound_audio_bytes_total;
+                        }
+                    }
+                });
             } else {
-                // Not primary video, just read to drain
+                // 其他轨道暂时只排空，避免缓冲堆积阻塞主轨。
                 tokio::spawn(async move {
                     while let Ok(_) = track.read_rtp().await {}
                 });
@@ -588,6 +839,95 @@ fn configure_peer_connection_offer_primitives(
 
         Ok(())
     })
+}
+
+struct BweDecision {
+    target_kbps: u32,
+    reason: String,
+}
+
+fn resolve_target_remb_kbps(
+    config: &crate::XbxEngineWebRtcRuntimeConfig,
+    observed_remb_kbps: Option<u32>,
+    actual_kbps: f64,
+    loss_ratio: f64,
+    last_sent_remb_kbps: &mut u32,
+    hybrid_ramp_cooldown_ticks: &mut u8,
+) -> BweDecision {
+    let floor_kbps = config.remb_floor_kbps.max(1);
+    let ceiling_kbps = config.remb_ceiling_kbps.max(floor_kbps);
+    let forced_kbps = config
+        .forced_remb_kbps
+        .unwrap_or(ceiling_kbps)
+        .clamp(floor_kbps, ceiling_kbps);
+    let observed_kbps = observed_remb_kbps
+        .unwrap_or(forced_kbps)
+        .clamp(floor_kbps, ceiling_kbps);
+    let current_kbps = (*last_sent_remb_kbps).clamp(floor_kbps, ceiling_kbps);
+    let actual_headroom_kbps =
+        ((actual_kbps * 1.25).round() as u32).clamp(floor_kbps, ceiling_kbps);
+
+    let (next_kbps, reason) = match config.bwe_mode.as_str() {
+        "observed-remb" => (observed_kbps, "observed-remb".to_string()),
+        "hybrid" => {
+            let severe_loss = loss_ratio >= 0.08;
+            let sustained_loss = loss_ratio >= 0.01;
+            let mild_loss = loss_ratio >= 0.005;
+            let bitrate_overrun = actual_kbps > (current_kbps as f64 * 1.1);
+
+            if severe_loss || bitrate_overrun {
+                *hybrid_ramp_cooldown_ticks = 12;
+                (
+                    ((current_kbps as f64) * (config.remb_ramp_down_factor as f64 / 1000.0))
+                        .round()
+                        .max(floor_kbps as f64) as u32,
+                    if severe_loss {
+                        "hybrid-severe-loss-backoff".to_string()
+                    } else {
+                        "hybrid-bitrate-overrun-backoff".to_string()
+                    },
+                )
+            } else if sustained_loss {
+                *hybrid_ramp_cooldown_ticks = 10;
+                (
+                    current_kbps.min(actual_headroom_kbps).max(floor_kbps),
+                    "hybrid-sustained-loss-cap".to_string(),
+                )
+            } else if mild_loss {
+                *hybrid_ramp_cooldown_ticks = 6;
+                (
+                    current_kbps
+                        .min(actual_headroom_kbps.saturating_add(config.remb_ramp_up_step_kbps))
+                        .max(floor_kbps),
+                    "hybrid-mild-loss-hold".to_string(),
+                )
+            } else if *hybrid_ramp_cooldown_ticks > 0 {
+                *hybrid_ramp_cooldown_ticks = hybrid_ramp_cooldown_ticks.saturating_sub(1);
+                (current_kbps, "hybrid-ramp-cooldown".to_string())
+            } else {
+                let desired_kbps = observed_kbps.min(ceiling_kbps);
+                (
+                    current_kbps
+                        .saturating_add(config.remb_ramp_up_step_kbps)
+                        .min(desired_kbps)
+                        .max(floor_kbps),
+                    if observed_remb_kbps.is_some() {
+                        "hybrid-ramp-up-observed".to_string()
+                    } else {
+                        "hybrid-ramp-up-ceiling".to_string()
+                    },
+                )
+            }
+        }
+        _ => (forced_kbps, "fixed-remb".to_string()),
+    };
+
+    let clamped_kbps = next_kbps.clamp(floor_kbps, ceiling_kbps);
+    *last_sent_remb_kbps = clamped_kbps;
+    BweDecision {
+        target_kbps: clamped_kbps,
+        reason,
+    }
 }
 
 fn build_h264_codec_preferences() -> Vec<RTCRtpCodecParameters> {
@@ -658,6 +998,7 @@ fn create_initial_data_channels(
     peer_connection: &Arc<RTCPeerConnection>,
     data_channels: &mut BTreeMap<String, Arc<RTCDataChannel>>,
     data_channel_state: Arc<Mutex<XbxDataChannelState>>,
+    runtime_stats: Arc<Mutex<XbxEngineMediaRuntimeStats>>,
 ) -> Result<(), XbxEngineRuntimeError> {
     // 硬编码创建标准通道，取消对 network_profile 的依赖。
     let configs = [
@@ -690,7 +1031,7 @@ fn create_initial_data_channels(
         data_channels.insert(name.to_string(), channel);
     }
 
-    install_data_channel_contracts(data_channels, data_channel_state)?;
+    install_data_channel_contracts(data_channels, data_channel_state, runtime_stats)?;
     Ok(())
 }
 
@@ -716,13 +1057,31 @@ fn build_rtc_configuration(turn_server: Option<&XbxEngineTurnServerDto>) -> RTCC
     }
 }
 
-// 简化后的 SDP 合约应用：注入带宽行并补充音频立体声支持。
-fn apply_offer_policy_contract(offer_sdp: &str) -> String {
-    // 默认使用 50Mbps 作为 AS 限制 (1080p60 Peak)
-    let with_video_bitrate = set_media_bitrate_as(offer_sdp, "video", 50_000);
-    let with_audio_stereo =
-        with_video_bitrate.replace("useinbandfec=1", "useinbandfec=1; stereo=1");
-    patch_video_fmtp_constraints(&with_audio_stereo)
+// SDP policy 只负责把 runtime negotiation 配置投影到上送服务端的文本 offer。
+fn apply_offer_policy_contract(
+    offer_sdp: &str,
+    negotiation_config: &XbxEngineNegotiationRuntimeConfig,
+) -> String {
+    let with_video_bitrate = set_media_bitrate_as(
+        offer_sdp,
+        "video",
+        negotiation_config.video_bitrate_kbps.max(1),
+    );
+    let with_audio_bitrate = set_media_bitrate_as(
+        &with_video_bitrate,
+        "audio",
+        negotiation_config.audio_bitrate_kbps.max(1),
+    );
+    let with_audio_layout = if negotiation_config.force_mono_audio {
+        with_audio_bitrate
+    } else {
+        with_audio_bitrate.replace("useinbandfec=1", "useinbandfec=1; stereo=1")
+    };
+    let with_video_profile = reorder_h264_payload_types_by_profile(
+        &with_audio_layout,
+        &negotiation_config.offer_profile,
+    );
+    patch_video_fmtp_constraints(&with_video_profile, negotiation_config)
 }
 
 fn set_media_bitrate_as(offer_sdp: &str, media: &str, bitrate: u32) -> String {
@@ -771,15 +1130,16 @@ fn set_media_bitrate_as(offer_sdp: &str, media: &str, bitrate: u32) -> String {
     lines.join("\r\n")
 }
 
-fn patch_video_fmtp_constraints(offer_sdp: &str) -> String {
+fn patch_video_fmtp_constraints(
+    offer_sdp: &str,
+    negotiation_config: &XbxEngineNegotiationRuntimeConfig,
+) -> String {
     let mut lines = offer_sdp
         .split("\r\n")
         .map(ToOwned::to_owned)
         .collect::<Vec<String>>();
     let mut section_start = 0usize;
-
-    // 默认分辨率约束：1080p 相关宏块数
-    let max_frame_size = 8160; // (1920/16) * (1080/16) 向上取整宏块
+    let tier = resolve_offer_video_constraint_tier(negotiation_config);
 
     while section_start < lines.len() {
         if !lines[section_start].starts_with("m=video ") {
@@ -803,13 +1163,117 @@ fn patch_video_fmtp_constraints(offer_sdp: &str) -> String {
             lines[index] = upsert_fmtp_constraints(
                 &lines[index],
                 &[
-                    ("x-google-min-bitrate", "5000".to_string()),
-                    ("x-google-start-bitrate", "20000".to_string()),
-                    ("x-google-max-bitrate", "50000".to_string()),
-                    ("max-fs", max_frame_size.to_string()),
+                    ("x-google-min-bitrate", tier.min_bitrate_kbps.to_string()),
+                    (
+                        "x-google-start-bitrate",
+                        tier.start_bitrate_kbps.to_string(),
+                    ),
+                    ("x-google-max-bitrate", tier.max_bitrate_kbps.to_string()),
+                    ("max-fs", tier.max_frame_size.to_string()),
                     ("max-fr", "60".to_string()),
                 ],
             );
+        }
+
+        section_start = section_end;
+    }
+
+    lines.join("\r\n")
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct OfferVideoConstraintTier {
+    max_frame_size: u32,
+    min_bitrate_kbps: u32,
+    start_bitrate_kbps: u32,
+    max_bitrate_kbps: u32,
+}
+
+fn resolve_offer_video_constraint_tier(
+    negotiation_config: &XbxEngineNegotiationRuntimeConfig,
+) -> OfferVideoConstraintTier {
+    let width = negotiation_config.target_resolution_width.max(16);
+    let height = negotiation_config.target_resolution_height.max(16);
+    let max_frame_size = width.div_ceil(16).saturating_mul(height.div_ceil(16));
+    let configured_max_bitrate_kbps = negotiation_config.video_bitrate_kbps.max(1);
+
+    // 这里沿用 browser runtime / better-xcloud 的分档思路：
+    // 720p 偏保守，1080p 中档，1440p+ 提前抬高 start bitrate，避免首屏长期糊帧。
+    if height <= 720 {
+        return OfferVideoConstraintTier {
+            max_frame_size,
+            min_bitrate_kbps: 3_000,
+            start_bitrate_kbps: configured_max_bitrate_kbps.min(10_000),
+            max_bitrate_kbps: configured_max_bitrate_kbps,
+        };
+    }
+
+    if height > 1080 || width > 1920 {
+        return OfferVideoConstraintTier {
+            max_frame_size,
+            min_bitrate_kbps: 8_000,
+            start_bitrate_kbps: configured_max_bitrate_kbps.min(35_000),
+            max_bitrate_kbps: configured_max_bitrate_kbps,
+        };
+    }
+
+    OfferVideoConstraintTier {
+        max_frame_size,
+        min_bitrate_kbps: 5_000,
+        start_bitrate_kbps: configured_max_bitrate_kbps.min(20_000),
+        max_bitrate_kbps: configured_max_bitrate_kbps,
+    }
+}
+
+fn reorder_h264_payload_types_by_profile(offer_sdp: &str, preferred_profile: &str) -> String {
+    if preferred_profile.is_empty() {
+        return offer_sdp.to_string();
+    }
+
+    let mut lines = offer_sdp
+        .split("\r\n")
+        .map(ToOwned::to_owned)
+        .collect::<Vec<String>>();
+    let mut section_start = 0usize;
+
+    while section_start < lines.len() {
+        if !lines[section_start].starts_with("m=video ") {
+            section_start += 1;
+            continue;
+        }
+
+        let mut section_end = section_start + 1;
+        while section_end < lines.len() && !lines[section_end].starts_with("m=") {
+            section_end += 1;
+        }
+
+        let preferred_payload_types = collect_h264_preferred_payload_types(
+            &lines[section_start..section_end],
+            preferred_profile,
+        );
+        if preferred_payload_types.is_empty() {
+            section_start = section_end;
+            continue;
+        }
+
+        let mut parts = lines[section_start]
+            .split_whitespace()
+            .map(ToOwned::to_owned)
+            .collect::<Vec<String>>();
+        if parts.len() > 3 {
+            let reordered = preferred_payload_types
+                .iter()
+                .cloned()
+                .chain(
+                    parts[3..]
+                        .iter()
+                        .filter(|payload| !preferred_payload_types.contains(*payload))
+                        .cloned(),
+                )
+                .collect::<Vec<String>>();
+            parts.truncate(3);
+            parts.extend(reordered);
+            lines[section_start] = parts.join(" ");
         }
 
         section_start = section_end;
@@ -854,6 +1318,30 @@ fn collect_h264_payload_types(video_section_lines: &[String]) -> HashSet<String>
         }
     }
     h264_payload_types
+}
+
+fn collect_h264_preferred_payload_types(
+    video_section_lines: &[String],
+    preferred_profile: &str,
+) -> Vec<String> {
+    let h264_payload_types = collect_h264_payload_types(video_section_lines);
+    let normalized_profile = preferred_profile.to_ascii_lowercase();
+    let mut preferred_payload_types = Vec::new();
+
+    for line in video_section_lines.iter().skip(1) {
+        let Some(payload_type) = extract_fmtp_payload_type(line) else {
+            continue;
+        };
+        if !h264_payload_types.contains(payload_type) {
+            continue;
+        }
+        let normalized_line = line.to_ascii_lowercase();
+        if normalized_line.contains(&format!("profile-level-id={normalized_profile}")) {
+            preferred_payload_types.push(payload_type.to_string());
+        }
+    }
+
+    preferred_payload_types
 }
 
 fn extract_fmtp_payload_type(line: &str) -> Option<&str> {
@@ -943,6 +1431,176 @@ fn normalize_remote_ice_candidate(candidate: &str) -> Option<String> {
 
     Some(trimmed.strip_prefix("a=").unwrap_or(trimmed).to_string())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        apply_offer_policy_contract, resolve_offer_video_constraint_tier, resolve_target_remb_kbps,
+        BweDecision, XbxEngineNegotiationRuntimeConfig,
+    };
+    use crate::XbxEngineWebRtcRuntimeConfig;
+
+    fn sample_offer_sdp() -> String {
+        [
+            "v=0",
+            "o=- 0 0 IN IP4 127.0.0.1",
+            "s=-",
+            "t=0 0",
+            "m=audio 9 UDP/TLS/RTP/SAVPF 111",
+            "c=IN IP4 0.0.0.0",
+            "a=rtpmap:111 opus/48000/2",
+            "a=fmtp:111 minptime=10;useinbandfec=1",
+            "m=video 9 UDP/TLS/RTP/SAVPF 102 104 106",
+            "c=IN IP4 0.0.0.0",
+            "a=rtpmap:102 H264/90000",
+            "a=fmtp:102 level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=42001f",
+            "a=rtpmap:104 H264/90000",
+            "a=fmtp:104 level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=42e01f",
+            "a=rtpmap:106 H264/90000",
+            "a=fmtp:106 level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=4d0032",
+            "m=application 9 UDP/DTLS/SCTP webrtc-datachannel",
+        ]
+        .join("\r\n")
+    }
+
+    #[test]
+    fn resolve_video_constraint_tier_matches_browser_720p_profile() {
+        let tier = resolve_offer_video_constraint_tier(&XbxEngineNegotiationRuntimeConfig {
+            target_resolution_width: 1280,
+            target_resolution_height: 720,
+            video_bitrate_kbps: 18_000,
+            ..Default::default()
+        });
+
+        assert_eq!(tier.min_bitrate_kbps, 3_000);
+        assert_eq!(tier.start_bitrate_kbps, 10_000);
+        assert_eq!(tier.max_bitrate_kbps, 18_000);
+        assert_eq!(tier.max_frame_size, 3_600);
+    }
+
+    #[test]
+    fn resolve_video_constraint_tier_matches_browser_1440p_profile() {
+        let tier = resolve_offer_video_constraint_tier(&XbxEngineNegotiationRuntimeConfig {
+            target_resolution_width: 2560,
+            target_resolution_height: 1440,
+            video_bitrate_kbps: 60_000,
+            ..Default::default()
+        });
+
+        assert_eq!(tier.min_bitrate_kbps, 8_000);
+        assert_eq!(tier.start_bitrate_kbps, 35_000);
+        assert_eq!(tier.max_bitrate_kbps, 60_000);
+        assert_eq!(tier.max_frame_size, 14_400);
+    }
+
+    #[test]
+    fn apply_offer_policy_contract_uses_better_xcloud_style_profile_and_bitrate_tier() {
+        let patched = apply_offer_policy_contract(
+            &sample_offer_sdp(),
+            &XbxEngineNegotiationRuntimeConfig {
+                target_resolution_width: 1920,
+                target_resolution_height: 1080,
+                video_bitrate_kbps: 40_000,
+                audio_bitrate_kbps: 192,
+                force_mono_audio: false,
+                offer_profile: "42e".to_string(),
+            },
+        );
+
+        assert!(patched.contains("m=audio 9 UDP/TLS/RTP/SAVPF 111\r\nb=AS:192"));
+        assert!(patched.contains("useinbandfec=1; stereo=1"));
+        assert!(patched.contains("m=video 9 UDP/TLS/RTP/SAVPF 104 102 106"));
+        assert!(patched.contains("x-google-min-bitrate=5000"));
+        assert!(patched.contains("x-google-start-bitrate=20000"));
+        assert!(patched.contains("x-google-max-bitrate=40000"));
+        assert!(patched.contains("max-fs=8160"));
+        assert!(patched.contains("max-fr=60"));
+    }
+
+    #[test]
+    fn hybrid_bwe_caps_to_actual_headroom_when_loss_is_sustained() {
+        let config = XbxEngineWebRtcRuntimeConfig {
+            bwe_mode: "hybrid".to_string(),
+            forced_remb_kbps: Some(100_000),
+            remb_floor_kbps: 12_000,
+            remb_ceiling_kbps: 100_000,
+            remb_ramp_up_step_kbps: 4_000,
+            remb_ramp_down_factor: 700,
+            ..Default::default()
+        };
+        let mut last_sent_remb_kbps = 100_000;
+
+        let BweDecision {
+            target_kbps,
+            reason,
+        } = resolve_target_remb_kbps(
+            &config,
+            None,
+            4_600.0,
+            0.012,
+            &mut last_sent_remb_kbps,
+            &mut 0,
+        );
+
+        assert_eq!(target_kbps, 12_000);
+        assert_eq!(reason, "hybrid-sustained-loss-cap");
+        assert_eq!(last_sent_remb_kbps, 12_000);
+    }
+
+    #[test]
+    fn hybrid_bwe_uses_multiplicative_backoff_for_severe_loss() {
+        let config = XbxEngineWebRtcRuntimeConfig {
+            bwe_mode: "hybrid".to_string(),
+            forced_remb_kbps: Some(80_000),
+            remb_floor_kbps: 12_000,
+            remb_ceiling_kbps: 100_000,
+            remb_ramp_up_step_kbps: 4_000,
+            remb_ramp_down_factor: 700,
+            ..Default::default()
+        };
+        let mut last_sent_remb_kbps = 50_000;
+
+        let decision = resolve_target_remb_kbps(
+            &config,
+            None,
+            9_000.0,
+            0.12,
+            &mut last_sent_remb_kbps,
+            &mut 0,
+        );
+
+        assert_eq!(decision.target_kbps, 35_000);
+        assert_eq!(decision.reason, "hybrid-severe-loss-backoff");
+    }
+
+    #[test]
+    fn hybrid_bwe_holds_during_post_loss_cooldown() {
+        let config = XbxEngineWebRtcRuntimeConfig {
+            bwe_mode: "hybrid".to_string(),
+            forced_remb_kbps: Some(100_000),
+            remb_floor_kbps: 12_000,
+            remb_ceiling_kbps: 100_000,
+            remb_ramp_up_step_kbps: 4_000,
+            remb_ramp_down_factor: 700,
+            ..Default::default()
+        };
+        let mut last_sent_remb_kbps = 16_000;
+        let mut cooldown_ticks = 3;
+
+        let decision = resolve_target_remb_kbps(
+            &config,
+            None,
+            5_200.0,
+            0.0,
+            &mut last_sent_remb_kbps,
+            &mut cooldown_ticks,
+        );
+
+        assert_eq!(decision.target_kbps, 16_000);
+        assert_eq!(decision.reason, "hybrid-ramp-cooldown");
+        assert_eq!(cooldown_ticks, 2);
+    }
+}
 fn summarize_sdp(sdp: &str) -> String {
     format!(
         "audio={} video={} application={} len={} preview={}",
@@ -955,6 +1613,72 @@ fn summarize_sdp(sdp: &str) -> String {
             .take(240)
             .collect::<String>()
     )
+}
+
+fn resolve_transport_path(stats: &StatsReport) -> Option<String> {
+    let selected_pair = select_preferred_candidate_pair(stats);
+    let mut local_candidates = std::collections::HashMap::<&str, &ICECandidateStats>::new();
+    let mut remote_candidates = std::collections::HashMap::<&str, &ICECandidateStats>::new();
+
+    for report in stats.reports.values() {
+        match report {
+            webrtc::stats::StatsReportType::LocalCandidate(candidate) => {
+                local_candidates.insert(candidate.id.as_str(), candidate);
+            }
+            webrtc::stats::StatsReportType::RemoteCandidate(candidate) => {
+                remote_candidates.insert(candidate.id.as_str(), candidate);
+            }
+            _ => {}
+        }
+    }
+
+    let pair = selected_pair?;
+    let local_candidate = local_candidates.get(pair.local_candidate_id.as_str())?;
+    let remote_candidate = remote_candidates.get(pair.remote_candidate_id.as_str())?;
+    let local_type = normalize_candidate_type(&local_candidate.candidate_type);
+    let remote_type = normalize_candidate_type(&remote_candidate.candidate_type);
+    let path_kind = if local_type == "relay" || remote_type == "relay" {
+        "Relay"
+    } else {
+        "Direct"
+    };
+    Some(format!("{path_kind} ({local_type}->{remote_type})"))
+}
+
+fn select_preferred_candidate_pair(
+    stats: &StatsReport,
+) -> Option<&webrtc::stats::ICECandidatePairStats> {
+    let mut nominated_pair: Option<&webrtc::stats::ICECandidatePairStats> = None;
+    let mut active_pair: Option<&webrtc::stats::ICECandidatePairStats> = None;
+
+    for report in stats.reports.values() {
+        let webrtc::stats::StatsReportType::CandidatePair(pair) = report else {
+            continue;
+        };
+        if pair.nominated {
+            nominated_pair = Some(pair);
+            break;
+        }
+        if active_pair.is_none()
+            && (pair.available_outgoing_bitrate > 0.0
+                || pair.available_incoming_bitrate > 0.0
+                || pair.current_round_trip_time > 0.0)
+        {
+            active_pair = Some(pair);
+        }
+    }
+
+    nominated_pair.or(active_pair)
+}
+
+fn normalize_candidate_type(candidate_type: &impl std::fmt::Debug) -> String {
+    match format!("{candidate_type:?}").to_ascii_lowercase().as_str() {
+        "host" => "host".to_string(),
+        "serverreflexive" => "srflx".to_string(),
+        "peerreflexive" => "prflx".to_string(),
+        "relay" => "relay".to_string(),
+        _ => "unknown".to_string(),
+    }
 }
 
 fn now_ms_f64() -> f64 {

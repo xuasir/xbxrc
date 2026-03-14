@@ -26,14 +26,72 @@ const resolutionText = computed(() => {
   return props.resolutionMode === 1081 ? `${resolution}(HQ)` : resolution
 })
 
+function formatKiB(value?: number): string {
+  if (value === undefined || value <= 0) {
+    return '--'
+  }
+
+  return `${(value / 1024).toFixed(1)} KiB`
+}
+
+function formatMs(value?: number): string {
+  if (value === undefined || Number.isNaN(value)) {
+    return '--'
+  }
+
+  return `${value.toFixed(1)}ms`
+}
+
+function formatKbps(value?: number): string {
+  if (value === undefined || value <= 0) {
+    return '--'
+  }
+
+  if (value >= 1000) {
+    return `${(value / 1000).toFixed(1)} Mbps`
+  }
+
+  return `${value.toFixed(1)} kbps`
+}
+
+function formatFps(value?: string | number): string {
+  if (value === undefined || value === null) {
+    return '--'
+  }
+  const numericValue = Number(value)
+  if (Number.isNaN(numericValue)) {
+    return '--'
+  }
+  return numericValue.toFixed(1)
+}
+
 const metrics = computed(() => [
   { key: 'Path', value: props.snapshot?.transportPath ?? '--' },
+  { key: 'State', value: props.snapshot?.transportState ?? '--' },
   { key: 'RTT', value: props.snapshot?.rtt ?? '--' },
   { key: 'JIT', value: props.snapshot?.jit ?? '--' },
-  { key: 'FPS', value: props.snapshot?.fps ?? '--' },
+  { key: 'RecvFPS', value: formatFps(props.snapshot?.inboundVideoFps) },
+  { key: 'DecFPS', value: formatFps(props.snapshot?.decodeFps) },
+  { key: 'PreFPS', value: formatFps(props.snapshot?.presentFps ?? props.snapshot?.fps) },
   { key: 'FD', value: props.snapshot?.fl ?? '--' },
   { key: 'PL', value: props.snapshot?.pl ?? '--' },
   { key: 'Bitrate', value: props.snapshot?.br ?? '--' },
+  { key: 'BWE', value: formatKbps(props.snapshot?.videoRembBps ? props.snapshot.videoRembBps / 1000 : undefined) },
+  { key: 'PktAge', value: formatMs(props.snapshot?.packetAgeMs) },
+  { key: 'DecAge', value: formatMs(props.snapshot?.decodeAgeMs) },
+  { key: 'PreAge', value: formatMs(props.snapshot?.presentAgeMs) },
+  { key: 'P2D', value: formatMs(props.snapshot?.packetToDecodeMs) },
+  { key: 'D2P', value: formatMs(props.snapshot?.decodeToPresentMs) },
+  { key: 'P2P', value: formatMs(props.snapshot?.packetToPresentMs) },
+  { key: 'InVideo', value: formatKiB(props.snapshot?.inboundVideoBytesTotal) },
+  { key: 'InAudio', value: formatKiB(props.snapshot?.inboundAudioBytesTotal) },
+  { key: 'DecInDrop', value: props.snapshot?.videoDecodeInputDropCountTotal ?? '--' },
+  { key: 'DecOutDrop', value: props.snapshot?.videoDecodeOutputDropCountTotal ?? '--' },
+  { key: 'KeyReq', value: props.snapshot?.recoveryKeyframeRequestCount ?? '--' },
+  { key: 'Reset', value: props.snapshot?.videoDecoderResetCount ?? '--' },
+  { key: 'Reco', value: props.snapshot?.recoveryReconnectCount ?? '--' },
+  { key: 'LastAct', value: props.snapshot?.lastRecoveryAction ?? '--' },
+  { key: 'LastWhy', value: props.snapshot?.lastRecoveryReason ?? '--' },
   { key: 'DT', value: props.snapshot?.decode ?? '--' },
 ])
 </script>

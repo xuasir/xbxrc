@@ -2,46 +2,18 @@ use xbxengine_protocol::{XbxEngineReconnectReasonDto, XbxEngineTransportStateDto
 
 pub const FIRST_FRAME_GRACE_MS: f64 = 8_000.0;
 pub const KEYFRAME_REQUEST_STALL_MS: f64 = 1_500.0;
+pub const KEYFRAME_LOSS_BURST_THRESHOLD: u8 = 2;
 pub const DECODER_RESET_AFTER_KEYFRAME_WAIT_MS: f64 = 500.0;
 pub const DECODER_RESET_REQUEST_COOLDOWN_MS: f64 = 1_500.0;
 pub const RECONNECT_STALL_MS: f64 = 4_000.0;
 pub const STALL_RECOVERY_COOLDOWN_MS: f64 = 6_000.0;
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum XbxEngineRecoveryPreset {
-    CloudConservative,
-    CloudAggressive,
-    LanLowLatency,
-}
-
-impl Default for XbxEngineRecoveryPreset {
-    fn default() -> Self {
-        Self::CloudConservative
-    }
-}
-
-impl XbxEngineRecoveryPreset {
-    pub fn from_label(label: &str) -> Option<Self> {
-        let normalized = label.trim().to_ascii_lowercase();
-        match normalized.as_str() {
-            "cloudconservative" | "cloud-conservative" | "cloud_conservative" => {
-                Some(Self::CloudConservative)
-            }
-            "cloudaggressive" | "cloud-aggressive" | "cloud_aggressive" => {
-                Some(Self::CloudAggressive)
-            }
-            "lanlowlatency" | "lan-low-latency" | "lan_low_latency" | "lan" => {
-                Some(Self::LanLowLatency)
-            }
-            _ => None,
-        }
-    }
-}
+pub const STALL_SIGNAL_STABILITY_MS: f64 = 250.0;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct XbxEngineRecoveryRuntimeConfig {
     pub first_frame_grace_ms: u64,
     pub keyframe_request_stall_ms: u64,
+    pub keyframe_loss_burst_threshold: u8,
     pub decoder_reset_after_keyframe_wait_ms: u64,
     pub decoder_reset_request_cooldown_ms: u64,
     pub reconnect_stall_ms: u64,
@@ -50,40 +22,19 @@ pub struct XbxEngineRecoveryRuntimeConfig {
 
 impl Default for XbxEngineRecoveryRuntimeConfig {
     fn default() -> Self {
-        Self::from_preset(XbxEngineRecoveryPreset::default())
+        Self {
+            first_frame_grace_ms: FIRST_FRAME_GRACE_MS as u64,
+            keyframe_request_stall_ms: KEYFRAME_REQUEST_STALL_MS as u64,
+            keyframe_loss_burst_threshold: KEYFRAME_LOSS_BURST_THRESHOLD,
+            decoder_reset_after_keyframe_wait_ms: DECODER_RESET_AFTER_KEYFRAME_WAIT_MS as u64,
+            decoder_reset_request_cooldown_ms: DECODER_RESET_REQUEST_COOLDOWN_MS as u64,
+            reconnect_stall_ms: RECONNECT_STALL_MS as u64,
+            stall_recovery_cooldown_ms: STALL_RECOVERY_COOLDOWN_MS as u64,
+        }
     }
 }
 
 impl XbxEngineRecoveryRuntimeConfig {
-    pub fn from_preset(preset: XbxEngineRecoveryPreset) -> Self {
-        match preset {
-            XbxEngineRecoveryPreset::CloudConservative => Self {
-                first_frame_grace_ms: FIRST_FRAME_GRACE_MS as u64,
-                keyframe_request_stall_ms: KEYFRAME_REQUEST_STALL_MS as u64,
-                decoder_reset_after_keyframe_wait_ms: DECODER_RESET_AFTER_KEYFRAME_WAIT_MS as u64,
-                decoder_reset_request_cooldown_ms: DECODER_RESET_REQUEST_COOLDOWN_MS as u64,
-                reconnect_stall_ms: RECONNECT_STALL_MS as u64,
-                stall_recovery_cooldown_ms: STALL_RECOVERY_COOLDOWN_MS as u64,
-            },
-            XbxEngineRecoveryPreset::CloudAggressive => Self {
-                first_frame_grace_ms: 6_000,
-                keyframe_request_stall_ms: 1_000,
-                decoder_reset_after_keyframe_wait_ms: 350,
-                decoder_reset_request_cooldown_ms: 1_000,
-                reconnect_stall_ms: 2_800,
-                stall_recovery_cooldown_ms: 4_000,
-            },
-            XbxEngineRecoveryPreset::LanLowLatency => Self {
-                first_frame_grace_ms: 2_500,
-                keyframe_request_stall_ms: 450,
-                decoder_reset_after_keyframe_wait_ms: 150,
-                decoder_reset_request_cooldown_ms: 450,
-                reconnect_stall_ms: 1_400,
-                stall_recovery_cooldown_ms: 2_000,
-            },
-        }
-    }
-
     pub fn with_override(self, override_config: XbxEngineRecoveryRuntimeConfigOverride) -> Self {
         Self {
             first_frame_grace_ms: override_config
@@ -92,6 +43,9 @@ impl XbxEngineRecoveryRuntimeConfig {
             keyframe_request_stall_ms: override_config
                 .keyframe_request_stall_ms
                 .unwrap_or(self.keyframe_request_stall_ms),
+            keyframe_loss_burst_threshold: override_config
+                .keyframe_loss_burst_threshold
+                .unwrap_or(self.keyframe_loss_burst_threshold),
             decoder_reset_after_keyframe_wait_ms: override_config
                 .decoder_reset_after_keyframe_wait_ms
                 .unwrap_or(self.decoder_reset_after_keyframe_wait_ms),
@@ -112,6 +66,7 @@ impl XbxEngineRecoveryRuntimeConfig {
 pub struct XbxEngineRecoveryRuntimeConfigOverride {
     pub first_frame_grace_ms: Option<u64>,
     pub keyframe_request_stall_ms: Option<u64>,
+    pub keyframe_loss_burst_threshold: Option<u8>,
     pub decoder_reset_after_keyframe_wait_ms: Option<u64>,
     pub decoder_reset_request_cooldown_ms: Option<u64>,
     pub reconnect_stall_ms: Option<u64>,
@@ -130,6 +85,7 @@ pub struct XbxEngineRuntimeHealth {
     pub last_keyframe_request_at_ms: Option<f64>,
     pub last_decoder_reset_request_at_ms: Option<f64>,
     pub last_reconnect_started_at_ms: Option<f64>,
+    pub stall_candidate_started_at_ms: Option<f64>,
     pub keyframe_requested_for_current_stall: bool,
     pub decoder_reset_requested_for_current_stall: bool,
 }
@@ -147,6 +103,7 @@ impl Default for XbxEngineRuntimeHealth {
             last_keyframe_request_at_ms: None,
             last_decoder_reset_request_at_ms: None,
             last_reconnect_started_at_ms: None,
+            stall_candidate_started_at_ms: None,
             keyframe_requested_for_current_stall: false,
             decoder_reset_requested_for_current_stall: false,
         }
@@ -169,6 +126,7 @@ pub struct XbxEngineTransportSignal {
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct XbxEngineMediaSignal {
+    pub latest_frame_decoded_at_ms: Option<f64>,
     pub latest_frame_rendered_at_ms: Option<f64>,
 }
 
@@ -203,10 +161,12 @@ impl XbxEngineRuntimeHealth {
                 self.connected_at_ms = Some(now_ms);
                 self.keyframe_requested_for_current_stall = false;
                 self.decoder_reset_requested_for_current_stall = false;
+                self.stall_candidate_started_at_ms = None;
             }
             XbxEngineTransportStateDto::Connecting => {
                 self.connected_at_ms = None;
                 self.decoder_reset_requested_for_current_stall = false;
+                self.stall_candidate_started_at_ms = None;
             }
             XbxEngineTransportStateDto::Disconnected
             | XbxEngineTransportStateDto::Failed
@@ -218,6 +178,7 @@ impl XbxEngineRuntimeHealth {
                 self.inbound_video_packet_count_total = 0;
                 self.keyframe_requested_for_current_stall = false;
                 self.decoder_reset_requested_for_current_stall = false;
+                self.stall_candidate_started_at_ms = None;
             }
         }
         true
@@ -240,6 +201,7 @@ impl XbxEngineRuntimeHealth {
         self.video_size = Some((width, height));
         self.keyframe_requested_for_current_stall = false;
         self.decoder_reset_requested_for_current_stall = false;
+        self.stall_candidate_started_at_ms = None;
         if previous_video_size != Some((width, height)) {
             return Some((width, height));
         }
@@ -258,6 +220,7 @@ impl XbxEngineRuntimeHealth {
         self.last_video_packet_arrival_at_ms = Some(arrived_at_ms);
         self.keyframe_requested_for_current_stall = false;
         self.decoder_reset_requested_for_current_stall = false;
+        self.stall_candidate_started_at_ms = None;
     }
 
     pub fn mark_keyframe_requested(&mut self, now_ms: f64) {
@@ -274,10 +237,25 @@ impl XbxEngineRuntimeHealth {
         self.last_reconnect_started_at_ms = Some(now_ms);
         self.keyframe_requested_for_current_stall = false;
         self.decoder_reset_requested_for_current_stall = false;
+        self.stall_candidate_started_at_ms = None;
     }
 
     pub fn restore_reconnect_marker(&mut self, reconnect_started_at_ms: f64) {
         self.last_reconnect_started_at_ms = Some(reconnect_started_at_ms);
+    }
+
+    pub fn update_stall_candidate(
+        &mut self,
+        now_ms: f64,
+        should_track_stall: bool,
+        stable_window_ms: f64,
+    ) -> bool {
+        if !should_track_stall {
+            self.stall_candidate_started_at_ms = None;
+            return false;
+        }
+        let started_at = self.stall_candidate_started_at_ms.get_or_insert(now_ms);
+        now_ms - *started_at >= stable_window_ms
     }
 
     pub fn next_recovery_action(
@@ -293,6 +271,7 @@ impl XbxEngineRuntimeHealth {
                 latest_video_packet_arrival_at_ms: self.last_video_packet_arrival_at_ms,
             },
             media: XbxEngineMediaSignal {
+                latest_frame_decoded_at_ms: self.last_frame_rendered_at_ms,
                 latest_frame_rendered_at_ms: self.last_frame_rendered_at_ms,
             },
             decode_render: XbxEngineDecodeRenderSignal::default(),
@@ -337,6 +316,7 @@ impl XbxEngineRuntimeHealth {
             recovery_config.decoder_reset_request_cooldown_ms as f64;
         let reconnect_stall_ms = recovery_config.reconnect_stall_ms as f64;
         let stall_recovery_cooldown_ms = recovery_config.stall_recovery_cooldown_ms as f64;
+        let recent_media_activity_grace_ms = keyframe_request_stall_ms.min(500.0);
 
         let connected_at_ms = signals.transport.connected_at_ms.unwrap_or(now_ms);
         let activity_at_ms = signals
@@ -353,6 +333,21 @@ impl XbxEngineRuntimeHealth {
                 .is_none()
             && now_ms - connected_at_ms < first_frame_grace_ms
         {
+            return None;
+        }
+
+        // 最近仍在持续 decode/present 时，优先相信新鲜活动，避免短抖动误触发恢复。
+        let has_fresh_media_activity = signals
+            .media
+            .latest_frame_rendered_at_ms
+            .map(|at_ms| now_ms - at_ms < recent_media_activity_grace_ms)
+            .unwrap_or(false)
+            || signals
+                .media
+                .latest_frame_decoded_at_ms
+                .map(|at_ms| now_ms - at_ms < recent_media_activity_grace_ms)
+                .unwrap_or(false);
+        if has_fresh_media_activity {
             return None;
         }
 
@@ -405,10 +400,9 @@ impl XbxEngineRuntimeHealth {
 mod tests {
     use super::{
         XbxEngineDecodeRenderSignal, XbxEngineMediaSignal, XbxEngineRecoveryAction,
-        XbxEngineRecoveryPreset, XbxEngineRecoveryRuntimeConfig,
-        XbxEngineRecoveryRuntimeConfigOverride, XbxEngineRecoverySignals, XbxEngineRuntimeHealth,
-        XbxEngineTransportSignal, DECODER_RESET_AFTER_KEYFRAME_WAIT_MS, KEYFRAME_REQUEST_STALL_MS,
-        RECONNECT_STALL_MS,
+        XbxEngineRecoveryRuntimeConfig, XbxEngineRecoveryRuntimeConfigOverride,
+        XbxEngineRecoverySignals, XbxEngineRuntimeHealth, XbxEngineTransportSignal,
+        DECODER_RESET_AFTER_KEYFRAME_WAIT_MS, KEYFRAME_REQUEST_STALL_MS, RECONNECT_STALL_MS,
     };
 
     #[test]
@@ -427,6 +421,7 @@ mod tests {
                     latest_video_packet_arrival_at_ms: Some(1_000.0),
                 },
                 media: XbxEngineMediaSignal {
+                    latest_frame_decoded_at_ms: Some(1_000.0),
                     latest_frame_rendered_at_ms: Some(1_000.0),
                 },
                 decode_render: XbxEngineDecodeRenderSignal::default(),
@@ -452,6 +447,7 @@ mod tests {
                     latest_video_packet_arrival_at_ms: Some(1_000.0),
                 },
                 media: XbxEngineMediaSignal {
+                    latest_frame_decoded_at_ms: Some(1_000.0),
                     latest_frame_rendered_at_ms: Some(1_000.0),
                 },
                 decode_render: XbxEngineDecodeRenderSignal::default(),
@@ -480,6 +476,7 @@ mod tests {
                     latest_video_packet_arrival_at_ms: Some(now_ms - 50.0),
                 },
                 media: XbxEngineMediaSignal {
+                    latest_frame_decoded_at_ms: Some(now_ms - 3_000.0),
                     latest_frame_rendered_at_ms: Some(now_ms - 3_000.0),
                 },
                 decode_render: XbxEngineDecodeRenderSignal {
@@ -510,6 +507,7 @@ mod tests {
                     latest_video_packet_arrival_at_ms: Some(now_ms - 50.0),
                 },
                 media: XbxEngineMediaSignal {
+                    latest_frame_decoded_at_ms: Some(now_ms - 3_000.0),
                     latest_frame_rendered_at_ms: Some(now_ms - 3_000.0),
                 },
                 decode_render: XbxEngineDecodeRenderSignal {
@@ -545,6 +543,7 @@ mod tests {
                     latest_video_packet_arrival_at_ms: Some(1_000.0),
                 },
                 media: XbxEngineMediaSignal {
+                    latest_frame_decoded_at_ms: Some(1_000.0),
                     latest_frame_rendered_at_ms: Some(1_000.0),
                 },
                 decode_render: XbxEngineDecodeRenderSignal::default(),
@@ -555,24 +554,16 @@ mod tests {
     }
 
     #[test]
-    fn recovery_presets_keep_expected_threshold_order() {
-        let conservative =
-            XbxEngineRecoveryRuntimeConfig::from_preset(XbxEngineRecoveryPreset::CloudConservative);
-        let aggressive =
-            XbxEngineRecoveryRuntimeConfig::from_preset(XbxEngineRecoveryPreset::CloudAggressive);
-        let lan =
-            XbxEngineRecoveryRuntimeConfig::from_preset(XbxEngineRecoveryPreset::LanLowLatency);
-
-        assert!(conservative.keyframe_request_stall_ms > aggressive.keyframe_request_stall_ms);
-        assert!(aggressive.keyframe_request_stall_ms > lan.keyframe_request_stall_ms);
-        assert!(conservative.reconnect_stall_ms > aggressive.reconnect_stall_ms);
-        assert!(aggressive.reconnect_stall_ms > lan.reconnect_stall_ms);
-    }
-
-    #[test]
     fn recovery_override_applies_partial_fields_only() {
-        let base =
-            XbxEngineRecoveryRuntimeConfig::from_preset(XbxEngineRecoveryPreset::CloudAggressive);
+        let base = XbxEngineRecoveryRuntimeConfig {
+            first_frame_grace_ms: 6_000,
+            keyframe_request_stall_ms: 1_000,
+            keyframe_loss_burst_threshold: 3,
+            decoder_reset_after_keyframe_wait_ms: 350,
+            decoder_reset_request_cooldown_ms: 1_000,
+            reconnect_stall_ms: 2_800,
+            stall_recovery_cooldown_ms: 4_000,
+        };
         let override_config = XbxEngineRecoveryRuntimeConfigOverride {
             reconnect_stall_ms: Some(5_000),
             ..Default::default()
@@ -582,6 +573,10 @@ mod tests {
         assert_eq!(
             merged.keyframe_request_stall_ms,
             base.keyframe_request_stall_ms
+        );
+        assert_eq!(
+            merged.keyframe_loss_burst_threshold,
+            base.keyframe_loss_burst_threshold
         );
     }
 }

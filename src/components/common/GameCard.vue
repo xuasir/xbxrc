@@ -48,7 +48,6 @@ function handleSelect(): void {
     :scope-id="props.scopeId"
     :disabled="props.disabled"
     :aria-label="props.ariaLabel || props.title"
-    :on-confirm="handleSelect"
     @click="handleSelect"
   >
     <span class="game-card__image-shell">

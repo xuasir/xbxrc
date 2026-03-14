@@ -135,6 +135,7 @@ export class SessionService {
     const initialSdp = offer.sdp
     if (initialSdp) {
       console.info('[player][session] local offer before sdp manipulation', summarizeSdp(initialSdp))
+      console.info(`[player][session] local offer before sdp manipulation raw\n${initialSdp}`)
     }
     if (initialSdp) {
       let nextSdp = initialSdp
@@ -169,6 +170,7 @@ export class SessionService {
       }
       offer = { ...offer, sdp: nextSdp }
       console.info('[player][session] local offer after sdp manipulation', summarizeSdp(nextSdp))
+      console.info(`[player][session] local offer after sdp manipulation raw\n${nextSdp}`)
     }
     await this.transport.setLocalDescription(offer)
     this.transition('connecting')

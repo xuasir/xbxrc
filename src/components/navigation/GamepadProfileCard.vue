@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import type { GamepadRuntimeSnapshotDto } from '@shared/gamepad/contract'
-import { Focusable, FocusScope } from '@/navigation/core/vue'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { Focusable, FocusScope } from '@/navigation/core/vue'
 import { SPATIAL_NAV_NODE_IDS, SPATIAL_NAV_SCOPE_IDS } from '../../navigation/spatial-nav.constants'
 
 interface GamepadProfileCardProps {
@@ -19,7 +19,7 @@ const emit = defineEmits<{
 const { t } = useI18n()
 
 const connectedDevices = computed(() => props.snapshot?.devices.filter(device => device.connected) ?? [])
-const defaultDeviceId = computed(() => props.snapshot?.haptics.defaultDeviceId ?? null)
+// const defaultDeviceId = computed(() => props.snapshot?.haptics.defaultDeviceId ?? null)
 
 function emitClose(): void {
   emit('close')
@@ -61,7 +61,7 @@ function formatBoolean(value: boolean): string {
 </script>
 
 <template>
-  <Transition name="user-menu-transition">
+  <Transition name="gamepad-card-transition">
     <div v-if="props.open" class="gamepad-card-layer">
       <button
         type="button"
@@ -74,7 +74,7 @@ function formatBoolean(value: boolean): string {
         <FocusScope
           :id="SPATIAL_NAV_SCOPE_IDS.gamepadMenu"
           as="section"
-          class="gamepad-card"
+          class="gamepad-card-panel"
           :active="props.open"
           :default-focus-id="SPATIAL_NAV_NODE_IDS.gamepadMenu.close"
           :aria-label="t('gamepadCard.title')"
@@ -84,7 +84,6 @@ function formatBoolean(value: boolean): string {
             as="button"
             type="button"
             class="gamepad-card__close"
-            :on-confirm="emitClose"
             :on-back="emitClose"
             :aria-label="t('gamepadCard.close')"
             @click="emitClose"
@@ -105,63 +104,59 @@ function formatBoolean(value: boolean): string {
             </p>
           </div>
 
-          <div class="gamepad-card__summary">
-            <div class="gamepad-card__summary-row">
-              <span class="gamepad-card__summary-label">{{ t('gamepadCard.provider') }}</span>
-              <span class="gamepad-card__summary-value">{{ formatProvider(props.snapshot?.haptics.provider) }}</span>
-            </div>
-            <div class="gamepad-card__summary-row">
-              <span class="gamepad-card__summary-label">{{ t('gamepadCard.autoTarget') }}</span>
-              <span class="gamepad-card__summary-value">{{ formatBoolean(props.snapshot?.haptics.supportsAutoTarget === true) }}</span>
-            </div>
-            <div class="gamepad-card__summary-row">
-              <span class="gamepad-card__summary-label">{{ t('gamepadCard.defaultTarget') }}</span>
-              <span class="gamepad-card__summary-value">{{ defaultDeviceId ?? t('gamepadCard.values.none') }}</span>
-            </div>
-          </div>
+          <div class="gamepad-card__divider" aria-hidden="true" />
 
-          <div v-if="connectedDevices.length > 0" class="gamepad-card__device-list">
-            <article
-              v-for="device in connectedDevices"
-              :key="device.deviceId"
-              class="gamepad-card__device"
-            >
-              <div class="gamepad-card__device-head">
-                <div>
-                  <h3 class="gamepad-card__device-name">
-                    {{ device.name }}
-                  </h3>
-                  <p class="gamepad-card__device-meta">
-                    {{ formatConnection(device.connection) }}
-                  </p>
-                </div>
-                <span
-                  v-if="device.isDefaultTarget"
-                  class="gamepad-card__device-badge"
-                >
-                  {{ t('gamepadCard.defaultBadge') }}
-                </span>
+          <div class="gamepad-card__content">
+            <div class="gamepad-card__summary">
+              <div class="gamepad-card__summary-row">
+                <span class="gamepad-card__summary-label">{{ t('gamepadCard.provider') }}</span>
+                <span class="gamepad-card__summary-value">{{ formatProvider(props.snapshot?.haptics.provider) }}</span>
               </div>
-
-              <div class="gamepad-card__capabilities">
-                <div class="gamepad-card__capability-row">
-                  <span>{{ t('gamepadCard.capabilities.basicRumble') }}</span>
-                  <strong>{{ formatBoolean(device.effectiveCapabilities.basicRumble) }}</strong>
-                </div>
-                <div class="gamepad-card__capability-row">
-                  <span>{{ t('gamepadCard.capabilities.advancedHaptics') }}</span>
-                  <strong>{{ formatBoolean(device.effectiveCapabilities.advancedHaptics) }}</strong>
-                </div>
-                <div class="gamepad-card__capability-row">
-                  <span>{{ t('gamepadCard.capabilities.battery') }}</span>
-                  <strong>{{ formatBoolean(device.capabilities.battery) }}</strong>
-                </div>
+              <div class="gamepad-card__summary-row">
+                <span class="gamepad-card__summary-label">{{ t('gamepadCard.autoTarget') }}</span>
+                <span class="gamepad-card__summary-value">{{ formatBoolean(props.snapshot?.haptics.supportsAutoTarget === true) }}</span>
               </div>
-            </article>
-          </div>
+            </div>
 
-          <div v-else class="gamepad-card__empty">
-            {{ t('gamepadCard.empty') }}
+            <div v-if="connectedDevices.length > 0" class="gamepad-card__device-list">
+              <article
+                v-for="device in connectedDevices"
+                :key="device.deviceId"
+                class="gamepad-card__device"
+              >
+                <div class="gamepad-card__device-head">
+                  <div>
+                    <h3 class="gamepad-card__device-name">
+                      {{ device.name }}
+                    </h3>
+                    <p class="gamepad-card__device-meta">
+                      {{ formatConnection(device.connection) }}
+                    </p>
+                  </div>
+                  <span
+                    v-if="device.isDefaultTarget"
+                    class="gamepad-card__device-badge"
+                  >
+                    {{ t('gamepadCard.defaultBadge') }}
+                  </span>
+                </div>
+
+                <div class="gamepad-card__capabilities">
+                  <div class="gamepad-card__capability-row">
+                    <span>{{ t('gamepadCard.capabilities.basicRumble') }}</span>
+                    <strong>{{ formatBoolean(device.effectiveCapabilities.basicRumble) }}</strong>
+                  </div>
+                  <div class="gamepad-card__capability-row">
+                    <span>{{ t('gamepadCard.capabilities.advancedHaptics') }}</span>
+                    <strong>{{ formatBoolean(device.effectiveCapabilities.advancedHaptics) }}</strong>
+                  </div>
+                </div>
+              </article>
+            </div>
+
+            <div v-else class="gamepad-card__empty">
+              {{ t('gamepadCard.empty') }}
+            </div>
           </div>
         </FocusScope>
       </div>
@@ -180,60 +175,64 @@ function formatBoolean(value: boolean): string {
   position: absolute;
   inset: 0;
   border: 0;
-  background: transparent;
+  background: var(--ui-scrim-bg);
+  backdrop-filter: blur(4px);
   cursor: default;
 }
 
 .gamepad-card-anchor {
   position: absolute;
   top: 24px;
-  right: 78px;
+  right: 84px; /* 定位在手柄图标下方附近，档案弹窗右侧 */
+  bottom: 24px;
   pointer-events: none;
+  display: flex;
+  align-items: stretch;
 }
 
-.gamepad-card {
-  width: min(calc(100vw - 48px), 380px);
-  max-height: min(72vh, 720px);
+.gamepad-card-panel {
+  width: min(calc(100vw - 48px), 360px);
   pointer-events: auto;
   position: relative;
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  overflow: auto;
-  padding: 22px 18px 18px;
-  border: 1px solid color-mix(in srgb, var(--ui-border-subtle) 80%, #7cff6b 20%);
-  border-radius: 18px;
-  background:
-    radial-gradient(circle at top right, rgba(124, 255, 107, 0.16), transparent 34%),
-    linear-gradient(180deg, rgba(19, 28, 24, 0.96), rgba(11, 17, 14, 0.98));
+  border: 1px solid var(--ui-border-subtle);
+  border-radius: 16px;
+  background: var(--ui-surface-overlay);
   box-shadow: var(--ui-shadow-overlay);
   color: var(--ui-page-text);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 24px 16px;
 }
 
 .gamepad-card__close {
   position: absolute;
-  top: 14px;
-  right: 14px;
+  top: 16px;
+  right: 16px;
   width: 36px;
   height: 36px;
   border: 0;
-  border-radius: 999px;
+  border-radius: var(--ui-radius-pill);
   background: transparent;
   cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--ui-motion-fast);
+  z-index: 10;
 }
 
 .gamepad-card__close[data-focused='true'] {
   background: var(--color-focus-bg-strong);
+  color: var(--ui-focus-text);
   box-shadow: var(--shadow-xbox-focus);
 }
 
 .gamepad-card__close-line {
   position: absolute;
-  top: 17px;
-  left: 10px;
   width: 16px;
   height: 2px;
-  border-radius: 999px;
+  border-radius: var(--ui-radius-pill);
   background: var(--ui-page-text);
 }
 
@@ -246,38 +245,50 @@ function formatBoolean(value: boolean): string {
 }
 
 .gamepad-card__header {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding-right: 36px;
+  padding: 8px 8px 16px;
 }
 
 .gamepad-card__eyebrow {
-  color: var(--ui-page-text-soft);
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.12em;
+  color: var(--brand-accent);
+  font-size: 11px;
+  font-weight: 800;
   text-transform: uppercase;
+  letter-spacing: 0.1em;
+  margin-bottom: 4px;
 }
 
 .gamepad-card__title {
   font-size: 24px;
-  line-height: 1.1;
   font-weight: 800;
+  line-height: 1.2;
 }
 
 .gamepad-card__subtitle {
   color: var(--ui-page-text-soft);
   font-size: 14px;
+  margin-top: 4px;
+}
+
+.gamepad-card__divider {
+  height: 1px;
+  margin: 8px 0 16px;
+  background: var(--ui-border-subtle);
+}
+
+.gamepad-card__content {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
 }
 
 .gamepad-card__summary {
   display: grid;
-  gap: 10px;
-  padding: 14px 16px;
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  gap: 8px;
+  padding: 12px;
+  border-radius: 12px;
+  background: var(--color-state-hover);
 }
 
 .gamepad-card__summary-row,
@@ -285,14 +296,14 @@ function formatBoolean(value: boolean): string {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
+  gap: 12px;
 }
 
 .gamepad-card__summary-label,
-.gamepad-card__capability-row span,
-.gamepad-card__device-meta {
+.gamepad-card__capability-row span {
   color: var(--ui-page-text-soft);
   font-size: 13px;
+  font-weight: 600;
 }
 
 .gamepad-card__summary-value,
@@ -307,64 +318,85 @@ function formatBoolean(value: boolean): string {
 }
 
 .gamepad-card__device {
-  display: grid;
+  padding: 14px;
+  border-radius: 12px;
+  background: var(--color-state-hover);
+  border: 1px solid var(--color-border-subtle);
+  display: flex;
+  flex-direction: column;
   gap: 12px;
-  padding: 14px 16px;
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.035);
-  border: 1px solid rgba(255, 255, 255, 0.06);
 }
 
 .gamepad-card__device-head {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 10px;
 }
 
 .gamepad-card__device-name {
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 700;
-  line-height: 1.2;
 }
 
 .gamepad-card__device-meta {
-  margin-top: 4px;
+  font-size: 12px;
+  color: var(--ui-page-text-soft);
+  margin-top: 2px;
 }
 
 .gamepad-card__device-badge {
-  padding: 5px 10px;
-  border-radius: 999px;
-  background: rgba(124, 255, 107, 0.14);
-  color: #b7ffad;
-  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: var(--brand-primary);
+  color: white;
+  font-size: 10px;
   font-weight: 800;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
 }
 
 .gamepad-card__capabilities {
   display: grid;
-  gap: 8px;
+  gap: 6px;
 }
 
 .gamepad-card__empty {
-  padding: 18px 16px;
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.03);
+  padding: 32px 16px;
+  text-align: center;
   color: var(--ui-page-text-soft);
   font-size: 14px;
-  text-align: center;
+  background: var(--color-state-hover);
+  border-radius: 12px;
 }
 
-@media (max-width: 720px) {
-  .gamepad-card-anchor {
-    right: 16px;
-    left: 16px;
-  }
+/* Transition */
+.gamepad-card-transition-enter-active,
+.gamepad-card-transition-leave-active {
+  transition: opacity 250ms ease;
+}
 
-  .gamepad-card {
-    width: 100%;
-  }
+.gamepad-card-transition-enter-active .gamepad-card-panel,
+.gamepad-card-transition-leave-active .gamepad-card-panel {
+  transition: transform 350ms cubic-bezier(0.2, 0, 0, 1);
+}
+
+.gamepad-card-transition-enter-from .gamepad-card-panel {
+  transform: translateX(calc(100% + 48px));
+}
+
+.gamepad-card-transition-leave-to .gamepad-card-panel {
+  transform: translateX(calc(100% + 48px));
+}
+
+.gamepad-card-transition-enter-from,
+.gamepad-card-transition-leave-to {
+  opacity: 0;
+}
+
+:global(html[data-ui-density='narrow']) .gamepad-card-anchor {
+  left: 24px;
+  right: 24px;
+}
+
+:global(html[data-ui-density='narrow']) .gamepad-card-panel {
+  width: 100%;
 }
 </style>

@@ -38,7 +38,6 @@ function handleConfirm(): void {
     :class="{ 'setting-toggle-row--active': props.enabled }"
     :scope-id="props.scopeId"
     :aria-label="props.label"
-    :on-confirm="handleConfirm"
     @click="handleConfirm"
   >
     <span class="setting-toggle-row__label">{{ props.label }}</span>

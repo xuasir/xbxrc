@@ -156,12 +156,32 @@
       "metrics": {
         "Resolution": "分辨率",
         "Path": "路径",
+        "State": "状态",
         "RTT": "RTT",
         "JIT": "JIT",
         "FPS": "FPS",
+        "RecvFPS": "接收 FPS",
+        "DecFPS": "解码 FPS",
+        "PreFPS": "呈现 FPS",
         "FD": "FD",
         "PL": "PL",
         "Bitrate": "码率",
+        "BWE": "带宽估计",
+        "PktAge": "包龄",
+        "DecAge": "解龄",
+        "PreAge": "呈龄",
+        "P2D": "包到解",
+        "D2P": "解到呈",
+        "P2P": "包到呈",
+        "InVideo": "视频下行",
+        "InAudio": "音频下行",
+        "DecInDrop": "解码入丢",
+        "DecOutDrop": "解码出丢",
+        "KeyReq": "关键帧请求",
+        "Reset": "重置",
+        "Reco": "重连",
+        "LastAct": "最近动作",
+        "LastWhy": "最近原因",
         "DT": "解码"
       }
     },
@@ -375,22 +395,6 @@
       }
     },
     "streaming": {
-      "presets": {
-        "title": "策略预设",
-        "description": "先应用预设，再按需在高级或专家层微调。",
-        "default": {
-          "label": "默认",
-          "description": "平衡稳定性与画质的基础策略"
-        },
-        "qualityFirst": {
-          "label": "画质优先",
-          "description": "提高视频/音频码率以追求更清晰画面"
-        },
-        "latencyFirst": {
-          "label": "延迟优先",
-          "description": "降低码率并偏向更快解码以缩短输入延迟"
-        }
-      },
       "expert": {
         "enter": "进入专家设置",
         "collapse": "收起专家设置",
@@ -551,7 +555,7 @@
       },
       "audio_bitrate": {
         "label": "音频码率",
-        "description": "目标音频码率（Mb/s）"
+        "description": "目标音频码率（kb/s）"
       },
       "enable_audio_control": {
         "label": "音量控制",

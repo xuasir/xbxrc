@@ -33,6 +33,7 @@ export function useStreamRuntimeHost(options: UseStreamRuntimeHostOptions) {
   const audioVolume = ref(1)
   const microphoneState = ref<StreamMicrophoneSnapshot>(createIdleMicrophoneState('browser'))
   const performanceEnabled = ref(false)
+  const diagnosticsEnabled = ref(false)
   const performanceSnapshot = ref<StreamStats | null>(null)
   const displayOptions = ref<DisplayOptionsValue>({ ...DEFAULT_DISPLAY_OPTIONS })
   const renderProjection = shallowRef<StreamRenderProjection | null>(null)
@@ -81,7 +82,7 @@ export function useStreamRuntimeHost(options: UseStreamRuntimeHostOptions) {
 
       if (event.type === 'connectionStateChanged') {
         if (event.state === 'connected') {
-          startPerformancePolling()
+          refreshStatsPolling()
         }
         if (event.state === 'closed' || event.state === 'failed') {
           clearPerformancePolling()
@@ -118,9 +119,9 @@ export function useStreamRuntimeHost(options: UseStreamRuntimeHostOptions) {
     })
   }
 
-  function startPerformancePolling(): void {
+  function refreshStatsPolling(): void {
     clearPerformancePolling()
-    if (!performanceEnabled.value || runtime.value === null) {
+    if ((!performanceEnabled.value && !diagnosticsEnabled.value) || runtime.value === null) {
       performanceSnapshot.value = null
       return
     }
@@ -130,9 +131,7 @@ export function useStreamRuntimeHost(options: UseStreamRuntimeHostOptions) {
         (snapshot) => {
           performanceSnapshot.value = snapshot
         },
-        () => {
-          performanceSnapshot.value = null
-        },
+        () => {},
       )
     }
 
@@ -260,7 +259,11 @@ export function useStreamRuntimeHost(options: UseStreamRuntimeHostOptions) {
     startRuntime,
     setPerformanceEnabled(enabled: boolean) {
       performanceEnabled.value = enabled
-      startPerformancePolling()
+      refreshStatsPolling()
+    },
+    setDiagnosticsEnabled(enabled: boolean) {
+      diagnosticsEnabled.value = enabled
+      refreshStatsPolling()
     },
     applyDisplayOptions(nextValue: DisplayOptionsValue) {
       if (renderProjection.value === null) {

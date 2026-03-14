@@ -1,4 +1,5 @@
 use crate::event_bridge;
+use crate::mods::runtime_trace::RuntimeTraceRecorderRef;
 use crate::mods::xbxengine::events;
 use std::sync::{Arc, Mutex as StdMutex};
 use tauri::AppHandle;
@@ -41,6 +42,7 @@ pub struct TauriEngineEventBridge {
     pub app_handle: AppHandle,
     pub state: TauriEngineWindowState,
     pub last_runtime_event: Arc<StdMutex<Option<serde_json::Value>>>,
+    pub runtime_trace: RuntimeTraceRecorderRef,
 }
 
 impl TauriEngineWindowHost for TauriEngineEventBridge {
@@ -49,6 +51,8 @@ impl TauriEngineWindowHost for TauriEngineEventBridge {
     }
 
     fn apply_event(&mut self, event: &XbxEngineRuntimeEventDto) {
+        self.runtime_trace
+            .record("xbxengine", "runtimeEventRaw", None, event);
         match event {
             XbxEngineRuntimeEventDto::RuntimePhaseChanged { phase } => {
                 self.state.runtime_phase = Some(phase.clone());

@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use xbox_streaming::{
-    QueueDetails as MonitorQueueDetails, QueueSnapshot as MonitorQueueSnapshot,
+    runtime::RuntimeBweMode as DomainRuntimeBweMode, QueueDetails as MonitorQueueDetails,
+    QueueSnapshot as MonitorQueueSnapshot,
     RenderDisplayOptionsProjection as DomainRenderDisplayOptionsProjection,
     RenderPlanProjection as DomainRenderPlanProjection,
     RuntimeCodecProjection as DomainRuntimeCodecProjection,
@@ -147,6 +148,14 @@ pub enum StreamingRuntimeMode {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub enum StreamingBweMode {
+    FixedRemb,
+    ObservedRemb,
+    Hybrid,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum StreamingRuntimeOwner {
     Browser,
@@ -158,6 +167,35 @@ pub enum StreamingRuntimeOwner {
 pub struct StreamingRuntimeCodecPreference {
     pub mime_type: String,
     pub profiles: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct StreamingRuntimeVideoPipelineProjection {
+    pub feedback_interval_ms: u64,
+    pub nack_window_ms: u64,
+    pub nack_burst_count: u16,
+    pub nack_max_age_ms: u64,
+    pub nack_retry_interval_ms: u64,
+    pub nack_max_retry_count: u8,
+    pub jitter_buffer_min_delay_ms: u64,
+    pub jitter_buffer_max_delay_ms: u64,
+    pub jitter_buffer_max_packets: u16,
+    pub idle_timeout_ms: u64,
+    pub late_frame_drop_threshold_ms: u64,
+    pub backlog_drop_threshold_packets: u16,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct StreamingRuntimeRecoveryProjection {
+    pub first_frame_grace_ms: u64,
+    pub keyframe_request_stall_ms: u64,
+    pub keyframe_loss_burst_threshold: u8,
+    pub decoder_reset_after_keyframe_wait_ms: u64,
+    pub decoder_reset_request_cooldown_ms: u64,
+    pub reconnect_stall_ms: u64,
+    pub stall_recovery_cooldown_ms: u64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -186,6 +224,15 @@ pub struct StreamingRuntimeProjection {
     pub max_video_bitrate_kbps: Option<u32>,
     pub max_audio_bitrate_kbps: Option<u32>,
     pub force_mono_audio: bool,
+    pub bwe_mode: StreamingBweMode,
+    pub forced_remb_kbps: Option<u32>,
+    pub adaptive_remb_enabled: bool,
+    pub remb_floor_kbps: u32,
+    pub remb_ceiling_kbps: u32,
+    pub remb_ramp_up_step_kbps: u32,
+    pub remb_ramp_down_factor: u16,
+    pub video_pipeline: StreamingRuntimeVideoPipelineProjection,
+    pub recovery: StreamingRuntimeRecoveryProjection,
     pub polling_rate_hz: u16,
     pub vibration: bool,
 }
@@ -271,6 +318,48 @@ impl From<DomainRuntimePlanProjection> for StreamingRuntimeProjection {
             max_video_bitrate_kbps: projection.max_video_bitrate_kbps,
             max_audio_bitrate_kbps: projection.max_audio_bitrate_kbps,
             force_mono_audio: projection.force_mono_audio,
+            bwe_mode: match projection.bwe_mode {
+                DomainRuntimeBweMode::FixedRemb => StreamingBweMode::FixedRemb,
+                DomainRuntimeBweMode::ObservedRemb => StreamingBweMode::ObservedRemb,
+                DomainRuntimeBweMode::Hybrid => StreamingBweMode::Hybrid,
+            },
+            forced_remb_kbps: projection.forced_remb_kbps,
+            adaptive_remb_enabled: projection.adaptive_remb_enabled,
+            remb_floor_kbps: projection.remb_floor_kbps,
+            remb_ceiling_kbps: projection.remb_ceiling_kbps,
+            remb_ramp_up_step_kbps: projection.remb_ramp_up_step_kbps,
+            remb_ramp_down_factor: projection.remb_ramp_down_factor,
+            video_pipeline: StreamingRuntimeVideoPipelineProjection {
+                feedback_interval_ms: projection.video_pipeline.feedback_interval_ms,
+                nack_window_ms: projection.video_pipeline.nack_window_ms,
+                nack_burst_count: projection.video_pipeline.nack_burst_count,
+                nack_max_age_ms: projection.video_pipeline.nack_max_age_ms,
+                nack_retry_interval_ms: projection.video_pipeline.nack_retry_interval_ms,
+                nack_max_retry_count: projection.video_pipeline.nack_max_retry_count,
+                jitter_buffer_min_delay_ms: projection.video_pipeline.jitter_buffer_min_delay_ms,
+                jitter_buffer_max_delay_ms: projection.video_pipeline.jitter_buffer_max_delay_ms,
+                jitter_buffer_max_packets: projection.video_pipeline.jitter_buffer_max_packets,
+                idle_timeout_ms: projection.video_pipeline.idle_timeout_ms,
+                late_frame_drop_threshold_ms: projection
+                    .video_pipeline
+                    .late_frame_drop_threshold_ms,
+                backlog_drop_threshold_packets: projection
+                    .video_pipeline
+                    .backlog_drop_threshold_packets,
+            },
+            recovery: StreamingRuntimeRecoveryProjection {
+                first_frame_grace_ms: projection.recovery.first_frame_grace_ms,
+                keyframe_request_stall_ms: projection.recovery.keyframe_request_stall_ms,
+                keyframe_loss_burst_threshold: projection.recovery.keyframe_loss_burst_threshold,
+                decoder_reset_after_keyframe_wait_ms: projection
+                    .recovery
+                    .decoder_reset_after_keyframe_wait_ms,
+                decoder_reset_request_cooldown_ms: projection
+                    .recovery
+                    .decoder_reset_request_cooldown_ms,
+                reconnect_stall_ms: projection.recovery.reconnect_stall_ms,
+                stall_recovery_cooldown_ms: projection.recovery.stall_recovery_cooldown_ms,
+            },
             polling_rate_hz: projection.polling_rate_hz,
             vibration: projection.vibration,
         }
@@ -471,6 +560,7 @@ pub struct StreamingExchangeOfferParams {
     pub session_id: String,
     pub sdp: String,
     pub channel: Option<String>,
+    pub restart: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -481,14 +571,28 @@ pub struct StreamingExchangeOfferResult {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct StreamingExchangeIceParams {
+pub struct StreamingSubmitIceParams {
     pub session_id: String,
     pub candidate: Vec<StreamingIceCandidate>,
+    pub restart: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct StreamingExchangeIceResult {
+pub struct StreamingSubmitIceResult {
+    pub accepted: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StreamingPollIceParams {
+    pub session_id: String,
+    pub restart: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StreamingPollIceResult {
     pub candidates: Vec<StreamingIceCandidate>,
 }
 
@@ -544,7 +648,7 @@ pub struct StreamingSessionPathPayload {
     pub session_path: String,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StreamingConfigSnapshot {
     pub resolution: i64,
     pub xhome_resolution: i64,

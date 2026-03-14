@@ -12,7 +12,8 @@ pub enum StreamingCommand {
     GetSessionProgress(StreamingGetSessionProgressParams),
     CloseSession(StreamingCloseSessionParams),
     ExchangeOffer(StreamingExchangeOfferParams),
-    ExchangeIce(StreamingExchangeIceParams),
+    SubmitIce(StreamingSubmitIceParams),
+    PollIce(StreamingPollIceParams),
     ListActiveSessions(StreamingListActiveSessionsParams),
     DecideRecovery(StreamingDecideRecoveryParams),
 }
@@ -47,8 +48,11 @@ pub async fn handle_rpc(
         StreamingCommand::ExchangeOffer(payload) => Ok(serde_json::to_value(
             service.exchange_offer(payload).await?,
         )?),
-        StreamingCommand::ExchangeIce(payload) => {
-            Ok(serde_json::to_value(service.exchange_ice(payload).await?)?)
+        StreamingCommand::SubmitIce(payload) => {
+            Ok(serde_json::to_value(service.submit_ice(payload).await?)?)
+        }
+        StreamingCommand::PollIce(payload) => {
+            Ok(serde_json::to_value(service.poll_ice(payload).await?)?)
         }
         StreamingCommand::ListActiveSessions(payload) => Ok(serde_json::to_value(
             service.list_active_sessions(payload).await?,

@@ -258,10 +258,9 @@ onBeforeUnmount(() => {
         type="button"
         class="xcloud-page__action-button"
         :scope-id="SPATIAL_NAV_SCOPE_IDS.appShell"
-        :aria-label="t('xcloudPage.actions.refresh')"
-        :on-confirm="handlePrimaryAction"
+        :aria-label="t('xcloudPage.action.ariaLabel')"
         @click="handlePrimaryAction"
-      >
+        >
         {{ t('xcloudPage.actions.refresh') }}
       </Focusable>
     </section>
@@ -326,7 +325,6 @@ onBeforeUnmount(() => {
               ? t('xcloudPage.actions.clearSearch')
               : t('xcloudPage.actions.refresh')
           "
-          :on-confirm="handlePrimaryAction"
           @click="handlePrimaryAction"
         >
           {{
@@ -425,7 +423,6 @@ onBeforeUnmount(() => {
 .xcloud-page {
   display: flex;
   flex-direction: column;
-  gap: var(--ui-page-stack-gap);
   min-height: 100%;
   padding-bottom: var(--ui-space-4xl);
 }
@@ -441,19 +438,22 @@ onBeforeUnmount(() => {
 .xcloud-page__header {
   display: flex;
   flex-direction: column;
-  gap: var(--ui-xcloud-header-gap);
   position: sticky;
-  top: 0;
-  z-index: 1;
-  padding-bottom: 2px;
+  top: calc(var(--ui-app-shell-content-padding-top) * -1);
+  z-index: 10;
+  margin: calc(var(--ui-app-shell-content-padding-top) * -1) calc(var(--ui-page-inset) * -1) 0;
+  padding: var(--ui-app-shell-content-padding-top) var(--ui-page-inset);
+  background: color-mix(in srgb, var(--ui-page-bg), transparent 15%);
+  backdrop-filter: blur(20px);
+  border-bottom: 1px solid var(--color-divider);
 }
 
 .xcloud-page__toolbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
-  padding: 8px 0 0;
+  gap: 24px;
+  padding: 12px 0; /* 给标题和搜索框增加内部垂直居中的余地 */
 }
 
 .xcloud-page__title-block {
@@ -527,6 +527,7 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   gap: var(--ui-space-4xl);
+  margin-top: var(--ui-space-2xl);
 }
 
 .xcloud-page__rail {

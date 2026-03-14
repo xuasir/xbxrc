@@ -15,9 +15,13 @@ pub enum XbxEngineHostRequestDto {
         sdp: String,
         restart: bool,
     },
-    ExchangeIce {
+    SubmitIce {
         session_id: String,
         candidates: Vec<XbxEngineIceCandidateDto>,
+        restart: bool,
+    },
+    PollIce {
+        session_id: String,
         restart: bool,
     },
     KeepAliveRemoteSession {
@@ -34,7 +38,8 @@ pub enum XbxEngineHostResponseDto {
     OfferExchanged {
         answer_sdp: String,
     },
-    IceExchanged {
+    IceSubmitted,
+    IcePolled {
         candidates: Vec<XbxEngineIceCandidateDto>,
     },
     KeepAliveAccepted,

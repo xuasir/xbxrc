@@ -117,6 +117,9 @@ export class WebRtcTransport {
     })
     return peer.createOffer(normalizedOptions).then((offer) => {
       console.info('[player][webrtc] local offer created', summarizeSdp(offer.sdp))
+      if (offer.sdp) {
+        console.info(`[player][webrtc] local offer raw\n${offer.sdp}`)
+      }
       return offer
     })
   }
@@ -124,11 +127,15 @@ export class WebRtcTransport {
   async setLocalDescription(offer: RTCSessionDescriptionInit): Promise<void> {
     await this.ensurePeer().setLocalDescription(offer)
     console.info('[player][webrtc] local description applied', summarizeSdp(offer.sdp))
+    if (offer.sdp) {
+      console.info(`[player][webrtc] local description raw\n${offer.sdp}`)
+    }
   }
 
   async setRemoteAnswer(sdp: string): Promise<void> {
     await this.ensurePeer().setRemoteDescription({ type: 'answer', sdp })
     console.info('[player][webrtc] remote answer applied', summarizeSdp(sdp))
+    console.info(`[player][webrtc] remote answer raw\n${sdp}`)
   }
 
   async addIceCandidate(candidate: IceCandidateLike): Promise<void> {

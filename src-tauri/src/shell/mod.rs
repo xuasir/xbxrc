@@ -73,6 +73,15 @@ async fn build_services(
     let app_handle = app.handle();
     let is_quitting = Arc::new(AtomicBool::new(false));
     let last_runtime_event = Arc::new(StdMutex::new(None));
+    let runtime_trace = Arc::new(
+        mods::runtime_trace::RuntimeTraceRecorder::new().map_err(|error| {
+            AppError::Internal(format!("Failed to init runtime trace: {error}"))
+        })?,
+    );
+    log::info!(
+        "Runtime trace recorder initialized at {}",
+        runtime_trace.path().display()
+    );
 
     let config_service = Arc::new(mods::config::ConfigService::new(app_handle.clone()));
     let config_provider: mods::config::ConfigProviderRef = config_service.clone();
@@ -88,14 +97,17 @@ async fn build_services(
         auth_provider.clone(),
         config_provider.clone(),
     ));
-    let xbxengine_service = Arc::new(mods::xbxengine::PlaceholderXbxEngineService::new(
+    let xbxengine_service = Arc::new(mods::xbxengine::XbxEngineService::new(
+        app_handle.clone(),
         last_runtime_event.clone(),
+        runtime_trace.clone(),
     ));
     let streaming_service = Arc::new(mods::streaming::StreamingService::new(
         auth_provider.clone(),
         config_provider.clone(),
         data_service.clone(),
         xbxengine_service.clone(),
+        runtime_trace.clone(),
     ));
 
     let gamepad_host = ohmygamepad_host::GamepadRuntimeHost::shared()
@@ -118,6 +130,7 @@ async fn build_services(
         config: config_provider,
         data: data_service,
         streaming: streaming_service,
+        runtime_trace,
         xbxengine: xbxengine_service,
         gamepad: gamepad_service,
         startup_flags,

@@ -494,6 +494,7 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
 
   function toggleDiagnostics(): void {
     diagnosticsVisible.value = !diagnosticsVisible.value
+    runtimeHost.setDiagnosticsEnabled(diagnosticsVisible.value)
   }
 
   function setTextInputActive(active: boolean): void {
@@ -538,6 +539,7 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
       performanceVisible.value = false
       diagnosticsVisible.value = false
       runtimeHost.setPerformanceEnabled(false)
+      runtimeHost.setDiagnosticsEnabled(false)
     },
   )
 
@@ -545,6 +547,14 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
     () => enhancements.value.performance.phase,
     (phase) => {
       runtimeHost.setPerformanceEnabled(phase === 'mounted')
+    },
+    { immediate: true },
+  )
+
+  watch(
+    () => enhancements.value.diagnostics.phase,
+    (phase) => {
+      runtimeHost.setDiagnosticsEnabled(phase === 'mounted')
     },
     { immediate: true },
   )
@@ -567,6 +577,7 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
     window.removeEventListener('keydown', handleKeydown)
     resetExecutionWarning()
     runtimeHost.setPerformanceEnabled(false)
+    runtimeHost.setDiagnosticsEnabled(false)
     void closeExecution()
   })
 

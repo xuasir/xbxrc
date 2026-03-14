@@ -156,12 +156,32 @@
       "metrics": {
         "Resolution": "Resolution",
         "Path": "Path",
+        "State": "State",
         "RTT": "RTT",
         "JIT": "JIT",
         "FPS": "FPS",
+        "RecvFPS": "Recv FPS",
+        "DecFPS": "Decode FPS",
+        "PreFPS": "Present FPS",
         "FD": "FD",
         "PL": "PL",
         "Bitrate": "Bitrate",
+        "BWE": "BWE",
+        "PktAge": "Pkt Age",
+        "DecAge": "Dec Age",
+        "PreAge": "Pre Age",
+        "P2D": "Pkt->Dec",
+        "D2P": "Dec->Pre",
+        "P2P": "Pkt->Pre",
+        "InVideo": "In Video",
+        "InAudio": "In Audio",
+        "DecInDrop": "Dec In Drop",
+        "DecOutDrop": "Dec Out Drop",
+        "KeyReq": "Key Req",
+        "Reset": "Reset",
+        "Reco": "Reconnect",
+        "LastAct": "Last Act",
+        "LastWhy": "Last Why",
         "DT": "DT"
       }
     },
@@ -375,22 +395,6 @@
       }
     },
     "streaming": {
-      "presets": {
-        "title": "Policy Presets",
-        "description": "Apply a preset first, then fine-tune in Advanced or Expert sections.",
-        "default": {
-          "label": "Default",
-          "description": "Balanced baseline tuned for stability"
-        },
-        "qualityFirst": {
-          "label": "Quality First",
-          "description": "Increase video/audio bitrate for better visual clarity"
-        },
-        "latencyFirst": {
-          "label": "Latency First",
-          "description": "Lower bitrate and faster decode preference for lower input latency"
-        }
-      },
       "expert": {
         "enter": "Enter Expert Settings",
         "collapse": "Collapse Expert Settings",
@@ -551,7 +555,7 @@
       },
       "audio_bitrate": {
         "label": "Audio Bitrate",
-        "description": "Target audio bitrate in Mb/s"
+        "description": "Target audio bitrate in kb/s"
       },
       "enable_audio_control": {
         "label": "Audio Control",

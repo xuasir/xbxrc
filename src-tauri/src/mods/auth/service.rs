@@ -212,6 +212,8 @@ impl AuthService {
                 self.persistence.persist_auth_bundle(&output.auth_bundle)?;
                 self.runtime
                     .mark_authenticated(output.auth_bundle.app_level)?;
+                // 认证成功后由服务层兜底关闭 OAuth 窗口，避免仅依赖导航回调里的 best-effort close。
+                self.close_auth_window();
                 log::info!("Auth: 交互式登录完成，下游 token 已全部就绪");
                 self.sync_auth_state();
                 Ok(())

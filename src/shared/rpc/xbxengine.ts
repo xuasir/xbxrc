@@ -58,11 +58,91 @@ export interface XbxEngineStatsDto {
   resolution: string
   rtt: string
   fps: number
+  inbound_video_fps?: number
+  decode_fps?: number
+  present_fps?: number
   pl: string
   fl: string
   jit: string
   br: string
   decode: string
+  transport_path?: string
+  transport_state?: string
+  video_rtt_source?: string
+  video_remb_bps?: number
+  inbound_bitrate_kbps?: number
+  inbound_video_bitrate_kbps?: number
+  inbound_audio_bitrate_kbps?: number
+  inbound_bytes_total?: number
+  inbound_video_bytes_total?: number
+  inbound_audio_bytes_total?: number
+  inbound_video_packet_count_total?: number
+  video_decoder_reset_count?: number
+  video_decoder_stalled?: boolean
+  video_renderer_stalled?: boolean
+  packet_age_ms?: number
+  decode_age_ms?: number
+  present_age_ms?: number
+  packet_to_decode_ms?: number
+  decode_to_present_ms?: number
+  packet_to_present_ms?: number
+  video_decode_input_drop_count_total?: number
+  video_decode_output_drop_count_total?: number
+  video_pacer_submit_count_total?: number
+  video_pacer_drop_count_total?: number
+  video_renderer_submit_count_total?: number
+  video_renderer_drop_count_total?: number
+  video_present_overwrite_count_total?: number
+  video_present_submit_count_total?: number
+  recovery_keyframe_request_count?: number
+  recovery_decoder_reset_count?: number
+  recovery_reconnect_count?: number
+  last_recovery_action?: string
+  last_recovery_action_at_ms?: number
+  last_recovery_reason?: string
+  latest_video_packet_gap?: {
+    observation_id: number
+    expected_sequence: number
+    received_sequence: number
+    missing_count: number
+    observed_at_ms: number
+  }
+  latest_video_frame_drop?: {
+    observation_id: number
+    reason: string
+    observed_at_ms: number
+    width: number
+    height: number
+    is_keyframe: boolean
+    queue_depth: number
+  }
+  latest_video_nack_observation?: {
+    observation_id: number
+    action: string
+    first_sequence: number
+    last_sequence: number
+    packet_count: number
+    retry_count: number
+    observed_at_ms: number
+  }
+  latest_video_escalation_observation?: {
+    observation_id: number
+    reason: string
+    action: string
+    observed_at_ms: number
+  }
+  latest_video_bwe_observation?: {
+    observation_id: number
+    mode: string
+    decision_reason: string
+    target_remb_kbps: number
+    observed_remb_kbps?: number | null
+    actual_video_bitrate_kbps: number
+    loss_ratio: number
+    rtt_ms?: number | null
+    transport_path?: string | null
+    observed_at_ms: number
+  }
 }
 
 export type XbxEngineRuntimePhase

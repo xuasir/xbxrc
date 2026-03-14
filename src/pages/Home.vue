@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { Focusable } from '@/navigation/core/vue'
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
+import { Focusable } from '@/navigation/core/vue'
 import seriesXImage from '../assets/console/series-x.png'
 import BrandedLoading from '../components/common/BrandedLoading.vue'
 import ConsoleStatusCard from '../components/common/ConsoleStatusCard.vue'
@@ -174,7 +174,7 @@ onMounted(() => {
         :image-src="card.imageSrc"
         :image-alt="card.title"
         :aria-label="t('homePage.consoleCard.ariaLabel', { name: card.title })"
-        :on-click="() => handleSelectHost(card.host, index)"
+        @click="() => handleSelectHost(card.host, index)"
       />
     </HorizontalListRail>
 
@@ -190,7 +190,6 @@ onMounted(() => {
         class="home-page__refresh-button"
         :scope-id="SPATIAL_NAV_SCOPE_IDS.appShell"
         :aria-label="t('homePage.refresh')"
-        :on-confirm="handleRefresh"
         @click="handleRefresh"
       >
         {{ t('homePage.refresh') }}

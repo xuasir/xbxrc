@@ -6,12 +6,19 @@ pub enum VideoCodec {
     H264,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum FrameValue {
+    Keyframe,
+    Delta,
+}
+
 #[derive(Clone, Debug)]
 pub struct EncodedFrame {
     pub codec: VideoCodec,
 
     pub is_keyframe: bool,
     pub config_changed: bool,
+    pub value: FrameValue,
 
     pub width: u32,
     pub height: u32,

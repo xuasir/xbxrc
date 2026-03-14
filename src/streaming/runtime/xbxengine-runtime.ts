@@ -13,10 +13,6 @@ function toRuntimeReconnectReason(reason: StreamRuntimeReconnectReason) {
   return 'networkLost' as const
 }
 
-function toStreamingMode(targetType: 'home' | 'cloud') {
-  return targetType === 'cloud' ? 'cloudGaming' as const : 'localHost' as const
-}
-
 /**
  * Rust runtime 通过 RPC 适配到同一套 runtime/UI 协议。
  */
@@ -84,7 +80,6 @@ export function createXbxEngineRuntime(options: {
         viewport: {
           viewportId: viewportElementId,
         },
-        mode: toStreamingMode(spec.targetType),
         runtime: spec.runtime,
         render: spec.render,
         audioVolume,
@@ -139,11 +134,48 @@ export function createXbxEngineRuntime(options: {
         resolution: snapshot.resolution,
         rtt: snapshot.rtt,
         fps: snapshot.fps,
+        inboundVideoFps: snapshot.inbound_video_fps,
+        decodeFps: snapshot.decode_fps,
+        presentFps: snapshot.present_fps,
         pl: snapshot.pl,
         fl: snapshot.fl,
         jit: snapshot.jit,
         br: snapshot.br,
         decode: snapshot.decode,
+        transportPath: snapshot.transport_path,
+        transportState: snapshot.transport_state,
+        videoRttSource: snapshot.video_rtt_source,
+        videoRembBps: snapshot.video_remb_bps,
+        inboundBitrateKbps: snapshot.inbound_bitrate_kbps,
+        inboundVideoBitrateKbps: snapshot.inbound_video_bitrate_kbps,
+        inboundAudioBitrateKbps: snapshot.inbound_audio_bitrate_kbps,
+        inboundBytesTotal: snapshot.inbound_bytes_total,
+        inboundVideoBytesTotal: snapshot.inbound_video_bytes_total,
+        inboundAudioBytesTotal: snapshot.inbound_audio_bytes_total,
+        inboundVideoPacketCountTotal: snapshot.inbound_video_packet_count_total,
+        videoDecoderResetCount: snapshot.video_decoder_reset_count,
+        videoDecoderStalled: snapshot.video_decoder_stalled,
+        videoRendererStalled: snapshot.video_renderer_stalled,
+        packetAgeMs: snapshot.packet_age_ms,
+        decodeAgeMs: snapshot.decode_age_ms,
+        presentAgeMs: snapshot.present_age_ms,
+        packetToDecodeMs: snapshot.packet_to_decode_ms,
+        decodeToPresentMs: snapshot.decode_to_present_ms,
+        packetToPresentMs: snapshot.packet_to_present_ms,
+        videoDecodeInputDropCountTotal: snapshot.video_decode_input_drop_count_total,
+        videoDecodeOutputDropCountTotal: snapshot.video_decode_output_drop_count_total,
+        videoPacerSubmitCountTotal: snapshot.video_pacer_submit_count_total,
+        videoPacerDropCountTotal: snapshot.video_pacer_drop_count_total,
+        videoRendererSubmitCountTotal: snapshot.video_renderer_submit_count_total,
+        videoRendererDropCountTotal: snapshot.video_renderer_drop_count_total,
+        videoPresentOverwriteCountTotal: snapshot.video_present_overwrite_count_total,
+        videoPresentSubmitCountTotal: snapshot.video_present_submit_count_total,
+        recoveryKeyframeRequestCount: snapshot.recovery_keyframe_request_count,
+        recoveryDecoderResetCount: snapshot.recovery_decoder_reset_count,
+        recoveryReconnectCount: snapshot.recovery_reconnect_count,
+        lastRecoveryAction: snapshot.last_recovery_action,
+        lastRecoveryActionAtMs: snapshot.last_recovery_action_at_ms,
+        lastRecoveryReason: snapshot.last_recovery_reason,
       }
     },
     subscribe(listener) {

@@ -117,6 +117,9 @@ onBeforeUnmount(() => {
   font-size: var(--ui-rail-hint-size);
   line-height: 1.4;
   color: var(--color-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 500;
 }
 
 .horizontal-list-rail__viewport {
@@ -130,6 +133,7 @@ onBeforeUnmount(() => {
   scroll-padding-inline: var(--shelf-scroll-padding);
   scrollbar-width: none;
   -ms-overflow-style: none;
+  scroll-snap-type: x mandatory;
 }
 
 .horizontal-list-rail__viewport::-webkit-scrollbar {
@@ -140,5 +144,9 @@ onBeforeUnmount(() => {
   display: flex;
   gap: var(--shelf-row-gap);
   min-width: max-content;
+}
+
+.horizontal-list-rail__scroller > * {
+  scroll-snap-align: start;
 }
 </style>

@@ -9,7 +9,6 @@ interface SpatialNavIconButtonProps {
   round?: boolean
   active?: boolean
   onClick?: () => void
-  onConfirm?: () => void
 }
 
 const props = withDefaults(defineProps<SpatialNavIconButtonProps>(), {
@@ -18,7 +17,6 @@ const props = withDefaults(defineProps<SpatialNavIconButtonProps>(), {
   round: false,
   active: false,
   onClick: undefined,
-  onConfirm: undefined,
 })
 </script>
 
@@ -29,7 +27,6 @@ const props = withDefaults(defineProps<SpatialNavIconButtonProps>(), {
     type="button"
     class="sn-icon-button"
     :class="{ 'sn-icon-button--round': props.round, 'sn-icon-button--active': props.active }"
-    :on-confirm="props.onConfirm"
     :aria-label="props.label"
     @click="props.onClick"
   >

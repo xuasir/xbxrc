@@ -364,11 +364,11 @@ export const CONFIG_FIELD_DEFINITIONS: Record<string, SettingFieldDefinition> = 
   },
   audio_bitrate: {
     label: 'Audio Bitrate',
-    description: 'Target audio bitrate in Mb/s',
+    description: 'Target audio bitrate in kb/s',
     control: 'numberInput',
     input: {
       min: 0,
-      max: 200,
+      max: 512,
       step: 1,
     },
   },

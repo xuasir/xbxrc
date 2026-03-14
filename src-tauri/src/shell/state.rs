@@ -16,6 +16,7 @@ pub struct AppState {
     pub config: mods::config::ConfigProviderRef,
     pub data: mods::data::DataProviderRef,
     pub streaming: mods::streaming::StreamingServiceRef,
+    pub runtime_trace: mods::runtime_trace::RuntimeTraceRecorderRef,
     pub xbxengine: mods::xbxengine::XbxEngineProviderRef,
     pub gamepad: mods::gamepad::GamepadProviderRef,
     pub startup_flags: Arc<RwLock<StartupFlagsState>>,

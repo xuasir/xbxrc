@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { Focusable, FocusScope } from '@/navigation/core/vue'
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { Focusable, FocusScope } from '@/navigation/core/vue'
 
 interface SettingSingleSelectOption {
   value: string | number
@@ -130,9 +130,15 @@ onBeforeUnmount(() => {
 
           <header class="setting-single-select-sheet__header">
             <div class="setting-single-select-sheet__header-copy">
-              <p class="setting-single-select-sheet__eyebrow">{{ t('setting.editor.eyebrow') }}</p>
-              <h2 class="setting-single-select-sheet__title">{{ props.title }}</h2>
-              <p v-if="props.hint" class="setting-single-select-sheet__hint">{{ props.hint }}</p>
+              <p class="setting-single-select-sheet__eyebrow">
+                {{ t('setting.editor.eyebrow') }}
+              </p>
+              <h2 class="setting-single-select-sheet__title">
+                {{ props.title }}
+              </h2>
+              <p v-if="props.hint" class="setting-single-select-sheet__hint">
+                {{ props.hint }}
+              </p>
             </div>
 
             <Focusable
@@ -141,7 +147,6 @@ onBeforeUnmount(() => {
               type="button"
               class="setting-single-select-sheet__close"
               :scope-id="props.scopeId"
-              :on-confirm="handleClose"
               :on-back="handleClose"
               :aria-label="t('setting.editor.cancel')"
               @click="handleClose"
@@ -164,7 +169,6 @@ onBeforeUnmount(() => {
                 }"
                 :scope-id="props.scopeId"
                 :aria-label="option.label"
-                :on-confirm="() => emit('select', option.value)"
                 :on-back="handleClose"
                 @click="emit('select', option.value)"
               >

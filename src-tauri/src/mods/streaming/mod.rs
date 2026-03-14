@@ -24,14 +24,16 @@ pub trait StreamingProvider: Send + Sync {
         &self,
         params: StreamingCloseSessionParams,
     ) -> AppResult<StreamingCloseSessionResult>;
+    async fn send_keepalive(&self, session_id: String) -> AppResult<bool>;
     async fn exchange_offer(
         &self,
         params: StreamingExchangeOfferParams,
     ) -> AppResult<StreamingExchangeOfferResult>;
-    async fn exchange_ice(
+    async fn submit_ice(
         &self,
-        params: StreamingExchangeIceParams,
-    ) -> AppResult<StreamingExchangeIceResult>;
+        params: StreamingSubmitIceParams,
+    ) -> AppResult<StreamingSubmitIceResult>;
+    async fn poll_ice(&self, params: StreamingPollIceParams) -> AppResult<StreamingPollIceResult>;
     async fn list_active_sessions(
         &self,
         params: StreamingListActiveSessionsParams,

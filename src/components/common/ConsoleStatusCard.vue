@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { Direction } from '@/navigation/core'
-import { Focusable } from '@/navigation/core/vue'
 import { computed } from 'vue'
+import { Focusable } from '@/navigation/core/vue'
 
 interface SpatialNavNodeIndex {
   row?: number
@@ -24,7 +24,6 @@ interface ConsoleStatusCardProps {
   index?: SpatialNavNodeIndex
   disabled?: boolean
   onClick?: () => void
-  onConfirm?: () => void
 }
 
 const props = withDefaults(defineProps<ConsoleStatusCardProps>(), {
@@ -34,7 +33,6 @@ const props = withDefaults(defineProps<ConsoleStatusCardProps>(), {
   index: undefined,
   disabled: false,
   onClick: undefined,
-  onConfirm: undefined,
 })
 
 // 统一生成可读的无障碍文案，避免页面每次重复拼接。
@@ -52,7 +50,6 @@ const resolvedAriaLabel = computed(() => {
     :scope-id="props.scopeId"
     :disabled="props.disabled"
     :aria-label="resolvedAriaLabel"
-    :on-confirm="props.onConfirm ?? props.onClick"
     @click="props.onClick"
   >
     <span class="console-status-card__media" aria-hidden="true">

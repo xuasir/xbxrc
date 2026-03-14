@@ -55,7 +55,7 @@
   --color-focus-bg: rgba(255, 255, 255, 0.12);
   --color-focus-bg-strong: rgba(255, 255, 255, 0.2);
 
-  --shadow-xbox-focus: 0 0 0 2px var(--color-focus-ring);
+  --shadow-xbox-focus: 0 0 0 2px var(--color-bg), 0 0 0 5px var(--color-focus-ring), 0 12px 24px rgba(0, 0, 0, 0.5);
   --shadow-xbox-panel: 0 24px 48px rgba(0, 0, 0, 0.8), inset 0 1px 1px rgba(255, 255, 255, 0.1);
 
   --font-weight-black: 900;

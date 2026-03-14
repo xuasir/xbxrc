@@ -46,11 +46,47 @@ export interface StreamPerformanceSnapshot {
   rtt?: string | number
   jit?: string | number
   fps?: string | number
+  inboundVideoFps?: number
+  decodeFps?: number
+  presentFps?: number
   fl?: string | number
   pl?: string | number
   br?: string | number
   decode?: string | number
   transportPath?: string
+  transportState?: string
+  videoRttSource?: string
+  videoRembBps?: number
+  inboundBitrateKbps?: number
+  inboundVideoBitrateKbps?: number
+  inboundAudioBitrateKbps?: number
+  inboundBytesTotal?: number
+  inboundVideoBytesTotal?: number
+  inboundAudioBytesTotal?: number
+  inboundVideoPacketCountTotal?: number
+  videoDecoderResetCount?: number
+  videoDecoderStalled?: boolean
+  videoRendererStalled?: boolean
+  packetAgeMs?: number
+  decodeAgeMs?: number
+  presentAgeMs?: number
+  packetToDecodeMs?: number
+  decodeToPresentMs?: number
+  packetToPresentMs?: number
+  videoDecodeInputDropCountTotal?: number
+  videoDecodeOutputDropCountTotal?: number
+  videoPacerSubmitCountTotal?: number
+  videoPacerDropCountTotal?: number
+  videoRendererSubmitCountTotal?: number
+  videoRendererDropCountTotal?: number
+  videoPresentOverwriteCountTotal?: number
+  videoPresentSubmitCountTotal?: number
+  recoveryKeyframeRequestCount?: number
+  recoveryDecoderResetCount?: number
+  recoveryReconnectCount?: number
+  lastRecoveryAction?: string
+  lastRecoveryActionAtMs?: number
+  lastRecoveryReason?: string
 }
 
 export interface StreamSessionDiagnosticsSnapshot {

@@ -13,10 +13,12 @@ import type {
   StreamingCloseSessionResult,
   StreamingDecideRecoveryParams,
   StreamingDecideRecoveryResult,
-  StreamingExchangeIceParams,
-  StreamingExchangeIceResult,
   StreamingExchangeOfferParams,
   StreamingExchangeOfferResult,
+  StreamingPollIceParams,
+  StreamingPollIceResult,
+  StreamingSubmitIceParams,
+  StreamingSubmitIceResult,
   StreamingGetSessionProgressParams,
   StreamingListActiveSessionsParams,
   StreamingListActiveSessionsResult,
@@ -220,8 +222,8 @@ export interface XBoxRpcSchema {
     >
     closeSession: RpcMethod<StreamingCloseSessionParams, StreamingCloseSessionResult>
     exchangeOffer: RpcMethod<StreamingExchangeOfferParams, StreamingExchangeOfferResult>
-
-    exchangeIce: RpcMethod<StreamingExchangeIceParams, StreamingExchangeIceResult>
+    submitIce: RpcMethod<StreamingSubmitIceParams, StreamingSubmitIceResult>
+    pollIce: RpcMethod<StreamingPollIceParams, StreamingPollIceResult>
     listActiveSessions: RpcMethod<
       StreamingListActiveSessionsParams,
       StreamingListActiveSessionsResult

@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { Focusable } from '@/navigation/core/vue'
 import { computed } from 'vue'
+import { Focusable } from '@/navigation/core/vue'
 
 interface SpatialNavTabItem {
   key: string
@@ -59,7 +59,6 @@ function isActiveTab(tabKey: string): boolean {
       :class="{ 'sn-tabs__item--active': isActiveTab(tab.key) }"
       :disabled="tab.disabled"
       :aria-label="tab.label"
-      :on-confirm="() => handleSelect(tab.key)"
       @click="handleSelect(tab.key)"
     >
       <span class="sn-tabs__label">{{ tab.label }}</span>

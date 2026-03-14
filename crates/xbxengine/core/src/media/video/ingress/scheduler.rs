@@ -1,7 +1,7 @@
 use std::collections::VecDeque;
 use std::time::{Duration, Instant};
 
-use crate::media::video::types::{EncodedFrame, VideoCodec};
+use crate::media::video::types::{EncodedFrame, FrameValue, VideoCodec};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum IngressDecision {
@@ -21,6 +21,7 @@ pub trait FrameScheduler: Send {
 pub struct VideoIngress {
     queue: VecDeque<EncodedFrame>,
     max_size: usize,
+    late_frame_drop_threshold: Duration,
     waiting_keyframe: bool,
     current_width: u32,
     current_height: u32,
@@ -28,10 +29,11 @@ pub struct VideoIngress {
 }
 
 impl VideoIngress {
-    pub fn new(max_size: usize) -> Self {
+    pub fn new(max_size: usize, late_frame_drop_threshold: Duration) -> Self {
         Self {
             queue: VecDeque::with_capacity(max_size),
             max_size,
+            late_frame_drop_threshold,
             waiting_keyframe: true,
             current_width: 0,
             current_height: 0,
@@ -43,6 +45,10 @@ impl VideoIngress {
     pub fn start_reconfigure(&mut self) {
         self.queue.clear();
         self.waiting_keyframe = true;
+    }
+
+    pub fn queue_depth(&self) -> usize {
+        self.queue.len()
     }
 }
 
@@ -81,9 +87,17 @@ impl FrameScheduler for VideoIngress {
             return IngressDecision::WaitKeyframe;
         }
 
-        // Rule 2: Delta 晚到即丢弃 (now > target_playout + 500ms)
-        // 放宽限制：低延迟场景宁可播晚帧也不愿意频繁断流等待关键帧。
-        if now > frame.target_playout_time + Duration::from_millis(500) {
+        let frame_late_threshold = match frame.value {
+            // 关键帧更值得保留，给完整晚帧窗口。
+            FrameValue::Keyframe => self.late_frame_drop_threshold,
+            // delta 帧价值更低，晚到窗口减半，避免 backlog 继续累积。
+            FrameValue::Delta => self
+                .late_frame_drop_threshold
+                .div_f32(2.0)
+                .max(Duration::from_millis(33)),
+        };
+
+        if now > frame.target_playout_time + frame_late_threshold {
             crate::xbx_log_warn!(
                 "[VideoIngress] frame too late, dropping. now={:?}, target={:?}",
                 now,
@@ -94,7 +108,10 @@ impl FrameScheduler for VideoIngress {
 
         // Rule 3: Backlog 控制
         if self.queue.len() >= self.max_size {
-            // drop oldest delta
+            // backlog 时优先丢低价值 delta，避免关键帧被队列吞掉。
+            if frame.value == FrameValue::Delta {
+                return IngressDecision::DropBacklog;
+            }
             self.queue.pop_front();
             self.queue.push_back(frame);
             return IngressDecision::DropBacklog;
@@ -106,5 +123,54 @@ impl FrameScheduler for VideoIngress {
 
     fn pop(&mut self) -> Option<EncodedFrame> {
         self.queue.pop_front()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{FrameScheduler, IngressDecision, VideoIngress};
+    use crate::media::video::types::{EncodedFrame, FrameValue, VideoCodec};
+    use bytes::Bytes;
+    use std::time::{Duration, Instant};
+
+    fn make_frame(
+        now: Instant,
+        value: FrameValue,
+        is_keyframe: bool,
+        target_offset_ms: i64,
+    ) -> EncodedFrame {
+        EncodedFrame {
+            codec: VideoCodec::H264,
+            is_keyframe,
+            config_changed: false,
+            value,
+            width: 1920,
+            height: 1080,
+            rtp_timestamp: 1,
+            assembled_at: now,
+            target_playout_time: if target_offset_ms >= 0 {
+                now + Duration::from_millis(target_offset_ms as u64)
+            } else {
+                now - Duration::from_millis(target_offset_ms.unsigned_abs())
+            },
+            payload: Bytes::from_static(b"x"),
+        }
+    }
+
+    #[test]
+    fn delta_frame_drops_earlier_than_keyframe() {
+        let now = Instant::now();
+        let mut ingress = VideoIngress::new(4, Duration::from_millis(250));
+
+        assert_eq!(
+            ingress.submit(make_frame(now, FrameValue::Keyframe, true, 0), now),
+            IngressDecision::Submit
+        );
+
+        let late_delta = make_frame(now, FrameValue::Delta, false, -150);
+        assert_eq!(ingress.submit(late_delta, now), IngressDecision::DropLate);
+
+        let late_keyframe = make_frame(now, FrameValue::Keyframe, true, -150);
+        assert_eq!(ingress.submit(late_keyframe, now), IngressDecision::Submit);
     }
 }

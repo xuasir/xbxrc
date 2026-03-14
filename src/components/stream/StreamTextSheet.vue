@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { Focusable, FocusScope } from '@/navigation/core/vue'
 import { computed, nextTick, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { Focusable, FocusScope } from '@/navigation/core/vue'
 
 interface StreamTextSheetProps {
   open: boolean
@@ -62,7 +62,7 @@ watch(
   <Transition name="stream-text-sheet-transition">
     <div v-if="props.open" class="stream-text-sheet-layer">
       <div class="stream-text-sheet-backdrop" @click="handleClose" />
-      
+
       <FocusScope
         :id="props.scopeId"
         as="section"
@@ -86,7 +86,6 @@ watch(
           :id="fieldNodeId"
           as="div"
           class="stream-text-sheet__field-focus"
-          :on-confirm="focusInput"
           :on-back="handleClose"
           @click="focusInput"
         >
@@ -108,7 +107,6 @@ watch(
             as="button"
             type="button"
             class="stream-text-sheet__action"
-            :on-confirm="handleClose"
             :on-back="handleClose"
             @click="handleClose"
           >
@@ -121,7 +119,6 @@ watch(
             type="button"
             class="stream-text-sheet__action stream-text-sheet__action--primary"
             :disabled="isEmpty || props.loading"
-            :on-confirm="handleSubmit"
             :on-back="handleClose"
             @click="handleSubmit"
           >

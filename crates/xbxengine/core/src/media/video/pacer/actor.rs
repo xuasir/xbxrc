@@ -1,10 +1,11 @@
 use std::sync::mpsc::{self, Receiver, SyncSender, TrySendError};
+use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 
+use crate::api::backend::XbxEngineMediaRuntimeStats;
 use crate::media::video::render::actor::RendererActorHandle;
 use crate::media::video::types::DecodedFrame;
-use std::sync::Arc;
 
 pub enum PacerMsg {
     Frame(DecodedFrame),
@@ -17,13 +18,17 @@ pub struct PacerActorHandle {
 }
 
 impl PacerActorHandle {
-    pub fn new(renderer: Arc<RendererActorHandle>, refresh_interval_ms: u64) -> Self {
+    pub fn new(
+        renderer: Arc<RendererActorHandle>,
+        runtime_stats: Arc<Mutex<XbxEngineMediaRuntimeStats>>,
+        refresh_interval_ms: u64,
+    ) -> Self {
         let (tx, rx) = mpsc::sync_channel(2);
 
         thread::Builder::new()
             .name("XbxPacerActor".into())
             .spawn(move || {
-                run_pacer_loop(rx, renderer, refresh_interval_ms);
+                run_pacer_loop(rx, renderer, runtime_stats, refresh_interval_ms);
             })
             .expect("Failed to spawn pacer actor thread");
 
@@ -46,20 +51,29 @@ impl PacerActorHandle {
 fn run_pacer_loop(
     rx: Receiver<PacerMsg>,
     renderer: Arc<RendererActorHandle>,
+    runtime_stats: Arc<Mutex<XbxEngineMediaRuntimeStats>>,
     refresh_interval_ms: u64,
 ) {
-    let refresh_interval = Duration::from_millis(refresh_interval_ms);
+    let _refresh_interval = Duration::from_millis(refresh_interval_ms);
     let catch_up_threshold = Duration::from_millis(500);
     let mut catch_up_mode = false;
 
     while let Ok(msg) = rx.recv() {
         match msg {
             PacerMsg::Frame(frame) => {
+                if let Ok(mut stats) = runtime_stats.lock() {
+                    stats.video_pacer_submit_count_total =
+                        stats.video_pacer_submit_count_total.saturating_add(1);
+                }
                 let now = Instant::now();
                 let deadline = frame.pts;
 
                 if catch_up_mode {
                     if now > deadline + catch_up_threshold {
+                        if let Ok(mut stats) = runtime_stats.lock() {
+                            stats.video_pacer_drop_count_total =
+                                stats.video_pacer_drop_count_total.saturating_add(1);
+                        }
                         continue;
                     } else {
                         catch_up_mode = false;
@@ -69,6 +83,10 @@ fn run_pacer_loop(
                 // If massive backlog, enter catch_up_mode
                 if now > deadline + catch_up_threshold {
                     catch_up_mode = true;
+                    if let Ok(mut stats) = runtime_stats.lock() {
+                        stats.video_pacer_drop_count_total =
+                            stats.video_pacer_drop_count_total.saturating_add(1);
+                    }
                     continue;
                 }
 
@@ -85,6 +103,10 @@ fn run_pacer_loop(
                 // Render queue size 1 as per RFC (or renderer limits itself).
                 // Renderer handles immediate flip.
                 if renderer.submit(frame).is_err() {
+                    if let Ok(mut stats) = runtime_stats.lock() {
+                        stats.video_pacer_drop_count_total =
+                            stats.video_pacer_drop_count_total.saturating_add(1);
+                    }
                     crate::xbx_log_warn!("[XbxPacerActor] renderer queue full, frame dropped!");
                 }
             }

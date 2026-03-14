@@ -1,6 +1,7 @@
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 use std::sync::Arc;
 
@@ -152,6 +153,13 @@ where
 {
     pub(crate) provider: P,
     pub(crate) sessions: tokio::sync::RwLock<SessionRuntimeStore<S>>,
+    pub(crate) signaling: tokio::sync::RwLock<HashMap<String, SessionSignalingState>>,
+}
+
+#[derive(Debug, Clone, Default)]
+pub(crate) struct SessionSignalingState {
+    pub last_polled_ice: Option<Vec<IceCandidate>>,
+    pub restart_baseline_ice: Option<Vec<IceCandidate>>,
 }
 
 impl<S, P> SessionFlowService<S, P>
@@ -164,6 +172,7 @@ where
             inner: Arc::new(SessionFlowServiceInner {
                 provider,
                 sessions: tokio::sync::RwLock::new(SessionRuntimeStore::default()),
+                signaling: tokio::sync::RwLock::new(HashMap::new()),
             }),
         }
     }
@@ -321,6 +330,7 @@ where
         session_id: &str,
         channel: Option<&str>,
         sdp: &str,
+        restart: bool,
     ) -> Result<AnswerPayload, SessionFlowError> {
         let record = self.get_session_record(session_id).await;
         let Some(record) = record else {
@@ -329,6 +339,13 @@ where
         let plan = &record.plan;
         let poll_interval_ms = plan.session.schedule.offer_poll_interval_ms.max(100);
         let api = self.create_signaling_api(plan).await?;
+        let previous_answer = if restart {
+            api.get_sdp_exchange_response(session_id)
+                .await
+                .map_err(map_webapi_error)?
+        } else {
+            None
+        };
 
         if channel == Some("chat") {
             api.send_chat_sdp(session_id, sdp)
@@ -345,6 +362,7 @@ where
                 .get_sdp_exchange_response(session_id)
                 .await
                 .map_err(map_webapi_error)?;
+            let answer = filter_stale_offer_response(answer, previous_answer.as_ref(), restart);
             let session_exists = self.get_session_record(session_id).await.is_some();
             let decision = decide_offer_poll(answer.is_some(), session_exists);
 
@@ -361,10 +379,42 @@ where
         }
     }
 
-    pub async fn exchange_ice(
+    pub async fn submit_ice(
         &self,
         session_id: &str,
         candidates: &[IceCandidate],
+        restart: bool,
+    ) -> Result<(), SessionFlowError> {
+        let record = self.get_session_record(session_id).await;
+        let Some(record) = record else {
+            return Err(missing_session_error(session_id));
+        };
+        let plan = &record.plan;
+        let api = self.create_signaling_api(plan).await?;
+        let restart_baseline = if restart {
+            api.get_ice_exchange_response(session_id)
+                .await
+                .map_err(map_webapi_error)?
+        } else {
+            None
+        };
+
+        api.send_ice(session_id, candidates)
+            .await
+            .map_err(map_webapi_error)?;
+        let mut signaling = self.inner.signaling.write().await;
+        let state = signaling.entry(session_id.to_string()).or_default();
+        if restart {
+            state.restart_baseline_ice = restart_baseline;
+            state.last_polled_ice = None;
+        }
+        Ok(())
+    }
+
+    pub async fn poll_ice(
+        &self,
+        session_id: &str,
+        restart: bool,
     ) -> Result<Vec<IceCandidate>, SessionFlowError> {
         let record = self.get_session_record(session_id).await;
         let Some(record) = record else {
@@ -373,16 +423,14 @@ where
         let plan = &record.plan;
         let poll_interval_ms = plan.session.schedule.ice_poll_interval_ms.max(100);
         let api = self.create_signaling_api(plan).await?;
-
-        api.send_ice(session_id, candidates)
-            .await
-            .map_err(map_webapi_error)?;
-
         loop {
             let response = api
                 .get_ice_exchange_response(session_id)
                 .await
                 .map_err(map_webapi_error)?;
+            let response = self
+                .filter_polled_ice_response(session_id, response, restart)
+                .await;
             let session_exists = self.get_session_record(session_id).await.is_some();
             let decision = decide_ice_poll(response.as_deref(), session_exists);
 
@@ -525,6 +573,7 @@ where
 
     async fn clear_session(&self, session_id: &str) {
         let _ = self.inner.sessions.write().await.remove(session_id);
+        let _ = self.inner.signaling.write().await.remove(session_id);
     }
 
     async fn create_session_api(
@@ -550,6 +599,53 @@ where
 
         Ok(WebApiSignalingGateway::new(plan.clone(), token))
     }
+
+    async fn filter_polled_ice_response(
+        &self,
+        session_id: &str,
+        response: Option<Vec<IceCandidate>>,
+        restart: bool,
+    ) -> Option<Vec<IceCandidate>> {
+        let mut signaling = self.inner.signaling.write().await;
+        let state = signaling.entry(session_id.to_string()).or_default();
+        let response =
+            filter_stale_ice_response(response, state.restart_baseline_ice.as_deref(), restart);
+        if response.as_deref() == state.last_polled_ice.as_deref() {
+            return None;
+        }
+        if let Some(candidates) = response.as_ref() {
+            state.last_polled_ice = Some(candidates.clone());
+        }
+        response
+    }
+}
+
+fn filter_stale_offer_response(
+    answer: Option<AnswerPayload>,
+    previous_answer: Option<&AnswerPayload>,
+    restart: bool,
+) -> Option<AnswerPayload> {
+    if !restart {
+        return answer;
+    }
+    if answer.as_ref() == previous_answer {
+        return None;
+    }
+    answer
+}
+
+fn filter_stale_ice_response(
+    candidates: Option<Vec<IceCandidate>>,
+    previous_candidates: Option<&[IceCandidate]>,
+    restart: bool,
+) -> Option<Vec<IceCandidate>> {
+    if !restart {
+        return candidates;
+    }
+    if candidates.as_deref() == previous_candidates {
+        return None;
+    }
+    candidates
 }
 
 pub(crate) fn missing_session_error(session_id: &str) -> SessionFlowError {
@@ -781,5 +877,39 @@ mod tests {
 
         assert_eq!(progress.phase, SessionPhase::SessionReady);
         assert_eq!(progress.status_text_key, "streamPage.status.startingPlayer");
+    }
+
+    #[test]
+    fn restart_offer_filter_ignores_previous_answer_snapshot() {
+        let answer = AnswerPayload {
+            sdp: "answer-1".to_string(),
+            message_type: Some("answer".to_string()),
+        };
+
+        assert_eq!(
+            filter_stale_offer_response(Some(answer.clone()), Some(&answer), true),
+            None
+        );
+        assert_eq!(
+            filter_stale_offer_response(Some(answer.clone()), Some(&answer), false),
+            Some(answer)
+        );
+    }
+
+    #[test]
+    fn restart_ice_filter_ignores_previous_candidate_snapshot() {
+        let candidates = vec![IceCandidate {
+            candidate: "a=candidate:1 1 UDP 1 10.0.0.1 9000 typ host".to_string(),
+            ..Default::default()
+        }];
+
+        assert_eq!(
+            filter_stale_ice_response(Some(candidates.clone()), Some(&candidates), true),
+            None
+        );
+        assert_eq!(
+            filter_stale_ice_response(Some(candidates.clone()), Some(&candidates), false),
+            Some(candidates)
+        );
     }
 }
