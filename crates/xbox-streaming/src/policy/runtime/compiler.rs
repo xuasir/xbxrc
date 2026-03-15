@@ -85,42 +85,43 @@ pub fn resolve_runtime_mode(
 fn compile_forced_remb_kbps(mode: RuntimeMode) -> Option<u32> {
     match mode {
         RuntimeMode::WebRtcDirect => Some(50_000),
-        RuntimeMode::RustOwned => Some(100_000),
+        // 内网主机串流优先榨高码率上限，不让 target 过早贴着保守天花板。
+        RuntimeMode::RustOwned => Some(150_000),
     }
 }
 
 fn compile_bwe_mode(mode: RuntimeMode) -> RuntimeBweMode {
     match mode {
         RuntimeMode::WebRtcDirect => RuntimeBweMode::FixedRemb,
-        RuntimeMode::RustOwned => RuntimeBweMode::Hybrid,
+        RuntimeMode::RustOwned => RuntimeBweMode::TwccGcc,
     }
 }
 
 fn compile_remb_floor_kbps(mode: RuntimeMode) -> u32 {
     match mode {
         RuntimeMode::WebRtcDirect => 8_000,
-        RuntimeMode::RustOwned => 12_000,
+        RuntimeMode::RustOwned => 25_000,
     }
 }
 
 fn compile_remb_ceiling_kbps(mode: RuntimeMode) -> u32 {
     match mode {
         RuntimeMode::WebRtcDirect => 50_000,
-        RuntimeMode::RustOwned => 100_000,
+        RuntimeMode::RustOwned => 150_000,
     }
 }
 
 fn compile_remb_ramp_up_step_kbps(mode: RuntimeMode) -> u32 {
     match mode {
         RuntimeMode::WebRtcDirect => 2_000,
-        RuntimeMode::RustOwned => 4_000,
+        RuntimeMode::RustOwned => 12_000,
     }
 }
 
 fn compile_remb_ramp_down_factor(mode: RuntimeMode) -> u16 {
     match mode {
         RuntimeMode::WebRtcDirect => 850,
-        RuntimeMode::RustOwned => 700,
+        RuntimeMode::RustOwned => 900,
     }
 }
 
@@ -141,18 +142,18 @@ fn compile_video_pipeline(mode: RuntimeMode) -> RuntimeVideoPipelinePlan {
             backlog_drop_threshold_packets: 10,
         },
         RuntimeMode::RustOwned => RuntimeVideoPipelinePlan {
-            feedback_interval_ms: 250,
-            nack_window_ms: 200,
-            nack_burst_count: 6,
-            nack_max_age_ms: 120,
-            nack_retry_interval_ms: 40,
-            nack_max_retry_count: 3,
-            jitter_buffer_min_delay_ms: 5,
-            jitter_buffer_max_delay_ms: 10,
-            jitter_buffer_max_packets: 512,
-            idle_timeout_ms: 100,
-            late_frame_drop_threshold_ms: 250,
-            backlog_drop_threshold_packets: 6,
+            feedback_interval_ms: 100,
+            nack_window_ms: 160,
+            nack_burst_count: 8,
+            nack_max_age_ms: 100,
+            nack_retry_interval_ms: 30,
+            nack_max_retry_count: 4,
+            jitter_buffer_min_delay_ms: 3,
+            jitter_buffer_max_delay_ms: 8,
+            jitter_buffer_max_packets: 384,
+            idle_timeout_ms: 80,
+            late_frame_drop_threshold_ms: 180,
+            backlog_drop_threshold_packets: 4,
         },
     }
 }
@@ -169,13 +170,13 @@ fn compile_recovery(mode: RuntimeMode) -> RuntimeRecoveryPlan {
             stall_recovery_cooldown_ms: 6_000,
         },
         RuntimeMode::RustOwned => RuntimeRecoveryPlan {
-            first_frame_grace_ms: 2_500,
-            keyframe_request_stall_ms: 450,
+            first_frame_grace_ms: 1_800,
+            keyframe_request_stall_ms: 300,
             keyframe_loss_burst_threshold: 2,
-            decoder_reset_after_keyframe_wait_ms: 150,
+            decoder_reset_after_keyframe_wait_ms: 120,
             decoder_reset_request_cooldown_ms: 450,
-            reconnect_stall_ms: 1_400,
-            stall_recovery_cooldown_ms: 2_000,
+            reconnect_stall_ms: 2_400,
+            stall_recovery_cooldown_ms: 1_600,
         },
     }
 }

@@ -54,7 +54,7 @@ fn run_pacer_loop(
     runtime_stats: Arc<Mutex<XbxEngineMediaRuntimeStats>>,
     refresh_interval_ms: u64,
 ) {
-    let _refresh_interval = Duration::from_millis(refresh_interval_ms);
+    let max_sleep = Duration::from_millis(refresh_interval_ms.max(1));
     let catch_up_threshold = Duration::from_millis(500);
     let mut catch_up_mode = false;
 
@@ -97,7 +97,15 @@ fn run_pacer_loop(
                 } else {
                     // Early frame
                     let sleep_time = deadline.duration_since(now);
-                    thread::sleep(sleep_time);
+                    if sleep_time <= max_sleep {
+                        thread::sleep(sleep_time);
+                    } else {
+                        // 保护：playout 目标异常偏大时不阻塞渲染节奏，优先快速出帧。
+                        crate::xbx_log_debug!(
+                            "[XbxPacerActor] skip long sleep: {:.2}ms",
+                            sleep_time.as_millis()
+                        );
+                    }
                 }
 
                 // Render queue size 1 as per RFC (or renderer limits itself).

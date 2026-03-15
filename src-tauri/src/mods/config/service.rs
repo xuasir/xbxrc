@@ -129,6 +129,11 @@ impl ConfigProvider for ConfigService {
                 .get("vibration")
                 .and_then(Value::as_bool)
                 .unwrap_or(true),
+            vibration_strength: normalized
+                .get("vibration_strength")
+                .and_then(Value::as_str)
+                .unwrap_or("realistic")
+                .to_string(),
             stream_runtime_mode: normalized
                 .get("stream_runtime_mode")
                 .and_then(Value::as_str)

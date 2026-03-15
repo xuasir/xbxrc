@@ -1,5 +1,19 @@
 use std::time::{Duration, Instant};
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum KeyframeReasonClass {
+    WaitKeyframe,
+    AdapterIdleTimeout,
+    TransportRecoveredLate,
+    TransportSampleLoss,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum DecoderResetReasonClass {
+    Reconfigure,
+    TransportExpiredDeadline,
+}
+
 pub enum VideoEscalationReason {
     WaitKeyframe,
     Reconfigure,
@@ -7,10 +21,12 @@ pub enum VideoEscalationReason {
     TransportExpiredDeadline,
     TransportSevereDeadline,
     TransportRecoveredLate,
+    TransportSampleLoss,
 }
 
 pub struct VideoEscalationController {
     cooldown: Duration,
+    burst_window: Duration,
     keyframe_burst_threshold: u8,
     decoder_reset_burst_threshold: u8,
     severe_deadline_reconnect_window: Duration,
@@ -20,6 +36,11 @@ pub struct VideoEscalationController {
     last_keyframe_request_at: Option<Instant>,
     last_decoder_reset_at: Option<Instant>,
     last_severe_deadline_at: Option<Instant>,
+    last_keyframe_signal_at: Option<Instant>,
+    last_decoder_reset_signal_at: Option<Instant>,
+    last_keyframe_reason_class: Option<KeyframeReasonClass>,
+    last_decoder_reset_reason_class: Option<DecoderResetReasonClass>,
+    wait_keyframe_started_at: Option<Instant>,
     next_observation_id: u64,
 }
 
@@ -36,6 +57,7 @@ impl VideoEscalationController {
     ) -> Self {
         Self {
             cooldown,
+            burst_window: cooldown.clamp(Duration::from_millis(200), Duration::from_millis(350)),
             keyframe_burst_threshold: keyframe_burst_threshold.max(1),
             decoder_reset_burst_threshold: decoder_reset_burst_threshold.max(1),
             severe_deadline_reconnect_window: cooldown.mul_f32(3.0),
@@ -45,6 +67,11 @@ impl VideoEscalationController {
             last_keyframe_request_at: None,
             last_decoder_reset_at: None,
             last_severe_deadline_at: None,
+            last_keyframe_signal_at: None,
+            last_decoder_reset_signal_at: None,
+            last_keyframe_reason_class: None,
+            last_decoder_reset_reason_class: None,
+            wait_keyframe_started_at: None,
             next_observation_id: 0,
         }
     }
@@ -55,7 +82,23 @@ impl VideoEscalationController {
         let action = match reason {
             VideoEscalationReason::WaitKeyframe
             | VideoEscalationReason::AdapterIdleTimeout
-            | VideoEscalationReason::TransportRecoveredLate => {
+            | VideoEscalationReason::TransportRecoveredLate
+            | VideoEscalationReason::TransportSampleLoss => {
+                let reason_class = match reason {
+                    VideoEscalationReason::WaitKeyframe => KeyframeReasonClass::WaitKeyframe,
+                    VideoEscalationReason::AdapterIdleTimeout => {
+                        KeyframeReasonClass::AdapterIdleTimeout
+                    }
+                    VideoEscalationReason::TransportRecoveredLate => {
+                        KeyframeReasonClass::TransportRecoveredLate
+                    }
+                    VideoEscalationReason::TransportSampleLoss => {
+                        KeyframeReasonClass::TransportSampleLoss
+                    }
+                    _ => unreachable!(),
+                };
+                let immediate_keyframe_reason =
+                    matches!(reason, VideoEscalationReason::TransportSampleLoss);
                 let severe_deadline_reconnect =
                     matches!(reason, VideoEscalationReason::AdapterIdleTimeout)
                         && self.last_severe_deadline_at.map_or(false, |last| {
@@ -68,9 +111,52 @@ impl VideoEscalationController {
                         self.reconnect_candidate_signals.saturating_add(1);
                     "requestReconnectCandidate"
                 } else {
-                    self.pending_keyframe_signals = self.pending_keyframe_signals.saturating_add(1);
+                    if matches!(reason, VideoEscalationReason::WaitKeyframe) {
+                        if self
+                            .last_keyframe_signal_at
+                            .map_or(true, |last| last.elapsed() > self.burst_window)
+                            || self.last_keyframe_reason_class != Some(reason_class)
+                        {
+                            self.wait_keyframe_started_at = Some(now);
+                        } else {
+                            self.wait_keyframe_started_at.get_or_insert(now);
+                        }
+                    } else {
+                        self.wait_keyframe_started_at = None;
+                    }
+                    if self
+                        .last_keyframe_signal_at
+                        .map_or(true, |last| last.elapsed() > self.burst_window)
+                        || self.last_keyframe_reason_class != Some(reason_class)
+                    {
+                        self.pending_keyframe_signals = 0;
+                    }
+                    self.last_keyframe_signal_at = Some(now);
+                    self.last_keyframe_reason_class = Some(reason_class);
+                    self.pending_keyframe_signals = if immediate_keyframe_reason {
+                        self.keyframe_burst_threshold
+                    } else {
+                        self.pending_keyframe_signals.saturating_add(1)
+                    };
                     self.pending_decoder_reset_signals = 0;
-                    if self.pending_keyframe_signals < self.keyframe_burst_threshold {
+                    let persistent_wait_keyframe =
+                        matches!(reason, VideoEscalationReason::WaitKeyframe)
+                            && self.wait_keyframe_started_at.map_or(false, |started_at| {
+                                now.duration_since(started_at) >= self.cooldown.mul_f32(2.0)
+                            });
+                    if persistent_wait_keyframe
+                        && self
+                            .last_decoder_reset_at
+                            .map_or(true, |last| last.elapsed() >= self.cooldown)
+                    {
+                        self.pending_keyframe_signals = 0;
+                        self.pending_decoder_reset_signals = 0;
+                        self.reconnect_candidate_signals =
+                            self.reconnect_candidate_signals.saturating_add(1);
+                        self.last_decoder_reset_at = Some(now);
+                        self.last_keyframe_request_at = Some(now);
+                        "requestDecoderReset"
+                    } else if self.pending_keyframe_signals < self.keyframe_burst_threshold {
                         "waitForBurst"
                     } else if self
                         .last_keyframe_request_at
@@ -87,7 +173,24 @@ impl VideoEscalationController {
             }
             VideoEscalationReason::Reconfigure
             | VideoEscalationReason::TransportExpiredDeadline => {
+                self.wait_keyframe_started_at = None;
+                let reason_class = match reason {
+                    VideoEscalationReason::Reconfigure => DecoderResetReasonClass::Reconfigure,
+                    VideoEscalationReason::TransportExpiredDeadline => {
+                        DecoderResetReasonClass::TransportExpiredDeadline
+                    }
+                    _ => unreachable!(),
+                };
                 self.pending_keyframe_signals = 0;
+                if self
+                    .last_decoder_reset_signal_at
+                    .map_or(true, |last| last.elapsed() > self.burst_window)
+                    || self.last_decoder_reset_reason_class != Some(reason_class)
+                {
+                    self.pending_decoder_reset_signals = 0;
+                }
+                self.last_decoder_reset_signal_at = Some(now);
+                self.last_decoder_reset_reason_class = Some(reason_class);
                 self.pending_decoder_reset_signals =
                     self.pending_decoder_reset_signals.saturating_add(1);
                 if self.pending_decoder_reset_signals < self.decoder_reset_burst_threshold {
@@ -111,6 +214,7 @@ impl VideoEscalationController {
                 }
             }
             VideoEscalationReason::TransportSevereDeadline => {
+                self.wait_keyframe_started_at = None;
                 // 大洞 deadline 失效通常说明这一段视频已经不可救，
                 // 这里直接跳过 keyframe burst，优先推到更高一级恢复。
                 self.pending_keyframe_signals = 0;
@@ -132,6 +236,14 @@ impl VideoEscalationController {
                 }
             }
         };
+        VideoEscalationDecision {
+            observation_id: self.next_observation_id,
+            action,
+        }
+    }
+
+    pub fn suppressed(&mut self, action: &'static str) -> VideoEscalationDecision {
+        self.next_observation_id = self.next_observation_id.saturating_add(1);
         VideoEscalationDecision {
             observation_id: self.next_observation_id,
             action,
@@ -159,6 +271,62 @@ mod tests {
                 .on_reason(VideoEscalationReason::AdapterIdleTimeout)
                 .action,
             "requestKeyframe"
+        );
+    }
+
+    #[test]
+    fn idle_timeout_burst_expires_before_requesting_keyframe() {
+        let mut controller = VideoEscalationController::new(Duration::from_millis(250), 2, 2);
+
+        assert_eq!(
+            controller
+                .on_reason(VideoEscalationReason::AdapterIdleTimeout)
+                .action,
+            "waitForBurst"
+        );
+        std::thread::sleep(Duration::from_millis(380));
+        assert_eq!(
+            controller
+                .on_reason(VideoEscalationReason::AdapterIdleTimeout)
+                .action,
+            "waitForBurst"
+        );
+    }
+
+    #[test]
+    fn mixed_wait_keyframe_and_idle_timeout_do_not_share_burst_counter() {
+        let mut controller = VideoEscalationController::new(Duration::from_millis(250), 2, 2);
+
+        assert_eq!(
+            controller
+                .on_reason(VideoEscalationReason::WaitKeyframe)
+                .action,
+            "waitForBurst"
+        );
+        assert_eq!(
+            controller
+                .on_reason(VideoEscalationReason::AdapterIdleTimeout)
+                .action,
+            "waitForBurst"
+        );
+    }
+
+    #[test]
+    fn reconfigure_burst_expires_before_requesting_decoder_reset() {
+        let mut controller = VideoEscalationController::new(Duration::from_millis(250), 2, 2);
+
+        assert_eq!(
+            controller
+                .on_reason(VideoEscalationReason::Reconfigure)
+                .action,
+            "waitForDecoderResetBurst"
+        );
+        std::thread::sleep(Duration::from_millis(380));
+        assert_eq!(
+            controller
+                .on_reason(VideoEscalationReason::Reconfigure)
+                .action,
+            "waitForDecoderResetBurst"
         );
     }
 
@@ -219,6 +387,44 @@ mod tests {
                 .on_reason(VideoEscalationReason::AdapterIdleTimeout)
                 .action,
             "requestReconnectCandidate"
+        );
+    }
+
+    #[test]
+    fn persistent_wait_keyframe_escalates_to_decoder_reset() {
+        let mut controller = VideoEscalationController::new(Duration::from_millis(200), 1, 2);
+
+        assert_eq!(
+            controller
+                .on_reason(VideoEscalationReason::WaitKeyframe)
+                .action,
+            "requestKeyframe"
+        );
+        std::thread::sleep(Duration::from_millis(210));
+        assert_eq!(
+            controller
+                .on_reason(VideoEscalationReason::WaitKeyframe)
+                .action,
+            "requestKeyframe"
+        );
+        std::thread::sleep(Duration::from_millis(210));
+        assert_eq!(
+            controller
+                .on_reason(VideoEscalationReason::WaitKeyframe)
+                .action,
+            "requestDecoderReset"
+        );
+    }
+
+    #[test]
+    fn transport_sample_loss_requests_keyframe_immediately() {
+        let mut controller = VideoEscalationController::new(Duration::from_millis(250), 3, 2);
+
+        assert_eq!(
+            controller
+                .on_reason(VideoEscalationReason::TransportSampleLoss)
+                .action,
+            "requestKeyframe"
         );
     }
 }

@@ -1,6 +1,6 @@
 use serde_json::{json, Map, Value};
 
-pub const APP_CONFIG_KEYS: [&str; 33] = [
+pub const APP_CONFIG_KEYS: [&str; 34] = [
     "locale",
     "theme",
     "use_msal",
@@ -20,6 +20,7 @@ pub const APP_CONFIG_KEYS: [&str; 33] = [
     "codec",
     "polling_rate",
     "vibration",
+    "vibration_strength",
     "power_on",
     "video_format",
     "ipv6",
@@ -57,6 +58,7 @@ pub fn default_config_map() -> Map<String, Value> {
         "codec": "",
         "polling_rate": 250,
         "vibration": true,
+        "vibration_strength": "realistic",
         "power_on": false,
         "video_format": "",
         "ipv6": false,

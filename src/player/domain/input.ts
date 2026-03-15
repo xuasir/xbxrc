@@ -38,7 +38,10 @@ export interface ProcessedVideoFrameMetadata {
 export interface InputRuntimeConfig {
   pollingRate: number
   vibrationEnabled: boolean
+  vibrationStrength: VibrationStrengthPreset
 }
+
+export type VibrationStrengthPreset = 'realistic' | 'enhanced' | 'full'
 
 export function DEFAULT_LOGICAL_BUTTONS_STATE(): LogicalButtonsStateDto {
   return {

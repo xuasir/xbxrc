@@ -21,13 +21,18 @@ use crate::{XbxEngineMediaRuntimeStats, XbxEngineRuntimeError};
 pub(crate) struct XbxDataChannelState {
     message_handshake_acked: bool,
     control_started: bool,
+    control_bootstrapped_after_handshake: bool,
     chat_open: bool,
     control_channel: Option<Arc<RTCDataChannel>>,
+    pending_keyframe_request: bool,
+    pending_decoder_reset: bool,
     keyboard_pointer_enabled: bool,
     input_metadata_sent: bool,
+    input_metadata_bootstrapped_after_handshake: bool,
     input_stream_loop_started: bool,
     pending_input_events: Vec<XbxEngineInputEventDto>,
     control_gamepad_added_task: Option<JoinHandle<()>>,
+    control_keyframe_prime_task: Option<JoinHandle<()>>,
     input_stream_loop_task: Option<JoinHandle<()>>,
 }
 
@@ -255,27 +260,77 @@ pub(crate) async fn request_video_keyframe_on_control_channel(
 pub(crate) async fn request_video_keyframe_from_state(
     runtime_state: &Arc<Mutex<XbxDataChannelState>>,
 ) -> Result<(), XbxEngineRuntimeError> {
-    let control_channel = runtime_state
-        .lock()
-        .ok()
-        .and_then(|state| state.control_channel.clone());
+    let control_channel = {
+        let Ok(mut state) = runtime_state.lock() else {
+            return Ok(());
+        };
+        match state.control_channel.clone() {
+            Some(channel) if channel.ready_state() == RTCDataChannelState::Open => Some(channel),
+            _ => {
+                // control channel 未恢复时先保留恢复意图，避免重连后长时间卡在 waitKeyframe。
+                state.pending_keyframe_request = true;
+                crate::xbx_log_warn!(
+                    "[xbxengine][webrtc-rs] queue pending keyframe request until control channel is open"
+                );
+                None
+            }
+        }
+    };
     let Some(control_channel) = control_channel else {
         return Ok(());
     };
-    request_video_keyframe_on_control_channel(&control_channel).await
+    match request_video_keyframe_on_control_channel(&control_channel).await {
+        Ok(()) => {
+            if let Ok(mut state) = runtime_state.lock() {
+                state.pending_keyframe_request = false;
+            }
+            Ok(())
+        }
+        Err(error) => {
+            if let Ok(mut state) = runtime_state.lock() {
+                state.pending_keyframe_request = true;
+            }
+            Err(error)
+        }
+    }
 }
 
 pub(crate) async fn request_decoder_reset_from_state(
     runtime_state: &Arc<Mutex<XbxDataChannelState>>,
 ) -> Result<(), XbxEngineRuntimeError> {
-    let control_channel = runtime_state
-        .lock()
-        .ok()
-        .and_then(|state| state.control_channel.clone());
+    let control_channel = {
+        let Ok(mut state) = runtime_state.lock() else {
+            return Ok(());
+        };
+        match state.control_channel.clone() {
+            Some(channel) if channel.ready_state() == RTCDataChannelState::Open => Some(channel),
+            _ => {
+                state.pending_decoder_reset = true;
+                crate::xbx_log_warn!(
+                    "[xbxengine][webrtc-rs] queue pending decoder reset until control channel is open"
+                );
+                None
+            }
+        }
+    };
     let Some(control_channel) = control_channel else {
         return Ok(());
     };
-    request_decoder_reset_on_control_channel(&control_channel).await
+    match request_decoder_reset_on_control_channel(&control_channel).await {
+        Ok(()) => {
+            if let Ok(mut state) = runtime_state.lock() {
+                state.pending_decoder_reset = false;
+                state.pending_keyframe_request = false;
+            }
+            Ok(())
+        }
+        Err(error) => {
+            if let Ok(mut state) = runtime_state.lock() {
+                state.pending_decoder_reset = true;
+            }
+            Err(error)
+        }
+    }
 }
 
 pub(crate) async fn request_decoder_reset_on_control_channel(
@@ -303,20 +358,32 @@ async fn bootstrap_post_handshake_channels(
     input_channel: Arc<RTCDataChannel>,
     runtime_stats: Arc<Mutex<XbxEngineMediaRuntimeStats>>,
 ) {
-    let mut should_start_control = false;
+    let mut should_bootstrap_control = false;
     let mut should_send_input_metadata = false;
     let mut should_start_input_stream_loop = false;
+    let mut message_handshake_acked = false;
 
     if let Ok(mut state) = runtime_state.lock() {
-        if !state.message_handshake_acked {
-            return;
-        }
-        if !state.control_started && control_channel.ready_state() == RTCDataChannelState::Open {
+        message_handshake_acked = state.message_handshake_acked;
+        if control_channel.ready_state() == RTCDataChannelState::Open
+            && (!state.control_started
+                || (message_handshake_acked && !state.control_bootstrapped_after_handshake))
+        {
             state.control_started = true;
-            should_start_control = true;
+            if message_handshake_acked {
+                state.control_bootstrapped_after_handshake = true;
+            }
+            should_bootstrap_control = true;
         }
-        if !state.input_metadata_sent && input_channel.ready_state() == RTCDataChannelState::Open {
+        if input_channel.ready_state() == RTCDataChannelState::Open
+            && (!state.input_metadata_sent
+                || (message_handshake_acked
+                    && !state.input_metadata_bootstrapped_after_handshake))
+        {
             state.input_metadata_sent = true;
+            if message_handshake_acked {
+                state.input_metadata_bootstrapped_after_handshake = true;
+            }
             should_send_input_metadata = true;
         }
         if !state.input_stream_loop_started
@@ -327,7 +394,18 @@ async fn bootstrap_post_handshake_channels(
         }
     }
 
-    if should_start_control {
+    if should_bootstrap_control {
+        // control/input 不应被 message ack 拖住；
+        // 否则媒体已连上时会出现“画面还在 waitKeyframe、输入也没反应”的假死窗口。
+        if !message_handshake_acked {
+            crate::xbx_log_warn!(
+                "[xbxengine][webrtc-rs] bootstrap control before message handshake ack"
+            );
+        } else {
+            crate::xbx_log_info!(
+                "[xbxengine][webrtc-rs] bootstrap control after message handshake ack"
+            );
+        }
         let _ = control_channel
             .send_text(build_control_authorization_payload())
             .await;
@@ -338,11 +416,27 @@ async fn bootstrap_post_handshake_channels(
             .send_text(build_control_keyframe_request_payload())
             .await;
         let delayed_added_task = start_delayed_gamepad_added(control_channel.clone());
+        let delayed_keyframe_prime_task =
+            start_delayed_keyframe_prime(control_channel.clone());
         if let Ok(mut state) = runtime_state.lock() {
             replace_task_handle(&mut state.control_gamepad_added_task, delayed_added_task);
+            replace_task_handle(
+                &mut state.control_keyframe_prime_task,
+                delayed_keyframe_prime_task,
+            );
         }
     }
+    flush_pending_recovery_requests(runtime_state.clone(), control_channel.clone()).await;
     if should_send_input_metadata {
+        if !message_handshake_acked {
+            crate::xbx_log_warn!(
+                "[xbxengine][webrtc-rs] bootstrap input metadata before message handshake ack"
+            );
+        } else {
+            crate::xbx_log_info!(
+                "[xbxengine][webrtc-rs] bootstrap input metadata after message handshake ack"
+            );
+        }
         let _ = input_channel
             .send(&Bytes::from(build_input_metadata_packet(
                 0,
@@ -362,6 +456,63 @@ async fn bootstrap_post_handshake_channels(
     let _ = message_channel;
 }
 
+async fn flush_pending_recovery_requests(
+    runtime_state: Arc<Mutex<XbxDataChannelState>>,
+    control_channel: Arc<RTCDataChannel>,
+) {
+    if control_channel.ready_state() != RTCDataChannelState::Open {
+        return;
+    }
+
+    let (flush_decoder_reset, flush_keyframe) = {
+        let Ok(state) = runtime_state.lock() else {
+            return;
+        };
+        (
+            state.pending_decoder_reset,
+            state.pending_keyframe_request && !state.pending_decoder_reset,
+        )
+    };
+
+    if flush_decoder_reset {
+        match request_decoder_reset_on_control_channel(&control_channel).await {
+            Ok(()) => {
+                if let Ok(mut state) = runtime_state.lock() {
+                    state.pending_decoder_reset = false;
+                    state.pending_keyframe_request = false;
+                }
+                crate::xbx_log_info!(
+                    "[xbxengine][webrtc-rs] flushed pending decoder reset after control channel recovery"
+                );
+            }
+            Err(error) => {
+                crate::xbx_log_warn!(
+                    "[xbxengine][webrtc-rs] flush pending decoder reset failed: {error}"
+                );
+            }
+        }
+        return;
+    }
+
+    if flush_keyframe {
+        match request_video_keyframe_on_control_channel(&control_channel).await {
+            Ok(()) => {
+                if let Ok(mut state) = runtime_state.lock() {
+                    state.pending_keyframe_request = false;
+                }
+                crate::xbx_log_info!(
+                    "[xbxengine][webrtc-rs] flushed pending keyframe request after control channel recovery"
+                );
+            }
+            Err(error) => {
+                crate::xbx_log_warn!(
+                    "[xbxengine][webrtc-rs] flush pending keyframe request failed: {error}"
+                );
+            }
+        }
+    }
+}
+
 fn start_delayed_gamepad_added(control_channel: Arc<RTCDataChannel>) -> JoinHandle<()> {
     tokio::spawn(async move {
         // 与 web player 保持一致：先 removed，再延迟 added，避免会话初期状态抖动。
@@ -371,6 +522,20 @@ fn start_delayed_gamepad_added(control_channel: Arc<RTCDataChannel>) -> JoinHand
         }
         let _ = control_channel
             .send_text(build_control_gamepad_changed_payload(true))
+            .await;
+    })
+}
+
+fn start_delayed_keyframe_prime(control_channel: Arc<RTCDataChannel>) -> JoinHandle<()> {
+    tokio::spawn(async move {
+        // 进入游戏/切场景时，首轮 keyframe 请求可能落在远端尚未完全切入 gameplay 的窗口。
+        // 这里补一发短延迟 prime，请求代价很低，但能明显缩短“声音先出来、画面仍卡住”的空窗。
+        sleep(Duration::from_millis(STREAM_CONTROL_KEYFRAME_PRIME_DELAY_MS)).await;
+        if control_channel.ready_state() != RTCDataChannelState::Open {
+            return;
+        }
+        let _ = control_channel
+            .send_text(build_control_keyframe_request_payload())
             .await;
     })
 }
@@ -385,14 +550,32 @@ fn start_input_stream_loop(
             return;
         };
         let mut ticker = interval(Duration::from_millis(STREAM_INPUT_POLL_INTERVAL_MS));
-        // 与 web input 定时器对齐：首包在一个 polling 周期后发送。
-        ticker.tick().await;
         let mut sequence = 1u32;
         let mut last_sample_count = 0usize;
         let mut last_sample_signature = [0u64; 4];
         let mut sample_signature = [0u64; 4];
         let mut frames = Vec::with_capacity(4);
         let mut last_metadata_frame_seq = 0u64;
+        let mut last_input_packet_sent_at_ms = now_ms_f64();
+
+        // input loop 拉起后先立刻发一次中性包，避免用户必须按一下手柄远端才开始真正刷新。
+        send_idle_gamepad_keepalive(
+            &input_channel,
+            &host,
+            &runtime_state,
+            &runtime_stats,
+            &mut sequence,
+            &mut last_sample_count,
+            &mut last_sample_signature,
+            &mut sample_signature,
+            &mut frames,
+            &mut last_metadata_frame_seq,
+            &mut last_input_packet_sent_at_ms,
+        )
+        .await;
+
+        // 与 web input 定时器对齐：后续节奏仍按 polling 周期推进。
+        ticker.tick().await;
 
         loop {
             ticker.tick().await;
@@ -428,8 +611,17 @@ fn start_input_stream_loop(
                 && !(sample_count == last_sample_count
                     && sample_signature[..sample_count]
                         == last_sample_signature[..last_sample_count]);
+            let now_ms = now_ms_f64();
+            let should_send_idle_gamepad_keepalive = sample_count > 0
+                && !gamepad_changed
+                && pointer_events.is_empty()
+                && mouse_frames.is_empty()
+                && keyboard_frames.is_empty()
+                && (now_ms - last_input_packet_sent_at_ms)
+                    >= STREAM_INPUT_IDLE_GAMEPAD_KEEPALIVE_MS as f64;
             if metadata.is_none()
                 && !gamepad_changed
+                && !should_send_idle_gamepad_keepalive
                 && pointer_events.is_empty()
                 && mouse_frames.is_empty()
                 && keyboard_frames.is_empty()
@@ -446,16 +638,21 @@ fn start_input_stream_loop(
 
             let packet = build_input_stream_packet(
                 sequence,
-                now_ms_f64(),
+                now_ms,
                 metadata.as_ref(),
-                if gamepad_changed { &frames } else { &[] },
+                if gamepad_changed || should_send_idle_gamepad_keepalive {
+                    &frames
+                } else {
+                    &[]
+                },
                 &pointer_events,
                 &mouse_frames,
                 &keyboard_frames,
             );
             if input_channel.send(&Bytes::from(packet)).await.is_ok() {
                 sequence = sequence.wrapping_add(1);
-                if gamepad_changed {
+                last_input_packet_sent_at_ms = now_ms;
+                if gamepad_changed || should_send_idle_gamepad_keepalive {
                     last_sample_count = sample_count;
                     last_sample_signature[..sample_count]
                         .copy_from_slice(&sample_signature[..sample_count]);
@@ -463,6 +660,69 @@ fn start_input_stream_loop(
             }
         }
     })
+}
+
+async fn send_idle_gamepad_keepalive(
+    input_channel: &Arc<RTCDataChannel>,
+    host: &GamepadRuntimeHost,
+    runtime_state: &Arc<Mutex<XbxDataChannelState>>,
+    runtime_stats: &Arc<Mutex<XbxEngineMediaRuntimeStats>>,
+    sequence: &mut u32,
+    last_sample_count: &mut usize,
+    last_sample_signature: &mut [u64; 4],
+    sample_signature: &mut [u64; 4],
+    frames: &mut Vec<LogicalPadSnapshotDto>,
+    last_metadata_frame_seq: &mut u64,
+    last_input_packet_sent_at_ms: &mut f64,
+) {
+    if input_channel.ready_state() != RTCDataChannelState::Open {
+        return;
+    }
+    let Ok(snapshot) = host.snapshot() else {
+        return;
+    };
+    if !matches!(
+        snapshot.route_target,
+        OhMyGamepadRouteTargetDto::StreamSession { .. }
+    ) {
+        return;
+    }
+
+    frames.clear();
+    let mut sample_count = 0usize;
+    for frame in snapshot.pads.iter().take(4) {
+        if sample_count < sample_signature.len() {
+            sample_signature[sample_count] = frame.sample_seq;
+        }
+        sample_count += 1;
+        frames.push(frame.clone());
+    }
+    if sample_count == 0 {
+        return;
+    }
+
+    let metadata = runtime_stats
+        .lock()
+        .ok()
+        .and_then(|stats| build_metadata_frame(&stats, last_metadata_frame_seq));
+    let (pointer_events, mouse_frames, keyboard_frames) =
+        drain_pending_input_frames(runtime_state, runtime_stats.as_ref());
+    let now_ms = now_ms_f64();
+    let packet = build_input_stream_packet(
+        *sequence,
+        now_ms,
+        metadata.as_ref(),
+        frames,
+        &pointer_events,
+        &mouse_frames,
+        &keyboard_frames,
+    );
+    if input_channel.send(&Bytes::from(packet)).await.is_ok() {
+        *sequence = sequence.wrapping_add(1);
+        *last_input_packet_sent_at_ms = now_ms;
+        *last_sample_count = sample_count;
+        last_sample_signature[..sample_count].copy_from_slice(&sample_signature[..sample_count]);
+    }
 }
 
 async fn handle_input_channel_binary_message(payload: &[u8]) {
@@ -484,11 +744,14 @@ fn reset_state_on_channel_close(runtime_state: &Arc<Mutex<XbxDataChannelState>>,
         "message" => {
             state.message_handshake_acked = false;
             state.control_started = false;
+            state.control_bootstrapped_after_handshake = false;
             state.chat_open = false;
             state.input_metadata_sent = false;
+            state.input_metadata_bootstrapped_after_handshake = false;
             state.input_stream_loop_started = false;
             state.pending_input_events.clear();
             abort_task_handle(&mut state.control_gamepad_added_task);
+            abort_task_handle(&mut state.control_keyframe_prime_task);
             abort_task_handle(&mut state.input_stream_loop_task);
         }
         "chat" => {
@@ -496,11 +759,14 @@ fn reset_state_on_channel_close(runtime_state: &Arc<Mutex<XbxDataChannelState>>,
         }
         "control" => {
             state.control_started = false;
+            state.control_bootstrapped_after_handshake = false;
             state.control_channel = None;
             abort_task_handle(&mut state.control_gamepad_added_task);
+            abort_task_handle(&mut state.control_keyframe_prime_task);
         }
         "input" => {
             state.input_metadata_sent = false;
+            state.input_metadata_bootstrapped_after_handshake = false;
             state.input_stream_loop_started = false;
             state.pending_input_events.clear();
             abort_task_handle(&mut state.input_stream_loop_task);
@@ -524,7 +790,9 @@ fn abort_task_handle(slot: &mut Option<JoinHandle<()>>) {
 // 协议常量 (从已删除的 network_profile.rs 迁移)
 const STREAM_INPUT_POLL_INTERVAL_MS: u64 = 8;
 const STREAM_INPUT_MAX_BUFFERED_AMOUNT_BYTES: u64 = 1024;
+const STREAM_INPUT_IDLE_GAMEPAD_KEEPALIVE_MS: u64 = 250;
 const STREAM_CONTROL_GAMEPAD_ADDED_DELAY_MS: u64 = 500;
+const STREAM_CONTROL_KEYFRAME_PRIME_DELAY_MS: u64 = 300;
 const STREAM_INPUT_INITIAL_MAX_TOUCHPOINTS: u8 = 64;
 
 const REPORT_TYPE_METADATA: u16 = 1;

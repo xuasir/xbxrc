@@ -61,6 +61,7 @@ function createPlayerClient(
     input: {
       pollingRate: spec.runtime.pollingRateHz,
       vibrationEnabled: spec.runtime.vibration,
+      vibrationStrength: spec.runtime.vibrationStrength,
     },
     audio: {
       volume: audioVolume,

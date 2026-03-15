@@ -64,9 +64,12 @@ impl NackScheduler {
         deadline_at_ms: Option<f64>,
     ) -> Option<NackBatch> {
         if received_sequence <= expected_sequence {
-            return None;
+            let wrapping_diff = received_sequence.wrapping_sub(expected_sequence);
+            if wrapping_diff >= (1 << 15) || wrapping_diff == 0 {
+                return None;
+            }
         }
-        let sequences: Vec<u16> = (expected_sequence..received_sequence).collect();
+        let sequences = sequence_range(expected_sequence, received_sequence);
         if sequences.is_empty() {
             return None;
         }
@@ -91,6 +94,50 @@ impl NackScheduler {
             sequences: sequences.into_iter().take(burst_count).collect(),
             retry_count: 0,
         })
+    }
+
+    pub fn observe_missing_sequences(
+        &mut self,
+        sequences: &[u16],
+        now_ms: f64,
+        deadline_at_ms: Option<f64>,
+    ) -> Option<NackBatch> {
+        if sequences.is_empty() {
+            return None;
+        }
+
+        let mut inserted = Vec::new();
+        let burst_count = usize::from(self.config.burst_count.max(1));
+        for (index, sequence) in sequences.iter().enumerate() {
+            if self.pending.contains_key(sequence) {
+                continue;
+            }
+            let last_sent_at_ms = if inserted.len() < burst_count && index < burst_count {
+                now_ms
+            } else {
+                now_ms - self.config.retry_interval_ms as f64
+            };
+            self.pending.insert(
+                *sequence,
+                PendingNack {
+                    first_seen_at_ms: now_ms,
+                    last_sent_at_ms,
+                    deadline_at_ms: deadline_at_ms
+                        .unwrap_or(now_ms + self.config.frame_deadline_ms as f64),
+                    retry_count: 0,
+                },
+            );
+            inserted.push(*sequence);
+        }
+
+        if inserted.is_empty() {
+            None
+        } else {
+            Some(NackBatch {
+                sequences: inserted.into_iter().take(burst_count).collect(),
+                retry_count: 0,
+            })
+        }
     }
 
     pub fn poll(&mut self, now_ms: f64) -> NackPollResult {
@@ -168,6 +215,16 @@ impl NackScheduler {
     }
 }
 
+fn sequence_range(start: u16, end_exclusive: u16) -> Vec<u16> {
+    let mut sequences = Vec::new();
+    let mut cursor = start;
+    while cursor != end_exclusive {
+        sequences.push(cursor);
+        cursor = cursor.wrapping_add(1);
+    }
+    sequences
+}
+
 #[cfg(test)]
 mod tests {
     use super::{NackScheduler, NackSchedulerConfig};
@@ -189,5 +246,21 @@ mod tests {
 
         let retry = scheduler.poll(1_000.0).retry_batch.expect("overflow batch");
         assert_eq!(retry.sequences, vec![12, 13]);
+    }
+
+    #[test]
+    fn observe_gap_supports_sequence_wrap() {
+        let mut scheduler = NackScheduler::new(NackSchedulerConfig {
+            max_age_ms: 200,
+            frame_deadline_ms: 120,
+            burst_count: 4,
+            retry_interval_ms: 40,
+            max_retry_count: 3,
+        });
+
+        let initial = scheduler
+            .observe_gap(u16::MAX, 2, 1_000.0, None)
+            .expect("wrapped batch");
+        assert_eq!(initial.sequences, vec![u16::MAX, 0, 1]);
     }
 }

@@ -165,8 +165,10 @@
         "PreFPS": "Present FPS",
         "FD": "FD",
         "PL": "PL",
-        "Bitrate": "Bitrate",
-        "BWE": "BWE",
+        "VideoDL": "Video DL",
+        "TotalDL": "Total DL",
+        "AudioDL": "Audio DL",
+        "BWE": "BWE Target",
         "PktAge": "Pkt Age",
         "DecAge": "Dec Age",
         "PreAge": "Pre Age",
@@ -694,6 +696,10 @@
       "vibration": {
         "label": "Vibration",
         "description": "Enable controller vibration output"
+      },
+      "vibration_strength": {
+        "label": "Vibration Strength",
+        "description": "Choose the vibration profile closest to your preferred controller feel"
       },
       "power_on": {
         "label": "Power On",

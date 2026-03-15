@@ -165,8 +165,10 @@
         "PreFPS": "呈现 FPS",
         "FD": "FD",
         "PL": "PL",
-        "Bitrate": "码率",
-        "BWE": "带宽估计",
+        "VideoDL": "视频下行",
+        "TotalDL": "总下行",
+        "AudioDL": "音频下行",
+        "BWE": "BWE目标",
         "PktAge": "包龄",
         "DecAge": "解龄",
         "PreAge": "呈龄",
@@ -694,6 +696,10 @@
       "vibration": {
         "label": "震动",
         "description": "启用手柄震动输出"
+      },
+      "vibration_strength": {
+        "label": "震动强度",
+        "description": "选择更接近你偏好体感的震动档位"
       },
       "power_on": {
         "label": "自动开机",

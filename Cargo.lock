@@ -8399,16 +8399,20 @@ dependencies = [
 name = "xbxengine"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
  "bytes",
  "cpal",
+ "interceptor",
  "ohmygamepad-host",
  "ohmygamepad-protocol",
  "opus",
+ "rtcp",
  "rtp",
  "serde_json",
  "tokio",
  "webrtc",
  "webrtc-media",
+ "webrtc-util",
  "xbxengine-protocol",
 ]
 
@@ -8430,6 +8434,9 @@ dependencies = [
  "hex-literal",
  "hmac",
  "log",
+ "objc2",
+ "objc2-app-kit",
+ "objc2-foundation",
  "ohmygamepad-host",
  "ohmygamepad-protocol",
  "openssl",

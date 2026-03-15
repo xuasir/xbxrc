@@ -141,6 +141,27 @@ export interface XbxEngineStatsDto {
     loss_ratio: number
     rtt_ms?: number | null
     transport_path?: string | null
+    twcc_feedback_interval_ms?: number | null
+    twcc_observed_packet_count?: number | null
+    twcc_covered_sequence_span?: number | null
+    twcc_receive_bitrate_kbps?: number | null
+    twcc_delivery_ratio?: number | null
+    twcc_loss_ratio?: number | null
+    observed_at_ms: number
+  }
+  latest_video_twcc_observation?: {
+    observation_id: number
+    feedback_packet_count: number
+    covered_sequence_start: number
+    covered_sequence_end: number
+    covered_sequence_span: number
+    observed_packet_count: number
+    observed_byte_count: number
+    feedback_interval_ms?: number | null
+    arrival_span_ms?: number | null
+    receive_bitrate_kbps?: number | null
+    delivery_ratio: number
+    packet_loss_ratio: number
     observed_at_ms: number
   }
 }

@@ -113,6 +113,7 @@ pub enum RuntimeBweMode {
     FixedRemb,
     ObservedRemb,
     Hybrid,
+    TwccGcc,
 }
 
 /// TURN plan 记录 custom/fallback/resolved 三层结果，便于调试和回放。

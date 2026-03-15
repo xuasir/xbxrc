@@ -1,12 +1,12 @@
 use std::collections::{BTreeMap, HashSet};
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
 use tokio::runtime::Handle;
 use tokio::sync::mpsc;
 use webrtc::{
     api::{
-        interceptor_registry::register_default_interceptors,
+        interceptor_registry::configure_rtcp_reports,
         media_engine::{MediaEngine, MIME_TYPE_H264},
         APIBuilder,
     },
@@ -20,10 +20,13 @@ use webrtc::{
         sdp::session_description::RTCSessionDescription, RTCPeerConnection,
     },
     rtp_transceiver::{
-        rtp_codec::{RTCRtpCodecCapability, RTCRtpCodecParameters, RTPCodecType},
+        rtp_codec::{
+            RTCRtpCodecCapability, RTCRtpCodecParameters, RTCRtpHeaderExtensionCapability,
+            RTPCodecType,
+        },
         rtp_transceiver_direction::RTCRtpTransceiverDirection,
         RTCPFeedback, RTCRtpTransceiverInit, TYPE_RTCP_FB_CCM, TYPE_RTCP_FB_GOOG_REMB,
-        TYPE_RTCP_FB_NACK,
+        TYPE_RTCP_FB_NACK, TYPE_RTCP_FB_TRANSPORT_CC,
     },
     stats::{ICECandidateStats, StatsReport},
 };
@@ -32,13 +35,15 @@ use crate::{
     api::runtime::XbxEngineNegotiationRuntimeConfig,
     media::video::render::renderer::XbxRenderState,
     transport::adapter::{FrameSource, WebrtcVideoAdapter},
+    transport::webrtc::audio_output::XbxRemoteAudioPlaybackSession,
     transport::webrtc::data_channel::{
         install_data_channel_contracts, request_decoder_reset_on_control_channel,
         request_video_keyframe_on_control_channel, XbxDataChannelState,
     },
     transport::webrtc::microphone::XbxMicrophoneSession,
+    transport::webrtc::twcc_owned_receiver::OwnedTwccReceiverBuilder,
     XbxEngineMediaNegotiationRequest, XbxEngineMediaRuntimeStats, XbxEngineRuntimeError,
-    XbxEngineVideoBweObservation, XbxEngineWebRtcRuntimeConfig,
+    XbxEngineVideoBweObservation, XbxEngineVideoTwccObservation, XbxEngineWebRtcRuntimeConfig,
 };
 use xbxengine_protocol::{
     XbxEngineIceCandidateDto, XbxEngineTransportStateDto, XbxEngineTurnServerDto,
@@ -53,19 +58,39 @@ const DEFAULT_ICE_SERVERS: [&str; 7] = [
     "stun:stun.kinesisvideo.us-east-1.amazonaws.com:443",
     "stun:stun.douyucdn.cn:18000",
 ];
+const TRANSPORT_CC_URI: &str =
+    "http://www.ietf.org/id/draft-holmer-rmcat-transport-wide-cc-extensions-01";
 
 const VIDEO_CONTROL_WARMUP_MS: f64 = 1_000.0;
 
-#[derive(Default)]
 pub(crate) struct XbxTransportState {
     peer_connection: Option<Arc<RTCPeerConnection>>,
     data_channels: BTreeMap<String, Arc<RTCDataChannel>>,
     local_candidates: Arc<Mutex<Vec<XbxEngineIceCandidateDto>>>,
     local_ice_gathering_complete: Arc<Mutex<bool>>,
     microphone_session: Option<XbxMicrophoneSession>,
+    audio_playback_session: Arc<Mutex<Option<XbxRemoteAudioPlaybackSession>>>,
+    audio_volume_bits: Arc<AtomicU32>,
     runtime_stats: Option<Arc<Mutex<XbxEngineMediaRuntimeStats>>>,
     task_generation: Arc<AtomicU64>,
     pub(crate) frame_source_tx: Arc<Mutex<Option<mpsc::Sender<Box<dyn FrameSource>>>>>,
+}
+
+impl Default for XbxTransportState {
+    fn default() -> Self {
+        Self {
+            peer_connection: None,
+            data_channels: BTreeMap::new(),
+            local_candidates: Arc::new(Mutex::new(Vec::new())),
+            local_ice_gathering_complete: Arc::new(Mutex::new(false)),
+            microphone_session: None,
+            audio_playback_session: Arc::new(Mutex::new(None)),
+            audio_volume_bits: Arc::new(AtomicU32::new(1.0f32.to_bits())),
+            runtime_stats: None,
+            task_generation: Arc::new(AtomicU64::new(0)),
+            frame_source_tx: Arc::new(Mutex::new(None)),
+        }
+    }
 }
 
 impl XbxTransportState {
@@ -96,10 +121,28 @@ impl XbxTransportState {
             media_engine
                 .register_default_codecs()
                 .map_err(map_webrtc_error("registerDefaultCodecsFailed"))?;
-            // 注册默认拦截器，确保接收侧具备 RTCP report / TWCC / NACK 反馈能力。
-            let interceptor_registry =
-                register_default_interceptors(Default::default(), &mut media_engine)
-                    .map_err(map_webrtc_error("registerDefaultInterceptorsFailed"))?;
+            // 保留 transport-cc 能力面，但把接收侧 feedback ownership 收到我们自己的实现。
+            // NACK 只保留 responder；真正的缺包检测/重传请求在 adapter 路径按 upstream 算法实现。
+            let mut interceptor_registry = configure_rtcp_reports(configure_owned_nack(
+                Default::default(),
+                &mut media_engine,
+                std::time::Duration::from_millis(
+                    webrtc_config.video_pipeline.nack_retry_interval_ms.max(30),
+                ),
+                runtime_stats.clone(),
+            ));
+            configure_owned_twcc_receiver(
+                &mut interceptor_registry,
+                &mut media_engine,
+                std::time::Duration::from_millis(
+                    webrtc_config
+                        .video_pipeline
+                        .feedback_interval_ms
+                        .clamp(50, 100),
+                ),
+                runtime_stats.clone(),
+            )
+            .map_err(map_webrtc_error("configureOwnedTwccReceiverFailed"))?;
             let api = APIBuilder::new()
                 .with_media_engine(media_engine)
                 .with_interceptor_registry(interceptor_registry)
@@ -119,6 +162,8 @@ impl XbxTransportState {
             render_state,
             webrtc_config.clone(),
             self.frame_source_tx.clone(),
+            self.audio_playback_session.clone(),
+            self.audio_volume_bits.clone(),
             self.task_generation.clone(),
             task_generation,
         );
@@ -320,6 +365,11 @@ impl XbxTransportState {
         Ok(())
     }
 
+    pub(crate) fn set_audio_volume(&self, value: f32) {
+        self.audio_volume_bits
+            .store(value.clamp(0.0, 1.0).to_bits(), Ordering::Relaxed);
+    }
+
     pub(crate) fn stop_peer_connection(&mut self, runtime: &Handle) {
         self.task_generation.fetch_add(1, Ordering::SeqCst);
         if let (Some(session), Some(peer_connection)) = (
@@ -330,6 +380,11 @@ impl XbxTransportState {
                 crate::xbx_log_error!(
                     "[xbxengine][webrtc-rs][mic] stop failed during shutdown: {error}"
                 );
+            }
+        }
+        if let Ok(mut audio_session) = self.audio_playback_session.lock() {
+            if let Some(session) = audio_session.take() {
+                session.stop();
             }
         }
         if let Some(peer_connection) = self.peer_connection.take() {
@@ -346,7 +401,10 @@ impl XbxTransportState {
                 stats.video_rtt_source = None;
                 stats.inbound_bitrate_kbps = None;
                 stats.inbound_video_bitrate_kbps = None;
+                stats.inbound_audio_bitrate_kbps = None;
+                stats.inbound_audio_bytes_total = 0;
                 stats.latest_video_bwe_observation = None;
+                stats.latest_video_twcc_observation = None;
                 stats.latest_video_packet_gap = None;
                 stats.latest_video_nack_observation = None;
                 stats.latest_video_escalation_observation = None;
@@ -386,6 +444,8 @@ fn install_peer_connection_callbacks(
     _render_state: Arc<Mutex<XbxRenderState>>,
     webrtc_config: XbxEngineWebRtcRuntimeConfig,
     frame_source_tx: Arc<Mutex<Option<mpsc::Sender<Box<dyn FrameSource>>>>>,
+    audio_playback_session: Arc<Mutex<Option<XbxRemoteAudioPlaybackSession>>>,
+    audio_volume_bits: Arc<AtomicU32>,
     task_generation: Arc<AtomicU64>,
     current_generation: u64,
 ) {
@@ -451,6 +511,8 @@ fn install_peer_connection_callbacks(
     let runtime_stats_for_track = runtime_stats.clone();
     let peer_connection_for_track = peer_connection.clone();
     let webrtc_config_for_track = webrtc_config.clone();
+    let audio_playback_session_for_track = audio_playback_session.clone();
+    let audio_volume_bits_for_track = audio_volume_bits.clone();
 
     peer_connection.on_track(Box::new(move |track, _, _transceiver| {
         let frame_source_tx = frame_source_tx.clone();
@@ -458,6 +520,8 @@ fn install_peer_connection_callbacks(
         let config_captured = webrtc_config_for_track.clone();
         let _stats_captured = runtime_stats_for_track.clone();
         let task_generation_for_track = task_generation.clone();
+        let audio_playback_session = audio_playback_session_for_track.clone();
+        let audio_volume_bits = audio_volume_bits_for_track.clone();
 
         Box::pin(async move {
             crate::xbx_log_info!("[xbxengine][webrtc-rs] ON_TRACK received: kind={} ssrc={} mime={}", track.kind(), track.ssrc(), track.codec().capability.mime_type);
@@ -482,6 +546,12 @@ fn install_peer_connection_callbacks(
                     pc_captured.clone(),
                     _stats_captured.clone(),
                     jitter_buffer_size,
+                    std::time::Duration::from_millis(
+                        config_captured.video_pipeline.jitter_buffer_min_delay_ms,
+                    ),
+                    std::time::Duration::from_millis(
+                        config_captured.video_pipeline.jitter_buffer_max_delay_ms,
+                    ),
                     idle_timeout,
                     crate::transport::webrtc::nack_scheduler::NackSchedulerConfig {
                         max_age_ms: config_captured.video_pipeline.nack_max_age_ms,
@@ -514,6 +584,7 @@ fn install_peer_connection_callbacks(
                     let mut interval = tokio::time::interval(feedback_interval);
                     let mut last_bytes_received = 0;
                     let mut last_packets_received = 0u64;
+                    let mut last_video_sample_at_ms = now_ms_f64();
                     let mut last_loss_estimate_total = 0u64;
                     let mut last_loss_recovered_total = 0u64;
                     let mut last_loss_finalized_total = 0u64;
@@ -604,12 +675,15 @@ fn install_peer_connection_callbacks(
                             rtt_source = Some("candidate-pair");
                         }
 
+                        let sample_now_ms = now_ms_f64();
+                        let elapsed_ms = (sample_now_ms - last_video_sample_at_ms).max(0.0);
                         let delta_bytes = current_bytes.saturating_sub(last_bytes_received);
                         last_bytes_received = current_bytes;
                         let delta_packets_received =
                             packets_received.saturating_sub(last_packets_received);
                         last_packets_received = packets_received;
-                        let actual_kbps = (delta_bytes * 8) as f64 / 1000.0;
+                        let actual_kbps = (delta_bytes * 8) as f64 / elapsed_ms.max(1.0);
+                        last_video_sample_at_ms = sample_now_ms;
 
                         if let Ok(shared) = _stats_captured.lock() {
                             let delta_loss_estimate = shared
@@ -651,11 +725,17 @@ fn install_peer_connection_callbacks(
                         } else {
                             None
                         };
+                        let latest_twcc_observation = _stats_captured
+                            .lock()
+                            .ok()
+                            .and_then(|shared| shared.latest_video_twcc_observation.clone());
                         let bwe_decision = resolve_target_remb_kbps(
                             &config_captured,
                             observed_remb_kbps,
                             actual_kbps,
                             fraction_lost,
+                            transport_path.as_deref(),
+                            latest_twcc_observation.as_ref(),
                             &mut last_sent_remb_kbps,
                             &mut hybrid_ramp_cooldown_ticks,
                         );
@@ -664,6 +744,30 @@ fn install_peer_connection_callbacks(
 
                         // 写回共享 stats
                         if let Ok(mut shared) = _stats_captured.lock() {
+                            let twcc_feedback_interval_ms = shared
+                                .latest_video_twcc_observation
+                                .as_ref()
+                                .and_then(|twcc| twcc.feedback_interval_ms);
+                            let twcc_observed_packet_count = shared
+                                .latest_video_twcc_observation
+                                .as_ref()
+                                .map(|twcc| twcc.observed_packet_count);
+                            let twcc_covered_sequence_span = shared
+                                .latest_video_twcc_observation
+                                .as_ref()
+                                .map(|twcc| twcc.covered_sequence_span);
+                            let twcc_receive_bitrate_kbps = shared
+                                .latest_video_twcc_observation
+                                .as_ref()
+                                .and_then(|twcc| twcc.receive_bitrate_kbps);
+                            let twcc_delivery_ratio = shared
+                                .latest_video_twcc_observation
+                                .as_ref()
+                                .map(|twcc| twcc.delivery_ratio);
+                            let twcc_loss_ratio = shared
+                                .latest_video_twcc_observation
+                                .as_ref()
+                                .map(|twcc| twcc.packet_loss_ratio);
                             bwe_observation_id = bwe_observation_id.saturating_add(1);
                             shared.video_remb_bps = Some(target_remb_kbps.saturating_mul(1000));
                             shared.inbound_video_bitrate_kbps = Some(actual_kbps.max(0.0));
@@ -695,6 +799,12 @@ fn install_peer_connection_callbacks(
                                         None
                                     },
                                     transport_path: transport_path.clone(),
+                                    twcc_feedback_interval_ms,
+                                    twcc_observed_packet_count,
+                                    twcc_covered_sequence_span,
+                                    twcc_receive_bitrate_kbps,
+                                    twcc_delivery_ratio,
+                                    twcc_loss_ratio,
                                     observed_at_ms,
                                 });
                         }
@@ -741,37 +851,15 @@ fn install_peer_connection_callbacks(
 
             } else if is_audio {
                 crate::xbx_log_info!(
-                    "[xbxengine][webrtc-rs] mounting audio drain track mime={}",
+                    "[xbxengine][webrtc-rs] mounting audio playback track mime={}",
                     track.codec().capability.mime_type
                 );
-                tokio::spawn(async move {
-                    let mut total_audio_bytes = 0u64;
-                    let mut last_audio_sample_bytes = 0u64;
-                    let mut last_audio_sample_at_ms = now_ms_f64();
-                    while let Ok((rtp, _)) = track.read_rtp().await {
-                        total_audio_bytes =
-                            total_audio_bytes.saturating_add(rtp.payload.len() as u64);
-                        let now_ms = now_ms_f64();
-                        let elapsed_ms = (now_ms - last_audio_sample_at_ms).max(0.0);
-                        if let Ok(mut shared) = _stats_captured.lock() {
-                            shared.inbound_audio_bytes_total = total_audio_bytes;
-                            if elapsed_ms >= 250.0 {
-                                let delta_bytes =
-                                    total_audio_bytes.saturating_sub(last_audio_sample_bytes);
-                                let audio_kbps = (delta_bytes * 8) as f64 / elapsed_ms.max(1.0);
-                                shared.inbound_audio_bitrate_kbps = Some(audio_kbps.max(0.0));
-                                shared.inbound_bitrate_kbps = Some(
-                                    shared.inbound_video_bitrate_kbps.unwrap_or(0.0)
-                                        + audio_kbps.max(0.0),
-                                );
-                                last_audio_sample_bytes = total_audio_bytes;
-                                last_audio_sample_at_ms = now_ms;
-                            }
-                            shared.inbound_bytes_total =
-                                shared.inbound_video_bytes_total + shared.inbound_audio_bytes_total;
-                        }
-                    }
-                });
+                mount_remote_audio_track(
+                    track.clone(),
+                    _stats_captured.clone(),
+                    audio_playback_session,
+                    audio_volume_bits,
+                );
             } else {
                 // 其他轨道暂时只排空，避免缓冲堆积阻塞主轨。
                 tokio::spawn(async move {
@@ -780,6 +868,66 @@ fn install_peer_connection_callbacks(
             }
         })
     }));
+}
+
+fn mount_remote_audio_track(
+    track: Arc<webrtc::track::track_remote::TrackRemote>,
+    runtime_stats: Arc<Mutex<XbxEngineMediaRuntimeStats>>,
+    audio_playback_session: Arc<Mutex<Option<XbxRemoteAudioPlaybackSession>>>,
+    audio_volume_bits: Arc<AtomicU32>,
+) {
+    match XbxRemoteAudioPlaybackSession::start(
+        track.clone(),
+        runtime_stats.clone(),
+        audio_volume_bits,
+    ) {
+        Ok(session) => {
+            if let Ok(mut current_session) = audio_playback_session.lock() {
+                if let Some(previous) = current_session.replace(session) {
+                    previous.stop();
+                }
+            } else {
+                session.stop();
+            }
+        }
+        Err(error) => {
+            crate::xbx_log_error!(
+                "[xbxengine][webrtc-rs][audio] remote playback unavailable, fallback to drain: {error}"
+            );
+            spawn_audio_drain_task(track, runtime_stats);
+        }
+    }
+}
+
+fn spawn_audio_drain_task(
+    track: Arc<webrtc::track::track_remote::TrackRemote>,
+    runtime_stats: Arc<Mutex<XbxEngineMediaRuntimeStats>>,
+) {
+    tokio::spawn(async move {
+        let mut total_audio_bytes = 0u64;
+        let mut last_audio_sample_bytes = 0u64;
+        let mut last_audio_sample_at_ms = now_ms_f64();
+        while let Ok((rtp, _)) = track.read_rtp().await {
+            total_audio_bytes = total_audio_bytes.saturating_add(rtp.payload.len() as u64);
+            let now_ms = now_ms_f64();
+            let elapsed_ms = (now_ms - last_audio_sample_at_ms).max(0.0);
+            if let Ok(mut shared) = runtime_stats.lock() {
+                shared.inbound_audio_bytes_total = total_audio_bytes;
+                if elapsed_ms >= 250.0 {
+                    let delta_bytes = total_audio_bytes.saturating_sub(last_audio_sample_bytes);
+                    let audio_kbps = (delta_bytes * 8) as f64 / elapsed_ms.max(1.0);
+                    shared.inbound_audio_bitrate_kbps = Some(audio_kbps.max(0.0));
+                    shared.inbound_bitrate_kbps = Some(
+                        shared.inbound_video_bitrate_kbps.unwrap_or(0.0) + audio_kbps.max(0.0),
+                    );
+                    last_audio_sample_bytes = total_audio_bytes;
+                    last_audio_sample_at_ms = now_ms;
+                }
+                shared.inbound_bytes_total =
+                    shared.inbound_video_bytes_total + shared.inbound_audio_bytes_total;
+            }
+        }
+    });
 }
 
 fn configure_peer_connection_offer_primitives(
@@ -846,11 +994,17 @@ struct BweDecision {
     reason: String,
 }
 
+struct TwccGccInput<'a> {
+    observation: &'a XbxEngineVideoTwccObservation,
+}
+
 fn resolve_target_remb_kbps(
     config: &crate::XbxEngineWebRtcRuntimeConfig,
     observed_remb_kbps: Option<u32>,
     actual_kbps: f64,
     loss_ratio: f64,
+    transport_path: Option<&str>,
+    twcc_observation: Option<&XbxEngineVideoTwccObservation>,
     last_sent_remb_kbps: &mut u32,
     hybrid_ramp_cooldown_ticks: &mut u8,
 ) -> BweDecision {
@@ -866,57 +1020,77 @@ fn resolve_target_remb_kbps(
     let current_kbps = (*last_sent_remb_kbps).clamp(floor_kbps, ceiling_kbps);
     let actual_headroom_kbps =
         ((actual_kbps * 1.25).round() as u32).clamp(floor_kbps, ceiling_kbps);
+    let twcc_input = twcc_observation.map(|observation| TwccGccInput { observation });
 
     let (next_kbps, reason) = match config.bwe_mode.as_str() {
+        "twcc-gcc" => resolve_twcc_gcc_target(
+            config,
+            current_kbps,
+            actual_headroom_kbps,
+            transport_path,
+            twcc_input.as_ref(),
+            hybrid_ramp_cooldown_ticks,
+        ),
         "observed-remb" => (observed_kbps, "observed-remb".to_string()),
         "hybrid" => {
-            let severe_loss = loss_ratio >= 0.08;
-            let sustained_loss = loss_ratio >= 0.01;
-            let mild_loss = loss_ratio >= 0.005;
-            let bitrate_overrun = actual_kbps > (current_kbps as f64 * 1.1);
-
-            if severe_loss || bitrate_overrun {
-                *hybrid_ramp_cooldown_ticks = 12;
-                (
-                    ((current_kbps as f64) * (config.remb_ramp_down_factor as f64 / 1000.0))
-                        .round()
-                        .max(floor_kbps as f64) as u32,
-                    if severe_loss {
-                        "hybrid-severe-loss-backoff".to_string()
-                    } else {
-                        "hybrid-bitrate-overrun-backoff".to_string()
-                    },
+            if let Some(twcc) = twcc_input.as_ref() {
+                resolve_twcc_gcc_target(
+                    config,
+                    current_kbps,
+                    actual_headroom_kbps,
+                    transport_path,
+                    Some(twcc),
+                    hybrid_ramp_cooldown_ticks,
                 )
-            } else if sustained_loss {
-                *hybrid_ramp_cooldown_ticks = 10;
-                (
-                    current_kbps.min(actual_headroom_kbps).max(floor_kbps),
-                    "hybrid-sustained-loss-cap".to_string(),
-                )
-            } else if mild_loss {
-                *hybrid_ramp_cooldown_ticks = 6;
-                (
-                    current_kbps
-                        .min(actual_headroom_kbps.saturating_add(config.remb_ramp_up_step_kbps))
-                        .max(floor_kbps),
-                    "hybrid-mild-loss-hold".to_string(),
-                )
-            } else if *hybrid_ramp_cooldown_ticks > 0 {
-                *hybrid_ramp_cooldown_ticks = hybrid_ramp_cooldown_ticks.saturating_sub(1);
-                (current_kbps, "hybrid-ramp-cooldown".to_string())
             } else {
-                let desired_kbps = observed_kbps.min(ceiling_kbps);
-                (
-                    current_kbps
-                        .saturating_add(config.remb_ramp_up_step_kbps)
-                        .min(desired_kbps)
-                        .max(floor_kbps),
-                    if observed_remb_kbps.is_some() {
-                        "hybrid-ramp-up-observed".to_string()
-                    } else {
-                        "hybrid-ramp-up-ceiling".to_string()
-                    },
-                )
+                let severe_loss = loss_ratio >= 0.08;
+                let sustained_loss = loss_ratio >= 0.01;
+                let mild_loss = loss_ratio >= 0.005;
+                let bitrate_overrun = actual_kbps > (current_kbps as f64 * 1.1);
+
+                if severe_loss || bitrate_overrun {
+                    *hybrid_ramp_cooldown_ticks = 12;
+                    (
+                        ((current_kbps as f64) * (config.remb_ramp_down_factor as f64 / 1000.0))
+                            .round()
+                            .max(floor_kbps as f64) as u32,
+                        if severe_loss {
+                            "hybrid-severe-loss-backoff".to_string()
+                        } else {
+                            "hybrid-bitrate-overrun-backoff".to_string()
+                        },
+                    )
+                } else if sustained_loss {
+                    *hybrid_ramp_cooldown_ticks = 10;
+                    (
+                        current_kbps.min(actual_headroom_kbps).max(floor_kbps),
+                        "hybrid-sustained-loss-cap".to_string(),
+                    )
+                } else if mild_loss {
+                    *hybrid_ramp_cooldown_ticks = 6;
+                    (
+                        current_kbps
+                            .min(actual_headroom_kbps.saturating_add(config.remb_ramp_up_step_kbps))
+                            .max(floor_kbps),
+                        "hybrid-mild-loss-hold".to_string(),
+                    )
+                } else if *hybrid_ramp_cooldown_ticks > 0 {
+                    *hybrid_ramp_cooldown_ticks = hybrid_ramp_cooldown_ticks.saturating_sub(1);
+                    (current_kbps, "hybrid-ramp-cooldown".to_string())
+                } else {
+                    let desired_kbps = observed_kbps.min(ceiling_kbps);
+                    (
+                        current_kbps
+                            .saturating_add(config.remb_ramp_up_step_kbps)
+                            .min(desired_kbps)
+                            .max(floor_kbps),
+                        if observed_remb_kbps.is_some() {
+                            "hybrid-ramp-up-observed".to_string()
+                        } else {
+                            "hybrid-ramp-up-ceiling".to_string()
+                        },
+                    )
+                }
             }
         }
         _ => (forced_kbps, "fixed-remb".to_string()),
@@ -930,10 +1104,239 @@ fn resolve_target_remb_kbps(
     }
 }
 
+fn resolve_twcc_gcc_target(
+    config: &crate::XbxEngineWebRtcRuntimeConfig,
+    current_kbps: u32,
+    actual_headroom_kbps: u32,
+    transport_path: Option<&str>,
+    twcc_input: Option<&TwccGccInput<'_>>,
+    ramp_cooldown_ticks: &mut u8,
+) -> (u32, String) {
+    let floor_kbps = config.remb_floor_kbps.max(1);
+    let ceiling_kbps = config.remb_ceiling_kbps.max(floor_kbps);
+    let direct_path = transport_path
+        .map(|path| path.to_ascii_lowercase().starts_with("direct"))
+        .unwrap_or(false);
+    let preferred_gaming_floor_kbps = if direct_path {
+        floor_kbps.max(30_000)
+    } else {
+        floor_kbps
+    };
+    let ramp_up_step_kbps = if direct_path {
+        config.remb_ramp_up_step_kbps.saturating_mul(2)
+    } else {
+        config.remb_ramp_up_step_kbps
+    };
+    let Some(twcc_input) = twcc_input else {
+        return (
+            current_kbps.max(preferred_gaming_floor_kbps),
+            if direct_path {
+                "twcc-gcc-direct-await-feedback".to_string()
+            } else {
+                "twcc-gcc-await-feedback".to_string()
+            },
+        );
+    };
+
+    let twcc = twcc_input.observation;
+    let stable_feedback = twcc.feedback_interval_ms.unwrap_or(0.0)
+        <= if direct_path { 300.0 } else { 200.0 }
+        && twcc.observed_packet_count >= if direct_path { 6 } else { 12 }
+        && twcc.covered_sequence_span >= twcc.observed_packet_count;
+    let receive_bitrate_kbps = twcc
+        .receive_bitrate_kbps
+        .unwrap_or(actual_headroom_kbps as f64)
+        .clamp(floor_kbps as f64, ceiling_kbps as f64) as u32;
+    let receive_headroom_kbps = ((receive_bitrate_kbps as f64)
+        * if direct_path { 1.55 } else { 1.08 })
+    .round()
+    .clamp(floor_kbps as f64, ceiling_kbps as f64) as u32;
+
+    if !stable_feedback {
+        return (
+            if direct_path {
+                current_kbps.max(preferred_gaming_floor_kbps)
+            } else {
+                current_kbps.min(receive_headroom_kbps.max(floor_kbps))
+            },
+            if direct_path {
+                "twcc-gcc-direct-unstable-hold".to_string()
+            } else {
+                "twcc-gcc-unstable-feedback-hold".to_string()
+            },
+        );
+    }
+
+    let severe_loss_threshold = if direct_path { 0.30 } else { 0.12 };
+    let severe_delivery_threshold = if direct_path { 0.62 } else { 0.82 };
+    let congestion_loss_threshold = if direct_path { 0.15 } else { 0.05 };
+    let congestion_delivery_threshold = if direct_path { 0.80 } else { 0.92 };
+    let mild_loss_threshold = if direct_path { 0.07 } else { 0.02 };
+    let mild_delivery_threshold = if direct_path { 0.90 } else { 0.97 };
+
+    if twcc.packet_loss_ratio >= severe_loss_threshold
+        || twcc.delivery_ratio <= severe_delivery_threshold
+    {
+        *ramp_cooldown_ticks = if direct_path { 6 } else { 12 };
+        let backoff_kbps = ((current_kbps as f64) * (config.remb_ramp_down_factor as f64 / 1000.0))
+            .round()
+            .max(floor_kbps as f64) as u32;
+        return (
+            backoff_kbps.min(receive_headroom_kbps.max(floor_kbps)),
+            if direct_path {
+                "twcc-gcc-direct-severe-backoff".to_string()
+            } else {
+                "twcc-gcc-severe-backoff".to_string()
+            },
+        );
+    }
+
+    if twcc.packet_loss_ratio >= congestion_loss_threshold
+        || twcc.delivery_ratio <= congestion_delivery_threshold
+    {
+        *ramp_cooldown_ticks = if direct_path { 4 } else { 8 };
+        let direct_cap_kbps = receive_headroom_kbps
+            .saturating_add(ramp_up_step_kbps)
+            .max(preferred_gaming_floor_kbps);
+        return (
+            if direct_path {
+                current_kbps.min(direct_cap_kbps)
+            } else {
+                current_kbps.min(receive_headroom_kbps.max(floor_kbps))
+            },
+            if direct_path {
+                "twcc-gcc-direct-congestion-cap".to_string()
+            } else {
+                "twcc-gcc-congestion-cap".to_string()
+            },
+        );
+    }
+
+    if twcc.packet_loss_ratio >= mild_loss_threshold
+        || twcc.delivery_ratio <= mild_delivery_threshold
+    {
+        *ramp_cooldown_ticks = if direct_path { 2 } else { 4 };
+        return (
+            if direct_path {
+                current_kbps.max(preferred_gaming_floor_kbps)
+            } else {
+                current_kbps
+                    .min(receive_headroom_kbps.saturating_add(ramp_up_step_kbps))
+                    .max(floor_kbps)
+            },
+            if direct_path {
+                "twcc-gcc-direct-mild-hold".to_string()
+            } else {
+                "twcc-gcc-mild-hold".to_string()
+            },
+        );
+    }
+
+    if *ramp_cooldown_ticks > 0 {
+        *ramp_cooldown_ticks = ramp_cooldown_ticks.saturating_sub(1);
+        return (
+            current_kbps.max(preferred_gaming_floor_kbps),
+            if direct_path {
+                "twcc-gcc-direct-ramp-cooldown".to_string()
+            } else {
+                "twcc-gcc-ramp-cooldown".to_string()
+            },
+        );
+    }
+
+    let desired_kbps = receive_headroom_kbps
+        .max(actual_headroom_kbps)
+        .max(preferred_gaming_floor_kbps)
+        .clamp(floor_kbps, ceiling_kbps);
+    (
+        current_kbps
+            .saturating_add(ramp_up_step_kbps)
+            .min(desired_kbps)
+            .max(floor_kbps),
+        if direct_path {
+            "twcc-gcc-direct-ramp-up".to_string()
+        } else {
+            "twcc-gcc-ramp-up".to_string()
+        },
+    )
+}
+
+fn configure_owned_nack(
+    mut registry: interceptor::registry::Registry,
+    media_engine: &mut MediaEngine,
+    _interval: std::time::Duration,
+    _runtime_stats: Arc<Mutex<XbxEngineMediaRuntimeStats>>,
+) -> interceptor::registry::Registry {
+    media_engine.register_feedback(
+        RTCPFeedback {
+            typ: TYPE_RTCP_FB_NACK.to_owned(),
+            parameter: "".to_owned(),
+        },
+        RTPCodecType::Video,
+    );
+    media_engine.register_feedback(
+        RTCPFeedback {
+            typ: TYPE_RTCP_FB_NACK.to_owned(),
+            parameter: "pli".to_owned(),
+        },
+        RTPCodecType::Video,
+    );
+
+    registry.add(Box::new(interceptor::nack::responder::Responder::builder()));
+    registry
+}
+
+fn configure_owned_twcc_receiver(
+    registry: &mut interceptor::registry::Registry,
+    media_engine: &mut MediaEngine,
+    interval: std::time::Duration,
+    runtime_stats: Arc<Mutex<XbxEngineMediaRuntimeStats>>,
+) -> webrtc::error::Result<()> {
+    media_engine.register_feedback(
+        RTCPFeedback {
+            typ: TYPE_RTCP_FB_TRANSPORT_CC.to_string(),
+            parameter: String::new(),
+        },
+        RTPCodecType::Video,
+    );
+    media_engine.register_header_extension(
+        RTCRtpHeaderExtensionCapability {
+            uri: TRANSPORT_CC_URI.to_string(),
+        },
+        RTPCodecType::Video,
+        None,
+    )?;
+
+    media_engine.register_feedback(
+        RTCPFeedback {
+            typ: TYPE_RTCP_FB_TRANSPORT_CC.to_string(),
+            parameter: String::new(),
+        },
+        RTPCodecType::Audio,
+    );
+    media_engine.register_header_extension(
+        RTCRtpHeaderExtensionCapability {
+            uri: TRANSPORT_CC_URI.to_string(),
+        },
+        RTPCodecType::Audio,
+        None,
+    )?;
+
+    registry.add(Box::new(OwnedTwccReceiverBuilder::new(
+        interval,
+        runtime_stats,
+    )));
+    Ok(())
+}
+
 fn build_h264_codec_preferences() -> Vec<RTCRtpCodecParameters> {
     let video_rtcp_feedback = vec![
         RTCPFeedback {
             typ: TYPE_RTCP_FB_GOOG_REMB.to_string(),
+            parameter: String::new(),
+        },
+        RTCPFeedback {
+            typ: TYPE_RTCP_FB_TRANSPORT_CC.to_string(),
             parameter: String::new(),
         },
         RTCPFeedback {
@@ -1450,14 +1853,18 @@ mod tests {
             "c=IN IP4 0.0.0.0",
             "a=rtpmap:111 opus/48000/2",
             "a=fmtp:111 minptime=10;useinbandfec=1",
+            "a=rtcp-fb:111 transport-cc",
+            "a=extmap:1 http://www.ietf.org/id/draft-holmer-rmcat-transport-wide-cc-extensions-01",
             "m=video 9 UDP/TLS/RTP/SAVPF 102 104 106",
             "c=IN IP4 0.0.0.0",
             "a=rtpmap:102 H264/90000",
             "a=fmtp:102 level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=42001f",
+            "a=rtcp-fb:102 transport-cc",
             "a=rtpmap:104 H264/90000",
             "a=fmtp:104 level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=42e01f",
             "a=rtpmap:106 H264/90000",
             "a=fmtp:106 level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=4d0032",
+            "a=extmap:3 http://www.ietf.org/id/draft-holmer-rmcat-transport-wide-cc-extensions-01",
             "m=application 9 UDP/DTLS/SCTP webrtc-datachannel",
         ]
         .join("\r\n")
@@ -1515,6 +1922,9 @@ mod tests {
         assert!(patched.contains("x-google-max-bitrate=40000"));
         assert!(patched.contains("max-fs=8160"));
         assert!(patched.contains("max-fr=60"));
+        assert!(patched.contains("a=rtcp-fb:111 transport-cc"));
+        assert!(patched.contains("a=rtcp-fb:102 transport-cc"));
+        assert!(patched.contains("draft-holmer-rmcat-transport-wide-cc-extensions-01"));
     }
 
     #[test]
@@ -1538,6 +1948,7 @@ mod tests {
             None,
             4_600.0,
             0.012,
+            None,
             &mut last_sent_remb_kbps,
             &mut 0,
         );
@@ -1565,6 +1976,7 @@ mod tests {
             None,
             9_000.0,
             0.12,
+            None,
             &mut last_sent_remb_kbps,
             &mut 0,
         );
@@ -1592,6 +2004,7 @@ mod tests {
             None,
             5_200.0,
             0.0,
+            None,
             &mut last_sent_remb_kbps,
             &mut cooldown_ticks,
         );
@@ -1599,6 +2012,94 @@ mod tests {
         assert_eq!(decision.target_kbps, 16_000);
         assert_eq!(decision.reason, "hybrid-ramp-cooldown");
         assert_eq!(cooldown_ticks, 2);
+    }
+
+    #[test]
+    fn twcc_gcc_direct_path_prefers_higher_gaming_target() {
+        let config = XbxEngineWebRtcRuntimeConfig {
+            bwe_mode: "twcc-gcc".to_string(),
+            forced_remb_kbps: Some(150_000),
+            remb_floor_kbps: 25_000,
+            remb_ceiling_kbps: 150_000,
+            remb_ramp_up_step_kbps: 12_000,
+            remb_ramp_down_factor: 900,
+            ..Default::default()
+        };
+        let twcc = crate::XbxEngineVideoTwccObservation {
+            observation_id: 1,
+            feedback_packet_count: 1,
+            covered_sequence_start: 100,
+            covered_sequence_end: 239,
+            covered_sequence_span: 140,
+            observed_packet_count: 140,
+            observed_byte_count: 150_000,
+            feedback_interval_ms: Some(100.0),
+            arrival_span_ms: Some(95.0),
+            receive_bitrate_kbps: Some(10_500.0),
+            delivery_ratio: 1.0,
+            packet_loss_ratio: 0.0,
+            observed_at_ms: 1_000.0,
+        };
+        let mut last_sent_remb_kbps = 25_000;
+        let mut cooldown_ticks = 0;
+
+        let decision = resolve_target_remb_kbps(
+            &config,
+            None,
+            9_800.0,
+            0.0,
+            Some("Direct (host->host)"),
+            Some(&twcc),
+            &mut last_sent_remb_kbps,
+            &mut cooldown_ticks,
+        );
+
+        assert_eq!(decision.reason, "twcc-gcc-direct-ramp-up");
+        assert_eq!(decision.target_kbps, 30_000);
+    }
+
+    #[test]
+    fn twcc_gcc_direct_path_keeps_high_target_under_mild_loss() {
+        let config = XbxEngineWebRtcRuntimeConfig {
+            bwe_mode: "twcc-gcc".to_string(),
+            forced_remb_kbps: Some(150_000),
+            remb_floor_kbps: 25_000,
+            remb_ceiling_kbps: 150_000,
+            remb_ramp_up_step_kbps: 12_000,
+            remb_ramp_down_factor: 900,
+            ..Default::default()
+        };
+        let twcc = crate::XbxEngineVideoTwccObservation {
+            observation_id: 2,
+            feedback_packet_count: 1,
+            covered_sequence_start: 1_000,
+            covered_sequence_end: 1_179,
+            covered_sequence_span: 180,
+            observed_packet_count: 168,
+            observed_byte_count: 240_000,
+            feedback_interval_ms: Some(102.0),
+            arrival_span_ms: Some(98.0),
+            receive_bitrate_kbps: Some(18_500.0),
+            delivery_ratio: 0.93,
+            packet_loss_ratio: 0.03,
+            observed_at_ms: 5_000.0,
+        };
+        let mut last_sent_remb_kbps = 52_000;
+        let mut cooldown_ticks = 0;
+
+        let decision = resolve_target_remb_kbps(
+            &config,
+            None,
+            18_000.0,
+            0.0,
+            Some("Direct (host->host)"),
+            Some(&twcc),
+            &mut last_sent_remb_kbps,
+            &mut cooldown_ticks,
+        );
+
+        assert_eq!(decision.reason, "twcc-gcc-direct-mild-hold");
+        assert_eq!(decision.target_kbps, 52_000);
     }
 }
 fn summarize_sdp(sdp: &str) -> String {

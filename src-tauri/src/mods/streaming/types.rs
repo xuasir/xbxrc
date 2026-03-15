@@ -153,6 +153,7 @@ pub enum StreamingBweMode {
     FixedRemb,
     ObservedRemb,
     Hybrid,
+    TwccGcc,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -235,6 +236,7 @@ pub struct StreamingRuntimeProjection {
     pub recovery: StreamingRuntimeRecoveryProjection,
     pub polling_rate_hz: u16,
     pub vibration: bool,
+    pub vibration_strength: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -322,6 +324,7 @@ impl From<DomainRuntimePlanProjection> for StreamingRuntimeProjection {
                 DomainRuntimeBweMode::FixedRemb => StreamingBweMode::FixedRemb,
                 DomainRuntimeBweMode::ObservedRemb => StreamingBweMode::ObservedRemb,
                 DomainRuntimeBweMode::Hybrid => StreamingBweMode::Hybrid,
+                DomainRuntimeBweMode::TwccGcc => StreamingBweMode::TwccGcc,
             },
             forced_remb_kbps: projection.forced_remb_kbps,
             adaptive_remb_enabled: projection.adaptive_remb_enabled,
@@ -362,6 +365,7 @@ impl From<DomainRuntimePlanProjection> for StreamingRuntimeProjection {
             },
             polling_rate_hz: projection.polling_rate_hz,
             vibration: projection.vibration,
+            vibration_strength: "realistic".to_string(),
         }
     }
 }
@@ -664,6 +668,7 @@ pub struct StreamingConfigSnapshot {
     pub codec: String,
     pub polling_rate: i64,
     pub vibration: bool,
+    pub vibration_strength: String,
     pub stream_runtime_mode: String,
     pub power_on: bool,
     pub server_url: String,

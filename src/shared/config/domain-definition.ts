@@ -208,7 +208,7 @@ export const CONFIG_GROUP_DEFINITIONS: Record<string, SettingGroupDefinition> = 
       {
         key: 'controller',
         label: 'Controller',
-        keys: ['vibration'],
+        keys: ['vibration', 'vibration_strength'],
       },
     ],
   },
@@ -405,6 +405,28 @@ export const CONFIG_FIELD_DEFINITIONS: Record<string, SettingFieldDefinition> = 
     label: 'Vibration',
     description: 'Enable controller vibration output',
     control: 'toggle',
+  },
+  vibration_strength: {
+    label: 'Vibration Strength',
+    description: 'Choose the vibration strength profile closest to your preferred controller feel',
+    control: 'singleSelect',
+    options: [
+      {
+        value: 'realistic',
+        label: 'Realistic',
+        description: 'Closer to native Xbox motor balance with lighter and finer feedback',
+      },
+      {
+        value: 'enhanced',
+        label: 'Enhanced',
+        description: 'Slightly stronger while still preserving most of the detail',
+      },
+      {
+        value: 'full',
+        label: 'Full',
+        description: 'Use the full decoded rumble signal for the strongest output',
+      },
+    ],
   },
   power_on: {
     label: 'Power On',

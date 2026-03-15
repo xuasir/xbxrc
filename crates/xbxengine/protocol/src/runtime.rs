@@ -149,6 +149,29 @@ pub struct XbxEngineVideoBweObservationDto {
     pub loss_ratio: f64,
     pub rtt_ms: Option<f64>,
     pub transport_path: Option<String>,
+    pub twcc_feedback_interval_ms: Option<f64>,
+    pub twcc_observed_packet_count: Option<u16>,
+    pub twcc_covered_sequence_span: Option<u16>,
+    pub twcc_receive_bitrate_kbps: Option<f64>,
+    pub twcc_delivery_ratio: Option<f64>,
+    pub twcc_loss_ratio: Option<f64>,
+    pub observed_at_ms: f64,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct XbxEngineVideoTwccObservationDto {
+    pub observation_id: u64,
+    pub feedback_packet_count: u16,
+    pub covered_sequence_start: u16,
+    pub covered_sequence_end: u16,
+    pub covered_sequence_span: u16,
+    pub observed_packet_count: u16,
+    pub observed_byte_count: u64,
+    pub feedback_interval_ms: Option<f64>,
+    pub arrival_span_ms: Option<f64>,
+    pub receive_bitrate_kbps: Option<f64>,
+    pub delivery_ratio: f64,
+    pub packet_loss_ratio: f64,
     pub observed_at_ms: f64,
 }
 
@@ -204,4 +227,5 @@ pub struct XbxEngineStatsDto {
     pub latest_video_nack_observation: Option<XbxEngineNackObservationDto>,
     pub latest_video_escalation_observation: Option<XbxEngineVideoEscalationObservationDto>,
     pub latest_video_bwe_observation: Option<XbxEngineVideoBweObservationDto>,
+    pub latest_video_twcc_observation: Option<XbxEngineVideoTwccObservationDto>,
 }

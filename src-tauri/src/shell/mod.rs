@@ -73,6 +73,9 @@ async fn build_services(
     let app_handle = app.handle();
     let is_quitting = Arc::new(AtomicBool::new(false));
     let last_runtime_event = Arc::new(StdMutex::new(None));
+    let native_video = Arc::new(StdMutex::new(mods::native_video::NativeVideoRegistry::new(
+        app_handle.clone(),
+    )));
     let runtime_trace = Arc::new(
         mods::runtime_trace::RuntimeTraceRecorder::new().map_err(|error| {
             AppError::Internal(format!("Failed to init runtime trace: {error}"))
@@ -100,6 +103,7 @@ async fn build_services(
     let xbxengine_service = Arc::new(mods::xbxengine::XbxEngineService::new(
         app_handle.clone(),
         last_runtime_event.clone(),
+        native_video.clone(),
         runtime_trace.clone(),
     ));
     let streaming_service = Arc::new(mods::streaming::StreamingService::new(
@@ -133,6 +137,7 @@ async fn build_services(
         runtime_trace,
         xbxengine: xbxengine_service,
         gamepad: gamepad_service,
+        native_video,
         startup_flags,
         is_quitting,
     };

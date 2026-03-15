@@ -15,6 +15,7 @@ use xbxengine_protocol::{
 };
 
 use crate::error::{AppError, AppResult};
+use crate::mods::native_video::NativeVideoRegistryRef;
 use crate::mods::runtime_trace::RuntimeTraceRecorderRef;
 use crate::mods::streaming::{
     StreamingCloseSessionParams, StreamingExchangeOfferParams, StreamingPollIceParams,
@@ -46,6 +47,7 @@ struct RuntimeTraceObservationState {
     nack_observation_id: Option<u64>,
     escalation_observation_id: Option<u64>,
     bwe_observation_id: Option<u64>,
+    twcc_observation_id: Option<u64>,
     recovery_keyframe_request_count: Option<u64>,
     recovery_decoder_reset_count: Option<u64>,
     recovery_reconnect_count: Option<u64>,
@@ -58,6 +60,7 @@ impl XbxEngineRuntimeState {
     pub fn new(
         app_handle: AppHandle,
         last_runtime_event: Arc<StdMutex<Option<serde_json::Value>>>,
+        native_video: NativeVideoRegistryRef,
         runtime_trace: RuntimeTraceRecorderRef,
     ) -> Self {
         let cancellation_epoch = Arc::new(AtomicU64::new(0));
@@ -74,6 +77,7 @@ impl XbxEngineRuntimeState {
             XbxEngineRuntimeConfig::default(),
             TauriXbxEngineHostBridge {
                 app_handle,
+                native_video,
                 runtime_trace: runtime_trace.clone(),
                 cancellation_epoch: cancellation_epoch.clone(),
             },
@@ -286,7 +290,39 @@ impl XbxEngineRuntimeState {
                         "lossRatio": bwe.loss_ratio,
                         "rttMs": bwe.rtt_ms,
                         "transportPath": bwe.transport_path,
+                        "twccFeedbackIntervalMs": bwe.twcc_feedback_interval_ms,
+                        "twccObservedPacketCount": bwe.twcc_observed_packet_count,
+                        "twccCoveredSequenceSpan": bwe.twcc_covered_sequence_span,
+                        "twccReceiveBitrateKbps": bwe.twcc_receive_bitrate_kbps,
+                        "twccDeliveryRatio": bwe.twcc_delivery_ratio,
+                        "twccLossRatio": bwe.twcc_loss_ratio,
                         "observedAtMs": bwe.observed_at_ms,
+                    }),
+                );
+            }
+        }
+
+        if let Some(twcc) = stats.latest_video_twcc_observation.as_ref() {
+            if observation_state.twcc_observation_id != Some(twcc.observation_id) {
+                observation_state.twcc_observation_id = Some(twcc.observation_id);
+                self.runtime_trace.record(
+                    "xbxengine",
+                    "twccFeedbackSent",
+                    session_id,
+                    serde_json::json!({
+                        "observationId": twcc.observation_id,
+                        "feedbackPacketCount": twcc.feedback_packet_count,
+                        "coveredSequenceStart": twcc.covered_sequence_start,
+                        "coveredSequenceEnd": twcc.covered_sequence_end,
+                        "coveredSequenceSpan": twcc.covered_sequence_span,
+                        "observedPacketCount": twcc.observed_packet_count,
+                        "observedByteCount": twcc.observed_byte_count,
+                        "feedbackIntervalMs": twcc.feedback_interval_ms,
+                        "arrivalSpanMs": twcc.arrival_span_ms,
+                        "receiveBitrateKbps": twcc.receive_bitrate_kbps,
+                        "deliveryRatio": twcc.delivery_ratio,
+                        "packetLossRatio": twcc.packet_loss_ratio,
+                        "observedAtMs": twcc.observed_at_ms,
                     }),
                 );
             }
@@ -315,6 +351,20 @@ impl XbxEngineRuntimeState {
 
         if observation_state.recovery_decoder_reset_count != stats.recovery_decoder_reset_count {
             observation_state.recovery_decoder_reset_count = stats.recovery_decoder_reset_count;
+            if let Some(count) = stats.recovery_decoder_reset_count {
+                if count > 0 && stats.last_recovery_action.as_deref() == Some("decoderReset") {
+                    self.runtime_trace.record(
+                        "xbxengine",
+                        "decoderResetRequested",
+                        session_id,
+                        serde_json::json!({
+                            "count": count,
+                            "atMs": stats.last_recovery_action_at_ms,
+                            "reason": stats.last_recovery_reason,
+                        }),
+                    );
+                }
+            }
         }
 
         if observation_state.recovery_reconnect_count != stats.recovery_reconnect_count {
@@ -356,6 +406,7 @@ impl XbxEngineRuntimeState {
 #[derive(Clone)]
 struct TauriXbxEngineHostBridge {
     app_handle: AppHandle,
+    native_video: NativeVideoRegistryRef,
     runtime_trace: RuntimeTraceRecorderRef,
     cancellation_epoch: Arc<AtomicU64>,
 }
@@ -522,11 +573,93 @@ impl TauriXbxEngineHostBridge {
         );
         Ok(XbxEngineHostResponseDto::RemoteSessionClosed)
     }
+
+    fn attach_native_viewport(
+        &self,
+        viewport_id: &str,
+        surface_id: Option<&str>,
+    ) -> Result<(), XbxEngineRuntimeError> {
+        let Ok(mut registry) = self.native_video.lock() else {
+            return Err(XbxEngineRuntimeError::new(
+                "xbxEngineNativeVideoRegistryLockFailed",
+            ));
+        };
+        let changed = registry.attach_viewport(viewport_id, surface_id);
+        if changed {
+            self.runtime_trace.record(
+                "xbxengine-host",
+                "nativeViewportAttached",
+                None,
+                serde_json::json!({
+                    "viewportId": viewport_id,
+                    "surfaceId": surface_id,
+                }),
+            );
+        }
+        Ok(())
+    }
+
+    fn detach_native_viewport(&self, viewport_id: &str) -> Result<(), XbxEngineRuntimeError> {
+        let Ok(mut registry) = self.native_video.lock() else {
+            return Err(XbxEngineRuntimeError::new(
+                "xbxEngineNativeVideoRegistryLockFailed",
+            ));
+        };
+        registry.detach_viewport(viewport_id);
+        self.runtime_trace.record(
+            "xbxengine-host",
+            "nativeViewportDetached",
+            None,
+            serde_json::json!({
+                "viewportId": viewport_id,
+            }),
+        );
+        Ok(())
+    }
+
+    fn present_native_frame(
+        &self,
+        viewport_id: &str,
+        surface_id: Option<&str>,
+        frame: &xbxengine::XbxEngineRenderFrame,
+    ) -> Result<(), XbxEngineRuntimeError> {
+        let Ok(mut registry) = self.native_video.lock() else {
+            return Err(XbxEngineRuntimeError::new(
+                "xbxEngineNativeVideoRegistryLockFailed",
+            ));
+        };
+        registry.present_frame(viewport_id, surface_id, frame);
+        Ok(())
+    }
 }
 
 impl XbxEngineHostBridge for TauriXbxEngineHostBridge {
     fn current_cancellation_epoch(&self) -> u64 {
         self.cancellation_epoch.load(Ordering::SeqCst)
+    }
+
+    fn attach_viewport(
+        &mut self,
+        viewport: &xbxengine_protocol::XbxEngineViewportDto,
+        surface_id: Option<&str>,
+    ) -> Result<(), XbxEngineRuntimeError> {
+        self.attach_native_viewport(&viewport.viewport_id, surface_id)
+    }
+
+    fn detach_viewport(&mut self, viewport_id: Option<&str>) -> Result<(), XbxEngineRuntimeError> {
+        let Some(viewport_id) = viewport_id else {
+            return Ok(());
+        };
+        self.detach_native_viewport(viewport_id)
+    }
+
+    fn present_frame(
+        &mut self,
+        viewport: &xbxengine_protocol::XbxEngineViewportDto,
+        surface_id: Option<&str>,
+        frame: &xbxengine::XbxEngineRenderFrame,
+    ) -> Result<(), XbxEngineRuntimeError> {
+        self.present_native_frame(&viewport.viewport_id, surface_id, frame)
     }
 
     fn request(

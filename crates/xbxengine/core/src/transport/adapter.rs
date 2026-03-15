@@ -1,6 +1,7 @@
 use bytes::Bytes;
 use rtp::codecs::h264::H264Packet;
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 use webrtc::peer_connection::RTCPeerConnection;
 use webrtc::track::track_remote::TrackRemote;
@@ -10,18 +11,11 @@ use crate::media::video::types::{EncodedFrame, FrameValue, VideoCodec};
 use crate::transport::h264_resolution::parse_sps_dimensions_from_nal;
 use crate::transport::webrtc::escalation::VideoEscalationReason;
 use crate::transport::webrtc::frame_deadline::FrameDeadlineTracker;
-use crate::transport::webrtc::nack_scheduler::{
-    NackBatch, NackScheduler, NackSchedulerConfig, ResolvedNack,
-};
+use crate::transport::webrtc::nack_scheduler::{NackScheduler, NackSchedulerConfig, ResolvedNack};
 use crate::{XbxEngineMediaRuntimeStats, XbxEngineVideoNackObservation};
 
 pub enum FrameSourceEvent {
     Frame(EncodedFrame),
-    PacketGapDetected {
-        expected_sequence: u16,
-        received_sequence: u16,
-        missing_count: u16,
-    },
     EscalationHint {
         reason: VideoEscalationReason,
         label: &'static str,
@@ -40,17 +34,25 @@ pub struct WebrtcVideoAdapter {
     runtime_stats: Arc<Mutex<XbxEngineMediaRuntimeStats>>,
     sample_builder: SampleBuilder<H264Packet>,
     max_late_packets: u16,
+    jitter_buffer_min_delay: Duration,
+    jitter_buffer_max_delay: Duration,
     idle_timeout: std::time::Duration,
     idle_hint_cooldown: std::time::Duration,
     last_packet_time: std::time::Instant,
     assembling_frame_start: Option<std::time::Instant>,
     last_idle_hint_time: Option<std::time::Instant>,
-    last_sequence: Option<u16>,
     nack_scheduler: NackScheduler,
+    nack_window: NackSequenceWindow,
+    nack_skip_last_n: u16,
+    last_highest_rtp_sequence: Option<u16>,
+    packet_gap_observation_id: u64,
     frame_deadline_tracker: FrameDeadlineTracker,
     nack_observation_id: u64,
     pending_escalation_hint: Option<(VideoEscalationReason, &'static str)>,
     severe_deadline_packet_threshold: usize,
+    waiting_for_recovery_keyframe: bool,
+    sample_loss_burst_count: u8,
+    clean_samples_since_loss: u8,
     current_width: u32,
     current_height: u32,
 }
@@ -61,30 +63,41 @@ impl WebrtcVideoAdapter {
         peer_connection: Arc<RTCPeerConnection>,
         runtime_stats: Arc<Mutex<XbxEngineMediaRuntimeStats>>,
         max_late_packets: u16,
+        jitter_buffer_min_delay: Duration,
+        jitter_buffer_max_delay: Duration,
         idle_timeout: std::time::Duration,
         nack_config: NackSchedulerConfig,
     ) -> Self {
         let frame_deadline_ms = nack_config.frame_deadline_ms;
         let burst_count = usize::from(nack_config.burst_count.max(1));
+        let jitter_buffer_max_delay = jitter_buffer_max_delay.max(jitter_buffer_min_delay);
         Self {
             track,
             peer_connection,
             runtime_stats,
-            sample_builder: SampleBuilder::new(max_late_packets, H264Packet::default(), 90_000),
+            sample_builder: build_sample_builder(max_late_packets, jitter_buffer_max_delay),
             max_late_packets,
+            jitter_buffer_min_delay,
+            jitter_buffer_max_delay,
             idle_timeout,
             idle_hint_cooldown: idle_timeout.max(std::time::Duration::from_millis(400)),
             last_packet_time: std::time::Instant::now(),
             assembling_frame_start: None,
             last_idle_hint_time: None,
-            last_sequence: None,
             nack_scheduler: NackScheduler::new(nack_config),
+            nack_window: NackSequenceWindow::new(13 - 6),
+            nack_skip_last_n: 2,
+            last_highest_rtp_sequence: None,
+            packet_gap_observation_id: 0,
             frame_deadline_tracker: FrameDeadlineTracker::new(frame_deadline_ms),
             nack_observation_id: 0,
             pending_escalation_hint: None,
             // 大范围 deadline 失效通常不是“再试一次 keyframe”能解决的，
             // 这里提前标成 severe，交给统一 escalation ladder 处理。
             severe_deadline_packet_threshold: (burst_count * 32).max(128),
+            waiting_for_recovery_keyframe: false,
+            sample_loss_burst_count: 0,
+            clean_samples_since_loss: 0,
             current_width: 0,
             current_height: 0,
         }
@@ -92,6 +105,32 @@ impl WebrtcVideoAdapter {
 
     async fn maybe_run_nack_maintenance(&mut self) {
         let now_ms = now_ms_f64();
+        let pending_before = self.nack_scheduler.pending_count();
+        let deadline_at_ms = self
+            .frame_deadline_tracker
+            .next_deadline_for_value_at_ms(now_ms, FrameValue::new(false, false, 0));
+        let missing_sequences = self.nack_window.missing_seq_numbers(self.nack_skip_last_n);
+        if let Some(initial_batch) = self.nack_scheduler.observe_missing_sequences(
+            &missing_sequences,
+            now_ms,
+            Some(deadline_at_ms),
+        ) {
+            let inserted_count = self
+                .nack_scheduler
+                .pending_count()
+                .saturating_sub(pending_before)
+                .min(u16::MAX as usize) as u16;
+            if inserted_count > 0 {
+                self.record_packet_gap_observation(&missing_sequences, inserted_count, now_ms);
+                if let Ok(mut stats) = self.runtime_stats.lock() {
+                    stats.inbound_video_packet_loss_estimate_total = stats
+                        .inbound_video_packet_loss_estimate_total
+                        .saturating_add(u64::from(inserted_count));
+                }
+            }
+            self.send_nack_batch("sent", &initial_batch, now_ms).await;
+        }
+
         let poll_result = self.nack_scheduler.poll(now_ms);
         for expired_batch in poll_result.expired_batches {
             if expired_batch.reason == "deadline" {
@@ -130,7 +169,43 @@ impl WebrtcVideoAdapter {
         }
     }
 
-    async fn send_nack_batch(&mut self, action: &str, batch: &NackBatch, now_ms: f64) {
+    async fn observe_forward_gap_and_nack(&mut self, expected_sequence: u16, received_sequence: u16) {
+        let now_ms = now_ms_f64();
+        let pending_before = self.nack_scheduler.pending_count();
+        let deadline_at_ms = self
+            .frame_deadline_tracker
+            .next_deadline_for_value_at_ms(now_ms, FrameValue::new(false, false, 0));
+        let Some(initial_batch) = self.nack_scheduler.observe_gap(
+            expected_sequence,
+            received_sequence,
+            now_ms,
+            Some(deadline_at_ms),
+        ) else {
+            return;
+        };
+        let inserted_count = self
+            .nack_scheduler
+            .pending_count()
+            .saturating_sub(pending_before)
+            .min(u16::MAX as usize) as u16;
+        if inserted_count > 0 {
+            let missing_sequences = wrapping_sequence_range(expected_sequence, received_sequence);
+            self.record_packet_gap_observation(&missing_sequences, inserted_count, now_ms);
+            if let Ok(mut stats) = self.runtime_stats.lock() {
+                stats.inbound_video_packet_loss_estimate_total = stats
+                    .inbound_video_packet_loss_estimate_total
+                    .saturating_add(u64::from(inserted_count));
+            }
+        }
+        self.send_nack_batch("sent", &initial_batch, now_ms).await;
+    }
+
+    async fn send_nack_batch(
+        &mut self,
+        action: &str,
+        batch: &crate::transport::webrtc::nack_scheduler::NackBatch,
+        now_ms: f64,
+    ) {
         if batch.sequences.is_empty() {
             return;
         }
@@ -226,11 +301,99 @@ impl WebrtcVideoAdapter {
         }
     }
 
+    fn record_packet_gap_observation(
+        &mut self,
+        missing_sequences: &[u16],
+        inserted_count: u16,
+        now_ms: f64,
+    ) {
+        let Some(first_sequence) = missing_sequences.first().copied() else {
+            return;
+        };
+        let Some(last_sequence) = missing_sequences.last().copied() else {
+            return;
+        };
+        self.packet_gap_observation_id = self.packet_gap_observation_id.saturating_add(1);
+        if let Ok(mut stats) = self.runtime_stats.lock() {
+            stats.latest_video_packet_gap = Some(crate::XbxEngineVideoPacketGapObservation {
+                observation_id: self.packet_gap_observation_id,
+                expected_sequence: first_sequence,
+                received_sequence: last_sequence.wrapping_add(1),
+                missing_count: inserted_count,
+                observed_at_ms: now_ms,
+            });
+            stats.latest_video_packet_sequence = Some(last_sequence);
+        }
+    }
+
     fn queue_escalation_hint(&mut self, reason: VideoEscalationReason, label: &'static str) {
         if self.pending_escalation_hint.is_none() {
             self.pending_escalation_hint = Some((reason, label));
         }
     }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum RecoveryKeyframeAction {
+    Submit,
+    DropAndRequestKeyframe,
+    TriggerWaitKeyframe,
+    WaitKeyframe,
+}
+
+fn resolve_recovery_keyframe_action(
+    waiting_for_recovery_keyframe: bool,
+    sample_loss_burst_count: u8,
+    media_dropped_packets: u16,
+    is_keyframe: bool,
+) -> (bool, RecoveryKeyframeAction) {
+    if is_keyframe {
+        return (false, RecoveryKeyframeAction::Submit);
+    }
+
+    if media_dropped_packets > 0 {
+        if sample_loss_burst_count >= 2 {
+            return (true, RecoveryKeyframeAction::TriggerWaitKeyframe);
+        }
+        return (false, RecoveryKeyframeAction::DropAndRequestKeyframe);
+    }
+
+    if waiting_for_recovery_keyframe {
+        return (true, RecoveryKeyframeAction::WaitKeyframe);
+    }
+
+    (false, RecoveryKeyframeAction::Submit)
+}
+
+fn detect_forward_gap(last_highest_rtp_sequence: Option<u16>, sequence: u16) -> (Option<u16>, Option<(u16, u16)>) {
+    let Some(last_highest) = last_highest_rtp_sequence else {
+        return (Some(sequence), None);
+    };
+    let diff = sequence.wrapping_sub(last_highest);
+    if diff == 0 {
+        return (Some(last_highest), None);
+    }
+    if diff < UINT16SIZE_HALF {
+        if diff > 1 {
+            return (
+                Some(sequence),
+                Some((last_highest.wrapping_add(1), sequence)),
+            );
+        }
+        return (Some(sequence), None);
+    }
+
+    (Some(last_highest), None)
+}
+
+fn wrapping_sequence_range(start: u16, end_exclusive: u16) -> Vec<u16> {
+    let mut sequences = Vec::new();
+    let mut cursor = start;
+    while cursor != end_exclusive {
+        sequences.push(cursor);
+        cursor = cursor.wrapping_add(1);
+    }
+    sequences
 }
 
 fn parse_idr_and_sps(payload: &[u8]) -> (bool, Option<(u32, u32)>) {
@@ -301,9 +464,76 @@ impl FrameSource for WebrtcVideoAdapter {
                     self.last_packet_time = std::time::Instant::now();
                     self.assembling_frame_start = None;
                     let payload = sample.data.to_vec();
-                    // extract the actual sequence numbers from the sample if needed,
-                    // but since sample builder popped it, it means it's complete.
                     let (is_keyframe, maybe_res) = parse_idr_and_sps(&payload);
+                    let media_dropped_packets = sample
+                        .prev_dropped_packets
+                        .saturating_sub(sample.prev_padding_packets);
+                    if is_keyframe {
+                        self.sample_loss_burst_count = 0;
+                        self.clean_samples_since_loss = 0;
+                    } else if media_dropped_packets > 0 {
+                        self.sample_loss_burst_count =
+                            self.sample_loss_burst_count.saturating_add(1);
+                        self.clean_samples_since_loss = 0;
+                    } else if self.sample_loss_burst_count > 0 {
+                        self.clean_samples_since_loss =
+                            self.clean_samples_since_loss.saturating_add(1);
+                        if self.clean_samples_since_loss >= 4 {
+                            self.sample_loss_burst_count = 0;
+                            self.clean_samples_since_loss = 0;
+                        }
+                    }
+                    let (next_waiting_for_recovery_keyframe, recovery_action) =
+                        resolve_recovery_keyframe_action(
+                            self.waiting_for_recovery_keyframe,
+                            self.sample_loss_burst_count,
+                            media_dropped_packets,
+                            is_keyframe,
+                        );
+                    self.waiting_for_recovery_keyframe = next_waiting_for_recovery_keyframe;
+
+                    if media_dropped_packets > 0 {
+                        if let Ok(mut stats) = self.runtime_stats.lock() {
+                            stats.inbound_video_packet_loss_estimate_total = stats
+                                .inbound_video_packet_loss_estimate_total
+                                .saturating_add(u64::from(media_dropped_packets));
+                        }
+                        crate::xbx_log_warn!(
+                            "[WebrtcVideoAdapter] media loss detected before sample ts={} dropped_packets={} is_keyframe={}",
+                            sample.packet_timestamp,
+                            media_dropped_packets,
+                            is_keyframe
+                        );
+                    }
+
+                    match recovery_action {
+                        RecoveryKeyframeAction::Submit => {}
+                        RecoveryKeyframeAction::DropAndRequestKeyframe => {
+                            // 单次样本丢包先丢掉当前污染帧，并立刻请求 keyframe。
+                            // 游戏串流优先“继续动起来”，不在这里直接把整条视频链卡死。
+                            self.queue_escalation_hint(
+                                VideoEscalationReason::TransportSampleLoss,
+                                "transportSampleLoss",
+                            );
+                            continue;
+                        }
+                        RecoveryKeyframeAction::TriggerWaitKeyframe => {
+                            // 连续样本丢包已经说明参考链大概率持续污染，
+                            // 这里再升级到 wait-keyframe，避免坏帧长时间扩散。
+                            self.queue_escalation_hint(
+                                VideoEscalationReason::WaitKeyframe,
+                                "transportSampleLoss",
+                            );
+                            continue;
+                        }
+                        RecoveryKeyframeAction::WaitKeyframe => {
+                            self.queue_escalation_hint(
+                                VideoEscalationReason::WaitKeyframe,
+                                "transportAwaitRecoveryKeyframe",
+                            );
+                            continue;
+                        }
+                    }
 
                     let mut config_changed = false;
                     if let Some((w, h)) = maybe_res {
@@ -314,7 +544,12 @@ impl FrameSource for WebrtcVideoAdapter {
                         }
                     }
 
-                    let playout_delay = std::time::Duration::from_millis(30);
+                    let frame_value = FrameValue::new(is_keyframe, config_changed, payload.len());
+                    let playout_delay = resolve_playout_delay(
+                        frame_value,
+                        self.jitter_buffer_min_delay,
+                        self.jitter_buffer_max_delay,
+                    );
                     let target_playout_at_ms = now_ms_f64() + playout_delay.as_millis() as f64;
                     self.frame_deadline_tracker
                         .record_frame_target(target_playout_at_ms);
@@ -332,11 +567,7 @@ impl FrameSource for WebrtcVideoAdapter {
                         codec: VideoCodec::H264,
                         is_keyframe,
                         config_changed,
-                        value: if is_keyframe {
-                            FrameValue::Keyframe
-                        } else {
-                            FrameValue::Delta
-                        },
+                        value: frame_value,
                         width: self.current_width,
                         height: self.current_height,
                         rtp_timestamp: sample.packet_timestamp,
@@ -354,7 +585,7 @@ impl FrameSource for WebrtcVideoAdapter {
 
                 if idle_timeout {
                     self.sample_builder =
-                        SampleBuilder::new(self.max_late_packets, H264Packet::default(), 90_000);
+                        build_sample_builder(self.max_late_packets, self.jitter_buffer_max_delay);
                     self.assembling_frame_start = None;
                     self.last_packet_time = now;
 
@@ -381,46 +612,17 @@ impl FrameSource for WebrtcVideoAdapter {
                         }
                         let seq = rtp.header.sequence_number;
                         let now_ms = now_ms_f64();
+                        let (next_highest_sequence, forward_gap) =
+                            detect_forward_gap(self.last_highest_rtp_sequence, seq);
+                        self.last_highest_rtp_sequence = next_highest_sequence;
+                        if let Some((expected_sequence, received_sequence)) = forward_gap {
+                            self.observe_forward_gap_and_nack(expected_sequence, received_sequence)
+                                .await;
+                        }
+                        self.nack_window.add(seq);
                         if let Some(resolved) = self.nack_scheduler.resolve_sequence(seq, now_ms) {
                             self.record_nack_recovered(resolved, now_ms);
                         }
-                        if let Some(previous_seq) = self.last_sequence {
-                            let delta = classify_sequence_delta(previous_seq, seq);
-                            if delta > 1 {
-                                let missing_count = (delta - 1) as u16;
-                                self.last_sequence = Some(seq);
-                                self.sample_builder.push(rtp);
-                                if let Some(initial_batch) = self.nack_scheduler.observe_gap(
-                                    previous_seq.wrapping_add(1),
-                                    seq,
-                                    now_ms,
-                                    Some(
-                                        self.frame_deadline_tracker.next_deadline_for_value_at_ms(
-                                            now_ms,
-                                            FrameValue::Delta,
-                                        ),
-                                    ),
-                                ) {
-                                    if let Ok(mut stats) = self.runtime_stats.lock() {
-                                        stats.inbound_video_packet_loss_estimate_total = stats
-                                            .inbound_video_packet_loss_estimate_total
-                                            .saturating_add(u64::from(missing_count));
-                                    }
-                                    self.send_nack_batch("sent", &initial_batch, now_ms).await;
-                                }
-                                return Some(FrameSourceEvent::PacketGapDetected {
-                                    expected_sequence: previous_seq.wrapping_add(1),
-                                    received_sequence: seq,
-                                    missing_count,
-                                });
-                            }
-                            if delta <= 0 {
-                                // 乱序/重复包不更新 last_sequence，避免被误判成超大 gap。
-                                self.sample_builder.push(rtp);
-                                continue;
-                            }
-                        }
-                        self.last_sequence = Some(seq);
                         if seq % 100 == 0 {
                             crate::xbx_log_info!(
                                 "[WebrtcVideoAdapter] RTP packet received: seq={}, ts={}",
@@ -445,6 +647,28 @@ impl FrameSource for WebrtcVideoAdapter {
     }
 }
 
+fn build_sample_builder(
+    max_late_packets: u16,
+    max_time_delay: Duration,
+) -> SampleBuilder<H264Packet> {
+    SampleBuilder::new(max_late_packets, H264Packet::default(), 90_000)
+        .with_max_time_delay(max_time_delay)
+}
+
+fn resolve_playout_delay(value: FrameValue, min_delay: Duration, max_delay: Duration) -> Duration {
+    if value.is_sync_point() || value.refresh_boost {
+        return max_delay;
+    }
+
+    // delta 帧按价值比例在 min/max 之间插值，尽量降低 steady-state 排队时延。
+    let ratio = value.deadline_budget_ratio_per_mille() as u128;
+    let min_ms = min_delay.as_millis();
+    let max_ms = max_delay.as_millis().max(min_ms);
+    let spread_ms = max_ms.saturating_sub(min_ms);
+    let scaled_ms = min_ms + (spread_ms * ratio / 1_000);
+    Duration::from_millis(scaled_ms as u64).max(min_delay)
+}
+
 fn now_ms_f64() -> f64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -460,23 +684,155 @@ fn capitalize_reason(reason: &str) -> String {
     }
 }
 
-fn classify_sequence_delta(previous_seq: u16, current_seq: u16) -> i32 {
-    i32::from((current_seq.wrapping_sub(previous_seq)) as i16)
+const UINT16SIZE_HALF: u16 = 1 << 15;
+
+struct NackSequenceWindow {
+    packets: Vec<u64>,
+    size: u16,
+    end: u16,
+    started: bool,
+    last_consecutive: u16,
+}
+
+impl NackSequenceWindow {
+    fn new(log2_size_minus_6: u8) -> Self {
+        Self {
+            packets: vec![0u64; 1 << log2_size_minus_6],
+            size: 1 << (log2_size_minus_6 + 6),
+            end: 0,
+            started: false,
+            last_consecutive: 0,
+        }
+    }
+
+    // 直接沿用 webrtc 默认 generator 的环形接收窗口语义，避免我们再发明一套缺包判定。
+    fn add(&mut self, seq: u16) {
+        if !self.started {
+            self.set_received(seq);
+            self.end = seq;
+            self.started = true;
+            self.last_consecutive = seq;
+            return;
+        }
+
+        let last_consecutive_plus1 = self.last_consecutive.wrapping_add(1);
+        let diff = seq.wrapping_sub(self.end);
+        if diff == 0 {
+            return;
+        } else if diff < UINT16SIZE_HALF {
+            let mut i = self.end.wrapping_add(1);
+            while i != seq {
+                self.del_received(i);
+                i = i.wrapping_add(1);
+            }
+            self.end = seq;
+
+            let seq_sub_last_consecutive = seq.wrapping_sub(self.last_consecutive);
+            if last_consecutive_plus1 == seq {
+                self.last_consecutive = seq;
+            } else if seq_sub_last_consecutive > self.size {
+                let diff = seq.wrapping_sub(self.size);
+                self.last_consecutive = diff;
+                self.fix_last_consecutive();
+            }
+        } else if last_consecutive_plus1 == seq {
+            self.last_consecutive = seq;
+            self.fix_last_consecutive();
+        }
+
+        self.set_received(seq);
+    }
+
+    fn missing_seq_numbers(&self, skip_last_n: u16) -> Vec<u16> {
+        let until = self.end.wrapping_sub(skip_last_n);
+        let diff = until.wrapping_sub(self.last_consecutive);
+        if diff >= UINT16SIZE_HALF {
+            return vec![];
+        }
+
+        let mut missing = vec![];
+        let mut i = self.last_consecutive.wrapping_add(1);
+        let until_plus_1 = until.wrapping_add(1);
+        while i != until_plus_1 {
+            if !self.get_received(i) {
+                missing.push(i);
+            }
+            i = i.wrapping_add(1);
+        }
+        missing
+    }
+
+    fn set_received(&mut self, seq: u16) {
+        let pos = (seq % self.size) as usize;
+        self.packets[pos / 64] |= 1u64 << (pos % 64);
+    }
+
+    fn del_received(&mut self, seq: u16) {
+        let pos = (seq % self.size) as usize;
+        self.packets[pos / 64] &= u64::MAX ^ (1u64 << (pos % 64));
+    }
+
+    fn get_received(&self, seq: u16) -> bool {
+        let pos = (seq % self.size) as usize;
+        (self.packets[pos / 64] & (1u64 << (pos % 64))) != 0
+    }
+
+    fn fix_last_consecutive(&mut self) {
+        let mut i = self.last_consecutive.wrapping_add(1);
+        while i != self.end.wrapping_add(1) && self.get_received(i) {
+            i = i.wrapping_add(1);
+        }
+        self.last_consecutive = i.wrapping_sub(1);
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::classify_sequence_delta;
+    use super::NackSequenceWindow;
 
     #[test]
-    fn classify_sequence_delta_treats_small_reorder_as_negative() {
-        assert_eq!(classify_sequence_delta(15348, 15346), -2);
-        assert_eq!(classify_sequence_delta(15348, 15348), 0);
+    fn nack_sequence_window_tracks_missing_and_wrap() {
+        let mut window = NackSequenceWindow::new(1);
+        window.add(10);
+        window.add(11);
+        window.add(13);
+        assert_eq!(window.missing_seq_numbers(0), vec![12]);
+
+        let mut wrapped = NackSequenceWindow::new(1);
+        wrapped.add(u16::MAX);
+        wrapped.add(0);
+        wrapped.add(2);
+        assert_eq!(wrapped.missing_seq_numbers(0), vec![1]);
     }
 
     #[test]
-    fn classify_sequence_delta_keeps_forward_progress_and_wrap() {
-        assert_eq!(classify_sequence_delta(15348, 15350), 2);
-        assert_eq!(classify_sequence_delta(u16::MAX, 0), 1);
+    fn recovery_keyframe_action_only_waits_after_repeated_sample_loss() {
+        assert_eq!(
+            resolve_recovery_keyframe_action(false, 1, 3, false),
+            (false, RecoveryKeyframeAction::DropAndRequestKeyframe)
+        );
+        assert_eq!(
+            resolve_recovery_keyframe_action(false, 2, 3, false),
+            (true, RecoveryKeyframeAction::TriggerWaitKeyframe)
+        );
+        assert_eq!(
+            resolve_recovery_keyframe_action(true, 0, 0, false),
+            (true, RecoveryKeyframeAction::WaitKeyframe)
+        );
+        assert_eq!(
+            resolve_recovery_keyframe_action(true, 0, 0, true),
+            (false, RecoveryKeyframeAction::Submit)
+        );
+    }
+
+    #[test]
+    fn detect_forward_gap_ignores_old_out_of_order_packets() {
+        assert_eq!(detect_forward_gap(None, 10), (Some(10), None));
+        assert_eq!(detect_forward_gap(Some(10), 11), (Some(11), None));
+        assert_eq!(
+            detect_forward_gap(Some(10), 13),
+            (Some(13), Some((11, 13)))
+        );
+        assert_eq!(detect_forward_gap(Some(13), 12), (Some(13), None));
     }
 }

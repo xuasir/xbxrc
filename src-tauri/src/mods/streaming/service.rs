@@ -490,9 +490,17 @@ impl crate::mods::streaming::StreamingProvider for StreamingService {
             .start_session_execution(plan, project_runtime_plan, project_render_plan)
             .await
             .map_err(map_flow_error)?;
+        let mut runtime: crate::mods::streaming::types::StreamingRuntimeProjection =
+            execution.runtime.into();
+        runtime.vibration_strength = normalize_vibration_strength(
+            &self
+                .config_provider
+                .get_streaming_config()
+                .vibration_strength,
+        );
         let execution = StreamingSessionExecutionSnapshot {
             session: execution.session,
-            runtime: execution.runtime.into(),
+            runtime,
             render: execution.render.into(),
             metadata: metadata.into(),
             capabilities: capabilities.into(),
@@ -868,6 +876,14 @@ fn parse_runtime_preference(value: &str) -> RuntimePreference {
     }
 }
 
+fn normalize_vibration_strength(value: &str) -> String {
+    match value.trim() {
+        "enhanced" => "enhanced".to_string(),
+        "full" => "full".to_string(),
+        _ => "realistic".to_string(),
+    }
+}
+
 fn resolve_custom_turn(snapshot: &StreamingConfigSnapshot) -> Option<TurnServer> {
     Some(TurnServer {
         url: normalize_optional(&snapshot.server_url)?,
@@ -913,6 +929,7 @@ mod tests {
             codec: "video/H264-42e".to_string(),
             polling_rate: 333,
             vibration: false,
+            vibration_strength: "enhanced".to_string(),
             stream_runtime_mode: "rust-owned".to_string(),
             power_on: true,
             server_url: "turn:example.test:3478".to_string(),

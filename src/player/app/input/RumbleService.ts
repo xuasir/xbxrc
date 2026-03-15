@@ -3,6 +3,7 @@ import type {
   GamepadRumbleTargetDto,
 } from '@shared/gamepad/contract'
 import { LOGICAL_PAD_IDS } from '@shared/gamepad/contract'
+import type { InputRuntimeConfig, VibrationStrengthPreset } from '../../domain/input'
 import { rpc } from '../../../services/rpc'
 
 const GAMEPAD_RUMBLE_REPORT_TYPE = 128
@@ -16,6 +17,32 @@ const GAMEPAD_RUMBLE_HEADER_SIZE_LEGACY = 2
 const GAMEPAD_RUMBLE_PAYLOAD_SIZE_LEGACY = 12
 const STREAM_RUMBLE_IGNORE_DURATION_MS = 8
 const STREAM_RUMBLE_IGNORE_MAGNITUDE = 0.02
+
+const VIBRATION_PROFILE_PRESETS: Record<VibrationStrengthPreset, {
+  handleScale: number
+  handleGamma: number
+  triggerScale: number
+  triggerGamma: number
+}> = {
+  realistic: {
+    handleScale: 0.66,
+    handleGamma: 1.32,
+    triggerScale: 0.58,
+    triggerGamma: 1.26,
+  },
+  enhanced: {
+    handleScale: 0.82,
+    handleGamma: 1.18,
+    triggerScale: 0.74,
+    triggerGamma: 1.14,
+  },
+  full: {
+    handleScale: 1,
+    handleGamma: 1,
+    triggerScale: 1,
+    triggerGamma: 1,
+  },
+}
 
 interface TargetRumbleState {
   requestSeq: number
@@ -47,6 +74,12 @@ function logicalPadTargetFromIndex(gamepadIndex: number): GamepadRumbleTargetDto
 
 export class RumbleService {
   private targetStates = new Map<string, TargetRumbleState>()
+
+  constructor(private runtime: InputRuntimeConfig) {}
+
+  updateRuntime(runtime: InputRuntimeConfig): void {
+    this.runtime = runtime
+  }
 
   onMessage(dataView: DataView): void {
     const parsedEffects = this.parseBetterXcloudPacket(dataView)
@@ -105,10 +138,10 @@ export class RumbleService {
     }
 
     const effect: GamepadRumbleEffectDto = {
-      leftTrigger: this.normalizePercentMotor(dataView.getUint8(offset + 3)),
-      rightTrigger: this.normalizePercentMotor(dataView.getUint8(offset + 4)),
-      weakMagnitude: this.normalizePercentMotor(dataView.getUint8(offset + 2)),
-      strongMagnitude: this.normalizePercentMotor(dataView.getUint8(offset + 1)),
+      leftTrigger: this.normalizePercentMotor(dataView.getUint8(offset + 3), 'trigger'),
+      rightTrigger: this.normalizePercentMotor(dataView.getUint8(offset + 4), 'trigger'),
+      weakMagnitude: this.normalizePercentMotor(dataView.getUint8(offset + 2), 'handle'),
+      strongMagnitude: this.normalizePercentMotor(dataView.getUint8(offset + 1), 'handle'),
       durationMs: dataView.getUint16(offset + 5, true),
       startDelayMs: 0,
       repeat: 0,
@@ -151,13 +184,13 @@ export class RumbleService {
       }
 
       const effect: GamepadRumbleEffectDto = {
-          leftTrigger: dataView.getUint16(offset + 2, true) / 1023,
-          rightTrigger: dataView.getUint16(offset + 4, true) / 1023,
-          weakMagnitude: dataView.getUint16(offset + 6, true) / 1023,
-          strongMagnitude: dataView.getUint16(offset + 8, true) / 1023,
-          durationMs: dataView.getUint16(offset + 10, true),
-          startDelayMs: 0,
-          repeat: 0,
+        leftTrigger: this.normalizeUnitMotor(dataView.getUint16(offset + 2, true) / 1023, 'trigger'),
+        rightTrigger: this.normalizeUnitMotor(dataView.getUint16(offset + 4, true) / 1023, 'trigger'),
+        weakMagnitude: this.normalizeUnitMotor(dataView.getUint16(offset + 6, true) / 1023, 'handle'),
+        strongMagnitude: this.normalizeUnitMotor(dataView.getUint16(offset + 8, true) / 1023, 'handle'),
+        durationMs: dataView.getUint16(offset + 10, true),
+        startDelayMs: 0,
+        repeat: 0,
       }
       if (!this.shouldIgnoreEffect(effect)) {
         effects.push({
@@ -171,8 +204,17 @@ export class RumbleService {
     return effects
   }
 
-  private normalizePercentMotor(value: number): number {
-    return Math.max(0, Math.min(100, value)) / 100
+  private normalizePercentMotor(value: number, channel: 'handle' | 'trigger'): number {
+    return this.normalizeUnitMotor(Math.max(0, Math.min(100, value)) / 100, channel)
+  }
+
+  // 默认曲线先向实机 Xbox 电机体感回靠，再把“增强/完整”作为上浮档位暴露给用户。
+  private normalizeUnitMotor(value: number, channel: 'handle' | 'trigger'): number {
+    const normalized = Math.max(0, Math.min(1, value))
+    const preset = VIBRATION_PROFILE_PRESETS[this.runtime.vibrationStrength] ?? VIBRATION_PROFILE_PRESETS.realistic
+    const scale = channel === 'trigger' ? preset.triggerScale : preset.handleScale
+    const gamma = channel === 'trigger' ? preset.triggerGamma : preset.handleGamma
+    return Math.max(0, Math.min(1, normalized ** gamma * scale))
   }
 
   private shouldIgnoreEffect(effect: GamepadRumbleEffectDto): boolean {

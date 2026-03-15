@@ -19,7 +19,7 @@ use crate::{
     transport::webrtc::transport::XbxTransportState,
     XbxEngineMediaNegotiationRequest, XbxEngineMediaRuntimeStats, XbxEngineRenderFrame,
     XbxEngineRuntimeConfig, XbxEngineRuntimeError, XbxEngineVideoEscalationObservation,
-    XbxEngineVideoFrameDropObservation, XbxEngineVideoPacketGapObservation,
+    XbxEngineVideoFrameDropObservation,
 };
 
 /**
@@ -52,6 +52,7 @@ pub(crate) trait XbxMediaStackPort: Send {
     fn local_ice_gathering_complete(&self) -> bool;
     fn snapshot_runtime_stats(&self) -> XbxEngineMediaRuntimeStats;
     fn take_latest_render_frame(&mut self) -> Option<XbxEngineRenderFrame>;
+    fn set_audio_volume(&mut self, value: f32);
     fn set_microphone_capturing(&mut self, capturing: bool) -> Result<(), XbxEngineRuntimeError>;
     fn set_keyboard_pointer_enabled(&mut self, enabled: bool) -> Result<(), XbxEngineRuntimeError>;
     fn push_keyboard_pointer_input(
@@ -163,6 +164,9 @@ impl XbxActiveMediaStack {
                 let ingress_keyframe_cooldown = std::time::Duration::from_millis(
                     ingress_keyframe_cooldown_ms,
                 );
+                let startup_escalation_grace = std::time::Duration::from_millis(
+                    runtime_config.webrtc.recovery.first_frame_grace_ms,
+                );
 
                 // Read frames in a separate task so we can still rx.recv() new tracks
                 tokio::spawn(async move {
@@ -171,9 +175,9 @@ impl XbxActiveMediaStack {
                     use crate::transport::adapter::FrameSourceEvent;
                     use std::time::Instant;
                     let mut frame_count = 0u64;
-                    let mut packet_gap_observation_id = 0u64;
                     let mut frame_drop_observation_id = 0u64;
                     let mut recent_receive_frame_times_ms = VecDeque::<f64>::new();
+                    let stream_started_at = Instant::now();
                     // 统一升级判定，避免 ingress/adapter 各自维护冷却状态。
                     let mut escalation_controller = VideoEscalationController::new(
                         ingress_keyframe_cooldown,
@@ -194,27 +198,6 @@ impl XbxActiveMediaStack {
                         let future = frame_source.recv_frame();
                         if let Some(event) = future.await {
                             match event {
-                                FrameSourceEvent::PacketGapDetected {
-                                    expected_sequence,
-                                    received_sequence,
-                                    missing_count,
-                                } => {
-                                    let now_ms = now_ms_f64();
-                                    packet_gap_observation_id =
-                                        packet_gap_observation_id.saturating_add(1);
-                                    if let Ok(mut stats) = stats_for_frame_loop.lock() {
-                                        stats.latest_video_packet_gap =
-                                            Some(XbxEngineVideoPacketGapObservation {
-                                                observation_id: packet_gap_observation_id,
-                                                expected_sequence,
-                                                received_sequence,
-                                                missing_count,
-                                                observed_at_ms: now_ms,
-                                            });
-                                        stats.latest_video_packet_sequence =
-                                            Some(received_sequence);
-                                    }
-                                }
                                 FrameSourceEvent::Frame(encoded_frame) => {
                                     // 更新包活动时间，防止 recovery 系统误判为 stall
                                     let now_ms = now_ms_f64();
@@ -262,10 +245,20 @@ impl XbxActiveMediaStack {
                                         decision,
                                         IngressDecision::WaitKeyframe | IngressDecision::Reconfigure
                                     ) {
-                                        let escalation_decision =
-                                            escalation_controller.on_reason(
-                                                map_ingress_escalation_reason(&decision),
-                                            );
+                                        let escalation_reason =
+                                            map_ingress_escalation_reason(&decision);
+                                        let escalation_decision = if should_suppress_startup_escalation(
+                                            &escalation_reason,
+                                            stream_started_at,
+                                            startup_escalation_grace,
+                                        ) {
+                                            suppressed_escalation_decision(
+                                                &mut escalation_controller,
+                                                "startupGraceSuppressed",
+                                            )
+                                        } else {
+                                            escalation_controller.on_reason(escalation_reason)
+                                        };
                                         if escalation_decision.action == "requestKeyframe" {
                                             let _ = request_video_keyframe_from_state(
                                                 &data_channel_state_for_keyframe,
@@ -342,8 +335,18 @@ impl XbxActiveMediaStack {
                                         "[Supervisor] Transport escalation hint: {}",
                                         label
                                     );
-                                    let escalation_decision =
-                                        escalation_controller.on_reason(reason);
+                                    let escalation_decision = if should_suppress_startup_escalation(
+                                        &reason,
+                                        stream_started_at,
+                                        startup_escalation_grace,
+                                    ) {
+                                        suppressed_escalation_decision(
+                                            &mut escalation_controller,
+                                            "startupGraceSuppressed",
+                                        )
+                                    } else {
+                                        escalation_controller.on_reason(reason)
+                                    };
                                     if escalation_decision.action == "requestKeyframe" {
                                         let _ = request_video_keyframe_from_state(
                                             &data_channel_state_for_keyframe,
@@ -522,6 +525,10 @@ impl XbxMediaStackPort for XbxActiveMediaStack {
             .and_then(|mut render_state| render_state.take_latest_frame())
     }
 
+    fn set_audio_volume(&mut self, value: f32) {
+        self.transport.set_audio_volume(value);
+    }
+
     fn set_microphone_capturing(&mut self, capturing: bool) -> Result<(), XbxEngineRuntimeError> {
         self.transport
             .set_microphone_capturing(&self.runtime.handle(), capturing)
@@ -596,6 +603,28 @@ fn map_ingress_drop_reason(
     }
 }
 
+fn should_suppress_startup_escalation(
+    reason: &VideoEscalationReason,
+    stream_started_at: std::time::Instant,
+    startup_grace: std::time::Duration,
+) -> bool {
+    if stream_started_at.elapsed() >= startup_grace {
+        return false;
+    }
+
+    matches!(
+        reason,
+        VideoEscalationReason::Reconfigure | VideoEscalationReason::AdapterIdleTimeout
+    )
+}
+
+fn suppressed_escalation_decision(
+    controller: &mut VideoEscalationController,
+    action: &'static str,
+) -> crate::transport::webrtc::escalation::VideoEscalationDecision {
+    controller.suppressed(action)
+}
+
 fn map_ingress_escalation_reason(
     decision: &crate::media::video::ingress::scheduler::IngressDecision,
 ) -> VideoEscalationReason {
@@ -629,4 +658,36 @@ fn now_ms_f64() -> f64 {
         .duration_since(std::time::UNIX_EPOCH)
         .map(|duration| duration.as_millis() as f64)
         .unwrap_or(0.0)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::should_suppress_startup_escalation;
+    use crate::transport::webrtc::escalation::VideoEscalationReason;
+    use std::time::{Duration, Instant};
+
+    #[test]
+    fn startup_grace_does_not_suppress_wait_keyframe() {
+        let stream_started_at = Instant::now();
+        assert!(!should_suppress_startup_escalation(
+            &VideoEscalationReason::WaitKeyframe,
+            stream_started_at,
+            Duration::from_secs(2),
+        ));
+    }
+
+    #[test]
+    fn startup_grace_still_suppresses_idle_timeout_and_reconfigure() {
+        let stream_started_at = Instant::now();
+        assert!(should_suppress_startup_escalation(
+            &VideoEscalationReason::AdapterIdleTimeout,
+            stream_started_at,
+            Duration::from_secs(2),
+        ));
+        assert!(should_suppress_startup_escalation(
+            &VideoEscalationReason::Reconfigure,
+            stream_started_at,
+            Duration::from_secs(2),
+        ));
+    }
 }

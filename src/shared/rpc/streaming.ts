@@ -85,7 +85,7 @@ export interface StreamingDisplayOptionsValue {
 
 export type StreamingRuntimeMode = 'webrtc-direct' | 'rust-owned'
 export type StreamingRuntimeOwner = 'browser' | 'sidecar'
-export type StreamingBweMode = 'fixed-remb' | 'observed-remb' | 'hybrid'
+export type StreamingBweMode = 'fixed-remb' | 'observed-remb' | 'hybrid' | 'twcc-gcc'
 
 export interface StreamingRuntimeProjection {
   mode: StreamingRuntimeMode
@@ -113,6 +113,7 @@ export interface StreamingRuntimeProjection {
   recovery: StreamingRuntimeRecoveryProjection
   pollingRateHz: number
   vibration: boolean
+  vibrationStrength: 'realistic' | 'enhanced' | 'full'
 }
 
 

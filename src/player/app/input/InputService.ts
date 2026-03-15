@@ -42,11 +42,12 @@ export class InputService {
     private readonly emitter: TypedEventEmitter<PlayerEvents>,
   ) {
     this.gamepadDriver = gamepadDriver
-    this.rumbleService = new RumbleService()
+    this.rumbleService = new RumbleService(runtime)
   }
 
   updateRuntime(runtime: Partial<InputRuntimeConfig>): void {
     this.runtime = { ...this.runtime, ...runtime }
+    this.rumbleService.updateRuntime(this.runtime)
   }
 
   start(inputTransport: InputTransport, controlTransport: ControlTransport): void {

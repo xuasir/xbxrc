@@ -83,7 +83,7 @@ impl XbxEngineWebRtcRuntimeConfig {
     pub fn base() -> Self {
         Self {
             // 这些值只作为 plan 未显式覆盖时的保守缺省。
-            bwe_mode: "fixed-remb".to_string(),
+            bwe_mode: "twcc-gcc".to_string(),
             forced_remb_kbps: Some(50_000),
             adaptive_remb_enabled: false,
             remb_floor_kbps: 8_000,
@@ -208,6 +208,27 @@ pub trait XbxEngineHostBridge {
         &mut self,
         request: XbxEngineHostRequestDto,
     ) -> Result<XbxEngineHostResponseDto, XbxEngineRuntimeError>;
+
+    fn attach_viewport(
+        &mut self,
+        _viewport: &XbxEngineViewportDto,
+        _surface_id: Option<&str>,
+    ) -> Result<(), XbxEngineRuntimeError> {
+        Ok(())
+    }
+
+    fn detach_viewport(&mut self, _viewport_id: Option<&str>) -> Result<(), XbxEngineRuntimeError> {
+        Ok(())
+    }
+
+    fn present_frame(
+        &mut self,
+        _viewport: &XbxEngineViewportDto,
+        _surface_id: Option<&str>,
+        _frame: &XbxEngineRenderFrame,
+    ) -> Result<(), XbxEngineRuntimeError> {
+        Ok(())
+    }
 
     fn current_cancellation_epoch(&self) -> u64 {
         0
@@ -440,6 +461,14 @@ where
     }
 
     pub fn stop(&mut self) {
+        let viewport_id = self
+            .snapshot
+            .viewport
+            .as_ref()
+            .map(|viewport| viewport.viewport_id.as_str());
+        if let Err(error) = self.host_bridge.detach_viewport(viewport_id) {
+            self.emit_error("detachViewportFailed", error.to_string());
+        }
         self.session = None;
         if let Err(error) = self.media_backend.stop() {
             self.emit_error("stopMediaBackendFailed", error.to_string());
@@ -469,6 +498,7 @@ where
             }
         };
 
+        self.present_latest_render_frame();
         self.sync_transport_state(&runtime_stats);
         self.sync_video_packet_stats(&runtime_stats);
         self.sync_video_frame_stats(&runtime_stats);
@@ -530,10 +560,18 @@ where
                 self.request_reconnect(reason)
             }
             XbxEngineControlCommandDto::AttachViewport { viewport } => {
+                self.host_bridge
+                    .attach_viewport(&viewport, self.snapshot.surface_id.as_deref())?;
                 self.snapshot.viewport = Some(viewport);
                 Ok(())
             }
             XbxEngineControlCommandDto::DetachViewport => {
+                let viewport_id = self
+                    .snapshot
+                    .viewport
+                    .as_ref()
+                    .map(|viewport| viewport.viewport_id.as_str());
+                self.host_bridge.detach_viewport(viewport_id)?;
                 self.snapshot.viewport = None;
                 Ok(())
             }
@@ -870,6 +908,14 @@ where
 
     fn record_media_ready(&mut self, negotiation: &XbxEngineMediaNegotiation) {
         self.snapshot.surface_id = Some(negotiation.surface_id.clone());
+        if let Some(viewport) = self.snapshot.viewport.as_ref() {
+            if let Err(error) = self
+                .host_bridge
+                .attach_viewport(viewport, Some(&negotiation.surface_id))
+            {
+                self.emit_error("attachViewportFailed", error.to_string());
+            }
+        }
         self.snapshot.video_size = Some((negotiation.video_width, negotiation.video_height));
         self.snapshot.first_frame_packet_arrival_time_ms =
             negotiation.first_frame_packet_arrival_time_ms;
@@ -884,6 +930,31 @@ where
                 width: negotiation.video_width,
                 height: negotiation.video_height,
             });
+    }
+
+    fn present_latest_render_frame(&mut self) {
+        let Some(viewport) = self.snapshot.viewport.clone() else {
+            return;
+        };
+        let frame = match self.media_backend.take_latest_render_frame() {
+            Ok(frame) => frame,
+            Err(error) => {
+                self.emit_error("takeLatestRenderFrameFailed", error.to_string());
+                return;
+            }
+        };
+        let Some(frame) = frame else {
+            return;
+        };
+        if let Err(error) =
+            self.host_bridge
+                .present_frame(&viewport, self.snapshot.surface_id.as_deref(), &frame)
+        {
+            self.emit_error("presentFrameFailed", error.to_string());
+            return;
+        }
+        self.snapshot.video_size = Some((frame.width, frame.height));
+        self.snapshot.frame_rendered_time_ms = Some(frame.rendered_at_ms);
     }
 
     fn record_input_status(&mut self, status: &crate::XbxEngineInputStatus) {
@@ -1141,6 +1212,13 @@ where
                 transport_connected: stats.transport_state == XbxEngineTransportStateDto::Connected,
                 connected_at_ms: self.health.connected_at_ms,
                 latest_video_packet_arrival_at_ms,
+                latest_twcc_feedback_at_ms: stats
+                    .latest_video_twcc_observation
+                    .as_ref()
+                    .map(|observation| observation.observed_at_ms),
+                audio_stream_alive: stats
+                    .inbound_audio_bitrate_kbps
+                    .is_some_and(|bitrate_kbps| bitrate_kbps >= 16.0),
             },
             media: XbxEngineMediaSignal {
                 latest_frame_decoded_at_ms: latest_decode_ok_at_ms,

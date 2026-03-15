@@ -15,6 +15,7 @@ use xbxengine_protocol::{
 };
 
 use crate::error::{AppError, AppResult};
+use crate::mods::native_video::NativeVideoRegistryRef;
 use crate::mods::runtime_trace::RuntimeTraceRecorderRef;
 use crate::mods::streaming::{
     StreamingRenderProjection, StreamingRuntimeProjection, StreamingTurnServerConfig,
@@ -33,12 +34,14 @@ impl XbxEngineService {
     pub fn new(
         app_handle: AppHandle,
         last_runtime_event: Arc<StdMutex<Option<Value>>>,
+        native_video: NativeVideoRegistryRef,
         runtime_trace: RuntimeTraceRecorderRef,
     ) -> Self {
         Self {
             runtime_state: Arc::new(XbxEngineRuntimeState::new(
                 app_handle,
                 last_runtime_event.clone(),
+                native_video,
                 runtime_trace,
             )),
             last_runtime_event,
@@ -378,6 +381,7 @@ fn to_runtime_projection(projection: StreamingRuntimeProjection) -> XbxEngineRun
                 "observed-remb".to_string()
             }
             crate::mods::streaming::types::StreamingBweMode::Hybrid => "hybrid".to_string(),
+            crate::mods::streaming::types::StreamingBweMode::TwccGcc => "twcc-gcc".to_string(),
         },
         forced_remb_kbps: projection.forced_remb_kbps,
         adaptive_remb_enabled: projection.adaptive_remb_enabled,

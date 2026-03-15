@@ -130,6 +130,7 @@ impl XbxEngineMediaBackend for XbxNegotiationBackend {
     }
 
     fn set_audio_volume(&mut self, value: f32) -> Result<(), XbxEngineRuntimeError> {
+        self.stack.set_audio_volume(value);
         self.inner.set_audio_volume(value)
     }
 

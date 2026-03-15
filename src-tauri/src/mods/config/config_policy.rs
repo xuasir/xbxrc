@@ -117,6 +117,12 @@ fn normalize_value(key: &str, value: &Value, fallback: &Value) -> Value {
             normalize_number(key, value, fallback.as_i64().unwrap_or(20), 0, 200)
         }
         "polling_rate" => normalize_number(key, value, fallback.as_i64().unwrap_or(250), 1, 1000),
+        "vibration_strength" => normalize_string_enum(
+            key,
+            value,
+            fallback.as_str().unwrap_or("realistic"),
+            &["realistic", "enhanced", "full"],
+        ),
         "xhome_bitrate_mode" | "xcloud_bitrate_mode" | "audio_bitrate_mode" => {
             normalize_string_enum(
                 key,

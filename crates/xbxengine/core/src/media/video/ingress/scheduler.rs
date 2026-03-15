@@ -1,7 +1,7 @@
 use std::collections::VecDeque;
 use std::time::{Duration, Instant};
 
-use crate::media::video::types::{EncodedFrame, FrameValue, VideoCodec};
+use crate::media::video::types::{EncodedFrame, VideoCodec};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum IngressDecision {
@@ -55,6 +55,9 @@ impl VideoIngress {
 impl FrameScheduler for VideoIngress {
     fn submit(&mut self, frame: EncodedFrame, now: Instant) -> IngressDecision {
         if frame.config_changed {
+            if self.waiting_keyframe {
+                return IngressDecision::WaitKeyframe;
+            }
             self.start_reconfigure();
             return IngressDecision::Reconfigure;
         }
@@ -65,6 +68,9 @@ impl FrameScheduler for VideoIngress {
             || self.current_height != frame.height;
 
         if config_mismatch && !frame.is_keyframe {
+            if self.waiting_keyframe {
+                return IngressDecision::WaitKeyframe;
+            }
             self.start_reconfigure();
             return IngressDecision::Reconfigure;
         }
@@ -87,15 +93,11 @@ impl FrameScheduler for VideoIngress {
             return IngressDecision::WaitKeyframe;
         }
 
-        let frame_late_threshold = match frame.value {
-            // 关键帧更值得保留，给完整晚帧窗口。
-            FrameValue::Keyframe => self.late_frame_drop_threshold,
-            // delta 帧价值更低，晚到窗口减半，避免 backlog 继续累积。
-            FrameValue::Delta => self
-                .late_frame_drop_threshold
-                .div_f32(2.0)
-                .max(Duration::from_millis(33)),
-        };
+        let frame_late_threshold = scale_duration_by_per_mille(
+            self.late_frame_drop_threshold,
+            frame.value.late_budget_ratio_per_mille(),
+            Duration::from_millis(33),
+        );
 
         if now > frame.target_playout_time + frame_late_threshold {
             crate::xbx_log_warn!(
@@ -108,11 +110,25 @@ impl FrameScheduler for VideoIngress {
 
         // Rule 3: Backlog 控制
         if self.queue.len() >= self.max_size {
-            // backlog 时优先丢低价值 delta，避免关键帧被队列吞掉。
-            if frame.value == FrameValue::Delta {
+            // backlog 时基于帧价值模型做替换，避免低价值旧帧继续堵塞队列。
+            if let Some((lowest_idx, lowest_score)) = self
+                .queue
+                .iter()
+                .enumerate()
+                .map(|(idx, queued)| (idx, queued.value.backlog_priority_score()))
+                .min_by_key(|(_, score)| *score)
+            {
+                let incoming_score = frame.value.backlog_priority_score();
+                if incoming_score <= lowest_score {
+                    return IngressDecision::DropBacklog;
+                }
+                self.queue.remove(lowest_idx);
+                self.queue.push_back(frame);
                 return IngressDecision::DropBacklog;
             }
-            self.queue.pop_front();
+            if !frame.value.is_sync_point() {
+                return IngressDecision::DropBacklog;
+            }
             self.queue.push_back(frame);
             return IngressDecision::DropBacklog;
         }
@@ -124,6 +140,11 @@ impl FrameScheduler for VideoIngress {
     fn pop(&mut self) -> Option<EncodedFrame> {
         self.queue.pop_front()
     }
+}
+
+fn scale_duration_by_per_mille(base: Duration, ratio_per_mille: u16, floor: Duration) -> Duration {
+    let scaled_ms = ((base.as_millis() as u128) * ratio_per_mille as u128 / 1_000) as u64;
+    Duration::from_millis(scaled_ms).max(floor)
 }
 
 #[cfg(test)]
@@ -163,14 +184,67 @@ mod tests {
         let mut ingress = VideoIngress::new(4, Duration::from_millis(250));
 
         assert_eq!(
-            ingress.submit(make_frame(now, FrameValue::Keyframe, true, 0), now),
+            ingress.submit(
+                make_frame(now, FrameValue::new(true, true, 64 * 1024), true, 0),
+                now
+            ),
             IngressDecision::Submit
         );
 
-        let late_delta = make_frame(now, FrameValue::Delta, false, -150);
+        let late_delta = make_frame(now, FrameValue::new(false, false, 8 * 1024), false, -150);
         assert_eq!(ingress.submit(late_delta, now), IngressDecision::DropLate);
 
-        let late_keyframe = make_frame(now, FrameValue::Keyframe, true, -150);
+        let late_keyframe = make_frame(now, FrameValue::new(true, true, 64 * 1024), true, -150);
         assert_eq!(ingress.submit(late_keyframe, now), IngressDecision::Submit);
+    }
+
+    #[test]
+    fn repeated_config_mismatch_while_waiting_does_not_retrigger_reconfigure() {
+        let now = Instant::now();
+        let mut ingress = VideoIngress::new(4, Duration::from_millis(250));
+
+        assert_eq!(
+            ingress.submit(
+                make_frame(now, FrameValue::new(true, true, 64 * 1024), true, 0),
+                now
+            ),
+            IngressDecision::Submit
+        );
+
+        let mut mismatched_delta =
+            make_frame(now, FrameValue::new(false, false, 8 * 1024), false, 0);
+        mismatched_delta.width = 1280;
+        mismatched_delta.height = 720;
+        assert_eq!(
+            ingress.submit(mismatched_delta.clone(), now),
+            IngressDecision::Reconfigure
+        );
+        assert_eq!(
+            ingress.submit(mismatched_delta, now),
+            IngressDecision::WaitKeyframe
+        );
+    }
+
+    #[test]
+    fn backlog_prefers_higher_value_frame() {
+        let now = Instant::now();
+        let mut ingress = VideoIngress::new(1, Duration::from_millis(250));
+
+        assert_eq!(
+            ingress.submit(
+                make_frame(now, FrameValue::new(true, true, 64 * 1024), true, 0),
+                now
+            ),
+            IngressDecision::Submit
+        );
+
+        let refresh_delta = make_frame(now, FrameValue::new(false, true, 6 * 1024), false, 0);
+        assert_eq!(
+            ingress.submit(refresh_delta, now),
+            IngressDecision::DropBacklog
+        );
+        assert_eq!(ingress.queue_depth(), 1);
+        let queued = ingress.pop().expect("frame should remain queued");
+        assert!(queued.value.is_sync_point());
     }
 }

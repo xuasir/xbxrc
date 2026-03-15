@@ -21,6 +21,7 @@ export function DEFAULT_PLAYER_OPTIONS(): PlayerClientOptions {
     input: {
       pollingRate: 250,
       vibrationEnabled: true,
+      vibrationStrength: 'realistic',
     },
     audio: {
       volume: 1,

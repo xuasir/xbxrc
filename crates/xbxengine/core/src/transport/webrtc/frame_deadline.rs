@@ -26,7 +26,7 @@ impl FrameDeadlineTracker {
     }
 
     pub fn next_deadline_at_ms(&self, now_ms: f64) -> f64 {
-        self.next_deadline_for_value_at_ms(now_ms, FrameValue::Delta)
+        self.next_deadline_for_value_at_ms(now_ms, FrameValue::new(false, false, 0))
     }
 
     pub fn next_deadline_for_value_at_ms(&self, now_ms: f64, value: FrameValue) -> f64 {
@@ -34,12 +34,14 @@ impl FrameDeadlineTracker {
             .last_target_playout_at_ms
             .map(|target| target + self.estimated_frame_interval_ms)
             .unwrap_or(now_ms);
-        let value_deadline_ms = match value {
-            // 关键帧更值得等待，给满窗口。
-            FrameValue::Keyframe => self.fallback_deadline_ms as f64,
-            // delta 帧更强调时效，过期就不要继续拖累恢复链。
-            FrameValue::Delta => (self.fallback_deadline_ms as f64)
-                .min((self.estimated_frame_interval_ms * 2.0).max(24.0)),
+        let raw_deadline_ms = (self.fallback_deadline_ms as f64)
+            * (value.deadline_budget_ratio_per_mille() as f64 / 1_000.0);
+        let value_deadline_ms = if value.is_sync_point() {
+            raw_deadline_ms.max(self.estimated_frame_interval_ms)
+        } else {
+            raw_deadline_ms
+                .min((self.estimated_frame_interval_ms * 2.0).max(24.0))
+                .max(24.0)
         };
         next_target_at_ms + value_deadline_ms
     }
@@ -56,9 +58,10 @@ mod tests {
         tracker.record_frame_target(1_000.0);
         tracker.record_frame_target(1_033.0);
 
-        let delta_deadline = tracker.next_deadline_for_value_at_ms(1_040.0, FrameValue::Delta);
+        let delta_deadline =
+            tracker.next_deadline_for_value_at_ms(1_040.0, FrameValue::new(false, false, 8 * 1024));
         let keyframe_deadline =
-            tracker.next_deadline_for_value_at_ms(1_040.0, FrameValue::Keyframe);
+            tracker.next_deadline_for_value_at_ms(1_040.0, FrameValue::new(true, true, 64 * 1024));
 
         assert!(delta_deadline < keyframe_deadline);
     }

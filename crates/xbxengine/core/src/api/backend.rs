@@ -177,6 +177,29 @@ pub struct XbxEngineVideoBweObservation {
     pub loss_ratio: f64,
     pub rtt_ms: Option<f64>,
     pub transport_path: Option<String>,
+    pub twcc_feedback_interval_ms: Option<f64>,
+    pub twcc_observed_packet_count: Option<u16>,
+    pub twcc_covered_sequence_span: Option<u16>,
+    pub twcc_receive_bitrate_kbps: Option<f64>,
+    pub twcc_delivery_ratio: Option<f64>,
+    pub twcc_loss_ratio: Option<f64>,
+    pub observed_at_ms: f64,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct XbxEngineVideoTwccObservation {
+    pub observation_id: u64,
+    pub feedback_packet_count: u16,
+    pub covered_sequence_start: u16,
+    pub covered_sequence_end: u16,
+    pub covered_sequence_span: u16,
+    pub observed_packet_count: u16,
+    pub observed_byte_count: u64,
+    pub feedback_interval_ms: Option<f64>,
+    pub arrival_span_ms: Option<f64>,
+    pub receive_bitrate_kbps: Option<f64>,
+    pub delivery_ratio: f64,
+    pub packet_loss_ratio: f64,
     pub observed_at_ms: f64,
 }
 
@@ -201,6 +224,7 @@ pub struct XbxEngineMediaRuntimeStats {
     pub latest_video_nack_observation: Option<XbxEngineVideoNackObservation>,
     pub latest_video_escalation_observation: Option<XbxEngineVideoEscalationObservation>,
     pub latest_video_bwe_observation: Option<XbxEngineVideoBweObservation>,
+    pub latest_video_twcc_observation: Option<XbxEngineVideoTwccObservation>,
     pub video_pli_request_count_total: u64,
     pub video_pli_per_min: f64,
     pub video_pending_missing_packets: usize,
@@ -261,6 +285,7 @@ impl Default for XbxEngineMediaRuntimeStats {
             latest_video_nack_observation: None,
             latest_video_escalation_observation: None,
             latest_video_bwe_observation: None,
+            latest_video_twcc_observation: None,
             video_pli_request_count_total: 0,
             video_pli_per_min: 0.0,
             video_pending_missing_packets: 0,

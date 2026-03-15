@@ -162,6 +162,7 @@ export interface StreamConfigSnapshot {
   enable_audio_control?: boolean
   polling_rate?: number
   vibration?: boolean
+  vibration_strength?: 'realistic' | 'enhanced' | 'full'
   codec?: string
   video_format?: string
   display_options?: DisplayOptionsValue

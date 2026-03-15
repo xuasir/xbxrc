@@ -70,10 +70,9 @@ mod platform {
     };
     use objc2_foundation::NSArray;
     use objc2_game_controller::{
-        GCController, GCDevice, GCDeviceHaptics, GCHapticsLocality,
-        GCHapticsLocalityDefault, GCHapticsLocalityHandles, GCHapticsLocalityLeftHandle,
-        GCHapticsLocalityLeftTrigger, GCHapticsLocalityRightHandle,
-        GCHapticsLocalityRightTrigger, GCHapticsLocalityTriggers,
+        GCController, GCDevice, GCDeviceHaptics, GCHapticsLocality, GCHapticsLocalityDefault,
+        GCHapticsLocalityHandles, GCHapticsLocalityLeftHandle, GCHapticsLocalityLeftTrigger,
+        GCHapticsLocalityRightHandle, GCHapticsLocalityRightTrigger, GCHapticsLocalityTriggers,
     };
     use ohmygamepad_core::HapticsProviderError;
     use ohmygamepad_protocol::OhMyGamepadRumbleEffectDto;
@@ -84,6 +83,9 @@ mod platform {
     const LOCALITY_MERGE_WINDOW_MS: u64 = 18;
     const LOCALITY_MIN_DURATION_MS: u16 = 24;
     const LOCALITY_REPLACE_EPSILON: f32 = 0.08;
+    const COMBINED_INTENSITY_CEILING: f32 = 0.72;
+    const HANDLE_INTENSITY_CEILING: f32 = 0.74;
+    const TRIGGER_INTENSITY_CEILING: f32 = 0.64;
     thread_local! {
         static LOCALITY_PLAYBACK_CACHE: RefCell<HashMap<String, LocalityPlaybackState>> = RefCell::new(HashMap::new());
     }
@@ -151,12 +153,8 @@ mod platform {
         }
 
         if let Some(locality) = resolve_fallback_locality(&supported_localities, effect) {
-            return dispatch_locality(
-                &haptics,
-                locality,
-                localized_effect_from_combined(effect),
-            )
-            .map(|_| ());
+            return dispatch_locality(&haptics, locality, localized_effect_from_combined(effect))
+                .map(|_| ());
         }
 
         Err(HapticsProviderError::Unsupported)
@@ -400,14 +398,16 @@ mod platform {
         state: &mut LocalityPlaybackState,
     ) -> Result<Retained<CHHapticEngine>, HapticsProviderError> {
         if let Some(engine) = state.engine.as_ref() {
-            unsafe { engine.startAndReturnError() }.map_err(|_| HapticsProviderError::TransportClosed)?;
+            unsafe { engine.startAndReturnError() }
+                .map_err(|_| HapticsProviderError::TransportClosed)?;
             return Ok(engine.clone());
         }
 
         let engine =
             unsafe { create_engine(haptics, locality) }.ok_or(HapticsProviderError::Unsupported)?;
         unsafe { engine.setPlaysHapticsOnly(true) };
-        unsafe { engine.startAndReturnError() }.map_err(|_| HapticsProviderError::TransportClosed)?;
+        unsafe { engine.startAndReturnError() }
+            .map_err(|_| HapticsProviderError::TransportClosed)?;
         state.engine = Some(engine.clone());
         Ok(engine)
     }
@@ -442,7 +442,9 @@ mod platform {
             && next_effect.sharpness <= previous_effect.sharpness + LOCALITY_REPLACE_EPSILON
     }
 
-    fn localized_effect_from_combined(effect: &OhMyGamepadRumbleEffectDto) -> LocalizedRumbleEffect {
+    fn localized_effect_from_combined(
+        effect: &OhMyGamepadRumbleEffectDto,
+    ) -> LocalizedRumbleEffect {
         LocalizedRumbleEffect {
             intensity: normalized_intensity(effect),
             sharpness: normalized_sharpness(effect),
@@ -461,15 +463,15 @@ mod platform {
             LocalityProfileKind::TriggerLeft | LocalityProfileKind::TriggerRight
         );
         let intensity = if is_trigger {
-            clamp_unit(normalized_magnitude.powf(0.92))
+            clamp_unit(normalized_magnitude.powf(1.18) * TRIGGER_INTENSITY_CEILING)
         } else {
-            clamp_unit(normalized_magnitude.powf(1.18))
+            clamp_unit(normalized_magnitude.powf(1.28) * HANDLE_INTENSITY_CEILING)
         };
         let sharpness = match profile {
-            LocalityProfileKind::HandleLeft => localized_sharpness(intensity, 0.78),
-            LocalityProfileKind::HandleRight => localized_sharpness(intensity, 0.42),
+            LocalityProfileKind::HandleLeft => localized_sharpness(intensity, 0.62),
+            LocalityProfileKind::HandleRight => localized_sharpness(intensity, 0.24),
             LocalityProfileKind::TriggerLeft | LocalityProfileKind::TriggerRight => {
-                localized_sharpness(intensity, 0.92)
+                localized_sharpness(intensity, 0.68)
             }
         };
 
@@ -481,30 +483,28 @@ mod platform {
     }
 
     fn normalized_intensity(effect: &OhMyGamepadRumbleEffectDto) -> f32 {
-        clamp_unit(
-            effect
-                .strong_magnitude
-                .max(effect.weak_magnitude)
-                .max(effect.left_trigger)
-                .max(effect.right_trigger),
-        )
+        let peak = effect
+            .strong_magnitude
+            .max(effect.weak_magnitude)
+            .max(effect.left_trigger)
+            .max(effect.right_trigger);
+        clamp_unit(clamp_unit(peak).powf(1.18) * COMBINED_INTENSITY_CEILING)
     }
 
     fn normalized_sharpness(effect: &OhMyGamepadRumbleEffectDto) -> f32 {
         let strong = clamp_unit(effect.strong_magnitude.max(effect.left_trigger));
         let weak = clamp_unit(effect.weak_magnitude.max(effect.right_trigger));
-        clamp_unit(0.2 + strong * 0.6 + weak * 0.2)
+        clamp_unit(0.12 + strong * 0.42 + weak * 0.16)
     }
 
     fn localized_sharpness(magnitude: f32, bias: f32) -> f32 {
-        clamp_unit(0.15 + clamp_unit(magnitude) * 0.35 + bias * 0.5)
+        clamp_unit(0.08 + clamp_unit(magnitude) * 0.24 + bias * 0.36)
     }
 
     fn normalized_duration_ms(duration_ms: u16, trigger_preferred: bool) -> u16 {
         if trigger_preferred {
             duration_ms.max(18)
-        }
-        else {
+        } else {
             duration_ms.max(LOCALITY_MIN_DURATION_MS)
         }
     }
@@ -523,9 +523,8 @@ mod platform {
 
         use super::{
             localized_effect_for_profile, localized_effect_from_combined, localized_sharpness,
-            normalized_duration_ms,
-            normalized_duration_seconds, normalized_intensity, normalized_sharpness,
-            LocalityProfileKind,
+            normalized_duration_ms, normalized_duration_seconds, normalized_intensity,
+            normalized_sharpness, LocalityProfileKind, LOCALITY_MIN_DURATION_MS,
         };
 
         #[test]
@@ -538,7 +537,9 @@ mod platform {
                 ..OhMyGamepadRumbleEffectDto::default()
             };
 
-            assert_eq!(normalized_intensity(&effect), 0.8);
+            let normalized = normalized_intensity(&effect);
+            assert!(normalized > 0.0);
+            assert!(normalized < 0.8);
         }
 
         #[test]
@@ -592,7 +593,14 @@ mod platform {
         fn trigger_profile_keeps_shorter_min_duration_and_higher_sharpness() {
             let localized = localized_effect_for_profile(LocalityProfileKind::TriggerLeft, 0.5, 0);
             assert_eq!(localized.duration_ms, 18);
-            assert!(localized.sharpness > 0.5);
+            assert!(localized.sharpness > 0.3);
+        }
+
+        #[test]
+        fn handle_profile_stays_below_raw_peak_for_realistic_default() {
+            let localized = localized_effect_for_profile(LocalityProfileKind::HandleLeft, 1.0, 32);
+            assert!(localized.intensity < 1.0);
+            assert!(localized.sharpness < 0.8);
         }
     }
 }

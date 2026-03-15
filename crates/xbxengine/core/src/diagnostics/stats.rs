@@ -204,7 +204,32 @@ pub fn build_xbxengine_stats(
                     loss_ratio: bwe.loss_ratio,
                     rtt_ms: bwe.rtt_ms,
                     transport_path: bwe.transport_path.clone(),
+                    twcc_feedback_interval_ms: bwe.twcc_feedback_interval_ms,
+                    twcc_observed_packet_count: bwe.twcc_observed_packet_count,
+                    twcc_covered_sequence_span: bwe.twcc_covered_sequence_span,
+                    twcc_receive_bitrate_kbps: bwe.twcc_receive_bitrate_kbps,
+                    twcc_delivery_ratio: bwe.twcc_delivery_ratio,
+                    twcc_loss_ratio: bwe.twcc_loss_ratio,
                     observed_at_ms: bwe.observed_at_ms,
+                }
+            })
+        }),
+        latest_video_twcc_observation: runtime_stats.and_then(|stats| {
+            stats.latest_video_twcc_observation.as_ref().map(|twcc| {
+                xbxengine_protocol::XbxEngineVideoTwccObservationDto {
+                    observation_id: twcc.observation_id,
+                    feedback_packet_count: twcc.feedback_packet_count,
+                    covered_sequence_start: twcc.covered_sequence_start,
+                    covered_sequence_end: twcc.covered_sequence_end,
+                    covered_sequence_span: twcc.covered_sequence_span,
+                    observed_packet_count: twcc.observed_packet_count,
+                    observed_byte_count: twcc.observed_byte_count,
+                    feedback_interval_ms: twcc.feedback_interval_ms,
+                    arrival_span_ms: twcc.arrival_span_ms,
+                    receive_bitrate_kbps: twcc.receive_bitrate_kbps,
+                    delivery_ratio: twcc.delivery_ratio,
+                    packet_loss_ratio: twcc.packet_loss_ratio,
+                    observed_at_ms: twcc.observed_at_ms,
                 }
             })
         }),

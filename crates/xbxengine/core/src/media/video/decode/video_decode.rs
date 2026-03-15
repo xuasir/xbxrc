@@ -1,15 +1,14 @@
 use std::collections::VecDeque;
 
 use crate::{
-    media::video::frame_buffer::FrameReleasePolicy, media::video::render::renderer::XbxRenderFrame,
-    media::video::types::EncodedFrame, XbxEngineRenderPixelData, XbxEngineRuntimeError,
+    media::video::render::renderer::XbxRenderFrame, media::video::types::EncodedFrame,
+    XbxEngineRenderPixelData, XbxEngineRuntimeError,
 };
 
 const MAX_DECODED_FRAME_QUEUE_LEN: usize = 2;
 
 #[derive(Debug)]
 struct QueuedDecodedFrame {
-    queued_at_ms: f64,
     frame: XbxRenderFrame,
 }
 
@@ -55,7 +54,6 @@ fn create_hardware_video_decoder() -> Box<dyn XbxHardwareVideoDecoder> {
 }
 
 pub(crate) struct XbxVideoDecodeState {
-    frame_release_policy: FrameReleasePolicy,
     decoder: Box<dyn XbxHardwareVideoDecoder>,
     latest_decoded_seq: u64,
     first_video_packet_logged: bool,
@@ -69,8 +67,8 @@ pub(crate) struct XbxVideoDecodeState {
 
 impl XbxVideoDecodeState {
     pub(crate) fn new(min_delay_ms: u64, max_delay_ms: u64) -> Result<Self, XbxEngineRuntimeError> {
+        let _ = (min_delay_ms, max_delay_ms);
         Ok(Self {
-            frame_release_policy: FrameReleasePolicy::new(min_delay_ms, max_delay_ms),
             decoder: create_hardware_video_decoder(),
             latest_decoded_seq: 0,
             first_video_packet_logged: false,
@@ -121,7 +119,6 @@ impl XbxVideoDecodeState {
         decoded_frame.frame_seq = self.latest_decoded_seq;
         decoded_frame.rendered_at_ms = now_ms;
         self.enqueue_decoded_frame(QueuedDecodedFrame {
-            queued_at_ms: now_ms,
             frame: decoded_frame,
         });
     }
@@ -130,22 +127,8 @@ impl XbxVideoDecodeState {
         self.last_decode_ok_time_ms
     }
 
-    pub(crate) fn pop_decoded_frame(&mut self, now_ms: f64) -> Option<XbxRenderFrame> {
-        let queued = self.decoded_frame_queue.front()?;
-        let queue_delay_ms = (now_ms - queued.queued_at_ms).max(0.0);
-        let should_release = self
-            .frame_release_policy
-            .should_release(queue_delay_ms, self.decoded_frame_queue.len());
-
-        if !should_release {
-            return None;
-        }
-
-        crate::xbx_log_warn!(
-            "[xbxengine][vt] pop_decoded_frame: delay={:.2}ms qlen={}",
-            queue_delay_ms,
-            self.decoded_frame_queue.len()
-        );
+    pub(crate) fn pop_decoded_frame(&mut self, _now_ms: f64) -> Option<XbxRenderFrame> {
+        // native 路径已经有 pacer 负责 playout 节奏，decode stage 不再额外等待。
         self.decoded_frame_queue.pop_front().map(|item| item.frame)
     }
 
@@ -176,8 +159,8 @@ impl XbxVideoDecodeState {
         max_delay_ms: u64,
         decoder: Box<dyn XbxHardwareVideoDecoder>,
     ) -> Self {
+        let _ = (min_delay_ms, max_delay_ms);
         Self {
-            frame_release_policy: FrameReleasePolicy::new(min_delay_ms, max_delay_ms),
             decoder,
             latest_decoded_seq: 0,
             first_video_packet_logged: false,
@@ -191,10 +174,7 @@ impl XbxVideoDecodeState {
     }
 
     fn enqueue_decoded_frame_for_test(&mut self, frame: XbxRenderFrame) {
-        self.enqueue_decoded_frame(QueuedDecodedFrame {
-            queued_at_ms: 0.0,
-            frame,
-        });
+        self.enqueue_decoded_frame(QueuedDecodedFrame { frame });
     }
 }
 
