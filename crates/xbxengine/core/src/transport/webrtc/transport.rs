@@ -608,6 +608,7 @@ fn install_peer_connection_callbacks(
                         let mut rtt_source: Option<&'static str> = None;
                         let mut fraction_lost = 0.0f64;
                         let mut candidate_pair_rtt = 0.0f64;
+                        let mut candidate_pair_avg_rtt = 0.0f64;
                         let mut synthetic_loss_ratio = 0.0f64;
 
                         let mut report_counts = std::collections::HashMap::<String, usize>::new();
@@ -640,9 +641,14 @@ fn install_peer_connection_callbacks(
                                     }
                                     if let Some(selected_pair) = selected_candidate_pair {
                                         if pair.id == selected_pair.id
-                                            && pair.current_round_trip_time > 0.0
                                         {
-                                            candidate_pair_rtt = pair.current_round_trip_time;
+                                            if pair.current_round_trip_time > 0.0 {
+                                                candidate_pair_rtt = pair.current_round_trip_time;
+                                            }
+                                            let avg_rtt = candidate_pair_average_rtt(pair);
+                                            if avg_rtt > 0.0 {
+                                                candidate_pair_avg_rtt = avg_rtt;
+                                            }
                                         }
                                     }
                                 }
@@ -673,6 +679,16 @@ fn install_peer_connection_callbacks(
                         if rtt <= 0.0 && candidate_pair_rtt > 0.0 {
                             rtt = candidate_pair_rtt;
                             rtt_source = Some("candidate-pair");
+                        } else if rtt <= 0.0 && candidate_pair_avg_rtt > 0.0 {
+                            rtt = candidate_pair_avg_rtt;
+                            rtt_source = Some("candidate-pair-avg");
+                        } else if rtt <= 0.0 {
+                            if let Some((fallback_rtt, fallback_source)) =
+                                select_any_candidate_pair_rtt(&stats)
+                            {
+                                rtt = fallback_rtt;
+                                rtt_source = Some(fallback_source);
+                            }
                         }
 
                         let sample_now_ms = now_ms_f64();
@@ -1117,15 +1133,28 @@ fn resolve_twcc_gcc_target(
     let direct_path = transport_path
         .map(|path| path.to_ascii_lowercase().starts_with("direct"))
         .unwrap_or(false);
+    // Direct(host->host) 走独立 operating range：
+    // - 稳态仍以真实 15-23Mbps 为主
+    // - 但 BWE allowance 略高一档，允许 target 更积极地探到 25-40Mbps
+    // target/ceiling 仍可保持更高，但调度层不再默认把高 ceiling 当作常态工作区。
+    let direct_operating_floor_kbps = 15_000u32;
+    let direct_operating_ceiling_kbps = 23_000u32;
+    let direct_peak_enter_kbps = 26_000u32;
+    let direct_peak_ceiling_kbps = 40_000u32;
     let preferred_gaming_floor_kbps = if direct_path {
-        floor_kbps.max(30_000)
+        floor_kbps.max(direct_operating_floor_kbps)
     } else {
         floor_kbps
     };
     let ramp_up_step_kbps = if direct_path {
-        config.remb_ramp_up_step_kbps.saturating_mul(2)
+        5_000
     } else {
         config.remb_ramp_up_step_kbps
+    };
+    let fast_ramp_up_step_kbps = if direct_path {
+        8_000
+    } else {
+        ramp_up_step_kbps
     };
     let Some(twcc_input) = twcc_input else {
         return (
@@ -1140,22 +1169,39 @@ fn resolve_twcc_gcc_target(
 
     let twcc = twcc_input.observation;
     let stable_feedback = twcc.feedback_interval_ms.unwrap_or(0.0)
-        <= if direct_path { 300.0 } else { 200.0 }
-        && twcc.observed_packet_count >= if direct_path { 6 } else { 12 }
+        <= if direct_path { 220.0 } else { 200.0 }
+        && twcc.observed_packet_count >= if direct_path { 8 } else { 12 }
         && twcc.covered_sequence_span >= twcc.observed_packet_count;
     let receive_bitrate_kbps = twcc
         .receive_bitrate_kbps
         .unwrap_or(actual_headroom_kbps as f64)
         .clamp(floor_kbps as f64, ceiling_kbps as f64) as u32;
     let receive_headroom_kbps = ((receive_bitrate_kbps as f64)
-        * if direct_path { 1.55 } else { 1.08 })
+        * if direct_path { 1.28 } else { 1.08 })
     .round()
     .clamp(floor_kbps as f64, ceiling_kbps as f64) as u32;
+    let direct_desired_kbps = if direct_path {
+        let bounded_receive = receive_headroom_kbps
+            .max(preferred_gaming_floor_kbps)
+            .min(direct_peak_ceiling_kbps.min(ceiling_kbps));
+        if bounded_receive >= direct_peak_enter_kbps {
+            bounded_receive
+        } else {
+            bounded_receive
+                .min(direct_operating_ceiling_kbps.max(preferred_gaming_floor_kbps))
+                .max(preferred_gaming_floor_kbps)
+        }
+    } else {
+        receive_headroom_kbps.max(floor_kbps)
+    };
 
     if !stable_feedback {
         return (
             if direct_path {
-                current_kbps.max(preferred_gaming_floor_kbps)
+                current_kbps.clamp(
+                    preferred_gaming_floor_kbps,
+                    direct_peak_ceiling_kbps.min(ceiling_kbps),
+                )
             } else {
                 current_kbps.min(receive_headroom_kbps.max(floor_kbps))
             },
@@ -1167,22 +1213,28 @@ fn resolve_twcc_gcc_target(
         );
     }
 
-    let severe_loss_threshold = if direct_path { 0.30 } else { 0.12 };
-    let severe_delivery_threshold = if direct_path { 0.62 } else { 0.82 };
-    let congestion_loss_threshold = if direct_path { 0.15 } else { 0.05 };
-    let congestion_delivery_threshold = if direct_path { 0.80 } else { 0.92 };
-    let mild_loss_threshold = if direct_path { 0.07 } else { 0.02 };
-    let mild_delivery_threshold = if direct_path { 0.90 } else { 0.97 };
+    let severe_loss_threshold = if direct_path { 0.08 } else { 0.12 };
+    let severe_delivery_threshold = if direct_path { 0.92 } else { 0.82 };
+    let congestion_loss_threshold = if direct_path { 0.03 } else { 0.05 };
+    let congestion_delivery_threshold = if direct_path { 0.96 } else { 0.92 };
+    let mild_loss_threshold = if direct_path { 0.01 } else { 0.02 };
+    let mild_delivery_threshold = if direct_path { 0.985 } else { 0.97 };
 
     if twcc.packet_loss_ratio >= severe_loss_threshold
         || twcc.delivery_ratio <= severe_delivery_threshold
     {
-        *ramp_cooldown_ticks = if direct_path { 6 } else { 12 };
+        *ramp_cooldown_ticks = if direct_path { 2 } else { 12 };
         let backoff_kbps = ((current_kbps as f64) * (config.remb_ramp_down_factor as f64 / 1000.0))
             .round()
             .max(floor_kbps as f64) as u32;
         return (
-            backoff_kbps.min(receive_headroom_kbps.max(floor_kbps)),
+            if direct_path {
+                backoff_kbps
+                    .min(direct_desired_kbps.max(preferred_gaming_floor_kbps))
+                    .max(preferred_gaming_floor_kbps)
+            } else {
+                backoff_kbps.min(receive_headroom_kbps.max(floor_kbps))
+            },
             if direct_path {
                 "twcc-gcc-direct-severe-backoff".to_string()
             } else {
@@ -1194,9 +1246,9 @@ fn resolve_twcc_gcc_target(
     if twcc.packet_loss_ratio >= congestion_loss_threshold
         || twcc.delivery_ratio <= congestion_delivery_threshold
     {
-        *ramp_cooldown_ticks = if direct_path { 4 } else { 8 };
-        let direct_cap_kbps = receive_headroom_kbps
-            .saturating_add(ramp_up_step_kbps)
+        *ramp_cooldown_ticks = if direct_path { 1 } else { 8 };
+        let direct_cap_kbps = direct_desired_kbps
+            .min(direct_peak_ceiling_kbps.min(ceiling_kbps))
             .max(preferred_gaming_floor_kbps);
         return (
             if direct_path {
@@ -1215,10 +1267,12 @@ fn resolve_twcc_gcc_target(
     if twcc.packet_loss_ratio >= mild_loss_threshold
         || twcc.delivery_ratio <= mild_delivery_threshold
     {
-        *ramp_cooldown_ticks = if direct_path { 2 } else { 4 };
+        *ramp_cooldown_ticks = if direct_path { 1 } else { 4 };
         return (
             if direct_path {
-                current_kbps.max(preferred_gaming_floor_kbps)
+                current_kbps
+                    .min(direct_peak_ceiling_kbps.min(ceiling_kbps))
+                    .max(preferred_gaming_floor_kbps)
             } else {
                 current_kbps
                     .min(receive_headroom_kbps.saturating_add(ramp_up_step_kbps))
@@ -1235,7 +1289,15 @@ fn resolve_twcc_gcc_target(
     if *ramp_cooldown_ticks > 0 {
         *ramp_cooldown_ticks = ramp_cooldown_ticks.saturating_sub(1);
         return (
-            current_kbps.max(preferred_gaming_floor_kbps),
+            if direct_path {
+                current_kbps
+                    .saturating_add(2_000)
+                    .min(direct_desired_kbps)
+                    .min(direct_peak_ceiling_kbps.min(ceiling_kbps))
+                    .max(preferred_gaming_floor_kbps)
+            } else {
+                current_kbps.max(preferred_gaming_floor_kbps)
+            },
             if direct_path {
                 "twcc-gcc-direct-ramp-cooldown".to_string()
             } else {
@@ -1244,13 +1306,26 @@ fn resolve_twcc_gcc_target(
         );
     }
 
-    let desired_kbps = receive_headroom_kbps
-        .max(actual_headroom_kbps)
-        .max(preferred_gaming_floor_kbps)
-        .clamp(floor_kbps, ceiling_kbps);
+    let desired_kbps = if direct_path {
+        direct_desired_kbps
+            .max(actual_headroom_kbps.min(direct_peak_ceiling_kbps.min(ceiling_kbps)))
+            .clamp(
+                preferred_gaming_floor_kbps,
+                direct_peak_ceiling_kbps.min(ceiling_kbps),
+            )
+    } else {
+        receive_headroom_kbps
+            .max(actual_headroom_kbps)
+            .max(preferred_gaming_floor_kbps)
+            .clamp(floor_kbps, ceiling_kbps)
+    };
     (
         current_kbps
-            .saturating_add(ramp_up_step_kbps)
+            .saturating_add(if direct_path && desired_kbps >= direct_peak_enter_kbps {
+                fast_ramp_up_step_kbps
+            } else {
+                ramp_up_step_kbps
+            })
             .min(desired_kbps)
             .max(floor_kbps),
         if direct_path {
@@ -1839,9 +1914,12 @@ fn normalize_remote_ice_candidate(candidate: &str) -> Option<String> {
 mod tests {
     use super::{
         apply_offer_policy_contract, resolve_offer_video_constraint_tier, resolve_target_remb_kbps,
-        BweDecision, XbxEngineNegotiationRuntimeConfig,
+        select_any_candidate_pair_rtt, BweDecision, XbxEngineNegotiationRuntimeConfig,
     };
     use crate::XbxEngineWebRtcRuntimeConfig;
+    use std::collections::HashMap;
+    use tokio::time::Instant;
+    use webrtc::stats::{ICECandidatePairStats, RTCStatsType, StatsReport, StatsReportType};
 
     fn sample_offer_sdp() -> String {
         [
@@ -1949,6 +2027,7 @@ mod tests {
             4_600.0,
             0.012,
             None,
+            None,
             &mut last_sent_remb_kbps,
             &mut 0,
         );
@@ -1977,6 +2056,7 @@ mod tests {
             9_000.0,
             0.12,
             None,
+            None,
             &mut last_sent_remb_kbps,
             &mut 0,
         );
@@ -2004,6 +2084,7 @@ mod tests {
             None,
             5_200.0,
             0.0,
+            None,
             None,
             &mut last_sent_remb_kbps,
             &mut cooldown_ticks,
@@ -2055,11 +2136,11 @@ mod tests {
         );
 
         assert_eq!(decision.reason, "twcc-gcc-direct-ramp-up");
-        assert_eq!(decision.target_kbps, 30_000);
+        assert_eq!(decision.target_kbps, 32_000);
     }
 
     #[test]
-    fn twcc_gcc_direct_path_keeps_high_target_under_mild_loss() {
+    fn twcc_gcc_direct_path_caps_into_operating_range_under_congestion() {
         let config = XbxEngineWebRtcRuntimeConfig {
             bwe_mode: "twcc-gcc".to_string(),
             forced_remb_kbps: Some(150_000),
@@ -2098,8 +2179,94 @@ mod tests {
             &mut cooldown_ticks,
         );
 
-        assert_eq!(decision.reason, "twcc-gcc-direct-mild-hold");
-        assert_eq!(decision.target_kbps, 52_000);
+        assert_eq!(decision.reason, "twcc-gcc-direct-congestion-cap");
+        assert_eq!(decision.target_kbps, 32_000);
+    }
+
+    #[test]
+    fn twcc_gcc_direct_path_allows_burst_but_caps_peak_range() {
+        let config = XbxEngineWebRtcRuntimeConfig {
+            bwe_mode: "twcc-gcc".to_string(),
+            forced_remb_kbps: Some(150_000),
+            remb_floor_kbps: 25_000,
+            remb_ceiling_kbps: 150_000,
+            remb_ramp_up_step_kbps: 12_000,
+            remb_ramp_down_factor: 900,
+            ..Default::default()
+        };
+        let twcc = crate::XbxEngineVideoTwccObservation {
+            observation_id: 3,
+            feedback_packet_count: 1,
+            covered_sequence_start: 2_000,
+            covered_sequence_end: 2_269,
+            covered_sequence_span: 270,
+            observed_packet_count: 270,
+            observed_byte_count: 360_000,
+            feedback_interval_ms: Some(100.0),
+            arrival_span_ms: Some(94.0),
+            receive_bitrate_kbps: Some(29_500.0),
+            delivery_ratio: 1.0,
+            packet_loss_ratio: 0.0,
+            observed_at_ms: 8_000.0,
+        };
+        let mut last_sent_remb_kbps = 30_000;
+        let mut cooldown_ticks = 0;
+
+        let decision = resolve_target_remb_kbps(
+            &config,
+            None,
+            28_000.0,
+            0.0,
+            Some("Direct (host->host)"),
+            Some(&twcc),
+            &mut last_sent_remb_kbps,
+            &mut cooldown_ticks,
+        );
+
+        assert_eq!(decision.reason, "twcc-gcc-direct-ramp-up");
+        assert_eq!(decision.target_kbps, 37_760);
+    }
+
+    #[test]
+    fn select_any_candidate_pair_rtt_falls_back_without_selected_pair() {
+        let mut reports = HashMap::new();
+        reports.insert(
+            "pair-a".to_string(),
+            StatsReportType::CandidatePair(ICECandidatePairStats {
+                timestamp: Instant::now(),
+                stats_type: RTCStatsType::CandidatePair,
+                id: "pair-a".to_string(),
+                local_candidate_id: "local-a".to_string(),
+                remote_candidate_id: "remote-a".to_string(),
+                state: Default::default(),
+                nominated: false,
+                packets_sent: 0,
+                packets_received: 0,
+                bytes_sent: 0,
+                bytes_received: 0,
+                last_packet_sent_timestamp: Instant::now(),
+                last_packet_received_timestamp: Instant::now(),
+                total_round_trip_time: 0.0,
+                current_round_trip_time: 0.023,
+                available_outgoing_bitrate: 0.0,
+                available_incoming_bitrate: 0.0,
+                requests_received: 0,
+                requests_sent: 0,
+                responses_received: 0,
+                responses_sent: 0,
+                consent_requests_sent: 0,
+                circuit_breaker_trigger_count: 0,
+                consent_expired_timestamp: Instant::now(),
+                first_request_timestamp: Instant::now(),
+                last_request_timestamp: Instant::now(),
+                retransmissions_sent: 0,
+            }),
+        );
+        let stats = StatsReport { reports };
+
+        let rtt = select_any_candidate_pair_rtt(&stats);
+
+        assert_eq!(rtt, Some((0.023, "candidate-pair-any")));
     }
 }
 fn summarize_sdp(sdp: &str) -> String {
@@ -2170,6 +2337,42 @@ fn select_preferred_candidate_pair(
     }
 
     nominated_pair.or(active_pair)
+}
+
+fn candidate_pair_average_rtt(pair: &webrtc::stats::ICECandidatePairStats) -> f64 {
+    let response_count = pair.responses_received.max(pair.responses_sent) as f64;
+    if response_count <= 0.0 || pair.total_round_trip_time <= 0.0 {
+        return 0.0;
+    }
+
+    pair.total_round_trip_time / response_count
+}
+
+fn select_any_candidate_pair_rtt(stats: &StatsReport) -> Option<(f64, &'static str)> {
+    let mut candidate_pair_rtt = None;
+    let mut candidate_pair_avg_rtt = None;
+
+    for report in stats.reports.values() {
+        let webrtc::stats::StatsReportType::CandidatePair(pair) = report else {
+            continue;
+        };
+        if candidate_pair_rtt.is_none() && pair.current_round_trip_time > 0.0 {
+            candidate_pair_rtt = Some(pair.current_round_trip_time);
+        }
+        if candidate_pair_avg_rtt.is_none() {
+            let avg_rtt = candidate_pair_average_rtt(pair);
+            if avg_rtt > 0.0 {
+                candidate_pair_avg_rtt = Some(avg_rtt);
+            }
+        }
+        if candidate_pair_rtt.is_some() && candidate_pair_avg_rtt.is_some() {
+            break;
+        }
+    }
+
+    candidate_pair_rtt
+        .map(|rtt| (rtt, "candidate-pair-any"))
+        .or_else(|| candidate_pair_avg_rtt.map(|rtt| (rtt, "candidate-pair-any-avg")))
 }
 
 fn normalize_candidate_type(candidate_type: &impl std::fmt::Debug) -> String {

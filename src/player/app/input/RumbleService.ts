@@ -17,6 +17,7 @@ const GAMEPAD_RUMBLE_HEADER_SIZE_LEGACY = 2
 const GAMEPAD_RUMBLE_PAYLOAD_SIZE_LEGACY = 12
 const STREAM_RUMBLE_IGNORE_DURATION_MS = 8
 const STREAM_RUMBLE_IGNORE_MAGNITUDE = 0.02
+const STREAM_RUMBLE_STOP_LEAD_MS = 10
 
 const VIBRATION_PROFILE_PRESETS: Record<VibrationStrengthPreset, {
   handleScale: number
@@ -274,12 +275,13 @@ export class RumbleService {
       return
     }
 
+    // Core Haptics 的 continuous pattern 会比逻辑时长略拖尾，提前一点发 stop 能让收尾更干脆。
     state.packetStopTimer = window.setTimeout(() => {
       state.packetStopTimer = null
       state.packetEffect = null
       this.dispatchRumble(target, null, state)
       this.pruneTargetState(target, state)
-    }, cycleIntervalMs)
+    }, Math.max(1, cycleIntervalMs - STREAM_RUMBLE_STOP_LEAD_MS))
   }
 
   private dispatchRumble(

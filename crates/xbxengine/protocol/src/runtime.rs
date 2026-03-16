@@ -105,6 +105,12 @@ pub struct XbxEnginePacketGapObservationDto {
     pub expected_sequence: u16,
     pub received_sequence: u16,
     pub missing_count: u16,
+    pub source: String,
+    pub frame_rtp_timestamp: Option<u32>,
+    pub frame_packet_count: Option<u16>,
+    pub frame_missing_count: Option<u16>,
+    pub frame_is_keyframe: Option<bool>,
+    pub frame_importance: Option<String>,
     pub observed_at_ms: f64,
 }
 
@@ -123,10 +129,15 @@ pub struct XbxEngineFrameDropObservationDto {
 pub struct XbxEngineNackObservationDto {
     pub observation_id: u64,
     pub action: String,
+    pub source: String,
     pub first_sequence: u16,
     pub last_sequence: u16,
     pub packet_count: u16,
     pub retry_count: u8,
+    pub frame_rtp_timestamp: Option<u32>,
+    pub frame_is_keyframe: Option<bool>,
+    pub frame_importance: Option<String>,
+    pub deadline_at_ms: Option<f64>,
     pub observed_at_ms: f64,
 }
 

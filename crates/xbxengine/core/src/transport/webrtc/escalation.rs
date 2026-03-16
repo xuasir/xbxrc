@@ -3,7 +3,9 @@ use std::time::{Duration, Instant};
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum KeyframeReasonClass {
     WaitKeyframe,
+    TransportAwaitRecoveryKeyframe,
     AdapterIdleTimeout,
+    AdapterThinStream,
     TransportRecoveredLate,
     TransportSampleLoss,
 }
@@ -16,8 +18,10 @@ enum DecoderResetReasonClass {
 
 pub enum VideoEscalationReason {
     WaitKeyframe,
+    TransportAwaitRecoveryKeyframe,
     Reconfigure,
     AdapterIdleTimeout,
+    AdapterThinStream,
     TransportExpiredDeadline,
     TransportSevereDeadline,
     TransportRecoveredLate,
@@ -41,6 +45,8 @@ pub struct VideoEscalationController {
     last_keyframe_reason_class: Option<KeyframeReasonClass>,
     last_decoder_reset_reason_class: Option<DecoderResetReasonClass>,
     wait_keyframe_started_at: Option<Instant>,
+    transport_deadline_window_started_at: Option<Instant>,
+    transport_deadline_window_count: u8,
     next_observation_id: u64,
 }
 
@@ -72,6 +78,8 @@ impl VideoEscalationController {
             last_keyframe_reason_class: None,
             last_decoder_reset_reason_class: None,
             wait_keyframe_started_at: None,
+            transport_deadline_window_started_at: None,
+            transport_deadline_window_count: 0,
             next_observation_id: 0,
         }
     }
@@ -81,13 +89,21 @@ impl VideoEscalationController {
         let now = Instant::now();
         let action = match reason {
             VideoEscalationReason::WaitKeyframe
+            | VideoEscalationReason::TransportAwaitRecoveryKeyframe
             | VideoEscalationReason::AdapterIdleTimeout
+            | VideoEscalationReason::AdapterThinStream
             | VideoEscalationReason::TransportRecoveredLate
             | VideoEscalationReason::TransportSampleLoss => {
                 let reason_class = match reason {
                     VideoEscalationReason::WaitKeyframe => KeyframeReasonClass::WaitKeyframe,
+                    VideoEscalationReason::TransportAwaitRecoveryKeyframe => {
+                        KeyframeReasonClass::TransportAwaitRecoveryKeyframe
+                    }
                     VideoEscalationReason::AdapterIdleTimeout => {
                         KeyframeReasonClass::AdapterIdleTimeout
+                    }
+                    VideoEscalationReason::AdapterThinStream => {
+                        KeyframeReasonClass::AdapterThinStream
                     }
                     VideoEscalationReason::TransportRecoveredLate => {
                         KeyframeReasonClass::TransportRecoveredLate
@@ -97,8 +113,13 @@ impl VideoEscalationController {
                     }
                     _ => unreachable!(),
                 };
-                let immediate_keyframe_reason =
-                    matches!(reason, VideoEscalationReason::TransportSampleLoss);
+                let immediate_keyframe_reason = matches!(
+                    reason,
+                    VideoEscalationReason::TransportAwaitRecoveryKeyframe
+                        | VideoEscalationReason::TransportSampleLoss
+                        | VideoEscalationReason::AdapterIdleTimeout
+                        | VideoEscalationReason::AdapterThinStream
+                );
                 let severe_deadline_reconnect =
                     matches!(reason, VideoEscalationReason::AdapterIdleTimeout)
                         && self.last_severe_deadline_at.map_or(false, |last| {
@@ -139,12 +160,81 @@ impl VideoEscalationController {
                         self.pending_keyframe_signals.saturating_add(1)
                     };
                     self.pending_decoder_reset_signals = 0;
+                    let repeated_thin_stream_after_keyframe =
+                        matches!(reason, VideoEscalationReason::AdapterThinStream)
+                            && self
+                                .last_keyframe_request_at
+                                .map_or(false, |last| last.elapsed() <= self.cooldown);
+                    let repeated_idle_timeout_after_keyframe =
+                        matches!(reason, VideoEscalationReason::AdapterIdleTimeout)
+                            && self
+                                .last_keyframe_request_at
+                                .map_or(false, |last| last.elapsed() <= self.cooldown);
+                    let repeated_wait_recovery_after_keyframe = matches!(
+                        reason,
+                        VideoEscalationReason::TransportAwaitRecoveryKeyframe
+                    ) && self
+                        .last_keyframe_request_at
+                        .map_or(false, |last| last.elapsed() <= self.cooldown);
+                    let repeated_sample_loss_after_keyframe =
+                        matches!(reason, VideoEscalationReason::TransportSampleLoss)
+                            && self
+                                .last_keyframe_request_at
+                                .map_or(false, |last| last.elapsed() <= self.cooldown.mul_f32(0.5));
                     let persistent_wait_keyframe =
                         matches!(reason, VideoEscalationReason::WaitKeyframe)
                             && self.wait_keyframe_started_at.map_or(false, |started_at| {
                                 now.duration_since(started_at) >= self.cooldown.mul_f32(2.0)
                             });
-                    if persistent_wait_keyframe
+                    if repeated_wait_recovery_after_keyframe
+                        && self
+                            .last_decoder_reset_at
+                            .map_or(true, |last| last.elapsed() >= self.cooldown)
+                    {
+                        self.pending_keyframe_signals = 0;
+                        self.pending_decoder_reset_signals = 0;
+                        self.reconnect_candidate_signals =
+                            self.reconnect_candidate_signals.saturating_add(1);
+                        self.last_decoder_reset_at = Some(now);
+                        self.last_keyframe_request_at = Some(now);
+                        "requestDecoderReset"
+                    } else if repeated_thin_stream_after_keyframe
+                        && self
+                            .last_decoder_reset_at
+                            .map_or(true, |last| last.elapsed() >= self.cooldown)
+                    {
+                        self.pending_keyframe_signals = 0;
+                        self.pending_decoder_reset_signals = 0;
+                        self.reconnect_candidate_signals =
+                            self.reconnect_candidate_signals.saturating_add(1);
+                        self.last_decoder_reset_at = Some(now);
+                        self.last_keyframe_request_at = Some(now);
+                        "requestDecoderReset"
+                    } else if repeated_idle_timeout_after_keyframe
+                        && self
+                            .last_decoder_reset_at
+                            .map_or(true, |last| last.elapsed() >= self.cooldown)
+                    {
+                        self.pending_keyframe_signals = 0;
+                        self.pending_decoder_reset_signals = 0;
+                        self.reconnect_candidate_signals =
+                            self.reconnect_candidate_signals.saturating_add(1);
+                        self.last_decoder_reset_at = Some(now);
+                        self.last_keyframe_request_at = Some(now);
+                        "requestDecoderReset"
+                    } else if repeated_sample_loss_after_keyframe
+                        && self
+                            .last_decoder_reset_at
+                            .map_or(true, |last| last.elapsed() >= self.cooldown.mul_f32(0.5))
+                    {
+                        self.pending_keyframe_signals = 0;
+                        self.pending_decoder_reset_signals = 0;
+                        self.reconnect_candidate_signals =
+                            self.reconnect_candidate_signals.saturating_add(1);
+                        self.last_decoder_reset_at = Some(now);
+                        self.last_keyframe_request_at = Some(now);
+                        "requestDecoderReset"
+                    } else if persistent_wait_keyframe
                         && self
                             .last_decoder_reset_at
                             .map_or(true, |last| last.elapsed() >= self.cooldown)
@@ -174,6 +264,12 @@ impl VideoEscalationController {
             VideoEscalationReason::Reconfigure
             | VideoEscalationReason::TransportExpiredDeadline => {
                 self.wait_keyframe_started_at = None;
+                let is_transport_deadline =
+                    matches!(reason, VideoEscalationReason::TransportExpiredDeadline);
+                if !is_transport_deadline {
+                    self.transport_deadline_window_started_at = None;
+                    self.transport_deadline_window_count = 0;
+                }
                 let reason_class = match reason {
                     VideoEscalationReason::Reconfigure => DecoderResetReasonClass::Reconfigure,
                     VideoEscalationReason::TransportExpiredDeadline => {
@@ -199,16 +295,44 @@ impl VideoEscalationController {
                     .last_decoder_reset_at
                     .map_or(true, |last| last.elapsed() >= self.cooldown)
                 {
+                    if is_transport_deadline {
+                        let reset_deadline_windows = self
+                            .transport_deadline_window_started_at
+                            .map_or(true, |started_at| {
+                                now.duration_since(started_at)
+                                    > self.severe_deadline_reconnect_window
+                            });
+                        let new_deadline_window = self
+                            .transport_deadline_window_started_at
+                            .map_or(true, |started_at| {
+                                now.duration_since(started_at) >= self.cooldown
+                            });
+                        if reset_deadline_windows {
+                            self.transport_deadline_window_count = 0;
+                        }
+                        if new_deadline_window {
+                            self.transport_deadline_window_started_at = Some(now);
+                            self.transport_deadline_window_count =
+                                self.transport_deadline_window_count.saturating_add(1);
+                        }
+                    } else {
+                        self.transport_deadline_window_started_at = None;
+                        self.transport_deadline_window_count = 0;
+                    }
                     self.pending_decoder_reset_signals = 0;
-                    self.reconnect_candidate_signals =
-                        self.reconnect_candidate_signals.saturating_add(1);
-                    self.last_decoder_reset_at = Some(now);
-                    self.last_keyframe_request_at = Some(now);
-                    "requestDecoderReset"
-                } else if self.reconnect_candidate_signals
-                    >= self.decoder_reset_burst_threshold.saturating_add(1)
-                {
-                    "requestReconnectCandidate"
+                    let should_reconnect_candidate =
+                        is_transport_deadline && self.transport_deadline_window_count >= 3;
+                    if should_reconnect_candidate {
+                        self.reconnect_candidate_signals =
+                            self.reconnect_candidate_signals.saturating_add(1);
+                        "requestReconnectCandidate"
+                    } else {
+                        self.reconnect_candidate_signals =
+                            self.reconnect_candidate_signals.saturating_add(1);
+                        self.last_decoder_reset_at = Some(now);
+                        self.last_keyframe_request_at = Some(now);
+                        "requestDecoderReset"
+                    }
                 } else {
                     "cooldownSuppressed"
                 }
@@ -275,39 +399,14 @@ mod tests {
     }
 
     #[test]
-    fn idle_timeout_burst_expires_before_requesting_keyframe() {
+    fn idle_timeout_requests_keyframe_immediately() {
         let mut controller = VideoEscalationController::new(Duration::from_millis(250), 2, 2);
 
         assert_eq!(
             controller
                 .on_reason(VideoEscalationReason::AdapterIdleTimeout)
                 .action,
-            "waitForBurst"
-        );
-        std::thread::sleep(Duration::from_millis(380));
-        assert_eq!(
-            controller
-                .on_reason(VideoEscalationReason::AdapterIdleTimeout)
-                .action,
-            "waitForBurst"
-        );
-    }
-
-    #[test]
-    fn mixed_wait_keyframe_and_idle_timeout_do_not_share_burst_counter() {
-        let mut controller = VideoEscalationController::new(Duration::from_millis(250), 2, 2);
-
-        assert_eq!(
-            controller
-                .on_reason(VideoEscalationReason::WaitKeyframe)
-                .action,
-            "waitForBurst"
-        );
-        assert_eq!(
-            controller
-                .on_reason(VideoEscalationReason::AdapterIdleTimeout)
-                .action,
-            "waitForBurst"
+            "requestKeyframe"
         );
     }
 
@@ -332,7 +431,7 @@ mod tests {
 
     #[test]
     fn repeated_transport_deadline_failures_escalate_to_reconnect_candidate() {
-        let mut controller = VideoEscalationController::new(Duration::from_secs(60), 2, 1);
+        let mut controller = VideoEscalationController::new(Duration::from_millis(40), 2, 1);
 
         assert_eq!(
             controller
@@ -346,12 +445,40 @@ mod tests {
                 .action,
             "cooldownSuppressed"
         );
+        std::thread::sleep(Duration::from_millis(45));
+        assert_eq!(
+            controller
+                .on_reason(VideoEscalationReason::TransportExpiredDeadline)
+                .action,
+            "requestDecoderReset"
+        );
+        std::thread::sleep(Duration::from_millis(45));
         assert_eq!(
             controller
                 .on_reason(VideoEscalationReason::TransportExpiredDeadline)
                 .action,
             "requestReconnectCandidate"
         );
+    }
+
+    #[test]
+    fn transport_deadline_storm_within_same_window_does_not_reconnect() {
+        let mut controller = VideoEscalationController::new(Duration::from_millis(60), 2, 1);
+
+        assert_eq!(
+            controller
+                .on_reason(VideoEscalationReason::TransportExpiredDeadline)
+                .action,
+            "requestDecoderReset"
+        );
+        for _ in 0..4 {
+            assert_eq!(
+                controller
+                    .on_reason(VideoEscalationReason::TransportExpiredDeadline)
+                    .action,
+                "cooldownSuppressed"
+            );
+        }
     }
 
     #[test]
@@ -425,6 +552,78 @@ mod tests {
                 .on_reason(VideoEscalationReason::TransportSampleLoss)
                 .action,
             "requestKeyframe"
+        );
+    }
+
+    #[test]
+    fn repeated_transport_sample_loss_after_keyframe_escalates_to_decoder_reset() {
+        let mut controller = VideoEscalationController::new(Duration::from_millis(200), 3, 2);
+
+        assert_eq!(
+            controller
+                .on_reason(VideoEscalationReason::TransportSampleLoss)
+                .action,
+            "requestKeyframe"
+        );
+        assert_eq!(
+            controller
+                .on_reason(VideoEscalationReason::TransportSampleLoss)
+                .action,
+            "requestDecoderReset"
+        );
+    }
+
+    #[test]
+    fn thin_stream_requests_keyframe_then_decoder_reset_quickly() {
+        let mut controller = VideoEscalationController::new(Duration::from_millis(250), 3, 2);
+
+        assert_eq!(
+            controller
+                .on_reason(VideoEscalationReason::AdapterThinStream)
+                .action,
+            "requestKeyframe"
+        );
+        assert_eq!(
+            controller
+                .on_reason(VideoEscalationReason::AdapterThinStream)
+                .action,
+            "requestDecoderReset"
+        );
+    }
+
+    #[test]
+    fn await_recovery_keyframe_requests_keyframe_then_decoder_reset_quickly() {
+        let mut controller = VideoEscalationController::new(Duration::from_millis(250), 3, 2);
+
+        assert_eq!(
+            controller
+                .on_reason(VideoEscalationReason::TransportAwaitRecoveryKeyframe)
+                .action,
+            "requestKeyframe"
+        );
+        assert_eq!(
+            controller
+                .on_reason(VideoEscalationReason::TransportAwaitRecoveryKeyframe)
+                .action,
+            "requestDecoderReset"
+        );
+    }
+
+    #[test]
+    fn idle_timeout_requests_keyframe_then_decoder_reset_quickly() {
+        let mut controller = VideoEscalationController::new(Duration::from_millis(250), 3, 2);
+
+        assert_eq!(
+            controller
+                .on_reason(VideoEscalationReason::AdapterIdleTimeout)
+                .action,
+            "requestKeyframe"
+        );
+        assert_eq!(
+            controller
+                .on_reason(VideoEscalationReason::AdapterIdleTimeout)
+                .action,
+            "requestDecoderReset"
         );
     }
 }

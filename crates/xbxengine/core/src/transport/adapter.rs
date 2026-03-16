@@ -1,5 +1,6 @@
 use bytes::Bytes;
 use rtp::codecs::h264::H264Packet;
+use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -11,7 +12,9 @@ use crate::media::video::types::{EncodedFrame, FrameValue, VideoCodec};
 use crate::transport::h264_resolution::parse_sps_dimensions_from_nal;
 use crate::transport::webrtc::escalation::VideoEscalationReason;
 use crate::transport::webrtc::frame_deadline::FrameDeadlineTracker;
-use crate::transport::webrtc::nack_scheduler::{NackScheduler, NackSchedulerConfig, ResolvedNack};
+use crate::transport::webrtc::nack_scheduler::{
+    NackObservePolicy, NackScheduler, NackSchedulerConfig, ResolvedNack,
+};
 use crate::{XbxEngineMediaRuntimeStats, XbxEngineVideoNackObservation};
 
 pub enum FrameSourceEvent {
@@ -40,11 +43,15 @@ pub struct WebrtcVideoAdapter {
     idle_hint_cooldown: std::time::Duration,
     last_packet_time: std::time::Instant,
     assembling_frame_start: Option<std::time::Instant>,
+    current_assembly_packet_count: u16,
     last_idle_hint_time: Option<std::time::Instant>,
+    assembly_stall_timeout: std::time::Duration,
+    thin_stream_packet_threshold: u16,
     nack_scheduler: NackScheduler,
     nack_window: NackSequenceWindow,
     nack_skip_last_n: u16,
     last_highest_rtp_sequence: Option<u16>,
+    recent_rtp_packets: VecDeque<RecentRtpPacket>,
     packet_gap_observation_id: u64,
     frame_deadline_tracker: FrameDeadlineTracker,
     nack_observation_id: u64,
@@ -71,6 +78,9 @@ impl WebrtcVideoAdapter {
         let frame_deadline_ms = nack_config.frame_deadline_ms;
         let burst_count = usize::from(nack_config.burst_count.max(1));
         let jitter_buffer_max_delay = jitter_buffer_max_delay.max(jitter_buffer_min_delay);
+        let assembly_stall_timeout = idle_timeout
+            .mul_f32(3.0)
+            .clamp(Duration::from_millis(240), Duration::from_millis(600));
         Self {
             track,
             peer_connection,
@@ -83,11 +93,15 @@ impl WebrtcVideoAdapter {
             idle_hint_cooldown: idle_timeout.max(std::time::Duration::from_millis(400)),
             last_packet_time: std::time::Instant::now(),
             assembling_frame_start: None,
+            current_assembly_packet_count: 0,
             last_idle_hint_time: None,
+            assembly_stall_timeout,
+            thin_stream_packet_threshold: nack_config.burst_count.saturating_mul(6).max(18),
             nack_scheduler: NackScheduler::new(nack_config),
             nack_window: NackSequenceWindow::new(13 - 6),
             nack_skip_last_n: 2,
             last_highest_rtp_sequence: None,
+            recent_rtp_packets: VecDeque::with_capacity(512),
             packet_gap_observation_id: 0,
             frame_deadline_tracker: FrameDeadlineTracker::new(frame_deadline_ms),
             nack_observation_id: 0,
@@ -121,7 +135,17 @@ impl WebrtcVideoAdapter {
                 .saturating_sub(pending_before)
                 .min(u16::MAX as usize) as u16;
             if inserted_count > 0 {
-                self.record_packet_gap_observation(&missing_sequences, inserted_count, now_ms);
+                self.record_packet_gap_observation(
+                    &missing_sequences,
+                    inserted_count,
+                    now_ms,
+                    "rtpWindow",
+                    None,
+                    None,
+                    None,
+                    None,
+                    None,
+                );
                 if let Ok(mut stats) = self.runtime_stats.lock() {
                     stats.inbound_video_packet_loss_estimate_total = stats
                         .inbound_video_packet_loss_estimate_total
@@ -156,8 +180,15 @@ impl WebrtcVideoAdapter {
             }
             self.record_nack_observation(
                 &format!("expired{}", capitalize_reason(&expired_batch.reason)),
-                &expired_batch.sequences,
-                0,
+                &crate::transport::webrtc::nack_scheduler::NackBatch {
+                    sequences: expired_batch.sequences.clone(),
+                    retry_count: 0,
+                    source: expired_batch.source,
+                    frame_rtp_timestamp: expired_batch.frame_rtp_timestamp,
+                    frame_is_keyframe: expired_batch.frame_is_keyframe,
+                    frame_importance: expired_batch.frame_importance,
+                    deadline_at_ms: expired_batch.deadline_at_ms,
+                },
                 now_ms,
             );
         }
@@ -169,7 +200,11 @@ impl WebrtcVideoAdapter {
         }
     }
 
-    async fn observe_forward_gap_and_nack(&mut self, expected_sequence: u16, received_sequence: u16) {
+    async fn observe_forward_gap_and_nack(
+        &mut self,
+        expected_sequence: u16,
+        received_sequence: u16,
+    ) {
         let now_ms = now_ms_f64();
         let pending_before = self.nack_scheduler.pending_count();
         let deadline_at_ms = self
@@ -190,7 +225,17 @@ impl WebrtcVideoAdapter {
             .min(u16::MAX as usize) as u16;
         if inserted_count > 0 {
             let missing_sequences = wrapping_sequence_range(expected_sequence, received_sequence);
-            self.record_packet_gap_observation(&missing_sequences, inserted_count, now_ms);
+            self.record_packet_gap_observation(
+                &missing_sequences,
+                inserted_count,
+                now_ms,
+                "rtpGap",
+                None,
+                None,
+                None,
+                None,
+                None,
+            );
             if let Ok(mut stats) = self.runtime_stats.lock() {
                 stats.inbound_video_packet_loss_estimate_total = stats
                     .inbound_video_packet_loss_estimate_total
@@ -236,16 +281,16 @@ impl WebrtcVideoAdapter {
                 .saturating_add(batch.sequences.len() as u64);
             stats.video_pending_missing_packets = self.nack_scheduler.pending_count();
         }
-        self.record_nack_observation(action, &batch.sequences, batch.retry_count, now_ms);
+        self.record_nack_observation(action, batch, now_ms);
     }
 
     fn record_nack_observation(
         &mut self,
         action: &str,
-        sequences: &[u16],
-        retry_count: u8,
+        batch: &crate::transport::webrtc::nack_scheduler::NackBatch,
         now_ms: f64,
     ) {
+        let sequences = &batch.sequences;
         let Some(first_sequence) = sequences.first().copied() else {
             return;
         };
@@ -257,10 +302,15 @@ impl WebrtcVideoAdapter {
             stats.latest_video_nack_observation = Some(XbxEngineVideoNackObservation {
                 observation_id: self.nack_observation_id,
                 action: action.to_string(),
+                source: batch.source.to_string(),
                 first_sequence,
                 last_sequence,
                 packet_count: sequences.len().min(u16::MAX as usize) as u16,
-                retry_count,
+                retry_count: batch.retry_count,
+                frame_rtp_timestamp: batch.frame_rtp_timestamp,
+                frame_is_keyframe: batch.frame_is_keyframe,
+                frame_importance: Some(batch.frame_importance.to_string()),
+                deadline_at_ms: batch.deadline_at_ms,
                 observed_at_ms: now_ms,
             });
         }
@@ -286,10 +336,15 @@ impl WebrtcVideoAdapter {
                 } else {
                     "recovered".to_string()
                 },
+                source: resolved.source.to_string(),
                 first_sequence: resolved.sequence,
                 last_sequence: resolved.sequence,
                 packet_count: 1,
                 retry_count: resolved.retry_count,
+                frame_rtp_timestamp: resolved.frame_rtp_timestamp,
+                frame_is_keyframe: resolved.frame_is_keyframe,
+                frame_importance: Some(resolved.frame_importance.to_string()),
+                deadline_at_ms: resolved.deadline_at_ms,
                 observed_at_ms: now_ms,
             });
         }
@@ -306,6 +361,12 @@ impl WebrtcVideoAdapter {
         missing_sequences: &[u16],
         inserted_count: u16,
         now_ms: f64,
+        source: &str,
+        frame_rtp_timestamp: Option<u32>,
+        frame_packet_count: Option<u16>,
+        frame_missing_count: Option<u16>,
+        frame_is_keyframe: Option<bool>,
+        frame_importance: Option<&str>,
     ) {
         let Some(first_sequence) = missing_sequences.first().copied() else {
             return;
@@ -320,10 +381,137 @@ impl WebrtcVideoAdapter {
                 expected_sequence: first_sequence,
                 received_sequence: last_sequence.wrapping_add(1),
                 missing_count: inserted_count,
+                source: source.to_string(),
+                frame_rtp_timestamp,
+                frame_packet_count,
+                frame_missing_count,
+                frame_is_keyframe,
+                frame_importance: frame_importance.map(|value| value.to_string()),
                 observed_at_ms: now_ms,
             });
             stats.latest_video_packet_sequence = Some(last_sequence);
         }
+    }
+
+    async fn observe_sample_loss_and_nack(
+        &mut self,
+        sample_rtp_timestamp: u32,
+        media_dropped_packets: u16,
+        frame_is_keyframe: bool,
+        frame_importance: &'static str,
+    ) -> bool {
+        let now_ms = now_ms_f64();
+        let mut missing_sequences =
+            self.collect_missing_sequences_for_sample(sample_rtp_timestamp, media_dropped_packets);
+        if missing_sequences.is_empty() {
+            missing_sequences = self.collect_recent_missing_sequences(media_dropped_packets);
+        }
+        if missing_sequences.is_empty() {
+            return false;
+        }
+        let frame_value = match frame_importance {
+            "keyframe" => FrameValue::new(true, false, 128 * 1024),
+            "reference" => FrameValue::new(false, true, 48 * 1024),
+            _ => FrameValue::new(false, false, 12 * 1024),
+        };
+        let deadline_at_ms = self
+            .frame_deadline_tracker
+            .next_deadline_for_value_at_ms(now_ms, frame_value);
+        let policy = sample_loss_nack_policy(
+            sample_rtp_timestamp,
+            frame_is_keyframe,
+            frame_importance,
+            deadline_at_ms,
+        );
+        let pending_before = self.nack_scheduler.pending_count();
+        let Some(batch) = self.nack_scheduler.observe_missing_sequences_with_policy(
+            &missing_sequences,
+            now_ms,
+            policy,
+        ) else {
+            return false;
+        };
+        let inserted_count = self
+            .nack_scheduler
+            .pending_count()
+            .saturating_sub(pending_before)
+            .min(u16::MAX as usize) as u16;
+        if inserted_count > 0 {
+            self.record_packet_gap_observation(
+                &missing_sequences,
+                inserted_count,
+                now_ms,
+                "sampleLoss",
+                Some(sample_rtp_timestamp),
+                Some((missing_sequences.len() + 1).min(u16::MAX as usize) as u16),
+                Some(media_dropped_packets),
+                Some(frame_is_keyframe),
+                Some(frame_importance),
+            );
+        }
+        self.send_nack_batch("sent", &batch, now_ms).await;
+        true
+    }
+
+    fn collect_recent_missing_sequences(&self, media_dropped_packets: u16) -> Vec<u16> {
+        let mut missing = self.nack_window.missing_seq_numbers(0);
+        let desired = usize::from(media_dropped_packets.max(1))
+            .saturating_mul(2)
+            .max(4);
+        if missing.len() > desired {
+            missing = missing[missing.len().saturating_sub(desired)..].to_vec();
+        }
+        missing
+    }
+
+    fn collect_missing_sequences_for_sample(
+        &self,
+        sample_rtp_timestamp: u32,
+        media_dropped_packets: u16,
+    ) -> Vec<u16> {
+        let mut matching_packets = self
+            .recent_rtp_packets
+            .iter()
+            .filter(|packet| packet.rtp_timestamp == sample_rtp_timestamp);
+        let Some(first_packet) = matching_packets.next() else {
+            return Vec::new();
+        };
+        let mut last_packet = *first_packet;
+        for packet in matching_packets {
+            last_packet = *packet;
+        }
+
+        let expand = media_dropped_packets.max(2).min(12);
+        let start = first_packet.sequence.wrapping_sub(expand);
+        let end_exclusive = last_packet.sequence.wrapping_add(expand.saturating_add(1));
+        let mut missing = self
+            .nack_window
+            .missing_seq_numbers_in_range(start, end_exclusive);
+        let desired = usize::from(media_dropped_packets.max(1))
+            .saturating_mul(3)
+            .max(6);
+        if missing.len() > desired {
+            missing = missing[missing.len().saturating_sub(desired)..].to_vec();
+        }
+        missing
+    }
+
+    fn push_recent_rtp_packet(&mut self, sequence: u16, rtp_timestamp: u32) {
+        if self.recent_rtp_packets.len() >= 512 {
+            self.recent_rtp_packets.pop_front();
+        }
+        self.recent_rtp_packets.push_back(RecentRtpPacket {
+            sequence,
+            rtp_timestamp,
+        });
+    }
+
+    fn should_trigger_thin_stream_stall(&self, now: std::time::Instant) -> bool {
+        self.assembling_frame_start.is_some_and(|started_at| {
+            now.duration_since(started_at) >= self.assembly_stall_timeout
+                && self.current_assembly_packet_count > 0
+                && self.current_assembly_packet_count <= self.thin_stream_packet_threshold
+        })
     }
 
     fn queue_escalation_hint(&mut self, reason: VideoEscalationReason, label: &'static str) {
@@ -331,6 +519,12 @@ impl WebrtcVideoAdapter {
             self.pending_escalation_hint = Some((reason, label));
         }
     }
+}
+
+#[derive(Clone, Copy)]
+struct RecentRtpPacket {
+    sequence: u16,
+    rtp_timestamp: u32,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -365,7 +559,34 @@ fn resolve_recovery_keyframe_action(
     (false, RecoveryKeyframeAction::Submit)
 }
 
-fn detect_forward_gap(last_highest_rtp_sequence: Option<u16>, sequence: u16) -> (Option<u16>, Option<(u16, u16)>) {
+fn sample_loss_nack_policy(
+    sample_rtp_timestamp: u32,
+    frame_is_keyframe: bool,
+    frame_importance: &'static str,
+    deadline_at_ms: f64,
+) -> NackObservePolicy {
+    let (max_age_ms, retry_interval_ms, burst_count, priority) = match frame_importance {
+        "keyframe" => (28, 10, 4, 3),
+        "reference" => (18, 8, 3, 2),
+        _ => (12, 6, 2, 1),
+    };
+    NackObservePolicy {
+        source: "sampleLoss",
+        deadline_at_ms: Some(deadline_at_ms),
+        max_age_ms: Some(max_age_ms),
+        retry_interval_ms: Some(retry_interval_ms),
+        burst_count: Some(burst_count),
+        frame_rtp_timestamp: Some(sample_rtp_timestamp),
+        frame_is_keyframe: Some(frame_is_keyframe),
+        frame_importance,
+        priority,
+    }
+}
+
+fn detect_forward_gap(
+    last_highest_rtp_sequence: Option<u16>,
+    sequence: u16,
+) -> (Option<u16>, Option<(u16, u16)>) {
     let Some(last_highest) = last_highest_rtp_sequence else {
         return (Some(sequence), None);
     };
@@ -463,6 +684,7 @@ impl FrameSource for WebrtcVideoAdapter {
                 if let Some(sample) = self.sample_builder.pop() {
                     self.last_packet_time = std::time::Instant::now();
                     self.assembling_frame_start = None;
+                    self.current_assembly_packet_count = 0;
                     let payload = sample.data.to_vec();
                     let (is_keyframe, maybe_res) = parse_idr_and_sps(&payload);
                     let media_dropped_packets = sample
@@ -506,15 +728,33 @@ impl FrameSource for WebrtcVideoAdapter {
                         );
                     }
 
+                    let sample_loss_frame_importance = if is_keyframe {
+                        "keyframe"
+                    } else if self.sample_loss_burst_count >= 2 {
+                        "reference"
+                    } else {
+                        "delta"
+                    };
+
                     match recovery_action {
                         RecoveryKeyframeAction::Submit => {}
                         RecoveryKeyframeAction::DropAndRequestKeyframe => {
-                            // 单次样本丢包先丢掉当前污染帧，并立刻请求 keyframe。
-                            // 游戏串流优先“继续动起来”，不在这里直接把整条视频链卡死。
-                            self.queue_escalation_hint(
-                                VideoEscalationReason::TransportSampleLoss,
-                                "transportSampleLoss",
-                            );
+                            // 单次样本丢包优先尝试低延迟 NACK，不为了追回旧帧长期阻塞视频链。
+                            // 只有当前拿不到明确缺包序号时，才退回 keyframe 恢复。
+                            let nack_started = self
+                                .observe_sample_loss_and_nack(
+                                    sample.packet_timestamp,
+                                    media_dropped_packets,
+                                    is_keyframe,
+                                    sample_loss_frame_importance,
+                                )
+                                .await;
+                            if !nack_started {
+                                self.queue_escalation_hint(
+                                    VideoEscalationReason::TransportSampleLoss,
+                                    "transportSampleLoss",
+                                );
+                            }
                             continue;
                         }
                         RecoveryKeyframeAction::TriggerWaitKeyframe => {
@@ -528,7 +768,7 @@ impl FrameSource for WebrtcVideoAdapter {
                         }
                         RecoveryKeyframeAction::WaitKeyframe => {
                             self.queue_escalation_hint(
-                                VideoEscalationReason::WaitKeyframe,
+                                VideoEscalationReason::TransportAwaitRecoveryKeyframe,
                                 "transportAwaitRecoveryKeyframe",
                             );
                             continue;
@@ -582,11 +822,13 @@ impl FrameSource for WebrtcVideoAdapter {
                 // 注意：不使用帧装配超时（assembly_timeout），因为大 IDR 帧在 15 Mbps
                 // 下可能需要 80-200ms 才能完整传输，短超时会反复打断装配形成死循环
                 let idle_timeout = now.duration_since(self.last_packet_time) > self.idle_timeout;
+                let thin_stream_stall = self.should_trigger_thin_stream_stall(now);
 
-                if idle_timeout {
+                if idle_timeout || thin_stream_stall {
                     self.sample_builder =
                         build_sample_builder(self.max_late_packets, self.jitter_buffer_max_delay);
                     self.assembling_frame_start = None;
+                    self.current_assembly_packet_count = 0;
                     self.last_packet_time = now;
 
                     if self
@@ -595,8 +837,16 @@ impl FrameSource for WebrtcVideoAdapter {
                     {
                         self.last_idle_hint_time = Some(now);
                         return Some(FrameSourceEvent::EscalationHint {
-                            reason: VideoEscalationReason::AdapterIdleTimeout,
-                            label: "adapterIdleTimeout",
+                            reason: if thin_stream_stall {
+                                VideoEscalationReason::AdapterThinStream
+                            } else {
+                                VideoEscalationReason::AdapterIdleTimeout
+                            },
+                            label: if thin_stream_stall {
+                                "adapterThinStream"
+                            } else {
+                                "adapterIdleTimeout"
+                            },
                         });
                     }
                     continue;
@@ -609,7 +859,10 @@ impl FrameSource for WebrtcVideoAdapter {
                         self.last_packet_time = std::time::Instant::now();
                         if self.assembling_frame_start.is_none() {
                             self.assembling_frame_start = Some(self.last_packet_time);
+                            self.current_assembly_packet_count = 0;
                         }
+                        self.current_assembly_packet_count =
+                            self.current_assembly_packet_count.saturating_add(1);
                         let seq = rtp.header.sequence_number;
                         let now_ms = now_ms_f64();
                         let (next_highest_sequence, forward_gap) =
@@ -620,6 +873,7 @@ impl FrameSource for WebrtcVideoAdapter {
                                 .await;
                         }
                         self.nack_window.add(seq);
+                        self.push_recent_rtp_packet(seq, rtp.header.timestamp);
                         if let Some(resolved) = self.nack_scheduler.resolve_sequence(seq, now_ms) {
                             self.record_nack_recovered(resolved, now_ms);
                         }
@@ -762,6 +1016,23 @@ impl NackSequenceWindow {
         missing
     }
 
+    fn missing_seq_numbers_in_range(&self, start: u16, end_exclusive: u16) -> Vec<u16> {
+        let diff = end_exclusive.wrapping_sub(start);
+        if diff == 0 || diff >= UINT16SIZE_HALF {
+            return vec![];
+        }
+
+        let mut missing = Vec::new();
+        let mut cursor = start;
+        while cursor != end_exclusive {
+            if !self.get_received(cursor) {
+                missing.push(cursor);
+            }
+            cursor = cursor.wrapping_add(1);
+        }
+        missing
+    }
+
     fn set_received(&mut self, seq: u16) {
         let pos = (seq % self.size) as usize;
         self.packets[pos / 64] |= 1u64 << (pos % 64);
@@ -788,7 +1059,10 @@ impl NackSequenceWindow {
 
 #[cfg(test)]
 mod tests {
-    use super::NackSequenceWindow;
+    use super::{
+        detect_forward_gap, resolve_recovery_keyframe_action, NackSequenceWindow,
+        RecoveryKeyframeAction,
+    };
 
     #[test]
     fn nack_sequence_window_tracks_missing_and_wrap() {
@@ -797,6 +1071,7 @@ mod tests {
         window.add(11);
         window.add(13);
         assert_eq!(window.missing_seq_numbers(0), vec![12]);
+        assert_eq!(window.missing_seq_numbers_in_range(10, 14), vec![12]);
 
         let mut wrapped = NackSequenceWindow::new(1);
         wrapped.add(u16::MAX);
@@ -829,10 +1104,7 @@ mod tests {
     fn detect_forward_gap_ignores_old_out_of_order_packets() {
         assert_eq!(detect_forward_gap(None, 10), (Some(10), None));
         assert_eq!(detect_forward_gap(Some(10), 11), (Some(11), None));
-        assert_eq!(
-            detect_forward_gap(Some(10), 13),
-            (Some(13), Some((11, 13)))
-        );
+        assert_eq!(detect_forward_gap(Some(10), 13), (Some(13), Some((11, 13))));
         assert_eq!(detect_forward_gap(Some(13), 12), (Some(13), None));
     }
 }

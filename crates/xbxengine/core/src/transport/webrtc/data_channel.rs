@@ -377,8 +377,7 @@ async fn bootstrap_post_handshake_channels(
         }
         if input_channel.ready_state() == RTCDataChannelState::Open
             && (!state.input_metadata_sent
-                || (message_handshake_acked
-                    && !state.input_metadata_bootstrapped_after_handshake))
+                || (message_handshake_acked && !state.input_metadata_bootstrapped_after_handshake))
         {
             state.input_metadata_sent = true;
             if message_handshake_acked {
@@ -416,8 +415,7 @@ async fn bootstrap_post_handshake_channels(
             .send_text(build_control_keyframe_request_payload())
             .await;
         let delayed_added_task = start_delayed_gamepad_added(control_channel.clone());
-        let delayed_keyframe_prime_task =
-            start_delayed_keyframe_prime(control_channel.clone());
+        let delayed_keyframe_prime_task = start_delayed_keyframe_prime(control_channel.clone());
         if let Ok(mut state) = runtime_state.lock() {
             replace_task_handle(&mut state.control_gamepad_added_task, delayed_added_task);
             replace_task_handle(
@@ -530,7 +528,10 @@ fn start_delayed_keyframe_prime(control_channel: Arc<RTCDataChannel>) -> JoinHan
     tokio::spawn(async move {
         // 进入游戏/切场景时，首轮 keyframe 请求可能落在远端尚未完全切入 gameplay 的窗口。
         // 这里补一发短延迟 prime，请求代价很低，但能明显缩短“声音先出来、画面仍卡住”的空窗。
-        sleep(Duration::from_millis(STREAM_CONTROL_KEYFRAME_PRIME_DELAY_MS)).await;
+        sleep(Duration::from_millis(
+            STREAM_CONTROL_KEYFRAME_PRIME_DELAY_MS,
+        ))
+        .await;
         if control_channel.ready_state() != RTCDataChannelState::Open {
             return;
         }

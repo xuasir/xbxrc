@@ -12,6 +12,7 @@ pub const AUDIO_ALIVE_VIDEO_ONLY_KEYFRAME_STALL_MS: f64 = 800.0;
 pub const AUDIO_ALIVE_VIDEO_ONLY_DECODER_RESET_WAIT_MS: f64 = 300.0;
 pub const TWCC_ALIVE_RECONNECT_STALL_MS: f64 = 8_000.0;
 pub const TWCC_RECENT_FEEDBACK_GRACE_MS: f64 = 500.0;
+pub const NACK_RECENT_GRACE_MS: f64 = 120.0;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct XbxEngineRecoveryRuntimeConfig {
@@ -127,6 +128,10 @@ pub struct XbxEngineTransportSignal {
     pub connected_at_ms: Option<f64>,
     pub latest_video_packet_arrival_at_ms: Option<f64>,
     pub latest_twcc_feedback_at_ms: Option<f64>,
+    pub latest_nack_sent_at_ms: Option<f64>,
+    pub latest_nack_recovered_at_ms: Option<f64>,
+    pub latest_nack_expired_at_ms: Option<f64>,
+    pub latest_nack_expired_frame_is_keyframe: bool,
     pub audio_stream_alive: bool,
 }
 
@@ -276,6 +281,10 @@ impl XbxEngineRuntimeHealth {
                 connected_at_ms: self.connected_at_ms,
                 latest_video_packet_arrival_at_ms: self.last_video_packet_arrival_at_ms,
                 latest_twcc_feedback_at_ms: None,
+                latest_nack_sent_at_ms: None,
+                latest_nack_recovered_at_ms: None,
+                latest_nack_expired_at_ms: None,
+                latest_nack_expired_frame_is_keyframe: false,
                 audio_stream_alive: false,
             },
             media: XbxEngineMediaSignal {
@@ -341,6 +350,21 @@ impl XbxEngineRuntimeHealth {
             .latest_twcc_feedback_at_ms
             .map(|at_ms| now_ms - at_ms < TWCC_RECENT_FEEDBACK_GRACE_MS)
             .unwrap_or(false);
+        let recent_nack_sent = signals
+            .transport
+            .latest_nack_sent_at_ms
+            .map(|at_ms| now_ms - at_ms < NACK_RECENT_GRACE_MS)
+            .unwrap_or(false);
+        let recent_nack_recovered = signals
+            .transport
+            .latest_nack_recovered_at_ms
+            .map(|at_ms| now_ms - at_ms < NACK_RECENT_GRACE_MS)
+            .unwrap_or(false);
+        let recent_nack_expired = signals
+            .transport
+            .latest_nack_expired_at_ms
+            .map(|at_ms| now_ms - at_ms < NACK_RECENT_GRACE_MS)
+            .unwrap_or(false);
 
         let connected_at_ms = signals.transport.connected_at_ms.unwrap_or(now_ms);
         let activity_at_ms = signals
@@ -374,6 +398,9 @@ impl XbxEngineRuntimeHealth {
         if has_fresh_media_activity {
             return None;
         }
+        if recent_nack_recovered {
+            return None;
+        }
 
         // 进入游戏时常见“音频先恢复、视频短暂断流”的单路 stall，
         // 这里允许更早进入 keyframe/decoder reset，而不是被动等到 reconnect。
@@ -396,8 +423,12 @@ impl XbxEngineRuntimeHealth {
         let can_try_decoder_reset = signals.decode_render.allow_decoder_reset
             && signals.decode_render.decoder_stalled == Some(true)
             && signals.decode_render.render_stalled != Some(true);
+        if recent_nack_sent && !recent_nack_expired {
+            return None;
+        }
         let should_request_keyframe = (stalled_for_ms >= effective_keyframe_request_stall_ms
-            || can_try_decoder_reset)
+            || can_try_decoder_reset
+            || (recent_nack_expired && signals.transport.latest_nack_expired_frame_is_keyframe))
             && !self.keyframe_requested_for_current_stall
             && self
                 .last_keyframe_request_at_ms
@@ -423,15 +454,14 @@ impl XbxEngineRuntimeHealth {
 
         // 音频仍在稳定推进时，更像“视频短暂断流/关键帧切换”，
         // 不应该过快升级到整路 reconnect。
-        let effective_reconnect_stall_ms = if signals.transport.audio_stream_alive
-            || recent_twcc_feedback
-        {
-            reconnect_stall_ms
-                .max(keyframe_request_stall_ms * 2.0)
-                .max(TWCC_ALIVE_RECONNECT_STALL_MS)
-        } else {
-            reconnect_stall_ms
-        };
+        let effective_reconnect_stall_ms =
+            if signals.transport.audio_stream_alive || recent_twcc_feedback {
+                reconnect_stall_ms
+                    .max(keyframe_request_stall_ms * 2.0)
+                    .max(TWCC_ALIVE_RECONNECT_STALL_MS)
+            } else {
+                reconnect_stall_ms
+            };
 
         if stalled_for_ms < effective_reconnect_stall_ms {
             return None;
@@ -473,7 +503,7 @@ mod tests {
                     transport_connected: true,
                     connected_at_ms: Some(1_000.0),
                     latest_video_packet_arrival_at_ms: Some(1_000.0),
-                    audio_stream_alive: false,
+                    ..Default::default()
                 },
                 media: XbxEngineMediaSignal {
                     latest_frame_decoded_at_ms: Some(1_000.0),
@@ -500,7 +530,7 @@ mod tests {
                     transport_connected: true,
                     connected_at_ms: Some(1_000.0),
                     latest_video_packet_arrival_at_ms: Some(1_000.0),
-                    audio_stream_alive: false,
+                    ..Default::default()
                 },
                 media: XbxEngineMediaSignal {
                     latest_frame_decoded_at_ms: Some(1_000.0),
@@ -531,6 +561,7 @@ mod tests {
                     connected_at_ms: Some(1_000.0),
                     latest_video_packet_arrival_at_ms: Some(1_000.0),
                     audio_stream_alive: true,
+                    ..Default::default()
                 },
                 media: XbxEngineMediaSignal {
                     latest_frame_decoded_at_ms: Some(1_000.0),
@@ -560,6 +591,7 @@ mod tests {
                     latest_video_packet_arrival_at_ms: Some(1_000.0),
                     latest_twcc_feedback_at_ms: Some(1_000.0 + RECONNECT_STALL_MS + 5.0),
                     audio_stream_alive: false,
+                    ..Default::default()
                 },
                 media: XbxEngineMediaSignal {
                     latest_frame_decoded_at_ms: Some(1_000.0),
@@ -587,6 +619,7 @@ mod tests {
                     connected_at_ms: Some(1_000.0),
                     latest_video_packet_arrival_at_ms: Some(now_ms - 50.0),
                     audio_stream_alive: false,
+                    ..Default::default()
                 },
                 media: XbxEngineMediaSignal {
                     latest_frame_decoded_at_ms: Some(now_ms - 3_000.0),
@@ -619,6 +652,7 @@ mod tests {
                     connected_at_ms: Some(1_000.0),
                     latest_video_packet_arrival_at_ms: Some(now_ms - 50.0),
                     audio_stream_alive: false,
+                    ..Default::default()
                 },
                 media: XbxEngineMediaSignal {
                     latest_frame_decoded_at_ms: Some(now_ms - 3_000.0),
@@ -656,6 +690,7 @@ mod tests {
                     connected_at_ms: Some(1_000.0),
                     latest_video_packet_arrival_at_ms: Some(1_000.0),
                     audio_stream_alive: false,
+                    ..Default::default()
                 },
                 media: XbxEngineMediaSignal {
                     latest_frame_decoded_at_ms: Some(1_000.0),
@@ -685,6 +720,7 @@ mod tests {
                     connected_at_ms: Some(1_000.0),
                     latest_video_packet_arrival_at_ms: Some(1_000.0),
                     audio_stream_alive: true,
+                    ..Default::default()
                 },
                 media: XbxEngineMediaSignal {
                     latest_frame_decoded_at_ms: Some(1_000.0),

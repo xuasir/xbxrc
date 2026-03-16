@@ -80,8 +80,10 @@ mod platform {
     use super::MacosGcControllerHapticsConfig;
 
     static LOGGED_HAPTICS_CAPABILITIES: Once = Once::new();
-    const LOCALITY_MERGE_WINDOW_MS: u64 = 18;
-    const LOCALITY_MIN_DURATION_MS: u16 = 24;
+    const LOCALITY_MERGE_WINDOW_MS: u64 = 8;
+    const HANDLE_MIN_DURATION_MS: u16 = 16;
+    const TRIGGER_MIN_DURATION_MS: u16 = 12;
+    const LOCALITY_DURATION_TRIM_MS: u16 = 8;
     const LOCALITY_REPLACE_EPSILON: f32 = 0.08;
     const COMBINED_INTENSITY_CEILING: f32 = 0.72;
     const HANDLE_INTENSITY_CEILING: f32 = 0.74;
@@ -502,11 +504,14 @@ mod platform {
     }
 
     fn normalized_duration_ms(duration_ms: u16, trigger_preferred: bool) -> u16 {
-        if trigger_preferred {
-            duration_ms.max(18)
+        let min_duration_ms = if trigger_preferred {
+            TRIGGER_MIN_DURATION_MS
         } else {
-            duration_ms.max(LOCALITY_MIN_DURATION_MS)
-        }
+            HANDLE_MIN_DURATION_MS
+        };
+        duration_ms
+            .saturating_sub(LOCALITY_DURATION_TRIM_MS)
+            .max(min_duration_ms)
     }
 
     fn normalized_duration_seconds(duration_ms: u16) -> f64 {
@@ -524,7 +529,8 @@ mod platform {
         use super::{
             localized_effect_for_profile, localized_effect_from_combined, localized_sharpness,
             normalized_duration_ms, normalized_duration_seconds, normalized_intensity,
-            normalized_sharpness, LocalityProfileKind, LOCALITY_MIN_DURATION_MS,
+            normalized_sharpness, LocalityProfileKind, HANDLE_MIN_DURATION_MS,
+            TRIGGER_MIN_DURATION_MS,
         };
 
         #[test]
@@ -551,7 +557,7 @@ mod platform {
 
             assert_eq!(
                 normalized_duration_seconds(normalized_duration_ms(effect.duration_ms, false)),
-                f64::from(LOCALITY_MIN_DURATION_MS) / 1000.0
+                f64::from(HANDLE_MIN_DURATION_MS) / 1000.0
             );
         }
 
@@ -592,7 +598,7 @@ mod platform {
         #[test]
         fn trigger_profile_keeps_shorter_min_duration_and_higher_sharpness() {
             let localized = localized_effect_for_profile(LocalityProfileKind::TriggerLeft, 0.5, 0);
-            assert_eq!(localized.duration_ms, 18);
+            assert_eq!(localized.duration_ms, TRIGGER_MIN_DURATION_MS);
             assert!(localized.sharpness > 0.3);
         }
 

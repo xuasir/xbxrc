@@ -200,6 +200,12 @@ impl XbxEngineRuntimeState {
                         "expectedSequence": packet_gap.expected_sequence,
                         "receivedSequence": packet_gap.received_sequence,
                         "missingCount": packet_gap.missing_count,
+                        "source": packet_gap.source,
+                        "frameRtpTimestamp": packet_gap.frame_rtp_timestamp,
+                        "framePacketCount": packet_gap.frame_packet_count,
+                        "frameMissingCount": packet_gap.frame_missing_count,
+                        "frameIsKeyframe": packet_gap.frame_is_keyframe,
+                        "frameImportance": packet_gap.frame_importance,
                         "observedAtMs": packet_gap.observed_at_ms,
                     }),
                 );
@@ -246,10 +252,15 @@ impl XbxEngineRuntimeState {
                     serde_json::json!({
                         "observationId": nack.observation_id,
                         "action": nack.action,
+                        "source": nack.source,
                         "firstSequence": nack.first_sequence,
                         "lastSequence": nack.last_sequence,
                         "packetCount": nack.packet_count,
                         "retryCount": nack.retry_count,
+                        "frameRtpTimestamp": nack.frame_rtp_timestamp,
+                        "frameIsKeyframe": nack.frame_is_keyframe,
+                        "frameImportance": nack.frame_importance,
+                        "deadlineAtMs": nack.deadline_at_ms,
                         "observedAtMs": nack.observed_at_ms,
                     }),
                 );

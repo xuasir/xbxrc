@@ -149,6 +149,12 @@ pub fn build_xbxengine_stats(
                     expected_sequence: gap.expected_sequence,
                     received_sequence: gap.received_sequence,
                     missing_count: gap.missing_count,
+                    source: gap.source.clone(),
+                    frame_rtp_timestamp: gap.frame_rtp_timestamp,
+                    frame_packet_count: gap.frame_packet_count,
+                    frame_missing_count: gap.frame_missing_count,
+                    frame_is_keyframe: gap.frame_is_keyframe,
+                    frame_importance: gap.frame_importance.clone(),
                     observed_at_ms: gap.observed_at_ms,
                 }
             })
@@ -171,10 +177,15 @@ pub fn build_xbxengine_stats(
                 xbxengine_protocol::XbxEngineNackObservationDto {
                     observation_id: nack.observation_id,
                     action: nack.action.clone(),
+                    source: nack.source.clone(),
                     first_sequence: nack.first_sequence,
                     last_sequence: nack.last_sequence,
                     packet_count: nack.packet_count,
                     retry_count: nack.retry_count,
+                    frame_rtp_timestamp: nack.frame_rtp_timestamp,
+                    frame_is_keyframe: nack.frame_is_keyframe,
+                    frame_importance: nack.frame_importance.clone(),
+                    deadline_at_ms: nack.deadline_at_ms,
                     observed_at_ms: nack.observed_at_ms,
                 }
             })

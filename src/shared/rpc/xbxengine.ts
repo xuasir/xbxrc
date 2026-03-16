@@ -105,6 +105,12 @@ export interface XbxEngineStatsDto {
     expected_sequence: number
     received_sequence: number
     missing_count: number
+    source: string
+    frame_rtp_timestamp?: number | null
+    frame_packet_count?: number | null
+    frame_missing_count?: number | null
+    frame_is_keyframe?: boolean | null
+    frame_importance?: string | null
     observed_at_ms: number
   }
   latest_video_frame_drop?: {
@@ -119,10 +125,15 @@ export interface XbxEngineStatsDto {
   latest_video_nack_observation?: {
     observation_id: number
     action: string
+    source: string
     first_sequence: number
     last_sequence: number
     packet_count: number
     retry_count: number
+    frame_rtp_timestamp?: number | null
+    frame_is_keyframe?: boolean | null
+    frame_importance?: string | null
+    deadline_at_ms?: number | null
     observed_at_ms: number
   }
   latest_video_escalation_observation?: {

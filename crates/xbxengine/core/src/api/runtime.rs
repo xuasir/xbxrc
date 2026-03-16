@@ -1207,6 +1207,39 @@ where
                 });
         let renderer_stalled = stats.video_renderer_stalled.unwrap_or(false);
 
+        let latest_nack_sent_at_ms =
+            stats
+                .latest_video_nack_observation
+                .as_ref()
+                .and_then(|nack| {
+                    if nack.action.starts_with("sent") {
+                        Some(nack.observed_at_ms)
+                    } else {
+                        None
+                    }
+                });
+        let latest_nack_recovered_at_ms =
+            stats
+                .latest_video_nack_observation
+                .as_ref()
+                .and_then(|nack| {
+                    if matches!(nack.action.as_str(), "recovered" | "recoveredLate") {
+                        Some(nack.observed_at_ms)
+                    } else {
+                        None
+                    }
+                });
+        let latest_nack_expired = stats
+            .latest_video_nack_observation
+            .as_ref()
+            .and_then(|nack| {
+                if nack.action.starts_with("expired") {
+                    Some((nack.observed_at_ms, nack.frame_is_keyframe.unwrap_or(false)))
+                } else {
+                    None
+                }
+            });
+
         XbxEngineRecoverySignals {
             transport: XbxEngineTransportSignal {
                 transport_connected: stats.transport_state == XbxEngineTransportStateDto::Connected,
@@ -1216,6 +1249,12 @@ where
                     .latest_video_twcc_observation
                     .as_ref()
                     .map(|observation| observation.observed_at_ms),
+                latest_nack_sent_at_ms,
+                latest_nack_recovered_at_ms,
+                latest_nack_expired_at_ms: latest_nack_expired.map(|value| value.0),
+                latest_nack_expired_frame_is_keyframe: latest_nack_expired
+                    .map(|value| value.1)
+                    .unwrap_or(false),
                 audio_stream_alive: stats
                     .inbound_audio_bitrate_kbps
                     .is_some_and(|bitrate_kbps| bitrate_kbps >= 16.0),
@@ -1633,7 +1672,7 @@ mod tests {
         let mut runtime = create_runtime(requests.clone(), events.clone());
 
         runtime
-            .start(session(), viewport(), 0.75, None, None, None)
+            .start(session(), viewport(), 0.75, None, None)
             .expect("runtime start should succeed");
 
         assert_eq!(runtime.state(), &XbxEngineRuntimeState::Running);
@@ -1733,6 +1772,7 @@ mod tests {
                         nack_window_ms: 321,
                         nack_max_age_ms: 123,
                         nack_retry_interval_ms: 45,
+                        nack_burst_count: 8,
                         nack_max_retry_count: 6,
                         jitter_buffer_min_delay_ms: 12,
                         jitter_buffer_max_delay_ms: 34,
@@ -1986,7 +2026,7 @@ mod tests {
         );
 
         runtime
-            .start(session(), viewport(), 0.3, None, None, None)
+            .start(session(), viewport(), 0.3, None, None)
             .expect("runtime start should succeed");
         runtime
             .apply_control(XbxEngineControlCommandDto::StopMicrophone)
@@ -2062,7 +2102,7 @@ mod tests {
         );
 
         let error = runtime
-            .start(session(), viewport(), 0.75, None, None, None)
+            .start(session(), viewport(), 0.75, None, None)
             .expect_err("runtime start should fail");
 
         assert_eq!(error.to_string(), "hostBridgeFailure:ExchangeOffer");
