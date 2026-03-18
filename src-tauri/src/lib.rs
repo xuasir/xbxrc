@@ -14,8 +14,16 @@ fn greet(name: &str) -> String {
     format!("Hello, {}! You've been greeted from Rust!", name)
 }
 
+fn install_rustls_crypto_provider() {
+    // reqwest 会启用 aws-lc-rs，而 webrtc/dtls 会启用 ring。
+    // rustls 0.23 在 provider 歧义时会 panic，所以这里在进程启动早期显式选定一次。
+    let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    install_rustls_crypto_provider();
+
     env_logger::Builder::from_env(
         env_logger::Env::default().default_filter_or("info,xbxrc_lib::mods::rpc=warn"),
     )

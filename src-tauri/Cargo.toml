@@ -36,6 +36,8 @@ serde_json.workspace = true
 
 reqwest.workspace = true
 
+rustls.workspace = true
+
 p256.workspace = true
 
 ring.workspace = true

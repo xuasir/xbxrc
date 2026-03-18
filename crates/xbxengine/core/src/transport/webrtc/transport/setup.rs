@@ -8,8 +8,7 @@ use webrtc::{
     api::media_engine::MIME_TYPE_H264,
     data_channel::{data_channel_init::RTCDataChannelInit, RTCDataChannel},
     ice_transport::{
-        ice_candidate::RTCIceCandidate, ice_credential_type::RTCIceCredentialType,
-        ice_server::RTCIceServer,
+        ice_candidate::RTCIceCandidate, ice_server::RTCIceServer,
     },
     peer_connection::{
         configuration::RTCConfiguration, peer_connection_state::RTCPeerConnectionState,
@@ -1044,7 +1043,6 @@ pub(crate) fn build_rtc_configuration(
             urls: vec![turn_server.url.clone()],
             username: turn_server.username.clone(),
             credential: turn_server.credential.clone(),
-            credential_type: RTCIceCredentialType::Password,
         });
     }
     RTCConfiguration {
