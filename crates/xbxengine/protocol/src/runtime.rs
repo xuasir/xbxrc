@@ -46,6 +46,20 @@ pub enum XbxEngineTransportStateDto {
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct XbxEngineVideoTrackStatusDto {
+    pub state: String,
+    pub video_width: Option<u32>,
+    pub video_height: Option<u32>,
+    pub mime_type: Option<String>,
+    pub transport_state: XbxEngineTransportStateDto,
+    pub video_bytes_total: u64,
+    pub video_packet_count_total: u64,
+    pub audio_bytes_total: u64,
+    pub observed_at_ms: f64,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum XbxEngineRuntimeEventDto {
     RuntimePhaseChanged {
         phase: XbxEngineRuntimePhaseDto,
@@ -60,6 +74,9 @@ pub enum XbxEngineRuntimeEventDto {
     MediaVideoReady {
         width: u32,
         height: u32,
+    },
+    MediaVideoTrackStatusChanged {
+        status: XbxEngineVideoTrackStatusDto,
     },
     MediaSurfaceReady {
         surface_id: String,
@@ -187,10 +204,35 @@ pub struct XbxEngineVideoTwccObservationDto {
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct XbxEngineDataChannelMessageCatalogObservationDto {
+    pub observation_id: u64,
+    pub direction: String,
+    pub channel: String,
+    pub kind_type: Option<String>,
+    pub kind_message: Option<String>,
+    pub target: Option<String>,
+    pub keys: Vec<String>,
+    pub payload_len: usize,
+    pub observed_at_ms: f64,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct XbxEngineStatsDto {
     pub resolution: String,
     pub rtt: String,
     pub fps: f64,
+    pub runtime_summary: Option<String>,
+    pub primary_issue_chain: Option<String>,
+    pub latest_decision_summary: Option<String>,
+    pub session_phase: Option<String>,
+    pub transport_policy_profile: Option<String>,
+    pub recovery_policy_profile: Option<String>,
+    pub recovery_diagnosis: Option<String>,
+    pub recovery_coupling_mode: Option<String>,
+    pub recovery_coupling_summary: Option<String>,
+    pub direct_gaming_bitrate_band: Option<String>,
+    pub video_health: Option<String>,
+    pub stall_kind: Option<String>,
     pub inbound_video_fps: Option<f64>,
     pub decode_fps: Option<f64>,
     pub present_fps: Option<f64>,
@@ -210,8 +252,12 @@ pub struct XbxEngineStatsDto {
     pub inbound_video_bytes_total: Option<u64>,
     pub inbound_audio_bytes_total: Option<u64>,
     pub inbound_video_packet_count_total: Option<u64>,
+    pub latest_video_track_status: Option<XbxEngineVideoTrackStatusDto>,
     pub video_decoder_reset_count: Option<u64>,
     pub video_decoder_stalled: Option<bool>,
+    pub video_decoder_hardware_failure_streak: Option<u32>,
+    pub latest_video_decoder_hardware_failure_time_ms: Option<f64>,
+    pub latest_video_decoder_hardware_failure_status: Option<i32>,
     pub video_renderer_stalled: Option<bool>,
     pub packet_age_ms: Option<f64>,
     pub decode_age_ms: Option<f64>,
@@ -225,8 +271,12 @@ pub struct XbxEngineStatsDto {
     pub video_pacer_drop_count_total: Option<u64>,
     pub video_renderer_submit_count_total: Option<u64>,
     pub video_renderer_drop_count_total: Option<u64>,
+    pub video_present_drop_count_total: Option<u64>,
     pub video_present_overwrite_count_total: Option<u64>,
     pub video_present_submit_count_total: Option<u64>,
+    pub video_present_descriptor_upload_mode: Option<String>,
+    pub video_present_descriptor_metal_import_count_total: Option<u64>,
+    pub video_present_descriptor_cpu_upload_count_total: Option<u64>,
     pub recovery_keyframe_request_count: Option<u64>,
     pub recovery_decoder_reset_count: Option<u64>,
     pub recovery_reconnect_count: Option<u64>,
@@ -239,4 +289,6 @@ pub struct XbxEngineStatsDto {
     pub latest_video_escalation_observation: Option<XbxEngineVideoEscalationObservationDto>,
     pub latest_video_bwe_observation: Option<XbxEngineVideoBweObservationDto>,
     pub latest_video_twcc_observation: Option<XbxEngineVideoTwccObservationDto>,
+    pub latest_data_channel_message_catalog_observation:
+        Option<XbxEngineDataChannelMessageCatalogObservationDto>,
 }

@@ -58,6 +58,18 @@ export interface XbxEngineStatsDto {
   resolution: string
   rtt: string
   fps: number
+  runtime_summary?: string
+  primary_issue_chain?: string
+  latest_decision_summary?: string
+  session_phase?: string
+  transport_policy_profile?: string
+  recovery_policy_profile?: string
+  recovery_diagnosis?: string
+  recovery_coupling_mode?: string
+  recovery_coupling_summary?: string
+  direct_gaming_bitrate_band?: string
+  video_health?: string
+  stall_kind?: string
   inbound_video_fps?: number
   decode_fps?: number
   present_fps?: number
@@ -77,8 +89,22 @@ export interface XbxEngineStatsDto {
   inbound_video_bytes_total?: number
   inbound_audio_bytes_total?: number
   inbound_video_packet_count_total?: number
+  latest_video_track_status?: {
+    state: string
+    video_width?: number | null
+    video_height?: number | null
+    mime_type?: string | null
+    transport_state: XbxEngineTransportState
+    video_bytes_total: number
+    video_packet_count_total: number
+    audio_bytes_total: number
+    observed_at_ms: number
+  } | null
   video_decoder_reset_count?: number
   video_decoder_stalled?: boolean
+  video_decoder_hardware_failure_streak?: number
+  latest_video_decoder_hardware_failure_time_ms?: number
+  latest_video_decoder_hardware_failure_status?: number
   video_renderer_stalled?: boolean
   packet_age_ms?: number
   decode_age_ms?: number
@@ -92,8 +118,12 @@ export interface XbxEngineStatsDto {
   video_pacer_drop_count_total?: number
   video_renderer_submit_count_total?: number
   video_renderer_drop_count_total?: number
+  video_present_drop_count_total?: number
   video_present_overwrite_count_total?: number
   video_present_submit_count_total?: number
+  video_present_descriptor_upload_mode?: string
+  video_present_descriptor_metal_import_count_total?: number
+  video_present_descriptor_cpu_upload_count_total?: number
   recovery_keyframe_request_count?: number
   recovery_decoder_reset_count?: number
   recovery_reconnect_count?: number
@@ -175,6 +205,17 @@ export interface XbxEngineStatsDto {
     packet_loss_ratio: number
     observed_at_ms: number
   }
+  latest_data_channel_message_catalog_observation?: {
+    observation_id: number
+    direction: string
+    channel: string
+    kind_type?: string | null
+    kind_message?: string | null
+    target?: string | null
+    keys: string[]
+    payload_len: number
+    observed_at_ms: number
+  }
 }
 
 export type XbxEngineRuntimePhase
@@ -198,6 +239,20 @@ export type XbxEngineRuntimeEventDto
     | { type: 'transport.connectionState', state: XbxEngineTransportState }
     | { type: 'chat.stateChanged', capturing: boolean, paused: boolean }
     | { type: 'media.videoReady', width: number, height: number }
+    | {
+      type: 'media.videoTrackStatusChanged'
+      status: {
+        state: string
+        video_width?: number | null
+        video_height?: number | null
+        mime_type?: string | null
+        transport_state: XbxEngineTransportState
+        video_bytes_total: number
+        video_packet_count_total: number
+        audio_bytes_total: number
+        observed_at_ms: number
+      }
+    }
     | { type: 'media.surfaceReady', surfaceId: string }
     | {
       type: 'stats.videoFrameProcessed'

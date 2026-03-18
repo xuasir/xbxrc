@@ -5,7 +5,7 @@ use std::{
 
 use xbxengine_protocol::{
     XbxEngineDisplayStateDto, XbxEngineIceCandidateDto, XbxEngineInputEventDto,
-    XbxEngineSessionDto, XbxEngineTransportStateDto, XbxEngineViewportDto,
+    XbxEngineSessionDto, XbxEngineTargetTypeDto, XbxEngineTransportStateDto, XbxEngineViewportDto,
 };
 
 use crate::api::input::{NoopXbxEngineInputBackend, XbxEngineInputBackend, XbxEngineInputStatus};
@@ -42,8 +42,57 @@ pub struct XbxEngineVideoFrameStats {
 
 pub type CFDictionaryRef = *const std::ffi::c_void;
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum MacOsVideoColorMatrix {
+    #[default]
+    Bt709,
+    Bt601,
+    Smpte240M,
+    Bt2020,
+    Unknown,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum MacOsVideoColorPrimaries {
+    #[default]
+    Bt709,
+    P3D65,
+    Bt2020,
+    Unknown,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum MacOsVideoTransferFunction {
+    #[default]
+    Bt709,
+    Srgb,
+    Linear,
+    Unknown,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum MacOsVideoColorRange {
+    #[default]
+    Video,
+    Full,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum MacOsVideoChromaLocation {
+    #[default]
+    Center,
+    Left,
+    TopLeft,
+    Unknown,
+}
+
 pub struct MacOsCVPixelBufferDescriptor {
     pub ptr: *mut std::ffi::c_void,
+    pub color_matrix: MacOsVideoColorMatrix,
+    pub color_primaries: MacOsVideoColorPrimaries,
+    pub transfer_function: MacOsVideoTransferFunction,
+    pub color_range: MacOsVideoColorRange,
+    pub chroma_location: MacOsVideoChromaLocation,
     pub drop_fn: Option<Box<dyn FnOnce(*mut std::ffi::c_void) + Send + Sync>>,
 }
 
@@ -51,6 +100,11 @@ impl std::fmt::Debug for MacOsCVPixelBufferDescriptor {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("MacOsCVPixelBufferDescriptor")
             .field("ptr", &self.ptr)
+            .field("color_matrix", &self.color_matrix)
+            .field("color_primaries", &self.color_primaries)
+            .field("transfer_function", &self.transfer_function)
+            .field("color_range", &self.color_range)
+            .field("chroma_location", &self.chroma_location)
             .field(
                 "drop_fn",
                 &if self.drop_fn.is_some() {
@@ -177,6 +231,11 @@ pub struct XbxEngineVideoEscalationObservation {
     pub observed_at_ms: f64,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum XbxEnginePendingRuntimeRecoveryAction {
+    RequestReconnectCandidate { observation_id: u64, reason: String },
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct XbxEngineVideoBweObservation {
     pub observation_id: u64,
@@ -215,8 +274,42 @@ pub struct XbxEngineVideoTwccObservation {
 }
 
 #[derive(Clone, Debug, PartialEq)]
+pub struct XbxEngineVideoTrackStatus {
+    pub state: String,
+    pub video_width: Option<u32>,
+    pub video_height: Option<u32>,
+    pub mime_type: Option<String>,
+    pub transport_state: XbxEngineTransportStateDto,
+    pub video_bytes_total: u64,
+    pub video_packet_count_total: u64,
+    pub audio_bytes_total: u64,
+    pub observed_at_ms: f64,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct XbxEngineDataChannelMessageCatalogObservation {
+    pub observation_id: u64,
+    pub direction: String,
+    pub channel: String,
+    pub kind_type: Option<String>,
+    pub kind_message: Option<String>,
+    pub target: Option<String>,
+    pub keys: Vec<String>,
+    pub payload_len: usize,
+    pub observed_at_ms: f64,
+}
+
+#[derive(Clone, Debug, PartialEq)]
 pub struct XbxEngineMediaRuntimeStats {
     pub transport_state: XbxEngineTransportStateDto,
+    pub session_target_type: Option<XbxEngineTargetTypeDto>,
+    pub session_phase: Option<String>,
+    pub transport_policy_profile: Option<String>,
+    pub recovery_policy_profile: Option<String>,
+    pub recovery_diagnosis: Option<String>,
+    pub recovery_coupling_mode: Option<String>,
+    pub recovery_coupling_summary: Option<String>,
+    pub direct_gaming_bitrate_band: Option<String>,
     pub latest_video_frame: Option<XbxEngineVideoFrameStats>,
     pub latest_video_stream_width: Option<u32>,
     pub latest_video_stream_height: Option<u32>,
@@ -236,6 +329,9 @@ pub struct XbxEngineMediaRuntimeStats {
     pub latest_video_escalation_observation: Option<XbxEngineVideoEscalationObservation>,
     pub latest_video_bwe_observation: Option<XbxEngineVideoBweObservation>,
     pub latest_video_twcc_observation: Option<XbxEngineVideoTwccObservation>,
+    pub latest_video_track_status: Option<XbxEngineVideoTrackStatus>,
+    pub latest_data_channel_message_catalog_observation:
+        Option<XbxEngineDataChannelMessageCatalogObservation>,
     pub video_pli_request_count_total: u64,
     pub video_pli_per_min: f64,
     pub video_pending_missing_packets: usize,
@@ -254,6 +350,9 @@ pub struct XbxEngineMediaRuntimeStats {
     pub video_decode_fps: f64,
     pub video_decoder_stalled: Option<bool>,
     pub video_decoder_backend_name: Option<String>,
+    pub video_decoder_hardware_failure_streak: u32,
+    pub latest_video_decoder_hardware_failure_time_ms: Option<f64>,
+    pub latest_video_decoder_hardware_failure_status: Option<i32>,
     pub video_decoder_reset_count: u64,
     pub latest_video_decoder_reset_time_ms: Option<f64>,
     pub video_decode_input_drop_count_total: u64,
@@ -264,6 +363,8 @@ pub struct XbxEngineMediaRuntimeStats {
     pub video_renderer_drop_count_total: u64,
     pub video_present_overwrite_count_total: u64,
     pub video_present_submit_count_total: u64,
+    pub host_display_interval_ms: Option<f64>,
+    pub host_frame_age_budget_ms: Option<f64>,
     pub latest_video_present_time_ms: Option<f64>,
     pub video_present_fps: f64,
     pub video_renderer_stalled: Option<bool>,
@@ -278,6 +379,14 @@ impl Default for XbxEngineMediaRuntimeStats {
     fn default() -> Self {
         Self {
             transport_state: XbxEngineTransportStateDto::New,
+            session_target_type: None,
+            session_phase: None,
+            transport_policy_profile: None,
+            recovery_policy_profile: None,
+            recovery_diagnosis: None,
+            recovery_coupling_mode: None,
+            recovery_coupling_summary: None,
+            direct_gaming_bitrate_band: None,
             latest_video_frame: None,
             latest_video_stream_width: None,
             latest_video_stream_height: None,
@@ -297,6 +406,8 @@ impl Default for XbxEngineMediaRuntimeStats {
             latest_video_escalation_observation: None,
             latest_video_bwe_observation: None,
             latest_video_twcc_observation: None,
+            latest_video_track_status: None,
+            latest_data_channel_message_catalog_observation: None,
             video_pli_request_count_total: 0,
             video_pli_per_min: 0.0,
             video_pending_missing_packets: 0,
@@ -315,6 +426,9 @@ impl Default for XbxEngineMediaRuntimeStats {
             video_decode_fps: 0.0,
             video_decoder_stalled: None,
             video_decoder_backend_name: None,
+            video_decoder_hardware_failure_streak: 0,
+            latest_video_decoder_hardware_failure_time_ms: None,
+            latest_video_decoder_hardware_failure_status: None,
             video_decoder_reset_count: 0,
             latest_video_decoder_reset_time_ms: None,
             video_decode_input_drop_count_total: 0,
@@ -325,6 +439,8 @@ impl Default for XbxEngineMediaRuntimeStats {
             video_renderer_drop_count_total: 0,
             video_present_overwrite_count_total: 0,
             video_present_submit_count_total: 0,
+            host_display_interval_ms: None,
+            host_frame_age_budget_ms: None,
             latest_video_present_time_ms: None,
             video_present_fps: 0.0,
             video_renderer_stalled: None,
@@ -381,6 +497,18 @@ pub trait XbxEngineMediaBackend: Send {
     ) -> Result<(), XbxEngineRuntimeError>;
     fn current_input_status(&self) -> Result<XbxEngineInputStatus, XbxEngineRuntimeError>;
     fn snapshot_runtime_stats(&self) -> Result<XbxEngineMediaRuntimeStats, XbxEngineRuntimeError>;
+    fn take_pending_runtime_recovery_action(
+        &mut self,
+    ) -> Result<Option<XbxEnginePendingRuntimeRecoveryAction>, XbxEngineRuntimeError> {
+        Ok(None)
+    }
+    fn update_host_video_timing(
+        &mut self,
+        _host_display_interval_ms: Option<f64>,
+        _host_frame_age_budget_ms: Option<f64>,
+    ) -> Result<(), XbxEngineRuntimeError> {
+        Ok(())
+    }
     fn take_latest_render_frame(
         &mut self,
     ) -> Result<Option<XbxEngineRenderFrame>, XbxEngineRuntimeError>;
@@ -479,6 +607,21 @@ where
         self.as_ref().snapshot_runtime_stats()
     }
 
+    fn take_pending_runtime_recovery_action(
+        &mut self,
+    ) -> Result<Option<XbxEnginePendingRuntimeRecoveryAction>, XbxEngineRuntimeError> {
+        self.as_mut().take_pending_runtime_recovery_action()
+    }
+
+    fn update_host_video_timing(
+        &mut self,
+        host_display_interval_ms: Option<f64>,
+        host_frame_age_budget_ms: Option<f64>,
+    ) -> Result<(), XbxEngineRuntimeError> {
+        self.as_mut()
+            .update_host_video_timing(host_display_interval_ms, host_frame_age_budget_ms)
+    }
+
     fn take_latest_render_frame(
         &mut self,
     ) -> Result<Option<XbxEngineRenderFrame>, XbxEngineRuntimeError> {
@@ -512,6 +655,7 @@ pub struct PlaceholderXbxEngineMediaBackend {
     pub last_pressed_controller_button: Option<(String, u64)>,
     pub last_input_status: XbxEngineInputStatus,
     pub last_runtime_stats: XbxEngineMediaRuntimeStats,
+    pub pending_runtime_recovery_action: Option<XbxEnginePendingRuntimeRecoveryAction>,
 }
 
 impl Default for PlaceholderXbxEngineMediaBackend {
@@ -536,6 +680,7 @@ impl PlaceholderXbxEngineMediaBackend {
             last_pressed_controller_button: None,
             last_input_status: XbxEngineInputStatus::default(),
             last_runtime_stats: XbxEngineMediaRuntimeStats::default(),
+            pending_runtime_recovery_action: None,
         }
     }
 }
@@ -678,6 +823,12 @@ impl XbxEngineMediaBackend for PlaceholderXbxEngineMediaBackend {
 
     fn snapshot_runtime_stats(&self) -> Result<XbxEngineMediaRuntimeStats, XbxEngineRuntimeError> {
         Ok(self.last_runtime_stats.clone())
+    }
+
+    fn take_pending_runtime_recovery_action(
+        &mut self,
+    ) -> Result<Option<XbxEnginePendingRuntimeRecoveryAction>, XbxEngineRuntimeError> {
+        Ok(self.pending_runtime_recovery_action.take())
     }
 
     fn take_latest_render_frame(

@@ -52,7 +52,7 @@ impl TauriEngineWindowHost for TauriEngineEventBridge {
 
     fn apply_event(&mut self, event: &XbxEngineRuntimeEventDto) {
         self.runtime_trace
-            .record("xbxengine", "runtimeEventRaw", None, event);
+            .record_event("xbxengine", "runtimeEventRaw", None, event);
         match event {
             XbxEngineRuntimeEventDto::RuntimePhaseChanged { phase } => {
                 self.state.runtime_phase = Some(phase.clone());
@@ -65,6 +65,11 @@ impl TauriEngineWindowHost for TauriEngineEventBridge {
             }
             XbxEngineRuntimeEventDto::MediaVideoReady { width, height } => {
                 self.state.video_size = Some((*width, *height));
+            }
+            XbxEngineRuntimeEventDto::MediaVideoTrackStatusChanged { status } => {
+                if let (Some(width), Some(height)) = (status.video_width, status.video_height) {
+                    self.state.video_size = Some((width, height));
+                }
             }
             _ => {}
         }

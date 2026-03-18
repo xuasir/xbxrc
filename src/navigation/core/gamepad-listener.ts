@@ -41,8 +41,12 @@ class GamepadUIListener {
       // Map LogicalButtonsStateDto to NavigationIntent
       this.checkButton(now, state, 'south', buttons.south > 0.5, NavigationIntent.Action)
       this.checkButton(now, state, 'east', buttons.east > 0.5, NavigationIntent.Back)
-      this.checkButton(now, state, 'l1', buttons.l1 > 0.5, NavigationIntent.TabPrev)
-      this.checkButton(now, state, 'r1', buttons.r1 > 0.5, NavigationIntent.TabNext)
+      // LB/RB → 一级页面导航
+      this.checkButton(now, state, 'l1', buttons.l1 > 0.5, NavigationIntent.PagePrev)
+      this.checkButton(now, state, 'r1', buttons.r1 > 0.5, NavigationIntent.PageNext)
+      // LT/RT → 二级 Tab/区域导航
+      this.checkButton(now, state, 'l2', buttons.l2 > 0.5, NavigationIntent.TabPrev)
+      this.checkButton(now, state, 'r2', buttons.r2 > 0.5, NavigationIntent.TabNext)
       this.checkButton(now, state, 'view', buttons.view > 0.5, NavigationIntent.View)
       this.checkButton(now, state, 'menu', buttons.menu > 0.5, NavigationIntent.Menu)
       this.checkButton(now, state, 'dpadUp', buttons.dpadUp > 0.5, NavigationIntent.Up)

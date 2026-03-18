@@ -68,6 +68,44 @@ import { FocusScope } from '@/navigation/core/vue'
 
 开发者可以通过 `syncHapticsConfig` 强制同步状态，或在 `haptics.ts` 中扩展新的震动模式。
 
+### 4. 页面与 Tab 切换 (Page & Tab Navigation)
+
+手柄肩键和扳机键被映射为两级导航意图：
+
+| 按键 | 意图 | 用途 |
+|------|------|------|
+| LB (L1) | `PagePrev` | 一级页面导航：XHome ← XCloud ← Setting |
+| RB (R1) | `PageNext` | 一级页面导航：XHome → XCloud → Setting |
+| LT (L2) | `TabPrev` | 二级 Tab/区域导航（上一个 Tab 或区域） |
+| RT (R2) | `TabNext` | 二级 Tab/区域导航（下一个 Tab 或区域） |
+
+引擎提供了 `onPageSwitch` 和 `onTabSwitch` 回调 API 供业务组件订阅：
+
+```typescript
+import { navigationEngine } from '@/navigation/core'
+
+// 订阅页面切换
+const dispose = navigationEngine.onPageSwitch((direction) => {
+  // direction: 'prev' | 'next'
+  // 执行路由跳转等逻辑
+})
+
+// 订阅 Tab/区域切换
+const dispose2 = navigationEngine.onTabSwitch((direction) => {
+  // direction: 'prev' | 'next'
+  // 执行 Tab 切换或区域跳转等逻辑
+})
+
+// 组件卸载时取消订阅
+dispose()
+dispose2()
+```
+
+当前已集成的使用场景：
+- **`AppShellLayout.vue`**：LB/RB 在 xhome/xcloud/setting 页面间切换
+- **`Setting.vue`**：LT/RT 在 5 个设置 Tab 间切换
+- **`XCloud.vue`**：LT/RT 在"最近游玩"、"新游戏"、"全部游戏"区域间跳转
+
 ## 性能优化建议 (Performance Tips)
 
 1. **避免频繁重建 DOM**: 引擎使用了 `MutationObserver` 缓存可聚焦元素。频繁的 DOM 销毁和重建会导致缓存失效并触发重计算。

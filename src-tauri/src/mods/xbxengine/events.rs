@@ -48,6 +48,10 @@ pub fn map_runtime_event(event: &XbxEngineRuntimeEventDto) -> Option<Value> {
             "width": width,
             "height": height
         })),
+        XbxEngineRuntimeEventDto::MediaVideoTrackStatusChanged { status } => Some(json!({
+            "type": "media.videoTrackStatusChanged",
+            "status": status
+        })),
         XbxEngineRuntimeEventDto::MediaSurfaceReady { surface_id } => Some(json!({
             "type": "media.surfaceReady",
             "surfaceId": surface_id

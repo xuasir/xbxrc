@@ -1,4 +1,45 @@
 export type StreamingTargetType = 'home' | 'cloud'
+export type StreamingStartupPhaseStatus = 'entered' | 'succeeded' | 'failed'
+export type StreamingStartupPhase
+  = | 'resolvingContext'
+    | 'wakingConsole'
+    | 'waitingConsoleReady'
+    | 'creatingSession'
+    | 'waitingSessionReady'
+    | 'startingRuntime'
+    | 'ready'
+    | 'failed'
+export type StreamingStartupErrorKind
+  = | 'wake'
+    | 'consoleReady'
+    | 'sessionCreate'
+    | 'sessionReady'
+    | 'runtime'
+    | 'network'
+    | 'auth'
+    | 'target'
+    | 'unknown'
+
+export interface StreamingStartupEvent {
+  attemptId: string
+  targetType: StreamingTargetType
+  targetId: string
+  phase: StreamingStartupPhase
+  status: StreamingStartupPhaseStatus
+  summary: string
+  details?: string
+  tsMs: number
+}
+
+export interface StreamingStartupError {
+  attemptId: string
+  phase: StreamingStartupPhase
+  errorKind: StreamingStartupErrorKind
+  userMessageKey: string
+  diagnosticSummary: string
+  rawMessage: string
+  retryable: boolean
+}
 
 export type StreamingPlayerState = 'pending' | 'started' | 'queued' | 'failed'
 
@@ -207,9 +248,11 @@ export interface StreamingSessionProgressSnapshot {
 export interface StreamingStartSessionParams {
   targetType: StreamingTargetType
   targetId: string
+  attemptId: string
 }
 
 export interface StreamingStartSessionResult {
+  attemptId: string
   execution: StreamingSessionExecutionSnapshot
   progress: StreamingSessionProgressSnapshot
 }

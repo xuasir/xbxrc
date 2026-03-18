@@ -112,6 +112,37 @@ pub struct SessionProgressSnapshot {
     pub error_message: Option<String>,
 }
 
+/// 会话创建前阶段：供 adapter 订阅真实启动进度，而不是在 UI 侧猜测。
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum SessionStartupPhase {
+    ResolvingContext,
+    WakingConsole,
+    WaitingConsoleReady,
+    CreatingSession,
+    WaitingSessionReady,
+    StartingRuntime,
+    Ready,
+    Failed,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum SessionStartupPhaseStatus {
+    Entered,
+    Succeeded,
+    Failed,
+}
+
+pub trait SessionStartupObserver: Send + Sync {
+    fn on_phase_event(
+        &self,
+        phase: SessionStartupPhase,
+        status: SessionStartupPhaseStatus,
+        details: Option<&str>,
+    );
+}
+
 /// 远端主机快照：仅保留 session 预检所需字段。
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
@@ -178,10 +209,34 @@ where
     }
 
     pub async fn create_session(&self, plan: Plan) -> Result<S, SessionFlowError> {
+        self.create_session_with_observer::<NoopSessionStartupObserver>(plan, None)
+            .await
+    }
+
+    async fn create_session_with_observer<O>(
+        &self,
+        plan: Plan,
+        observer: Option<&O>,
+    ) -> Result<S, SessionFlowError>
+    where
+        O: SessionStartupObserver,
+    {
         let monitor_interval_ms = plan.session.schedule.monitor_interval_ms.max(200);
         let keepalive_interval_ms = plan.session.schedule.keepalive_interval_ms.max(1_000);
         let api = self.create_session_api(&plan).await?;
-        let session_path = api.start_stream().await.map_err(map_webapi_error)?;
+        notify_startup_phase(
+            observer,
+            SessionStartupPhase::CreatingSession,
+            SessionStartupPhaseStatus::Entered,
+            None,
+        );
+        let session_path = self.start_stream_with_retry(&api, &plan).await?;
+        notify_startup_phase(
+            observer,
+            SessionStartupPhase::CreatingSession,
+            SessionStartupPhaseStatus::Succeeded,
+            None,
+        );
 
         let session_id = parse_session_id_from_path(&session_path)
             .map_err(|error| SessionFlowError::message(error.to_string()))?;
@@ -246,15 +301,50 @@ where
         FR: Fn(&Plan) -> R,
         FE: Fn(&Plan) -> E,
     {
+        self.start_session_execution_with_observer::<R, E, FR, FE, NoopSessionStartupObserver>(
+            plan,
+            project_runtime,
+            project_render,
+            None,
+        )
+        .await
+    }
+
+    pub async fn start_session_execution_with_observer<R, E, FR, FE, O>(
+        &self,
+        plan: Plan,
+        project_runtime: FR,
+        project_render: FE,
+        observer: Option<&O>,
+    ) -> Result<SessionExecutionSnapshot<S, R, E>, SessionFlowError>
+    where
+        R: Clone,
+        E: Clone,
+        FR: Fn(&Plan) -> R,
+        FE: Fn(&Plan) -> E,
+        O: SessionStartupObserver,
+    {
         let runtime = project_runtime(&plan);
         let render = project_render(&plan);
         let schedule = plan.session.schedule.clone();
 
-        self.prepare_remote_console(&plan).await?;
-        let session = self.create_session(plan).await?;
+        self.prepare_remote_console(&plan, observer).await?;
+        let session = self.create_session_with_observer(plan, observer).await?;
         let session_id = session.session_id().to_string();
+        notify_startup_phase(
+            observer,
+            SessionStartupPhase::WaitingSessionReady,
+            SessionStartupPhaseStatus::Entered,
+            None,
+        );
         self.wait_until_session_started_or_failed(&session_id, &schedule)
             .await?;
+        notify_startup_phase(
+            observer,
+            SessionStartupPhase::WaitingSessionReady,
+            SessionStartupPhaseStatus::Succeeded,
+            None,
+        );
 
         let started_session = self
             .get_session(&session_id)
@@ -480,21 +570,70 @@ where
         }
     }
 
-    async fn prepare_remote_console(&self, plan: &Plan) -> Result<(), SessionFlowError> {
+    async fn prepare_remote_console<O>(
+        &self,
+        plan: &Plan,
+        observer: Option<&O>,
+    ) -> Result<(), SessionFlowError>
+    where
+        O: SessionStartupObserver,
+    {
         if !plan.session.target.is_home() || !plan.session.schedule.wake_console {
             return Ok(());
         }
-        let wake_accepted = self
+        notify_startup_phase(
+            observer,
+            SessionStartupPhase::WakingConsole,
+            SessionStartupPhaseStatus::Entered,
+            None,
+        );
+        let wake_accepted = match self
             .inner
             .provider
             .power_on_console(&plan.session.target_id)
-            .await?;
+            .await
+        {
+            Ok(accepted) => accepted,
+            Err(error) if is_waiting_for_server_registration_message(&error.message) => {
+                log::warn!(
+                    "home wake command is still waiting for server registration: target_id={} error={}",
+                    plan.session.target_id,
+                    error,
+                );
+                true
+            }
+            Err(error) => return Err(error),
+        };
+        notify_startup_phase(
+            observer,
+            SessionStartupPhase::WakingConsole,
+            SessionStartupPhaseStatus::Succeeded,
+            Some(if wake_accepted {
+                "wakeCommandAccepted"
+            } else {
+                "wakeCommandRejected"
+            }),
+        );
         if !wake_accepted || !plan.session.schedule.require_console_ready {
             return Ok(());
         }
 
+        notify_startup_phase(
+            observer,
+            SessionStartupPhase::WaitingConsoleReady,
+            SessionStartupPhaseStatus::Entered,
+            None,
+        );
         self.wait_until_console_ready(&plan.session.target_id, &plan.session.schedule)
             .await
+            .inspect(|_| {
+                notify_startup_phase(
+                    observer,
+                    SessionStartupPhase::WaitingConsoleReady,
+                    SessionStartupPhaseStatus::Succeeded,
+                    None,
+                )
+            })
     }
 
     async fn wait_until_console_ready(
@@ -503,25 +642,138 @@ where
         schedule: &crate::policy::session::SessionSchedulePlan,
     ) -> Result<(), SessionFlowError> {
         let interval_ms = schedule.monitor_interval_ms.max(200);
+        let started_at_ms = now_ms();
+        let mut last_wake_attempt_at_ms = Some(started_at_ms);
+        let mut transient_wake_failure_count = 0u8;
 
-        wait_until(
-            interval_ms,
-            schedule.ready_timeout_ms,
-            || async {
-                let consoles = self.inner.provider.get_remote_consoles().await?;
-                let matched = consoles
-                    .iter()
-                    .find(|console| matches_remote_console_id(target_id, console));
-                if let Some(console) = matched {
-                    if is_remote_console_ready(console) {
-                        return Ok(Some(()));
+        loop {
+            let consoles = self.inner.provider.get_remote_consoles().await?;
+            let matched = consoles
+                .iter()
+                .find(|console| matches_remote_console_id(target_id, console));
+
+            if let Some(console) = matched {
+                if is_remote_console_ready(console) {
+                    return Ok(());
+                }
+
+                let now_ms = now_ms();
+                let power_state = console.power_state.as_deref();
+                if should_retry_wake_during_ready_wait(power_state, last_wake_attempt_at_ms, now_ms)
+                {
+                    match self.inner.provider.power_on_console(target_id).await {
+                        Ok(accepted) => {
+                            log::info!(
+                                "home ready wait issued follow-up wake command: target_id={} power_state={:?} accepted={}",
+                                target_id,
+                                power_state,
+                                accepted,
+                            );
+                            last_wake_attempt_at_ms = Some(now_ms);
+                            if accepted {
+                                transient_wake_failure_count = 0;
+                            }
+                        }
+                        Err(error)
+                            if is_waiting_for_server_registration_message(&error.message) =>
+                        {
+                            log::warn!(
+                                "home ready wait wake command is still waiting for server registration: target_id={} power_state={:?} error={}",
+                                target_id,
+                                power_state,
+                                error,
+                            );
+                            last_wake_attempt_at_ms = Some(now_ms);
+                            transient_wake_failure_count =
+                                transient_wake_failure_count.saturating_add(1);
+                            let elapsed_ms = now_ms.saturating_sub(started_at_ms);
+                            if transient_wake_failure_count >= 3
+                                && elapsed_ms >= 15_000
+                                && matches!(
+                                    power_state,
+                                    Some("ConnectedStandby") | Some("Off") | None
+                                )
+                            {
+                                return Err(remote_console_wake_circuit_open_error(
+                                    target_id,
+                                    power_state,
+                                    transient_wake_failure_count,
+                                ));
+                            }
+                        }
+                        Err(error) => return Err(error),
                     }
                 }
-                Ok(None)
-            },
-            || SessionFlowError::message(format!("remoteConsoleNotReady:targetId={target_id}")),
-        )
-        .await
+            }
+
+            let elapsed_ms = now_ms().saturating_sub(started_at_ms);
+            if elapsed_ms >= schedule.ready_timeout_ms {
+                return Err(SessionFlowError::message(format!(
+                    "remoteConsoleNotReady:targetId={target_id}"
+                )));
+            }
+
+            tokio::time::sleep(std::time::Duration::from_millis(interval_ms)).await;
+        }
+    }
+
+    async fn start_stream_with_retry(
+        &self,
+        api: &WebApiSessionGateway,
+        plan: &Plan,
+    ) -> Result<String, SessionFlowError> {
+        let retry_backoff_ms = &plan.session.schedule.retry_backoff_ms;
+        let retry_timeout_ms = plan
+            .session
+            .schedule
+            .ready_timeout_ms
+            .max(plan.session.schedule.monitor_interval_ms.max(200));
+        let retry_started_at_ms = now_ms();
+        let mut attempt = 0usize;
+
+        loop {
+            match api.start_stream().await {
+                Ok(session_path) => return Ok(session_path),
+                Err(error) => {
+                    let elapsed_ms = now_ms().saturating_sub(retry_started_at_ms);
+                    let should_retry = should_retry_home_server_registration(
+                        plan,
+                        &error,
+                        elapsed_ms,
+                        retry_timeout_ms,
+                    );
+                    if !should_retry {
+                        return Err(map_webapi_error(error));
+                    }
+
+                    let backoff_ms = next_retry_backoff_ms(retry_backoff_ms, attempt);
+                    let error_message = error.to_string();
+                    log::warn!(
+                        "home start_stream waiting for server registration: target_id={} attempt={} elapsed_ms={} backoff_ms={} error={}",
+                        plan.session.target_id,
+                        attempt + 1,
+                        elapsed_ms,
+                        backoff_ms,
+                        error_message,
+                    );
+
+                    // xHome 主机可能已经开机，但串流服务尚未重新注册；
+                    // 在重试前补一次 ready 轮询，避免直接对 XCCS 打无效重试风暴。
+                    if let Err(wait_error) = self
+                        .wait_until_console_ready(&plan.session.target_id, &plan.session.schedule)
+                        .await
+                    {
+                        log::warn!(
+                            "home console ready precheck did not pass before start_stream retry: target_id={} error={}",
+                            plan.session.target_id,
+                            wait_error,
+                        );
+                    }
+                    tokio::time::sleep(std::time::Duration::from_millis(backoff_ms)).await;
+                    attempt += 1;
+                }
+            }
+        }
     }
 
     async fn wait_until_session_started_or_failed(
@@ -617,6 +869,19 @@ where
             state.last_polled_ice = Some(candidates.clone());
         }
         response
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+struct NoopSessionStartupObserver;
+
+impl SessionStartupObserver for NoopSessionStartupObserver {
+    fn on_phase_event(
+        &self,
+        _phase: SessionStartupPhase,
+        _status: SessionStartupPhaseStatus,
+        _details: Option<&str>,
+    ) {
     }
 }
 
@@ -736,6 +1001,82 @@ fn matches_remote_console_id(target_id: &str, console: &RemoteConsoleSnapshot) -
 
 fn is_remote_console_ready(console: &RemoteConsoleSnapshot) -> bool {
     console.power_state.as_deref() == Some("On") && console.console_streaming_enabled != Some(false)
+}
+
+fn remote_console_wake_circuit_open_error(
+    target_id: &str,
+    power_state: Option<&str>,
+    wake_failure_count: u8,
+) -> SessionFlowError {
+    let power_state = power_state.unwrap_or("unknown");
+    SessionFlowError::message(format!(
+        "remoteConsoleWakeCircuitOpen:targetId={target_id};powerState={power_state};wakeFailureCount={wake_failure_count}"
+    ))
+}
+
+#[cfg(test)]
+fn is_remote_console_wake_circuit_open_message(message: &str) -> bool {
+    message
+        .to_ascii_lowercase()
+        .contains("remoteconsolewakecircuitopen")
+}
+
+fn should_retry_wake_during_ready_wait(
+    power_state: Option<&str>,
+    last_wake_attempt_at_ms: Option<u64>,
+    now_ms: u64,
+) -> bool {
+    if !matches!(power_state, Some("ConnectedStandby") | Some("Off")) {
+        return false;
+    }
+
+    let elapsed_since_last_wake_ms = last_wake_attempt_at_ms
+        .map(|last_ms| now_ms.saturating_sub(last_ms))
+        .unwrap_or(u64::MAX);
+    elapsed_since_last_wake_ms >= 5_000
+}
+
+fn notify_startup_phase<O>(
+    observer: Option<&O>,
+    phase: SessionStartupPhase,
+    status: SessionStartupPhaseStatus,
+    details: Option<&str>,
+) where
+    O: SessionStartupObserver,
+{
+    if let Some(observer) = observer {
+        observer.on_phase_event(phase, status, details);
+    }
+}
+
+fn should_retry_home_server_registration(
+    plan: &Plan,
+    error: &xbox_webapi::WebApiError,
+    elapsed_ms: u64,
+    retry_timeout_ms: u64,
+) -> bool {
+    plan.session.target.is_home()
+        && elapsed_ms < retry_timeout_ms
+        && is_waiting_for_server_registration_error(error)
+}
+
+fn next_retry_backoff_ms(retry_backoff_ms: &[u64], attempt: usize) -> u64 {
+    retry_backoff_ms
+        .get(attempt)
+        .copied()
+        .or_else(|| retry_backoff_ms.last().copied())
+        .unwrap_or(1_000)
+}
+
+fn is_waiting_for_server_registration_error(error: &xbox_webapi::WebApiError) -> bool {
+    is_waiting_for_server_registration_message(&error.to_string())
+}
+
+fn is_waiting_for_server_registration_message(message: &str) -> bool {
+    let normalized = message.to_ascii_lowercase();
+    normalized.contains("waitingforservertoregister")
+        || normalized.contains("errorcallingwns")
+        || (normalized.contains("xccs") && normalized.contains("send command failed"))
 }
 
 fn now_ms() -> u64 {
@@ -911,5 +1252,97 @@ mod tests {
             filter_stale_ice_response(Some(candidates.clone()), Some(&candidates), false),
             Some(candidates)
         );
+    }
+
+    #[test]
+    fn waiting_for_server_registration_http_error_is_retryable_for_home() {
+        let mut plan = crate::policy::Plan::default();
+        plan.session.target = crate::policy::types::Target::Home;
+        plan.session.schedule.ready_timeout_ms = 10_000;
+
+        let error = xbox_webapi::WebApiError::http(
+            503,
+            "Streaming error: Xccs : ErrorCallingWNS : Send command failed : State WaitingForServerToRegister",
+        );
+
+        assert!(should_retry_home_server_registration(
+            &plan,
+            &error,
+            0,
+            plan.session.schedule.ready_timeout_ms,
+        ));
+        assert!(!should_retry_home_server_registration(
+            &plan,
+            &error,
+            plan.session.schedule.ready_timeout_ms,
+            plan.session.schedule.ready_timeout_ms,
+        ));
+    }
+
+    #[test]
+    fn waiting_for_server_registration_retry_does_not_apply_to_cloud() {
+        let mut plan = crate::policy::Plan::default();
+        plan.session.target = crate::policy::types::Target::Cloud;
+        plan.session.schedule.ready_timeout_ms = 10_000;
+
+        let error = xbox_webapi::WebApiError::http(
+            503,
+            "Streaming error: Xccs : ErrorCallingWNS : Send command failed : State WaitingForServerToRegister",
+        );
+
+        assert!(!should_retry_home_server_registration(
+            &plan,
+            &error,
+            0,
+            plan.session.schedule.ready_timeout_ms,
+        ));
+    }
+
+    #[test]
+    fn waiting_for_server_registration_message_matches_non_http_error_text() {
+        assert!(is_waiting_for_server_registration_message(
+            "Xccs : ErrorCallingWNS : Send command failed : State WaitingForServerToRegister",
+        ));
+        assert!(!is_waiting_for_server_registration_message(
+            "remoteConsoleNotReady"
+        ));
+    }
+
+    #[test]
+    fn retry_backoff_reuses_last_entry_after_sequence_is_exhausted() {
+        assert_eq!(next_retry_backoff_ms(&[1_000, 3_000, 5_000], 0), 1_000);
+        assert_eq!(next_retry_backoff_ms(&[1_000, 3_000, 5_000], 2), 5_000);
+        assert_eq!(next_retry_backoff_ms(&[1_000, 3_000, 5_000], 6), 5_000);
+        assert_eq!(next_retry_backoff_ms(&[], 0), 1_000);
+    }
+
+    #[test]
+    fn connected_standby_retries_wake_after_cooldown() {
+        assert!(!should_retry_wake_during_ready_wait(
+            Some("ConnectedStandby"),
+            Some(10_000),
+            14_999,
+        ));
+        assert!(should_retry_wake_during_ready_wait(
+            Some("ConnectedStandby"),
+            Some(10_000),
+            15_000,
+        ));
+        assert!(should_retry_wake_during_ready_wait(Some("Off"), None, 0));
+        assert!(!should_retry_wake_during_ready_wait(
+            Some("On"),
+            Some(10_000),
+            20_000
+        ));
+    }
+
+    #[test]
+    fn remote_console_wake_circuit_open_message_is_detected() {
+        let error =
+            remote_console_wake_circuit_open_error("console-1", Some("ConnectedStandby"), 3);
+        assert!(is_remote_console_wake_circuit_open_message(&error.message));
+        assert!(!is_remote_console_wake_circuit_open_message(
+            "remoteConsoleNotReady:targetId=console-1"
+        ));
     }
 }

@@ -1,5 +1,6 @@
 use crate::mods::app_state::AppStateProvider;
 use crate::mods::auth::AuthProviderRef;
+use crate::mods::data::cache_repository::DataCacheRepository;
 use crate::settings_store::SettingsStoreResolver;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
@@ -72,6 +73,21 @@ impl AppStateProvider for AppStateService {
 
         for key in STORE_DATA_RESET_KEYS {
             store.store().delete(*key);
+        }
+        let dynamic_cache_keys = store
+            .store()
+            .entries()
+            .into_iter()
+            .filter_map(|(key, _)| {
+                if key.starts_with(DataCacheRepository::dynamic_cache_prefix()) {
+                    Some(key.to_string())
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>();
+        for key in dynamic_cache_keys {
+            store.store().delete(key);
         }
         store.save()?;
 

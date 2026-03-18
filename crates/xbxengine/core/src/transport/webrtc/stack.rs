@@ -1,5 +1,6 @@
 use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 use tokio::runtime::Runtime;
 use xbxengine_protocol::{
@@ -12,19 +13,18 @@ use crate::{
         XbxDataChannelMediaControl, XbxMediaControlContext, XbxMediaControlPort,
     },
     transport::webrtc::data_channel::{
-        queue_keyboard_pointer_input, request_decoder_reset_from_state,
-        request_video_keyframe_from_state, set_keyboard_pointer_enabled, XbxDataChannelState,
+        queue_keyboard_pointer_input, set_keyboard_pointer_enabled, XbxDataChannelState,
     },
     transport::webrtc::escalation::{VideoEscalationController, VideoEscalationReason},
+    transport::webrtc::recovery_coordinator::{RecoveryCoordinator, RecoveryRuntimeState},
+    transport::webrtc::recovery_diagnosis::{diagnose_ingress_signal, diagnose_transport_signal},
+    transport::webrtc::recovery_executor::apply_recovery_decision,
+    transport::webrtc::recovery_signal::VideoIngressSignal,
     transport::webrtc::transport::XbxTransportState,
-    XbxEngineMediaNegotiationRequest, XbxEngineMediaRuntimeStats, XbxEngineRenderFrame,
-    XbxEngineRuntimeConfig, XbxEngineRuntimeError, XbxEngineVideoEscalationObservation,
-    XbxEngineVideoFrameDropObservation,
+    XbxEngineMediaNegotiationRequest, XbxEngineMediaRuntimeStats,
+    XbxEnginePendingRuntimeRecoveryAction, XbxEngineRenderFrame, XbxEngineRuntimeConfig,
+    XbxEngineRuntimeError, XbxEngineVideoFrameDropObservation,
 };
-
-const STARTUP_LOW_QUALITY_RETRY_DELAY_MS: u64 = 450;
-const STARTUP_LOW_QUALITY_FLOOR_KBPS: f64 = 8_000.0;
-const STARTUP_LOW_QUALITY_RECOVERED_KBPS: f64 = 12_000.0;
 
 /**
  * active `webrtc-rs` 媒体栈的组合根：
@@ -55,6 +55,9 @@ pub(crate) trait XbxMediaStackPort: Send {
     fn local_candidates_snapshot(&self) -> Vec<XbxEngineIceCandidateDto>;
     fn local_ice_gathering_complete(&self) -> bool;
     fn snapshot_runtime_stats(&self) -> XbxEngineMediaRuntimeStats;
+    fn take_pending_runtime_recovery_action(
+        &mut self,
+    ) -> Option<XbxEnginePendingRuntimeRecoveryAction>;
     fn take_latest_render_frame(&mut self) -> Option<XbxEngineRenderFrame>;
     fn set_audio_volume(&mut self, value: f32);
     fn set_microphone_capturing(&mut self, capturing: bool) -> Result<(), XbxEngineRuntimeError>;
@@ -65,6 +68,11 @@ pub(crate) trait XbxMediaStackPort: Send {
     ) -> Result<(), XbxEngineRuntimeError>;
     fn request_video_keyframe(&mut self) -> Result<(), XbxEngineRuntimeError>;
     fn request_decoder_reset(&mut self) -> Result<(), XbxEngineRuntimeError>;
+    fn update_host_video_timing(
+        &mut self,
+        host_display_interval_ms: Option<f64>,
+        host_frame_age_budget_ms: Option<f64>,
+    );
     fn stop(&mut self);
 }
 
@@ -73,27 +81,10 @@ pub(crate) struct XbxActiveMediaStack {
     transport: XbxTransportState,
     control: Arc<Mutex<Box<dyn XbxMediaControlPort>>>,
     runtime_stats: Arc<Mutex<XbxEngineMediaRuntimeStats>>,
+    pending_runtime_recovery_action: Arc<Mutex<Option<XbxEnginePendingRuntimeRecoveryAction>>>,
     data_channel_state: Arc<Mutex<XbxDataChannelState>>,
     render_state: Arc<Mutex<XbxRenderState>>,
     runtime_config: XbxEngineRuntimeConfig,
-}
-
-#[derive(Clone, Copy, Debug, Default)]
-struct StartupRecoveryProbe {
-    armed_at: Option<std::time::Instant>,
-    retried: bool,
-}
-
-impl StartupRecoveryProbe {
-    fn arm(&mut self, now: std::time::Instant) {
-        self.armed_at = Some(now);
-        self.retried = false;
-    }
-
-    fn clear(&mut self) {
-        self.armed_at = None;
-        self.retried = false;
-    }
 }
 
 impl XbxActiveMediaStack {
@@ -128,6 +119,8 @@ impl XbxActiveMediaStack {
         let runtime_stats_for_supervisor =
             Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default())); // 这里先预创建，后面传入
         let runtime_stats_for_spawn = runtime_stats_for_supervisor.clone(); // clone 给 spawn 使用
+        let pending_runtime_recovery_action = Arc::new(Mutex::new(None));
+        let pending_runtime_recovery_action_for_spawn = pending_runtime_recovery_action.clone();
         let video_pipeline_config = runtime_config.webrtc.video_pipeline.clone();
         let ingress_keyframe_cooldown_ms = runtime_config
             .webrtc
@@ -183,6 +176,8 @@ impl XbxActiveMediaStack {
 
                 active_handles = Some((decode_handle.clone(), pacer_handle.clone(), renderer_handle.clone()));
                 let data_channel_state_for_keyframe = data_channel_state_for_supervisor.clone();
+                let pending_runtime_action_for_frame_loop =
+                    pending_runtime_recovery_action_for_spawn.clone();
                 let ingress_keyframe_cooldown = std::time::Duration::from_millis(
                     ingress_keyframe_cooldown_ms,
                 );
@@ -199,10 +194,10 @@ impl XbxActiveMediaStack {
                     let mut frame_count = 0u64;
                     let mut frame_drop_observation_id = 0u64;
                     let mut recent_receive_frame_times_ms = VecDeque::<f64>::new();
+                    let mut last_transport_escalation_hint: Option<(String, f64)> = None;
                     let stream_started_at = Instant::now();
-                    let mut startup_recovery_probe = StartupRecoveryProbe::default();
                     // 统一升级判定，避免 ingress/adapter 各自维护冷却状态。
-                    let mut escalation_controller = VideoEscalationController::new(
+                    let escalation_controller = VideoEscalationController::new(
                         ingress_keyframe_cooldown,
                         runtime_config
                             .webrtc
@@ -216,11 +211,51 @@ impl XbxActiveMediaStack {
                             .saturating_add(1)
                             .max(1),
                     );
+                    let mut recovery_coordinator = RecoveryCoordinator::new(
+                        escalation_controller,
+                        stream_started_at,
+                        startup_escalation_grace,
+                    );
+                    let mut startup_retry_tick =
+                        tokio::time::interval(Duration::from_millis(120));
 
                     loop {
-                        let future = frame_source.recv_frame();
-                        if let Some(event) = future.await {
-                            match event {
+                        tokio::select! {
+                            _ = startup_retry_tick.tick() => {
+                                if let Some(retry_decision) =
+                                    recovery_coordinator.poll_startup_retry(
+                                        stats_for_frame_loop.as_ref(),
+                                    )
+                                {
+                                    // startup retry 仍然复用同一 recovery coordinator，
+                                    // supervisor loop 只负责转发时钟事件与执行动作。
+                                    publish_recovery_runtime_state(
+                                        RecoveryCoordinator::runtime_state_for_diagnosis(
+                                            stats_for_frame_loop.as_ref(),
+                                            "startupLowQuality",
+                                            stream_started_at,
+                                            startup_escalation_grace,
+                                        ),
+                                        &stats_for_frame_loop,
+                                    );
+                                    apply_recovery_decision(
+                                        &stats_for_frame_loop,
+                                        &pending_runtime_action_for_frame_loop,
+                                        &data_channel_state_for_keyframe,
+                                        Some(&decode_handle),
+                                        retry_decision,
+                                        "startupLowQuality",
+                                        now_ms_f64(),
+                                    )
+                                    .await;
+                                }
+                            }
+                            maybe_event = frame_source.recv_frame() => {
+                                let Some(event) = maybe_event else {
+                                    crate::xbx_log_info!("[Supervisor] frame source connection closed");
+                                    break;
+                                };
+                                match event {
                                 FrameSourceEvent::Frame(encoded_frame) => {
                                     // 更新包活动时间，防止 recovery 系统误判为 stall
                                     let now_ms = now_ms_f64();
@@ -268,84 +303,22 @@ impl XbxActiveMediaStack {
                                         decision,
                                         IngressDecision::WaitKeyframe | IngressDecision::Reconfigure
                                     ) {
-                                        let escalation_reason =
-                                            map_ingress_escalation_reason(&decision);
-                                        let startup_fast_reset =
-                                            should_fast_reset_startup_recovery(
-                                                &escalation_reason,
-                                                stream_started_at,
-                                                startup_escalation_grace,
-                                            );
-                                        let escalation_decision = if should_suppress_startup_escalation(
-                                            &escalation_reason,
+                                        let diagnosis = diagnose_ingress_signal(
+                                            VideoIngressSignal::from_decision(&decision),
+                                        );
+                                        apply_recovery_reason(
+                                            &mut recovery_coordinator,
+                                            &stats_for_frame_loop,
+                                            &pending_runtime_action_for_frame_loop,
+                                            &data_channel_state_for_keyframe,
+                                            &decode_handle,
+                                            diagnosis.label,
+                                            diagnosis.reason,
                                             stream_started_at,
                                             startup_escalation_grace,
-                                        ) {
-                                            suppressed_escalation_decision(
-                                                &mut escalation_controller,
-                                                "startupGraceSuppressed",
-                                            )
-                                        } else {
-                                            escalation_controller.on_reason(escalation_reason)
-                                        };
-                                        let escalation_action = if startup_fast_reset
-                                            && escalation_decision.action == "requestKeyframe"
-                                        {
-                                            "requestKeyframe+decoderReset"
-                                        } else {
-                                            escalation_decision.action
-                                        };
-                                        if escalation_decision.action == "requestKeyframe" {
-                                            let _ = request_video_keyframe_from_state(
-                                                &data_channel_state_for_keyframe,
-                                            )
-                                            .await;
-                                            if startup_fast_reset {
-                                                let _ = request_decoder_reset_from_state(
-                                                    &data_channel_state_for_keyframe,
-                                                )
-                                                .await;
-                                            }
-                                        } else if escalation_decision.action
-                                            == "requestDecoderReset"
-                                        {
-                                            let _ = request_decoder_reset_from_state(
-                                                &data_channel_state_for_keyframe,
-                                            )
-                                            .await;
-                                        }
-                                        if startup_fast_reset
-                                            && escalation_action == "requestKeyframe+decoderReset"
-                                        {
-                                            startup_recovery_probe.arm(Instant::now());
-                                        }
-                                        if let Ok(mut stats) = stats_for_frame_loop.lock() {
-                                            stats.latest_video_escalation_observation =
-                                                Some(XbxEngineVideoEscalationObservation {
-                                                    observation_id: escalation_decision
-                                                        .observation_id,
-                                                    reason: map_ingress_escalation_reason_label(
-                                                        &decision,
-                                                    )
-                                                        .to_string(),
-                                                    action: escalation_action.to_string(),
-                                                    observed_at_ms: now_ms,
-                                                });
-                                            if matches!(escalation_action, "requestKeyframe" | "requestDecoderReset")
-                                            {
-                                                stats.video_pli_request_count_total = stats
-                                                    .video_pli_request_count_total
-                                                    .saturating_add(1);
-                                            } else if matches!(
-                                                escalation_action,
-                                                "requestKeyframe+decoderReset"
-                                            )
-                                            {
-                                                stats.video_pli_request_count_total = stats
-                                                    .video_pli_request_count_total
-                                                    .saturating_add(2);
-                                            }
-                                        }
+                                            now_ms,
+                                        )
+                                        .await;
                                     }
                                     while let Some(frame) = ingress.pop() {
                                         // 同步分辨率到 runtime_stats（供 diagnostics / recovery 使用）
@@ -383,126 +356,45 @@ impl XbxActiveMediaStack {
                                     }
 
                                 }
-                                FrameSourceEvent::EscalationHint { reason, label } => {
-                                    crate::xbx_log_warn!(
-                                        "[Supervisor] Transport escalation hint: {}",
-                                        label
-                                    );
-                                    let startup_sample_loss_fast_reset =
-                                        should_fast_reset_startup_recovery(
-                                            &reason,
-                                            stream_started_at,
-                                            startup_escalation_grace,
+                                FrameSourceEvent::RecoverySignal(signal) => {
+                                    let diagnosis = diagnose_transport_signal(signal);
+                                    let hint_now_ms = now_ms_f64();
+                                    let should_log_transport_hint =
+                                        match last_transport_escalation_hint.as_ref() {
+                                            Some((last_label, last_at_ms)) => {
+                                                last_label != diagnosis.label
+                                                    || hint_now_ms - *last_at_ms >= 1_000.0
+                                            }
+                                            None => true,
+                                        };
+                                    if should_log_transport_hint {
+                                        // transport hint 是高频信号，只在标签变化或 1s 周期到达时打印，
+                                        // 避免 trace / UI 被同一条 deadline 日志刷爆。
+                                        crate::xbx_log_warn!(
+                                            "[Supervisor] Transport escalation hint: {}",
+                                            diagnosis.label
                                         );
-                                    let escalation_decision = if should_suppress_startup_escalation(
-                                        &reason,
+                                        last_transport_escalation_hint = Some((
+                                            diagnosis.label.to_string(),
+                                            hint_now_ms,
+                                        ));
+                                    }
+                                    apply_recovery_reason(
+                                        &mut recovery_coordinator,
+                                        &stats_for_frame_loop,
+                                        &pending_runtime_action_for_frame_loop,
+                                        &data_channel_state_for_keyframe,
+                                        &decode_handle,
+                                        diagnosis.label,
+                                        diagnosis.reason,
                                         stream_started_at,
                                         startup_escalation_grace,
-                                    ) {
-                                        suppressed_escalation_decision(
-                                            &mut escalation_controller,
-                                            "startupGraceSuppressed",
-                                        )
-                                    } else {
-                                        escalation_controller.on_reason(reason)
-                                    };
-                                    let escalation_action = if startup_sample_loss_fast_reset
-                                        && escalation_decision.action == "requestKeyframe"
-                                    {
-                                        "requestKeyframe+decoderReset"
-                                    } else {
-                                        escalation_decision.action
-                                    };
-                                    if escalation_decision.action == "requestKeyframe" {
-                                        let _ = request_video_keyframe_from_state(
-                                            &data_channel_state_for_keyframe,
-                                        )
-                                        .await;
-                                        if startup_sample_loss_fast_reset {
-                                            let _ = request_decoder_reset_from_state(
-                                                &data_channel_state_for_keyframe,
-                                            )
-                                            .await;
-                                        }
-                                    } else if escalation_decision.action
-                                        == "requestDecoderReset"
-                                    {
-                                        let _ = request_decoder_reset_from_state(
-                                            &data_channel_state_for_keyframe,
-                                        )
-                                        .await;
-                                    }
-                                    if startup_sample_loss_fast_reset
-                                        && escalation_action == "requestKeyframe+decoderReset"
-                                    {
-                                        startup_recovery_probe.arm(Instant::now());
-                                    }
-                                    if let Ok(mut stats) = stats_for_frame_loop.lock() {
-                                        stats.latest_video_escalation_observation =
-                                            Some(XbxEngineVideoEscalationObservation {
-                                                observation_id: escalation_decision.observation_id,
-                                                reason: label.to_string(),
-                                                action: escalation_action.to_string(),
-                                                observed_at_ms: now_ms_f64(),
-                                            });
-                                        if matches!(escalation_action, "requestKeyframe" | "requestDecoderReset")
-                                        {
-                                            stats.video_pli_request_count_total = stats
-                                                .video_pli_request_count_total
-                                                .saturating_add(1);
-                                        } else if matches!(
-                                            escalation_action,
-                                            "requestKeyframe+decoderReset"
-                                        )
-                                        {
-                                            stats.video_pli_request_count_total = stats
-                                                .video_pli_request_count_total
-                                                .saturating_add(2);
-                                        }
-                                    }
+                                        now_ms_f64(),
+                                    )
+                                    .await;
                                 }
                             }
-                            if should_retry_startup_low_quality_recovery(
-                                &mut startup_recovery_probe,
-                                stats_for_frame_loop.as_ref(),
-                                stream_started_at,
-                                startup_escalation_grace,
-                                std::time::Duration::from_millis(
-                                    STARTUP_LOW_QUALITY_RETRY_DELAY_MS,
-                                ),
-                                STARTUP_LOW_QUALITY_FLOOR_KBPS,
-                                STARTUP_LOW_QUALITY_RECOVERED_KBPS,
-                            ) {
-                                let retry_decision = suppressed_escalation_decision(
-                                    &mut escalation_controller,
-                                    "requestKeyframe+decoderReset(startupLowQualityRetry)",
-                                );
-                                let _ = request_video_keyframe_from_state(
-                                    &data_channel_state_for_keyframe,
-                                )
-                                .await;
-                                let _ = request_decoder_reset_from_state(
-                                    &data_channel_state_for_keyframe,
-                                )
-                                .await;
-                                if let Ok(mut stats) = stats_for_frame_loop.lock() {
-                                    stats.latest_video_escalation_observation =
-                                        Some(XbxEngineVideoEscalationObservation {
-                                            observation_id: retry_decision.observation_id,
-                                            reason: "startupLowQuality".to_string(),
-                                            action:
-                                                "requestKeyframe+decoderReset(startupLowQualityRetry)"
-                                                    .to_string(),
-                                            observed_at_ms: now_ms_f64(),
-                                        });
-                                    stats.video_pli_request_count_total = stats
-                                        .video_pli_request_count_total
-                                        .saturating_add(2);
-                                }
-                            }
-                        } else {
-                            crate::xbx_log_info!("[Supervisor] frame source connection closed");
-                            break;
+                        }
                         }
                     }
                 });
@@ -514,11 +406,67 @@ impl XbxActiveMediaStack {
             transport,
             control,
             runtime_stats: runtime_stats_for_supervisor,
+            pending_runtime_recovery_action,
             data_channel_state,
             render_state,
             runtime_config,
         }
     }
+}
+
+fn publish_recovery_runtime_state(
+    state: RecoveryRuntimeState,
+    runtime_stats: &Arc<Mutex<XbxEngineMediaRuntimeStats>>,
+) {
+    if let Ok(mut stats) = runtime_stats.lock() {
+        stats.session_phase = Some(state.phase.as_str().to_string());
+        stats.recovery_policy_profile = Some(state.recovery_policy_profile.to_string());
+        stats.recovery_diagnosis = Some(state.diagnosis_label);
+        stats.recovery_coupling_mode = Some(state.coupling.mode.as_str().to_string());
+        stats.recovery_coupling_summary = Some(state.coupling.summary());
+    }
+}
+
+async fn apply_recovery_reason(
+    recovery_coordinator: &mut RecoveryCoordinator,
+    runtime_stats: &Arc<Mutex<XbxEngineMediaRuntimeStats>>,
+    pending_runtime_action: &Arc<Mutex<Option<XbxEnginePendingRuntimeRecoveryAction>>>,
+    data_channel_state: &Arc<Mutex<XbxDataChannelState>>,
+    decode_handle: &Arc<crate::media::video::decode::actor::DecodeActorHandle>,
+    diagnosis_label: &'static str,
+    reason: VideoEscalationReason,
+    stream_started_at: std::time::Instant,
+    startup_escalation_grace: Duration,
+    observed_at_ms: f64,
+) {
+    let diagnosis_label = RecoveryCoordinator::runtime_state_for_diagnosis(
+        runtime_stats.as_ref(),
+        diagnosis_label,
+        stream_started_at,
+        startup_escalation_grace,
+    )
+    .diagnosis_label;
+    let escalation_decision =
+        recovery_coordinator.on_reason_with_runtime_stats(reason, runtime_stats.as_ref());
+    publish_recovery_runtime_state(
+        RecoveryCoordinator::runtime_state_for_diagnosis(
+            runtime_stats.as_ref(),
+            diagnosis_label.as_str(),
+            stream_started_at,
+            startup_escalation_grace,
+        ),
+        runtime_stats,
+    );
+    apply_recovery_decision(
+        runtime_stats,
+        pending_runtime_action,
+        data_channel_state,
+        Some(decode_handle),
+        escalation_decision,
+        diagnosis_label.as_str(),
+        observed_at_ms,
+    )
+    .await;
 }
 
 impl XbxMediaStackPort for XbxActiveMediaStack {
@@ -639,6 +587,15 @@ impl XbxMediaStackPort for XbxActiveMediaStack {
         stats
     }
 
+    fn take_pending_runtime_recovery_action(
+        &mut self,
+    ) -> Option<XbxEnginePendingRuntimeRecoveryAction> {
+        self.pending_runtime_recovery_action
+            .lock()
+            .ok()
+            .and_then(|mut action| action.take())
+    }
+
     fn take_latest_render_frame(&mut self) -> Option<XbxEngineRenderFrame> {
         self.render_state
             .lock()
@@ -684,8 +641,22 @@ impl XbxMediaStackPort for XbxActiveMediaStack {
         })
     }
 
+    fn update_host_video_timing(
+        &mut self,
+        host_display_interval_ms: Option<f64>,
+        host_frame_age_budget_ms: Option<f64>,
+    ) {
+        if let Ok(mut stats) = self.runtime_stats.lock() {
+            stats.host_display_interval_ms = host_display_interval_ms;
+            stats.host_frame_age_budget_ms = host_frame_age_budget_ms;
+        }
+    }
+
     fn stop(&mut self) {
         self.transport.stop_peer_connection(&self.runtime.handle());
+        if let Ok(mut pending_action) = self.pending_runtime_recovery_action.lock() {
+            *pending_action = None;
+        }
         if let Ok(mut render_state) = self.render_state.lock() {
             render_state.stop();
         }
@@ -724,328 +695,9 @@ fn map_ingress_drop_reason(
     }
 }
 
-fn should_suppress_startup_escalation(
-    reason: &VideoEscalationReason,
-    stream_started_at: std::time::Instant,
-    startup_grace: std::time::Duration,
-) -> bool {
-    if stream_started_at.elapsed() >= startup_grace {
-        return false;
-    }
-
-    matches!(reason, VideoEscalationReason::Reconfigure)
-}
-
-fn should_fast_reset_startup_recovery(
-    reason: &VideoEscalationReason,
-    stream_started_at: std::time::Instant,
-    startup_grace: std::time::Duration,
-) -> bool {
-    stream_started_at.elapsed() < startup_grace
-        && matches!(
-            reason,
-            VideoEscalationReason::TransportSampleLoss
-                | VideoEscalationReason::WaitKeyframe
-                | VideoEscalationReason::AdapterIdleTimeout
-        )
-}
-
-fn should_retry_startup_low_quality_recovery(
-    probe: &mut StartupRecoveryProbe,
-    runtime_stats: &Mutex<XbxEngineMediaRuntimeStats>,
-    stream_started_at: std::time::Instant,
-    startup_grace: std::time::Duration,
-    retry_delay: std::time::Duration,
-    low_bitrate_kbps: f64,
-    recovered_bitrate_kbps: f64,
-) -> bool {
-    if stream_started_at.elapsed() >= startup_grace {
-        probe.clear();
-        return false;
-    }
-
-    let Some(armed_at) = probe.armed_at else {
-        return false;
-    };
-    if probe.retried {
-        return false;
-    }
-
-    let Ok(stats) = runtime_stats.lock() else {
-        return false;
-    };
-    let effective_bitrate = extract_startup_recovery_bitrate_kbps(&stats);
-    if effective_bitrate
-        .map(|value| value >= recovered_bitrate_kbps)
-        .unwrap_or(false)
-    {
-        drop(stats);
-        probe.clear();
-        return false;
-    }
-
-    if armed_at.elapsed() < retry_delay {
-        return false;
-    }
-
-    let should_retry = effective_bitrate
-        .map(|value| value > 0.0 && value < low_bitrate_kbps)
-        .unwrap_or(false);
-    if should_retry {
-        probe.retried = true;
-    }
-    should_retry
-}
-
-fn extract_startup_recovery_bitrate_kbps(stats: &XbxEngineMediaRuntimeStats) -> Option<f64> {
-    stats
-        .inbound_video_bitrate_kbps
-        .or_else(|| {
-            stats
-                .latest_video_bwe_observation
-                .as_ref()
-                .map(|observation| observation.actual_video_bitrate_kbps)
-        })
-        .or_else(|| {
-            stats
-                .latest_video_bwe_observation
-                .as_ref()
-                .and_then(|observation| observation.twcc_receive_bitrate_kbps)
-        })
-        .or_else(|| {
-            stats
-                .latest_video_twcc_observation
-                .as_ref()
-                .and_then(|observation| observation.receive_bitrate_kbps)
-        })
-}
-
-fn suppressed_escalation_decision(
-    controller: &mut VideoEscalationController,
-    action: &'static str,
-) -> crate::transport::webrtc::escalation::VideoEscalationDecision {
-    controller.suppressed(action)
-}
-
-fn map_ingress_escalation_reason(
-    decision: &crate::media::video::ingress::scheduler::IngressDecision,
-) -> VideoEscalationReason {
-    match decision {
-        crate::media::video::ingress::scheduler::IngressDecision::WaitKeyframe => {
-            VideoEscalationReason::WaitKeyframe
-        }
-        crate::media::video::ingress::scheduler::IngressDecision::Reconfigure => {
-            VideoEscalationReason::Reconfigure
-        }
-        _ => VideoEscalationReason::WaitKeyframe,
-    }
-}
-
-fn map_ingress_escalation_reason_label(
-    decision: &crate::media::video::ingress::scheduler::IngressDecision,
-) -> &'static str {
-    match decision {
-        crate::media::video::ingress::scheduler::IngressDecision::WaitKeyframe => {
-            "ingressWaitKeyframe"
-        }
-        crate::media::video::ingress::scheduler::IngressDecision::Reconfigure => {
-            "ingressReconfigure"
-        }
-        _ => "ingressEscalation",
-    }
-}
-
 fn now_ms_f64() -> f64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|duration| duration.as_millis() as f64)
         .unwrap_or(0.0)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::{
-        extract_startup_recovery_bitrate_kbps, should_fast_reset_startup_recovery,
-        should_retry_startup_low_quality_recovery, should_suppress_startup_escalation,
-        StartupRecoveryProbe,
-    };
-    use crate::transport::webrtc::escalation::VideoEscalationReason;
-    use crate::{
-        XbxEngineMediaRuntimeStats, XbxEngineVideoBweObservation, XbxEngineVideoTwccObservation,
-    };
-    use std::{
-        sync::Mutex,
-        time::{Duration, Instant},
-    };
-
-    #[test]
-    fn startup_grace_does_not_suppress_wait_keyframe() {
-        let stream_started_at = Instant::now();
-        assert!(!should_suppress_startup_escalation(
-            &VideoEscalationReason::WaitKeyframe,
-            stream_started_at,
-            Duration::from_secs(2),
-        ));
-    }
-
-    #[test]
-    fn startup_grace_only_suppresses_reconfigure() {
-        let stream_started_at = Instant::now();
-        assert!(!should_suppress_startup_escalation(
-            &VideoEscalationReason::AdapterIdleTimeout,
-            stream_started_at,
-            Duration::from_secs(2),
-        ));
-        assert!(should_suppress_startup_escalation(
-            &VideoEscalationReason::Reconfigure,
-            stream_started_at,
-            Duration::from_secs(2),
-        ));
-    }
-
-    #[test]
-    fn startup_grace_fast_resets_startup_recovery_reasons_only() {
-        let stream_started_at = Instant::now();
-        assert!(should_fast_reset_startup_recovery(
-            &VideoEscalationReason::TransportSampleLoss,
-            stream_started_at,
-            Duration::from_secs(2),
-        ));
-        assert!(should_fast_reset_startup_recovery(
-            &VideoEscalationReason::WaitKeyframe,
-            stream_started_at,
-            Duration::from_secs(2),
-        ));
-        assert!(should_fast_reset_startup_recovery(
-            &VideoEscalationReason::AdapterIdleTimeout,
-            stream_started_at,
-            Duration::from_secs(2),
-        ));
-        assert!(!should_fast_reset_startup_recovery(
-            &VideoEscalationReason::Reconfigure,
-            stream_started_at,
-            Duration::from_secs(2),
-        ));
-        std::thread::sleep(Duration::from_millis(20));
-        assert!(!should_fast_reset_startup_recovery(
-            &VideoEscalationReason::WaitKeyframe,
-            stream_started_at,
-            Duration::from_millis(5),
-        ));
-        assert!(!should_fast_reset_startup_recovery(
-            &VideoEscalationReason::TransportSampleLoss,
-            stream_started_at,
-            Duration::from_millis(5),
-        ));
-    }
-
-    #[test]
-    fn startup_low_quality_probe_retries_when_bitrate_stays_low() {
-        let stream_started_at = Instant::now();
-        let mut probe = StartupRecoveryProbe::default();
-        probe.arm(Instant::now());
-        let mut stats = XbxEngineMediaRuntimeStats::default();
-        stats.inbound_video_bitrate_kbps = Some(6_500.0);
-        let runtime_stats = Mutex::new(stats);
-
-        std::thread::sleep(Duration::from_millis(20));
-        assert!(should_retry_startup_low_quality_recovery(
-            &mut probe,
-            &runtime_stats,
-            stream_started_at,
-            Duration::from_secs(2),
-            Duration::from_millis(5),
-            8_000.0,
-            12_000.0,
-        ));
-        assert!(!should_retry_startup_low_quality_recovery(
-            &mut probe,
-            &runtime_stats,
-            stream_started_at,
-            Duration::from_secs(2),
-            Duration::from_millis(5),
-            8_000.0,
-            12_000.0,
-        ));
-    }
-
-    #[test]
-    fn startup_low_quality_probe_clears_after_bitrate_recovers() {
-        let stream_started_at = Instant::now();
-        let mut probe = StartupRecoveryProbe::default();
-        probe.arm(Instant::now());
-        let mut stats = XbxEngineMediaRuntimeStats::default();
-        stats.latest_video_bwe_observation = Some(XbxEngineVideoBweObservation {
-            observation_id: 1,
-            mode: "twcc-gcc".to_string(),
-            decision_reason: "hold".to_string(),
-            target_remb_kbps: 30_000,
-            observed_remb_kbps: None,
-            actual_video_bitrate_kbps: 14_500.0,
-            loss_ratio: 0.0,
-            rtt_ms: None,
-            transport_path: Some("Direct".to_string()),
-            twcc_feedback_interval_ms: Some(100.0),
-            twcc_observed_packet_count: Some(120),
-            twcc_covered_sequence_span: Some(120),
-            twcc_receive_bitrate_kbps: Some(14_800.0),
-            twcc_delivery_ratio: Some(1.0),
-            twcc_loss_ratio: Some(0.0),
-            observed_at_ms: 1.0,
-        });
-        let runtime_stats = Mutex::new(stats);
-
-        std::thread::sleep(Duration::from_millis(20));
-        assert!(!should_retry_startup_low_quality_recovery(
-            &mut probe,
-            &runtime_stats,
-            stream_started_at,
-            Duration::from_secs(2),
-            Duration::from_millis(5),
-            8_000.0,
-            12_000.0,
-        ));
-        assert!(probe.armed_at.is_none());
-    }
-
-    #[test]
-    fn startup_recovery_bitrate_prefers_real_video_rate() {
-        let mut stats = XbxEngineMediaRuntimeStats::default();
-        stats.inbound_video_bitrate_kbps = Some(9_500.0);
-        stats.latest_video_bwe_observation = Some(XbxEngineVideoBweObservation {
-            observation_id: 1,
-            mode: "twcc-gcc".to_string(),
-            decision_reason: "hold".to_string(),
-            target_remb_kbps: 30_000,
-            observed_remb_kbps: None,
-            actual_video_bitrate_kbps: 8_800.0,
-            loss_ratio: 0.0,
-            rtt_ms: None,
-            transport_path: Some("Direct".to_string()),
-            twcc_feedback_interval_ms: Some(100.0),
-            twcc_observed_packet_count: Some(100),
-            twcc_covered_sequence_span: Some(100),
-            twcc_receive_bitrate_kbps: Some(10_000.0),
-            twcc_delivery_ratio: Some(1.0),
-            twcc_loss_ratio: Some(0.0),
-            observed_at_ms: 1.0,
-        });
-        stats.latest_video_twcc_observation = Some(XbxEngineVideoTwccObservation {
-            observation_id: 1,
-            feedback_packet_count: 1,
-            covered_sequence_start: 1,
-            covered_sequence_end: 100,
-            covered_sequence_span: 100,
-            observed_packet_count: 100,
-            observed_byte_count: 100_000,
-            feedback_interval_ms: Some(100.0),
-            arrival_span_ms: Some(100.0),
-            receive_bitrate_kbps: Some(10_500.0),
-            delivery_ratio: 1.0,
-            packet_loss_ratio: 0.0,
-            observed_at_ms: 1.0,
-        });
-
-        assert_eq!(extract_startup_recovery_bitrate_kbps(&stats), Some(9_500.0));
-    }
 }

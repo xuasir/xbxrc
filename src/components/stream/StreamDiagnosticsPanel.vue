@@ -13,7 +13,7 @@ interface StreamDiagnosticsPanelProps {
 }
 
 interface StreamDiagnosticsRowViewModel {
-  key: 'region' | 'server' | 'relay' | 'path' | 'status'
+  key: 'region' | 'server' | 'relay' | 'path' | 'profile' | 'phase' | 'reason' | 'band' | 'health' | 'stall' | 'status'
   value: string
 }
 
@@ -50,6 +50,30 @@ const rows = computed<StreamDiagnosticsRowViewModel[]>(() => [
   {
     key: 'path',
     value: props.diagnostics.transportPath ?? t('streamPage.diagnostics.values.unknown'),
+  },
+  {
+    key: 'profile',
+    value: props.diagnostics.transportPolicyProfile ?? t('streamPage.diagnostics.values.unknown'),
+  },
+  {
+    key: 'phase',
+    value: props.diagnostics.sessionPhase ?? t('streamPage.diagnostics.values.unknown'),
+  },
+  {
+    key: 'reason',
+    value: props.diagnostics.recoveryDiagnosis ?? t('streamPage.diagnostics.values.none'),
+  },
+  {
+    key: 'band',
+    value: props.diagnostics.directGamingBitrateBand ?? t('streamPage.diagnostics.values.none'),
+  },
+  {
+    key: 'health',
+    value: props.diagnostics.videoHealth ?? t('streamPage.diagnostics.values.unknown'),
+  },
+  {
+    key: 'stall',
+    value: props.diagnostics.stallKind ?? t('streamPage.diagnostics.values.none'),
   },
   {
     key: 'status',
@@ -90,6 +114,9 @@ const notices = computed<StreamDiagnosticsNoticeViewModel[]>(() => {
 function resolveStatusText(): string {
   if (props.diagnostics.hasNoVideoWarning) {
     return t('streamPage.diagnostics.values.noVideo')
+  }
+  if (props.diagnostics.videoHealth === 'recovering') {
+    return t('streamPage.diagnostics.values.recovering')
   }
   if (props.diagnostics.isRecovering) {
     return t('streamPage.diagnostics.values.recovering')
@@ -141,11 +168,9 @@ function resolveStatusText(): string {
   width: min(340px, calc(100vw - 48px));
   padding: 14px 16px;
   border-radius: 16px;
-  background: rgba(8, 12, 18, 0.84);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  backdrop-filter: blur(18px);
-  color: #ffffff;
-  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.36);
+  background: var(--ui-surface-info-panel);
+  border: 1px solid var(--ui-border-subtle);
+  color: var(--ui-page-text);
   pointer-events: none;
 }
 
@@ -160,7 +185,7 @@ function resolveStatusText(): string {
   font-size: 11px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.72);
+  color: var(--ui-page-text-soft);
 }
 
 .stream-diagnostics-panel__title {
@@ -183,7 +208,7 @@ function resolveStatusText(): string {
 }
 
 .stream-diagnostics-panel__row span {
-  color: rgba(255, 255, 255, 0.72);
+  color: var(--ui-page-text-soft);
 }
 
 .stream-diagnostics-panel__row strong {
@@ -207,7 +232,7 @@ function resolveStatusText(): string {
 }
 
 .stream-diagnostics-panel__notice--info {
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--color-state-hover);
 }
 
 .stream-diagnostics-panel__notice--warning {

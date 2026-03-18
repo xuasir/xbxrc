@@ -34,6 +34,8 @@
     "emptyBody": "当前目录为空，请稍后刷新重试。",
     "emptySearchTitle": "没有匹配的云游戏",
     "emptySearchBody": "没有找到与“{keyword}”相关的云游戏，请尝试其他关键词。",
+    "refreshingHint": "正在后台刷新目录...",
+    "cachedHint": "当前显示缓存目录，最后更新于 {time}",
     "searchLabel": "搜索",
     "searchPlaceholder": "搜索游戏、人员等",
     "resultsCount": "共 {count} 款游戏",
@@ -89,7 +91,10 @@
       "cloud": "XCLOUD"
     },
     "status": {
+      "connectingHost": "正在连接主机...",
       "wakingConsole": "正在唤醒主机...",
+      "waitingConsoleReady": "正在等待主机完成唤醒并进入可串流状态...",
+      "startingStream": "正在启动串流...",
       "retryingTurn": "直连失败，正在切换 TURN 中继重试...",
       "creatingSession": "正在创建串流会话...",
       "waitingSession": "正在等待串流会话就绪...",
@@ -208,6 +213,12 @@
         "server": "入口",
         "relay": "TURN",
         "path": "路径",
+        "profile": "策略",
+        "phase": "阶段",
+        "reason": "原因",
+        "band": "码率档位",
+        "health": "视频健康",
+        "stall": "卡顿类型",
         "status": "状态"
       },
       "values": {
@@ -242,13 +253,21 @@
       "sending": "发送中..."
     },
     "errors": {
+      "authFailed": "登录状态已失效，请重新登录后再试",
+      "consoleReadyFailed": "主机未进入可串流状态，请确认主机已成功唤醒",
       "invalidAnswer": "远端串流应答无效",
       "invalidOffer": "本地串流请求无效",
+      "networkFailed": "网络请求失败，请检查网络后重试",
       "unknown": "未知错误",
       "connectionFailed": "串流连接失败",
       "connectionClosed": "串流连接已关闭",
+      "hostRemotePlayUnavailable": "主机端远程游玩当前不可用。请先检查主机网络与远程游玩设置，必要时重启主机后再试。",
+      "runtimeStartFailed": "串流播放器启动失败",
+      "sessionCreateFailed": "串流会话创建失败",
       "sessionMissing": "串流会话不存在",
+      "sessionReadyFailed": "串流会话未能进入可连接状态",
       "startFailed": "串流启动失败",
+      "wakeFailed": "主机唤醒失败，请确认主机在线且远程功能已开启",
       "remoteConsoleNotReady": "主机尚未完成远程串流注册，请稍候再试。诊断信息：{details}",
       "targetMissing": "缺少串流目标 ID",
       "powerOffFailed": "主机关机命令未被接受，请确认已启用远程功能后重试"
@@ -626,9 +645,10 @@
             "label": "自动",
             "description": "自动选择最合适的编码"
           },
-          "video_h264_4d": { "label": "H264-高" },
-          "video_h264_42e": { "label": "H264-中" },
-          "video_h264_420": { "label": "H264-低" }
+          "video_h264_64": { "label": "H264-高" },
+          "video_h264_4d": { "label": "H264-主" },
+          "video_h264_42e": { "label": "H264-受限基线" },
+          "video_h264_420": { "label": "H264-基线" }
         }
       },
       "polling_rate": {

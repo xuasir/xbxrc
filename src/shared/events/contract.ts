@@ -1,6 +1,9 @@
+import type { DataXcloudCatalogUpdatedRendererEvent } from './data'
 import type { AuthSessionReadyRendererEvent, AuthStateRendererEvent } from './auth'
 import type { GamepadDevicesChangedRendererEvent, GamepadPadSnapshotRendererEvent, GamepadRouteChangedRendererEvent, GamepadRuntimeSnapshotRendererEvent } from './gamepad'
+import type { StreamingStartupEventRendererEvent } from './streaming'
 import type { XbxEngineRuntimeEventRendererEvent } from './xbxengine'
+import { DATA_XCLOUD_CATALOG_UPDATED_CHANNEL } from './data'
 import { AUTH_SESSION_READY_CHANNEL, AUTH_STATE_CHANGED_CHANNEL } from './auth'
 import {
   GAMEPAD_DEVICES_CHANGED_CHANNEL,
@@ -10,10 +13,14 @@ import {
 
 } from './gamepad'
 import {
+  STREAMING_STARTUP_EVENT_CHANNEL,
+} from './streaming'
+import {
   STREAMING_XBXENGINE_RUNTIME_EVENT_CHANNEL,
 
 } from './xbxengine'
 
+export type { DataXcloudCatalogUpdatedRendererEvent } from './data'
 export type { AuthSessionReadyRendererEvent, AuthStateRendererEvent } from './auth'
 export type {
   GamepadDevicesChangedRendererEvent,
@@ -21,6 +28,7 @@ export type {
   GamepadRouteChangedRendererEvent,
   GamepadRuntimeSnapshotRendererEvent,
 } from './gamepad'
+export type { StreamingStartupEventRendererEvent } from './streaming'
 export type { XbxEngineRuntimeEventRendererEvent } from './xbxengine'
 
 /**
@@ -28,12 +36,14 @@ export type { XbxEngineRuntimeEventRendererEvent } from './xbxengine'
  * - 统一维护 renderer 可订阅的事件名称与载荷类型
  */
 export interface XBoxEventSchema {
+  'data.xcloudCatalogUpdated': DataXcloudCatalogUpdatedRendererEvent
   'auth.sessionReady': AuthSessionReadyRendererEvent
   'auth.stateChanged': AuthStateRendererEvent
   'gamepad.runtimeSnapshot': GamepadRuntimeSnapshotRendererEvent
   'gamepad.devicesChanged': GamepadDevicesChangedRendererEvent
   'gamepad.padSnapshot': GamepadPadSnapshotRendererEvent
   'gamepad.routeChanged': GamepadRouteChangedRendererEvent
+  'streaming.startupEvent': StreamingStartupEventRendererEvent
   'streaming.xbxEngineRuntimeEvent': XbxEngineRuntimeEventRendererEvent
 }
 
@@ -44,11 +54,13 @@ export type XBoxEventName = keyof XBoxEventSchema
  * - 主进程/预加载层共享同一份定义，避免字符串分散
  */
 export const EVENT_CHANNEL_MAP: Record<XBoxEventName, string> = {
+  'data.xcloudCatalogUpdated': DATA_XCLOUD_CATALOG_UPDATED_CHANNEL,
   'auth.sessionReady': AUTH_SESSION_READY_CHANNEL,
   'auth.stateChanged': AUTH_STATE_CHANGED_CHANNEL,
   'gamepad.runtimeSnapshot': GAMEPAD_RUNTIME_SNAPSHOT_CHANNEL,
   'gamepad.devicesChanged': GAMEPAD_DEVICES_CHANGED_CHANNEL,
   'gamepad.padSnapshot': GAMEPAD_PAD_SNAPSHOT_CHANNEL,
   'gamepad.routeChanged': GAMEPAD_ROUTE_CHANGED_CHANNEL,
+  'streaming.startupEvent': STREAMING_STARTUP_EVENT_CHANNEL,
   'streaming.xbxEngineRuntimeEvent': STREAMING_XBXENGINE_RUNTIME_EVENT_CHANNEL,
 }

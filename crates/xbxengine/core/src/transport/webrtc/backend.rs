@@ -1,7 +1,8 @@
 use crate::{
     api::backend::{
         PlaceholderXbxEngineMediaBackend, XbxEngineMediaBackend, XbxEngineMediaNegotiation,
-        XbxEngineMediaNegotiationRequest, XbxEngineMediaRuntimeStats, XbxEngineRenderFrame,
+        XbxEngineMediaNegotiationRequest, XbxEngineMediaRuntimeStats,
+        XbxEnginePendingRuntimeRecoveryAction, XbxEngineRenderFrame,
     },
     api::input::{XbxEngineInputBackend, XbxEngineInputStatus},
     api::runtime::XbxEngineNegotiationRuntimeConfig,
@@ -166,6 +167,22 @@ impl XbxEngineMediaBackend for XbxNegotiationBackend {
 
     fn snapshot_runtime_stats(&self) -> Result<XbxEngineMediaRuntimeStats, XbxEngineRuntimeError> {
         Ok(self.stack.snapshot_runtime_stats())
+    }
+
+    fn take_pending_runtime_recovery_action(
+        &mut self,
+    ) -> Result<Option<XbxEnginePendingRuntimeRecoveryAction>, XbxEngineRuntimeError> {
+        Ok(self.stack.take_pending_runtime_recovery_action())
+    }
+
+    fn update_host_video_timing(
+        &mut self,
+        host_display_interval_ms: Option<f64>,
+        host_frame_age_budget_ms: Option<f64>,
+    ) -> Result<(), XbxEngineRuntimeError> {
+        self.stack
+            .update_host_video_timing(host_display_interval_ms, host_frame_age_budget_ms);
+        Ok(())
     }
 
     fn take_latest_render_frame(

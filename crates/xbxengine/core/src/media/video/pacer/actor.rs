@@ -1,10 +1,11 @@
 use std::sync::mpsc::{self, Receiver, SyncSender, TrySendError};
 use std::sync::{Arc, Mutex};
 use std::thread;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 use crate::api::backend::XbxEngineMediaRuntimeStats;
 use crate::media::video::render::actor::RendererActorHandle;
+use crate::media::video::render::pacer::{FramePacingAction, FramePacingPolicy};
 use crate::media::video::types::DecodedFrame;
 
 pub enum PacerMsg {
@@ -54,8 +55,7 @@ fn run_pacer_loop(
     runtime_stats: Arc<Mutex<XbxEngineMediaRuntimeStats>>,
     refresh_interval_ms: u64,
 ) {
-    let max_sleep = Duration::from_millis(refresh_interval_ms.max(1));
-    let catch_up_threshold = Duration::from_millis(500);
+    let fallback_refresh_interval_ms = refresh_interval_ms;
     let mut catch_up_mode = false;
 
     while let Ok(msg) = rx.recv() {
@@ -65,46 +65,33 @@ fn run_pacer_loop(
                     stats.video_pacer_submit_count_total =
                         stats.video_pacer_submit_count_total.saturating_add(1);
                 }
-                let now = Instant::now();
-                let deadline = frame.pts;
-
-                if catch_up_mode {
-                    if now > deadline + catch_up_threshold {
+                let (effective_refresh_interval_ms, host_frame_age_budget_ms) =
+                    resolve_host_pacing_timing(
+                        runtime_stats.as_ref(),
+                        fallback_refresh_interval_ms,
+                    );
+                let pacing_policy = FramePacingPolicy::with_dynamic_budget(
+                    effective_refresh_interval_ms,
+                    host_frame_age_budget_ms.map(|budget_ms| budget_ms.round() as u64),
+                );
+                let decision = pacing_policy.decide(Instant::now(), frame.pts, catch_up_mode);
+                if decision.enter_catch_up_mode {
+                    catch_up_mode = true;
+                }
+                if decision.exit_catch_up_mode {
+                    catch_up_mode = false;
+                }
+                match decision.action {
+                    FramePacingAction::Drop => {
                         if let Ok(mut stats) = runtime_stats.lock() {
                             stats.video_pacer_drop_count_total =
                                 stats.video_pacer_drop_count_total.saturating_add(1);
                         }
                         continue;
-                    } else {
-                        catch_up_mode = false;
                     }
-                }
-
-                // If massive backlog, enter catch_up_mode
-                if now > deadline + catch_up_threshold {
-                    catch_up_mode = true;
-                    if let Ok(mut stats) = runtime_stats.lock() {
-                        stats.video_pacer_drop_count_total =
-                            stats.video_pacer_drop_count_total.saturating_add(1);
-                    }
-                    continue;
-                }
-
-                // If late, but within 500ms, just submit immediately (don't sleep)
-                if now >= deadline {
-                    // Late or Perfect time.
-                    // (removed strict drop if now > deadline + refresh_interval)
-                } else {
-                    // Early frame
-                    let sleep_time = deadline.duration_since(now);
-                    if sleep_time <= max_sleep {
-                        thread::sleep(sleep_time);
-                    } else {
-                        // 保护：playout 目标异常偏大时不阻塞渲染节奏，优先快速出帧。
-                        crate::xbx_log_debug!(
-                            "[XbxPacerActor] skip long sleep: {:.2}ms",
-                            sleep_time.as_millis()
-                        );
+                    FramePacingAction::SubmitNow => {}
+                    FramePacingAction::Sleep(duration) => {
+                        thread::sleep(duration);
                     }
                 }
 
@@ -126,4 +113,19 @@ fn run_pacer_loop(
             }
         }
     }
+}
+
+fn resolve_host_pacing_timing(
+    runtime_stats: &Mutex<XbxEngineMediaRuntimeStats>,
+    fallback_refresh_interval_ms: u64,
+) -> (u64, Option<f64>) {
+    let Ok(stats) = runtime_stats.lock() else {
+        return (fallback_refresh_interval_ms, None);
+    };
+    let refresh_interval_ms = stats
+        .host_display_interval_ms
+        .map(|interval_ms| interval_ms.round() as u64)
+        .filter(|interval_ms| *interval_ms > 0)
+        .unwrap_or(fallback_refresh_interval_ms);
+    (refresh_interval_ms, stats.host_frame_age_budget_ms)
 }

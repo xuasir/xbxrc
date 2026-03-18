@@ -1,6 +1,5 @@
 <script setup lang="ts">
-import type { StreamEnhancementMountState } from '../../streaming/types'
-import type { StreamMicrophoneSnapshot } from '../../streaming/types'
+import type { StreamEnhancementMountState, StreamMicrophoneSnapshot } from '../../streaming/types'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
@@ -60,9 +59,8 @@ const sourceLabel = computed(() =>
   min-height: 32px;
   padding: 6px 12px;
   background: var(--ui-scrim-bg);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--ui-border-subtle);
   border-radius: 999px;
-  backdrop-filter: blur(10px);
   color: var(--ui-page-text);
   pointer-events: none;
 }
@@ -71,7 +69,7 @@ const sourceLabel = computed(() =>
   width: 8px;
   height: 8px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.35);
+  background: var(--color-state-tertiary, rgba(255, 255, 255, 0.35));
 }
 
 .stream-microphone-status__dot--live {

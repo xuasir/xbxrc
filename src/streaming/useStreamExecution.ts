@@ -1,4 +1,5 @@
 import type { RouteLocationNormalizedLoaded, Router } from 'vue-router'
+import type { StreamingStartupEvent } from '@shared/rpc/streaming'
 import type { StreamRuntimePhase } from './runtime/runtime-contract'
 import type { SessionHealthSnapshot, SessionUiPhase } from './session'
 import type {
@@ -15,12 +16,15 @@ import type {
   StreamingSessionProgress,
 } from './types'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { events } from '../services/events'
 import { rpc } from '../services/rpc'
+import { buildStreamDiagnosticsSnapshot } from './diagnostics'
 import { bindStreamEnhancements, resolveStreamEnhancementMounts } from './enhancements'
 import { useStreamRuntimeHost } from './runtime/runtime-host'
 import {
   buildSessionHealthSnapshot,
   closeRemoteStreamSession,
+  createStartupAttemptId,
   createSessionProgressSubscription,
   createStreamRouteState,
   getRemoteSessionProgress,
@@ -29,8 +33,9 @@ import {
   persistStreamDisplayOptions,
   powerOffRemoteConsole,
   resolveStreamError,
+  resolveStartupPhasePrimaryStatusTextKey,
   sendTextToRemoteConsole,
-  startRemoteStreamSession,
+  startRemoteStreamSessionWithAttempt,
 } from './session'
 
 interface UseStreamExecutionOptions {
@@ -50,6 +55,7 @@ const RUNTIME_PHASE_STATUS_KEYS: Record<StreamRuntimePhase, string> = {
 
 const NO_FRAME_WARNING_DELAY_MS = 20_000
 const NO_FRAME_RECENT_ACTIVITY_MS = 20_000
+const STREAM_UI_HOST_RESET_EVENT = 'stream-ui-host-reset'
 
 type BrowserTimeout = number
 
@@ -64,9 +70,11 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
   const isConnected = ref(false)
   const statusText = ref('')
   const errorText = ref('')
+  const errorDiagnosticText = ref('')
   const errorKind = ref<StreamErrorKind>('none')
   const lifecyclePhase = ref<StreamSessionLifecyclePhase>('idle')
   const sessionId = ref('')
+  const startupAttemptId = ref('')
   const sessionExecution = ref<StreamingSessionExecution | null>(null)
   const streamConfig = ref<StreamConfigSnapshot>({})
   const sessionHealth = ref<SessionHealthSnapshot | null>(null)
@@ -76,6 +84,7 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
   const diagnosticsVisible = ref(false)
   const warningVisible = ref(false)
   let warningTimer: BrowserTimeout | null = null
+  let disposeStartupEvents: (() => void) | null = null
 
   const renderProjection = computed(() => sessionExecution.value?.render ?? null)
   const sessionMetadata = computed<StreamSessionMetadataProjection | null>(
@@ -85,26 +94,12 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
     () => sessionExecution.value?.capabilities ?? null,
   )
   const diagnostics = computed<StreamSessionDiagnosticsSnapshot>(() => {
-    const metadata = sessionMetadata.value
-    const region = metadata?.region
-    const regionName = region?.displayName ?? region?.shortName ?? region?.name ?? undefined
-    const transportPath = runtimeHost.performanceSnapshot.value?.transportPath?.trim() || undefined
-    const turnSource = metadata?.turnSource ?? 'none'
-
-    const serverHost = parseServerHost(metadata?.serverBaseUrl)
-    const isRecovering = lifecyclePhase.value === 'recovering'
-    const isRelayPath = transportPath?.toLowerCase().startsWith('relay') === true
-
-    return {
-      isActive: lifecyclePhase.value === 'playing' || lifecyclePhase.value === 'recovering',
-      regionName,
-      serverHost,
-      turnSource,
-      transportPath,
-      isRelayPath,
-      isRecovering,
-      hasNoVideoWarning: warningVisible.value,
-    }
+    return buildStreamDiagnosticsSnapshot({
+      metadata: sessionMetadata.value,
+      runtimeSnapshot: runtimeHost.performanceSnapshot.value,
+      lifecyclePhase: lifecyclePhase.value,
+      warningVisible: warningVisible.value,
+    })
   })
   const enhancements = computed<StreamEnhancementMountSnapshot>(() => {
     return resolveStreamEnhancementMounts({
@@ -220,6 +215,10 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
     warningVisible.value = false
   }
 
+  function resetStreamUiHost(): void {
+    window.dispatchEvent(new Event(STREAM_UI_HOST_RESET_EVENT))
+  }
+
   function applyResolvedError(error: unknown): void {
     const resolved = resolveStreamError({
       error,
@@ -227,8 +226,27 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
     })
     errorKind.value = resolved.kind
     errorText.value = resolved.message
+    errorDiagnosticText.value = resolved.diagnosticSummary ?? ''
     lifecyclePhase.value = 'failed'
     sessionUiPhase.value = 'failed'
+  }
+
+  function disposeStartupEventSubscription(): void {
+    if (disposeStartupEvents !== null) {
+      disposeStartupEvents()
+      disposeStartupEvents = null
+    }
+  }
+
+  function applyStartupEvent(event: StreamingStartupEvent): void {
+    if (event.attemptId !== startupAttemptId.value) {
+      return
+    }
+
+    statusText.value = options.t(resolveStartupPhasePrimaryStatusTextKey(event.phase))
+    if (event.phase !== 'ready' && event.phase !== 'failed') {
+      isLoading.value = true
+    }
   }
 
   async function loadStreamConfig(): Promise<void> {
@@ -270,6 +288,7 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
       errorKind.value = 'startFailed'
       errorText.value
         = progress.errorMessage ?? options.t('streamPage.errors.connectionFailed')
+      errorDiagnosticText.value = progress.errorMessage ?? ''
       isLoading.value = false
       return
     }
@@ -314,6 +333,7 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
 
     if (optionsInput?.navigateBack === true) {
       try {
+        resetStreamUiHost()
         await options.router.push(routeState.exitRoute.value)
       }
       finally {
@@ -329,6 +349,7 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
     if (routeState.targetId.value === '') {
       errorKind.value = 'targetMissing'
       errorText.value = options.t('streamPage.errors.targetMissing')
+      errorDiagnosticText.value = ''
       isLoading.value = false
       sessionUiPhase.value = 'failed'
       return
@@ -342,23 +363,30 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
       isConnected.value = false
       errorKind.value = 'none'
       errorText.value = ''
+      errorDiagnosticText.value = ''
       sessionHealth.value = null
+      startupAttemptId.value = createStartupAttemptId()
+      disposeStartupEventSubscription()
+      disposeStartupEvents = events.on('streaming.startupEvent', applyStartupEvent)
 
       await loadStreamConfig()
 
       sessionUiPhase.value = 'starting'
-      statusText.value = options.t('streamPage.status.creatingSession')
-      const started = await startRemoteStreamSession(
+      statusText.value = options.t('streamPage.status.preparing')
+      const started = await startRemoteStreamSessionWithAttempt(
         routeState.targetType.value,
         routeState.targetId.value,
+        startupAttemptId.value,
       )
 
       sessionExecution.value = started.execution
       sessionId.value = started.execution.session.id
+      disposeStartupEventSubscription()
       enableSessionHealthReporting()
       applySessionProgress(started.progress, 'start')
     }
     catch (error) {
+      disposeStartupEventSubscription()
       applyResolvedError(error)
       isLoading.value = false
     }
@@ -368,6 +396,7 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
     disableSessionHealthReporting()
     resetExecutionWarning()
     errorText.value = ''
+    errorDiagnosticText.value = ''
     errorKind.value = 'none'
     isLoading.value = true
     isConnected.value = false
@@ -416,6 +445,7 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
     isLoading.value = false
     errorKind.value = 'none'
     errorText.value = ''
+    errorDiagnosticText.value = ''
     sessionUiPhase.value = 'connected'
     if (lifecyclePhase.value !== 'recovering' && lifecyclePhase.value !== 'playing') {
       lifecyclePhase.value = 'starting'
@@ -459,6 +489,7 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
       handlePlayerError(options.t('streamPage.errors.powerOffFailed'))
       return
     }
+    resetStreamUiHost()
     await options.router.push(routeState.exitRoute.value)
   }
 
@@ -578,6 +609,7 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
     resetExecutionWarning()
     runtimeHost.setPerformanceEnabled(false)
     runtimeHost.setDiagnosticsEnabled(false)
+    disposeStartupEventSubscription()
     void closeExecution()
   })
 
@@ -614,6 +646,7 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
       isConnected,
       statusText,
       errorText,
+      errorDiagnosticText,
       errorKind,
       hasError: computed(() => errorText.value !== ''),
       lifecyclePhase,
@@ -660,18 +693,5 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
         warningVisible.value = false
       },
     },
-  }
-}
-
-function parseServerHost(baseUrl?: string | null): string | undefined {
-  if (baseUrl === undefined || baseUrl === null || baseUrl.trim() === '') {
-    return undefined
-  }
-
-  try {
-    return new URL(baseUrl).host || undefined
-  }
-  catch {
-    return undefined
   }
 }

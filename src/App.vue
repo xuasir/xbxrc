@@ -45,7 +45,7 @@ function warmupXcloudCatalog(): void {
   }
 
   xcloudWarmupPromise = rpc.data
-    .getXcloudTitles()
+    .primeXcloudTitles()
     .catch((error) => {
       console.warn('[App] warmup xcloud catalog failed:', error)
     })
@@ -116,8 +116,18 @@ onUnmounted(() => {
         </Transition>
       </AppShellLayout>
 
-      <div v-else class="app-view-plain">
-        <Transition name="page-fade" mode="out-in">
+      <div
+        v-else
+        class="app-view-plain"
+        :class="{ 'app-view-plain--stream': isStreamRoute }"
+      >
+        <component
+          v-if="isStreamRoute"
+          :is="Component"
+          :key="resolveRouteViewKey(currentRoute)"
+        />
+
+        <Transition v-else name="page-fade" mode="out-in">
           <component
             :is="Component"
             :key="resolveRouteViewKey(currentRoute)"
@@ -127,4 +137,3 @@ onUnmounted(() => {
     </RouterView>
   </div>
 </template>
-

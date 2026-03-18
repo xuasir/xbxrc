@@ -1,4 +1,8 @@
 import type { StreamingTargetType } from '@shared/rpc/streaming'
+import type {
+  StreamingStartupError,
+  StreamingStartupPhase,
+} from '@shared/rpc/streaming'
 import type { RouteLocationNormalizedLoaded } from 'vue-router'
 import type {
   DisplayOptionsValue,
@@ -139,6 +143,19 @@ export async function startRemoteStreamSession(targetType: StreamingTargetType, 
   return await rpc.streaming.startSession({
     targetType,
     targetId,
+    attemptId: crypto.randomUUID(),
+  })
+}
+
+export async function startRemoteStreamSessionWithAttempt(
+  targetType: StreamingTargetType,
+  targetId: string,
+  attemptId: string,
+) {
+  return await rpc.streaming.startSession({
+    targetType,
+    targetId,
+    attemptId,
   })
 }
 
@@ -224,7 +241,17 @@ export function buildSessionHealthSnapshot(
 export function resolveStreamError(input: StreamErrorInput): {
   kind: StreamErrorKind
   message: string
+  diagnosticSummary?: string
 } {
+  const structuredStartupError = extractStructuredStartupError(input.error)
+  if (structuredStartupError !== null) {
+    return {
+      kind: 'startFailed',
+      message: input.t(structuredStartupError.userMessageKey),
+      diagnosticSummary: structuredStartupError.diagnosticSummary,
+    }
+  }
+
   const message = normalizeErrorMessage(input.error)
   if (message.startsWith('remoteConsoleNotReady:')) {
     const details = message.slice('remoteConsoleNotReady:'.length)
@@ -233,6 +260,7 @@ export function resolveStreamError(input: StreamErrorInput): {
       message: input.t('streamPage.errors.remoteConsoleNotReady', {
         details,
       }),
+      diagnosticSummary: details,
     }
   }
   if (message === 'invalidAnswer') {
@@ -257,6 +285,75 @@ export function resolveStreamError(input: StreamErrorInput): {
     return { kind: 'unknown', message: input.t('streamPage.errors.unknown') }
   }
   return { kind: 'unknown', message }
+}
+
+export function resolveStartupPhaseStatusTextKey(
+  phase: StreamingStartupPhase,
+): string {
+  switch (phase) {
+    case 'resolvingContext':
+      return 'streamPage.status.preparing'
+    case 'wakingConsole':
+      return 'streamPage.status.wakingConsole'
+    case 'waitingConsoleReady':
+      return 'streamPage.status.waitingConsoleReady'
+    case 'creatingSession':
+      return 'streamPage.status.creatingSession'
+    case 'waitingSessionReady':
+      return 'streamPage.status.waitingSession'
+    case 'startingRuntime':
+      return 'streamPage.status.startingPlayer'
+    case 'ready':
+      return 'streamPage.status.connected'
+    case 'failed':
+      return 'streamPage.errorTitle'
+  }
+}
+
+export function resolveStartupPhasePrimaryStatusTextKey(
+  phase: StreamingStartupPhase,
+): string {
+  switch (phase) {
+    case 'resolvingContext':
+      return 'streamPage.status.preparing'
+    case 'wakingConsole':
+    case 'waitingConsoleReady':
+      return 'streamPage.status.connectingHost'
+    case 'creatingSession':
+    case 'waitingSessionReady':
+    case 'startingRuntime':
+      return 'streamPage.status.startingStream'
+    case 'ready':
+      return 'streamPage.status.connected'
+    case 'failed':
+      return 'streamPage.errorTitle'
+  }
+}
+
+export function createStartupAttemptId(): string {
+  return crypto.randomUUID()
+}
+
+function extractStructuredStartupError(error: unknown): StreamingStartupError | null {
+  if (!isRecord(error)) {
+    return null
+  }
+  const details = isRecord(error.details) ? error.details : null
+  if (details === null) {
+    return null
+  }
+  if (
+    typeof details.attemptId !== 'string'
+    || typeof details.phase !== 'string'
+    || typeof details.errorKind !== 'string'
+    || typeof details.userMessageKey !== 'string'
+    || typeof details.diagnosticSummary !== 'string'
+    || typeof details.rawMessage !== 'string'
+    || typeof details.retryable !== 'boolean'
+  ) {
+    return null
+  }
+  return details as unknown as StreamingStartupError
 }
 
 /**

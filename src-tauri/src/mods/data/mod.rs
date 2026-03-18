@@ -1,5 +1,7 @@
 pub mod cache_repository;
+pub mod events;
 pub mod rpc;
+pub mod runtime_state;
 pub mod service;
 pub mod services;
 pub mod session_resolver;
@@ -27,7 +29,9 @@ pub trait DataProvider: Send + Sync {
         console_id: &str,
         text: &str,
     ) -> Result<DataSendTextResult, String>;
-    async fn get_xcloud_titles(&self) -> Result<Vec<DataXcloudTitleSummary>, String>;
+    async fn get_xcloud_titles(&self) -> Result<DataXcloudCatalogPayload, String>;
+    async fn refresh_xcloud_titles(&self) -> Result<DataXcloudCatalogPayload, String>;
+    async fn prime_xcloud_titles(&self) -> Result<bool, String>;
 }
 
 pub type DataProviderRef = Arc<dyn DataProvider>;

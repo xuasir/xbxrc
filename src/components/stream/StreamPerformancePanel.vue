@@ -130,18 +130,16 @@ const metrics = computed(() => [
   right: 24px;
   z-index: 14;
   padding: 12px 14px;
-  background: rgba(8, 12, 18, 0.84);
-  backdrop-filter: blur(14px);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: var(--ui-surface-info-panel);
+  border: 1px solid var(--ui-border-subtle);
   border-radius: 14px;
-  color: #ffffff;
+  color: var(--ui-page-text);
   font-family: var(--ui-font-family-mono, monospace);
   font-size: 11px;
   pointer-events: none;
   display: flex;
   flex-direction: column;
   gap: 4px;
-  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.36);
 }
 
 .stream-performance--compact {
@@ -154,7 +152,7 @@ const metrics = computed(() => [
   font-size: 12px;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.72);
+  color: var(--ui-page-text-soft);
 }
 
 .stream-performance__metric {

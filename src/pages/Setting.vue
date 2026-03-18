@@ -7,7 +7,8 @@ import {
 } from '@shared/config/domain-definition'
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { syncHapticsConfig } from '@/navigation/core'
+import { navigationEngine, syncHapticsConfig } from '@/navigation/core'
+import { playNavSound, triggerNavHaptic } from '@/navigation/core/haptics'
 import { Focusable } from '@/navigation/core/vue'
 import { applyTheme } from '../app/theme'
 import BrandedLoading from '../components/common/BrandedLoading.vue'
@@ -96,6 +97,7 @@ const activeSingleSelectRow = ref<SettingRow | null>(null)
 const activeValueEditorRow = ref<SettingRow | null>(null)
 const activeDisplayOptionsRow = ref<SettingRow | null>(null)
 const { t, te } = useI18n()
+let disposeTabSwitch: (() => void) | undefined
 
 function translateOrFallback(key: string, fallback: string): string {
   return te(key) ? t(key) : fallback
@@ -528,6 +530,22 @@ function handleWindowKeydown(event: KeyboardEvent): void {
 onMounted(() => {
   void loadConfigGroups()
   window.addEventListener('keydown', handleWindowKeydown)
+
+  // 注册 LT/RT 二级 Tab 切换
+  disposeTabSwitch = navigationEngine.onTabSwitch((direction) => {
+    const tabKeys = tabs.value.map(tab => tab.key)
+    const currentIndex = tabKeys.indexOf(activeTabKey.value)
+    const nextIndex = direction === 'next' ? currentIndex + 1 : currentIndex - 1
+
+    if (nextIndex >= 0 && nextIndex < tabKeys.length) {
+      playNavSound('move')
+      triggerNavHaptic('move')
+      handleTabChange(tabKeys[nextIndex])
+    } else {
+      playNavSound('boundary')
+      triggerNavHaptic('boundary')
+    }
+  })
 })
 
 onUnmounted(() => {
@@ -535,6 +553,10 @@ onUnmounted(() => {
   activeValueEditorRow.value = null
   activeDisplayOptionsRow.value = null
   window.removeEventListener('keydown', handleWindowKeydown)
+  if (disposeTabSwitch !== undefined) {
+    disposeTabSwitch()
+    disposeTabSwitch = undefined
+  }
 })
 </script>
 

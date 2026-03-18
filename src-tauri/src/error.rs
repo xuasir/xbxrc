@@ -24,6 +24,12 @@ pub enum AppError {
     #[error("Streaming error: {0}")]
     Streaming(String),
 
+    #[error("Streaming error: {message}")]
+    StreamingDetailed {
+        message: String,
+        details: serde_json::Value,
+    },
+
     #[error("Gamepad error: {0}")]
     Gamepad(String),
 
@@ -53,12 +59,29 @@ impl AppError {
             AppError::Config(_) => "CONFIG_ERROR",
             AppError::Data(_) => "DATA_ERROR",
             AppError::Streaming(_) => "STREAMING_ERROR",
+            AppError::StreamingDetailed { .. } => "STREAMING_ERROR",
             AppError::Gamepad(_) => "GAMEPAD_ERROR",
             AppError::XbxEngine(_) => "XBXENGINE_ERROR",
             AppError::Io(_) => "IO_ERROR",
             AppError::Tauri(_) => "TAURI_ERROR",
             AppError::Network(_) => "NETWORK_ERROR",
             AppError::WebApi(_) => "WEBAPI_ERROR",
+        }
+    }
+}
+
+impl AppError {
+    pub fn details(&self) -> Option<&serde_json::Value> {
+        match self {
+            AppError::StreamingDetailed { details, .. } => Some(details),
+            _ => None,
+        }
+    }
+
+    pub fn streaming_detailed(message: impl Into<String>, details: serde_json::Value) -> Self {
+        Self::StreamingDetailed {
+            message: message.into(),
+            details,
         }
     }
 }

@@ -63,9 +63,13 @@ pub fn compile_codec(preference: CodecPreference) -> Option<Codec> {
             mime_type: "video/H264".to_string(),
             profiles: vec!["42e".to_string()],
         }),
-        CodecPreference::H264High => Some(Codec {
+        CodecPreference::H264Main => Some(Codec {
             mime_type: "video/H264".to_string(),
             profiles: vec!["4d".to_string()],
+        }),
+        CodecPreference::H264High => Some(Codec {
+            mime_type: "video/H264".to_string(),
+            profiles: vec!["64".to_string()],
         }),
         CodecPreference::MimeType { mime_type } => Some(Codec {
             mime_type,

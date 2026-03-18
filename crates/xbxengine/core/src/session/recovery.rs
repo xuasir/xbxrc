@@ -1,5 +1,17 @@
 use xbxengine_protocol::{XbxEngineReconnectReasonDto, XbxEngineTransportStateDto};
 
+/**
+ * 这是 session/runtime 级 watchdog：
+ * - 负责“整场会话是否长期卡死、是否需要整路 reconnect”这类粗粒度恢复
+ * - 不负责 webrtc 视频链里的 signal/diagnosis/policy/executor 四层恢复
+ *
+ * 也就是说：
+ * - `transport/webrtc/recovery_*` 处理媒体链内部恢复
+ * - 本模块只处理 runtime 级别的 session health / reconnect 判定
+ *
+ * 保留这层是为了让“会话级恢复”和“媒体级恢复”分权，避免再次揉成一团。
+ */
+
 pub const FIRST_FRAME_GRACE_MS: f64 = 8_000.0;
 pub const KEYFRAME_REQUEST_STALL_MS: f64 = 1_500.0;
 pub const KEYFRAME_LOSS_BURST_THRESHOLD: u8 = 2;
@@ -367,12 +379,23 @@ impl XbxEngineRuntimeHealth {
             .unwrap_or(false);
 
         let connected_at_ms = signals.transport.connected_at_ms.unwrap_or(now_ms);
-        let activity_at_ms = signals
+        // 把“媒体推进停滞”和“传输仍有新包”显式拆开：
+        // - packet 持续到达不代表 decode/render 还在推进
+        // - pipeline stall 场景里如果继续用 packet activity 覆盖 stalled_for，
+        //   会把已经冻结数秒的画面误判成“系统仍然活跃”
+        let latest_media_activity_at_ms = signals
             .media
             .latest_frame_rendered_at_ms
-            .or(signals.transport.latest_video_packet_arrival_at_ms)
-            .unwrap_or(connected_at_ms);
-        let stalled_for_ms = now_ms - activity_at_ms;
+            .or(signals.media.latest_frame_decoded_at_ms);
+        let media_stalled_for_ms = latest_media_activity_at_ms
+            .map(|at_ms| now_ms - at_ms)
+            .unwrap_or_else(|| {
+                signals
+                    .transport
+                    .latest_video_packet_arrival_at_ms
+                    .map(|at_ms| now_ms - at_ms)
+                    .unwrap_or(now_ms - connected_at_ms)
+            });
 
         if signals.media.latest_frame_rendered_at_ms.is_none()
             && signals
@@ -426,7 +449,7 @@ impl XbxEngineRuntimeHealth {
         if recent_nack_sent && !recent_nack_expired {
             return None;
         }
-        let should_request_keyframe = (stalled_for_ms >= effective_keyframe_request_stall_ms
+        let should_request_keyframe = (media_stalled_for_ms >= effective_keyframe_request_stall_ms
             || can_try_decoder_reset
             || (recent_nack_expired && signals.transport.latest_nack_expired_frame_is_keyframe))
             && !self.keyframe_requested_for_current_stall
@@ -463,7 +486,7 @@ impl XbxEngineRuntimeHealth {
                 reconnect_stall_ms
             };
 
-        if stalled_for_ms < effective_reconnect_stall_ms {
+        if media_stalled_for_ms < effective_reconnect_stall_ms {
             return None;
         }
         if self
@@ -669,6 +692,77 @@ mod tests {
             request_decoder_reset,
             Some(XbxEngineRecoveryAction::RequestDecoderReset)
         );
+    }
+
+    #[test]
+    fn recovery_signals_request_keyframe_on_pipeline_stall_even_with_fresh_packets() {
+        let now_ms = 10_000.0;
+        let action = XbxEngineRuntimeHealth {
+            connected_at_ms: Some(1_000.0),
+            ..Default::default()
+        }
+        .next_recovery_action_with_signals(
+            now_ms,
+            true,
+            XbxEngineRecoverySignals {
+                transport: XbxEngineTransportSignal {
+                    transport_connected: true,
+                    connected_at_ms: Some(1_000.0),
+                    latest_video_packet_arrival_at_ms: Some(now_ms - 20.0),
+                    latest_twcc_feedback_at_ms: Some(now_ms - 20.0),
+                    ..Default::default()
+                },
+                media: XbxEngineMediaSignal {
+                    latest_frame_decoded_at_ms: Some(now_ms - 5_000.0),
+                    latest_frame_rendered_at_ms: Some(now_ms - 5_000.0),
+                },
+                decode_render: XbxEngineDecodeRenderSignal {
+                    decoder_stalled: Some(false),
+                    render_stalled: Some(true),
+                    allow_decoder_reset: true,
+                },
+            },
+        );
+        assert_eq!(action, Some(XbxEngineRecoveryAction::RequestVideoKeyframe));
+    }
+
+    #[test]
+    fn recovery_signals_request_reconnect_on_pipeline_stall_even_with_fresh_packets() {
+        let now_ms = 10_000.0;
+        let action = XbxEngineRuntimeHealth {
+            connected_at_ms: Some(1_000.0),
+            keyframe_requested_for_current_stall: true,
+            decoder_reset_requested_for_current_stall: true,
+            last_keyframe_request_at_ms: Some(now_ms - 4_000.0),
+            last_decoder_reset_request_at_ms: Some(now_ms - 3_000.0),
+            ..Default::default()
+        }
+        .next_recovery_action_with_signals(
+            now_ms,
+            true,
+            XbxEngineRecoverySignals {
+                transport: XbxEngineTransportSignal {
+                    transport_connected: true,
+                    connected_at_ms: Some(1_000.0),
+                    latest_video_packet_arrival_at_ms: Some(now_ms - 20.0),
+                    latest_twcc_feedback_at_ms: Some(now_ms - 20.0),
+                    ..Default::default()
+                },
+                media: XbxEngineMediaSignal {
+                    latest_frame_decoded_at_ms: Some(now_ms - 9_000.0),
+                    latest_frame_rendered_at_ms: Some(now_ms - 9_000.0),
+                },
+                decode_render: XbxEngineDecodeRenderSignal {
+                    decoder_stalled: Some(false),
+                    render_stalled: Some(true),
+                    allow_decoder_reset: true,
+                },
+            },
+        );
+        assert!(matches!(
+            action,
+            Some(XbxEngineRecoveryAction::RequestReconnect(_))
+        ));
     }
 
     #[test]

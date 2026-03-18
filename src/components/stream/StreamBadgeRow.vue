@@ -21,10 +21,6 @@ const props = defineProps<StreamBadgeRowProps>()
 
 const { t } = useI18n()
 
-const visible = computed(() =>
-  props.mount.phase === 'mounted' && badges.value.length > 0,
-)
-
 const badges = computed<StreamBadgeViewModel[]>(() => {
   const items: StreamBadgeViewModel[] = []
 
@@ -62,6 +58,10 @@ const badges = computed<StreamBadgeViewModel[]>(() => {
 
   return items
 })
+
+const visible = computed(() =>
+  props.mount.phase === 'mounted' && badges.value.length > 0,
+)
 </script>
 
 <template>
@@ -98,9 +98,8 @@ const badges = computed<StreamBadgeViewModel[]>(() => {
   min-height: 32px;
   padding: 6px 10px;
   background: var(--ui-scrim-bg);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--ui-border-subtle);
   border-radius: 999px;
-  backdrop-filter: blur(10px);
   color: var(--ui-page-text);
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.24);
 }

@@ -1,16 +1,21 @@
 <script setup lang="ts">
-import { computed, nextTick, onActivated, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onActivated, onBeforeUnmount, onDeactivated, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
+import { navigationEngine } from '@/navigation/core'
+import { FOCUSABLE_SELECTOR } from '@/navigation/core/engine'
+import { playNavSound, triggerNavHaptic } from '@/navigation/core/haptics'
 import { Focusable } from '@/navigation/core/vue'
 import { resolveUiDensity } from '../app/ui-density'
 import BrandedLoading from '../components/common/BrandedLoading.vue'
 import GameCard from '../components/common/GameCard.vue'
 import HorizontalListRail from '../components/common/HorizontalListRail.vue'
 import { SPATIAL_NAV_NODE_IDS, SPATIAL_NAV_SCOPE_IDS } from '../navigation/spatial-nav.constants'
+import { events } from '../services/events'
 import { rpc } from '../services/rpc'
 
-type XcloudTitle = Awaited<ReturnType<typeof rpc.data.getXcloudTitles>>[number]
+type XcloudCatalogPayload = Awaited<ReturnType<typeof rpc.data.getXcloudTitles>>
+type XcloudTitle = XcloudCatalogPayload['titles'][number]
 
 interface XcloudGridCardViewModel {
   title: XcloudTitle
@@ -22,18 +27,37 @@ const { t } = useI18n()
 const router = useRouter()
 
 const isLoading = ref(false)
+const isRefreshing = ref(false)
 const appLevel = ref(0)
 const titles = ref<XcloudTitle[]>([])
+const cacheState = ref<XcloudCatalogPayload['cacheState']>('miss')
+const updatedAt = ref<number | undefined>(undefined)
 const searchKeyword = ref('')
 const viewportWidth = ref(typeof window === 'undefined' ? 1440 : window.innerWidth)
 const renderedTitleCount = ref(0)
 const loadMoreSentinelRef = ref<HTMLElement | null>(null)
 let loadMoreObserver: IntersectionObserver | null = null
+let disposeTabSwitch: (() => void) | undefined
+let disposeCatalogUpdated: (() => void) | undefined
+
+// LT/RT 区域导航的 section 标识符
+const XCLOUD_SECTION_IDS = ['xcloud-recent', 'xcloud-new', 'xcloud-all'] as const
 
 const normalizedSearchKeyword = computed(() => searchKeyword.value.trim().toLowerCase())
 const isSearching = computed(() => normalizedSearchKeyword.value !== '')
 const hasFullAccess = computed(() => appLevel.value >= 2)
 const uiDensity = computed(() => resolveUiDensity(viewportWidth.value))
+const showInitialLoading = computed(() => isLoading.value && titles.value.length === 0)
+const updatedAtLabel = computed(() => {
+  if (updatedAt.value === undefined) {
+    return ''
+  }
+
+  return new Date(updatedAt.value).toLocaleTimeString([], {
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+})
 
 const gridColumnCount = computed(() => {
   if (uiDensity.value === 'comfortable') {
@@ -187,27 +211,42 @@ function handlePrimaryAction(): void {
   void loadTitles(true)
 }
 
+function applyCatalogPayload(payload: XcloudCatalogPayload): void {
+  titles.value = Array.isArray(payload.titles) ? payload.titles : []
+  cacheState.value = payload.cacheState
+  updatedAt.value = payload.updatedAt
+  isRefreshing.value = payload.refreshing
+}
+
 async function loadTitles(forceRefresh = false): Promise<void> {
-  if (isLoading.value) {
+  if (isLoading.value || (forceRefresh && isRefreshing.value)) {
     return
   }
 
-  if (!forceRefresh && titles.value.length > 0) {
-    return
+  const shouldBlock = titles.value.length === 0
+  if (shouldBlock) {
+    isLoading.value = true
+  }
+  else if (forceRefresh) {
+    isRefreshing.value = true
   }
 
-  isLoading.value = true
   try {
-    const [authState, xcloudTitles] = await Promise.all([
+    const [authState, catalogPayload] = await Promise.all([
       rpc.auth.getState(),
-      rpc.data.getXcloudTitles(),
+      forceRefresh ? rpc.data.refreshXcloudTitles() : rpc.data.getXcloudTitles(),
     ])
     appLevel.value = authState.appLevel
-    titles.value = Array.isArray(xcloudTitles) ? xcloudTitles : []
+    applyCatalogPayload(catalogPayload)
   }
   catch (error) {
     console.warn('[XCloud] load titles failed:', error)
-    titles.value = []
+    if (titles.value.length === 0) {
+      titles.value = []
+      cacheState.value = 'miss'
+      updatedAt.value = undefined
+    }
+    isRefreshing.value = false
   }
   finally {
     isLoading.value = false
@@ -217,27 +256,89 @@ async function loadTitles(forceRefresh = false): Promise<void> {
 onMounted(() => {
   handleResize()
   window.addEventListener('resize', handleResize)
+  disposeCatalogUpdated = events.on('data.xcloudCatalogUpdated', (payload) => {
+    applyCatalogPayload(payload)
+  })
   void loadTitles()
   void nextTick(setupLoadMoreObserver)
+  registerTabSwitch()
 })
 
 onActivated(() => {
-  if (titles.value.length === 0 && !isLoading.value) {
+  if (!isLoading.value) {
     void loadTitles()
   }
   void nextTick(setupLoadMoreObserver)
+  registerTabSwitch()
+})
+
+onDeactivated(() => {
+  unregisterTabSwitch()
 })
 
 onBeforeUnmount(() => {
   window.removeEventListener('resize', handleResize)
   loadMoreObserver?.disconnect()
   loadMoreObserver = null
+  if (disposeCatalogUpdated !== undefined) {
+    disposeCatalogUpdated()
+    disposeCatalogUpdated = undefined
+  }
+  unregisterTabSwitch()
 })
+
+// 注册 LT/RT 区域切换
+function registerTabSwitch(): void {
+  if (disposeTabSwitch !== undefined) return
+
+  disposeTabSwitch = navigationEngine.onTabSwitch((direction) => {
+    // 动态构建当前可见的 section 列表
+    const visibleSections = XCLOUD_SECTION_IDS
+      .map(id => document.querySelector(`[data-nav-section="${id}"]`) as HTMLElement | null)
+      .filter((el): el is HTMLElement => el !== null)
+
+    if (visibleSections.length === 0) return
+
+    // 查找当前焦点所在 section 的索引
+    const focused = document.querySelector('[data-focused="true"]') as HTMLElement | null
+    let currentIndex = -1
+    if (focused) {
+      currentIndex = visibleSections.findIndex(s => s.contains(focused))
+    }
+
+    // 计算目标索引
+    const nextIndex = direction === 'next'
+      ? (currentIndex === -1 ? 0 : currentIndex + 1)
+      : (currentIndex === -1 ? visibleSections.length - 1 : currentIndex - 1)
+
+    if (nextIndex < 0 || nextIndex >= visibleSections.length) {
+      playNavSound('boundary')
+      triggerNavHaptic('boundary')
+      return
+    }
+
+    // 聚焦目标区域的第一个可聚焦元素
+    const targetSection = visibleSections[nextIndex]
+    const firstFocusable = targetSection.querySelector(FOCUSABLE_SELECTOR) as HTMLElement | null
+    if (firstFocusable) {
+      playNavSound('move')
+      triggerNavHaptic('move')
+      navigationEngine.focusElement(firstFocusable, false)
+    }
+  })
+}
+
+function unregisterTabSwitch(): void {
+  if (disposeTabSwitch !== undefined) {
+    disposeTabSwitch()
+    disposeTabSwitch = undefined
+  }
+}
 </script>
 
 <template>
   <section class="xcloud-page ui-page-shell" :aria-label="t('xcloudPage.ariaLabel')">
-    <div v-if="isLoading" class="xcloud-page__loading">
+    <div v-if="showInitialLoading" class="xcloud-page__loading">
       <BrandedLoading :label="t('xcloudPage.loading')" />
     </div>
 
@@ -293,6 +394,15 @@ onBeforeUnmount(() => {
             >
           </label>
         </div>
+        <p v-if="isRefreshing" class="xcloud-page__refreshing-hint">
+          {{ t('xcloudPage.refreshingHint') }}
+        </p>
+        <p
+          v-else-if="cacheState === 'stale' && updatedAtLabel !== ''"
+          class="xcloud-page__refreshing-hint"
+        >
+          {{ t('xcloudPage.cachedHint', { time: updatedAtLabel }) }}
+        </p>
       </header>
 
       <section
@@ -341,6 +451,7 @@ onBeforeUnmount(() => {
           <HorizontalListRail
             v-if="recentCards.length > 0"
             class="xcloud-page__rail"
+            data-nav-section="xcloud-recent"
             :title="t('xcloudPage.sections.recent.title')"
             :hint="t('xcloudPage.sections.recent.hint', { count: recentCards.length })"
             :aria-label="t('xcloudPage.sections.recent.title')"
@@ -361,6 +472,7 @@ onBeforeUnmount(() => {
           <HorizontalListRail
             v-if="newCards.length > 0"
             class="xcloud-page__rail"
+            data-nav-section="xcloud-new"
             :title="t('xcloudPage.sections.new.title')"
             :hint="t('xcloudPage.sections.new.hint', { count: newCards.length })"
             :aria-label="t('xcloudPage.sections.new.title')"
@@ -380,7 +492,7 @@ onBeforeUnmount(() => {
         </template>
 
         <!-- 所有游戏/搜索结果 网格 -->
-        <section class="xcloud-page__grid-section">
+        <section class="xcloud-page__grid-section" data-nav-section="xcloud-all">
           <header class="xcloud-page__grid-header">
             <h2 class="xcloud-page__grid-title">
               {{ isSearching ? t('xcloudPage.searchLabel') : t('xcloudPage.sections.all.title') }}
@@ -475,6 +587,13 @@ onBeforeUnmount(() => {
   max-width: 620px;
   font-size: 13px;
   line-height: 1.45;
+  color: var(--color-text-secondary);
+}
+
+.xcloud-page__refreshing-hint {
+  padding-bottom: 8px;
+  font-size: 12px;
+  line-height: 1.4;
   color: var(--color-text-secondary);
 }
 

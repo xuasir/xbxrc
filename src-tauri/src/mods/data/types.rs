@@ -112,3 +112,38 @@ pub struct DataXcloudTitleSummary {
     pub is_recently_played: bool,
     pub is_new: bool,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum DataXcloudCatalogCacheState {
+    Miss,
+    Fresh,
+    Stale,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DataXcloudCatalogPayload {
+    pub titles: Vec<DataXcloudTitleSummary>,
+    pub cache_state: DataXcloudCatalogCacheState,
+    pub updated_at: Option<u64>,
+    pub refreshing: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DataXcloudCatalogUpdatedEvent {
+    pub titles: Vec<DataXcloudTitleSummary>,
+    pub cache_state: DataXcloudCatalogCacheState,
+    pub updated_at: Option<u64>,
+    pub refreshing: bool,
+    pub reason: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct XcloudCatalogCacheScope {
+    pub account_id: String,
+    pub region_host: String,
+    pub language: String,
+    pub market: String,
+}

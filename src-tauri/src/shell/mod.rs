@@ -81,6 +81,23 @@ async fn build_services(
             AppError::Internal(format!("Failed to init runtime trace: {error}"))
         })?,
     );
+    xbxengine::set_log_sink({
+        let runtime_trace = runtime_trace.clone();
+        Arc::new(move |record| {
+            runtime_trace.record_log(
+                "xbxengine",
+                "runtimeLog",
+                None,
+                serde_json::json!({
+                    "level": record.level.as_str(),
+                    "message": record.message,
+                    "tsMs": record.ts_ms,
+                }),
+            );
+        })
+    });
+    // 现阶段仍保留终端输出，等 trace/observability 完整统一后再默认关闭。
+    xbxengine::set_log_sink_min_level(Some(xbxengine::XbxLogLevel::Warn));
     log::info!(
         "Runtime trace recorder initialized at {}",
         runtime_trace.path().display()
@@ -107,6 +124,7 @@ async fn build_services(
         runtime_trace.clone(),
     ));
     let streaming_service = Arc::new(mods::streaming::StreamingService::new(
+        app_handle.clone(),
         auth_provider.clone(),
         config_provider.clone(),
         data_service.clone(),
@@ -148,6 +166,7 @@ async fn build_services(
         let fullscreen = state.startup_flags.read().await.fullscreen;
         let _ = main_window.set_fullscreen(fullscreen);
     }
+    mods::native_video::configure_main_window_video_host(&app_handle);
 
     Ok(state)
 }

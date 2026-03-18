@@ -2,10 +2,12 @@
 import type { EventUnsubscribe } from '@shared/events/client'
 import type { GamepadRuntimeSnapshotDto } from '@shared/gamepad/contract'
 import type { AppPageRouteName, TopNavNodeKey } from '../../navigation/spatial-nav.constants'
-import { FocusScope } from '@/navigation/core/vue'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
+import { navigationEngine } from '@/navigation/core'
+import { playNavSound, triggerNavHaptic } from '@/navigation/core/haptics'
+import { FocusScope } from '@/navigation/core/vue'
 import controllerStatusIcon from '../../assets/nav/no-ctrl.svg'
 import settingIcon from '../../assets/nav/setting.svg'
 import xboxLogoIcon from '../../assets/nav/xbox-logo.svg'
@@ -46,6 +48,10 @@ const isLoggingOut = ref(false)
 let disposeAuthSessionReady: EventUnsubscribe | undefined
 let disposeGamepadRuntimeSnapshot: EventUnsubscribe | undefined
 const gamepadSnapshot = ref<GamepadRuntimeSnapshotDto | null>(null)
+
+// LB/RB 一级页面切换顺序
+const PAGE_NAV_ORDER: AppPageRouteName[] = ['xhome', 'xcloud', 'setting']
+let disposePageSwitch: (() => void) | undefined
 
 const activeNav = computed<'xhome' | 'xcloud' | 'setting'>(() => {
   if (route.name === 'xcloud') {
@@ -238,6 +244,22 @@ onMounted(() => {
     gamepadSnapshot.value = snapshot
   })
   window.addEventListener('keydown', handleEscapeKeydown)
+
+  // 注册 LB/RB 一级页面切换
+  disposePageSwitch = navigationEngine.onPageSwitch((direction) => {
+    const currentIndex = PAGE_NAV_ORDER.indexOf(activeNav.value)
+    const nextIndex = direction === 'next' ? currentIndex + 1 : currentIndex - 1
+
+    if (nextIndex >= 0 && nextIndex < PAGE_NAV_ORDER.length) {
+      playNavSound('move')
+      triggerNavHaptic('move')
+      void router.push({ name: PAGE_NAV_ORDER[nextIndex] })
+    } else {
+      // 已到边界
+      playNavSound('boundary')
+      triggerNavHaptic('boundary')
+    }
+  })
 })
 
 onUnmounted(() => {
@@ -250,6 +272,10 @@ onUnmounted(() => {
     disposeGamepadRuntimeSnapshot = undefined
   }
   window.removeEventListener('keydown', handleEscapeKeydown)
+  if (disposePageSwitch !== undefined) {
+    disposePageSwitch()
+    disposePageSwitch = undefined
+  }
 })
 </script>
 

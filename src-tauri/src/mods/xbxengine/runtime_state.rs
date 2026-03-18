@@ -15,7 +15,7 @@ use xbxengine_protocol::{
 };
 
 use crate::error::{AppError, AppResult};
-use crate::mods::native_video::NativeVideoRegistryRef;
+use crate::mods::native_video::{NativeVideoRegistryRef, NativeVideoViewportState};
 use crate::mods::runtime_trace::RuntimeTraceRecorderRef;
 use crate::mods::streaming::{
     StreamingCloseSessionParams, StreamingExchangeOfferParams, StreamingPollIceParams,
@@ -33,6 +33,7 @@ type TauriXbxEngineRuntime = XbxEngineRuntime<
 /// 运行态只负责持有 runtime 实例和并发访问。
 pub struct XbxEngineRuntimeState {
     runtime: StdMutex<TauriXbxEngineRuntime>,
+    native_video: NativeVideoRegistryRef,
     runtime_trace: RuntimeTraceRecorderRef,
     last_stats_trace_at: StdMutex<Option<Instant>>,
     last_trace_observation: StdMutex<RuntimeTraceObservationState>,
@@ -48,12 +49,32 @@ struct RuntimeTraceObservationState {
     escalation_observation_id: Option<u64>,
     bwe_observation_id: Option<u64>,
     twcc_observation_id: Option<u64>,
+    data_channel_catalog_observation_id: Option<u64>,
     recovery_keyframe_request_count: Option<u64>,
     recovery_decoder_reset_count: Option<u64>,
     recovery_reconnect_count: Option<u64>,
     transport_state: Option<String>,
     transport_path: Option<String>,
+    latest_video_track_status: Option<xbxengine_protocol::XbxEngineVideoTrackStatusDto>,
     video_remb_bps: Option<u32>,
+    session_phase: Option<String>,
+    transport_policy_profile: Option<String>,
+    recovery_policy_profile: Option<String>,
+    recovery_diagnosis: Option<String>,
+    recovery_coupling_mode: Option<String>,
+    recovery_coupling_summary: Option<String>,
+    direct_gaming_bitrate_band: Option<String>,
+    runtime_summary: Option<String>,
+    primary_issue_chain: Option<String>,
+    latest_decision_summary: Option<String>,
+    video_health: Option<String>,
+    stall_kind: Option<String>,
+    host_present_submit_count_total: Option<u64>,
+    host_present_drop_count_total: Option<u64>,
+    host_present_overwrite_count_total: Option<u64>,
+    host_descriptor_upload_mode: Option<String>,
+    host_descriptor_metal_import_count_total: Option<u64>,
+    host_descriptor_cpu_upload_count_total: Option<u64>,
 }
 
 impl XbxEngineRuntimeState {
@@ -77,7 +98,7 @@ impl XbxEngineRuntimeState {
             XbxEngineRuntimeConfig::default(),
             TauriXbxEngineHostBridge {
                 app_handle,
-                native_video,
+                native_video: native_video.clone(),
                 runtime_trace: runtime_trace.clone(),
                 cancellation_epoch: cancellation_epoch.clone(),
             },
@@ -88,6 +109,7 @@ impl XbxEngineRuntimeState {
         );
         Self {
             runtime: StdMutex::new(runtime),
+            native_video,
             runtime_trace,
             last_stats_trace_at: StdMutex::new(None),
             last_trace_observation: StdMutex::new(RuntimeTraceObservationState::default()),
@@ -102,7 +124,7 @@ impl XbxEngineRuntimeState {
     ) -> Result<(), XbxEngineRuntimeError> {
         let command_value = serde_json::to_value(&command).unwrap_or(serde_json::Value::Null);
         let session_id = extract_command_session_id(&command);
-        self.runtime_trace.record_value(
+        self.runtime_trace.record_event(
             "xbxengine",
             "controlCommand",
             session_id.as_deref(),
@@ -139,8 +161,15 @@ impl XbxEngineRuntimeState {
             .runtime
             .lock()
             .map_err(|_| XbxEngineRuntimeError::new("xbxEngineRuntimeLockPoisoned"))?;
+        let viewport_id = runtime
+            .snapshot()
+            .viewport
+            .as_ref()
+            .map(|viewport| viewport.viewport_id.clone());
+        self.sync_native_video_host_timing(&mut runtime, viewport_id.as_deref());
         runtime.tick();
-        let stats_snapshot = runtime.snapshot_stats();
+        let mut stats_snapshot = runtime.snapshot_stats();
+        self.apply_native_video_host_stats(&mut stats_snapshot, viewport_id.as_deref());
         let session_id = self
             .active_session_id
             .lock()
@@ -160,23 +189,37 @@ impl XbxEngineRuntimeState {
         if should_record {
             *last_stats_trace_at = Some(now);
             if let Ok(snapshot) = serde_json::to_value(&stats_snapshot) {
-                self.runtime_trace.record_value(
+                self.runtime_trace.record_snapshot(
                     "xbxengine",
                     "statsSnapshot",
                     session_id.as_deref(),
                     snapshot,
                 );
             }
+            self.runtime_trace.record_snapshot(
+                "xbxengine",
+                "observabilitySnapshot",
+                session_id.as_deref(),
+                build_observability_snapshot(&stats_snapshot),
+            );
         }
         Ok(())
     }
 
     pub fn snapshot_stats(&self) -> AppResult<serde_json::Value> {
-        let runtime = self
+        let mut runtime = self
             .runtime
             .lock()
             .map_err(|_| AppError::XbxEngine("Failed to lock xbxengine runtime".to_string()))?;
-        Ok(serde_json::to_value(runtime.snapshot_stats())?)
+        let viewport_id = runtime
+            .snapshot()
+            .viewport
+            .as_ref()
+            .map(|viewport| viewport.viewport_id.clone());
+        self.sync_native_video_host_timing(&mut runtime, viewport_id.as_deref());
+        let mut stats = runtime.snapshot_stats();
+        self.apply_native_video_host_stats(&mut stats, viewport_id.as_deref());
+        Ok(serde_json::to_value(stats)?)
     }
 
     fn record_runtime_trace_observations(
@@ -191,7 +234,7 @@ impl XbxEngineRuntimeState {
         if let Some(packet_gap) = stats.latest_video_packet_gap.as_ref() {
             if observation_state.packet_gap_observation_id != Some(packet_gap.observation_id) {
                 observation_state.packet_gap_observation_id = Some(packet_gap.observation_id);
-                self.runtime_trace.record(
+                self.runtime_trace.record_event(
                     "xbxengine",
                     "packetGapDetected",
                     session_id,
@@ -220,7 +263,7 @@ impl XbxEngineRuntimeState {
                 } else {
                     "frameDropped"
                 };
-                self.runtime_trace.record(
+                self.runtime_trace.record_event(
                     "xbxengine",
                     event_name,
                     session_id,
@@ -245,7 +288,7 @@ impl XbxEngineRuntimeState {
                     "recovered" | "recoveredLate" => "nackRecovered",
                     _ => "nackSent",
                 };
-                self.runtime_trace.record(
+                self.runtime_trace.record_event(
                     "xbxengine",
                     event_name,
                     session_id,
@@ -270,7 +313,7 @@ impl XbxEngineRuntimeState {
         if let Some(escalation) = stats.latest_video_escalation_observation.as_ref() {
             if observation_state.escalation_observation_id != Some(escalation.observation_id) {
                 observation_state.escalation_observation_id = Some(escalation.observation_id);
-                self.runtime_trace.record(
+                self.runtime_trace.record_decision(
                     "xbxengine",
                     "videoEscalation",
                     session_id,
@@ -287,7 +330,7 @@ impl XbxEngineRuntimeState {
         if let Some(bwe) = stats.latest_video_bwe_observation.as_ref() {
             if observation_state.bwe_observation_id != Some(bwe.observation_id) {
                 observation_state.bwe_observation_id = Some(bwe.observation_id);
-                self.runtime_trace.record(
+                self.runtime_trace.record_decision(
                     "xbxengine",
                     "bweUpdated",
                     session_id,
@@ -316,7 +359,7 @@ impl XbxEngineRuntimeState {
         if let Some(twcc) = stats.latest_video_twcc_observation.as_ref() {
             if observation_state.twcc_observation_id != Some(twcc.observation_id) {
                 observation_state.twcc_observation_id = Some(twcc.observation_id);
-                self.runtime_trace.record(
+                self.runtime_trace.record_event(
                     "xbxengine",
                     "twccFeedbackSent",
                     session_id,
@@ -339,6 +382,121 @@ impl XbxEngineRuntimeState {
             }
         }
 
+        if let Some(observation) = stats
+            .latest_data_channel_message_catalog_observation
+            .as_ref()
+        {
+            if observation_state.data_channel_catalog_observation_id
+                != Some(observation.observation_id)
+            {
+                observation_state.data_channel_catalog_observation_id =
+                    Some(observation.observation_id);
+                self.runtime_trace.record_event(
+                    "xbxengine",
+                    "channelMessageCatalog",
+                    session_id,
+                    serde_json::json!({
+                        "observationId": observation.observation_id,
+                        "direction": observation.direction,
+                        "channel": observation.channel,
+                        "kindType": observation.kind_type,
+                        "kindMessage": observation.kind_message,
+                        "target": observation.target,
+                        "keys": observation.keys,
+                        "payloadLen": observation.payload_len,
+                        "observedAtMs": observation.observed_at_ms,
+                    }),
+                );
+            }
+        }
+
+        if observation_state.session_phase != stats.session_phase
+            || observation_state.transport_policy_profile != stats.transport_policy_profile
+            || observation_state.recovery_policy_profile != stats.recovery_policy_profile
+            || observation_state.recovery_diagnosis != stats.recovery_diagnosis
+            || observation_state.recovery_coupling_mode != stats.recovery_coupling_mode
+            || observation_state.recovery_coupling_summary != stats.recovery_coupling_summary
+            || observation_state.direct_gaming_bitrate_band != stats.direct_gaming_bitrate_band
+            || observation_state.runtime_summary != stats.runtime_summary
+            || observation_state.primary_issue_chain != stats.primary_issue_chain
+            || observation_state.latest_decision_summary != stats.latest_decision_summary
+            || observation_state.video_health != stats.video_health
+            || observation_state.stall_kind != stats.stall_kind
+        {
+            observation_state.session_phase = stats.session_phase.clone();
+            observation_state.transport_policy_profile = stats.transport_policy_profile.clone();
+            observation_state.recovery_policy_profile = stats.recovery_policy_profile.clone();
+            observation_state.recovery_diagnosis = stats.recovery_diagnosis.clone();
+            observation_state.recovery_coupling_mode = stats.recovery_coupling_mode.clone();
+            observation_state.recovery_coupling_summary = stats.recovery_coupling_summary.clone();
+            observation_state.direct_gaming_bitrate_band = stats.direct_gaming_bitrate_band.clone();
+            observation_state.runtime_summary = stats.runtime_summary.clone();
+            observation_state.primary_issue_chain = stats.primary_issue_chain.clone();
+            observation_state.latest_decision_summary = stats.latest_decision_summary.clone();
+            observation_state.video_health = stats.video_health.clone();
+            observation_state.stall_kind = stats.stall_kind.clone();
+            self.runtime_trace.record_state(
+                "xbxengine",
+                "directGamingState",
+                session_id,
+                serde_json::json!({
+                    "sessionPhase": stats.session_phase,
+                    "transportPolicyProfile": stats.transport_policy_profile,
+                    "recoveryPolicyProfile": stats.recovery_policy_profile,
+                    "recoveryDiagnosis": stats.recovery_diagnosis,
+                    "recoveryCouplingMode": stats.recovery_coupling_mode,
+                    "recoveryCouplingSummary": stats.recovery_coupling_summary,
+                    "directGamingBitrateBand": stats.direct_gaming_bitrate_band,
+                    "runtimeSummary": stats.runtime_summary,
+                    "primaryIssueChain": stats.primary_issue_chain,
+                    "latestDecisionSummary": stats.latest_decision_summary,
+                    "videoHealth": stats.video_health,
+                    "stallKind": stats.stall_kind,
+                }),
+            );
+        }
+
+        if observation_state.host_present_submit_count_total
+            != stats.video_present_submit_count_total
+            || observation_state.host_present_drop_count_total
+                != stats.video_present_drop_count_total
+            || observation_state.host_present_overwrite_count_total
+                != stats.video_present_overwrite_count_total
+            || observation_state.host_descriptor_upload_mode
+                != stats.video_present_descriptor_upload_mode
+            || observation_state.host_descriptor_metal_import_count_total
+                != stats.video_present_descriptor_metal_import_count_total
+            || observation_state.host_descriptor_cpu_upload_count_total
+                != stats.video_present_descriptor_cpu_upload_count_total
+        {
+            observation_state.host_present_submit_count_total =
+                stats.video_present_submit_count_total;
+            observation_state.host_present_drop_count_total = stats.video_present_drop_count_total;
+            observation_state.host_present_overwrite_count_total =
+                stats.video_present_overwrite_count_total;
+            observation_state.host_descriptor_upload_mode =
+                stats.video_present_descriptor_upload_mode.clone();
+            observation_state.host_descriptor_metal_import_count_total =
+                stats.video_present_descriptor_metal_import_count_total;
+            observation_state.host_descriptor_cpu_upload_count_total =
+                stats.video_present_descriptor_cpu_upload_count_total;
+            self.runtime_trace.record_state(
+                "xbxengine",
+                "hostPresentState",
+                session_id,
+                serde_json::json!({
+                    "presentFps": stats.present_fps,
+                    "presentSubmitCountTotal": stats.video_present_submit_count_total,
+                    "presentDropCountTotal": stats.video_present_drop_count_total,
+                    "presentOverwriteCountTotal": stats.video_present_overwrite_count_total,
+                    "presentAgeMs": stats.present_age_ms,
+                    "descriptorUploadMode": stats.video_present_descriptor_upload_mode,
+                    "descriptorMetalImportCountTotal": stats.video_present_descriptor_metal_import_count_total,
+                    "descriptorCpuUploadCountTotal": stats.video_present_descriptor_cpu_upload_count_total,
+                }),
+            );
+        }
+
         if observation_state.recovery_keyframe_request_count
             != stats.recovery_keyframe_request_count
         {
@@ -346,7 +504,7 @@ impl XbxEngineRuntimeState {
                 stats.recovery_keyframe_request_count;
             if let Some(count) = stats.recovery_keyframe_request_count {
                 if count > 0 && stats.last_recovery_action.as_deref() == Some("keyframe") {
-                    self.runtime_trace.record(
+                    self.runtime_trace.record_decision(
                         "xbxengine",
                         "keyframeRequested",
                         session_id,
@@ -364,7 +522,7 @@ impl XbxEngineRuntimeState {
             observation_state.recovery_decoder_reset_count = stats.recovery_decoder_reset_count;
             if let Some(count) = stats.recovery_decoder_reset_count {
                 if count > 0 && stats.last_recovery_action.as_deref() == Some("decoderReset") {
-                    self.runtime_trace.record(
+                    self.runtime_trace.record_decision(
                         "xbxengine",
                         "decoderResetRequested",
                         session_id,
@@ -387,7 +545,7 @@ impl XbxEngineRuntimeState {
         {
             observation_state.transport_state = stats.transport_state.clone();
             observation_state.transport_path = stats.transport_path.clone();
-            self.runtime_trace.record(
+            self.runtime_trace.record_state(
                 "xbxengine",
                 "transportObservation",
                 session_id,
@@ -398,10 +556,32 @@ impl XbxEngineRuntimeState {
             );
         }
 
+        if observation_state.latest_video_track_status != stats.latest_video_track_status {
+            observation_state.latest_video_track_status = stats.latest_video_track_status.clone();
+            if let Some(status) = stats.latest_video_track_status.as_ref() {
+                self.runtime_trace.record_state(
+                    "xbxengine",
+                    "videoTrackState",
+                    session_id,
+                    serde_json::json!({
+                        "state": status.state,
+                        "videoWidth": status.video_width,
+                        "videoHeight": status.video_height,
+                        "mimeType": status.mime_type,
+                        "transportState": status.transport_state,
+                        "videoBytesTotal": status.video_bytes_total,
+                        "videoPacketCountTotal": status.video_packet_count_total,
+                        "audioBytesTotal": status.audio_bytes_total,
+                        "observedAtMs": status.observed_at_ms,
+                    }),
+                );
+            }
+        }
+
         if observation_state.video_remb_bps != stats.video_remb_bps {
             observation_state.video_remb_bps = stats.video_remb_bps;
             if let Some(video_remb_bps) = stats.video_remb_bps {
-                self.runtime_trace.record(
+                self.runtime_trace.record_state(
                     "xbxengine",
                     "rembUpdated",
                     session_id,
@@ -412,6 +592,68 @@ impl XbxEngineRuntimeState {
             }
         }
     }
+
+    fn apply_native_video_host_stats(
+        &self,
+        stats: &mut XbxEngineStatsDto,
+        viewport_id: Option<&str>,
+    ) {
+        let Some(viewport_id) = viewport_id else {
+            return;
+        };
+        let Some(viewport) = self.native_video_snapshot(viewport_id) else {
+            return;
+        };
+
+        stats.present_fps = Some(viewport.host_present_fps);
+        stats.video_present_submit_count_total = Some(viewport.host_present_submit_count_total);
+        stats.video_present_drop_count_total = Some(viewport.host_present_drop_count_total);
+        stats.video_present_overwrite_count_total =
+            Some(viewport.host_present_overwrite_count_total);
+        stats.video_present_descriptor_upload_mode = viewport.host_descriptor_upload_mode.clone();
+        stats.video_present_descriptor_metal_import_count_total =
+            Some(viewport.host_descriptor_metal_import_count_total);
+        stats.video_present_descriptor_cpu_upload_count_total =
+            Some(viewport.host_descriptor_cpu_upload_count_total);
+
+        if let Some(latest_present_time_ms) = viewport.latest_host_present_time_ms {
+            let host_now_ms = current_time_ms_f64();
+            stats.present_age_ms = Some((host_now_ms - latest_present_time_ms).max(0.0));
+        }
+    }
+
+    fn native_video_snapshot(&self, viewport_id: &str) -> Option<NativeVideoViewportState> {
+        let Ok(registry) = self.native_video.lock() else {
+            return None;
+        };
+        registry.snapshot(viewport_id)
+    }
+
+    fn sync_native_video_host_timing(
+        &self,
+        runtime: &mut TauriXbxEngineRuntime,
+        viewport_id: Option<&str>,
+    ) {
+        let Some(viewport_id) = viewport_id else {
+            return;
+        };
+        let Some(viewport) = self.native_video_snapshot(viewport_id) else {
+            return;
+        };
+        let _ = runtime.update_host_video_timing(
+            viewport.host_display_interval_ms,
+            viewport.host_frame_age_budget_ms,
+        );
+    }
+}
+
+fn current_time_ms_f64() -> f64 {
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_millis() as f64)
+        .unwrap_or(0.0)
 }
 
 #[derive(Clone)]
@@ -437,7 +679,7 @@ impl TauriXbxEngineHostBridge {
         restart: bool,
     ) -> Result<XbxEngineHostResponseDto, XbxEngineRuntimeError> {
         let state = self.app_state().map_err(map_app_error("exchangeOffer"))?;
-        self.runtime_trace.record(
+        self.runtime_trace.record_event(
             "xbxengine-host",
             "exchangeOfferRequested",
             Some(&session_id),
@@ -456,7 +698,7 @@ impl TauriXbxEngineHostBridge {
             },
         ))
         .map_err(map_app_error("exchangeOffer"))?;
-        self.runtime_trace.record(
+        self.runtime_trace.record_event(
             "xbxengine-host",
             "exchangeOfferResult",
             None,
@@ -477,7 +719,7 @@ impl TauriXbxEngineHostBridge {
     ) -> Result<XbxEngineHostResponseDto, XbxEngineRuntimeError> {
         let state = self.app_state().map_err(map_app_error("submitIce"))?;
         let trace_session_id = session_id.clone();
-        self.runtime_trace.record(
+        self.runtime_trace.record_event(
             "xbxengine-host",
             "submitIceRequested",
             Some(&session_id),
@@ -503,7 +745,7 @@ impl TauriXbxEngineHostBridge {
             }),
         )
         .map_err(map_app_error("submitIce"))?;
-        self.runtime_trace.record(
+        self.runtime_trace.record_event(
             "xbxengine-host",
             "submitIceResult",
             Some(&trace_session_id),
@@ -521,7 +763,7 @@ impl TauriXbxEngineHostBridge {
         restart: bool,
     ) -> Result<XbxEngineHostResponseDto, XbxEngineRuntimeError> {
         let state = self.app_state().map_err(map_app_error("pollIce"))?;
-        self.runtime_trace.record(
+        self.runtime_trace.record_event(
             "xbxengine-host",
             "pollIceRequested",
             Some(&session_id),
@@ -535,7 +777,7 @@ impl TauriXbxEngineHostBridge {
                 restart,
             }))
             .map_err(map_app_error("pollIce"))?;
-        self.runtime_trace.record(
+        self.runtime_trace.record_event(
             "xbxengine-host",
             "pollIceResult",
             None,
@@ -564,7 +806,7 @@ impl TauriXbxEngineHostBridge {
             .app_handle
             .try_state::<AppState>()
             .ok_or_else(|| XbxEngineRuntimeError::new("xbxEngineAppStateUnavailable"))?;
-        self.runtime_trace.record(
+        self.runtime_trace.record_event(
             "xbxengine-host",
             "closeRemoteSessionRequested",
             Some(&session_id),
@@ -576,7 +818,7 @@ impl TauriXbxEngineHostBridge {
                 .close_session(StreamingCloseSessionParams { session_id }),
         )
         .map_err(map_app_error("closeRemoteSession"))?;
-        self.runtime_trace.record(
+        self.runtime_trace.record_event(
             "xbxengine-host",
             "closeRemoteSessionResult",
             None,
@@ -587,7 +829,7 @@ impl TauriXbxEngineHostBridge {
 
     fn attach_native_viewport(
         &self,
-        viewport_id: &str,
+        viewport: &xbxengine_protocol::XbxEngineViewportDto,
         surface_id: Option<&str>,
     ) -> Result<(), XbxEngineRuntimeError> {
         let Ok(mut registry) = self.native_video.lock() else {
@@ -595,14 +837,14 @@ impl TauriXbxEngineHostBridge {
                 "xbxEngineNativeVideoRegistryLockFailed",
             ));
         };
-        let changed = registry.attach_viewport(viewport_id, surface_id);
+        let changed = registry.attach_viewport(&viewport.viewport_id, surface_id);
         if changed {
-            self.runtime_trace.record(
+            self.runtime_trace.record_state(
                 "xbxengine-host",
                 "nativeViewportAttached",
                 None,
                 serde_json::json!({
-                    "viewportId": viewport_id,
+                    "viewportId": viewport.viewport_id,
                     "surfaceId": surface_id,
                 }),
             );
@@ -617,7 +859,7 @@ impl TauriXbxEngineHostBridge {
             ));
         };
         registry.detach_viewport(viewport_id);
-        self.runtime_trace.record(
+        self.runtime_trace.record_state(
             "xbxengine-host",
             "nativeViewportDetached",
             None,
@@ -654,7 +896,7 @@ impl XbxEngineHostBridge for TauriXbxEngineHostBridge {
         viewport: &xbxengine_protocol::XbxEngineViewportDto,
         surface_id: Option<&str>,
     ) -> Result<(), XbxEngineRuntimeError> {
-        self.attach_native_viewport(&viewport.viewport_id, surface_id)
+        self.attach_native_viewport(viewport, surface_id)
     }
 
     fn detach_viewport(&mut self, viewport_id: Option<&str>) -> Result<(), XbxEngineRuntimeError> {
@@ -699,7 +941,7 @@ impl XbxEngineHostBridge for TauriXbxEngineHostBridge {
                     .map_err(map_app_error("keepAliveRemoteSession"))?;
                 tauri::async_runtime::block_on(state.streaming.send_keepalive(session_id))
                     .map_err(map_app_error("keepAliveRemoteSession"))?;
-                self.runtime_trace.record(
+                self.runtime_trace.record_event(
                     "xbxengine-host",
                     "keepAliveRemoteSession",
                     None,
@@ -742,4 +984,84 @@ fn extract_command_session_id(command: &XbxEngineControlCommandDto) -> Option<St
 
 fn should_skip_trace_tick(session_id: Option<&str>, stats: &XbxEngineStatsDto) -> bool {
     session_id.is_none() && stats.transport_state.as_deref() == Some("Closed")
+}
+
+/// 统一观测快照：把 UI 与离线分析真正关心的状态压成单条 snapshot，避免继续手工拼
+/// `statsSnapshot + directGamingState + hostPresentState`。
+fn build_observability_snapshot(stats: &XbxEngineStatsDto) -> serde_json::Value {
+    serde_json::json!({
+        "resolution": stats.resolution,
+        "fps": stats.fps,
+        "rtt": stats.rtt,
+        "runtimeSummary": stats.runtime_summary,
+        "primaryIssueChain": stats.primary_issue_chain,
+        "latestDecisionSummary": stats.latest_decision_summary,
+        "transport": {
+            "path": stats.transport_path,
+            "state": stats.transport_state,
+            "policyProfile": stats.transport_policy_profile,
+            "videoRttSource": stats.video_rtt_source,
+            "videoRembBps": stats.video_remb_bps,
+        },
+        "recovery": {
+            "sessionPhase": stats.session_phase,
+            "policyProfile": stats.recovery_policy_profile,
+            "diagnosis": stats.recovery_diagnosis,
+            "couplingMode": stats.recovery_coupling_mode,
+            "couplingSummary": stats.recovery_coupling_summary,
+            "videoHealth": stats.video_health,
+            "stallKind": stats.stall_kind,
+            "keyframeRequestCount": stats.recovery_keyframe_request_count,
+            "decoderResetCount": stats.recovery_decoder_reset_count,
+            "reconnectCount": stats.recovery_reconnect_count,
+            "lastAction": stats.last_recovery_action,
+            "lastActionAtMs": stats.last_recovery_action_at_ms,
+            "lastReason": stats.last_recovery_reason,
+        },
+        "directGaming": {
+            "bitrateBand": stats.direct_gaming_bitrate_band,
+        },
+        "bitrate": {
+            "display": stats.br,
+            "inboundKbps": stats.inbound_bitrate_kbps,
+            "videoKbps": stats.inbound_video_bitrate_kbps,
+            "audioKbps": stats.inbound_audio_bitrate_kbps,
+            "bytesTotal": stats.inbound_bytes_total,
+            "videoBytesTotal": stats.inbound_video_bytes_total,
+            "audioBytesTotal": stats.inbound_audio_bytes_total,
+        },
+        "video": {
+            "inboundFps": stats.inbound_video_fps,
+            "decodeFps": stats.decode_fps,
+            "presentFps": stats.present_fps,
+            "packetAgeMs": stats.packet_age_ms,
+            "decodeAgeMs": stats.decode_age_ms,
+            "presentAgeMs": stats.present_age_ms,
+            "packetToDecodeMs": stats.packet_to_decode_ms,
+            "decodeToPresentMs": stats.decode_to_present_ms,
+            "packetToPresentMs": stats.packet_to_present_ms,
+            "decoderStalled": stats.video_decoder_stalled,
+            "rendererStalled": stats.video_renderer_stalled,
+            "decodeInputDropCountTotal": stats.video_decode_input_drop_count_total,
+            "decodeOutputDropCountTotal": stats.video_decode_output_drop_count_total,
+            "pacerSubmitCountTotal": stats.video_pacer_submit_count_total,
+            "pacerDropCountTotal": stats.video_pacer_drop_count_total,
+            "rendererSubmitCountTotal": stats.video_renderer_submit_count_total,
+            "rendererDropCountTotal": stats.video_renderer_drop_count_total,
+            "presentSubmitCountTotal": stats.video_present_submit_count_total,
+            "presentDropCountTotal": stats.video_present_drop_count_total,
+            "presentOverwriteCountTotal": stats.video_present_overwrite_count_total,
+            "descriptorUploadMode": stats.video_present_descriptor_upload_mode,
+            "descriptorMetalImportCountTotal": stats.video_present_descriptor_metal_import_count_total,
+            "descriptorCpuUploadCountTotal": stats.video_present_descriptor_cpu_upload_count_total,
+        },
+        "latest": {
+            "packetGap": stats.latest_video_packet_gap,
+            "frameDrop": stats.latest_video_frame_drop,
+            "nack": stats.latest_video_nack_observation,
+            "escalation": stats.latest_video_escalation_observation,
+            "bwe": stats.latest_video_bwe_observation,
+            "twcc": stats.latest_video_twcc_observation,
+        },
+    })
 }

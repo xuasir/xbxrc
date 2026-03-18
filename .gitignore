@@ -69,6 +69,7 @@ yarn-error.log
 
 # ai
 .trae
+.codex-tmp
 
 # Tauri
 /src-tauri/target

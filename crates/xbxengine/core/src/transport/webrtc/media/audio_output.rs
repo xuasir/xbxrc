@@ -17,7 +17,7 @@ use opus::{Channels as OpusChannels, Decoder as OpusDecoder};
 use tokio::{sync::watch, task::JoinHandle as TokioJoinHandle};
 use webrtc::track::track_remote::TrackRemote;
 
-use crate::{XbxEngineMediaRuntimeStats, XbxEngineRuntimeError};
+use crate::{XbxEngineMediaRuntimeStats, XbxEngineRuntimeError, XbxEngineVideoTrackStatus};
 
 const OPUS_SAMPLE_RATE_HZ: u32 = 48_000;
 const OPUS_OUTPUT_CHANNELS: usize = 2;
@@ -239,6 +239,23 @@ fn update_audio_runtime_stats(
         }
         shared.inbound_bytes_total =
             shared.inbound_video_bytes_total + shared.inbound_audio_bytes_total;
+        if shared.latest_video_track_status.is_none()
+            && shared.inbound_audio_bytes_total > 0
+            && shared.inbound_video_bytes_total == 0
+        {
+            // 音频主路径同样要补 audioOnly，否则正常播放不会把该状态同步进 snapshot。
+            shared.latest_video_track_status = Some(XbxEngineVideoTrackStatus {
+                state: "audioOnly".to_string(),
+                video_width: None,
+                video_height: None,
+                mime_type: None,
+                transport_state: shared.transport_state.clone(),
+                video_bytes_total: 0,
+                video_packet_count_total: 0,
+                audio_bytes_total: shared.inbound_audio_bytes_total,
+                observed_at_ms: now_ms,
+            });
+        }
     }
 }
 

@@ -54,6 +54,22 @@ impl VideoIngress {
 
 impl FrameScheduler for VideoIngress {
     fn submit(&mut self, frame: EncodedFrame, now: Instant) -> IngressDecision {
+        // 关键帧必须优先于 config_changed 判定消费。
+        // 启动阶段第一张 keyframe 往往天然伴随 SPS/PPS / 分辨率变化，
+        // 如果先走 waiting_keyframe + config_changed 分支，会把“用来解除等待态的首帧”
+        // 自己丢掉，随后整条链会永久卡在 waitKeyframe。
+        if frame.is_keyframe {
+            self.current_codec = Some(frame.codec.clone());
+            self.current_width = frame.width;
+            self.current_height = frame.height;
+            self.waiting_keyframe = false;
+
+            // 永远优先: 清空 backlog
+            self.queue.clear();
+            self.queue.push_back(frame);
+            return IngressDecision::Submit;
+        }
+
         if frame.config_changed {
             if self.waiting_keyframe {
                 return IngressDecision::WaitKeyframe;
@@ -73,19 +89,6 @@ impl FrameScheduler for VideoIngress {
             }
             self.start_reconfigure();
             return IngressDecision::Reconfigure;
-        }
-
-        // Rule 1: Keyframe
-        if frame.is_keyframe {
-            self.current_codec = Some(frame.codec.clone());
-            self.current_width = frame.width;
-            self.current_height = frame.height;
-            self.waiting_keyframe = false;
-
-            // 永远优先: 清空 backlog
-            self.queue.clear();
-            self.queue.push_back(frame);
-            return IngressDecision::Submit;
         }
 
         // 丢弃期间等待关键帧
@@ -246,5 +249,25 @@ mod tests {
         assert_eq!(ingress.queue_depth(), 1);
         let queued = ingress.pop().expect("frame should remain queued");
         assert!(queued.value.is_sync_point());
+    }
+
+    #[test]
+    fn config_changed_keyframe_while_waiting_is_still_accepted() {
+        let now = Instant::now();
+        let mut ingress = VideoIngress::new(4, Duration::from_millis(250));
+
+        let mut first_keyframe = make_frame(now, FrameValue::new(true, true, 64 * 1024), true, 0);
+        first_keyframe.config_changed = true;
+        first_keyframe.width = 2560;
+        first_keyframe.height = 1440;
+
+        assert_eq!(ingress.submit(first_keyframe, now), IngressDecision::Submit);
+        assert_eq!(ingress.queue_depth(), 1);
+
+        let queued = ingress.pop().expect("keyframe should be queued");
+        assert!(queued.is_keyframe);
+        assert!(queued.config_changed);
+        assert_eq!(queued.width, 2560);
+        assert_eq!(queued.height, 1440);
     }
 }

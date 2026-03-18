@@ -8,6 +8,9 @@ use crate::XbxEngineMediaRuntimeStats;
 use std::sync::Arc;
 use std::sync::Mutex;
 
+const DECODER_STALL_PACKET_FRESH_MAX_AGE_MS: f64 = 400.0;
+const DECODER_STALL_DECODE_AGE_MS: f64 = 1_000.0;
+
 pub enum DecodeMsg {
     Frame(EncodedFrame),
     Flush,
@@ -92,6 +95,7 @@ fn run_decode_loop(
         }
     };
     let mut recent_decode_times_ms = std::collections::VecDeque::<f64>::new();
+    sync_decode_runtime_stats(&runtime_stats, &decode_state, 0.0);
 
     while let Ok(msg) = rx.recv() {
         match msg {
@@ -130,9 +134,15 @@ fn run_decode_loop(
                         crate::xbx_log_warn!("[XbxDecodeActor] pacer queue full, drop frame");
                     }
                 }
+                sync_decode_runtime_stats(&runtime_stats, &decode_state, now_ms);
             }
             DecodeMsg::Flush => {
                 let _ = decode_state.request_decoder_reset();
+                sync_decode_runtime_stats(
+                    &runtime_stats,
+                    &decode_state,
+                    crate::media::video::decode::video_decode::now_ms_f64(),
+                );
             }
             DecodeMsg::Stop => {
                 break;
@@ -150,4 +160,39 @@ fn recent_window_fps(times: &std::collections::VecDeque<f64>) -> f64 {
     let last = times.back().copied().unwrap_or(first);
     let window_ms = (last - first).max(1.0);
     ((len.saturating_sub(1)) as f64 * 1_000.0 / window_ms).max(0.0)
+}
+
+fn sync_decode_runtime_stats(
+    runtime_stats: &Arc<Mutex<XbxEngineMediaRuntimeStats>>,
+    decode_state: &XbxVideoDecodeState,
+    now_ms: f64,
+) {
+    let Ok(mut stats) = runtime_stats.lock() else {
+        return;
+    };
+    stats.video_decoder_backend_name = Some(decode_state.decoder_backend_name().to_string());
+    stats.video_decoder_reset_count = decode_state.decoder_reset_count();
+    stats.latest_video_decoder_reset_time_ms = decode_state.latest_decoder_reset_time_ms();
+    stats.video_decode_output_drop_count_total = decode_state.decoded_frame_drop_count();
+    stats.video_decoder_hardware_failure_streak = decode_state.hardware_decode_failure_streak();
+    stats.latest_video_decoder_hardware_failure_time_ms =
+        decode_state.latest_hardware_decode_failure_time_ms();
+    stats.latest_video_decoder_hardware_failure_status =
+        decode_state.latest_hardware_decode_failure_status();
+    stats.video_decoder_stalled = Some(derive_decoder_stalled(&stats, now_ms));
+}
+
+fn derive_decoder_stalled(stats: &XbxEngineMediaRuntimeStats, now_ms: f64) -> bool {
+    let packet_age_ms = stats
+        .latest_video_packet_arrival_time_ms
+        .map(|at_ms| (now_ms - at_ms).max(0.0))
+        .unwrap_or(f64::INFINITY);
+    if packet_age_ms > DECODER_STALL_PACKET_FRESH_MAX_AGE_MS {
+        return false;
+    }
+    let decode_age_ms = stats
+        .latest_video_decode_ok_time_ms
+        .map(|at_ms| (now_ms - at_ms).max(0.0))
+        .unwrap_or(f64::INFINITY);
+    decode_age_ms >= DECODER_STALL_DECODE_AGE_MS
 }

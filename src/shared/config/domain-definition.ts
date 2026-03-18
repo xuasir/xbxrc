@@ -76,9 +76,10 @@ const FORCE_REGION_IP_OPTIONS = [
 
 const CODEC_OPTIONS = [
   { value: '', label: 'Auto', description: 'Automatically select the most suitable codec' },
-  { value: 'video/H264-4d', label: 'H264-High' },
-  { value: 'video/H264-42e', label: 'H264-Medium' },
-  { value: 'video/H264-420', label: 'H264-Low' },
+  { value: 'video/H264-64', label: 'H264-High' },
+  { value: 'video/H264-4d', label: 'H264-Main' },
+  { value: 'video/H264-42e', label: 'H264-Constrained Baseline' },
+  { value: 'video/H264-420', label: 'H264-Baseline' },
 ] as const satisfies readonly SettingSelectOptionDefinition[]
 
 const POLLING_RATE_OPTIONS = [

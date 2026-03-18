@@ -40,7 +40,7 @@ impl RpcEnvelope {
             error: Some(RpcError {
                 code: error.code().to_string(),
                 message: error.to_string(),
-                details: None, // 未来可以扩展 AppError 以支持 details
+                details: error.details().cloned(),
             }),
         }
     }

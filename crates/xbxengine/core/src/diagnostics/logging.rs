@@ -1,4 +1,11 @@
 use std::time::SystemTime;
+use std::{
+    sync::{
+        atomic::{AtomicBool, AtomicU8, Ordering},
+        Arc, OnceLock,
+    },
+    time::UNIX_EPOCH,
+};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum XbxLogLevel {
@@ -10,7 +17,7 @@ pub enum XbxLogLevel {
 }
 
 impl XbxLogLevel {
-    fn as_str(self) -> &'static str {
+    pub fn as_str(self) -> &'static str {
         match self {
             XbxLogLevel::Error => "ERROR",
             XbxLogLevel::Warn => "WARN",
@@ -21,9 +28,17 @@ impl XbxLogLevel {
     }
 }
 
-use std::sync::atomic::{AtomicU8, Ordering};
-
 static LOG_LEVEL: AtomicU8 = AtomicU8::new(XbxLogLevel::Warn as u8); // 默认 Warn
+static STDERR_ENABLED: AtomicBool = AtomicBool::new(true);
+static LOG_SINK_MIN_LEVEL: AtomicU8 = AtomicU8::new(XbxLogLevel::Warn as u8);
+static LOG_SINK: OnceLock<Arc<dyn Fn(&XbxLogRecord) + Send + Sync>> = OnceLock::new();
+
+#[derive(Clone, Debug)]
+pub struct XbxLogRecord {
+    pub ts_ms: u128,
+    pub level: XbxLogLevel,
+    pub message: String,
+}
 
 pub fn set_configured_level(level: Option<XbxLogLevel>) {
     let val = match level {
@@ -57,6 +72,34 @@ fn configured_level() -> Option<XbxLogLevel> {
     }
 }
 
+fn sink_level() -> Option<XbxLogLevel> {
+    match LOG_SINK_MIN_LEVEL.load(Ordering::Relaxed) {
+        0 => None,
+        1 => Some(XbxLogLevel::Error),
+        2 => Some(XbxLogLevel::Warn),
+        3 => Some(XbxLogLevel::Info),
+        4 => Some(XbxLogLevel::Debug),
+        5 => Some(XbxLogLevel::Trace),
+        _ => Some(XbxLogLevel::Warn),
+    }
+}
+
+pub fn set_stderr_enabled(enabled: bool) {
+    STDERR_ENABLED.store(enabled, Ordering::Relaxed);
+}
+
+pub fn set_log_sink_min_level(level: Option<XbxLogLevel>) {
+    let raw = match level {
+        Some(level) => level as u8,
+        None => 0,
+    };
+    LOG_SINK_MIN_LEVEL.store(raw, Ordering::Relaxed);
+}
+
+pub fn set_log_sink(sink: Arc<dyn Fn(&XbxLogRecord) + Send + Sync>) {
+    let _ = LOG_SINK.set(sink);
+}
+
 pub fn xbx_log_enabled(level: XbxLogLevel) -> bool {
     configured_level().is_some_and(|configured| level <= configured)
 }
@@ -66,10 +109,29 @@ pub fn xbx_log(level: XbxLogLevel, args: std::fmt::Arguments<'_>) {
         return;
     }
     let now_ms = SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
+        .duration_since(UNIX_EPOCH)
         .map(|value| value.as_millis())
         .unwrap_or(0);
-    eprintln!("[xbxengine][{}][{}] {}", level.as_str(), now_ms, args);
+    let record = XbxLogRecord {
+        ts_ms: now_ms,
+        level,
+        message: args.to_string(),
+    };
+    if let Some(min_level) = sink_level() {
+        if level <= min_level {
+            if let Some(sink) = LOG_SINK.get() {
+                sink(&record);
+            }
+        }
+    }
+    if STDERR_ENABLED.load(Ordering::Relaxed) {
+        eprintln!(
+            "[xbxengine][{}][{}] {}",
+            record.level.as_str(),
+            record.ts_ms,
+            record.message
+        );
+    }
 }
 
 #[macro_export]

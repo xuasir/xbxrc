@@ -5,6 +5,10 @@ export enum NavigationIntent {
   Right = 'right',
   Action = 'action',
   Back = 'back',
+  // LB/RB — 一级页面导航（xhome/xcloud/setting）
+  PagePrev = 'page-prev',
+  PageNext = 'page-next',
+  // LT/RT — 二级 Tab/区域导航
   TabPrev = 'tab-prev',
   TabNext = 'tab-next',
   View = 'view',

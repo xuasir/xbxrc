@@ -24,7 +24,10 @@ tauri-build = { version = "2", features = [] }
 [dependencies]
 async-trait.workspace = true
 
-tauri = { version = "2", features = ["macos-private-api", "unstable"] }
+tauri = { version = "2", features = [
+  "macos-private-api",
+  "unstable"
+] }
 tauri-plugin-opener = "2"
 
 serde.workspace = true
@@ -80,7 +83,20 @@ log.workspace = true
 
 env_logger.workspace = true
 
+pollster = "0.3.0"
+raw-window-handle = "0.6.2"
+wgpu = "28.0.0"
+
 [target.'cfg(target_os = "macos")'.dependencies]
-objc2 = { version = "0.6.4", default-features = false, features = ["std"] }
-objc2-foundation = { version = "0.3.2", default-features = false, features = ["alloc", "NSGeometry", "NSString"] }
-objc2-app-kit = { version = "0.3.2", default-features = false, features = ["NSView", "NSWindow"] }
+objc2 = { version = "0.6.4", default-features = false, features = [ "std" ] }
+objc2-foundation = { version = "0.3.2", default-features = false, features = [
+  "alloc",
+  "NSGeometry",
+  "NSString"
+] }
+objc2-app-kit = { version = "0.3.2", default-features = false, features = [
+  "NSView",
+  "NSWindow"
+] }
+wgpu-hal = "28.0.0"
+metal = "0.33.0"

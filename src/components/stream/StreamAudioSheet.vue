@@ -143,7 +143,6 @@ watch(
   position: absolute;
   inset: 0;
   background: var(--ui-scrim-bg);
-  backdrop-filter: blur(4px);
 }
 
 .stream-audio-sheet__panel {
@@ -156,7 +155,6 @@ watch(
   background: var(--ui-surface-overlay);
   border: 1px solid var(--ui-border-subtle);
   border-radius: 16px;
-  box-shadow: var(--ui-shadow-overlay);
   display: flex;
   flex-direction: column;
   color: var(--ui-page-text);
@@ -243,7 +241,6 @@ watch(
 .stream-audio-sheet__close[data-focused='true'] {
   background: var(--color-focus-bg-strong);
   color: var(--ui-focus-text);
-  box-shadow: var(--shadow-xbox-focus);
   transform: scale(1.02);
 }
 

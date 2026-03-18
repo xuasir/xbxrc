@@ -39,14 +39,23 @@ export class SdpManipulator {
     if (!capabilities) {
       return sdp
     }
+    const normalizedProfiles = preference.profiles
+      .map(profile => normalizeH264ProfileToken(profile))
+      .filter(profile => profile.length > 0)
     const prefCodecs = capabilities.codecs.filter((codec) => {
       if (codec.mimeType !== preference.mimeType) {
         return false
       }
-      if (preference.profiles.length === 0) {
+      if (normalizedProfiles.length === 0) {
         return true
       }
-      return preference.profiles.some(profile => codec.sdpFmtpLine?.includes(`profile-level-id=${profile}`))
+      const codecProfileLevelId = extractH264ProfileLevelId(codec.sdpFmtpLine)
+      if (!codecProfileLevelId) {
+        return false
+      }
+      return normalizedProfiles.some(profile =>
+        matchesH264ProfileFamily(codecProfileLevelId, profile),
+      )
     })
     if (prefCodecs.length === 0) {
       return sdp
@@ -54,16 +63,26 @@ export class SdpManipulator {
     if (!preference.mimeType.includes('H264')) {
       return sdp
     }
-    const h264Pattern = /a=fmtp:(\d+).*profile-level-id=([0-9a-f]{6})/g
-    const preferredCodecIds: Array<string> = []
-    const profilePrefix = preference.profiles[0]
-    for (const match of sdp.matchAll(h264Pattern)) {
-      const id = match[1]
-      const profileId = match[2]
-      if (profileId.startsWith(profilePrefix)) {
-        preferredCodecIds.push(id)
-      }
-    }
+    const h264Pattern = /a=fmtp:(\d+).*profile-level-id=([0-9a-f]{6})/gi
+    const preferredCodecIds = Array.from(sdp.matchAll(h264Pattern))
+      .map((match, index) => ({
+        id: match[1],
+        rank: rankH264Profile(match[2]),
+        matchesPreference: normalizedProfiles.length > 0
+          ? normalizedProfiles.some(profile => matchesH264ProfileFamily(match[2], profile))
+          : false,
+        index,
+      }))
+      .sort((left, right) => {
+        if (left.rank !== right.rank) {
+          return right.rank - left.rank
+        }
+        if (left.matchesPreference !== right.matchesPreference) {
+          return Number(right.matchesPreference) - Number(left.matchesPreference)
+        }
+        return left.index - right.index
+      })
+      .map(entry => entry.id)
     if (preferredCodecIds.length === 0) {
       return sdp
     }
@@ -160,4 +179,46 @@ export class SdpManipulator {
       })
       .join('\r\n')
   }
+}
+
+function normalizeH264ProfileToken(profile: string): string {
+  return profile.trim().toLowerCase().replace(/^profile-level-id=/, '')
+}
+
+function extractH264ProfileLevelId(fmtpLine: string | undefined): string | null {
+  if (!fmtpLine) {
+    return null
+  }
+  const normalized = fmtpLine.toLowerCase()
+  for (const part of normalized.split(';')) {
+    const trimmed = part.trim()
+    if (trimmed.startsWith('profile-level-id=')) {
+      return normalizeH264ProfileToken(trimmed.slice('profile-level-id='.length))
+    }
+  }
+  return null
+}
+
+function rankH264Profile(profileLevelId: string): number {
+  const normalized = normalizeH264ProfileToken(profileLevelId)
+  if (normalized.startsWith('64')) {
+    return 3
+  }
+  if (normalized.startsWith('4d')) {
+    return 2
+  }
+  if (normalized.startsWith('42e')) {
+    return 1
+  }
+  if (normalized.startsWith('420')) {
+    return 0
+  }
+  return 0
+}
+
+function matchesH264ProfileFamily(profileLevelId: string, preferredProfile: string): boolean {
+  const normalizedProfileLevelId = normalizeH264ProfileToken(profileLevelId)
+  const normalizedPreferredProfile = normalizeH264ProfileToken(preferredProfile)
+  return normalizedPreferredProfile.length > 0
+    && normalizedProfileLevelId.startsWith(normalizedPreferredProfile)
 }

@@ -382,6 +382,66 @@ pub struct StreamingSessionExecutionSnapshot {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
+pub enum StreamingStartupPhaseStatus {
+    Entered,
+    Succeeded,
+    Failed,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum StreamingStartupPhase {
+    ResolvingContext,
+    WakingConsole,
+    WaitingConsoleReady,
+    CreatingSession,
+    WaitingSessionReady,
+    StartingRuntime,
+    Ready,
+    Failed,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum StreamingStartupErrorKind {
+    Wake,
+    ConsoleReady,
+    SessionCreate,
+    SessionReady,
+    Runtime,
+    Network,
+    Auth,
+    Target,
+    Unknown,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StreamingStartupEvent {
+    pub attempt_id: String,
+    pub target_type: String,
+    pub target_id: String,
+    pub phase: StreamingStartupPhase,
+    pub status: StreamingStartupPhaseStatus,
+    pub summary: String,
+    pub details: Option<String>,
+    pub ts_ms: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StreamingStartupError {
+    pub attempt_id: String,
+    pub phase: StreamingStartupPhase,
+    pub error_kind: StreamingStartupErrorKind,
+    pub user_message_key: String,
+    pub diagnostic_summary: String,
+    pub raw_message: String,
+    pub retryable: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
 pub enum StreamingSessionPhase {
     Creating,
     WaitingSessionReady,
@@ -409,6 +469,7 @@ pub struct StreamingSessionProgressSnapshot {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct StreamingStartSessionResult {
+    pub attempt_id: String,
     pub execution: StreamingSessionExecutionSnapshot,
     pub progress: StreamingSessionProgressSnapshot,
 }
@@ -542,6 +603,7 @@ impl SessionFlowSnapshot for StreamingSessionSnapshot {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct StreamingStartSessionParams {
+    pub attempt_id: String,
     pub target_type: String,
     pub target_id: String,
 }

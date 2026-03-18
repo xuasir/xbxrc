@@ -28,6 +28,8 @@ pub enum DataCommand {
         text: String,
     },
     GetXcloudTitles,
+    RefreshXcloudTitles,
+    PrimeXcloudTitles,
 }
 
 pub async fn handle_rpc(
@@ -109,6 +111,16 @@ pub async fn handle_rpc(
         }
         DataCommand::GetXcloudTitles => Ok(serde_json::to_value(
             data.get_xcloud_titles().await.map_err(|e| e.to_string())?,
+        )?),
+        DataCommand::RefreshXcloudTitles => Ok(serde_json::to_value(
+            data.refresh_xcloud_titles()
+                .await
+                .map_err(|e| e.to_string())?,
+        )?),
+        DataCommand::PrimeXcloudTitles => Ok(serde_json::to_value(
+            data.prime_xcloud_titles()
+                .await
+                .map_err(|e| e.to_string())?,
         )?),
     }
 }

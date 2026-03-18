@@ -1,8 +1,14 @@
-import { NavigationIntent, inputDispatcher, IntentHandler } from './input'
-import { findNextFocusable, Direction } from './pathfinding'
+import type { IntentHandler } from './input'
+import type { Direction } from './pathfinding'
 import { playNavSound, triggerNavHaptic } from './haptics'
+import { inputDispatcher, NavigationIntent } from './input'
+import { findNextFocusable } from './pathfinding'
 
 export const FOCUSABLE_SELECTOR = '[data-focusable="true"]:not([disabled]):not([aria-disabled="true"])'
+
+// 页面/Tab 切换回调类型
+export type SwitchDirection = 'prev' | 'next'
+export type SwitchHandler = (direction: SwitchDirection) => void
 
 interface ScopeState {
   id: string
@@ -15,6 +21,11 @@ export class NavigationEngine {
   private scopeStack: ScopeState[] = []
   private unsubscribeInput: (() => void) | null = null
   private lastMoveTime = 0
+
+  // LB/RB 一级页面切换回调
+  private pageSwitchHandlers: Set<SwitchHandler> = new Set()
+  // LT/RT 二级 Tab/区域切换回调
+  private tabSwitchHandlers: Set<SwitchHandler> = new Set()
   
   // 性能优化：缓存可聚焦元素
   private focusableCache: HTMLElement[] = []
@@ -26,7 +37,7 @@ export class NavigationEngine {
 
   start(): void {
     this.unsubscribeInput = inputDispatcher.subscribe(this.handleIntent)
-    
+
     if (typeof window !== 'undefined') {
       const observer = new MutationObserver(() => {
         // 标记缓存过期
@@ -37,15 +48,14 @@ export class NavigationEngine {
           this.handleFocusLoss()
         }
       })
-      observer.observe(document.body, { 
-        childList: true, 
+      observer.observe(document.body, {
+        childList: true,
         subtree: true,
         attributes: true,
-        attributeFilter: ['data-focusable', 'disabled', 'aria-disabled']
+        attributeFilter: ['data-focusable', 'disabled', 'aria-disabled'],
       })
     }
   }
-
 
   stop(): void {
     if (this.unsubscribeInput) {
@@ -54,12 +64,31 @@ export class NavigationEngine {
     }
   }
 
+  // 注册 LB/RB 页面切换回调，返回取消订阅函数
+  onPageSwitch(handler: SwitchHandler): () => void {
+    this.pageSwitchHandlers.add(handler)
+    return () => this.pageSwitchHandlers.delete(handler)
+  }
+
+  // 注册 LT/RT Tab/区域切换回调，返回取消订阅函数
+  onTabSwitch(handler: SwitchHandler): () => void {
+    this.tabSwitchHandlers.add(handler)
+    return () => this.tabSwitchHandlers.delete(handler)
+  }
+
+  private dispatchSwitch(handlers: Set<SwitchHandler>, direction: SwitchDirection): void {
+    for (const handler of handlers) {
+      handler(direction)
+    }
+  }
+
   private handleFocusLoss(): void {
     const zoneId = this.currentFocus ? this.getZoneId(this.currentFocus) : null
     this.currentFocus = null
     if (zoneId) {
       this.focusFirstInScope(zoneId)
-    } else {
+    }
+    else {
       this.focusFirstAvailable()
     }
   }
@@ -81,22 +110,24 @@ export class NavigationEngine {
       if (!this.scopeStack.find(s => s.id === scopeId)) {
         this.scopeStack.push({
           id: scopeId,
-          previousFocus: this.currentFocus
+          previousFocus: this.currentFocus,
         })
       }
       this.isCacheDirty = true // Scope 变化时也清空缓存
       this.focusFirstInScope(scopeId)
-    } else {
+    }
+    else {
       const index = this.scopeStack.findIndex(s => s.id === scopeId)
       if (index !== -1) {
         const state = this.scopeStack[index]
         this.scopeStack.splice(index, 1)
         this.isCacheDirty = true
-        
+
         if (this.currentFocus && this.getZoneId(this.currentFocus) === scopeId) {
           if (state.previousFocus && document.contains(state.previousFocus)) {
             this.focusElement(state.previousFocus)
-          } else {
+          }
+          else {
             this.focusFirstAvailable()
           }
         }
@@ -105,7 +136,8 @@ export class NavigationEngine {
   }
 
   focusElement(el: HTMLElement | null, soundAndHaptic = true, isRapid = false): void {
-    if (!el || el === this.currentFocus) return
+    if (!el || el === this.currentFocus)
+      return
 
     if (this.currentFocus) {
       this.currentFocus.classList.remove('is-focused')
@@ -115,7 +147,7 @@ export class NavigationEngine {
     this.currentFocus = el
     this.currentFocus.classList.add('is-focused')
     this.currentFocus.setAttribute('data-focused', 'true')
-    
+
     // 异步焦点应用，防止阻塞当前宏任务的滚动/渲染
     const target = this.currentFocus
     requestAnimationFrame(() => {
@@ -123,7 +155,7 @@ export class NavigationEngine {
         target.focus({ preventScroll: true })
       }
     })
-    
+
     const zoneId = this.getZoneId(el)
     if (zoneId) {
       this.zoneMemory.set(zoneId, el)
@@ -139,12 +171,13 @@ export class NavigationEngine {
 
   private handleIntent: IntentHandler = (intent, event) => {
     const now = Date.now()
-    const isRapid = now - this.lastMoveTime < 150 
+    const isRapid = now - this.lastMoveTime < 150
     this.lastMoveTime = now
 
     if (!this.currentFocus || !document.contains(this.currentFocus)) {
       this.focusFirstAvailable()
-      if (!this.currentFocus) return
+      if (!this.currentFocus)
+        return
     }
 
     let handled = false
@@ -168,6 +201,22 @@ export class NavigationEngine {
       case NavigationIntent.Back:
         handled = this.triggerBack()
         break
+      case NavigationIntent.PagePrev:
+        this.dispatchSwitch(this.pageSwitchHandlers, 'prev')
+        handled = true
+        break
+      case NavigationIntent.PageNext:
+        this.dispatchSwitch(this.pageSwitchHandlers, 'next')
+        handled = true
+        break
+      case NavigationIntent.TabPrev:
+        this.dispatchSwitch(this.tabSwitchHandlers, 'prev')
+        handled = true
+        break
+      case NavigationIntent.TabNext:
+        this.dispatchSwitch(this.tabSwitchHandlers, 'next')
+        handled = true
+        break
     }
 
     if (handled && event) {
@@ -177,19 +226,21 @@ export class NavigationEngine {
   }
 
   private move(direction: Direction, isRapid: boolean): boolean {
-    if (!this.currentFocus) return false
+    if (!this.currentFocus)
+      return false
 
     const activeScopeEl = this.getTopmostActiveScope()
 
     // 使用缓存的列表
     const allFocusable = this.getFocusableElements(activeScopeEl || document)
 
-    
     // 快速过滤掉不可见或不在 container 里的元素
-    const candidates = allFocusable.filter(el => {
+    const candidates = allFocusable.filter((el) => {
       // offsetParent === null 是判断元素隐藏（如 display: none）最快的方式
-      if (el.offsetParent === null && window.getComputedStyle(el).position !== 'fixed') return false
-      if (activeScopeEl && !activeScopeEl.contains(el)) return false
+      if (el.offsetParent === null && window.getComputedStyle(el).position !== 'fixed')
+        return false
+      if (activeScopeEl && !activeScopeEl.contains(el))
+        return false
       return true
     })
 
@@ -198,15 +249,15 @@ export class NavigationEngine {
 
     if (nextEl) {
       const nextZoneId = this.getZoneId(nextEl)
-      
+
       if (currentZoneId && nextZoneId && currentZoneId !== nextZoneId) {
         const rememberedEl = this.zoneMemory.get(nextZoneId)
         if (rememberedEl && document.contains(rememberedEl) && candidates.includes(rememberedEl)) {
-           this.focusElement(rememberedEl, true, isRapid)
-           return true
+          this.focusElement(rememberedEl, true, isRapid)
+          return true
         }
       }
-      
+
       this.focusElement(nextEl, true, isRapid)
       return true
     }
@@ -217,7 +268,8 @@ export class NavigationEngine {
   }
 
   private getTopmostActiveScope(): HTMLElement | null {
-    if (this.scopeStack.length === 0) return null
+    if (this.scopeStack.length === 0)
+      return null
     const last = this.scopeStack[this.scopeStack.length - 1]
     const el = document.getElementById(last.id)
     return (el && document.contains(el)) ? el : null
@@ -225,7 +277,8 @@ export class NavigationEngine {
 
   private focusFirstInScope(scopeId: string): void {
     const scopeEl = document.getElementById(scopeId)
-    if (!scopeEl) return
+    if (!scopeEl)
+      return
 
     const memory = this.zoneMemory.get(scopeId)
     if (memory && document.contains(memory)) {
@@ -249,7 +302,8 @@ export class NavigationEngine {
   }
 
   private triggerAction(): boolean {
-    if (!this.currentFocus) return false
+    if (!this.currentFocus)
+      return false
     playNavSound('action')
     triggerNavHaptic('action')
     this.currentFocus.click()
@@ -284,23 +338,23 @@ export class NavigationEngine {
     const rect = el.getBoundingClientRect()
     const viewportWidth = window.innerWidth
     const viewportHeight = window.innerHeight
-    
+
     // 安全区设定 (15%)，避免频繁触发滚动导致的重绘
     const safePaddingX = viewportWidth * 0.15
     const safePaddingY = viewportHeight * 0.15
 
     const needsScroll = (
-      rect.left < safePaddingX ||
-      rect.right > viewportWidth - safePaddingX ||
-      rect.top < safePaddingY ||
-      rect.bottom > viewportHeight - safePaddingY
+      rect.left < safePaddingX
+      || rect.right > viewportWidth - safePaddingX
+      || rect.top < safePaddingY
+      || rect.bottom > viewportHeight - safePaddingY
     )
 
     if (needsScroll) {
-      el.scrollIntoView({ 
-        behavior: isRapid ? 'auto' : 'smooth', 
-        block: 'center', 
-        inline: 'center' 
+      el.scrollIntoView({
+        behavior: isRapid ? 'auto' : 'smooth',
+        block: 'center',
+        inline: 'center',
       })
     }
   }

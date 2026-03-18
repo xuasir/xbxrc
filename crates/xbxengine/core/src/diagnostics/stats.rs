@@ -85,11 +85,38 @@ pub fn build_xbxengine_stats(
         .and_then(|stats| stats.inbound_video_jitter_ms)
         .map(|value| format!("{value:.1}ms"))
         .unwrap_or_default();
+    let video_health = classify_video_health(runtime_stats);
+    let stall_kind = classify_stall_kind(runtime_stats);
+    let runtime_summary = build_runtime_summary(runtime_stats, video_health.as_deref());
+    let primary_issue_chain = build_primary_issue_chain(
+        runtime_stats,
+        video_health.as_deref(),
+        stall_kind.as_deref(),
+    );
+    let latest_decision_summary =
+        build_latest_decision_summary(snapshot, runtime_stats, video_health.as_deref(), now_ms);
 
     XbxEngineStatsDto {
         resolution,
         rtt,
         fps,
+        runtime_summary,
+        primary_issue_chain,
+        latest_decision_summary,
+        session_phase: runtime_stats.and_then(|stats| stats.session_phase.clone()),
+        transport_policy_profile: runtime_stats
+            .and_then(|stats| stats.transport_policy_profile.clone()),
+        recovery_policy_profile: runtime_stats
+            .and_then(|stats| stats.recovery_policy_profile.clone()),
+        recovery_diagnosis: runtime_stats.and_then(|stats| stats.recovery_diagnosis.clone()),
+        recovery_coupling_mode: runtime_stats
+            .and_then(|stats| stats.recovery_coupling_mode.clone()),
+        recovery_coupling_summary: runtime_stats
+            .and_then(|stats| stats.recovery_coupling_summary.clone()),
+        direct_gaming_bitrate_band: runtime_stats
+            .and_then(|stats| stats.direct_gaming_bitrate_band.clone()),
+        video_health,
+        stall_kind,
         inbound_video_fps: runtime_stats.map(|stats| stats.inbound_video_frame_rate_fps),
         decode_fps: runtime_stats.map(|stats| stats.video_decode_fps),
         present_fps: runtime_stats.map(|stats| stats.video_present_fps.max(fps)),
@@ -112,8 +139,29 @@ pub fn build_xbxengine_stats(
         inbound_audio_bytes_total: runtime_stats.map(|stats| stats.inbound_audio_bytes_total),
         inbound_video_packet_count_total: runtime_stats
             .map(|stats| stats.inbound_video_packet_count_total),
+        latest_video_track_status: runtime_stats.and_then(|stats| {
+            stats.latest_video_track_status.as_ref().map(|status| {
+                xbxengine_protocol::XbxEngineVideoTrackStatusDto {
+                    state: status.state.clone(),
+                    video_width: status.video_width,
+                    video_height: status.video_height,
+                    mime_type: status.mime_type.clone(),
+                    transport_state: status.transport_state.clone(),
+                    video_bytes_total: status.video_bytes_total,
+                    video_packet_count_total: status.video_packet_count_total,
+                    audio_bytes_total: status.audio_bytes_total,
+                    observed_at_ms: status.observed_at_ms,
+                }
+            })
+        }),
         video_decoder_reset_count: runtime_stats.map(|stats| stats.video_decoder_reset_count),
         video_decoder_stalled: runtime_stats.and_then(|stats| stats.video_decoder_stalled),
+        video_decoder_hardware_failure_streak: runtime_stats
+            .map(|stats| stats.video_decoder_hardware_failure_streak),
+        latest_video_decoder_hardware_failure_time_ms: runtime_stats
+            .and_then(|stats| stats.latest_video_decoder_hardware_failure_time_ms),
+        latest_video_decoder_hardware_failure_status: runtime_stats
+            .and_then(|stats| stats.latest_video_decoder_hardware_failure_status),
         video_renderer_stalled: runtime_stats.and_then(|stats| stats.video_renderer_stalled),
         packet_age_ms,
         decode_age_ms,
@@ -132,10 +180,14 @@ pub fn build_xbxengine_stats(
             .map(|stats| stats.video_renderer_submit_count_total),
         video_renderer_drop_count_total: runtime_stats
             .map(|stats| stats.video_renderer_drop_count_total),
+        video_present_drop_count_total: None,
         video_present_overwrite_count_total: runtime_stats
             .map(|stats| stats.video_present_overwrite_count_total),
         video_present_submit_count_total: runtime_stats
             .map(|stats| stats.video_present_submit_count_total),
+        video_present_descriptor_upload_mode: None,
+        video_present_descriptor_metal_import_count_total: None,
+        video_present_descriptor_cpu_upload_count_total: None,
         recovery_keyframe_request_count: Some(snapshot.recovery_keyframe_request_count),
         recovery_decoder_reset_count: Some(snapshot.recovery_decoder_reset_count),
         recovery_reconnect_count: Some(snapshot.recovery_reconnect_count),
@@ -244,5 +296,186 @@ pub fn build_xbxengine_stats(
                 }
             })
         }),
+        latest_data_channel_message_catalog_observation: runtime_stats.and_then(|stats| {
+            stats
+                .latest_data_channel_message_catalog_observation
+                .as_ref()
+                .map(|observation| {
+                    xbxengine_protocol::XbxEngineDataChannelMessageCatalogObservationDto {
+                        observation_id: observation.observation_id,
+                        direction: observation.direction.clone(),
+                        channel: observation.channel.clone(),
+                        kind_type: observation.kind_type.clone(),
+                        kind_message: observation.kind_message.clone(),
+                        target: observation.target.clone(),
+                        keys: observation.keys.clone(),
+                        payload_len: observation.payload_len,
+                        observed_at_ms: observation.observed_at_ms,
+                    }
+                })
+        }),
+    }
+}
+
+// 用统一摘要描述当前 runtime 所处状态，便于回归时快速判断是否落在预期档位。
+fn build_runtime_summary(
+    runtime_stats: Option<&XbxEngineMediaRuntimeStats>,
+    video_health: Option<&str>,
+) -> Option<String> {
+    let stats = runtime_stats?;
+    let profile = stats
+        .transport_policy_profile
+        .as_deref()
+        .unwrap_or("unknown");
+    let phase = stats.session_phase.as_deref().unwrap_or("unknown");
+    let band = stats
+        .direct_gaming_bitrate_band
+        .as_deref()
+        .unwrap_or("unknown");
+    let health = video_health.unwrap_or("unknown");
+    Some(format!("{profile}/{phase}/{band}/{health}"))
+}
+
+// 将当前主问题链显式归类，避免每次回归都手工拼 diagnosis/band/health。
+fn build_primary_issue_chain(
+    runtime_stats: Option<&XbxEngineMediaRuntimeStats>,
+    video_health: Option<&str>,
+    stall_kind: Option<&str>,
+) -> Option<String> {
+    let stats = runtime_stats?;
+    match video_health {
+        Some("connecting") => return Some("transport:connecting".to_string()),
+        Some("startupLowQuality") => return Some("startup:lowQuality".to_string()),
+        Some("stalled") => {
+            if let Some(stall) = stall_kind.filter(|stall| *stall != "none") {
+                return Some(format!("stall:{stall}"));
+            }
+        }
+        Some("recovering") => {
+            if let Some(diagnosis) = stats.recovery_diagnosis.as_deref() {
+                return Some(format!("recovery:{diagnosis}"));
+            }
+        }
+        _ => {}
+    }
+    if let Some(diagnosis) = stats.recovery_diagnosis.as_deref() {
+        return Some(format!("recovery:{diagnosis}"));
+    }
+    if let Some(stall) = stall_kind.filter(|stall| *stall != "none") {
+        return Some(format!("stall:{stall}"));
+    }
+    if stats.session_phase.as_deref() == Some("startup")
+        && stats.direct_gaming_bitrate_band.as_deref() == Some("startupLow")
+    {
+        return Some("startup:lowQuality".to_string());
+    }
+    Some("steady:healthy".to_string())
+}
+
+// 把最近一次真正影响行为的决策压成摘要，便于对照 trace 和面板。
+fn build_latest_decision_summary(
+    snapshot: &XbxEngineRuntimeSnapshot,
+    runtime_stats: Option<&XbxEngineMediaRuntimeStats>,
+    video_health: Option<&str>,
+    now_ms: f64,
+) -> Option<String> {
+    let stats = runtime_stats?;
+    const DECISION_FRESH_WINDOW_MS: f64 = 1_500.0;
+
+    if let Some(escalation) = stats.latest_video_escalation_observation.as_ref() {
+        if now_ms - escalation.observed_at_ms <= DECISION_FRESH_WINDOW_MS
+            || matches!(
+                video_health,
+                Some("stalled" | "recovering" | "startupLowQuality")
+            )
+        {
+            return Some(format!(
+                "recovery:{}->{}",
+                escalation.reason, escalation.action
+            ));
+        }
+    }
+    if let Some(bwe) = stats.latest_video_bwe_observation.as_ref() {
+        return Some(format!(
+            "bwe:{}:{}kbps",
+            bwe.decision_reason, bwe.target_remb_kbps
+        ));
+    }
+    if let (Some(action), Some(reason)) = (
+        snapshot.last_recovery_action.as_deref(),
+        snapshot.last_recovery_reason.as_deref(),
+    ) {
+        if snapshot
+            .last_recovery_action_at_ms
+            .is_some_and(|at_ms| now_ms - at_ms <= DECISION_FRESH_WINDOW_MS)
+        {
+            return Some(format!("recovery:{reason}->{action}"));
+        }
+    }
+    None
+}
+
+/// 统一把运行时事实压成 UI/trace 可直接消费的健康态，避免前端再拼条件猜状态。
+fn classify_video_health(runtime_stats: Option<&XbxEngineMediaRuntimeStats>) -> Option<String> {
+    let stats = runtime_stats?;
+    let transport_state = format!("{:?}", stats.transport_state);
+    if transport_state != "Connected" {
+        return Some("connecting".to_string());
+    }
+    match stats.recovery_diagnosis.as_deref() {
+        Some("ingressWaitKeyframe") | Some("transportAwaitRecoveryKeyframe") => {
+            return Some("waitingKeyframe".to_string());
+        }
+        Some("transportSampleLoss") => {
+            return Some("referenceDirty".to_string());
+        }
+        Some("adapterIdleTimeout" | "decoderBackendFailure") => {
+            return Some("stalled".to_string());
+        }
+        _ => {}
+    }
+    if stats.video_decoder_stalled == Some(true) || stats.video_renderer_stalled == Some(true) {
+        return Some("stalled".to_string());
+    }
+    if stats.session_phase.as_deref() == Some("startup")
+        && stats.direct_gaming_bitrate_band.as_deref() == Some("startupLow")
+    {
+        return Some("startupLowQuality".to_string());
+    }
+    if stats.session_phase.as_deref() == Some("recovering") {
+        return Some("recovering".to_string());
+    }
+    Some("healthy".to_string())
+}
+
+/// stall kind 用于界面/离线分析统一解释“这次卡住属于哪条链”。
+fn classify_stall_kind(runtime_stats: Option<&XbxEngineMediaRuntimeStats>) -> Option<String> {
+    let stats = runtime_stats?;
+    match stats.recovery_diagnosis.as_deref() {
+        Some("adapterIdleTimeout") => Some("idleTimeout".to_string()),
+        Some("decoderBackendFailure") => Some("decoderBackendFailure".to_string()),
+        Some("transportSampleLoss") => Some("sampleLoss".to_string()),
+        Some("transportAwaitRecoveryKeyframe") | Some("ingressWaitKeyframe") => {
+            Some("waitingKeyframe".to_string())
+        }
+        Some("reconfigure") => Some("reconfigure".to_string()),
+        _ => {
+            if stats.video_decoder_stalled == Some(true)
+                || stats.video_renderer_stalled == Some(true)
+            {
+                Some("pipelineStall".to_string())
+            } else if stats.direct_gaming_bitrate_band.as_deref() == Some("paused")
+                && stats.inbound_video_bitrate_kbps.unwrap_or(0.0) <= 0.1
+                && stats.video_present_fps <= 1.0
+            {
+                Some("videoPaused".to_string())
+            } else if stats.session_phase.as_deref() == Some("startup")
+                && stats.direct_gaming_bitrate_band.as_deref() == Some("startupLow")
+            {
+                Some("startupLowQuality".to_string())
+            } else {
+                Some("none".to_string())
+            }
+        }
     }
 }

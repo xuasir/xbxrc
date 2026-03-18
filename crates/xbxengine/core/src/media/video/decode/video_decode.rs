@@ -1,11 +1,17 @@
 use std::collections::VecDeque;
 
 use crate::{
-    media::video::render::renderer::XbxRenderFrame, media::video::types::EncodedFrame,
+    api::{
+        MacOsVideoChromaLocation, MacOsVideoColorMatrix, MacOsVideoColorPrimaries,
+        MacOsVideoColorRange, MacOsVideoTransferFunction,
+    },
+    media::video::render::renderer::XbxRenderFrame,
+    media::video::types::EncodedFrame,
     XbxEngineRenderPixelData, XbxEngineRuntimeError,
 };
 
 const MAX_DECODED_FRAME_QUEUE_LEN: usize = 2;
+const HARDWARE_DECODE_FAILURE_BURST_GAP_MS: f64 = 400.0;
 
 #[derive(Debug)]
 struct QueuedDecodedFrame {
@@ -13,6 +19,7 @@ struct QueuedDecodedFrame {
 }
 
 trait XbxHardwareVideoDecoder: Send {
+    fn backend_name(&self) -> &'static str;
     fn decode(
         &mut self,
         encoded_frame: EncodedFrame,
@@ -25,6 +32,10 @@ trait XbxHardwareVideoDecoder: Send {
 struct NoopXbxHardwareVideoDecoder;
 
 impl XbxHardwareVideoDecoder for NoopXbxHardwareVideoDecoder {
+    fn backend_name(&self) -> &'static str {
+        "noop"
+    }
+
     fn decode(
         &mut self,
         _encoded_frame: EncodedFrame,
@@ -63,6 +74,9 @@ pub(crate) struct XbxVideoDecodeState {
     decoder_reset_count: u64,
     latest_decoder_reset_time_ms: Option<f64>,
     decoded_frame_drop_count: u64,
+    hardware_decode_failure_streak: u32,
+    latest_hardware_decode_failure_time_ms: Option<f64>,
+    latest_hardware_decode_failure_status: Option<i32>,
 }
 
 impl XbxVideoDecodeState {
@@ -78,6 +92,9 @@ impl XbxVideoDecodeState {
             decoder_reset_count: 0,
             latest_decoder_reset_time_ms: None,
             decoded_frame_drop_count: 0,
+            hardware_decode_failure_streak: 0,
+            latest_hardware_decode_failure_time_ms: None,
+            latest_hardware_decode_failure_status: None,
         })
     }
 
@@ -91,6 +108,7 @@ impl XbxVideoDecodeState {
         self.decoder.reset()?;
         self.decoder_reset_count = self.decoder_reset_count.saturating_add(1);
         self.latest_decoder_reset_time_ms = Some(now_ms_f64());
+        self.reset_hardware_failure_streak();
         Ok(())
     }
 
@@ -108,12 +126,14 @@ impl XbxVideoDecodeState {
             Ok(frame) => frame,
             Err(error) => {
                 crate::xbx_log_error!("[xbxengine][webrtc-rs] hardware decode failed: {error}");
+                self.record_hardware_decode_failure(now_ms, parse_decoder_status_code(&error));
                 None
             }
         };
         let Some(mut decoded_frame) = decoded_frame else {
             return;
         };
+        self.reset_hardware_failure_streak();
         self.latest_decoded_seq = self.latest_decoded_seq.saturating_add(1);
         self.last_decode_ok_time_ms = Some(now_ms);
         decoded_frame.frame_seq = self.latest_decoded_seq;
@@ -125,6 +145,34 @@ impl XbxVideoDecodeState {
 
     pub(crate) fn last_decode_ok_time_ms(&self) -> Option<f64> {
         self.last_decode_ok_time_ms
+    }
+
+    pub(crate) fn decoder_backend_name(&self) -> &'static str {
+        self.decoder.backend_name()
+    }
+
+    pub(crate) fn decoder_reset_count(&self) -> u64 {
+        self.decoder_reset_count
+    }
+
+    pub(crate) fn latest_decoder_reset_time_ms(&self) -> Option<f64> {
+        self.latest_decoder_reset_time_ms
+    }
+
+    pub(crate) fn decoded_frame_drop_count(&self) -> u64 {
+        self.decoded_frame_drop_count
+    }
+
+    pub(crate) fn hardware_decode_failure_streak(&self) -> u32 {
+        self.hardware_decode_failure_streak
+    }
+
+    pub(crate) fn latest_hardware_decode_failure_time_ms(&self) -> Option<f64> {
+        self.latest_hardware_decode_failure_time_ms
+    }
+
+    pub(crate) fn latest_hardware_decode_failure_status(&self) -> Option<i32> {
+        self.latest_hardware_decode_failure_status
     }
 
     pub(crate) fn pop_decoded_frame(&mut self, _now_ms: f64) -> Option<XbxRenderFrame> {
@@ -143,12 +191,27 @@ impl XbxVideoDecodeState {
             }
             self.decoded_frame_drop_count = self.decoded_frame_drop_count.saturating_add(1);
         }
-        crate::xbx_log_warn!(
-            "[xbxengine][vt] enqueue_decoded_frame: seq={} qlen={}",
-            frame.frame.frame_seq,
-            self.decoded_frame_queue.len() + 1
-        );
         self.decoded_frame_queue.push_back(frame);
+    }
+
+    // 连续硬解失败用于 recovery 诊断：只在短窗口内累加，避免偶发错误误触发。
+    fn record_hardware_decode_failure(&mut self, now_ms: f64, status: Option<i32>) {
+        let same_burst = self
+            .latest_hardware_decode_failure_time_ms
+            .map(|last| (now_ms - last).max(0.0) <= HARDWARE_DECODE_FAILURE_BURST_GAP_MS)
+            .unwrap_or(false);
+        self.hardware_decode_failure_streak = if same_burst {
+            self.hardware_decode_failure_streak.saturating_add(1)
+        } else {
+            1
+        };
+        self.latest_hardware_decode_failure_time_ms = Some(now_ms);
+        self.latest_hardware_decode_failure_status = status;
+    }
+
+    fn reset_hardware_failure_streak(&mut self) {
+        self.hardware_decode_failure_streak = 0;
+        self.latest_hardware_decode_failure_status = None;
     }
 }
 
@@ -170,6 +233,9 @@ impl XbxVideoDecodeState {
             decoder_reset_count: 0,
             latest_decoder_reset_time_ms: None,
             decoded_frame_drop_count: 0,
+            hardware_decode_failure_streak: 0,
+            latest_hardware_decode_failure_time_ms: None,
+            latest_hardware_decode_failure_status: None,
         }
     }
 
@@ -183,6 +249,15 @@ pub(crate) fn now_ms_f64() -> f64 {
         .duration_since(std::time::UNIX_EPOCH)
         .map(|duration| duration.as_millis() as f64)
         .unwrap_or(0.0)
+}
+
+fn parse_decoder_status_code(error: &XbxEngineRuntimeError) -> Option<i32> {
+    let message = error.to_string();
+    let status = message.split("status=").nth(1)?;
+    let token = status
+        .split(|ch: char| !(ch == '-' || ch.is_ascii_digit()))
+        .next()?;
+    token.parse::<i32>().ok()
 }
 
 #[cfg(target_os = "macos")]
@@ -209,31 +284,20 @@ impl MacOsVideoToolboxDecoder {
 
     fn ensure_decoder_session(&mut self, payload: &[u8]) -> Result<bool, XbxEngineRuntimeError> {
         let nals = split_annex_b_nals(payload);
-        crate::xbx_log_warn!(
-            "[xbxengine][vt] ensure_decoder_session: found {} nals",
-            nals.len()
-        );
         for nal in &nals {
             if nal.is_empty() {
                 continue;
             }
             let nal_type = nal[0] & 0x1f;
-            crate::xbx_log_warn!("[xbxengine][vt] found nal type={}", nal_type);
             match nal_type {
                 7 => {
                     if self.last_sps != *nal {
-                        crate::xbx_log_warn!(
-                            "[xbxengine][vt] SPS changed, forcing session recreate"
-                        );
                         self.last_sps = nal.to_vec();
                         self.release_session();
                     }
                 }
                 8 => {
                     if self.last_pps != *nal {
-                        crate::xbx_log_warn!(
-                            "[xbxengine][vt] PPS changed, forcing session recreate"
-                        );
                         self.last_pps = nal.to_vec();
                         self.release_session();
                     }
@@ -258,9 +322,6 @@ impl MacOsVideoToolboxDecoder {
             return Ok(true);
         }
 
-        crate::xbx_log_warn!(
-            "[xbxengine][webrtc-rs][vt] creating decoder session with stored SPS/PPS"
-        );
         self.release_session();
 
         let parameter_set_pointers = [self.last_sps.as_ptr(), self.last_pps.as_ptr()];
@@ -317,7 +378,6 @@ impl MacOsVideoToolboxDecoder {
                 );
             }
 
-            crate::xbx_log_warn!("[xbxengine][webrtc-rs][vt] calling VTDecompressionSessionCreate");
             let mut session: VTDecompressionSessionRef = std::ptr::null_mut();
             let status = VTDecompressionSessionCreate(
                 std::ptr::null(),
@@ -348,7 +408,6 @@ impl MacOsVideoToolboxDecoder {
         }
 
         self.format_description = format_description;
-        crate::xbx_log_warn!("[xbxengine][webrtc-rs][vt] decoder session created successfully");
         Ok(true)
     }
 
@@ -380,6 +439,10 @@ impl Drop for MacOsVideoToolboxDecoder {
 
 #[cfg(target_os = "macos")]
 impl XbxHardwareVideoDecoder for MacOsVideoToolboxDecoder {
+    fn backend_name(&self) -> &'static str {
+        "videotoolbox"
+    }
+
     fn decode(
         &mut self,
         encoded_frame: EncodedFrame,
@@ -481,7 +544,6 @@ impl XbxHardwareVideoDecoder for MacOsVideoToolboxDecoder {
         let (sync_tx, sync_rx) = std::sync::mpsc::sync_channel(1);
         output_state.sync_tx = Some(sync_tx);
 
-        crate::xbx_log_warn!("[xbxengine][vt] calling VTDecompressionSessionDecodeFrame");
         let mut decode_info_flags = 0u32;
         let status = unsafe {
             VTDecompressionSessionDecodeFrame(
@@ -492,11 +554,6 @@ impl XbxHardwareVideoDecoder for MacOsVideoToolboxDecoder {
                 &mut decode_info_flags,
             )
         };
-        crate::xbx_log_warn!(
-            "[xbxengine][vt] VTDecompressionSessionDecodeFrame status={}",
-            status
-        );
-
         unsafe {
             CFRelease(sample_buffer as CFTypeRef);
         }
@@ -544,6 +601,11 @@ impl XbxHardwareVideoDecoder for MacOsVideoToolboxDecoder {
             pixel_data: XbxEngineRenderPixelData::Descriptor {
                 handle: std::sync::Arc::new(crate::api::backend::MacOsCVPixelBufferDescriptor {
                     ptr: pixel_buffer as *mut _,
+                    color_matrix: pixel_buffer_color_matrix(pixel_buffer),
+                    color_primaries: pixel_buffer_color_primaries(pixel_buffer),
+                    transfer_function: pixel_buffer_transfer_function(pixel_buffer),
+                    color_range: pixel_buffer_color_range(pixel_buffer),
+                    chroma_location: pixel_buffer_chroma_location(pixel_buffer),
                     drop_fn: Some(Box::new(|ptr| unsafe {
                         CFRelease(ptr as CFTypeRef);
                     })),
@@ -594,18 +656,12 @@ extern "C" fn vt_decompression_output_callback(
     let output = unsafe { &mut *output_ptr };
     output.status = status;
     if status == NO_ERR && !image_buffer.is_null() {
-        crate::xbx_log_warn!("[xbxengine][vt] callback received valid image buffer");
         unsafe {
             // SAFETY: 回调返回后仍需读取像素缓冲，先 retain 再在上层释放。
             CFRetain(image_buffer as CFTypeRef);
         }
         output.pixel_buffer = image_buffer;
     } else {
-        crate::xbx_log_warn!(
-            "[xbxengine][vt] callback fired with status={} buffer_is_null={}",
-            status,
-            image_buffer.is_null()
-        );
         output.pixel_buffer = std::ptr::null_mut();
     }
 
@@ -678,6 +734,10 @@ type CVImageBufferRef = *mut std::ffi::c_void;
 type VTDecodeInfoFlags = u32;
 #[cfg(target_os = "macos")]
 type CFNumberRef = *const std::ffi::c_void;
+#[cfg(target_os = "macos")]
+type CFStringRef = *const std::ffi::c_void;
+#[cfg(target_os = "macos")]
+type CVAttachmentMode = u32;
 #[allow(non_upper_case_globals)]
 #[cfg(target_os = "macos")]
 const kCFNumberSInt32Type: i32 = 3;
@@ -788,8 +848,31 @@ unsafe extern "C" {
 #[link(name = "CoreVideo", kind = "framework")]
 unsafe extern "C" {
     static kCVPixelBufferPixelFormatTypeKey: *const std::ffi::c_void;
+    static kCVImageBufferYCbCrMatrixKey: CFStringRef;
+    static kCVImageBufferYCbCrMatrix_ITU_R_709_2: CFStringRef;
+    static kCVImageBufferYCbCrMatrix_ITU_R_601_4: CFStringRef;
+    static kCVImageBufferYCbCrMatrix_SMPTE_240M_1995: CFStringRef;
+    static kCVImageBufferYCbCrMatrix_ITU_R_2020: CFStringRef;
+    static kCVImageBufferColorPrimariesKey: CFStringRef;
+    static kCVImageBufferColorPrimaries_ITU_R_709_2: CFStringRef;
+    static kCVImageBufferColorPrimaries_P3_D65: CFStringRef;
+    static kCVImageBufferColorPrimaries_ITU_R_2020: CFStringRef;
+    static kCVImageBufferTransferFunctionKey: CFStringRef;
+    static kCVImageBufferTransferFunction_ITU_R_709_2: CFStringRef;
+    static kCVImageBufferTransferFunction_sRGB: CFStringRef;
+    static kCVImageBufferTransferFunction_Linear: CFStringRef;
+    static kCVImageBufferChromaLocationTopFieldKey: CFStringRef;
+    static kCVImageBufferChromaLocationBottomFieldKey: CFStringRef;
+    static kCVImageBufferChromaLocation_Center: CFStringRef;
+    static kCVImageBufferChromaLocation_Left: CFStringRef;
+    static kCVImageBufferChromaLocation_TopLeft: CFStringRef;
     fn CVPixelBufferGetWidth(pixel_buffer: CVImageBufferRef) -> usize;
     fn CVPixelBufferGetHeight(pixel_buffer: CVImageBufferRef) -> usize;
+    fn CVBufferGetAttachment(
+        buffer: CVImageBufferRef,
+        key: CFStringRef,
+        attachment_mode: *mut CVAttachmentMode,
+    ) -> CFTypeRef;
 }
 
 #[cfg(target_os = "macos")]
@@ -797,6 +880,7 @@ unsafe extern "C" {
 unsafe extern "C" {
     fn CFRetain(cf: CFTypeRef) -> CFTypeRef;
     fn CFRelease(cf: CFTypeRef);
+    fn CFEqual(cf1: CFTypeRef, cf2: CFTypeRef) -> bool;
 
     static kCFTypeDictionaryKeyCallBacks: std::ffi::c_void;
     static kCFTypeDictionaryValueCallBacks: std::ffi::c_void;
@@ -819,6 +903,115 @@ unsafe extern "C" {
     static kCFBooleanTrue: CFTypeRef;
 }
 
+#[cfg(target_os = "macos")]
+fn pixel_buffer_color_matrix(pixel_buffer: CVImageBufferRef) -> MacOsVideoColorMatrix {
+    let attachment = cv_attachment(pixel_buffer, unsafe { kCVImageBufferYCbCrMatrixKey });
+    match attachment {
+        Some(value) if cf_equals(value, unsafe { kCVImageBufferYCbCrMatrix_ITU_R_709_2 }) => {
+            MacOsVideoColorMatrix::Bt709
+        }
+        Some(value) if cf_equals(value, unsafe { kCVImageBufferYCbCrMatrix_ITU_R_601_4 }) => {
+            MacOsVideoColorMatrix::Bt601
+        }
+        Some(value) if cf_equals(value, unsafe { kCVImageBufferYCbCrMatrix_SMPTE_240M_1995 }) => {
+            MacOsVideoColorMatrix::Smpte240M
+        }
+        Some(value) if cf_equals(value, unsafe { kCVImageBufferYCbCrMatrix_ITU_R_2020 }) => {
+            MacOsVideoColorMatrix::Bt2020
+        }
+        Some(_) => MacOsVideoColorMatrix::Unknown,
+        None => MacOsVideoColorMatrix::Bt709,
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn pixel_buffer_color_primaries(pixel_buffer: CVImageBufferRef) -> MacOsVideoColorPrimaries {
+    let attachment = cv_attachment(pixel_buffer, unsafe { kCVImageBufferColorPrimariesKey });
+    match attachment {
+        Some(value) if cf_equals(value, unsafe { kCVImageBufferColorPrimaries_ITU_R_709_2 }) => {
+            MacOsVideoColorPrimaries::Bt709
+        }
+        Some(value) if cf_equals(value, unsafe { kCVImageBufferColorPrimaries_P3_D65 }) => {
+            MacOsVideoColorPrimaries::P3D65
+        }
+        Some(value) if cf_equals(value, unsafe { kCVImageBufferColorPrimaries_ITU_R_2020 }) => {
+            MacOsVideoColorPrimaries::Bt2020
+        }
+        Some(_) => MacOsVideoColorPrimaries::Unknown,
+        None => MacOsVideoColorPrimaries::Bt709,
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn pixel_buffer_transfer_function(pixel_buffer: CVImageBufferRef) -> MacOsVideoTransferFunction {
+    let attachment = cv_attachment(pixel_buffer, unsafe { kCVImageBufferTransferFunctionKey });
+    match attachment {
+        Some(value) if cf_equals(value, unsafe { kCVImageBufferTransferFunction_ITU_R_709_2 }) => {
+            MacOsVideoTransferFunction::Bt709
+        }
+        Some(value) if cf_equals(value, unsafe { kCVImageBufferTransferFunction_sRGB }) => {
+            MacOsVideoTransferFunction::Srgb
+        }
+        Some(value) if cf_equals(value, unsafe { kCVImageBufferTransferFunction_Linear }) => {
+            MacOsVideoTransferFunction::Linear
+        }
+        Some(_) => MacOsVideoTransferFunction::Unknown,
+        None => MacOsVideoTransferFunction::Bt709,
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn pixel_buffer_color_range(_pixel_buffer: CVImageBufferRef) -> MacOsVideoColorRange {
+    // 当前 VideoToolbox 会话固定请求 video-range NV12，先显式带入 descriptor。
+    MacOsVideoColorRange::Video
+}
+
+#[cfg(target_os = "macos")]
+fn pixel_buffer_chroma_location(pixel_buffer: CVImageBufferRef) -> MacOsVideoChromaLocation {
+    let attachment = cv_attachment(pixel_buffer, unsafe {
+        kCVImageBufferChromaLocationTopFieldKey
+    })
+    .or_else(|| {
+        cv_attachment(pixel_buffer, unsafe {
+            kCVImageBufferChromaLocationBottomFieldKey
+        })
+    });
+    match attachment {
+        Some(value) if cf_equals(value, unsafe { kCVImageBufferChromaLocation_Center }) => {
+            MacOsVideoChromaLocation::Center
+        }
+        Some(value) if cf_equals(value, unsafe { kCVImageBufferChromaLocation_Left }) => {
+            MacOsVideoChromaLocation::Left
+        }
+        Some(value) if cf_equals(value, unsafe { kCVImageBufferChromaLocation_TopLeft }) => {
+            MacOsVideoChromaLocation::TopLeft
+        }
+        Some(_) => MacOsVideoChromaLocation::Unknown,
+        None => MacOsVideoChromaLocation::Center,
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn cv_attachment(pixel_buffer: CVImageBufferRef, key: CFStringRef) -> Option<CFTypeRef> {
+    if pixel_buffer.is_null() || key.is_null() {
+        return None;
+    }
+    let value = unsafe { CVBufferGetAttachment(pixel_buffer, key, std::ptr::null_mut()) };
+    if value.is_null() {
+        None
+    } else {
+        Some(value)
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn cf_equals(lhs: CFTypeRef, rhs: CFTypeRef) -> bool {
+    if lhs.is_null() || rhs.is_null() {
+        return false;
+    }
+    unsafe { CFEqual(lhs, rhs) }
+}
+
 #[cfg(test)]
 mod tests {
     use std::sync::{
@@ -837,6 +1030,10 @@ mod tests {
     }
 
     impl XbxHardwareVideoDecoder for SpyHardwareDecoder {
+        fn backend_name(&self) -> &'static str {
+            "spy"
+        }
+
         fn decode(
             &mut self,
             _encoded_frame: EncodedFrame,

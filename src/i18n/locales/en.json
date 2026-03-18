@@ -34,6 +34,8 @@
     "emptyBody": "The current catalog is empty. Try refreshing again later.",
     "emptySearchTitle": "No cloud games matched your search",
     "emptySearchBody": "No cloud games were found for “{keyword}”. Try another search term.",
+    "refreshingHint": "Refreshing the catalog in the background...",
+    "cachedHint": "Showing cached catalog. Last updated at {time}",
     "searchLabel": "Search",
     "searchPlaceholder": "Search games, people, and more",
     "resultsCount": "{count} games",
@@ -89,7 +91,10 @@
       "cloud": "XCLOUD"
     },
     "status": {
+      "connectingHost": "Connecting to the console...",
       "wakingConsole": "Waking console...",
+      "waitingConsoleReady": "Waiting for the console to wake and become stream-ready...",
+      "startingStream": "Starting the stream...",
       "retryingTurn": "Direct connection failed, retrying with TURN relay...",
       "creatingSession": "Creating stream session...",
       "waitingSession": "Waiting for stream session readiness...",
@@ -208,6 +213,12 @@
         "server": "Server",
         "relay": "TURN",
         "path": "Path",
+        "profile": "Profile",
+        "phase": "Phase",
+        "reason": "Reason",
+        "band": "Bitrate Band",
+        "health": "Video Health",
+        "stall": "Stall Kind",
         "status": "Status"
       },
       "values": {
@@ -242,13 +253,21 @@
       "sending": "Sending..."
     },
     "errors": {
+      "authFailed": "Sign-in state expired. Sign in again and retry.",
+      "consoleReadyFailed": "The console did not reach a stream-ready state. Verify it woke successfully.",
       "invalidAnswer": "Streaming answer is invalid",
       "invalidOffer": "Streaming local offer is invalid",
+      "networkFailed": "Network request failed. Check your connection and retry.",
       "unknown": "Unknown error",
       "connectionFailed": "Streaming connection failed",
       "connectionClosed": "Streaming connection closed",
+      "hostRemotePlayUnavailable": "Remote Play on the console is currently unavailable. Check the console network and Remote Play settings, then restart the console if needed.",
+      "runtimeStartFailed": "The streaming player failed to start",
+      "sessionCreateFailed": "Failed to create the streaming session",
       "sessionMissing": "Streaming session is missing",
+      "sessionReadyFailed": "The streaming session never reached a connectable state",
       "startFailed": "Failed to start stream",
+      "wakeFailed": "Failed to wake the console. Verify it is online and remote features are enabled.",
       "remoteConsoleNotReady": "The console has not finished registering for remote streaming yet. Diagnostic details: {details}",
       "targetMissing": "Stream target id is missing",
       "powerOffFailed": "The power-off command was not accepted. Verify remote features are enabled and try again."
@@ -626,9 +645,10 @@
             "label": "Auto",
             "description": "Automatically select the most suitable codec"
           },
-          "video_h264_4d": { "label": "H264-High" },
-          "video_h264_42e": { "label": "H264-Medium" },
-          "video_h264_420": { "label": "H264-Low" }
+          "video_h264_64": { "label": "H264-High" },
+          "video_h264_4d": { "label": "H264-Main" },
+          "video_h264_42e": { "label": "H264-Constrained Baseline" },
+          "video_h264_420": { "label": "H264-Baseline" }
         }
       },
       "polling_rate": {

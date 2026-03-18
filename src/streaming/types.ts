@@ -46,6 +46,13 @@ export interface StreamPerformanceSnapshot {
   rtt?: string | number
   jit?: string | number
   fps?: string | number
+  sessionPhase?: string
+  transportPolicyProfile?: string
+  recoveryPolicyProfile?: string
+  recoveryDiagnosis?: string
+  directGamingBitrateBand?: string
+  videoHealth?: string
+  stallKind?: string
   inboundVideoFps?: number
   decodeFps?: number
   presentFps?: number
@@ -79,6 +86,7 @@ export interface StreamPerformanceSnapshot {
   videoPacerDropCountTotal?: number
   videoRendererSubmitCountTotal?: number
   videoRendererDropCountTotal?: number
+  videoPresentDropCountTotal?: number
   videoPresentOverwriteCountTotal?: number
   videoPresentSubmitCountTotal?: number
   recoveryKeyframeRequestCount?: number
@@ -95,6 +103,13 @@ export interface StreamSessionDiagnosticsSnapshot {
   serverHost?: string
   turnSource: 'none' | 'custom' | 'fallback'
   transportPath?: string
+  transportPolicyProfile?: string
+  recoveryPolicyProfile?: string
+  sessionPhase?: string
+  recoveryDiagnosis?: string
+  directGamingBitrateBand?: string
+  videoHealth?: string
+  stallKind?: string
   isRelayPath: boolean
   isRecovering: boolean
   hasNoVideoWarning: boolean

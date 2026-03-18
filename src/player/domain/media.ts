@@ -16,6 +16,13 @@ export interface StreamStats {
   resolution: string
   rtt: string
   fps: number
+  sessionPhase?: string
+  transportPolicyProfile?: string
+  recoveryPolicyProfile?: string
+  recoveryDiagnosis?: string
+  directGamingBitrateBand?: string
+  videoHealth?: string
+  stallKind?: string
   inboundVideoFps?: number
   decodeFps?: number
   presentFps?: number
@@ -35,6 +42,17 @@ export interface StreamStats {
   inboundVideoBytesTotal?: number
   inboundAudioBytesTotal?: number
   inboundVideoPacketCountTotal?: number
+  videoTrackStatus?: {
+    state: string
+    videoWidth?: number | null
+    videoHeight?: number | null
+    mimeType?: string | null
+    transportState?: string
+    videoBytesTotal: number
+    videoPacketCountTotal: number
+    audioBytesTotal: number
+    observedAtMs: number
+  }
   videoDecoderResetCount?: number
   videoDecoderStalled?: boolean
   videoRendererStalled?: boolean
@@ -50,8 +68,12 @@ export interface StreamStats {
   videoPacerDropCountTotal?: number
   videoRendererSubmitCountTotal?: number
   videoRendererDropCountTotal?: number
+  videoPresentDropCountTotal?: number
   videoPresentOverwriteCountTotal?: number
   videoPresentSubmitCountTotal?: number
+  videoPresentDescriptorUploadMode?: string
+  videoPresentDescriptorMetalImportCountTotal?: number
+  videoPresentDescriptorCpuUploadCountTotal?: number
   recoveryKeyframeRequestCount?: number
   recoveryDecoderResetCount?: number
   recoveryReconnectCount?: number

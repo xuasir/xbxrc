@@ -146,9 +146,18 @@ mod tests {
         assert_eq!(low.mime_type, "video/H264");
         assert_eq!(low.profiles, vec!["420".to_string()]);
 
+        let normal =
+            crate::policy::negotiation::compiler::compile_codec(CodecPreference::H264Normal)
+                .unwrap();
+        assert_eq!(normal.profiles, vec!["42e".to_string()]);
+
+        let main =
+            crate::policy::negotiation::compiler::compile_codec(CodecPreference::H264Main).unwrap();
+        assert_eq!(main.profiles, vec!["4d".to_string()]);
+
         let high =
             crate::policy::negotiation::compiler::compile_codec(CodecPreference::H264High).unwrap();
-        assert_eq!(high.profiles, vec!["4d".to_string()]);
+        assert_eq!(high.profiles, vec!["64".to_string()]);
     }
 
     #[test]

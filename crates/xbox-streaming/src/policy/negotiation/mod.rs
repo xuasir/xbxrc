@@ -47,6 +47,7 @@ pub enum CodecPreference {
     Auto,
     H264Low,
     H264Normal,
+    H264Main,
     H264High,
     MimeType {
         mime_type: String,

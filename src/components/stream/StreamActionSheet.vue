@@ -92,7 +92,6 @@ function handleSelect(id: string): void {
   position: absolute;
   inset: 0;
   background: var(--ui-scrim-bg);
-  backdrop-filter: blur(12px);
 }
 
 .stream-action-sheet-anchor {
@@ -112,10 +111,8 @@ function handleSelect(id: string): void {
   z-index: 1;
   padding: 32px 12px;
   background: var(--ui-surface-overlay);
-  backdrop-filter: blur(48px);
   border: 1px solid var(--ui-border-subtle);
   border-radius: 16px;
-  box-shadow: 20px 0 60px rgba(0, 0, 0, 0.5);
   display: flex;
   flex-direction: column;
   color: var(--ui-page-text);
@@ -181,7 +178,6 @@ function handleSelect(id: string): void {
 .stream-action-sheet__item[data-focused='true'] {
   background: var(--color-focus-bg-strong);
   color: var(--ui-focus-text);
-  box-shadow: var(--shadow-xbox-focus);
   transform: scale(1.02);
   z-index: 10;
 }

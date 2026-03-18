@@ -191,7 +191,19 @@ impl StreamingQueryService {
             .await
             .map_err(|error| error.to_string())?;
 
-        Ok(response.status().is_success())
+        let status = response.status();
+        if status.is_success() {
+            return Ok(true);
+        }
+
+        // 保留 XCCS 原始响应体，避免把关键业务错误吞成简单的 accepted=false。
+        let body = response.text().await.map_err(|error| error.to_string())?;
+        let body = body.trim();
+        if body.is_empty() {
+            Err(format!("XCCS command failed: HTTP {}", status.as_u16()))
+        } else {
+            Err(body.to_string())
+        }
     }
 
     async fn create_home_session_api(

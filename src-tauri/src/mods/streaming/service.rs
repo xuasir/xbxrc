@@ -3,9 +3,11 @@ use crate::mods::auth::AuthProviderRef;
 use crate::mods::config::ConfigProviderRef;
 use crate::mods::data::DataProviderRef;
 use crate::mods::runtime_trace::RuntimeTraceRecorderRef;
+use crate::mods::streaming::events;
 use crate::mods::streaming::types::*;
 use crate::mods::xbxengine::XbxEngineProviderRef;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
+use tauri::AppHandle;
 use xbox_streaming::input::{
     SupportedInput as DomainSupportedInput, TitleCapabilities as DomainTitleCapabilities,
 };
@@ -25,11 +27,13 @@ use xbox_streaming::{
     DisplayOptions as DomainDisplayOptions, FallbackTurnProvider, HostAddr as DomainHostAddr,
     IceCandidate as DomainIceCandidate, Plan as StreamingPlan, RemoteConsoleSnapshot, RuntimeFact,
     RuntimePreference, SessionFlowError, SessionFlowProvider, SessionFlowService,
-    Target as DomainTarget, TurnServer,
+    SessionStartupObserver, SessionStartupPhase as DomainStartupPhase,
+    SessionStartupPhaseStatus as DomainStartupPhaseStatus, Target as DomainTarget, TurnServer,
 };
 
 #[derive(Clone)]
 pub struct StreamingService {
+    app_handle: AppHandle,
     auth_provider: AuthProviderRef,
     config_provider: ConfigProviderRef,
     data_provider: DataProviderRef,
@@ -63,6 +67,115 @@ struct ResolvedRemotePlayContext {
 struct TauriSessionFlowProvider {
     auth_provider: AuthProviderRef,
     data_provider: DataProviderRef,
+    runtime_trace: RuntimeTraceRecorderRef,
+}
+
+struct StartupAttemptRecorder {
+    app_handle: AppHandle,
+    runtime_trace: RuntimeTraceRecorderRef,
+    attempt_id: String,
+    target_type: String,
+    target_id: String,
+    current_phase: Mutex<StreamingStartupPhase>,
+}
+
+impl StartupAttemptRecorder {
+    fn new(
+        app_handle: AppHandle,
+        runtime_trace: RuntimeTraceRecorderRef,
+        attempt_id: String,
+        target_type: String,
+        target_id: String,
+    ) -> Self {
+        Self {
+            app_handle,
+            runtime_trace,
+            attempt_id,
+            target_type,
+            target_id,
+            current_phase: Mutex::new(StreamingStartupPhase::ResolvingContext),
+        }
+    }
+
+    fn emit(
+        &self,
+        phase: StreamingStartupPhase,
+        status: StreamingStartupPhaseStatus,
+        summary: impl Into<String>,
+        details: Option<String>,
+    ) {
+        if !matches!(phase, StreamingStartupPhase::Failed) {
+            if let Ok(mut current_phase) = self.current_phase.lock() {
+                *current_phase = phase.clone();
+            }
+        }
+
+        let event = StreamingStartupEvent {
+            attempt_id: self.attempt_id.clone(),
+            target_type: self.target_type.clone(),
+            target_id: self.target_id.clone(),
+            phase: phase.clone(),
+            status: status.clone(),
+            summary: summary.into(),
+            details: details.clone(),
+            ts_ms: now_ms(),
+        };
+        self.runtime_trace.record_event(
+            "streaming",
+            "startupPhase",
+            None,
+            serde_json::json!({
+                "attemptId": event.attempt_id,
+                "targetType": event.target_type,
+                "targetId": event.target_id,
+                "phase": event.phase,
+                "status": event.status,
+                "summary": event.summary,
+                "details": event.details,
+                "tsMs": event.ts_ms,
+            }),
+        );
+        let _ = events::emit_startup_event(&self.app_handle, &event);
+    }
+
+    fn current_phase(&self) -> StreamingStartupPhase {
+        self.current_phase
+            .lock()
+            .map(|phase| phase.clone())
+            .unwrap_or(StreamingStartupPhase::Failed)
+    }
+
+    fn build_startup_error(&self, error: &SessionFlowError) -> StreamingStartupError {
+        let phase = self.current_phase();
+        let error_kind = classify_startup_error_kind(&phase, error);
+        StreamingStartupError {
+            attempt_id: self.attempt_id.clone(),
+            phase: phase.clone(),
+            error_kind: error_kind.clone(),
+            user_message_key: startup_error_message_key(&error_kind, error).to_string(),
+            diagnostic_summary: build_startup_diagnostic_summary(&phase, error),
+            raw_message: error.message.clone(),
+            retryable: is_startup_error_retryable(&error_kind, error),
+        }
+    }
+}
+
+impl SessionStartupObserver for StartupAttemptRecorder {
+    fn on_phase_event(
+        &self,
+        phase: DomainStartupPhase,
+        status: DomainStartupPhaseStatus,
+        details: Option<&str>,
+    ) {
+        let phase = map_startup_phase(phase);
+        let status = map_startup_phase_status(status);
+        self.emit(
+            phase.clone(),
+            status,
+            startup_phase_summary(&phase, details),
+            details.map(str::to_string),
+        );
+    }
 }
 
 #[async_trait::async_trait]
@@ -89,7 +202,27 @@ impl SessionFlowProvider for TauriSessionFlowProvider {
             .data_provider
             .power_on_console(console_id)
             .await
-            .map_err(SessionFlowError::message)?;
+            .map_err(|error| {
+                self.runtime_trace.record_event(
+                    "streaming",
+                    "powerOnConsoleFailed",
+                    None,
+                    serde_json::json!({
+                        "consoleId": console_id,
+                        "error": error,
+                    }),
+                );
+                SessionFlowError::message(error)
+            })?;
+        self.runtime_trace.record_event(
+            "streaming",
+            "powerOnConsoleResult",
+            None,
+            serde_json::json!({
+                "consoleId": console_id,
+                "accepted": result.accepted,
+            }),
+        );
         Ok(result.accepted)
     }
 
@@ -98,7 +231,34 @@ impl SessionFlowProvider for TauriSessionFlowProvider {
             .data_provider
             .get_remote_consoles()
             .await
-            .map_err(SessionFlowError::message)?;
+            .map_err(|error| {
+                self.runtime_trace.record_event(
+                    "streaming",
+                    "remoteConsolesQueryFailed",
+                    None,
+                    serde_json::json!({
+                        "error": error,
+                    }),
+                );
+                SessionFlowError::message(error)
+            })?;
+        self.runtime_trace.record_snapshot(
+            "streaming",
+            "remoteConsolesSnapshot",
+            None,
+            serde_json::json!({
+                "count": consoles.len(),
+                "consoles": consoles.iter().map(|console| {
+                    serde_json::json!({
+                        "id": console.id,
+                        "deviceId": console.device_id,
+                        "serverId": console.server_id,
+                        "powerState": console.power_state,
+                        "consoleStreamingEnabled": console.console_streaming_enabled,
+                    })
+                }).collect::<Vec<_>>(),
+            }),
+        );
         Ok(consoles
             .into_iter()
             .map(|console| RemoteConsoleSnapshot {
@@ -114,6 +274,7 @@ impl SessionFlowProvider for TauriSessionFlowProvider {
 
 impl StreamingService {
     pub fn new(
+        app_handle: AppHandle,
         auth_provider: AuthProviderRef,
         config_provider: ConfigProviderRef,
         data_provider: DataProviderRef,
@@ -123,9 +284,11 @@ impl StreamingService {
         let flow_provider = TauriSessionFlowProvider {
             auth_provider: auth_provider.clone(),
             data_provider: data_provider.clone(),
+            runtime_trace: runtime_trace.clone(),
         };
 
         Self {
+            app_handle,
             auth_provider,
             config_provider,
             data_provider,
@@ -151,7 +314,7 @@ impl StreamingService {
         };
 
         let config_snapshot = self.config_provider.get_streaming_config();
-        self.runtime_trace.record(
+        self.runtime_trace.record_snapshot(
             "streaming",
             "configSnapshot",
             None,
@@ -194,6 +357,29 @@ impl StreamingService {
         let context = self
             .build_domain_context(target, target_id, target_type.as_str(), access_context)
             .await;
+        self.runtime_trace.record_snapshot(
+            "streaming",
+            "contextSnapshot",
+            None,
+            serde_json::json!({
+                "targetType": target_type.as_str(),
+                "targetId": target_id,
+                "runtime": {
+                    "browserWebrtc": context.runtime.browser_webrtc,
+                    "rustOwned": context.runtime.rust_owned,
+                    "preferBrowser": context.runtime.prefer_browser,
+                },
+                "remotePlay": {
+                    "configurationResolved": context.remote_play.configuration_resolved,
+                    "remoteManagementEnabled": context.remote_play.remote_management_enabled,
+                    "consoleStreamingEnabled": context.remote_play.console_streaming_enabled,
+                    "consoleAddrsCount": context.remote_play.console_addrs.len(),
+                },
+                "turn": {
+                    "hasFallback": context.turn.fallback.is_some(),
+                },
+            }),
+        );
 
         let compiler_context = context.clone();
         let output = compile_plan(DomainCompilerInput {
@@ -201,7 +387,7 @@ impl StreamingService {
             context,
         })
         .map_err(|error| AppError::Streaming(error.to_string()))?;
-        self.runtime_trace.record(
+        self.runtime_trace.record_decision(
             "streaming",
             "compiledPlan",
             None,
@@ -478,18 +664,96 @@ impl crate::mods::streaming::StreamingProvider for StreamingService {
         &self,
         params: StreamingStartSessionParams,
     ) -> AppResult<StreamingStartSessionResult> {
+        let startup = StartupAttemptRecorder::new(
+            self.app_handle.clone(),
+            self.runtime_trace.clone(),
+            params.attempt_id.clone(),
+            params.target_type.clone(),
+            params.target_id.clone(),
+        );
+        startup.emit(
+            StreamingStartupPhase::ResolvingContext,
+            StreamingStartupPhaseStatus::Entered,
+            startup_phase_summary(&StreamingStartupPhase::ResolvingContext, None),
+            None,
+        );
         let (plan, compiler_context) = self
             .resolve_streaming_plan(&params.target_type, &params.target_id)
-            .await?;
+            .await
+            .map_err(|error| {
+                let flow_error = SessionFlowError::message(error.to_string());
+                let startup_error = startup.build_startup_error(&flow_error);
+                startup.emit(
+                    StreamingStartupPhase::Failed,
+                    StreamingStartupPhaseStatus::Failed,
+                    startup_error.diagnostic_summary.clone(),
+                    Some(startup_error.raw_message.clone()),
+                );
+                AppError::streaming_detailed(
+                    error.to_string(),
+                    serde_json::to_value(&startup_error).unwrap_or(serde_json::Value::Null),
+                )
+            })?;
+        startup.emit(
+            StreamingStartupPhase::ResolvingContext,
+            StreamingStartupPhaseStatus::Succeeded,
+            startup_phase_summary(
+                &StreamingStartupPhase::ResolvingContext,
+                Some("contextResolved"),
+            ),
+            Some("contextResolved".to_string()),
+        );
         // 执行快照会消费 plan，这里先投影出页面侧需要的稳定元数据。
         let metadata = project_session_metadata(&plan);
         let capabilities = project_session_capabilities(&compiler_context, &plan);
-        let execution = self
+        let execution = match self
             .inner
             .flow
-            .start_session_execution(plan, project_runtime_plan, project_render_plan)
+            .start_session_execution_with_observer(
+                plan,
+                project_runtime_plan,
+                project_render_plan,
+                Some(&startup),
+            )
             .await
-            .map_err(map_flow_error)?;
+        {
+            Ok(execution) => execution,
+            Err(error) => {
+                let startup_error = startup.build_startup_error(&error);
+                startup.emit(
+                    StreamingStartupPhase::Failed,
+                    StreamingStartupPhaseStatus::Failed,
+                    startup_error.diagnostic_summary.clone(),
+                    Some(startup_error.raw_message.clone()),
+                );
+                self.runtime_trace.record_event(
+                    "streaming",
+                    "sessionStartFailed",
+                    None,
+                    serde_json::json!({
+                        "attemptId": params.attempt_id,
+                        "targetType": params.target_type,
+                        "targetId": params.target_id,
+                        "startupError": startup_error,
+                        "error": {
+                            "message": error.message,
+                            "status": error.status,
+                            "body": error.body,
+                        },
+                    }),
+                );
+                return Err(AppError::streaming_detailed(
+                    error.to_string(),
+                    serde_json::to_value(&startup_error).unwrap_or(serde_json::Value::Null),
+                ));
+            }
+        };
+        startup.emit(
+            StreamingStartupPhase::StartingRuntime,
+            StreamingStartupPhaseStatus::Entered,
+            startup_phase_summary(&StreamingStartupPhase::StartingRuntime, None),
+            Some(execution.session.id.clone()),
+        );
         let mut runtime: crate::mods::streaming::types::StreamingRuntimeProjection =
             execution.runtime.into();
         runtime.vibration_strength = normalize_vibration_strength(
@@ -505,11 +769,17 @@ impl crate::mods::streaming::StreamingProvider for StreamingService {
             metadata: metadata.into(),
             capabilities: capabilities.into(),
         };
-        self.runtime_trace.record(
+        self.runtime_trace.record_state(
             "streaming",
             "sessionExecutionStarted",
             Some(&execution.session.id),
             &execution,
+        );
+        startup.emit(
+            StreamingStartupPhase::Ready,
+            StreamingStartupPhaseStatus::Succeeded,
+            startup_phase_summary(&StreamingStartupPhase::Ready, None),
+            Some(execution.session.id.clone()),
         );
 
         let progress = self
@@ -521,7 +791,7 @@ impl crate::mods::streaming::StreamingProvider for StreamingService {
             .unwrap_or_else(|| {
                 StreamingSessionProgressSnapshot::from_session_snapshot(&execution.session)
             });
-        self.runtime_trace.record(
+        self.runtime_trace.record_state(
             "streaming",
             "sessionProgress",
             Some(&execution.session.id),
@@ -529,6 +799,7 @@ impl crate::mods::streaming::StreamingProvider for StreamingService {
         );
 
         Ok(StreamingStartSessionResult {
+            attempt_id: params.attempt_id,
             execution,
             progress,
         })
@@ -550,7 +821,7 @@ impl crate::mods::streaming::StreamingProvider for StreamingService {
         &self,
         params: StreamingCloseSessionParams,
     ) -> AppResult<StreamingCloseSessionResult> {
-        self.runtime_trace.record(
+        self.runtime_trace.record_event(
             "streaming",
             "closeSessionRequested",
             Some(&params.session_id),
@@ -562,7 +833,7 @@ impl crate::mods::streaming::StreamingProvider for StreamingService {
             .close_session(&params.session_id)
             .await
             .map_err(map_flow_error)?;
-        self.runtime_trace.record(
+        self.runtime_trace.record_event(
             "streaming",
             "closeSessionResult",
             Some(&params.session_id),
@@ -573,7 +844,7 @@ impl crate::mods::streaming::StreamingProvider for StreamingService {
     }
 
     async fn send_keepalive(&self, session_id: String) -> AppResult<bool> {
-        self.runtime_trace.record(
+        self.runtime_trace.record_event(
             "streaming",
             "keepaliveRequested",
             Some(&session_id),
@@ -585,7 +856,7 @@ impl crate::mods::streaming::StreamingProvider for StreamingService {
             .send_keepalive(&session_id)
             .await
             .map_err(map_flow_error)?;
-        self.runtime_trace.record(
+        self.runtime_trace.record_event(
             "streaming",
             "keepaliveResult",
             Some(&session_id),
@@ -598,7 +869,7 @@ impl crate::mods::streaming::StreamingProvider for StreamingService {
         &self,
         params: StreamingExchangeOfferParams,
     ) -> AppResult<StreamingExchangeOfferResult> {
-        self.runtime_trace.record(
+        self.runtime_trace.record_event(
             "streaming",
             "exchangeOfferRequested",
             Some(&params.session_id),
@@ -615,7 +886,7 @@ impl crate::mods::streaming::StreamingProvider for StreamingService {
             )
             .await
             .map_err(map_flow_error)?;
-        self.runtime_trace.record(
+        self.runtime_trace.record_event(
             "streaming",
             "exchangeOfferResult",
             Some(&params.session_id),
@@ -635,7 +906,7 @@ impl crate::mods::streaming::StreamingProvider for StreamingService {
         &self,
         params: StreamingSubmitIceParams,
     ) -> AppResult<StreamingSubmitIceResult> {
-        self.runtime_trace.record(
+        self.runtime_trace.record_event(
             "streaming",
             "submitIceRequested",
             Some(&params.session_id),
@@ -651,7 +922,7 @@ impl crate::mods::streaming::StreamingProvider for StreamingService {
             .submit_ice(&params.session_id, &local_candidates, params.restart)
             .await
             .map_err(map_flow_error)?;
-        self.runtime_trace.record(
+        self.runtime_trace.record_event(
             "streaming",
             "submitIceResult",
             Some(&params.session_id),
@@ -661,7 +932,7 @@ impl crate::mods::streaming::StreamingProvider for StreamingService {
     }
 
     async fn poll_ice(&self, params: StreamingPollIceParams) -> AppResult<StreamingPollIceResult> {
-        self.runtime_trace.record(
+        self.runtime_trace.record_event(
             "streaming",
             "pollIceRequested",
             Some(&params.session_id),
@@ -673,7 +944,7 @@ impl crate::mods::streaming::StreamingProvider for StreamingService {
             .poll_ice(&params.session_id, params.restart)
             .await
             .map_err(map_flow_error)?;
-        self.runtime_trace.record(
+        self.runtime_trace.record_event(
             "streaming",
             "pollIceResult",
             Some(&params.session_id),
@@ -742,7 +1013,7 @@ impl crate::mods::streaming::StreamingProvider for StreamingService {
             }
         };
         let reason = reason.map(|value| value.as_str().to_string());
-        self.runtime_trace.record(
+        self.runtime_trace.record_decision(
             "streaming",
             "decideRecovery",
             Some(&params.session_id),
@@ -803,6 +1074,157 @@ fn normalize_optional(value: &str) -> Option<String> {
     }
 }
 
+fn map_startup_phase(phase: DomainStartupPhase) -> StreamingStartupPhase {
+    match phase {
+        DomainStartupPhase::ResolvingContext => StreamingStartupPhase::ResolvingContext,
+        DomainStartupPhase::WakingConsole => StreamingStartupPhase::WakingConsole,
+        DomainStartupPhase::WaitingConsoleReady => StreamingStartupPhase::WaitingConsoleReady,
+        DomainStartupPhase::CreatingSession => StreamingStartupPhase::CreatingSession,
+        DomainStartupPhase::WaitingSessionReady => StreamingStartupPhase::WaitingSessionReady,
+        DomainStartupPhase::StartingRuntime => StreamingStartupPhase::StartingRuntime,
+        DomainStartupPhase::Ready => StreamingStartupPhase::Ready,
+        DomainStartupPhase::Failed => StreamingStartupPhase::Failed,
+    }
+}
+
+fn map_startup_phase_status(status: DomainStartupPhaseStatus) -> StreamingStartupPhaseStatus {
+    match status {
+        DomainStartupPhaseStatus::Entered => StreamingStartupPhaseStatus::Entered,
+        DomainStartupPhaseStatus::Succeeded => StreamingStartupPhaseStatus::Succeeded,
+        DomainStartupPhaseStatus::Failed => StreamingStartupPhaseStatus::Failed,
+    }
+}
+
+fn startup_phase_summary(phase: &StreamingStartupPhase, details: Option<&str>) -> String {
+    let details_suffix = details
+        .filter(|value| !value.is_empty())
+        .map(|value| format!(" ({value})"))
+        .unwrap_or_default();
+    match phase {
+        StreamingStartupPhase::ResolvingContext => format!("resolvingContext{details_suffix}"),
+        StreamingStartupPhase::WakingConsole => format!("wakingConsole{details_suffix}"),
+        StreamingStartupPhase::WaitingConsoleReady => {
+            format!("waitingConsoleReady{details_suffix}")
+        }
+        StreamingStartupPhase::CreatingSession => format!("creatingSession{details_suffix}"),
+        StreamingStartupPhase::WaitingSessionReady => {
+            format!("waitingSessionReady{details_suffix}")
+        }
+        StreamingStartupPhase::StartingRuntime => format!("startingRuntime{details_suffix}"),
+        StreamingStartupPhase::Ready => format!("ready{details_suffix}"),
+        StreamingStartupPhase::Failed => format!("failed{details_suffix}"),
+    }
+}
+
+fn classify_startup_error_kind(
+    phase: &StreamingStartupPhase,
+    error: &SessionFlowError,
+) -> StreamingStartupErrorKind {
+    let normalized = error.message.to_ascii_lowercase();
+    if normalized.contains("target missing") {
+        return StreamingStartupErrorKind::Target;
+    }
+    if normalized.contains("auth") || normalized.contains("token missing") {
+        return StreamingStartupErrorKind::Auth;
+    }
+    if normalized.contains("network error") {
+        return StreamingStartupErrorKind::Network;
+    }
+    match phase {
+        StreamingStartupPhase::ResolvingContext => StreamingStartupErrorKind::Unknown,
+        StreamingStartupPhase::WakingConsole => StreamingStartupErrorKind::Wake,
+        StreamingStartupPhase::WaitingConsoleReady => StreamingStartupErrorKind::ConsoleReady,
+        StreamingStartupPhase::CreatingSession => StreamingStartupErrorKind::SessionCreate,
+        StreamingStartupPhase::WaitingSessionReady => StreamingStartupErrorKind::SessionReady,
+        StreamingStartupPhase::StartingRuntime => StreamingStartupErrorKind::Runtime,
+        StreamingStartupPhase::Ready => StreamingStartupErrorKind::Runtime,
+        StreamingStartupPhase::Failed => StreamingStartupErrorKind::Unknown,
+    }
+}
+
+fn startup_error_message_key(
+    kind: &StreamingStartupErrorKind,
+    error: &SessionFlowError,
+) -> &'static str {
+    if is_remote_console_wake_circuit_open_message(&error.message) {
+        return "streamPage.errors.hostRemotePlayUnavailable";
+    }
+    match kind {
+        StreamingStartupErrorKind::Wake => "streamPage.errors.wakeFailed",
+        StreamingStartupErrorKind::ConsoleReady => "streamPage.errors.consoleReadyFailed",
+        StreamingStartupErrorKind::SessionCreate => "streamPage.errors.sessionCreateFailed",
+        StreamingStartupErrorKind::SessionReady => "streamPage.errors.sessionReadyFailed",
+        StreamingStartupErrorKind::Runtime => "streamPage.errors.runtimeStartFailed",
+        StreamingStartupErrorKind::Network => "streamPage.errors.networkFailed",
+        StreamingStartupErrorKind::Auth => "streamPage.errors.authFailed",
+        StreamingStartupErrorKind::Target => "streamPage.errors.targetMissing",
+        StreamingStartupErrorKind::Unknown => "streamPage.errors.unknown",
+    }
+}
+
+fn build_startup_diagnostic_summary(
+    phase: &StreamingStartupPhase,
+    error: &SessionFlowError,
+) -> String {
+    if let Some(summary) = build_remote_console_wake_circuit_summary(&error.message) {
+        return format!("phase={phase:?}; {summary}");
+    }
+    let detail = error
+        .body
+        .as_deref()
+        .filter(|value| !value.is_empty())
+        .unwrap_or(&error.message);
+    format!("phase={phase:?}; detail={detail}")
+}
+
+fn is_startup_error_retryable(kind: &StreamingStartupErrorKind, error: &SessionFlowError) -> bool {
+    if is_remote_console_wake_circuit_open_message(&error.message) {
+        return false;
+    }
+    matches!(
+        kind,
+        StreamingStartupErrorKind::Wake
+            | StreamingStartupErrorKind::ConsoleReady
+            | StreamingStartupErrorKind::SessionCreate
+            | StreamingStartupErrorKind::SessionReady
+            | StreamingStartupErrorKind::Network
+    ) || error.status.is_some_and(|status| status >= 500)
+}
+
+fn is_remote_console_wake_circuit_open_message(message: &str) -> bool {
+    message
+        .to_ascii_lowercase()
+        .contains("remoteconsolewakecircuitopen")
+}
+
+fn build_remote_console_wake_circuit_summary(message: &str) -> Option<String> {
+    if !is_remote_console_wake_circuit_open_message(message) {
+        return None;
+    }
+
+    let target_id = extract_circuit_open_field(message, "targetId").unwrap_or("unknown");
+    let power_state = extract_circuit_open_field(message, "powerState").unwrap_or("unknown");
+    let wake_failure_count =
+        extract_circuit_open_field(message, "wakeFailureCount").unwrap_or("unknown");
+    Some(format!(
+        "targetId={target_id}; powerState={power_state}; wakeFailureCount={wake_failure_count}; hint=hostRemotePlayUnavailable"
+    ))
+}
+
+fn extract_circuit_open_field<'a>(message: &'a str, key: &str) -> Option<&'a str> {
+    let prefix = format!("{key}=");
+    message
+        .split(';')
+        .find_map(|segment| segment.trim().strip_prefix(&prefix))
+}
+
+fn now_ms() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|duration| duration.as_millis() as u64)
+        .unwrap_or(0)
+}
+
 fn apply_streaming_preferences(
     config: &mut DomainStreamingConfig,
     snapshot: &StreamingConfigSnapshot,
@@ -861,7 +1283,8 @@ fn parse_codec_preference(value: &str) -> CodecPreference {
         "" => CodecPreference::Auto,
         "video/H264-420" => CodecPreference::H264Low,
         "video/H264-42e" => CodecPreference::H264Normal,
-        "video/H264-4d" => CodecPreference::H264High,
+        "video/H264-4d" => CodecPreference::H264Main,
+        "video/H264-64" => CodecPreference::H264High,
         mime_type => CodecPreference::MimeType {
             mime_type: mime_type.to_string(),
         },
@@ -994,6 +1417,22 @@ mod tests {
             BitratePreference::CustomKbps { kbps: 24 }
         );
         assert_eq!(parse_codec_preference(""), CodecPreference::Auto);
+        assert_eq!(
+            parse_codec_preference("video/H264-64"),
+            CodecPreference::H264High
+        );
+        assert_eq!(
+            parse_codec_preference("video/H264-4d"),
+            CodecPreference::H264Main
+        );
+        assert_eq!(
+            parse_codec_preference("video/H264-42e"),
+            CodecPreference::H264Normal
+        );
+        assert_eq!(
+            parse_codec_preference("video/H264-420"),
+            CodecPreference::H264Low
+        );
         assert_eq!(parse_runtime_preference(""), RuntimePreference::Auto);
     }
 }

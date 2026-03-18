@@ -83,7 +83,6 @@ const notices = computed<StreamDiagnosticNoticeViewModel[]>(() => {
   max-width: 100%;
   padding: 10px 14px;
   border-radius: 14px;
-  backdrop-filter: blur(14px);
   color: #ffffff;
   font-size: 12px;
   font-weight: 600;
@@ -93,7 +92,7 @@ const notices = computed<StreamDiagnosticNoticeViewModel[]>(() => {
 
 .stream-diagnostic-notice-bar__item--info {
   background: var(--ui-scrim-bg);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--ui-border-subtle);
 }
 
 .stream-diagnostic-notice-bar__item--warning {

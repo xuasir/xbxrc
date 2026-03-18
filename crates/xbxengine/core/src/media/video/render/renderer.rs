@@ -174,7 +174,7 @@ impl XbxRenderState {
         XbxRenderSignalSnapshot {
             latest_present_time_ms,
             renderer_stalled,
-            fps: self.current_fps(),
+            fps: self.current_fps_at(now_ms),
             present_submit_count_total: self.present_submit_count_total,
             present_overwrite_count_total: self.present_overwrite_count_total,
         }
@@ -210,6 +210,35 @@ impl XbxRenderState {
             .unwrap_or(first);
         let window_ms = (last - first).max(1.0);
         ((len.saturating_sub(1)) as f64 * 1_000.0 / window_ms).max(0.0)
+    }
+
+    fn current_fps_at(&self, now_ms: f64) -> f64 {
+        let window_start_ms = now_ms - 1_000.0;
+        let mut first: Option<f64> = None;
+        let mut last: Option<f64> = None;
+        let mut count = 0usize;
+
+        for presented_at_ms in self.recent_present_times_ms.iter().copied() {
+            if presented_at_ms < window_start_ms {
+                continue;
+            }
+            first.get_or_insert(presented_at_ms);
+            last = Some(presented_at_ms);
+            count = count.saturating_add(1);
+        }
+
+        if count < 2 {
+            return 0.0;
+        }
+
+        let Some(first) = first else {
+            return 0.0;
+        };
+        let Some(last) = last else {
+            return 0.0;
+        };
+        let window_ms = (last - first).max(1.0);
+        ((count.saturating_sub(1)) as f64 * 1_000.0 / window_ms).max(0.0)
     }
 }
 
@@ -308,5 +337,30 @@ mod tests {
 
         let snapshot = state.render_signal_snapshot(1_050.0);
         assert!(snapshot.fps > 50.0);
+    }
+
+    #[test]
+    fn render_signal_snapshot_drops_stale_fps_to_zero() {
+        let mut state = XbxRenderState::default();
+        for index in 0..4u64 {
+            state
+                .present_frame(XbxRenderFrame {
+                    width: 2,
+                    height: 2,
+                    frame_seq: index + 1,
+                    rendered_at_ms: 1_000.0 + index as f64 * 16.0,
+                    pixel_data: XbxEngineRenderPixelData::Rgba {
+                        bytes: Arc::<[u8]>::from([0u8; 16]),
+                    },
+                })
+                .expect("present frame should work");
+        }
+
+        let snapshot = state.render_signal_snapshot(2_200.0);
+        assert_eq!(snapshot.fps, 0.0);
+
+        let stalled_snapshot = state.render_signal_snapshot(2_700.0);
+        assert_eq!(stalled_snapshot.fps, 0.0);
+        assert_eq!(stalled_snapshot.renderer_stalled, Some(true));
     }
 }

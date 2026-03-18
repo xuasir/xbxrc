@@ -89,7 +89,6 @@ function handleSelect(id: string): void {
   position: absolute;
   inset: 0;
   background: var(--ui-scrim-bg);
-  backdrop-filter: blur(4px);
 }
 
 .stream-alert-sheet__panel {
@@ -100,7 +99,6 @@ function handleSelect(id: string): void {
   background: var(--ui-surface-overlay);
   border: 1px solid var(--ui-border-subtle);
   border-radius: 16px;
-  box-shadow: var(--ui-shadow-overlay);
   color: var(--ui-page-text);
   text-align: left;
 }
@@ -144,7 +142,6 @@ function handleSelect(id: string): void {
 .stream-alert-sheet__action[data-focused='true'] {
   background: var(--color-focus-bg-strong);
   color: var(--ui-focus-text);
-  box-shadow: var(--shadow-xbox-focus);
   transform: scale(1.02);
 }
 

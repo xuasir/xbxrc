@@ -162,9 +162,9 @@ impl Default for SessionSchedulePlan {
             keepalive_interval_ms: 30_000,
             offer_poll_interval_ms: 1_000,
             ice_poll_interval_ms: 1_000,
-            // 与重构前默认行为保持一致：启动/ready 超时窗口默认 45 秒。
-            startup_timeout_ms: 45_000,
-            ready_timeout_ms: 45_000,
+            // xHome 慢启动与服务注册完成可能超过 45 秒，默认窗口保持 90 秒更稳妥。
+            startup_timeout_ms: 90_000,
+            ready_timeout_ms: 90_000,
             retry_backoff_ms: vec![1_000, 3_000, 5_000],
             wake_console: false,
             require_console_ready: false,
