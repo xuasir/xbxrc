@@ -115,7 +115,7 @@ Use for:
 - locating likely modification sites
 
 Recommended model class:
-- lower-cost / lower-reasoning model
+- 5.1-mini low reasoning
 
 ### Analysis Agent
 Use for:
@@ -227,39 +227,20 @@ End every task with:
 
 Always respond in this structure:
 
-GOAL:
-<one line>
+GOAL: <one line immutable objective>
 
-CONSTRAINTS:
-- ...
-- ...
-
-ACCEPTANCE:
-- ...
-- ...
-
-CURRENT PHASE:
-<phase>
+PROGRESS: [<PHASE>] - <ACTIVE STEP>
+- [x] ...
+- [ ] ...
 
 PLAN:
 1. ...
 2. ...
-3. ...
 
-CURRENT STEP:
-<active execution step>
+RISKS/DECISIONS: <brief item or none>
 
-STATE:
-[x] ...
-[ ] ...
-[ ] ...
+SUBAGENT SUMMARY: <concise itemized summary if used; keep it extremely brief>
 
-RISKS / DECISIONS:
-- none
-or
-- <brief item>
-
-If a subagent was used, only include a concise summary, not the raw payload.
 
 ## 13. Hard Rules
 
