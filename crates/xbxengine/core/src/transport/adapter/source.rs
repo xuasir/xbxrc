@@ -1,4 +1,4 @@
-use crate::transport::h264_resolution::parse_sps_dimensions_from_nal;
+use crate::media::video::h264::inspection::H264AccessUnitInspection;
 use crate::transport::webrtc::recovery::recovery_signal::VideoRecoverySignal;
 
 use super::{
@@ -12,6 +12,22 @@ pub(super) enum RecoveryKeyframeAction {
     DropAndRequestKeyframe,
     TriggerWaitKeyframe,
     WaitKeyframe,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum InspectionAdmission {
+    Accept,
+    Recover(VideoRecoverySignal),
+}
+
+pub(super) fn resolve_inspection_admission(
+    inspection: &H264AccessUnitInspection,
+) -> InspectionAdmission {
+    if !inspection.slice_headers_valid {
+        return InspectionAdmission::Recover(VideoRecoverySignal::TransportAwaitRecoveryKeyframe);
+    }
+
+    InspectionAdmission::Accept
 }
 
 pub(super) fn resolve_recovery_keyframe_action(
@@ -68,58 +84,6 @@ pub(super) fn detect_forward_gap(
     (Some(last_highest), None)
 }
 
-fn parse_idr_and_sps(payload: &[u8]) -> (bool, Option<(u32, u32)>) {
-    let mut is_keyframe = false;
-    let mut resolution = None;
-    let mut i = 0;
-    while i + 3 < payload.len() {
-        let start_len = if payload[i] == 0 && payload[i + 1] == 0 && payload[i + 2] == 1 {
-            3
-        } else if i + 4 < payload.len()
-            && payload[i] == 0
-            && payload[i + 1] == 0
-            && payload[i + 2] == 0
-            && payload[i + 3] == 1
-        {
-            4
-        } else {
-            i += 1;
-            continue;
-        };
-
-        if i + start_len >= payload.len() {
-            break;
-        }
-
-        let nal_type = payload[i + start_len] & 0x1f;
-        let mut nal_end = payload.len();
-        let mut j = i + start_len;
-        while j + 3 < payload.len() {
-            if (payload[j] == 0 && payload[j + 1] == 0 && payload[j + 2] == 1)
-                || (j + 4 < payload.len()
-                    && payload[j] == 0
-                    && payload[j + 1] == 0
-                    && payload[j + 2] == 0
-                    && payload[j + 3] == 1)
-            {
-                nal_end = j;
-                break;
-            }
-            j += 1;
-        }
-
-        let nal = &payload[i + start_len..nal_end];
-        if nal_type == 5 {
-            is_keyframe = true;
-        } else if nal_type == 7 {
-            resolution = parse_sps_dimensions_from_nal(nal);
-        }
-
-        i = nal_end;
-    }
-    (is_keyframe, resolution)
-}
-
 impl WebrtcVideoAdapter {
     fn should_trigger_thin_stream_stall(&self, now: std::time::Instant) -> bool {
         self.assembling_frame_start.is_some_and(|started_at| {
@@ -146,7 +110,34 @@ impl FrameSource for WebrtcVideoAdapter {
                     self.assembling_frame_start = None;
                     self.current_assembly_packet_count = 0;
                     let payload = sample.data.to_vec();
-                    let (is_keyframe, maybe_res) = parse_idr_and_sps(&payload);
+                    let inspection = match self.h264_inspector.inspect_access_unit(&payload) {
+                        Ok(inspection) => inspection,
+                        Err(error) => {
+                            crate::xbx_log_error!(
+                                "[WebrtcVideoAdapter] h264 inspection failed: {error}"
+                            );
+                            self.waiting_for_recovery_keyframe = true;
+                            self.queue_recovery_signal(
+                                VideoRecoverySignal::TransportAwaitRecoveryKeyframe,
+                            );
+                            continue;
+                        }
+                    };
+                    match resolve_inspection_admission(&inspection) {
+                        InspectionAdmission::Accept => {}
+                        InspectionAdmission::Recover(signal) => {
+                            crate::xbx_log_warn!(
+                                "[WebrtcVideoAdapter] h264 inspection rejected sample ts={} bootstrap={:?} slice_headers_valid={}",
+                                sample.packet_timestamp,
+                                inspection.bootstrap_reject_reason,
+                                inspection.slice_headers_valid
+                            );
+                            self.waiting_for_recovery_keyframe = true;
+                            self.queue_recovery_signal(signal);
+                            continue;
+                        }
+                    }
+                    let is_keyframe = inspection.is_idr;
                     let media_dropped_packets = sample
                         .prev_dropped_packets
                         .saturating_sub(sample.prev_padding_packets);
@@ -228,13 +219,12 @@ impl FrameSource for WebrtcVideoAdapter {
                         }
                     }
 
-                    let mut config_changed = false;
-                    if let Some((w, h)) = maybe_res {
-                        if w != self.current_width || h != self.current_height {
-                            self.current_width = w;
-                            self.current_height = h;
-                            config_changed = true;
-                        }
+                    let config_changed = inspection.config_changed;
+                    if let Some(width) = inspection.width {
+                        self.current_width = width;
+                    }
+                    if let Some(height) = inspection.height {
+                        self.current_height = height;
                     }
 
                     let frame_value = FrameValue::new(is_keyframe, config_changed, payload.len());
@@ -248,11 +238,12 @@ impl FrameSource for WebrtcVideoAdapter {
                         .record_frame_target(target_playout_at_ms);
 
                     crate::xbx_log_debug!(
-                        "[Ingress] NALU Assb OK: size={}B, res={}x{}, is_kf={}",
+                        "[Ingress] NALU Assb OK: size={}B, res={}x{}, is_kf={}, bootstrap={}",
                         payload.len(),
                         self.current_width,
                         self.current_height,
-                        is_keyframe
+                        is_keyframe,
+                        inspection.bootstrap_ready
                     );
 
                     return Some(FrameSourceEvent::Frame(EncodedFrame {
@@ -265,6 +256,7 @@ impl FrameSource for WebrtcVideoAdapter {
                         rtp_timestamp: sample.packet_timestamp,
                         assembled_at: std::time::Instant::now(),
                         target_playout_time: std::time::Instant::now() + playout_delay,
+                        h264: inspection,
                         payload: Bytes::from(payload),
                     }));
                 }

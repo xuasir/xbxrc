@@ -50,21 +50,70 @@ impl VideoIngress {
     pub fn queue_depth(&self) -> usize {
         self.queue.len()
     }
+
+    /// 返回这帧若触发 reconfigure 时的具体原因，便于把 trace 收敛到参数集/尺寸/codec 维度。
+    pub fn describe_reconfigure_reason(&self, frame: &EncodedFrame) -> Option<String> {
+        let codec_changed = self
+            .current_codec
+            .as_ref()
+            .is_some_and(|codec| codec != &frame.codec);
+        let dimensions_changed = self.current_width != 0
+            && self.current_height != 0
+            && (self.current_width != frame.width || self.current_height != frame.height);
+
+        let mut reasons = Vec::new();
+        if frame.h264.parameter_sets_changed {
+            reasons.push("parameterSetsChanged");
+        }
+        if dimensions_changed {
+            reasons.push("dimensionsChanged");
+        }
+        if codec_changed {
+            reasons.push("codecChanged");
+        }
+
+        if frame.config_changed {
+            if reasons.is_empty() {
+                reasons.push("configChanged");
+            }
+            return Some(reasons.join(","));
+        }
+
+        if reasons.is_empty() {
+            return None;
+        }
+
+        Some(reasons.join(","))
+    }
 }
 
 impl FrameScheduler for VideoIngress {
     fn submit(&mut self, frame: EncodedFrame, now: Instant) -> IngressDecision {
-        // 关键帧必须优先于 config_changed 判定消费。
-        // 启动阶段第一张 keyframe 往往天然伴随 SPS/PPS / 分辨率变化，
-        // 如果先走 waiting_keyframe + config_changed 分支，会把“用来解除等待态的首帧”
-        // 自己丢掉，随后整条链会永久卡在 waitKeyframe。
-        if frame.is_keyframe {
+        // bootstrap_ready 是更严格的准入门槛：必须是干净 IDR、带完整参数集且语法有效。
+        // 只有这类 access unit 才允许解除等待态并进入硬解。
+        if frame.h264.bootstrap_ready {
             self.current_codec = Some(frame.codec.clone());
             self.current_width = frame.width;
             self.current_height = frame.height;
             self.waiting_keyframe = false;
+            frame.h264.commit();
 
             // 永远优先: 清空 backlog
+            self.queue.clear();
+            self.queue.push_back(frame);
+            return IngressDecision::Submit;
+        }
+
+        if frame.is_keyframe {
+            self.current_codec = Some(frame.codec.clone());
+            self.current_width = frame.width;
+            self.current_height = frame.height;
+
+            if self.waiting_keyframe {
+                return IngressDecision::WaitKeyframe;
+            }
+
+            frame.h264.commit();
             self.queue.clear();
             self.queue.push_back(frame);
             return IngressDecision::Submit;
@@ -83,7 +132,7 @@ impl FrameScheduler for VideoIngress {
             || self.current_width != frame.width
             || self.current_height != frame.height;
 
-        if config_mismatch && !frame.is_keyframe {
+        if config_mismatch {
             if self.waiting_keyframe {
                 return IngressDecision::WaitKeyframe;
             }
@@ -126,16 +175,19 @@ impl FrameScheduler for VideoIngress {
                     return IngressDecision::DropBacklog;
                 }
                 self.queue.remove(lowest_idx);
+                frame.h264.commit();
                 self.queue.push_back(frame);
                 return IngressDecision::DropBacklog;
             }
             if !frame.value.is_sync_point() {
                 return IngressDecision::DropBacklog;
             }
+            frame.h264.commit();
             self.queue.push_back(frame);
             return IngressDecision::DropBacklog;
         }
 
+        frame.h264.commit();
         self.queue.push_back(frame);
         IngressDecision::Submit
     }
@@ -153,9 +205,37 @@ fn scale_duration_by_per_mille(base: Duration, ratio_per_mille: u16, floor: Dura
 #[cfg(test)]
 mod tests {
     use super::{FrameScheduler, IngressDecision, VideoIngress};
+    use crate::media::video::h264::inspection::{
+        H264AccessUnitInspection, H264BootstrapRejectReason,
+    };
     use crate::media::video::types::{EncodedFrame, FrameValue, VideoCodec};
     use bytes::Bytes;
     use std::time::{Duration, Instant};
+
+    fn make_h264_inspection(bootstrap_ready: bool) -> H264AccessUnitInspection {
+        H264AccessUnitInspection {
+            nals: Vec::new(),
+            parameter_sets: None,
+            width: Some(1920),
+            height: Some(1080),
+            is_idr: bootstrap_ready,
+            has_vcl: true,
+            has_inband_sps: bootstrap_ready,
+            has_inband_pps: bootstrap_ready,
+            has_aud: false,
+            slice_headers_valid: bootstrap_ready,
+            parameter_sets_changed: false,
+            config_changed: false,
+            bootstrap_ready,
+            bootstrap_reject_reason: if bootstrap_ready {
+                None
+            } else {
+                Some(H264BootstrapRejectReason::MissingSps)
+            },
+            commit_state:
+                crate::media::video::h264::inspection::H264AccessUnitInspector::test_commit_state(),
+        }
+    }
 
     fn make_frame(
         now: Instant,
@@ -177,6 +257,7 @@ mod tests {
             } else {
                 now - Duration::from_millis(target_offset_ms.unsigned_abs())
             },
+            h264: make_h264_inspection(is_keyframe),
             payload: Bytes::from_static(b"x"),
         }
     }
@@ -269,5 +350,45 @@ mod tests {
         assert!(queued.config_changed);
         assert_eq!(queued.width, 2560);
         assert_eq!(queued.height, 1440);
+    }
+
+    #[test]
+    fn waiting_keyframe_requires_clean_bootstrap_frame() {
+        let now = Instant::now();
+        let mut ingress = VideoIngress::new(4, Duration::from_millis(250));
+
+        let dirty_keyframe = EncodedFrame {
+            h264: make_h264_inspection(false),
+            ..make_frame(now, FrameValue::new(true, false, 64 * 1024), true, 0)
+        };
+        assert_eq!(
+            ingress.submit(dirty_keyframe, now),
+            IngressDecision::WaitKeyframe
+        );
+    }
+
+    #[test]
+    fn describe_reconfigure_reason_prefers_parameter_sets_dimensions_and_codec() {
+        let now = Instant::now();
+        let mut ingress = VideoIngress::new(4, Duration::from_millis(250));
+
+        assert_eq!(
+            ingress.submit(
+                make_frame(now, FrameValue::new(true, true, 64 * 1024), true, 0),
+                now
+            ),
+            IngressDecision::Submit
+        );
+
+        let mut changed = make_frame(now, FrameValue::new(false, false, 8 * 1024), false, 0);
+        changed.width = 2560;
+        changed.height = 1440;
+        changed.config_changed = true;
+        changed.h264.parameter_sets_changed = true;
+
+        assert_eq!(
+            ingress.describe_reconfigure_reason(&changed).as_deref(),
+            Some("parameterSetsChanged,dimensionsChanged")
+        );
     }
 }

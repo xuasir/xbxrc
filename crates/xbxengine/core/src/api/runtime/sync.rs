@@ -111,10 +111,15 @@ where
         let Ok(runtime_stats) = self.media_backend.snapshot_runtime_stats() else {
             return;
         };
+        self.sync_recovery_snapshot(&runtime_stats);
         self.sync_transport_state(&runtime_stats);
         self.sync_video_track_status(&runtime_stats);
         self.sync_video_packet_stats(&runtime_stats);
         self.sync_video_frame_stats(&runtime_stats);
+    }
+
+    pub(super) fn sync_recovery_snapshot(&mut self, stats: &XbxEngineMediaRuntimeStats) {
+        self.snapshot.recovery_keyframe_request_count = stats.video_pli_request_count_total;
     }
 
     pub(super) fn sync_transport_state(&mut self, stats: &XbxEngineMediaRuntimeStats) {
@@ -175,6 +180,7 @@ where
     }
 
     pub(super) fn sync_video_packet_stats(&mut self, stats: &XbxEngineMediaRuntimeStats) {
+        self.sync_recovery_snapshot(stats);
         let Some(arrived_at_ms) = stats.latest_video_packet_arrival_time_ms else {
             return;
         };

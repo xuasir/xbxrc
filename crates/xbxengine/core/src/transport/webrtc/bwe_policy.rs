@@ -13,6 +13,7 @@ pub(crate) struct BweDecision {
 
 pub(crate) struct TwccGccInput<'a> {
     pub(crate) observation: &'a XbxEngineVideoTwccObservation,
+    pub(crate) rtt_ms: Option<f64>,
 }
 
 pub(crate) fn resolve_transport_policy_profile_kind(
@@ -43,6 +44,7 @@ pub(crate) fn resolve_target_remb_kbps(
     observed_remb_kbps: Option<u32>,
     actual_kbps: f64,
     loss_ratio: f64,
+    rtt_ms: Option<f64>,
     session_target_type: Option<&XbxEngineTargetTypeDto>,
     transport_path: Option<&str>,
     session_phase: SessionPhase,
@@ -63,16 +65,23 @@ pub(crate) fn resolve_target_remb_kbps(
     let current_kbps = (*last_sent_remb_kbps).clamp(floor_kbps, ceiling_kbps);
     let actual_headroom_kbps =
         ((actual_kbps * 1.25).round() as u32).clamp(floor_kbps, ceiling_kbps);
-    let twcc_input = twcc_observation.map(|observation| TwccGccInput { observation });
+    let twcc_input = twcc_observation.map(|observation| TwccGccInput {
+        observation,
+        rtt_ms,
+    });
+    let transport_profile = ScenarioPolicyResolver::resolve_transport_bwe_profile(
+        config,
+        session_target_type,
+        transport_path,
+        session_phase,
+    );
 
     let (next_kbps, reason) = match config.bwe_mode.as_str() {
         "twcc-gcc" => resolve_twcc_gcc_target(
             config,
             current_kbps,
             actual_headroom_kbps,
-            session_target_type,
-            transport_path,
-            session_phase,
+            transport_profile,
             recovery_coupling,
             twcc_input.as_ref(),
             hybrid_ramp_cooldown_ticks,
@@ -84,61 +93,80 @@ pub(crate) fn resolve_target_remb_kbps(
                     config,
                     current_kbps,
                     actual_headroom_kbps,
-                    session_target_type,
-                    transport_path,
-                    session_phase,
+                    transport_profile,
                     recovery_coupling,
                     Some(twcc),
                     hybrid_ramp_cooldown_ticks,
                 )
             } else {
-                let severe_loss = loss_ratio >= 0.08;
-                let sustained_loss = loss_ratio >= 0.01;
-                let mild_loss = loss_ratio >= 0.005;
-                let bitrate_overrun = actual_kbps > (current_kbps as f64 * 1.1);
-
-                if severe_loss || bitrate_overrun {
-                    *hybrid_ramp_cooldown_ticks = 12;
+                if is_severe_rtt(transport_profile, rtt_ms) {
+                    *hybrid_ramp_cooldown_ticks = transport_profile.severe_cooldown_ticks;
                     (
                         ((current_kbps as f64) * (config.remb_ramp_down_factor as f64 / 1000.0))
                             .round()
-                            .max(floor_kbps as f64) as u32,
-                        if severe_loss {
-                            "hybrid-severe-loss-backoff".to_string()
-                        } else {
-                            "hybrid-bitrate-overrun-backoff".to_string()
-                        },
+                            .max(floor_kbps as f64)
+                            .min(ceiling_kbps as f64) as u32,
+                        "hybrid-severe-rtt-backoff".to_string(),
                     )
-                } else if sustained_loss {
-                    *hybrid_ramp_cooldown_ticks = 10;
+                } else if is_high_rtt(transport_profile, rtt_ms) {
+                    *hybrid_ramp_cooldown_ticks =
+                        transport_profile.congestion_cooldown_ticks.max(1);
                     (
-                        current_kbps.min(actual_headroom_kbps).max(floor_kbps),
-                        "hybrid-sustained-loss-cap".to_string(),
+                        current_kbps.clamp(floor_kbps, ceiling_kbps),
+                        "hybrid-high-rtt-hold".to_string(),
                     )
-                } else if mild_loss {
-                    *hybrid_ramp_cooldown_ticks = 6;
-                    (
-                        current_kbps
-                            .min(actual_headroom_kbps.saturating_add(config.remb_ramp_up_step_kbps))
-                            .max(floor_kbps),
-                        "hybrid-mild-loss-hold".to_string(),
-                    )
-                } else if *hybrid_ramp_cooldown_ticks > 0 {
-                    *hybrid_ramp_cooldown_ticks = hybrid_ramp_cooldown_ticks.saturating_sub(1);
-                    (current_kbps, "hybrid-ramp-cooldown".to_string())
                 } else {
-                    let desired_kbps = observed_kbps.min(ceiling_kbps);
-                    (
-                        current_kbps
-                            .saturating_add(config.remb_ramp_up_step_kbps)
-                            .min(desired_kbps)
-                            .max(floor_kbps),
-                        if observed_remb_kbps.is_some() {
-                            "hybrid-ramp-up-observed".to_string()
-                        } else {
-                            "hybrid-ramp-up-ceiling".to_string()
-                        },
-                    )
+                    let severe_loss = loss_ratio >= 0.08;
+                    let sustained_loss = loss_ratio >= 0.01;
+                    let mild_loss = loss_ratio >= 0.005;
+                    let bitrate_overrun = actual_kbps > (current_kbps as f64 * 1.1);
+
+                    if severe_loss || bitrate_overrun {
+                        *hybrid_ramp_cooldown_ticks = 12;
+                        (
+                            ((current_kbps as f64) * (config.remb_ramp_down_factor as f64 / 1000.0))
+                                .round()
+                                .max(floor_kbps as f64) as u32,
+                            if severe_loss {
+                                "hybrid-severe-loss-backoff".to_string()
+                            } else {
+                                "hybrid-bitrate-overrun-backoff".to_string()
+                            },
+                        )
+                    } else if sustained_loss {
+                        *hybrid_ramp_cooldown_ticks = 10;
+                        (
+                            current_kbps.min(actual_headroom_kbps).max(floor_kbps),
+                            "hybrid-sustained-loss-cap".to_string(),
+                        )
+                    } else if mild_loss {
+                        *hybrid_ramp_cooldown_ticks = 6;
+                        (
+                            current_kbps
+                                .min(
+                                    actual_headroom_kbps
+                                        .saturating_add(config.remb_ramp_up_step_kbps),
+                                )
+                                .max(floor_kbps),
+                            "hybrid-mild-loss-hold".to_string(),
+                        )
+                    } else if *hybrid_ramp_cooldown_ticks > 0 {
+                        *hybrid_ramp_cooldown_ticks = hybrid_ramp_cooldown_ticks.saturating_sub(1);
+                        (current_kbps, "hybrid-ramp-cooldown".to_string())
+                    } else {
+                        let desired_kbps = observed_kbps.min(ceiling_kbps);
+                        (
+                            current_kbps
+                                .saturating_add(config.remb_ramp_up_step_kbps)
+                                .min(desired_kbps)
+                                .max(floor_kbps),
+                            if observed_remb_kbps.is_some() {
+                                "hybrid-ramp-up-observed".to_string()
+                            } else {
+                                "hybrid-ramp-up-ceiling".to_string()
+                            },
+                        )
+                    }
                 }
             }
         }
@@ -160,21 +188,13 @@ pub(crate) fn resolve_twcc_gcc_target(
     config: &XbxEngineWebRtcRuntimeConfig,
     current_kbps: u32,
     actual_headroom_kbps: u32,
-    session_target_type: Option<&XbxEngineTargetTypeDto>,
-    transport_path: Option<&str>,
-    session_phase: SessionPhase,
+    profile: crate::transport::webrtc::policy::TransportBweScenarioProfile,
     recovery_coupling: Option<RecoveryCouplingState>,
     twcc_input: Option<&TwccGccInput<'_>>,
     ramp_cooldown_ticks: &mut u8,
 ) -> (u32, String) {
     let floor_kbps = config.remb_floor_kbps.max(1);
     let ceiling_kbps = config.remb_ceiling_kbps.max(floor_kbps);
-    let profile = ScenarioPolicyResolver::resolve_transport_bwe_profile(
-        config,
-        session_target_type,
-        transport_path,
-        session_phase,
-    );
     let bounded_gaming_profile = profile.kind != ScenarioPolicyProfileKind::RelayGaming;
     let preferred_gaming_floor_kbps = floor_kbps.max(profile.preferred_floor(floor_kbps));
     let operating_ceiling_kbps = profile
@@ -210,6 +230,7 @@ pub(crate) fn resolve_twcc_gcc_target(
     };
 
     let twcc = twcc_input.observation;
+    let rtt_ms = twcc_input.rtt_ms;
     let stable_feedback = twcc.feedback_interval_ms.unwrap_or(0.0)
         <= profile.stable_feedback_interval_ms
         && twcc.observed_packet_count >= profile.stable_feedback_min_packets
@@ -305,6 +326,38 @@ pub(crate) fn resolve_twcc_gcc_target(
                 .max(hold_floor_kbps)
                 .clamp(preferred_gaming_floor_kbps, hold_ceiling_kbps),
             profile.reason(reason_suffix),
+        );
+    }
+
+    // RTT 是 transport 侧的直接拥塞信号，优先阻止“loss 还没起但排队已明显增加”的错误 ramp-up。
+    if is_severe_rtt(profile, rtt_ms) {
+        *ramp_cooldown_ticks = profile.severe_cooldown_ticks;
+        let backoff_kbps = ((current_kbps as f64) * (config.remb_ramp_down_factor as f64 / 1000.0))
+            .round()
+            .max(floor_kbps as f64) as u32;
+        return (
+            if bounded_gaming_profile {
+                backoff_kbps
+                    .min(desired_kbps.max(preferred_gaming_floor_kbps))
+                    .max(preferred_gaming_floor_kbps)
+            } else {
+                backoff_kbps.min(receive_headroom_kbps.max(floor_kbps))
+            },
+            profile.reason("severe-rtt-backoff"),
+        );
+    }
+
+    if is_high_rtt(profile, rtt_ms) {
+        *ramp_cooldown_ticks = profile.congestion_cooldown_ticks.max(1);
+        return (
+            if bounded_gaming_profile {
+                current_kbps
+                    .min(effective_peak_ceiling_kbps.min(ceiling_kbps))
+                    .max(preferred_gaming_floor_kbps)
+            } else {
+                current_kbps.min(receive_headroom_kbps.max(floor_kbps))
+            },
+            profile.reason("high-rtt-hold"),
         );
     }
 
@@ -406,12 +459,33 @@ pub(crate) fn resolve_twcc_gcc_target(
     )
 }
 
+fn is_high_rtt(
+    profile: crate::transport::webrtc::policy::TransportBweScenarioProfile,
+    rtt_ms: Option<f64>,
+) -> bool {
+    match (profile.high_rtt_ms_threshold, rtt_ms) {
+        (Some(threshold_ms), Some(value_ms)) => value_ms >= threshold_ms,
+        _ => false,
+    }
+}
+
+fn is_severe_rtt(
+    profile: crate::transport::webrtc::policy::TransportBweScenarioProfile,
+    rtt_ms: Option<f64>,
+) -> bool {
+    match (profile.severe_rtt_ms_threshold, rtt_ms) {
+        (Some(threshold_ms), Some(value_ms)) => value_ms >= threshold_ms,
+        _ => false,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
         classify_scenario_bitrate_band, resolve_transport_policy_profile_kind,
         resolve_twcc_gcc_target, RecoveryCouplingState, SessionPhase,
     };
+    use crate::transport::webrtc::policy::ScenarioPolicyResolver;
     use crate::transport::webrtc::recovery_coordinator::RecoveryCouplingMode;
     use crate::{XbxEngineVideoTwccObservation, XbxEngineWebRtcRuntimeConfig};
     use xbxengine_protocol::XbxEngineTargetTypeDto;
@@ -508,12 +582,16 @@ mod tests {
             &XbxEngineWebRtcRuntimeConfig::default(),
             18_000,
             20_000,
-            Some(&XbxEngineTargetTypeDto::Home),
-            Some("Direct (host->host)"),
-            SessionPhase::Recovering,
+            ScenarioPolicyResolver::resolve_transport_bwe_profile(
+                &XbxEngineWebRtcRuntimeConfig::default(),
+                Some(&XbxEngineTargetTypeDto::Home),
+                Some("Direct (host->host)"),
+                SessionPhase::Recovering,
+            ),
             Some(coupling),
             Some(&super::TwccGccInput {
                 observation: &observation,
+                rtt_ms: None,
             }),
             &mut cooldown,
         );
@@ -549,16 +627,61 @@ mod tests {
             &XbxEngineWebRtcRuntimeConfig::default(),
             12_000,
             14_000,
-            Some(&XbxEngineTargetTypeDto::Cloud),
-            Some("Direct (host->host)"),
-            SessionPhase::Startup,
+            ScenarioPolicyResolver::resolve_transport_bwe_profile(
+                &XbxEngineWebRtcRuntimeConfig::default(),
+                Some(&XbxEngineTargetTypeDto::Cloud),
+                Some("Direct (host->host)"),
+                SessionPhase::Startup,
+            ),
             Some(coupling),
             Some(&super::TwccGccInput {
                 observation: &observation,
+                rtt_ms: None,
             }),
             &mut cooldown,
         );
         assert_eq!(target, 20_000);
         assert_eq!(reason, "twcc-gcc-cloud-recovery-coupled-wait-keyframe-hold");
+    }
+
+    #[test]
+    fn direct_high_rtt_holds_ramp_up_even_when_twcc_is_clean() {
+        let observation = XbxEngineVideoTwccObservation {
+            observation_id: 2,
+            feedback_packet_count: 1,
+            covered_sequence_start: 1,
+            covered_sequence_end: 160,
+            covered_sequence_span: 160,
+            observed_packet_count: 160,
+            observed_byte_count: 180_000,
+            feedback_interval_ms: Some(100.0),
+            arrival_span_ms: Some(100.0),
+            receive_bitrate_kbps: Some(25_000.0),
+            delivery_ratio: 1.0,
+            packet_loss_ratio: 0.0,
+            observed_at_ms: 2.0,
+        };
+        let mut cooldown = 0;
+        let (target, reason) = resolve_twcc_gcc_target(
+            &XbxEngineWebRtcRuntimeConfig::default(),
+            20_000,
+            21_000,
+            ScenarioPolicyResolver::resolve_transport_bwe_profile(
+                &XbxEngineWebRtcRuntimeConfig::default(),
+                Some(&XbxEngineTargetTypeDto::Home),
+                Some("Direct (host->host)"),
+                SessionPhase::Steady,
+            ),
+            None,
+            Some(&super::TwccGccInput {
+                observation: &observation,
+                rtt_ms: Some(90.0),
+            }),
+            &mut cooldown,
+        );
+
+        assert_eq!(target, 20_000);
+        assert_eq!(reason, "twcc-gcc-direct-high-rtt-hold");
+        assert_eq!(cooldown, 1);
     }
 }

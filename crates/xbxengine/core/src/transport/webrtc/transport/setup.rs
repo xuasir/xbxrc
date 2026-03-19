@@ -7,9 +7,7 @@ use tokio::sync::mpsc;
 use webrtc::{
     api::media_engine::MIME_TYPE_H264,
     data_channel::{data_channel_init::RTCDataChannelInit, RTCDataChannel},
-    ice_transport::{
-        ice_candidate::RTCIceCandidate, ice_server::RTCIceServer,
-    },
+    ice_transport::{ice_candidate::RTCIceCandidate, ice_server::RTCIceServer},
     peer_connection::{
         configuration::RTCConfiguration, peer_connection_state::RTCPeerConnectionState,
         RTCPeerConnection,
@@ -429,6 +427,7 @@ pub(crate) fn install_peer_connection_callbacks(
                             observed_remb_kbps,
                             actual_kbps,
                             fraction_lost,
+                            if rtt > 0.0 { Some(rtt * 1000.0) } else { None },
                             session_target_type.as_ref(),
                             transport_path.as_deref(),
                             session_phase,
@@ -982,7 +981,10 @@ mod tests {
         let codecs = build_h264_codec_preferences();
         assert!(codecs.iter().any(|codec| {
             codec.payload_type == 124
-                && codec.capability.sdp_fmtp_line.contains("profile-level-id=4d0032")
+                && codec
+                    .capability
+                    .sdp_fmtp_line
+                    .contains("profile-level-id=4d0032")
         }));
     }
 }

@@ -1567,3 +1567,47 @@ fn runtime_waits_for_real_frame_before_populating_first_frame_timestamps() {
             && *frame_rendered_time_ms == frame_time_ms
     )));
 }
+
+#[test]
+fn runtime_syncs_keyframe_request_count_from_media_stats() {
+    let requests = Rc::new(RefCell::new(Vec::new()));
+    let events = Rc::new(RefCell::new(Vec::new()));
+    let backend = ScriptedMediaBackend::new(
+        XbxEngineMediaNegotiation {
+            local_offer_sdp: "offer".to_string(),
+            local_candidates: Vec::new(),
+            surface_id: "surface:viewport-1".to_string(),
+            video_width: 1920,
+            video_height: 1080,
+            first_frame_packet_arrival_time_ms: None,
+            frame_decoded_time_ms: None,
+            frame_rendered_time_ms: None,
+            input_status: XbxEngineInputStatus::default(),
+        },
+        XbxEngineMediaRuntimeStats {
+            transport_state: XbxEngineTransportStateDto::Connected,
+            video_pli_request_count_total: 3,
+            ..Default::default()
+        },
+    );
+    let runtime_stats = backend.runtime_stats.clone();
+    let mut runtime = XbxEngineRuntime::with_media_backend(
+        XbxEngineRuntimeConfig::default(),
+        TestHostBridge::new(requests),
+        TestEventSink::new(events),
+        backend,
+    );
+
+    runtime
+        .start(session(), viewport(), 1.0, None, None)
+        .expect("runtime start should succeed");
+    assert_eq!(runtime.snapshot().recovery_keyframe_request_count, 3);
+
+    runtime_stats
+        .lock()
+        .expect("lock runtime stats")
+        .video_pli_request_count_total = 5;
+    runtime.tick();
+
+    assert_eq!(runtime.snapshot().recovery_keyframe_request_count, 5);
+}

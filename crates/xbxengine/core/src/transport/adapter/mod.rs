@@ -4,6 +4,7 @@ use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+use crate::media::video::h264::inspection::H264AccessUnitInspector;
 use webrtc::peer_connection::RTCPeerConnection;
 use webrtc::track::track_remote::TrackRemote;
 use webrtc_media::io::sample_builder::SampleBuilder;
@@ -48,6 +49,8 @@ pub struct WebrtcVideoAdapter {
     nack_window: NackSequenceWindow,
     nack_skip_last_n: u16,
     last_highest_rtp_sequence: Option<u16>,
+    current_width: u32,
+    current_height: u32,
     recent_rtp_packets: VecDeque<RecentRtpPacket>,
     packet_gap_observation_id: u64,
     frame_deadline_tracker: FrameDeadlineTracker,
@@ -57,8 +60,7 @@ pub struct WebrtcVideoAdapter {
     waiting_for_recovery_keyframe: bool,
     sample_loss_burst_count: u8,
     clean_samples_since_loss: u8,
-    current_width: u32,
-    current_height: u32,
+    h264_inspector: H264AccessUnitInspector,
 }
 
 impl WebrtcVideoAdapter {
@@ -98,6 +100,8 @@ impl WebrtcVideoAdapter {
             nack_window: NackSequenceWindow::new(13 - 6),
             nack_skip_last_n: 2,
             last_highest_rtp_sequence: None,
+            current_width: 0,
+            current_height: 0,
             recent_rtp_packets: VecDeque::with_capacity(512),
             packet_gap_observation_id: 0,
             frame_deadline_tracker: FrameDeadlineTracker::new(frame_deadline_ms),
@@ -109,8 +113,7 @@ impl WebrtcVideoAdapter {
             waiting_for_recovery_keyframe: false,
             sample_loss_burst_count: 0,
             clean_samples_since_loss: 0,
-            current_width: 0,
-            current_height: 0,
+            h264_inspector: H264AccessUnitInspector::new(),
         }
     }
 

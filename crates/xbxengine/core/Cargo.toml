@@ -11,6 +11,8 @@ publish = false
 bytes.workspace = true
 cpal.workspace = true
 async-trait.workspace = true
+h264-reader.workspace = true
+hex-literal.workspace = true
 interceptor.workspace = true
 ohmygamepad-host = { path = "../../ohmygamepad/bridge/host" }
 ohmygamepad-protocol = { path = "../../ohmygamepad/protocol" }

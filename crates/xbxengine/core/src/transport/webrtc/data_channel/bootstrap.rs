@@ -87,6 +87,17 @@ pub(crate) fn install_data_channel_contracts(
                     }
                     let _ = chat_channel;
                 } else if label == "control" || label == "input" {
+                    if label == "control" {
+                        if let Ok(mut state) = runtime_state.lock() {
+                            // control channel 可能在 startup/recovery 期短暂 close 后 reopen。
+                            // close 路径会把 state.control_channel 清空，这里必须重新绑定，
+                            // 否则 recovery 会一直认为 control_open/control_ready 为 false。
+                            state.control_channel = Some(control_channel.clone());
+                        }
+                        crate::xbx_log_info!(
+                            "[xbxengine][webrtc-rs] rebound control channel reference after open"
+                        );
+                    }
                     bootstrap_post_handshake_channels(
                         runtime_state,
                         message_channel,
@@ -369,6 +380,9 @@ async fn flush_pending_recovery_requests(
     };
 
     if flush_decoder_reset {
+        crate::xbx_log_info!(
+            "[xbxengine][webrtc-rs] flushing pending decoder reset after control channel recovery"
+        );
         match request_decoder_reset_on_control_channel(&runtime_state, &control_channel).await {
             Ok(()) => {
                 if let Ok(mut state) = runtime_state.lock() {
@@ -390,6 +404,9 @@ async fn flush_pending_recovery_requests(
     }
 
     if flush_keyframe {
+        crate::xbx_log_info!(
+            "[xbxengine][webrtc-rs] flushing pending keyframe request after control channel recovery"
+        );
         match request_video_keyframe_on_control_channel(&runtime_state, &control_channel).await {
             Ok(()) => {
                 if let Ok(mut state) = runtime_state.lock() {
@@ -446,11 +463,24 @@ fn start_delayed_keyframe_prime(
             if let Ok(mut state) = runtime_state.lock() {
                 state.pending_keyframe_request = true;
             }
+            crate::xbx_log_warn!(
+                "[xbxengine][webrtc-rs] keyframe prime deferred because recovery protocol is not ready"
+            );
             return;
         }
-        let _ = control_channel
+        crate::xbx_log_info!(
+            "[xbxengine][webrtc-rs] sending delayed keyframe prime on control channel"
+        );
+        if let Err(error) = control_channel
             .send_text(build_control_keyframe_request_payload())
-            .await;
+            .await
+        {
+            crate::xbx_log_warn!("[xbxengine][webrtc-rs] delayed keyframe prime failed: {error}");
+        } else {
+            crate::xbx_log_info!(
+                "[xbxengine][webrtc-rs] sent delayed keyframe prime on control channel"
+            );
+        }
     })
 }
 

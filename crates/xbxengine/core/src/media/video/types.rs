@@ -1,6 +1,8 @@
 use bytes::Bytes;
 use std::time::Instant;
 
+use super::h264::inspection::H264AccessUnitInspection;
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum VideoCodec {
     H264,
@@ -82,6 +84,7 @@ pub struct EncodedFrame {
     pub assembled_at: Instant,
     pub target_playout_time: Instant,
 
+    pub h264: H264AccessUnitInspection,
     pub payload: Bytes,
 }
 

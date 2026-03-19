@@ -539,6 +539,7 @@ mod tests {
             0.012,
             None,
             None,
+            None,
             SessionPhase::Steady,
             None,
             None,
@@ -569,6 +570,7 @@ mod tests {
             None,
             9_000.0,
             0.12,
+            None,
             None,
             None,
             SessionPhase::Steady,
@@ -603,6 +605,7 @@ mod tests {
             0.0,
             None,
             None,
+            None,
             SessionPhase::Steady,
             None,
             None,
@@ -612,6 +615,40 @@ mod tests {
 
         assert_eq!(decision.target_kbps, 16_000);
         assert_eq!(decision.reason, "hybrid-ramp-cooldown");
+        assert_eq!(cooldown_ticks, 2);
+    }
+
+    #[test]
+    fn hybrid_bwe_backoffs_on_severe_rtt_without_twcc() {
+        let config = XbxEngineWebRtcRuntimeConfig {
+            bwe_mode: "hybrid".to_string(),
+            forced_remb_kbps: Some(100_000),
+            remb_floor_kbps: 12_000,
+            remb_ceiling_kbps: 100_000,
+            remb_ramp_up_step_kbps: 4_000,
+            remb_ramp_down_factor: 700,
+            ..Default::default()
+        };
+        let mut last_sent_remb_kbps = 50_000;
+        let mut cooldown_ticks = 0;
+
+        let decision = resolve_target_remb_kbps(
+            &config,
+            None,
+            9_000.0,
+            0.0,
+            Some(300.0),
+            None,
+            None,
+            SessionPhase::Steady,
+            None,
+            None,
+            &mut last_sent_remb_kbps,
+            &mut cooldown_ticks,
+        );
+
+        assert_eq!(decision.target_kbps, 35_000);
+        assert_eq!(decision.reason, "hybrid-severe-rtt-backoff");
         assert_eq!(cooldown_ticks, 2);
     }
 
@@ -649,6 +686,7 @@ mod tests {
             None,
             9_800.0,
             0.0,
+            None,
             Some(&XbxEngineTargetTypeDto::Home),
             Some("Direct (host->host)"),
             SessionPhase::Steady,
@@ -696,6 +734,7 @@ mod tests {
             None,
             18_000.0,
             0.0,
+            None,
             Some(&XbxEngineTargetTypeDto::Home),
             Some("Direct (host->host)"),
             SessionPhase::Steady,
@@ -743,6 +782,7 @@ mod tests {
             None,
             28_000.0,
             0.0,
+            None,
             Some(&XbxEngineTargetTypeDto::Home),
             Some("Direct (host->host)"),
             SessionPhase::Steady,

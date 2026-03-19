@@ -275,6 +275,8 @@ impl XbxActiveMediaStack {
                                         encoded_frame.height,
                                         encoded_frame.is_keyframe,
                                     );
+                                    let reconfigure_reason =
+                                        ingress.describe_reconfigure_reason(&encoded_frame);
                                     let decision = ingress.submit(encoded_frame, Instant::now());
                                     if matches!(
                                         decision,
@@ -289,8 +291,10 @@ impl XbxActiveMediaStack {
                                             stats.latest_video_frame_drop =
                                                 Some(XbxEngineVideoFrameDropObservation {
                                                     observation_id: frame_drop_observation_id,
-                                                    reason: map_ingress_drop_reason(&decision)
-                                                        .to_string(),
+                                                    reason: map_ingress_drop_reason(
+                                                        &decision,
+                                                        reconfigure_reason.as_deref(),
+                                                    ),
                                                     observed_at_ms: now_ms,
                                                     width: frame_meta.0,
                                                     height: frame_meta.1,
@@ -685,13 +689,26 @@ fn calculate_recent_fps(times: &VecDeque<f64>) -> f64 {
 
 fn map_ingress_drop_reason(
     decision: &crate::media::video::ingress::scheduler::IngressDecision,
-) -> &'static str {
+    reconfigure_reason: Option<&str>,
+) -> String {
     match decision {
-        crate::media::video::ingress::scheduler::IngressDecision::Submit => "submit",
-        crate::media::video::ingress::scheduler::IngressDecision::DropLate => "dropLate",
-        crate::media::video::ingress::scheduler::IngressDecision::DropBacklog => "dropBacklog",
-        crate::media::video::ingress::scheduler::IngressDecision::WaitKeyframe => "waitKeyframe",
-        crate::media::video::ingress::scheduler::IngressDecision::Reconfigure => "reconfigure",
+        crate::media::video::ingress::scheduler::IngressDecision::Submit => "submit".to_string(),
+        crate::media::video::ingress::scheduler::IngressDecision::DropLate => {
+            "dropLate".to_string()
+        }
+        crate::media::video::ingress::scheduler::IngressDecision::DropBacklog => {
+            "dropBacklog".to_string()
+        }
+        crate::media::video::ingress::scheduler::IngressDecision::WaitKeyframe => {
+            "waitKeyframe".to_string()
+        }
+        crate::media::video::ingress::scheduler::IngressDecision::Reconfigure => {
+            if let Some(reason) = reconfigure_reason {
+                format!("reconfigure:{reason}")
+            } else {
+                "reconfigure".to_string()
+            }
+        }
     }
 }
 

@@ -58,16 +58,43 @@ async fn execute_recovery_action(
     data_channel_state: &Arc<Mutex<XbxDataChannelState>>,
     decode_handle: Option<&Arc<DecodeActorHandle>>,
 ) {
+    log_recovery_action_start(observation_id, action, reason_label, data_channel_state);
     match action {
         RecoveryAction::RequestKeyframe => {
-            dispatch_keyframe_recovery(runtime_stats, data_channel_state).await;
+            dispatch_keyframe_recovery(
+                observation_id,
+                reason_label,
+                runtime_stats,
+                data_channel_state,
+            )
+            .await;
         }
         RecoveryAction::RequestDecoderReset => {
-            dispatch_decoder_reset_recovery(runtime_stats, data_channel_state, decode_handle).await;
+            dispatch_decoder_reset_recovery(
+                observation_id,
+                reason_label,
+                runtime_stats,
+                data_channel_state,
+                decode_handle,
+            )
+            .await;
         }
         RecoveryAction::RequestKeyframeAndDecoderReset | RecoveryAction::StartupLowQualityRetry => {
-            dispatch_keyframe_recovery(runtime_stats, data_channel_state).await;
-            dispatch_decoder_reset_recovery(runtime_stats, data_channel_state, decode_handle).await;
+            dispatch_keyframe_recovery(
+                observation_id,
+                reason_label,
+                runtime_stats,
+                data_channel_state,
+            )
+            .await;
+            dispatch_decoder_reset_recovery(
+                observation_id,
+                reason_label,
+                runtime_stats,
+                data_channel_state,
+                decode_handle,
+            )
+            .await;
         }
         RecoveryAction::WaitForBurst
         | RecoveryAction::WaitForDecoderResetBurst
@@ -88,32 +115,54 @@ async fn execute_recovery_action(
 }
 
 async fn dispatch_keyframe_recovery(
+    observation_id: u64,
+    reason_label: &str,
     runtime_stats: &Arc<Mutex<XbxEngineMediaRuntimeStats>>,
     data_channel_state: &Arc<Mutex<XbxDataChannelState>>,
 ) {
     if let Some(control_channel) = actionable_control_channel(data_channel_state) {
+        crate::xbx_log_info!(
+            "[xbxengine][recovery] observation_id={observation_id} reason={reason_label} dispatch keyframe via actionable control channel ({})",
+            describe_recovery_control_state(data_channel_state)
+        );
         match request_video_keyframe_on_control_channel(data_channel_state, &control_channel).await
         {
             Ok(()) => {
                 if let Ok(mut state) = data_channel_state.lock() {
                     state.pending_keyframe_request = false;
                 }
+                crate::xbx_log_info!(
+                    "[xbxengine][recovery] observation_id={observation_id} reason={reason_label} keyframe dispatch completed"
+                );
             }
-            Err(_) => {
+            Err(error) => {
                 if let Ok(mut state) = data_channel_state.lock() {
                     state.pending_keyframe_request = true;
                 }
+                crate::xbx_log_warn!(
+                    "[xbxengine][recovery] observation_id={observation_id} reason={reason_label} keyframe dispatch failed: {error}"
+                );
             }
         }
         return;
     }
     if already_pending_keyframe(data_channel_state) {
+        crate::xbx_log_info!(
+            "[xbxengine][recovery] observation_id={observation_id} reason={reason_label} keyframe dispatch skipped because request is already pending ({})",
+            describe_recovery_control_state(data_channel_state)
+        );
         return;
     }
+    crate::xbx_log_info!(
+        "[xbxengine][recovery] observation_id={observation_id} reason={reason_label} keyframe dispatch falling back to state-gated path ({})",
+        describe_recovery_control_state(data_channel_state)
+    );
     let _ = request_video_keyframe_from_state(data_channel_state, runtime_stats).await;
 }
 
 async fn dispatch_decoder_reset_recovery(
+    observation_id: u64,
+    reason_label: &str,
     runtime_stats: &Arc<Mutex<XbxEngineMediaRuntimeStats>>,
     data_channel_state: &Arc<Mutex<XbxDataChannelState>>,
     decode_handle: Option<&Arc<DecodeActorHandle>>,
@@ -121,27 +170,48 @@ async fn dispatch_decoder_reset_recovery(
     // decoder reset 语义必须同时覆盖本地硬解会话；否则远端即便补关键帧，
     // 本地坏掉的 VideoToolbox session 仍会继续卡住。
     if let Some(decode_handle) = decode_handle {
+        crate::xbx_log_info!(
+            "[xbxengine][recovery] observation_id={observation_id} reason={reason_label} flushing local decode actor before decoder reset"
+        );
         decode_handle.flush();
     }
     if let Some(control_channel) = actionable_control_channel(data_channel_state) {
+        crate::xbx_log_info!(
+            "[xbxengine][recovery] observation_id={observation_id} reason={reason_label} dispatch decoder reset via actionable control channel ({})",
+            describe_recovery_control_state(data_channel_state)
+        );
         match request_decoder_reset_on_control_channel(data_channel_state, &control_channel).await {
             Ok(()) => {
                 if let Ok(mut state) = data_channel_state.lock() {
                     state.pending_decoder_reset = false;
                     state.pending_keyframe_request = false;
                 }
+                crate::xbx_log_info!(
+                    "[xbxengine][recovery] observation_id={observation_id} reason={reason_label} decoder reset dispatch completed"
+                );
             }
-            Err(_) => {
+            Err(error) => {
                 if let Ok(mut state) = data_channel_state.lock() {
                     state.pending_decoder_reset = true;
                 }
+                crate::xbx_log_warn!(
+                    "[xbxengine][recovery] observation_id={observation_id} reason={reason_label} decoder reset dispatch failed: {error}"
+                );
             }
         }
         return;
     }
     if already_pending_decoder_reset(data_channel_state) {
+        crate::xbx_log_info!(
+            "[xbxengine][recovery] observation_id={observation_id} reason={reason_label} decoder reset dispatch skipped because request is already pending ({})",
+            describe_recovery_control_state(data_channel_state)
+        );
         return;
     }
+    crate::xbx_log_info!(
+        "[xbxengine][recovery] observation_id={observation_id} reason={reason_label} decoder reset dispatch falling back to state-gated path ({})",
+        describe_recovery_control_state(data_channel_state)
+    );
     let _ = request_decoder_reset_from_state(data_channel_state, runtime_stats).await;
 }
 
@@ -198,4 +268,40 @@ fn bump_recovery_action_counter(stats: &mut XbxEngineMediaRuntimeStats, action: 
         | RecoveryAction::StartupGraceSuppressed
         | RecoveryAction::RequestReconnectCandidate => {}
     }
+}
+
+fn log_recovery_action_start(
+    observation_id: u64,
+    action: RecoveryAction,
+    reason_label: &str,
+    data_channel_state: &Arc<Mutex<XbxDataChannelState>>,
+) {
+    crate::xbx_log_info!(
+        "[xbxengine][recovery] observation_id={observation_id} action={} reason={reason_label} ({})",
+        action.label(),
+        describe_recovery_control_state(data_channel_state)
+    );
+}
+
+// 恢复执行期把 control/handshake/pending 状态一起记下来，方便对照控制面是否真的发送。
+fn describe_recovery_control_state(data_channel_state: &Arc<Mutex<XbxDataChannelState>>) -> String {
+    data_channel_state
+        .lock()
+        .ok()
+        .map(|state| {
+            let control_open = state
+                .control_channel
+                .as_ref()
+                .is_some_and(|channel| channel.ready_state() == RTCDataChannelState::Open);
+            format!(
+                "control_ready={},control_open={control_open},handshake_acked={},control_started={},control_bootstrapped={},pending_keyframe={},pending_decoder_reset={}",
+                recovery_requests_ready(&state),
+                state.message_handshake_acked,
+                state.control_started,
+                state.control_bootstrapped_after_handshake,
+                state.pending_keyframe_request,
+                state.pending_decoder_reset,
+            )
+        })
+        .unwrap_or_else(|| "state=poisoned".to_string())
 }

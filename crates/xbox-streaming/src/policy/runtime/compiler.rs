@@ -4,7 +4,7 @@ use crate::policy::runtime::{
     RuntimeBweMode, RuntimeMode, RuntimePlan, RuntimePreference, RuntimeRecoveryPlan,
     RuntimeVideoPipelinePlan, TurnPlan,
 };
-use crate::policy::types::{CompileError, Owner, TurnSource};
+use crate::policy::types::{CompileError, Owner, Target, TurnSource};
 
 pub fn compile_runtime(config: &Config, context: &Context) -> Result<RuntimePlan, CompileError> {
     let mode = resolve_runtime_mode(config, context)?;
@@ -47,7 +47,7 @@ pub fn compile_runtime(config: &Config, context: &Context) -> Result<RuntimePlan
         remb_ceiling_kbps: compile_remb_ceiling_kbps(mode),
         remb_ramp_up_step_kbps: compile_remb_ramp_up_step_kbps(mode),
         remb_ramp_down_factor: compile_remb_ramp_down_factor(mode),
-        video_pipeline: compile_video_pipeline(mode),
+        video_pipeline: compile_video_pipeline(mode, context.target),
         recovery: compile_recovery(mode),
     })
 }
@@ -125,7 +125,7 @@ fn compile_remb_ramp_down_factor(mode: RuntimeMode) -> u16 {
     }
 }
 
-fn compile_video_pipeline(mode: RuntimeMode) -> RuntimeVideoPipelinePlan {
+fn compile_video_pipeline(mode: RuntimeMode, target: Target) -> RuntimeVideoPipelinePlan {
     match mode {
         RuntimeMode::WebRtcDirect => RuntimeVideoPipelinePlan {
             feedback_interval_ms: 1_000,
@@ -141,20 +141,27 @@ fn compile_video_pipeline(mode: RuntimeMode) -> RuntimeVideoPipelinePlan {
             late_frame_drop_threshold_ms: 500,
             backlog_drop_threshold_packets: 10,
         },
-        RuntimeMode::RustOwned => RuntimeVideoPipelinePlan {
-            feedback_interval_ms: 100,
-            nack_window_ms: 160,
-            nack_burst_count: 4,
-            nack_max_age_ms: 24,
-            nack_retry_interval_ms: 10,
-            nack_max_retry_count: 2,
-            jitter_buffer_min_delay_ms: 3,
-            jitter_buffer_max_delay_ms: 8,
-            jitter_buffer_max_packets: 384,
-            idle_timeout_ms: 80,
-            late_frame_drop_threshold_ms: 180,
-            backlog_drop_threshold_packets: 4,
-        },
+        RuntimeMode::RustOwned => {
+            if matches!(target, Target::Cloud) {
+                // 云串流先对齐浏览器档位，优先验证“更宽容的媒体恢复窗口”是否能消除
+                // transportExpiredDeadline；后续再按新 trace 逐项收紧。
+                return compile_video_pipeline(RuntimeMode::WebRtcDirect, target);
+            }
+            RuntimeVideoPipelinePlan {
+                feedback_interval_ms: 100,
+                nack_window_ms: 160,
+                nack_burst_count: 4,
+                nack_max_age_ms: 24,
+                nack_retry_interval_ms: 10,
+                nack_max_retry_count: 2,
+                jitter_buffer_min_delay_ms: 3,
+                jitter_buffer_max_delay_ms: 8,
+                jitter_buffer_max_packets: 384,
+                idle_timeout_ms: 80,
+                late_frame_drop_threshold_ms: 180,
+                backlog_drop_threshold_packets: 4,
+            }
+        }
     }
 }
 
@@ -170,6 +177,8 @@ fn compile_recovery(mode: RuntimeMode) -> RuntimeRecoveryPlan {
             stall_recovery_cooldown_ms: 6_000,
         },
         RuntimeMode::RustOwned => RuntimeRecoveryPlan {
+            // Rust-owned 首帧/坏参考链恢复仍然需要 sidecar 自己更积极地拉 keyframe/reset，
+            // 只放宽 video pipeline，不能把 recovery 也拖到浏览器节奏，否则首帧坏数据会卡太久。
             first_frame_grace_ms: 1_800,
             keyframe_request_stall_ms: 300,
             keyframe_loss_burst_threshold: 2,
@@ -178,5 +187,54 @@ fn compile_recovery(mode: RuntimeMode) -> RuntimeRecoveryPlan {
             reconnect_stall_ms: 2_400,
             stall_recovery_cooldown_ms: 1_600,
         },
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::compile_runtime;
+    use crate::policy::config::Config;
+    use crate::policy::context::Context;
+    use crate::policy::runtime::RuntimePreference;
+    use crate::policy::types::Target;
+
+    #[test]
+    fn rust_owned_cloud_aligns_video_pipeline_but_keeps_sidecar_recovery_profile() {
+        let mut config = Config::default();
+        config.runtime.mode = RuntimePreference::RustOwned;
+
+        let mut context = Context::default();
+        context.target = Target::Cloud;
+        context.runtime.rust_owned = true;
+
+        let runtime = compile_runtime(&config, &context).expect("compile runtime");
+
+        assert_eq!(runtime.video_pipeline.feedback_interval_ms, 1_000);
+        assert_eq!(runtime.video_pipeline.nack_max_age_ms, 200);
+        assert_eq!(runtime.video_pipeline.jitter_buffer_max_delay_ms, 30);
+        assert_eq!(runtime.video_pipeline.late_frame_drop_threshold_ms, 500);
+        assert_eq!(runtime.recovery.first_frame_grace_ms, 1_800);
+        assert_eq!(runtime.recovery.keyframe_request_stall_ms, 300);
+        assert_eq!(runtime.recovery.reconnect_stall_ms, 2_400);
+    }
+
+    #[test]
+    fn rust_owned_home_keeps_low_latency_sidecar_profile() {
+        let mut config = Config::default();
+        config.runtime.mode = RuntimePreference::RustOwned;
+
+        let mut context = Context::default();
+        context.target = Target::Home;
+        context.runtime.rust_owned = true;
+
+        let runtime = compile_runtime(&config, &context).expect("compile runtime");
+
+        assert_eq!(runtime.video_pipeline.feedback_interval_ms, 100);
+        assert_eq!(runtime.video_pipeline.nack_max_age_ms, 24);
+        assert_eq!(runtime.video_pipeline.jitter_buffer_max_delay_ms, 8);
+        assert_eq!(runtime.video_pipeline.late_frame_drop_threshold_ms, 180);
+        assert_eq!(runtime.recovery.first_frame_grace_ms, 1_800);
+        assert_eq!(runtime.recovery.keyframe_request_stall_ms, 300);
+        assert_eq!(runtime.recovery.reconnect_stall_ms, 2_400);
     }
 }

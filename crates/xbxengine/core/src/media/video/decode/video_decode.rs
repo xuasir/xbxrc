@@ -5,6 +5,7 @@ use crate::{
         MacOsVideoChromaLocation, MacOsVideoColorMatrix, MacOsVideoColorPrimaries,
         MacOsVideoColorRange, MacOsVideoTransferFunction,
     },
+    media::video::h264::inspection::H264AccessUnitInspection,
     media::video::render::renderer::XbxRenderFrame,
     media::video::types::EncodedFrame,
     XbxEngineRenderPixelData, XbxEngineRuntimeError,
@@ -77,6 +78,7 @@ pub(crate) struct XbxVideoDecodeState {
     hardware_decode_failure_streak: u32,
     latest_hardware_decode_failure_time_ms: Option<f64>,
     latest_hardware_decode_failure_status: Option<i32>,
+    waiting_for_recovery_keyframe: bool,
 }
 
 impl XbxVideoDecodeState {
@@ -95,6 +97,7 @@ impl XbxVideoDecodeState {
             hardware_decode_failure_streak: 0,
             latest_hardware_decode_failure_time_ms: None,
             latest_hardware_decode_failure_status: None,
+            waiting_for_recovery_keyframe: false,
         })
     }
 
@@ -109,11 +112,15 @@ impl XbxVideoDecodeState {
         self.decoder_reset_count = self.decoder_reset_count.saturating_add(1);
         self.latest_decoder_reset_time_ms = Some(now_ms_f64());
         self.reset_hardware_failure_streak();
+        self.waiting_for_recovery_keyframe = true;
         Ok(())
     }
 
     pub(crate) fn process_encoded_frame(&mut self, encoded_frame: EncodedFrame, now_ms: f64) {
         self.last_encoded_frame_time_ms = Some(now_ms);
+        if self.waiting_for_recovery_keyframe && !encoded_frame.h264.bootstrap_ready {
+            return;
+        }
         if !self.first_video_packet_logged {
             self.first_video_packet_logged = true;
             crate::xbx_log_info!(
@@ -123,10 +130,20 @@ impl XbxVideoDecodeState {
             );
         }
         let decoded_frame = match self.decoder.decode(encoded_frame, now_ms) {
-            Ok(frame) => frame,
+            Ok(frame) => {
+                self.waiting_for_recovery_keyframe = false;
+                frame
+            }
             Err(error) => {
+                let status = parse_decoder_status_code(&error);
                 crate::xbx_log_error!("[xbxengine][webrtc-rs] hardware decode failed: {error}");
-                self.record_hardware_decode_failure(now_ms, parse_decoder_status_code(&error));
+                self.record_hardware_decode_failure(now_ms, status);
+                if should_force_recovery_keyframe(status) {
+                    crate::xbx_log_warn!(
+                        "[xbxengine][webrtc-rs] decoder entered wait-keyframe recovery after backend failure"
+                    );
+                    let _ = self.request_decoder_reset();
+                }
                 None
             }
         };
@@ -236,6 +253,7 @@ impl XbxVideoDecodeState {
             hardware_decode_failure_streak: 0,
             latest_hardware_decode_failure_time_ms: None,
             latest_hardware_decode_failure_status: None,
+            waiting_for_recovery_keyframe: false,
         }
     }
 
@@ -260,6 +278,13 @@ fn parse_decoder_status_code(error: &XbxEngineRuntimeError) -> Option<i32> {
     token.parse::<i32>().ok()
 }
 
+fn should_force_recovery_keyframe(status: Option<i32>) -> bool {
+    matches!(
+        status,
+        Some(K_VT_VIDEO_DECODER_BAD_DATA_ERR | K_VT_VIDEO_DECODER_REFERENCE_MISSING_ERR)
+    )
+}
+
 #[cfg(target_os = "macos")]
 struct MacOsVideoToolboxDecoder {
     format_description: CMVideoFormatDescriptionRef,
@@ -282,47 +307,27 @@ impl MacOsVideoToolboxDecoder {
         })
     }
 
-    fn ensure_decoder_session(&mut self, payload: &[u8]) -> Result<bool, XbxEngineRuntimeError> {
-        let nals = split_annex_b_nals(payload);
-        for nal in &nals {
-            if nal.is_empty() {
-                continue;
-            }
-            let nal_type = nal[0] & 0x1f;
-            match nal_type {
-                7 => {
-                    if self.last_sps != *nal {
-                        self.last_sps = nal.to_vec();
-                        self.release_session();
-                    }
-                }
-                8 => {
-                    if self.last_pps != *nal {
-                        self.last_pps = nal.to_vec();
-                        self.release_session();
-                    }
-                }
-                _ => {}
-            }
-        }
-
-        if self.last_sps.is_empty() || self.last_pps.is_empty() {
+    fn ensure_decoder_session(
+        &mut self,
+        inspection: &H264AccessUnitInspection,
+    ) -> Result<bool, XbxEngineRuntimeError> {
+        let Some(parameter_sets) = inspection.bootstrap_parameter_sets() else {
             return Ok(!self.decompression_session.is_null());
-        }
+        };
 
-        if !self.decompression_session.is_null() && self.format_description != std::ptr::null_mut()
-        {
-            // 已有会话且参数未变（逻辑简化：这里假设 format_description 也是基于最新的 SPS/PPS）
-            // 实际上我们应该检查 SPS/PPS 是否真的改变了再重建。
-            // 为了稳健性，我们在 NAL 循环里已经更新了 self.last_sps/pps。
-            // 这里我们只需要检查是否需要（重新）创建。
+        if self.last_sps != parameter_sets.sps.raw || self.last_pps != parameter_sets.pps.raw {
+            self.last_sps = parameter_sets.sps.raw.clone();
+            self.last_pps = parameter_sets.pps.raw.clone();
+            self.release_session();
         }
 
         if !self.decompression_session.is_null() {
             return Ok(true);
         }
 
-        self.release_session();
+        if !inspection.bootstrap_ready {
+            return Ok(false);
+        }
 
         let parameter_set_pointers = [self.last_sps.as_ptr(), self.last_pps.as_ptr()];
         let parameter_set_sizes = [self.last_sps.len(), self.last_pps.len()];
@@ -448,28 +453,14 @@ impl XbxHardwareVideoDecoder for MacOsVideoToolboxDecoder {
         encoded_frame: EncodedFrame,
         _now_ms: f64,
     ) -> Result<Option<XbxRenderFrame>, XbxEngineRuntimeError> {
-        if !self.ensure_decoder_session(&encoded_frame.payload)? {
+        if !self.ensure_decoder_session(&encoded_frame.h264)? {
             return Ok(None);
         }
 
-        // 将 Annex-B (00 00 01 / 00 00 00 01) 转换为 AVCC (4-byte length prefix)
-        // VideoToolbox 需要 AVCC 格式。
-        let nals = split_annex_b_nals(&encoded_frame.payload);
-        let mut avcc_payload = Vec::with_capacity(encoded_frame.payload.len() + nals.len() * 4);
-        for nal in nals {
-            if nal.is_empty() {
-                continue;
-            }
-            let nal_type = nal[0] & 0x1f;
-            // AVCC 模式下，SPS/PPS/AUD 不应在 SampleData 中，它们在 FormatDescription 里。
-            // 某些解码器对 in-band parameter sets 敏感，返回 -12909。
-            if nal_type == 7 || nal_type == 8 || nal_type == 9 {
-                continue;
-            }
-            let len = nal.len() as u32;
-            avcc_payload.extend_from_slice(&len.to_be_bytes());
-            avcc_payload.extend_from_slice(nal);
-        }
+        // 由 inspection 给出统一的 NAL 结果，避免这里再自行扫 Annex-B。
+        let avcc_payload = encoded_frame
+            .h264
+            .build_avcc_payload(&encoded_frame.payload);
 
         if avcc_payload.is_empty() {
             return Ok(None);
@@ -672,49 +663,6 @@ extern "C" fn vt_decompression_output_callback(
 }
 
 #[cfg(target_os = "macos")]
-fn split_annex_b_nals(data: &[u8]) -> Vec<&[u8]> {
-    let mut nals = Vec::new();
-    let mut i = 0usize;
-    while i + 3 < data.len() {
-        let start_len = if data[i] == 0 && data[i + 1] == 0 && data[i + 2] == 1 {
-            3
-        } else if i + 4 < data.len()
-            && data[i] == 0
-            && data[i + 1] == 0
-            && data[i + 2] == 0
-            && data[i + 3] == 1
-        {
-            4
-        } else {
-            i += 1;
-            continue;
-        };
-
-        let nal_start = i + start_len;
-        let mut nal_end = data.len();
-        let mut j = nal_start;
-        while j + 3 < data.len() {
-            let has_three = data[j] == 0 && data[j + 1] == 0 && data[j + 2] == 1;
-            let has_four = j + 4 < data.len()
-                && data[j] == 0
-                && data[j + 1] == 0
-                && data[j + 2] == 0
-                && data[j + 3] == 1;
-            if has_three || has_four {
-                nal_end = j;
-                break;
-            }
-            j += 1;
-        }
-        if nal_start < nal_end {
-            nals.push(&data[nal_start..nal_end]);
-        }
-        i = nal_end;
-    }
-    nals
-}
-
-#[cfg(target_os = "macos")]
 type OSStatus = i32;
 #[cfg(target_os = "macos")]
 type CFTypeRef = *const std::ffi::c_void;
@@ -773,6 +721,8 @@ struct VTDecompressionOutputCallbackRecord {
 const NO_ERR: OSStatus = 0;
 #[cfg(target_os = "macos")]
 const K_CVPIXEL_FORMAT_TYPE_420YPCBCR8_BIPLANAR_VIDEO_RANGE: u32 = 0x3432_3076;
+const K_VT_VIDEO_DECODER_BAD_DATA_ERR: i32 = -12909;
+const K_VT_VIDEO_DECODER_REFERENCE_MISSING_ERR: i32 = -17694;
 
 #[cfg(target_os = "macos")]
 #[link(name = "VideoToolbox", kind = "framework")]
@@ -1014,16 +964,22 @@ fn cf_equals(lhs: CFTypeRef, rhs: CFTypeRef) -> bool {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::VecDeque;
     use std::sync::{
         atomic::{AtomicUsize, Ordering},
         Arc,
     };
+    use std::time::{Duration, Instant};
 
     use super::{XbxHardwareVideoDecoder, XbxVideoDecodeState};
+    use crate::media::video::h264::inspection::{
+        H264AccessUnitInspection, H264AccessUnitInspector, H264BootstrapRejectReason,
+    };
     use crate::{
         media::video::render::renderer::XbxRenderFrame, media::video::types::EncodedFrame,
         XbxEngineRenderPixelData,
     };
+    use bytes::Bytes;
 
     struct SpyHardwareDecoder {
         reset_calls: Arc<AtomicUsize>,
@@ -1090,5 +1046,100 @@ mod tests {
                 .map(|frame| frame.frame.frame_seq),
             Some(2)
         );
+    }
+
+    struct ScriptedHardwareDecoder {
+        decode_calls: Arc<AtomicUsize>,
+        reset_calls: Arc<AtomicUsize>,
+        scripted_results: VecDeque<Result<Option<XbxRenderFrame>, crate::XbxEngineRuntimeError>>,
+    }
+
+    impl XbxHardwareVideoDecoder for ScriptedHardwareDecoder {
+        fn backend_name(&self) -> &'static str {
+            "scripted"
+        }
+
+        fn decode(
+            &mut self,
+            _encoded_frame: EncodedFrame,
+            _now_ms: f64,
+        ) -> Result<Option<XbxRenderFrame>, crate::XbxEngineRuntimeError> {
+            self.decode_calls.fetch_add(1, Ordering::Relaxed);
+            self.scripted_results.pop_front().unwrap_or(Ok(None))
+        }
+
+        fn reset(&mut self) -> Result<(), crate::XbxEngineRuntimeError> {
+            self.reset_calls.fetch_add(1, Ordering::Relaxed);
+            Ok(())
+        }
+    }
+
+    fn make_encoded_frame(is_keyframe: bool) -> EncodedFrame {
+        let now = Instant::now();
+        EncodedFrame {
+            codec: crate::media::video::types::VideoCodec::H264,
+            is_keyframe,
+            config_changed: false,
+            value: crate::media::video::types::FrameValue::new(is_keyframe, false, 1024),
+            width: 2560,
+            height: 1440,
+            rtp_timestamp: if is_keyframe { 1 } else { 2 },
+            assembled_at: now,
+            target_playout_time: now + Duration::from_millis(16),
+            h264: make_h264_inspection(is_keyframe),
+            payload: Bytes::from_static(b"\x00\x00\x00\x01\x65"),
+        }
+    }
+
+    fn make_h264_inspection(bootstrap_ready: bool) -> H264AccessUnitInspection {
+        H264AccessUnitInspection {
+            nals: Vec::new(),
+            parameter_sets: None,
+            width: Some(2560),
+            height: Some(1440),
+            is_idr: bootstrap_ready,
+            has_vcl: true,
+            has_inband_sps: bootstrap_ready,
+            has_inband_pps: bootstrap_ready,
+            has_aud: false,
+            slice_headers_valid: bootstrap_ready,
+            parameter_sets_changed: false,
+            config_changed: false,
+            bootstrap_ready,
+            bootstrap_reject_reason: if bootstrap_ready {
+                None
+            } else {
+                Some(H264BootstrapRejectReason::MissingSps)
+            },
+            commit_state: H264AccessUnitInspector::test_commit_state(),
+        }
+    }
+
+    #[test]
+    fn bad_data_failure_waits_for_next_keyframe_before_decoding_again() {
+        let decode_calls = Arc::new(AtomicUsize::new(0));
+        let reset_calls = Arc::new(AtomicUsize::new(0));
+        let decoder = ScriptedHardwareDecoder {
+            decode_calls: decode_calls.clone(),
+            reset_calls: reset_calls.clone(),
+            scripted_results: VecDeque::from([
+                Err(crate::XbxEngineRuntimeError::new(
+                    "xbxEngineVideoToolboxOutputCallbackFailed:status=-12909",
+                )),
+                Ok(None),
+            ]),
+        };
+        let mut state = XbxVideoDecodeState::new_for_test(20, 30, Box::new(decoder));
+
+        state.process_encoded_frame(make_encoded_frame(true), 1_000.0);
+        assert_eq!(decode_calls.load(Ordering::Relaxed), 1);
+        assert_eq!(reset_calls.load(Ordering::Relaxed), 1);
+        assert_eq!(state.decoder_reset_count(), 1);
+
+        state.process_encoded_frame(make_encoded_frame(false), 1_016.0);
+        assert_eq!(decode_calls.load(Ordering::Relaxed), 1);
+
+        state.process_encoded_frame(make_encoded_frame(true), 1_032.0);
+        assert_eq!(decode_calls.load(Ordering::Relaxed), 2);
     }
 }

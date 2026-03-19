@@ -161,19 +161,33 @@ pub(crate) fn catalog_data_channel_message(
 }
 
 pub(crate) async fn request_video_keyframe_on_control_channel(
-    _runtime_state: &Arc<Mutex<XbxDataChannelState>>,
+    runtime_state: &Arc<Mutex<XbxDataChannelState>>,
     control_channel: &Arc<RTCDataChannel>,
 ) -> Result<(), XbxEngineRuntimeError> {
+    let request_state = describe_recovery_request_state(runtime_state, control_channel);
     if control_channel.ready_state() != RTCDataChannelState::Open {
+        crate::xbx_log_warn!(
+            "[xbxengine][webrtc-rs] skip keyframe request because control channel is not open ({request_state})"
+        );
         return Ok(());
     }
     let payload = build_control_keyframe_request_payload();
+    crate::xbx_log_info!(
+        "[xbxengine][webrtc-rs] sending keyframe request on control channel ({request_state})"
+    );
 
     control_channel
         .send_text(payload)
         .await
-        .map(|_| ())
+        .map(|_| {
+            crate::xbx_log_info!(
+                "[xbxengine][webrtc-rs] sent keyframe request on control channel ({request_state})"
+            );
+        })
         .map_err(|error| {
+            crate::xbx_log_warn!(
+                "[xbxengine][webrtc-rs] send keyframe request on control channel failed ({request_state}): {error}"
+            );
             XbxEngineRuntimeError::new(format!("sendControlKeyframeRequestFailed:{error}"))
         })
 }
@@ -201,8 +215,9 @@ pub(crate) async fn request_video_keyframe_from_state(
             // 恢复请求必须等 message handshake + control bootstrap 真正完成，
             // 不能仅凭 control channel open 就提前发出。
             state.pending_keyframe_request = true;
+            let request_state = describe_recovery_request_state_locked(&state);
             crate::xbx_log_warn!(
-                "[xbxengine][webrtc-rs] queue pending keyframe request until recovery protocol is ready"
+                "[xbxengine][webrtc-rs] queue pending keyframe request until recovery protocol is ready ({request_state})"
             );
             None
         }
@@ -245,8 +260,9 @@ pub(crate) async fn request_decoder_reset_from_state(
             state.control_channel.clone()
         } else {
             state.pending_decoder_reset = true;
+            let request_state = describe_recovery_request_state_locked(&state);
             crate::xbx_log_warn!(
-                "[xbxengine][webrtc-rs] queue pending decoder reset until recovery protocol is ready"
+                "[xbxengine][webrtc-rs] queue pending decoder reset until recovery protocol is ready ({request_state})"
             );
             None
         }
@@ -289,17 +305,69 @@ pub(crate) async fn request_decoder_reset_on_control_channel(
     runtime_state: &Arc<Mutex<XbxDataChannelState>>,
     control_channel: &Arc<RTCDataChannel>,
 ) -> Result<(), XbxEngineRuntimeError> {
+    let request_state = describe_recovery_request_state(runtime_state, control_channel);
     if control_channel.ready_state() != RTCDataChannelState::Open {
+        crate::xbx_log_warn!(
+            "[xbxengine][webrtc-rs] skip decoder reset because control channel is not open ({request_state})"
+        );
         return Ok(());
     }
 
     // 先发送独立 decoder reset 意图；若远端不识别，再由关键帧请求兜底。
     let decoder_reset_payload = build_control_decoder_reset_payload();
+    crate::xbx_log_info!(
+        "[xbxengine][webrtc-rs] sending decoder reset on control channel ({request_state})"
+    );
     if let Err(error) = control_channel.send_text(decoder_reset_payload).await {
-        crate::xbx_log_error!("[xbxengine][webrtc-rs] send decoder reset payload failed: {error}");
+        crate::xbx_log_error!(
+            "[xbxengine][webrtc-rs] send decoder reset payload failed ({request_state}): {error}"
+        );
+    } else {
+        crate::xbx_log_info!(
+            "[xbxengine][webrtc-rs] sent decoder reset on control channel ({request_state})"
+        );
     }
 
     request_video_keyframe_on_control_channel(runtime_state, control_channel).await
+}
+
+// 把恢复请求关键状态折叠成一条稳定日志，方便把“做了决策”和“真的发出”对齐。
+fn describe_recovery_request_state(
+    runtime_state: &Arc<Mutex<XbxDataChannelState>>,
+    control_channel: &Arc<RTCDataChannel>,
+) -> String {
+    runtime_state
+        .lock()
+        .ok()
+        .map(|state| {
+            format!(
+                "{},control_open={}",
+                describe_recovery_request_state_locked(&state),
+                control_channel.ready_state() == RTCDataChannelState::Open
+            )
+        })
+        .unwrap_or_else(|| {
+            format!(
+                "state=poisoned,control_open={}",
+                control_channel.ready_state() == RTCDataChannelState::Open
+            )
+        })
+}
+
+fn describe_recovery_request_state_locked(state: &XbxDataChannelState) -> String {
+    let control_ready = recovery_requests_ready(state);
+    let control_open = state
+        .control_channel
+        .as_ref()
+        .is_some_and(|channel| channel.ready_state() == RTCDataChannelState::Open);
+    format!(
+        "control_ready={control_ready},handshake_acked={},control_started={},control_bootstrapped={},pending_keyframe={},pending_decoder_reset={},control_open={control_open}",
+        state.message_handshake_acked,
+        state.control_started,
+        state.control_bootstrapped_after_handshake,
+        state.pending_keyframe_request,
+        state.pending_decoder_reset,
+    )
 }
 pub(crate) async fn handle_input_channel_binary_message(payload: &[u8]) {
     let Some(request) = parse_input_rumble_packet(payload) else {
