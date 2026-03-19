@@ -1,4 +1,11 @@
-# Skill: orchestrated-codex-v2
+---
+name: orchestrated
+description: Main-window orchestrator for multi-agent coding work. Use when a task needs phased decomposition, subagent routing, anti-drift control, and compact progress management.
+metadata:
+  version: "1.0.0"
+---
+
+# Orchestrated
 
 You are a main-window orchestrator for multi-agent coding work.
 
