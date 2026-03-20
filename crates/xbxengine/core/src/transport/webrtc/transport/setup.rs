@@ -1,5 +1,5 @@
 use std::collections::BTreeMap;
-use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicU32, AtomicU64};
 use std::sync::{Arc, Mutex};
 
 use tokio::runtime::Handle;
@@ -25,27 +25,20 @@ use webrtc::{
 
 use crate::{
     media::video::render::renderer::XbxRenderState,
-    transport::adapter::{FrameSource, WebrtcVideoAdapter},
+    runtime_stats_sink::RuntimeStatsSink,
+    transport::adapter::{FrameSource, TransportFeedbackPort, WebrtcVideoAdapter},
     transport::webrtc::audio_output::XbxRemoteAudioPlaybackSession,
-    transport::webrtc::bwe_policy::{
-        classify_scenario_bitrate_band, resolve_target_remb_kbps,
-        resolve_transport_policy_profile_kind,
-    },
     transport::webrtc::data_channel::{install_data_channel_contracts, XbxDataChannelState},
     transport::webrtc::nack_scheduler::NackSchedulerConfig,
-    transport::webrtc::recovery_coordinator::RecoveryCoordinator,
-    transport::webrtc::startup_recovery::resolve_session_phase,
-    transport::webrtc::transport_observation::{
-        candidate_pair_average_rtt, resolve_transport_path, select_any_candidate_pair_rtt,
-        select_preferred_candidate_pair,
-    },
     transport::webrtc::twcc_owned_receiver::OwnedTwccReceiverBuilder,
-    XbxEngineMediaRuntimeStats, XbxEngineRuntimeError, XbxEngineVideoBweObservation,
-    XbxEngineVideoTrackStatus, XbxEngineWebRtcRuntimeConfig,
+    XbxEngineMediaRuntimeStats, XbxEngineRuntimeError, XbxEngineVideoTrackStatus,
+    XbxEngineWebRtcRuntimeConfig,
 };
 use xbxengine_protocol::{
     XbxEngineIceCandidateDto, XbxEngineTransportStateDto, XbxEngineTurnServerDto,
 };
+
+use super::video_track_stats::spawn_video_track_stats_loop;
 
 const DEFAULT_ICE_SERVERS: [&str; 7] = [
     "stun:worldaz.relay.teams.microsoft.com:3478",
@@ -58,6 +51,43 @@ const DEFAULT_ICE_SERVERS: [&str; 7] = [
 ];
 const TRANSPORT_CC_URI: &str =
     "http://www.ietf.org/id/draft-holmer-rmcat-transport-wide-cc-extensions-01";
+
+struct PeerConnectionFeedbackPort {
+    peer_connection: Arc<RTCPeerConnection>,
+}
+
+impl PeerConnectionFeedbackPort {
+    fn new(peer_connection: Arc<RTCPeerConnection>) -> Self {
+        Self { peer_connection }
+    }
+}
+
+impl TransportFeedbackPort for PeerConnectionFeedbackPort {
+    fn send_transport_layer_nack<'a>(
+        &'a self,
+        media_ssrc: u32,
+        sequences: &'a [u16],
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), String>> + Send + 'a>> {
+        use webrtc::rtcp::transport_feedbacks::transport_layer_nack::{
+            nack_pairs_from_sequence_numbers, TransportLayerNack,
+        };
+
+        // feedback port 只负责发 RTCP，不向 adapter 暴露 PeerConnection 实体。
+        let nack = TransportLayerNack {
+            sender_ssrc: 0,
+            media_ssrc,
+            nacks: nack_pairs_from_sequence_numbers(sequences),
+        };
+        let peer_connection = self.peer_connection.clone();
+        Box::pin(async move {
+            peer_connection
+                .write_rtcp(&[Box::new(nack)])
+                .await
+                .map(|_| ())
+                .map_err(|error| error.to_string())
+        })
+    }
+}
 
 // peer connection 装配与 callback 安装收在一个粗模块里，避免继续膨胀 core.rs。
 pub(crate) fn install_peer_connection_callbacks(
@@ -73,6 +103,8 @@ pub(crate) fn install_peer_connection_callbacks(
     task_generation: Arc<AtomicU64>,
     current_generation: u64,
 ) {
+    let runtime_stats_sink = RuntimeStatsSink::new(runtime_stats.clone());
+
     peer_connection.on_ice_candidate(Box::new(move |candidate: Option<RTCIceCandidate>| {
         let local_candidates = local_candidates.clone();
         let local_ice_gathering_complete = local_ice_gathering_complete.clone();
@@ -114,9 +146,9 @@ pub(crate) fn install_peer_connection_callbacks(
     peer_connection.on_peer_connection_state_change(Box::new(move |state| {
         let runtime_stats = runtime_stats_for_state.clone();
         Box::pin(async move {
-            if let Ok(mut stats) = runtime_stats.lock() {
+            RuntimeStatsSink::new(runtime_stats).update(|stats| {
                 stats.transport_state = map_peer_connection_state(state);
-            }
+            });
             crate::xbx_log_info!("[xbxengine][webrtc-rs] peer connection state={state}");
         })
     }));
@@ -143,6 +175,7 @@ pub(crate) fn install_peer_connection_callbacks(
         let pc_captured = peer_connection_for_track.clone();
         let config_captured = webrtc_config_for_track.clone();
         let runtime_stats_captured = runtime_stats_for_track.clone();
+        let runtime_stats_sink = runtime_stats_sink.clone();
         let task_generation_for_track = task_generation.clone();
         let audio_playback_session = audio_playback_session_for_track.clone();
         let audio_volume_bits = audio_volume_bits_for_track.clone();
@@ -182,7 +215,7 @@ pub(crate) fn install_peer_connection_callbacks(
                 }
                 let observed_at_ms = now_ms_f64();
                 update_video_track_status(
-                    &runtime_stats_captured,
+                    &runtime_stats_sink,
                     XbxEngineVideoTrackStatus {
                         state: "remoteTrackAttached".to_string(),
                         video_width: None,
@@ -210,9 +243,11 @@ pub(crate) fn install_peer_connection_callbacks(
                     idle_timeout
                 );
 
+                let feedback_port: Arc<dyn TransportFeedbackPort> =
+                    Arc::new(PeerConnectionFeedbackPort::new(pc_captured.clone()));
                 let adapter = WebrtcVideoAdapter::new(
                     track.clone(),
-                    pc_captured.clone(),
+                    feedback_port,
                     runtime_stats_captured.clone(),
                     jitter_buffer_size,
                     std::time::Duration::from_millis(
@@ -248,335 +283,15 @@ pub(crate) fn install_peer_connection_callbacks(
                     }
                 }
 
-                let stats_track = track.clone();
-                let pc_for_stats = pc_captured;
-                tokio::spawn(async move {
-                    let feedback_interval = std::time::Duration::from_millis(
-                        config_captured.video_pipeline.feedback_interval_ms.max(50),
-                    );
-                    let bwe_stream_started_at = std::time::Instant::now();
-                    let bwe_startup_grace = std::time::Duration::from_millis(
-                        config_captured.recovery.first_frame_grace_ms,
-                    );
-                    let mut interval = tokio::time::interval(feedback_interval);
-                    let mut last_bytes_received = 0;
-                    let mut last_packets_received = 0u64;
-                    let mut last_video_sample_at_ms = now_ms_f64();
-                    let mut last_loss_estimate_total = 0u64;
-                    let mut last_loss_recovered_total = 0u64;
-                    let mut last_loss_finalized_total = 0u64;
-                    let mut bwe_observation_id = 0u64;
-                    let mut last_sent_remb_kbps = config_captured
-                        .forced_remb_kbps
-                        .unwrap_or(config_captured.remb_floor_kbps);
-                    let mut hybrid_ramp_cooldown_ticks = 0u8;
-                    loop {
-                        interval.tick().await;
-                        if task_generation_for_track.load(Ordering::SeqCst) != current_generation {
-                            break;
-                        }
-                        let stats = pc_for_stats.get_stats().await;
-                        let mut current_bytes = 0;
-                        let mut packets_received = 0u64;
-                        let mut rtt = 0.0f64;
-                        let mut rtt_source: Option<&'static str> = None;
-                        let mut fraction_lost = 0.0f64;
-                        let mut candidate_pair_rtt = 0.0f64;
-                        let mut candidate_pair_avg_rtt = 0.0f64;
-                        let mut synthetic_loss_ratio = 0.0f64;
-                        let mut avail_bps = 0.0f64;
-                        let mut avail_in_bps = 0.0f64;
-                        let transport_path = resolve_transport_path(&stats);
-                        let selected_candidate_pair = select_preferred_candidate_pair(&stats);
-                        for (_id, report) in stats.reports.iter() {
-                            match report {
-                                webrtc::stats::StatsReportType::InboundRTP(inbound) => {
-                                    if inbound.ssrc == stats_track.ssrc() {
-                                        current_bytes = inbound.bytes_received;
-                                        packets_received = inbound.packets_received;
-                                    }
-                                }
-                                webrtc::stats::StatsReportType::CandidatePair(pair) => {
-                                    if pair.available_outgoing_bitrate > avail_bps {
-                                        avail_bps = pair.available_outgoing_bitrate;
-                                    }
-                                    if pair.available_incoming_bitrate > avail_in_bps {
-                                        avail_in_bps = pair.available_incoming_bitrate;
-                                    }
-                                    if let Some(selected_pair) = selected_candidate_pair {
-                                        if pair.id == selected_pair.id {
-                                            if pair.current_round_trip_time > 0.0 {
-                                                candidate_pair_rtt = pair.current_round_trip_time;
-                                            }
-                                            let avg_rtt = candidate_pair_average_rtt(pair);
-                                            if avg_rtt > 0.0 {
-                                                candidate_pair_avg_rtt = avg_rtt;
-                                            }
-                                        }
-                                    }
-                                }
-                                webrtc::stats::StatsReportType::RemoteInboundRTP(remote_inbound) => {
-                                    if remote_inbound.ssrc == stats_track.ssrc() {
-                                        fraction_lost = remote_inbound.fraction_lost;
-                                        if let Some(remote_inbound_rtt) = remote_inbound.round_trip_time
-                                        {
-                                            if remote_inbound_rtt > 0.0 {
-                                                rtt = remote_inbound_rtt;
-                                                rtt_source = Some("remote-inbound");
-                                            }
-                                        }
-                                    }
-                                }
-                                _ => {}
-                            }
-                        }
-
-                        if rtt <= 0.0 && candidate_pair_rtt > 0.0 {
-                            rtt = candidate_pair_rtt;
-                            rtt_source = Some("candidate-pair");
-                        } else if rtt <= 0.0 && candidate_pair_avg_rtt > 0.0 {
-                            rtt = candidate_pair_avg_rtt;
-                            rtt_source = Some("candidate-pair-avg");
-                        } else if rtt <= 0.0 {
-                            if let Some((fallback_rtt, fallback_source)) =
-                                select_any_candidate_pair_rtt(&stats)
-                            {
-                                rtt = fallback_rtt;
-                                rtt_source = Some(fallback_source);
-                            }
-                        }
-
-                        let sample_now_ms = now_ms_f64();
-                        let elapsed_ms = (sample_now_ms - last_video_sample_at_ms).max(0.0);
-                        let delta_bytes = current_bytes.saturating_sub(last_bytes_received);
-                        let should_mark_video_started =
-                            current_bytes > 0 && last_bytes_received == 0;
-                        last_bytes_received = current_bytes;
-                        let delta_packets_received =
-                            packets_received.saturating_sub(last_packets_received);
-                        last_packets_received = packets_received;
-                        let actual_kbps = (delta_bytes * 8) as f64 / elapsed_ms.max(1.0);
-                        last_video_sample_at_ms = sample_now_ms;
-
-                        if let Ok(shared) = runtime_stats_captured.lock() {
-                            let delta_loss_estimate = shared
-                                .inbound_video_packet_loss_estimate_total
-                                .saturating_sub(last_loss_estimate_total);
-                            let delta_loss_recovered = shared
-                                .video_loss_recovered_count_total
-                                .saturating_sub(last_loss_recovered_total);
-                            let delta_loss_finalized = shared
-                                .video_loss_finalized_count_total
-                                .saturating_sub(last_loss_finalized_total);
-                            last_loss_estimate_total = shared.inbound_video_packet_loss_estimate_total;
-                            last_loss_recovered_total = shared.video_loss_recovered_count_total;
-                            last_loss_finalized_total = shared.video_loss_finalized_count_total;
-
-                            let effective_loss_packets = delta_loss_finalized.max(
-                                delta_loss_estimate.saturating_sub(delta_loss_recovered),
-                            );
-                            let loss_denominator =
-                                delta_packets_received.saturating_add(effective_loss_packets);
-                            if loss_denominator > 0 {
-                                synthetic_loss_ratio =
-                                    effective_loss_packets as f64 / loss_denominator as f64;
-                            }
-                            if fraction_lost <= 0.0 && synthetic_loss_ratio > 0.0 {
-                                fraction_lost = synthetic_loss_ratio;
-                            }
-                            if rtt <= 0.0 {
-                                if let Some(nack_rtt_ms) = shared.video_nack_recovery_rtt_ms {
-                                    rtt = nack_rtt_ms / 1000.0;
-                                    rtt_source = Some("nack-recovery");
-                                }
-                            }
-                        }
-
-                        let observed_remb_kbps = if avail_bps > 0.0 {
-                            Some((avail_bps / 1000.0).round().max(0.0) as u32)
-                        } else {
-                            None
-                        };
-                        let (latest_twcc_observation, session_target_type) =
-                            runtime_stats_captured
-                                .lock()
-                                .ok()
-                                .map(|shared| {
-                                    (
-                                        shared.latest_video_twcc_observation.clone(),
-                                        shared.session_target_type.clone(),
-                                    )
-                                })
-                                .unwrap_or((None, None));
-                        let session_phase = resolve_session_phase(
-                            runtime_stats_captured.as_ref(),
-                            bwe_stream_started_at,
-                            bwe_startup_grace,
-                        );
-                        let recovery_coupling = RecoveryCoordinator::current_coupling_state(
-                            runtime_stats_captured.as_ref(),
-                            bwe_stream_started_at,
-                            bwe_startup_grace,
-                        );
-                        let transport_profile_kind = resolve_transport_policy_profile_kind(
-                            session_target_type.as_ref(),
-                            transport_path.as_deref(),
-                        );
-                        let bwe_decision = resolve_target_remb_kbps(
-                            &config_captured,
-                            observed_remb_kbps,
-                            actual_kbps,
-                            fraction_lost,
-                            if rtt > 0.0 { Some(rtt * 1000.0) } else { None },
-                            session_target_type.as_ref(),
-                            transport_path.as_deref(),
-                            session_phase,
-                            Some(recovery_coupling),
-                            latest_twcc_observation.as_ref(),
-                            &mut last_sent_remb_kbps,
-                            &mut hybrid_ramp_cooldown_ticks,
-                        );
-                        let target_remb_kbps = bwe_decision.target_kbps;
-                        let observed_at_ms = now_ms_f64();
-
-                        if let Ok(mut shared) = runtime_stats_captured.lock() {
-                            let twcc_feedback_interval_ms = shared
-                                .latest_video_twcc_observation
-                                .as_ref()
-                                .and_then(|twcc| twcc.feedback_interval_ms);
-                            let twcc_observed_packet_count = shared
-                                .latest_video_twcc_observation
-                                .as_ref()
-                                .map(|twcc| twcc.observed_packet_count);
-                            let twcc_covered_sequence_span = shared
-                                .latest_video_twcc_observation
-                                .as_ref()
-                                .map(|twcc| twcc.covered_sequence_span);
-                            let twcc_receive_bitrate_kbps = shared
-                                .latest_video_twcc_observation
-                                .as_ref()
-                                .and_then(|twcc| twcc.receive_bitrate_kbps);
-                            let twcc_delivery_ratio = shared
-                                .latest_video_twcc_observation
-                                .as_ref()
-                                .map(|twcc| twcc.delivery_ratio);
-                            let twcc_loss_ratio = shared
-                                .latest_video_twcc_observation
-                                .as_ref()
-                                .map(|twcc| twcc.packet_loss_ratio);
-                            bwe_observation_id = bwe_observation_id.saturating_add(1);
-                            shared.video_remb_bps = Some(target_remb_kbps.saturating_mul(1000));
-                            shared.inbound_video_bitrate_kbps = Some(actual_kbps.max(0.0));
-                            shared.inbound_bitrate_kbps = Some(
-                                actual_kbps.max(0.0)
-                                    + shared.inbound_audio_bitrate_kbps.unwrap_or(0.0),
-                            );
-                            shared.video_rtt_ms = if rtt > 0.0 { Some(rtt * 1000.0) } else { None };
-                            shared.video_rtt_source = rtt_source.map(str::to_string);
-                            shared.inbound_video_loss_ratio_5s = fraction_lost;
-                            shared.inbound_video_loss_ratio_1s =
-                                synthetic_loss_ratio.max(fraction_lost);
-                            shared.transport_path = transport_path.clone();
-                            shared.session_phase = Some(session_phase.as_str().to_string());
-                            shared.transport_policy_profile =
-                                Some(transport_profile_kind.as_str().to_string());
-                            if matches!(
-                                session_phase,
-                                crate::transport::webrtc::startup_recovery::SessionPhase::Steady
-                            ) {
-                                shared.recovery_diagnosis = None;
-                            }
-                            shared.recovery_coupling_mode =
-                                Some(recovery_coupling.mode.as_str().to_string());
-                            shared.recovery_coupling_summary = Some(recovery_coupling.summary());
-                            shared.direct_gaming_bitrate_band = classify_scenario_bitrate_band(
-                                session_target_type.as_ref(),
-                                transport_path.as_deref(),
-                                Some(actual_kbps.max(0.0)),
-                            )
-                            .map(str::to_string);
-                            shared.inbound_primary_video_bytes_total = current_bytes;
-                            shared.inbound_video_bytes_total = current_bytes;
-                            shared.inbound_bytes_total =
-                                shared.inbound_video_bytes_total + shared.inbound_audio_bytes_total;
-                            if shared.latest_video_track_status.is_none()
-                                && shared.inbound_audio_bytes_total > 0
-                                && shared.inbound_video_bytes_total == 0
-                            {
-                                shared.latest_video_track_status = Some(XbxEngineVideoTrackStatus {
-                                    state: "audioOnly".to_string(),
-                                    video_width: None,
-                                    video_height: None,
-                                    mime_type: None,
-                                    transport_state: shared.transport_state.clone(),
-                                    video_bytes_total: 0,
-                                    video_packet_count_total: 0,
-                                    audio_bytes_total: shared.inbound_audio_bytes_total,
-                                    observed_at_ms,
-                                });
-                            }
-                            shared.latest_video_bwe_observation =
-                                Some(XbxEngineVideoBweObservation {
-                                    observation_id: bwe_observation_id,
-                                    mode: config_captured.bwe_mode.clone(),
-                                    decision_reason: bwe_decision.reason.clone(),
-                                    target_remb_kbps,
-                                    observed_remb_kbps,
-                                    actual_video_bitrate_kbps: actual_kbps.max(0.0),
-                                    loss_ratio: fraction_lost,
-                                    rtt_ms: if rtt > 0.0 {
-                                        Some(rtt * 1000.0)
-                                    } else {
-                                        None
-                                    },
-                                    transport_path: transport_path.clone(),
-                                    twcc_feedback_interval_ms,
-                                    twcc_observed_packet_count,
-                                    twcc_covered_sequence_span,
-                                    twcc_receive_bitrate_kbps,
-                                    twcc_delivery_ratio,
-                                    twcc_loss_ratio,
-                                    observed_at_ms,
-                                });
-                        }
-                        if should_mark_video_started {
-                            let audio_bytes_total = runtime_stats_captured
-                                .lock()
-                                .ok()
-                                .map(|stats| stats.inbound_audio_bytes_total)
-                                .unwrap_or(0);
-                            update_video_track_status(
-                                &runtime_stats_captured,
-                                XbxEngineVideoTrackStatus {
-                                    state: "videoRtpStarted".to_string(),
-                                    video_width: None,
-                                    video_height: None,
-                                    mime_type: video_mime_type.clone(),
-                                    transport_state: XbxEngineTransportStateDto::Connected,
-                                    video_bytes_total: current_bytes,
-                                    video_packet_count_total: packets_received,
-                                    audio_bytes_total,
-                                    observed_at_ms: sample_now_ms,
-                                },
-                            );
-                        }
-
-                        use webrtc::rtcp::payload_feedbacks::receiver_estimated_maximum_bitrate::*;
-                        let remb = ReceiverEstimatedMaximumBitrate {
-                            bitrate: (target_remb_kbps as f32) * 1000.0,
-                            ssrcs: vec![stats_track.ssrc()],
-                            ..Default::default()
-                        };
-                        let inject_result = pc_for_stats.write_rtcp(&[Box::new(remb)]).await;
-
-                        if let Err(error) = inject_result {
-                            crate::xbx_log_warn!(
-                                "[xbxengine][BWE] REMB injection failed: {:?}",
-                                error
-                            );
-                        }
-                    }
-                });
+                spawn_video_track_stats_loop(
+                    track.clone(),
+                    pc_captured.clone(),
+                    runtime_stats_captured.clone(),
+                    config_captured.clone(),
+                    task_generation_for_track,
+                    current_generation,
+                    video_mime_type.clone(),
+                );
             } else if is_audio {
                 crate::xbx_log_info!(
                     "[xbxengine][webrtc-rs] mounting audio playback track mime={}",
@@ -630,6 +345,7 @@ fn spawn_audio_drain_task(
     track: Arc<webrtc::track::track_remote::TrackRemote>,
     runtime_stats: Arc<Mutex<XbxEngineMediaRuntimeStats>>,
 ) {
+    let runtime_stats = RuntimeStatsSink::new(runtime_stats);
     tokio::spawn(async move {
         let mut total_audio_bytes = 0u64;
         let mut last_audio_sample_bytes = 0u64;
@@ -638,7 +354,7 @@ fn spawn_audio_drain_task(
             total_audio_bytes = total_audio_bytes.saturating_add(rtp.payload.len() as u64);
             let now_ms = now_ms_f64();
             let elapsed_ms = (now_ms - last_audio_sample_at_ms).max(0.0);
-            if let Ok(mut shared) = runtime_stats.lock() {
+            runtime_stats.update(|shared| {
                 shared.inbound_audio_bytes_total = total_audio_bytes;
                 if elapsed_ms >= 250.0 {
                     let delta_bytes = total_audio_bytes.saturating_sub(last_audio_sample_bytes);
@@ -668,19 +384,17 @@ fn spawn_audio_drain_task(
                         observed_at_ms: now_ms,
                     });
                 }
-            }
+            });
         }
     });
 }
 
-fn update_video_track_status(
-    runtime_stats: &Arc<Mutex<XbxEngineMediaRuntimeStats>>,
-    status: XbxEngineVideoTrackStatus,
-) {
-    if let Ok(mut shared) = runtime_stats.lock() {
-        if shared.latest_video_track_status.as_ref() != Some(&status) {
-            shared.latest_video_track_status = Some(status);
-        }
+fn update_video_track_status(runtime_stats: &RuntimeStatsSink, status: XbxEngineVideoTrackStatus) {
+    let should_publish = runtime_stats
+        .read(|shared| shared.latest_video_track_status.as_ref() != Some(&status))
+        .unwrap_or(true);
+    if should_publish {
+        runtime_stats.record_video_track_status(status);
     }
 }
 
@@ -729,8 +443,9 @@ pub(crate) fn configure_peer_connection_offer_primitives(
             )
             .await
             .map_err(map_webrtc_error("addVideoTransceiverFailed"))?;
+        let video_codec_preferences = build_offer_video_codec_preferences();
         video
-            .set_codec_preferences(build_h264_codec_preferences())
+            .set_codec_preferences(video_codec_preferences)
             .await
             .map_err(map_webrtc_error("setVideoCodecPreferencesFailed"))?;
 
@@ -794,7 +509,7 @@ pub(crate) fn register_owned_h264_codecs(
     // 但我们的 rust-owned offer 会把 4d family 放进协商优先级里。
     // 这里把 offer/primitives 用到的 H.264 family 同步注册进 MediaEngine，
     // 避免出现 SDP 谈成 main，但接收层实际上不认识该 payload/fmtp 的半失效状态。
-    for codec in build_h264_codec_preferences() {
+    for codec in build_offer_video_codec_preferences() {
         media_engine.register_codec(codec, RTPCodecType::Video)?;
     }
     Ok(())
@@ -843,6 +558,10 @@ pub(crate) fn configure_owned_twcc_receiver(
     Ok(())
 }
 
+fn build_offer_video_codec_preferences() -> Vec<RTCRtpCodecParameters> {
+    build_h264_codec_preferences()
+}
+
 fn build_h264_codec_preferences() -> Vec<RTCRtpCodecParameters> {
     let video_rtcp_feedback = vec![
         RTCPFeedback {
@@ -868,7 +587,7 @@ fn build_h264_codec_preferences() -> Vec<RTCRtpCodecParameters> {
     ];
 
     // 按高 -> 主 -> 受限基线 -> 基线排列，确保 peer connection 的默认 offer 回退方向正确。
-    vec![
+    let mut codecs = vec![
         RTCRtpCodecParameters {
             capability: RTCRtpCodecCapability {
                 mime_type: MIME_TYPE_H264.to_string(),
@@ -942,7 +661,22 @@ fn build_h264_codec_preferences() -> Vec<RTCRtpCodecParameters> {
             payload_type: 102,
             ..Default::default()
         },
-    ]
+    ];
+
+    // 固定协商 RTX。当前只验证最小可用 repair 路径，不再让 RED/ULPFEC 干扰结论。
+    codecs.push(RTCRtpCodecParameters {
+        capability: RTCRtpCodecCapability {
+            mime_type: "video/rtx".to_string(),
+            clock_rate: 90_000,
+            channels: 0,
+            sdp_fmtp_line: "apt=124".to_string(),
+            rtcp_feedback: vec![],
+        },
+        payload_type: 97,
+        ..Default::default()
+    });
+
+    codecs
 }
 
 #[cfg(test)]
@@ -986,6 +720,35 @@ mod tests {
                     .sdp_fmtp_line
                     .contains("profile-level-id=4d0032")
         }));
+    }
+
+    #[test]
+    fn offer_video_codec_preferences_always_include_rtx_probe() {
+        let codecs = build_h264_codec_preferences();
+        assert!(codecs.iter().any(|codec| {
+            codec.capability.mime_type.eq_ignore_ascii_case("video/rtx")
+                && codec.payload_type == 97
+                && codec.capability.sdp_fmtp_line == "apt=124"
+        }));
+        assert!(!codecs
+            .iter()
+            .any(|codec| codec.capability.mime_type.eq_ignore_ascii_case("video/red")));
+        assert!(!codecs.iter().any(|codec| codec
+            .capability
+            .mime_type
+            .eq_ignore_ascii_case("video/ulpfec")));
+    }
+
+    #[test]
+    fn offer_video_codec_preferences_keep_red_and_ulpfec_disabled() {
+        let codecs = build_h264_codec_preferences();
+        assert!(!codecs
+            .iter()
+            .any(|codec| codec.capability.mime_type.eq_ignore_ascii_case("video/red")));
+        assert!(!codecs.iter().any(|codec| codec
+            .capability
+            .mime_type
+            .eq_ignore_ascii_case("video/ulpfec")));
     }
 }
 

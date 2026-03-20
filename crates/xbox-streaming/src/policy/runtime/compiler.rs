@@ -143,9 +143,23 @@ fn compile_video_pipeline(mode: RuntimeMode, target: Target) -> RuntimeVideoPipe
         },
         RuntimeMode::RustOwned => {
             if matches!(target, Target::Cloud) {
-                // 云串流先对齐浏览器档位，优先验证“更宽容的媒体恢复窗口”是否能消除
-                // transportExpiredDeadline；后续再按新 trace 逐项收紧。
-                return compile_video_pipeline(RuntimeMode::WebRtcDirect, target);
+                // 云游戏基础 RTT 明显高于 home/直连场景，沿用浏览器宽档还不够；
+                // 这里继续在浏览器档之上补一个 cloud floor，避免 Rust-owned 在几十毫秒级
+                // packet policy 下过早进入 transportExpiredDeadline。
+                return RuntimeVideoPipelinePlan {
+                    feedback_interval_ms: 1_000,
+                    nack_window_ms: 700,
+                    nack_burst_count: 16,
+                    nack_max_age_ms: 420,
+                    nack_retry_interval_ms: 90,
+                    nack_max_retry_count: 6,
+                    jitter_buffer_min_delay_ms: 28,
+                    jitter_buffer_max_delay_ms: 48,
+                    jitter_buffer_max_packets: 1536,
+                    idle_timeout_ms: 260,
+                    late_frame_drop_threshold_ms: 900,
+                    backlog_drop_threshold_packets: 14,
+                };
             }
             RuntimeVideoPipelinePlan {
                 feedback_interval_ms: 100,
@@ -210,9 +224,9 @@ mod tests {
         let runtime = compile_runtime(&config, &context).expect("compile runtime");
 
         assert_eq!(runtime.video_pipeline.feedback_interval_ms, 1_000);
-        assert_eq!(runtime.video_pipeline.nack_max_age_ms, 200);
-        assert_eq!(runtime.video_pipeline.jitter_buffer_max_delay_ms, 30);
-        assert_eq!(runtime.video_pipeline.late_frame_drop_threshold_ms, 500);
+        assert_eq!(runtime.video_pipeline.nack_max_age_ms, 420);
+        assert_eq!(runtime.video_pipeline.jitter_buffer_max_delay_ms, 48);
+        assert_eq!(runtime.video_pipeline.late_frame_drop_threshold_ms, 900);
         assert_eq!(runtime.recovery.first_frame_grace_ms, 1_800);
         assert_eq!(runtime.recovery.keyframe_request_stall_ms, 300);
         assert_eq!(runtime.recovery.reconnect_stall_ms, 2_400);

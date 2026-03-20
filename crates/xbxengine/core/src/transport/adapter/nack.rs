@@ -1,23 +1,33 @@
+use xbxengine_protocol::XbxEngineTargetTypeDto;
+
 use crate::transport::webrtc::nack_scheduler::{NackBatch, NackObservePolicy, ResolvedNack};
 use crate::XbxEngineVideoNackObservation;
 
+const CLOUD_STARTUP_HEAD_HOLE_DEADLINE_FLOOR_MS: f64 = 320.0;
+
 use super::{
     capitalize_reason, now_ms_f64, FrameValue, NackSequenceWindow, RecentRtpPacket,
-    VideoRecoverySignal, WebrtcVideoAdapter, UINT16SIZE_HALF,
+    TransportObservation, WebrtcVideoAdapter, UINT16SIZE_HALF,
 };
 
 impl WebrtcVideoAdapter {
     pub(super) async fn maybe_run_nack_maintenance(&mut self) {
         let now_ms = now_ms_f64();
         let pending_before = self.nack_scheduler.pending_count();
-        let deadline_at_ms = self
-            .frame_deadline_tracker
-            .next_deadline_for_value_at_ms(now_ms, FrameValue::new(false, false, 0));
         let missing_sequences = self.nack_window.missing_seq_numbers(self.nack_skip_last_n);
-        if let Some(initial_batch) = self.nack_scheduler.observe_missing_sequences(
+        let frame_value = self.current_transport_frame_value();
+        let cloud_mode = self.is_cloud_transport_profile();
+        let startup_mode = self.is_cloud_startup_transport_profile();
+        let deadline_at_ms = cloud_startup_head_hole_deadline_at_ms(
+            now_ms,
+            self.transport_deadline_tracker
+                .next_transport_deadline_for_value_at_ms(now_ms, frame_value),
+            startup_mode,
+        );
+        if let Some(initial_batch) = self.nack_scheduler.observe_missing_sequences_with_policy(
             &missing_sequences,
             now_ms,
-            Some(deadline_at_ms),
+            rtp_window_nack_policy(frame_value, deadline_at_ms, cloud_mode, startup_mode),
         ) {
             let inserted_count = self
                 .nack_scheduler
@@ -36,11 +46,8 @@ impl WebrtcVideoAdapter {
                     None,
                     None,
                 );
-                if let Ok(mut stats) = self.runtime_stats.lock() {
-                    stats.inbound_video_packet_loss_estimate_total = stats
-                        .inbound_video_packet_loss_estimate_total
-                        .saturating_add(u64::from(inserted_count));
-                }
+                self.runtime_stats
+                    .add_inbound_video_packet_loss_estimate(inserted_count);
             }
             self.send_nack_batch("sent", &initial_batch, now_ms).await;
         }
@@ -48,19 +55,13 @@ impl WebrtcVideoAdapter {
         let poll_result = self.nack_scheduler.poll(now_ms);
         for expired_batch in poll_result.expired_batches {
             if expired_batch.reason == "deadline" {
-                let is_severe_gap =
-                    expired_batch.sequences.len() >= self.severe_deadline_packet_threshold;
-                self.queue_recovery_signal(if is_severe_gap {
-                    VideoRecoverySignal::TransportSevereDeadline
-                } else {
-                    VideoRecoverySignal::TransportExpiredDeadline
+                let missing_packets = expired_batch.sequences.len().min(u16::MAX as usize) as u16;
+                self.queue_transport_observation(TransportObservation::NackDeadlineExpired {
+                    missing_packets,
                 });
             }
-            if let Ok(mut stats) = self.runtime_stats.lock() {
-                stats.video_loss_finalized_count_total = stats
-                    .video_loss_finalized_count_total
-                    .saturating_add(expired_batch.sequences.len() as u64);
-            }
+            self.runtime_stats
+                .add_video_loss_finalized(expired_batch.sequences.len());
             self.record_nack_observation(
                 &format!("expired{}", capitalize_reason(&expired_batch.reason)),
                 &NackBatch {
@@ -78,9 +79,8 @@ impl WebrtcVideoAdapter {
         if let Some(retry_batch) = poll_result.retry_batch {
             self.send_nack_batch("sent", &retry_batch, now_ms).await;
         }
-        if let Ok(mut stats) = self.runtime_stats.lock() {
-            stats.video_pending_missing_packets = self.nack_scheduler.pending_count();
-        }
+        self.runtime_stats
+            .set_video_pending_missing_packets(self.nack_scheduler.pending_count());
     }
 
     pub(super) async fn observe_forward_gap_and_nack(
@@ -90,14 +90,23 @@ impl WebrtcVideoAdapter {
     ) {
         let now_ms = now_ms_f64();
         let pending_before = self.nack_scheduler.pending_count();
-        let deadline_at_ms = self
-            .frame_deadline_tracker
-            .next_deadline_for_value_at_ms(now_ms, FrameValue::new(false, false, 0));
-        let Some(initial_batch) = self.nack_scheduler.observe_gap(
-            expected_sequence,
-            received_sequence,
+        let missing_sequences = wrapping_sequence_range(expected_sequence, received_sequence);
+        if missing_sequences.is_empty() {
+            return;
+        }
+        let frame_value = self.current_transport_frame_value();
+        let cloud_mode = self.is_cloud_transport_profile();
+        let startup_mode = self.is_cloud_startup_transport_profile();
+        let deadline_at_ms = cloud_startup_head_hole_deadline_at_ms(
             now_ms,
-            Some(deadline_at_ms),
+            self.transport_deadline_tracker
+                .next_transport_deadline_for_value_at_ms(now_ms, frame_value),
+            startup_mode,
+        );
+        let Some(initial_batch) = self.nack_scheduler.observe_missing_sequences_with_policy(
+            &missing_sequences,
+            now_ms,
+            rtp_gap_nack_policy(frame_value, deadline_at_ms, cloud_mode, startup_mode),
         ) else {
             return;
         };
@@ -107,7 +116,6 @@ impl WebrtcVideoAdapter {
             .saturating_sub(pending_before)
             .min(u16::MAX as usize) as u16;
         if inserted_count > 0 {
-            let missing_sequences = wrapping_sequence_range(expected_sequence, received_sequence);
             self.record_packet_gap_observation(
                 &missing_sequences,
                 inserted_count,
@@ -119,11 +127,8 @@ impl WebrtcVideoAdapter {
                 None,
                 None,
             );
-            if let Ok(mut stats) = self.runtime_stats.lock() {
-                stats.inbound_video_packet_loss_estimate_total = stats
-                    .inbound_video_packet_loss_estimate_total
-                    .saturating_add(u64::from(inserted_count));
-            }
+            self.runtime_stats
+                .add_inbound_video_packet_loss_estimate(inserted_count);
         }
         self.send_nack_batch("sent", &initial_batch, now_ms).await;
     }
@@ -132,17 +137,11 @@ impl WebrtcVideoAdapter {
         if batch.sequences.is_empty() {
             return;
         }
-        use webrtc::rtcp::transport_feedbacks::transport_layer_nack::{
-            nack_pairs_from_sequence_numbers, TransportLayerNack,
-        };
-
-        let nack = TransportLayerNack {
-            sender_ssrc: 0,
-            media_ssrc: self.track.ssrc(),
-            nacks: nack_pairs_from_sequence_numbers(&batch.sequences),
-        };
-
-        if let Err(error) = self.peer_connection.write_rtcp(&[Box::new(nack)]).await {
+        if let Err(error) = self
+            .feedback_port
+            .send_transport_layer_nack(self.track.ssrc(), &batch.sequences)
+            .await
+        {
             crate::xbx_log_warn!(
                 "[WebrtcVideoAdapter] nack send failed action={} err={}",
                 action,
@@ -151,14 +150,8 @@ impl WebrtcVideoAdapter {
             return;
         }
 
-        if let Ok(mut stats) = self.runtime_stats.lock() {
-            stats.video_nack_batch_count_total =
-                stats.video_nack_batch_count_total.saturating_add(1);
-            stats.video_nack_request_count_total = stats
-                .video_nack_request_count_total
-                .saturating_add(batch.sequences.len() as u64);
-            stats.video_pending_missing_packets = self.nack_scheduler.pending_count();
-        }
+        self.runtime_stats
+            .record_nack_sent(batch.sequences.len(), self.nack_scheduler.pending_count());
         self.record_nack_observation(action, batch, now_ms);
     }
 
@@ -171,8 +164,8 @@ impl WebrtcVideoAdapter {
             return;
         };
         self.nack_observation_id = self.nack_observation_id.saturating_add(1);
-        if let Ok(mut stats) = self.runtime_stats.lock() {
-            stats.latest_video_nack_observation = Some(XbxEngineVideoNackObservation {
+        self.runtime_stats
+            .record_latest_video_nack_observation(XbxEngineVideoNackObservation {
                 observation_id: self.nack_observation_id,
                 action: action.to_string(),
                 source: batch.source.to_string(),
@@ -186,23 +179,22 @@ impl WebrtcVideoAdapter {
                 deadline_at_ms: batch.deadline_at_ms,
                 observed_at_ms: now_ms,
             });
-        }
     }
 
     pub(super) fn record_nack_recovered(&mut self, resolved: ResolvedNack, now_ms: f64) {
+        self.nack_recovery_ewma_ms =
+            (self.nack_recovery_ewma_ms * 0.8) + (resolved.recovery_time_ms * 0.2);
+        self.nack_late_ewma = if resolved.was_late {
+            (self.nack_late_ewma * 0.8) + 0.2
+        } else {
+            self.nack_late_ewma * 0.8
+        };
         self.nack_observation_id = self.nack_observation_id.saturating_add(1);
-        if let Ok(mut stats) = self.runtime_stats.lock() {
-            stats.video_pending_missing_packets = self.nack_scheduler.pending_count();
-            if resolved.was_late {
-                stats.video_loss_late_recovered_count_total = stats
-                    .video_loss_late_recovered_count_total
-                    .saturating_add(1);
-            } else {
-                stats.video_loss_recovered_count_total =
-                    stats.video_loss_recovered_count_total.saturating_add(1);
-            }
-            stats.video_nack_recovery_rtt_ms = Some(resolved.recovery_time_ms);
-            stats.latest_video_nack_observation = Some(XbxEngineVideoNackObservation {
+        self.runtime_stats.record_nack_recovered(
+            resolved.was_late,
+            resolved.recovery_time_ms,
+            self.nack_scheduler.pending_count(),
+            XbxEngineVideoNackObservation {
                 observation_id: self.nack_observation_id,
                 action: if resolved.was_late {
                     "recoveredLate".to_string()
@@ -219,10 +211,10 @@ impl WebrtcVideoAdapter {
                 frame_importance: Some(resolved.frame_importance.to_string()),
                 deadline_at_ms: resolved.deadline_at_ms,
                 observed_at_ms: now_ms,
-            });
-        }
+            },
+        );
         if resolved.was_late {
-            self.queue_recovery_signal(VideoRecoverySignal::TransportRecoveredLate);
+            self.queue_transport_observation(TransportObservation::NackRecoveredLate);
         }
     }
 
@@ -245,8 +237,8 @@ impl WebrtcVideoAdapter {
             return;
         };
         self.packet_gap_observation_id = self.packet_gap_observation_id.saturating_add(1);
-        if let Ok(mut stats) = self.runtime_stats.lock() {
-            stats.latest_video_packet_gap = Some(crate::XbxEngineVideoPacketGapObservation {
+        self.runtime_stats.record_latest_video_packet_gap(
+            crate::XbxEngineVideoPacketGapObservation {
                 observation_id: self.packet_gap_observation_id,
                 expected_sequence: first_sequence,
                 received_sequence: last_sequence.wrapping_add(1),
@@ -258,9 +250,9 @@ impl WebrtcVideoAdapter {
                 frame_is_keyframe,
                 frame_importance: frame_importance.map(|value| value.to_string()),
                 observed_at_ms: now_ms,
-            });
-            stats.latest_video_packet_sequence = Some(last_sequence);
-        }
+            },
+            last_sequence,
+        );
     }
 
     pub(super) async fn observe_sample_loss_and_nack(
@@ -279,19 +271,25 @@ impl WebrtcVideoAdapter {
         if missing_sequences.is_empty() {
             return false;
         }
-        let frame_value = match frame_importance {
-            "keyframe" => FrameValue::new(true, false, 128 * 1024),
-            "reference" => FrameValue::new(false, true, 48 * 1024),
-            _ => FrameValue::new(false, false, 12 * 1024),
-        };
-        let deadline_at_ms = self
-            .frame_deadline_tracker
-            .next_deadline_for_value_at_ms(now_ms, frame_value);
+        let frame_value = frame_value_for_importance(frame_importance);
+        let repairability = self.estimate_repairability(
+            frame_importance,
+            media_dropped_packets,
+            missing_sequences.len().min(u16::MAX as usize) as u16,
+        );
+        let base_deadline_at_ms = self
+            .transport_deadline_tracker
+            .next_transport_deadline_for_value_at_ms(now_ms, frame_value);
+        let deadline_at_ms =
+            self.dynamic_repair_deadline(now_ms, base_deadline_at_ms, repairability);
         let policy = sample_loss_nack_policy(
             sample_rtp_timestamp,
             frame_is_keyframe,
             frame_importance,
             deadline_at_ms,
+            repairability,
+            self.is_cloud_transport_profile(),
+            self.is_cloud_startup_transport_profile(),
         );
         let pending_before = self.nack_scheduler.pending_count();
         let Some(batch) = self.nack_scheduler.observe_missing_sequences_with_policy(
@@ -328,8 +326,15 @@ impl WebrtcVideoAdapter {
         let desired = usize::from(media_dropped_packets.max(1))
             .saturating_mul(2)
             .max(4);
+        let desired = if self.is_cloud_startup_transport_profile() {
+            desired.max(16)
+        } else if self.is_cloud_transport_profile() {
+            desired.max(8)
+        } else {
+            desired
+        };
         if missing.len() > desired {
-            missing = missing[missing.len().saturating_sub(desired)..].to_vec();
+            missing.truncate(desired);
         }
         missing
     }
@@ -360,8 +365,15 @@ impl WebrtcVideoAdapter {
         let desired = usize::from(media_dropped_packets.max(1))
             .saturating_mul(3)
             .max(6);
+        let desired = if self.is_cloud_startup_transport_profile() {
+            desired.max(20)
+        } else if self.is_cloud_transport_profile() {
+            desired.max(12)
+        } else {
+            desired
+        };
         if missing.len() > desired {
-            missing = missing[missing.len().saturating_sub(desired)..].to_vec();
+            missing.truncate(desired);
         }
         missing
     }
@@ -375,18 +387,159 @@ impl WebrtcVideoAdapter {
             rtp_timestamp,
         });
     }
+
+    fn current_transport_frame_value(&self) -> FrameValue {
+        if self.waiting_for_recovery_keyframe {
+            FrameValue::new(true, true, 96 * 1024)
+        } else {
+            self.last_submitted_frame_value
+        }
+    }
+
+    fn estimate_repairability(
+        &self,
+        frame_importance: &'static str,
+        media_dropped_packets: u16,
+        missing_sequence_count: u16,
+    ) -> f64 {
+        let base = match frame_importance {
+            "keyframe" => 0.95,
+            "reference" => 0.8,
+            _ => 0.62,
+        };
+        // 动态 repairability：综合帧价值、缺包规模、当前恢复状态与历史恢复质量。
+        let missing_ratio = missing_sequence_count as f64 / f64::from(media_dropped_packets.max(1));
+        let burst_penalty = f64::from(self.sample_loss_burst_count.min(6)) * 0.04;
+        let late_penalty = self.nack_late_ewma * 0.35;
+        let missing_penalty = (missing_ratio - 1.0).max(0.0) * 0.08;
+        let recovery_bonus = if self.nack_recovery_ewma_ms <= 16.0 {
+            0.08
+        } else if self.nack_recovery_ewma_ms <= 24.0 {
+            0.04
+        } else {
+            0.0
+        };
+        let waiting_penalty = if self.waiting_for_recovery_keyframe {
+            0.06
+        } else {
+            0.0
+        };
+        (base + recovery_bonus - burst_penalty - late_penalty - missing_penalty - waiting_penalty)
+            .clamp(0.25, 1.0)
+    }
+
+    fn dynamic_repair_deadline(
+        &self,
+        now_ms: f64,
+        base_deadline_at_ms: f64,
+        repairability: f64,
+    ) -> f64 {
+        let mut base_window_ms = (base_deadline_at_ms - now_ms).max(10.0);
+        let scale = if self.is_cloud_startup_transport_profile() {
+            // startup + cloud 需要更宽的首洞修复窗口，避免刚出画就把恢复链判死。
+            let rtt_floor_ms = self.cloud_repair_rtt_floor_ms();
+            base_window_ms = base_window_ms
+                .max(rtt_floor_ms * 1.2)
+                .max(CLOUD_STARTUP_HEAD_HOLE_DEADLINE_FLOOR_MS);
+            (1.05 + repairability * 0.7).clamp(1.05, 1.7)
+        } else if self.is_cloud_transport_profile() {
+            // 参考浏览器云游戏 `RTT≈214ms`，cloud 场景不要再按几十毫秒级局部 RTT
+            // 去压缩 repair window。
+            let rtt_floor_ms = self.cloud_repair_rtt_floor_ms();
+            base_window_ms = base_window_ms.max(rtt_floor_ms * 1.15);
+            (0.95 + repairability * 0.65).clamp(0.95, 1.55)
+        } else {
+            (0.75 + repairability * 0.55).clamp(0.75, 1.3)
+        };
+        now_ms + (base_window_ms * scale)
+    }
+
+    fn is_cloud_transport_profile(&self) -> bool {
+        self.runtime_stats
+            .read(|stats| {
+                matches!(
+                    stats.session_target_type,
+                    Some(XbxEngineTargetTypeDto::Cloud)
+                ) || matches!(
+                    stats.transport_policy_profile.as_deref(),
+                    Some("cloudGaming")
+                )
+            })
+            .unwrap_or(false)
+    }
+
+    fn is_cloud_startup_transport_profile(&self) -> bool {
+        self.runtime_stats
+            .read(|stats| {
+                let cloud_mode = matches!(
+                    stats.session_target_type,
+                    Some(XbxEngineTargetTypeDto::Cloud)
+                ) || matches!(
+                    stats.transport_policy_profile.as_deref(),
+                    Some("cloudGaming")
+                );
+                cloud_mode
+                    && (matches!(stats.session_phase.as_deref(), Some("startup"))
+                        || matches!(
+                            stats.direct_gaming_bitrate_band.as_deref(),
+                            Some("startupLow")
+                        ))
+            })
+            .unwrap_or(false)
+    }
+
+    fn cloud_repair_rtt_floor_ms(&self) -> f64 {
+        self.runtime_stats
+            .read(|stats| {
+                let observed_rtt_ms = stats.video_rtt_ms.unwrap_or(0.0);
+                observed_rtt_ms.max(214.0)
+            })
+            .unwrap_or(214.0)
+    }
 }
 
-fn sample_loss_nack_policy(
+pub(super) fn cloud_startup_head_hole_deadline_at_ms(
+    now_ms: f64,
+    deadline_at_ms: f64,
+    startup_mode: bool,
+) -> f64 {
+    if startup_mode {
+        deadline_at_ms.max(now_ms + CLOUD_STARTUP_HEAD_HOLE_DEADLINE_FLOOR_MS)
+    } else {
+        deadline_at_ms
+    }
+}
+
+pub(super) fn sample_loss_nack_policy(
     sample_rtp_timestamp: u32,
     frame_is_keyframe: bool,
     frame_importance: &'static str,
     deadline_at_ms: f64,
+    repairability: f64,
+    cloud_mode: bool,
+    startup_mode: bool,
 ) -> NackObservePolicy {
-    let (max_age_ms, retry_interval_ms, burst_count, priority) = match frame_importance {
-        "keyframe" => (28, 10, 4, 3),
-        "reference" => (18, 8, 3, 2),
-        _ => (12, 6, 2, 1),
+    let (base_max_age_ms, base_retry_interval_ms, base_burst_count, base_priority) =
+        match (cloud_mode, startup_mode, frame_importance) {
+            (true, true, "keyframe") => (360.0, 40.0, 8.0, 3u8),
+            (true, true, "reference") => (300.0, 34.0, 7.0, 2u8),
+            (true, true, _) => (240.0, 28.0, 6.0, 1u8),
+            (true, false, "keyframe") => (240.0, 32.0, 6.0, 3u8),
+            (true, false, "reference") => (180.0, 26.0, 5.0, 2u8),
+            (true, false, _) => (120.0, 22.0, 4.0, 1u8),
+            (false, _, "keyframe") => (30.0, 10.0, 4.0, 3u8),
+            (false, _, "reference") => (20.0, 8.0, 3.0, 2u8),
+            (false, _, _) => (14.0, 6.0, 2.0, 1u8),
+        };
+    let max_age_ms = (base_max_age_ms * (0.85 + repairability * 0.45)).round() as u64;
+    let retry_interval_ms = (base_retry_interval_ms * (1.25 - repairability * 0.45))
+        .round()
+        .max(4.0) as u64;
+    let burst_count = (base_burst_count + (repairability * 1.8)).round().max(1.0) as u16;
+    let priority = if repairability >= 0.86 {
+        base_priority.saturating_add(1).min(4)
+    } else {
+        base_priority
     };
     NackObservePolicy {
         source: "sampleLoss",
@@ -394,10 +547,137 @@ fn sample_loss_nack_policy(
         max_age_ms: Some(max_age_ms),
         retry_interval_ms: Some(retry_interval_ms),
         burst_count: Some(burst_count),
+        max_tracked_sequences: Some(match (cloud_mode, startup_mode, frame_importance) {
+            (true, true, "keyframe") => 24,
+            (true, true, "reference") => 18,
+            (true, true, _) => 14,
+            (true, false, "keyframe") => 18,
+            (true, false, "reference") => 12,
+            (true, false, _) => 8,
+            (false, _, "keyframe") => 12,
+            (false, _, "reference") => 8,
+            (false, _, _) => 4,
+        }),
         frame_rtp_timestamp: Some(sample_rtp_timestamp),
         frame_is_keyframe: Some(frame_is_keyframe),
         frame_importance,
         priority,
+    }
+}
+
+pub(super) fn rtp_window_nack_policy(
+    frame_value: FrameValue,
+    deadline_at_ms: f64,
+    cloud_mode: bool,
+    startup_mode: bool,
+) -> NackObservePolicy {
+    let (frame_importance, frame_is_keyframe, retry_interval_ms, burst_count, priority) =
+        transport_policy_tuple(frame_value, cloud_mode, startup_mode);
+    NackObservePolicy {
+        source: "rtpWindow",
+        deadline_at_ms: Some(deadline_at_ms),
+        max_age_ms: Some(match (cloud_mode, startup_mode) {
+            (true, true) => 300,
+            (true, false) => 180,
+            (false, _) => 26,
+        }),
+        retry_interval_ms: Some(retry_interval_ms),
+        burst_count: Some(burst_count),
+        max_tracked_sequences: Some(match (cloud_mode, startup_mode, frame_importance) {
+            (true, true, "keyframe") => 20,
+            (true, true, "reference") => 14,
+            (true, true, _) => 10,
+            (true, false, "keyframe") => 14,
+            (true, false, "reference") => 10,
+            (true, false, _) => 6,
+            (false, _, "keyframe") => 10,
+            (false, _, "reference") => 6,
+            (false, _, _) => 4,
+        }),
+        frame_rtp_timestamp: None,
+        frame_is_keyframe: Some(frame_is_keyframe),
+        frame_importance,
+        priority,
+    }
+}
+
+pub(super) fn rtp_gap_nack_policy(
+    frame_value: FrameValue,
+    deadline_at_ms: f64,
+    cloud_mode: bool,
+    startup_mode: bool,
+) -> NackObservePolicy {
+    let (frame_importance, frame_is_keyframe, retry_interval_ms, burst_count, priority) =
+        transport_policy_tuple(frame_value, cloud_mode, startup_mode);
+    NackObservePolicy {
+        source: "rtpGap",
+        deadline_at_ms: Some(deadline_at_ms),
+        max_age_ms: Some(match (cloud_mode, startup_mode) {
+            (true, true) => 260,
+            (true, false) => 160,
+            (false, _) => 22,
+        }),
+        retry_interval_ms: Some(if cloud_mode {
+            retry_interval_ms
+        } else {
+            retry_interval_ms.saturating_sub(1).max(4)
+        }),
+        burst_count: Some(burst_count.saturating_add(1)),
+        max_tracked_sequences: Some(match (cloud_mode, startup_mode, frame_importance) {
+            (true, true, "keyframe") => 22,
+            (true, true, "reference") => 16,
+            (true, true, _) => 12,
+            (true, false, "keyframe") => 16,
+            (true, false, "reference") => 12,
+            (true, false, _) => 8,
+            (false, _, "keyframe") => 12,
+            (false, _, "reference") => 8,
+            (false, _, _) => 4,
+        }),
+        frame_rtp_timestamp: None,
+        frame_is_keyframe: Some(frame_is_keyframe),
+        frame_importance,
+        priority,
+    }
+}
+
+fn transport_policy_tuple(
+    frame_value: FrameValue,
+    cloud_mode: bool,
+    startup_mode: bool,
+) -> (&'static str, bool, u64, u16, u8) {
+    if frame_value.is_sync_point() {
+        if cloud_mode && startup_mode {
+            ("keyframe", true, 30, 8, 3)
+        } else if cloud_mode {
+            ("keyframe", true, 24, 6, 3)
+        } else {
+            ("keyframe", true, 8, 4, 3)
+        }
+    } else if frame_value.refresh_boost {
+        if cloud_mode && startup_mode {
+            ("reference", false, 26, 7, 2)
+        } else if cloud_mode {
+            ("reference", false, 20, 5, 2)
+        } else {
+            ("reference", false, 7, 3, 2)
+        }
+    } else {
+        if cloud_mode && startup_mode {
+            ("delta", false, 22, 6, 1)
+        } else if cloud_mode {
+            ("delta", false, 16, 4, 1)
+        } else {
+            ("delta", false, 6, 2, 1)
+        }
+    }
+}
+
+pub(super) fn frame_value_for_importance(frame_importance: &'static str) -> FrameValue {
+    match frame_importance {
+        "keyframe" => FrameValue::new(true, false, 128 * 1024),
+        "reference" => FrameValue::new(false, true, 48 * 1024),
+        _ => FrameValue::new(false, false, 12 * 1024),
     }
 }
 

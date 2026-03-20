@@ -17,6 +17,7 @@ use tokio::task::JoinHandle;
 use tokio::time::{self, Instant, MissedTickBehavior};
 use webrtc_util::Unmarshal;
 
+use crate::runtime_stats_sink::RuntimeStatsSink;
 use crate::{XbxEngineMediaRuntimeStats, XbxEngineVideoTwccObservation};
 
 const TRANSPORT_CC_URI: &str =
@@ -32,7 +33,7 @@ struct TwccObservedPacket {
 
 pub struct OwnedTwccReceiverBuilder {
     interval: Duration,
-    runtime_stats: Arc<StdMutex<XbxEngineMediaRuntimeStats>>,
+    runtime_stats: RuntimeStatsSink,
 }
 
 impl OwnedTwccReceiverBuilder {
@@ -42,7 +43,7 @@ impl OwnedTwccReceiverBuilder {
     ) -> Self {
         Self {
             interval,
-            runtime_stats,
+            runtime_stats: RuntimeStatsSink::new(runtime_stats),
         }
     }
 }
@@ -71,7 +72,7 @@ impl InterceptorBuilder for OwnedTwccReceiverBuilder {
 // 自定义 TWCC receiver：保留 transport-cc 能力，但 feedback 的生成节奏与实现由我们接管。
 pub struct OwnedTwccReceiver {
     interval: Duration,
-    runtime_stats: Arc<StdMutex<XbxEngineMediaRuntimeStats>>,
+    runtime_stats: RuntimeStatsSink,
     observation_counter: Arc<AtomicU64>,
     start_time: Instant,
     packet_tx: mpsc::Sender<TwccObservedPacket>,
@@ -172,9 +173,11 @@ impl OwnedTwccReceiver {
                                 0.0
                             };
                             let packet_loss_ratio = (1.0 - delivery_ratio).clamp(0.0, 1.0);
-                            if let Ok(mut stats) = runtime_stats.lock() {
-                                stats.latest_video_twcc_observation = Some(XbxEngineVideoTwccObservation {
-                                    observation_id: observation_counter.fetch_add(1, Ordering::SeqCst) + 1,
+                            runtime_stats.record_latest_video_twcc_observation(
+                                XbxEngineVideoTwccObservation {
+                                    observation_id: observation_counter
+                                        .fetch_add(1, Ordering::SeqCst)
+                                        + 1,
                                     feedback_packet_count,
                                     covered_sequence_start,
                                     covered_sequence_end,
@@ -187,8 +190,8 @@ impl OwnedTwccReceiver {
                                     delivery_ratio,
                                     packet_loss_ratio,
                                     observed_at_ms,
-                                });
-                            }
+                                },
+                            );
                             last_feedback_at_ms = Some(observed_at_ms);
                         }
                         observed_packet_count = 0;

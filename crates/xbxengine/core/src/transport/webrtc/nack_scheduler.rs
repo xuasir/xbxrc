@@ -72,6 +72,7 @@ pub struct NackObservePolicy {
     pub max_age_ms: Option<u64>,
     pub retry_interval_ms: Option<u64>,
     pub burst_count: Option<u16>,
+    pub max_tracked_sequences: Option<u16>,
     pub frame_rtp_timestamp: Option<u32>,
     pub frame_is_keyframe: Option<bool>,
     pub frame_importance: &'static str,
@@ -118,6 +119,7 @@ impl NackScheduler {
                 max_age_ms: None,
                 retry_interval_ms: None,
                 burst_count: None,
+                max_tracked_sequences: None,
                 frame_rtp_timestamp: None,
                 frame_is_keyframe: None,
                 frame_importance: "unknown",
@@ -141,6 +143,7 @@ impl NackScheduler {
                 max_age_ms: None,
                 retry_interval_ms: None,
                 burst_count: None,
+                max_tracked_sequences: None,
                 frame_rtp_timestamp: None,
                 frame_is_keyframe: None,
                 frame_importance: "unknown",
@@ -161,6 +164,12 @@ impl NackScheduler {
 
         let mut inserted = Vec::new();
         let burst_count = usize::from(policy.burst_count.unwrap_or(self.config.burst_count).max(1));
+        let max_tracked_sequences = usize::from(
+            policy
+                .max_tracked_sequences
+                .unwrap_or((burst_count.saturating_mul(2)).min(u16::MAX as usize) as u16)
+                .max(1),
+        );
         let retry_interval_ms = policy
             .retry_interval_ms
             .unwrap_or(self.config.retry_interval_ms);
@@ -168,7 +177,7 @@ impl NackScheduler {
         let deadline_at_ms = policy
             .deadline_at_ms
             .unwrap_or(now_ms + self.config.frame_deadline_ms as f64);
-        for (index, sequence) in sequences.iter().enumerate() {
+        for (index, sequence) in sequences.iter().take(max_tracked_sequences).enumerate() {
             if self.pending.contains_key(sequence) {
                 continue;
             }

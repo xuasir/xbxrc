@@ -1,10 +1,12 @@
 use crate::media::video::h264::inspection::H264AccessUnitInspection;
-use crate::transport::webrtc::recovery::recovery_signal::VideoRecoverySignal;
 
 use super::{
-    build_sample_builder, now_ms_f64, resolve_playout_delay, Bytes, EncodedFrame, FrameSource,
-    FrameSourceEvent, FrameValue, VideoCodec, WebrtcVideoAdapter, UINT16SIZE_HALF,
+    build_sample_builder, now_ms_f64, Bytes, FrameSource, FrameSourceEvent, FrameValue,
+    TransportAdmissionObservation, TransportLossObservation, TransportObservation, VideoCodec,
+    WebrtcVideoAdapter, UINT16SIZE_HALF,
 };
+use crate::media::video::types::AssembledVideoFrame;
+use crate::XbxEngineVideoRtxReinjectObservation;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum RecoveryKeyframeAction {
@@ -17,14 +19,14 @@ pub(super) enum RecoveryKeyframeAction {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum InspectionAdmission {
     Accept,
-    Recover(VideoRecoverySignal),
+    AwaitRecoveryKeyframe,
 }
 
 pub(super) fn resolve_inspection_admission(
     inspection: &H264AccessUnitInspection,
 ) -> InspectionAdmission {
     if !inspection.slice_headers_valid {
-        return InspectionAdmission::Recover(VideoRecoverySignal::TransportAwaitRecoveryKeyframe);
+        return InspectionAdmission::AwaitRecoveryKeyframe;
     }
 
     InspectionAdmission::Accept
@@ -92,6 +94,15 @@ impl WebrtcVideoAdapter {
                 && self.current_assembly_packet_count <= self.thin_stream_packet_threshold
         })
     }
+
+    fn should_prioritize_reinject_drain(&self) -> bool {
+        self.runtime_stats
+            .read(|stats| stats.latest_video_rtx_reinject_observation.clone())
+            .flatten()
+            .is_some_and(|observation| {
+                observation.stage == "queued" && observation.matched_head_gap
+            })
+    }
 }
 
 impl FrameSource for WebrtcVideoAdapter {
@@ -102,8 +113,8 @@ impl FrameSource for WebrtcVideoAdapter {
         Box::pin(async {
             loop {
                 self.maybe_run_nack_maintenance().await;
-                if let Some(signal) = self.pending_recovery_signal.take() {
-                    return Some(FrameSourceEvent::RecoverySignal(signal));
+                if let Some(observation) = self.pending_transport_observation.take() {
+                    return Some(FrameSourceEvent::TransportObservation(observation));
                 }
                 if let Some(sample) = self.sample_builder.pop() {
                     self.last_packet_time = std::time::Instant::now();
@@ -117,15 +128,15 @@ impl FrameSource for WebrtcVideoAdapter {
                                 "[WebrtcVideoAdapter] h264 inspection failed: {error}"
                             );
                             self.waiting_for_recovery_keyframe = true;
-                            self.queue_recovery_signal(
-                                VideoRecoverySignal::TransportAwaitRecoveryKeyframe,
-                            );
+                            self.queue_transport_observation(TransportObservation::Admission(
+                                TransportAdmissionObservation::AwaitRecoveryKeyframe,
+                            ));
                             continue;
                         }
                     };
                     match resolve_inspection_admission(&inspection) {
                         InspectionAdmission::Accept => {}
-                        InspectionAdmission::Recover(signal) => {
+                        InspectionAdmission::AwaitRecoveryKeyframe => {
                             crate::xbx_log_warn!(
                                 "[WebrtcVideoAdapter] h264 inspection rejected sample ts={} bootstrap={:?} slice_headers_valid={}",
                                 sample.packet_timestamp,
@@ -133,7 +144,9 @@ impl FrameSource for WebrtcVideoAdapter {
                                 inspection.slice_headers_valid
                             );
                             self.waiting_for_recovery_keyframe = true;
-                            self.queue_recovery_signal(signal);
+                            self.queue_transport_observation(TransportObservation::Admission(
+                                TransportAdmissionObservation::AwaitRecoveryKeyframe,
+                            ));
                             continue;
                         }
                     }
@@ -166,11 +179,8 @@ impl FrameSource for WebrtcVideoAdapter {
                     self.waiting_for_recovery_keyframe = next_waiting_for_recovery_keyframe;
 
                     if media_dropped_packets > 0 {
-                        if let Ok(mut stats) = self.runtime_stats.lock() {
-                            stats.inbound_video_packet_loss_estimate_total = stats
-                                .inbound_video_packet_loss_estimate_total
-                                .saturating_add(u64::from(media_dropped_packets));
-                        }
+                        self.runtime_stats
+                            .add_inbound_video_packet_loss_estimate(media_dropped_packets);
                         crate::xbx_log_warn!(
                             "[WebrtcVideoAdapter] media loss detected before sample ts={} dropped_packets={} is_keyframe={}",
                             sample.packet_timestamp,
@@ -199,22 +209,22 @@ impl FrameSource for WebrtcVideoAdapter {
                                 )
                                 .await;
                             if !nack_started {
-                                self.queue_recovery_signal(
-                                    VideoRecoverySignal::TransportSampleLoss,
-                                );
+                                self.queue_transport_observation(TransportObservation::Loss(
+                                    TransportLossObservation::PacketLossDetected,
+                                ));
                             }
                             continue;
                         }
                         RecoveryKeyframeAction::TriggerWaitKeyframe => {
-                            self.queue_recovery_signal(
-                                VideoRecoverySignal::TransportSampleLossBurst,
-                            );
+                            self.queue_transport_observation(TransportObservation::Loss(
+                                TransportLossObservation::RecoveryKeyframeRequested,
+                            ));
                             continue;
                         }
                         RecoveryKeyframeAction::WaitKeyframe => {
-                            self.queue_recovery_signal(
-                                VideoRecoverySignal::TransportAwaitRecoveryKeyframe,
-                            );
+                            self.queue_transport_observation(TransportObservation::Loss(
+                                TransportLossObservation::AwaitRecoveryKeyframe,
+                            ));
                             continue;
                         }
                     }
@@ -228,14 +238,10 @@ impl FrameSource for WebrtcVideoAdapter {
                     }
 
                     let frame_value = FrameValue::new(is_keyframe, config_changed, payload.len());
-                    let playout_delay = resolve_playout_delay(
-                        frame_value,
-                        self.jitter_buffer_min_delay,
-                        self.jitter_buffer_max_delay,
-                    );
-                    let target_playout_at_ms = now_ms_f64() + playout_delay.as_millis() as f64;
-                    self.frame_deadline_tracker
-                        .record_frame_target(target_playout_at_ms);
+                    self.last_submitted_frame_value = frame_value;
+                    let assembled_at = std::time::Instant::now();
+                    self.transport_deadline_tracker
+                        .record_frame_arrival(now_ms_f64());
 
                     crate::xbx_log_debug!(
                         "[Ingress] NALU Assb OK: size={}B, res={}x{}, is_kf={}, bootstrap={}",
@@ -246,7 +252,7 @@ impl FrameSource for WebrtcVideoAdapter {
                         inspection.bootstrap_ready
                     );
 
-                    return Some(FrameSourceEvent::Frame(EncodedFrame {
+                    return Some(FrameSourceEvent::Frame(AssembledVideoFrame {
                         codec: VideoCodec::H264,
                         is_keyframe,
                         config_changed,
@@ -254,8 +260,7 @@ impl FrameSource for WebrtcVideoAdapter {
                         width: self.current_width,
                         height: self.current_height,
                         rtp_timestamp: sample.packet_timestamp,
-                        assembled_at: std::time::Instant::now(),
-                        target_playout_time: std::time::Instant::now() + playout_delay,
+                        assembled_at,
                         h264: inspection,
                         payload: Bytes::from(payload),
                     }));
@@ -277,17 +282,50 @@ impl FrameSource for WebrtcVideoAdapter {
                         .map_or(true, |t| now.duration_since(t) >= self.idle_hint_cooldown)
                     {
                         self.last_idle_hint_time = Some(now);
-                        return Some(FrameSourceEvent::RecoverySignal(if thin_stream_stall {
-                            VideoRecoverySignal::AdapterThinStream
-                        } else {
-                            VideoRecoverySignal::AdapterIdleTimeout
-                        }));
+                        return Some(FrameSourceEvent::TransportObservation(
+                            if thin_stream_stall {
+                                TransportObservation::StreamThinStall
+                            } else {
+                                TransportObservation::StreamIdleTimeout
+                            },
+                        ));
                     }
                     continue;
                 }
 
-                let wait_duration = std::time::Duration::from_millis(50);
-                match tokio::time::timeout(wait_duration, self.track.read_rtp()).await {
+                // 当 RTX 已经命中首洞并排进 reinject queue 时，优先给主 reader 一个很短的直接出队窗口。
+                // 否则外层固定 50ms timeout 很容易一直打断普通读路径，导致 queued 包迟迟走不到 deliveredPrimary。
+                let read_timeout = if self.should_prioritize_reinject_drain() {
+                    std::time::Duration::from_millis(8)
+                } else {
+                    std::time::Duration::from_millis(50)
+                };
+                if let Some(observation) = self
+                    .runtime_stats
+                    .read(|stats| stats.latest_video_rtx_reinject_observation.clone())
+                    .flatten()
+                {
+                    if observation.stage == "queued" && observation.pending_queue_len > 0 {
+                        self.reinject_read_poll_count =
+                            self.reinject_read_poll_count.saturating_add(1);
+                        if self.reinject_read_poll_count == 1
+                            || self.reinject_read_poll_count.is_power_of_two()
+                        {
+                            crate::xbx_log_warn!(
+                                "[WebrtcVideoAdapter] reinjectReadPoll track_ssrc={} track_tid={} pending={} gap={:?} nack={:?}..{:?} timeout_ms={} count={}",
+                                self.track.ssrc(),
+                                self.track.tid(),
+                                observation.pending_queue_len,
+                                observation.matched_gap_sequence,
+                                observation.matched_nack_first_sequence,
+                                observation.matched_nack_last_sequence,
+                                read_timeout.as_millis(),
+                                self.reinject_read_poll_count
+                            );
+                        }
+                    }
+                }
+                match tokio::time::timeout(read_timeout, self.track.read_rtp()).await {
                     Ok(Ok((rtp, _))) => {
                         self.last_packet_time = std::time::Instant::now();
                         if self.assembling_frame_start.is_none() {
@@ -298,6 +336,36 @@ impl FrameSource for WebrtcVideoAdapter {
                             self.current_assembly_packet_count.saturating_add(1);
                         let seq = rtp.header.sequence_number;
                         let now_ms = now_ms_f64();
+                        let latest_reinject_observation = self
+                            .runtime_stats
+                            .read(|stats| stats.latest_video_rtx_reinject_observation.clone())
+                            .flatten();
+                        if let Some(observation) = latest_reinject_observation.clone() {
+                            if observation.stage == "deliveredPrimary"
+                                && observation.sequence_number == seq
+                            {
+                                self.runtime_stats.record_video_rtx_reinject(
+                                    XbxEngineVideoRtxReinjectObservation {
+                                        stage: "adapterRead".to_string(),
+                                        primary_ssrc: observation.primary_ssrc,
+                                        repair_ssrc: observation.repair_ssrc,
+                                        sequence_number: observation.sequence_number,
+                                        rtp_timestamp: observation.rtp_timestamp,
+                                        pending_queue_len: observation.pending_queue_len,
+                                        native_sequence_number: observation.native_sequence_number,
+                                        matched_head_gap: observation.matched_head_gap,
+                                        matched_nack_range: observation.matched_nack_range,
+                                        matched_pending_gap: observation.matched_pending_gap,
+                                        matched_gap_sequence: observation.matched_gap_sequence,
+                                        matched_nack_first_sequence: observation
+                                            .matched_nack_first_sequence,
+                                        matched_nack_last_sequence: observation
+                                            .matched_nack_last_sequence,
+                                        observed_at_ms: now_ms,
+                                    },
+                                );
+                            }
+                        }
                         let (next_highest_sequence, forward_gap) =
                             detect_forward_gap(self.last_highest_rtp_sequence, seq);
                         self.last_highest_rtp_sequence = next_highest_sequence;
@@ -307,8 +375,84 @@ impl FrameSource for WebrtcVideoAdapter {
                         }
                         self.nack_window.add(seq);
                         self.push_recent_rtp_packet(seq, rtp.header.timestamp);
+                        if let Some(observation) = latest_reinject_observation.clone() {
+                            if observation.stage == "adapterRead"
+                                && observation.sequence_number == seq
+                            {
+                                self.runtime_stats.record_video_rtx_reinject(
+                                    XbxEngineVideoRtxReinjectObservation {
+                                        stage: "sampleBuilderPush".to_string(),
+                                        primary_ssrc: observation.primary_ssrc,
+                                        repair_ssrc: observation.repair_ssrc,
+                                        sequence_number: observation.sequence_number,
+                                        rtp_timestamp: observation.rtp_timestamp,
+                                        pending_queue_len: observation.pending_queue_len,
+                                        native_sequence_number: observation.native_sequence_number,
+                                        matched_head_gap: observation.matched_head_gap,
+                                        matched_nack_range: observation.matched_nack_range,
+                                        matched_pending_gap: observation.matched_pending_gap,
+                                        matched_gap_sequence: observation.matched_gap_sequence,
+                                        matched_nack_first_sequence: observation
+                                            .matched_nack_first_sequence,
+                                        matched_nack_last_sequence: observation
+                                            .matched_nack_last_sequence,
+                                        observed_at_ms: now_ms,
+                                    },
+                                );
+                            }
+                        }
                         if let Some(resolved) = self.nack_scheduler.resolve_sequence(seq, now_ms) {
+                            if let Some(observation) = latest_reinject_observation.clone() {
+                                if observation.sequence_number == seq {
+                                    self.runtime_stats.record_video_rtx_reinject(
+                                        XbxEngineVideoRtxReinjectObservation {
+                                            stage: "adapterResolved".to_string(),
+                                            primary_ssrc: observation.primary_ssrc,
+                                            repair_ssrc: observation.repair_ssrc,
+                                            sequence_number: observation.sequence_number,
+                                            rtp_timestamp: observation.rtp_timestamp,
+                                            pending_queue_len: observation.pending_queue_len,
+                                            native_sequence_number: observation
+                                                .native_sequence_number,
+                                            matched_head_gap: observation.matched_head_gap,
+                                            matched_nack_range: observation.matched_nack_range,
+                                            matched_pending_gap: observation.matched_pending_gap,
+                                            matched_gap_sequence: observation.matched_gap_sequence,
+                                            matched_nack_first_sequence: observation
+                                                .matched_nack_first_sequence,
+                                            matched_nack_last_sequence: observation
+                                                .matched_nack_last_sequence,
+                                            observed_at_ms: now_ms,
+                                        },
+                                    );
+                                }
+                            }
                             self.record_nack_recovered(resolved, now_ms);
+                        } else if let Some(observation) = latest_reinject_observation {
+                            if observation.stage == "adapterRead"
+                                && observation.sequence_number == seq
+                            {
+                                self.runtime_stats.record_video_rtx_reinject(
+                                    XbxEngineVideoRtxReinjectObservation {
+                                        stage: "adapterResolveMiss".to_string(),
+                                        primary_ssrc: observation.primary_ssrc,
+                                        repair_ssrc: observation.repair_ssrc,
+                                        sequence_number: observation.sequence_number,
+                                        rtp_timestamp: observation.rtp_timestamp,
+                                        pending_queue_len: observation.pending_queue_len,
+                                        native_sequence_number: observation.native_sequence_number,
+                                        matched_head_gap: observation.matched_head_gap,
+                                        matched_nack_range: observation.matched_nack_range,
+                                        matched_pending_gap: observation.matched_pending_gap,
+                                        matched_gap_sequence: observation.matched_gap_sequence,
+                                        matched_nack_first_sequence: observation
+                                            .matched_nack_first_sequence,
+                                        matched_nack_last_sequence: observation
+                                            .matched_nack_last_sequence,
+                                        observed_at_ms: now_ms,
+                                    },
+                                );
+                            }
                         }
                         if seq % 100 == 0 {
                             crate::xbx_log_info!(

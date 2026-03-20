@@ -2,6 +2,7 @@ pub mod api;
 pub mod diagnostics;
 mod media;
 mod platform;
+mod runtime_stats_sink;
 pub mod session;
 mod transport;
 

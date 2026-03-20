@@ -27,7 +27,7 @@ use xbox_streaming::{
     DisplayOptions as DomainDisplayOptions, FallbackTurnProvider, HostAddr as DomainHostAddr,
     IceCandidate as DomainIceCandidate, Plan as StreamingPlan, RemoteConsoleSnapshot, RuntimeFact,
     RuntimePreference, SessionFlowError, SessionFlowProvider, SessionFlowService,
-    SessionStartupObserver, SessionStartupPhase as DomainStartupPhase,
+    SessionProgressSnapshot, SessionStartupObserver, SessionStartupPhase as DomainStartupPhase,
     SessionStartupPhaseStatus as DomainStartupPhaseStatus, Target as DomainTarget, TurnServer,
 };
 
@@ -269,6 +269,112 @@ impl SessionFlowProvider for TauriSessionFlowProvider {
                 console_streaming_enabled: console.console_streaming_enabled,
             })
             .collect())
+    }
+
+    fn on_session_state_polled(
+        &self,
+        session_id: &str,
+        target_type: &str,
+        target_id: &str,
+        state: Option<&str>,
+        error_code: Option<&serde_json::Value>,
+        error_message: Option<&str>,
+    ) {
+        self.runtime_trace.record_event(
+            "streaming",
+            "sessionStatePolled",
+            None,
+            serde_json::json!({
+                "sessionId": session_id,
+                "targetType": target_type,
+                "targetId": target_id,
+                "state": state,
+                "errorCode": error_code,
+                "errorMessage": error_message,
+                "tsMs": now_ms(),
+            }),
+        );
+    }
+
+    fn on_session_state_poll_failed(
+        &self,
+        session_id: &str,
+        target_type: &str,
+        target_id: &str,
+        error: &SessionFlowError,
+    ) {
+        self.runtime_trace.record_event(
+            "streaming",
+            "sessionStatePollFailed",
+            None,
+            serde_json::json!({
+                "sessionId": session_id,
+                "targetType": target_type,
+                "targetId": target_id,
+                "status": error.status,
+                "message": error.message,
+                "body": error.body,
+                "tsMs": now_ms(),
+            }),
+        );
+    }
+
+    fn on_session_monitor_tick(
+        &self,
+        session_id: &str,
+        target_type: &str,
+        target_id: &str,
+        progress: &SessionProgressSnapshot,
+        stream_state: Option<&str>,
+        player_state: &str,
+        should_continue: bool,
+        should_send_connect_token: bool,
+    ) {
+        self.runtime_trace.record_snapshot(
+            "streaming",
+            "sessionMonitorSnapshot",
+            None,
+            serde_json::json!({
+                "sessionId": session_id,
+                "targetType": target_type,
+                "targetId": target_id,
+                "phase": progress.phase,
+                "statusTextKey": progress.status_text_key,
+                "streamState": stream_state,
+                "playerState": player_state,
+                "queueSeconds": progress.queue_seconds,
+                "errorCode": progress.error_code,
+                "errorMessage": progress.error_message,
+                "shouldContinue": should_continue,
+                "shouldSendConnectToken": should_send_connect_token,
+                "tsMs": now_ms(),
+            }),
+        );
+    }
+
+    fn on_session_connect_token_result(
+        &self,
+        session_id: &str,
+        target_type: &str,
+        target_id: &str,
+        status: &str,
+        error: Option<&SessionFlowError>,
+    ) {
+        self.runtime_trace.record_event(
+            "streaming",
+            "sessionConnectToken",
+            None,
+            serde_json::json!({
+                "sessionId": session_id,
+                "targetType": target_type,
+                "targetId": target_id,
+                "status": status,
+                "errorStatus": error.and_then(|value| value.status),
+                "errorMessage": error.map(|value| value.message.clone()),
+                "errorBody": error.and_then(|value| value.body.clone()),
+                "tsMs": now_ms(),
+            }),
+        );
     }
 }
 

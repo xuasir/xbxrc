@@ -17,7 +17,10 @@ use opus::{Channels as OpusChannels, Decoder as OpusDecoder};
 use tokio::{sync::watch, task::JoinHandle as TokioJoinHandle};
 use webrtc::track::track_remote::TrackRemote;
 
-use crate::{XbxEngineMediaRuntimeStats, XbxEngineRuntimeError, XbxEngineVideoTrackStatus};
+use crate::{
+    runtime_stats_sink::RuntimeStatsSink, XbxEngineMediaRuntimeStats, XbxEngineRuntimeError,
+    XbxEngineVideoTrackStatus,
+};
 
 const OPUS_SAMPLE_RATE_HZ: u32 = 48_000;
 const OPUS_OUTPUT_CHANNELS: usize = 2;
@@ -161,6 +164,7 @@ fn spawn_audio_decode_task(
     shared_state: Arc<Mutex<AudioPlaybackSharedState>>,
     mut stop_receiver: watch::Receiver<bool>,
 ) -> TokioJoinHandle<()> {
+    let runtime_stats = RuntimeStatsSink::new(runtime_stats);
     tokio::spawn(async move {
         let mut decoder = match OpusDecoder::new(OPUS_SAMPLE_RATE_HZ, OpusChannels::Stereo) {
             Ok(decoder) => decoder,
@@ -188,7 +192,7 @@ fn spawn_audio_decode_task(
                     };
                     total_audio_bytes = total_audio_bytes.saturating_add(rtp.payload.len() as u64);
                     update_audio_runtime_stats(
-                        runtime_stats.as_ref(),
+                        &runtime_stats,
                         total_audio_bytes,
                         &mut last_audio_sample_bytes,
                         &mut last_audio_sample_at_ms,
@@ -219,14 +223,14 @@ fn spawn_audio_decode_task(
 }
 
 fn update_audio_runtime_stats(
-    runtime_stats: &Mutex<XbxEngineMediaRuntimeStats>,
+    runtime_stats: &RuntimeStatsSink,
     total_audio_bytes: u64,
     last_audio_sample_bytes: &mut u64,
     last_audio_sample_at_ms: &mut f64,
 ) {
     let now_ms = now_ms_f64();
     let elapsed_ms = (now_ms - *last_audio_sample_at_ms).max(0.0);
-    if let Ok(mut shared) = runtime_stats.lock() {
+    runtime_stats.update(|shared| {
         shared.inbound_audio_bytes_total = total_audio_bytes;
         if elapsed_ms >= 250.0 {
             let delta_bytes = total_audio_bytes.saturating_sub(*last_audio_sample_bytes);
@@ -256,7 +260,7 @@ fn update_audio_runtime_stats(
                 observed_at_ms: now_ms,
             });
         }
-    }
+    });
 }
 
 fn build_output_stream(

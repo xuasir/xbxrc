@@ -12,8 +12,8 @@ use webrtc::data_channel::{data_channel_state::RTCDataChannelState, RTCDataChann
 use xbxengine_protocol::XbxEngineInputEventDto;
 
 use crate::{
-    XbxEngineDataChannelMessageCatalogObservation, XbxEngineMediaRuntimeStats,
-    XbxEngineRuntimeError,
+    runtime_stats_sink::RuntimeStatsSink, XbxEngineDataChannelMessageCatalogObservation,
+    XbxEngineMediaRuntimeStats, XbxEngineRuntimeError,
 };
 
 #[derive(Default)]
@@ -35,6 +35,92 @@ pub(crate) struct XbxDataChannelState {
     pub(crate) input_stream_loop_task: Option<JoinHandle<()>>,
     pub(crate) seen_message_catalog_keys: HashSet<String>,
     pub(crate) next_message_catalog_observation_id: u64,
+}
+
+#[derive(Clone, Debug, Default)]
+pub(crate) struct ChannelAvailabilitySnapshot {
+    pub(crate) control_ready: bool,
+    pub(crate) control_open: bool,
+    pub(crate) handshake_acked: bool,
+    pub(crate) control_started: bool,
+    pub(crate) control_bootstrapped: bool,
+}
+
+#[derive(Clone)]
+pub(crate) struct RecoveryActionDispatcher {
+    pub(crate) runtime_state: Arc<Mutex<XbxDataChannelState>>,
+    pub(crate) runtime_stats: Arc<Mutex<XbxEngineMediaRuntimeStats>>,
+}
+
+impl RecoveryActionDispatcher {
+    pub(crate) fn new(
+        runtime_state: Arc<Mutex<XbxDataChannelState>>,
+        runtime_stats: Arc<Mutex<XbxEngineMediaRuntimeStats>>,
+    ) -> Self {
+        Self {
+            runtime_state,
+            runtime_stats,
+        }
+    }
+
+    pub(crate) fn actionable_control_channel(&self) -> Option<Arc<RTCDataChannel>> {
+        let Ok(state) = self.runtime_state.lock() else {
+            return None;
+        };
+        actionable_control_channel_locked(&state)
+    }
+
+    pub(crate) fn already_pending_keyframe(&self) -> bool {
+        self.runtime_state
+            .lock()
+            .ok()
+            .is_some_and(|state| state.pending_keyframe_request)
+    }
+
+    pub(crate) fn already_pending_decoder_reset(&self) -> bool {
+        self.runtime_state
+            .lock()
+            .ok()
+            .is_some_and(|state| state.pending_decoder_reset)
+    }
+
+    pub(crate) fn describe_state(&self) -> String {
+        self.runtime_state
+            .lock()
+            .ok()
+            .map(|state| describe_recovery_request_state_locked(&state))
+            .unwrap_or_else(|| "state=poisoned".to_string())
+    }
+
+    pub(crate) fn mark_keyframe_pending(&self, pending: bool) {
+        if let Ok(mut state) = self.runtime_state.lock() {
+            state.pending_keyframe_request = pending;
+        }
+        publish_data_channel_availability(&self.runtime_state, &self.runtime_stats);
+    }
+
+    pub(crate) fn mark_decoder_reset_pending(&self, pending: bool) {
+        if let Ok(mut state) = self.runtime_state.lock() {
+            state.pending_decoder_reset = pending;
+        }
+        publish_data_channel_availability(&self.runtime_state, &self.runtime_stats);
+    }
+
+    pub(crate) fn clear_recovery_pending(&self) {
+        if let Ok(mut state) = self.runtime_state.lock() {
+            state.pending_decoder_reset = false;
+            state.pending_keyframe_request = false;
+        }
+        publish_data_channel_availability(&self.runtime_state, &self.runtime_stats);
+    }
+
+    pub(crate) async fn request_keyframe(&self) -> Result<(), XbxEngineRuntimeError> {
+        request_video_keyframe_from_state(&self.runtime_state, &self.runtime_stats).await
+    }
+
+    pub(crate) async fn request_decoder_reset(&self) -> Result<(), XbxEngineRuntimeError> {
+        request_decoder_reset_from_state(&self.runtime_state, &self.runtime_stats).await
+    }
 }
 
 const MAX_PENDING_INPUT_EVENTS: usize = 64;
@@ -144,7 +230,7 @@ pub(crate) fn catalog_data_channel_message(
             state.next_message_catalog_observation_id.saturating_add(1);
         state.next_message_catalog_observation_id
     };
-    if let Ok(mut stats) = runtime_stats.lock() {
+    RuntimeStatsSink::new(runtime_stats.clone()).update(|stats| {
         stats.latest_data_channel_message_catalog_observation =
             Some(XbxEngineDataChannelMessageCatalogObservation {
                 observation_id,
@@ -157,7 +243,7 @@ pub(crate) fn catalog_data_channel_message(
                 payload_len: payload.len(),
                 observed_at_ms: now_ms_f64(),
             });
-    }
+    });
 }
 
 pub(crate) async fn request_video_keyframe_on_control_channel(
@@ -201,6 +287,38 @@ pub(crate) fn recovery_requests_ready(state: &XbxDataChannelState) -> bool {
             .is_some_and(|channel| channel.ready_state() == RTCDataChannelState::Open)
 }
 
+pub(crate) fn snapshot_data_channel_availability(
+    runtime_state: &Arc<Mutex<XbxDataChannelState>>,
+) -> ChannelAvailabilitySnapshot {
+    let Ok(state) = runtime_state.lock() else {
+        return ChannelAvailabilitySnapshot::default();
+    };
+    ChannelAvailabilitySnapshot {
+        control_ready: recovery_requests_ready(&state),
+        control_open: state
+            .control_channel
+            .as_ref()
+            .is_some_and(|channel| channel.ready_state() == RTCDataChannelState::Open),
+        handshake_acked: state.message_handshake_acked,
+        control_started: state.control_started,
+        control_bootstrapped: state.control_bootstrapped_after_handshake,
+    }
+}
+
+pub(crate) fn publish_data_channel_availability(
+    runtime_state: &Arc<Mutex<XbxDataChannelState>>,
+    runtime_stats: &Arc<Mutex<XbxEngineMediaRuntimeStats>>,
+) {
+    let snapshot = snapshot_data_channel_availability(runtime_state);
+    RuntimeStatsSink::new(runtime_stats.clone()).record_data_channel_availability(
+        snapshot.control_ready,
+        snapshot.control_open,
+        snapshot.handshake_acked,
+        snapshot.control_started,
+        snapshot.control_bootstrapped,
+    );
+}
+
 pub(crate) async fn request_video_keyframe_from_state(
     runtime_state: &Arc<Mutex<XbxDataChannelState>>,
     runtime_stats: &Arc<Mutex<XbxEngineMediaRuntimeStats>>,
@@ -209,8 +327,10 @@ pub(crate) async fn request_video_keyframe_from_state(
         let Ok(mut state) = runtime_state.lock() else {
             return Ok(());
         };
-        if recovery_requests_ready(&state) {
-            state.control_channel.clone()
+        // 与 RecoveryActionDispatcher 保持一致：启动期允许 fallback 提前发控制动作，
+        // 避免 control 已 open 但 handshake 未 ack 时永远只排队。
+        if let Some(control_channel) = actionable_control_channel_locked(&state) {
+            control_channel
         } else {
             // 恢复请求必须等 message handshake + control bootstrap 真正完成，
             // 不能仅凭 control channel open 就提前发出。
@@ -219,11 +339,9 @@ pub(crate) async fn request_video_keyframe_from_state(
             crate::xbx_log_warn!(
                 "[xbxengine][webrtc-rs] queue pending keyframe request until recovery protocol is ready ({request_state})"
             );
-            None
+            publish_data_channel_availability(runtime_state, runtime_stats);
+            return Ok(());
         }
-    };
-    let Some(control_channel) = control_channel else {
-        return Ok(());
     };
     catalog_data_channel_message(
         runtime_state,
@@ -237,12 +355,14 @@ pub(crate) async fn request_video_keyframe_from_state(
             if let Ok(mut state) = runtime_state.lock() {
                 state.pending_keyframe_request = false;
             }
+            publish_data_channel_availability(runtime_state, runtime_stats);
             Ok(())
         }
         Err(error) => {
             if let Ok(mut state) = runtime_state.lock() {
                 state.pending_keyframe_request = true;
             }
+            publish_data_channel_availability(runtime_state, runtime_stats);
             Err(error)
         }
     }
@@ -256,19 +376,19 @@ pub(crate) async fn request_decoder_reset_from_state(
         let Ok(mut state) = runtime_state.lock() else {
             return Ok(());
         };
-        if recovery_requests_ready(&state) {
-            state.control_channel.clone()
+        // 与 keyframe 请求保持一致：启动期允许 fallback，
+        // 否则 decoder reset 会在 control 已 open 时仍反复挂起。
+        if let Some(control_channel) = actionable_control_channel_locked(&state) {
+            control_channel
         } else {
             state.pending_decoder_reset = true;
             let request_state = describe_recovery_request_state_locked(&state);
             crate::xbx_log_warn!(
                 "[xbxengine][webrtc-rs] queue pending decoder reset until recovery protocol is ready ({request_state})"
             );
-            None
+            publish_data_channel_availability(runtime_state, runtime_stats);
+            return Ok(());
         }
-    };
-    let Some(control_channel) = control_channel else {
-        return Ok(());
     };
     catalog_data_channel_message(
         runtime_state,
@@ -283,12 +403,14 @@ pub(crate) async fn request_decoder_reset_from_state(
                 state.pending_decoder_reset = false;
                 state.pending_keyframe_request = false;
             }
+            publish_data_channel_availability(runtime_state, runtime_stats);
             Ok(())
         }
         Err(error) => {
             if let Ok(mut state) = runtime_state.lock() {
                 state.pending_decoder_reset = true;
             }
+            publish_data_channel_availability(runtime_state, runtime_stats);
             Err(error)
         }
     }
@@ -355,19 +477,44 @@ fn describe_recovery_request_state(
 }
 
 fn describe_recovery_request_state_locked(state: &XbxDataChannelState) -> String {
-    let control_ready = recovery_requests_ready(state);
-    let control_open = state
-        .control_channel
-        .as_ref()
-        .is_some_and(|channel| channel.ready_state() == RTCDataChannelState::Open);
+    let snapshot = ChannelAvailabilitySnapshot {
+        control_ready: recovery_requests_ready(state),
+        control_open: state
+            .control_channel
+            .as_ref()
+            .is_some_and(|channel| channel.ready_state() == RTCDataChannelState::Open),
+        handshake_acked: state.message_handshake_acked,
+        control_started: state.control_started,
+        control_bootstrapped: state.control_bootstrapped_after_handshake,
+    };
     format!(
         "control_ready={control_ready},handshake_acked={},control_started={},control_bootstrapped={},pending_keyframe={},pending_decoder_reset={},control_open={control_open}",
-        state.message_handshake_acked,
-        state.control_started,
-        state.control_bootstrapped_after_handshake,
+        snapshot.handshake_acked,
+        snapshot.control_started,
+        snapshot.control_bootstrapped,
         state.pending_keyframe_request,
         state.pending_decoder_reset,
+        control_ready = snapshot.control_ready,
+        control_open = snapshot.control_open,
     )
+}
+
+pub(crate) fn startup_fallback_ready(state: &XbxDataChannelState) -> bool {
+    // 启动兜底：message handshake 未完成时，允许在 control open 后先执行恢复动作，
+    // 以恢复 3f41d93 之前的启动可用性，避免持续卡在 pending。
+    !state.message_handshake_acked
+        && state.control_started
+        && state
+            .control_channel
+            .as_ref()
+            .is_some_and(|channel| channel.ready_state() == RTCDataChannelState::Open)
+}
+
+fn actionable_control_channel_locked(state: &XbxDataChannelState) -> Option<Arc<RTCDataChannel>> {
+    if recovery_requests_ready(state) || startup_fallback_ready(state) {
+        return state.control_channel.clone();
+    }
+    None
 }
 pub(crate) async fn handle_input_channel_binary_message(payload: &[u8]) {
     let Some(request) = parse_input_rumble_packet(payload) else {

@@ -1,6 +1,7 @@
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
+use crate::runtime_stats_sink::RuntimeStatsSink;
 use crate::transport::webrtc::escalation::VideoEscalationReason;
 use crate::transport::webrtc::policy::{RecoveryScenarioProfile, ScenarioPolicyResolver};
 use crate::XbxEngineMediaRuntimeStats;
@@ -68,15 +69,27 @@ impl StartupRecoveryProbe {
             return false;
         }
 
-        let Ok(stats) = runtime_stats.lock() else {
+        let Some((effective_bitrate, waiting_for_clean_video)) =
+            RuntimeStatsSink::read_shared(runtime_stats, |stats| {
+                let effective_bitrate = extract_startup_recovery_bitrate_kbps(stats);
+                let waiting_for_clean_video = matches!(
+                    stats.recovery_diagnosis.as_deref(),
+                    Some(
+                        "ingressWaitKeyframe"
+                            | "transportAwaitRecoveryKeyframe"
+                            | "adapterIdleTimeout"
+                    )
+                ) || stats.direct_gaming_bitrate_band.as_deref()
+                    == Some("startupLow");
+                (effective_bitrate, waiting_for_clean_video)
+            })
+        else {
             return false;
         };
-        let effective_bitrate = extract_startup_recovery_bitrate_kbps(&stats);
         if effective_bitrate
             .map(|value| value >= recovered_bitrate_kbps)
             .unwrap_or(false)
         {
-            drop(stats);
             self.clear();
             return false;
         }
@@ -84,12 +97,6 @@ impl StartupRecoveryProbe {
         if armed_at.elapsed() < retry_delay {
             return false;
         }
-
-        let waiting_for_clean_video = matches!(
-            stats.recovery_diagnosis.as_deref(),
-            Some("ingressWaitKeyframe" | "transportAwaitRecoveryKeyframe" | "adapterIdleTimeout")
-        ) || stats.direct_gaming_bitrate_band.as_deref()
-            == Some("startupLow");
         let should_retry = effective_bitrate
             .map(|value| value < low_bitrate_kbps)
             .unwrap_or(waiting_for_clean_video)
@@ -107,8 +114,10 @@ pub fn resolve_session_phase(
     stream_started_at: Instant,
     startup_grace: Duration,
 ) -> SessionPhase {
-    let stats = runtime_stats.lock().ok();
-    resolve_session_phase_from_stats(stats.as_deref(), stream_started_at, startup_grace)
+    RuntimeStatsSink::read_shared(runtime_stats, |stats| {
+        resolve_session_phase_from_stats(Some(stats), stream_started_at, startup_grace)
+    })
+    .unwrap_or_else(|| resolve_session_phase_from_stats(None, stream_started_at, startup_grace))
 }
 
 fn resolve_session_phase_from_stats(

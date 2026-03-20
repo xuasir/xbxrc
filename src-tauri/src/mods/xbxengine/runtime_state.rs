@@ -1,3 +1,4 @@
+use std::collections::{BTreeMap, BTreeSet};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex as StdMutex};
 use std::time::{Duration, Instant};
@@ -21,6 +22,10 @@ use crate::mods::streaming::{
     StreamingCloseSessionParams, StreamingExchangeOfferParams, StreamingPollIceParams,
     StreamingSubmitIceParams,
 };
+use crate::mods::xbxengine::trace_projection::{
+    build_observability_snapshot, record_runtime_trace_observations, should_skip_trace_tick,
+    RuntimeTraceObservationState,
+};
 use crate::shell::bridge::{TauriEngineEventBridge, TauriEngineWindowHost};
 use crate::AppState;
 
@@ -39,42 +44,6 @@ pub struct XbxEngineRuntimeState {
     last_trace_observation: StdMutex<RuntimeTraceObservationState>,
     active_session_id: StdMutex<Option<String>>,
     cancellation_epoch: Arc<AtomicU64>,
-}
-
-#[derive(Default)]
-struct RuntimeTraceObservationState {
-    packet_gap_observation_id: Option<u64>,
-    frame_drop_observation_id: Option<u64>,
-    nack_observation_id: Option<u64>,
-    escalation_observation_id: Option<u64>,
-    bwe_observation_id: Option<u64>,
-    twcc_observation_id: Option<u64>,
-    data_channel_catalog_observation_id: Option<u64>,
-    recovery_keyframe_request_count: Option<u64>,
-    recovery_decoder_reset_count: Option<u64>,
-    recovery_reconnect_count: Option<u64>,
-    transport_state: Option<String>,
-    transport_path: Option<String>,
-    latest_video_track_status: Option<xbxengine_protocol::XbxEngineVideoTrackStatusDto>,
-    video_remb_bps: Option<u32>,
-    session_phase: Option<String>,
-    transport_policy_profile: Option<String>,
-    recovery_policy_profile: Option<String>,
-    recovery_diagnosis: Option<String>,
-    recovery_coupling_mode: Option<String>,
-    recovery_coupling_summary: Option<String>,
-    direct_gaming_bitrate_band: Option<String>,
-    runtime_summary: Option<String>,
-    primary_issue_chain: Option<String>,
-    latest_decision_summary: Option<String>,
-    video_health: Option<String>,
-    stall_kind: Option<String>,
-    host_present_submit_count_total: Option<u64>,
-    host_present_drop_count_total: Option<u64>,
-    host_present_overwrite_count_total: Option<u64>,
-    host_descriptor_upload_mode: Option<String>,
-    host_descriptor_metal_import_count_total: Option<u64>,
-    host_descriptor_cpu_upload_count_total: Option<u64>,
 }
 
 impl XbxEngineRuntimeState {
@@ -230,367 +199,12 @@ impl XbxEngineRuntimeState {
         let Ok(mut observation_state) = self.last_trace_observation.lock() else {
             return;
         };
-
-        if let Some(packet_gap) = stats.latest_video_packet_gap.as_ref() {
-            if observation_state.packet_gap_observation_id != Some(packet_gap.observation_id) {
-                observation_state.packet_gap_observation_id = Some(packet_gap.observation_id);
-                self.runtime_trace.record_event(
-                    "xbxengine",
-                    "packetGapDetected",
-                    session_id,
-                    serde_json::json!({
-                        "observationId": packet_gap.observation_id,
-                        "expectedSequence": packet_gap.expected_sequence,
-                        "receivedSequence": packet_gap.received_sequence,
-                        "missingCount": packet_gap.missing_count,
-                        "source": packet_gap.source,
-                        "frameRtpTimestamp": packet_gap.frame_rtp_timestamp,
-                        "framePacketCount": packet_gap.frame_packet_count,
-                        "frameMissingCount": packet_gap.frame_missing_count,
-                        "frameIsKeyframe": packet_gap.frame_is_keyframe,
-                        "frameImportance": packet_gap.frame_importance,
-                        "observedAtMs": packet_gap.observed_at_ms,
-                    }),
-                );
-            }
-        }
-
-        if let Some(frame_drop) = stats.latest_video_frame_drop.as_ref() {
-            if observation_state.frame_drop_observation_id != Some(frame_drop.observation_id) {
-                observation_state.frame_drop_observation_id = Some(frame_drop.observation_id);
-                let event_name = if frame_drop.reason == "dropLate" {
-                    "frameDeadlineMissed"
-                } else {
-                    "frameDropped"
-                };
-                self.runtime_trace.record_event(
-                    "xbxengine",
-                    event_name,
-                    session_id,
-                    serde_json::json!({
-                        "observationId": frame_drop.observation_id,
-                        "reason": frame_drop.reason,
-                        "observedAtMs": frame_drop.observed_at_ms,
-                        "width": frame_drop.width,
-                        "height": frame_drop.height,
-                        "isKeyframe": frame_drop.is_keyframe,
-                        "queueDepth": frame_drop.queue_depth,
-                    }),
-                );
-            }
-        }
-
-        if let Some(nack) = stats.latest_video_nack_observation.as_ref() {
-            if observation_state.nack_observation_id != Some(nack.observation_id) {
-                observation_state.nack_observation_id = Some(nack.observation_id);
-                let event_name = match nack.action.as_str() {
-                    "expiredDeadline" | "expiredMaxAge" => "nackExpired",
-                    "recovered" | "recoveredLate" => "nackRecovered",
-                    _ => "nackSent",
-                };
-                self.runtime_trace.record_event(
-                    "xbxengine",
-                    event_name,
-                    session_id,
-                    serde_json::json!({
-                        "observationId": nack.observation_id,
-                        "action": nack.action,
-                        "source": nack.source,
-                        "firstSequence": nack.first_sequence,
-                        "lastSequence": nack.last_sequence,
-                        "packetCount": nack.packet_count,
-                        "retryCount": nack.retry_count,
-                        "frameRtpTimestamp": nack.frame_rtp_timestamp,
-                        "frameIsKeyframe": nack.frame_is_keyframe,
-                        "frameImportance": nack.frame_importance,
-                        "deadlineAtMs": nack.deadline_at_ms,
-                        "observedAtMs": nack.observed_at_ms,
-                    }),
-                );
-            }
-        }
-
-        if let Some(escalation) = stats.latest_video_escalation_observation.as_ref() {
-            if observation_state.escalation_observation_id != Some(escalation.observation_id) {
-                observation_state.escalation_observation_id = Some(escalation.observation_id);
-                self.runtime_trace.record_decision(
-                    "xbxengine",
-                    "videoEscalation",
-                    session_id,
-                    serde_json::json!({
-                        "observationId": escalation.observation_id,
-                        "reason": escalation.reason,
-                        "action": escalation.action,
-                        "observedAtMs": escalation.observed_at_ms,
-                    }),
-                );
-            }
-        }
-
-        if let Some(bwe) = stats.latest_video_bwe_observation.as_ref() {
-            if observation_state.bwe_observation_id != Some(bwe.observation_id) {
-                observation_state.bwe_observation_id = Some(bwe.observation_id);
-                self.runtime_trace.record_decision(
-                    "xbxengine",
-                    "bweUpdated",
-                    session_id,
-                    serde_json::json!({
-                        "observationId": bwe.observation_id,
-                        "mode": bwe.mode,
-                        "decisionReason": bwe.decision_reason,
-                        "targetRembKbps": bwe.target_remb_kbps,
-                        "observedRembKbps": bwe.observed_remb_kbps,
-                        "actualVideoBitrateKbps": bwe.actual_video_bitrate_kbps,
-                        "lossRatio": bwe.loss_ratio,
-                        "rttMs": bwe.rtt_ms,
-                        "transportPath": bwe.transport_path,
-                        "twccFeedbackIntervalMs": bwe.twcc_feedback_interval_ms,
-                        "twccObservedPacketCount": bwe.twcc_observed_packet_count,
-                        "twccCoveredSequenceSpan": bwe.twcc_covered_sequence_span,
-                        "twccReceiveBitrateKbps": bwe.twcc_receive_bitrate_kbps,
-                        "twccDeliveryRatio": bwe.twcc_delivery_ratio,
-                        "twccLossRatio": bwe.twcc_loss_ratio,
-                        "observedAtMs": bwe.observed_at_ms,
-                    }),
-                );
-            }
-        }
-
-        if let Some(twcc) = stats.latest_video_twcc_observation.as_ref() {
-            if observation_state.twcc_observation_id != Some(twcc.observation_id) {
-                observation_state.twcc_observation_id = Some(twcc.observation_id);
-                self.runtime_trace.record_event(
-                    "xbxengine",
-                    "twccFeedbackSent",
-                    session_id,
-                    serde_json::json!({
-                        "observationId": twcc.observation_id,
-                        "feedbackPacketCount": twcc.feedback_packet_count,
-                        "coveredSequenceStart": twcc.covered_sequence_start,
-                        "coveredSequenceEnd": twcc.covered_sequence_end,
-                        "coveredSequenceSpan": twcc.covered_sequence_span,
-                        "observedPacketCount": twcc.observed_packet_count,
-                        "observedByteCount": twcc.observed_byte_count,
-                        "feedbackIntervalMs": twcc.feedback_interval_ms,
-                        "arrivalSpanMs": twcc.arrival_span_ms,
-                        "receiveBitrateKbps": twcc.receive_bitrate_kbps,
-                        "deliveryRatio": twcc.delivery_ratio,
-                        "packetLossRatio": twcc.packet_loss_ratio,
-                        "observedAtMs": twcc.observed_at_ms,
-                    }),
-                );
-            }
-        }
-
-        if let Some(observation) = stats
-            .latest_data_channel_message_catalog_observation
-            .as_ref()
-        {
-            if observation_state.data_channel_catalog_observation_id
-                != Some(observation.observation_id)
-            {
-                observation_state.data_channel_catalog_observation_id =
-                    Some(observation.observation_id);
-                self.runtime_trace.record_event(
-                    "xbxengine",
-                    "channelMessageCatalog",
-                    session_id,
-                    serde_json::json!({
-                        "observationId": observation.observation_id,
-                        "direction": observation.direction,
-                        "channel": observation.channel,
-                        "kindType": observation.kind_type,
-                        "kindMessage": observation.kind_message,
-                        "target": observation.target,
-                        "keys": observation.keys,
-                        "payloadLen": observation.payload_len,
-                        "observedAtMs": observation.observed_at_ms,
-                    }),
-                );
-            }
-        }
-
-        if observation_state.session_phase != stats.session_phase
-            || observation_state.transport_policy_profile != stats.transport_policy_profile
-            || observation_state.recovery_policy_profile != stats.recovery_policy_profile
-            || observation_state.recovery_diagnosis != stats.recovery_diagnosis
-            || observation_state.recovery_coupling_mode != stats.recovery_coupling_mode
-            || observation_state.recovery_coupling_summary != stats.recovery_coupling_summary
-            || observation_state.direct_gaming_bitrate_band != stats.direct_gaming_bitrate_band
-            || observation_state.runtime_summary != stats.runtime_summary
-            || observation_state.primary_issue_chain != stats.primary_issue_chain
-            || observation_state.latest_decision_summary != stats.latest_decision_summary
-            || observation_state.video_health != stats.video_health
-            || observation_state.stall_kind != stats.stall_kind
-        {
-            observation_state.session_phase = stats.session_phase.clone();
-            observation_state.transport_policy_profile = stats.transport_policy_profile.clone();
-            observation_state.recovery_policy_profile = stats.recovery_policy_profile.clone();
-            observation_state.recovery_diagnosis = stats.recovery_diagnosis.clone();
-            observation_state.recovery_coupling_mode = stats.recovery_coupling_mode.clone();
-            observation_state.recovery_coupling_summary = stats.recovery_coupling_summary.clone();
-            observation_state.direct_gaming_bitrate_band = stats.direct_gaming_bitrate_band.clone();
-            observation_state.runtime_summary = stats.runtime_summary.clone();
-            observation_state.primary_issue_chain = stats.primary_issue_chain.clone();
-            observation_state.latest_decision_summary = stats.latest_decision_summary.clone();
-            observation_state.video_health = stats.video_health.clone();
-            observation_state.stall_kind = stats.stall_kind.clone();
-            self.runtime_trace.record_state(
-                "xbxengine",
-                "directGamingState",
-                session_id,
-                serde_json::json!({
-                    "sessionPhase": stats.session_phase,
-                    "transportPolicyProfile": stats.transport_policy_profile,
-                    "recoveryPolicyProfile": stats.recovery_policy_profile,
-                    "recoveryDiagnosis": stats.recovery_diagnosis,
-                    "recoveryCouplingMode": stats.recovery_coupling_mode,
-                    "recoveryCouplingSummary": stats.recovery_coupling_summary,
-                    "directGamingBitrateBand": stats.direct_gaming_bitrate_band,
-                    "runtimeSummary": stats.runtime_summary,
-                    "primaryIssueChain": stats.primary_issue_chain,
-                    "latestDecisionSummary": stats.latest_decision_summary,
-                    "videoHealth": stats.video_health,
-                    "stallKind": stats.stall_kind,
-                }),
-            );
-        }
-
-        if observation_state.host_present_submit_count_total
-            != stats.video_present_submit_count_total
-            || observation_state.host_present_drop_count_total
-                != stats.video_present_drop_count_total
-            || observation_state.host_present_overwrite_count_total
-                != stats.video_present_overwrite_count_total
-            || observation_state.host_descriptor_upload_mode
-                != stats.video_present_descriptor_upload_mode
-            || observation_state.host_descriptor_metal_import_count_total
-                != stats.video_present_descriptor_metal_import_count_total
-            || observation_state.host_descriptor_cpu_upload_count_total
-                != stats.video_present_descriptor_cpu_upload_count_total
-        {
-            observation_state.host_present_submit_count_total =
-                stats.video_present_submit_count_total;
-            observation_state.host_present_drop_count_total = stats.video_present_drop_count_total;
-            observation_state.host_present_overwrite_count_total =
-                stats.video_present_overwrite_count_total;
-            observation_state.host_descriptor_upload_mode =
-                stats.video_present_descriptor_upload_mode.clone();
-            observation_state.host_descriptor_metal_import_count_total =
-                stats.video_present_descriptor_metal_import_count_total;
-            observation_state.host_descriptor_cpu_upload_count_total =
-                stats.video_present_descriptor_cpu_upload_count_total;
-            self.runtime_trace.record_state(
-                "xbxengine",
-                "hostPresentState",
-                session_id,
-                serde_json::json!({
-                    "presentFps": stats.present_fps,
-                    "presentSubmitCountTotal": stats.video_present_submit_count_total,
-                    "presentDropCountTotal": stats.video_present_drop_count_total,
-                    "presentOverwriteCountTotal": stats.video_present_overwrite_count_total,
-                    "presentAgeMs": stats.present_age_ms,
-                    "descriptorUploadMode": stats.video_present_descriptor_upload_mode,
-                    "descriptorMetalImportCountTotal": stats.video_present_descriptor_metal_import_count_total,
-                    "descriptorCpuUploadCountTotal": stats.video_present_descriptor_cpu_upload_count_total,
-                }),
-            );
-        }
-
-        if observation_state.recovery_keyframe_request_count
-            != stats.recovery_keyframe_request_count
-        {
-            observation_state.recovery_keyframe_request_count =
-                stats.recovery_keyframe_request_count;
-            if let Some(count) = stats.recovery_keyframe_request_count {
-                if count > 0 && stats.last_recovery_action.as_deref() == Some("keyframe") {
-                    self.runtime_trace.record_decision(
-                        "xbxengine",
-                        "keyframeRequested",
-                        session_id,
-                        serde_json::json!({
-                            "count": count,
-                            "atMs": stats.last_recovery_action_at_ms,
-                            "reason": stats.last_recovery_reason,
-                        }),
-                    );
-                }
-            }
-        }
-
-        if observation_state.recovery_decoder_reset_count != stats.recovery_decoder_reset_count {
-            observation_state.recovery_decoder_reset_count = stats.recovery_decoder_reset_count;
-            if let Some(count) = stats.recovery_decoder_reset_count {
-                if count > 0 && stats.last_recovery_action.as_deref() == Some("decoderReset") {
-                    self.runtime_trace.record_decision(
-                        "xbxengine",
-                        "decoderResetRequested",
-                        session_id,
-                        serde_json::json!({
-                            "count": count,
-                            "atMs": stats.last_recovery_action_at_ms,
-                            "reason": stats.last_recovery_reason,
-                        }),
-                    );
-                }
-            }
-        }
-
-        if observation_state.recovery_reconnect_count != stats.recovery_reconnect_count {
-            observation_state.recovery_reconnect_count = stats.recovery_reconnect_count;
-        }
-
-        if observation_state.transport_state != stats.transport_state
-            || observation_state.transport_path != stats.transport_path
-        {
-            observation_state.transport_state = stats.transport_state.clone();
-            observation_state.transport_path = stats.transport_path.clone();
-            self.runtime_trace.record_state(
-                "xbxengine",
-                "transportObservation",
-                session_id,
-                serde_json::json!({
-                    "transportState": stats.transport_state,
-                    "transportPath": stats.transport_path,
-                }),
-            );
-        }
-
-        if observation_state.latest_video_track_status != stats.latest_video_track_status {
-            observation_state.latest_video_track_status = stats.latest_video_track_status.clone();
-            if let Some(status) = stats.latest_video_track_status.as_ref() {
-                self.runtime_trace.record_state(
-                    "xbxengine",
-                    "videoTrackState",
-                    session_id,
-                    serde_json::json!({
-                        "state": status.state,
-                        "videoWidth": status.video_width,
-                        "videoHeight": status.video_height,
-                        "mimeType": status.mime_type,
-                        "transportState": status.transport_state,
-                        "videoBytesTotal": status.video_bytes_total,
-                        "videoPacketCountTotal": status.video_packet_count_total,
-                        "audioBytesTotal": status.audio_bytes_total,
-                        "observedAtMs": status.observed_at_ms,
-                    }),
-                );
-            }
-        }
-
-        if observation_state.video_remb_bps != stats.video_remb_bps {
-            observation_state.video_remb_bps = stats.video_remb_bps;
-            if let Some(video_remb_bps) = stats.video_remb_bps {
-                self.runtime_trace.record_state(
-                    "xbxengine",
-                    "rembUpdated",
-                    session_id,
-                    serde_json::json!({
-                        "videoRembBps": video_remb_bps,
-                    }),
-                );
-            }
-        }
+        record_runtime_trace_observations(
+            &self.runtime_trace,
+            &mut observation_state,
+            session_id,
+            stats,
+        );
     }
 
     fn apply_native_video_host_stats(
@@ -656,6 +270,102 @@ fn current_time_ms_f64() -> f64 {
         .unwrap_or(0.0)
 }
 
+// 为 runtime trace 生成一份稳定的 SDP 能力摘要，便于直接判断远端是否宣告 repair/fec 能力。
+fn summarize_sdp_capabilities(sdp: &str) -> serde_json::Value {
+    let mut video_payload_order = Vec::new();
+    let mut payload_codec_map = BTreeMap::<String, String>::new();
+    let mut apt_pairs = Vec::<serde_json::Value>::new();
+    let mut has_video_fid_group = false;
+
+    for line in sdp.split("\r\n") {
+        if let Some(rest) = line.strip_prefix("m=video ") {
+            let parts = rest.split_whitespace().collect::<Vec<_>>();
+            // m=video 格式是: <port> <proto> <payload...>
+            if parts.len() > 2 {
+                video_payload_order = parts[2..]
+                    .iter()
+                    .map(|value| (*value).to_string())
+                    .collect();
+            }
+            continue;
+        }
+
+        if let Some(rest) = line.strip_prefix("a=rtpmap:") {
+            let mut payload_and_codec = rest.split_whitespace();
+            let Some(payload_type) = payload_and_codec.next() else {
+                continue;
+            };
+            let Some(codec_part) = payload_and_codec.next() else {
+                continue;
+            };
+            let codec = codec_part
+                .split('/')
+                .next()
+                .unwrap_or(codec_part)
+                .to_ascii_lowercase();
+            payload_codec_map.insert(payload_type.to_string(), codec);
+            continue;
+        }
+
+        if let Some(rest) = line.strip_prefix("a=fmtp:") {
+            let mut payload_and_params = rest.splitn(2, ' ');
+            let Some(payload_type) = payload_and_params.next() else {
+                continue;
+            };
+            let Some(params) = payload_and_params.next() else {
+                continue;
+            };
+            for param in params.split(';') {
+                let trimmed = param.trim();
+                let Some(apt_value) = trimmed.strip_prefix("apt=") else {
+                    continue;
+                };
+                apt_pairs.push(serde_json::json!({
+                    "payloadType": payload_type,
+                    "aptPayloadType": apt_value,
+                    "codec": payload_codec_map.get(payload_type).cloned(),
+                }));
+            }
+            continue;
+        }
+
+        if line.starts_with("a=ssrc-group:FID ") {
+            has_video_fid_group = true;
+        }
+    }
+
+    let mut declared_video_codecs = BTreeSet::new();
+    let mut declared_video_repair_codecs = BTreeSet::new();
+    for payload_type in &video_payload_order {
+        let Some(codec) = payload_codec_map.get(payload_type) else {
+            continue;
+        };
+        match codec.as_str() {
+            "rtx" | "red" | "ulpfec" | "flexfec-03" | "flexfec" => {
+                declared_video_repair_codecs.insert(codec.clone());
+            }
+            _ => {
+                declared_video_codecs.insert(codec.clone());
+            }
+        }
+    }
+
+    serde_json::json!({
+        "hasVideo": !video_payload_order.is_empty(),
+        "videoPayloadOrder": video_payload_order,
+        "videoCodecs": declared_video_codecs.into_iter().collect::<Vec<_>>(),
+        "videoRepairCodecs": declared_video_repair_codecs.into_iter().collect::<Vec<_>>(),
+        "hasVideoRtx": payload_codec_map.values().any(|codec| codec == "rtx"),
+        "hasVideoRed": payload_codec_map.values().any(|codec| codec == "red"),
+        "hasVideoUlpfec": payload_codec_map.values().any(|codec| codec == "ulpfec"),
+        "hasVideoFlexfec": payload_codec_map
+            .values()
+            .any(|codec| codec == "flexfec-03" || codec == "flexfec"),
+        "hasSsrcGroupFid": has_video_fid_group,
+        "aptPairs": apt_pairs,
+    })
+}
+
 #[derive(Clone)]
 struct TauriXbxEngineHostBridge {
     app_handle: AppHandle,
@@ -687,6 +397,7 @@ impl TauriXbxEngineHostBridge {
                 "channel": channel,
                 "restart": restart,
                 "offerSdp": sdp,
+                "offerSdpCapabilities": summarize_sdp_capabilities(&sdp),
             }),
         );
         let result = tauri::async_runtime::block_on(state.streaming.exchange_offer(
@@ -704,6 +415,7 @@ impl TauriXbxEngineHostBridge {
             None,
             serde_json::json!({
                 "answerSdp": result.answer.sdp,
+                "answerSdpCapabilities": summarize_sdp_capabilities(&result.answer.sdp),
             }),
         );
         Ok(XbxEngineHostResponseDto::OfferExchanged {
@@ -982,86 +694,62 @@ fn extract_command_session_id(command: &XbxEngineControlCommandDto) -> Option<St
     }
 }
 
-fn should_skip_trace_tick(session_id: Option<&str>, stats: &XbxEngineStatsDto) -> bool {
-    session_id.is_none() && stats.transport_state.as_deref() == Some("Closed")
-}
+#[cfg(test)]
+mod tests {
+    use super::summarize_sdp_capabilities;
 
-/// 统一观测快照：把 UI 与离线分析真正关心的状态压成单条 snapshot，避免继续手工拼
-/// `statsSnapshot + directGamingState + hostPresentState`。
-fn build_observability_snapshot(stats: &XbxEngineStatsDto) -> serde_json::Value {
-    serde_json::json!({
-        "resolution": stats.resolution,
-        "fps": stats.fps,
-        "rtt": stats.rtt,
-        "runtimeSummary": stats.runtime_summary,
-        "primaryIssueChain": stats.primary_issue_chain,
-        "latestDecisionSummary": stats.latest_decision_summary,
-        "transport": {
-            "path": stats.transport_path,
-            "state": stats.transport_state,
-            "policyProfile": stats.transport_policy_profile,
-            "videoRttSource": stats.video_rtt_source,
-            "videoRembBps": stats.video_remb_bps,
-        },
-        "recovery": {
-            "sessionPhase": stats.session_phase,
-            "policyProfile": stats.recovery_policy_profile,
-            "diagnosis": stats.recovery_diagnosis,
-            "couplingMode": stats.recovery_coupling_mode,
-            "couplingSummary": stats.recovery_coupling_summary,
-            "videoHealth": stats.video_health,
-            "stallKind": stats.stall_kind,
-            "keyframeRequestCount": stats.recovery_keyframe_request_count,
-            "decoderResetCount": stats.recovery_decoder_reset_count,
-            "reconnectCount": stats.recovery_reconnect_count,
-            "lastAction": stats.last_recovery_action,
-            "lastActionAtMs": stats.last_recovery_action_at_ms,
-            "lastReason": stats.last_recovery_reason,
-        },
-        "directGaming": {
-            "bitrateBand": stats.direct_gaming_bitrate_band,
-        },
-        "bitrate": {
-            "display": stats.br,
-            "inboundKbps": stats.inbound_bitrate_kbps,
-            "videoKbps": stats.inbound_video_bitrate_kbps,
-            "audioKbps": stats.inbound_audio_bitrate_kbps,
-            "bytesTotal": stats.inbound_bytes_total,
-            "videoBytesTotal": stats.inbound_video_bytes_total,
-            "audioBytesTotal": stats.inbound_audio_bytes_total,
-        },
-        "video": {
-            "inboundFps": stats.inbound_video_fps,
-            "decodeFps": stats.decode_fps,
-            "presentFps": stats.present_fps,
-            "packetAgeMs": stats.packet_age_ms,
-            "decodeAgeMs": stats.decode_age_ms,
-            "presentAgeMs": stats.present_age_ms,
-            "packetToDecodeMs": stats.packet_to_decode_ms,
-            "decodeToPresentMs": stats.decode_to_present_ms,
-            "packetToPresentMs": stats.packet_to_present_ms,
-            "decoderStalled": stats.video_decoder_stalled,
-            "rendererStalled": stats.video_renderer_stalled,
-            "decodeInputDropCountTotal": stats.video_decode_input_drop_count_total,
-            "decodeOutputDropCountTotal": stats.video_decode_output_drop_count_total,
-            "pacerSubmitCountTotal": stats.video_pacer_submit_count_total,
-            "pacerDropCountTotal": stats.video_pacer_drop_count_total,
-            "rendererSubmitCountTotal": stats.video_renderer_submit_count_total,
-            "rendererDropCountTotal": stats.video_renderer_drop_count_total,
-            "presentSubmitCountTotal": stats.video_present_submit_count_total,
-            "presentDropCountTotal": stats.video_present_drop_count_total,
-            "presentOverwriteCountTotal": stats.video_present_overwrite_count_total,
-            "descriptorUploadMode": stats.video_present_descriptor_upload_mode,
-            "descriptorMetalImportCountTotal": stats.video_present_descriptor_metal_import_count_total,
-            "descriptorCpuUploadCountTotal": stats.video_present_descriptor_cpu_upload_count_total,
-        },
-        "latest": {
-            "packetGap": stats.latest_video_packet_gap,
-            "frameDrop": stats.latest_video_frame_drop,
-            "nack": stats.latest_video_nack_observation,
-            "escalation": stats.latest_video_escalation_observation,
-            "bwe": stats.latest_video_bwe_observation,
-            "twcc": stats.latest_video_twcc_observation,
-        },
-    })
+    #[test]
+    fn summarize_sdp_capabilities_detects_video_repair_streams() {
+        let sdp = concat!(
+            "v=0\r\n",
+            "m=video 9 UDP/TLS/RTP/SAVPF 102 121 116\r\n",
+            "a=rtpmap:102 H264/90000\r\n",
+            "a=rtpmap:121 rtx/90000\r\n",
+            "a=fmtp:121 apt=102\r\n",
+            "a=rtpmap:116 ulpfec/90000\r\n",
+            "a=ssrc-group:FID 1111 2222\r\n",
+        );
+
+        let summary = summarize_sdp_capabilities(sdp);
+
+        assert_eq!(summary["hasVideoRtx"], true);
+        assert_eq!(summary["hasVideoUlpfec"], true);
+        assert_eq!(summary["hasSsrcGroupFid"], true);
+        assert_eq!(summary["videoCodecs"], serde_json::json!(["h264"]));
+        assert_eq!(
+            summary["videoRepairCodecs"],
+            serde_json::json!(["rtx", "ulpfec"])
+        );
+        assert_eq!(
+            summary["aptPairs"],
+            serde_json::json!([{
+                "payloadType": "121",
+                "aptPayloadType": "102",
+                "codec": "rtx"
+            }])
+        );
+    }
+
+    #[test]
+    fn summarize_sdp_capabilities_handles_plain_h264_offer() {
+        let sdp = concat!(
+            "v=0\r\n",
+            "m=video 9 UDP/TLS/RTP/SAVPF 102 104\r\n",
+            "a=rtpmap:102 H264/90000\r\n",
+            "a=fmtp:102 level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=42001f\r\n",
+            "a=rtpmap:104 H264/90000\r\n",
+            "a=fmtp:104 level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=42e01f\r\n",
+        );
+
+        let summary = summarize_sdp_capabilities(sdp);
+
+        assert_eq!(summary["hasVideo"], true);
+        assert_eq!(summary["hasVideoRtx"], false);
+        assert_eq!(summary["hasVideoUlpfec"], false);
+        assert_eq!(summary["hasVideoRed"], false);
+        assert_eq!(summary["hasVideoFlexfec"], false);
+        assert_eq!(summary["hasSsrcGroupFid"], false);
+        assert_eq!(summary["videoRepairCodecs"], serde_json::json!([]));
+        assert_eq!(summary["videoCodecs"], serde_json::json!(["h264"]));
+    }
 }

@@ -1,3 +1,7 @@
+use super::nack::{
+    cloud_startup_head_hole_deadline_at_ms, frame_value_for_importance, rtp_gap_nack_policy,
+    rtp_window_nack_policy, sample_loss_nack_policy,
+};
 use super::source::{
     detect_forward_gap, resolve_inspection_admission, resolve_recovery_keyframe_action,
     InspectionAdmission, RecoveryKeyframeAction,
@@ -6,7 +10,6 @@ use super::NackSequenceWindow;
 use crate::media::video::h264::inspection::{
     H264AccessUnitInspection, H264AccessUnitInspector, H264BootstrapRejectReason,
 };
-use crate::transport::webrtc::recovery::recovery_signal::VideoRecoverySignal;
 
 #[test]
 fn nack_sequence_window_tracks_missing_and_wrap() {
@@ -93,7 +96,7 @@ fn invalid_slice_header_au_requests_wait_keyframe_recovery() {
 
     assert_eq!(
         resolve_inspection_admission(&inspection),
-        InspectionAdmission::Recover(VideoRecoverySignal::TransportAwaitRecoveryKeyframe)
+        InspectionAdmission::AwaitRecoveryKeyframe
     );
 }
 
@@ -105,4 +108,126 @@ fn valid_slice_header_au_is_admitted_by_adapter_gate() {
         resolve_inspection_admission(&inspection),
         InspectionAdmission::Accept
     );
+}
+
+#[test]
+fn sample_loss_policy_scales_with_repairability() {
+    let low = sample_loss_nack_policy(90_000, false, "reference", 1_200.0, 0.3, false, false);
+    let high = sample_loss_nack_policy(90_000, false, "reference", 1_200.0, 0.95, false, false);
+
+    assert_eq!(low.source, "sampleLoss");
+    assert_eq!(high.source, "sampleLoss");
+    assert!(high.max_age_ms.unwrap_or_default() > low.max_age_ms.unwrap_or_default());
+    assert!(high.retry_interval_ms.unwrap_or_default() < low.retry_interval_ms.unwrap_or_default());
+    assert!(high.burst_count.unwrap_or_default() >= low.burst_count.unwrap_or_default());
+    assert!(high.priority >= low.priority);
+}
+
+#[test]
+fn cloud_startup_head_hole_deadline_floor_only_applies_in_startup() {
+    let now_ms = 1_000.0;
+    let tight_deadline = 1_120.0;
+    let wide_deadline = 1_450.0;
+
+    assert_eq!(
+        cloud_startup_head_hole_deadline_at_ms(now_ms, tight_deadline, false),
+        tight_deadline
+    );
+    assert_eq!(
+        cloud_startup_head_hole_deadline_at_ms(now_ms, tight_deadline, true),
+        1_320.0
+    );
+    assert_eq!(
+        cloud_startup_head_hole_deadline_at_ms(now_ms, wide_deadline, true),
+        wide_deadline
+    );
+}
+
+#[test]
+fn cloud_startup_sample_loss_policy_is_wider_than_cloud_steady_and_home() {
+    let home = sample_loss_nack_policy(90_000, false, "delta", 1_200.0, 0.7, false, false);
+    let cloud_steady = sample_loss_nack_policy(90_000, false, "delta", 1_200.0, 0.7, true, false);
+    let cloud_startup = sample_loss_nack_policy(90_000, false, "delta", 1_200.0, 0.7, true, true);
+
+    assert!(
+        cloud_startup.max_age_ms.unwrap_or_default() > cloud_steady.max_age_ms.unwrap_or_default()
+    );
+    assert!(cloud_steady.max_age_ms.unwrap_or_default() > home.max_age_ms.unwrap_or_default());
+    assert!(
+        cloud_startup.retry_interval_ms.unwrap_or_default()
+            > cloud_steady.retry_interval_ms.unwrap_or_default()
+    );
+    assert!(
+        cloud_steady.retry_interval_ms.unwrap_or_default()
+            > home.retry_interval_ms.unwrap_or_default()
+    );
+    assert!(
+        cloud_startup.max_tracked_sequences.unwrap_or_default()
+            > cloud_steady.max_tracked_sequences.unwrap_or_default()
+    );
+    assert!(
+        cloud_steady.max_tracked_sequences.unwrap_or_default()
+            > home.max_tracked_sequences.unwrap_or_default()
+    );
+}
+
+#[test]
+fn cloud_startup_rtp_gap_and_window_policies_widen_head_hole_budget() {
+    let value = frame_value_for_importance("reference");
+    let home_gap = rtp_gap_nack_policy(value, 1_200.0, false, false);
+    let cloud_steady_gap = rtp_gap_nack_policy(value, 1_200.0, true, false);
+    let cloud_startup_gap = rtp_gap_nack_policy(value, 1_200.0, true, true);
+    let home_window = rtp_window_nack_policy(value, 1_200.0, false, false);
+    let cloud_steady_window = rtp_window_nack_policy(value, 1_200.0, true, false);
+    let cloud_startup_window = rtp_window_nack_policy(value, 1_200.0, true, true);
+
+    assert!(
+        cloud_startup_gap.max_age_ms.unwrap_or_default()
+            > cloud_steady_gap.max_age_ms.unwrap_or_default()
+    );
+    assert!(
+        cloud_steady_gap.max_age_ms.unwrap_or_default() > home_gap.max_age_ms.unwrap_or_default()
+    );
+    assert!(
+        cloud_startup_gap.max_tracked_sequences.unwrap_or_default()
+            > cloud_steady_gap.max_tracked_sequences.unwrap_or_default()
+    );
+    assert!(
+        cloud_steady_gap.max_tracked_sequences.unwrap_or_default()
+            > home_gap.max_tracked_sequences.unwrap_or_default()
+    );
+    assert!(
+        cloud_startup_window.max_age_ms.unwrap_or_default()
+            > cloud_steady_window.max_age_ms.unwrap_or_default()
+    );
+    assert!(
+        cloud_steady_window.max_age_ms.unwrap_or_default()
+            > home_window.max_age_ms.unwrap_or_default()
+    );
+    assert!(
+        cloud_startup_window
+            .max_tracked_sequences
+            .unwrap_or_default()
+            > cloud_steady_window
+                .max_tracked_sequences
+                .unwrap_or_default()
+    );
+    assert!(
+        cloud_steady_window
+            .max_tracked_sequences
+            .unwrap_or_default()
+            > home_window.max_tracked_sequences.unwrap_or_default()
+    );
+}
+
+#[test]
+fn frame_value_for_importance_maps_sync_and_refresh_flags() {
+    let keyframe = frame_value_for_importance("keyframe");
+    let reference = frame_value_for_importance("reference");
+    let delta = frame_value_for_importance("delta");
+
+    assert!(keyframe.is_sync_point());
+    assert!(!reference.is_sync_point());
+    assert!(reference.refresh_boost);
+    assert!(!delta.refresh_boost);
 }

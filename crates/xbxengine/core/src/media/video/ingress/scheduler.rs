@@ -51,6 +51,11 @@ impl VideoIngress {
         self.queue.len()
     }
 
+    /// decode handoff 失败时，把已出队的帧放回 ingress 头部，等待下一次 budget 窗口。
+    pub fn requeue_front(&mut self, frame: EncodedFrame) {
+        self.queue.push_front(frame);
+    }
+
     /// 返回这帧若触发 reconfigure 时的具体原因，便于把 trace 收敛到参数集/尺寸/codec 维度。
     pub fn describe_reconfigure_reason(&self, frame: &EncodedFrame) -> Option<String> {
         let codec_changed = self

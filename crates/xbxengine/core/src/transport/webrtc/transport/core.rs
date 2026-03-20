@@ -15,10 +15,13 @@ use super::{
     build_rtc_configuration, configure_owned_nack, configure_owned_twcc_receiver,
     configure_peer_connection_offer_primitives, create_initial_data_channels,
     install_peer_connection_callbacks, map_webrtc_error, normalize_remote_ice_candidate,
+    repair_probe_interceptor::RepairProbeInterceptorBuilder,
+    rtx_reinject_interceptor::RtxReinjectInterceptorBuilder,
 };
 use crate::{
     api::runtime::XbxEngineNegotiationRuntimeConfig,
     media::video::render::renderer::XbxRenderState,
+    runtime_stats_sink::RuntimeStatsSink,
     transport::adapter::FrameSource,
     transport::webrtc::audio_output::XbxRemoteAudioPlaybackSession,
     transport::webrtc::data_channel::{
@@ -49,6 +52,7 @@ pub(crate) struct XbxTransportState {
     session_target_type: Option<XbxEngineTargetTypeDto>,
     task_generation: Arc<AtomicU64>,
     pub(crate) frame_source_tx: Arc<Mutex<Option<mpsc::Sender<Box<dyn FrameSource>>>>>,
+    remote_answer_sdp: Arc<Mutex<Option<String>>>,
 }
 
 impl Default for XbxTransportState {
@@ -66,6 +70,7 @@ impl Default for XbxTransportState {
             session_target_type: None,
             task_generation: Arc::new(AtomicU64::new(0)),
             frame_source_tx: Arc::new(Mutex::new(None)),
+            remote_answer_sdp: Arc::new(Mutex::new(None)),
         }
     }
 }
@@ -84,13 +89,16 @@ impl XbxTransportState {
         self.clear_local_candidates();
         self.set_local_ice_gathering_complete(false);
         self.data_channels.clear();
-        if let Ok(mut stats) = runtime_stats.lock() {
+        if let Ok(mut remote_answer_sdp) = self.remote_answer_sdp.lock() {
+            *remote_answer_sdp = None;
+        }
+        RuntimeStatsSink::new(runtime_stats.clone()).update(|stats| {
             *stats = XbxEngineMediaRuntimeStats {
                 session_target_type: Some(request.session.target_type.clone()),
                 transport_state: XbxEngineTransportStateDto::New,
                 ..Default::default()
             };
-        }
+        });
         self.runtime_stats = Some(runtime_stats.clone());
         self.data_channel_state = Some(data_channel_state.clone());
         self.session_target_type = Some(request.session.target_type.clone());
@@ -125,6 +133,14 @@ impl XbxTransportState {
                 runtime_stats.clone(),
             )
             .map_err(map_webrtc_error("configureOwnedTwccReceiverFailed"))?;
+            // 固定挂载 repair probe + RTX reinject，确保当前主线总是带最小可用 RTX 路径。
+            interceptor_registry.add(Box::new(RepairProbeInterceptorBuilder::new(
+                RuntimeStatsSink::new(runtime_stats.clone()),
+            )));
+            interceptor_registry.add(Box::new(RtxReinjectInterceptorBuilder::new(
+                self.remote_answer_sdp.clone(),
+                RuntimeStatsSink::new(runtime_stats.clone()),
+            )));
             let api = APIBuilder::new()
                 .with_media_engine(media_engine)
                 .with_interceptor_registry(interceptor_registry)
@@ -207,6 +223,9 @@ impl XbxTransportState {
         remote_candidates: &[XbxEngineIceCandidateDto],
     ) -> Result<(), XbxEngineRuntimeError> {
         let peer_connection = self.require_peer_connection()?;
+        if let Ok(mut remote_answer_sdp) = self.remote_answer_sdp.lock() {
+            *remote_answer_sdp = Some(answer_sdp.to_string());
+        }
         runtime.block_on(async {
             peer_connection
                 .set_remote_description(
@@ -364,7 +383,7 @@ impl XbxTransportState {
         self.data_channel_state = None;
         self.session_target_type = None;
         if let Some(runtime_stats) = self.runtime_stats.as_ref() {
-            if let Ok(mut stats) = runtime_stats.lock() {
+            RuntimeStatsSink::new(runtime_stats.clone()).update(|stats| {
                 // stop 后立即清掉会污染后续 trace 的瞬态观测，避免 Closed 会话继续冒泡旧数据。
                 stats.transport_state = XbxEngineTransportStateDto::Closed;
                 stats.session_target_type = None;
@@ -383,7 +402,7 @@ impl XbxTransportState {
                 stats.latest_video_escalation_observation = None;
                 stats.latest_video_packet_arrival_time_ms = None;
                 stats.latest_video_frame = None;
-            }
+            });
         }
         // Warning: Do NOT take frame_source_tx here, rebuild_peer_connection calls stop_peer_connection
         // and we want the same tx to be used for the next connection.

@@ -87,14 +87,33 @@ pub fn build_xbxengine_stats(
         .unwrap_or_default();
     let video_health = classify_video_health(runtime_stats);
     let stall_kind = classify_stall_kind(runtime_stats);
-    let runtime_summary = build_runtime_summary(runtime_stats, video_health.as_deref());
+    let observation_note = build_observation_note(runtime_stats);
+    let transport_recovery_note = build_transport_recovery_note(runtime_stats);
+    let repair_probe_note = build_repair_probe_note(runtime_stats);
+    let reinject_note = build_rtx_reinject_note(runtime_stats);
+    let runtime_summary = build_runtime_summary(
+        runtime_stats,
+        video_health.as_deref(),
+        observation_note.as_deref(),
+        transport_recovery_note.as_deref(),
+        repair_probe_note.as_deref(),
+        reinject_note.as_deref(),
+    );
     let primary_issue_chain = build_primary_issue_chain(
         runtime_stats,
         video_health.as_deref(),
         stall_kind.as_deref(),
     );
-    let latest_decision_summary =
-        build_latest_decision_summary(snapshot, runtime_stats, video_health.as_deref(), now_ms);
+    let latest_decision_summary = build_latest_decision_summary(
+        snapshot,
+        runtime_stats,
+        video_health.as_deref(),
+        observation_note.as_deref(),
+        transport_recovery_note.as_deref(),
+        repair_probe_note.as_deref(),
+        reinject_note.as_deref(),
+        now_ms,
+    );
 
     XbxEngineStatsDto {
         resolution,
@@ -321,6 +340,10 @@ pub fn build_xbxengine_stats(
 fn build_runtime_summary(
     runtime_stats: Option<&XbxEngineMediaRuntimeStats>,
     video_health: Option<&str>,
+    observation_note: Option<&str>,
+    transport_recovery_note: Option<&str>,
+    repair_probe_note: Option<&str>,
+    reinject_note: Option<&str>,
 ) -> Option<String> {
     let stats = runtime_stats?;
     let profile = stats
@@ -333,7 +356,14 @@ fn build_runtime_summary(
         .as_deref()
         .unwrap_or("unknown");
     let health = video_health.unwrap_or("unknown");
-    Some(format!("{profile}/{phase}/{band}/{health}"))
+    let base = format!("{profile}/{phase}/{band}/{health}");
+    Some(append_runtime_notes(
+        base,
+        observation_note,
+        transport_recovery_note,
+        repair_probe_note,
+        reinject_note,
+    ))
 }
 
 // 将当前主问题链显式归类，避免每次回归都手工拼 diagnosis/band/health。
@@ -377,6 +407,10 @@ fn build_latest_decision_summary(
     snapshot: &XbxEngineRuntimeSnapshot,
     runtime_stats: Option<&XbxEngineMediaRuntimeStats>,
     video_health: Option<&str>,
+    observation_note: Option<&str>,
+    transport_recovery_note: Option<&str>,
+    repair_probe_note: Option<&str>,
+    reinject_note: Option<&str>,
     now_ms: f64,
 ) -> Option<String> {
     let stats = runtime_stats?;
@@ -389,16 +423,22 @@ fn build_latest_decision_summary(
                 Some("stalled" | "recovering" | "startupLowQuality")
             )
         {
-            return Some(format!(
-                "recovery:{}->{}",
-                escalation.reason, escalation.action
+            return Some(append_runtime_notes(
+                format!("recovery:{}->{}", escalation.reason, escalation.action),
+                observation_note,
+                transport_recovery_note,
+                repair_probe_note,
+                reinject_note,
             ));
         }
     }
     if let Some(bwe) = stats.latest_video_bwe_observation.as_ref() {
-        return Some(format!(
-            "bwe:{}:{}kbps",
-            bwe.decision_reason, bwe.target_remb_kbps
+        return Some(append_runtime_notes(
+            format!("bwe:{}:{}kbps", bwe.decision_reason, bwe.target_remb_kbps),
+            observation_note,
+            transport_recovery_note,
+            repair_probe_note,
+            reinject_note,
         ));
     }
     if let (Some(action), Some(reason)) = (
@@ -409,10 +449,157 @@ fn build_latest_decision_summary(
             .last_recovery_action_at_ms
             .is_some_and(|at_ms| now_ms - at_ms <= DECISION_FRESH_WINDOW_MS)
         {
-            return Some(format!("recovery:{reason}->{action}"));
+            return Some(append_runtime_notes(
+                format!("recovery:{reason}->{action}"),
+                observation_note,
+                transport_recovery_note,
+                repair_probe_note,
+                reinject_note,
+            ));
         }
     }
-    None
+    match (
+        observation_note,
+        transport_recovery_note,
+        repair_probe_note,
+        reinject_note,
+    ) {
+        (Some(note), Some(epoch), Some(repair), Some(reinject)) => {
+            Some(format!("obs:{note} | {epoch} | {repair} | {reinject}"))
+        }
+        (Some(note), Some(epoch), Some(repair), None) => {
+            Some(format!("obs:{note} | {epoch} | {repair}"))
+        }
+        (Some(note), Some(epoch), None, Some(reinject)) => {
+            Some(format!("obs:{note} | {epoch} | {reinject}"))
+        }
+        (Some(note), Some(epoch), None, None) => Some(format!("obs:{note} | {epoch}")),
+        (Some(note), None, Some(repair), Some(reinject)) => {
+            Some(format!("obs:{note} | {repair} | {reinject}"))
+        }
+        (Some(note), None, Some(repair), None) => Some(format!("obs:{note} | {repair}")),
+        (Some(note), None, None, Some(reinject)) => Some(format!("obs:{note} | {reinject}")),
+        (Some(note), None, None, None) => Some(format!("obs:{note}")),
+        (None, Some(epoch), Some(repair), Some(reinject)) => {
+            Some(format!("{epoch} | {repair} | {reinject}"))
+        }
+        (None, Some(epoch), Some(repair), None) => Some(format!("{epoch} | {repair}")),
+        (None, Some(epoch), None, Some(reinject)) => Some(format!("{epoch} | {reinject}")),
+        (None, Some(epoch), None, None) => Some(epoch.to_string()),
+        (None, None, Some(repair), Some(reinject)) => Some(format!("{repair} | {reinject}")),
+        (None, None, Some(repair), None) => Some(repair.to_string()),
+        (None, None, None, Some(reinject)) => Some(reinject.to_string()),
+        (None, None, None, None) => None,
+    }
+}
+
+fn build_observation_note(runtime_stats: Option<&XbxEngineMediaRuntimeStats>) -> Option<String> {
+    let stats = runtime_stats?;
+    if format!("{:?}", stats.transport_state) == "Closed" {
+        return None;
+    }
+    let label = stats.latest_observation_label.as_deref()?;
+    let summary = stats.latest_observation_summary.as_deref()?;
+    Some(format!("{label}:{summary}"))
+}
+
+fn build_transport_recovery_note(
+    runtime_stats: Option<&XbxEngineMediaRuntimeStats>,
+) -> Option<String> {
+    let stats = runtime_stats?;
+    if stats.transport_recovery_epoch == 0 {
+        return None;
+    }
+    if stats.transport_recovery_epoch > stats.transport_recovery_epoch_at_last_escalation {
+        Some(format!("repoch:{}:active", stats.transport_recovery_epoch))
+    } else {
+        Some(format!("repoch:{}", stats.transport_recovery_epoch))
+    }
+}
+
+fn append_runtime_notes(
+    base: String,
+    observation_note: Option<&str>,
+    transport_recovery_note: Option<&str>,
+    repair_probe_note: Option<&str>,
+    reinject_note: Option<&str>,
+) -> String {
+    let mut result = base;
+    if let Some(note) = observation_note {
+        result.push_str(" | obs:");
+        result.push_str(note);
+    }
+    if let Some(note) = transport_recovery_note {
+        result.push_str(" | ");
+        result.push_str(note);
+    }
+    if let Some(note) = repair_probe_note {
+        result.push_str(" | ");
+        result.push_str(note);
+    }
+    if let Some(note) = reinject_note {
+        result.push_str(" | ");
+        result.push_str(note);
+    }
+    result
+}
+
+fn build_repair_probe_note(runtime_stats: Option<&XbxEngineMediaRuntimeStats>) -> Option<String> {
+    let stats = runtime_stats?;
+    let observation = stats.latest_video_repair_probe_observation.as_ref()?;
+    let active_since_ms = stats.video_repair_probe_active_since_ms?;
+    let recovery_hit_rate = stats
+        .video_repair_probe_recovery_hit_rate_since_active
+        .map(|value| format!("{value:.3}"))
+        .unwrap_or_else(|| "-".to_string());
+    Some(format!(
+        "repair:{}:{}:{} id={} ssrc={} pt={} clock={} pkts={} since={active_since_ms:.0} rec={} late={} exp={} gaps={} hit={}",
+        observation.classification,
+        observation.mime_type,
+        observation.phase,
+        observation.stream_id,
+        observation.stream_ssrc,
+        observation.payload_type,
+        observation.clock_rate,
+        stats.video_repair_probe_packet_count_total,
+        stats.video_repair_probe_recovered_count_since_active,
+        stats.video_repair_probe_late_recovered_count_since_active,
+        stats.video_repair_probe_expired_count_since_active,
+        stats.video_repair_probe_packet_gap_count_since_active,
+        recovery_hit_rate
+    ))
+}
+
+fn build_rtx_reinject_note(runtime_stats: Option<&XbxEngineMediaRuntimeStats>) -> Option<String> {
+    let stats = runtime_stats?;
+    let observation = stats.latest_video_rtx_reinject_observation.as_ref()?;
+    let total = stats.video_rtx_reinject_head_match_count_total
+        + stats.video_rtx_reinject_range_match_count_total
+        + stats.video_rtx_reinject_miss_count_total;
+    let hit_rate = if total > 0 {
+        format!(
+            "{:.3}",
+            stats.video_rtx_reinject_head_match_count_total as f64 / total as f64
+        )
+    } else {
+        "-".to_string()
+    };
+    Some(format!(
+        "reinject:stage={} seq={} native={:?} pending={} headMatch={} rangeMatch={} gap={:?} nack={:?}..{:?} headHits={} rangeHits={} miss={} headHitRate={}",
+        observation.stage,
+        observation.sequence_number,
+        observation.native_sequence_number,
+        observation.pending_queue_len,
+        observation.matched_head_gap,
+        observation.matched_nack_range,
+        observation.matched_gap_sequence,
+        observation.matched_nack_first_sequence,
+        observation.matched_nack_last_sequence,
+        stats.video_rtx_reinject_head_match_count_total,
+        stats.video_rtx_reinject_range_match_count_total,
+        stats.video_rtx_reinject_miss_count_total,
+        hit_rate
+    ))
 }
 
 /// 统一把运行时事实压成 UI/trace 可直接消费的健康态，避免前端再拼条件猜状态。
@@ -477,5 +664,158 @@ fn classify_stall_kind(runtime_stats: Option<&XbxEngineMediaRuntimeStats>) -> Op
                 Some("none".to_string())
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use xbxengine_protocol::XbxEngineTransportStateDto;
+
+    use super::*;
+    use crate::api::runtime::XbxEngineRuntimeSnapshot;
+
+    fn test_snapshot() -> XbxEngineRuntimeSnapshot {
+        XbxEngineRuntimeSnapshot {
+            audio_volume: 1.0,
+            keyboard_pointer_enabled: false,
+            microphone_capturing: false,
+            microphone_paused: false,
+            display_state: None,
+            viewport: None,
+            surface_id: None,
+            video_size: None,
+            last_keyboard_pointer_event: None,
+            last_pressed_controller_button: None,
+            negotiation_attempt_count: 0,
+            last_offer_sdp: None,
+            last_answer_sdp: None,
+            last_remote_candidates: Vec::new(),
+            input_device_count: 0,
+            input_pad_count: 0,
+            input_route_attached: false,
+            first_frame_packet_arrival_time_ms: None,
+            frame_decoded_time_ms: None,
+            frame_rendered_time_ms: None,
+            latest_video_track_status: None,
+            recovery_keyframe_request_count: 0,
+            recovery_decoder_reset_count: 0,
+            recovery_reconnect_count: 0,
+            last_recovery_action: None,
+            last_recovery_action_at_ms: None,
+            last_recovery_reason: None,
+        }
+    }
+
+    #[test]
+    fn runtime_summary_includes_transport_recovery_epoch_note() {
+        let stats = XbxEngineMediaRuntimeStats {
+            transport_state: XbxEngineTransportStateDto::Connected,
+            transport_policy_profile: Some("cloud".to_string()),
+            session_phase: Some("recovering".to_string()),
+            direct_gaming_bitrate_band: Some("steady".to_string()),
+            transport_recovery_epoch: 7,
+            transport_recovery_epoch_at_last_escalation: 6,
+            ..XbxEngineMediaRuntimeStats::default()
+        };
+
+        let dto = build_xbxengine_stats(&test_snapshot(), Some(&stats));
+        let runtime_summary = dto.runtime_summary.expect("runtime summary");
+
+        assert!(runtime_summary.contains("repoch:7:active"));
+    }
+
+    #[test]
+    fn latest_decision_summary_falls_back_to_transport_recovery_epoch_note() {
+        let stats = XbxEngineMediaRuntimeStats {
+            transport_state: XbxEngineTransportStateDto::Connected,
+            transport_recovery_epoch: 3,
+            transport_recovery_epoch_at_last_escalation: 3,
+            ..XbxEngineMediaRuntimeStats::default()
+        };
+
+        let dto = build_xbxengine_stats(&test_snapshot(), Some(&stats));
+        let latest_decision_summary = dto
+            .latest_decision_summary
+            .expect("latest decision summary");
+
+        assert_eq!(latest_decision_summary, "repoch:3");
+    }
+
+    #[test]
+    fn runtime_summary_includes_repair_probe_note_when_active() {
+        let stats = XbxEngineMediaRuntimeStats {
+            transport_state: XbxEngineTransportStateDto::Connected,
+            transport_policy_profile: Some("cloud".to_string()),
+            session_phase: Some("steady".to_string()),
+            direct_gaming_bitrate_band: Some("steady".to_string()),
+            latest_video_repair_probe_observation: Some(
+                crate::XbxEngineVideoRepairProbeObservation {
+                    observation_id: 1,
+                    phase: "packet".to_string(),
+                    classification: "repair-mime".to_string(),
+                    stream_id: "rtx-1".to_string(),
+                    stream_ssrc: 11,
+                    mime_type: "video/rtx".to_string(),
+                    payload_type: 97,
+                    clock_rate: 90_000,
+                    associated_ssrc: Some(42),
+                    associated_payload_type: Some(124),
+                    stream_packet_count: 8,
+                    observed_at_ms: 2_000.0,
+                },
+            ),
+            video_repair_probe_active_since_ms: Some(1_000.0),
+            video_repair_probe_packet_count_total: 8,
+            video_repair_probe_recovered_count_since_active: 3,
+            video_repair_probe_late_recovered_count_since_active: 1,
+            video_repair_probe_expired_count_since_active: 0,
+            video_repair_probe_packet_gap_count_since_active: 2,
+            ..XbxEngineMediaRuntimeStats::default()
+        };
+
+        let dto = build_xbxengine_stats(&test_snapshot(), Some(&stats));
+        let runtime_summary = dto.runtime_summary.expect("runtime summary");
+
+        assert!(runtime_summary.contains("repair:repair-mime:video/rtx:packet"));
+        assert!(runtime_summary.contains("id=rtx-1"));
+        assert!(runtime_summary.contains("rec=3"));
+        assert!(runtime_summary.contains("exp=0"));
+    }
+
+    #[test]
+    fn runtime_summary_includes_rtx_reinject_note_when_present() {
+        let stats = XbxEngineMediaRuntimeStats {
+            transport_state: XbxEngineTransportStateDto::Connected,
+            latest_video_rtx_reinject_observation: Some(
+                crate::XbxEngineVideoRtxReinjectObservation {
+                    stage: "adapterResolved".to_string(),
+                    primary_ssrc: 10,
+                    repair_ssrc: 20,
+                    sequence_number: 18_894,
+                    rtp_timestamp: 123,
+                    pending_queue_len: 0,
+                    native_sequence_number: None,
+                    matched_head_gap: true,
+                    matched_nack_range: true,
+                    matched_pending_gap: true,
+                    matched_gap_sequence: Some(18_894),
+                    matched_nack_first_sequence: Some(18_894),
+                    matched_nack_last_sequence: Some(18_894),
+                    observed_at_ms: 1_000.0,
+                },
+            ),
+            video_rtx_reinject_head_match_count_total: 2,
+            video_rtx_reinject_range_match_count_total: 1,
+            video_rtx_reinject_miss_count_total: 1,
+            ..XbxEngineMediaRuntimeStats::default()
+        };
+
+        let dto = build_xbxengine_stats(&test_snapshot(), Some(&stats));
+        let runtime_summary = dto.runtime_summary.expect("runtime summary");
+
+        assert!(runtime_summary.contains("reinject:stage=adapterResolved seq=18894"));
+        assert!(runtime_summary.contains("headMatch=true"));
+        assert!(runtime_summary.contains("rangeMatch=true"));
+        assert!(runtime_summary.contains("headHitRate=0.500"));
     }
 }

@@ -235,10 +235,14 @@ pub(crate) fn resolve_twcc_gcc_target(
         <= profile.stable_feedback_interval_ms
         && twcc.observed_packet_count >= profile.stable_feedback_min_packets
         && twcc.covered_sequence_span >= twcc.observed_packet_count;
-    let receive_bitrate_kbps = twcc
+    let raw_receive_bitrate_kbps = twcc
         .receive_bitrate_kbps
         .unwrap_or(actual_headroom_kbps as f64)
-        .clamp(floor_kbps as f64, ceiling_kbps as f64) as u32;
+        .max(1.0);
+    let raw_receive_headroom_kbps =
+        (raw_receive_bitrate_kbps * profile.receive_headroom_factor).round() as u32;
+    let receive_bitrate_kbps =
+        raw_receive_bitrate_kbps.clamp(floor_kbps as f64, ceiling_kbps as f64) as u32;
     let receive_headroom_kbps = ((receive_bitrate_kbps as f64) * profile.receive_headroom_factor)
         .round()
         .clamp(floor_kbps as f64, ceiling_kbps as f64) as u32;
@@ -321,6 +325,48 @@ pub(crate) fn resolve_twcc_gcc_target(
                 "recovery-coupled-hold",
             ),
         };
+
+        // 启动低质态如果已经明显拥塞，就不要继续被 25k floor 顶住。
+        // 这里直接按真实 TWCC headroom 回退，先把发送压力压下来。
+        if matches!(coupling.mode, RecoveryCouplingMode::StartupLowQuality)
+            && matches!(profile.kind, ScenarioPolicyProfileKind::CloudGaming)
+            && (twcc.packet_loss_ratio >= profile.severe_loss_threshold
+                || twcc.delivery_ratio <= profile.severe_delivery_threshold)
+        {
+            *ramp_cooldown_ticks = profile.congestion_cooldown_ticks.max(2);
+            return (
+                raw_receive_headroom_kbps.min(desired_kbps.max(1)),
+                profile.reason("recovery-coupled-startup-backoff"),
+            );
+        }
+
+        // Cloud 场景下，reference chain 恢复不应该一直“顶着”不降码率。
+        // 一旦 TWCC 已经进入明显拥塞，就先退回到保守 backoff，
+        // 否则会把短时抖动放大成持续 burst loss。
+        if matches!(
+            coupling.mode,
+            RecoveryCouplingMode::RecoveringReferenceChain
+        ) && (twcc.packet_loss_ratio >= profile.congestion_loss_threshold
+            || twcc.delivery_ratio <= profile.congestion_delivery_threshold)
+        {
+            *ramp_cooldown_ticks = profile.congestion_cooldown_ticks.max(1);
+            let recovery_backoff_floor_kbps = profile.preferred_floor(floor_kbps);
+            let backoff_kbps = ((current_kbps as f64)
+                * (config.remb_ramp_down_factor as f64 / 1000.0))
+                .round()
+                .max(recovery_backoff_floor_kbps as f64) as u32;
+            return (
+                if bounded_gaming_profile {
+                    backoff_kbps
+                        .min(desired_kbps.max(recovery_backoff_floor_kbps))
+                        .max(recovery_backoff_floor_kbps)
+                } else {
+                    backoff_kbps.min(receive_headroom_kbps.max(floor_kbps))
+                },
+                profile.reason("recovery-coupled-reference-backoff"),
+            );
+        }
+
         return (
             current_kbps
                 .max(hold_floor_kbps)
@@ -600,6 +646,56 @@ mod tests {
     }
 
     #[test]
+    fn cloud_recovery_reference_chain_backs_off_under_congestion() {
+        let observation = XbxEngineVideoTwccObservation {
+            observation_id: 3,
+            feedback_packet_count: 1,
+            covered_sequence_start: 1,
+            covered_sequence_end: 80,
+            covered_sequence_span: 80,
+            observed_packet_count: 32,
+            observed_byte_count: 32_000,
+            feedback_interval_ms: Some(100.0),
+            arrival_span_ms: Some(100.0),
+            receive_bitrate_kbps: Some(8_000.0),
+            delivery_ratio: 0.40,
+            packet_loss_ratio: 0.60,
+            observed_at_ms: 3.0,
+        };
+        let mut config = XbxEngineWebRtcRuntimeConfig::default();
+        config.remb_floor_kbps = 25_000;
+        config.remb_ceiling_kbps = 50_000;
+        let coupling = RecoveryCouplingState {
+            mode: RecoveryCouplingMode::RecoveringReferenceChain,
+            suppress_ramp_up: true,
+            prefer_hold: true,
+            allow_peak_range: false,
+        };
+        let mut cooldown = 0;
+        let (target, reason) = resolve_twcc_gcc_target(
+            &config,
+            25_000,
+            25_000,
+            ScenarioPolicyResolver::resolve_transport_bwe_profile(
+                &config,
+                Some(&XbxEngineTargetTypeDto::Cloud),
+                Some("Direct (host->host)"),
+                SessionPhase::Recovering,
+            ),
+            Some(coupling),
+            Some(&super::TwccGccInput {
+                observation: &observation,
+                rtt_ms: None,
+            }),
+            &mut cooldown,
+        );
+
+        assert_eq!(target, 21_250);
+        assert_eq!(reason, "twcc-gcc-cloud-recovery-coupled-reference-backoff");
+        assert_eq!(cooldown, 2);
+    }
+
+    #[test]
     fn cloud_wait_keyframe_coupling_holds_at_cloud_operating_floor() {
         let observation = XbxEngineVideoTwccObservation {
             observation_id: 1,
@@ -642,6 +738,56 @@ mod tests {
         );
         assert_eq!(target, 20_000);
         assert_eq!(reason, "twcc-gcc-cloud-recovery-coupled-wait-keyframe-hold");
+    }
+
+    #[test]
+    fn cloud_startup_low_quality_backs_off_under_congestion() {
+        let observation = XbxEngineVideoTwccObservation {
+            observation_id: 4,
+            feedback_packet_count: 1,
+            covered_sequence_start: 1,
+            covered_sequence_end: 120,
+            covered_sequence_span: 120,
+            observed_packet_count: 24,
+            observed_byte_count: 24_000,
+            feedback_interval_ms: Some(100.0),
+            arrival_span_ms: Some(100.0),
+            receive_bitrate_kbps: Some(5_000.0),
+            delivery_ratio: 0.08,
+            packet_loss_ratio: 0.92,
+            observed_at_ms: 4.0,
+        };
+        let mut config = XbxEngineWebRtcRuntimeConfig::default();
+        config.remb_floor_kbps = 25_000;
+        config.remb_ceiling_kbps = 50_000;
+        let coupling = RecoveryCouplingState {
+            mode: RecoveryCouplingMode::StartupLowQuality,
+            suppress_ramp_up: true,
+            prefer_hold: true,
+            allow_peak_range: false,
+        };
+        let mut cooldown = 0;
+        let (target, reason) = resolve_twcc_gcc_target(
+            &config,
+            25_000,
+            25_000,
+            ScenarioPolicyResolver::resolve_transport_bwe_profile(
+                &config,
+                Some(&XbxEngineTargetTypeDto::Cloud),
+                Some("Direct (host->host)"),
+                SessionPhase::Startup,
+            ),
+            Some(coupling),
+            Some(&super::TwccGccInput {
+                observation: &observation,
+                rtt_ms: None,
+            }),
+            &mut cooldown,
+        );
+
+        assert_eq!(target, 5_500);
+        assert_eq!(reason, "twcc-gcc-cloud-recovery-coupled-startup-backoff");
+        assert_eq!(cooldown, 2);
     }
 
     #[test]

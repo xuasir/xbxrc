@@ -120,6 +120,8 @@ where
         };
 
         let plan = record.plan.clone();
+        let target_type = plan.session.target.as_str().to_string();
+        let target_id = plan.session.target_id.clone();
         let api = match self.create_session_api(&plan).await {
             Ok(api) => api,
             Err(_) => return true,
@@ -127,9 +129,28 @@ where
 
         let state_response = api.get_stream_state(session_id).await;
         let (state, error_details) = match state_response {
-            Ok(value) => value,
+            Ok(value) => {
+                self.inner.provider.on_session_state_polled(
+                    session_id,
+                    &target_type,
+                    &target_id,
+                    value.0.as_deref(),
+                    value.1.as_ref().and_then(|details| details.code.as_ref()),
+                    value
+                        .1
+                        .as_ref()
+                        .and_then(|details| details.message.as_deref()),
+                );
+                value
+            }
             Err(error) => {
                 let flow_error = map_webapi_error(error);
+                self.inner.provider.on_session_state_poll_failed(
+                    session_id,
+                    &target_type,
+                    &target_id,
+                    &flow_error,
+                );
                 if flow_error.status == Some(404) {
                     self.clear_session(session_id).await;
                     return false;
@@ -158,15 +179,54 @@ where
             waiting_queue,
         };
         let monitor_control = apply_monitor_tick_to_record(&mut record, monitor_input);
+        let progress = build_session_progress_snapshot(record.clone());
+        let runtime = record.snapshot.runtime_snapshot();
+        self.inner.provider.on_session_monitor_tick(
+            session_id,
+            &target_type,
+            &target_id,
+            &progress,
+            runtime.stream_state.as_deref(),
+            &runtime.player_state,
+            monitor_control.should_continue,
+            monitor_control.should_send_connect_token,
+        );
         self.upsert_session(session_id, record).await;
 
         if monitor_control.should_send_connect_token {
             let transfer_token = match self.inner.provider.transfer_token().await {
                 Ok(token) => token,
-                Err(_) => return true,
+                Err(error) => {
+                    self.inner.provider.on_session_connect_token_result(
+                        session_id,
+                        &target_type,
+                        &target_id,
+                        "transferTokenFailed",
+                        Some(&error),
+                    );
+                    return true;
+                }
             };
 
-            let _ = api.send_connect_token(session_id, &transfer_token).await;
+            match api.send_connect_token(session_id, &transfer_token).await {
+                Ok(()) => self.inner.provider.on_session_connect_token_result(
+                    session_id,
+                    &target_type,
+                    &target_id,
+                    "sent",
+                    None,
+                ),
+                Err(error) => {
+                    let flow_error = map_webapi_error(error);
+                    self.inner.provider.on_session_connect_token_result(
+                        session_id,
+                        &target_type,
+                        &target_id,
+                        "sendFailed",
+                        Some(&flow_error),
+                    );
+                }
+            }
         }
 
         monitor_control.should_continue

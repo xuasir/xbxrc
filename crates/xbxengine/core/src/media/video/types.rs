@@ -69,6 +69,43 @@ impl FrameValue {
 }
 
 #[derive(Clone, Debug)]
+pub struct AssembledVideoFrame {
+    pub codec: VideoCodec,
+
+    pub is_keyframe: bool,
+    pub config_changed: bool,
+    pub value: FrameValue,
+
+    pub width: u32,
+    pub height: u32,
+
+    pub rtp_timestamp: u32,
+
+    pub assembled_at: Instant,
+
+    pub h264: H264AccessUnitInspection,
+    pub payload: Bytes,
+}
+
+impl AssembledVideoFrame {
+    pub fn into_encoded_frame(self, target_playout_time: Instant) -> EncodedFrame {
+        EncodedFrame {
+            codec: self.codec,
+            is_keyframe: self.is_keyframe,
+            config_changed: self.config_changed,
+            value: self.value,
+            width: self.width,
+            height: self.height,
+            rtp_timestamp: self.rtp_timestamp,
+            assembled_at: self.assembled_at,
+            target_playout_time,
+            h264: self.h264,
+            payload: self.payload,
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
 pub struct EncodedFrame {
     pub codec: VideoCodec,
 

@@ -7,6 +7,7 @@ use crate::api::backend::XbxEngineMediaRuntimeStats;
 use crate::media::video::render::actor::RendererActorHandle;
 use crate::media::video::render::pacer::{FramePacingAction, FramePacingPolicy};
 use crate::media::video::types::DecodedFrame;
+use crate::runtime_stats_sink::RuntimeStatsSink;
 
 pub enum PacerMsg {
     Frame(DecodedFrame),
@@ -24,6 +25,7 @@ impl PacerActorHandle {
         runtime_stats: Arc<Mutex<XbxEngineMediaRuntimeStats>>,
         refresh_interval_ms: u64,
     ) -> Self {
+        let runtime_stats = RuntimeStatsSink::new(runtime_stats);
         let (tx, rx) = mpsc::sync_channel(2);
 
         thread::Builder::new()
@@ -52,7 +54,7 @@ impl PacerActorHandle {
 fn run_pacer_loop(
     rx: Receiver<PacerMsg>,
     renderer: Arc<RendererActorHandle>,
-    runtime_stats: Arc<Mutex<XbxEngineMediaRuntimeStats>>,
+    runtime_stats: RuntimeStatsSink,
     refresh_interval_ms: u64,
 ) {
     let fallback_refresh_interval_ms = refresh_interval_ms;
@@ -61,15 +63,12 @@ fn run_pacer_loop(
     while let Ok(msg) = rx.recv() {
         match msg {
             PacerMsg::Frame(frame) => {
-                if let Ok(mut stats) = runtime_stats.lock() {
+                runtime_stats.update(|stats| {
                     stats.video_pacer_submit_count_total =
                         stats.video_pacer_submit_count_total.saturating_add(1);
-                }
+                });
                 let (effective_refresh_interval_ms, host_frame_age_budget_ms) =
-                    resolve_host_pacing_timing(
-                        runtime_stats.as_ref(),
-                        fallback_refresh_interval_ms,
-                    );
+                    resolve_host_pacing_timing(&runtime_stats, fallback_refresh_interval_ms);
                 let pacing_policy = FramePacingPolicy::with_dynamic_budget(
                     effective_refresh_interval_ms,
                     host_frame_age_budget_ms.map(|budget_ms| budget_ms.round() as u64),
@@ -83,10 +82,10 @@ fn run_pacer_loop(
                 }
                 match decision.action {
                     FramePacingAction::Drop => {
-                        if let Ok(mut stats) = runtime_stats.lock() {
+                        runtime_stats.update(|stats| {
                             stats.video_pacer_drop_count_total =
                                 stats.video_pacer_drop_count_total.saturating_add(1);
-                        }
+                        });
                         continue;
                     }
                     FramePacingAction::SubmitNow => {}
@@ -98,10 +97,10 @@ fn run_pacer_loop(
                 // Render queue size 1 as per RFC (or renderer limits itself).
                 // Renderer handles immediate flip.
                 if renderer.submit(frame).is_err() {
-                    if let Ok(mut stats) = runtime_stats.lock() {
+                    runtime_stats.update(|stats| {
                         stats.video_pacer_drop_count_total =
                             stats.video_pacer_drop_count_total.saturating_add(1);
-                    }
+                    });
                     crate::xbx_log_warn!("[XbxPacerActor] renderer queue full, frame dropped!");
                 }
             }
@@ -116,16 +115,17 @@ fn run_pacer_loop(
 }
 
 fn resolve_host_pacing_timing(
-    runtime_stats: &Mutex<XbxEngineMediaRuntimeStats>,
+    runtime_stats: &RuntimeStatsSink,
     fallback_refresh_interval_ms: u64,
 ) -> (u64, Option<f64>) {
-    let Ok(stats) = runtime_stats.lock() else {
-        return (fallback_refresh_interval_ms, None);
-    };
-    let refresh_interval_ms = stats
-        .host_display_interval_ms
-        .map(|interval_ms| interval_ms.round() as u64)
-        .filter(|interval_ms| *interval_ms > 0)
-        .unwrap_or(fallback_refresh_interval_ms);
-    (refresh_interval_ms, stats.host_frame_age_budget_ms)
+    runtime_stats
+        .read(|stats| {
+            let refresh_interval_ms = stats
+                .host_display_interval_ms
+                .map(|interval_ms| interval_ms.round() as u64)
+                .filter(|interval_ms| *interval_ms > 0)
+                .unwrap_or(fallback_refresh_interval_ms);
+            (refresh_interval_ms, stats.host_frame_age_budget_ms)
+        })
+        .unwrap_or((fallback_refresh_interval_ms, None))
 }

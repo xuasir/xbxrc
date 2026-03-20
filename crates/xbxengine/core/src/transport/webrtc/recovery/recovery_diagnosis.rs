@@ -10,54 +10,66 @@ pub struct VideoRecoveryDiagnosis {
     pub label: &'static str,
 }
 
-pub fn diagnose_transport_signal(signal: VideoRecoverySignal) -> VideoRecoveryDiagnosis {
-    match signal {
-        VideoRecoverySignal::AdapterIdleTimeout => VideoRecoveryDiagnosis {
-            reason: VideoEscalationReason::AdapterIdleTimeout,
-            label: "adapterIdleTimeout",
-        },
-        VideoRecoverySignal::AdapterThinStream => VideoRecoveryDiagnosis {
-            reason: VideoEscalationReason::AdapterThinStream,
-            label: "adapterThinStream",
-        },
-        VideoRecoverySignal::TransportExpiredDeadline => VideoRecoveryDiagnosis {
-            reason: VideoEscalationReason::TransportExpiredDeadline,
-            label: "transportExpiredDeadline",
-        },
-        VideoRecoverySignal::TransportSevereDeadline => VideoRecoveryDiagnosis {
-            reason: VideoEscalationReason::TransportSevereDeadline,
-            label: "transportSevereDeadline",
-        },
-        VideoRecoverySignal::TransportRecoveredLate => VideoRecoveryDiagnosis {
-            reason: VideoEscalationReason::TransportRecoveredLate,
-            label: "transportRecoveredLate",
-        },
-        VideoRecoverySignal::TransportSampleLoss => VideoRecoveryDiagnosis {
-            reason: VideoEscalationReason::TransportSampleLoss,
-            label: "transportSampleLoss",
-        },
-        VideoRecoverySignal::TransportSampleLossBurst => VideoRecoveryDiagnosis {
-            reason: VideoEscalationReason::WaitKeyframe,
-            label: "transportSampleLoss",
-        },
-        VideoRecoverySignal::TransportAwaitRecoveryKeyframe => VideoRecoveryDiagnosis {
-            reason: VideoEscalationReason::TransportAwaitRecoveryKeyframe,
-            label: "transportAwaitRecoveryKeyframe",
-        },
+impl VideoRecoverySignal {
+    pub fn diagnose(self) -> VideoRecoveryDiagnosis {
+        match self {
+            VideoRecoverySignal::AdapterIdleTimeout => VideoRecoveryDiagnosis {
+                reason: VideoEscalationReason::AdapterIdleTimeout,
+                label: "adapterIdleTimeout",
+            },
+            VideoRecoverySignal::AdapterThinStream => VideoRecoveryDiagnosis {
+                reason: VideoEscalationReason::AdapterThinStream,
+                label: "adapterThinStream",
+            },
+            VideoRecoverySignal::TransportExpiredDeadline => VideoRecoveryDiagnosis {
+                reason: VideoEscalationReason::TransportExpiredDeadline,
+                label: "transportExpiredDeadline",
+            },
+            VideoRecoverySignal::TransportSevereDeadline => VideoRecoveryDiagnosis {
+                reason: VideoEscalationReason::TransportSevereDeadline,
+                label: "transportSevereDeadline",
+            },
+            VideoRecoverySignal::TransportRecoveredLate => VideoRecoveryDiagnosis {
+                reason: VideoEscalationReason::TransportRecoveredLate,
+                label: "transportRecoveredLate",
+            },
+            VideoRecoverySignal::TransportSampleLoss => VideoRecoveryDiagnosis {
+                reason: VideoEscalationReason::TransportSampleLoss,
+                label: "transportSampleLoss",
+            },
+            VideoRecoverySignal::TransportSampleLossBurst => VideoRecoveryDiagnosis {
+                reason: VideoEscalationReason::WaitKeyframe,
+                label: "transportSampleLoss",
+            },
+            VideoRecoverySignal::TransportAwaitRecoveryKeyframe => VideoRecoveryDiagnosis {
+                reason: VideoEscalationReason::TransportAwaitRecoveryKeyframe,
+                label: "transportAwaitRecoveryKeyframe",
+            },
+        }
     }
 }
 
-pub fn diagnose_ingress_signal(signal: VideoIngressSignal) -> VideoRecoveryDiagnosis {
-    match signal {
-        VideoIngressSignal::WaitKeyframe => VideoRecoveryDiagnosis {
-            reason: VideoEscalationReason::WaitKeyframe,
-            label: "ingressWaitKeyframe",
-        },
-        VideoIngressSignal::Reconfigure => VideoRecoveryDiagnosis {
-            reason: VideoEscalationReason::Reconfigure,
-            label: "ingressReconfigure",
-        },
+impl VideoIngressSignal {
+    pub fn diagnose(self) -> VideoRecoveryDiagnosis {
+        match self {
+            VideoIngressSignal::WaitKeyframe => VideoRecoveryDiagnosis {
+                reason: VideoEscalationReason::WaitKeyframe,
+                label: "ingressWaitKeyframe",
+            },
+            VideoIngressSignal::Reconfigure => VideoRecoveryDiagnosis {
+                reason: VideoEscalationReason::Reconfigure,
+                label: "ingressReconfigure",
+            },
+        }
     }
+}
+
+pub fn diagnose_transport_signal(signal: VideoRecoverySignal) -> VideoRecoveryDiagnosis {
+    signal.diagnose()
+}
+
+pub fn diagnose_ingress_signal(signal: VideoIngressSignal) -> VideoRecoveryDiagnosis {
+    signal.diagnose()
 }
 
 #[cfg(test)]

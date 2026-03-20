@@ -166,6 +166,49 @@ pub trait SessionFlowProvider: Send + Sync + 'static {
     async fn get_remote_consoles(&self) -> Result<Vec<RemoteConsoleSnapshot>, SessionFlowError> {
         Ok(Vec::new())
     }
+    /// 诊断钩子：记录 session state 轮询结果，默认 no-op，避免 core 层绑定具体日志设施。
+    fn on_session_state_polled(
+        &self,
+        _session_id: &str,
+        _target_type: &str,
+        _target_id: &str,
+        _state: Option<&str>,
+        _error_code: Option<&Value>,
+        _error_message: Option<&str>,
+    ) {
+    }
+    /// 诊断钩子：记录 session state 轮询失败。
+    fn on_session_state_poll_failed(
+        &self,
+        _session_id: &str,
+        _target_type: &str,
+        _target_id: &str,
+        _error: &SessionFlowError,
+    ) {
+    }
+    /// 诊断钩子：记录 monitor tick 投影结果，便于定位 waitingSessionReady 卡点。
+    fn on_session_monitor_tick(
+        &self,
+        _session_id: &str,
+        _target_type: &str,
+        _target_id: &str,
+        _progress: &SessionProgressSnapshot,
+        _stream_state: Option<&str>,
+        _player_state: &str,
+        _should_continue: bool,
+        _should_send_connect_token: bool,
+    ) {
+    }
+    /// 诊断钩子：记录 connect token 分发结果。
+    fn on_session_connect_token_result(
+        &self,
+        _session_id: &str,
+        _target_type: &str,
+        _target_id: &str,
+        _status: &str,
+        _error: Option<&SessionFlowError>,
+    ) {
+    }
 }
 
 #[derive(Clone)]

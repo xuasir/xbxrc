@@ -2,6 +2,7 @@ pub mod events;
 pub mod rpc;
 pub mod runtime_state;
 pub mod service;
+mod trace_projection;
 
 pub use service::XbxEngineService;
 

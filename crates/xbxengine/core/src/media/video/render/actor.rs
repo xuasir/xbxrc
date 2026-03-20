@@ -5,6 +5,7 @@ use std::thread;
 use crate::api::backend::XbxEngineMediaRuntimeStats;
 use crate::media::video::render::renderer::XbxRenderState;
 use crate::media::video::types::DecodedFrame;
+use crate::runtime_stats_sink::RuntimeStatsSink;
 
 pub enum RendererMsg {
     Frame(DecodedFrame),
@@ -20,6 +21,7 @@ impl RendererActorHandle {
         render_state: Arc<Mutex<XbxRenderState>>,
         runtime_stats: Arc<Mutex<XbxEngineMediaRuntimeStats>>,
     ) -> Self {
+        let runtime_stats = RuntimeStatsSink::new(runtime_stats);
         let (tx, rx) = mpsc::sync_channel(1);
 
         thread::Builder::new()
@@ -44,22 +46,22 @@ impl RendererActorHandle {
 fn run_renderer_loop(
     rx: Receiver<RendererMsg>,
     render_state: Arc<Mutex<XbxRenderState>>,
-    runtime_stats: Arc<Mutex<XbxEngineMediaRuntimeStats>>,
+    runtime_stats: RuntimeStatsSink,
 ) {
     while let Ok(msg) = rx.recv() {
         match msg {
             RendererMsg::Frame(frame) => {
-                if let Ok(mut stats) = runtime_stats.lock() {
+                runtime_stats.update(|stats| {
                     stats.video_renderer_submit_count_total =
                         stats.video_renderer_submit_count_total.saturating_add(1);
-                }
+                });
                 let mut state = match render_state.lock() {
                     Ok(guard) => guard,
                     Err(_) => {
-                        if let Ok(mut stats) = runtime_stats.lock() {
+                        runtime_stats.update(|stats| {
                             stats.video_renderer_drop_count_total =
                                 stats.video_renderer_drop_count_total.saturating_add(1);
-                        }
+                        });
                         continue;
                     }
                 };
@@ -72,10 +74,10 @@ fn run_renderer_loop(
                     .unwrap_or(0.0);
 
                 if let Err(e) = state.present_frame(render_frame) {
-                    if let Ok(mut stats) = runtime_stats.lock() {
+                    runtime_stats.update(|stats| {
                         stats.video_renderer_drop_count_total =
                             stats.video_renderer_drop_count_total.saturating_add(1);
-                    }
+                    });
                     crate::xbx_log_error!("[XbxRendererActor] present_frame error: {:?}", e);
                 }
             }

@@ -13,6 +13,7 @@ use xbxengine_protocol::{
     XbxEngineSessionDto, XbxEngineTargetTypeDto, XbxEngineTransportStateDto, XbxEngineViewportDto,
 };
 
+use crate::runtime_stats_sink::RuntimeStatsSink;
 use crate::{
     PlaceholderXbxEngineMediaBackend, XbxEngineInputBackend, XbxEngineInputStatus,
     XbxEngineMediaBackend, XbxEngineMediaNegotiation, XbxEngineMediaNegotiationRequest,
@@ -181,6 +182,15 @@ fn create_runtime(
         TestHostBridge::new(requests),
         TestEventSink::new(events),
     )
+}
+
+fn overwrite_runtime_stats(
+    runtime_stats: &Arc<Mutex<XbxEngineMediaRuntimeStats>>,
+    value: XbxEngineMediaRuntimeStats,
+) {
+    RuntimeStatsSink::new(runtime_stats.clone()).update(|stats| {
+        *stats = value;
+    });
 }
 
 #[derive(Clone)]
@@ -586,21 +596,24 @@ fn video_track_status_changes_are_emitted_and_snapshotted() {
         .start(session(), viewport(), 1.0, None, None)
         .expect("runtime start should succeed");
 
-    *runtime_stats.lock().expect("lock runtime stats") = XbxEngineMediaRuntimeStats {
-        transport_state: XbxEngineTransportStateDto::Connected,
-        latest_video_track_status: Some(crate::XbxEngineVideoTrackStatus {
-            state: "remoteTrackAttached".to_string(),
-            video_width: None,
-            video_height: None,
-            mime_type: Some("video/h264".to_string()),
+    overwrite_runtime_stats(
+        &runtime_stats,
+        XbxEngineMediaRuntimeStats {
             transport_state: XbxEngineTransportStateDto::Connected,
-            video_bytes_total: 0,
-            video_packet_count_total: 0,
-            audio_bytes_total: 0,
-            observed_at_ms: 101.0,
-        }),
-        ..Default::default()
-    };
+            latest_video_track_status: Some(crate::XbxEngineVideoTrackStatus {
+                state: "remoteTrackAttached".to_string(),
+                video_width: None,
+                video_height: None,
+                mime_type: Some("video/h264".to_string()),
+                transport_state: XbxEngineTransportStateDto::Connected,
+                video_bytes_total: 0,
+                video_packet_count_total: 0,
+                audio_bytes_total: 0,
+                observed_at_ms: 101.0,
+            }),
+            ..Default::default()
+        },
+    );
 
     runtime.tick();
 
@@ -1098,12 +1111,15 @@ fn runtime_requests_decoder_reset_when_decode_stall_signal_is_active() {
     runtime.health.last_keyframe_request_at_ms = Some(now_ms - 600.0);
     runtime.health.keyframe_requested_for_current_stall = true;
 
-    *runtime_stats.lock().expect("lock runtime stats") = XbxEngineMediaRuntimeStats {
-        transport_state: XbxEngineTransportStateDto::Connected,
-        latest_video_packet_arrival_time_ms: Some(now_ms - 20.0),
-        inbound_video_packet_count_total: 200,
-        ..Default::default()
-    };
+    overwrite_runtime_stats(
+        &runtime_stats,
+        XbxEngineMediaRuntimeStats {
+            transport_state: XbxEngineTransportStateDto::Connected,
+            latest_video_packet_arrival_time_ms: Some(now_ms - 20.0),
+            inbound_video_packet_count_total: 200,
+            ..Default::default()
+        },
+    );
 
     runtime.tick();
 
@@ -1166,16 +1182,19 @@ fn runtime_prefers_explicit_decoder_stall_signal_from_stats() {
     runtime.health.inbound_video_packet_count_total = 300;
     runtime.health.last_video_packet_arrival_at_ms = Some(now_ms - 20.0);
 
-    *runtime_stats.lock().expect("lock runtime stats") = XbxEngineMediaRuntimeStats {
-        transport_state: XbxEngineTransportStateDto::Connected,
-        latest_video_packet_arrival_time_ms: Some(now_ms - 20.0),
-        latest_video_present_time_ms: Some(now_ms - 100.0),
-        latest_video_decode_ok_time_ms: Some(now_ms - 100.0),
-        video_decoder_stalled: Some(true),
-        video_renderer_stalled: Some(false),
-        inbound_video_packet_count_total: 300,
-        ..Default::default()
-    };
+    overwrite_runtime_stats(
+        &runtime_stats,
+        XbxEngineMediaRuntimeStats {
+            transport_state: XbxEngineTransportStateDto::Connected,
+            latest_video_packet_arrival_time_ms: Some(now_ms - 20.0),
+            latest_video_present_time_ms: Some(now_ms - 100.0),
+            latest_video_decode_ok_time_ms: Some(now_ms - 100.0),
+            video_decoder_stalled: Some(true),
+            video_renderer_stalled: Some(false),
+            inbound_video_packet_count_total: 300,
+            ..Default::default()
+        },
+    );
 
     runtime.tick();
 
@@ -1374,16 +1393,19 @@ fn runtime_recovery_sequence_stays_keyframe_then_decoder_reset_then_reconnect() 
     );
 
     // tick-3: 扩大 stall 时长，触发 reconnect
-    *runtime_stats.lock().expect("lock runtime stats") = XbxEngineMediaRuntimeStats {
-        transport_state: XbxEngineTransportStateDto::Connected,
-        latest_video_packet_arrival_time_ms: Some(now_ms - 20.0),
-        latest_video_present_time_ms: Some(now_ms - 5_000.0),
-        latest_video_decode_ok_time_ms: Some(now_ms - 5_000.0),
-        video_decoder_stalled: Some(true),
-        video_renderer_stalled: Some(false),
-        inbound_video_packet_count_total: 500,
-        ..Default::default()
-    };
+    overwrite_runtime_stats(
+        &runtime_stats,
+        XbxEngineMediaRuntimeStats {
+            transport_state: XbxEngineTransportStateDto::Connected,
+            latest_video_packet_arrival_time_ms: Some(now_ms - 20.0),
+            latest_video_present_time_ms: Some(now_ms - 5_000.0),
+            latest_video_decode_ok_time_ms: Some(now_ms - 5_000.0),
+            video_decoder_stalled: Some(true),
+            video_renderer_stalled: Some(false),
+            inbound_video_packet_count_total: 500,
+            ..Default::default()
+        },
+    );
     runtime.health.last_frame_rendered_at_ms = Some(now_ms - 5_000.0);
     runtime.health.keyframe_requested_for_current_stall = true;
     runtime.health.decoder_reset_requested_for_current_stall = true;
@@ -1533,17 +1555,20 @@ fn runtime_waits_for_real_frame_before_populating_first_frame_timestamps() {
         .duration_since(UNIX_EPOCH)
         .map(|duration| duration.as_millis() as f64)
         .unwrap_or(0.0);
-    *runtime_stats.lock().expect("lock runtime stats") = XbxEngineMediaRuntimeStats {
-        transport_state: XbxEngineTransportStateDto::Connected,
-        latest_video_frame: Some(crate::XbxEngineVideoFrameStats {
-            width: 1920,
-            height: 1080,
-            frame_seq: 1,
-            fps: 60.0,
-            rendered_at_ms: frame_time_ms,
-        }),
-        ..Default::default()
-    };
+    overwrite_runtime_stats(
+        &runtime_stats,
+        XbxEngineMediaRuntimeStats {
+            transport_state: XbxEngineTransportStateDto::Connected,
+            latest_video_frame: Some(crate::XbxEngineVideoFrameStats {
+                width: 1920,
+                height: 1080,
+                frame_seq: 1,
+                fps: 60.0,
+                rendered_at_ms: frame_time_ms,
+            }),
+            ..Default::default()
+        },
+    );
 
     runtime.tick();
 

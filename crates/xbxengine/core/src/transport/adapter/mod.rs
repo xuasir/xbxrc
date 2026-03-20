@@ -1,26 +1,60 @@
 use bytes::Bytes;
 use rtp::codecs::h264::H264Packet;
 use std::collections::VecDeque;
-use std::sync::{Arc, Mutex};
+use std::future::Future;
+use std::pin::Pin;
+use std::sync::Arc;
 use std::time::Duration;
 
 use crate::media::video::h264::inspection::H264AccessUnitInspector;
-use webrtc::peer_connection::RTCPeerConnection;
 use webrtc::track::track_remote::TrackRemote;
 use webrtc_media::io::sample_builder::SampleBuilder;
 
-use crate::media::video::types::{EncodedFrame, FrameValue, VideoCodec};
-use crate::transport::webrtc::frame_deadline::FrameDeadlineTracker;
+use crate::media::video::types::{AssembledVideoFrame, FrameValue, VideoCodec};
+use crate::runtime_stats_sink::RuntimeStatsSink;
 use crate::transport::webrtc::nack_scheduler::{NackScheduler, NackSchedulerConfig};
-use crate::transport::webrtc::recovery::recovery_signal::VideoRecoverySignal;
 use crate::XbxEngineMediaRuntimeStats;
 
+mod frame_cadence;
 mod nack;
 mod source;
 
+use frame_cadence::TransportFrameDeadlineTracker;
+
+pub trait TransportFeedbackPort: Send + Sync {
+    fn send_transport_layer_nack<'a>(
+        &'a self,
+        media_ssrc: u32,
+        sequences: &'a [u16],
+    ) -> Pin<Box<dyn Future<Output = Result<(), String>> + Send + 'a>>;
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum TransportAdmissionObservation {
+    AwaitRecoveryKeyframe,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum TransportLossObservation {
+    PacketLossDetected,
+    RecoveryKeyframeRequested,
+    AwaitRecoveryKeyframe,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum TransportObservation {
+    Admission(TransportAdmissionObservation),
+    Loss(TransportLossObservation),
+    StreamIdleTimeout,
+    StreamThinStall,
+    NackDeadlineExpired { missing_packets: u16 },
+    NackRecoveredLate,
+}
+
 pub enum FrameSourceEvent {
-    Frame(EncodedFrame),
-    RecoverySignal(VideoRecoverySignal),
+    // adapter 只负责把 RTP 样本整理成可消费的编码帧，不在这里承诺最终 playout budget。
+    Frame(AssembledVideoFrame),
+    TransportObservation(TransportObservation),
 }
 
 pub trait FrameSource: Send {
@@ -31,11 +65,10 @@ pub trait FrameSource: Send {
 
 pub struct WebrtcVideoAdapter {
     track: Arc<TrackRemote>,
-    peer_connection: Arc<RTCPeerConnection>,
-    runtime_stats: Arc<Mutex<XbxEngineMediaRuntimeStats>>,
+    feedback_port: Arc<dyn TransportFeedbackPort>,
+    runtime_stats: RuntimeStatsSink,
     sample_builder: SampleBuilder<H264Packet>,
     max_late_packets: u16,
-    jitter_buffer_min_delay: Duration,
     jitter_buffer_max_delay: Duration,
     idle_timeout: std::time::Duration,
     idle_hint_cooldown: std::time::Duration,
@@ -53,21 +86,27 @@ pub struct WebrtcVideoAdapter {
     current_height: u32,
     recent_rtp_packets: VecDeque<RecentRtpPacket>,
     packet_gap_observation_id: u64,
-    frame_deadline_tracker: FrameDeadlineTracker,
+    transport_deadline_tracker: TransportFrameDeadlineTracker,
     nack_observation_id: u64,
-    pending_recovery_signal: Option<VideoRecoverySignal>,
-    severe_deadline_packet_threshold: usize,
+    pending_transport_observation: Option<TransportObservation>,
+    last_transport_observation: Option<TransportObservation>,
+    last_transport_observation_at: Option<std::time::Instant>,
     waiting_for_recovery_keyframe: bool,
+    wait_keyframe_observation_cooldown: std::time::Duration,
     sample_loss_burst_count: u8,
     clean_samples_since_loss: u8,
+    last_submitted_frame_value: FrameValue,
+    nack_recovery_ewma_ms: f64,
+    nack_late_ewma: f64,
     h264_inspector: H264AccessUnitInspector,
+    reinject_read_poll_count: u64,
 }
 
 impl WebrtcVideoAdapter {
     pub fn new(
         track: Arc<TrackRemote>,
-        peer_connection: Arc<RTCPeerConnection>,
-        runtime_stats: Arc<Mutex<XbxEngineMediaRuntimeStats>>,
+        feedback_port: Arc<dyn TransportFeedbackPort>,
+        runtime_stats: Arc<std::sync::Mutex<XbxEngineMediaRuntimeStats>>,
         max_late_packets: u16,
         jitter_buffer_min_delay: Duration,
         jitter_buffer_max_delay: Duration,
@@ -75,18 +114,16 @@ impl WebrtcVideoAdapter {
         nack_config: NackSchedulerConfig,
     ) -> Self {
         let frame_deadline_ms = nack_config.frame_deadline_ms;
-        let burst_count = usize::from(nack_config.burst_count.max(1));
         let jitter_buffer_max_delay = jitter_buffer_max_delay.max(jitter_buffer_min_delay);
         let assembly_stall_timeout = idle_timeout
             .mul_f32(3.0)
             .clamp(Duration::from_millis(240), Duration::from_millis(600));
         Self {
             track,
-            peer_connection,
-            runtime_stats,
+            feedback_port,
+            runtime_stats: RuntimeStatsSink::new(runtime_stats),
             sample_builder: build_sample_builder(max_late_packets, jitter_buffer_max_delay),
             max_late_packets,
-            jitter_buffer_min_delay,
             jitter_buffer_max_delay,
             idle_timeout,
             idle_hint_cooldown: idle_timeout.max(std::time::Duration::from_millis(400)),
@@ -104,24 +141,98 @@ impl WebrtcVideoAdapter {
             current_height: 0,
             recent_rtp_packets: VecDeque::with_capacity(512),
             packet_gap_observation_id: 0,
-            frame_deadline_tracker: FrameDeadlineTracker::new(frame_deadline_ms),
+            transport_deadline_tracker: TransportFrameDeadlineTracker::new(frame_deadline_ms),
             nack_observation_id: 0,
-            pending_recovery_signal: None,
-            // 大范围 deadline 失效通常不是“再试一次 keyframe”能解决的，
-            // 这里提前标成 severe，交给统一 escalation ladder 处理。
-            severe_deadline_packet_threshold: (burst_count * 32).max(128),
+            pending_transport_observation: None,
+            last_transport_observation: None,
+            last_transport_observation_at: None,
             waiting_for_recovery_keyframe: false,
+            wait_keyframe_observation_cooldown: Duration::from_millis(350),
             sample_loss_burst_count: 0,
             clean_samples_since_loss: 0,
+            last_submitted_frame_value: FrameValue::new(false, false, 12 * 1024),
+            nack_recovery_ewma_ms: 22.0,
+            nack_late_ewma: 0.0,
             h264_inspector: H264AccessUnitInspector::new(),
+            reinject_read_poll_count: 0,
         }
     }
 
-    fn queue_recovery_signal(&mut self, signal: VideoRecoverySignal) {
-        if self.pending_recovery_signal.is_none() {
-            self.pending_recovery_signal = Some(signal);
+    fn queue_transport_observation(&mut self, observation: TransportObservation) {
+        let now = std::time::Instant::now();
+        if self.should_suppress_transport_observation(observation, now) {
+            return;
         }
+        self.last_transport_observation = Some(observation);
+        self.last_transport_observation_at = Some(now);
+
+        if let Some(pending) = self.pending_transport_observation {
+            if transport_observation_priority(observation)
+                <= transport_observation_priority(pending)
+            {
+                return;
+            }
+        }
+        if should_begin_transport_recovery_episode(observation) {
+            self.runtime_stats.begin_transport_recovery_episode();
+        }
+        self.pending_transport_observation = Some(observation);
     }
+
+    fn should_suppress_transport_observation(
+        &self,
+        observation: TransportObservation,
+        now: std::time::Instant,
+    ) -> bool {
+        let is_wait_keyframe = matches!(
+            observation,
+            TransportObservation::Admission(TransportAdmissionObservation::AwaitRecoveryKeyframe)
+                | TransportObservation::Loss(TransportLossObservation::AwaitRecoveryKeyframe)
+        );
+        if !is_wait_keyframe {
+            return false;
+        }
+        let Some(last_observation) = self.last_transport_observation else {
+            return false;
+        };
+        let was_wait_keyframe = matches!(
+            last_observation,
+            TransportObservation::Admission(TransportAdmissionObservation::AwaitRecoveryKeyframe)
+                | TransportObservation::Loss(TransportLossObservation::AwaitRecoveryKeyframe)
+        );
+        if !was_wait_keyframe {
+            return false;
+        }
+        self.last_transport_observation_at.is_some_and(|last_at| {
+            now.duration_since(last_at) < self.wait_keyframe_observation_cooldown
+        })
+    }
+}
+
+fn transport_observation_priority(observation: TransportObservation) -> u8 {
+    match observation {
+        TransportObservation::NackDeadlineExpired { .. } => 6,
+        TransportObservation::Loss(TransportLossObservation::RecoveryKeyframeRequested) => 5,
+        TransportObservation::Loss(TransportLossObservation::PacketLossDetected) => 4,
+        TransportObservation::Loss(TransportLossObservation::AwaitRecoveryKeyframe)
+        | TransportObservation::Admission(TransportAdmissionObservation::AwaitRecoveryKeyframe) => {
+            3
+        }
+        TransportObservation::StreamThinStall | TransportObservation::StreamIdleTimeout => 2,
+        TransportObservation::NackRecoveredLate => 1,
+    }
+}
+
+fn should_begin_transport_recovery_episode(observation: TransportObservation) -> bool {
+    matches!(
+        observation,
+        TransportObservation::Admission(TransportAdmissionObservation::AwaitRecoveryKeyframe)
+            | TransportObservation::Loss(TransportLossObservation::RecoveryKeyframeRequested)
+            | TransportObservation::Loss(TransportLossObservation::AwaitRecoveryKeyframe)
+            | TransportObservation::StreamIdleTimeout
+            | TransportObservation::StreamThinStall
+            | TransportObservation::NackDeadlineExpired { .. }
+    )
 }
 
 #[derive(Clone, Copy)]
@@ -136,20 +247,6 @@ fn build_sample_builder(
 ) -> SampleBuilder<H264Packet> {
     SampleBuilder::new(max_late_packets, H264Packet::default(), 90_000)
         .with_max_time_delay(max_time_delay)
-}
-
-fn resolve_playout_delay(value: FrameValue, min_delay: Duration, max_delay: Duration) -> Duration {
-    if value.is_sync_point() || value.refresh_boost {
-        return max_delay;
-    }
-
-    // delta 帧按价值比例在 min/max 之间插值，尽量降低 steady-state 排队时延。
-    let ratio = value.deadline_budget_ratio_per_mille() as u128;
-    let min_ms = min_delay.as_millis();
-    let max_ms = max_delay.as_millis().max(min_ms);
-    let spread_ms = max_ms.saturating_sub(min_ms);
-    let scaled_ms = min_ms + (spread_ms * ratio / 1_000);
-    Duration::from_millis(scaled_ms as u64).max(min_delay)
 }
 
 fn now_ms_f64() -> f64 {

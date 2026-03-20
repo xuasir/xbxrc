@@ -15,11 +15,12 @@ use crate::transport::webrtc::data_channel::{
     build_control_keyframe_request_payload, build_input_metadata_packet, build_input_stream_packet,
     build_message_handshake_payload, build_metadata_frame, build_post_handshake_message_payloads,
     catalog_data_channel_message, drain_pending_input_frames, is_handshake_ack_payload,
-    recovery_requests_ready, request_decoder_reset_on_control_channel,
-    request_video_keyframe_on_control_channel, XbxDataChannelState,
-    STREAM_CONTROL_GAMEPAD_ADDED_DELAY_MS, STREAM_CONTROL_KEYFRAME_PRIME_DELAY_MS,
-    STREAM_INPUT_IDLE_GAMEPAD_KEEPALIVE_MS, STREAM_INPUT_INITIAL_MAX_TOUCHPOINTS,
-    STREAM_INPUT_MAX_BUFFERED_AMOUNT_BYTES, STREAM_INPUT_POLL_INTERVAL_MS,
+    publish_data_channel_availability, recovery_requests_ready,
+    request_decoder_reset_on_control_channel, request_video_keyframe_on_control_channel,
+    XbxDataChannelState, STREAM_CONTROL_GAMEPAD_ADDED_DELAY_MS,
+    STREAM_CONTROL_KEYFRAME_PRIME_DELAY_MS, STREAM_INPUT_IDLE_GAMEPAD_KEEPALIVE_MS,
+    STREAM_INPUT_INITIAL_MAX_TOUCHPOINTS, STREAM_INPUT_MAX_BUFFERED_AMOUNT_BYTES,
+    STREAM_INPUT_POLL_INTERVAL_MS,
 };
 use crate::{XbxEngineMediaRuntimeStats, XbxEngineRuntimeError};
 
@@ -48,6 +49,7 @@ pub(crate) fn install_data_channel_contracts(
     if let Ok(mut state) = runtime_state.lock() {
         state.control_channel = Some(control_channel.clone());
     }
+    publish_data_channel_availability(&runtime_state, &runtime_stats);
 
     for (label, channel) in data_channels {
         let label = label.clone();
@@ -60,6 +62,7 @@ pub(crate) fn install_data_channel_contracts(
         let input_channel_for_open = input_channel.clone();
         let chat_channel_for_open = chat_channel.clone();
         let runtime_stats_for_open = runtime_stats.clone();
+        let runtime_stats_for_close = runtime_stats.clone();
         let runtime_stats_for_message = runtime_stats.clone();
         channel.on_open(Box::new(move || {
             let label = label_for_open.clone();
@@ -85,6 +88,7 @@ pub(crate) fn install_data_channel_contracts(
                     if let Ok(mut state) = runtime_state.lock() {
                         state.chat_open = true;
                     }
+                    publish_data_channel_availability(&runtime_state, &runtime_stats);
                     let _ = chat_channel;
                 } else if label == "control" || label == "input" {
                     if label == "control" {
@@ -98,6 +102,7 @@ pub(crate) fn install_data_channel_contracts(
                             "[xbxengine][webrtc-rs] rebound control channel reference after open"
                         );
                     }
+                    publish_data_channel_availability(&runtime_state, &runtime_stats);
                     bootstrap_post_handshake_channels(
                         runtime_state,
                         message_channel,
@@ -113,9 +118,11 @@ pub(crate) fn install_data_channel_contracts(
         channel.on_close(Box::new(move || {
             let label = label_for_close.clone();
             let runtime_state = runtime_state_for_close.clone();
+            let runtime_stats = runtime_stats_for_close.clone();
             Box::pin(async move {
                 crate::xbx_log_debug!("[xbxengine][webrtc-rs] data channel close label={label}");
                 reset_state_on_channel_close(&runtime_state, &label);
+                publish_data_channel_availability(&runtime_state, &runtime_stats);
             })
         }));
 
@@ -190,6 +197,7 @@ pub(crate) fn install_data_channel_contracts(
                     should_send_post_handshake_messages = true;
                 }
             }
+            publish_data_channel_availability(&runtime_state, &runtime_stats);
 
             if should_send_post_handshake_messages {
                 for payload in build_post_handshake_message_payloads() {
@@ -295,9 +303,12 @@ async fn bootstrap_post_handshake_channels(
         if protocol_ready {
             // 恢复请求和默认 prime 都统一收口到“协议 ready”之后，
             // 避免 control 先开时把关键请求打在 handshake 之前。
-            let flushed_pending_recovery =
-                flush_pending_recovery_requests(runtime_state.clone(), control_channel.clone())
-                    .await;
+            let flushed_pending_recovery = flush_pending_recovery_requests(
+                runtime_state.clone(),
+                control_channel.clone(),
+                runtime_stats.clone(),
+            )
+            .await;
             if !flushed_pending_recovery {
                 let keyframe_payload = build_control_keyframe_request_payload();
                 catalog_data_channel_message(
@@ -312,8 +323,11 @@ async fn bootstrap_post_handshake_channels(
         }
         let delayed_added_task =
             start_delayed_gamepad_added(runtime_state.clone(), control_channel.clone());
-        let delayed_keyframe_prime_task =
-            start_delayed_keyframe_prime(runtime_state.clone(), control_channel.clone());
+        let delayed_keyframe_prime_task = start_delayed_keyframe_prime(
+            runtime_state.clone(),
+            control_channel.clone(),
+            runtime_stats.clone(),
+        );
         if let Ok(mut state) = runtime_state.lock() {
             replace_task_handle(&mut state.control_gamepad_added_task, delayed_added_task);
             replace_task_handle(
@@ -328,8 +342,12 @@ async fn bootstrap_post_handshake_channels(
             .ok()
             .is_some_and(|state| is_recovery_request_actionable(&state));
         if protocol_ready {
-            let _ = flush_pending_recovery_requests(runtime_state.clone(), control_channel.clone())
-                .await;
+            let _ = flush_pending_recovery_requests(
+                runtime_state.clone(),
+                control_channel.clone(),
+                runtime_stats.clone(),
+            )
+            .await;
         }
     }
     if should_send_input_metadata {
@@ -364,6 +382,7 @@ async fn bootstrap_post_handshake_channels(
 async fn flush_pending_recovery_requests(
     runtime_state: Arc<Mutex<XbxDataChannelState>>,
     control_channel: Arc<RTCDataChannel>,
+    runtime_stats: Arc<Mutex<XbxEngineMediaRuntimeStats>>,
 ) -> bool {
     if control_channel.ready_state() != RTCDataChannelState::Open {
         return false;
@@ -389,6 +408,7 @@ async fn flush_pending_recovery_requests(
                     state.pending_decoder_reset = false;
                     state.pending_keyframe_request = false;
                 }
+                publish_data_channel_availability(&runtime_state, &runtime_stats);
                 crate::xbx_log_info!(
                     "[xbxengine][webrtc-rs] flushed pending decoder reset after control channel recovery"
                 );
@@ -412,6 +432,7 @@ async fn flush_pending_recovery_requests(
                 if let Ok(mut state) = runtime_state.lock() {
                     state.pending_keyframe_request = false;
                 }
+                publish_data_channel_availability(&runtime_state, &runtime_stats);
                 crate::xbx_log_info!(
                     "[xbxengine][webrtc-rs] flushed pending keyframe request after control channel recovery"
                 );
@@ -446,6 +467,7 @@ fn start_delayed_gamepad_added(
 fn start_delayed_keyframe_prime(
     runtime_state: Arc<Mutex<XbxDataChannelState>>,
     control_channel: Arc<RTCDataChannel>,
+    runtime_stats: Arc<Mutex<XbxEngineMediaRuntimeStats>>,
 ) -> JoinHandle<()> {
     tokio::spawn(async move {
         sleep(Duration::from_millis(
@@ -463,6 +485,7 @@ fn start_delayed_keyframe_prime(
             if let Ok(mut state) = runtime_state.lock() {
                 state.pending_keyframe_request = true;
             }
+            publish_data_channel_availability(&runtime_state, &runtime_stats);
             crate::xbx_log_warn!(
                 "[xbxengine][webrtc-rs] keyframe prime deferred because recovery protocol is not ready"
             );
