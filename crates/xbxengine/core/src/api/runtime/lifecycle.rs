@@ -180,6 +180,19 @@ where
         };
         if let Err(error) = self.request_reconnect(XbxEngineReconnectReasonDto::MediaStalled) {
             if !error.is_cancelled() {
+                if is_terminal_remote_session_inactive_error(&error) {
+                    self.snapshot.last_recovery_action =
+                        Some("reconnectSessionInactive".to_string());
+                    self.snapshot.last_recovery_action_at_ms = Some(now_ms_f64());
+                    self.snapshot.last_recovery_reason =
+                        Some("transportReconnectCandidate:sessionNotActive".to_string());
+                    self.emit_error(
+                        "recoverTransportReconnectSessionNotActive",
+                        error.to_string(),
+                    );
+                    self.stop();
+                    return true;
+                }
                 self.emit_error(
                     "recoverTransportReconnectCandidateFailed",
                     error.to_string(),
@@ -575,4 +588,17 @@ fn normalize_offer_profile_token(profile: &str) -> String {
         .strip_prefix("profile-level-id=")
         .unwrap_or(normalized.as_str())
         .to_string()
+}
+
+fn is_terminal_remote_session_inactive_error(error: &XbxEngineRuntimeError) -> bool {
+    let message = error.to_string();
+    let normalized = message.to_ascii_lowercase();
+    let from_keepalive = normalized.contains("keepaliveremotesession")
+        || normalized.contains("keepalive remote session");
+    let session_inactive =
+        normalized.contains("sessionnotactive") || normalized.contains("session not active");
+    let http_410 = normalized.contains("http 410")
+        || normalized.contains("status 410")
+        || normalized.contains("code 410");
+    from_keepalive && (session_inactive || http_410)
 }

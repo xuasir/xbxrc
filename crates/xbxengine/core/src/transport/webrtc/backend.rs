@@ -6,7 +6,7 @@ use crate::{
     },
     api::input::{XbxEngineInputBackend, XbxEngineInputStatus},
     api::runtime::XbxEngineNegotiationRuntimeConfig,
-    transport::webrtc::stack::{XbxActiveMediaStack, XbxMediaStackPort},
+    transport::rtc::stack::{XbxActiveMediaStack, XbxMediaStackPort},
     XbxEngineRuntimeConfig, XbxEngineRuntimeError,
 };
 use xbxengine_protocol::{

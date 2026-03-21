@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use crate::policy::Plan;
 use crate::session::access::StreamingToken;
@@ -17,6 +17,9 @@ use crate::session::scheduler::SessionScheduler;
 use crate::session::signaling::ice::IceCandidate;
 use crate::session::signaling::logic::{decide_ice_poll, decide_offer_poll, PollDecision};
 use crate::session::store::{SessionRuntimeRecord, SessionRuntimeStore};
+
+const STARTUP_CLOSED_RECOVERY_GRACE_MS_MIN: u64 = 1_200;
+const STARTUP_CLOSED_RECOVERY_GRACE_MS_MAX: u64 = 5_000;
 
 /// session flow 的统一错误，便于 adapter 只做一次映射。
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -825,32 +828,64 @@ where
         schedule: &crate::policy::session::SessionSchedulePlan,
     ) -> Result<SessionProgressSnapshot, SessionFlowError> {
         let interval_ms = schedule.monitor_interval_ms.max(200);
+        let closed_recovery_grace_ms = startup_closed_recovery_grace_ms(interval_ms);
         // 给 monitor 一次额外 tick，把精确踩线的“卡住”状态先收敛成 failed，
         // 避免这里抢先抛出通用 timeout，丢掉更具体的上下文。
         let timeout_with_grace_ms = schedule.startup_timeout_ms.saturating_add(interval_ms);
         let session_id_owned = session_id.to_string();
+        let last_recovery_signal_at_ms = Arc::new(Mutex::new(now_ms()));
+        let session_id_for_check = session_id_owned.clone();
+        let recovery_signal_for_check = Arc::clone(&last_recovery_signal_at_ms);
 
         wait_until(
             interval_ms,
             timeout_with_grace_ms,
-            || async {
+            move || {
+                let session_id_for_check = session_id_for_check.clone();
+                let recovery_signal_for_check = Arc::clone(&recovery_signal_for_check);
+                async move {
                 let progress = self
-                    .get_session_progress(&session_id_owned)
+                    .get_session_progress(&session_id_for_check)
                     .await
-                    .ok_or_else(|| missing_session_error(&session_id_owned))?;
+                    .ok_or_else(|| missing_session_error(&session_id_for_check))?;
 
-                if progress.phase == SessionPhase::SessionReady {
-                    return Ok(Some(progress));
-                }
-                if progress.phase == SessionPhase::Failed || progress.phase == SessionPhase::Closed
-                {
-                    let message = progress
-                        .error_message
-                        .clone()
-                        .unwrap_or_else(|| "streamingStartFailed".to_string());
-                    return Err(SessionFlowError::message(message));
+                let now_ms = now_ms();
+                let mut last_recovery_signal_at_ms =
+                    recovery_signal_for_check.lock().map_err(|_| {
+                        SessionFlowError::message(
+                            "startupWaitRecoveryStateLockFailed:sessionFlowClosedGuard",
+                        )
+                    })?;
+                match decide_startup_progress_action(
+                    &progress,
+                    now_ms,
+                    &mut last_recovery_signal_at_ms,
+                    closed_recovery_grace_ms,
+                ) {
+                    StartupProgressAction::Ready => return Ok(Some(progress)),
+                    StartupProgressAction::Continue { transient_closed } => {
+                        if transient_closed {
+                            log::warn!(
+                                "startup wait keeps polling after transient closed: session_id={} phase={:?} grace_ms={} since_recovery_ms={}",
+                                session_id_for_check,
+                                progress.phase,
+                                closed_recovery_grace_ms,
+                                now_ms.saturating_sub(*last_recovery_signal_at_ms),
+                            );
+                        }
+                    }
+                    StartupProgressAction::Fail(message) => {
+                        log::warn!(
+                            "startup wait failing: session_id={} phase={:?} message={}",
+                            session_id_for_check,
+                            progress.phase,
+                            message
+                        );
+                        return Err(SessionFlowError::message(message));
+                    }
                 }
                 Ok(None)
+            }
             },
             || {
                 SessionFlowError::message(format!(
@@ -1079,6 +1114,85 @@ fn should_retry_wake_during_ready_wait(
     elapsed_since_last_wake_ms >= 5_000
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum StartupProgressAction {
+    Ready,
+    Continue { transient_closed: bool },
+    Fail(String),
+}
+
+fn startup_closed_recovery_grace_ms(interval_ms: u64) -> u64 {
+    interval_ms.saturating_mul(3).clamp(
+        STARTUP_CLOSED_RECOVERY_GRACE_MS_MIN,
+        STARTUP_CLOSED_RECOVERY_GRACE_MS_MAX,
+    )
+}
+
+fn has_startup_recovery_signal(progress: &SessionProgressSnapshot) -> bool {
+    if matches!(
+        progress.phase,
+        SessionPhase::Creating
+            | SessionPhase::WaitingSessionReady
+            | SessionPhase::RuntimeStarting
+            | SessionPhase::Recovering
+    ) {
+        return true;
+    }
+    progress
+        .error_message
+        .as_deref()
+        .map(str::to_ascii_lowercase)
+        .is_some_and(|message| {
+            message.contains("reconnect")
+                || message.contains("recover")
+                || message.contains("networklost")
+        })
+}
+
+fn decide_startup_progress_action(
+    progress: &SessionProgressSnapshot,
+    now_ms: u64,
+    last_recovery_signal_at_ms: &mut u64,
+    closed_recovery_grace_ms: u64,
+) -> StartupProgressAction {
+    if progress.phase == SessionPhase::SessionReady {
+        return StartupProgressAction::Ready;
+    }
+
+    if progress.phase == SessionPhase::Failed {
+        return StartupProgressAction::Fail(
+            progress
+                .error_message
+                .clone()
+                .unwrap_or_else(|| "streamingStartFailed".to_string()),
+        );
+    }
+
+    if has_startup_recovery_signal(progress) {
+        *last_recovery_signal_at_ms = now_ms;
+    }
+
+    if progress.phase == SessionPhase::Closed {
+        let in_recovery_window =
+            now_ms.saturating_sub(*last_recovery_signal_at_ms) <= closed_recovery_grace_ms;
+        if in_recovery_window {
+            return StartupProgressAction::Continue {
+                transient_closed: true,
+            };
+        }
+        return StartupProgressAction::Fail(
+            progress
+                .error_message
+                .clone()
+                .unwrap_or_else(|| "streamingStartFailed".to_string()),
+        );
+    }
+
+    StartupProgressAction::Continue {
+        transient_closed: false,
+    }
+}
+
 fn notify_startup_phase<O>(
     observer: Option<&O>,
     phase: SessionStartupPhase,
@@ -1132,11 +1246,11 @@ fn now_ms() -> u64 {
 async fn wait_until<F, Fut, T, E>(
     interval_ms: u64,
     timeout_ms: u64,
-    check: F,
+    mut check: F,
     timeout_error: E,
 ) -> Result<T, SessionFlowError>
 where
-    F: Fn() -> Fut,
+    F: FnMut() -> Fut,
     Fut: std::future::Future<Output = Result<Option<T>, SessionFlowError>>,
     E: Fn() -> SessionFlowError,
 {
@@ -1387,5 +1501,97 @@ mod tests {
         assert!(!is_remote_console_wake_circuit_open_message(
             "remoteConsoleNotReady:targetId=console-1"
         ));
+    }
+
+    fn startup_progress(
+        phase: SessionPhase,
+        error_message: Option<&str>,
+    ) -> SessionProgressSnapshot {
+        SessionProgressSnapshot {
+            session_id: "session-1".to_string(),
+            phase,
+            status_text_key: "key".to_string(),
+            retry_count: 0,
+            queue_seconds: None,
+            queue: None,
+            error_code: None,
+            error_message: error_message.map(str::to_string),
+        }
+    }
+
+    #[test]
+    fn closed_is_treated_as_transient_when_recovering_signal_is_recent() {
+        let mut last_recovery_signal_at_ms = 10_000;
+        let action = decide_startup_progress_action(
+            &startup_progress(SessionPhase::Closed, None),
+            10_900,
+            &mut last_recovery_signal_at_ms,
+            1_000,
+        );
+        assert_eq!(
+            action,
+            StartupProgressAction::Continue {
+                transient_closed: true
+            }
+        );
+    }
+
+    #[test]
+    fn closed_fails_after_recovery_window_expires() {
+        let mut last_recovery_signal_at_ms = 10_000;
+        let action = decide_startup_progress_action(
+            &startup_progress(SessionPhase::Closed, Some("closed-final")),
+            12_001,
+            &mut last_recovery_signal_at_ms,
+            2_000,
+        );
+        assert_eq!(
+            action,
+            StartupProgressAction::Fail("closed-final".to_string())
+        );
+    }
+
+    #[test]
+    fn recovering_phase_refreshes_recovery_signal_timestamp() {
+        let mut last_recovery_signal_at_ms = 10_000;
+        let action = decide_startup_progress_action(
+            &startup_progress(SessionPhase::Recovering, None),
+            11_234,
+            &mut last_recovery_signal_at_ms,
+            2_000,
+        );
+        assert_eq!(
+            action,
+            StartupProgressAction::Continue {
+                transient_closed: false
+            }
+        );
+        assert_eq!(last_recovery_signal_at_ms, 11_234);
+    }
+
+    #[test]
+    fn closed_with_reconnect_signal_stays_transient_within_window() {
+        let mut last_recovery_signal_at_ms = 1_000;
+        let _ = decide_startup_progress_action(
+            &startup_progress(
+                SessionPhase::WaitingSessionReady,
+                Some("networkLost reconnecting"),
+            ),
+            1_500,
+            &mut last_recovery_signal_at_ms,
+            900,
+        );
+        let action = decide_startup_progress_action(
+            &startup_progress(SessionPhase::Closed, None),
+            2_300,
+            &mut last_recovery_signal_at_ms,
+            1_000,
+        );
+        assert_eq!(
+            action,
+            StartupProgressAction::Continue {
+                transient_closed: true
+            }
+        );
     }
 }

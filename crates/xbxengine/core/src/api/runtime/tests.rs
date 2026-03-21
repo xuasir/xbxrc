@@ -29,6 +29,7 @@ use super::{
 struct TestHostBridge {
     requests: Rc<RefCell<Vec<XbxEngineHostRequestDto>>>,
     fail_request_kind: Rc<RefCell<Option<&'static str>>>,
+    fail_keepalive_message: Rc<RefCell<Option<String>>>,
     cancellation_epoch: Rc<Cell<u64>>,
     cancel_after_request_kind: Rc<RefCell<Option<&'static str>>>,
 }
@@ -38,6 +39,7 @@ impl TestHostBridge {
         Self {
             requests,
             fail_request_kind: Rc::new(RefCell::new(None)),
+            fail_keepalive_message: Rc::new(RefCell::new(None)),
             cancellation_epoch: Rc::new(Cell::new(0)),
             cancel_after_request_kind: Rc::new(RefCell::new(None)),
         }
@@ -50,9 +52,15 @@ impl TestHostBridge {
         Self {
             requests,
             fail_request_kind,
+            fail_keepalive_message: Rc::new(RefCell::new(None)),
             cancellation_epoch: Rc::new(Cell::new(0)),
             cancel_after_request_kind: Rc::new(RefCell::new(None)),
         }
+    }
+
+    fn with_keepalive_failure_message(self, message: impl Into<String>) -> Self {
+        *self.fail_keepalive_message.borrow_mut() = Some(message.into());
+        self
     }
 }
 
@@ -78,6 +86,11 @@ impl XbxEngineHostBridge for TestHostBridge {
             .borrow()
             .is_some_and(|kind| kind == request_kind)
         {
+            if request_kind == "KeepAliveRemoteSession" {
+                if let Some(message) = self.fail_keepalive_message.borrow().clone() {
+                    return Err(XbxEngineRuntimeError::new(message));
+                }
+            }
             return Err(XbxEngineRuntimeError::new(format!(
                 "hostBridgeFailure:{request_kind}"
             )));
@@ -1508,6 +1521,75 @@ fn runtime_consumes_pending_transport_reconnect_candidate_once() {
         })
         .count();
     assert_eq!(reconnect_request_count_after_second_tick, 1);
+}
+
+#[test]
+fn runtime_stops_reconnect_loop_when_keepalive_reports_session_not_active() {
+    let requests = Rc::new(RefCell::new(Vec::new()));
+    let events = Rc::new(RefCell::new(Vec::new()));
+    let now_ms = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_millis() as f64)
+        .unwrap_or(0.0);
+    let backend = ScriptedMediaBackend::new(
+        XbxEngineMediaNegotiation {
+            local_offer_sdp: "offer".to_string(),
+            local_candidates: Vec::new(),
+            surface_id: "surface:viewport-1".to_string(),
+            video_width: 1280,
+            video_height: 720,
+            first_frame_packet_arrival_time_ms: None,
+            frame_decoded_time_ms: None,
+            frame_rendered_time_ms: None,
+            input_status: XbxEngineInputStatus::default(),
+        },
+        XbxEngineMediaRuntimeStats {
+            transport_state: XbxEngineTransportStateDto::Connected,
+            latest_video_packet_arrival_time_ms: Some(now_ms - 20.0),
+            inbound_video_packet_count_total: 500,
+            latest_video_escalation_observation: Some(crate::XbxEngineVideoEscalationObservation {
+                observation_id: 42,
+                reason: "transportExpiredDeadline".to_string(),
+                action: "requestReconnectCandidate".to_string(),
+                observed_at_ms: now_ms,
+            }),
+            ..Default::default()
+        },
+    );
+    *backend
+        .pending_runtime_recovery_action
+        .lock()
+        .expect("lock pending runtime recovery action") = Some(
+        crate::XbxEnginePendingRuntimeRecoveryAction::RequestReconnectCandidate {
+            observation_id: 42,
+            reason: "transportExpiredDeadline".to_string(),
+        },
+    );
+    let fail_request_kind = Rc::new(RefCell::new(Some("KeepAliveRemoteSession")));
+    let host_bridge = TestHostBridge::with_failures(requests.clone(), fail_request_kind)
+        .with_keepalive_failure_message(
+            "keepAliveRemoteSession:streaming:HTTP 410 SessionNotActive",
+        );
+    let mut runtime = XbxEngineRuntime::with_media_backend(
+        XbxEngineRuntimeConfig::default(),
+        host_bridge,
+        TestEventSink::new(events.clone()),
+        backend,
+    );
+
+    runtime
+        .start(session(), viewport(), 1.0, None, None)
+        .expect("runtime start should succeed");
+
+    runtime.tick();
+
+    assert_eq!(runtime.state(), &XbxEngineRuntimeState::Stopped);
+    assert!(events.borrow().iter().any(|event| matches!(
+        event,
+        XbxEngineRuntimeEventDto::ErrorReported { code, message }
+        if code == "recoverTransportReconnectSessionNotActive"
+            && message.contains("HTTP 410")
+    )));
 }
 
 #[test]

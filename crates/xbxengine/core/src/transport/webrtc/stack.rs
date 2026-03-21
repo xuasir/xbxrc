@@ -1,4 +1,4 @@
-mod media_supervisor;
+pub(crate) mod media_supervisor;
 mod observation;
 mod recovery_driver;
 mod recovery_scheduler;

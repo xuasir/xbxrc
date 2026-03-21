@@ -10,16 +10,16 @@ use crate::{
 
 use super::session::{spawn_media_session, ActiveMediaSession, MediaSessionContext};
 
-pub(super) struct MediaSupervisorContext {
-    pub(super) runtime_stats: Arc<Mutex<XbxEngineMediaRuntimeStats>>,
-    pub(super) pending_runtime_recovery_action:
+pub(crate) struct MediaSupervisorContext {
+    pub(crate) runtime_stats: Arc<Mutex<XbxEngineMediaRuntimeStats>>,
+    pub(crate) pending_runtime_recovery_action:
         Arc<Mutex<Option<XbxEnginePendingRuntimeRecoveryAction>>>,
-    pub(super) data_channel_state: Arc<Mutex<XbxDataChannelState>>,
-    pub(super) render_state: Arc<Mutex<XbxRenderState>>,
-    pub(super) runtime_config: XbxEngineRuntimeConfig,
+    pub(crate) data_channel_state: Arc<Mutex<XbxDataChannelState>>,
+    pub(crate) render_state: Arc<Mutex<XbxRenderState>>,
+    pub(crate) runtime_config: XbxEngineRuntimeConfig,
 }
 
-pub(super) fn spawn_media_supervisor(
+pub(crate) fn spawn_media_supervisor(
     handle: Handle,
     mut frame_source_rx: tokio::sync::mpsc::Receiver<Box<dyn FrameSource>>,
     context: MediaSupervisorContext,
