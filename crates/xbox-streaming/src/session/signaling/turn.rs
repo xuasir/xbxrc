@@ -7,7 +7,7 @@ const HOME_FALLBACK_TURN_SERVER_URL: &str = "https://xstreaming-support.pages.de
 /// Fallback TURN 拉取与内存缓存。
 #[derive(Debug, Clone)]
 pub struct FallbackTurnProvider {
-    home_turn_server: Option<Option<TurnServer>>,
+    cached_turn_server: Option<Option<TurnServer>>,
     client: reqwest::Client,
 }
 
@@ -20,29 +20,25 @@ impl Default for FallbackTurnProvider {
 impl FallbackTurnProvider {
     pub fn new() -> Self {
         Self {
-            home_turn_server: None,
+            cached_turn_server: None,
             client: reqwest::Client::new(),
         }
     }
 
     pub async fn get_by_target_type(
         &mut self,
-        target_type: &str,
+        _target_type: &str,
     ) -> Result<Option<TurnServer>, String> {
-        if target_type != "home" {
-            return Ok(None);
-        }
-
-        if let Some(value) = &self.home_turn_server {
+        if let Some(value) = &self.cached_turn_server {
             return Ok(value.clone());
         }
 
-        let value = self.fetch_home_turn_server().await;
-        self.home_turn_server = Some(value.clone());
+        let value = self.fetch_fallback_turn_server().await;
+        self.cached_turn_server = Some(value.clone());
         Ok(value)
     }
 
-    async fn fetch_home_turn_server(&self) -> Option<TurnServer> {
+    async fn fetch_fallback_turn_server(&self) -> Option<TurnServer> {
         let response = match self
             .client
             .get(HOME_FALLBACK_TURN_SERVER_URL)

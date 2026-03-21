@@ -1,0 +1,276 @@
+use rtp::codecs::h264::H264Packet;
+use std::collections::VecDeque;
+use std::sync::Arc;
+use std::time::Duration;
+
+use crate::media::video::h264::inspection::H264AccessUnitInspector;
+use crate::transport::rtc::media::nack_scheduler::{NackScheduler, NackSchedulerConfig};
+use crate::XbxEngineMediaRuntimeStats;
+
+use super::packet_types::RtcVideoRtpPacket;
+use super::sink::RtcRtcpSendPort;
+use crate::media::video::types::FrameValue;
+use crate::runtime_stats_sink::RuntimeStatsSink;
+use webrtc_media::io::sample_builder::SampleBuilder;
+
+pub(crate) mod nack;
+pub(crate) mod sink;
+pub(crate) mod source;
+
+use crate::transport::rtc::media::frame_cadence::TransportFrameDeadlineTracker;
+
+use crate::transport::rtc::media::adapter_types::{
+    TransportAdmissionObservation, TransportLossObservation, TransportObservation,
+    VideoFramePipelineSources,
+};
+
+pub struct RtcVideoFrameSource {
+    rx: tokio::sync::mpsc::Receiver<RtcVideoRtpPacket>,
+    transport_observation_tx: tokio::sync::mpsc::UnboundedSender<TransportObservation>,
+    rtcp_port: Arc<dyn RtcRtcpSendPort>,
+    runtime_stats: RuntimeStatsSink,
+    sample_builder: SampleBuilder<H264Packet>,
+    max_late_packets: u16,
+    jitter_buffer_max_delay: Duration,
+    idle_timeout: std::time::Duration,
+    idle_hint_cooldown: std::time::Duration,
+    last_packet_time: std::time::Instant,
+    assembling_frame_start: Option<std::time::Instant>,
+    current_assembly_packet_count: u16,
+    last_idle_hint_time: Option<std::time::Instant>,
+    assembly_stall_timeout: std::time::Duration,
+    thin_stream_packet_threshold: u16,
+    nack_scheduler: NackScheduler,
+    nack_window: NackSequenceWindow,
+    nack_skip_last_n: u16,
+    last_highest_rtp_sequence: Option<u16>,
+    current_width: u32,
+    current_height: u32,
+    recent_rtp_packets: VecDeque<RecentRtpPacket>,
+    packet_gap_observation_id: u64,
+    transport_deadline_tracker: TransportFrameDeadlineTracker,
+    nack_observation_id: u64,
+    last_transport_observation: Option<TransportObservation>,
+    last_transport_observation_at: Option<std::time::Instant>,
+    waiting_for_recovery_keyframe: bool,
+    wait_keyframe_observation_cooldown: std::time::Duration,
+    sample_loss_burst_count: u8,
+    clean_samples_since_loss: u8,
+    last_submitted_frame_value: FrameValue,
+    nack_recovery_ewma_ms: f64,
+    nack_late_ewma: f64,
+    h264_inspector: H264AccessUnitInspector,
+    reinject_read_poll_count: u64,
+    received_packet_count: u64,
+    assembled_frame_count: u64,
+    transport_observation_emit_count: u64,
+}
+
+pub struct RtcVideoTransportObservationSource {
+    pub(crate) rx: tokio::sync::mpsc::UnboundedReceiver<TransportObservation>,
+}
+
+impl RtcVideoFrameSource {
+    pub fn new(
+        rx: tokio::sync::mpsc::Receiver<RtcVideoRtpPacket>,
+        transport_observation_tx: tokio::sync::mpsc::UnboundedSender<TransportObservation>,
+        rtcp_port: Arc<dyn RtcRtcpSendPort>,
+        runtime_stats: Arc<std::sync::Mutex<XbxEngineMediaRuntimeStats>>,
+        max_late_packets: u16,
+        jitter_buffer_min_delay: Duration,
+        jitter_buffer_max_delay: Duration,
+        idle_timeout: std::time::Duration,
+        nack_config: NackSchedulerConfig,
+    ) -> Self {
+        let frame_deadline_ms = nack_config.frame_deadline_ms;
+        let jitter_buffer_max_delay = jitter_buffer_max_delay.max(jitter_buffer_min_delay);
+        let assembly_stall_timeout = idle_timeout
+            .mul_f32(3.0)
+            .clamp(Duration::from_millis(240), Duration::from_millis(600));
+        Self {
+            rx,
+            transport_observation_tx,
+            rtcp_port,
+            runtime_stats: RuntimeStatsSink::new(runtime_stats),
+            sample_builder: build_sample_builder(max_late_packets, jitter_buffer_max_delay),
+            max_late_packets,
+            jitter_buffer_max_delay,
+            idle_timeout,
+            idle_hint_cooldown: idle_timeout.max(std::time::Duration::from_millis(400)),
+            last_packet_time: std::time::Instant::now(),
+            assembling_frame_start: None,
+            current_assembly_packet_count: 0,
+            last_idle_hint_time: None,
+            assembly_stall_timeout,
+            thin_stream_packet_threshold: nack_config.burst_count.saturating_mul(6).max(18),
+            nack_scheduler: NackScheduler::new(nack_config),
+            nack_window: NackSequenceWindow::new(13 - 6),
+            nack_skip_last_n: 2,
+            last_highest_rtp_sequence: None,
+            current_width: 0,
+            current_height: 0,
+            recent_rtp_packets: VecDeque::with_capacity(512),
+            packet_gap_observation_id: 0,
+            transport_deadline_tracker: TransportFrameDeadlineTracker::new(frame_deadline_ms),
+            nack_observation_id: 0,
+            last_transport_observation: None,
+            last_transport_observation_at: None,
+            waiting_for_recovery_keyframe: false,
+            wait_keyframe_observation_cooldown: Duration::from_millis(350),
+            sample_loss_burst_count: 0,
+            clean_samples_since_loss: 0,
+            last_submitted_frame_value: FrameValue::new(false, false, 12 * 1024),
+            nack_recovery_ewma_ms: 22.0,
+            nack_late_ewma: 0.0,
+            h264_inspector: H264AccessUnitInspector::new(),
+            reinject_read_poll_count: 0,
+            received_packet_count: 0,
+            assembled_frame_count: 0,
+            transport_observation_emit_count: 0,
+        }
+    }
+
+    fn queue_transport_observation(&mut self, observation: TransportObservation) {
+        let now = std::time::Instant::now();
+        if self.should_suppress_transport_observation(observation, now) {
+            return;
+        }
+        self.last_transport_observation = Some(observation);
+        self.last_transport_observation_at = Some(now);
+        if should_begin_transport_recovery_episode(observation) {
+            self.runtime_stats.begin_transport_recovery_episode();
+        }
+        let _ = self.transport_observation_tx.send(observation);
+        self.transport_observation_emit_count =
+            self.transport_observation_emit_count.saturating_add(1);
+        if self.transport_observation_emit_count == 1
+            || self.transport_observation_emit_count.is_power_of_two()
+        {
+            crate::xbx_log_info!(
+                "[RtcVideoFrameSource] queued transport observation count={} observation={:?}",
+                self.transport_observation_emit_count,
+                observation
+            );
+        }
+    }
+
+    fn should_suppress_transport_observation(
+        &self,
+        observation: TransportObservation,
+        now: std::time::Instant,
+    ) -> bool {
+        let is_wait_keyframe = matches!(
+            observation,
+            TransportObservation::Admission(TransportAdmissionObservation::AwaitRecoveryKeyframe)
+                | TransportObservation::Loss(TransportLossObservation::AwaitRecoveryKeyframe)
+        );
+        if !is_wait_keyframe {
+            return false;
+        }
+        let Some(last_observation) = self.last_transport_observation else {
+            return false;
+        };
+        let was_wait_keyframe = matches!(
+            last_observation,
+            TransportObservation::Admission(TransportAdmissionObservation::AwaitRecoveryKeyframe)
+                | TransportObservation::Loss(TransportLossObservation::AwaitRecoveryKeyframe)
+        );
+        if !was_wait_keyframe {
+            return false;
+        }
+        self.last_transport_observation_at.is_some_and(|last_at| {
+            now.duration_since(last_at) < self.wait_keyframe_observation_cooldown
+        })
+    }
+}
+
+fn should_begin_transport_recovery_episode(observation: TransportObservation) -> bool {
+    matches!(
+        observation,
+        TransportObservation::Admission(TransportAdmissionObservation::AwaitRecoveryKeyframe)
+            | TransportObservation::Loss(TransportLossObservation::RecoveryKeyframeRequested)
+            | TransportObservation::Loss(TransportLossObservation::AwaitRecoveryKeyframe)
+            | TransportObservation::StreamIdleTimeout
+            | TransportObservation::StreamThinStall
+            | TransportObservation::NackDeadlineExpired { .. }
+    )
+}
+
+#[derive(Clone, Copy)]
+struct RecentRtpPacket {
+    sequence: u16,
+    rtp_timestamp: u32,
+}
+
+pub(super) fn build_sample_builder(
+    max_late_packets: u16,
+    max_time_delay: Duration,
+) -> SampleBuilder<H264Packet> {
+    SampleBuilder::new(max_late_packets, H264Packet::default(), 90_000)
+        .with_max_time_delay(max_time_delay)
+}
+
+pub(super) fn now_ms_f64() -> f64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|duration| duration.as_millis() as f64)
+        .unwrap_or(0.0)
+}
+
+fn capitalize_reason(reason: &str) -> String {
+    let mut chars = reason.chars();
+    match chars.next() {
+        Some(first) => first.to_uppercase().collect::<String>() + chars.as_str(),
+        None => String::new(),
+    }
+}
+
+const UINT16SIZE_HALF: u16 = 1 << 15;
+
+struct NackSequenceWindow {
+    packets: Vec<u64>,
+    size: u16,
+    end: u16,
+    started: bool,
+    last_consecutive: u16,
+}
+
+pub(crate) fn build_rtc_video_frame_source(
+    ingress_capacity: usize,
+    rtcp_port: Arc<dyn super::sink::RtcRtcpSendPort>,
+    runtime_stats: Arc<std::sync::Mutex<XbxEngineMediaRuntimeStats>>,
+    max_late_packets: u16,
+    jitter_buffer_min_delay: Duration,
+    jitter_buffer_max_delay: Duration,
+    idle_timeout: std::time::Duration,
+    nack_config: NackSchedulerConfig,
+) -> (
+    Box<dyn super::sink::RtcMediaSink>,
+    VideoFramePipelineSources,
+) {
+    let (tx, rx) = tokio::sync::mpsc::channel::<RtcVideoRtpPacket>(ingress_capacity.max(256));
+    let (transport_observation_tx, transport_observation_rx) =
+        tokio::sync::mpsc::unbounded_channel::<TransportObservation>();
+    let source = RtcVideoFrameSource::new(
+        rx,
+        transport_observation_tx,
+        rtcp_port,
+        runtime_stats,
+        max_late_packets,
+        jitter_buffer_min_delay,
+        jitter_buffer_max_delay,
+        idle_timeout,
+        nack_config,
+    );
+    let sink = sink::RtcVideoSourceSink { tx };
+    let observation_source = RtcVideoTransportObservationSource {
+        rx: transport_observation_rx,
+    };
+    (
+        Box::new(sink),
+        VideoFramePipelineSources {
+            frame_source: Box::new(source),
+            transport_observation_source: Box::new(observation_source),
+        },
+    )
+}

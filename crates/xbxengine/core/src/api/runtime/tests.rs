@@ -213,6 +213,8 @@ struct ScriptedMediaBackend {
     pending_runtime_recovery_action:
         Arc<Mutex<Option<crate::XbxEnginePendingRuntimeRecoveryAction>>>,
     microphone_capturing_calls: Arc<Mutex<Vec<bool>>>,
+    local_ice_gathering_complete_calls: Arc<Mutex<usize>>,
+    local_ice_gathering_complete_true_after_calls: usize,
     keyframe_request_calls: Arc<Mutex<usize>>,
     decoder_reset_calls: Arc<Mutex<usize>>,
     stop_calls: Arc<Mutex<usize>>,
@@ -228,10 +230,17 @@ impl ScriptedMediaBackend {
             runtime_stats: Arc::new(Mutex::new(runtime_stats)),
             pending_runtime_recovery_action: Arc::new(Mutex::new(None)),
             microphone_capturing_calls: Arc::new(Mutex::new(Vec::new())),
+            local_ice_gathering_complete_calls: Arc::new(Mutex::new(0)),
+            local_ice_gathering_complete_true_after_calls: 0,
             keyframe_request_calls: Arc::new(Mutex::new(0)),
             decoder_reset_calls: Arc::new(Mutex::new(0)),
             stop_calls: Arc::new(Mutex::new(0)),
         }
+    }
+
+    fn with_local_ice_gathering_complete_true_after_calls(mut self, calls: usize) -> Self {
+        self.local_ice_gathering_complete_true_after_calls = calls;
+        self
     }
 }
 
@@ -272,11 +281,20 @@ impl XbxEngineMediaBackend for ScriptedMediaBackend {
     fn local_candidates_snapshot(
         &self,
     ) -> Result<Vec<XbxEngineIceCandidateDto>, XbxEngineRuntimeError> {
-        Ok(self.negotiation.local_candidates.clone())
+        if self.negotiation.local_candidates.is_empty() {
+            Ok(vec![placeholder_local_candidate()])
+        } else {
+            Ok(self.negotiation.local_candidates.clone())
+        }
     }
 
     fn local_ice_gathering_complete(&self) -> Result<bool, XbxEngineRuntimeError> {
-        Ok(true)
+        let mut calls = self
+            .local_ice_gathering_complete_calls
+            .lock()
+            .expect("lock local ice gathering calls");
+        *calls += 1;
+        Ok(*calls > self.local_ice_gathering_complete_true_after_calls)
     }
 
     fn apply_display_state(
@@ -384,6 +402,14 @@ fn viewport() -> XbxEngineViewportDto {
     }
 }
 
+fn placeholder_local_candidate() -> XbxEngineIceCandidateDto {
+    XbxEngineIceCandidateDto {
+        candidate: "candidate:placeholder 1 udp 2130706431 127.0.0.1 60000 typ host".to_string(),
+        sdp_m_line_index: Some(0),
+        sdp_mid: Some("0".to_string()),
+    }
+}
+
 #[test]
 fn start_negotiates_remote_and_reaches_running() {
     let requests = Rc::new(RefCell::new(Vec::new()));
@@ -417,7 +443,7 @@ fn start_negotiates_remote_and_reaches_running() {
             },
             XbxEngineHostRequestDto::SubmitIce {
                 session_id: "session-1".to_string(),
-                candidates: Vec::new(),
+                candidates: vec![placeholder_local_candidate()],
                 restart: false,
             },
             XbxEngineHostRequestDto::PollIce {
@@ -455,6 +481,127 @@ fn start_negotiates_remote_and_reaches_running() {
         event,
         XbxEngineRuntimeEventDto::MediaSurfaceReady { surface_id }
         if surface_id == "surface:viewport-1"
+    )));
+}
+
+#[test]
+fn start_submits_offer_sdp_ice_without_waiting_for_gathering() {
+    let requests = Rc::new(RefCell::new(Vec::new()));
+    let events = Rc::new(RefCell::new(Vec::new()));
+    let backend = ScriptedMediaBackend::new(
+        XbxEngineMediaNegotiation {
+            local_offer_sdp: concat!(
+                "v=0\r\n",
+                "m=audio 9 UDP/TLS/RTP/SAVPF 111\r\n",
+                "a=mid:0\r\n",
+                "a=candidate:1 1 udp 2130706431 10.0.0.20 50000 typ host\r\n",
+            )
+            .to_string(),
+            local_candidates: Vec::new(),
+            surface_id: "surface:viewport-1".to_string(),
+            video_width: 1280,
+            video_height: 720,
+            first_frame_packet_arrival_time_ms: Some(1.0),
+            frame_decoded_time_ms: Some(2.0),
+            frame_rendered_time_ms: Some(3.0),
+            input_status: XbxEngineInputStatus::default(),
+        },
+        XbxEngineMediaRuntimeStats {
+            transport_state: XbxEngineTransportStateDto::Connected,
+            ..Default::default()
+        },
+    )
+    .with_local_ice_gathering_complete_true_after_calls(1);
+    let mut runtime = XbxEngineRuntime::with_media_backend(
+        XbxEngineRuntimeConfig::default(),
+        TestHostBridge::new(requests.clone()),
+        TestEventSink::new(events),
+        backend,
+    );
+
+    runtime
+        .start(session(), viewport(), 1.0, None, None)
+        .expect("runtime start should succeed");
+
+    assert_eq!(runtime.state(), &XbxEngineRuntimeState::Running);
+    let request_log = requests.borrow();
+    assert!(matches!(
+        request_log.first(),
+        Some(XbxEngineHostRequestDto::ExchangeOffer { .. })
+    ));
+    assert!(matches!(
+        request_log.last(),
+        Some(XbxEngineHostRequestDto::PollIce { .. })
+    ));
+    let submit_candidates = request_log
+        .iter()
+        .find_map(|request| match request {
+            XbxEngineHostRequestDto::SubmitIce { candidates, .. } => Some(candidates),
+            _ => None,
+        })
+        .expect("submit ice request should exist");
+    assert!(
+        !submit_candidates.is_empty(),
+        "submit ice request should include candidates"
+    );
+    assert_eq!(
+        submit_candidates[0],
+        XbxEngineIceCandidateDto {
+            candidate: "a=candidate:1 1 udp 2130706431 10.0.0.20 50000 typ host".to_string(),
+            sdp_m_line_index: Some(0),
+            sdp_mid: Some("0".to_string()),
+        },
+        "offer SDP candidate should be submitted with highest priority"
+    );
+}
+
+#[test]
+fn start_submits_offer_sdp_ice_even_if_gathering_completes_immediately() {
+    let requests = Rc::new(RefCell::new(Vec::new()));
+    let events = Rc::new(RefCell::new(Vec::new()));
+    let backend = ScriptedMediaBackend::new(
+        XbxEngineMediaNegotiation {
+            local_offer_sdp: concat!(
+                "v=0\r\n",
+                "m=audio 9 UDP/TLS/RTP/SAVPF 111\r\n",
+                "a=mid:0\r\n",
+                "a=candidate:1 1 udp 2130706431 10.0.0.20 50000 typ host\r\n",
+            )
+            .to_string(),
+            local_candidates: Vec::new(),
+            surface_id: "surface:viewport-1".to_string(),
+            video_width: 1280,
+            video_height: 720,
+            first_frame_packet_arrival_time_ms: Some(1.0),
+            frame_decoded_time_ms: Some(2.0),
+            frame_rendered_time_ms: Some(3.0),
+            input_status: XbxEngineInputStatus::default(),
+        },
+        XbxEngineMediaRuntimeStats {
+            transport_state: XbxEngineTransportStateDto::Connected,
+            ..Default::default()
+        },
+    )
+    .with_local_ice_gathering_complete_true_after_calls(0);
+    let mut runtime = XbxEngineRuntime::with_media_backend(
+        XbxEngineRuntimeConfig::default(),
+        TestHostBridge::new(requests.clone()),
+        TestEventSink::new(events),
+        backend,
+    );
+
+    runtime
+        .start(session(), viewport(), 1.0, None, None)
+        .expect("runtime start should succeed");
+
+    let request_log = requests.borrow();
+    assert!(request_log.iter().any(|request| matches!(
+        request,
+        XbxEngineHostRequestDto::SubmitIce { .. }
+    )));
+    assert!(request_log.iter().any(|request| matches!(
+        request,
+        XbxEngineHostRequestDto::PollIce { .. }
     )));
 }
 
@@ -676,7 +823,7 @@ fn reconnect_keeps_remote_session_alive_before_restart_negotiation() {
             },
             XbxEngineHostRequestDto::SubmitIce {
                 session_id: "session-1".to_string(),
-                candidates: Vec::new(),
+                candidates: vec![placeholder_local_candidate()],
                 restart: true,
             },
             XbxEngineHostRequestDto::PollIce {

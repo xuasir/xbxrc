@@ -9,7 +9,7 @@ pub struct RuntimeConfig {
     pub mode: RuntimePreference,
     /// 自定义 TURN 配置，优先级高于 fallback TURN。
     pub custom_turn: Option<TurnServer>,
-    /// xHome 在没有自定义 TURN 时，是否允许走 fallback TURN。
+    /// 是否允许在没有自定义 TURN 时使用 fallback TURN。
     pub home_fallback_turn: bool,
 }
 

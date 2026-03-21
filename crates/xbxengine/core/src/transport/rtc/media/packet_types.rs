@@ -106,3 +106,32 @@ fn normalize_identity_token(value: &str) -> Option<String> {
         Some(trimmed.to_string())
     }
 }
+
+#[derive(Clone, Debug)]
+pub(crate) struct RtcVideoRtpPacket {
+    pub(crate) payload: Vec<u8>,
+    pub(crate) meta: RtcRtpPacketMeta,
+}
+
+#[derive(Clone, Debug)]
+pub(crate) struct RtcAudioRtpPacket {
+    pub(crate) payload: Vec<u8>,
+    pub(crate) meta: RtcRtpPacketMeta,
+}
+
+impl RtcVideoRtpPacket {
+    pub(crate) fn to_rtp_packet(self) -> rtp::packet::Packet {
+        rtp::packet::Packet {
+            header: rtp::header::Header {
+                version: 2,
+                marker: self.meta.marker,
+                payload_type: self.meta.payload_type,
+                sequence_number: self.meta.sequence_number,
+                timestamp: self.meta.timestamp,
+                ssrc: self.meta.ssrc,
+                ..Default::default()
+            },
+            payload: bytes::Bytes::from(self.payload),
+        }
+    }
+}

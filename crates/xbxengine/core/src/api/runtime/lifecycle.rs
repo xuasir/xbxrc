@@ -10,8 +10,11 @@ use super::{
     now_ms_f64, XbxEngineEventSink, XbxEngineHostBridge, XbxEngineRuntime, XbxEngineRuntimeError,
     XbxEngineRuntimeState, XbxEngineVideoPipelineRuntimeConfig,
 };
+use crate::session::recovery::STALL_SIGNAL_STABILITY_MS;
 use crate::{
-    XbxEngineMediaBackend, XbxEngineMediaNegotiationRequest, XbxEngineRecoveryRuntimeConfig,
+    XbxEngineDecodeRenderSignal, XbxEngineMediaBackend, XbxEngineMediaNegotiationRequest,
+    XbxEngineMediaSignal, XbxEngineRecoveryAction, XbxEngineRecoveryRuntimeConfig,
+    XbxEngineRecoverySignals, XbxEngineTransportSignal,
 };
 
 impl<THostBridge, TEventSink, TMediaBackend>
@@ -163,6 +166,9 @@ where
         if self.maybe_consume_pending_runtime_recovery_action() {
             return;
         }
+        if self.drive_runtime_recovery_action(&runtime_stats) {
+            return;
+        }
     }
 
     fn maybe_consume_pending_runtime_recovery_action(&mut self) -> bool {
@@ -203,6 +209,136 @@ where
                 Some(format!("transportReconnectCandidate:{reason}"));
         }
         true
+    }
+
+    fn drive_runtime_recovery_action(
+        &mut self,
+        runtime_stats: &crate::XbxEngineMediaRuntimeStats,
+    ) -> bool {
+        if !matches!(self.state, XbxEngineRuntimeState::Running) {
+            return false;
+        }
+
+        let now_ms = now_ms_f64();
+        let decoder_stall_is_recent_and_aligned = runtime_stats.video_decoder_stalled == Some(true)
+            && runtime_stats.video_renderer_stalled != Some(true)
+            && runtime_stats
+                .latest_video_present_time_ms
+                .zip(runtime_stats.latest_video_decode_ok_time_ms)
+                .is_some_and(|(present_at_ms, decode_ok_at_ms)| {
+                    let stall_age_ms = now_ms - present_at_ms.min(decode_ok_at_ms);
+                    let alignment_gap_ms = (present_at_ms - decode_ok_at_ms).abs();
+                    stall_age_ms <= STALL_SIGNAL_STABILITY_MS && alignment_gap_ms <= 20.0
+                });
+        let signals = XbxEngineRecoverySignals {
+            transport: XbxEngineTransportSignal {
+                transport_connected: runtime_stats.transport_state
+                    == XbxEngineTransportStateDto::Connected,
+                connected_at_ms: self.health.connected_at_ms,
+                latest_video_packet_arrival_at_ms: runtime_stats
+                    .latest_video_packet_arrival_time_ms
+                    .or(self.health.last_video_packet_arrival_at_ms),
+                latest_twcc_feedback_at_ms: runtime_stats
+                    .latest_video_twcc_observation
+                    .as_ref()
+                    .map(|observation| observation.observed_at_ms),
+                latest_nack_sent_at_ms: runtime_stats
+                    .latest_video_nack_observation
+                    .as_ref()
+                    .map(|observation| observation.observed_at_ms),
+                latest_nack_recovered_at_ms: runtime_stats
+                    .latest_video_nack_observation
+                    .as_ref()
+                    .filter(|observation| observation.action == "recovered")
+                    .map(|observation| observation.observed_at_ms),
+                latest_nack_expired_at_ms: runtime_stats
+                    .latest_video_nack_observation
+                    .as_ref()
+                    .filter(|observation| observation.action == "expiredDeadline")
+                    .map(|observation| observation.observed_at_ms),
+                latest_nack_expired_frame_is_keyframe: runtime_stats
+                    .latest_video_nack_observation
+                    .as_ref()
+                    .and_then(|observation| observation.frame_is_keyframe)
+                    .unwrap_or(false),
+                audio_stream_alive: runtime_stats.inbound_audio_bitrate_kbps.unwrap_or(0.0) > 0.1,
+            },
+            media: XbxEngineMediaSignal {
+                // 显式 decoder stall 还很新、且 decode/present 时间基本同步时，
+                // 允许恢复逻辑绕过“最近还有媒体活动”的抑制，优先打 keyframe。
+                latest_frame_decoded_at_ms: if decoder_stall_is_recent_and_aligned {
+                    None
+                } else {
+                    runtime_stats
+                        .latest_video_decode_ok_time_ms
+                        .or(self.snapshot.frame_decoded_time_ms)
+                        .or(self.health.last_frame_rendered_at_ms)
+                },
+                latest_frame_rendered_at_ms: if decoder_stall_is_recent_and_aligned {
+                    None
+                } else {
+                    runtime_stats
+                        .latest_video_present_time_ms
+                        .or(self.snapshot.frame_rendered_time_ms)
+                        .or(self.health.last_frame_rendered_at_ms)
+                },
+            },
+            decode_render: XbxEngineDecodeRenderSignal {
+                decoder_stalled: runtime_stats.video_decoder_stalled,
+                render_stalled: runtime_stats.video_renderer_stalled,
+                allow_decoder_reset: true,
+            },
+        };
+
+        let Some(action) = self.health.next_recovery_action_with_signals_and_config(
+            now_ms,
+            true,
+            signals,
+            &self.config.webrtc.recovery,
+        ) else {
+            return false;
+        };
+
+        match action {
+            XbxEngineRecoveryAction::RequestVideoKeyframe => {
+                if let Err(error) = self.media_backend.request_video_keyframe() {
+                    self.emit_error("requestVideoKeyframeFailed", error.to_string());
+                    return true;
+                }
+                self.health.mark_keyframe_requested(now_ms);
+                self.snapshot.recovery_keyframe_request_count = self
+                    .snapshot
+                    .recovery_keyframe_request_count
+                    .saturating_add(1);
+                self.snapshot.last_recovery_action = Some("requestKeyframe".to_string());
+                self.snapshot.last_recovery_action_at_ms = Some(now_ms);
+                self.sync_runtime_activity_snapshot();
+                true
+            }
+            XbxEngineRecoveryAction::RequestDecoderReset => {
+                if let Err(error) = self.media_backend.request_decoder_reset() {
+                    self.emit_error("requestDecoderResetFailed", error.to_string());
+                    return true;
+                }
+                self.health.mark_decoder_reset_requested(now_ms);
+                self.snapshot.recovery_decoder_reset_count =
+                    self.snapshot.recovery_decoder_reset_count.saturating_add(1);
+                self.snapshot.last_recovery_action = Some("requestDecoderReset".to_string());
+                self.snapshot.last_recovery_action_at_ms = Some(now_ms);
+                self.sync_runtime_activity_snapshot();
+                true
+            }
+            XbxEngineRecoveryAction::RequestReconnect(reason) => {
+                if let Err(error) = self.request_reconnect(reason) {
+                    if !error.is_cancelled() {
+                        self.emit_error("requestReconnectFailed", error.to_string());
+                    }
+                } else {
+                    self.sync_runtime_activity_snapshot();
+                }
+                true
+            }
+        }
     }
 
     pub fn apply_control(
@@ -398,6 +534,10 @@ where
         restart: bool,
         operation_epoch: u64,
     ) -> Result<(), XbxEngineRuntimeError> {
+        crate::xbx_log_warn!(
+            "[xbxengine][runtime][ice] negotiate_remote start restart={restart} state={:?}",
+            self.state
+        );
         self.ensure_operation_active(operation_epoch)?;
         let negotiation = self
             .media_backend
@@ -409,6 +549,14 @@ where
 
         self.snapshot.negotiation_attempt_count += 1;
         self.snapshot.last_offer_sdp = Some(negotiation.local_offer_sdp.clone());
+        crate::xbx_log_warn!(
+            "[xbxengine][runtime][ice] negotiate_remote prepared offer len={} local_candidates={} surface_id={} video={}x{}",
+            negotiation.local_offer_sdp.len(),
+            negotiation.local_candidates.len(),
+            negotiation.surface_id,
+            negotiation.video_width,
+            negotiation.video_height,
+        );
 
         self.emit_phase(XbxEngineRuntimePhaseDto::ExchangingOffer);
         self.ensure_operation_active(operation_epoch)?;
@@ -420,20 +568,40 @@ where
                 restart,
             },
         )?)?;
+        crate::xbx_log_warn!(
+            "[xbxengine][runtime][ice] exchange offer response received answer_len={}",
+            answer_sdp.len()
+        );
 
         self.emit_phase(XbxEngineRuntimePhaseDto::GatheringIce);
         self.ensure_operation_active(operation_epoch)?;
         self.media_backend
             .apply_remote_description(answer_sdp.clone(), Vec::new())?;
+        crate::xbx_log_warn!(
+            "[xbxengine][runtime][ice] remote description applied answer_len={} local_candidates_snapshot_pending={}",
+            answer_sdp.len(),
+            negotiation.local_candidates.len(),
+        );
         self.emit_phase(XbxEngineRuntimePhaseDto::Connecting);
         self.health.observed_transport_state = XbxEngineTransportStateDto::Connecting;
         self.emit_transport_state(XbxEngineTransportStateDto::Connecting);
+        crate::xbx_log_warn!(
+            "[xbxengine][runtime][ice] before sync_runtime_activity_snapshot"
+        );
         self.sync_runtime_activity_snapshot();
+        crate::xbx_log_warn!(
+            "[xbxengine][runtime][ice] after sync_runtime_activity_snapshot entering exchange loop"
+        );
         let remote_candidates = self.exchange_remote_ice_incrementally(
+            &negotiation.local_offer_sdp,
             negotiation.local_candidates.clone(),
             restart,
             operation_epoch,
         )?;
+        crate::xbx_log_warn!(
+            "[xbxengine][runtime][ice] exchange_remote_ice_incrementally returned remote_candidates={}",
+            remote_candidates.len()
+        );
         self.snapshot.last_answer_sdp = Some(answer_sdp);
         self.snapshot.last_remote_candidates = remote_candidates;
         self.record_media_ready(&negotiation);
@@ -444,6 +612,7 @@ where
 
     fn exchange_remote_ice_incrementally(
         &mut self,
+        local_offer_sdp: &str,
         initial_local_candidates: Vec<XbxEngineIceCandidateDto>,
         restart: bool,
         operation_epoch: u64,
@@ -451,70 +620,156 @@ where
         use std::collections::HashSet;
         use std::time::Duration;
 
+        let exchange_started_at_ms = now_ms_f64();
+        let exchange_timeout_ms = self.config.webrtc.recovery.first_frame_grace_ms as f64;
+        let offer_sdp_candidates = collect_local_offer_ice_candidates(local_offer_sdp);
         let mut sent_local_candidates = HashSet::<String>::new();
         let mut applied_remote_candidates = HashSet::<String>::new();
         let mut aggregated_remote_candidates = Vec::new();
-        let mut final_poll_sent = false;
         let mut remote_end_of_candidates_seen = false;
+        let mut submitted_local_candidates = false;
 
-        loop {
-            self.ensure_operation_active(operation_epoch)?;
-            let local_candidates = self.collect_unsent_local_candidates(
-                &initial_local_candidates,
-                &mut sent_local_candidates,
-            )?;
-            let local_gathering_complete = self.media_backend.local_ice_gathering_complete()?;
-
-            if local_candidates.is_empty() && !local_gathering_complete {
-                std::thread::sleep(Duration::from_millis(60));
-                continue;
-            }
-
-            if local_candidates.is_empty() && local_gathering_complete && final_poll_sent {
-                break;
-            }
-
-            let request_candidates = if local_candidates.is_empty() {
-                final_poll_sent = true;
-                Vec::new()
-            } else {
-                local_candidates
-            };
-
+        // 第一批候选单独前置提交，避免 gathering 状态先行收敛把首轮 ICE 交换吞掉。
+        let initial_local_candidates_batch = self.collect_unsent_local_candidates(
+            &offer_sdp_candidates,
+            &initial_local_candidates,
+            &mut sent_local_candidates,
+        )?;
+        crate::xbx_log_warn!(
+            "[xbxengine][runtime][ice] initial submit batch candidates={} offer_candidates={} initial_candidates={}",
+            initial_local_candidates_batch.len(),
+            offer_sdp_candidates.len(),
+            initial_local_candidates.len(),
+        );
+        if !initial_local_candidates_batch.is_empty() {
+            crate::xbx_log_warn!(
+                "[xbxengine][runtime][ice] submitting initial local candidates restart={restart}"
+            );
             self.emit_phase(XbxEngineRuntimePhaseDto::ExchangingIce);
             self.ensure_operation_active(operation_epoch)?;
             Self::extract_submit_ice_response(self.host_bridge.request(
                 XbxEngineHostRequestDto::SubmitIce {
                     session_id: self.require_session_id()?,
-                    candidates: request_candidates,
+                    candidates: initial_local_candidates_batch,
                     restart,
                 },
             )?)?;
+            submitted_local_candidates = true;
+        }
+
+        loop {
             self.ensure_operation_active(operation_epoch)?;
+            let local_candidates = self.collect_unsent_local_candidates(
+                &offer_sdp_candidates,
+                &initial_local_candidates,
+                &mut sent_local_candidates,
+            )?;
+            let local_gathering_complete = self.media_backend.local_ice_gathering_complete()?;
+            let has_local_candidates = !local_candidates.is_empty();
+            crate::xbx_log_warn!(
+                "[xbxengine][runtime][ice] exchange loop local_candidates={} submitted={} local_gathering_complete={} remote_eoc_seen={} remote_accumulated={}",
+                local_candidates.len(),
+                submitted_local_candidates,
+                local_gathering_complete,
+                remote_end_of_candidates_seen,
+                aggregated_remote_candidates.len(),
+            );
+
+            if has_local_candidates {
+                if !submitted_local_candidates {
+                    self.emit_phase(XbxEngineRuntimePhaseDto::ExchangingIce);
+                }
+                // 先把当前批次真实候选送出去，再继续轮询后续 trickle。
+                self.ensure_operation_active(operation_epoch)?;
+                crate::xbx_log_warn!(
+                    "[xbxengine][runtime][ice] submitting local candidates batch size={} restart={restart}",
+                    local_candidates.len(),
+                );
+                Self::extract_submit_ice_response(self.host_bridge.request(
+                    XbxEngineHostRequestDto::SubmitIce {
+                        session_id: self.require_session_id()?,
+                        candidates: local_candidates,
+                        restart,
+                    },
+                )?)?;
+                submitted_local_candidates = true;
+            } else if !submitted_local_candidates {
+                if local_gathering_complete {
+                    crate::xbx_log_warn!(
+                        "[xbxengine][runtime][ice] skip initial submit because gathering completed before first batch"
+                    );
+                    break;
+                }
+                crate::xbx_log_warn!(
+                    "[xbxengine][runtime][ice] waiting for first local candidate batch"
+                );
+                std::thread::sleep(Duration::from_millis(60));
+                continue;
+            }
+
+            self.ensure_operation_active(operation_epoch)?;
+            crate::xbx_log_warn!(
+                "[xbxengine][runtime][ice] polling remote candidates restart={restart}"
+            );
             let remote_candidates = Self::extract_poll_ice_response(self.host_bridge.request(
                 XbxEngineHostRequestDto::PollIce {
                     session_id: self.require_session_id()?,
                     restart,
                 },
             )?)?;
+            crate::xbx_log_warn!(
+                "[xbxengine][runtime][ice] polled remote candidates count={}",
+                remote_candidates.len()
+            );
             self.ensure_operation_active(operation_epoch)?;
             remote_end_of_candidates_seen |= remote_candidates
                 .iter()
                 .any(|candidate| is_end_of_candidates_marker(&candidate.candidate));
+            if remote_end_of_candidates_seen {
+                crate::xbx_log_warn!(
+                    "[xbxengine][runtime][ice] remote end-of-candidates observed"
+                );
+            }
 
             let next_remote_candidates =
                 dedupe_remote_ice_candidates(remote_candidates, &mut applied_remote_candidates);
             if !next_remote_candidates.is_empty() {
+                let applied_batch_len = next_remote_candidates.len();
                 self.media_backend
                     .add_remote_ice_candidates(next_remote_candidates.clone())?;
                 aggregated_remote_candidates.extend(next_remote_candidates);
+                crate::xbx_log_warn!(
+                    "[xbxengine][runtime][ice] applied remote candidates batch size={} accumulated={}",
+                    applied_batch_len,
+                    aggregated_remote_candidates.len(),
+                );
             }
 
             self.sync_runtime_activity_snapshot();
 
-            if local_gathering_complete
-                && (remote_end_of_candidates_seen || self.health.connected_at_ms.is_some())
-            {
+            if self.health.connected_at_ms.is_some() {
+                crate::xbx_log_warn!(
+                    "[xbxengine][runtime][ice] exchange loop exit because transport connected"
+                );
+                break;
+            }
+            if submitted_local_candidates {
+                if local_gathering_complete && remote_end_of_candidates_seen {
+                    crate::xbx_log_warn!(
+                        "[xbxengine][runtime][ice] exchange loop exit because gathering complete and remote eoc seen"
+                    );
+                    break;
+                }
+                if now_ms_f64() - exchange_started_at_ms >= exchange_timeout_ms {
+                    crate::xbx_log_warn!(
+                        "[xbxengine][runtime][ice] exchange loop exit because timeout elapsed"
+                    );
+                    break;
+                }
+            } else if local_gathering_complete && remote_end_of_candidates_seen {
+                crate::xbx_log_warn!(
+                    "[xbxengine][runtime][ice] exchange loop exit because gathering complete and remote eoc seen before submit"
+                );
                 break;
             }
         }
@@ -531,13 +786,15 @@ where
 
     fn collect_unsent_local_candidates(
         &self,
+        local_offer_candidates: &[XbxEngineIceCandidateDto],
         initial_local_candidates: &[XbxEngineIceCandidateDto],
         sent_local_candidates: &mut std::collections::HashSet<String>,
     ) -> Result<Vec<XbxEngineIceCandidateDto>, XbxEngineRuntimeError> {
         let mut pending = Vec::new();
-        for candidate in initial_local_candidates
+        for candidate in local_offer_candidates
             .iter()
             .cloned()
+            .chain(initial_local_candidates.iter().cloned())
             .chain(self.media_backend.local_candidates_snapshot()?.into_iter())
         {
             let key = ice_candidate_dedupe_key(&candidate);
@@ -582,6 +839,52 @@ where
     }
 }
 
+fn collect_local_offer_ice_candidates(offer_sdp: &str) -> Vec<XbxEngineIceCandidateDto> {
+    let mut candidates = Vec::new();
+    let mut seen = std::collections::HashSet::new();
+    let mut seen_media_line = false;
+    let mut current_mline_index = 0u16;
+    let mut current_mid: Option<String> = None;
+
+    // 优先复用 offer 中已有 candidate，避免启动阶段卡在候选快照尚未刷新。
+    for line in offer_sdp.lines().map(str::trim) {
+        if line.is_empty() {
+            continue;
+        }
+        if line.starts_with("m=") {
+            if seen_media_line {
+                current_mline_index = current_mline_index.saturating_add(1);
+            } else {
+                seen_media_line = true;
+            }
+            current_mid = None;
+            continue;
+        }
+        if let Some(mid) = line.strip_prefix("a=mid:") {
+            let mid = mid.trim();
+            if !mid.is_empty() {
+                current_mid = Some(mid.to_string());
+            }
+            continue;
+        }
+        if !line.starts_with("a=candidate:") && !line.starts_with("candidate:") {
+            continue;
+        }
+
+        let candidate = XbxEngineIceCandidateDto {
+            candidate: line.to_string(),
+            sdp_m_line_index: Some(current_mline_index),
+            sdp_mid: current_mid.clone(),
+        };
+        let key = ice_candidate_dedupe_key(&candidate);
+        if seen.insert(key) {
+            candidates.push(candidate);
+        }
+    }
+
+    candidates
+}
+
 fn normalize_offer_profile_token(profile: &str) -> String {
     let normalized = profile.trim().to_ascii_lowercase();
     normalized
@@ -601,4 +904,33 @@ fn is_terminal_remote_session_inactive_error(error: &XbxEngineRuntimeError) -> b
         || normalized.contains("status 410")
         || normalized.contains("code 410");
     from_keepalive && (session_inactive || http_410)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::collect_local_offer_ice_candidates;
+
+    #[test]
+    fn collects_offer_sdp_candidates_from_realistic_sdp() {
+        let offer = concat!(
+            "v=0\r\n",
+            "o=- 3626176003912642578 968255000 IN IP4 0.0.0.0\r\n",
+            "s=-\r\n",
+            "t=0 0\r\n",
+            "m=audio 9 UDP/TLS/RTP/SAVPF 111 9 0 8\r\n",
+            "a=mid:0\r\n",
+            "a=candidate:2067167569 1 udp 2130706431 fdfe:dcba:9876::1 63405 typ host\r\n",
+            "a=candidate:2067167569 2 udp 2130706431 fdfe:dcba:9876::1 63405 typ host\r\n",
+            "m=video 9 UDP/TLS/RTP/SAVPF 123 124 125\r\n",
+            "a=mid:1\r\n",
+            "a=candidate:2067167569 1 udp 2130706431 fdfe:dcba:9876::1 63405 typ host\r\n",
+        );
+
+        let candidates = collect_local_offer_ice_candidates(offer);
+        assert_eq!(candidates.len(), 3);
+        assert_eq!(candidates[0].sdp_mid.as_deref(), Some("0"));
+        assert_eq!(candidates[0].sdp_m_line_index, Some(0));
+        assert_eq!(candidates[2].sdp_mid.as_deref(), Some("1"));
+        assert_eq!(candidates[2].sdp_m_line_index, Some(1));
+    }
 }

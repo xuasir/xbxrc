@@ -12,7 +12,7 @@ pub(crate) trait RtcMediaSink: Send + Sync {
 }
 
 pub(crate) trait RtcRtcpSendPort: Send + Sync {
-    fn send_rtcp(&mut self, _payload: &[u8]);
+    fn send_rtcp(&self, _payload: &[u8]);
 }
 
 #[derive(Default)]
@@ -33,5 +33,5 @@ impl RtcMediaSink for NullRtcMediaSink {
 pub(crate) struct NullRtcRtcpSendPort;
 
 impl RtcRtcpSendPort for NullRtcRtcpSendPort {
-    fn send_rtcp(&mut self, _payload: &[u8]) {}
+    fn send_rtcp(&self, _payload: &[u8]) {}
 }

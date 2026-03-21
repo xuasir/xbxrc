@@ -377,6 +377,15 @@ impl XbxEngineRuntimeHealth {
             .latest_nack_expired_at_ms
             .map(|at_ms| now_ms - at_ms < NACK_RECENT_GRACE_MS)
             .unwrap_or(false);
+        // TWCC 仍然活跃时，允许视频链稍微晚一点才升级到整路重连。
+        // 音频存活时只做视频侧恢复，不把它当成重连兜底的延长条件。
+        let effective_reconnect_stall_ms = if recent_twcc_feedback {
+            reconnect_stall_ms
+                .max(keyframe_request_stall_ms * 2.0)
+                .max(TWCC_ALIVE_RECONNECT_STALL_MS)
+        } else {
+            reconnect_stall_ms
+        };
 
         let connected_at_ms = signals.transport.connected_at_ms.unwrap_or(now_ms);
         // 把“媒体推进停滞”和“传输仍有新包”显式拆开：
@@ -460,9 +469,12 @@ impl XbxEngineRuntimeHealth {
         if should_request_keyframe {
             return Some(XbxEngineRecoveryAction::RequestVideoKeyframe);
         }
-        let should_request_decoder_reset = (can_try_decoder_reset || sustained_video_only_stall)
+        let should_request_decoder_reset = (can_try_decoder_reset
+            || sustained_video_only_stall
+            || media_stalled_for_ms >= effective_keyframe_request_stall_ms)
             && self.keyframe_requested_for_current_stall
             && !self.decoder_reset_requested_for_current_stall
+            && media_stalled_for_ms < effective_reconnect_stall_ms
             && self
                 .last_keyframe_request_at_ms
                 .map(|last| now_ms - last >= effective_decoder_reset_after_keyframe_wait_ms)
@@ -475,17 +487,9 @@ impl XbxEngineRuntimeHealth {
             return Some(XbxEngineRecoveryAction::RequestDecoderReset);
         }
 
-        // 音频仍在稳定推进时，更像“视频短暂断流/关键帧切换”，
-        // 不应该过快升级到整路 reconnect。
-        let effective_reconnect_stall_ms =
-            if signals.transport.audio_stream_alive || recent_twcc_feedback {
-                reconnect_stall_ms
-                    .max(keyframe_request_stall_ms * 2.0)
-                    .max(TWCC_ALIVE_RECONNECT_STALL_MS)
-            } else {
-                reconnect_stall_ms
-            };
-
+        if signals.transport.audio_stream_alive {
+            return None;
+        }
         if media_stalled_for_ms < effective_reconnect_stall_ms {
             return None;
         }

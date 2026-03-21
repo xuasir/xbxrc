@@ -237,6 +237,30 @@ mod tests {
     }
 
     #[test]
+    fn compile_builds_cloud_plan_with_fallback_turn_when_enabled() {
+        let mut config = Config::default();
+        config.runtime.home_fallback_turn = true;
+
+        let mut context = Context::default();
+        context.target = Target::Cloud;
+        context.session.gs_token = Some("token".to_string());
+        context.session.regions = vec![sample_region("WESTUS", "https://westus.example.com", true)];
+        context.turn.fallback = Some(TurnServer {
+            url: "turn:example.com".to_string(),
+            username: "u".to_string(),
+            credential: "c".to_string(),
+        });
+
+        let output = compile(CompilerInput { config, context }).unwrap();
+
+        assert_eq!(output.plan.runtime.turn.source, TurnSource::Fallback);
+        assert_eq!(
+            output.plan.runtime.turn.resolved.as_ref().map(|turn| turn.url.as_str()),
+            Some("turn:example.com")
+        );
+    }
+
+    #[test]
     fn configuration_facts_override_remote_play_fallback_capability() {
         let mut config = Config::default();
         config.session.home_resolution = ResolutionPreference::P1080;

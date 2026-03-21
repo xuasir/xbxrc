@@ -96,8 +96,10 @@ async fn build_services(
             );
         })
     });
-    // 现阶段仍保留终端输出，等 trace/observability 完整统一后再默认关闭。
-    xbxengine::set_log_sink_min_level(Some(xbxengine::XbxLogLevel::Warn));
+    // 引擎侧观测默认只进 runtime trace，避免高频节点刷终端。
+    xbxengine::set_configured_level(Some(xbxengine::XbxLogLevel::Debug));
+    xbxengine::set_log_sink_min_level(Some(xbxengine::XbxLogLevel::Debug));
+    xbxengine::set_stderr_enabled(false);
     log::info!(
         "Runtime trace recorder initialized at {}",
         runtime_trace.path().display()

@@ -1,5 +1,6 @@
 use crate::transport::rtc::media::packet_router::{
-    classify_packet, parse_payload_route_map_from_answer, RtcMediaRouteDecision, RtcPayloadRouteMap,
+    classify_packet, parse_payload_route_map_from_answer, RtcMediaRouteDecision, RtcMediaRouteLabel,
+    RtcPayloadRouteMap,
 };
 use crate::transport::rtc::media::packet_types::{
     MediaPacketKind, RtcMediaIngressPacket, RtcMediaPacketSource, RtcRtpPacketMeta,
@@ -75,6 +76,13 @@ impl RtcMediaService {
                 rtp_meta.as_ref(),
             ));
             stats.latest_video_packet_arrival_time_ms = Some(now_ms_f64());
+            if route.label == RtcMediaRouteLabel::Audio {
+                let now_ms = now_ms_f64();
+                if stats.first_audio_packet_arrival_time_ms.is_none() {
+                    stats.first_audio_packet_arrival_time_ms = Some(now_ms);
+                }
+                stats.latest_audio_packet_arrival_time_ms = Some(now_ms);
+            }
         }
     }
 

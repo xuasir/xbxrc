@@ -1,5 +1,6 @@
 use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
 
 use bytes::BytesMut;
 use rtc::peer_connection::configuration::media_engine::{
@@ -24,7 +25,9 @@ use xbxengine_protocol::{
 };
 
 use crate::api::runtime::XbxEngineNegotiationRuntimeConfig;
+use crate::api::runtime::XbxEngineWebRtcRuntimeConfig;
 use crate::runtime_stats_sink::RuntimeStatsSink;
+use crate::transport::rtc::bwe::evaluator::{RtcBweObservation, RtcBweState};
 use crate::transport::rtc::connection::control_channel::RtcControlChannelService;
 use crate::transport::rtc::connection::data_channel_bootstrap::{
     bootstrap_default_channels, build_control_authorization_payload,
@@ -37,6 +40,9 @@ use crate::transport::rtc::connection::data_channel_bootstrap::{
 use crate::transport::rtc::connection::io_runtime::RtcIoRuntime;
 use crate::transport::rtc::connection::runtime_state::{
     RtcConnectionRuntimeState, RtcIceCandidateKind,
+};
+use crate::transport::rtc::connection::transport_metrics::{
+    collect_transport_metrics, RtcTransportMetricsSnapshot,
 };
 use crate::transport::rtc::events::{RtcConnectionLifecycleState, RtcTransportEvent};
 use crate::transport::rtc::media::{
@@ -58,14 +64,18 @@ const DEFAULT_ICE_SERVERS: [&str; 7] = [
     "stun:stun.douyucdn.cn:18000",
 ];
 
-#[derive(Default)]
 pub(crate) struct RtcConnectionService {
     state: Arc<Mutex<RtcConnectionRuntimeState>>,
     peer_connection: Option<RTCPeerConnection>,
     io_runtime: RtcIoRuntime,
     control_service: RtcControlChannelService,
+    webrtc_runtime_config: XbxEngineWebRtcRuntimeConfig,
+    bwe_state: RtcBweState,
+    bwe_stream_started_at: Instant,
+    bwe_startup_grace: Duration,
     lifecycle_state: RtcConnectionLifecycleState,
     lifecycle_state_since_ms: f64,
+    last_transport_metrics_sample_at_ms: f64,
     pending_runtime_recovery_action: Option<XbxEnginePendingRuntimeRecoveryAction>,
     lifecycle_observation_id: u64,
     pump_failure_injected: bool,
@@ -73,6 +83,34 @@ pub(crate) struct RtcConnectionService {
     pending_media_ingress_packets: Vec<(RtcMediaIngressPacket, Option<RtcRtpPacketMeta>)>,
     delayed_gamepad_added_due_at_ms: Option<f64>,
     delayed_keyframe_prime_due_at_ms: Option<f64>,
+}
+
+impl Default for RtcConnectionService {
+    fn default() -> Self {
+        let webrtc_runtime_config = XbxEngineWebRtcRuntimeConfig::default();
+        let bwe_startup_grace =
+            Duration::from_millis(webrtc_runtime_config.recovery.first_frame_grace_ms);
+        Self {
+            state: Arc::new(Mutex::new(RtcConnectionRuntimeState::default())),
+            peer_connection: None,
+            io_runtime: RtcIoRuntime::default(),
+            control_service: RtcControlChannelService::default(),
+            webrtc_runtime_config: webrtc_runtime_config.clone(),
+            bwe_state: RtcBweState::new(webrtc_runtime_config.remb_floor_kbps),
+            bwe_stream_started_at: Instant::now(),
+            bwe_startup_grace,
+            lifecycle_state: RtcConnectionLifecycleState::Closed,
+            lifecycle_state_since_ms: 0.0,
+            last_transport_metrics_sample_at_ms: 0.0,
+            pending_runtime_recovery_action: None,
+            lifecycle_observation_id: 0,
+            pump_failure_injected: false,
+            read_counters: RtcReadIngressCounters::default(),
+            pending_media_ingress_packets: Vec::new(),
+            delayed_gamepad_added_due_at_ms: None,
+            delayed_keyframe_prime_due_at_ms: None,
+        }
+    }
 }
 
 #[derive(Clone, Debug, Default)]
@@ -90,6 +128,12 @@ const RTC_INPUT_BUFFERED_AMOUNT_HIGH_THRESHOLD_BYTES: u32 = 1024;
 const RTC_INPUT_BUFFERED_AMOUNT_LOW_THRESHOLD_BYTES: u32 = 512;
 
 impl RtcConnectionService {
+    pub(crate) fn sync_runtime_config(&mut self, runtime_config: XbxEngineWebRtcRuntimeConfig) {
+        self.webrtc_runtime_config = runtime_config;
+        self.bwe_startup_grace =
+            Duration::from_millis(self.webrtc_runtime_config.recovery.first_frame_grace_ms);
+    }
+
     pub(crate) fn rebuild(
         &mut self,
         session: &XbxEngineSessionDto,
@@ -124,11 +168,16 @@ impl RtcConnectionService {
         self.pending_runtime_recovery_action = None;
         self.lifecycle_state = RtcConnectionLifecycleState::Connecting;
         self.lifecycle_state_since_ms = now_ms_f64();
+        self.last_transport_metrics_sample_at_ms = 0.0;
         self.lifecycle_observation_id = self.lifecycle_observation_id.saturating_add(1);
         self.read_counters = RtcReadIngressCounters::default();
         self.pending_media_ingress_packets.clear();
         self.delayed_gamepad_added_due_at_ms = None;
         self.delayed_keyframe_prime_due_at_ms = None;
+        self.bwe_state = RtcBweState::new(self.webrtc_runtime_config.remb_floor_kbps.max(1));
+        self.bwe_stream_started_at = Instant::now();
+        self.bwe_startup_grace =
+            Duration::from_millis(self.webrtc_runtime_config.recovery.first_frame_grace_ms);
         let mut peer_connection = build_peer_connection(session)?;
         configure_offer_primitives(&mut peer_connection)?;
         if let Ok(mut state) = self.state.lock() {
@@ -290,18 +339,41 @@ impl RtcConnectionService {
     }
 
     pub(crate) fn local_candidates_snapshot(&self) -> Vec<XbxEngineIceCandidateDto> {
-        self.state
+        let candidates = self
+            .state
             .lock()
             .ok()
-            .map(|state| state.local_candidates.clone())
-            .unwrap_or_default()
+            .map(|mut state| {
+                if state.local_candidates.is_empty() {
+                    if let Some(offer_sdp) = state.local_offer_sdp.clone() {
+                        // offer SDP 里已经带出的 candidate 不能等到后续事件再补，
+                        // 否则 runtime 会错过第一次 ICE 交换窗口。
+                        for candidate in extract_local_candidates_from_offer_sdp(&offer_sdp) {
+                            let kind = classify_candidate_kind(&candidate.candidate);
+                            state.record_local_candidate(candidate, kind);
+                        }
+                    }
+                }
+                state.local_candidates.clone()
+            })
+            .unwrap_or_default();
+        crate::xbx_log_warn!(
+            "[xbxengine][rtc-connection] local_candidates_snapshot count={}",
+            candidates.len()
+        );
+        candidates
     }
 
     pub(crate) fn local_ice_gathering_complete(&self) -> bool {
-        self.state
+        let complete = self
+            .state
             .lock()
             .ok()
-            .is_some_and(|state| state.local_ice_gathering_complete)
+            .is_some_and(|state| state.local_ice_gathering_complete);
+        crate::xbx_log_warn!(
+            "[xbxengine][rtc-connection] local_ice_gathering_complete complete={complete}"
+        );
+        complete
     }
 
     pub(crate) fn set_keyboard_pointer_enabled(&mut self, enabled: bool) {
@@ -403,12 +475,14 @@ impl RtcConnectionService {
         self.delayed_keyframe_prime_due_at_ms = None;
         self.pending_media_ingress_packets.clear();
         self.publish_event(runtime_stats, RtcTransportEvent::TransportStopped);
+        self.last_transport_metrics_sample_at_ms = 0.0;
     }
 
     pub(crate) fn pump(
         &mut self,
         runtime_stats: &Arc<Mutex<XbxEngineMediaRuntimeStats>>,
     ) -> Result<(), XbxEngineRuntimeError> {
+        crate::xbx_log_warn!("[xbxengine][rtc-connection] pump enter");
         if self.pump_failure_injected {
             self.pump_failure_injected = false;
             let error = XbxEngineRuntimeError::new("xbxEngineRtcPumpInjectedFailure");
@@ -433,12 +507,131 @@ impl RtcConnectionService {
                 return Err(error);
             }
         }
+        crate::xbx_log_warn!("[xbxengine][rtc-connection] pump after io_runtime");
         self.drain_peer_events(runtime_stats)?;
         self.drain_peer_reads(runtime_stats)?;
+        crate::xbx_log_warn!("[xbxengine][rtc-connection] pump after drain peer events/reads");
         self.try_send_message_handshake(runtime_stats)?;
         self.run_delayed_control_actions(runtime_stats)?;
         self.maybe_schedule_delayed_reconnect(runtime_stats);
+        self.refresh_transport_metrics(runtime_stats);
+        crate::xbx_log_warn!("[xbxengine][rtc-connection] pump exit");
         Ok(())
+    }
+
+    fn refresh_transport_metrics(
+        &mut self,
+        runtime_stats: &Arc<Mutex<XbxEngineMediaRuntimeStats>>,
+    ) {
+        let now_ms = now_ms_f64();
+        if now_ms - self.last_transport_metrics_sample_at_ms < 1_000.0 {
+            return;
+        }
+        self.last_transport_metrics_sample_at_ms = now_ms;
+
+        let Some(peer_connection) = self.peer_connection.as_mut() else {
+            return;
+        };
+
+        let connected_at_ms =
+            matches!(self.lifecycle_state, RtcConnectionLifecycleState::Connected)
+                .then_some(self.lifecycle_state_since_ms);
+        let Some(snapshot) = collect_transport_metrics(peer_connection, connected_at_ms) else {
+            return;
+        };
+        let video_rtt_source = snapshot.video_rtt_source.clone();
+        let transport_path = snapshot.transport_path.clone();
+
+        let runtime_stats_sink = RuntimeStatsSink::new(runtime_stats.clone());
+        runtime_stats_sink.record_transport_metrics(
+            snapshot.video_rtt_ms,
+            video_rtt_source,
+            snapshot.inbound_video_loss_ratio_5s,
+            snapshot.inbound_video_loss_ratio_1s,
+            transport_path,
+            snapshot.inbound_video_bitrate_kbps,
+            snapshot.inbound_primary_video_bytes_total,
+        );
+        self.refresh_bandwidth_estimation(&runtime_stats_sink, &snapshot, now_ms);
+    }
+
+    fn refresh_bandwidth_estimation(
+        &mut self,
+        runtime_stats: &RuntimeStatsSink,
+        snapshot: &RtcTransportMetricsSnapshot,
+        now_ms: f64,
+    ) {
+        let observed_remb_kbps = runtime_stats
+            .read(|stats| stats.video_remb_bps.map(|bps| bps / 1_000))
+            .flatten();
+        let bwe_mode = self.webrtc_runtime_config.bwe_mode.clone();
+        let observation = RtcBweObservation {
+            actual_kbps: snapshot.inbound_video_bitrate_kbps,
+            fraction_lost: snapshot.inbound_video_loss_ratio_1s,
+            rtt_ms: snapshot.video_rtt_ms,
+            transport_path: snapshot.transport_path.clone(),
+            observed_remb_kbps,
+        };
+        let evaluation = self.bwe_state.evaluate(
+            runtime_stats,
+            &self.webrtc_runtime_config,
+            &observation,
+            self.bwe_stream_started_at,
+            self.bwe_startup_grace,
+        );
+        let target_remb_bps = evaluation.target_remb_kbps.saturating_mul(1_000);
+        runtime_stats.update(|stats| {
+            stats.session_phase = Some(evaluation.session_phase.as_str().to_string());
+            stats.transport_policy_profile = Some(evaluation.transport_policy_profile.clone());
+            stats.recovery_coupling_mode = Some(evaluation.recovery_coupling_mode.clone());
+            stats.recovery_coupling_summary = Some(evaluation.recovery_coupling_summary.clone());
+            stats.direct_gaming_bitrate_band = evaluation.direct_gaming_bitrate_band.clone();
+            stats.video_remb_bps = Some(target_remb_bps);
+            stats.latest_video_bwe_observation = Some(crate::XbxEngineVideoBweObservation {
+                observation_id: evaluation.observation_id,
+                mode: self.webrtc_runtime_config.bwe_mode.clone(),
+                decision_reason: evaluation.decision_reason.clone(),
+                target_remb_kbps: evaluation.target_remb_kbps,
+                observed_remb_kbps,
+                actual_video_bitrate_kbps: snapshot.inbound_video_bitrate_kbps,
+                loss_ratio: snapshot.inbound_video_loss_ratio_1s,
+                rtt_ms: snapshot.video_rtt_ms,
+                transport_path: snapshot.transport_path.clone(),
+                twcc_feedback_interval_ms: stats
+                    .latest_video_twcc_observation
+                    .as_ref()
+                    .and_then(|twcc| twcc.feedback_interval_ms),
+                twcc_observed_packet_count: stats
+                    .latest_video_twcc_observation
+                    .as_ref()
+                    .map(|twcc| twcc.observed_packet_count),
+                twcc_covered_sequence_span: stats
+                    .latest_video_twcc_observation
+                    .as_ref()
+                    .map(|twcc| twcc.covered_sequence_span),
+                twcc_receive_bitrate_kbps: stats
+                    .latest_video_twcc_observation
+                    .as_ref()
+                    .and_then(|twcc| twcc.receive_bitrate_kbps),
+                twcc_delivery_ratio: stats
+                    .latest_video_twcc_observation
+                    .as_ref()
+                    .map(|twcc| twcc.delivery_ratio),
+                twcc_loss_ratio: stats
+                    .latest_video_twcc_observation
+                    .as_ref()
+                    .map(|twcc| twcc.packet_loss_ratio),
+                observed_at_ms: now_ms,
+            });
+            stats.latest_observation_label = Some("rtcVideoBweEvaluated".to_string());
+            stats.latest_observation_summary = Some(format!(
+                "phase1 rtc bwe mode={} reason={} target={}kbps path={}",
+                bwe_mode,
+                evaluation.decision_reason,
+                evaluation.target_remb_kbps,
+                snapshot.transport_path.as_deref().unwrap_or("-"),
+            ));
+        });
     }
 
     pub(crate) fn take_media_ingress_packets(
@@ -647,13 +840,10 @@ impl RtcConnectionService {
         let mut pending_data_channel_events = Vec::new();
         let mut pending_ice_events = Vec::new();
         let mut pending_connection_states = Vec::new();
-        let mut local_gathering_finalize_requested = false;
         let mut saw_local_candidate_update = false;
         let mut saw_local_gathering_complete = false;
         loop {
             let mut saw_event = false;
-            let mut finalize_now = false;
-            let should_finalize_local_gathering = self.should_finalize_local_gathering();
             {
                 let Some(peer_connection) = self.peer_connection.as_mut() else {
                     return Ok(());
@@ -668,6 +858,9 @@ impl RtcConnectionService {
                         RTCPeerConnectionEvent::OnIceGatheringStateChangeEvent(
                             RTCIceGatheringState::Complete,
                         ) => {
+                            crate::xbx_log_warn!(
+                                "[xbxengine][rtc-connection] ice gathering state complete observed"
+                            );
                             if let Ok(mut state) = self.state.lock() {
                                 state.record_local_end_of_candidates();
                             }
@@ -682,23 +875,6 @@ impl RtcConnectionService {
                         _ => {}
                     }
                 }
-                if should_finalize_local_gathering && !local_gathering_finalize_requested {
-                    peer_connection
-                        .add_local_candidate(RTCIceCandidateInit {
-                            candidate: String::new(),
-                            sdp_mid: Some("0".to_string()),
-                            sdp_mline_index: Some(0),
-                            username_fragment: None,
-                            url: None,
-                        })
-                        .map_err(|err| {
-                            XbxEngineRuntimeError::new(format!(
-                                "xbxEngineRtcAddEndOfCandidatesFailed: {err}"
-                            ))
-                        })?;
-                    local_gathering_finalize_requested = true;
-                    finalize_now = true;
-                }
             }
             for ice_event in pending_ice_events.drain(..) {
                 self.record_local_candidate_event(ice_event, runtime_stats)?;
@@ -708,12 +884,6 @@ impl RtcConnectionService {
             }
             for event in pending_data_channel_events.drain(..) {
                 self.apply_data_channel_event(event, runtime_stats)?;
-            }
-            if finalize_now {
-                continue;
-            }
-            if local_gathering_finalize_requested {
-                break;
             }
             if !saw_event {
                 break;
@@ -759,15 +929,6 @@ impl RtcConnectionService {
             ));
         }
         Ok(())
-    }
-
-    fn should_finalize_local_gathering(&self) -> bool {
-        self.state.lock().ok().is_some_and(|state| {
-            state.local_offer_sdp.is_some()
-                && state.local_candidate_count_total > 0
-                && !state.local_ice_gathering_complete
-                && state.local_candidate_end_of_candidates_count == 0
-        })
     }
 
     fn publish_ice_snapshot(
@@ -1841,6 +2002,56 @@ fn is_end_of_candidates_marker(sdp: &str) -> bool {
     })
 }
 
+fn extract_local_candidates_from_offer_sdp(offer_sdp: &str) -> Vec<XbxEngineIceCandidateDto> {
+    let mut candidates = Vec::new();
+    let mut current_mid: Option<String> = None;
+    let mut current_mline_index: Option<u16> = None;
+
+    for line in offer_sdp.lines() {
+        let trimmed = line.trim();
+        if trimmed.starts_with("m=") {
+            current_mline_index = Some(current_mline_index.map_or(0, |index| index.saturating_add(1)));
+            current_mid = None;
+            continue;
+        }
+
+        if let Some(mid) = trimmed
+            .strip_prefix("a=mid:")
+            .or_else(|| trimmed.strip_prefix("mid:"))
+        {
+            let mid = mid.trim();
+            if !mid.is_empty() {
+                current_mid = Some(mid.to_string());
+            }
+            continue;
+        }
+
+        if trimmed.is_empty()
+            || trimmed.eq_ignore_ascii_case("a=end-of-candidates")
+            || trimmed.eq_ignore_ascii_case("end-of-candidates")
+        {
+            continue;
+        }
+
+        let Some(candidate) = trimmed
+            .strip_prefix("a=candidate:")
+            .or_else(|| trimmed.strip_prefix("candidate:"))
+        else {
+            continue;
+        };
+
+        candidates.push(XbxEngineIceCandidateDto {
+            candidate: format!("candidate:{candidate}"),
+            sdp_m_line_index: Some(current_mline_index.unwrap_or(0)),
+            sdp_mid: current_mid
+                .clone()
+                .or_else(|| current_mline_index.map(|index| index.to_string())),
+        });
+    }
+
+    candidates
+}
+
 fn candidate_identity_key(candidate: &XbxEngineIceCandidateDto) -> String {
     format!(
         "{}|{:?}|{}",
@@ -1884,7 +2095,10 @@ mod tests {
         RtcConnectionLifecycleState, RtcConnectionService, CHAT_CHANNEL_LABEL,
         CONTROL_CHANNEL_LABEL, INPUT_CHANNEL_LABEL, MESSAGE_CHANNEL_LABEL,
     };
-    use crate::{XbxEngineMediaRuntimeStats, XbxEngineRuntimeError};
+    use crate::api::runtime::XbxEngineWebRtcRuntimeConfig;
+    use crate::runtime_stats_sink::RuntimeStatsSink;
+    use crate::transport::rtc::connection::transport_metrics::RtcTransportMetricsSnapshot;
+    use crate::{XbxEngineMediaRuntimeStats, XbxEngineRuntimeError, XbxEngineVideoTwccObservation};
     use std::sync::{Arc, Mutex};
     use xbxengine_protocol::{
         XbxEngineIceCandidateDto, XbxEngineSessionDto, XbxEngineTargetTypeDto,
@@ -1911,12 +2125,11 @@ mod tests {
         assert!(offer.contains("m=video"));
         assert!(offer.contains("m=application"));
         assert!(offer.contains("webrtc-datachannel"));
-        assert!(service.local_ice_gathering_complete());
         assert!(!service.local_candidates_snapshot().is_empty());
         let state = service.state.lock().expect("connection state");
         assert_eq!(state.local_candidate_host_count, 1);
-        assert_eq!(state.local_candidate_end_of_candidates_count, 1);
-        assert!(state.local_ice_gathering_complete);
+        // 移除 eager EOC 注入后，gathering 完成由底层事件驱动，不再要求这里立即完成。
+        assert!(state.local_candidate_end_of_candidates_count <= 1);
         drop(state);
         assert!(runtime_stats
             .lock()
@@ -1924,6 +2137,51 @@ mod tests {
             .latest_observation_summary
             .as_deref()
             .is_some_and(|summary| summary.contains("local total=1")));
+    }
+
+    #[test]
+    fn local_candidates_snapshot_falls_back_to_offer_sdp_candidates() {
+        let mut service = RtcConnectionService::default();
+        let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
+        let session = XbxEngineSessionDto {
+            session_id: "test-session".to_string(),
+            target_type: XbxEngineTargetTypeDto::Cloud,
+            turn_server: None,
+        };
+
+        service.rebuild(&session, &runtime_stats).unwrap();
+        let offer = service
+            .create_raw_offer(&Default::default(), &runtime_stats)
+            .unwrap();
+        {
+            let mut state = service.state.lock().expect("connection state");
+            state.local_candidates.clear();
+            state.local_candidate_keys.clear();
+            state.local_candidate_count_total = 0;
+            state.local_candidate_host_count = 0;
+            state.local_candidate_srflx_count = 0;
+            state.local_candidate_relay_count = 0;
+            state.local_candidate_unknown_count = 0;
+            state.latest_local_candidate_kind = None;
+            state.latest_local_candidate_key = None;
+            state.local_ice_gathering_complete = false;
+            state.local_offer_sdp = Some(offer);
+        }
+
+        let candidates = service.local_candidates_snapshot();
+
+        assert!(!candidates.is_empty());
+        assert!(candidates
+            .iter()
+            .all(|candidate| candidate.candidate.starts_with("candidate:")));
+        assert_eq!(
+            service
+                .state
+                .lock()
+                .expect("connection state")
+                .local_candidate_count_total,
+            candidates.len() as u64
+        );
     }
 
     #[test]
@@ -1950,6 +2208,71 @@ mod tests {
         media_engine.register_default_codecs().unwrap();
         // rtc::MediaEngine 的 codec 列表对外不可见；这里至少保证补充注册不会报错。
         assert!(register_owned_h264_codecs(&mut media_engine).is_ok());
+    }
+
+    #[test]
+    fn refresh_transport_metrics_publishes_bwe_observation() {
+        let mut service = RtcConnectionService::default();
+        let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
+        {
+            let mut config = XbxEngineWebRtcRuntimeConfig::default();
+            config.bwe_mode = "hybrid".to_string();
+            config.forced_remb_kbps = Some(24_000);
+            config.adaptive_remb_enabled = true;
+            config.remb_floor_kbps = 12_000;
+            config.remb_ceiling_kbps = 60_000;
+            config.remb_ramp_up_step_kbps = 3_000;
+            config.remb_ramp_down_factor = 750;
+            service.sync_runtime_config(config);
+        }
+        {
+            let mut stats = runtime_stats.lock().unwrap();
+            stats.session_target_type = Some(XbxEngineTargetTypeDto::Home);
+            stats.latest_video_twcc_observation = Some(XbxEngineVideoTwccObservation {
+                observation_id: 1,
+                feedback_packet_count: 4,
+                covered_sequence_start: 1,
+                covered_sequence_end: 120,
+                covered_sequence_span: 120,
+                observed_packet_count: 120,
+                observed_byte_count: 150_000,
+                feedback_interval_ms: Some(100.0),
+                arrival_span_ms: Some(100.0),
+                receive_bitrate_kbps: Some(13_500.0),
+                delivery_ratio: 1.0,
+                packet_loss_ratio: 0.0,
+                observed_at_ms: 1.0,
+            });
+        }
+        let sink = RuntimeStatsSink::new(runtime_stats.clone());
+        let snapshot = RtcTransportMetricsSnapshot {
+            video_rtt_ms: Some(48.0),
+            video_rtt_source: Some("candidate-pair".to_string()),
+            inbound_video_loss_ratio_5s: 0.0,
+            inbound_video_loss_ratio_1s: 0.0,
+            transport_path: Some("Direct (host->host)".to_string()),
+            inbound_video_bitrate_kbps: 11_500.0,
+            inbound_primary_video_bytes_total: 900_000,
+        };
+
+        service.refresh_bandwidth_estimation(&sink, &snapshot, 1_234.0);
+
+        let stats = runtime_stats.lock().unwrap();
+        let bwe = stats
+            .latest_video_bwe_observation
+            .as_ref()
+            .expect("bwe observation should be published");
+        assert_eq!(bwe.mode, "hybrid");
+        assert_eq!(
+            stats.video_remb_bps,
+            Some(bwe.target_remb_kbps.saturating_mul(1_000))
+        );
+        assert_eq!(
+            stats.latest_observation_label.as_deref(),
+            Some("rtcVideoBweEvaluated")
+        );
+        assert!(bwe.decision_reason.contains("twcc-gcc") || bwe.decision_reason.contains("hybrid"));
+        assert_eq!(bwe.transport_path.as_deref(), Some("Direct (host->host)"));
     }
 
     #[test]

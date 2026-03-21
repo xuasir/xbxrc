@@ -2,6 +2,8 @@ use std::collections::{HashMap, HashSet};
 
 use xbxengine_protocol::{XbxEngineIceCandidateDto, XbxEngineTargetTypeDto};
 
+use crate::transport::rtc::stats::now_ms_f64;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum RtcIceCandidateKind {
     Host,
@@ -33,6 +35,8 @@ pub(crate) struct RtcConnectionRuntimeState {
     pub(crate) local_candidate_end_of_candidates_count: u64,
     pub(crate) latest_local_candidate_kind: Option<RtcIceCandidateKind>,
     pub(crate) latest_local_candidate_key: Option<String>,
+    pub(crate) local_candidate_first_observed_at_ms: Option<f64>,
+    pub(crate) local_candidate_last_observed_at_ms: Option<f64>,
     pub(crate) remote_candidates: Vec<XbxEngineIceCandidateDto>,
     pub(crate) pending_remote_candidates: Vec<XbxEngineIceCandidateDto>,
     pub(crate) remote_candidate_keys: HashSet<String>,
@@ -70,6 +74,8 @@ impl RtcConnectionRuntimeState {
         self.local_candidate_end_of_candidates_count = 0;
         self.latest_local_candidate_kind = None;
         self.latest_local_candidate_key = None;
+        self.local_candidate_first_observed_at_ms = None;
+        self.local_candidate_last_observed_at_ms = None;
         self.remote_candidates.clear();
         self.pending_remote_candidates.clear();
         self.remote_candidate_keys.clear();
@@ -107,6 +113,11 @@ impl RtcConnectionRuntimeState {
             return false;
         }
         self.local_candidate_count_total = self.local_candidate_count_total.saturating_add(1);
+        let now_ms = now_ms_f64();
+        if self.local_candidate_first_observed_at_ms.is_none() {
+            self.local_candidate_first_observed_at_ms = Some(now_ms);
+        }
+        self.local_candidate_last_observed_at_ms = Some(now_ms);
         match kind {
             RtcIceCandidateKind::Host => {
                 self.local_candidate_host_count = self.local_candidate_host_count.saturating_add(1)

@@ -1,5 +1,5 @@
+use crate::transport::rtc::sdp::policy::apply_offer_policy_contract;
 use crate::transport::rtc::sdp::types::RtcSdpContext;
-use crate::transport::webrtc::transport::sdp_policy::apply_offer_policy_contract;
 
 pub(crate) fn adapt_local_offer(raw_offer_sdp: &str, context: &RtcSdpContext) -> String {
     // 沿用旧 transport 的成熟 offer patch 规则，保证新 rtc 栈协商内容与现网策略一致。

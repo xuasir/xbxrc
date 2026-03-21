@@ -14,7 +14,7 @@ pub fn compile_runtime(config: &Config, context: &Context) -> Result<RuntimePlan
     };
 
     let custom = config.runtime.custom_turn.clone();
-    let fallback = if context.target.is_home() && config.runtime.home_fallback_turn {
+    let fallback = if config.runtime.home_fallback_turn {
         context.turn.fallback.clone()
     } else {
         None

@@ -108,18 +108,35 @@ where
     }
 
     pub(super) fn sync_runtime_activity_snapshot(&mut self) {
+        crate::xbx_log_debug!("[xbxengine][runtime][sync] sync_runtime_activity_snapshot enter");
         let Ok(runtime_stats) = self.media_backend.snapshot_runtime_stats() else {
+            crate::xbx_log_warn!(
+                "[xbxengine][runtime][sync] sync_runtime_activity_snapshot snapshot_runtime_stats_failed"
+            );
             return;
         };
+        crate::xbx_log_debug!(
+            "[xbxengine][runtime][sync] sync_runtime_activity_snapshot got_stats transport_state={:?}",
+            runtime_stats.transport_state
+        );
         self.sync_recovery_snapshot(&runtime_stats);
         self.sync_transport_state(&runtime_stats);
         self.sync_video_track_status(&runtime_stats);
         self.sync_video_packet_stats(&runtime_stats);
         self.sync_video_frame_stats(&runtime_stats);
+        crate::xbx_log_debug!("[xbxengine][runtime][sync] sync_runtime_activity_snapshot exit");
     }
 
     pub(super) fn sync_recovery_snapshot(&mut self, stats: &XbxEngineMediaRuntimeStats) {
-        self.snapshot.recovery_keyframe_request_count = stats.video_pli_request_count_total;
+        // 这里取当前快照与后端统计的较大值，避免测试后端或延迟统计回写把本地计数冲掉。
+        self.snapshot.recovery_keyframe_request_count = self
+            .snapshot
+            .recovery_keyframe_request_count
+            .max(stats.video_pli_request_count_total);
+        self.snapshot.recovery_decoder_reset_count = self
+            .snapshot
+            .recovery_decoder_reset_count
+            .max(stats.video_decoder_reset_count);
     }
 
     pub(super) fn sync_transport_state(&mut self, stats: &XbxEngineMediaRuntimeStats) {

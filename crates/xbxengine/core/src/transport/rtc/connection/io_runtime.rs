@@ -277,19 +277,18 @@ impl RtcIoRuntime {
 
 fn discover_advertised_ip() -> Option<IpAddr> {
     // 对齐 webrtc-rs 的 local_interfaces 语义：先取本机接口的非 loopback 地址。
-    let mut local_ips = discover_local_interface_ips();
+    let local_ips = discover_local_interface_ips();
     if local_ips.is_empty() {
         return discover_default_route_ip();
     }
 
     if let Some(probe_ip) = discover_default_route_ip() {
-        if local_ips.contains(&probe_ip) {
+        if local_ips.contains(&probe_ip) && advertised_ip_priority(probe_ip).is_some() {
             return Some(probe_ip);
         }
     }
 
-    local_ips.sort_by_key(|ip| ip.to_string());
-    local_ips.into_iter().next()
+    choose_preferred_advertised_ip(local_ips)
 }
 
 fn discover_local_interface_ips() -> Vec<IpAddr> {
@@ -299,8 +298,20 @@ fn discover_local_interface_ips() -> Vec<IpAddr> {
     interfaces
         .into_iter()
         .filter_map(|iface| iface.addr.map(|addr| addr.ip()))
-        .filter(|ip| advertised_ip_priority(*ip).is_some())
+        .filter(|ip| advertised_ip_priority(*ip).is_some_and(|rank| rank > 0))
         .collect()
+}
+
+fn choose_preferred_advertised_ip(mut ips: Vec<IpAddr>) -> Option<IpAddr> {
+    // 先保证可达性，再处理特殊网段优先级；benchmark 网段只作为最低优先级兜底。
+    ips.sort_by(|left, right| {
+        let left_rank = advertised_ip_priority(*left).unwrap_or(0);
+        let right_rank = advertised_ip_priority(*right).unwrap_or(0);
+        left_rank
+            .cmp(&right_rank)
+            .then_with(|| left.to_string().cmp(&right.to_string()))
+    });
+    ips.pop()
 }
 
 fn discover_default_route_ip() -> Option<IpAddr> {
@@ -341,11 +352,20 @@ fn discover_default_route_ip() -> Option<IpAddr> {
 }
 
 fn advertised_ip_priority(ip: IpAddr) -> Option<u8> {
-    // 与 webrtc-rs local_interfaces 的默认边界一致：排除 loopback。
+    // 广播给远端的地址必须是可实际到达的接口地址。
+    // 198.18.0.0/15 是基准测试保留网段，不能作为可广播 ICE 候选。
     match ip {
-        IpAddr::V4(v4) => (!v4.is_loopback() && !v4.is_unspecified()).then_some(1),
+        IpAddr::V4(v4) if v4.is_loopback() || v4.is_unspecified() => None,
+        IpAddr::V4(v4) if is_benchmark_ipv4(v4) => None,
+        IpAddr::V4(v4) if v4.is_private() => Some(2),
+        IpAddr::V4(_) => Some(1),
         IpAddr::V6(v6) => (!v6.is_loopback() && !v6.is_unspecified()).then_some(1),
     }
+}
+
+fn is_benchmark_ipv4(ip: Ipv4Addr) -> bool {
+    let [a, b, _, _] = ip.octets();
+    a == 198 && (b == 18 || b == 19)
 }
 
 #[cfg(test)]
@@ -361,7 +381,13 @@ mod tests {
     #[test]
     fn advertised_ip_priority_accepts_non_loopback_ipv4() {
         let ip = IpAddr::V4(Ipv4Addr::new(192, 168, 1, 10));
-        assert_eq!(advertised_ip_priority(ip), Some(1));
+        assert_eq!(advertised_ip_priority(ip), Some(2));
+    }
+
+    #[test]
+    fn advertised_ip_priority_rejects_benchmark_ipv4() {
+        let ip = IpAddr::V4(Ipv4Addr::new(198, 18, 0, 1));
+        assert_eq!(advertised_ip_priority(ip), None);
     }
 
     #[test]
@@ -391,5 +417,14 @@ mod tests {
             runtime.resolve_local_addr_for_socket(bind_addr),
             "192.168.0.10:7000".parse::<SocketAddr>().unwrap()
         );
+    }
+
+    #[test]
+    fn choose_preferred_advertised_ip_prefers_private_over_benchmark() {
+        let chosen = choose_preferred_advertised_ip(vec![
+            IpAddr::V4(Ipv4Addr::new(198, 18, 0, 1)),
+            IpAddr::V4(Ipv4Addr::new(192, 168, 1, 10)),
+        ]);
+        assert_eq!(chosen, Some(IpAddr::V4(Ipv4Addr::new(192, 168, 1, 10))));
     }
 }

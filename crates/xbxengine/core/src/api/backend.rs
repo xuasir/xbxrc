@@ -350,6 +350,8 @@ pub struct XbxEngineMediaRuntimeStats {
     pub latest_video_stream_width: Option<u32>,
     pub latest_video_stream_height: Option<u32>,
     pub latest_video_packet_arrival_time_ms: Option<f64>,
+    pub first_audio_packet_arrival_time_ms: Option<f64>,
+    pub latest_audio_packet_arrival_time_ms: Option<f64>,
     pub inbound_video_frame_rate_fps: f64,
     pub latest_video_packet_sequence: Option<u16>,
     pub latest_video_packet_gap: Option<XbxEngineVideoPacketGapObservation>,
@@ -444,6 +446,8 @@ impl Default for XbxEngineMediaRuntimeStats {
             latest_video_stream_width: None,
             latest_video_stream_height: None,
             latest_video_packet_arrival_time_ms: None,
+            first_audio_packet_arrival_time_ms: None,
+            latest_audio_packet_arrival_time_ms: None,
             inbound_video_frame_rate_fps: 0.0,
             latest_video_packet_sequence: None,
             latest_video_packet_gap: None,
@@ -795,9 +799,16 @@ impl XbxEngineMediaBackend for PlaceholderXbxEngineMediaBackend {
             }),
             ..Default::default()
         };
+        // 让默认测试后端也具备一条最小可用的 ICE 候选，避免 runtime 依赖空交换兜底。
+        let local_candidate = XbxEngineIceCandidateDto {
+            candidate: "candidate:placeholder 1 udp 2130706431 127.0.0.1 60000 typ host"
+                .to_string(),
+            sdp_m_line_index: Some(0),
+            sdp_mid: Some("0".to_string()),
+        };
         Ok(XbxEngineMediaNegotiation {
             local_offer_sdp: offer_sdp,
-            local_candidates: Vec::new(),
+            local_candidates: vec![local_candidate],
             surface_id: format!("surface:{}", request.viewport.viewport_id),
             video_width: 1280,
             video_height: 720,
