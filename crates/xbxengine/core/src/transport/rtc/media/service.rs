@@ -92,6 +92,8 @@ impl RtcMediaService {
 
     pub(crate) fn apply_remote_answer_sdp(&mut self, answer_sdp: &str) {
         self.payload_route_map = parse_payload_route_map_from_answer(answer_sdp);
+        self.sink
+            .apply_payload_route_map(self.payload_route_map.clone());
     }
 }
 

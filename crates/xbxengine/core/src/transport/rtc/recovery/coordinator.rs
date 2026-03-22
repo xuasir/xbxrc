@@ -23,6 +23,7 @@ const CLOUD_STARTUP_NACK_BUDGET_WINDOW_MS: f64 = 1_200.0;
 const CLOUD_STARTUP_NACK_BUDGET_THRESHOLD: u8 = 3;
 const WAIT_KEYFRAME_REPEAT_SUPPRESS_MS: f64 = 260.0;
 const IDLE_TIMEOUT_REPEAT_SUPPRESS_MS: f64 = 360.0;
+const AUDIO_ONLY_RECOVERY_LABEL_WINDOW_MS: f64 = HARD_STALL_RECONNECT_MS;
 const HARD_STALL_DECODER_RESET_MS: f64 = 1_200.0;
 const HARD_STALL_RECONNECT_MS: f64 = 3_000.0;
 const HARD_STALL_MIN_RESET_SPACING_MS: f64 = 1_200.0;
@@ -322,6 +323,15 @@ impl RecoveryCoordinator {
         runtime_stats: &Mutex<XbxEngineMediaRuntimeStats>,
         diagnosis_label: &str,
     ) -> String {
+        if diagnosis_label == "adapterIdleTimeout"
+            && RuntimeStatsSink::read_shared(runtime_stats, |stats| {
+                is_audio_only_track(stats)
+                    && has_recent_recovery_action(stats, unix_now_ms())
+            })
+            .unwrap_or(false)
+        {
+            return "healthy".to_string();
+        }
         if diagnosis_label == "adapterIdleTimeout"
             && RuntimeStatsSink::read_shared(runtime_stats, |stats| {
                 has_fresh_media_output(stats, unix_now_ms())
@@ -856,6 +866,25 @@ fn has_fresh_media_output(stats: &XbxEngineMediaRuntimeStats, now_ms: f64) -> bo
         .map(|at_ms| now_ms - at_ms < FRESH_MEDIA_OUTPUT_WINDOW_MS)
         .unwrap_or(false);
     present_fresh || decode_fresh || stats.video_present_fps >= 10.0
+}
+
+fn has_recent_recovery_action(stats: &XbxEngineMediaRuntimeStats, now_ms: f64) -> bool {
+    stats
+        .latest_video_escalation_observation
+        .as_ref()
+        .is_some_and(|observation| {
+            observation.action != "cooldownSuppressed"
+                && now_ms - observation.observed_at_ms <= AUDIO_ONLY_RECOVERY_LABEL_WINDOW_MS
+        })
+}
+
+fn is_audio_only_track(stats: &XbxEngineMediaRuntimeStats) -> bool {
+    stats.latest_video_track_status.as_ref().is_some_and(|status| {
+        status.state == "audioOnly"
+            && status.video_bytes_total == 0
+            && status.audio_bytes_total > 0
+            && status.transport_state == XbxEngineTransportStateDto::Connected
+    })
 }
 
 fn decoder_backend_failure_signal_is_active(
@@ -1705,6 +1734,38 @@ mod tests {
         assert_eq!(state.mode, RecoveryCouplingMode::Healthy);
         assert!(!state.suppress_ramp_up);
         assert!(state.allow_peak_range);
+    }
+
+    #[test]
+    fn adapter_idle_timeout_is_downgraded_when_audio_only_and_recovery_recent() {
+        let now_ms = unix_now_ms();
+        let mut stats = XbxEngineMediaRuntimeStats::default();
+        stats.recovery_diagnosis = Some("adapterIdleTimeout".to_string());
+        stats.latest_video_escalation_observation = Some(crate::XbxEngineVideoEscalationObservation {
+            observation_id: 1,
+            reason: "adapterIdleTimeout".to_string(),
+            action: "requestDecoderReset".to_string(),
+            observed_at_ms: now_ms - 500.0,
+        });
+        stats.latest_video_track_status = Some(crate::XbxEngineVideoTrackStatus {
+            state: "audioOnly".to_string(),
+            video_width: None,
+            video_height: None,
+            mime_type: None,
+            transport_state: XbxEngineTransportStateDto::Connected,
+            video_bytes_total: 0,
+            video_packet_count_total: 0,
+            audio_bytes_total: 42,
+            observed_at_ms: now_ms,
+        });
+
+        let state = RecoveryCoordinator::runtime_state_for_diagnosis(
+            &Mutex::new(stats),
+            "adapterIdleTimeout",
+            Instant::now(),
+            Duration::from_millis(800),
+        );
+        assert_eq!(state.diagnosis_label, "healthy");
     }
 
     #[test]

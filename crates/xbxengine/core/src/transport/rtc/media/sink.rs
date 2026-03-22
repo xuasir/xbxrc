@@ -1,7 +1,9 @@
-use crate::transport::rtc::media::packet_router::RtcMediaRouteLabel;
+use crate::transport::rtc::media::packet_router::{RtcMediaRouteLabel, RtcPayloadRouteMap};
 use crate::transport::rtc::media::packet_types::{RtcMediaIngressPacket, RtcRtpPacketMeta};
 
 pub(crate) trait RtcMediaSink: Send + Sync {
+    fn apply_payload_route_map(&mut self, _payload_route_map: Option<RtcPayloadRouteMap>) {}
+
     fn on_raw_packet(
         &mut self,
         _packet: &RtcMediaIngressPacket,
@@ -19,6 +21,8 @@ pub(crate) trait RtcRtcpSendPort: Send + Sync {
 pub(crate) struct NullRtcMediaSink;
 
 impl RtcMediaSink for NullRtcMediaSink {
+    fn apply_payload_route_map(&mut self, _payload_route_map: Option<RtcPayloadRouteMap>) {}
+
     fn on_raw_packet(
         &mut self,
         _packet: &RtcMediaIngressPacket,

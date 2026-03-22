@@ -33,10 +33,12 @@ pub(crate) struct RtcPayloadRouteMap {
     audio_payload_types: HashSet<u8>,
     primary_video_payload_types: HashSet<u8>,
     repair_video_payload_types: HashSet<u8>,
+    repair_rtx_payload_types: HashSet<u8>,
+    repair_rtx_apt_targets: HashMap<u8, u8>,
 }
 
 impl RtcPayloadRouteMap {
-    fn classify_payload_type(&self, payload_type: u8) -> Option<RtcMediaRouteLabel> {
+    pub(crate) fn classify_payload_type(&self, payload_type: u8) -> Option<RtcMediaRouteLabel> {
         if self.audio_payload_types.contains(&payload_type) {
             Some(RtcMediaRouteLabel::Audio)
         } else if self.repair_video_payload_types.contains(&payload_type) {
@@ -46,6 +48,14 @@ impl RtcPayloadRouteMap {
         } else {
             None
         }
+    }
+
+    pub(crate) fn is_rtx_payload_type(&self, payload_type: u8) -> bool {
+        self.repair_rtx_payload_types.contains(&payload_type)
+    }
+
+    pub(crate) fn primary_payload_type_for_rtx(&self, payload_type: u8) -> Option<u8> {
+        self.repair_rtx_apt_targets.get(&payload_type).copied()
     }
 }
 
@@ -186,7 +196,7 @@ pub(crate) fn parse_payload_route_map_from_answer(answer_sdp: &str) -> Option<Rt
     let mut sections = Vec::<SdpMediaSection>::new();
     let mut current_section_index = None::<usize>;
     let mut codec_by_payload_type = HashMap::<u8, String>::new();
-    let mut apt_target_payload_types = HashSet::<u8>::new();
+    let mut rtx_apt_targets = HashMap::<u8, u8>::new();
 
     for raw_line in answer_sdp.lines() {
         let line = raw_line.trim();
@@ -214,7 +224,7 @@ pub(crate) fn parse_payload_route_map_from_answer(answer_sdp: &str) -> Option<Rt
                 .payload_types
                 .contains(&payload_type)
             {
-                apt_target_payload_types.insert(apt_payload_type);
+                rtx_apt_targets.insert(payload_type, apt_payload_type);
             }
         }
     }
@@ -233,7 +243,14 @@ pub(crate) fn parse_payload_route_map_from_answer(answer_sdp: &str) -> Option<Rt
                         .unwrap_or_default();
                     if is_repair_codec(codec) {
                         route_map.repair_video_payload_types.insert(payload_type);
-                    } else if apt_target_payload_types.contains(&payload_type) || !codec.is_empty()
+                        if codec == "rtx" {
+                            route_map.repair_rtx_payload_types.insert(payload_type);
+                            if let Some(&apt_payload_type) = rtx_apt_targets.get(&payload_type) {
+                                route_map.repair_rtx_apt_targets.insert(payload_type, apt_payload_type);
+                            }
+                        }
+                    } else if rtx_apt_targets.values().any(|&apt| apt == payload_type)
+                        || !codec.is_empty()
                     {
                         route_map.primary_video_payload_types.insert(payload_type);
                     } else {
