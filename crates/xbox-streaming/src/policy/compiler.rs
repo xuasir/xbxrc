@@ -255,7 +255,13 @@ mod tests {
 
         assert_eq!(output.plan.runtime.turn.source, TurnSource::Fallback);
         assert_eq!(
-            output.plan.runtime.turn.resolved.as_ref().map(|turn| turn.url.as_str()),
+            output
+                .plan
+                .runtime
+                .turn
+                .resolved
+                .as_ref()
+                .map(|turn| turn.url.as_str()),
             Some("turn:example.com")
         );
     }

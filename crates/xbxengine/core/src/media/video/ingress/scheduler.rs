@@ -224,10 +224,8 @@ mod tests {
             width: Some(1920),
             height: Some(1080),
             is_idr: bootstrap_ready,
-            has_vcl: true,
             has_inband_sps: bootstrap_ready,
             has_inband_pps: bootstrap_ready,
-            has_aud: false,
             slice_headers_valid: bootstrap_ready,
             parameter_sets_changed: false,
             config_changed: false,
@@ -256,7 +254,6 @@ mod tests {
             width: 1920,
             height: 1080,
             rtp_timestamp: 1,
-            assembled_at: now,
             target_playout_time: if target_offset_ms >= 0 {
                 now + Duration::from_millis(target_offset_ms as u64)
             } else {

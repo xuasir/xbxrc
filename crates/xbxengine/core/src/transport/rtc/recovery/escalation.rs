@@ -81,6 +81,7 @@ pub struct VideoEscalationController {
     next_observation_id: u64,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct VideoEscalationDecision {
     pub observation_id: u64,
     pub action: RecoveryAction,

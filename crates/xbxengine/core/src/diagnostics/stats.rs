@@ -155,12 +155,11 @@ pub fn build_xbxengine_stats(
         }),
         inbound_video_bitrate_kbps: runtime_stats
             .and_then(|stats| stats.inbound_video_bitrate_kbps),
-        inbound_audio_bitrate_kbps: runtime_stats
-            .and_then(|stats| {
-                stats
-                    .inbound_audio_bitrate_kbps
-                    .or_else(|| estimate_audio_inbound_bitrate_kbps(stats, now_ms))
-            }),
+        inbound_audio_bitrate_kbps: runtime_stats.and_then(|stats| {
+            stats
+                .inbound_audio_bitrate_kbps
+                .or_else(|| estimate_audio_inbound_bitrate_kbps(stats, now_ms))
+        }),
         inbound_bytes_total: runtime_stats.map(|stats| stats.inbound_bytes_total),
         inbound_video_bytes_total: runtime_stats.map(|stats| stats.inbound_video_bytes_total),
         inbound_audio_bytes_total: runtime_stats.map(|stats| stats.inbound_audio_bytes_total),
@@ -623,9 +622,7 @@ fn classify_video_health(runtime_stats: Option<&XbxEngineMediaRuntimeStats>) -> 
         return Some("connecting".to_string());
     }
     match stats.recovery_diagnosis.as_deref() {
-        Some("ingressWaitKeyframe") | Some("transportAwaitRecoveryKeyframe")
-            if !fresh_output =>
-        {
+        Some("ingressWaitKeyframe") | Some("transportAwaitRecoveryKeyframe") if !fresh_output => {
             return Some("waitingKeyframe".to_string());
         }
         Some("transportSampleLoss") if !fresh_output => {
@@ -660,13 +657,9 @@ fn classify_stall_kind(runtime_stats: Option<&XbxEngineMediaRuntimeStats>) -> Op
     let fresh_output = has_recent_video_output(stats, now_ms);
     match stats.recovery_diagnosis.as_deref() {
         Some("adapterIdleTimeout") if !fresh_output => Some("idleTimeout".to_string()),
-        Some("decoderBackendFailure") if !fresh_output => {
-            Some("decoderBackendFailure".to_string())
-        }
+        Some("decoderBackendFailure") if !fresh_output => Some("decoderBackendFailure".to_string()),
         Some("transportSampleLoss") if !fresh_output => Some("sampleLoss".to_string()),
-        Some("transportAwaitRecoveryKeyframe") | Some("ingressWaitKeyframe")
-            if !fresh_output =>
-        {
+        Some("transportAwaitRecoveryKeyframe") | Some("ingressWaitKeyframe") if !fresh_output => {
             Some("waitingKeyframe".to_string())
         }
         Some("reconfigure") => Some("reconfigure".to_string()),
@@ -732,7 +725,11 @@ fn estimate_total_inbound_bitrate_kbps(
         .or_else(|| estimate_audio_inbound_bitrate_kbps(stats, now_ms))
         .unwrap_or(0.0);
     let total = video_kbps + audio_kbps;
-    if total > 0.0 { Some(total) } else { None }
+    if total > 0.0 {
+        Some(total)
+    } else {
+        None
+    }
 }
 
 #[cfg(test)]
@@ -902,7 +899,10 @@ mod tests {
             ..XbxEngineMediaRuntimeStats::default()
         };
 
-        assert_eq!(classify_video_health(Some(&stats)), Some("healthy".to_string()));
+        assert_eq!(
+            classify_video_health(Some(&stats)),
+            Some("healthy".to_string())
+        );
         assert_eq!(classify_stall_kind(Some(&stats)), Some("none".to_string()));
     }
 
@@ -923,6 +923,9 @@ mod tests {
 
         let dto = build_xbxengine_stats(&test_snapshot(), Some(&stats));
         assert!(dto.inbound_audio_bitrate_kbps.unwrap_or(0.0) > 0.0);
-        assert!(dto.inbound_bitrate_kbps.unwrap_or(0.0) >= dto.inbound_video_bitrate_kbps.unwrap_or(0.0));
+        assert!(
+            dto.inbound_bitrate_kbps.unwrap_or(0.0)
+                >= dto.inbound_video_bitrate_kbps.unwrap_or(0.0)
+        );
     }
 }

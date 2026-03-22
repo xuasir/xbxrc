@@ -84,8 +84,8 @@ fn unpack_rtx_packet(
     let original_sequence = u16::from_be_bytes([payload[0], payload[1]]);
     let mut normalized_meta = meta.clone();
     normalized_meta.sequence_number = original_sequence;
-    if let Some(primary_payload_type) = payload_route_map
-        .and_then(|map| map.primary_payload_type_for_rtx(meta.payload_type))
+    if let Some(primary_payload_type) =
+        payload_route_map.and_then(|map| map.primary_payload_type_for_rtx(meta.payload_type))
     {
         normalized_meta.payload_type = primary_payload_type;
     }

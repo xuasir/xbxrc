@@ -185,13 +185,6 @@ impl RtcIoRuntime {
         self.pending_writes.clear();
     }
 
-    #[cfg(test)]
-    pub(crate) fn clear_local_addr_for_test(&mut self) {
-        self.local_addr_v4 = None;
-        self.local_addr_v6 = None;
-        self.advertised_ip = None;
-    }
-
     fn send_to_peer(&self, payload: &[u8], peer_addr: SocketAddr) -> Result<usize, std::io::Error> {
         let socket = match peer_addr {
             SocketAddr::V4(_) => self.socket_v4.as_ref(),

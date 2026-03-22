@@ -163,7 +163,7 @@ where
         self.sync_transport_state(&runtime_stats);
         self.sync_video_packet_stats(&runtime_stats);
         self.sync_video_frame_stats(&runtime_stats);
-        if self.maybe_consume_pending_runtime_recovery_action() {
+        if self.maybe_consume_pending_runtime_recovery_action(&runtime_stats) {
             return;
         }
         if self.drive_runtime_recovery_action(&runtime_stats) {
@@ -171,7 +171,14 @@ where
         }
     }
 
-    fn maybe_consume_pending_runtime_recovery_action(&mut self) -> bool {
+    fn maybe_consume_pending_runtime_recovery_action(
+        &mut self,
+        runtime_stats: &crate::XbxEngineMediaRuntimeStats,
+    ) -> bool {
+        // transport 对外仍只暴露标准状态枚举；recovering 需要结合连接态和观测标签判断。
+        if !runtime_stats_indicate_transport_recovering(runtime_stats) {
+            return false;
+        }
         let Ok(action) = self.media_backend.take_pending_runtime_recovery_action() else {
             return false;
         };
@@ -585,9 +592,7 @@ where
         self.emit_phase(XbxEngineRuntimePhaseDto::Connecting);
         self.health.observed_transport_state = XbxEngineTransportStateDto::Connecting;
         self.emit_transport_state(XbxEngineTransportStateDto::Connecting);
-        crate::xbx_log_warn!(
-            "[xbxengine][runtime][ice] before sync_runtime_activity_snapshot"
-        );
+        crate::xbx_log_warn!("[xbxengine][runtime][ice] before sync_runtime_activity_snapshot");
         self.sync_runtime_activity_snapshot();
         crate::xbx_log_warn!(
             "[xbxengine][runtime][ice] after sync_runtime_activity_snapshot entering exchange loop"
@@ -726,9 +731,7 @@ where
                 .iter()
                 .any(|candidate| is_end_of_candidates_marker(&candidate.candidate));
             if remote_end_of_candidates_seen {
-                crate::xbx_log_warn!(
-                    "[xbxengine][runtime][ice] remote end-of-candidates observed"
-                );
+                crate::xbx_log_warn!("[xbxengine][runtime][ice] remote end-of-candidates observed");
             }
 
             let next_remote_candidates =
@@ -837,6 +840,31 @@ where
             )),
         }
     }
+}
+
+fn runtime_stats_indicate_transport_recovering(
+    runtime_stats: &crate::XbxEngineMediaRuntimeStats,
+) -> bool {
+    if runtime_stats.transport_state != XbxEngineTransportStateDto::Connecting {
+        return false;
+    }
+    runtime_stats
+        .latest_observation_summary
+        .as_deref()
+        .is_some_and(|summary| summary.contains("recoveryActionCreated=true"))
+        || runtime_stats
+            .latest_observation_label
+            .as_deref()
+            .is_some_and(|label| {
+                matches!(
+                    label,
+                    "rtcConnectionRecovering"
+                        | "rtcPeerConnectionFailed"
+                        | "rtcPeerConnectionClosed"
+                        | "rtcControlChannelClosed"
+                        | "rtcMessageChannelClosed"
+                )
+            })
 }
 
 fn collect_local_offer_ice_candidates(offer_sdp: &str) -> Vec<XbxEngineIceCandidateDto> {

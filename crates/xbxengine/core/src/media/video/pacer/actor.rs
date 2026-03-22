@@ -11,7 +11,6 @@ use crate::runtime_stats_sink::RuntimeStatsSink;
 
 pub enum PacerMsg {
     Frame(DecodedFrame),
-    Flush,
     Stop,
 }
 
@@ -40,10 +39,6 @@ impl PacerActorHandle {
 
     pub fn submit(&self, frame: DecodedFrame) -> Result<(), TrySendError<PacerMsg>> {
         self.tx.try_send(PacerMsg::Frame(frame))
-    }
-
-    pub fn flush(&self) {
-        let _ = self.tx.send(PacerMsg::Flush);
     }
 
     pub fn stop(&self) {
@@ -103,9 +98,6 @@ fn run_pacer_loop(
                     });
                     crate::xbx_log_warn!("[XbxPacerActor] renderer queue full, frame dropped!");
                 }
-            }
-            PacerMsg::Flush => {
-                catch_up_mode = false;
             }
             PacerMsg::Stop => {
                 break;

@@ -507,7 +507,7 @@ fn start_submits_offer_sdp_ice_without_waiting_for_gathering() {
             input_status: XbxEngineInputStatus::default(),
         },
         XbxEngineMediaRuntimeStats {
-            transport_state: XbxEngineTransportStateDto::Connected,
+            transport_state: XbxEngineTransportStateDto::Connecting,
             ..Default::default()
         },
     )
@@ -578,7 +578,7 @@ fn start_submits_offer_sdp_ice_even_if_gathering_completes_immediately() {
             input_status: XbxEngineInputStatus::default(),
         },
         XbxEngineMediaRuntimeStats {
-            transport_state: XbxEngineTransportStateDto::Connected,
+            transport_state: XbxEngineTransportStateDto::Connecting,
             ..Default::default()
         },
     )
@@ -595,14 +595,12 @@ fn start_submits_offer_sdp_ice_even_if_gathering_completes_immediately() {
         .expect("runtime start should succeed");
 
     let request_log = requests.borrow();
-    assert!(request_log.iter().any(|request| matches!(
-        request,
-        XbxEngineHostRequestDto::SubmitIce { .. }
-    )));
-    assert!(request_log.iter().any(|request| matches!(
-        request,
-        XbxEngineHostRequestDto::PollIce { .. }
-    )));
+    assert!(request_log
+        .iter()
+        .any(|request| matches!(request, XbxEngineHostRequestDto::SubmitIce { .. })));
+    assert!(request_log
+        .iter()
+        .any(|request| matches!(request, XbxEngineHostRequestDto::PollIce { .. })));
 }
 
 #[test]
@@ -729,7 +727,7 @@ fn video_track_status_changes_are_emitted_and_snapshotted() {
             input_status: XbxEngineInputStatus::default(),
         },
         XbxEngineMediaRuntimeStats {
-            transport_state: XbxEngineTransportStateDto::Connected,
+            transport_state: XbxEngineTransportStateDto::Connecting,
             latest_video_track_status: Some(crate::XbxEngineVideoTrackStatus {
                 state: "remoteTrackAttached".to_string(),
                 video_width: None,
@@ -759,7 +757,7 @@ fn video_track_status_changes_are_emitted_and_snapshotted() {
     overwrite_runtime_stats(
         &runtime_stats,
         XbxEngineMediaRuntimeStats {
-            transport_state: XbxEngineTransportStateDto::Connected,
+            transport_state: XbxEngineTransportStateDto::Connecting,
             latest_video_track_status: Some(crate::XbxEngineVideoTrackStatus {
                 state: "remoteTrackAttached".to_string(),
                 video_width: None,
@@ -1604,9 +1602,14 @@ fn runtime_consumes_pending_transport_reconnect_candidate_once() {
             input_status: XbxEngineInputStatus::default(),
         },
         XbxEngineMediaRuntimeStats {
-            transport_state: XbxEngineTransportStateDto::Connected,
+            transport_state: XbxEngineTransportStateDto::Connecting,
             latest_video_packet_arrival_time_ms: Some(now_ms - 20.0),
             inbound_video_packet_count_total: 500,
+            latest_observation_label: Some("rtcConnectionRecovering".to_string()),
+            latest_observation_summary: Some(
+                "phase1 rtc lifecycle=Recovering state=Recovering recoveryActionCreated=true"
+                    .to_string(),
+            ),
             latest_video_escalation_observation: Some(crate::XbxEngineVideoEscalationObservation {
                 observation_id: 42,
                 reason: "transportExpiredDeadline".to_string(),
@@ -1691,9 +1694,14 @@ fn runtime_stops_reconnect_loop_when_keepalive_reports_session_not_active() {
             input_status: XbxEngineInputStatus::default(),
         },
         XbxEngineMediaRuntimeStats {
-            transport_state: XbxEngineTransportStateDto::Connected,
+            transport_state: XbxEngineTransportStateDto::Connecting,
             latest_video_packet_arrival_time_ms: Some(now_ms - 20.0),
             inbound_video_packet_count_total: 500,
+            latest_observation_label: Some("rtcConnectionRecovering".to_string()),
+            latest_observation_summary: Some(
+                "phase1 rtc lifecycle=Recovering state=Recovering recoveryActionCreated=true"
+                    .to_string(),
+            ),
             latest_video_escalation_observation: Some(crate::XbxEngineVideoEscalationObservation {
                 observation_id: 42,
                 reason: "transportExpiredDeadline".to_string(),

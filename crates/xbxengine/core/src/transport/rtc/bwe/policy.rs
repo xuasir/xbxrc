@@ -528,8 +528,9 @@ fn is_severe_rtt(
 #[cfg(test)]
 mod tests {
     use super::{
-        classify_scenario_bitrate_band, resolve_transport_policy_profile_kind,
-        resolve_twcc_gcc_target, RecoveryCouplingState, SessionPhase,
+        classify_scenario_bitrate_band, resolve_target_remb_kbps,
+        resolve_transport_policy_profile_kind, resolve_twcc_gcc_target, RecoveryCouplingState,
+        SessionPhase,
     };
     use crate::transport::rtc::recovery::coordinator::RecoveryCouplingMode;
     use crate::transport::rtc::recovery::policy::ScenarioPolicyResolver;
@@ -829,5 +830,33 @@ mod tests {
         assert_eq!(target, 20_000);
         assert_eq!(reason, "twcc-gcc-direct-high-rtt-hold");
         assert_eq!(cooldown, 1);
+    }
+
+    #[test]
+    fn fixed_mode_resolve_target_remb_returns_forced_value() {
+        let mut config = XbxEngineWebRtcRuntimeConfig::default();
+        config.bwe_mode = "fixed".to_string();
+        config.forced_remb_kbps = Some(22_000);
+        let mut last_sent = 18_000;
+        let mut cooldown = 0;
+
+        let decision = resolve_target_remb_kbps(
+            &config,
+            None,
+            12_000.0,
+            0.0,
+            None,
+            Some(&XbxEngineTargetTypeDto::Home),
+            Some("Direct (host->host)"),
+            SessionPhase::Steady,
+            None,
+            None,
+            &mut last_sent,
+            &mut cooldown,
+        );
+
+        assert_eq!(decision.target_kbps, 22_000);
+        assert_eq!(decision.reason, "fixed-remb");
+        assert_eq!(last_sent, 22_000);
     }
 }

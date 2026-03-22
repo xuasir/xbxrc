@@ -214,6 +214,9 @@ mod tests {
 
     #[test]
     fn direct_path_falls_back_when_candidate_types_are_missing() {
-        assert_eq!(classify_transport_path(None, None), Some("Direct".to_string()));
+        assert_eq!(
+            classify_transport_path(None, None),
+            Some("Direct".to_string())
+        );
     }
 }

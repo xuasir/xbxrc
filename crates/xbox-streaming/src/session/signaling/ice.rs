@@ -132,7 +132,10 @@ fn parse_candidate(
         sdp_m_line_index: source.sdp_m_line_index,
         sdp_mid: source.sdp_mid.clone(),
         username_fragment: source.username_fragment.clone(),
-        message_type: source.message_type.clone().or(Some("iceCandidate".to_string())),
+        message_type: source
+            .message_type
+            .clone()
+            .or(Some("iceCandidate".to_string())),
         original_index,
     })
 }
@@ -242,7 +245,9 @@ mod tests {
             },
         ]);
 
-        assert!(normalized[0].candidate.contains("2001:db8::1 9000 typ host"));
+        assert!(normalized[0]
+            .candidate
+            .contains("2001:db8::1 9000 typ host"));
         assert!(normalized[1].candidate.contains("10.0.0.1 9000 typ host"));
         assert!(normalized[2].candidate.contains("typ srflx"));
     }

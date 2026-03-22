@@ -1,0 +1,554 @@
+use std::time::Duration;
+
+use crate::transport::rtc::bwe::evaluator::RtcBweEvaluation;
+use crate::transport::rtc::facts::{ConnectionLifecycleStateFact, TransportCommand};
+use crate::transport::rtc::policy::bwe::BwePolicyProposal;
+use crate::transport::rtc::policy::planner::{
+    PlannedTransportCommand, PolicyPlanInput, TransportCommandPlanner,
+};
+use crate::transport::rtc::policy::reconnect::ReconnectPolicyProposal;
+use crate::transport::rtc::policy::recovery::RecoveryPolicyProposal;
+use crate::transport::rtc::projection::TransportSnapshot;
+use crate::transport::rtc::recovery::escalation::{
+    RecoveryAction, VideoEscalationController, VideoEscalationReason,
+};
+use crate::transport::rtc::session::actor::SessionPolicyHook;
+
+const DEFAULT_BWE_TARGET_KBPS: u32 = 16_000;
+const BWE_FLOOR_KBPS: u32 = 8_000;
+const BWE_CEILING_KBPS: u32 = 60_000;
+const RECOVERY_REPEAT_SUPPRESS_MS: f64 = 160.0;
+
+#[derive(Clone, Debug)]
+struct RecoverySignalCursor {
+    label: String,
+    observed_at_ms: f64,
+    emitted_at_ms: f64,
+}
+
+/// rtc session 主线策略：
+/// - 统一把 reconnect/recovery/BWE proposal 收口到 session policy
+/// - 复用 planner 的优先级（reconnect > recovery > bwe）
+/// - stack 只做命令执行与 CommandResultFact 回写
+pub struct RtcSessionPolicy {
+    reconnect_inflight: bool,
+    planner: TransportCommandPlanner,
+    escalation_controller: VideoEscalationController,
+    last_recovery_signal: Option<RecoverySignalCursor>,
+    last_bwe_sample_tick_ms: Option<f64>,
+    next_reconnect_observation_id: u64,
+    next_bwe_observation_id: u64,
+}
+
+impl Default for RtcSessionPolicy {
+    fn default() -> Self {
+        Self {
+            reconnect_inflight: false,
+            planner: TransportCommandPlanner::new(),
+            escalation_controller: VideoEscalationController::new(Duration::from_millis(320), 2, 3),
+            last_recovery_signal: None,
+            last_bwe_sample_tick_ms: None,
+            next_reconnect_observation_id: 0,
+            next_bwe_observation_id: 0,
+        }
+    }
+}
+
+impl SessionPolicyHook for RtcSessionPolicy {
+    fn on_snapshot(&mut self, snapshot: &TransportSnapshot) -> Vec<TransportCommand> {
+        if snapshot.connection.lifecycle_state != ConnectionLifecycleStateFact::Recovering {
+            self.reconnect_inflight = false;
+        }
+        let recovery = self.build_recovery_proposal(snapshot);
+        let reconnect = self.build_reconnect_proposal(snapshot, recovery.as_ref());
+        let bwe = self.build_bwe_proposal(snapshot);
+        let bwe_observation_id = bwe
+            .as_ref()
+            .map(|proposal| proposal.evaluation.observation_id)
+            .unwrap_or(0);
+
+        self.planner
+            .plan(PolicyPlanInput {
+                recovery,
+                reconnect,
+                bwe,
+            })
+            .commands
+            .into_iter()
+            .flat_map(|command| self.map_planned_command(command, bwe_observation_id))
+            .collect()
+    }
+}
+
+impl RtcSessionPolicy {
+    fn build_reconnect_proposal(
+        &mut self,
+        snapshot: &TransportSnapshot,
+        recovery: Option<&RecoveryPolicyProposal>,
+    ) -> Option<ReconnectPolicyProposal> {
+        if self.reconnect_inflight {
+            return None;
+        }
+        if snapshot.connection.lifecycle_state != ConnectionLifecycleStateFact::Recovering {
+            return None;
+        }
+        // reconnect 是 Recovering 主线的独立动作，不能被 recovery/BWE 绑架。
+        let (observation_id, reason) = if let Some(recovery_proposal) = recovery {
+            let reason = recovery_proposal.reason_label.clone();
+            if matches!(
+                recovery_proposal.decision.action,
+                RecoveryAction::RequestReconnectCandidate
+            ) {
+                (recovery_proposal.decision.observation_id, reason)
+            } else {
+                self.next_reconnect_observation_id =
+                    self.next_reconnect_observation_id.saturating_add(1);
+                (self.next_reconnect_observation_id, reason)
+            }
+        } else {
+            let reason = snapshot
+                .recovery
+                .latest_diagnosis_label
+                .clone()
+                .or_else(|| snapshot.diagnostics.latest_label.clone())
+                .unwrap_or_else(|| "rtcConnectionRecovering".to_string());
+            self.next_reconnect_observation_id =
+                self.next_reconnect_observation_id.saturating_add(1);
+            (self.next_reconnect_observation_id, reason)
+        };
+        self.reconnect_inflight = true;
+        Some(ReconnectPolicyProposal {
+            observation_id,
+            reason,
+        })
+    }
+
+    fn build_recovery_proposal(
+        &mut self,
+        snapshot: &TransportSnapshot,
+    ) -> Option<RecoveryPolicyProposal> {
+        let label = snapshot.recovery.latest_diagnosis_label.as_deref()?;
+        let reason = map_label_to_escalation_reason(label)?;
+        let observed_at_ms = snapshot
+            .recovery
+            .last_observed_at_ms
+            .unwrap_or(snapshot.now_ms);
+        if !self.should_emit_recovery_signal(label, observed_at_ms) {
+            return None;
+        }
+        let decision = self.escalation_controller.on_reason(reason);
+        Some(RecoveryPolicyProposal {
+            decision,
+            reason_label: label.to_string(),
+        })
+    }
+
+    fn build_bwe_proposal(&mut self, snapshot: &TransportSnapshot) -> Option<BwePolicyProposal> {
+        if !matches!(
+            snapshot.connection.lifecycle_state,
+            ConnectionLifecycleStateFact::Connected | ConnectionLifecycleStateFact::Recovering
+        ) {
+            return None;
+        }
+        let sample_tick_ms = snapshot.bwe.latest_sample_tick_ms?;
+        if self
+            .last_bwe_sample_tick_ms
+            .is_some_and(|last| sample_tick_ms <= last)
+        {
+            return None;
+        }
+        self.last_bwe_sample_tick_ms = Some(sample_tick_ms);
+
+        let loss_ratio = snapshot
+            .bwe
+            .latest_loss_ratio_1s
+            .or(snapshot.connection.latest_loss_ratio_1s)
+            .unwrap_or(0.0)
+            .clamp(0.0, 1.0);
+        let rtt_ms = snapshot
+            .bwe
+            .latest_rtt_ms
+            .or(snapshot.connection.latest_rtt_ms);
+        let actual_kbps = snapshot.bwe.latest_actual_video_bitrate_kbps.unwrap_or(0.0);
+        let current_target_kbps = snapshot
+            .bwe
+            .target_remb_kbps
+            .or_else(|| {
+                (actual_kbps > 0.0)
+                    .then_some(actual_kbps.round() as u32)
+                    .map(|value| value.clamp(BWE_FLOOR_KBPS, BWE_CEILING_KBPS))
+            })
+            .unwrap_or(DEFAULT_BWE_TARGET_KBPS);
+        let (target_kbps, decision_reason) = resolve_bwe_target(
+            current_target_kbps,
+            loss_ratio,
+            rtt_ms,
+            actual_kbps,
+            snapshot.bwe.latest_observed_remb_kbps,
+            snapshot.connection.latest_transport_path.as_deref(),
+        );
+        if target_kbps == current_target_kbps {
+            return None;
+        }
+        self.next_bwe_observation_id = self.next_bwe_observation_id.saturating_add(1);
+        let evaluation = RtcBweEvaluation {
+            target_remb_kbps: target_kbps,
+            decision_reason,
+            observation_id: self.next_bwe_observation_id,
+        };
+        Some(BwePolicyProposal { evaluation })
+    }
+
+    fn should_emit_recovery_signal(&mut self, label: &str, observed_at_ms: f64) -> bool {
+        if let Some(last) = self.last_recovery_signal.clone() {
+            if last.label == label {
+                if observed_at_ms <= last.observed_at_ms {
+                    return false;
+                }
+                if observed_at_ms - last.emitted_at_ms < RECOVERY_REPEAT_SUPPRESS_MS {
+                    self.last_recovery_signal = Some(RecoverySignalCursor {
+                        label: label.to_string(),
+                        observed_at_ms,
+                        emitted_at_ms: last.emitted_at_ms,
+                    });
+                    return false;
+                }
+            }
+        }
+        self.last_recovery_signal = Some(RecoverySignalCursor {
+            label: label.to_string(),
+            observed_at_ms,
+            emitted_at_ms: observed_at_ms,
+        });
+        true
+    }
+
+    fn map_planned_command(
+        &mut self,
+        command: PlannedTransportCommand,
+        bwe_observation_id: u64,
+    ) -> Vec<TransportCommand> {
+        match command {
+            PlannedTransportCommand::RequestReconnectCandidate {
+                observation_id,
+                reason,
+            } => vec![TransportCommand::RequestReconnectCandidate {
+                reason,
+                observation_id,
+            }],
+            PlannedTransportCommand::ExecuteRecoveryAction {
+                decision,
+                reason_label,
+            } => map_recovery_action_to_transport_commands(
+                decision.action,
+                reason_label,
+                decision.observation_id,
+            ),
+            PlannedTransportCommand::UpdateTargetRemb {
+                target_remb_kbps,
+                decision_reason,
+            } => vec![TransportCommand::SetTargetRembKbps {
+                target_kbps: target_remb_kbps,
+                reason: decision_reason,
+                observation_id: bwe_observation_id,
+            }],
+        }
+    }
+}
+
+fn map_recovery_action_to_transport_commands(
+    action: RecoveryAction,
+    reason: String,
+    observation_id: u64,
+) -> Vec<TransportCommand> {
+    match action {
+        RecoveryAction::RequestKeyframe => vec![TransportCommand::RequestKeyframe {
+            reason,
+            observation_id,
+        }],
+        RecoveryAction::RequestDecoderReset => vec![TransportCommand::RequestDecoderReset {
+            reason,
+            observation_id,
+        }],
+        RecoveryAction::RequestReconnectCandidate => {
+            vec![TransportCommand::RequestReconnectCandidate {
+                reason,
+                observation_id,
+            }]
+        }
+        RecoveryAction::RequestKeyframeAndDecoderReset | RecoveryAction::StartupLowQualityRetry => {
+            vec![
+                TransportCommand::RequestKeyframe {
+                    reason: reason.clone(),
+                    observation_id,
+                },
+                TransportCommand::RequestDecoderReset {
+                    reason,
+                    observation_id,
+                },
+            ]
+        }
+        RecoveryAction::WaitForBurst
+        | RecoveryAction::WaitForDecoderResetBurst
+        | RecoveryAction::CooldownSuppressed
+        | RecoveryAction::StartupGraceSuppressed => Vec::new(),
+    }
+}
+
+fn map_label_to_escalation_reason(label: &str) -> Option<VideoEscalationReason> {
+    match label {
+        "ingressWaitKeyframe" => Some(VideoEscalationReason::WaitKeyframe),
+        "transportAwaitRecoveryKeyframe" => {
+            Some(VideoEscalationReason::TransportAwaitRecoveryKeyframe)
+        }
+        "ingressReconfigure" => Some(VideoEscalationReason::Reconfigure),
+        "decoderBackendFailure" => Some(VideoEscalationReason::DecoderBackendFailure),
+        "adapterIdleTimeout" => Some(VideoEscalationReason::AdapterIdleTimeout),
+        "adapterThinStream" => Some(VideoEscalationReason::AdapterThinStream),
+        "transportExpiredDeadline" => Some(VideoEscalationReason::TransportExpiredDeadline),
+        "transportSevereDeadline" => Some(VideoEscalationReason::TransportSevereDeadline),
+        "transportRecoveredLate" => Some(VideoEscalationReason::TransportRecoveredLate),
+        "transportSampleLoss" => Some(VideoEscalationReason::TransportSampleLoss),
+        _ => None,
+    }
+}
+
+fn resolve_bwe_target(
+    current_target_kbps: u32,
+    loss_ratio: f64,
+    rtt_ms: Option<f64>,
+    actual_kbps: f64,
+    observed_remb_kbps: Option<u32>,
+    transport_path: Option<&str>,
+) -> (u32, String) {
+    let (candidate, reason) = if loss_ratio >= 0.12 || rtt_ms.is_some_and(|rtt| rtt >= 260.0) {
+        (
+            ((current_target_kbps as f64) * 0.72).round() as u32,
+            "session.bwe.highLossOrRtt".to_string(),
+        )
+    } else if loss_ratio >= 0.06 || rtt_ms.is_some_and(|rtt| rtt >= 180.0) {
+        (
+            ((current_target_kbps as f64) * 0.86).round() as u32,
+            "session.bwe.moderateLossOrRtt".to_string(),
+        )
+    } else if loss_ratio <= 0.015
+        && rtt_ms.is_none_or(|rtt| rtt <= 95.0)
+        && (actual_kbps <= 0.0 || actual_kbps + 500.0 >= current_target_kbps as f64)
+    {
+        (
+            current_target_kbps.saturating_add(2_000),
+            "session.bwe.healthyRampUp".to_string(),
+        )
+    } else {
+        (current_target_kbps, "session.bwe.hold".to_string())
+    };
+    let profile_ceiling = if transport_path.is_some_and(|path| path.contains("relay")) {
+        45_000
+    } else if transport_path.is_some_and(|path| path.contains("cloud")) {
+        38_000
+    } else {
+        BWE_CEILING_KBPS
+    };
+    let capped_by_observed = observed_remb_kbps
+        .map(|observed| candidate.min(observed.saturating_add(4_000)))
+        .unwrap_or(candidate);
+    (
+        capped_by_observed.clamp(BWE_FLOOR_KBPS, profile_ceiling),
+        reason,
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::RtcSessionPolicy;
+    use crate::transport::rtc::facts::{ConnectionLifecycleStateFact, TransportCommand};
+    use crate::transport::rtc::projection::{
+        BweProjection, ConnectionProjection, DiagnosticsProjection, MediaProjection,
+        RecoveryProjection, TransportSnapshot,
+    };
+    use crate::transport::rtc::session::actor::SessionPolicyHook;
+
+    #[test]
+    fn reconnect_command_is_emitted_once_per_recovering_transition() {
+        let mut policy = RtcSessionPolicy::default();
+        let mut connection = ConnectionProjection::default();
+        let mut recovery = RecoveryProjection::default();
+        recovery.latest_diagnosis_label = Some("rtcPeerConnectionFailed".to_string());
+        connection.lifecycle_state = ConnectionLifecycleStateFact::Recovering;
+
+        let snapshot = TransportSnapshot::new(
+            1,
+            1.0,
+            connection.clone(),
+            MediaProjection::default(),
+            recovery.clone(),
+            BweProjection::default(),
+            DiagnosticsProjection::default(),
+        );
+        let commands = policy.on_snapshot(&snapshot);
+        assert_eq!(commands.len(), 1);
+        assert!(policy.on_snapshot(&snapshot).is_empty());
+
+        connection.lifecycle_state = ConnectionLifecycleStateFact::Connected;
+        let steady_snapshot = TransportSnapshot::new(
+            2,
+            2.0,
+            connection.clone(),
+            MediaProjection::default(),
+            recovery.clone(),
+            BweProjection::default(),
+            DiagnosticsProjection::default(),
+        );
+        assert!(policy.on_snapshot(&steady_snapshot).is_empty());
+
+        connection.lifecycle_state = ConnectionLifecycleStateFact::Recovering;
+        let recovering_again = TransportSnapshot::new(
+            3,
+            3.0,
+            connection,
+            MediaProjection::default(),
+            recovery,
+            BweProjection::default(),
+            DiagnosticsProjection::default(),
+        );
+        assert_eq!(policy.on_snapshot(&recovering_again).len(), 1);
+    }
+
+    #[test]
+    fn transport_await_recovery_keyframe_can_emit_keyframe_command() {
+        let mut policy = RtcSessionPolicy::default();
+        let mut snapshot = build_snapshot(
+            ConnectionLifecycleStateFact::Connected,
+            "transportAwaitRecoveryKeyframe",
+            100.0,
+        );
+        let commands = policy.on_snapshot(&snapshot);
+        assert!(commands
+            .iter()
+            .any(|command| matches!(command, TransportCommand::RequestKeyframe { .. })));
+
+        snapshot.recovery.last_observed_at_ms = Some(120.0);
+        assert!(policy.on_snapshot(&snapshot).is_empty());
+    }
+
+    #[test]
+    fn decoder_backend_failure_can_emit_decoder_reset_command() {
+        let mut policy = RtcSessionPolicy::default();
+        let snapshot = build_snapshot(
+            ConnectionLifecycleStateFact::Connected,
+            "decoderBackendFailure",
+            180.0,
+        );
+        let commands = policy.on_snapshot(&snapshot);
+        assert!(commands
+            .iter()
+            .any(|command| matches!(command, TransportCommand::RequestDecoderReset { .. })));
+    }
+
+    #[test]
+    fn bwe_tick_emits_target_remb_update_when_metrics_are_healthy() {
+        let mut policy = RtcSessionPolicy::default();
+        let mut connection = ConnectionProjection::default();
+        connection.lifecycle_state = ConnectionLifecycleStateFact::Connected;
+        connection.latest_loss_ratio_1s = Some(0.01);
+        connection.latest_rtt_ms = Some(40.0);
+        connection.latest_transport_path = Some("udp-direct".to_string());
+        let bwe = BweProjection {
+            latest_rtt_ms: Some(40.0),
+            latest_loss_ratio_1s: Some(0.01),
+            latest_actual_video_bitrate_kbps: Some(16_000.0),
+            latest_observed_remb_kbps: Some(20_000),
+            latest_transport_path: Some("udp-direct".to_string()),
+            latest_sample_tick_ms: Some(300.0),
+            target_remb_kbps: Some(16_000),
+            last_observed_at_ms: Some(300.0),
+        };
+        let snapshot = TransportSnapshot::new(
+            1,
+            300.0,
+            connection,
+            MediaProjection::default(),
+            RecoveryProjection::default(),
+            bwe,
+            DiagnosticsProjection::default(),
+        );
+        let commands = policy.on_snapshot(&snapshot);
+        let command = commands
+            .into_iter()
+            .find_map(|command| {
+                if let TransportCommand::SetTargetRembKbps { target_kbps, .. } = command {
+                    Some(target_kbps)
+                } else {
+                    None
+                }
+            })
+            .unwrap_or(0);
+        assert!(command > 16_000);
+    }
+
+    #[test]
+    fn reconnect_keeps_priority_over_recovery_and_bwe() {
+        let mut policy = RtcSessionPolicy::default();
+        let mut connection = ConnectionProjection::default();
+        connection.lifecycle_state = ConnectionLifecycleStateFact::Recovering;
+        connection.latest_loss_ratio_1s = Some(0.01);
+        connection.latest_rtt_ms = Some(40.0);
+        let recovery = RecoveryProjection {
+            latest_diagnosis_label: Some("transportAwaitRecoveryKeyframe".to_string()),
+            pending_action: false,
+            successful_action_count: 0,
+            failed_action_count: 0,
+            last_observed_at_ms: Some(100.0),
+        };
+        let bwe = BweProjection {
+            latest_rtt_ms: Some(40.0),
+            latest_loss_ratio_1s: Some(0.01),
+            latest_actual_video_bitrate_kbps: Some(12_000.0),
+            latest_observed_remb_kbps: Some(18_000),
+            latest_transport_path: Some("udp-direct".to_string()),
+            latest_sample_tick_ms: Some(100.0),
+            target_remb_kbps: Some(12_000),
+            last_observed_at_ms: Some(100.0),
+        };
+        let snapshot = TransportSnapshot::new(
+            1,
+            100.0,
+            connection,
+            MediaProjection::default(),
+            recovery,
+            bwe,
+            DiagnosticsProjection::default(),
+        );
+        let commands = policy.on_snapshot(&snapshot);
+        assert_eq!(commands.len(), 1);
+        assert!(matches!(
+            commands[0],
+            TransportCommand::RequestReconnectCandidate { .. }
+        ));
+    }
+
+    fn build_snapshot(
+        lifecycle_state: ConnectionLifecycleStateFact,
+        diagnosis: &str,
+        observed_at_ms: f64,
+    ) -> TransportSnapshot {
+        let mut connection = ConnectionProjection::default();
+        connection.lifecycle_state = lifecycle_state;
+        let recovery = RecoveryProjection {
+            latest_diagnosis_label: Some(diagnosis.to_string()),
+            pending_action: false,
+            successful_action_count: 0,
+            failed_action_count: 0,
+            last_observed_at_ms: Some(observed_at_ms),
+        };
+        TransportSnapshot::new(
+            1,
+            observed_at_ms,
+            connection,
+            MediaProjection::default(),
+            recovery,
+            BweProjection::default(),
+            DiagnosticsProjection::default(),
+        )
+    }
+}

@@ -14,7 +14,6 @@ const DECODE_MAILBOX_CAPACITY: usize = 2;
 
 pub enum DecodeMsg {
     Frame(EncodedFrame),
-    Flush,
     Stop,
 }
 
@@ -83,10 +82,6 @@ impl DecodeActorHandle {
         self.available_slots.load(Ordering::Acquire)
     }
 
-    pub fn flush(&self) {
-        let _ = self.tx.send(DecodeMsg::Flush);
-    }
-
     pub fn stop(&self) {
         let _ = self.tx.send(DecodeMsg::Stop);
     }
@@ -153,8 +148,6 @@ fn run_decode_loop(
                 }
                 while let Some(render_frame) = decode_state.pop_decoded_frame(now_ms) {
                     let decoded_frame = DecodedFrame {
-                        width: render_frame.width,
-                        height: render_frame.height,
                         pts: target_time, // map pts back
                         surface: render_frame,
                     };
@@ -165,14 +158,6 @@ fn run_decode_loop(
                     }
                 }
                 sync_decode_runtime_stats(&runtime_stats, &decode_state, now_ms);
-            }
-            DecodeMsg::Flush => {
-                let _ = decode_state.request_decoder_reset();
-                sync_decode_runtime_stats(
-                    &runtime_stats,
-                    &decode_state,
-                    crate::media::video::decode::video_decode::now_ms_f64(),
-                );
             }
             DecodeMsg::Stop => {
                 break;

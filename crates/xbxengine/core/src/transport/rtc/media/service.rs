@@ -1,14 +1,12 @@
 use crate::transport::rtc::media::packet_router::{
-    classify_packet, parse_payload_route_map_from_answer, RtcMediaRouteDecision, RtcMediaRouteLabel,
-    RtcPayloadRouteMap,
+    classify_packet, parse_payload_route_map_from_answer, RtcMediaRouteDecision,
+    RtcMediaRouteLabel, RtcPayloadRouteMap,
 };
 use crate::transport::rtc::media::packet_types::{
     MediaPacketKind, RtcMediaIngressPacket, RtcMediaPacketSource, RtcRtpPacketMeta,
 };
 use crate::transport::rtc::media::runtime_state::{RtcMediaIngressSnapshot, RtcMediaRuntimeState};
-use crate::transport::rtc::media::sink::{
-    NullRtcMediaSink, NullRtcRtcpSendPort, RtcMediaSink, RtcRtcpSendPort,
-};
+use crate::transport::rtc::media::sink::{NullRtcMediaSink, RtcMediaSink};
 use crate::transport::rtc::stats::now_ms_f64;
 use crate::XbxEngineMediaRuntimeStats;
 use std::sync::{Arc, Mutex};
@@ -17,7 +15,6 @@ pub(crate) struct RtcMediaService {
     state: RtcMediaRuntimeState,
     payload_route_map: Option<RtcPayloadRouteMap>,
     sink: Box<dyn RtcMediaSink>,
-    rtcp_send_port: Box<dyn RtcRtcpSendPort>,
 }
 
 impl Default for RtcMediaService {
@@ -26,7 +23,6 @@ impl Default for RtcMediaService {
             state: RtcMediaRuntimeState::default(),
             payload_route_map: None,
             sink: Box::new(NullRtcMediaSink),
-            rtcp_send_port: Box::new(NullRtcRtcpSendPort),
         }
     }
 }
@@ -39,10 +35,6 @@ impl RtcMediaService {
     pub(crate) fn reset(&mut self) {
         self.state = RtcMediaRuntimeState::default();
         self.payload_route_map = None;
-    }
-
-    pub(crate) fn send_rtcp(&mut self, payload: &[u8]) {
-        self.rtcp_send_port.send_rtcp(payload);
     }
 
     // 兼容第一阶段旧调用点；后续连接层可直接切到 observe_ingress_packet。

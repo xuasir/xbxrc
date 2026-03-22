@@ -4,12 +4,10 @@ use std::time::{Duration, Instant};
 use xbxengine_protocol::XbxEngineTransportStateDto;
 
 use crate::runtime_stats_sink::RuntimeStatsSink;
-use crate::transport::rtc::recovery::diagnosis::VideoRecoveryDiagnosis;
 use crate::transport::rtc::recovery::escalation::{
     RecoveryAction, VideoEscalationController, VideoEscalationDecision, VideoEscalationReason,
 };
 use crate::transport::rtc::recovery::policy::{RecoveryScenarioProfile, ScenarioPolicyResolver};
-use crate::transport::rtc::recovery::signal::{VideoIngressSignal, VideoRecoverySignal};
 use crate::transport::rtc::recovery::startup::{
     extract_startup_recovery_bitrate_kbps, resolve_session_phase,
     should_fast_reset_startup_recovery, should_suppress_startup_escalation, SessionPhase,
@@ -39,19 +37,6 @@ pub(crate) enum RecoveryCouplingMode {
     ThinStream,
 }
 
-impl RecoveryCouplingMode {
-    pub(crate) fn as_str(self) -> &'static str {
-        match self {
-            RecoveryCouplingMode::Healthy => "healthy",
-            RecoveryCouplingMode::StartupLowQuality => "startupLowQuality",
-            RecoveryCouplingMode::WaitingKeyframe => "waitingKeyframe",
-            RecoveryCouplingMode::RecoveringReferenceChain => "recoveringReferenceChain",
-            RecoveryCouplingMode::Stalled => "stalled",
-            RecoveryCouplingMode::ThinStream => "thinStream",
-        }
-    }
-}
-
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct RecoveryCouplingState {
     pub(crate) mode: RecoveryCouplingMode,
@@ -60,41 +45,12 @@ pub(crate) struct RecoveryCouplingState {
     pub(crate) allow_peak_range: bool,
 }
 
-impl RecoveryCouplingState {
-    pub(crate) fn summary(self) -> String {
-        format!(
-            "{}:{}:{}:{}",
-            self.mode.as_str(),
-            if self.suppress_ramp_up {
-                "suppressRampUp"
-            } else {
-                "allowRampUp"
-            },
-            if self.prefer_hold {
-                "preferHold"
-            } else {
-                "allowAdvance"
-            },
-            if self.allow_peak_range {
-                "allowPeak"
-            } else {
-                "capPeak"
-            },
-        )
-    }
-}
-
 #[derive(Clone, Debug)]
 pub(crate) struct RecoveryRuntimeState {
     pub(crate) phase: SessionPhase,
     pub(crate) recovery_policy_profile: &'static str,
     pub(crate) diagnosis_label: String,
     pub(crate) coupling: RecoveryCouplingState,
-}
-
-pub(crate) struct RecoveryDispatch {
-    pub(crate) runtime_state: RecoveryRuntimeState,
-    pub(crate) decision: VideoEscalationDecision,
 }
 
 fn resolve_recovery_profile(
@@ -274,59 +230,13 @@ impl RecoveryCoordinator {
         }
     }
 
-    pub(crate) fn runtime_state_for_label(
-        &self,
-        runtime_stats: &Mutex<XbxEngineMediaRuntimeStats>,
-        diagnosis_label: &str,
-    ) -> RecoveryRuntimeState {
-        Self::runtime_state_for_diagnosis(
-            runtime_stats,
-            diagnosis_label,
-            self.stream_started_at,
-            self.startup_grace,
-        )
-    }
-
-    pub(crate) fn on_transport_signal_with_runtime_stats(
-        &mut self,
-        signal: VideoRecoverySignal,
-        runtime_stats: &Mutex<XbxEngineMediaRuntimeStats>,
-    ) -> RecoveryDispatch {
-        self.dispatch_diagnosis(signal.diagnose(), runtime_stats)
-    }
-
-    pub(crate) fn on_ingress_signal_with_runtime_stats(
-        &mut self,
-        signal: VideoIngressSignal,
-        runtime_stats: &Mutex<XbxEngineMediaRuntimeStats>,
-    ) -> RecoveryDispatch {
-        self.dispatch_diagnosis(signal.diagnose(), runtime_stats)
-    }
-
-    fn dispatch_diagnosis(
-        &mut self,
-        diagnosis: VideoRecoveryDiagnosis,
-        runtime_stats: &Mutex<XbxEngineMediaRuntimeStats>,
-    ) -> RecoveryDispatch {
-        let diagnosis_label = self
-            .runtime_state_for_label(runtime_stats, diagnosis.label)
-            .diagnosis_label;
-        let decision = self.on_reason_with_runtime_stats(diagnosis.reason, runtime_stats);
-        let runtime_state = self.runtime_state_for_label(runtime_stats, diagnosis_label.as_str());
-        RecoveryDispatch {
-            runtime_state,
-            decision,
-        }
-    }
-
     fn resolve_effective_diagnosis_label(
         runtime_stats: &Mutex<XbxEngineMediaRuntimeStats>,
         diagnosis_label: &str,
     ) -> String {
         if diagnosis_label == "adapterIdleTimeout"
             && RuntimeStatsSink::read_shared(runtime_stats, |stats| {
-                is_audio_only_track(stats)
-                    && has_recent_recovery_action(stats, unix_now_ms())
+                is_audio_only_track(stats) && has_recent_recovery_action(stats, unix_now_ms())
             })
             .unwrap_or(false)
         {
@@ -879,12 +789,15 @@ fn has_recent_recovery_action(stats: &XbxEngineMediaRuntimeStats, now_ms: f64) -
 }
 
 fn is_audio_only_track(stats: &XbxEngineMediaRuntimeStats) -> bool {
-    stats.latest_video_track_status.as_ref().is_some_and(|status| {
-        status.state == "audioOnly"
-            && status.video_bytes_total == 0
-            && status.audio_bytes_total > 0
-            && status.transport_state == XbxEngineTransportStateDto::Connected
-    })
+    stats
+        .latest_video_track_status
+        .as_ref()
+        .is_some_and(|status| {
+            status.state == "audioOnly"
+                && status.video_bytes_total == 0
+                && status.audio_bytes_total > 0
+                && status.transport_state == XbxEngineTransportStateDto::Connected
+        })
 }
 
 fn decoder_backend_failure_signal_is_active(
@@ -1050,9 +963,7 @@ pub(crate) fn resolve_recovery_coupling_state(
             prefer_hold: true,
             allow_peak_range: false,
         },
-        Some("adapterIdleTimeout" | "decoderBackendFailure")
-            if !stale_idle_timeout =>
-        {
+        Some("adapterIdleTimeout" | "decoderBackendFailure") if !stale_idle_timeout => {
             RecoveryCouplingState {
                 mode: RecoveryCouplingMode::Stalled,
                 suppress_ramp_up: true,
@@ -1402,6 +1313,12 @@ mod tests {
             Instant::now() - Duration::from_secs(3),
             Duration::from_millis(800),
         );
+        assert_eq!(state.phase, SessionPhase::Recovering);
+        assert_eq!(state.recovery_policy_profile, "homeLanGaming");
+        assert_eq!(
+            state.coupling.mode,
+            RecoveryCouplingMode::RecoveringReferenceChain
+        );
         assert_eq!(state.diagnosis_label, "decoderBackendFailure");
     }
 
@@ -1424,6 +1341,9 @@ mod tests {
             Instant::now() - Duration::from_secs(3),
             Duration::from_millis(800),
         );
+        assert_eq!(state.phase, SessionPhase::Steady);
+        assert_eq!(state.recovery_policy_profile, "homeLanGaming");
+        assert_eq!(state.coupling.mode, RecoveryCouplingMode::Healthy);
         assert_eq!(state.diagnosis_label, "transportExpiredDeadline");
     }
 
@@ -1741,12 +1661,13 @@ mod tests {
         let now_ms = unix_now_ms();
         let mut stats = XbxEngineMediaRuntimeStats::default();
         stats.recovery_diagnosis = Some("adapterIdleTimeout".to_string());
-        stats.latest_video_escalation_observation = Some(crate::XbxEngineVideoEscalationObservation {
-            observation_id: 1,
-            reason: "adapterIdleTimeout".to_string(),
-            action: "requestDecoderReset".to_string(),
-            observed_at_ms: now_ms - 500.0,
-        });
+        stats.latest_video_escalation_observation =
+            Some(crate::XbxEngineVideoEscalationObservation {
+                observation_id: 1,
+                reason: "adapterIdleTimeout".to_string(),
+                action: "requestDecoderReset".to_string(),
+                observed_at_ms: now_ms - 500.0,
+            });
         stats.latest_video_track_status = Some(crate::XbxEngineVideoTrackStatus {
             state: "audioOnly".to_string(),
             video_width: None,
@@ -1765,6 +1686,9 @@ mod tests {
             Instant::now(),
             Duration::from_millis(800),
         );
+        assert_eq!(state.phase, SessionPhase::Startup);
+        assert_eq!(state.recovery_policy_profile, "homeLanGaming");
+        assert_eq!(state.coupling.mode, RecoveryCouplingMode::Stalled);
         assert_eq!(state.diagnosis_label, "healthy");
     }
 

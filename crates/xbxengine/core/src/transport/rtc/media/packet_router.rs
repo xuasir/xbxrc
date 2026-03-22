@@ -246,7 +246,9 @@ pub(crate) fn parse_payload_route_map_from_answer(answer_sdp: &str) -> Option<Rt
                         if codec == "rtx" {
                             route_map.repair_rtx_payload_types.insert(payload_type);
                             if let Some(&apt_payload_type) = rtx_apt_targets.get(&payload_type) {
-                                route_map.repair_rtx_apt_targets.insert(payload_type, apt_payload_type);
+                                route_map
+                                    .repair_rtx_apt_targets
+                                    .insert(payload_type, apt_payload_type);
                             }
                         }
                     } else if rtx_apt_targets.values().any(|&apt| apt == payload_type)

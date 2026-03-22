@@ -5,7 +5,7 @@
 //! - diagnosis：信号 → 恢复原因映射
 //! - escalation：burst/cooldown 决策引擎
 //! - coordinator：编排完整决策链
-//! - executor：将决策落地为控制动作
+//! - executor：由 rtc 顶层 executor 层统一执行
 //!
 //! 以及配套的：
 //! - startup：启动阶段特殊恢复逻辑
@@ -14,7 +14,6 @@
 pub mod coordinator;
 pub mod diagnosis;
 pub mod escalation;
-pub mod executor;
 pub mod policy;
 pub mod signal;
 pub mod startup;

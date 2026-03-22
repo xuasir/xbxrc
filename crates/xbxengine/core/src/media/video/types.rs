@@ -97,7 +97,6 @@ impl AssembledVideoFrame {
             width: self.width,
             height: self.height,
             rtp_timestamp: self.rtp_timestamp,
-            assembled_at: self.assembled_at,
             target_playout_time,
             h264: self.h264,
             payload: self.payload,
@@ -118,19 +117,13 @@ pub struct EncodedFrame {
 
     pub rtp_timestamp: u32,
 
-    pub assembled_at: Instant,
     pub target_playout_time: Instant,
 
     pub h264: H264AccessUnitInspection,
     pub payload: Bytes,
 }
 
-pub trait FrameSurface: Send + Sync {}
-
 pub struct DecodedFrame {
-    pub width: u32,
-    pub height: u32,
-
     pub pts: Instant,
 
     pub surface: crate::media::video::render::renderer::XbxRenderFrame,

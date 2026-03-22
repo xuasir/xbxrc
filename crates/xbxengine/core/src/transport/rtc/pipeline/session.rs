@@ -11,26 +11,21 @@ use crate::{
     media::video::render::renderer::XbxRenderState,
     media::video::types::AssembledVideoFrame,
     runtime_stats_sink::RuntimeStatsSink,
+    transport::rtc::facts::{IngressDecisionFact, MediaFact, TransportFact},
     transport::rtc::media::adapter_types::{
         TransportAdmissionObservation, TransportLossObservation, TransportObservation,
         VideoFramePipelineSources,
     },
-    transport::rtc::recovery::escalation::VideoEscalationController,
-    XbxEngineMediaRuntimeStats, XbxEnginePendingRuntimeRecoveryAction, XbxEngineRuntimeConfig,
+    XbxEngineMediaRuntimeStats, XbxEngineRuntimeConfig,
 };
 
 use super::observation::MediaSupervisorObservationState;
-use super::recovery_driver::RecoveryDriver;
-use super::recovery_types::RecoverySchedulerInput;
-use super::scheduler::MediaSessionScheduler;
 
 #[derive(Clone)]
 pub(super) struct MediaSessionContext {
     pub(super) runtime_stats: Arc<Mutex<XbxEngineMediaRuntimeStats>>,
-    pub(super) pending_runtime_recovery_action:
-        Arc<Mutex<Option<XbxEnginePendingRuntimeRecoveryAction>>>,
-    pub(super) data_channel_state: Arc<Mutex<crate::transport::rtc::protocol::data_channel_state::XbxDataChannelState>>,
     pub(super) render_state: Arc<Mutex<XbxRenderState>>,
+    pub(super) transport_fact_sink: Arc<Mutex<Vec<TransportFact>>>,
     pub(super) runtime_config: XbxEngineRuntimeConfig,
 }
 
@@ -40,7 +35,6 @@ pub(super) struct ActiveMediaSession {
     renderer: Arc<crate::media::video::render::actor::RendererActorHandle>,
     frame_source_task: tokio::task::JoinHandle<()>,
     transport_observation_task: tokio::task::JoinHandle<()>,
-    recovery_task: tokio::task::JoinHandle<()>,
     task: tokio::task::JoinHandle<()>,
 }
 
@@ -51,7 +45,6 @@ impl ActiveMediaSession {
         self.renderer.stop();
         self.frame_source_task.abort();
         self.transport_observation_task.abort();
-        self.recovery_task.abort();
         self.task.abort();
     }
 }
@@ -85,8 +78,6 @@ pub(super) fn spawn_media_session(
     ));
     let severe_deadline_packet_threshold =
         (usize::from(video_pipeline_config.nack_burst_count.max(1)) * 32).max(128);
-    let (recovery_input_tx, recovery_input_rx) =
-        mpsc::unbounded_channel::<RecoverySchedulerInput>();
 
     let (frame_tx, frame_rx) = mpsc::channel::<AssembledVideoFrame>(256);
     let (transport_observation_tx, transport_observation_rx) =
@@ -108,7 +99,10 @@ pub(super) fn spawn_media_session(
 
     let transport_observation_task = tokio::spawn(async move {
         crate::xbx_log_info!("[MediaSession] transport observation feeder started");
-        while let Some(observation) = transport_observation_source.recv_transport_observation().await {
+        while let Some(observation) = transport_observation_source
+            .recv_transport_observation()
+            .await
+        {
             if transport_observation_tx.send(observation).is_err() {
                 break;
             }
@@ -116,11 +110,6 @@ pub(super) fn spawn_media_session(
         crate::xbx_log_info!("[MediaSession] transport observation feeder stopped");
     });
 
-    let recovery_task = spawn_media_recovery(
-        recovery_input_rx,
-        context.clone(),
-        decode_handle.clone(),
-    );
     let session_decode_handle = decode_handle.clone();
 
     let task = {
@@ -128,13 +117,13 @@ pub(super) fn spawn_media_session(
             MediaSessionLoop::new(
                 frame_rx,
                 transport_observation_rx,
-                recovery_input_tx,
                 jitter_buffer_min_delay,
                 jitter_buffer_max_delay,
                 video_pipeline_config.late_frame_drop_threshold_ms,
                 video_pipeline_config.backlog_drop_threshold_packets,
                 session_decode_handle,
                 context.runtime_stats.clone(),
+                context.transport_fact_sink.clone(),
                 severe_deadline_packet_threshold,
             )
             .run()
@@ -148,105 +137,58 @@ pub(super) fn spawn_media_session(
         renderer: renderer_handle,
         frame_source_task,
         transport_observation_task,
-        recovery_task,
         task,
     }
-}
-
-fn spawn_media_recovery(
-    mut recovery_input_rx: mpsc::UnboundedReceiver<RecoverySchedulerInput>,
-    context: MediaSessionContext,
-    decode_handle: Arc<crate::media::video::decode::actor::DecodeActorHandle>,
-) -> tokio::task::JoinHandle<()> {
-    tokio::spawn(async move {
-        crate::xbx_log_info!("[Recovery] dispatcher started");
-        let stream_started_at = std::time::Instant::now();
-        let startup_escalation_grace =
-            Duration::from_millis(context.runtime_config.webrtc.recovery.first_frame_grace_ms);
-        let recovery_driver = RecoveryDriver::new(
-            VideoEscalationController::new(
-                ingress_keyframe_cooldown_from_context(&context),
-                context
-                    .runtime_config
-                    .webrtc
-                    .recovery
-                    .keyframe_loss_burst_threshold
-                    .max(1) as u8,
-                context
-                    .runtime_config
-                    .webrtc
-                    .recovery
-                    .keyframe_loss_burst_threshold
-                    .saturating_add(1)
-                    .max(1),
-            ),
-            context.data_channel_state.clone(),
-            context.pending_runtime_recovery_action.clone(),
-            context.runtime_stats.clone(),
-            decode_handle,
-            stream_started_at,
-            startup_escalation_grace,
-        );
-        let mut scheduler = MediaSessionScheduler::new(recovery_driver);
-        while let Some(input) = recovery_input_rx.recv().await {
-            scheduler.handle_input(input).await;
-        }
-        crate::xbx_log_info!("[Recovery] dispatcher stopped");
-    })
 }
 
 struct MediaSessionLoop {
     frame_rx: mpsc::Receiver<AssembledVideoFrame>,
     transport_observation_rx: mpsc::UnboundedReceiver<TransportObservation>,
-    recovery_input_tx: mpsc::UnboundedSender<RecoverySchedulerInput>,
     ingress: VideoIngress,
     decode_handle: Arc<crate::media::video::decode::actor::DecodeActorHandle>,
     runtime_stats: RuntimeStatsSink,
+    transport_fact_sink: Arc<Mutex<Vec<TransportFact>>>,
     observation: MediaSupervisorObservationState,
     jitter_buffer_min_delay: Duration,
     jitter_buffer_max_delay: Duration,
     severe_deadline_packet_threshold: usize,
-    startup_retry_tick: tokio::time::Interval,
     decode_drain_tick: tokio::time::Interval,
     frame_event_count: u64,
     transport_event_count: u64,
     decode_tick_count: u64,
-    startup_retry_tick_count: u64,
 }
 
 impl MediaSessionLoop {
     fn new(
         frame_rx: mpsc::Receiver<AssembledVideoFrame>,
         transport_observation_rx: mpsc::UnboundedReceiver<TransportObservation>,
-        recovery_input_tx: mpsc::UnboundedSender<RecoverySchedulerInput>,
         jitter_buffer_min_delay: Duration,
         jitter_buffer_max_delay: Duration,
         late_frame_drop_threshold_ms: u64,
         backlog_drop_threshold_packets: u16,
         decode_handle: Arc<crate::media::video::decode::actor::DecodeActorHandle>,
         runtime_stats: Arc<Mutex<XbxEngineMediaRuntimeStats>>,
+        transport_fact_sink: Arc<Mutex<Vec<TransportFact>>>,
         severe_deadline_packet_threshold: usize,
     ) -> Self {
         Self {
             frame_rx,
             transport_observation_rx,
-            recovery_input_tx,
             ingress: VideoIngress::new(
                 usize::from(backlog_drop_threshold_packets.max(1)),
                 Duration::from_millis(late_frame_drop_threshold_ms),
             ),
             decode_handle,
             runtime_stats: RuntimeStatsSink::new(runtime_stats),
+            transport_fact_sink,
             observation: MediaSupervisorObservationState::new(),
             jitter_buffer_min_delay,
             jitter_buffer_max_delay,
             severe_deadline_packet_threshold,
-            startup_retry_tick: tokio::time::interval(Duration::from_millis(120)),
             decode_drain_tick: tokio::time::interval(Duration::from_millis(4)),
             frame_event_count: 0,
             transport_event_count: 0,
             decode_tick_count: 0,
-            startup_retry_tick_count: 0,
         }
     }
 
@@ -263,19 +205,6 @@ impl MediaSessionLoop {
                         );
                     }
                     self.on_decode_drain_tick();
-                }
-                _ = self.startup_retry_tick.tick() => {
-                    self.startup_retry_tick_count = self.startup_retry_tick_count.saturating_add(1);
-                    if self.startup_retry_tick_count == 1 || self.startup_retry_tick_count.is_power_of_two() {
-                        crate::xbx_log_info!(
-                            "[MediaSession] startup retry tick count={}",
-                            self.startup_retry_tick_count
-                        );
-                    }
-                    self.on_decode_drain_tick();
-                    let _ = self
-                        .recovery_input_tx
-                        .send(RecoverySchedulerInput::StartupRetryTick);
                 }
                 maybe_frame = self.frame_rx.recv() => {
                     let Some(frame) = maybe_frame else {
@@ -326,6 +255,13 @@ impl MediaSessionLoop {
         let now_ms = now_ms_f64();
         self.observation
             .record_frame_arrival(&self.runtime_stats, now_ms);
+        self.push_transport_fact(TransportFact::Media(MediaFact::FrameArrived {
+            rtp_timestamp: assembled_frame.rtp_timestamp,
+            width: assembled_frame.width,
+            height: assembled_frame.height,
+            is_keyframe: assembled_frame.is_keyframe,
+            observed_at_ms: now_ms,
+        }));
         if self.frame_event_count == 1 || self.frame_event_count.is_power_of_two() {
             crate::xbx_log_info!(
                 "[MediaSession] frame ts={} size={}x{} keyframe={}",
@@ -359,94 +295,113 @@ impl MediaSessionLoop {
             frame_meta.2,
             frame_queue_depth_before_submit,
         );
+        self.push_transport_fact(TransportFact::Media(MediaFact::IngressDecisionObserved {
+            decision: map_ingress_decision_fact(&decision),
+            queue_depth: frame_queue_depth_before_submit,
+            observed_at_ms: now_ms,
+        }));
         if matches!(
             decision,
             IngressDecision::WaitKeyframe | IngressDecision::Reconfigure
         ) {
             if self.frame_event_count == 1 || self.frame_event_count.is_power_of_two() {
                 crate::xbx_log_warn!(
-                    "[MediaSession] frame event triggered recovery decision={:?}",
+                    "[MediaSession] frame event triggered ingress hint={:?}",
                     decision
                 );
             }
-            let _ = self.recovery_input_tx.send(RecoverySchedulerInput::IngressSignal(
-                crate::transport::rtc::recovery::signal::VideoIngressSignal::from_decision(
-                    &decision,
-                ),
-            ));
         }
         self.on_decode_drain_tick();
     }
 
     async fn on_transport_observation(&mut self, observation: TransportObservation) {
-        let signal = map_transport_observation_to_recovery_signal(
-            observation,
+        let hint_label = map_transport_observation_to_hint_label(
+            &observation,
             self.severe_deadline_packet_threshold,
         );
         let hint_now_ms = now_ms_f64();
-        let diagnosis = signal.diagnose();
         if self.transport_event_count == 1 || self.transport_event_count.is_power_of_two() {
             crate::xbx_log_info!(
                 "[MediaSession] transport observation diagnosis={}",
-                diagnosis.label
+                hint_label
             );
         }
         if self
             .observation
-            .should_log_transport_hint(diagnosis.label, hint_now_ms)
+            .should_log_transport_hint(hint_label, hint_now_ms)
         {
-            crate::xbx_log_warn!(
-                "[MediaSession] Transport escalation hint: {}",
-                diagnosis.label
-            );
+            crate::xbx_log_warn!("[MediaSession] Transport escalation hint: {}", hint_label);
             self.observation
-                .record_transport_hint(diagnosis.label.to_string(), hint_now_ms);
+                .record_transport_hint(hint_label.to_string(), hint_now_ms);
         }
-        let _ = self.recovery_input_tx.send(RecoverySchedulerInput::TransportSignal(signal));
+        self.push_transport_fact(TransportFact::Media(
+            MediaFact::TransportObservationRaised {
+                label: hint_label.to_string(),
+                severity: transport_observation_severity(&observation),
+                observed_at_ms: hint_now_ms,
+            },
+        ));
+    }
+
+    fn push_transport_fact(&self, fact: TransportFact) {
+        if let Ok(mut pending) = self.transport_fact_sink.lock() {
+            pending.push(fact);
+        }
     }
 }
 
-fn map_transport_observation_to_recovery_signal(
-    observation: TransportObservation,
+fn map_transport_observation_to_hint_label(
+    observation: &TransportObservation,
     severe_deadline_packet_threshold: usize,
-) -> crate::transport::rtc::recovery::signal::VideoRecoverySignal {
-    use crate::transport::rtc::recovery::signal::VideoRecoverySignal;
-
+) -> &'static str {
     match observation {
         TransportObservation::Admission(TransportAdmissionObservation::AwaitRecoveryKeyframe) => {
-            VideoRecoverySignal::TransportAwaitRecoveryKeyframe
+            "transportAwaitRecoveryKeyframe"
         }
         TransportObservation::Loss(TransportLossObservation::PacketLossDetected) => {
-            VideoRecoverySignal::TransportSampleLoss
+            "transportSampleLoss"
         }
         TransportObservation::Loss(TransportLossObservation::RecoveryKeyframeRequested) => {
-            VideoRecoverySignal::TransportSampleLossBurst
+            "transportSampleLossBurst"
         }
         TransportObservation::Loss(TransportLossObservation::AwaitRecoveryKeyframe) => {
-            VideoRecoverySignal::TransportAwaitRecoveryKeyframe
+            "transportAwaitRecoveryKeyframe"
         }
-        TransportObservation::StreamIdleTimeout => VideoRecoverySignal::AdapterIdleTimeout,
-        TransportObservation::StreamThinStall => VideoRecoverySignal::AdapterThinStream,
-        TransportObservation::NackRecoveredLate => VideoRecoverySignal::TransportRecoveredLate,
+        TransportObservation::StreamIdleTimeout => "adapterIdleTimeout",
+        TransportObservation::StreamThinStall => "adapterThinStream",
+        TransportObservation::NackRecoveredLate => "transportRecoveredLate",
         TransportObservation::NackDeadlineExpired { missing_packets } => {
-            if usize::from(missing_packets) >= severe_deadline_packet_threshold {
-                VideoRecoverySignal::TransportSevereDeadline
+            if usize::from(*missing_packets) >= severe_deadline_packet_threshold {
+                "transportSevereDeadline"
             } else {
-                VideoRecoverySignal::TransportExpiredDeadline
+                "transportExpiredDeadline"
             }
         }
     }
 }
 
-fn ingress_keyframe_cooldown_from_context(context: &MediaSessionContext) -> Duration {
-    Duration::from_millis(
-        context
-            .runtime_config
-            .webrtc
-            .recovery
-            .keyframe_request_stall_ms
-            .max(250),
-    )
+fn map_ingress_decision_fact(decision: &IngressDecision) -> IngressDecisionFact {
+    match decision {
+        IngressDecision::Submit => IngressDecisionFact::Submit,
+        IngressDecision::DropLate => IngressDecisionFact::DropLate,
+        IngressDecision::DropBacklog => IngressDecisionFact::DropBacklog,
+        IngressDecision::WaitKeyframe => IngressDecisionFact::WaitKeyframe,
+        IngressDecision::Reconfigure => IngressDecisionFact::Reconfigure,
+    }
+}
+
+fn transport_observation_severity(observation: &TransportObservation) -> u8 {
+    match observation {
+        TransportObservation::NackDeadlineExpired { missing_packets } if *missing_packets >= 64 => {
+            2
+        }
+        TransportObservation::StreamIdleTimeout
+        | TransportObservation::StreamThinStall
+        | TransportObservation::NackDeadlineExpired { .. } => 1,
+        TransportObservation::Admission(_)
+        | TransportObservation::Loss(_)
+        | TransportObservation::NackRecoveredLate => 0,
+    }
 }
 
 fn drain_ingress_to_decode(

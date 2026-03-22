@@ -2,8 +2,7 @@ use std::sync::{Arc, Mutex};
 
 use crate::{
     XbxEngineMediaRuntimeStats, XbxEngineVideoFrameDropObservation, XbxEngineVideoNackObservation,
-    XbxEngineVideoPacketGapObservation, XbxEngineVideoRepairProbeObservation,
-    XbxEngineVideoRtxReinjectObservation, XbxEngineVideoTrackStatus, XbxEngineVideoTwccObservation,
+    XbxEngineVideoPacketGapObservation, XbxEngineVideoRtxReinjectObservation,
 };
 
 #[derive(Clone)]
@@ -22,13 +21,6 @@ pub(crate) enum ObservationEvent {
         width: u32,
         height: u32,
     },
-    VideoTrackStatus {
-        status: XbxEngineVideoTrackStatus,
-    },
-    VideoRepairProbe {
-        observation: XbxEngineVideoRepairProbeObservation,
-        reset_active_window: bool,
-    },
     VideoRtxReinject {
         observation: XbxEngineVideoRtxReinjectObservation,
     },
@@ -45,22 +37,8 @@ pub(crate) enum ObservationEvent {
         inbound_video_bitrate_kbps: f64,
         inbound_primary_video_bytes_total: u64,
     },
-    DataChannelAvailability {
-        control_ready: bool,
-        control_open: bool,
-        handshake_acked: bool,
-        control_started: bool,
-        control_bootstrapped: bool,
-    },
     VideoFrameDrop {
         observation: XbxEngineVideoFrameDropObservation,
-    },
-    RecoveryRuntimeState {
-        session_phase: String,
-        recovery_policy_profile: String,
-        recovery_diagnosis: String,
-        recovery_coupling_mode: String,
-        recovery_coupling_summary: String,
     },
     InboundVideoPacketLossEstimate {
         packet_count: u16,
@@ -88,9 +66,6 @@ pub(crate) enum ObservationEvent {
         observation: XbxEngineVideoPacketGapObservation,
         latest_sequence: u16,
     },
-    LatestVideoTwccObservation {
-        observation: XbxEngineVideoTwccObservation,
-    },
 }
 
 #[derive(Clone, Debug)]
@@ -102,10 +77,6 @@ struct ObservationPublication {
 impl ObservationBus {
     pub(crate) fn new(runtime_stats: Arc<Mutex<XbxEngineMediaRuntimeStats>>) -> Self {
         Self { runtime_stats }
-    }
-
-    pub(crate) fn shared(&self) -> &Arc<Mutex<XbxEngineMediaRuntimeStats>> {
-        &self.runtime_stats
     }
 
     pub(crate) fn update(&self, apply: impl FnOnce(&mut XbxEngineMediaRuntimeStats)) {
@@ -149,33 +120,6 @@ fn summarize_event(event: &ObservationEvent) -> ObservationPublication {
             label: "streamDimensions".to_string(),
             summary: format!("{width}x{height}"),
         },
-        ObservationEvent::VideoTrackStatus { status } => ObservationPublication {
-            label: "videoTrackStatus".to_string(),
-            summary: format!(
-                "state={} bytes={} packets={}",
-                status.state, status.video_bytes_total, status.video_packet_count_total
-            ),
-        },
-        ObservationEvent::VideoRepairProbe {
-            observation,
-            reset_active_window,
-        } => ObservationPublication {
-            label: "repairProbe".to_string(),
-            summary: format!(
-                "class={} phase={} id={} ssrc={} mime={} pt={} clock={} assoc={:?}:{:?} streamPackets={} reset={}",
-                observation.classification,
-                observation.phase,
-                observation.stream_id,
-                observation.stream_ssrc,
-                observation.mime_type,
-                observation.payload_type,
-                observation.clock_rate,
-                observation.associated_ssrc,
-                observation.associated_payload_type,
-                observation.stream_packet_count,
-                reset_active_window
-            ),
-        },
         ObservationEvent::VideoRtxReinject { observation } => ObservationPublication {
             label: "rtxReinject".to_string(),
             summary: format!(
@@ -215,18 +159,6 @@ fn summarize_event(event: &ObservationEvent) -> ObservationPublication {
                 transport_path.as_deref().unwrap_or("-"),
             ),
         },
-        ObservationEvent::DataChannelAvailability {
-            control_ready,
-            control_open,
-            handshake_acked,
-            control_started,
-            control_bootstrapped,
-        } => ObservationPublication {
-            label: "dataChannelAvailability".to_string(),
-            summary: format!(
-                "ready={control_ready} open={control_open} handshake={handshake_acked} started={control_started} bootstrapped={control_bootstrapped}"
-            ),
-        },
         ObservationEvent::VideoFrameDrop { observation } => ObservationPublication {
             label: "videoFrameDrop".to_string(),
             summary: format!(
@@ -236,18 +168,6 @@ fn summarize_event(event: &ObservationEvent) -> ObservationPublication {
                 observation.is_keyframe,
                 observation.width,
                 observation.height
-            ),
-        },
-        ObservationEvent::RecoveryRuntimeState {
-            session_phase,
-            recovery_policy_profile,
-            recovery_diagnosis,
-            recovery_coupling_mode,
-            ..
-        } => ObservationPublication {
-            label: "recoveryRuntimeState".to_string(),
-            summary: format!(
-                "{session_phase}/{recovery_policy_profile}/{recovery_diagnosis}/{recovery_coupling_mode}"
             ),
         },
         ObservationEvent::InboundVideoPacketLossEstimate { packet_count } => ObservationPublication {
@@ -305,16 +225,6 @@ fn summarize_event(event: &ObservationEvent) -> ObservationPublication {
                 observation.source, observation.missing_count, observation.expected_sequence, latest_sequence
             ),
         },
-        ObservationEvent::LatestVideoTwccObservation { observation } => ObservationPublication {
-            label: "twccObservation".to_string(),
-            summary: format!(
-                "packets={} span={} delivery={:.3} loss={:.3}",
-                observation.observed_packet_count,
-                observation.covered_sequence_span,
-                observation.delivery_ratio,
-                observation.packet_loss_ratio
-            ),
-        },
     }
 }
 
@@ -334,45 +244,6 @@ fn apply_event(stats: &mut XbxEngineMediaRuntimeStats, event: ObservationEvent) 
                 stats.latest_video_stream_width = Some(width);
                 stats.latest_video_stream_height = Some(height);
             }
-        }
-        ObservationEvent::VideoTrackStatus { status } => {
-            stats.latest_video_track_status = Some(status);
-        }
-        ObservationEvent::VideoRepairProbe {
-            observation,
-            reset_active_window,
-        } => {
-            let observed_at_ms = observation.observed_at_ms;
-            if observation.phase == "bind" {
-                stats.video_repair_probe_stream_bind_count_total = stats
-                    .video_repair_probe_stream_bind_count_total
-                    .saturating_add(1);
-                stats.video_repair_probe_active_since_ms = Some(observed_at_ms);
-                stats.video_repair_probe_recovered_count_since_active = 0;
-                stats.video_repair_probe_late_recovered_count_since_active = 0;
-                stats.video_repair_probe_expired_count_since_active = 0;
-                stats.video_repair_probe_packet_gap_count_since_active = 0;
-            } else {
-                stats.video_repair_probe_packet_count_total = stats
-                    .video_repair_probe_packet_count_total
-                    .saturating_add(1);
-            }
-            if reset_active_window {
-                stats.video_repair_probe_active_since_ms = Some(observed_at_ms);
-                stats.video_repair_probe_recovered_count_since_active = 0;
-                stats.video_repair_probe_late_recovered_count_since_active = 0;
-                stats.video_repair_probe_expired_count_since_active = 0;
-                stats.video_repair_probe_packet_gap_count_since_active = 0;
-            }
-            stats.latest_video_repair_probe_observation = Some(observation);
-            let recovered = stats.video_repair_probe_recovered_count_since_active
-                + stats.video_repair_probe_late_recovered_count_since_active;
-            let total = recovered + stats.video_repair_probe_expired_count_since_active;
-            stats.video_repair_probe_recovery_hit_rate_since_active = if total > 0 {
-                Some(recovered as f64 / total as f64)
-            } else {
-                None
-            };
         }
         ObservationEvent::VideoRtxReinject { observation } => {
             if observation.stage == "queued" {
@@ -422,22 +293,8 @@ fn apply_event(stats: &mut XbxEngineMediaRuntimeStats, event: ObservationEvent) 
             stats.inbound_bytes_total =
                 stats.inbound_video_bytes_total + stats.inbound_audio_bytes_total;
         }
-        ObservationEvent::DataChannelAvailability { .. } => {}
         ObservationEvent::VideoFrameDrop { observation } => {
             stats.latest_video_frame_drop = Some(observation);
-        }
-        ObservationEvent::RecoveryRuntimeState {
-            session_phase,
-            recovery_policy_profile,
-            recovery_diagnosis,
-            recovery_coupling_mode,
-            recovery_coupling_summary,
-        } => {
-            stats.session_phase = Some(session_phase);
-            stats.recovery_policy_profile = Some(recovery_policy_profile);
-            stats.recovery_diagnosis = Some(recovery_diagnosis);
-            stats.recovery_coupling_mode = Some(recovery_coupling_mode);
-            stats.recovery_coupling_summary = Some(recovery_coupling_summary);
         }
         ObservationEvent::InboundVideoPacketLossEstimate { packet_count } => {
             stats.inbound_video_packet_loss_estimate_total = stats
@@ -523,9 +380,6 @@ fn apply_event(stats: &mut XbxEngineMediaRuntimeStats, event: ObservationEvent) 
             }
             stats.latest_video_packet_gap = Some(observation);
             stats.latest_video_packet_sequence = Some(latest_sequence);
-        }
-        ObservationEvent::LatestVideoTwccObservation { observation } => {
-            stats.latest_video_twcc_observation = Some(observation);
         }
     }
 }

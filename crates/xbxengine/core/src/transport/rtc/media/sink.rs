@@ -32,10 +32,3 @@ impl RtcMediaSink for NullRtcMediaSink {
     ) {
     }
 }
-
-#[derive(Default)]
-pub(crate) struct NullRtcRtcpSendPort;
-
-impl RtcRtcpSendPort for NullRtcRtcpSendPort {
-    fn send_rtcp(&self, _payload: &[u8]) {}
-}

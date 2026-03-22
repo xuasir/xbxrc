@@ -3,8 +3,7 @@ use std::sync::{Arc, Mutex};
 use crate::diagnostics::observation_bus::{ObservationBus, ObservationEvent};
 use crate::{
     XbxEngineMediaRuntimeStats, XbxEngineVideoFrameDropObservation, XbxEngineVideoNackObservation,
-    XbxEngineVideoPacketGapObservation, XbxEngineVideoRepairProbeObservation,
-    XbxEngineVideoRtxReinjectObservation, XbxEngineVideoTrackStatus, XbxEngineVideoTwccObservation,
+    XbxEngineVideoPacketGapObservation, XbxEngineVideoRtxReinjectObservation,
 };
 
 #[derive(Clone)]
@@ -36,10 +35,6 @@ impl RuntimeStatsSink {
         }
     }
 
-    pub(crate) fn shared(&self) -> &Arc<Mutex<XbxEngineMediaRuntimeStats>> {
-        self.observation_bus.shared()
-    }
-
     pub(crate) fn update(&self, apply: impl FnOnce(&mut XbxEngineMediaRuntimeStats)) {
         self.observation_bus.update(apply);
     }
@@ -68,21 +63,6 @@ impl RuntimeStatsSink {
             return;
         }
         self.publish(ObservationEvent::StreamDimensions { width, height });
-    }
-
-    pub(crate) fn record_video_track_status(&self, status: XbxEngineVideoTrackStatus) {
-        self.publish(ObservationEvent::VideoTrackStatus { status });
-    }
-
-    pub(crate) fn record_video_repair_probe(
-        &self,
-        observation: XbxEngineVideoRepairProbeObservation,
-        reset_active_window: bool,
-    ) {
-        self.publish(ObservationEvent::VideoRepairProbe {
-            observation,
-            reset_active_window,
-        });
     }
 
     pub(crate) fn record_video_rtx_reinject(
@@ -124,42 +104,8 @@ impl RuntimeStatsSink {
         });
     }
 
-    pub(crate) fn record_data_channel_availability(
-        &self,
-        control_ready: bool,
-        control_open: bool,
-        handshake_acked: bool,
-        control_started: bool,
-        control_bootstrapped: bool,
-    ) {
-        self.publish(ObservationEvent::DataChannelAvailability {
-            control_ready,
-            control_open,
-            handshake_acked,
-            control_started,
-            control_bootstrapped,
-        });
-    }
-
     pub(crate) fn record_video_frame_drop(&self, observation: XbxEngineVideoFrameDropObservation) {
         self.publish(ObservationEvent::VideoFrameDrop { observation });
-    }
-
-    pub(crate) fn record_recovery_runtime_state(
-        &self,
-        session_phase: String,
-        recovery_policy_profile: String,
-        recovery_diagnosis: String,
-        recovery_coupling_mode: String,
-        recovery_coupling_summary: String,
-    ) {
-        self.publish(ObservationEvent::RecoveryRuntimeState {
-            session_phase,
-            recovery_policy_profile,
-            recovery_diagnosis,
-            recovery_coupling_mode,
-            recovery_coupling_summary,
-        });
     }
 
     pub(crate) fn add_inbound_video_packet_loss_estimate(&self, packet_count: u16) {
@@ -212,13 +158,6 @@ impl RuntimeStatsSink {
             observation,
             latest_sequence,
         });
-    }
-
-    pub(crate) fn record_latest_video_twcc_observation(
-        &self,
-        observation: XbxEngineVideoTwccObservation,
-    ) {
-        self.publish(ObservationEvent::LatestVideoTwccObservation { observation });
     }
 
     pub(crate) fn begin_transport_recovery_episode(&self) -> u64 {

@@ -124,7 +124,9 @@ impl RtcVideoFrameSource {
                 let inspection = match self.h264_inspector.inspect_access_unit(&payload) {
                     Ok(inspection) => inspection,
                     Err(error) => {
-                        crate::xbx_log_error!("[RtcVideoFrameSource] h264 inspection failed: {error}");
+                        crate::xbx_log_error!(
+                            "[RtcVideoFrameSource] h264 inspection failed: {error}"
+                        );
                         self.waiting_for_recovery_keyframe = true;
                         self.queue_transport_observation(TransportObservation::Admission(
                             TransportAdmissionObservation::AwaitRecoveryKeyframe,
@@ -153,15 +155,13 @@ impl RtcVideoFrameSource {
                     .prev_dropped_packets
                     .saturating_sub(sample.prev_padding_packets);
                 if media_dropped_packets > 0 {
-                    self.sample_loss_burst_count =
-                        self.sample_loss_burst_count.saturating_add(1);
+                    self.sample_loss_burst_count = self.sample_loss_burst_count.saturating_add(1);
                     self.clean_samples_since_loss = 0;
                 } else if is_keyframe {
                     self.sample_loss_burst_count = 0;
                     self.clean_samples_since_loss = 0;
                 } else if self.sample_loss_burst_count > 0 {
-                    self.clean_samples_since_loss =
-                        self.clean_samples_since_loss.saturating_add(1);
+                    self.clean_samples_since_loss = self.clean_samples_since_loss.saturating_add(1);
                     if self.clean_samples_since_loss >= 4 {
                         self.sample_loss_burst_count = 0;
                         self.clean_samples_since_loss = 0;
@@ -240,8 +240,7 @@ impl RtcVideoFrameSource {
                 let assembled_at = std::time::Instant::now();
                 self.transport_deadline_tracker
                     .record_frame_arrival(now_ms_f64());
-                if self.assembled_frame_count == 1 || self.assembled_frame_count.is_power_of_two()
-                {
+                if self.assembled_frame_count == 1 || self.assembled_frame_count.is_power_of_two() {
                     crate::xbx_log_info!(
                         "[RtcVideoFrameSource] assembled frame count={} ts={} len={} keyframe={} bootstrap={}",
                         self.assembled_frame_count,
@@ -313,8 +312,7 @@ impl RtcVideoFrameSource {
                 .flatten()
             {
                 if observation.stage == "queued" && observation.pending_queue_len > 0 {
-                    self.reinject_read_poll_count =
-                        self.reinject_read_poll_count.saturating_add(1);
+                    self.reinject_read_poll_count = self.reinject_read_poll_count.saturating_add(1);
                     if self.reinject_read_poll_count == 1
                         || self.reinject_read_poll_count.is_power_of_two()
                     {
@@ -383,8 +381,7 @@ impl RtcVideoFrameSource {
                     self.nack_window.add(seq);
                     self.push_recent_rtp_packet(seq, rtp.header.timestamp);
                     if let Some(observation) = latest_reinject_observation.clone() {
-                        if observation.stage == "adapterRead"
-                            && observation.sequence_number == seq
+                        if observation.stage == "adapterRead" && observation.sequence_number == seq
                         {
                             self.runtime_stats.record_video_rtx_reinject(
                                 XbxEngineVideoRtxReinjectObservation {
@@ -435,8 +432,7 @@ impl RtcVideoFrameSource {
                         }
                         self.record_nack_recovered(resolved, now_ms);
                     } else if let Some(observation) = latest_reinject_observation {
-                        if observation.stage == "adapterRead"
-                            && observation.sequence_number == seq
+                        if observation.stage == "adapterRead" && observation.sequence_number == seq
                         {
                             self.runtime_stats.record_video_rtx_reinject(
                                 XbxEngineVideoRtxReinjectObservation {
@@ -467,7 +463,8 @@ impl RtcVideoFrameSource {
                             rtp.header.timestamp
                         );
                     }
-                    if self.received_packet_count == 1 || self.received_packet_count.is_power_of_two()
+                    if self.received_packet_count == 1
+                        || self.received_packet_count.is_power_of_two()
                     {
                         crate::xbx_log_info!(
                             "[RtcVideoFrameSource] packet received count={} seq={} ts={}",
@@ -491,9 +488,8 @@ impl RtcVideoFrameSource {
 impl FrameSource for RtcVideoFrameSource {
     fn recv_frame<'a>(
         &'a mut self,
-    ) -> std::pin::Pin<
-        Box<dyn std::future::Future<Output = Option<AssembledVideoFrame>> + Send + 'a>,
-    > {
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Option<AssembledVideoFrame>> + Send + 'a>>
+    {
         Box::pin(async move { self.recv_frame_inner().await })
     }
 }
@@ -501,8 +497,9 @@ impl FrameSource for RtcVideoFrameSource {
 impl TransportObservationSource for RtcVideoTransportObservationSource {
     fn recv_transport_observation<'a>(
         &'a mut self,
-    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Option<TransportObservation>> + Send + 'a>>
-    {
+    ) -> std::pin::Pin<
+        Box<dyn std::future::Future<Output = Option<TransportObservation>> + Send + 'a>,
+    > {
         Box::pin(async move { self.rx.recv().await })
     }
 }

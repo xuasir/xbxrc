@@ -74,9 +74,7 @@ impl StartupRecoveryProbe {
                 let effective_bitrate = extract_startup_recovery_bitrate_kbps(stats);
                 let waiting_for_clean_video = matches!(
                     stats.recovery_diagnosis.as_deref(),
-                    Some(
-                        "ingressWaitKeyframe" | "transportAwaitRecoveryKeyframe"
-                    )
+                    Some("ingressWaitKeyframe" | "transportAwaitRecoveryKeyframe")
                 ) || stats.direct_gaming_bitrate_band.as_deref()
                     == Some("startupLow");
                 (effective_bitrate, waiting_for_clean_video)

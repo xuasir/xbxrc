@@ -40,10 +40,8 @@ pub struct H264AccessUnitInspection {
     pub width: Option<u32>,
     pub height: Option<u32>,
     pub is_idr: bool,
-    pub has_vcl: bool,
     pub has_inband_sps: bool,
     pub has_inband_pps: bool,
-    pub has_aud: bool,
     pub slice_headers_valid: bool,
     pub parameter_sets_changed: bool,
     pub config_changed: bool,
@@ -219,16 +217,13 @@ impl H264AccessUnitInspector {
         let mut is_idr = false;
         let mut has_vcl = false;
         let mut has_non_idr_vcl = false;
-        let mut has_aud = false;
         let mut slice_headers_valid = true;
         let mut first_vcl_seen = false;
 
         for (index, nal) in nals.iter().enumerate() {
             let header = parse_nal_header(nal.bytes, index)?;
             match header.nal_unit_type() {
-                UnitType::AccessUnitDelimiter => {
-                    has_aud = true;
-                }
+                UnitType::AccessUnitDelimiter => {}
                 unit_type if is_vcl_unit(unit_type) => {
                     has_vcl = true;
                     if !first_vcl_seen {
@@ -291,10 +286,8 @@ impl H264AccessUnitInspector {
             width: width_height.map(|(width, _)| width),
             height: width_height.map(|(_, height)| height),
             is_idr,
-            has_vcl,
             has_inband_sps: seen_sps,
             has_inband_pps: seen_pps,
-            has_aud,
             slice_headers_valid,
             parameter_sets_changed,
             config_changed,

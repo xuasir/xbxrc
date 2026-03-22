@@ -128,30 +128,6 @@ impl NackScheduler {
         )
     }
 
-    pub fn observe_missing_sequences(
-        &mut self,
-        sequences: &[u16],
-        now_ms: f64,
-        deadline_at_ms: Option<f64>,
-    ) -> Option<NackBatch> {
-        self.observe_missing_sequences_with_policy(
-            sequences,
-            now_ms,
-            NackObservePolicy {
-                source: "rtpWindow",
-                deadline_at_ms,
-                max_age_ms: None,
-                retry_interval_ms: None,
-                burst_count: None,
-                max_tracked_sequences: None,
-                frame_rtp_timestamp: None,
-                frame_is_keyframe: None,
-                frame_importance: "unknown",
-                priority: 1,
-            },
-        )
-    }
-
     pub fn observe_missing_sequences_with_policy(
         &mut self,
         sequences: &[u16],

@@ -16,6 +16,11 @@ use crate::api::backend::{
 use crate::media::video::render::renderer::XbxRenderState;
 use crate::runtime_stats_sink::RuntimeStatsSink;
 use crate::transport::rtc::connection::RtcConnectionService;
+use crate::transport::rtc::executor::peer::stage_reconnect_candidate;
+use crate::transport::rtc::facts::{
+    CommandResultFact, CommandResultStatus, ConnectionLifecycleStateFact, PeerFact, TimerFact,
+    TransportCommand, TransportFact,
+};
 use crate::transport::rtc::media::{build_rtc_video_frame_source, RtcMediaService};
 use crate::transport::rtc::pipeline::supervisor::{spawn_media_supervisor, MediaSupervisorContext};
 use crate::transport::rtc::protocol::data_channel_state::{
@@ -27,6 +32,9 @@ use crate::transport::rtc::sdp::policy::{summarize_sdp, validate_local_offer_sdp
 use crate::transport::rtc::sdp::{
     adapt_local_offer, adapt_remote_answer, normalize_remote_candidate, RtcSdpContext,
 };
+use crate::transport::rtc::session::actor::SessionActor;
+use crate::transport::rtc::session::clock::SystemSessionClock;
+use crate::transport::rtc::session::policy::RtcSessionPolicy;
 use crate::{XbxEngineRuntimeConfig, XbxEngineRuntimeError};
 
 pub(crate) trait XbxMediaStackPort: Send {
@@ -92,6 +100,8 @@ pub(crate) struct XbxActiveMediaStack {
     >,
     connection: Arc<Mutex<RtcConnectionService>>,
     media: Arc<Mutex<RtcMediaService>>,
+    transport_session: Arc<Mutex<SessionActor<SystemSessionClock, RtcSessionPolicy>>>,
+    transport_fact_sink: Arc<Mutex<Vec<TransportFact>>>,
     input_stream_state: Arc<Mutex<RtcInputStreamState>>,
     input_loop_stop: Arc<AtomicBool>,
     input_loop_task: Option<JoinHandle<()>>,
@@ -137,17 +147,18 @@ impl XbxActiveMediaStack {
         let pending_runtime_recovery_action = Arc::new(Mutex::new(None));
         let data_channel_state = Arc::new(Mutex::new(XbxDataChannelState::default()));
         let render_state = Arc::new(Mutex::new(XbxRenderState::default()));
+        let transport_fact_sink = Arc::new(Mutex::new(Vec::new()));
         spawn_media_supervisor(
             media_runtime.handle().clone(),
             frame_source_rx,
             MediaSupervisorContext {
                 runtime_stats: runtime_stats.clone(),
-                pending_runtime_recovery_action: pending_runtime_recovery_action.clone(),
-                data_channel_state: data_channel_state.clone(),
                 render_state: render_state.clone(),
+                transport_fact_sink: transport_fact_sink.clone(),
                 runtime_config: runtime_config.clone(),
             },
         );
+        let connection = Arc::new(Mutex::new(RtcConnectionService::default()));
         let mut stack = Self {
             media_runtime,
             runtime_stats,
@@ -157,8 +168,13 @@ impl XbxActiveMediaStack {
             runtime_config: Arc::new(Mutex::new(runtime_config)),
             last_request: Arc::new(Mutex::new(None)),
             frame_source_tx: Arc::new(Mutex::new(Some(frame_source_tx))),
-            connection: Arc::new(Mutex::new(RtcConnectionService::default())),
+            connection,
             media: Arc::new(Mutex::new(RtcMediaService::default())),
+            transport_session: Arc::new(Mutex::new(SessionActor::new(
+                SystemSessionClock,
+                RtcSessionPolicy::default(),
+            ))),
+            transport_fact_sink,
             input_stream_state: Arc::new(Mutex::new(RtcInputStreamState::default())),
             input_loop_stop: Arc::new(AtomicBool::new(false)),
             input_loop_task: None,
@@ -255,9 +271,7 @@ impl XbxActiveMediaStack {
                 });
             }
             None => {
-                crate::xbx_log_info!(
-                    "[xbxengine][rtc] legacy frame pipeline sender unavailable"
-                );
+                crate::xbx_log_info!("[xbxengine][rtc] legacy frame pipeline sender unavailable");
                 RuntimeStatsSink::new(self.runtime_stats.clone()).update(|stats| {
                     stats.latest_observation_label =
                         Some("rtcLegacyFramePipelineSenderMissing".to_string());
@@ -288,27 +302,29 @@ impl XbxActiveMediaStack {
 
     fn pump_connection_and_media_ingress(&self) {
         crate::xbx_log_debug!("[xbxengine][rtc-stack] pump_connection_and_media_ingress enter");
-        let mut pending_recovery_action = None;
-        let ingress_packets = self
+        self.record_transport_fact(TransportFact::Timer(TimerFact::MetricsSampleTick {
+            observed_at_ms: crate::transport::rtc::stats::now_ms_f64(),
+        }));
+        let (ingress_packets, connection_facts) = self
             .connection
             .lock()
             .ok()
             .map(|mut connection| {
                 crate::xbx_log_debug!("[xbxengine][rtc-stack] pump_connection lock acquired");
                 let _ = connection.pump(&self.runtime_stats);
-                pending_recovery_action = connection.take_pending_runtime_recovery_action();
-                connection.take_media_ingress_packets()
+                (
+                    connection.take_media_ingress_packets(),
+                    connection.take_transport_facts(),
+                )
             })
             .unwrap_or_default();
+        for fact in connection_facts {
+            self.record_transport_fact(fact);
+        }
         crate::xbx_log_debug!(
             "[xbxengine][rtc-stack] pump_connection_and_media_ingress ingress_packets={}",
             ingress_packets.len()
         );
-        if let Some(action) = pending_recovery_action {
-            if let Ok(mut cached_action) = self.pending_runtime_recovery_action.lock() {
-                *cached_action = Some(action);
-            }
-        }
         if !ingress_packets.is_empty() {
             if let Ok(mut media) = self.media.lock() {
                 for (packet, rtp_meta) in ingress_packets {
@@ -317,7 +333,114 @@ impl XbxActiveMediaStack {
                 }
             }
         }
+        self.drain_transport_fact_sink();
         crate::xbx_log_debug!("[xbxengine][rtc-stack] pump_connection_and_media_ingress exit");
+    }
+
+    fn record_transport_fact(&self, fact: TransportFact) {
+        let mut pending_commands = Vec::new();
+        if let Ok(mut session) = self.transport_session.lock() {
+            session.enqueue_fact(fact);
+            let _ = session.drain_once(64);
+            while let Some(command) = session.pop_next_command() {
+                pending_commands.push(command);
+            }
+        }
+        for command in pending_commands {
+            self.apply_transport_session_command(command);
+        }
+    }
+
+    fn reset_transport_session(&self) {
+        if let Ok(mut session) = self.transport_session.lock() {
+            *session = SessionActor::new(SystemSessionClock, RtcSessionPolicy::default());
+        }
+    }
+
+    fn drain_transport_fact_sink(&self) {
+        let facts = self
+            .transport_fact_sink
+            .lock()
+            .ok()
+            .map(|mut pending| std::mem::take(&mut *pending))
+            .unwrap_or_default();
+        for fact in facts {
+            self.record_transport_fact(fact);
+        }
+    }
+
+    fn record_transport_command_result(
+        &self,
+        command: TransportCommand,
+        result: &Result<(), XbxEngineRuntimeError>,
+    ) {
+        let status = match result {
+            Ok(()) => CommandResultStatus::Succeeded,
+            Err(error) => CommandResultStatus::Failed {
+                error: error.to_string(),
+            },
+        };
+        self.record_transport_fact(TransportFact::CommandResult(CommandResultFact {
+            command,
+            status,
+            observed_at_ms: crate::transport::rtc::stats::now_ms_f64(),
+        }));
+    }
+
+    fn apply_transport_session_command(&self, command: TransportCommand) {
+        match &command {
+            TransportCommand::RequestReconnectCandidate {
+                observation_id,
+                reason,
+            } => {
+                let result = self
+                    .pending_runtime_recovery_action
+                    .lock()
+                    .map_err(|_| {
+                        XbxEngineRuntimeError::new("xbxEngineRtcPendingRecoveryActionLockFailed")
+                    })
+                    .map(|mut pending| {
+                        stage_reconnect_candidate(&mut pending, *observation_id, reason.clone());
+                    });
+                self.record_transport_command_result(command, &result.map(|_| ()));
+            }
+            TransportCommand::RequestKeyframe { .. } => {
+                let result = self
+                    .connection
+                    .lock()
+                    .map_err(|_| XbxEngineRuntimeError::new("xbxEngineRtcConnectionLockFailed"))
+                    .and_then(|mut connection| {
+                        connection.request_video_keyframe(&self.runtime_stats)
+                    });
+                self.record_transport_command_result(command, &result);
+            }
+            TransportCommand::RequestDecoderReset { .. } => {
+                let result = self
+                    .connection
+                    .lock()
+                    .map_err(|_| XbxEngineRuntimeError::new("xbxEngineRtcConnectionLockFailed"))
+                    .and_then(|mut connection| {
+                        connection.request_decoder_reset(&self.runtime_stats)
+                    });
+                self.record_transport_command_result(command, &result);
+            }
+            TransportCommand::SetTargetRembKbps {
+                target_kbps,
+                reason,
+                ..
+            } => {
+                RuntimeStatsSink::new(self.runtime_stats.clone()).update(|stats| {
+                    stats.video_remb_bps = Some(target_kbps.saturating_mul(1_000));
+                    stats.latest_observation_label =
+                        Some("rtcSessionCommandUpdateTargetRemb".to_string());
+                    stats.latest_observation_summary = Some(format!(
+                        "rtc session command updated target remb={}kbps reason={reason}",
+                        target_kbps
+                    ));
+                });
+                self.record_transport_command_result(command, &Ok(()));
+            }
+        }
     }
 
     fn collect_gamepad_frames(input_state: &mut RtcInputStreamState) -> Vec<LogicalPadSnapshotDto> {
@@ -432,15 +555,6 @@ impl XbxActiveMediaStack {
             input_state.last_gamepad_sample_signature[frames.len()..].fill(0);
         }
     }
-
-    fn pump_input_stream(&self) {
-        Self::pump_input_stream_once(
-            &self.connection,
-            &self.runtime_stats,
-            &self.data_channel_state,
-            &self.input_stream_state,
-        );
-    }
 }
 
 impl XbxMediaStackPort for XbxActiveMediaStack {
@@ -464,6 +578,11 @@ impl XbxMediaStackPort for XbxActiveMediaStack {
         request: &XbxEngineMediaNegotiationRequest,
     ) -> Result<(), XbxEngineRuntimeError> {
         let _ = &self.media_runtime;
+        self.reset_transport_session();
+        self.record_transport_fact(TransportFact::Peer(PeerFact::ConnectionStateChanged {
+            state: ConnectionLifecycleStateFact::Connecting,
+            observed_at_ms: crate::transport::rtc::stats::now_ms_f64(),
+        }));
         if let Ok(mut render_state) = self.render_state.lock() {
             render_state.reset()?;
         }
@@ -645,11 +764,6 @@ impl XbxMediaStackPort for XbxActiveMediaStack {
     fn take_pending_runtime_recovery_action(
         &mut self,
     ) -> Option<XbxEnginePendingRuntimeRecoveryAction> {
-        if let Ok(mut connection) = self.connection.lock() {
-            if let Some(action) = connection.take_pending_runtime_recovery_action() {
-                return Some(action);
-            }
-        }
         self.pending_runtime_recovery_action
             .lock()
             .ok()
@@ -687,17 +801,35 @@ impl XbxMediaStackPort for XbxActiveMediaStack {
     }
 
     fn request_video_keyframe(&mut self) -> Result<(), XbxEngineRuntimeError> {
-        self.connection
+        let result = self
+            .connection
             .lock()
             .map_err(|_| XbxEngineRuntimeError::new("xbxEngineRtcConnectionLockFailed"))?
-            .request_video_keyframe(&self.runtime_stats)
+            .request_video_keyframe(&self.runtime_stats);
+        self.record_transport_command_result(
+            TransportCommand::RequestKeyframe {
+                reason: "stack.manualRequest".to_string(),
+                observation_id: 0,
+            },
+            &result,
+        );
+        result
     }
 
     fn request_decoder_reset(&mut self) -> Result<(), XbxEngineRuntimeError> {
-        self.connection
+        let result = self
+            .connection
             .lock()
             .map_err(|_| XbxEngineRuntimeError::new("xbxEngineRtcConnectionLockFailed"))?
-            .request_decoder_reset(&self.runtime_stats)
+            .request_decoder_reset(&self.runtime_stats);
+        self.record_transport_command_result(
+            TransportCommand::RequestDecoderReset {
+                reason: "stack.manualRequest".to_string(),
+                observation_id: 0,
+            },
+            &result,
+        );
+        result
     }
 
     fn update_host_video_timing(
@@ -723,5 +855,9 @@ impl XbxMediaStackPort for XbxActiveMediaStack {
         if let Ok(mut render_state) = self.render_state.lock() {
             render_state.stop();
         }
+        self.record_transport_fact(TransportFact::Peer(PeerFact::ConnectionStateChanged {
+            state: ConnectionLifecycleStateFact::Closed,
+            observed_at_ms: crate::transport::rtc::stats::now_ms_f64(),
+        }));
     }
 }

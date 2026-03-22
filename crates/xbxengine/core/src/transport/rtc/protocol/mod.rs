@@ -1,5 +1,4 @@
-//! 处理所有 Xbox 协议相关的反序列化和序列化
-//! 包括 Data Channel 上的控制、输入和输入元数据信号
+//! 处理当前主线仍在使用的 Xbox 协议相关编解码逻辑
+//! 这里只保留输入队列、输入打包和视频元数据辅助函数
 
-pub(crate) mod data_channel;
 pub(crate) mod data_channel_state;

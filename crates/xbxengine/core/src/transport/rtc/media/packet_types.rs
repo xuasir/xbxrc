@@ -113,12 +113,6 @@ pub(crate) struct RtcVideoRtpPacket {
     pub(crate) meta: RtcRtpPacketMeta,
 }
 
-#[derive(Clone, Debug)]
-pub(crate) struct RtcAudioRtpPacket {
-    pub(crate) payload: Vec<u8>,
-    pub(crate) meta: RtcRtpPacketMeta,
-}
-
 impl RtcVideoRtpPacket {
     pub(crate) fn to_rtp_packet(self) -> rtp::packet::Packet {
         rtp::packet::Packet {

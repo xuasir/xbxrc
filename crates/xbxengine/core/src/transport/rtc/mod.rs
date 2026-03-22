@@ -1,10 +1,15 @@
 pub mod bwe;
 pub mod connection;
 pub mod events;
+pub mod executor;
+pub mod facts;
 pub mod media;
 pub mod pipeline;
+pub mod policy;
+pub mod projection;
 pub mod protocol;
 pub mod recovery;
 pub mod sdp;
+pub mod session;
 pub mod stack;
 pub mod stats;
