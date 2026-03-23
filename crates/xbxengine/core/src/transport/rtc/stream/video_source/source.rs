@@ -1,4 +1,4 @@
-use super::{build_sample_builder, now_ms_f64};
+use super::{build_sample_builder, now_ms_f64, UINT16SIZE_HALF};
 use crate::media::video::h264::inspection::H264AccessUnitInspection;
 use bytes::Bytes;
 
@@ -11,7 +11,6 @@ use crate::transport::rtc::stream::video_source::{
     RtcVideoFrameSource, RtcVideoTransportObservationSource,
 };
 
-const UINT16SIZE_HALF: u16 = 1 << 15;
 use crate::XbxEngineVideoRtxReinjectObservation;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

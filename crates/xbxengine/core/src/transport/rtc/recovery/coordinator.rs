@@ -1,74 +1,31 @@
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
-use xbxengine_protocol::XbxEngineTransportStateDto;
-
 use crate::runtime_stats_sink::RuntimeStatsSink;
+use crate::transport::rtc::recovery::decoder_backend_failure::{
+    resolve_decoder_backend_failure_recovery, DecoderBackendFailureResolution,
+};
 use crate::transport::rtc::recovery::escalation::{
     RecoveryAction, VideoEscalationController, VideoEscalationDecision, VideoEscalationReason,
 };
-use crate::transport::rtc::recovery::policy::{RecoveryScenarioProfile, ScenarioPolicyResolver};
+use crate::transport::rtc::recovery::hard_stall::resolve_persistent_stall_recovery;
+use crate::transport::rtc::recovery::nack_outcome::{
+    resolve_recent_nack_outcome, CloudStartupExpiredDeadlineBudget, RecentNackOutcomeResolution,
+};
+use crate::transport::rtc::recovery::policy::RecoveryScenarioProfile;
+use crate::transport::rtc::recovery::repeat_suppression::resolve_recent_repeat_suppression;
+use crate::transport::rtc::recovery::runtime_state::{
+    has_fresh_media_output, resolve_recovery_profile, unix_now_ms,
+};
+#[cfg(test)]
+use crate::transport::rtc::recovery::runtime_state::{
+    runtime_state_for_diagnosis as build_runtime_state_for_diagnosis, RecoveryRuntimeState,
+};
 use crate::transport::rtc::recovery::startup::{
-    extract_startup_recovery_bitrate_kbps, resolve_session_phase,
-    should_fast_reset_startup_recovery, should_suppress_startup_escalation, SessionPhase,
-    StartupRecoveryProbe,
+    resolve_session_phase, should_fast_reset_startup_recovery, should_suppress_startup_escalation,
+    SessionPhase, StartupRecoveryProbe,
 };
 use crate::XbxEngineMediaRuntimeStats;
-
-const RECENT_NACK_OUTCOME_WINDOW_MS: f64 = 180.0;
-const RECENT_NACK_OUTCOME_WINDOW_MS_CLOUD: f64 = 520.0;
-const CLOUD_STARTUP_NACK_BUDGET_WINDOW_MS: f64 = 1_200.0;
-const CLOUD_STARTUP_NACK_BUDGET_THRESHOLD: u8 = 3;
-const WAIT_KEYFRAME_REPEAT_SUPPRESS_MS: f64 = 260.0;
-const IDLE_TIMEOUT_REPEAT_SUPPRESS_MS: f64 = 360.0;
-const AUDIO_ONLY_RECOVERY_LABEL_WINDOW_MS: f64 = HARD_STALL_RECONNECT_MS;
-const HARD_STALL_DECODER_RESET_MS: f64 = 1_200.0;
-const HARD_STALL_RECONNECT_MS: f64 = 3_000.0;
-const HARD_STALL_MIN_RESET_SPACING_MS: f64 = 1_200.0;
-const HARD_STALL_MIN_RECONNECT_SPACING_MS: f64 = 1_800.0;
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum RecoveryCouplingMode {
-    Healthy,
-    StartupLowQuality,
-    WaitingKeyframe,
-    RecoveringReferenceChain,
-    Stalled,
-    ThinStream,
-}
-
-#[derive(Clone, Copy, Debug)]
-pub(crate) struct RecoveryCouplingState {
-    pub(crate) mode: RecoveryCouplingMode,
-    pub(crate) suppress_ramp_up: bool,
-    pub(crate) prefer_hold: bool,
-    pub(crate) allow_peak_range: bool,
-}
-
-#[derive(Clone, Debug)]
-pub(crate) struct RecoveryRuntimeState {
-    pub(crate) phase: SessionPhase,
-    pub(crate) recovery_policy_profile: &'static str,
-    pub(crate) diagnosis_label: String,
-    pub(crate) coupling: RecoveryCouplingState,
-}
-
-fn resolve_recovery_profile(
-    runtime_stats: &Mutex<XbxEngineMediaRuntimeStats>,
-) -> RecoveryScenarioProfile {
-    let (session_target_type, transport_path) =
-        RuntimeStatsSink::read_shared(runtime_stats, |stats| {
-            (
-                stats.session_target_type.clone(),
-                stats.transport_path.clone(),
-            )
-        })
-        .unwrap_or((None, None));
-    ScenarioPolicyResolver::resolve_recovery_profile(
-        session_target_type.as_ref(),
-        transport_path.as_deref(),
-    )
-}
 
 /**
  * 统一承接 startup/recovery 的局部状态：
@@ -80,9 +37,7 @@ pub struct RecoveryCoordinator {
     startup_probe: StartupRecoveryProbe,
     stream_started_at: Instant,
     startup_grace: Duration,
-    cloud_startup_expired_deadline_first_seen_at_ms: Option<f64>,
-    cloud_startup_expired_deadline_last_observation_id: Option<u64>,
-    cloud_startup_expired_deadline_streak: u8,
+    cloud_startup_nack_budget: CloudStartupExpiredDeadlineBudget,
 }
 
 impl RecoveryCoordinator {
@@ -96,9 +51,7 @@ impl RecoveryCoordinator {
             startup_probe: StartupRecoveryProbe::default(),
             stream_started_at,
             startup_grace,
-            cloud_startup_expired_deadline_first_seen_at_ms: None,
-            cloud_startup_expired_deadline_last_observation_id: None,
-            cloud_startup_expired_deadline_streak: 0,
+            cloud_startup_nack_budget: CloudStartupExpiredDeadlineBudget::default(),
         }
     }
 
@@ -207,84 +160,19 @@ impl RecoveryCoordinator {
         )
     }
 
-    pub(crate) fn current_profile_name(
-        runtime_stats: &Mutex<XbxEngineMediaRuntimeStats>,
-    ) -> &'static str {
-        resolve_recovery_profile(runtime_stats).kind.as_str()
-    }
-
+    #[cfg(test)]
     pub(crate) fn runtime_state_for_diagnosis(
         runtime_stats: &Mutex<XbxEngineMediaRuntimeStats>,
         diagnosis_label: &str,
         stream_started_at: Instant,
         startup_grace: Duration,
     ) -> RecoveryRuntimeState {
-        let phase = resolve_session_phase(runtime_stats, stream_started_at, startup_grace);
-        let diagnosis_label =
-            Self::resolve_effective_diagnosis_label(runtime_stats, diagnosis_label);
-        RecoveryRuntimeState {
-            phase,
-            recovery_policy_profile: Self::current_profile_name(runtime_stats),
+        build_runtime_state_for_diagnosis(
+            runtime_stats,
             diagnosis_label,
-            coupling: Self::current_coupling_state(runtime_stats, stream_started_at, startup_grace),
-        }
-    }
-
-    fn resolve_effective_diagnosis_label(
-        runtime_stats: &Mutex<XbxEngineMediaRuntimeStats>,
-        diagnosis_label: &str,
-    ) -> String {
-        if diagnosis_label == "adapterIdleTimeout"
-            && RuntimeStatsSink::read_shared(runtime_stats, |stats| {
-                is_audio_only_track(stats) && has_recent_recovery_action(stats, unix_now_ms())
-            })
-            .unwrap_or(false)
-        {
-            return "healthy".to_string();
-        }
-        if diagnosis_label == "adapterIdleTimeout"
-            && RuntimeStatsSink::read_shared(runtime_stats, |stats| {
-                has_fresh_media_output(stats, unix_now_ms())
-                    && !stats.video_decoder_stalled.unwrap_or(false)
-                    && !stats.video_renderer_stalled.unwrap_or(false)
-            })
-            .unwrap_or(false)
-        {
-            return "healthy".to_string();
-        }
-        if !matches!(
-            diagnosis_label,
-            "transportExpiredDeadline"
-                | "transportSevereDeadline"
-                | "transportSampleLoss"
-                | "adapterIdleTimeout"
-                | "transportAwaitRecoveryKeyframe"
-                | "ingressWaitKeyframe"
-        ) {
-            return diagnosis_label.to_string();
-        }
-        let now_ms = unix_now_ms();
-        RuntimeStatsSink::read_shared(runtime_stats, |stats| {
-            let profile = ScenarioPolicyResolver::resolve_recovery_profile(
-                stats.session_target_type.as_ref(),
-                stats.transport_path.as_deref(),
-            );
-            if decoder_backend_failure_signal_is_active(stats, profile, now_ms) {
-                "decoderBackendFailure".to_string()
-            } else {
-                diagnosis_label.to_string()
-            }
-        })
-        .unwrap_or_else(|| diagnosis_label.to_string())
-    }
-
-    pub(crate) fn current_coupling_state(
-        runtime_stats: &Mutex<XbxEngineMediaRuntimeStats>,
-        stream_started_at: Instant,
-        startup_grace: Duration,
-    ) -> RecoveryCouplingState {
-        let phase = resolve_session_phase(runtime_stats, stream_started_at, startup_grace);
-        resolve_recovery_coupling_state(runtime_stats, phase)
+            stream_started_at,
+            startup_grace,
+        )
     }
 
     fn resolve_decoder_backend_failure_recovery(
@@ -292,53 +180,23 @@ impl RecoveryCoordinator {
         runtime_stats: &Mutex<XbxEngineMediaRuntimeStats>,
         reason: &VideoEscalationReason,
     ) -> Option<VideoEscalationDecision> {
-        if !matches!(
-            reason,
-            VideoEscalationReason::TransportExpiredDeadline
-                | VideoEscalationReason::TransportSevereDeadline
-                | VideoEscalationReason::TransportSampleLoss
-                | VideoEscalationReason::TransportAwaitRecoveryKeyframe
-                | VideoEscalationReason::WaitKeyframe
-                | VideoEscalationReason::AdapterIdleTimeout
-        ) {
-            return None;
-        }
-
-        let now_ms = unix_now_ms();
-        let Some((profile, since_last_reset_ms)) =
-            RuntimeStatsSink::read_shared(runtime_stats, |stats| {
-                let profile = ScenarioPolicyResolver::resolve_recovery_profile(
-                    stats.session_target_type.as_ref(),
-                    stats.transport_path.as_deref(),
+        match resolve_decoder_backend_failure_recovery(runtime_stats, reason)? {
+            DecoderBackendFailureResolution::Suppress(action) => {
+                Some(self.escalation_controller.suppressed(action))
+            }
+            DecoderBackendFailureResolution::Escalate(profile) => {
+                let phase = resolve_session_phase(
+                    runtime_stats,
+                    self.stream_started_at,
+                    self.startup_grace,
                 );
-                if !decoder_backend_failure_signal_is_active(stats, profile, now_ms) {
-                    return None;
-                }
-                let since_last_reset_ms = stats
-                    .latest_video_decoder_reset_time_ms
-                    .map(|at_ms| (now_ms - at_ms).max(0.0))
-                    .unwrap_or(f64::INFINITY);
-                Some((profile, since_last_reset_ms))
-            })
-            .flatten()
-        else {
-            return None;
-        };
-
-        if since_last_reset_ms < profile.decoder_backend_failure_min_reset_spacing_ms {
-            return Some(
-                self.escalation_controller
-                    .suppressed(RecoveryAction::CooldownSuppressed),
-            );
+                Some(self.on_reason_with_policy(
+                    VideoEscalationReason::DecoderBackendFailure,
+                    phase,
+                    profile,
+                ))
+            }
         }
-
-        let phase =
-            resolve_session_phase(runtime_stats, self.stream_started_at, self.startup_grace);
-        Some(self.on_reason_with_policy(
-            VideoEscalationReason::DecoderBackendFailure,
-            phase,
-            profile,
-        ))
     }
 
     // 优先消费最近一次 NACK outcome：
@@ -349,220 +207,26 @@ impl RecoveryCoordinator {
         runtime_stats: &Mutex<XbxEngineMediaRuntimeStats>,
         reason: &VideoEscalationReason,
     ) -> Option<VideoEscalationDecision> {
-        let now_ms = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map(|duration| duration.as_millis() as f64)
-            .unwrap_or(0.0);
-        let Some((nack, stalled_with_fresh_packets)) =
-            RuntimeStatsSink::read_shared(runtime_stats, |stats| {
-                let nack = stats.latest_video_nack_observation.clone()?;
-                let recent_window_ms = if matches!(
-                    stats.session_target_type,
-                    Some(xbxengine_protocol::XbxEngineTargetTypeDto::Cloud)
-                ) || matches!(
-                    stats.transport_policy_profile.as_deref(),
-                    Some("cloudGaming")
-                ) {
-                    RECENT_NACK_OUTCOME_WINDOW_MS_CLOUD
-                } else {
-                    RECENT_NACK_OUTCOME_WINDOW_MS
-                };
-                if now_ms - nack.observed_at_ms > recent_window_ms {
-                    return None;
-                }
-                let present_age_ms = stats
-                    .latest_video_present_time_ms
-                    .map(|at_ms| (now_ms - at_ms).max(0.0))
-                    .unwrap_or(f64::INFINITY);
-                let packet_age_ms = stats
-                    .latest_video_packet_arrival_time_ms
-                    .map(|at_ms| (now_ms - at_ms).max(0.0))
-                    .unwrap_or(f64::INFINITY);
-                let stalled_with_fresh_packets = stats.video_renderer_stalled.unwrap_or(false)
-                    && present_age_ms >= HARD_STALL_DECODER_RESET_MS
-                    && packet_age_ms <= HARD_STALL_DECODER_RESET_MS;
-                Some((nack, stalled_with_fresh_packets))
-            })
-            .flatten()
-        else {
-            return None;
-        };
-
-        let is_delta = nack.frame_is_keyframe == Some(false)
-            && matches!(nack.frame_importance.as_deref(), Some("delta"));
-        let is_important = nack.frame_is_keyframe == Some(true)
-            || matches!(
-                nack.frame_importance.as_deref(),
-                Some("reference" | "keyframe")
-            );
-        let is_cloud_startup = RuntimeStatsSink::read_shared(runtime_stats, |stats| {
-            matches!(
-                stats.session_target_type,
-                Some(xbxengine_protocol::XbxEngineTargetTypeDto::Cloud)
-            ) || matches!(
-                stats.transport_policy_profile.as_deref(),
-                Some("cloudGaming")
-            )
-        })
-        .unwrap_or(false)
-            && matches!(
-                resolve_session_phase(runtime_stats, self.stream_started_at, self.startup_grace),
-                SessionPhase::Startup
-            );
-
-        match nack.action.as_str() {
-            "recovered" | "recoveredLate" => {
-                self.clear_cloud_startup_expired_deadline_budget();
-                if is_important
-                    && matches!(
-                        reason,
-                        VideoEscalationReason::WaitKeyframe
-                            | VideoEscalationReason::TransportAwaitRecoveryKeyframe
-                            | VideoEscalationReason::AdapterIdleTimeout
-                    )
-                {
-                    Some(
-                        self.escalation_controller
-                            .suppressed(RecoveryAction::WaitForBurst),
-                    )
-                } else {
-                    Some(
-                        self.escalation_controller
-                            .suppressed(RecoveryAction::CooldownSuppressed),
-                    )
-                }
+        match resolve_recent_nack_outcome(
+            runtime_stats,
+            reason,
+            self.stream_started_at,
+            self.startup_grace,
+            &mut self.cloud_startup_nack_budget,
+        )? {
+            RecentNackOutcomeResolution::Suppress(action) => {
+                Some(self.escalation_controller.suppressed(action))
             }
-            "expiredDeadline" | "expiredMaxAge" => {
-                if is_delta {
-                    let profile = resolve_recovery_profile(runtime_stats);
-                    if is_cloud_startup
-                        && matches!(reason, VideoEscalationReason::TransportExpiredDeadline)
-                    {
-                        if self.update_cloud_startup_expired_deadline_budget(&nack) {
-                            let phase = resolve_session_phase(
-                                runtime_stats,
-                                self.stream_started_at,
-                                self.startup_grace,
-                            );
-                            return Some(self.on_reason_with_policy(
-                                VideoEscalationReason::TransportExpiredDeadline,
-                                phase,
-                                profile,
-                            ));
-                        }
-                        return Some(
-                            self.escalation_controller
-                                .suppressed(RecoveryAction::CooldownSuppressed),
-                        );
-                    }
-                    if stalled_with_fresh_packets
-                        && matches!(
-                            reason,
-                            VideoEscalationReason::TransportExpiredDeadline
-                                | VideoEscalationReason::TransportSampleLoss
-                                | VideoEscalationReason::WaitKeyframe
-                                | VideoEscalationReason::AdapterIdleTimeout
-                        )
-                    {
-                        let phase = resolve_session_phase(
-                            runtime_stats,
-                            self.stream_started_at,
-                            self.startup_grace,
-                        );
-                        let profile = resolve_recovery_profile(runtime_stats);
-                        return Some(self.on_reason_with_policy(
-                            VideoEscalationReason::TransportAwaitRecoveryKeyframe,
-                            phase,
-                            profile,
-                        ));
-                    }
-                    Some(
-                        self.escalation_controller
-                            .suppressed(RecoveryAction::CooldownSuppressed),
-                    )
-                } else if is_important
-                    && matches!(
-                        reason,
-                        VideoEscalationReason::AdapterIdleTimeout
-                            | VideoEscalationReason::TransportSampleLoss
-                            | VideoEscalationReason::TransportAwaitRecoveryKeyframe
-                            | VideoEscalationReason::WaitKeyframe
-                    )
-                {
-                    let phase = resolve_session_phase(
-                        runtime_stats,
-                        self.stream_started_at,
-                        self.startup_grace,
-                    );
-                    let profile = resolve_recovery_profile(runtime_stats);
-                    let escalated_reason =
-                        if matches!(reason, VideoEscalationReason::AdapterIdleTimeout) {
-                            VideoEscalationReason::TransportAwaitRecoveryKeyframe
-                        } else {
-                            VideoEscalationReason::TransportSampleLoss
-                        };
-                    Some(self.on_reason_with_policy(escalated_reason, phase, profile))
-                } else if is_important
-                    && matches!(
-                        reason,
-                        VideoEscalationReason::TransportSampleLoss
-                            | VideoEscalationReason::TransportAwaitRecoveryKeyframe
-                            | VideoEscalationReason::WaitKeyframe
-                    )
-                {
-                    let phase = resolve_session_phase(
-                        runtime_stats,
-                        self.stream_started_at,
-                        self.startup_grace,
-                    );
-                    let profile = resolve_recovery_profile(runtime_stats);
-                    Some(self.on_reason_with_policy(
-                        VideoEscalationReason::TransportSampleLoss,
-                        phase,
-                        profile,
-                    ))
-                } else {
-                    None
-                }
+            RecentNackOutcomeResolution::Escalate(reason) => {
+                let phase = resolve_session_phase(
+                    runtime_stats,
+                    self.stream_started_at,
+                    self.startup_grace,
+                );
+                let profile = resolve_recovery_profile(runtime_stats);
+                Some(self.on_reason_with_policy(reason, phase, profile))
             }
-            _ => None,
         }
-    }
-
-    fn update_cloud_startup_expired_deadline_budget(
-        &mut self,
-        nack: &crate::XbxEngineVideoNackObservation,
-    ) -> bool {
-        let current_observation_id = nack.observation_id;
-        if self.cloud_startup_expired_deadline_last_observation_id == Some(current_observation_id) {
-            return self.cloud_startup_expired_deadline_streak
-                >= CLOUD_STARTUP_NACK_BUDGET_THRESHOLD;
-        }
-
-        let now_ms = nack.observed_at_ms.max(unix_now_ms());
-        let same_window = self
-            .cloud_startup_expired_deadline_first_seen_at_ms
-            .map(|first_seen_at_ms| {
-                now_ms - first_seen_at_ms <= CLOUD_STARTUP_NACK_BUDGET_WINDOW_MS
-            })
-            .unwrap_or(false);
-        if same_window {
-            self.cloud_startup_expired_deadline_streak = self
-                .cloud_startup_expired_deadline_streak
-                .saturating_add(1)
-                .max(1);
-        } else {
-            self.cloud_startup_expired_deadline_first_seen_at_ms = Some(now_ms);
-            self.cloud_startup_expired_deadline_streak = 1;
-        }
-        self.cloud_startup_expired_deadline_last_observation_id = Some(current_observation_id);
-        self.cloud_startup_expired_deadline_streak >= CLOUD_STARTUP_NACK_BUDGET_THRESHOLD
-    }
-
-    fn clear_cloud_startup_expired_deadline_budget(&mut self) {
-        self.cloud_startup_expired_deadline_first_seen_at_ms = None;
-        self.cloud_startup_expired_deadline_last_observation_id = None;
-        self.cloud_startup_expired_deadline_streak = 0;
     }
 
     // 已经进入同一轮恢复时，短窗口内抑制重复 reason：
@@ -573,70 +237,8 @@ impl RecoveryCoordinator {
         runtime_stats: &Mutex<XbxEngineMediaRuntimeStats>,
         reason: &VideoEscalationReason,
     ) -> Option<VideoEscalationDecision> {
-        let now_ms = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map(|duration| duration.as_millis() as f64)
-            .unwrap_or(0.0);
-        let (escalation, has_new_transport_recovery_epoch) =
-            RuntimeStatsSink::read_shared(runtime_stats, |stats| {
-                let escalation = stats.latest_video_escalation_observation.clone()?;
-                let has_new_transport_recovery_epoch = stats.transport_recovery_epoch
-                    > stats.transport_recovery_epoch_at_last_escalation;
-                Some((escalation, has_new_transport_recovery_epoch))
-            })
-            .flatten()?;
-        let elapsed_ms = now_ms - escalation.observed_at_ms;
-        if elapsed_ms < 0.0 {
-            return None;
-        }
-
-        match reason {
-            VideoEscalationReason::WaitKeyframe => {
-                let same_wait_keyframe_chain = matches!(
-                    escalation.reason.as_str(),
-                    "waitKeyframe" | "ingressWaitKeyframe" | "transportAwaitRecoveryKeyframe"
-                );
-                let active_recovery_action = matches!(
-                    escalation.action.as_str(),
-                    "requestKeyframe"
-                        | "requestDecoderReset"
-                        | "requestKeyframe+decoderReset"
-                        | "requestKeyframe+decoderReset(startupLowQualityRetry)"
-                );
-                if same_wait_keyframe_chain
-                    && active_recovery_action
-                    && !has_new_transport_recovery_epoch
-                    && elapsed_ms <= WAIT_KEYFRAME_REPEAT_SUPPRESS_MS
-                {
-                    return Some(
-                        self.escalation_controller
-                            .suppressed(RecoveryAction::CooldownSuppressed),
-                    );
-                }
-            }
-            VideoEscalationReason::AdapterIdleTimeout => {
-                let same_idle_chain = escalation.reason == "adapterIdleTimeout";
-                let decoder_reset_inflight = matches!(
-                    escalation.action.as_str(),
-                    "requestDecoderReset"
-                        | "requestKeyframe+decoderReset"
-                        | "requestKeyframe+decoderReset(startupLowQualityRetry)"
-                );
-                if same_idle_chain
-                    && decoder_reset_inflight
-                    && !has_new_transport_recovery_epoch
-                    && elapsed_ms <= IDLE_TIMEOUT_REPEAT_SUPPRESS_MS
-                {
-                    return Some(
-                        self.escalation_controller
-                            .suppressed(RecoveryAction::CooldownSuppressed),
-                    );
-                }
-            }
-            _ => {}
-        }
-
-        None
+        resolve_recent_repeat_suppression(runtime_stats, reason)
+            .map(|action| self.escalation_controller.suppressed(action))
     }
 
     // 当视频已经长时间 0kbps 且没有任何新呈现时，不允许一直停在 cooldownSuppressed。
@@ -647,367 +249,20 @@ impl RecoveryCoordinator {
         runtime_stats: &Mutex<XbxEngineMediaRuntimeStats>,
         reason: &VideoEscalationReason,
     ) -> Option<VideoEscalationDecision> {
-        if !matches!(
-            reason,
-            VideoEscalationReason::AdapterIdleTimeout
-                | VideoEscalationReason::TransportExpiredDeadline
-                | VideoEscalationReason::TransportSevereDeadline
-        ) {
-            return None;
-        }
-
-        let now_ms = unix_now_ms();
-        let Some(stats) = RuntimeStatsSink::read_shared(runtime_stats, |stats| {
-            (
-                stats.transport_state.clone(),
-                stats.inbound_video_bitrate_kbps.unwrap_or(0.0),
-                stats
-                    .latest_video_present_time_ms
-                    .map(|at_ms| (now_ms - at_ms).max(0.0))
-                    .unwrap_or(HARD_STALL_RECONNECT_MS),
-                stats
-                    .latest_video_packet_arrival_time_ms
-                    .map(|at_ms| (now_ms - at_ms).max(0.0))
-                    .unwrap_or(HARD_STALL_RECONNECT_MS),
-                if stats.video_renderer_stalled.unwrap_or(false)
-                    || stats
-                        .latest_video_present_time_ms
-                        .map(|at_ms| (now_ms - at_ms).max(0.0))
-                        .unwrap_or(HARD_STALL_RECONNECT_MS)
-                        >= HARD_STALL_DECODER_RESET_MS
-                {
-                    0.0
-                } else {
-                    stats.video_present_fps
-                },
-                stats.direct_gaming_bitrate_band.clone(),
-                stats
-                    .latest_video_escalation_observation
-                    .as_ref()
-                    .map(|observation| observation.action.as_str().to_string()),
-                stats
-                    .latest_video_decoder_reset_time_ms
-                    .map(|at_ms| (now_ms - at_ms).max(0.0))
-                    .unwrap_or(f64::INFINITY),
-            )
-        }) else {
-            return None;
-        };
-        let (
-            transport_state,
-            inbound_video_bitrate_kbps,
-            present_age_ms,
-            packet_age_ms,
-            effective_present_fps,
-            direct_gaming_bitrate_band,
-            latest_action,
-            since_last_decoder_reset_ms,
-        ) = stats;
-        if transport_state != XbxEngineTransportStateDto::Connected {
-            return None;
-        }
-        let hard_paused_stream = inbound_video_bitrate_kbps <= 0.1
-            && direct_gaming_bitrate_band.as_deref() == Some("paused")
-            && effective_present_fps <= 1.0
-            && present_age_ms >= HARD_STALL_DECODER_RESET_MS
-            && packet_age_ms >= HARD_STALL_DECODER_RESET_MS;
-        if !hard_paused_stream {
-            return None;
-        }
-
-        if present_age_ms >= HARD_STALL_RECONNECT_MS
-            && packet_age_ms >= HARD_STALL_RECONNECT_MS
-            && since_last_decoder_reset_ms >= HARD_STALL_MIN_RECONNECT_SPACING_MS
-            && matches!(
-                latest_action.as_deref(),
-                Some(
-                    "requestDecoderReset"
-                        | "requestKeyframe+decoderReset"
-                        | "requestKeyframe+decoderReset(startupLowQualityRetry)"
-                        | "cooldownSuppressed"
-                )
-            )
-        {
-            return Some(VideoEscalationDecision {
-                observation_id: 0,
-                action: RecoveryAction::RequestReconnectCandidate,
-            });
-        }
-
-        // transport stall 已经证明是“媒体链没法自救”，这里直接交给会话级重连，
-        // 避免又回到 decoder reset 分支，把传输故障误当成解码故障。
-        if matches!(
-            reason,
-            VideoEscalationReason::TransportExpiredDeadline
-                | VideoEscalationReason::TransportSevereDeadline
-        ) {
-            return Some(VideoEscalationDecision {
-                observation_id: 0,
-                action: RecoveryAction::RequestReconnectCandidate,
-            });
-        }
-
-        if since_last_decoder_reset_ms >= HARD_STALL_MIN_RESET_SPACING_MS {
-            return Some(VideoEscalationDecision {
-                observation_id: 0,
-                action: RecoveryAction::RequestDecoderReset,
-            });
-        }
-
-        None
+        resolve_persistent_stall_recovery(runtime_stats, reason)
     }
-}
-
-fn unix_now_ms() -> f64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|duration| duration.as_millis() as f64)
-        .unwrap_or(0.0)
-}
-
-fn has_fresh_media_output(stats: &XbxEngineMediaRuntimeStats, now_ms: f64) -> bool {
-    const FRESH_MEDIA_OUTPUT_WINDOW_MS: f64 = 500.0;
-    let present_fresh = stats
-        .latest_video_present_time_ms
-        .map(|at_ms| now_ms - at_ms < FRESH_MEDIA_OUTPUT_WINDOW_MS)
-        .unwrap_or(false);
-    let decode_fresh = stats
-        .latest_video_decode_ok_time_ms
-        .map(|at_ms| now_ms - at_ms < FRESH_MEDIA_OUTPUT_WINDOW_MS)
-        .unwrap_or(false);
-    present_fresh || decode_fresh || stats.video_present_fps >= 10.0
-}
-
-fn has_recent_recovery_action(stats: &XbxEngineMediaRuntimeStats, now_ms: f64) -> bool {
-    stats
-        .latest_video_escalation_observation
-        .as_ref()
-        .is_some_and(|observation| {
-            observation.action != "cooldownSuppressed"
-                && now_ms - observation.observed_at_ms <= AUDIO_ONLY_RECOVERY_LABEL_WINDOW_MS
-        })
-}
-
-fn is_audio_only_track(stats: &XbxEngineMediaRuntimeStats) -> bool {
-    stats
-        .latest_video_track_status
-        .as_ref()
-        .is_some_and(|status| {
-            status.state == "audioOnly"
-                && status.video_bytes_total == 0
-                && status.audio_bytes_total > 0
-                && status.transport_state == XbxEngineTransportStateDto::Connected
-        })
-}
-
-fn decoder_backend_failure_signal_is_active(
-    stats: &XbxEngineMediaRuntimeStats,
-    profile: RecoveryScenarioProfile,
-    now_ms: f64,
-) -> bool {
-    if stats.transport_state != XbxEngineTransportStateDto::Connected {
-        return false;
-    }
-    if stats.video_decoder_hardware_failure_streak
-        < profile.decoder_backend_failure_min_consecutive_failures
-    {
-        return false;
-    }
-    let failure_age_ms = stats
-        .latest_video_decoder_hardware_failure_time_ms
-        .map(|at_ms| (now_ms - at_ms).max(0.0))
-        .unwrap_or(f64::INFINITY);
-    if failure_age_ms > profile.decoder_backend_failure_recent_window_ms {
-        return false;
-    }
-    let packet_age_ms = stats
-        .latest_video_packet_arrival_time_ms
-        .map(|at_ms| (now_ms - at_ms).max(0.0))
-        .unwrap_or(f64::INFINITY);
-    if packet_age_ms > profile.decoder_backend_failure_max_packet_age_ms {
-        return false;
-    }
-    let decode_age_ms = stats
-        .latest_video_decode_ok_time_ms
-        .map(|at_ms| (now_ms - at_ms).max(0.0))
-        .unwrap_or(f64::INFINITY);
-    let present_age_ms = stats
-        .latest_video_present_time_ms
-        .map(|at_ms| (now_ms - at_ms).max(0.0))
-        .unwrap_or(f64::INFINITY);
-    let pipeline_not_advancing = stats.video_renderer_stalled.unwrap_or(false)
-        || decode_age_ms >= HARD_STALL_DECODER_RESET_MS
-        || present_age_ms >= HARD_STALL_DECODER_RESET_MS;
-    if !pipeline_not_advancing {
-        return false;
-    }
-    let Some((delivery_ratio, loss_ratio)) = extract_twcc_health_ratios(stats) else {
-        return false;
-    };
-    delivery_ratio >= profile.decoder_backend_failure_min_twcc_delivery_ratio
-        && loss_ratio <= profile.decoder_backend_failure_max_twcc_loss_ratio
-}
-
-fn extract_twcc_health_ratios(stats: &XbxEngineMediaRuntimeStats) -> Option<(f64, f64)> {
-    if let Some(observation) = stats.latest_video_twcc_observation.as_ref() {
-        return Some((observation.delivery_ratio, observation.packet_loss_ratio));
-    }
-    stats
-        .latest_video_bwe_observation
-        .as_ref()
-        .and_then(|observation| {
-            observation
-                .twcc_delivery_ratio
-                .zip(observation.twcc_loss_ratio)
-        })
-}
-
-pub(crate) fn resolve_recovery_coupling_state(
-    runtime_stats: &Mutex<XbxEngineMediaRuntimeStats>,
-    phase: SessionPhase,
-) -> RecoveryCouplingState {
-    // 这里先做粗粒度联动：recovery 只向 BWE 输出“该不该继续激进爬升”的约束，
-    // 先不直接输出更复杂的 target，避免过早把两条策略硬耦合。
-    let Some((
-        diagnosis,
-        _effective_bitrate_kbps,
-        _recovery_profile,
-        stable_output,
-        fresh_output,
-        startup_low,
-        decoder_stalled,
-        renderer_stalled,
-    )) = RuntimeStatsSink::read_shared(runtime_stats, |stats| {
-        let diagnosis = stats.recovery_diagnosis.clone();
-        let effective_bitrate_kbps = extract_startup_recovery_bitrate_kbps(stats).unwrap_or(0.0);
-        let recovery_profile = ScenarioPolicyResolver::resolve_recovery_profile(
-            stats.session_target_type.as_ref(),
-            stats.transport_path.as_deref(),
-        );
-        let stable_output = effective_bitrate_kbps
-            >= recovery_profile.startup_low_quality_recovered_kbps
-            && stats.video_present_fps >= 50.0;
-        let fresh_output = has_fresh_media_output(stats, unix_now_ms());
-        let startup_low = phase == SessionPhase::Startup
-            && stats.direct_gaming_bitrate_band.as_deref() == Some("startupLow");
-        Some((
-            diagnosis,
-            effective_bitrate_kbps,
-            recovery_profile,
-            stable_output,
-            fresh_output,
-            startup_low,
-            stats.video_decoder_stalled.unwrap_or(false),
-            stats.video_renderer_stalled.unwrap_or(false),
-        ))
-    })
-    .flatten()
-    else {
-        return RecoveryCouplingState {
-            mode: RecoveryCouplingMode::Healthy,
-            suppress_ramp_up: false,
-            prefer_hold: false,
-            allow_peak_range: true,
-        };
-    };
-    let stale_idle_timeout = diagnosis.as_deref() == Some("adapterIdleTimeout")
-        && fresh_output
-        && !decoder_stalled
-        && !renderer_stalled;
-
-    if startup_low {
-        return RecoveryCouplingState {
-            mode: RecoveryCouplingMode::StartupLowQuality,
-            suppress_ramp_up: true,
-            prefer_hold: true,
-            allow_peak_range: false,
-        };
-    }
-
-    // 已经回到 steady/healthy 且输出恢复后，直接退出 coupling，
-    // 避免 BWE 在恢复结束后继续长时间按 recovery hold 运行。
-    if phase == SessionPhase::Steady
-        && (diagnosis.is_none() || stale_idle_timeout)
-        && stable_output
-        && !decoder_stalled
-        && !renderer_stalled
-    {
-        return RecoveryCouplingState {
-            mode: RecoveryCouplingMode::Healthy,
-            suppress_ramp_up: false,
-            prefer_hold: false,
-            allow_peak_range: true,
-        };
-    }
-
-    let coupling = match diagnosis.as_deref() {
-        Some("waitKeyframe" | "transportAwaitRecoveryKeyframe" | "ingressWaitKeyframe") => {
-            RecoveryCouplingState {
-                mode: RecoveryCouplingMode::WaitingKeyframe,
-                suppress_ramp_up: true,
-                prefer_hold: true,
-                allow_peak_range: false,
-            }
-        }
-        Some("transportSampleLoss" | "reconfigure" | "ingressReconfigure") => {
-            RecoveryCouplingState {
-                mode: RecoveryCouplingMode::RecoveringReferenceChain,
-                suppress_ramp_up: true,
-                prefer_hold: true,
-                allow_peak_range: false,
-            }
-        }
-        Some("adapterThinStream" | "thinStream") => RecoveryCouplingState {
-            mode: RecoveryCouplingMode::ThinStream,
-            suppress_ramp_up: true,
-            prefer_hold: true,
-            allow_peak_range: false,
-        },
-        Some("adapterIdleTimeout" | "decoderBackendFailure") if !stale_idle_timeout => {
-            RecoveryCouplingState {
-                mode: RecoveryCouplingMode::Stalled,
-                suppress_ramp_up: true,
-                prefer_hold: true,
-                allow_peak_range: false,
-            }
-        }
-        Some("adapterIdleTimeout") if stale_idle_timeout => RecoveryCouplingState {
-            mode: RecoveryCouplingMode::Healthy,
-            suppress_ramp_up: false,
-            prefer_hold: false,
-            allow_peak_range: true,
-        },
-        Some("decoderBackendFailure") => RecoveryCouplingState {
-            mode: RecoveryCouplingMode::Stalled,
-            suppress_ramp_up: true,
-            prefer_hold: true,
-            allow_peak_range: false,
-        },
-        _ if phase == SessionPhase::Recovering && !stable_output => RecoveryCouplingState {
-            mode: RecoveryCouplingMode::RecoveringReferenceChain,
-            suppress_ramp_up: true,
-            prefer_hold: true,
-            allow_peak_range: false,
-        },
-        _ => RecoveryCouplingState {
-            mode: RecoveryCouplingMode::Healthy,
-            suppress_ramp_up: false,
-            prefer_hold: false,
-            allow_peak_range: true,
-        },
-    };
-    coupling
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        resolve_recovery_coupling_state, resolve_recovery_profile, unix_now_ms,
-        RecoveryCoordinator, RecoveryCouplingMode,
-    };
+    use super::RecoveryCoordinator;
     use crate::runtime_stats_sink::RuntimeStatsSink;
     use crate::transport::rtc::recovery::escalation::{
         RecoveryAction, VideoEscalationController, VideoEscalationReason,
+    };
+    use crate::transport::rtc::recovery::runtime_state::{
+        resolve_recovery_coupling_state, resolve_recovery_profile, unix_now_ms,
+        RecoveryCouplingMode,
     };
     use crate::transport::rtc::recovery::startup::SessionPhase;
     use crate::XbxEngineMediaRuntimeStats;

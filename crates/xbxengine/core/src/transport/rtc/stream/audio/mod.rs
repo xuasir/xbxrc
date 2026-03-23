@@ -5,7 +5,15 @@ use tokio::runtime::Handle;
 use crate::{XbxEngineMediaRuntimeStats, XbxEngineRuntimeError};
 
 pub(crate) mod audio_output;
+mod decode;
+mod output;
 pub(crate) mod sink;
+mod state;
+
+pub(super) const OPUS_SAMPLE_RATE_HZ: u32 = 48_000;
+pub(super) const OPUS_OUTPUT_CHANNELS: usize = 2;
+pub(super) const MAX_OPUS_FRAME_SAMPLES_PER_CHANNEL: usize = 5_760;
+pub(super) const MAX_BUFFERED_AUDIO_FRAMES: usize = OPUS_SAMPLE_RATE_HZ as usize;
 
 pub(crate) use audio_output::XbxRemoteAudioPlaybackSession;
 pub(crate) use sink::RtcAudioPlaybackSink;

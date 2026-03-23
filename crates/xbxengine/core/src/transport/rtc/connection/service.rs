@@ -179,4 +179,5 @@ impl RtcConnectionService {
 }
 
 #[cfg(test)]
+#[path = "tests/service.rs"]
 mod tests;

@@ -14,10 +14,14 @@ use crate::runtime_stats_sink::RuntimeStatsSink;
 use webrtc_media::io::sample_builder::SampleBuilder;
 
 pub(crate) mod nack;
+pub(super) mod nack_policy;
+pub(super) mod nack_window;
 pub(crate) mod sink;
 pub(crate) mod source;
 
 use crate::transport::rtc::stream::frame_cadence::TransportFrameDeadlineTracker;
+
+use self::nack_window::NackSequenceWindow;
 
 use crate::transport::rtc::stream::adapter_types::{
     TransportAdmissionObservation, TransportLossObservation, TransportObservation,
@@ -225,15 +229,7 @@ fn capitalize_reason(reason: &str) -> String {
     }
 }
 
-const UINT16SIZE_HALF: u16 = 1 << 15;
-
-struct NackSequenceWindow {
-    packets: Vec<u64>,
-    size: u16,
-    end: u16,
-    started: bool,
-    last_consecutive: u16,
-}
+pub(super) const UINT16SIZE_HALF: u16 = 1 << 15;
 
 pub(crate) fn build_rtc_video_frame_source(
     ingress_capacity: usize,

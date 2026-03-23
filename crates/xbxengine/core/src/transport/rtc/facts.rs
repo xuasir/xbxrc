@@ -1,5 +1,7 @@
 use std::fmt;
 
+use crate::media::video::ingress::scheduler::IngressDecision;
+
 /// 连接生命周期事实，尽量保持中性语义。
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ConnectionLifecycleStateFact {
@@ -71,6 +73,18 @@ pub enum IngressDecisionFact {
     DropBacklog,
     WaitKeyframe,
     Reconfigure,
+}
+
+impl From<&IngressDecision> for IngressDecisionFact {
+    fn from(decision: &IngressDecision) -> Self {
+        match decision {
+            IngressDecision::Submit => Self::Submit,
+            IngressDecision::DropLate => Self::DropLate,
+            IngressDecision::DropBacklog => Self::DropBacklog,
+            IngressDecision::WaitKeyframe => Self::WaitKeyframe,
+            IngressDecision::Reconfigure => Self::Reconfigure,
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]

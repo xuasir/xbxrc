@@ -12,8 +12,13 @@
 //! - policy：场景策略（Home/Cloud/Relay）
 
 pub mod coordinator;
+pub(crate) mod decoder_backend_failure;
 pub mod diagnosis;
 pub mod escalation;
+pub(crate) mod hard_stall;
+pub(crate) mod nack_outcome;
 pub mod policy;
+pub(crate) mod repeat_suppression;
+pub mod runtime_state;
 pub mod signal;
 pub mod startup;

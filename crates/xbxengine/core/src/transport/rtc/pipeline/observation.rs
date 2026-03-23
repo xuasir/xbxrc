@@ -1,5 +1,6 @@
 use crate::{
     media::video::ingress::scheduler::IngressDecision, runtime_stats_sink::RuntimeStatsSink,
+    transport::rtc::stream::adapter_types::TransportObservation,
     XbxEngineVideoFrameDropObservation,
 };
 use std::collections::VecDeque;
@@ -130,5 +131,49 @@ fn map_ingress_drop_reason(decision: &IngressDecision, reconfigure_reason: Optio
                 "reconfigure".to_string()
             }
         }
+    }
+}
+
+pub(super) fn map_transport_observation_to_hint_label(
+    observation: &TransportObservation,
+    severe_deadline_packet_threshold: usize,
+) -> &'static str {
+    match observation {
+        TransportObservation::Admission(
+            crate::transport::rtc::stream::adapter_types::TransportAdmissionObservation::AwaitRecoveryKeyframe,
+        ) => "transportAwaitRecoveryKeyframe",
+        TransportObservation::Loss(
+            crate::transport::rtc::stream::adapter_types::TransportLossObservation::PacketLossDetected,
+        ) => "transportSampleLoss",
+        TransportObservation::Loss(
+            crate::transport::rtc::stream::adapter_types::TransportLossObservation::RecoveryKeyframeRequested,
+        ) => "transportSampleLossBurst",
+        TransportObservation::Loss(
+            crate::transport::rtc::stream::adapter_types::TransportLossObservation::AwaitRecoveryKeyframe,
+        ) => "transportAwaitRecoveryKeyframe",
+        TransportObservation::StreamIdleTimeout => "adapterIdleTimeout",
+        TransportObservation::StreamThinStall => "adapterThinStream",
+        TransportObservation::NackRecoveredLate => "transportRecoveredLate",
+        TransportObservation::NackDeadlineExpired { missing_packets } => {
+            if usize::from(*missing_packets) >= severe_deadline_packet_threshold {
+                "transportSevereDeadline"
+            } else {
+                "transportExpiredDeadline"
+            }
+        }
+    }
+}
+
+pub(super) fn transport_observation_severity(observation: &TransportObservation) -> u8 {
+    match observation {
+        TransportObservation::NackDeadlineExpired { missing_packets } if *missing_packets >= 64 => {
+            2
+        }
+        TransportObservation::StreamIdleTimeout
+        | TransportObservation::StreamThinStall
+        | TransportObservation::NackDeadlineExpired { .. } => 1,
+        TransportObservation::Admission(_)
+        | TransportObservation::Loss(_)
+        | TransportObservation::NackRecoveredLate => 0,
     }
 }
