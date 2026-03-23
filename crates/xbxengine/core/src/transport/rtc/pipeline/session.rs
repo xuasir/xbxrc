@@ -12,7 +12,7 @@ use crate::{
     media::video::types::AssembledVideoFrame,
     runtime_stats_sink::RuntimeStatsSink,
     transport::rtc::facts::{IngressDecisionFact, MediaFact, TransportFact},
-    transport::rtc::media::adapter_types::{
+    transport::rtc::stream::adapter_types::{
         TransportAdmissionObservation, TransportLossObservation, TransportObservation,
         VideoFramePipelineSources,
     },

@@ -4,7 +4,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use crate::media::video::h264::inspection::H264AccessUnitInspector;
-use crate::transport::rtc::media::nack_scheduler::{NackScheduler, NackSchedulerConfig};
+use crate::transport::rtc::stream::nack_scheduler::{NackScheduler, NackSchedulerConfig};
 use crate::XbxEngineMediaRuntimeStats;
 
 use super::packet_types::RtcVideoRtpPacket;
@@ -17,9 +17,9 @@ pub(crate) mod nack;
 pub(crate) mod sink;
 pub(crate) mod source;
 
-use crate::transport::rtc::media::frame_cadence::TransportFrameDeadlineTracker;
+use crate::transport::rtc::stream::frame_cadence::TransportFrameDeadlineTracker;
 
-use crate::transport::rtc::media::adapter_types::{
+use crate::transport::rtc::stream::adapter_types::{
     TransportAdmissionObservation, TransportLossObservation, TransportObservation,
     VideoFramePipelineSources,
 };

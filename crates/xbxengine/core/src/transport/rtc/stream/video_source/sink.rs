@@ -1,8 +1,8 @@
-use crate::transport::rtc::media::packet_router::{RtcMediaRouteLabel, RtcPayloadRouteMap};
-use crate::transport::rtc::media::packet_types::{
+use crate::transport::rtc::stream::packet_router::{RtcMediaRouteLabel, RtcPayloadRouteMap};
+use crate::transport::rtc::stream::packet_types::{
     RtcMediaIngressPacket, RtcRtpPacketMeta, RtcVideoRtpPacket,
 };
-use crate::transport::rtc::media::sink::RtcMediaSink;
+use crate::transport::rtc::stream::sink::RtcMediaSink;
 
 pub(crate) struct RtcVideoSourceSink {
     pub(crate) tx: tokio::sync::mpsc::Sender<RtcVideoRtpPacket>,
@@ -95,12 +95,12 @@ fn unpack_rtx_packet(
 #[cfg(test)]
 mod tests {
     use super::RtcVideoSourceSink;
-    use crate::transport::rtc::media::packet_router::parse_payload_route_map_from_answer;
-    use crate::transport::rtc::media::packet_router::RtcMediaRouteLabel;
-    use crate::transport::rtc::media::packet_types::{
+    use crate::transport::rtc::stream::packet_router::parse_payload_route_map_from_answer;
+    use crate::transport::rtc::stream::packet_router::RtcMediaRouteLabel;
+    use crate::transport::rtc::stream::packet_types::{
         MediaPacketKind, RtcMediaIngressPacket, RtcMediaPacketSource, RtcRtpPacketMeta,
     };
-    use crate::transport::rtc::media::sink::RtcMediaSink;
+    use crate::transport::rtc::stream::sink::RtcMediaSink;
     use std::time::Duration;
 
     #[tokio::test]

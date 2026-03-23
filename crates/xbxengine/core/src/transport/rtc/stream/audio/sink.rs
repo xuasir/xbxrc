@@ -1,8 +1,8 @@
-use crate::transport::rtc::media::packet_router::RtcMediaRouteLabel;
-use crate::transport::rtc::media::packet_types::{
+use crate::transport::rtc::stream::packet_router::RtcMediaRouteLabel;
+use crate::transport::rtc::stream::packet_types::{
     RtcAudioRtpPacket, RtcMediaIngressPacket, RtcRtpPacketMeta,
 };
-use crate::transport::rtc::media::sink::RtcMediaSink;
+use crate::transport::rtc::stream::sink::RtcMediaSink;
 
 pub(crate) struct RtcAudioPlaybackSink {
     tx: Option<tokio::sync::mpsc::Sender<RtcAudioRtpPacket>>,

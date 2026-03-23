@@ -23,11 +23,6 @@ use crate::transport::rtc::facts::{
     CommandResultFact, CommandResultStatus, ConnectionLifecycleStateFact, PeerFact, TimerFact,
     TransportCommand, TransportFact,
 };
-use crate::transport::rtc::media::audio::{
-    build_audio_playback_components, RtcAudioPlaybackSink, XbxRemoteAudioPlaybackSession,
-};
-use crate::transport::rtc::media::runtime_state::RtcMediaIngressSnapshot;
-use crate::transport::rtc::media::{build_rtc_video_frame_source, RtcMediaService, RtcMediaSink};
 use crate::transport::rtc::pipeline::supervisor::{spawn_media_supervisor, MediaSupervisorContext};
 use crate::transport::rtc::protocol::data_channel_state::{
     build_input_stream_packet, build_metadata_frame, drain_pending_input_frames,
@@ -41,6 +36,11 @@ use crate::transport::rtc::sdp::{
 use crate::transport::rtc::session::actor::SessionActor;
 use crate::transport::rtc::session::clock::SystemSessionClock;
 use crate::transport::rtc::session::policy::RtcSessionPolicy;
+use crate::transport::rtc::stream::audio::{
+    build_audio_playback_components, RtcAudioPlaybackSink, XbxRemoteAudioPlaybackSession,
+};
+use crate::transport::rtc::stream::runtime_state::RtcMediaIngressSnapshot;
+use crate::transport::rtc::stream::{build_rtc_video_frame_source, RtcMediaService, RtcMediaSink};
 use crate::{XbxEngineRuntimeConfig, XbxEngineRuntimeError};
 
 pub(crate) trait XbxMediaStackPort: Send {
@@ -100,7 +100,7 @@ pub(crate) struct XbxActiveMediaStack {
         Mutex<
             Option<
                 tokio::sync::mpsc::Sender<
-                    crate::transport::rtc::media::adapter_types::VideoFramePipelineSources,
+                    crate::transport::rtc::stream::adapter_types::VideoFramePipelineSources,
                 >,
             >,
         >,
@@ -155,7 +155,7 @@ impl RtcCompositeMediaSink {
 impl RtcMediaSink for RtcCompositeMediaSink {
     fn apply_payload_route_map(
         &mut self,
-        payload_route_map: Option<crate::transport::rtc::media::packet_router::RtcPayloadRouteMap>,
+        payload_route_map: Option<crate::transport::rtc::stream::packet_router::RtcPayloadRouteMap>,
     ) {
         self.primary
             .apply_payload_route_map(payload_route_map.clone());
@@ -164,10 +164,10 @@ impl RtcMediaSink for RtcCompositeMediaSink {
 
     fn on_raw_packet(
         &mut self,
-        packet: &crate::transport::rtc::media::packet_types::RtcMediaIngressPacket,
-        route_label: crate::transport::rtc::media::packet_router::RtcMediaRouteLabel,
+        packet: &crate::transport::rtc::stream::packet_types::RtcMediaIngressPacket,
+        route_label: crate::transport::rtc::stream::packet_router::RtcMediaRouteLabel,
         route_reason: &str,
-        rtp_meta: Option<&crate::transport::rtc::media::packet_types::RtcRtpPacketMeta>,
+        rtp_meta: Option<&crate::transport::rtc::stream::packet_types::RtcRtpPacketMeta>,
     ) {
         self.primary
             .on_raw_packet(packet, route_label, route_reason, rtp_meta);
@@ -268,7 +268,7 @@ impl XbxActiveMediaStack {
                 .expect("build rtc media runtime"),
         );
         let (frame_source_tx, frame_source_rx) = tokio::sync::mpsc::channel::<
-            crate::transport::rtc::media::adapter_types::VideoFramePipelineSources,
+            crate::transport::rtc::stream::adapter_types::VideoFramePipelineSources,
         >(1);
         let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
         let pending_runtime_recovery_action = Arc::new(Mutex::new(None));
@@ -355,7 +355,7 @@ impl XbxActiveMediaStack {
 
     fn mount_legacy_frame_pipeline(&mut self) {
         struct DummyRtcpPort;
-        impl crate::transport::rtc::media::sink::RtcRtcpSendPort for DummyRtcpPort {
+        impl crate::transport::rtc::stream::sink::RtcRtcpSendPort for DummyRtcpPort {
             fn send_rtcp(&self, _buf: &[u8]) {}
         }
         let (video_sink, frame_sources) = build_rtc_video_frame_source(
@@ -366,7 +366,7 @@ impl XbxActiveMediaStack {
             Duration::from_millis(0),
             Duration::from_millis(50),
             Duration::from_millis(500),
-            crate::transport::rtc::media::nack_scheduler::NackSchedulerConfig {
+            crate::transport::rtc::stream::nack_scheduler::NackSchedulerConfig {
                 max_age_ms: 200,
                 frame_deadline_ms: 120,
                 burst_count: 4,
@@ -1026,7 +1026,7 @@ impl XbxMediaStackPort for XbxActiveMediaStack {
 mod tests {
     use super::merge_media_snapshot_into_runtime_stats;
     use crate::api::backend::XbxEngineMediaRuntimeStats;
-    use crate::transport::rtc::media::runtime_state::RtcMediaIngressSnapshot;
+    use crate::transport::rtc::stream::runtime_state::RtcMediaIngressSnapshot;
     use xbxengine_protocol::XbxEngineTransportStateDto;
 
     #[test]

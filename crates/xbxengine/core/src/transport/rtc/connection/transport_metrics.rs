@@ -1,11 +1,17 @@
+use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
 use rtc::peer_connection::transport::RTCIceCandidateType;
 use rtc::peer_connection::RTCPeerConnection;
 use rtc::statistics::report::{RTCStatsReport, RTCStatsReportEntry};
 use rtc::statistics::StatsSelector;
+use rtcp::transport_feedbacks::transport_layer_cc::TransportLayerCc;
 
+use crate::runtime_stats_sink::RuntimeStatsSink;
+use crate::transport::rtc::events::RtcConnectionLifecycleState;
+use crate::transport::rtc::facts::{PeerFact, TransportFact};
 use crate::transport::rtc::stats::now_ms_f64;
+use crate::{XbxEngineMediaRuntimeStats, XbxEngineVideoTwccObservation};
 
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct RtcTransportMetricsSnapshot {
@@ -66,6 +72,139 @@ fn collect_transport_metrics_from_report(
         inbound_video_bitrate_kbps,
         inbound_primary_video_bytes_total: inbound_video_bytes_total,
     })
+}
+
+pub(crate) fn publish_transport_metrics_sample(
+    runtime_stats: &RuntimeStatsSink,
+    snapshot: &RtcTransportMetricsSnapshot,
+) {
+    runtime_stats.record_transport_metrics(
+        snapshot.video_rtt_ms,
+        snapshot.video_rtt_source.clone(),
+        snapshot.inbound_video_loss_ratio_5s,
+        snapshot.inbound_video_loss_ratio_1s,
+        snapshot.transport_path.clone(),
+        snapshot.inbound_video_bitrate_kbps,
+        snapshot.inbound_primary_video_bytes_total,
+    );
+}
+
+pub(crate) fn build_twcc_observation(
+    observation_id: u64,
+    packet: &TransportLayerCc,
+    runtime_stats: &Arc<Mutex<XbxEngineMediaRuntimeStats>>,
+) -> Option<XbxEngineVideoTwccObservation> {
+    let observed_at_ms = now_ms_f64();
+    RuntimeStatsSink::read_shared(runtime_stats, |stats| {
+        let observed_packet_count = packet
+            .recv_deltas
+            .len()
+            .min(packet.packet_status_count as usize)
+            .min(u16::MAX as usize) as u16;
+        if packet.packet_status_count == 0 {
+            return None;
+        }
+
+        let covered_sequence_span = packet.packet_status_count;
+        let covered_sequence_end = packet
+            .base_sequence_number
+            .wrapping_add(covered_sequence_span.saturating_sub(1));
+        let feedback_interval_ms = stats
+            .latest_video_twcc_observation
+            .as_ref()
+            .map(|previous| (observed_at_ms - previous.observed_at_ms).max(0.0))
+            .filter(|value| *value > 0.0);
+        let arrival_span_ms = {
+            let span_ms = packet
+                .recv_deltas
+                .iter()
+                .map(|delta| delta.delta.max(0) as f64 / 1_000.0)
+                .sum::<f64>();
+            (span_ms > 0.0).then_some(span_ms).or(feedback_interval_ms)
+        };
+        let observed_byte_count = estimate_twcc_observed_byte_count(stats, observed_packet_count);
+        let receive_bitrate_kbps = feedback_interval_ms
+            .filter(|interval| *interval > 0.0)
+            .map(|interval| observed_byte_count as f64 * 8.0 / interval)
+            .or_else(|| stats.inbound_video_bitrate_kbps)
+            .or_else(|| {
+                stats
+                    .latest_video_bwe_observation
+                    .as_ref()
+                    .map(|bwe| bwe.actual_video_bitrate_kbps)
+            });
+        let packet_status_count = packet.packet_status_count.max(1);
+        let delivery_ratio =
+            (observed_packet_count as f64 / packet_status_count as f64).clamp(0.0, 1.0);
+        let packet_loss_ratio = (1.0 - delivery_ratio).clamp(0.0, 1.0);
+
+        Some(XbxEngineVideoTwccObservation {
+            observation_id,
+            feedback_packet_count: u16::from(packet.fb_pkt_count),
+            covered_sequence_start: packet.base_sequence_number,
+            covered_sequence_end,
+            covered_sequence_span,
+            observed_packet_count,
+            observed_byte_count,
+            feedback_interval_ms,
+            arrival_span_ms,
+            receive_bitrate_kbps,
+            delivery_ratio,
+            packet_loss_ratio,
+            observed_at_ms,
+        })
+    })
+    .flatten()
+}
+
+impl super::RtcConnectionService {
+    pub(crate) fn refresh_transport_metrics(
+        &mut self,
+        runtime_stats: &Arc<Mutex<XbxEngineMediaRuntimeStats>>,
+    ) {
+        let now_ms = now_ms_f64();
+        let previous_sample_at_ms = self.last_transport_metrics_sample_at_ms;
+        if now_ms - previous_sample_at_ms < 1_000.0 {
+            return;
+        }
+        self.last_transport_metrics_sample_at_ms = now_ms;
+
+        let Some(peer_connection) = self.peer_connection.as_mut() else {
+            return;
+        };
+
+        let connected_at_ms =
+            matches!(self.lifecycle_state, RtcConnectionLifecycleState::Connected)
+                .then_some(self.lifecycle_state_since_ms);
+        let previous_inbound_video_bytes_total =
+            self.last_transport_metrics_sample_inbound_video_bytes_total;
+        let previous_sample_at_ms = (previous_sample_at_ms > 0.0).then_some(previous_sample_at_ms);
+        let previous_inbound_video_bytes_total =
+            (previous_inbound_video_bytes_total > 0).then_some(previous_inbound_video_bytes_total);
+        let Some(snapshot) = collect_transport_metrics(
+            peer_connection,
+            connected_at_ms,
+            previous_sample_at_ms,
+            previous_inbound_video_bytes_total,
+        ) else {
+            return;
+        };
+        self.last_transport_metrics_sample_inbound_video_bytes_total =
+            snapshot.inbound_primary_video_bytes_total;
+        let runtime_stats_sink = RuntimeStatsSink::new(runtime_stats.clone());
+        publish_transport_metrics_sample(&runtime_stats_sink, &snapshot);
+        self.push_transport_fact(TransportFact::Peer(PeerFact::TransportMetricsSampled {
+            video_rtt_ms: snapshot.video_rtt_ms,
+            loss_ratio_1s: snapshot.inbound_video_loss_ratio_1s,
+            actual_video_bitrate_kbps: Some(snapshot.inbound_video_bitrate_kbps),
+            observed_remb_kbps: runtime_stats
+                .lock()
+                .ok()
+                .and_then(|stats| stats.video_remb_bps.map(|bps| bps / 1_000)),
+            transport_path: snapshot.transport_path.clone(),
+            observed_at_ms: now_ms,
+        }));
+    }
 }
 
 fn selected_candidate_pair(
@@ -154,6 +293,22 @@ fn estimate_recent_inbound_bitrate_kbps(
     let baseline_bytes_total = previous_inbound_video_bytes_total.unwrap_or(0);
     let delta_bytes_total = inbound_video_bytes_total.saturating_sub(baseline_bytes_total);
     (delta_bytes_total as f64 * 8.0 / elapsed_ms).max(0.0)
+}
+
+fn estimate_twcc_observed_byte_count(
+    stats: &XbxEngineMediaRuntimeStats,
+    observed_packet_count: u16,
+) -> u64 {
+    if observed_packet_count == 0 {
+        return 0;
+    }
+    let packet_count_total = stats.inbound_video_packet_count_total;
+    let average_packet_bytes = if packet_count_total == 0 {
+        1_200
+    } else {
+        (stats.inbound_primary_video_bytes_total / packet_count_total).max(1)
+    };
+    average_packet_bytes.saturating_mul(u64::from(observed_packet_count))
 }
 
 fn candidate_type_for(report: &RTCStatsReport, candidate_id: &str) -> Option<RTCIceCandidateType> {

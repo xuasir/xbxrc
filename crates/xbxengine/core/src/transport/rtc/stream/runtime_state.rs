@@ -1,5 +1,5 @@
-use crate::transport::rtc::media::packet_router::{RtcMediaRouteDecision, RtcMediaRouteLabel};
-use crate::transport::rtc::media::packet_types::{
+use crate::transport::rtc::stream::packet_router::{RtcMediaRouteDecision, RtcMediaRouteLabel};
+use crate::transport::rtc::stream::packet_types::{
     MediaPacketKind, RtcMediaIngressPacket, RtcMediaPacketSource, RtcMediaStreamIdentity,
     RtcRtpPacketMeta,
 };

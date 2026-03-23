@@ -17,7 +17,7 @@ use opus::{Channels as OpusChannels, Decoder as OpusDecoder};
 use tokio::{runtime::Handle, sync::watch, task::JoinHandle as TokioJoinHandle};
 
 use crate::{
-    runtime_stats_sink::RuntimeStatsSink, transport::rtc::media::packet_types::RtcAudioRtpPacket,
+    runtime_stats_sink::RuntimeStatsSink, transport::rtc::stream::packet_types::RtcAudioRtpPacket,
     XbxEngineMediaRuntimeStats, XbxEngineRuntimeError, XbxEngineVideoTrackStatus,
 };
 

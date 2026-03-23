@@ -4,7 +4,7 @@ use tokio::runtime::Handle;
 
 use crate::{
     media::video::render::renderer::XbxRenderState, transport::rtc::facts::TransportFact,
-    transport::rtc::media::adapter_types::VideoFramePipelineSources, XbxEngineMediaRuntimeStats,
+    transport::rtc::stream::adapter_types::VideoFramePipelineSources, XbxEngineMediaRuntimeStats,
     XbxEngineRuntimeConfig,
 };
 

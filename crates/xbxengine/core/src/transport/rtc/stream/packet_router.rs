@@ -1,4 +1,4 @@
-use crate::transport::rtc::media::packet_types::{
+use crate::transport::rtc::stream::packet_types::{
     MediaPacketKind, RtcMediaIngressPacket, RtcMediaPacketSource, RtcRtpPacketMeta,
 };
 use std::collections::{HashMap, HashSet};

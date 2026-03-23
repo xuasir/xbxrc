@@ -3,11 +3,11 @@ use crate::media::video::h264::inspection::H264AccessUnitInspection;
 use bytes::Bytes;
 
 use crate::media::video::types::{AssembledVideoFrame, FrameValue, VideoCodec};
-use crate::transport::rtc::media::adapter_types::{
+use crate::transport::rtc::stream::adapter_types::{
     FrameSource, TransportAdmissionObservation, TransportLossObservation, TransportObservation,
     TransportObservationSource,
 };
-use crate::transport::rtc::media::video_source::{
+use crate::transport::rtc::stream::video_source::{
     RtcVideoFrameSource, RtcVideoTransportObservationSource,
 };
 

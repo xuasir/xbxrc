@@ -1,13 +1,13 @@
-use crate::transport::rtc::media::packet_router::{
+use crate::transport::rtc::stats::now_ms_f64;
+use crate::transport::rtc::stream::packet_router::{
     classify_packet, parse_payload_route_map_from_answer, RtcMediaRouteDecision,
     RtcMediaRouteLabel, RtcPayloadRouteMap,
 };
-use crate::transport::rtc::media::packet_types::{
+use crate::transport::rtc::stream::packet_types::{
     MediaPacketKind, RtcMediaIngressPacket, RtcMediaPacketSource, RtcRtpPacketMeta,
 };
-use crate::transport::rtc::media::runtime_state::{RtcMediaIngressSnapshot, RtcMediaRuntimeState};
-use crate::transport::rtc::media::sink::{NullRtcMediaSink, RtcMediaSink};
-use crate::transport::rtc::stats::now_ms_f64;
+use crate::transport::rtc::stream::runtime_state::{RtcMediaIngressSnapshot, RtcMediaRuntimeState};
+use crate::transport::rtc::stream::sink::{NullRtcMediaSink, RtcMediaSink};
 use crate::XbxEngineMediaRuntimeStats;
 use std::sync::{Arc, Mutex};
 
@@ -135,8 +135,8 @@ fn build_observation_summary(
 #[cfg(test)]
 mod tests {
     use super::RtcMediaService;
-    use crate::transport::rtc::media::packet_router::RtcMediaRouteLabel;
-    use crate::transport::rtc::media::packet_types::{
+    use crate::transport::rtc::stream::packet_router::RtcMediaRouteLabel;
+    use crate::transport::rtc::stream::packet_types::{
         MediaPacketKind, RtcMediaIngressPacket, RtcMediaPacketSource, RtcRtpPacketMeta,
     };
     use crate::XbxEngineMediaRuntimeStats;

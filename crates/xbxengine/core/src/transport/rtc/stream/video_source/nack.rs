@@ -1,6 +1,6 @@
 use xbxengine_protocol::XbxEngineTargetTypeDto;
 
-use crate::transport::rtc::media::nack_scheduler::{NackBatch, NackObservePolicy, ResolvedNack};
+use crate::transport::rtc::stream::nack_scheduler::{NackBatch, NackObservePolicy, ResolvedNack};
 use crate::XbxEngineVideoNackObservation;
 
 const CLOUD_STARTUP_HEAD_HOLE_DEADLINE_FLOOR_MS: f64 = 320.0;
