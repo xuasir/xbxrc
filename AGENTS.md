@@ -14,8 +14,6 @@ Do NOT perform most implementation directly unless the task is truly lightweight
   - delegate to `gpt-5.4-mini` with low reasoning
 - Deep analysis
   - delegate to `gpt-5.4-mini` with high reasoning
-- Lightweight tasks
-  - execute locally
 
 ## Main-Window Responsibilities
 
@@ -105,29 +103,32 @@ A task should be treated as complex if it involves one or more of the following:
 - work that will span multiple commits or sessions
 - work that requires explicit milestones for tracking
 
-Default rule: 1 complex task = 1 RFC = 1 Report.
+Default rule: 1 complex task = 1 RFC, and only fully completed work should produce 1 Report.
 
 For complex tasks, execution must follow this order:
 
 1. Determine the solution and scope first.
 2. Before implementation, create an RFC plan under `docs/rfcs/`.
 3. Use that RFC as the execution checklist and progress tracker during implementation.
-4. After the implementation is complete, create a summary report under `docs/reports/`.
-5. Update `docs/project-task.md` with the completed result and the relevant RFC/report references.
+4. During in-progress work, track milestones, status, and interim decisions directly in the RFC instead of creating intermediate reports.
+5. After the implementation is fully complete, create a summary report under `docs/reports/`.
+6. Update `docs/project-task.md` with the completed result and the relevant RFC/report references.
 
 ## RFC Requirements
 
 - Complex tasks must create an RFC plan file under `docs/rfcs/` before execution starts.
 - Complex tasks should create the RFC from `docs/rfcs/_template.md` by default, and keep it concise unless the task genuinely needs more detail.
 - The RFC should describe background, goals, scope, non-goals, impacted modules, implementation steps, validation plan, risks, and progress checkpoints.
+- During execution, all interim progress tracking should stay in the RFC until the task is fully completed.
 - If the solution changes materially during implementation, update the RFC instead of letting execution drift away from the plan.
 
 ## Report Requirements
 
-- After a complex task is completed, create a summary report under `docs/reports/`.
+- Only after a complex task is fully completed, create a summary report under `docs/reports/`.
 - Complex tasks should create the report from `docs/reports/_template.md` by default, and keep it concise unless more detail is necessary for handoff or risk tracking.
 - The report should record what was delivered, what changed, validation performed, residual risks, and follow-up items.
 - The report should reference the corresponding RFC when applicable.
+- Do not create intermediate or partial reports for work that is still in progress; use the RFC to track that progress instead.
 
 # Tracking Policy
 
