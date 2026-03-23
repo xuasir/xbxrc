@@ -18,6 +18,7 @@ export type StreamingStartupErrorKind
     | 'network'
     | 'auth'
     | 'target'
+    | 'hostRemotePlayUnavailable'
     | 'unknown'
 
 export interface StreamingStartupEvent {

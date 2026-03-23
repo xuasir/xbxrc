@@ -1,4 +1,5 @@
 pub(crate) mod adapter_types;
+pub(crate) mod audio;
 pub(crate) mod frame_cadence;
 pub(crate) mod nack_scheduler;
 pub(crate) mod packet_router;

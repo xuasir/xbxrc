@@ -16,6 +16,7 @@ use crate::transport::rtc::session::actor::SessionPolicyHook;
 
 const DEFAULT_BWE_TARGET_KBPS: u32 = 16_000;
 const BWE_FLOOR_KBPS: u32 = 8_000;
+const CLOUD_BWE_FLOOR_KBPS: u32 = 20_000;
 const BWE_CEILING_KBPS: u32 = 60_000;
 const RECOVERY_REPEAT_SUPPRESS_MS: f64 = 160.0;
 
@@ -169,6 +170,8 @@ impl RtcSessionPolicy {
             .bwe
             .latest_rtt_ms
             .or(snapshot.connection.latest_rtt_ms);
+        let floor_kbps =
+            resolve_bwe_floor_kbps(snapshot.connection.latest_transport_path.as_deref());
         let actual_kbps = snapshot.bwe.latest_actual_video_bitrate_kbps.unwrap_or(0.0);
         let current_target_kbps = snapshot
             .bwe
@@ -176,7 +179,7 @@ impl RtcSessionPolicy {
             .or_else(|| {
                 (actual_kbps > 0.0)
                     .then_some(actual_kbps.round() as u32)
-                    .map(|value| value.clamp(BWE_FLOOR_KBPS, BWE_CEILING_KBPS))
+                    .map(|value| value.clamp(floor_kbps, BWE_CEILING_KBPS))
             })
             .unwrap_or(DEFAULT_BWE_TARGET_KBPS);
         let (target_kbps, decision_reason) = resolve_bwe_target(
@@ -321,6 +324,7 @@ fn resolve_bwe_target(
     observed_remb_kbps: Option<u32>,
     transport_path: Option<&str>,
 ) -> (u32, String) {
+    let floor_kbps = resolve_bwe_floor_kbps(transport_path);
     let (candidate, reason) = if loss_ratio >= 0.12 || rtt_ms.is_some_and(|rtt| rtt >= 260.0) {
         (
             ((current_target_kbps as f64) * 0.72).round() as u32,
@@ -353,9 +357,17 @@ fn resolve_bwe_target(
         .map(|observed| candidate.min(observed.saturating_add(4_000)))
         .unwrap_or(candidate);
     (
-        capped_by_observed.clamp(BWE_FLOOR_KBPS, profile_ceiling),
+        capped_by_observed.clamp(floor_kbps, profile_ceiling),
         reason,
     )
+}
+
+fn resolve_bwe_floor_kbps(transport_path: Option<&str>) -> u32 {
+    if transport_path.is_some_and(|path| path.contains("cloud")) {
+        CLOUD_BWE_FLOOR_KBPS
+    } else {
+        BWE_FLOOR_KBPS
+    }
 }
 
 #[cfg(test)]
@@ -484,6 +496,47 @@ mod tests {
             })
             .unwrap_or(0);
         assert!(command > 16_000);
+    }
+
+    #[test]
+    fn cloud_bwe_floor_holds_at_twenty_mbps() {
+        let mut policy = RtcSessionPolicy::default();
+        let mut connection = ConnectionProjection::default();
+        connection.lifecycle_state = ConnectionLifecycleStateFact::Connected;
+        connection.latest_loss_ratio_1s = Some(0.0);
+        connection.latest_rtt_ms = Some(35.0);
+        connection.latest_transport_path = Some("udp-cloud-direct".to_string());
+        let bwe = BweProjection {
+            latest_rtt_ms: Some(35.0),
+            latest_loss_ratio_1s: Some(0.0),
+            latest_actual_video_bitrate_kbps: Some(14_000.0),
+            latest_observed_remb_kbps: Some(16_000),
+            latest_transport_path: Some("udp-cloud-direct".to_string()),
+            latest_sample_tick_ms: Some(400.0),
+            target_remb_kbps: Some(12_000),
+            last_observed_at_ms: Some(400.0),
+        };
+        let snapshot = TransportSnapshot::new(
+            2,
+            400.0,
+            connection,
+            MediaProjection::default(),
+            RecoveryProjection::default(),
+            bwe,
+            DiagnosticsProjection::default(),
+        );
+        let target = policy
+            .on_snapshot(&snapshot)
+            .into_iter()
+            .find_map(|command| {
+                if let TransportCommand::SetTargetRembKbps { target_kbps, .. } = command {
+                    Some(target_kbps)
+                } else {
+                    None
+                }
+            })
+            .unwrap_or(0);
+        assert_eq!(target, 20_000);
     }
 
     #[test]

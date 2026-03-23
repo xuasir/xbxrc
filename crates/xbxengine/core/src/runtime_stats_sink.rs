@@ -4,6 +4,7 @@ use crate::diagnostics::observation_bus::{ObservationBus, ObservationEvent};
 use crate::{
     XbxEngineMediaRuntimeStats, XbxEngineVideoFrameDropObservation, XbxEngineVideoNackObservation,
     XbxEngineVideoPacketGapObservation, XbxEngineVideoRtxReinjectObservation,
+    XbxEngineVideoTwccObservation,
 };
 
 #[derive(Clone)]
@@ -132,6 +133,13 @@ impl RuntimeStatsSink {
         observation: XbxEngineVideoNackObservation,
     ) {
         self.publish(ObservationEvent::LatestVideoNackObservation { observation });
+    }
+
+    pub(crate) fn record_latest_video_twcc_observation(
+        &self,
+        observation: XbxEngineVideoTwccObservation,
+    ) {
+        self.publish(ObservationEvent::LatestVideoTwccObservation { observation });
     }
 
     pub(crate) fn record_nack_recovered(

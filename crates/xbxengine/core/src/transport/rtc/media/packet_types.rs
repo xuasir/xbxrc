@@ -129,3 +129,8 @@ impl RtcVideoRtpPacket {
         }
     }
 }
+
+#[derive(Clone, Debug)]
+pub(crate) struct RtcAudioRtpPacket {
+    pub(crate) payload: Vec<u8>,
+}

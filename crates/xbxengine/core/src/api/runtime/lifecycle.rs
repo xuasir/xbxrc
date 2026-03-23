@@ -1,3 +1,4 @@
+use ohmygamepad_protocol::OhMyGamepadRumbleEffectDto;
 use xbxengine_protocol::{
     XbxEngineControlCommandDto, XbxEngineDisplayStateDto, XbxEngineHostRequestDto,
     XbxEngineHostResponseDto, XbxEngineIceCandidateDto, XbxEngineReconnectReasonDto,
@@ -163,6 +164,7 @@ where
         self.sync_transport_state(&runtime_stats);
         self.sync_video_packet_stats(&runtime_stats);
         self.sync_video_frame_stats(&runtime_stats);
+        self.drive_pending_gamepad_rumble_requests();
         if self.maybe_consume_pending_runtime_recovery_action(&runtime_stats) {
             return;
         }
@@ -344,6 +346,28 @@ where
                     self.sync_runtime_activity_snapshot();
                 }
                 true
+            }
+        }
+    }
+
+    fn drive_pending_gamepad_rumble_requests(&mut self) {
+        let Ok(rumble_requests) = self.media_backend.take_pending_gamepad_rumble_requests() else {
+            self.emit_error(
+                "takePendingGamepadRumbleRequestsFailed",
+                "xbxEngineRuntimeMediaBackendRumbleQueueUnavailable",
+            );
+            return;
+        };
+
+        for request in rumble_requests {
+            let result = if is_stop_gamepad_rumble_request(&request.effect) {
+                self.host_bridge.stop_gamepad_rumble(request.target.clone())
+            } else {
+                self.host_bridge.play_gamepad_rumble(request.clone())
+            };
+
+            if let Err(error) = result {
+                self.emit_error("dispatchGamepadRumbleFailed", error.to_string());
             }
         }
     }
@@ -865,6 +889,16 @@ fn runtime_stats_indicate_transport_recovering(
                         | "rtcMessageChannelClosed"
                 )
             })
+}
+
+fn is_stop_gamepad_rumble_request(effect: &OhMyGamepadRumbleEffectDto) -> bool {
+    effect.duration_ms == 0
+        && effect.start_delay_ms == 0
+        && effect.repeat == 0
+        && effect.strong_magnitude == 0.0
+        && effect.weak_magnitude == 0.0
+        && effect.left_trigger == 0.0
+        && effect.right_trigger == 0.0
 }
 
 fn collect_local_offer_ice_candidates(offer_sdp: &str) -> Vec<XbxEngineIceCandidateDto> {

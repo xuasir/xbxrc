@@ -242,11 +242,11 @@ impl AuthFlow {
             .await?
             .Token;
 
-        // xHome 是主机串流场景，强制区域 IP 可能导致会话长期停在 Provisioning。
-        // 这里固定走服务端默认区域解析，避免把 xCloud 的区域偏好误带到 xHome。
+        // xHome 的会话在当前环境下会被 force_region_ip 影响到 Provisioning/Provisioned 的推进，
+        // 这里保留区域 IP，避免把 xCloud 的默认区域选择误带进 xHome。
         let xhome_token = self
             .auth_api
-            .get_streaming_token(&gssv_token, "xhome", "")
+            .get_streaming_token(&gssv_token, "xhome", force_region_ip)
             .await?;
         let xcloud_token = match self
             .auth_api

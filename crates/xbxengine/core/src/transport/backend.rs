@@ -176,6 +176,12 @@ impl XbxEngineMediaBackend for XbxNegotiationBackend {
         Ok(self.stack.snapshot_runtime_stats())
     }
 
+    fn take_pending_gamepad_rumble_requests(
+        &mut self,
+    ) -> Result<Vec<ohmygamepad_protocol::OhMyGamepadRumbleRequestDto>, XbxEngineRuntimeError> {
+        Ok(self.stack.take_pending_gamepad_rumble_requests())
+    }
+
     fn take_pending_runtime_recovery_action(
         &mut self,
     ) -> Result<Option<XbxEnginePendingRuntimeRecoveryAction>, XbxEngineRuntimeError> {

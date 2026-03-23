@@ -118,6 +118,7 @@ async fn build_services(
         app_handle.clone(),
         auth_provider.clone(),
         config_provider.clone(),
+        runtime_trace.clone(),
     ));
     let xbxengine_service = Arc::new(mods::xbxengine::XbxEngineService::new(
         app_handle.clone(),

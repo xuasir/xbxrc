@@ -3,6 +3,7 @@ use std::sync::{Arc, Mutex};
 use crate::{
     XbxEngineMediaRuntimeStats, XbxEngineVideoFrameDropObservation, XbxEngineVideoNackObservation,
     XbxEngineVideoPacketGapObservation, XbxEngineVideoRtxReinjectObservation,
+    XbxEngineVideoTwccObservation,
 };
 
 #[derive(Clone)]
@@ -55,6 +56,9 @@ pub(crate) enum ObservationEvent {
     },
     LatestVideoNackObservation {
         observation: XbxEngineVideoNackObservation,
+    },
+    LatestVideoTwccObservation {
+        observation: XbxEngineVideoTwccObservation,
     },
     NackRecovered {
         was_late: bool,
@@ -200,6 +204,18 @@ fn summarize_event(event: &ObservationEvent) -> ObservationPublication {
                 observation.source
             ),
         },
+        ObservationEvent::LatestVideoTwccObservation { observation } => ObservationPublication {
+            label: "twccObservation".to_string(),
+            summary: format!(
+                "fb={} seq={}..{} packets={} loss={:.3} delivery={:.3}",
+                observation.feedback_packet_count,
+                observation.covered_sequence_start,
+                observation.covered_sequence_end,
+                observation.observed_packet_count,
+                observation.packet_loss_ratio,
+                observation.delivery_ratio
+            ),
+        },
         ObservationEvent::NackRecovered {
             was_late,
             recovery_time_ms,
@@ -331,6 +347,9 @@ fn apply_event(stats: &mut XbxEngineMediaRuntimeStats, event: ObservationEvent) 
                 }
             }
             stats.latest_video_nack_observation = Some(observation);
+        }
+        ObservationEvent::LatestVideoTwccObservation { observation } => {
+            stats.latest_video_twcc_observation = Some(observation);
         }
         ObservationEvent::NackRecovered {
             was_late,

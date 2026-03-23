@@ -1,8 +1,10 @@
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::{Arc, Mutex};
 
 use ohmygamepad_host::GamepadRuntimeHost;
-use ohmygamepad_protocol::{LogicalPadSnapshotDto, OhMyGamepadRouteTargetDto};
+use ohmygamepad_protocol::{
+    LogicalPadSnapshotDto, OhMyGamepadRouteTargetDto, OhMyGamepadRumbleRequestDto,
+};
 use tokio::task::JoinHandle;
 use tokio::time::{interval, Duration};
 use xbxengine_protocol::{
@@ -21,7 +23,11 @@ use crate::transport::rtc::facts::{
     CommandResultFact, CommandResultStatus, ConnectionLifecycleStateFact, PeerFact, TimerFact,
     TransportCommand, TransportFact,
 };
-use crate::transport::rtc::media::{build_rtc_video_frame_source, RtcMediaService};
+use crate::transport::rtc::media::audio::{
+    build_audio_playback_components, RtcAudioPlaybackSink, XbxRemoteAudioPlaybackSession,
+};
+use crate::transport::rtc::media::runtime_state::RtcMediaIngressSnapshot;
+use crate::transport::rtc::media::{build_rtc_video_frame_source, RtcMediaService, RtcMediaSink};
 use crate::transport::rtc::pipeline::supervisor::{spawn_media_supervisor, MediaSupervisorContext};
 use crate::transport::rtc::protocol::data_channel_state::{
     build_input_stream_packet, build_metadata_frame, drain_pending_input_frames,
@@ -60,6 +66,7 @@ pub(crate) trait XbxMediaStackPort: Send {
     fn local_candidates_snapshot(&self) -> Vec<XbxEngineIceCandidateDto>;
     fn local_ice_gathering_complete(&self) -> bool;
     fn snapshot_runtime_stats(&self) -> XbxEngineMediaRuntimeStats;
+    fn take_pending_gamepad_rumble_requests(&mut self) -> Vec<OhMyGamepadRumbleRequestDto>;
     fn take_pending_runtime_recovery_action(
         &mut self,
     ) -> Option<XbxEnginePendingRuntimeRecoveryAction>;
@@ -98,6 +105,8 @@ pub(crate) struct XbxActiveMediaStack {
             >,
         >,
     >,
+    audio_volume_bits: Arc<AtomicU32>,
+    audio_playback_session: Arc<Mutex<Option<XbxRemoteAudioPlaybackSession>>>,
     connection: Arc<Mutex<RtcConnectionService>>,
     media: Arc<Mutex<RtcMediaService>>,
     transport_session: Arc<Mutex<SessionActor<SystemSessionClock, RtcSessionPolicy>>>,
@@ -131,6 +140,124 @@ impl Default for RtcInputStreamState {
 }
 
 const RTC_INPUT_STREAM_POLL_INTERVAL_MS: u64 = 8;
+
+struct RtcCompositeMediaSink {
+    primary: Box<dyn RtcMediaSink>,
+    secondary: Box<dyn RtcMediaSink>,
+}
+
+impl RtcCompositeMediaSink {
+    fn new(primary: Box<dyn RtcMediaSink>, secondary: Box<dyn RtcMediaSink>) -> Self {
+        Self { primary, secondary }
+    }
+}
+
+impl RtcMediaSink for RtcCompositeMediaSink {
+    fn apply_payload_route_map(
+        &mut self,
+        payload_route_map: Option<crate::transport::rtc::media::packet_router::RtcPayloadRouteMap>,
+    ) {
+        self.primary
+            .apply_payload_route_map(payload_route_map.clone());
+        self.secondary.apply_payload_route_map(payload_route_map);
+    }
+
+    fn on_raw_packet(
+        &mut self,
+        packet: &crate::transport::rtc::media::packet_types::RtcMediaIngressPacket,
+        route_label: crate::transport::rtc::media::packet_router::RtcMediaRouteLabel,
+        route_reason: &str,
+        rtp_meta: Option<&crate::transport::rtc::media::packet_types::RtcRtpPacketMeta>,
+    ) {
+        self.primary
+            .on_raw_packet(packet, route_label, route_reason, rtp_meta);
+        self.secondary
+            .on_raw_packet(packet, route_label, route_reason, rtp_meta);
+    }
+}
+
+fn merge_media_snapshot_into_runtime_stats(
+    stats: &mut XbxEngineMediaRuntimeStats,
+    media_snapshot: &RtcMediaIngressSnapshot,
+    now_ms: f64,
+) {
+    let inbound_video_packet_count_total = media_snapshot
+        .inbound_primary_video_count
+        .saturating_add(media_snapshot.inbound_repair_video_count);
+    let inbound_video_bytes_total = media_snapshot
+        .inbound_primary_video_bytes
+        .saturating_add(media_snapshot.inbound_repair_video_bytes);
+
+    stats.inbound_audio_bytes_total = stats
+        .inbound_audio_bytes_total
+        .max(media_snapshot.inbound_audio_bytes);
+    stats.inbound_primary_video_bytes_total = stats
+        .inbound_primary_video_bytes_total
+        .max(media_snapshot.inbound_primary_video_bytes);
+    stats.inbound_video_packet_count_total = stats
+        .inbound_video_packet_count_total
+        .max(inbound_video_packet_count_total);
+    stats.inbound_video_bytes_total = stats
+        .inbound_video_bytes_total
+        .max(inbound_video_bytes_total);
+    stats.inbound_bytes_total = stats.inbound_video_bytes_total + stats.inbound_audio_bytes_total;
+
+    let video_width = stats
+        .latest_video_frame
+        .as_ref()
+        .map(|frame| frame.width)
+        .or(stats.latest_video_stream_width)
+        .or_else(|| {
+            stats
+                .latest_video_track_status
+                .as_ref()
+                .and_then(|status| status.video_width)
+        });
+    let video_height = stats
+        .latest_video_frame
+        .as_ref()
+        .map(|frame| frame.height)
+        .or(stats.latest_video_stream_height)
+        .or_else(|| {
+            stats
+                .latest_video_track_status
+                .as_ref()
+                .and_then(|status| status.video_height)
+        });
+    let mime_type = stats
+        .latest_video_track_status
+        .as_ref()
+        .and_then(|status| status.mime_type.clone());
+
+    // media ingress 已经确认收到了视频包时，不再让统计面长期停留在 audioOnly。
+    stats.latest_video_track_status = if stats.inbound_video_bytes_total > 0 {
+        Some(crate::XbxEngineVideoTrackStatus {
+            state: "remoteTrackAttached".to_string(),
+            video_width,
+            video_height,
+            mime_type,
+            transport_state: stats.transport_state.clone(),
+            video_bytes_total: stats.inbound_video_bytes_total,
+            video_packet_count_total: stats.inbound_video_packet_count_total,
+            audio_bytes_total: stats.inbound_audio_bytes_total,
+            observed_at_ms: now_ms,
+        })
+    } else if stats.inbound_audio_bytes_total > 0 {
+        Some(crate::XbxEngineVideoTrackStatus {
+            state: "audioOnly".to_string(),
+            video_width: None,
+            video_height: None,
+            mime_type,
+            transport_state: stats.transport_state.clone(),
+            video_bytes_total: 0,
+            video_packet_count_total: 0,
+            audio_bytes_total: stats.inbound_audio_bytes_total,
+            observed_at_ms: now_ms,
+        })
+    } else {
+        stats.latest_video_track_status.clone()
+    };
+}
 
 impl XbxActiveMediaStack {
     pub(crate) fn new(runtime_config: XbxEngineRuntimeConfig) -> Self {
@@ -168,6 +295,8 @@ impl XbxActiveMediaStack {
             runtime_config: Arc::new(Mutex::new(runtime_config)),
             last_request: Arc::new(Mutex::new(None)),
             frame_source_tx: Arc::new(Mutex::new(Some(frame_source_tx))),
+            audio_volume_bits: Arc::new(AtomicU32::new(1.0f32.to_bits())),
+            audio_playback_session: Arc::new(Mutex::new(None)),
             connection,
             media: Arc::new(Mutex::new(RtcMediaService::default())),
             transport_session: Arc::new(Mutex::new(SessionActor::new(
@@ -216,12 +345,20 @@ impl XbxActiveMediaStack {
         self.input_loop_task = Some(task);
     }
 
-    fn mount_legacy_frame_pipeline(&self) {
+    fn stop_audio_playback_session(&mut self) {
+        if let Ok(mut session) = self.audio_playback_session.lock() {
+            if let Some(session) = session.take() {
+                session.stop();
+            }
+        }
+    }
+
+    fn mount_legacy_frame_pipeline(&mut self) {
         struct DummyRtcpPort;
         impl crate::transport::rtc::media::sink::RtcRtcpSendPort for DummyRtcpPort {
             fn send_rtcp(&self, _buf: &[u8]) {}
         }
-        let (sink, frame_sources) = build_rtc_video_frame_source(
+        let (video_sink, frame_sources) = build_rtc_video_frame_source(
             8192,
             Arc::new(DummyRtcpPort),
             self.runtime_stats.clone(),
@@ -237,8 +374,37 @@ impl XbxActiveMediaStack {
                 max_retry_count: 3,
             },
         );
+        let mut audio_session = None;
+        let audio_sink = match build_audio_playback_components(
+            self.media_runtime.handle(),
+            self.runtime_stats.clone(),
+            self.audio_volume_bits.clone(),
+        ) {
+            Ok((session, sink)) => {
+                audio_session = Some(session);
+                sink
+            }
+            Err(error) => {
+                crate::xbx_log_warn!(
+                    "[xbxengine][rtc][audio] playback session failed to start: {error}"
+                );
+                RtcAudioPlaybackSink::disabled()
+            }
+        };
         if let Ok(mut media) = self.media.lock() {
-            media.set_sink(sink);
+            media.set_sink(Box::new(RtcCompositeMediaSink::new(
+                video_sink,
+                Box::new(audio_sink),
+            )));
+            if let Some(session) = audio_session.take() {
+                if let Ok(mut audio_session_guard) = self.audio_playback_session.lock() {
+                    *audio_session_guard = Some(session);
+                } else {
+                    session.stop();
+                }
+            }
+        } else if let Some(session) = audio_session.take() {
+            session.stop();
         }
         let send_result = self
             .frame_source_tx
@@ -601,6 +767,7 @@ impl XbxMediaStackPort for XbxActiveMediaStack {
         if let Ok(mut last_request) = self.last_request.lock() {
             *last_request = Some(request.clone());
         }
+        self.stop_audio_playback_session();
         if let Ok(mut media) = self.media.lock() {
             media.reset();
         }
@@ -736,29 +903,18 @@ impl XbxMediaStackPort for XbxActiveMediaStack {
         }
         if let Ok(media) = self.media.lock() {
             let media_snapshot = media.snapshot();
-            stats.inbound_audio_bytes_total = media_snapshot.inbound_audio_bytes;
-            stats.inbound_bytes_total =
-                stats.inbound_video_bytes_total + stats.inbound_audio_bytes_total;
-            if stats.latest_video_track_status.is_none()
-                && media_snapshot.inbound_audio_bytes > 0
-                && stats.inbound_video_bytes_total == 0
-            {
-                // 音频-only 情况下，补一个可消费的 track 状态，避免统计面板一直空白。
-                stats.latest_video_track_status = Some(crate::XbxEngineVideoTrackStatus {
-                    state: "audioOnly".to_string(),
-                    video_width: None,
-                    video_height: None,
-                    mime_type: None,
-                    transport_state: stats.transport_state.clone(),
-                    video_bytes_total: 0,
-                    video_packet_count_total: 0,
-                    audio_bytes_total: stats.inbound_audio_bytes_total,
-                    observed_at_ms: now_ms,
-                });
-            }
+            merge_media_snapshot_into_runtime_stats(&mut stats, &media_snapshot, now_ms);
         }
         crate::xbx_log_debug!("[xbxengine][rtc-stack] snapshot_runtime_stats exit");
         stats
+    }
+
+    fn take_pending_gamepad_rumble_requests(&mut self) -> Vec<OhMyGamepadRumbleRequestDto> {
+        self.connection
+            .lock()
+            .ok()
+            .map(|mut connection| connection.take_pending_gamepad_rumble_requests())
+            .unwrap_or_default()
     }
 
     fn take_pending_runtime_recovery_action(
@@ -777,7 +933,10 @@ impl XbxMediaStackPort for XbxActiveMediaStack {
             .and_then(|mut render_state| render_state.take_latest_frame())
     }
 
-    fn set_audio_volume(&mut self, _value: f32) {}
+    fn set_audio_volume(&mut self, value: f32) {
+        self.audio_volume_bits
+            .store(value.to_bits(), Ordering::Relaxed);
+    }
 
     fn set_microphone_capturing(&mut self, _capturing: bool) -> Result<(), XbxEngineRuntimeError> {
         Ok(())
@@ -846,6 +1005,7 @@ impl XbxMediaStackPort for XbxActiveMediaStack {
         if let Some(task) = self.input_loop_task.take() {
             task.abort();
         }
+        self.stop_audio_playback_session();
         if let Ok(mut connection) = self.connection.lock() {
             connection.stop(&self.runtime_stats);
         }
@@ -859,5 +1019,59 @@ impl XbxMediaStackPort for XbxActiveMediaStack {
             state: ConnectionLifecycleStateFact::Closed,
             observed_at_ms: crate::transport::rtc::stats::now_ms_f64(),
         }));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::merge_media_snapshot_into_runtime_stats;
+    use crate::api::backend::XbxEngineMediaRuntimeStats;
+    use crate::transport::rtc::media::runtime_state::RtcMediaIngressSnapshot;
+    use xbxengine_protocol::XbxEngineTransportStateDto;
+
+    #[test]
+    fn media_snapshot_promotes_track_status_to_remote_track_attached_when_video_exists() {
+        let mut stats = XbxEngineMediaRuntimeStats {
+            transport_state: XbxEngineTransportStateDto::Connected,
+            inbound_audio_bytes_total: 64,
+            latest_video_track_status: Some(crate::XbxEngineVideoTrackStatus {
+                state: "audioOnly".to_string(),
+                video_width: None,
+                video_height: None,
+                mime_type: Some("video/h264".to_string()),
+                transport_state: XbxEngineTransportStateDto::Connected,
+                video_bytes_total: 0,
+                video_packet_count_total: 0,
+                audio_bytes_total: 64,
+                observed_at_ms: 10.0,
+            }),
+            latest_video_stream_width: Some(1920),
+            latest_video_stream_height: Some(1080),
+            ..XbxEngineMediaRuntimeStats::default()
+        };
+        let media_snapshot = RtcMediaIngressSnapshot {
+            inbound_primary_video_count: 12,
+            inbound_primary_video_bytes: 12_000,
+            inbound_repair_video_count: 3,
+            inbound_repair_video_bytes: 600,
+            inbound_audio_bytes: 128,
+            ..RtcMediaIngressSnapshot::default()
+        };
+
+        merge_media_snapshot_into_runtime_stats(&mut stats, &media_snapshot, 123.0);
+
+        assert_eq!(stats.inbound_video_packet_count_total, 15);
+        assert_eq!(stats.inbound_video_bytes_total, 12_600);
+        assert_eq!(stats.inbound_primary_video_bytes_total, 12_000);
+        assert_eq!(stats.inbound_audio_bytes_total, 128);
+        let status = stats
+            .latest_video_track_status
+            .expect("video track status should exist");
+        assert_eq!(status.state, "remoteTrackAttached");
+        assert_eq!(status.video_width, Some(1920));
+        assert_eq!(status.video_height, Some(1080));
+        assert_eq!(status.video_bytes_total, 12_600);
+        assert_eq!(status.video_packet_count_total, 15);
+        assert_eq!(status.audio_bytes_total, 128);
     }
 }

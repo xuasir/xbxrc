@@ -61,6 +61,9 @@ struct ResolvedRemotePlayContext {
     console_addrs: Vec<DomainHostAddr>,
 }
 
+const HOME_REMOTE_PLAY_PREFLIGHT_TIMEOUT_MS: u64 = 8_000;
+const HOME_REMOTE_PLAY_PREFLIGHT_POLL_INTERVAL_MS: u64 = 1_000;
+
 /// tauri 侧 flow adapter：仅负责提供凭证。
 /// RFC: 策略与执行层已下沉 crate，adapter 彻底退化。
 #[derive(Clone)]
@@ -639,6 +642,80 @@ impl StreamingService {
                 .collect(),
         }
     }
+
+    async fn preflight_home_remote_play_registration(
+        &self,
+        plan: &StreamingPlan,
+        target_id: &str,
+    ) -> Result<(), SessionFlowError> {
+        if !plan.session.target.is_home() || !plan.session.schedule.require_console_ready {
+            return Ok(());
+        }
+
+        let started_at_ms = now_ms();
+        let timeout_ms = HOME_REMOTE_PLAY_PREFLIGHT_TIMEOUT_MS
+            .min(plan.session.schedule.ready_timeout_ms)
+            .max(HOME_REMOTE_PLAY_PREFLIGHT_POLL_INTERVAL_MS);
+        let poll_interval_ms = HOME_REMOTE_PLAY_PREFLIGHT_POLL_INTERVAL_MS.max(
+            plan.session
+                .schedule
+                .monitor_interval_ms
+                .max(200)
+                .min(HOME_REMOTE_PLAY_PREFLIGHT_POLL_INTERVAL_MS),
+        );
+        let mut attempt = 0u32;
+
+        loop {
+            attempt = attempt.saturating_add(1);
+            let consoles = self
+                .data_provider
+                .get_remote_consoles()
+                .await
+                .map_err(|error| SessionFlowError::message(error.to_string()))?;
+            let matched = consoles
+                .iter()
+                .find(|console| matches_remote_host_id(target_id, console));
+            let elapsed_ms = now_ms().saturating_sub(started_at_ms);
+            let ready = matched.is_some_and(is_home_remote_play_registered);
+
+            self.runtime_trace.record_snapshot(
+                "streaming",
+                "homeRemotePlayPreflightSnapshot",
+                None,
+                serde_json::json!({
+                    "targetId": target_id,
+                    "attempt": attempt,
+                    "elapsedMs": elapsed_ms,
+                    "matched": matched.is_some(),
+                    "powerState": matched.and_then(|console| console.power_state.clone()),
+                    "remoteManagementEnabled": matched.and_then(|console| console.remote_management_enabled),
+                    "consoleStreamingEnabled": matched.and_then(|console| console.console_streaming_enabled),
+                    "consoleAddrsCount": matched
+                        .and_then(|console| console.console_addrs.as_ref().map(|items| items.len()))
+                        .unwrap_or(0),
+                    "ready": ready,
+                }),
+            );
+
+            if ready {
+                return Ok(());
+            }
+
+            if elapsed_ms >= timeout_ms {
+                if matched.is_some_and(|console| console.power_state.as_deref() == Some("On")) {
+                    return Err(home_remote_play_not_ready_error(
+                        target_id, matched, attempt, elapsed_ms,
+                    ));
+                }
+
+                return Err(SessionFlowError::message(format!(
+                    "remoteConsoleNotReady:targetId={target_id}"
+                )));
+            }
+
+            tokio::time::sleep(std::time::Duration::from_millis(poll_interval_ms)).await;
+        }
+    }
 }
 
 fn resolve_runtime_capabilities(xbxengine_runtime_available: bool) -> DomainRuntimeCapabilities {
@@ -809,6 +886,37 @@ impl crate::mods::streaming::StreamingProvider for StreamingService {
             ),
             Some("contextResolved".to_string()),
         );
+        self.preflight_home_remote_play_registration(&plan, &params.target_id)
+            .await
+            .map_err(|error| {
+                let startup_error = startup.build_startup_error(&error);
+                startup.emit(
+                    StreamingStartupPhase::Failed,
+                    StreamingStartupPhaseStatus::Failed,
+                    startup_error.diagnostic_summary.clone(),
+                    Some(startup_error.raw_message.clone()),
+                );
+                self.runtime_trace.record_event(
+                    "streaming",
+                    "sessionStartFailed",
+                    None,
+                    serde_json::json!({
+                        "attemptId": params.attempt_id,
+                        "targetType": params.target_type,
+                        "targetId": params.target_id,
+                        "startupError": startup_error,
+                        "error": {
+                            "message": error.message,
+                            "status": error.status,
+                            "body": error.body,
+                        },
+                    }),
+                );
+                AppError::streaming_detailed(
+                    error.to_string(),
+                    serde_json::to_value(&startup_error).unwrap_or(serde_json::Value::Null),
+                )
+            })?;
         // 执行快照会消费 plan，这里先投影出页面侧需要的稳定元数据。
         let metadata = project_session_metadata(&plan);
         let capabilities = project_session_capabilities(&compiler_context, &plan);
@@ -1227,6 +1335,9 @@ fn classify_startup_error_kind(
     error: &SessionFlowError,
 ) -> StreamingStartupErrorKind {
     let normalized = error.message.to_ascii_lowercase();
+    if is_home_remote_play_not_ready_message(&normalized) {
+        return StreamingStartupErrorKind::HostRemotePlayUnavailable;
+    }
     if normalized.contains("target missing") {
         return StreamingStartupErrorKind::Target;
     }
@@ -1252,6 +1363,9 @@ fn startup_error_message_key(
     kind: &StreamingStartupErrorKind,
     error: &SessionFlowError,
 ) -> &'static str {
+    if is_home_remote_play_not_ready_message(&error.message.to_ascii_lowercase()) {
+        return "streamPage.errors.hostRemotePlayUnavailable";
+    }
     if is_remote_console_wake_circuit_open_message(&error.message) {
         return "streamPage.errors.hostRemotePlayUnavailable";
     }
@@ -1264,6 +1378,9 @@ fn startup_error_message_key(
         StreamingStartupErrorKind::Network => "streamPage.errors.networkFailed",
         StreamingStartupErrorKind::Auth => "streamPage.errors.authFailed",
         StreamingStartupErrorKind::Target => "streamPage.errors.targetMissing",
+        StreamingStartupErrorKind::HostRemotePlayUnavailable => {
+            "streamPage.errors.hostRemotePlayUnavailable"
+        }
         StreamingStartupErrorKind::Unknown => "streamPage.errors.unknown",
     }
 }
@@ -1272,6 +1389,9 @@ fn build_startup_diagnostic_summary(
     phase: &StreamingStartupPhase,
     error: &SessionFlowError,
 ) -> String {
+    if let Some(summary) = build_home_remote_play_not_ready_summary(&error.message) {
+        return format!("phase={phase:?}; {summary}");
+    }
     if let Some(summary) = build_remote_console_wake_circuit_summary(&error.message) {
         return format!("phase={phase:?}; {summary}");
     }
@@ -1284,6 +1404,9 @@ fn build_startup_diagnostic_summary(
 }
 
 fn is_startup_error_retryable(kind: &StreamingStartupErrorKind, error: &SessionFlowError) -> bool {
+    if is_home_remote_play_not_ready_message(&error.message.to_ascii_lowercase()) {
+        return false;
+    }
     if is_remote_console_wake_circuit_open_message(&error.message) {
         return false;
     }
@@ -1297,10 +1420,36 @@ fn is_startup_error_retryable(kind: &StreamingStartupErrorKind, error: &SessionF
     ) || error.status.is_some_and(|status| status >= 500)
 }
 
+fn is_home_remote_play_not_ready_message(message: &str) -> bool {
+    let normalized = message.to_ascii_lowercase();
+    normalized.contains("homeremoteplaynotready")
+}
+
 fn is_remote_console_wake_circuit_open_message(message: &str) -> bool {
     message
         .to_ascii_lowercase()
         .contains("remoteconsolewakecircuitopen")
+}
+
+fn build_home_remote_play_not_ready_summary(message: &str) -> Option<String> {
+    if !is_home_remote_play_not_ready_message(message) {
+        return None;
+    }
+
+    let target_id = extract_preflight_field(message, "targetId").unwrap_or("unknown");
+    let power_state = extract_preflight_field(message, "powerState").unwrap_or("unknown");
+    let remote_management_enabled =
+        extract_preflight_field(message, "remoteManagementEnabled").unwrap_or("unknown");
+    let console_streaming_enabled =
+        extract_preflight_field(message, "consoleStreamingEnabled").unwrap_or("unknown");
+    let console_addrs_count =
+        extract_preflight_field(message, "consoleAddrsCount").unwrap_or("unknown");
+    let attempts = extract_preflight_field(message, "attempts").unwrap_or("unknown");
+    let elapsed_ms = extract_preflight_field(message, "elapsedMs").unwrap_or("unknown");
+
+    Some(format!(
+        "targetId={target_id}; powerState={power_state}; remoteManagementEnabled={remote_management_enabled}; consoleStreamingEnabled={console_streaming_enabled}; consoleAddrsCount={console_addrs_count}; attempts={attempts}; elapsedMs={elapsed_ms}; hint=hostRemotePlayUnavailable"
+    ))
 }
 
 fn build_remote_console_wake_circuit_summary(message: &str) -> Option<String> {
@@ -1317,11 +1466,63 @@ fn build_remote_console_wake_circuit_summary(message: &str) -> Option<String> {
     ))
 }
 
+fn extract_preflight_field<'a>(message: &'a str, key: &str) -> Option<&'a str> {
+    let prefix = format!("{key}=");
+    message
+        .split(';')
+        .find_map(|segment| segment.trim().strip_prefix(&prefix))
+}
+
 fn extract_circuit_open_field<'a>(message: &'a str, key: &str) -> Option<&'a str> {
     let prefix = format!("{key}=");
     message
         .split(';')
         .find_map(|segment| segment.trim().strip_prefix(&prefix))
+}
+
+fn matches_remote_host_id(
+    target_id: &str,
+    console: &crate::mods::data::types::DataHostSummary,
+) -> bool {
+    console.server_id.as_deref() == Some(target_id)
+        || console.id.as_deref() == Some(target_id)
+        || console.device_id.as_deref() == Some(target_id)
+}
+
+fn is_home_remote_play_registered(console: &crate::mods::data::types::DataHostSummary) -> bool {
+    console.power_state.as_deref() == Some("On")
+        && (console.remote_management_enabled == Some(true)
+            || console.console_streaming_enabled == Some(true))
+}
+
+fn home_remote_play_not_ready_error(
+    target_id: &str,
+    console: Option<&crate::mods::data::types::DataHostSummary>,
+    attempts: u32,
+    elapsed_ms: u64,
+) -> SessionFlowError {
+    let power_state = console
+        .and_then(|console| console.power_state.as_deref())
+        .unwrap_or("unknown");
+    let remote_management_enabled =
+        format_option_bool(console.and_then(|console| console.remote_management_enabled));
+    let console_streaming_enabled =
+        format_option_bool(console.and_then(|console| console.console_streaming_enabled));
+    let console_addrs_count = console
+        .and_then(|console| console.console_addrs.as_ref().map(|items| items.len()))
+        .unwrap_or(0);
+
+    SessionFlowError::message(format!(
+        "homeRemotePlayNotReady:targetId={target_id};powerState={power_state};remoteManagementEnabled={remote_management_enabled};consoleStreamingEnabled={console_streaming_enabled};consoleAddrsCount={console_addrs_count};attempts={attempts};elapsedMs={elapsed_ms};hint=hostRemotePlayUnavailable"
+    ))
+}
+
+fn format_option_bool(value: Option<bool>) -> &'static str {
+    match value {
+        Some(true) => "true",
+        Some(false) => "false",
+        None => "null",
+    }
 }
 
 fn now_ms() -> u64 {
@@ -1424,11 +1625,12 @@ fn resolve_custom_turn(snapshot: &StreamingConfigSnapshot) -> Option<TurnServer>
 #[cfg(test)]
 mod tests {
     use super::{
-        apply_streaming_preferences, parse_audio_bitrate_preference, parse_bitrate_preference,
-        parse_codec_preference, parse_runtime_preference,
+        apply_streaming_preferences, build_startup_diagnostic_summary, classify_startup_error_kind,
+        is_startup_error_retryable, parse_audio_bitrate_preference, parse_bitrate_preference,
+        parse_codec_preference, parse_runtime_preference, startup_error_message_key,
+        SessionFlowError, StreamingStartupErrorKind, StreamingStartupPhase,
     };
     use crate::mods::streaming::types::{StreamingConfigSnapshot, StreamingDisplayOptionsValue};
-    use xbox_streaming::SessionFlowError;
     use xbox_streaming::{
         BitratePreference, CodecPreference, Config as DomainStreamingConfig, RuntimePreference,
     };
@@ -1506,6 +1708,25 @@ mod tests {
                 .map(|turn| turn.url.as_str()),
             Some("turn:example.test:3478")
         );
+    }
+
+    #[test]
+    fn home_remote_play_not_ready_maps_to_host_remote_play_unavailable() {
+        let error = SessionFlowError::message(
+            "homeRemotePlayNotReady:targetId=console-1;powerState=On;remoteManagementEnabled=null;consoleStreamingEnabled=null;consoleAddrsCount=0;attempts=3;elapsedMs=8000;hint=hostRemotePlayUnavailable",
+        );
+
+        let phase = StreamingStartupPhase::ResolvingContext;
+        let kind = classify_startup_error_kind(&phase, &error);
+
+        assert_eq!(kind, StreamingStartupErrorKind::HostRemotePlayUnavailable);
+        assert_eq!(
+            startup_error_message_key(&kind, &error),
+            "streamPage.errors.hostRemotePlayUnavailable"
+        );
+        assert!(!is_startup_error_retryable(&kind, &error));
+        assert!(build_startup_diagnostic_summary(&phase, &error)
+            .contains("hint=hostRemotePlayUnavailable"));
     }
 
     #[test]

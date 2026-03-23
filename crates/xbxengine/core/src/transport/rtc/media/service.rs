@@ -67,9 +67,16 @@ impl RtcMediaService {
                 &route,
                 rtp_meta.as_ref(),
             ));
-            stats.latest_video_packet_arrival_time_ms = Some(now_ms_f64());
-            if route.label == RtcMediaRouteLabel::Audio {
-                let now_ms = now_ms_f64();
+            let now_ms = now_ms_f64();
+            if matches!(
+                route.label,
+                RtcMediaRouteLabel::PrimaryVideo | RtcMediaRouteLabel::RepairVideo
+            ) {
+                if stats.first_video_packet_arrival_time_ms.is_none() {
+                    stats.first_video_packet_arrival_time_ms = Some(now_ms);
+                }
+                stats.latest_video_packet_arrival_time_ms = Some(now_ms);
+            } else if route.label == RtcMediaRouteLabel::Audio {
                 if stats.first_audio_packet_arrival_time_ms.is_none() {
                     stats.first_audio_packet_arrival_time_ms = Some(now_ms);
                 }

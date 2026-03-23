@@ -73,7 +73,7 @@ pub fn build_xbxengine_stats(
         .map(|value| format!("{value:.1}ms"))
         .unwrap_or_default();
     let bitrate = runtime_stats
-        .and_then(|stats| stats.inbound_video_bitrate_kbps)
+        .and_then(|stats| resolve_video_inbound_bitrate_kbps(stats, now_ms))
         .map(|value| format!("{:.1}Mbps", value / 1_000.0))
         .or_else(|| {
             runtime_stats
@@ -151,15 +151,13 @@ pub fn build_xbxengine_stats(
         inbound_bitrate_kbps: runtime_stats.and_then(|stats| {
             stats
                 .inbound_bitrate_kbps
+                .filter(|value| *value > 0.1)
                 .or_else(|| estimate_total_inbound_bitrate_kbps(stats, now_ms))
         }),
         inbound_video_bitrate_kbps: runtime_stats
-            .and_then(|stats| stats.inbound_video_bitrate_kbps),
-        inbound_audio_bitrate_kbps: runtime_stats.and_then(|stats| {
-            stats
-                .inbound_audio_bitrate_kbps
-                .or_else(|| estimate_audio_inbound_bitrate_kbps(stats, now_ms))
-        }),
+            .and_then(|stats| resolve_video_inbound_bitrate_kbps(stats, now_ms)),
+        inbound_audio_bitrate_kbps: runtime_stats
+            .and_then(|stats| resolve_audio_inbound_bitrate_kbps(stats, now_ms)),
         inbound_bytes_total: runtime_stats.map(|stats| stats.inbound_bytes_total),
         inbound_video_bytes_total: runtime_stats.map(|stats| stats.inbound_video_bytes_total),
         inbound_audio_bytes_total: runtime_stats.map(|stats| stats.inbound_audio_bytes_total),
@@ -715,15 +713,48 @@ fn estimate_audio_inbound_bitrate_kbps(
     Some((bytes_total as f64 * 8.0 / elapsed_ms).max(0.0))
 }
 
+fn estimate_video_inbound_bitrate_kbps(
+    stats: &XbxEngineMediaRuntimeStats,
+    now_ms: f64,
+) -> Option<f64> {
+    let first_video_packet_at_ms = stats.first_video_packet_arrival_time_ms?;
+    let elapsed_ms = (now_ms - first_video_packet_at_ms).max(0.0);
+    if elapsed_ms <= 0.0 {
+        return None;
+    }
+    let bytes_total = stats.inbound_video_bytes_total;
+    if bytes_total == 0 {
+        return None;
+    }
+    Some((bytes_total as f64 * 8.0 / elapsed_ms).max(0.0))
+}
+
+fn resolve_video_inbound_bitrate_kbps(
+    stats: &XbxEngineMediaRuntimeStats,
+    now_ms: f64,
+) -> Option<f64> {
+    stats
+        .inbound_video_bitrate_kbps
+        .filter(|value| *value > 0.1)
+        .or_else(|| estimate_video_inbound_bitrate_kbps(stats, now_ms))
+}
+
+fn resolve_audio_inbound_bitrate_kbps(
+    stats: &XbxEngineMediaRuntimeStats,
+    now_ms: f64,
+) -> Option<f64> {
+    stats
+        .inbound_audio_bitrate_kbps
+        .filter(|value| *value > 0.1)
+        .or_else(|| estimate_audio_inbound_bitrate_kbps(stats, now_ms))
+}
+
 fn estimate_total_inbound_bitrate_kbps(
     stats: &XbxEngineMediaRuntimeStats,
     now_ms: f64,
 ) -> Option<f64> {
-    let video_kbps = stats.inbound_video_bitrate_kbps.unwrap_or(0.0);
-    let audio_kbps = stats
-        .inbound_audio_bitrate_kbps
-        .or_else(|| estimate_audio_inbound_bitrate_kbps(stats, now_ms))
-        .unwrap_or(0.0);
+    let video_kbps = resolve_video_inbound_bitrate_kbps(stats, now_ms).unwrap_or(0.0);
+    let audio_kbps = resolve_audio_inbound_bitrate_kbps(stats, now_ms).unwrap_or(0.0);
     let total = video_kbps + audio_kbps;
     if total > 0.0 {
         Some(total)
@@ -927,5 +958,25 @@ mod tests {
             dto.inbound_bitrate_kbps.unwrap_or(0.0)
                 >= dto.inbound_video_bitrate_kbps.unwrap_or(0.0)
         );
+    }
+
+    #[test]
+    fn video_inbound_bitrate_falls_back_to_media_ingress_bytes_when_transport_stats_are_zero() {
+        let now_ms = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_millis() as f64;
+        let stats = XbxEngineMediaRuntimeStats {
+            transport_state: XbxEngineTransportStateDto::Connected,
+            first_video_packet_arrival_time_ms: Some(now_ms - 2_000.0),
+            latest_video_packet_arrival_time_ms: Some(now_ms - 16.0),
+            inbound_video_bytes_total: 2_000_000,
+            inbound_video_bitrate_kbps: Some(0.0),
+            ..XbxEngineMediaRuntimeStats::default()
+        };
+
+        let dto = build_xbxengine_stats(&test_snapshot(), Some(&stats));
+        assert!(dto.inbound_video_bitrate_kbps.unwrap_or(0.0) > 0.0);
+        assert!(dto.inbound_bitrate_kbps.unwrap_or(0.0) > 0.0);
     }
 }

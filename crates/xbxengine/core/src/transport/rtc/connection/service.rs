@@ -19,6 +19,7 @@ use rtc::rtp_transceiver::rtp_sender::{
 };
 use rtc::rtp_transceiver::{RTCRtpTransceiverDirection, RTCRtpTransceiverInit};
 use rtc::sansio::Protocol;
+use rtcp::transport_feedbacks::transport_layer_cc::TransportLayerCc;
 use xbxengine_protocol::{
     XbxEngineIceCandidateDto, XbxEngineSessionDto, XbxEngineTransportStateDto,
 };
@@ -36,6 +37,7 @@ use crate::transport::rtc::connection::data_channel_bootstrap::{
     MESSAGE_CHANNEL_LABEL,
 };
 use crate::transport::rtc::connection::io_runtime::RtcIoRuntime;
+use crate::transport::rtc::connection::rumble::parse_rumble_requests;
 use crate::transport::rtc::connection::runtime_state::{
     RtcConnectionRuntimeState, RtcIceCandidateKind,
 };
@@ -72,10 +74,13 @@ pub(crate) struct RtcConnectionService {
     lifecycle_state: RtcConnectionLifecycleState,
     lifecycle_state_since_ms: f64,
     last_transport_metrics_sample_at_ms: f64,
+    last_transport_metrics_sample_inbound_video_bytes_total: u64,
     lifecycle_observation_id: u64,
+    twcc_observation_id: u64,
     pump_failure_injected: bool,
     read_counters: RtcReadIngressCounters,
     pending_media_ingress_packets: Vec<(RtcMediaIngressPacket, Option<RtcRtpPacketMeta>)>,
+    pending_gamepad_rumble_requests: Vec<ohmygamepad_protocol::OhMyGamepadRumbleRequestDto>,
     pending_transport_facts: Vec<TransportFact>,
     delayed_gamepad_added_due_at_ms: Option<f64>,
     delayed_keyframe_prime_due_at_ms: Option<f64>,
@@ -93,10 +98,13 @@ impl Default for RtcConnectionService {
             lifecycle_state: RtcConnectionLifecycleState::Closed,
             lifecycle_state_since_ms: 0.0,
             last_transport_metrics_sample_at_ms: 0.0,
+            last_transport_metrics_sample_inbound_video_bytes_total: 0,
             lifecycle_observation_id: 0,
+            twcc_observation_id: 0,
             pump_failure_injected: false,
             read_counters: RtcReadIngressCounters::default(),
             pending_media_ingress_packets: Vec::new(),
+            pending_gamepad_rumble_requests: Vec::new(),
             pending_transport_facts: Vec::new(),
             delayed_gamepad_added_due_at_ms: None,
             delayed_keyframe_prime_due_at_ms: None,
@@ -157,9 +165,12 @@ impl RtcConnectionService {
         self.lifecycle_state = RtcConnectionLifecycleState::Connecting;
         self.lifecycle_state_since_ms = now_ms_f64();
         self.last_transport_metrics_sample_at_ms = 0.0;
+        self.last_transport_metrics_sample_inbound_video_bytes_total = 0;
         self.lifecycle_observation_id = self.lifecycle_observation_id.saturating_add(1);
+        self.twcc_observation_id = 0;
         self.read_counters = RtcReadIngressCounters::default();
         self.pending_media_ingress_packets.clear();
+        self.pending_gamepad_rumble_requests.clear();
         self.pending_transport_facts.clear();
         self.delayed_gamepad_added_due_at_ms = None;
         self.delayed_keyframe_prime_due_at_ms = None;
@@ -460,6 +471,7 @@ impl RtcConnectionService {
         self.pending_media_ingress_packets.clear();
         self.publish_event(runtime_stats, RtcTransportEvent::TransportStopped);
         self.last_transport_metrics_sample_at_ms = 0.0;
+        self.last_transport_metrics_sample_inbound_video_bytes_total = 0;
     }
 
     pub(crate) fn pump(
@@ -508,7 +520,8 @@ impl RtcConnectionService {
         runtime_stats: &Arc<Mutex<XbxEngineMediaRuntimeStats>>,
     ) {
         let now_ms = now_ms_f64();
-        if now_ms - self.last_transport_metrics_sample_at_ms < 1_000.0 {
+        let previous_sample_at_ms = self.last_transport_metrics_sample_at_ms;
+        if now_ms - previous_sample_at_ms < 1_000.0 {
             return;
         }
         self.last_transport_metrics_sample_at_ms = now_ms;
@@ -520,9 +533,21 @@ impl RtcConnectionService {
         let connected_at_ms =
             matches!(self.lifecycle_state, RtcConnectionLifecycleState::Connected)
                 .then_some(self.lifecycle_state_since_ms);
-        let Some(snapshot) = collect_transport_metrics(peer_connection, connected_at_ms) else {
+        let previous_inbound_video_bytes_total =
+            self.last_transport_metrics_sample_inbound_video_bytes_total;
+        let previous_sample_at_ms = (previous_sample_at_ms > 0.0).then_some(previous_sample_at_ms);
+        let previous_inbound_video_bytes_total =
+            (previous_inbound_video_bytes_total > 0).then_some(previous_inbound_video_bytes_total);
+        let Some(snapshot) = collect_transport_metrics(
+            peer_connection,
+            connected_at_ms,
+            previous_sample_at_ms,
+            previous_inbound_video_bytes_total,
+        ) else {
             return;
         };
+        self.last_transport_metrics_sample_inbound_video_bytes_total =
+            snapshot.inbound_primary_video_bytes_total;
         let runtime_stats_sink = RuntimeStatsSink::new(runtime_stats.clone());
         publish_transport_metrics_sample(&runtime_stats_sink, &snapshot);
         self.push_transport_fact(TransportFact::Peer(PeerFact::TransportMetricsSampled {
@@ -542,6 +567,12 @@ impl RtcConnectionService {
         &mut self,
     ) -> Vec<(RtcMediaIngressPacket, Option<RtcRtpPacketMeta>)> {
         std::mem::take(&mut self.pending_media_ingress_packets)
+    }
+
+    pub(crate) fn take_pending_gamepad_rumble_requests(
+        &mut self,
+    ) -> Vec<ohmygamepad_protocol::OhMyGamepadRumbleRequestDto> {
+        std::mem::take(&mut self.pending_gamepad_rumble_requests)
     }
 
     pub(crate) fn take_transport_facts(&mut self) -> Vec<TransportFact> {
@@ -1088,6 +1119,18 @@ impl RtcConnectionService {
                 RTCMessage::RtcpPacket(track_id, packets) => {
                     self.read_counters.rtcp_packets =
                         self.read_counters.rtcp_packets.saturating_add(1);
+                    for packet in packets.iter() {
+                        let Some(twcc) = packet.as_any().downcast_ref::<TransportLayerCc>() else {
+                            continue;
+                        };
+                        self.twcc_observation_id = self.twcc_observation_id.saturating_add(1);
+                        if let Some(observation) =
+                            build_twcc_observation(self.twcc_observation_id, twcc, runtime_stats)
+                        {
+                            RuntimeStatsSink::new(runtime_stats.clone())
+                                .record_latest_video_twcc_observation(observation);
+                        }
+                    }
                     let byte_len = packets.iter().map(|packet| packet.marshal_size()).sum();
                     self.pending_media_ingress_packets.push((
                         RtcMediaIngressPacket::new(
@@ -1131,6 +1174,16 @@ impl RtcConnectionService {
                             String::from_utf8_lossy(payload.data.as_ref()).to_string();
                         chat_text_observations
                             .push((self.read_counters.data_channel_messages, payload_text));
+                    } else if last_label == INPUT_CHANNEL_LABEL && !payload.is_string {
+                        let requests = parse_rumble_requests(payload.data.as_ref());
+                        if !requests.is_empty() {
+                            crate::xbx_log_warn!(
+                                "[xbxengine][rtc] inbound input rumble observed observation_id={} requests={}",
+                                self.read_counters.data_channel_messages,
+                                requests.len()
+                            );
+                            self.pending_gamepad_rumble_requests.extend(requests);
+                        }
                     }
                     changed = true;
                 }
@@ -1159,7 +1212,6 @@ impl RtcConnectionService {
                     self.read_counters.data_channel_messages,
                     last_label
                 ));
-                stats.latest_video_packet_arrival_time_ms = Some(now_ms_f64());
                 if self.read_counters.data_channel_messages > 0 {
                     stats.latest_data_channel_message_catalog_observation =
                         Some(XbxEngineDataChannelMessageCatalogObservation {
@@ -1715,6 +1767,90 @@ fn publish_transport_metrics_sample(
         snapshot.inbound_video_bitrate_kbps,
         snapshot.inbound_primary_video_bytes_total,
     );
+}
+
+fn build_twcc_observation(
+    observation_id: u64,
+    packet: &TransportLayerCc,
+    runtime_stats: &Arc<Mutex<XbxEngineMediaRuntimeStats>>,
+) -> Option<crate::XbxEngineVideoTwccObservation> {
+    let observed_at_ms = now_ms_f64();
+    RuntimeStatsSink::read_shared(runtime_stats, |stats| {
+        let observed_packet_count = packet
+            .recv_deltas
+            .len()
+            .min(packet.packet_status_count as usize)
+            .min(u16::MAX as usize) as u16;
+        if packet.packet_status_count == 0 {
+            return None;
+        }
+
+        let covered_sequence_span = packet.packet_status_count;
+        let covered_sequence_end = packet
+            .base_sequence_number
+            .wrapping_add(covered_sequence_span.saturating_sub(1));
+        let feedback_interval_ms = stats
+            .latest_video_twcc_observation
+            .as_ref()
+            .map(|previous| (observed_at_ms - previous.observed_at_ms).max(0.0))
+            .filter(|value| *value > 0.0);
+        let arrival_span_ms = {
+            let span_ms = packet
+                .recv_deltas
+                .iter()
+                .map(|delta| delta.delta.max(0) as f64 / 1_000.0)
+                .sum::<f64>();
+            (span_ms > 0.0).then_some(span_ms).or(feedback_interval_ms)
+        };
+        let observed_byte_count = estimate_twcc_observed_byte_count(stats, observed_packet_count);
+        let receive_bitrate_kbps = feedback_interval_ms
+            .filter(|interval| *interval > 0.0)
+            .map(|interval| observed_byte_count as f64 * 8.0 / interval)
+            .or_else(|| stats.inbound_video_bitrate_kbps)
+            .or_else(|| {
+                stats
+                    .latest_video_bwe_observation
+                    .as_ref()
+                    .map(|bwe| bwe.actual_video_bitrate_kbps)
+            });
+        let packet_status_count = packet.packet_status_count.max(1);
+        let delivery_ratio =
+            (observed_packet_count as f64 / packet_status_count as f64).clamp(0.0, 1.0);
+        let packet_loss_ratio = (1.0 - delivery_ratio).clamp(0.0, 1.0);
+
+        Some(crate::XbxEngineVideoTwccObservation {
+            observation_id,
+            feedback_packet_count: u16::from(packet.fb_pkt_count),
+            covered_sequence_start: packet.base_sequence_number,
+            covered_sequence_end,
+            covered_sequence_span,
+            observed_packet_count,
+            observed_byte_count,
+            feedback_interval_ms,
+            arrival_span_ms,
+            receive_bitrate_kbps,
+            delivery_ratio,
+            packet_loss_ratio,
+            observed_at_ms,
+        })
+    })
+    .flatten()
+}
+
+fn estimate_twcc_observed_byte_count(
+    stats: &XbxEngineMediaRuntimeStats,
+    observed_packet_count: u16,
+) -> u64 {
+    if observed_packet_count == 0 {
+        return 0;
+    }
+    let packet_count_total = stats.inbound_video_packet_count_total;
+    let average_packet_bytes = if packet_count_total == 0 {
+        1_200
+    } else {
+        (stats.inbound_primary_video_bytes_total / packet_count_total).max(1)
+    };
+    average_packet_bytes.saturating_mul(u64::from(observed_packet_count))
 }
 
 fn build_peer_connection(

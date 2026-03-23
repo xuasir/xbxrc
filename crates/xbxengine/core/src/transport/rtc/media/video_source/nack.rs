@@ -4,6 +4,8 @@ use crate::transport::rtc::media::nack_scheduler::{NackBatch, NackObservePolicy,
 use crate::XbxEngineVideoNackObservation;
 
 const CLOUD_STARTUP_HEAD_HOLE_DEADLINE_FLOOR_MS: f64 = 320.0;
+const CLOUD_NACK_RTT_MARGIN_MS: f64 = 80.0;
+const CLOUD_STARTUP_NACK_RTT_MARGIN_MS: f64 = 140.0;
 
 use super::{
     capitalize_reason, now_ms_f64, FrameValue, NackSequenceWindow, RecentRtpPacket,
@@ -19,16 +21,25 @@ impl RtcVideoFrameSource {
         let frame_value = self.current_transport_frame_value();
         let cloud_mode = self.is_cloud_transport_profile();
         let startup_mode = self.is_cloud_startup_transport_profile();
+        let cloud_rtt_ms = self.cloud_nack_rtt_ms();
         let deadline_at_ms = cloud_startup_head_hole_deadline_at_ms(
             now_ms,
             self.transport_deadline_tracker
                 .next_transport_deadline_for_value_at_ms(now_ms, frame_value),
+            cloud_mode,
             startup_mode,
+            Some(cloud_rtt_ms),
         );
         if let Some(initial_batch) = self.nack_scheduler.observe_missing_sequences_with_policy(
             &missing_sequences,
             now_ms,
-            rtp_window_nack_policy(frame_value, deadline_at_ms, cloud_mode, startup_mode),
+            rtp_window_nack_policy(
+                frame_value,
+                deadline_at_ms,
+                cloud_mode,
+                startup_mode,
+                Some(cloud_rtt_ms),
+            ),
         ) {
             let inserted_count = self
                 .nack_scheduler
@@ -98,16 +109,25 @@ impl RtcVideoFrameSource {
         let frame_value = self.current_transport_frame_value();
         let cloud_mode = self.is_cloud_transport_profile();
         let startup_mode = self.is_cloud_startup_transport_profile();
+        let cloud_rtt_ms = self.cloud_nack_rtt_ms();
         let deadline_at_ms = cloud_startup_head_hole_deadline_at_ms(
             now_ms,
             self.transport_deadline_tracker
                 .next_transport_deadline_for_value_at_ms(now_ms, frame_value),
+            cloud_mode,
             startup_mode,
+            Some(cloud_rtt_ms),
         );
         let Some(initial_batch) = self.nack_scheduler.observe_missing_sequences_with_policy(
             &missing_sequences,
             now_ms,
-            rtp_gap_nack_policy(frame_value, deadline_at_ms, cloud_mode, startup_mode),
+            rtp_gap_nack_policy(
+                frame_value,
+                deadline_at_ms,
+                cloud_mode,
+                startup_mode,
+                Some(cloud_rtt_ms),
+            ),
         ) else {
             return;
         };
@@ -295,6 +315,7 @@ impl RtcVideoFrameSource {
             repairability,
             self.is_cloud_transport_profile(),
             self.is_cloud_startup_transport_profile(),
+            Some(self.cloud_nack_rtt_ms()),
         );
         let pending_before = self.nack_scheduler.pending_count();
         let Some(batch) = self.nack_scheduler.observe_missing_sequences_with_policy(
@@ -442,16 +463,15 @@ impl RtcVideoFrameSource {
         let mut base_window_ms = (base_deadline_at_ms - now_ms).max(10.0);
         let scale = if self.is_cloud_startup_transport_profile() {
             // startup + cloud 需要更宽的首洞修复窗口，避免刚出画就把恢复链判死。
-            let rtt_floor_ms = self.cloud_repair_rtt_floor_ms();
+            let rtt_ms = self.cloud_nack_rtt_ms();
             base_window_ms = base_window_ms
-                .max(rtt_floor_ms * 1.2)
+                .max(rtt_ms + CLOUD_STARTUP_NACK_RTT_MARGIN_MS)
                 .max(CLOUD_STARTUP_HEAD_HOLE_DEADLINE_FLOOR_MS);
             (1.05 + repairability * 0.7).clamp(1.05, 1.7)
         } else if self.is_cloud_transport_profile() {
-            // 参考浏览器云游戏 `RTT≈214ms`，cloud 场景不要再按几十毫秒级局部 RTT
-            // 去压缩 repair window。
-            let rtt_floor_ms = self.cloud_repair_rtt_floor_ms();
-            base_window_ms = base_window_ms.max(rtt_floor_ms * 1.15);
+            // cloud 场景直接按运行时 RTT 放宽恢复窗口，不再额外加硬下限。
+            let rtt_ms = self.cloud_nack_rtt_ms();
+            base_window_ms = base_window_ms.max(rtt_ms + CLOUD_NACK_RTT_MARGIN_MS);
             (0.95 + repairability * 0.65).clamp(0.95, 1.55)
         } else {
             (0.75 + repairability * 0.55).clamp(0.75, 1.3)
@@ -493,26 +513,51 @@ impl RtcVideoFrameSource {
             .unwrap_or(false)
     }
 
-    fn cloud_repair_rtt_floor_ms(&self) -> f64 {
+    fn cloud_nack_rtt_ms(&self) -> f64 {
         self.runtime_stats
-            .read(|stats| {
-                let observed_rtt_ms = stats.video_rtt_ms.unwrap_or(0.0);
-                observed_rtt_ms.max(214.0)
-            })
-            .unwrap_or(214.0)
+            .read(|stats| stats.video_rtt_ms.unwrap_or(0.0))
+            .unwrap_or(0.0)
     }
 }
 
 pub(super) fn cloud_startup_head_hole_deadline_at_ms(
     now_ms: f64,
     deadline_at_ms: f64,
+    cloud_mode: bool,
     startup_mode: bool,
+    cloud_rtt_ms: Option<f64>,
 ) -> f64 {
-    if startup_mode {
-        deadline_at_ms.max(now_ms + CLOUD_STARTUP_HEAD_HOLE_DEADLINE_FLOOR_MS)
-    } else {
-        deadline_at_ms
+    if !cloud_mode {
+        return deadline_at_ms;
     }
+    let rtt_ms = cloud_rtt_ms.unwrap_or(0.0);
+    let deadline_floor_ms = now_ms
+        + if startup_mode {
+            (rtt_ms + CLOUD_STARTUP_NACK_RTT_MARGIN_MS)
+                .max(CLOUD_STARTUP_HEAD_HOLE_DEADLINE_FLOOR_MS)
+        } else {
+            rtt_ms + CLOUD_NACK_RTT_MARGIN_MS
+        };
+    deadline_at_ms.max(deadline_floor_ms)
+}
+
+fn cloud_nack_max_age_ms(
+    base_max_age_ms: u64,
+    cloud_mode: bool,
+    startup_mode: bool,
+    cloud_rtt_ms: Option<f64>,
+) -> u64 {
+    if !cloud_mode {
+        return base_max_age_ms;
+    }
+
+    let rtt_ms = cloud_rtt_ms.unwrap_or(0.0);
+    let rtt_margin_ms = if startup_mode {
+        CLOUD_STARTUP_NACK_RTT_MARGIN_MS
+    } else {
+        CLOUD_NACK_RTT_MARGIN_MS
+    };
+    base_max_age_ms.max((rtt_ms + rtt_margin_ms).round() as u64)
 }
 
 pub(super) fn sample_loss_nack_policy(
@@ -523,6 +568,7 @@ pub(super) fn sample_loss_nack_policy(
     repairability: f64,
     cloud_mode: bool,
     startup_mode: bool,
+    cloud_rtt_floor_ms: Option<f64>,
 ) -> NackObservePolicy {
     let (base_max_age_ms, base_retry_interval_ms, base_burst_count, base_priority) =
         match (cloud_mode, startup_mode, frame_importance) {
@@ -536,7 +582,12 @@ pub(super) fn sample_loss_nack_policy(
             (false, _, "reference") => (20.0, 8.0, 3.0, 2u8),
             (false, _, _) => (14.0, 6.0, 2.0, 1u8),
         };
-    let max_age_ms = (base_max_age_ms * (0.85 + repairability * 0.45)).round() as u64;
+    let max_age_ms = cloud_nack_max_age_ms(
+        (base_max_age_ms * (0.85 + repairability * 0.45)).round() as u64,
+        cloud_mode,
+        startup_mode,
+        cloud_rtt_floor_ms,
+    );
     let retry_interval_ms = (base_retry_interval_ms * (1.25 - repairability * 0.45))
         .round()
         .max(4.0) as u64;
@@ -575,17 +626,23 @@ pub(super) fn rtp_window_nack_policy(
     deadline_at_ms: f64,
     cloud_mode: bool,
     startup_mode: bool,
+    cloud_rtt_floor_ms: Option<f64>,
 ) -> NackObservePolicy {
     let (frame_importance, frame_is_keyframe, retry_interval_ms, burst_count, priority) =
         transport_policy_tuple(frame_value, cloud_mode, startup_mode);
     NackObservePolicy {
         source: "rtpWindow",
         deadline_at_ms: Some(deadline_at_ms),
-        max_age_ms: Some(match (cloud_mode, startup_mode) {
-            (true, true) => 300,
-            (true, false) => 180,
-            (false, _) => 26,
-        }),
+        max_age_ms: Some(cloud_nack_max_age_ms(
+            match (cloud_mode, startup_mode) {
+                (true, true) => 300,
+                (true, false) => 180,
+                (false, _) => 26,
+            },
+            cloud_mode,
+            startup_mode,
+            cloud_rtt_floor_ms,
+        )),
         retry_interval_ms: Some(retry_interval_ms),
         burst_count: Some(burst_count),
         max_tracked_sequences: Some(match (cloud_mode, startup_mode, frame_importance) {
@@ -611,17 +668,23 @@ pub(super) fn rtp_gap_nack_policy(
     deadline_at_ms: f64,
     cloud_mode: bool,
     startup_mode: bool,
+    cloud_rtt_floor_ms: Option<f64>,
 ) -> NackObservePolicy {
     let (frame_importance, frame_is_keyframe, retry_interval_ms, burst_count, priority) =
         transport_policy_tuple(frame_value, cloud_mode, startup_mode);
     NackObservePolicy {
         source: "rtpGap",
         deadline_at_ms: Some(deadline_at_ms),
-        max_age_ms: Some(match (cloud_mode, startup_mode) {
-            (true, true) => 260,
-            (true, false) => 160,
-            (false, _) => 22,
-        }),
+        max_age_ms: Some(cloud_nack_max_age_ms(
+            match (cloud_mode, startup_mode) {
+                (true, true) => 260,
+                (true, false) => 160,
+                (false, _) => 22,
+            },
+            cloud_mode,
+            startup_mode,
+            cloud_rtt_floor_ms,
+        )),
         retry_interval_ms: Some(if cloud_mode {
             retry_interval_ms
         } else {
@@ -802,5 +865,46 @@ impl NackSequenceWindow {
             i = i.wrapping_add(1);
         }
         self.last_consecutive = i.wrapping_sub(1);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn cloud_nack_windows_follow_rtt_without_floor() {
+        let now_ms = 1_000.0;
+        let base_deadline_at_ms = 1_120.0;
+
+        let adjusted_deadline = cloud_startup_head_hole_deadline_at_ms(
+            now_ms,
+            base_deadline_at_ms,
+            true,
+            false,
+            Some(90.0),
+        );
+        let adjusted_max_age = cloud_nack_max_age_ms(100, true, false, Some(90.0));
+
+        assert_eq!(adjusted_deadline, 1_170.0);
+        assert_eq!(adjusted_max_age, 170);
+    }
+
+    #[test]
+    fn non_cloud_nack_windows_remain_unchanged() {
+        let now_ms = 1_000.0;
+        let base_deadline_at_ms = 1_120.0;
+
+        let adjusted_deadline = cloud_startup_head_hole_deadline_at_ms(
+            now_ms,
+            base_deadline_at_ms,
+            false,
+            false,
+            Some(90.0),
+        );
+        let adjusted_max_age = cloud_nack_max_age_ms(180, false, false, Some(90.0));
+
+        assert_eq!(adjusted_deadline, base_deadline_at_ms);
+        assert_eq!(adjusted_max_age, 180);
     }
 }

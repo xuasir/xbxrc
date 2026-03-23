@@ -4,6 +4,7 @@ use crate::mods::data::types::{
     DataConsolePowerResult, DataHostAddr, DataHostSummary, DataSendTextResult, DataSessionContext,
     DataStreamingTitleInputConfig,
 };
+use crate::mods::runtime_trace::RuntimeTraceRecorderRef;
 use reqwest::header::{HeaderMap, HeaderValue, AUTHORIZATION, CONTENT_TYPE};
 use reqwest::Client;
 use serde_json::{json, Value};
@@ -21,13 +22,15 @@ const XBOX_CLIENT_VERSION: &str = "39.39.22001.0";
 pub struct StreamingQueryService {
     client: Client,
     config_provider: ConfigProviderRef,
+    runtime_trace: RuntimeTraceRecorderRef,
 }
 
 impl StreamingQueryService {
-    pub fn new(config_provider: ConfigProviderRef) -> Self {
+    pub fn new(config_provider: ConfigProviderRef, runtime_trace: RuntimeTraceRecorderRef) -> Self {
         Self {
             client: Client::new(),
             config_provider,
+            runtime_trace,
         }
     }
 
@@ -50,6 +53,32 @@ impl StreamingQueryService {
                 if summary.console_addrs.is_none() {
                     summary.console_addrs = extract_console_addrs(&console);
                 }
+                let remote_management_enabled =
+                    describe_json_value(console.get("remoteManagementEnabled"));
+                let console_streaming_enabled =
+                    describe_json_value(console.get("consoleStreamingEnabled"));
+                let console_addrs_count = summary
+                    .console_addrs
+                    .as_ref()
+                    .map(|items| items.len())
+                    .unwrap_or(0);
+                let needs_review = needs_remote_play_capability_review(&console);
+                // 只有在能力字段缺失、null 或类型异常时才展开原始 payload，避免 trace 过大。
+                self.runtime_trace.record_snapshot(
+                    "data",
+                    "remoteConsoleCapabilitySnapshot",
+                    None,
+                    json!({
+                        "id": summary.id.clone(),
+                        "serverId": summary.server_id.clone(),
+                        "powerState": summary.power_state.clone(),
+                        "remoteManagementEnabled": remote_management_enabled.clone(),
+                        "consoleStreamingEnabled": console_streaming_enabled.clone(),
+                        "consoleAddrsCount": console_addrs_count,
+                        "needsReview": needs_review,
+                        "rawPayload": needs_review.then_some(console),
+                    }),
+                );
                 summaries.push(summary);
             }
         }
@@ -397,9 +426,30 @@ fn try_parse_console_addr(map: &serde_json::Map<String, Value>) -> Option<DataHo
     Some(DataHostAddr { ip, port })
 }
 
+fn describe_json_value(value: Option<&Value>) -> String {
+    match value {
+        None => "missing".to_string(),
+        Some(Value::Null) => "null".to_string(),
+        Some(Value::Bool(value)) => format!("bool:{value}"),
+        Some(Value::Number(value)) => format!("number:{value}"),
+        Some(Value::String(value)) => format!("string:{value}"),
+        Some(Value::Array(items)) => format!("array(len={})", items.len()),
+        Some(Value::Object(map)) => format!("object(len={})", map.len()),
+    }
+}
+
+fn needs_remote_play_capability_review(value: &Value) -> bool {
+    let Some(object) = value.as_object() else {
+        return false;
+    };
+
+    !matches!(object.get("remoteManagementEnabled"), Some(Value::Bool(_)))
+        || !matches!(object.get("consoleStreamingEnabled"), Some(Value::Bool(_)))
+}
+
 #[cfg(test)]
 mod tests {
-    use super::extract_console_addrs;
+    use super::{describe_json_value, extract_console_addrs, needs_remote_play_capability_review};
     use serde_json::json;
 
     #[test]
@@ -445,5 +495,39 @@ mod tests {
 
         let addrs = extract_console_addrs(&payload).expect("should extract");
         assert_eq!(addrs.len(), 1);
+    }
+
+    #[test]
+    fn describes_missing_and_null_values() {
+        let payload = json!({
+            "presentNull": null,
+            "presentBool": true,
+            "presentString": "ready"
+        });
+
+        assert_eq!(describe_json_value(payload.get("missing")), "missing");
+        assert_eq!(describe_json_value(payload.get("presentNull")), "null");
+        assert_eq!(describe_json_value(payload.get("presentBool")), "bool:true");
+        assert_eq!(
+            describe_json_value(payload.get("presentString")),
+            "string:ready"
+        );
+    }
+
+    #[test]
+    fn flags_non_boolean_or_missing_capability_fields_for_review() {
+        assert!(needs_remote_play_capability_review(&json!({})));
+        assert!(needs_remote_play_capability_review(&json!({
+            "remoteManagementEnabled": null,
+            "consoleStreamingEnabled": true
+        })));
+        assert!(needs_remote_play_capability_review(&json!({
+            "remoteManagementEnabled": "yes",
+            "consoleStreamingEnabled": false
+        })));
+        assert!(!needs_remote_play_capability_review(&json!({
+            "remoteManagementEnabled": true,
+            "consoleStreamingEnabled": false
+        })));
     }
 }

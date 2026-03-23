@@ -1,6 +1,7 @@
 use std::error::Error;
 use std::fmt::{Display, Formatter};
 
+use ohmygamepad_protocol::{OhMyGamepadRumbleRequestDto, OhMyGamepadRumbleTargetDto};
 use xbxengine_protocol::{
     XbxEngineDisplayStateDto, XbxEngineHostRequestDto, XbxEngineHostResponseDto,
     XbxEngineIceCandidateDto, XbxEngineInputEventDto, XbxEngineRuntimeEventDto,
@@ -225,6 +226,20 @@ pub trait XbxEngineHostBridge {
         _viewport: &XbxEngineViewportDto,
         _surface_id: Option<&str>,
         _frame: &XbxEngineRenderFrame,
+    ) -> Result<(), XbxEngineRuntimeError> {
+        Ok(())
+    }
+
+    fn play_gamepad_rumble(
+        &mut self,
+        _request: OhMyGamepadRumbleRequestDto,
+    ) -> Result<(), XbxEngineRuntimeError> {
+        Ok(())
+    }
+
+    fn stop_gamepad_rumble(
+        &mut self,
+        _target: OhMyGamepadRumbleTargetDto,
     ) -> Result<(), XbxEngineRuntimeError> {
         Ok(())
     }

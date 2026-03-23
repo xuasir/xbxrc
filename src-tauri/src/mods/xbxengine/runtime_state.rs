@@ -3,6 +3,9 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex as StdMutex};
 use std::time::{Duration, Instant};
 
+use ohmygamepad_protocol::{
+    OhMyGamepadRumbleRequestDto, OhMyGamepadRumbleResultDto, OhMyGamepadRumbleTargetDto,
+};
 use tauri::{AppHandle, Manager};
 use xbxengine::{
     create_active_media_backend, OhMyGamepadXbxEngineInputBackend, XbxEngineEventSink,
@@ -596,6 +599,32 @@ impl TauriXbxEngineHostBridge {
         registry.present_frame(viewport_id, surface_id, frame);
         Ok(())
     }
+
+    fn log_gamepad_rumble_result(
+        &self,
+        event_name: &'static str,
+        request_summary: serde_json::Value,
+        result: &OhMyGamepadRumbleResultDto,
+    ) {
+        self.runtime_trace.record_event(
+            "xbxengine-host",
+            event_name,
+            None,
+            serde_json::json!({
+                "request": request_summary,
+                "accepted": result.accepted,
+                "reason": result.reason,
+                "resolvedDeviceIds": result.resolved_device_ids,
+            }),
+        );
+        if !result.accepted {
+            log::warn!(
+                "[xbxengine][host] gamepad rumble rejected reason={:?} resolved_device_ids={:?}",
+                result.reason,
+                result.resolved_device_ids
+            );
+        }
+    }
 }
 
 impl XbxEngineHostBridge for TauriXbxEngineHostBridge {
@@ -625,6 +654,62 @@ impl XbxEngineHostBridge for TauriXbxEngineHostBridge {
         frame: &xbxengine::XbxEngineRenderFrame,
     ) -> Result<(), XbxEngineRuntimeError> {
         self.present_native_frame(&viewport.viewport_id, surface_id, frame)
+    }
+
+    fn play_gamepad_rumble(
+        &mut self,
+        request: OhMyGamepadRumbleRequestDto,
+    ) -> Result<(), XbxEngineRuntimeError> {
+        let state = self
+            .app_state()
+            .map_err(map_app_error("playGamepadRumble"))?;
+        let vibration_config = state.config.get_streaming_config();
+        let request_summary = serde_json::to_value(&request).unwrap_or(serde_json::Value::Null);
+        if !vibration_config.vibration {
+            let result = OhMyGamepadRumbleResultDto {
+                accepted: false,
+                reason: Some(
+                    ohmygamepad_protocol::OhMyGamepadRumbleRejectionReasonDto::Unsupported,
+                ),
+                resolved_device_ids: Vec::new(),
+            };
+            self.log_gamepad_rumble_result("playGamepadRumbleResult", request_summary, &result);
+            return Ok(());
+        }
+        let result = state
+            .gamepad
+            .play_rumble(request)
+            .map_err(|error| map_app_error("playGamepadRumble")(AppError::Gamepad(error)))?;
+        self.log_gamepad_rumble_result("playGamepadRumbleResult", request_summary, &result);
+        Ok(())
+    }
+
+    fn stop_gamepad_rumble(
+        &mut self,
+        target: OhMyGamepadRumbleTargetDto,
+    ) -> Result<(), XbxEngineRuntimeError> {
+        let state = self
+            .app_state()
+            .map_err(map_app_error("stopGamepadRumble"))?;
+        let vibration_config = state.config.get_streaming_config();
+        let request_summary = serde_json::json!({ "target": &target });
+        if !vibration_config.vibration {
+            let result = OhMyGamepadRumbleResultDto {
+                accepted: false,
+                reason: Some(
+                    ohmygamepad_protocol::OhMyGamepadRumbleRejectionReasonDto::Unsupported,
+                ),
+                resolved_device_ids: Vec::new(),
+            };
+            self.log_gamepad_rumble_result("stopGamepadRumbleResult", request_summary, &result);
+            return Ok(());
+        }
+        let result = state
+            .gamepad
+            .stop_rumble(target)
+            .map_err(|error| map_app_error("stopGamepadRumble")(AppError::Gamepad(error)))?;
+        self.log_gamepad_rumble_result("stopGamepadRumbleResult", request_summary, &result);
+        Ok(())
     }
 
     fn request(

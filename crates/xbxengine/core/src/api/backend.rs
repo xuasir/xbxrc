@@ -3,6 +3,7 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
+use ohmygamepad_protocol::OhMyGamepadRumbleRequestDto;
 use xbxengine_protocol::{
     XbxEngineDisplayStateDto, XbxEngineIceCandidateDto, XbxEngineInputEventDto,
     XbxEngineSessionDto, XbxEngineTargetTypeDto, XbxEngineTransportStateDto, XbxEngineViewportDto,
@@ -349,6 +350,7 @@ pub struct XbxEngineMediaRuntimeStats {
     pub latest_observation_summary: Option<String>,
     pub latest_video_stream_width: Option<u32>,
     pub latest_video_stream_height: Option<u32>,
+    pub first_video_packet_arrival_time_ms: Option<f64>,
     pub latest_video_packet_arrival_time_ms: Option<f64>,
     pub first_audio_packet_arrival_time_ms: Option<f64>,
     pub latest_audio_packet_arrival_time_ms: Option<f64>,
@@ -445,6 +447,7 @@ impl Default for XbxEngineMediaRuntimeStats {
             latest_observation_summary: None,
             latest_video_stream_width: None,
             latest_video_stream_height: None,
+            first_video_packet_arrival_time_ms: None,
             latest_video_packet_arrival_time_ms: None,
             first_audio_packet_arrival_time_ms: None,
             latest_audio_packet_arrival_time_ms: None,
@@ -569,6 +572,11 @@ pub trait XbxEngineMediaBackend: Send {
     ) -> Result<(), XbxEngineRuntimeError>;
     fn current_input_status(&self) -> Result<XbxEngineInputStatus, XbxEngineRuntimeError>;
     fn snapshot_runtime_stats(&self) -> Result<XbxEngineMediaRuntimeStats, XbxEngineRuntimeError>;
+    fn take_pending_gamepad_rumble_requests(
+        &mut self,
+    ) -> Result<Vec<OhMyGamepadRumbleRequestDto>, XbxEngineRuntimeError> {
+        Ok(Vec::new())
+    }
     fn take_pending_runtime_recovery_action(
         &mut self,
     ) -> Result<Option<XbxEnginePendingRuntimeRecoveryAction>, XbxEngineRuntimeError> {
@@ -677,6 +685,12 @@ where
 
     fn snapshot_runtime_stats(&self) -> Result<XbxEngineMediaRuntimeStats, XbxEngineRuntimeError> {
         self.as_ref().snapshot_runtime_stats()
+    }
+
+    fn take_pending_gamepad_rumble_requests(
+        &mut self,
+    ) -> Result<Vec<OhMyGamepadRumbleRequestDto>, XbxEngineRuntimeError> {
+        self.as_mut().take_pending_gamepad_rumble_requests()
     }
 
     fn take_pending_runtime_recovery_action(

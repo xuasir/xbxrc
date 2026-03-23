@@ -98,6 +98,78 @@ impl H264AccessUnitInspection {
     }
 }
 
+impl H264SeqParameterSet {
+    /// 比较两份 SPS 是否会改变解码语义。
+    ///
+    /// 这里刻意忽略 `seq_parameter_set_id`，因为同一套语义内容换一个 id，
+    /// 对解码能力本身没有影响，只会影响引用标识。
+    pub(crate) fn same_decoder_configuration(&self, other: &Self) -> bool {
+        self.parsed.profile_idc == other.parsed.profile_idc
+            && self.parsed.constraint_flags == other.parsed.constraint_flags
+            && self.parsed.level_idc == other.parsed.level_idc
+            && self.parsed.chroma_info == other.parsed.chroma_info
+            && self.parsed.log2_max_frame_num_minus4 == other.parsed.log2_max_frame_num_minus4
+            && self.parsed.pic_order_cnt == other.parsed.pic_order_cnt
+            && self.parsed.max_num_ref_frames == other.parsed.max_num_ref_frames
+            && self.parsed.gaps_in_frame_num_value_allowed_flag
+                == other.parsed.gaps_in_frame_num_value_allowed_flag
+            && self.parsed.pic_width_in_mbs_minus1 == other.parsed.pic_width_in_mbs_minus1
+            && self.parsed.pic_height_in_map_units_minus1
+                == other.parsed.pic_height_in_map_units_minus1
+            && self.parsed.frame_mbs_flags == other.parsed.frame_mbs_flags
+            && self.parsed.direct_8x8_inference_flag == other.parsed.direct_8x8_inference_flag
+            && self.parsed.frame_cropping == other.parsed.frame_cropping
+            && self.parsed.vui_parameters == other.parsed.vui_parameters
+    }
+}
+
+impl H264PicParameterSet {
+    /// 比较两份 PPS 是否会改变解码语义。
+    ///
+    /// `pic_parameter_set_id` / `seq_parameter_set_id` 只是引用标识，这里不拿它们
+    /// 作为是否重配的判定依据。
+    pub(crate) fn same_decoder_configuration(&self, other: &Self) -> bool {
+        let slice_groups_equal = match (&self.parsed.slice_groups, &other.parsed.slice_groups) {
+            (None, None) => true,
+            (Some(left), Some(right)) => format!("{left:?}") == format!("{right:?}"),
+            _ => false,
+        };
+        let extension_equal = match (&self.parsed.extension, &other.parsed.extension) {
+            (None, None) => true,
+            (Some(left), Some(right)) => format!("{left:?}") == format!("{right:?}"),
+            _ => false,
+        };
+
+        self.parsed.entropy_coding_mode_flag == other.parsed.entropy_coding_mode_flag
+            && self.parsed.bottom_field_pic_order_in_frame_present_flag
+                == other.parsed.bottom_field_pic_order_in_frame_present_flag
+            && slice_groups_equal
+            && self.parsed.num_ref_idx_l0_default_active_minus1
+                == other.parsed.num_ref_idx_l0_default_active_minus1
+            && self.parsed.num_ref_idx_l1_default_active_minus1
+                == other.parsed.num_ref_idx_l1_default_active_minus1
+            && self.parsed.weighted_pred_flag == other.parsed.weighted_pred_flag
+            && self.parsed.weighted_bipred_idc == other.parsed.weighted_bipred_idc
+            && self.parsed.pic_init_qp_minus26 == other.parsed.pic_init_qp_minus26
+            && self.parsed.pic_init_qs_minus26 == other.parsed.pic_init_qs_minus26
+            && self.parsed.chroma_qp_index_offset == other.parsed.chroma_qp_index_offset
+            && self.parsed.deblocking_filter_control_present_flag
+                == other.parsed.deblocking_filter_control_present_flag
+            && self.parsed.constrained_intra_pred_flag == other.parsed.constrained_intra_pred_flag
+            && self.parsed.redundant_pic_cnt_present_flag
+                == other.parsed.redundant_pic_cnt_present_flag
+            && extension_equal
+    }
+}
+
+impl H264ParameterSets {
+    /// 比较一组参数集是否会改变当前解码配置。
+    pub(crate) fn same_decoder_configuration(&self, other: &Self) -> bool {
+        self.sps.same_decoder_configuration(&other.sps)
+            && self.pps.same_decoder_configuration(&other.pps)
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum H264BootstrapRejectReason {
     NoVcl,
@@ -186,7 +258,7 @@ impl H264AccessUnitInspector {
                     if state
                         .committed_sps
                         .as_ref()
-                        .is_none_or(|committed| committed.raw != parsed.raw)
+                        .is_none_or(|committed| !committed.same_decoder_configuration(&parsed))
                     {
                         parameter_sets_changed = true;
                     }
@@ -205,7 +277,7 @@ impl H264AccessUnitInspector {
                 if state
                     .committed_pps
                     .as_ref()
-                    .is_none_or(|committed| committed.raw != parsed.raw)
+                    .is_none_or(|committed| !committed.same_decoder_configuration(&parsed))
                 {
                     parameter_sets_changed = true;
                 }
@@ -484,5 +556,32 @@ mod tests {
         assert!(!avcc.windows(1).any(|window| window == [0x67]));
         assert!(!avcc.windows(1).any(|window| window == [0x68]));
         assert!(avcc.windows(1).any(|window| window == [0x65]));
+    }
+
+    #[test]
+    fn semantic_parameter_set_comparison_ignores_id_only_refresh() {
+        let inspector = make_inspector();
+        let payload = hex_literal::hex!(
+            "00 00 00 01 67 64 00 0A AC 72 84 44 26 84 00 00
+             03 00 04 00 00 03 00 CA 3C 48 96 11 80 00 00 00
+             01 68 E8 43 8F 13 21 30 00 00 01 65 88 81 00 05
+             4E 7F 87 DF"
+        );
+
+        let inspection = inspector.inspect_access_unit(&payload).expect("inspection");
+        let original = inspection.parameter_sets.expect("parameter sets");
+        let mut refreshed = original.clone();
+
+        refreshed.sps.parsed.seq_parameter_set_id =
+            h264_reader::nal::sps::SeqParamSetId::from_u32(7).expect("sps id");
+        refreshed.pps.parsed.pic_parameter_set_id =
+            h264_reader::nal::pps::PicParamSetId::from_u32(9).expect("pps id");
+        refreshed.pps.parsed.seq_parameter_set_id =
+            h264_reader::nal::sps::SeqParamSetId::from_u32(7).expect("sps id");
+
+        assert!(original.same_decoder_configuration(&refreshed));
+
+        refreshed.sps.parsed.level_idc = refreshed.sps.parsed.level_idc.saturating_add(1);
+        assert!(!original.same_decoder_configuration(&refreshed));
     }
 }

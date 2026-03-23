@@ -412,6 +412,7 @@ pub enum StreamingStartupErrorKind {
     Network,
     Auth,
     Target,
+    HostRemotePlayUnavailable,
     Unknown,
 }
 

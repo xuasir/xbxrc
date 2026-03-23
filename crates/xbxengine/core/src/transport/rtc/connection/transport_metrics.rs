@@ -21,14 +21,23 @@ pub(crate) struct RtcTransportMetricsSnapshot {
 pub(crate) fn collect_transport_metrics(
     peer_connection: &mut RTCPeerConnection,
     connected_at_ms: Option<f64>,
+    previous_sample_at_ms: Option<f64>,
+    previous_inbound_video_bytes_total: Option<u64>,
 ) -> Option<RtcTransportMetricsSnapshot> {
     let report = peer_connection.get_stats(Instant::now(), StatsSelector::None);
-    collect_transport_metrics_from_report(&report, connected_at_ms)
+    collect_transport_metrics_from_report(
+        &report,
+        connected_at_ms,
+        previous_sample_at_ms,
+        previous_inbound_video_bytes_total,
+    )
 }
 
 fn collect_transport_metrics_from_report(
     report: &RTCStatsReport,
     connected_at_ms: Option<f64>,
+    previous_sample_at_ms: Option<f64>,
+    previous_inbound_video_bytes_total: Option<u64>,
 ) -> Option<RtcTransportMetricsSnapshot> {
     let now_ms = now_ms_f64();
     let selected_pair = selected_candidate_pair(report)?;
@@ -40,8 +49,13 @@ fn collect_transport_metrics_from_report(
 
     let (inbound_video_loss_ratio_5s, inbound_video_loss_ratio_1s, inbound_video_bytes_total) =
         select_video_inbound_metrics(report);
-    let inbound_video_bitrate_kbps =
-        estimate_inbound_bitrate_kbps(inbound_video_bytes_total, connected_at_ms, now_ms);
+    let inbound_video_bitrate_kbps = estimate_recent_inbound_bitrate_kbps(
+        inbound_video_bytes_total,
+        previous_inbound_video_bytes_total,
+        connected_at_ms,
+        previous_sample_at_ms,
+        now_ms,
+    );
 
     Some(RtcTransportMetricsSnapshot {
         video_rtt_ms,
@@ -121,20 +135,25 @@ fn select_video_inbound_metrics(report: &RTCStatsReport) -> (f64, f64, u64) {
     (loss_ratio, loss_ratio, stream.bytes_received)
 }
 
-fn estimate_inbound_bitrate_kbps(
+fn estimate_recent_inbound_bitrate_kbps(
     inbound_video_bytes_total: u64,
+    previous_inbound_video_bytes_total: Option<u64>,
     connected_at_ms: Option<f64>,
+    previous_sample_at_ms: Option<f64>,
     now_ms: f64,
 ) -> f64 {
-    let Some(connected_at_ms) = connected_at_ms else {
+    let Some(reference_start_ms) = previous_sample_at_ms.or(connected_at_ms) else {
         return 0.0;
     };
-    let elapsed_ms = (now_ms - connected_at_ms).max(0.0);
+    let elapsed_ms = (now_ms - reference_start_ms).max(0.0);
     if elapsed_ms <= 0.0 {
         return 0.0;
     }
-    // 这里只先给出连接生命周期内的平均吞吐量，避免在没有窗口化采样时伪造瞬时值。
-    (inbound_video_bytes_total as f64 * 8.0 / elapsed_ms).max(0.0)
+    // 这里按“上一采样点 -> 当前采样点”的窗口估算实时吞吐；
+    // 若还没有上一采样点，就退回到连接起点，避免首个样本直接变成 0。
+    let baseline_bytes_total = previous_inbound_video_bytes_total.unwrap_or(0);
+    let delta_bytes_total = inbound_video_bytes_total.saturating_sub(baseline_bytes_total);
+    (delta_bytes_total as f64 * 8.0 / elapsed_ms).max(0.0)
 }
 
 fn candidate_type_for(report: &RTCStatsReport, candidate_id: &str) -> Option<RTCIceCandidateType> {
@@ -180,7 +199,7 @@ fn is_video_inbound_stream(
 
 #[cfg(test)]
 mod tests {
-    use super::classify_transport_path;
+    use super::{classify_transport_path, estimate_recent_inbound_bitrate_kbps};
     use rtc::peer_connection::transport::RTCIceCandidateType;
 
     #[test]
@@ -218,5 +237,24 @@ mod tests {
             classify_transport_path(None, None),
             Some("Direct".to_string())
         );
+    }
+
+    #[test]
+    fn recent_inbound_bitrate_uses_window_delta_when_previous_sample_exists() {
+        let bitrate = estimate_recent_inbound_bitrate_kbps(
+            1_800_000,
+            Some(900_000),
+            Some(500.0),
+            Some(1_000.0),
+            2_000.0,
+        );
+        assert_eq!(bitrate, 7_200.0);
+    }
+
+    #[test]
+    fn recent_inbound_bitrate_falls_back_to_connection_start_on_first_sample() {
+        let bitrate =
+            estimate_recent_inbound_bitrate_kbps(900_000, None, Some(500.0), None, 1_500.0);
+        assert_eq!(bitrate, 7_200.0);
     }
 }

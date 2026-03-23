@@ -13,6 +13,7 @@ use crate::mods::data::types::{
     DataXcloudCatalogUpdatedEvent, XcloudCatalogCacheScope,
 };
 use crate::mods::data::DataProvider;
+use crate::mods::runtime_trace::RuntimeTraceRecorderRef;
 use async_trait::async_trait;
 use std::sync::Arc;
 
@@ -32,6 +33,7 @@ impl DataService {
         app_handle: tauri::AppHandle,
         auth_provider: AuthProviderRef,
         config_provider: ConfigProviderRef,
+        runtime_trace: RuntimeTraceRecorderRef,
     ) -> Self {
         let cache_repository = Arc::new(DataCacheRepository::new(app_handle.clone()));
         Self {
@@ -41,7 +43,7 @@ impl DataService {
             runtime_state: Arc::new(DataRuntimeState::new()),
             host_service: HostService::new(),
             profile_service: ProfileService::new(),
-            streaming_query_service: StreamingQueryService::new(config_provider),
+            streaming_query_service: StreamingQueryService::new(config_provider, runtime_trace),
             xcloud_service: Arc::new(XcloudService::new()),
         }
     }

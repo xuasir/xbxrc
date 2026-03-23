@@ -5,7 +5,7 @@ use crate::{
         MacOsVideoChromaLocation, MacOsVideoColorMatrix, MacOsVideoColorPrimaries,
         MacOsVideoColorRange, MacOsVideoTransferFunction,
     },
-    media::video::h264::inspection::H264AccessUnitInspection,
+    media::video::h264::inspection::{H264AccessUnitInspection, H264ParameterSets},
     media::video::render::renderer::XbxRenderFrame,
     media::video::types::EncodedFrame,
     XbxEngineRenderPixelData, XbxEngineRuntimeError,
@@ -289,8 +289,7 @@ fn should_force_recovery_keyframe(status: Option<i32>) -> bool {
 struct MacOsVideoToolboxDecoder {
     format_description: CMVideoFormatDescriptionRef,
     decompression_session: VTDecompressionSessionRef,
-    last_sps: Vec<u8>,
-    last_pps: Vec<u8>,
+    last_parameter_sets: Option<H264ParameterSets>,
 }
 
 #[cfg(target_os = "macos")]
@@ -302,8 +301,7 @@ impl MacOsVideoToolboxDecoder {
         Ok(Self {
             format_description: std::ptr::null_mut(),
             decompression_session: std::ptr::null_mut(),
-            last_sps: Vec::new(),
-            last_pps: Vec::new(),
+            last_parameter_sets: None,
         })
     }
 
@@ -315,9 +313,12 @@ impl MacOsVideoToolboxDecoder {
             return Ok(!self.decompression_session.is_null());
         };
 
-        if self.last_sps != parameter_sets.sps.raw || self.last_pps != parameter_sets.pps.raw {
-            self.last_sps = parameter_sets.sps.raw.clone();
-            self.last_pps = parameter_sets.pps.raw.clone();
+        if self
+            .last_parameter_sets
+            .as_ref()
+            .is_none_or(|committed| !committed.same_decoder_configuration(parameter_sets))
+        {
+            self.last_parameter_sets = Some(parameter_sets.clone());
             self.release_session();
         }
 
@@ -329,8 +330,15 @@ impl MacOsVideoToolboxDecoder {
             return Ok(false);
         }
 
-        let parameter_set_pointers = [self.last_sps.as_ptr(), self.last_pps.as_ptr()];
-        let parameter_set_sizes = [self.last_sps.len(), self.last_pps.len()];
+        let parameter_sets = self
+            .last_parameter_sets
+            .as_ref()
+            .expect("parameter sets must be captured before creating a session");
+        let parameter_set_pointers = [
+            parameter_sets.sps.raw.as_ptr(),
+            parameter_sets.pps.raw.as_ptr(),
+        ];
+        let parameter_set_sizes = [parameter_sets.sps.raw.len(), parameter_sets.pps.raw.len()];
         let mut format_description: CMVideoFormatDescriptionRef = std::ptr::null_mut();
         let status = unsafe {
             CMVideoFormatDescriptionCreateFromH264ParameterSets(

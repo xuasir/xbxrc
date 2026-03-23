@@ -1,0 +1,22 @@
+use std::sync::{atomic::AtomicU32, Arc, Mutex};
+
+use tokio::runtime::Handle;
+
+use crate::{XbxEngineMediaRuntimeStats, XbxEngineRuntimeError};
+
+pub(crate) mod audio_output;
+pub(crate) mod sink;
+
+pub(crate) use audio_output::XbxRemoteAudioPlaybackSession;
+pub(crate) use sink::RtcAudioPlaybackSink;
+
+pub(crate) fn build_audio_playback_components(
+    runtime: &Handle,
+    runtime_stats: Arc<Mutex<XbxEngineMediaRuntimeStats>>,
+    volume_bits: Arc<AtomicU32>,
+) -> Result<(XbxRemoteAudioPlaybackSession, RtcAudioPlaybackSink), XbxEngineRuntimeError> {
+    let (sender, receiver) = tokio::sync::mpsc::channel(1024);
+    let session =
+        XbxRemoteAudioPlaybackSession::start(runtime, receiver, runtime_stats, volume_bits)?;
+    Ok((session, RtcAudioPlaybackSink::new(sender)))
+}
