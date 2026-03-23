@@ -1,0 +1,4 @@
+interface:
+  display_name: "Analyze Runtime Logs"
+  short_description: "Analyze runtime trace logs for failures, regressions, and performance issues."
+  default_prompt: "Analyze the provided runtime trace logs, reconstruct the timeline, identify anomalies, explain likely causes with evidence, and recommend next diagnostic steps."
