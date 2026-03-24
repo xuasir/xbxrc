@@ -1,4 +1,4 @@
 pub mod backend;
 
 pub mod rtc;
-// webrtc module will be rebuilt in Supervisor context or external manager
+// RTC transport 为当前唯一主线模块。

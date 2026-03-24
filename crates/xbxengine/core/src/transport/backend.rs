@@ -16,7 +16,7 @@ use xbxengine_protocol::{
 /**
  * 当前 active stack 只保留 backend 外壳职责：
  * - 持有 placeholder 输入/宿主门面
- * - 组装 webrtc-rs transport / data channel / video / control 子模块
+ * - 组装 rtc transport / data channel / video / control 子模块
  * - 对外实现统一 media backend trait
  */
 pub struct XbxNegotiationBackend {

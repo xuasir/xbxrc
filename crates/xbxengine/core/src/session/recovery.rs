@@ -3,10 +3,10 @@ use xbxengine_protocol::{XbxEngineReconnectReasonDto, XbxEngineTransportStateDto
 /**
  * 这是 session/runtime 级 watchdog：
  * - 负责“整场会话是否长期卡死、是否需要整路 reconnect”这类粗粒度恢复
- * - 不负责 webrtc 视频链里的 signal/diagnosis/policy/executor 四层恢复
+ * - 不负责 RTC 视频链里的 signal/diagnosis/policy/executor 四层恢复
  *
  * 也就是说：
- * - `transport/webrtc/recovery_*` 处理媒体链内部恢复
+ * - `transport/rtc/recovery_*` 处理媒体链内部恢复
  * - 本模块只处理 runtime 级别的 session health / reconnect 判定
  *
  * 保留这层是为了让“会话级恢复”和“媒体级恢复”分权，避免再次揉成一团。

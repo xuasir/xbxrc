@@ -5,7 +5,7 @@ use rtc::data_channel::RTCDataChannelInit;
 use rtc::peer_connection::event::RTCDataChannelEvent;
 use rtc::peer_connection::message::RTCMessage;
 use rtc::sansio::Protocol;
-use rtcp::transport_feedbacks::transport_layer_cc::TransportLayerCc;
+use rtc_rtcp::transport_feedbacks::transport_layer_cc::TransportLayerCc;
 
 use crate::runtime_stats_sink::RuntimeStatsSink;
 use crate::transport::rtc::connection::rumble::parse_rumble_requests;

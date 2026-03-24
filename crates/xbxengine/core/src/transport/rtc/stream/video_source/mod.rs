@@ -1,4 +1,5 @@
-use rtp::codecs::h264::H264Packet;
+use rtc_media::io::sample_builder::SampleBuilder;
+use rtc_rtp::codec::h264::H264Packet;
 use std::collections::VecDeque;
 use std::sync::Arc;
 use std::time::Duration;
@@ -11,7 +12,6 @@ use super::packet_types::RtcVideoRtpPacket;
 use super::sink::RtcRtcpSendPort;
 use crate::media::video::types::FrameValue;
 use crate::runtime_stats_sink::RuntimeStatsSink;
-use webrtc_media::io::sample_builder::SampleBuilder;
 
 pub(crate) mod nack;
 pub(super) mod nack_policy;

@@ -7,13 +7,13 @@
    * XbxEngineRuntime
      (状态机中心)：作为整个引擎的控制中枢，它协调信令交换（HostBridge）、事件通知（EventSink）和媒体后端（MediaBackend）。它管理会话的完整生命周期（Idle ->
      Starting -> Running -> Reconnecting -> Stopped）。
-   * 后端抽象 (XbxEngineMediaBackend)：定义了媒体层的标准接口。当前主线实现是 XbxNegotiationBackend（基于 webrtc-rs），同时也保留了 Placeholder
+   * 后端抽象 (XbxEngineMediaBackend)：定义了媒体层的标准接口。当前主线实现是 XbxNegotiationBackend（基于 rtc sans-io 主线），同时也保留了 Placeholder
      实现用于单元测试和离线开发。
    * 输入集成 (input.rs)：通过 OhMyGamepad 桥接本地手柄。它能将本地驱动捕获的手柄状态通过 WebRTC Data Channel 实时路由到远端会话，并支持模拟控制指令（如 Nexus
      键）。
 
 
-  2. WebRTC 传输层实现 (transport/webrtc/)
+  2. RTC 传输层实现 (transport/rtc/)
    * 连接管理 (transport.rs & stack.rs)：
        * 实现了标准的 WebRTC 协商流程（CreateOffer / SetRemoteDescription）。
        * 针对云游戏场景优化了 SDP，如注入 b=AS 码率限制、开启音频 stereo、配置 H.264 Profile 约束。

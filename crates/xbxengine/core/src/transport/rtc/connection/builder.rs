@@ -52,7 +52,7 @@ pub(super) fn build_peer_connection(
     media_engine.register_default_codecs().map_err(|err| {
         XbxEngineRuntimeError::new(format!("xbxEngineRtcRegisterDefaultCodecsFailed: {err}"))
     })?;
-    // 对齐旧 webrtc 主线：在默认 codec 之外补齐我们稳定依赖的 H264 family。
+    // 对齐当前 RTC 主线：在默认 codec 之外补齐我们稳定依赖的 H264 family。
     register_owned_h264_codecs(&mut media_engine)?;
 
     let ice_servers = build_ice_servers(session);

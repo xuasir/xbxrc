@@ -5,7 +5,7 @@ use rtc::peer_connection::transport::RTCIceCandidateType;
 use rtc::peer_connection::RTCPeerConnection;
 use rtc::statistics::report::{RTCStatsReport, RTCStatsReportEntry};
 use rtc::statistics::StatsSelector;
-use rtcp::transport_feedbacks::transport_layer_cc::TransportLayerCc;
+use rtc_rtcp::transport_feedbacks::transport_layer_cc::TransportLayerCc;
 
 use crate::runtime_stats_sink::RuntimeStatsSink;
 use crate::transport::rtc::events::RtcConnectionLifecycleState;

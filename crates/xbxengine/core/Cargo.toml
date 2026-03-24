@@ -23,16 +23,22 @@ h264-reader.workspace = true
 
 hex-literal.workspace = true
 
-interceptor.workspace = true
-
 ohmygamepad-host = { path = "../../ohmygamepad/bridge/host" }
 ohmygamepad-protocol = { path = "../../ohmygamepad/protocol" }
 
 opus.workspace = true
 
-rtp.workspace = true
+rtc-rtp.workspace = true
 
-rtcp.workspace = true
+rtc-rtcp.workspace = true
+
+rtc-media.workspace = true
+
+rtc-shared.workspace = true
+
+rtc-stun.workspace = true
+
+rtc-turn.workspace = true
 
 log.workspace = true
 
@@ -44,17 +50,7 @@ xbxengine-protocol = { path = "../protocol" }
 
 tokio.workspace = true
 
-webrtc.workspace = true
-
-webrtc-media.workspace = true
-
-webrtc-util.workspace = true
-
 rtc.workspace = true
-
-stun.workspace = true
-
-turn.workspace = true
 
 openssl.workspace = true
 

@@ -114,9 +114,9 @@ pub(crate) struct RtcVideoRtpPacket {
 }
 
 impl RtcVideoRtpPacket {
-    pub(crate) fn to_rtp_packet(self) -> rtp::packet::Packet {
-        rtp::packet::Packet {
-            header: rtp::header::Header {
+    pub(crate) fn to_rtp_packet(self) -> rtc_rtp::packet::Packet {
+        rtc_rtp::packet::Packet {
+            header: rtc_rtp::header::Header {
                 version: 2,
                 marker: self.meta.marker,
                 payload_type: self.meta.payload_type,

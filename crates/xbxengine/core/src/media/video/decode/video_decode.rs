@@ -57,7 +57,7 @@ fn create_hardware_video_decoder() -> Box<dyn XbxHardwareVideoDecoder> {
             Ok(decoder) => return Box::new(decoder),
             Err(error) => {
                 crate::xbx_log_info!(
-                    "[xbxengine][webrtc-rs] create macos videotoolbox decoder failed: {error}"
+                    "[xbxengine][rtc] create macos videotoolbox decoder failed: {error}"
                 );
             }
         }
@@ -124,7 +124,7 @@ impl XbxVideoDecodeState {
         if !self.first_video_packet_logged {
             self.first_video_packet_logged = true;
             crate::xbx_log_info!(
-                "[xbxengine][webrtc-rs] first encoded video frame received ts={} bytes={}",
+                "[xbxengine][rtc] first encoded video frame received ts={} bytes={}",
                 encoded_frame.rtp_timestamp,
                 encoded_frame.payload.len()
             );
@@ -136,11 +136,11 @@ impl XbxVideoDecodeState {
             }
             Err(error) => {
                 let status = parse_decoder_status_code(&error);
-                crate::xbx_log_error!("[xbxengine][webrtc-rs] hardware decode failed: {error}");
+                crate::xbx_log_error!("[xbxengine][rtc] hardware decode failed: {error}");
                 self.record_hardware_decode_failure(now_ms, status);
                 if should_force_recovery_keyframe(status) {
                     crate::xbx_log_warn!(
-                        "[xbxengine][webrtc-rs] decoder entered wait-keyframe recovery after backend failure"
+                        "[xbxengine][rtc] decoder entered wait-keyframe recovery after backend failure"
                     );
                     let _ = self.request_decoder_reset();
                 }
@@ -387,7 +387,7 @@ impl MacOsVideoToolboxDecoder {
 
             if pixel_buffer_attributes.is_null() {
                 crate::xbx_log_error!(
-                    "[xbxengine][webrtc-rs][vt] create pixel buffer attributes failed"
+                    "[xbxengine][rtc][vt] create pixel buffer attributes failed"
                 );
             }
 
@@ -568,7 +568,7 @@ impl XbxHardwareVideoDecoder for MacOsVideoToolboxDecoder {
             Ok(state_ptr) => unsafe { Box::from_raw(state_ptr) },
             Err(_) => {
                 crate::xbx_log_error!(
-                    "[xbxengine][webrtc-rs][vt] decode session timed out or callback never fired"
+                    "[xbxengine][rtc][vt] decode session timed out or callback never fired"
                 );
                 return Err(XbxEngineRuntimeError::new(
                     "xbxEngineVideoToolboxDecodeTimeout".to_string(),

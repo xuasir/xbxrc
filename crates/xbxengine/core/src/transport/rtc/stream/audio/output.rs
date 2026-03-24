@@ -52,7 +52,7 @@ fn build_output_stream(
     let output_sample_rate_hz = stream_config.sample_rate.0;
 
     crate::xbx_log_info!(
-        "[xbxengine][webrtc-rs][audio] output config rate={}Hz channels={} format={:?}",
+        "[xbxengine][rtc][audio] output config rate={}Hz channels={} format={:?}",
         output_sample_rate_hz,
         output_channels,
         output_config.sample_format()
@@ -80,7 +80,7 @@ fn build_output_stream(
                     },
                     move |error| {
                         crate::xbx_log_error!(
-                            "[xbxengine][webrtc-rs][audio] output stream error: {error}"
+                            "[xbxengine][rtc][audio] output stream error: {error}"
                         );
                     },
                     None,
@@ -117,7 +117,7 @@ fn build_output_stream(
                     },
                     move |error| {
                         crate::xbx_log_error!(
-                            "[xbxengine][webrtc-rs][audio] output stream error: {error}"
+                            "[xbxengine][rtc][audio] output stream error: {error}"
                         );
                     },
                     None,
@@ -154,7 +154,7 @@ fn build_output_stream(
                     },
                     move |error| {
                         crate::xbx_log_error!(
-                            "[xbxengine][webrtc-rs][audio] output stream error: {error}"
+                            "[xbxengine][rtc][audio] output stream error: {error}"
                         );
                     },
                     None,

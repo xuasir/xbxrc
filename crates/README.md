@@ -67,7 +67,7 @@
 - 输入继续复用 `ohmygamepad-*`
 - gamepad owner 当前固定为 Rust 侧单实例 `ohmygamepad-host`
 - 主线宿主目标固定为 `Tauri`
-- transport 主线固定为 `webrtc-rs`
+- transport 主线固定为 `rtc` sans-io 体系
 - 当前 active 视频链固定为 `openh264` 软解 + 最小 headless `wgpu` render backend
 - render 目标固定为 `wgpu + winit`
 

@@ -3,9 +3,9 @@
 //! 这里负责的是“整场会话”的生命周期、命令和 watchdog 兜底：
 //! - runtime state 与 session commands/events
 //! - 会话级 reconnect fallback
-//! - 不直接参与 webrtc 视频链内部的逐帧恢复
+//! - 不直接参与 RTC 视频链内部的逐帧恢复
 //!
-//! 媒体链内部恢复请看 `transport::webrtc::recovery`。
+//! 媒体链内部恢复请看 `transport::rtc::recovery`。
 
 pub mod commands;
 pub mod events;

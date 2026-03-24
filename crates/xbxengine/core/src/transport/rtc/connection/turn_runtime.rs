@@ -1,22 +1,22 @@
 use std::{
-    collections::VecDeque,
+    collections::{HashSet, VecDeque},
+    io::ErrorKind,
     net::{SocketAddr, ToSocketAddrs, UdpSocket},
-    sync::{Arc, Mutex},
-    time::Duration,
+    time::{Duration, Instant},
 };
 
-use tokio::{
-    net::UdpSocket as TokioUdpSocket,
-    runtime::{Builder, Runtime},
-    sync::mpsc::{self, UnboundedReceiver, UnboundedSender},
-    task::JoinHandle,
-};
-use turn::client::{Client, ClientConfig};
+use bytes::BytesMut;
+use rtc::sansio::Protocol;
+use rtc::shared::error::Error as SharedError;
+use rtc::shared::{TransportContext, TransportMessage, TransportProtocol};
+use rtc_turn::client::{Client, ClientConfig, Event as TurnEvent};
 use url::Url;
-use webrtc_util::Conn;
 
 use crate::XbxEngineRuntimeError;
 use xbxengine_protocol::XbxEngineTurnServerDto;
+
+const TURN_ALLOCATE_TIMEOUT: Duration = Duration::from_secs(3);
+const TURN_PUMP_MAX_PASSES: usize = 8;
 
 pub(crate) struct RelayPacket {
     pub(crate) data: Vec<u8>,
@@ -32,11 +32,11 @@ pub(crate) struct TurnRuntime {
     base_addr: SocketAddr,
     relay_addr: SocketAddr,
     turn_url: String,
-    inbound: Arc<Mutex<VecDeque<RelayPacket>>>,
-    outbound_tx: UnboundedSender<OutboundPacket>,
-    send_handle: JoinHandle<()>,
-    recv_handle: JoinHandle<()>,
-    runtime: Arc<Runtime>,
+    socket: UdpSocket,
+    inbound: VecDeque<RelayPacket>,
+    outbound: VecDeque<OutboundPacket>,
+    permitted_peers: HashSet<SocketAddr>,
+    pending_permission_peers: HashSet<SocketAddr>,
     client: Client,
 }
 
@@ -45,106 +45,49 @@ impl TurnRuntime {
         turn_server: &XbxEngineTurnServerDto,
     ) -> Result<Self, XbxEngineRuntimeError> {
         let server_addr = parse_turn_server_addr(&turn_server.url)?;
-        let runtime = Arc::new(
-            Builder::new_multi_thread()
-                .worker_threads(2)
-                .enable_all()
-                .build()
-                .map_err(|err| {
-                    XbxEngineRuntimeError::new(format!("xbxEngineTurnRuntimeBuildFailed: {err}"))
-                })?,
-        );
-
-        let std_socket = UdpSocket::bind("0.0.0.0:0").map_err(|err| {
+        let socket = UdpSocket::bind("0.0.0.0:0").map_err(|err| {
             XbxEngineRuntimeError::new(format!("xbxEngineTurnBaseBindFailed: {err}"))
         })?;
-        std_socket.set_nonblocking(true).map_err(|err| {
+        socket.set_nonblocking(true).map_err(|err| {
             XbxEngineRuntimeError::new(format!("xbxEngineTurnBaseNonblockingFailed: {err}"))
         })?;
-        let tokio_socket = TokioUdpSocket::from_std(std_socket).map_err(|err| {
-            XbxEngineRuntimeError::new(format!("xbxEngineTurnBindTokioSocketFailed: {err}"))
-        })?;
-
-        let conn: Arc<dyn Conn + Send + Sync> = Arc::new(tokio_socket);
-        let base_addr = conn.local_addr().map_err(|err| {
+        let base_addr = socket.local_addr().map_err(|err| {
             XbxEngineRuntimeError::new(format!("xbxEngineTurnBaseLocalAddrFailed: {err}"))
         })?;
-        let config = ClientConfig {
+
+        let mut client = Client::new(ClientConfig {
             stun_serv_addr: server_addr.to_string(),
             turn_serv_addr: server_addr.to_string(),
+            local_addr: base_addr,
+            transport_protocol: TransportProtocol::UDP,
             username: turn_server.username.clone(),
             password: turn_server.credential.clone(),
             realm: String::new(),
             software: "xbxengine-turn".to_string(),
             rto_in_ms: 200,
-            conn: Arc::clone(&conn),
-            vnet: None,
-        };
-
-        let client = runtime.block_on(Client::new(config)).map_err(|err| {
+        })
+        .map_err(|err| {
             XbxEngineRuntimeError::new(format!("xbxEngineTurnClientInitFailed: {err}"))
         })?;
-        runtime.block_on(client.listen()).map_err(|err| {
-            XbxEngineRuntimeError::new(format!("xbxEngineTurnClientListenFailed: {err}"))
-        })?;
-        let relay_conn = runtime.block_on(client.allocate()).map_err(|err| {
+
+        let allocate_tid = client.allocate().map_err(|err| {
             XbxEngineRuntimeError::new(format!("xbxEngineTurnAllocateFailed: {err}"))
         })?;
-        let relay_conn: Arc<dyn Conn + Send + Sync> = Arc::new(relay_conn);
-        let relay_addr = relay_conn.local_addr().map_err(|err| {
-            XbxEngineRuntimeError::new(format!("xbxEngineTurnLocalAddrFailed: {err}"))
-        })?;
 
-        let inbound = Arc::new(Mutex::new(VecDeque::new()));
-        let (outbound_tx, outbound_rx) = mpsc::unbounded_channel();
-
-        let send_handle = {
-            let relay_conn = Arc::clone(&relay_conn);
-            runtime.spawn(async move {
-                let mut outbound_rx: UnboundedReceiver<OutboundPacket> = outbound_rx;
-                while let Some(packet) = outbound_rx.recv().await {
-                    if let Err(err) = relay_conn.send_to(&packet.data, packet.target).await {
-                        log::warn!("[xbxengine][rtc-connection] turn relay send failed: {err}");
-                    }
-                }
-            })
-        };
-
-        let recv_handle = {
-            let relay_conn = Arc::clone(&relay_conn);
-            let inbound = Arc::clone(&inbound);
-            runtime.spawn(async move {
-                let mut buffer = vec![0u8; 2_048];
-                loop {
-                    match relay_conn.recv_from(&mut buffer).await {
-                        Ok((size, from)) => {
-                            let packet = RelayPacket {
-                                data: buffer[..size].to_vec(),
-                                from,
-                            };
-                            let mut queue = inbound.lock().unwrap();
-                            queue.push_back(packet);
-                        }
-                        Err(err) => {
-                            log::warn!("[xbxengine][rtc-connection] turn relay recv failed: {err}");
-                            break;
-                        }
-                    }
-                }
-            })
-        };
-
-        Ok(Self {
+        let mut runtime = Self {
             base_addr,
-            relay_addr,
+            relay_addr: base_addr,
             turn_url: turn_server.url.clone(),
-            inbound,
-            outbound_tx,
-            send_handle,
-            recv_handle,
-            runtime,
+            socket,
+            inbound: VecDeque::new(),
+            outbound: VecDeque::new(),
+            permitted_peers: HashSet::new(),
+            pending_permission_peers: HashSet::new(),
             client,
-        })
+        };
+
+        runtime.drive_until_allocated(allocate_tid)?;
+        Ok(runtime)
     }
 
     pub(crate) fn local_addr(&self) -> SocketAddr {
@@ -159,35 +102,242 @@ impl TurnRuntime {
         &self.turn_url
     }
 
-    pub(crate) fn send(&self, payload: &[u8], target: SocketAddr) -> Result<(), std::io::Error> {
-        self.outbound_tx
-            .send(OutboundPacket {
-                data: payload.to_vec(),
-                target,
-            })
-            .map_err(|_| {
-                std::io::Error::new(std::io::ErrorKind::BrokenPipe, "turn relay worker stopped")
-            })
+    pub(crate) fn send(
+        &mut self,
+        payload: &[u8],
+        target: SocketAddr,
+    ) -> Result<(), std::io::Error> {
+        self.outbound.push_back(OutboundPacket {
+            data: payload.to_vec(),
+            target,
+        });
+        self.pump().map_err(to_io_error)?;
+        Ok(())
     }
 
-    pub(crate) fn drain_incoming(&self) -> Vec<RelayPacket> {
-        let mut queue = self.inbound.lock().unwrap();
-        queue.drain(..).collect()
+    pub(crate) fn pump(&mut self) -> Result<(), XbxEngineRuntimeError> {
+        for _ in 0..TURN_PUMP_MAX_PASSES {
+            let mut progressed = false;
+
+            progressed |= self.flush_client_writes()?;
+            progressed |= self.read_socket()?;
+            progressed |= self.handle_events()?;
+
+            let now = Instant::now();
+            if self
+                .client
+                .poll_timeout()
+                .is_some_and(|deadline| deadline <= now)
+            {
+                self.client.handle_timeout(now).map_err(|err| {
+                    XbxEngineRuntimeError::new(format!("xbxEngineTurnClientTimeoutFailed: {err}"))
+                })?;
+                progressed = true;
+            }
+            progressed |= self.flush_outbound()?;
+            if !progressed {
+                break;
+            }
+        }
+        Ok(())
+    }
+
+    pub(crate) fn drain_incoming(&mut self) -> Vec<RelayPacket> {
+        if let Err(err) = self.pump() {
+            log::warn!("[xbxengine][rtc-connection] turn relay pump failed: {err}");
+        }
+        self.inbound.drain(..).collect()
+    }
+
+    fn drive_until_allocated(
+        &mut self,
+        allocate_tid: rtc_stun::message::TransactionId,
+    ) -> Result<(), XbxEngineRuntimeError> {
+        let deadline = Instant::now() + TURN_ALLOCATE_TIMEOUT;
+        while Instant::now() < deadline {
+            self.flush_client_writes()?;
+            self.read_socket()?;
+
+            while let Some(event) = self.client.poll_event() {
+                match event {
+                    TurnEvent::AllocateResponse(tid, addr) if tid == allocate_tid => {
+                        self.relay_addr = addr;
+                        return Ok(());
+                    }
+                    TurnEvent::AllocateError(tid, err) if tid == allocate_tid => {
+                        return Err(XbxEngineRuntimeError::new(format!(
+                            "xbxEngineTurnAllocateFailed: {err}"
+                        )));
+                    }
+                    TurnEvent::TransactionTimeout(tid) if tid == allocate_tid => {
+                        return Err(XbxEngineRuntimeError::new("xbxEngineTurnAllocateTimeout"));
+                    }
+                    other => {
+                        self.handle_event(other)?;
+                    }
+                }
+            }
+            let now = Instant::now();
+            if self
+                .client
+                .poll_timeout()
+                .is_some_and(|timeout_at| timeout_at <= now)
+            {
+                self.client.handle_timeout(now).map_err(|err| {
+                    XbxEngineRuntimeError::new(format!("xbxEngineTurnClientTimeoutFailed: {err}"))
+                })?;
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        Err(XbxEngineRuntimeError::new("xbxEngineTurnAllocateTimeout"))
+    }
+
+    fn flush_client_writes(&mut self) -> Result<bool, XbxEngineRuntimeError> {
+        let mut progressed = false;
+        while let Some(transmit) = self.client.poll_write() {
+            self.socket
+                .send_to(&transmit.message, transmit.transport.peer_addr)
+                .map_err(|err| {
+                    XbxEngineRuntimeError::new(format!("xbxEngineTurnSocketSendFailed: {err}"))
+                })?;
+            progressed = true;
+        }
+        Ok(progressed)
+    }
+
+    fn read_socket(&mut self) -> Result<bool, XbxEngineRuntimeError> {
+        let mut progressed = false;
+        let mut buffer = [0u8; 2_048];
+        loop {
+            match self.socket.recv_from(&mut buffer) {
+                Ok((size, peer_addr)) => {
+                    self.client
+                        .handle_read(TransportMessage {
+                            now: Instant::now(),
+                            transport: TransportContext {
+                                local_addr: self.base_addr,
+                                peer_addr,
+                                transport_protocol: TransportProtocol::UDP,
+                                ecn: None,
+                            },
+                            message: BytesMut::from(&buffer[..size]),
+                        })
+                        .map_err(|err| {
+                            XbxEngineRuntimeError::new(format!(
+                                "xbxEngineTurnHandleReadFailed: {err}"
+                            ))
+                        })?;
+                    progressed = true;
+                }
+                Err(err) if err.kind() == ErrorKind::WouldBlock => break,
+                Err(err) => {
+                    return Err(XbxEngineRuntimeError::new(format!(
+                        "xbxEngineTurnSocketReadFailed: {err}"
+                    )));
+                }
+            }
+        }
+        Ok(progressed)
+    }
+
+    fn handle_events(&mut self) -> Result<bool, XbxEngineRuntimeError> {
+        let mut progressed = false;
+        while let Some(event) = self.client.poll_event() {
+            self.handle_event(event)?;
+            progressed = true;
+        }
+        Ok(progressed)
+    }
+
+    fn handle_event(&mut self, event: TurnEvent) -> Result<(), XbxEngineRuntimeError> {
+        match event {
+            TurnEvent::TransactionTimeout(tid) => {
+                log::warn!("[xbxengine][rtc-connection] turn transaction timeout tid={tid:?}");
+            }
+            TurnEvent::BindingResponse(_, _) | TurnEvent::BindingError(_, _) => {}
+            TurnEvent::AllocateResponse(_, _) => {}
+            TurnEvent::AllocateError(_, err) => {
+                log::warn!("[xbxengine][rtc-connection] turn allocate error: {err}");
+            }
+            TurnEvent::CreatePermissionResponse(_, peer_addr) => {
+                self.pending_permission_peers.remove(&peer_addr);
+                self.permitted_peers.insert(peer_addr);
+            }
+            TurnEvent::CreatePermissionError(_, err) => {
+                log::warn!("[xbxengine][rtc-connection] turn create permission error: {err}");
+            }
+            TurnEvent::DataIndicationOrChannelData(_, from, data) => {
+                self.inbound.push_back(RelayPacket {
+                    data: data.to_vec(),
+                    from,
+                });
+            }
+        }
+        Ok(())
+    }
+
+    fn flush_outbound(&mut self) -> Result<bool, XbxEngineRuntimeError> {
+        let mut progressed = false;
+        let mut deferred = VecDeque::new();
+        while let Some(packet) = self.outbound.pop_front() {
+            if !self.permitted_peers.contains(&packet.target) {
+                self.ensure_permission(packet.target)?;
+                deferred.push_back(packet);
+                continue;
+            }
+            match self
+                .client
+                .relay(self.relay_addr)
+                .and_then(|mut relay| relay.send_to(&packet.data, packet.target))
+            {
+                Ok(()) => {
+                    progressed = true;
+                }
+                Err(SharedError::ErrNoPermission) => {
+                    // 权限状态可能因服务端生命周期刷新而失效；这里回退到排队并重新申请权限。
+                    self.permitted_peers.remove(&packet.target);
+                    self.ensure_permission(packet.target)?;
+                    deferred.push_back(packet);
+                }
+                Err(err) => {
+                    return Err(XbxEngineRuntimeError::new(format!(
+                        "xbxEngineTurnRelaySendFailed: {err}"
+                    )));
+                }
+            }
+        }
+        self.outbound = deferred;
+        Ok(progressed)
+    }
+
+    fn ensure_permission(&mut self, peer_addr: SocketAddr) -> Result<(), XbxEngineRuntimeError> {
+        if self.pending_permission_peers.contains(&peer_addr) {
+            return Ok(());
+        }
+        self.client
+            .relay(self.relay_addr)
+            .and_then(|mut relay| relay.create_permission(peer_addr))
+            .map_err(|err| {
+                XbxEngineRuntimeError::new(format!(
+                    "xbxEngineTurnCreatePermissionFailed({peer_addr}): {err}"
+                ))
+            })?;
+        self.pending_permission_peers.insert(peer_addr);
+        Ok(())
     }
 }
 
 impl Drop for TurnRuntime {
     fn drop(&mut self) {
-        self.send_handle.abort();
-        self.recv_handle.abort();
-        let client = self.client.clone();
-        let (close_tx, close_rx) = std::sync::mpsc::channel();
-        let _close_handle = self.runtime.spawn(async move {
-            let _ = client.close().await;
-            let _ = close_tx.send(());
-        });
-        let _ = close_rx.recv_timeout(Duration::from_secs(1));
+        if let Ok(mut relay) = self.client.relay(self.relay_addr) {
+            let _ = relay.close();
+        }
+        let _ = self.client.close();
     }
+}
+
+fn to_io_error(err: XbxEngineRuntimeError) -> std::io::Error {
+    std::io::Error::other(err.to_string())
 }
 
 fn parse_turn_server_addr(url: &str) -> Result<SocketAddr, XbxEngineRuntimeError> {

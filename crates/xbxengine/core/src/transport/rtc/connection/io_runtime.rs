@@ -13,10 +13,9 @@ use rtc::peer_connection::RTCPeerConnection;
 use rtc::sansio::Protocol;
 use rtc::shared::ifaces::ifaces;
 use rtc::shared::{TaggedBytesMut, TransportContext, TransportProtocol};
-use stun::agent::TransactionId;
-use stun::fingerprint::FINGERPRINT;
-use stun::message::{Getter, Message, BINDING_REQUEST};
-use stun::xoraddr::XorMappedAddress;
+use rtc_stun::fingerprint::FINGERPRINT;
+use rtc_stun::message::{Getter, Message, TransactionId, BINDING_REQUEST};
+use rtc_stun::xoraddr::XorMappedAddress;
 use url::Url;
 
 use crate::transport::rtc::connection::builder::build_ice_servers;
@@ -310,11 +309,11 @@ impl RtcIoRuntime {
     }
 
     fn send_to_peer(
-        &self,
+        &mut self,
         payload: &[u8],
         transport: &TransportContext,
     ) -> Result<usize, std::io::Error> {
-        if let Some(relay) = self.relay_runtime.as_ref() {
+        if let Some(relay) = self.relay_runtime.as_mut() {
             if transport.local_addr == relay.local_addr() {
                 relay.send(payload, transport.peer_addr)?;
                 return Ok(payload.len());
@@ -334,10 +333,10 @@ impl RtcIoRuntime {
     }
 
     fn read_relay(
-        &self,
+        &mut self,
         peer_connection: &mut RTCPeerConnection,
     ) -> Result<bool, XbxEngineRuntimeError> {
-        let Some(relay) = self.relay_runtime.as_ref() else {
+        let Some(relay) = self.relay_runtime.as_mut() else {
             return Ok(false);
         };
         let packets = relay.drain_incoming();
@@ -616,7 +615,7 @@ struct IceServerReference {
 }
 
 fn discover_advertised_ip() -> Option<IpAddr> {
-    // 对齐 webrtc-rs 的 local_interfaces 语义：先取本机接口的非 loopback 地址。
+    // 对齐当前 RTC local_interfaces 语义：先取本机接口的非 loopback 地址。
     let mut candidates = discover_local_interface_ips();
     if let Some(probe_ip) = discover_default_route_ip() {
         if advertised_ip_priority(probe_ip).is_some() && !candidates.contains(&probe_ip) {

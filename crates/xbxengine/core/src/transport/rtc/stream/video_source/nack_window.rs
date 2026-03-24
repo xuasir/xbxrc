@@ -19,7 +19,7 @@ impl NackSequenceWindow {
         }
     }
 
-    // 直接沿用 webrtc 默认 generator 的环形接收窗口语义，避免我们再发明一套缺包判定。
+    // 直接沿用 RTC 侧默认 generator 的环形接收窗口语义，避免我们再发明一套缺包判定。
     pub(super) fn add(&mut self, seq: u16) {
         if !self.started {
             self.set_received(seq);

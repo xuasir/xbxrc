@@ -26,7 +26,7 @@ pub(super) fn spawn_audio_decode_task(
             Ok(decoder) => decoder,
             Err(error) => {
                 crate::xbx_log_error!(
-                    "[xbxengine][webrtc-rs][audio] opus decoder init failed: {error}"
+                    "[xbxengine][rtc][audio] opus decoder init failed: {error}"
                 );
                 return;
             }

@@ -1,5 +1,10 @@
 use xbxengine_protocol::XbxEngineTargetTypeDto;
 
+use rtc_rtcp::transport_feedbacks::transport_layer_nack::{
+    nack_pairs_from_sequence_numbers, TransportLayerNack,
+};
+use rtc_shared::marshal::{Marshal, MarshalSize};
+
 use crate::transport::rtc::stream::nack_scheduler::{NackBatch, ResolvedNack};
 use crate::XbxEngineVideoNackObservation;
 
@@ -7,7 +12,6 @@ use super::{
     capitalize_reason, nack_policy::*, now_ms_f64, FrameValue, RecentRtpPacket,
     RtcVideoFrameSource, TransportObservation,
 };
-use webrtc::util::{Marshal, MarshalSize};
 
 impl RtcVideoFrameSource {
     pub(super) async fn maybe_run_nack_maintenance(&mut self) {
@@ -155,10 +159,10 @@ impl RtcVideoFrameSource {
             return;
         }
 
-        let nack = webrtc::rtcp::transport_feedbacks::transport_layer_nack::TransportLayerNack {
+        let nack = TransportLayerNack {
             sender_ssrc: 0,
             media_ssrc: 0,
-            nacks: webrtc::rtcp::transport_feedbacks::transport_layer_nack::nack_pairs_from_sequence_numbers(&batch.sequences),
+            nacks: nack_pairs_from_sequence_numbers(&batch.sequences),
         };
         let mut buf = vec![0u8; nack.marshal_size()];
         if let Ok(_) = nack.marshal_to(&mut buf) {
