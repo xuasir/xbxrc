@@ -270,18 +270,13 @@ impl RtcIoRuntime {
 
 fn discover_advertised_ip() -> Option<IpAddr> {
     // 对齐 webrtc-rs 的 local_interfaces 语义：先取本机接口的非 loopback 地址。
-    let local_ips = discover_local_interface_ips();
-    if local_ips.is_empty() {
-        return discover_default_route_ip();
-    }
-
+    let mut candidates = discover_local_interface_ips();
     if let Some(probe_ip) = discover_default_route_ip() {
-        if local_ips.contains(&probe_ip) && advertised_ip_priority(probe_ip).is_some() {
-            return Some(probe_ip);
+        if advertised_ip_priority(probe_ip).is_some() && !candidates.contains(&probe_ip) {
+            candidates.push(probe_ip);
         }
     }
-
-    choose_preferred_advertised_ip(local_ips)
+    choose_preferred_advertised_ip(candidates)
 }
 
 fn discover_local_interface_ips() -> Vec<IpAddr> {
@@ -352,7 +347,17 @@ fn advertised_ip_priority(ip: IpAddr) -> Option<u8> {
         IpAddr::V4(v4) if is_benchmark_ipv4(v4) => None,
         IpAddr::V4(v4) if v4.is_private() => Some(2),
         IpAddr::V4(_) => Some(1),
-        IpAddr::V6(v6) => (!v6.is_loopback() && !v6.is_unspecified()).then_some(1),
+        // 避免把 ULA / link-local IPv6 当成可广播候选，
+        // 否则 home 串流可能只把 fdfe:* 之类的本地伪可达地址送给远端。
+        IpAddr::V6(v6)
+            if v6.is_loopback()
+                || v6.is_unspecified()
+                || v6.is_unique_local()
+                || v6.is_unicast_link_local() =>
+        {
+            None
+        }
+        IpAddr::V6(_) => Some(1),
     }
 }
 
@@ -390,6 +395,12 @@ mod tests {
     }
 
     #[test]
+    fn advertised_ip_priority_rejects_unique_local_ipv6() {
+        let ip = IpAddr::V6("fdfe:dcba:9876::1".parse::<std::net::Ipv6Addr>().unwrap());
+        assert_eq!(advertised_ip_priority(ip), None);
+    }
+
+    #[test]
     fn resolve_local_addr_for_socket_keeps_bind_addr_when_family_differs() {
         let runtime = RtcIoRuntime {
             advertised_ip: Some(IpAddr::V4(Ipv4Addr::new(192, 168, 0, 10))),
@@ -419,5 +430,19 @@ mod tests {
             IpAddr::V4(Ipv4Addr::new(192, 168, 1, 10)),
         ]);
         assert_eq!(chosen, Some(IpAddr::V4(Ipv4Addr::new(192, 168, 1, 10))));
+    }
+
+    #[test]
+    fn choose_preferred_advertised_ip_prefers_private_ipv4_over_global_ipv6() {
+        let chosen = choose_preferred_advertised_ip(vec![
+            IpAddr::V6(
+                "2408:8352:a12:20e0::e6a"
+                    .parse::<std::net::Ipv6Addr>()
+                    .unwrap(),
+            ),
+            IpAddr::V4(Ipv4Addr::new(10, 0, 0, 122)),
+        ]);
+
+        assert_eq!(chosen, Some(IpAddr::V4(Ipv4Addr::new(10, 0, 0, 122))));
     }
 }

@@ -980,11 +980,23 @@ impl RtcConnectionService {
         }
         if should_ack_message_handshake {
             if self.control_service.ack_handshake() {
+                RuntimeStatsSink::new(runtime_stats.clone()).update(|stats| {
+                    if stats.message_handshake_acked_at_ms.is_none() {
+                        stats.message_handshake_acked_at_ms = Some(now_ms_f64());
+                    }
+                });
                 self.send_post_handshake_messages(runtime_stats)?;
             }
             self.try_bootstrap_control_channel(runtime_stats)?;
             self.try_bootstrap_input_channel(runtime_stats)?;
             self.observe_control_replay_if_ready(runtime_stats)?;
+            if self.control_service.is_control_ready() {
+                RuntimeStatsSink::new(runtime_stats.clone()).update(|stats| {
+                    if stats.control_ready_at_ms.is_none() {
+                        stats.control_ready_at_ms = Some(now_ms_f64());
+                    }
+                });
+            }
         }
         if changed {
             let last_label = self

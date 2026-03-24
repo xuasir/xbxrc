@@ -1,5 +1,7 @@
 export type StreamingTargetType = 'home' | 'cloud'
 export type StreamingStartupPhaseStatus = 'entered' | 'succeeded' | 'failed'
+export type StreamingStartupBoundedRetryStatus = 'retrying' | 'exhausted'
+export type StreamingStartupBoundedRetryReason = 'waitingForServerRegistration'
 export type StreamingStartupPhase
   = | 'resolvingContext'
     | 'wakingConsole'
@@ -19,7 +21,15 @@ export type StreamingStartupErrorKind
     | 'auth'
     | 'target'
     | 'hostRemotePlayUnavailable'
+    | 'hostRegistrationRetryExhausted'
     | 'unknown'
+
+export interface StreamingStartupBoundedRetry {
+  reason: StreamingStartupBoundedRetryReason
+  status: StreamingStartupBoundedRetryStatus
+  retryCount: number
+  retryLimit: number
+}
 
 export interface StreamingStartupEvent {
   attemptId: string
@@ -29,6 +39,7 @@ export interface StreamingStartupEvent {
   status: StreamingStartupPhaseStatus
   summary: string
   details?: string
+  boundedRetry?: StreamingStartupBoundedRetry | null
   tsMs: number
 }
 
@@ -40,6 +51,16 @@ export interface StreamingStartupError {
   diagnosticSummary: string
   rawMessage: string
   retryable: boolean
+  boundedRetry?: StreamingStartupBoundedRetry | null
+}
+
+export interface StreamingSessionError {
+  errorKind: StreamingStartupErrorKind
+  userMessageKey: string
+  diagnosticSummary: string
+  rawMessage: string
+  retryable: boolean
+  boundedRetry?: StreamingStartupBoundedRetry | null
 }
 
 export type StreamingPlayerState = 'pending' | 'started' | 'queued' | 'failed'
@@ -158,7 +179,6 @@ export interface StreamingRuntimeProjection {
   vibrationStrength: 'realistic' | 'enhanced' | 'full'
 }
 
-
 export interface StreamingRenderProjection {
   enableAudioControl: boolean
   videoFormat?: string | null
@@ -239,11 +259,11 @@ export interface StreamingSessionProgressSnapshot {
   sessionId: string
   phase: StreamingSessionPhase
   statusTextKey: string
-  retryCount: number
   queueSeconds?: number
   queue?: StreamingQueueDetails
   errorCode?: string
   errorMessage?: string
+  error?: StreamingSessionError
 }
 
 export interface StreamingStartSessionParams {
@@ -313,13 +333,13 @@ export type StreamingRuntimeFact
     type: 'transportConnectionState'
     connectionState: 'new' | 'connecting' | 'connected' | 'disconnected' | 'failed' | 'closed'
   }
-    | {
-      type: 'mediaHealth'
-      connectionState: 'new' | 'connecting' | 'connected' | 'disconnected' | 'failed' | 'closed'
-      connectedElapsedMs: number
-      inactivityElapsedMs: number
-    }
-    | { type: 'mediaStalled' }
+  | {
+    type: 'mediaHealth'
+    connectionState: 'new' | 'connecting' | 'connected' | 'disconnected' | 'failed' | 'closed'
+    connectedElapsedMs: number
+    inactivityElapsedMs: number
+  }
+  | { type: 'mediaStalled' }
 
 export interface StreamingDecideRecoveryParams {
   sessionId: string

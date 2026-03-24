@@ -20,6 +20,10 @@ use crate::session::store::{SessionRuntimeRecord, SessionRuntimeStore};
 
 const STARTUP_CLOSED_RECOVERY_GRACE_MS_MIN: u64 = 1_200;
 const STARTUP_CLOSED_RECOVERY_GRACE_MS_MAX: u64 = 5_000;
+const HOME_SESSION_READY_RETRY_LIMIT: u8 = 0;
+const HOME_SERVER_REGISTRATION_WAIT_TIMEOUT_MS: u64 = 30_000;
+const HOME_RECREATE_CLEANUP_SETTLE_MS: u64 = 8_000;
+const HOME_RECREATE_CLEANUP_POLL_MS: u64 = 500;
 
 /// session flow 的统一错误，便于 adapter 只做一次映射。
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -28,6 +32,31 @@ pub struct SessionFlowError {
     pub message: String,
     pub status: Option<u16>,
     pub body: Option<String>,
+    pub startup_hint: Option<SessionFlowStartupErrorHint>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum SessionFlowStartupErrorKind {
+    Wake,
+    ConsoleReady,
+    SessionCreate,
+    SessionReady,
+    Runtime,
+    Network,
+    Auth,
+    Target,
+    HostRemotePlayUnavailable,
+    HostRegistrationRetryExhausted,
+    Unknown,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionFlowStartupErrorHint {
+    pub kind: SessionFlowStartupErrorKind,
+    pub retryable: bool,
+    pub diagnostic_summary: String,
 }
 
 impl SessionFlowError {
@@ -36,6 +65,7 @@ impl SessionFlowError {
             message: message.into(),
             status: None,
             body: None,
+            startup_hint: None,
         }
     }
 
@@ -44,7 +74,13 @@ impl SessionFlowError {
             message: message.into(),
             status: Some(status),
             body,
+            startup_hint: None,
         }
+    }
+
+    pub fn with_startup_hint(mut self, startup_hint: SessionFlowStartupErrorHint) -> Self {
+        self.startup_hint = Some(startup_hint);
+        self
     }
 }
 
@@ -108,11 +144,11 @@ pub struct SessionProgressSnapshot {
     pub session_id: String,
     pub phase: SessionPhase,
     pub status_text_key: String,
-    pub retry_count: u8,
     pub queue_seconds: Option<u64>,
     pub queue: Option<crate::session::monitor::QueueDetails>,
     pub error_code: Option<String>,
     pub error_message: Option<String>,
+    pub error_hint: Option<SessionFlowStartupErrorHint>,
 }
 
 /// 会话创建前阶段：供 adapter 订阅真实启动进度，而不是在 UI 侧猜测。
@@ -137,6 +173,28 @@ pub enum SessionStartupPhaseStatus {
     Failed,
 }
 
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum SessionStartupBoundedRetryStatus {
+    Retrying,
+    Exhausted,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum SessionStartupBoundedRetryReason {
+    WaitingForServerRegistration,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionStartupBoundedRetrySnapshot {
+    pub reason: SessionStartupBoundedRetryReason,
+    pub status: SessionStartupBoundedRetryStatus,
+    pub retry_count: u8,
+    pub retry_limit: u8,
+}
+
 pub trait SessionStartupObserver: Send + Sync {
     fn on_phase_event(
         &self,
@@ -144,6 +202,13 @@ pub trait SessionStartupObserver: Send + Sync {
         status: SessionStartupPhaseStatus,
         details: Option<&str>,
     );
+
+    fn on_bounded_retry(
+        &self,
+        _phase: SessionStartupPhase,
+        _bounded_retry: &SessionStartupBoundedRetrySnapshot,
+    ) {
+    }
 }
 
 /// 远端主机快照：仅保留 session 预检所需字段。
@@ -154,7 +219,10 @@ pub struct RemoteConsoleSnapshot {
     pub device_id: Option<String>,
     pub server_id: Option<String>,
     pub power_state: Option<String>,
+    pub remote_management_enabled: Option<bool>,
     pub console_streaming_enabled: Option<bool>,
+    pub console_addrs_count: u32,
+    pub ready_source: Option<String>,
 }
 
 /// session flow 外部依赖：仅负责提供凭证。
@@ -212,6 +280,43 @@ pub trait SessionFlowProvider: Send + Sync + 'static {
         _error: Option<&SessionFlowError>,
     ) {
     }
+    /// 诊断钩子：记录 create_session 返回的 session 标识，便于确认 recreate 是否真的换了 session。
+    fn on_session_created(
+        &self,
+        _session_id: &str,
+        _session_path: &str,
+        _target_type: &str,
+        _target_id: &str,
+        _recreate_from_session_id: Option<&str>,
+    ) {
+    }
+    /// 诊断钩子：记录 recreate 前旧 session 清理是否真正收敛。
+    fn on_session_recreate_cleanup_result(
+        &self,
+        _session_id: &str,
+        _target_type: &str,
+        _target_id: &str,
+        _status: &str,
+        _last_state: Option<&str>,
+        _error: Option<&SessionFlowError>,
+    ) {
+    }
+    /// 诊断钩子：记录 waitingConsoleReady 的收敛结果，便于区分显式注册与超时。
+    fn on_console_ready_wait_result(
+        &self,
+        _target_type: &str,
+        _target_id: &str,
+        _status: &str,
+        _reason: &str,
+        _console: Option<&RemoteConsoleSnapshot>,
+    ) {
+    }
+}
+
+#[derive(Debug, Clone)]
+struct SessionRecreateContext {
+    previous_session_id: String,
+    cleanup_settled: bool,
 }
 
 #[derive(Clone)]
@@ -255,7 +360,7 @@ where
     }
 
     pub async fn create_session(&self, plan: Plan) -> Result<S, SessionFlowError> {
-        self.create_session_with_observer::<NoopSessionStartupObserver>(plan, None)
+        self.create_session_with_observer::<NoopSessionStartupObserver>(plan, None, None)
             .await
     }
 
@@ -263,6 +368,7 @@ where
         &self,
         plan: Plan,
         observer: Option<&O>,
+        recreate_from_session_id: Option<&str>,
     ) -> Result<S, SessionFlowError>
     where
         O: SessionStartupObserver,
@@ -288,6 +394,13 @@ where
             .map_err(|error| SessionFlowError::message(error.to_string()))?;
 
         let target_type = plan.session.target.as_str();
+        self.inner.provider.on_session_created(
+            &session_id,
+            &session_path,
+            target_type,
+            &plan.session.target_id,
+            recreate_from_session_id,
+        );
         let snapshot = S::new_pending(
             session_id.clone(),
             session_path,
@@ -373,35 +486,154 @@ where
         let runtime = project_runtime(&plan);
         let render = project_render(&plan);
         let schedule = plan.session.schedule.clone();
+        let mut recreate_retry_count = 0u8;
+        let mut recreate_context: Option<SessionRecreateContext> = None;
 
         self.prepare_remote_console(&plan, observer).await?;
-        let session = self.create_session_with_observer(plan, observer).await?;
-        let session_id = session.session_id().to_string();
-        notify_startup_phase(
-            observer,
-            SessionStartupPhase::WaitingSessionReady,
-            SessionStartupPhaseStatus::Entered,
-            None,
-        );
-        self.wait_until_session_started_or_failed(&session_id, &schedule)
-            .await?;
-        notify_startup_phase(
-            observer,
-            SessionStartupPhase::WaitingSessionReady,
-            SessionStartupPhaseStatus::Succeeded,
-            None,
-        );
 
-        let started_session = self
-            .get_session(&session_id)
-            .await
-            .ok_or_else(|| missing_session_error(&session_id))?;
+        loop {
+            let recreate_from_session_id = recreate_context
+                .as_ref()
+                .map(|context| context.previous_session_id.as_str());
+            let session = self
+                .create_session_with_observer(plan.clone(), observer, recreate_from_session_id)
+                .await?;
+            let session_id = session.session_id().to_string();
+            if let Some(context) = recreate_context.take() {
+                if should_fail_home_recreate_same_session(
+                    context.cleanup_settled,
+                    Some(context.previous_session_id.as_str()),
+                    &session_id,
+                ) {
+                    notify_startup_phase(
+                        observer,
+                        SessionStartupPhase::WaitingSessionReady,
+                        SessionStartupPhaseStatus::Failed,
+                        None,
+                    );
+                    return Err(SessionFlowError::message(format!(
+                        "homeRecreateReusedSession:sessionId={session_id};cleanupSettled={}",
+                        context.cleanup_settled
+                    )));
+                }
+            }
+            notify_startup_phase(
+                observer,
+                SessionStartupPhase::WaitingSessionReady,
+                SessionStartupPhaseStatus::Entered,
+                None,
+            );
 
-        Ok(SessionExecutionSnapshot {
-            session: started_session,
-            runtime,
-            render,
-        })
+            match self
+                .wait_until_session_started_or_failed(&session_id, &schedule)
+                .await
+            {
+                Ok(_) => {
+                    notify_startup_phase(
+                        observer,
+                        SessionStartupPhase::WaitingSessionReady,
+                        SessionStartupPhaseStatus::Succeeded,
+                        None,
+                    );
+
+                    let started_session = self
+                        .get_session(&session_id)
+                        .await
+                        .ok_or_else(|| missing_session_error(&session_id))?;
+
+                    return Ok(SessionExecutionSnapshot {
+                        session: started_session,
+                        runtime,
+                        render,
+                    });
+                }
+                Err(wait_error) => {
+                    let retry_probe = self.get_session_ready_retry_probe(&session_id).await;
+                    let retry_decision = decide_home_session_ready_recreate_retry(
+                        plan.session.target.is_home(),
+                        recreate_retry_count,
+                        &wait_error.message,
+                        retry_probe.phase,
+                        retry_probe.stream_state.as_deref(),
+                        retry_probe.error_code.as_deref(),
+                        retry_probe.error_message.as_deref(),
+                    );
+
+                    if let Some(decision) = retry_decision {
+                        match decision {
+                            SessionReadyRetryDecision::Retry(reason) => {
+                                log::warn!(
+                                    "home startup retry will recreate session after session-ready failure: target_id={} session_id={} retry_count={} reason={:?} phase={:?} stream_state={:?} wait_error={} progress_error={:?}",
+                                    plan.session.target_id,
+                                    session_id,
+                                    recreate_retry_count + 1,
+                                    reason,
+                                    retry_probe.phase,
+                                    retry_probe.stream_state,
+                                    wait_error,
+                                    retry_probe.error_message,
+                                );
+                                notify_startup_bounded_retry(
+                                    observer,
+                                    SessionStartupPhase::WaitingSessionReady,
+                                    SessionStartupBoundedRetrySnapshot {
+                                        reason: map_session_ready_retry_reason(reason),
+                                        status: SessionStartupBoundedRetryStatus::Retrying,
+                                        retry_count: recreate_retry_count.saturating_add(1),
+                                        retry_limit: HOME_SESSION_READY_RETRY_LIMIT,
+                                    },
+                                );
+                                self.cleanup_session_for_recreate(&session_id).await;
+                                let cleanup_settled = self
+                                    .wait_until_session_cleanup_settled(&plan, &session_id)
+                                    .await;
+                                // home 场景下 recreate 前补一次主机准备，给服务端重新注册留出机会。
+                                self.prepare_remote_console(&plan, observer).await?;
+                                recreate_context = Some(SessionRecreateContext {
+                                    previous_session_id: session_id,
+                                    cleanup_settled,
+                                });
+                                recreate_retry_count = recreate_retry_count.saturating_add(1);
+                                continue;
+                            }
+                            SessionReadyRetryDecision::Exhausted(reason) => {
+                                notify_startup_bounded_retry(
+                                    observer,
+                                    SessionStartupPhase::WaitingSessionReady,
+                                    SessionStartupBoundedRetrySnapshot {
+                                        reason: map_session_ready_retry_reason(reason),
+                                        status: SessionStartupBoundedRetryStatus::Exhausted,
+                                        retry_count: recreate_retry_count,
+                                        retry_limit: HOME_SESSION_READY_RETRY_LIMIT,
+                                    },
+                                );
+                                notify_startup_phase(
+                                    observer,
+                                    SessionStartupPhase::WaitingSessionReady,
+                                    SessionStartupPhaseStatus::Failed,
+                                    None,
+                                );
+                                return Err(build_home_session_ready_retry_exhausted_error(
+                                    &plan.session.target_id,
+                                    reason,
+                                    recreate_retry_count,
+                                    HOME_SESSION_READY_RETRY_LIMIT,
+                                    wait_error,
+                                ));
+                            }
+                        }
+                    }
+
+                    notify_startup_phase(
+                        observer,
+                        SessionStartupPhase::WaitingSessionReady,
+                        SessionStartupPhaseStatus::Failed,
+                        None,
+                    );
+                    return Err(wait_error);
+                }
+            }
+        }
     }
 
     pub async fn get_session(&self, session_id: &str) -> Option<S> {
@@ -557,30 +789,16 @@ where
             return Err(missing_session_error(session_id));
         };
         let plan = &record.plan;
-        let poll_interval_ms = plan.session.schedule.ice_poll_interval_ms.max(100);
         let api = self.create_signaling_api(plan).await?;
-        loop {
-            let response = api
-                .get_ice_exchange_response(session_id)
-                .await
-                .map_err(map_webapi_error)?;
-            let response = self
-                .filter_polled_ice_response(session_id, response, restart)
-                .await;
-            let session_exists = self.get_session_record(session_id).await.is_some();
-            let decision = decide_ice_poll(response.as_deref(), session_exists);
-
-            match (decision, response) {
-                (PollDecision::Completed, Some(candidates)) => return Ok(candidates),
-                (PollDecision::SessionMissing, _) => {
-                    return Err(missing_session_error(session_id));
-                }
-                (PollDecision::Continue, _) => {
-                    tokio::time::sleep(std::time::Duration::from_millis(poll_interval_ms)).await;
-                }
-                (PollDecision::Completed, None) => {}
-            }
-        }
+        let response = api
+            .get_ice_exchange_response(session_id)
+            .await
+            .map_err(map_webapi_error)?;
+        let response = self
+            .filter_polled_ice_response(session_id, response, restart)
+            .await;
+        let session_exists = self.get_session_record(session_id).await.is_some();
+        resolve_polled_ice_result(session_id, response, session_exists)
     }
 
     pub async fn send_keepalive(&self, session_id: &str) -> Result<bool, SessionFlowError> {
@@ -670,23 +888,28 @@ where
             SessionStartupPhaseStatus::Entered,
             None,
         );
-        self.wait_until_console_ready(&plan.session.target_id, &plan.session.schedule)
-            .await
-            .inspect(|_| {
-                notify_startup_phase(
-                    observer,
-                    SessionStartupPhase::WaitingConsoleReady,
-                    SessionStartupPhaseStatus::Succeeded,
-                    None,
-                )
-            })
+        let ready_reason = self
+            .wait_until_console_ready(
+                plan.session.target.as_str(),
+                &plan.session.target_id,
+                &plan.session.schedule,
+            )
+            .await?;
+        notify_startup_phase(
+            observer,
+            SessionStartupPhase::WaitingConsoleReady,
+            SessionStartupPhaseStatus::Succeeded,
+            Some(ready_reason),
+        );
+        Ok(())
     }
 
     async fn wait_until_console_ready(
         &self,
+        target_type: &str,
         target_id: &str,
         schedule: &crate::policy::session::SessionSchedulePlan,
-    ) -> Result<(), SessionFlowError> {
+    ) -> Result<&'static str, SessionFlowError> {
         let interval_ms = schedule.monitor_interval_ms.max(200);
         let started_at_ms = now_ms();
         let mut last_wake_attempt_at_ms = Some(started_at_ms);
@@ -699,11 +922,18 @@ where
                 .find(|console| matches_remote_console_id(target_id, console));
 
             if let Some(console) = matched {
-                if is_remote_console_ready(console) {
-                    return Ok(());
+                let now_ms = now_ms();
+                if let Some(reason) = remote_console_ready_reason(console) {
+                    self.inner.provider.on_console_ready_wait_result(
+                        target_type,
+                        target_id,
+                        "succeeded",
+                        reason,
+                        Some(console),
+                    );
+                    return Ok(reason);
                 }
 
-                let now_ms = now_ms();
                 let power_state = console.power_state.as_deref();
                 if should_retry_wake_during_ready_wait(power_state, last_wake_attempt_at_ms, now_ms)
                 {
@@ -754,9 +984,14 @@ where
 
             let elapsed_ms = now_ms().saturating_sub(started_at_ms);
             if elapsed_ms >= schedule.ready_timeout_ms {
-                return Err(SessionFlowError::message(format!(
-                    "remoteConsoleNotReady:targetId={target_id}"
-                )));
+                self.inner.provider.on_console_ready_wait_result(
+                    target_type,
+                    target_id,
+                    "failed",
+                    "timeout",
+                    matched,
+                );
+                return Err(remote_console_not_ready_error(target_id));
             }
 
             tokio::time::sleep(std::time::Duration::from_millis(interval_ms)).await;
@@ -806,7 +1041,11 @@ where
                     // xHome 主机可能已经开机，但串流服务尚未重新注册；
                     // 在重试前补一次 ready 轮询，避免直接对 XCCS 打无效重试风暴。
                     if let Err(wait_error) = self
-                        .wait_until_console_ready(&plan.session.target_id, &plan.session.schedule)
+                        .wait_until_console_ready(
+                            plan.session.target.as_str(),
+                            &plan.session.target_id,
+                            &plan.session.schedule,
+                        )
                         .await
                     {
                         log::warn!(
@@ -834,8 +1073,10 @@ where
         let timeout_with_grace_ms = schedule.startup_timeout_ms.saturating_add(interval_ms);
         let session_id_owned = session_id.to_string();
         let last_recovery_signal_at_ms = Arc::new(Mutex::new(now_ms()));
+        let home_registration_wait_started_at_ms = Arc::new(Mutex::new(None::<u64>));
         let session_id_for_check = session_id_owned.clone();
         let recovery_signal_for_check = Arc::clone(&last_recovery_signal_at_ms);
+        let home_registration_wait_for_check = Arc::clone(&home_registration_wait_started_at_ms);
 
         wait_until(
             interval_ms,
@@ -843,13 +1084,34 @@ where
             move || {
                 let session_id_for_check = session_id_for_check.clone();
                 let recovery_signal_for_check = Arc::clone(&recovery_signal_for_check);
+                let home_registration_wait_for_check = Arc::clone(&home_registration_wait_for_check);
                 async move {
-                let progress = self
-                    .get_session_progress(&session_id_for_check)
+                let record = self
+                    .get_session_record(&session_id_for_check)
                     .await
                     .ok_or_else(|| missing_session_error(&session_id_for_check))?;
+                let runtime = record.snapshot.runtime_snapshot();
+                let is_home = record.plan.session.target.is_home();
+                let target_id = record.plan.session.target_id.clone();
+                let progress = build_session_progress_snapshot(record);
 
                 let now_ms = now_ms();
+                let mut home_registration_wait_started_at_ms =
+                    home_registration_wait_for_check.lock().map_err(|_| {
+                        SessionFlowError::message(
+                            "startupWaitRegistrationStateLockFailed:sessionFlowClosedGuard",
+                        )
+                    })?;
+                if let Some(error) = evaluate_home_server_registration_wait_timeout(
+                    is_home,
+                    &target_id,
+                    &session_id_for_check,
+                    &runtime,
+                    now_ms,
+                    &mut home_registration_wait_started_at_ms,
+                ) {
+                    return Err(error);
+                }
                 let mut last_recovery_signal_at_ms =
                     recovery_signal_for_check.lock().map_err(|_| {
                         SessionFlowError::message(
@@ -888,9 +1150,7 @@ where
             }
             },
             || {
-                SessionFlowError::message(format!(
-                    "streamingStartTimeout:sessionId={session_id_owned}"
-                ))
+                startup_timeout_error(&session_id_owned)
             },
         )
         .await
@@ -904,6 +1164,106 @@ where
     async fn clear_session(&self, session_id: &str) {
         let _ = self.inner.sessions.write().await.remove(session_id);
         let _ = self.inner.signaling.write().await.remove(session_id);
+    }
+
+    async fn cleanup_session_for_recreate(&self, session_id: &str) {
+        if let Err(error) = self.close_session(session_id).await {
+            log::warn!(
+                "best-effort startup retry cleanup failed, continuing with recreate: session_id={} error={}",
+                session_id,
+                error,
+            );
+        }
+        self.clear_session(session_id).await;
+    }
+
+    async fn wait_until_session_cleanup_settled(&self, plan: &Plan, session_id: &str) -> bool {
+        let target_type = plan.session.target.as_str().to_string();
+        let target_id = plan.session.target_id.clone();
+        let api = match self.create_session_api(plan).await {
+            Ok(api) => api,
+            Err(error) => {
+                self.inner.provider.on_session_recreate_cleanup_result(
+                    session_id,
+                    &target_type,
+                    &target_id,
+                    "createApiFailed",
+                    None,
+                    Some(&error),
+                );
+                return false;
+            }
+        };
+
+        let started_at_ms = now_ms();
+        let mut last_state: Option<String> = None;
+        let mut last_error: Option<SessionFlowError> = None;
+
+        loop {
+            match api.get_stream_state(session_id).await {
+                Ok((state, _)) => {
+                    last_state = state.clone();
+                    if is_session_cleanup_terminal_state(state.as_deref()) {
+                        self.inner.provider.on_session_recreate_cleanup_result(
+                            session_id,
+                            &target_type,
+                            &target_id,
+                            "settled",
+                            last_state.as_deref(),
+                            None,
+                        );
+                        return true;
+                    }
+                }
+                Err(error) => {
+                    let flow_error = map_webapi_error(error);
+                    if flow_error.status == Some(404) {
+                        self.inner.provider.on_session_recreate_cleanup_result(
+                            session_id,
+                            &target_type,
+                            &target_id,
+                            "notFound",
+                            last_state.as_deref(),
+                            None,
+                        );
+                        return true;
+                    }
+                    last_error = Some(flow_error);
+                }
+            }
+
+            if now_ms().saturating_sub(started_at_ms) >= HOME_RECREATE_CLEANUP_SETTLE_MS {
+                self.inner.provider.on_session_recreate_cleanup_result(
+                    session_id,
+                    &target_type,
+                    &target_id,
+                    "timeout",
+                    last_state.as_deref(),
+                    last_error.as_ref(),
+                );
+                return false;
+            }
+
+            tokio::time::sleep(std::time::Duration::from_millis(
+                HOME_RECREATE_CLEANUP_POLL_MS,
+            ))
+            .await;
+        }
+    }
+
+    async fn get_session_ready_retry_probe(&self, session_id: &str) -> SessionReadyRetryProbe {
+        let Some(record) = self.get_session_record(session_id).await else {
+            return SessionReadyRetryProbe::default();
+        };
+        let runtime = record.snapshot.runtime_snapshot();
+        let progress = build_session_progress_snapshot(record);
+
+        SessionReadyRetryProbe {
+            phase: Some(progress.phase),
+            stream_state: runtime.stream_state,
+            error_code: progress.error_code,
+            error_message: progress.error_message,
+        }
     }
 
     async fn create_session_api(
@@ -1016,19 +1376,23 @@ pub(crate) fn build_session_progress_snapshot<S: SessionFlowSnapshot>(
         .and_then(|queue| queue.details.estimated_total_wait_time_in_seconds);
     let queue = runtime.queue.as_ref().map(|queue| queue.details.clone());
 
+    let error_code = runtime
+        .error_details
+        .as_ref()
+        .and_then(|details| stringify_error_code(details.code.as_ref()));
+    let error_message = runtime.error_details.and_then(|details| details.message);
+    let error_hint =
+        build_session_progress_error_hint(phase, error_code.as_deref(), error_message.as_deref());
+
     SessionProgressSnapshot {
         session_id: record.snapshot.session_id().to_string(),
         phase,
         status_text_key: default_status_text_key(phase).to_string(),
-        // 当前尚无独立重试计数器，M1 先占位为 0，后续由 orchestrator 接管。
-        retry_count: 0,
         queue_seconds,
         queue,
-        error_code: runtime
-            .error_details
-            .as_ref()
-            .and_then(|details| stringify_error_code(details.code.as_ref())),
-        error_message: runtime.error_details.and_then(|details| details.message),
+        error_code,
+        error_message,
+        error_hint,
     }
 }
 
@@ -1071,13 +1435,128 @@ fn stringify_error_code(value: Option<&Value>) -> Option<String> {
     }
 }
 
+fn build_session_progress_error_hint(
+    phase: SessionPhase,
+    error_code: Option<&str>,
+    error_message: Option<&str>,
+) -> Option<SessionFlowStartupErrorHint> {
+    let primary_signal = error_message
+        .filter(|value| !value.trim().is_empty())
+        .or_else(|| error_code.filter(|value| !value.trim().is_empty()))?;
+    let kind = classify_session_progress_error_kind(phase, primary_signal);
+
+    Some(SessionFlowStartupErrorHint {
+        kind: kind.clone(),
+        retryable: is_session_progress_error_retryable(&kind),
+        diagnostic_summary: build_session_progress_diagnostic_summary(
+            phase,
+            kind,
+            error_code,
+            error_message,
+        ),
+    })
+}
+
+fn classify_session_progress_error_kind(
+    phase: SessionPhase,
+    primary_signal: &str,
+) -> SessionFlowStartupErrorKind {
+    let normalized = primary_signal.to_ascii_lowercase();
+    if is_server_registration_retry_signal(primary_signal) {
+        return SessionFlowStartupErrorKind::HostRegistrationRetryExhausted;
+    }
+    if normalized.contains("remoteconsolenotready") {
+        return SessionFlowStartupErrorKind::ConsoleReady;
+    }
+    if normalized.contains("streamingstarttimeout") {
+        return SessionFlowStartupErrorKind::SessionReady;
+    }
+    if normalized.contains("targetmissing") {
+        return SessionFlowStartupErrorKind::Target;
+    }
+    if normalized.contains("unauthorized")
+        || normalized.contains("forbidden")
+        || normalized.contains("authentication")
+        || normalized.contains("auth")
+    {
+        return SessionFlowStartupErrorKind::Auth;
+    }
+    if normalized.contains("network")
+        || normalized.contains("reconnect")
+        || normalized.contains("recover")
+    {
+        return SessionFlowStartupErrorKind::Network;
+    }
+
+    match phase {
+        SessionPhase::Failed | SessionPhase::Closed | SessionPhase::Recovering => {
+            SessionFlowStartupErrorKind::Runtime
+        }
+        _ => SessionFlowStartupErrorKind::Unknown,
+    }
+}
+
+fn is_session_progress_error_retryable(kind: &SessionFlowStartupErrorKind) -> bool {
+    matches!(
+        kind,
+        SessionFlowStartupErrorKind::ConsoleReady
+            | SessionFlowStartupErrorKind::SessionCreate
+            | SessionFlowStartupErrorKind::SessionReady
+            | SessionFlowStartupErrorKind::Runtime
+            | SessionFlowStartupErrorKind::Network
+    )
+}
+
+fn build_session_progress_diagnostic_summary(
+    phase: SessionPhase,
+    kind: SessionFlowStartupErrorKind,
+    error_code: Option<&str>,
+    error_message: Option<&str>,
+) -> String {
+    let error_code = error_code.unwrap_or("none");
+    let error_message = error_message.unwrap_or("none");
+    let hint = match kind {
+        SessionFlowStartupErrorKind::ConsoleReady => "remoteConsoleNotReady",
+        SessionFlowStartupErrorKind::SessionReady => "streamingStartTimeout",
+        SessionFlowStartupErrorKind::HostRegistrationRetryExhausted => {
+            "hostRegistrationRetryExhausted"
+        }
+        SessionFlowStartupErrorKind::HostRemotePlayUnavailable => "hostRemotePlayUnavailable",
+        SessionFlowStartupErrorKind::Wake => "wakeFailed",
+        SessionFlowStartupErrorKind::SessionCreate => "sessionCreateFailed",
+        SessionFlowStartupErrorKind::Runtime => "runtimeFailed",
+        SessionFlowStartupErrorKind::Network => "networkFailed",
+        SessionFlowStartupErrorKind::Auth => "authFailed",
+        SessionFlowStartupErrorKind::Target => "targetMissing",
+        SessionFlowStartupErrorKind::Unknown => "unknown",
+    };
+    format!("phase={phase:?}; errorCode={error_code}; errorMessage={error_message}; hint={hint}")
+}
+
 fn matches_remote_console_id(target_id: &str, console: &RemoteConsoleSnapshot) -> bool {
     console.server_id.as_deref() == Some(target_id)
         || console.id.as_deref() == Some(target_id)
         || console.device_id.as_deref() == Some(target_id)
 }
 
+#[cfg(test)]
 fn is_remote_console_ready(console: &RemoteConsoleSnapshot) -> bool {
+    remote_console_ready_reason(console).is_some()
+}
+
+fn remote_console_ready_reason(console: &RemoteConsoleSnapshot) -> Option<&'static str> {
+    if !is_remote_console_power_ready(console) {
+        return None;
+    }
+
+    if console.remote_management_enabled == Some(true) {
+        return Some("explicitRegistration");
+    }
+
+    None
+}
+
+fn is_remote_console_power_ready(console: &RemoteConsoleSnapshot) -> bool {
     console.power_state.as_deref() == Some("On") && console.console_streaming_enabled != Some(false)
 }
 
@@ -1087,9 +1566,17 @@ fn remote_console_wake_circuit_open_error(
     wake_failure_count: u8,
 ) -> SessionFlowError {
     let power_state = power_state.unwrap_or("unknown");
+    let diagnostic_summary = format!(
+        "targetId={target_id}; powerState={power_state}; wakeFailureCount={wake_failure_count}; hint=hostRemotePlayUnavailable"
+    );
     SessionFlowError::message(format!(
         "remoteConsoleWakeCircuitOpen:targetId={target_id};powerState={power_state};wakeFailureCount={wake_failure_count}"
     ))
+    .with_startup_hint(SessionFlowStartupErrorHint {
+        kind: SessionFlowStartupErrorKind::HostRemotePlayUnavailable,
+        retryable: false,
+        diagnostic_summary,
+    })
 }
 
 #[cfg(test)]
@@ -1114,11 +1601,42 @@ fn should_retry_wake_during_ready_wait(
     elapsed_since_last_wake_ms >= 5_000
 }
 
+fn is_session_cleanup_terminal_state(state: Option<&str>) -> bool {
+    matches!(state, Some("Closed") | Some("Failed"))
+}
+
+fn should_fail_home_recreate_same_session(
+    cleanup_settled: bool,
+    previous_session_id: Option<&str>,
+    next_session_id: &str,
+) -> bool {
+    !cleanup_settled && previous_session_id == Some(next_session_id)
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum StartupProgressAction {
     Ready,
     Continue { transient_closed: bool },
     Fail(String),
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+struct SessionReadyRetryProbe {
+    phase: Option<SessionPhase>,
+    stream_state: Option<String>,
+    error_code: Option<String>,
+    error_message: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SessionReadyRetryDecision {
+    Retry(SessionReadyRecreateRetryReason),
+    Exhausted(SessionReadyRecreateRetryReason),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SessionReadyRecreateRetryReason {
+    WaitingForServerRegistration,
 }
 
 fn startup_closed_recovery_grace_ms(interval_ms: u64) -> u64 {
@@ -1206,6 +1724,84 @@ fn notify_startup_phase<O>(
     }
 }
 
+fn notify_startup_bounded_retry<O>(
+    observer: Option<&O>,
+    phase: SessionStartupPhase,
+    bounded_retry: SessionStartupBoundedRetrySnapshot,
+) where
+    O: SessionStartupObserver,
+{
+    if let Some(observer) = observer {
+        observer.on_bounded_retry(phase, &bounded_retry);
+    }
+}
+
+fn remote_console_not_ready_error(target_id: &str) -> SessionFlowError {
+    let diagnostic_summary = format!("targetId={target_id}; hint=remoteConsoleNotReady");
+    SessionFlowError::message(format!("remoteConsoleNotReady:targetId={target_id}"))
+        .with_startup_hint(SessionFlowStartupErrorHint {
+            kind: SessionFlowStartupErrorKind::ConsoleReady,
+            retryable: true,
+            diagnostic_summary,
+        })
+}
+
+fn startup_timeout_error(session_id: &str) -> SessionFlowError {
+    let diagnostic_summary = format!("sessionId={session_id}; hint=streamingStartTimeout");
+    SessionFlowError::message(format!("streamingStartTimeout:sessionId={session_id}"))
+        .with_startup_hint(SessionFlowStartupErrorHint {
+            kind: SessionFlowStartupErrorKind::SessionReady,
+            retryable: true,
+            diagnostic_summary,
+        })
+}
+
+fn home_server_registration_timeout_error(
+    target_id: &str,
+    session_id: &str,
+    elapsed_ms: u64,
+) -> SessionFlowError {
+    let diagnostic_summary = format!(
+        "targetId={target_id}; sessionId={session_id}; reason=waitingForServerRegistration; elapsedMs={elapsed_ms}; hint=hostRegistrationRetryExhausted"
+    );
+    SessionFlowError::message(format!(
+        "homeServerRegistrationTimeout:targetId={target_id};sessionId={session_id};reason=waitingForServerRegistration;elapsedMs={elapsed_ms}"
+    ))
+    .with_startup_hint(SessionFlowStartupErrorHint {
+        kind: SessionFlowStartupErrorKind::HostRegistrationRetryExhausted,
+        retryable: false,
+        diagnostic_summary,
+    })
+}
+
+fn evaluate_home_server_registration_wait_timeout(
+    is_home: bool,
+    target_id: &str,
+    session_id: &str,
+    runtime: &crate::session::monitor::SessionRuntimeSnapshot,
+    now_ms: u64,
+    wait_started_at_ms: &mut Option<u64>,
+) -> Option<SessionFlowError> {
+    let is_provisioning_pending =
+        runtime.player_state == "pending" && runtime.stream_state.as_deref() == Some("Provisioning");
+    if !is_home || !is_provisioning_pending {
+        *wait_started_at_ms = None;
+        return None;
+    }
+
+    let started_at_ms = wait_started_at_ms.get_or_insert(now_ms);
+    let elapsed_ms = now_ms.saturating_sub(*started_at_ms);
+    if elapsed_ms < HOME_SERVER_REGISTRATION_WAIT_TIMEOUT_MS {
+        return None;
+    }
+
+    Some(home_server_registration_timeout_error(
+        target_id,
+        session_id,
+        elapsed_ms,
+    ))
+}
+
 fn should_retry_home_server_registration(
     plan: &Plan,
     error: &xbox_webapi::WebApiError,
@@ -1217,6 +1813,91 @@ fn should_retry_home_server_registration(
         && is_waiting_for_server_registration_error(error)
 }
 
+fn decide_home_session_ready_recreate_retry(
+    is_home: bool,
+    retry_count: u8,
+    wait_error_message: &str,
+    latest_phase: Option<SessionPhase>,
+    latest_stream_state: Option<&str>,
+    latest_error_code: Option<&str>,
+    latest_error_message: Option<&str>,
+) -> Option<SessionReadyRetryDecision> {
+    if !is_home {
+        return None;
+    }
+
+    if !matches!(latest_stream_state, Some("Provisioning") | Some("Failed")) {
+        return None;
+    }
+
+    if !matches!(
+        latest_phase,
+        Some(SessionPhase::WaitingSessionReady) | Some(SessionPhase::Failed)
+    ) {
+        return None;
+    }
+
+    // 对齐 XStreamingDesktop：Provisioning 本身只继续轮询，不再因为本地超时或卡点推断而主动 recreate。
+    // 这里仅保留“服务端尚未完成注册”的显式错误分支，避免把本来会继续推进的 session 提前打断。
+    // 同时允许该错误落在最终 Failed 终态，覆盖 wake 后第一次 create 最终以 ServerNeverRegistered 收敛、
+    // 但稍后手动重试即可成功的场景。
+    if is_server_registration_retry_signal(wait_error_message)
+        || latest_error_code.is_some_and(is_server_registration_retry_signal)
+        || latest_error_message.is_some_and(is_server_registration_retry_signal)
+    {
+        let reason = SessionReadyRecreateRetryReason::WaitingForServerRegistration;
+        if retry_count < HOME_SESSION_READY_RETRY_LIMIT {
+            return Some(SessionReadyRetryDecision::Retry(reason));
+        }
+        return Some(SessionReadyRetryDecision::Exhausted(reason));
+    }
+
+    None
+}
+
+fn map_session_ready_retry_reason(
+    reason: SessionReadyRecreateRetryReason,
+) -> SessionStartupBoundedRetryReason {
+    match reason {
+        SessionReadyRecreateRetryReason::WaitingForServerRegistration => {
+            SessionStartupBoundedRetryReason::WaitingForServerRegistration
+        }
+    }
+}
+
+fn session_ready_retry_reason_code(reason: SessionReadyRecreateRetryReason) -> &'static str {
+    match reason {
+        SessionReadyRecreateRetryReason::WaitingForServerRegistration => {
+            "waitingForServerRegistration"
+        }
+    }
+}
+
+fn build_home_session_ready_retry_exhausted_error(
+    target_id: &str,
+    reason: SessionReadyRecreateRetryReason,
+    retry_count: u8,
+    retry_limit: u8,
+    source: SessionFlowError,
+) -> SessionFlowError {
+    SessionFlowError {
+        message: format!(
+            "homeSessionBoundedRetryExhausted:targetId={target_id};reason={};retryCount={retry_count};retryLimit={retry_limit}",
+            session_ready_retry_reason_code(reason)
+        ),
+        status: source.status,
+        body: source.body.or(Some(source.message)),
+        startup_hint: Some(SessionFlowStartupErrorHint {
+            kind: SessionFlowStartupErrorKind::HostRegistrationRetryExhausted,
+            retryable: false,
+            diagnostic_summary: format!(
+                "targetId={target_id}; reason={}; retryCount={retry_count}; retryLimit={retry_limit}; hint=hostRegistrationRetryExhausted",
+                session_ready_retry_reason_code(reason)
+            ),
+        }),
+    }
+}
+
 fn next_retry_backoff_ms(retry_backoff_ms: &[u64], attempt: usize) -> u64 {
     retry_backoff_ms
         .get(attempt)
@@ -1225,8 +1906,26 @@ fn next_retry_backoff_ms(retry_backoff_ms: &[u64], attempt: usize) -> u64 {
         .unwrap_or(1_000)
 }
 
+fn resolve_polled_ice_result(
+    session_id: &str,
+    response: Option<Vec<IceCandidate>>,
+    session_exists: bool,
+) -> Result<Vec<IceCandidate>, SessionFlowError> {
+    match decide_ice_poll(response.as_deref(), session_exists) {
+        PollDecision::SessionMissing => Err(missing_session_error(session_id)),
+        // ICE 轮询节奏由 runtime 控制，这里只做单次快照读取，避免把上层阶段机阻塞在服务层。
+        PollDecision::Completed | PollDecision::Continue => Ok(response.unwrap_or_default()),
+    }
+}
+
 fn is_waiting_for_server_registration_error(error: &xbox_webapi::WebApiError) -> bool {
-    is_waiting_for_server_registration_message(&error.to_string())
+    is_server_registration_retry_signal(&error.to_string())
+}
+
+fn is_server_registration_retry_signal(message: &str) -> bool {
+    let normalized = message.to_ascii_lowercase();
+    normalized.contains("serverneverregistered")
+        || is_waiting_for_server_registration_message(message)
 }
 
 fn is_waiting_for_server_registration_message(message: &str) -> bool {
@@ -1466,11 +2165,40 @@ mod tests {
     }
 
     #[test]
+    fn server_never_registered_message_is_treated_as_registration_signal() {
+        assert!(is_server_registration_retry_signal("ServerNeverRegistered"));
+        assert!(!is_server_registration_retry_signal(
+            "streamingStartTimeout:sessionId=session-1"
+        ));
+    }
+
+    #[test]
     fn retry_backoff_reuses_last_entry_after_sequence_is_exhausted() {
         assert_eq!(next_retry_backoff_ms(&[1_000, 3_000, 5_000], 0), 1_000);
         assert_eq!(next_retry_backoff_ms(&[1_000, 3_000, 5_000], 2), 5_000);
         assert_eq!(next_retry_backoff_ms(&[1_000, 3_000, 5_000], 6), 5_000);
         assert_eq!(next_retry_backoff_ms(&[], 0), 1_000);
+    }
+
+    #[test]
+    fn poll_ice_returns_end_of_candidates_batch_without_blocking() {
+        let end_of_candidates = vec![IceCandidate {
+            candidate: "a=end-of-candidates".to_string(),
+            ..Default::default()
+        }];
+
+        let result = resolve_polled_ice_result("session-1", Some(end_of_candidates.clone()), true)
+            .expect("eoc batch should be returned");
+
+        assert_eq!(result, end_of_candidates);
+    }
+
+    #[test]
+    fn poll_ice_returns_empty_for_duplicate_snapshot() {
+        let result = resolve_polled_ice_result("session-1", None, true)
+            .expect("duplicate snapshot should collapse to empty batch");
+
+        assert!(result.is_empty());
     }
 
     #[test]
@@ -1494,13 +2222,98 @@ mod tests {
     }
 
     #[test]
+    fn remote_console_ready_requires_registration_signal_after_wake() {
+        let console = RemoteConsoleSnapshot {
+            power_state: Some("On".to_string()),
+            console_streaming_enabled: Some(true),
+            ..Default::default()
+        };
+
+        assert!(is_remote_console_power_ready(&console));
+        assert!(!is_remote_console_ready(&console));
+    }
+
+    #[test]
+    fn remote_console_ready_signal_reason_prefers_remote_management() {
+        let console = RemoteConsoleSnapshot {
+            power_state: Some("On".to_string()),
+            remote_management_enabled: Some(true),
+            console_streaming_enabled: Some(true),
+            console_addrs_count: 1,
+            ..Default::default()
+        };
+
+        assert!(is_remote_console_ready(&console));
+        assert_eq!(
+            remote_console_ready_reason(&console),
+            Some("explicitRegistration")
+        );
+    }
+
+    #[test]
+    fn remote_console_ready_signal_reason_rejects_console_addrs_without_registration() {
+        let console = RemoteConsoleSnapshot {
+            power_state: Some("On".to_string()),
+            console_streaming_enabled: Some(true),
+            console_addrs_count: 1,
+            ..Default::default()
+        };
+
+        assert!(!is_remote_console_ready(&console));
+        assert_eq!(remote_console_ready_reason(&console), None);
+    }
+
+    #[test]
+    fn remote_console_ready_reason_requires_explicit_registration_signal() {
+        let console = RemoteConsoleSnapshot {
+            power_state: Some("On".to_string()),
+            console_streaming_enabled: Some(true),
+            ..Default::default()
+        };
+
+        assert_eq!(remote_console_ready_reason(&console), None);
+    }
+
+    #[test]
     fn remote_console_wake_circuit_open_message_is_detected() {
         let error =
             remote_console_wake_circuit_open_error("console-1", Some("ConnectedStandby"), 3);
         assert!(is_remote_console_wake_circuit_open_message(&error.message));
+        assert_eq!(
+            error.startup_hint.as_ref().map(|hint| hint.kind.clone()),
+            Some(SessionFlowStartupErrorKind::HostRemotePlayUnavailable)
+        );
         assert!(!is_remote_console_wake_circuit_open_message(
             "remoteConsoleNotReady:targetId=console-1"
         ));
+    }
+
+    #[test]
+    fn remote_console_not_ready_error_carries_structured_hint() {
+        let error = remote_console_not_ready_error("console-1");
+
+        assert_eq!(
+            error.startup_hint.as_ref().map(|hint| hint.kind.clone()),
+            Some(SessionFlowStartupErrorKind::ConsoleReady)
+        );
+        assert!(error
+            .startup_hint
+            .as_ref()
+            .is_some_and(|hint| hint.retryable));
+    }
+
+    #[test]
+    fn startup_timeout_error_carries_structured_hint() {
+        let error = startup_timeout_error("session-1");
+
+        assert_eq!(
+            error.startup_hint.as_ref().map(|hint| hint.kind.clone()),
+            Some(SessionFlowStartupErrorKind::SessionReady)
+        );
+        assert!(error
+            .startup_hint
+            .as_ref()
+            .is_some_and(|hint| hint.retryable));
     }
 
     fn startup_progress(
@@ -1511,12 +2324,76 @@ mod tests {
             session_id: "session-1".to_string(),
             phase,
             status_text_key: "key".to_string(),
-            retry_count: 0,
             queue_seconds: None,
             queue: None,
             error_code: None,
             error_message: error_message.map(str::to_string),
+            error_hint: build_session_progress_error_hint(phase, None, error_message),
         }
+    }
+
+    #[test]
+    fn failed_progress_server_registration_signal_carries_structured_hint() {
+        let progress = SessionProgressSnapshot {
+            session_id: "session-1".to_string(),
+            phase: SessionPhase::Failed,
+            status_text_key: "key".to_string(),
+            queue_seconds: None,
+            queue: None,
+            error_code: Some("ServerNeverRegistered".to_string()),
+            error_message: Some(
+                "Agent : ServerNeverRegistered : Server never registered with service : State WaitingForServerToRegister"
+                    .to_string(),
+            ),
+            error_hint: build_session_progress_error_hint(
+                SessionPhase::Failed,
+                Some("ServerNeverRegistered"),
+                Some(
+                    "Agent : ServerNeverRegistered : Server never registered with service : State WaitingForServerToRegister",
+                ),
+            ),
+        };
+
+        assert_eq!(
+            progress.error_hint.as_ref().map(|hint| hint.kind.clone()),
+            Some(SessionFlowStartupErrorKind::HostRegistrationRetryExhausted)
+        );
+        assert!(progress
+            .error_hint
+            .as_ref()
+            .is_some_and(|hint| !hint.retryable));
+    }
+
+    #[test]
+    fn failed_progress_unknown_error_defaults_to_runtime_hint() {
+        let progress = startup_progress(SessionPhase::Failed, Some("decoder pipeline stalled"));
+        assert_eq!(
+            progress.error_hint.as_ref().map(|hint| hint.kind.clone()),
+            Some(SessionFlowStartupErrorKind::Runtime)
+        );
+        assert!(progress
+            .error_hint
+            .as_ref()
+            .is_some_and(|hint| hint.retryable));
+    }
+
+    #[test]
+    fn progress_without_error_has_no_structured_hint() {
+        let progress = startup_progress(SessionPhase::WaitingSessionReady, None);
+        assert_eq!(progress.error_hint, None);
+    }
+
+    #[test]
+    fn recovering_progress_network_signal_maps_network_hint() {
+        let progress = startup_progress(SessionPhase::Recovering, Some("networkLost reconnecting"));
+        assert_eq!(
+            progress.error_hint.as_ref().map(|hint| hint.kind.clone()),
+            Some(SessionFlowStartupErrorKind::Network)
+        );
+        assert!(progress
+            .error_hint
+            .as_ref()
+            .is_some_and(|hint| hint.retryable));
     }
 
     #[test]
@@ -1592,6 +2469,287 @@ mod tests {
             StartupProgressAction::Continue {
                 transient_closed: true
             }
+        );
+    }
+
+    #[test]
+    fn home_provisioning_startup_timeout_no_longer_triggers_recreate() {
+        assert_eq!(
+            decide_home_session_ready_recreate_retry(
+                true,
+                0,
+                "streamingStartTimeout:sessionId=session-1",
+                Some(SessionPhase::WaitingSessionReady),
+                Some("Provisioning"),
+                None,
+                None,
+            ),
+            None
+        );
+    }
+
+    #[test]
+    fn home_provisioning_stall_timeout_no_longer_triggers_recreate() {
+        assert_eq!(
+            decide_home_session_ready_recreate_retry(
+                true,
+                0,
+                "homeProvisioningStallTimeout:sessionId=session-1;elapsedMs=10000",
+                Some(SessionPhase::WaitingSessionReady),
+                Some("Provisioning"),
+                None,
+                None,
+            ),
+            None
+        );
+    }
+
+    #[test]
+    fn failed_server_never_registered_error_code_is_exhausted_immediately() {
+        assert_eq!(
+            decide_home_session_ready_recreate_retry(
+                true,
+                0,
+                "streamingStartFailed",
+                Some(SessionPhase::Failed),
+                Some("Failed"),
+                Some("ServerNeverRegistered"),
+                None,
+            ),
+            Some(SessionReadyRetryDecision::Exhausted(
+                SessionReadyRecreateRetryReason::WaitingForServerRegistration,
+            ))
+        );
+    }
+
+    #[test]
+    fn failed_server_registration_error_is_exhausted_immediately() {
+        assert_eq!(
+            decide_home_session_ready_recreate_retry(
+                true,
+                0,
+                "Agent : ServerNeverRegistered : Server never registered with service : State WaitingForServerToRegister",
+                Some(SessionPhase::Failed),
+                Some("Failed"),
+                None,
+                Some(
+                    "Agent : ServerNeverRegistered : Server never registered with service : State WaitingForServerToRegister",
+                ),
+            ),
+            Some(SessionReadyRetryDecision::Exhausted(
+                SessionReadyRecreateRetryReason::WaitingForServerRegistration,
+            ))
+        );
+    }
+
+    #[test]
+    fn waiting_for_server_registration_retry_signal_is_exhausted_bounded_retry() {
+        assert_eq!(
+            decide_home_session_ready_recreate_retry(
+                true,
+                0,
+                "HTTP 500: Xccs : ErrorCallingWNS : Send command failed : State WaitingForServerToRegister",
+                Some(SessionPhase::WaitingSessionReady),
+                Some("Provisioning"),
+                Some("ServerNeverRegistered"),
+                Some("ServerNeverRegistered"),
+            ),
+            Some(SessionReadyRetryDecision::Exhausted(
+                SessionReadyRecreateRetryReason::WaitingForServerRegistration,
+            ))
+        );
+    }
+
+    #[test]
+    fn cleanup_terminal_state_only_accepts_closed_or_failed() {
+        assert!(is_session_cleanup_terminal_state(Some("Closed")));
+        assert!(is_session_cleanup_terminal_state(Some("Failed")));
+        assert!(!is_session_cleanup_terminal_state(Some("Provisioning")));
+        assert!(!is_session_cleanup_terminal_state(Some("ReadyToConnect")));
+        assert!(!is_session_cleanup_terminal_state(None));
+    }
+
+    #[test]
+    fn recreate_reused_session_only_fails_when_cleanup_did_not_settle() {
+        assert!(should_fail_home_recreate_same_session(
+            false,
+            Some("session-1"),
+            "session-1",
+        ));
+        assert!(!should_fail_home_recreate_same_session(
+            true,
+            Some("session-1"),
+            "session-1",
+        ));
+        assert!(!should_fail_home_recreate_same_session(
+            false,
+            Some("session-1"),
+            "session-2",
+        ));
+        assert!(!should_fail_home_recreate_same_session(
+            false,
+            None,
+            "session-1",
+        ));
+    }
+
+    #[test]
+    fn non_home_provisioning_timeout_is_not_retryable() {
+        assert_eq!(
+            decide_home_session_ready_recreate_retry(
+                false,
+                0,
+                "streamingStartTimeout:sessionId=session-1",
+                Some(SessionPhase::WaitingSessionReady),
+                Some("Provisioning"),
+                None,
+                None,
+            ),
+            None
+        );
+    }
+
+    #[test]
+    fn non_provisioning_state_is_not_retryable() {
+        assert_eq!(
+            decide_home_session_ready_recreate_retry(
+                true,
+                0,
+                "streamingStartTimeout:sessionId=session-1",
+                Some(SessionPhase::WaitingSessionReady),
+                Some("ReadyToConnect"),
+                None,
+                None,
+            ),
+            None
+        );
+    }
+
+    #[test]
+    fn home_waiting_for_server_registration_is_exhausted_in_provisioning() {
+        assert_eq!(
+            decide_home_session_ready_recreate_retry(
+                true,
+                0,
+                "HTTP 500: Xccs : ErrorCallingWNS : Send command failed : State WaitingForServerToRegister",
+                Some(SessionPhase::Failed),
+                Some("Provisioning"),
+                Some("ServerNeverRegistered"),
+                Some("ServerNeverRegistered"),
+            ),
+            Some(SessionReadyRetryDecision::Exhausted(
+                SessionReadyRecreateRetryReason::WaitingForServerRegistration,
+            ))
+        );
+    }
+
+    #[test]
+    fn home_server_registration_wait_timeout_only_triggers_after_threshold() {
+        let runtime = SessionRuntimeSnapshot {
+            stream_state: Some("Provisioning".to_string()),
+            player_state: "pending".to_string(),
+            queue: None,
+            error_details: None,
+        };
+        let mut wait_started_at_ms = None;
+
+        assert_eq!(
+            evaluate_home_server_registration_wait_timeout(
+                true,
+                "console-1",
+                "session-1",
+                &runtime,
+                10_000,
+                &mut wait_started_at_ms,
+            ),
+            None
+        );
+        assert_eq!(wait_started_at_ms, Some(10_000));
+
+        let error = evaluate_home_server_registration_wait_timeout(
+            true,
+            "console-1",
+            "session-1",
+            &runtime,
+            40_000,
+            &mut wait_started_at_ms,
+        )
+        .expect("home provisioning wait should stop after threshold");
+        assert!(error.message.contains("homeServerRegistrationTimeout"));
+        assert_eq!(
+            error.startup_hint.as_ref().map(|hint| hint.kind.clone()),
+            Some(SessionFlowStartupErrorKind::HostRegistrationRetryExhausted)
+        );
+        assert!(error
+            .startup_hint
+            .as_ref()
+            .is_some_and(|hint| !hint.retryable));
+    }
+
+    #[test]
+    fn home_server_registration_wait_timeout_resets_after_state_progresses() {
+        let provisioning_runtime = SessionRuntimeSnapshot {
+            stream_state: Some("Provisioning".to_string()),
+            player_state: "pending".to_string(),
+            queue: None,
+            error_details: None,
+        };
+        let ready_runtime = SessionRuntimeSnapshot {
+            stream_state: Some("ReadyToConnect".to_string()),
+            player_state: "pending".to_string(),
+            queue: None,
+            error_details: None,
+        };
+        let mut wait_started_at_ms = None;
+
+        let _ = evaluate_home_server_registration_wait_timeout(
+            true,
+            "console-1",
+            "session-1",
+            &provisioning_runtime,
+            10_000,
+            &mut wait_started_at_ms,
+        );
+        assert_eq!(wait_started_at_ms, Some(10_000));
+
+        assert_eq!(
+            evaluate_home_server_registration_wait_timeout(
+                true,
+                "console-1",
+                "session-1",
+                &ready_runtime,
+                12_000,
+                &mut wait_started_at_ms,
+            ),
+            None
+        );
+        assert_eq!(wait_started_at_ms, None);
+    }
+
+    #[test]
+    fn home_server_registration_retry_exhausted_is_terminal_host_issue() {
+        let error = build_home_session_ready_retry_exhausted_error(
+            "console-1",
+            SessionReadyRecreateRetryReason::WaitingForServerRegistration,
+            1,
+            1,
+            SessionFlowError::message(
+                "Agent : ServerNeverRegistered : Server never registered with service",
+            ),
+        );
+
+        assert!(error.message.contains("homeSessionBoundedRetryExhausted"));
+        assert!(error.message.contains("targetId=console-1"));
+        assert!(error
+            .message
+            .contains("reason=waitingForServerRegistration"));
+        assert_eq!(
+            error.startup_hint.as_ref().map(|hint| hint.kind.clone()),
+            Some(SessionFlowStartupErrorKind::HostRegistrationRetryExhausted)
+        );
+        assert_eq!(
+            error.body.as_deref(),
+            Some("Agent : ServerNeverRegistered : Server never registered with service")
         );
     }
 }

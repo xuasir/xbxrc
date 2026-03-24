@@ -47,6 +47,7 @@ const {
   errorText,
   errorDiagnosticText,
   errorKind,
+  startupBoundedRetry,
   hasError,
   warningVisible,
   displayOptions,
@@ -179,6 +180,27 @@ const queueMetrics = computed(() => {
       seconds: details.estimatedProvisioningTimeInSeconds,
     },
   ].filter(item => typeof item.seconds === 'number')
+})
+
+const hostRegistrationRetryingNotice = computed(() => {
+  const boundedRetry = startupBoundedRetry.value
+  if (
+    boundedRetry == null
+    || boundedRetry.reason !== 'waitingForServerRegistration'
+    || boundedRetry.status !== 'retrying'
+  ) {
+    return ''
+  }
+  return t('streamPage.status.waitingForHostRegistrationRetry')
+})
+
+const showHostRegistrationRetryHelp = computed(() => {
+  const boundedRetry = startupBoundedRetry.value
+  return (
+    boundedRetry?.reason === 'waitingForServerRegistration'
+    && boundedRetry.status === 'exhausted'
+    && errorKind.value === 'startFailed'
+  )
 })
 
 const diagnosticsBinding = computed(() =>
@@ -512,6 +534,9 @@ async function handleStreamMenuAction(id: string): Promise<void> {
         <div v-if="overlayState === 'loading'" class="stream-page__overlay stream-page__overlay--immersive">
           <div class="stream-page__loading-stack">
             <BrandedLoading size="xl" :label="statusText || t('streamPage.status.preparing')" />
+            <p v-if="hostRegistrationRetryingNotice" class="stream-page__loading-detail stream-page__loading-detail--notice">
+              {{ hostRegistrationRetryingNotice }}
+            </p>
             <div v-if="queueMetrics.length > 0" class="stream-page__queue-panel">
               <div
                 v-for="metric in queueMetrics"
@@ -541,6 +566,9 @@ async function handleStreamMenuAction(id: string): Promise<void> {
             <p v-if="errorDiagnosticText" class="stream-page__error-diagnostic">
               {{ errorDiagnosticText }}
             </p>
+            <div v-if="showHostRegistrationRetryHelp" class="stream-page__error-help">
+              {{ t('streamPage.errors.hostRegistrationRetryExhaustedHint') }}
+            </div>
             <div class="stream-page__error-actions">
               <Focusable
                 :id="SPATIAL_NAV_NODE_IDS.streamPage.retry"
@@ -716,6 +744,14 @@ async function handleStreamMenuAction(id: string): Promise<void> {
   color: var(--ui-page-text-soft);
 }
 
+.stream-page__loading-detail--notice {
+  padding: 12px 16px;
+  background: color-mix(in srgb, var(--brand-primary) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--brand-primary) 24%, transparent);
+  border-radius: 14px;
+  color: var(--ui-page-text);
+}
+
 .stream-page__queue-panel {
   width: min(320px, calc(100vw - 48px));
   padding: 14px 16px;
@@ -781,6 +817,17 @@ async function handleStreamMenuAction(id: string): Promise<void> {
   line-height: 1.6;
   color: var(--ui-page-text-soft);
   opacity: 0.88;
+}
+
+.stream-page__error-help {
+  margin: 0 0 20px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--brand-primary) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--brand-primary) 18%, transparent);
+  color: var(--ui-page-text-soft);
+  font-size: 13px;
+  line-height: 1.6;
 }
 .stream-page__chrome-btn--danger[data-focused='true'] {
   background: #e81123;

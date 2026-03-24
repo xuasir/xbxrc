@@ -9,7 +9,6 @@ use xbox_streaming::{
     SessionCapabilitiesProjection as DomainSessionCapabilitiesProjection,
     SessionErrorDetails as MonitorErrorDetails, SessionFlowSnapshot,
     SessionMetadataProjection as DomainSessionMetadataProjection,
-    SessionPhase as DomainSessionPhase, SessionProgressSnapshot as DomainSessionProgressSnapshot,
     SessionRegionProjection as DomainSessionRegionProjection, SessionRuntimeBinding,
     SessionRuntimeSnapshot,
 };
@@ -390,6 +389,28 @@ pub enum StreamingStartupPhaseStatus {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
+pub enum StreamingStartupBoundedRetryStatus {
+    Retrying,
+    Exhausted,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum StreamingStartupBoundedRetryReason {
+    WaitingForServerRegistration,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct StreamingStartupBoundedRetry {
+    pub reason: StreamingStartupBoundedRetryReason,
+    pub status: StreamingStartupBoundedRetryStatus,
+    pub retry_count: u8,
+    pub retry_limit: u8,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
 pub enum StreamingStartupPhase {
     ResolvingContext,
     WakingConsole,
@@ -413,6 +434,7 @@ pub enum StreamingStartupErrorKind {
     Auth,
     Target,
     HostRemotePlayUnavailable,
+    HostRegistrationRetryExhausted,
     Unknown,
 }
 
@@ -426,6 +448,7 @@ pub struct StreamingStartupEvent {
     pub status: StreamingStartupPhaseStatus,
     pub summary: String,
     pub details: Option<String>,
+    pub bounded_retry: Option<StreamingStartupBoundedRetry>,
     pub ts_ms: u64,
 }
 
@@ -439,6 +462,18 @@ pub struct StreamingStartupError {
     pub diagnostic_summary: String,
     pub raw_message: String,
     pub retryable: bool,
+    pub bounded_retry: Option<StreamingStartupBoundedRetry>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StreamingSessionError {
+    pub error_kind: StreamingStartupErrorKind,
+    pub user_message_key: String,
+    pub diagnostic_summary: String,
+    pub raw_message: String,
+    pub retryable: bool,
+    pub bounded_retry: Option<StreamingStartupBoundedRetry>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -460,11 +495,11 @@ pub struct StreamingSessionProgressSnapshot {
     pub session_id: String,
     pub phase: StreamingSessionPhase,
     pub status_text_key: String,
-    pub retry_count: u8,
     pub queue_seconds: Option<u64>,
     pub queue: Option<StreamingQueueDetails>,
     pub error_code: Option<String>,
     pub error_message: Option<String>,
+    pub error: Option<StreamingSessionError>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -510,7 +545,6 @@ impl StreamingSessionProgressSnapshot {
                 StreamingSessionPhase::Closed => "streamPage.status.disconnected".to_string(),
                 StreamingSessionPhase::Failed => "streamPage.errors.startFailed".to_string(),
             },
-            retry_count: 0,
             queue_seconds,
             queue: session.queue.as_ref().map(|queue| queue.details.clone()),
             error_code: session.error_details.as_ref().and_then(|details| {
@@ -523,6 +557,7 @@ impl StreamingSessionProgressSnapshot {
                 .error_details
                 .as_ref()
                 .and_then(|details| details.message.clone()),
+            error: None,
         }
     }
 }
@@ -855,32 +890,6 @@ impl From<DomainRenderDisplayOptionsProjection> for StreamingDisplayOptionsValue
             saturation: options.saturation,
             contrast: options.contrast,
             brightness: options.brightness,
-        }
-    }
-}
-
-impl From<DomainSessionProgressSnapshot> for StreamingSessionProgressSnapshot {
-    fn from(progress: DomainSessionProgressSnapshot) -> Self {
-        Self {
-            session_id: progress.session_id,
-            phase: match progress.phase {
-                DomainSessionPhase::Creating => StreamingSessionPhase::Creating,
-                DomainSessionPhase::WaitingSessionReady => {
-                    StreamingSessionPhase::WaitingSessionReady
-                }
-                DomainSessionPhase::RuntimeStarting => StreamingSessionPhase::RuntimeStarting,
-                DomainSessionPhase::SessionReady => StreamingSessionPhase::SessionReady,
-                DomainSessionPhase::Recovering => StreamingSessionPhase::Recovering,
-                DomainSessionPhase::Closing => StreamingSessionPhase::Closing,
-                DomainSessionPhase::Closed => StreamingSessionPhase::Closed,
-                DomainSessionPhase::Failed => StreamingSessionPhase::Failed,
-            },
-            status_text_key: progress.status_text_key,
-            retry_count: progress.retry_count,
-            queue_seconds: progress.queue_seconds,
-            queue: progress.queue.map(Into::into),
-            error_code: progress.error_code,
-            error_message: progress.error_message,
         }
     }
 }

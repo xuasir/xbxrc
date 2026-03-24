@@ -18,6 +18,8 @@ use crate::{
     XbxEngineRecoverySignals, XbxEngineTransportSignal,
 };
 
+const ICE_EXCHANGE_TIMEOUT_MS_MIN: f64 = 5_000.0;
+
 impl<THostBridge, TEventSink, TMediaBackend>
     XbxEngineRuntime<THostBridge, TEventSink, TMediaBackend>
 where
@@ -650,7 +652,10 @@ where
         use std::time::Duration;
 
         let exchange_started_at_ms = now_ms_f64();
-        let exchange_timeout_ms = self.config.webrtc.recovery.first_frame_grace_ms as f64;
+        let exchange_timeout_ms = resolve_ice_exchange_timeout_ms(
+            self.config.webrtc.recovery.first_frame_grace_ms,
+            self.config.webrtc.recovery.reconnect_stall_ms,
+        );
         let offer_sdp_candidates = collect_local_offer_ice_candidates(local_offer_sdp);
         let mut sent_local_candidates = HashSet::<String>::new();
         let mut applied_remote_candidates = HashSet::<String>::new();
@@ -866,6 +871,14 @@ where
     }
 }
 
+fn resolve_ice_exchange_timeout_ms(first_frame_grace_ms: u64, reconnect_stall_ms: u64) -> f64 {
+    // ICE 打洞阶段不能直接复用激进的首帧 grace；至少给一次完整 trickle 窗口，
+    // 否则远端 candidates 已经返回，但 transport 还没来得及从 Connecting 推进就会提前退出。
+    first_frame_grace_ms
+        .max(reconnect_stall_ms)
+        .max(ICE_EXCHANGE_TIMEOUT_MS_MIN as u64) as f64
+}
+
 fn runtime_stats_indicate_transport_recovering(
     runtime_stats: &crate::XbxEngineMediaRuntimeStats,
 ) -> bool {
@@ -970,7 +983,7 @@ fn is_terminal_remote_session_inactive_error(error: &XbxEngineRuntimeError) -> b
 
 #[cfg(test)]
 mod tests {
-    use super::collect_local_offer_ice_candidates;
+    use super::{collect_local_offer_ice_candidates, resolve_ice_exchange_timeout_ms};
 
     #[test]
     fn collects_offer_sdp_candidates_from_realistic_sdp() {
@@ -994,5 +1007,11 @@ mod tests {
         assert_eq!(candidates[0].sdp_m_line_index, Some(0));
         assert_eq!(candidates[2].sdp_mid.as_deref(), Some("1"));
         assert_eq!(candidates[2].sdp_m_line_index, Some(1));
+    }
+
+    #[test]
+    fn ice_exchange_timeout_uses_bounded_floor() {
+        assert_eq!(resolve_ice_exchange_timeout_ms(1_800, 2_400), 5_000.0);
+        assert_eq!(resolve_ice_exchange_timeout_ms(8_000, 4_000), 8_000.0);
     }
 }

@@ -50,8 +50,8 @@ impl OhMyGamepadKeyboardMapper {
             }
 
             match binding.control {
-                OhMyGamepadKeyboardControl::LeftStickUp => state.left_stick.y -= 1.0,
-                OhMyGamepadKeyboardControl::LeftStickDown => state.left_stick.y += 1.0,
+                OhMyGamepadKeyboardControl::LeftStickUp => state.left_stick.y += 1.0,
+                OhMyGamepadKeyboardControl::LeftStickDown => state.left_stick.y -= 1.0,
                 OhMyGamepadKeyboardControl::LeftStickLeft => state.left_stick.x -= 1.0,
                 OhMyGamepadKeyboardControl::LeftStickRight => state.left_stick.x += 1.0,
                 OhMyGamepadKeyboardControl::RightStickUp => state.right_stick.y -= 1.0,
@@ -211,7 +211,19 @@ mod tests {
         let state =
             mapper.sync_pressed_keys([OhMyGamepadKeyboardKey::KeyW, OhMyGamepadKeyboardKey::KeyJ]);
 
-        assert_eq!(state.left_stick.y, -1.0);
+        assert_eq!(state.left_stick.y, 1.0);
         assert_eq!(state.buttons.south, 1.0);
+    }
+
+    #[test]
+    fn left_stick_y_axis_sign_matches_keyboard_up_down() {
+        let mut mapper_up = OhMyGamepadKeyboardMapper::with_default_mapping();
+        let mut mapper_down = OhMyGamepadKeyboardMapper::with_default_mapping();
+
+        let up = mapper_up.press_key(OhMyGamepadKeyboardKey::KeyW);
+        assert_eq!(up.left_stick.y, 1.0);
+
+        let down = mapper_down.press_key(OhMyGamepadKeyboardKey::KeyS);
+        assert_eq!(down.left_stick.y, -1.0);
     }
 }

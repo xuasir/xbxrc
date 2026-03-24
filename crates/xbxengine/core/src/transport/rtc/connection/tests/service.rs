@@ -1298,6 +1298,43 @@ fn service_replays_pending_control_requests_after_control_close_and_rebuild() {
     );
 }
 
+#[test]
+fn service_records_handshake_and_control_ready_timestamps() {
+    let mut service = RtcConnectionService::default();
+    let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
+    let session = XbxEngineSessionDto {
+        session_id: "test-session".to_string(),
+        target_type: XbxEngineTargetTypeDto::Cloud,
+        turn_server: None,
+    };
+
+    service.rebuild(&session, &runtime_stats).unwrap();
+    let (
+        _answer_pc,
+        _answer_io,
+        _message_dc_id,
+        _control_dc_id,
+        _input_dc_id,
+        _chat_dc_id,
+        _saw_input_metadata,
+        _observed_payloads,
+    ) = connect_service_to_answer_peer(&mut service, &runtime_stats);
+
+    let stats = runtime_stats.lock().expect("runtime stats");
+    assert!(
+        stats.message_handshake_acked_at_ms.is_some(),
+        "handshake ack timestamp should be recorded"
+    );
+    assert!(
+        stats.control_ready_at_ms.is_some(),
+        "control ready timestamp should be recorded"
+    );
+    assert!(
+        stats.control_ready_at_ms.unwrap() >= stats.message_handshake_acked_at_ms.unwrap(),
+        "control ready should not precede handshake ack"
+    );
+}
+
 #[derive(Debug)]
 struct TestRtcPeerIo {
     socket: UdpSocket,

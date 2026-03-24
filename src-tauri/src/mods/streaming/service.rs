@@ -1,11 +1,13 @@
 use crate::error::{AppError, AppResult};
 use crate::mods::auth::AuthProviderRef;
 use crate::mods::config::ConfigProviderRef;
+use crate::mods::data::DataHostSummary;
 use crate::mods::data::DataProviderRef;
 use crate::mods::runtime_trace::RuntimeTraceRecorderRef;
 use crate::mods::streaming::events;
 use crate::mods::streaming::types::*;
 use crate::mods::xbxengine::XbxEngineProviderRef;
+use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
 use tauri::AppHandle;
 use xbox_streaming::input::{
@@ -27,9 +29,16 @@ use xbox_streaming::{
     DisplayOptions as DomainDisplayOptions, FallbackTurnProvider, HostAddr as DomainHostAddr,
     IceCandidate as DomainIceCandidate, Plan as StreamingPlan, RemoteConsoleSnapshot, RuntimeFact,
     RuntimePreference, SessionFlowError, SessionFlowProvider, SessionFlowService,
-    SessionProgressSnapshot, SessionStartupObserver, SessionStartupPhase as DomainStartupPhase,
+    SessionFlowStartupErrorHint as DomainStartupErrorHint,
+    SessionFlowStartupErrorKind as DomainStartupErrorKind, SessionPhase as DomainSessionPhase,
+    SessionProgressSnapshot, SessionStartupBoundedRetryReason as DomainStartupBoundedRetryReason,
+    SessionStartupBoundedRetrySnapshot as DomainStartupBoundedRetrySnapshot,
+    SessionStartupBoundedRetryStatus as DomainStartupBoundedRetryStatus, SessionStartupObserver,
+    SessionStartupPhase as DomainStartupPhase,
     SessionStartupPhaseStatus as DomainStartupPhaseStatus, Target as DomainTarget, TurnServer,
 };
+
+const CONSOLE_READY_SMARTGLASS_CACHE_MS: u64 = 2_000;
 
 #[derive(Clone)]
 pub struct StreamingService {
@@ -61,9 +70,6 @@ struct ResolvedRemotePlayContext {
     console_addrs: Vec<DomainHostAddr>,
 }
 
-const HOME_REMOTE_PLAY_PREFLIGHT_TIMEOUT_MS: u64 = 8_000;
-const HOME_REMOTE_PLAY_PREFLIGHT_POLL_INTERVAL_MS: u64 = 1_000;
-
 /// tauri 侧 flow adapter：仅负责提供凭证。
 /// RFC: 策略与执行层已下沉 crate，adapter 彻底退化。
 #[derive(Clone)]
@@ -71,6 +77,13 @@ struct TauriSessionFlowProvider {
     auth_provider: AuthProviderRef,
     data_provider: DataProviderRef,
     runtime_trace: RuntimeTraceRecorderRef,
+    console_ready_smartglass_cache: Arc<tokio::sync::Mutex<Option<CachedHostSnapshot>>>,
+}
+
+#[derive(Clone)]
+struct CachedHostSnapshot {
+    recorded_at_ms: u64,
+    hosts: Vec<DataHostSummary>,
 }
 
 struct StartupAttemptRecorder {
@@ -80,6 +93,7 @@ struct StartupAttemptRecorder {
     target_type: String,
     target_id: String,
     current_phase: Mutex<StreamingStartupPhase>,
+    bounded_retry: Mutex<Option<StreamingStartupBoundedRetry>>,
 }
 
 impl StartupAttemptRecorder {
@@ -97,6 +111,7 @@ impl StartupAttemptRecorder {
             target_type,
             target_id,
             current_phase: Mutex::new(StreamingStartupPhase::ResolvingContext),
+            bounded_retry: Mutex::new(None),
         }
     }
 
@@ -121,6 +136,7 @@ impl StartupAttemptRecorder {
             status: status.clone(),
             summary: summary.into(),
             details: details.clone(),
+            bounded_retry: self.current_bounded_retry(),
             ts_ms: now_ms(),
         };
         self.runtime_trace.record_event(
@@ -135,6 +151,7 @@ impl StartupAttemptRecorder {
                 "status": event.status,
                 "summary": event.summary,
                 "details": event.details,
+                "boundedRetry": event.bounded_retry,
                 "tsMs": event.ts_ms,
             }),
         );
@@ -148,18 +165,70 @@ impl StartupAttemptRecorder {
             .unwrap_or(StreamingStartupPhase::Failed)
     }
 
+    fn current_bounded_retry(&self) -> Option<StreamingStartupBoundedRetry> {
+        self.bounded_retry
+            .lock()
+            .ok()
+            .and_then(|state| state.clone())
+    }
+
+    fn set_bounded_retry(&self, bounded_retry: Option<StreamingStartupBoundedRetry>) {
+        if let Ok(mut state) = self.bounded_retry.lock() {
+            *state = bounded_retry;
+        }
+    }
+
     fn build_startup_error(&self, error: &SessionFlowError) -> StreamingStartupError {
         let phase = self.current_phase();
-        let error_kind = classify_startup_error_kind(&phase, error);
+        let bounded_retry = self.current_bounded_retry();
+        let error_kind = error
+            .startup_hint
+            .as_ref()
+            .map(map_domain_startup_error_kind)
+            .unwrap_or_else(|| classify_startup_error_kind_fallback(&phase, error));
+        let user_message_key = startup_error_message_key(&error_kind);
+        let diagnostic_summary = error
+            .startup_hint
+            .as_ref()
+            .map(|hint| hint.diagnostic_summary.clone())
+            .unwrap_or_else(|| build_startup_diagnostic_summary_fallback(&phase, error));
+        let retryable = error
+            .startup_hint
+            .as_ref()
+            .map(|hint| hint.retryable)
+            .unwrap_or_else(|| is_startup_error_retryable_fallback(&error_kind, error));
         StreamingStartupError {
             attempt_id: self.attempt_id.clone(),
             phase: phase.clone(),
             error_kind: error_kind.clone(),
-            user_message_key: startup_error_message_key(&error_kind, error).to_string(),
-            diagnostic_summary: build_startup_diagnostic_summary(&phase, error),
+            user_message_key: user_message_key.to_string(),
+            diagnostic_summary,
             raw_message: error.message.clone(),
-            retryable: is_startup_error_retryable(&error_kind, error),
+            retryable,
+            bounded_retry,
         }
+    }
+}
+
+impl TauriSessionFlowProvider {
+    async fn load_hosts_for_console_ready_trace(&self) -> Vec<DataHostSummary> {
+        let now = now_ms();
+        {
+            let cache = self.console_ready_smartglass_cache.lock().await;
+            if let Some(cache) = cache.as_ref() {
+                if now.saturating_sub(cache.recorded_at_ms) < CONSOLE_READY_SMARTGLASS_CACHE_MS {
+                    return cache.hosts.clone();
+                }
+            }
+        }
+
+        let hosts = self.data_provider.get_hosts().await.unwrap_or_default();
+        let mut cache = self.console_ready_smartglass_cache.lock().await;
+        *cache = Some(CachedHostSnapshot {
+            recorded_at_ms: now,
+            hosts: hosts.clone(),
+        });
+        hosts
     }
 }
 
@@ -177,6 +246,22 @@ impl SessionStartupObserver for StartupAttemptRecorder {
             status,
             startup_phase_summary(&phase, details),
             details.map(str::to_string),
+        );
+    }
+
+    fn on_bounded_retry(
+        &self,
+        phase: DomainStartupPhase,
+        bounded_retry: &DomainStartupBoundedRetrySnapshot,
+    ) {
+        let phase = map_startup_phase(phase);
+        let bounded_retry = map_startup_bounded_retry(bounded_retry);
+        self.set_bounded_retry(Some(bounded_retry.clone()));
+        self.emit(
+            phase.clone(),
+            StreamingStartupPhaseStatus::Entered,
+            startup_bounded_retry_summary(&phase, &bounded_retry),
+            Some(build_startup_bounded_retry_details(&bounded_retry)),
         );
     }
 }
@@ -230,48 +315,34 @@ impl SessionFlowProvider for TauriSessionFlowProvider {
     }
 
     async fn get_remote_consoles(&self) -> Result<Vec<RemoteConsoleSnapshot>, SessionFlowError> {
-        let consoles = self
-            .data_provider
-            .get_remote_consoles()
-            .await
-            .map_err(|error| {
-                self.runtime_trace.record_event(
-                    "streaming",
-                    "remoteConsolesQueryFailed",
-                    None,
-                    serde_json::json!({
-                        "error": error,
-                    }),
-                );
-                SessionFlowError::message(error)
-            })?;
+        let smartglass_hosts = self.load_hosts_for_console_ready_trace().await;
+        let smartglass_ready_consoles = build_smartglass_ready_candidates(&smartglass_hosts);
         self.runtime_trace.record_snapshot(
             "streaming",
-            "remoteConsolesSnapshot",
+            "smartglassConsolesSnapshot",
             None,
             serde_json::json!({
-                "count": consoles.len(),
-                "consoles": consoles.iter().map(|console| {
+                "count": smartglass_hosts.len(),
+                "consoles": smartglass_hosts.iter().map(|console| {
                     serde_json::json!({
                         "id": console.id,
                         "deviceId": console.device_id,
                         "serverId": console.server_id,
                         "powerState": console.power_state,
+                        "remoteManagementEnabled": console.remote_management_enabled,
                         "consoleStreamingEnabled": console.console_streaming_enabled,
+                        "consoleAddrsCount": console.console_addrs.as_ref().map(|items| items.len()).unwrap_or(0),
                     })
                 }).collect::<Vec<_>>(),
             }),
         );
-        Ok(consoles
-            .into_iter()
-            .map(|console| RemoteConsoleSnapshot {
-                id: console.id,
-                device_id: console.device_id,
-                server_id: console.server_id,
-                power_state: console.power_state,
-                console_streaming_enabled: console.console_streaming_enabled,
-            })
-            .collect())
+        self.runtime_trace.record_snapshot(
+            "streaming",
+            "consoleReadySnapshot",
+            None,
+            build_console_ready_snapshot(&smartglass_hosts, &smartglass_ready_consoles),
+        );
+        Ok(smartglass_ready_consoles)
     }
 
     fn on_session_state_polled(
@@ -379,6 +450,84 @@ impl SessionFlowProvider for TauriSessionFlowProvider {
             }),
         );
     }
+
+    fn on_session_created(
+        &self,
+        session_id: &str,
+        session_path: &str,
+        target_type: &str,
+        target_id: &str,
+        recreate_from_session_id: Option<&str>,
+    ) {
+        self.runtime_trace.record_event(
+            "streaming",
+            "sessionCreated",
+            Some(session_id),
+            serde_json::json!({
+                "sessionId": session_id,
+                "sessionPath": session_path,
+                "targetType": target_type,
+                "targetId": target_id,
+                "recreateFromSessionId": recreate_from_session_id,
+                "reusedSessionId": recreate_from_session_id == Some(session_id),
+                "tsMs": now_ms(),
+            }),
+        );
+    }
+
+    fn on_session_recreate_cleanup_result(
+        &self,
+        session_id: &str,
+        target_type: &str,
+        target_id: &str,
+        status: &str,
+        last_state: Option<&str>,
+        error: Option<&SessionFlowError>,
+    ) {
+        self.runtime_trace.record_event(
+            "streaming",
+            "sessionRecreateCleanup",
+            Some(session_id),
+            serde_json::json!({
+                "sessionId": session_id,
+                "targetType": target_type,
+                "targetId": target_id,
+                "status": status,
+                "lastState": last_state,
+                "errorStatus": error.and_then(|value| value.status),
+                "errorMessage": error.map(|value| value.message.clone()),
+                "errorBody": error.and_then(|value| value.body.clone()),
+                "tsMs": now_ms(),
+            }),
+        );
+    }
+
+    fn on_console_ready_wait_result(
+        &self,
+        target_type: &str,
+        target_id: &str,
+        status: &str,
+        reason: &str,
+        console: Option<&RemoteConsoleSnapshot>,
+    ) {
+        self.runtime_trace.record_event(
+            "streaming",
+            "consoleReadyWaitResult",
+            None,
+            serde_json::json!({
+                "targetType": target_type,
+                "targetId": target_id,
+                "status": status,
+                "reason": reason,
+                "powerState": console.and_then(|value| value.power_state.clone()),
+                "remoteManagementEnabled": console.and_then(|value| value.remote_management_enabled),
+                "consoleStreamingEnabled": console.and_then(|value| value.console_streaming_enabled),
+                "consoleAddrsCount": console.map(|value| value.console_addrs_count),
+                "readySource": console.and_then(|value| value.ready_source.clone()),
+                "tsMs": now_ms(),
+            }),
+        );
+    }
 }
 
 impl StreamingService {
@@ -394,6 +543,7 @@ impl StreamingService {
             auth_provider: auth_provider.clone(),
             data_provider: data_provider.clone(),
             runtime_trace: runtime_trace.clone(),
+            console_ready_smartglass_cache: Arc::new(tokio::sync::Mutex::new(None)),
         };
 
         Self {
@@ -642,80 +792,6 @@ impl StreamingService {
                 .collect(),
         }
     }
-
-    async fn preflight_home_remote_play_registration(
-        &self,
-        plan: &StreamingPlan,
-        target_id: &str,
-    ) -> Result<(), SessionFlowError> {
-        if !plan.session.target.is_home() || !plan.session.schedule.require_console_ready {
-            return Ok(());
-        }
-
-        let started_at_ms = now_ms();
-        let timeout_ms = HOME_REMOTE_PLAY_PREFLIGHT_TIMEOUT_MS
-            .min(plan.session.schedule.ready_timeout_ms)
-            .max(HOME_REMOTE_PLAY_PREFLIGHT_POLL_INTERVAL_MS);
-        let poll_interval_ms = HOME_REMOTE_PLAY_PREFLIGHT_POLL_INTERVAL_MS.max(
-            plan.session
-                .schedule
-                .monitor_interval_ms
-                .max(200)
-                .min(HOME_REMOTE_PLAY_PREFLIGHT_POLL_INTERVAL_MS),
-        );
-        let mut attempt = 0u32;
-
-        loop {
-            attempt = attempt.saturating_add(1);
-            let consoles = self
-                .data_provider
-                .get_remote_consoles()
-                .await
-                .map_err(|error| SessionFlowError::message(error.to_string()))?;
-            let matched = consoles
-                .iter()
-                .find(|console| matches_remote_host_id(target_id, console));
-            let elapsed_ms = now_ms().saturating_sub(started_at_ms);
-            let ready = matched.is_some_and(is_home_remote_play_registered);
-
-            self.runtime_trace.record_snapshot(
-                "streaming",
-                "homeRemotePlayPreflightSnapshot",
-                None,
-                serde_json::json!({
-                    "targetId": target_id,
-                    "attempt": attempt,
-                    "elapsedMs": elapsed_ms,
-                    "matched": matched.is_some(),
-                    "powerState": matched.and_then(|console| console.power_state.clone()),
-                    "remoteManagementEnabled": matched.and_then(|console| console.remote_management_enabled),
-                    "consoleStreamingEnabled": matched.and_then(|console| console.console_streaming_enabled),
-                    "consoleAddrsCount": matched
-                        .and_then(|console| console.console_addrs.as_ref().map(|items| items.len()))
-                        .unwrap_or(0),
-                    "ready": ready,
-                }),
-            );
-
-            if ready {
-                return Ok(());
-            }
-
-            if elapsed_ms >= timeout_ms {
-                if matched.is_some_and(|console| console.power_state.as_deref() == Some("On")) {
-                    return Err(home_remote_play_not_ready_error(
-                        target_id, matched, attempt, elapsed_ms,
-                    ));
-                }
-
-                return Err(SessionFlowError::message(format!(
-                    "remoteConsoleNotReady:targetId={target_id}"
-                )));
-            }
-
-            tokio::time::sleep(std::time::Duration::from_millis(poll_interval_ms)).await;
-        }
-    }
 }
 
 fn resolve_runtime_capabilities(xbxengine_runtime_available: bool) -> DomainRuntimeCapabilities {
@@ -886,37 +962,8 @@ impl crate::mods::streaming::StreamingProvider for StreamingService {
             ),
             Some("contextResolved".to_string()),
         );
-        self.preflight_home_remote_play_registration(&plan, &params.target_id)
-            .await
-            .map_err(|error| {
-                let startup_error = startup.build_startup_error(&error);
-                startup.emit(
-                    StreamingStartupPhase::Failed,
-                    StreamingStartupPhaseStatus::Failed,
-                    startup_error.diagnostic_summary.clone(),
-                    Some(startup_error.raw_message.clone()),
-                );
-                self.runtime_trace.record_event(
-                    "streaming",
-                    "sessionStartFailed",
-                    None,
-                    serde_json::json!({
-                        "attemptId": params.attempt_id,
-                        "targetType": params.target_type,
-                        "targetId": params.target_id,
-                        "startupError": startup_error,
-                        "error": {
-                            "message": error.message,
-                            "status": error.status,
-                            "body": error.body,
-                        },
-                    }),
-                );
-                AppError::streaming_detailed(
-                    error.to_string(),
-                    serde_json::to_value(&startup_error).unwrap_or(serde_json::Value::Null),
-                )
-            })?;
+        // home 启动期不再让 service 层 preflight 抢先失败，
+        // 统一交给 flow 内已有的 wake/ready/create 重试主链裁决。
         // 执行快照会消费 plan，这里先投影出页面侧需要的稳定元数据。
         let metadata = project_session_metadata(&plan);
         let capabilities = project_session_capabilities(&compiler_context, &plan);
@@ -1001,9 +1048,11 @@ impl crate::mods::streaming::StreamingProvider for StreamingService {
             .flow
             .get_session_progress(&execution.session.id)
             .await
-            .map(Into::into)
+            .map(map_domain_progress_snapshot)
             .unwrap_or_else(|| {
-                StreamingSessionProgressSnapshot::from_session_snapshot(&execution.session)
+                build_fallback_progress_snapshot(
+                    StreamingSessionProgressSnapshot::from_session_snapshot(&execution.session),
+                )
             });
         self.runtime_trace.record_state(
             "streaming",
@@ -1028,7 +1077,7 @@ impl crate::mods::streaming::StreamingProvider for StreamingService {
             .flow
             .get_session_progress(&params.session_id)
             .await
-            .map(Into::into))
+            .map(map_domain_progress_snapshot))
     }
 
     async fn close_session(
@@ -1252,6 +1301,93 @@ fn map_flow_error(error: SessionFlowError) -> AppError {
     AppError::Streaming(error.to_string())
 }
 
+fn map_domain_progress_snapshot(
+    progress: SessionProgressSnapshot,
+) -> StreamingSessionProgressSnapshot {
+    let phase = map_domain_session_phase(progress.phase);
+    let error = build_progress_error(
+        &phase,
+        progress.error_code.as_deref(),
+        progress.error_message.as_deref(),
+        progress.error_hint.as_ref(),
+    );
+    StreamingSessionProgressSnapshot {
+        session_id: progress.session_id,
+        phase,
+        status_text_key: progress.status_text_key,
+        queue_seconds: progress.queue_seconds,
+        queue: progress.queue.map(Into::into),
+        error_code: progress.error_code,
+        error_message: progress.error_message,
+        error,
+    }
+}
+
+fn build_fallback_progress_snapshot(
+    mut progress: StreamingSessionProgressSnapshot,
+) -> StreamingSessionProgressSnapshot {
+    progress.error = build_progress_error(
+        &progress.phase,
+        progress.error_code.as_deref(),
+        progress.error_message.as_deref(),
+        None,
+    );
+    progress
+}
+
+fn map_domain_session_phase(phase: DomainSessionPhase) -> StreamingSessionPhase {
+    match phase {
+        DomainSessionPhase::Creating => StreamingSessionPhase::Creating,
+        DomainSessionPhase::WaitingSessionReady => StreamingSessionPhase::WaitingSessionReady,
+        DomainSessionPhase::RuntimeStarting => StreamingSessionPhase::RuntimeStarting,
+        DomainSessionPhase::SessionReady => StreamingSessionPhase::SessionReady,
+        DomainSessionPhase::Recovering => StreamingSessionPhase::Recovering,
+        DomainSessionPhase::Closing => StreamingSessionPhase::Closing,
+        DomainSessionPhase::Closed => StreamingSessionPhase::Closed,
+        DomainSessionPhase::Failed => StreamingSessionPhase::Failed,
+    }
+}
+
+fn build_progress_error(
+    phase: &StreamingSessionPhase,
+    error_code: Option<&str>,
+    error_message: Option<&str>,
+    error_hint: Option<&DomainStartupErrorHint>,
+) -> Option<StreamingSessionError> {
+    let raw_message = error_message
+        .filter(|value| !value.trim().is_empty())
+        .or_else(|| error_code.filter(|value| !value.trim().is_empty()))
+        .map(str::to_string)?;
+    let bounded_retry = build_progress_bounded_retry(raw_message.as_str());
+
+    if let Some(hint) = error_hint {
+        let error_kind = map_domain_startup_error_kind(hint);
+        return Some(StreamingSessionError {
+            error_kind: error_kind.clone(),
+            user_message_key: startup_error_message_key(&error_kind).to_string(),
+            diagnostic_summary: hint.diagnostic_summary.clone(),
+            raw_message,
+            retryable: hint.retryable,
+            bounded_retry,
+        });
+    }
+
+    let error_kind = classify_progress_error_kind_fallback(phase, &raw_message);
+    Some(StreamingSessionError {
+        error_kind: error_kind.clone(),
+        user_message_key: startup_error_message_key(&error_kind).to_string(),
+        diagnostic_summary: build_progress_diagnostic_summary_fallback(
+            phase,
+            error_code,
+            error_message,
+            &error_kind,
+        ),
+        raw_message,
+        retryable: is_progress_error_retryable_fallback(&error_kind),
+        bounded_retry,
+    })
+}
+
 fn to_domain_ice_candidate(candidate: &StreamingIceCandidate) -> DomainIceCandidate {
     DomainIceCandidate {
         candidate: candidate.candidate.clone(),
@@ -1309,6 +1445,36 @@ fn map_startup_phase_status(status: DomainStartupPhaseStatus) -> StreamingStartu
     }
 }
 
+fn map_startup_bounded_retry_status(
+    status: DomainStartupBoundedRetryStatus,
+) -> StreamingStartupBoundedRetryStatus {
+    match status {
+        DomainStartupBoundedRetryStatus::Retrying => StreamingStartupBoundedRetryStatus::Retrying,
+        DomainStartupBoundedRetryStatus::Exhausted => StreamingStartupBoundedRetryStatus::Exhausted,
+    }
+}
+
+fn map_startup_bounded_retry_reason(
+    reason: DomainStartupBoundedRetryReason,
+) -> StreamingStartupBoundedRetryReason {
+    match reason {
+        DomainStartupBoundedRetryReason::WaitingForServerRegistration => {
+            StreamingStartupBoundedRetryReason::WaitingForServerRegistration
+        }
+    }
+}
+
+fn map_startup_bounded_retry(
+    bounded_retry: &DomainStartupBoundedRetrySnapshot,
+) -> StreamingStartupBoundedRetry {
+    StreamingStartupBoundedRetry {
+        reason: map_startup_bounded_retry_reason(bounded_retry.reason),
+        status: map_startup_bounded_retry_status(bounded_retry.status),
+        retry_count: bounded_retry.retry_count,
+        retry_limit: bounded_retry.retry_limit,
+    }
+}
+
 fn startup_phase_summary(phase: &StreamingStartupPhase, details: Option<&str>) -> String {
     let details_suffix = details
         .filter(|value| !value.is_empty())
@@ -1330,13 +1496,98 @@ fn startup_phase_summary(phase: &StreamingStartupPhase, details: Option<&str>) -
     }
 }
 
-fn classify_startup_error_kind(
+fn startup_bounded_retry_summary(
+    phase: &StreamingStartupPhase,
+    bounded_retry: &StreamingStartupBoundedRetry,
+) -> String {
+    let detail = match bounded_retry.status {
+        StreamingStartupBoundedRetryStatus::Retrying => "boundedRetry",
+        StreamingStartupBoundedRetryStatus::Exhausted => "boundedRetryExhausted",
+    };
+    startup_phase_summary(phase, Some(detail))
+}
+
+fn build_startup_bounded_retry_details(bounded_retry: &StreamingStartupBoundedRetry) -> String {
+    format!(
+        "reason={:?};status={:?};retryCount={};retryLimit={}",
+        bounded_retry.reason,
+        bounded_retry.status,
+        bounded_retry.retry_count,
+        bounded_retry.retry_limit,
+    )
+}
+
+fn map_domain_startup_error_kind(hint: &DomainStartupErrorHint) -> StreamingStartupErrorKind {
+    match hint.kind {
+        DomainStartupErrorKind::Wake => StreamingStartupErrorKind::Wake,
+        DomainStartupErrorKind::ConsoleReady => StreamingStartupErrorKind::ConsoleReady,
+        DomainStartupErrorKind::SessionCreate => StreamingStartupErrorKind::SessionCreate,
+        DomainStartupErrorKind::SessionReady => StreamingStartupErrorKind::SessionReady,
+        DomainStartupErrorKind::Runtime => StreamingStartupErrorKind::Runtime,
+        DomainStartupErrorKind::Network => StreamingStartupErrorKind::Network,
+        DomainStartupErrorKind::Auth => StreamingStartupErrorKind::Auth,
+        DomainStartupErrorKind::Target => StreamingStartupErrorKind::Target,
+        DomainStartupErrorKind::HostRemotePlayUnavailable => {
+            StreamingStartupErrorKind::HostRemotePlayUnavailable
+        }
+        DomainStartupErrorKind::HostRegistrationRetryExhausted => {
+            StreamingStartupErrorKind::HostRegistrationRetryExhausted
+        }
+        DomainStartupErrorKind::Unknown => StreamingStartupErrorKind::Unknown,
+    }
+}
+
+fn classify_progress_error_kind_fallback(
+    phase: &StreamingSessionPhase,
+    raw_message: &str,
+) -> StreamingStartupErrorKind {
+    let normalized = raw_message.to_ascii_lowercase();
+    if is_home_server_registration_retry_exhausted_message(&normalized)
+        || is_server_registration_retry_signal_message(&normalized)
+    {
+        return StreamingStartupErrorKind::HostRegistrationRetryExhausted;
+    }
+    if normalized.contains("remoteconsolenotready") {
+        return StreamingStartupErrorKind::ConsoleReady;
+    }
+    if normalized.contains("streamingstarttimeout") {
+        return StreamingStartupErrorKind::SessionReady;
+    }
+    if normalized.contains("targetmissing") {
+        return StreamingStartupErrorKind::Target;
+    }
+    if normalized.contains("unauthorized")
+        || normalized.contains("forbidden")
+        || normalized.contains("authentication")
+        || normalized.contains("auth")
+    {
+        return StreamingStartupErrorKind::Auth;
+    }
+    if normalized.contains("network")
+        || normalized.contains("reconnect")
+        || normalized.contains("recover")
+    {
+        return StreamingStartupErrorKind::Network;
+    }
+
+    match phase {
+        StreamingSessionPhase::Failed
+        | StreamingSessionPhase::Closed
+        | StreamingSessionPhase::Recovering => StreamingStartupErrorKind::Runtime,
+        _ => StreamingStartupErrorKind::Unknown,
+    }
+}
+
+fn classify_startup_error_kind_fallback(
     phase: &StreamingStartupPhase,
     error: &SessionFlowError,
 ) -> StreamingStartupErrorKind {
     let normalized = error.message.to_ascii_lowercase();
     if is_home_remote_play_not_ready_message(&normalized) {
         return StreamingStartupErrorKind::HostRemotePlayUnavailable;
+    }
+    if is_home_server_registration_retry_exhausted_message(&normalized) {
+        return StreamingStartupErrorKind::HostRegistrationRetryExhausted;
     }
     if normalized.contains("target missing") {
         return StreamingStartupErrorKind::Target;
@@ -1359,16 +1610,7 @@ fn classify_startup_error_kind(
     }
 }
 
-fn startup_error_message_key(
-    kind: &StreamingStartupErrorKind,
-    error: &SessionFlowError,
-) -> &'static str {
-    if is_home_remote_play_not_ready_message(&error.message.to_ascii_lowercase()) {
-        return "streamPage.errors.hostRemotePlayUnavailable";
-    }
-    if is_remote_console_wake_circuit_open_message(&error.message) {
-        return "streamPage.errors.hostRemotePlayUnavailable";
-    }
+fn startup_error_message_key(kind: &StreamingStartupErrorKind) -> &'static str {
     match kind {
         StreamingStartupErrorKind::Wake => "streamPage.errors.wakeFailed",
         StreamingStartupErrorKind::ConsoleReady => "streamPage.errors.consoleReadyFailed",
@@ -1381,15 +1623,58 @@ fn startup_error_message_key(
         StreamingStartupErrorKind::HostRemotePlayUnavailable => {
             "streamPage.errors.hostRemotePlayUnavailable"
         }
+        StreamingStartupErrorKind::HostRegistrationRetryExhausted => {
+            "streamPage.errors.hostRegistrationRetryExhausted"
+        }
         StreamingStartupErrorKind::Unknown => "streamPage.errors.unknown",
     }
 }
 
-fn build_startup_diagnostic_summary(
+fn build_progress_diagnostic_summary_fallback(
+    phase: &StreamingSessionPhase,
+    error_code: Option<&str>,
+    error_message: Option<&str>,
+    kind: &StreamingStartupErrorKind,
+) -> String {
+    let error_code = error_code.unwrap_or("none");
+    let error_message = error_message.unwrap_or("none");
+    let hint = match kind {
+        StreamingStartupErrorKind::Wake => "wakeFailed",
+        StreamingStartupErrorKind::ConsoleReady => "remoteConsoleNotReady",
+        StreamingStartupErrorKind::SessionCreate => "sessionCreateFailed",
+        StreamingStartupErrorKind::SessionReady => "streamingStartTimeout",
+        StreamingStartupErrorKind::Runtime => "runtimeFailed",
+        StreamingStartupErrorKind::Network => "networkFailed",
+        StreamingStartupErrorKind::Auth => "authFailed",
+        StreamingStartupErrorKind::Target => "targetMissing",
+        StreamingStartupErrorKind::HostRemotePlayUnavailable => "hostRemotePlayUnavailable",
+        StreamingStartupErrorKind::HostRegistrationRetryExhausted => {
+            "hostRegistrationRetryExhausted"
+        }
+        StreamingStartupErrorKind::Unknown => "unknown",
+    };
+    format!("phase={phase:?}; errorCode={error_code}; errorMessage={error_message}; hint={hint}")
+}
+
+fn is_progress_error_retryable_fallback(kind: &StreamingStartupErrorKind) -> bool {
+    matches!(
+        kind,
+        StreamingStartupErrorKind::ConsoleReady
+            | StreamingStartupErrorKind::SessionCreate
+            | StreamingStartupErrorKind::SessionReady
+            | StreamingStartupErrorKind::Runtime
+            | StreamingStartupErrorKind::Network
+    )
+}
+
+fn build_startup_diagnostic_summary_fallback(
     phase: &StreamingStartupPhase,
     error: &SessionFlowError,
 ) -> String {
     if let Some(summary) = build_home_remote_play_not_ready_summary(&error.message) {
+        return format!("phase={phase:?}; {summary}");
+    }
+    if let Some(summary) = build_host_registration_retry_exhausted_summary(error) {
         return format!("phase={phase:?}; {summary}");
     }
     if let Some(summary) = build_remote_console_wake_circuit_summary(&error.message) {
@@ -1403,7 +1688,10 @@ fn build_startup_diagnostic_summary(
     format!("phase={phase:?}; detail={detail}")
 }
 
-fn is_startup_error_retryable(kind: &StreamingStartupErrorKind, error: &SessionFlowError) -> bool {
+fn is_startup_error_retryable_fallback(
+    kind: &StreamingStartupErrorKind,
+    error: &SessionFlowError,
+) -> bool {
     if is_home_remote_play_not_ready_message(&error.message.to_ascii_lowercase()) {
         return false;
     }
@@ -1423,6 +1711,18 @@ fn is_startup_error_retryable(kind: &StreamingStartupErrorKind, error: &SessionF
 fn is_home_remote_play_not_ready_message(message: &str) -> bool {
     let normalized = message.to_ascii_lowercase();
     normalized.contains("homeremoteplaynotready")
+}
+
+fn is_home_server_registration_retry_exhausted_message(message: &str) -> bool {
+    message
+        .to_ascii_lowercase()
+        .contains("homesessionboundedretryexhausted")
+}
+
+fn is_server_registration_retry_signal_message(message: &str) -> bool {
+    let normalized = message.to_ascii_lowercase();
+    normalized.contains("serverneverregistered")
+        || normalized.contains("waitingforservertoregister")
 }
 
 fn is_remote_console_wake_circuit_open_message(message: &str) -> bool {
@@ -1466,7 +1766,49 @@ fn build_remote_console_wake_circuit_summary(message: &str) -> Option<String> {
     ))
 }
 
+fn build_host_registration_retry_exhausted_summary(error: &SessionFlowError) -> Option<String> {
+    if !is_home_server_registration_retry_exhausted_message(&error.message) {
+        return None;
+    }
+
+    let target_id = extract_bounded_retry_field(&error.message, "targetId").unwrap_or("unknown");
+    let reason = extract_bounded_retry_field(&error.message, "reason").unwrap_or("unknown");
+    let retry_count =
+        extract_bounded_retry_field(&error.message, "retryCount").unwrap_or("unknown");
+    let retry_limit =
+        extract_bounded_retry_field(&error.message, "retryLimit").unwrap_or("unknown");
+    let last_error = error.body.as_deref().unwrap_or("unknown");
+
+    Some(format!(
+        "targetId={target_id}; reason={reason}; retryCount={retry_count}; retryLimit={retry_limit}; lastError={last_error}; hint=hostRegistrationRetryExhausted"
+    ))
+}
+
+fn build_progress_bounded_retry(message: &str) -> Option<StreamingStartupBoundedRetry> {
+    if !is_home_server_registration_retry_exhausted_message(message) {
+        return None;
+    }
+
+    let retry_count = extract_bounded_retry_field(message, "retryCount")
+        .and_then(|value| value.parse::<u8>().ok())?;
+    let retry_limit = extract_bounded_retry_field(message, "retryLimit")
+        .and_then(|value| value.parse::<u8>().ok())?;
+    Some(StreamingStartupBoundedRetry {
+        reason: StreamingStartupBoundedRetryReason::WaitingForServerRegistration,
+        status: StreamingStartupBoundedRetryStatus::Exhausted,
+        retry_count,
+        retry_limit,
+    })
+}
+
 fn extract_preflight_field<'a>(message: &'a str, key: &str) -> Option<&'a str> {
+    let prefix = format!("{key}=");
+    message
+        .split(';')
+        .find_map(|segment| segment.trim().strip_prefix(&prefix))
+}
+
+fn extract_bounded_retry_field<'a>(message: &'a str, key: &str) -> Option<&'a str> {
     let prefix = format!("{key}=");
     message
         .split(';')
@@ -1478,51 +1820,6 @@ fn extract_circuit_open_field<'a>(message: &'a str, key: &str) -> Option<&'a str
     message
         .split(';')
         .find_map(|segment| segment.trim().strip_prefix(&prefix))
-}
-
-fn matches_remote_host_id(
-    target_id: &str,
-    console: &crate::mods::data::types::DataHostSummary,
-) -> bool {
-    console.server_id.as_deref() == Some(target_id)
-        || console.id.as_deref() == Some(target_id)
-        || console.device_id.as_deref() == Some(target_id)
-}
-
-fn is_home_remote_play_registered(console: &crate::mods::data::types::DataHostSummary) -> bool {
-    console.power_state.as_deref() == Some("On")
-        && (console.remote_management_enabled == Some(true)
-            || console.console_streaming_enabled == Some(true))
-}
-
-fn home_remote_play_not_ready_error(
-    target_id: &str,
-    console: Option<&crate::mods::data::types::DataHostSummary>,
-    attempts: u32,
-    elapsed_ms: u64,
-) -> SessionFlowError {
-    let power_state = console
-        .and_then(|console| console.power_state.as_deref())
-        .unwrap_or("unknown");
-    let remote_management_enabled =
-        format_option_bool(console.and_then(|console| console.remote_management_enabled));
-    let console_streaming_enabled =
-        format_option_bool(console.and_then(|console| console.console_streaming_enabled));
-    let console_addrs_count = console
-        .and_then(|console| console.console_addrs.as_ref().map(|items| items.len()))
-        .unwrap_or(0);
-
-    SessionFlowError::message(format!(
-        "homeRemotePlayNotReady:targetId={target_id};powerState={power_state};remoteManagementEnabled={remote_management_enabled};consoleStreamingEnabled={console_streaming_enabled};consoleAddrsCount={console_addrs_count};attempts={attempts};elapsedMs={elapsed_ms};hint=hostRemotePlayUnavailable"
-    ))
-}
-
-fn format_option_bool(value: Option<bool>) -> &'static str {
-    match value {
-        Some(true) => "true",
-        Some(false) => "false",
-        None => "null",
-    }
 }
 
 fn now_ms() -> u64 {
@@ -1622,17 +1919,126 @@ fn resolve_custom_turn(snapshot: &StreamingConfigSnapshot) -> Option<TurnServer>
     })
 }
 
+fn build_console_ready_snapshot(
+    smartglass_hosts: &[DataHostSummary],
+    smartglass_ready_consoles: &[RemoteConsoleSnapshot],
+) -> serde_json::Value {
+    serde_json::json!({
+        "smartglassCount": smartglass_hosts.len(),
+        "smartglassReadyCount": smartglass_ready_consoles.len(),
+        "smartglassHosts": smartglass_hosts.iter().map(summarize_host_for_console_ready_trace).collect::<Vec<_>>(),
+        "smartglassReadyConsoles": smartglass_ready_consoles
+            .iter()
+            .map(summarize_remote_console_for_ready_trace)
+            .collect::<Vec<_>>(),
+        "tsMs": now_ms(),
+    })
+}
+
+fn build_smartglass_ready_candidates(
+    smartglass_hosts: &[DataHostSummary],
+) -> Vec<RemoteConsoleSnapshot> {
+    let smartglass_index = build_host_index(smartglass_hosts);
+
+    smartglass_index
+        .into_iter()
+        .map(|(identity, smartglass)| build_smartglass_ready_candidate(identity, smartglass))
+        .collect()
+}
+
+fn build_host_index<'a>(hosts: &'a [DataHostSummary]) -> BTreeMap<String, &'a DataHostSummary> {
+    let mut index = BTreeMap::new();
+    for host in hosts {
+        if let Some(identity) = host_identity(host) {
+            index.entry(identity).or_insert(host);
+        }
+    }
+    index
+}
+
+fn host_identity(host: &DataHostSummary) -> Option<String> {
+    host.server_id
+        .clone()
+        .or_else(|| host.id.clone())
+        .or_else(|| host.device_id.clone())
+}
+
+fn build_smartglass_ready_candidate(
+    identity: String,
+    smartglass: &DataHostSummary,
+) -> RemoteConsoleSnapshot {
+    RemoteConsoleSnapshot {
+        id: smartglass.id.clone().or_else(|| Some(identity.clone())),
+        device_id: smartglass.device_id.clone(),
+        server_id: smartglass
+            .server_id
+            .clone()
+            .or_else(|| smartglass.id.clone())
+            .or_else(|| Some(identity)),
+        power_state: smartglass.power_state.clone(),
+        remote_management_enabled: smartglass.remote_management_enabled,
+        console_streaming_enabled: smartglass.console_streaming_enabled,
+        console_addrs_count: console_addrs_count(smartglass),
+        ready_source: Some("smartglass".to_string()),
+    }
+}
+
+fn console_addrs_count(host: &DataHostSummary) -> u32 {
+    host.console_addrs
+        .as_ref()
+        .map(|items| items.len() as u32)
+        .unwrap_or(0)
+}
+
+fn summarize_host_for_console_ready_trace(host: &DataHostSummary) -> serde_json::Value {
+    serde_json::json!({
+        "id": host.id,
+        "deviceId": host.device_id,
+        "serverId": host.server_id,
+        "name": host.name,
+        "deviceName": host.device_name,
+        "powerState": host.power_state,
+        "remoteManagementEnabled": host.remote_management_enabled,
+        "consoleStreamingEnabled": host.console_streaming_enabled,
+        "consoleAddrsCount": console_addrs_count(host),
+    })
+}
+
+fn summarize_remote_console_for_ready_trace(console: &RemoteConsoleSnapshot) -> serde_json::Value {
+    serde_json::json!({
+        "id": console.id,
+        "deviceId": console.device_id,
+        "serverId": console.server_id,
+        "powerState": console.power_state,
+        "remoteManagementEnabled": console.remote_management_enabled,
+        "consoleStreamingEnabled": console.console_streaming_enabled,
+        "consoleAddrsCount": console.console_addrs_count,
+        "readySource": console.ready_source,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
-        apply_streaming_preferences, build_startup_diagnostic_summary, classify_startup_error_kind,
-        is_startup_error_retryable, parse_audio_bitrate_preference, parse_bitrate_preference,
-        parse_codec_preference, parse_runtime_preference, startup_error_message_key,
-        SessionFlowError, StreamingStartupErrorKind, StreamingStartupPhase,
+        apply_streaming_preferences, build_console_ready_snapshot,
+        build_fallback_progress_snapshot, build_smartglass_ready_candidates,
+        build_startup_diagnostic_summary_fallback, classify_startup_error_kind_fallback,
+        is_startup_error_retryable_fallback, map_domain_progress_snapshot,
+        parse_audio_bitrate_preference, parse_bitrate_preference, parse_codec_preference,
+        parse_runtime_preference, startup_error_message_key, SessionFlowError,
+        StreamingStartupErrorKind, StreamingStartupPhase,
     };
-    use crate::mods::streaming::types::{StreamingConfigSnapshot, StreamingDisplayOptionsValue};
+    use crate::mods::data::DataHostSummary;
+    use crate::mods::streaming::types::{
+        StreamingConfigSnapshot, StreamingDisplayOptionsValue, StreamingSessionPhase,
+        StreamingSessionProgressSnapshot,
+    };
+    use serde_json::json;
     use xbox_streaming::{
         BitratePreference, CodecPreference, Config as DomainStreamingConfig, RuntimePreference,
+        SessionFlowStartupErrorHint as DomainStartupErrorHint,
+        SessionFlowStartupErrorKind as DomainStartupErrorKind, SessionPhase as DomainSessionPhase,
+        SessionProgressSnapshot as DomainSessionProgressSnapshot,
     };
 
     #[test]
@@ -1717,16 +2123,208 @@ mod tests {
         );
 
         let phase = StreamingStartupPhase::ResolvingContext;
-        let kind = classify_startup_error_kind(&phase, &error);
+        let kind = classify_startup_error_kind_fallback(&phase, &error);
 
         assert_eq!(kind, StreamingStartupErrorKind::HostRemotePlayUnavailable);
         assert_eq!(
-            startup_error_message_key(&kind, &error),
+            startup_error_message_key(&kind),
             "streamPage.errors.hostRemotePlayUnavailable"
         );
-        assert!(!is_startup_error_retryable(&kind, &error));
-        assert!(build_startup_diagnostic_summary(&phase, &error)
+        assert!(!is_startup_error_retryable_fallback(&kind, &error));
+        assert!(build_startup_diagnostic_summary_fallback(&phase, &error)
             .contains("hint=hostRemotePlayUnavailable"));
+    }
+
+    #[test]
+    fn host_registration_retry_exhausted_maps_to_host_issue() {
+        let error = SessionFlowError {
+            message: "homeSessionBoundedRetryExhausted:targetId=console-1;reason=waitingForServerRegistration;retryCount=1;retryLimit=1".to_string(),
+            status: None,
+            body: Some(
+                "Agent : ServerNeverRegistered : Server never registered with service : State WaitingForServerToRegister"
+                    .to_string(),
+            ),
+            startup_hint: None,
+        };
+
+        let phase = StreamingStartupPhase::WaitingSessionReady;
+        let kind = classify_startup_error_kind_fallback(&phase, &error);
+
+        assert_eq!(
+            kind,
+            StreamingStartupErrorKind::HostRegistrationRetryExhausted
+        );
+        assert_eq!(
+            startup_error_message_key(&kind),
+            "streamPage.errors.hostRegistrationRetryExhausted"
+        );
+        assert!(!is_startup_error_retryable_fallback(&kind, &error));
+        assert!(build_startup_diagnostic_summary_fallback(&phase, &error)
+            .contains("hint=hostRegistrationRetryExhausted"));
+    }
+
+    #[test]
+    fn domain_progress_hint_maps_to_structured_progress_error() {
+        let progress = map_domain_progress_snapshot(DomainSessionProgressSnapshot {
+            session_id: "session-1".to_string(),
+            phase: DomainSessionPhase::Failed,
+            status_text_key: "streamPage.errors.startFailed".to_string(),
+            queue_seconds: None,
+            queue: None,
+            error_code: Some("ServerNeverRegistered".to_string()),
+            error_message: Some(
+                "homeSessionBoundedRetryExhausted:targetId=console-1;reason=waitingForServerRegistration;retryCount=1;retryLimit=1"
+                    .to_string(),
+            ),
+            error_hint: Some(DomainStartupErrorHint {
+                kind: DomainStartupErrorKind::HostRegistrationRetryExhausted,
+                retryable: false,
+                diagnostic_summary: "targetId=console-1; reason=waitingForServerRegistration; retryCount=1; retryLimit=1; hint=hostRegistrationRetryExhausted".to_string(),
+            }),
+        });
+
+        assert_eq!(
+            progress
+                .error
+                .as_ref()
+                .map(|error| error.error_kind.clone()),
+            Some(StreamingStartupErrorKind::HostRegistrationRetryExhausted)
+        );
+        assert_eq!(
+            progress
+                .error
+                .as_ref()
+                .and_then(|error| error.bounded_retry.as_ref())
+                .map(|retry| retry.retry_count),
+            Some(1)
+        );
+    }
+
+    #[test]
+    fn fallback_progress_registration_message_maps_structured_error() {
+        let progress = build_fallback_progress_snapshot(StreamingSessionProgressSnapshot {
+            session_id: "session-1".to_string(),
+            phase: StreamingSessionPhase::Failed,
+            status_text_key: "streamPage.errors.startFailed".to_string(),
+            queue_seconds: None,
+            queue: None,
+            error_code: Some("ServerNeverRegistered".to_string()),
+            error_message: Some(
+                "homeSessionBoundedRetryExhausted:targetId=console-1;reason=waitingForServerRegistration;retryCount=1;retryLimit=1"
+                    .to_string(),
+            ),
+            error: None,
+        });
+
+        assert_eq!(
+            progress
+                .error
+                .as_ref()
+                .map(|error| error.error_kind.clone()),
+            Some(StreamingStartupErrorKind::HostRegistrationRetryExhausted)
+        );
+        assert_eq!(
+            progress
+                .error
+                .as_ref()
+                .and_then(|error| error.bounded_retry.as_ref())
+                .map(|retry| retry.retry_limit),
+            Some(1)
+        );
+        assert_eq!(
+            progress.error.as_ref().map(|error| error.retryable),
+            Some(false)
+        );
+    }
+
+    #[test]
+    fn fallback_progress_without_raw_error_keeps_structured_error_empty() {
+        let progress = build_fallback_progress_snapshot(StreamingSessionProgressSnapshot {
+            session_id: "session-1".to_string(),
+            phase: StreamingSessionPhase::WaitingSessionReady,
+            status_text_key: "streamPage.status.waitingSession".to_string(),
+            queue_seconds: None,
+            queue: None,
+            error_code: None,
+            error_message: None,
+            error: None,
+        });
+
+        assert!(progress.error.is_none());
+    }
+
+    #[test]
+    fn fallback_progress_network_message_maps_retryable_network_error() {
+        let progress = build_fallback_progress_snapshot(StreamingSessionProgressSnapshot {
+            session_id: "session-1".to_string(),
+            phase: StreamingSessionPhase::Recovering,
+            status_text_key: "streamPage.status.reconnecting".to_string(),
+            queue_seconds: None,
+            queue: None,
+            error_code: None,
+            error_message: Some("networkLost reconnecting".to_string()),
+            error: None,
+        });
+
+        assert_eq!(
+            progress
+                .error
+                .as_ref()
+                .map(|error| error.error_kind.clone()),
+            Some(StreamingStartupErrorKind::Network)
+        );
+        assert_eq!(
+            progress.error.as_ref().map(|error| error.retryable),
+            Some(true)
+        );
+    }
+
+    #[test]
+    fn build_console_ready_snapshot_includes_smartglass_ready_hosts() {
+        let smartglass = vec![DataHostSummary {
+            id: Some("console-1".to_string()),
+            power_state: Some("On".to_string()),
+            remote_management_enabled: Some(true),
+            console_streaming_enabled: Some(true),
+            ..Default::default()
+        }];
+        let smartglass_ready = build_smartglass_ready_candidates(&smartglass);
+
+        let snapshot = build_console_ready_snapshot(&smartglass, &smartglass_ready);
+
+        assert_eq!(snapshot["smartglassCount"], json!(1));
+        assert_eq!(snapshot["smartglassReadyCount"], json!(1));
+        assert_eq!(
+            snapshot["smartglassHosts"][0]["remoteManagementEnabled"],
+            json!(true)
+        );
+        assert_eq!(
+            snapshot["smartglassReadyConsoles"][0]["readySource"],
+            json!("smartglass")
+        );
+    }
+
+    #[test]
+    fn build_smartglass_ready_candidates_keeps_smartglass_only_host_ready() {
+        let smartglass = vec![DataHostSummary {
+            id: Some("console-2".to_string()),
+            power_state: Some("On".to_string()),
+            remote_management_enabled: Some(true),
+            console_streaming_enabled: Some(true),
+            ..Default::default()
+        }];
+
+        let smartglass_ready = build_smartglass_ready_candidates(&smartglass);
+
+        assert_eq!(smartglass_ready.len(), 1);
+        assert_eq!(smartglass_ready[0].id.as_deref(), Some("console-2"));
+        assert_eq!(smartglass_ready[0].server_id.as_deref(), Some("console-2"));
+        assert_eq!(smartglass_ready[0].power_state.as_deref(), Some("On"));
+        assert_eq!(smartglass_ready[0].remote_management_enabled, Some(true));
+        assert_eq!(
+            smartglass_ready[0].ready_source.as_deref(),
+            Some("smartglass")
+        );
     }
 
     #[test]

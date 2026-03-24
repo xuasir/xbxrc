@@ -1,5 +1,8 @@
+import type {
+  StreamingStartupBoundedRetry,
+  StreamingStartupEvent,
+} from '@shared/rpc/streaming'
 import type { RouteLocationNormalizedLoaded, Router } from 'vue-router'
-import type { StreamingStartupEvent } from '@shared/rpc/streaming'
 import type { StreamRuntimePhase } from './runtime/runtime-contract'
 import type { SessionHealthSnapshot, SessionUiPhase } from './session'
 import type {
@@ -7,13 +10,13 @@ import type {
   RuntimeLaunchSpec,
   StreamConfigSnapshot,
   StreamEnhancementMountSnapshot,
-  StreamSessionCapabilitiesProjection,
-  StreamSessionDiagnosticsSnapshot,
   StreamErrorKind,
-  StreamSessionLifecyclePhase,
-  StreamSessionMetadataProjection,
   StreamingSessionExecution,
   StreamingSessionProgress,
+  StreamSessionCapabilitiesProjection,
+  StreamSessionDiagnosticsSnapshot,
+  StreamSessionLifecyclePhase,
+  StreamSessionMetadataProjection,
 } from './types'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { events } from '../services/events'
@@ -24,16 +27,17 @@ import { useStreamRuntimeHost } from './runtime/runtime-host'
 import {
   buildSessionHealthSnapshot,
   closeRemoteStreamSession,
-  createStartupAttemptId,
   createSessionProgressSubscription,
+  createStartupAttemptId,
   createStreamRouteState,
   getRemoteSessionProgress,
   loadStreamConfigSnapshot,
   mapProgressToSessionUiPhase,
   persistStreamDisplayOptions,
   powerOffRemoteConsole,
-  resolveStreamError,
+  resolveProgressError,
   resolveStartupPhasePrimaryStatusTextKey,
+  resolveStreamError,
   sendTextToRemoteConsole,
   startRemoteStreamSessionWithAttempt,
 } from './session'
@@ -58,6 +62,223 @@ const NO_FRAME_RECENT_ACTIVITY_MS = 20_000
 const STREAM_UI_HOST_RESET_EVENT = 'stream-ui-host-reset'
 
 type BrowserTimeout = number
+type SessionProgressSource = 'start' | 'subscription'
+type ResolvedStreamErrorSnapshot = ReturnType<typeof resolveStreamError>
+type ResolvedProgressErrorSnapshot = ReturnType<typeof resolveProgressError>
+
+interface StreamExecutionViewState {
+  sessionUiPhase: SessionUiPhase
+  isLoading: boolean
+  isConnected: boolean
+  statusText: string
+  errorText: string
+  errorDiagnosticText: string
+  errorKind: StreamErrorKind
+  startupBoundedRetry: StreamingStartupBoundedRetry | null
+  lifecyclePhase: StreamSessionLifecyclePhase
+}
+
+type StreamExecutionViewAction
+  = | { type: 'targetMissing', message: string }
+    | { type: 'resolvedError', resolved: ResolvedStreamErrorSnapshot }
+    | { type: 'startupEvent', event: StreamingStartupEvent, statusText: string }
+    | {
+      type: 'sessionProgress'
+      progress: StreamingSessionProgress
+      source: SessionProgressSource
+      statusText: string
+      resolvedFailed?: ResolvedProgressErrorSnapshot
+    }
+    | { type: 'disconnecting' }
+    | { type: 'disconnected' }
+    | { type: 'startRequested' }
+    | { type: 'startPreparing', statusText: string }
+    | { type: 'retryRequested' }
+    | { type: 'runtimeConnected', statusText: string }
+    | { type: 'runtimeDisconnected' }
+    | { type: 'runtimePhaseChanged', phase: StreamRuntimePhase, statusText: string }
+    | { type: 'framePresented' }
+    | { type: 'runtimeLaunchRequested', statusText: string }
+
+function reduceViewState(
+  state: StreamExecutionViewState,
+  action: StreamExecutionViewAction,
+): StreamExecutionViewState {
+  switch (action.type) {
+    case 'targetMissing':
+      return {
+        ...state,
+        errorKind: 'targetMissing',
+        errorText: action.message,
+        errorDiagnosticText: '',
+        isLoading: false,
+        sessionUiPhase: 'failed',
+      }
+    case 'resolvedError':
+      return {
+        ...state,
+        errorKind: action.resolved.kind,
+        errorText: action.resolved.message,
+        errorDiagnosticText: action.resolved.diagnosticSummary ?? '',
+        startupBoundedRetry: action.resolved.boundedRetry ?? null,
+        lifecyclePhase: 'failed',
+        sessionUiPhase: 'failed',
+        isLoading: false,
+      }
+    case 'startupEvent':
+      if (state.sessionUiPhase === 'failed' || state.sessionUiPhase === 'closed') {
+        return state
+      }
+      return {
+        ...state,
+        statusText: action.statusText,
+        startupBoundedRetry: action.event.boundedRetry ?? state.startupBoundedRetry,
+        isLoading:
+          action.event.phase !== 'ready' && action.event.phase !== 'failed'
+            ? true
+            : state.isLoading,
+      }
+    case 'sessionProgress': {
+      const nextState: StreamExecutionViewState = {
+        ...state,
+        sessionUiPhase: mapProgressToSessionUiPhase(action.progress),
+      }
+      if (action.progress.phase === 'recovering') {
+        nextState.lifecyclePhase = 'recovering'
+      }
+      if (
+        !state.isConnected
+        || action.progress.phase === 'failed'
+        || action.progress.phase === 'closed'
+      ) {
+        nextState.statusText = action.statusText
+      }
+      if (action.progress.phase === 'failed') {
+        return {
+          ...nextState,
+          isConnected: false,
+          isLoading: false,
+          lifecyclePhase: 'failed',
+          errorKind: action.resolvedFailed?.kind ?? 'startFailed',
+          errorText: action.resolvedFailed?.message ?? state.errorText,
+          errorDiagnosticText: action.resolvedFailed?.diagnosticSummary ?? '',
+          startupBoundedRetry: action.resolvedFailed?.boundedRetry ?? null,
+        }
+      }
+      if (action.progress.phase === 'closed') {
+        return {
+          ...nextState,
+          isConnected: false,
+          isLoading: false,
+          lifecyclePhase: 'stopped',
+          sessionUiPhase: action.source === 'subscription' ? 'closed' : nextState.sessionUiPhase,
+        }
+      }
+      return nextState
+    }
+    case 'disconnecting':
+      return {
+        ...state,
+        lifecyclePhase: 'stopped',
+        sessionUiPhase: 'closing',
+      }
+    case 'disconnected':
+      return {
+        ...state,
+        isConnected: false,
+        isLoading: false,
+        sessionUiPhase: 'closed',
+      }
+    case 'startRequested':
+      return {
+        ...state,
+        sessionUiPhase: 'subscribing',
+        lifecyclePhase: 'loading',
+        isLoading: true,
+        isConnected: false,
+        errorKind: 'none',
+        errorText: '',
+        errorDiagnosticText: '',
+        startupBoundedRetry: null,
+      }
+    case 'startPreparing':
+      return {
+        ...state,
+        sessionUiPhase: 'starting',
+        statusText: action.statusText,
+      }
+    case 'retryRequested':
+      return {
+        ...state,
+        errorText: '',
+        errorDiagnosticText: '',
+        startupBoundedRetry: null,
+        errorKind: 'none',
+        isLoading: true,
+        isConnected: false,
+        sessionUiPhase: 'idle',
+        lifecyclePhase: 'idle',
+      }
+    case 'runtimeConnected': {
+      if (state.sessionUiPhase === 'failed' || state.sessionUiPhase === 'closed') {
+        return state
+      }
+      const nextState: StreamExecutionViewState = {
+        ...state,
+        isConnected: true,
+        isLoading: false,
+        statusText: action.statusText,
+        errorKind: 'none',
+        errorText: '',
+        errorDiagnosticText: '',
+        sessionUiPhase: 'connected',
+      }
+      if (state.lifecyclePhase !== 'recovering' && state.lifecyclePhase !== 'playing') {
+        nextState.lifecyclePhase = 'starting'
+      }
+      return nextState
+    }
+    case 'runtimeDisconnected':
+      return {
+        ...state,
+        isConnected: false,
+        isLoading: false,
+        lifecyclePhase: state.lifecyclePhase === 'failed' ? 'failed' : 'stopped',
+      }
+    case 'runtimePhaseChanged':
+      if (state.sessionUiPhase === 'failed' || state.sessionUiPhase === 'closed') {
+        return state
+      }
+      return {
+        ...state,
+        statusText: action.statusText,
+        lifecyclePhase:
+          action.phase === 'reconnecting'
+            ? 'recovering'
+            : state.lifecyclePhase !== 'playing'
+              ? 'starting'
+              : state.lifecyclePhase,
+      }
+    case 'framePresented':
+      return state.lifecyclePhase === 'failed'
+        || state.sessionUiPhase === 'failed'
+        || state.sessionUiPhase === 'closed'
+        ? state
+        : {
+            ...state,
+            lifecyclePhase: 'playing',
+          }
+    case 'runtimeLaunchRequested':
+      if (state.sessionUiPhase === 'failed' || state.sessionUiPhase === 'closed') {
+        return state
+      }
+      return {
+        ...state,
+        statusText: action.statusText,
+        lifecyclePhase: 'starting',
+      }
+  }
+}
 
 /**
  * 串流执行入口：直接收口 session orchestration、runtime host 和页面要消费的 execution view model。
@@ -72,6 +293,7 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
   const errorText = ref('')
   const errorDiagnosticText = ref('')
   const errorKind = ref<StreamErrorKind>('none')
+  const startupBoundedRetry = ref<StreamingStartupBoundedRetry | null>(null)
   const lifecyclePhase = ref<StreamSessionLifecyclePhase>('idle')
   const sessionId = ref('')
   const startupAttemptId = ref('')
@@ -85,6 +307,75 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
   const warningVisible = ref(false)
   let warningTimer: BrowserTimeout | null = null
   let disposeStartupEvents: (() => void) | null = null
+
+  function readViewState(): StreamExecutionViewState {
+    return {
+      sessionUiPhase: sessionUiPhase.value,
+      isLoading: isLoading.value,
+      isConnected: isConnected.value,
+      statusText: statusText.value,
+      errorText: errorText.value,
+      errorDiagnosticText: errorDiagnosticText.value,
+      errorKind: errorKind.value,
+      startupBoundedRetry: startupBoundedRetry.value,
+      lifecyclePhase: lifecyclePhase.value,
+    }
+  }
+
+  // 单一写入口：startup/progress/runtime 只能通过 reducer 改这组 UI 状态。
+  function applyViewState(next: StreamExecutionViewState): void {
+    sessionUiPhase.value = next.sessionUiPhase
+    isLoading.value = next.isLoading
+    isConnected.value = next.isConnected
+    statusText.value = next.statusText
+    errorText.value = next.errorText
+    errorDiagnosticText.value = next.errorDiagnosticText
+    errorKind.value = next.errorKind
+    startupBoundedRetry.value = next.startupBoundedRetry
+    lifecyclePhase.value = next.lifecyclePhase
+  }
+
+  function dispatchViewAction(action: StreamExecutionViewAction): void {
+    applyViewState(reduceViewState(readViewState(), action))
+  }
+
+  const runtimeHost = useStreamRuntimeHost({
+    playerElementId: 'stream-page-video',
+    onConnectionStateChange: (state) => {
+      if (state === 'connected') {
+        handlePlayerConnected()
+        return
+      }
+
+      if (state === 'failed' || state === 'closed') {
+        resetExecutionWarning()
+        handlePlayerDisconnected()
+        if (state === 'failed') {
+          handlePlayerError(options.t('streamPage.errors.connectionFailed'))
+          return
+        }
+        handlePlayerError(options.t('streamPage.errors.connectionClosed'))
+      }
+    },
+    onRuntimeError: (message) => {
+      handlePlayerError(message)
+    },
+    onRuntimePhaseChange: (phase) => {
+      dispatchViewAction({
+        type: 'runtimePhaseChanged',
+        phase,
+        statusText: options.t(RUNTIME_PHASE_STATUS_KEYS[phase]),
+      })
+      if (phase === 'reconnecting') {
+        resetExecutionWarning()
+      }
+    },
+    onFramePresented: () => {
+      if (!closing.value) {
+        dispatchViewAction({ type: 'framePresented' })
+      }
+    },
+  })
 
   const renderProjection = computed(() => sessionExecution.value?.render ?? null)
   const sessionMetadata = computed<StreamSessionMetadataProjection | null>(
@@ -134,45 +425,6 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
     () => routeState.targetType.value === 'home' && routeState.targetId.value !== '',
   )
 
-  const runtimeHost = useStreamRuntimeHost({
-    playerElementId: 'stream-page-video',
-    onConnectionStateChange: (state) => {
-      if (state === 'connected') {
-        handlePlayerConnected()
-        setStatusText(options.t('streamPage.status.connected'))
-        return
-      }
-
-      if (state === 'failed' || state === 'closed') {
-        resetExecutionWarning()
-        handlePlayerDisconnected()
-        if (state === 'failed') {
-          handlePlayerError(options.t('streamPage.errors.connectionFailed'))
-          return
-        }
-        handlePlayerError(options.t('streamPage.errors.connectionClosed'))
-      }
-    },
-    onRuntimeError: (message) => {
-      handlePlayerError(message)
-    },
-    onRuntimePhaseChange: (phase) => {
-      if (phase === 'reconnecting') {
-        lifecyclePhase.value = 'recovering'
-        resetExecutionWarning()
-      }
-      else if (lifecyclePhase.value !== 'playing') {
-        lifecyclePhase.value = 'starting'
-      }
-      setStatusText(options.t(RUNTIME_PHASE_STATUS_KEYS[phase]))
-    },
-    onFramePresented: () => {
-      if (!closing.value && lifecyclePhase.value !== 'failed') {
-        lifecyclePhase.value = 'playing'
-      }
-    },
-  })
-
   const progressSubscription = createSessionProgressSubscription({
     getSessionId: () => sessionId.value,
     getEnabled: () => sessionReportingEnabled.value,
@@ -182,7 +434,6 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
     },
     onError: (error) => {
       applyResolvedError(error)
-      isLoading.value = false
     },
   })
 
@@ -224,11 +475,7 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
       error,
       t: options.t,
     })
-    errorKind.value = resolved.kind
-    errorText.value = resolved.message
-    errorDiagnosticText.value = resolved.diagnosticSummary ?? ''
-    lifecyclePhase.value = 'failed'
-    sessionUiPhase.value = 'failed'
+    dispatchViewAction({ type: 'resolvedError', resolved })
   }
 
   function disposeStartupEventSubscription(): void {
@@ -243,10 +490,11 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
       return
     }
 
-    statusText.value = options.t(resolveStartupPhasePrimaryStatusTextKey(event.phase))
-    if (event.phase !== 'ready' && event.phase !== 'failed') {
-      isLoading.value = true
-    }
+    dispatchViewAction({
+      type: 'startupEvent',
+      event,
+      statusText: options.t(resolveStartupPhasePrimaryStatusTextKey(event.phase)),
+    })
   }
 
   async function loadStreamConfig(): Promise<void> {
@@ -268,39 +516,26 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
 
   function applySessionProgress(
     progress: StreamingSessionProgress,
-    source: 'start' | 'subscription',
+    source: SessionProgressSource,
   ): void {
     sessionHealth.value = buildSessionHealthSnapshot(progress)
-    sessionUiPhase.value = mapProgressToSessionUiPhase(progress)
-    if (progress.phase === 'recovering') {
-      lifecyclePhase.value = 'recovering'
-    }
-    // 媒体已连通后，页面文案由 runtime 连接态驱动；
-    // session progress 继续更新健康信息，但不再把状态文案刷回“启动播放器”。
-    if (!isConnected.value || progress.phase === 'failed' || progress.phase === 'closed') {
-      statusText.value = options.t(progress.statusTextKey)
-    }
+    const resolvedFailed
+      = progress.phase === 'failed' ? resolveProgressError(progress, options.t) : undefined
+    dispatchViewAction({
+      type: 'sessionProgress',
+      progress,
+      source,
+      statusText: options.t(progress.statusTextKey),
+      resolvedFailed,
+    })
 
     if (progress.phase === 'failed') {
       disableSessionHealthReporting()
-      isConnected.value = false
-      lifecyclePhase.value = 'failed'
-      errorKind.value = 'startFailed'
-      errorText.value
-        = progress.errorMessage ?? options.t('streamPage.errors.connectionFailed')
-      errorDiagnosticText.value = progress.errorMessage ?? ''
-      isLoading.value = false
       return
     }
 
     if (progress.phase === 'closed') {
       disableSessionHealthReporting()
-      isConnected.value = false
-      lifecyclePhase.value = 'stopped'
-      isLoading.value = false
-      if (source === 'subscription') {
-        sessionUiPhase.value = 'closed'
-      }
     }
   }
 
@@ -310,8 +545,7 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
     }
 
     closing.value = true
-    lifecyclePhase.value = 'stopped'
-    sessionUiPhase.value = 'closing'
+    dispatchViewAction({ type: 'disconnecting' })
     disableSessionHealthReporting()
     resetExecutionWarning()
 
@@ -327,9 +561,7 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
     sessionId.value = ''
     sessionExecution.value = null
     sessionHealth.value = null
-    isConnected.value = false
-    isLoading.value = false
-    sessionUiPhase.value = 'closed'
+    dispatchViewAction({ type: 'disconnected' })
 
     if (optionsInput?.navigateBack === true) {
       try {
@@ -347,23 +579,16 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
 
   async function startStream(): Promise<void> {
     if (routeState.targetId.value === '') {
-      errorKind.value = 'targetMissing'
-      errorText.value = options.t('streamPage.errors.targetMissing')
-      errorDiagnosticText.value = ''
-      isLoading.value = false
-      sessionUiPhase.value = 'failed'
+      dispatchViewAction({
+        type: 'targetMissing',
+        message: options.t('streamPage.errors.targetMissing'),
+      })
       return
     }
 
     try {
       disableSessionHealthReporting()
-      sessionUiPhase.value = 'subscribing'
-      lifecyclePhase.value = 'loading'
-      isLoading.value = true
-      isConnected.value = false
-      errorKind.value = 'none'
-      errorText.value = ''
-      errorDiagnosticText.value = ''
+      dispatchViewAction({ type: 'startRequested' })
       sessionHealth.value = null
       startupAttemptId.value = createStartupAttemptId()
       disposeStartupEventSubscription()
@@ -371,8 +596,10 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
 
       await loadStreamConfig()
 
-      sessionUiPhase.value = 'starting'
-      statusText.value = options.t('streamPage.status.preparing')
+      dispatchViewAction({
+        type: 'startPreparing',
+        statusText: options.t('streamPage.status.preparing'),
+      })
       const started = await startRemoteStreamSessionWithAttempt(
         routeState.targetType.value,
         routeState.targetId.value,
@@ -388,24 +615,17 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
     catch (error) {
       disposeStartupEventSubscription()
       applyResolvedError(error)
-      isLoading.value = false
     }
   }
 
   async function handleRetry(): Promise<void> {
     disableSessionHealthReporting()
     resetExecutionWarning()
-    errorText.value = ''
-    errorDiagnosticText.value = ''
-    errorKind.value = 'none'
-    isLoading.value = true
-    isConnected.value = false
     sessionId.value = ''
     sessionExecution.value = null
     sessionHealth.value = null
     closing.value = false
-    sessionUiPhase.value = 'idle'
-    lifecyclePhase.value = 'idle'
+    dispatchViewAction({ type: 'retryRequested' })
     await runtimeHost.closeRuntime()
     await startStream()
   }
@@ -436,31 +656,18 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
     }
   }
 
-  function setStatusText(message: string): void {
-    statusText.value = message
-  }
-
   function handlePlayerConnected(): void {
-    isConnected.value = true
-    isLoading.value = false
-    errorKind.value = 'none'
-    errorText.value = ''
-    errorDiagnosticText.value = ''
-    sessionUiPhase.value = 'connected'
-    if (lifecyclePhase.value !== 'recovering' && lifecyclePhase.value !== 'playing') {
-      lifecyclePhase.value = 'starting'
-    }
+    dispatchViewAction({
+      type: 'runtimeConnected',
+      statusText: options.t('streamPage.status.connected'),
+    })
   }
 
   function handlePlayerDisconnected(): void {
     if (closing.value) {
       return
     }
-    isConnected.value = false
-    isLoading.value = false
-    if (lifecyclePhase.value !== 'failed') {
-      lifecyclePhase.value = 'stopped'
-    }
+    dispatchViewAction({ type: 'runtimeDisconnected' })
   }
 
   function handlePlayerError(message: string): void {
@@ -549,8 +756,10 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
         return
       }
 
-      setStatusText(options.t('streamPage.status.startingPlayer'))
-      lifecyclePhase.value = 'starting'
+      dispatchViewAction({
+        type: 'runtimeLaunchRequested',
+        statusText: options.t('streamPage.status.startingPlayer'),
+      })
       void runtimeHost.startRuntime(spec).catch((error: unknown) => {
         handlePlayerError(error instanceof Error ? error.message : String(error))
         handlePlayerDisconnected()
@@ -648,6 +857,7 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
       errorText,
       errorDiagnosticText,
       errorKind,
+      startupBoundedRetry,
       hasError: computed(() => errorText.value !== ''),
       lifecyclePhase,
       warningVisible,

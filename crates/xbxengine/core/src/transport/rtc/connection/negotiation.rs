@@ -26,6 +26,10 @@ impl RtcConnectionService {
         session: &XbxEngineSessionDto,
         runtime_stats: &Arc<Mutex<XbxEngineMediaRuntimeStats>>,
     ) -> Result<(), XbxEngineRuntimeError> {
+        if let Ok(mut stats) = runtime_stats.lock() {
+            stats.message_handshake_acked_at_ms = None;
+            stats.control_ready_at_ms = None;
+        }
         let preserved_remote_candidates = self.state.lock().ok().map(|state| {
             (
                 state.remote_candidates.clone(),

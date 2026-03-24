@@ -85,7 +85,8 @@ pub fn build_xbxengine_stats(
         .and_then(|stats| stats.inbound_video_jitter_ms)
         .map(|value| format!("{value:.1}ms"))
         .unwrap_or_default();
-    let video_health = classify_video_health(runtime_stats);
+    let display_phase = classify_display_phase(runtime_stats, now_ms);
+    let video_health = classify_video_health(runtime_stats, display_phase.as_deref(), now_ms);
     let stall_kind = classify_stall_kind(runtime_stats);
     let observation_note = build_observation_note(runtime_stats);
     let transport_recovery_note = build_transport_recovery_note(runtime_stats);
@@ -93,6 +94,7 @@ pub fn build_xbxengine_stats(
     let reinject_note = build_rtx_reinject_note(runtime_stats);
     let runtime_summary = build_runtime_summary(
         runtime_stats,
+        display_phase.as_deref(),
         video_health.as_deref(),
         observation_note.as_deref(),
         transport_recovery_note.as_deref(),
@@ -101,6 +103,7 @@ pub fn build_xbxengine_stats(
     );
     let primary_issue_chain = build_primary_issue_chain(
         runtime_stats,
+        display_phase.as_deref(),
         video_health.as_deref(),
         stall_kind.as_deref(),
     );
@@ -122,7 +125,7 @@ pub fn build_xbxengine_stats(
         runtime_summary,
         primary_issue_chain,
         latest_decision_summary,
-        session_phase: runtime_stats.and_then(|stats| stats.session_phase.clone()),
+        session_phase: display_phase,
         transport_policy_profile: runtime_stats
             .and_then(|stats| stats.transport_policy_profile.clone()),
         recovery_policy_profile: runtime_stats
@@ -344,6 +347,7 @@ pub fn build_xbxengine_stats(
 // 用统一摘要描述当前 runtime 所处状态，便于回归时快速判断是否落在预期档位。
 fn build_runtime_summary(
     runtime_stats: Option<&XbxEngineMediaRuntimeStats>,
+    display_phase: Option<&str>,
     video_health: Option<&str>,
     observation_note: Option<&str>,
     transport_recovery_note: Option<&str>,
@@ -355,7 +359,7 @@ fn build_runtime_summary(
         .transport_policy_profile
         .as_deref()
         .unwrap_or("unknown");
-    let phase = stats.session_phase.as_deref().unwrap_or("unknown");
+    let phase = display_phase.unwrap_or("unknown");
     let band = stats
         .direct_gaming_bitrate_band
         .as_deref()
@@ -374,14 +378,27 @@ fn build_runtime_summary(
 // 将当前主问题链显式归类，避免每次回归都手工拼 diagnosis/band/health。
 fn build_primary_issue_chain(
     runtime_stats: Option<&XbxEngineMediaRuntimeStats>,
+    display_phase: Option<&str>,
     video_health: Option<&str>,
     stall_kind: Option<&str>,
 ) -> Option<String> {
     let stats = runtime_stats?;
+    match display_phase {
+        Some("connecting") => return Some("transport:connecting".to_string()),
+        Some("handshaking") => return Some("startup:handshaking".to_string()),
+        Some("priming") => return Some("startup:priming".to_string()),
+        _ => {}
+    }
     match video_health {
         Some("connecting") => return Some("transport:connecting".to_string()),
+        Some("priming") => return Some("startup:priming".to_string()),
         Some("startupLowQuality") => return Some("startup:lowQuality".to_string()),
         Some("stalled") => {
+            if matches!(display_phase, Some("recovering")) {
+                if let Some(diagnosis) = stats.recovery_diagnosis.as_deref() {
+                    return Some(format!("recovery:{diagnosis}"));
+                }
+            }
             if let Some(stall) = stall_kind.filter(|stall| *stall != "none") {
                 return Some(format!("stall:{stall}"));
             }
@@ -607,17 +624,80 @@ fn build_rtx_reinject_note(runtime_stats: Option<&XbxEngineMediaRuntimeStats>) -
     ))
 }
 
-/// 统一把运行时事实压成 UI/trace 可直接消费的健康态，避免前端再拼条件猜状态。
-fn classify_video_health(runtime_stats: Option<&XbxEngineMediaRuntimeStats>) -> Option<String> {
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum DisplaySessionPhase {
+    Connecting,
+    Handshaking,
+    Priming,
+    Steady,
+    Recovering,
+}
+
+impl DisplaySessionPhase {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Connecting => "connecting",
+            Self::Handshaking => "handshaking",
+            Self::Priming => "priming",
+            Self::Steady => "steady",
+            Self::Recovering => "recovering",
+        }
+    }
+}
+
+fn classify_display_phase(
+    runtime_stats: Option<&XbxEngineMediaRuntimeStats>,
+    now_ms: f64,
+) -> Option<String> {
     let stats = runtime_stats?;
-    let now_ms = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|duration| duration.as_millis() as f64)
-        .unwrap_or(0.0);
-    let fresh_output = has_recent_video_output(stats, now_ms);
+    let phase = compute_display_phase(stats, now_ms);
+    Some(phase.as_str().to_string())
+}
+
+fn compute_display_phase(stats: &XbxEngineMediaRuntimeStats, now_ms: f64) -> DisplaySessionPhase {
     let transport_state = format!("{:?}", stats.transport_state);
     if transport_state != "Connected" {
-        return Some("connecting".to_string());
+        return DisplaySessionPhase::Connecting;
+    }
+    if stats.message_handshake_acked_at_ms.is_none() {
+        return DisplaySessionPhase::Handshaking;
+    }
+    if !has_visible_video_output(stats) || stats.control_ready_at_ms.is_none() {
+        return DisplaySessionPhase::Priming;
+    }
+    let fresh_output = has_recent_video_output(stats, now_ms);
+    if stats.session_phase.as_deref() == Some("recovering") && !fresh_output {
+        return DisplaySessionPhase::Recovering;
+    }
+    match stats.recovery_diagnosis.as_deref() {
+        Some("adapterIdleTimeout" | "decoderBackendFailure" | "transportSampleLoss")
+            if !fresh_output =>
+        {
+            DisplaySessionPhase::Recovering
+        }
+        Some("transportAwaitRecoveryKeyframe" | "ingressWaitKeyframe") if !fresh_output => {
+            DisplaySessionPhase::Recovering
+        }
+        _ => DisplaySessionPhase::Steady,
+    }
+}
+
+fn has_visible_video_output(stats: &XbxEngineMediaRuntimeStats) -> bool {
+    stats.latest_video_present_time_ms.is_some() || stats.video_present_submit_count_total > 0
+}
+
+/// 统一把运行时事实压成 UI/trace 可直接消费的健康态，避免前端再拼条件猜状态。
+fn classify_video_health(
+    runtime_stats: Option<&XbxEngineMediaRuntimeStats>,
+    display_phase: Option<&str>,
+    now_ms: f64,
+) -> Option<String> {
+    let stats = runtime_stats?;
+    let fresh_output = has_recent_video_output(stats, now_ms);
+    match display_phase {
+        Some("connecting" | "handshaking") => return Some("connecting".to_string()),
+        Some("priming") => return Some("priming".to_string()),
+        _ => {}
     }
     match stats.recovery_diagnosis.as_deref() {
         Some("ingressWaitKeyframe") | Some("transportAwaitRecoveryKeyframe") if !fresh_output => {
@@ -639,7 +719,7 @@ fn classify_video_health(runtime_stats: Option<&XbxEngineMediaRuntimeStats>) -> 
     {
         return Some("startupLowQuality".to_string());
     }
-    if stats.session_phase.as_deref() == Some("recovering") && !fresh_output {
+    if matches!(display_phase, Some("recovering")) && !fresh_output {
         return Some("recovering".to_string());
     }
     Some("healthy".to_string())
@@ -808,6 +888,10 @@ mod tests {
             transport_state: XbxEngineTransportStateDto::Connected,
             transport_policy_profile: Some("cloud".to_string()),
             session_phase: Some("recovering".to_string()),
+            message_handshake_acked_at_ms: Some(10.0),
+            control_ready_at_ms: Some(20.0),
+            latest_video_present_time_ms: Some(30.0),
+            video_present_submit_count_total: 1,
             direct_gaming_bitrate_band: Some("steady".to_string()),
             transport_recovery_epoch: 7,
             transport_recovery_epoch_at_last_escalation: 6,
@@ -843,6 +927,10 @@ mod tests {
             transport_state: XbxEngineTransportStateDto::Connected,
             transport_policy_profile: Some("cloud".to_string()),
             session_phase: Some("steady".to_string()),
+            message_handshake_acked_at_ms: Some(10.0),
+            control_ready_at_ms: Some(20.0),
+            latest_video_present_time_ms: Some(30.0),
+            video_present_submit_count_total: 1,
             direct_gaming_bitrate_band: Some("steady".to_string()),
             latest_video_repair_probe_observation: Some(
                 crate::XbxEngineVideoRepairProbeObservation {
@@ -882,6 +970,10 @@ mod tests {
     fn runtime_summary_includes_rtx_reinject_note_when_present() {
         let stats = XbxEngineMediaRuntimeStats {
             transport_state: XbxEngineTransportStateDto::Connected,
+            message_handshake_acked_at_ms: Some(10.0),
+            control_ready_at_ms: Some(20.0),
+            latest_video_present_time_ms: Some(30.0),
+            video_present_submit_count_total: 1,
             latest_video_rtx_reinject_observation: Some(
                 crate::XbxEngineVideoRtxReinjectObservation {
                     stage: "adapterResolved".to_string(),
@@ -924,17 +1016,115 @@ mod tests {
         let stats = XbxEngineMediaRuntimeStats {
             transport_state: XbxEngineTransportStateDto::Connected,
             recovery_diagnosis: Some("adapterIdleTimeout".to_string()),
+            message_handshake_acked_at_ms: Some(now_ms - 80.0),
+            control_ready_at_ms: Some(now_ms - 70.0),
             latest_video_present_time_ms: Some(now_ms - 40.0),
             latest_video_decode_ok_time_ms: Some(now_ms - 40.0),
+            video_present_submit_count_total: 1,
             video_present_fps: 58.0,
             ..XbxEngineMediaRuntimeStats::default()
         };
 
         assert_eq!(
-            classify_video_health(Some(&stats)),
+            classify_video_health(Some(&stats), Some("steady"), now_ms),
             Some("healthy".to_string())
         );
         assert_eq!(classify_stall_kind(Some(&stats)), Some("none".to_string()));
+    }
+
+    #[test]
+    fn build_stats_uses_handshaking_phase_before_handshake_ack() {
+        let stats = XbxEngineMediaRuntimeStats {
+            transport_state: XbxEngineTransportStateDto::Connected,
+            transport_policy_profile: Some("cloud".to_string()),
+            direct_gaming_bitrate_band: Some("steady".to_string()),
+            ..XbxEngineMediaRuntimeStats::default()
+        };
+
+        let dto = build_xbxengine_stats(&test_snapshot(), Some(&stats));
+
+        assert_eq!(dto.session_phase.as_deref(), Some("handshaking"));
+        assert_eq!(dto.video_health.as_deref(), Some("connecting"));
+        assert_eq!(
+            dto.primary_issue_chain.as_deref(),
+            Some("startup:handshaking")
+        );
+    }
+
+    #[test]
+    fn build_stats_uses_priming_phase_before_first_present() {
+        let stats = XbxEngineMediaRuntimeStats {
+            transport_state: XbxEngineTransportStateDto::Connected,
+            transport_policy_profile: Some("cloud".to_string()),
+            direct_gaming_bitrate_band: Some("steady".to_string()),
+            message_handshake_acked_at_ms: Some(10.0),
+            control_ready_at_ms: Some(20.0),
+            latest_video_packet_arrival_time_ms: Some(30.0),
+            latest_video_decode_ok_time_ms: Some(35.0),
+            ..XbxEngineMediaRuntimeStats::default()
+        };
+
+        let dto = build_xbxengine_stats(&test_snapshot(), Some(&stats));
+
+        assert_eq!(dto.session_phase.as_deref(), Some("priming"));
+        assert_eq!(dto.video_health.as_deref(), Some("priming"));
+        assert_eq!(dto.primary_issue_chain.as_deref(), Some("startup:priming"));
+    }
+
+    #[test]
+    fn build_stats_only_turns_healthy_after_first_present() {
+        let now_ms = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_millis() as f64;
+        let stats = XbxEngineMediaRuntimeStats {
+            transport_state: XbxEngineTransportStateDto::Connected,
+            transport_policy_profile: Some("cloud".to_string()),
+            direct_gaming_bitrate_band: Some("steady".to_string()),
+            message_handshake_acked_at_ms: Some(now_ms - 100.0),
+            control_ready_at_ms: Some(now_ms - 90.0),
+            latest_video_present_time_ms: Some(now_ms - 20.0),
+            latest_video_decode_ok_time_ms: Some(now_ms - 20.0),
+            video_present_submit_count_total: 1,
+            video_present_fps: 60.0,
+            ..XbxEngineMediaRuntimeStats::default()
+        };
+
+        let dto = build_xbxengine_stats(&test_snapshot(), Some(&stats));
+
+        assert_eq!(dto.session_phase.as_deref(), Some("steady"));
+        assert_eq!(dto.video_health.as_deref(), Some("healthy"));
+        assert_eq!(dto.primary_issue_chain.as_deref(), Some("steady:healthy"));
+    }
+
+    #[test]
+    fn build_stats_reports_recovering_after_first_present_when_output_turns_stale() {
+        let now_ms = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_millis() as f64;
+        let stats = XbxEngineMediaRuntimeStats {
+            transport_state: XbxEngineTransportStateDto::Connected,
+            transport_policy_profile: Some("cloud".to_string()),
+            session_phase: Some("recovering".to_string()),
+            direct_gaming_bitrate_band: Some("steady".to_string()),
+            message_handshake_acked_at_ms: Some(now_ms - 1_000.0),
+            control_ready_at_ms: Some(now_ms - 990.0),
+            latest_video_present_time_ms: Some(now_ms - 800.0),
+            latest_video_decode_ok_time_ms: Some(now_ms - 800.0),
+            video_present_submit_count_total: 1,
+            recovery_diagnosis: Some("adapterIdleTimeout".to_string()),
+            ..XbxEngineMediaRuntimeStats::default()
+        };
+
+        let dto = build_xbxengine_stats(&test_snapshot(), Some(&stats));
+
+        assert_eq!(dto.session_phase.as_deref(), Some("recovering"));
+        assert_eq!(dto.video_health.as_deref(), Some("stalled"));
+        assert_eq!(
+            dto.primary_issue_chain.as_deref(),
+            Some("recovery:adapterIdleTimeout")
+        );
     }
 
     #[test]
