@@ -86,11 +86,26 @@ Continue developing the current desktop application as the canonical codebase, u
 
 1. Clarify the target and impacted modules.
 2. Check existing architecture / docs / current implementation.
-3. If the task is straightforward, execute directly.
+3. If the task is straightforward or small in scope, execute directly without creating an RFC/report.
 4. If the task is complex, determine the implementation plan first.
 5. Implement the change.
 6. Run appropriate validation.
 7. Update tracking documents.
+
+## Small Task Policy
+
+Small / straightforward tasks should be tracked in `docs/project-task.md` only and should **not** create an RFC/report by default.
+
+Typical small tasks include:
+
+- focused bug fixes within an existing module
+- small UI polish or copy updates
+- local refactors that do not change module boundaries
+- narrow config / script / build fixes
+- small documentation updates tied to an implementation
+- single-session work that does not need milestone tracking
+
+Default rule: if `docs/project-task.md` is enough to track the work clearly, do **not** create an RFC/report.
 
 ## Complex Task Workflow
 
@@ -103,7 +118,7 @@ A task should be treated as complex if it involves one or more of the following:
 - work that will span multiple commits or sessions
 - work that requires explicit milestones for tracking
 
-Default rule: 1 complex task = 1 RFC, and only fully completed work should produce 1 Report.
+Default rule: only complex tasks require an RFC, and only fully completed complex tasks should produce a Report.
 
 For complex tasks, execution must follow this order:
 
@@ -121,6 +136,7 @@ For complex tasks, execution must follow this order:
 - The RFC should describe background, goals, scope, non-goals, impacted modules, implementation steps, validation plan, risks, and progress checkpoints.
 - During execution, all interim progress tracking should stay in the RFC until the task is fully completed.
 - If the solution changes materially during implementation, update the RFC instead of letting execution drift away from the plan.
+- Do not create RFCs for small / straightforward tasks that can be tracked sufficiently in `docs/project-task.md`.
 
 ## Report Requirements
 
@@ -129,11 +145,12 @@ For complex tasks, execution must follow this order:
 - The report should record what was delivered, what changed, validation performed, residual risks, and follow-up items.
 - The report should reference the corresponding RFC when applicable.
 - Do not create intermediate or partial reports for work that is still in progress; use the RFC to track that progress instead.
+- Do not create reports for small / straightforward tasks unless the user explicitly asks for one.
 
 # Tracking Policy
 
 - `docs/project-task.md` MUST be the single source of truth for active task tracking.
-- Every completed task must be recorded in `docs/project-task.md` immediately in the current task list.
+- Every completed task must be recorded in `docs/project-task.md` immediately in the current task list, including small tasks that do not have an RFC/report.
 - When the current task list exceeds **100 entries**, archive completed historical items into a dated archive file such as `docs/project-task.archived.YYYY-MM-DD.md`.
 - After archiving, keep `docs/project-task.md` focused on active and recent work, and preserve the archive reference at the top of the tracker.
 
@@ -143,6 +160,6 @@ Before closing a task, confirm all applicable items below:
 
 - code changes are aligned with the fixed stack and allowed technical route
 - validation has been run at the appropriate level
-- `docs/rfcs/` has been updated for complex work
-- `docs/reports/` has been added for completed complex work
+- `docs/rfcs/` has been updated for complex work when required
+- `docs/reports/` has been added for completed complex work when required
 - `docs/project-task.md` has been updated immediately
