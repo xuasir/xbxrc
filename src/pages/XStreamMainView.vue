@@ -216,6 +216,16 @@ const microphoneBinding = computed(() =>
 )
 
 const streamMenuActions = computed<StreamMenuActionViewModel[]>(() => {
+  if (!isConnected.value) {
+    return [
+      {
+        id: 'exit',
+        label: t('streamPage.actions.exit'),
+        danger: true,
+      },
+    ]
+  }
+
   const items: StreamMenuActionViewModel[] = []
 
   if (ability.canOpenDiagnostics.value) {
@@ -689,7 +699,7 @@ async function handleStreamMenuAction(id: string): Promise<void> {
   position: absolute;
   top: 24px;
   left: 24px;
-  z-index: 20;
+  z-index: 120;
   pointer-events: none;
   transition: all 0.3s cubic-bezier(0.2, 0, 0, 1);
 }
