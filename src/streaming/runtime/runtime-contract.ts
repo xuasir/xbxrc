@@ -33,7 +33,7 @@ export type RuntimeEvent
  */
 export interface RuntimePort {
   launch: (spec: RuntimeLaunchSpec) => Promise<void>
-  stop: () => Promise<void>
+  stop: (reason?: string) => Promise<void>
   requestReconnect: (reason: StreamRuntimeReconnectReason) => Promise<void>
   applyDisplayState: (state: RuntimeDisplayState) => void
   setAudioVolume: (value: number) => void

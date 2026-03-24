@@ -624,7 +624,7 @@ export function createBrowserRuntime(options: {
       await connectMediaProtocol(spec, { restart: false })
       applyCurrentDisplayState()
     },
-    async stop() {
+    async stop(_reason?: string) {
       const stoppedSessionId = currentSpec?.sessionId ?? null
       connectAttempt += 1
       reconnectPromise = null

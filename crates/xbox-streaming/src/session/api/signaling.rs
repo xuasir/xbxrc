@@ -26,10 +26,12 @@ impl WebApiSignalingGateway {
 
         let session_base_path = format!("{}/v5/sessions/{target_type}", plan.session.base_url);
         let signaling_api = CrateSignalingApi::new(session_base_path, token.gs_token);
+        let enable_teredo_derivation = plan.session.target.is_home();
 
         Self {
             signaling_api,
-            ice_policy: IcePolicy::new(plan.negotiation.prefer_ipv6),
+            ice_policy: IcePolicy::new(plan.negotiation.prefer_ipv6)
+                .with_teredo_ipv4_derivation(enable_teredo_derivation),
         }
     }
 

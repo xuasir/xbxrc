@@ -39,6 +39,25 @@ pub(crate) fn collect_transport_metrics(
     )
 }
 
+pub(crate) fn describe_selected_candidate_pair(
+    peer_connection: &mut RTCPeerConnection,
+) -> Option<String> {
+    let report = peer_connection.get_stats(Instant::now(), StatsSelector::None);
+    let pair = selected_candidate_pair(&report)?;
+    let local = candidate_summary(&report, &pair.local_candidate_id);
+    let remote = candidate_summary(&report, &pair.remote_candidate_id);
+    Some(format!(
+        "state={:?} nominated={} rtt_ms={:.1} requests_sent={} responses_received={} local={} remote={}",
+        pair.state,
+        pair.nominated,
+        pair.current_round_trip_time * 1_000.0,
+        pair.requests_sent,
+        pair.responses_received,
+        local,
+        remote,
+    ))
+}
+
 fn collect_transport_metrics_from_report(
     report: &RTCStatsReport,
     connected_at_ms: Option<f64>,
@@ -316,6 +335,31 @@ fn candidate_type_for(report: &RTCStatsReport, candidate_id: &str) -> Option<RTC
         RTCStatsReportEntry::LocalCandidate(candidate) => Some(candidate.candidate_type),
         RTCStatsReportEntry::RemoteCandidate(candidate) => Some(candidate.candidate_type),
         _ => None,
+    }
+}
+
+fn candidate_summary(report: &RTCStatsReport, candidate_id: &str) -> String {
+    match report.get(candidate_id) {
+        Some(RTCStatsReportEntry::LocalCandidate(candidate))
+        | Some(RTCStatsReportEntry::RemoteCandidate(candidate)) => format!(
+            "type={:?} addr={}:{} related={}:{} protocol={} url={}",
+            candidate.candidate_type,
+            candidate.address.as_deref().unwrap_or("?"),
+            candidate.port,
+            if candidate.related_address.is_empty() {
+                "?"
+            } else {
+                candidate.related_address.as_str()
+            },
+            candidate.related_port,
+            candidate.protocol,
+            if candidate.url.is_empty() {
+                "-"
+            } else {
+                candidate.url.as_str()
+            },
+        ),
+        _ => format!("id={candidate_id}"),
     }
 }
 

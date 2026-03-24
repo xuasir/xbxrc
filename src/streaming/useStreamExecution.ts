@@ -410,6 +410,7 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
     return {
       sessionId: execution.session.id,
       targetType: execution.session.targetType,
+      turnSource: execution.metadata.turnSource,
       runtime: execution.runtime,
       render: execution.render,
     }
@@ -419,10 +420,10 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
     () =>
       routeState.targetType.value === 'home'
       && routeState.initialRemoteManagementEnabled.value
-      && routeState.targetId.value !== '',
+      && routeState.controlConsoleId.value !== '',
   )
   const canSendText = computed(
-    () => routeState.targetType.value === 'home' && routeState.targetId.value !== '',
+    () => routeState.targetType.value === 'home' && routeState.controlConsoleId.value !== '',
   )
 
   const progressSubscription = createSessionProgressSubscription({
@@ -634,7 +635,7 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
     if (!canPowerOffConsole.value) {
       return false
     }
-    return await powerOffRemoteConsole(routeState.targetId.value)
+    return await powerOffRemoteConsole(routeState.controlConsoleId.value)
   }
 
   async function sendTextToConsole(text: string): Promise<boolean> {
@@ -645,7 +646,7 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
     if (normalizedText === '') {
       return false
     }
-    return await sendTextToRemoteConsole(routeState.targetId.value, normalizedText)
+    return await sendTextToRemoteConsole(routeState.controlConsoleId.value, normalizedText)
   }
 
   async function persistDisplayOptions(optionsValue: DisplayOptionsValue): Promise<void> {

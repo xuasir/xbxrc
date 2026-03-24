@@ -1,5 +1,10 @@
 import type { StreamStats } from '../../player'
-import type { RuntimeDisplayState, RuntimeEvent, RuntimePort, StreamRuntimeReconnectReason } from './runtime-contract'
+import type {
+  RuntimeDisplayState,
+  RuntimeEvent,
+  RuntimePort,
+  StreamRuntimeReconnectReason,
+} from './runtime-contract'
 import { events } from '../../services/events'
 import { rpc } from '../../services/rpc'
 
@@ -85,13 +90,19 @@ export function createXbxEngineRuntime(options: {
         audioVolume,
       })
     },
-    async stop() {
+    async stop(reason?: string) {
       unsubscribe()
       microphoneState = {
         capturing: false,
         paused: false,
       }
-      await rpc.xbxEngine.stopRuntime()
+      console.info('[streaming][xbxengine-runtime] stopRuntime', {
+        viewportElementId,
+        reason: reason ?? 'unspecified',
+      })
+      await rpc.xbxEngine.stopRuntime({
+        reason,
+      })
     },
     async requestReconnect(reason) {
       await rpc.xbxEngine.requestReconnect({

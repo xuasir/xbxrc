@@ -114,6 +114,13 @@ export function createStreamRouteState(route: RouteLocationNormalizedLoaded) {
   const targetId = computed(() => routeDescriptor.value.targetId)
   const displayName = computed(() => routeDescriptor.value.displayName)
   const exitRoute = computed(() => routeDescriptor.value.exitRoute)
+  const controlConsoleId = computed(() => {
+    const value = route.query.consoleId
+    if (typeof value === 'string' && value.trim() !== '') {
+      return value.trim()
+    }
+    return targetId.value
+  })
   const initialPowerState = computed(() => {
     const value = route.query.powerState
     return typeof value === 'string' ? value : ''
@@ -123,6 +130,7 @@ export function createStreamRouteState(route: RouteLocationNormalizedLoaded) {
   return {
     targetType,
     targetId,
+    controlConsoleId,
     displayName,
     exitRoute,
     initialPowerState,

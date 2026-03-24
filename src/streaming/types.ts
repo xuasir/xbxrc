@@ -35,6 +35,7 @@ export type StreamSessionLifecyclePhase
 export interface RuntimeLaunchSpec {
   sessionId: string
   targetType: StreamingTargetType
+  turnSource: StreamSessionMetadataProjection['turnSource']
   runtime: StreamRuntimeProjection
   render: StreamRenderProjection
 }

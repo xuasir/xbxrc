@@ -1,5 +1,6 @@
 use std::sync::{Arc, Mutex};
 
+use rtc::peer_connection::event::RTCPeerConnectionIceErrorEvent;
 use rtc::peer_connection::state::RTCPeerConnectionState;
 use rtc::sansio::Protocol;
 use xbxengine_protocol::{XbxEngineIceCandidateDto, XbxEngineTransportStateDto};
@@ -276,6 +277,7 @@ impl RtcConnectionService {
         }
         let mut pending_data_channel_events = Vec::new();
         let mut pending_ice_events = Vec::new();
+        let mut pending_ice_error_events = Vec::new();
         let mut pending_connection_states = Vec::new();
         let mut saw_local_candidate_update = false;
         let mut saw_local_gathering_complete = false;
@@ -293,6 +295,11 @@ impl RtcConnectionService {
                         ) => {
                             pending_ice_events.push(ice_event);
                             saw_local_candidate_update = true;
+                        }
+                        rtc::peer_connection::event::RTCPeerConnectionEvent::OnIceCandidateErrorEvent(
+                            error_event,
+                        ) => {
+                            pending_ice_error_events.push(error_event);
                         }
                         rtc::peer_connection::event::RTCPeerConnectionEvent::OnIceGatheringStateChangeEvent(
                             rtc::peer_connection::state::RTCIceGatheringState::Complete,
@@ -323,6 +330,9 @@ impl RtcConnectionService {
             for ice_event in pending_ice_events.drain(..) {
                 self.record_local_candidate_event(ice_event, runtime_stats)?;
             }
+            for error_event in pending_ice_error_events.drain(..) {
+                self.record_local_candidate_error_event(error_event, runtime_stats);
+            }
             for state in pending_connection_states.drain(..) {
                 self.handle_peer_connection_state_change(state, runtime_stats);
             }
@@ -339,6 +349,49 @@ impl RtcConnectionService {
             self.publish_ice_snapshot(runtime_stats, "rtcLocalIceCandidateObserved");
         }
         Ok(())
+    }
+
+    fn record_local_candidate_error_event(
+        &self,
+        error_event: RTCPeerConnectionIceErrorEvent,
+        runtime_stats: &Arc<Mutex<XbxEngineMediaRuntimeStats>>,
+    ) {
+        let address = if error_event.address.trim().is_empty() {
+            "-".to_string()
+        } else {
+            error_event.address.clone()
+        };
+        let url = if error_event.url.trim().is_empty() {
+            "-".to_string()
+        } else {
+            error_event.url.clone()
+        };
+        let summary = if let Ok(state) = self.state.lock() {
+            state.candidate_snapshot_summary()
+        } else {
+            "local=state-unavailable".to_string()
+        };
+        crate::xbx_log_warn!(
+            "[xbxengine][rtc-connection] local ice candidate error code={} text={} url={} address={} port={} summary={}",
+            error_event.error_code,
+            error_event.error_text,
+            url,
+            address,
+            error_event.port,
+            summary,
+        );
+        RuntimeStatsSink::new(runtime_stats.clone()).update(|stats| {
+            stats.latest_observation_label = Some("rtcLocalIceCandidateError".to_string());
+            stats.latest_observation_summary = Some(format!(
+                "phase1 rtc local ice candidate error code={} text={} url={} address={} port={} ice={}",
+                error_event.error_code,
+                error_event.error_text,
+                url,
+                address,
+                error_event.port,
+                summary,
+            ));
+        });
     }
 
     fn record_local_candidate_event(
@@ -367,6 +420,11 @@ impl RtcConnectionService {
         let kind = classify_candidate_kind(&dto.candidate);
         if let Ok(mut state) = self.state.lock() {
             state.record_local_candidate(dto, kind);
+            crate::xbx_log_warn!(
+                "[xbxengine][rtc-connection] local candidate observed kind={} summary={}",
+                kind.as_str(),
+                state.candidate_snapshot_summary(),
+            );
         } else {
             return Err(crate::XbxEngineRuntimeError::new(
                 "xbxEngineRtcConnectionStateLockFailed",

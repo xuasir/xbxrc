@@ -317,8 +317,8 @@ fn build_ms_device_info_header_value(target: Target, info: &MsDeviceInfo) -> Str
             "env": {
                 "clientAppId": client_app_id,
                 "clientAppType": info.client_app_type,
-                "clientAppVersion": "26.1.97",
-                "clientSdkVersion": "10.3.7",
+                "clientAppVersion": "29.11.13-hotfix.3",
+                "clientSdkVersion": "10.6.33",
                 "httpEnvironment": "prod",
                 "sdkInstallId": ""
             }

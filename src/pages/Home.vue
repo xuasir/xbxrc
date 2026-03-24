@@ -36,6 +36,12 @@ function resolveStreamTargetId(host: HostSummary, index: number): string {
   return host.serverId ?? host.id ?? host.deviceId ?? `host-${index}`
 }
 
+function resolveConsoleCommandId(host: HostSummary, index: number): string {
+  // XCCS RemoteManagement 命令优先使用 console identity（`id`），
+  // 而 xHome 建 session 仍应继续优先走 `serverId`。
+  return host.id ?? host.serverId ?? host.deviceId ?? `host-${index}`
+}
+
 function resolveHostTitle(host: HostSummary): string {
   const title = host.name ?? host.deviceName
   return typeof title === 'string' && title.trim() !== '' ? title.trim() : 'Xbox'
@@ -135,6 +141,7 @@ function handleSelectHost(host: HostSummary, index: number): void {
     },
     query: {
       name: resolveHostTitle(host),
+      consoleId: resolveConsoleCommandId(host, index),
       powerState: host.powerState ?? '',
       remoteManagementEnabled: host.remoteManagementEnabled === true ? '1' : '0',
     },

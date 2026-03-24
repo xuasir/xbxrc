@@ -116,7 +116,9 @@ pub enum XbxEngineControlCommandDto {
         runtime: Option<XbxEngineRuntimeProjectionDto>,
         render: Option<XbxEngineRenderProjectionDto>,
     },
-    StopRuntime,
+    StopRuntime {
+        reason: Option<String>,
+    },
     RequestReconnect {
         reason: XbxEngineReconnectReasonDto,
     },

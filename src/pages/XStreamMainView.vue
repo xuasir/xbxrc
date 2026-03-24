@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { DisplayOptionsValue } from '../streaming/types'
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { Focusable, FocusScope } from '@/navigation/core/vue'
@@ -479,6 +479,8 @@ async function handleStreamMenuAction(id: string): Promise<void> {
 
   if (handlers[id]) {
     closeActionSheet()
+    // 先让 overlay 关闭完成，再发即时控制动作，降低菜单态切换竞态。
+    await nextTick()
     await handlers[id]?.()
   }
 }

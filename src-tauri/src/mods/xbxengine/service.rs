@@ -42,7 +42,7 @@ impl XbxEngineService {
                 app_handle,
                 last_runtime_event.clone(),
                 native_video,
-                runtime_trace,
+                runtime_trace.clone(),
             )),
             last_runtime_event,
         }
@@ -134,6 +134,12 @@ struct AttachViewportParams {
 #[serde(rename_all = "camelCase")]
 struct RequestReconnectParams {
     reason: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct StopRuntimeParams {
+    reason: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -247,7 +253,16 @@ fn parse_control_command(
                 },
             })
         }
-        "StopRuntime" => Ok(XbxEngineControlCommandDto::StopRuntime),
+        "StopRuntime" => {
+            let reason = params
+                .map(serde_json::from_value::<StopRuntimeParams>)
+                .transpose()
+                .map_err(|error| {
+                    AppError::InvalidParams(format!("Invalid StopRuntime params: {error}"))
+                })?
+                .and_then(|value| value.reason);
+            Ok(XbxEngineControlCommandDto::StopRuntime { reason })
+        }
         "AttachViewport" => {
             let params: AttachViewportParams = parse_required_params(command_name, params)?;
             Ok(XbxEngineControlCommandDto::AttachViewport {

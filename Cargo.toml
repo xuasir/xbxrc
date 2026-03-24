@@ -55,6 +55,8 @@ webrtc-media = "0.17.1"
 interceptor = "0.17.1"
 webrtc-util = "0.17.1"
 rtc = "0.9.0"
+stun = "0.17.1"
+turn = "0.17.1"
 p256 = { version = "0.13.2", features = [
   "jwk",
   "pkcs8",

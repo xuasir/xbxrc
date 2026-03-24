@@ -9,7 +9,7 @@ use tauri::{AppHandle, Manager};
 pub enum XbxEngineCommand {
     StartRuntime(Option<Value>),
     RequestReconnect(Option<Value>),
-    StopRuntime,
+    StopRuntime(Option<Value>),
     AttachViewport(Option<Value>),
     DetachViewport,
     ApplyDisplayState(Option<Value>),
@@ -49,8 +49,8 @@ pub async fn handle_rpc(
             service.dispatch_control("RequestReconnect", p).await?;
             Ok(json!({ "accepted": true }))
         }
-        XbxEngineCommand::StopRuntime => {
-            service.dispatch_control("StopRuntime", None).await?;
+        XbxEngineCommand::StopRuntime(p) => {
+            service.dispatch_control("StopRuntime", p).await?;
             Ok(json!({ "accepted": true }))
         }
         XbxEngineCommand::AttachViewport(p) => {

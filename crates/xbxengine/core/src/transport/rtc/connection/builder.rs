@@ -24,16 +24,7 @@ const DEFAULT_ICE_SERVERS: [&str; 7] = [
     "stun:stun.douyucdn.cn:18000",
 ];
 
-pub(super) fn build_peer_connection(
-    session: &XbxEngineSessionDto,
-) -> Result<RTCPeerConnection, XbxEngineRuntimeError> {
-    let mut media_engine = MediaEngine::default();
-    media_engine.register_default_codecs().map_err(|err| {
-        XbxEngineRuntimeError::new(format!("xbxEngineRtcRegisterDefaultCodecsFailed: {err}"))
-    })?;
-    // 对齐旧 webrtc 主线：在默认 codec 之外补齐我们稳定依赖的 H264 family。
-    register_owned_h264_codecs(&mut media_engine)?;
-
+pub(super) fn build_ice_servers(session: &XbxEngineSessionDto) -> Vec<RTCIceServer> {
     let mut ice_servers = Vec::new();
     if !cfg!(test) {
         ice_servers.push(RTCIceServer {
@@ -51,6 +42,32 @@ pub(super) fn build_peer_connection(
             credential: turn_server.credential.clone(),
         });
     }
+    ice_servers
+}
+
+pub(super) fn build_peer_connection(
+    session: &XbxEngineSessionDto,
+) -> Result<RTCPeerConnection, XbxEngineRuntimeError> {
+    let mut media_engine = MediaEngine::default();
+    media_engine.register_default_codecs().map_err(|err| {
+        XbxEngineRuntimeError::new(format!("xbxEngineRtcRegisterDefaultCodecsFailed: {err}"))
+    })?;
+    // 对齐旧 webrtc 主线：在默认 codec 之外补齐我们稳定依赖的 H264 family。
+    register_owned_h264_codecs(&mut media_engine)?;
+
+    let ice_servers = build_ice_servers(session);
+    let ice_server_urls = ice_servers
+        .iter()
+        .flat_map(|server| server.urls.iter().cloned())
+        .collect::<Vec<_>>();
+    crate::xbx_log_warn!(
+        "[xbxengine][rtc-builder] build peer connection session={} target={:?} turn_configured={} ice_server_count={} ice_server_urls={:?}",
+        session.session_id,
+        session.target_type,
+        session.turn_server.is_some(),
+        ice_server_urls.len(),
+        ice_server_urls,
+    );
     let configuration = RTCConfigurationBuilder::new().with_ice_servers(ice_servers);
     RTCPeerConnectionBuilder::new()
         .with_configuration(configuration.build())

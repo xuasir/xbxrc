@@ -1782,8 +1782,8 @@ fn evaluate_home_server_registration_wait_timeout(
     now_ms: u64,
     wait_started_at_ms: &mut Option<u64>,
 ) -> Option<SessionFlowError> {
-    let is_provisioning_pending =
-        runtime.player_state == "pending" && runtime.stream_state.as_deref() == Some("Provisioning");
+    let is_provisioning_pending = runtime.player_state == "pending"
+        && runtime.stream_state.as_deref() == Some("Provisioning");
     if !is_home || !is_provisioning_pending {
         *wait_started_at_ms = None;
         return None;
@@ -1796,9 +1796,7 @@ fn evaluate_home_server_registration_wait_timeout(
     }
 
     Some(home_server_registration_timeout_error(
-        target_id,
-        session_id,
-        elapsed_ms,
+        target_id, session_id, elapsed_ms,
     ))
 }
 

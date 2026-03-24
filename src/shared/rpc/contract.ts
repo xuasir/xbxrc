@@ -38,8 +38,13 @@ import type {
   XbxEngineRuntimeEventDto,
   XbxEngineSetAudioVolumeParams,
   XbxEngineStartRuntimeParams,
+  XbxEngineStopRuntimeParams,
   XbxEngineStatsDto,
 } from './xbxengine'
+import type {
+  RuntimeTraceAckResult,
+  RuntimeTraceRecordEventParams,
+} from './runtimeTrace'
 
 type RpcConfigGroup = Record<string, unknown>
 
@@ -260,10 +265,13 @@ export interface XBoxRpcSchema {
     >
     decideRecovery: RpcMethod<StreamingDecideRecoveryParams, StreamingDecideRecoveryResult>
   }
+  runtimeTrace: {
+    recordEvent: RpcMethod<RuntimeTraceRecordEventParams, RuntimeTraceAckResult>
+  }
   xbxEngine: {
     startRuntime: RpcMethod<XbxEngineStartRuntimeParams, XbxEngineAckResult>
     requestReconnect: RpcMethod<XbxEngineRequestReconnectParams, XbxEngineAckResult>
-    stopRuntime: RpcMethod<void, XbxEngineAckResult>
+    stopRuntime: RpcMethod<XbxEngineStopRuntimeParams | void, XbxEngineAckResult>
     attachViewport: RpcMethod<XbxEngineAttachViewportParams, XbxEngineAckResult>
     detachViewport: RpcMethod<void, XbxEngineAckResult>
     applyDisplayState: RpcMethod<XbxEngineApplyDisplayStateParams, XbxEngineAckResult>

@@ -12,6 +12,12 @@ import { rpc } from '../../services/rpc'
 import { DEFAULT_DISPLAY_OPTIONS, normalizeDisplayOptions, sleep } from '../utils'
 import { createBrowserRuntime } from './browser-runtime'
 import { createXbxEngineRuntime } from './xbxengine-runtime'
+import {
+  buildRuntimeAttemptSpec,
+  canRetryFallbackTurn,
+  shouldAttemptRecovery,
+  shouldUseDirectFirstFallback,
+} from './runtime-host-policy'
 
 type BrowserInterval = number
 
@@ -42,6 +48,26 @@ export function useStreamRuntimeHost(options: UseStreamRuntimeHostOptions) {
   let runtimeToken = 0
   let activeSessionId: string | null = null
   let activeMode: RuntimeLaunchSpec['runtime']['mode'] | null = null
+  let activeLaunchSpec: RuntimeLaunchSpec | null = null
+  let activeConnected = false
+  let fallbackRetryConsumed = false
+
+  async function recordRuntimeTraceEvent(
+    event: string,
+    payload: Record<string, unknown>,
+    sessionId: string | null = activeSessionId,
+  ): Promise<void> {
+    try {
+      await rpc.runtimeTrace.recordEvent({
+        event,
+        sessionId,
+        payload,
+      })
+    }
+    catch {
+      // trace 失败不能反向影响串流主链
+    }
+  }
 
   function clearPerformancePolling(): void {
     if (performanceTimer.value !== null) {
@@ -82,15 +108,27 @@ export function useStreamRuntimeHost(options: UseStreamRuntimeHostOptions) {
 
       if (event.type === 'connectionStateChanged') {
         if (event.state === 'connected') {
+          activeConnected = true
           refreshStatsPolling()
         }
         if (event.state === 'closed' || event.state === 'failed') {
           clearPerformancePolling()
           lastFrameAt.value = null
-          void tryRecoverByTransportState(event.state, token).then((recovered) => {
-            if (!recovered && isRuntimeTokenActive(token)) {
-              options.onConnectionStateChange(event.state)
+          void tryFallbackTurnRetry(token).then((retriedWithFallbackTurn) => {
+            if (retriedWithFallbackTurn) {
+              return
             }
+            return tryRecoverByTransportState(event.state, token).then((recovered) => {
+              if (!recovered && isRuntimeTokenActive(token)) {
+                options.onConnectionStateChange(event.state)
+              }
+            })
+          }, () => {
+            void closeRuntime(`runtime-event:${event.state}:recovery-handler-threw`).finally(() => {
+              if (isRuntimeTokenActive(token)) {
+                options.onConnectionStateChange(event.state)
+              }
+            })
           })
           return
         }
@@ -144,12 +182,12 @@ export function useStreamRuntimeHost(options: UseStreamRuntimeHostOptions) {
     token: number,
   ): Promise<boolean> {
     const currentRuntime = runtime.value
-    if (
-      currentRuntime === null
-      || activeSessionId === null
-      || !isRuntimeTokenActive(token)
-      || (state !== 'failed' && state !== 'closed')
-    ) {
+    if (!shouldAttemptRecovery({
+      runtimeAvailable: currentRuntime !== null,
+      sessionId: activeSessionId,
+      isTokenActive: isRuntimeTokenActive(token),
+      connectionState: state,
+    })) {
       return false
     }
 
@@ -165,12 +203,41 @@ export function useStreamRuntimeHost(options: UseStreamRuntimeHostOptions) {
       if (!isRuntimeTokenActive(token) || !decision.shouldReconnect || decision.reason === undefined) {
         return false
       }
+      console.info('[streaming][runtime-host] requesting runtime reconnect', {
+        sessionId: activeSessionId,
+        state,
+        reason: decision.reason,
+      })
       await currentRuntime.requestReconnect(decision.reason)
       return true
     }
     catch {
       return false
     }
+  }
+
+  async function tryFallbackTurnRetry(token: number): Promise<boolean> {
+    const launchSpec = activeLaunchSpec
+    if (!canRetryFallbackTurn({
+      isTokenActive: isRuntimeTokenActive(token),
+      launchSpec,
+      activeConnected,
+      fallbackRetryConsumed,
+    })) {
+      return false
+    }
+
+    // 仅在首轮直连失败时切一次 fallback TURN，避免和既有 recovery 重试叠加。
+    fallbackRetryConsumed = true
+    console.info('[streaming][runtime-host] home direct-first failed before connected, retrying with fallback TURN')
+    void recordRuntimeTraceEvent('fallbackTurnRetry', {
+      targetType: launchSpec.targetType,
+      mode: launchSpec.runtime.mode,
+      activeConnected,
+      fallbackRetryConsumed,
+    })
+    await launchRuntimeAttempt(launchSpec, { useFallbackTurn: true })
+    return true
   }
 
   function ensureRuntime(mode: RuntimeLaunchSpec['runtime']['mode']): RuntimePort {
@@ -183,7 +250,10 @@ export function useStreamRuntimeHost(options: UseStreamRuntimeHostOptions) {
     return runtime.value
   }
 
-  async function closeRuntime(): Promise<void> {
+  async function stopRuntimeState(input?: {
+    preserveLaunchContext?: boolean
+    reason?: string
+  }): Promise<void> {
     runtimeToken += 1
     clearPerformancePolling()
     runtimeCleanup?.()
@@ -195,56 +265,124 @@ export function useStreamRuntimeHost(options: UseStreamRuntimeHostOptions) {
     performanceSnapshot.value = null
     lastFrameAt.value = null
     renderProjection.value = null
-    activeSessionId = null
-    activeMode = null
-    await currentRuntime?.stop()
+    if (!input?.preserveLaunchContext) {
+      activeSessionId = null
+      activeMode = null
+      activeLaunchSpec = null
+      activeConnected = false
+      fallbackRetryConsumed = false
+    }
+    console.info('[streaming][runtime-host] stopping runtime', {
+      sessionId: activeSessionId,
+      preserveLaunchContext: input?.preserveLaunchContext ?? false,
+      reason: input?.reason ?? 'unspecified',
+    })
+    await currentRuntime?.stop(input?.reason)
   }
 
-  async function startRuntime(input: RuntimeLaunchSpec): Promise<void> {
-    if (runtimeStarted.value && activeSessionId === input.sessionId && activeMode === input.runtime.mode) {
-      return
-    }
+  async function closeRuntime(reason?: string): Promise<void> {
+    await stopRuntimeState({ reason })
+  }
 
+  async function launchRuntimeAttempt(
+    input: RuntimeLaunchSpec,
+    attempt: { useFallbackTurn: boolean },
+  ): Promise<void> {
     if (runtimeStarted.value || runtime.value !== null) {
-      await closeRuntime()
+      await stopRuntimeState({ preserveLaunchContext: true })
     }
 
+    const launchSpec = buildRuntimeAttemptSpec(input, attempt.useFallbackTurn)
+    console.info(
+      `[streaming][runtime-host] launching runtime target=${input.targetType} mode=${input.runtime.mode} turn=${launchSpec.runtime.turnServer === null ? 'direct' : 'fallback'}`,
+    )
+    void recordRuntimeTraceEvent('launchRuntimeAttempt', {
+      targetType: input.targetType,
+      mode: input.runtime.mode,
+      turnMode: launchSpec.runtime.turnServer === null ? 'direct' : 'fallback',
+      directFirstEligible: shouldUseDirectFirstFallback(input),
+      useFallbackTurn: attempt.useFallbackTurn,
+    }, input.sessionId)
     runtimeStarted.value = true
     await nextTick()
     await sleep(500)
 
-    try {
-      runtimeToken += 1
-      const token = runtimeToken
-      activeSessionId = input.sessionId
-      renderProjection.value = input.render
-      displayOptions.value = normalizeDisplayOptions(input.render.displayOptions)
-      microphoneState.value = createIdleMicrophoneState(input.runtime.microphone)
-      microphoneState.value.startWithSession = input.runtime.microphoneStartWithSession
-      const nextRuntime = ensureRuntime(input.runtime.mode)
-      bindRuntimeEvents(nextRuntime, token)
-      await nextRuntime.launch(input)
-      nextRuntime.applyDisplayState({
-        displayOptions: displayOptions.value,
-        render: input.render,
+    runtimeToken += 1
+    const token = runtimeToken
+    activeLaunchSpec = input
+    activeSessionId = input.sessionId
+    renderProjection.value = input.render
+    displayOptions.value = normalizeDisplayOptions(input.render.displayOptions)
+    microphoneState.value = createIdleMicrophoneState(input.runtime.microphone)
+    microphoneState.value.startWithSession = input.runtime.microphoneStartWithSession
+    activeConnected = false
+    const nextRuntime = ensureRuntime(input.runtime.mode)
+    bindRuntimeEvents(nextRuntime, token)
+    await nextRuntime.launch(launchSpec)
+    nextRuntime.applyDisplayState({
+      displayOptions: displayOptions.value,
+      render: input.render,
+    })
+    nextRuntime.setAudioVolume(audioVolume.value)
+    if (input.runtime.microphoneStartWithSession) {
+      applyMicrophoneIntent(true, 'policy')
+      // 自动开麦失败不应阻断串流启动，保持会话主链优先可用。
+      void nextRuntime.setMicrophoneEnabled(true).then((enabled) => {
+        if (isRuntimeTokenActive(token)) {
+          applyMicrophoneResult(enabled)
+        }
+      }, () => {
+        if (isRuntimeTokenActive(token)) {
+          applyMicrophoneResult(false)
+        }
       })
-      nextRuntime.setAudioVolume(audioVolume.value)
-      if (input.runtime.microphoneStartWithSession) {
-        applyMicrophoneIntent(true, 'policy')
-        // 自动开麦失败不应阻断串流启动，保持会话主链优先可用。
-        void nextRuntime.setMicrophoneEnabled(true).then((enabled) => {
-          if (isRuntimeTokenActive(token)) {
-            applyMicrophoneResult(enabled)
-          }
-        }, () => {
-          if (isRuntimeTokenActive(token)) {
-            applyMicrophoneResult(false)
-          }
-        })
-      }
+    }
+  }
+
+  async function startRuntime(input: RuntimeLaunchSpec): Promise<void> {
+    if (
+      runtimeStarted.value
+      && activeSessionId === input.sessionId
+      && activeMode === input.runtime.mode
+    ) {
+      return
+    }
+
+    try {
+      fallbackRetryConsumed = false
+      await launchRuntimeAttempt(input, { useFallbackTurn: false })
     }
     catch (error) {
-      await closeRuntime()
+      void recordRuntimeTraceEvent('startRuntimeLaunchFailed', {
+        mode: input.runtime.mode,
+        targetType: input.targetType,
+        activeConnected,
+        fallbackRetryConsumed,
+        error: error instanceof Error
+          ? {
+              name: error.name,
+              message: error.message,
+              stack: error.stack,
+            }
+          : error,
+      }, input.sessionId)
+      console.error('[streaming][runtime-host] startRuntime launch failed', {
+        sessionId: input.sessionId,
+        mode: input.runtime.mode,
+        targetType: input.targetType,
+        activeConnected,
+        fallbackRetryConsumed,
+        error: error instanceof Error ? {
+          name: error.name,
+          message: error.message,
+          stack: error.stack,
+        } : error,
+      })
+      const retriedWithFallbackTurn = await tryFallbackTurnRetry(runtimeToken).catch(() => false)
+      if (retriedWithFallbackTurn) {
+        return
+      }
+      await closeRuntime('launch-failed')
       throw error
     }
   }

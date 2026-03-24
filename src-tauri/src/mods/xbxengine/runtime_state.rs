@@ -104,8 +104,12 @@ impl XbxEngineRuntimeState {
         );
         match &command {
             // Stop 需要先发出取消信号，打断正在路上的 keepalive/offer/ice。
-            XbxEngineControlCommandDto::StopRuntime => {
+            XbxEngineControlCommandDto::StopRuntime { reason } => {
                 self.cancellation_epoch.fetch_add(1, Ordering::SeqCst);
+                log::warn!(
+                    "[xbxengine][control] stop runtime requested reason={}",
+                    reason.as_deref().unwrap_or("unspecified")
+                );
             }
             XbxEngineControlCommandDto::StartRuntime { .. } => {}
             _ => {}
@@ -115,7 +119,7 @@ impl XbxEngineRuntimeState {
                 XbxEngineControlCommandDto::StartRuntime { session, .. } => {
                     *active_session_id = Some(session.session_id.clone());
                 }
-                XbxEngineControlCommandDto::StopRuntime => {
+                XbxEngineControlCommandDto::StopRuntime { .. } => {
                     *active_session_id = None;
                 }
                 _ => {}

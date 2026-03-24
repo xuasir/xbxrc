@@ -1,6 +1,7 @@
 use crate::mods;
 use serde::{Deserialize, Serialize};
 use std::time::Instant;
+use tauri::Manager;
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -80,6 +81,19 @@ pub async fn rpc_invoke(payload: RpcInvokePayload, app_handle: tauri::AppHandle)
             mods::streaming::rpc::handle_rpc(payload.method.as_str(), payload.params, app_handle)
                 .await
                 .map_err(Into::into)
+        }
+        "runtimeTrace" => {
+            let runtime_trace = app_handle
+                .state::<crate::shell::state::AppState>()
+                .runtime_trace
+                .clone();
+            mods::runtime_trace::rpc::handle_rpc(
+                payload.method.as_str(),
+                payload.params,
+                runtime_trace,
+            )
+            .await
+            .map_err(Into::into)
         }
         "xbxEngine" => {
             mods::xbxengine::rpc::handle_rpc(payload.method.as_str(), payload.params, app_handle)

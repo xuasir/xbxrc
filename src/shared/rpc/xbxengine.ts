@@ -300,6 +300,10 @@ export interface XbxEngineRequestReconnectParams {
   reason: XbxEngineReconnectReason
 }
 
+export interface XbxEngineStopRuntimeParams {
+  reason?: string
+}
+
 export interface XbxEngineAckResult {
   accepted: boolean
 }

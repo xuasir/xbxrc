@@ -10,6 +10,7 @@ pub(super) use crate::transport::rtc::connection::builder::{
 use crate::transport::rtc::connection::control_channel::RtcControlChannelService;
 use crate::transport::rtc::connection::io_runtime::RtcIoRuntime;
 use crate::transport::rtc::connection::runtime_state::RtcConnectionRuntimeState;
+use crate::transport::rtc::connection::transport_metrics::describe_selected_candidate_pair;
 use crate::transport::rtc::connection::{
     build_control_decoder_reset_payload, build_control_keyframe_request_payload,
 };
@@ -39,6 +40,8 @@ pub(crate) struct RtcConnectionService {
     pub(super) pending_transport_facts: Vec<TransportFact>,
     pub(super) delayed_gamepad_added_due_at_ms: Option<f64>,
     pub(super) delayed_keyframe_prime_due_at_ms: Option<f64>,
+    pub(super) last_selected_pair_diagnostic: Option<String>,
+    pub(super) selected_pair_snapshot_emitted: bool,
 }
 
 impl Default for RtcConnectionService {
@@ -63,6 +66,8 @@ impl Default for RtcConnectionService {
             pending_transport_facts: Vec::new(),
             delayed_gamepad_added_due_at_ms: None,
             delayed_keyframe_prime_due_at_ms: None,
+            last_selected_pair_diagnostic: None,
+            selected_pair_snapshot_emitted: false,
         }
     }
 }
@@ -142,6 +147,17 @@ impl RtcConnectionService {
                     error.to_string(),
                 );
                 return Err(error);
+            }
+            let pair_diagnostic = describe_selected_candidate_pair(peer_connection);
+            if !self.selected_pair_snapshot_emitted
+                || pair_diagnostic != self.last_selected_pair_diagnostic
+            {
+                crate::xbx_log_warn!(
+                    "[xbxengine][rtc-connection] selected_pair_snapshot {}",
+                    pair_diagnostic.as_deref().unwrap_or("none")
+                );
+                self.last_selected_pair_diagnostic = pair_diagnostic;
+                self.selected_pair_snapshot_emitted = true;
             }
         }
         crate::xbx_log_warn!("[xbxengine][rtc-connection] pump after io_runtime");

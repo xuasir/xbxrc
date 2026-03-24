@@ -386,7 +386,7 @@ where
                 runtime,
                 render,
             } => self.start(session, viewport, audio_volume, runtime, render),
-            XbxEngineControlCommandDto::StopRuntime => {
+            XbxEngineControlCommandDto::StopRuntime { .. } => {
                 self.stop();
                 Ok(())
             }
@@ -670,8 +670,9 @@ where
             &mut sent_local_candidates,
         )?;
         crate::xbx_log_warn!(
-            "[xbxengine][runtime][ice] initial submit batch candidates={} offer_candidates={} initial_candidates={}",
+            "[xbxengine][runtime][ice] initial submit batch candidates={} summary={} offer_candidates={} initial_candidates={}",
             initial_local_candidates_batch.len(),
+            Self::summarize_ice_candidate_kinds(&initial_local_candidates_batch),
             offer_sdp_candidates.len(),
             initial_local_candidates.len(),
         );
@@ -716,8 +717,9 @@ where
                 // 先把当前批次真实候选送出去，再继续轮询后续 trickle。
                 self.ensure_operation_active(operation_epoch)?;
                 crate::xbx_log_warn!(
-                    "[xbxengine][runtime][ice] submitting local candidates batch size={} restart={restart}",
+                    "[xbxengine][runtime][ice] submitting local candidates batch size={} summary={} restart={restart}",
                     local_candidates.len(),
+                    Self::summarize_ice_candidate_kinds(&local_candidates),
                 );
                 Self::extract_submit_ice_response(self.host_bridge.request(
                     XbxEngineHostRequestDto::SubmitIce {
@@ -752,8 +754,9 @@ where
                 },
             )?)?;
             crate::xbx_log_warn!(
-                "[xbxengine][runtime][ice] polled remote candidates count={}",
-                remote_candidates.len()
+                "[xbxengine][runtime][ice] polled remote candidates count={} summary={}",
+                remote_candidates.len(),
+                Self::summarize_ice_candidate_kinds(&remote_candidates),
             );
             self.ensure_operation_active(operation_epoch)?;
             remote_end_of_candidates_seen |= remote_candidates
@@ -771,8 +774,9 @@ where
                     .add_remote_ice_candidates(next_remote_candidates.clone())?;
                 aggregated_remote_candidates.extend(next_remote_candidates);
                 crate::xbx_log_warn!(
-                    "[xbxengine][runtime][ice] applied remote candidates batch size={} accumulated={}",
+                    "[xbxengine][runtime][ice] applied remote candidates batch size={} summary={} accumulated={}",
                     applied_batch_len,
+                    Self::summarize_ice_candidate_kinds(&aggregated_remote_candidates),
                     aggregated_remote_candidates.len(),
                 );
             }
@@ -781,31 +785,45 @@ where
 
             if self.health.connected_at_ms.is_some() {
                 crate::xbx_log_warn!(
-                    "[xbxengine][runtime][ice] exchange loop exit because transport connected"
+                    "[xbxengine][runtime][ice] exchange loop exit because transport connected local_summary={} remote_summary={}",
+                    Self::summarize_ice_candidate_kinds_from_set(&sent_local_candidates),
+                    Self::summarize_ice_candidate_kinds(&aggregated_remote_candidates),
                 );
                 break;
             }
             if submitted_local_candidates {
                 if local_gathering_complete && remote_end_of_candidates_seen {
                     crate::xbx_log_warn!(
-                        "[xbxengine][runtime][ice] exchange loop exit because gathering complete and remote eoc seen"
+                        "[xbxengine][runtime][ice] exchange loop exit because gathering complete and remote eoc seen local_summary={} remote_summary={}",
+                        Self::summarize_ice_candidate_kinds_from_set(&sent_local_candidates),
+                        Self::summarize_ice_candidate_kinds(&aggregated_remote_candidates),
                     );
                     break;
                 }
                 if now_ms_f64() - exchange_started_at_ms >= exchange_timeout_ms {
                     crate::xbx_log_warn!(
-                        "[xbxengine][runtime][ice] exchange loop exit because timeout elapsed"
+                        "[xbxengine][runtime][ice] exchange loop exit because timeout elapsed local_summary={} remote_summary={}",
+                        Self::summarize_ice_candidate_kinds_from_set(&sent_local_candidates),
+                        Self::summarize_ice_candidate_kinds(&aggregated_remote_candidates),
                     );
                     break;
                 }
             } else if local_gathering_complete && remote_end_of_candidates_seen {
                 crate::xbx_log_warn!(
-                    "[xbxengine][runtime][ice] exchange loop exit because gathering complete and remote eoc seen before submit"
+                    "[xbxengine][runtime][ice] exchange loop exit because gathering complete and remote eoc seen before submit local_summary={} remote_summary={}",
+                    Self::summarize_ice_candidate_kinds_from_set(&sent_local_candidates),
+                    Self::summarize_ice_candidate_kinds(&aggregated_remote_candidates),
                 );
                 break;
             }
         }
 
+        crate::xbx_log_warn!(
+            "[xbxengine][runtime][ice] exchange loop finished local_summary={} remote_summary={} remote_total={}",
+            Self::summarize_ice_candidate_kinds_from_set(&sent_local_candidates),
+            Self::summarize_ice_candidate_kinds(&aggregated_remote_candidates),
+            aggregated_remote_candidates.len(),
+        );
         Ok(aggregated_remote_candidates)
     }
 
@@ -835,6 +853,79 @@ where
             }
         }
         Ok(pending)
+    }
+
+    fn summarize_ice_candidate_kinds(candidates: &[XbxEngineIceCandidateDto]) -> String {
+        let mut host = 0usize;
+        let mut srflx = 0usize;
+        let mut relay = 0usize;
+        let mut unknown = 0usize;
+        let mut eoc = 0usize;
+        for candidate in candidates {
+            let trimmed = candidate.candidate.trim();
+            if trimmed.eq_ignore_ascii_case("a=end-of-candidates")
+                || trimmed.eq_ignore_ascii_case("end-of-candidates")
+            {
+                eoc += 1;
+                continue;
+            }
+            match Self::parse_candidate_kind(trimmed) {
+                "host" => host += 1,
+                "srflx" => srflx += 1,
+                "relay" => relay += 1,
+                _ => unknown += 1,
+            }
+        }
+        format!(
+            "host={} srflx={} relay={} unknown={} eoc={}",
+            host, srflx, relay, unknown, eoc
+        )
+    }
+
+    fn summarize_ice_candidate_kinds_from_set(
+        candidate_keys: &std::collections::HashSet<String>,
+    ) -> String {
+        let mut host = 0usize;
+        let mut srflx = 0usize;
+        let mut relay = 0usize;
+        let mut unknown = 0usize;
+        let mut eoc = 0usize;
+        for key in candidate_keys {
+            let candidate = key.split('|').next().unwrap_or_default().trim();
+            if candidate.eq_ignore_ascii_case("a=end-of-candidates")
+                || candidate.eq_ignore_ascii_case("end-of-candidates")
+            {
+                eoc += 1;
+                continue;
+            }
+            match Self::parse_candidate_kind(candidate) {
+                "host" => host += 1,
+                "srflx" => srflx += 1,
+                "relay" => relay += 1,
+                _ => unknown += 1,
+            }
+        }
+        format!(
+            "host={} srflx={} relay={} unknown={} eoc={}",
+            host, srflx, relay, unknown, eoc
+        )
+    }
+
+    fn parse_candidate_kind(candidate: &str) -> &'static str {
+        let mut tokens = candidate
+            .split_whitespace()
+            .map(|token| token.to_ascii_lowercase());
+        while let Some(token) = tokens.next() {
+            if token == "typ" {
+                return match tokens.next().as_deref() {
+                    Some("host") => "host",
+                    Some("srflx") => "srflx",
+                    Some("relay") => "relay",
+                    _ => "unknown",
+                };
+            }
+        }
+        "unknown"
     }
 
     fn extract_offer_response(
