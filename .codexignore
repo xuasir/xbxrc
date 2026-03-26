@@ -1,0 +1,31 @@
+# 基础噪音
+.DS_Store
+.idea/
+.vscode/
+
+# 版本控制与本地工具状态
+.git/
+.agents/
+.trae/
+.codex-tmp/
+
+# 前端依赖与构建产物
+node_modules/
+dist/
+coverage/
+*.log
+npm-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Rust / Tauri 构建产物
+target/
+src-tauri/target/
+src-tauri/gen/schemas/
+
+# 运行期日志与归档材料（非主线开发输入）
+runtime-logs/
+archived/
+
+# 历史/对照代码库，避免污染主线上下文
+XStreamingDesktop/
