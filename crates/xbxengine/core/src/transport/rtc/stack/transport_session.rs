@@ -1,6 +1,9 @@
 use std::sync::{Arc, Mutex};
 
-use crate::api::backend::{XbxEngineMediaRuntimeStats, XbxEnginePendingRuntimeRecoveryAction};
+use crate::api::backend::{
+    XbxEngineMediaRuntimeStats, XbxEnginePendingRuntimeRecoveryAction, XbxEngineVideoBweObservation,
+};
+use crate::api::runtime::XbxEngineRuntimeConfig;
 use crate::runtime_stats_sink::RuntimeStatsSink;
 use crate::transport::rtc::connection::RtcConnectionService;
 use crate::transport::rtc::executor::peer::stage_reconnect_candidate;
@@ -17,6 +20,7 @@ use crate::XbxEngineRuntimeError;
 // 让 stack.rs 只保留编排入口。
 pub(crate) struct RtcTransportSessionBridge<'a> {
     runtime_stats: &'a Arc<Mutex<XbxEngineMediaRuntimeStats>>,
+    runtime_config: &'a Arc<Mutex<XbxEngineRuntimeConfig>>,
     pending_runtime_recovery_action: &'a Arc<Mutex<Option<XbxEnginePendingRuntimeRecoveryAction>>>,
     connection: &'a Arc<Mutex<RtcConnectionService>>,
     media: &'a Arc<Mutex<RtcMediaService>>,
@@ -27,6 +31,7 @@ pub(crate) struct RtcTransportSessionBridge<'a> {
 impl<'a> RtcTransportSessionBridge<'a> {
     pub(crate) fn new(
         runtime_stats: &'a Arc<Mutex<XbxEngineMediaRuntimeStats>>,
+        runtime_config: &'a Arc<Mutex<XbxEngineRuntimeConfig>>,
         pending_runtime_recovery_action: &'a Arc<
             Mutex<Option<XbxEnginePendingRuntimeRecoveryAction>>,
         >,
@@ -37,6 +42,7 @@ impl<'a> RtcTransportSessionBridge<'a> {
     ) -> Self {
         Self {
             runtime_stats,
+            runtime_config,
             pending_runtime_recovery_action,
             connection,
             media,
@@ -98,7 +104,10 @@ impl<'a> RtcTransportSessionBridge<'a> {
 
     pub(crate) fn reset_transport_session(&self) {
         if let Ok(mut session) = self.transport_session.lock() {
-            *session = SessionActor::new(SystemSessionClock, RtcSessionPolicy::default());
+            *session = SessionActor::new(
+                SystemSessionClock,
+                RtcSessionPolicy::new(self.runtime_config.clone(), self.runtime_stats.clone()),
+            );
         }
     }
 
@@ -172,18 +181,63 @@ impl<'a> RtcTransportSessionBridge<'a> {
             TransportCommand::SetTargetRembKbps {
                 target_kbps,
                 reason,
-                ..
+                observation_id,
             } => {
+                let result = self
+                    .connection
+                    .lock()
+                    .map_err(|_| XbxEngineRuntimeError::new("xbxEngineRtcConnectionLockFailed"))
+                    .and_then(|mut connection| {
+                        connection.request_target_remb_kbps(*target_kbps, self.runtime_stats)
+                    });
+                let bwe_mode = self
+                    .runtime_config
+                    .lock()
+                    .ok()
+                    .map(|config| config.webrtc.bwe_mode.clone())
+                    .unwrap_or_else(|| "fixed-remb".to_string());
+                let observed_at_ms = crate::transport::rtc::stats::now_ms_f64();
+                let target_kbps = *target_kbps;
+                let observation_id = *observation_id;
+                let decision_reason = reason.clone();
                 RuntimeStatsSink::new(self.runtime_stats.clone()).update(|stats| {
+                    let twcc = stats.latest_video_twcc_observation.clone();
+                    let observed_remb_kbps = stats.video_remb_bps.map(|bps| bps / 1_000);
                     stats.video_remb_bps = Some(target_kbps.saturating_mul(1_000));
+                    stats.latest_video_bwe_observation = Some(XbxEngineVideoBweObservation {
+                        observation_id,
+                        mode: bwe_mode.clone(),
+                        decision_reason: decision_reason.clone(),
+                        target_remb_kbps: target_kbps,
+                        observed_remb_kbps,
+                        actual_video_bitrate_kbps: stats.inbound_video_bitrate_kbps.unwrap_or(0.0),
+                        loss_ratio: stats.inbound_video_loss_ratio_1s.clamp(0.0, 1.0),
+                        rtt_ms: stats.video_rtt_ms,
+                        transport_path: stats.transport_path.clone(),
+                        twcc_feedback_interval_ms: twcc
+                            .as_ref()
+                            .and_then(|value| value.feedback_interval_ms),
+                        twcc_observed_packet_count: twcc
+                            .as_ref()
+                            .map(|value| value.observed_packet_count),
+                        twcc_covered_sequence_span: twcc
+                            .as_ref()
+                            .map(|value| value.covered_sequence_span),
+                        twcc_receive_bitrate_kbps: twcc
+                            .as_ref()
+                            .and_then(|value| value.receive_bitrate_kbps),
+                        twcc_delivery_ratio: twcc.as_ref().map(|value| value.delivery_ratio),
+                        twcc_loss_ratio: twcc.as_ref().map(|value| value.packet_loss_ratio),
+                        observed_at_ms,
+                    });
                     stats.latest_observation_label =
                         Some("rtcSessionCommandUpdateTargetRemb".to_string());
                     stats.latest_observation_summary = Some(format!(
-                        "rtc session command updated target remb={}kbps reason={reason}",
-                        target_kbps
+                        "rtc session command updated target remb={}kbps reason={}",
+                        target_kbps, decision_reason
                     ));
                 });
-                self.record_transport_command_result(command, &Ok(()));
+                self.record_transport_command_result(command, &result);
             }
         }
     }

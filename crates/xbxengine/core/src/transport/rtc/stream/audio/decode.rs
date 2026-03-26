@@ -25,9 +25,7 @@ pub(super) fn spawn_audio_decode_task(
         let mut decoder = match OpusDecoder::new(OPUS_SAMPLE_RATE_HZ, OpusChannels::Stereo) {
             Ok(decoder) => decoder,
             Err(error) => {
-                crate::xbx_log_error!(
-                    "[xbxengine][rtc][audio] opus decoder init failed: {error}"
-                );
+                crate::xbx_log_error!("[xbxengine][rtc][audio] opus decoder init failed: {error}");
                 return;
             }
         };

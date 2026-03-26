@@ -4,6 +4,7 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use bytes::BytesMut;
+use rtc::media_stream::MediaStreamTrackId;
 use rtc::peer_connection::configuration::media_engine::MediaEngine;
 use rtc::peer_connection::configuration::RTCConfigurationBuilder;
 use rtc::peer_connection::event::{RTCDataChannelEvent, RTCPeerConnectionEvent};
@@ -14,8 +15,11 @@ use rtc::peer_connection::transport::{
 };
 use rtc::peer_connection::RTCPeerConnection;
 use rtc::peer_connection::RTCPeerConnectionBuilder;
+use rtc::rtcp::payload_feedbacks::receiver_estimated_maximum_bitrate::ReceiverEstimatedMaximumBitrate;
 use rtc::sansio::Protocol;
+use rtc::shared::marshal::Marshal;
 use rtc::shared::{TaggedBytesMut, TransportContext, TransportProtocol};
+use rtc_rtp::extension::transport_cc_extension::TransportCcExtension;
 
 use super::{
     build_owned_h264_codec_preferences, register_owned_h264_codecs, RtcConnectionLifecycleState,
@@ -53,6 +57,11 @@ fn create_raw_offer_comes_from_real_rtc_peer_connection() {
     assert!(offer.contains("m=video"));
     assert!(offer.contains("m=application"));
     assert!(offer.contains("webrtc-datachannel"));
+    assert!(offer.contains("transport-cc"));
+    assert!(offer.contains("goog-remb"));
+    assert!(
+        offer.contains("http://www.ietf.org/id/draft-holmer-rmcat-transport-wide-cc-extensions-01")
+    );
     assert!(!service.local_candidates_snapshot().is_empty());
     let state = service.state.lock().expect("connection state");
     assert_eq!(state.local_candidate_host_count, 1);
@@ -65,6 +74,35 @@ fn create_raw_offer_comes_from_real_rtc_peer_connection() {
         .latest_observation_summary
         .as_deref()
         .is_some_and(|summary| summary.contains("local total=1")));
+}
+
+#[test]
+fn create_raw_offer_does_not_duplicate_standard_rtcp_feedback_lines() {
+    let mut service = RtcConnectionService::default();
+    let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
+    let session = XbxEngineSessionDto {
+        session_id: "test-session".to_string(),
+        target_type: XbxEngineTargetTypeDto::Cloud,
+        turn_server: None,
+    };
+
+    service.rebuild(&session, &runtime_stats).unwrap();
+    let raw_offer = service
+        .create_raw_offer(&Default::default(), &runtime_stats)
+        .unwrap();
+    let patched_offer = crate::transport::rtc::sdp::adapt_local_offer(
+        &raw_offer,
+        &crate::transport::rtc::sdp::RtcSdpContext {
+            negotiation: Default::default(),
+            session_target_type: Some(XbxEngineTargetTypeDto::Cloud),
+        },
+    );
+
+    assert_eq!(patched_offer.matches("a=rtcp-fb:124 goog-remb").count(), 1);
+    assert_eq!(
+        patched_offer.matches("a=rtcp-fb:124 transport-cc").count(),
+        1
+    );
 }
 
 #[test]
@@ -122,6 +160,11 @@ fn owned_h264_codec_preferences_include_main_profile_and_rtx_probe() {
                 .rtp_codec
                 .sdp_fmtp_line
                 .contains("profile-level-id=4d0032")
+            && codec
+                .rtp_codec
+                .rtcp_feedback
+                .iter()
+                .any(|feedback| feedback.typ == "goog-remb")
     }));
     assert!(codecs.iter().any(|codec| {
         codec.payload_type == 97
@@ -1046,6 +1089,149 @@ fn service_bootstraps_message_and_control_payloads_after_handshake_ack() {
     assert!(saw_chat_catalog, "service should catalog inbound chat text");
 
     assert!(service.request_video_keyframe(&runtime_stats).is_ok());
+}
+
+#[test]
+fn request_target_remb_kbps_sends_goog_remb_rtcp() {
+    let mut service = RtcConnectionService::default();
+    let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
+    let session = XbxEngineSessionDto {
+        session_id: "test-session".to_string(),
+        target_type: XbxEngineTargetTypeDto::Cloud,
+        turn_server: None,
+    };
+
+    service.rebuild(&session, &runtime_stats).unwrap();
+    let (mut answer_pc, mut answer_io, _, _, _, _, _, _) =
+        connect_service_to_answer_peer(&mut service, &runtime_stats);
+
+    let request_result = service.request_target_remb_kbps(25_000, &runtime_stats);
+    assert!(
+        request_result.is_ok(),
+        "request_target_remb_kbps should succeed: {request_result:?}"
+    );
+
+    let deadline = Instant::now() + Duration::from_secs(3);
+    let mut saw_remb = false;
+    while Instant::now() < deadline {
+        service.pump(&runtime_stats).unwrap();
+        answer_io.pump(&mut answer_pc).unwrap();
+        while let Some(message) = answer_pc.poll_read() {
+            let rtc::peer_connection::message::RTCMessage::RtcpPacket(_, packets) = message else {
+                continue;
+            };
+            for packet in packets {
+                if let Some(remb) = packet
+                    .as_any()
+                    .downcast_ref::<ReceiverEstimatedMaximumBitrate>()
+                {
+                    assert_eq!(remb.bitrate, 25_000_000.0);
+                    assert!(remb.ssrcs.len() <= 1);
+                    saw_remb = true;
+                }
+            }
+        }
+        if saw_remb {
+            break;
+        }
+        thread::sleep(Duration::from_millis(10));
+    }
+
+    let latest_label = runtime_stats
+        .lock()
+        .unwrap()
+        .latest_observation_label
+        .clone();
+    assert!(
+        saw_remb || latest_label.as_deref() == Some("rtcTargetRembQueued"),
+        "answer peer should observe goog-remb RTCP or queue target until video binding is ready"
+    );
+    assert!(matches!(
+        latest_label.as_deref(),
+        Some("rtcTargetRembRequested") | Some("rtcTargetRembQueued")
+    ));
+}
+
+#[test]
+fn target_remb_is_refreshed_periodically_after_initial_request() {
+    let mut service = RtcConnectionService::default();
+    let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
+    let session = XbxEngineSessionDto {
+        session_id: "test-session".to_string(),
+        target_type: XbxEngineTargetTypeDto::Cloud,
+        turn_server: None,
+    };
+
+    service.rebuild(&session, &runtime_stats).unwrap();
+    let (_answer_pc, _answer_io, _, _, _, _, _, _) =
+        connect_service_to_answer_peer(&mut service, &runtime_stats);
+    let receiver_id = service
+        .peer_connection
+        .as_mut()
+        .and_then(|pc| pc.get_receivers().next())
+        .expect("receiver id");
+    let track_id: MediaStreamTrackId = "video".to_string();
+    service
+        .controlled_twcc_feedback
+        .register_track_open(&track_id, receiver_id);
+    let mut packet = rtc_rtp::packet::Packet {
+        header: rtc_rtp::header::Header {
+            ssrc: 0x55667788,
+            sequence_number: 1,
+            payload_type: 124,
+            ..Default::default()
+        },
+        payload: vec![0u8; 64].into(),
+    };
+    let ext = TransportCcExtension {
+        transport_sequence: 9,
+    };
+    packet
+        .header
+        .set_extension(5, ext.marshal().unwrap().freeze())
+        .unwrap();
+    service
+        .controlled_twcc_feedback
+        .observe_inbound_rtp(
+            &track_id,
+            &packet,
+            &runtime_stats,
+            Some(concat!(
+                "m=video 9 UDP/TLS/RTP/SAVPF 124\r\n",
+                "a=extmap:5 http://www.ietf.org/id/draft-holmer-rmcat-transport-wide-cc-extensions-01\r\n",
+                "a=rtpmap:124 H264/90000\r\n",
+                "a=rtcp-fb:124 transport-cc\r\n",
+            )),
+            Some("video/H264".to_string()),
+        )
+        .unwrap();
+    service
+        .request_target_remb_kbps(25_000, &runtime_stats)
+        .unwrap();
+    let initial_count = service.target_remb_request_count;
+    service.last_target_remb_request_at_ms = Some(
+        crate::transport::rtc::stats::now_ms_f64()
+            - service
+                .webrtc_runtime_config
+                .video_pipeline
+                .feedback_interval_ms as f64
+            - 50.0,
+    );
+
+    let deadline = Instant::now() + Duration::from_secs(2);
+    while Instant::now() < deadline {
+        service.pump(&runtime_stats).unwrap();
+        if service.target_remb_request_count > initial_count {
+            break;
+        }
+        thread::sleep(Duration::from_millis(10));
+    }
+
+    assert!(
+        service.target_remb_request_count > initial_count,
+        "expected periodic REMB refresh, initial_count={initial_count} final_count={}",
+        service.target_remb_request_count
+    );
 }
 
 #[test]

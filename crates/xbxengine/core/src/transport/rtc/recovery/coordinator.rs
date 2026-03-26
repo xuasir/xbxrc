@@ -310,6 +310,7 @@ mod tests {
     fn healthy_twcc_observation(now_ms: f64) -> XbxEngineVideoTwccObservation {
         XbxEngineVideoTwccObservation {
             observation_id: 1,
+            source: "local-feedback".to_string(),
             feedback_packet_count: 20,
             covered_sequence_start: 10,
             covered_sequence_end: 29,

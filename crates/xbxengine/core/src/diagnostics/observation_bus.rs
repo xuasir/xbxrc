@@ -1,7 +1,9 @@
 use std::sync::{Arc, Mutex};
 
 use crate::{
-    XbxEngineMediaRuntimeStats, XbxEngineVideoFrameDropObservation, XbxEngineVideoNackObservation,
+    XbxEngineMediaRuntimeStats, XbxEngineRemoteAnswerObservation, XbxEngineRtcBuilderObservation,
+    XbxEngineTwccExtensionObservation, XbxEngineTwccRemoteStreamObservation,
+    XbxEngineVideoFrameDropObservation, XbxEngineVideoNackObservation,
     XbxEngineVideoPacketGapObservation, XbxEngineVideoRtxReinjectObservation,
     XbxEngineVideoTwccObservation,
 };
@@ -37,6 +39,18 @@ pub(crate) enum ObservationEvent {
         transport_path: Option<String>,
         inbound_video_bitrate_kbps: f64,
         inbound_primary_video_bytes_total: u64,
+    },
+    RtcBuilderConfigured {
+        observation: XbxEngineRtcBuilderObservation,
+    },
+    TwccRemoteStreamBound {
+        observation: XbxEngineTwccRemoteStreamObservation,
+    },
+    RemoteAnswerApplied {
+        observation: XbxEngineRemoteAnswerObservation,
+    },
+    TwccInboundExtensionObserved {
+        observation: XbxEngineTwccExtensionObservation,
     },
     VideoFrameDrop {
         observation: XbxEngineVideoFrameDropObservation,
@@ -163,6 +177,54 @@ fn summarize_event(event: &ObservationEvent) -> ObservationPublication {
                 transport_path.as_deref().unwrap_or("-"),
             ),
         },
+        ObservationEvent::RtcBuilderConfigured { observation } => ObservationPublication {
+            label: "rtcBuilderConfigured".to_string(),
+            summary: format!(
+                "controlled={} interval={}ms headerExts={} rtcpFb={}",
+                observation.controlled_twcc_registry,
+                observation.feedback_interval_ms,
+                observation.registered_header_extensions.join(","),
+                observation.registered_rtcp_feedback.join(",")
+            ),
+        },
+        ObservationEvent::TwccRemoteStreamBound { observation } => ObservationPublication {
+            label: "twccRemoteStreamBound".to_string(),
+            summary: format!(
+                "ssrc={} mime={} extId={:?}",
+                observation.ssrc, observation.mime_type, observation.twcc_ext_id
+            ),
+        },
+        ObservationEvent::RemoteAnswerApplied { observation } => ObservationPublication {
+            label: "remoteAnswerApplied".to_string(),
+            summary: format!(
+                "selectedPt={:?} profile={:?} goog-remb={} transport-cc={} videoPtOrder={:?}",
+                observation.selected_video_payload_type,
+                observation.selected_video_profile_level_id,
+                observation
+                    .accepted_video_rtcp_feedback
+                    .iter()
+                    .any(|value| value.eq_ignore_ascii_case("goog-remb")
+                        || value.to_ascii_lowercase().starts_with("goog-remb:")),
+                observation
+                    .accepted_video_rtcp_feedback
+                    .iter()
+                    .any(|value| value.eq_ignore_ascii_case("transport-cc")
+                        || value.to_ascii_lowercase().starts_with("transport-cc:")),
+                observation.video_payload_order,
+            ),
+        },
+        ObservationEvent::TwccInboundExtensionObserved { observation } => ObservationPublication {
+            label: "twccInboundExtensionObserved".to_string(),
+            summary: format!(
+                "state={} ssrc={} seq={} extId={} seen={} missing={}",
+                observation.state,
+                observation.ssrc,
+                observation.sequence_number,
+                observation.expected_ext_id,
+                observation.packet_seen_count,
+                observation.missing_count
+            ),
+        },
         ObservationEvent::VideoFrameDrop { observation } => ObservationPublication {
             label: "videoFrameDrop".to_string(),
             summary: format!(
@@ -207,7 +269,8 @@ fn summarize_event(event: &ObservationEvent) -> ObservationPublication {
         ObservationEvent::LatestVideoTwccObservation { observation } => ObservationPublication {
             label: "twccObservation".to_string(),
             summary: format!(
-                "fb={} seq={}..{} packets={} loss={:.3} delivery={:.3}",
+                "source={} fb={} seq={}..{} packets={} loss={:.3} delivery={:.3}",
+                observation.source,
                 observation.feedback_packet_count,
                 observation.covered_sequence_start,
                 observation.covered_sequence_end,
@@ -306,8 +369,29 @@ fn apply_event(stats: &mut XbxEngineMediaRuntimeStats, event: ObservationEvent) 
                 inbound_video_bitrate_kbps.max(0.0)
                     + stats.inbound_audio_bitrate_kbps.unwrap_or(0.0),
             );
+            stats.actual_video_bitrate_source = Some("transport-metrics".to_string());
             stats.inbound_bytes_total =
                 stats.inbound_video_bytes_total + stats.inbound_audio_bytes_total;
+            if let Some(bwe) = stats.latest_video_bwe_observation.as_mut() {
+                // 统一口径：BWE 结构化观测里的 actual/path/rtt/loss 要跟随 transport metrics 刷新，
+                // 避免只在 target 变化瞬间写一次导致长期显示为旧值。
+                bwe.actual_video_bitrate_kbps = inbound_video_bitrate_kbps.max(0.0);
+                bwe.loss_ratio = inbound_video_loss_ratio_1s.clamp(0.0, 1.0);
+                bwe.rtt_ms = video_rtt_ms;
+                bwe.transport_path = stats.transport_path.clone();
+            }
+        }
+        ObservationEvent::RtcBuilderConfigured { observation } => {
+            stats.latest_rtc_builder_observation = Some(observation);
+        }
+        ObservationEvent::TwccRemoteStreamBound { observation } => {
+            stats.latest_twcc_remote_stream_observation = Some(observation);
+        }
+        ObservationEvent::RemoteAnswerApplied { observation } => {
+            stats.latest_remote_answer_observation = Some(observation);
+        }
+        ObservationEvent::TwccInboundExtensionObserved { observation } => {
+            stats.latest_twcc_extension_observation = Some(observation);
         }
         ObservationEvent::VideoFrameDrop { observation } => {
             stats.latest_video_frame_drop = Some(observation);
@@ -349,7 +433,20 @@ fn apply_event(stats: &mut XbxEngineMediaRuntimeStats, event: ObservationEvent) 
             stats.latest_video_nack_observation = Some(observation);
         }
         ObservationEvent::LatestVideoTwccObservation { observation } => {
-            stats.latest_video_twcc_observation = Some(observation);
+            let keep_existing_local =
+                stats
+                    .latest_video_twcc_observation
+                    .as_ref()
+                    .is_some_and(|existing| {
+                        existing.source == "local-feedback"
+                            && observation.source != "local-feedback"
+                    });
+            if !keep_existing_local {
+                if observation.source == "local-feedback" {
+                    stats.actual_video_bitrate_source = Some("local-twcc".to_string());
+                }
+                stats.latest_video_twcc_observation = Some(observation);
+            }
         }
         ObservationEvent::NackRecovered {
             was_late,

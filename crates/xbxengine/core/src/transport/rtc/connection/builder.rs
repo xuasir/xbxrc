@@ -1,3 +1,9 @@
+use rtc::interceptor::{
+    NackGeneratorBuilder, NackGeneratorInterceptor, NackResponderBuilder, NackResponderInterceptor,
+    NoopInterceptor, ReceiverReportBuilder, ReceiverReportInterceptor, Registry,
+    SenderReportBuilder, SenderReportInterceptor,
+};
+use rtc::peer_connection::configuration::interceptor_registry::configure_simulcast_extension_headers;
 use rtc::peer_connection::configuration::media_engine::{
     MediaEngine, MIME_TYPE_H264, MIME_TYPE_OPUS,
 };
@@ -6,12 +12,18 @@ use rtc::peer_connection::RTCPeerConnection;
 use rtc::peer_connection::RTCPeerConnectionBuilder;
 use rtc::rtp_transceiver::rtp_sender::{
     RTCPFeedback, RTCRtpCodec, RTCRtpCodecParameters, RTCRtpCodingParameters,
-    RTCRtpEncodingParameters, RtpCodecKind,
+    RTCRtpEncodingParameters, RTCRtpHeaderExtensionCapability, RtpCodecKind,
+    TYPE_RTCP_FB_GOOG_REMB, TYPE_RTCP_FB_NACK,
 };
 use rtc::rtp_transceiver::{RTCRtpTransceiverDirection, RTCRtpTransceiverInit};
+use rtc::shared::error::Result as SharedResult;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Arc, Mutex};
 
+use crate::api::runtime::XbxEngineWebRtcRuntimeConfig;
+use crate::runtime_stats_sink::RuntimeStatsSink;
 use crate::transport::rtc::stats::now_ms_f64;
-use crate::XbxEngineRuntimeError;
+use crate::{XbxEngineMediaRuntimeStats, XbxEngineRtcBuilderObservation, XbxEngineRuntimeError};
 use xbxengine_protocol::XbxEngineSessionDto;
 
 const DEFAULT_ICE_SERVERS: [&str; 7] = [
@@ -23,6 +35,14 @@ const DEFAULT_ICE_SERVERS: [&str; 7] = [
     "stun:stun.kinesisvideo.us-east-1.amazonaws.com:443",
     "stun:stun.douyucdn.cn:18000",
 ];
+
+static RTC_BUILDER_OBSERVATION_ID: AtomicU64 = AtomicU64::new(0);
+
+pub(super) type ControlledTwccInterceptor = SenderReportInterceptor<
+    ReceiverReportInterceptor<NackResponderInterceptor<NackGeneratorInterceptor<NoopInterceptor>>>,
+>;
+
+pub(super) type ControlledPeerConnection = RTCPeerConnection<ControlledTwccInterceptor>;
 
 pub(super) fn build_ice_servers(session: &XbxEngineSessionDto) -> Vec<RTCIceServer> {
     let mut ice_servers = Vec::new();
@@ -47,13 +67,42 @@ pub(super) fn build_ice_servers(session: &XbxEngineSessionDto) -> Vec<RTCIceServ
 
 pub(super) fn build_peer_connection(
     session: &XbxEngineSessionDto,
-) -> Result<RTCPeerConnection, XbxEngineRuntimeError> {
+    runtime_stats: &Arc<Mutex<XbxEngineMediaRuntimeStats>>,
+    runtime_config: &XbxEngineWebRtcRuntimeConfig,
+) -> Result<ControlledPeerConnection, XbxEngineRuntimeError> {
     let mut media_engine = MediaEngine::default();
     media_engine.register_default_codecs().map_err(|err| {
         XbxEngineRuntimeError::new(format!("xbxEngineRtcRegisterDefaultCodecsFailed: {err}"))
     })?;
     // 对齐当前 RTC 主线：在默认 codec 之外补齐我们稳定依赖的 H264 family。
     register_owned_h264_codecs(&mut media_engine)?;
+    let interceptor_registry = build_controlled_twcc_registry(
+        &mut media_engine,
+        runtime_stats.clone(),
+        runtime_config.video_pipeline.feedback_interval_ms,
+    )?;
+    RuntimeStatsSink::new(runtime_stats.clone()).record_rtc_builder_observation(
+        XbxEngineRtcBuilderObservation {
+            observation_id: RTC_BUILDER_OBSERVATION_ID.fetch_add(1, Ordering::Relaxed) + 1,
+            controlled_twcc_registry: true,
+            feedback_interval_ms: runtime_config.video_pipeline.feedback_interval_ms as f64,
+            registered_header_extensions: vec![
+                "video:http://www.ietf.org/id/draft-holmer-rmcat-transport-wide-cc-extensions-01"
+                    .to_string(),
+                "audio:http://www.ietf.org/id/draft-holmer-rmcat-transport-wide-cc-extensions-01"
+                    .to_string(),
+            ],
+            registered_rtcp_feedback: vec![
+                "video:nack".to_string(),
+                "video:nack:pli".to_string(),
+                "video:goog-remb".to_string(),
+                "video:transport-cc".to_string(),
+                "audio:goog-remb".to_string(),
+                "audio:transport-cc".to_string(),
+            ],
+            observed_at_ms: now_ms_f64(),
+        },
+    );
 
     let ice_servers = build_ice_servers(session);
     let ice_server_urls = ice_servers
@@ -72,14 +121,103 @@ pub(super) fn build_peer_connection(
     RTCPeerConnectionBuilder::new()
         .with_configuration(configuration.build())
         .with_media_engine(media_engine)
+        .with_interceptor_registry(interceptor_registry)
         .build()
         .map_err(|err| {
             XbxEngineRuntimeError::new(format!("xbxEngineRtcBuildPeerConnectionFailed: {err}"))
         })
 }
 
+fn build_controlled_twcc_registry(
+    media_engine: &mut MediaEngine,
+    _runtime_stats: Arc<Mutex<XbxEngineMediaRuntimeStats>>,
+    _feedback_interval_ms: u64,
+) -> Result<Registry<ControlledTwccInterceptor>, XbxEngineRuntimeError> {
+    // 显式组装 interceptor registry，避免继续依赖隐式默认链路。
+    let registry = Registry::new();
+    configure_nack_feedback_support(media_engine);
+    configure_simulcast_extension_headers(media_engine).map_err(|err| {
+        XbxEngineRuntimeError::new(format!(
+            "xbxEngineRtcConfigureSimulcastHeadersFailed: {err}"
+        ))
+    })?;
+    configure_twcc_receiver_feedback_support(media_engine).map_err(|err| {
+        XbxEngineRuntimeError::new(format!("xbxEngineRtcConfigureTwccFailed: {err}"))
+    })?;
+    Ok(registry
+        .with(NackGeneratorBuilder::new().build())
+        .with(NackResponderBuilder::new().build())
+        .with(ReceiverReportBuilder::new().build())
+        .with(SenderReportBuilder::new().build()))
+}
+
+fn configure_nack_feedback_support(media_engine: &mut MediaEngine) {
+    media_engine.register_feedback(
+        RTCPFeedback {
+            typ: TYPE_RTCP_FB_NACK.to_string(),
+            parameter: String::new(),
+        },
+        RtpCodecKind::Video,
+    );
+    media_engine.register_feedback(
+        RTCPFeedback {
+            typ: TYPE_RTCP_FB_NACK.to_string(),
+            parameter: "pli".to_string(),
+        },
+        RtpCodecKind::Video,
+    );
+}
+
+fn configure_twcc_receiver_feedback_support(media_engine: &mut MediaEngine) -> SharedResult<()> {
+    const TRANSPORT_CC_URI: &str =
+        "http://www.ietf.org/id/draft-holmer-rmcat-transport-wide-cc-extensions-01";
+    media_engine.register_feedback(
+        RTCPFeedback {
+            typ: "transport-cc".to_string(),
+            ..Default::default()
+        },
+        RtpCodecKind::Video,
+    );
+    media_engine.register_feedback(
+        RTCPFeedback {
+            typ: TYPE_RTCP_FB_GOOG_REMB.to_string(),
+            ..Default::default()
+        },
+        RtpCodecKind::Video,
+    );
+    media_engine.register_header_extension(
+        RTCRtpHeaderExtensionCapability {
+            uri: TRANSPORT_CC_URI.to_string(),
+        },
+        RtpCodecKind::Video,
+        None,
+    )?;
+    media_engine.register_feedback(
+        RTCPFeedback {
+            typ: "transport-cc".to_string(),
+            ..Default::default()
+        },
+        RtpCodecKind::Audio,
+    );
+    media_engine.register_feedback(
+        RTCPFeedback {
+            typ: TYPE_RTCP_FB_GOOG_REMB.to_string(),
+            ..Default::default()
+        },
+        RtpCodecKind::Audio,
+    );
+    media_engine.register_header_extension(
+        RTCRtpHeaderExtensionCapability {
+            uri: TRANSPORT_CC_URI.to_string(),
+        },
+        RtpCodecKind::Audio,
+        None,
+    )?;
+    Ok(())
+}
+
 pub(super) fn configure_offer_primitives(
-    peer_connection: &mut RTCPeerConnection,
+    peer_connection: &mut ControlledPeerConnection,
 ) -> Result<(), XbxEngineRuntimeError> {
     // 对齐旧 transport 的 offer 结构：audio + video + application 三段必须同时出现。
     peer_connection
@@ -154,7 +292,7 @@ pub(super) fn register_owned_h264_codecs(
 pub(super) fn build_owned_h264_codec_preferences() -> Vec<RTCRtpCodecParameters> {
     let video_rtcp_feedback = vec![
         RTCPFeedback {
-            typ: "goog-remb".to_string(),
+            typ: TYPE_RTCP_FB_GOOG_REMB.to_string(),
             parameter: String::new(),
         },
         RTCPFeedback {
@@ -174,20 +312,9 @@ pub(super) fn build_owned_h264_codec_preferences() -> Vec<RTCRtpCodecParameters>
             parameter: "pli".to_string(),
         },
     ];
-    // 与旧主线一致：高 -> 主 -> 受限基线 -> 基线，最后附加 RTX(apt=124)。
+    // 对齐 Xbox 云端兼容口径：Main(4d) 优先，其次 42e / 420；
+    // 64 family 保留，但不作为首选 family。
     vec![
-        RTCRtpCodecParameters {
-            rtp_codec: RTCRtpCodec {
-                mime_type: MIME_TYPE_H264.to_string(),
-                clock_rate: 90_000,
-                channels: 0,
-                sdp_fmtp_line:
-                    "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=640032"
-                        .to_string(),
-                rtcp_feedback: video_rtcp_feedback.clone(),
-            },
-            payload_type: 123,
-        },
         RTCRtpCodecParameters {
             rtp_codec: RTCRtpCodec {
                 mime_type: MIME_TYPE_H264.to_string(),
@@ -211,6 +338,18 @@ pub(super) fn build_owned_h264_codec_preferences() -> Vec<RTCRtpCodecParameters>
                 rtcp_feedback: video_rtcp_feedback.clone(),
             },
             payload_type: 125,
+        },
+        RTCRtpCodecParameters {
+            rtp_codec: RTCRtpCodec {
+                mime_type: MIME_TYPE_H264.to_string(),
+                clock_rate: 90_000,
+                channels: 0,
+                sdp_fmtp_line:
+                    "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=640032"
+                        .to_string(),
+                rtcp_feedback: video_rtcp_feedback.clone(),
+            },
+            payload_type: 123,
         },
         RTCRtpCodecParameters {
             rtp_codec: RTCRtpCodec {

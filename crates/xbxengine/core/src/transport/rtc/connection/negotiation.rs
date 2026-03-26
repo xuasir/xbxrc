@@ -3,6 +3,7 @@ use std::sync::{Arc, Mutex};
 
 use xbxengine_protocol::XbxEngineIceCandidateDto;
 
+use crate::runtime_stats_sink::RuntimeStatsSink;
 use crate::transport::rtc::connection::builder::{
     build_peer_connection, configure_offer_primitives,
 };
@@ -10,8 +11,8 @@ use crate::transport::rtc::connection::data_channel::bootstrap_default_channels;
 #[cfg(test)]
 use crate::transport::rtc::connection::runtime_state::RtcIceCandidateKind;
 use crate::transport::rtc::connection::{
-    add_remote_candidate_to_peer, candidate_identity_key, candidate_ip_family,
-    classify_candidate_kind, collect_candidate_ip_families,
+    add_remote_candidate_to_peer, build_remote_answer_observation, candidate_identity_key,
+    candidate_ip_family, classify_candidate_kind, collect_candidate_ip_families,
     extract_local_candidates_from_offer_sdp, is_end_of_candidates_candidate,
     is_end_of_candidates_marker, should_skip_remote_candidate_for_family_mismatch,
 };
@@ -64,7 +65,8 @@ impl RtcConnectionService {
         self.last_transport_metrics_sample_at_ms = 0.0;
         self.last_transport_metrics_sample_inbound_video_bytes_total = 0;
         self.lifecycle_observation_id = self.lifecycle_observation_id.saturating_add(1);
-        self.twcc_observation_id = 0;
+        self.remote_rtcp_twcc_observation_id = 0;
+        self.controlled_twcc_feedback.reset();
         self.read_counters = RtcReadIngressCounters::default();
         self.pending_media_ingress_packets.clear();
         self.pending_gamepad_rumble_requests.clear();
@@ -73,7 +75,8 @@ impl RtcConnectionService {
         self.delayed_keyframe_prime_due_at_ms = None;
         self.last_selected_pair_diagnostic = None;
         self.selected_pair_snapshot_emitted = false;
-        let mut peer_connection = build_peer_connection(session)?;
+        let mut peer_connection =
+            build_peer_connection(session, runtime_stats, &self.webrtc_runtime_config)?;
         configure_offer_primitives(&mut peer_connection)?;
         if let Ok(mut state) = self.state.lock() {
             bootstrap_default_channels(&mut peer_connection, &mut state)?;
@@ -205,6 +208,9 @@ impl RtcConnectionService {
             }
         }
         drop(state);
+        let remote_answer_observation = build_remote_answer_observation(answer_sdp);
+        RuntimeStatsSink::new(runtime_stats.clone())
+            .record_remote_answer_observation(remote_answer_observation);
         if skipped_incompatible_count > 0 {
             crate::xbx_log_warn!(
                 "[xbxengine][rtc-connection] skipped incompatible remote candidates count={}",

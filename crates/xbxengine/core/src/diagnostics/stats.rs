@@ -72,8 +72,27 @@ pub fn build_xbxengine_stats(
         .and_then(|stats| stats.video_rtt_ms)
         .map(|value| format!("{value:.1}ms"))
         .unwrap_or_default();
-    let bitrate = runtime_stats
-        .and_then(|stats| resolve_video_inbound_bitrate_kbps(stats, now_ms))
+    let resolved_video_bitrate_kbps =
+        runtime_stats.and_then(|stats| resolve_video_inbound_bitrate_kbps(stats, now_ms));
+    let resolved_audio_bitrate_kbps =
+        runtime_stats.and_then(|stats| resolve_audio_inbound_bitrate_kbps(stats, now_ms));
+    let resolved_total_bitrate_kbps =
+        runtime_stats.and_then(|stats| resolve_total_inbound_bitrate_kbps(stats, now_ms));
+    let latest_bwe = runtime_stats.and_then(|stats| stats.latest_video_bwe_observation.as_ref());
+    let latest_twcc = runtime_stats.and_then(|stats| stats.latest_video_twcc_observation.as_ref());
+    let local_twcc_video_bitrate_kbps = latest_twcc
+        .filter(|twcc| twcc.source == "local-feedback")
+        .and_then(|twcc| twcc.receive_bitrate_kbps);
+    let actual_video_bitrate_kbps = local_twcc_video_bitrate_kbps.or(resolved_video_bitrate_kbps);
+    let actual_video_bitrate_source = if local_twcc_video_bitrate_kbps.is_some() {
+        Some("local-twcc".to_string())
+    } else if resolved_video_bitrate_kbps.is_some() {
+        Some("transport-metrics".to_string())
+    } else {
+        Some("unavailable".to_string())
+    };
+    let twcc_observation_state = runtime_stats.map(resolve_twcc_observation_state);
+    let bitrate = resolved_video_bitrate_kbps
         .map(|value| format!("{:.1}Mbps", value / 1_000.0))
         .or_else(|| {
             runtime_stats
@@ -151,16 +170,31 @@ pub fn build_xbxengine_stats(
         transport_state,
         video_rtt_source: runtime_stats.and_then(|stats| stats.video_rtt_source.clone()),
         video_remb_bps: runtime_stats.and_then(|stats| stats.video_remb_bps),
-        inbound_bitrate_kbps: runtime_stats.and_then(|stats| {
-            stats
-                .inbound_bitrate_kbps
-                .filter(|value| *value > 0.1)
-                .or_else(|| estimate_total_inbound_bitrate_kbps(stats, now_ms))
+        // 统一口径：total 始终按 video + audio 聚合推导，避免历史缓存字段瞬时失真。
+        inbound_bitrate_kbps: resolved_total_bitrate_kbps,
+        inbound_video_bitrate_kbps: resolved_video_bitrate_kbps,
+        inbound_audio_bitrate_kbps: resolved_audio_bitrate_kbps,
+        actual_video_bitrate_source,
+        video_bwe_mode: latest_bwe.map(|bwe| bwe.mode.clone()),
+        video_bwe_reason: latest_bwe.map(|bwe| bwe.decision_reason.clone()),
+        video_target_remb_kbps: latest_bwe.map(|bwe| bwe.target_remb_kbps).or_else(|| {
+            runtime_stats.and_then(|stats| stats.video_remb_bps.map(|bps| bps / 1_000))
         }),
-        inbound_video_bitrate_kbps: runtime_stats
-            .and_then(|stats| resolve_video_inbound_bitrate_kbps(stats, now_ms)),
-        inbound_audio_bitrate_kbps: runtime_stats
-            .and_then(|stats| resolve_audio_inbound_bitrate_kbps(stats, now_ms)),
+        video_observed_remb_kbps: latest_bwe.and_then(|bwe| bwe.observed_remb_kbps),
+        video_actual_bitrate_kbps: actual_video_bitrate_kbps,
+        video_twcc_receive_bitrate_kbps: latest_twcc
+            .and_then(|twcc| twcc.receive_bitrate_kbps)
+            .or_else(|| latest_bwe.and_then(|bwe| bwe.twcc_receive_bitrate_kbps)),
+        video_twcc_loss_ratio: latest_twcc
+            .map(|twcc| twcc.packet_loss_ratio)
+            .or_else(|| latest_bwe.and_then(|bwe| bwe.twcc_loss_ratio)),
+        video_twcc_delivery_ratio: latest_twcc
+            .map(|twcc| twcc.delivery_ratio)
+            .or_else(|| latest_bwe.and_then(|bwe| bwe.twcc_delivery_ratio)),
+        video_twcc_feedback_interval_ms: latest_twcc
+            .and_then(|twcc| twcc.feedback_interval_ms)
+            .or_else(|| latest_bwe.and_then(|bwe| bwe.twcc_feedback_interval_ms)),
+        twcc_observation_state,
         inbound_bytes_total: runtime_stats.map(|stats| stats.inbound_bytes_total),
         inbound_video_bytes_total: runtime_stats.map(|stats| stats.inbound_video_bytes_total),
         inbound_audio_bytes_total: runtime_stats.map(|stats| stats.inbound_audio_bytes_total),
@@ -308,6 +342,7 @@ pub fn build_xbxengine_stats(
             stats.latest_video_twcc_observation.as_ref().map(|twcc| {
                 xbxengine_protocol::XbxEngineVideoTwccObservationDto {
                     observation_id: twcc.observation_id,
+                    source: twcc.source.clone(),
                     feedback_packet_count: twcc.feedback_packet_count,
                     covered_sequence_start: twcc.covered_sequence_start,
                     covered_sequence_end: twcc.covered_sequence_end,
@@ -322,6 +357,85 @@ pub fn build_xbxengine_stats(
                     observed_at_ms: twcc.observed_at_ms,
                 }
             })
+        }),
+        latest_rtc_builder_observation: runtime_stats.and_then(|stats| {
+            stats
+                .latest_rtc_builder_observation
+                .as_ref()
+                .map(
+                    |observation| xbxengine_protocol::XbxEngineRtcBuilderObservationDto {
+                        observation_id: observation.observation_id,
+                        controlled_twcc_registry: observation.controlled_twcc_registry,
+                        feedback_interval_ms: observation.feedback_interval_ms,
+                        registered_header_extensions: observation
+                            .registered_header_extensions
+                            .clone(),
+                        registered_rtcp_feedback: observation.registered_rtcp_feedback.clone(),
+                        observed_at_ms: observation.observed_at_ms,
+                    },
+                )
+        }),
+        latest_twcc_remote_stream_observation: runtime_stats.and_then(|stats| {
+            stats
+                .latest_twcc_remote_stream_observation
+                .as_ref()
+                .map(
+                    |observation| xbxengine_protocol::XbxEngineTwccRemoteStreamObservationDto {
+                        observation_id: observation.observation_id,
+                        ssrc: observation.ssrc,
+                        mime_type: observation.mime_type.clone(),
+                        twcc_ext_id: observation.twcc_ext_id,
+                        header_extensions: observation.header_extensions.clone(),
+                        rtcp_feedback: observation.rtcp_feedback.clone(),
+                        observed_at_ms: observation.observed_at_ms,
+                    },
+                )
+        }),
+        latest_remote_answer_observation: runtime_stats.and_then(|stats| {
+            stats
+                .latest_remote_answer_observation
+                .as_ref()
+                .map(
+                    |observation| xbxengine_protocol::XbxEngineRemoteAnswerObservationDto {
+                        observation_id: observation.observation_id,
+                        video_payload_order: observation.video_payload_order.clone(),
+                        selected_video_payload_type: observation.selected_video_payload_type,
+                        selected_video_mime_type: observation.selected_video_mime_type.clone(),
+                        selected_video_profile_level_id: observation
+                            .selected_video_profile_level_id
+                            .clone(),
+                        accepted_video_rtcp_feedback: observation
+                            .accepted_video_rtcp_feedback
+                            .clone(),
+                        accepted_audio_rtcp_feedback: observation
+                            .accepted_audio_rtcp_feedback
+                            .clone(),
+                        accepted_video_header_extensions: observation
+                            .accepted_video_header_extensions
+                            .clone(),
+                        accepted_audio_header_extensions: observation
+                            .accepted_audio_header_extensions
+                            .clone(),
+                        observed_at_ms: observation.observed_at_ms,
+                    },
+                )
+        }),
+        latest_twcc_extension_observation: runtime_stats.and_then(|stats| {
+            stats
+                .latest_twcc_extension_observation
+                .as_ref()
+                .map(
+                    |observation| xbxengine_protocol::XbxEngineTwccExtensionObservationDto {
+                        observation_id: observation.observation_id,
+                        state: observation.state.clone(),
+                        ssrc: observation.ssrc,
+                        sequence_number: observation.sequence_number,
+                        expected_ext_id: observation.expected_ext_id,
+                        packet_seen_count: observation.packet_seen_count,
+                        missing_count: observation.missing_count,
+                        observed_at_ms: observation.observed_at_ms,
+                    },
+                )
         }),
         latest_data_channel_message_catalog_observation: runtime_stats.and_then(|stats| {
             stats
@@ -341,7 +455,63 @@ pub fn build_xbxengine_stats(
                     }
                 })
         }),
+        latest_observation_label: runtime_stats
+            .and_then(|stats| stats.latest_observation_label.clone()),
+        latest_observation_summary: runtime_stats
+            .and_then(|stats| stats.latest_observation_summary.clone()),
+        latest_target_remb_action: runtime_stats
+            .and_then(|stats| stats.latest_target_remb_action.clone()),
+        latest_target_remb_summary: runtime_stats
+            .and_then(|stats| stats.latest_target_remb_summary.clone()),
+        build_fingerprint: None,
     }
+}
+
+fn resolve_twcc_observation_state(stats: &XbxEngineMediaRuntimeStats) -> String {
+    let has_video_remote_twcc_binding = stats
+        .latest_twcc_remote_stream_observation
+        .as_ref()
+        .is_some_and(is_video_twcc_remote_stream_observation);
+    let has_video_extension_signal = stats
+        .latest_twcc_extension_observation
+        .as_ref()
+        .is_some_and(|observation| observation.state == "seen" || observation.state == "missing");
+    let has_video_twcc_chain_signal = has_video_remote_twcc_binding || has_video_extension_signal;
+
+    if stats
+        .latest_video_twcc_observation
+        .as_ref()
+        .is_some_and(|observation| observation.source == "local-feedback")
+    {
+        return "local-feedback".to_string();
+    }
+    if stats.latest_video_twcc_observation.is_some() {
+        return "remote-observed".to_string();
+    }
+    if stats
+        .latest_twcc_extension_observation
+        .as_ref()
+        .is_some_and(|observation| observation.state == "missing")
+        && has_video_twcc_chain_signal
+    {
+        return "missing-header-extension".to_string();
+    }
+    if has_video_twcc_chain_signal {
+        return "missing-local-feedback".to_string();
+    }
+    if stats.latest_rtc_builder_observation.is_some() {
+        return "builder-configured".to_string();
+    }
+    "unavailable".to_string()
+}
+
+fn is_video_twcc_remote_stream_observation(
+    observation: &crate::XbxEngineTwccRemoteStreamObservation,
+) -> bool {
+    observation
+        .mime_type
+        .get(..5)
+        .is_some_and(|prefix| prefix.eq_ignore_ascii_case("video"))
 }
 
 // 用统一摘要描述当前 runtime 所处状态，便于回归时快速判断是否落在预期档位。
@@ -829,6 +999,23 @@ fn resolve_audio_inbound_bitrate_kbps(
         .or_else(|| estimate_audio_inbound_bitrate_kbps(stats, now_ms))
 }
 
+fn resolve_total_inbound_bitrate_kbps(
+    stats: &XbxEngineMediaRuntimeStats,
+    now_ms: f64,
+) -> Option<f64> {
+    let video_kbps = resolve_video_inbound_bitrate_kbps(stats, now_ms);
+    let audio_kbps = resolve_audio_inbound_bitrate_kbps(stats, now_ms);
+    match (video_kbps, audio_kbps) {
+        (Some(video), Some(audio)) => Some(video.max(0.0) + audio.max(0.0)),
+        (Some(video), None) => Some(video.max(0.0)),
+        (None, Some(audio)) => Some(audio.max(0.0)),
+        (None, None) => stats
+            .inbound_bitrate_kbps
+            .filter(|value| *value > 0.1)
+            .or_else(|| estimate_total_inbound_bitrate_kbps(stats, now_ms)),
+    }
+}
+
 fn estimate_total_inbound_bitrate_kbps(
     stats: &XbxEngineMediaRuntimeStats,
     now_ms: f64,
@@ -1168,5 +1355,210 @@ mod tests {
         let dto = build_xbxengine_stats(&test_snapshot(), Some(&stats));
         assert!(dto.inbound_video_bitrate_kbps.unwrap_or(0.0) > 0.0);
         assert!(dto.inbound_bitrate_kbps.unwrap_or(0.0) > 0.0);
+    }
+
+    #[test]
+    fn total_inbound_bitrate_prefers_video_plus_audio_components() {
+        let stats = XbxEngineMediaRuntimeStats {
+            transport_state: XbxEngineTransportStateDto::Connected,
+            inbound_bitrate_kbps: Some(128.0),
+            inbound_video_bitrate_kbps: Some(8_800.0),
+            inbound_audio_bitrate_kbps: Some(160.0),
+            ..XbxEngineMediaRuntimeStats::default()
+        };
+
+        let dto = build_xbxengine_stats(&test_snapshot(), Some(&stats));
+        assert_eq!(dto.inbound_video_bitrate_kbps, Some(8_800.0));
+        assert_eq!(dto.inbound_audio_bitrate_kbps, Some(160.0));
+        assert_eq!(dto.inbound_bitrate_kbps, Some(8_960.0));
+    }
+
+    #[test]
+    fn bwe_and_twcc_semantic_fields_are_projected_explicitly() {
+        let stats = XbxEngineMediaRuntimeStats {
+            transport_state: XbxEngineTransportStateDto::Connected,
+            video_remb_bps: Some(25_000_000),
+            latest_video_bwe_observation: Some(crate::XbxEngineVideoBweObservation {
+                observation_id: 7,
+                mode: "twcc-gcc".to_string(),
+                decision_reason: "twcc-gcc-cloud-stable-ramp".to_string(),
+                target_remb_kbps: 25_000,
+                observed_remb_kbps: Some(23_000),
+                actual_video_bitrate_kbps: 21_500.0,
+                loss_ratio: 0.01,
+                rtt_ms: Some(82.0),
+                transport_path: Some("Direct".to_string()),
+                twcc_feedback_interval_ms: Some(80.0),
+                twcc_observed_packet_count: Some(120),
+                twcc_covered_sequence_span: Some(120),
+                twcc_receive_bitrate_kbps: Some(22_800.0),
+                twcc_delivery_ratio: Some(0.99),
+                twcc_loss_ratio: Some(0.01),
+                observed_at_ms: 1.0,
+            }),
+            latest_video_twcc_observation: Some(crate::XbxEngineVideoTwccObservation {
+                observation_id: 8,
+                source: "local-feedback".to_string(),
+                feedback_packet_count: 3,
+                covered_sequence_start: 100,
+                covered_sequence_end: 220,
+                covered_sequence_span: 120,
+                observed_packet_count: 120,
+                observed_byte_count: 340_000,
+                feedback_interval_ms: Some(80.0),
+                arrival_span_ms: Some(70.0),
+                receive_bitrate_kbps: Some(22_800.0),
+                delivery_ratio: 0.99,
+                packet_loss_ratio: 0.01,
+                observed_at_ms: 2.0,
+            }),
+            ..XbxEngineMediaRuntimeStats::default()
+        };
+
+        let dto = build_xbxengine_stats(&test_snapshot(), Some(&stats));
+        assert_eq!(dto.video_bwe_mode.as_deref(), Some("twcc-gcc"));
+        assert_eq!(dto.video_target_remb_kbps, Some(25_000));
+        assert_eq!(dto.video_observed_remb_kbps, Some(23_000));
+        assert_eq!(dto.video_actual_bitrate_kbps, Some(22_800.0));
+        assert_eq!(dto.video_twcc_receive_bitrate_kbps, Some(22_800.0));
+        assert_eq!(dto.video_twcc_loss_ratio, Some(0.01));
+        assert_eq!(dto.video_twcc_delivery_ratio, Some(0.99));
+        assert_eq!(dto.video_twcc_feedback_interval_ms, Some(80.0));
+        assert_eq!(
+            dto.actual_video_bitrate_source.as_deref(),
+            Some("local-twcc")
+        );
+        assert_eq!(
+            dto.twcc_observation_state.as_deref(),
+            Some("local-feedback")
+        );
+    }
+
+    #[test]
+    fn actual_video_bitrate_falls_back_to_transport_metrics_when_local_twcc_missing() {
+        let stats = XbxEngineMediaRuntimeStats {
+            transport_state: XbxEngineTransportStateDto::Connected,
+            inbound_video_bitrate_kbps: Some(8_600.0),
+            latest_video_twcc_observation: Some(crate::XbxEngineVideoTwccObservation {
+                observation_id: 8,
+                source: "remote-rtcp".to_string(),
+                feedback_packet_count: 3,
+                covered_sequence_start: 100,
+                covered_sequence_end: 220,
+                covered_sequence_span: 120,
+                observed_packet_count: 120,
+                observed_byte_count: 340_000,
+                feedback_interval_ms: Some(80.0),
+                arrival_span_ms: Some(70.0),
+                receive_bitrate_kbps: Some(22_800.0),
+                delivery_ratio: 0.99,
+                packet_loss_ratio: 0.01,
+                observed_at_ms: 2.0,
+            }),
+            latest_twcc_remote_stream_observation: Some(
+                crate::XbxEngineTwccRemoteStreamObservation {
+                    observation_id: 11,
+                    ssrc: 42,
+                    mime_type: "video/H264".to_string(),
+                    twcc_ext_id: Some(7),
+                    header_extensions: vec!["transport-cc#7".to_string()],
+                    rtcp_feedback: vec!["transport-cc:".to_string()],
+                    observed_at_ms: 3.0,
+                },
+            ),
+            ..XbxEngineMediaRuntimeStats::default()
+        };
+
+        let dto = build_xbxengine_stats(&test_snapshot(), Some(&stats));
+        assert_eq!(dto.video_actual_bitrate_kbps, Some(8_600.0));
+        assert_eq!(
+            dto.actual_video_bitrate_source.as_deref(),
+            Some("transport-metrics")
+        );
+        assert_eq!(
+            dto.twcc_observation_state.as_deref(),
+            Some("remote-observed")
+        );
+    }
+
+    #[test]
+    fn twcc_state_marks_missing_header_extension_when_feedback_chain_has_not_started() {
+        let stats = XbxEngineMediaRuntimeStats {
+            transport_state: XbxEngineTransportStateDto::Connected,
+            latest_rtc_builder_observation: Some(crate::XbxEngineRtcBuilderObservation {
+                observation_id: 1,
+                controlled_twcc_registry: true,
+                feedback_interval_ms: 1_000.0,
+                registered_header_extensions: vec!["video:transport-cc".to_string()],
+                registered_rtcp_feedback: vec!["video:transport-cc".to_string()],
+                observed_at_ms: 1.0,
+            }),
+            latest_twcc_remote_stream_observation: Some(
+                crate::XbxEngineTwccRemoteStreamObservation {
+                    observation_id: 2,
+                    ssrc: 42,
+                    mime_type: "video/H264".to_string(),
+                    twcc_ext_id: Some(7),
+                    header_extensions: vec!["transport-cc#7".to_string()],
+                    rtcp_feedback: vec!["transport-cc:".to_string()],
+                    observed_at_ms: 2.0,
+                },
+            ),
+            latest_twcc_extension_observation: Some(crate::XbxEngineTwccExtensionObservation {
+                observation_id: 3,
+                state: "missing".to_string(),
+                ssrc: 42,
+                sequence_number: 99,
+                expected_ext_id: 7,
+                packet_seen_count: 1,
+                missing_count: 1,
+                observed_at_ms: 3.0,
+            }),
+            ..XbxEngineMediaRuntimeStats::default()
+        };
+
+        let dto = build_xbxengine_stats(&test_snapshot(), Some(&stats));
+        assert_eq!(dto.video_actual_bitrate_kbps, None);
+        assert_eq!(
+            dto.actual_video_bitrate_source.as_deref(),
+            Some("unavailable")
+        );
+        assert_eq!(
+            dto.twcc_observation_state.as_deref(),
+            Some("missing-header-extension")
+        );
+    }
+
+    #[test]
+    fn twcc_state_stays_builder_configured_when_only_audio_remote_binding_exists() {
+        let stats = XbxEngineMediaRuntimeStats {
+            transport_state: XbxEngineTransportStateDto::Connected,
+            latest_rtc_builder_observation: Some(crate::XbxEngineRtcBuilderObservation {
+                observation_id: 1,
+                controlled_twcc_registry: true,
+                feedback_interval_ms: 1_000.0,
+                registered_header_extensions: vec!["video:transport-cc".to_string()],
+                registered_rtcp_feedback: vec!["video:transport-cc".to_string()],
+                observed_at_ms: 1.0,
+            }),
+            latest_twcc_remote_stream_observation: Some(
+                crate::XbxEngineTwccRemoteStreamObservation {
+                    observation_id: 2,
+                    ssrc: 99,
+                    mime_type: "audio/opus".to_string(),
+                    twcc_ext_id: Some(7),
+                    header_extensions: vec!["transport-cc#7".to_string()],
+                    rtcp_feedback: vec!["transport-cc:".to_string()],
+                    observed_at_ms: 2.0,
+                },
+            ),
+            ..XbxEngineMediaRuntimeStats::default()
+        };
+
+        let dto = build_xbxengine_stats(&test_snapshot(), Some(&stats));
+        assert_eq!(
+            dto.twcc_observation_state.as_deref(),
+            Some("builder-configured")
+        );
     }
 }

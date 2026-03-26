@@ -189,8 +189,11 @@ pub(crate) fn resolve_twcc_gcc_target(
 
     let twcc = twcc_input.observation;
     let rtt_ms = twcc_input.rtt_ms;
+    let effective_stable_feedback_interval_ms = profile
+        .stable_feedback_interval_ms
+        .max(config.video_pipeline.feedback_interval_ms as f64 * 1.25);
     let stable_feedback = twcc.feedback_interval_ms.unwrap_or(0.0)
-        <= profile.stable_feedback_interval_ms
+        <= effective_stable_feedback_interval_ms
         && twcc.observed_packet_count >= profile.stable_feedback_min_packets
         && twcc.covered_sequence_span >= twcc.observed_packet_count;
     let raw_receive_bitrate_kbps = twcc
@@ -370,6 +373,7 @@ mod tests {
     fn direct_recovery_coupling_holds_bwe_and_caps_peak() {
         let observation = XbxEngineVideoTwccObservation {
             observation_id: 1,
+            source: "local-feedback".to_string(),
             feedback_packet_count: 1,
             covered_sequence_start: 1,
             covered_sequence_end: 120,
@@ -415,6 +419,7 @@ mod tests {
     fn cloud_recovery_reference_chain_backs_off_under_congestion() {
         let observation = XbxEngineVideoTwccObservation {
             observation_id: 3,
+            source: "local-feedback".to_string(),
             feedback_packet_count: 1,
             covered_sequence_start: 1,
             covered_sequence_end: 80,
@@ -465,6 +470,7 @@ mod tests {
     fn cloud_wait_keyframe_coupling_holds_at_cloud_operating_floor() {
         let observation = XbxEngineVideoTwccObservation {
             observation_id: 1,
+            source: "local-feedback".to_string(),
             feedback_packet_count: 1,
             covered_sequence_start: 1,
             covered_sequence_end: 120,
@@ -510,6 +516,7 @@ mod tests {
     fn cloud_startup_low_quality_backs_off_under_congestion() {
         let observation = XbxEngineVideoTwccObservation {
             observation_id: 4,
+            source: "local-feedback".to_string(),
             feedback_packet_count: 1,
             covered_sequence_start: 1,
             covered_sequence_end: 120,
@@ -560,6 +567,7 @@ mod tests {
     fn direct_high_rtt_holds_ramp_up_even_when_twcc_is_clean() {
         let observation = XbxEngineVideoTwccObservation {
             observation_id: 2,
+            source: "local-feedback".to_string(),
             feedback_packet_count: 1,
             covered_sequence_start: 1,
             covered_sequence_end: 160,
@@ -595,6 +603,131 @@ mod tests {
         assert_eq!(target, 20_000);
         assert_eq!(reason, "twcc-gcc-direct-high-rtt-hold");
         assert_eq!(cooldown, 1);
+    }
+
+    #[test]
+    fn cloud_normal_rtt_does_not_hold_clean_twcc_feedback() {
+        let observation = XbxEngineVideoTwccObservation {
+            observation_id: 3,
+            source: "local-feedback".to_string(),
+            feedback_packet_count: 1,
+            covered_sequence_start: 1,
+            covered_sequence_end: 160,
+            covered_sequence_span: 160,
+            observed_packet_count: 160,
+            observed_byte_count: 220_000,
+            feedback_interval_ms: Some(1_000.0),
+            arrival_span_ms: Some(1_000.0),
+            receive_bitrate_kbps: Some(24_000.0),
+            delivery_ratio: 1.0,
+            packet_loss_ratio: 0.0,
+            observed_at_ms: 2.0,
+        };
+        let mut cooldown = 0;
+        let (target, reason) = resolve_twcc_gcc_target(
+            &XbxEngineWebRtcRuntimeConfig::default(),
+            25_000,
+            22_000,
+            ScenarioPolicyResolver::resolve_transport_bwe_profile(
+                &XbxEngineWebRtcRuntimeConfig::default(),
+                Some(&XbxEngineTargetTypeDto::Cloud),
+                Some("Direct"),
+                SessionPhase::Steady,
+            ),
+            None,
+            Some(&super::TwccGccInput {
+                observation: &observation,
+                rtt_ms: Some(200.0),
+            }),
+            &mut cooldown,
+        );
+
+        assert_eq!(target, 27_360);
+        assert_eq!(reason, "twcc-gcc-cloud-ramp-up");
+        assert_eq!(cooldown, 0);
+    }
+
+    #[test]
+    fn cloud_very_high_rtt_still_holds_clean_twcc_feedback() {
+        let observation = XbxEngineVideoTwccObservation {
+            observation_id: 4,
+            source: "local-feedback".to_string(),
+            feedback_packet_count: 1,
+            covered_sequence_start: 1,
+            covered_sequence_end: 160,
+            covered_sequence_span: 160,
+            observed_packet_count: 160,
+            observed_byte_count: 220_000,
+            feedback_interval_ms: Some(1_000.0),
+            arrival_span_ms: Some(1_000.0),
+            receive_bitrate_kbps: Some(24_000.0),
+            delivery_ratio: 1.0,
+            packet_loss_ratio: 0.0,
+            observed_at_ms: 2.0,
+        };
+        let mut cooldown = 0;
+        let (target, reason) = resolve_twcc_gcc_target(
+            &XbxEngineWebRtcRuntimeConfig::default(),
+            25_000,
+            22_000,
+            ScenarioPolicyResolver::resolve_transport_bwe_profile(
+                &XbxEngineWebRtcRuntimeConfig::default(),
+                Some(&XbxEngineTargetTypeDto::Cloud),
+                Some("Direct"),
+                SessionPhase::Steady,
+            ),
+            None,
+            Some(&super::TwccGccInput {
+                observation: &observation,
+                rtt_ms: Some(330.0),
+            }),
+            &mut cooldown,
+        );
+
+        assert_eq!(target, 25_000);
+        assert_eq!(reason, "twcc-gcc-cloud-high-rtt-hold");
+        assert_eq!(cooldown, 2);
+    }
+
+    #[test]
+    fn cloud_long_feedback_interval_can_still_be_treated_as_stable() {
+        let observation = XbxEngineVideoTwccObservation {
+            observation_id: 5,
+            source: "local-feedback".to_string(),
+            feedback_packet_count: 40,
+            covered_sequence_start: 1,
+            covered_sequence_end: 826,
+            covered_sequence_span: 826,
+            observed_packet_count: 798,
+            observed_byte_count: 957_600,
+            feedback_interval_ms: Some(4_042.0),
+            arrival_span_ms: Some(999.0),
+            receive_bitrate_kbps: Some(1_895.299356754082),
+            delivery_ratio: 0.9661016949152542,
+            packet_loss_ratio: 0.03389830508474578,
+            observed_at_ms: 2.0,
+        };
+        let mut cooldown = 0;
+        let (target, reason) = resolve_twcc_gcc_target(
+            &XbxEngineWebRtcRuntimeConfig::default(),
+            28_500,
+            22_000,
+            ScenarioPolicyResolver::resolve_transport_bwe_profile(
+                &XbxEngineWebRtcRuntimeConfig::default(),
+                Some(&XbxEngineTargetTypeDto::Cloud),
+                Some("Direct"),
+                SessionPhase::Steady,
+            ),
+            None,
+            Some(&super::TwccGccInput {
+                observation: &observation,
+                rtt_ms: Some(194.0),
+            }),
+            &mut cooldown,
+        );
+
+        assert_ne!(reason, "twcc-gcc-cloud-unstable-hold");
+        assert_eq!(target, 28_500);
     }
 
     #[test]

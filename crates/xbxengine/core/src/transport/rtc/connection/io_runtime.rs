@@ -9,7 +9,6 @@ use rtc::peer_connection::transport::{
     CandidateConfig, CandidateHostConfig, CandidateRelayConfig, CandidateServerReflexiveConfig,
     RTCIceCandidate, RTCIceCandidateInit,
 };
-use rtc::peer_connection::RTCPeerConnection;
 use rtc::sansio::Protocol;
 use rtc::shared::ifaces::ifaces;
 use rtc::shared::{TaggedBytesMut, TransportContext, TransportProtocol};
@@ -18,7 +17,7 @@ use rtc_stun::message::{Getter, Message, TransactionId, BINDING_REQUEST};
 use rtc_stun::xoraddr::XorMappedAddress;
 use url::Url;
 
-use crate::transport::rtc::connection::builder::build_ice_servers;
+use crate::transport::rtc::connection::builder::{build_ice_servers, ControlledPeerConnection};
 use crate::transport::rtc::connection::turn_runtime::TurnRuntime;
 use crate::XbxEngineRuntimeError;
 use xbxengine_protocol::XbxEngineSessionDto;
@@ -224,7 +223,7 @@ impl RtcIoRuntime {
 
     pub(crate) fn pump(
         &mut self,
-        peer_connection: &mut RTCPeerConnection,
+        peer_connection: &mut ControlledPeerConnection,
     ) -> Result<(), XbxEngineRuntimeError> {
         if self.socket_v4.is_none() && self.socket_v6.is_none() {
             return Ok(());
@@ -334,7 +333,7 @@ impl RtcIoRuntime {
 
     fn read_relay(
         &mut self,
-        peer_connection: &mut RTCPeerConnection,
+        peer_connection: &mut ControlledPeerConnection,
     ) -> Result<bool, XbxEngineRuntimeError> {
         let Some(relay) = self.relay_runtime.as_mut() else {
             return Ok(false);
@@ -366,7 +365,7 @@ impl RtcIoRuntime {
     }
     fn read_from_socket(
         &self,
-        peer_connection: &mut RTCPeerConnection,
+        peer_connection: &mut ControlledPeerConnection,
         use_v6: bool,
     ) -> Result<bool, XbxEngineRuntimeError> {
         let socket = if use_v6 {

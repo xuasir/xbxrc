@@ -143,11 +143,11 @@ fn compile_video_pipeline(mode: RuntimeMode, target: Target) -> RuntimeVideoPipe
         },
         RuntimeMode::RustOwned => {
             if matches!(target, Target::Cloud) {
-                // 云游戏基础 RTT 明显高于 home/直连场景，沿用浏览器宽档还不够；
-                // 这里继续在浏览器档之上补一个 cloud floor，避免 Rust-owned 在几十毫秒级
-                // packet policy 下过早进入 transportExpiredDeadline。
+                // Cloud 侧可以放宽 NACK/jitter 等视频管线参数，但 TWCC 反馈节奏仍需保持快反馈。
+                // Rust-owned 的 BWE/恢复策略按 100ms 级 feedback 设计，若放慢到 1000ms，
+                // 会把 cloud 场景误判成“长期 await/unstable”，进一步放大保守 backoff。
                 return RuntimeVideoPipelinePlan {
-                    feedback_interval_ms: 1_000,
+                    feedback_interval_ms: 100,
                     nack_window_ms: 700,
                     nack_burst_count: 16,
                     nack_max_age_ms: 420,
@@ -223,7 +223,7 @@ mod tests {
 
         let runtime = compile_runtime(&config, &context).expect("compile runtime");
 
-        assert_eq!(runtime.video_pipeline.feedback_interval_ms, 1_000);
+        assert_eq!(runtime.video_pipeline.feedback_interval_ms, 100);
         assert_eq!(runtime.video_pipeline.nack_max_age_ms, 420);
         assert_eq!(runtime.video_pipeline.jitter_buffer_max_delay_ms, 48);
         assert_eq!(runtime.video_pipeline.late_frame_drop_threshold_ms, 900);

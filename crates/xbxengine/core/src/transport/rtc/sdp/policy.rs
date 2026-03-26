@@ -30,7 +30,9 @@ pub(crate) fn apply_offer_policy_contract(
         &with_audio_layout,
         &negotiation_config.offer_profile,
     );
-    patch_video_fmtp_constraints(&with_video_profile, negotiation_config, session_target_type)
+    let with_constraints =
+        patch_video_fmtp_constraints(&with_video_profile, negotiation_config, session_target_type);
+    dedupe_rtcp_feedback_lines(&with_constraints)
 }
 
 pub(crate) fn summarize_sdp(sdp: &str) -> String {
@@ -318,17 +320,32 @@ fn normalize_h264_profile_token(profile: &str) -> String {
 
 fn h264_profile_rank(profile_level_id: &str) -> u8 {
     let normalized = normalize_h264_profile_token(profile_level_id);
-    if normalized.starts_with("64") {
+    if normalized.starts_with("4d") {
         3
-    } else if normalized.starts_with("4d") {
-        2
     } else if normalized.starts_with("42e") {
-        1
+        2
     } else if normalized.starts_with("420") {
+        1
+    } else if normalized.starts_with("64") {
         0
     } else {
         0
     }
+}
+
+fn dedupe_rtcp_feedback_lines(offer_sdp: &str) -> String {
+    let mut lines = Vec::<String>::new();
+    let mut seen_rtcp_fb = HashSet::<String>::new();
+
+    for raw_line in offer_sdp.split("\r\n") {
+        let line = raw_line.to_string();
+        if line.starts_with("a=rtcp-fb:") && !seen_rtcp_fb.insert(line.clone()) {
+            continue;
+        }
+        lines.push(line);
+    }
+
+    lines.join("\r\n")
 }
 
 fn matches_h264_profile_family(profile_level_id: &str, preferred_profile: &str) -> bool {
@@ -443,7 +460,7 @@ mod tests {
     }
 
     #[test]
-    fn apply_offer_policy_contract_orders_h264_families_from_high_to_low() {
+    fn apply_offer_policy_contract_orders_h264_families_from_xbox_compatible_preference() {
         let patched = apply_offer_policy_contract(
             &sample_offer_sdp(),
             &XbxEngineNegotiationRuntimeConfig {
@@ -452,16 +469,40 @@ mod tests {
                 video_bitrate_kbps: 60_000,
                 audio_bitrate_kbps: 192,
                 force_mono_audio: false,
-                offer_profile: "64".to_string(),
+                offer_profile: "4d".to_string(),
             },
             Some(&XbxEngineTargetTypeDto::Cloud),
         );
 
-        assert!(patched.contains("m=video 9 UDP/TLS/RTP/SAVPF 108 106 104 102"));
+        assert!(patched.contains("m=video 9 UDP/TLS/RTP/SAVPF 106 104 102 108"));
         assert!(patched.contains("x-google-min-bitrate=12000"));
         assert!(patched.contains("x-google-start-bitrate=25000"));
         assert!(patched.contains("x-google-max-bitrate=60000"));
         assert!(patched.contains("max-fs=14400"));
         assert!(patched.contains("max-fr=60"));
+    }
+
+    #[test]
+    fn apply_offer_policy_contract_dedupes_duplicate_rtcp_feedback_lines() {
+        let patched = apply_offer_policy_contract(
+            concat!(
+                "v=0\r\n",
+                "m=video 9 UDP/TLS/RTP/SAVPF 124\r\n",
+                "a=rtpmap:124 H264/90000\r\n",
+                "a=fmtp:124 level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=4d0032\r\n",
+                "a=rtcp-fb:124 goog-remb\r\n",
+                "a=rtcp-fb:124 goog-remb\r\n",
+                "a=rtcp-fb:124 transport-cc\r\n",
+                "a=rtcp-fb:124 transport-cc\r\n"
+            ),
+            &XbxEngineNegotiationRuntimeConfig {
+                offer_profile: "4d".to_string(),
+                ..Default::default()
+            },
+            Some(&XbxEngineTargetTypeDto::Cloud),
+        );
+
+        assert_eq!(patched.matches("a=rtcp-fb:124 goog-remb").count(), 1);
+        assert_eq!(patched.matches("a=rtcp-fb:124 transport-cc").count(), 1);
     }
 }

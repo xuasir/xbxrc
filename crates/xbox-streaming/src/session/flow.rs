@@ -1835,7 +1835,8 @@ fn decide_home_session_ready_recreate_retry(
         return None;
     }
 
-    // 对齐 XStreamingDesktop：Provisioning 本身只继续轮询，不再因为本地超时或卡点推断而主动 recreate。
+    // 对齐当前 canonical session 策略：Provisioning 本身只继续轮询，
+    // 不再因为本地超时或卡点推断而主动 recreate。
     // 这里仅保留“服务端尚未完成注册”的显式错误分支，避免把本来会继续推进的 session 提前打断。
     // 同时允许该错误落在最终 Failed 终态，覆盖 wake 后第一次 create 最终以 ServerNeverRegistered 收敛、
     // 但稍后手动重试即可成功的场景。

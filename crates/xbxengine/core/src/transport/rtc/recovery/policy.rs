@@ -224,7 +224,7 @@ impl ScenarioPolicyResolver {
             },
             ScenarioPolicyProfileKind::CloudGaming => TransportBweScenarioProfile {
                 kind: ScenarioPolicyProfileKind::CloudGaming,
-                stable_feedback_interval_ms: 230.0,
+                stable_feedback_interval_ms: 4_500.0,
                 stable_feedback_min_packets: match phase {
                     SessionPhase::Startup => 8,
                     SessionPhase::Steady | SessionPhase::Recovering => 10,
@@ -254,8 +254,8 @@ impl ScenarioPolicyResolver {
                 congestion_delivery_threshold: 0.92,
                 mild_loss_threshold: 0.02,
                 mild_delivery_threshold: 0.97,
-                high_rtt_ms_threshold: Some(130.0),
-                severe_rtt_ms_threshold: Some(220.0),
+                high_rtt_ms_threshold: Some(300.0),
+                severe_rtt_ms_threshold: Some(400.0),
                 severe_cooldown_ticks: 4,
                 congestion_cooldown_ticks: 2,
                 mild_cooldown_ticks: 1,

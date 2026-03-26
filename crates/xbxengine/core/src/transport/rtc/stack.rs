@@ -112,6 +112,7 @@ impl XbxActiveMediaStack {
     fn transport_bridge(&self) -> RtcTransportSessionBridge<'_> {
         RtcTransportSessionBridge::new(
             &self.runtime_stats,
+            &self.runtime_config,
             &self.pending_runtime_recovery_action,
             &self.connection,
             &self.media,
@@ -154,6 +155,8 @@ impl XbxActiveMediaStack {
     }
 
     pub(crate) fn new(runtime_config: XbxEngineRuntimeConfig) -> Self {
+        let runtime_config_for_supervisor = runtime_config.clone();
+        let runtime_config = Arc::new(Mutex::new(runtime_config));
         let media_runtime = Arc::new(
             tokio::runtime::Builder::new_multi_thread()
                 .enable_all()
@@ -175,7 +178,7 @@ impl XbxActiveMediaStack {
                 runtime_stats: runtime_stats.clone(),
                 render_state: render_state.clone(),
                 transport_fact_sink: transport_fact_sink.clone(),
-                runtime_config: runtime_config.clone(),
+                runtime_config: runtime_config_for_supervisor,
             },
         );
         let connection = Arc::new(Mutex::new(RtcConnectionService::default()));
@@ -187,11 +190,11 @@ impl XbxActiveMediaStack {
         );
         let mut stack = Self {
             media_runtime,
-            runtime_stats,
+            runtime_stats: runtime_stats.clone(),
             pending_runtime_recovery_action,
             data_channel_state,
             render_state,
-            runtime_config: Arc::new(Mutex::new(runtime_config)),
+            runtime_config: runtime_config.clone(),
             last_request: Arc::new(Mutex::new(None)),
             frame_source_tx: Arc::new(Mutex::new(Some(frame_source_tx))),
             audio_volume_bits: Arc::new(AtomicU32::new(1.0f32.to_bits())),
@@ -200,7 +203,7 @@ impl XbxActiveMediaStack {
             media: Arc::new(Mutex::new(RtcMediaService::default())),
             transport_session: Arc::new(Mutex::new(SessionActor::new(
                 SystemSessionClock,
-                RtcSessionPolicy::default(),
+                RtcSessionPolicy::new(runtime_config.clone(), runtime_stats.clone()),
             ))),
             transport_fact_sink,
             input_stream,
@@ -412,6 +415,19 @@ mod tests {
         };
 
         merge_media_snapshot_into_runtime_stats(&mut stats, &media_snapshot, 123.0);
+
+        let first_status = stats
+            .latest_video_track_status
+            .as_ref()
+            .expect("video track status should exist after first merge");
+        assert_eq!(first_status.state, "primaryVideoRtpStarted");
+        assert_eq!(first_status.video_width, Some(1920));
+        assert_eq!(first_status.video_height, Some(1080));
+        assert_eq!(first_status.video_bytes_total, 12_000);
+        assert_eq!(first_status.video_packet_count_total, 12);
+        assert_eq!(first_status.audio_bytes_total, 128);
+
+        merge_media_snapshot_into_runtime_stats(&mut stats, &media_snapshot, 124.0);
 
         assert_eq!(stats.inbound_video_packet_count_total, 15);
         assert_eq!(stats.inbound_video_bytes_total, 12_600);

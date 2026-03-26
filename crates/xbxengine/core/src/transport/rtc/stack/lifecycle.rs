@@ -111,7 +111,7 @@ impl<'a> RtcStackLifecycleBridge<'a> {
         }
         self.input_stream.reset_state();
         self.input_stream.ensure_running();
-        self.media_pipeline_bridge().mount_legacy_frame_pipeline();
+        self.media_pipeline_bridge().mount_primary_frame_pipeline();
         if let Ok(mut connection) = self.connection.lock() {
             if let Ok(config) = self.runtime_config.lock() {
                 connection.sync_runtime_config(config.webrtc.clone());
@@ -169,6 +169,7 @@ impl<'a> RtcStackLifecycleBridge<'a> {
     fn transport_bridge(&self) -> RtcTransportSessionBridge<'_> {
         RtcTransportSessionBridge::new(
             self.runtime_stats,
+            self.runtime_config,
             self.pending_runtime_recovery_action,
             self.connection,
             self.media,

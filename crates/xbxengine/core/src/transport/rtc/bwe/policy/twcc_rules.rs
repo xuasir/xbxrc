@@ -1,4 +1,6 @@
-use crate::transport::rtc::recovery::policy::TransportBweScenarioProfile;
+use crate::transport::rtc::recovery::policy::{
+    ScenarioPolicyProfileKind, TransportBweScenarioProfile,
+};
 use crate::{XbxEngineVideoTwccObservation, XbxEngineWebRtcRuntimeConfig};
 
 #[derive(Clone, Copy)]
@@ -78,6 +80,21 @@ pub(crate) fn resolve_loss_rule(
     if context.twcc.packet_loss_ratio >= context.profile.severe_loss_threshold
         || context.twcc.delivery_ratio <= context.profile.severe_delivery_threshold
     {
+        if should_apply_cloud_optimistic_loss_cap(context) {
+            *ramp_cooldown_ticks = context.profile.congestion_cooldown_ticks.max(1);
+            let cap_kbps = context
+                .desired_kbps
+                .min(
+                    context
+                        .effective_peak_ceiling_kbps
+                        .min(context.ceiling_kbps),
+                )
+                .max(context.preferred_gaming_floor_kbps);
+            return Some((
+                context.current_kbps.min(cap_kbps),
+                context.profile.reason("severe-optimistic-cap"),
+            ));
+        }
         *ramp_cooldown_ticks = context.profile.severe_cooldown_ticks;
         let backoff_kbps = ((context.current_kbps as f64)
             * (context.config.remb_ramp_down_factor as f64 / 1000.0))
@@ -152,6 +169,18 @@ pub(crate) fn resolve_loss_rule(
     }
 
     None
+}
+
+fn should_apply_cloud_optimistic_loss_cap(context: TwccRuleContext<'_>) -> bool {
+    if !context.bounded_gaming_profile || context.profile.kind != ScenarioPolicyProfileKind::CloudGaming
+    {
+        return false;
+    }
+    let expected_interval_ms = context.config.video_pipeline.feedback_interval_ms.max(1) as f64;
+    let Some(feedback_interval_ms) = context.twcc.feedback_interval_ms else {
+        return false;
+    };
+    feedback_interval_ms >= expected_interval_ms * 1.6
 }
 
 pub(crate) fn resolve_cooldown_or_ramp(

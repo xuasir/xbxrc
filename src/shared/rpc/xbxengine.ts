@@ -58,6 +58,15 @@ export interface XbxEngineStatsDto {
   resolution: string
   rtt: string
   fps: number
+  build_fingerprint?: {
+    git_commit_short: string
+    workspace_dirty: boolean
+    build_timestamp_unix_ms: string
+    cargo_profile: string
+    default_feedback_interval_ms: number
+    effective_feedback_interval_ms: number
+    controlled_twcc_registry: boolean
+  } | null
   runtime_summary?: string
   primary_issue_chain?: string
   latest_decision_summary?: string
@@ -85,6 +94,17 @@ export interface XbxEngineStatsDto {
   inbound_bitrate_kbps?: number
   inbound_video_bitrate_kbps?: number
   inbound_audio_bitrate_kbps?: number
+  actual_video_bitrate_source?: string
+  video_bwe_mode?: string
+  video_bwe_reason?: string
+  video_target_remb_kbps?: number
+  video_observed_remb_kbps?: number
+  video_actual_bitrate_kbps?: number
+  video_twcc_receive_bitrate_kbps?: number
+  video_twcc_loss_ratio?: number
+  video_twcc_delivery_ratio?: number
+  video_twcc_feedback_interval_ms?: number
+  twcc_observation_state?: string
   inbound_bytes_total?: number
   inbound_video_bytes_total?: number
   inbound_audio_bytes_total?: number
@@ -192,6 +212,7 @@ export interface XbxEngineStatsDto {
   }
   latest_video_twcc_observation?: {
     observation_id: number
+    source: string
     feedback_packet_count: number
     covered_sequence_start: number
     covered_sequence_end: number
@@ -203,6 +224,45 @@ export interface XbxEngineStatsDto {
     receive_bitrate_kbps?: number | null
     delivery_ratio: number
     packet_loss_ratio: number
+    observed_at_ms: number
+  }
+  latest_rtc_builder_observation?: {
+    observation_id: number
+    controlled_twcc_registry: boolean
+    feedback_interval_ms: number
+    registered_header_extensions: string[]
+    registered_rtcp_feedback: string[]
+    observed_at_ms: number
+  }
+  latest_twcc_remote_stream_observation?: {
+    observation_id: number
+    ssrc: number
+    mime_type: string
+    twcc_ext_id?: number | null
+    header_extensions: string[]
+    rtcp_feedback: string[]
+    observed_at_ms: number
+  }
+  latest_remote_answer_observation?: {
+    observation_id: number
+    video_payload_order: number[]
+    selected_video_payload_type?: number | null
+    selected_video_mime_type?: string | null
+    selected_video_profile_level_id?: string | null
+    accepted_video_rtcp_feedback: string[]
+    accepted_audio_rtcp_feedback: string[]
+    accepted_video_header_extensions: string[]
+    accepted_audio_header_extensions: string[]
+    observed_at_ms: number
+  }
+  latest_twcc_extension_observation?: {
+    observation_id: number
+    state: string
+    ssrc: number
+    sequence_number: number
+    expected_ext_id: number
+    packet_seen_count: number
+    missing_count: number
     observed_at_ms: number
   }
   latest_data_channel_message_catalog_observation?: {

@@ -69,7 +69,9 @@ pub fn compile_codec(preference: CodecPreference) -> Option<Codec> {
         }),
         CodecPreference::H264High => Some(Codec {
             mime_type: "video/H264".to_string(),
-            profiles: vec!["64".to_string()],
+            // 对齐 better-xcloud / Xbox 云端协商口径：
+            // high 档在标准 SDP 排序里优先 Main family(4d)。
+            profiles: vec!["4d".to_string()],
         }),
         CodecPreference::MimeType { mime_type } => Some(Codec {
             mime_type,

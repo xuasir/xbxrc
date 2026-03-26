@@ -104,6 +104,14 @@ async fn build_services(
         "Runtime trace recorder initialized at {}",
         runtime_trace.path().display()
     );
+    runtime_trace.record_state(
+        "xbxengine",
+        "runtimeBuildInfo",
+        None,
+        serde_json::json!({
+            "buildFingerprint": crate::mods::xbxengine::build_info::current_build_fingerprint(),
+        }),
+    );
 
     let config_service = Arc::new(mods::config::ConfigService::new(app_handle.clone()));
     let config_provider: mods::config::ConfigProviderRef = config_service.clone();

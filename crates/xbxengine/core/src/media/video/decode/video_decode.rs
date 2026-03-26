@@ -386,9 +386,7 @@ impl MacOsVideoToolboxDecoder {
             }
 
             if pixel_buffer_attributes.is_null() {
-                crate::xbx_log_error!(
-                    "[xbxengine][rtc][vt] create pixel buffer attributes failed"
-                );
+                crate::xbx_log_error!("[xbxengine][rtc][vt] create pixel buffer attributes failed");
             }
 
             let mut session: VTDecompressionSessionRef = std::ptr::null_mut();

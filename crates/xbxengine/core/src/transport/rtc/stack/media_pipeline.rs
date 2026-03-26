@@ -56,7 +56,7 @@ impl RtcRtcpSendPort for DummyRtcpPort {
     fn send_rtcp(&self, _buf: &[u8]) {}
 }
 
-// 负责 legacy frame pipeline 的挂载和音频播放会话管理，
+// 负责当前主 frame pipeline 的挂载和音频播放会话管理，
 // 让 stack.rs 只保留生命周期入口。
 pub(crate) struct RtcStackMediaPipelineBridge<'a> {
     media_runtime: &'a Arc<tokio::runtime::Runtime>,
@@ -94,7 +94,7 @@ impl<'a> RtcStackMediaPipelineBridge<'a> {
         }
     }
 
-    pub(crate) fn mount_legacy_frame_pipeline(&self) {
+    pub(crate) fn mount_primary_frame_pipeline(&self) {
         let (video_sink, frame_sources) = build_rtc_video_frame_source(
             8192,
             Arc::new(DummyRtcpPort),
@@ -152,32 +152,33 @@ impl<'a> RtcStackMediaPipelineBridge<'a> {
         match send_result {
             Some(Ok(())) => {
                 crate::xbx_log_info!(
-                    "[xbxengine][rtc] legacy frame pipeline mounted and handed to supervisor"
+                    "[xbxengine][rtc] primary frame pipeline mounted and handed to supervisor"
                 );
                 RuntimeStatsSink::new(self.runtime_stats.clone()).update(|stats| {
                     stats.latest_observation_label =
-                        Some("rtcLegacyFramePipelineMounted".to_string());
-                    stats.latest_observation_summary =
-                        Some("phase1 rtc mounted legacy sample-builder frame pipeline".to_string());
+                        Some("rtcPrimaryFramePipelineMounted".to_string());
+                    stats.latest_observation_summary = Some(
+                        "phase1 rtc mounted primary sample-builder frame pipeline".to_string(),
+                    );
                 });
             }
             Some(Err(err)) => {
                 crate::xbx_log_info!(
-                    "[xbxengine][rtc] legacy frame pipeline mount failed err={err}"
+                    "[xbxengine][rtc] primary frame pipeline mount failed err={err}"
                 );
                 RuntimeStatsSink::new(self.runtime_stats.clone()).update(|stats| {
                     stats.latest_observation_label =
-                        Some("rtcLegacyFramePipelineMountFailed".to_string());
+                        Some("rtcPrimaryFramePipelineMountFailed".to_string());
                     stats.latest_observation_summary = Some(format!(
-                        "phase1 rtc mount legacy frame pipeline failed err={err}"
+                        "phase1 rtc mount primary frame pipeline failed err={err}"
                     ));
                 });
             }
             None => {
-                crate::xbx_log_info!("[xbxengine][rtc] legacy frame pipeline sender unavailable");
+                crate::xbx_log_info!("[xbxengine][rtc] primary frame pipeline sender unavailable");
                 RuntimeStatsSink::new(self.runtime_stats.clone()).update(|stats| {
                     stats.latest_observation_label =
-                        Some("rtcLegacyFramePipelineSenderMissing".to_string());
+                        Some("rtcPrimaryFramePipelineSenderMissing".to_string());
                     stats.latest_observation_summary =
                         Some("phase1 rtc frame source sender unavailable".to_string());
                 });

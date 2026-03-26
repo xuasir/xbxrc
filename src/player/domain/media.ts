@@ -38,6 +38,17 @@ export interface StreamStats {
   inboundBitrateKbps?: number
   inboundVideoBitrateKbps?: number
   inboundAudioBitrateKbps?: number
+  actualVideoBitrateSource?: string
+  videoBweMode?: string
+  videoBweReason?: string
+  videoTargetRembKbps?: number
+  videoObservedRembKbps?: number
+  videoActualBitrateKbps?: number
+  videoTwccReceiveBitrateKbps?: number
+  videoTwccLossRatio?: number
+  videoTwccDeliveryRatio?: number
+  videoTwccFeedbackIntervalMs?: number
+  twccObservationState?: string
   inboundBytesTotal?: number
   inboundVideoBytesTotal?: number
   inboundAudioBytesTotal?: number

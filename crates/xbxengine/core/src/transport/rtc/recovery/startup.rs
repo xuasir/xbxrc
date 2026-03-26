@@ -433,6 +433,7 @@ mod tests {
         });
         stats.latest_video_twcc_observation = Some(XbxEngineVideoTwccObservation {
             observation_id: 1,
+            source: "local-feedback".to_string(),
             feedback_packet_count: 1,
             covered_sequence_start: 1,
             covered_sequence_end: 100,

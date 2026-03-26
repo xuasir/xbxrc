@@ -187,8 +187,56 @@ pub struct XbxEngineVideoBweObservationDto {
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct XbxEngineRtcBuilderObservationDto {
+    pub observation_id: u64,
+    pub controlled_twcc_registry: bool,
+    pub feedback_interval_ms: f64,
+    pub registered_header_extensions: Vec<String>,
+    pub registered_rtcp_feedback: Vec<String>,
+    pub observed_at_ms: f64,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct XbxEngineTwccRemoteStreamObservationDto {
+    pub observation_id: u64,
+    pub ssrc: u32,
+    pub mime_type: String,
+    pub twcc_ext_id: Option<u8>,
+    pub header_extensions: Vec<String>,
+    pub rtcp_feedback: Vec<String>,
+    pub observed_at_ms: f64,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct XbxEngineRemoteAnswerObservationDto {
+    pub observation_id: u64,
+    pub video_payload_order: Vec<u8>,
+    pub selected_video_payload_type: Option<u8>,
+    pub selected_video_mime_type: Option<String>,
+    pub selected_video_profile_level_id: Option<String>,
+    pub accepted_video_rtcp_feedback: Vec<String>,
+    pub accepted_audio_rtcp_feedback: Vec<String>,
+    pub accepted_video_header_extensions: Vec<String>,
+    pub accepted_audio_header_extensions: Vec<String>,
+    pub observed_at_ms: f64,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct XbxEngineTwccExtensionObservationDto {
+    pub observation_id: u64,
+    pub state: String,
+    pub ssrc: u32,
+    pub sequence_number: u16,
+    pub expected_ext_id: u8,
+    pub packet_seen_count: u64,
+    pub missing_count: u64,
+    pub observed_at_ms: f64,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct XbxEngineVideoTwccObservationDto {
     pub observation_id: u64,
+    pub source: String,
     pub feedback_packet_count: u16,
     pub covered_sequence_start: u16,
     pub covered_sequence_end: u16,
@@ -201,6 +249,18 @@ pub struct XbxEngineVideoTwccObservationDto {
     pub delivery_ratio: f64,
     pub packet_loss_ratio: f64,
     pub observed_at_ms: f64,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct XbxEngineBuildFingerprintDto {
+    pub git_commit_short: String,
+    pub workspace_dirty: bool,
+    pub build_timestamp_unix_ms: String,
+    pub cargo_profile: String,
+    pub default_feedback_interval_ms: u64,
+    pub effective_feedback_interval_ms: u64,
+    pub controlled_twcc_registry: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -248,6 +308,17 @@ pub struct XbxEngineStatsDto {
     pub inbound_bitrate_kbps: Option<f64>,
     pub inbound_video_bitrate_kbps: Option<f64>,
     pub inbound_audio_bitrate_kbps: Option<f64>,
+    pub actual_video_bitrate_source: Option<String>,
+    pub video_bwe_mode: Option<String>,
+    pub video_bwe_reason: Option<String>,
+    pub video_target_remb_kbps: Option<u32>,
+    pub video_observed_remb_kbps: Option<u32>,
+    pub video_actual_bitrate_kbps: Option<f64>,
+    pub video_twcc_receive_bitrate_kbps: Option<f64>,
+    pub video_twcc_loss_ratio: Option<f64>,
+    pub video_twcc_delivery_ratio: Option<f64>,
+    pub video_twcc_feedback_interval_ms: Option<f64>,
+    pub twcc_observation_state: Option<String>,
     pub inbound_bytes_total: Option<u64>,
     pub inbound_video_bytes_total: Option<u64>,
     pub inbound_audio_bytes_total: Option<u64>,
@@ -289,6 +360,15 @@ pub struct XbxEngineStatsDto {
     pub latest_video_escalation_observation: Option<XbxEngineVideoEscalationObservationDto>,
     pub latest_video_bwe_observation: Option<XbxEngineVideoBweObservationDto>,
     pub latest_video_twcc_observation: Option<XbxEngineVideoTwccObservationDto>,
+    pub latest_rtc_builder_observation: Option<XbxEngineRtcBuilderObservationDto>,
+    pub latest_twcc_remote_stream_observation: Option<XbxEngineTwccRemoteStreamObservationDto>,
+    pub latest_remote_answer_observation: Option<XbxEngineRemoteAnswerObservationDto>,
+    pub latest_twcc_extension_observation: Option<XbxEngineTwccExtensionObservationDto>,
     pub latest_data_channel_message_catalog_observation:
         Option<XbxEngineDataChannelMessageCatalogObservationDto>,
+    pub latest_observation_label: Option<String>,
+    pub latest_observation_summary: Option<String>,
+    pub latest_target_remb_action: Option<String>,
+    pub latest_target_remb_summary: Option<String>,
+    pub build_fingerprint: Option<XbxEngineBuildFingerprintDto>,
 }

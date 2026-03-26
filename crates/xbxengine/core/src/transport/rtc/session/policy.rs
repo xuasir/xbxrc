@@ -1,6 +1,11 @@
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+use crate::api::backend::XbxEngineMediaRuntimeStats;
+use crate::api::runtime::XbxEngineRuntimeConfig;
+use crate::runtime_stats_sink::RuntimeStatsSink;
 use crate::transport::rtc::bwe::evaluator::RtcBweEvaluation;
+use crate::transport::rtc::bwe::policy::resolve_target_remb_kbps;
 use crate::transport::rtc::facts::{ConnectionLifecycleStateFact, TransportCommand};
 use crate::transport::rtc::policy::bwe::BwePolicyProposal;
 use crate::transport::rtc::policy::planner::{
@@ -12,12 +17,10 @@ use crate::transport::rtc::projection::TransportSnapshot;
 use crate::transport::rtc::recovery::escalation::{
     RecoveryAction, VideoEscalationController, VideoEscalationReason,
 };
+use crate::transport::rtc::recovery::startup::SessionPhase;
 use crate::transport::rtc::session::actor::SessionPolicyHook;
 
 const DEFAULT_BWE_TARGET_KBPS: u32 = 16_000;
-const BWE_FLOOR_KBPS: u32 = 8_000;
-const CLOUD_BWE_FLOOR_KBPS: u32 = 20_000;
-const BWE_CEILING_KBPS: u32 = 60_000;
 const RECOVERY_REPEAT_SUPPRESS_MS: f64 = 160.0;
 
 #[derive(Clone, Debug)]
@@ -32,26 +35,48 @@ struct RecoverySignalCursor {
 /// - 复用 planner 的优先级（reconnect > recovery > bwe）
 /// - stack 只做命令执行与 CommandResultFact 回写
 pub struct RtcSessionPolicy {
+    runtime_config: Arc<Mutex<XbxEngineRuntimeConfig>>,
+    runtime_stats: Arc<Mutex<XbxEngineMediaRuntimeStats>>,
     reconnect_inflight: bool,
     planner: TransportCommandPlanner,
     escalation_controller: VideoEscalationController,
     last_recovery_signal: Option<RecoverySignalCursor>,
     last_bwe_sample_tick_ms: Option<f64>,
+    last_sent_remb_kbps: u32,
+    hybrid_ramp_cooldown_ticks: u8,
     next_reconnect_observation_id: u64,
     next_bwe_observation_id: u64,
+    last_bwe_reason: Option<String>,
 }
 
-impl Default for RtcSessionPolicy {
-    fn default() -> Self {
+impl RtcSessionPolicy {
+    pub fn new(
+        runtime_config: Arc<Mutex<XbxEngineRuntimeConfig>>,
+        runtime_stats: Arc<Mutex<XbxEngineMediaRuntimeStats>>,
+    ) -> Self {
         Self {
+            runtime_config,
+            runtime_stats,
             reconnect_inflight: false,
             planner: TransportCommandPlanner::new(),
             escalation_controller: VideoEscalationController::new(Duration::from_millis(320), 2, 3),
             last_recovery_signal: None,
             last_bwe_sample_tick_ms: None,
+            last_sent_remb_kbps: DEFAULT_BWE_TARGET_KBPS,
+            hybrid_ramp_cooldown_ticks: 0,
             next_reconnect_observation_id: 0,
             next_bwe_observation_id: 0,
+            last_bwe_reason: None,
         }
+    }
+}
+
+impl Default for RtcSessionPolicy {
+    fn default() -> Self {
+        Self::new(
+            Arc::new(Mutex::new(XbxEngineRuntimeConfig::default())),
+            Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default())),
+        )
     }
 }
 
@@ -170,27 +195,49 @@ impl RtcSessionPolicy {
             .bwe
             .latest_rtt_ms
             .or(snapshot.connection.latest_rtt_ms);
-        let floor_kbps =
-            resolve_bwe_floor_kbps(snapshot.connection.latest_transport_path.as_deref());
         let actual_kbps = snapshot.bwe.latest_actual_video_bitrate_kbps.unwrap_or(0.0);
+        let webrtc_config = self
+            .runtime_config
+            .lock()
+            .ok()
+            .map(|config| config.webrtc.clone())
+            .unwrap_or_default();
+        let (session_target_type, twcc_observation, session_phase) =
+            RuntimeStatsSink::read_shared(self.runtime_stats.as_ref(), |stats| {
+                (
+                    stats.session_target_type.clone(),
+                    stats.latest_video_twcc_observation.clone(),
+                    parse_session_phase(stats.session_phase.as_deref()),
+                )
+            })
+            .unwrap_or((None, None, SessionPhase::Steady));
         let current_target_kbps = snapshot
             .bwe
             .target_remb_kbps
-            .or_else(|| {
-                (actual_kbps > 0.0)
-                    .then_some(actual_kbps.round() as u32)
-                    .map(|value| value.clamp(floor_kbps, BWE_CEILING_KBPS))
-            })
-            .unwrap_or(DEFAULT_BWE_TARGET_KBPS);
-        let (target_kbps, decision_reason) = resolve_bwe_target(
-            current_target_kbps,
+            .unwrap_or(self.last_sent_remb_kbps.max(DEFAULT_BWE_TARGET_KBPS));
+        self.last_sent_remb_kbps = current_target_kbps;
+        let bwe_decision = resolve_target_remb_kbps(
+            &webrtc_config,
+            snapshot.bwe.latest_observed_remb_kbps,
+            actual_kbps,
             loss_ratio,
             rtt_ms,
-            actual_kbps,
-            snapshot.bwe.latest_observed_remb_kbps,
+            session_target_type.as_ref(),
             snapshot.connection.latest_transport_path.as_deref(),
+            session_phase,
+            None,
+            twcc_observation.as_ref(),
+            &mut self.last_sent_remb_kbps,
+            &mut self.hybrid_ramp_cooldown_ticks,
         );
-        if target_kbps == current_target_kbps {
+        let target_kbps = bwe_decision.target_kbps;
+        let decision_reason = bwe_decision.reason;
+        let reason_changed = self
+            .last_bwe_reason
+            .as_ref()
+            .is_none_or(|last| last != &decision_reason);
+        self.last_bwe_reason = Some(decision_reason.clone());
+        if target_kbps == current_target_kbps && !reason_changed {
             return None;
         }
         self.next_bwe_observation_id = self.next_bwe_observation_id.saturating_add(1);
@@ -259,6 +306,14 @@ impl RtcSessionPolicy {
     }
 }
 
+fn parse_session_phase(value: Option<&str>) -> SessionPhase {
+    match value {
+        Some("startup") => SessionPhase::Startup,
+        Some("recovering") => SessionPhase::Recovering,
+        _ => SessionPhase::Steady,
+    }
+}
+
 fn map_recovery_action_to_transport_commands(
     action: RecoveryAction,
     reason: String,
@@ -316,69 +371,18 @@ fn map_label_to_escalation_reason(label: &str) -> Option<VideoEscalationReason> 
     }
 }
 
-fn resolve_bwe_target(
-    current_target_kbps: u32,
-    loss_ratio: f64,
-    rtt_ms: Option<f64>,
-    actual_kbps: f64,
-    observed_remb_kbps: Option<u32>,
-    transport_path: Option<&str>,
-) -> (u32, String) {
-    let floor_kbps = resolve_bwe_floor_kbps(transport_path);
-    let (candidate, reason) = if loss_ratio >= 0.12 || rtt_ms.is_some_and(|rtt| rtt >= 260.0) {
-        (
-            ((current_target_kbps as f64) * 0.72).round() as u32,
-            "session.bwe.highLossOrRtt".to_string(),
-        )
-    } else if loss_ratio >= 0.06 || rtt_ms.is_some_and(|rtt| rtt >= 180.0) {
-        (
-            ((current_target_kbps as f64) * 0.86).round() as u32,
-            "session.bwe.moderateLossOrRtt".to_string(),
-        )
-    } else if loss_ratio <= 0.015
-        && rtt_ms.is_none_or(|rtt| rtt <= 95.0)
-        && (actual_kbps <= 0.0 || actual_kbps + 500.0 >= current_target_kbps as f64)
-    {
-        (
-            current_target_kbps.saturating_add(2_000),
-            "session.bwe.healthyRampUp".to_string(),
-        )
-    } else {
-        (current_target_kbps, "session.bwe.hold".to_string())
-    };
-    let profile_ceiling = if transport_path.is_some_and(|path| path.contains("relay")) {
-        45_000
-    } else if transport_path.is_some_and(|path| path.contains("cloud")) {
-        38_000
-    } else {
-        BWE_CEILING_KBPS
-    };
-    let capped_by_observed = observed_remb_kbps
-        .map(|observed| candidate.min(observed.saturating_add(4_000)))
-        .unwrap_or(candidate);
-    (
-        capped_by_observed.clamp(floor_kbps, profile_ceiling),
-        reason,
-    )
-}
-
-fn resolve_bwe_floor_kbps(transport_path: Option<&str>) -> u32 {
-    if transport_path.is_some_and(|path| path.contains("cloud")) {
-        CLOUD_BWE_FLOOR_KBPS
-    } else {
-        BWE_FLOOR_KBPS
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::RtcSessionPolicy;
+    use crate::api::backend::{XbxEngineMediaRuntimeStats, XbxEngineVideoTwccObservation};
+    use crate::api::runtime::XbxEngineRuntimeConfig;
     use crate::transport::rtc::facts::{ConnectionLifecycleStateFact, TransportCommand};
     use crate::transport::rtc::projection::{
         BweProjection, ConnectionProjection, DiagnosticsProjection, MediaProjection,
         RecoveryProjection, TransportSnapshot,
     };
     use crate::transport::rtc::session::actor::SessionPolicyHook;
+    use std::sync::{Arc, Mutex};
 
     #[test]
     fn reconnect_command_is_emitted_once_per_recovering_transition() {
@@ -459,7 +463,12 @@ mod tests {
 
     #[test]
     fn bwe_tick_emits_target_remb_update_when_metrics_are_healthy() {
-        let mut policy = RtcSessionPolicy::default();
+        let runtime_config = Arc::new(Mutex::new(XbxEngineRuntimeConfig::default()));
+        if let Ok(mut config) = runtime_config.lock() {
+            config.webrtc.bwe_mode = "observed-remb".to_string();
+        }
+        let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
+        let mut policy = RtcSessionPolicy::new(runtime_config, runtime_stats);
         let mut connection = ConnectionProjection::default();
         connection.lifecycle_state = ConnectionLifecycleStateFact::Connected;
         connection.latest_loss_ratio_1s = Some(0.01);
@@ -499,19 +508,26 @@ mod tests {
     }
 
     #[test]
-    fn cloud_bwe_floor_holds_at_twenty_mbps() {
-        let mut policy = RtcSessionPolicy::default();
+    fn runtime_config_floor_is_respected() {
+        let runtime_config = Arc::new(Mutex::new(XbxEngineRuntimeConfig::default()));
+        if let Ok(mut config) = runtime_config.lock() {
+            config.webrtc.bwe_mode = "observed-remb".to_string();
+            config.webrtc.remb_floor_kbps = 25_000;
+            config.webrtc.remb_ceiling_kbps = 150_000;
+        }
+        let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
+        let mut policy = RtcSessionPolicy::new(runtime_config, runtime_stats);
         let mut connection = ConnectionProjection::default();
         connection.lifecycle_state = ConnectionLifecycleStateFact::Connected;
         connection.latest_loss_ratio_1s = Some(0.0);
         connection.latest_rtt_ms = Some(35.0);
-        connection.latest_transport_path = Some("udp-cloud-direct".to_string());
+        connection.latest_transport_path = Some("Direct".to_string());
         let bwe = BweProjection {
             latest_rtt_ms: Some(35.0),
             latest_loss_ratio_1s: Some(0.0),
             latest_actual_video_bitrate_kbps: Some(14_000.0),
             latest_observed_remb_kbps: Some(16_000),
-            latest_transport_path: Some("udp-cloud-direct".to_string()),
+            latest_transport_path: Some("Direct".to_string()),
             latest_sample_tick_ms: Some(400.0),
             target_remb_kbps: Some(12_000),
             last_observed_at_ms: Some(400.0),
@@ -536,7 +552,151 @@ mod tests {
                 }
             })
             .unwrap_or(0);
-        assert_eq!(target, 20_000);
+        assert_eq!(target, 25_000);
+    }
+
+    #[test]
+    fn session_target_type_and_twcc_input_flow_into_new_bwe_policy() {
+        let runtime_config = Arc::new(Mutex::new(XbxEngineRuntimeConfig::default()));
+        if let Ok(mut config) = runtime_config.lock() {
+            config.webrtc.bwe_mode = "twcc-gcc".to_string();
+            config.webrtc.remb_floor_kbps = 8_000;
+            config.webrtc.remb_ceiling_kbps = 150_000;
+        }
+        let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
+        if let Ok(mut stats) = runtime_stats.lock() {
+            stats.session_target_type = Some(xbxengine_protocol::XbxEngineTargetTypeDto::Cloud);
+            stats.latest_video_twcc_observation = Some(XbxEngineVideoTwccObservation {
+                observation_id: 1,
+                source: "local-feedback".to_string(),
+                feedback_packet_count: 3,
+                covered_sequence_start: 100,
+                covered_sequence_end: 120,
+                covered_sequence_span: 20,
+                observed_packet_count: 20,
+                observed_byte_count: 30_000,
+                feedback_interval_ms: Some(80.0),
+                arrival_span_ms: Some(70.0),
+                receive_bitrate_kbps: Some(28_000.0),
+                delivery_ratio: 0.995,
+                packet_loss_ratio: 0.0,
+                observed_at_ms: 10.0,
+            });
+            stats.session_phase = Some("steady".to_string());
+        }
+        let mut policy = RtcSessionPolicy::new(runtime_config, runtime_stats);
+        let mut connection = ConnectionProjection::default();
+        connection.lifecycle_state = ConnectionLifecycleStateFact::Connected;
+        connection.latest_loss_ratio_1s = Some(0.0);
+        connection.latest_rtt_ms = Some(40.0);
+        connection.latest_transport_path = Some("Direct".to_string());
+        let bwe = BweProjection {
+            latest_rtt_ms: Some(40.0),
+            latest_loss_ratio_1s: Some(0.0),
+            latest_actual_video_bitrate_kbps: Some(18_000.0),
+            latest_observed_remb_kbps: Some(28_000),
+            latest_transport_path: Some("Direct".to_string()),
+            latest_sample_tick_ms: Some(1.0),
+            target_remb_kbps: Some(18_000),
+            last_observed_at_ms: Some(1.0),
+        };
+        let snapshot = TransportSnapshot::new(
+            1,
+            1.0,
+            connection,
+            MediaProjection::default(),
+            RecoveryProjection::default(),
+            bwe,
+            DiagnosticsProjection::default(),
+        );
+        let reason = policy
+            .on_snapshot(&snapshot)
+            .into_iter()
+            .find_map(|command| {
+                if let TransportCommand::SetTargetRembKbps { reason, .. } = command {
+                    Some(reason)
+                } else {
+                    None
+                }
+            });
+        assert!(reason.is_some_and(|value| value.starts_with("twcc-gcc-cloud-")));
+    }
+
+    #[test]
+    fn bwe_emits_reason_update_even_when_target_is_unchanged() {
+        let runtime_config = Arc::new(Mutex::new(XbxEngineRuntimeConfig::default()));
+        if let Ok(mut config) = runtime_config.lock() {
+            config.webrtc.bwe_mode = "twcc-gcc".to_string();
+            config.webrtc.remb_floor_kbps = 8_000;
+            config.webrtc.remb_ceiling_kbps = 50_000;
+            config.webrtc.video_pipeline.feedback_interval_ms = 1_000;
+        }
+        let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
+        if let Ok(mut stats) = runtime_stats.lock() {
+            stats.session_target_type = Some(xbxengine_protocol::XbxEngineTargetTypeDto::Cloud);
+            stats.session_phase = Some("steady".to_string());
+        }
+        let mut policy = RtcSessionPolicy::new(runtime_config, runtime_stats.clone());
+        policy.last_sent_remb_kbps = 25_000;
+        policy.last_bwe_reason = Some("twcc-gcc-cloud-await-feedback".to_string());
+
+        if let Ok(mut stats) = runtime_stats.lock() {
+            stats.latest_video_twcc_observation = Some(XbxEngineVideoTwccObservation {
+                observation_id: 1,
+                source: "local-feedback".to_string(),
+                feedback_packet_count: 3,
+                covered_sequence_start: 100,
+                covered_sequence_end: 220,
+                covered_sequence_span: 120,
+                observed_packet_count: 120,
+                observed_byte_count: 180_000,
+                feedback_interval_ms: Some(1_000.0),
+                arrival_span_ms: Some(1_000.0),
+                receive_bitrate_kbps: Some(24_500.0),
+                delivery_ratio: 1.0,
+                packet_loss_ratio: 0.0,
+                observed_at_ms: 10.0,
+            });
+        }
+
+        let mut connection = ConnectionProjection::default();
+        connection.lifecycle_state = ConnectionLifecycleStateFact::Connected;
+        connection.latest_loss_ratio_1s = Some(0.0);
+        connection.latest_rtt_ms = Some(40.0);
+        connection.latest_transport_path = Some("Direct".to_string());
+        let bwe = BweProjection {
+            latest_rtt_ms: Some(40.0),
+            latest_loss_ratio_1s: Some(0.0),
+            latest_actual_video_bitrate_kbps: Some(18_000.0),
+            latest_observed_remb_kbps: Some(25_000),
+            latest_transport_path: Some("Direct".to_string()),
+            latest_sample_tick_ms: Some(1.0),
+            target_remb_kbps: Some(25_000),
+            last_observed_at_ms: Some(1.0),
+        };
+        let snapshot = TransportSnapshot::new(
+            1,
+            1.0,
+            connection,
+            MediaProjection::default(),
+            RecoveryProjection::default(),
+            bwe,
+            DiagnosticsProjection::default(),
+        );
+
+        let reason = policy
+            .on_snapshot(&snapshot)
+            .into_iter()
+            .find_map(|command| {
+                if let TransportCommand::SetTargetRembKbps { reason, .. } = command {
+                    Some(reason)
+                } else {
+                    None
+                }
+            });
+
+        assert!(reason.is_some());
+        assert_ne!(reason.as_deref(), Some("twcc-gcc-cloud-await-feedback"));
     }
 
     #[test]

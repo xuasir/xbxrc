@@ -313,6 +313,9 @@ where
         match action {
             XbxEngineRecoveryAction::RequestVideoKeyframe => {
                 if let Err(error) = self.media_backend.request_video_keyframe() {
+                    if is_control_channel_not_ready_error(&error) {
+                        return true;
+                    }
                     self.emit_error("requestVideoKeyframeFailed", error.to_string());
                     return true;
                 }
@@ -328,6 +331,9 @@ where
             }
             XbxEngineRecoveryAction::RequestDecoderReset => {
                 if let Err(error) = self.media_backend.request_decoder_reset() {
+                    if is_control_channel_not_ready_error(&error) {
+                        return true;
+                    }
                     self.emit_error("requestDecoderResetFailed", error.to_string());
                     return true;
                 }
@@ -1053,10 +1059,16 @@ fn collect_local_offer_ice_candidates(offer_sdp: &str) -> Vec<XbxEngineIceCandid
 
 fn normalize_offer_profile_token(profile: &str) -> String {
     let normalized = profile.trim().to_ascii_lowercase();
-    normalized
+    let normalized = normalized
         .strip_prefix("profile-level-id=")
         .unwrap_or(normalized.as_str())
-        .to_string()
+        .to_string();
+    match normalized.as_str() {
+        "high" | "main" => "4d".to_string(),
+        "normal" | "default" | "browser" | "macos" | "rust-owned" => "42e".to_string(),
+        "low" | "baseline" => "420".to_string(),
+        other => other.to_string(),
+    }
 }
 
 fn is_terminal_remote_session_inactive_error(error: &XbxEngineRuntimeError) -> bool {
@@ -1070,6 +1082,12 @@ fn is_terminal_remote_session_inactive_error(error: &XbxEngineRuntimeError) -> b
         || normalized.contains("status 410")
         || normalized.contains("code 410");
     from_keepalive && (session_inactive || http_410)
+}
+
+fn is_control_channel_not_ready_error(error: &XbxEngineRuntimeError) -> bool {
+    let normalized = error.to_string().to_ascii_lowercase();
+    normalized.contains("xbxenginertccontrolchannelnotreadyforkeyframe")
+        || normalized.contains("xbxenginertccontrolchannelnotreadyfordecoderreset")
 }
 
 #[cfg(test)]

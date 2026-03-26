@@ -258,8 +258,56 @@ pub struct XbxEngineVideoBweObservation {
 }
 
 #[derive(Clone, Debug, PartialEq)]
+pub struct XbxEngineRtcBuilderObservation {
+    pub observation_id: u64,
+    pub controlled_twcc_registry: bool,
+    pub feedback_interval_ms: f64,
+    pub registered_header_extensions: Vec<String>,
+    pub registered_rtcp_feedback: Vec<String>,
+    pub observed_at_ms: f64,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct XbxEngineTwccRemoteStreamObservation {
+    pub observation_id: u64,
+    pub ssrc: u32,
+    pub mime_type: String,
+    pub twcc_ext_id: Option<u8>,
+    pub header_extensions: Vec<String>,
+    pub rtcp_feedback: Vec<String>,
+    pub observed_at_ms: f64,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct XbxEngineRemoteAnswerObservation {
+    pub observation_id: u64,
+    pub video_payload_order: Vec<u8>,
+    pub selected_video_payload_type: Option<u8>,
+    pub selected_video_mime_type: Option<String>,
+    pub selected_video_profile_level_id: Option<String>,
+    pub accepted_video_rtcp_feedback: Vec<String>,
+    pub accepted_audio_rtcp_feedback: Vec<String>,
+    pub accepted_video_header_extensions: Vec<String>,
+    pub accepted_audio_header_extensions: Vec<String>,
+    pub observed_at_ms: f64,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct XbxEngineTwccExtensionObservation {
+    pub observation_id: u64,
+    pub state: String,
+    pub ssrc: u32,
+    pub sequence_number: u16,
+    pub expected_ext_id: u8,
+    pub packet_seen_count: u64,
+    pub missing_count: u64,
+    pub observed_at_ms: f64,
+}
+
+#[derive(Clone, Debug, PartialEq)]
 pub struct XbxEngineVideoTwccObservation {
     pub observation_id: u64,
+    pub source: String,
     pub feedback_packet_count: u16,
     pub covered_sequence_start: u16,
     pub covered_sequence_end: u16,
@@ -350,6 +398,8 @@ pub struct XbxEngineMediaRuntimeStats {
     pub latest_video_frame: Option<XbxEngineVideoFrameStats>,
     pub latest_observation_label: Option<String>,
     pub latest_observation_summary: Option<String>,
+    pub latest_target_remb_action: Option<String>,
+    pub latest_target_remb_summary: Option<String>,
     pub latest_video_stream_width: Option<u32>,
     pub latest_video_stream_height: Option<u32>,
     pub first_video_packet_arrival_time_ms: Option<f64>,
@@ -371,6 +421,10 @@ pub struct XbxEngineMediaRuntimeStats {
     pub latest_video_escalation_observation: Option<XbxEngineVideoEscalationObservation>,
     pub latest_video_bwe_observation: Option<XbxEngineVideoBweObservation>,
     pub latest_video_twcc_observation: Option<XbxEngineVideoTwccObservation>,
+    pub latest_rtc_builder_observation: Option<XbxEngineRtcBuilderObservation>,
+    pub latest_twcc_remote_stream_observation: Option<XbxEngineTwccRemoteStreamObservation>,
+    pub latest_remote_answer_observation: Option<XbxEngineRemoteAnswerObservation>,
+    pub latest_twcc_extension_observation: Option<XbxEngineTwccExtensionObservation>,
     pub latest_video_track_status: Option<XbxEngineVideoTrackStatus>,
     pub latest_video_repair_probe_observation: Option<XbxEngineVideoRepairProbeObservation>,
     pub latest_video_rtx_reinject_observation: Option<XbxEngineVideoRtxReinjectObservation>,
@@ -402,6 +456,7 @@ pub struct XbxEngineMediaRuntimeStats {
     pub inbound_bitrate_kbps: Option<f64>,
     pub inbound_video_bitrate_kbps: Option<f64>,
     pub inbound_audio_bitrate_kbps: Option<f64>,
+    pub actual_video_bitrate_source: Option<String>,
     pub transport_path: Option<String>,
     pub latest_video_decode_ok_time_ms: Option<f64>,
     pub video_decode_fps: f64,
@@ -449,6 +504,8 @@ impl Default for XbxEngineMediaRuntimeStats {
             latest_video_frame: None,
             latest_observation_label: None,
             latest_observation_summary: None,
+            latest_target_remb_action: None,
+            latest_target_remb_summary: None,
             latest_video_stream_width: None,
             latest_video_stream_height: None,
             first_video_packet_arrival_time_ms: None,
@@ -470,6 +527,10 @@ impl Default for XbxEngineMediaRuntimeStats {
             latest_video_escalation_observation: None,
             latest_video_bwe_observation: None,
             latest_video_twcc_observation: None,
+            latest_rtc_builder_observation: None,
+            latest_twcc_remote_stream_observation: None,
+            latest_remote_answer_observation: None,
+            latest_twcc_extension_observation: None,
             latest_video_track_status: None,
             latest_video_repair_probe_observation: None,
             latest_video_rtx_reinject_observation: None,
@@ -500,6 +561,7 @@ impl Default for XbxEngineMediaRuntimeStats {
             inbound_bitrate_kbps: None,
             inbound_video_bitrate_kbps: None,
             inbound_audio_bitrate_kbps: None,
+            actual_video_bitrate_source: None,
             transport_path: None,
             latest_video_decode_ok_time_ms: None,
             video_decode_fps: 0.0,

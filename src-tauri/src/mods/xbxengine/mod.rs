@@ -1,3 +1,4 @@
+pub(crate) mod build_info;
 pub mod events;
 pub mod rpc;
 pub mod runtime_state;

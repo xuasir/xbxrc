@@ -8,9 +8,12 @@ use rtc::sansio::Protocol;
 use rtc_rtcp::transport_feedbacks::transport_layer_cc::TransportLayerCc;
 
 use crate::runtime_stats_sink::RuntimeStatsSink;
+use crate::transport::rtc::connection::builder::ControlledPeerConnection;
 use crate::transport::rtc::connection::rumble::parse_rumble_requests;
 use crate::transport::rtc::connection::short_text_preview;
-use crate::transport::rtc::connection::transport_metrics::build_twcc_observation;
+use crate::transport::rtc::connection::transport_metrics::{
+    build_twcc_observation, TWCC_OBSERVATION_SOURCE_REMOTE_RTCP,
+};
 use crate::transport::rtc::connection::RtcConnectionService;
 use crate::transport::rtc::facts::{DataChannelLabelFact, PeerFact, TransportFact};
 use crate::transport::rtc::stats::now_ms_f64;
@@ -40,7 +43,7 @@ const INPUT_METADATA_MAX_TOUCHPOINTS: u8 = 64;
 
 // phase-1 先只把控制面 channel 拓扑建进 rtc，真正的 ready/handshake 由后续事件循环接管。
 pub(crate) fn bootstrap_default_channels(
-    peer_connection: &mut rtc::peer_connection::RTCPeerConnection,
+    peer_connection: &mut ControlledPeerConnection,
     state: &mut crate::transport::rtc::connection::runtime_state::RtcConnectionRuntimeState,
 ) -> Result<(), crate::XbxEngineRuntimeError> {
     for (label, ordered, protocol) in [
@@ -878,12 +881,36 @@ impl RtcConnectionService {
         let Some(peer_connection) = self.peer_connection.as_mut() else {
             return Ok(());
         };
+        let mut pending_reads = Vec::new();
+        while let Some(message) = peer_connection.poll_read() {
+            pending_reads.push(message);
+        }
         let mut changed = false;
         let mut should_ack_message_handshake = false;
         let mut chat_text_observations = Vec::new();
-        while let Some(message) = peer_connection.poll_read() {
+        for message in pending_reads {
             match message {
                 RTCMessage::RtpPacket(track_id, packet) => {
+                    let remote_answer_sdp = self
+                        .state
+                        .lock()
+                        .ok()
+                        .and_then(|state| state.remote_answer_sdp.clone());
+                    let fallback_mime_type =
+                        RuntimeStatsSink::read_shared(runtime_stats, |stats| {
+                            stats
+                                .latest_video_track_status
+                                .as_ref()
+                                .and_then(|status| status.mime_type.clone())
+                        })
+                        .flatten();
+                    self.controlled_twcc_feedback.observe_inbound_rtp(
+                        &track_id,
+                        &packet,
+                        runtime_stats,
+                        remote_answer_sdp.as_deref(),
+                        fallback_mime_type,
+                    )?;
                     self.read_counters.rtp_packets =
                         self.read_counters.rtp_packets.saturating_add(1);
                     self.pending_media_ingress_packets.push((
@@ -912,10 +939,14 @@ impl RtcConnectionService {
                         let Some(twcc) = packet.as_any().downcast_ref::<TransportLayerCc>() else {
                             continue;
                         };
-                        self.twcc_observation_id = self.twcc_observation_id.saturating_add(1);
-                        if let Some(observation) =
-                            build_twcc_observation(self.twcc_observation_id, twcc, runtime_stats)
-                        {
+                        self.remote_rtcp_twcc_observation_id =
+                            self.remote_rtcp_twcc_observation_id.saturating_add(1);
+                        if let Some(observation) = build_twcc_observation(
+                            self.remote_rtcp_twcc_observation_id,
+                            twcc,
+                            runtime_stats,
+                            TWCC_OBSERVATION_SOURCE_REMOTE_RTCP,
+                        ) {
                             RuntimeStatsSink::new(runtime_stats.clone())
                                 .record_latest_video_twcc_observation(observation);
                         }
@@ -977,6 +1008,10 @@ impl RtcConnectionService {
                     changed = true;
                 }
             }
+        }
+        if let Some(peer_connection) = self.peer_connection.as_mut() {
+            self.controlled_twcc_feedback
+                .flush_due_feedback(peer_connection, runtime_stats)?;
         }
         if should_ack_message_handshake {
             if self.control_service.ack_handshake() {

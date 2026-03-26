@@ -1,6 +1,7 @@
 use std::sync::{Arc, Mutex};
 
 use rtc::peer_connection::event::RTCPeerConnectionIceErrorEvent;
+use rtc::peer_connection::event::RTCTrackEvent;
 use rtc::peer_connection::state::RTCPeerConnectionState;
 use rtc::sansio::Protocol;
 use xbxengine_protocol::{XbxEngineIceCandidateDto, XbxEngineTransportStateDto};
@@ -279,6 +280,7 @@ impl RtcConnectionService {
         let mut pending_ice_events = Vec::new();
         let mut pending_ice_error_events = Vec::new();
         let mut pending_connection_states = Vec::new();
+        let mut pending_track_events = Vec::new();
         let mut saw_local_candidate_update = false;
         let mut saw_local_gathering_complete = false;
         loop {
@@ -323,6 +325,11 @@ impl RtcConnectionService {
                         ) => {
                             pending_data_channel_events.push(dc_event);
                         }
+                        rtc::peer_connection::event::RTCPeerConnectionEvent::OnTrack(
+                            track_event,
+                        ) => {
+                            pending_track_events.push(track_event);
+                        }
                         _ => {}
                     }
                 }
@@ -335,6 +342,19 @@ impl RtcConnectionService {
             }
             for state in pending_connection_states.drain(..) {
                 self.handle_peer_connection_state_change(state, runtime_stats);
+            }
+            for event in pending_track_events.drain(..) {
+                match event {
+                    RTCTrackEvent::OnOpen(init) => {
+                        self.controlled_twcc_feedback
+                            .register_track_open(&init.track_id, init.receiver_id);
+                    }
+                    RTCTrackEvent::OnClosing(track_id)
+                    | RTCTrackEvent::OnClose(track_id)
+                    | RTCTrackEvent::OnError(track_id) => {
+                        self.controlled_twcc_feedback.unregister_track(&track_id);
+                    }
+                }
             }
             for event in pending_data_channel_events.drain(..) {
                 self.apply_data_channel_event(event, runtime_stats)?;

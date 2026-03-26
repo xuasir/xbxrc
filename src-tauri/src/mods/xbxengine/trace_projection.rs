@@ -11,6 +11,10 @@ pub(super) struct RuntimeTraceObservationState {
     escalation_observation_id: Option<u64>,
     bwe_observation_id: Option<u64>,
     twcc_observation_id: Option<u64>,
+    rtc_builder_observation_id: Option<u64>,
+    twcc_remote_stream_observation_id: Option<u64>,
+    remote_answer_observation_id: Option<u64>,
+    twcc_extension_observation_id: Option<u64>,
     data_channel_catalog_observation_id: Option<u64>,
     recovery_keyframe_request_count: Option<u64>,
     recovery_decoder_reset_count: Option<u64>,
@@ -37,6 +41,12 @@ pub(super) struct RuntimeTraceObservationState {
     host_descriptor_upload_mode: Option<String>,
     host_descriptor_metal_import_count_total: Option<u64>,
     host_descriptor_cpu_upload_count_total: Option<u64>,
+    actual_video_bitrate_source: Option<String>,
+    twcc_observation_state: Option<String>,
+    latest_observation_label: Option<String>,
+    latest_observation_summary: Option<String>,
+    latest_target_remb_action: Option<String>,
+    latest_target_remb_summary: Option<String>,
 }
 
 pub(super) fn should_skip_trace_tick(session_id: Option<&str>, stats: &XbxEngineStatsDto) -> bool {
@@ -80,17 +90,51 @@ pub(super) fn build_observability_snapshot(stats: &XbxEngineStatsDto) -> serde_j
         },
         "bitrate": {
             "display": stats.br,
+            "videoDisplay": stats.br,
+            "totalKbps": stats.inbound_bitrate_kbps,
             "inboundKbps": stats.inbound_bitrate_kbps,
             "videoKbps": stats.inbound_video_bitrate_kbps,
             "audioKbps": stats.inbound_audio_bitrate_kbps,
+            "actualVideoSource": stats.actual_video_bitrate_source,
             "bytesTotal": stats.inbound_bytes_total,
             "videoBytesTotal": stats.inbound_video_bytes_total,
             "audioBytesTotal": stats.inbound_audio_bytes_total,
         },
+        "bwe": {
+            "mode": stats.video_bwe_mode,
+            "reason": stats.video_bwe_reason,
+            "targetKbps": stats.video_target_remb_kbps,
+            "observedRembKbps": stats.video_observed_remb_kbps,
+            "actualVideoKbps": stats.video_actual_bitrate_kbps,
+            "actualVideoBitrateSource": stats.actual_video_bitrate_source,
+        },
+        "twcc": {
+            "state": stats.twcc_observation_state,
+            "receiveKbps": stats.video_twcc_receive_bitrate_kbps,
+            "lossRatio": stats.video_twcc_loss_ratio,
+            "deliveryRatio": stats.video_twcc_delivery_ratio,
+            "feedbackIntervalMs": stats.video_twcc_feedback_interval_ms,
+        },
+        "buildFingerprint": stats.build_fingerprint,
         "video": {
             "inboundFps": stats.inbound_video_fps,
             "decodeFps": stats.decode_fps,
             "presentFps": stats.present_fps,
+            "inboundPrimaryBytesTotal": stats
+                .latest_video_track_status
+                .as_ref()
+                .map(|status| status.video_bytes_total)
+                .or(stats.inbound_video_bytes_total),
+            "inboundVideoPacketsTotal": stats
+                .latest_video_track_status
+                .as_ref()
+                .map(|status| status.video_packet_count_total)
+                .or(stats.inbound_video_packet_count_total),
+            "inboundAudioBytesTotal": stats
+                .latest_video_track_status
+                .as_ref()
+                .map(|status| status.audio_bytes_total)
+                .or(stats.inbound_audio_bytes_total),
             "packetAgeMs": stats.packet_age_ms,
             "decodeAgeMs": stats.decode_age_ms,
             "presentAgeMs": stats.present_age_ms,
@@ -239,6 +283,7 @@ pub(super) fn record_runtime_trace_observations(
                     "targetRembKbps": bwe.target_remb_kbps,
                     "observedRembKbps": bwe.observed_remb_kbps,
                     "actualVideoBitrateKbps": bwe.actual_video_bitrate_kbps,
+                    "actualVideoBitrateSource": stats.actual_video_bitrate_source,
                     "lossRatio": bwe.loss_ratio,
                     "rttMs": bwe.rtt_ms,
                     "transportPath": bwe.transport_path,
@@ -257,12 +302,18 @@ pub(super) fn record_runtime_trace_observations(
     if let Some(twcc) = stats.latest_video_twcc_observation.as_ref() {
         if observation_state.twcc_observation_id != Some(twcc.observation_id) {
             observation_state.twcc_observation_id = Some(twcc.observation_id);
+            let event_name = if twcc.source == "local-feedback" {
+                "twccFeedbackSent"
+            } else {
+                "twccFeedbackObserved"
+            };
             runtime_trace.record_event(
                 "xbxengine",
-                "twccFeedbackSent",
+                event_name,
                 session_id,
                 json!({
                     "observationId": twcc.observation_id,
+                    "source": twcc.source,
                     "feedbackPacketCount": twcc.feedback_packet_count,
                     "coveredSequenceStart": twcc.covered_sequence_start,
                     "coveredSequenceEnd": twcc.covered_sequence_end,
@@ -270,11 +321,130 @@ pub(super) fn record_runtime_trace_observations(
                     "observedPacketCount": twcc.observed_packet_count,
                     "observedByteCount": twcc.observed_byte_count,
                     "feedbackIntervalMs": twcc.feedback_interval_ms,
+                    "state": stats.twcc_observation_state,
                     "arrivalSpanMs": twcc.arrival_span_ms,
                     "receiveBitrateKbps": twcc.receive_bitrate_kbps,
                     "deliveryRatio": twcc.delivery_ratio,
                     "packetLossRatio": twcc.packet_loss_ratio,
                     "observedAtMs": twcc.observed_at_ms,
+                }),
+            );
+        }
+    }
+
+    if let Some(observation) = stats.latest_rtc_builder_observation.as_ref() {
+        if observation_state.rtc_builder_observation_id != Some(observation.observation_id) {
+            observation_state.rtc_builder_observation_id = Some(observation.observation_id);
+            runtime_trace.record_event(
+                "xbxengine",
+                "rtcBuilderConfigured",
+                session_id,
+                json!({
+                    "observationId": observation.observation_id,
+                    "controlledTwccRegistry": observation.controlled_twcc_registry,
+                    "feedbackIntervalMs": observation.feedback_interval_ms,
+                    "registeredHeaderExtensions": observation.registered_header_extensions,
+                    "registeredRtcpFeedback": observation.registered_rtcp_feedback,
+                    "observedAtMs": observation.observed_at_ms,
+                }),
+            );
+        }
+    }
+
+    if let Some(observation) = stats.latest_twcc_remote_stream_observation.as_ref() {
+        if observation_state.twcc_remote_stream_observation_id != Some(observation.observation_id) {
+            observation_state.twcc_remote_stream_observation_id = Some(observation.observation_id);
+            runtime_trace.record_event(
+                "xbxengine",
+                "twccRemoteStreamBound",
+                session_id,
+                json!({
+                    "observationId": observation.observation_id,
+                    "ssrc": observation.ssrc,
+                    "mimeType": observation.mime_type,
+                    "twccExtId": observation.twcc_ext_id,
+                    "headerExtensions": observation.header_extensions,
+                    "rtcpFeedback": observation.rtcp_feedback,
+                    "observedAtMs": observation.observed_at_ms,
+                }),
+            );
+        }
+    }
+
+    if let Some(observation) = stats.latest_remote_answer_observation.as_ref() {
+        if observation_state.remote_answer_observation_id != Some(observation.observation_id) {
+            let accepted_video_feedback = observation
+                .accepted_video_rtcp_feedback
+                .iter()
+                .map(|value| value.to_ascii_lowercase())
+                .collect::<Vec<_>>();
+            let accepted_audio_feedback = observation
+                .accepted_audio_rtcp_feedback
+                .iter()
+                .map(|value| value.to_ascii_lowercase())
+                .collect::<Vec<_>>();
+            let video_goog_remb_accepted = accepted_video_feedback
+                .iter()
+                .any(|value| value == "goog-remb" || value.starts_with("goog-remb:"));
+            let video_transport_cc_accepted = accepted_video_feedback
+                .iter()
+                .any(|value| value == "transport-cc" || value.starts_with("transport-cc:"));
+            let audio_goog_remb_accepted = accepted_audio_feedback
+                .iter()
+                .any(|value| value == "goog-remb" || value.starts_with("goog-remb:"));
+            let audio_transport_cc_accepted = accepted_audio_feedback
+                .iter()
+                .any(|value| value == "transport-cc" || value.starts_with("transport-cc:"));
+
+            observation_state.remote_answer_observation_id = Some(observation.observation_id);
+            runtime_trace.record_event(
+                "xbxengine",
+                "remoteAnswerAccepted",
+                session_id,
+                json!({
+                    "observationId": observation.observation_id,
+                    "selectedVideoPayloadType": observation.selected_video_payload_type,
+                    "selectedVideoMimeType": observation.selected_video_mime_type,
+                    "selectedVideoProfileLevelId": observation.selected_video_profile_level_id,
+                    "videoPayloadOrder": observation.video_payload_order,
+                    "acceptedVideoRtcpFeedback": observation.accepted_video_rtcp_feedback,
+                    "acceptedAudioRtcpFeedback": observation.accepted_audio_rtcp_feedback,
+                    "acceptedVideoHeaderExtensions": observation.accepted_video_header_extensions,
+                    "acceptedAudioHeaderExtensions": observation.accepted_audio_header_extensions,
+                    "videoFeedbackAcceptance": {
+                        "googRembAccepted": video_goog_remb_accepted,
+                        "transportCcAccepted": video_transport_cc_accepted,
+                    },
+                    "audioFeedbackAcceptance": {
+                        "googRembAccepted": audio_goog_remb_accepted,
+                        "transportCcAccepted": audio_transport_cc_accepted,
+                    },
+                    "observedAtMs": observation.observed_at_ms,
+                }),
+            );
+        }
+    }
+
+    if let Some(observation) = stats.latest_twcc_extension_observation.as_ref() {
+        if observation_state.twcc_extension_observation_id != Some(observation.observation_id) {
+            observation_state.twcc_extension_observation_id = Some(observation.observation_id);
+            runtime_trace.record_event(
+                "xbxengine",
+                if observation.state == "seen" {
+                    "twccInboundExtensionSeen"
+                } else {
+                    "twccInboundExtensionMissing"
+                },
+                session_id,
+                json!({
+                    "observationId": observation.observation_id,
+                    "state": observation.state,
+                    "ssrc": observation.ssrc,
+                    "sequenceNumber": observation.sequence_number,
+                    "expectedExtId": observation.expected_ext_id,
+                    "packetSeenCount": observation.packet_seen_count,
+                    "missingCount": observation.missing_count,
+                    "observedAtMs": observation.observed_at_ms,
                 }),
             );
         }
@@ -447,6 +617,67 @@ pub(super) fn record_runtime_trace_observations(
         );
     }
 
+    if observation_state.actual_video_bitrate_source != stats.actual_video_bitrate_source {
+        observation_state.actual_video_bitrate_source = stats.actual_video_bitrate_source.clone();
+        runtime_trace.record_state(
+            "xbxengine",
+            "actualVideoBitrateSource",
+            session_id,
+            json!({
+                "source": stats.actual_video_bitrate_source,
+            }),
+        );
+    }
+
+    if observation_state.twcc_observation_state != stats.twcc_observation_state {
+        observation_state.twcc_observation_state = stats.twcc_observation_state.clone();
+        runtime_trace.record_state(
+            "xbxengine",
+            "twccObservationState",
+            session_id,
+            json!({
+                "state": stats.twcc_observation_state,
+            }),
+        );
+    }
+
+    if observation_state.latest_observation_label != stats.latest_observation_label
+        || observation_state.latest_observation_summary != stats.latest_observation_summary
+    {
+        observation_state.latest_observation_label = stats.latest_observation_label.clone();
+        observation_state.latest_observation_summary = stats.latest_observation_summary.clone();
+    }
+
+    if observation_state.latest_target_remb_action != stats.latest_target_remb_action
+        || observation_state.latest_target_remb_summary != stats.latest_target_remb_summary
+    {
+        observation_state.latest_target_remb_action = stats.latest_target_remb_action.clone();
+        observation_state.latest_target_remb_summary = stats.latest_target_remb_summary.clone();
+        match stats.latest_target_remb_action.as_deref() {
+            Some("requested") => {
+                runtime_trace.record_event(
+                    "xbxengine",
+                    "rtcTargetRembRequested",
+                    session_id,
+                    json!({
+                        "summary": stats.latest_target_remb_summary,
+                    }),
+                );
+            }
+            Some("queued") => {
+                runtime_trace.record_event(
+                    "xbxengine",
+                    "rtcTargetRembQueued",
+                    session_id,
+                    json!({
+                        "summary": stats.latest_target_remb_summary,
+                    }),
+                );
+            }
+            _ => {}
+        }
+    }
+
     if observation_state.latest_video_track_status != stats.latest_video_track_status {
         observation_state.latest_video_track_status = stats.latest_video_track_status.clone();
         if let Some(status) = stats.latest_video_track_status.as_ref() {
@@ -481,5 +712,174 @@ pub(super) fn record_runtime_trace_observations(
                 }),
             );
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::mods::runtime_trace::RuntimeTraceRecorder;
+    use serde_json::json;
+    use std::fs;
+
+    fn test_stats(payload: serde_json::Value) -> XbxEngineStatsDto {
+        serde_json::from_value(payload).expect("valid stats dto")
+    }
+
+    #[test]
+    fn build_observability_snapshot_includes_source_state_and_build_fingerprint() {
+        let stats = test_stats(json!({
+            "resolution": "2560x1440",
+            "rtt": "81.0ms",
+            "fps": 60.0,
+            "pl": "0.00%",
+            "fl": "",
+            "jit": "1.0ms",
+            "br": "8.5Mbps",
+            "decode": "",
+            "inbound_bitrate_kbps": 8600.0,
+            "inbound_video_bitrate_kbps": 8400.0,
+            "inbound_audio_bitrate_kbps": 200.0,
+            "actual_video_bitrate_source": "transport-metrics",
+            "video_actual_bitrate_kbps": 8400.0,
+            "video_twcc_receive_bitrate_kbps": 22800.0,
+            "video_twcc_loss_ratio": 0.01,
+            "video_twcc_delivery_ratio": 0.99,
+            "video_twcc_feedback_interval_ms": 80.0,
+            "twcc_observation_state": "missing-local-feedback",
+            "build_fingerprint": {
+                "gitCommitShort": "abc1234",
+                "workspaceDirty": true,
+                "buildTimestampUnixMs": "1774405700000",
+                "cargoProfile": "debug",
+                "defaultFeedbackIntervalMs": 1000,
+                "effectiveFeedbackIntervalMs": 80,
+                "controlledTwccRegistry": true
+            }
+        }));
+
+        let snapshot = build_observability_snapshot(&stats);
+        assert_eq!(
+            snapshot["bitrate"]["actualVideoSource"],
+            "transport-metrics"
+        );
+        assert_eq!(
+            snapshot["bwe"]["actualVideoBitrateSource"],
+            "transport-metrics"
+        );
+        assert_eq!(snapshot["twcc"]["state"], "missing-local-feedback");
+        assert_eq!(snapshot["buildFingerprint"]["gitCommitShort"], "abc1234");
+    }
+
+    #[test]
+    fn record_runtime_trace_observations_uses_twcc_event_name_by_source() {
+        let recorder = std::sync::Arc::new(RuntimeTraceRecorder::new().expect("trace recorder"));
+        let mut local_state = RuntimeTraceObservationState::default();
+        let local_stats = test_stats(json!({
+            "resolution": "",
+            "rtt": "",
+            "fps": 0.0,
+            "pl": "0.00%",
+            "fl": "",
+            "jit": "",
+            "br": "",
+            "decode": "",
+            "twcc_observation_state": "local-feedback",
+            "latest_video_twcc_observation": {
+                "observation_id": 7,
+                "source": "local-feedback",
+                "feedback_packet_count": 3,
+                "covered_sequence_start": 100,
+                "covered_sequence_end": 220,
+                "covered_sequence_span": 120,
+                "observed_packet_count": 120,
+                "observed_byte_count": 340000,
+                "feedback_interval_ms": 80.0,
+                "arrival_span_ms": 70.0,
+                "receive_bitrate_kbps": 22800.0,
+                "delivery_ratio": 0.99,
+                "packet_loss_ratio": 0.01,
+                "observed_at_ms": 2.0
+            }
+        }));
+
+        record_runtime_trace_observations(
+            &recorder,
+            &mut local_state,
+            Some("session-1"),
+            &local_stats,
+        );
+        let mut remote_state = RuntimeTraceObservationState::default();
+        record_runtime_trace_observations(
+            &recorder,
+            &mut remote_state,
+            Some("session-1"),
+            &test_stats(json!({
+                "resolution": "",
+                "rtt": "",
+                "fps": 0.0,
+                "pl": "0.00%",
+                "fl": "",
+                "jit": "",
+                "br": "",
+                "decode": "",
+                "twcc_observation_state": "remote-observed",
+                "latest_video_twcc_observation": {
+                    "observation_id": 8,
+                    "source": "remote-rtcp",
+                    "feedback_packet_count": 3,
+                    "covered_sequence_start": 100,
+                    "covered_sequence_end": 220,
+                    "covered_sequence_span": 120,
+                    "observed_packet_count": 120,
+                    "observed_byte_count": 340000,
+                    "feedback_interval_ms": 80.0,
+                    "arrival_span_ms": 70.0,
+                    "receive_bitrate_kbps": 22800.0,
+                    "delivery_ratio": 0.99,
+                    "packet_loss_ratio": 0.01,
+                    "observed_at_ms": 2.0
+                }
+            })),
+        );
+
+        let contents = fs::read_to_string(recorder.path()).expect("trace contents");
+        assert!(contents.contains("\"event\":\"twccFeedbackSent\""));
+        assert!(contents.contains("\"event\":\"twccFeedbackObserved\""));
+    }
+
+    #[test]
+    fn record_runtime_trace_observations_projects_remote_answer_acceptance() {
+        let recorder = std::sync::Arc::new(RuntimeTraceRecorder::new().expect("trace recorder"));
+        let mut state = RuntimeTraceObservationState::default();
+        let stats = test_stats(json!({
+            "resolution": "",
+            "rtt": "",
+            "fps": 0.0,
+            "pl": "0.00%",
+            "fl": "",
+            "jit": "",
+            "br": "",
+            "decode": "",
+            "latest_remote_answer_observation": {
+                "observation_id": 11,
+                "video_payload_order": [124, 97, 125],
+                "selected_video_payload_type": 124,
+                "selected_video_mime_type": "video/h264",
+                "selected_video_profile_level_id": "4d002a",
+                "accepted_video_rtcp_feedback": ["goog-remb", "transport-cc", "nack:pli"],
+                "accepted_audio_rtcp_feedback": ["transport-cc"],
+                "accepted_video_header_extensions": ["http://www.ietf.org/id/draft-holmer-rmcat-transport-wide-cc-extensions-01#3"],
+                "accepted_audio_header_extensions": ["urn:ietf:params:rtp-hdrext:ssrc-audio-level#2"],
+                "observed_at_ms": 1234.0
+            }
+        }));
+        record_runtime_trace_observations(&recorder, &mut state, Some("session-1"), &stats);
+
+        let contents = fs::read_to_string(recorder.path()).expect("trace contents");
+        assert!(contents.contains("\"event\":\"remoteAnswerAccepted\""));
+        assert!(contents.contains("\"selectedVideoProfileLevelId\":\"4d002a\""));
+        assert!(contents.contains("\"googRembAccepted\":true"));
+        assert!(contents.contains("\"transportCcAccepted\":true"));
     }
 }

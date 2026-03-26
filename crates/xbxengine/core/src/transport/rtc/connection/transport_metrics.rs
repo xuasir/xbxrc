@@ -2,16 +2,19 @@ use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
 use rtc::peer_connection::transport::RTCIceCandidateType;
-use rtc::peer_connection::RTCPeerConnection;
 use rtc::statistics::report::{RTCStatsReport, RTCStatsReportEntry};
 use rtc::statistics::StatsSelector;
 use rtc_rtcp::transport_feedbacks::transport_layer_cc::TransportLayerCc;
 
 use crate::runtime_stats_sink::RuntimeStatsSink;
+use crate::transport::rtc::connection::builder::ControlledPeerConnection;
 use crate::transport::rtc::events::RtcConnectionLifecycleState;
 use crate::transport::rtc::facts::{PeerFact, TransportFact};
 use crate::transport::rtc::stats::now_ms_f64;
 use crate::{XbxEngineMediaRuntimeStats, XbxEngineVideoTwccObservation};
+
+pub(crate) const TWCC_OBSERVATION_SOURCE_LOCAL_FEEDBACK: &str = "local-feedback";
+pub(crate) const TWCC_OBSERVATION_SOURCE_REMOTE_RTCP: &str = "remote-rtcp";
 
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct RtcTransportMetricsSnapshot {
@@ -25,7 +28,7 @@ pub(crate) struct RtcTransportMetricsSnapshot {
 }
 
 pub(crate) fn collect_transport_metrics(
-    peer_connection: &mut RTCPeerConnection,
+    peer_connection: &mut ControlledPeerConnection,
     connected_at_ms: Option<f64>,
     previous_sample_at_ms: Option<f64>,
     previous_inbound_video_bytes_total: Option<u64>,
@@ -40,7 +43,7 @@ pub(crate) fn collect_transport_metrics(
 }
 
 pub(crate) fn describe_selected_candidate_pair(
-    peer_connection: &mut RTCPeerConnection,
+    peer_connection: &mut ControlledPeerConnection,
 ) -> Option<String> {
     let report = peer_connection.get_stats(Instant::now(), StatsSelector::None);
     let pair = selected_candidate_pair(&report)?;
@@ -112,6 +115,7 @@ pub(crate) fn build_twcc_observation(
     observation_id: u64,
     packet: &TransportLayerCc,
     runtime_stats: &Arc<Mutex<XbxEngineMediaRuntimeStats>>,
+    source: &'static str,
 ) -> Option<XbxEngineVideoTwccObservation> {
     let observed_at_ms = now_ms_f64();
     RuntimeStatsSink::read_shared(runtime_stats, |stats| {
@@ -131,6 +135,7 @@ pub(crate) fn build_twcc_observation(
         let feedback_interval_ms = stats
             .latest_video_twcc_observation
             .as_ref()
+            .filter(|previous| previous.source == source)
             .map(|previous| (observed_at_ms - previous.observed_at_ms).max(0.0))
             .filter(|value| *value > 0.0);
         let arrival_span_ms = {
@@ -141,16 +146,33 @@ pub(crate) fn build_twcc_observation(
                 .sum::<f64>();
             (span_ms > 0.0).then_some(span_ms).or(feedback_interval_ms)
         };
-        let observed_byte_count = estimate_twcc_observed_byte_count(stats, observed_packet_count);
+        // remote-rtcp 观测并不保证是本地 video stream 的可归因吞吐，
+        // 这里仅在 local-feedback 下允许回退到 video transport 指标，避免误导。
+        let allow_video_bitrate_fallback = source == TWCC_OBSERVATION_SOURCE_LOCAL_FEEDBACK;
+        let observed_byte_count = if allow_video_bitrate_fallback {
+            estimate_twcc_observed_byte_count(
+                stats,
+                observed_packet_count,
+                feedback_interval_ms,
+                arrival_span_ms,
+            )
+        } else {
+            0
+        };
         let receive_bitrate_kbps = feedback_interval_ms
-            .filter(|interval| *interval > 0.0)
+            .filter(|interval| *interval > 0.0 && observed_byte_count > 0)
             .map(|interval| observed_byte_count as f64 * 8.0 / interval)
-            .or_else(|| stats.inbound_video_bitrate_kbps)
             .or_else(|| {
-                stats
-                    .latest_video_bwe_observation
-                    .as_ref()
-                    .map(|bwe| bwe.actual_video_bitrate_kbps)
+                if allow_video_bitrate_fallback {
+                    stats.inbound_video_bitrate_kbps.or_else(|| {
+                        stats
+                            .latest_video_bwe_observation
+                            .as_ref()
+                            .map(|bwe| bwe.actual_video_bitrate_kbps)
+                    })
+                } else {
+                    None
+                }
             });
         let packet_status_count = packet.packet_status_count.max(1);
         let delivery_ratio =
@@ -159,6 +181,7 @@ pub(crate) fn build_twcc_observation(
 
         Some(XbxEngineVideoTwccObservation {
             observation_id,
+            source: source.to_string(),
             feedback_packet_count: u16::from(packet.fb_pkt_count),
             covered_sequence_start: packet.base_sequence_number,
             covered_sequence_end,
@@ -317,9 +340,25 @@ fn estimate_recent_inbound_bitrate_kbps(
 fn estimate_twcc_observed_byte_count(
     stats: &XbxEngineMediaRuntimeStats,
     observed_packet_count: u16,
+    feedback_interval_ms: Option<f64>,
+    arrival_span_ms: Option<f64>,
 ) -> u64 {
     if observed_packet_count == 0 {
         return 0;
+    }
+    let reference_interval_ms = feedback_interval_ms
+        .filter(|value| *value > 0.0)
+        .or(arrival_span_ms.filter(|value| *value > 0.0));
+    if let (Some(video_kbps), Some(interval_ms)) =
+        (stats.inbound_video_bitrate_kbps, reference_interval_ms)
+    {
+        let estimated_bytes = (video_kbps.max(0.0) * interval_ms / 8.0).round();
+        if estimated_bytes.is_finite()
+            && estimated_bytes > 0.0
+            && estimated_bytes > observed_packet_count as f64
+        {
+            return estimated_bytes as u64;
+        }
     }
     let packet_count_total = stats.inbound_video_packet_count_total;
     let average_packet_bytes = if packet_count_total == 0 {
@@ -327,7 +366,9 @@ fn estimate_twcc_observed_byte_count(
     } else {
         (stats.inbound_primary_video_bytes_total / packet_count_total).max(1)
     };
-    average_packet_bytes.saturating_mul(u64::from(observed_packet_count))
+    average_packet_bytes
+        .max(1_200)
+        .saturating_mul(u64::from(observed_packet_count))
 }
 
 fn candidate_type_for(report: &RTCStatsReport, candidate_id: &str) -> Option<RTCIceCandidateType> {
@@ -398,7 +439,15 @@ fn is_video_inbound_stream(
 
 #[cfg(test)]
 mod tests {
-    use super::{classify_transport_path, estimate_recent_inbound_bitrate_kbps};
+    use std::sync::{Arc, Mutex};
+
+    use rtc_rtcp::transport_feedbacks::transport_layer_cc::TransportLayerCc;
+
+    use super::{
+        build_twcc_observation, classify_transport_path, estimate_recent_inbound_bitrate_kbps,
+        TWCC_OBSERVATION_SOURCE_LOCAL_FEEDBACK, TWCC_OBSERVATION_SOURCE_REMOTE_RTCP,
+    };
+    use crate::XbxEngineMediaRuntimeStats;
     use rtc::peer_connection::transport::RTCIceCandidateType;
 
     #[test]
@@ -455,5 +504,50 @@ mod tests {
         let bitrate =
             estimate_recent_inbound_bitrate_kbps(900_000, None, Some(500.0), None, 1_500.0);
         assert_eq!(bitrate, 7_200.0);
+    }
+
+    #[test]
+    fn remote_rtcp_twcc_observation_does_not_fallback_to_video_transport_bitrate() {
+        let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats {
+            inbound_video_bitrate_kbps: Some(9_000.0),
+            ..XbxEngineMediaRuntimeStats::default()
+        }));
+        let packet = TransportLayerCc {
+            packet_status_count: 10,
+            ..TransportLayerCc::default()
+        };
+
+        let observation = build_twcc_observation(
+            1,
+            &packet,
+            &runtime_stats,
+            TWCC_OBSERVATION_SOURCE_REMOTE_RTCP,
+        )
+        .expect("twcc observation should be built");
+
+        assert_eq!(observation.observed_byte_count, 0);
+        assert_eq!(observation.receive_bitrate_kbps, None);
+    }
+
+    #[test]
+    fn local_feedback_twcc_observation_can_fallback_to_video_transport_bitrate() {
+        let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats {
+            inbound_video_bitrate_kbps: Some(9_000.0),
+            ..XbxEngineMediaRuntimeStats::default()
+        }));
+        let packet = TransportLayerCc {
+            packet_status_count: 10,
+            ..TransportLayerCc::default()
+        };
+
+        let observation = build_twcc_observation(
+            1,
+            &packet,
+            &runtime_stats,
+            TWCC_OBSERVATION_SOURCE_LOCAL_FEEDBACK,
+        )
+        .expect("twcc observation should be built");
+
+        assert_eq!(observation.receive_bitrate_kbps, Some(9_000.0));
     }
 }

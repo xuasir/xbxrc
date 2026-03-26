@@ -2,7 +2,9 @@ use std::sync::{Arc, Mutex};
 
 use crate::diagnostics::observation_bus::{ObservationBus, ObservationEvent};
 use crate::{
-    XbxEngineMediaRuntimeStats, XbxEngineVideoFrameDropObservation, XbxEngineVideoNackObservation,
+    XbxEngineMediaRuntimeStats, XbxEngineRemoteAnswerObservation, XbxEngineRtcBuilderObservation,
+    XbxEngineTwccExtensionObservation, XbxEngineTwccRemoteStreamObservation,
+    XbxEngineVideoFrameDropObservation, XbxEngineVideoNackObservation,
     XbxEngineVideoPacketGapObservation, XbxEngineVideoRtxReinjectObservation,
     XbxEngineVideoTwccObservation,
 };
@@ -103,6 +105,34 @@ impl RuntimeStatsSink {
             inbound_video_bitrate_kbps,
             inbound_primary_video_bytes_total,
         });
+    }
+
+    pub(crate) fn record_rtc_builder_observation(
+        &self,
+        observation: XbxEngineRtcBuilderObservation,
+    ) {
+        self.publish(ObservationEvent::RtcBuilderConfigured { observation });
+    }
+
+    pub(crate) fn record_twcc_remote_stream_observation(
+        &self,
+        observation: XbxEngineTwccRemoteStreamObservation,
+    ) {
+        self.publish(ObservationEvent::TwccRemoteStreamBound { observation });
+    }
+
+    pub(crate) fn record_remote_answer_observation(
+        &self,
+        observation: XbxEngineRemoteAnswerObservation,
+    ) {
+        self.publish(ObservationEvent::RemoteAnswerApplied { observation });
+    }
+
+    pub(crate) fn record_twcc_inbound_extension_observation(
+        &self,
+        observation: XbxEngineTwccExtensionObservation,
+    ) {
+        self.publish(ObservationEvent::TwccInboundExtensionObserved { observation });
     }
 
     pub(crate) fn record_video_frame_drop(&self, observation: XbxEngineVideoFrameDropObservation) {

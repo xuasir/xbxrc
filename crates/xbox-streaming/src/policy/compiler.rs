@@ -157,7 +157,7 @@ mod tests {
 
         let high =
             crate::policy::negotiation::compiler::compile_codec(CodecPreference::H264High).unwrap();
-        assert_eq!(high.profiles, vec!["64".to_string()]);
+        assert_eq!(high.profiles, vec!["4d".to_string()]);
     }
 
     #[test]

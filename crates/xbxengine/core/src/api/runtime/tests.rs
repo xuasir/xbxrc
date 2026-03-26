@@ -217,6 +217,8 @@ struct ScriptedMediaBackend {
     local_ice_gathering_complete_true_after_calls: usize,
     keyframe_request_calls: Arc<Mutex<usize>>,
     decoder_reset_calls: Arc<Mutex<usize>>,
+    fail_video_keyframe: Arc<Mutex<Option<String>>>,
+    fail_decoder_reset: Arc<Mutex<Option<String>>>,
     stop_calls: Arc<Mutex<usize>>,
 }
 
@@ -234,12 +236,30 @@ impl ScriptedMediaBackend {
             local_ice_gathering_complete_true_after_calls: 0,
             keyframe_request_calls: Arc::new(Mutex::new(0)),
             decoder_reset_calls: Arc::new(Mutex::new(0)),
+            fail_video_keyframe: Arc::new(Mutex::new(None)),
+            fail_decoder_reset: Arc::new(Mutex::new(None)),
             stop_calls: Arc::new(Mutex::new(0)),
         }
     }
 
     fn with_local_ice_gathering_complete_true_after_calls(mut self, calls: usize) -> Self {
         self.local_ice_gathering_complete_true_after_calls = calls;
+        self
+    }
+
+    fn with_keyframe_error_message(self, message: impl Into<String>) -> Self {
+        *self
+            .fail_video_keyframe
+            .lock()
+            .expect("lock keyframe failure message") = Some(message.into());
+        self
+    }
+
+    fn with_decoder_reset_error_message(self, message: impl Into<String>) -> Self {
+        *self
+            .fail_decoder_reset
+            .lock()
+            .expect("lock decoder reset failure message") = Some(message.into());
         self
     }
 }
@@ -367,6 +387,14 @@ impl XbxEngineMediaBackend for ScriptedMediaBackend {
     }
 
     fn request_video_keyframe(&mut self) -> Result<(), XbxEngineRuntimeError> {
+        if let Some(message) = self
+            .fail_video_keyframe
+            .lock()
+            .expect("lock keyframe failure message")
+            .clone()
+        {
+            return Err(XbxEngineRuntimeError::new(message));
+        }
         *self
             .keyframe_request_calls
             .lock()
@@ -375,6 +403,14 @@ impl XbxEngineMediaBackend for ScriptedMediaBackend {
     }
 
     fn request_decoder_reset(&mut self) -> Result<(), XbxEngineRuntimeError> {
+        if let Some(message) = self
+            .fail_decoder_reset
+            .lock()
+            .expect("lock decoder reset failure message")
+            .clone()
+        {
+            return Err(XbxEngineRuntimeError::new(message));
+        }
         *self
             .decoder_reset_calls
             .lock()
@@ -1579,6 +1615,128 @@ fn runtime_recovery_sequence_stays_keyframe_then_decoder_reset_then_reconnect() 
         XbxEngineHostRequestDto::ExchangeOffer { channel, restart, .. }
         if channel == "media" && *restart
     )));
+}
+
+#[test]
+fn runtime_does_not_emit_error_when_keyframe_request_is_only_control_not_ready() {
+    let requests = Rc::new(RefCell::new(Vec::new()));
+    let events = Rc::new(RefCell::new(Vec::new()));
+    let now_ms = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_millis() as f64)
+        .unwrap_or(0.0);
+    let backend = ScriptedMediaBackend::new(
+        XbxEngineMediaNegotiation {
+            local_offer_sdp: "offer".to_string(),
+            local_candidates: Vec::new(),
+            surface_id: "surface:viewport-1".to_string(),
+            video_width: 1280,
+            video_height: 720,
+            first_frame_packet_arrival_time_ms: None,
+            frame_decoded_time_ms: None,
+            frame_rendered_time_ms: None,
+            input_status: XbxEngineInputStatus::default(),
+        },
+        XbxEngineMediaRuntimeStats {
+            transport_state: XbxEngineTransportStateDto::Connected,
+            latest_video_packet_arrival_time_ms: Some(now_ms - 20.0),
+            latest_video_present_time_ms: Some(now_ms - 2_000.0),
+            latest_video_decode_ok_time_ms: Some(now_ms - 2_000.0),
+            video_decoder_stalled: Some(true),
+            video_renderer_stalled: Some(false),
+            inbound_video_packet_count_total: 500,
+            ..Default::default()
+        },
+    )
+    .with_keyframe_error_message("xbxEngineRtcControlChannelNotReadyForKeyframe");
+    let mut runtime = XbxEngineRuntime::with_media_backend(
+        XbxEngineRuntimeConfig::default(),
+        TestHostBridge::new(requests),
+        TestEventSink::new(events.clone()),
+        backend,
+    );
+
+    runtime
+        .start(session(), viewport(), 1.0, None, None)
+        .expect("runtime start should succeed");
+    runtime.health.connected_at_ms = Some(now_ms - 10_000.0);
+    runtime.health.last_frame_seq = 30;
+    runtime.health.last_frame_rendered_at_ms = Some(now_ms - 2_000.0);
+    runtime.health.inbound_video_packet_count_total = 500;
+    runtime.health.last_video_packet_arrival_at_ms = Some(now_ms - 20.0);
+
+    runtime.tick();
+
+    assert!(
+        !events.borrow().iter().any(|event| matches!(
+            event,
+            XbxEngineRuntimeEventDto::ErrorReported { code, .. }
+            if code == "requestVideoKeyframeFailed"
+        )),
+        "control not ready should be treated as pending replay, not runtime error"
+    );
+}
+
+#[test]
+fn runtime_does_not_emit_error_when_decoder_reset_is_only_control_not_ready() {
+    let requests = Rc::new(RefCell::new(Vec::new()));
+    let events = Rc::new(RefCell::new(Vec::new()));
+    let now_ms = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_millis() as f64)
+        .unwrap_or(0.0);
+    let backend = ScriptedMediaBackend::new(
+        XbxEngineMediaNegotiation {
+            local_offer_sdp: "offer".to_string(),
+            local_candidates: Vec::new(),
+            surface_id: "surface:viewport-1".to_string(),
+            video_width: 1280,
+            video_height: 720,
+            first_frame_packet_arrival_time_ms: None,
+            frame_decoded_time_ms: None,
+            frame_rendered_time_ms: None,
+            input_status: XbxEngineInputStatus::default(),
+        },
+        XbxEngineMediaRuntimeStats {
+            transport_state: XbxEngineTransportStateDto::Connected,
+            latest_video_packet_arrival_time_ms: Some(now_ms - 20.0),
+            latest_video_present_time_ms: Some(now_ms - 2_000.0),
+            latest_video_decode_ok_time_ms: Some(now_ms - 2_000.0),
+            video_decoder_stalled: Some(true),
+            video_renderer_stalled: Some(false),
+            inbound_video_packet_count_total: 500,
+            ..Default::default()
+        },
+    )
+    .with_decoder_reset_error_message("xbxEngineRtcControlChannelNotReadyForDecoderReset");
+    let mut runtime = XbxEngineRuntime::with_media_backend(
+        XbxEngineRuntimeConfig::default(),
+        TestHostBridge::new(requests),
+        TestEventSink::new(events.clone()),
+        backend,
+    );
+
+    runtime
+        .start(session(), viewport(), 1.0, None, None)
+        .expect("runtime start should succeed");
+    runtime.health.connected_at_ms = Some(now_ms - 10_000.0);
+    runtime.health.last_frame_seq = 30;
+    runtime.health.last_frame_rendered_at_ms = Some(now_ms - 2_000.0);
+    runtime.health.inbound_video_packet_count_total = 500;
+    runtime.health.last_video_packet_arrival_at_ms = Some(now_ms - 20.0);
+    runtime.health.last_keyframe_request_at_ms = Some(now_ms - 700.0);
+    runtime.health.keyframe_requested_for_current_stall = true;
+
+    runtime.tick();
+
+    assert!(
+        !events.borrow().iter().any(|event| matches!(
+            event,
+            XbxEngineRuntimeEventDto::ErrorReported { code, .. }
+            if code == "requestDecoderResetFailed"
+        )),
+        "control not ready should be treated as pending replay, not runtime error"
+    );
 }
 
 #[test]

@@ -2,9 +2,9 @@ use std::collections::HashSet;
 use std::net::IpAddr;
 
 use rtc::peer_connection::transport::RTCIceCandidateInit;
-use rtc::peer_connection::RTCPeerConnection;
 use xbxengine_protocol::XbxEngineIceCandidateDto;
 
+use crate::transport::rtc::connection::builder::ControlledPeerConnection;
 use crate::transport::rtc::connection::runtime_state::RtcIceCandidateKind;
 use crate::XbxEngineRuntimeError;
 
@@ -52,7 +52,7 @@ pub(crate) fn dto_to_rtc_candidate(candidate: &XbxEngineIceCandidateDto) -> RTCI
 }
 
 pub(crate) fn add_remote_candidate_to_peer(
-    peer_connection: &mut RTCPeerConnection,
+    peer_connection: &mut ControlledPeerConnection,
     candidate: &XbxEngineIceCandidateDto,
 ) -> Result<(), XbxEngineRuntimeError> {
     peer_connection

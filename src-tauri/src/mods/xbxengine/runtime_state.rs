@@ -25,6 +25,7 @@ use crate::mods::streaming::{
     StreamingCloseSessionParams, StreamingExchangeOfferParams, StreamingPollIceParams,
     StreamingSubmitIceParams,
 };
+use crate::mods::xbxengine::build_info::current_build_fingerprint_with_effective;
 use crate::mods::xbxengine::trace_projection::{
     build_observability_snapshot, record_runtime_trace_observations, should_skip_trace_tick,
     RuntimeTraceObservationState,
@@ -146,6 +147,7 @@ impl XbxEngineRuntimeState {
         runtime.tick();
         let mut stats_snapshot = runtime.snapshot_stats();
         self.apply_native_video_host_stats(&mut stats_snapshot, viewport_id.as_deref());
+        self.apply_build_fingerprint(&mut stats_snapshot);
         let session_id = self
             .active_session_id
             .lock()
@@ -195,6 +197,7 @@ impl XbxEngineRuntimeState {
         self.sync_native_video_host_timing(&mut runtime, viewport_id.as_deref());
         let mut stats = runtime.snapshot_stats();
         self.apply_native_video_host_stats(&mut stats, viewport_id.as_deref());
+        self.apply_build_fingerprint(&mut stats);
         Ok(serde_json::to_value(stats)?)
     }
 
@@ -241,6 +244,22 @@ impl XbxEngineRuntimeState {
             let host_now_ms = current_time_ms_f64();
             stats.present_age_ms = Some((host_now_ms - latest_present_time_ms).max(0.0));
         }
+    }
+
+    fn apply_build_fingerprint(&self, stats: &mut XbxEngineStatsDto) {
+        let effective_feedback_interval_ms = stats
+            .latest_rtc_builder_observation
+            .as_ref()
+            .map(|observation| observation.feedback_interval_ms.max(0.0).round() as u64)
+            .unwrap_or_else(|| {
+                xbxengine::XbxEngineRuntimeConfig::default()
+                    .webrtc
+                    .video_pipeline
+                    .feedback_interval_ms
+            });
+        stats.build_fingerprint = Some(current_build_fingerprint_with_effective(
+            effective_feedback_interval_ms,
+        ));
     }
 
     fn native_video_snapshot(&self, viewport_id: &str) -> Option<NativeVideoViewportState> {
