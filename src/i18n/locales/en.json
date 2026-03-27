@@ -174,10 +174,10 @@
         "VideoDL": "Video DL",
         "TotalDL": "Total DL",
         "AudioDL": "Audio DL",
+        "VideoActual": "Actual Video",
         "BweTarget": "BWE Target",
         "BweObserved": "Observed REMB",
-        "BweActual": "Actual Video",
-        "BweActualSrc": "Actual Src",
+        "VideoActualSrc": "Video Source",
         "TwccRecv": "TWCC Recv",
         "TwccLoss": "TWCC Loss",
         "TwccDelivery": "TWCC Delivery",
@@ -188,8 +188,8 @@
         "P2D": "Pkt->Dec",
         "D2P": "Dec->Pre",
         "P2P": "Pkt->Pre",
-        "InVideo": "In Video",
-        "InAudio": "In Audio",
+        "VideoBytes": "Video Bytes",
+        "AudioBytes": "Audio Bytes",
         "DecInDrop": "Dec In Drop",
         "DecOutDrop": "Dec Out Drop",
         "KeyReq": "Key Req",
@@ -198,7 +198,8 @@
         "LastAct": "Last Act",
         "LastWhy": "Last Why",
         "DT": "DT"
-      }
+      },
+      "values": {}
     },
     "badges": {
       "title": "Stream Diagnostics",

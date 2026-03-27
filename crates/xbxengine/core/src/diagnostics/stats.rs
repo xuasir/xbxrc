@@ -80,13 +80,9 @@ pub fn build_xbxengine_stats(
         runtime_stats.and_then(|stats| resolve_total_inbound_bitrate_kbps(stats, now_ms));
     let latest_bwe = runtime_stats.and_then(|stats| stats.latest_video_bwe_observation.as_ref());
     let latest_twcc = runtime_stats.and_then(|stats| stats.latest_video_twcc_observation.as_ref());
-    let local_twcc_video_bitrate_kbps = latest_twcc
-        .filter(|twcc| twcc.source == "local-feedback")
-        .and_then(|twcc| twcc.receive_bitrate_kbps);
-    let actual_video_bitrate_kbps = local_twcc_video_bitrate_kbps.or(resolved_video_bitrate_kbps);
-    let actual_video_bitrate_source = if local_twcc_video_bitrate_kbps.is_some() {
-        Some("local-twcc".to_string())
-    } else if resolved_video_bitrate_kbps.is_some() {
+    // 主口径固定为 transport inbound video bitrate。TWCC 仅作为诊断/BWE输入。
+    let actual_video_bitrate_kbps = resolved_video_bitrate_kbps;
+    let actual_video_bitrate_source = if resolved_video_bitrate_kbps.is_some() {
         Some("transport-metrics".to_string())
     } else {
         Some("unavailable".to_string())
@@ -285,6 +281,22 @@ pub fn build_xbxengine_stats(
                 }
             })
         }),
+        latest_video_frame_recovery_observation: runtime_stats.and_then(|stats| {
+            stats
+                .latest_video_frame_recovery_observation
+                .as_ref()
+                .map(
+                    |observation| xbxengine_protocol::XbxEngineFrameRecoveryObservationDto {
+                        observation_id: observation.observation_id,
+                        action: observation.action.clone(),
+                        frame_rtp_timestamp: observation.frame_rtp_timestamp,
+                        frame_playout_deadline_at_ms: observation.frame_playout_deadline_at_ms,
+                        frame_recovery_disposition: observation.frame_recovery_disposition.clone(),
+                        frame_unrecoverable_reason: observation.frame_unrecoverable_reason.clone(),
+                        observed_at_ms: observation.observed_at_ms,
+                    },
+                )
+        }),
         latest_video_nack_observation: runtime_stats.and_then(|stats| {
             stats.latest_video_nack_observation.as_ref().map(|nack| {
                 xbxengine_protocol::XbxEngineNackObservationDto {
@@ -299,6 +311,10 @@ pub fn build_xbxengine_stats(
                     frame_is_keyframe: nack.frame_is_keyframe,
                     frame_importance: nack.frame_importance.clone(),
                     deadline_at_ms: nack.deadline_at_ms,
+                    estimated_recovery_arrival_ms: nack.estimated_recovery_arrival_ms,
+                    nack_disposition: nack.nack_disposition.clone(),
+                    frame_playout_deadline_at_ms: nack.frame_playout_deadline_at_ms,
+                    frame_unrecoverable_reason: nack.frame_unrecoverable_reason.clone(),
                     observed_at_ms: nack.observed_at_ms,
                 }
             })
@@ -343,15 +359,20 @@ pub fn build_xbxengine_stats(
                 xbxengine_protocol::XbxEngineVideoTwccObservationDto {
                     observation_id: twcc.observation_id,
                     source: twcc.source.clone(),
+                    quality: twcc.quality.as_str().to_string(),
                     feedback_packet_count: twcc.feedback_packet_count,
                     covered_sequence_start: twcc.covered_sequence_start,
                     covered_sequence_end: twcc.covered_sequence_end,
                     covered_sequence_span: twcc.covered_sequence_span,
                     observed_packet_count: twcc.observed_packet_count,
                     observed_byte_count: twcc.observed_byte_count,
+                    coverage_ratio: twcc.coverage_ratio,
+                    ledger_hit_ratio: twcc.ledger_hit_ratio,
                     feedback_interval_ms: twcc.feedback_interval_ms,
                     arrival_span_ms: twcc.arrival_span_ms,
                     receive_bitrate_kbps: twcc.receive_bitrate_kbps,
+                    twcc_sample_valid: twcc.twcc_sample_valid,
+                    twcc_invalid_reason: twcc.twcc_invalid_reason.clone(),
                     delivery_ratio: twcc.delivery_ratio,
                     packet_loss_ratio: twcc.packet_loss_ratio,
                     observed_at_ms: twcc.observed_at_ms,
@@ -963,30 +984,13 @@ fn estimate_audio_inbound_bitrate_kbps(
     Some((bytes_total as f64 * 8.0 / elapsed_ms).max(0.0))
 }
 
-fn estimate_video_inbound_bitrate_kbps(
-    stats: &XbxEngineMediaRuntimeStats,
-    now_ms: f64,
-) -> Option<f64> {
-    let first_video_packet_at_ms = stats.first_video_packet_arrival_time_ms?;
-    let elapsed_ms = (now_ms - first_video_packet_at_ms).max(0.0);
-    if elapsed_ms <= 0.0 {
-        return None;
-    }
-    let bytes_total = stats.inbound_video_bytes_total;
-    if bytes_total == 0 {
-        return None;
-    }
-    Some((bytes_total as f64 * 8.0 / elapsed_ms).max(0.0))
-}
-
 fn resolve_video_inbound_bitrate_kbps(
     stats: &XbxEngineMediaRuntimeStats,
-    now_ms: f64,
+    _now_ms: f64,
 ) -> Option<f64> {
     stats
         .inbound_video_bitrate_kbps
         .filter(|value| *value > 0.1)
-        .or_else(|| estimate_video_inbound_bitrate_kbps(stats, now_ms))
 }
 
 fn resolve_audio_inbound_bitrate_kbps(
@@ -1338,7 +1342,8 @@ mod tests {
     }
 
     #[test]
-    fn video_inbound_bitrate_falls_back_to_media_ingress_bytes_when_transport_stats_are_zero() {
+    fn video_inbound_bitrate_does_not_fallback_to_media_ingress_bytes_when_transport_stats_are_zero(
+    ) {
         let now_ms = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
@@ -1353,8 +1358,12 @@ mod tests {
         };
 
         let dto = build_xbxengine_stats(&test_snapshot(), Some(&stats));
-        assert!(dto.inbound_video_bitrate_kbps.unwrap_or(0.0) > 0.0);
-        assert!(dto.inbound_bitrate_kbps.unwrap_or(0.0) > 0.0);
+        assert_eq!(dto.inbound_video_bitrate_kbps, None);
+        assert_eq!(dto.video_actual_bitrate_kbps, None);
+        assert_eq!(
+            dto.actual_video_bitrate_source.as_deref(),
+            Some("unavailable")
+        );
     }
 
     #[test]
@@ -1405,9 +1414,14 @@ mod tests {
                 covered_sequence_span: 120,
                 observed_packet_count: 120,
                 observed_byte_count: 340_000,
+                coverage_ratio: Some(1.0),
+                ledger_hit_ratio: Some(1.0),
                 feedback_interval_ms: Some(80.0),
                 arrival_span_ms: Some(70.0),
                 receive_bitrate_kbps: Some(22_800.0),
+                twcc_sample_valid: true,
+                twcc_invalid_reason: None,
+                quality: crate::XbxEngineTwccObservationQuality::Stable,
                 delivery_ratio: 0.99,
                 packet_loss_ratio: 0.01,
                 observed_at_ms: 2.0,
@@ -1419,14 +1433,14 @@ mod tests {
         assert_eq!(dto.video_bwe_mode.as_deref(), Some("twcc-gcc"));
         assert_eq!(dto.video_target_remb_kbps, Some(25_000));
         assert_eq!(dto.video_observed_remb_kbps, Some(23_000));
-        assert_eq!(dto.video_actual_bitrate_kbps, Some(22_800.0));
+        assert_eq!(dto.video_actual_bitrate_kbps, None);
         assert_eq!(dto.video_twcc_receive_bitrate_kbps, Some(22_800.0));
         assert_eq!(dto.video_twcc_loss_ratio, Some(0.01));
         assert_eq!(dto.video_twcc_delivery_ratio, Some(0.99));
         assert_eq!(dto.video_twcc_feedback_interval_ms, Some(80.0));
         assert_eq!(
             dto.actual_video_bitrate_source.as_deref(),
-            Some("local-twcc")
+            Some("unavailable")
         );
         assert_eq!(
             dto.twcc_observation_state.as_deref(),
@@ -1435,7 +1449,7 @@ mod tests {
     }
 
     #[test]
-    fn actual_video_bitrate_falls_back_to_transport_metrics_when_local_twcc_missing() {
+    fn actual_video_bitrate_uses_transport_metrics_when_local_twcc_missing() {
         let stats = XbxEngineMediaRuntimeStats {
             transport_state: XbxEngineTransportStateDto::Connected,
             inbound_video_bitrate_kbps: Some(8_600.0),
@@ -1448,9 +1462,14 @@ mod tests {
                 covered_sequence_span: 120,
                 observed_packet_count: 120,
                 observed_byte_count: 340_000,
+                coverage_ratio: Some(1.0),
+                ledger_hit_ratio: None,
                 feedback_interval_ms: Some(80.0),
                 arrival_span_ms: Some(70.0),
                 receive_bitrate_kbps: Some(22_800.0),
+                twcc_sample_valid: true,
+                twcc_invalid_reason: None,
+                quality: crate::XbxEngineTwccObservationQuality::RemoteObserved,
                 delivery_ratio: 0.99,
                 packet_loss_ratio: 0.01,
                 observed_at_ms: 2.0,
@@ -1479,6 +1498,40 @@ mod tests {
             dto.twcc_observation_state.as_deref(),
             Some("remote-observed")
         );
+    }
+
+    #[test]
+    fn actual_video_bitrate_uses_transport_metrics_when_local_twcc_is_guarded() {
+        let stats = XbxEngineMediaRuntimeStats {
+            transport_state: XbxEngineTransportStateDto::Connected,
+            inbound_video_bitrate_kbps: Some(8_600.0),
+            latest_video_twcc_observation: Some(crate::XbxEngineVideoTwccObservation {
+                observation_id: 9,
+                source: "local-feedback".to_string(),
+                feedback_packet_count: 3,
+                covered_sequence_start: 100,
+                covered_sequence_end: 220,
+                covered_sequence_span: 120,
+                observed_packet_count: 6,
+                observed_byte_count: 0,
+                coverage_ratio: Some(0.05),
+                ledger_hit_ratio: Some(0.0),
+                feedback_interval_ms: Some(900.0),
+                arrival_span_ms: Some(120.0),
+                receive_bitrate_kbps: None,
+                twcc_sample_valid: false,
+                twcc_invalid_reason: Some("missing-byte-ledger|sample-too-small".to_string()),
+                quality: crate::XbxEngineTwccObservationQuality::Delayed,
+                delivery_ratio: 1.0,
+                packet_loss_ratio: 0.0,
+                observed_at_ms: 2.0,
+            }),
+            ..XbxEngineMediaRuntimeStats::default()
+        };
+
+        let dto = build_xbxengine_stats(&test_snapshot(), Some(&stats));
+        assert_eq!(dto.video_actual_bitrate_kbps, Some(8_600.0));
+        assert_eq!(dto.actual_video_bitrate_source.as_deref(), Some("transport-metrics"));
     }
 
     #[test]

@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -11,12 +11,14 @@ use rtc::media_stream::MediaStreamTrackId;
 use rtc::rtcp::transport_feedbacks::transport_layer_cc::TransportLayerCc;
 use rtc::rtp_transceiver::RTCRtpReceiverId;
 use rtc::sansio::Protocol;
+use rtc::shared::marshal::{MarshalSize, Unmarshal};
 use rtc::shared::TransportContext;
+use rtc_rtp::extension::transport_cc_extension::TransportCcExtension;
 
 use crate::runtime_stats_sink::RuntimeStatsSink;
 use crate::transport::rtc::connection::builder::ControlledPeerConnection;
 use crate::transport::rtc::connection::transport_metrics::{
-    build_twcc_observation, TWCC_OBSERVATION_SOURCE_LOCAL_FEEDBACK,
+    build_twcc_observation_with_packet_bytes, TWCC_OBSERVATION_SOURCE_LOCAL_FEEDBACK,
 };
 use crate::transport::rtc::stats::now_ms_f64;
 use crate::{
@@ -28,6 +30,7 @@ const TRANSPORT_CC_URI: &str =
     "http://www.ietf.org/id/draft-holmer-rmcat-transport-wide-cc-extensions-01";
 const TWCC_PACKET_MISS_LOG_INTERVAL: u64 = 512;
 const TWCC_PENDING_FEEDBACK_MAX: usize = 128;
+const TWCC_PACKET_BYTES_LEDGER_WINDOW_MS: f64 = 4_000.0;
 static TWCC_REMOTE_STREAM_OBSERVATION_ID: AtomicU64 = AtomicU64::new(0);
 static TWCC_EXTENSION_OBSERVATION_ID: AtomicU64 = AtomicU64::new(0);
 
@@ -54,6 +57,13 @@ struct ControlledTwccStreamBinding {
 struct PendingTwccFeedbackPacket {
     media_ssrc: Option<u32>,
     packet: Box<dyn rtc::rtcp::Packet>,
+}
+
+#[derive(Clone, Debug)]
+struct TwccPacketBytesSample {
+    observed_at_ms: f64,
+    transport_sequence: u16,
+    packet_bytes: u32,
 }
 
 pub(super) fn record_twcc_remote_stream_observation(
@@ -111,6 +121,7 @@ pub(super) struct ControlledTwccFeedbackController {
     preferred_video_media_ssrc: Option<u32>,
     pending_feedback_packets: Vec<PendingTwccFeedbackPacket>,
     dropped_pending_feedback_count: u64,
+    twcc_packet_bytes_ledger: VecDeque<TwccPacketBytesSample>,
 }
 
 impl ControlledTwccFeedbackController {
@@ -127,6 +138,7 @@ impl ControlledTwccFeedbackController {
             preferred_video_media_ssrc: None,
             pending_feedback_packets: Vec::new(),
             dropped_pending_feedback_count: 0,
+            twcc_packet_bytes_ledger: VecDeque::new(),
         }
     }
 
@@ -149,6 +161,7 @@ impl ControlledTwccFeedbackController {
         self.preferred_video_media_ssrc = None;
         self.pending_feedback_packets.clear();
         self.dropped_pending_feedback_count = 0;
+        self.twcc_packet_bytes_ledger.clear();
     }
 
     pub(super) fn register_track_open(
@@ -245,28 +258,67 @@ impl ControlledTwccFeedbackController {
             }
         }
 
-        let Some(binding) = self.remote_twcc_streams.get_mut(&packet.header.ssrc) else {
-            return Ok(());
-        };
-        if binding.receiver_id.is_none() {
-            binding.receiver_id = self.track_receivers.get(&track_key).copied();
-            if !is_audio_mime_type(binding.mime_type.as_str()) && binding.receiver_id.is_some() {
-                self.preferred_video_media_ssrc = Some(packet.header.ssrc);
-                self.preferred_video_receiver_id = binding.receiver_id;
+        let mut seen_observation: Option<(u8, u64, u64)> = None;
+        let mut missing_observation: Option<(u8, u64, u64)> = None;
+        let mut raw_extension_payload: Option<bytes::Bytes> = None;
+        {
+            let Some(binding) = self.remote_twcc_streams.get_mut(&packet.header.ssrc) else {
+                return Ok(());
+            };
+            if binding.receiver_id.is_none() {
+                binding.receiver_id = self.track_receivers.get(&track_key).copied();
+                if !is_audio_mime_type(binding.mime_type.as_str()) && binding.receiver_id.is_some()
+                {
+                    self.preferred_video_media_ssrc = Some(packet.header.ssrc);
+                    self.preferred_video_receiver_id = binding.receiver_id;
+                }
+            }
+
+            binding.packet_seen_count = binding.packet_seen_count.saturating_add(1);
+            if let Some(raw_extension) = packet.header.get_extension(binding.twcc_ext_id) {
+                raw_extension_payload = Some(raw_extension.clone());
+                if binding.packet_seen_count <= 3 {
+                    seen_observation = Some((
+                        binding.twcc_ext_id,
+                        binding.packet_seen_count,
+                        binding.missing_extension_count,
+                    ));
+                }
+            } else {
+                binding.missing_extension_count = binding.missing_extension_count.saturating_add(1);
+                if binding.missing_extension_count <= 3
+                    || binding
+                        .missing_extension_count
+                        .is_multiple_of(TWCC_PACKET_MISS_LOG_INTERVAL)
+                {
+                    missing_observation = Some((
+                        binding.twcc_ext_id,
+                        binding.packet_seen_count,
+                        binding.missing_extension_count,
+                    ));
+                }
             }
         }
 
-        binding.packet_seen_count = binding.packet_seen_count.saturating_add(1);
-        if packet.header.get_extension(binding.twcc_ext_id).is_some() {
-            if binding.packet_seen_count <= 3 {
+        if let Some(raw_extension) = raw_extension_payload {
+            let mut extension_payload = raw_extension;
+            if let Ok(twcc_extension) = TransportCcExtension::unmarshal(&mut extension_payload) {
+                self.record_twcc_packet_bytes_sample(
+                    twcc_extension.transport_sequence,
+                    packet.marshal_size() as u32,
+                );
+            }
+            if let Some((twcc_ext_id, packet_seen_count, missing_extension_count)) =
+                seen_observation
+            {
                 record_twcc_inbound_extension_observation(
                     runtime_stats,
                     "seen",
                     packet.header.ssrc,
                     packet.header.sequence_number,
-                    binding.twcc_ext_id,
-                    binding.packet_seen_count,
-                    binding.missing_extension_count,
+                    twcc_ext_id,
+                    packet_seen_count,
+                    missing_extension_count,
                 );
             }
             self.interceptor
@@ -280,23 +332,18 @@ impl ControlledTwccFeedbackController {
                         "xbxEngineTwccControlledHandleReadFailed: {err}"
                     ))
                 })?;
-        } else {
-            binding.missing_extension_count = binding.missing_extension_count.saturating_add(1);
-            if binding.missing_extension_count <= 3
-                || binding
-                    .missing_extension_count
-                    .is_multiple_of(TWCC_PACKET_MISS_LOG_INTERVAL)
-            {
-                record_twcc_inbound_extension_observation(
-                    runtime_stats,
-                    "missing",
-                    packet.header.ssrc,
-                    packet.header.sequence_number,
-                    binding.twcc_ext_id,
-                    binding.packet_seen_count,
-                    binding.missing_extension_count,
-                );
-            }
+        } else if let Some((twcc_ext_id, packet_seen_count, missing_extension_count)) =
+            missing_observation
+        {
+            record_twcc_inbound_extension_observation(
+                runtime_stats,
+                "missing",
+                packet.header.ssrc,
+                packet.header.sequence_number,
+                twcc_ext_id,
+                packet_seen_count,
+                missing_extension_count,
+            );
         }
 
         Ok(())
@@ -385,15 +432,45 @@ impl ControlledTwccFeedbackController {
         self.twcc_observation_id = self.twcc_observation_id.saturating_add(1);
         self.outbound_twcc_feedback_count = self.outbound_twcc_feedback_count.saturating_add(1);
         // 这里记录的是“本地受控 TWCC feedback 已经生成”，用于证明链路确实由我们驱动。
-        if let Some(observation) = build_twcc_observation(
+        if let Some(observation) = build_twcc_observation_with_packet_bytes(
             self.twcc_observation_id,
             twcc,
             runtime_stats,
             TWCC_OBSERVATION_SOURCE_LOCAL_FEEDBACK,
+            Some(&self.packet_bytes_by_transport_sequence()),
         ) {
             RuntimeStatsSink::new(runtime_stats.clone())
                 .record_latest_video_twcc_observation(observation);
         }
+    }
+
+    fn record_twcc_packet_bytes_sample(&mut self, transport_sequence: u16, packet_bytes: u32) {
+        let observed_at_ms = now_ms_f64();
+        self.twcc_packet_bytes_ledger
+            .push_back(TwccPacketBytesSample {
+                observed_at_ms,
+                transport_sequence,
+                packet_bytes,
+            });
+        self.compact_twcc_packet_bytes_ledger(observed_at_ms);
+    }
+
+    fn compact_twcc_packet_bytes_ledger(&mut self, now_ms: f64) {
+        while self.twcc_packet_bytes_ledger.front().is_some_and(|sample| {
+            now_ms - sample.observed_at_ms > TWCC_PACKET_BYTES_LEDGER_WINDOW_MS
+        }) {
+            self.twcc_packet_bytes_ledger.pop_front();
+        }
+    }
+
+    fn packet_bytes_by_transport_sequence(&mut self) -> HashMap<u16, u32> {
+        let now_ms = now_ms_f64();
+        self.compact_twcc_packet_bytes_ledger(now_ms);
+        let mut bytes_by_sequence = HashMap::with_capacity(self.twcc_packet_bytes_ledger.len());
+        for sample in self.twcc_packet_bytes_ledger.iter() {
+            bytes_by_sequence.insert(sample.transport_sequence, sample.packet_bytes);
+        }
+        bytes_by_sequence
     }
 
     fn resolve_receiver_id_for_media_ssrc(&mut self, media_ssrc: u32) -> Option<RTCRtpReceiverId> {

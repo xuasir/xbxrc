@@ -7,6 +7,7 @@ use crate::mods::runtime_trace::RuntimeTraceRecorderRef;
 pub(super) struct RuntimeTraceObservationState {
     packet_gap_observation_id: Option<u64>,
     frame_drop_observation_id: Option<u64>,
+    frame_recovery_observation_id: Option<u64>,
     nack_observation_id: Option<u64>,
     escalation_observation_id: Option<u64>,
     bwe_observation_id: Option<u64>,
@@ -95,7 +96,10 @@ pub(super) fn build_observability_snapshot(stats: &XbxEngineStatsDto) -> serde_j
             "inboundKbps": stats.inbound_bitrate_kbps,
             "videoKbps": stats.inbound_video_bitrate_kbps,
             "audioKbps": stats.inbound_audio_bitrate_kbps,
+            "actualVideoKbps": stats.video_actual_bitrate_kbps,
+            // legacy: 保留兼容镜像字段，值与 actualVideoBitrateSource 必须一致。
             "actualVideoSource": stats.actual_video_bitrate_source,
+            "actualVideoBitrateSource": stats.actual_video_bitrate_source,
             "bytesTotal": stats.inbound_bytes_total,
             "videoBytesTotal": stats.inbound_video_bytes_total,
             "audioBytesTotal": stats.inbound_audio_bytes_total,
@@ -114,6 +118,22 @@ pub(super) fn build_observability_snapshot(stats: &XbxEngineStatsDto) -> serde_j
             "lossRatio": stats.video_twcc_loss_ratio,
             "deliveryRatio": stats.video_twcc_delivery_ratio,
             "feedbackIntervalMs": stats.video_twcc_feedback_interval_ms,
+            "coverageRatio": stats
+                .latest_video_twcc_observation
+                .as_ref()
+                .and_then(|twcc| twcc.coverage_ratio),
+            "ledgerHitRatio": stats
+                .latest_video_twcc_observation
+                .as_ref()
+                .and_then(|twcc| twcc.ledger_hit_ratio),
+            "sampleValid": stats
+                .latest_video_twcc_observation
+                .as_ref()
+                .map(|twcc| twcc.twcc_sample_valid),
+            "invalidReason": stats
+                .latest_video_twcc_observation
+                .as_ref()
+                .and_then(|twcc| twcc.twcc_invalid_reason.clone()),
         },
         "buildFingerprint": stats.build_fingerprint,
         "video": {
@@ -159,6 +179,7 @@ pub(super) fn build_observability_snapshot(stats: &XbxEngineStatsDto) -> serde_j
         "latest": {
             "packetGap": stats.latest_video_packet_gap,
             "frameDrop": stats.latest_video_frame_drop,
+            "frameRecovery": stats.latest_video_frame_recovery_observation,
             "nack": stats.latest_video_nack_observation,
             "escalation": stats.latest_video_escalation_observation,
             "bwe": stats.latest_video_bwe_observation,
@@ -222,6 +243,26 @@ pub(super) fn record_runtime_trace_observations(
         }
     }
 
+    if let Some(frame_recovery) = stats.latest_video_frame_recovery_observation.as_ref() {
+        if observation_state.frame_recovery_observation_id != Some(frame_recovery.observation_id) {
+            observation_state.frame_recovery_observation_id = Some(frame_recovery.observation_id);
+            runtime_trace.record_event(
+                "xbxengine",
+                "frameRecoveryObserved",
+                session_id,
+                json!({
+                    "observationId": frame_recovery.observation_id,
+                    "action": frame_recovery.action,
+                    "frameRtpTimestamp": frame_recovery.frame_rtp_timestamp,
+                    "framePlayoutDeadlineAtMs": frame_recovery.frame_playout_deadline_at_ms,
+                    "frameRecoveryDisposition": frame_recovery.frame_recovery_disposition,
+                    "frameUnrecoverableReason": frame_recovery.frame_unrecoverable_reason,
+                    "observedAtMs": frame_recovery.observed_at_ms,
+                }),
+            );
+        }
+    }
+
     if let Some(nack) = stats.latest_video_nack_observation.as_ref() {
         if observation_state.nack_observation_id != Some(nack.observation_id) {
             observation_state.nack_observation_id = Some(nack.observation_id);
@@ -246,6 +287,10 @@ pub(super) fn record_runtime_trace_observations(
                     "frameIsKeyframe": nack.frame_is_keyframe,
                     "frameImportance": nack.frame_importance,
                     "deadlineAtMs": nack.deadline_at_ms,
+                    "estimatedRecoveryArrivalMs": nack.estimated_recovery_arrival_ms,
+                    "nackDisposition": nack.nack_disposition,
+                    "framePlayoutDeadlineAtMs": nack.frame_playout_deadline_at_ms,
+                    "frameUnrecoverableReason": nack.frame_unrecoverable_reason,
                     "observedAtMs": nack.observed_at_ms,
                 }),
             );
@@ -282,7 +327,7 @@ pub(super) fn record_runtime_trace_observations(
                     "decisionReason": bwe.decision_reason,
                     "targetRembKbps": bwe.target_remb_kbps,
                     "observedRembKbps": bwe.observed_remb_kbps,
-                    "actualVideoBitrateKbps": bwe.actual_video_bitrate_kbps,
+                    "actualVideoBitrateKbps": stats.video_actual_bitrate_kbps,
                     "actualVideoBitrateSource": stats.actual_video_bitrate_source,
                     "lossRatio": bwe.loss_ratio,
                     "rttMs": bwe.rtt_ms,
@@ -314,16 +359,21 @@ pub(super) fn record_runtime_trace_observations(
                 json!({
                     "observationId": twcc.observation_id,
                     "source": twcc.source,
+                    "quality": twcc.quality.as_str(),
                     "feedbackPacketCount": twcc.feedback_packet_count,
                     "coveredSequenceStart": twcc.covered_sequence_start,
                     "coveredSequenceEnd": twcc.covered_sequence_end,
                     "coveredSequenceSpan": twcc.covered_sequence_span,
                     "observedPacketCount": twcc.observed_packet_count,
                     "observedByteCount": twcc.observed_byte_count,
+                    "coverageRatio": twcc.coverage_ratio,
+                    "ledgerHitRatio": twcc.ledger_hit_ratio,
                     "feedbackIntervalMs": twcc.feedback_interval_ms,
                     "state": stats.twcc_observation_state,
                     "arrivalSpanMs": twcc.arrival_span_ms,
                     "receiveBitrateKbps": twcc.receive_bitrate_kbps,
+                    "twccSampleValid": twcc.twcc_sample_valid,
+                    "twccInvalidReason": twcc.twcc_invalid_reason,
                     "deliveryRatio": twcc.delivery_ratio,
                     "packetLossRatio": twcc.packet_loss_ratio,
                     "observedAtMs": twcc.observed_at_ms,
@@ -763,12 +813,101 @@ mod tests {
             snapshot["bitrate"]["actualVideoSource"],
             "transport-metrics"
         );
+        assert_eq!(snapshot["bitrate"]["actualVideoKbps"], 8400.0);
         assert_eq!(
             snapshot["bwe"]["actualVideoBitrateSource"],
             "transport-metrics"
         );
+        assert_eq!(snapshot["bwe"]["actualVideoKbps"], 8400.0);
         assert_eq!(snapshot["twcc"]["state"], "missing-local-feedback");
         assert_eq!(snapshot["buildFingerprint"]["gitCommitShort"], "abc1234");
+    }
+
+    #[test]
+    fn build_observability_snapshot_includes_latest_frame_recovery() {
+        let stats = test_stats(json!({
+            "resolution": "",
+            "rtt": "",
+            "fps": 0.0,
+            "pl": "0.00%",
+            "fl": "",
+            "jit": "",
+            "br": "",
+            "decode": "",
+            "actual_video_bitrate_source": "unavailable",
+            "video_actual_bitrate_kbps": 1019.4,
+            "latest_video_frame_recovery_observation": {
+                "observation_id": 77,
+                "action": "ledgerConsume",
+                "frame_rtp_timestamp": 123456789,
+                "frame_playout_deadline_at_ms": 4567.0,
+                "frame_recovery_disposition": "unrecoverable-reference-chain",
+                "frame_unrecoverable_reason": "referenceChainUnrecoverable",
+                "observed_at_ms": 1234.0
+            }
+        }));
+
+        let snapshot = build_observability_snapshot(&stats);
+        assert_eq!(snapshot["bitrate"]["actualVideoKbps"], 1019.4);
+        assert_eq!(snapshot["bitrate"]["actualVideoBitrateSource"], "unavailable");
+        assert_eq!(snapshot["bitrate"]["actualVideoSource"], "unavailable");
+        assert_eq!(
+            snapshot["latest"]["frameRecovery"]["action"],
+            "ledgerConsume"
+        );
+        assert_eq!(
+            snapshot["latest"]["frameRecovery"]["frame_recovery_disposition"],
+            "unrecoverable-reference-chain"
+        );
+        assert_eq!(
+            snapshot["latest"]["frameRecovery"]["frame_unrecoverable_reason"],
+            "referenceChainUnrecoverable"
+        );
+    }
+
+    #[test]
+    fn build_observability_snapshot_projects_latest_twcc_sample_gate_fields() {
+        let stats = test_stats(json!({
+            "resolution": "",
+            "rtt": "",
+            "fps": 0.0,
+            "pl": "0.00%",
+            "fl": "",
+            "jit": "",
+            "br": "",
+            "decode": "",
+            "twcc_observation_state": "unavailable",
+            "latest_video_twcc_observation": {
+                "observation_id": 19,
+                "source": "local-feedback",
+                "feedback_packet_count": 1,
+                "covered_sequence_start": 1,
+                "covered_sequence_end": 8,
+                "covered_sequence_span": 8,
+                "observed_packet_count": 8,
+                "observed_byte_count": 0,
+                "coverage_ratio": 1.0,
+                "ledger_hit_ratio": 0.0,
+                "feedback_interval_ms": 600.0,
+                "arrival_span_ms": 100.0,
+                "receive_bitrate_kbps": null,
+                "twcc_sample_valid": false,
+                "twcc_invalid_reason": "missing-byte-ledger|interval-too-long:600.0",
+                "quality": "delayed",
+                "delivery_ratio": 1.0,
+                "packet_loss_ratio": 0.0,
+                "observed_at_ms": 1234.0
+            }
+        }));
+
+        let snapshot = build_observability_snapshot(&stats);
+        assert_eq!(snapshot["twcc"]["sampleValid"], false);
+        assert_eq!(
+            snapshot["twcc"]["invalidReason"],
+            "missing-byte-ledger|interval-too-long:600.0"
+        );
+        assert_eq!(snapshot["twcc"]["coverageRatio"], 1.0);
+        assert_eq!(snapshot["twcc"]["ledgerHitRatio"], 0.0);
     }
 
     #[test]
@@ -794,6 +933,8 @@ mod tests {
                 "covered_sequence_span": 120,
                 "observed_packet_count": 120,
                 "observed_byte_count": 340000,
+                "coverage_ratio": 1.0,
+                "ledger_hit_ratio": 0.95,
                 "feedback_interval_ms": 80.0,
                 "arrival_span_ms": 70.0,
                 "receive_bitrate_kbps": 22800.0,
@@ -833,6 +974,8 @@ mod tests {
                     "covered_sequence_span": 120,
                     "observed_packet_count": 120,
                     "observed_byte_count": 340000,
+                    "coverage_ratio": 1.0,
+                    "ledger_hit_ratio": null,
                     "feedback_interval_ms": 80.0,
                     "arrival_span_ms": 70.0,
                     "receive_bitrate_kbps": 22800.0,
@@ -881,5 +1024,82 @@ mod tests {
         assert!(contents.contains("\"selectedVideoProfileLevelId\":\"4d002a\""));
         assert!(contents.contains("\"googRembAccepted\":true"));
         assert!(contents.contains("\"transportCcAccepted\":true"));
+    }
+
+    #[test]
+    fn bwe_updated_event_uses_top_level_actual_video_bitrate() {
+        let recorder = std::sync::Arc::new(RuntimeTraceRecorder::new().expect("trace recorder"));
+        let mut state = RuntimeTraceObservationState::default();
+        let stats = test_stats(json!({
+            "resolution": "",
+            "rtt": "199.7ms",
+            "fps": 0.0,
+            "pl": "0.00%",
+            "fl": "",
+            "jit": "",
+            "br": "0.7Mbps",
+            "decode": "",
+            "actual_video_bitrate_source": "transport-metrics",
+            "video_actual_bitrate_kbps": 1019.4,
+            "latest_video_bwe_observation": {
+                "observation_id": 42,
+                "mode": "twcc-gcc",
+                "decision_reason": "twcc-gcc-cloud-ramp-up",
+                "target_remb_kbps": 28500,
+                "observed_remb_kbps": 28500,
+                "actual_video_bitrate_kbps": 0.0,
+                "loss_ratio": 0.0,
+                "rtt_ms": 199.7,
+                "transport_path": "Direct",
+                "twcc_feedback_interval_ms": 113.0,
+                "twcc_observed_packet_count": 12,
+                "twcc_covered_sequence_span": 12,
+                "twcc_receive_bitrate_kbps": 1019.4,
+                "twcc_delivery_ratio": 1.0,
+                "twcc_loss_ratio": 0.0,
+                "observed_at_ms": 1000.0
+            }
+        }));
+
+        record_runtime_trace_observations(&recorder, &mut state, Some("session-1"), &stats);
+
+        let contents = fs::read_to_string(recorder.path()).expect("trace contents");
+        assert!(contents.contains("\"event\":\"bweUpdated\""));
+        assert!(contents.contains("\"actualVideoBitrateKbps\":1019.4"));
+        assert!(!contents.contains("\"actualVideoBitrateKbps\":0.0"));
+    }
+
+    #[test]
+    fn frame_recovery_observation_projects_ledger_events() {
+        let recorder = std::sync::Arc::new(RuntimeTraceRecorder::new().expect("trace recorder"));
+        let mut state = RuntimeTraceObservationState::default();
+        let stats = test_stats(json!({
+            "resolution": "",
+            "rtt": "",
+            "fps": 0.0,
+            "pl": "0.00%",
+            "fl": "",
+            "jit": "",
+            "br": "",
+            "decode": "",
+            "latest_video_frame_recovery_observation": {
+                "observation_id": 77,
+                "action": "ledgerWrite",
+                "frame_rtp_timestamp": 123456789,
+                "frame_playout_deadline_at_ms": 4567.0,
+                "frame_recovery_disposition": "unrecoverable-reference-chain",
+                "frame_unrecoverable_reason": "referenceChainUnrecoverable",
+                "observed_at_ms": 1234.0
+            }
+        }));
+
+        record_runtime_trace_observations(&recorder, &mut state, Some("session-1"), &stats);
+
+        let contents = fs::read_to_string(recorder.path()).expect("trace contents");
+        assert!(contents.contains("\"event\":\"frameRecoveryObserved\""));
+        assert!(contents.contains("\"action\":\"ledgerWrite\""));
+        assert!(contents.contains("\"frameRtpTimestamp\":123456789"));
+        assert!(contents.contains("\"frameRecoveryDisposition\":\"unrecoverable-reference-chain\""));
+        assert!(contents.contains("\"frameUnrecoverableReason\":\"referenceChainUnrecoverable\""));
     }
 }

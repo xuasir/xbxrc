@@ -1,13 +1,14 @@
 use std::collections::VecDeque;
 use std::time::{Duration, Instant};
 
-use crate::media::video::types::{EncodedFrame, VideoCodec};
+use crate::media::video::types::{EncodedFrame, FrameRecoveryDisposition, VideoCodec};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum IngressDecision {
     Submit,
     DropLate,
     DropBacklog,
+    DropUnrecoverable,
     WaitKeyframe,
     Reconfigure,
 }
@@ -94,6 +95,20 @@ impl VideoIngress {
 
 impl FrameScheduler for VideoIngress {
     fn submit(&mut self, frame: EncodedFrame, now: Instant) -> IngressDecision {
+        let disposition = frame.frame_recovery_disposition;
+        if matches!(
+            disposition,
+            FrameRecoveryDisposition::UnrecoverableReferenceChain
+        ) {
+            // 参考链已污染时，直接前置放弃并等待后续 keyframe 重建。
+            self.queue.clear();
+            self.waiting_keyframe = true;
+            return IngressDecision::DropUnrecoverable;
+        }
+        if matches!(disposition, FrameRecoveryDisposition::UnrecoverableLate) {
+            return IngressDecision::DropUnrecoverable;
+        }
+
         // bootstrap_ready 是更严格的准入门槛：必须是干净 IDR、带完整参数集且语法有效。
         // 只有这类 access unit 才允许解除等待态并进入硬解。
         if frame.h264.bootstrap_ready {
@@ -213,7 +228,9 @@ mod tests {
     use crate::media::video::h264::inspection::{
         H264AccessUnitInspection, H264BootstrapRejectReason,
     };
-    use crate::media::video::types::{EncodedFrame, FrameValue, VideoCodec};
+    use crate::media::video::types::{
+        EncodedFrame, FrameRecoveryDisposition, FrameValue, VideoCodec,
+    };
     use bytes::Bytes;
     use std::time::{Duration, Instant};
 
@@ -254,6 +271,9 @@ mod tests {
             width: 1920,
             height: 1080,
             rtp_timestamp: 1,
+            frame_playout_deadline_at_ms: None,
+            frame_recovery_disposition: FrameRecoveryDisposition::Repairing,
+            frame_unrecoverable_reason: None,
             target_playout_time: if target_offset_ms >= 0 {
                 now + Duration::from_millis(target_offset_ms as u64)
             } else {
@@ -391,6 +411,46 @@ mod tests {
         assert_eq!(
             ingress.describe_reconfigure_reason(&changed).as_deref(),
             Some("parameterSetsChanged,dimensionsChanged")
+        );
+    }
+
+    #[test]
+    fn unrecoverable_late_frame_is_dropped_before_decode() {
+        let now = Instant::now();
+        let mut ingress = VideoIngress::new(4, Duration::from_millis(250));
+        let mut delta = make_frame(now, FrameValue::new(false, false, 8 * 1024), false, 0);
+        delta.frame_recovery_disposition = FrameRecoveryDisposition::UnrecoverableLate;
+        delta.frame_unrecoverable_reason = Some("deadline".to_string());
+        assert_eq!(
+            ingress.submit(delta, now),
+            IngressDecision::DropUnrecoverable
+        );
+        assert_eq!(ingress.queue_depth(), 0);
+    }
+
+    #[test]
+    fn unrecoverable_reference_chain_enters_wait_keyframe_path() {
+        let now = Instant::now();
+        let mut ingress = VideoIngress::new(4, Duration::from_millis(250));
+        assert_eq!(
+            ingress.submit(
+                make_frame(now, FrameValue::new(true, true, 64 * 1024), true, 0),
+                now
+            ),
+            IngressDecision::Submit
+        );
+        let mut reference_delta = make_frame(now, FrameValue::new(false, true, 8 * 1024), false, 0);
+        reference_delta.frame_recovery_disposition =
+            FrameRecoveryDisposition::UnrecoverableReferenceChain;
+        reference_delta.frame_unrecoverable_reason = Some("referenceChain".to_string());
+        assert_eq!(
+            ingress.submit(reference_delta, now),
+            IngressDecision::DropUnrecoverable
+        );
+        let next_delta = make_frame(now, FrameValue::new(false, false, 8 * 1024), false, 0);
+        assert_eq!(
+            ingress.submit(next_delta, now),
+            IngressDecision::WaitKeyframe
         );
     }
 }

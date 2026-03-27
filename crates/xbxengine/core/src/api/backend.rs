@@ -209,6 +209,17 @@ pub struct XbxEngineVideoFrameDropObservation {
 }
 
 #[derive(Clone, Debug, PartialEq)]
+pub struct XbxEngineFrameRecoveryObservation {
+    pub observation_id: u64,
+    pub action: String,
+    pub frame_rtp_timestamp: u32,
+    pub frame_playout_deadline_at_ms: Option<f64>,
+    pub frame_recovery_disposition: String,
+    pub frame_unrecoverable_reason: Option<String>,
+    pub observed_at_ms: f64,
+}
+
+#[derive(Clone, Debug, PartialEq)]
 pub struct XbxEngineVideoNackObservation {
     pub observation_id: u64,
     pub action: String,
@@ -221,6 +232,10 @@ pub struct XbxEngineVideoNackObservation {
     pub frame_is_keyframe: Option<bool>,
     pub frame_importance: Option<String>,
     pub deadline_at_ms: Option<f64>,
+    pub estimated_recovery_arrival_ms: Option<f64>,
+    pub nack_disposition: Option<String>,
+    pub frame_playout_deadline_at_ms: Option<f64>,
+    pub frame_unrecoverable_reason: Option<String>,
     pub observed_at_ms: f64,
 }
 
@@ -314,12 +329,87 @@ pub struct XbxEngineVideoTwccObservation {
     pub covered_sequence_span: u16,
     pub observed_packet_count: u16,
     pub observed_byte_count: u64,
+    pub coverage_ratio: Option<f64>,
+    pub ledger_hit_ratio: Option<f64>,
     pub feedback_interval_ms: Option<f64>,
     pub arrival_span_ms: Option<f64>,
     pub receive_bitrate_kbps: Option<f64>,
+    pub twcc_sample_valid: bool,
+    pub twcc_invalid_reason: Option<String>,
+    pub quality: XbxEngineTwccObservationQuality,
     pub delivery_ratio: f64,
     pub packet_loss_ratio: f64,
     pub observed_at_ms: f64,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum XbxEngineTwccObservationQuality {
+    Stable,
+    Delayed,
+    BootstrapSparse,
+    RemoteObserved,
+    Unstable,
+}
+
+impl XbxEngineTwccObservationQuality {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Stable => "stable",
+            Self::Delayed => "delayed",
+            Self::BootstrapSparse => "bootstrap-sparse",
+            Self::RemoteObserved => "remote-observed",
+            Self::Unstable => "unstable",
+        }
+    }
+}
+
+impl XbxEngineVideoTwccObservation {
+    pub fn is_bootstrap_sparse_local_feedback(
+        source: &str,
+        feedback_interval_ms: Option<f64>,
+        observed_packet_count: u16,
+        covered_sequence_span: u16,
+    ) -> bool {
+        source == "local-feedback"
+            && feedback_interval_ms.is_none()
+            && observed_packet_count > 0
+            && covered_sequence_span >= observed_packet_count.saturating_mul(3)
+    }
+
+    pub fn classify_quality(
+        &self,
+        expected_interval_ms: f64,
+        stable_feedback_interval_ms: f64,
+        stable_feedback_min_packets: u16,
+    ) -> XbxEngineTwccObservationQuality {
+        if self.source != "local-feedback" {
+            return XbxEngineTwccObservationQuality::RemoteObserved;
+        }
+        if Self::is_bootstrap_sparse_local_feedback(
+            &self.source,
+            self.feedback_interval_ms,
+            self.observed_packet_count,
+            self.covered_sequence_span,
+        ) {
+            return XbxEngineTwccObservationQuality::BootstrapSparse;
+        }
+        if let Some(interval_ms) = self.feedback_interval_ms {
+            if interval_ms >= expected_interval_ms.max(1.0) * 1.6 {
+                return XbxEngineTwccObservationQuality::Delayed;
+            }
+        }
+        let effective_stable_feedback_interval_ms =
+            stable_feedback_interval_ms.max(expected_interval_ms.max(1.0) * 1.25) * 1.2;
+        let stable_feedback = self.feedback_interval_ms.unwrap_or(0.0)
+            <= effective_stable_feedback_interval_ms
+            && self.observed_packet_count >= stable_feedback_min_packets
+            && self.covered_sequence_span >= self.observed_packet_count;
+        if stable_feedback {
+            XbxEngineTwccObservationQuality::Stable
+        } else {
+            XbxEngineTwccObservationQuality::Unstable
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -481,6 +571,7 @@ pub struct XbxEngineMediaRuntimeStats {
     pub video_present_fps: f64,
     pub video_renderer_stalled: Option<bool>,
     pub latest_video_frame_drop: Option<XbxEngineVideoFrameDropObservation>,
+    pub latest_video_frame_recovery_observation: Option<XbxEngineFrameRecoveryObservation>,
     pub inbound_bytes_total: u64,
     pub inbound_video_bytes_total: u64,
     pub inbound_primary_video_bytes_total: u64,
@@ -586,6 +677,7 @@ impl Default for XbxEngineMediaRuntimeStats {
             video_present_fps: 0.0,
             video_renderer_stalled: None,
             latest_video_frame_drop: None,
+            latest_video_frame_recovery_observation: None,
             inbound_bytes_total: 0,
             inbound_video_bytes_total: 0,
             inbound_primary_video_bytes_total: 0,

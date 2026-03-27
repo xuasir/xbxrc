@@ -1,7 +1,9 @@
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
+use std::{collections::HashMap, fmt::Write as _};
 
 use rtc::peer_connection::transport::RTCIceCandidateType;
+use rtc::rtp_transceiver::rtp_sender::RtpCodecKind;
 use rtc::statistics::report::{RTCStatsReport, RTCStatsReportEntry};
 use rtc::statistics::StatsSelector;
 use rtc_rtcp::transport_feedbacks::transport_layer_cc::TransportLayerCc;
@@ -11,7 +13,9 @@ use crate::transport::rtc::connection::builder::ControlledPeerConnection;
 use crate::transport::rtc::events::RtcConnectionLifecycleState;
 use crate::transport::rtc::facts::{PeerFact, TransportFact};
 use crate::transport::rtc::stats::now_ms_f64;
-use crate::{XbxEngineMediaRuntimeStats, XbxEngineVideoTwccObservation};
+use crate::{
+    XbxEngineMediaRuntimeStats, XbxEngineTwccObservationQuality, XbxEngineVideoTwccObservation,
+};
 
 pub(crate) const TWCC_OBSERVATION_SOURCE_LOCAL_FEEDBACK: &str = "local-feedback";
 pub(crate) const TWCC_OBSERVATION_SOURCE_REMOTE_RTCP: &str = "remote-rtcp";
@@ -117,6 +121,16 @@ pub(crate) fn build_twcc_observation(
     runtime_stats: &Arc<Mutex<XbxEngineMediaRuntimeStats>>,
     source: &'static str,
 ) -> Option<XbxEngineVideoTwccObservation> {
+    build_twcc_observation_with_packet_bytes(observation_id, packet, runtime_stats, source, None)
+}
+
+pub(crate) fn build_twcc_observation_with_packet_bytes(
+    observation_id: u64,
+    packet: &TransportLayerCc,
+    runtime_stats: &Arc<Mutex<XbxEngineMediaRuntimeStats>>,
+    source: &'static str,
+    packet_bytes_by_transport_seq: Option<&HashMap<u16, u32>>,
+) -> Option<XbxEngineVideoTwccObservation> {
     let observed_at_ms = now_ms_f64();
     RuntimeStatsSink::read_shared(runtime_stats, |stats| {
         let observed_packet_count = packet
@@ -146,37 +160,43 @@ pub(crate) fn build_twcc_observation(
                 .sum::<f64>();
             (span_ms > 0.0).then_some(span_ms).or(feedback_interval_ms)
         };
-        // remote-rtcp 观测并不保证是本地 video stream 的可归因吞吐，
-        // 这里仅在 local-feedback 下允许回退到 video transport 指标，避免误导。
-        let allow_video_bitrate_fallback = source == TWCC_OBSERVATION_SOURCE_LOCAL_FEEDBACK;
-        let observed_byte_count = if allow_video_bitrate_fallback {
-            estimate_twcc_observed_byte_count(
-                stats,
-                observed_packet_count,
-                feedback_interval_ms,
-                arrival_span_ms,
-            )
-        } else {
-            0
-        };
+        let covered_sequence_span_nonzero = covered_sequence_span.max(1);
+        let coverage_ratio =
+            Some((observed_packet_count as f64 / covered_sequence_span_nonzero as f64).clamp(0.0, 1.0));
+        let observed_from_ledger = packet_bytes_by_transport_seq
+            .map(|ledger| sum_twcc_observed_packet_bytes(packet, ledger))
+            .unwrap_or_default();
+        let observed_byte_count = observed_from_ledger.observed_byte_count;
+        let ledger_hit_ratio = (source == TWCC_OBSERVATION_SOURCE_LOCAL_FEEDBACK
+            && packet_bytes_by_transport_seq.is_some()
+            && observed_packet_count > 0)
+            .then_some(
+                (f64::from(observed_from_ledger.ledger_hit_count) / observed_packet_count as f64)
+                    .clamp(0.0, 1.0),
+            );
+        let sample_gate = evaluate_twcc_sample_gate(
+            source,
+            observed_packet_count,
+            coverage_ratio,
+            ledger_hit_ratio,
+            observed_byte_count,
+            feedback_interval_ms,
+            arrival_span_ms,
+        );
         let receive_bitrate_kbps = feedback_interval_ms
-            .filter(|interval| *interval > 0.0 && observed_byte_count > 0)
-            .map(|interval| observed_byte_count as f64 * 8.0 / interval)
-            .or_else(|| {
-                if allow_video_bitrate_fallback {
-                    stats.inbound_video_bitrate_kbps.or_else(|| {
-                        stats
-                            .latest_video_bwe_observation
-                            .as_ref()
-                            .map(|bwe| bwe.actual_video_bitrate_kbps)
-                    })
-                } else {
-                    None
-                }
-            });
+            .filter(|interval| *interval > 0.0 && observed_byte_count > 0 && sample_gate.is_valid)
+            .map(|interval| observed_byte_count as f64 * 8.0 / interval);
         let packet_status_count = packet.packet_status_count.max(1);
+        let quality = classify_twcc_observation_quality(
+            source,
+            packet_status_count,
+            observed_packet_count,
+            feedback_interval_ms,
+        );
+        let effective_packet_status_count =
+            effective_twcc_packet_status_count(packet_status_count, observed_packet_count, quality);
         let delivery_ratio =
-            (observed_packet_count as f64 / packet_status_count as f64).clamp(0.0, 1.0);
+            (observed_packet_count as f64 / effective_packet_status_count as f64).clamp(0.0, 1.0);
         let packet_loss_ratio = (1.0 - delivery_ratio).clamp(0.0, 1.0);
 
         Some(XbxEngineVideoTwccObservation {
@@ -188,15 +208,32 @@ pub(crate) fn build_twcc_observation(
             covered_sequence_span,
             observed_packet_count,
             observed_byte_count,
+            coverage_ratio,
+            ledger_hit_ratio,
             feedback_interval_ms,
             arrival_span_ms,
             receive_bitrate_kbps,
+            twcc_sample_valid: sample_gate.is_valid,
+            twcc_invalid_reason: sample_gate.invalid_reason,
+            quality,
             delivery_ratio,
             packet_loss_ratio,
             observed_at_ms,
         })
     })
     .flatten()
+}
+
+#[derive(Default)]
+struct TwccSampleGateResult {
+    is_valid: bool,
+    invalid_reason: Option<String>,
+}
+
+#[derive(Default)]
+struct TwccObservedBytesFromLedger {
+    observed_byte_count: u64,
+    ledger_hit_count: u16,
 }
 
 impl super::RtcConnectionService {
@@ -337,38 +374,158 @@ fn estimate_recent_inbound_bitrate_kbps(
     (delta_bytes_total as f64 * 8.0 / elapsed_ms).max(0.0)
 }
 
-fn estimate_twcc_observed_byte_count(
-    stats: &XbxEngineMediaRuntimeStats,
-    observed_packet_count: u16,
-    feedback_interval_ms: Option<f64>,
-    arrival_span_ms: Option<f64>,
-) -> u64 {
-    if observed_packet_count == 0 {
-        return 0;
+fn sum_twcc_observed_packet_bytes(
+    packet: &TransportLayerCc,
+    packet_bytes_by_transport_seq: &HashMap<u16, u32>,
+) -> TwccObservedBytesFromLedger {
+    let mut observed_byte_count = 0u64;
+    let mut ledger_hit_count = 0u16;
+    twcc_received_sequences(packet)
+        .into_iter()
+        .filter_map(|sequence| packet_bytes_by_transport_seq.get(&sequence).copied())
+        .for_each(|packet_bytes| {
+            observed_byte_count = observed_byte_count.saturating_add(u64::from(packet_bytes));
+            ledger_hit_count = ledger_hit_count.saturating_add(1);
+        });
+    TwccObservedBytesFromLedger {
+        observed_byte_count,
+        ledger_hit_count,
     }
-    let reference_interval_ms = feedback_interval_ms
-        .filter(|value| *value > 0.0)
-        .or(arrival_span_ms.filter(|value| *value > 0.0));
-    if let (Some(video_kbps), Some(interval_ms)) =
-        (stats.inbound_video_bitrate_kbps, reference_interval_ms)
-    {
-        let estimated_bytes = (video_kbps.max(0.0) * interval_ms / 8.0).round();
-        if estimated_bytes.is_finite()
-            && estimated_bytes > 0.0
-            && estimated_bytes > observed_packet_count as f64
-        {
-            return estimated_bytes as u64;
+}
+
+fn twcc_received_sequences(packet: &TransportLayerCc) -> Vec<u16> {
+    let mut remaining = packet.packet_status_count as usize;
+    let mut sequence = packet.base_sequence_number;
+    let mut received_sequences = Vec::new();
+    for chunk in &packet.packet_chunks {
+        if remaining == 0 {
+            break;
+        }
+        match chunk {
+            rtc_rtcp::transport_feedbacks::transport_layer_cc::PacketStatusChunk::RunLengthChunk(
+                chunk,
+            ) => {
+                let run_length = usize::from(chunk.run_length).min(remaining);
+                for _ in 0..run_length {
+                    if twcc_symbol_is_received(chunk.packet_status_symbol) {
+                        received_sequences.push(sequence);
+                    }
+                    sequence = sequence.wrapping_add(1);
+                }
+                remaining = remaining.saturating_sub(run_length);
+            }
+            rtc_rtcp::transport_feedbacks::transport_layer_cc::PacketStatusChunk::StatusVectorChunk(
+                chunk,
+            ) => {
+                for symbol in &chunk.symbol_list {
+                    if remaining == 0 {
+                        break;
+                    }
+                    if twcc_symbol_is_received(*symbol) {
+                        received_sequences.push(sequence);
+                    }
+                    sequence = sequence.wrapping_add(1);
+                    remaining = remaining.saturating_sub(1);
+                }
+            }
         }
     }
-    let packet_count_total = stats.inbound_video_packet_count_total;
-    let average_packet_bytes = if packet_count_total == 0 {
-        1_200
+    received_sequences
+}
+
+fn twcc_symbol_is_received(
+    symbol: rtc_rtcp::transport_feedbacks::transport_layer_cc::SymbolTypeTcc,
+) -> bool {
+    !matches!(
+        symbol,
+        rtc_rtcp::transport_feedbacks::transport_layer_cc::SymbolTypeTcc::PacketNotReceived
+    )
+}
+
+fn evaluate_twcc_sample_gate(
+    source: &'static str,
+    observed_packet_count: u16,
+    coverage_ratio: Option<f64>,
+    ledger_hit_ratio: Option<f64>,
+    observed_byte_count: u64,
+    feedback_interval_ms: Option<f64>,
+    arrival_span_ms: Option<f64>,
+) -> TwccSampleGateResult {
+    if source != TWCC_OBSERVATION_SOURCE_LOCAL_FEEDBACK {
+        return TwccSampleGateResult {
+            is_valid: true,
+            invalid_reason: None,
+        };
+    }
+
+    const MIN_VALID_OBSERVED_PACKETS: u16 = 8;
+    const MAX_VALID_SAMPLE_INTERVAL_MS: f64 = 500.0;
+    const MIN_COVERAGE_RATIO: f64 = 0.60;
+    const MIN_LEDGER_HIT_RATIO: f64 = 0.90;
+
+    let mut reasons = Vec::<String>::new();
+    if observed_packet_count == 0 {
+        reasons.push("no-observed-packets".to_string());
+    }
+    if observed_packet_count > 0 && observed_byte_count == 0 {
+        reasons.push("missing-byte-ledger".to_string());
+    }
+    if observed_packet_count < MIN_VALID_OBSERVED_PACKETS {
+        reasons.push("sample-too-small".to_string());
+    }
+    if coverage_ratio.is_some_and(|ratio| ratio < MIN_COVERAGE_RATIO) {
+        reasons.push("coverage-too-low".to_string());
+    }
+    if ledger_hit_ratio.is_some_and(|ratio| ratio < MIN_LEDGER_HIT_RATIO) {
+        reasons.push("ledger-hit-too-low".to_string());
+    }
+    if let Some(sample_interval_ms) = feedback_interval_ms
+        .or(arrival_span_ms)
+        .filter(|interval_ms| *interval_ms > MAX_VALID_SAMPLE_INTERVAL_MS)
+    {
+        let mut reason = String::from("interval-too-long:");
+        let _ = write!(&mut reason, "{sample_interval_ms:.1}");
+        reasons.push(reason);
+    }
+
+    let invalid_reason = if reasons.is_empty() {
+        None
     } else {
-        (stats.inbound_primary_video_bytes_total / packet_count_total).max(1)
+        Some(reasons.join("|"))
     };
-    average_packet_bytes
-        .max(1_200)
-        .saturating_mul(u64::from(observed_packet_count))
+    TwccSampleGateResult {
+        is_valid: invalid_reason.is_none(),
+        invalid_reason,
+    }
+}
+
+fn classify_twcc_observation_quality(
+    source: &'static str,
+    packet_status_count: u16,
+    observed_packet_count: u16,
+    feedback_interval_ms: Option<f64>,
+) -> XbxEngineTwccObservationQuality {
+    if source != TWCC_OBSERVATION_SOURCE_LOCAL_FEEDBACK {
+        return XbxEngineTwccObservationQuality::Stable;
+    }
+    if feedback_interval_ms.is_some() || observed_packet_count == 0 {
+        return XbxEngineTwccObservationQuality::Stable;
+    }
+    if packet_status_count > observed_packet_count.saturating_mul(3) {
+        return XbxEngineTwccObservationQuality::BootstrapSparse;
+    }
+    XbxEngineTwccObservationQuality::Unstable
+}
+
+fn effective_twcc_packet_status_count(
+    packet_status_count: u16,
+    observed_packet_count: u16,
+    quality: XbxEngineTwccObservationQuality,
+) -> u16 {
+    if quality == XbxEngineTwccObservationQuality::BootstrapSparse {
+        return observed_packet_count.max(1);
+    }
+    packet_status_count.max(1)
 }
 
 fn candidate_type_for(report: &RTCStatsReport, candidate_id: &str) -> Option<RTCIceCandidateType> {
@@ -430,25 +587,53 @@ fn classify_transport_path(
 fn is_video_inbound_stream(
     stream: &&rtc::statistics::stats::rtp_stream::received::inbound::RTCInboundRtpStreamStats,
 ) -> bool {
-    stream.frame_width > 0
-        || stream.frame_height > 0
-        || stream.frames_decoded > 0
-        || stream.frames_rendered > 0
-        || stream.decoder_implementation.eq_ignore_ascii_case("video")
+    is_video_inbound_stream_by_hints(
+        stream.received_rtp_stream_stats.rtp_stream_stats.kind,
+        stream.frame_width,
+        stream.frame_height,
+        stream.frames_decoded,
+        stream.frames_rendered,
+        stream.decoder_implementation.as_str(),
+    )
+}
+
+fn is_video_inbound_stream_by_hints(
+    kind: RtpCodecKind,
+    frame_width: u32,
+    frame_height: u32,
+    frames_decoded: u32,
+    frames_rendered: u32,
+    decoder_implementation: &str,
+) -> bool {
+    // 优先按 RTP stats 的媒体类型判定视频流；
+    // 解码维度字段在某些平台/时序下会长期为 0，不能再作为硬门槛。
+    kind == RtpCodecKind::Video
+        || frame_width > 0
+        || frame_height > 0
+        || frames_decoded > 0
+        || frames_rendered > 0
+        || decoder_implementation.eq_ignore_ascii_case("video")
 }
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
     use std::sync::{Arc, Mutex};
 
-    use rtc_rtcp::transport_feedbacks::transport_layer_cc::TransportLayerCc;
+    use rtc_rtcp::transport_feedbacks::transport_layer_cc::{
+        PacketStatusChunk, StatusChunkTypeTcc, StatusVectorChunk, SymbolSizeTypeTcc,
+    };
+    use rtc_rtcp::transport_feedbacks::transport_layer_cc::{SymbolTypeTcc, TransportLayerCc};
 
     use super::{
-        build_twcc_observation, classify_transport_path, estimate_recent_inbound_bitrate_kbps,
-        TWCC_OBSERVATION_SOURCE_LOCAL_FEEDBACK, TWCC_OBSERVATION_SOURCE_REMOTE_RTCP,
+        build_twcc_observation, build_twcc_observation_with_packet_bytes, classify_transport_path,
+        estimate_recent_inbound_bitrate_kbps, is_video_inbound_stream_by_hints,
+        TWCC_OBSERVATION_SOURCE_LOCAL_FEEDBACK,
+        TWCC_OBSERVATION_SOURCE_REMOTE_RTCP,
     };
     use crate::XbxEngineMediaRuntimeStats;
     use rtc::peer_connection::transport::RTCIceCandidateType;
+    use rtc::rtp_transceiver::rtp_sender::RtpCodecKind;
 
     #[test]
     fn relay_path_is_detected_from_either_side() {
@@ -507,6 +692,42 @@ mod tests {
     }
 
     #[test]
+    fn video_kind_is_accepted_even_when_frame_decode_hints_are_zero() {
+        assert!(is_video_inbound_stream_by_hints(
+            RtpCodecKind::Video,
+            0,
+            0,
+            0,
+            0,
+            "",
+        ));
+    }
+
+    #[test]
+    fn audio_kind_without_video_hints_is_rejected() {
+        assert!(!is_video_inbound_stream_by_hints(
+            RtpCodecKind::Audio,
+            0,
+            0,
+            0,
+            0,
+            "",
+        ));
+    }
+
+    #[test]
+    fn audio_kind_with_video_decode_hints_still_uses_fallback_video_detection() {
+        assert!(is_video_inbound_stream_by_hints(
+            RtpCodecKind::Audio,
+            1920,
+            1080,
+            0,
+            0,
+            "",
+        ));
+    }
+
+    #[test]
     fn remote_rtcp_twcc_observation_does_not_fallback_to_video_transport_bitrate() {
         let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats {
             inbound_video_bitrate_kbps: Some(9_000.0),
@@ -530,7 +751,7 @@ mod tests {
     }
 
     #[test]
-    fn local_feedback_twcc_observation_can_fallback_to_video_transport_bitrate() {
+    fn local_feedback_twcc_observation_without_ledger_is_marked_invalid() {
         let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats {
             inbound_video_bitrate_kbps: Some(9_000.0),
             ..XbxEngineMediaRuntimeStats::default()
@@ -548,6 +769,278 @@ mod tests {
         )
         .expect("twcc observation should be built");
 
-        assert_eq!(observation.receive_bitrate_kbps, Some(9_000.0));
+        assert_eq!(observation.receive_bitrate_kbps, None);
+        assert_eq!(observation.coverage_ratio, Some(0.0));
+        assert_eq!(observation.ledger_hit_ratio, None);
+        assert!(!observation.twcc_sample_valid);
+        assert!(
+            observation
+                .twcc_invalid_reason
+                .as_deref()
+                .unwrap_or("")
+                .contains("sample-too-small")
+        );
+    }
+
+    #[test]
+    fn first_local_feedback_twcc_uses_optimistic_delivery_ratio_when_interval_is_missing() {
+        let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
+        let packet = TransportLayerCc {
+            packet_status_count: 93,
+            recv_deltas: std::iter::repeat_n(
+                rtc_rtcp::transport_feedbacks::transport_layer_cc::RecvDelta {
+                    type_tcc_packet: SymbolTypeTcc::PacketReceivedSmallDelta,
+                    delta: 1_000,
+                },
+                17,
+            )
+            .collect(),
+            ..TransportLayerCc::default()
+        };
+
+        let observation = build_twcc_observation(
+            1,
+            &packet,
+            &runtime_stats,
+            TWCC_OBSERVATION_SOURCE_LOCAL_FEEDBACK,
+        )
+        .expect("twcc observation should be built");
+
+        assert_eq!(observation.feedback_interval_ms, None);
+        assert_eq!(observation.observed_packet_count, 17);
+        assert_eq!(observation.covered_sequence_span, 93);
+        assert!(observation.coverage_ratio.is_some());
+        assert!(observation.ledger_hit_ratio.is_none());
+        assert_eq!(observation.delivery_ratio, 1.0);
+        assert_eq!(observation.packet_loss_ratio, 0.0);
+    }
+
+    #[test]
+    fn local_feedback_twcc_observation_uses_packet_byte_ledger_when_available() {
+        let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
+        let packet = TransportLayerCc {
+            base_sequence_number: 100,
+            packet_status_count: 8,
+            packet_chunks: vec![PacketStatusChunk::StatusVectorChunk(StatusVectorChunk {
+                type_tcc: StatusChunkTypeTcc::StatusVectorChunk,
+                symbol_size: SymbolSizeTypeTcc::TwoBit,
+                symbol_list: vec![
+                    SymbolTypeTcc::PacketReceivedSmallDelta,
+                    SymbolTypeTcc::PacketReceivedSmallDelta,
+                    SymbolTypeTcc::PacketReceivedSmallDelta,
+                    SymbolTypeTcc::PacketReceivedSmallDelta,
+                    SymbolTypeTcc::PacketReceivedSmallDelta,
+                    SymbolTypeTcc::PacketReceivedSmallDelta,
+                    SymbolTypeTcc::PacketReceivedSmallDelta,
+                    SymbolTypeTcc::PacketReceivedSmallDelta,
+                ],
+            })],
+            recv_deltas: vec![
+                rtc_rtcp::transport_feedbacks::transport_layer_cc::RecvDelta {
+                    type_tcc_packet: SymbolTypeTcc::PacketReceivedSmallDelta,
+                    delta: 10_000,
+                },
+                rtc_rtcp::transport_feedbacks::transport_layer_cc::RecvDelta {
+                    type_tcc_packet: SymbolTypeTcc::PacketReceivedSmallDelta,
+                    delta: 10_000,
+                },
+                rtc_rtcp::transport_feedbacks::transport_layer_cc::RecvDelta {
+                    type_tcc_packet: SymbolTypeTcc::PacketReceivedSmallDelta,
+                    delta: 10_000,
+                },
+                rtc_rtcp::transport_feedbacks::transport_layer_cc::RecvDelta {
+                    type_tcc_packet: SymbolTypeTcc::PacketReceivedSmallDelta,
+                    delta: 10_000,
+                },
+                rtc_rtcp::transport_feedbacks::transport_layer_cc::RecvDelta {
+                    type_tcc_packet: SymbolTypeTcc::PacketReceivedSmallDelta,
+                    delta: 10_000,
+                },
+                rtc_rtcp::transport_feedbacks::transport_layer_cc::RecvDelta {
+                    type_tcc_packet: SymbolTypeTcc::PacketReceivedSmallDelta,
+                    delta: 10_000,
+                },
+                rtc_rtcp::transport_feedbacks::transport_layer_cc::RecvDelta {
+                    type_tcc_packet: SymbolTypeTcc::PacketReceivedSmallDelta,
+                    delta: 10_000,
+                },
+                rtc_rtcp::transport_feedbacks::transport_layer_cc::RecvDelta {
+                    type_tcc_packet: SymbolTypeTcc::PacketReceivedSmallDelta,
+                    delta: 10_000,
+                },
+            ],
+            ..TransportLayerCc::default()
+        };
+        let mut ledger = HashMap::new();
+        ledger.insert(100, 1200);
+        ledger.insert(101, 1300);
+        ledger.insert(102, 1400);
+        ledger.insert(103, 1500);
+        ledger.insert(104, 1600);
+        ledger.insert(105, 1700);
+        ledger.insert(106, 1800);
+        ledger.insert(107, 1900);
+
+        let mut first_observation = build_twcc_observation_with_packet_bytes(
+            1,
+            &packet,
+            &runtime_stats,
+            TWCC_OBSERVATION_SOURCE_LOCAL_FEEDBACK,
+            Some(&ledger),
+        )
+        .expect("twcc observation should be built");
+        assert!(first_observation.twcc_sample_valid);
+        assert_eq!(first_observation.observed_byte_count, 12400);
+        assert_eq!(first_observation.coverage_ratio, Some(1.0));
+        assert_eq!(first_observation.ledger_hit_ratio, Some(1.0));
+        assert_eq!(first_observation.receive_bitrate_kbps, None);
+        // 避免两次观测落在同一毫秒，导致反馈间隔偶发为 None。
+        first_observation.observed_at_ms = (first_observation.observed_at_ms - 1.0).max(0.0);
+
+        if let Ok(mut stats) = runtime_stats.lock() {
+            stats.latest_video_twcc_observation = Some(first_observation);
+        }
+
+        let second_observation = build_twcc_observation_with_packet_bytes(
+            2,
+            &packet,
+            &runtime_stats,
+            TWCC_OBSERVATION_SOURCE_LOCAL_FEEDBACK,
+            Some(&ledger),
+        )
+        .expect("twcc observation should be built");
+        assert!(second_observation.twcc_sample_valid);
+        assert_eq!(second_observation.observed_byte_count, 12400);
+        assert_eq!(second_observation.coverage_ratio, Some(1.0));
+        assert_eq!(second_observation.ledger_hit_ratio, Some(1.0));
+        assert!(second_observation.feedback_interval_ms.is_some());
+        assert!(second_observation.receive_bitrate_kbps.is_some());
+    }
+
+    #[test]
+    fn local_feedback_twcc_observation_marks_invalid_when_sample_interval_too_long() {
+        let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
+        let packet = TransportLayerCc {
+            packet_status_count: 8,
+            recv_deltas: std::iter::repeat_n(
+                rtc_rtcp::transport_feedbacks::transport_layer_cc::RecvDelta {
+                    type_tcc_packet: SymbolTypeTcc::PacketReceivedSmallDelta,
+                    delta: 80_000,
+                },
+                8,
+            )
+            .collect(),
+            ..TransportLayerCc::default()
+        };
+
+        let observation = build_twcc_observation(
+            1,
+            &packet,
+            &runtime_stats,
+            TWCC_OBSERVATION_SOURCE_LOCAL_FEEDBACK,
+        )
+        .expect("twcc observation should be built");
+        assert!(!observation.twcc_sample_valid);
+        assert!(observation
+            .twcc_invalid_reason
+            .as_deref()
+            .unwrap_or("")
+            .contains("interval-too-long"));
+    }
+
+    #[test]
+    fn local_feedback_twcc_observation_marks_invalid_when_coverage_too_low() {
+        let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
+        let packet = TransportLayerCc {
+            base_sequence_number: 100,
+            packet_status_count: 10,
+            packet_chunks: vec![PacketStatusChunk::RunLengthChunk(
+                rtc_rtcp::transport_feedbacks::transport_layer_cc::RunLengthChunk {
+                    type_tcc: StatusChunkTypeTcc::RunLengthChunk,
+                    packet_status_symbol: SymbolTypeTcc::PacketReceivedSmallDelta,
+                    run_length: 4,
+                },
+            )],
+            recv_deltas: std::iter::repeat_n(
+                rtc_rtcp::transport_feedbacks::transport_layer_cc::RecvDelta {
+                    type_tcc_packet: SymbolTypeTcc::PacketReceivedSmallDelta,
+                    delta: 10_000,
+                },
+                4,
+            )
+            .collect(),
+            ..TransportLayerCc::default()
+        };
+        let mut ledger = HashMap::new();
+        ledger.insert(100, 1200);
+        ledger.insert(101, 1200);
+        ledger.insert(102, 1200);
+        ledger.insert(103, 1200);
+
+        let observation = build_twcc_observation_with_packet_bytes(
+            1,
+            &packet,
+            &runtime_stats,
+            TWCC_OBSERVATION_SOURCE_LOCAL_FEEDBACK,
+            Some(&ledger),
+        )
+        .expect("twcc observation should be built");
+
+        assert_eq!(observation.coverage_ratio, Some(0.4));
+        assert!(!observation.twcc_sample_valid);
+        assert!(observation
+            .twcc_invalid_reason
+            .as_deref()
+            .unwrap_or("")
+            .contains("coverage-too-low"));
+    }
+
+    #[test]
+    fn local_feedback_twcc_observation_marks_invalid_when_ledger_hit_too_low() {
+        let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
+        let packet = TransportLayerCc {
+            base_sequence_number: 100,
+            packet_status_count: 10,
+            packet_chunks: vec![PacketStatusChunk::RunLengthChunk(
+                rtc_rtcp::transport_feedbacks::transport_layer_cc::RunLengthChunk {
+                    type_tcc: StatusChunkTypeTcc::RunLengthChunk,
+                    packet_status_symbol: SymbolTypeTcc::PacketReceivedSmallDelta,
+                    run_length: 10,
+                },
+            )],
+            recv_deltas: std::iter::repeat_n(
+                rtc_rtcp::transport_feedbacks::transport_layer_cc::RecvDelta {
+                    type_tcc_packet: SymbolTypeTcc::PacketReceivedSmallDelta,
+                    delta: 10_000,
+                },
+                10,
+            )
+            .collect(),
+            ..TransportLayerCc::default()
+        };
+        let mut ledger = HashMap::new();
+        ledger.insert(100, 1200);
+        ledger.insert(101, 1200);
+        ledger.insert(102, 1200);
+        ledger.insert(103, 1200);
+        ledger.insert(104, 1200);
+
+        let observation = build_twcc_observation_with_packet_bytes(
+            1,
+            &packet,
+            &runtime_stats,
+            TWCC_OBSERVATION_SOURCE_LOCAL_FEEDBACK,
+            Some(&ledger),
+        )
+        .expect("twcc observation should be built");
+
+        assert_eq!(observation.coverage_ratio, Some(1.0));
+        assert_eq!(observation.ledger_hit_ratio, Some(0.5));
+        assert!(!observation.twcc_sample_valid);
+        assert!(observation
+            .twcc_invalid_reason
+            .as_deref()
+            .unwrap_or("")
+            .contains("ledger-hit-too-low"));
     }
 }

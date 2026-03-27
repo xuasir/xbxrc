@@ -19,6 +19,7 @@ pub enum VideoRecoverySignal {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum VideoIngressSignal {
     WaitKeyframe,
+    FrameAbandoned,
     Reconfigure,
 }
 
@@ -26,6 +27,7 @@ impl VideoIngressSignal {
     pub fn from_decision(decision: &IngressDecision) -> Self {
         match decision {
             IngressDecision::Reconfigure => Self::Reconfigure,
+            IngressDecision::DropUnrecoverable => Self::FrameAbandoned,
             IngressDecision::WaitKeyframe
             | IngressDecision::DropLate
             | IngressDecision::DropBacklog => Self::WaitKeyframe,

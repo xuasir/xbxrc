@@ -74,7 +74,11 @@ impl StartupRecoveryProbe {
                 let effective_bitrate = extract_startup_recovery_bitrate_kbps(stats);
                 let waiting_for_clean_video = matches!(
                     stats.recovery_diagnosis.as_deref(),
-                    Some("ingressWaitKeyframe" | "transportAwaitRecoveryKeyframe")
+                    Some(
+                        "ingressWaitKeyframe"
+                            | "ingressFrameAbandoned"
+                            | "transportAwaitRecoveryKeyframe"
+                    )
                 ) || stats.direct_gaming_bitrate_band.as_deref()
                     == Some("startupLow");
                 (effective_bitrate, waiting_for_clean_video)
@@ -149,6 +153,7 @@ fn resolve_session_phase_from_stats(
         Some(
             "waitKeyframe"
                 | "ingressWaitKeyframe"
+                | "ingressFrameAbandoned"
                 | "transportAwaitRecoveryKeyframe"
                 | "transportExpiredDeadline"
                 | "transportSevereDeadline"
@@ -440,9 +445,16 @@ mod tests {
             covered_sequence_span: 100,
             observed_packet_count: 100,
             observed_byte_count: 100_000,
+            coverage_ratio: None,
+            ledger_hit_ratio: None,
             feedback_interval_ms: Some(100.0),
             arrival_span_ms: Some(100.0),
             receive_bitrate_kbps: Some(10_500.0),
+            twcc_sample_valid: true,
+
+            twcc_invalid_reason: None,
+
+            quality: crate::XbxEngineTwccObservationQuality::Stable,
             delivery_ratio: 1.0,
             packet_loss_ratio: 0.0,
             observed_at_ms: 1.0,

@@ -15,7 +15,9 @@ use self::twcc_rules::{
 use crate::transport::rtc::recovery::policy::{ScenarioPolicyProfileKind, ScenarioPolicyResolver};
 use crate::transport::rtc::recovery::runtime_state::RecoveryCouplingState;
 use crate::transport::rtc::recovery::startup::SessionPhase;
-use crate::{XbxEngineVideoTwccObservation, XbxEngineWebRtcRuntimeConfig};
+use crate::{
+    XbxEngineTwccObservationQuality, XbxEngineVideoTwccObservation, XbxEngineWebRtcRuntimeConfig,
+};
 
 pub(crate) struct BweDecision {
     pub(crate) target_kbps: u32,
@@ -189,13 +191,19 @@ pub(crate) fn resolve_twcc_gcc_target(
 
     let twcc = twcc_input.observation;
     let rtt_ms = twcc_input.rtt_ms;
-    let effective_stable_feedback_interval_ms = profile
-        .stable_feedback_interval_ms
-        .max(config.video_pipeline.feedback_interval_ms as f64 * 1.25);
-    let stable_feedback = twcc.feedback_interval_ms.unwrap_or(0.0)
-        <= effective_stable_feedback_interval_ms
-        && twcc.observed_packet_count >= profile.stable_feedback_min_packets
-        && twcc.covered_sequence_span >= twcc.observed_packet_count;
+    let quality = twcc.classify_quality(
+        config.video_pipeline.feedback_interval_ms as f64,
+        profile.stable_feedback_interval_ms,
+        profile.stable_feedback_min_packets,
+    );
+    let stable_feedback = matches!(
+        quality,
+        XbxEngineTwccObservationQuality::Stable
+            | XbxEngineTwccObservationQuality::RemoteObserved
+            | XbxEngineTwccObservationQuality::Delayed
+            | XbxEngineTwccObservationQuality::BootstrapSparse
+    );
+    let should_bypass_unstable_hold = quality == XbxEngineTwccObservationQuality::BootstrapSparse;
     let raw_receive_bitrate_kbps = twcc
         .receive_bitrate_kbps
         .unwrap_or(actual_headroom_kbps as f64)
@@ -222,7 +230,7 @@ pub(crate) fn resolve_twcc_gcc_target(
         receive_headroom_kbps.max(floor_kbps)
     };
 
-    if !stable_feedback {
+    if !stable_feedback && !should_bypass_unstable_hold {
         return (
             if bounded_gaming_profile {
                 current_kbps.clamp(
@@ -380,9 +388,16 @@ mod tests {
             covered_sequence_span: 120,
             observed_packet_count: 120,
             observed_byte_count: 120_000,
+            coverage_ratio: None,
+            ledger_hit_ratio: None,
             feedback_interval_ms: Some(100.0),
             arrival_span_ms: Some(100.0),
             receive_bitrate_kbps: Some(30_000.0),
+            twcc_sample_valid: true,
+
+            twcc_invalid_reason: None,
+
+            quality: crate::XbxEngineTwccObservationQuality::Stable,
             delivery_ratio: 1.0,
             packet_loss_ratio: 0.0,
             observed_at_ms: 1.0,
@@ -426,9 +441,16 @@ mod tests {
             covered_sequence_span: 80,
             observed_packet_count: 32,
             observed_byte_count: 32_000,
+            coverage_ratio: None,
+            ledger_hit_ratio: None,
             feedback_interval_ms: Some(100.0),
             arrival_span_ms: Some(100.0),
             receive_bitrate_kbps: Some(8_000.0),
+            twcc_sample_valid: true,
+
+            twcc_invalid_reason: None,
+
+            quality: crate::XbxEngineTwccObservationQuality::Stable,
             delivery_ratio: 0.40,
             packet_loss_ratio: 0.60,
             observed_at_ms: 3.0,
@@ -477,9 +499,16 @@ mod tests {
             covered_sequence_span: 120,
             observed_packet_count: 120,
             observed_byte_count: 120_000,
+            coverage_ratio: None,
+            ledger_hit_ratio: None,
             feedback_interval_ms: Some(100.0),
             arrival_span_ms: Some(100.0),
             receive_bitrate_kbps: Some(24_000.0),
+            twcc_sample_valid: true,
+
+            twcc_invalid_reason: None,
+
+            quality: crate::XbxEngineTwccObservationQuality::Stable,
             delivery_ratio: 1.0,
             packet_loss_ratio: 0.0,
             observed_at_ms: 1.0,
@@ -523,9 +552,16 @@ mod tests {
             covered_sequence_span: 120,
             observed_packet_count: 24,
             observed_byte_count: 24_000,
+            coverage_ratio: None,
+            ledger_hit_ratio: None,
             feedback_interval_ms: Some(100.0),
             arrival_span_ms: Some(100.0),
             receive_bitrate_kbps: Some(5_000.0),
+            twcc_sample_valid: true,
+
+            twcc_invalid_reason: None,
+
+            quality: crate::XbxEngineTwccObservationQuality::Stable,
             delivery_ratio: 0.08,
             packet_loss_ratio: 0.92,
             observed_at_ms: 4.0,
@@ -574,9 +610,16 @@ mod tests {
             covered_sequence_span: 160,
             observed_packet_count: 160,
             observed_byte_count: 180_000,
+            coverage_ratio: None,
+            ledger_hit_ratio: None,
             feedback_interval_ms: Some(100.0),
             arrival_span_ms: Some(100.0),
             receive_bitrate_kbps: Some(25_000.0),
+            twcc_sample_valid: true,
+
+            twcc_invalid_reason: None,
+
+            quality: crate::XbxEngineTwccObservationQuality::Stable,
             delivery_ratio: 1.0,
             packet_loss_ratio: 0.0,
             observed_at_ms: 2.0,
@@ -616,9 +659,16 @@ mod tests {
             covered_sequence_span: 160,
             observed_packet_count: 160,
             observed_byte_count: 220_000,
+            coverage_ratio: None,
+            ledger_hit_ratio: None,
             feedback_interval_ms: Some(1_000.0),
             arrival_span_ms: Some(1_000.0),
             receive_bitrate_kbps: Some(24_000.0),
+            twcc_sample_valid: true,
+
+            twcc_invalid_reason: None,
+
+            quality: crate::XbxEngineTwccObservationQuality::Stable,
             delivery_ratio: 1.0,
             packet_loss_ratio: 0.0,
             observed_at_ms: 2.0,
@@ -658,9 +708,16 @@ mod tests {
             covered_sequence_span: 160,
             observed_packet_count: 160,
             observed_byte_count: 220_000,
+            coverage_ratio: None,
+            ledger_hit_ratio: None,
             feedback_interval_ms: Some(1_000.0),
             arrival_span_ms: Some(1_000.0),
             receive_bitrate_kbps: Some(24_000.0),
+            twcc_sample_valid: true,
+
+            twcc_invalid_reason: None,
+
+            quality: crate::XbxEngineTwccObservationQuality::Stable,
             delivery_ratio: 1.0,
             packet_loss_ratio: 0.0,
             observed_at_ms: 2.0,
@@ -700,9 +757,16 @@ mod tests {
             covered_sequence_span: 826,
             observed_packet_count: 798,
             observed_byte_count: 957_600,
+            coverage_ratio: None,
+            ledger_hit_ratio: None,
             feedback_interval_ms: Some(4_042.0),
             arrival_span_ms: Some(999.0),
             receive_bitrate_kbps: Some(1_895.299356754082),
+            twcc_sample_valid: true,
+
+            twcc_invalid_reason: None,
+
+            quality: crate::XbxEngineTwccObservationQuality::Stable,
             delivery_ratio: 0.9661016949152542,
             packet_loss_ratio: 0.03389830508474578,
             observed_at_ms: 2.0,
@@ -728,6 +792,167 @@ mod tests {
 
         assert_ne!(reason, "twcc-gcc-cloud-unstable-hold");
         assert_eq!(target, 28_500);
+    }
+
+    #[test]
+    fn direct_feedback_interval_small_spike_does_not_trigger_unstable_hold() {
+        let mut config = XbxEngineWebRtcRuntimeConfig::default();
+        config.video_pipeline.feedback_interval_ms = 100;
+        let observation = XbxEngineVideoTwccObservation {
+            observation_id: 9,
+            source: "local-feedback".to_string(),
+            feedback_packet_count: 20,
+            covered_sequence_start: 1,
+            covered_sequence_end: 80,
+            covered_sequence_span: 80,
+            observed_packet_count: 80,
+            observed_byte_count: 96_000,
+            coverage_ratio: None,
+            ledger_hit_ratio: None,
+            feedback_interval_ms: Some(260.0),
+            arrival_span_ms: Some(120.0),
+            receive_bitrate_kbps: Some(18_000.0),
+            twcc_sample_valid: true,
+
+            twcc_invalid_reason: None,
+
+            quality: crate::XbxEngineTwccObservationQuality::Stable,
+            delivery_ratio: 1.0,
+            packet_loss_ratio: 0.0,
+            observed_at_ms: 2.0,
+        };
+        let mut cooldown = 0;
+        let (target, reason) = resolve_twcc_gcc_target(
+            &config,
+            20_000,
+            18_000,
+            ScenarioPolicyResolver::resolve_transport_bwe_profile(
+                &config,
+                Some(&XbxEngineTargetTypeDto::Home),
+                Some("Direct (host->host)"),
+                SessionPhase::Steady,
+            ),
+            None,
+            Some(&super::TwccGccInput {
+                observation: &observation,
+                rtt_ms: Some(35.0),
+            }),
+            &mut cooldown,
+        );
+        assert_ne!(reason, "twcc-gcc-direct-unstable-hold");
+        assert!(target >= 20_000);
+    }
+
+    #[test]
+    fn cloud_delayed_feedback_uses_optimistic_cap_instead_of_severe_backoff() {
+        let mut config = XbxEngineWebRtcRuntimeConfig::default();
+        config.video_pipeline.feedback_interval_ms = 100;
+        let observation = XbxEngineVideoTwccObservation {
+            observation_id: 6,
+            source: "local-feedback".to_string(),
+            feedback_packet_count: 16,
+            covered_sequence_start: 1,
+            covered_sequence_end: 160,
+            covered_sequence_span: 160,
+            observed_packet_count: 64,
+            observed_byte_count: 96_000,
+            coverage_ratio: None,
+            ledger_hit_ratio: None,
+            feedback_interval_ms: Some(200.0),
+            arrival_span_ms: Some(180.0),
+            receive_bitrate_kbps: Some(18_000.0),
+            twcc_sample_valid: true,
+
+            twcc_invalid_reason: None,
+
+            quality: crate::XbxEngineTwccObservationQuality::Stable,
+            delivery_ratio: 0.40,
+            packet_loss_ratio: 0.60,
+            observed_at_ms: 2.0,
+        };
+        let mut cooldown = 0;
+        let (target, reason) = resolve_twcc_gcc_target(
+            &config,
+            25_000,
+            22_000,
+            ScenarioPolicyResolver::resolve_transport_bwe_profile(
+                &config,
+                Some(&XbxEngineTargetTypeDto::Cloud),
+                Some("Direct"),
+                SessionPhase::Steady,
+            ),
+            None,
+            Some(&super::TwccGccInput {
+                observation: &observation,
+                rtt_ms: Some(180.0),
+            }),
+            &mut cooldown,
+        );
+
+        assert_eq!(reason, "twcc-gcc-cloud-severe-optimistic-cap");
+        assert!(
+            target >= 20_000,
+            "target should stay at cloud floor: {target}"
+        );
+        assert!(
+            target <= 25_000,
+            "target should be capped, not ramped up: {target}"
+        );
+        assert_eq!(cooldown, 2);
+    }
+
+    #[test]
+    fn cloud_first_sparse_local_feedback_without_interval_uses_optimistic_cap() {
+        let mut config = XbxEngineWebRtcRuntimeConfig::default();
+        config.video_pipeline.feedback_interval_ms = 100;
+        let observation = XbxEngineVideoTwccObservation {
+            observation_id: 7,
+            source: "local-feedback".to_string(),
+            feedback_packet_count: 1,
+            covered_sequence_start: 100,
+            covered_sequence_end: 192,
+            covered_sequence_span: 93,
+            observed_packet_count: 17,
+            observed_byte_count: 20_400,
+            coverage_ratio: None,
+            ledger_hit_ratio: None,
+            feedback_interval_ms: None,
+            arrival_span_ms: Some(91.0),
+            receive_bitrate_kbps: Some(0.0),
+            twcc_sample_valid: true,
+
+            twcc_invalid_reason: None,
+
+            quality: crate::XbxEngineTwccObservationQuality::Stable,
+            delivery_ratio: 0.1827956989247312,
+            packet_loss_ratio: 0.8172043010752688,
+            observed_at_ms: 2.0,
+        };
+        let mut cooldown = 0;
+        let (target, reason) = resolve_twcc_gcc_target(
+            &config,
+            25_000,
+            22_000,
+            ScenarioPolicyResolver::resolve_transport_bwe_profile(
+                &config,
+                Some(&XbxEngineTargetTypeDto::Cloud),
+                Some("Direct (host->host)"),
+                SessionPhase::Steady,
+            ),
+            None,
+            Some(&super::TwccGccInput {
+                observation: &observation,
+                rtt_ms: Some(180.0),
+            }),
+            &mut cooldown,
+        );
+
+        assert_eq!(reason, "twcc-gcc-cloud-severe-optimistic-cap");
+        assert!(
+            (20_000..=25_000).contains(&target),
+            "target should stay in cloud floor/cap window: {target}"
+        );
+        assert_eq!(cooldown, 2);
     }
 
     #[test]

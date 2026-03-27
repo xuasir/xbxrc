@@ -56,6 +56,10 @@ impl VideoIngressSignal {
                 reason: VideoEscalationReason::WaitKeyframe,
                 label: "ingressWaitKeyframe",
             },
+            VideoIngressSignal::FrameAbandoned => VideoRecoveryDiagnosis {
+                reason: VideoEscalationReason::WaitKeyframe,
+                label: "ingressFrameAbandoned",
+            },
             VideoIngressSignal::Reconfigure => VideoRecoveryDiagnosis {
                 reason: VideoEscalationReason::Reconfigure,
                 label: "ingressReconfigure",
@@ -96,5 +100,15 @@ mod tests {
             _ => panic!("ingress reconfigure should diagnose to reconfigure"),
         }
         assert_eq!(diagnosis.label, "ingressReconfigure");
+    }
+
+    #[test]
+    fn ingress_frame_abandoned_maps_to_wait_keyframe_reason() {
+        let diagnosis = diagnose_ingress_signal(VideoIngressSignal::FrameAbandoned);
+        match diagnosis.reason {
+            VideoEscalationReason::WaitKeyframe => {}
+            _ => panic!("ingress frame abandoned should diagnose to wait-keyframe"),
+        }
+        assert_eq!(diagnosis.label, "ingressFrameAbandoned");
     }
 }

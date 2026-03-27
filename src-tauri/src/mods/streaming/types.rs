@@ -413,8 +413,6 @@ pub struct StreamingStartupBoundedRetry {
 #[serde(rename_all = "camelCase")]
 pub enum StreamingStartupPhase {
     ResolvingContext,
-    WakingConsole,
-    WaitingConsoleReady,
     CreatingSession,
     WaitingSessionReady,
     StartingRuntime,
@@ -425,8 +423,6 @@ pub enum StreamingStartupPhase {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub enum StreamingStartupErrorKind {
-    Wake,
-    ConsoleReady,
     SessionCreate,
     SessionReady,
     Runtime,

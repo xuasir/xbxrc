@@ -203,6 +203,12 @@ impl<'a> RtcTransportSessionBridge<'a> {
                 RuntimeStatsSink::new(self.runtime_stats.clone()).update(|stats| {
                     let twcc = stats.latest_video_twcc_observation.clone();
                     let observed_remb_kbps = stats.video_remb_bps.map(|bps| bps / 1_000);
+                    let actual_video_bitrate_kbps = twcc
+                        .as_ref()
+                        .and_then(|value| value.receive_bitrate_kbps)
+                        .or(stats.inbound_video_bitrate_kbps)
+                        .unwrap_or(0.0)
+                        .max(0.0);
                     stats.video_remb_bps = Some(target_kbps.saturating_mul(1_000));
                     stats.latest_video_bwe_observation = Some(XbxEngineVideoBweObservation {
                         observation_id,
@@ -210,7 +216,7 @@ impl<'a> RtcTransportSessionBridge<'a> {
                         decision_reason: decision_reason.clone(),
                         target_remb_kbps: target_kbps,
                         observed_remb_kbps,
-                        actual_video_bitrate_kbps: stats.inbound_video_bitrate_kbps.unwrap_or(0.0),
+                        actual_video_bitrate_kbps,
                         loss_ratio: stats.inbound_video_loss_ratio_1s.clamp(0.0, 1.0),
                         rtt_ms: stats.video_rtt_ms,
                         transport_path: stats.transport_path.clone(),

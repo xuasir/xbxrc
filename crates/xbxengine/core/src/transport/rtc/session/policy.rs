@@ -22,6 +22,7 @@ use crate::transport::rtc::session::actor::SessionPolicyHook;
 
 const DEFAULT_BWE_TARGET_KBPS: u32 = 16_000;
 const RECOVERY_REPEAT_SUPPRESS_MS: f64 = 160.0;
+const BWE_UNSTABLE_HOLD_CONFIRMATION_TICKS: u8 = 2;
 
 #[derive(Clone, Debug)]
 struct RecoverySignalCursor {
@@ -47,6 +48,7 @@ pub struct RtcSessionPolicy {
     next_reconnect_observation_id: u64,
     next_bwe_observation_id: u64,
     last_bwe_reason: Option<String>,
+    unstable_hold_streak: u8,
 }
 
 impl RtcSessionPolicy {
@@ -67,6 +69,7 @@ impl RtcSessionPolicy {
             next_reconnect_observation_id: 0,
             next_bwe_observation_id: 0,
             last_bwe_reason: None,
+            unstable_hold_streak: 0,
         }
     }
 }
@@ -236,10 +239,19 @@ impl RtcSessionPolicy {
             .last_bwe_reason
             .as_ref()
             .is_none_or(|last| last != &decision_reason);
-        self.last_bwe_reason = Some(decision_reason.clone());
+        let is_unstable_hold = decision_reason.ends_with("unstable-hold");
+        if is_unstable_hold && target_kbps == current_target_kbps {
+            self.unstable_hold_streak = self.unstable_hold_streak.saturating_add(1);
+            if self.unstable_hold_streak < BWE_UNSTABLE_HOLD_CONFIRMATION_TICKS {
+                return None;
+            }
+        } else {
+            self.unstable_hold_streak = 0;
+        }
         if target_kbps == current_target_kbps && !reason_changed {
             return None;
         }
+        self.last_bwe_reason = Some(decision_reason.clone());
         self.next_bwe_observation_id = self.next_bwe_observation_id.saturating_add(1);
         let evaluation = RtcBweEvaluation {
             target_remb_kbps: target_kbps,
@@ -356,6 +368,9 @@ fn map_recovery_action_to_transport_commands(
 fn map_label_to_escalation_reason(label: &str) -> Option<VideoEscalationReason> {
     match label {
         "ingressWaitKeyframe" => Some(VideoEscalationReason::WaitKeyframe),
+        "ingressFrameAbandoned" => Some(VideoEscalationReason::WaitKeyframe),
+        "waitKeyframeEntered" => Some(VideoEscalationReason::WaitKeyframe),
+        "frameAbandoned" => Some(VideoEscalationReason::WaitKeyframe),
         "transportAwaitRecoveryKeyframe" => {
             Some(VideoEscalationReason::TransportAwaitRecoveryKeyframe)
         }
@@ -575,9 +590,16 @@ mod tests {
                 covered_sequence_span: 20,
                 observed_packet_count: 20,
                 observed_byte_count: 30_000,
+                coverage_ratio: None,
+                ledger_hit_ratio: None,
                 feedback_interval_ms: Some(80.0),
                 arrival_span_ms: Some(70.0),
                 receive_bitrate_kbps: Some(28_000.0),
+                twcc_sample_valid: true,
+
+                twcc_invalid_reason: None,
+
+                quality: crate::XbxEngineTwccObservationQuality::Stable,
                 delivery_ratio: 0.995,
                 packet_loss_ratio: 0.0,
                 observed_at_ms: 10.0,
@@ -650,9 +672,16 @@ mod tests {
                 covered_sequence_span: 120,
                 observed_packet_count: 120,
                 observed_byte_count: 180_000,
+                coverage_ratio: None,
+                ledger_hit_ratio: None,
                 feedback_interval_ms: Some(1_000.0),
                 arrival_span_ms: Some(1_000.0),
                 receive_bitrate_kbps: Some(24_500.0),
+                twcc_sample_valid: true,
+
+                twcc_invalid_reason: None,
+
+                quality: crate::XbxEngineTwccObservationQuality::Stable,
                 delivery_ratio: 1.0,
                 packet_loss_ratio: 0.0,
                 observed_at_ms: 10.0,
@@ -738,6 +767,98 @@ mod tests {
             commands[0],
             TransportCommand::RequestReconnectCandidate { .. }
         ));
+    }
+
+    #[test]
+    fn unstable_hold_requires_consecutive_confirmation_before_emit() {
+        let runtime_config = Arc::new(Mutex::new(XbxEngineRuntimeConfig::default()));
+        if let Ok(mut config) = runtime_config.lock() {
+            config.webrtc.bwe_mode = "twcc-gcc".to_string();
+            config.webrtc.video_pipeline.feedback_interval_ms = 100;
+        }
+        let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
+        if let Ok(mut stats) = runtime_stats.lock() {
+            stats.session_target_type = Some(xbxengine_protocol::XbxEngineTargetTypeDto::Cloud);
+            stats.session_phase = Some("steady".to_string());
+            stats.latest_video_twcc_observation = Some(XbxEngineVideoTwccObservation {
+                observation_id: 1,
+                source: "local-feedback".to_string(),
+                feedback_packet_count: 1,
+                covered_sequence_start: 1,
+                covered_sequence_end: 2,
+                covered_sequence_span: 2,
+                observed_packet_count: 1,
+                observed_byte_count: 1200,
+                coverage_ratio: None,
+                ledger_hit_ratio: None,
+                feedback_interval_ms: None,
+                arrival_span_ms: None,
+                receive_bitrate_kbps: Some(0.0),
+                twcc_sample_valid: true,
+
+                twcc_invalid_reason: None,
+
+                quality: crate::XbxEngineTwccObservationQuality::Stable,
+                delivery_ratio: 1.0,
+                packet_loss_ratio: 0.0,
+                observed_at_ms: 1.0,
+            });
+        }
+        let mut policy = RtcSessionPolicy::new(runtime_config, runtime_stats);
+        policy.last_sent_remb_kbps = 25_000;
+
+        let mut connection = ConnectionProjection::default();
+        connection.lifecycle_state = ConnectionLifecycleStateFact::Connected;
+        connection.latest_transport_path = Some("Direct".to_string());
+        let snapshot_first = TransportSnapshot::new(
+            1,
+            1.0,
+            connection.clone(),
+            MediaProjection::default(),
+            RecoveryProjection::default(),
+            BweProjection {
+                latest_rtt_ms: Some(180.0),
+                latest_loss_ratio_1s: Some(0.0),
+                latest_actual_video_bitrate_kbps: Some(1_000.0),
+                latest_observed_remb_kbps: Some(25_000),
+                latest_transport_path: Some("Direct".to_string()),
+                latest_sample_tick_ms: Some(1.0),
+                target_remb_kbps: Some(25_000),
+                last_observed_at_ms: Some(1.0),
+            },
+            DiagnosticsProjection::default(),
+        );
+        let first_commands = policy.on_snapshot(&snapshot_first);
+        assert!(first_commands
+            .iter()
+            .all(|command| !matches!(command, TransportCommand::SetTargetRembKbps { .. })));
+
+        let snapshot_second = TransportSnapshot::new(
+            2,
+            2.0,
+            connection,
+            MediaProjection::default(),
+            RecoveryProjection::default(),
+            BweProjection {
+                latest_rtt_ms: Some(180.0),
+                latest_loss_ratio_1s: Some(0.0),
+                latest_actual_video_bitrate_kbps: Some(1_000.0),
+                latest_observed_remb_kbps: Some(25_000),
+                latest_transport_path: Some("Direct".to_string()),
+                latest_sample_tick_ms: Some(2.0),
+                target_remb_kbps: Some(25_000),
+                last_observed_at_ms: Some(2.0),
+            },
+            DiagnosticsProjection::default(),
+        );
+        let second_commands = policy.on_snapshot(&snapshot_second);
+        assert!(second_commands.iter().any(|command| {
+            matches!(
+                command,
+                TransportCommand::SetTargetRembKbps { reason, .. }
+                    if reason.contains("unstable-hold")
+            )
+        }));
     }
 
     fn build_snapshot(

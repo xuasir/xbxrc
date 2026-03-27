@@ -2,7 +2,8 @@ use std::sync::{Arc, Mutex};
 
 use crate::diagnostics::observation_bus::{ObservationBus, ObservationEvent};
 use crate::{
-    XbxEngineMediaRuntimeStats, XbxEngineRemoteAnswerObservation, XbxEngineRtcBuilderObservation,
+    XbxEngineFrameRecoveryObservation, XbxEngineMediaRuntimeStats,
+    XbxEngineRemoteAnswerObservation, XbxEngineRtcBuilderObservation,
     XbxEngineTwccExtensionObservation, XbxEngineTwccRemoteStreamObservation,
     XbxEngineVideoFrameDropObservation, XbxEngineVideoNackObservation,
     XbxEngineVideoPacketGapObservation, XbxEngineVideoRtxReinjectObservation,
@@ -137,6 +138,13 @@ impl RuntimeStatsSink {
 
     pub(crate) fn record_video_frame_drop(&self, observation: XbxEngineVideoFrameDropObservation) {
         self.publish(ObservationEvent::VideoFrameDrop { observation });
+    }
+
+    pub(crate) fn record_frame_recovery_observation(
+        &self,
+        observation: XbxEngineFrameRecoveryObservation,
+    ) {
+        self.publish(ObservationEvent::FrameRecovery { observation });
     }
 
     pub(crate) fn add_inbound_video_packet_loss_estimate(&self, packet_count: u16) {

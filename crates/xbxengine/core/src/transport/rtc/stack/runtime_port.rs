@@ -43,23 +43,25 @@ impl<'a> RtcStackRuntimePort<'a> {
 
     pub(crate) fn snapshot_runtime_stats(&self) -> XbxEngineMediaRuntimeStats {
         crate::xbx_log_debug!("[xbxengine][rtc-stack] snapshot_runtime_stats enter");
+        let now_ms = crate::transport::rtc::stats::now_ms_f64();
         let mut stats = self
             .runtime_stats
             .lock()
             .ok()
-            .map(|guard| guard.clone())
+            .map(|mut guard| {
+                if let Ok(media) = self.media.lock() {
+                    let media_snapshot = media.snapshot();
+                    merge_media_snapshot_into_runtime_stats(&mut guard, &media_snapshot, now_ms);
+                }
+                guard.clone()
+            })
             .unwrap_or_default();
         crate::xbx_log_debug!("[xbxengine][rtc-stack] snapshot_runtime_stats runtime_stats cloned");
-        let now_ms = crate::transport::rtc::stats::now_ms_f64();
         if let Ok(render_state) = self.render_state.lock() {
             let render_signal = render_state.render_signal_snapshot(now_ms);
             stats.latest_video_present_time_ms = render_signal.latest_present_time_ms;
             stats.video_present_fps = render_signal.fps;
             stats.video_renderer_stalled = render_signal.renderer_stalled;
-        }
-        if let Ok(media) = self.media.lock() {
-            let media_snapshot = media.snapshot();
-            merge_media_snapshot_into_runtime_stats(&mut stats, &media_snapshot, now_ms);
         }
         crate::xbx_log_debug!("[xbxengine][rtc-stack] snapshot_runtime_stats exit");
         stats

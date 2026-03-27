@@ -51,6 +51,7 @@ impl MediaSupervisorObservationState {
         &mut self,
         runtime_stats: &RuntimeStatsSink,
         decision: &IngressDecision,
+        reason: Option<&str>,
         reconfigure_reason: Option<&str>,
         observed_at_ms: f64,
         width: u32,
@@ -62,6 +63,7 @@ impl MediaSupervisorObservationState {
             decision,
             IngressDecision::DropLate
                 | IngressDecision::DropBacklog
+                | IngressDecision::DropUnrecoverable
                 | IngressDecision::WaitKeyframe
                 | IngressDecision::Reconfigure
         ) {
@@ -71,7 +73,7 @@ impl MediaSupervisorObservationState {
         self.frame_drop_observation_id = self.frame_drop_observation_id.saturating_add(1);
         runtime_stats.record_video_frame_drop(XbxEngineVideoFrameDropObservation {
             observation_id: self.frame_drop_observation_id,
-            reason: map_ingress_drop_reason(decision, reconfigure_reason),
+            reason: map_ingress_drop_reason(decision, reason, reconfigure_reason),
             observed_at_ms,
             width,
             height,
@@ -118,12 +120,35 @@ fn calculate_recent_fps(times: &VecDeque<f64>) -> f64 {
     ((len.saturating_sub(1)) as f64 * 1_000.0 / window_ms).max(0.0)
 }
 
-fn map_ingress_drop_reason(decision: &IngressDecision, reconfigure_reason: Option<&str>) -> String {
+fn map_ingress_drop_reason(
+    decision: &IngressDecision,
+    reason: Option<&str>,
+    reconfigure_reason: Option<&str>,
+) -> String {
     match decision {
         IngressDecision::Submit => "submit".to_string(),
         IngressDecision::DropLate => "dropLate".to_string(),
         IngressDecision::DropBacklog => "dropBacklog".to_string(),
-        IngressDecision::WaitKeyframe => "waitKeyframe".to_string(),
+        IngressDecision::DropUnrecoverable => {
+            let detail = reason.unwrap_or("late");
+            let wait_keyframe_hint = if detail == "referenceChain" {
+                ";waitKeyframeEntered:referenceChain"
+            } else {
+                ""
+            };
+            format!(
+                "frameAbandoned:{detail};frameRecoveryDisposition=unrecoverable;recoveryStrategyMode=latency-first{wait_keyframe_hint}"
+            )
+        }
+        IngressDecision::WaitKeyframe => {
+            if let Some(detail) = reason {
+                format!(
+                    "waitKeyframeEntered:{detail};frameRecoveryDisposition=waitKeyframe;recoveryStrategyMode=latency-first"
+                )
+            } else {
+                "waitKeyframe".to_string()
+            }
+        }
         IngressDecision::Reconfigure => {
             if let Some(reason) = reconfigure_reason {
                 format!("reconfigure:{reason}")

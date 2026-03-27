@@ -1,5 +1,5 @@
 use crate::media::video::types::FrameValue;
-use crate::transport::rtc::stream::nack_scheduler::NackObservePolicy;
+use crate::transport::rtc::stream::nack_scheduler::{NackObservePolicy, PacketRecoveryDisposition};
 
 pub(super) const CLOUD_STARTUP_HEAD_HOLE_DEADLINE_FLOOR_MS: f64 = 320.0;
 pub(super) const CLOUD_NACK_RTT_MARGIN_MS: f64 = 80.0;
@@ -103,6 +103,10 @@ pub(super) fn sample_loss_nack_policy(
         frame_is_keyframe: Some(frame_is_keyframe),
         frame_importance,
         priority,
+        estimated_recovery_arrival_ms: None,
+        frame_playout_deadline_at_ms: Some(deadline_at_ms),
+        nack_disposition: PacketRecoveryDisposition::Attempted,
+        frame_unrecoverable_reason: None,
     }
 }
 
@@ -145,6 +149,10 @@ pub(super) fn rtp_window_nack_policy(
         frame_is_keyframe: Some(frame_is_keyframe),
         frame_importance,
         priority,
+        estimated_recovery_arrival_ms: None,
+        frame_playout_deadline_at_ms: Some(deadline_at_ms),
+        nack_disposition: PacketRecoveryDisposition::Attempted,
+        frame_unrecoverable_reason: None,
     }
 }
 
@@ -191,6 +199,10 @@ pub(super) fn rtp_gap_nack_policy(
         frame_is_keyframe: Some(frame_is_keyframe),
         frame_importance,
         priority,
+        estimated_recovery_arrival_ms: None,
+        frame_playout_deadline_at_ms: Some(deadline_at_ms),
+        nack_disposition: PacketRecoveryDisposition::Attempted,
+        frame_unrecoverable_reason: None,
     }
 }
 

@@ -239,6 +239,11 @@ impl RtcVideoFrameSource {
                 let assembled_at = std::time::Instant::now();
                 self.transport_deadline_tracker
                     .record_frame_arrival(now_ms_f64());
+                let (
+                    frame_playout_deadline_at_ms,
+                    frame_recovery_disposition,
+                    frame_unrecoverable_reason,
+                ) = self.take_frame_recovery_ledger(sample.packet_timestamp);
                 if self.assembled_frame_count == 1 || self.assembled_frame_count.is_power_of_two() {
                     crate::xbx_log_info!(
                         "[RtcVideoFrameSource] assembled frame count={} ts={} len={} keyframe={} bootstrap={}",
@@ -267,6 +272,9 @@ impl RtcVideoFrameSource {
                     width: self.current_width,
                     height: self.current_height,
                     rtp_timestamp: sample.packet_timestamp,
+                    frame_playout_deadline_at_ms,
+                    frame_recovery_disposition,
+                    frame_unrecoverable_reason,
                     assembled_at,
                     h264: inspection,
                     payload: Bytes::from(payload),

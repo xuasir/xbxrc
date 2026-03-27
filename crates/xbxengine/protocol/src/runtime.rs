@@ -143,6 +143,17 @@ pub struct XbxEngineFrameDropObservationDto {
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct XbxEngineFrameRecoveryObservationDto {
+    pub observation_id: u64,
+    pub action: String,
+    pub frame_rtp_timestamp: u32,
+    pub frame_playout_deadline_at_ms: Option<f64>,
+    pub frame_recovery_disposition: String,
+    pub frame_unrecoverable_reason: Option<String>,
+    pub observed_at_ms: f64,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct XbxEngineNackObservationDto {
     pub observation_id: u64,
     pub action: String,
@@ -155,6 +166,10 @@ pub struct XbxEngineNackObservationDto {
     pub frame_is_keyframe: Option<bool>,
     pub frame_importance: Option<String>,
     pub deadline_at_ms: Option<f64>,
+    pub estimated_recovery_arrival_ms: Option<f64>,
+    pub nack_disposition: Option<String>,
+    pub frame_playout_deadline_at_ms: Option<f64>,
+    pub frame_unrecoverable_reason: Option<String>,
     pub observed_at_ms: f64,
 }
 
@@ -243,9 +258,14 @@ pub struct XbxEngineVideoTwccObservationDto {
     pub covered_sequence_span: u16,
     pub observed_packet_count: u16,
     pub observed_byte_count: u64,
+    pub coverage_ratio: Option<f64>,
+    pub ledger_hit_ratio: Option<f64>,
     pub feedback_interval_ms: Option<f64>,
     pub arrival_span_ms: Option<f64>,
     pub receive_bitrate_kbps: Option<f64>,
+    pub twcc_sample_valid: bool,
+    pub twcc_invalid_reason: Option<String>,
+    pub quality: String,
     pub delivery_ratio: f64,
     pub packet_loss_ratio: f64,
     pub observed_at_ms: f64,
@@ -356,6 +376,7 @@ pub struct XbxEngineStatsDto {
     pub last_recovery_reason: Option<String>,
     pub latest_video_packet_gap: Option<XbxEnginePacketGapObservationDto>,
     pub latest_video_frame_drop: Option<XbxEngineFrameDropObservationDto>,
+    pub latest_video_frame_recovery_observation: Option<XbxEngineFrameRecoveryObservationDto>,
     pub latest_video_nack_observation: Option<XbxEngineNackObservationDto>,
     pub latest_video_escalation_observation: Option<XbxEngineVideoEscalationObservationDto>,
     pub latest_video_bwe_observation: Option<XbxEngineVideoBweObservationDto>,

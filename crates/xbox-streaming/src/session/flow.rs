@@ -38,8 +38,6 @@ pub struct SessionFlowError {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub enum SessionFlowStartupErrorKind {
-    Wake,
-    ConsoleReady,
     SessionCreate,
     SessionReady,
     Runtime,
@@ -156,8 +154,6 @@ pub struct SessionProgressSnapshot {
 #[serde(rename_all = "camelCase")]
 pub enum SessionStartupPhase {
     ResolvingContext,
-    WakingConsole,
-    WaitingConsoleReady,
     CreatingSession,
     WaitingSessionReady,
     StartingRuntime,
@@ -301,7 +297,7 @@ pub trait SessionFlowProvider: Send + Sync + 'static {
         _error: Option<&SessionFlowError>,
     ) {
     }
-    /// 诊断钩子：记录 waitingConsoleReady 的收敛结果，便于区分显式注册与超时。
+    /// 诊断钩子：记录主机远程串流可用性探测结果，便于区分显式注册与超时。
     fn on_console_ready_wait_result(
         &self,
         _target_type: &str,
@@ -587,7 +583,7 @@ where
                                 let cleanup_settled = self
                                     .wait_until_session_cleanup_settled(&plan, &session_id)
                                     .await;
-                                // home 场景下 recreate 前补一次主机准备，给服务端重新注册留出机会。
+                                // home 场景下 recreate 前保留空钩子，统一由 play -> state 主链裁决主机唤醒/准备。
                                 self.prepare_remote_console(&plan, observer).await?;
                                 recreate_context = Some(SessionRecreateContext {
                                     previous_session_id: session_id,
@@ -842,65 +838,10 @@ where
     where
         O: SessionStartupObserver,
     {
-        if !plan.session.target.is_home() || !plan.session.schedule.wake_console {
-            return Ok(());
-        }
-        notify_startup_phase(
-            observer,
-            SessionStartupPhase::WakingConsole,
-            SessionStartupPhaseStatus::Entered,
-            None,
-        );
-        let wake_accepted = match self
-            .inner
-            .provider
-            .power_on_console(&plan.session.target_id)
-            .await
-        {
-            Ok(accepted) => accepted,
-            Err(error) if is_waiting_for_server_registration_message(&error.message) => {
-                log::warn!(
-                    "home wake command is still waiting for server registration: target_id={} error={}",
-                    plan.session.target_id,
-                    error,
-                );
-                true
-            }
-            Err(error) => return Err(error),
-        };
-        notify_startup_phase(
-            observer,
-            SessionStartupPhase::WakingConsole,
-            SessionStartupPhaseStatus::Succeeded,
-            Some(if wake_accepted {
-                "wakeCommandAccepted"
-            } else {
-                "wakeCommandRejected"
-            }),
-        );
-        if !wake_accepted || !plan.session.schedule.require_console_ready {
-            return Ok(());
-        }
-
-        notify_startup_phase(
-            observer,
-            SessionStartupPhase::WaitingConsoleReady,
-            SessionStartupPhaseStatus::Entered,
-            None,
-        );
-        let ready_reason = self
-            .wait_until_console_ready(
-                plan.session.target.as_str(),
-                &plan.session.target_id,
-                &plan.session.schedule,
-            )
-            .await?;
-        notify_startup_phase(
-            observer,
-            SessionStartupPhase::WaitingConsoleReady,
-            SessionStartupPhaseStatus::Succeeded,
-            Some(ready_reason),
-        );
+        // 对齐浏览器链路：home 的 play -> state 路径内含主机唤醒与准备，
+        // 启动前不再执行任何独立的 wake / ready 编排。
+        let _ = observer;
+        let _ = plan;
         Ok(())
     }
 
@@ -1466,7 +1407,7 @@ fn classify_session_progress_error_kind(
         return SessionFlowStartupErrorKind::HostRegistrationRetryExhausted;
     }
     if normalized.contains("remoteconsolenotready") {
-        return SessionFlowStartupErrorKind::ConsoleReady;
+        return SessionFlowStartupErrorKind::HostRemotePlayUnavailable;
     }
     if normalized.contains("streamingstarttimeout") {
         return SessionFlowStartupErrorKind::SessionReady;
@@ -1499,8 +1440,7 @@ fn classify_session_progress_error_kind(
 fn is_session_progress_error_retryable(kind: &SessionFlowStartupErrorKind) -> bool {
     matches!(
         kind,
-        SessionFlowStartupErrorKind::ConsoleReady
-            | SessionFlowStartupErrorKind::SessionCreate
+        SessionFlowStartupErrorKind::SessionCreate
             | SessionFlowStartupErrorKind::SessionReady
             | SessionFlowStartupErrorKind::Runtime
             | SessionFlowStartupErrorKind::Network
@@ -1516,13 +1456,11 @@ fn build_session_progress_diagnostic_summary(
     let error_code = error_code.unwrap_or("none");
     let error_message = error_message.unwrap_or("none");
     let hint = match kind {
-        SessionFlowStartupErrorKind::ConsoleReady => "remoteConsoleNotReady",
         SessionFlowStartupErrorKind::SessionReady => "streamingStartTimeout",
         SessionFlowStartupErrorKind::HostRegistrationRetryExhausted => {
             "hostRegistrationRetryExhausted"
         }
         SessionFlowStartupErrorKind::HostRemotePlayUnavailable => "hostRemotePlayUnavailable",
-        SessionFlowStartupErrorKind::Wake => "wakeFailed",
         SessionFlowStartupErrorKind::SessionCreate => "sessionCreateFailed",
         SessionFlowStartupErrorKind::Runtime => "runtimeFailed",
         SessionFlowStartupErrorKind::Network => "networkFailed",
@@ -1740,7 +1678,7 @@ fn remote_console_not_ready_error(target_id: &str) -> SessionFlowError {
     let diagnostic_summary = format!("targetId={target_id}; hint=remoteConsoleNotReady");
     SessionFlowError::message(format!("remoteConsoleNotReady:targetId={target_id}"))
         .with_startup_hint(SessionFlowStartupErrorHint {
-            kind: SessionFlowStartupErrorKind::ConsoleReady,
+            kind: SessionFlowStartupErrorKind::HostRemotePlayUnavailable,
             retryable: true,
             diagnostic_summary,
         })
@@ -2293,7 +2231,7 @@ mod tests {
 
         assert_eq!(
             error.startup_hint.as_ref().map(|hint| hint.kind.clone()),
-            Some(SessionFlowStartupErrorKind::ConsoleReady)
+            Some(SessionFlowStartupErrorKind::HostRemotePlayUnavailable)
         );
         assert!(error
             .startup_hint

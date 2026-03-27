@@ -71,6 +71,7 @@ pub enum IngressDecisionFact {
     Submit,
     DropLate,
     DropBacklog,
+    DropUnrecoverable,
     WaitKeyframe,
     Reconfigure,
 }
@@ -81,6 +82,7 @@ impl From<&IngressDecision> for IngressDecisionFact {
             IngressDecision::Submit => Self::Submit,
             IngressDecision::DropLate => Self::DropLate,
             IngressDecision::DropBacklog => Self::DropBacklog,
+            IngressDecision::DropUnrecoverable => Self::DropUnrecoverable,
             IngressDecision::WaitKeyframe => Self::WaitKeyframe,
             IngressDecision::Reconfigure => Self::Reconfigure,
         }

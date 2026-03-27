@@ -80,6 +80,9 @@ pub struct AssembledVideoFrame {
     pub height: u32,
 
     pub rtp_timestamp: u32,
+    pub frame_playout_deadline_at_ms: Option<f64>,
+    pub frame_recovery_disposition: FrameRecoveryDisposition,
+    pub frame_unrecoverable_reason: Option<String>,
 
     pub assembled_at: Instant,
 
@@ -97,6 +100,9 @@ impl AssembledVideoFrame {
             width: self.width,
             height: self.height,
             rtp_timestamp: self.rtp_timestamp,
+            frame_playout_deadline_at_ms: self.frame_playout_deadline_at_ms,
+            frame_recovery_disposition: self.frame_recovery_disposition,
+            frame_unrecoverable_reason: self.frame_unrecoverable_reason,
             target_playout_time,
             h264: self.h264,
             payload: self.payload,
@@ -116,6 +122,9 @@ pub struct EncodedFrame {
     pub height: u32,
 
     pub rtp_timestamp: u32,
+    pub frame_playout_deadline_at_ms: Option<f64>,
+    pub frame_recovery_disposition: FrameRecoveryDisposition,
+    pub frame_unrecoverable_reason: Option<String>,
 
     pub target_playout_time: Instant,
 
@@ -127,4 +136,29 @@ pub struct DecodedFrame {
     pub pts: Instant,
 
     pub surface: crate::media::video::render::renderer::XbxRenderFrame,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FrameRecoveryDisposition {
+    Repairing,
+    UnrecoverableLate,
+    UnrecoverableReferenceChain,
+}
+
+impl FrameRecoveryDisposition {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Repairing => "repairing",
+            Self::UnrecoverableLate => "abandonedLate",
+            Self::UnrecoverableReferenceChain => "abandonedReferenceChain",
+        }
+    }
+
+    pub fn ingress_reason(self) -> Option<&'static str> {
+        match self {
+            Self::Repairing => None,
+            Self::UnrecoverableLate => Some("late"),
+            Self::UnrecoverableReferenceChain => Some("referenceChain"),
+        }
+    }
 }

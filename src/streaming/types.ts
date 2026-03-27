@@ -59,7 +59,6 @@ export interface StreamPerformanceSnapshot {
   presentFps?: number
   fl?: string | number
   pl?: string | number
-  br?: string | number
   decode?: string | number
   transportPath?: string
   transportState?: string

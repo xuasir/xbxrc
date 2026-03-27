@@ -443,4 +443,64 @@ mod tests {
         assert_eq!(status.video_packet_count_total, 15);
         assert_eq!(status.audio_bytes_total, 128);
     }
+
+    #[test]
+    fn media_snapshot_track_state_machine_flows_audio_then_video_then_attached() {
+        let mut stats = XbxEngineMediaRuntimeStats {
+            transport_state: XbxEngineTransportStateDto::Connected,
+            ..XbxEngineMediaRuntimeStats::default()
+        };
+
+        merge_media_snapshot_into_runtime_stats(
+            &mut stats,
+            &RtcMediaIngressSnapshot {
+                inbound_audio_bytes: 96,
+                ..RtcMediaIngressSnapshot::default()
+            },
+            10.0,
+        );
+        assert_eq!(
+            stats
+                .latest_video_track_status
+                .as_ref()
+                .map(|status| status.state.as_str()),
+            Some("audioOnly")
+        );
+
+        merge_media_snapshot_into_runtime_stats(
+            &mut stats,
+            &RtcMediaIngressSnapshot {
+                inbound_primary_video_count: 3,
+                inbound_primary_video_bytes: 3_000,
+                inbound_audio_bytes: 96,
+                ..RtcMediaIngressSnapshot::default()
+            },
+            20.0,
+        );
+        assert_eq!(
+            stats
+                .latest_video_track_status
+                .as_ref()
+                .map(|status| status.state.as_str()),
+            Some("primaryVideoRtpStarted")
+        );
+
+        merge_media_snapshot_into_runtime_stats(
+            &mut stats,
+            &RtcMediaIngressSnapshot {
+                inbound_primary_video_count: 6,
+                inbound_primary_video_bytes: 6_000,
+                inbound_audio_bytes: 96,
+                ..RtcMediaIngressSnapshot::default()
+            },
+            30.0,
+        );
+        let status = stats
+            .latest_video_track_status
+            .as_ref()
+            .expect("video track status should exist");
+        assert_eq!(status.state, "remoteTrackAttached");
+        assert_eq!(status.video_packet_count_total, 6);
+        assert_eq!(status.video_bytes_total, 6_000);
+    }
 }

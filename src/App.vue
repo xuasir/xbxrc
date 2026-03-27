@@ -2,7 +2,7 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { setupUiDensity } from './app/ui-density'
-import { applyTheme, setupTheme } from './app/theme'
+import { setupTheme } from './app/theme'
 import AppShellLayout from './components/layout/AppShellLayout.vue'
 import SpatialNavGlobalHotkeys from './components/navigation/SpatialNavGlobalHotkeys.vue'
 import { useGamepadNavigation } from './navigation/core'
@@ -25,6 +25,10 @@ function handleStreamUiInputMode(event: Event): void {
 const isStreamRoute = computed(
   () => route.name === 'xhome-stream' || route.name === 'xcloud-stream',
 )
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
 
 function resolveRouteViewKey(currentRoute: {
   name?: unknown

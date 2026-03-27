@@ -118,6 +118,7 @@ fn resolve_effective_diagnosis_label(
             | "adapterIdleTimeout"
             | "transportAwaitRecoveryKeyframe"
             | "ingressWaitKeyframe"
+            | "ingressFrameAbandoned"
     ) {
         return diagnosis_label.to_string();
     }
@@ -213,14 +214,17 @@ pub(crate) fn resolve_recovery_coupling_state(
     }
 
     match diagnosis.as_deref() {
-        Some("waitKeyframe" | "transportAwaitRecoveryKeyframe" | "ingressWaitKeyframe") => {
-            RecoveryCouplingState {
-                mode: RecoveryCouplingMode::WaitingKeyframe,
-                suppress_ramp_up: true,
-                prefer_hold: true,
-                allow_peak_range: false,
-            }
-        }
+        Some(
+            "waitKeyframe"
+            | "transportAwaitRecoveryKeyframe"
+            | "ingressWaitKeyframe"
+            | "ingressFrameAbandoned",
+        ) => RecoveryCouplingState {
+            mode: RecoveryCouplingMode::WaitingKeyframe,
+            suppress_ramp_up: true,
+            prefer_hold: true,
+            allow_peak_range: false,
+        },
         Some("transportSampleLoss" | "reconfigure" | "ingressReconfigure") => {
             RecoveryCouplingState {
                 mode: RecoveryCouplingMode::RecoveringReferenceChain,

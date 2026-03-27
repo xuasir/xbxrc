@@ -42,6 +42,7 @@ impl MediaProjection {
                 decision,
                 queue_depth,
                 observed_at_ms,
+                ..
             } => {
                 self.ingress_queue_depth = Some(*queue_depth);
                 self.last_observed_at_ms = Some(*observed_at_ms);
@@ -54,7 +55,8 @@ impl MediaProjection {
                     }
                     IngressDecisionFact::Submit
                     | IngressDecisionFact::DropLate
-                    | IngressDecisionFact::DropBacklog => {}
+                    | IngressDecisionFact::DropBacklog
+                    | IngressDecisionFact::DropUnrecoverable => {}
                 }
             }
         }

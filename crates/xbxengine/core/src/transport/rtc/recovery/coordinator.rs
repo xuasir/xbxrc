@@ -317,35 +317,60 @@ mod tests {
             covered_sequence_span: 20,
             observed_packet_count: 20,
             observed_byte_count: 32_000,
+            coverage_ratio: None,
+            ledger_hit_ratio: None,
             feedback_interval_ms: Some(100.0),
             arrival_span_ms: Some(95.0),
             receive_bitrate_kbps: Some(18_000.0),
+            twcc_sample_valid: true,
+
+            twcc_invalid_reason: None,
+
+            quality: crate::XbxEngineTwccObservationQuality::Stable,
             delivery_ratio: 0.99,
             packet_loss_ratio: 0.01,
             observed_at_ms: now_ms,
         }
     }
 
-    #[test]
-    fn recovered_nack_suppresses_transport_sample_loss_escalation() {
-        let mut stats = XbxEngineMediaRuntimeStats::default();
-        stats.latest_video_nack_observation = Some(XbxEngineVideoNackObservation {
+    fn make_test_nack_observation(
+        action: &str,
+        frame_importance: &str,
+        retry_count: u8,
+        observed_at_ms: f64,
+    ) -> XbxEngineVideoNackObservation {
+        XbxEngineVideoNackObservation {
             observation_id: 1,
-            action: "recovered".to_string(),
+            action: action.to_string(),
             source: "sampleLoss".to_string(),
             first_sequence: 1,
             last_sequence: 2,
             packet_count: 2,
-            retry_count: 0,
+            retry_count,
             frame_rtp_timestamp: Some(1),
-            frame_is_keyframe: Some(false),
-            frame_importance: Some("delta".to_string()),
+            frame_is_keyframe: Some(frame_importance == "keyframe"),
+            frame_importance: Some(frame_importance.to_string()),
             deadline_at_ms: None,
-            observed_at_ms: std::time::SystemTime::now()
+            estimated_recovery_arrival_ms: None,
+            nack_disposition: Some("attempted".to_string()),
+            frame_playout_deadline_at_ms: None,
+            frame_unrecoverable_reason: None,
+            observed_at_ms,
+        }
+    }
+
+    #[test]
+    fn recovered_nack_suppresses_transport_sample_loss_escalation() {
+        let mut stats = XbxEngineMediaRuntimeStats::default();
+        stats.latest_video_nack_observation = Some(make_test_nack_observation(
+            "recovered",
+            "delta",
+            0,
+            std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap()
                 .as_millis() as f64,
-        });
+        ));
         let mut coordinator = RecoveryCoordinator::new(
             VideoEscalationController::new(Duration::from_millis(250), 2, 2),
             Instant::now(),
@@ -362,23 +387,15 @@ mod tests {
     fn expired_delta_nack_stays_suppressed_without_stall_signal() {
         let mut stats = XbxEngineMediaRuntimeStats::default();
         stats.session_target_type = Some(xbxengine_protocol::XbxEngineTargetTypeDto::Home);
-        stats.latest_video_nack_observation = Some(XbxEngineVideoNackObservation {
-            observation_id: 1,
-            action: "expiredDeadline".to_string(),
-            source: "sampleLoss".to_string(),
-            first_sequence: 1,
-            last_sequence: 2,
-            packet_count: 2,
-            retry_count: 2,
-            frame_rtp_timestamp: Some(1),
-            frame_is_keyframe: Some(false),
-            frame_importance: Some("delta".to_string()),
-            deadline_at_ms: None,
-            observed_at_ms: std::time::SystemTime::now()
+        stats.latest_video_nack_observation = Some(make_test_nack_observation(
+            "expiredDeadline",
+            "delta",
+            2,
+            std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap()
                 .as_millis() as f64,
-        });
+        ));
         let mut coordinator = RecoveryCoordinator::new(
             VideoEscalationController::new(Duration::from_millis(250), 2, 2),
             Instant::now(),
@@ -405,20 +422,12 @@ mod tests {
             Duration::from_secs(2),
         );
 
-        stats.latest_video_nack_observation = Some(XbxEngineVideoNackObservation {
-            observation_id: 1,
-            action: "expiredDeadline".to_string(),
-            source: "sampleLoss".to_string(),
-            first_sequence: 1,
-            last_sequence: 2,
-            packet_count: 2,
-            retry_count: 2,
-            frame_rtp_timestamp: Some(1),
-            frame_is_keyframe: Some(false),
-            frame_importance: Some("delta".to_string()),
-            deadline_at_ms: None,
+        stats.latest_video_nack_observation = Some(make_test_nack_observation(
+            "expiredDeadline",
+            "delta",
+            2,
             observed_at_ms,
-        });
+        ));
         let shared_stats = Mutex::new(stats);
         let decision = coordinator.on_reason_with_runtime_stats(
             VideoEscalationReason::TransportExpiredDeadline,
@@ -458,20 +467,12 @@ mod tests {
         stats.video_renderer_stalled = Some(true);
         stats.latest_video_present_time_ms = Some(now_ms - 2_000.0);
         stats.latest_video_packet_arrival_time_ms = Some(now_ms - 40.0);
-        stats.latest_video_nack_observation = Some(XbxEngineVideoNackObservation {
-            observation_id: 1,
-            action: "expiredDeadline".to_string(),
-            source: "sampleLoss".to_string(),
-            first_sequence: 1,
-            last_sequence: 2,
-            packet_count: 2,
-            retry_count: 2,
-            frame_rtp_timestamp: Some(1),
-            frame_is_keyframe: Some(false),
-            frame_importance: Some("delta".to_string()),
-            deadline_at_ms: None,
-            observed_at_ms: now_ms,
-        });
+        stats.latest_video_nack_observation = Some(make_test_nack_observation(
+            "expiredDeadline",
+            "delta",
+            2,
+            now_ms,
+        ));
         let mut coordinator = RecoveryCoordinator::new(
             VideoEscalationController::new(Duration::from_millis(250), 1, 1),
             Instant::now() - Duration::from_secs(5),
@@ -497,20 +498,12 @@ mod tests {
         stats.video_decoder_hardware_failure_streak = 4;
         stats.latest_video_decoder_hardware_failure_time_ms = Some(now_ms - 25.0);
         stats.latest_video_decoder_reset_time_ms = Some(now_ms - 2_500.0);
-        stats.latest_video_nack_observation = Some(XbxEngineVideoNackObservation {
-            observation_id: 1,
-            action: "expiredDeadline".to_string(),
-            source: "sampleLoss".to_string(),
-            first_sequence: 1,
-            last_sequence: 2,
-            packet_count: 2,
-            retry_count: 2,
-            frame_rtp_timestamp: Some(1),
-            frame_is_keyframe: Some(false),
-            frame_importance: Some("delta".to_string()),
-            deadline_at_ms: None,
-            observed_at_ms: now_ms,
-        });
+        stats.latest_video_nack_observation = Some(make_test_nack_observation(
+            "expiredDeadline",
+            "delta",
+            2,
+            now_ms,
+        ));
 
         let mut coordinator = RecoveryCoordinator::new(
             VideoEscalationController::new(Duration::from_millis(250), 2, 2),
@@ -606,23 +599,17 @@ mod tests {
     #[test]
     fn recovered_reference_nack_waits_for_burst_in_wait_keyframe_chain() {
         let mut stats = XbxEngineMediaRuntimeStats::default();
-        stats.latest_video_nack_observation = Some(XbxEngineVideoNackObservation {
-            observation_id: 1,
-            action: "recovered".to_string(),
-            source: "sampleLoss".to_string(),
-            first_sequence: 1,
-            last_sequence: 2,
-            packet_count: 2,
-            retry_count: 0,
-            frame_rtp_timestamp: Some(1),
-            frame_is_keyframe: Some(true),
-            frame_importance: Some("reference".to_string()),
-            deadline_at_ms: None,
-            observed_at_ms: std::time::SystemTime::now()
+        let mut observation = make_test_nack_observation(
+            "recovered",
+            "reference",
+            0,
+            std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap()
                 .as_millis() as f64,
-        });
+        );
+        observation.frame_is_keyframe = Some(true);
+        stats.latest_video_nack_observation = Some(observation);
         let mut coordinator = RecoveryCoordinator::new(
             VideoEscalationController::new(Duration::from_millis(250), 2, 2),
             Instant::now(),
@@ -636,23 +623,17 @@ mod tests {
     #[test]
     fn expired_reference_nack_pushes_idle_timeout_into_recovery_chain() {
         let mut stats = XbxEngineMediaRuntimeStats::default();
-        stats.latest_video_nack_observation = Some(XbxEngineVideoNackObservation {
-            observation_id: 1,
-            action: "expiredDeadline".to_string(),
-            source: "sampleLoss".to_string(),
-            first_sequence: 1,
-            last_sequence: 2,
-            packet_count: 2,
-            retry_count: 2,
-            frame_rtp_timestamp: Some(1),
-            frame_is_keyframe: Some(true),
-            frame_importance: Some("reference".to_string()),
-            deadline_at_ms: None,
-            observed_at_ms: std::time::SystemTime::now()
+        let mut observation = make_test_nack_observation(
+            "expiredDeadline",
+            "reference",
+            2,
+            std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap()
                 .as_millis() as f64,
-        });
+        );
+        observation.frame_is_keyframe = Some(true);
+        stats.latest_video_nack_observation = Some(observation);
         let mut coordinator = RecoveryCoordinator::new(
             VideoEscalationController::new(Duration::from_millis(250), 1, 1),
             Instant::now() - Duration::from_secs(5),

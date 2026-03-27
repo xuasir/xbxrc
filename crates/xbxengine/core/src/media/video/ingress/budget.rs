@@ -32,7 +32,9 @@ mod tests {
     use crate::media::video::h264::inspection::{
         H264AccessUnitInspection, H264BootstrapRejectReason,
     };
-    use crate::media::video::types::{AssembledVideoFrame, FrameValue, VideoCodec};
+    use crate::media::video::types::{
+        AssembledVideoFrame, FrameRecoveryDisposition, FrameValue, VideoCodec,
+    };
     use bytes::Bytes;
     use std::time::{Duration, Instant};
 
@@ -71,6 +73,9 @@ mod tests {
                 width: 1920,
                 height: 1080,
                 rtp_timestamp: 1,
+                frame_playout_deadline_at_ms: None,
+                frame_recovery_disposition: FrameRecoveryDisposition::Repairing,
+                frame_unrecoverable_reason: None,
                 assembled_at,
                 h264: make_h264_inspection(true),
                 payload: Bytes::from_static(b"k"),
@@ -87,6 +92,9 @@ mod tests {
                 width: 1920,
                 height: 1080,
                 rtp_timestamp: 2,
+                frame_playout_deadline_at_ms: None,
+                frame_recovery_disposition: FrameRecoveryDisposition::Repairing,
+                frame_unrecoverable_reason: None,
                 assembled_at,
                 h264: make_h264_inspection(false),
                 payload: Bytes::from_static(b"d"),

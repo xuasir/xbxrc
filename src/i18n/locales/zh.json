@@ -174,10 +174,10 @@
         "VideoDL": "视频下行",
         "TotalDL": "总下行",
         "AudioDL": "音频下行",
+        "VideoActual": "实际视频码率",
         "BweTarget": "BWE目标",
         "BweObserved": "观测REMB",
-        "BweActual": "实际视频",
-        "BweActualSrc": "实际来源",
+        "VideoActualSrc": "视频码率来源",
         "TwccRecv": "TWCC接收",
         "TwccLoss": "TWCC丢包",
         "TwccDelivery": "TWCC送达",
@@ -188,8 +188,8 @@
         "P2D": "包到解",
         "D2P": "解到呈",
         "P2P": "包到呈",
-        "InVideo": "视频下行",
-        "InAudio": "音频下行",
+        "VideoBytes": "视频累计",
+        "AudioBytes": "音频累计",
         "DecInDrop": "解码入丢",
         "DecOutDrop": "解码出丢",
         "KeyReq": "关键帧请求",
@@ -198,7 +198,8 @@
         "LastAct": "最近动作",
         "LastWhy": "最近原因",
         "DT": "解码"
-      }
+      },
+      "values": {}
     },
     "badges": {
       "title": "串流诊断信息",

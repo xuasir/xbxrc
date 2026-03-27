@@ -5,7 +5,10 @@ use rtc_rtcp::transport_feedbacks::transport_layer_nack::{
 };
 use rtc_shared::marshal::{Marshal, MarshalSize};
 
-use crate::transport::rtc::stream::nack_scheduler::{NackBatch, ResolvedNack};
+use crate::media::video::types::FrameRecoveryDisposition;
+use crate::transport::rtc::stream::nack_scheduler::{
+    NackBatch, NackObservePolicy, PacketRecoveryDisposition, ResolvedNack, SkippedNackBatch,
+};
 use crate::XbxEngineVideoNackObservation;
 
 use super::{
@@ -30,17 +33,21 @@ impl RtcVideoFrameSource {
             startup_mode,
             Some(cloud_rtt_ms),
         );
-        if let Some(initial_batch) = self.nack_scheduler.observe_missing_sequences_with_policy(
-            &missing_sequences,
-            now_ms,
-            rtp_window_nack_policy(
-                frame_value,
-                deadline_at_ms,
-                cloud_mode,
-                startup_mode,
-                Some(cloud_rtt_ms),
-            ),
-        ) {
+        let policy = rtp_window_nack_policy(
+            frame_value,
+            deadline_at_ms,
+            cloud_mode,
+            startup_mode,
+            Some(cloud_rtt_ms),
+        );
+        let policy = self.with_cloud_latency_admission_policy(policy, now_ms);
+        let (initial_batch, skipped_batch) = self
+            .nack_scheduler
+            .observe_missing_sequences_with_policy(&missing_sequences, now_ms, policy);
+        if let Some(skipped) = skipped_batch.as_ref() {
+            self.record_nack_skipped(skipped, now_ms);
+        }
+        if let Some(initial_batch) = initial_batch {
             let inserted_count = self
                 .nack_scheduler
                 .pending_count()
@@ -66,6 +73,14 @@ impl RtcVideoFrameSource {
 
         let poll_result = self.nack_scheduler.poll(now_ms);
         for expired_batch in poll_result.expired_batches {
+            self.record_frame_recovery_from_nack(
+                expired_batch.frame_rtp_timestamp,
+                expired_batch.frame_importance,
+                expired_batch.nack_disposition,
+                expired_batch.frame_playout_deadline_at_ms,
+                expired_batch.frame_unrecoverable_reason,
+                now_ms,
+            );
             if expired_batch.reason == "deadline" {
                 let missing_packets = expired_batch.sequences.len().min(u16::MAX as usize) as u16;
                 self.queue_transport_observation(TransportObservation::NackDeadlineExpired {
@@ -84,6 +99,10 @@ impl RtcVideoFrameSource {
                     frame_is_keyframe: expired_batch.frame_is_keyframe,
                     frame_importance: expired_batch.frame_importance,
                     deadline_at_ms: expired_batch.deadline_at_ms,
+                    estimated_recovery_arrival_ms: expired_batch.estimated_recovery_arrival_ms,
+                    frame_playout_deadline_at_ms: expired_batch.frame_playout_deadline_at_ms,
+                    nack_disposition: expired_batch.nack_disposition,
+                    frame_unrecoverable_reason: expired_batch.frame_unrecoverable_reason,
                 },
                 now_ms,
             );
@@ -118,17 +137,21 @@ impl RtcVideoFrameSource {
             startup_mode,
             Some(cloud_rtt_ms),
         );
-        let Some(initial_batch) = self.nack_scheduler.observe_missing_sequences_with_policy(
-            &missing_sequences,
-            now_ms,
-            rtp_gap_nack_policy(
-                frame_value,
-                deadline_at_ms,
-                cloud_mode,
-                startup_mode,
-                Some(cloud_rtt_ms),
-            ),
-        ) else {
+        let policy = rtp_gap_nack_policy(
+            frame_value,
+            deadline_at_ms,
+            cloud_mode,
+            startup_mode,
+            Some(cloud_rtt_ms),
+        );
+        let policy = self.with_cloud_latency_admission_policy(policy, now_ms);
+        let (initial_batch, skipped_batch) = self
+            .nack_scheduler
+            .observe_missing_sequences_with_policy(&missing_sequences, now_ms, policy);
+        if let Some(skipped) = skipped_batch.as_ref() {
+            self.record_nack_skipped(skipped, now_ms);
+        }
+        let Some(initial_batch) = initial_batch else {
             return;
         };
         let inserted_count = self
@@ -202,11 +225,25 @@ impl RtcVideoFrameSource {
                 frame_is_keyframe: batch.frame_is_keyframe,
                 frame_importance: Some(batch.frame_importance.to_string()),
                 deadline_at_ms: batch.deadline_at_ms,
+                estimated_recovery_arrival_ms: batch.estimated_recovery_arrival_ms,
+                nack_disposition: Some(batch.nack_disposition.as_str().to_string()),
+                frame_playout_deadline_at_ms: batch.frame_playout_deadline_at_ms,
+                frame_unrecoverable_reason: batch
+                    .frame_unrecoverable_reason
+                    .map(|reason| reason.to_string()),
                 observed_at_ms: now_ms,
             });
     }
 
     pub(super) fn record_nack_recovered(&mut self, resolved: ResolvedNack, now_ms: f64) {
+        self.record_frame_recovery_from_nack(
+            resolved.frame_rtp_timestamp,
+            resolved.frame_importance,
+            resolved.nack_disposition,
+            resolved.frame_playout_deadline_at_ms,
+            resolved.frame_unrecoverable_reason,
+            now_ms,
+        );
         self.nack_recovery_ewma_ms =
             (self.nack_recovery_ewma_ms * 0.8) + (resolved.recovery_time_ms * 0.2);
         self.nack_late_ewma = if resolved.was_late {
@@ -235,6 +272,12 @@ impl RtcVideoFrameSource {
                 frame_is_keyframe: resolved.frame_is_keyframe,
                 frame_importance: Some(resolved.frame_importance.to_string()),
                 deadline_at_ms: resolved.deadline_at_ms,
+                estimated_recovery_arrival_ms: resolved.estimated_recovery_arrival_ms,
+                nack_disposition: Some(resolved.nack_disposition.as_str().to_string()),
+                frame_playout_deadline_at_ms: resolved.frame_playout_deadline_at_ms,
+                frame_unrecoverable_reason: resolved
+                    .frame_unrecoverable_reason
+                    .map(|reason| reason.to_string()),
                 observed_at_ms: now_ms,
             },
         );
@@ -317,12 +360,17 @@ impl RtcVideoFrameSource {
             self.is_cloud_startup_transport_profile(),
             Some(self.cloud_nack_rtt_ms()),
         );
+        let policy = self.with_cloud_latency_admission_policy(policy, now_ms);
         let pending_before = self.nack_scheduler.pending_count();
-        let Some(batch) = self.nack_scheduler.observe_missing_sequences_with_policy(
+        let (batch, skipped_batch) = self.nack_scheduler.observe_missing_sequences_with_policy(
             &missing_sequences,
             now_ms,
             policy,
-        ) else {
+        );
+        if let Some(skipped) = skipped_batch.as_ref() {
+            self.record_nack_skipped(skipped, now_ms);
+        }
+        let Some(batch) = batch else {
             return false;
         };
         let inserted_count = self
@@ -345,6 +393,104 @@ impl RtcVideoFrameSource {
         }
         self.send_nack_batch("sent", &batch, now_ms).await;
         true
+    }
+
+    fn record_nack_skipped(&mut self, skipped: &SkippedNackBatch, now_ms: f64) {
+        self.record_frame_recovery_from_nack(
+            skipped.frame_rtp_timestamp,
+            skipped.frame_importance,
+            skipped.nack_disposition,
+            skipped.frame_playout_deadline_at_ms,
+            skipped.frame_unrecoverable_reason,
+            now_ms,
+        );
+        self.record_nack_observation(
+            "skipped",
+            &NackBatch {
+                sequences: skipped.sequences.clone(),
+                retry_count: 0,
+                source: skipped.source,
+                frame_rtp_timestamp: skipped.frame_rtp_timestamp,
+                frame_is_keyframe: skipped.frame_is_keyframe,
+                frame_importance: skipped.frame_importance,
+                deadline_at_ms: skipped.deadline_at_ms,
+                estimated_recovery_arrival_ms: skipped.estimated_recovery_arrival_ms,
+                frame_playout_deadline_at_ms: skipped.frame_playout_deadline_at_ms,
+                nack_disposition: skipped.nack_disposition,
+                frame_unrecoverable_reason: skipped.frame_unrecoverable_reason,
+            },
+            now_ms,
+        );
+    }
+
+    fn record_frame_recovery_from_nack(
+        &mut self,
+        frame_rtp_timestamp: Option<u32>,
+        frame_importance: &'static str,
+        nack_disposition: PacketRecoveryDisposition,
+        frame_playout_deadline_at_ms: Option<f64>,
+        frame_unrecoverable_reason: Option<&'static str>,
+        observed_at_ms: f64,
+    ) {
+        let Some(frame_recovery_disposition) =
+            self.resolve_frame_recovery_disposition_from_nack(frame_importance, nack_disposition)
+        else {
+            return;
+        };
+        self.record_frame_recovery_ledger(
+            frame_rtp_timestamp,
+            frame_playout_deadline_at_ms,
+            frame_recovery_disposition,
+            frame_unrecoverable_reason,
+            observed_at_ms,
+        );
+    }
+
+    fn resolve_frame_recovery_disposition_from_nack(
+        &self,
+        frame_importance: &'static str,
+        nack_disposition: PacketRecoveryDisposition,
+    ) -> Option<FrameRecoveryDisposition> {
+        if !self.is_cloud_transport_profile() {
+            return None;
+        }
+        if !matches!(
+            nack_disposition,
+            PacketRecoveryDisposition::SkippedTooLate
+                | PacketRecoveryDisposition::SkippedLowValue
+                | PacketRecoveryDisposition::SkippedChainBroken
+        ) {
+            return None;
+        }
+        if frame_importance == "delta" {
+            return Some(FrameRecoveryDisposition::UnrecoverableLate);
+        }
+        Some(FrameRecoveryDisposition::UnrecoverableReferenceChain)
+    }
+
+    fn with_cloud_latency_admission_policy(
+        &self,
+        mut policy: NackObservePolicy,
+        now_ms: f64,
+    ) -> NackObservePolicy {
+        if !self.is_cloud_transport_profile() {
+            return policy;
+        }
+        let retry_interval_ms = policy.retry_interval_ms.unwrap_or(16) as f64;
+        let estimated_recovery_arrival_ms = now_ms
+            + (self.cloud_nack_rtt_ms().max(0.0) * 0.5)
+                .max(self.nack_recovery_ewma_ms.max(0.0))
+                .max(retry_interval_ms);
+        policy.estimated_recovery_arrival_ms = Some(estimated_recovery_arrival_ms);
+        if let Some(deadline_at_ms) = policy.deadline_at_ms {
+            if estimated_recovery_arrival_ms > deadline_at_ms {
+                policy.nack_disposition = PacketRecoveryDisposition::SkippedTooLate;
+                if policy.frame_unrecoverable_reason.is_none() {
+                    policy.frame_unrecoverable_reason = Some("estimatedArrivalPastDeadline");
+                }
+            }
+        }
+        policy
     }
 
     fn collect_recent_missing_sequences(&self, media_dropped_packets: u16) -> Vec<u16> {

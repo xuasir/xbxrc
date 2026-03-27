@@ -182,18 +182,22 @@ export function useStreamRuntimeHost(options: UseStreamRuntimeHostOptions) {
     token: number,
   ): Promise<boolean> {
     const currentRuntime = runtime.value
+    const sessionId = activeSessionId
     if (!shouldAttemptRecovery({
       runtimeAvailable: currentRuntime !== null,
-      sessionId: activeSessionId,
+      sessionId,
       isTokenActive: isRuntimeTokenActive(token),
       connectionState: state,
     })) {
       return false
     }
+    if (currentRuntime === null || sessionId === null || !isRuntimeTokenActive(token)) {
+      return false
+    }
 
     try {
       const decision = await rpc.streaming.decideRecovery({
-        sessionId: activeSessionId,
+        sessionId,
         fact: {
           type: 'transportConnectionState',
           connectionState: state,
@@ -204,7 +208,7 @@ export function useStreamRuntimeHost(options: UseStreamRuntimeHostOptions) {
         return false
       }
       console.info('[streaming][runtime-host] requesting runtime reconnect', {
-        sessionId: activeSessionId,
+        sessionId,
         state,
         reason: decision.reason,
       })
@@ -224,6 +228,9 @@ export function useStreamRuntimeHost(options: UseStreamRuntimeHostOptions) {
       activeConnected,
       fallbackRetryConsumed,
     })) {
+      return false
+    }
+    if (launchSpec === null || !isRuntimeTokenActive(token)) {
       return false
     }
 

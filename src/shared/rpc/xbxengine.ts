@@ -219,9 +219,12 @@ export interface XbxEngineStatsDto {
     covered_sequence_span: number
     observed_packet_count: number
     observed_byte_count: number
+    coverage_ratio?: number | null
+    ledger_hit_ratio?: number | null
     feedback_interval_ms?: number | null
     arrival_span_ms?: number | null
     receive_bitrate_kbps?: number | null
+    quality: string
     delivery_ratio: number
     packet_loss_ratio: number
     observed_at_ms: number

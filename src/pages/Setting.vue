@@ -92,7 +92,6 @@ const activeTabKey = ref<SettingTabKey>('app')
 const groupState = ref<SettingGroupMap | null>(null)
 const isLoading = ref(false)
 const pendingActionKey = ref<string | null>(null)
-const settingPanelRef = ref<HTMLElement | null>(null)
 const activeSingleSelectRow = ref<SettingRow | null>(null)
 const activeValueEditorRow = ref<SettingRow | null>(null)
 const activeDisplayOptionsRow = ref<SettingRow | null>(null)
@@ -589,7 +588,6 @@ onUnmounted(() => {
       </aside>
 
       <section
-        ref="settingPanelRef"
         class="setting-panel"
         :aria-label="t('setting.aria.panel', { group: activeGroupLabel })"
       >

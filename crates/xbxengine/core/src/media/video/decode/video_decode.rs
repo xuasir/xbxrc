@@ -1090,6 +1090,10 @@ mod tests {
             width: 2560,
             height: 1440,
             rtp_timestamp: if is_keyframe { 1 } else { 2 },
+            frame_playout_deadline_at_ms: None,
+            frame_recovery_disposition:
+                crate::media::video::types::FrameRecoveryDisposition::Repairing,
+            frame_unrecoverable_reason: None,
             target_playout_time: now + Duration::from_millis(16),
             h264: make_h264_inspection(is_keyframe),
             payload: Bytes::from_static(b"\x00\x00\x00\x01\x65"),

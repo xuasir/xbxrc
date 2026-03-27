@@ -11,6 +11,8 @@ use crate::{
     media::video::types::AssembledVideoFrame,
     runtime_stats_sink::RuntimeStatsSink,
     transport::rtc::facts::{IngressDecisionFact, MediaFact, TransportFact},
+    transport::rtc::recovery::diagnosis::diagnose_ingress_signal,
+    transport::rtc::recovery::signal::VideoIngressSignal,
     transport::rtc::stream::adapter_types::TransportObservation,
     XbxEngineMediaRuntimeStats,
 };
@@ -189,11 +191,17 @@ impl MediaSessionLoop {
             encoded_frame.height,
             encoded_frame.is_keyframe,
         );
+        let ingress_reason = encoded_frame
+            .frame_recovery_disposition
+            .ingress_reason()
+            .or_else(|| encoded_frame.frame_unrecoverable_reason.as_deref())
+            .map(str::to_string);
         let reconfigure_reason = self.ingress.describe_reconfigure_reason(&encoded_frame);
         let decision = self.ingress.submit(encoded_frame, Instant::now());
         self.observation.record_ingress_observation(
             &self.runtime_stats,
             &decision,
+            ingress_reason.as_deref(),
             reconfigure_reason.as_deref(),
             now_ms,
             frame_meta.0,
@@ -208,8 +216,27 @@ impl MediaSessionLoop {
         }));
         if matches!(
             decision,
-            IngressDecision::WaitKeyframe | IngressDecision::Reconfigure
+            IngressDecision::WaitKeyframe
+                | IngressDecision::DropUnrecoverable
+                | IngressDecision::Reconfigure
         ) {
+            let ingress_signal = VideoIngressSignal::from_decision(&decision);
+            let diagnosis = diagnose_ingress_signal(ingress_signal);
+            let hint_label = diagnosis.label;
+            if self
+                .observation
+                .should_log_transport_hint(hint_label, now_ms)
+            {
+                self.observation
+                    .record_transport_hint(hint_label.to_string(), now_ms);
+            }
+            self.push_transport_fact(TransportFact::Media(
+                MediaFact::TransportObservationRaised {
+                    label: hint_label.to_string(),
+                    severity: 1,
+                    observed_at_ms: now_ms,
+                },
+            ));
             if self.frame_event_count == 1 || self.frame_event_count.is_power_of_two() {
                 crate::xbx_log_warn!(
                     "[MediaSession] frame event triggered ingress hint={:?}",

@@ -342,10 +342,6 @@ export function resolveStartupPhaseStatusTextKey(
   switch (phase) {
     case 'resolvingContext':
       return 'streamPage.status.preparing'
-    case 'wakingConsole':
-      return 'streamPage.status.wakingConsole'
-    case 'waitingConsoleReady':
-      return 'streamPage.status.waitingConsoleReady'
     case 'creatingSession':
       return 'streamPage.status.creatingSession'
     case 'waitingSessionReady':
@@ -365,9 +361,6 @@ export function resolveStartupPhasePrimaryStatusTextKey(
   switch (phase) {
     case 'resolvingContext':
       return 'streamPage.status.preparing'
-    case 'wakingConsole':
-    case 'waitingConsoleReady':
-      return 'streamPage.status.connectingHost'
     case 'creatingSession':
     case 'waitingSessionReady':
     case 'startingRuntime':

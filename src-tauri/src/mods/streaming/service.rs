@@ -1427,8 +1427,6 @@ fn normalize_optional(value: &str) -> Option<String> {
 fn map_startup_phase(phase: DomainStartupPhase) -> StreamingStartupPhase {
     match phase {
         DomainStartupPhase::ResolvingContext => StreamingStartupPhase::ResolvingContext,
-        DomainStartupPhase::WakingConsole => StreamingStartupPhase::WakingConsole,
-        DomainStartupPhase::WaitingConsoleReady => StreamingStartupPhase::WaitingConsoleReady,
         DomainStartupPhase::CreatingSession => StreamingStartupPhase::CreatingSession,
         DomainStartupPhase::WaitingSessionReady => StreamingStartupPhase::WaitingSessionReady,
         DomainStartupPhase::StartingRuntime => StreamingStartupPhase::StartingRuntime,
@@ -1482,10 +1480,6 @@ fn startup_phase_summary(phase: &StreamingStartupPhase, details: Option<&str>) -
         .unwrap_or_default();
     match phase {
         StreamingStartupPhase::ResolvingContext => format!("resolvingContext{details_suffix}"),
-        StreamingStartupPhase::WakingConsole => format!("wakingConsole{details_suffix}"),
-        StreamingStartupPhase::WaitingConsoleReady => {
-            format!("waitingConsoleReady{details_suffix}")
-        }
         StreamingStartupPhase::CreatingSession => format!("creatingSession{details_suffix}"),
         StreamingStartupPhase::WaitingSessionReady => {
             format!("waitingSessionReady{details_suffix}")
@@ -1519,8 +1513,6 @@ fn build_startup_bounded_retry_details(bounded_retry: &StreamingStartupBoundedRe
 
 fn map_domain_startup_error_kind(hint: &DomainStartupErrorHint) -> StreamingStartupErrorKind {
     match hint.kind {
-        DomainStartupErrorKind::Wake => StreamingStartupErrorKind::Wake,
-        DomainStartupErrorKind::ConsoleReady => StreamingStartupErrorKind::ConsoleReady,
         DomainStartupErrorKind::SessionCreate => StreamingStartupErrorKind::SessionCreate,
         DomainStartupErrorKind::SessionReady => StreamingStartupErrorKind::SessionReady,
         DomainStartupErrorKind::Runtime => StreamingStartupErrorKind::Runtime,
@@ -1548,7 +1540,7 @@ fn classify_progress_error_kind_fallback(
         return StreamingStartupErrorKind::HostRegistrationRetryExhausted;
     }
     if normalized.contains("remoteconsolenotready") {
-        return StreamingStartupErrorKind::ConsoleReady;
+        return StreamingStartupErrorKind::HostRemotePlayUnavailable;
     }
     if normalized.contains("streamingstarttimeout") {
         return StreamingStartupErrorKind::SessionReady;
@@ -1600,8 +1592,6 @@ fn classify_startup_error_kind_fallback(
     }
     match phase {
         StreamingStartupPhase::ResolvingContext => StreamingStartupErrorKind::Unknown,
-        StreamingStartupPhase::WakingConsole => StreamingStartupErrorKind::Wake,
-        StreamingStartupPhase::WaitingConsoleReady => StreamingStartupErrorKind::ConsoleReady,
         StreamingStartupPhase::CreatingSession => StreamingStartupErrorKind::SessionCreate,
         StreamingStartupPhase::WaitingSessionReady => StreamingStartupErrorKind::SessionReady,
         StreamingStartupPhase::StartingRuntime => StreamingStartupErrorKind::Runtime,
@@ -1612,8 +1602,6 @@ fn classify_startup_error_kind_fallback(
 
 fn startup_error_message_key(kind: &StreamingStartupErrorKind) -> &'static str {
     match kind {
-        StreamingStartupErrorKind::Wake => "streamPage.errors.wakeFailed",
-        StreamingStartupErrorKind::ConsoleReady => "streamPage.errors.consoleReadyFailed",
         StreamingStartupErrorKind::SessionCreate => "streamPage.errors.sessionCreateFailed",
         StreamingStartupErrorKind::SessionReady => "streamPage.errors.sessionReadyFailed",
         StreamingStartupErrorKind::Runtime => "streamPage.errors.runtimeStartFailed",
@@ -1639,8 +1627,6 @@ fn build_progress_diagnostic_summary_fallback(
     let error_code = error_code.unwrap_or("none");
     let error_message = error_message.unwrap_or("none");
     let hint = match kind {
-        StreamingStartupErrorKind::Wake => "wakeFailed",
-        StreamingStartupErrorKind::ConsoleReady => "remoteConsoleNotReady",
         StreamingStartupErrorKind::SessionCreate => "sessionCreateFailed",
         StreamingStartupErrorKind::SessionReady => "streamingStartTimeout",
         StreamingStartupErrorKind::Runtime => "runtimeFailed",
@@ -1659,8 +1645,7 @@ fn build_progress_diagnostic_summary_fallback(
 fn is_progress_error_retryable_fallback(kind: &StreamingStartupErrorKind) -> bool {
     matches!(
         kind,
-        StreamingStartupErrorKind::ConsoleReady
-            | StreamingStartupErrorKind::SessionCreate
+        StreamingStartupErrorKind::SessionCreate
             | StreamingStartupErrorKind::SessionReady
             | StreamingStartupErrorKind::Runtime
             | StreamingStartupErrorKind::Network
@@ -1700,9 +1685,7 @@ fn is_startup_error_retryable_fallback(
     }
     matches!(
         kind,
-        StreamingStartupErrorKind::Wake
-            | StreamingStartupErrorKind::ConsoleReady
-            | StreamingStartupErrorKind::SessionCreate
+        StreamingStartupErrorKind::SessionCreate
             | StreamingStartupErrorKind::SessionReady
             | StreamingStartupErrorKind::Network
     ) || error.status.is_some_and(|status| status >= 500)

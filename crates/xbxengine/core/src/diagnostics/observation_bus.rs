@@ -1,7 +1,8 @@
 use std::sync::{Arc, Mutex};
 
 use crate::{
-    XbxEngineMediaRuntimeStats, XbxEngineRemoteAnswerObservation, XbxEngineRtcBuilderObservation,
+    XbxEngineFrameRecoveryObservation, XbxEngineMediaRuntimeStats,
+    XbxEngineRemoteAnswerObservation, XbxEngineRtcBuilderObservation,
     XbxEngineTwccExtensionObservation, XbxEngineTwccRemoteStreamObservation,
     XbxEngineVideoFrameDropObservation, XbxEngineVideoNackObservation,
     XbxEngineVideoPacketGapObservation, XbxEngineVideoRtxReinjectObservation,
@@ -54,6 +55,9 @@ pub(crate) enum ObservationEvent {
     },
     VideoFrameDrop {
         observation: XbxEngineVideoFrameDropObservation,
+    },
+    FrameRecovery {
+        observation: XbxEngineFrameRecoveryObservation,
     },
     InboundVideoPacketLossEstimate {
         packet_count: u16,
@@ -236,6 +240,19 @@ fn summarize_event(event: &ObservationEvent) -> ObservationPublication {
                 observation.height
             ),
         },
+        ObservationEvent::FrameRecovery { observation } => ObservationPublication {
+            label: "frameRecovery".to_string(),
+            summary: format!(
+                "action={} ts={} disposition={} reason={}",
+                observation.action,
+                observation.frame_rtp_timestamp,
+                observation.frame_recovery_disposition,
+                observation
+                    .frame_unrecoverable_reason
+                    .as_deref()
+                    .unwrap_or("none")
+            ),
+        },
         ObservationEvent::InboundVideoPacketLossEstimate { packet_count } => ObservationPublication {
             label: "packetLossEstimate".to_string(),
             summary: format!("+{packet_count}"),
@@ -372,10 +389,13 @@ fn apply_event(stats: &mut XbxEngineMediaRuntimeStats, event: ObservationEvent) 
             stats.actual_video_bitrate_source = Some("transport-metrics".to_string());
             stats.inbound_bytes_total =
                 stats.inbound_video_bytes_total + stats.inbound_audio_bytes_total;
+            let resolved_actual_video_bitrate_kbps =
+                resolved_actual_video_bitrate_kbps_for_observation(stats)
+                    .unwrap_or_else(|| inbound_video_bitrate_kbps.max(0.0));
             if let Some(bwe) = stats.latest_video_bwe_observation.as_mut() {
-                // 统一口径：BWE 结构化观测里的 actual/path/rtt/loss 要跟随 transport metrics 刷新，
-                // 避免只在 target 变化瞬间写一次导致长期显示为旧值。
-                bwe.actual_video_bitrate_kbps = inbound_video_bitrate_kbps.max(0.0);
+                // 观测口径统一：BWE 结构化观测里的 actual 走当前“对外实际码率”口径，
+                // 避免与 stats.video_actual_bitrate_kbps 出现长期分叉。
+                bwe.actual_video_bitrate_kbps = resolved_actual_video_bitrate_kbps;
                 bwe.loss_ratio = inbound_video_loss_ratio_1s.clamp(0.0, 1.0);
                 bwe.rtt_ms = video_rtt_ms;
                 bwe.transport_path = stats.transport_path.clone();
@@ -395,6 +415,9 @@ fn apply_event(stats: &mut XbxEngineMediaRuntimeStats, event: ObservationEvent) 
         }
         ObservationEvent::VideoFrameDrop { observation } => {
             stats.latest_video_frame_drop = Some(observation);
+        }
+        ObservationEvent::FrameRecovery { observation } => {
+            stats.latest_video_frame_recovery_observation = Some(observation);
         }
         ObservationEvent::InboundVideoPacketLossEstimate { packet_count } => {
             stats.inbound_video_packet_loss_estimate_total = stats
@@ -442,10 +465,8 @@ fn apply_event(stats: &mut XbxEngineMediaRuntimeStats, event: ObservationEvent) 
                             && observation.source != "local-feedback"
                     });
             if !keep_existing_local {
-                if observation.source == "local-feedback" {
-                    stats.actual_video_bitrate_source = Some("local-twcc".to_string());
-                }
                 stats.latest_video_twcc_observation = Some(observation);
+                sync_latest_video_bwe_actual_video_bitrate(stats);
             }
         }
         ObservationEvent::NackRecovered {
@@ -497,5 +518,21 @@ fn apply_event(stats: &mut XbxEngineMediaRuntimeStats, event: ObservationEvent) 
             stats.latest_video_packet_gap = Some(observation);
             stats.latest_video_packet_sequence = Some(latest_sequence);
         }
+    }
+}
+
+fn resolved_actual_video_bitrate_kbps_for_observation(
+    stats: &XbxEngineMediaRuntimeStats,
+) -> Option<f64> {
+    stats.inbound_video_bitrate_kbps.map(|value| value.max(0.0))
+}
+
+fn sync_latest_video_bwe_actual_video_bitrate(stats: &mut XbxEngineMediaRuntimeStats) {
+    let Some(actual_video_bitrate_kbps) = resolved_actual_video_bitrate_kbps_for_observation(stats)
+    else {
+        return;
+    };
+    if let Some(bwe) = stats.latest_video_bwe_observation.as_mut() {
+        bwe.actual_video_bitrate_kbps = actual_video_bitrate_kbps;
     }
 }

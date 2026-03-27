@@ -1,7 +1,9 @@
 use crate::transport::rtc::recovery::policy::{
     ScenarioPolicyProfileKind, TransportBweScenarioProfile,
 };
-use crate::{XbxEngineVideoTwccObservation, XbxEngineWebRtcRuntimeConfig};
+use crate::{
+    XbxEngineTwccObservationQuality, XbxEngineVideoTwccObservation, XbxEngineWebRtcRuntimeConfig,
+};
 
 #[derive(Clone, Copy)]
 pub(crate) struct TwccRuleContext<'a> {
@@ -82,14 +84,28 @@ pub(crate) fn resolve_loss_rule(
     {
         if should_apply_cloud_optimistic_loss_cap(context) {
             *ramp_cooldown_ticks = context.profile.congestion_cooldown_ticks.max(1);
-            let cap_kbps = context
-                .desired_kbps
-                .min(
+            let quality = context.twcc.classify_quality(
+                context.config.video_pipeline.feedback_interval_ms as f64,
+                context.profile.stable_feedback_interval_ms,
+                context.profile.stable_feedback_min_packets,
+            );
+            let cap_kbps = if quality == XbxEngineTwccObservationQuality::BootstrapSparse {
+                context.current_kbps.clamp(
+                    context.preferred_gaming_floor_kbps,
                     context
                         .effective_peak_ceiling_kbps
                         .min(context.ceiling_kbps),
                 )
-                .max(context.preferred_gaming_floor_kbps);
+            } else {
+                context
+                    .desired_kbps
+                    .min(
+                        context
+                            .effective_peak_ceiling_kbps
+                            .min(context.ceiling_kbps),
+                    )
+                    .max(context.preferred_gaming_floor_kbps)
+            };
             return Some((
                 context.current_kbps.min(cap_kbps),
                 context.profile.reason("severe-optimistic-cap"),
@@ -172,15 +188,26 @@ pub(crate) fn resolve_loss_rule(
 }
 
 fn should_apply_cloud_optimistic_loss_cap(context: TwccRuleContext<'_>) -> bool {
-    if !context.bounded_gaming_profile || context.profile.kind != ScenarioPolicyProfileKind::CloudGaming
+    if !context.bounded_gaming_profile
+        || context.profile.kind != ScenarioPolicyProfileKind::CloudGaming
     {
         return false;
     }
     let expected_interval_ms = context.config.video_pipeline.feedback_interval_ms.max(1) as f64;
-    let Some(feedback_interval_ms) = context.twcc.feedback_interval_ms else {
-        return false;
-    };
-    feedback_interval_ms >= expected_interval_ms * 1.6
+    let quality = context.twcc.classify_quality(
+        expected_interval_ms,
+        context.profile.stable_feedback_interval_ms,
+        context.profile.stable_feedback_min_packets,
+    );
+    if quality == XbxEngineTwccObservationQuality::BootstrapSparse {
+        return true;
+    }
+
+    if let Some(feedback_interval_ms) = context.twcc.feedback_interval_ms {
+        return feedback_interval_ms >= expected_interval_ms * 1.6;
+    }
+
+    false
 }
 
 pub(crate) fn resolve_cooldown_or_ramp(

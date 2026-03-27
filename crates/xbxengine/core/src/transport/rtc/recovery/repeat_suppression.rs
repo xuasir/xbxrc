@@ -30,7 +30,10 @@ pub(crate) fn resolve_recent_repeat_suppression(
         VideoEscalationReason::WaitKeyframe => {
             let same_wait_keyframe_chain = matches!(
                 escalation.reason.as_str(),
-                "waitKeyframe" | "ingressWaitKeyframe" | "transportAwaitRecoveryKeyframe"
+                "waitKeyframe"
+                    | "ingressWaitKeyframe"
+                    | "ingressFrameAbandoned"
+                    | "transportAwaitRecoveryKeyframe"
             );
             let active_recovery_action = matches!(
                 escalation.action.as_str(),

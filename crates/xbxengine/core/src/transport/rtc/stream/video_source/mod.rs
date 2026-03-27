@@ -1,6 +1,6 @@
 use rtc_media::io::sample_builder::SampleBuilder;
 use rtc_rtp::codec::h264::H264Packet;
-use std::collections::VecDeque;
+use std::collections::{BTreeMap, VecDeque};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -10,7 +10,7 @@ use crate::XbxEngineMediaRuntimeStats;
 
 use super::packet_types::RtcVideoRtpPacket;
 use super::sink::RtcRtcpSendPort;
-use crate::media::video::types::FrameValue;
+use crate::media::video::types::{FrameRecoveryDisposition, FrameValue};
 use crate::runtime_stats_sink::RuntimeStatsSink;
 
 pub(crate) mod nack;
@@ -68,10 +68,19 @@ pub struct RtcVideoFrameSource {
     received_packet_count: u64,
     assembled_frame_count: u64,
     transport_observation_emit_count: u64,
+    frame_recovery_ledger: BTreeMap<u32, FrameRecoveryLedgerEntry>,
 }
 
 pub struct RtcVideoTransportObservationSource {
     pub(crate) rx: tokio::sync::mpsc::UnboundedReceiver<TransportObservation>,
+}
+
+#[derive(Clone, Debug)]
+pub(super) struct FrameRecoveryLedgerEntry {
+    pub(super) frame_playout_deadline_at_ms: Option<f64>,
+    pub(super) frame_recovery_disposition: FrameRecoveryDisposition,
+    pub(super) frame_unrecoverable_reason: Option<String>,
+    observed_at_ms: f64,
 }
 
 impl RtcVideoFrameSource {
@@ -131,6 +140,7 @@ impl RtcVideoFrameSource {
             received_packet_count: 0,
             assembled_frame_count: 0,
             transport_observation_emit_count: 0,
+            frame_recovery_ledger: BTreeMap::new(),
         }
     }
 
@@ -185,6 +195,98 @@ impl RtcVideoFrameSource {
         self.last_transport_observation_at.is_some_and(|last_at| {
             now.duration_since(last_at) < self.wait_keyframe_observation_cooldown
         })
+    }
+
+    pub(super) fn record_frame_recovery_ledger(
+        &mut self,
+        frame_rtp_timestamp: Option<u32>,
+        frame_playout_deadline_at_ms: Option<f64>,
+        frame_recovery_disposition: FrameRecoveryDisposition,
+        frame_unrecoverable_reason: Option<&str>,
+        observed_at_ms: f64,
+    ) {
+        let Some(frame_rtp_timestamp) = frame_rtp_timestamp else {
+            return;
+        };
+        self.nack_observation_id = self.nack_observation_id.saturating_add(1);
+        self.runtime_stats.record_frame_recovery_observation(
+            crate::XbxEngineFrameRecoveryObservation {
+                observation_id: self.nack_observation_id,
+                action: "ledgerWrite".to_string(),
+                frame_rtp_timestamp,
+                frame_playout_deadline_at_ms,
+                frame_recovery_disposition: frame_recovery_disposition.as_str().to_string(),
+                frame_unrecoverable_reason: frame_unrecoverable_reason.map(str::to_string),
+                observed_at_ms,
+            },
+        );
+        let next_entry = FrameRecoveryLedgerEntry {
+            frame_playout_deadline_at_ms,
+            frame_recovery_disposition,
+            frame_unrecoverable_reason: frame_unrecoverable_reason.map(str::to_string),
+            observed_at_ms,
+        };
+        if let Some(entry) = self.frame_recovery_ledger.get_mut(&frame_rtp_timestamp) {
+            entry.frame_playout_deadline_at_ms = entry
+                .frame_playout_deadline_at_ms
+                .or(next_entry.frame_playout_deadline_at_ms);
+            if matches!(
+                next_entry.frame_recovery_disposition,
+                FrameRecoveryDisposition::UnrecoverableReferenceChain
+            ) || !matches!(
+                entry.frame_recovery_disposition,
+                FrameRecoveryDisposition::UnrecoverableReferenceChain
+            ) {
+                entry.frame_recovery_disposition = next_entry.frame_recovery_disposition;
+            }
+            if next_entry.frame_unrecoverable_reason.is_some() {
+                entry.frame_unrecoverable_reason = next_entry.frame_unrecoverable_reason;
+            }
+            entry.observed_at_ms = next_entry.observed_at_ms;
+        } else {
+            self.frame_recovery_ledger
+                .insert(frame_rtp_timestamp, next_entry);
+        }
+        self.prune_frame_recovery_ledger();
+    }
+
+    pub(super) fn take_frame_recovery_ledger(
+        &mut self,
+        frame_rtp_timestamp: u32,
+    ) -> (Option<f64>, FrameRecoveryDisposition, Option<String>) {
+        if let Some(entry) = self.frame_recovery_ledger.remove(&frame_rtp_timestamp) {
+            self.nack_observation_id = self.nack_observation_id.saturating_add(1);
+            self.runtime_stats.record_frame_recovery_observation(
+                crate::XbxEngineFrameRecoveryObservation {
+                    observation_id: self.nack_observation_id,
+                    action: "ledgerConsume".to_string(),
+                    frame_rtp_timestamp,
+                    frame_playout_deadline_at_ms: entry.frame_playout_deadline_at_ms,
+                    frame_recovery_disposition: entry
+                        .frame_recovery_disposition
+                        .as_str()
+                        .to_string(),
+                    frame_unrecoverable_reason: entry.frame_unrecoverable_reason.clone(),
+                    observed_at_ms: now_ms_f64(),
+                },
+            );
+            return (
+                entry.frame_playout_deadline_at_ms,
+                entry.frame_recovery_disposition,
+                entry.frame_unrecoverable_reason,
+            );
+        }
+        (None, FrameRecoveryDisposition::Repairing, None)
+    }
+
+    fn prune_frame_recovery_ledger(&mut self) {
+        const MAX_LEDGER_ENTRIES: usize = 512;
+        while self.frame_recovery_ledger.len() > MAX_LEDGER_ENTRIES {
+            let Some((&oldest_timestamp, _)) = self.frame_recovery_ledger.first_key_value() else {
+                break;
+            };
+            self.frame_recovery_ledger.remove(&oldest_timestamp);
+        }
     }
 }
 
