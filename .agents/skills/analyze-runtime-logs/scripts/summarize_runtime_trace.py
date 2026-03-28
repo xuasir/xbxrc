@@ -108,6 +108,14 @@ BAD_STATE_HINTS = (
     "inactive",
 )
 
+PHASE_ALIASES = {
+    "startup": ("connecting", "provisioning", "waiting"),
+    "connect": ("connecting", "checking"),
+    "playing": ("playing", "steady", "healthy", "active", "running"),
+    "stall": ("stall", "stalled", "pipelineStall", "decoderStall", "rendererStall"),
+    "recovery": ("recover", "repair", "reset", "keyframe", "nack", "recovery"),
+}
+
 
 @dataclass
 class PhaseSegment:
@@ -130,6 +138,27 @@ class ClusterWindow:
     start_ts: int
     end_ts: int
     rows: list[dict[str, Any]]
+
+
+@dataclass
+class TraceProfile:
+    path: Path
+    rows: list[dict[str, Any]]
+    first_ts: int | None
+    last_ts: int | None
+    duration_ms: int | None
+    category_counts: Counter[str]
+    domain_counts: Counter[str]
+    event_counts: Counter[str]
+    session_counts: Counter[str]
+    log_levels: Counter[str]
+    suspicious_rows: list[dict[str, Any]]
+    phase_segments: list[PhaseSegment]
+    long_gaps: list[GapWindow]
+    anomaly_windows: list[ClusterWindow]
+    phase_signature_counts: Counter[str]
+    anomaly_signal_counts: Counter[str]
+    metric_stats: dict[str, dict[str, Any]]
 
 
 def fmt_ms(value: int | None) -> str:
@@ -215,6 +244,99 @@ def contains_bad_hint(value: Any) -> bool:
     return any(hint in lower for hint in BAD_STATE_HINTS)
 
 
+def classify_phase_label(row: dict[str, Any]) -> str | None:
+    payload = row.get("payload")
+    if not isinstance(payload, dict):
+        return None
+
+    phase = payload_get(payload, "session_phase", "sessionPhase")
+    if isinstance(phase, str) and phase:
+        phase_lower = phase.lower()
+        if phase_lower == "connecting":
+            return "connect"
+        if phase_lower in {"playing", "steady", "healthy", "active", "running"}:
+            return "playing"
+        if any(hint in phase_lower for hint in ("stall", "stalled")):
+            return "stall"
+        if any(hint in phase_lower for hint in ("recover", "repair", "reset", "keyframe", "nack")):
+            return "recovery"
+        return phase_lower
+
+    video_health = payload_get(payload, "video_health", "videoHealth")
+    if isinstance(video_health, str) and video_health:
+        health_lower = video_health.lower()
+        if health_lower == "connecting":
+            return "connect"
+        if health_lower in {"healthy", "ready", "active"}:
+            return "playing"
+        if any(hint in health_lower for hint in ("stall", "stalled")):
+            return "stall"
+        if any(hint in health_lower for hint in ("recover", "repair", "reset")):
+            return "recovery"
+        return health_lower
+
+    transport_state = payload_get(payload, "transport_state", "transportState")
+    if isinstance(transport_state, str) and transport_state:
+        transport_lower = transport_state.lower()
+        if transport_lower in {"new", "connecting", "checking"}:
+            return "connect"
+        if transport_lower in {"connected", "completed"}:
+            return "playing"
+        return transport_lower
+
+    primary_issue_chain = payload_get(payload, "primary_issue_chain", "primaryIssueChain")
+    if isinstance(primary_issue_chain, str) and primary_issue_chain:
+        chain_lower = primary_issue_chain.lower()
+        for alias, needles in PHASE_ALIASES.items():
+            if any(needle.lower() in chain_lower for needle in needles):
+                return alias
+        return chain_lower
+
+    return None
+
+
+def is_phase_match(row: dict[str, Any], phase_filter: str | None) -> bool:
+    if not phase_filter:
+        return True
+    label = classify_phase_label(row)
+    if label is None:
+        return False
+    if label == phase_filter:
+        return True
+    needles = PHASE_ALIASES.get(phase_filter, ())
+    if any(needle.lower() in label for needle in needles):
+        return True
+    return any(needle.lower() in label for needle in PHASE_ALIASES.get(label, ()))
+
+
+def is_metric_field(name: str) -> bool:
+    return name in {
+        "presentAgeMs",
+        "decodeAgeMs",
+        "packetAgeMs",
+        "packetToDecodeMs",
+        "packetToPresentMs",
+        "presentFps",
+        "decodeFps",
+        "videoDecoderHardwareFailureStreak",
+        "videoPresentDropCountTotal",
+        "videoRendererDropCountTotal",
+        "videoPacerDropCountTotal",
+        "recoveryKeyframeRequestCount",
+        "recoveryDecoderResetCount",
+        "recoveryReconnectCount",
+    }
+
+
+def extract_numeric_metric(payload: Any, metric: str) -> float | None:
+    if not isinstance(payload, dict):
+        return None
+    value = payload_get(payload, metric, metric)
+    if isinstance(value, (int, float)):
+        return float(value)
+    return None
+
+
 def is_suspicious(row: dict[str, Any]) -> bool:
     haystacks = [
         str(row.get("event", "")).lower(),
@@ -231,6 +353,52 @@ def is_focus_row(row: dict[str, Any], session_id: str | None, domain: str | None
     if domain is not None and str(row.get("domain")) != domain:
         return False
     return True
+
+
+def parse_time_filters(value: str | None) -> list[tuple[int | None, int | None]] | None:
+    if not value:
+        return []
+
+    filters: list[tuple[int | None, int | None]] = []
+    for item in value.split(","):
+        item = item.strip()
+        if not item:
+            continue
+        try:
+            if "-" in item:
+                start_text, end_text = item.split("-", 1)
+                start_ts = int(start_text) if start_text.strip() else None
+                end_ts = int(end_text) if end_text.strip() else None
+            else:
+                start_ts = int(item)
+                end_ts = int(item)
+        except ValueError:
+            return None
+        filters.append((start_ts, end_ts))
+    return filters
+
+
+def describe_time_filters(filters: list[tuple[int | None, int | None]]) -> str:
+    if not filters:
+        return ""
+    parts: list[str] = []
+    for start_ts, end_ts in filters:
+        parts.append(f"{start_ts or ''}-{end_ts or ''}")
+    return ",".join(parts)
+
+
+def is_within_time_filters(ts_ms: int | None, filters: list[tuple[int | None, int | None]]) -> bool:
+    if not filters:
+        return True
+    if ts_ms is None:
+        return False
+    for start_ts, end_ts in filters:
+        if start_ts is not None and ts_ms < start_ts:
+            continue
+        if end_ts is not None and ts_ms > end_ts:
+            continue
+        return True
+    return False
 
 
 def build_signature(row: dict[str, Any]) -> tuple[str, str] | None:
@@ -384,6 +552,89 @@ def format_row_ref(row: dict[str, Any]) -> str:
     )
 
 
+def build_trace_profile(
+    path: Path,
+    rows: list[dict[str, Any]],
+    *,
+    gap_threshold_ms: int,
+    cluster_window_ms: int,
+    metric_name: str | None = None,
+) -> TraceProfile:
+    category_counts = Counter(str(row.get("category", "unknown")) for row in rows)
+    domain_counts = Counter(str(row.get("domain", "unknown")) for row in rows)
+    event_counts = Counter(
+        f"{row.get('category', 'unknown')}/{row.get('domain', 'unknown')}/{row.get('event', 'unknown')}"
+        for row in rows
+    )
+    session_counts = Counter(str(row.get("sessionId")) for row in rows if row.get("sessionId"))
+    log_levels = Counter(
+        str(row.get("payload", {}).get("level", "unknown"))
+        for row in rows
+        if row.get("category") == "log" and isinstance(row.get("payload"), dict)
+    )
+    suspicious_rows = [row for row in rows if is_suspicious(row)]
+    phase_segments = build_phase_segments(rows)
+    long_gaps = find_long_gaps(rows, gap_threshold_ms)
+    anomaly_windows = cluster_signal_rows(rows, cluster_window_ms)
+
+    phase_signature_counts = Counter(segment.signature for segment in phase_segments)
+    anomaly_signal_counts = Counter(
+        classify_signal(row) or "unknown" for cluster in anomaly_windows for row in cluster.rows
+    )
+    metric_stats: dict[str, dict[str, Any]] = {}
+    if metric_name:
+        samples: list[tuple[int, float]] = []
+        for row in rows:
+            payload = row.get("payload")
+            value = extract_numeric_metric(payload, metric_name)
+            ts = row_ts(row)
+            if value is not None and ts is not None:
+                samples.append((ts, value))
+        if samples:
+            values = [value for _, value in samples]
+            metric_stats[metric_name] = {
+                "samples": len(samples),
+                "min": min(values),
+                "max": max(values),
+                "avg": sum(values) / len(values),
+                "first": samples[0][1],
+                "last": samples[-1][1],
+                "peaks": [
+                    {
+                        "ts": ts,
+                        "value": value,
+                    }
+                    for ts, value in sorted(samples, key=lambda item: item[1], reverse=True)[:5]
+                ],
+            }
+
+    first_ts = next((row_ts(row) for row in rows if row_ts(row) is not None), None)
+    last_ts = next((row_ts(row) for row in reversed(rows) if row_ts(row) is not None), None)
+    duration_ms = None
+    if isinstance(first_ts, int) and isinstance(last_ts, int):
+        duration_ms = last_ts - first_ts
+
+    return TraceProfile(
+        path=path,
+        rows=rows,
+        first_ts=first_ts,
+        last_ts=last_ts,
+        duration_ms=duration_ms,
+        category_counts=category_counts,
+        domain_counts=domain_counts,
+        event_counts=event_counts,
+        session_counts=session_counts,
+        log_levels=log_levels,
+        suspicious_rows=suspicious_rows,
+        phase_segments=phase_segments,
+        long_gaps=long_gaps,
+        anomaly_windows=anomaly_windows,
+        phase_signature_counts=phase_signature_counts,
+        anomaly_signal_counts=anomaly_signal_counts,
+        metric_stats=metric_stats,
+    )
+
+
 def print_phase_segments(segments: list[PhaseSegment], limit: int) -> None:
     print("\nphase_windows:")
     if not segments:
@@ -457,13 +708,218 @@ def print_clusters(clusters: list[ClusterWindow], limit: int, sample_limit: int)
         print(f"  - ... {len(clusters) - limit} more anomaly windows omitted")
 
 
+def print_profile(profile: TraceProfile, args: argparse.Namespace) -> None:
+    print(f"file: {profile.path}")
+    if args.session_id or args.domain or args.time_window or args.phase or args.metric:
+        filters = []
+        if args.session_id:
+            filters.append(f"sessionId={args.session_id}")
+        if args.domain:
+            filters.append(f"domain={args.domain}")
+        if args.phase:
+            filters.append(f"phase={args.phase}")
+        if args.metric:
+            filters.append(f"metric={args.metric}")
+        if args.time_window:
+            filters.append(f"time_window={args.time_window}")
+        print("filters: " + ", ".join(filters))
+    print(f"rows: {len(profile.rows)}")
+    if len(profile.rows) == 0:
+        print("note: no rows matched the selected filters")
+    print(
+        f"time_range_ms: {profile.first_ts} -> {profile.last_ts} "
+        f"(duration={fmt_ms(profile.duration_ms)})"
+    )
+    print(
+        "categories: "
+        + ", ".join(f"{name}={count}" for name, count in profile.category_counts.most_common())
+    )
+    print("domains: " + ", ".join(f"{name}={count}" for name, count in profile.domain_counts.most_common(12)))
+    if profile.session_counts:
+        print(
+            "sessions: "
+            + ", ".join(f"{name}={count}" for name, count in profile.session_counts.most_common(8))
+        )
+    if profile.log_levels:
+        print(
+            "log_levels: "
+            + ", ".join(f"{name}={count}" for name, count in profile.log_levels.most_common())
+        )
+
+    print("\nphase_anchors:")
+    if profile.phase_segments:
+        print(f"  - segments={len(profile.phase_segments)}")
+        for segment in profile.phase_segments[: args.max_phase_windows]:
+            print(
+                "  - "
+                f"{format_row_ref(segment.start_row)} -> {format_row_ref(segment.end_row)} "
+                f"phase={segment.signature}"
+            )
+            if segment.detail:
+                print(f"    detail={segment.detail}")
+    else:
+        print("  - none")
+
+    print_phase_segments(profile.phase_segments, args.max_phase_windows)
+    print_gap_windows(profile.long_gaps, args.max_gap_windows)
+    print_clusters(profile.anomaly_windows, args.max_anomaly_windows, args.sample_rows)
+
+    print("\ntop_events:")
+    for name, count in profile.event_counts.most_common(args.top_events):
+        print(f"  - {count:5d} {name}")
+
+    print("\nsuspicious_rows:")
+    # 这里保留首批异常线索，先把可疑窗口和上下文缩小，再回看原始 trace。
+    for row in profile.suspicious_rows[: args.top_suspicious]:
+        signal = classify_signal(row)
+        print(
+            "  - "
+            f"{format_row_ref(row)} "
+            f"signal={signal or 'suspicious'} "
+            f"session={row.get('sessionId')} "
+            f"summary={short_payload(row.get('payload'))}"
+        )
+
+    if len(profile.suspicious_rows) > args.top_suspicious:
+        print(f"  - ... {len(profile.suspicious_rows) - args.top_suspicious} more suspicious rows omitted")
+
+    if args.metric:
+        print("\nmetric_summary:")
+        metric = profile.metric_stats.get(args.metric)
+        if not metric:
+            print("  - no samples")
+        else:
+            print(
+                "  - "
+                f"samples={metric['samples']} min={metric['min']:.3f} max={metric['max']:.3f} "
+                f"avg={metric['avg']:.3f} first={metric['first']:.3f} last={metric['last']:.3f}"
+            )
+            for peak in metric["peaks"]:
+                print(f"    - peak ts={peak['ts']} value={peak['value']:.3f}")
+
+
+def print_trace_comparison(base: TraceProfile, compare: TraceProfile) -> None:
+    print("\ntrace_comparison:")
+    print(
+        "  - "
+        f"base_rows={len(base.rows)} compare_rows={len(compare.rows)} "
+        f"base_duration={fmt_ms(base.duration_ms)} compare_duration={fmt_ms(compare.duration_ms)}"
+    )
+
+    base_phase_total = sum(base.phase_signature_counts.values())
+    compare_phase_total = sum(compare.phase_signature_counts.values())
+    print(
+        "  - "
+        f"phase_windows base={base_phase_total} compare={compare_phase_total} "
+        f"delta={compare_phase_total - base_phase_total:+d}"
+    )
+
+    base_anomaly_total = sum(base.anomaly_signal_counts.values())
+    compare_anomaly_total = sum(compare.anomaly_signal_counts.values())
+    print(
+        "  - "
+        f"anomaly_signals base={base_anomaly_total} compare={compare_anomaly_total} "
+        f"delta={compare_anomaly_total - base_anomaly_total:+d}"
+    )
+
+    print("  - top phase signatures delta:")
+    all_phase_signatures = set(base.phase_signature_counts) | set(compare.phase_signature_counts)
+    for signature in sorted(
+        all_phase_signatures,
+        key=lambda item: abs(compare.phase_signature_counts.get(item, 0) - base.phase_signature_counts.get(item, 0)),
+        reverse=True,
+    )[:8]:
+        base_count = base.phase_signature_counts.get(signature, 0)
+        compare_count = compare.phase_signature_counts.get(signature, 0)
+        delta = compare_count - base_count
+        if delta == 0:
+            continue
+        print(f"    - {signature}: base={base_count} compare={compare_count} delta={delta:+d}")
+
+    print("  - top anomaly signal delta:")
+    all_signals = set(base.anomaly_signal_counts) | set(compare.anomaly_signal_counts)
+    for signal in sorted(
+        all_signals,
+        key=lambda item: abs(compare.anomaly_signal_counts.get(item, 0) - base.anomaly_signal_counts.get(item, 0)),
+        reverse=True,
+    )[:8]:
+        base_count = base.anomaly_signal_counts.get(signal, 0)
+        compare_count = compare.anomaly_signal_counts.get(signal, 0)
+        delta = compare_count - base_count
+        if delta == 0:
+            continue
+        print(f"    - {signal}: base={base_count} compare={compare_count} delta={delta:+d}")
+
+    if base.metric_stats or compare.metric_stats:
+        print("  - metric delta:")
+        metric_names = set(base.metric_stats) | set(compare.metric_stats)
+        for metric_name in sorted(metric_names):
+            base_metric = base.metric_stats.get(metric_name)
+            compare_metric = compare.metric_stats.get(metric_name)
+            if not base_metric or not compare_metric:
+                continue
+            print(
+                f"    - {metric_name}: "
+                f"base_avg={base_metric['avg']:.3f} compare_avg={compare_metric['avg']:.3f} "
+                f"delta={compare_metric['avg'] - base_metric['avg']:+.3f}"
+            )
+
+
+def load_trace_profile(
+    path: Path,
+    *,
+    session_id: str | None,
+    domain: str | None,
+    time_filters: list[tuple[int | None, int | None]],
+    phase_filter: str | None,
+    gap_threshold_ms: int,
+    cluster_window_ms: int,
+    metric_name: str | None = None,
+) -> TraceProfile:
+    rows: list[dict[str, Any]] = []
+    with path.open("r", encoding="utf-8") as handle:
+        for line_no, line in enumerate(handle, start=1):
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                row = json.loads(line)
+            except json.JSONDecodeError as exc:
+                print(f"invalid json at line {line_no}: {exc}", file=sys.stderr)
+                raise SystemExit(1)
+            if not isinstance(row, dict):
+                continue
+            if not is_focus_row(row, session_id, domain):
+                continue
+            if not is_within_time_filters(row_ts(row), time_filters):
+                continue
+            if not is_phase_match(row, phase_filter):
+                continue
+            rows.append(row)
+
+    return build_trace_profile(
+        path,
+        rows,
+        gap_threshold_ms=gap_threshold_ms,
+        cluster_window_ms=cluster_window_ms,
+        metric_name=metric_name,
+    )
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Summarize runtime trace logs with phase windows and anomaly windows."
     )
     parser.add_argument("trace", help="trace jsonl file")
+    parser.add_argument("--compare", help="another trace jsonl file for comparison")
     parser.add_argument("--session-id", help="focus on one sessionId")
     parser.add_argument("--domain", help="focus on one domain")
+    parser.add_argument("--phase", help="focus on a semantic phase such as startup, playing, stall, recovery")
+    parser.add_argument("--metric", help="focus on a numeric metric field, e.g. presentAgeMs or packetAgeMs")
+    parser.add_argument(
+        "--time-window",
+        help="time filter, format start-end or single timestamp, comma separated",
+    )
     parser.add_argument("--gap-threshold-ms", type=int, default=1000, help="minimum gap to report")
     parser.add_argument(
         "--cluster-window-ms",
@@ -488,125 +944,43 @@ def main() -> int:
         print(f"trace file not found: {path}", file=sys.stderr)
         return 2
 
-    rows: list[dict[str, Any]] = []
-    with path.open("r", encoding="utf-8") as handle:
-        for line_no, line in enumerate(handle, start=1):
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                row = json.loads(line)
-            except json.JSONDecodeError as exc:
-                print(f"invalid json at line {line_no}: {exc}", file=sys.stderr)
-                return 1
-            if not isinstance(row, dict):
-                continue
-            if not is_focus_row(row, args.session_id, args.domain):
-                continue
-            rows.append(row)
+    time_filters = parse_time_filters(args.time_window)
+    if args.time_window and time_filters is None:
+        print("invalid time window filter", file=sys.stderr)
+        return 2
 
-    if not rows:
-        print(f"file: {path}")
-        print("rows: 0")
-        if args.session_id or args.domain:
-            print(
-                "filters: "
-                + ", ".join(
-                    part
-                    for part in (
-                        f"sessionId={args.session_id}" if args.session_id else None,
-                        f"domain={args.domain}" if args.domain else None,
-                    )
-                    if part
-                )
-            )
-        return 0
+    if args.metric and not is_metric_field(args.metric):
+        print(f"unsupported metric field: {args.metric}", file=sys.stderr)
+        return 2
 
-    category_counts = Counter(str(row.get("category", "unknown")) for row in rows)
-    domain_counts = Counter(str(row.get("domain", "unknown")) for row in rows)
-    event_counts = Counter(
-        f"{row.get('category', 'unknown')}/{row.get('domain', 'unknown')}/{row.get('event', 'unknown')}"
-        for row in rows
+    profile = load_trace_profile(
+        path,
+        session_id=args.session_id,
+        domain=args.domain,
+        time_filters=time_filters,
+        phase_filter=args.phase,
+        gap_threshold_ms=args.gap_threshold_ms,
+        cluster_window_ms=args.cluster_window_ms,
+        metric_name=args.metric,
     )
-    session_counts = Counter(str(row.get("sessionId")) for row in rows if row.get("sessionId"))
-    log_levels = Counter(
-        str(row.get("payload", {}).get("level", "unknown"))
-        for row in rows
-        if row.get("category") == "log" and isinstance(row.get("payload"), dict)
-    )
+    print_profile(profile, args)
 
-    first_ts = next((row_ts(row) for row in rows if row_ts(row) is not None), None)
-    last_ts = next((row_ts(row) for row in reversed(rows) if row_ts(row) is not None), None)
-    duration_ms = None
-    if isinstance(first_ts, int) and isinstance(last_ts, int):
-        duration_ms = last_ts - first_ts
-
-    suspicious_rows = [row for row in rows if is_suspicious(row)]
-    phase_segments = build_phase_segments(rows)
-    long_gaps = find_long_gaps(rows, args.gap_threshold_ms)
-    anomaly_windows = cluster_signal_rows(rows, args.cluster_window_ms)
-
-    print(f"file: {path}")
-    if args.session_id or args.domain:
-        filters = [
-            f"sessionId={args.session_id}" if args.session_id else None,
-            f"domain={args.domain}" if args.domain else None,
-        ]
-        print("filters: " + ", ".join(filter(None, filters)))
-    print(f"rows: {len(rows)}")
-    print(f"time_range_ms: {first_ts} -> {last_ts} (duration={fmt_ms(duration_ms)})")
-    print(
-        "categories: "
-        + ", ".join(f"{name}={count}" for name, count in category_counts.most_common())
-    )
-    print("domains: " + ", ".join(f"{name}={count}" for name, count in domain_counts.most_common(12)))
-    if session_counts:
-        print(
-            "sessions: "
-            + ", ".join(f"{name}={count}" for name, count in session_counts.most_common(8))
+    if args.compare:
+        compare_path = Path(args.compare)
+        if not compare_path.is_file():
+            print(f"compare trace file not found: {compare_path}", file=sys.stderr)
+            return 2
+        compare_profile = load_trace_profile(
+            compare_path,
+            session_id=args.session_id,
+            domain=args.domain,
+            time_filters=time_filters,
+            phase_filter=args.phase,
+            gap_threshold_ms=args.gap_threshold_ms,
+            cluster_window_ms=args.cluster_window_ms,
+            metric_name=args.metric,
         )
-    if log_levels:
-        print(
-            "log_levels: "
-            + ", ".join(f"{name}={count}" for name, count in log_levels.most_common())
-        )
-
-    print("\nphase_anchors:")
-    if phase_segments:
-        print(f"  - segments={len(phase_segments)}")
-        for segment in phase_segments[: args.max_phase_windows]:
-            print(
-                "  - "
-                f"{format_row_ref(segment.start_row)} -> {format_row_ref(segment.end_row)} "
-                f"phase={segment.signature}"
-            )
-            if segment.detail:
-                print(f"    detail={segment.detail}")
-    else:
-        print("  - none")
-
-    print_phase_segments(phase_segments, args.max_phase_windows)
-    print_gap_windows(long_gaps, args.max_gap_windows)
-    print_clusters(anomaly_windows, args.max_anomaly_windows, args.sample_rows)
-
-    print("\ntop_events:")
-    for name, count in event_counts.most_common(args.top_events):
-        print(f"  - {count:5d} {name}")
-
-    print("\nsuspicious_rows:")
-    # 这里保留首批异常线索，先把可疑窗口和上下文缩小，再回看原始 trace。
-    for row in suspicious_rows[: args.top_suspicious]:
-        signal = classify_signal(row)
-        print(
-            "  - "
-            f"{format_row_ref(row)} "
-            f"signal={signal or 'suspicious'} "
-            f"session={row.get('sessionId')} "
-            f"summary={short_payload(row.get('payload'))}"
-        )
-
-    if len(suspicious_rows) > args.top_suspicious:
-        print(f"  - ... {len(suspicious_rows) - args.top_suspicious} more suspicious rows omitted")
+        print_trace_comparison(profile, compare_profile)
 
     return 0
 

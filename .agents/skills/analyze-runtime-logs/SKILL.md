@@ -13,17 +13,18 @@ Use this skill for `runtime-logs/runtime-trace-*.jsonl` analysis in this reposit
 
 1. Identify the target trace file or log directory.
 2. Run [`scripts/summarize_runtime_trace.py`](scripts/summarize_runtime_trace.py) `<trace.jsonl>` to get phase anchors, long gaps, and anomaly windows first.
-3. If you need to isolate one session or one subsystem, add `--session-id` and/or `--domain` before reading more rows.
-4. Read [`references/log-schema.md`](references/log-schema.md) when you need field semantics.
-5. Read [`references/analysis-playbook.md`](references/analysis-playbook.md) when you need the project-specific workflow, output contract, or heuristics.
-6. Re-open the raw trace around the key `seq` / `tsMs` window before making conclusions.
+3. If you need to isolate one session, subsystem, stage window, or metric, add `--session-id`, `--domain`, `--time-window`, `--phase`, and/or `--metric`.
+4. Use `--compare <other-trace.jsonl>` when you need a before/after regression check for the same phase window.
+5. Read [`references/log-schema.md`](references/log-schema.md) when you need field semantics.
+6. Read [`references/analysis-playbook.md`](references/analysis-playbook.md) when you need the project-specific workflow, output contract, or heuristics.
+7. Re-open the raw trace around the key `seq` / `tsMs` window before making conclusions.
 
 ## Follow This Workflow
 
 1. Confirm the user goal: incident triage, regression comparison, startup failure, streaming fault, or performance review.
 2. Establish the time window: first row, last row, duration, active `sessionId`, and major phase boundaries.
 3. Separate `state` / `decision` / `snapshot` rows from `log` noise before chasing individual messages.
-4. Use the script output to locate phase windows, long gaps, and anomaly clusters before reconstructing the fine-grained timeline.
+4. Use the script output to locate phase windows, long gaps, anomaly clusters, and compare deltas before reconstructing the fine-grained timeline.
 5. Reconstruct the primary timeline with concrete `seq`, `tsMs`, `domain`, and `event` anchors.
 6. Identify the first abnormal signal, not only the final failure symptom.
 7. Correlate front-end, Tauri, service, and `xbxengine` observations before inferring causality.
