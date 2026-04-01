@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 from collections import Counter
 from dataclasses import dataclass
@@ -159,6 +160,7 @@ class TraceProfile:
     phase_signature_counts: Counter[str]
     anomaly_signal_counts: Counter[str]
     metric_stats: dict[str, dict[str, Any]]
+    recovery_audit: dict[str, Any]
 
 
 def fmt_ms(value: int | None) -> str:
@@ -223,6 +225,216 @@ def short_payload(payload: Any) -> str:
         text = json.dumps(payload, ensure_ascii=False, sort_keys=True)
         return text[:180]
     return str(payload)[:180]
+
+
+def normalize_text(value: Any) -> str | None:
+    if not isinstance(value, str):
+        return None
+    stripped = value.strip()
+    return stripped if stripped else None
+
+
+def normalize_state(value: Any) -> str | None:
+    text = normalize_text(value)
+    if text is None:
+        return None
+    return text.lower().replace("_", "-")
+
+
+def is_failed_terminal(value: Any) -> bool:
+    state = normalize_state(value)
+    return state in {"failed-terminal", "failedterminal", "terminal-failed"}
+
+
+def extract_terminal_reason(*candidates: Any) -> str | None:
+    for candidate in candidates:
+        text = normalize_text(candidate)
+        if not text:
+            continue
+        match = re.search(r"terminal:([A-Za-z0-9_-]+)", text)
+        if match:
+            return match.group(1)
+    return None
+
+
+def extract_transport_state(row: dict[str, Any]) -> str | None:
+    payload = row.get("payload")
+    if not isinstance(payload, dict):
+        return None
+    return normalize_state(payload_get(payload, "transportState", "transport_state", "state"))
+
+
+def extract_recovery_ledger(row: dict[str, Any]) -> dict[str, Any] | None:
+    if str(row.get("event", "")) != "recoveryDecisionLedger":
+        return None
+    payload = row.get("payload")
+    if not isinstance(payload, dict):
+        return None
+    return payload
+
+
+def extract_successful_action_sample(row: dict[str, Any]) -> tuple[int, int] | None:
+    payload = row.get("payload")
+    ts = row_ts(row)
+    if not isinstance(payload, dict) or ts is None:
+        return None
+    value = payload_get(payload, "successful_action_count", "successfulActionCount")
+    if isinstance(value, int):
+        return ts, value
+    return None
+
+
+def collect_connecting_windows(rows: list[dict[str, Any]]) -> list[tuple[int, int]]:
+    sorted_rows = sorted(rows, key=lambda item: (row_ts(item) or 0, row_seq(item) or 0))
+    windows: list[tuple[int, int]] = []
+    active_start: int | None = None
+    last_state: str | None = None
+    last_ts = next((row_ts(row) for row in reversed(sorted_rows) if row_ts(row) is not None), None)
+    for row in sorted_rows:
+        ts = row_ts(row)
+        if ts is None:
+            continue
+        state = extract_transport_state(row)
+        if state is None:
+            continue
+        if state == "connecting" and active_start is None:
+            active_start = ts
+        elif state != "connecting" and last_state == "connecting" and active_start is not None:
+            windows.append((active_start, ts))
+            active_start = None
+        last_state = state
+    if active_start is not None and last_ts is not None and last_ts >= active_start:
+        windows.append((active_start, last_ts))
+    return windows
+
+
+def analyze_recovery_audit(rows: list[dict[str, Any]], silence_threshold_ms: int) -> dict[str, Any]:
+    sorted_rows = sorted(rows, key=lambda item: (row_ts(item) or 0, row_seq(item) or 0))
+    ledger_rows: list[dict[str, Any]] = []
+    ledger_times: list[int] = []
+    failed_terminal_entries: list[dict[str, Any]] = []
+    failed_terminal_reasons: Counter[str] = Counter()
+
+    for row in sorted_rows:
+        payload = extract_recovery_ledger(row)
+        if payload is None:
+            continue
+        ts = row_ts(row)
+        if ts is None:
+            continue
+        ledger_rows.append(row)
+        ledger_times.append(ts)
+        state_after = payload_get(payload, "stateAfter", "state_after")
+        if not is_failed_terminal(state_after):
+            continue
+        reason = extract_terminal_reason(
+            payload_get(payload, "gateResult", "gate_result"),
+            payload_get(payload, "inputSignal", "input_signal"),
+            payload_get(payload, "commandDetail", "command_detail"),
+            payload_get(payload, "actionSelected", "action_selected"),
+        ) or "unknown"
+        failed_terminal_reasons[reason] += 1
+        failed_terminal_entries.append(
+            {
+                "seq": row_seq(row),
+                "tsMs": ts,
+                "decisionId": payload_get(payload, "decisionId", "decision_id"),
+                "reason": reason,
+                "stateBefore": payload_get(payload, "stateBefore", "state_before"),
+                "stateAfter": state_after,
+                "inputSignal": payload_get(payload, "inputSignal", "input_signal"),
+                "gateResult": payload_get(payload, "gateResult", "gate_result"),
+                "actionSelected": payload_get(payload, "actionSelected", "action_selected"),
+            }
+        )
+
+    connecting_windows = collect_connecting_windows(sorted_rows)
+    silence_breaches: list[dict[str, Any]] = []
+    for start_ts, end_ts in connecting_windows:
+        if end_ts <= start_ts:
+            continue
+        in_window = [ts for ts in ledger_times if start_ts <= ts <= end_ts]
+        checkpoints = [start_ts, *in_window, end_ts]
+        max_gap_ms = 0
+        for left, right in zip(checkpoints, checkpoints[1:]):
+            max_gap_ms = max(max_gap_ms, right - left)
+        if max_gap_ms >= silence_threshold_ms:
+            silence_breaches.append(
+                {
+                    "windowStartTsMs": start_ts,
+                    "windowEndTsMs": end_ts,
+                    "windowDurationMs": end_ts - start_ts,
+                    "maxLedgerSilenceMs": max_gap_ms,
+                    "ledgerEntries": len(in_window),
+                }
+            )
+
+    successful_samples = [sample for sample in (extract_successful_action_sample(row) for row in sorted_rows) if sample]
+    successful_samples.sort(key=lambda item: item[0])
+    successful_action_increments = 0
+    for (_, left), (_, right) in zip(successful_samples, successful_samples[1:]):
+        if right > left:
+            successful_action_increments += 1
+
+    unlock_evidence: list[dict[str, Any]] = []
+    for failed in failed_terminal_entries:
+        failed_ts = int(failed["tsMs"])
+        unlocked = False
+        unlock_ts_ms: int | None = None
+        unlock_kind: str | None = None
+        detail: str | None = None
+
+        for row in sorted_rows:
+            ts = row_ts(row)
+            if ts is None or ts <= failed_ts:
+                continue
+            payload = extract_recovery_ledger(row)
+            if payload is None:
+                continue
+            state_after = payload_get(payload, "stateAfter", "state_after")
+            if state_after is not None and not is_failed_terminal(state_after):
+                unlocked = True
+                unlock_ts_ms = ts
+                unlock_kind = "state-exit"
+                detail = f"stateAfter={state_after}"
+                break
+
+        if not unlocked:
+            baseline: int | None = None
+            for ts, count in successful_samples:
+                if ts <= failed_ts:
+                    baseline = count
+                    continue
+                if baseline is not None and count > baseline:
+                    unlocked = True
+                    unlock_ts_ms = ts
+                    unlock_kind = "successful-action-increase"
+                    detail = f"{baseline}->{count}"
+                    break
+
+        unlock_evidence.append(
+            {
+                "failedTerminalTsMs": failed_ts,
+                "unlocked": unlocked,
+                "unlockTsMs": unlock_ts_ms,
+                "unlockKind": unlock_kind,
+                "detail": detail,
+            }
+        )
+
+    return {
+        "recoveryLedgerRows": len(ledger_rows),
+        "connectingWindows": len(connecting_windows),
+        "silenceThresholdMs": silence_threshold_ms,
+        "silenceBreachCount": len(silence_breaches),
+        "silenceBreaches": silence_breaches,
+        "failedTerminalCount": len(failed_terminal_entries),
+        "failedTerminalReasons": dict(failed_terminal_reasons),
+        "failedTerminalEntries": failed_terminal_entries,
+        "unlockEvidence": unlock_evidence,
+        "successfulActionSamples": len(successful_samples),
+        "successfulActionIncrements": successful_action_increments,
+    }
 
 
 def extract_payload_strings(payload: Any) -> list[str]:
@@ -558,6 +770,7 @@ def build_trace_profile(
     *,
     gap_threshold_ms: int,
     cluster_window_ms: int,
+    recovery_silence_threshold_ms: int,
     metric_name: str | None = None,
 ) -> TraceProfile:
     category_counts = Counter(str(row.get("category", "unknown")) for row in rows)
@@ -613,6 +826,7 @@ def build_trace_profile(
     duration_ms = None
     if isinstance(first_ts, int) and isinstance(last_ts, int):
         duration_ms = last_ts - first_ts
+    recovery_audit = analyze_recovery_audit(rows, recovery_silence_threshold_ms)
 
     return TraceProfile(
         path=path,
@@ -632,6 +846,7 @@ def build_trace_profile(
         phase_signature_counts=phase_signature_counts,
         anomaly_signal_counts=anomaly_signal_counts,
         metric_stats=metric_stats,
+        recovery_audit=recovery_audit,
     )
 
 
@@ -708,6 +923,96 @@ def print_clusters(clusters: list[ClusterWindow], limit: int, sample_limit: int)
         print(f"  - ... {len(clusters) - limit} more anomaly windows omitted")
 
 
+def print_recovery_audit(profile: TraceProfile, sample_limit: int) -> None:
+    audit = profile.recovery_audit
+    print("\nrecovery_audit:")
+    print(
+        "  - "
+        f"ledger_rows={audit['recoveryLedgerRows']} "
+        f"connecting_windows={audit['connectingWindows']} "
+        f"silence_threshold_ms={audit['silenceThresholdMs']} "
+        f"silence_breaches={audit['silenceBreachCount']}"
+    )
+    for breach in audit["silenceBreaches"][:sample_limit]:
+        print(
+            "    - "
+            f"window={breach['windowStartTsMs']}->{breach['windowEndTsMs']} "
+            f"duration={fmt_ms(breach['windowDurationMs'])} "
+            f"max_ledger_silence={fmt_ms(breach['maxLedgerSilenceMs'])} "
+            f"ledger_entries={breach['ledgerEntries']}"
+        )
+    reasons = audit["failedTerminalReasons"]
+    reason_text = ", ".join(f"{name}={count}" for name, count in sorted(reasons.items())) or "none"
+    print(
+        "  - "
+        f"failed_terminal_count={audit['failedTerminalCount']} reasons={reason_text}"
+    )
+    for item in audit["failedTerminalEntries"][:sample_limit]:
+        print(
+            "    - "
+            f"seq={item['seq']} tsMs={item['tsMs']} reason={item['reason']} "
+            f"decisionId={item['decisionId']} state={item['stateBefore']}->{item['stateAfter']} "
+            f"gate={item['gateResult']} action={item['actionSelected']}"
+        )
+    unlock_items = audit["unlockEvidence"]
+    unlocked_count = sum(1 for item in unlock_items if item["unlocked"])
+    print(f"  - failed_terminal_unlock={unlocked_count}/{len(unlock_items)}")
+    for item in unlock_items[:sample_limit]:
+        status = "unlocked" if item["unlocked"] else "still-locked"
+        print(
+            "    - "
+            f"failedAt={item['failedTerminalTsMs']} status={status} "
+            f"unlockAt={item['unlockTsMs']} kind={item['unlockKind']} detail={item['detail']}"
+        )
+    print(
+        "  - "
+        f"successful_action_samples={audit['successfulActionSamples']} "
+        f"increments={audit['successfulActionIncrements']}"
+    )
+
+
+def build_machine_summary(
+    profile: TraceProfile,
+    args: argparse.Namespace,
+    compare_profile: TraceProfile | None = None,
+) -> dict[str, Any]:
+    result: dict[str, Any] = {
+        "file": str(profile.path),
+        "rows": len(profile.rows),
+        "timeRangeMs": {
+            "first": profile.first_ts,
+            "last": profile.last_ts,
+            "duration": profile.duration_ms,
+        },
+        "filters": {
+            "sessionId": args.session_id,
+            "domain": args.domain,
+            "phase": args.phase,
+            "metric": args.metric,
+            "timeWindow": args.time_window,
+        },
+        "counts": {
+            "categories": dict(profile.category_counts),
+            "domains": dict(profile.domain_counts),
+            "eventsTop": dict(profile.event_counts.most_common(args.top_events)),
+            "phaseSegments": len(profile.phase_segments),
+            "longGaps": len(profile.long_gaps),
+            "anomalyWindows": len(profile.anomaly_windows),
+            "suspiciousRows": len(profile.suspicious_rows),
+        },
+        "recoveryAudit": profile.recovery_audit,
+    }
+    if compare_profile is not None:
+        result["compare"] = {
+            "file": str(compare_profile.path),
+            "rows": len(compare_profile.rows),
+            "durationMs": compare_profile.duration_ms,
+            "phaseWindows": sum(compare_profile.phase_signature_counts.values()),
+            "anomalySignals": sum(compare_profile.anomaly_signal_counts.values()),
+        }
+    return result
+
+
 def print_profile(profile: TraceProfile, args: argparse.Namespace) -> None:
     print(f"file: {profile.path}")
     if args.session_id or args.domain or args.time_window or args.phase or args.metric:
@@ -763,6 +1068,7 @@ def print_profile(profile: TraceProfile, args: argparse.Namespace) -> None:
     print_phase_segments(profile.phase_segments, args.max_phase_windows)
     print_gap_windows(profile.long_gaps, args.max_gap_windows)
     print_clusters(profile.anomaly_windows, args.max_anomaly_windows, args.sample_rows)
+    print_recovery_audit(profile, args.sample_rows)
 
     print("\ntop_events:")
     for name, count in profile.event_counts.most_common(args.top_events):
@@ -874,6 +1180,7 @@ def load_trace_profile(
     phase_filter: str | None,
     gap_threshold_ms: int,
     cluster_window_ms: int,
+    recovery_silence_threshold_ms: int,
     metric_name: str | None = None,
 ) -> TraceProfile:
     rows: list[dict[str, Any]] = []
@@ -902,6 +1209,7 @@ def load_trace_profile(
         rows,
         gap_threshold_ms=gap_threshold_ms,
         cluster_window_ms=cluster_window_ms,
+        recovery_silence_threshold_ms=recovery_silence_threshold_ms,
         metric_name=metric_name,
     )
 
@@ -933,6 +1241,17 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-gap-windows", type=int, default=12)
     parser.add_argument("--max-anomaly-windows", type=int, default=8)
     parser.add_argument("--sample-rows", type=int, default=5)
+    parser.add_argument(
+        "--recovery-silence-threshold-ms",
+        type=int,
+        default=3000,
+        help="max allowed recoveryDecisionLedger silence in connecting windows",
+    )
+    parser.add_argument(
+        "--json",
+        action="store_true",
+        help="emit machine-readable JSON summary",
+    )
     return parser.parse_args()
 
 
@@ -961,9 +1280,10 @@ def main() -> int:
         phase_filter=args.phase,
         gap_threshold_ms=args.gap_threshold_ms,
         cluster_window_ms=args.cluster_window_ms,
+        recovery_silence_threshold_ms=args.recovery_silence_threshold_ms,
         metric_name=args.metric,
     )
-    print_profile(profile, args)
+    compare_profile: TraceProfile | None = None
 
     if args.compare:
         compare_path = Path(args.compare)
@@ -978,8 +1298,22 @@ def main() -> int:
             phase_filter=args.phase,
             gap_threshold_ms=args.gap_threshold_ms,
             cluster_window_ms=args.cluster_window_ms,
+            recovery_silence_threshold_ms=args.recovery_silence_threshold_ms,
             metric_name=args.metric,
         )
+
+    if args.json:
+        print(
+            json.dumps(
+                build_machine_summary(profile, args, compare_profile),
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
+        return 0
+
+    print_profile(profile, args)
+    if compare_profile is not None:
         print_trace_comparison(profile, compare_profile)
 
     return 0
