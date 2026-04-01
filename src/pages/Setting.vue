@@ -13,9 +13,10 @@ import { Focusable } from '@/navigation/core/vue'
 import { applyTheme } from '../app/theme'
 import BrandedLoading from '../components/common/BrandedLoading.vue'
 import SettingDisplayOptionsSheet from '../components/settings/SettingDisplayOptionsSheet.vue'
-import SettingSingleSelectSheet from '../components/settings/SettingSingleSelectSheet.vue'
+import SettingInlineSingleSelect from '../components/settings/SettingInlineSingleSelect.vue'
 import SettingToggleRow from '../components/settings/SettingToggleRow.vue'
 import SettingValueSheet from '../components/settings/SettingValueSheet.vue'
+import SettingSingleSelectPopupSheet from '../components/settings/SettingSingleSelectPopupSheet.vue'
 import { resolveUiLocale, setUiLocale } from '../i18n'
 import {
   SPATIAL_NAV_NODE_IDS,
@@ -92,6 +93,7 @@ const activeTabKey = ref<SettingTabKey>('app')
 const groupState = ref<SettingGroupMap | null>(null)
 const isLoading = ref(false)
 const pendingActionKey = ref<string | null>(null)
+const activeInlineSingleSelectRow = ref<SettingRow | null>(null)
 const activeSingleSelectRow = ref<SettingRow | null>(null)
 const activeValueEditorRow = ref<SettingRow | null>(null)
 const activeDisplayOptionsRow = ref<SettingRow | null>(null)
@@ -297,6 +299,7 @@ async function loadConfigGroups(): Promise<void> {
 function handleTabChange(tabKey: string): void {
   if (tabKey in SPATIAL_NAV_NODE_IDS.settingTabs) {
     activeTabKey.value = tabKey as SettingTabKey
+    activeInlineSingleSelectRow.value = null
     activeSingleSelectRow.value = null
     activeValueEditorRow.value = null
     activeDisplayOptionsRow.value = null
@@ -413,9 +416,24 @@ async function handleRowConfirm(row: SettingRow): Promise<void> {
   }
 
   if (row.control === 'singleSelect') {
-    activeSingleSelectRow.value = row
+    const optionCount = row.options?.length ?? 0
+
+    if (optionCount <= 3) {
+      activeSingleSelectRow.value = null
+      activeInlineSingleSelectRow.value
+        = activeInlineSingleSelectRow.value?.nodeId === row.nodeId ? null : row
+      return
+    }
+
+    activeInlineSingleSelectRow.value = null
+    activeSingleSelectRow.value
+      = activeSingleSelectRow.value?.nodeId === row.nodeId ? null : row
     return
   }
+
+  // 打开其它编辑器前，先收起行内单选，避免界面同时展开两种二级交互
+  activeInlineSingleSelectRow.value = null
+  activeSingleSelectRow.value = null
 
   if (row.control === 'textInput' || row.control === 'numberInput') {
     activeValueEditorRow.value = row
@@ -427,7 +445,22 @@ async function handleRowConfirm(row: SettingRow): Promise<void> {
   }
 }
 
-async function handleSingleSelectChange(nextValue: string | number): Promise<void> {
+async function handleInlineSingleSelect(nextValue: string | number): Promise<void> {
+  const row = activeInlineSingleSelectRow.value
+  if (row === null || pendingActionKey.value !== null) {
+    return
+  }
+
+  if (row.value === nextValue) {
+    activeInlineSingleSelectRow.value = null
+    return
+  }
+
+  await persistRowValue(row, nextValue)
+  activeInlineSingleSelectRow.value = null
+}
+
+async function handleSingleSelectPopup(nextValue: string | number): Promise<void> {
   const row = activeSingleSelectRow.value
   if (row === null || pendingActionKey.value !== null) {
     return
@@ -513,6 +546,10 @@ function handleWindowKeydown(event: KeyboardEvent): void {
     return
   }
 
+  if (activeInlineSingleSelectRow.value !== null) {
+    activeInlineSingleSelectRow.value = null
+  }
+
   if (activeSingleSelectRow.value !== null) {
     activeSingleSelectRow.value = null
   }
@@ -548,6 +585,7 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  activeInlineSingleSelectRow.value = null
   activeSingleSelectRow.value = null
   activeValueEditorRow.value = null
   activeDisplayOptionsRow.value = null
@@ -671,6 +709,15 @@ onUnmounted(() => {
                       :class="{ 'setting-row--select': row.control === 'singleSelect' }"
                       :scope-id="SPATIAL_NAV_SCOPE_IDS.appShell"
                       :aria-label="row.label"
+                      :on-back="
+                        row.control === 'singleSelect'
+                          && (row.options?.length ?? 0) <= 3
+                          && activeInlineSingleSelectRow?.nodeId === row.nodeId
+                          ? () => {
+                            activeInlineSingleSelectRow = null
+                          }
+                          : undefined
+                      "
                       @click="() => void handleRowConfirm(row)"
                     >
                       <span class="setting-row__copy">
@@ -681,6 +728,28 @@ onUnmounted(() => {
                       </span>
                       <span class="setting-row__value">{{ row.valueText }}</span>
                     </Focusable>
+
+                    <SettingInlineSingleSelect
+                      v-if="
+                        row.control === 'singleSelect'
+                          && (row.options?.length ?? 0) <= 3
+                          && activeInlineSingleSelectRow?.nodeId === row.nodeId
+                      "
+                      :open="true"
+                      :scope-id="SPATIAL_NAV_SCOPE_IDS.appShell"
+                      :row-node-id="row.nodeId"
+                      :options="row.options ?? []"
+                      :current-value="
+                        typeof row.value === 'string' || typeof row.value === 'number'
+                          ? row.key === 'locale'
+                            ? resolveUiLocale(row.value)
+                            : row.value
+                          : null
+                      "
+                      :disabled="pendingActionKey !== null"
+                      @close="activeInlineSingleSelectRow = null"
+                      @select="(value) => void handleInlineSingleSelect(value)"
+                    />
                   </template>
                 </div>
               </section>
@@ -689,26 +758,6 @@ onUnmounted(() => {
         </Transition>
       </section>
     </div>
-
-    <SettingSingleSelectSheet
-      :open="activeSingleSelectRow !== null"
-      :scope-id="SPATIAL_NAV_SCOPE_IDS.settingSingleSelect"
-      :title="activeSingleSelectRow?.label ?? ''"
-      :hint="activeSingleSelectRow?.description ?? ''"
-      :options="activeSingleSelectRow?.options ?? []"
-      :current-value="
-        activeSingleSelectRow !== null
-          && (typeof activeSingleSelectRow.value === 'string'
-            || typeof activeSingleSelectRow.value === 'number')
-          ? activeSingleSelectRow.key === 'locale'
-            ? resolveUiLocale(activeSingleSelectRow.value)
-            : activeSingleSelectRow.value
-          : null
-      "
-      max-list-height="480px"
-      @close="activeSingleSelectRow = null"
-      @select="(value) => void handleSingleSelectChange(value)"
-    />
 
     <SettingValueSheet
       :key="activeValueEditorScopeId"
@@ -754,6 +803,26 @@ onUnmounted(() => {
       "
       @close="activeDisplayOptionsRow = null"
       @submit="(value) => void handleDisplayOptionsSubmit(value)"
+    />
+
+    <SettingSingleSelectPopupSheet
+      :key="activeSingleSelectRow?.nodeId"
+      :open="activeSingleSelectRow !== null"
+      :scope-id="SPATIAL_NAV_SCOPE_IDS.settingSingleSelect"
+      :title="activeSingleSelectRow?.label ?? ''"
+      :hint="activeSingleSelectRow?.description ?? ''"
+      :options="activeSingleSelectRow?.options ?? []"
+      :current-value="
+        activeSingleSelectRow !== null
+          && (typeof activeSingleSelectRow.value === 'string'
+            || typeof activeSingleSelectRow.value === 'number')
+          ? activeSingleSelectRow.key === 'locale'
+            ? resolveUiLocale(activeSingleSelectRow.value)
+            : activeSingleSelectRow.value
+          : null
+      "
+      @close="activeSingleSelectRow = null"
+      @select="(value) => void handleSingleSelectPopup(value)"
     />
   </section>
 </template>

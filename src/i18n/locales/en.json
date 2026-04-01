@@ -174,6 +174,8 @@
         "VideoDL": "Video DL",
         "TotalDL": "Total DL",
         "AudioDL": "Audio DL",
+        "AudioPlayout": "Audio Playout",
+        "AudioAvDelta": "A/V Delta",
         "VideoActual": "Actual Video",
         "BweTarget": "BWE Target",
         "BweObserved": "Observed REMB",
@@ -195,6 +197,9 @@
         "KeyReq": "Key Req",
         "Reset": "Reset",
         "Reco": "Reconnect",
+        "HardFallbackTimer": "Hard Fallback Timer",
+        "HardFallbackReason": "Hard Fallback Reason",
+        "HardFallbackReset": "Hard Fallback Reset",
         "LastAct": "Last Act",
         "LastWhy": "Last Why",
         "DT": "DT"

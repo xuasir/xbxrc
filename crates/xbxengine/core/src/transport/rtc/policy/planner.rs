@@ -1,17 +1,12 @@
 use crate::transport::rtc::recovery::escalation::VideoEscalationDecision;
 
 use super::bwe::BwePolicyProposal;
-use super::reconnect::ReconnectPolicyProposal;
 use super::recovery::RecoveryPolicyProposal;
 
 pub(crate) enum PlannedTransportCommand {
     ExecuteRecoveryAction {
         decision: VideoEscalationDecision,
         reason_label: String,
-    },
-    RequestReconnectCandidate {
-        observation_id: u64,
-        reason: String,
     },
     UpdateTargetRemb {
         target_remb_kbps: u32,
@@ -21,7 +16,6 @@ pub(crate) enum PlannedTransportCommand {
 
 pub(crate) struct PolicyPlanInput {
     pub(crate) recovery: Option<RecoveryPolicyProposal>,
-    pub(crate) reconnect: Option<ReconnectPolicyProposal>,
     pub(crate) bwe: Option<BwePolicyProposal>,
 }
 
@@ -31,7 +25,7 @@ pub(crate) struct PolicyPlan {
 
 /**
  * planner 骨架：
- * - 先固定优先级（reconnect > recovery > bwe）
+ * - 先固定优先级（recovery > bwe）
  * - 后续再增加去重/冷却/互斥窗口
  */
 pub(crate) struct TransportCommandPlanner;
@@ -43,14 +37,6 @@ impl TransportCommandPlanner {
 
     pub(crate) fn plan(&self, input: PolicyPlanInput) -> PolicyPlan {
         let mut commands = Vec::new();
-
-        if let Some(reconnect) = input.reconnect {
-            commands.push(PlannedTransportCommand::RequestReconnectCandidate {
-                observation_id: reconnect.observation_id,
-                reason: reconnect.reason,
-            });
-            return PolicyPlan { commands };
-        }
 
         if let Some(recovery) = input.recovery {
             commands.push(PlannedTransportCommand::ExecuteRecoveryAction {
@@ -73,25 +59,50 @@ impl TransportCommandPlanner {
 #[cfg(test)]
 mod tests {
     use super::{PlannedTransportCommand, PolicyPlanInput, TransportCommandPlanner};
-    use crate::transport::rtc::policy::reconnect::ReconnectPolicyProposal;
+    use crate::transport::rtc::policy::recovery::RecoveryPolicyProposal;
+    use crate::transport::rtc::recovery::escalation::{
+        RecoveryAction, RecoveryActionBudgetState, VideoEscalationDecision, VideoEscalationReason,
+    };
 
     #[test]
-    fn reconnect_has_higher_priority_than_other_proposals() {
+    fn recovery_has_higher_priority_than_bwe() {
         let planner = TransportCommandPlanner::new();
         let plan = planner.plan(PolicyPlanInput {
-            recovery: None,
-            reconnect: Some(ReconnectPolicyProposal {
-                observation_id: 42,
-                reason: "peer-failed".to_string(),
+            recovery: Some(RecoveryPolicyProposal {
+                decision: VideoEscalationDecision {
+                    observation_id: 42,
+                    action: RecoveryAction::RequestReconnectCandidate,
+                },
+                reason: VideoEscalationReason::LifecycleRecovering,
+                reason_label: "rtcConnectionRecovering".to_string(),
+                budget_before: RecoveryActionBudgetState {
+                    recovery_epoch: 1,
+                    keyframe_budget_used: 0,
+                    keyframe_budget_limit: 3,
+                    decoder_reset_budget_used: 0,
+                    decoder_reset_budget_limit: 2,
+                    reconnect_budget_used: 0,
+                    reconnect_budget_limit: 1,
+                },
+                budget_after: RecoveryActionBudgetState {
+                    recovery_epoch: 1,
+                    keyframe_budget_used: 0,
+                    keyframe_budget_limit: 3,
+                    decoder_reset_budget_used: 0,
+                    decoder_reset_budget_limit: 2,
+                    reconnect_budget_used: 1,
+                    reconnect_budget_limit: 1,
+                },
             }),
             bwe: None,
         });
         assert_eq!(plan.commands.len(), 1);
         match &plan.commands[0] {
-            PlannedTransportCommand::RequestReconnectCandidate { observation_id, .. } => {
-                assert_eq!(*observation_id, 42);
+            PlannedTransportCommand::ExecuteRecoveryAction { decision, .. } => {
+                assert_eq!(decision.observation_id, 42);
+                assert_eq!(decision.action, RecoveryAction::RequestReconnectCandidate);
             }
-            _ => panic!("expected reconnect command"),
+            _ => panic!("expected recovery command"),
         }
     }
 }

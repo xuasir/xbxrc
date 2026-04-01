@@ -73,14 +73,16 @@ async fn build_services(
     let app_handle = app.handle();
     let is_quitting = Arc::new(AtomicBool::new(false));
     let last_runtime_event = Arc::new(StdMutex::new(None));
-    let native_video = Arc::new(StdMutex::new(mods::native_video::NativeVideoRegistry::new(
-        app_handle.clone(),
-    )));
     let runtime_trace = Arc::new(
         mods::runtime_trace::RuntimeTraceRecorder::new().map_err(|error| {
             AppError::Internal(format!("Failed to init runtime trace: {error}"))
         })?,
     );
+    let native_video = Arc::new(StdMutex::new(mods::native_video::NativeVideoRegistry::new(
+        app_handle.clone(),
+        Some(runtime_trace.clone()),
+    )));
+    mods::native_video::set_runtime_trace_recorder(runtime_trace.clone());
     xbxengine::set_log_sink({
         let runtime_trace = runtime_trace.clone();
         Arc::new(move |record| {

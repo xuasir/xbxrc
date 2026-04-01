@@ -1,5 +1,5 @@
 use super::{build_sample_builder, now_ms_f64, UINT16SIZE_HALF};
-use crate::media::video::h264::inspection::H264AccessUnitInspection;
+use crate::media::video::h264::inspection::{H264AccessUnitInspection, H264BootstrapRejectReason};
 use bytes::Bytes;
 
 use crate::media::video::types::{AssembledVideoFrame, FrameValue, VideoCodec};
@@ -11,7 +11,10 @@ use crate::transport::rtc::stream::video_source::{
     RtcVideoFrameSource, RtcVideoTransportObservationSource,
 };
 
-use crate::XbxEngineVideoRtxReinjectObservation;
+use crate::{
+    XbxEngineAnchorCandidateFailureReason, XbxEngineAnchorCandidateState,
+    XbxEngineVideoRtxReinjectObservation,
+};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum RecoveryKeyframeAction {
@@ -35,6 +38,18 @@ pub(super) fn resolve_inspection_admission(
     }
 
     InspectionAdmission::Accept
+}
+
+fn inspection_reject_reason(inspection: &H264AccessUnitInspection) -> &'static str {
+    match inspection.bootstrap_reject_reason {
+        Some(H264BootstrapRejectReason::NoVcl) => "inspectionRejectNoVcl",
+        Some(H264BootstrapRejectReason::MissingSps) => "inspectionRejectMissingSps",
+        Some(H264BootstrapRejectReason::MissingPps) => "inspectionRejectMissingPps",
+        Some(H264BootstrapRejectReason::NonIdrVcl) => "inspectionRejectNonIdrVcl",
+        Some(H264BootstrapRejectReason::InvalidSliceHeader) => "inspectionRejectInvalidSliceHeader",
+        None if !inspection.slice_headers_valid => "inspectionRejectInvalidSliceHeader",
+        None => "inspectionRejectUnknown",
+    }
 }
 
 pub(super) fn resolve_recovery_keyframe_action(
@@ -110,6 +125,16 @@ impl RtcVideoFrameSource {
     }
 }
 
+fn should_trigger_idle_timeout(
+    has_received_packet: bool,
+    now: std::time::Instant,
+    last_packet_time: std::time::Instant,
+    idle_timeout: std::time::Duration,
+) -> bool {
+    // 首包到来前不把“没有媒体包”当成 idle，避免启动/握手期误触发超时诊断。
+    has_received_packet && now.duration_since(last_packet_time) > idle_timeout
+}
+
 impl RtcVideoFrameSource {
     pub(super) async fn recv_frame_inner(&mut self) -> Option<AssembledVideoFrame> {
         loop {
@@ -123,10 +148,39 @@ impl RtcVideoFrameSource {
                 let inspection = match self.h264_inspector.inspect_access_unit(&payload) {
                     Ok(inspection) => inspection,
                     Err(error) => {
+                        let now_ms = now_ms_f64();
                         crate::xbx_log_error!(
                             "[RtcVideoFrameSource] h264 inspection failed: {error}"
                         );
-                        self.waiting_for_recovery_keyframe = true;
+                        self.set_waiting_for_recovery_keyframe(true);
+                        self.timeline_state
+                            .on_admission_await_recovery_keyframe(Some("inspectionError"));
+                        self.timeline_state.observe_frame(
+                            sample.packet_timestamp,
+                            now_ms,
+                            None,
+                            "unknown",
+                        );
+                        self.timeline_state.mark_frame_closed(
+                            sample.packet_timestamp,
+                            now_ms,
+                            None,
+                            "unknown",
+                            Some("inspectionError"),
+                        );
+                        self.record_video_timeline_observation(
+                            "frame-inspection-error-await-keyframe",
+                            None,
+                            Some(sample.packet_timestamp),
+                            now_ms,
+                        );
+                        self.record_anchor_candidate_ledger(
+                            Some(sample.packet_timestamp),
+                            "frame-inspection-error-await-keyframe",
+                            XbxEngineAnchorCandidateState::Rejected,
+                            Some(XbxEngineAnchorCandidateFailureReason::Unknown),
+                            now_ms,
+                        );
                         self.queue_transport_observation(TransportObservation::Admission(
                             TransportAdmissionObservation::AwaitRecoveryKeyframe,
                         ));
@@ -136,13 +190,55 @@ impl RtcVideoFrameSource {
                 match resolve_inspection_admission(&inspection) {
                     InspectionAdmission::Accept => {}
                     InspectionAdmission::AwaitRecoveryKeyframe => {
+                        let now_ms = now_ms_f64();
+                        let reject_reason = inspection_reject_reason(&inspection);
                         crate::xbx_log_warn!(
                             "[RtcVideoFrameSource] h264 inspection rejected sample ts={} bootstrap={:?} slice_headers_valid={}",
                             sample.packet_timestamp,
                             inspection.bootstrap_reject_reason,
                             inspection.slice_headers_valid
                         );
-                        self.waiting_for_recovery_keyframe = true;
+                        self.set_waiting_for_recovery_keyframe(true);
+                        self.timeline_state
+                            .on_admission_await_recovery_keyframe(Some(reject_reason));
+                        self.timeline_state.observe_frame(
+                            sample.packet_timestamp,
+                            now_ms,
+                            None,
+                            "unknown",
+                        );
+                        self.timeline_state.mark_frame_closed(
+                            sample.packet_timestamp,
+                            now_ms,
+                            None,
+                            "unknown",
+                            Some(reject_reason),
+                        );
+                        self.record_video_timeline_observation(
+                            "frame-inspection-rejected-await-keyframe",
+                            None,
+                            Some(sample.packet_timestamp),
+                            now_ms,
+                        );
+                        let failure_reason = match reject_reason {
+                            "inspectionRejectMissingSps" => {
+                                XbxEngineAnchorCandidateFailureReason::InspectionRejectedMissingSps
+                            }
+                            "inspectionRejectMissingPps" => {
+                                XbxEngineAnchorCandidateFailureReason::InspectionRejectedMissingPps
+                            }
+                            "inspectionRejectInvalidSliceHeader" => {
+                                XbxEngineAnchorCandidateFailureReason::InspectionRejectedInvalidSliceHeader
+                            }
+                            _ => XbxEngineAnchorCandidateFailureReason::Unknown,
+                        };
+                        self.record_anchor_candidate_ledger(
+                            Some(sample.packet_timestamp),
+                            "frame-inspection-rejected-await-keyframe",
+                            XbxEngineAnchorCandidateState::Rejected,
+                            Some(failure_reason),
+                            now_ms,
+                        );
                         self.queue_transport_observation(TransportObservation::Admission(
                             TransportAdmissionObservation::AwaitRecoveryKeyframe,
                         ));
@@ -168,12 +264,12 @@ impl RtcVideoFrameSource {
                 }
                 let (next_waiting_for_recovery_keyframe, recovery_action) =
                     resolve_recovery_keyframe_action(
-                        self.waiting_for_recovery_keyframe,
+                        self.waiting_for_recovery_keyframe(),
                         self.sample_loss_burst_count,
                         media_dropped_packets,
                         is_keyframe,
                     );
-                self.waiting_for_recovery_keyframe = next_waiting_for_recovery_keyframe;
+                self.set_waiting_for_recovery_keyframe(next_waiting_for_recovery_keyframe);
 
                 if media_dropped_packets > 0 {
                     self.runtime_stats
@@ -213,12 +309,36 @@ impl RtcVideoFrameSource {
                         continue;
                     }
                     RecoveryKeyframeAction::TriggerWaitKeyframe => {
+                        let now_ms = now_ms_f64();
+                        self.timeline_state.on_recovery_keyframe_requested();
+                        self.record_video_timeline_observation(
+                            "chain-recovery-keyframe-requested",
+                            None,
+                            Some(sample.packet_timestamp),
+                            now_ms,
+                        );
                         self.queue_transport_observation(TransportObservation::Loss(
                             TransportLossObservation::RecoveryKeyframeRequested,
                         ));
                         continue;
                     }
                     RecoveryKeyframeAction::WaitKeyframe => {
+                        let now_ms = now_ms_f64();
+                        self.timeline_state
+                            .on_admission_await_recovery_keyframe(Some("awaitingRecoveryKeyframe"));
+                        self.record_video_timeline_observation(
+                            "frame-await-recovery-keyframe",
+                            None,
+                            Some(sample.packet_timestamp),
+                            now_ms,
+                        );
+                        self.record_anchor_candidate_ledger(
+                            Some(sample.packet_timestamp),
+                            "frame-await-recovery-keyframe",
+                            XbxEngineAnchorCandidateState::AwaitingRecovery,
+                            Some(XbxEngineAnchorCandidateFailureReason::AwaitingRecoveryKeyframe),
+                            now_ms,
+                        );
                         self.queue_transport_observation(TransportObservation::Loss(
                             TransportLossObservation::AwaitRecoveryKeyframe,
                         ));
@@ -236,6 +356,35 @@ impl RtcVideoFrameSource {
 
                 let frame_value = FrameValue::new(is_keyframe, config_changed, payload.len());
                 self.last_submitted_frame_value = frame_value;
+                let frame_importance = if is_keyframe {
+                    "keyframe"
+                } else if config_changed {
+                    "reference"
+                } else {
+                    "delta"
+                };
+                let frame_now_ms = now_ms_f64();
+                self.timeline_state.observe_frame(
+                    sample.packet_timestamp,
+                    frame_now_ms,
+                    Some(is_keyframe),
+                    frame_importance,
+                );
+                self.record_video_timeline_observation(
+                    "frame-observed",
+                    None,
+                    Some(sample.packet_timestamp),
+                    frame_now_ms,
+                );
+                if is_keyframe && media_dropped_packets == 0 {
+                    self.timeline_state.on_clean_keyframe_submitted();
+                    self.record_video_timeline_observation(
+                        "chain-clean-keyframe-submitted",
+                        None,
+                        Some(sample.packet_timestamp),
+                        frame_now_ms,
+                    );
+                }
                 let assembled_at = std::time::Instant::now();
                 self.transport_deadline_tracker
                     .record_frame_arrival(now_ms_f64());
@@ -263,6 +412,36 @@ impl RtcVideoFrameSource {
                     is_keyframe,
                     inspection.bootstrap_ready
                 );
+                let complete_candidate_now_ms = now_ms_f64();
+                self.timeline_state.mark_frame_complete_candidate(
+                    sample.packet_timestamp,
+                    complete_candidate_now_ms,
+                    Some(is_keyframe),
+                    frame_importance,
+                );
+                self.record_video_timeline_observation(
+                    "frame-complete-candidate",
+                    None,
+                    Some(sample.packet_timestamp),
+                    complete_candidate_now_ms,
+                );
+                self.record_anchor_candidate_ledger(
+                    Some(sample.packet_timestamp),
+                    "frame-complete-candidate",
+                    XbxEngineAnchorCandidateState::Observed,
+                    None,
+                    complete_candidate_now_ms,
+                );
+
+                if is_keyframe && media_dropped_packets == 0 {
+                    self.record_anchor_candidate_ledger(
+                        Some(sample.packet_timestamp),
+                        "chain-clean-keyframe-submitted",
+                        XbxEngineAnchorCandidateState::SubmittedCleanAnchor,
+                        None,
+                        frame_now_ms,
+                    );
+                }
 
                 return Some(AssembledVideoFrame {
                     codec: VideoCodec::H264,
@@ -282,10 +461,34 @@ impl RtcVideoFrameSource {
             }
 
             let now = std::time::Instant::now();
-            let idle_timeout = now.duration_since(self.last_packet_time) > self.idle_timeout;
+            let idle_timeout = should_trigger_idle_timeout(
+                self.received_packet_count > 0,
+                now,
+                self.last_packet_time,
+                self.idle_timeout,
+            );
             let thin_stream_stall = self.should_trigger_thin_stream_stall(now);
 
             if idle_timeout || thin_stream_stall {
+                let timeout_reason = if thin_stream_stall {
+                    "streamThinStall"
+                } else {
+                    "streamIdleTimeout"
+                };
+                let timeout_source_event = if thin_stream_stall {
+                    "timeout-stream-thin-stall"
+                } else {
+                    "timeout-stream-idle"
+                };
+                let timeout_now_ms = now_ms_f64();
+                self.timeline_state.record_timeout_reason(timeout_reason);
+                self.timeline_state.on_timeout_detected();
+                self.record_video_timeline_observation(
+                    timeout_source_event,
+                    None,
+                    None,
+                    timeout_now_ms,
+                );
                 self.sample_builder =
                     build_sample_builder(self.max_late_packets, self.jitter_buffer_max_delay);
                 self.assembling_frame_start = None;
@@ -382,6 +585,24 @@ impl RtcVideoFrameSource {
                         detect_forward_gap(self.last_highest_rtp_sequence, seq);
                     self.last_highest_rtp_sequence = next_highest_sequence;
                     if let Some((expected_sequence, received_sequence)) = forward_gap {
+                        let missing_sequences = super::nack::wrapping_sequence_range(
+                            expected_sequence,
+                            received_sequence,
+                        );
+                        self.timeline_state.observe_gap(
+                            &missing_sequences,
+                            now_ms,
+                            Some(rtp.header.timestamp),
+                            "unknown",
+                        );
+                        if let Some(sequence) = missing_sequences.first().copied() {
+                            self.record_video_timeline_observation(
+                                "gap-observed-forward-packet",
+                                Some(sequence),
+                                Some(rtp.header.timestamp),
+                                now_ms,
+                            );
+                        }
                         self.observe_forward_gap_and_nack(expected_sequence, received_sequence)
                             .await;
                     }
@@ -413,6 +634,25 @@ impl RtcVideoFrameSource {
                         }
                     }
                     if let Some(resolved) = self.nack_scheduler.resolve_sequence(seq, now_ms) {
+                        self.timeline_state.mark_gap_resolved(
+                            seq,
+                            now_ms,
+                            resolved.frame_rtp_timestamp,
+                            resolved.frame_importance,
+                        );
+                        self.record_video_timeline_observation(
+                            "gap-resolved",
+                            Some(seq),
+                            resolved.frame_rtp_timestamp,
+                            now_ms,
+                        );
+                        self.record_anchor_candidate_ledger(
+                            resolved.frame_rtp_timestamp,
+                            "gap-resolved",
+                            XbxEngineAnchorCandidateState::Repaired,
+                            None,
+                            now_ms,
+                        );
                         if let Some(observation) = latest_reinject_observation.clone() {
                             if observation.sequence_number == seq {
                                 self.runtime_stats.record_video_rtx_reinject(
@@ -508,5 +748,30 @@ impl TransportObservationSource for RtcVideoTransportObservationSource {
         Box<dyn std::future::Future<Output = Option<TransportObservation>> + Send + 'a>,
     > {
         Box::pin(async move { self.rx.recv().await })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::should_trigger_idle_timeout;
+    use std::time::{Duration, Instant};
+
+    #[test]
+    fn idle_timeout_is_suppressed_before_first_packet() {
+        let started_at = Instant::now();
+        let later = started_at + Duration::from_millis(500);
+
+        assert!(!should_trigger_idle_timeout(
+            false,
+            later,
+            started_at,
+            Duration::from_millis(150),
+        ));
+        assert!(should_trigger_idle_timeout(
+            true,
+            later,
+            started_at,
+            Duration::from_millis(150),
+        ));
     }
 }

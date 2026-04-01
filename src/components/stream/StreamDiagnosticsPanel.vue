@@ -49,7 +49,7 @@ const rows = computed<StreamDiagnosticsRowViewModel[]>(() => [
   },
   {
     key: 'path',
-    value: props.diagnostics.transportPath ?? t('streamPage.diagnostics.values.unknown'),
+    value: resolveTransportPathText(),
   },
   {
     key: 'profile',
@@ -125,6 +125,42 @@ function resolveStatusText(): string {
     return t('streamPage.diagnostics.values.stable')
   }
   return t('streamPage.diagnostics.values.inactive')
+}
+
+function resolveTransportPathText(): string {
+  const base = props.diagnostics.transportPath
+  const details = [
+    props.diagnostics.transportCandidatePair,
+    props.diagnostics.transportProtocol,
+    formatAddressFamily(props.diagnostics.transportAddressFamily),
+  ].filter((item): item is string => item !== undefined && item.trim() !== '')
+
+  if (base !== undefined && details.length > 0) {
+    return `${base} | ${details.join(' | ')}`
+  }
+  if (base !== undefined) {
+    return base
+  }
+  if (details.length > 0) {
+    return details.join(' | ')
+  }
+  return t('streamPage.diagnostics.values.unknown')
+}
+
+function formatAddressFamily(family: StreamSessionDiagnosticsSnapshot['transportAddressFamily']): string | undefined {
+  if (family === undefined) {
+    return undefined
+  }
+  if (family === 'ipv4') {
+    return 'IPv4'
+  }
+  if (family === 'ipv6') {
+    return 'IPv6'
+  }
+  if (family === 'mixed') {
+    return 'MIXED'
+  }
+  return 'UNKNOWN'
 }
 </script>
 

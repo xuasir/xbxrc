@@ -4,14 +4,17 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 
+use crate::mods::runtime_trace::RuntimeTraceRecorderRef;
 use tauri::{AppHandle, Manager};
 use xbxengine::{MacOsCVPixelBufferDescriptor, XbxEngineRenderFrame, XbxEngineRenderPixelData};
 
 use super::scheduling::{HostCadenceTelemetry, ScheduledFrameSlot};
 use super::{
-    drop_display_layer, drop_wgpu_host_view, now_ms_f64, run_layer_present_tick,
-    run_wgpu_render_tick, MacOsDisplayLinkHandle, MacOsLayerDisplayLinkHandle, MacOsLayerState,
-    MacOsWgpuState, MacOsWgpuTelemetry, NativeVideoViewportState,
+    drop_display_layer, drop_wgpu_host_view, now_ms_f64, prepare_layer_sample_for_present,
+    record_native_video_timing_event, record_native_video_trace, run_layer_present_tick,
+    run_wgpu_render_tick, LayerSamplePrepareOutcome, MacOsDisplayLinkHandle,
+    MacOsLayerDisplayLinkHandle, MacOsLayerState, MacOsWgpuState, MacOsWgpuTelemetry,
+    NativeVideoViewportState,
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -27,6 +30,9 @@ pub(super) trait NativeVideoPresenter: Send {
     fn present(&mut self, surface_id: Option<&str>, frame: &XbxEngineRenderFrame);
     fn detach(&mut self);
     fn apply_viewport_diagnostics(&self, _viewport: &mut NativeVideoViewportState) {}
+    fn take_pending_frame_drops(&mut self) -> Vec<xbxengine::XbxEngineHostVideoFrameDropEvent> {
+        Vec::new()
+    }
 }
 
 pub(super) struct NoopVideoPresenter {
@@ -79,11 +85,17 @@ pub(super) struct MacOsWgpuPresenter {
     render_loop_stop: Arc<std::sync::atomic::AtomicBool>,
     render_loop_pending: Arc<std::sync::atomic::AtomicBool>,
     display_link: Option<MacOsDisplayLinkHandle>,
+    runtime_trace: Option<RuntimeTraceRecorderRef>,
 }
 
 #[cfg(target_os = "macos")]
 impl MacOsWgpuPresenter {
-    pub(super) fn new(viewport_id: &str, window_label: &str, app_handle: AppHandle) -> Self {
+    pub(super) fn new(
+        viewport_id: &str,
+        window_label: &str,
+        app_handle: AppHandle,
+        runtime_trace: Option<RuntimeTraceRecorderRef>,
+    ) -> Self {
         Self {
             viewport_id: viewport_id.to_string(),
             window_label: window_label.to_string(),
@@ -94,6 +106,7 @@ impl MacOsWgpuPresenter {
             render_loop_stop: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             render_loop_pending: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             display_link: None,
+            runtime_trace,
         }
     }
 
@@ -114,11 +127,20 @@ impl MacOsWgpuPresenter {
                 self.renderer_state.clone(),
                 self.telemetry.clone(),
                 self.render_loop_pending.clone(),
+                self.runtime_trace.clone(),
             ) {
                 self.display_link = Some(display_link);
                 return;
             }
         }
+        record_native_video_trace(
+            "display_link_unavailable",
+            serde_json::json!({
+                "pipeline": "wgpu",
+                "viewportId": self.viewport_id,
+                "windowLabel": self.window_label,
+            }),
+        );
         log::warn!(
             "[native_video][wgpu] display link unavailable for viewport={}, fallback to 16ms loop",
             self.viewport_id
@@ -130,6 +152,7 @@ impl MacOsWgpuPresenter {
         let telemetry = self.telemetry.clone();
         let render_loop_stop = self.render_loop_stop.clone();
         let render_loop_pending = self.render_loop_pending.clone();
+        let runtime_trace = self.runtime_trace.clone();
         thread::Builder::new()
             .name(format!("XbxWgpuRenderLoop-{viewport_id}"))
             .spawn(move || {
@@ -149,6 +172,8 @@ impl MacOsWgpuPresenter {
                     let viewport_id = viewport_id.clone();
                     let app_handle_for_task = app_handle.clone();
                     let window_for_task = window.clone();
+                    let runtime_trace_for_task = runtime_trace.clone();
+                    let dispatch_requested_at_ms = now_ms_f64();
                     let _ = window.run_on_main_thread(move || {
                         run_wgpu_render_tick(
                             &window_for_task,
@@ -157,6 +182,8 @@ impl MacOsWgpuPresenter {
                             &renderer_state,
                             &telemetry,
                             &render_loop_pending,
+                            Some(dispatch_requested_at_ms),
+                            runtime_trace_for_task,
                         );
                     });
                 }
@@ -195,8 +222,20 @@ impl NativeVideoPresenter for MacOsWgpuPresenter {
         }
         if self.should_drop_submitted_frame(frame, now_ms) {
             if let Ok(mut telemetry) = self.telemetry.lock() {
-                telemetry.record_drop();
+                telemetry.record_stale_frame_drop(frame, now_ms, "submittedFrameStale", 0);
             }
+            record_native_video_timing_event(
+                self.runtime_trace.as_ref(),
+                "wgpu",
+                "frame_submit",
+                &self.viewport_id,
+                &self.window_label,
+                serde_json::json!({
+                    "outcome": "stale",
+                    "frameSeq": frame.frame_seq,
+                    "frameAgeMs": (now_ms - frame.rendered_at_ms).max(0.0),
+                }),
+            );
             log::debug!(
                 "[native_video][wgpu] reject stale submitted frame viewport={} window={} frame_seq={} age_ms={:.2}",
                 self.viewport_id,
@@ -211,18 +250,46 @@ impl NativeVideoPresenter for MacOsWgpuPresenter {
                 .last_rendered_frame_seq
                 .is_some_and(|rendered_seq| frame.frame_seq <= rendered_seq)
             {
+                record_native_video_timing_event(
+                    self.runtime_trace.as_ref(),
+                    "wgpu",
+                    "frame_submit",
+                    &self.viewport_id,
+                    &self.window_label,
+                    serde_json::json!({
+                        "outcome": "already_presented",
+                        "frameSeq": frame.frame_seq,
+                        "lastRenderedFrameSeq": state.last_rendered_frame_seq,
+                    }),
+                );
                 return;
             }
-            if state.latest_frame.as_ref().is_some_and(|latest| {
+            let replaced_frame_seq = state.latest_frame.as_ref().map(|latest| latest.frame_seq);
+            let overwrote_pending = state.latest_frame.as_ref().is_some_and(|latest| {
                 Some(latest.frame_seq) != state.last_rendered_frame_seq
                     && latest.frame_seq != frame.frame_seq
-            }) {
+            });
+            if overwrote_pending {
                 if let Ok(mut telemetry) = self.telemetry.lock() {
                     telemetry.present_overwrite_count_total =
                         telemetry.present_overwrite_count_total.saturating_add(1);
                 }
             }
             state.latest_frame = Some(frame.clone());
+            record_native_video_timing_event(
+                self.runtime_trace.as_ref(),
+                "wgpu",
+                "frame_submit",
+                &self.viewport_id,
+                &self.window_label,
+                serde_json::json!({
+                    "outcome": "accepted",
+                    "frameSeq": frame.frame_seq,
+                    "frameAgeMs": (now_ms - frame.rendered_at_ms).max(0.0),
+                    "overwrotePending": overwrote_pending,
+                    "replacedFrameSeq": replaced_frame_seq,
+                }),
+            );
         }
     }
 
@@ -267,6 +334,9 @@ impl NativeVideoPresenter for MacOsWgpuPresenter {
         viewport.host_present_submit_count_total = telemetry.present_submit_count_total;
         viewport.host_present_drop_count_total = telemetry.present_drop_count_total;
         viewport.host_present_overwrite_count_total = telemetry.present_overwrite_count_total;
+        viewport.host_no_pending_take_count_total = telemetry.no_pending_take_count_total;
+        viewport.host_no_pending_streak = telemetry.no_pending_streak;
+        viewport.host_no_pending_max_streak = telemetry.no_pending_max_streak;
         viewport.host_display_interval_ms = telemetry.display_interval_ms();
         viewport.host_frame_age_budget_ms = Some(telemetry.frame_age_budget_ms());
         viewport.host_descriptor_upload_mode = telemetry.descriptor_upload_mode.clone();
@@ -274,6 +344,13 @@ impl NativeVideoPresenter for MacOsWgpuPresenter {
             telemetry.descriptor_metal_import_count_total;
         viewport.host_descriptor_cpu_upload_count_total =
             telemetry.descriptor_cpu_upload_count_total;
+    }
+
+    fn take_pending_frame_drops(&mut self) -> Vec<xbxengine::XbxEngineHostVideoFrameDropEvent> {
+        self.telemetry
+            .lock()
+            .map(|mut telemetry| telemetry.take_pending_frame_drops())
+            .unwrap_or_default()
     }
 }
 
@@ -289,11 +366,17 @@ pub(super) struct MacOsVideoPresenter {
     render_loop_stop: Arc<std::sync::atomic::AtomicBool>,
     render_loop_pending: Arc<std::sync::atomic::AtomicBool>,
     display_link: Option<MacOsLayerDisplayLinkHandle>,
+    runtime_trace: Option<RuntimeTraceRecorderRef>,
 }
 
 #[cfg(target_os = "macos")]
 impl MacOsVideoPresenter {
-    pub(super) fn new(viewport_id: &str, window_label: &str, app_handle: AppHandle) -> Self {
+    pub(super) fn new(
+        viewport_id: &str,
+        window_label: &str,
+        app_handle: AppHandle,
+        runtime_trace: Option<RuntimeTraceRecorderRef>,
+    ) -> Self {
         Self {
             viewport_id: viewport_id.to_string(),
             window_label: window_label.to_string(),
@@ -305,6 +388,7 @@ impl MacOsVideoPresenter {
             render_loop_stop: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             render_loop_pending: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             display_link: None,
+            runtime_trace,
         }
     }
 
@@ -326,11 +410,20 @@ impl MacOsVideoPresenter {
                 self.frame_slot.clone(),
                 self.telemetry.clone(),
                 self.render_loop_pending.clone(),
+                self.runtime_trace.clone(),
             ) {
                 self.display_link = Some(display_link);
                 return;
             }
         }
+        record_native_video_trace(
+            "display_link_unavailable",
+            serde_json::json!({
+                "pipeline": "layer",
+                "viewportId": self.viewport_id,
+                "windowLabel": self.window_label,
+            }),
+        );
         log::warn!(
             "[native_video][layer] display link unavailable for viewport={}, fallback to 16ms loop",
             self.viewport_id
@@ -343,6 +436,7 @@ impl MacOsVideoPresenter {
         let telemetry = self.telemetry.clone();
         let render_loop_stop = self.render_loop_stop.clone();
         let render_loop_pending = self.render_loop_pending.clone();
+        let runtime_trace = self.runtime_trace.clone();
         thread::Builder::new()
             .name(format!("XbxLayerRenderLoop-{viewport_id}"))
             .spawn(move || {
@@ -362,14 +456,29 @@ impl MacOsVideoPresenter {
                     let render_loop_pending = render_loop_pending.clone();
                     let viewport_id = viewport_id.clone();
                     let window_for_task = window.clone();
+                    let runtime_trace_for_task = runtime_trace.clone();
+                    let dispatch_requested_at_ms = now_ms_f64();
+                    let prepare_outcome = prepare_layer_sample_for_present(
+                        &layer_state,
+                        &frame_slot,
+                        &telemetry,
+                        &viewport_id,
+                        &window_label,
+                        runtime_trace_for_task.as_ref(),
+                    );
+                    if !matches!(prepare_outcome, LayerSamplePrepareOutcome::Prepared) {
+                        render_loop_pending.store(false, Ordering::Relaxed);
+                        continue;
+                    }
                     let _ = window.run_on_main_thread(move || {
                         run_layer_present_tick(
                             &window_for_task,
                             &viewport_id,
                             &layer_state,
-                            &frame_slot,
                             &telemetry,
                             &render_loop_pending,
+                            Some(dispatch_requested_at_ms),
+                            runtime_trace_for_task,
                         );
                     });
                 }
@@ -402,6 +511,17 @@ impl NativeVideoPresenter for MacOsVideoPresenter {
             .or_else(|| self.surface_id.clone());
         self.ensure_render_loop();
         if !frame_has_cv_pixelbuffer(frame) {
+            record_native_video_timing_event(
+                self.runtime_trace.as_ref(),
+                "layer",
+                "frame_submit",
+                &self.viewport_id,
+                &self.window_label,
+                serde_json::json!({
+                    "outcome": "rejected_non_cv_pixelbuffer",
+                    "frameSeq": frame.frame_seq,
+                }),
+            );
             return;
         }
         let now_ms = now_ms_f64();
@@ -409,8 +529,20 @@ impl NativeVideoPresenter for MacOsVideoPresenter {
             if let Ok(mut telemetry) = self.telemetry.lock() {
                 telemetry.present_submit_count_total =
                     telemetry.present_submit_count_total.saturating_add(1);
-                telemetry.record_drop();
+                telemetry.record_stale_frame_drop(frame, now_ms, "submittedFrameStale", 0);
             }
+            record_native_video_timing_event(
+                self.runtime_trace.as_ref(),
+                "layer",
+                "frame_submit",
+                &self.viewport_id,
+                &self.window_label,
+                serde_json::json!({
+                    "outcome": "stale",
+                    "frameSeq": frame.frame_seq,
+                    "frameAgeMs": (now_ms - frame.rendered_at_ms).max(0.0),
+                }),
+            );
             log::debug!(
                 "[native_video][layer] reject stale submitted frame viewport={} window={} frame_seq={} age_ms={:.2}",
                 self.viewport_id,
@@ -421,14 +553,96 @@ impl NativeVideoPresenter for MacOsVideoPresenter {
             return;
         }
         let Ok(mut telemetry) = self.telemetry.lock() else {
+            record_native_video_timing_event(
+                self.runtime_trace.as_ref(),
+                "layer",
+                "frame_submit_failed",
+                &self.viewport_id,
+                &self.window_label,
+                serde_json::json!({
+                    "reason": "telemetryLockFailed",
+                    "frameSeq": frame.frame_seq,
+                }),
+            );
             return;
         };
         telemetry.present_submit_count_total =
             telemetry.present_submit_count_total.saturating_add(1);
         let Ok(mut frame_slot) = self.frame_slot.lock() else {
+            record_native_video_timing_event(
+                self.runtime_trace.as_ref(),
+                "layer",
+                "frame_submit_failed",
+                &self.viewport_id,
+                &self.window_label,
+                serde_json::json!({
+                    "reason": "frameSlotLockFailed",
+                    "frameSeq": frame.frame_seq,
+                }),
+            );
             return;
         };
-        let _ = frame_slot.submit_frame(frame, now_ms, &mut telemetry);
+        match frame_slot.submit_frame(frame, now_ms, &mut telemetry) {
+            super::scheduling::ScheduledFrameSubmitOutcome::Accepted {
+                frame_seq,
+                overwrote_pending,
+                replaced_frame_seq,
+                frame_age_ms,
+                frame_age_budget_ms,
+            } => {
+                record_native_video_timing_event(
+                    self.runtime_trace.as_ref(),
+                    "layer",
+                    "frame_submit",
+                    &self.viewport_id,
+                    &self.window_label,
+                    serde_json::json!({
+                        "outcome": "accepted",
+                        "frameSeq": frame_seq,
+                        "frameAgeMs": frame_age_ms,
+                        "frameAgeBudgetMs": frame_age_budget_ms,
+                        "overwrotePending": overwrote_pending,
+                        "replacedFrameSeq": replaced_frame_seq,
+                    }),
+                );
+            }
+            super::scheduling::ScheduledFrameSubmitOutcome::DroppedStale {
+                frame_seq,
+                frame_age_ms,
+                frame_age_budget_ms,
+            } => {
+                record_native_video_timing_event(
+                    self.runtime_trace.as_ref(),
+                    "layer",
+                    "frame_submit",
+                    &self.viewport_id,
+                    &self.window_label,
+                    serde_json::json!({
+                        "outcome": "stale",
+                        "frameSeq": frame_seq,
+                        "frameAgeMs": frame_age_ms,
+                        "frameAgeBudgetMs": frame_age_budget_ms,
+                    }),
+                );
+            }
+            super::scheduling::ScheduledFrameSubmitOutcome::RejectedAlreadyPresented {
+                frame_seq,
+                last_presented_frame_seq,
+            } => {
+                record_native_video_timing_event(
+                    self.runtime_trace.as_ref(),
+                    "layer",
+                    "frame_submit",
+                    &self.viewport_id,
+                    &self.window_label,
+                    serde_json::json!({
+                        "outcome": "already_presented",
+                        "frameSeq": frame_seq,
+                        "lastPresentedFrameSeq": last_presented_frame_seq,
+                    }),
+                );
+            }
+        }
     }
 
     fn detach(&mut self) {
@@ -469,11 +683,21 @@ impl NativeVideoPresenter for MacOsVideoPresenter {
         viewport.host_present_submit_count_total = telemetry.present_submit_count_total;
         viewport.host_present_drop_count_total = telemetry.present_drop_count_total;
         viewport.host_present_overwrite_count_total = telemetry.present_overwrite_count_total;
+        viewport.host_no_pending_take_count_total = telemetry.no_pending_take_count_total;
+        viewport.host_no_pending_streak = telemetry.no_pending_streak;
+        viewport.host_no_pending_max_streak = telemetry.no_pending_max_streak;
         viewport.host_display_interval_ms = telemetry.display_interval_ms();
         viewport.host_frame_age_budget_ms = Some(telemetry.frame_age_budget_ms());
         viewport.host_descriptor_upload_mode = None;
         viewport.host_descriptor_metal_import_count_total = 0;
         viewport.host_descriptor_cpu_upload_count_total = 0;
+    }
+
+    fn take_pending_frame_drops(&mut self) -> Vec<xbxengine::XbxEngineHostVideoFrameDropEvent> {
+        self.telemetry
+            .lock()
+            .map(|mut telemetry| telemetry.take_pending_frame_drops())
+            .unwrap_or_default()
     }
 }
 

@@ -30,6 +30,7 @@ struct TestHostBridge {
     requests: Rc<RefCell<Vec<XbxEngineHostRequestDto>>>,
     fail_request_kind: Rc<RefCell<Option<&'static str>>>,
     fail_keepalive_message: Rc<RefCell<Option<String>>>,
+    poll_ice_batches: Rc<RefCell<Vec<Vec<XbxEngineIceCandidateDto>>>>,
     cancellation_epoch: Rc<Cell<u64>>,
     cancel_after_request_kind: Rc<RefCell<Option<&'static str>>>,
 }
@@ -40,6 +41,7 @@ impl TestHostBridge {
             requests,
             fail_request_kind: Rc::new(RefCell::new(None)),
             fail_keepalive_message: Rc::new(RefCell::new(None)),
+            poll_ice_batches: Rc::new(RefCell::new(Vec::new())),
             cancellation_epoch: Rc::new(Cell::new(0)),
             cancel_after_request_kind: Rc::new(RefCell::new(None)),
         }
@@ -53,6 +55,7 @@ impl TestHostBridge {
             requests,
             fail_request_kind,
             fail_keepalive_message: Rc::new(RefCell::new(None)),
+            poll_ice_batches: Rc::new(RefCell::new(Vec::new())),
             cancellation_epoch: Rc::new(Cell::new(0)),
             cancel_after_request_kind: Rc::new(RefCell::new(None)),
         }
@@ -60,6 +63,11 @@ impl TestHostBridge {
 
     fn with_keepalive_failure_message(self, message: impl Into<String>) -> Self {
         *self.fail_keepalive_message.borrow_mut() = Some(message.into());
+        self
+    }
+
+    fn with_poll_ice_batches(self, batches: Vec<Vec<XbxEngineIceCandidateDto>>) -> Self {
+        *self.poll_ice_batches.borrow_mut() = batches;
         self
     }
 }
@@ -110,9 +118,14 @@ impl XbxEngineHostBridge for TestHostBridge {
                 }
             }
             XbxEngineHostRequestDto::SubmitIce { .. } => XbxEngineHostResponseDto::IceSubmitted,
-            XbxEngineHostRequestDto::PollIce { .. } => XbxEngineHostResponseDto::IcePolled {
-                candidates: Vec::new(),
-            },
+            XbxEngineHostRequestDto::PollIce { .. } => {
+                let candidates = if self.poll_ice_batches.borrow().is_empty() {
+                    Vec::new()
+                } else {
+                    self.poll_ice_batches.borrow_mut().remove(0)
+                };
+                XbxEngineHostResponseDto::IcePolled { candidates }
+            }
             XbxEngineHostRequestDto::KeepAliveRemoteSession { .. } => {
                 XbxEngineHostResponseDto::KeepAliveAccepted
             }
@@ -195,6 +208,12 @@ fn create_runtime(
         TestHostBridge::new(requests),
         TestEventSink::new(events),
     )
+}
+
+fn legacy_runtime_config() -> XbxEngineRuntimeConfig {
+    let mut config = XbxEngineRuntimeConfig::default();
+    config.runtime_name = "browser".to_string();
+    config
 }
 
 fn overwrite_runtime_stats(
@@ -370,6 +389,35 @@ impl XbxEngineMediaBackend for ScriptedMediaBackend {
             .clone())
     }
 
+    fn update_host_video_present_metrics(
+        &mut self,
+        metrics: crate::XbxEngineHostVideoPresentMetrics,
+    ) -> Result<(), XbxEngineRuntimeError> {
+        let mut runtime_stats = self.runtime_stats.lock().expect("lock runtime stats");
+        runtime_stats.video_present_fps = metrics.present_fps;
+        runtime_stats.video_present_submit_count_total = metrics.present_submit_count_total;
+        runtime_stats.video_present_drop_count_total = metrics.present_drop_count_total;
+        runtime_stats.video_present_overwrite_count_total = metrics.present_overwrite_count_total;
+        runtime_stats.host_no_pending_take_count_total = metrics.no_pending_take_count_total;
+        runtime_stats.host_no_pending_streak = metrics.no_pending_streak;
+        runtime_stats.host_no_pending_max_streak = metrics.no_pending_max_streak;
+        runtime_stats.host_no_pending_pressure_level = Some(if metrics.no_pending_streak >= 180 {
+            "critical".to_string()
+        } else if metrics.no_pending_streak >= 60 {
+            "high".to_string()
+        } else if metrics.no_pending_streak >= 20 {
+            "elevated".to_string()
+        } else {
+            "normal".to_string()
+        });
+        runtime_stats.video_present_descriptor_upload_mode = metrics.descriptor_upload_mode;
+        runtime_stats.video_present_descriptor_metal_import_count_total =
+            metrics.descriptor_metal_import_count_total;
+        runtime_stats.video_present_descriptor_cpu_upload_count_total =
+            metrics.descriptor_cpu_upload_count_total;
+        Ok(())
+    }
+
     fn take_pending_runtime_recovery_action(
         &mut self,
     ) -> Result<Option<crate::XbxEnginePendingRuntimeRecoveryAction>, XbxEngineRuntimeError> {
@@ -384,6 +432,13 @@ impl XbxEngineMediaBackend for ScriptedMediaBackend {
         &mut self,
     ) -> Result<Option<crate::XbxEngineRenderFrame>, XbxEngineRuntimeError> {
         Ok(None)
+    }
+
+    fn acknowledge_latest_render_frame(
+        &mut self,
+        _frame_seq: u64,
+    ) -> Result<bool, XbxEngineRuntimeError> {
+        Ok(false)
     }
 
     fn request_video_keyframe(&mut self) -> Result<(), XbxEngineRuntimeError> {
@@ -443,6 +498,14 @@ fn placeholder_local_candidate() -> XbxEngineIceCandidateDto {
         candidate: "candidate:placeholder 1 udp 2130706431 127.0.0.1 60000 typ host".to_string(),
         sdp_m_line_index: Some(0),
         sdp_mid: Some("0".to_string()),
+    }
+}
+
+fn remote_end_of_candidates_marker() -> XbxEngineIceCandidateDto {
+    XbxEngineIceCandidateDto {
+        candidate: "a=end-of-candidates".to_string(),
+        sdp_m_line_index: None,
+        sdp_mid: None,
     }
 }
 
@@ -543,7 +606,7 @@ fn start_submits_offer_sdp_ice_without_waiting_for_gathering() {
             input_status: XbxEngineInputStatus::default(),
         },
         XbxEngineMediaRuntimeStats {
-            transport_state: XbxEngineTransportStateDto::Connecting,
+            transport_state: XbxEngineTransportStateDto::Connected,
             ..Default::default()
         },
     )
@@ -614,7 +677,7 @@ fn start_submits_offer_sdp_ice_even_if_gathering_completes_immediately() {
             input_status: XbxEngineInputStatus::default(),
         },
         XbxEngineMediaRuntimeStats {
-            transport_state: XbxEngineTransportStateDto::Connecting,
+            transport_state: XbxEngineTransportStateDto::Connected,
             ..Default::default()
         },
     )
@@ -640,6 +703,60 @@ fn start_submits_offer_sdp_ice_even_if_gathering_completes_immediately() {
 }
 
 #[test]
+fn start_exits_ice_exchange_when_gathering_complete_and_remote_eoc_seen() {
+    let requests = Rc::new(RefCell::new(Vec::new()));
+    let events = Rc::new(RefCell::new(Vec::new()));
+    let backend = ScriptedMediaBackend::new(
+        XbxEngineMediaNegotiation {
+            local_offer_sdp: concat!(
+                "v=0\r\n",
+                "m=audio 9 UDP/TLS/RTP/SAVPF 111\r\n",
+                "a=mid:0\r\n",
+                "a=candidate:1 1 udp 2130706431 10.0.0.20 50000 typ host\r\n",
+            )
+            .to_string(),
+            local_candidates: Vec::new(),
+            surface_id: "surface:viewport-1".to_string(),
+            video_width: 1280,
+            video_height: 720,
+            first_frame_packet_arrival_time_ms: Some(1.0),
+            frame_decoded_time_ms: Some(2.0),
+            frame_rendered_time_ms: Some(3.0),
+            input_status: XbxEngineInputStatus::default(),
+        },
+        XbxEngineMediaRuntimeStats {
+            transport_state: XbxEngineTransportStateDto::Connecting,
+            ..Default::default()
+        },
+    )
+    .with_local_ice_gathering_complete_true_after_calls(0);
+    let host_bridge = TestHostBridge::new(requests.clone())
+        .with_poll_ice_batches(vec![vec![remote_end_of_candidates_marker()]]);
+    let mut runtime = XbxEngineRuntime::with_media_backend(
+        XbxEngineRuntimeConfig::default(),
+        host_bridge,
+        TestEventSink::new(events),
+        backend,
+    );
+
+    runtime
+        .start(session(), viewport(), 1.0, None, None)
+        .expect("runtime start should succeed");
+
+    assert_eq!(runtime.state(), &XbxEngineRuntimeState::Running);
+    assert_eq!(
+        runtime.snapshot().last_remote_candidates,
+        vec![remote_end_of_candidates_marker()]
+    );
+    let poll_count = requests
+        .borrow()
+        .iter()
+        .filter(|request| matches!(request, XbxEngineHostRequestDto::PollIce { .. }))
+        .count();
+    assert_eq!(poll_count, 1);
+}
+
+#[test]
 fn start_runtime_control_consumes_execution_spec() {
     let requests = Rc::new(RefCell::new(Vec::new()));
     let events = Rc::new(RefCell::new(Vec::new()));
@@ -660,6 +777,7 @@ fn start_runtime_control_consumes_execution_spec() {
                 target_video_width: 1920,
                 target_video_height: 1080,
                 force_mono_audio: false,
+                prefer_ipv6: true,
                 bwe_mode: "hybrid".to_string(),
                 forced_remb_kbps: Some(24_000),
                 adaptive_remb_enabled: false,
@@ -709,6 +827,7 @@ fn start_runtime_control_consumes_execution_spec() {
     assert_eq!(runtime.state(), &XbxEngineRuntimeState::Running);
     assert_eq!(runtime.config.webrtc.negotiation.video_bitrate_kbps, 42_000);
     assert_eq!(runtime.config.webrtc.negotiation.audio_bitrate_kbps, 192);
+    assert!(runtime.config.webrtc.negotiation.prefer_ipv6);
     assert_eq!(runtime.config.webrtc.negotiation.offer_profile, "42e01f");
     assert_eq!(runtime.config.webrtc.bwe_mode, "hybrid");
     assert_eq!(runtime.config.webrtc.forced_remb_kbps, Some(24_000));
@@ -763,7 +882,7 @@ fn video_track_status_changes_are_emitted_and_snapshotted() {
             input_status: XbxEngineInputStatus::default(),
         },
         XbxEngineMediaRuntimeStats {
-            transport_state: XbxEngineTransportStateDto::Connecting,
+            transport_state: XbxEngineTransportStateDto::Connected,
             latest_video_track_status: Some(crate::XbxEngineVideoTrackStatus {
                 state: "remoteTrackAttached".to_string(),
                 video_width: None,
@@ -1288,7 +1407,7 @@ fn runtime_requests_decoder_reset_when_decode_stall_signal_is_active() {
     let keyframe_calls = backend.keyframe_request_calls.clone();
     let decoder_reset_calls = backend.decoder_reset_calls.clone();
     let mut runtime = XbxEngineRuntime::with_media_backend(
-        XbxEngineRuntimeConfig::default(),
+        legacy_runtime_config(),
         TestHostBridge::new(requests),
         TestEventSink::new(events),
         backend,
@@ -1327,6 +1446,66 @@ fn runtime_requests_decoder_reset_when_decode_stall_signal_is_active() {
 }
 
 #[test]
+fn rust_owned_runtime_skips_legacy_runtime_recovery_loop() {
+    let requests = Rc::new(RefCell::new(Vec::new()));
+    let events = Rc::new(RefCell::new(Vec::new()));
+    let now_ms = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_millis() as f64)
+        .unwrap_or(0.0);
+    let backend = ScriptedMediaBackend::new(
+        XbxEngineMediaNegotiation {
+            local_offer_sdp: "offer".to_string(),
+            local_candidates: Vec::new(),
+            surface_id: "surface:viewport-1".to_string(),
+            video_width: 1280,
+            video_height: 720,
+            first_frame_packet_arrival_time_ms: None,
+            frame_decoded_time_ms: None,
+            frame_rendered_time_ms: None,
+            input_status: XbxEngineInputStatus::default(),
+        },
+        XbxEngineMediaRuntimeStats {
+            transport_state: XbxEngineTransportStateDto::Connected,
+            latest_video_packet_arrival_time_ms: Some(now_ms - 20.0),
+            latest_video_present_time_ms: Some(now_ms - 3_000.0),
+            latest_video_decode_ok_time_ms: Some(now_ms - 3_000.0),
+            video_decoder_stalled: Some(true),
+            video_renderer_stalled: Some(false),
+            inbound_video_packet_count_total: 500,
+            ..Default::default()
+        },
+    );
+    let keyframe_calls = backend.keyframe_request_calls.clone();
+    let decoder_reset_calls = backend.decoder_reset_calls.clone();
+    let mut runtime = XbxEngineRuntime::with_media_backend(
+        XbxEngineRuntimeConfig::default(),
+        TestHostBridge::new(requests),
+        TestEventSink::new(events),
+        backend,
+    );
+
+    runtime
+        .start(session(), viewport(), 1.0, None, None)
+        .expect("runtime start should succeed");
+    runtime.health.connected_at_ms = Some(now_ms - 10_000.0);
+    runtime.health.last_frame_seq = 30;
+    runtime.health.last_frame_rendered_at_ms = Some(now_ms - 3_000.0);
+    runtime.health.inbound_video_packet_count_total = 500;
+    runtime.health.last_video_packet_arrival_at_ms = Some(now_ms - 20.0);
+
+    runtime.tick();
+
+    assert_eq!(*keyframe_calls.lock().expect("lock keyframe calls"), 0);
+    assert_eq!(
+        *decoder_reset_calls
+            .lock()
+            .expect("lock decoder reset calls"),
+        0
+    );
+}
+
+#[test]
 fn runtime_prefers_explicit_decoder_stall_signal_from_stats() {
     let requests = Rc::new(RefCell::new(Vec::new()));
     let events = Rc::new(RefCell::new(Vec::new()));
@@ -1361,7 +1540,7 @@ fn runtime_prefers_explicit_decoder_stall_signal_from_stats() {
     let keyframe_calls = backend.keyframe_request_calls.clone();
     let decoder_reset_calls = backend.decoder_reset_calls.clone();
     let mut runtime = XbxEngineRuntime::with_media_backend(
-        XbxEngineRuntimeConfig::default(),
+        legacy_runtime_config(),
         TestHostBridge::new(requests),
         TestEventSink::new(events),
         backend,
@@ -1435,7 +1614,7 @@ fn runtime_suppresses_recovery_when_decode_activity_is_fresh() {
     let keyframe_calls = backend.keyframe_request_calls.clone();
     let decoder_reset_calls = backend.decoder_reset_calls.clone();
     let mut runtime = XbxEngineRuntime::with_media_backend(
-        XbxEngineRuntimeConfig::default(),
+        legacy_runtime_config(),
         TestHostBridge::new(requests),
         TestEventSink::new(events),
         backend,
@@ -1494,7 +1673,7 @@ fn runtime_requires_stable_stall_window_before_requesting_keyframe() {
     );
     let keyframe_calls = backend.keyframe_request_calls.clone();
     let mut runtime = XbxEngineRuntime::with_media_backend(
-        XbxEngineRuntimeConfig::default(),
+        legacy_runtime_config(),
         TestHostBridge::new(requests),
         TestEventSink::new(events),
         backend,
@@ -1548,7 +1727,7 @@ fn runtime_recovery_sequence_stays_keyframe_then_decoder_reset_then_reconnect() 
     let keyframe_calls = backend.keyframe_request_calls.clone();
     let decoder_reset_calls = backend.decoder_reset_calls.clone();
     let mut runtime = XbxEngineRuntime::with_media_backend(
-        XbxEngineRuntimeConfig::default(),
+        legacy_runtime_config(),
         TestHostBridge::new(requests.clone()),
         TestEventSink::new(events),
         backend,
@@ -1650,7 +1829,7 @@ fn runtime_does_not_emit_error_when_keyframe_request_is_only_control_not_ready()
     )
     .with_keyframe_error_message("xbxEngineRtcControlChannelNotReadyForKeyframe");
     let mut runtime = XbxEngineRuntime::with_media_backend(
-        XbxEngineRuntimeConfig::default(),
+        legacy_runtime_config(),
         TestHostBridge::new(requests),
         TestEventSink::new(events.clone()),
         backend,
@@ -1710,7 +1889,7 @@ fn runtime_does_not_emit_error_when_decoder_reset_is_only_control_not_ready() {
     )
     .with_decoder_reset_error_message("xbxEngineRtcControlChannelNotReadyForDecoderReset");
     let mut runtime = XbxEngineRuntime::with_media_backend(
-        XbxEngineRuntimeConfig::default(),
+        legacy_runtime_config(),
         TestHostBridge::new(requests),
         TestEventSink::new(events.clone()),
         backend,
@@ -1760,7 +1939,7 @@ fn runtime_consumes_pending_transport_reconnect_candidate_once() {
             input_status: XbxEngineInputStatus::default(),
         },
         XbxEngineMediaRuntimeStats {
-            transport_state: XbxEngineTransportStateDto::Connecting,
+            transport_state: XbxEngineTransportStateDto::Connected,
             latest_video_packet_arrival_time_ms: Some(now_ms - 20.0),
             inbound_video_packet_count_total: 500,
             latest_observation_label: Some("rtcConnectionRecovering".to_string()),
@@ -1832,7 +2011,80 @@ fn runtime_consumes_pending_transport_reconnect_candidate_once() {
 }
 
 #[test]
-fn runtime_stops_reconnect_loop_when_keepalive_reports_session_not_active() {
+fn runtime_consumes_pending_transport_reconnect_candidate_even_when_transport_is_connected() {
+    let requests = Rc::new(RefCell::new(Vec::new()));
+    let events = Rc::new(RefCell::new(Vec::new()));
+    let now_ms = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_millis() as f64)
+        .unwrap_or(0.0);
+    let backend = ScriptedMediaBackend::new(
+        XbxEngineMediaNegotiation {
+            local_offer_sdp: "offer".to_string(),
+            local_candidates: Vec::new(),
+            surface_id: "surface:viewport-1".to_string(),
+            video_width: 1280,
+            video_height: 720,
+            first_frame_packet_arrival_time_ms: None,
+            frame_decoded_time_ms: None,
+            frame_rendered_time_ms: None,
+            input_status: XbxEngineInputStatus::default(),
+        },
+        XbxEngineMediaRuntimeStats {
+            transport_state: XbxEngineTransportStateDto::Connected,
+            latest_video_packet_arrival_time_ms: Some(now_ms - 20.0),
+            inbound_video_packet_count_total: 500,
+            latest_video_escalation_observation: Some(crate::XbxEngineVideoEscalationObservation {
+                observation_id: 77,
+                reason: "transportAwaitRecoveryKeyframe".to_string(),
+                action: "requestReconnectCandidate".to_string(),
+                observed_at_ms: now_ms,
+            }),
+            ..Default::default()
+        },
+    );
+    *backend
+        .pending_runtime_recovery_action
+        .lock()
+        .expect("lock pending runtime recovery action") = Some(
+        crate::XbxEnginePendingRuntimeRecoveryAction::RequestReconnectCandidate {
+            observation_id: 77,
+            reason: "transportAwaitRecoveryKeyframe".to_string(),
+        },
+    );
+    let mut runtime = XbxEngineRuntime::with_media_backend(
+        XbxEngineRuntimeConfig::default(),
+        TestHostBridge::new(requests.clone()),
+        TestEventSink::new(events),
+        backend,
+    );
+
+    runtime
+        .start(session(), viewport(), 1.0, None, None)
+        .expect("runtime start should succeed");
+    requests.borrow_mut().clear();
+
+    runtime.tick();
+    let reconnect_request_count = requests
+        .borrow()
+        .iter()
+        .filter(|request| {
+            matches!(
+                request,
+                XbxEngineHostRequestDto::ExchangeOffer { channel, restart, .. }
+                if channel == "media" && *restart
+            )
+        })
+        .count();
+    assert_eq!(reconnect_request_count, 1);
+    assert_eq!(
+        runtime.snapshot().last_recovery_reason.as_deref(),
+        Some("transportReconnectCandidate:transportAwaitRecoveryKeyframe")
+    );
+}
+
+#[test]
+fn runtime_defers_pending_transport_reconnect_candidate_while_reconnecting() {
     let requests = Rc::new(RefCell::new(Vec::new()));
     let events = Rc::new(RefCell::new(Vec::new()));
     let now_ms = SystemTime::now()
@@ -1853,6 +2105,169 @@ fn runtime_stops_reconnect_loop_when_keepalive_reports_session_not_active() {
         },
         XbxEngineMediaRuntimeStats {
             transport_state: XbxEngineTransportStateDto::Connecting,
+            latest_video_packet_arrival_time_ms: Some(now_ms - 20.0),
+            inbound_video_packet_count_total: 500,
+            ..Default::default()
+        },
+    );
+    *backend
+        .pending_runtime_recovery_action
+        .lock()
+        .expect("lock pending runtime recovery action") = Some(
+        crate::XbxEnginePendingRuntimeRecoveryAction::RequestReconnectCandidate {
+            observation_id: 77,
+            reason: "transportAwaitRecoveryKeyframe".to_string(),
+        },
+    );
+    let pending = backend.pending_runtime_recovery_action.clone();
+    let mut runtime = XbxEngineRuntime::with_media_backend(
+        XbxEngineRuntimeConfig::default(),
+        TestHostBridge::new(requests.clone()),
+        TestEventSink::new(events),
+        backend,
+    );
+
+    runtime
+        .start(session(), viewport(), 1.0, None, None)
+        .expect("runtime start should succeed");
+    requests.borrow_mut().clear();
+    runtime.state = XbxEngineRuntimeState::Reconnecting;
+
+    runtime.tick();
+
+    let reconnect_request_count = requests
+        .borrow()
+        .iter()
+        .filter(|request| {
+            matches!(
+                request,
+                XbxEngineHostRequestDto::ExchangeOffer { channel, restart, .. }
+                if channel == "media" && *restart
+            )
+        })
+        .count();
+    assert_eq!(reconnect_request_count, 0);
+    assert!(pending
+        .lock()
+        .expect("lock pending runtime recovery action")
+        .is_some());
+    assert_eq!(
+        runtime.snapshot().last_recovery_reason.as_deref(),
+        Some("transportReconnectCandidateDeferred:reconnecting")
+    );
+}
+
+#[test]
+fn runtime_applies_transport_reconnect_candidate_cooldown_and_retries_after_window() {
+    let requests = Rc::new(RefCell::new(Vec::new()));
+    let events = Rc::new(RefCell::new(Vec::new()));
+    let now_ms = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_millis() as f64)
+        .unwrap_or(0.0);
+    let backend = ScriptedMediaBackend::new(
+        XbxEngineMediaNegotiation {
+            local_offer_sdp: "offer".to_string(),
+            local_candidates: Vec::new(),
+            surface_id: "surface:viewport-1".to_string(),
+            video_width: 1280,
+            video_height: 720,
+            first_frame_packet_arrival_time_ms: None,
+            frame_decoded_time_ms: None,
+            frame_rendered_time_ms: None,
+            input_status: XbxEngineInputStatus::default(),
+        },
+        XbxEngineMediaRuntimeStats {
+            transport_state: XbxEngineTransportStateDto::Connected,
+            latest_video_packet_arrival_time_ms: Some(now_ms - 20.0),
+            inbound_video_packet_count_total: 500,
+            ..Default::default()
+        },
+    );
+    *backend
+        .pending_runtime_recovery_action
+        .lock()
+        .expect("lock pending runtime recovery action") = Some(
+        crate::XbxEnginePendingRuntimeRecoveryAction::RequestReconnectCandidate {
+            observation_id: 88,
+            reason: "transportExpiredDeadline".to_string(),
+        },
+    );
+    let pending = backend.pending_runtime_recovery_action.clone();
+    let mut runtime = XbxEngineRuntime::with_media_backend(
+        XbxEngineRuntimeConfig::default(),
+        TestHostBridge::new(requests.clone()),
+        TestEventSink::new(events),
+        backend,
+    );
+
+    runtime
+        .start(session(), viewport(), 1.0, None, None)
+        .expect("runtime start should succeed");
+    requests.borrow_mut().clear();
+    runtime.snapshot.last_recovery_action = Some("reconnect".to_string());
+    runtime.snapshot.last_recovery_action_at_ms = Some(now_ms);
+
+    runtime.tick();
+    let reconnect_request_count_after_first_tick = requests
+        .borrow()
+        .iter()
+        .filter(|request| {
+            matches!(
+                request,
+                XbxEngineHostRequestDto::ExchangeOffer { channel, restart, .. }
+                if channel == "media" && *restart
+            )
+        })
+        .count();
+    assert_eq!(reconnect_request_count_after_first_tick, 0);
+    assert!(pending
+        .lock()
+        .expect("lock pending runtime recovery action")
+        .is_some());
+    assert_eq!(
+        runtime.snapshot().last_recovery_reason.as_deref(),
+        Some("transportReconnectCandidateDeferred:cooldown")
+    );
+
+    runtime.snapshot.last_recovery_action_at_ms = Some(now_ms - 6_100.0);
+    runtime.tick();
+    let reconnect_request_count_after_second_tick = requests
+        .borrow()
+        .iter()
+        .filter(|request| {
+            matches!(
+                request,
+                XbxEngineHostRequestDto::ExchangeOffer { channel, restart, .. }
+                if channel == "media" && *restart
+            )
+        })
+        .count();
+    assert_eq!(reconnect_request_count_after_second_tick, 1);
+}
+
+#[test]
+fn runtime_stops_reconnect_loop_when_keepalive_reports_session_not_active() {
+    let requests = Rc::new(RefCell::new(Vec::new()));
+    let events = Rc::new(RefCell::new(Vec::new()));
+    let now_ms = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_millis() as f64)
+        .unwrap_or(0.0);
+    let backend = ScriptedMediaBackend::new(
+        XbxEngineMediaNegotiation {
+            local_offer_sdp: "offer".to_string(),
+            local_candidates: Vec::new(),
+            surface_id: "surface:viewport-1".to_string(),
+            video_width: 1280,
+            video_height: 720,
+            first_frame_packet_arrival_time_ms: None,
+            frame_decoded_time_ms: None,
+            frame_rendered_time_ms: None,
+            input_status: XbxEngineInputStatus::default(),
+        },
+        XbxEngineMediaRuntimeStats {
+            transport_state: XbxEngineTransportStateDto::Connected,
             latest_video_packet_arrival_time_ms: Some(now_ms - 20.0),
             inbound_video_packet_count_total: 500,
             latest_observation_label: Some("rtcConnectionRecovering".to_string()),
@@ -1903,6 +2318,73 @@ fn runtime_stops_reconnect_loop_when_keepalive_reports_session_not_active() {
         if code == "recoverTransportReconnectSessionNotActive"
             && message.contains("HTTP 410")
     )));
+}
+
+#[test]
+fn runtime_stops_when_session_is_kicked_for_closed_game() {
+    let requests = Rc::new(RefCell::new(Vec::new()));
+    let events = Rc::new(RefCell::new(Vec::new()));
+    let now_ms = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_millis() as f64)
+        .unwrap_or(0.0);
+    let backend = ScriptedMediaBackend::new(
+        XbxEngineMediaNegotiation {
+            local_offer_sdp: "offer".to_string(),
+            local_candidates: Vec::new(),
+            surface_id: "surface:viewport-1".to_string(),
+            video_width: 1280,
+            video_height: 720,
+            first_frame_packet_arrival_time_ms: None,
+            frame_decoded_time_ms: None,
+            frame_rendered_time_ms: None,
+            input_status: XbxEngineInputStatus::default(),
+        },
+        XbxEngineMediaRuntimeStats {
+            transport_state: XbxEngineTransportStateDto::Connected,
+            latest_video_packet_arrival_time_ms: Some(now_ms - 20.0),
+            inbound_video_packet_count_total: 500,
+            latest_observation_label: Some("rtcSessionKickedForClosedGame".to_string()),
+            latest_observation_summary: Some(
+                "phase1 rtc inbound message kick reason=KickForClosedGame observationId=66"
+                    .to_string(),
+            ),
+            ..Default::default()
+        },
+    );
+    let mut runtime = XbxEngineRuntime::with_media_backend(
+        XbxEngineRuntimeConfig::default(),
+        TestHostBridge::new(requests.clone()),
+        TestEventSink::new(events.clone()),
+        backend,
+    );
+
+    runtime
+        .start(session(), viewport(), 1.0, None, None)
+        .expect("runtime start should succeed");
+    requests.borrow_mut().clear();
+
+    runtime.tick();
+
+    assert_eq!(runtime.state(), &XbxEngineRuntimeState::Stopped);
+    assert!(events.borrow().iter().any(|event| matches!(
+        event,
+        XbxEngineRuntimeEventDto::ErrorReported { code, message }
+        if code == "recoverTransportSessionKickedForClosedGame"
+            && message.contains("KickForClosedGame")
+    )));
+    let reconnect_request_count = requests
+        .borrow()
+        .iter()
+        .filter(|request| {
+            matches!(
+                request,
+                XbxEngineHostRequestDto::ExchangeOffer { channel, restart, .. }
+                if channel == "media" && *restart
+            )
+        })
+        .count();
+    assert_eq!(reconnect_request_count, 0);
 }
 
 #[test]

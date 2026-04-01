@@ -989,6 +989,16 @@ impl RtcConnectionService {
                             );
                             should_ack_message_handshake = true;
                         }
+                        if payload_text.contains("KickForClosedGame") {
+                            RuntimeStatsSink::new(runtime_stats.clone()).update(|stats| {
+                                stats.latest_observation_label =
+                                    Some("rtcSessionKickedForClosedGame".to_string());
+                                stats.latest_observation_summary = Some(format!(
+                                    "phase1 rtc inbound message kick reason=KickForClosedGame observationId={}",
+                                    self.read_counters.data_channel_messages
+                                ));
+                            });
+                        }
                     } else if last_label == CHAT_CHANNEL_LABEL && payload.is_string {
                         let payload_text =
                             String::from_utf8_lossy(payload.data.as_ref()).to_string();

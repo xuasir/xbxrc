@@ -390,6 +390,7 @@ fn to_runtime_projection(projection: StreamingRuntimeProjection) -> XbxEngineRun
         target_video_width: projection.target_video_width,
         target_video_height: projection.target_video_height,
         force_mono_audio: projection.force_mono_audio,
+        prefer_ipv6: projection.prefer_ipv6,
         bwe_mode: match projection.bwe_mode {
             crate::mods::streaming::types::StreamingBweMode::FixedRemb => "fixed-remb".to_string(),
             crate::mods::streaming::types::StreamingBweMode::ObservedRemb => {

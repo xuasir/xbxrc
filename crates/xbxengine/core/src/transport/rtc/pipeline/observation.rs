@@ -1,7 +1,8 @@
 use crate::{
-    media::video::ingress::scheduler::IngressDecision, runtime_stats_sink::RuntimeStatsSink,
+    api::backend::XbxEngineVideoFrameDropObservation,
+    media::video::ingress::scheduler::IngressDecision,
+    media::video::types::FrameRecoveryDisposition, runtime_stats_sink::RuntimeStatsSink,
     transport::rtc::stream::adapter_types::TransportObservation,
-    XbxEngineVideoFrameDropObservation,
 };
 use std::collections::VecDeque;
 
@@ -58,6 +59,10 @@ impl MediaSupervisorObservationState {
         height: u32,
         is_keyframe: bool,
         queue_depth: usize,
+        frame_rtp_timestamp: Option<u32>,
+        frame_seq: Option<u64>,
+        frame_recovery_disposition: Option<FrameRecoveryDisposition>,
+        frame_unrecoverable_reason: Option<&str>,
     ) {
         if !matches!(
             decision,
@@ -70,16 +75,22 @@ impl MediaSupervisorObservationState {
             return;
         }
 
-        self.frame_drop_observation_id = self.frame_drop_observation_id.saturating_add(1);
-        runtime_stats.record_video_frame_drop(XbxEngineVideoFrameDropObservation {
-            observation_id: self.frame_drop_observation_id,
-            reason: map_ingress_drop_reason(decision, reason, reconfigure_reason),
+        record_pipeline_frame_drop(
+            runtime_stats,
+            &mut self.frame_drop_observation_id,
+            "ingress",
+            map_ingress_action(decision),
+            Some(map_ingress_drop_reason(decision, reason, reconfigure_reason).as_str()),
             observed_at_ms,
             width,
             height,
             is_keyframe,
             queue_depth,
-        });
+            frame_rtp_timestamp,
+            frame_seq,
+            frame_recovery_disposition,
+            frame_unrecoverable_reason,
+        );
     }
 
     pub(super) fn total_frame_count(&self) -> u64 {
@@ -159,6 +170,17 @@ fn map_ingress_drop_reason(
     }
 }
 
+fn map_ingress_action(decision: &IngressDecision) -> &'static str {
+    match decision {
+        IngressDecision::Submit => "submit",
+        IngressDecision::DropLate => "drop",
+        IngressDecision::DropBacklog => "drop",
+        IngressDecision::DropUnrecoverable => "drop",
+        IngressDecision::WaitKeyframe => "defer",
+        IngressDecision::Reconfigure => "reconfigure",
+    }
+}
+
 pub(super) fn map_transport_observation_to_hint_label(
     observation: &TransportObservation,
     severe_deadline_packet_threshold: usize,
@@ -201,4 +223,47 @@ pub(super) fn transport_observation_severity(observation: &TransportObservation)
         | TransportObservation::Loss(_)
         | TransportObservation::NackRecoveredLate => 0,
     }
+}
+
+pub(crate) fn record_pipeline_frame_drop(
+    runtime_stats: &RuntimeStatsSink,
+    observation_id: &mut u64,
+    stage: &'static str,
+    action: &'static str,
+    detail: Option<&str>,
+    observed_at_ms: f64,
+    width: u32,
+    height: u32,
+    is_keyframe: bool,
+    queue_depth: usize,
+    frame_rtp_timestamp: Option<u32>,
+    frame_seq: Option<u64>,
+    frame_recovery_disposition: Option<FrameRecoveryDisposition>,
+    frame_unrecoverable_reason: Option<&str>,
+) {
+    *observation_id = observation_id.saturating_add(1);
+    let reason = match (stage, detail) {
+        ("pacer", Some("deadline")) => "dropLate".to_string(),
+        ("ingress", Some(detail)) => detail.to_string(),
+        (_, Some(detail)) => format!("{stage}:{action}:{detail}"),
+        _ => format!("{stage}:{action}"),
+    };
+    runtime_stats.record_video_frame_drop(XbxEngineVideoFrameDropObservation {
+        observation_id: *observation_id,
+        reason,
+        stage: Some(stage.to_string()),
+        action: Some(action.to_string()),
+        detail: detail.map(str::to_string),
+        frame_rtp_timestamp,
+        frame_seq,
+        frame_recovery_disposition: frame_recovery_disposition
+            .map(FrameRecoveryDisposition::as_str)
+            .map(str::to_string),
+        frame_unrecoverable_reason: frame_unrecoverable_reason.map(str::to_string),
+        observed_at_ms,
+        width,
+        height,
+        is_keyframe,
+        queue_depth,
+    });
 }

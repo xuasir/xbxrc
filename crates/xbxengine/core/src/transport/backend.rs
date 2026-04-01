@@ -1,6 +1,7 @@
 use crate::{
     api::backend::{
-        PlaceholderXbxEngineMediaBackend, XbxEngineMediaBackend, XbxEngineMediaNegotiation,
+        PlaceholderXbxEngineMediaBackend, XbxEngineHostVideoFrameDropEvent,
+        XbxEngineHostVideoPresentMetrics, XbxEngineMediaBackend, XbxEngineMediaNegotiation,
         XbxEngineMediaNegotiationRequest, XbxEngineMediaRuntimeStats,
         XbxEnginePendingRuntimeRecoveryAction, XbxEngineRenderFrame,
     },
@@ -198,10 +199,41 @@ impl XbxEngineMediaBackend for XbxNegotiationBackend {
         Ok(())
     }
 
+    fn update_host_video_present_metrics(
+        &mut self,
+        metrics: XbxEngineHostVideoPresentMetrics,
+    ) -> Result<(), XbxEngineRuntimeError> {
+        self.stack.update_host_video_present_metrics(metrics);
+        Ok(())
+    }
+
+    fn record_host_video_frame_drop(
+        &mut self,
+        event: XbxEngineHostVideoFrameDropEvent,
+    ) -> Result<(), XbxEngineRuntimeError> {
+        self.stack.record_host_video_frame_drop(event);
+        Ok(())
+    }
+
     fn take_latest_render_frame(
         &mut self,
     ) -> Result<Option<XbxEngineRenderFrame>, XbxEngineRuntimeError> {
         Ok(self.stack.take_latest_render_frame())
+    }
+
+    fn acknowledge_latest_render_frame(
+        &mut self,
+        frame_seq: u64,
+    ) -> Result<bool, XbxEngineRuntimeError> {
+        Ok(self.stack.acknowledge_latest_render_frame(frame_seq))
+    }
+
+    fn record_video_frame_drop(
+        &mut self,
+        observation: crate::XbxEngineVideoFrameDropObservation,
+    ) -> Result<(), XbxEngineRuntimeError> {
+        self.stack.record_video_frame_drop(observation);
+        Ok(())
     }
 
     fn request_video_keyframe(&mut self) -> Result<(), XbxEngineRuntimeError> {

@@ -1,12 +1,13 @@
 use std::sync::{Arc, Mutex};
 
+use crate::runtime_stats_sink::RuntimeStatsSink;
 use crate::{
     XbxEngineFrameRecoveryObservation, XbxEngineMediaRuntimeStats,
     XbxEngineRemoteAnswerObservation, XbxEngineRtcBuilderObservation,
     XbxEngineTwccExtensionObservation, XbxEngineTwccRemoteStreamObservation,
     XbxEngineVideoFrameDropObservation, XbxEngineVideoNackObservation,
     XbxEngineVideoPacketGapObservation, XbxEngineVideoRtxReinjectObservation,
-    XbxEngineVideoTwccObservation,
+    XbxEngineVideoTimelineObservation, XbxEngineVideoTwccObservation,
 };
 
 #[derive(Clone)]
@@ -38,6 +39,9 @@ pub(crate) enum ObservationEvent {
         inbound_video_loss_ratio_5s: f64,
         inbound_video_loss_ratio_1s: f64,
         transport_path: Option<String>,
+        transport_candidate_pair: Option<String>,
+        transport_protocol: Option<String>,
+        transport_address_family: Option<String>,
         inbound_video_bitrate_kbps: f64,
         inbound_primary_video_bytes_total: u64,
     },
@@ -83,6 +87,9 @@ pub(crate) enum ObservationEvent {
         recovery_time_ms: f64,
         pending_count: usize,
         observation: XbxEngineVideoNackObservation,
+    },
+    VideoTimelineObserved {
+        observation: XbxEngineVideoTimelineObservation,
     },
     LatestVideoPacketGap {
         observation: XbxEngineVideoPacketGapObservation,
@@ -172,13 +179,19 @@ fn summarize_event(event: &ObservationEvent) -> ObservationPublication {
             inbound_video_loss_ratio_5s,
             inbound_video_loss_ratio_1s,
             transport_path,
+            transport_candidate_pair,
+            transport_protocol,
+            transport_address_family,
             inbound_video_bitrate_kbps,
             ..
         } => ObservationPublication {
             label: "transportMetrics".to_string(),
             summary: format!(
-                "rtt={video_rtt_ms:?} path={} loss5={inbound_video_loss_ratio_5s:.3} loss1={inbound_video_loss_ratio_1s:.3} kbps={inbound_video_bitrate_kbps:.1}",
+                "rtt={video_rtt_ms:?} path={} pair={} proto={} family={} loss5={inbound_video_loss_ratio_5s:.3} loss1={inbound_video_loss_ratio_1s:.3} kbps={inbound_video_bitrate_kbps:.1}",
                 transport_path.as_deref().unwrap_or("-"),
+                transport_candidate_pair.as_deref().unwrap_or("-"),
+                transport_protocol.as_deref().unwrap_or("-"),
+                transport_address_family.as_deref().unwrap_or("-"),
             ),
         },
         ObservationEvent::RtcBuilderConfigured { observation } => ObservationPublication {
@@ -311,6 +324,24 @@ fn summarize_event(event: &ObservationEvent) -> ObservationPublication {
                 observation.source
             ),
         },
+        ObservationEvent::VideoTimelineObserved { observation } => ObservationPublication {
+            label: "videoTimeline".to_string(),
+            summary: format!(
+                "event={} chain={} gap={} frame={}",
+                observation.source_event,
+                observation.chain.state,
+                observation
+                    .gap
+                    .as_ref()
+                    .map(|gap| gap.state.as_str())
+                    .unwrap_or("-"),
+                observation
+                    .frame
+                    .as_ref()
+                    .map(|frame| frame.state.as_str())
+                    .unwrap_or("-")
+            ),
+        },
         ObservationEvent::LatestVideoPacketGap {
             observation,
             latest_sequence,
@@ -371,6 +402,9 @@ fn apply_event(stats: &mut XbxEngineMediaRuntimeStats, event: ObservationEvent) 
             inbound_video_loss_ratio_5s,
             inbound_video_loss_ratio_1s,
             transport_path,
+            transport_candidate_pair,
+            transport_protocol,
+            transport_address_family,
             inbound_video_bitrate_kbps,
             inbound_primary_video_bytes_total,
         } => {
@@ -379,6 +413,9 @@ fn apply_event(stats: &mut XbxEngineMediaRuntimeStats, event: ObservationEvent) 
             stats.inbound_video_loss_ratio_5s = inbound_video_loss_ratio_5s;
             stats.inbound_video_loss_ratio_1s = inbound_video_loss_ratio_1s;
             stats.transport_path = transport_path;
+            stats.transport_candidate_pair = transport_candidate_pair;
+            stats.transport_protocol = transport_protocol;
+            stats.transport_address_family = transport_address_family;
             stats.inbound_primary_video_bytes_total = inbound_primary_video_bytes_total;
             stats.inbound_video_bytes_total = inbound_primary_video_bytes_total;
             stats.inbound_video_bitrate_kbps = Some(inbound_video_bitrate_kbps.max(0.0));
@@ -502,6 +539,16 @@ fn apply_event(stats: &mut XbxEngineMediaRuntimeStats, event: ObservationEvent) 
             }
             stats.video_nack_recovery_rtt_ms = Some(recovery_time_ms);
             stats.latest_video_nack_observation = Some(observation);
+        }
+        ObservationEvent::VideoTimelineObserved { observation } => {
+            if observation.source_event == "chain-clean-keyframe-submitted" {
+                RuntimeStatsSink::apply_transport_clean_anchor(
+                    stats,
+                    observation.observed_at_ms,
+                    observation.source_event.as_str(),
+                );
+            }
+            stats.latest_video_timeline_observation = Some(observation);
         }
         ObservationEvent::LatestVideoPacketGap {
             observation,

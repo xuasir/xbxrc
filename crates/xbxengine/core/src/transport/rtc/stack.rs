@@ -7,8 +7,10 @@ use xbxengine_protocol::{
 };
 
 use crate::api::backend::{
+    XbxEngineHostVideoFrameDropEvent, XbxEngineHostVideoPresentMetrics,
     XbxEngineMediaNegotiationRequest, XbxEngineMediaRuntimeStats,
     XbxEnginePendingRuntimeRecoveryAction, XbxEngineRenderFrame,
+    XbxEngineVideoFrameDropObservation,
 };
 use crate::media::video::render::renderer::XbxRenderState;
 use crate::transport::rtc::connection::RtcConnectionService;
@@ -65,6 +67,8 @@ pub(crate) trait XbxMediaStackPort: Send {
         &mut self,
     ) -> Option<XbxEnginePendingRuntimeRecoveryAction>;
     fn take_latest_render_frame(&mut self) -> Option<XbxEngineRenderFrame>;
+    fn acknowledge_latest_render_frame(&mut self, frame_seq: u64) -> bool;
+    fn record_video_frame_drop(&mut self, observation: XbxEngineVideoFrameDropObservation);
     fn set_audio_volume(&mut self, value: f32);
     fn set_microphone_capturing(&mut self, capturing: bool) -> Result<(), XbxEngineRuntimeError>;
     fn set_keyboard_pointer_enabled(&mut self, enabled: bool) -> Result<(), XbxEngineRuntimeError>;
@@ -79,6 +83,8 @@ pub(crate) trait XbxMediaStackPort: Send {
         host_display_interval_ms: Option<f64>,
         host_frame_age_budget_ms: Option<f64>,
     );
+    fn update_host_video_present_metrics(&mut self, metrics: XbxEngineHostVideoPresentMetrics);
+    fn record_host_video_frame_drop(&mut self, event: XbxEngineHostVideoFrameDropEvent);
     fn stop(&mut self);
 }
 
@@ -306,6 +312,15 @@ impl XbxMediaStackPort for XbxActiveMediaStack {
         self.runtime_port().take_latest_render_frame()
     }
 
+    fn acknowledge_latest_render_frame(&mut self, frame_seq: u64) -> bool {
+        self.runtime_port()
+            .acknowledge_latest_render_frame(frame_seq)
+    }
+
+    fn record_video_frame_drop(&mut self, observation: XbxEngineVideoFrameDropObservation) {
+        self.runtime_port().record_video_frame_drop(observation);
+    }
+
     fn set_audio_volume(&mut self, value: f32) {
         self.audio_volume_bits
             .store(value.to_bits(), Ordering::Relaxed);
@@ -371,6 +386,15 @@ impl XbxMediaStackPort for XbxActiveMediaStack {
     ) {
         self.runtime_port()
             .update_host_video_timing(host_display_interval_ms, host_frame_age_budget_ms);
+    }
+
+    fn update_host_video_present_metrics(&mut self, metrics: XbxEngineHostVideoPresentMetrics) {
+        self.runtime_port()
+            .update_host_video_present_metrics(metrics);
+    }
+
+    fn record_host_video_frame_drop(&mut self, event: XbxEngineHostVideoFrameDropEvent) {
+        self.runtime_port().record_host_video_frame_drop(event);
     }
 
     fn stop(&mut self) {

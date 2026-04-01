@@ -755,13 +755,10 @@ where
         };
         let plan = &record.plan;
         let api = self.create_signaling_api(plan).await?;
-        let restart_baseline = if restart {
-            api.get_ice_exchange_response(session_id)
-                .await
-                .map_err(map_webapi_error)?
-        } else {
-            None
-        };
+        // restart=true 用于“重新开始候选交换”。
+        // 这里不再额外读取一次 /ice 作为 baseline：该读取可能与服务端候选队列语义耦合，
+        // 导致后续 poll 读取到的 candidates 被意外清空/错配。
+        let restart_baseline = None;
 
         api.send_ice(session_id, candidates)
             .await
@@ -1235,12 +1232,12 @@ where
         &self,
         session_id: &str,
         response: Option<Vec<IceCandidate>>,
-        restart: bool,
+        _restart: bool,
     ) -> Option<Vec<IceCandidate>> {
         let mut signaling = self.inner.signaling.write().await;
         let state = signaling.entry(session_id.to_string()).or_default();
-        let response =
-            filter_stale_ice_response(response, state.restart_baseline_ice.as_deref(), restart);
+        // restart=true 时不做 baseline 相等过滤，避免把服务端在重连阶段尚未变化的候选错误折叠为空。
+        let response = response;
         if response.as_deref() == state.last_polled_ice.as_deref() {
             return None;
         }

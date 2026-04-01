@@ -27,6 +27,9 @@ pub(crate) struct RtcTransportMetricsSnapshot {
     pub(crate) inbound_video_loss_ratio_5s: f64,
     pub(crate) inbound_video_loss_ratio_1s: f64,
     pub(crate) transport_path: Option<String>,
+    pub(crate) transport_candidate_pair: Option<String>,
+    pub(crate) transport_protocol: Option<String>,
+    pub(crate) transport_address_family: Option<String>,
     pub(crate) inbound_video_bitrate_kbps: f64,
     pub(crate) inbound_primary_video_bytes_total: u64,
 }
@@ -73,10 +76,22 @@ fn collect_transport_metrics_from_report(
 ) -> Option<RtcTransportMetricsSnapshot> {
     let now_ms = now_ms_f64();
     let selected_pair = selected_candidate_pair(report)?;
+    let local_candidate_type = candidate_type_for(report, &selected_pair.local_candidate_id);
+    let remote_candidate_type = candidate_type_for(report, &selected_pair.remote_candidate_id);
     let (video_rtt_ms, video_rtt_source) = select_video_rtt(report, selected_pair);
-    let transport_path = classify_transport_path(
-        candidate_type_for(report, &selected_pair.local_candidate_id),
-        candidate_type_for(report, &selected_pair.remote_candidate_id),
+    let transport_path = classify_transport_path(local_candidate_type, remote_candidate_type);
+    let transport_candidate_pair =
+        build_transport_candidate_pair(local_candidate_type, remote_candidate_type);
+    let transport_protocol = resolve_transport_protocol(
+        candidate_protocol_for(report, &selected_pair.local_candidate_id),
+        candidate_protocol_for(report, &selected_pair.remote_candidate_id),
+    );
+    let transport_address_family = Some(
+        resolve_transport_address_family(
+            candidate_address_family_for(report, &selected_pair.local_candidate_id),
+            candidate_address_family_for(report, &selected_pair.remote_candidate_id),
+        )
+        .to_string(),
     );
 
     let (inbound_video_loss_ratio_5s, inbound_video_loss_ratio_1s, inbound_video_bytes_total) =
@@ -95,6 +110,9 @@ fn collect_transport_metrics_from_report(
         inbound_video_loss_ratio_5s,
         inbound_video_loss_ratio_1s,
         transport_path,
+        transport_candidate_pair,
+        transport_protocol,
+        transport_address_family,
         inbound_video_bitrate_kbps,
         inbound_primary_video_bytes_total: inbound_video_bytes_total,
     })
@@ -110,6 +128,9 @@ pub(crate) fn publish_transport_metrics_sample(
         snapshot.inbound_video_loss_ratio_5s,
         snapshot.inbound_video_loss_ratio_1s,
         snapshot.transport_path.clone(),
+        snapshot.transport_candidate_pair.clone(),
+        snapshot.transport_protocol.clone(),
+        snapshot.transport_address_family.clone(),
         snapshot.inbound_video_bitrate_kbps,
         snapshot.inbound_primary_video_bytes_total,
     );
@@ -161,8 +182,9 @@ pub(crate) fn build_twcc_observation_with_packet_bytes(
             (span_ms > 0.0).then_some(span_ms).or(feedback_interval_ms)
         };
         let covered_sequence_span_nonzero = covered_sequence_span.max(1);
-        let coverage_ratio =
-            Some((observed_packet_count as f64 / covered_sequence_span_nonzero as f64).clamp(0.0, 1.0));
+        let coverage_ratio = Some(
+            (observed_packet_count as f64 / covered_sequence_span_nonzero as f64).clamp(0.0, 1.0),
+        );
         let observed_from_ledger = packet_bytes_by_transport_seq
             .map(|ledger| sum_twcc_observed_packet_bytes(packet, ledger))
             .unwrap_or_default();
@@ -536,6 +558,119 @@ fn candidate_type_for(report: &RTCStatsReport, candidate_id: &str) -> Option<RTC
     }
 }
 
+fn candidate_protocol_for(report: &RTCStatsReport, candidate_id: &str) -> Option<String> {
+    match report.get(candidate_id)? {
+        RTCStatsReportEntry::LocalCandidate(candidate)
+        | RTCStatsReportEntry::RemoteCandidate(candidate) => {
+            let protocol = candidate.protocol.trim();
+            (!protocol.is_empty()).then_some(protocol.to_ascii_uppercase())
+        }
+        _ => None,
+    }
+}
+
+fn candidate_address_family_for(
+    report: &RTCStatsReport,
+    candidate_id: &str,
+) -> TransportAddressFamily {
+    match report.get(candidate_id) {
+        Some(RTCStatsReportEntry::LocalCandidate(candidate))
+        | Some(RTCStatsReportEntry::RemoteCandidate(candidate)) => {
+            resolve_candidate_address_family(candidate.address.as_deref())
+        }
+        _ => TransportAddressFamily::Unknown,
+    }
+}
+
+fn resolve_candidate_address_family(address: Option<&str>) -> TransportAddressFamily {
+    let Some(raw_address) = address.map(str::trim).filter(|value| !value.is_empty()) else {
+        return TransportAddressFamily::Unknown;
+    };
+    let without_prefix = raw_address.strip_prefix('[').unwrap_or(raw_address);
+    let normalized = without_prefix.strip_suffix(']').unwrap_or(without_prefix);
+    if normalized.contains(':') {
+        return TransportAddressFamily::Ipv6;
+    }
+    if normalized.contains('.') {
+        return TransportAddressFamily::Ipv4;
+    }
+    TransportAddressFamily::Unknown
+}
+
+fn normalize_candidate_type(candidate_type: RTCIceCandidateType) -> &'static str {
+    match candidate_type {
+        RTCIceCandidateType::Host => "host",
+        RTCIceCandidateType::Srflx => "srflx",
+        RTCIceCandidateType::Prflx => "prflx",
+        RTCIceCandidateType::Relay => "relay",
+        _ => "unknown",
+    }
+}
+
+fn build_transport_candidate_pair(
+    local_candidate_type: Option<RTCIceCandidateType>,
+    remote_candidate_type: Option<RTCIceCandidateType>,
+) -> Option<String> {
+    match (local_candidate_type, remote_candidate_type) {
+        (None, None) => None,
+        (local, remote) => Some(format!(
+            "{}->{}",
+            local.map(normalize_candidate_type).unwrap_or("unknown"),
+            remote.map(normalize_candidate_type).unwrap_or("unknown"),
+        )),
+    }
+}
+
+fn resolve_transport_protocol(local: Option<String>, remote: Option<String>) -> Option<String> {
+    match (local, remote) {
+        (Some(local), Some(remote)) if local.eq_ignore_ascii_case(remote.as_str()) => Some(local),
+        (Some(local), Some(remote)) => Some(format!("{local}/{remote}")),
+        (Some(local), None) => Some(local),
+        (None, Some(remote)) => Some(remote),
+        (None, None) => None,
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum TransportAddressFamily {
+    Ipv4,
+    Ipv6,
+    Unknown,
+}
+
+impl TransportAddressFamily {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Ipv4 => "ipv4",
+            Self::Ipv6 => "ipv6",
+            Self::Unknown => "unknown",
+        }
+    }
+}
+
+impl std::fmt::Display for TransportAddressFamily {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+fn resolve_transport_address_family(
+    local: TransportAddressFamily,
+    remote: TransportAddressFamily,
+) -> &'static str {
+    match (local, remote) {
+        (TransportAddressFamily::Unknown, TransportAddressFamily::Unknown) => "unknown",
+        (TransportAddressFamily::Unknown, TransportAddressFamily::Ipv4)
+        | (TransportAddressFamily::Ipv4, TransportAddressFamily::Unknown)
+        | (TransportAddressFamily::Ipv4, TransportAddressFamily::Ipv4) => "ipv4",
+        (TransportAddressFamily::Unknown, TransportAddressFamily::Ipv6)
+        | (TransportAddressFamily::Ipv6, TransportAddressFamily::Unknown)
+        | (TransportAddressFamily::Ipv6, TransportAddressFamily::Ipv6) => "ipv6",
+        (TransportAddressFamily::Ipv4, TransportAddressFamily::Ipv6)
+        | (TransportAddressFamily::Ipv6, TransportAddressFamily::Ipv4) => "mixed",
+    }
+}
+
 fn candidate_summary(report: &RTCStatsReport, candidate_id: &str) -> String {
     match report.get(candidate_id) {
         Some(RTCStatsReportEntry::LocalCandidate(candidate))
@@ -626,9 +761,11 @@ mod tests {
     use rtc_rtcp::transport_feedbacks::transport_layer_cc::{SymbolTypeTcc, TransportLayerCc};
 
     use super::{
-        build_twcc_observation, build_twcc_observation_with_packet_bytes, classify_transport_path,
+        build_transport_candidate_pair, build_twcc_observation,
+        build_twcc_observation_with_packet_bytes, classify_transport_path,
         estimate_recent_inbound_bitrate_kbps, is_video_inbound_stream_by_hints,
-        TWCC_OBSERVATION_SOURCE_LOCAL_FEEDBACK,
+        resolve_candidate_address_family, resolve_transport_address_family,
+        resolve_transport_protocol, TransportAddressFamily, TWCC_OBSERVATION_SOURCE_LOCAL_FEEDBACK,
         TWCC_OBSERVATION_SOURCE_REMOTE_RTCP,
     };
     use crate::XbxEngineMediaRuntimeStats;
@@ -669,6 +806,71 @@ mod tests {
         assert_eq!(
             classify_transport_path(None, None),
             Some("Direct".to_string())
+        );
+    }
+
+    #[test]
+    fn transport_candidate_pair_is_normalized_to_lowercase() {
+        assert_eq!(
+            build_transport_candidate_pair(
+                Some(RTCIceCandidateType::Host),
+                Some(RTCIceCandidateType::Srflx)
+            ),
+            Some("host->srflx".to_string())
+        );
+    }
+
+    #[test]
+    fn transport_protocol_prefers_single_value_when_consistent() {
+        assert_eq!(
+            resolve_transport_protocol(Some("UDP".to_string()), Some("udp".to_string())),
+            Some("UDP".to_string())
+        );
+    }
+
+    #[test]
+    fn transport_protocol_marks_mixed_sources() {
+        assert_eq!(
+            resolve_transport_protocol(Some("UDP".to_string()), Some("TCP".to_string())),
+            Some("UDP/TCP".to_string())
+        );
+    }
+
+    #[test]
+    fn transport_address_family_uses_mixed_when_local_and_remote_differ() {
+        assert_eq!(
+            resolve_transport_address_family(
+                TransportAddressFamily::Ipv4,
+                TransportAddressFamily::Ipv6
+            ),
+            "mixed"
+        );
+    }
+
+    #[test]
+    fn transport_address_family_falls_back_to_known_side() {
+        assert_eq!(
+            resolve_transport_address_family(
+                TransportAddressFamily::Unknown,
+                TransportAddressFamily::Ipv6
+            ),
+            "ipv6"
+        );
+    }
+
+    #[test]
+    fn candidate_address_family_detects_ipv4_ipv6_and_unknown() {
+        assert_eq!(
+            resolve_candidate_address_family(Some("192.168.0.2")),
+            TransportAddressFamily::Ipv4
+        );
+        assert_eq!(
+            resolve_candidate_address_family(Some("[2001:db8::1]")),
+            TransportAddressFamily::Ipv6
+        );
+        assert_eq!(
+            resolve_candidate_address_family(Some("")),
+            TransportAddressFamily::Unknown
         );
     }
 
@@ -773,13 +975,11 @@ mod tests {
         assert_eq!(observation.coverage_ratio, Some(0.0));
         assert_eq!(observation.ledger_hit_ratio, None);
         assert!(!observation.twcc_sample_valid);
-        assert!(
-            observation
-                .twcc_invalid_reason
-                .as_deref()
-                .unwrap_or("")
-                .contains("sample-too-small")
-        );
+        assert!(observation
+            .twcc_invalid_reason
+            .as_deref()
+            .unwrap_or("")
+            .contains("sample-too-small"));
     }
 
     #[test]

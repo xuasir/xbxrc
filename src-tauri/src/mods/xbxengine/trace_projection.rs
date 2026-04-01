@@ -10,6 +10,7 @@ pub(super) struct RuntimeTraceObservationState {
     frame_recovery_observation_id: Option<u64>,
     nack_observation_id: Option<u64>,
     escalation_observation_id: Option<u64>,
+    recovery_decision_ledger_signature: Option<(u64, Option<String>, Option<String>)>,
     bwe_observation_id: Option<u64>,
     twcc_observation_id: Option<u64>,
     rtc_builder_observation_id: Option<u64>,
@@ -17,11 +18,21 @@ pub(super) struct RuntimeTraceObservationState {
     remote_answer_observation_id: Option<u64>,
     twcc_extension_observation_id: Option<u64>,
     data_channel_catalog_observation_id: Option<u64>,
+    timeline_observation_id: Option<u64>,
+    anchor_candidate_observation: Option<(u64, Option<u32>, String, Option<String>, f64)>,
+    decode_candidate_decision_id: Option<u64>,
+    render_candidate_decision_id: Option<u64>,
     recovery_keyframe_request_count: Option<u64>,
     recovery_decoder_reset_count: Option<u64>,
     recovery_reconnect_count: Option<u64>,
+    recovery_hard_fallback_timer_ms: Option<f64>,
+    recovery_hard_fallback_trigger_reason: Option<String>,
+    recovery_hard_fallback_timer_reset_reason: Option<String>,
     transport_state: Option<String>,
     transport_path: Option<String>,
+    transport_candidate_pair: Option<String>,
+    transport_protocol: Option<String>,
+    transport_address_family: Option<String>,
     latest_video_track_status: Option<xbxengine_protocol::XbxEngineVideoTrackStatusDto>,
     video_remb_bps: Option<u32>,
     session_phase: Option<String>,
@@ -34,11 +45,19 @@ pub(super) struct RuntimeTraceObservationState {
     runtime_summary: Option<String>,
     primary_issue_chain: Option<String>,
     latest_decision_summary: Option<String>,
+    video_owner_state: Option<String>,
+    video_owner_reason: Option<String>,
+    video_owner_source: Option<String>,
+    video_owner_observed_at_ms: Option<f64>,
     video_health: Option<String>,
     stall_kind: Option<String>,
     host_present_submit_count_total: Option<u64>,
     host_present_drop_count_total: Option<u64>,
     host_present_overwrite_count_total: Option<u64>,
+    host_no_pending_take_count_total: Option<u64>,
+    host_no_pending_streak: Option<u32>,
+    host_no_pending_max_streak: Option<u32>,
+    host_no_pending_pressure_level: Option<String>,
     host_descriptor_upload_mode: Option<String>,
     host_descriptor_metal_import_count_total: Option<u64>,
     host_descriptor_cpu_upload_count_total: Option<u64>,
@@ -48,6 +67,10 @@ pub(super) struct RuntimeTraceObservationState {
     latest_observation_summary: Option<String>,
     latest_target_remb_action: Option<String>,
     latest_target_remb_summary: Option<String>,
+    timeline_chain_state: Option<String>,
+    timeline_chain_reason: Option<String>,
+    video_decoder_stalled: Option<bool>,
+    video_renderer_stalled: Option<bool>,
 }
 
 pub(super) fn should_skip_trace_tick(session_id: Option<&str>, stats: &XbxEngineStatsDto) -> bool {
@@ -64,8 +87,17 @@ pub(super) fn build_observability_snapshot(stats: &XbxEngineStatsDto) -> serde_j
         "runtimeSummary": stats.runtime_summary,
         "primaryIssueChain": stats.primary_issue_chain,
         "latestDecisionSummary": stats.latest_decision_summary,
+        "videoOwner": {
+            "state": stats.video_owner_state,
+            "reason": stats.video_owner_reason,
+            "source": stats.video_owner_source,
+            "observedAtMs": stats.video_owner_observed_at_ms,
+        },
         "transport": {
             "path": stats.transport_path,
+            "candidatePair": stats.transport_candidate_pair,
+            "protocol": stats.transport_protocol,
+            "addressFamily": stats.transport_address_family,
             "state": stats.transport_state,
             "policyProfile": stats.transport_policy_profile,
             "videoRttSource": stats.video_rtt_source,
@@ -78,10 +110,17 @@ pub(super) fn build_observability_snapshot(stats: &XbxEngineStatsDto) -> serde_j
             "couplingMode": stats.recovery_coupling_mode,
             "couplingSummary": stats.recovery_coupling_summary,
             "videoHealth": stats.video_health,
+            "videoOwnerState": stats.video_owner_state,
+            "videoOwnerReason": stats.video_owner_reason,
+            "videoOwnerSource": stats.video_owner_source,
+            "videoOwnerObservedAtMs": stats.video_owner_observed_at_ms,
             "stallKind": stats.stall_kind,
             "keyframeRequestCount": stats.recovery_keyframe_request_count,
             "decoderResetCount": stats.recovery_decoder_reset_count,
             "reconnectCount": stats.recovery_reconnect_count,
+            "hardFallbackTimerMs": stats.recovery_hard_fallback_timer_ms,
+            "hardFallbackTriggerReason": stats.recovery_hard_fallback_trigger_reason,
+            "hardFallbackTimerResetReason": stats.recovery_hard_fallback_timer_reset_reason,
             "lastAction": stats.last_recovery_action,
             "lastActionAtMs": stats.last_recovery_action_at_ms,
             "lastReason": stats.last_recovery_reason,
@@ -103,6 +142,11 @@ pub(super) fn build_observability_snapshot(stats: &XbxEngineStatsDto) -> serde_j
             "bytesTotal": stats.inbound_bytes_total,
             "videoBytesTotal": stats.inbound_video_bytes_total,
             "audioBytesTotal": stats.inbound_audio_bytes_total,
+        },
+        "audio": {
+            "latestAudioPlayoutTimeMs": stats.latest_audio_playout_time_ms,
+            "audioPlayoutLatencyMs": stats.audio_playout_latency_ms,
+            "audioVideoPlayoutDeltaMs": stats.audio_video_playout_delta_ms,
         },
         "bwe": {
             "mode": stats.video_bwe_mode,
@@ -172,6 +216,10 @@ pub(super) fn build_observability_snapshot(stats: &XbxEngineStatsDto) -> serde_j
             "presentSubmitCountTotal": stats.video_present_submit_count_total,
             "presentDropCountTotal": stats.video_present_drop_count_total,
             "presentOverwriteCountTotal": stats.video_present_overwrite_count_total,
+            "noPendingTakeCountTotal": stats.host_no_pending_take_count_total,
+            "noPendingStreak": stats.host_no_pending_streak,
+            "noPendingMaxStreak": stats.host_no_pending_max_streak,
+            "noPendingPressureLevel": stats.host_no_pending_pressure_level,
             "descriptorUploadMode": stats.video_present_descriptor_upload_mode,
             "descriptorMetalImportCountTotal": stats.video_present_descriptor_metal_import_count_total,
             "descriptorCpuUploadCountTotal": stats.video_present_descriptor_cpu_upload_count_total,
@@ -181,7 +229,11 @@ pub(super) fn build_observability_snapshot(stats: &XbxEngineStatsDto) -> serde_j
             "frameDrop": stats.latest_video_frame_drop,
             "frameRecovery": stats.latest_video_frame_recovery_observation,
             "nack": stats.latest_video_nack_observation,
+            "timeline": stats.latest_video_timeline_observation,
+            "decodeCandidate": stats.latest_decode_candidate_decision,
+            "renderCandidate": stats.latest_render_candidate_decision,
             "escalation": stats.latest_video_escalation_observation,
+            "recoveryDecisionLedger": stats.latest_recovery_decision_ledger,
             "bwe": stats.latest_video_bwe_observation,
             "twcc": stats.latest_video_twcc_observation,
         },
@@ -233,6 +285,13 @@ pub(super) fn record_runtime_trace_observations(
                 json!({
                     "observationId": frame_drop.observation_id,
                     "reason": frame_drop.reason,
+                    "stage": frame_drop.stage,
+                    "action": frame_drop.action,
+                    "detail": frame_drop.detail,
+                    "frameRtpTimestamp": frame_drop.frame_rtp_timestamp,
+                    "frameSeq": frame_drop.frame_seq,
+                    "frameRecoveryDisposition": frame_drop.frame_recovery_disposition,
+                    "frameUnrecoverableReason": frame_drop.frame_unrecoverable_reason,
                     "observedAtMs": frame_drop.observed_at_ms,
                     "width": frame_drop.width,
                     "height": frame_drop.height,
@@ -240,6 +299,31 @@ pub(super) fn record_runtime_trace_observations(
                     "queueDepth": frame_drop.queue_depth,
                 }),
             );
+            let decision_event_name = match frame_drop.stage.as_deref() {
+                Some("decode") => Some("decodeCandidateDecision"),
+                Some("pacer" | "render") => Some("renderCandidateDecision"),
+                _ => None,
+            };
+            if let Some(decision_event_name) = decision_event_name {
+                runtime_trace.record_event(
+                    "xbxengine",
+                    decision_event_name,
+                    session_id,
+                    json!({
+                        "observationId": frame_drop.observation_id,
+                        "stage": frame_drop.stage,
+                        "action": frame_drop.action,
+                        "detail": frame_drop.detail,
+                        "reason": frame_drop.reason,
+                        "frameSeq": frame_drop.frame_seq,
+                        "frameRtpTimestamp": frame_drop.frame_rtp_timestamp,
+                        "frameRecoveryDisposition": frame_drop.frame_recovery_disposition,
+                        "frameUnrecoverableReason": frame_drop.frame_unrecoverable_reason,
+                        "queueDepth": frame_drop.queue_depth,
+                        "observedAtMs": frame_drop.observed_at_ms,
+                    }),
+                );
+            }
         }
     }
 
@@ -263,12 +347,52 @@ pub(super) fn record_runtime_trace_observations(
         }
     }
 
+    if let Some(decode_candidate) = stats.latest_decode_candidate_decision.as_ref() {
+        if observation_state.decode_candidate_decision_id != Some(decode_candidate.decision_id) {
+            observation_state.decode_candidate_decision_id = Some(decode_candidate.decision_id);
+            runtime_trace.record_event(
+                "xbxengine",
+                "decodeCandidateStateTransition",
+                session_id,
+                json!({
+                    "decisionId": decode_candidate.decision_id,
+                    "state": decode_candidate.state,
+                    "action": decode_candidate.action,
+                    "detail": decode_candidate.detail,
+                    "frameSeq": decode_candidate.frame_seq,
+                    "observedAtMs": decode_candidate.observed_at_ms,
+                }),
+            );
+        }
+    }
+
+    if let Some(render_candidate) = stats.latest_render_candidate_decision.as_ref() {
+        if observation_state.render_candidate_decision_id != Some(render_candidate.decision_id) {
+            observation_state.render_candidate_decision_id = Some(render_candidate.decision_id);
+            runtime_trace.record_event(
+                "xbxengine",
+                "renderCandidateStateTransition",
+                session_id,
+                json!({
+                    "decisionId": render_candidate.decision_id,
+                    "state": render_candidate.state,
+                    "action": render_candidate.action,
+                    "detail": render_candidate.detail,
+                    "frameSeq": render_candidate.frame_seq,
+                    "observedAtMs": render_candidate.observed_at_ms,
+                }),
+            );
+        }
+    }
+
     if let Some(nack) = stats.latest_video_nack_observation.as_ref() {
         if observation_state.nack_observation_id != Some(nack.observation_id) {
             observation_state.nack_observation_id = Some(nack.observation_id);
             let event_name = match nack.action.as_str() {
-                "expiredDeadline" | "expiredMaxAge" => "nackExpired",
+                "expiredDeadline" | "expiredMaxAge" | "expiredRetryBudget"
+                | "expiredChainBroken" => "nackExpired",
                 "recovered" | "recoveredLate" => "nackRecovered",
+                "skipped" => "nackSkipped",
                 _ => "nackSent",
             };
             runtime_trace.record_event(
@@ -297,6 +421,108 @@ pub(super) fn record_runtime_trace_observations(
         }
     }
 
+    if let Some(timeline) = stats.latest_video_timeline_observation.as_ref() {
+        if observation_state.timeline_observation_id != Some(timeline.observation_id) {
+            observation_state.timeline_observation_id = Some(timeline.observation_id);
+            let previous_chain_state = observation_state.timeline_chain_state.clone();
+            let previous_chain_reason = observation_state.timeline_chain_reason.clone();
+            runtime_trace.record_event(
+                "xbxengine",
+                "videoTimelineObserved",
+                session_id,
+                json!({
+                    "observationId": timeline.observation_id,
+                    "sourceEvent": timeline.source_event,
+                    "gap": timeline.gap,
+                    "frame": timeline.frame,
+                    "chain": timeline.chain,
+                    "observedAtMs": timeline.observed_at_ms,
+                }),
+            );
+            let chain_state_changed =
+                previous_chain_state.as_deref() != Some(timeline.chain.state.as_str());
+            if chain_state_changed || is_chain_transition_source_event(&timeline.source_event) {
+                runtime_trace.record_event(
+                    "xbxengine",
+                    "videoChainTransition",
+                    session_id,
+                    json!({
+                        "observationId": timeline.observation_id,
+                        "sourceEvent": timeline.source_event,
+                        "previousChainState": previous_chain_state,
+                        "previousChainReason": previous_chain_reason,
+                        "state": timeline.chain.state,
+                        "reason": timeline.chain.reason,
+                        "chain": {
+                            "state": timeline.chain.state,
+                            "reason": timeline.chain.reason,
+                        },
+                        "observedAtMs": timeline.observed_at_ms,
+                    }),
+                );
+            }
+            if is_timeout_source_event(&timeline.source_event) {
+                runtime_trace.record_event(
+                    "xbxengine",
+                    "videoTimeoutTransition",
+                    session_id,
+                    json!({
+                        "observationId": timeline.observation_id,
+                        "sourceEvent": timeline.source_event,
+                        "chain": {
+                            "state": timeline.chain.state,
+                            "reason": timeline.chain.reason,
+                        },
+                        "observedAtMs": timeline.observed_at_ms,
+                    }),
+                );
+            }
+            if is_chain_flush_source_event(&timeline.source_event) {
+                runtime_trace.record_event(
+                    "xbxengine",
+                    "videoBacklogFlushed",
+                    session_id,
+                    json!({
+                        "observationId": timeline.observation_id,
+                        "sourceEvent": timeline.source_event,
+                        "gap": timeline.gap,
+                        "frame": timeline.frame,
+                        "chain": timeline.chain,
+                        "observedAtMs": timeline.observed_at_ms,
+                    }),
+                );
+            }
+            observation_state.timeline_chain_state = Some(timeline.chain.state.clone());
+            observation_state.timeline_chain_reason = timeline.chain.reason.clone();
+        }
+    }
+
+    if let Some(candidate) = stats.latest_anchor_candidate_ledger.as_ref() {
+        let current = (
+            candidate.recovery_epoch,
+            candidate.frame_rtp_timestamp,
+            candidate.state.clone(),
+            candidate.failure_reason.clone(),
+            candidate.observed_at_ms,
+        );
+        if observation_state.anchor_candidate_observation.as_ref() != Some(&current) {
+            observation_state.anchor_candidate_observation = Some(current);
+            runtime_trace.record_event(
+                "xbxengine",
+                "videoAnchorCandidateObserved",
+                session_id,
+                json!({
+                    "recoveryEpoch": candidate.recovery_epoch,
+                    "frameRtpTimestamp": candidate.frame_rtp_timestamp,
+                    "state": candidate.state,
+                    "sourceEvent": candidate.source_event,
+                    "failureReason": candidate.failure_reason,
+                    "observedAtMs": candidate.observed_at_ms,
+                }),
+            );
+        }
+    }
+
     if let Some(escalation) = stats.latest_video_escalation_observation.as_ref() {
         if observation_state.escalation_observation_id != Some(escalation.observation_id) {
             observation_state.escalation_observation_id = Some(escalation.observation_id);
@@ -309,6 +535,39 @@ pub(super) fn record_runtime_trace_observations(
                     "reason": escalation.reason,
                     "action": escalation.action,
                     "observedAtMs": escalation.observed_at_ms,
+                }),
+            );
+        }
+    }
+
+    if let Some(ledger) = stats.latest_recovery_decision_ledger.as_ref() {
+        let signature = (
+            ledger.decision_id,
+            ledger.command_result.clone(),
+            ledger.command_detail.clone(),
+        );
+        if observation_state
+            .recovery_decision_ledger_signature
+            .as_ref()
+            != Some(&signature)
+        {
+            observation_state.recovery_decision_ledger_signature = Some(signature);
+            runtime_trace.record_decision(
+                "xbxengine",
+                "recoveryDecisionLedger",
+                session_id,
+                json!({
+                    "decisionId": ledger.decision_id,
+                    "stateBefore": ledger.state_before,
+                    "stateAfter": ledger.state_after,
+                    "inputSignal": ledger.input_signal,
+                    "gateResult": ledger.gate_result,
+                    "actionSelected": ledger.action_selected,
+                    "budgetBefore": ledger.budget_before,
+                    "budgetAfter": ledger.budget_after,
+                    "commandResult": ledger.command_result,
+                    "commandDetail": ledger.command_detail,
+                    "observedAtMs": ledger.observed_at_ms,
                 }),
             );
         }
@@ -537,6 +796,10 @@ pub(super) fn record_runtime_trace_observations(
         || observation_state.runtime_summary != stats.runtime_summary
         || observation_state.primary_issue_chain != stats.primary_issue_chain
         || observation_state.latest_decision_summary != stats.latest_decision_summary
+        || observation_state.video_owner_state != stats.video_owner_state
+        || observation_state.video_owner_reason != stats.video_owner_reason
+        || observation_state.video_owner_source != stats.video_owner_source
+        || observation_state.video_owner_observed_at_ms != stats.video_owner_observed_at_ms
         || observation_state.video_health != stats.video_health
         || observation_state.stall_kind != stats.stall_kind
     {
@@ -550,6 +813,10 @@ pub(super) fn record_runtime_trace_observations(
         observation_state.runtime_summary = stats.runtime_summary.clone();
         observation_state.primary_issue_chain = stats.primary_issue_chain.clone();
         observation_state.latest_decision_summary = stats.latest_decision_summary.clone();
+        observation_state.video_owner_state = stats.video_owner_state.clone();
+        observation_state.video_owner_reason = stats.video_owner_reason.clone();
+        observation_state.video_owner_source = stats.video_owner_source.clone();
+        observation_state.video_owner_observed_at_ms = stats.video_owner_observed_at_ms;
         observation_state.video_health = stats.video_health.clone();
         observation_state.stall_kind = stats.stall_kind.clone();
         runtime_trace.record_state(
@@ -567,6 +834,10 @@ pub(super) fn record_runtime_trace_observations(
                 "runtimeSummary": stats.runtime_summary,
                 "primaryIssueChain": stats.primary_issue_chain,
                 "latestDecisionSummary": stats.latest_decision_summary,
+                "videoOwnerState": stats.video_owner_state,
+                "videoOwnerReason": stats.video_owner_reason,
+                "videoOwnerSource": stats.video_owner_source,
+                "videoOwnerObservedAtMs": stats.video_owner_observed_at_ms,
                 "videoHealth": stats.video_health,
                 "stallKind": stats.stall_kind,
             }),
@@ -577,6 +848,11 @@ pub(super) fn record_runtime_trace_observations(
         || observation_state.host_present_drop_count_total != stats.video_present_drop_count_total
         || observation_state.host_present_overwrite_count_total
             != stats.video_present_overwrite_count_total
+        || observation_state.host_no_pending_take_count_total
+            != stats.host_no_pending_take_count_total
+        || observation_state.host_no_pending_streak != stats.host_no_pending_streak
+        || observation_state.host_no_pending_max_streak != stats.host_no_pending_max_streak
+        || observation_state.host_no_pending_pressure_level != stats.host_no_pending_pressure_level
         || observation_state.host_descriptor_upload_mode
             != stats.video_present_descriptor_upload_mode
         || observation_state.host_descriptor_metal_import_count_total
@@ -588,6 +864,11 @@ pub(super) fn record_runtime_trace_observations(
         observation_state.host_present_drop_count_total = stats.video_present_drop_count_total;
         observation_state.host_present_overwrite_count_total =
             stats.video_present_overwrite_count_total;
+        observation_state.host_no_pending_take_count_total = stats.host_no_pending_take_count_total;
+        observation_state.host_no_pending_streak = stats.host_no_pending_streak;
+        observation_state.host_no_pending_max_streak = stats.host_no_pending_max_streak;
+        observation_state.host_no_pending_pressure_level =
+            stats.host_no_pending_pressure_level.clone();
         observation_state.host_descriptor_upload_mode =
             stats.video_present_descriptor_upload_mode.clone();
         observation_state.host_descriptor_metal_import_count_total =
@@ -603,6 +884,10 @@ pub(super) fn record_runtime_trace_observations(
                 "presentSubmitCountTotal": stats.video_present_submit_count_total,
                 "presentDropCountTotal": stats.video_present_drop_count_total,
                 "presentOverwriteCountTotal": stats.video_present_overwrite_count_total,
+                "noPendingTakeCountTotal": stats.host_no_pending_take_count_total,
+                "noPendingStreak": stats.host_no_pending_streak,
+                "noPendingMaxStreak": stats.host_no_pending_max_streak,
+                "noPendingPressureLevel": stats.host_no_pending_pressure_level,
                 "presentAgeMs": stats.present_age_ms,
                 "descriptorUploadMode": stats.video_present_descriptor_upload_mode,
                 "descriptorMetalImportCountTotal": stats.video_present_descriptor_metal_import_count_total,
@@ -650,12 +935,40 @@ pub(super) fn record_runtime_trace_observations(
     if observation_state.recovery_reconnect_count != stats.recovery_reconnect_count {
         observation_state.recovery_reconnect_count = stats.recovery_reconnect_count;
     }
+    if observation_state.recovery_hard_fallback_timer_ms != stats.recovery_hard_fallback_timer_ms
+        || observation_state.recovery_hard_fallback_trigger_reason
+            != stats.recovery_hard_fallback_trigger_reason
+        || observation_state.recovery_hard_fallback_timer_reset_reason
+            != stats.recovery_hard_fallback_timer_reset_reason
+    {
+        observation_state.recovery_hard_fallback_timer_ms = stats.recovery_hard_fallback_timer_ms;
+        observation_state.recovery_hard_fallback_trigger_reason =
+            stats.recovery_hard_fallback_trigger_reason.clone();
+        observation_state.recovery_hard_fallback_timer_reset_reason =
+            stats.recovery_hard_fallback_timer_reset_reason.clone();
+        runtime_trace.record_state(
+            "xbxengine",
+            "recoveryHardFallbackState",
+            session_id,
+            json!({
+                "timerMs": stats.recovery_hard_fallback_timer_ms,
+                "triggerReason": stats.recovery_hard_fallback_trigger_reason,
+                "resetReason": stats.recovery_hard_fallback_timer_reset_reason,
+            }),
+        );
+    }
 
     if observation_state.transport_state != stats.transport_state
         || observation_state.transport_path != stats.transport_path
+        || observation_state.transport_candidate_pair != stats.transport_candidate_pair
+        || observation_state.transport_protocol != stats.transport_protocol
+        || observation_state.transport_address_family != stats.transport_address_family
     {
         observation_state.transport_state = stats.transport_state.clone();
         observation_state.transport_path = stats.transport_path.clone();
+        observation_state.transport_candidate_pair = stats.transport_candidate_pair.clone();
+        observation_state.transport_protocol = stats.transport_protocol.clone();
+        observation_state.transport_address_family = stats.transport_address_family.clone();
         runtime_trace.record_state(
             "xbxengine",
             "transportObservation",
@@ -663,6 +976,9 @@ pub(super) fn record_runtime_trace_observations(
             json!({
                 "transportState": stats.transport_state,
                 "transportPath": stats.transport_path,
+                "transportCandidatePair": stats.transport_candidate_pair,
+                "transportProtocol": stats.transport_protocol,
+                "transportAddressFamily": stats.transport_address_family,
             }),
         );
     }
@@ -750,6 +1066,42 @@ pub(super) fn record_runtime_trace_observations(
         }
     }
 
+    if observation_state.video_decoder_stalled != stats.video_decoder_stalled {
+        let previous_stalled = observation_state.video_decoder_stalled;
+        observation_state.video_decoder_stalled = stats.video_decoder_stalled;
+        runtime_trace.record_event(
+            "xbxengine",
+            "videoDecoderStallTransition",
+            session_id,
+            json!({
+                "stalled": stats.video_decoder_stalled.unwrap_or(false),
+                "previousStalled": previous_stalled,
+                "packetAgeMs": stats.packet_age_ms,
+                "decodeAgeMs": stats.decode_age_ms,
+                "presentAgeMs": stats.present_age_ms,
+                "observedAtMs": 0.0_f64,
+            }),
+        );
+    }
+
+    if observation_state.video_renderer_stalled != stats.video_renderer_stalled {
+        let previous_stalled = observation_state.video_renderer_stalled;
+        observation_state.video_renderer_stalled = stats.video_renderer_stalled;
+        runtime_trace.record_event(
+            "xbxengine",
+            "videoRendererStallTransition",
+            session_id,
+            json!({
+                "stalled": stats.video_renderer_stalled.unwrap_or(false),
+                "previousStalled": previous_stalled,
+                "packetAgeMs": stats.packet_age_ms,
+                "decodeAgeMs": stats.decode_age_ms,
+                "presentAgeMs": stats.present_age_ms,
+                "observedAtMs": 0.0_f64,
+            }),
+        );
+    }
+
     if observation_state.video_remb_bps != stats.video_remb_bps {
         observation_state.video_remb_bps = stats.video_remb_bps;
         if let Some(video_remb_bps) = stats.video_remb_bps {
@@ -765,15 +1117,54 @@ pub(super) fn record_runtime_trace_observations(
     }
 }
 
+fn is_timeout_source_event(source_event: &str) -> bool {
+    source_event.starts_with("timeout-")
+}
+
+fn is_chain_transition_source_event(source_event: &str) -> bool {
+    matches!(
+        source_event,
+        "chain-broken" | "chain-recovery-keyframe-requested" | "chain-clean-keyframe-submitted"
+    )
+}
+
+fn is_chain_flush_source_event(source_event: &str) -> bool {
+    source_event == "gap-expired-chain-flush"
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::mods::runtime_trace::RuntimeTraceRecorder;
-    use serde_json::json;
+    use serde_json::{json, Value};
     use std::fs;
 
     fn test_stats(payload: serde_json::Value) -> XbxEngineStatsDto {
         serde_json::from_value(payload).expect("valid stats dto")
+    }
+
+    fn read_trace_lines(recorder: &RuntimeTraceRecorder) -> Vec<Value> {
+        let contents = fs::read_to_string(recorder.path()).expect("trace contents");
+        contents
+            .lines()
+            .filter_map(|line| serde_json::from_str::<Value>(line).ok())
+            .collect()
+    }
+
+    fn find_event_payload(entries: &[Value], event: &str) -> Value {
+        entries
+            .iter()
+            .find(|entry| entry["event"] == event)
+            .map(|entry| entry["payload"].clone())
+            .unwrap_or_else(|| panic!("event not found: {event}"))
+    }
+
+    fn event_payloads(entries: &[Value], event: &str) -> Vec<Value> {
+        entries
+            .iter()
+            .filter(|entry| entry["event"] == event)
+            .map(|entry| entry["payload"].clone())
+            .collect()
     }
 
     #[test]
@@ -790,6 +1181,9 @@ mod tests {
             "inbound_bitrate_kbps": 8600.0,
             "inbound_video_bitrate_kbps": 8400.0,
             "inbound_audio_bitrate_kbps": 200.0,
+            "latest_audio_playout_time_ms": 1774405700123.0,
+            "audio_playout_latency_ms": 41.5,
+            "audio_video_playout_delta_ms": 8.5,
             "actual_video_bitrate_source": "transport-metrics",
             "video_actual_bitrate_kbps": 8400.0,
             "video_twcc_receive_bitrate_kbps": 22800.0,
@@ -814,6 +1208,8 @@ mod tests {
             "transport-metrics"
         );
         assert_eq!(snapshot["bitrate"]["actualVideoKbps"], 8400.0);
+        assert_eq!(snapshot["audio"]["audioPlayoutLatencyMs"], 41.5);
+        assert_eq!(snapshot["audio"]["audioVideoPlayoutDeltaMs"], 8.5);
         assert_eq!(
             snapshot["bwe"]["actualVideoBitrateSource"],
             "transport-metrics"
@@ -849,7 +1245,10 @@ mod tests {
 
         let snapshot = build_observability_snapshot(&stats);
         assert_eq!(snapshot["bitrate"]["actualVideoKbps"], 1019.4);
-        assert_eq!(snapshot["bitrate"]["actualVideoBitrateSource"], "unavailable");
+        assert_eq!(
+            snapshot["bitrate"]["actualVideoBitrateSource"],
+            "unavailable"
+        );
         assert_eq!(snapshot["bitrate"]["actualVideoSource"], "unavailable");
         assert_eq!(
             snapshot["latest"]["frameRecovery"]["action"],
@@ -911,6 +1310,37 @@ mod tests {
     }
 
     #[test]
+    fn build_observability_snapshot_projects_owner_contract_from_stats() {
+        let stats = test_stats(json!({
+            "resolution": "",
+            "rtt": "",
+            "fps": 0.0,
+            "pl": "0.00%",
+            "fl": "",
+            "jit": "",
+            "br": "",
+            "decode": "",
+            "video_owner_state": "rebuildingSupply",
+            "video_owner_reason": "timelineReferenceBroken",
+            "video_owner_source": "anchor",
+            "video_owner_observed_at_ms": 2048.0,
+            "video_health": "recovering",
+            "primary_issue_chain": "recovery:timelineReferenceBroken",
+            "latest_decision_summary": "owner:rebuildingSupply:timelineReferenceBroken",
+            "recovery_coupling_mode": "legacy",
+            "recovery_coupling_summary": "legacy-summary"
+        }));
+
+        let snapshot = build_observability_snapshot(&stats);
+        assert_eq!(snapshot["videoOwner"]["state"], "rebuildingSupply");
+        assert_eq!(snapshot["videoOwner"]["reason"], "timelineReferenceBroken");
+        assert_eq!(snapshot["videoOwner"]["source"], "anchor");
+        assert_eq!(snapshot["videoOwner"]["observedAtMs"], 2048.0);
+        assert_eq!(snapshot["recovery"]["couplingMode"], "legacy");
+        assert_eq!(snapshot["recovery"]["couplingSummary"], "legacy-summary");
+    }
+
+    #[test]
     fn record_runtime_trace_observations_uses_twcc_event_name_by_source() {
         let recorder = std::sync::Arc::new(RuntimeTraceRecorder::new().expect("trace recorder"));
         let mut local_state = RuntimeTraceObservationState::default();
@@ -938,6 +1368,9 @@ mod tests {
                 "feedback_interval_ms": 80.0,
                 "arrival_span_ms": 70.0,
                 "receive_bitrate_kbps": 22800.0,
+                "twcc_sample_valid": true,
+                "twcc_invalid_reason": null,
+                "quality": "stable",
                 "delivery_ratio": 0.99,
                 "packet_loss_ratio": 0.01,
                 "observed_at_ms": 2.0
@@ -979,6 +1412,9 @@ mod tests {
                     "feedback_interval_ms": 80.0,
                     "arrival_span_ms": 70.0,
                     "receive_bitrate_kbps": 22800.0,
+                    "twcc_sample_valid": false,
+                    "twcc_invalid_reason": "source-remote",
+                    "quality": "remote-observed",
                     "delivery_ratio": 0.99,
                     "packet_loss_ratio": 0.01,
                     "observed_at_ms": 2.0
@@ -1101,5 +1537,805 @@ mod tests {
         assert!(contents.contains("\"frameRtpTimestamp\":123456789"));
         assert!(contents.contains("\"frameRecoveryDisposition\":\"unrecoverable-reference-chain\""));
         assert!(contents.contains("\"frameUnrecoverableReason\":\"referenceChainUnrecoverable\""));
+    }
+
+    #[test]
+    fn video_timeline_observation_projects_event_and_snapshot() {
+        let recorder = std::sync::Arc::new(RuntimeTraceRecorder::new().expect("trace recorder"));
+        let mut state = RuntimeTraceObservationState::default();
+        let stats = test_stats(json!({
+            "resolution": "",
+            "rtt": "",
+            "fps": 0.0,
+            "pl": "0.00%",
+            "fl": "",
+            "jit": "",
+            "br": "",
+            "decode": "",
+            "latest_video_timeline_observation": {
+                "observation_id": 88,
+                "source_event": "gap-repair-in-flight",
+                "gap": {
+                    "state": "repair-in-flight",
+                    "sequence": 1337,
+                    "frame_rtp_timestamp": 123456789,
+                    "frame_importance": "reference",
+                    "observed_at_ms": 1250.0
+                },
+                "frame": {
+                    "state": "repairing",
+                    "frame_rtp_timestamp": 123456789,
+                    "is_keyframe": false,
+                    "frame_importance": "reference",
+                    "close_reason": null,
+                    "observed_at_ms": 1250.0
+                },
+                "chain": {
+                    "state": "repairing",
+                    "reason": "gapRepairInFlight",
+                    "observed_at_ms": 1250.0
+                },
+                "observed_at_ms": 1250.0
+            }
+        }));
+        record_runtime_trace_observations(&recorder, &mut state, Some("session-1"), &stats);
+        let entries = read_trace_lines(recorder.as_ref());
+        let payload = find_event_payload(&entries, "videoTimelineObserved");
+        assert_eq!(payload["sourceEvent"], "gap-repair-in-flight");
+        assert_eq!(payload["gap"]["state"], "repair-in-flight");
+        assert_eq!(payload["frame"]["state"], "repairing");
+        assert_eq!(payload["chain"]["state"], "repairing");
+        assert!(entries
+            .iter()
+            .all(|entry| entry["event"] != "videoTimeoutTransition"));
+    }
+
+    #[test]
+    fn anchor_candidate_ledger_projects_event() {
+        let recorder = std::sync::Arc::new(RuntimeTraceRecorder::new().expect("trace recorder"));
+        let mut state = RuntimeTraceObservationState::default();
+        let stats = test_stats(json!({
+            "resolution": "",
+            "rtt": "",
+            "fps": 0.0,
+            "pl": "0.00%",
+            "fl": "",
+            "jit": "",
+            "br": "",
+            "decode": "",
+            "latest_anchor_candidate_ledger": {
+                "recovery_epoch": 9,
+                "frame_rtp_timestamp": 123456799,
+                "state": "rejected",
+                "source_event": "frame-inspection-rejected-await-keyframe",
+                "failure_reason": "inspectionRejectInvalidSliceHeader",
+                "observed_at_ms": 2250.0
+            }
+        }));
+        record_runtime_trace_observations(&recorder, &mut state, Some("session-1"), &stats);
+        let entries = read_trace_lines(recorder.as_ref());
+        let payload = find_event_payload(&entries, "videoAnchorCandidateObserved");
+        assert_eq!(payload["recoveryEpoch"], 9);
+        assert_eq!(payload["frameRtpTimestamp"], 123456799);
+        assert_eq!(payload["state"], "rejected");
+        assert_eq!(
+            payload["sourceEvent"],
+            "frame-inspection-rejected-await-keyframe"
+        );
+        assert_eq!(
+            payload["failureReason"],
+            "inspectionRejectInvalidSliceHeader"
+        );
+    }
+
+    #[test]
+    fn timeout_video_timeline_observation_projects_timeout_transition_event() {
+        let recorder = std::sync::Arc::new(RuntimeTraceRecorder::new().expect("trace recorder"));
+        let mut state = RuntimeTraceObservationState::default();
+        let stats = test_stats(json!({
+            "resolution": "",
+            "rtt": "",
+            "fps": 0.0,
+            "pl": "0.00%",
+            "fl": "",
+            "jit": "",
+            "br": "",
+            "decode": "",
+            "latest_video_timeline_observation": {
+                "observation_id": 89,
+                "source_event": "timeout-stream-idle",
+                "gap": null,
+                "frame": {
+                    "state": "waiting-keyframe",
+                    "frame_rtp_timestamp": 123456790,
+                    "is_keyframe": false,
+                    "frame_importance": "reference",
+                    "close_reason": null,
+                    "observed_at_ms": 1300.0
+                },
+                "chain": {
+                    "state": "stalled",
+                    "reason": "streamIdleTimeout",
+                    "observed_at_ms": 1300.0
+                },
+                "observed_at_ms": 1300.0
+            }
+        }));
+
+        record_runtime_trace_observations(&recorder, &mut state, Some("session-1"), &stats);
+
+        let entries = read_trace_lines(recorder.as_ref());
+        let payload = find_event_payload(&entries, "videoTimeoutTransition");
+        assert_eq!(payload["observationId"], 89);
+        assert_eq!(payload["sourceEvent"], "timeout-stream-idle");
+        assert_eq!(payload["chain"]["state"], "stalled");
+        assert_eq!(payload["chain"]["reason"], "streamIdleTimeout");
+        assert_eq!(payload["observedAtMs"], 1300.0);
+        assert!(entries
+            .iter()
+            .any(|entry| entry["event"] == "videoTimelineObserved"));
+    }
+
+    #[test]
+    fn chain_broken_timeline_projects_chain_transition_event() {
+        let recorder = std::sync::Arc::new(RuntimeTraceRecorder::new().expect("trace recorder"));
+        let mut state = RuntimeTraceObservationState::default();
+        let stats = test_stats(json!({
+            "resolution": "",
+            "rtt": "",
+            "fps": 0.0,
+            "pl": "0.00%",
+            "fl": "",
+            "jit": "",
+            "br": "",
+            "decode": "",
+            "latest_video_timeline_observation": {
+                "observation_id": 90,
+                "source_event": "chain-broken",
+                "gap": null,
+                "frame": null,
+                "chain": {
+                    "state": "broken",
+                    "reason": "referenceChainBroken",
+                    "observed_at_ms": 1400.0
+                },
+                "observed_at_ms": 1400.0
+            }
+        }));
+
+        record_runtime_trace_observations(&recorder, &mut state, Some("session-1"), &stats);
+        let entries = read_trace_lines(recorder.as_ref());
+        let payload = find_event_payload(&entries, "videoChainTransition");
+        assert_eq!(payload["observationId"], 90);
+        assert_eq!(payload["sourceEvent"], "chain-broken");
+        assert_eq!(payload["previousChainState"], serde_json::Value::Null);
+        assert_eq!(payload["state"], "broken");
+        assert_eq!(payload["reason"], "referenceChainBroken");
+        assert_eq!(payload["chain"]["state"], "broken");
+        assert_eq!(payload["chain"]["reason"], "referenceChainBroken");
+    }
+
+    #[test]
+    fn chain_flush_timeline_projects_backlog_flushed_event() {
+        let recorder = std::sync::Arc::new(RuntimeTraceRecorder::new().expect("trace recorder"));
+        let mut state = RuntimeTraceObservationState::default();
+        let stats = test_stats(json!({
+            "resolution": "",
+            "rtt": "",
+            "fps": 0.0,
+            "pl": "0.00%",
+            "fl": "",
+            "jit": "",
+            "br": "",
+            "decode": "",
+            "latest_video_timeline_observation": {
+                "observation_id": 91,
+                "source_event": "gap-expired-chain-flush",
+                "gap": {
+                    "state": "expired",
+                    "sequence": 2001,
+                    "frame_rtp_timestamp": 22334455,
+                    "frame_importance": "reference",
+                    "observed_at_ms": 1410.0
+                },
+                "frame": {
+                    "state": "dropped",
+                    "frame_rtp_timestamp": 22334455,
+                    "is_keyframe": false,
+                    "frame_importance": "reference",
+                    "close_reason": "chainFlush",
+                    "observed_at_ms": 1410.0
+                },
+                "chain": {
+                    "state": "recovering",
+                    "reason": "referenceChainBroken",
+                    "observed_at_ms": 1410.0
+                },
+                "observed_at_ms": 1410.0
+            }
+        }));
+
+        record_runtime_trace_observations(&recorder, &mut state, Some("session-1"), &stats);
+        let entries = read_trace_lines(recorder.as_ref());
+        let payload = find_event_payload(&entries, "videoBacklogFlushed");
+        assert_eq!(payload["observationId"], 91);
+        assert_eq!(payload["sourceEvent"], "gap-expired-chain-flush");
+        assert_eq!(payload["gap"]["sequence"], 2001);
+        assert_eq!(payload["chain"]["state"], "recovering");
+    }
+
+    #[test]
+    fn nack_observation_projects_event_name_and_common_fields() {
+        let recorder = std::sync::Arc::new(RuntimeTraceRecorder::new().expect("trace recorder"));
+        let mut state = RuntimeTraceObservationState::default();
+
+        let cases = [
+            ("skipped", "nackSkipped"),
+            ("expiredDeadline", "nackExpired"),
+            ("sent", "nackSent"),
+        ];
+
+        for (observation_id, (action, expected_event)) in (1_u64..).zip(cases.iter()) {
+            let stats = test_stats(json!({
+                "resolution": "",
+                "rtt": "",
+                "fps": 0.0,
+                "pl": "0.00%",
+                "fl": "",
+                "jit": "",
+                "br": "",
+                "decode": "",
+                "latest_video_nack_observation": {
+                    "observation_id": observation_id,
+                    "action": action,
+                    "source": "scheduler",
+                    "first_sequence": 100,
+                    "last_sequence": 102,
+                    "packet_count": 3,
+                    "retry_count": 1,
+                    "frame_rtp_timestamp": 123456789,
+                    "frame_is_keyframe": false,
+                    "frame_importance": "delta",
+                    "deadline_at_ms": 1500.0,
+                    "estimated_recovery_arrival_ms": 1512.0,
+                    "nack_disposition": "skippedTooLate",
+                    "frame_playout_deadline_at_ms": 1498.0,
+                    "frame_unrecoverable_reason": "referenceChainUnrecoverable",
+                    "observed_at_ms": 1200.0
+                }
+            }));
+            record_runtime_trace_observations(&recorder, &mut state, Some("session-1"), &stats);
+
+            let entries = read_trace_lines(recorder.as_ref());
+            let payload = find_event_payload(&entries, expected_event);
+            assert_eq!(payload["action"], *action);
+            assert_eq!(payload["deadlineAtMs"], 1500.0);
+            assert_eq!(payload["estimatedRecoveryArrivalMs"], 1512.0);
+            assert_eq!(payload["nackDisposition"], "skippedTooLate");
+            assert_eq!(payload["framePlayoutDeadlineAtMs"], 1498.0);
+            assert_eq!(
+                payload["frameUnrecoverableReason"],
+                "referenceChainUnrecoverable"
+            );
+            assert_eq!(payload["frameImportance"], "delta");
+        }
+    }
+
+    #[test]
+    fn stall_transition_does_not_repeat_when_values_unchanged() {
+        let recorder = std::sync::Arc::new(RuntimeTraceRecorder::new().expect("trace recorder"));
+        let mut state = RuntimeTraceObservationState::default();
+        let stats = test_stats(json!({
+            "resolution": "",
+            "rtt": "",
+            "fps": 0.0,
+            "pl": "0.00%",
+            "fl": "",
+            "jit": "",
+            "br": "",
+            "decode": "",
+            "video_decoder_stalled": false,
+            "video_renderer_stalled": true,
+            "packet_age_ms": 10.0,
+            "decode_age_ms": 20.0,
+            "present_age_ms": 30.0
+        }));
+
+        record_runtime_trace_observations(&recorder, &mut state, Some("session-1"), &stats);
+        record_runtime_trace_observations(&recorder, &mut state, Some("session-1"), &stats);
+
+        let entries = read_trace_lines(recorder.as_ref());
+        assert_eq!(
+            entries
+                .iter()
+                .filter(|entry| entry["event"] == "videoDecoderStallTransition")
+                .count(),
+            1
+        );
+        assert_eq!(
+            entries
+                .iter()
+                .filter(|entry| entry["event"] == "videoRendererStallTransition")
+                .count(),
+            1
+        );
+    }
+
+    #[test]
+    fn decoder_stall_transition_emits_for_false_true_and_true_false() {
+        let recorder = std::sync::Arc::new(RuntimeTraceRecorder::new().expect("trace recorder"));
+        let mut state = RuntimeTraceObservationState::default();
+
+        let stats_false = test_stats(json!({
+            "resolution": "",
+            "rtt": "",
+            "fps": 0.0,
+            "pl": "0.00%",
+            "fl": "",
+            "jit": "",
+            "br": "",
+            "decode": "",
+            "video_decoder_stalled": false,
+            "video_renderer_stalled": false,
+            "packet_age_ms": 10.0,
+            "decode_age_ms": 20.0,
+            "present_age_ms": 30.0
+        }));
+        let stats_true = test_stats(json!({
+            "resolution": "",
+            "rtt": "",
+            "fps": 0.0,
+            "pl": "0.00%",
+            "fl": "",
+            "jit": "",
+            "br": "",
+            "decode": "",
+            "video_decoder_stalled": true,
+            "video_renderer_stalled": false,
+            "packet_age_ms": 11.0,
+            "decode_age_ms": 21.0,
+            "present_age_ms": 31.0
+        }));
+
+        record_runtime_trace_observations(&recorder, &mut state, Some("session-1"), &stats_false);
+        record_runtime_trace_observations(&recorder, &mut state, Some("session-1"), &stats_true);
+        record_runtime_trace_observations(&recorder, &mut state, Some("session-1"), &stats_false);
+
+        let entries = read_trace_lines(recorder.as_ref());
+        let decoder_payloads = event_payloads(&entries, "videoDecoderStallTransition");
+        assert!(decoder_payloads
+            .iter()
+            .any(|payload| payload["previousStalled"] == false && payload["stalled"] == true));
+        assert!(decoder_payloads
+            .iter()
+            .any(|payload| payload["previousStalled"] == true && payload["stalled"] == false));
+    }
+
+    #[test]
+    fn decoder_and_renderer_stall_transition_are_triggered_independently() {
+        let recorder = std::sync::Arc::new(RuntimeTraceRecorder::new().expect("trace recorder"));
+        let mut state = RuntimeTraceObservationState::default();
+
+        let stats_base = test_stats(json!({
+            "resolution": "",
+            "rtt": "",
+            "fps": 0.0,
+            "pl": "0.00%",
+            "fl": "",
+            "jit": "",
+            "br": "",
+            "decode": "",
+            "video_decoder_stalled": false,
+            "video_renderer_stalled": false
+        }));
+        let stats_decoder_only = test_stats(json!({
+            "resolution": "",
+            "rtt": "",
+            "fps": 0.0,
+            "pl": "0.00%",
+            "fl": "",
+            "jit": "",
+            "br": "",
+            "decode": "",
+            "video_decoder_stalled": true,
+            "video_renderer_stalled": false
+        }));
+        let stats_renderer_only = test_stats(json!({
+            "resolution": "",
+            "rtt": "",
+            "fps": 0.0,
+            "pl": "0.00%",
+            "fl": "",
+            "jit": "",
+            "br": "",
+            "decode": "",
+            "video_decoder_stalled": true,
+            "video_renderer_stalled": true
+        }));
+
+        record_runtime_trace_observations(&recorder, &mut state, Some("session-1"), &stats_base);
+        record_runtime_trace_observations(
+            &recorder,
+            &mut state,
+            Some("session-1"),
+            &stats_decoder_only,
+        );
+        record_runtime_trace_observations(
+            &recorder,
+            &mut state,
+            Some("session-1"),
+            &stats_renderer_only,
+        );
+
+        let entries = read_trace_lines(recorder.as_ref());
+        assert_eq!(
+            entries
+                .iter()
+                .filter(|entry| entry["event"] == "videoDecoderStallTransition")
+                .count(),
+            2
+        );
+        assert_eq!(
+            entries
+                .iter()
+                .filter(|entry| entry["event"] == "videoRendererStallTransition")
+                .count(),
+            2
+        );
+
+        let renderer_payloads = event_payloads(&entries, "videoRendererStallTransition");
+        assert!(renderer_payloads
+            .iter()
+            .any(|payload| payload["previousStalled"] == false && payload["stalled"] == true));
+    }
+
+    #[test]
+    fn frame_drop_decode_stage_projects_decode_candidate_decision() {
+        let recorder = std::sync::Arc::new(RuntimeTraceRecorder::new().expect("trace recorder"));
+        let mut state = RuntimeTraceObservationState::default();
+        let stats = test_stats(json!({
+            "resolution": "",
+            "rtt": "",
+            "fps": 0.0,
+            "pl": "0.00%",
+            "fl": "",
+            "jit": "",
+            "br": "",
+            "decode": "",
+            "latest_video_frame_drop": {
+                "observation_id": 501,
+                "stage": "decode",
+                "action": "drop",
+                "detail": "outputQueueOverflow",
+                "reason": "dropBackpressure",
+                "observed_at_ms": 1001.0,
+                "width": 1920,
+                "height": 1080,
+                "is_keyframe": false,
+                "queue_depth": 2,
+                "frame_rtp_timestamp": 123456789,
+                "frame_seq": 77,
+                "frame_recovery_disposition": "repairing",
+                "frame_unrecoverable_reason": null
+            }
+        }));
+
+        record_runtime_trace_observations(&recorder, &mut state, Some("session-1"), &stats);
+        let entries = read_trace_lines(recorder.as_ref());
+        assert!(entries.iter().any(|entry| entry["event"] == "frameDropped"));
+        let payload = find_event_payload(&entries, "decodeCandidateDecision");
+        assert_eq!(payload["stage"], "decode");
+        assert_eq!(payload["detail"], "outputQueueOverflow");
+        assert_eq!(payload["reason"], "dropBackpressure");
+    }
+
+    #[test]
+    fn frame_drop_render_stage_projects_render_candidate_decision() {
+        let recorder = std::sync::Arc::new(RuntimeTraceRecorder::new().expect("trace recorder"));
+        let mut state = RuntimeTraceObservationState::default();
+        let stats = test_stats(json!({
+            "resolution": "",
+            "rtt": "",
+            "fps": 0.0,
+            "pl": "0.00%",
+            "fl": "",
+            "jit": "",
+            "br": "",
+            "decode": "",
+            "latest_video_frame_drop": {
+                "observation_id": 502,
+                "stage": "render",
+                "action": "replace",
+                "detail": "latestSlotOverwrite",
+                "reason": "dropBackpressure",
+                "observed_at_ms": 1002.0,
+                "width": 1280,
+                "height": 720,
+                "is_keyframe": false,
+                "queue_depth": 1,
+                "frame_rtp_timestamp": 123456790,
+                "frame_seq": 78,
+                "frame_recovery_disposition": "repairing",
+                "frame_unrecoverable_reason": null
+            }
+        }));
+
+        record_runtime_trace_observations(&recorder, &mut state, Some("session-1"), &stats);
+        let entries = read_trace_lines(recorder.as_ref());
+        assert!(entries.iter().any(|entry| entry["event"] == "frameDropped"));
+        let payload = find_event_payload(&entries, "renderCandidateDecision");
+        assert_eq!(payload["stage"], "render");
+        assert_eq!(payload["detail"], "latestSlotOverwrite");
+        assert_eq!(payload["reason"], "dropBackpressure");
+    }
+
+    #[test]
+    fn frame_drop_unknown_stage_does_not_project_candidate_decision() {
+        let recorder = std::sync::Arc::new(RuntimeTraceRecorder::new().expect("trace recorder"));
+        let mut state = RuntimeTraceObservationState::default();
+        let stats = test_stats(json!({
+            "resolution": "",
+            "rtt": "",
+            "fps": 0.0,
+            "pl": "0.00%",
+            "fl": "",
+            "jit": "",
+            "br": "",
+            "decode": "",
+            "latest_video_frame_drop": {
+                "observation_id": 503,
+                "stage": "ingress",
+                "action": "drop",
+                "detail": "predecode",
+                "reason": "dropBackpressure",
+                "observed_at_ms": 1003.0,
+                "width": 640,
+                "height": 360,
+                "is_keyframe": false,
+                "queue_depth": 3,
+                "frame_rtp_timestamp": 123456791,
+                "frame_seq": 79,
+                "frame_recovery_disposition": "repairing",
+                "frame_unrecoverable_reason": null
+            }
+        }));
+
+        record_runtime_trace_observations(&recorder, &mut state, Some("session-1"), &stats);
+        let entries = read_trace_lines(recorder.as_ref());
+        assert!(entries.iter().any(|entry| entry["event"] == "frameDropped"));
+        assert!(entries
+            .iter()
+            .all(|entry| entry["event"] != "decodeCandidateDecision"));
+        assert!(entries
+            .iter()
+            .all(|entry| entry["event"] != "renderCandidateDecision"));
+    }
+
+    #[test]
+    fn decode_candidate_state_projects_transition_event() {
+        let recorder = std::sync::Arc::new(RuntimeTraceRecorder::new().expect("trace recorder"));
+        let mut state = RuntimeTraceObservationState::default();
+        let stats = test_stats(json!({
+            "resolution": "",
+            "rtt": "",
+            "fps": 0.0,
+            "pl": "0.00%",
+            "fl": "",
+            "jit": "",
+            "br": "",
+            "decode": "",
+            "latest_decode_candidate_decision": {
+                "decision_id": 701,
+                "state": "backpressure",
+                "action": "drop",
+                "detail": "outputQueueOverflow",
+                "frame_seq": 42,
+                "observed_at_ms": 1800.0
+            }
+        }));
+
+        record_runtime_trace_observations(&recorder, &mut state, Some("session-1"), &stats);
+        let entries = read_trace_lines(recorder.as_ref());
+        let payload = find_event_payload(&entries, "decodeCandidateStateTransition");
+        assert_eq!(payload["decisionId"], 701);
+        assert_eq!(payload["state"], "backpressure");
+        assert_eq!(payload["detail"], "outputQueueOverflow");
+        assert_eq!(payload["frameSeq"], 42);
+    }
+
+    #[test]
+    fn render_candidate_state_projects_transition_event() {
+        let recorder = std::sync::Arc::new(RuntimeTraceRecorder::new().expect("trace recorder"));
+        let mut state = RuntimeTraceObservationState::default();
+        let stats = test_stats(json!({
+            "resolution": "",
+            "rtt": "",
+            "fps": 0.0,
+            "pl": "0.00%",
+            "fl": "",
+            "jit": "",
+            "br": "",
+            "decode": "",
+            "latest_render_candidate_decision": {
+                "decision_id": 702,
+                "state": "latest-overwrite",
+                "action": "replace",
+                "detail": "latestSlotOverwrite",
+                "frame_seq": 77,
+                "observed_at_ms": 1801.0
+            }
+        }));
+
+        record_runtime_trace_observations(&recorder, &mut state, Some("session-1"), &stats);
+        let entries = read_trace_lines(recorder.as_ref());
+        let payload = find_event_payload(&entries, "renderCandidateStateTransition");
+        assert_eq!(payload["decisionId"], 702);
+        assert_eq!(payload["state"], "latest-overwrite");
+        assert_eq!(payload["detail"], "latestSlotOverwrite");
+        assert_eq!(payload["frameSeq"], 77);
+    }
+
+    #[test]
+    fn host_present_state_projects_no_pending_supply_signals() {
+        let recorder = std::sync::Arc::new(RuntimeTraceRecorder::new().expect("trace recorder"));
+        let mut state = RuntimeTraceObservationState::default();
+        let stats = test_stats(json!({
+            "resolution": "",
+            "rtt": "",
+            "fps": 0.0,
+            "pl": "0.00%",
+            "fl": "",
+            "jit": "",
+            "br": "",
+            "decode": "",
+            "present_fps": 59.8,
+            "video_present_submit_count_total": 301,
+            "video_present_drop_count_total": 11,
+            "video_present_overwrite_count_total": 9,
+            "host_no_pending_take_count_total": 1200,
+            "host_no_pending_streak": 66,
+            "host_no_pending_max_streak": 132,
+            "host_no_pending_pressure_level": "high",
+            "present_age_ms": 18.0
+        }));
+
+        record_runtime_trace_observations(&recorder, &mut state, Some("session-1"), &stats);
+        let entries = read_trace_lines(recorder.as_ref());
+        let payload = find_event_payload(&entries, "hostPresentState");
+        assert_eq!(payload["noPendingTakeCountTotal"], 1200);
+        assert_eq!(payload["noPendingStreak"], 66);
+        assert_eq!(payload["noPendingMaxStreak"], 132);
+        assert_eq!(payload["noPendingPressureLevel"], "high");
+    }
+
+    #[test]
+    fn direct_gaming_state_projects_display_supply_health_and_issue_chain() {
+        let recorder = std::sync::Arc::new(RuntimeTraceRecorder::new().expect("trace recorder"));
+        let mut state = RuntimeTraceObservationState::default();
+        let stats = test_stats(json!({
+            "resolution": "",
+            "rtt": "",
+            "fps": 0.0,
+            "pl": "0.00%",
+            "fl": "",
+            "jit": "",
+            "br": "",
+            "decode": "",
+            "session_phase": "steady",
+            "transport_policy_profile": "cloud",
+            "recovery_policy_profile": "cloud",
+            "recovery_diagnosis": "adapterIdleTimeout",
+            "direct_gaming_bitrate_band": "steady",
+            "runtime_summary": "cloud/steady/steady/displaySupplyStarved",
+            "primary_issue_chain": "display:supplyStarved",
+            "latest_decision_summary": "owner:supplyStarved:supplyStarved",
+            "video_owner_state": "supplyStarved",
+            "video_owner_reason": "supplyStarved",
+            "video_owner_source": "supply",
+            "video_owner_observed_at_ms": 3200.0,
+            "video_health": "displaySupplyStarved",
+            "recovery_coupling_mode": "legacy",
+            "recovery_coupling_summary": "legacy-summary",
+            "stall_kind": "pipelineStall",
+            "host_no_pending_take_count_total": 8062,
+            "host_no_pending_streak": 1291,
+            "host_no_pending_max_streak": 2866,
+            "host_no_pending_pressure_level": "critical",
+            "present_age_ms": 1624.0
+        }));
+
+        record_runtime_trace_observations(&recorder, &mut state, Some("session-1"), &stats);
+        let entries = read_trace_lines(recorder.as_ref());
+        let payload = find_event_payload(&entries, "directGamingState");
+
+        assert_eq!(payload["videoHealth"], "displaySupplyStarved");
+        assert_eq!(payload["videoOwnerState"], "supplyStarved");
+        assert_eq!(payload["videoOwnerReason"], "supplyStarved");
+        assert_eq!(payload["videoOwnerSource"], "supply");
+        assert_eq!(payload["videoOwnerObservedAtMs"], 3200.0);
+        assert_eq!(payload["primaryIssueChain"], "display:supplyStarved");
+        assert_eq!(payload["recoveryCouplingMode"], "legacy");
+        assert_eq!(payload["recoveryCouplingSummary"], "legacy-summary");
+        let host_payload = find_event_payload(&entries, "hostPresentState");
+        assert_eq!(host_payload["noPendingPressureLevel"], "critical");
+        assert_eq!(host_payload["presentAgeMs"], 1624.0);
+    }
+
+    #[test]
+    fn direct_gaming_state_owner_contract_unchanged_does_not_repeat_transition() {
+        let recorder = std::sync::Arc::new(RuntimeTraceRecorder::new().expect("trace recorder"));
+        let mut state = RuntimeTraceObservationState::default();
+        let baseline = json!({
+            "resolution": "",
+            "rtt": "",
+            "fps": 0.0,
+            "pl": "0.00%",
+            "fl": "",
+            "jit": "",
+            "br": "",
+            "decode": "",
+            "session_phase": "steady",
+            "transport_policy_profile": "cloud",
+            "recovery_policy_profile": "cloud",
+            "recovery_coupling_mode": "rebuildingSupply",
+            "recovery_coupling_summary": "timelineReferenceBroken",
+            "video_owner_state": "rebuildingSupply",
+            "video_owner_reason": "timelineReferenceBroken",
+            "video_owner_source": "anchor",
+            "video_owner_observed_at_ms": 4096.0,
+            "video_health": "recovering",
+            "primary_issue_chain": "recovery:timelineReferenceBroken",
+            "latest_decision_summary": "owner:rebuildingSupply:timelineReferenceBroken",
+            "stall_kind": "waitingKeyframe"
+        });
+        let stats = test_stats(baseline.clone());
+
+        record_runtime_trace_observations(&recorder, &mut state, Some("session-1"), &stats);
+        record_runtime_trace_observations(&recorder, &mut state, Some("session-1"), &stats);
+        let entries = read_trace_lines(recorder.as_ref());
+        assert_eq!(
+            entries
+                .iter()
+                .filter(|entry| entry["event"] == "directGamingState")
+                .count(),
+            1
+        );
+
+        let timeline_changed = test_stats({
+            let mut value = baseline;
+            value["latest_video_timeline_observation"] = json!({
+                "observation_id": 901,
+                "source_event": "nack-observation",
+                "gap": null,
+                "frame": null,
+                "chain": {
+                    "state": "recovering",
+                    "reason": "timelineReferenceBroken",
+                    "observed_at_ms": 5000.0
+                },
+                "observed_at_ms": 5000.0
+            });
+            value
+        });
+        record_runtime_trace_observations(
+            &recorder,
+            &mut state,
+            Some("session-1"),
+            &timeline_changed,
+        );
+
+        let entries = read_trace_lines(recorder.as_ref());
+        let latest_direct = entries
+            .iter()
+            .filter(|entry| entry["event"] == "directGamingState")
+            .last()
+            .expect("directGamingState entry");
+        assert_eq!(
+            latest_direct["payload"]["videoOwnerState"],
+            "rebuildingSupply"
+        );
+        assert!(entries
+            .iter()
+            .any(|entry| entry["event"] == "videoTimelineObserved"));
     }
 }

@@ -17,6 +17,9 @@ export function buildStreamDiagnosticsSnapshot(input: {
   const region = input.metadata?.region
   const regionName = region?.displayName ?? region?.shortName ?? region?.name ?? undefined
   const transportPath = input.runtimeSnapshot?.transportPath?.trim() || undefined
+  const transportCandidatePair = input.runtimeSnapshot?.transportCandidatePair?.trim() || undefined
+  const transportProtocol = input.runtimeSnapshot?.transportProtocol?.trim() || undefined
+  const transportAddressFamily = input.runtimeSnapshot?.transportAddressFamily
   const sessionPhase = input.runtimeSnapshot?.sessionPhase
   const recoveryDiagnosis = input.runtimeSnapshot?.recoveryDiagnosis
   const videoHealth = input.runtimeSnapshot?.videoHealth
@@ -28,6 +31,9 @@ export function buildStreamDiagnosticsSnapshot(input: {
     serverHost: parseServerHost(input.metadata?.serverBaseUrl),
     turnSource: input.metadata?.turnSource ?? 'none',
     transportPath,
+    transportCandidatePair,
+    transportProtocol,
+    transportAddressFamily,
     transportPolicyProfile: input.runtimeSnapshot?.transportPolicyProfile,
     recoveryPolicyProfile: input.runtimeSnapshot?.recoveryPolicyProfile,
     sessionPhase,

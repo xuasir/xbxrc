@@ -32,7 +32,11 @@ interface IceCandidateStat extends RTCStats {
   candidateType?: string
   protocol?: string
   relayProtocol?: string
+  address?: string | null
+  ip?: string | null
 }
+
+type TransportAddressFamily = 'ipv4' | 'ipv6' | 'mixed' | 'unknown'
 
 type ResolutionGlobal = typeof globalThis & {
   resolution?: string
@@ -198,7 +202,11 @@ export class StatsService {
         networkStats.roundTripTime = performanceState.rtt
       }
     })
-    performanceState.transportPath = resolveTransportPath(stats) ?? ''
+    const transportDetails = resolveTransportDetails(stats)
+    performanceState.transportPath = transportDetails.transportPath ?? ''
+    performanceState.transportCandidatePair = transportDetails.transportCandidatePair
+    performanceState.transportProtocol = transportDetails.transportProtocol
+    performanceState.transportAddressFamily = transportDetails.transportAddressFamily
     networkStats.packetLoss = performanceState.pl
     networkStats.frameLoss = performanceState.fl
     void networkStats
@@ -208,7 +216,14 @@ export class StatsService {
   }
 }
 
-function resolveTransportPath(stats: RTCStatsReport): string | undefined {
+interface ResolvedTransportDetails {
+  transportPath?: string
+  transportCandidatePair?: string
+  transportProtocol?: string
+  transportAddressFamily: TransportAddressFamily
+}
+
+function resolveTransportDetails(stats: RTCStatsReport): ResolvedTransportDetails {
   const candidatePairs = Array.from(stats.values())
     .filter(isSucceededCandidatePairStat)
     .sort((left, right) => {
@@ -219,7 +234,7 @@ function resolveTransportPath(stats: RTCStatsReport): string | undefined {
 
   const selectedPair = candidatePairs[0]
   if (!selectedPair) {
-    return undefined
+    return { transportAddressFamily: 'unknown' }
   }
 
   const localCandidate = selectedPair.localCandidateId
@@ -229,15 +244,16 @@ function resolveTransportPath(stats: RTCStatsReport): string | undefined {
     ? stats.get(selectedPair.remoteCandidateId)
     : undefined
   if (!localCandidate || !remoteCandidate) {
-    return undefined
+    return { transportAddressFamily: 'unknown' }
   }
   if (!isIceCandidateStat(localCandidate) || !isIceCandidateStat(remoteCandidate)) {
-    return undefined
+    return { transportAddressFamily: 'unknown' }
   }
 
   const localType = normalizeCandidateType(localCandidate.candidateType)
   const remoteType = normalizeCandidateType(remoteCandidate.candidateType)
   const transportKind = localType === 'relay' || remoteType === 'relay' ? 'Relay' : 'Direct'
+  const transportCandidatePair = `${localType || 'unknown'}->${remoteType || 'unknown'}`
   const pairText = [localType, remoteType].filter(Boolean).join(' -> ')
   const protocol = (localCandidate.relayProtocol
     ?? remoteCandidate.relayProtocol
@@ -246,7 +262,17 @@ function resolveTransportPath(stats: RTCStatsReport): string | undefined {
     ?? '')
     .trim()
     .toUpperCase()
+  const transportAddressFamily = resolveAddressFamily(localCandidate, remoteCandidate)
 
+  return {
+    transportPath: buildTransportPathText(transportKind, pairText, protocol),
+    transportCandidatePair,
+    transportProtocol: protocol || undefined,
+    transportAddressFamily,
+  }
+}
+
+function buildTransportPathText(transportKind: string, pairText: string, protocol: string): string {
   if (pairText !== '' && protocol !== '') {
     return `${transportKind} (${pairText}, ${protocol})`
   }
@@ -257,6 +283,42 @@ function resolveTransportPath(stats: RTCStatsReport): string | undefined {
     return `${transportKind} (${protocol})`
   }
   return transportKind
+}
+
+function resolveAddressFamily(
+  localCandidate: IceCandidateStat,
+  remoteCandidate: IceCandidateStat,
+): TransportAddressFamily {
+  const localFamily = resolveCandidateAddressFamily(localCandidate)
+  const remoteFamily = resolveCandidateAddressFamily(remoteCandidate)
+  if (localFamily === 'unknown' && remoteFamily === 'unknown') {
+    return 'unknown'
+  }
+  if (localFamily === 'unknown') {
+    return remoteFamily
+  }
+  if (remoteFamily === 'unknown') {
+    return localFamily
+  }
+  if (localFamily !== remoteFamily) {
+    return 'mixed'
+  }
+  return localFamily
+}
+
+function resolveCandidateAddressFamily(candidate: IceCandidateStat): 'ipv4' | 'ipv6' | 'unknown' {
+  const rawAddress = (candidate.address ?? candidate.ip ?? '').trim()
+  if (rawAddress === '') {
+    return 'unknown'
+  }
+  const address = rawAddress.replace(/^\[/, '').replace(/\]$/, '')
+  if (address.includes(':')) {
+    return 'ipv6'
+  }
+  if (address.includes('.')) {
+    return 'ipv4'
+  }
+  return 'unknown'
 }
 
 function normalizeCandidateType(value: string | undefined): string {

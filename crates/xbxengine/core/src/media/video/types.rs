@@ -134,6 +134,10 @@ pub struct EncodedFrame {
 
 pub struct DecodedFrame {
     pub pts: Instant,
+    pub rtp_timestamp: u32,
+    pub is_keyframe: bool,
+    pub frame_recovery_disposition: FrameRecoveryDisposition,
+    pub frame_unrecoverable_reason: Option<String>,
 
     pub surface: crate::media::video::render::renderer::XbxRenderFrame,
 }

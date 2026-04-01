@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Focusable, FocusScope } from '@/navigation/core/vue'
+import { Focusable } from '@/navigation/core/vue'
+import SettingModalShell from './SettingModalShell.vue'
 
 interface SettingValueSheetProps {
   open: boolean
@@ -119,255 +120,128 @@ watch(
 </script>
 
 <template>
-  <Transition name="setting-value-sheet-transition">
-    <div v-if="props.open" class="setting-value-sheet" @click.self="handleClose">
-      <FocusScope
-        :id="props.scopeId"
-        :active="props.open"
-        :trap="true"
-        :restore-focus="true"
-        :default-focus-id="defaultFocusId"
+  <SettingModalShell
+    :open="props.open"
+    :scope-id="props.scopeId"
+    :title="props.title"
+    :hint="props.hint"
+    width="min(100%, 540px)"
+    :default-focus-id="defaultFocusId"
+    @close="handleClose"
+  >
+    <div class="setting-value-sheet__field">
+      <span class="setting-value-sheet__field-label">
+        {{ t('setting.editor.valueLabel') }}
+      </span>
+
+      <div
+        class="setting-value-sheet__field-controls"
+        :class="{
+          'setting-value-sheet__field-controls--number': props.mode === 'number',
+          'setting-value-sheet__field-controls--text': props.mode === 'text',
+        }"
       >
-        <div class="setting-value-sheet__panel">
-          <header class="setting-value-sheet__header">
-            <div class="setting-value-sheet__header-copy">
-              <p class="setting-value-sheet__eyebrow">
-                {{ t('setting.editor.eyebrow') }}
-              </p>
-              <h2 class="setting-value-sheet__title">
-                {{ props.title }}
-              </h2>
-              <p v-if="props.hint" class="setting-value-sheet__hint">
-                {{ props.hint }}
-              </p>
-            </div>
+        <Focusable
+          v-if="props.mode === 'number'"
+          :id="decreaseNodeId"
+          as="button"
+          type="button"
+          class="setting-value-sheet__mini-action"
+          :scope-id="props.scopeId"
+          :on-back="handleClose"
+          :aria-label="t('setting.editor.decrease')"
+          @click="handleStep(-1)"
+        >
+          -
+        </Focusable>
 
-            <Focusable
-              :id="`${props.scopeId}.close`"
-              as="button"
-              type="button"
-              class="setting-value-sheet__close"
-              :scope-id="props.scopeId"
-              :on-back="handleClose"
-              :aria-label="t('setting.editor.cancel')"
-              @click="handleClose"
-            >
-              <span class="setting-value-sheet__close-icon" aria-hidden="true">✕</span>
-            </Focusable>
-          </header>
+        <Focusable
+          :id="fieldNodeId"
+          as="div"
+          class="setting-value-sheet__field-focus"
+          :on-back="handleClose"
+          @click="handleFocusField"
+        >
+          <input
+            ref="inputRef"
+            v-model="draftValue"
+            class="setting-value-sheet__input"
+            :type="props.mode === 'number' ? 'number' : 'text'"
+            :inputmode="props.mode === 'number' ? 'decimal' : 'text'"
+            :min="props.min"
+            :max="props.max"
+            :step="props.step"
+            :aria-label="props.title"
+            @click.stop
+            @keydown.enter.prevent="handleSubmit"
+          >
+        </Focusable>
 
-          <div class="setting-value-sheet__body">
-            <div class="setting-value-sheet__field">
-              <span class="setting-value-sheet__field-label">
-                {{ t('setting.editor.valueLabel') }}
-              </span>
+        <Focusable
+          v-if="props.mode === 'number'"
+          :id="increaseNodeId"
+          as="button"
+          type="button"
+          class="setting-value-sheet__mini-action"
+          :scope-id="props.scopeId"
+          :on-back="handleClose"
+          :aria-label="t('setting.editor.increase')"
+          @click="handleStep(1)"
+        >
+          +
+        </Focusable>
 
-              <div
-                class="setting-value-sheet__field-controls"
-                :class="{
-                  'setting-value-sheet__field-controls--number': props.mode === 'number',
-                  'setting-value-sheet__field-controls--text': props.mode === 'text',
-                }"
-              >
-                <Focusable
-                  v-if="props.mode === 'number'"
-                  :id="decreaseNodeId"
-                  as="button"
-                  type="button"
-                  class="setting-value-sheet__mini-action"
-                  :scope-id="props.scopeId"
-                  :on-back="handleClose"
-                  :aria-label="t('setting.editor.decrease')"
-                  @click="handleStep(-1)"
-                >
-                  -
-                </Focusable>
-
-                <Focusable
-                  :id="fieldNodeId"
-                  as="div"
-                  class="setting-value-sheet__field-focus"
-                  :on-back="handleClose"
-                  @click="handleFocusField"
-                >
-                  <input
-                    ref="inputRef"
-                    v-model="draftValue"
-                    class="setting-value-sheet__input"
-                    :type="props.mode === 'number' ? 'number' : 'text'"
-                    :inputmode="props.mode === 'number' ? 'decimal' : 'text'"
-                    :min="props.min"
-                    :max="props.max"
-                    :step="props.step"
-                    :aria-label="props.title"
-                    @click.stop
-                    @keydown.enter.prevent="handleSubmit"
-                  >
-                </Focusable>
-
-                <Focusable
-                  v-if="props.mode === 'number'"
-                  :id="increaseNodeId"
-                  as="button"
-                  type="button"
-                  class="setting-value-sheet__mini-action"
-                  :scope-id="props.scopeId"
-                  :on-back="handleClose"
-                  :aria-label="t('setting.editor.increase')"
-                  @click="handleStep(1)"
-                >
-                  +
-                </Focusable>
-
-                <Focusable
-                  v-else
-                  :id="clearNodeId"
-                  as="button"
-                  type="button"
-                  class="setting-value-sheet__mini-action"
-                  :scope-id="props.scopeId"
-                  :on-back="handleClose"
-                  :aria-label="t('setting.editor.clear')"
-                  @click="handleClear"
-                >
-                  {{ t('setting.editor.clearShort') }}
-                </Focusable>
-              </div>
-            </div>
-
-            <p v-if="props.mode === 'number' && isNumberInvalid" class="setting-value-sheet__error">
-              {{ t('setting.editor.invalidNumber') }}
-            </p>
-          </div>
-
-          <div class="setting-value-sheet__footer">
-            <div class="setting-value-sheet__actions">
-              <Focusable
-                :id="cancelNodeId"
-                as="button"
-                type="button"
-                class="setting-value-sheet__action setting-value-sheet__action--secondary"
-                :scope-id="props.scopeId"
-                :on-back="handleClose"
-                @click="handleClose"
-              >
-                {{ t('setting.editor.cancel') }}
-              </Focusable>
-
-              <Focusable
-                :id="submitNodeId"
-                as="button"
-                type="button"
-                class="setting-value-sheet__action setting-value-sheet__action--primary"
-                :scope-id="props.scopeId"
-                :on-back="handleClose"
-                @click="handleSubmit"
-              >
-                {{ t('setting.editor.save') }}
-              </Focusable>
-            </div>
-          </div>
-        </div>
-      </FocusScope>
+        <Focusable
+          v-else
+          :id="clearNodeId"
+          as="button"
+          type="button"
+          class="setting-value-sheet__mini-action"
+          :scope-id="props.scopeId"
+          :on-back="handleClose"
+          :aria-label="t('setting.editor.clear')"
+          @click="handleClear"
+        >
+          {{ t('setting.editor.clearShort') }}
+        </Focusable>
+      </div>
     </div>
-  </Transition>
+
+    <p v-if="props.mode === 'number' && isNumberInvalid" class="setting-value-sheet__error">
+      {{ t('setting.editor.invalidNumber') }}
+    </p>
+
+    <template #footer>
+      <div class="setting-value-sheet__actions">
+        <Focusable
+          :id="cancelNodeId"
+          as="button"
+          type="button"
+          class="setting-value-sheet__action setting-value-sheet__action--secondary"
+          :scope-id="props.scopeId"
+          :on-back="handleClose"
+          @click="handleClose"
+        >
+          {{ t('setting.editor.cancel') }}
+        </Focusable>
+
+        <Focusable
+          :id="submitNodeId"
+          as="button"
+          type="button"
+          class="setting-value-sheet__action setting-value-sheet__action--primary"
+          :scope-id="props.scopeId"
+          :on-back="handleClose"
+          @click="handleSubmit"
+        >
+          {{ t('setting.editor.save') }}
+        </Focusable>
+      </div>
+    </template>
+  </SettingModalShell>
 </template>
 
 <style scoped>
-.setting-value-sheet {
-  position: fixed;
-  inset: 0;
-  z-index: 100;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 40px;
-  background: var(--ui-scrim-bg);
-}
-
-.setting-value-sheet__panel {
-  position: relative;
-  width: min(100%, 540px);
-  display: flex;
-  flex-direction: column;
-  padding: 0;
-  border: 1px solid var(--ui-border-subtle);
-  border-radius: var(--ui-radius-md);
-  background: var(--ui-surface-overlay);
-  box-shadow: var(--ui-shadow-overlay);
-  color: var(--ui-page-text);
-  overflow: hidden;
-}
-
-.setting-value-sheet__header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 24px;
-  padding: 32px 32px 16px;
-  background: transparent;
-}
-
-.setting-value-sheet__header-copy {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-width: 0;
-}
-
-.setting-value-sheet__close {
-  flex: 0 0 auto;
-  width: 32px;
-  height: 32px;
-  border: 0;
-  border-radius: 50%;
-  background: var(--color-state-hover);
-  color: var(--ui-page-text);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: all var(--ui-motion-fast);
-}
-
-.setting-value-sheet__close[data-focused='true'] {
-  background: var(--color-focus-bg-strong);
-  color: var(--ui-focus-text);
-  box-shadow: var(--shadow-xbox-focus);
-}
-
-.setting-value-sheet__close-icon {
-  font-size: 16px;
-  line-height: 1;
-}
-
-.setting-value-sheet__eyebrow {
-  margin: 0;
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  color: var(--brand-primary);
-}
-
-.setting-value-sheet__title {
-  margin: 0;
-  font-size: 28px;
-  line-height: 1.2;
-  font-weight: 700;
-}
-
-.setting-value-sheet__hint {
-  margin: 4px 0 0;
-  font-size: 14px;
-  line-height: 1.4;
-  color: var(--color-text-secondary);
-}
-
-.setting-value-sheet__body {
-  padding: 16px 32px 24px;
-}
-
 .setting-value-sheet__field {
   display: flex;
   flex-direction: column;
@@ -444,11 +318,6 @@ watch(
   color: #e81123;
 }
 
-.setting-value-sheet__footer {
-  padding: 16px 32px 32px;
-  border-top: 1px solid rgba(255, 255, 255, 0.05);
-}
-
 .setting-value-sheet__actions {
   display: flex;
   justify-content: flex-end;
@@ -489,29 +358,7 @@ watch(
   color: #ffffff;
 }
 
-.setting-value-sheet-transition-enter-active,
-.setting-value-sheet-transition-leave-active {
-  transition: opacity 300ms var(--ease-standard);
-}
-
-.setting-value-sheet-transition-enter-from,
-.setting-value-sheet-transition-leave-to {
-  opacity: 0;
-}
-
-.setting-value-sheet-transition-enter-active .setting-value-sheet__panel,
-.setting-value-sheet-transition-leave-active .setting-value-sheet__panel {
-  transition: all 400ms var(--ease-standard);
-}
-
-.setting-value-sheet-transition-enter-from .setting-value-sheet__panel {
-  opacity: 0;
-  transform: scale(0.95);
-}
-
 .setting-value-sheet-transition-leave-to .setting-value-sheet__panel {
-  opacity: 0;
-  transform: scale(1.02);
 }
 
 :global(html[data-ui-density='narrow']) .setting-value-sheet__actions {

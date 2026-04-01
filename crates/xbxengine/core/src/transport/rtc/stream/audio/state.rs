@@ -2,6 +2,11 @@ use std::collections::VecDeque;
 
 use super::{MAX_BUFFERED_AUDIO_FRAMES, OPUS_OUTPUT_CHANNELS, OPUS_SAMPLE_RATE_HZ};
 
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub(super) struct AudioPlaybackOutputMetrics {
+    pub(super) playout_latency_ms: f64,
+}
+
 #[derive(Default)]
 pub(super) struct AudioPlaybackSharedState {
     pub(super) frames: VecDeque<[f32; OPUS_OUTPUT_CHANNELS]>,
@@ -24,10 +29,11 @@ impl AudioPlaybackSharedState {
         output_sample_rate_hz: u32,
         output_channels: usize,
         volume: f32,
-    ) {
+    ) -> AudioPlaybackOutputMetrics {
+        let metrics = self.current_output_metrics();
         output.fill(0.0);
         if output_channels == 0 {
-            return;
+            return metrics;
         }
 
         // 先用最近邻重采样保证链路可播，后续再按需要替换更高质量实现。
@@ -47,6 +53,17 @@ impl AudioPlaybackSharedState {
         }
 
         self.discard_consumed_frames();
+        metrics
+    }
+
+    pub(super) fn current_output_metrics(&self) -> AudioPlaybackOutputMetrics {
+        AudioPlaybackOutputMetrics {
+            playout_latency_ms: self.playout_buffer_frames() * 1_000.0 / OPUS_SAMPLE_RATE_HZ as f64,
+        }
+    }
+
+    pub(super) fn playout_buffer_frames(&self) -> f64 {
+        (self.frames.len() as f64 - self.source_cursor_frames).max(0.0)
     }
 
     fn trim_overflow(&mut self) {
@@ -137,5 +154,25 @@ mod tests {
         assert_eq!(output, vec![0.1, 0.2, 0.5, 0.6]);
         assert!(state.frames.is_empty());
         assert_eq!(state.source_cursor_frames, 0.0);
+    }
+
+    #[test]
+    fn playback_buffer_metrics_reflect_remaining_frames() {
+        let mut state = AudioPlaybackSharedState::default();
+        state.enqueue_interleaved_stereo(&[
+            0.1, 0.2, //
+            0.3, 0.4, //
+            0.5, 0.6, //
+            0.7, 0.8,
+        ]);
+        state.source_cursor_frames = 1.5;
+
+        let metrics = state.current_output_metrics();
+
+        assert_eq!(state.playout_buffer_frames(), 2.5);
+        assert_eq!(
+            metrics.playout_latency_ms,
+            2.5 * 1_000.0 / OPUS_SAMPLE_RATE_HZ as f64
+        );
     }
 }

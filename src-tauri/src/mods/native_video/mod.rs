@@ -1,10 +1,16 @@
 use std::collections::{HashMap, VecDeque};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use crate::mods::runtime_trace::RuntimeTraceRecorderRef;
+use serde_json::json;
 use tauri::{AppHandle, Manager, Window};
-use xbxengine::{XbxEngineRenderFrame, XbxEngineRenderPixelData};
+use xbxengine::{
+    MacOsCVPixelBufferDescriptor, MacOsVideoChromaLocation, MacOsVideoColorMatrix,
+    MacOsVideoColorPrimaries, MacOsVideoColorRange, MacOsVideoTransferFunction,
+    XbxEngineRenderFrame, XbxEngineRenderPixelData,
+};
 
 mod effects;
 mod native_video_policy;
@@ -20,7 +26,9 @@ use self::presenters::{
     resolve_present_kind, MacOsVideoPresenter, MacOsWgpuPresenter, NativeVideoPresenter,
     NativeVideoPresenterKind, NoopVideoPresenter,
 };
-use self::scheduling::{HostCadenceTelemetry, ScheduledFrameSlot};
+use self::scheduling::{
+    HostCadenceTelemetry, HostFrameDropBacklog, ScheduledFrameSlot, ScheduledFrameTakeOutcome,
+};
 use self::types::{
     DecodedVideoSurface, VideoEffectPipelineKind, VideoPlatformCapabilities, VideoPresenterMode,
 };
@@ -31,6 +39,56 @@ const HOST_RENDER_FPS_WINDOW_MS: f64 = 1_000.0;
 const HOST_RENDER_MIN_FRAME_AGE_MS: f64 = 24.0;
 const HOST_RENDER_MAX_FRAME_AGE_MS: f64 = 75.0;
 const HOST_RENDER_FRAME_AGE_MULTIPLIER: f64 = 2.25;
+const HOST_TIMING_QUEUE_WARN_MS: f64 = 24.0;
+const HOST_TIMING_TICK_WARN_MS: f64 = 24.0;
+
+static RUNTIME_TRACE: OnceLock<Mutex<Option<RuntimeTraceRecorderRef>>> = OnceLock::new();
+
+fn runtime_trace_slot() -> &'static Mutex<Option<RuntimeTraceRecorderRef>> {
+    RUNTIME_TRACE.get_or_init(|| Mutex::new(None))
+}
+
+pub(crate) fn set_runtime_trace_recorder(runtime_trace: RuntimeTraceRecorderRef) {
+    if let Ok(mut slot) = runtime_trace_slot().lock() {
+        *slot = Some(runtime_trace);
+    }
+}
+
+pub(super) fn record_native_video_trace(event: &str, payload: serde_json::Value) {
+    let runtime_trace = runtime_trace_slot()
+        .lock()
+        .ok()
+        .and_then(|slot| slot.as_ref().cloned());
+    if let Some(runtime_trace) = runtime_trace {
+        runtime_trace.record_log("native_video", event, None, payload);
+    }
+}
+
+fn record_native_video_timing_event(
+    runtime_trace: Option<&RuntimeTraceRecorderRef>,
+    pipeline: &str,
+    stage: &str,
+    viewport_id: &str,
+    window_label: &str,
+    payload: serde_json::Value,
+) {
+    let Some(runtime_trace) = runtime_trace else {
+        return;
+    };
+    runtime_trace.record_event(
+        "native_video",
+        "hostTiming",
+        None,
+        serde_json::json!({
+            "pipeline": pipeline,
+            "stage": stage,
+            "viewportId": viewport_id,
+            "windowLabel": window_label,
+            "tsMs": now_ms_f64(),
+            "details": payload,
+        }),
+    );
+}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 enum NativeVideoViewportTarget {
@@ -59,6 +117,9 @@ pub struct NativeVideoViewportState {
     pub host_present_submit_count_total: u64,
     pub host_present_drop_count_total: u64,
     pub host_present_overwrite_count_total: u64,
+    pub host_no_pending_take_count_total: u64,
+    pub host_no_pending_streak: u32,
+    pub host_no_pending_max_streak: u32,
     pub host_display_interval_ms: Option<f64>,
     pub host_frame_age_budget_ms: Option<f64>,
     pub host_descriptor_upload_mode: Option<String>,
@@ -68,6 +129,7 @@ pub struct NativeVideoViewportState {
 
 pub struct NativeVideoRegistry {
     app_handle: Option<AppHandle>,
+    runtime_trace: Option<RuntimeTraceRecorderRef>,
     platform_capabilities: VideoPlatformCapabilities,
     viewports: HashMap<String, NativeVideoViewportState>,
     presenters: HashMap<String, Box<dyn NativeVideoPresenter>>,
@@ -75,9 +137,10 @@ pub struct NativeVideoRegistry {
 }
 
 impl NativeVideoRegistry {
-    pub fn new(app_handle: AppHandle) -> Self {
+    pub fn new(app_handle: AppHandle, runtime_trace: Option<RuntimeTraceRecorderRef>) -> Self {
         Self {
             app_handle: Some(app_handle),
+            runtime_trace,
             platform_capabilities: VideoPlatformCapabilities::current(),
             viewports: HashMap::new(),
             presenters: HashMap::new(),
@@ -212,6 +275,16 @@ impl NativeVideoRegistry {
         Some(snapshot)
     }
 
+    pub fn take_pending_host_frame_drops(
+        &mut self,
+        viewport_id: &str,
+    ) -> Vec<xbxengine::XbxEngineHostVideoFrameDropEvent> {
+        self.presenters
+            .get_mut(viewport_id)
+            .map(|presenter| presenter.take_pending_frame_drops())
+            .unwrap_or_default()
+    }
+
     fn resolve_viewport_target(&self, _viewport_id: &str) -> NativeVideoViewportTarget {
         // 当前统一走单窗口宿主；保留 target 抽象，便于后续扩展其他宿主类型。
         NativeVideoViewportTarget::MainWindow
@@ -231,12 +304,14 @@ impl NativeVideoRegistry {
                         viewport_id,
                         target.window_label(),
                         app_handle,
+                        self.runtime_trace.clone(),
                     ));
                 }
                 return Box::new(MacOsVideoPresenter::new(
                     viewport_id,
                     target.window_label(),
                     app_handle,
+                    self.runtime_trace.clone(),
                 ));
             }
         }
@@ -276,6 +351,7 @@ impl Default for NativeVideoRegistry {
     fn default() -> Self {
         Self {
             app_handle: None,
+            runtime_trace: None,
             platform_capabilities: VideoPlatformCapabilities::current(),
             viewports: HashMap::new(),
             presenters: HashMap::new(),
@@ -398,6 +474,13 @@ fn configure_macos_window_video_host(
             }
         });
     }) {
+        record_native_video_trace(
+            "configure_window_video_host_failed",
+            json!({
+                "label": window_label,
+                "error": error.to_string(),
+            }),
+        );
         log::warn!(
             "[native_video][macos] failed to configure window video host label={} error={}",
             window_label,
@@ -428,6 +511,10 @@ pub(super) struct MacOsWgpuTelemetry {
     present_submit_count_total: u64,
     present_drop_count_total: u64,
     present_overwrite_count_total: u64,
+    no_pending_take_count_total: u64,
+    no_pending_streak: u32,
+    no_pending_max_streak: u32,
+    pending_frame_drops: HostFrameDropBacklog,
     descriptor_upload_mode: Option<String>,
     descriptor_metal_import_count_total: u64,
     descriptor_cpu_upload_count_total: u64,
@@ -448,6 +535,36 @@ impl MacOsWgpuTelemetry {
 
     fn record_drop(&mut self) {
         self.present_drop_count_total = self.present_drop_count_total.saturating_add(1);
+    }
+
+    fn record_no_pending_take(&mut self) {
+        self.no_pending_take_count_total = self.no_pending_take_count_total.saturating_add(1);
+        self.no_pending_streak = self.no_pending_streak.saturating_add(1);
+        self.no_pending_max_streak = self.no_pending_max_streak.max(self.no_pending_streak);
+    }
+
+    fn clear_no_pending_streak(&mut self) {
+        self.no_pending_streak = 0;
+    }
+
+    fn record_stale_frame_drop(
+        &mut self,
+        frame: &XbxEngineRenderFrame,
+        observed_at_ms: f64,
+        detail: &str,
+        queue_depth: usize,
+    ) {
+        self.record_drop();
+        self.pending_frame_drops.record_stale_frame_drop(
+            frame,
+            observed_at_ms,
+            detail,
+            queue_depth,
+        );
+    }
+
+    fn take_pending_frame_drops(&mut self) -> Vec<xbxengine::XbxEngineHostVideoFrameDropEvent> {
+        self.pending_frame_drops.take_all()
     }
 
     fn present_fps(&self) -> f64 {
@@ -471,7 +588,16 @@ impl MacOsWgpuTelemetry {
         self.latest_present_time_ms = None;
         self.recent_present_times_ms.clear();
         self.recent_display_tick_times_ms.clear();
+        self.present_submit_count_total = 0;
+        self.present_drop_count_total = 0;
+        self.present_overwrite_count_total = 0;
+        self.no_pending_take_count_total = 0;
+        self.no_pending_streak = 0;
+        self.no_pending_max_streak = 0;
+        self.pending_frame_drops.reset();
         self.descriptor_upload_mode = None;
+        self.descriptor_metal_import_count_total = 0;
+        self.descriptor_cpu_upload_count_total = 0;
     }
 
     fn trim_recent(&mut self, now_ms: f64) {
@@ -500,6 +626,10 @@ impl MacOsWgpuTelemetry {
 pub(super) struct MacOsLayerState {
     display_layer_ptr: Option<*mut objc2::runtime::AnyObject>,
     first_present_logged: bool,
+    cached_format_desc: Option<CachedFormatDescription>,
+    pending_sample: Option<PreparedLayerSample>,
+    last_layer_bounds: Option<[f64; 4]>,
+    last_layer_scale: Option<f64>,
 }
 
 #[cfg(target_os = "macos")]
@@ -532,8 +662,32 @@ pub(super) fn run_wgpu_render_tick(
     renderer_state: &Arc<Mutex<MacOsWgpuState>>,
     telemetry: &Arc<Mutex<MacOsWgpuTelemetry>>,
     render_loop_pending: &Arc<AtomicBool>,
+    dispatch_requested_at_ms: Option<f64>,
+    runtime_trace: Option<RuntimeTraceRecorderRef>,
 ) {
+    let tick_started_at_ms = now_ms_f64();
     let _pending_guard = PendingFlagGuard::new(render_loop_pending.clone());
+    if let Some(dispatch_ms) = dispatch_requested_at_ms {
+        let queue_delay_ms = (tick_started_at_ms - dispatch_ms).max(0.0);
+        if queue_delay_ms >= HOST_TIMING_QUEUE_WARN_MS {
+            record_native_video_timing_event(
+                runtime_trace.as_ref(),
+                "wgpu",
+                "run_on_main_thread_delay",
+                viewport_id,
+                window.label(),
+                serde_json::json!({
+                    "queueDelayMs": queue_delay_ms,
+                }),
+            );
+            log::warn!(
+                "[native_video][timing] pipeline=wgpu stage=run_on_main_thread_delay viewport={} window={} queueDelayMs={:.2}",
+                viewport_id,
+                window.label(),
+                queue_delay_ms
+            );
+        }
+    }
     let Ok(mut state) = renderer_state.lock() else {
         return;
     };
@@ -587,6 +741,13 @@ pub(super) fn run_wgpu_render_tick(
         || state.latest_frame.as_ref().map(|frame| frame.frame_seq)
             != state.last_rendered_frame_seq;
     let latest_frame = state.latest_frame.clone();
+    if latest_frame.is_none() {
+        if let Ok(mut telemetry) = telemetry.lock() {
+            telemetry.record_no_pending_take();
+        }
+    } else if let Ok(mut telemetry) = telemetry.lock() {
+        telemetry.clear_no_pending_streak();
+    }
     let rendered_seq_before = state.last_rendered_frame_seq;
     if size_changed {
         state.last_surface_size = Some((surface_width, surface_height));
@@ -603,7 +764,7 @@ pub(super) fn run_wgpu_render_tick(
                 state.last_rendered_frame_seq = Some(frame.frame_seq);
                 state.latest_frame = None;
                 if let Ok(mut telemetry) = telemetry.lock() {
-                    telemetry.record_drop();
+                    telemetry.record_stale_frame_drop(&frame, now_ms, "scheduledFrameStale", 1);
                 }
                 log::debug!(
                     "[native_video][wgpu] drop stale frame viewport={} window={} frame_seq={} age_ms={:.2}",
@@ -638,6 +799,25 @@ pub(super) fn run_wgpu_render_tick(
         }
     } else if rendered_seq_before.is_none() && size_changed {
         let _ = renderer.render();
+    }
+    let tick_total_ms = (now_ms_f64() - tick_started_at_ms).max(0.0);
+    if tick_total_ms >= HOST_TIMING_TICK_WARN_MS {
+        record_native_video_timing_event(
+            runtime_trace.as_ref(),
+            "wgpu",
+            "tick_total",
+            viewport_id,
+            window.label(),
+            serde_json::json!({
+                "totalMs": tick_total_ms,
+            }),
+        );
+        log::warn!(
+            "[native_video][timing] pipeline=wgpu stage=tick_total viewport={} window={} totalMs={:.2}",
+            viewport_id,
+            window.label(),
+            tick_total_ms
+        );
     }
 }
 
@@ -827,6 +1007,12 @@ fn ensure_wgpu_host_view(
     if !created_view_ptr.is_null() {
         state.host_view_ptr = Some(created_view_ptr);
         state.host_view_managed = true;
+        record_native_video_trace(
+            "host_view_created",
+            json!({
+                "windowLabel": window_label,
+            }),
+        );
         log::info!(
             "[native_video][wgpu] host view created for window={}",
             window_label
@@ -883,6 +1069,7 @@ struct MacOsDisplayLinkContext {
     renderer_state: Arc<Mutex<MacOsWgpuState>>,
     telemetry: Arc<Mutex<MacOsWgpuTelemetry>>,
     render_loop_pending: Arc<AtomicBool>,
+    runtime_trace: Option<RuntimeTraceRecorderRef>,
 }
 
 #[cfg(target_os = "macos")]
@@ -903,6 +1090,7 @@ impl MacOsDisplayLinkHandle {
         renderer_state: Arc<Mutex<MacOsWgpuState>>,
         telemetry: Arc<Mutex<MacOsWgpuTelemetry>>,
         render_loop_pending: Arc<AtomicBool>,
+        runtime_trace: Option<RuntimeTraceRecorderRef>,
     ) -> Result<Self, String> {
         let context = Box::new(MacOsDisplayLinkContext {
             viewport_id,
@@ -911,6 +1099,7 @@ impl MacOsDisplayLinkHandle {
             renderer_state,
             telemetry,
             render_loop_pending,
+            runtime_trace,
         });
         let context_ptr = Box::into_raw(context);
         let mut display_link_ref: *mut std::ffi::c_void = std::ptr::null_mut();
@@ -967,6 +1156,7 @@ struct MacOsLayerDisplayLinkContext {
     frame_slot: Arc<Mutex<ScheduledFrameSlot>>,
     telemetry: Arc<Mutex<HostCadenceTelemetry>>,
     render_loop_pending: Arc<AtomicBool>,
+    runtime_trace: Option<RuntimeTraceRecorderRef>,
 }
 
 #[cfg(target_os = "macos")]
@@ -988,6 +1178,7 @@ impl MacOsLayerDisplayLinkHandle {
         frame_slot: Arc<Mutex<ScheduledFrameSlot>>,
         telemetry: Arc<Mutex<HostCadenceTelemetry>>,
         render_loop_pending: Arc<AtomicBool>,
+        runtime_trace: Option<RuntimeTraceRecorderRef>,
     ) -> Result<Self, String> {
         let context = Box::new(MacOsLayerDisplayLinkContext {
             viewport_id,
@@ -997,6 +1188,7 @@ impl MacOsLayerDisplayLinkHandle {
             frame_slot,
             telemetry,
             render_loop_pending,
+            runtime_trace,
         });
         let context_ptr = Box::into_raw(context);
         let mut display_link_ref: *mut std::ffi::c_void = std::ptr::null_mut();
@@ -1055,9 +1247,16 @@ unsafe extern "C" fn macos_display_link_callback(
     _flags_out: *mut u64,
     display_link_context: *mut std::ffi::c_void,
 ) -> i32 {
+    let callback_ts_ms = now_ms_f64();
     let Some(context) = (display_link_context as *mut MacOsDisplayLinkContext).as_ref() else {
         return 0;
     };
+    log::debug!(
+        "[native_video][timing] pipeline=wgpu stage=display_link_callback viewport={} window={} callbackTsMs={:.3}",
+        context.viewport_id,
+        context.window_label,
+        callback_ts_ms
+    );
     if context.render_loop_pending.swap(true, Ordering::Relaxed) {
         return 0;
     }
@@ -1070,8 +1269,10 @@ unsafe extern "C" fn macos_display_link_callback(
     let render_loop_pending = context.render_loop_pending.clone();
     let viewport_id = context.viewport_id.clone();
     let app_handle = context.app_handle.clone();
+    let runtime_trace = context.runtime_trace.clone();
     let window_for_task = window.clone();
-    let _ = window.run_on_main_thread(move || {
+    let dispatch_requested_at_ms = now_ms_f64();
+    if let Err(error) = window.run_on_main_thread(move || {
         run_wgpu_render_tick(
             &window_for_task,
             &app_handle,
@@ -1079,8 +1280,28 @@ unsafe extern "C" fn macos_display_link_callback(
             &renderer_state,
             &telemetry,
             &render_loop_pending,
+            Some(dispatch_requested_at_ms),
+            runtime_trace,
         );
-    });
+    }) {
+        record_native_video_timing_event(
+            context.runtime_trace.as_ref(),
+            "wgpu",
+            "run_on_main_thread_enqueue_failed",
+            &context.viewport_id,
+            &context.window_label,
+            serde_json::json!({
+                "error": error.to_string(),
+            }),
+        );
+        context.render_loop_pending.store(false, Ordering::Relaxed);
+        log::warn!(
+            "[native_video][timing] pipeline=wgpu stage=run_on_main_thread_enqueue_failed viewport={} window={} error={}",
+            context.viewport_id,
+            context.window_label,
+            error
+        );
+    }
     0
 }
 
@@ -1093,9 +1314,16 @@ unsafe extern "C" fn macos_layer_display_link_callback(
     _flags_out: *mut u64,
     display_link_context: *mut std::ffi::c_void,
 ) -> i32 {
+    let callback_ts_ms = now_ms_f64();
     let Some(context) = (display_link_context as *mut MacOsLayerDisplayLinkContext).as_ref() else {
         return 0;
     };
+    log::debug!(
+        "[native_video][timing] pipeline=layer stage=display_link_callback viewport={} window={} callbackTsMs={:.3}",
+        context.viewport_id,
+        context.window_label,
+        callback_ts_ms
+    );
     if context.render_loop_pending.swap(true, Ordering::Relaxed) {
         return 0;
     }
@@ -1108,17 +1336,50 @@ unsafe extern "C" fn macos_layer_display_link_callback(
     let telemetry = context.telemetry.clone();
     let render_loop_pending = context.render_loop_pending.clone();
     let viewport_id = context.viewport_id.clone();
+    let runtime_trace = context.runtime_trace.clone();
     let window_for_task = window.clone();
-    let _ = window.run_on_main_thread(move || {
+    let prepare_outcome = prepare_layer_sample_for_present(
+        &layer_state,
+        &frame_slot,
+        &telemetry,
+        &context.viewport_id,
+        &context.window_label,
+        context.runtime_trace.as_ref(),
+    );
+    if !matches!(prepare_outcome, LayerSamplePrepareOutcome::Prepared) {
+        context.render_loop_pending.store(false, Ordering::Relaxed);
+        return 0;
+    }
+    let dispatch_requested_at_ms = now_ms_f64();
+    if let Err(error) = window.run_on_main_thread(move || {
         run_layer_present_tick(
             &window_for_task,
             &viewport_id,
             &layer_state,
-            &frame_slot,
             &telemetry,
             &render_loop_pending,
+            Some(dispatch_requested_at_ms),
+            runtime_trace,
         );
-    });
+    }) {
+        record_native_video_timing_event(
+            context.runtime_trace.as_ref(),
+            "layer",
+            "run_on_main_thread_enqueue_failed",
+            &context.viewport_id,
+            &context.window_label,
+            serde_json::json!({
+                "error": error.to_string(),
+            }),
+        );
+        context.render_loop_pending.store(false, Ordering::Relaxed);
+        log::warn!(
+            "[native_video][timing] pipeline=layer stage=run_on_main_thread_enqueue_failed viewport={} window={} error={}",
+            context.viewport_id,
+            context.window_label,
+            error
+        );
+    }
     0
 }
 
@@ -1188,52 +1449,135 @@ pub(super) fn run_layer_present_tick(
     window: &Window,
     viewport_id: &str,
     layer_state: &Arc<Mutex<MacOsLayerState>>,
-    frame_slot: &Arc<Mutex<ScheduledFrameSlot>>,
     telemetry: &Arc<Mutex<HostCadenceTelemetry>>,
     render_loop_pending: &Arc<AtomicBool>,
+    dispatch_requested_at_ms: Option<f64>,
+    runtime_trace: Option<RuntimeTraceRecorderRef>,
 ) {
+    let tick_started_at_ms = now_ms_f64();
     let _pending_guard = PendingFlagGuard::new(render_loop_pending.clone());
-    let now_ms = now_ms_f64();
-    let Ok(mut telemetry_state) = telemetry.lock() else {
-        return;
-    };
-    telemetry_state.record_display_tick(now_ms);
-    let Some(frame) = ({
-        let Ok(mut frame_slot_state) = frame_slot.lock() else {
-            return;
-        };
-        frame_slot_state.take_ready_frame(now_ms, &mut telemetry_state)
-    }) else {
-        return;
-    };
-    let XbxEngineRenderPixelData::Descriptor { handle } = &frame.pixel_data else {
-        return;
-    };
-    let Some(descriptor) = handle
-        .as_ref()
-        .downcast_ref::<xbxengine::MacOsCVPixelBufferDescriptor>()
-    else {
-        return;
-    };
-    if descriptor.ptr.is_null() {
-        return;
+    if let Some(dispatch_ms) = dispatch_requested_at_ms {
+        let queue_delay_ms = (tick_started_at_ms - dispatch_ms).max(0.0);
+        if queue_delay_ms >= HOST_TIMING_QUEUE_WARN_MS {
+            record_native_video_timing_event(
+                runtime_trace.as_ref(),
+                "layer",
+                "run_on_main_thread_delay",
+                viewport_id,
+                window.label(),
+                serde_json::json!({
+                    "queueDelayMs": queue_delay_ms,
+                }),
+            );
+            log::warn!(
+                "[native_video][timing] pipeline=layer stage=run_on_main_thread_delay viewport={} window={} queueDelayMs={:.2}",
+                viewport_id,
+                window.label(),
+                queue_delay_ms
+            );
+        }
     }
-    let Ok(mut layer_state) = layer_state.lock() else {
+    let Ok(mut layer_state_guard) = layer_state.lock() else {
+        record_native_video_timing_event(
+            runtime_trace.as_ref(),
+            "layer",
+            "present_tick_failed",
+            viewport_id,
+            window.label(),
+            serde_json::json!({
+                "reason": "layerStateLockFailed",
+            }),
+        );
         return;
     };
-    let Some(layer_ptr) = ensure_display_layer(window, &mut layer_state) else {
+    let Some(layer_ptr) = ensure_display_layer(window, &mut layer_state_guard) else {
+        record_native_video_timing_event(
+            runtime_trace.as_ref(),
+            "layer",
+            "present_tick_blocked",
+            viewport_id,
+            window.label(),
+            serde_json::json!({
+                "reason": "displayLayerUnavailable",
+            }),
+        );
         return;
     };
-    if !layer_state.first_present_logged {
-        layer_state.first_present_logged = true;
+    if !layer_state_guard.first_present_logged {
+        layer_state_guard.first_present_logged = true;
+        record_native_video_timing_event(
+            runtime_trace.as_ref(),
+            "layer",
+            "first_present",
+            viewport_id,
+            window.label(),
+            serde_json::json!({}),
+        );
         log::info!(
             "[native_video][macos] first layer present for viewport={} window={}",
             viewport_id,
             window.label()
         );
     }
-    present_cv_pixelbuffer(layer_ptr, descriptor.ptr, frame.frame_seq);
-    telemetry_state.record_present(now_ms);
+    let Some(prepared_sample) = layer_state_guard.pending_sample.take() else {
+        record_native_video_timing_event(
+            runtime_trace.as_ref(),
+            "layer",
+            "present_tick_blocked",
+            viewport_id,
+            window.label(),
+            serde_json::json!({
+                "reason": "pendingSampleMissing",
+            }),
+        );
+        return;
+    };
+    let sample_frame_seq = prepared_sample.frame_seq;
+    let sample_width = prepared_sample.width;
+    let sample_height = prepared_sample.height;
+    let sample_rendered_at_ms = prepared_sample.rendered_at_ms;
+    let sample_frame_recovery_disposition = prepared_sample.frame_recovery_disposition.clone();
+    let sample_frame_unrecoverable_reason = prepared_sample.frame_unrecoverable_reason.clone();
+    present_cv_pixelbuffer(layer_ptr, prepared_sample);
+    drop(layer_state_guard);
+    let now_ms = now_ms_f64();
+    if let Ok(mut telemetry_state) = telemetry.lock() {
+        telemetry_state.record_present(now_ms);
+    }
+    record_native_video_timing_event(
+        runtime_trace.as_ref(),
+        "layer",
+        "sample_presented",
+        viewport_id,
+        window.label(),
+        serde_json::json!({
+            "frameSeq": sample_frame_seq,
+            "width": sample_width,
+            "height": sample_height,
+            "frameAgeMs": (now_ms - sample_rendered_at_ms).max(0.0),
+            "frameRecoveryDisposition": sample_frame_recovery_disposition,
+            "frameUnrecoverableReason": sample_frame_unrecoverable_reason,
+        }),
+    );
+    let tick_total_ms = (now_ms_f64() - tick_started_at_ms).max(0.0);
+    if tick_total_ms >= HOST_TIMING_TICK_WARN_MS {
+        record_native_video_timing_event(
+            runtime_trace.as_ref(),
+            "layer",
+            "tick_total",
+            viewport_id,
+            window.label(),
+            serde_json::json!({
+                "totalMs": tick_total_ms,
+            }),
+        );
+        log::warn!(
+            "[native_video][timing] pipeline=layer stage=tick_total viewport={} window={} totalMs={:.2}",
+            viewport_id,
+            window.label(),
+            tick_total_ms
+        );
+    }
 }
 
 #[cfg(target_os = "macos")]
@@ -1253,13 +1597,38 @@ pub(super) fn ensure_display_layer(
     if let Some(ptr) = state.display_layer_ptr {
         autoreleasepool(|_| unsafe {
             let bounds: NSRect = msg_send![view, bounds];
+            let bounds_key = ns_rect_to_key(bounds);
+            let bounds_changed = state.last_layer_bounds != Some(bounds_key);
             let ns_window: *mut AnyObject = msg_send![view, window];
+            let mut scale_changed = false;
             if !ns_window.is_null() {
                 let scale_factor: f64 = msg_send![ns_window, backingScaleFactor];
-                let _: () = msg_send![ptr, setContentsScale: scale_factor];
+                scale_changed = should_update_scale(state.last_layer_scale, Some(scale_factor));
+                if scale_changed {
+                    let _: () = msg_send![ptr, setContentsScale: scale_factor];
+                    state.last_layer_scale = Some(scale_factor);
+                }
             }
-            let _: () = msg_send![ptr, setFrame: bounds];
-            let _: () = msg_send![ptr, setNeedsLayout];
+            if bounds_changed {
+                let _: () = msg_send![ptr, setFrame: bounds];
+                state.last_layer_bounds = Some(bounds_key);
+            }
+            if scale_changed || bounds_changed {
+                let _: () = msg_send![ptr, setNeedsLayout];
+                record_native_video_trace(
+                    "layout_updated",
+                    json!({
+                        "scaleChanged": scale_changed,
+                        "boundsChanged": bounds_changed,
+                        "windowLabel": window.label(),
+                    }),
+                );
+                log::debug!(
+                    "[native_video][layer] layout updated scale_changed={} bounds_changed={}",
+                    scale_changed,
+                    bounds_changed
+                );
+            }
         });
         return Some(ptr);
     }
@@ -1293,6 +1662,7 @@ pub(super) fn ensure_display_layer(
             let scale_factor: f64 = msg_send![ns_window, backingScaleFactor];
             let _: () = msg_send![layer, setContentsScale: scale_factor];
             let _: () = msg_send![view_layer, setContentsScale: scale_factor];
+            state.last_layer_scale = Some(scale_factor);
         }
 
         let bounds: NSRect = msg_send![view, bounds];
@@ -1302,6 +1672,13 @@ pub(super) fn ensure_display_layer(
         let _: () = msg_send![layer, setNeedsLayout];
 
         state.display_layer_ptr = Some(layer);
+        state.last_layer_bounds = Some(ns_rect_to_key(bounds));
+        record_native_video_trace(
+            "display_layer_created",
+            json!({
+                "windowLabel": window.label(),
+            }),
+        );
         log::info!("[native_video][macos] display layer created");
     });
 
@@ -1317,6 +1694,10 @@ pub(super) fn drop_display_layer(window: &Window, state: &mut MacOsLayerState) {
     let Some(layer_ptr) = state.display_layer_ptr.take() else {
         return;
     };
+    state.cached_format_desc = None;
+    state.pending_sample = None;
+    state.last_layer_bounds = None;
+    state.last_layer_scale = None;
     let ns_view_ptr = match window.ns_view() {
         Ok(ptr) => ptr as *mut AnyObject,
         Err(_) => return,
@@ -1331,12 +1712,219 @@ pub(super) fn drop_display_layer(window: &Window, state: &mut MacOsLayerState) {
 }
 
 #[cfg(target_os = "macos")]
-pub(super) fn present_cv_pixelbuffer(
-    layer_ptr: *mut objc2::runtime::AnyObject,
-    buffer_ptr: *mut std::ffi::c_void,
-    frame_seq: u64,
-) {
-    use objc2::{msg_send, rc::autoreleasepool};
+pub(super) fn prepare_layer_sample_for_present(
+    layer_state: &Arc<Mutex<MacOsLayerState>>,
+    frame_slot: &Arc<Mutex<ScheduledFrameSlot>>,
+    telemetry: &Arc<Mutex<HostCadenceTelemetry>>,
+    viewport_id: &str,
+    window_label: &str,
+    runtime_trace: Option<&RuntimeTraceRecorderRef>,
+) -> LayerSamplePrepareOutcome {
+    let now_ms = now_ms_f64();
+    let mut telemetry_state = match telemetry.lock() {
+        Ok(state) => state,
+        Err(_) => {
+            record_native_video_timing_event(
+                runtime_trace,
+                "layer",
+                "prepare_sample_failed",
+                viewport_id,
+                window_label,
+                json!({
+                    "reason": "telemetryLockFailed",
+                }),
+            );
+            return LayerSamplePrepareOutcome::Failed;
+        }
+    };
+    telemetry_state.record_display_tick(now_ms);
+    let frame_take_outcome = {
+        let Ok(mut frame_slot_state) = frame_slot.lock() else {
+            record_native_video_timing_event(
+                runtime_trace,
+                "layer",
+                "prepare_sample_failed",
+                viewport_id,
+                window_label,
+                json!({
+                    "reason": "frameSlotLockFailed",
+                }),
+            );
+            return LayerSamplePrepareOutcome::Failed;
+        };
+        frame_slot_state.take_ready_frame(now_ms, &mut telemetry_state)
+    };
+    let frame = match frame_take_outcome {
+        ScheduledFrameTakeOutcome::Ready(frame) => frame,
+        ScheduledFrameTakeOutcome::NoPendingFrame => {
+            record_native_video_timing_event(
+                runtime_trace,
+                "layer",
+                "frame_slot_take_skipped",
+                viewport_id,
+                window_label,
+                json!({
+                    "reason": "noPendingFrame",
+                }),
+            );
+            return LayerSamplePrepareOutcome::SkippedNoReadyFrame;
+        }
+        ScheduledFrameTakeOutcome::RejectedAlreadyPresented {
+            frame_seq,
+            last_presented_frame_seq,
+        } => {
+            record_native_video_timing_event(
+                runtime_trace,
+                "layer",
+                "frame_slot_take_skipped",
+                viewport_id,
+                window_label,
+                json!({
+                    "reason": "frameAlreadyPresented",
+                    "frameSeq": frame_seq,
+                    "lastPresentedFrameSeq": last_presented_frame_seq,
+                }),
+            );
+            return LayerSamplePrepareOutcome::Failed;
+        }
+        ScheduledFrameTakeOutcome::DroppedStale {
+            frame,
+            frame_age_ms,
+            frame_age_budget_ms,
+        } => {
+            record_native_video_timing_event(
+                runtime_trace,
+                "layer",
+                "frame_slot_take_dropped",
+                viewport_id,
+                window_label,
+                json!({
+                    "reason": "scheduledFrameStale",
+                    "frameSeq": frame.frame_seq,
+                    "frameAgeMs": frame_age_ms,
+                    "frameAgeBudgetMs": frame_age_budget_ms,
+                }),
+            );
+            return LayerSamplePrepareOutcome::Failed;
+        }
+    };
+    let frame_age_budget_ms = telemetry_state.frame_age_budget_ms();
+    drop(telemetry_state);
+
+    let XbxEngineRenderPixelData::Descriptor { handle } = &frame.pixel_data else {
+        record_native_video_timing_event(
+            runtime_trace,
+            "layer",
+            "prepare_sample_failed",
+            viewport_id,
+            window_label,
+            json!({
+                "reason": "nonDescriptorPixelData",
+                "frameSeq": frame.frame_seq,
+            }),
+        );
+        return LayerSamplePrepareOutcome::Failed;
+    };
+    let Some(descriptor) = handle
+        .as_ref()
+        .downcast_ref::<MacOsCVPixelBufferDescriptor>()
+    else {
+        record_native_video_timing_event(
+            runtime_trace,
+            "layer",
+            "prepare_sample_failed",
+            viewport_id,
+            window_label,
+            json!({
+                "reason": "nonCvPixelBufferDescriptor",
+                "frameSeq": frame.frame_seq,
+            }),
+        );
+        return LayerSamplePrepareOutcome::Failed;
+    };
+    if descriptor.ptr.is_null() {
+        record_native_video_timing_event(
+            runtime_trace,
+            "layer",
+            "prepare_sample_failed",
+            viewport_id,
+            window_label,
+            json!({
+                "reason": "descriptorPointerNull",
+                "frameSeq": frame.frame_seq,
+            }),
+        );
+        return LayerSamplePrepareOutcome::Failed;
+    }
+    let Ok(mut layer_state_guard) = layer_state.lock() else {
+        record_native_video_timing_event(
+            runtime_trace,
+            "layer",
+            "prepare_sample_failed",
+            viewport_id,
+            window_label,
+            json!({
+                "reason": "layerStateLockFailed",
+                "frameSeq": frame.frame_seq,
+            }),
+        );
+        return LayerSamplePrepareOutcome::Failed;
+    };
+    let replaced_pending_frame_seq = layer_state_guard
+        .pending_sample
+        .as_ref()
+        .map(|sample| sample.frame_seq);
+    let sample_prepare_outcome =
+        prepare_cv_pixelbuffer_sample(&mut layer_state_guard, descriptor, &frame);
+    let (sample, used_cached_format_description) = match sample_prepare_outcome {
+        PreparedLayerSampleOutcome::Prepared {
+            sample,
+            used_cached_format_description,
+        } => (sample, used_cached_format_description),
+        PreparedLayerSampleOutcome::Failed { reason, status } => {
+            record_native_video_timing_event(
+                runtime_trace,
+                "layer",
+                "prepare_sample_failed",
+                viewport_id,
+                window_label,
+                json!({
+                    "reason": reason,
+                    "frameSeq": frame.frame_seq,
+                    "status": status,
+                }),
+            );
+            return LayerSamplePrepareOutcome::Failed;
+        }
+    };
+    layer_state_guard.pending_sample = Some(sample);
+    let frame_age_ms = (now_ms - frame.rendered_at_ms).max(0.0);
+    record_native_video_timing_event(
+        runtime_trace,
+        "layer",
+        "prepare_sample_ready",
+        viewport_id,
+        window_label,
+        json!({
+            "frameSeq": frame.frame_seq,
+            "width": frame.width,
+            "height": frame.height,
+            "frameAgeMs": frame_age_ms,
+            "frameAgeBudgetMs": frame_age_budget_ms,
+            "usedCachedFormatDescription": used_cached_format_description,
+            "replacedPendingFrameSeq": replaced_pending_frame_seq,
+        }),
+    );
+    LayerSamplePrepareOutcome::Prepared
+}
+
+#[cfg(target_os = "macos")]
+fn prepare_cv_pixelbuffer_sample(
+    layer_state: &mut MacOsLayerState,
+    descriptor: &MacOsCVPixelBufferDescriptor,
+    frame: &XbxEngineRenderFrame,
+) -> PreparedLayerSampleOutcome {
+    use objc2::rc::autoreleasepool;
     use std::ffi::c_void;
     use std::ptr;
 
@@ -1355,16 +1943,15 @@ pub(super) fn present_cv_pixelbuffer(
         decode_time_stamp: CMTime,
     }
 
+    type OSStatus = i32;
+    const DEFAULT_TIMESCALE: i32 = 60;
+    const K_CM_TIME_FLAGS_VALID: u32 = 1;
     const K_CM_TIME_INVALID: CMTime = CMTime {
         value: 0,
         timescale: 0,
         flags: 0,
         epoch: 0,
     };
-    const K_CM_TIME_FLAGS_VALID: u32 = 1;
-    const DEFAULT_TIMESCALE: i32 = 60;
-
-    type OSStatus = i32;
 
     #[link(name = "CoreMedia", kind = "framework")]
     extern "C" {
@@ -1385,61 +1972,293 @@ pub(super) fn present_cv_pixelbuffer(
         ) -> OSStatus;
     }
 
-    #[link(name = "CoreFoundation", kind = "framework")]
+    #[link(name = "CoreVideo", kind = "framework")]
     extern "C" {
-        fn CFRelease(cf: *mut c_void);
+        fn CVPixelBufferGetPixelFormatType(pixel_buffer: *mut c_void) -> u32;
     }
 
-    #[link(name = "AVFoundation", kind = "framework")]
-    extern "C" {}
-
-    #[link(name = "QuartzCore", kind = "framework")]
-    extern "C" {}
+    let key = FormatDescriptionCacheKey {
+        width: frame.width,
+        height: frame.height,
+        pixel_format: unsafe { CVPixelBufferGetPixelFormatType(descriptor.ptr) },
+        color_matrix: descriptor.color_matrix,
+        color_primaries: descriptor.color_primaries,
+        transfer_function: descriptor.transfer_function,
+        color_range: descriptor.color_range,
+        chroma_location: descriptor.chroma_location,
+    };
 
     autoreleasepool(|_| unsafe {
-        let mut format_desc: *mut c_void = ptr::null_mut();
-        let status =
-            CMVideoFormatDescriptionCreateForImageBuffer(ptr::null(), buffer_ptr, &mut format_desc);
-        if status != 0 || format_desc.is_null() {
-            return;
+        let mut used_cached_format_description = false;
+        let format_desc_ptr = if layer_state
+            .cached_format_desc
+            .as_ref()
+            .is_some_and(|cached| cached.key == key)
+        {
+            used_cached_format_description = true;
+            layer_state
+                .cached_format_desc
+                .as_ref()
+                .map(|cached| cached.format_description.as_ptr())
+                .unwrap_or(ptr::null_mut())
+        } else {
+            let mut format_desc: *mut c_void = ptr::null_mut();
+            let status = CMVideoFormatDescriptionCreateForImageBuffer(
+                ptr::null(),
+                descriptor.ptr,
+                &mut format_desc,
+            );
+            if status != 0 || format_desc.is_null() {
+                return PreparedLayerSampleOutcome::Failed {
+                    reason: "formatDescriptionCreateFailed",
+                    status: Some(status),
+                };
+            }
+            let Some(cached_desc) = CoreFoundationOwnedRef::new(format_desc) else {
+                return PreparedLayerSampleOutcome::Failed {
+                    reason: "formatDescriptionCacheRefInvalid",
+                    status: None,
+                };
+            };
+            layer_state.cached_format_desc = Some(CachedFormatDescription {
+                key,
+                format_description: cached_desc,
+            });
+            layer_state
+                .cached_format_desc
+                .as_ref()
+                .map(|cached| cached.format_description.as_ptr())
+                .unwrap_or(ptr::null_mut())
+        };
+        if format_desc_ptr.is_null() {
+            return PreparedLayerSampleOutcome::Failed {
+                reason: "formatDescriptionUnavailable",
+                status: None,
+            };
         }
 
-        let pts = CMTime {
-            value: frame_seq as i64,
-            timescale: DEFAULT_TIMESCALE,
-            flags: K_CM_TIME_FLAGS_VALID,
-            epoch: 0,
-        };
-        let duration = CMTime {
-            value: 1,
-            timescale: DEFAULT_TIMESCALE,
-            flags: K_CM_TIME_FLAGS_VALID,
-            epoch: 0,
-        };
         let timing = CMSampleTimingInfo {
-            duration,
-            presentation_time_stamp: pts,
+            duration: CMTime {
+                value: 1,
+                timescale: DEFAULT_TIMESCALE,
+                flags: K_CM_TIME_FLAGS_VALID,
+                epoch: 0,
+            },
+            presentation_time_stamp: CMTime {
+                value: frame.frame_seq as i64,
+                timescale: DEFAULT_TIMESCALE,
+                flags: K_CM_TIME_FLAGS_VALID,
+                epoch: 0,
+            },
             decode_time_stamp: K_CM_TIME_INVALID,
         };
         let mut sample_buffer: *mut c_void = ptr::null_mut();
         let status = CMSampleBufferCreateForImageBuffer(
             ptr::null(),
-            buffer_ptr,
+            descriptor.ptr,
             true,
             ptr::null(),
             ptr::null(),
-            format_desc,
+            format_desc_ptr,
             &timing,
             &mut sample_buffer,
         );
-        if status == 0 && !sample_buffer.is_null() {
-            let _: () = msg_send![layer_ptr, enqueueSampleBuffer: sample_buffer];
+        if status != 0 || sample_buffer.is_null() {
+            return PreparedLayerSampleOutcome::Failed {
+                reason: "sampleBufferCreateFailed",
+                status: Some(status),
+            };
         }
-        if !sample_buffer.is_null() {
-            CFRelease(sample_buffer);
+        let Some(sample_ref) = CoreFoundationOwnedRef::new(sample_buffer) else {
+            return PreparedLayerSampleOutcome::Failed {
+                reason: "sampleBufferRefInvalid",
+                status: None,
+            };
+        };
+        PreparedLayerSampleOutcome::Prepared {
+            sample: PreparedLayerSample {
+                frame_seq: frame.frame_seq,
+                width: frame.width,
+                height: frame.height,
+                rendered_at_ms: frame.rendered_at_ms,
+                frame_recovery_disposition: frame.frame_recovery_disposition.clone(),
+                frame_unrecoverable_reason: frame.frame_unrecoverable_reason.clone(),
+                sample_buffer: sample_ref,
+            },
+            used_cached_format_description,
         }
-        if !format_desc.is_null() {
-            CFRelease(format_desc);
-        }
+    })
+}
+
+#[cfg(target_os = "macos")]
+pub(super) fn present_cv_pixelbuffer(
+    layer_ptr: *mut objc2::runtime::AnyObject,
+    prepared_sample: PreparedLayerSample,
+) {
+    use objc2::{msg_send, rc::autoreleasepool};
+
+    autoreleasepool(|_| unsafe {
+        let _: () =
+            msg_send![layer_ptr, enqueueSampleBuffer: prepared_sample.sample_buffer.as_ptr()];
     });
+}
+
+#[cfg(target_os = "macos")]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct FormatDescriptionCacheKey {
+    width: u32,
+    height: u32,
+    pixel_format: u32,
+    color_matrix: MacOsVideoColorMatrix,
+    color_primaries: MacOsVideoColorPrimaries,
+    transfer_function: MacOsVideoTransferFunction,
+    color_range: MacOsVideoColorRange,
+    chroma_location: MacOsVideoChromaLocation,
+}
+
+#[cfg(target_os = "macos")]
+#[derive(Debug)]
+struct CachedFormatDescription {
+    key: FormatDescriptionCacheKey,
+    format_description: CoreFoundationOwnedRef,
+}
+
+#[cfg(target_os = "macos")]
+#[derive(Debug)]
+pub(super) struct PreparedLayerSample {
+    frame_seq: u64,
+    width: u32,
+    height: u32,
+    rendered_at_ms: f64,
+    frame_recovery_disposition: Option<String>,
+    frame_unrecoverable_reason: Option<String>,
+    sample_buffer: CoreFoundationOwnedRef,
+}
+
+#[cfg(target_os = "macos")]
+#[derive(Debug)]
+pub(super) enum PreparedLayerSampleOutcome {
+    Prepared {
+        sample: PreparedLayerSample,
+        used_cached_format_description: bool,
+    },
+    Failed {
+        reason: &'static str,
+        status: Option<i32>,
+    },
+}
+
+#[cfg(target_os = "macos")]
+#[derive(Debug)]
+pub(super) enum LayerSamplePrepareOutcome {
+    Prepared,
+    SkippedNoReadyFrame,
+    Failed,
+}
+
+#[cfg(target_os = "macos")]
+#[derive(Debug)]
+struct CoreFoundationOwnedRef {
+    ptr: *mut std::ffi::c_void,
+}
+
+#[cfg(target_os = "macos")]
+impl CoreFoundationOwnedRef {
+    fn new(ptr: *mut std::ffi::c_void) -> Option<Self> {
+        if ptr.is_null() {
+            return None;
+        }
+        Some(Self { ptr })
+    }
+
+    fn as_ptr(&self) -> *mut std::ffi::c_void {
+        self.ptr
+    }
+}
+
+#[cfg(target_os = "macos")]
+impl Drop for CoreFoundationOwnedRef {
+    fn drop(&mut self) {
+        unsafe {
+            CFRelease(self.ptr);
+        }
+    }
+}
+
+#[cfg(target_os = "macos")]
+unsafe impl Send for CoreFoundationOwnedRef {}
+
+#[cfg(target_os = "macos")]
+fn ns_rect_to_key(rect: objc2_foundation::NSRect) -> [f64; 4] {
+    [
+        rect.origin.x as f64,
+        rect.origin.y as f64,
+        rect.size.width as f64,
+        rect.size.height as f64,
+    ]
+}
+
+#[cfg(target_os = "macos")]
+fn should_update_scale(previous: Option<f64>, current: Option<f64>) -> bool {
+    match (previous, current) {
+        (None, Some(_)) => true,
+        (Some(_), None) => true,
+        (Some(prev), Some(cur)) => (prev - cur).abs() > 0.001,
+        (None, None) => false,
+    }
+}
+
+#[cfg(all(test, target_os = "macos"))]
+mod tests {
+    use super::{should_update_scale, MacOsWgpuTelemetry};
+
+    #[test]
+    fn scale_update_ignores_tiny_jitter() {
+        assert!(!should_update_scale(Some(2.0), Some(2.0005)));
+    }
+
+    #[test]
+    fn scale_update_detects_real_change() {
+        assert!(should_update_scale(Some(2.0), Some(2.01)));
+    }
+
+    #[test]
+    fn scale_update_detects_presence_change() {
+        assert!(should_update_scale(None, Some(2.0)));
+        assert!(should_update_scale(Some(2.0), None));
+    }
+
+    #[test]
+    fn wgpu_no_pending_streak_accumulates_and_tracks_max() {
+        let mut telemetry = MacOsWgpuTelemetry::default();
+        telemetry.record_no_pending_take();
+        telemetry.record_no_pending_take();
+        telemetry.record_no_pending_take();
+        assert_eq!(telemetry.no_pending_take_count_total, 3);
+        assert_eq!(telemetry.no_pending_streak, 3);
+        assert_eq!(telemetry.no_pending_max_streak, 3);
+    }
+
+    #[test]
+    fn wgpu_clear_no_pending_streak_keeps_max_value() {
+        let mut telemetry = MacOsWgpuTelemetry::default();
+        telemetry.record_no_pending_take();
+        telemetry.record_no_pending_take();
+        telemetry.clear_no_pending_streak();
+        telemetry.record_no_pending_take();
+        assert_eq!(telemetry.no_pending_take_count_total, 3);
+        assert_eq!(telemetry.no_pending_streak, 1);
+        assert_eq!(telemetry.no_pending_max_streak, 2);
+    }
+
+    #[test]
+    fn wgpu_reset_frame_slot_clears_no_pending_counters() {
+        let mut telemetry = MacOsWgpuTelemetry::default();
+        telemetry.record_no_pending_take();
+        telemetry.record_no_pending_take();
+        telemetry.reset_frame_slot();
+        assert_eq!(telemetry.no_pending_take_count_total, 0);
+        assert_eq!(telemetry.no_pending_streak, 0);
+        assert_eq!(telemetry.no_pending_max_streak, 0);
+    }
 }

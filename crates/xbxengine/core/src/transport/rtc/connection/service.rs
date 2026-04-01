@@ -1,6 +1,7 @@
-use std::sync::{Arc, Mutex};
-
+use rtc::rtcp::payload_feedbacks::full_intra_request::{FirEntry, FullIntraRequest};
+use rtc::rtcp::payload_feedbacks::picture_loss_indication::PictureLossIndication;
 use rtc::rtcp::payload_feedbacks::receiver_estimated_maximum_bitrate::ReceiverEstimatedMaximumBitrate;
+use std::sync::{Arc, Mutex};
 
 use crate::api::runtime::XbxEngineWebRtcRuntimeConfig;
 use crate::runtime_stats_sink::RuntimeStatsSink;
@@ -20,6 +21,25 @@ use crate::transport::rtc::events::RtcConnectionLifecycleState;
 use crate::transport::rtc::facts::TransportFact;
 use crate::transport::rtc::stream::{RtcMediaIngressPacket, RtcRtpPacketMeta};
 use crate::{XbxEngineMediaRuntimeStats, XbxEngineRuntimeError};
+
+const VIDEO_RECOVERY_PLI_TO_FIR_MIN_DELAY_MS: f64 = 180.0;
+const VIDEO_RECOVERY_FIR_TO_CONTROL_MIN_DELAY_MS: f64 = 360.0;
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+enum VideoRecoveryTransportStage {
+    #[default]
+    None,
+    PictureLossIndication,
+    FullIntraRequest,
+    ControlKeyframe,
+}
+
+#[derive(Clone, Debug, Default)]
+pub(super) struct VideoRecoveryTransportState {
+    recovery_epoch: u64,
+    stage: VideoRecoveryTransportStage,
+    last_sent_at_ms: Option<f64>,
+}
 
 pub(crate) struct RtcConnectionService {
     pub(super) state: Arc<Mutex<RtcConnectionRuntimeState>>,
@@ -50,6 +70,7 @@ pub(crate) struct RtcConnectionService {
     pub(super) target_remb_request_count: u64,
     pub(super) last_selected_pair_diagnostic: Option<String>,
     pub(super) selected_pair_snapshot_emitted: bool,
+    pub(super) video_recovery_transport_state: VideoRecoveryTransportState,
 }
 
 impl Default for RtcConnectionService {
@@ -84,6 +105,7 @@ impl Default for RtcConnectionService {
             target_remb_request_count: 0,
             last_selected_pair_diagnostic: None,
             selected_pair_snapshot_emitted: false,
+            video_recovery_transport_state: VideoRecoveryTransportState::default(),
         }
     }
 }
@@ -101,6 +123,8 @@ impl RtcConnectionService {
     pub(crate) fn sync_runtime_config(&mut self, runtime_config: XbxEngineWebRtcRuntimeConfig) {
         self.controlled_twcc_feedback
             .set_feedback_interval(runtime_config.video_pipeline.feedback_interval_ms);
+        self.io_runtime
+            .set_prefer_ipv6(runtime_config.negotiation.prefer_ipv6);
         self.webrtc_runtime_config = runtime_config;
     }
 
@@ -112,15 +136,7 @@ impl RtcConnectionService {
         &mut self,
         runtime_stats: &Arc<Mutex<XbxEngineMediaRuntimeStats>>,
     ) -> Result<(), XbxEngineRuntimeError> {
-        if let Err(error) = self.control_service.request_video_keyframe() {
-            return Err(error);
-        }
-        self.send_control_payload(
-            build_control_keyframe_request_payload(),
-            "rtcControlKeyframeRequested",
-            "phase1 rtc control keyframe requested",
-            runtime_stats,
-        )
+        self.request_video_recovery_keyframe(runtime_stats)
     }
 
     pub(crate) fn request_decoder_reset(
@@ -136,6 +152,294 @@ impl RtcConnectionService {
             "phase1 rtc control decoder reset requested",
             runtime_stats,
         )
+    }
+
+    fn request_video_recovery_keyframe(
+        &mut self,
+        runtime_stats: &Arc<Mutex<XbxEngineMediaRuntimeStats>>,
+    ) -> Result<(), XbxEngineRuntimeError> {
+        self.sync_video_recovery_transport_state(runtime_stats);
+        match self.resolve_video_recovery_transport_stage(runtime_stats) {
+            VideoRecoveryTransportStage::None => {
+                self.record_video_recovery_observation(
+                    runtime_stats,
+                    "rtcVideoRecoverySuppressed",
+                    "phase1 rtc video recovery suppressed by active clean anchor or duplicate stage",
+                );
+                Ok(())
+            }
+            VideoRecoveryTransportStage::PictureLossIndication => {
+                if self
+                    .send_video_picture_loss_indication(runtime_stats)
+                    .is_ok()
+                {
+                    self.control_service.clear_pending_keyframe_request();
+                    self.video_recovery_transport_state.stage =
+                        VideoRecoveryTransportStage::PictureLossIndication;
+                    self.video_recovery_transport_state.last_sent_at_ms =
+                        Some(crate::transport::rtc::stats::now_ms_f64());
+                    return Ok(());
+                }
+                self.send_control_keyframe_request(runtime_stats, "rtcVideoPliFallbackControl")
+            }
+            VideoRecoveryTransportStage::FullIntraRequest => {
+                if self.send_video_full_intra_request(runtime_stats).is_ok() {
+                    self.control_service.clear_pending_keyframe_request();
+                    self.video_recovery_transport_state.stage =
+                        VideoRecoveryTransportStage::FullIntraRequest;
+                    self.video_recovery_transport_state.last_sent_at_ms =
+                        Some(crate::transport::rtc::stats::now_ms_f64());
+                    return Ok(());
+                }
+                self.send_control_keyframe_request(runtime_stats, "rtcVideoFirFallbackControl")
+            }
+            VideoRecoveryTransportStage::ControlKeyframe => {
+                self.send_control_keyframe_request(runtime_stats, "rtcControlKeyframeRequested")
+            }
+        }
+    }
+
+    fn resolve_video_recovery_transport_stage(
+        &mut self,
+        runtime_stats: &Arc<Mutex<XbxEngineMediaRuntimeStats>>,
+    ) -> VideoRecoveryTransportStage {
+        let now_ms = crate::transport::rtc::stats::now_ms_f64();
+        let (current_epoch, clean_anchor_epoch, supports_pli, supports_fir) =
+            RuntimeStatsSink::read_shared(runtime_stats, |stats| {
+                let supported = stats
+                    .latest_remote_answer_observation
+                    .as_ref()
+                    .map(|observation| {
+                        let pli_supported = observation
+                            .accepted_video_rtcp_feedback
+                            .iter()
+                            .any(|feedback| feedback == "nack:pli");
+                        let fir_supported = observation
+                            .accepted_video_rtcp_feedback
+                            .iter()
+                            .any(|feedback| feedback == "ccm:fir");
+                        (pli_supported, fir_supported)
+                    })
+                    .unwrap_or((false, false));
+                (
+                    stats.transport_recovery_epoch,
+                    stats.video_anchor_clean_epoch,
+                    supported.0,
+                    supported.1,
+                )
+            })
+            .unwrap_or((0, None, false, false));
+
+        if self.video_recovery_transport_state.recovery_epoch != current_epoch {
+            self.video_recovery_transport_state = VideoRecoveryTransportState {
+                recovery_epoch: current_epoch,
+                ..Default::default()
+            };
+        }
+
+        if clean_anchor_epoch == Some(current_epoch) {
+            self.video_recovery_transport_state.stage = VideoRecoveryTransportStage::None;
+            self.video_recovery_transport_state.last_sent_at_ms = None;
+            return VideoRecoveryTransportStage::None;
+        }
+
+        let elapsed_ms = self
+            .video_recovery_transport_state
+            .last_sent_at_ms
+            .map(|last| (now_ms - last).max(0.0))
+            .unwrap_or(f64::INFINITY);
+        match self.video_recovery_transport_state.stage {
+            VideoRecoveryTransportStage::None => {
+                if supports_pli {
+                    VideoRecoveryTransportStage::PictureLossIndication
+                } else if supports_fir {
+                    VideoRecoveryTransportStage::FullIntraRequest
+                } else {
+                    VideoRecoveryTransportStage::ControlKeyframe
+                }
+            }
+            VideoRecoveryTransportStage::PictureLossIndication => {
+                if supports_fir && elapsed_ms >= VIDEO_RECOVERY_PLI_TO_FIR_MIN_DELAY_MS {
+                    VideoRecoveryTransportStage::FullIntraRequest
+                } else if !supports_fir && elapsed_ms >= VIDEO_RECOVERY_PLI_TO_FIR_MIN_DELAY_MS {
+                    VideoRecoveryTransportStage::ControlKeyframe
+                } else {
+                    VideoRecoveryTransportStage::None
+                }
+            }
+            VideoRecoveryTransportStage::FullIntraRequest => {
+                if elapsed_ms >= VIDEO_RECOVERY_FIR_TO_CONTROL_MIN_DELAY_MS {
+                    VideoRecoveryTransportStage::ControlKeyframe
+                } else {
+                    VideoRecoveryTransportStage::None
+                }
+            }
+            VideoRecoveryTransportStage::ControlKeyframe => VideoRecoveryTransportStage::None,
+        }
+    }
+
+    fn send_video_picture_loss_indication(
+        &mut self,
+        runtime_stats: &Arc<Mutex<XbxEngineMediaRuntimeStats>>,
+    ) -> Result<(), XbxEngineRuntimeError> {
+        let Some((receiver_id, media_ssrc)) = self
+            .controlled_twcc_feedback
+            .preferred_video_feedback_target()
+        else {
+            return Err(XbxEngineRuntimeError::new(
+                "xbxEngineRtcVideoPliFeedbackTargetUnavailable",
+            ));
+        };
+        let Some(media_ssrc) = media_ssrc else {
+            return Err(XbxEngineRuntimeError::new(
+                "xbxEngineRtcVideoPliMediaSsrcUnavailable",
+            ));
+        };
+        let Some(peer_connection) = self.peer_connection.as_mut() else {
+            return Err(XbxEngineRuntimeError::new(
+                "xbxEngineRtcPeerConnectionUnavailable",
+            ));
+        };
+        let Some(mut receiver) = peer_connection.rtp_receiver(receiver_id) else {
+            return Err(XbxEngineRuntimeError::new(
+                "xbxEngineRtcReceiverLookupFailedForVideoPli",
+            ));
+        };
+        let pli = PictureLossIndication {
+            sender_ssrc: 0,
+            media_ssrc,
+        };
+        receiver.write_rtcp(vec![Box::new(pli)]).map_err(|err| {
+            XbxEngineRuntimeError::new(format!("xbxEngineRtcWriteVideoPliFailed: {err}"))
+        })?;
+        self.record_video_recovery_observation(
+            runtime_stats,
+            "rtcVideoPliRequested",
+            &format!(
+                "phase1 rtc video PLI requested mediaSsrc={media_ssrc} receiverId={receiver_id:?}",
+            ),
+        );
+        RuntimeStatsSink::new(runtime_stats.clone()).update(|stats| {
+            stats.video_pli_request_count_total =
+                stats.video_pli_request_count_total.saturating_add(1);
+        });
+        Ok(())
+    }
+
+    fn send_video_full_intra_request(
+        &mut self,
+        runtime_stats: &Arc<Mutex<XbxEngineMediaRuntimeStats>>,
+    ) -> Result<(), XbxEngineRuntimeError> {
+        let Some((receiver_id, media_ssrc)) = self
+            .controlled_twcc_feedback
+            .preferred_video_feedback_target()
+        else {
+            return Err(XbxEngineRuntimeError::new(
+                "xbxEngineRtcVideoFirFeedbackTargetUnavailable",
+            ));
+        };
+        let Some(media_ssrc) = media_ssrc else {
+            return Err(XbxEngineRuntimeError::new(
+                "xbxEngineRtcVideoFirMediaSsrcUnavailable",
+            ));
+        };
+        let Some(peer_connection) = self.peer_connection.as_mut() else {
+            return Err(XbxEngineRuntimeError::new(
+                "xbxEngineRtcPeerConnectionUnavailable",
+            ));
+        };
+        let Some(mut receiver) = peer_connection.rtp_receiver(receiver_id) else {
+            return Err(XbxEngineRuntimeError::new(
+                "xbxEngineRtcReceiverLookupFailedForVideoFir",
+            ));
+        };
+        let fir = FullIntraRequest {
+            sender_ssrc: 0,
+            media_ssrc,
+            fir: vec![FirEntry {
+                ssrc: media_ssrc,
+                sequence_number: 1,
+            }],
+        };
+        receiver.write_rtcp(vec![Box::new(fir)]).map_err(|err| {
+            XbxEngineRuntimeError::new(format!("xbxEngineRtcWriteVideoFirFailed: {err}"))
+        })?;
+        self.record_video_recovery_observation(
+            runtime_stats,
+            "rtcVideoFirRequested",
+            &format!(
+                "phase1 rtc video FIR requested mediaSsrc={media_ssrc} receiverId={receiver_id:?}",
+            ),
+        );
+        RuntimeStatsSink::new(runtime_stats.clone()).update(|stats| {
+            stats.video_pli_request_count_total =
+                stats.video_pli_request_count_total.saturating_add(1);
+        });
+        Ok(())
+    }
+
+    fn send_control_keyframe_request(
+        &mut self,
+        runtime_stats: &Arc<Mutex<XbxEngineMediaRuntimeStats>>,
+        observation_label: &str,
+    ) -> Result<(), XbxEngineRuntimeError> {
+        let result = self.control_service.request_video_keyframe();
+        self.video_recovery_transport_state.stage = VideoRecoveryTransportStage::ControlKeyframe;
+        self.video_recovery_transport_state.last_sent_at_ms =
+            Some(crate::transport::rtc::stats::now_ms_f64());
+        if let Err(error) = result {
+            self.record_video_recovery_observation(
+                runtime_stats,
+                observation_label,
+                "phase1 rtc control keyframe queued for replay",
+            );
+            RuntimeStatsSink::new(runtime_stats.clone()).update(|stats| {
+                stats.video_pli_request_count_total =
+                    stats.video_pli_request_count_total.saturating_add(1);
+            });
+            return Err(error);
+        }
+        self.send_control_payload(
+            build_control_keyframe_request_payload(),
+            observation_label,
+            "phase1 rtc control keyframe requested",
+            runtime_stats,
+        )?;
+        self.video_recovery_transport_state.stage = VideoRecoveryTransportStage::ControlKeyframe;
+        self.video_recovery_transport_state.last_sent_at_ms =
+            Some(crate::transport::rtc::stats::now_ms_f64());
+        RuntimeStatsSink::new(runtime_stats.clone()).update(|stats| {
+            stats.video_pli_request_count_total =
+                stats.video_pli_request_count_total.saturating_add(1);
+        });
+        Ok(())
+    }
+
+    fn record_video_recovery_observation(
+        &self,
+        runtime_stats: &Arc<Mutex<XbxEngineMediaRuntimeStats>>,
+        label: &str,
+        summary: &str,
+    ) {
+        RuntimeStatsSink::new(runtime_stats.clone()).update(|stats| {
+            stats.latest_observation_label = Some(label.to_string());
+            stats.latest_observation_summary = Some(summary.to_string());
+        });
+    }
+
+    fn sync_video_recovery_transport_state(
+        &mut self,
+        runtime_stats: &Arc<Mutex<XbxEngineMediaRuntimeStats>>,
+    ) {
+        let current_epoch =
+            RuntimeStatsSink::read_shared(runtime_stats, |stats| stats.transport_recovery_epoch)
+                .unwrap_or(0);
+        if self.video_recovery_transport_state.recovery_epoch != current_epoch {
+            self.video_recovery_transport_state = VideoRecoveryTransportState {
+                recovery_epoch: current_epoch,
+                ..Default::default()
+            };
+        }
     }
 
     pub(crate) fn request_target_remb_kbps(
@@ -248,7 +552,7 @@ impl RtcConnectionService {
         } else if let Some(target_kbps) =
             desired_target_remb_kbps(runtime_stats).or(self.active_target_remb_kbps)
         {
-            if self.should_refresh_target_remb(target_kbps, runtime_stats) {
+            if self.should_refresh_target_remb(target_kbps) {
                 let _ = self.request_target_remb_kbps(target_kbps, runtime_stats);
             }
         }
@@ -295,46 +599,8 @@ fn desired_target_remb_kbps(runtime_stats: &Arc<Mutex<XbxEngineMediaRuntimeStats
 }
 
 impl RtcConnectionService {
-    fn should_refresh_target_remb(
-        &self,
-        target_kbps: u32,
-        runtime_stats: &Arc<Mutex<XbxEngineMediaRuntimeStats>>,
-    ) -> bool {
-        if self.last_target_remb_requested_kbps != Some(target_kbps) {
-            return true;
-        }
-        let base_interval_ms = self
-            .webrtc_runtime_config
-            .video_pipeline
-            .feedback_interval_ms
-            .max(100);
-        let pressure_interval_ms = (base_interval_ms / 2).clamp(100, base_interval_ms);
-        let refresh_interval_ms = RuntimeStatsSink::read_shared(runtime_stats, |stats| {
-            let now_ms = crate::transport::rtc::stats::now_ms_f64();
-            let recent_gap = stats
-                .latest_video_packet_gap
-                .as_ref()
-                .is_some_and(|gap| (now_ms - gap.observed_at_ms).max(0.0) <= 250.0);
-            let recent_nack = stats
-                .latest_video_nack_observation
-                .as_ref()
-                .is_some_and(|nack| (now_ms - nack.observed_at_ms).max(0.0) <= 350.0);
-            if stats.video_pending_missing_packets > 0
-                || stats.recovery_coupling_mode.as_deref() == Some("waitingKeyframe")
-                || recent_gap
-                || recent_nack
-            {
-                pressure_interval_ms
-            } else {
-                base_interval_ms
-            }
-        })
-        .unwrap_or(base_interval_ms);
-        let Some(last_request_at_ms) = self.last_target_remb_request_at_ms else {
-            return true;
-        };
-        (crate::transport::rtc::stats::now_ms_f64() - last_request_at_ms).max(0.0)
-            >= refresh_interval_ms as f64
+    fn should_refresh_target_remb(&self, target_kbps: u32) -> bool {
+        self.last_target_remb_requested_kbps != Some(target_kbps)
     }
 }
 

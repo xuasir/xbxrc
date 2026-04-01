@@ -18,7 +18,10 @@ use crate::{
     XbxEngineRecoverySignals, XbxEngineTransportSignal,
 };
 
-const ICE_EXCHANGE_TIMEOUT_MS_MIN: f64 = 5_000.0;
+const ICE_EXCHANGE_TIMEOUT_MS_MIN: f64 = 10_000.0;
+const ICE_EXCHANGE_TIMEOUT_MS_MAX: f64 = 12_000.0;
+const ICE_EXCHANGE_STABLE_SETTLE_WINDOW_MS: f64 = 1_500.0;
+const TRANSPORT_RECONNECT_CANDIDATE_MIN_INTERVAL_MS: f64 = 6_000.0;
 
 impl<THostBridge, TEventSink, TMediaBackend>
     XbxEngineRuntime<THostBridge, TEventSink, TMediaBackend>
@@ -167,7 +170,15 @@ where
         self.sync_video_packet_stats(&runtime_stats);
         self.sync_video_frame_stats(&runtime_stats);
         self.drive_pending_gamepad_rumble_requests();
+        if self.maybe_handle_terminal_session_kick(&runtime_stats) {
+            return;
+        }
         if self.maybe_consume_pending_runtime_recovery_action(&runtime_stats) {
+            return;
+        }
+        // rust-owned 模式下，恢复动作统一由 transport session policy 主链裁决并执行；
+        // runtime lifecycle 不再并行发 keyframe/reset/reconnect，避免双轨决策。
+        if self.recovery_actions_owned_by_transport_policy() {
             return;
         }
         if self.drive_runtime_recovery_action(&runtime_stats) {
@@ -175,12 +186,29 @@ where
         }
     }
 
+    fn recovery_actions_owned_by_transport_policy(&self) -> bool {
+        self.config.runtime_name == "rust-owned"
+    }
+
     fn maybe_consume_pending_runtime_recovery_action(
         &mut self,
         runtime_stats: &crate::XbxEngineMediaRuntimeStats,
     ) -> bool {
-        // transport 对外仍只暴露标准状态枚举；recovering 需要结合连接态和观测标签判断。
-        if !runtime_stats_indicate_transport_recovering(runtime_stats) {
+        if matches!(self.state, XbxEngineRuntimeState::Reconnecting) {
+            self.snapshot.last_recovery_reason =
+                Some("transportReconnectCandidateDeferred:reconnecting".to_string());
+            return false;
+        }
+        if self.snapshot.last_recovery_action.as_deref() == Some("reconnect")
+            && self
+                .snapshot
+                .last_recovery_action_at_ms
+                .is_some_and(|last_at_ms| {
+                    now_ms_f64() - last_at_ms < TRANSPORT_RECONNECT_CANDIDATE_MIN_INTERVAL_MS
+                })
+        {
+            self.snapshot.last_recovery_reason =
+                Some("transportReconnectCandidateDeferred:cooldown".to_string());
             return false;
         }
         let Ok(action) = self.media_backend.take_pending_runtime_recovery_action() else {
@@ -195,6 +223,14 @@ where
                 ..
             } => reason,
         };
+        // 只要 transport 已经产出 pending reconnect candidate，就应立即消费执行，
+        // 不能再依赖外层连接态门控，否则会出现“已决策但不落地”。
+        self.snapshot.last_recovery_action = Some("reconnectCandidateConsumed".to_string());
+        self.snapshot.last_recovery_action_at_ms = Some(now_ms_f64());
+        self.snapshot.last_recovery_reason = Some(format!(
+            "transportReconnectCandidateConsumed:{reason}:transportRecovering={}",
+            runtime_stats_indicate_transport_recovering(runtime_stats)
+        ));
         if let Err(error) = self.request_reconnect(XbxEngineReconnectReasonDto::MediaStalled) {
             if !error.is_cancelled() {
                 if is_terminal_remote_session_inactive_error(&error) {
@@ -219,6 +255,29 @@ where
             self.snapshot.last_recovery_reason =
                 Some(format!("transportReconnectCandidate:{reason}"));
         }
+        true
+    }
+
+    fn maybe_handle_terminal_session_kick(
+        &mut self,
+        runtime_stats: &crate::XbxEngineMediaRuntimeStats,
+    ) -> bool {
+        if runtime_stats.latest_observation_label.as_deref()
+            != Some("rtcSessionKickedForClosedGame")
+        {
+            return false;
+        }
+        self.snapshot.last_recovery_action = Some("sessionKickedStop".to_string());
+        self.snapshot.last_recovery_action_at_ms = Some(now_ms_f64());
+        self.snapshot.last_recovery_reason = Some("sessionKicked:KickForClosedGame".to_string());
+        self.emit_error(
+            "recoverTransportSessionKickedForClosedGame",
+            runtime_stats
+                .latest_observation_summary
+                .clone()
+                .unwrap_or_else(|| "kick reason=KickForClosedGame".to_string()),
+        );
+        self.stop();
         true
     }
 
@@ -493,6 +552,7 @@ where
                 self.config.webrtc.negotiation.audio_bitrate_kbps = audio_bitrate_kbps;
             }
             self.config.webrtc.negotiation.force_mono_audio = runtime.force_mono_audio;
+            self.config.webrtc.negotiation.prefer_ipv6 = runtime.prefer_ipv6;
             self.config.webrtc.negotiation.target_resolution_width = runtime.target_video_width;
             self.config.webrtc.negotiation.target_resolution_height = runtime.target_video_height;
             self.config.webrtc.forced_remb_kbps = runtime.forced_remb_kbps;
@@ -668,6 +728,10 @@ where
         let mut aggregated_remote_candidates = Vec::new();
         let mut remote_end_of_candidates_seen = false;
         let mut submitted_local_candidates = false;
+        let mut submitted_local_end_of_candidates = false;
+        let mut last_progress_at_ms = exchange_started_at_ms;
+        let mut last_local_gathering_complete = false;
+        let mut local_candidates_stable_since_ms: Option<f64> = None;
 
         // 第一批候选单独前置提交，避免 gathering 状态先行收敛把首轮 ICE 交换吞掉。
         let initial_local_candidates_batch = self.collect_unsent_local_candidates(
@@ -696,27 +760,57 @@ where
                 },
             )?)?;
             submitted_local_candidates = true;
+            last_progress_at_ms = now_ms_f64();
         }
 
         loop {
             self.ensure_operation_active(operation_epoch)?;
-            let local_candidates = self.collect_unsent_local_candidates(
+            let mut outbound_local_candidates = self.collect_unsent_local_candidates(
                 &offer_sdp_candidates,
                 &initial_local_candidates,
                 &mut sent_local_candidates,
             )?;
+            let has_new_local_candidates = !outbound_local_candidates.is_empty();
+            let now_ms = now_ms_f64();
+            if has_new_local_candidates {
+                local_candidates_stable_since_ms = None;
+            } else if submitted_local_candidates {
+                local_candidates_stable_since_ms.get_or_insert(now_ms);
+            }
+            let local_candidates_stable_elapsed_ms = local_candidates_stable_since_ms
+                .map(|stable_since_ms| (now_ms - stable_since_ms).max(0.0));
+            let mut appended_local_end_of_candidates = false;
+            if should_submit_controlled_local_end_of_candidates(
+                submitted_local_candidates,
+                submitted_local_end_of_candidates,
+                remote_end_of_candidates_seen,
+                has_new_local_candidates,
+                local_candidates_stable_elapsed_ms,
+            ) {
+                let local_end_of_candidates = build_local_end_of_candidates_candidate();
+                let key = ice_candidate_dedupe_key(&local_end_of_candidates);
+                if sent_local_candidates.insert(key) {
+                    outbound_local_candidates.push(local_end_of_candidates);
+                    appended_local_end_of_candidates = true;
+                }
+            }
             let local_gathering_complete = self.media_backend.local_ice_gathering_complete()?;
-            let has_local_candidates = !local_candidates.is_empty();
+            if local_gathering_complete && !last_local_gathering_complete {
+                last_local_gathering_complete = true;
+                last_progress_at_ms = now_ms_f64();
+            }
             crate::xbx_log_warn!(
-                "[xbxengine][runtime][ice] exchange loop local_candidates={} submitted={} local_gathering_complete={} remote_eoc_seen={} remote_accumulated={}",
-                local_candidates.len(),
+                "[xbxengine][runtime][ice] exchange loop local_candidates={} submitted={} local_gathering_complete={} remote_eoc_seen={} local_eoc_submitted={} stable_elapsed_ms={:.0} remote_accumulated={}",
+                outbound_local_candidates.len(),
                 submitted_local_candidates,
                 local_gathering_complete,
                 remote_end_of_candidates_seen,
+                submitted_local_end_of_candidates,
+                local_candidates_stable_elapsed_ms.unwrap_or(0.0),
                 aggregated_remote_candidates.len(),
             );
 
-            if has_local_candidates {
+            if !outbound_local_candidates.is_empty() {
                 if !submitted_local_candidates {
                     self.emit_phase(XbxEngineRuntimePhaseDto::ExchangingIce);
                 }
@@ -724,17 +818,21 @@ where
                 self.ensure_operation_active(operation_epoch)?;
                 crate::xbx_log_warn!(
                     "[xbxengine][runtime][ice] submitting local candidates batch size={} summary={} restart={restart}",
-                    local_candidates.len(),
-                    Self::summarize_ice_candidate_kinds(&local_candidates),
+                    outbound_local_candidates.len(),
+                    Self::summarize_ice_candidate_kinds(&outbound_local_candidates),
                 );
                 Self::extract_submit_ice_response(self.host_bridge.request(
                     XbxEngineHostRequestDto::SubmitIce {
                         session_id: self.require_session_id()?,
-                        candidates: local_candidates,
+                        candidates: outbound_local_candidates,
                         restart,
                     },
                 )?)?;
                 submitted_local_candidates = true;
+                if appended_local_end_of_candidates {
+                    submitted_local_end_of_candidates = true;
+                }
+                last_progress_at_ms = now_ms_f64();
             } else if !submitted_local_candidates {
                 if local_gathering_complete {
                     crate::xbx_log_warn!(
@@ -765,9 +863,13 @@ where
                 Self::summarize_ice_candidate_kinds(&remote_candidates),
             );
             self.ensure_operation_active(operation_epoch)?;
+            let had_remote_end_of_candidates = remote_end_of_candidates_seen;
             remote_end_of_candidates_seen |= remote_candidates
                 .iter()
                 .any(|candidate| is_end_of_candidates_marker(&candidate.candidate));
+            if remote_end_of_candidates_seen && !had_remote_end_of_candidates {
+                last_progress_at_ms = now_ms_f64();
+            }
             if remote_end_of_candidates_seen {
                 crate::xbx_log_warn!("[xbxengine][runtime][ice] remote end-of-candidates observed");
             }
@@ -779,6 +881,7 @@ where
                 self.media_backend
                     .add_remote_ice_candidates(next_remote_candidates.clone())?;
                 aggregated_remote_candidates.extend(next_remote_candidates);
+                last_progress_at_ms = now_ms_f64();
                 crate::xbx_log_warn!(
                     "[xbxengine][runtime][ice] applied remote candidates batch size={} summary={} accumulated={}",
                     applied_batch_len,
@@ -798,6 +901,23 @@ where
                 break;
             }
             if submitted_local_candidates {
+                let exchange_elapsed_ms = now_ms_f64() - exchange_started_at_ms;
+                let idle_elapsed_ms = now_ms_f64() - last_progress_at_ms;
+                if should_allow_stable_exchange_settle(
+                    submitted_local_candidates,
+                    remote_end_of_candidates_seen,
+                    has_new_local_candidates,
+                    local_candidates_stable_elapsed_ms,
+                ) {
+                    crate::xbx_log_warn!(
+                        "[xbxengine][runtime][ice] exchange loop exit because candidates settled local_summary={} remote_summary={} local_gathering_complete={} stable_elapsed_ms={:.0}",
+                        Self::summarize_ice_candidate_kinds_from_set(&sent_local_candidates),
+                        Self::summarize_ice_candidate_kinds(&aggregated_remote_candidates),
+                        local_gathering_complete,
+                        local_candidates_stable_elapsed_ms.unwrap_or(0.0),
+                    );
+                    break;
+                }
                 if local_gathering_complete && remote_end_of_candidates_seen {
                     crate::xbx_log_warn!(
                         "[xbxengine][runtime][ice] exchange loop exit because gathering complete and remote eoc seen local_summary={} remote_summary={}",
@@ -806,11 +926,13 @@ where
                     );
                     break;
                 }
-                if now_ms_f64() - exchange_started_at_ms >= exchange_timeout_ms {
+                if exchange_elapsed_ms >= exchange_timeout_ms {
                     crate::xbx_log_warn!(
-                        "[xbxengine][runtime][ice] exchange loop exit because timeout elapsed local_summary={} remote_summary={}",
+                        "[xbxengine][runtime][ice] exchange loop exit because timeout elapsed local_summary={} remote_summary={} idle_elapsed_ms={:.0} elapsed_ms={:.0}",
                         Self::summarize_ice_candidate_kinds_from_set(&sent_local_candidates),
                         Self::summarize_ice_candidate_kinds(&aggregated_remote_candidates),
+                        idle_elapsed_ms,
+                        exchange_elapsed_ms,
                     );
                     break;
                 }
@@ -969,11 +1091,48 @@ where
 }
 
 fn resolve_ice_exchange_timeout_ms(first_frame_grace_ms: u64, reconnect_stall_ms: u64) -> f64 {
-    // ICE 打洞阶段不能直接复用激进的首帧 grace；至少给一次完整 trickle 窗口，
-    // 否则远端 candidates 已经返回，但 transport 还没来得及从 Connecting 推进就会提前退出。
-    first_frame_grace_ms
+    // 临时 A/B：把 exchange timeout 固定约束在 [10s, 12s]，用于验证是否存在“超时过短误杀”。
+    let baseline = first_frame_grace_ms
         .max(reconnect_stall_ms)
-        .max(ICE_EXCHANGE_TIMEOUT_MS_MIN as u64) as f64
+        .max(ICE_EXCHANGE_TIMEOUT_MS_MIN as u64);
+    baseline.min(ICE_EXCHANGE_TIMEOUT_MS_MAX as u64) as f64
+}
+
+fn should_allow_stable_exchange_settle(
+    submitted_local_candidates: bool,
+    remote_end_of_candidates_seen: bool,
+    has_new_local_candidates: bool,
+    local_candidates_stable_elapsed_ms: Option<f64>,
+) -> bool {
+    submitted_local_candidates
+        && remote_end_of_candidates_seen
+        && !has_new_local_candidates
+        && local_candidates_stable_elapsed_ms
+            .is_some_and(|elapsed| elapsed >= ICE_EXCHANGE_STABLE_SETTLE_WINDOW_MS)
+}
+
+fn should_submit_controlled_local_end_of_candidates(
+    submitted_local_candidates: bool,
+    submitted_local_end_of_candidates: bool,
+    remote_end_of_candidates_seen: bool,
+    has_new_local_candidates: bool,
+    local_candidates_stable_elapsed_ms: Option<f64>,
+) -> bool {
+    !submitted_local_end_of_candidates
+        && should_allow_stable_exchange_settle(
+            submitted_local_candidates,
+            remote_end_of_candidates_seen,
+            has_new_local_candidates,
+            local_candidates_stable_elapsed_ms,
+        )
+}
+
+fn build_local_end_of_candidates_candidate() -> XbxEngineIceCandidateDto {
+    XbxEngineIceCandidateDto {
+        candidate: "a=end-of-candidates".to_string(),
+        sdp_m_line_index: Some(0),
+        sdp_mid: Some("0".to_string()),
+    }
 }
 
 fn runtime_stats_indicate_transport_recovering(
@@ -1092,7 +1251,11 @@ fn is_control_channel_not_ready_error(error: &XbxEngineRuntimeError) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::{collect_local_offer_ice_candidates, resolve_ice_exchange_timeout_ms};
+    use super::{
+        build_local_end_of_candidates_candidate, collect_local_offer_ice_candidates,
+        resolve_ice_exchange_timeout_ms, should_allow_stable_exchange_settle,
+        should_submit_controlled_local_end_of_candidates, ICE_EXCHANGE_STABLE_SETTLE_WINDOW_MS,
+    };
 
     #[test]
     fn collects_offer_sdp_candidates_from_realistic_sdp() {
@@ -1120,7 +1283,60 @@ mod tests {
 
     #[test]
     fn ice_exchange_timeout_uses_bounded_floor() {
-        assert_eq!(resolve_ice_exchange_timeout_ms(1_800, 2_400), 5_000.0);
-        assert_eq!(resolve_ice_exchange_timeout_ms(8_000, 4_000), 8_000.0);
+        assert_eq!(resolve_ice_exchange_timeout_ms(1_800, 2_400), 10_000.0);
+        assert_eq!(resolve_ice_exchange_timeout_ms(8_000, 4_000), 10_000.0);
+        assert_eq!(resolve_ice_exchange_timeout_ms(15_000, 8_000), 12_000.0);
+    }
+
+    #[test]
+    fn stable_exchange_settle_does_not_require_local_gathering_complete() {
+        assert!(should_allow_stable_exchange_settle(
+            true,
+            true,
+            false,
+            Some(ICE_EXCHANGE_STABLE_SETTLE_WINDOW_MS + 1.0),
+        ));
+    }
+
+    #[test]
+    fn controlled_local_eoc_is_single_shot_after_stable_window() {
+        assert!(should_submit_controlled_local_end_of_candidates(
+            true,
+            false,
+            true,
+            false,
+            Some(ICE_EXCHANGE_STABLE_SETTLE_WINDOW_MS + 10.0),
+        ));
+        assert!(!should_submit_controlled_local_end_of_candidates(
+            true,
+            true,
+            true,
+            false,
+            Some(ICE_EXCHANGE_STABLE_SETTLE_WINDOW_MS + 10.0),
+        ));
+    }
+
+    #[test]
+    fn stable_exchange_settle_requires_remote_eoc_and_stable_window() {
+        assert!(!should_allow_stable_exchange_settle(
+            true,
+            false,
+            false,
+            Some(ICE_EXCHANGE_STABLE_SETTLE_WINDOW_MS + 100.0),
+        ));
+        assert!(!should_allow_stable_exchange_settle(
+            true,
+            true,
+            false,
+            Some(ICE_EXCHANGE_STABLE_SETTLE_WINDOW_MS - 1.0),
+        ));
+    }
+
+    #[test]
+    fn local_end_of_candidates_marker_uses_expected_contract() {
+        let marker = build_local_end_of_candidates_candidate();
+        assert_eq!(marker.candidate, "a=end-of-candidates");
+        assert_eq!(marker.sdp_m_line_index, Some(0));
+        assert_eq!(marker.sdp_mid.as_deref(), Some("0"));
     }
 }

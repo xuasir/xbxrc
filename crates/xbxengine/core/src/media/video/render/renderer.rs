@@ -1,19 +1,49 @@
 use crate::{
     XbxEngineRenderFrame, XbxEngineRenderPixelData, XbxEngineRuntimeError, XbxEngineVideoFrameStats,
 };
-use std::collections::VecDeque;
 use xbxengine_protocol::XbxEngineDisplayStateDto;
 #[allow(dead_code)]
 const RENDER_STALL_THRESHOLD_MS: f64 = 1_500.0;
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) enum XbxRenderCandidateState {
+    #[default]
+    Nominal,
+    LatestOverwrite,
+}
+
+impl XbxRenderCandidateState {
+    pub(crate) fn as_str(self) -> &'static str {
+        match self {
+            Self::Nominal => "nominal",
+            Self::LatestOverwrite => "latest-overwrite",
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct XbxRenderCandidateDecisionSnapshot {
+    pub(crate) decision_id: u64,
+    pub(crate) state: XbxRenderCandidateState,
+    pub(crate) action: &'static str,
+    pub(crate) detail: &'static str,
+    pub(crate) frame_seq: Option<u64>,
+    pub(crate) observed_at_ms: f64,
+}
 
 #[allow(dead_code)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub(crate) struct XbxRenderSignalSnapshot {
     pub latest_present_time_ms: Option<f64>,
     pub renderer_stalled: Option<bool>,
-    pub fps: f64,
-    pub present_submit_count_total: u64,
-    pub present_overwrite_count_total: u64,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) struct XbxPresentFrameOutcome {
+    pub(crate) overwritten_previous_latest: bool,
+    pub(crate) overwritten_frame_seq: Option<u64>,
+    pub(crate) overwritten_frame_width: Option<u32>,
+    pub(crate) overwritten_frame_height: Option<u32>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -22,6 +52,10 @@ pub(crate) struct XbxRenderFrame {
     pub height: u32,
     pub frame_seq: u64,
     pub rendered_at_ms: f64,
+    pub rtp_timestamp: Option<u32>,
+    pub is_keyframe: bool,
+    pub frame_recovery_disposition: Option<String>,
+    pub frame_unrecoverable_reason: Option<String>,
     pub pixel_data: XbxEngineRenderPixelData,
 }
 
@@ -45,6 +79,10 @@ impl From<XbxRenderFrame> for XbxEngineRenderFrame {
             height: value.height,
             frame_seq: value.frame_seq,
             rendered_at_ms: value.rendered_at_ms,
+            rtp_timestamp: value.rtp_timestamp,
+            is_keyframe: value.is_keyframe,
+            frame_recovery_disposition: value.frame_recovery_disposition,
+            frame_unrecoverable_reason: value.frame_unrecoverable_reason,
             pixel_data: value.pixel_data,
         }
     }
@@ -58,18 +96,20 @@ impl From<XbxRenderFrame> for XbxEngineRenderFrame {
 pub(crate) struct XbxRenderState {
     latest_display_state: Option<XbxEngineDisplayStateDto>,
     latest_frame: Option<XbxEngineRenderFrame>,
-    recent_present_times_ms: VecDeque<f64>,
-    present_submit_count_total: u64,
-    present_overwrite_count_total: u64,
+    last_acknowledged_present_time_ms: Option<f64>,
+    render_candidate_state: XbxRenderCandidateState,
+    latest_render_candidate_decision: Option<XbxRenderCandidateDecisionSnapshot>,
+    render_candidate_decision_id: u64,
 }
 
 impl XbxRenderState {
     pub(crate) fn reset(&mut self) -> Result<(), XbxEngineRuntimeError> {
         self.latest_display_state = None;
         self.latest_frame = None;
-        self.recent_present_times_ms.clear();
-        self.present_submit_count_total = 0;
-        self.present_overwrite_count_total = 0;
+        self.last_acknowledged_present_time_ms = None;
+        self.render_candidate_state = XbxRenderCandidateState::Nominal;
+        self.latest_render_candidate_decision = None;
+        self.render_candidate_decision_id = 0;
         Ok(())
     }
 
@@ -85,7 +125,7 @@ impl XbxRenderState {
     pub(crate) fn present_frame(
         &mut self,
         frame: XbxRenderFrame,
-    ) -> Result<XbxEngineVideoFrameStats, XbxEngineRuntimeError> {
+    ) -> Result<(XbxEngineVideoFrameStats, XbxPresentFrameOutcome), XbxEngineRuntimeError> {
         match &frame.pixel_data {
             XbxEngineRenderPixelData::Rgba { bytes } | XbxEngineRenderPixelData::Bgra { bytes } => {
                 let expected_len = frame.width as usize * frame.height as usize * 4;
@@ -119,25 +159,55 @@ impl XbxRenderState {
             }
         }
         let frame_stats = frame.video_stats();
-        self.record_present_time(frame.rendered_at_ms);
-        self.present_submit_count_total = self.present_submit_count_total.saturating_add(1);
-        if self.latest_frame.is_some() {
-            self.present_overwrite_count_total =
-                self.present_overwrite_count_total.saturating_add(1);
-        }
+        let presented_frame_seq = frame.frame_seq;
+        let observed_at_ms = frame.rendered_at_ms;
+        let overwritten_previous_latest = self.latest_frame.is_some();
+        let overwritten_frame = self
+            .latest_frame
+            .as_ref()
+            .map(|frame| (frame.frame_seq, frame.width, frame.height));
         self.latest_frame = Some(frame.into());
-        Ok(XbxEngineVideoFrameStats {
-            fps: self.current_fps(),
-            ..frame_stats
-        })
+        if overwritten_previous_latest {
+            self.record_render_candidate_decision(
+                XbxRenderCandidateState::LatestOverwrite,
+                "replace",
+                "latestSlotOverwrite",
+                overwritten_frame.map(|frame| frame.0),
+                observed_at_ms,
+            );
+        } else if matches!(
+            self.render_candidate_state,
+            XbxRenderCandidateState::LatestOverwrite
+        ) {
+            self.record_render_candidate_decision(
+                XbxRenderCandidateState::Nominal,
+                "accept",
+                "latestSlotRecovered",
+                Some(presented_frame_seq),
+                observed_at_ms,
+            );
+        }
+        Ok((
+            XbxEngineVideoFrameStats {
+                fps: 0.0,
+                ..frame_stats
+            },
+            XbxPresentFrameOutcome {
+                overwritten_previous_latest,
+                overwritten_frame_seq: overwritten_frame.map(|frame| frame.0),
+                overwritten_frame_width: overwritten_frame.map(|frame| frame.1),
+                overwritten_frame_height: overwritten_frame.map(|frame| frame.2),
+            },
+        ))
     }
 
     pub(crate) fn stop(&mut self) {
         self.latest_display_state = None;
         self.latest_frame = None;
-        self.recent_present_times_ms.clear();
-        self.present_submit_count_total = 0;
-        self.present_overwrite_count_total = 0;
+        self.last_acknowledged_present_time_ms = None;
+        self.render_candidate_state = XbxRenderCandidateState::Nominal;
+        self.latest_render_candidate_decision = None;
+        self.render_candidate_decision_id = 0;
     }
 
     pub(crate) fn take_latest_frame(&mut self) -> Option<XbxEngineRenderFrame> {
@@ -159,6 +229,8 @@ impl XbxRenderState {
             .as_ref()
             .is_some_and(|frame| frame.frame_seq == frame_seq)
         {
+            self.last_acknowledged_present_time_ms =
+                self.latest_frame.as_ref().map(|frame| frame.rendered_at_ms);
             self.latest_frame = None;
             return true;
         }
@@ -167,78 +239,42 @@ impl XbxRenderState {
 
     #[allow(dead_code)]
     pub(crate) fn render_signal_snapshot(&self, now_ms: f64) -> XbxRenderSignalSnapshot {
-        let latest_present_time_ms = self.latest_frame.as_ref().map(|frame| frame.rendered_at_ms);
+        let latest_present_time_ms = self
+            .last_acknowledged_present_time_ms
+            .or_else(|| self.latest_frame.as_ref().map(|frame| frame.rendered_at_ms));
         let renderer_stalled = latest_present_time_ms.map(|presented_at_ms| {
             (now_ms - presented_at_ms).max(0.0) >= RENDER_STALL_THRESHOLD_MS
         });
         XbxRenderSignalSnapshot {
             latest_present_time_ms,
             renderer_stalled,
-            fps: self.current_fps_at(now_ms),
-            present_submit_count_total: self.present_submit_count_total,
-            present_overwrite_count_total: self.present_overwrite_count_total,
         }
     }
 
-    fn record_present_time(&mut self, rendered_at_ms: f64) {
-        self.recent_present_times_ms.push_back(rendered_at_ms);
-        while self.recent_present_times_ms.len() > 120 {
-            self.recent_present_times_ms.pop_front();
-        }
-        while let Some(front) = self.recent_present_times_ms.front().copied() {
-            if rendered_at_ms - front <= 1_000.0 {
-                break;
-            }
-            self.recent_present_times_ms.pop_front();
-        }
+    pub(crate) fn latest_render_candidate_decision(
+        &self,
+    ) -> Option<&XbxRenderCandidateDecisionSnapshot> {
+        self.latest_render_candidate_decision.as_ref()
     }
 
-    fn current_fps(&self) -> f64 {
-        let len = self.recent_present_times_ms.len();
-        if len < 2 {
-            return 0.0;
-        }
-        let first = self
-            .recent_present_times_ms
-            .front()
-            .copied()
-            .unwrap_or_default();
-        let last = self
-            .recent_present_times_ms
-            .back()
-            .copied()
-            .unwrap_or(first);
-        let window_ms = (last - first).max(1.0);
-        ((len.saturating_sub(1)) as f64 * 1_000.0 / window_ms).max(0.0)
-    }
-
-    fn current_fps_at(&self, now_ms: f64) -> f64 {
-        let window_start_ms = now_ms - 1_000.0;
-        let mut first: Option<f64> = None;
-        let mut last: Option<f64> = None;
-        let mut count = 0usize;
-
-        for presented_at_ms in self.recent_present_times_ms.iter().copied() {
-            if presented_at_ms < window_start_ms {
-                continue;
-            }
-            first.get_or_insert(presented_at_ms);
-            last = Some(presented_at_ms);
-            count = count.saturating_add(1);
-        }
-
-        if count < 2 {
-            return 0.0;
-        }
-
-        let Some(first) = first else {
-            return 0.0;
-        };
-        let Some(last) = last else {
-            return 0.0;
-        };
-        let window_ms = (last - first).max(1.0);
-        ((count.saturating_sub(1)) as f64 * 1_000.0 / window_ms).max(0.0)
+    fn record_render_candidate_decision(
+        &mut self,
+        state: XbxRenderCandidateState,
+        action: &'static str,
+        detail: &'static str,
+        frame_seq: Option<u64>,
+        observed_at_ms: f64,
+    ) {
+        self.render_candidate_state = state;
+        self.render_candidate_decision_id = self.render_candidate_decision_id.saturating_add(1);
+        self.latest_render_candidate_decision = Some(XbxRenderCandidateDecisionSnapshot {
+            decision_id: self.render_candidate_decision_id,
+            state,
+            action,
+            detail,
+            frame_seq,
+            observed_at_ms,
+        });
     }
 }
 
@@ -246,7 +282,7 @@ impl XbxRenderState {
 mod tests {
     use std::sync::Arc;
 
-    use super::{XbxRenderFrame, XbxRenderState};
+    use super::{XbxPresentFrameOutcome, XbxRenderFrame, XbxRenderState};
     use crate::XbxEngineRenderPixelData;
 
     #[test]
@@ -257,6 +293,10 @@ mod tests {
             height: 2,
             frame_seq: 1,
             rendered_at_ms: 1_000.0,
+            rtp_timestamp: Some(1),
+            is_keyframe: true,
+            frame_recovery_disposition: Some("repairing".to_string()),
+            frame_unrecoverable_reason: None,
             pixel_data: XbxEngineRenderPixelData::Rgba {
                 bytes: Arc::<[u8]>::from([0u8; 16]),
             },
@@ -278,6 +318,10 @@ mod tests {
             height: 2,
             frame_seq: 3,
             rendered_at_ms: 1_016.0,
+            rtp_timestamp: Some(3),
+            is_keyframe: false,
+            frame_recovery_disposition: Some("repairing".to_string()),
+            frame_unrecoverable_reason: None,
             pixel_data: XbxEngineRenderPixelData::Rgba {
                 bytes: Arc::<[u8]>::from([1u8; 16]),
             },
@@ -299,6 +343,90 @@ mod tests {
     }
 
     #[test]
+    fn present_frame_reports_overwritten_latest_metadata() {
+        let mut state = XbxRenderState::default();
+        let first_frame = XbxRenderFrame {
+            width: 2,
+            height: 2,
+            frame_seq: 1,
+            rendered_at_ms: 1_000.0,
+            rtp_timestamp: Some(1),
+            is_keyframe: true,
+            frame_recovery_disposition: Some("repairing".to_string()),
+            frame_unrecoverable_reason: None,
+            pixel_data: XbxEngineRenderPixelData::Rgba {
+                bytes: Arc::<[u8]>::from([0u8; 16]),
+            },
+        };
+        let second_frame = XbxRenderFrame {
+            width: 4,
+            height: 4,
+            frame_seq: 2,
+            rendered_at_ms: 1_016.0,
+            rtp_timestamp: Some(2),
+            is_keyframe: false,
+            frame_recovery_disposition: Some("repairing".to_string()),
+            frame_unrecoverable_reason: None,
+            pixel_data: XbxEngineRenderPixelData::Rgba {
+                bytes: Arc::<[u8]>::from([1u8; 64]),
+            },
+        };
+
+        let (_, first_outcome) = state
+            .present_frame(first_frame)
+            .expect("first present should work");
+        let (_, second_outcome) = state
+            .present_frame(second_frame)
+            .expect("second present should work");
+
+        assert_eq!(
+            first_outcome,
+            XbxPresentFrameOutcome {
+                overwritten_previous_latest: false,
+                overwritten_frame_seq: None,
+                overwritten_frame_width: None,
+                overwritten_frame_height: None,
+            }
+        );
+        assert_eq!(
+            second_outcome,
+            XbxPresentFrameOutcome {
+                overwritten_previous_latest: true,
+                overwritten_frame_seq: Some(1),
+                overwritten_frame_width: Some(2),
+                overwritten_frame_height: Some(2),
+            }
+        );
+    }
+
+    #[test]
+    fn acknowledge_keeps_last_present_time_for_snapshot() {
+        let mut state = XbxRenderState::default();
+        state
+            .present_frame(XbxRenderFrame {
+                width: 2,
+                height: 2,
+                frame_seq: 1,
+                rendered_at_ms: 1_000.0,
+                rtp_timestamp: Some(1),
+                is_keyframe: true,
+                frame_recovery_disposition: Some("repairing".to_string()),
+                frame_unrecoverable_reason: None,
+                pixel_data: XbxEngineRenderPixelData::Rgba {
+                    bytes: Arc::<[u8]>::from([0u8; 16]),
+                },
+            })
+            .expect("present frame should work");
+
+        assert!(state.acknowledge_latest_frame(1));
+        let snapshot = state.render_signal_snapshot(1_200.0);
+
+        assert_eq!(snapshot.latest_present_time_ms, Some(1_000.0));
+        assert_eq!(snapshot.renderer_stalled, Some(false));
+        assert!(state.peek_latest_frame().is_none());
+    }
+
+    #[test]
     fn render_signal_snapshot_marks_stall_after_threshold() {
         let mut state = XbxRenderState::default();
         let frame = XbxRenderFrame {
@@ -306,6 +434,10 @@ mod tests {
             height: 2,
             frame_seq: 1,
             rendered_at_ms: 1_000.0,
+            rtp_timestamp: Some(1),
+            is_keyframe: true,
+            frame_recovery_disposition: Some("repairing".to_string()),
+            frame_unrecoverable_reason: None,
             pixel_data: XbxEngineRenderPixelData::Rgba {
                 bytes: Arc::<[u8]>::from([0u8; 16]),
             },
@@ -319,7 +451,7 @@ mod tests {
     }
 
     #[test]
-    fn render_signal_snapshot_reports_recent_fps() {
+    fn render_signal_snapshot_reports_latest_present_time_when_recent() {
         let mut state = XbxRenderState::default();
         for index in 0..4u64 {
             state
@@ -328,6 +460,10 @@ mod tests {
                     height: 2,
                     frame_seq: index + 1,
                     rendered_at_ms: 1_000.0 + index as f64 * 16.0,
+                    rtp_timestamp: Some(index as u32 + 1),
+                    is_keyframe: index == 0,
+                    frame_recovery_disposition: Some("repairing".to_string()),
+                    frame_unrecoverable_reason: None,
                     pixel_data: XbxEngineRenderPixelData::Rgba {
                         bytes: Arc::<[u8]>::from([0u8; 16]),
                     },
@@ -336,11 +472,12 @@ mod tests {
         }
 
         let snapshot = state.render_signal_snapshot(1_050.0);
-        assert!(snapshot.fps > 50.0);
+        assert_eq!(snapshot.latest_present_time_ms, Some(1_048.0));
+        assert_eq!(snapshot.renderer_stalled, Some(false));
     }
 
     #[test]
-    fn render_signal_snapshot_drops_stale_fps_to_zero() {
+    fn render_signal_snapshot_marks_stall_when_latest_present_is_stale() {
         let mut state = XbxRenderState::default();
         for index in 0..4u64 {
             state
@@ -349,6 +486,10 @@ mod tests {
                     height: 2,
                     frame_seq: index + 1,
                     rendered_at_ms: 1_000.0 + index as f64 * 16.0,
+                    rtp_timestamp: Some(index as u32 + 1),
+                    is_keyframe: index == 0,
+                    frame_recovery_disposition: Some("repairing".to_string()),
+                    frame_unrecoverable_reason: None,
                     pixel_data: XbxEngineRenderPixelData::Rgba {
                         bytes: Arc::<[u8]>::from([0u8; 16]),
                     },
@@ -357,10 +498,59 @@ mod tests {
         }
 
         let snapshot = state.render_signal_snapshot(2_200.0);
-        assert_eq!(snapshot.fps, 0.0);
+        assert_eq!(snapshot.latest_present_time_ms, Some(1_048.0));
+        assert_eq!(snapshot.renderer_stalled, Some(false));
 
         let stalled_snapshot = state.render_signal_snapshot(2_700.0);
-        assert_eq!(stalled_snapshot.fps, 0.0);
+        assert_eq!(stalled_snapshot.latest_present_time_ms, Some(1_048.0));
         assert_eq!(stalled_snapshot.renderer_stalled, Some(true));
+    }
+
+    #[test]
+    fn render_candidate_state_recovers_after_latest_slot_overwrite_is_cleared() {
+        let mut state = XbxRenderState::default();
+        let mk_frame = |frame_seq: u64, rendered_at_ms: f64| XbxRenderFrame {
+            width: 2,
+            height: 2,
+            frame_seq,
+            rendered_at_ms,
+            rtp_timestamp: Some(frame_seq as u32),
+            is_keyframe: frame_seq == 1,
+            frame_recovery_disposition: Some("repairing".to_string()),
+            frame_unrecoverable_reason: None,
+            pixel_data: XbxEngineRenderPixelData::Rgba {
+                bytes: Arc::<[u8]>::from([0u8; 16]),
+            },
+        };
+
+        state
+            .present_frame(mk_frame(1, 1_000.0))
+            .expect("first present should work");
+        state
+            .present_frame(mk_frame(2, 1_016.0))
+            .expect("second present should overwrite");
+
+        let pressured = state
+            .latest_render_candidate_decision()
+            .expect("overwrite decision");
+        assert_eq!(
+            pressured.state,
+            super::XbxRenderCandidateState::LatestOverwrite
+        );
+        assert_eq!(pressured.action, "replace");
+        assert_eq!(pressured.detail, "latestSlotOverwrite");
+        assert_eq!(pressured.frame_seq, Some(1));
+
+        assert!(state.acknowledge_latest_frame(2));
+        state
+            .present_frame(mk_frame(3, 1_032.0))
+            .expect("third present should recover");
+        let recovered = state
+            .latest_render_candidate_decision()
+            .expect("recovered decision");
+        assert_eq!(recovered.state, super::XbxRenderCandidateState::Nominal);
+        assert_eq!(recovered.action, "accept");
+        assert_eq!(recovered.detail, "latestSlotRecovered");
+        assert_eq!(recovered.frame_seq, Some(3));
     }
 }

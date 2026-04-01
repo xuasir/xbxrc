@@ -1,5 +1,7 @@
 use std::collections::VecDeque;
 
+#[cfg(test)]
+use crate::media::video::types::FrameRecoveryDisposition;
 use crate::{
     api::{
         MacOsVideoChromaLocation, MacOsVideoColorMatrix, MacOsVideoColorPrimaries,
@@ -7,16 +9,36 @@ use crate::{
     },
     media::video::h264::inspection::{H264AccessUnitInspection, H264ParameterSets},
     media::video::render::renderer::XbxRenderFrame,
-    media::video::types::EncodedFrame,
+    media::video::types::{DecodedFrame, EncodedFrame},
     XbxEngineRenderPixelData, XbxEngineRuntimeError,
 };
 
 const MAX_DECODED_FRAME_QUEUE_LEN: usize = 2;
 const HARDWARE_DECODE_FAILURE_BURST_GAP_MS: f64 = 400.0;
 
-#[derive(Debug)]
-struct QueuedDecodedFrame {
-    frame: XbxRenderFrame,
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum XbxDecodeCandidateState {
+    Nominal,
+    Backpressure,
+}
+
+impl XbxDecodeCandidateState {
+    pub(crate) fn as_str(self) -> &'static str {
+        match self {
+            Self::Nominal => "nominal",
+            Self::Backpressure => "backpressure",
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct XbxDecodeCandidateDecisionSnapshot {
+    pub(crate) decision_id: u64,
+    pub(crate) state: XbxDecodeCandidateState,
+    pub(crate) action: &'static str,
+    pub(crate) detail: &'static str,
+    pub(crate) frame_seq: Option<u64>,
+    pub(crate) observed_at_ms: f64,
 }
 
 trait XbxHardwareVideoDecoder: Send {
@@ -69,7 +91,7 @@ pub(crate) struct XbxVideoDecodeState {
     decoder: Box<dyn XbxHardwareVideoDecoder>,
     latest_decoded_seq: u64,
     first_video_packet_logged: bool,
-    decoded_frame_queue: VecDeque<QueuedDecodedFrame>,
+    decoded_frame_queue: VecDeque<DecodedFrame>,
     last_decode_ok_time_ms: Option<f64>,
     last_encoded_frame_time_ms: Option<f64>,
     decoder_reset_count: u64,
@@ -79,6 +101,9 @@ pub(crate) struct XbxVideoDecodeState {
     latest_hardware_decode_failure_time_ms: Option<f64>,
     latest_hardware_decode_failure_status: Option<i32>,
     waiting_for_recovery_keyframe: bool,
+    decode_candidate_state: XbxDecodeCandidateState,
+    latest_decode_candidate_decision: Option<XbxDecodeCandidateDecisionSnapshot>,
+    decode_candidate_decision_id: u64,
 }
 
 impl XbxVideoDecodeState {
@@ -98,6 +123,9 @@ impl XbxVideoDecodeState {
             latest_hardware_decode_failure_time_ms: None,
             latest_hardware_decode_failure_status: None,
             waiting_for_recovery_keyframe: false,
+            decode_candidate_state: XbxDecodeCandidateState::Nominal,
+            latest_decode_candidate_decision: None,
+            decode_candidate_decision_id: 0,
         })
     }
 
@@ -116,10 +144,14 @@ impl XbxVideoDecodeState {
         Ok(())
     }
 
-    pub(crate) fn process_encoded_frame(&mut self, encoded_frame: EncodedFrame, now_ms: f64) {
+    pub(crate) fn process_encoded_frame(
+        &mut self,
+        encoded_frame: EncodedFrame,
+        now_ms: f64,
+    ) -> Option<DecodedFrame> {
         self.last_encoded_frame_time_ms = Some(now_ms);
         if self.waiting_for_recovery_keyframe && !encoded_frame.h264.bootstrap_ready {
-            return;
+            return None;
         }
         if !self.first_video_packet_logged {
             self.first_video_packet_logged = true;
@@ -129,6 +161,11 @@ impl XbxVideoDecodeState {
                 encoded_frame.payload.len()
             );
         }
+        let target_time = encoded_frame.target_playout_time;
+        let rtp_timestamp = encoded_frame.rtp_timestamp;
+        let is_keyframe = encoded_frame.is_keyframe;
+        let frame_recovery_disposition = encoded_frame.frame_recovery_disposition;
+        let frame_unrecoverable_reason = encoded_frame.frame_unrecoverable_reason.clone();
         let decoded_frame = match self.decoder.decode(encoded_frame, now_ms) {
             Ok(frame) => {
                 self.waiting_for_recovery_keyframe = false;
@@ -144,20 +181,30 @@ impl XbxVideoDecodeState {
                     );
                     let _ = self.request_decoder_reset();
                 }
-                None
+                return None;
             }
         };
-        let Some(mut decoded_frame) = decoded_frame else {
-            return;
+        let Some(mut render_frame) = decoded_frame else {
+            return None;
         };
         self.reset_hardware_failure_streak();
         self.latest_decoded_seq = self.latest_decoded_seq.saturating_add(1);
         self.last_decode_ok_time_ms = Some(now_ms);
-        decoded_frame.frame_seq = self.latest_decoded_seq;
-        decoded_frame.rendered_at_ms = now_ms;
-        self.enqueue_decoded_frame(QueuedDecodedFrame {
-            frame: decoded_frame,
-        });
+        render_frame.frame_seq = self.latest_decoded_seq;
+        render_frame.rendered_at_ms = now_ms;
+        render_frame.rtp_timestamp = Some(rtp_timestamp);
+        render_frame.is_keyframe = is_keyframe;
+        render_frame.frame_recovery_disposition =
+            Some(frame_recovery_disposition.as_str().to_string());
+        render_frame.frame_unrecoverable_reason = frame_unrecoverable_reason.clone();
+        self.enqueue_decoded_frame(DecodedFrame {
+            pts: target_time,
+            rtp_timestamp,
+            is_keyframe,
+            frame_recovery_disposition,
+            frame_unrecoverable_reason,
+            surface: render_frame,
+        })
     }
 
     pub(crate) fn last_decode_ok_time_ms(&self) -> Option<f64> {
@@ -192,23 +239,54 @@ impl XbxVideoDecodeState {
         self.latest_hardware_decode_failure_status
     }
 
-    pub(crate) fn pop_decoded_frame(&mut self, _now_ms: f64) -> Option<XbxRenderFrame> {
-        // native 路径已经有 pacer 负责 playout 节奏，decode stage 不再额外等待。
-        self.decoded_frame_queue.pop_front().map(|item| item.frame)
+    pub(crate) fn latest_decode_candidate_decision(
+        &self,
+    ) -> Option<&XbxDecodeCandidateDecisionSnapshot> {
+        self.latest_decode_candidate_decision.as_ref()
     }
 
-    fn enqueue_decoded_frame(&mut self, frame: QueuedDecodedFrame) {
+    pub(crate) fn pop_decoded_frame(&mut self, _now_ms: f64) -> Option<DecodedFrame> {
+        // native 路径已经有 pacer 负责 playout 节奏，decode stage 不再额外等待。
+        self.decoded_frame_queue.pop_front()
+    }
+
+    fn enqueue_decoded_frame(&mut self, frame: DecodedFrame) -> Option<DecodedFrame> {
+        let incoming_frame_seq = frame.surface.frame_seq;
+        let observed_at_ms = frame.surface.rendered_at_ms;
+        let mut dropped_frame = None;
         while self.decoded_frame_queue.len() >= MAX_DECODED_FRAME_QUEUE_LEN {
             let dropped = self.decoded_frame_queue.pop_front();
             if let Some(d) = dropped {
                 crate::xbx_log_warn!(
                     "[xbxengine][vt] enqueue_decoded_frame: queue FULL, dropping old frame seq={}",
-                    d.frame.frame_seq
+                    d.surface.frame_seq
                 );
+                dropped_frame = Some(d);
             }
             self.decoded_frame_drop_count = self.decoded_frame_drop_count.saturating_add(1);
         }
         self.decoded_frame_queue.push_back(frame);
+        if let Some(dropped) = dropped_frame.as_ref() {
+            self.record_decode_candidate_decision(
+                XbxDecodeCandidateState::Backpressure,
+                "drop",
+                "outputQueueOverflow",
+                Some(dropped.surface.frame_seq),
+                observed_at_ms,
+            );
+        } else if matches!(
+            self.decode_candidate_state,
+            XbxDecodeCandidateState::Backpressure
+        ) {
+            self.record_decode_candidate_decision(
+                XbxDecodeCandidateState::Nominal,
+                "accept",
+                "queueRecovered",
+                Some(incoming_frame_seq),
+                observed_at_ms,
+            );
+        }
+        dropped_frame
     }
 
     // 连续硬解失败用于 recovery 诊断：只在短窗口内累加，避免偶发错误误触发。
@@ -229,6 +307,26 @@ impl XbxVideoDecodeState {
     fn reset_hardware_failure_streak(&mut self) {
         self.hardware_decode_failure_streak = 0;
         self.latest_hardware_decode_failure_status = None;
+    }
+
+    fn record_decode_candidate_decision(
+        &mut self,
+        state: XbxDecodeCandidateState,
+        action: &'static str,
+        detail: &'static str,
+        frame_seq: Option<u64>,
+        observed_at_ms: f64,
+    ) {
+        self.decode_candidate_state = state;
+        self.decode_candidate_decision_id = self.decode_candidate_decision_id.saturating_add(1);
+        self.latest_decode_candidate_decision = Some(XbxDecodeCandidateDecisionSnapshot {
+            decision_id: self.decode_candidate_decision_id,
+            state,
+            action,
+            detail,
+            frame_seq,
+            observed_at_ms,
+        });
     }
 }
 
@@ -254,11 +352,21 @@ impl XbxVideoDecodeState {
             latest_hardware_decode_failure_time_ms: None,
             latest_hardware_decode_failure_status: None,
             waiting_for_recovery_keyframe: false,
+            decode_candidate_state: XbxDecodeCandidateState::Nominal,
+            latest_decode_candidate_decision: None,
+            decode_candidate_decision_id: 0,
         }
     }
 
     fn enqueue_decoded_frame_for_test(&mut self, frame: XbxRenderFrame) {
-        self.enqueue_decoded_frame(QueuedDecodedFrame { frame });
+        let _ = self.enqueue_decoded_frame(DecodedFrame {
+            pts: std::time::Instant::now(),
+            rtp_timestamp: frame.frame_seq as u32,
+            is_keyframe: frame.is_keyframe,
+            frame_recovery_disposition: FrameRecoveryDisposition::Repairing,
+            frame_unrecoverable_reason: None,
+            surface: frame,
+        });
     }
 }
 
@@ -595,6 +703,10 @@ impl XbxHardwareVideoDecoder for MacOsVideoToolboxDecoder {
             height,
             frame_seq: 0,
             rendered_at_ms: 0.0,
+            rtp_timestamp: None,
+            is_keyframe: false,
+            frame_recovery_disposition: None,
+            frame_unrecoverable_reason: None,
             pixel_data: XbxEngineRenderPixelData::Descriptor {
                 handle: std::sync::Arc::new(crate::api::backend::MacOsCVPixelBufferDescriptor {
                     ptr: pixel_buffer as *mut _,
@@ -977,12 +1089,13 @@ mod tests {
     };
     use std::time::{Duration, Instant};
 
-    use super::{XbxHardwareVideoDecoder, XbxVideoDecodeState};
+    use super::{XbxDecodeCandidateState, XbxHardwareVideoDecoder, XbxVideoDecodeState};
     use crate::media::video::h264::inspection::{
         H264AccessUnitInspection, H264AccessUnitInspector, H264BootstrapRejectReason,
     };
     use crate::{
-        media::video::render::renderer::XbxRenderFrame, media::video::types::EncodedFrame,
+        media::video::render::renderer::XbxRenderFrame,
+        media::video::types::{DecodedFrame, EncodedFrame, FrameRecoveryDisposition},
         XbxEngineRenderPixelData,
     };
     use bytes::Bytes;
@@ -1038,6 +1151,10 @@ mod tests {
                 height: 2,
                 frame_seq: seq,
                 rendered_at_ms: seq as f64,
+                rtp_timestamp: Some(seq as u32),
+                is_keyframe: seq == 1,
+                frame_recovery_disposition: Some("repairing".to_string()),
+                frame_unrecoverable_reason: None,
                 pixel_data: XbxEngineRenderPixelData::Rgba {
                     bytes: Arc::<[u8]>::from([0u8; 16]),
                 },
@@ -1049,9 +1166,125 @@ mod tests {
             state
                 .decoded_frame_queue
                 .front()
-                .map(|frame| frame.frame.frame_seq),
+                .map(|frame| frame.surface.frame_seq),
             Some(2)
         );
+    }
+
+    #[test]
+    fn enqueue_decoded_frame_returns_dropped_oldest_frame() {
+        let decoder = SpyHardwareDecoder {
+            reset_calls: Arc::new(AtomicUsize::new(0)),
+        };
+        let mut state = XbxVideoDecodeState::new_for_test(20, 30, Box::new(decoder));
+
+        state.enqueue_decoded_frame_for_test(XbxRenderFrame {
+            width: 2,
+            height: 2,
+            frame_seq: 1,
+            rendered_at_ms: 1.0,
+            rtp_timestamp: Some(1),
+            is_keyframe: true,
+            frame_recovery_disposition: Some("repairing".to_string()),
+            frame_unrecoverable_reason: None,
+            pixel_data: XbxEngineRenderPixelData::Rgba {
+                bytes: Arc::<[u8]>::from([0u8; 16]),
+            },
+        });
+        state.enqueue_decoded_frame_for_test(XbxRenderFrame {
+            width: 2,
+            height: 2,
+            frame_seq: 2,
+            rendered_at_ms: 2.0,
+            rtp_timestamp: Some(2),
+            is_keyframe: false,
+            frame_recovery_disposition: Some("repairing".to_string()),
+            frame_unrecoverable_reason: None,
+            pixel_data: XbxEngineRenderPixelData::Rgba {
+                bytes: Arc::<[u8]>::from([1u8; 16]),
+            },
+        });
+
+        let dropped = state.enqueue_decoded_frame(DecodedFrame {
+            pts: Instant::now(),
+            rtp_timestamp: 3,
+            is_keyframe: false,
+            frame_recovery_disposition: FrameRecoveryDisposition::Repairing,
+            frame_unrecoverable_reason: None,
+            surface: XbxRenderFrame {
+                width: 2,
+                height: 2,
+                frame_seq: 3,
+                rendered_at_ms: 3.0,
+                rtp_timestamp: Some(3),
+                is_keyframe: false,
+                frame_recovery_disposition: Some("repairing".to_string()),
+                frame_unrecoverable_reason: None,
+                pixel_data: XbxEngineRenderPixelData::Rgba {
+                    bytes: Arc::<[u8]>::from([2u8; 16]),
+                },
+            },
+        });
+
+        assert_eq!(dropped.map(|frame| frame.surface.frame_seq), Some(1));
+        assert_eq!(state.decoded_frame_drop_count(), 1);
+        let decision = state
+            .latest_decode_candidate_decision()
+            .expect("candidate decision");
+        assert_eq!(decision.state, XbxDecodeCandidateState::Backpressure);
+        assert_eq!(decision.action, "drop");
+        assert_eq!(decision.detail, "outputQueueOverflow");
+        assert_eq!(decision.frame_seq, Some(1));
+    }
+
+    #[test]
+    fn decode_candidate_state_recovers_to_nominal_after_pressure_is_relieved() {
+        let decoder = SpyHardwareDecoder {
+            reset_calls: Arc::new(AtomicUsize::new(0)),
+        };
+        let mut state = XbxVideoDecodeState::new_for_test(20, 30, Box::new(decoder));
+
+        for seq in 1..=3 {
+            state.enqueue_decoded_frame_for_test(XbxRenderFrame {
+                width: 2,
+                height: 2,
+                frame_seq: seq,
+                rendered_at_ms: seq as f64,
+                rtp_timestamp: Some(seq as u32),
+                is_keyframe: seq == 1,
+                frame_recovery_disposition: Some("repairing".to_string()),
+                frame_unrecoverable_reason: None,
+                pixel_data: XbxEngineRenderPixelData::Rgba {
+                    bytes: Arc::<[u8]>::from([0u8; 16]),
+                },
+            });
+        }
+        let pressured = state
+            .latest_decode_candidate_decision()
+            .expect("backpressure decision");
+        assert_eq!(pressured.state, XbxDecodeCandidateState::Backpressure);
+
+        let _ = state.pop_decoded_frame(4.0);
+        state.enqueue_decoded_frame_for_test(XbxRenderFrame {
+            width: 2,
+            height: 2,
+            frame_seq: 4,
+            rendered_at_ms: 4.0,
+            rtp_timestamp: Some(4),
+            is_keyframe: false,
+            frame_recovery_disposition: Some("repairing".to_string()),
+            frame_unrecoverable_reason: None,
+            pixel_data: XbxEngineRenderPixelData::Rgba {
+                bytes: Arc::<[u8]>::from([1u8; 16]),
+            },
+        });
+        let recovered = state
+            .latest_decode_candidate_decision()
+            .expect("recovered decision");
+        assert_eq!(recovered.state, XbxDecodeCandidateState::Nominal);
+        assert_eq!(recovered.action, "accept");
+        assert_eq!(recovered.detail, "queueRecovered");
+        assert_eq!(recovered.frame_seq, Some(4));
     }
 
     struct ScriptedHardwareDecoder {

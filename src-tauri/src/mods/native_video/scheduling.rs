@@ -1,11 +1,61 @@
 use std::collections::VecDeque;
 
-use xbxengine::XbxEngineRenderFrame;
+use xbxengine::{XbxEngineHostVideoFrameDropEvent, XbxEngineRenderFrame};
 
 const HOST_RENDER_FPS_WINDOW_MS: f64 = 1_000.0;
 const HOST_RENDER_MIN_FRAME_AGE_MS: f64 = 24.0;
 const HOST_RENDER_MAX_FRAME_AGE_MS: f64 = 75.0;
 const HOST_RENDER_FRAME_AGE_MULTIPLIER: f64 = 2.25;
+const HOST_FRAME_DROP_BACKLOG_LIMIT: usize = 32;
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct HostFrameDropBacklog {
+    pending: VecDeque<XbxEngineHostVideoFrameDropEvent>,
+}
+
+impl Default for HostFrameDropBacklog {
+    fn default() -> Self {
+        Self {
+            pending: VecDeque::new(),
+        }
+    }
+}
+
+impl HostFrameDropBacklog {
+    pub fn record_stale_frame_drop(
+        &mut self,
+        frame: &XbxEngineRenderFrame,
+        observed_at_ms: f64,
+        detail: &str,
+        queue_depth: usize,
+    ) {
+        self.pending.push_back(XbxEngineHostVideoFrameDropEvent {
+            stage: Some("present".to_string()),
+            action: Some("drop".to_string()),
+            detail: Some(detail.to_string()),
+            frame_rtp_timestamp: frame.rtp_timestamp,
+            frame_seq: Some(frame.frame_seq),
+            frame_recovery_disposition: frame.frame_recovery_disposition.clone(),
+            frame_unrecoverable_reason: frame.frame_unrecoverable_reason.clone(),
+            observed_at_ms,
+            width: frame.width,
+            height: frame.height,
+            is_keyframe: frame.is_keyframe,
+            queue_depth,
+        });
+        while self.pending.len() > HOST_FRAME_DROP_BACKLOG_LIMIT {
+            self.pending.pop_front();
+        }
+    }
+
+    pub fn take_all(&mut self) -> Vec<XbxEngineHostVideoFrameDropEvent> {
+        self.pending.drain(..).collect()
+    }
+
+    pub fn reset(&mut self) {
+        self.pending.clear();
+    }
+}
 
 #[derive(Default)]
 pub struct HostCadenceTelemetry {
@@ -15,6 +65,10 @@ pub struct HostCadenceTelemetry {
     pub present_submit_count_total: u64,
     pub present_drop_count_total: u64,
     pub present_overwrite_count_total: u64,
+    pub no_pending_take_count_total: u64,
+    pub no_pending_streak: u32,
+    pub no_pending_max_streak: u32,
+    pending_frame_drops: HostFrameDropBacklog,
 }
 
 impl HostCadenceTelemetry {
@@ -33,8 +87,38 @@ impl HostCadenceTelemetry {
         self.present_drop_count_total = self.present_drop_count_total.saturating_add(1);
     }
 
+    pub fn record_stale_frame_drop(
+        &mut self,
+        frame: &XbxEngineRenderFrame,
+        observed_at_ms: f64,
+        detail: &str,
+        queue_depth: usize,
+    ) {
+        self.record_drop();
+        self.pending_frame_drops.record_stale_frame_drop(
+            frame,
+            observed_at_ms,
+            detail,
+            queue_depth,
+        );
+    }
+
     pub fn record_overwrite(&mut self) {
         self.present_overwrite_count_total = self.present_overwrite_count_total.saturating_add(1);
+    }
+
+    pub fn record_no_pending_take(&mut self) {
+        self.no_pending_take_count_total = self.no_pending_take_count_total.saturating_add(1);
+        self.no_pending_streak = self.no_pending_streak.saturating_add(1);
+        self.no_pending_max_streak = self.no_pending_max_streak.max(self.no_pending_streak);
+    }
+
+    pub fn clear_no_pending_streak(&mut self) {
+        self.no_pending_streak = 0;
+    }
+
+    pub fn take_pending_frame_drops(&mut self) -> Vec<XbxEngineHostVideoFrameDropEvent> {
+        self.pending_frame_drops.take_all()
     }
 
     pub fn present_fps(&self) -> f64 {
@@ -63,6 +147,10 @@ impl HostCadenceTelemetry {
         self.present_submit_count_total = 0;
         self.present_drop_count_total = 0;
         self.present_overwrite_count_total = 0;
+        self.no_pending_take_count_total = 0;
+        self.no_pending_streak = 0;
+        self.no_pending_max_streak = 0;
+        self.pending_frame_drops.reset();
     }
 
     fn trim_recent(&mut self, now_ms: f64) {
@@ -93,54 +181,117 @@ pub struct ScheduledFrameSlot {
     pub render_loop_started: bool,
 }
 
+#[derive(Debug)]
+pub enum ScheduledFrameSubmitOutcome {
+    Accepted {
+        frame_seq: u64,
+        overwrote_pending: bool,
+        replaced_frame_seq: Option<u64>,
+        frame_age_ms: f64,
+        frame_age_budget_ms: f64,
+    },
+    DroppedStale {
+        frame_seq: u64,
+        frame_age_ms: f64,
+        frame_age_budget_ms: f64,
+    },
+    RejectedAlreadyPresented {
+        frame_seq: u64,
+        last_presented_frame_seq: u64,
+    },
+}
+
+#[derive(Debug)]
+pub enum ScheduledFrameTakeOutcome {
+    Ready(XbxEngineRenderFrame),
+    NoPendingFrame,
+    RejectedAlreadyPresented {
+        frame_seq: u64,
+        last_presented_frame_seq: u64,
+    },
+    DroppedStale {
+        frame: XbxEngineRenderFrame,
+        frame_age_ms: f64,
+        frame_age_budget_ms: f64,
+    },
+}
+
 impl ScheduledFrameSlot {
     pub fn submit_frame(
         &mut self,
         frame: &XbxEngineRenderFrame,
         now_ms: f64,
         telemetry: &mut HostCadenceTelemetry,
-    ) -> bool {
-        if now_ms - frame.rendered_at_ms > telemetry.frame_age_budget_ms() {
-            telemetry.record_drop();
-            return false;
+    ) -> ScheduledFrameSubmitOutcome {
+        let frame_age_budget_ms = telemetry.frame_age_budget_ms();
+        let frame_age_ms = (now_ms - frame.rendered_at_ms).max(0.0);
+        if frame_age_ms > frame_age_budget_ms {
+            telemetry.record_stale_frame_drop(frame, now_ms, "scheduledFrameStale", 1);
+            return ScheduledFrameSubmitOutcome::DroppedStale {
+                frame_seq: frame.frame_seq,
+                frame_age_ms,
+                frame_age_budget_ms,
+            };
         }
         if self
             .last_presented_frame_seq
             .is_some_and(|frame_seq| frame.frame_seq <= frame_seq)
         {
-            return false;
+            return ScheduledFrameSubmitOutcome::RejectedAlreadyPresented {
+                frame_seq: frame.frame_seq,
+                last_presented_frame_seq: self.last_presented_frame_seq.unwrap_or_default(),
+            };
         }
+        let replaced_frame_seq = self.latest_frame.as_ref().map(|latest| latest.frame_seq);
+        let mut overwrote_pending = false;
         if self.latest_frame.as_ref().is_some_and(|latest| {
             Some(latest.frame_seq) != self.last_presented_frame_seq
                 && latest.frame_seq != frame.frame_seq
         }) {
             telemetry.record_overwrite();
+            overwrote_pending = true;
         }
         self.latest_frame = Some(frame.clone());
-        true
+        ScheduledFrameSubmitOutcome::Accepted {
+            frame_seq: frame.frame_seq,
+            overwrote_pending,
+            replaced_frame_seq,
+            frame_age_ms,
+            frame_age_budget_ms,
+        }
     }
 
     pub fn take_ready_frame(
         &mut self,
         now_ms: f64,
         telemetry: &mut HostCadenceTelemetry,
-    ) -> Option<XbxEngineRenderFrame> {
-        let frame = self.latest_frame.as_ref()?;
+    ) -> ScheduledFrameTakeOutcome {
+        let Some(frame) = self.latest_frame.take() else {
+            telemetry.record_no_pending_take();
+            return ScheduledFrameTakeOutcome::NoPendingFrame;
+        };
+        telemetry.clear_no_pending_streak();
         if self
             .last_presented_frame_seq
             .is_some_and(|frame_seq| frame.frame_seq <= frame_seq)
         {
-            self.latest_frame = None;
-            return None;
+            return ScheduledFrameTakeOutcome::RejectedAlreadyPresented {
+                frame_seq: frame.frame_seq,
+                last_presented_frame_seq: self.last_presented_frame_seq.unwrap_or_default(),
+            };
         }
-        if now_ms - frame.rendered_at_ms > telemetry.frame_age_budget_ms() {
-            self.latest_frame = None;
-            telemetry.record_drop();
-            return None;
+        let frame_age_budget_ms = telemetry.frame_age_budget_ms();
+        let frame_age_ms = (now_ms - frame.rendered_at_ms).max(0.0);
+        if frame_age_ms > frame_age_budget_ms {
+            telemetry.record_stale_frame_drop(&frame, now_ms, "scheduledFrameStale", 1);
+            return ScheduledFrameTakeOutcome::DroppedStale {
+                frame,
+                frame_age_ms,
+                frame_age_budget_ms,
+            };
         }
-        let frame = self.latest_frame.take()?;
         self.last_presented_frame_seq = Some(frame.frame_seq);
-        Some(frame)
+        ScheduledFrameTakeOutcome::Ready(frame)
     }
 
     pub fn reset(&mut self) {

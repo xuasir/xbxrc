@@ -161,6 +161,7 @@ export interface StreamingRuntimeProjection {
   maxVideoBitrateKbps?: number | null
   maxAudioBitrateKbps?: number | null
   forceMonoAudio: boolean
+  preferIpv6: boolean
   bweMode: StreamingBweMode
   forcedRembKbps?: number | null
   adaptiveRembEnabled: boolean

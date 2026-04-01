@@ -224,6 +224,7 @@ pub struct StreamingRuntimeProjection {
     pub max_video_bitrate_kbps: Option<u32>,
     pub max_audio_bitrate_kbps: Option<u32>,
     pub force_mono_audio: bool,
+    pub prefer_ipv6: bool,
     pub bwe_mode: StreamingBweMode,
     pub forced_remb_kbps: Option<u32>,
     pub adaptive_remb_enabled: bool,
@@ -319,6 +320,7 @@ impl From<DomainRuntimePlanProjection> for StreamingRuntimeProjection {
             max_video_bitrate_kbps: projection.max_video_bitrate_kbps,
             max_audio_bitrate_kbps: projection.max_audio_bitrate_kbps,
             force_mono_audio: projection.force_mono_audio,
+            prefer_ipv6: projection.prefer_ipv6,
             bwe_mode: match projection.bwe_mode {
                 DomainRuntimeBweMode::FixedRemb => StreamingBweMode::FixedRemb,
                 DomainRuntimeBweMode::ObservedRemb => StreamingBweMode::ObservedRemb,

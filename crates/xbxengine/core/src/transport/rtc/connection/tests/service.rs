@@ -192,6 +192,9 @@ fn refresh_transport_metrics_publishes_raw_sample_only() {
         inbound_video_loss_ratio_5s: 0.0,
         inbound_video_loss_ratio_1s: 0.0,
         transport_path: Some("Direct (host->host)".to_string()),
+        transport_candidate_pair: Some("host->host".to_string()),
+        transport_protocol: Some("UDP".to_string()),
+        transport_address_family: Some("ipv4".to_string()),
         inbound_video_bitrate_kbps: 11_500.0,
         inbound_primary_video_bytes_total: 900_000,
     };
@@ -204,6 +207,12 @@ fn refresh_transport_metrics_publishes_raw_sample_only() {
     assert_eq!(stats.inbound_video_loss_ratio_1s, 0.0);
     assert_eq!(stats.inbound_video_bitrate_kbps, Some(11_500.0));
     assert_eq!(stats.inbound_primary_video_bytes_total, 900_000);
+    assert_eq!(
+        stats.transport_candidate_pair.as_deref(),
+        Some("host->host")
+    );
+    assert_eq!(stats.transport_protocol.as_deref(), Some("UDP"));
+    assert_eq!(stats.transport_address_family.as_deref(), Some("ipv4"));
     assert_eq!(stats.video_remb_bps, Some(42_000_000));
     assert!(stats.latest_video_bwe_observation.is_none());
 }
@@ -1153,7 +1162,7 @@ fn request_target_remb_kbps_sends_goog_remb_rtcp() {
 }
 
 #[test]
-fn target_remb_is_refreshed_periodically_after_initial_request() {
+fn target_remb_same_target_is_not_refreshed_periodically() {
     let mut service = RtcConnectionService::default();
     let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
     let session = XbxEngineSessionDto {
@@ -1209,14 +1218,350 @@ fn target_remb_is_refreshed_periodically_after_initial_request() {
         .request_target_remb_kbps(25_000, &runtime_stats)
         .unwrap();
     let initial_count = service.target_remb_request_count;
-    service.last_target_remb_request_at_ms = Some(
-        crate::transport::rtc::stats::now_ms_f64()
-            - service
-                .webrtc_runtime_config
-                .video_pipeline
-                .feedback_interval_ms as f64
-            - 50.0,
+    RuntimeStatsSink::new(runtime_stats.clone()).update(|stats| {
+        stats.latest_video_bwe_observation =
+            Some(crate::api::backend::XbxEngineVideoBweObservation {
+                observation_id: 1,
+                mode: "hybrid".to_string(),
+                decision_reason: "test".to_string(),
+                target_remb_kbps: 25_000,
+                observed_remb_kbps: Some(25_000),
+                actual_video_bitrate_kbps: 25_000.0,
+                loss_ratio: 0.0,
+                rtt_ms: Some(18.0),
+                transport_path: Some("Direct".to_string()),
+                twcc_feedback_interval_ms: Some(100.0),
+                twcc_observed_packet_count: Some(100),
+                twcc_covered_sequence_span: Some(100),
+                twcc_receive_bitrate_kbps: Some(24_000.0),
+                twcc_delivery_ratio: Some(1.0),
+                twcc_loss_ratio: Some(0.0),
+                observed_at_ms: crate::transport::rtc::stats::now_ms_f64(),
+            });
+    });
+
+    let deadline = Instant::now() + Duration::from_secs(2);
+    while Instant::now() < deadline {
+        service.pump(&runtime_stats).unwrap();
+        thread::sleep(Duration::from_millis(10));
+    }
+
+    assert_eq!(
+        service.target_remb_request_count, initial_count,
+        "same REMB target should not be periodically refreshed"
     );
+}
+
+fn prime_video_feedback_target(
+    service: &mut RtcConnectionService,
+    runtime_stats: &Arc<Mutex<XbxEngineMediaRuntimeStats>>,
+) {
+    let receiver_id = service
+        .peer_connection
+        .as_mut()
+        .and_then(|pc| pc.get_receivers().next())
+        .expect("receiver id");
+    let track_id: MediaStreamTrackId = "video".to_string();
+    service
+        .controlled_twcc_feedback
+        .register_track_open(&track_id, receiver_id);
+    let mut packet = rtc_rtp::packet::Packet {
+        header: rtc_rtp::header::Header {
+            ssrc: 0x55667788,
+            sequence_number: 1,
+            payload_type: 124,
+            ..Default::default()
+        },
+        payload: vec![0u8; 64].into(),
+    };
+    let ext = TransportCcExtension {
+        transport_sequence: 9,
+    };
+    packet
+        .header
+        .set_extension(5, ext.marshal().unwrap().freeze())
+        .unwrap();
+    service
+        .controlled_twcc_feedback
+        .observe_inbound_rtp(
+            &track_id,
+            &packet,
+            runtime_stats,
+            Some(concat!(
+                "m=video 9 UDP/TLS/RTP/SAVPF 124\r\n",
+                "a=extmap:5 http://www.ietf.org/id/draft-holmer-rmcat-transport-wide-cc-extensions-01\r\n",
+                "a=rtpmap:124 H264/90000\r\n",
+                "a=rtcp-fb:124 transport-cc\r\n",
+            )),
+            Some("video/H264".to_string()),
+        )
+        .unwrap();
+}
+
+#[test]
+fn video_recovery_prefers_pli_on_first_request() {
+    let mut service = RtcConnectionService::default();
+    let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
+    let session = XbxEngineSessionDto {
+        session_id: "test-session".to_string(),
+        target_type: XbxEngineTargetTypeDto::Cloud,
+        turn_server: None,
+    };
+    service.rebuild(&session, &runtime_stats).unwrap();
+    let _ = connect_service_to_answer_peer(&mut service, &runtime_stats);
+    prime_video_feedback_target(&mut service, &runtime_stats);
+    if let Ok(mut stats) = runtime_stats.lock() {
+        if let Some(remote_answer) = stats.latest_remote_answer_observation.as_mut() {
+            remote_answer.accepted_video_rtcp_feedback =
+                vec!["nack:pli".to_string(), "ccm:fir".to_string()];
+        }
+    }
+
+    assert!(service.request_video_keyframe(&runtime_stats).is_ok());
+    let first_label = runtime_stats
+        .lock()
+        .ok()
+        .and_then(|stats| stats.latest_observation_label.clone());
+    assert_eq!(first_label.as_deref(), Some("rtcVideoPliRequested"));
+
+    let stats = runtime_stats.lock().expect("runtime stats lock");
+    assert_eq!(stats.video_pli_request_count_total, 1);
+}
+
+#[test]
+fn video_recovery_escalates_to_fir_within_same_epoch() {
+    let mut service = RtcConnectionService::default();
+    let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
+    let session = XbxEngineSessionDto {
+        session_id: "test-session".to_string(),
+        target_type: XbxEngineTargetTypeDto::Cloud,
+        turn_server: None,
+    };
+    service.rebuild(&session, &runtime_stats).unwrap();
+    let _ = connect_service_to_answer_peer(&mut service, &runtime_stats);
+    prime_video_feedback_target(&mut service, &runtime_stats);
+    if let Ok(mut stats) = runtime_stats.lock() {
+        if let Some(remote_answer) = stats.latest_remote_answer_observation.as_mut() {
+            remote_answer.accepted_video_rtcp_feedback =
+                vec!["nack:pli".to_string(), "ccm:fir".to_string()];
+        }
+    }
+
+    assert!(service.request_video_keyframe(&runtime_stats).is_ok());
+    thread::sleep(Duration::from_millis(220));
+    assert!(service.request_video_keyframe(&runtime_stats).is_ok());
+    let second_label = runtime_stats
+        .lock()
+        .ok()
+        .and_then(|stats| stats.latest_observation_label.clone());
+    assert_eq!(second_label.as_deref(), Some("rtcVideoFirRequested"));
+
+    let stats = runtime_stats.lock().expect("runtime stats lock");
+    assert_eq!(stats.video_pli_request_count_total, 2);
+}
+
+#[test]
+fn video_recovery_falls_back_to_control_when_feedback_not_supported() {
+    let mut service = RtcConnectionService::default();
+    let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
+    let session = XbxEngineSessionDto {
+        session_id: "test-session".to_string(),
+        target_type: XbxEngineTargetTypeDto::Cloud,
+        turn_server: None,
+    };
+    service.rebuild(&session, &runtime_stats).unwrap();
+    let (mut answer_pc, mut answer_io, _, control_dc_id, _, _, _, _) =
+        connect_service_to_answer_peer(&mut service, &runtime_stats);
+    if let Ok(mut stats) = runtime_stats.lock() {
+        if let Some(remote_answer) = stats.latest_remote_answer_observation.as_mut() {
+            remote_answer.accepted_video_rtcp_feedback.clear();
+        }
+    }
+    assert!(service.request_video_keyframe(&runtime_stats).is_ok());
+    let fallback_label = runtime_stats
+        .lock()
+        .ok()
+        .and_then(|stats| stats.latest_observation_label.clone());
+    assert_eq!(
+        fallback_label.as_deref(),
+        Some("rtcControlKeyframeRequested")
+    );
+
+    let control_dc_id = control_dc_id.expect("control channel id");
+    let deadline = Instant::now() + Duration::from_secs(3);
+    let mut saw_control_keyframe = false;
+    while Instant::now() < deadline {
+        service.pump(&runtime_stats).unwrap();
+        answer_io.pump(&mut answer_pc).unwrap();
+        while let Some(message) = answer_pc.poll_read() {
+            let rtc::peer_connection::message::RTCMessage::DataChannelMessage(channel_id, payload) =
+                message
+            else {
+                continue;
+            };
+            if channel_id != control_dc_id || !payload.is_string {
+                continue;
+            }
+            let body = String::from_utf8_lossy(payload.data.as_ref());
+            if body.contains("\"message\":\"videoKeyframeRequested\"") {
+                saw_control_keyframe = true;
+                break;
+            }
+        }
+        if saw_control_keyframe {
+            break;
+        }
+        thread::sleep(Duration::from_millis(10));
+    }
+
+    let stats = runtime_stats.lock().expect("runtime stats lock");
+    assert_eq!(stats.video_pli_request_count_total, 1);
+    assert!(
+        saw_control_keyframe,
+        "when remote answer does not advertise pli/fir, should fallback to control keyframe"
+    );
+}
+
+#[test]
+fn video_recovery_clean_anchor_clears_stage_token_and_new_epoch_restarts_from_pli() {
+    let mut service = RtcConnectionService::default();
+    let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
+    let session = XbxEngineSessionDto {
+        session_id: "test-session".to_string(),
+        target_type: XbxEngineTargetTypeDto::Cloud,
+        turn_server: None,
+    };
+    service.rebuild(&session, &runtime_stats).unwrap();
+    let (mut answer_pc, mut answer_io, _, _, _, _, _, _) =
+        connect_service_to_answer_peer(&mut service, &runtime_stats);
+    prime_video_feedback_target(&mut service, &runtime_stats);
+    if let Ok(mut stats) = runtime_stats.lock() {
+        if let Some(remote_answer) = stats.latest_remote_answer_observation.as_mut() {
+            remote_answer.accepted_video_rtcp_feedback =
+                vec!["nack:pli".to_string(), "ccm:fir".to_string()];
+        }
+    }
+
+    assert!(service.request_video_keyframe(&runtime_stats).is_ok());
+    thread::sleep(Duration::from_millis(220));
+    assert!(service.request_video_keyframe(&runtime_stats).is_ok());
+    for _ in 0..8 {
+        service.pump(&runtime_stats).unwrap();
+        answer_io.pump(&mut answer_pc).unwrap();
+    }
+
+    let current_epoch = runtime_stats
+        .lock()
+        .ok()
+        .map(|stats| stats.transport_recovery_epoch)
+        .unwrap_or(0);
+    if let Ok(mut stats) = runtime_stats.lock() {
+        stats.video_anchor_clean_epoch = Some(current_epoch);
+    }
+    assert!(service.request_video_keyframe(&runtime_stats).is_ok());
+    let suppressed_label = runtime_stats
+        .lock()
+        .ok()
+        .and_then(|stats| stats.latest_observation_label.clone());
+    assert_eq!(
+        suppressed_label.as_deref(),
+        Some("rtcVideoRecoverySuppressed")
+    );
+
+    if let Ok(mut stats) = runtime_stats.lock() {
+        stats.transport_recovery_epoch = stats.transport_recovery_epoch.saturating_add(1);
+        stats.video_anchor_clean_epoch = None;
+    }
+    assert!(service.request_video_keyframe(&runtime_stats).is_ok());
+    let restarted_label = runtime_stats
+        .lock()
+        .ok()
+        .and_then(|stats| stats.latest_observation_label.clone());
+    assert_eq!(restarted_label.as_deref(), Some("rtcVideoPliRequested"));
+    for _ in 0..8 {
+        service.pump(&runtime_stats).unwrap();
+        answer_io.pump(&mut answer_pc).unwrap();
+    }
+}
+
+#[test]
+fn target_remb_target_change_triggers_new_request() {
+    let mut service = RtcConnectionService::default();
+    let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
+    let session = XbxEngineSessionDto {
+        session_id: "test-session".to_string(),
+        target_type: XbxEngineTargetTypeDto::Cloud,
+        turn_server: None,
+    };
+
+    service.rebuild(&session, &runtime_stats).unwrap();
+    let (_answer_pc, _answer_io, _, _, _, _, _, _) =
+        connect_service_to_answer_peer(&mut service, &runtime_stats);
+    let receiver_id = service
+        .peer_connection
+        .as_mut()
+        .and_then(|pc| pc.get_receivers().next())
+        .expect("receiver id");
+    let track_id: MediaStreamTrackId = "video".to_string();
+    service
+        .controlled_twcc_feedback
+        .register_track_open(&track_id, receiver_id);
+    let mut packet = rtc_rtp::packet::Packet {
+        header: rtc_rtp::header::Header {
+            ssrc: 0x55667788,
+            sequence_number: 1,
+            payload_type: 124,
+            ..Default::default()
+        },
+        payload: vec![0u8; 64].into(),
+    };
+    let ext = TransportCcExtension {
+        transport_sequence: 9,
+    };
+    packet
+        .header
+        .set_extension(5, ext.marshal().unwrap().freeze())
+        .unwrap();
+    service
+        .controlled_twcc_feedback
+        .observe_inbound_rtp(
+            &track_id,
+            &packet,
+            &runtime_stats,
+            Some(concat!(
+                "m=video 9 UDP/TLS/RTP/SAVPF 124\r\n",
+                "a=extmap:5 http://www.ietf.org/id/draft-holmer-rmcat-transport-wide-cc-extensions-01\r\n",
+                "a=rtpmap:124 H264/90000\r\n",
+                "a=rtcp-fb:124 transport-cc\r\n",
+            )),
+            Some("video/H264".to_string()),
+        )
+        .unwrap();
+    service
+        .request_target_remb_kbps(25_000, &runtime_stats)
+        .unwrap();
+    let initial_count = service.target_remb_request_count;
+    RuntimeStatsSink::new(runtime_stats.clone()).update(|stats| {
+        stats.latest_video_bwe_observation =
+            Some(crate::api::backend::XbxEngineVideoBweObservation {
+                observation_id: 2,
+                mode: "hybrid".to_string(),
+                decision_reason: "test-change".to_string(),
+                target_remb_kbps: 22_000,
+                observed_remb_kbps: Some(22_000),
+                actual_video_bitrate_kbps: 21_500.0,
+                loss_ratio: 0.02,
+                rtt_ms: Some(22.0),
+                transport_path: Some("Direct".to_string()),
+                twcc_feedback_interval_ms: Some(100.0),
+                twcc_observed_packet_count: Some(100),
+                twcc_covered_sequence_span: Some(100),
+                twcc_receive_bitrate_kbps: Some(21_800.0),
+                twcc_delivery_ratio: Some(0.98),
+                twcc_loss_ratio: Some(0.02),
+                observed_at_ms: crate::transport::rtc::stats::now_ms_f64(),
+            });
+    });
 
     let deadline = Instant::now() + Duration::from_secs(2);
     while Instant::now() < deadline {
@@ -1229,8 +1574,7 @@ fn target_remb_is_refreshed_periodically_after_initial_request() {
 
     assert!(
         service.target_remb_request_count > initial_count,
-        "expected periodic REMB refresh, initial_count={initial_count} final_count={}",
-        service.target_remb_request_count
+        "changed REMB target should trigger new request"
     );
 }
 
@@ -1894,4 +2238,179 @@ fn connect_service_to_answer_peer(
         saw_input_metadata,
         observed_payloads,
     )
+}
+
+fn prime_video_recovery_feedback_target(
+    service: &mut RtcConnectionService,
+    runtime_stats: &Arc<Mutex<XbxEngineMediaRuntimeStats>>,
+    answer_pc: &mut RTCPeerConnection,
+) {
+    let receiver_id = answer_pc
+        .get_receivers()
+        .next()
+        .expect("answer receiver id");
+    let track_id: MediaStreamTrackId = "video".to_string();
+    service
+        .controlled_twcc_feedback
+        .register_track_open(&track_id, receiver_id);
+    let mut packet = rtc_rtp::packet::Packet {
+        header: rtc_rtp::header::Header {
+            ssrc: 0x5566_7788,
+            sequence_number: 1,
+            payload_type: 124,
+            ..Default::default()
+        },
+        payload: vec![0u8; 64].into(),
+    };
+    let ext = TransportCcExtension {
+        transport_sequence: 9,
+    };
+    packet
+        .header
+        .set_extension(5, ext.marshal().unwrap().freeze())
+        .unwrap();
+    service
+        .controlled_twcc_feedback
+        .observe_inbound_rtp(
+            &track_id,
+            &packet,
+            runtime_stats,
+            Some(concat!(
+                "m=video 9 UDP/TLS/RTP/SAVPF 124\r\n",
+                "a=extmap:5 http://www.ietf.org/id/draft-holmer-rmcat-transport-wide-cc-extensions-01\r\n",
+                "a=rtpmap:124 H264/90000\r\n",
+                "a=rtcp-fb:124 transport-cc\r\n",
+                "a=rtcp-fb:124 nack pli\r\n",
+                "a=rtcp-fb:124 ccm fir\r\n",
+            )),
+            Some("video/H264".to_string()),
+        )
+        .unwrap();
+    assert!(service
+        .controlled_twcc_feedback
+        .preferred_video_feedback_target()
+        .is_some());
+    RuntimeStatsSink::new(runtime_stats.clone()).update(|stats| {
+        if let Some(remote_answer) = stats.latest_remote_answer_observation.as_mut() {
+            remote_answer.accepted_video_rtcp_feedback =
+                vec!["nack:pli".to_string(), "ccm:fir".to_string()];
+        }
+    });
+}
+
+#[test]
+fn request_video_keyframe_prefers_pli_when_video_feedback_is_bound() {
+    let mut service = RtcConnectionService::default();
+    let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
+    let session = XbxEngineSessionDto {
+        session_id: "test-session".to_string(),
+        target_type: XbxEngineTargetTypeDto::Cloud,
+        turn_server: None,
+    };
+
+    service.rebuild(&session, &runtime_stats).unwrap();
+    let (mut answer_pc, mut answer_io, _, _, _, _, _, _) =
+        connect_service_to_answer_peer(&mut service, &runtime_stats);
+    prime_video_recovery_feedback_target(&mut service, &runtime_stats, &mut answer_pc);
+
+    service.request_video_keyframe(&runtime_stats).unwrap();
+    answer_io.pump(&mut answer_pc).unwrap();
+
+    let stats = runtime_stats.lock().unwrap().clone();
+    assert_eq!(
+        stats.latest_observation_label.as_deref(),
+        Some("rtcVideoPliRequested")
+    );
+    assert_eq!(stats.video_pli_request_count_total, 1);
+    assert_eq!(
+        service.video_recovery_transport_state.stage,
+        super::VideoRecoveryTransportStage::PictureLossIndication
+    );
+}
+
+#[test]
+fn request_video_keyframe_upgrades_from_pli_to_fir_then_control() {
+    let mut service = RtcConnectionService::default();
+    let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
+    let session = XbxEngineSessionDto {
+        session_id: "test-session".to_string(),
+        target_type: XbxEngineTargetTypeDto::Cloud,
+        turn_server: None,
+    };
+
+    service.rebuild(&session, &runtime_stats).unwrap();
+    let (mut answer_pc, mut answer_io, _, _, _, _, _, _) =
+        connect_service_to_answer_peer(&mut service, &runtime_stats);
+    prime_video_recovery_feedback_target(&mut service, &runtime_stats, &mut answer_pc);
+
+    service.request_video_keyframe(&runtime_stats).unwrap();
+
+    let now_ms = crate::transport::rtc::stats::now_ms_f64();
+    service.video_recovery_transport_state.stage =
+        super::VideoRecoveryTransportStage::PictureLossIndication;
+    service.video_recovery_transport_state.last_sent_at_ms = Some(now_ms - 240.0);
+    service.request_video_keyframe(&runtime_stats).unwrap();
+
+    let stats = runtime_stats.lock().unwrap().clone();
+    assert_eq!(
+        stats.latest_observation_label.as_deref(),
+        Some("rtcVideoFirRequested")
+    );
+    assert_eq!(stats.video_pli_request_count_total, 2);
+    assert_eq!(
+        service.video_recovery_transport_state.stage,
+        super::VideoRecoveryTransportStage::FullIntraRequest
+    );
+
+    service.video_recovery_transport_state.stage =
+        super::VideoRecoveryTransportStage::FullIntraRequest;
+    service.video_recovery_transport_state.last_sent_at_ms = Some(now_ms - 420.0);
+    service.request_video_keyframe(&runtime_stats).unwrap();
+    answer_io.pump(&mut answer_pc).unwrap();
+
+    let stats = runtime_stats.lock().unwrap().clone();
+    assert_eq!(
+        stats.latest_observation_label.as_deref(),
+        Some("rtcControlKeyframeRequested")
+    );
+    assert_eq!(stats.video_pli_request_count_total, 3);
+    assert_eq!(
+        service.video_recovery_transport_state.stage,
+        super::VideoRecoveryTransportStage::ControlKeyframe
+    );
+}
+
+#[test]
+fn request_video_keyframe_clears_stage_after_clean_anchor() {
+    let mut service = RtcConnectionService::default();
+    let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
+    let session = XbxEngineSessionDto {
+        session_id: "test-session".to_string(),
+        target_type: XbxEngineTargetTypeDto::Cloud,
+        turn_server: None,
+    };
+
+    service.rebuild(&session, &runtime_stats).unwrap();
+    let (mut answer_pc, mut answer_io, _, _, _, _, _, _) =
+        connect_service_to_answer_peer(&mut service, &runtime_stats);
+    prime_video_recovery_feedback_target(&mut service, &runtime_stats, &mut answer_pc);
+    service.request_video_keyframe(&runtime_stats).unwrap();
+
+    let current_epoch = runtime_stats.lock().unwrap().transport_recovery_epoch;
+    RuntimeStatsSink::new(runtime_stats.clone()).update(|stats| {
+        stats.video_anchor_clean_epoch = Some(current_epoch);
+    });
+
+    service.request_video_keyframe(&runtime_stats).unwrap();
+    answer_io.pump(&mut answer_pc).unwrap();
+
+    let stats = runtime_stats.lock().unwrap().clone();
+    assert_eq!(
+        stats.latest_observation_label.as_deref(),
+        Some("rtcVideoRecoverySuppressed")
+    );
+    assert_eq!(
+        service.video_recovery_transport_state.stage,
+        super::VideoRecoveryTransportStage::None
+    );
 }

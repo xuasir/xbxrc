@@ -191,6 +191,9 @@ impl MediaSessionLoop {
             encoded_frame.height,
             encoded_frame.is_keyframe,
         );
+        let frame_rtp_timestamp = encoded_frame.rtp_timestamp;
+        let frame_recovery_disposition = encoded_frame.frame_recovery_disposition;
+        let frame_unrecoverable_reason = encoded_frame.frame_unrecoverable_reason.clone();
         let ingress_reason = encoded_frame
             .frame_recovery_disposition
             .ingress_reason()
@@ -208,6 +211,10 @@ impl MediaSessionLoop {
             frame_meta.1,
             frame_meta.2,
             frame_queue_depth_before_submit,
+            Some(frame_rtp_timestamp),
+            None,
+            Some(frame_recovery_disposition),
+            frame_unrecoverable_reason.as_deref(),
         );
         self.push_transport_fact(TransportFact::Media(MediaFact::IngressDecisionObserved {
             decision: IngressDecisionFact::from(&decision),

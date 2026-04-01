@@ -139,6 +139,7 @@ pub enum TransportCommand {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum CommandResultStatus {
     Succeeded,
+    Deferred { reason: String },
     Failed { error: String },
 }
 

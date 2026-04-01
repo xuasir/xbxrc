@@ -62,6 +62,8 @@ pub struct XbxEngineRuntimeProjectionDto {
     pub target_video_width: u32,
     pub target_video_height: u32,
     pub force_mono_audio: bool,
+    #[serde(default)]
+    pub prefer_ipv6: bool,
     pub bwe_mode: String,
     pub forced_remb_kbps: Option<u32>,
     pub adaptive_remb_enabled: bool,

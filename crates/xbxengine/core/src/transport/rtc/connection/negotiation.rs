@@ -60,6 +60,7 @@ impl RtcConnectionService {
         self.peer_connection = None;
         self.io_runtime.rebuild()?;
         self.control_service.reset();
+        self.video_recovery_transport_state = Default::default();
         self.lifecycle_state = RtcConnectionLifecycleState::Connecting;
         self.lifecycle_state_since_ms = now_ms_f64();
         self.last_transport_metrics_sample_at_ms = 0.0;

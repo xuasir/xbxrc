@@ -77,6 +77,10 @@ export interface XbxEngineStatsDto {
   recovery_coupling_mode?: string
   recovery_coupling_summary?: string
   direct_gaming_bitrate_band?: string
+  video_owner_state?: string
+  video_owner_reason?: string
+  video_owner_source?: string
+  video_owner_observed_at_ms?: number
   video_health?: string
   stall_kind?: string
   inbound_video_fps?: number
@@ -88,12 +92,18 @@ export interface XbxEngineStatsDto {
   br: string
   decode: string
   transport_path?: string
+  transport_candidate_pair?: string
+  transport_protocol?: string
+  transport_address_family?: 'ipv4' | 'ipv6' | 'mixed' | 'unknown'
   transport_state?: string
   video_rtt_source?: string
   video_remb_bps?: number
   inbound_bitrate_kbps?: number
   inbound_video_bitrate_kbps?: number
   inbound_audio_bitrate_kbps?: number
+  latest_audio_playout_time_ms?: number
+  audio_playout_latency_ms?: number
+  audio_video_playout_delta_ms?: number
   actual_video_bitrate_source?: string
   video_bwe_mode?: string
   video_bwe_reason?: string
@@ -141,12 +151,19 @@ export interface XbxEngineStatsDto {
   video_present_drop_count_total?: number
   video_present_overwrite_count_total?: number
   video_present_submit_count_total?: number
+  host_no_pending_take_count_total?: number
+  host_no_pending_streak?: number
+  host_no_pending_max_streak?: number
+  host_no_pending_pressure_level?: string
   video_present_descriptor_upload_mode?: string
   video_present_descriptor_metal_import_count_total?: number
   video_present_descriptor_cpu_upload_count_total?: number
   recovery_keyframe_request_count?: number
   recovery_decoder_reset_count?: number
   recovery_reconnect_count?: number
+  recovery_hard_fallback_timer_ms?: number
+  recovery_hard_fallback_trigger_reason?: string
+  recovery_hard_fallback_timer_reset_reason?: string
   last_recovery_action?: string
   last_recovery_action_at_ms?: number
   last_recovery_reason?: string
@@ -166,6 +183,13 @@ export interface XbxEngineStatsDto {
   latest_video_frame_drop?: {
     observation_id: number
     reason: string
+    stage?: string | null
+    action?: string | null
+    detail?: string | null
+    frame_rtp_timestamp?: number | null
+    frame_seq?: number | null
+    frame_recovery_disposition?: string | null
+    frame_unrecoverable_reason?: string | null
     observed_at_ms: number
     width: number
     height: number
@@ -184,12 +208,78 @@ export interface XbxEngineStatsDto {
     frame_is_keyframe?: boolean | null
     frame_importance?: string | null
     deadline_at_ms?: number | null
+    estimated_recovery_arrival_ms?: number | null
+    nack_disposition?: string | null
+    frame_playout_deadline_at_ms?: number | null
+    frame_unrecoverable_reason?: string | null
     observed_at_ms: number
   }
   latest_video_escalation_observation?: {
     observation_id: number
     reason: string
     action: string
+    observed_at_ms: number
+  }
+  latest_recovery_decision_ledger?: {
+    decision_id: number
+    state_before: string
+    state_after: string
+    input_signal: string
+    gate_result: string
+    action_selected: string
+    budget_before?: {
+      recovery_epoch: number
+      keyframe_budget_used: number
+      keyframe_budget_limit: number
+      decoder_reset_budget_used: number
+      decoder_reset_budget_limit: number
+      reconnect_budget_used: number
+      reconnect_budget_limit: number
+    } | null
+    budget_after?: {
+      recovery_epoch: number
+      keyframe_budget_used: number
+      keyframe_budget_limit: number
+      decoder_reset_budget_used: number
+      decoder_reset_budget_limit: number
+      reconnect_budget_used: number
+      reconnect_budget_limit: number
+    } | null
+    command_result?: string | null
+    command_detail?: string | null
+    observed_at_ms: number
+  }
+  latest_video_timeline_observation?: {
+    observation_id: number
+    source_event: string
+    gap?: {
+      state: string
+      sequence?: number | null
+      frame_rtp_timestamp?: number | null
+      frame_importance?: string | null
+      observed_at_ms: number
+    } | null
+    frame?: {
+      state: string
+      frame_rtp_timestamp?: number | null
+      is_keyframe?: boolean | null
+      frame_importance?: string | null
+      close_reason?: string | null
+      observed_at_ms: number
+    } | null
+    chain: {
+      state: string
+      reason?: string | null
+      observed_at_ms: number
+    }
+    observed_at_ms: number
+  }
+  latest_anchor_candidate_ledger?: {
+    recovery_epoch: number
+    frame_rtp_timestamp?: number | null
+    state: string
+    source_event: string
+    failure_reason?: string | null
     observed_at_ms: number
   }
   latest_video_bwe_observation?: {

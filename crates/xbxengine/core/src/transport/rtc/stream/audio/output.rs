@@ -9,18 +9,19 @@ use cpal::{
     Device, SampleFormat, SampleRate, Stream, SupportedStreamConfig,
 };
 
-use crate::XbxEngineRuntimeError;
+use crate::{XbxEngineMediaRuntimeStats, XbxEngineRuntimeError};
 
 use super::{state::AudioPlaybackSharedState, OPUS_SAMPLE_RATE_HZ};
 
 pub(super) fn spawn_audio_output_thread(
     shared_state: Arc<Mutex<AudioPlaybackSharedState>>,
+    runtime_stats: Arc<Mutex<XbxEngineMediaRuntimeStats>>,
     volume_bits: Arc<AtomicU32>,
     startup_sender: std::sync::mpsc::SyncSender<Result<(), String>>,
     output_stop_receiver: std::sync::mpsc::Receiver<()>,
 ) -> thread::JoinHandle<()> {
     thread::spawn(
-        move || match build_output_stream(shared_state, volume_bits) {
+        move || match build_output_stream(shared_state, runtime_stats, volume_bits) {
             Ok(output_stream) => {
                 if let Err(error) = output_stream.play() {
                     let _ =
@@ -40,6 +41,7 @@ pub(super) fn spawn_audio_output_thread(
 
 fn build_output_stream(
     shared_state: Arc<Mutex<AudioPlaybackSharedState>>,
+    runtime_stats: Arc<Mutex<XbxEngineMediaRuntimeStats>>,
     volume_bits: Arc<AtomicU32>,
 ) -> Result<Stream, XbxEngineRuntimeError> {
     let host = cpal::default_host();
@@ -61,21 +63,26 @@ fn build_output_stream(
     match output_config.sample_format() {
         SampleFormat::F32 => {
             let shared_state = shared_state.clone();
+            let runtime_stats = runtime_stats.clone();
             let volume_bits = volume_bits.clone();
             output_device
                 .build_output_stream(
                     &stream_config,
                     move |data: &mut [f32], _| {
                         let volume = f32::from_bits(volume_bits.load(Ordering::Relaxed));
-                        if let Ok(mut state) = shared_state.lock() {
+                        let metrics = shared_state.lock().ok().map(|mut state| {
                             state.fill_output_f32(
                                 data,
                                 output_sample_rate_hz,
                                 output_channels,
                                 volume,
-                            );
-                        } else {
+                            )
+                        });
+                        if metrics.is_none() {
                             data.fill(0.0);
+                        }
+                        if let Some(metrics) = metrics {
+                            publish_audio_playout_metrics(&runtime_stats, metrics);
                         }
                     },
                     move |error| {
@@ -93,6 +100,7 @@ fn build_output_stream(
         }
         SampleFormat::I16 => {
             let shared_state = shared_state.clone();
+            let runtime_stats = runtime_stats.clone();
             let volume_bits = volume_bits.clone();
             let mut scratch = Vec::<f32>::new();
             output_device
@@ -101,15 +109,19 @@ fn build_output_stream(
                     move |data: &mut [i16], _| {
                         scratch.resize(data.len(), 0.0);
                         let volume = f32::from_bits(volume_bits.load(Ordering::Relaxed));
-                        if let Ok(mut state) = shared_state.lock() {
+                        let metrics = shared_state.lock().ok().map(|mut state| {
                             state.fill_output_f32(
                                 &mut scratch,
                                 output_sample_rate_hz,
                                 output_channels,
                                 volume,
-                            );
-                        } else {
+                            )
+                        });
+                        if metrics.is_none() {
                             scratch.fill(0.0);
+                        }
+                        if let Some(metrics) = metrics {
+                            publish_audio_playout_metrics(&runtime_stats, metrics);
                         }
                         for (index, sample) in data.iter_mut().enumerate() {
                             *sample = float_to_i16(scratch[index]);
@@ -130,6 +142,7 @@ fn build_output_stream(
         }
         SampleFormat::U16 => {
             let shared_state = shared_state.clone();
+            let runtime_stats = runtime_stats.clone();
             let volume_bits = volume_bits.clone();
             let mut scratch = Vec::<f32>::new();
             output_device
@@ -138,15 +151,19 @@ fn build_output_stream(
                     move |data: &mut [u16], _| {
                         scratch.resize(data.len(), 0.0);
                         let volume = f32::from_bits(volume_bits.load(Ordering::Relaxed));
-                        if let Ok(mut state) = shared_state.lock() {
+                        let metrics = shared_state.lock().ok().map(|mut state| {
                             state.fill_output_f32(
                                 &mut scratch,
                                 output_sample_rate_hz,
                                 output_channels,
                                 volume,
-                            );
-                        } else {
+                            )
+                        });
+                        if metrics.is_none() {
                             scratch.fill(0.0);
+                        }
+                        if let Some(metrics) = metrics {
+                            publish_audio_playout_metrics(&runtime_stats, metrics);
                         }
                         for (index, sample) in data.iter_mut().enumerate() {
                             *sample = float_to_u16(scratch[index]);
@@ -211,4 +228,22 @@ fn float_to_i16(value: f32) -> i16 {
 fn float_to_u16(value: f32) -> u16 {
     let normalized = value.clamp(-1.0, 1.0) * 0.5 + 0.5;
     (normalized * u16::MAX as f32).round() as u16
+}
+
+fn publish_audio_playout_metrics(
+    runtime_stats: &Arc<Mutex<XbxEngineMediaRuntimeStats>>,
+    metrics: super::state::AudioPlaybackOutputMetrics,
+) {
+    let Ok(mut stats) = runtime_stats.try_lock() else {
+        return;
+    };
+    stats.latest_audio_playout_time_ms = Some(now_ms_f64());
+    stats.audio_playout_latency_ms = Some(metrics.playout_latency_ms);
+}
+
+fn now_ms_f64() -> f64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|duration| duration.as_millis() as f64)
+        .unwrap_or(0.0)
 }

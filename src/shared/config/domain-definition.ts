@@ -209,7 +209,7 @@ export const CONFIG_GROUP_DEFINITIONS: Record<string, SettingGroupDefinition> = 
       {
         key: 'controller',
         label: 'Controller',
-        keys: ['vibration', 'vibration_strength'],
+        keys: ['polling_rate', 'vibration', 'vibration_strength'],
       },
     ],
   },

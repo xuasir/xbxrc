@@ -2,6 +2,7 @@ use xbxengine_protocol::XbxEngineTargetTypeDto;
 
 use crate::{
     api::runtime::XbxEngineNegotiationRuntimeConfig,
+    transport::rtc::recovery::escalation::VideoEscalationConfig,
     transport::rtc::recovery::startup::SessionPhase, XbxEngineWebRtcRuntimeConfig,
 };
 
@@ -33,6 +34,24 @@ impl ScenarioPolicyProfileKind {
 }
 
 #[derive(Clone, Copy, Debug)]
+pub(crate) struct DisplaySupplyThresholds {
+    pub(crate) degraded_no_pending_streak: u32,
+    pub(crate) critical_no_pending_streak: u32,
+    pub(crate) degraded_present_age_ms: f64,
+    pub(crate) degraded_decode_age_ms: f64,
+    pub(crate) critical_present_age_ms: f64,
+    pub(crate) critical_decode_age_ms: f64,
+    pub(crate) degraded_present_drop_ratio: f64,
+    pub(crate) critical_present_drop_ratio: f64,
+    pub(crate) degraded_present_overwrite_ratio: f64,
+    pub(crate) critical_present_overwrite_ratio: f64,
+    pub(crate) degraded_pacer_drop_ratio: f64,
+    pub(crate) critical_pacer_drop_ratio: f64,
+    pub(crate) degraded_renderer_drop_ratio: f64,
+    pub(crate) critical_renderer_drop_ratio: f64,
+}
+
+#[derive(Clone, Copy, Debug)]
 pub(crate) struct RecoveryScenarioProfile {
     pub(crate) kind: ScenarioPolicyProfileKind,
     pub(crate) startup_fast_reset_enabled: bool,
@@ -45,6 +64,27 @@ pub(crate) struct RecoveryScenarioProfile {
     pub(crate) decoder_backend_failure_min_twcc_delivery_ratio: f64,
     pub(crate) decoder_backend_failure_max_twcc_loss_ratio: f64,
     pub(crate) decoder_backend_failure_min_reset_spacing_ms: f64,
+    pub(crate) escalation_cooldown_ms: u64,
+    pub(crate) escalation_keyframe_burst_threshold: u8,
+    pub(crate) escalation_decoder_reset_burst_threshold: u8,
+    pub(crate) escalation_keyframe_min_interval_ms: u64,
+    pub(crate) escalation_upgrade_window_ms: u64,
+    pub(crate) escalation_keyframe_upgrade_min_delay_ms: u64,
+    pub(crate) hard_fallback_transport_await_timeout_ms: u64,
+    pub(crate) display_supply_thresholds: DisplaySupplyThresholds,
+}
+
+impl RecoveryScenarioProfile {
+    pub(crate) fn escalation_config(self) -> VideoEscalationConfig {
+        VideoEscalationConfig {
+            cooldown_ms: self.escalation_cooldown_ms,
+            keyframe_burst_threshold: self.escalation_keyframe_burst_threshold,
+            decoder_reset_burst_threshold: self.escalation_decoder_reset_burst_threshold,
+            keyframe_min_interval_ms: self.escalation_keyframe_min_interval_ms,
+            escalation_window_ms: self.escalation_upgrade_window_ms,
+            keyframe_upgrade_min_delay_ms: self.escalation_keyframe_upgrade_min_delay_ms,
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -142,6 +182,29 @@ impl ScenarioPolicyResolver {
                 decoder_backend_failure_min_twcc_delivery_ratio: 0.92,
                 decoder_backend_failure_max_twcc_loss_ratio: 0.08,
                 decoder_backend_failure_min_reset_spacing_ms: 800.0,
+                escalation_cooldown_ms: 260,
+                escalation_keyframe_burst_threshold: 2,
+                escalation_decoder_reset_burst_threshold: 3,
+                escalation_keyframe_min_interval_ms: 260,
+                escalation_upgrade_window_ms: 900,
+                escalation_keyframe_upgrade_min_delay_ms: 180,
+                hard_fallback_transport_await_timeout_ms: 2_400,
+                display_supply_thresholds: DisplaySupplyThresholds {
+                    degraded_no_pending_streak: 80,
+                    critical_no_pending_streak: 150,
+                    degraded_present_age_ms: 240.0,
+                    degraded_decode_age_ms: 180.0,
+                    critical_present_age_ms: 720.0,
+                    critical_decode_age_ms: 420.0,
+                    degraded_present_drop_ratio: 0.04,
+                    critical_present_drop_ratio: 0.10,
+                    degraded_present_overwrite_ratio: 0.06,
+                    critical_present_overwrite_ratio: 0.14,
+                    degraded_pacer_drop_ratio: 0.03,
+                    critical_pacer_drop_ratio: 0.08,
+                    degraded_renderer_drop_ratio: 0.02,
+                    critical_renderer_drop_ratio: 0.06,
+                },
             },
             ScenarioPolicyProfileKind::CloudGaming => RecoveryScenarioProfile {
                 kind: ScenarioPolicyProfileKind::CloudGaming,
@@ -155,6 +218,29 @@ impl ScenarioPolicyResolver {
                 decoder_backend_failure_min_twcc_delivery_ratio: 0.92,
                 decoder_backend_failure_max_twcc_loss_ratio: 0.08,
                 decoder_backend_failure_min_reset_spacing_ms: 800.0,
+                escalation_cooldown_ms: 420,
+                escalation_keyframe_burst_threshold: 2,
+                escalation_decoder_reset_burst_threshold: 3,
+                escalation_keyframe_min_interval_ms: 420,
+                escalation_upgrade_window_ms: 1_500,
+                escalation_keyframe_upgrade_min_delay_ms: 300,
+                hard_fallback_transport_await_timeout_ms: 4_200,
+                display_supply_thresholds: DisplaySupplyThresholds {
+                    degraded_no_pending_streak: 48,
+                    critical_no_pending_streak: 96,
+                    degraded_present_age_ms: 180.0,
+                    degraded_decode_age_ms: 140.0,
+                    critical_present_age_ms: 600.0,
+                    critical_decode_age_ms: 320.0,
+                    degraded_present_drop_ratio: 0.03,
+                    critical_present_drop_ratio: 0.08,
+                    degraded_present_overwrite_ratio: 0.05,
+                    critical_present_overwrite_ratio: 0.12,
+                    degraded_pacer_drop_ratio: 0.02,
+                    critical_pacer_drop_ratio: 0.06,
+                    degraded_renderer_drop_ratio: 0.015,
+                    critical_renderer_drop_ratio: 0.05,
+                },
             },
             ScenarioPolicyProfileKind::RelayGaming => RecoveryScenarioProfile {
                 kind: ScenarioPolicyProfileKind::RelayGaming,
@@ -168,6 +254,29 @@ impl ScenarioPolicyResolver {
                 decoder_backend_failure_min_twcc_delivery_ratio: 0.92,
                 decoder_backend_failure_max_twcc_loss_ratio: 0.08,
                 decoder_backend_failure_min_reset_spacing_ms: 800.0,
+                escalation_cooldown_ms: 360,
+                escalation_keyframe_burst_threshold: 2,
+                escalation_decoder_reset_burst_threshold: 3,
+                escalation_keyframe_min_interval_ms: 360,
+                escalation_upgrade_window_ms: 1_200,
+                escalation_keyframe_upgrade_min_delay_ms: 260,
+                hard_fallback_transport_await_timeout_ms: 3_600,
+                display_supply_thresholds: DisplaySupplyThresholds {
+                    degraded_no_pending_streak: 64,
+                    critical_no_pending_streak: 128,
+                    degraded_present_age_ms: 220.0,
+                    degraded_decode_age_ms: 170.0,
+                    critical_present_age_ms: 650.0,
+                    critical_decode_age_ms: 360.0,
+                    degraded_present_drop_ratio: 0.035,
+                    critical_present_drop_ratio: 0.09,
+                    degraded_present_overwrite_ratio: 0.055,
+                    critical_present_overwrite_ratio: 0.13,
+                    degraded_pacer_drop_ratio: 0.025,
+                    critical_pacer_drop_ratio: 0.07,
+                    degraded_renderer_drop_ratio: 0.02,
+                    critical_renderer_drop_ratio: 0.055,
+                },
             },
         }
     }

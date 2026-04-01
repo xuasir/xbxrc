@@ -174,6 +174,8 @@
         "VideoDL": "视频下行",
         "TotalDL": "总下行",
         "AudioDL": "音频下行",
+        "AudioPlayout": "音频播放",
+        "AudioAvDelta": "音画差值",
         "VideoActual": "实际视频码率",
         "BweTarget": "BWE目标",
         "BweObserved": "观测REMB",
@@ -195,6 +197,9 @@
         "KeyReq": "关键帧请求",
         "Reset": "重置",
         "Reco": "重连",
+        "HardFallbackTimer": "硬兜底计时",
+        "HardFallbackReason": "硬兜底触发原因",
+        "HardFallbackReset": "硬兜底重置原因",
         "LastAct": "最近动作",
         "LastWhy": "最近原因",
         "DT": "解码"

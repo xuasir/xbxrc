@@ -79,6 +79,12 @@ where
             self.emit_error("presentFrameFailed", error.to_string());
             return;
         }
+        if let Err(error) = self
+            .media_backend
+            .acknowledge_latest_render_frame(frame.frame_seq)
+        {
+            self.emit_error("acknowledgeLatestRenderFrameFailed", error.to_string());
+        }
         self.snapshot.video_size = Some((frame.width, frame.height));
         self.snapshot.frame_rendered_time_ms = Some(frame.rendered_at_ms);
     }

@@ -9,12 +9,22 @@ use crate::media::video::types::FrameRecoveryDisposition;
 use crate::transport::rtc::stream::nack_scheduler::{
     NackBatch, NackObservePolicy, PacketRecoveryDisposition, ResolvedNack, SkippedNackBatch,
 };
-use crate::XbxEngineVideoNackObservation;
+use crate::{
+    XbxEngineAnchorCandidateFailureReason, XbxEngineAnchorCandidateState,
+    XbxEngineVideoNackObservation,
+};
 
 use super::{
     capitalize_reason, nack_policy::*, now_ms_f64, FrameValue, RecentRtpPacket,
-    RtcVideoFrameSource, TransportObservation,
+    RtcVideoFrameSource, TransportLossObservation, TransportObservation,
 };
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum RepairValueTier {
+    Anchor,
+    Supply,
+    LowValue,
+}
 
 impl RtcVideoFrameSource {
     pub(super) async fn maybe_run_nack_maintenance(&mut self) {
@@ -40,14 +50,81 @@ impl RtcVideoFrameSource {
             startup_mode,
             Some(cloud_rtt_ms),
         );
+        self.timeline_state.mark_gap_reorder_pending(
+            &missing_sequences,
+            now_ms,
+            None,
+            policy.frame_importance,
+        );
+        if let Some(sequence) = missing_sequences.first().copied() {
+            self.record_video_timeline_observation(
+                "gap-reorder-pending",
+                Some(sequence),
+                None,
+                now_ms,
+            );
+        }
         let policy = self.with_cloud_latency_admission_policy(policy, now_ms);
         let (initial_batch, skipped_batch) = self
             .nack_scheduler
             .observe_missing_sequences_with_policy(&missing_sequences, now_ms, policy);
         if let Some(skipped) = skipped_batch.as_ref() {
+            let chain_broken = self.timeline_state.mark_gap_expired(
+                &skipped.sequences,
+                now_ms,
+                skipped.frame_rtp_timestamp,
+                skipped.frame_importance,
+                skipped.frame_unrecoverable_reason,
+            );
+            if let Some(sequence) = skipped.sequences.first().copied() {
+                self.record_video_timeline_observation(
+                    "gap-expired-skipped",
+                    Some(sequence),
+                    skipped.frame_rtp_timestamp,
+                    now_ms,
+                );
+            }
+            self.record_anchor_candidate_ledger(
+                skipped.frame_rtp_timestamp,
+                "gap-expired-skipped",
+                XbxEngineAnchorCandidateState::Rejected,
+                Some(match skipped.frame_unrecoverable_reason {
+                    Some("referenceChainUnrecoverable") => {
+                        XbxEngineAnchorCandidateFailureReason::ChainBrokenReferenceUnrecoverable
+                    }
+                    Some("cloudHighRttLowValueAdmission") => {
+                        XbxEngineAnchorCandidateFailureReason::ChainBrokenCloudHighRttLowValueAdmission
+                    }
+                    Some("deadline") => XbxEngineAnchorCandidateFailureReason::GapExpiredDeadline,
+                    _ => XbxEngineAnchorCandidateFailureReason::Unknown,
+                }),
+                now_ms,
+            );
             self.record_nack_skipped(skipped, now_ms);
+            self.maybe_handle_chain_broken(skipped, now_ms, chain_broken);
         }
         if let Some(initial_batch) = initial_batch {
+            self.timeline_state.mark_gap_repair_in_flight(
+                &initial_batch.sequences,
+                now_ms,
+                initial_batch.frame_rtp_timestamp,
+                initial_batch.frame_importance,
+            );
+            if let Some(sequence) = initial_batch.sequences.first().copied() {
+                self.record_video_timeline_observation(
+                    "gap-repair-in-flight",
+                    Some(sequence),
+                    initial_batch.frame_rtp_timestamp,
+                    now_ms,
+                );
+            }
+            self.record_anchor_candidate_ledger(
+                initial_batch.frame_rtp_timestamp,
+                "gap-repair-in-flight",
+                XbxEngineAnchorCandidateState::AwaitingRecovery,
+                Some(XbxEngineAnchorCandidateFailureReason::AwaitingRecoveryKeyframe),
+                now_ms,
+            );
             let inserted_count = self
                 .nack_scheduler
                 .pending_count()
@@ -73,6 +150,21 @@ impl RtcVideoFrameSource {
 
         let poll_result = self.nack_scheduler.poll(now_ms);
         for expired_batch in poll_result.expired_batches {
+            let chain_broken = self.timeline_state.mark_gap_expired(
+                &expired_batch.sequences,
+                now_ms,
+                expired_batch.frame_rtp_timestamp,
+                expired_batch.frame_importance,
+                expired_batch.frame_unrecoverable_reason,
+            );
+            if let Some(sequence) = expired_batch.sequences.first().copied() {
+                self.record_video_timeline_observation(
+                    "gap-expired-poll",
+                    Some(sequence),
+                    expired_batch.frame_rtp_timestamp,
+                    now_ms,
+                );
+            }
             self.record_frame_recovery_from_nack(
                 expired_batch.frame_rtp_timestamp,
                 expired_batch.frame_importance,
@@ -106,8 +198,28 @@ impl RtcVideoFrameSource {
                 },
                 now_ms,
             );
+            self.maybe_trigger_reference_chain_recovery(
+                expired_batch.frame_rtp_timestamp,
+                Some(expired_batch.sequences.as_slice()),
+                now_ms,
+                chain_broken,
+            );
         }
         if let Some(retry_batch) = poll_result.retry_batch {
+            self.timeline_state.mark_gap_repair_in_flight(
+                &retry_batch.sequences,
+                now_ms,
+                retry_batch.frame_rtp_timestamp,
+                retry_batch.frame_importance,
+            );
+            if let Some(sequence) = retry_batch.sequences.first().copied() {
+                self.record_video_timeline_observation(
+                    "gap-repair-retry",
+                    Some(sequence),
+                    retry_batch.frame_rtp_timestamp,
+                    now_ms,
+                );
+            }
             self.send_nack_batch("sent", &retry_batch, now_ms).await;
         }
         self.runtime_stats
@@ -144,16 +256,93 @@ impl RtcVideoFrameSource {
             startup_mode,
             Some(cloud_rtt_ms),
         );
+        self.timeline_state
+            .observe_gap(&missing_sequences, now_ms, None, policy.frame_importance);
+        if let Some(sequence) = missing_sequences.first().copied() {
+            self.record_video_timeline_observation(
+                "gap-observed-forward",
+                Some(sequence),
+                None,
+                now_ms,
+            );
+        }
+        self.timeline_state.mark_gap_nack_candidate(
+            &missing_sequences,
+            now_ms,
+            None,
+            policy.frame_importance,
+        );
+        if let Some(sequence) = missing_sequences.first().copied() {
+            self.record_video_timeline_observation(
+                "gap-nack-candidate",
+                Some(sequence),
+                None,
+                now_ms,
+            );
+        }
         let policy = self.with_cloud_latency_admission_policy(policy, now_ms);
         let (initial_batch, skipped_batch) = self
             .nack_scheduler
             .observe_missing_sequences_with_policy(&missing_sequences, now_ms, policy);
         if let Some(skipped) = skipped_batch.as_ref() {
+            let chain_broken = self.timeline_state.mark_gap_expired(
+                &skipped.sequences,
+                now_ms,
+                skipped.frame_rtp_timestamp,
+                skipped.frame_importance,
+                skipped.frame_unrecoverable_reason,
+            );
+            if let Some(sequence) = skipped.sequences.first().copied() {
+                self.record_video_timeline_observation(
+                    "gap-expired-skipped",
+                    Some(sequence),
+                    skipped.frame_rtp_timestamp,
+                    now_ms,
+                );
+            }
+            self.record_anchor_candidate_ledger(
+                skipped.frame_rtp_timestamp,
+                "gap-expired-skipped",
+                XbxEngineAnchorCandidateState::Rejected,
+                Some(match skipped.frame_unrecoverable_reason {
+                    Some("referenceChainUnrecoverable") => {
+                        XbxEngineAnchorCandidateFailureReason::ChainBrokenReferenceUnrecoverable
+                    }
+                    Some("cloudHighRttLowValueAdmission") => {
+                        XbxEngineAnchorCandidateFailureReason::ChainBrokenCloudHighRttLowValueAdmission
+                    }
+                    Some("deadline") => XbxEngineAnchorCandidateFailureReason::GapExpiredDeadline,
+                    _ => XbxEngineAnchorCandidateFailureReason::Unknown,
+                }),
+                now_ms,
+            );
             self.record_nack_skipped(skipped, now_ms);
+            self.maybe_handle_chain_broken(skipped, now_ms, chain_broken);
         }
         let Some(initial_batch) = initial_batch else {
             return;
         };
+        self.timeline_state.mark_gap_repair_in_flight(
+            &initial_batch.sequences,
+            now_ms,
+            initial_batch.frame_rtp_timestamp,
+            initial_batch.frame_importance,
+        );
+        if let Some(sequence) = initial_batch.sequences.first().copied() {
+            self.record_video_timeline_observation(
+                "gap-repair-in-flight",
+                Some(sequence),
+                initial_batch.frame_rtp_timestamp,
+                now_ms,
+            );
+        }
+        self.record_anchor_candidate_ledger(
+            initial_batch.frame_rtp_timestamp,
+            "gap-repair-in-flight",
+            XbxEngineAnchorCandidateState::AwaitingRecovery,
+            Some(XbxEngineAnchorCandidateFailureReason::AwaitingRecoveryKeyframe),
+            now_ms,
+        );
         let inserted_count = self
             .nack_scheduler
             .pending_count()
@@ -233,6 +422,12 @@ impl RtcVideoFrameSource {
                     .map(|reason| reason.to_string()),
                 observed_at_ms: now_ms,
             });
+        self.record_video_timeline_observation(
+            "nack-observation",
+            Some(first_sequence),
+            batch.frame_rtp_timestamp,
+            now_ms,
+        );
     }
 
     pub(super) fn record_nack_recovered(&mut self, resolved: ResolvedNack, now_ms: f64) {
@@ -360,6 +555,34 @@ impl RtcVideoFrameSource {
             self.is_cloud_startup_transport_profile(),
             Some(self.cloud_nack_rtt_ms()),
         );
+        self.timeline_state.observe_gap(
+            &missing_sequences,
+            now_ms,
+            Some(sample_rtp_timestamp),
+            frame_importance,
+        );
+        if let Some(sequence) = missing_sequences.first().copied() {
+            self.record_video_timeline_observation(
+                "gap-observed-sample-loss",
+                Some(sequence),
+                Some(sample_rtp_timestamp),
+                now_ms,
+            );
+        }
+        self.timeline_state.mark_gap_nack_candidate(
+            &missing_sequences,
+            now_ms,
+            Some(sample_rtp_timestamp),
+            frame_importance,
+        );
+        if let Some(sequence) = missing_sequences.first().copied() {
+            self.record_video_timeline_observation(
+                "gap-nack-candidate",
+                Some(sequence),
+                Some(sample_rtp_timestamp),
+                now_ms,
+            );
+        }
         let policy = self.with_cloud_latency_admission_policy(policy, now_ms);
         let pending_before = self.nack_scheduler.pending_count();
         let (batch, skipped_batch) = self.nack_scheduler.observe_missing_sequences_with_policy(
@@ -368,11 +591,64 @@ impl RtcVideoFrameSource {
             policy,
         );
         if let Some(skipped) = skipped_batch.as_ref() {
+            let chain_broken = self.timeline_state.mark_gap_expired(
+                &skipped.sequences,
+                now_ms,
+                skipped.frame_rtp_timestamp,
+                skipped.frame_importance,
+                skipped.frame_unrecoverable_reason,
+            );
+            if let Some(sequence) = skipped.sequences.first().copied() {
+                self.record_video_timeline_observation(
+                    "gap-expired-skipped",
+                    Some(sequence),
+                    skipped.frame_rtp_timestamp,
+                    now_ms,
+                );
+            }
+            self.record_anchor_candidate_ledger(
+                skipped.frame_rtp_timestamp,
+                "gap-expired-skipped",
+                XbxEngineAnchorCandidateState::Rejected,
+                Some(match skipped.frame_unrecoverable_reason {
+                    Some("referenceChainUnrecoverable") => {
+                        XbxEngineAnchorCandidateFailureReason::ChainBrokenReferenceUnrecoverable
+                    }
+                    Some("cloudHighRttLowValueAdmission") => {
+                        XbxEngineAnchorCandidateFailureReason::ChainBrokenCloudHighRttLowValueAdmission
+                    }
+                    Some("deadline") => XbxEngineAnchorCandidateFailureReason::GapExpiredDeadline,
+                    _ => XbxEngineAnchorCandidateFailureReason::Unknown,
+                }),
+                now_ms,
+            );
             self.record_nack_skipped(skipped, now_ms);
+            self.maybe_handle_chain_broken(skipped, now_ms, chain_broken);
         }
         let Some(batch) = batch else {
             return false;
         };
+        self.timeline_state.mark_gap_repair_in_flight(
+            &batch.sequences,
+            now_ms,
+            batch.frame_rtp_timestamp,
+            batch.frame_importance,
+        );
+        if let Some(sequence) = batch.sequences.first().copied() {
+            self.record_video_timeline_observation(
+                "gap-repair-in-flight",
+                Some(sequence),
+                batch.frame_rtp_timestamp,
+                now_ms,
+            );
+        }
+        self.record_anchor_candidate_ledger(
+            batch.frame_rtp_timestamp,
+            "gap-repair-in-flight",
+            XbxEngineAnchorCandidateState::AwaitingRecovery,
+            Some(XbxEngineAnchorCandidateFailureReason::AwaitingRecoveryKeyframe),
+            now_ms,
+        );
         let inserted_count = self
             .nack_scheduler
             .pending_count()
@@ -482,15 +758,144 @@ impl RtcVideoFrameSource {
                 .max(self.nack_recovery_ewma_ms.max(0.0))
                 .max(retry_interval_ms);
         policy.estimated_recovery_arrival_ms = Some(estimated_recovery_arrival_ms);
+
+        let value_tier = classify_repair_value_tier(
+            policy.frame_importance,
+            policy.priority,
+            self.waiting_for_recovery_keyframe(),
+            self.is_cloud_high_rtt_path(),
+            self.is_cloud_startup_transport_profile(),
+        );
+
+        if self.waiting_for_recovery_keyframe() && !matches!(value_tier, RepairValueTier::Anchor) {
+            policy.nack_disposition = PacketRecoveryDisposition::SkippedChainBroken;
+            if policy.frame_unrecoverable_reason.is_none() {
+                policy.frame_unrecoverable_reason = Some("awaitingRecoveryKeyframe");
+            }
+            return policy;
+        }
+
+        if self.is_cloud_high_rtt_path() && matches!(value_tier, RepairValueTier::LowValue) {
+            policy.nack_disposition = PacketRecoveryDisposition::SkippedLowValue;
+            if policy.frame_unrecoverable_reason.is_none() {
+                policy.frame_unrecoverable_reason = Some("cloudHighRttLowValueAdmission");
+            }
+            return policy;
+        }
+
         if let Some(deadline_at_ms) = policy.deadline_at_ms {
             if estimated_recovery_arrival_ms > deadline_at_ms {
                 policy.nack_disposition = PacketRecoveryDisposition::SkippedTooLate;
                 if policy.frame_unrecoverable_reason.is_none() {
                     policy.frame_unrecoverable_reason = Some("estimatedArrivalPastDeadline");
                 }
+                return policy;
             }
         }
+
         policy
+    }
+
+    fn is_cloud_high_rtt_path(&self) -> bool {
+        self.cloud_nack_rtt_ms() >= 120.0
+    }
+
+    fn maybe_handle_chain_broken(
+        &mut self,
+        skipped: &SkippedNackBatch,
+        now_ms: f64,
+        chain_broken: bool,
+    ) {
+        if skipped.nack_disposition != PacketRecoveryDisposition::SkippedChainBroken
+            && !chain_broken
+        {
+            return;
+        }
+        self.maybe_trigger_reference_chain_recovery(
+            skipped.frame_rtp_timestamp,
+            Some(skipped.sequences.as_slice()),
+            now_ms,
+            true,
+        );
+    }
+
+    fn maybe_trigger_reference_chain_recovery(
+        &mut self,
+        frame_rtp_timestamp: Option<u32>,
+        sequences: Option<&[u16]>,
+        now_ms: f64,
+        chain_broken: bool,
+    ) {
+        if !chain_broken || self.waiting_for_recovery_keyframe() {
+            return;
+        }
+        self.timeline_state.on_chain_broken();
+        if let Some(sequence) = sequences.and_then(|value| value.first().copied()) {
+            self.record_video_timeline_observation(
+                "chain-broken",
+                Some(sequence),
+                frame_rtp_timestamp,
+                now_ms,
+            );
+        }
+        if let Some(flushed_batch) = self
+            .nack_scheduler
+            .flush_non_keyframe_pending("flushedAfterChainBrokenAdmission")
+        {
+            self.timeline_state.mark_gap_expired(
+                &flushed_batch.sequences,
+                now_ms,
+                flushed_batch.frame_rtp_timestamp,
+                flushed_batch.frame_importance,
+                flushed_batch.frame_unrecoverable_reason,
+            );
+            if let Some(sequence) = flushed_batch.sequences.first().copied() {
+                self.record_video_timeline_observation(
+                    "gap-expired-chain-flush",
+                    Some(sequence),
+                    flushed_batch.frame_rtp_timestamp,
+                    now_ms,
+                );
+            }
+            self.record_frame_recovery_from_nack(
+                flushed_batch.frame_rtp_timestamp,
+                flushed_batch.frame_importance,
+                flushed_batch.nack_disposition,
+                flushed_batch.frame_playout_deadline_at_ms,
+                flushed_batch.frame_unrecoverable_reason,
+                now_ms,
+            );
+            self.runtime_stats
+                .add_video_loss_finalized(flushed_batch.sequences.len());
+            self.record_nack_observation(
+                "expiredChainBroken",
+                &NackBatch {
+                    sequences: flushed_batch.sequences,
+                    retry_count: 0,
+                    source: flushed_batch.source,
+                    frame_rtp_timestamp: flushed_batch.frame_rtp_timestamp,
+                    frame_is_keyframe: flushed_batch.frame_is_keyframe,
+                    frame_importance: flushed_batch.frame_importance,
+                    deadline_at_ms: flushed_batch.deadline_at_ms,
+                    estimated_recovery_arrival_ms: flushed_batch.estimated_recovery_arrival_ms,
+                    frame_playout_deadline_at_ms: flushed_batch.frame_playout_deadline_at_ms,
+                    nack_disposition: flushed_batch.nack_disposition,
+                    frame_unrecoverable_reason: flushed_batch.frame_unrecoverable_reason,
+                },
+                now_ms,
+            );
+        }
+        self.timeline_state.on_recovery_keyframe_requested();
+        self.record_video_timeline_observation(
+            "chain-recovery-keyframe-requested",
+            None,
+            frame_rtp_timestamp,
+            now_ms,
+        );
+        self.set_waiting_for_recovery_keyframe(true);
+        self.queue_transport_observation(TransportObservation::Loss(
+            TransportLossObservation::RecoveryKeyframeRequested,
+        ));
     }
 
     fn collect_recent_missing_sequences(&self, media_dropped_packets: u16) -> Vec<u16> {
@@ -561,7 +966,7 @@ impl RtcVideoFrameSource {
     }
 
     fn current_transport_frame_value(&self) -> FrameValue {
-        if self.waiting_for_recovery_keyframe {
+        if self.waiting_for_recovery_keyframe() {
             FrameValue::new(true, true, 96 * 1024)
         } else {
             self.last_submitted_frame_value
@@ -591,7 +996,7 @@ impl RtcVideoFrameSource {
         } else {
             0.0
         };
-        let waiting_penalty = if self.waiting_for_recovery_keyframe {
+        let waiting_penalty = if self.waiting_for_recovery_keyframe() {
             0.06
         } else {
             0.0
@@ -665,7 +1070,30 @@ impl RtcVideoFrameSource {
             .unwrap_or(0.0)
     }
 }
-fn wrapping_sequence_range(start: u16, end_exclusive: u16) -> Vec<u16> {
+
+fn classify_repair_value_tier(
+    frame_importance: &'static str,
+    priority: u8,
+    waiting_for_recovery_keyframe: bool,
+    cloud_high_rtt: bool,
+    cloud_startup_mode: bool,
+) -> RepairValueTier {
+    if frame_importance == "keyframe" || priority >= 3 {
+        return RepairValueTier::Anchor;
+    }
+    if frame_importance == "reference" {
+        if waiting_for_recovery_keyframe {
+            return RepairValueTier::Anchor;
+        }
+        return RepairValueTier::Supply;
+    }
+    if frame_importance == "delta" && cloud_high_rtt && !cloud_startup_mode {
+        return RepairValueTier::LowValue;
+    }
+    RepairValueTier::Supply
+}
+
+pub(super) fn wrapping_sequence_range(start: u16, end_exclusive: u16) -> Vec<u16> {
     let mut sequences = Vec::new();
     let mut cursor = start;
     while cursor != end_exclusive {
@@ -713,5 +1141,29 @@ mod tests {
 
         assert_eq!(adjusted_deadline, base_deadline_at_ms);
         assert_eq!(adjusted_max_age, 180);
+    }
+
+    #[test]
+    fn repair_value_tier_marks_delta_as_low_value_on_cloud_high_rtt() {
+        assert_eq!(
+            classify_repair_value_tier("delta", 1, false, true, false),
+            RepairValueTier::LowValue
+        );
+    }
+
+    #[test]
+    fn repair_value_tier_keeps_reference_as_anchor_while_waiting_keyframe() {
+        assert_eq!(
+            classify_repair_value_tier("reference", 2, true, true, false),
+            RepairValueTier::Anchor
+        );
+    }
+
+    #[test]
+    fn repair_value_tier_marks_reference_as_supply_when_not_waiting_keyframe() {
+        assert_eq!(
+            classify_repair_value_tier("reference", 2, false, true, false),
+            RepairValueTier::Supply
+        );
     }
 }

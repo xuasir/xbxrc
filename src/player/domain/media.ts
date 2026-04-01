@@ -32,12 +32,18 @@ export interface StreamStats {
   br: string
   decode: string
   transportPath?: string
+  transportCandidatePair?: string
+  transportProtocol?: string
+  transportAddressFamily?: 'ipv4' | 'ipv6' | 'mixed' | 'unknown'
   transportState?: string
   videoRttSource?: string
   videoRembBps?: number
   inboundBitrateKbps?: number
   inboundVideoBitrateKbps?: number
   inboundAudioBitrateKbps?: number
+  latestAudioPlayoutTimeMs?: number
+  audioPlayoutLatencyMs?: number
+  audioVideoPlayoutDeltaMs?: number
   actualVideoBitrateSource?: string
   videoBweMode?: string
   videoBweReason?: string
@@ -88,6 +94,9 @@ export interface StreamStats {
   recoveryKeyframeRequestCount?: number
   recoveryDecoderResetCount?: number
   recoveryReconnectCount?: number
+  recoveryHardFallbackTimerMs?: number
+  recoveryHardFallbackTriggerReason?: string
+  recoveryHardFallbackTimerResetReason?: string
   lastRecoveryAction?: string
   lastRecoveryActionAtMs?: number
   lastRecoveryReason?: string

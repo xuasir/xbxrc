@@ -1,3 +1,5 @@
+#![recursion_limit = "256"]
+
 use tauri::Manager;
 
 pub mod error;

@@ -41,6 +41,10 @@ impl RtcControlChannelService {
         self.state.pending_decoder_reset = false;
     }
 
+    pub(crate) fn clear_pending_keyframe_request(&mut self) {
+        self.state.pending_keyframe_request = false;
+    }
+
     pub(crate) fn open_message_channel(&mut self) {
         self.state.message_channel_open = true;
         self.state.message_handshake_pending = true;

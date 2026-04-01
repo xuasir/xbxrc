@@ -1,12 +1,15 @@
 use rtc_media::io::sample_builder::SampleBuilder;
 use rtc_rtp::codec::h264::H264Packet;
-use std::collections::{BTreeMap, VecDeque};
+use std::collections::VecDeque;
 use std::sync::Arc;
 use std::time::Duration;
 
 use crate::media::video::h264::inspection::H264AccessUnitInspector;
 use crate::transport::rtc::stream::nack_scheduler::{NackScheduler, NackSchedulerConfig};
-use crate::XbxEngineMediaRuntimeStats;
+use crate::{
+    XbxEngineAnchorCandidateFailureReason, XbxEngineAnchorCandidateState,
+    XbxEngineMediaRuntimeStats,
+};
 
 use super::packet_types::RtcVideoRtpPacket;
 use super::sink::RtcRtcpSendPort;
@@ -18,10 +21,12 @@ pub(super) mod nack_policy;
 pub(super) mod nack_window;
 pub(crate) mod sink;
 pub(crate) mod source;
+pub(super) mod timeline;
 
 use crate::transport::rtc::stream::frame_cadence::TransportFrameDeadlineTracker;
 
 use self::nack_window::NackSequenceWindow;
+use self::timeline::VideoTimelineState;
 
 use crate::transport::rtc::stream::adapter_types::{
     TransportAdmissionObservation, TransportLossObservation, TransportObservation,
@@ -56,7 +61,7 @@ pub struct RtcVideoFrameSource {
     nack_observation_id: u64,
     last_transport_observation: Option<TransportObservation>,
     last_transport_observation_at: Option<std::time::Instant>,
-    waiting_for_recovery_keyframe: bool,
+    timeline_state: VideoTimelineState,
     wait_keyframe_observation_cooldown: std::time::Duration,
     sample_loss_burst_count: u8,
     clean_samples_since_loss: u8,
@@ -68,19 +73,10 @@ pub struct RtcVideoFrameSource {
     received_packet_count: u64,
     assembled_frame_count: u64,
     transport_observation_emit_count: u64,
-    frame_recovery_ledger: BTreeMap<u32, FrameRecoveryLedgerEntry>,
 }
 
 pub struct RtcVideoTransportObservationSource {
     pub(crate) rx: tokio::sync::mpsc::UnboundedReceiver<TransportObservation>,
-}
-
-#[derive(Clone, Debug)]
-pub(super) struct FrameRecoveryLedgerEntry {
-    pub(super) frame_playout_deadline_at_ms: Option<f64>,
-    pub(super) frame_recovery_disposition: FrameRecoveryDisposition,
-    pub(super) frame_unrecoverable_reason: Option<String>,
-    observed_at_ms: f64,
 }
 
 impl RtcVideoFrameSource {
@@ -128,7 +124,7 @@ impl RtcVideoFrameSource {
             nack_observation_id: 0,
             last_transport_observation: None,
             last_transport_observation_at: None,
-            waiting_for_recovery_keyframe: false,
+            timeline_state: VideoTimelineState::new(),
             wait_keyframe_observation_cooldown: Duration::from_millis(350),
             sample_loss_burst_count: 0,
             clean_samples_since_loss: 0,
@@ -140,7 +136,6 @@ impl RtcVideoFrameSource {
             received_packet_count: 0,
             assembled_frame_count: 0,
             transport_observation_emit_count: 0,
-            frame_recovery_ledger: BTreeMap::new(),
         }
     }
 
@@ -152,7 +147,8 @@ impl RtcVideoFrameSource {
         self.last_transport_observation = Some(observation);
         self.last_transport_observation_at = Some(now);
         if should_begin_transport_recovery_episode(observation) {
-            self.runtime_stats.begin_transport_recovery_episode();
+            self.runtime_stats
+                .begin_transport_recovery_episode(now_ms_f64());
         }
         let _ = self.transport_observation_tx.send(observation);
         self.transport_observation_emit_count =
@@ -220,41 +216,57 @@ impl RtcVideoFrameSource {
                 observed_at_ms,
             },
         );
-        let next_entry = FrameRecoveryLedgerEntry {
+        self.timeline_state.record_frame_recovery(
+            frame_rtp_timestamp,
             frame_playout_deadline_at_ms,
             frame_recovery_disposition,
-            frame_unrecoverable_reason: frame_unrecoverable_reason.map(str::to_string),
+            frame_unrecoverable_reason,
+        );
+        self.record_video_timeline_observation(
+            "frame-recovery-ledger-write",
+            None,
+            Some(frame_rtp_timestamp),
             observed_at_ms,
-        };
-        if let Some(entry) = self.frame_recovery_ledger.get_mut(&frame_rtp_timestamp) {
-            entry.frame_playout_deadline_at_ms = entry
-                .frame_playout_deadline_at_ms
-                .or(next_entry.frame_playout_deadline_at_ms);
-            if matches!(
-                next_entry.frame_recovery_disposition,
-                FrameRecoveryDisposition::UnrecoverableReferenceChain
-            ) || !matches!(
-                entry.frame_recovery_disposition,
-                FrameRecoveryDisposition::UnrecoverableReferenceChain
-            ) {
-                entry.frame_recovery_disposition = next_entry.frame_recovery_disposition;
-            }
-            if next_entry.frame_unrecoverable_reason.is_some() {
-                entry.frame_unrecoverable_reason = next_entry.frame_unrecoverable_reason;
-            }
-            entry.observed_at_ms = next_entry.observed_at_ms;
-        } else {
-            self.frame_recovery_ledger
-                .insert(frame_rtp_timestamp, next_entry);
+        );
+    }
+
+    pub(super) fn record_anchor_candidate_ledger(
+        &mut self,
+        frame_rtp_timestamp: Option<u32>,
+        source_event: &str,
+        state: XbxEngineAnchorCandidateState,
+        failure_reason: Option<XbxEngineAnchorCandidateFailureReason>,
+        observed_at_ms: f64,
+    ) {
+        let recovery_epoch = self
+            .runtime_stats
+            .read(|stats| stats.transport_recovery_epoch)
+            .unwrap_or(0);
+        self.timeline_state.observe_anchor_candidate(
+            recovery_epoch,
+            frame_rtp_timestamp,
+            source_event,
+            state,
+            failure_reason,
+            observed_at_ms,
+        );
+        if let Some(candidate) = self.timeline_state.latest_anchor_candidate_ledger() {
+            self.runtime_stats.record_anchor_candidate_ledger(
+                candidate.recovery_epoch,
+                candidate.frame_rtp_timestamp,
+                candidate.state,
+                candidate.source_event.as_str(),
+                candidate.failure_reason,
+                candidate.observed_at_ms,
+            );
         }
-        self.prune_frame_recovery_ledger();
     }
 
     pub(super) fn take_frame_recovery_ledger(
         &mut self,
         frame_rtp_timestamp: u32,
     ) -> (Option<f64>, FrameRecoveryDisposition, Option<String>) {
-        if let Some(entry) = self.frame_recovery_ledger.remove(&frame_rtp_timestamp) {
+        if let Some(entry) = self.timeline_state.take_frame_recovery(frame_rtp_timestamp) {
             self.nack_observation_id = self.nack_observation_id.saturating_add(1);
             self.runtime_stats.record_frame_recovery_observation(
                 crate::XbxEngineFrameRecoveryObservation {
@@ -270,6 +282,12 @@ impl RtcVideoFrameSource {
                     observed_at_ms: now_ms_f64(),
                 },
             );
+            self.record_video_timeline_observation(
+                "frame-recovery-ledger-consume",
+                None,
+                Some(frame_rtp_timestamp),
+                now_ms_f64(),
+            );
             return (
                 entry.frame_playout_deadline_at_ms,
                 entry.frame_recovery_disposition,
@@ -279,14 +297,31 @@ impl RtcVideoFrameSource {
         (None, FrameRecoveryDisposition::Repairing, None)
     }
 
-    fn prune_frame_recovery_ledger(&mut self) {
-        const MAX_LEDGER_ENTRIES: usize = 512;
-        while self.frame_recovery_ledger.len() > MAX_LEDGER_ENTRIES {
-            let Some((&oldest_timestamp, _)) = self.frame_recovery_ledger.first_key_value() else {
-                break;
-            };
-            self.frame_recovery_ledger.remove(&oldest_timestamp);
-        }
+    pub(super) fn waiting_for_recovery_keyframe(&self) -> bool {
+        self.timeline_state.waiting_for_recovery_keyframe()
+    }
+
+    pub(super) fn set_waiting_for_recovery_keyframe(&mut self, waiting: bool) {
+        self.timeline_state.apply_wait_keyframe_gate(waiting);
+    }
+
+    pub(super) fn record_video_timeline_observation(
+        &mut self,
+        source_event: &str,
+        gap_sequence: Option<u16>,
+        frame_rtp_timestamp: Option<u32>,
+        now_ms: f64,
+    ) {
+        self.nack_observation_id = self.nack_observation_id.saturating_add(1);
+        let observation = self.timeline_state.snapshot_for_observation(
+            self.nack_observation_id,
+            source_event,
+            gap_sequence,
+            frame_rtp_timestamp,
+            now_ms,
+        );
+        self.runtime_stats
+            .record_video_timeline_observation(observation);
     }
 }
 

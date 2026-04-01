@@ -27,6 +27,7 @@ impl XbxRemoteAudioPlaybackSession {
             std::sync::mpsc::sync_channel::<Result<(), String>>(1);
         let output_thread = spawn_audio_output_thread(
             shared_state.clone(),
+            runtime_stats.clone(),
             volume_bits,
             startup_sender,
             output_stop_receiver,

@@ -5,12 +5,15 @@ use std::thread;
 
 use crate::media::video::decode::video_decode::XbxVideoDecodeState;
 use crate::media::video::pacer::actor::PacerActorHandle;
-use crate::media::video::types::{DecodedFrame, EncodedFrame};
+use crate::media::video::types::EncodedFrame;
 use crate::runtime_stats_sink::RuntimeStatsSink;
+use crate::transport::rtc::pipeline::observation::record_pipeline_frame_drop;
 
 const DECODER_STALL_PACKET_FRESH_MAX_AGE_MS: f64 = 400.0;
 const DECODER_STALL_DECODE_AGE_MS: f64 = 1_000.0;
 const DECODE_MAILBOX_CAPACITY: usize = 2;
+const DECODE_OUTPUT_QUEUE_CAPACITY: usize = 2;
+const PACER_MAILBOX_CAPACITY: usize = 2;
 
 pub enum DecodeMsg {
     Frame(EncodedFrame),
@@ -119,20 +122,38 @@ fn run_decode_loop(
         }
     };
     let mut recent_decode_times_ms = std::collections::VecDeque::<f64>::new();
+    let mut frame_drop_observation_id = 0u64;
+    let mut decode_candidate_decision_id = 0u64;
     sync_decode_runtime_stats(&runtime_stats, &decode_state, 0.0);
 
     while let Ok(msg) = rx.recv() {
         match msg {
             DecodeMsg::Frame(frame) => {
                 release_decode_slot(&available_slots);
-                let target_time = frame.target_playout_time;
                 let now_ms = crate::media::video::decode::video_decode::now_ms_f64();
                 crate::xbx_log_warn!(
                     "[XbxDecodeActor] processing frame ts={} len={}",
                     frame.rtp_timestamp,
                     frame.payload.len()
                 );
-                decode_state.process_encoded_frame(frame, now_ms);
+                if let Some(dropped_frame) = decode_state.process_encoded_frame(frame, now_ms) {
+                    record_pipeline_frame_drop(
+                        &runtime_stats,
+                        &mut frame_drop_observation_id,
+                        "decode",
+                        "drop",
+                        Some("outputQueueOverflow"),
+                        now_ms,
+                        dropped_frame.surface.width,
+                        dropped_frame.surface.height,
+                        false,
+                        DECODE_OUTPUT_QUEUE_CAPACITY,
+                        Some(dropped_frame.rtp_timestamp),
+                        Some(dropped_frame.surface.frame_seq),
+                        Some(dropped_frame.frame_recovery_disposition),
+                        dropped_frame.frame_unrecoverable_reason.as_deref(),
+                    );
+                }
                 if decode_state.last_decode_ok_time_ms() == Some(now_ms) {
                     recent_decode_times_ms.push_back(now_ms);
                     while let Some(front) = recent_decode_times_ms.front().copied() {
@@ -146,15 +167,72 @@ fn run_decode_loop(
                         stats.video_decode_fps = recent_window_fps(&recent_decode_times_ms);
                     });
                 }
-                while let Some(render_frame) = decode_state.pop_decoded_frame(now_ms) {
-                    let decoded_frame = DecodedFrame {
-                        pts: target_time, // map pts back
-                        surface: render_frame,
-                    };
-
+                while let Some(decoded_frame) = decode_state.pop_decoded_frame(now_ms) {
                     // DecodeActor sends decoded frame to pacer queue
-                    if pacer.submit(decoded_frame).is_err() {
-                        crate::xbx_log_warn!("[XbxDecodeActor] pacer queue full, drop frame");
+                    if let Err(error) = pacer.submit(decoded_frame) {
+                        let (detail, dropped_frame, queue_depth) = match error {
+                            TrySendError::Full(
+                                crate::media::video::pacer::actor::PacerMsg::Frame(frame),
+                            ) => ("pacerBackpressure", frame, PACER_MAILBOX_CAPACITY),
+                            TrySendError::Disconnected(
+                                crate::media::video::pacer::actor::PacerMsg::Frame(frame),
+                            ) => ("pacerDisconnected", frame, 0),
+                            TrySendError::Full(
+                                crate::media::video::pacer::actor::PacerMsg::Stop,
+                            )
+                            | TrySendError::Disconnected(
+                                crate::media::video::pacer::actor::PacerMsg::Stop,
+                            ) => unreachable!(),
+                        };
+                        record_pipeline_frame_drop(
+                            &runtime_stats,
+                            &mut frame_drop_observation_id,
+                            "decode",
+                            "drop",
+                            Some(detail),
+                            crate::media::video::decode::video_decode::now_ms_f64(),
+                            dropped_frame.surface.width,
+                            dropped_frame.surface.height,
+                            false,
+                            queue_depth,
+                            Some(dropped_frame.rtp_timestamp),
+                            Some(dropped_frame.surface.frame_seq),
+                            Some(dropped_frame.frame_recovery_disposition),
+                            dropped_frame.frame_unrecoverable_reason.as_deref(),
+                        );
+                        crate::xbx_log_warn!(
+                            "[XbxDecodeActor] pacer unavailable detail={}, drop frame",
+                            detail
+                        );
+                    }
+                }
+                if let Some(decision) = decode_state.latest_decode_candidate_decision() {
+                    if decision.decision_id != decode_candidate_decision_id {
+                        decode_candidate_decision_id = decision.decision_id;
+                        runtime_stats.update(|stats| {
+                            stats.latest_decode_candidate_decision = Some(
+                                crate::api::backend::XbxEnginePipelineCandidateDecisionObservation {
+                                    decision_id: decision.decision_id,
+                                    state: decision.state.as_str().to_string(),
+                                    action: decision.action.to_string(),
+                                    detail: decision.detail.to_string(),
+                                    frame_seq: decision.frame_seq,
+                                    observed_at_ms: decision.observed_at_ms,
+                                },
+                            );
+                            stats.latest_observation_label =
+                                Some("decodeCandidateState".to_string());
+                            stats.latest_observation_summary = Some(format!(
+                                "{}:{}:{}:seq={}",
+                                decision.state.as_str(),
+                                decision.action,
+                                decision.detail,
+                                decision
+                                    .frame_seq
+                                    .map(|seq| seq.to_string())
+                                    .unwrap_or_else(|| "-".to_string())
+                            ));
+                        });
                     }
                 }
                 sync_decode_runtime_stats(&runtime_stats, &decode_state, now_ms);

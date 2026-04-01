@@ -29,7 +29,7 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/xhome/stream/:targetId',
     name: 'xhome-stream',
-    component: () => import('../pages/XStream.vue'),
+    component: () => import('../pages/Stream.vue'),
     meta: {
       requiresAuth: true,
       layout: 'plain',
@@ -39,7 +39,7 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/xcloud/stream/:targetId',
     name: 'xcloud-stream',
-    component: () => import('../pages/XStream.vue'),
+    component: () => import('../pages/Stream.vue'),
     meta: {
       requiresAuth: true,
       layout: 'plain',

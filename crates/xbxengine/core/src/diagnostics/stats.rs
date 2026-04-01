@@ -2,6 +2,42 @@ use xbxengine_protocol::XbxEngineStatsDto;
 
 use crate::{XbxEngineMediaRuntimeStats, XbxEngineRuntimeSnapshot};
 
+#[derive(Clone, Debug)]
+struct VideoOwnerContract {
+    state: String,
+    reason: Option<String>,
+    source: Option<String>,
+    observed_at_ms: Option<f64>,
+}
+
+fn project_video_owner_contract(
+    runtime_stats: Option<&XbxEngineMediaRuntimeStats>,
+) -> Option<VideoOwnerContract> {
+    let stats = runtime_stats?;
+    Some(VideoOwnerContract {
+        state: stats.video_owner_state.clone()?,
+        reason: stats.video_owner_reason.clone(),
+        source: stats.video_owner_source.clone(),
+        observed_at_ms: stats.video_owner_observed_at_ms,
+    })
+}
+
+fn map_owner_state_to_video_health(owner_state: &str) -> String {
+    match owner_state {
+        "seeking-anchor" | "priming" => "priming".to_string(),
+        "stable-serving" => "healthy".to_string(),
+        "rebuilding-supply" => "recovering".to_string(),
+        "supply-starved" => "displaySupplyStarved".to_string(),
+        // 兼容历史 owner state 字符串（迁移窗口内仍可读取）
+        "startup" => "priming".to_string(),
+        "stableServing" => "healthy".to_string(),
+        "rebuildingSupply" => "recovering".to_string(),
+        "supplyStarved" => "displaySupplyStarved".to_string(),
+        // 允许 owner contract 直接给出 legacy health 值
+        other => other.to_string(),
+    }
+}
+
 /**
  * 统计聚合先保持轻量：
  * - 不改当前事件/字段合同
@@ -26,6 +62,9 @@ pub fn build_xbxengine_stats(
     let present_age_ms = runtime_stats
         .and_then(|stats| stats.latest_video_present_time_ms)
         .map(|at| (now_ms - at).max(0.0));
+    let audio_playout_latency_ms = runtime_stats.and_then(resolve_audio_playout_latency_ms);
+    let audio_video_playout_delta_ms =
+        runtime_stats.and_then(|stats| resolve_audio_video_playout_delta_ms(stats, present_age_ms));
     let packet_to_decode_ms = runtime_stats.and_then(|stats| {
         stats
             .latest_video_packet_arrival_time_ms
@@ -100,9 +139,12 @@ pub fn build_xbxengine_stats(
         .and_then(|stats| stats.inbound_video_jitter_ms)
         .map(|value| format!("{value:.1}ms"))
         .unwrap_or_default();
-    let display_phase = classify_display_phase(runtime_stats, now_ms);
-    let video_health = classify_video_health(runtime_stats, display_phase.as_deref(), now_ms);
     let stall_kind = classify_stall_kind(runtime_stats);
+    let display_phase = classify_display_phase(runtime_stats, now_ms);
+    let video_owner = project_video_owner_contract(runtime_stats);
+    let video_health = video_owner
+        .as_ref()
+        .map(|owner| map_owner_state_to_video_health(owner.state.as_str()));
     let observation_note = build_observation_note(runtime_stats);
     let transport_recovery_note = build_transport_recovery_note(runtime_stats);
     let repair_probe_note = build_repair_probe_note(runtime_stats);
@@ -119,18 +161,17 @@ pub fn build_xbxengine_stats(
     let primary_issue_chain = build_primary_issue_chain(
         runtime_stats,
         display_phase.as_deref(),
-        video_health.as_deref(),
+        video_owner.as_ref(),
         stall_kind.as_deref(),
     );
     let latest_decision_summary = build_latest_decision_summary(
         snapshot,
         runtime_stats,
-        video_health.as_deref(),
+        video_owner.as_ref(),
         observation_note.as_deref(),
         transport_recovery_note.as_deref(),
         repair_probe_note.as_deref(),
         reinject_note.as_deref(),
-        now_ms,
     );
 
     XbxEngineStatsDto {
@@ -152,17 +193,26 @@ pub fn build_xbxengine_stats(
             .and_then(|stats| stats.recovery_coupling_summary.clone()),
         direct_gaming_bitrate_band: runtime_stats
             .and_then(|stats| stats.direct_gaming_bitrate_band.clone()),
+        video_owner_state: video_owner.as_ref().map(|owner| owner.state.clone()),
+        video_owner_reason: video_owner.as_ref().and_then(|owner| owner.reason.clone()),
+        video_owner_source: video_owner.as_ref().and_then(|owner| owner.source.clone()),
+        video_owner_observed_at_ms: video_owner.as_ref().and_then(|owner| owner.observed_at_ms),
         video_health,
         stall_kind,
         inbound_video_fps: runtime_stats.map(|stats| stats.inbound_video_frame_rate_fps),
         decode_fps: runtime_stats.map(|stats| stats.video_decode_fps),
-        present_fps: runtime_stats.map(|stats| stats.video_present_fps.max(fps)),
+        present_fps: runtime_stats.map(|stats| stats.video_present_fps),
         pl: packet_loss,
         fl: String::new(),
         jit: jitter,
         br: bitrate,
         decode: String::new(),
         transport_path: runtime_stats.and_then(|stats| stats.transport_path.clone()),
+        transport_candidate_pair: runtime_stats
+            .and_then(|stats| stats.transport_candidate_pair.clone()),
+        transport_protocol: runtime_stats.and_then(|stats| stats.transport_protocol.clone()),
+        transport_address_family: runtime_stats
+            .and_then(|stats| stats.transport_address_family.clone()),
         transport_state,
         video_rtt_source: runtime_stats.and_then(|stats| stats.video_rtt_source.clone()),
         video_remb_bps: runtime_stats.and_then(|stats| stats.video_remb_bps),
@@ -170,6 +220,10 @@ pub fn build_xbxengine_stats(
         inbound_bitrate_kbps: resolved_total_bitrate_kbps,
         inbound_video_bitrate_kbps: resolved_video_bitrate_kbps,
         inbound_audio_bitrate_kbps: resolved_audio_bitrate_kbps,
+        latest_audio_playout_time_ms: runtime_stats
+            .and_then(|stats| stats.latest_audio_playout_time_ms),
+        audio_playout_latency_ms,
+        audio_video_playout_delta_ms,
         actual_video_bitrate_source,
         video_bwe_mode: latest_bwe.map(|bwe| bwe.mode.clone()),
         video_bwe_reason: latest_bwe.map(|bwe| bwe.decision_reason.clone()),
@@ -237,20 +291,66 @@ pub fn build_xbxengine_stats(
             .map(|stats| stats.video_renderer_submit_count_total),
         video_renderer_drop_count_total: runtime_stats
             .map(|stats| stats.video_renderer_drop_count_total),
-        video_present_drop_count_total: None,
+        video_present_drop_count_total: runtime_stats
+            .map(|stats| stats.video_present_drop_count_total),
         video_present_overwrite_count_total: runtime_stats
             .map(|stats| stats.video_present_overwrite_count_total),
         video_present_submit_count_total: runtime_stats
             .map(|stats| stats.video_present_submit_count_total),
-        video_present_descriptor_upload_mode: None,
-        video_present_descriptor_metal_import_count_total: None,
-        video_present_descriptor_cpu_upload_count_total: None,
+        host_no_pending_take_count_total: runtime_stats
+            .map(|stats| stats.host_no_pending_take_count_total),
+        host_no_pending_streak: runtime_stats.map(|stats| stats.host_no_pending_streak),
+        host_no_pending_max_streak: runtime_stats.map(|stats| stats.host_no_pending_max_streak),
+        host_no_pending_pressure_level: runtime_stats
+            .and_then(|stats| stats.host_no_pending_pressure_level.clone()),
+        video_present_descriptor_upload_mode: runtime_stats
+            .and_then(|stats| stats.video_present_descriptor_upload_mode.clone()),
+        video_present_descriptor_metal_import_count_total: runtime_stats
+            .map(|stats| stats.video_present_descriptor_metal_import_count_total),
+        video_present_descriptor_cpu_upload_count_total: runtime_stats
+            .map(|stats| stats.video_present_descriptor_cpu_upload_count_total),
         recovery_keyframe_request_count: Some(snapshot.recovery_keyframe_request_count),
         recovery_decoder_reset_count: Some(snapshot.recovery_decoder_reset_count),
         recovery_reconnect_count: Some(snapshot.recovery_reconnect_count),
+        recovery_hard_fallback_timer_ms: runtime_stats
+            .and_then(|stats| stats.recovery_hard_fallback_timer_ms),
+        recovery_hard_fallback_trigger_reason: runtime_stats
+            .and_then(|stats| stats.recovery_hard_fallback_trigger_reason.clone()),
+        recovery_hard_fallback_timer_reset_reason: runtime_stats
+            .and_then(|stats| stats.recovery_hard_fallback_timer_reset_reason.clone()),
         last_recovery_action: snapshot.last_recovery_action.clone(),
         last_recovery_action_at_ms: snapshot.last_recovery_action_at_ms,
         last_recovery_reason: snapshot.last_recovery_reason.clone(),
+        latest_decode_candidate_decision: runtime_stats.and_then(|stats| {
+            stats
+                .latest_decode_candidate_decision
+                .as_ref()
+                .map(|decision| {
+                    xbxengine_protocol::XbxEnginePipelineCandidateDecisionObservationDto {
+                        decision_id: decision.decision_id,
+                        state: decision.state.clone(),
+                        action: decision.action.clone(),
+                        detail: decision.detail.clone(),
+                        frame_seq: decision.frame_seq,
+                        observed_at_ms: decision.observed_at_ms,
+                    }
+                })
+        }),
+        latest_render_candidate_decision: runtime_stats.and_then(|stats| {
+            stats
+                .latest_render_candidate_decision
+                .as_ref()
+                .map(|decision| {
+                    xbxengine_protocol::XbxEnginePipelineCandidateDecisionObservationDto {
+                        decision_id: decision.decision_id,
+                        state: decision.state.clone(),
+                        action: decision.action.clone(),
+                        detail: decision.detail.clone(),
+                        frame_seq: decision.frame_seq,
+                        observed_at_ms: decision.observed_at_ms,
+                    }
+                })
+        }),
         latest_video_packet_gap: runtime_stats.and_then(|stats| {
             stats.latest_video_packet_gap.as_ref().map(|gap| {
                 xbxengine_protocol::XbxEnginePacketGapObservationDto {
@@ -273,6 +373,13 @@ pub fn build_xbxengine_stats(
                 xbxengine_protocol::XbxEngineFrameDropObservationDto {
                     observation_id: drop.observation_id,
                     reason: drop.reason.clone(),
+                    stage: drop.stage.clone(),
+                    action: drop.action.clone(),
+                    detail: drop.detail.clone(),
+                    frame_rtp_timestamp: drop.frame_rtp_timestamp,
+                    frame_seq: drop.frame_seq,
+                    frame_recovery_disposition: drop.frame_recovery_disposition.clone(),
+                    frame_unrecoverable_reason: drop.frame_unrecoverable_reason.clone(),
                     observed_at_ms: drop.observed_at_ms,
                     width: drop.width,
                     height: drop.height,
@@ -329,6 +436,99 @@ pub fn build_xbxengine_stats(
                         reason: escalation.reason.clone(),
                         action: escalation.action.clone(),
                         observed_at_ms: escalation.observed_at_ms,
+                    },
+                )
+        }),
+        latest_recovery_decision_ledger: runtime_stats.and_then(|stats| {
+            stats
+                .latest_recovery_decision_ledger
+                .as_ref()
+                .map(
+                    |ledger| xbxengine_protocol::XbxEngineRecoveryDecisionLedgerObservationDto {
+                        decision_id: ledger.decision_id,
+                        state_before: ledger.state_before.clone(),
+                        state_after: ledger.state_after.clone(),
+                        input_signal: ledger.input_signal.clone(),
+                        gate_result: ledger.gate_result.clone(),
+                        action_selected: ledger.action_selected.clone(),
+                        budget_before: ledger.budget_before.as_ref().map(|budget| {
+                            xbxengine_protocol::XbxEngineRecoveryBudgetSnapshotDto {
+                                recovery_epoch: budget.recovery_epoch,
+                                keyframe_budget_used: budget.keyframe_budget_used,
+                                keyframe_budget_limit: budget.keyframe_budget_limit,
+                                decoder_reset_budget_used: budget.decoder_reset_budget_used,
+                                decoder_reset_budget_limit: budget.decoder_reset_budget_limit,
+                                reconnect_budget_used: budget.reconnect_budget_used,
+                                reconnect_budget_limit: budget.reconnect_budget_limit,
+                            }
+                        }),
+                        budget_after: ledger.budget_after.as_ref().map(|budget| {
+                            xbxengine_protocol::XbxEngineRecoveryBudgetSnapshotDto {
+                                recovery_epoch: budget.recovery_epoch,
+                                keyframe_budget_used: budget.keyframe_budget_used,
+                                keyframe_budget_limit: budget.keyframe_budget_limit,
+                                decoder_reset_budget_used: budget.decoder_reset_budget_used,
+                                decoder_reset_budget_limit: budget.decoder_reset_budget_limit,
+                                reconnect_budget_used: budget.reconnect_budget_used,
+                                reconnect_budget_limit: budget.reconnect_budget_limit,
+                            }
+                        }),
+                        command_result: ledger.command_result.clone(),
+                        command_detail: ledger.command_detail.clone(),
+                        observed_at_ms: ledger.observed_at_ms,
+                    },
+                )
+        }),
+        latest_video_timeline_observation: runtime_stats.and_then(|stats| {
+            stats
+                .latest_video_timeline_observation
+                .as_ref()
+                .map(
+                    |timeline| xbxengine_protocol::XbxEngineVideoTimelineObservationDto {
+                        observation_id: timeline.observation_id,
+                        source_event: timeline.source_event.clone(),
+                        gap: timeline.gap.as_ref().map(|gap| {
+                            xbxengine_protocol::XbxEngineVideoTimelineGapSnapshotDto {
+                                state: gap.state.clone(),
+                                sequence: gap.sequence,
+                                frame_rtp_timestamp: gap.frame_rtp_timestamp,
+                                frame_importance: gap.frame_importance.clone(),
+                                observed_at_ms: gap.observed_at_ms,
+                            }
+                        }),
+                        frame: timeline.frame.as_ref().map(|frame| {
+                            xbxengine_protocol::XbxEngineVideoTimelineFrameSnapshotDto {
+                                state: frame.state.clone(),
+                                frame_rtp_timestamp: frame.frame_rtp_timestamp,
+                                is_keyframe: frame.is_keyframe,
+                                frame_importance: frame.frame_importance.clone(),
+                                close_reason: frame.close_reason.clone(),
+                                observed_at_ms: frame.observed_at_ms,
+                            }
+                        }),
+                        chain: xbxengine_protocol::XbxEngineVideoTimelineChainSnapshotDto {
+                            state: timeline.chain.state.clone(),
+                            reason: timeline.chain.reason.clone(),
+                            observed_at_ms: timeline.chain.observed_at_ms,
+                        },
+                        observed_at_ms: timeline.observed_at_ms,
+                    },
+                )
+        }),
+        latest_anchor_candidate_ledger: runtime_stats.and_then(|stats| {
+            stats
+                .latest_anchor_candidate_ledger
+                .as_ref()
+                .map(
+                    |candidate| xbxengine_protocol::XbxEngineAnchorCandidateLedgerDto {
+                        recovery_epoch: candidate.recovery_epoch,
+                        frame_rtp_timestamp: candidate.frame_rtp_timestamp,
+                        state: candidate.state.as_str().to_string(),
+                        source_event: candidate.source_event.clone(),
+                        failure_reason: candidate
+                            .failure_reason
+                            .map(|reason| reason.as_str().to_string()),
+                        observed_at_ms: candidate.observed_at_ms,
                     },
                 )
         }),
@@ -569,141 +769,48 @@ fn build_runtime_summary(
 // 将当前主问题链显式归类，避免每次回归都手工拼 diagnosis/band/health。
 fn build_primary_issue_chain(
     runtime_stats: Option<&XbxEngineMediaRuntimeStats>,
-    display_phase: Option<&str>,
-    video_health: Option<&str>,
-    stall_kind: Option<&str>,
+    _display_phase: Option<&str>,
+    video_owner: Option<&VideoOwnerContract>,
+    _stall_kind: Option<&str>,
 ) -> Option<String> {
-    let stats = runtime_stats?;
-    match display_phase {
-        Some("connecting") => return Some("transport:connecting".to_string()),
-        Some("handshaking") => return Some("startup:handshaking".to_string()),
-        Some("priming") => return Some("startup:priming".to_string()),
-        _ => {}
+    let _ = runtime_stats?;
+    let owner = video_owner?;
+    match owner.state.as_str() {
+        "seeking-anchor" | "priming" | "startup" => Some("startup:priming".to_string()),
+        "stable-serving" | "stableServing" => Some("steady:healthy".to_string()),
+        "rebuilding-supply" | "rebuildingSupply" => Some(format!(
+            "recovery:{}",
+            owner.reason.as_deref().unwrap_or("rebuildingSupply")
+        )),
+        "supply-starved" | "supplyStarved" => Some(format!(
+            "display:{}",
+            owner.reason.as_deref().unwrap_or("supplyStarved")
+        )),
+        _ => Some(format!(
+            "owner:{}:{}",
+            owner.state,
+            owner.reason.as_deref().unwrap_or("none")
+        )),
     }
-    match video_health {
-        Some("connecting") => return Some("transport:connecting".to_string()),
-        Some("priming") => return Some("startup:priming".to_string()),
-        Some("startupLowQuality") => return Some("startup:lowQuality".to_string()),
-        Some("stalled") => {
-            if matches!(display_phase, Some("recovering")) {
-                if let Some(diagnosis) = stats.recovery_diagnosis.as_deref() {
-                    return Some(format!("recovery:{diagnosis}"));
-                }
-            }
-            if let Some(stall) = stall_kind.filter(|stall| *stall != "none") {
-                return Some(format!("stall:{stall}"));
-            }
-        }
-        Some("recovering") => {
-            if let Some(diagnosis) = stats.recovery_diagnosis.as_deref() {
-                return Some(format!("recovery:{diagnosis}"));
-            }
-        }
-        _ => {}
-    }
-    if let Some(diagnosis) = stats.recovery_diagnosis.as_deref() {
-        return Some(format!("recovery:{diagnosis}"));
-    }
-    if let Some(stall) = stall_kind.filter(|stall| *stall != "none") {
-        return Some(format!("stall:{stall}"));
-    }
-    if stats.session_phase.as_deref() == Some("startup")
-        && stats.direct_gaming_bitrate_band.as_deref() == Some("startupLow")
-    {
-        return Some("startup:lowQuality".to_string());
-    }
-    Some("steady:healthy".to_string())
 }
 
 // 把最近一次真正影响行为的决策压成摘要，便于对照 trace 和面板。
 fn build_latest_decision_summary(
-    snapshot: &XbxEngineRuntimeSnapshot,
+    _snapshot: &XbxEngineRuntimeSnapshot,
     runtime_stats: Option<&XbxEngineMediaRuntimeStats>,
-    video_health: Option<&str>,
-    observation_note: Option<&str>,
-    transport_recovery_note: Option<&str>,
-    repair_probe_note: Option<&str>,
-    reinject_note: Option<&str>,
-    now_ms: f64,
+    video_owner: Option<&VideoOwnerContract>,
+    _observation_note: Option<&str>,
+    _transport_recovery_note: Option<&str>,
+    _repair_probe_note: Option<&str>,
+    _reinject_note: Option<&str>,
 ) -> Option<String> {
-    let stats = runtime_stats?;
-    const DECISION_FRESH_WINDOW_MS: f64 = 1_500.0;
-
-    if let Some(escalation) = stats.latest_video_escalation_observation.as_ref() {
-        if now_ms - escalation.observed_at_ms <= DECISION_FRESH_WINDOW_MS
-            || matches!(
-                video_health,
-                Some("stalled" | "recovering" | "startupLowQuality")
-            )
-        {
-            return Some(append_runtime_notes(
-                format!("recovery:{}->{}", escalation.reason, escalation.action),
-                observation_note,
-                transport_recovery_note,
-                repair_probe_note,
-                reinject_note,
-            ));
-        }
-    }
-    if let Some(bwe) = stats.latest_video_bwe_observation.as_ref() {
-        return Some(append_runtime_notes(
-            format!("bwe:{}:{}kbps", bwe.decision_reason, bwe.target_remb_kbps),
-            observation_note,
-            transport_recovery_note,
-            repair_probe_note,
-            reinject_note,
-        ));
-    }
-    if let (Some(action), Some(reason)) = (
-        snapshot.last_recovery_action.as_deref(),
-        snapshot.last_recovery_reason.as_deref(),
-    ) {
-        if snapshot
-            .last_recovery_action_at_ms
-            .is_some_and(|at_ms| now_ms - at_ms <= DECISION_FRESH_WINDOW_MS)
-        {
-            return Some(append_runtime_notes(
-                format!("recovery:{reason}->{action}"),
-                observation_note,
-                transport_recovery_note,
-                repair_probe_note,
-                reinject_note,
-            ));
-        }
-    }
-    match (
-        observation_note,
-        transport_recovery_note,
-        repair_probe_note,
-        reinject_note,
-    ) {
-        (Some(note), Some(epoch), Some(repair), Some(reinject)) => {
-            Some(format!("obs:{note} | {epoch} | {repair} | {reinject}"))
-        }
-        (Some(note), Some(epoch), Some(repair), None) => {
-            Some(format!("obs:{note} | {epoch} | {repair}"))
-        }
-        (Some(note), Some(epoch), None, Some(reinject)) => {
-            Some(format!("obs:{note} | {epoch} | {reinject}"))
-        }
-        (Some(note), Some(epoch), None, None) => Some(format!("obs:{note} | {epoch}")),
-        (Some(note), None, Some(repair), Some(reinject)) => {
-            Some(format!("obs:{note} | {repair} | {reinject}"))
-        }
-        (Some(note), None, Some(repair), None) => Some(format!("obs:{note} | {repair}")),
-        (Some(note), None, None, Some(reinject)) => Some(format!("obs:{note} | {reinject}")),
-        (Some(note), None, None, None) => Some(format!("obs:{note}")),
-        (None, Some(epoch), Some(repair), Some(reinject)) => {
-            Some(format!("{epoch} | {repair} | {reinject}"))
-        }
-        (None, Some(epoch), Some(repair), None) => Some(format!("{epoch} | {repair}")),
-        (None, Some(epoch), None, Some(reinject)) => Some(format!("{epoch} | {reinject}")),
-        (None, Some(epoch), None, None) => Some(epoch.to_string()),
-        (None, None, Some(repair), Some(reinject)) => Some(format!("{repair} | {reinject}")),
-        (None, None, Some(repair), None) => Some(repair.to_string()),
-        (None, None, None, Some(reinject)) => Some(reinject.to_string()),
-        (None, None, None, None) => None,
-    }
+    let _ = runtime_stats?;
+    let owner = video_owner?;
+    Some(format!(
+        "owner:{}:{}",
+        owner.state,
+        owner.reason.as_deref().unwrap_or("none")
+    ))
 }
 
 fn build_observation_note(runtime_stats: Option<&XbxEngineMediaRuntimeStats>) -> Option<String> {
@@ -723,7 +830,7 @@ fn build_transport_recovery_note(
     if stats.transport_recovery_epoch == 0 {
         return None;
     }
-    if stats.transport_recovery_epoch > stats.transport_recovery_epoch_at_last_escalation {
+    if stats.transport_recovery_episode_active {
         Some(format!("repoch:{}:active", stats.transport_recovery_epoch))
     } else {
         Some(format!("repoch:{}", stats.transport_recovery_epoch))
@@ -856,64 +963,24 @@ fn compute_display_phase(stats: &XbxEngineMediaRuntimeStats, now_ms: f64) -> Dis
     if !has_visible_video_output(stats) || stats.control_ready_at_ms.is_none() {
         return DisplaySessionPhase::Priming;
     }
+    if let Some(owner_state) = stats.video_owner_state.as_deref() {
+        return match owner_state {
+            "seeking-anchor" | "priming" | "startup" => DisplaySessionPhase::Priming,
+            "rebuilding-supply" | "rebuildingSupply" | "supply-starved" | "supplyStarved" => {
+                DisplaySessionPhase::Recovering
+            }
+            _ => DisplaySessionPhase::Steady,
+        };
+    }
     let fresh_output = has_recent_video_output(stats, now_ms);
-    if stats.session_phase.as_deref() == Some("recovering") && !fresh_output {
+    if !fresh_output && stats.session_phase.as_deref() == Some("recovering") {
         return DisplaySessionPhase::Recovering;
     }
-    match stats.recovery_diagnosis.as_deref() {
-        Some("adapterIdleTimeout" | "decoderBackendFailure" | "transportSampleLoss")
-            if !fresh_output =>
-        {
-            DisplaySessionPhase::Recovering
-        }
-        Some("transportAwaitRecoveryKeyframe" | "ingressWaitKeyframe") if !fresh_output => {
-            DisplaySessionPhase::Recovering
-        }
-        _ => DisplaySessionPhase::Steady,
-    }
+    DisplaySessionPhase::Steady
 }
 
 fn has_visible_video_output(stats: &XbxEngineMediaRuntimeStats) -> bool {
     stats.latest_video_present_time_ms.is_some() || stats.video_present_submit_count_total > 0
-}
-
-/// 统一把运行时事实压成 UI/trace 可直接消费的健康态，避免前端再拼条件猜状态。
-fn classify_video_health(
-    runtime_stats: Option<&XbxEngineMediaRuntimeStats>,
-    display_phase: Option<&str>,
-    now_ms: f64,
-) -> Option<String> {
-    let stats = runtime_stats?;
-    let fresh_output = has_recent_video_output(stats, now_ms);
-    match display_phase {
-        Some("connecting" | "handshaking") => return Some("connecting".to_string()),
-        Some("priming") => return Some("priming".to_string()),
-        _ => {}
-    }
-    match stats.recovery_diagnosis.as_deref() {
-        Some("ingressWaitKeyframe") | Some("transportAwaitRecoveryKeyframe") if !fresh_output => {
-            return Some("waitingKeyframe".to_string());
-        }
-        Some("transportSampleLoss") if !fresh_output => {
-            return Some("referenceDirty".to_string());
-        }
-        Some("adapterIdleTimeout" | "decoderBackendFailure") if !fresh_output => {
-            return Some("stalled".to_string());
-        }
-        _ => {}
-    }
-    if stats.video_decoder_stalled == Some(true) || stats.video_renderer_stalled == Some(true) {
-        return Some("stalled".to_string());
-    }
-    if stats.session_phase.as_deref() == Some("startup")
-        && stats.direct_gaming_bitrate_band.as_deref() == Some("startupLow")
-    {
-        return Some("startupLowQuality".to_string());
-    }
-    if matches!(display_phase, Some("recovering")) && !fresh_output {
-        return Some("recovering".to_string());
-    }
-    Some("healthy".to_string())
 }
 
 /// stall kind 用于界面/离线分析统一解释“这次卡住属于哪条链”。
@@ -923,36 +990,45 @@ fn classify_stall_kind(runtime_stats: Option<&XbxEngineMediaRuntimeStats>) -> Op
         .duration_since(std::time::UNIX_EPOCH)
         .map(|duration| duration.as_millis() as f64)
         .unwrap_or(0.0);
-    let fresh_output = has_recent_video_output(stats, now_ms);
-    match stats.recovery_diagnosis.as_deref() {
-        Some("adapterIdleTimeout") if !fresh_output => Some("idleTimeout".to_string()),
-        Some("decoderBackendFailure") if !fresh_output => Some("decoderBackendFailure".to_string()),
-        Some("transportSampleLoss") if !fresh_output => Some("sampleLoss".to_string()),
-        Some("transportAwaitRecoveryKeyframe") | Some("ingressWaitKeyframe") if !fresh_output => {
-            Some("waitingKeyframe".to_string())
-        }
-        Some("reconfigure") => Some("reconfigure".to_string()),
-        _ => {
-            if stats.video_decoder_stalled == Some(true)
-                || stats.video_renderer_stalled == Some(true)
-            {
-                Some("pipelineStall".to_string())
-            } else if stats.direct_gaming_bitrate_band.as_deref() == Some("paused")
-                && stats.inbound_video_bitrate_kbps.unwrap_or(0.0) <= 0.1
-                && stats.video_present_fps <= 1.0
-            {
-                Some("videoPaused".to_string())
-            } else if stats.session_phase.as_deref() == Some("startup")
-                && stats.direct_gaming_bitrate_band.as_deref() == Some("startupLow")
-            {
-                Some("startupLowQuality".to_string())
-            } else if stats.session_phase.as_deref() == Some("recovering") && !fresh_output {
-                Some("recovering".to_string())
-            } else {
-                Some("none".to_string())
+    if let Some(owner_reason) = stats.video_owner_reason.as_deref() {
+        return Some(match owner_reason {
+            "adapterIdleTimeout" | "displaySupplyCritical" => "idleTimeout".to_string(),
+            "decoderBackendFailure" => "decoderBackendFailure".to_string(),
+            "transportSampleLoss" => "sampleLoss".to_string(),
+            "transportAwaitRecoveryKeyframe" | "ingressWaitKeyframe" => {
+                "waitingKeyframe".to_string()
             }
-        }
+            "reconfigure" => "reconfigure".to_string(),
+            _ => {
+                if stats.video_decoder_stalled == Some(true)
+                    || stats.video_renderer_stalled == Some(true)
+                {
+                    "pipelineStall".to_string()
+                } else {
+                    "recovering".to_string()
+                }
+            }
+        });
     }
+    let fresh_output = has_recent_video_output(stats, now_ms);
+    if stats.video_decoder_stalled == Some(true) || stats.video_renderer_stalled == Some(true) {
+        return Some("pipelineStall".to_string());
+    }
+    if stats.direct_gaming_bitrate_band.as_deref() == Some("paused")
+        && stats.inbound_video_bitrate_kbps.unwrap_or(0.0) <= 0.1
+        && stats.video_present_fps <= 1.0
+    {
+        return Some("videoPaused".to_string());
+    }
+    if stats.session_phase.as_deref() == Some("startup")
+        && stats.direct_gaming_bitrate_band.as_deref() == Some("startupLow")
+    {
+        return Some("startupLowQuality".to_string());
+    }
+    if stats.session_phase.as_deref() == Some("recovering") && !fresh_output {
+        return Some("recovering".to_string());
+    }
+    Some("none".to_string())
 }
 
 fn has_recent_video_output(stats: &XbxEngineMediaRuntimeStats, now_ms: f64) -> bool {
@@ -1001,6 +1077,19 @@ fn resolve_audio_inbound_bitrate_kbps(
         .inbound_audio_bitrate_kbps
         .filter(|value| *value > 0.1)
         .or_else(|| estimate_audio_inbound_bitrate_kbps(stats, now_ms))
+}
+
+fn resolve_audio_playout_latency_ms(stats: &XbxEngineMediaRuntimeStats) -> Option<f64> {
+    stats.audio_playout_latency_ms.filter(|value| *value >= 0.0)
+}
+
+fn resolve_audio_video_playout_delta_ms(
+    stats: &XbxEngineMediaRuntimeStats,
+    present_age_ms: Option<f64>,
+) -> Option<f64> {
+    resolve_audio_playout_latency_ms(stats)
+        .zip(present_age_ms)
+        .map(|(audio, present)| audio - present)
 }
 
 fn resolve_total_inbound_bitrate_kbps(
@@ -1074,6 +1163,21 @@ mod tests {
     }
 
     #[test]
+    fn audio_playout_latency_helpers_return_latency_and_av_delta() {
+        let stats = XbxEngineMediaRuntimeStats {
+            audio_playout_latency_ms: Some(42.5),
+            ..XbxEngineMediaRuntimeStats::default()
+        };
+
+        assert_eq!(resolve_audio_playout_latency_ms(&stats), Some(42.5));
+        assert_eq!(
+            resolve_audio_video_playout_delta_ms(&stats, Some(30.0)),
+            Some(12.5)
+        );
+        assert_eq!(resolve_audio_video_playout_delta_ms(&stats, None), None);
+    }
+
+    #[test]
     fn runtime_summary_includes_transport_recovery_epoch_note() {
         let stats = XbxEngineMediaRuntimeStats {
             transport_state: XbxEngineTransportStateDto::Connected,
@@ -1086,6 +1190,7 @@ mod tests {
             direct_gaming_bitrate_band: Some("steady".to_string()),
             transport_recovery_epoch: 7,
             transport_recovery_epoch_at_last_escalation: 6,
+            transport_recovery_episode_active: true,
             ..XbxEngineMediaRuntimeStats::default()
         };
 
@@ -1096,20 +1201,23 @@ mod tests {
     }
 
     #[test]
-    fn latest_decision_summary_falls_back_to_transport_recovery_epoch_note() {
+    fn latest_decision_summary_is_driven_by_canonical_owner_contract() {
         let stats = XbxEngineMediaRuntimeStats {
             transport_state: XbxEngineTransportStateDto::Connected,
             transport_recovery_epoch: 3,
             transport_recovery_epoch_at_last_escalation: 3,
+            video_owner_state: Some("rebuildingSupply".to_string()),
+            video_owner_reason: Some("transportAwaitRecoveryKeyframe".to_string()),
+            video_owner_source: Some("anchor".to_string()),
+            video_owner_observed_at_ms: Some(1234.0),
             ..XbxEngineMediaRuntimeStats::default()
         };
 
         let dto = build_xbxengine_stats(&test_snapshot(), Some(&stats));
-        let latest_decision_summary = dto
-            .latest_decision_summary
-            .expect("latest decision summary");
-
-        assert_eq!(latest_decision_summary, "repoch:3");
+        assert_eq!(
+            dto.latest_decision_summary.as_deref(),
+            Some("owner:rebuildingSupply:transportAwaitRecoveryKeyframe")
+        );
     }
 
     #[test]
@@ -1199,28 +1307,45 @@ mod tests {
     }
 
     #[test]
-    fn classify_video_health_ignores_stale_adapter_idle_timeout_when_output_is_fresh() {
+    fn owner_contract_projection_reads_canonical_runtime_owner_fields() {
         let now_ms = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_millis() as f64;
         let stats = XbxEngineMediaRuntimeStats {
             transport_state: XbxEngineTransportStateDto::Connected,
-            recovery_diagnosis: Some("adapterIdleTimeout".to_string()),
-            message_handshake_acked_at_ms: Some(now_ms - 80.0),
-            control_ready_at_ms: Some(now_ms - 70.0),
-            latest_video_present_time_ms: Some(now_ms - 40.0),
-            latest_video_decode_ok_time_ms: Some(now_ms - 40.0),
-            video_present_submit_count_total: 1,
-            video_present_fps: 58.0,
+            message_handshake_acked_at_ms: Some(now_ms - 120.0),
+            control_ready_at_ms: Some(now_ms - 110.0),
+            latest_video_present_time_ms: Some(now_ms - 30.0),
+            latest_video_decode_ok_time_ms: Some(now_ms - 30.0),
+            video_present_submit_count_total: 2,
+            video_owner_state: Some("rebuildingSupply".to_string()),
+            video_owner_reason: Some("timelineReferenceBroken".to_string()),
+            video_owner_source: Some("anchor".to_string()),
+            video_owner_observed_at_ms: Some(now_ms - 10.0),
             ..XbxEngineMediaRuntimeStats::default()
         };
 
+        let dto = build_xbxengine_stats(&test_snapshot(), Some(&stats));
+        assert_eq!(dto.video_owner_state.as_deref(), Some("rebuildingSupply"));
         assert_eq!(
-            classify_video_health(Some(&stats), Some("steady"), now_ms),
-            Some("healthy".to_string())
+            dto.video_owner_reason.as_deref(),
+            Some("timelineReferenceBroken")
         );
-        assert_eq!(classify_stall_kind(Some(&stats)), Some("none".to_string()));
+        assert_eq!(dto.video_owner_source.as_deref(), Some("anchor"));
+        assert_eq!(dto.video_owner_observed_at_ms, Some(now_ms - 10.0));
+        assert_eq!(dto.video_health.as_deref(), Some("recovering"));
+        assert_eq!(
+            dto.primary_issue_chain.as_deref(),
+            Some("recovery:timelineReferenceBroken")
+        );
+        assert_eq!(
+            dto.latest_decision_summary.as_deref(),
+            Some("owner:rebuildingSupply:timelineReferenceBroken")
+        );
+        // legacy coupling 仍保留为辅助字段，不参与 owner 语义。
+        assert_eq!(dto.recovery_coupling_mode, None);
+        assert_eq!(dto.recovery_coupling_summary.as_deref(), None);
     }
 
     #[test]
@@ -1235,11 +1360,8 @@ mod tests {
         let dto = build_xbxengine_stats(&test_snapshot(), Some(&stats));
 
         assert_eq!(dto.session_phase.as_deref(), Some("handshaking"));
-        assert_eq!(dto.video_health.as_deref(), Some("connecting"));
-        assert_eq!(
-            dto.primary_issue_chain.as_deref(),
-            Some("startup:handshaking")
-        );
+        assert_eq!(dto.video_health, None);
+        assert_eq!(dto.primary_issue_chain, None);
     }
 
     #[test]
@@ -1258,8 +1380,8 @@ mod tests {
         let dto = build_xbxengine_stats(&test_snapshot(), Some(&stats));
 
         assert_eq!(dto.session_phase.as_deref(), Some("priming"));
-        assert_eq!(dto.video_health.as_deref(), Some("priming"));
-        assert_eq!(dto.primary_issue_chain.as_deref(), Some("startup:priming"));
+        assert_eq!(dto.video_health, None);
+        assert_eq!(dto.primary_issue_chain, None);
     }
 
     #[test]
@@ -1278,6 +1400,10 @@ mod tests {
             latest_video_decode_ok_time_ms: Some(now_ms - 20.0),
             video_present_submit_count_total: 1,
             video_present_fps: 60.0,
+            video_owner_state: Some("stableServing".to_string()),
+            video_owner_reason: Some("steady".to_string()),
+            video_owner_source: Some("anchor".to_string()),
+            video_owner_observed_at_ms: Some(now_ms - 5.0),
             ..XbxEngineMediaRuntimeStats::default()
         };
 
@@ -1285,6 +1411,8 @@ mod tests {
 
         assert_eq!(dto.session_phase.as_deref(), Some("steady"));
         assert_eq!(dto.video_health.as_deref(), Some("healthy"));
+        assert_eq!(dto.video_owner_state.as_deref(), Some("stableServing"));
+        assert_eq!(dto.video_owner_source.as_deref(), Some("anchor"));
         assert_eq!(dto.primary_issue_chain.as_deref(), Some("steady:healthy"));
     }
 
@@ -1305,16 +1433,278 @@ mod tests {
             latest_video_decode_ok_time_ms: Some(now_ms - 800.0),
             video_present_submit_count_total: 1,
             recovery_diagnosis: Some("adapterIdleTimeout".to_string()),
+            video_owner_state: Some("rebuildingSupply".to_string()),
+            video_owner_reason: Some("adapterIdleTimeout".to_string()),
+            video_owner_source: Some("anchor".to_string()),
+            video_owner_observed_at_ms: Some(now_ms - 10.0),
             ..XbxEngineMediaRuntimeStats::default()
         };
 
         let dto = build_xbxengine_stats(&test_snapshot(), Some(&stats));
 
         assert_eq!(dto.session_phase.as_deref(), Some("recovering"));
-        assert_eq!(dto.video_health.as_deref(), Some("stalled"));
+        assert_eq!(dto.video_health.as_deref(), Some("recovering"));
         assert_eq!(
             dto.primary_issue_chain.as_deref(),
             Some("recovery:adapterIdleTimeout")
+        );
+    }
+
+    #[test]
+    fn build_stats_prioritizes_display_supply_starved_when_no_pending_and_present_age_is_stale() {
+        let now_ms = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_millis() as f64;
+        let stats = XbxEngineMediaRuntimeStats {
+            transport_state: XbxEngineTransportStateDto::Connected,
+            transport_policy_profile: Some("cloud".to_string()),
+            session_phase: Some("steady".to_string()),
+            direct_gaming_bitrate_band: Some("steady".to_string()),
+            message_handshake_acked_at_ms: Some(now_ms - 4_000.0),
+            control_ready_at_ms: Some(now_ms - 3_900.0),
+            latest_video_present_time_ms: Some(now_ms - 2_200.0),
+            latest_video_decode_ok_time_ms: Some(now_ms - 1_600.0),
+            video_present_submit_count_total: 120,
+            video_present_fps: 1.0,
+            host_no_pending_pressure_level: Some("critical".to_string()),
+            host_no_pending_streak: 1_280,
+            host_no_pending_max_streak: 1_500,
+            video_owner_state: Some("supplyStarved".to_string()),
+            video_owner_reason: Some("supplyStarved".to_string()),
+            video_owner_source: Some("supply".to_string()),
+            video_owner_observed_at_ms: Some(now_ms - 10.0),
+            ..XbxEngineMediaRuntimeStats::default()
+        };
+
+        let dto = build_xbxengine_stats(&test_snapshot(), Some(&stats));
+        assert_eq!(dto.video_health.as_deref(), Some("displaySupplyStarved"));
+        assert_eq!(dto.video_owner_state.as_deref(), Some("supplyStarved"));
+        assert_eq!(dto.video_owner_reason.as_deref(), Some("supplyStarved"));
+        assert_eq!(dto.video_owner_source.as_deref(), Some("supply"));
+        assert_eq!(
+            dto.primary_issue_chain.as_deref(),
+            Some("display:supplyStarved")
+        );
+    }
+
+    #[test]
+    fn build_stats_ignores_stale_recovery_diagnosis_when_output_is_fresh() {
+        let now_ms = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_millis() as f64;
+        let stats = XbxEngineMediaRuntimeStats {
+            transport_state: XbxEngineTransportStateDto::Connected,
+            transport_policy_profile: Some("cloud".to_string()),
+            session_phase: Some("steady".to_string()),
+            direct_gaming_bitrate_band: Some("steady".to_string()),
+            recovery_diagnosis: Some("adapterIdleTimeout".to_string()),
+            message_handshake_acked_at_ms: Some(now_ms - 80.0),
+            control_ready_at_ms: Some(now_ms - 70.0),
+            latest_video_present_time_ms: Some(now_ms - 35.0),
+            latest_video_decode_ok_time_ms: Some(now_ms - 35.0),
+            video_present_submit_count_total: 2,
+            video_present_fps: 58.0,
+            host_no_pending_pressure_level: Some("normal".to_string()),
+            host_no_pending_streak: 1,
+            video_owner_state: Some("stableServing".to_string()),
+            video_owner_reason: Some("steady".to_string()),
+            video_owner_source: Some("anchor".to_string()),
+            video_owner_observed_at_ms: Some(now_ms - 10.0),
+            ..XbxEngineMediaRuntimeStats::default()
+        };
+
+        let dto = build_xbxengine_stats(&test_snapshot(), Some(&stats));
+        assert_eq!(dto.video_health.as_deref(), Some("healthy"));
+        assert_eq!(dto.primary_issue_chain.as_deref(), Some("steady:healthy"));
+    }
+
+    #[test]
+    fn build_stats_prioritizes_recent_timeline_recovering_over_healthy_summary() {
+        let now_ms = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_millis() as f64;
+        let stats = XbxEngineMediaRuntimeStats {
+            transport_state: XbxEngineTransportStateDto::Connected,
+            transport_policy_profile: Some("cloud".to_string()),
+            session_phase: Some("steady".to_string()),
+            direct_gaming_bitrate_band: Some("steady".to_string()),
+            message_handshake_acked_at_ms: Some(now_ms - 80.0),
+            control_ready_at_ms: Some(now_ms - 70.0),
+            latest_video_present_time_ms: Some(now_ms - 35.0),
+            latest_video_decode_ok_time_ms: Some(now_ms - 35.0),
+            video_present_submit_count_total: 2,
+            video_present_fps: 58.0,
+            video_owner_state: Some("rebuildingSupply".to_string()),
+            video_owner_reason: Some("inspectionRejectInvalidSliceHeader".to_string()),
+            video_owner_source: Some("anchor".to_string()),
+            video_owner_observed_at_ms: Some(now_ms - 10.0),
+            latest_video_timeline_observation: Some(crate::XbxEngineVideoTimelineObservation {
+                observation_id: 7,
+                source_event: "frame-await-recovery-keyframe".to_string(),
+                gap: None,
+                frame: Some(crate::XbxEngineVideoTimelineFrameSnapshot {
+                    state: "closed".to_string(),
+                    frame_rtp_timestamp: Some(123),
+                    is_keyframe: Some(false),
+                    frame_importance: Some("unknown".to_string()),
+                    close_reason: Some("inspectionRejectInvalidSliceHeader".to_string()),
+                    observed_at_ms: now_ms - 20.0,
+                }),
+                chain: crate::XbxEngineVideoTimelineChainSnapshot {
+                    state: "recovering".to_string(),
+                    reason: Some("inspectionRejectInvalidSliceHeader".to_string()),
+                    observed_at_ms: now_ms - 20.0,
+                },
+                observed_at_ms: now_ms - 20.0,
+            }),
+            latest_video_escalation_observation: Some(crate::XbxEngineVideoEscalationObservation {
+                observation_id: 1,
+                reason: "transportAwaitRecoveryKeyframe".to_string(),
+                action: "requestDecoderReset".to_string(),
+                observed_at_ms: now_ms - 10.0,
+            }),
+            ..XbxEngineMediaRuntimeStats::default()
+        };
+
+        let dto = build_xbxengine_stats(&test_snapshot(), Some(&stats));
+        assert_eq!(dto.video_health.as_deref(), Some("recovering"));
+        assert_eq!(dto.video_owner_state.as_deref(), Some("rebuildingSupply"));
+        assert_eq!(
+            dto.video_owner_reason.as_deref(),
+            Some("inspectionRejectInvalidSliceHeader")
+        );
+        assert_eq!(dto.video_owner_source.as_deref(), Some("anchor"));
+        assert_eq!(
+            dto.primary_issue_chain.as_deref(),
+            Some("recovery:inspectionRejectInvalidSliceHeader")
+        );
+        assert_eq!(
+            dto.latest_decision_summary.as_deref(),
+            Some("owner:rebuildingSupply:inspectionRejectInvalidSliceHeader")
+        );
+    }
+
+    #[test]
+    fn build_stats_prioritizes_recent_timeline_broken_over_steady_healthy() {
+        let now_ms = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_millis() as f64;
+        let stats = XbxEngineMediaRuntimeStats {
+            transport_state: XbxEngineTransportStateDto::Connected,
+            transport_policy_profile: Some("cloud".to_string()),
+            session_phase: Some("steady".to_string()),
+            direct_gaming_bitrate_band: Some("steady".to_string()),
+            message_handshake_acked_at_ms: Some(now_ms - 80.0),
+            control_ready_at_ms: Some(now_ms - 70.0),
+            latest_video_present_time_ms: Some(now_ms - 40.0),
+            latest_video_decode_ok_time_ms: Some(now_ms - 35.0),
+            video_present_submit_count_total: 3,
+            video_present_fps: 60.0,
+            video_owner_state: Some("rebuildingSupply".to_string()),
+            video_owner_reason: Some("cloudHighRttLowValueAdmission".to_string()),
+            video_owner_source: Some("anchor".to_string()),
+            video_owner_observed_at_ms: Some(now_ms - 10.0),
+            latest_video_timeline_observation: Some(crate::XbxEngineVideoTimelineObservation {
+                observation_id: 8,
+                source_event: "nack-observation".to_string(),
+                gap: Some(crate::XbxEngineVideoTimelineGapSnapshot {
+                    state: "expired".to_string(),
+                    sequence: Some(38022),
+                    frame_rtp_timestamp: Some(456),
+                    frame_importance: Some("delta".to_string()),
+                    observed_at_ms: now_ms - 15.0,
+                }),
+                frame: Some(crate::XbxEngineVideoTimelineFrameSnapshot {
+                    state: "gap-present".to_string(),
+                    frame_rtp_timestamp: Some(456),
+                    is_keyframe: Some(false),
+                    frame_importance: Some("delta".to_string()),
+                    close_reason: None,
+                    observed_at_ms: now_ms - 15.0,
+                }),
+                chain: crate::XbxEngineVideoTimelineChainSnapshot {
+                    state: "broken".to_string(),
+                    reason: Some("cloudHighRttLowValueAdmission".to_string()),
+                    observed_at_ms: now_ms - 15.0,
+                },
+                observed_at_ms: now_ms - 15.0,
+            }),
+            ..XbxEngineMediaRuntimeStats::default()
+        };
+
+        let dto = build_xbxengine_stats(&test_snapshot(), Some(&stats));
+        assert_eq!(dto.video_health.as_deref(), Some("recovering"));
+        assert_eq!(dto.video_owner_state.as_deref(), Some("rebuildingSupply"));
+        assert_eq!(
+            dto.video_owner_reason.as_deref(),
+            Some("cloudHighRttLowValueAdmission")
+        );
+        assert_eq!(dto.video_owner_source.as_deref(), Some("anchor"));
+        assert_eq!(
+            dto.primary_issue_chain.as_deref(),
+            Some("recovery:cloudHighRttLowValueAdmission")
+        );
+        assert_eq!(
+            dto.latest_decision_summary.as_deref(),
+            Some("owner:rebuildingSupply:cloudHighRttLowValueAdmission")
+        );
+    }
+
+    #[test]
+    fn build_stats_owner_contract_prefers_canonical_owner_over_legacy_coupling_signals() {
+        let now_ms = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_millis() as f64;
+        let stats = XbxEngineMediaRuntimeStats {
+            transport_state: XbxEngineTransportStateDto::Connected,
+            transport_policy_profile: Some("cloud".to_string()),
+            session_phase: Some("steady".to_string()),
+            direct_gaming_bitrate_band: Some("steady".to_string()),
+            message_handshake_acked_at_ms: Some(now_ms - 2000.0),
+            control_ready_at_ms: Some(now_ms - 1900.0),
+            latest_video_present_time_ms: Some(now_ms - 1700.0),
+            latest_video_decode_ok_time_ms: Some(now_ms - 1700.0),
+            video_present_submit_count_total: 64,
+            host_no_pending_pressure_level: Some("critical".to_string()),
+            host_no_pending_streak: 2048,
+            video_renderer_stalled: Some(true),
+            recovery_coupling_mode: Some("supplyStarved".to_string()),
+            recovery_coupling_summary: Some("supplyStarved".to_string()),
+            video_owner_state: Some("rebuildingSupply".to_string()),
+            video_owner_reason: Some("inspectionRejectInvalidSliceHeader".to_string()),
+            video_owner_source: Some("anchor".to_string()),
+            video_owner_observed_at_ms: Some(now_ms - 10.0),
+            latest_video_timeline_observation: Some(crate::XbxEngineVideoTimelineObservation {
+                observation_id: 9,
+                source_event: "frame-await-recovery-keyframe".to_string(),
+                gap: None,
+                frame: None,
+                chain: crate::XbxEngineVideoTimelineChainSnapshot {
+                    state: "recovering".to_string(),
+                    reason: Some("inspectionRejectInvalidSliceHeader".to_string()),
+                    observed_at_ms: now_ms - 15.0,
+                },
+                observed_at_ms: now_ms - 15.0,
+            }),
+            ..XbxEngineMediaRuntimeStats::default()
+        };
+
+        let dto = build_xbxengine_stats(&test_snapshot(), Some(&stats));
+        assert_eq!(dto.video_health.as_deref(), Some("recovering"));
+        assert_eq!(dto.video_owner_state.as_deref(), Some("rebuildingSupply"));
+        assert_eq!(dto.video_owner_source.as_deref(), Some("anchor"));
+        assert_eq!(
+            dto.primary_issue_chain.as_deref(),
+            Some("recovery:inspectionRejectInvalidSliceHeader")
+        );
+        assert_eq!(
+            dto.latest_decision_summary.as_deref(),
+            Some("owner:rebuildingSupply:inspectionRejectInvalidSliceHeader")
         );
     }
 
@@ -1501,6 +1891,24 @@ mod tests {
     }
 
     #[test]
+    fn transport_details_fields_are_projected_from_runtime_stats() {
+        let stats = XbxEngineMediaRuntimeStats {
+            transport_state: XbxEngineTransportStateDto::Connected,
+            transport_path: Some("Direct (host->srflx)".to_string()),
+            transport_candidate_pair: Some("host->srflx".to_string()),
+            transport_protocol: Some("UDP".to_string()),
+            transport_address_family: Some("ipv4".to_string()),
+            ..XbxEngineMediaRuntimeStats::default()
+        };
+
+        let dto = build_xbxengine_stats(&test_snapshot(), Some(&stats));
+        assert_eq!(dto.transport_path.as_deref(), Some("Direct (host->srflx)"));
+        assert_eq!(dto.transport_candidate_pair.as_deref(), Some("host->srflx"));
+        assert_eq!(dto.transport_protocol.as_deref(), Some("UDP"));
+        assert_eq!(dto.transport_address_family.as_deref(), Some("ipv4"));
+    }
+
+    #[test]
     fn actual_video_bitrate_uses_transport_metrics_when_local_twcc_is_guarded() {
         let stats = XbxEngineMediaRuntimeStats {
             transport_state: XbxEngineTransportStateDto::Connected,
@@ -1531,7 +1939,10 @@ mod tests {
 
         let dto = build_xbxengine_stats(&test_snapshot(), Some(&stats));
         assert_eq!(dto.video_actual_bitrate_kbps, Some(8_600.0));
-        assert_eq!(dto.actual_video_bitrate_source.as_deref(), Some("transport-metrics"));
+        assert_eq!(
+            dto.actual_video_bitrate_source.as_deref(),
+            Some("transport-metrics")
+        );
     }
 
     #[test]

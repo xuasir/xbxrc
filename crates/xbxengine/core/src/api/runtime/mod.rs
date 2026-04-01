@@ -9,8 +9,9 @@ use xbxengine_protocol::{
 };
 
 use crate::{
-    build_xbxengine_stats, PlaceholderXbxEngineMediaBackend, XbxEngineMediaBackend,
-    XbxEngineRecoveryRuntimeConfig, XbxEngineRenderFrame, XbxEngineRuntimeHealth,
+    build_xbxengine_stats, PlaceholderXbxEngineMediaBackend, XbxEngineHostVideoPresentMetrics,
+    XbxEngineMediaBackend, XbxEngineRecoveryRuntimeConfig, XbxEngineRenderFrame,
+    XbxEngineRuntimeHealth,
 };
 
 mod lifecycle;
@@ -69,6 +70,7 @@ pub struct XbxEngineNegotiationRuntimeConfig {
     pub video_bitrate_kbps: u32,
     pub audio_bitrate_kbps: u32,
     pub force_mono_audio: bool,
+    pub prefer_ipv6: bool,
     pub offer_profile: String,
 }
 
@@ -133,6 +135,7 @@ impl Default for XbxEngineNegotiationRuntimeConfig {
             video_bitrate_kbps: 15_000,
             audio_bitrate_kbps: 128,
             force_mono_audio: false,
+            prefer_ipv6: false,
             offer_profile: "macos".to_string(),
         }
     }
@@ -362,6 +365,21 @@ where
             .update_host_video_timing(host_display_interval_ms, host_frame_age_budget_ms)
     }
 
+    pub fn update_host_video_present_metrics(
+        &mut self,
+        metrics: XbxEngineHostVideoPresentMetrics,
+    ) -> Result<(), XbxEngineRuntimeError> {
+        self.media_backend
+            .update_host_video_present_metrics(metrics)
+    }
+
+    pub fn record_host_video_frame_drop(
+        &mut self,
+        event: crate::XbxEngineHostVideoFrameDropEvent,
+    ) -> Result<(), XbxEngineRuntimeError> {
+        self.media_backend.record_host_video_frame_drop(event)
+    }
+
     /**
      * Rust 原生窗口宿主需要直接消费最新渲染帧，
      * 这里显式暴露一个“只取最新、不做排队”的只读出口。
@@ -370,6 +388,13 @@ where
         &mut self,
     ) -> Result<Option<XbxEngineRenderFrame>, XbxEngineRuntimeError> {
         self.media_backend.take_latest_render_frame()
+    }
+
+    pub fn record_video_frame_drop(
+        &mut self,
+        observation: crate::XbxEngineVideoFrameDropObservation,
+    ) -> Result<(), XbxEngineRuntimeError> {
+        self.media_backend.record_video_frame_drop(observation)
     }
 
     fn require_session(&self) -> Result<&XbxEngineSessionDto, XbxEngineRuntimeError> {

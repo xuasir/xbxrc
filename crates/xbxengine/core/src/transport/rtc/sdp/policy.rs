@@ -469,6 +469,7 @@ mod tests {
                 video_bitrate_kbps: 60_000,
                 audio_bitrate_kbps: 192,
                 force_mono_audio: false,
+                prefer_ipv6: false,
                 offer_profile: "4d".to_string(),
             },
             Some(&XbxEngineTargetTypeDto::Cloud),

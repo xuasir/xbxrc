@@ -8,6 +8,7 @@ use crate::media::video::render::actor::RendererActorHandle;
 use crate::media::video::render::pacer::{FramePacingAction, FramePacingPolicy};
 use crate::media::video::types::DecodedFrame;
 use crate::runtime_stats_sink::RuntimeStatsSink;
+use crate::transport::rtc::pipeline::observation::record_pipeline_frame_drop;
 
 pub enum PacerMsg {
     Frame(DecodedFrame),
@@ -54,6 +55,7 @@ fn run_pacer_loop(
 ) {
     let fallback_refresh_interval_ms = refresh_interval_ms;
     let mut catch_up_mode = false;
+    let mut frame_drop_observation_id = 0u64;
 
     while let Ok(msg) = rx.recv() {
         match msg {
@@ -81,6 +83,22 @@ fn run_pacer_loop(
                             stats.video_pacer_drop_count_total =
                                 stats.video_pacer_drop_count_total.saturating_add(1);
                         });
+                        record_pipeline_frame_drop(
+                            &runtime_stats,
+                            &mut frame_drop_observation_id,
+                            "pacer",
+                            "drop",
+                            Some("deadline"),
+                            crate::media::video::decode::video_decode::now_ms_f64(),
+                            frame.surface.width,
+                            frame.surface.height,
+                            false,
+                            0,
+                            Some(frame.rtp_timestamp),
+                            Some(frame.surface.frame_seq),
+                            Some(frame.frame_recovery_disposition),
+                            frame.frame_unrecoverable_reason.as_deref(),
+                        );
                         continue;
                     }
                     FramePacingAction::SubmitNow => {}
@@ -91,12 +109,45 @@ fn run_pacer_loop(
 
                 // Render queue size 1 as per RFC (or renderer limits itself).
                 // Renderer handles immediate flip.
-                if renderer.submit(frame).is_err() {
+                if let Err(error) = renderer.submit(frame) {
+                    let (detail, dropped_frame, queue_depth) = match error {
+                        TrySendError::Full(
+                            crate::media::video::render::actor::RendererMsg::Frame(frame),
+                        ) => ("rendererBackpressure", frame, 1),
+                        TrySendError::Disconnected(
+                            crate::media::video::render::actor::RendererMsg::Frame(frame),
+                        ) => ("rendererDisconnected", frame, 0),
+                        TrySendError::Full(
+                            crate::media::video::render::actor::RendererMsg::Stop,
+                        )
+                        | TrySendError::Disconnected(
+                            crate::media::video::render::actor::RendererMsg::Stop,
+                        ) => unreachable!(),
+                    };
                     runtime_stats.update(|stats| {
                         stats.video_pacer_drop_count_total =
                             stats.video_pacer_drop_count_total.saturating_add(1);
                     });
-                    crate::xbx_log_warn!("[XbxPacerActor] renderer queue full, frame dropped!");
+                    record_pipeline_frame_drop(
+                        &runtime_stats,
+                        &mut frame_drop_observation_id,
+                        "pacer",
+                        "drop",
+                        Some(detail),
+                        crate::media::video::decode::video_decode::now_ms_f64(),
+                        dropped_frame.surface.width,
+                        dropped_frame.surface.height,
+                        false,
+                        queue_depth,
+                        Some(dropped_frame.rtp_timestamp),
+                        Some(dropped_frame.surface.frame_seq),
+                        Some(dropped_frame.frame_recovery_disposition),
+                        dropped_frame.frame_unrecoverable_reason.as_deref(),
+                    );
+                    crate::xbx_log_warn!(
+                        "[XbxPacerActor] renderer unavailable detail={}, frame dropped",
+                        detail
+                    );
                 }
             }
             PacerMsg::Stop => {

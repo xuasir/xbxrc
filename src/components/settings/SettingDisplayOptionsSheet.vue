@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { computed, reactive, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Focusable, FocusScope } from '@/navigation/core/vue'
+import { Focusable } from '@/navigation/core/vue'
+import SettingModalShell from './SettingModalShell.vue'
 
 interface DisplayOptionsValue {
   sharpness: number
@@ -109,236 +110,107 @@ watch(
 </script>
 
 <template>
-  <Transition name="setting-display-options-sheet-transition">
-    <div v-if="props.open" class="setting-display-options-sheet" @click.self="handleClose">
-      <FocusScope
-        :id="props.scopeId"
-        :active="props.open"
-        :trap="true"
-        :restore-focus="true"
-        :default-focus-id="defaultFocusId"
+  <SettingModalShell
+    :open="props.open"
+    :scope-id="props.scopeId"
+    :title="props.title"
+    :hint="props.hint"
+    width="min(100%, 640px)"
+    :default-focus-id="defaultFocusId"
+    @close="handleClose"
+  >
+    <div class="setting-display-options-sheet__list">
+      <div
+        v-for="(field, index) in DISPLAY_FIELDS"
+        :key="field.key"
+        class="setting-display-options-sheet__row"
       >
-        <div class="setting-display-options-sheet__panel">
-          <header class="setting-display-options-sheet__header">
-            <div class="setting-display-options-sheet__header-copy">
-              <p class="setting-display-options-sheet__eyebrow">
-                {{ t('setting.editor.eyebrow') }}
-              </p>
-              <h2 class="setting-display-options-sheet__title">
-                {{ props.title }}
-              </h2>
-              <p v-if="props.hint" class="setting-display-options-sheet__hint">
-                {{ props.hint }}
-              </p>
-            </div>
+        <span class="setting-display-options-sheet__label">
+          {{ t(`setting.displayOptions.fields.${field.key}`) }}
+        </span>
 
-            <Focusable
-              :id="`${props.scopeId}.close`"
-              as="button"
-              type="button"
-              class="setting-display-options-sheet__close"
-              :scope-id="props.scopeId"
-              :on-back="handleClose"
-              :aria-label="t('setting.editor.cancel')"
-              @click="handleClose"
+        <div class="setting-display-options-sheet__controls">
+          <Focusable
+            :id="createDecreaseNodeId(index)"
+            as="button"
+            type="button"
+            class="setting-display-options-sheet__step"
+            :scope-id="props.scopeId"
+            :on-back="handleClose"
+            :aria-label="t('setting.editor.decrease')"
+            @click="stepField(field, -1)"
+          >
+            -
+          </Focusable>
+
+          <Focusable
+            :id="createFieldNodeId(index)"
+            as="label"
+            class="setting-display-options-sheet__value"
+            :scope-id="props.scopeId"
+            :on-back="handleClose"
+          >
+            <input
+              class="setting-display-options-sheet__input"
+              type="number"
+              inputmode="numeric"
+              :min="field.min"
+              :max="field.max"
+              :step="field.step"
+              :value="draft[field.key]"
+              :aria-label="t(`setting.displayOptions.fields.${field.key}`)"
+              @click.stop
+              @input="(event) => updateField(field, (event.target as HTMLInputElement).value)"
             >
-              <span class="setting-display-options-sheet__close-icon" aria-hidden="true">✕</span>
-            </Focusable>
-          </header>
+          </Focusable>
 
-          <div class="setting-display-options-sheet__body">
-            <div class="setting-display-options-sheet__list">
-              <div
-                v-for="(field, index) in DISPLAY_FIELDS"
-                :key="field.key"
-                class="setting-display-options-sheet__row"
-              >
-                <span class="setting-display-options-sheet__label">
-                  {{ t(`setting.displayOptions.fields.${field.key}`) }}
-                </span>
-
-                <div class="setting-display-options-sheet__controls">
-                  <Focusable
-                    :id="createDecreaseNodeId(index)"
-                    as="button"
-                    type="button"
-                    class="setting-display-options-sheet__step"
-                    :scope-id="props.scopeId"
-                    :on-back="handleClose"
-                    :aria-label="t('setting.editor.decrease')"
-                    @click="stepField(field, -1)"
-                  >
-                    -
-                  </Focusable>
-
-                  <Focusable
-                    :id="createFieldNodeId(index)"
-                    as="label"
-                    class="setting-display-options-sheet__value"
-                    :scope-id="props.scopeId"
-                    :on-back="handleClose"
-                  >
-                    <input
-                      class="setting-display-options-sheet__input"
-                      type="number"
-                      inputmode="numeric"
-                      :min="field.min"
-                      :max="field.max"
-                      :step="field.step"
-                      :value="draft[field.key]"
-                      :aria-label="t(`setting.displayOptions.fields.${field.key}`)"
-                      @click.stop
-                      @input="(event) => updateField(field, (event.target as HTMLInputElement).value)"
-                    >
-                  </Focusable>
-
-                  <Focusable
-                    :id="createIncreaseNodeId(index)"
-                    as="button"
-                    type="button"
-                    class="setting-display-options-sheet__step"
-                    :scope-id="props.scopeId"
-                    :on-back="handleClose"
-                    :aria-label="t('setting.editor.increase')"
-                    @click="stepField(field, 1)"
-                  >
-                    +
-                  </Focusable>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div class="setting-display-options-sheet__footer">
-            <div class="setting-display-options-sheet__actions">
-              <Focusable
-                :id="cancelNodeId"
-                as="button"
-                type="button"
-                class="setting-display-options-sheet__action setting-display-options-sheet__action--secondary"
-                :scope-id="props.scopeId"
-                :on-back="handleClose"
-                @click="handleClose"
-              >
-                {{ t('setting.editor.cancel') }}
-              </Focusable>
-
-              <Focusable
-                :id="submitNodeId"
-                as="button"
-                type="button"
-                class="setting-display-options-sheet__action setting-display-options-sheet__action--primary"
-                :scope-id="props.scopeId"
-                :on-back="handleClose"
-                @click="handleSubmit"
-              >
-                {{ t('setting.editor.save') }}
-              </Focusable>
-            </div>
-          </div>
+          <Focusable
+            :id="createIncreaseNodeId(index)"
+            as="button"
+            type="button"
+            class="setting-display-options-sheet__step"
+            :scope-id="props.scopeId"
+            :on-back="handleClose"
+            :aria-label="t('setting.editor.increase')"
+            @click="stepField(field, 1)"
+          >
+            +
+          </Focusable>
         </div>
-      </FocusScope>
+      </div>
     </div>
-  </Transition>
+
+    <template #footer>
+      <div class="setting-display-options-sheet__actions">
+        <Focusable
+          :id="cancelNodeId"
+          as="button"
+          type="button"
+          class="setting-display-options-sheet__action setting-display-options-sheet__action--secondary"
+          :scope-id="props.scopeId"
+          :on-back="handleClose"
+          @click="handleClose"
+        >
+          {{ t('setting.editor.cancel') }}
+        </Focusable>
+
+        <Focusable
+          :id="submitNodeId"
+          as="button"
+          type="button"
+          class="setting-display-options-sheet__action setting-display-options-sheet__action--primary"
+          :scope-id="props.scopeId"
+          :on-back="handleClose"
+          @click="handleSubmit"
+        >
+          {{ t('setting.editor.save') }}
+        </Focusable>
+      </div>
+    </template>
+  </SettingModalShell>
 </template>
 
 <style scoped>
-.setting-display-options-sheet {
-  position: fixed;
-  inset: 0;
-  z-index: 100;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 40px;
-  background: var(--ui-scrim-bg);
-}
-
-.setting-display-options-sheet__panel {
-  position: relative;
-  width: min(100%, 640px);
-  max-height: 90vh;
-  display: flex;
-  flex-direction: column;
-  padding: 0;
-  border: 1px solid var(--ui-border-subtle);
-  border-radius: var(--ui-radius-md);
-  background: var(--ui-surface-overlay);
-  box-shadow: var(--ui-shadow-overlay);
-  color: var(--ui-page-text);
-  overflow: hidden;
-}
-
-.setting-display-options-sheet__header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 24px;
-  padding: 32px 32px 16px;
-  background: transparent;
-}
-
-.setting-display-options-sheet__header-copy {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-width: 0;
-}
-
-.setting-display-options-sheet__close {
-  flex: 0 0 auto;
-  width: 32px;
-  height: 32px;
-  border: 0;
-  border-radius: 50%;
-  background: var(--color-state-hover);
-  color: var(--ui-page-text);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: all var(--ui-motion-fast);
-}
-
-.setting-display-options-sheet__close[data-focused='true'] {
-  background: var(--color-focus-bg-strong);
-  color: var(--ui-focus-text);
-  box-shadow: var(--shadow-xbox-focus);
-}
-
-.setting-display-options-sheet__close-icon {
-  font-size: 16px;
-  line-height: 1;
-}
-
-.setting-display-options-sheet__eyebrow {
-  margin: 0;
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  color: var(--brand-primary);
-}
-
-.setting-display-options-sheet__title {
-  margin: 0;
-  font-size: 28px;
-  line-height: 1.2;
-  font-weight: 700;
-}
-
-.setting-display-options-sheet__hint {
-  margin: 4px 0 0;
-  font-size: 14px;
-  line-height: 1.4;
-  color: var(--color-text-secondary);
-}
-
-.setting-display-options-sheet__body {
-  padding: 16px 32px 24px;
-  overflow-y: auto;
-}
-
 .setting-display-options-sheet__list {
   display: flex;
   flex-direction: column;
@@ -412,11 +284,6 @@ watch(
   outline: none;
 }
 
-.setting-display-options-sheet__footer {
-  padding: 16px 32px 32px;
-  border-top: 1px solid rgba(255, 255, 255, 0.05);
-}
-
 .setting-display-options-sheet__actions {
   display: flex;
   justify-content: flex-end;
@@ -457,29 +324,7 @@ watch(
   color: #ffffff;
 }
 
-.setting-display-options-sheet-transition-enter-active,
-.setting-display-options-sheet-transition-leave-active {
-  transition: opacity 300ms var(--ease-standard);
-}
-
-.setting-display-options-sheet-transition-enter-from,
-.setting-display-options-sheet-transition-leave-to {
-  opacity: 0;
-}
-
-.setting-display-options-sheet-transition-enter-active .setting-display-options-sheet__panel,
-.setting-display-options-sheet-transition-leave-active .setting-display-options-sheet__panel {
-  transition: all 400ms var(--ease-standard);
-}
-
-.setting-display-options-sheet-transition-enter-from .setting-display-options-sheet__panel {
-  opacity: 0;
-  transform: scale(0.95);
-}
-
 .setting-display-options-sheet-transition-leave-to .setting-display-options-sheet__panel {
-  opacity: 0;
-  transform: scale(1.02);
 }
 
 :global(html[data-ui-density='narrow']) .setting-display-options-sheet__list {

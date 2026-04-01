@@ -841,6 +841,7 @@ async function handleStreamMenuAction(id: string): Promise<void> {
   font-size: 13px;
   line-height: 1.6;
 }
+
 .stream-page__chrome-btn--danger[data-focused='true'] {
   background: #e81123;
   color: var(--ui-focus-text);
@@ -898,3 +899,4 @@ async function handleStreamMenuAction(id: string): Promise<void> {
   flex-direction: column;
 }
 </style>
+

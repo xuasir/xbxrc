@@ -94,6 +94,8 @@ pub(crate) fn should_skip_remote_candidate_for_family_mismatch(
         return false;
     }
 
+    // 对 host 候选保持 4/6 对应关系，避免把单栈本地候选与异族 host 强行混用。
+    // srflx/relay 仍允许跨族，交给 ICE 做最终连通性裁决。
     matches!(candidate_kind, RtcIceCandidateKind::Host)
 }
 

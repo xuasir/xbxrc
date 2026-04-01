@@ -9,8 +9,8 @@ use ohmygamepad_protocol::{
 use tauri::{AppHandle, Manager};
 use xbxengine::{
     create_active_media_backend, OhMyGamepadXbxEngineInputBackend, XbxEngineEventSink,
-    XbxEngineHostBridge, XbxEngineMediaBackend, XbxEngineRuntime, XbxEngineRuntimeConfig,
-    XbxEngineRuntimeError,
+    XbxEngineHostBridge, XbxEngineHostVideoPresentMetrics, XbxEngineMediaBackend, XbxEngineRuntime,
+    XbxEngineRuntimeConfig, XbxEngineRuntimeError,
 };
 use xbxengine_protocol::XbxEngineStatsDto;
 use xbxengine_protocol::{
@@ -19,7 +19,7 @@ use xbxengine_protocol::{
 };
 
 use crate::error::{AppError, AppResult};
-use crate::mods::native_video::{NativeVideoRegistryRef, NativeVideoViewportState};
+use crate::mods::native_video::NativeVideoRegistryRef;
 use crate::mods::runtime_trace::RuntimeTraceRecorderRef;
 use crate::mods::streaming::{
     StreamingCloseSessionParams, StreamingExchangeOfferParams, StreamingPollIceParams,
@@ -143,10 +143,9 @@ impl XbxEngineRuntimeState {
             .viewport
             .as_ref()
             .map(|viewport| viewport.viewport_id.clone());
-        self.sync_native_video_host_timing(&mut runtime, viewport_id.as_deref());
+        self.sync_native_video_host_feedback(&mut runtime, viewport_id.as_deref());
         runtime.tick();
         let mut stats_snapshot = runtime.snapshot_stats();
-        self.apply_native_video_host_stats(&mut stats_snapshot, viewport_id.as_deref());
         self.apply_build_fingerprint(&mut stats_snapshot);
         let session_id = self
             .active_session_id
@@ -194,9 +193,8 @@ impl XbxEngineRuntimeState {
             .viewport
             .as_ref()
             .map(|viewport| viewport.viewport_id.clone());
-        self.sync_native_video_host_timing(&mut runtime, viewport_id.as_deref());
+        self.sync_native_video_host_feedback(&mut runtime, viewport_id.as_deref());
         let mut stats = runtime.snapshot_stats();
-        self.apply_native_video_host_stats(&mut stats, viewport_id.as_deref());
         self.apply_build_fingerprint(&mut stats);
         Ok(serde_json::to_value(stats)?)
     }
@@ -217,35 +215,6 @@ impl XbxEngineRuntimeState {
         );
     }
 
-    fn apply_native_video_host_stats(
-        &self,
-        stats: &mut XbxEngineStatsDto,
-        viewport_id: Option<&str>,
-    ) {
-        let Some(viewport_id) = viewport_id else {
-            return;
-        };
-        let Some(viewport) = self.native_video_snapshot(viewport_id) else {
-            return;
-        };
-
-        stats.present_fps = Some(viewport.host_present_fps);
-        stats.video_present_submit_count_total = Some(viewport.host_present_submit_count_total);
-        stats.video_present_drop_count_total = Some(viewport.host_present_drop_count_total);
-        stats.video_present_overwrite_count_total =
-            Some(viewport.host_present_overwrite_count_total);
-        stats.video_present_descriptor_upload_mode = viewport.host_descriptor_upload_mode.clone();
-        stats.video_present_descriptor_metal_import_count_total =
-            Some(viewport.host_descriptor_metal_import_count_total);
-        stats.video_present_descriptor_cpu_upload_count_total =
-            Some(viewport.host_descriptor_cpu_upload_count_total);
-
-        if let Some(latest_present_time_ms) = viewport.latest_host_present_time_ms {
-            let host_now_ms = current_time_ms_f64();
-            stats.present_age_ms = Some((host_now_ms - latest_present_time_ms).max(0.0));
-        }
-    }
-
     fn apply_build_fingerprint(&self, stats: &mut XbxEngineStatsDto) {
         let effective_feedback_interval_ms = stats
             .latest_rtc_builder_observation
@@ -262,14 +231,7 @@ impl XbxEngineRuntimeState {
         ));
     }
 
-    fn native_video_snapshot(&self, viewport_id: &str) -> Option<NativeVideoViewportState> {
-        let Ok(registry) = self.native_video.lock() else {
-            return None;
-        };
-        registry.snapshot(viewport_id)
-    }
-
-    fn sync_native_video_host_timing(
+    fn sync_native_video_host_feedback(
         &self,
         runtime: &mut TauriXbxEngineRuntime,
         viewport_id: Option<&str>,
@@ -277,23 +239,32 @@ impl XbxEngineRuntimeState {
         let Some(viewport_id) = viewport_id else {
             return;
         };
-        let Some(viewport) = self.native_video_snapshot(viewport_id) else {
+        let Ok(mut registry) = self.native_video.lock() else {
+            return;
+        };
+        let Some(viewport) = registry.snapshot(viewport_id) else {
             return;
         };
         let _ = runtime.update_host_video_timing(
             viewport.host_display_interval_ms,
             viewport.host_frame_age_budget_ms,
         );
+        let _ = runtime.update_host_video_present_metrics(XbxEngineHostVideoPresentMetrics {
+            present_fps: viewport.host_present_fps,
+            present_submit_count_total: viewport.host_present_submit_count_total,
+            present_drop_count_total: viewport.host_present_drop_count_total,
+            present_overwrite_count_total: viewport.host_present_overwrite_count_total,
+            no_pending_take_count_total: viewport.host_no_pending_take_count_total,
+            no_pending_streak: viewport.host_no_pending_streak,
+            no_pending_max_streak: viewport.host_no_pending_max_streak,
+            descriptor_upload_mode: viewport.host_descriptor_upload_mode.clone(),
+            descriptor_metal_import_count_total: viewport.host_descriptor_metal_import_count_total,
+            descriptor_cpu_upload_count_total: viewport.host_descriptor_cpu_upload_count_total,
+        });
+        for drop in registry.take_pending_host_frame_drops(viewport_id) {
+            let _ = runtime.record_host_video_frame_drop(drop);
+        }
     }
-}
-
-fn current_time_ms_f64() -> f64 {
-    use std::time::{SystemTime, UNIX_EPOCH};
-
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|duration| duration.as_millis() as f64)
-        .unwrap_or(0.0)
 }
 
 // 为 runtime trace 生成一份稳定的 SDP 能力摘要，便于直接判断远端是否宣告 repair/fec 能力。
