@@ -1171,6 +1171,21 @@ def print_trace_comparison(base: TraceProfile, compare: TraceProfile) -> None:
             )
 
 
+def resolve_category_filter(
+    categories: str | None, exclude_categories: str | None
+) -> frozenset[str] | None:
+    """Return allowed categories, or None to allow all."""
+    if categories and exclude_categories:
+        return None  # caller prints error
+    if categories:
+        return frozenset(x.strip() for x in categories.split(",") if x.strip())
+    if exclude_categories:
+        all_known = frozenset({"event", "decision", "state", "snapshot", "log"})
+        ex = {x.strip() for x in exclude_categories.split(",") if x.strip()}
+        return frozenset(all_known - ex)
+    return None
+
+
 def load_trace_profile(
     path: Path,
     *,
@@ -1182,6 +1197,7 @@ def load_trace_profile(
     cluster_window_ms: int,
     recovery_silence_threshold_ms: int,
     metric_name: str | None = None,
+    category_allowlist: frozenset[str] | None = None,
 ) -> TraceProfile:
     rows: list[dict[str, Any]] = []
     with path.open("r", encoding="utf-8") as handle:
@@ -1196,6 +1212,10 @@ def load_trace_profile(
                 raise SystemExit(1)
             if not isinstance(row, dict):
                 continue
+            if category_allowlist is not None:
+                cat = str(row.get("category", ""))
+                if cat not in category_allowlist:
+                    continue
             if not is_focus_row(row, session_id, domain):
                 continue
             if not is_within_time_filters(row_ts(row), time_filters):
@@ -1252,7 +1272,52 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="emit machine-readable JSON summary",
     )
+    parser.add_argument(
+        "--categories",
+        help="comma-separated category whitelist (event,decision,state,snapshot,log)",
+    )
+    parser.add_argument(
+        "--exclude-categories",
+        help="comma-separated categories to omit from analysis (e.g. log)",
+    )
+    parser.add_argument(
+        "--anchor-seq",
+        type=int,
+        default=None,
+        help="if set, print JSON rows around this seq (drill-down); skips normal summary",
+    )
+    parser.add_argument("--context-before", type=int, default=25, help="rows before anchor-seq")
+    parser.add_argument("--context-after", type=int, default=80, help="rows after anchor-seq")
     return parser.parse_args()
+
+
+def dump_anchor_context(path: Path, anchor_seq: int, before: int, after: int) -> int:
+    rows: list[dict[str, Any]] = []
+    with path.open("r", encoding="utf-8") as handle:
+        for line in handle:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                row = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if isinstance(row, dict):
+                rows.append(row)
+    indices = [i for i, r in enumerate(rows) if r.get("seq") == anchor_seq]
+    if not indices:
+        print(f"seq {anchor_seq} not found in {path}", file=sys.stderr)
+        return 3
+    idx = indices[0]
+    lo = max(0, idx - before)
+    hi = min(len(rows), idx + after + 1)
+    print(
+        f"# anchor seq={anchor_seq} line_index={idx} window=[{lo},{hi}) file={path}",
+        file=sys.stderr,
+    )
+    for r in rows[lo:hi]:
+        print(json.dumps(r, ensure_ascii=False))
+    return 0
 
 
 def main() -> int:
@@ -1263,6 +1328,9 @@ def main() -> int:
         print(f"trace file not found: {path}", file=sys.stderr)
         return 2
 
+    if args.anchor_seq is not None:
+        return dump_anchor_context(path, args.anchor_seq, args.context_before, args.context_after)
+
     time_filters = parse_time_filters(args.time_window)
     if args.time_window and time_filters is None:
         print("invalid time window filter", file=sys.stderr)
@@ -1271,6 +1339,15 @@ def main() -> int:
     if args.metric and not is_metric_field(args.metric):
         print(f"unsupported metric field: {args.metric}", file=sys.stderr)
         return 2
+
+    if args.categories and args.exclude_categories:
+        print(
+            "error: use only one of --categories and --exclude-categories",
+            file=sys.stderr,
+        )
+        return 2
+
+    category_allowlist = resolve_category_filter(args.categories, args.exclude_categories)
 
     profile = load_trace_profile(
         path,
@@ -1282,6 +1359,7 @@ def main() -> int:
         cluster_window_ms=args.cluster_window_ms,
         recovery_silence_threshold_ms=args.recovery_silence_threshold_ms,
         metric_name=args.metric,
+        category_allowlist=category_allowlist,
     )
     compare_profile: TraceProfile | None = None
 
@@ -1300,6 +1378,7 @@ def main() -> int:
             cluster_window_ms=args.cluster_window_ms,
             recovery_silence_threshold_ms=args.recovery_silence_threshold_ms,
             metric_name=args.metric,
+            category_allowlist=category_allowlist,
         )
 
     if args.json:

@@ -14,10 +14,12 @@ Use this skill for `runtime-logs/runtime-trace-*.jsonl` analysis in this reposit
 1. Identify the target trace file or log directory.
 2. Run [`scripts/summarize_runtime_trace.py`](scripts/summarize_runtime_trace.py) `<trace.jsonl>` to get phase anchors, long gaps, and anomaly windows first.
 3. If you need to isolate one session, subsystem, stage window, or metric, add `--session-id`, `--domain`, `--time-window`, `--phase`, and/or `--metric`.
-4. Use `--compare <other-trace.jsonl>` when you need a before/after regression check for the same phase window.
-5. Read [`references/log-schema.md`](references/log-schema.md) when you need field semantics.
-6. Read [`references/analysis-playbook.md`](references/analysis-playbook.md) when you need the project-specific workflow, output contract, or heuristics.
-7. Re-open the raw trace around the key `seq` / `tsMs` window before making conclusions.
+4. To drop noisy rows before summarizing, add `--exclude-categories log` or `--categories state,decision,snapshot,event`.
+5. To drill down around a row anchor, use `--anchor-seq <n>` with optional `--context-before` / `--context-after` (prints JSONL lines to stdout).
+6. Use `--compare <other-trace.jsonl>` when you need a before/after regression check for the same phase window.
+7. Read [`references/log-schema.md`](references/log-schema.md) when you need field semantics (including `traceMode` on schema v2+).
+8. Read [`references/analysis-playbook.md`](references/analysis-playbook.md) when you need the project-specific workflow, output contract, or heuristics.
+9. Re-open the raw trace around the key `seq` / `tsMs` window before making conclusions.
 
 ## Follow This Workflow
 

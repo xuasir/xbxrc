@@ -6,9 +6,10 @@ Each trace row is one JSON object in `jsonl` format.
 
 Stable top-level fields:
 
-- `schemaVersion`: current schema version. Treat version drift as a parsing risk.
+- `schemaVersion`: current schema version. Treat version drift as a parsing risk. Version `2` adds `traceMode` and keeps prior fields.
 - `seq`: per-file monotonic sequence number. Use this as the most stable row anchor.
 - `tsMs`: wall-clock timestamp in milliseconds.
+- `traceMode` (schema ≥2): setting at file creation time — one of `off`, `minimal`, `standard`, `verbose`, `trace`. Missing on legacy files (treat as unknown / pre-settings UI).
 - `category`: one of `event`, `decision`, `state`, `snapshot`, `log`.
 - `domain`: emitting subsystem, for example `streaming`, `xbxengine`, `trace`, or `data`.
 - `event`: event name within the domain.
