@@ -36,6 +36,7 @@ impl XbxEngineService {
         last_runtime_event: Arc<StdMutex<Option<Value>>>,
         native_video: NativeVideoRegistryRef,
         runtime_trace: RuntimeTraceRecorderRef,
+        stats_snapshot_interval: Duration,
     ) -> Self {
         Self {
             runtime_state: Arc::new(XbxEngineRuntimeState::new(
@@ -43,6 +44,7 @@ impl XbxEngineService {
                 last_runtime_event.clone(),
                 native_video,
                 runtime_trace.clone(),
+                stats_snapshot_interval,
             )),
             last_runtime_event,
         }
@@ -77,6 +79,10 @@ impl XbxEngineProvider for XbxEngineService {
 
     fn is_runtime_available(&self) -> bool {
         true
+    }
+
+    fn set_stats_snapshot_interval(&self, interval: Duration) {
+        self.runtime_state.set_stats_snapshot_interval(interval);
     }
 
     fn bind_tasks(&self, is_quitting: Arc<AtomicBool>) {

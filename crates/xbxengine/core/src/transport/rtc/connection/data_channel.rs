@@ -763,7 +763,7 @@ impl RtcConnectionService {
                         self.control_service.close_control_channel();
                         self.delayed_gamepad_added_due_at_ms = None;
                         self.delayed_keyframe_prime_due_at_ms = None;
-                        self.schedule_immediate_reconnect(
+                        self.raise_disconnect_signal(
                             runtime_stats,
                             "rtcControlChannelClosed",
                             "phase1 rtc control channel closed",
@@ -781,7 +781,7 @@ impl RtcConnectionService {
                         }
                         self.delayed_gamepad_added_due_at_ms = None;
                         self.delayed_keyframe_prime_due_at_ms = None;
-                        self.schedule_immediate_reconnect(
+                        self.raise_disconnect_signal(
                             runtime_stats,
                             "rtcMessageChannelClosed",
                             "phase1 rtc message channel closed",

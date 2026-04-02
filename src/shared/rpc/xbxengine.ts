@@ -167,6 +167,8 @@ export interface XbxEngineStatsDto {
   last_recovery_action?: string
   last_recovery_action_at_ms?: number
   last_recovery_reason?: string
+  /** policy | runtime | other */
+  reconnect_trigger_source?: string
   latest_video_packet_gap?: {
     observation_id: number
     expected_sequence: number

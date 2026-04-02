@@ -44,6 +44,8 @@ pub struct XbxEngineRuntimeState {
     runtime: StdMutex<TauriXbxEngineRuntime>,
     native_video: NativeVideoRegistryRef,
     runtime_trace: RuntimeTraceRecorderRef,
+    /// `statsSnapshot` / `observabilitySnapshot` 最小间隔（毫秒），可由设置 `runtime_trace_mode` 运行时更新。
+    stats_snapshot_interval_ms: Arc<AtomicU64>,
     last_stats_trace_at: StdMutex<Option<Instant>>,
     last_trace_observation: StdMutex<RuntimeTraceObservationState>,
     active_session_id: StdMutex<Option<String>>,
@@ -56,6 +58,7 @@ impl XbxEngineRuntimeState {
         last_runtime_event: Arc<StdMutex<Option<serde_json::Value>>>,
         native_video: NativeVideoRegistryRef,
         runtime_trace: RuntimeTraceRecorderRef,
+        stats_snapshot_interval: Duration,
     ) -> Self {
         let cancellation_epoch = Arc::new(AtomicU64::new(0));
         let event_bridge = TauriEngineEventBridge {
@@ -84,11 +87,19 @@ impl XbxEngineRuntimeState {
             runtime: StdMutex::new(runtime),
             native_video,
             runtime_trace,
+            stats_snapshot_interval_ms: Arc::new(AtomicU64::new(
+                stats_snapshot_interval.as_millis() as u64,
+            )),
             last_stats_trace_at: StdMutex::new(None),
             last_trace_observation: StdMutex::new(RuntimeTraceObservationState::default()),
             active_session_id: StdMutex::new(None),
             cancellation_epoch,
         }
+    }
+
+    pub fn set_stats_snapshot_interval(&self, interval: Duration) {
+        self.stats_snapshot_interval_ms
+            .store(interval.as_millis() as u64, Ordering::Relaxed);
     }
 
     pub fn apply_control(
@@ -160,8 +171,10 @@ impl XbxEngineRuntimeState {
             return Ok(());
         };
         let now = Instant::now();
+        let interval =
+            Duration::from_millis(self.stats_snapshot_interval_ms.load(Ordering::Relaxed));
         let should_record = last_stats_trace_at
-            .map(|last| now.duration_since(last) >= Duration::from_secs(1))
+            .map(|last| now.duration_since(last) >= interval)
             .unwrap_or(true);
         if should_record {
             *last_stats_trace_at = Some(now);

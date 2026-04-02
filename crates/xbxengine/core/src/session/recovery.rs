@@ -169,6 +169,20 @@ pub struct XbxEngineRecoverySignals {
 }
 
 impl XbxEngineRuntimeHealth {
+    pub fn reset_video_epoch(&mut self) {
+        // 媒体会话重建后，帧序号和最近一次视频活动都必须重新开始统计，
+        // 但 transport 连接态本身不在这里动，避免把已连接状态误清掉。
+        self.last_frame_seq = 0;
+        self.last_frame_rendered_at_ms = None;
+        self.inbound_video_packet_count_total = 0;
+        self.last_video_packet_arrival_at_ms = None;
+        self.last_keyframe_request_at_ms = None;
+        self.last_decoder_reset_request_at_ms = None;
+        self.stall_candidate_started_at_ms = None;
+        self.keyframe_requested_for_current_stall = false;
+        self.decoder_reset_requested_for_current_stall = false;
+    }
+
     pub fn sync_transport_state(
         &mut self,
         next_state: &XbxEngineTransportStateDto,
@@ -515,6 +529,7 @@ mod tests {
         XbxEngineRecoverySignals, XbxEngineRuntimeHealth, XbxEngineTransportSignal,
         DECODER_RESET_AFTER_KEYFRAME_WAIT_MS, KEYFRAME_REQUEST_STALL_MS, RECONNECT_STALL_MS,
     };
+    use xbxengine_protocol::XbxEngineTransportStateDto;
 
     #[test]
     fn recovery_signals_request_keyframe_before_reconnect() {
@@ -859,5 +874,40 @@ mod tests {
             merged.keyframe_loss_burst_threshold,
             base.keyframe_loss_burst_threshold
         );
+    }
+
+    #[test]
+    fn reset_video_epoch_clears_frame_tracking_without_touching_transport_state() {
+        let mut health = XbxEngineRuntimeHealth {
+            observed_transport_state: XbxEngineTransportStateDto::Connected,
+            connected_at_ms: Some(1_000.0),
+            last_frame_seq: 223,
+            last_frame_rendered_at_ms: Some(2_000.0),
+            inbound_video_packet_count_total: 88,
+            last_video_packet_arrival_at_ms: Some(2_100.0),
+            last_keyframe_request_at_ms: Some(1_800.0),
+            last_decoder_reset_request_at_ms: Some(1_900.0),
+            stall_candidate_started_at_ms: Some(1_700.0),
+            keyframe_requested_for_current_stall: true,
+            decoder_reset_requested_for_current_stall: true,
+            ..Default::default()
+        };
+
+        health.reset_video_epoch();
+
+        assert_eq!(
+            health.observed_transport_state,
+            XbxEngineTransportStateDto::Connected
+        );
+        assert_eq!(health.connected_at_ms, Some(1_000.0));
+        assert_eq!(health.last_frame_seq, 0);
+        assert_eq!(health.last_frame_rendered_at_ms, None);
+        assert_eq!(health.inbound_video_packet_count_total, 0);
+        assert_eq!(health.last_video_packet_arrival_at_ms, None);
+        assert_eq!(health.last_keyframe_request_at_ms, None);
+        assert_eq!(health.last_decoder_reset_request_at_ms, None);
+        assert_eq!(health.stall_candidate_started_at_ms, None);
+        assert!(!health.keyframe_requested_for_current_stall);
+        assert!(!health.decoder_reset_requested_for_current_stall);
     }
 }

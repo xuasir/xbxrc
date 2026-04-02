@@ -147,6 +147,11 @@ pub struct NackScheduler {
     skipped_low_value: BTreeMap<u16, SkippedAdmissionRecord>,
 }
 
+fn should_bypass_low_value_skip(policy: NackObservePolicy) -> bool {
+    policy.frame_is_keyframe.unwrap_or(false)
+        || matches!(policy.frame_importance, "keyframe" | "reference")
+}
+
 type PendingMeta = (
     &'static str,
     Option<u32>,
@@ -274,6 +279,17 @@ impl NackScheduler {
             policy.nack_disposition,
             PacketRecoveryDisposition::SkippedLowValue
         ) {
+            if should_bypass_low_value_skip(policy) {
+                return self.observe_missing_sequences_with_policy(
+                    sequences,
+                    now_ms,
+                    NackObservePolicy {
+                        nack_disposition: PacketRecoveryDisposition::Attempted,
+                        frame_unrecoverable_reason: None,
+                        ..policy
+                    },
+                );
+            }
             const LOW_VALUE_SKIP_SUPPRESS_MS: f64 = 250.0;
             let unrecoverable_reason = policy
                 .frame_unrecoverable_reason
@@ -790,6 +806,31 @@ mod tests {
     }
 
     #[test]
+    fn cloud_high_rtt_low_value_admission_keeps_reference_packets_repairable() {
+        let mut scheduler = NackScheduler::new(NackSchedulerConfig {
+            max_age_ms: 200,
+            frame_deadline_ms: 120,
+            burst_count: 2,
+            retry_interval_ms: 40,
+            max_retry_count: 3,
+        });
+        let mut policy = base_policy();
+        policy.frame_importance = "reference";
+        policy.priority = 2;
+        policy.nack_disposition = PacketRecoveryDisposition::SkippedLowValue;
+        policy.frame_unrecoverable_reason = Some("cloudHighRttLowValueAdmission");
+
+        let (batch, skipped) =
+            scheduler.observe_missing_sequences_with_policy(&[10, 11], 1_000.0, policy);
+        assert!(skipped.is_none());
+        let batch = batch.expect("reference batch should be attempted");
+        assert_eq!(batch.sequences, vec![10, 11]);
+        assert_eq!(batch.nack_disposition, PacketRecoveryDisposition::Attempted);
+        assert_eq!(batch.frame_unrecoverable_reason, None);
+        assert_eq!(scheduler.pending_count(), 2);
+    }
+
+    #[test]
     fn admission_skipped_low_value_is_throttled_per_sequence() {
         let mut scheduler = NackScheduler::new(NackSchedulerConfig {
             max_age_ms: 500,
@@ -821,6 +862,30 @@ mod tests {
         assert!(third_batch.is_none());
         let third_skipped = third_skipped.expect("third skipped");
         assert_eq!(third_skipped.sequences, vec![10]);
+    }
+
+    #[test]
+    fn low_value_admission_does_not_skip_keyframe_recovery() {
+        let mut scheduler = NackScheduler::new(NackSchedulerConfig {
+            max_age_ms: 500,
+            frame_deadline_ms: 2_000,
+            burst_count: 2,
+            retry_interval_ms: 40,
+            max_retry_count: 3,
+        });
+        let mut policy = base_policy();
+        policy.deadline_at_ms = Some(2_000.0);
+        policy.nack_disposition = PacketRecoveryDisposition::SkippedLowValue;
+        policy.frame_unrecoverable_reason = Some("cloudHighRttLowValueAdmission");
+        policy.frame_is_keyframe = Some(true);
+        policy.frame_importance = "keyframe";
+
+        let (batch, skipped) =
+            scheduler.observe_missing_sequences_with_policy(&[10, 11], 1_000.0, policy);
+        assert!(skipped.is_none());
+        let batch = batch.expect("batch");
+        assert_eq!(batch.sequences, vec![10, 11]);
+        assert_eq!(scheduler.pending_count(), 2);
     }
 
     #[test]

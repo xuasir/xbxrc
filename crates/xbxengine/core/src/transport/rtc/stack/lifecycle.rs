@@ -182,6 +182,7 @@ impl<'a> RtcStackLifecycleBridge<'a> {
         RtcStackMediaPipelineBridge::new(
             self.media_runtime,
             self.runtime_stats,
+            self.runtime_config,
             self.audio_volume_bits,
             self.audio_playback_session,
             self.media,

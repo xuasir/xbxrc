@@ -16,6 +16,7 @@ use crate::transport::rtc::stats::now_ms_f64;
 use crate::{
     XbxEngineMediaRuntimeStats, XbxEngineTwccObservationQuality, XbxEngineVideoTwccObservation,
 };
+use xbxengine_protocol::XbxEngineTargetTypeDto;
 
 pub(crate) const TWCC_OBSERVATION_SOURCE_LOCAL_FEEDBACK: &str = "local-feedback";
 pub(crate) const TWCC_OBSERVATION_SOURCE_REMOTE_RTCP: &str = "remote-rtcp";
@@ -198,6 +199,7 @@ pub(crate) fn build_twcc_observation_with_packet_bytes(
             );
         let sample_gate = evaluate_twcc_sample_gate(
             source,
+            stats.session_target_type.clone(),
             observed_packet_count,
             coverage_ratio,
             ledger_hit_ratio,
@@ -466,6 +468,7 @@ fn twcc_symbol_is_received(
 
 fn evaluate_twcc_sample_gate(
     source: &'static str,
+    session_target_type: Option<XbxEngineTargetTypeDto>,
     observed_packet_count: u16,
     coverage_ratio: Option<f64>,
     ledger_hit_ratio: Option<f64>,
@@ -482,8 +485,15 @@ fn evaluate_twcc_sample_gate(
 
     const MIN_VALID_OBSERVED_PACKETS: u16 = 8;
     const MAX_VALID_SAMPLE_INTERVAL_MS: f64 = 500.0;
+    const CLOUD_MAX_VALID_SAMPLE_INTERVAL_MS: f64 = 700.0;
     const MIN_COVERAGE_RATIO: f64 = 0.60;
     const MIN_LEDGER_HIT_RATIO: f64 = 0.90;
+    let max_valid_sample_interval_ms = if session_target_type == Some(XbxEngineTargetTypeDto::Cloud)
+    {
+        CLOUD_MAX_VALID_SAMPLE_INTERVAL_MS
+    } else {
+        MAX_VALID_SAMPLE_INTERVAL_MS
+    };
 
     let mut reasons = Vec::<String>::new();
     if observed_packet_count == 0 {
@@ -503,7 +513,7 @@ fn evaluate_twcc_sample_gate(
     }
     if let Some(sample_interval_ms) = feedback_interval_ms
         .or(arrival_span_ms)
-        .filter(|interval_ms| *interval_ms > MAX_VALID_SAMPLE_INTERVAL_MS)
+        .filter(|interval_ms| *interval_ms > max_valid_sample_interval_ms)
     {
         let mut reason = String::from("interval-too-long:");
         let _ = write!(&mut reason, "{sample_interval_ms:.1}");
@@ -771,6 +781,7 @@ mod tests {
     use crate::XbxEngineMediaRuntimeStats;
     use rtc::peer_connection::transport::RTCIceCandidateType;
     use rtc::rtp_transceiver::rtp_sender::RtpCodecKind;
+    use xbxengine_protocol::XbxEngineTargetTypeDto;
 
     #[test]
     fn relay_path_is_detected_from_either_side() {
@@ -1121,7 +1132,22 @@ mod tests {
     fn local_feedback_twcc_observation_marks_invalid_when_sample_interval_too_long() {
         let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
         let packet = TransportLayerCc {
+            base_sequence_number: 100,
             packet_status_count: 8,
+            packet_chunks: vec![PacketStatusChunk::StatusVectorChunk(StatusVectorChunk {
+                type_tcc: StatusChunkTypeTcc::StatusVectorChunk,
+                symbol_size: SymbolSizeTypeTcc::TwoBit,
+                symbol_list: vec![
+                    SymbolTypeTcc::PacketReceivedSmallDelta,
+                    SymbolTypeTcc::PacketReceivedSmallDelta,
+                    SymbolTypeTcc::PacketReceivedSmallDelta,
+                    SymbolTypeTcc::PacketReceivedSmallDelta,
+                    SymbolTypeTcc::PacketReceivedSmallDelta,
+                    SymbolTypeTcc::PacketReceivedSmallDelta,
+                    SymbolTypeTcc::PacketReceivedSmallDelta,
+                    SymbolTypeTcc::PacketReceivedSmallDelta,
+                ],
+            })],
             recv_deltas: std::iter::repeat_n(
                 rtc_rtcp::transport_feedbacks::transport_layer_cc::RecvDelta {
                     type_tcc_packet: SymbolTypeTcc::PacketReceivedSmallDelta,
@@ -1132,12 +1158,23 @@ mod tests {
             .collect(),
             ..TransportLayerCc::default()
         };
+        let ledger = HashMap::from([
+            (100, 1200),
+            (101, 1300),
+            (102, 1400),
+            (103, 1500),
+            (104, 1600),
+            (105, 1700),
+            (106, 1800),
+            (107, 1900),
+        ]);
 
-        let observation = build_twcc_observation(
+        let observation = build_twcc_observation_with_packet_bytes(
             1,
             &packet,
             &runtime_stats,
             TWCC_OBSERVATION_SOURCE_LOCAL_FEEDBACK,
+            Some(&ledger),
         )
         .expect("twcc observation should be built");
         assert!(!observation.twcc_sample_valid);
@@ -1146,6 +1183,66 @@ mod tests {
             .as_deref()
             .unwrap_or("")
             .contains("interval-too-long"));
+        assert_eq!(observation.observed_byte_count, 12400);
+        assert_eq!(observation.ledger_hit_ratio, Some(1.0));
+    }
+
+    #[test]
+    fn cloud_local_feedback_tolerates_longer_sample_interval() {
+        let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
+        if let Ok(mut stats) = runtime_stats.lock() {
+            stats.session_target_type = Some(XbxEngineTargetTypeDto::Cloud);
+        }
+        let packet = TransportLayerCc {
+            base_sequence_number: 100,
+            packet_status_count: 8,
+            packet_chunks: vec![PacketStatusChunk::StatusVectorChunk(StatusVectorChunk {
+                type_tcc: StatusChunkTypeTcc::StatusVectorChunk,
+                symbol_size: SymbolSizeTypeTcc::TwoBit,
+                symbol_list: vec![
+                    SymbolTypeTcc::PacketReceivedSmallDelta,
+                    SymbolTypeTcc::PacketReceivedSmallDelta,
+                    SymbolTypeTcc::PacketReceivedSmallDelta,
+                    SymbolTypeTcc::PacketReceivedSmallDelta,
+                    SymbolTypeTcc::PacketReceivedSmallDelta,
+                    SymbolTypeTcc::PacketReceivedSmallDelta,
+                    SymbolTypeTcc::PacketReceivedSmallDelta,
+                    SymbolTypeTcc::PacketReceivedSmallDelta,
+                ],
+            })],
+            recv_deltas: std::iter::repeat_n(
+                rtc_rtcp::transport_feedbacks::transport_layer_cc::RecvDelta {
+                    type_tcc_packet: SymbolTypeTcc::PacketReceivedSmallDelta,
+                    delta: 80_000,
+                },
+                8,
+            )
+            .collect(),
+            ..TransportLayerCc::default()
+        };
+        let ledger = HashMap::from([
+            (100, 1200),
+            (101, 1300),
+            (102, 1400),
+            (103, 1500),
+            (104, 1600),
+            (105, 1700),
+            (106, 1800),
+            (107, 1900),
+        ]);
+
+        let observation = build_twcc_observation_with_packet_bytes(
+            1,
+            &packet,
+            &runtime_stats,
+            TWCC_OBSERVATION_SOURCE_LOCAL_FEEDBACK,
+            Some(&ledger),
+        )
+        .expect("twcc observation should be built");
+        assert!(observation.twcc_sample_valid);
+        assert_eq!(observation.twcc_invalid_reason, None);
+        assert_eq!(observation.observed_byte_count, 12400);
+        assert_eq!(observation.ledger_hit_ratio, Some(1.0));
     }
 
     #[test]

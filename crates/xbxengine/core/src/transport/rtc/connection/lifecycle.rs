@@ -15,7 +15,6 @@ use crate::transport::rtc::stats::{apply_transport_event, now_ms_f64};
 use crate::XbxEngineMediaRuntimeStats;
 
 use super::runtime_state::RtcConnectionRuntimeState;
-use super::service::RTC_RECONNECT_GRACE_MS;
 use super::RtcConnectionService;
 
 impl RtcConnectionService {
@@ -57,7 +56,7 @@ impl RtcConnectionService {
                 );
             }
             RTCPeerConnectionState::Failed => {
-                self.schedule_immediate_reconnect(
+                self.raise_reconnect_signal(
                     runtime_stats,
                     "rtcPeerConnectionFailed",
                     "phase1 rtc peer connection failed",
@@ -65,7 +64,7 @@ impl RtcConnectionService {
                 );
             }
             RTCPeerConnectionState::Closed => {
-                self.schedule_immediate_reconnect(
+                self.raise_reconnect_signal(
                     runtime_stats,
                     "rtcPeerConnectionClosed",
                     "phase1 rtc peer connection closed",
@@ -85,7 +84,7 @@ impl RtcConnectionService {
         }
     }
 
-    pub(super) fn schedule_immediate_reconnect(
+    pub(super) fn raise_reconnect_signal(
         &mut self,
         runtime_stats: &Arc<Mutex<XbxEngineMediaRuntimeStats>>,
         label: &str,
@@ -96,40 +95,37 @@ impl RtcConnectionService {
         self.lifecycle_state = RtcConnectionLifecycleState::Recovering;
         self.lifecycle_state_since_ms = observed_at_ms;
         self.lifecycle_observation_id = self.lifecycle_observation_id.saturating_add(1);
-        // 记录是否新建 recovery action，方便上层区分“瞬态 closed”还是“已进入恢复编排”。
+        // 这里只上报“恢复信号已触发”，不承诺动作已经创建/消费。
         self.publish_lifecycle_observation(
             runtime_stats,
             RtcConnectionLifecycleState::Recovering,
             label,
             Some(format!(
-                "{summary} reason={reason} recoveryActionCreated=true observationId={}",
+                "{summary} reason={reason} recoverySignalRaised=true observationId={}",
                 self.lifecycle_observation_id
             )),
         );
     }
 
-    pub(super) fn maybe_schedule_delayed_reconnect(
+    pub(super) fn raise_disconnect_signal(
         &mut self,
         runtime_stats: &Arc<Mutex<XbxEngineMediaRuntimeStats>>,
+        label: &str,
+        summary: &str,
+        reason: &str,
     ) {
-        let should_recover = matches!(
-            self.lifecycle_state,
-            RtcConnectionLifecycleState::Disconnected | RtcConnectionLifecycleState::Failed
-        ) && now_ms_f64() - self.lifecycle_state_since_ms
-            >= RTC_RECONNECT_GRACE_MS;
-        if !should_recover {
-            return;
-        }
-        let reason = match self.lifecycle_state {
-            RtcConnectionLifecycleState::Disconnected => "peer connection disconnected",
-            RtcConnectionLifecycleState::Failed => "peer connection failed",
-            _ => "peer connection recovered",
-        };
-        self.schedule_immediate_reconnect(
+        let observed_at_ms = now_ms_f64();
+        self.lifecycle_state = RtcConnectionLifecycleState::Disconnected;
+        self.lifecycle_state_since_ms = observed_at_ms;
+        self.lifecycle_observation_id = self.lifecycle_observation_id.saturating_add(1);
+        self.publish_lifecycle_observation(
             runtime_stats,
-            "rtcConnectionRecovering",
-            "phase1 rtc connection entering recovering",
-            reason,
+            RtcConnectionLifecycleState::Disconnected,
+            label,
+            Some(format!(
+                "{summary} reason={reason} disconnectSignalRaised=true observationId={}",
+                self.lifecycle_observation_id
+            )),
         );
     }
 
@@ -179,7 +175,7 @@ impl RtcConnectionService {
             RtcConnectionLifecycleState::Recovering,
             label,
             Some(format!(
-                "{summary} reason={} recoveryActionCreated=true observationId={}",
+                "{summary} reason={} recoverySignalRaised=true observationId={}",
                 reason, self.lifecycle_observation_id
             )),
         );

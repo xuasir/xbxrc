@@ -187,10 +187,9 @@ pub fn build_xbxengine_stats(
         recovery_policy_profile: runtime_stats
             .and_then(|stats| stats.recovery_policy_profile.clone()),
         recovery_diagnosis: runtime_stats.and_then(|stats| stats.recovery_diagnosis.clone()),
-        recovery_coupling_mode: runtime_stats
-            .and_then(|stats| stats.recovery_coupling_mode.clone()),
-        recovery_coupling_summary: runtime_stats
-            .and_then(|stats| stats.recovery_coupling_summary.clone()),
+        // legacy coupling 字段保留协议位，但调度语义已由 owner contract 接管，这里固定不再透出。
+        recovery_coupling_mode: None,
+        recovery_coupling_summary: None,
         direct_gaming_bitrate_band: runtime_stats
             .and_then(|stats| stats.direct_gaming_bitrate_band.clone()),
         video_owner_state: video_owner.as_ref().map(|owner| owner.state.clone()),
@@ -321,6 +320,7 @@ pub fn build_xbxengine_stats(
         last_recovery_action: snapshot.last_recovery_action.clone(),
         last_recovery_action_at_ms: snapshot.last_recovery_action_at_ms,
         last_recovery_reason: snapshot.last_recovery_reason.clone(),
+        reconnect_trigger_source: snapshot.reconnect_trigger_source.clone(),
         latest_decode_candidate_decision: runtime_stats.and_then(|stats| {
             stats
                 .latest_decode_candidate_decision
@@ -689,6 +689,8 @@ pub fn build_xbxengine_stats(
 }
 
 fn resolve_twcc_observation_state(stats: &XbxEngineMediaRuntimeStats) -> String {
+    // 这组 phase 名称同时服务 diagnostics 展示和 session warmup 判定，
+    // 变更时要同步检查 scheduling/session 对 cloud warmup 的消费逻辑。
     let has_video_remote_twcc_binding = stats
         .latest_twcc_remote_stream_observation
         .as_ref()
@@ -1159,6 +1161,7 @@ mod tests {
             last_recovery_action: None,
             last_recovery_action_at_ms: None,
             last_recovery_reason: None,
+            reconnect_trigger_source: None,
         }
     }
 

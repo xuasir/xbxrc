@@ -10,7 +10,7 @@ use serde_json::{json, Value};
 
 pub type RuntimeTraceRecorderRef = Arc<RuntimeTraceRecorder>;
 
-const TRACE_SCHEMA_VERSION: u32 = 1;
+const TRACE_SCHEMA_VERSION: u32 = 2;
 
 #[derive(Clone, Copy, Debug)]
 pub enum RuntimeTraceCategory {
@@ -33,37 +33,122 @@ impl RuntimeTraceCategory {
     }
 }
 
+struct TraceInner {
+    trace_mode: String,
+    file: Option<File>,
+    path: Option<PathBuf>,
+}
+
 /// 开发期协助日志：独立写入项目目录，便于后续整体清理。
 pub struct RuntimeTraceRecorder {
-    file: Mutex<File>,
-    path: PathBuf,
+    inner: Mutex<TraceInner>,
     sequence: AtomicU64,
 }
 
 impl RuntimeTraceRecorder {
-    pub fn new() -> std::io::Result<Self> {
+    /// `trace_mode` 与设置项 `runtime_trace_mode` 一致；`off` 时不创建文件、不写盘。
+    pub fn new_with_mode(trace_mode: &str) -> std::io::Result<Self> {
+        let trace_mode = trace_mode.to_string();
+        let inner = TraceInner {
+            trace_mode: trace_mode.clone(),
+            file: None,
+            path: None,
+        };
+        let recorder = Self {
+            inner: Mutex::new(inner),
+            sequence: AtomicU64::new(0),
+        };
+        if trace_mode != "off" {
+            recorder.apply_trace_mode_open_file(&trace_mode)?;
+        }
+        Ok(recorder)
+    }
+
+    fn apply_trace_mode_open_file(&self, trace_mode: &str) -> std::io::Result<()> {
         let root = project_root().join("runtime-logs");
         create_dir_all(&root)?;
         let path = root.join(format!("runtime-trace-{}.jsonl", now_ms()));
+        let path_open_payload = path.display().to_string();
         let file = OpenOptions::new().create(true).append(true).open(&path)?;
-        let recorder = Self {
-            file: Mutex::new(file),
-            path,
-            sequence: AtomicU64::new(0),
-        };
-        recorder.record_state(
+        {
+            let mut inner = self
+                .inner
+                .lock()
+                .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
+            inner.file = Some(file);
+            inner.path = Some(path);
+            inner.trace_mode = trace_mode.to_string();
+        }
+        self.record_state(
             "trace",
             "fileOpened",
             None,
             json!({
-                "path": recorder.path,
+                "path": path_open_payload,
             }),
         );
-        Ok(recorder)
+        Ok(())
     }
 
-    pub fn path(&self) -> &Path {
-        &self.path
+    /// 设置页修改 `runtime_trace_mode` 后立即应用：开关盘写入、更新当前模式字段。
+    pub fn apply_trace_mode(&self, mode: &str) -> std::io::Result<()> {
+        let mode = mode.to_string();
+        let path_open_payload = {
+            let mut inner = self
+                .inner
+                .lock()
+                .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
+            if inner.trace_mode == mode {
+                return Ok(());
+            }
+            if let Some(mut file) = inner.file.take() {
+                let _ = file.flush();
+                inner.path = None;
+            }
+            inner.trace_mode = mode.clone();
+            if mode == "off" {
+                return Ok(());
+            }
+            let root = project_root().join("runtime-logs");
+            create_dir_all(&root)?;
+            let path = root.join(format!("runtime-trace-{}.jsonl", now_ms()));
+            let path_open_payload = path.display().to_string();
+            let file = OpenOptions::new().create(true).append(true).open(&path)?;
+            inner.file = Some(file);
+            inner.path = Some(path.clone());
+            Some(path_open_payload)
+        };
+        if let Some(path_open_payload) = path_open_payload {
+            self.record_state(
+                "trace",
+                "fileOpened",
+                None,
+                json!({
+                    "path": path_open_payload,
+                    "reason": "traceModeChanged",
+                }),
+            );
+        }
+        Ok(())
+    }
+
+    pub fn path(&self) -> Option<PathBuf> {
+        self.inner.lock().ok().and_then(|g| g.path.clone())
+    }
+
+    pub fn trace_mode(&self) -> String {
+        self.inner
+            .lock()
+            .map(|g| g.trace_mode.clone())
+            .unwrap_or_default()
+    }
+
+    pub fn disk_enabled(&self) -> bool {
+        self.inner
+            .lock()
+            .ok()
+            .map(|g| g.file.is_some())
+            .unwrap_or(false)
     }
 
     pub fn record<T: Serialize>(
@@ -209,19 +294,24 @@ impl RuntimeTraceRecorder {
         session_id: Option<&str>,
         payload: Value,
     ) {
+        let Ok(mut inner) = self.inner.lock() else {
+            return;
+        };
+        let trace_mode = inner.trace_mode.clone();
+        let Some(file) = inner.file.as_mut() else {
+            return;
+        };
         let line = json!({
             "schemaVersion": TRACE_SCHEMA_VERSION,
             "seq": self.sequence.fetch_add(1, Ordering::Relaxed) + 1,
             "tsMs": now_ms(),
+            "traceMode": trace_mode,
             "category": category.as_str(),
             "domain": domain,
             "event": event,
             "sessionId": session_id,
             "payload": payload,
         });
-        let Ok(mut file) = self.file.lock() else {
-            return;
-        };
         if serde_json::to_writer(&mut *file, &line).is_err() {
             return;
         }

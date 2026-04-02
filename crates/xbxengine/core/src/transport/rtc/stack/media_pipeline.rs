@@ -10,6 +10,7 @@ use crate::transport::rtc::stream::audio::{
 };
 use crate::transport::rtc::stream::sink::RtcRtcpSendPort;
 use crate::transport::rtc::stream::{build_rtc_video_frame_source, RtcMediaService, RtcMediaSink};
+use crate::XbxEngineRuntimeConfig;
 
 pub(super) type FrameSourceSender = tokio::sync::mpsc::Sender<
     crate::transport::rtc::stream::adapter_types::VideoFramePipelineSources,
@@ -61,6 +62,7 @@ impl RtcRtcpSendPort for DummyRtcpPort {
 pub(crate) struct RtcStackMediaPipelineBridge<'a> {
     media_runtime: &'a Arc<tokio::runtime::Runtime>,
     runtime_stats: &'a Arc<Mutex<XbxEngineMediaRuntimeStats>>,
+    runtime_config: &'a Arc<Mutex<XbxEngineRuntimeConfig>>,
     audio_volume_bits: &'a Arc<AtomicU32>,
     audio_playback_session: &'a Arc<Mutex<Option<XbxRemoteAudioPlaybackSession>>>,
     media: &'a Arc<Mutex<RtcMediaService>>,
@@ -71,6 +73,7 @@ impl<'a> RtcStackMediaPipelineBridge<'a> {
     pub(crate) fn new(
         media_runtime: &'a Arc<tokio::runtime::Runtime>,
         runtime_stats: &'a Arc<Mutex<XbxEngineMediaRuntimeStats>>,
+        runtime_config: &'a Arc<Mutex<XbxEngineRuntimeConfig>>,
         audio_volume_bits: &'a Arc<AtomicU32>,
         audio_playback_session: &'a Arc<Mutex<Option<XbxRemoteAudioPlaybackSession>>>,
         media: &'a Arc<Mutex<RtcMediaService>>,
@@ -79,6 +82,7 @@ impl<'a> RtcStackMediaPipelineBridge<'a> {
         Self {
             media_runtime,
             runtime_stats,
+            runtime_config,
             audio_volume_bits,
             audio_playback_session,
             media,
@@ -95,20 +99,27 @@ impl<'a> RtcStackMediaPipelineBridge<'a> {
     }
 
     pub(crate) fn mount_primary_frame_pipeline(&self) {
+        let webrtc = self
+            .runtime_config
+            .lock()
+            .ok()
+            .map(|config| config.webrtc.clone())
+            .unwrap_or_else(|| XbxEngineRuntimeConfig::default().webrtc);
+        let video_pipeline = webrtc.video_pipeline;
         let (video_sink, frame_sources) = build_rtc_video_frame_source(
             8192,
             Arc::new(DummyRtcpPort),
             self.runtime_stats.clone(),
-            300,
-            Duration::from_millis(0),
-            Duration::from_millis(50),
-            Duration::from_millis(500),
+            video_pipeline.jitter_buffer_max_packets.max(64),
+            Duration::from_millis(video_pipeline.jitter_buffer_min_delay_ms),
+            Duration::from_millis(video_pipeline.jitter_buffer_max_delay_ms),
+            Duration::from_millis(video_pipeline.idle_timeout_ms.max(120)),
             crate::transport::rtc::stream::nack_scheduler::NackSchedulerConfig {
-                max_age_ms: 200,
-                frame_deadline_ms: 120,
-                burst_count: 4,
-                retry_interval_ms: 40,
-                max_retry_count: 3,
+                max_age_ms: video_pipeline.nack_max_age_ms,
+                frame_deadline_ms: video_pipeline.late_frame_drop_threshold_ms.max(40),
+                burst_count: video_pipeline.nack_burst_count.max(1),
+                retry_interval_ms: video_pipeline.nack_retry_interval_ms.max(10),
+                max_retry_count: video_pipeline.nack_max_retry_count.max(1),
             },
         );
         let mut audio_session = None;

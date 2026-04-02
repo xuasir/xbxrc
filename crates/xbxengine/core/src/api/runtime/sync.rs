@@ -26,6 +26,7 @@ where
                 self.emit_error("attachViewportFailed", error.to_string());
             }
         }
+        self.health.reset_video_epoch();
         self.snapshot.video_size = Some((negotiation.video_width, negotiation.video_height));
         self.snapshot.first_frame_packet_arrival_time_ms =
             negotiation.first_frame_packet_arrival_time_ms;

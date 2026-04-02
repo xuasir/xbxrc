@@ -480,6 +480,9 @@ pub struct XbxEngineStatsDto {
     pub last_recovery_action: Option<String>,
     pub last_recovery_action_at_ms: Option<f64>,
     pub last_recovery_reason: Option<String>,
+    /// policy | runtime | other — 与宿主侧 `restart=true` 重协商观测对齐
+    #[serde(default)]
+    pub reconnect_trigger_source: Option<String>,
     pub latest_decode_candidate_decision: Option<XbxEnginePipelineCandidateDecisionObservationDto>,
     pub latest_render_candidate_decision: Option<XbxEnginePipelineCandidateDecisionObservationDto>,
     pub latest_video_packet_gap: Option<XbxEnginePacketGapObservationDto>,

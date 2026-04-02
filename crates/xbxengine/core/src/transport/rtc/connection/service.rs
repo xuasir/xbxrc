@@ -118,7 +118,6 @@ pub(super) struct RtcReadIngressCounters {
     pub(super) last_data_channel_label: Option<String>,
 }
 
-pub(super) const RTC_RECONNECT_GRACE_MS: f64 = 750.0;
 impl RtcConnectionService {
     pub(crate) fn sync_runtime_config(&mut self, runtime_config: XbxEngineWebRtcRuntimeConfig) {
         self.controlled_twcc_feedback
@@ -559,7 +558,6 @@ impl RtcConnectionService {
         crate::xbx_log_warn!("[xbxengine][rtc-connection] pump after drain peer events/reads");
         self.try_send_message_handshake(runtime_stats)?;
         self.run_delayed_control_actions(runtime_stats)?;
-        self.maybe_schedule_delayed_reconnect(runtime_stats);
         self.refresh_transport_metrics(runtime_stats);
         crate::xbx_log_warn!("[xbxengine][rtc-connection] pump exit");
         Ok(())

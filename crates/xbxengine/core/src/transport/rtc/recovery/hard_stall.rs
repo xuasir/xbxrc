@@ -49,20 +49,24 @@ pub(crate) fn resolve_persistent_stall_recovery(
     if snapshot.should_escalate_to_reconnect() {
         return Some(VideoEscalationDecision {
             observation_id: 0,
-            action: RecoveryAction::RequestReconnectCandidate,
+            action: RecoveryAction::RequestDecoderReset,
         });
     }
 
-    // transport stall 已证明媒体链难以自愈，这里直接交给会话级重连。
+    // 连接域与媒体域解耦后，transport stall 仍属于媒体恢复域：
+    // 即使是 deadline 类硬停顿，也先走 decoder reset，不直接触发 reconnect。
     if matches!(
         reason,
         VideoEscalationReason::TransportExpiredDeadline
             | VideoEscalationReason::TransportSevereDeadline
     ) {
-        return Some(VideoEscalationDecision {
-            observation_id: 0,
-            action: RecoveryAction::RequestReconnectCandidate,
-        });
+        if snapshot.since_last_decoder_reset_ms >= HARD_STALL_MIN_RESET_SPACING_MS {
+            return Some(VideoEscalationDecision {
+                observation_id: 0,
+                action: RecoveryAction::RequestDecoderReset,
+            });
+        }
+        return None;
     }
 
     if snapshot.since_last_decoder_reset_ms >= HARD_STALL_MIN_RESET_SPACING_MS {

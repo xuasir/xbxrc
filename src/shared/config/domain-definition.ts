@@ -99,6 +99,34 @@ const POLLING_RATE_OPTIONS = [
   { value: 16.67, label: '16.67 HZ' },
 ] as const satisfies readonly SettingSelectOptionDefinition[]
 
+const RUNTIME_TRACE_MODE_OPTIONS = [
+  {
+    value: 'off',
+    label: 'Off',
+    description: 'Do not write runtime trace JSONL files (structured engine snapshots disabled on disk)',
+  },
+  {
+    value: 'minimal',
+    label: 'Minimal',
+    description: 'Low noise: engine WARN+ to file; snapshots every ~3s (recommended for long sessions)',
+  },
+  {
+    value: 'standard',
+    label: 'Standard',
+    description: 'Engine INFO+ to file; snapshots every ~2s',
+  },
+  {
+    value: 'verbose',
+    label: 'Verbose',
+    description: 'Engine DEBUG+ to file; snapshots every ~1s (large files)',
+  },
+  {
+    value: 'trace',
+    label: 'Trace',
+    description: 'Engine TRACE to file; maximum detail',
+  },
+] as const satisfies readonly SettingSelectOptionDefinition[]
+
 const VIDEO_FORMAT_OPTIONS = [
   { value: '', label: 'Aspect Ratio', description: 'Keep the original stream aspect ratio' },
   { value: 'Stretch', label: 'Stretch' },
@@ -138,7 +166,7 @@ export const CONFIG_GROUP_DEFINITIONS: Record<string, SettingGroupDefinition> = 
       {
         key: 'runtime',
         label: 'Runtime',
-        keys: ['background_keepalive', 'debug'],
+        keys: ['background_keepalive', 'debug', 'runtime_trace_mode'],
       },
       {
         key: 'navigation',
@@ -511,5 +539,11 @@ export const CONFIG_FIELD_DEFINITIONS: Record<string, SettingFieldDefinition> = 
     label: 'Debug',
     description: 'Enable debug mode',
     control: 'toggle',
+  },
+  runtime_trace_mode: {
+    label: 'Runtime trace',
+    description: 'How much data is written to runtime-logs JSONL (restart to apply)',
+    control: 'singleSelect',
+    options: [...RUNTIME_TRACE_MODE_OPTIONS],
   },
 }

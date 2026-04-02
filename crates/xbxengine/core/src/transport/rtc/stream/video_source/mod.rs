@@ -15,6 +15,7 @@ use super::packet_types::RtcVideoRtpPacket;
 use super::sink::RtcRtcpSendPort;
 use crate::media::video::types::{FrameRecoveryDisposition, FrameValue};
 use crate::runtime_stats_sink::RuntimeStatsSink;
+use xbxengine_protocol::XbxEngineTransportStateDto;
 
 pub(crate) mod nack;
 pub(super) mod nack_policy;
@@ -146,6 +147,7 @@ impl RtcVideoFrameSource {
         }
         self.last_transport_observation = Some(observation);
         self.last_transport_observation_at = Some(now);
+        // adapterIdleTimeout / thin stream 只上行 MediaFact，由 policy 决定是否进入 recovery episode；避免源侧抢跑抬 epoch。
         if should_begin_transport_recovery_episode(observation) {
             self.runtime_stats
                 .begin_transport_recovery_episode(now_ms_f64());
@@ -169,6 +171,13 @@ impl RtcVideoFrameSource {
         observation: TransportObservation,
         now: std::time::Instant,
     ) -> bool {
+        let transport_state = self
+            .runtime_stats
+            .read(|stats| stats.transport_state.clone())
+            .unwrap_or(XbxEngineTransportStateDto::New);
+        if should_suppress_transport_observation_for_runtime(transport_state, observation) {
+            return true;
+        }
         let is_wait_keyframe = matches!(
             observation,
             TransportObservation::Admission(TransportAdmissionObservation::AwaitRecoveryKeyframe)
@@ -325,14 +334,50 @@ impl RtcVideoFrameSource {
     }
 }
 
+fn should_suppress_transport_observation_for_runtime(
+    transport_state: XbxEngineTransportStateDto,
+    observation: TransportObservation,
+) -> bool {
+    let idle_or_thin_stall = matches!(
+        observation,
+        TransportObservation::StreamIdleTimeout | TransportObservation::StreamThinStall
+    );
+    if !idle_or_thin_stall {
+        return false;
+    }
+    // 连接已关闭后，idle/thin-stall 继续上报只会挤占连接域信号。
+    transport_state == XbxEngineTransportStateDto::Closed
+}
+
+#[cfg(test)]
+mod tests {
+    use super::should_suppress_transport_observation_for_runtime;
+    use crate::transport::rtc::stream::adapter_types::TransportObservation;
+    use xbxengine_protocol::XbxEngineTransportStateDto;
+
+    #[test]
+    fn closed_transport_suppresses_idle_observation_noise() {
+        assert!(should_suppress_transport_observation_for_runtime(
+            XbxEngineTransportStateDto::Closed,
+            TransportObservation::StreamIdleTimeout,
+        ));
+    }
+
+    #[test]
+    fn non_closed_transport_keeps_thin_stall_signal() {
+        assert!(!should_suppress_transport_observation_for_runtime(
+            XbxEngineTransportStateDto::Connecting,
+            TransportObservation::StreamThinStall,
+        ));
+    }
+}
+
 fn should_begin_transport_recovery_episode(observation: TransportObservation) -> bool {
     matches!(
         observation,
         TransportObservation::Admission(TransportAdmissionObservation::AwaitRecoveryKeyframe)
             | TransportObservation::Loss(TransportLossObservation::RecoveryKeyframeRequested)
             | TransportObservation::Loss(TransportLossObservation::AwaitRecoveryKeyframe)
-            | TransportObservation::StreamIdleTimeout
-            | TransportObservation::StreamThinStall
             | TransportObservation::NackDeadlineExpired { .. }
     )
 }

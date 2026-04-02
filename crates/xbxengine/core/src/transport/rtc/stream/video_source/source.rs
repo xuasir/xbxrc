@@ -15,6 +15,7 @@ use crate::{
     XbxEngineAnchorCandidateFailureReason, XbxEngineAnchorCandidateState,
     XbxEngineVideoRtxReinjectObservation,
 };
+use xbxengine_protocol::XbxEngineTargetTypeDto;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum RecoveryKeyframeAction {
@@ -135,7 +136,56 @@ fn should_trigger_idle_timeout(
     has_received_packet && now.duration_since(last_packet_time) > idle_timeout
 }
 
+fn should_relax_idle_timeout(
+    session_target_type: Option<&XbxEngineTargetTypeDto>,
+    feedback_interval_ms: Option<f64>,
+) -> bool {
+    const SLOW_FEEDBACK_INTERVAL_THRESHOLD_MS: f64 = 350.0;
+    matches!(session_target_type, Some(XbxEngineTargetTypeDto::Cloud))
+        || feedback_interval_ms.is_some_and(|ms| ms >= SLOW_FEEDBACK_INTERVAL_THRESHOLD_MS)
+}
+
+fn resolve_effective_idle_controls(
+    base_idle_timeout: std::time::Duration,
+    base_idle_hint_cooldown: std::time::Duration,
+    session_target_type: Option<&XbxEngineTargetTypeDto>,
+    feedback_interval_ms: Option<f64>,
+) -> (std::time::Duration, std::time::Duration) {
+    const ADAPTIVE_IDLE_TIMEOUT_MS: u64 = 700;
+    if !should_relax_idle_timeout(session_target_type, feedback_interval_ms) {
+        return (base_idle_timeout, base_idle_hint_cooldown);
+    }
+
+    // 云侧或慢反馈场景放宽 idle 判定，降低“反馈慢但链路仍在推进”时的误触发。
+    let effective_idle_timeout =
+        base_idle_timeout.max(std::time::Duration::from_millis(ADAPTIVE_IDLE_TIMEOUT_MS));
+    // hint 冷却跟随放宽，避免短时间重复上报 idle。
+    let effective_idle_hint_cooldown = base_idle_hint_cooldown.max(effective_idle_timeout);
+    (effective_idle_timeout, effective_idle_hint_cooldown)
+}
+
 impl RtcVideoFrameSource {
+    fn resolve_effective_idle_controls(&self) -> (std::time::Duration, std::time::Duration) {
+        let (session_target_type, feedback_interval_ms) = self
+            .runtime_stats
+            .read(|stats| {
+                (
+                    stats.session_target_type.clone(),
+                    stats
+                        .latest_video_twcc_observation
+                        .as_ref()
+                        .and_then(|observation| observation.feedback_interval_ms),
+                )
+            })
+            .unwrap_or((None, None));
+        resolve_effective_idle_controls(
+            self.idle_timeout,
+            self.idle_hint_cooldown,
+            session_target_type.as_ref(),
+            feedback_interval_ms,
+        )
+    }
+
     pub(super) async fn recv_frame_inner(&mut self) -> Option<AssembledVideoFrame> {
         loop {
             self.maybe_run_nack_maintenance().await;
@@ -461,11 +511,13 @@ impl RtcVideoFrameSource {
             }
 
             let now = std::time::Instant::now();
+            let (effective_idle_timeout, effective_idle_hint_cooldown) =
+                self.resolve_effective_idle_controls();
             let idle_timeout = should_trigger_idle_timeout(
                 self.received_packet_count > 0,
                 now,
                 self.last_packet_time,
-                self.idle_timeout,
+                effective_idle_timeout,
             );
             let thin_stream_stall = self.should_trigger_thin_stream_stall(now);
 
@@ -495,10 +547,9 @@ impl RtcVideoFrameSource {
                 self.current_assembly_packet_count = 0;
                 self.last_packet_time = now;
 
-                if self
-                    .last_idle_hint_time
-                    .map_or(true, |t| now.duration_since(t) >= self.idle_hint_cooldown)
-                {
+                if self.last_idle_hint_time.map_or(true, |t| {
+                    now.duration_since(t) >= effective_idle_hint_cooldown
+                }) {
                     self.last_idle_hint_time = Some(now);
                     self.queue_transport_observation(if thin_stream_stall {
                         TransportObservation::StreamThinStall
@@ -753,8 +804,9 @@ impl TransportObservationSource for RtcVideoTransportObservationSource {
 
 #[cfg(test)]
 mod tests {
-    use super::should_trigger_idle_timeout;
+    use super::{resolve_effective_idle_controls, should_trigger_idle_timeout};
     use std::time::{Duration, Instant};
+    use xbxengine_protocol::XbxEngineTargetTypeDto;
 
     #[test]
     fn idle_timeout_is_suppressed_before_first_packet() {
@@ -773,5 +825,31 @@ mod tests {
             started_at,
             Duration::from_millis(150),
         ));
+    }
+
+    #[test]
+    fn cloud_profile_relaxes_idle_timeout_and_hint_cooldown() {
+        let (idle_timeout, idle_hint_cooldown) = resolve_effective_idle_controls(
+            Duration::from_millis(250),
+            Duration::from_millis(400),
+            Some(&XbxEngineTargetTypeDto::Cloud),
+            Some(120.0),
+        );
+
+        assert_eq!(idle_timeout, Duration::from_millis(700));
+        assert_eq!(idle_hint_cooldown, Duration::from_millis(700));
+    }
+
+    #[test]
+    fn slow_feedback_relaxes_idle_timeout_even_for_non_cloud() {
+        let (idle_timeout, idle_hint_cooldown) = resolve_effective_idle_controls(
+            Duration::from_millis(300),
+            Duration::from_millis(450),
+            Some(&XbxEngineTargetTypeDto::Home),
+            Some(500.0),
+        );
+
+        assert_eq!(idle_timeout, Duration::from_millis(700));
+        assert_eq!(idle_hint_cooldown, Duration::from_millis(700));
     }
 }

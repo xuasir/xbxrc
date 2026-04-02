@@ -175,8 +175,16 @@ impl NativeVideoRegistry {
                     viewport_id: viewport_id.to_string(),
                     ..Default::default()
                 });
+            // 同一个 viewport 在重新协商后会复用同一 surface_id，
+            // 这里把宿主侧 per-epoch 的呈现态先清掉，避免旧帧序号残留。
             entry.surface_id = surface_id.map(str::to_string);
             entry.window_label = Some(target.window_label().to_string());
+            entry.latest_frame_seq = None;
+            entry.latest_frame_width = None;
+            entry.latest_frame_height = None;
+            entry.latest_frame_rendered_at_ms = None;
+            entry.last_present_kind = None;
+            entry.present_count_total = 0;
         }
         if presenter_missing {
             let presenter = self.create_presenter(viewport_id, &target, desired_kind);
@@ -189,9 +197,7 @@ impl NativeVideoRegistry {
             Some(presenter) => presenter,
             None => return false,
         };
-        if presenter_missing || surface_changed {
-            presenter.attach(surface_id);
-        }
+        presenter.attach(surface_id);
         presenter_missing || presenter_kind_changed || surface_changed
     }
 

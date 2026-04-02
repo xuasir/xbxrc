@@ -26,6 +26,27 @@ pub enum XbxEngineRuntimeState {
     Stopped,
 }
 
+/// 重连带 `restart=true` 的触发来源：验收“仅 policy 自动重连 vs 显式/兜底”去双轨。
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum XbxEngineReconnectTriggerSource {
+    /// transport session policy 产出并消费的 `RequestReconnectCandidate`
+    Policy,
+    /// 控制面 `RequestReconnect` 等显式调用
+    Runtime,
+    /// 非 rust-owned 模式下的 health 超时重连等历史路径
+    Other,
+}
+
+impl XbxEngineReconnectTriggerSource {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Policy => "policy",
+            Self::Runtime => "runtime",
+            Self::Other => "other",
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct XbxEngineRuntimeConfig {
     pub runtime_name: String,
@@ -179,6 +200,7 @@ pub struct XbxEngineRuntimeSnapshot {
     pub last_recovery_action: Option<String>,
     pub last_recovery_action_at_ms: Option<f64>,
     pub last_recovery_reason: Option<String>,
+    pub reconnect_trigger_source: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

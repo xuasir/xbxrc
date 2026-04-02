@@ -137,6 +137,12 @@ fn normalize_value(key: &str, value: &Value, fallback: &Value) -> Value {
             fallback.as_str().unwrap_or("webrtc-direct"),
             &["webrtc-direct", "rust-owned"],
         ),
+        "runtime_trace_mode" => normalize_string_enum(
+            key,
+            value,
+            fallback.as_str().unwrap_or("minimal"),
+            &["off", "minimal", "standard", "verbose", "trace"],
+        ),
         "display_options" => normalize_display_options(key, value, fallback),
         _ => fallback.clone(),
     }

@@ -269,8 +269,17 @@ impl VideoEscalationController {
         reason: VideoEscalationReason,
         recovery_epoch: u64,
     ) -> VideoEscalationDecision {
+        self.on_reason_with_epoch_policy(reason, recovery_epoch, true)
+    }
+
+    pub fn on_reason_with_epoch_policy(
+        &mut self,
+        reason: VideoEscalationReason,
+        recovery_epoch: u64,
+        allow_reconnect: bool,
+    ) -> VideoEscalationDecision {
         self.begin_recovery_epoch(recovery_epoch);
-        self.on_reason(reason)
+        self.on_reason_with_policy(reason, allow_reconnect)
     }
 
     pub fn budget_state(&self) -> RecoveryActionBudgetState {
@@ -355,6 +364,14 @@ impl VideoEscalationController {
     }
 
     pub fn on_reason(&mut self, reason: VideoEscalationReason) -> VideoEscalationDecision {
+        self.on_reason_with_policy(reason, true)
+    }
+
+    pub fn on_reason_with_policy(
+        &mut self,
+        reason: VideoEscalationReason,
+        allow_reconnect: bool,
+    ) -> VideoEscalationDecision {
         self.next_observation_id = self.next_observation_id.saturating_add(1);
         let now = Instant::now();
         let action = match reason {
@@ -365,11 +382,7 @@ impl VideoEscalationController {
                 self.pending_decoder_reset_signals = 0;
                 self.reconnect_candidate_signals = 0;
                 self.clear_keyframe_epoch();
-                if self.reconnect_budget_used < self.reconnect_budget_limit {
-                    RecoveryAction::RequestReconnectCandidate
-                } else {
-                    RecoveryAction::CooldownSuppressed
-                }
+                self.resolve_reconnect_or_decoder_reset_fallback(now, allow_reconnect)
             }
             VideoEscalationReason::WaitKeyframe
             | VideoEscalationReason::TransportAwaitRecoveryKeyframe
@@ -419,11 +432,7 @@ impl VideoEscalationController {
                     self.reconnect_candidate_signals =
                         self.reconnect_candidate_signals.saturating_add(1);
                     self.clear_keyframe_epoch();
-                    if self.reconnect_budget_used < self.reconnect_budget_limit {
-                        RecoveryAction::RequestReconnectCandidate
-                    } else {
-                        RecoveryAction::CooldownSuppressed
-                    }
+                    self.resolve_reconnect_or_decoder_reset_fallback(now, allow_reconnect)
                 } else {
                     if matches!(reason, VideoEscalationReason::WaitKeyframe) {
                         // WaitKeyframe 的“持续时长”要跨 burst 保留，
@@ -532,11 +541,7 @@ impl VideoEscalationController {
                             self.reconnect_candidate_signals =
                                 self.reconnect_candidate_signals.saturating_add(1);
                             self.clear_keyframe_epoch();
-                            if self.reconnect_budget_used < self.reconnect_budget_limit {
-                                RecoveryAction::RequestReconnectCandidate
-                            } else {
-                                RecoveryAction::CooldownSuppressed
-                            }
+                            self.resolve_reconnect_or_decoder_reset_fallback(now, allow_reconnect)
                         } else if self
                             .last_keyframe_request_at
                             .map_or(true, |last| last.elapsed() >= self.cooldown)
@@ -632,11 +637,7 @@ impl VideoEscalationController {
                         self.reconnect_candidate_signals =
                             self.reconnect_candidate_signals.saturating_add(1);
                         self.clear_keyframe_epoch();
-                        if self.reconnect_budget_used < self.reconnect_budget_limit {
-                            RecoveryAction::RequestReconnectCandidate
-                        } else {
-                            RecoveryAction::CooldownSuppressed
-                        }
+                        self.resolve_reconnect_or_decoder_reset_fallback(now, allow_reconnect)
                     } else if persistent_transport_await_recovery_keyframe
                         && self
                             .last_decoder_reset_at
@@ -656,6 +657,21 @@ impl VideoEscalationController {
                         }
                     } else if self.pending_keyframe_signals < self.keyframe_burst_threshold {
                         RecoveryAction::WaitForBurst
+                    } else if self.try_release_keyframe_epoch_for_same_reason(reason_class, now) {
+                        if matches!(
+                            reason,
+                            VideoEscalationReason::TransportAwaitRecoveryKeyframe
+                        ) {
+                            self.transport_await_recovery_started_at = Some(now);
+                        }
+                        self.last_keyframe_request_at = Some(now);
+                        self.pending_keyframe_signals = 0;
+                        self.reconnect_candidate_signals = 0;
+                        if self.keyframe_budget_used < self.keyframe_budget_limit {
+                            RecoveryAction::RequestKeyframe
+                        } else {
+                            RecoveryAction::CooldownSuppressed
+                        }
                     } else if self
                         .last_keyframe_request_at
                         .map_or(true, |last| last.elapsed() >= self.keyframe_min_interval)
@@ -736,11 +752,7 @@ impl VideoEscalationController {
                 self.last_severe_deadline_at = Some(now);
                 if self.reconnect_candidate_signals >= 2 {
                     self.clear_keyframe_epoch();
-                    if self.reconnect_budget_used < self.reconnect_budget_limit {
-                        RecoveryAction::RequestReconnectCandidate
-                    } else {
-                        RecoveryAction::CooldownSuppressed
-                    }
+                    self.resolve_reconnect_or_decoder_reset_fallback(now, allow_reconnect)
                 } else {
                     RecoveryAction::CooldownSuppressed
                 }
@@ -750,6 +762,35 @@ impl VideoEscalationController {
         VideoEscalationDecision {
             observation_id: self.next_observation_id,
             action,
+        }
+    }
+
+    fn resolve_reconnect_or_decoder_reset_fallback(
+        &mut self,
+        now: Instant,
+        allow_reconnect: bool,
+    ) -> RecoveryAction {
+        if allow_reconnect {
+            return if self.reconnect_budget_used < self.reconnect_budget_limit {
+                RecoveryAction::RequestReconnectCandidate
+            } else {
+                RecoveryAction::CooldownSuppressed
+            };
+        }
+        if self
+            .last_decoder_reset_at
+            .map_or(true, |last| last.elapsed() >= self.cooldown)
+        {
+            self.last_decoder_reset_at = Some(now);
+            self.last_keyframe_request_at = Some(now);
+            self.clear_keyframe_epoch();
+            if self.decoder_reset_budget_used < self.decoder_reset_budget_limit {
+                RecoveryAction::RequestDecoderReset
+            } else {
+                RecoveryAction::CooldownSuppressed
+            }
+        } else {
+            RecoveryAction::CooldownSuppressed
         }
     }
 
@@ -779,6 +820,33 @@ impl VideoEscalationController {
         self.keyframe_epoch_started_at = Some(now);
         self.keyframe_epoch_reason_class = Some(reason_class);
         true
+    }
+
+    fn try_release_keyframe_epoch_for_same_reason(
+        &mut self,
+        reason_class: KeyframeReasonClass,
+        now: Instant,
+    ) -> bool {
+        let can_auto_release = matches!(
+            reason_class,
+            KeyframeReasonClass::AdapterIdleTimeout
+                | KeyframeReasonClass::TransportAwaitRecoveryKeyframe
+        );
+        if !can_auto_release
+            || !self.keyframe_epoch_active
+            || self.keyframe_epoch_reason_class != Some(reason_class)
+        {
+            return false;
+        }
+        let should_release = self.keyframe_epoch_started_at.map_or(false, |started_at| {
+            now.duration_since(started_at) >= self.escalation_window
+        });
+        if should_release {
+            // 超过升级窗口后自动释放同 reason 的 keyframe epoch，解除长期抑制自锁。
+            self.clear_keyframe_epoch();
+            return true;
+        }
+        false
     }
 
     fn clear_keyframe_epoch(&mut self) {
@@ -1134,7 +1202,7 @@ mod tests {
         let mut controller = VideoEscalationController::new(VideoEscalationConfig {
             cooldown_ms: 120,
             keyframe_burst_threshold: 1,
-            decoder_reset_burst_threshold: 1,
+            decoder_reset_burst_threshold: 2,
             keyframe_min_interval_ms: 120,
             escalation_window_ms: 220,
             keyframe_upgrade_min_delay_ms: 0,
@@ -1254,6 +1322,72 @@ mod tests {
     }
 
     #[test]
+    fn idle_timeout_is_throttled_within_window_and_releases_after_window() {
+        let mut controller = VideoEscalationController::new(VideoEscalationConfig {
+            cooldown_ms: 120,
+            keyframe_burst_threshold: 1,
+            decoder_reset_burst_threshold: 2,
+            keyframe_min_interval_ms: 220,
+            escalation_window_ms: 260,
+            keyframe_upgrade_min_delay_ms: 220,
+        });
+
+        assert_eq!(
+            controller
+                .on_reason(VideoEscalationReason::AdapterIdleTimeout)
+                .action,
+            RecoveryAction::RequestKeyframe
+        );
+        std::thread::sleep(Duration::from_millis(180));
+        assert_eq!(
+            controller
+                .on_reason(VideoEscalationReason::AdapterIdleTimeout)
+                .action,
+            RecoveryAction::CooldownSuppressed
+        );
+        std::thread::sleep(Duration::from_millis(140));
+        assert_eq!(
+            controller
+                .on_reason(VideoEscalationReason::AdapterIdleTimeout)
+                .action,
+            RecoveryAction::RequestKeyframe
+        );
+    }
+
+    #[test]
+    fn await_recovery_keyframe_is_throttled_within_window_and_releases_after_window() {
+        let mut controller = VideoEscalationController::new(VideoEscalationConfig {
+            cooldown_ms: 120,
+            keyframe_burst_threshold: 1,
+            decoder_reset_burst_threshold: 2,
+            keyframe_min_interval_ms: 220,
+            escalation_window_ms: 260,
+            keyframe_upgrade_min_delay_ms: 0,
+        });
+
+        assert_eq!(
+            controller
+                .on_reason(VideoEscalationReason::TransportAwaitRecoveryKeyframe)
+                .action,
+            RecoveryAction::RequestKeyframe
+        );
+        std::thread::sleep(Duration::from_millis(180));
+        assert_eq!(
+            controller
+                .on_reason(VideoEscalationReason::TransportAwaitRecoveryKeyframe)
+                .action,
+            RecoveryAction::CooldownSuppressed
+        );
+        std::thread::sleep(Duration::from_millis(140));
+        assert_eq!(
+            controller
+                .on_reason(VideoEscalationReason::TransportAwaitRecoveryKeyframe)
+                .action,
+            RecoveryAction::RequestDecoderReset
+        );
+    }
+
+    #[test]
     fn cooldown_window_prevents_keyframe_storm() {
         let mut controller = VideoEscalationController::new(VideoEscalationConfig {
             cooldown_ms: 220,
@@ -1353,6 +1487,60 @@ mod tests {
                 .action,
             RecoveryAction::RequestReconnectCandidate
         );
+    }
+
+    #[test]
+    fn media_policy_disallows_reconnect_for_severe_deadline() {
+        let mut controller = VideoEscalationController::new(VideoEscalationConfig {
+            cooldown_ms: 120,
+            keyframe_burst_threshold: 1,
+            decoder_reset_burst_threshold: 1,
+            keyframe_min_interval_ms: 120,
+            escalation_window_ms: 260,
+            keyframe_upgrade_min_delay_ms: 0,
+        });
+        controller.begin_recovery_epoch(6);
+        assert_eq!(
+            controller
+                .on_reason_with_policy(VideoEscalationReason::TransportSevereDeadline, false)
+                .action,
+            RecoveryAction::CooldownSuppressed
+        );
+        assert_eq!(
+            controller
+                .on_reason_with_policy(VideoEscalationReason::TransportSevereDeadline, false)
+                .action,
+            RecoveryAction::RequestDecoderReset
+        );
+    }
+
+    #[test]
+    fn media_policy_disallows_reconnect_for_transport_await_hard_stuck() {
+        let mut controller = VideoEscalationController::new(VideoEscalationConfig {
+            cooldown_ms: 120,
+            keyframe_burst_threshold: 1,
+            decoder_reset_burst_threshold: 1,
+            keyframe_min_interval_ms: 120,
+            escalation_window_ms: 220,
+            keyframe_upgrade_min_delay_ms: 0,
+        });
+        controller.begin_recovery_epoch(8);
+        assert_eq!(
+            controller
+                .on_reason_with_policy(VideoEscalationReason::TransportAwaitRecoveryKeyframe, false)
+                .action,
+            RecoveryAction::RequestKeyframe
+        );
+        std::thread::sleep(Duration::from_millis(240));
+        let second = controller
+            .on_reason_with_policy(VideoEscalationReason::TransportAwaitRecoveryKeyframe, false)
+            .action;
+        assert_ne!(second, RecoveryAction::RequestReconnectCandidate);
+        std::thread::sleep(Duration::from_millis(480));
+        let third = controller
+            .on_reason_with_policy(VideoEscalationReason::TransportAwaitRecoveryKeyframe, false)
+            .action;
+        assert_ne!(third, RecoveryAction::RequestReconnectCandidate);
     }
 
     #[test]

@@ -17,9 +17,25 @@ pub(crate) struct SchedulingPolicyEngine {
     planner: TransportCommandPlanner,
 }
 
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub(crate) enum TwccWarmupState {
+    #[default]
+    Inactive,
+    BuilderConfigured,
+    MissingLocalFeedback,
+    LocalFeedbackReady,
+}
+
+impl TwccWarmupState {
+    pub(crate) fn blocks_bwe_updates(self) -> bool {
+        matches!(self, Self::BuilderConfigured | Self::MissingLocalFeedback)
+    }
+}
+
 pub(crate) struct SchedulingPolicyInput {
     pub(crate) owner_state: VideoSchedulingOwnerState,
     pub(crate) owner_health: VideoHealthContract,
+    pub(crate) twcc_warmup_state: TwccWarmupState,
     pub(crate) recovery: Option<RecoveryPolicyProposal>,
     pub(crate) bwe: Option<BwePolicyProposal>,
 }
@@ -32,7 +48,11 @@ impl SchedulingPolicyEngine {
     }
 
     pub(crate) fn plan(&self, input: SchedulingPolicyInput) -> Vec<PlannedTransportCommand> {
-        let bwe = if allows_bwe_update(input.owner_state, input.owner_health) {
+        let bwe = if allows_bwe_update(
+            input.owner_state,
+            input.owner_health,
+            input.twcc_warmup_state,
+        ) {
             input.bwe
         } else {
             None
@@ -49,7 +69,11 @@ impl SchedulingPolicyEngine {
 fn allows_bwe_update(
     owner_state: VideoSchedulingOwnerState,
     owner_health: VideoHealthContract,
+    twcc_warmup_state: TwccWarmupState,
 ) -> bool {
+    if twcc_warmup_state.blocks_bwe_updates() {
+        return false;
+    }
     matches!(
         (owner_state, owner_health),
         (
@@ -130,7 +154,7 @@ fn map_recovery_action_to_transport_commands(
 
 #[cfg(test)]
 mod tests {
-    use super::{SchedulingPolicyEngine, SchedulingPolicyInput};
+    use super::{SchedulingPolicyEngine, SchedulingPolicyInput, TwccWarmupState};
     use crate::transport::rtc::bwe::evaluator::RtcBweEvaluation;
     use crate::transport::rtc::policy::bwe::BwePolicyProposal;
     use crate::transport::rtc::policy::recovery::RecoveryPolicyProposal;
@@ -179,6 +203,7 @@ mod tests {
         let commands = engine.plan(SchedulingPolicyInput {
             owner_state: VideoSchedulingOwnerState::SupplyStarved,
             owner_health: VideoHealthContract::Starved,
+            twcc_warmup_state: TwccWarmupState::Inactive,
             recovery: Some(build_recovery_proposal(
                 RecoveryAction::CooldownSuppressed,
                 9,
@@ -201,6 +226,7 @@ mod tests {
         let commands = engine.plan(SchedulingPolicyInput {
             owner_state: VideoSchedulingOwnerState::RebuildingSupply,
             owner_health: VideoHealthContract::Recovering,
+            twcc_warmup_state: TwccWarmupState::Inactive,
             recovery: Some(build_recovery_proposal(RecoveryAction::WaitForBurst, 10)),
             bwe: None,
         });
@@ -222,6 +248,7 @@ mod tests {
         let commands = engine.plan(SchedulingPolicyInput {
             owner_state: VideoSchedulingOwnerState::RebuildingSupply,
             owner_health: VideoHealthContract::Recovering,
+            twcc_warmup_state: TwccWarmupState::Inactive,
             recovery: Some(RecoveryPolicyProposal {
                 decision: VideoEscalationDecision {
                     observation_id: 99,
@@ -271,6 +298,7 @@ mod tests {
         let commands = engine.plan(SchedulingPolicyInput {
             owner_state: VideoSchedulingOwnerState::RebuildingSupply,
             owner_health: VideoHealthContract::Recovering,
+            twcc_warmup_state: TwccWarmupState::Inactive,
             recovery: Some(RecoveryPolicyProposal {
                 decision: VideoEscalationDecision {
                     observation_id: 7,
@@ -324,6 +352,7 @@ mod tests {
         let commands = engine.plan(SchedulingPolicyInput {
             owner_state: VideoSchedulingOwnerState::StableServing,
             owner_health: VideoHealthContract::Stable,
+            twcc_warmup_state: TwccWarmupState::LocalFeedbackReady,
             recovery: None,
             bwe: Some(BwePolicyProposal {
                 evaluation: RtcBweEvaluation {
@@ -343,6 +372,67 @@ mod tests {
                 },
             ) => {
                 assert_eq!(*target_remb_kbps, 24_000);
+                assert_eq!(decision_reason, "twcc-gcc-cloud-ramp");
+            }
+            _ => panic!("unexpected command kind"),
+        }
+    }
+
+    #[test]
+    fn cloud_warmup_blocks_bwe_but_keeps_recovery() {
+        let engine = SchedulingPolicyEngine::new();
+        let commands = engine.plan(SchedulingPolicyInput {
+            owner_state: VideoSchedulingOwnerState::StableServing,
+            owner_health: VideoHealthContract::Stable,
+            twcc_warmup_state: TwccWarmupState::BuilderConfigured,
+            recovery: Some(build_recovery_proposal(RecoveryAction::RequestKeyframe, 11)),
+            bwe: Some(BwePolicyProposal {
+                evaluation: RtcBweEvaluation {
+                    target_remb_kbps: 24_000,
+                    decision_reason: "twcc-gcc-cloud-await-feedback".to_string(),
+                    observation_id: 12,
+                },
+            }),
+        });
+
+        assert_eq!(commands.len(), 1);
+        match commands.first() {
+            Some(
+                crate::transport::rtc::policy::planner::PlannedTransportCommand::ExecuteRecoveryAction {
+                    decision,
+                    ..
+                },
+            ) => assert_eq!(decision.action, RecoveryAction::RequestKeyframe),
+            _ => panic!("unexpected command kind"),
+        }
+    }
+
+    #[test]
+    fn local_feedback_ready_restores_bwe_updates_after_warmup() {
+        let engine = SchedulingPolicyEngine::new();
+        let commands = engine.plan(SchedulingPolicyInput {
+            owner_state: VideoSchedulingOwnerState::StableServing,
+            owner_health: VideoHealthContract::Stable,
+            twcc_warmup_state: TwccWarmupState::LocalFeedbackReady,
+            recovery: None,
+            bwe: Some(BwePolicyProposal {
+                evaluation: RtcBweEvaluation {
+                    target_remb_kbps: 26_000,
+                    decision_reason: "twcc-gcc-cloud-ramp".to_string(),
+                    observation_id: 13,
+                },
+            }),
+        });
+
+        assert_eq!(commands.len(), 1);
+        match commands.first() {
+            Some(
+                crate::transport::rtc::policy::planner::PlannedTransportCommand::UpdateTargetRemb {
+                    target_remb_kbps,
+                    decision_reason,
+                },
+            ) => {
+                assert_eq!(*target_remb_kbps, 26_000);
                 assert_eq!(decision_reason, "twcc-gcc-cloud-ramp");
             }
             _ => panic!("unexpected command kind"),

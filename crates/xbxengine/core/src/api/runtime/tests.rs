@@ -21,8 +21,8 @@ use crate::{
 };
 
 use super::{
-    XbxEngineEventSink, XbxEngineHostBridge, XbxEngineRuntime, XbxEngineRuntimeConfig,
-    XbxEngineRuntimeError, XbxEngineRuntimeState,
+    XbxEngineEventSink, XbxEngineHostBridge, XbxEngineReconnectTriggerSource, XbxEngineRuntime,
+    XbxEngineRuntimeConfig, XbxEngineRuntimeError, XbxEngineRuntimeState,
 };
 
 #[derive(Clone)]
@@ -958,7 +958,10 @@ fn reconnect_keeps_remote_session_alive_before_restart_negotiation() {
     events.borrow_mut().clear();
 
     runtime
-        .request_reconnect(XbxEngineReconnectReasonDto::MediaStalled)
+        .request_reconnect(
+            XbxEngineReconnectReasonDto::MediaStalled,
+            XbxEngineReconnectTriggerSource::Policy,
+        )
         .expect("runtime reconnect should succeed");
 
     assert_eq!(runtime.snapshot().negotiation_attempt_count, 2);
@@ -1238,7 +1241,10 @@ fn reconnect_failure_restores_running_state() {
     *fail_request_kind.borrow_mut() = Some("KeepAliveRemoteSession");
 
     let error = runtime
-        .request_reconnect(XbxEngineReconnectReasonDto::MediaStalled)
+        .request_reconnect(
+            XbxEngineReconnectReasonDto::MediaStalled,
+            XbxEngineReconnectTriggerSource::Policy,
+        )
         .expect_err("runtime reconnect should fail");
 
     assert_eq!(
@@ -1275,7 +1281,10 @@ fn reconnect_cancellation_stops_before_restart_offer() {
     requests.borrow_mut().clear();
 
     let error = runtime
-        .request_reconnect(XbxEngineReconnectReasonDto::MediaStalled)
+        .request_reconnect(
+            XbxEngineReconnectReasonDto::MediaStalled,
+            XbxEngineReconnectTriggerSource::Policy,
+        )
         .expect_err("runtime reconnect should be cancelled");
 
     assert!(error.is_cancelled());
@@ -1303,7 +1312,10 @@ fn reconnect_restores_chat_negotiation_when_microphone_is_on() {
     requests.borrow_mut().clear();
 
     runtime
-        .request_reconnect(XbxEngineReconnectReasonDto::MediaStalled)
+        .request_reconnect(
+            XbxEngineReconnectReasonDto::MediaStalled,
+            XbxEngineReconnectTriggerSource::Policy,
+        )
         .expect("runtime reconnect should succeed");
 
     let request_list = requests.borrow();
@@ -1359,7 +1371,10 @@ fn reconnect_restores_microphone_capture_when_microphone_is_on() {
     requests.borrow_mut().clear();
 
     runtime
-        .request_reconnect(XbxEngineReconnectReasonDto::MediaStalled)
+        .request_reconnect(
+            XbxEngineReconnectReasonDto::MediaStalled,
+            XbxEngineReconnectTriggerSource::Policy,
+        )
         .expect("runtime reconnect should succeed");
 
     assert_eq!(
@@ -1944,7 +1959,7 @@ fn runtime_consumes_pending_transport_reconnect_candidate_once() {
             inbound_video_packet_count_total: 500,
             latest_observation_label: Some("rtcConnectionRecovering".to_string()),
             latest_observation_summary: Some(
-                "phase1 rtc lifecycle=Recovering state=Recovering recoveryActionCreated=true"
+                "phase1 rtc lifecycle=Recovering state=Recovering recoverySignalRaised=true"
                     .to_string(),
             ),
             latest_video_escalation_observation: Some(crate::XbxEngineVideoEscalationObservation {
@@ -2272,7 +2287,7 @@ fn runtime_stops_reconnect_loop_when_keepalive_reports_session_not_active() {
             inbound_video_packet_count_total: 500,
             latest_observation_label: Some("rtcConnectionRecovering".to_string()),
             latest_observation_summary: Some(
-                "phase1 rtc lifecycle=Recovering state=Recovering recoveryActionCreated=true"
+                "phase1 rtc lifecycle=Recovering state=Recovering recoverySignalRaised=true"
                     .to_string(),
             ),
             latest_video_escalation_observation: Some(crate::XbxEngineVideoEscalationObservation {

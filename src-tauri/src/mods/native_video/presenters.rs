@@ -29,6 +29,7 @@ pub(super) trait NativeVideoPresenter: Send {
     fn attach(&mut self, surface_id: Option<&str>);
     fn present(&mut self, surface_id: Option<&str>, frame: &XbxEngineRenderFrame);
     fn detach(&mut self);
+    fn begin_media_epoch(&mut self) {}
     fn apply_viewport_diagnostics(&self, _viewport: &mut NativeVideoViewportState) {}
     fn take_pending_frame_drops(&mut self) -> Vec<xbxengine::XbxEngineHostVideoFrameDropEvent> {
         Vec::new()
@@ -206,8 +207,21 @@ impl NativeVideoPresenter for MacOsWgpuPresenter {
     }
 
     fn attach(&mut self, surface_id: Option<&str>) {
+        self.begin_media_epoch();
         self.surface_id = surface_id.map(str::to_string);
         self.ensure_render_loop();
+    }
+
+    fn begin_media_epoch(&mut self) {
+        if let Ok(mut state) = self.renderer_state.lock() {
+            state.latest_frame = None;
+            state.last_rendered_frame_seq = None;
+            state.last_surface_size = None;
+        }
+        if let Ok(mut telemetry) = self.telemetry.lock() {
+            telemetry.reset_frame_slot();
+        }
+        self.render_loop_pending.store(false, Ordering::Relaxed);
     }
 
     fn present(&mut self, surface_id: Option<&str>, frame: &XbxEngineRenderFrame) {
@@ -501,8 +515,19 @@ impl NativeVideoPresenter for MacOsVideoPresenter {
     }
 
     fn attach(&mut self, surface_id: Option<&str>) {
+        self.begin_media_epoch();
         self.surface_id = surface_id.map(str::to_string);
         self.ensure_render_loop();
+    }
+
+    fn begin_media_epoch(&mut self) {
+        if let Ok(mut frame_slot) = self.frame_slot.lock() {
+            frame_slot.begin_media_epoch();
+        }
+        if let Ok(mut telemetry) = self.telemetry.lock() {
+            telemetry.reset_frame_slot();
+        }
+        self.render_loop_pending.store(false, Ordering::Relaxed);
     }
 
     fn present(&mut self, surface_id: Option<&str>, frame: &XbxEngineRenderFrame) {

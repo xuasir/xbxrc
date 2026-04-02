@@ -1619,11 +1619,11 @@ fn service_pump_error_marks_recovering_transport_state() {
 }
 
 #[test]
-fn schedule_immediate_reconnect_publishes_reason_and_observation_id() {
+fn raise_reconnect_signal_publishes_reason_and_observation_id() {
     let mut service = RtcConnectionService::default();
     let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
 
-    service.schedule_immediate_reconnect(
+    service.raise_reconnect_signal(
         &runtime_stats,
         "testReconnect",
         "test reconnect summary",
@@ -1825,6 +1825,54 @@ fn service_replays_pending_control_requests_after_control_close_and_rebuild() {
     assert!(
         replay_decoder_reset,
         "reconnect should replay pending decoder reset request"
+    );
+}
+
+#[test]
+fn message_channel_close_publishes_disconnected_lifecycle_signal() {
+    let mut service = RtcConnectionService::default();
+    let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
+    let session = XbxEngineSessionDto {
+        session_id: "test-session".to_string(),
+        target_type: XbxEngineTargetTypeDto::Cloud,
+        turn_server: None,
+    };
+
+    service.rebuild(&session, &runtime_stats).unwrap();
+    let (mut answer_pc, mut answer_io, message_dc_id, _control_dc_id, ..) =
+        connect_service_to_answer_peer(&mut service, &runtime_stats);
+    let message_dc_id = message_dc_id.expect("answer message channel id");
+    {
+        let mut answer_message_dc = answer_pc
+            .data_channel(message_dc_id)
+            .expect("answer message channel available");
+        answer_message_dc.close().unwrap();
+    }
+
+    let close_deadline = Instant::now() + Duration::from_secs(3);
+    let mut observed = false;
+    while Instant::now() < close_deadline {
+        service.pump(&runtime_stats).unwrap();
+        answer_io.pump(&mut answer_pc).unwrap();
+        if runtime_stats.lock().ok().is_some_and(|stats| {
+            stats.latest_observation_label.as_deref() == Some("rtcMessageChannelClosed")
+                && stats
+                    .latest_observation_summary
+                    .as_deref()
+                    .is_some_and(|summary| {
+                        summary.contains("state=Disconnected")
+                            && summary.contains("disconnectSignalRaised=true")
+                    })
+        }) {
+            observed = true;
+            break;
+        }
+        thread::sleep(Duration::from_millis(10));
+    }
+
+    assert!(
+        observed,
+        "message channel close should publish disconnected signal"
     );
 }
 

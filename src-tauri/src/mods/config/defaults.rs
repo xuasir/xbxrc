@@ -1,6 +1,6 @@
 use serde_json::{json, Map, Value};
 
-pub const APP_CONFIG_KEYS: [&str; 34] = [
+pub const APP_CONFIG_KEYS: [&str; 35] = [
     "locale",
     "theme",
     "use_msal",
@@ -35,6 +35,7 @@ pub const APP_CONFIG_KEYS: [&str; 34] = [
     "ui_haptics",
     "ui_audio",
     "debug",
+    "runtime_trace_mode",
 ];
 
 pub fn default_config_map() -> Map<String, Value> {
@@ -77,7 +78,8 @@ pub fn default_config_map() -> Map<String, Value> {
         "use_vulkan": false,
         "ui_haptics": true,
         "ui_audio": true,
-        "debug": false
+        "debug": false,
+        "runtime_trace_mode": "minimal"
     });
 
     value.as_object().cloned().unwrap_or_default()

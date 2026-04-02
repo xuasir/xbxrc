@@ -16,6 +16,7 @@ use crate::transport::rtc::policy::planner::PlannedTransportCommand;
 use crate::transport::rtc::policy::recovery::RecoveryPolicyProposal;
 use crate::transport::rtc::policy::scheduling::{
     map_planned_command_to_transport_commands, SchedulingPolicyEngine, SchedulingPolicyInput,
+    TwccWarmupState,
 };
 use crate::transport::rtc::policy::video_scheduling_owner::{
     RecoveryIntentContract, RecoveryIntentSource, VideoSchedulingOwner, VideoSchedulingOwnerInput,
@@ -35,12 +36,20 @@ const DEFAULT_BWE_TARGET_KBPS: u32 = 16_000;
 const BWE_UNSTABLE_HOLD_CONFIRMATION_TICKS: u8 = 2;
 const RECOVERY_STARTUP_GRACE_MS: u64 = 800;
 const RECOVERING_RECONNECT_PROPOSAL_INTERVAL_MS: f64 = 1_500.0;
+const CONNECTING_PRE_FIRST_FRAME_RECONNECT_PROPOSAL_INTERVAL_MS: f64 = 4_500.0;
+const CLOUD_RECOVERING_RECONNECT_PROPOSAL_INTERVAL_MS: f64 = 2_500.0;
+const CLOUD_BUILDER_CONFIGURED_RECONNECT_PROPOSAL_INTERVAL_MS: f64 = 4_500.0;
+const CLOUD_MISSING_LOCAL_FEEDBACK_RECONNECT_PROPOSAL_INTERVAL_MS: f64 = 3_500.0;
 const RECOVERY_NO_PROGRESS_RECONNECT_FALLBACK_MS: f64 = 4_000.0;
 const RECOVERY_PRE_FIRST_FRAME_RECONNECT_FALLBACK_MS: f64 = 15_000.0;
+const CLOUD_RECOVERY_PRE_FIRST_FRAME_RECONNECT_FALLBACK_MS: f64 = 35_000.0;
+const CONNECTING_PRE_FIRST_FRAME_FAILED_TERMINAL_MIN_MS: f64 = 90_000.0;
 const CONNECTED_PRESENT_STALL_RECONNECT_FALLBACK_MS: f64 = 10_000.0;
 const CONNECTED_PRESENT_STALL_MIN_AGE_MS: f64 = 1_500.0;
 const CONNECTED_PRESENT_STALL_HARD_AGE_MS: f64 = 4_000.0;
+const CONNECTED_CONNECTIVITY_EVIDENCE_STALE_MS: f64 = 3_000.0;
 const LIVENESS_RECONNECT_ATTEMPT_LIMIT: u8 = 3;
+const CLOUD_LIVENESS_RECONNECT_ATTEMPT_LIMIT: u8 = 6;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum RecoveryLivenessState {
@@ -178,7 +187,8 @@ impl SessionPolicyHook for RtcSessionPolicy {
         let reconnect_selected_by_recovery = recovery.as_ref().is_some_and(|proposal| {
             proposal.decision.action == RecoveryAction::RequestReconnectCandidate
         });
-        let bwe = if reconnect_selected_by_recovery {
+        let twcc_warmup_state = self.resolve_twcc_warmup_state();
+        let bwe = if reconnect_selected_by_recovery || twcc_warmup_state.blocks_bwe_updates() {
             None
         } else {
             self.build_bwe_proposal(snapshot)
@@ -192,6 +202,7 @@ impl SessionPolicyHook for RtcSessionPolicy {
             .plan(SchedulingPolicyInput {
                 owner_state: owner_output.state,
                 owner_health: owner_output.health,
+                twcc_warmup_state,
                 recovery,
                 bwe,
             })
@@ -202,6 +213,95 @@ impl SessionPolicyHook for RtcSessionPolicy {
 }
 
 impl RtcSessionPolicy {
+    fn resolve_twcc_warmup_state(&self) -> TwccWarmupState {
+        RuntimeStatsSink::read_shared(self.runtime_stats.as_ref(), |stats| {
+            if stats.session_target_type != Some(xbxengine_protocol::XbxEngineTargetTypeDto::Cloud)
+            {
+                return TwccWarmupState::Inactive;
+            }
+            if stats
+                .latest_video_twcc_observation
+                .as_ref()
+                .is_some_and(|observation| {
+                    observation.source == "local-feedback" && observation.twcc_sample_valid
+                })
+            {
+                return TwccWarmupState::LocalFeedbackReady;
+            }
+
+            let has_video_remote_twcc_binding = stats
+                .latest_twcc_remote_stream_observation
+                .as_ref()
+                .is_some_and(|observation| {
+                    observation
+                        .mime_type
+                        .get(..5)
+                        .is_some_and(|prefix| prefix.eq_ignore_ascii_case("video"))
+                });
+            let has_video_extension_signal = stats
+                .latest_twcc_extension_observation
+                .as_ref()
+                .is_some_and(|observation| {
+                    observation.state == "seen" || observation.state == "missing"
+                });
+            if has_video_remote_twcc_binding || has_video_extension_signal {
+                return TwccWarmupState::MissingLocalFeedback;
+            }
+            if stats.latest_rtc_builder_observation.is_some() {
+                return TwccWarmupState::BuilderConfigured;
+            }
+            TwccWarmupState::Inactive
+        })
+        .unwrap_or(TwccWarmupState::Inactive)
+    }
+
+    fn is_cloud_gaming_profile(&self) -> bool {
+        self.escalation_profile_kind == ScenarioPolicyProfileKind::CloudGaming
+    }
+
+    fn lifecycle_reconnect_proposal_interval_ms(
+        &self,
+        snapshot: &TransportSnapshot,
+        twcc_warmup_state: TwccWarmupState,
+    ) -> f64 {
+        if self.is_cloud_gaming_profile() && Self::is_pre_first_frame_connecting_surface(snapshot) {
+            return CONNECTING_PRE_FIRST_FRAME_RECONNECT_PROPOSAL_INTERVAL_MS;
+        }
+        // 云侧 warmup 分阶段放宽 reconnect proposal 节流，避免 feedback 尚未 ready 时过早重连。
+        if !self.is_cloud_gaming_profile() {
+            return RECOVERING_RECONNECT_PROPOSAL_INTERVAL_MS;
+        }
+        match twcc_warmup_state {
+            TwccWarmupState::BuilderConfigured => {
+                CLOUD_BUILDER_CONFIGURED_RECONNECT_PROPOSAL_INTERVAL_MS
+            }
+            TwccWarmupState::MissingLocalFeedback => {
+                CLOUD_MISSING_LOCAL_FEEDBACK_RECONNECT_PROPOSAL_INTERVAL_MS
+            }
+            TwccWarmupState::LocalFeedbackReady | TwccWarmupState::Inactive => {
+                CLOUD_RECOVERING_RECONNECT_PROPOSAL_INTERVAL_MS
+            }
+        }
+    }
+
+    fn pre_first_frame_reconnect_fallback_ms(&self) -> f64 {
+        // 云侧首帧前容忍更长 no-progress 窗口，降低误触发重连。
+        if self.is_cloud_gaming_profile() {
+            CLOUD_RECOVERY_PRE_FIRST_FRAME_RECONNECT_FALLBACK_MS
+        } else {
+            RECOVERY_PRE_FIRST_FRAME_RECONNECT_FALLBACK_MS
+        }
+    }
+
+    fn liveness_reconnect_attempt_limit(&self) -> u8 {
+        // 云侧提高尝试上限，给高抖动链路更多恢复机会。
+        if self.is_cloud_gaming_profile() {
+            CLOUD_LIVENESS_RECONNECT_ATTEMPT_LIMIT
+        } else {
+            LIVENESS_RECONNECT_ATTEMPT_LIMIT
+        }
+    }
+
     fn refresh_escalation_profile(&mut self) {
         let profile = resolve_recovery_profile(self.runtime_stats.as_ref());
         if profile.kind != self.escalation_profile_kind {
@@ -245,39 +345,52 @@ impl RtcSessionPolicy {
         snapshot: &TransportSnapshot,
         owner_state: VideoSchedulingOwnerState,
         recovery_intent: Option<&RecoveryIntentContract>,
-        owner_reason_label: &str,
+        _owner_reason_label: &str,
     ) -> Option<RecoveryPolicyProposal> {
         self.maybe_clear_failed_terminal(snapshot, owner_state);
         if self.failed_terminal_since_ms.is_some() {
             return None;
         }
         let observed_at_ms = Self::resolve_policy_observed_at_ms(snapshot);
-        let force_lifecycle_reconnect =
-            self.should_force_liveness_reconnect(snapshot, owner_state, observed_at_ms);
+        let twcc_warmup_state = self.resolve_twcc_warmup_state();
+        let has_media_recovery_intent = recovery_intent.is_some();
+        let lifecycle_disconnected =
+            snapshot.connection.lifecycle_state == ConnectionLifecycleStateFact::Disconnected;
+        let force_lifecycle_reconnect = !has_media_recovery_intent
+            && (lifecycle_disconnected
+                || self.should_force_liveness_reconnect(snapshot, owner_state, observed_at_ms));
         let lifecycle_recovering =
             snapshot.connection.lifecycle_state == ConnectionLifecycleStateFact::Recovering;
+        let block_lifecycle_reconnect_candidate = lifecycle_recovering && has_media_recovery_intent;
         let allow_periodic_lifecycle_reconnect =
-            lifecycle_recovering && snapshot.media.frame_count > 0;
+            lifecycle_recovering && snapshot.media.frame_count > 0 && !has_media_recovery_intent;
         let owner_signal = if force_lifecycle_reconnect || allow_periodic_lifecycle_reconnect {
             RuntimeStatsSink::new(self.runtime_stats.clone())
                 .complete_transport_recovery_for_lifecycle_recovering(observed_at_ms);
-            if self.liveness_reconnect_attempts_without_progress >= LIVENESS_RECONNECT_ATTEMPT_LIMIT
+            if self.liveness_reconnect_attempts_without_progress
+                >= self.liveness_reconnect_attempt_limit()
             {
-                self.mark_failed_terminal(snapshot, "livenessReconnectAttemptLimitExceeded");
-                return None;
+                if self.should_enter_connecting_pre_first_frame_failed_terminal(
+                    snapshot,
+                    twcc_warmup_state,
+                    observed_at_ms,
+                ) {
+                    self.mark_failed_terminal(snapshot, "livenessReconnectAttemptLimitExceeded");
+                    return None;
+                }
             }
-            if !self.should_emit_lifecycle_reconnect(observed_at_ms) {
+            if !self.should_emit_lifecycle_reconnect(snapshot, observed_at_ms, twcc_warmup_state) {
                 return None;
             }
             // 持续 recovering 期间按固定间隔推进恢复 episode，允许 reconnect 预算周期性重试。
             RuntimeStatsSink::new(self.runtime_stats.clone())
                 .advance_transport_recovery_episode(observed_at_ms);
-            let reason_label = if force_lifecycle_reconnect {
+            let reason_label = if lifecycle_disconnected {
+                "rtcConnectionDisconnected".to_string()
+            } else if force_lifecycle_reconnect {
                 "livenessNoProgressTimeout".to_string()
-            } else if owner_reason_label.is_empty() {
-                "rtcConnectionRecovering".to_string()
             } else {
-                owner_reason_label.to_string()
+                "rtcConnectionRecovering".to_string()
             };
             RecoveryOwnerSignal {
                 reason: VideoEscalationReason::LifecycleRecovering,
@@ -286,9 +399,6 @@ impl RtcSessionPolicy {
             }
         } else {
             if let Some(intent) = recovery_intent {
-                if !intent.emit {
-                    return None;
-                }
                 let reason = map_owner_reason_label_to_escalation_reason(
                     intent.source,
                     intent.reason_label.as_str(),
@@ -308,9 +418,24 @@ impl RtcSessionPolicy {
                 }
             }
         };
-        let proposal = self
+        let mut proposal = self
             .recovery_coordinator
             .propose_from_owner_signal(owner_signal, self.runtime_stats.as_ref());
+        if block_lifecycle_reconnect_candidate
+            && proposal.decision.action == RecoveryAction::RequestReconnectCandidate
+        {
+            // Recovering + 媒体恢复意图场景禁止走生命周期重连候选，避免抢占媒体恢复收敛路径。
+            proposal.decision.action = RecoveryAction::CooldownSuppressed;
+        }
+        if self.should_hold_media_reconnect_during_twcc_warmup(
+            proposal.signal.reason,
+            twcc_warmup_state,
+            proposal.decision.action,
+        ) {
+            // cloud feedback 尚未进入 valid local-feedback 前，媒体域 reconnect 先收敛在本地恢复链，
+            // 避免 builder-configured / missing-local-feedback 阶段过早把恢复升级到 reconnect。
+            proposal.decision.action = RecoveryAction::CooldownSuppressed;
+        }
         if proposal.signal.reason == VideoEscalationReason::LifecycleRecovering
             && proposal.decision.action == RecoveryAction::RequestReconnectCandidate
         {
@@ -328,6 +453,21 @@ impl RtcSessionPolicy {
             budget_before: proposal.budget_before,
             budget_after: proposal.budget_after,
         })
+    }
+
+    fn should_hold_media_reconnect_during_twcc_warmup(
+        &self,
+        reason: VideoEscalationReason,
+        twcc_warmup_state: TwccWarmupState,
+        action: RecoveryAction,
+    ) -> bool {
+        if !self.is_cloud_gaming_profile() || !twcc_warmup_state.blocks_bwe_updates() {
+            return false;
+        }
+        if action != RecoveryAction::RequestReconnectCandidate {
+            return false;
+        }
+        reason != VideoEscalationReason::LifecycleRecovering
     }
 
     fn maybe_clear_failed_terminal(
@@ -370,17 +510,86 @@ impl RtcSessionPolicy {
         self.failed_terminal_last_frame_count = Some(snapshot.media.frame_count);
     }
 
-    fn should_emit_lifecycle_reconnect(&mut self, observed_at_ms: f64) -> bool {
+    fn should_emit_lifecycle_reconnect(
+        &mut self,
+        snapshot: &TransportSnapshot,
+        observed_at_ms: f64,
+        twcc_warmup_state: TwccWarmupState,
+    ) -> bool {
+        let proposal_interval_ms =
+            self.lifecycle_reconnect_proposal_interval_ms(snapshot, twcc_warmup_state);
         if self
             .last_lifecycle_reconnect_proposal_at_ms
-            .is_some_and(|last| {
-                (observed_at_ms - last).max(0.0) < RECOVERING_RECONNECT_PROPOSAL_INTERVAL_MS
-            })
+            .is_some_and(|last| (observed_at_ms - last).max(0.0) < proposal_interval_ms)
         {
             return false;
         }
         self.last_lifecycle_reconnect_proposal_at_ms = Some(observed_at_ms);
         true
+    }
+
+    fn should_enter_connecting_pre_first_frame_failed_terminal(
+        &self,
+        snapshot: &TransportSnapshot,
+        twcc_warmup_state: TwccWarmupState,
+        observed_at_ms: f64,
+    ) -> bool {
+        if !self.should_soft_hold_early_connecting_failed_terminal(snapshot, twcc_warmup_state) {
+            return true;
+        }
+        self.recovery_no_progress_since_ms
+            .is_some_and(|stalled_since| {
+                (observed_at_ms - stalled_since).max(0.0)
+                    >= CONNECTING_PRE_FIRST_FRAME_FAILED_TERMINAL_MIN_MS
+            })
+    }
+
+    fn should_soft_hold_early_connecting_failed_terminal(
+        &self,
+        snapshot: &TransportSnapshot,
+        twcc_warmup_state: TwccWarmupState,
+    ) -> bool {
+        if snapshot.media.frame_count != 0 {
+            return false;
+        }
+        let in_pre_first_frame_surface = matches!(
+            snapshot.connection.lifecycle_state,
+            ConnectionLifecycleStateFact::New
+                | ConnectionLifecycleStateFact::Connecting
+                | ConnectionLifecycleStateFact::Recovering
+        );
+        if !in_pre_first_frame_surface {
+            return false;
+        }
+        if self.is_cloud_gaming_profile() {
+            return true;
+        }
+        // 首窗 target_type 尚未判定时，按 cloud 同级长窗口处理，避免在 session
+        // 还没进入 Provisioned 前被短预算误判为 failed-terminal。
+        if self.read_session_target_type().is_none() {
+            return true;
+        }
+        // warmup 已建立后的首帧前路径继续沿用同一条 soft hold，避免 pass11/pass12/pass13 分叉。
+        twcc_warmup_state.blocks_bwe_updates()
+            && matches!(
+                snapshot.connection.lifecycle_state,
+                ConnectionLifecycleStateFact::New
+            )
+    }
+
+    fn read_session_target_type(&self) -> Option<xbxengine_protocol::XbxEngineTargetTypeDto> {
+        RuntimeStatsSink::read_shared(self.runtime_stats.as_ref(), |stats| {
+            stats.session_target_type.clone()
+        })
+        .flatten()
+    }
+
+    fn is_pre_first_frame_connecting_surface(snapshot: &TransportSnapshot) -> bool {
+        snapshot.media.frame_count == 0
+            && matches!(
+                snapshot.connection.lifecycle_state,
+                ConnectionLifecycleStateFact::New | ConnectionLifecycleStateFact::Connecting
+            )
     }
 
     fn should_force_liveness_reconnect(
@@ -390,13 +599,15 @@ impl RtcSessionPolicy {
         observed_at_ms: f64,
     ) -> bool {
         let lifecycle_state = snapshot.connection.lifecycle_state;
+        let connected_non_stable = lifecycle_state == ConnectionLifecycleStateFact::Connected
+            && owner_state != VideoSchedulingOwnerState::StableServing;
         let in_recovery_surface = matches!(
             lifecycle_state,
             ConnectionLifecycleStateFact::New
                 | ConnectionLifecycleStateFact::Connecting
                 | ConnectionLifecycleStateFact::Recovering
-        ) || (lifecycle_state == ConnectionLifecycleStateFact::Connected
-            && owner_state != VideoSchedulingOwnerState::StableServing);
+        ) || (connected_non_stable
+            && self.has_connected_connectivity_failure_evidence(snapshot, observed_at_ms));
         if !in_recovery_surface {
             self.recovery_no_progress_since_ms = None;
             self.recovery_no_progress_last_frame_count = None;
@@ -455,15 +666,15 @@ impl RtcSessionPolicy {
             }
         }
 
-        let stalled_since = self
-            .recovery_no_progress_since_ms
-            .get_or_insert(observed_at_ms);
         // 首帧前统一走保守阈值，避免“无明显 transport 进展”被 4s 上界过早误杀。
         let fallback_threshold_ms = if snapshot.media.frame_count == 0 {
-            RECOVERY_PRE_FIRST_FRAME_RECONNECT_FALLBACK_MS
+            self.pre_first_frame_reconnect_fallback_ms()
         } else {
             RECOVERY_NO_PROGRESS_RECONNECT_FALLBACK_MS
         };
+        let stalled_since = self
+            .recovery_no_progress_since_ms
+            .get_or_insert(observed_at_ms);
         observed_at_ms - *stalled_since >= fallback_threshold_ms
     }
 
@@ -477,6 +688,9 @@ impl RtcSessionPolicy {
             || owner_state == VideoSchedulingOwnerState::StableServing
         {
             self.reset_connected_render_stall_liveness();
+            return false;
+        }
+        if !self.has_connected_connectivity_failure_evidence(snapshot, observed_at_ms) {
             return false;
         }
         let signal = self.read_connected_render_liveness_signal();
@@ -501,8 +715,8 @@ impl RtcSessionPolicy {
         let present_age_ms = signal
             .latest_video_present_time_ms
             .map(|ts| (observed_at_ms - ts).max(0.0));
-        let present_stale = present_age_ms
-            .is_some_and(|age| age >= CONNECTED_PRESENT_STALL_MIN_AGE_MS);
+        let present_stale =
+            present_age_ms.is_some_and(|age| age >= CONNECTED_PRESENT_STALL_MIN_AGE_MS);
         let pressure_or_hard_stale = signal.no_pending_pressure_is_high
             || present_age_ms.is_some_and(|age| age >= CONNECTED_PRESENT_STALL_HARD_AGE_MS);
         if !present_stale || !pressure_or_hard_stale {
@@ -547,6 +761,26 @@ impl RtcSessionPolicy {
         self.connected_render_last_present_time_ms = None;
         self.connected_render_last_inbound_video_bytes_total = None;
         self.connected_render_stall_has_ingress_progress = false;
+    }
+
+    fn has_connected_connectivity_failure_evidence(
+        &self,
+        snapshot: &TransportSnapshot,
+        observed_at_ms: f64,
+    ) -> bool {
+        if snapshot.connection.lifecycle_state != ConnectionLifecycleStateFact::Connected {
+            return true;
+        }
+        let has_data_channel = snapshot.connection.control_channel_open
+            || snapshot.connection.message_channel_open
+            || snapshot.connection.input_channel_open
+            || snapshot.connection.chat_channel_open;
+        let has_transport_signal = snapshot.connection.latest_transport_path.is_some()
+            || snapshot.connection.latest_rtt_ms.is_some();
+        let connection_signal_stale = snapshot.connection.last_observed_at_ms.is_none_or(|last| {
+            (observed_at_ms - last).max(0.0) >= CONNECTED_CONNECTIVITY_EVIDENCE_STALE_MS
+        });
+        !has_data_channel && !has_transport_signal && connection_signal_stale
     }
 
     fn build_transport_progress_token(snapshot: &TransportSnapshot) -> u64 {
@@ -847,22 +1081,6 @@ impl RtcSessionPolicy {
         owner_state: VideoSchedulingOwnerState,
         proposal: Option<&RecoveryPolicyProposal>,
     ) {
-        // 避免在“上一条 ledger 的命令尚未落地（command_result=None）”时，
-        // 被无信号/心跳类的刷新覆盖，导致命令结果无法回填到对应 decision_id。
-        if proposal.is_none()
-            && self.failed_terminal_since_ms.is_none()
-            && RuntimeStatsSink::read_shared(self.runtime_stats.as_ref(), |stats| {
-                stats
-                    .latest_recovery_decision_ledger
-                    .as_ref()
-                    .is_some_and(|ledger| {
-                        ledger.command_result.is_none() && ledger.action_selected != "none"
-                    })
-            })
-            .unwrap_or(false)
-        {
-            return;
-        }
         let state_after = self.resolve_recovery_state(snapshot, owner_state);
         let state_before = self.last_recovery_state.unwrap_or(state_after);
         self.last_recovery_state = Some(state_after);
@@ -1154,6 +1372,108 @@ mod tests {
     }
 
     #[test]
+    fn cloud_lifecycle_reconnect_interval_is_more_relaxed_than_non_cloud() {
+        fn run_for_target(
+            session_target_type: Option<xbxengine_protocol::XbxEngineTargetTypeDto>,
+        ) -> Vec<Vec<TransportCommand>> {
+            let runtime_config = Arc::new(Mutex::new(XbxEngineRuntimeConfig::default()));
+            let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
+            if let Ok(mut stats) = runtime_stats.lock() {
+                stats.session_target_type = session_target_type;
+            }
+            let mut policy = RtcSessionPolicy::new(runtime_config, runtime_stats);
+            let mut connection = ConnectionProjection::default();
+            connection.lifecycle_state = ConnectionLifecycleStateFact::Recovering;
+            let recovery = RecoveryProjection {
+                latest_diagnosis_label: Some("rtcPeerConnectionFailed".to_string()),
+                pending_action: false,
+                successful_action_count: 0,
+                failed_action_count: 0,
+                last_observed_at_ms: Some(100.0),
+            };
+            let media = MediaProjection {
+                frame_count: 1,
+                ..MediaProjection::default()
+            };
+            let timestamps = [100.0, 2_000.0];
+            timestamps
+                .into_iter()
+                .enumerate()
+                .map(|(idx, ts)| {
+                    let snapshot = TransportSnapshot::new(
+                        (idx as u64) + 1,
+                        ts,
+                        connection.clone(),
+                        media.clone(),
+                        RecoveryProjection {
+                            last_observed_at_ms: Some(ts),
+                            ..recovery.clone()
+                        },
+                        BweProjection::default(),
+                        DiagnosticsProjection::default(),
+                    );
+                    policy.on_snapshot(&snapshot)
+                })
+                .collect()
+        }
+
+        let home_commands = run_for_target(Some(xbxengine_protocol::XbxEngineTargetTypeDto::Home));
+        let cloud_commands =
+            run_for_target(Some(xbxengine_protocol::XbxEngineTargetTypeDto::Cloud));
+
+        assert!(home_commands[0].iter().any(|command| {
+            matches!(command, TransportCommand::RequestReconnectCandidate { .. })
+        }));
+        assert!(cloud_commands[0].iter().any(|command| {
+            matches!(command, TransportCommand::RequestReconnectCandidate { .. })
+        }));
+        assert!(home_commands[1].iter().any(|command| {
+            matches!(command, TransportCommand::RequestReconnectCandidate { .. })
+        }));
+        assert!(cloud_commands[1].iter().all(|command| {
+            !matches!(command, TransportCommand::RequestReconnectCandidate { .. })
+        }));
+    }
+
+    #[test]
+    fn disconnected_surface_emits_lifecycle_reconnect_without_waiting_no_progress_timeout() {
+        let runtime_config = Arc::new(Mutex::new(XbxEngineRuntimeConfig::default()));
+        let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
+        let mut policy = RtcSessionPolicy::new(runtime_config, runtime_stats.clone());
+        let mut connection = ConnectionProjection::default();
+        connection.lifecycle_state = ConnectionLifecycleStateFact::Disconnected;
+        let recovery = RecoveryProjection {
+            latest_diagnosis_label: Some("rtcControlChannelClosed".to_string()),
+            pending_action: false,
+            successful_action_count: 0,
+            failed_action_count: 0,
+            last_observed_at_ms: Some(100.0),
+        };
+        let first = TransportSnapshot::new(
+            1,
+            100.0,
+            connection,
+            MediaProjection::default(),
+            recovery,
+            BweProjection::default(),
+            DiagnosticsProjection::default(),
+        );
+        let first_commands = policy.on_snapshot(&first);
+        assert!(first_commands.iter().any(|command| {
+            matches!(command, TransportCommand::RequestReconnectCandidate { .. })
+        }));
+        let stats = runtime_stats.lock().expect("runtime stats lock");
+        let ledger = stats
+            .latest_recovery_decision_ledger
+            .as_ref()
+            .expect("recovery decision ledger");
+        assert_eq!(
+            ledger.input_signal,
+            "rtcConnectionRecovering:rtcConnectionDisconnected"
+        );
+    }
+
+    #[test]
     fn fallback_transport_await_recovery_keyframe_is_not_blocked_before_coordinator() {
         let runtime_config = Arc::new(Mutex::new(XbxEngineRuntimeConfig::default()));
         let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
@@ -1253,11 +1573,11 @@ mod tests {
 
         let fifth = TransportSnapshot::new(
             5,
-            17_200.0,
+            20_200.0,
             connection,
             MediaProjection::default(),
             RecoveryProjection {
-                last_observed_at_ms: Some(17_200.0),
+                last_observed_at_ms: Some(20_200.0),
                 ..recovery
             },
             BweProjection::default(),
@@ -1819,6 +2139,474 @@ mod tests {
     }
 
     #[test]
+    fn cloud_early_connecting_without_builder_waits_for_long_terminal_window() {
+        let runtime_config = Arc::new(Mutex::new(XbxEngineRuntimeConfig::default()));
+        let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
+        if let Ok(mut stats) = runtime_stats.lock() {
+            stats.session_target_type = Some(xbxengine_protocol::XbxEngineTargetTypeDto::Cloud);
+        }
+        let mut policy = RtcSessionPolicy::new(runtime_config, runtime_stats.clone());
+        let mut connection = ConnectionProjection::default();
+        connection.lifecycle_state = ConnectionLifecycleStateFact::Connecting;
+        let recovery = RecoveryProjection {
+            latest_diagnosis_label: Some("none".to_string()),
+            pending_action: false,
+            successful_action_count: 0,
+            failed_action_count: 0,
+            last_observed_at_ms: Some(100.0),
+        };
+        let media = MediaProjection::default();
+
+        let first = TransportSnapshot::new(
+            1,
+            100.0,
+            connection.clone(),
+            media.clone(),
+            recovery.clone(),
+            BweProjection::default(),
+            DiagnosticsProjection::default(),
+        );
+        let first_commands = policy.on_snapshot(&first);
+        assert!(first_commands.iter().all(|command| {
+            !matches!(command, TransportCommand::RequestReconnectCandidate { .. })
+        }));
+
+        let second = TransportSnapshot::new(
+            2,
+            15_600.0,
+            connection.clone(),
+            media.clone(),
+            RecoveryProjection {
+                last_observed_at_ms: Some(15_600.0),
+                ..recovery.clone()
+            },
+            BweProjection::default(),
+            DiagnosticsProjection::default(),
+        );
+        let second_commands = policy.on_snapshot(&second);
+        assert!(second_commands.iter().all(|command| {
+            !matches!(command, TransportCommand::RequestReconnectCandidate { .. })
+        }));
+        let stats = runtime_stats.lock().expect("runtime stats lock");
+        assert!(
+            stats.latest_rtc_builder_observation.is_none(),
+            "early connecting soft hold 应在 builder 尚未出现时就生效"
+        );
+        drop(stats);
+
+        let third = TransportSnapshot::new(
+            3,
+            35_600.0,
+            connection.clone(),
+            media.clone(),
+            RecoveryProjection {
+                last_observed_at_ms: Some(35_600.0),
+                ..recovery.clone()
+            },
+            BweProjection::default(),
+            DiagnosticsProjection::default(),
+        );
+        let third_commands = policy.on_snapshot(&third);
+        assert!(third_commands.iter().any(|command| {
+            matches!(command, TransportCommand::RequestReconnectCandidate { .. })
+        }));
+
+        let fourth = TransportSnapshot::new(
+            4,
+            38_200.0,
+            connection.clone(),
+            media.clone(),
+            RecoveryProjection {
+                last_observed_at_ms: Some(38_200.0),
+                ..recovery.clone()
+            },
+            BweProjection::default(),
+            DiagnosticsProjection::default(),
+        );
+        let fourth_commands = policy.on_snapshot(&fourth);
+        assert!(
+            fourth_commands.iter().all(|command| {
+                !matches!(command, TransportCommand::RequestReconnectCandidate { .. })
+            }),
+            "connecting + 首帧前应按更长间隔节流 reconnect"
+        );
+
+        let reconnect_ticks = [40_200.0, 44_800.0, 49_400.0, 53_900.0, 58_400.0];
+        for (idx, ts) in reconnect_ticks.into_iter().enumerate() {
+            let snapshot = TransportSnapshot::new(
+                (idx as u64) + 5,
+                ts,
+                connection.clone(),
+                media.clone(),
+                RecoveryProjection {
+                    last_observed_at_ms: Some(ts),
+                    ..recovery.clone()
+                },
+                BweProjection::default(),
+                DiagnosticsProjection::default(),
+            );
+            let commands = policy.on_snapshot(&snapshot);
+            assert!(
+                commands.iter().any(|command| {
+                    matches!(command, TransportCommand::RequestReconnectCandidate { .. })
+                }),
+                "cloud 在长窗口内应继续允许第 {} 次无进展 reconnect 尝试",
+                idx + 2
+            );
+        }
+
+        let terminal = TransportSnapshot::new(
+            10,
+            90_200.0,
+            connection,
+            media,
+            RecoveryProjection {
+                last_observed_at_ms: Some(90_200.0),
+                ..recovery
+            },
+            BweProjection::default(),
+            DiagnosticsProjection::default(),
+        );
+        let terminal_commands = policy.on_snapshot(&terminal);
+        assert!(
+            terminal_commands.is_empty(),
+            "cloud 只有超过长窗口后才允许进入 failed-terminal"
+        );
+        let stats = runtime_stats.lock().expect("runtime stats lock");
+        let ledger = stats
+            .latest_recovery_decision_ledger
+            .as_ref()
+            .expect("recovery decision ledger");
+        assert_eq!(
+            ledger.gate_result,
+            "terminal:livenessReconnectAttemptLimitExceeded"
+        );
+        assert_eq!(ledger.state_after, "failed-terminal");
+    }
+
+    #[test]
+    fn cloud_early_new_without_builder_waits_for_long_terminal_window() {
+        let runtime_config = Arc::new(Mutex::new(XbxEngineRuntimeConfig::default()));
+        let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
+        if let Ok(mut stats) = runtime_stats.lock() {
+            stats.session_target_type = Some(xbxengine_protocol::XbxEngineTargetTypeDto::Cloud);
+        }
+        let mut policy = RtcSessionPolicy::new(runtime_config, runtime_stats.clone());
+        let mut connection = ConnectionProjection::default();
+        connection.lifecycle_state = ConnectionLifecycleStateFact::New;
+        let recovery = RecoveryProjection {
+            latest_diagnosis_label: Some("none".to_string()),
+            pending_action: false,
+            successful_action_count: 0,
+            failed_action_count: 0,
+            last_observed_at_ms: Some(100.0),
+        };
+        let media = MediaProjection::default();
+
+        let first = TransportSnapshot::new(
+            1,
+            100.0,
+            connection.clone(),
+            media.clone(),
+            recovery.clone(),
+            BweProjection::default(),
+            DiagnosticsProjection::default(),
+        );
+        let first_commands = policy.on_snapshot(&first);
+        assert!(first_commands.iter().all(|command| {
+            !matches!(command, TransportCommand::RequestReconnectCandidate { .. })
+        }));
+
+        for (idx, ts) in [35_600.0, 40_200.0, 44_800.0, 49_400.0, 53_900.0, 58_400.0]
+            .into_iter()
+            .enumerate()
+        {
+            let snapshot = TransportSnapshot::new(
+                (idx as u64) + 2,
+                ts,
+                connection.clone(),
+                media.clone(),
+                RecoveryProjection {
+                    last_observed_at_ms: Some(ts),
+                    ..recovery.clone()
+                },
+                BweProjection::default(),
+                DiagnosticsProjection::default(),
+            );
+            let commands = policy.on_snapshot(&snapshot);
+            assert!(
+                commands.iter().any(|command| {
+                    matches!(command, TransportCommand::RequestReconnectCandidate { .. })
+                }),
+                "cloud new 首窗在长窗口内应继续允许第 {} 次无进展 reconnect 尝试",
+                idx + 1
+            );
+        }
+
+        let pre_terminal = TransportSnapshot::new(
+            8,
+            58_500.0,
+            connection.clone(),
+            media.clone(),
+            RecoveryProjection {
+                last_observed_at_ms: Some(58_500.0),
+                ..recovery.clone()
+            },
+            BweProjection::default(),
+            DiagnosticsProjection::default(),
+        );
+        let pre_terminal_commands = policy.on_snapshot(&pre_terminal);
+        assert!(
+            pre_terminal_commands.iter().all(|command| {
+                !matches!(command, TransportCommand::RequestReconnectCandidate { .. })
+            }),
+            "proposal interval 仍应保持 4.5s 节流"
+        );
+        let stats = runtime_stats.lock().expect("runtime stats lock");
+        assert!(
+            stats.latest_rtc_builder_observation.is_none(),
+            "cloud new 首窗 soft hold 应在 builder 尚未出现时就生效"
+        );
+        drop(stats);
+
+        let terminal = TransportSnapshot::new(
+            9,
+            90_200.0,
+            connection,
+            media,
+            RecoveryProjection {
+                last_observed_at_ms: Some(90_200.0),
+                ..recovery
+            },
+            BweProjection::default(),
+            DiagnosticsProjection::default(),
+        );
+        let terminal_commands = policy.on_snapshot(&terminal);
+        assert!(
+            terminal_commands.is_empty(),
+            "cloud new 首窗只有超过长窗口后才允许进入 failed-terminal"
+        );
+        let stats = runtime_stats.lock().expect("runtime stats lock");
+        let ledger = stats
+            .latest_recovery_decision_ledger
+            .as_ref()
+            .expect("recovery decision ledger");
+        assert_eq!(
+            ledger.gate_result,
+            "terminal:livenessReconnectAttemptLimitExceeded"
+        );
+        assert_eq!(ledger.state_after, "failed-terminal");
+    }
+
+    #[test]
+    fn cloud_early_recovering_without_builder_waits_for_long_terminal_window() {
+        let runtime_config = Arc::new(Mutex::new(XbxEngineRuntimeConfig::default()));
+        let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
+        if let Ok(mut stats) = runtime_stats.lock() {
+            stats.session_target_type = Some(xbxengine_protocol::XbxEngineTargetTypeDto::Cloud);
+        }
+        let mut policy = RtcSessionPolicy::new(runtime_config, runtime_stats.clone());
+        let mut connection = ConnectionProjection::default();
+        connection.lifecycle_state = ConnectionLifecycleStateFact::Recovering;
+        let recovery = RecoveryProjection {
+            latest_diagnosis_label: Some("rtcPeerConnectionFailed".to_string()),
+            pending_action: false,
+            successful_action_count: 0,
+            failed_action_count: 0,
+            last_observed_at_ms: Some(100.0),
+        };
+        let media = MediaProjection::default();
+
+        let first = TransportSnapshot::new(
+            1,
+            100.0,
+            connection.clone(),
+            media.clone(),
+            recovery.clone(),
+            BweProjection::default(),
+            DiagnosticsProjection::default(),
+        );
+        let _ = policy.on_snapshot(&first);
+
+        let second = TransportSnapshot::new(
+            2,
+            15_600.0,
+            connection.clone(),
+            media.clone(),
+            RecoveryProjection {
+                last_observed_at_ms: Some(15_600.0),
+                ..recovery.clone()
+            },
+            BweProjection::default(),
+            DiagnosticsProjection::default(),
+        );
+        let second_commands = policy.on_snapshot(&second);
+        assert!(
+            second_commands.iter().all(|command| {
+                !matches!(command, TransportCommand::RequestReconnectCandidate { .. })
+            }),
+            "cloud recovering 首窗在长窗口前不应进入 reconnect"
+        );
+
+        let third = TransportSnapshot::new(
+            3,
+            35_600.0,
+            connection.clone(),
+            media.clone(),
+            RecoveryProjection {
+                last_observed_at_ms: Some(35_600.0),
+                ..recovery.clone()
+            },
+            BweProjection::default(),
+            DiagnosticsProjection::default(),
+        );
+        let third_commands = policy.on_snapshot(&third);
+        assert!(third_commands.iter().any(|command| {
+            matches!(command, TransportCommand::RequestReconnectCandidate { .. })
+        }));
+
+        for (idx, ts) in [38_200.0, 40_800.0, 43_400.0, 46_000.0, 48_600.0]
+            .into_iter()
+            .enumerate()
+        {
+            let snapshot = TransportSnapshot::new(
+                (idx as u64) + 4,
+                ts,
+                connection.clone(),
+                media.clone(),
+                RecoveryProjection {
+                    last_observed_at_ms: Some(ts),
+                    ..recovery.clone()
+                },
+                BweProjection::default(),
+                DiagnosticsProjection::default(),
+            );
+            let commands = policy.on_snapshot(&snapshot);
+            assert!(
+                commands.iter().any(|command| {
+                    matches!(command, TransportCommand::RequestReconnectCandidate { .. })
+                }),
+                "cloud recovering 首窗长窗口内应继续允许无进展 reconnect 尝试，idx={}",
+                idx
+            );
+        }
+
+        let terminal = TransportSnapshot::new(
+            9,
+            90_200.0,
+            connection,
+            media,
+            RecoveryProjection {
+                last_observed_at_ms: Some(90_200.0),
+                ..recovery
+            },
+            BweProjection::default(),
+            DiagnosticsProjection::default(),
+        );
+        let terminal_commands = policy.on_snapshot(&terminal);
+        assert!(
+            terminal_commands.is_empty(),
+            "cloud recovering 首窗超过长窗口后应进入 failed-terminal"
+        );
+        let stats = runtime_stats.lock().expect("runtime stats lock");
+        let ledger = stats
+            .latest_recovery_decision_ledger
+            .as_ref()
+            .expect("recovery decision ledger");
+        assert_eq!(
+            ledger.gate_result,
+            "terminal:livenessReconnectAttemptLimitExceeded"
+        );
+        assert_eq!(ledger.state_after, "failed-terminal");
+    }
+
+    #[test]
+    fn connecting_without_target_type_keeps_reconnecting_before_long_terminal_window() {
+        let runtime_config = Arc::new(Mutex::new(XbxEngineRuntimeConfig::default()));
+        let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
+        let mut policy = RtcSessionPolicy::new(runtime_config, runtime_stats.clone());
+        let mut connection = ConnectionProjection::default();
+        connection.lifecycle_state = ConnectionLifecycleStateFact::Connecting;
+        let recovery = RecoveryProjection {
+            latest_diagnosis_label: Some("none".to_string()),
+            pending_action: false,
+            successful_action_count: 0,
+            failed_action_count: 0,
+            last_observed_at_ms: Some(100.0),
+        };
+        let media = MediaProjection::default();
+
+        for (idx, ts) in [100.0, 15_600.0, 20_200.0, 24_800.0]
+            .into_iter()
+            .enumerate()
+        {
+            let snapshot = TransportSnapshot::new(
+                (idx as u64) + 1,
+                ts,
+                connection.clone(),
+                media.clone(),
+                RecoveryProjection {
+                    last_observed_at_ms: Some(ts),
+                    ..recovery.clone()
+                },
+                BweProjection::default(),
+                DiagnosticsProjection::default(),
+            );
+            let commands = policy.on_snapshot(&snapshot);
+            if idx == 0 {
+                assert!(commands.iter().all(|command| {
+                    !matches!(command, TransportCommand::RequestReconnectCandidate { .. })
+                }));
+            } else {
+                assert!(commands.iter().any(|command| {
+                    matches!(command, TransportCommand::RequestReconnectCandidate { .. })
+                }));
+            }
+        }
+
+        let stats = runtime_stats.lock().expect("runtime stats lock");
+        let ledger = stats
+            .latest_recovery_decision_ledger
+            .as_ref()
+            .expect("recovery decision ledger");
+        assert_ne!(ledger.state_after, "failed-terminal");
+        assert_ne!(
+            ledger.gate_result,
+            "terminal:livenessReconnectAttemptLimitExceeded"
+        );
+        drop(stats);
+
+        // target_type 未决的首窗也要遵循长窗口，超过阈值后仍应进入 terminal，避免无限重试。
+        let terminal = TransportSnapshot::new(
+            5,
+            90_200.0,
+            connection,
+            media,
+            RecoveryProjection {
+                last_observed_at_ms: Some(90_200.0),
+                ..recovery
+            },
+            BweProjection::default(),
+            DiagnosticsProjection::default(),
+        );
+        let terminal_commands = policy.on_snapshot(&terminal);
+        assert!(
+            terminal_commands.is_empty(),
+            "target_type 缺失场景超过长窗口后应进入 failed-terminal"
+        );
+        let stats = runtime_stats.lock().expect("runtime stats lock");
+        let ledger = stats
+            .latest_recovery_decision_ledger
+            .as_ref()
+            .expect("recovery decision ledger");
+        assert_eq!(
+            ledger.gate_result,
+            "terminal:livenessReconnectAttemptLimitExceeded"
+        );
+        assert_eq!(ledger.state_after, "failed-terminal");
+    }
+
+    #[test]
     fn recovering_without_first_frame_does_not_emit_periodic_reconnect() {
         let runtime_config = Arc::new(Mutex::new(XbxEngineRuntimeConfig::default()));
         let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
@@ -1919,6 +2707,9 @@ mod tests {
     fn command_success_without_frames_does_not_reset_liveness_budget() {
         let runtime_config = Arc::new(Mutex::new(XbxEngineRuntimeConfig::default()));
         let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
+        if let Ok(mut stats) = runtime_stats.lock() {
+            stats.session_target_type = Some(xbxengine_protocol::XbxEngineTargetTypeDto::Home);
+        }
         let mut policy = RtcSessionPolicy::new(runtime_config, runtime_stats.clone());
         let mut connection = ConnectionProjection::default();
         connection.lifecycle_state = ConnectionLifecycleStateFact::Connecting;
@@ -1968,12 +2759,12 @@ mod tests {
 
         let third = TransportSnapshot::new(
             3,
-            17_500.0,
+            20_200.0,
             connection.clone(),
             media.clone(),
             RecoveryProjection {
                 successful_action_count: 2,
-                last_observed_at_ms: Some(17_500.0),
+                last_observed_at_ms: Some(20_200.0),
                 ..base_recovery.clone()
             },
             BweProjection::default(),
@@ -1986,12 +2777,12 @@ mod tests {
 
         let fourth = TransportSnapshot::new(
             4,
-            19_400.0,
+            24_800.0,
             connection.clone(),
             media,
             RecoveryProjection {
                 successful_action_count: 3,
-                last_observed_at_ms: Some(19_400.0),
+                last_observed_at_ms: Some(24_800.0),
                 ..base_recovery
             },
             BweProjection::default(),
@@ -2007,12 +2798,12 @@ mod tests {
 
         let fifth = TransportSnapshot::new(
             5,
-            21_300.0,
+            29_400.0,
             connection,
             MediaProjection::default(),
             RecoveryProjection {
                 successful_action_count: 4,
-                last_observed_at_ms: Some(21_300.0),
+                last_observed_at_ms: Some(29_400.0),
                 ..RecoveryProjection::default()
             },
             BweProjection::default(),
@@ -2036,20 +2827,24 @@ mod tests {
     }
 
     #[test]
-    fn connected_ingress_progress_without_present_progress_triggers_liveness_reconnect() {
+    fn connected_ingress_progress_without_present_progress_does_not_force_reconnect() {
         let runtime_config = Arc::new(Mutex::new(XbxEngineRuntimeConfig::default()));
         let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
-        let now_ms = crate::transport::rtc::stats::now_ms_f64();
         if let Ok(mut stats) = runtime_stats.lock() {
             stats.host_no_pending_pressure_level = Some("critical".to_string());
             stats.host_no_pending_streak = 260;
-            stats.latest_video_present_time_ms = Some(now_ms - 5_000.0);
-            stats.latest_video_decode_ok_time_ms = Some(now_ms - 4_000.0);
+            // 这里使用与 snapshot 同一时间轴，避免“墙钟时间”与“策略时间”混用。
+            stats.latest_video_present_time_ms = Some(0.0);
+            stats.latest_video_decode_ok_time_ms = Some(0.0);
             stats.inbound_primary_video_bytes_total = 1_000;
         }
         let mut policy = RtcSessionPolicy::new(runtime_config, runtime_stats.clone());
         let mut connection = ConnectionProjection::default();
         connection.lifecycle_state = ConnectionLifecycleStateFact::Connected;
+        connection.control_channel_open = true;
+        connection.latest_transport_path = Some("relay/udp".to_string());
+        connection.latest_rtt_ms = Some(48.0);
+        connection.last_observed_at_ms = Some(100.0);
         let recovery = RecoveryProjection {
             latest_diagnosis_label: Some("none".to_string()),
             pending_action: false,
@@ -2117,9 +2912,15 @@ mod tests {
             DiagnosticsProjection::default(),
         );
         let third_commands = policy.on_snapshot(&third);
-        assert!(third_commands.iter().any(|command| {
-            matches!(command, TransportCommand::RequestReconnectCandidate { .. })
+        assert!(third_commands.iter().all(|command| {
+            !matches!(command, TransportCommand::RequestReconnectCandidate { .. })
         }));
+        let stats = runtime_stats.lock().expect("runtime stats lock");
+        let ledger = stats
+            .latest_recovery_decision_ledger
+            .as_ref()
+            .expect("recovery decision ledger");
+        assert_ne!(ledger.action_selected, "requestReconnectCandidate");
     }
 
     #[test]
@@ -2154,7 +2955,7 @@ mod tests {
     }
 
     #[test]
-    fn recovery_decision_ledger_still_updates_when_proposal_is_none() {
+    fn recovery_decision_ledger_updates_when_proposal_is_none_even_if_previous_is_pending() {
         let runtime_config = Arc::new(Mutex::new(XbxEngineRuntimeConfig::default()));
         let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
         let mut policy = RtcSessionPolicy::new(runtime_config, runtime_stats.clone());
@@ -2176,9 +2977,7 @@ mod tests {
             .expect("recovery decision ledger")
             .decision_id;
 
-        // 下一 tick 明确无恢复信号时：
-        // - 如果上一条 ledger 仍在等待 command_result 回填（command_result=None 且 action!=none），
-        //   则必须保留该 ledger，避免覆盖导致 command_result 无法按 decision_id 回填。
+        // 下一 tick 明确无恢复信号时，也必须写入新的 ledger，保证观测连续完整。
         let second = build_snapshot(ConnectionLifecycleStateFact::Connected, "none", 340.0);
         let _ = policy.on_snapshot(&second);
         let stats = runtime_stats.lock().expect("runtime stats lock");
@@ -2186,13 +2985,10 @@ mod tests {
             .latest_recovery_decision_ledger
             .as_ref()
             .expect("recovery decision ledger");
-        assert_eq!(ledger.decision_id, first_decision_id);
-        assert_eq!(
-            ledger.input_signal,
-            "transportAwaitRecoveryKeyframe:transportAwaitRecoveryKeyframe"
-        );
-        assert_eq!(ledger.gate_result, "pass");
-        assert_eq!(ledger.action_selected, "requestKeyframe");
+        assert_ne!(ledger.decision_id, first_decision_id);
+        assert_eq!(ledger.input_signal, "none");
+        assert_eq!(ledger.gate_result, "no-signal");
+        assert_eq!(ledger.action_selected, "none");
     }
 
     #[test]
@@ -2694,7 +3490,7 @@ mod tests {
 
         assert_eq!(
             classify_supply_state_with_profile(&cloud_stats),
-            crate::transport::rtc::policy::display_supply::DisplaySupplyState::Critical
+            crate::transport::rtc::policy::display_supply::DisplaySupplyState::Degraded
         );
         assert_eq!(
             classify_supply_state_with_profile(&home_stats),
@@ -2882,6 +3678,421 @@ mod tests {
                 }
             });
         assert!(reason.is_some_and(|value| value.starts_with("twcc-gcc-cloud-")));
+    }
+
+    #[test]
+    fn cloud_builder_configured_warmup_blocks_bwe_update() {
+        let runtime_config = Arc::new(Mutex::new(XbxEngineRuntimeConfig::default()));
+        if let Ok(mut config) = runtime_config.lock() {
+            config.webrtc.bwe_mode = "twcc-gcc".to_string();
+            config.webrtc.remb_floor_kbps = 8_000;
+            config.webrtc.remb_ceiling_kbps = 150_000;
+        }
+        let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
+        if let Ok(mut stats) = runtime_stats.lock() {
+            stats.session_target_type = Some(xbxengine_protocol::XbxEngineTargetTypeDto::Cloud);
+            stats.session_phase = Some("recovering".to_string());
+            stats.latest_rtc_builder_observation = Some(crate::XbxEngineRtcBuilderObservation {
+                observation_id: 1,
+                controlled_twcc_registry: true,
+                feedback_interval_ms: 100.0,
+                registered_header_extensions: vec!["video:transport-cc".to_string()],
+                registered_rtcp_feedback: vec!["video:transport-cc".to_string()],
+                observed_at_ms: 10.0,
+            });
+        }
+        let mut policy = RtcSessionPolicy::new(runtime_config, runtime_stats);
+        let mut connection = ConnectionProjection::default();
+        connection.lifecycle_state = ConnectionLifecycleStateFact::Connected;
+        connection.latest_loss_ratio_1s = Some(0.0);
+        connection.latest_rtt_ms = Some(40.0);
+        connection.latest_transport_path = Some("Direct".to_string());
+        let bwe = BweProjection {
+            latest_rtt_ms: Some(40.0),
+            latest_loss_ratio_1s: Some(0.0),
+            latest_actual_video_bitrate_kbps: Some(18_000.0),
+            latest_observed_remb_kbps: Some(28_000),
+            latest_transport_path: Some("Direct".to_string()),
+            latest_sample_tick_ms: Some(1.0),
+            target_remb_kbps: Some(18_000),
+            last_observed_at_ms: Some(1.0),
+        };
+        let snapshot = TransportSnapshot::new(
+            1,
+            1.0,
+            connection,
+            MediaProjection::default(),
+            RecoveryProjection::default(),
+            bwe,
+            DiagnosticsProjection::default(),
+        );
+
+        let commands = policy.on_snapshot(&snapshot);
+        assert!(!commands
+            .iter()
+            .any(|command| matches!(command, TransportCommand::SetTargetRembKbps { .. })));
+    }
+
+    #[test]
+    fn cloud_valid_local_feedback_restores_bwe_after_warmup() {
+        let runtime_config = Arc::new(Mutex::new(XbxEngineRuntimeConfig::default()));
+        if let Ok(mut config) = runtime_config.lock() {
+            config.webrtc.bwe_mode = "twcc-gcc".to_string();
+            config.webrtc.remb_floor_kbps = 8_000;
+            config.webrtc.remb_ceiling_kbps = 150_000;
+        }
+        let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
+        if let Ok(mut stats) = runtime_stats.lock() {
+            stats.session_target_type = Some(xbxengine_protocol::XbxEngineTargetTypeDto::Cloud);
+            stats.session_phase = Some("steady".to_string());
+            stats.latest_rtc_builder_observation = Some(crate::XbxEngineRtcBuilderObservation {
+                observation_id: 1,
+                controlled_twcc_registry: true,
+                feedback_interval_ms: 100.0,
+                registered_header_extensions: vec!["video:transport-cc".to_string()],
+                registered_rtcp_feedback: vec!["video:transport-cc".to_string()],
+                observed_at_ms: 10.0,
+            });
+            stats.latest_video_twcc_observation = Some(XbxEngineVideoTwccObservation {
+                observation_id: 2,
+                source: "local-feedback".to_string(),
+                feedback_packet_count: 3,
+                covered_sequence_start: 100,
+                covered_sequence_end: 120,
+                covered_sequence_span: 20,
+                observed_packet_count: 20,
+                observed_byte_count: 30_000,
+                coverage_ratio: None,
+                ledger_hit_ratio: None,
+                feedback_interval_ms: Some(80.0),
+                arrival_span_ms: Some(70.0),
+                receive_bitrate_kbps: Some(28_000.0),
+                twcc_sample_valid: true,
+                twcc_invalid_reason: None,
+                quality: crate::XbxEngineTwccObservationQuality::Stable,
+                delivery_ratio: 0.995,
+                packet_loss_ratio: 0.0,
+                observed_at_ms: 10.0,
+            });
+        }
+        let mut policy = RtcSessionPolicy::new(runtime_config, runtime_stats);
+        let mut connection = ConnectionProjection::default();
+        connection.lifecycle_state = ConnectionLifecycleStateFact::Connected;
+        connection.latest_loss_ratio_1s = Some(0.0);
+        connection.latest_rtt_ms = Some(40.0);
+        connection.latest_transport_path = Some("Direct".to_string());
+        let bwe = BweProjection {
+            latest_rtt_ms: Some(40.0),
+            latest_loss_ratio_1s: Some(0.0),
+            latest_actual_video_bitrate_kbps: Some(18_000.0),
+            latest_observed_remb_kbps: Some(28_000),
+            latest_transport_path: Some("Direct".to_string()),
+            latest_sample_tick_ms: Some(1.0),
+            target_remb_kbps: Some(18_000),
+            last_observed_at_ms: Some(1.0),
+        };
+        let snapshot = TransportSnapshot::new(
+            1,
+            1.0,
+            connection,
+            MediaProjection::default(),
+            RecoveryProjection::default(),
+            bwe,
+            DiagnosticsProjection::default(),
+        );
+
+        let commands = policy.on_snapshot(&snapshot);
+        assert!(commands
+            .iter()
+            .any(|command| matches!(command, TransportCommand::SetTargetRembKbps { .. })));
+    }
+
+    #[test]
+    fn cloud_builder_configured_warmup_holds_media_reconnect_candidate() {
+        let runtime_config = Arc::new(Mutex::new(XbxEngineRuntimeConfig::default()));
+        let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
+        if let Ok(mut stats) = runtime_stats.lock() {
+            stats.session_target_type = Some(xbxengine_protocol::XbxEngineTargetTypeDto::Cloud);
+            stats.latest_rtc_builder_observation = Some(crate::XbxEngineRtcBuilderObservation {
+                observation_id: 1,
+                controlled_twcc_registry: true,
+                feedback_interval_ms: 100.0,
+                registered_header_extensions: vec!["video:transport-cc".to_string()],
+                registered_rtcp_feedback: vec!["video:transport-cc".to_string()],
+                observed_at_ms: 1_000.0,
+            });
+            stats.video_renderer_stalled = Some(true);
+            stats.latest_video_present_time_ms = Some(0.0);
+            stats.latest_video_decoder_reset_time_ms = Some(2_000.0);
+        }
+        let mut policy = RtcSessionPolicy::new(runtime_config, runtime_stats.clone());
+        let first = build_snapshot(
+            ConnectionLifecycleStateFact::Connected,
+            "transportAwaitRecoveryKeyframe",
+            1_000.0,
+        );
+        let _ = policy.on_snapshot(&first);
+
+        let second = build_snapshot(
+            ConnectionLifecycleStateFact::Connected,
+            "transportAwaitRecoveryKeyframe",
+            8_000.0,
+        );
+        let commands = policy.on_snapshot(&second);
+        assert!(commands.iter().all(|command| {
+            !matches!(command, TransportCommand::RequestReconnectCandidate { .. })
+        }));
+        let stats = runtime_stats.lock().expect("runtime stats lock");
+        let ledger = stats
+            .latest_recovery_decision_ledger
+            .as_ref()
+            .expect("recovery decision ledger");
+        assert_eq!(ledger.action_selected, "cooldownSuppressed");
+    }
+
+    #[test]
+    fn cloud_builder_configured_warmup_does_not_block_lifecycle_reconnect() {
+        let runtime_config = Arc::new(Mutex::new(XbxEngineRuntimeConfig::default()));
+        let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
+        if let Ok(mut stats) = runtime_stats.lock() {
+            stats.session_target_type = Some(xbxengine_protocol::XbxEngineTargetTypeDto::Cloud);
+            stats.latest_rtc_builder_observation = Some(crate::XbxEngineRtcBuilderObservation {
+                observation_id: 1,
+                controlled_twcc_registry: true,
+                feedback_interval_ms: 100.0,
+                registered_header_extensions: vec!["video:transport-cc".to_string()],
+                registered_rtcp_feedback: vec!["video:transport-cc".to_string()],
+                observed_at_ms: 100.0,
+            });
+        }
+        let mut policy = RtcSessionPolicy::new(runtime_config, runtime_stats);
+        let mut connection = ConnectionProjection::default();
+        connection.lifecycle_state = ConnectionLifecycleStateFact::Connecting;
+        let recovery = RecoveryProjection {
+            latest_diagnosis_label: Some("none".to_string()),
+            pending_action: false,
+            successful_action_count: 0,
+            failed_action_count: 0,
+            last_observed_at_ms: Some(100.0),
+        };
+        let first = TransportSnapshot::new(
+            1,
+            100.0,
+            connection.clone(),
+            MediaProjection::default(),
+            recovery.clone(),
+            BweProjection::default(),
+            DiagnosticsProjection::default(),
+        );
+        let _ = policy.on_snapshot(&first);
+        let second = TransportSnapshot::new(
+            2,
+            35_600.0,
+            connection,
+            MediaProjection::default(),
+            RecoveryProjection {
+                last_observed_at_ms: Some(35_600.0),
+                ..recovery
+            },
+            BweProjection::default(),
+            DiagnosticsProjection::default(),
+        );
+        let commands = policy.on_snapshot(&second);
+        assert!(commands.iter().any(|command| {
+            matches!(command, TransportCommand::RequestReconnectCandidate { .. })
+        }));
+    }
+
+    #[test]
+    fn cloud_builder_configured_uses_more_relaxed_lifecycle_reconnect_interval_than_missing_feedback(
+    ) {
+        let runtime_config = Arc::new(Mutex::new(XbxEngineRuntimeConfig::default()));
+        let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
+        if let Ok(mut stats) = runtime_stats.lock() {
+            stats.session_target_type = Some(xbxengine_protocol::XbxEngineTargetTypeDto::Cloud);
+            stats.latest_rtc_builder_observation = Some(crate::XbxEngineRtcBuilderObservation {
+                observation_id: 1,
+                controlled_twcc_registry: true,
+                feedback_interval_ms: 100.0,
+                registered_header_extensions: vec!["video:transport-cc".to_string()],
+                registered_rtcp_feedback: vec!["video:transport-cc".to_string()],
+                observed_at_ms: 100.0,
+            });
+        }
+        let mut policy = RtcSessionPolicy::new(runtime_config, runtime_stats.clone());
+        let mut connection = ConnectionProjection::default();
+        connection.lifecycle_state = ConnectionLifecycleStateFact::Recovering;
+        let media = MediaProjection {
+            frame_count: 1,
+            ..MediaProjection::default()
+        };
+        let recovery = RecoveryProjection {
+            latest_diagnosis_label: Some("rtcPeerConnectionFailed".to_string()),
+            pending_action: false,
+            successful_action_count: 0,
+            failed_action_count: 0,
+            last_observed_at_ms: Some(100.0),
+        };
+
+        let first = TransportSnapshot::new(
+            1,
+            100.0,
+            connection.clone(),
+            media.clone(),
+            recovery.clone(),
+            BweProjection::default(),
+            DiagnosticsProjection::default(),
+        );
+        let first_commands = policy.on_snapshot(&first);
+        assert!(first_commands.iter().any(|command| {
+            matches!(command, TransportCommand::RequestReconnectCandidate { .. })
+        }));
+
+        if let Ok(mut stats) = runtime_stats.lock() {
+            stats.latest_twcc_remote_stream_observation =
+                Some(crate::XbxEngineTwccRemoteStreamObservation {
+                    observation_id: 2,
+                    ssrc: 42,
+                    mime_type: "video/H264".to_string(),
+                    twcc_ext_id: Some(7),
+                    header_extensions: vec!["transport-cc#7".to_string()],
+                    rtcp_feedback: vec!["transport-cc:".to_string()],
+                    observed_at_ms: 200.0,
+                });
+        }
+        let second = TransportSnapshot::new(
+            2,
+            3_200.0,
+            connection.clone(),
+            media.clone(),
+            RecoveryProjection {
+                last_observed_at_ms: Some(3_200.0),
+                ..recovery.clone()
+            },
+            BweProjection::default(),
+            DiagnosticsProjection::default(),
+        );
+        let second_commands = policy.on_snapshot(&second);
+        assert!(second_commands.iter().all(|command| {
+            !matches!(command, TransportCommand::RequestReconnectCandidate { .. })
+        }));
+
+        let third = TransportSnapshot::new(
+            3,
+            3_800.0,
+            connection,
+            media,
+            RecoveryProjection {
+                last_observed_at_ms: Some(3_800.0),
+                ..recovery
+            },
+            BweProjection::default(),
+            DiagnosticsProjection::default(),
+        );
+        let third_commands = policy.on_snapshot(&third);
+        assert!(third_commands.iter().any(|command| {
+            matches!(command, TransportCommand::RequestReconnectCandidate { .. })
+        }));
+    }
+
+    #[test]
+    fn cloud_local_feedback_ready_restores_default_cloud_reconnect_interval() {
+        let runtime_config = Arc::new(Mutex::new(XbxEngineRuntimeConfig::default()));
+        let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
+        if let Ok(mut stats) = runtime_stats.lock() {
+            stats.session_target_type = Some(xbxengine_protocol::XbxEngineTargetTypeDto::Cloud);
+            stats.latest_rtc_builder_observation = Some(crate::XbxEngineRtcBuilderObservation {
+                observation_id: 1,
+                controlled_twcc_registry: true,
+                feedback_interval_ms: 100.0,
+                registered_header_extensions: vec!["video:transport-cc".to_string()],
+                registered_rtcp_feedback: vec!["video:transport-cc".to_string()],
+                observed_at_ms: 100.0,
+            });
+            stats.latest_video_twcc_observation = Some(XbxEngineVideoTwccObservation {
+                observation_id: 2,
+                source: "local-feedback".to_string(),
+                feedback_packet_count: 3,
+                covered_sequence_start: 100,
+                covered_sequence_end: 120,
+                covered_sequence_span: 20,
+                observed_packet_count: 20,
+                observed_byte_count: 30_000,
+                coverage_ratio: None,
+                ledger_hit_ratio: None,
+                feedback_interval_ms: Some(80.0),
+                arrival_span_ms: Some(70.0),
+                receive_bitrate_kbps: Some(28_000.0),
+                twcc_sample_valid: true,
+                twcc_invalid_reason: None,
+                quality: crate::XbxEngineTwccObservationQuality::Stable,
+                delivery_ratio: 0.995,
+                packet_loss_ratio: 0.0,
+                observed_at_ms: 100.0,
+            });
+        }
+        let mut policy = RtcSessionPolicy::new(runtime_config, runtime_stats);
+        let mut connection = ConnectionProjection::default();
+        connection.lifecycle_state = ConnectionLifecycleStateFact::Recovering;
+        let media = MediaProjection {
+            frame_count: 1,
+            ..MediaProjection::default()
+        };
+        let recovery = RecoveryProjection {
+            latest_diagnosis_label: Some("rtcPeerConnectionFailed".to_string()),
+            pending_action: false,
+            successful_action_count: 0,
+            failed_action_count: 0,
+            last_observed_at_ms: Some(100.0),
+        };
+
+        let first = TransportSnapshot::new(
+            1,
+            100.0,
+            connection.clone(),
+            media.clone(),
+            recovery.clone(),
+            BweProjection::default(),
+            DiagnosticsProjection::default(),
+        );
+        let first_commands = policy.on_snapshot(&first);
+        assert!(first_commands.iter().any(|command| {
+            matches!(command, TransportCommand::RequestReconnectCandidate { .. })
+        }));
+
+        let second = TransportSnapshot::new(
+            2,
+            2_000.0,
+            connection.clone(),
+            media.clone(),
+            RecoveryProjection {
+                last_observed_at_ms: Some(2_000.0),
+                ..recovery.clone()
+            },
+            BweProjection::default(),
+            DiagnosticsProjection::default(),
+        );
+        let second_commands = policy.on_snapshot(&second);
+        assert!(second_commands.iter().all(|command| {
+            !matches!(command, TransportCommand::RequestReconnectCandidate { .. })
+        }));
+
+        let third = TransportSnapshot::new(
+            3,
+            2_700.0,
+            connection,
+            media,
+            RecoveryProjection {
+                last_observed_at_ms: Some(2_700.0),
+                ..recovery
+            },
+            BweProjection::default(),
+            DiagnosticsProjection::default(),
+        );
+        let third_commands = policy.on_snapshot(&third);
+        assert!(third_commands.iter().any(|command| {
+            matches!(command, TransportCommand::RequestReconnectCandidate { .. })
+        }));
     }
 
     #[test]

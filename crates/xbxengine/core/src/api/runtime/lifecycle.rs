@@ -8,8 +8,9 @@ use xbxengine_protocol::{
 
 use super::{
     dedupe_remote_ice_candidates, ice_candidate_dedupe_key, is_end_of_candidates_marker,
-    now_ms_f64, XbxEngineEventSink, XbxEngineHostBridge, XbxEngineRuntime, XbxEngineRuntimeError,
-    XbxEngineRuntimeState, XbxEngineVideoPipelineRuntimeConfig,
+    now_ms_f64, XbxEngineEventSink, XbxEngineHostBridge, XbxEngineReconnectTriggerSource,
+    XbxEngineRuntime, XbxEngineRuntimeError, XbxEngineRuntimeState,
+    XbxEngineVideoPipelineRuntimeConfig,
 };
 use crate::session::recovery::STALL_SIGNAL_STABILITY_MS;
 use crate::{
@@ -76,9 +77,11 @@ where
         }
     }
 
+    /// `restart=true` 的宿主侧协商仅允许经由本入口；`trigger_source` 用于观测与去双轨验收。
     pub fn request_reconnect(
         &mut self,
         reason: XbxEngineReconnectReasonDto,
+        trigger_source: XbxEngineReconnectTriggerSource,
     ) -> Result<(), XbxEngineRuntimeError> {
         let previous_state = self.state.clone();
         let previous_session = self.session.clone();
@@ -94,6 +97,11 @@ where
         self.snapshot.last_recovery_action = Some("reconnect".to_string());
         self.snapshot.last_recovery_action_at_ms = Some(reconnect_started_at_ms);
         self.snapshot.last_recovery_reason = Some(format!("{reason:?}"));
+        self.snapshot.reconnect_trigger_source = Some(trigger_source.as_str().to_string());
+        crate::xbx_log_warn!(
+            "[xbxengine][runtime] reconnect negotiate restart=true triggerSource={} reason={reason:?}",
+            trigger_source.as_str()
+        );
         self.emit_phase(XbxEngineRuntimePhaseDto::Reconnecting);
 
         let reconnect_result = (|| {
@@ -231,7 +239,10 @@ where
             "transportReconnectCandidateConsumed:{reason}:transportRecovering={}",
             runtime_stats_indicate_transport_recovering(runtime_stats)
         ));
-        if let Err(error) = self.request_reconnect(XbxEngineReconnectReasonDto::MediaStalled) {
+        if let Err(error) = self.request_reconnect(
+            XbxEngineReconnectReasonDto::MediaStalled,
+            XbxEngineReconnectTriggerSource::Policy,
+        ) {
             if !error.is_cancelled() {
                 if is_terminal_remote_session_inactive_error(&error) {
                     self.snapshot.last_recovery_action =
@@ -405,7 +416,9 @@ where
                 true
             }
             XbxEngineRecoveryAction::RequestReconnect(reason) => {
-                if let Err(error) = self.request_reconnect(reason) {
+                if let Err(error) =
+                    self.request_reconnect(reason, XbxEngineReconnectTriggerSource::Other)
+                {
                     if !error.is_cancelled() {
                         self.emit_error("requestReconnectFailed", error.to_string());
                     }
@@ -456,7 +469,7 @@ where
                 Ok(())
             }
             XbxEngineControlCommandDto::RequestReconnect { reason } => {
-                self.request_reconnect(reason)
+                self.request_reconnect(reason, XbxEngineReconnectTriggerSource::Runtime)
             }
             XbxEngineControlCommandDto::AttachViewport { viewport } => {
                 self.host_bridge
@@ -628,6 +641,7 @@ where
         Ok(())
     }
 
+    /// `restart=true` 仅允许自 `request_reconnect` 进入（policy/显式/历史 health），避免双轨触发宿主侧 ICE restart。
     fn negotiate_remote(
         &mut self,
         restart: bool,
@@ -1142,22 +1156,18 @@ fn runtime_stats_indicate_transport_recovering(
         return false;
     }
     runtime_stats
-        .latest_observation_summary
+        .latest_observation_label
         .as_deref()
-        .is_some_and(|summary| summary.contains("recoveryActionCreated=true"))
-        || runtime_stats
-            .latest_observation_label
-            .as_deref()
-            .is_some_and(|label| {
-                matches!(
-                    label,
-                    "rtcConnectionRecovering"
-                        | "rtcPeerConnectionFailed"
-                        | "rtcPeerConnectionClosed"
-                        | "rtcControlChannelClosed"
-                        | "rtcMessageChannelClosed"
-                )
-            })
+        .is_some_and(|label| {
+            matches!(
+                label,
+                "rtcConnectionRecovering"
+                    | "rtcPeerConnectionFailed"
+                    | "rtcPeerConnectionClosed"
+                    | "rtcControlChannelClosed"
+                    | "rtcMessageChannelClosed"
+            )
+        })
 }
 
 fn is_stop_gamepad_rumble_request(effect: &OhMyGamepadRumbleEffectDto) -> bool {

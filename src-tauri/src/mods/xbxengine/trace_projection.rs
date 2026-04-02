@@ -124,6 +124,7 @@ pub(super) fn build_observability_snapshot(stats: &XbxEngineStatsDto) -> serde_j
             "lastAction": stats.last_recovery_action,
             "lastActionAtMs": stats.last_recovery_action_at_ms,
             "lastReason": stats.last_recovery_reason,
+            "reconnectTriggerSource": stats.reconnect_trigger_source,
         },
         "directGaming": {
             "bitrateBand": stats.direct_gaming_bitrate_band,
@@ -934,6 +935,21 @@ pub(super) fn record_runtime_trace_observations(
 
     if observation_state.recovery_reconnect_count != stats.recovery_reconnect_count {
         observation_state.recovery_reconnect_count = stats.recovery_reconnect_count;
+        if let Some(count) = stats.recovery_reconnect_count {
+            if count > 0 && stats.last_recovery_action.as_deref() == Some("reconnect") {
+                runtime_trace.record_decision(
+                    "xbxengine",
+                    "mediaTransportReconnect",
+                    session_id,
+                    json!({
+                        "count": count,
+                        "atMs": stats.last_recovery_action_at_ms,
+                        "reason": stats.last_recovery_reason,
+                        "reconnectTriggerSource": stats.reconnect_trigger_source,
+                    }),
+                );
+            }
+        }
     }
     if observation_state.recovery_hard_fallback_timer_ms != stats.recovery_hard_fallback_timer_ms
         || observation_state.recovery_hard_fallback_trigger_reason
@@ -1144,7 +1160,8 @@ mod tests {
     }
 
     fn read_trace_lines(recorder: &RuntimeTraceRecorder) -> Vec<Value> {
-        let contents = fs::read_to_string(recorder.path()).expect("trace contents");
+        let contents =
+            fs::read_to_string(recorder.path().expect("trace path")).expect("trace contents");
         contents
             .lines()
             .filter_map(|line| serde_json::from_str::<Value>(line).ok())
@@ -1342,7 +1359,9 @@ mod tests {
 
     #[test]
     fn record_runtime_trace_observations_uses_twcc_event_name_by_source() {
-        let recorder = std::sync::Arc::new(RuntimeTraceRecorder::new().expect("trace recorder"));
+        let recorder = std::sync::Arc::new(
+            RuntimeTraceRecorder::new_with_mode("verbose").expect("trace recorder"),
+        );
         let mut local_state = RuntimeTraceObservationState::default();
         let local_stats = test_stats(json!({
             "resolution": "",
@@ -1422,14 +1441,17 @@ mod tests {
             })),
         );
 
-        let contents = fs::read_to_string(recorder.path()).expect("trace contents");
+        let contents =
+            fs::read_to_string(recorder.path().expect("trace path")).expect("trace contents");
         assert!(contents.contains("\"event\":\"twccFeedbackSent\""));
         assert!(contents.contains("\"event\":\"twccFeedbackObserved\""));
     }
 
     #[test]
     fn record_runtime_trace_observations_projects_remote_answer_acceptance() {
-        let recorder = std::sync::Arc::new(RuntimeTraceRecorder::new().expect("trace recorder"));
+        let recorder = std::sync::Arc::new(
+            RuntimeTraceRecorder::new_with_mode("verbose").expect("trace recorder"),
+        );
         let mut state = RuntimeTraceObservationState::default();
         let stats = test_stats(json!({
             "resolution": "",
@@ -1455,7 +1477,8 @@ mod tests {
         }));
         record_runtime_trace_observations(&recorder, &mut state, Some("session-1"), &stats);
 
-        let contents = fs::read_to_string(recorder.path()).expect("trace contents");
+        let contents =
+            fs::read_to_string(recorder.path().expect("trace path")).expect("trace contents");
         assert!(contents.contains("\"event\":\"remoteAnswerAccepted\""));
         assert!(contents.contains("\"selectedVideoProfileLevelId\":\"4d002a\""));
         assert!(contents.contains("\"googRembAccepted\":true"));
@@ -1464,7 +1487,9 @@ mod tests {
 
     #[test]
     fn bwe_updated_event_uses_top_level_actual_video_bitrate() {
-        let recorder = std::sync::Arc::new(RuntimeTraceRecorder::new().expect("trace recorder"));
+        let recorder = std::sync::Arc::new(
+            RuntimeTraceRecorder::new_with_mode("verbose").expect("trace recorder"),
+        );
         let mut state = RuntimeTraceObservationState::default();
         let stats = test_stats(json!({
             "resolution": "",
@@ -1499,7 +1524,8 @@ mod tests {
 
         record_runtime_trace_observations(&recorder, &mut state, Some("session-1"), &stats);
 
-        let contents = fs::read_to_string(recorder.path()).expect("trace contents");
+        let contents =
+            fs::read_to_string(recorder.path().expect("trace path")).expect("trace contents");
         assert!(contents.contains("\"event\":\"bweUpdated\""));
         assert!(contents.contains("\"actualVideoBitrateKbps\":1019.4"));
         assert!(!contents.contains("\"actualVideoBitrateKbps\":0.0"));
@@ -1507,7 +1533,9 @@ mod tests {
 
     #[test]
     fn frame_recovery_observation_projects_ledger_events() {
-        let recorder = std::sync::Arc::new(RuntimeTraceRecorder::new().expect("trace recorder"));
+        let recorder = std::sync::Arc::new(
+            RuntimeTraceRecorder::new_with_mode("verbose").expect("trace recorder"),
+        );
         let mut state = RuntimeTraceObservationState::default();
         let stats = test_stats(json!({
             "resolution": "",
@@ -1531,7 +1559,8 @@ mod tests {
 
         record_runtime_trace_observations(&recorder, &mut state, Some("session-1"), &stats);
 
-        let contents = fs::read_to_string(recorder.path()).expect("trace contents");
+        let contents =
+            fs::read_to_string(recorder.path().expect("trace path")).expect("trace contents");
         assert!(contents.contains("\"event\":\"frameRecoveryObserved\""));
         assert!(contents.contains("\"action\":\"ledgerWrite\""));
         assert!(contents.contains("\"frameRtpTimestamp\":123456789"));
@@ -1541,7 +1570,9 @@ mod tests {
 
     #[test]
     fn video_timeline_observation_projects_event_and_snapshot() {
-        let recorder = std::sync::Arc::new(RuntimeTraceRecorder::new().expect("trace recorder"));
+        let recorder = std::sync::Arc::new(
+            RuntimeTraceRecorder::new_with_mode("verbose").expect("trace recorder"),
+        );
         let mut state = RuntimeTraceObservationState::default();
         let stats = test_stats(json!({
             "resolution": "",
@@ -1592,7 +1623,9 @@ mod tests {
 
     #[test]
     fn anchor_candidate_ledger_projects_event() {
-        let recorder = std::sync::Arc::new(RuntimeTraceRecorder::new().expect("trace recorder"));
+        let recorder = std::sync::Arc::new(
+            RuntimeTraceRecorder::new_with_mode("verbose").expect("trace recorder"),
+        );
         let mut state = RuntimeTraceObservationState::default();
         let stats = test_stats(json!({
             "resolution": "",
@@ -1630,7 +1663,9 @@ mod tests {
 
     #[test]
     fn timeout_video_timeline_observation_projects_timeout_transition_event() {
-        let recorder = std::sync::Arc::new(RuntimeTraceRecorder::new().expect("trace recorder"));
+        let recorder = std::sync::Arc::new(
+            RuntimeTraceRecorder::new_with_mode("verbose").expect("trace recorder"),
+        );
         let mut state = RuntimeTraceObservationState::default();
         let stats = test_stats(json!({
             "resolution": "",
@@ -1678,7 +1713,9 @@ mod tests {
 
     #[test]
     fn chain_broken_timeline_projects_chain_transition_event() {
-        let recorder = std::sync::Arc::new(RuntimeTraceRecorder::new().expect("trace recorder"));
+        let recorder = std::sync::Arc::new(
+            RuntimeTraceRecorder::new_with_mode("verbose").expect("trace recorder"),
+        );
         let mut state = RuntimeTraceObservationState::default();
         let stats = test_stats(json!({
             "resolution": "",
@@ -1717,7 +1754,9 @@ mod tests {
 
     #[test]
     fn chain_flush_timeline_projects_backlog_flushed_event() {
-        let recorder = std::sync::Arc::new(RuntimeTraceRecorder::new().expect("trace recorder"));
+        let recorder = std::sync::Arc::new(
+            RuntimeTraceRecorder::new_with_mode("verbose").expect("trace recorder"),
+        );
         let mut state = RuntimeTraceObservationState::default();
         let stats = test_stats(json!({
             "resolution": "",
@@ -1766,7 +1805,9 @@ mod tests {
 
     #[test]
     fn nack_observation_projects_event_name_and_common_fields() {
-        let recorder = std::sync::Arc::new(RuntimeTraceRecorder::new().expect("trace recorder"));
+        let recorder = std::sync::Arc::new(
+            RuntimeTraceRecorder::new_with_mode("verbose").expect("trace recorder"),
+        );
         let mut state = RuntimeTraceObservationState::default();
 
         let cases = [
@@ -1823,7 +1864,9 @@ mod tests {
 
     #[test]
     fn stall_transition_does_not_repeat_when_values_unchanged() {
-        let recorder = std::sync::Arc::new(RuntimeTraceRecorder::new().expect("trace recorder"));
+        let recorder = std::sync::Arc::new(
+            RuntimeTraceRecorder::new_with_mode("verbose").expect("trace recorder"),
+        );
         let mut state = RuntimeTraceObservationState::default();
         let stats = test_stats(json!({
             "resolution": "",
@@ -1863,7 +1906,9 @@ mod tests {
 
     #[test]
     fn decoder_stall_transition_emits_for_false_true_and_true_false() {
-        let recorder = std::sync::Arc::new(RuntimeTraceRecorder::new().expect("trace recorder"));
+        let recorder = std::sync::Arc::new(
+            RuntimeTraceRecorder::new_with_mode("verbose").expect("trace recorder"),
+        );
         let mut state = RuntimeTraceObservationState::default();
 
         let stats_false = test_stats(json!({
@@ -1913,7 +1958,9 @@ mod tests {
 
     #[test]
     fn decoder_and_renderer_stall_transition_are_triggered_independently() {
-        let recorder = std::sync::Arc::new(RuntimeTraceRecorder::new().expect("trace recorder"));
+        let recorder = std::sync::Arc::new(
+            RuntimeTraceRecorder::new_with_mode("verbose").expect("trace recorder"),
+        );
         let mut state = RuntimeTraceObservationState::default();
 
         let stats_base = test_stats(json!({
@@ -1991,7 +2038,9 @@ mod tests {
 
     #[test]
     fn frame_drop_decode_stage_projects_decode_candidate_decision() {
-        let recorder = std::sync::Arc::new(RuntimeTraceRecorder::new().expect("trace recorder"));
+        let recorder = std::sync::Arc::new(
+            RuntimeTraceRecorder::new_with_mode("verbose").expect("trace recorder"),
+        );
         let mut state = RuntimeTraceObservationState::default();
         let stats = test_stats(json!({
             "resolution": "",
@@ -2031,7 +2080,9 @@ mod tests {
 
     #[test]
     fn frame_drop_render_stage_projects_render_candidate_decision() {
-        let recorder = std::sync::Arc::new(RuntimeTraceRecorder::new().expect("trace recorder"));
+        let recorder = std::sync::Arc::new(
+            RuntimeTraceRecorder::new_with_mode("verbose").expect("trace recorder"),
+        );
         let mut state = RuntimeTraceObservationState::default();
         let stats = test_stats(json!({
             "resolution": "",
@@ -2071,7 +2122,9 @@ mod tests {
 
     #[test]
     fn frame_drop_unknown_stage_does_not_project_candidate_decision() {
-        let recorder = std::sync::Arc::new(RuntimeTraceRecorder::new().expect("trace recorder"));
+        let recorder = std::sync::Arc::new(
+            RuntimeTraceRecorder::new_with_mode("verbose").expect("trace recorder"),
+        );
         let mut state = RuntimeTraceObservationState::default();
         let stats = test_stats(json!({
             "resolution": "",
@@ -2113,7 +2166,9 @@ mod tests {
 
     #[test]
     fn decode_candidate_state_projects_transition_event() {
-        let recorder = std::sync::Arc::new(RuntimeTraceRecorder::new().expect("trace recorder"));
+        let recorder = std::sync::Arc::new(
+            RuntimeTraceRecorder::new_with_mode("verbose").expect("trace recorder"),
+        );
         let mut state = RuntimeTraceObservationState::default();
         let stats = test_stats(json!({
             "resolution": "",
@@ -2145,7 +2200,9 @@ mod tests {
 
     #[test]
     fn render_candidate_state_projects_transition_event() {
-        let recorder = std::sync::Arc::new(RuntimeTraceRecorder::new().expect("trace recorder"));
+        let recorder = std::sync::Arc::new(
+            RuntimeTraceRecorder::new_with_mode("verbose").expect("trace recorder"),
+        );
         let mut state = RuntimeTraceObservationState::default();
         let stats = test_stats(json!({
             "resolution": "",
@@ -2177,7 +2234,9 @@ mod tests {
 
     #[test]
     fn host_present_state_projects_no_pending_supply_signals() {
-        let recorder = std::sync::Arc::new(RuntimeTraceRecorder::new().expect("trace recorder"));
+        let recorder = std::sync::Arc::new(
+            RuntimeTraceRecorder::new_with_mode("verbose").expect("trace recorder"),
+        );
         let mut state = RuntimeTraceObservationState::default();
         let stats = test_stats(json!({
             "resolution": "",
@@ -2210,7 +2269,9 @@ mod tests {
 
     #[test]
     fn direct_gaming_state_projects_display_supply_health_and_issue_chain() {
-        let recorder = std::sync::Arc::new(RuntimeTraceRecorder::new().expect("trace recorder"));
+        let recorder = std::sync::Arc::new(
+            RuntimeTraceRecorder::new_with_mode("verbose").expect("trace recorder"),
+        );
         let mut state = RuntimeTraceObservationState::default();
         let stats = test_stats(json!({
             "resolution": "",
@@ -2263,7 +2324,9 @@ mod tests {
 
     #[test]
     fn direct_gaming_state_owner_contract_unchanged_does_not_repeat_transition() {
-        let recorder = std::sync::Arc::new(RuntimeTraceRecorder::new().expect("trace recorder"));
+        let recorder = std::sync::Arc::new(
+            RuntimeTraceRecorder::new_with_mode("verbose").expect("trace recorder"),
+        );
         let mut state = RuntimeTraceObservationState::default();
         let baseline = json!({
             "resolution": "",
