@@ -667,5 +667,5 @@ pub(super) fn generate_local_rtcp_sender_ssrc() -> u32 {
 }
 
 #[cfg(test)]
-#[path = "tests/service.rs"]
+#[path = "service.test.rs"]
 mod tests;

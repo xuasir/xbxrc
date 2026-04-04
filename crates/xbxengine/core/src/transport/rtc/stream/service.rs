@@ -79,5 +79,5 @@ impl RtcMediaService {
 }
 
 #[cfg(test)]
-#[path = "tests/service.rs"]
+#[path = "service.test.rs"]
 mod tests;

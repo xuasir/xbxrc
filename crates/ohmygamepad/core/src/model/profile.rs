@@ -169,6 +169,8 @@ mod tests {
             connected: true,
             last_seen_at_ms: 0,
             capabilities: OhMyGamepadCapabilityFlagsDto::default(),
+            effective_capabilities: OhMyGamepadCapabilityFlagsDto::default(),
+            is_default_target: false,
         }
     }
 

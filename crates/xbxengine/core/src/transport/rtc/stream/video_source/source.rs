@@ -18,7 +18,7 @@ use crate::{
     XbxEngineAnchorCandidateFailureReason, XbxEngineAnchorCandidateState,
     XbxEngineH264InspectionObservation, XbxEngineVideoRtxReinjectObservation,
 };
-use xbxengine_protocol::XbxEngineTargetTypeDto;
+use xbxengine_protocol::{XbxEngineTargetTypeDto, XbxEngineTransportStateDto};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum RecoveryKeyframeAction {
@@ -265,6 +265,48 @@ fn should_trigger_idle_timeout(
     has_received_packet && now.duration_since(last_packet_time) > idle_timeout
 }
 
+fn idle_timeout_render_slack_window_ms(idle_timeout: std::time::Duration) -> f64 {
+    const IDLE_TIMEOUT_SLACK_WINDOW_MIN_MS: f64 = 220.0;
+    const IDLE_TIMEOUT_SLACK_WINDOW_MAX_MS: f64 = 450.0;
+    let scaled = (idle_timeout.as_millis() as f64) * 1.5;
+    scaled
+        .max(IDLE_TIMEOUT_SLACK_WINDOW_MIN_MS)
+        .min(IDLE_TIMEOUT_SLACK_WINDOW_MAX_MS)
+}
+
+fn should_absorb_idle_timeout_for_steady_gap(
+    transport_state: XbxEngineTransportStateDto,
+    current_recovery_epoch: u64,
+    clean_anchor_epoch: Option<u64>,
+    clean_anchor_source_event: Option<&str>,
+    latest_video_host_present_time_ms: Option<f64>,
+    latest_video_decode_ok_time_ms: Option<f64>,
+    video_renderer_stalled: Option<bool>,
+    video_decoder_stalled: Option<bool>,
+    now_ms: f64,
+    idle_timeout: std::time::Duration,
+) -> bool {
+    if transport_state != XbxEngineTransportStateDto::Connected {
+        return false;
+    }
+    if video_renderer_stalled.unwrap_or(false) || video_decoder_stalled.unwrap_or(false) {
+        return false;
+    }
+    let has_current_clean_anchor = clean_anchor_epoch.is_some_and(|epoch| {
+        epoch == current_recovery_epoch
+            && clean_anchor_source_event == Some("chain-clean-keyframe-submitted")
+    });
+    if !has_current_clean_anchor {
+        return false;
+    }
+    let fresh_window_ms = idle_timeout_render_slack_window_ms(idle_timeout);
+    let present_fresh = latest_video_host_present_time_ms
+        .is_some_and(|at_ms| (now_ms - at_ms).max(0.0) <= fresh_window_ms);
+    let decode_fresh = latest_video_decode_ok_time_ms
+        .is_some_and(|at_ms| (now_ms - at_ms).max(0.0) <= fresh_window_ms);
+    present_fresh || decode_fresh
+}
+
 fn should_relax_idle_timeout(
     session_target_type: Option<&XbxEngineTargetTypeDto>,
     feedback_interval_ms: Option<f64>,
@@ -313,6 +355,29 @@ impl RtcVideoFrameSource {
             session_target_type.as_ref(),
             feedback_interval_ms,
         )
+    }
+
+    fn should_absorb_idle_timeout(&self, idle_timeout: std::time::Duration) -> bool {
+        if self.timeline_state.waiting_for_recovery_keyframe() {
+            return false;
+        }
+        let now_ms = now_ms_f64();
+        self.runtime_stats
+            .read(|stats| {
+                should_absorb_idle_timeout_for_steady_gap(
+                    stats.transport_state.clone(),
+                    stats.transport_recovery_epoch,
+                    stats.video_anchor_clean_epoch,
+                    stats.video_anchor_clean_source_event.as_deref(),
+                    stats.latest_video_host_present_time_ms,
+                    stats.latest_video_decode_ok_time_ms,
+                    stats.video_renderer_stalled,
+                    stats.video_decoder_stalled,
+                    now_ms,
+                    idle_timeout,
+                )
+            })
+            .unwrap_or(false)
     }
 
     pub(super) async fn recv_frame_inner(&mut self) -> Option<AssembledVideoFrame> {
@@ -696,6 +761,7 @@ impl RtcVideoFrameSource {
                 self.last_packet_time,
                 effective_idle_timeout,
             );
+            let idle_timeout = idle_timeout && !self.should_absorb_idle_timeout(effective_idle_timeout);
             let thin_stream_stall = self.should_trigger_thin_stream_stall(now);
 
             if idle_timeout || thin_stream_stall {
@@ -910,352 +976,5 @@ impl TransportObservationSource for RtcVideoTransportObservationSource {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::{
-        resolve_effective_idle_controls, resolve_inspection_admission,
-        resolve_recovery_keyframe_action, should_trigger_idle_timeout, RecoveryKeyframeAction,
-        RtcVideoFrameSource,
-    };
-    use crate::media::video::h264::inspection::H264AccessUnitInspection;
-    use crate::media::video::test_fixtures::{
-        bootstrap_idr_nalu, bootstrap_pps_nalu, bootstrap_sps_nalu, make_video_source_for_test,
-        make_video_rtp_packet, send_bootstrap_access_unit, NoopRtcpPort,
-    };
-    use crate::transport::rtc::stream::adapter_types::{
-        TransportAdmissionObservation, TransportObservation,
-    };
-    use crate::transport::rtc::stream::packet_types::{
-        RtcVideoIngressKind, RtcVideoRepairMetadata,
-    };
-    use crate::transport::rtc::stream::sink::RtcRtcpSendPort;
-    use crate::transport::rtc::stream::video_source::NackSchedulerConfig;
-    use std::sync::{Arc, Mutex};
-    use std::time::{Duration, Instant};
-    use xbxengine_protocol::XbxEngineTargetTypeDto;
-
-    #[test]
-    fn idle_timeout_is_suppressed_before_first_packet() {
-        let started_at = Instant::now();
-        let later = started_at + Duration::from_millis(500);
-
-        assert!(!should_trigger_idle_timeout(
-            false,
-            later,
-            started_at,
-            Duration::from_millis(150),
-        ));
-        assert!(should_trigger_idle_timeout(
-            true,
-            later,
-            started_at,
-            Duration::from_millis(150),
-        ));
-    }
-
-    #[test]
-    fn cloud_profile_relaxes_idle_timeout_and_hint_cooldown() {
-        let (idle_timeout, idle_hint_cooldown) = resolve_effective_idle_controls(
-            Duration::from_millis(250),
-            Duration::from_millis(400),
-            Some(&XbxEngineTargetTypeDto::Cloud),
-            Some(120.0),
-        );
-
-        assert_eq!(idle_timeout, Duration::from_millis(700));
-        assert_eq!(idle_hint_cooldown, Duration::from_millis(700));
-    }
-
-    #[test]
-    fn slow_feedback_relaxes_idle_timeout_even_for_non_cloud() {
-        let (idle_timeout, idle_hint_cooldown) = resolve_effective_idle_controls(
-            Duration::from_millis(300),
-            Duration::from_millis(450),
-            Some(&XbxEngineTargetTypeDto::Home),
-            Some(500.0),
-        );
-
-        assert_eq!(idle_timeout, Duration::from_millis(700));
-        assert_eq!(idle_hint_cooldown, Duration::from_millis(700));
-    }
-
-    #[test]
-    fn clean_anchor_soft_reentry_allows_healthy_delta_to_submit() {
-        let (next_waiting_for_recovery_keyframe, recovery_action) =
-            resolve_recovery_keyframe_action(true, 0, 0, false, true);
-
-        assert!(!next_waiting_for_recovery_keyframe);
-        assert_eq!(recovery_action, RecoveryKeyframeAction::Submit);
-    }
-
-    #[test]
-    fn clean_anchor_soft_reentry_does_not_override_loss_semantics() {
-        let (next_waiting_for_recovery_keyframe, recovery_action) =
-            resolve_recovery_keyframe_action(true, 0, 1, false, true);
-
-        assert!(!next_waiting_for_recovery_keyframe);
-        assert_eq!(
-            recovery_action,
-            RecoveryKeyframeAction::DropAndRequestKeyframe
-        );
-    }
-
-    #[test]
-    fn recovery_wait_without_soft_reentry_remains_waiting() {
-        let (next_waiting_for_recovery_keyframe, recovery_action) =
-            resolve_recovery_keyframe_action(true, 0, 0, false, false);
-
-        assert!(next_waiting_for_recovery_keyframe);
-        assert_eq!(recovery_action, RecoveryKeyframeAction::WaitKeyframe);
-    }
-
-    #[test]
-    fn inspection_admission_rejects_frames_without_bootstrap_or_continuation() {
-        assert_eq!(
-            resolve_inspection_admission(&H264AccessUnitInspection {
-                nals: Vec::new(),
-                parameter_sets: None,
-                width: None,
-                height: None,
-                is_idr: true,
-                has_inband_sps: false,
-                has_inband_pps: false,
-                slice_headers_valid: true,
-                parameter_sets_changed: false,
-                config_changed: false,
-                bootstrap_ready: true,
-                bootstrap_reject_reason: None,
-                commit_state:
-                    crate::media::video::h264::inspection::H264AccessUnitInspector::test_commit_state(),
-            }),
-            super::InspectionAdmission::Accept
-        );
-
-        assert_eq!(
-            resolve_inspection_admission(&H264AccessUnitInspection {
-                nals: Vec::new(),
-                parameter_sets: None,
-                width: None,
-                height: None,
-                is_idr: false,
-                has_inband_sps: false,
-                has_inband_pps: false,
-                slice_headers_valid: true,
-                parameter_sets_changed: false,
-                config_changed: false,
-                bootstrap_ready: false,
-                bootstrap_reject_reason: None,
-                commit_state:
-                    crate::media::video::h264::inspection::H264AccessUnitInspector::test_commit_state(),
-            }),
-            super::InspectionAdmission::AwaitRecoveryKeyframe
-        );
-
-        assert_eq!(
-            resolve_inspection_admission(&H264AccessUnitInspection {
-                nals: Vec::new(),
-                parameter_sets: None,
-                width: None,
-                height: None,
-                is_idr: false,
-                has_inband_sps: false,
-                has_inband_pps: false,
-                slice_headers_valid: false,
-                parameter_sets_changed: false,
-                config_changed: false,
-                bootstrap_ready: false,
-                bootstrap_reject_reason: None,
-                commit_state:
-                    crate::media::video::h264::inspection::H264AccessUnitInspector::test_commit_state(),
-            }),
-            super::InspectionAdmission::AwaitRecoveryKeyframe
-        );
-    }
-
-    #[test]
-    fn clean_keyframe_anchor_records_current_transport_recovery_epoch() {
-        let (tx, rx) = tokio::sync::mpsc::channel(1);
-        let (transport_observation_tx, _transport_observation_rx) =
-            tokio::sync::mpsc::unbounded_channel();
-        let rtcp_port: Arc<dyn RtcRtcpSendPort> = Arc::new(NoopRtcpPort::default());
-        let runtime_stats = Arc::new(Mutex::new(crate::XbxEngineMediaRuntimeStats::default()));
-        let source = RtcVideoFrameSource::new(
-            rx,
-            transport_observation_tx,
-            rtcp_port,
-            runtime_stats.clone(),
-            16,
-            Duration::from_millis(10),
-            Duration::from_millis(20),
-            Duration::from_millis(200),
-            NackSchedulerConfig {
-                max_age_ms: 1_000,
-                frame_deadline_ms: 120,
-                burst_count: 2,
-                retry_interval_ms: 20,
-                max_retry_count: 3,
-            },
-        );
-        drop(tx);
-
-        source.runtime_stats.begin_transport_recovery_episode(100.0);
-        source.record_clean_keyframe_anchor(180.0);
-
-        let stats = runtime_stats.lock().expect("runtime stats lock");
-        assert_eq!(stats.video_anchor_clean_epoch, Some(1));
-        assert_eq!(stats.video_anchor_clean_observed_at_ms, Some(180.0));
-        assert_eq!(
-            stats.video_anchor_clean_source_event.as_deref(),
-            Some("chain-clean-keyframe-submitted")
-        );
-        assert!(!stats.transport_recovery_episode_active);
-        assert_eq!(stats.transport_recovery_episode_closed_at_ms, Some(180.0));
-        assert_eq!(
-            stats.transport_recovery_episode_close_reason.as_deref(),
-            Some("cleanAnchor")
-        );
-    }
-
-    #[tokio::test]
-    async fn bootstrap_keyframe_packets_are_assembled_into_frame() {
-        let (tx, mut transport_observation_rx, mut source) = make_video_source_for_test();
-
-        send_bootstrap_access_unit(&tx, 100, 9000).await;
-        tx.send(make_video_rtp_packet(103, 9016, true, bootstrap_idr_nalu()))
-            .await
-            .expect("next frame packet should flush previous sample");
-        drop(tx);
-
-        let frame = tokio::time::timeout(Duration::from_millis(200), source.recv_frame_inner())
-            .await
-            .expect("frame assembly should finish")
-            .expect("bootstrap frame should be emitted");
-        assert!(frame.is_keyframe);
-        assert!(frame.h264.bootstrap_ready);
-        assert_eq!(frame.rtp_timestamp, 9000);
-        assert!(frame.width > 0);
-        assert!(frame.height > 0);
-        assert!(transport_observation_rx.try_recv().is_err());
-    }
-
-    #[tokio::test]
-    async fn repair_packet_closes_bootstrap_gap_and_allows_frame_assembly() {
-        let (tx, mut transport_observation_rx, mut source) = make_video_source_for_test();
-
-        tx.send(make_video_rtp_packet(100, 9000, false, bootstrap_sps_nalu()))
-            .await
-            .expect("sps packet should enqueue");
-        tx.send(make_video_rtp_packet(102, 9000, true, bootstrap_idr_nalu()))
-            .await
-            .expect("idr packet should enqueue");
-        let mut repair_packet = make_video_rtp_packet(101, 9000, false, bootstrap_pps_nalu());
-        repair_packet.ingress_kind = RtcVideoIngressKind::RtxReinject {
-            repair: RtcVideoRepairMetadata {
-                native_ssrc: 88,
-                native_payload_type: 97,
-                native_sequence_number: 9_001,
-            },
-        };
-        tx.send(repair_packet)
-            .await
-            .expect("repair packet should enqueue");
-        tx.send(make_video_rtp_packet(103, 9016, true, bootstrap_idr_nalu()))
-            .await
-            .expect("next frame packet should flush previous sample");
-        drop(tx);
-
-        let frame = tokio::time::timeout(Duration::from_millis(200), source.recv_frame_inner())
-            .await
-            .expect("frame assembly should finish")
-            .expect("repaired bootstrap frame should be emitted");
-        assert!(frame.is_keyframe);
-        assert!(frame.h264.bootstrap_ready);
-        assert_eq!(frame.rtp_timestamp, 9000);
-        assert!(transport_observation_rx.try_recv().is_err());
-
-        let latest = source
-            .runtime_stats
-            .read(|stats| stats.latest_video_rtx_reinject_observation.clone())
-            .flatten()
-            .expect("repair observation should be recorded");
-        assert_eq!(latest.sequence_number, 101);
-        assert_eq!(latest.rtp_timestamp, 9000);
-        assert_eq!(latest.native_sequence_number, Some(9_001));
-        assert_eq!(latest.repair_ssrc, 88);
-    }
-
-    #[tokio::test]
-    async fn idr_without_parameter_sets_requests_recovery_keyframe_instead_of_emitting_frame() {
-        let (tx, mut transport_observation_rx, mut source) = make_video_source_for_test();
-
-        tx.send(make_video_rtp_packet(100, 9001, true, bootstrap_idr_nalu()))
-            .await
-            .expect("idr packet should enqueue");
-        tx.send(make_video_rtp_packet(101, 9017, true, bootstrap_idr_nalu()))
-            .await
-            .expect("follow-up packet should flush previous sample");
-        drop(tx);
-
-        let frame = tokio::time::timeout(Duration::from_millis(200), source.recv_frame_inner())
-            .await
-            .expect("reader should finish after rx closes");
-        assert!(frame.is_none());
-
-        let observation =
-            tokio::time::timeout(Duration::from_millis(50), transport_observation_rx.recv())
-                .await
-                .expect("await-recovery observation should be emitted")
-                .expect("observation should exist");
-        assert_eq!(
-            observation,
-            TransportObservation::Admission(TransportAdmissionObservation::AwaitRecoveryKeyframe)
-        );
-    }
-
-    #[tokio::test]
-    async fn bootstrap_packets_without_followup_boundary_do_not_emit_partial_frame() {
-        let (tx, mut transport_observation_rx, mut source) = make_video_source_for_test();
-
-        send_bootstrap_access_unit(&tx, 100, 9000).await;
-        drop(tx);
-
-        let frame = tokio::time::timeout(Duration::from_millis(120), source.recv_frame_inner())
-            .await
-            .expect("reader should finish after rx closes");
-        assert!(frame.is_none());
-        assert!(transport_observation_rx.try_recv().is_err());
-    }
-
-    #[tokio::test]
-    async fn repair_rtx_packet_keeps_explicit_provenance_through_source_stage_updates() {
-        let (tx, _transport_observation_rx, mut source) = make_video_source_for_test();
-
-        let mut packet = make_video_rtp_packet(100, 9_000, true, bootstrap_idr_nalu());
-        packet.meta.ssrc = 777;
-        packet.meta.payload_type = 124;
-        packet.ingress_kind = RtcVideoIngressKind::RtxReinject {
-            repair: RtcVideoRepairMetadata {
-                native_ssrc: 99,
-                native_payload_type: 97,
-                native_sequence_number: 4_321,
-            },
-        };
-        tx.send(packet).await.expect("repair packet should enqueue");
-        drop(tx);
-
-        let frame = tokio::time::timeout(Duration::from_millis(200), source.recv_frame_inner())
-            .await
-            .expect("reader should finish after rx closes");
-        assert!(frame.is_none());
-
-        let latest = source
-            .runtime_stats
-            .read(|stats| stats.latest_video_rtx_reinject_observation.clone())
-            .flatten()
-            .expect("repair provenance observation should be recorded");
-        assert_eq!(latest.stage, "adapterResolveMiss");
-        assert_eq!(latest.sequence_number, 100);
-        assert_eq!(latest.repair_ssrc, 99);
-        assert_eq!(latest.primary_ssrc, 777);
-        assert_eq!(latest.native_sequence_number, Some(4_321));
-    }
-}
+#[path = "source.test.rs"]
+mod tests;

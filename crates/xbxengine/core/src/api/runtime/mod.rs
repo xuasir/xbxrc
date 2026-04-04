@@ -472,4 +472,5 @@ fn now_ms_f64() -> f64 {
 }
 
 #[cfg(test)]
+#[path = "mod.test.rs"]
 mod tests;
