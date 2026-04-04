@@ -16,10 +16,17 @@ export interface StreamStats {
   resolution: string
   rtt: string
   fps: number
+  remoteProfileBaseline?: string
+  remoteProfileDynamic?: string
+  remoteProfileEffectiveLabel?: string
   sessionPhase?: string
-  transportPolicyProfile?: string
-  recoveryPolicyProfile?: string
+  transportStrategyProfile?: string
+  recoveryStrategyProfile?: string
   recoveryDiagnosis?: string
+  recoveryOwnerState?: string
+  recoveryOwnerReason?: string
+  videoOwnerSource?: string
+  videoOwnerObservedAtMs?: number
   directGamingBitrateBand?: string
   videoHealth?: string
   stallKind?: string
@@ -72,6 +79,11 @@ export interface StreamStats {
   }
   videoDecoderResetCount?: number
   videoDecoderStalled?: boolean
+  videoDecoderRecoveryState?: string
+  videoDecoderRecoveryEvent?: string
+  videoDecoderRecoveryDetail?: string
+  videoDecoderRecoveryStatus?: number
+  videoDecoderRecoveryStateChangedAtMs?: number
   videoRendererStalled?: boolean
   packetAgeMs?: number
   decodeAgeMs?: number
@@ -87,6 +99,7 @@ export interface StreamStats {
   videoRendererDropCountTotal?: number
   videoPresentDropCountTotal?: number
   videoPresentOverwriteCountTotal?: number
+  videoPresentEnqueueCountTotal?: number
   videoPresentSubmitCountTotal?: number
   videoPresentDescriptorUploadMode?: string
   videoPresentDescriptorMetalImportCountTotal?: number

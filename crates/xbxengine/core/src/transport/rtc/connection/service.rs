@@ -24,6 +24,8 @@ use crate::{XbxEngineMediaRuntimeStats, XbxEngineRuntimeError};
 
 const VIDEO_RECOVERY_PLI_TO_FIR_MIN_DELAY_MS: f64 = 180.0;
 const VIDEO_RECOVERY_FIR_TO_CONTROL_MIN_DELAY_MS: f64 = 360.0;
+// 与恢复侧的 escalation window 对齐，作为首个 keyframe 响应的统一观测窗口。
+const KEYFRAME_REQUEST_RESPONSE_WINDOW_MS: f64 = 960.0;
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 enum VideoRecoveryTransportStage {
@@ -68,6 +70,7 @@ pub(crate) struct RtcConnectionService {
     pub(super) last_target_remb_request_at_ms: Option<f64>,
     pub(super) last_target_remb_requested_kbps: Option<u32>,
     pub(super) target_remb_request_count: u64,
+    pub(super) local_rtcp_sender_ssrc: u32,
     pub(super) last_selected_pair_diagnostic: Option<String>,
     pub(super) selected_pair_snapshot_emitted: bool,
     pub(super) video_recovery_transport_state: VideoRecoveryTransportState,
@@ -103,6 +106,7 @@ impl Default for RtcConnectionService {
             last_target_remb_request_at_ms: None,
             last_target_remb_requested_kbps: None,
             target_remb_request_count: 0,
+            local_rtcp_sender_ssrc: generate_local_rtcp_sender_ssrc(),
             last_selected_pair_diagnostic: None,
             selected_pair_snapshot_emitted: false,
             video_recovery_transport_state: VideoRecoveryTransportState::default(),
@@ -305,18 +309,24 @@ impl RtcConnectionService {
             ));
         };
         let pli = PictureLossIndication {
-            sender_ssrc: 0,
+            sender_ssrc: self.local_rtcp_sender_ssrc,
             media_ssrc,
         };
         receiver.write_rtcp(vec![Box::new(pli)]).map_err(|err| {
             XbxEngineRuntimeError::new(format!("xbxEngineRtcWriteVideoPliFailed: {err}"))
         })?;
+        let sent_at_ms = crate::transport::rtc::stats::now_ms_f64();
         self.record_video_recovery_observation(
             runtime_stats,
             "rtcVideoPliRequested",
             &format!(
                 "phase1 rtc video PLI requested mediaSsrc={media_ssrc} receiverId={receiver_id:?}",
             ),
+        );
+        RuntimeStatsSink::new(runtime_stats.clone()).record_keyframe_request_episode_sent(
+            "pli",
+            sent_at_ms,
+            Some(sent_at_ms + KEYFRAME_REQUEST_RESPONSE_WINDOW_MS),
         );
         RuntimeStatsSink::new(runtime_stats.clone()).update(|stats| {
             stats.video_pli_request_count_total =
@@ -353,7 +363,7 @@ impl RtcConnectionService {
             ));
         };
         let fir = FullIntraRequest {
-            sender_ssrc: 0,
+            sender_ssrc: self.local_rtcp_sender_ssrc,
             media_ssrc,
             fir: vec![FirEntry {
                 ssrc: media_ssrc,
@@ -363,12 +373,18 @@ impl RtcConnectionService {
         receiver.write_rtcp(vec![Box::new(fir)]).map_err(|err| {
             XbxEngineRuntimeError::new(format!("xbxEngineRtcWriteVideoFirFailed: {err}"))
         })?;
+        let sent_at_ms = crate::transport::rtc::stats::now_ms_f64();
         self.record_video_recovery_observation(
             runtime_stats,
             "rtcVideoFirRequested",
             &format!(
                 "phase1 rtc video FIR requested mediaSsrc={media_ssrc} receiverId={receiver_id:?}",
             ),
+        );
+        RuntimeStatsSink::new(runtime_stats.clone()).record_keyframe_request_episode_sent(
+            "fir",
+            sent_at_ms,
+            Some(sent_at_ms + KEYFRAME_REQUEST_RESPONSE_WINDOW_MS),
         );
         RuntimeStatsSink::new(runtime_stats.clone()).update(|stats| {
             stats.video_pli_request_count_total =
@@ -404,9 +420,14 @@ impl RtcConnectionService {
             "phase1 rtc control keyframe requested",
             runtime_stats,
         )?;
+        let sent_at_ms = crate::transport::rtc::stats::now_ms_f64();
+        RuntimeStatsSink::new(runtime_stats.clone()).record_keyframe_request_episode_sent(
+            "control",
+            sent_at_ms,
+            Some(sent_at_ms + KEYFRAME_REQUEST_RESPONSE_WINDOW_MS),
+        );
         self.video_recovery_transport_state.stage = VideoRecoveryTransportStage::ControlKeyframe;
-        self.video_recovery_transport_state.last_sent_at_ms =
-            Some(crate::transport::rtc::stats::now_ms_f64());
+        self.video_recovery_transport_state.last_sent_at_ms = Some(sent_at_ms);
         RuntimeStatsSink::new(runtime_stats.clone()).update(|stats| {
             stats.video_pli_request_count_total =
                 stats.video_pli_request_count_total.saturating_add(1);
@@ -474,7 +495,7 @@ impl RtcConnectionService {
         };
 
         let remb = ReceiverEstimatedMaximumBitrate {
-            sender_ssrc: 0,
+            sender_ssrc: self.local_rtcp_sender_ssrc,
             bitrate: (target_kbps as f32) * 1_000.0,
             ssrcs: media_ssrc.into_iter().collect(),
         };
@@ -501,6 +522,38 @@ impl RtcConnectionService {
         self.pending_target_remb_kbps = None;
 
         Ok(())
+    }
+
+    pub(crate) fn send_video_rtcp_payload(
+        &mut self,
+        payload: &[u8],
+    ) -> Result<(), XbxEngineRuntimeError> {
+        let Some((receiver_id, _media_ssrc)) = self
+            .controlled_twcc_feedback
+            .preferred_video_feedback_target()
+        else {
+            return Err(XbxEngineRuntimeError::new(
+                "xbxEngineRtcVideoRtcpFeedbackTargetUnavailable",
+            ));
+        };
+        let Some(peer_connection) = self.peer_connection.as_mut() else {
+            return Err(XbxEngineRuntimeError::new(
+                "xbxEngineRtcPeerConnectionUnavailable",
+            ));
+        };
+        let Some(mut receiver) = peer_connection.rtp_receiver(receiver_id) else {
+            return Err(XbxEngineRuntimeError::new(
+                "xbxEngineRtcReceiverLookupFailedForVideoRtcp",
+            ));
+        };
+
+        let mut raw = bytes::Bytes::copy_from_slice(payload);
+        let packets = rtc_rtcp::packet::unmarshal(&mut raw).map_err(|err| {
+            XbxEngineRuntimeError::new(format!("xbxEngineRtcVideoRtcpParseFailed: {err}"))
+        })?;
+        receiver.write_rtcp(packets).map_err(|err| {
+            XbxEngineRuntimeError::new(format!("xbxEngineRtcVideoRtcpWriteFailed: {err}"))
+        })
     }
 
     pub(crate) fn pump(
@@ -558,6 +611,8 @@ impl RtcConnectionService {
         crate::xbx_log_warn!("[xbxengine][rtc-connection] pump after drain peer events/reads");
         self.try_send_message_handshake(runtime_stats)?;
         self.run_delayed_control_actions(runtime_stats)?;
+        RuntimeStatsSink::new(runtime_stats.clone())
+            .record_keyframe_request_episode_timeout(crate::transport::rtc::stats::now_ms_f64());
         self.refresh_transport_metrics(runtime_stats);
         crate::xbx_log_warn!("[xbxengine][rtc-connection] pump exit");
         Ok(())
@@ -599,6 +654,15 @@ fn desired_target_remb_kbps(runtime_stats: &Arc<Mutex<XbxEngineMediaRuntimeStats
 impl RtcConnectionService {
     fn should_refresh_target_remb(&self, target_kbps: u32) -> bool {
         self.last_target_remb_requested_kbps != Some(target_kbps)
+    }
+}
+
+pub(super) fn generate_local_rtcp_sender_ssrc() -> u32 {
+    let seed = crate::transport::rtc::stats::now_ms_f64() as u32;
+    if seed == 0 {
+        1
+    } else {
+        seed
     }
 }
 

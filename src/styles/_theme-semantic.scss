@@ -73,6 +73,14 @@
   --ui-border-placeholder: #{$ui-icon-placeholder-border-dark};
   --ui-surface-placeholder: #{$ui-icon-placeholder-bg-dark};
   --ui-status-positive: #{$ui-status-online};
+  --ui-status-danger: var(--color-danger);
+
+  // 浮层 / 串流：避免组件内写死 rgba/#hex，随主题 token 变化
+  --ui-overlay-immersive-bg: color-mix(in srgb, var(--neutral-0) 96%, transparent);
+  --ui-shadow-floating: 0 12px 32px color-mix(in srgb, var(--neutral-0) 24%, transparent);
+  --ui-notice-warning-bg: color-mix(in srgb, var(--color-warning) 36%, transparent);
+  --ui-notice-warning-border: color-mix(in srgb, var(--color-warning) 28%, transparent);
+  --ui-notice-warning-mix: color-mix(in srgb, var(--ui-scrim-bg) 58%, var(--color-warning) 42%);
 
   --ui-scrollbar-thumb: #{$ui-scrollbar-thumb-dark};
   --ui-scrollbar-thumb-hover: #{$ui-scrollbar-thumb-hover-dark};
@@ -479,6 +487,12 @@
 
   --ui-shadow-overlay: 0 12px 32px rgba(0, 0, 0, 0.12);
   --ui-scrim-bg: rgba(0, 0, 0, 0.35);
+
+  --ui-overlay-immersive-bg: color-mix(in srgb, var(--neutral-0) 96%, transparent);
+  --ui-shadow-floating: 0 12px 32px color-mix(in srgb, var(--neutral-0) 12%, transparent);
+  --ui-notice-warning-bg: color-mix(in srgb, var(--color-warning) 28%, transparent);
+  --ui-notice-warning-border: color-mix(in srgb, var(--color-warning) 22%, transparent);
+  --ui-notice-warning-mix: color-mix(in srgb, var(--ui-scrim-bg) 52%, var(--color-warning) 48%);
 }
 
 // 公共页面骨架：页面只描述结构，不重复拼边框/背景/字号

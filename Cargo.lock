@@ -8607,6 +8607,7 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "xbox-webapi",
+ "xbxengine-protocol",
 ]
 
 [[package]]
@@ -8632,6 +8633,7 @@ name = "xbxengine"
 version = "0.1.0"
 dependencies = [
  "async-trait",
+ "base64 0.22.1",
  "bytes",
  "cpal",
  "h264-reader",

@@ -3,7 +3,8 @@ use std::time::{Duration, Instant};
 
 use crate::runtime_stats_sink::RuntimeStatsSink;
 use crate::transport::rtc::recovery::escalation::VideoEscalationReason;
-use crate::transport::rtc::recovery::policy::{RecoveryScenarioProfile, ScenarioPolicyResolver};
+use crate::transport::rtc::recovery::policy::RecoveryScenarioProfile;
+use crate::transport::rtc::recovery::runtime_state::resolve_runtime_recovery_profile;
 use crate::XbxEngineMediaRuntimeStats;
 
 pub const STARTUP_LOW_QUALITY_RETRY_DELAY_MS: u64 = 320;
@@ -145,7 +146,7 @@ fn resolve_session_phase_from_stats(
     let profile = resolve_recovery_profile(stats);
     let effective_bitrate = extract_startup_recovery_bitrate_kbps(stats).unwrap_or(0.0);
     let render_age_ms = stats
-        .latest_video_present_time_ms
+        .latest_video_host_present_time_ms
         .map(|at_ms| (now_ms_f64() - at_ms).max(0.0))
         .unwrap_or(f64::INFINITY);
     let active_recovery_diagnosis = matches!(
@@ -234,10 +235,7 @@ fn now_ms_f64() -> f64 {
 }
 
 fn resolve_recovery_profile(stats: &XbxEngineMediaRuntimeStats) -> RecoveryScenarioProfile {
-    ScenarioPolicyResolver::resolve_recovery_profile(
-        stats.session_target_type.as_ref(),
-        stats.transport_path.as_deref(),
-    )
+    resolve_runtime_recovery_profile(stats)
 }
 
 #[cfg(test)]

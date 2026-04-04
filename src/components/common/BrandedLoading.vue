@@ -64,8 +64,8 @@ withDefaults(defineProps<Props>(), {
   border-radius: 50%;
   background: radial-gradient(
     circle,
-    rgba(16, 124, 16, 0.22) 0%,
-    rgba(16, 124, 16, 0.08) 50%,
+    color-mix(in srgb, var(--brand-primary) 22%, transparent) 0%,
+    color-mix(in srgb, var(--brand-primary) 8%, transparent) 50%,
     transparent 70%
   );
   animation: aura-pulse 3s ease-in-out infinite;
@@ -84,12 +84,12 @@ withDefaults(defineProps<Props>(), {
     color-mix(in srgb, var(--brand-primary) 20%, transparent) 120deg,
     transparent 240deg
   );
-  -webkit-mask: 
-    linear-gradient(#fff 0 0) content-box, 
-    linear-gradient(#fff 0 0);
-  mask: 
-    linear-gradient(#fff 0 0) content-box, 
-    linear-gradient(#fff 0 0);
+  -webkit-mask:
+    linear-gradient(var(--neutral-1000) 0 0) content-box,
+    linear-gradient(var(--neutral-1000) 0 0);
+  mask:
+    linear-gradient(var(--neutral-1000) 0 0) content-box,
+    linear-gradient(var(--neutral-1000) 0 0);
   -webkit-mask-composite: xor;
   mask-composite: exclude;
   animation: ring-rotate 1.2s cubic-bezier(0.4, 0, 0.2, 1) infinite;

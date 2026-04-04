@@ -6,7 +6,9 @@ use crate::runtime_stats_sink::RuntimeStatsSink;
 use crate::transport::rtc::recovery::escalation::{
     RecoveryAction, VideoEscalationDecision, VideoEscalationReason,
 };
-use crate::transport::rtc::recovery::runtime_state::unix_now_ms;
+use crate::transport::rtc::recovery::runtime_state::{
+    recovery_stage_label_from_stats, unix_now_ms,
+};
 use crate::XbxEngineMediaRuntimeStats;
 
 pub(crate) const HARD_STALL_DECODER_RESET_MS: f64 = 1_200.0;
@@ -22,6 +24,7 @@ struct HardStallSnapshot {
     effective_present_fps: f64,
     direct_gaming_bitrate_band: Option<String>,
     latest_action: Option<String>,
+    recovery_stage: String,
     since_last_decoder_reset_ms: f64,
 }
 
@@ -49,7 +52,19 @@ pub(crate) fn resolve_persistent_stall_recovery(
     if snapshot.should_escalate_to_reconnect() {
         return Some(VideoEscalationDecision {
             observation_id: 0,
-            action: RecoveryAction::RequestDecoderReset,
+            action: if snapshot.recovery_stage == "steady"
+                && matches!(
+                    snapshot.latest_action.as_deref(),
+                    Some(
+                        "requestDecoderReset"
+                            | "requestKeyframe+decoderReset"
+                            | "requestKeyframe+decoderReset(startupLowQualityRetry)"
+                    )
+                ) {
+                RecoveryAction::RequestReconnectCandidate
+            } else {
+                RecoveryAction::RequestDecoderReset
+            },
         });
     }
 
@@ -84,8 +99,9 @@ fn read_hard_stall_snapshot(
 ) -> Option<HardStallSnapshot> {
     let now_ms = unix_now_ms();
     RuntimeStatsSink::read_shared(runtime_stats, |stats| {
+        let recovery_stage = recovery_stage_label_from_stats(stats);
         let present_age_ms = stats
-            .latest_video_present_time_ms
+            .latest_video_host_present_time_ms
             .map(|at_ms| (now_ms - at_ms).max(0.0))
             .unwrap_or(HARD_STALL_RECONNECT_MS);
         let effective_present_fps = if stats.video_renderer_stalled.unwrap_or(false)
@@ -109,6 +125,7 @@ fn read_hard_stall_snapshot(
                 .latest_video_escalation_observation
                 .as_ref()
                 .map(|observation| observation.action.clone()),
+            recovery_stage: recovery_stage.to_string(),
             since_last_decoder_reset_ms: stats
                 .latest_video_decoder_reset_time_ms
                 .map(|at_ms| (now_ms - at_ms).max(0.0))
@@ -131,6 +148,7 @@ impl HardStallSnapshot {
         self.present_age_ms >= HARD_STALL_RECONNECT_MS
             && self.packet_age_ms >= HARD_STALL_RECONNECT_MS
             && self.since_last_decoder_reset_ms >= HARD_STALL_MIN_RECONNECT_SPACING_MS
+            && self.recovery_stage != "rebuilding-supply"
             && matches!(
                 self.latest_action.as_deref(),
                 Some(

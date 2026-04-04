@@ -518,6 +518,7 @@ async function handleStreamMenuAction(id: string): Promise<void> {
         :visible="performanceVisible && (isConnected || performanceBinding.phase === 'mounted')"
         :compact="performanceStyle"
         :snapshot="performanceSnapshot"
+        :diagnostics="diagnostics"
         :resolution-mode="resolutionMode"
       />
       <StreamMicrophoneStatus
@@ -737,7 +738,7 @@ async function handleStreamMenuAction(id: string): Promise<void> {
 }
 
 .stream-page__overlay--immersive {
-  background: rgba(0, 0, 0, 0.96);
+  background: var(--ui-overlay-immersive-bg);
 }
 
 .stream-page__loading-stack {
@@ -843,8 +844,8 @@ async function handleStreamMenuAction(id: string): Promise<void> {
 }
 
 .stream-page__chrome-btn--danger[data-focused='true'] {
-  background: #e81123;
-  color: var(--ui-focus-text);
+  background: var(--color-danger);
+  color: var(--brand-on-primary);
 }
 
 /* 覆盖层 Overlays */
@@ -899,4 +900,3 @@ async function handleStreamMenuAction(id: string): Promise<void> {
   flex-direction: column;
 }
 </style>
-

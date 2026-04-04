@@ -309,7 +309,7 @@ watch(
 
 .setting-display-options-sheet__action--primary {
   background: var(--brand-primary);
-  color: #ffffff;
+  color: var(--brand-on-primary);
 }
 
 .setting-display-options-sheet__action[data-focused='true'] {
@@ -321,7 +321,7 @@ watch(
 
 .setting-display-options-sheet__action--primary[data-focused='true'] {
   background: var(--brand-primary-strong);
-  color: #ffffff;
+  color: var(--brand-on-primary);
 }
 
 .setting-display-options-sheet-transition-leave-to .setting-display-options-sheet__panel {

@@ -146,13 +146,13 @@ function handleSelect(id: string): void {
 }
 
 .stream-alert-sheet__action--danger {
-  background: rgba(232, 17, 35, 0.1);
-  color: #ff5252;
+  background: color-mix(in srgb, var(--color-danger) 10%, transparent);
+  color: var(--color-danger);
 }
 
 .stream-alert-sheet__action--danger[data-focused='true'] {
-  background: #e81123;
-  color: var(--ui-focus-text);
+  background: var(--color-danger);
+  color: var(--brand-on-primary);
 }
 
 /* 动画 */

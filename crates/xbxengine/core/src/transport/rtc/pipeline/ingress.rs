@@ -19,7 +19,17 @@ pub(super) fn drain_ingress_to_decode(
     frame_count: u64,
     observation: &MediaSupervisorObservationState,
 ) {
-    while decode_handle.available_slots() > 0 {
+    loop {
+        let demand = decode_handle.demand_snapshot();
+        if !demand.accepts_input {
+            if demand.pending_output_backpressure && frame_count % 120 == 0 {
+                crate::xbx_log_info!(
+                    "[MediaSession] decode pending output backpressure, pause ingress handoff (slots={})",
+                    demand.available_input_slots
+                );
+            }
+            break;
+        }
         let Some(frame) = ingress.pop() else {
             break;
         };

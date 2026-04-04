@@ -35,6 +35,7 @@ pub(crate) struct RtcPayloadRouteMap {
     repair_video_payload_types: HashSet<u8>,
     repair_rtx_payload_types: HashSet<u8>,
     repair_rtx_apt_targets: HashMap<u8, u8>,
+    repair_video_ssrc_primary_ssrc: HashMap<u32, u32>,
 }
 
 impl RtcPayloadRouteMap {
@@ -54,8 +55,18 @@ impl RtcPayloadRouteMap {
         self.repair_rtx_payload_types.contains(&payload_type)
     }
 
+    pub(crate) fn is_primary_video_payload_type(&self, payload_type: u8) -> bool {
+        self.primary_video_payload_types.contains(&payload_type)
+    }
+
     pub(crate) fn primary_payload_type_for_rtx(&self, payload_type: u8) -> Option<u8> {
         self.repair_rtx_apt_targets.get(&payload_type).copied()
+    }
+
+    pub(crate) fn primary_ssrc_for_repair(&self, repair_ssrc: u32) -> Option<u32> {
+        self.repair_video_ssrc_primary_ssrc
+            .get(&repair_ssrc)
+            .copied()
     }
 }
 
@@ -197,6 +208,7 @@ pub(crate) fn parse_payload_route_map_from_answer(answer_sdp: &str) -> Option<Rt
     let mut current_section_index = None::<usize>;
     let mut codec_by_payload_type = HashMap::<u8, String>::new();
     let mut rtx_apt_targets = HashMap::<u8, u8>::new();
+    let mut repair_video_ssrc_primary_ssrc = HashMap::<u32, u32>::new();
 
     for raw_line in answer_sdp.lines() {
         let line = raw_line.trim();
@@ -225,6 +237,11 @@ pub(crate) fn parse_payload_route_map_from_answer(answer_sdp: &str) -> Option<Rt
                 .contains(&payload_type)
             {
                 rtx_apt_targets.insert(payload_type, apt_payload_type);
+            }
+        }
+        if matches!(sections[section_index].kind, SdpMediaKind::Video) {
+            if let Some((primary_ssrc, repair_ssrc)) = parse_ssrc_group_fid_line(line) {
+                repair_video_ssrc_primary_ssrc.insert(repair_ssrc, primary_ssrc);
             }
         }
     }
@@ -264,6 +281,7 @@ pub(crate) fn parse_payload_route_map_from_answer(answer_sdp: &str) -> Option<Rt
             SdpMediaKind::Other => {}
         }
     }
+    route_map.repair_video_ssrc_primary_ssrc = repair_video_ssrc_primary_ssrc;
 
     if route_map.audio_payload_types.is_empty()
         && route_map.primary_video_payload_types.is_empty()
@@ -327,6 +345,14 @@ fn parse_apt_line(line: &str) -> Option<(u8, u8)> {
         }
     })?;
     Some((payload_type, apt_value))
+}
+
+fn parse_ssrc_group_fid_line(line: &str) -> Option<(u32, u32)> {
+    let value = line.strip_prefix("a=ssrc-group:FID ")?;
+    let mut tokens = value.split_whitespace();
+    let primary_ssrc = tokens.next()?.parse::<u32>().ok()?;
+    let repair_ssrc = tokens.next()?.parse::<u32>().ok()?;
+    Some((primary_ssrc, repair_ssrc))
 }
 
 fn is_repair_codec(codec: &str) -> bool {
@@ -411,5 +437,20 @@ mod tests {
             map.classify_payload_type(122),
             Some(RtcMediaRouteLabel::RepairVideo)
         );
+    }
+
+    #[test]
+    fn answer_payload_map_extracts_video_fid_repair_ssrc_mapping() {
+        let answer = concat!(
+            "v=0\r\n",
+            "m=video 9 UDP/TLS/RTP/SAVPF 124 97\r\n",
+            "a=rtpmap:124 H264/90000\r\n",
+            "a=rtpmap:97 rtx/90000\r\n",
+            "a=fmtp:97 apt=124\r\n",
+            "a=ssrc-group:FID 1111 2222\r\n",
+        );
+        let map = parse_payload_route_map_from_answer(answer).expect("route map should exist");
+        assert_eq!(map.primary_ssrc_for_repair(2222), Some(1111));
+        assert_eq!(map.primary_ssrc_for_repair(1111), None);
     }
 }

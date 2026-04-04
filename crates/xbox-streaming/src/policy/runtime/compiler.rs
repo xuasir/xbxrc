@@ -5,9 +5,11 @@ use crate::policy::runtime::{
     RuntimeVideoPipelinePlan, TurnPlan,
 };
 use crate::policy::types::{CompileError, Owner, Target, TurnSource};
+use xbxengine_protocol::{XbxEngineRemoteProfileKindDto, XbxEngineTargetTypeDto};
 
 pub fn compile_runtime(config: &Config, context: &Context) -> Result<RuntimePlan, CompileError> {
     let mode = resolve_runtime_mode(config, context)?;
+    let remote_profile = resolve_runtime_remote_profile(context.target);
     let owner = match mode {
         RuntimeMode::WebRtcDirect => Owner::Browser,
         RuntimeMode::RustOwned => Owner::Sidecar,
@@ -47,7 +49,7 @@ pub fn compile_runtime(config: &Config, context: &Context) -> Result<RuntimePlan
         remb_ceiling_kbps: compile_remb_ceiling_kbps(mode),
         remb_ramp_up_step_kbps: compile_remb_ramp_up_step_kbps(mode),
         remb_ramp_down_factor: compile_remb_ramp_down_factor(mode),
-        video_pipeline: compile_video_pipeline(mode, context.target),
+        video_pipeline: compile_video_pipeline(mode, remote_profile),
         recovery: compile_recovery(mode),
     })
 }
@@ -125,7 +127,18 @@ fn compile_remb_ramp_down_factor(mode: RuntimeMode) -> u16 {
     }
 }
 
-fn compile_video_pipeline(mode: RuntimeMode, target: Target) -> RuntimeVideoPipelinePlan {
+fn resolve_runtime_remote_profile(target: Target) -> XbxEngineRemoteProfileKindDto {
+    let target_type = match target {
+        Target::Home => XbxEngineTargetTypeDto::Home,
+        Target::Cloud => XbxEngineTargetTypeDto::Cloud,
+    };
+    XbxEngineRemoteProfileKindDto::from_target_type(target_type)
+}
+
+fn compile_video_pipeline(
+    mode: RuntimeMode,
+    remote_profile: XbxEngineRemoteProfileKindDto,
+) -> RuntimeVideoPipelinePlan {
     match mode {
         RuntimeMode::WebRtcDirect => RuntimeVideoPipelinePlan {
             feedback_interval_ms: 1_000,
@@ -142,7 +155,7 @@ fn compile_video_pipeline(mode: RuntimeMode, target: Target) -> RuntimeVideoPipe
             backlog_drop_threshold_packets: 10,
         },
         RuntimeMode::RustOwned => {
-            if matches!(target, Target::Cloud) {
+            if remote_profile.is_cloud() {
                 // Cloud 侧可以放宽 NACK/jitter 等视频管线参数，但 TWCC 反馈节奏仍需保持快反馈。
                 // Rust-owned 的 BWE/恢复策略按 100ms 级 feedback 设计，若放慢到 1000ms，
                 // 会把 cloud 场景误判成“长期 await/unstable”，进一步放大保守 backoff。
@@ -206,11 +219,24 @@ fn compile_recovery(mode: RuntimeMode) -> RuntimeRecoveryPlan {
 
 #[cfg(test)]
 mod tests {
-    use super::compile_runtime;
+    use super::{compile_runtime, resolve_runtime_remote_profile};
     use crate::policy::config::Config;
     use crate::policy::context::Context;
     use crate::policy::runtime::RuntimePreference;
     use crate::policy::types::Target;
+    use xbxengine_protocol::XbxEngineRemoteProfileKindDto;
+
+    #[test]
+    fn runtime_remote_profile_follows_shared_contract_baseline() {
+        assert_eq!(
+            resolve_runtime_remote_profile(Target::Cloud),
+            XbxEngineRemoteProfileKindDto::CloudGaming
+        );
+        assert_eq!(
+            resolve_runtime_remote_profile(Target::Home),
+            XbxEngineRemoteProfileKindDto::HomeLanGaming
+        );
+    }
 
     #[test]
     fn rust_owned_cloud_aligns_video_pipeline_but_keeps_sidecar_recovery_profile() {

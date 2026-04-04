@@ -1,3 +1,4 @@
+use crate::media::video::ingress::budget::FrameBudgetContext;
 use crate::media::video::types::FrameValue;
 use crate::transport::rtc::stream::nack_scheduler::{NackObservePolicy, PacketRecoveryDisposition};
 
@@ -48,13 +49,18 @@ pub(super) fn cloud_nack_max_age_ms(
 pub(super) fn sample_loss_nack_policy(
     sample_rtp_timestamp: u32,
     frame_is_keyframe: bool,
-    frame_importance: &'static str,
+    budget_context: FrameBudgetContext,
     deadline_at_ms: f64,
     repairability: f64,
     cloud_mode: bool,
     startup_mode: bool,
     cloud_rtt_floor_ms: Option<f64>,
 ) -> NackObservePolicy {
+    let frame_importance = if frame_is_keyframe {
+        "keyframe"
+    } else {
+        budget_context.frame_importance()
+    };
     let (base_max_age_ms, base_retry_interval_ms, base_burst_count, base_priority) =
         match (cloud_mode, startup_mode, frame_importance) {
             (true, true, "keyframe") => (360.0, 40.0, 8.0, 3u8),
@@ -77,11 +83,13 @@ pub(super) fn sample_loss_nack_policy(
         .round()
         .max(4.0) as u64;
     let burst_count = (base_burst_count + (repairability * 1.8)).round().max(1.0) as u16;
-    let priority = if repairability >= 0.86 {
-        base_priority.saturating_add(1).min(4)
-    } else {
-        base_priority
-    };
+    let priority = budget_context
+        .repair_priority(frame_value_for_importance(frame_importance))
+        .max(if repairability >= 0.86 {
+            base_priority.saturating_add(1).min(4)
+        } else {
+            base_priority
+        });
     NackObservePolicy {
         source: "sampleLoss",
         deadline_at_ms: Some(deadline_at_ms),
@@ -103,6 +111,7 @@ pub(super) fn sample_loss_nack_policy(
         frame_is_keyframe: Some(frame_is_keyframe),
         frame_importance,
         priority,
+        budget_context,
         estimated_recovery_arrival_ms: None,
         frame_playout_deadline_at_ms: Some(deadline_at_ms),
         nack_disposition: PacketRecoveryDisposition::Attempted,
@@ -112,13 +121,14 @@ pub(super) fn sample_loss_nack_policy(
 
 pub(super) fn rtp_window_nack_policy(
     frame_value: FrameValue,
+    budget_context: FrameBudgetContext,
     deadline_at_ms: f64,
     cloud_mode: bool,
     startup_mode: bool,
     cloud_rtt_floor_ms: Option<f64>,
 ) -> NackObservePolicy {
     let (frame_importance, frame_is_keyframe, retry_interval_ms, burst_count, priority) =
-        transport_policy_tuple(frame_value, cloud_mode, startup_mode);
+        transport_policy_tuple(frame_value, budget_context, cloud_mode, startup_mode);
     NackObservePolicy {
         source: "rtpWindow",
         deadline_at_ms: Some(deadline_at_ms),
@@ -149,6 +159,7 @@ pub(super) fn rtp_window_nack_policy(
         frame_is_keyframe: Some(frame_is_keyframe),
         frame_importance,
         priority,
+        budget_context,
         estimated_recovery_arrival_ms: None,
         frame_playout_deadline_at_ms: Some(deadline_at_ms),
         nack_disposition: PacketRecoveryDisposition::Attempted,
@@ -158,13 +169,14 @@ pub(super) fn rtp_window_nack_policy(
 
 pub(super) fn rtp_gap_nack_policy(
     frame_value: FrameValue,
+    budget_context: FrameBudgetContext,
     deadline_at_ms: f64,
     cloud_mode: bool,
     startup_mode: bool,
     cloud_rtt_floor_ms: Option<f64>,
 ) -> NackObservePolicy {
     let (frame_importance, frame_is_keyframe, retry_interval_ms, burst_count, priority) =
-        transport_policy_tuple(frame_value, cloud_mode, startup_mode);
+        transport_policy_tuple(frame_value, budget_context, cloud_mode, startup_mode);
     NackObservePolicy {
         source: "rtpGap",
         deadline_at_ms: Some(deadline_at_ms),
@@ -199,6 +211,7 @@ pub(super) fn rtp_gap_nack_policy(
         frame_is_keyframe: Some(frame_is_keyframe),
         frame_importance,
         priority,
+        budget_context,
         estimated_recovery_arrival_ms: None,
         frame_playout_deadline_at_ms: Some(deadline_at_ms),
         nack_disposition: PacketRecoveryDisposition::Attempted,
@@ -208,32 +221,31 @@ pub(super) fn rtp_gap_nack_policy(
 
 fn transport_policy_tuple(
     frame_value: FrameValue,
+    budget_context: FrameBudgetContext,
     cloud_mode: bool,
     startup_mode: bool,
 ) -> (&'static str, bool, u64, u16, u8) {
-    if frame_value.is_sync_point() {
-        if cloud_mode && startup_mode {
-            ("keyframe", true, 30, 8, 3)
-        } else if cloud_mode {
-            ("keyframe", true, 24, 6, 3)
-        } else {
-            ("keyframe", true, 8, 4, 3)
-        }
-    } else if frame_value.refresh_boost {
-        if cloud_mode && startup_mode {
-            ("reference", false, 26, 7, 2)
-        } else if cloud_mode {
-            ("reference", false, 20, 5, 2)
-        } else {
-            ("reference", false, 7, 3, 2)
-        }
-    } else if cloud_mode && startup_mode {
-        ("delta", false, 22, 6, 1)
-    } else if cloud_mode {
-        ("delta", false, 16, 4, 1)
-    } else {
-        ("delta", false, 6, 2, 1)
-    }
+    let frame_importance = budget_context.frame_importance();
+    let frame_is_keyframe = matches!(frame_importance, "keyframe") || frame_value.is_sync_point();
+    let (retry_interval_ms, burst_count) = match (cloud_mode, startup_mode, frame_importance) {
+        (true, true, "keyframe") => (30, 8),
+        (true, true, "reference") => (26, 7),
+        (true, true, _) => (22, 6),
+        (true, false, "keyframe") => (24, 6),
+        (true, false, "reference") => (20, 5),
+        (true, false, _) => (16, 4),
+        (false, _, "keyframe") => (8, 4),
+        (false, _, "reference") => (7, 3),
+        (false, _, _) => (6, 2),
+    };
+    let priority = budget_context.repair_priority(frame_value);
+    (
+        frame_importance,
+        frame_is_keyframe,
+        retry_interval_ms,
+        burst_count,
+        priority,
+    )
 }
 
 pub(super) fn frame_value_for_importance(frame_importance: &'static str) -> FrameValue {

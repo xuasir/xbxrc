@@ -13,7 +13,17 @@ interface StreamDiagnosticsPanelProps {
 }
 
 interface StreamDiagnosticsRowViewModel {
-  key: 'region' | 'server' | 'relay' | 'path' | 'profile' | 'phase' | 'reason' | 'band' | 'health' | 'stall' | 'status'
+  key:
+    | 'region'
+    | 'server'
+    | 'relay'
+    | 'path'
+    | 'inputPortrait'
+    | 'phase'
+    | 'ownerState'
+    | 'ownerReason'
+    | 'decoderState'
+    | 'status'
   value: string
 }
 
@@ -49,31 +59,28 @@ const rows = computed<StreamDiagnosticsRowViewModel[]>(() => [
   },
   {
     key: 'path',
-    value: resolveTransportPathText(),
+    value: props.diagnostics.transportSummary ?? t('streamPage.diagnostics.values.unknown'),
   },
   {
-    key: 'profile',
-    value: props.diagnostics.transportPolicyProfile ?? t('streamPage.diagnostics.values.unknown'),
+    key: 'inputPortrait',
+    value: props.diagnostics.recoveryInputPortrait ?? t('streamPage.diagnostics.values.unknown'),
   },
   {
     key: 'phase',
     value: props.diagnostics.sessionPhase ?? t('streamPage.diagnostics.values.unknown'),
   },
   {
-    key: 'reason',
-    value: props.diagnostics.recoveryDiagnosis ?? t('streamPage.diagnostics.values.none'),
+    key: 'decoderState',
+    value:
+      props.diagnostics.videoDecoderRecoveryState ?? t('streamPage.diagnostics.values.unknown'),
   },
   {
-    key: 'band',
-    value: props.diagnostics.directGamingBitrateBand ?? t('streamPage.diagnostics.values.none'),
+    key: 'ownerState',
+    value: props.diagnostics.recoveryOwnerState ?? t('streamPage.diagnostics.values.unknown'),
   },
   {
-    key: 'health',
-    value: props.diagnostics.videoHealth ?? t('streamPage.diagnostics.values.unknown'),
-  },
-  {
-    key: 'stall',
-    value: props.diagnostics.stallKind ?? t('streamPage.diagnostics.values.none'),
+    key: 'ownerReason',
+    value: props.diagnostics.recoveryOwnerReason ?? t('streamPage.diagnostics.values.none'),
   },
   {
     key: 'status',
@@ -112,55 +119,19 @@ const notices = computed<StreamDiagnosticsNoticeViewModel[]>(() => {
 })
 
 function resolveStatusText(): string {
-  if (props.diagnostics.hasNoVideoWarning) {
+  if (props.diagnostics.statusCode === 'noVideo') {
     return t('streamPage.diagnostics.values.noVideo')
   }
-  if (props.diagnostics.videoHealth === 'recovering') {
+  if (props.diagnostics.statusCode === 'recovering') {
     return t('streamPage.diagnostics.values.recovering')
   }
-  if (props.diagnostics.isRecovering) {
-    return t('streamPage.diagnostics.values.recovering')
+  if (props.diagnostics.statusCode === 'owner' && props.diagnostics.recoveryOwnerState !== undefined) {
+    return props.diagnostics.recoveryOwnerState
   }
-  if (props.diagnostics.isActive) {
+  if (props.diagnostics.statusCode === 'stable') {
     return t('streamPage.diagnostics.values.stable')
   }
   return t('streamPage.diagnostics.values.inactive')
-}
-
-function resolveTransportPathText(): string {
-  const base = props.diagnostics.transportPath
-  const details = [
-    props.diagnostics.transportCandidatePair,
-    props.diagnostics.transportProtocol,
-    formatAddressFamily(props.diagnostics.transportAddressFamily),
-  ].filter((item): item is string => item !== undefined && item.trim() !== '')
-
-  if (base !== undefined && details.length > 0) {
-    return `${base} | ${details.join(' | ')}`
-  }
-  if (base !== undefined) {
-    return base
-  }
-  if (details.length > 0) {
-    return details.join(' | ')
-  }
-  return t('streamPage.diagnostics.values.unknown')
-}
-
-function formatAddressFamily(family: StreamSessionDiagnosticsSnapshot['transportAddressFamily']): string | undefined {
-  if (family === undefined) {
-    return undefined
-  }
-  if (family === 'ipv4') {
-    return 'IPv4'
-  }
-  if (family === 'ipv6') {
-    return 'IPv6'
-  }
-  if (family === 'mixed') {
-    return 'MIXED'
-  }
-  return 'UNKNOWN'
 }
 </script>
 
@@ -207,7 +178,12 @@ function formatAddressFamily(family: StreamSessionDiagnosticsSnapshot['transport
   background: var(--ui-surface-info-panel);
   border: 1px solid var(--ui-border-subtle);
   color: var(--ui-page-text);
-  pointer-events: none;
+  /* 需要允许滚动，否则信息较多时超出视口会被裁掉且无法滚动查看 */
+  pointer-events: auto;
+  max-height: calc(100vh - 156px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 .stream-diagnostics-panel__header {
@@ -233,6 +209,11 @@ function formatAddressFamily(family: StreamSessionDiagnosticsSnapshot['transport
   display: flex;
   flex-direction: column;
   gap: 8px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 2px;
+  flex: 1;
+  min-height: 0;
 }
 
 .stream-diagnostics-panel__row {
@@ -272,8 +253,8 @@ function formatAddressFamily(family: StreamSessionDiagnosticsSnapshot['transport
 }
 
 .stream-diagnostics-panel__notice--warning {
-  background: rgba(159, 84, 24, 0.36);
-  border: 1px solid rgba(255, 184, 77, 0.28);
+  background: var(--ui-notice-warning-bg);
+  border: 1px solid var(--ui-notice-warning-border);
 }
 
 @media (max-width: 768px) {
@@ -282,6 +263,7 @@ function formatAddressFamily(family: StreamSessionDiagnosticsSnapshot['transport
     left: 16px;
     right: 16px;
     width: auto;
+    max-height: calc(100vh - 164px);
   }
 }
 </style>

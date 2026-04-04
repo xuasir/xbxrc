@@ -56,15 +56,16 @@ pub fn map_runtime_event(event: &XbxEngineRuntimeEventDto) -> Option<Value> {
             "type": "media.surfaceReady",
             "surfaceId": surface_id
         })),
-        XbxEngineRuntimeEventDto::StatsVideoFrameProcessed {
+        XbxEngineRuntimeEventDto::StatsVideoFrameRendered {
             first_frame_packet_arrival_time_ms,
             frame_decoded_time_ms,
-            frame_rendered_time_ms,
+            renderer_frame_time_ms,
         } => Some(json!({
-            "type": "stats.videoFrameProcessed",
+            "type": "stats.videoFrameRendered",
             "firstFramePacketArrivalTimeMs": first_frame_packet_arrival_time_ms,
             "frameDecodedTimeMs": frame_decoded_time_ms,
-            "frameRenderedTimeMs": frame_rendered_time_ms
+            // `StatsVideoFrameRendered` 来自 renderer 处理时钟，不代表 host present 完成时间。
+            "rendererFrameTimeMs": renderer_frame_time_ms
         })),
         XbxEngineRuntimeEventDto::ErrorReported { code, message } => Some(json!({
             "type": "error",

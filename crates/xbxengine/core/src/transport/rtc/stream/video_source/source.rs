@@ -1,19 +1,22 @@
 use super::{build_sample_builder, now_ms_f64, UINT16SIZE_HALF};
 use crate::media::video::h264::inspection::{H264AccessUnitInspection, H264BootstrapRejectReason};
+use base64::Engine as _;
 use bytes::Bytes;
 
+use crate::media::video::ingress::budget::FrameBudgetContext;
 use crate::media::video::types::{AssembledVideoFrame, FrameValue, VideoCodec};
 use crate::transport::rtc::stream::adapter_types::{
     FrameSource, TransportAdmissionObservation, TransportLossObservation, TransportObservation,
     TransportObservationSource,
 };
+use crate::transport::rtc::stream::packet_types::{RtcVideoIngressKind, RtcVideoRepairMetadata};
 use crate::transport::rtc::stream::video_source::{
     RtcVideoFrameSource, RtcVideoTransportObservationSource,
 };
 
 use crate::{
     XbxEngineAnchorCandidateFailureReason, XbxEngineAnchorCandidateState,
-    XbxEngineVideoRtxReinjectObservation,
+    XbxEngineH264InspectionObservation, XbxEngineVideoRtxReinjectObservation,
 };
 use xbxengine_protocol::XbxEngineTargetTypeDto;
 
@@ -38,14 +41,18 @@ pub(super) fn resolve_inspection_admission(
         return InspectionAdmission::AwaitRecoveryKeyframe;
     }
 
-    InspectionAdmission::Accept
+    if inspection.bootstrap_ready || inspection.delta_continuation_ready() {
+        return InspectionAdmission::Accept;
+    }
+
+    InspectionAdmission::AwaitRecoveryKeyframe
 }
 
-fn inspection_reject_reason(inspection: &H264AccessUnitInspection) -> &'static str {
+fn inspection_bootstrap_reason(inspection: &H264AccessUnitInspection) -> &'static str {
     match inspection.bootstrap_reject_reason {
         Some(H264BootstrapRejectReason::NoVcl) => "inspectionRejectNoVcl",
-        Some(H264BootstrapRejectReason::MissingSps) => "inspectionRejectMissingSps",
-        Some(H264BootstrapRejectReason::MissingPps) => "inspectionRejectMissingPps",
+        Some(H264BootstrapRejectReason::MissingSps) => "bootstrapMissingSps",
+        Some(H264BootstrapRejectReason::MissingPps) => "bootstrapMissingPps",
         Some(H264BootstrapRejectReason::NonIdrVcl) => "inspectionRejectNonIdrVcl",
         Some(H264BootstrapRejectReason::InvalidSliceHeader) => "inspectionRejectInvalidSliceHeader",
         None if !inspection.slice_headers_valid => "inspectionRejectInvalidSliceHeader",
@@ -58,6 +65,7 @@ pub(super) fn resolve_recovery_keyframe_action(
     sample_loss_burst_count: u8,
     media_dropped_packets: u16,
     is_keyframe: bool,
+    allow_soft_reentry_submit: bool,
 ) -> (bool, RecoveryKeyframeAction) {
     // 带丢包的 keyframe/reference 不能继续喂给解码器，否则很容易把本地参考链喂脏，
     // 在 macOS 上会直接放大成 VideoToolbox 连续 bad-data 回调。
@@ -77,6 +85,10 @@ pub(super) fn resolve_recovery_keyframe_action(
     }
 
     if waiting_for_recovery_keyframe {
+        if allow_soft_reentry_submit {
+            // clean anchor 后的短窗内，健康 delta 只要还能安全提交，就别继续把链路拖回 recovering。
+            return (false, RecoveryKeyframeAction::Submit);
+        }
         return (true, RecoveryKeyframeAction::WaitKeyframe);
     }
 
@@ -108,6 +120,64 @@ pub(super) fn detect_forward_gap(
 }
 
 impl RtcVideoFrameSource {
+    fn maybe_seed_h264_bootstrap_from_remote_answer(&self) {
+        if self.h264_inspector.committed_sps_present()
+            && self.h264_inspector.committed_pps_present()
+        {
+            return;
+        }
+
+        let sprop_parameter_sets = self
+            .runtime_stats
+            .read(|stats| {
+                stats
+                    .latest_remote_answer_observation
+                    .as_ref()
+                    .and_then(|observation| {
+                        observation.selected_video_h264_sprop_parameter_sets.clone()
+                    })
+            })
+            .flatten();
+        let Some(sprop_parameter_sets) = sprop_parameter_sets else {
+            return;
+        };
+        let [sps_b64, pps_b64, ..] = sprop_parameter_sets.as_slice() else {
+            return;
+        };
+
+        let decode_engine = &base64::engine::general_purpose::STANDARD;
+        let Ok(sps) = decode_engine.decode(sps_b64) else {
+            crate::xbx_log_warn!("[RtcVideoFrameSource] failed to decode remote answer sprop SPS");
+            return;
+        };
+        let Ok(pps) = decode_engine.decode(pps_b64) else {
+            crate::xbx_log_warn!("[RtcVideoFrameSource] failed to decode remote answer sprop PPS");
+            return;
+        };
+
+        match self
+            .h264_inspector
+            .seed_committed_parameter_sets_if_absent(&sps, &pps)
+        {
+            Ok(true) => {
+                crate::xbx_log_info!(
+                    "[RtcVideoFrameSource] seeded H264 bootstrap from remote answer sprop parameter sets"
+                );
+            }
+            Ok(false) => {}
+            Err(error) => {
+                crate::xbx_log_warn!(
+                    "[RtcVideoFrameSource] failed to seed H264 bootstrap from remote answer: {error}"
+                );
+            }
+        }
+    }
+
+    fn record_clean_keyframe_anchor(&self, observed_at_ms: f64) {
+        self.runtime_stats
+            .record_transport_clean_anchor(observed_at_ms, "chain-clean-keyframe-submitted");
+    }
+
     fn should_trigger_thin_stream_stall(&self, now: std::time::Instant) -> bool {
         self.assembling_frame_start.is_some_and(|started_at| {
             now.duration_since(started_at) >= self.assembly_stall_timeout
@@ -121,8 +191,67 @@ impl RtcVideoFrameSource {
             .read(|stats| stats.latest_video_rtx_reinject_observation.clone())
             .flatten()
             .is_some_and(|observation| {
-                observation.stage == "queued" && observation.matched_head_gap
+                observation.stage == "queued" && observation.pending_queue_len > 0
             })
+    }
+
+    fn reinject_observation_for_ingress(
+        &self,
+        ingress_kind: RtcVideoIngressKind,
+        primary_ssrc: u32,
+        sequence_number: u16,
+        rtp_timestamp: u32,
+        observed_at_ms: f64,
+    ) -> Option<XbxEngineVideoRtxReinjectObservation> {
+        let repair = match ingress_kind {
+            RtcVideoIngressKind::Primary => return None,
+            RtcVideoIngressKind::RepairPrimaryPassThrough { repair } => repair,
+            RtcVideoIngressKind::RtxReinject { repair } => repair,
+        };
+        Some(Self::build_reinject_observation(
+            repair,
+            primary_ssrc,
+            sequence_number,
+            rtp_timestamp,
+            observed_at_ms,
+        ))
+    }
+
+    fn build_reinject_observation(
+        repair: RtcVideoRepairMetadata,
+        primary_ssrc: u32,
+        sequence_number: u16,
+        rtp_timestamp: u32,
+        observed_at_ms: f64,
+    ) -> XbxEngineVideoRtxReinjectObservation {
+        XbxEngineVideoRtxReinjectObservation {
+            stage: "adapterRead".to_string(),
+            primary_ssrc,
+            repair_ssrc: repair.native_ssrc,
+            sequence_number,
+            rtp_timestamp,
+            pending_queue_len: 0,
+            native_sequence_number: Some(repair.native_sequence_number),
+            matched_head_gap: false,
+            matched_nack_range: false,
+            matched_pending_gap: false,
+            matched_gap_sequence: None,
+            matched_nack_first_sequence: None,
+            matched_nack_last_sequence: None,
+            observed_at_ms,
+        }
+    }
+
+    fn record_reinject_stage(
+        &self,
+        observation: &XbxEngineVideoRtxReinjectObservation,
+        stage: &str,
+        observed_at_ms: f64,
+    ) {
+        let mut next = observation.clone();
+        next.stage = stage.to_string();
+        next.observed_at_ms = observed_at_ms;
+        self.runtime_stats.record_video_rtx_reinject(next);
     }
 }
 
@@ -195,6 +324,7 @@ impl RtcVideoFrameSource {
                 self.current_assembly_packet_count = 0;
                 let payload = sample.data.to_vec();
                 self.assembled_frame_count = self.assembled_frame_count.saturating_add(1);
+                self.maybe_seed_h264_bootstrap_from_remote_answer();
                 let inspection = match self.h264_inspector.inspect_access_unit(&payload) {
                     Ok(inspection) => inspection,
                     Err(error) => {
@@ -237,11 +367,38 @@ impl RtcVideoFrameSource {
                         continue;
                     }
                 };
-                match resolve_inspection_admission(&inspection) {
+                let inspection_now_ms = now_ms_f64();
+                let inspection_admission = resolve_inspection_admission(&inspection);
+                let admission_accepted =
+                    matches!(inspection_admission, InspectionAdmission::Accept);
+                // bootstrap_reject_reason 只描述当前 AU 是否具备自举条件，不代表 delta slice 不能继续承接。
+                self.runtime_stats.record_h264_inspection_observation(
+                    XbxEngineH264InspectionObservation {
+                        observation_id: u64::from(sample.packet_timestamp),
+                        frame_rtp_timestamp: Some(sample.packet_timestamp),
+                        nal_types: inspection.nal_type_labels(),
+                        has_inband_sps: inspection.has_inband_sps,
+                        has_inband_pps: inspection.has_inband_pps,
+                        committed_sps_present: inspection.committed_sps_present(),
+                        committed_pps_present: inspection.committed_pps_present(),
+                        slice_headers_valid: inspection.slice_headers_valid,
+                        delta_continuation_ready: inspection.delta_continuation_ready(),
+                        parameter_sets_changed: inspection.parameter_sets_changed,
+                        config_changed: inspection.config_changed,
+                        is_idr: inspection.is_idr,
+                        bootstrap_ready: inspection.bootstrap_ready,
+                        bootstrap_reject_reason: inspection
+                            .bootstrap_reject_reason
+                            .map(|reason| reason.as_str().to_string()),
+                        admission_accepted,
+                        observed_at_ms: inspection_now_ms,
+                    },
+                );
+                match inspection_admission {
                     InspectionAdmission::Accept => {}
                     InspectionAdmission::AwaitRecoveryKeyframe => {
                         let now_ms = now_ms_f64();
-                        let reject_reason = inspection_reject_reason(&inspection);
+                        let reject_reason = inspection_bootstrap_reason(&inspection);
                         crate::xbx_log_warn!(
                             "[RtcVideoFrameSource] h264 inspection rejected sample ts={} bootstrap={:?} slice_headers_valid={}",
                             sample.packet_timestamp,
@@ -271,10 +428,10 @@ impl RtcVideoFrameSource {
                             now_ms,
                         );
                         let failure_reason = match reject_reason {
-                            "inspectionRejectMissingSps" => {
+                            "bootstrapMissingSps" => {
                                 XbxEngineAnchorCandidateFailureReason::InspectionRejectedMissingSps
                             }
-                            "inspectionRejectMissingPps" => {
+                            "bootstrapMissingPps" => {
                                 XbxEngineAnchorCandidateFailureReason::InspectionRejectedMissingPps
                             }
                             "inspectionRejectInvalidSliceHeader" => {
@@ -296,6 +453,7 @@ impl RtcVideoFrameSource {
                     }
                 }
                 let is_keyframe = inspection.is_idr;
+                let config_changed = inspection.config_changed;
                 let media_dropped_packets = sample
                     .prev_dropped_packets
                     .saturating_sub(sample.prev_padding_packets);
@@ -312,12 +470,28 @@ impl RtcVideoFrameSource {
                         self.clean_samples_since_loss = 0;
                     }
                 }
+                let frame_now_ms = now_ms_f64();
+                let frame_importance = if is_keyframe {
+                    "keyframe"
+                } else if config_changed {
+                    "reference"
+                } else {
+                    "delta"
+                };
+                let waiting_for_recovery_keyframe = self.waiting_for_recovery_keyframe();
+                let allow_soft_reentry_submit = waiting_for_recovery_keyframe
+                    && media_dropped_packets == 0
+                    && !is_keyframe
+                    && self
+                        .timeline_state
+                        .try_consume_soft_reentry_budget(frame_now_ms, frame_importance);
                 let (next_waiting_for_recovery_keyframe, recovery_action) =
                     resolve_recovery_keyframe_action(
-                        self.waiting_for_recovery_keyframe(),
+                        waiting_for_recovery_keyframe,
                         self.sample_loss_burst_count,
                         media_dropped_packets,
                         is_keyframe,
+                        allow_soft_reentry_submit,
                     );
                 self.set_waiting_for_recovery_keyframe(next_waiting_for_recovery_keyframe);
 
@@ -396,7 +570,6 @@ impl RtcVideoFrameSource {
                     }
                 }
 
-                let config_changed = inspection.config_changed;
                 if let Some(width) = inspection.width {
                     self.current_width = width;
                 }
@@ -406,14 +579,6 @@ impl RtcVideoFrameSource {
 
                 let frame_value = FrameValue::new(is_keyframe, config_changed, payload.len());
                 self.last_submitted_frame_value = frame_value;
-                let frame_importance = if is_keyframe {
-                    "keyframe"
-                } else if config_changed {
-                    "reference"
-                } else {
-                    "delta"
-                };
-                let frame_now_ms = now_ms_f64();
                 self.timeline_state.observe_frame(
                     sample.packet_timestamp,
                     frame_now_ms,
@@ -427,7 +592,7 @@ impl RtcVideoFrameSource {
                     frame_now_ms,
                 );
                 if is_keyframe && media_dropped_packets == 0 {
-                    self.timeline_state.on_clean_keyframe_submitted();
+                    self.record_clean_keyframe_anchor(frame_now_ms);
                     self.record_video_timeline_observation(
                         "chain-clean-keyframe-submitted",
                         None,
@@ -442,7 +607,15 @@ impl RtcVideoFrameSource {
                     frame_playout_deadline_at_ms,
                     frame_recovery_disposition,
                     frame_unrecoverable_reason,
+                    ledger_budget_context,
                 ) = self.take_frame_recovery_ledger(sample.packet_timestamp);
+                let frame_budget = ledger_budget_context.unwrap_or_else(|| {
+                    FrameBudgetContext::for_ingress_materialization_parts(
+                        frame_value,
+                        frame_playout_deadline_at_ms,
+                        frame_unrecoverable_reason.as_deref(),
+                    )
+                });
                 if self.assembled_frame_count == 1 || self.assembled_frame_count.is_power_of_two() {
                     crate::xbx_log_info!(
                         "[RtcVideoFrameSource] assembled frame count={} ts={} len={} keyframe={} bootstrap={}",
@@ -491,6 +664,9 @@ impl RtcVideoFrameSource {
                         None,
                         frame_now_ms,
                     );
+                    // 先把当前 clean anchor candidate 写进 timeline，再开软重入窗口，
+                    // 避免 arm 时还拿到旧的 anchor candidate。
+                    self.timeline_state.on_clean_keyframe_submitted();
                 }
 
                 return Some(AssembledVideoFrame {
@@ -498,6 +674,7 @@ impl RtcVideoFrameSource {
                     is_keyframe,
                     config_changed,
                     value: frame_value,
+                    budget: frame_budget,
                     width: self.current_width,
                     height: self.current_height,
                     rtp_timestamp: sample.packet_timestamp,
@@ -592,6 +769,7 @@ impl RtcVideoFrameSource {
             match tokio::time::timeout(read_timeout, self.rx.recv()).await {
                 Ok(Some(rtp_video_packet)) => {
                     self.received_packet_count = self.received_packet_count.saturating_add(1);
+                    let ingress_kind = rtp_video_packet.ingress_kind;
                     let rtp = rtp_video_packet.to_rtp_packet();
                     self.last_packet_time = std::time::Instant::now();
                     if self.assembling_frame_start.is_none() {
@@ -602,35 +780,16 @@ impl RtcVideoFrameSource {
                         self.current_assembly_packet_count.saturating_add(1);
                     let seq = rtp.header.sequence_number;
                     let now_ms = now_ms_f64();
-                    let latest_reinject_observation = self
-                        .runtime_stats
-                        .read(|stats| stats.latest_video_rtx_reinject_observation.clone())
-                        .flatten();
-                    if let Some(observation) = latest_reinject_observation.clone() {
-                        if observation.stage == "deliveredPrimary"
-                            && observation.sequence_number == seq
-                        {
-                            self.runtime_stats.record_video_rtx_reinject(
-                                XbxEngineVideoRtxReinjectObservation {
-                                    stage: "adapterRead".to_string(),
-                                    primary_ssrc: observation.primary_ssrc,
-                                    repair_ssrc: observation.repair_ssrc,
-                                    sequence_number: observation.sequence_number,
-                                    rtp_timestamp: observation.rtp_timestamp,
-                                    pending_queue_len: observation.pending_queue_len,
-                                    native_sequence_number: observation.native_sequence_number,
-                                    matched_head_gap: observation.matched_head_gap,
-                                    matched_nack_range: observation.matched_nack_range,
-                                    matched_pending_gap: observation.matched_pending_gap,
-                                    matched_gap_sequence: observation.matched_gap_sequence,
-                                    matched_nack_first_sequence: observation
-                                        .matched_nack_first_sequence,
-                                    matched_nack_last_sequence: observation
-                                        .matched_nack_last_sequence,
-                                    observed_at_ms: now_ms,
-                                },
-                            );
-                        }
+                    let reinject_observation = self.reinject_observation_for_ingress(
+                        ingress_kind,
+                        rtp.header.ssrc,
+                        seq,
+                        rtp.header.timestamp,
+                        now_ms,
+                    );
+                    if let Some(observation) = reinject_observation.as_ref() {
+                        self.runtime_stats
+                            .record_video_rtx_reinject(observation.clone());
                     }
                     let (next_highest_sequence, forward_gap) =
                         detect_forward_gap(self.last_highest_rtp_sequence, seq);
@@ -659,30 +818,8 @@ impl RtcVideoFrameSource {
                     }
                     self.nack_window.add(seq);
                     self.push_recent_rtp_packet(seq, rtp.header.timestamp);
-                    if let Some(observation) = latest_reinject_observation.clone() {
-                        if observation.stage == "adapterRead" && observation.sequence_number == seq
-                        {
-                            self.runtime_stats.record_video_rtx_reinject(
-                                XbxEngineVideoRtxReinjectObservation {
-                                    stage: "sampleBuilderPush".to_string(),
-                                    primary_ssrc: observation.primary_ssrc,
-                                    repair_ssrc: observation.repair_ssrc,
-                                    sequence_number: observation.sequence_number,
-                                    rtp_timestamp: observation.rtp_timestamp,
-                                    pending_queue_len: observation.pending_queue_len,
-                                    native_sequence_number: observation.native_sequence_number,
-                                    matched_head_gap: observation.matched_head_gap,
-                                    matched_nack_range: observation.matched_nack_range,
-                                    matched_pending_gap: observation.matched_pending_gap,
-                                    matched_gap_sequence: observation.matched_gap_sequence,
-                                    matched_nack_first_sequence: observation
-                                        .matched_nack_first_sequence,
-                                    matched_nack_last_sequence: observation
-                                        .matched_nack_last_sequence,
-                                    observed_at_ms: now_ms,
-                                },
-                            );
-                        }
+                    if let Some(observation) = reinject_observation.as_ref() {
+                        self.record_reinject_stage(observation, "sampleBuilderPush", now_ms);
                     }
                     if let Some(resolved) = self.nack_scheduler.resolve_sequence(seq, now_ms) {
                         self.timeline_state.mark_gap_resolved(
@@ -704,55 +841,22 @@ impl RtcVideoFrameSource {
                             None,
                             now_ms,
                         );
-                        if let Some(observation) = latest_reinject_observation.clone() {
-                            if observation.sequence_number == seq {
-                                self.runtime_stats.record_video_rtx_reinject(
-                                    XbxEngineVideoRtxReinjectObservation {
-                                        stage: "adapterResolved".to_string(),
-                                        primary_ssrc: observation.primary_ssrc,
-                                        repair_ssrc: observation.repair_ssrc,
-                                        sequence_number: observation.sequence_number,
-                                        rtp_timestamp: observation.rtp_timestamp,
-                                        pending_queue_len: observation.pending_queue_len,
-                                        native_sequence_number: observation.native_sequence_number,
-                                        matched_head_gap: observation.matched_head_gap,
-                                        matched_nack_range: observation.matched_nack_range,
-                                        matched_pending_gap: observation.matched_pending_gap,
-                                        matched_gap_sequence: observation.matched_gap_sequence,
-                                        matched_nack_first_sequence: observation
-                                            .matched_nack_first_sequence,
-                                        matched_nack_last_sequence: observation
-                                            .matched_nack_last_sequence,
-                                        observed_at_ms: now_ms,
-                                    },
-                                );
-                            }
-                        }
-                        self.record_nack_recovered(resolved, now_ms);
-                    } else if let Some(observation) = latest_reinject_observation {
-                        if observation.stage == "adapterRead" && observation.sequence_number == seq
-                        {
-                            self.runtime_stats.record_video_rtx_reinject(
-                                XbxEngineVideoRtxReinjectObservation {
-                                    stage: "adapterResolveMiss".to_string(),
-                                    primary_ssrc: observation.primary_ssrc,
-                                    repair_ssrc: observation.repair_ssrc,
-                                    sequence_number: observation.sequence_number,
-                                    rtp_timestamp: observation.rtp_timestamp,
-                                    pending_queue_len: observation.pending_queue_len,
-                                    native_sequence_number: observation.native_sequence_number,
-                                    matched_head_gap: observation.matched_head_gap,
-                                    matched_nack_range: observation.matched_nack_range,
-                                    matched_pending_gap: observation.matched_pending_gap,
-                                    matched_gap_sequence: observation.matched_gap_sequence,
-                                    matched_nack_first_sequence: observation
-                                        .matched_nack_first_sequence,
-                                    matched_nack_last_sequence: observation
-                                        .matched_nack_last_sequence,
-                                    observed_at_ms: now_ms,
-                                },
+                        if let Some(observation) = reinject_observation.as_ref() {
+                            let mut resolved_observation = observation.clone();
+                            resolved_observation.matched_nack_range = true;
+                            resolved_observation.matched_pending_gap = true;
+                            resolved_observation.matched_gap_sequence = Some(seq);
+                            resolved_observation.matched_nack_first_sequence = Some(seq);
+                            resolved_observation.matched_nack_last_sequence = Some(seq);
+                            self.record_reinject_stage(
+                                &resolved_observation,
+                                "adapterResolved",
+                                now_ms,
                             );
                         }
+                        self.record_nack_recovered(resolved, now_ms);
+                    } else if let Some(observation) = reinject_observation.as_ref() {
+                        self.record_reinject_stage(observation, "adapterResolveMiss", now_ms);
                     }
                     if seq % 100 == 0 {
                         crate::xbx_log_info!(
@@ -770,6 +874,9 @@ impl RtcVideoFrameSource {
                             seq,
                             rtp.header.timestamp
                         );
+                    }
+                    if !matches!(ingress_kind, RtcVideoIngressKind::RtxReinject { .. }) {
+                        self.current_media_ssrc = Some(rtp.header.ssrc);
                     }
                     self.sample_builder.push(rtp);
                 }
@@ -804,7 +911,25 @@ impl TransportObservationSource for RtcVideoTransportObservationSource {
 
 #[cfg(test)]
 mod tests {
-    use super::{resolve_effective_idle_controls, should_trigger_idle_timeout};
+    use super::{
+        resolve_effective_idle_controls, resolve_inspection_admission,
+        resolve_recovery_keyframe_action, should_trigger_idle_timeout, RecoveryKeyframeAction,
+        RtcVideoFrameSource,
+    };
+    use crate::media::video::h264::inspection::H264AccessUnitInspection;
+    use crate::media::video::test_fixtures::{
+        bootstrap_idr_nalu, bootstrap_pps_nalu, bootstrap_sps_nalu, make_video_source_for_test,
+        make_video_rtp_packet, send_bootstrap_access_unit, NoopRtcpPort,
+    };
+    use crate::transport::rtc::stream::adapter_types::{
+        TransportAdmissionObservation, TransportObservation,
+    };
+    use crate::transport::rtc::stream::packet_types::{
+        RtcVideoIngressKind, RtcVideoRepairMetadata,
+    };
+    use crate::transport::rtc::stream::sink::RtcRtcpSendPort;
+    use crate::transport::rtc::stream::video_source::NackSchedulerConfig;
+    use std::sync::{Arc, Mutex};
     use std::time::{Duration, Instant};
     use xbxengine_protocol::XbxEngineTargetTypeDto;
 
@@ -851,5 +976,286 @@ mod tests {
 
         assert_eq!(idle_timeout, Duration::from_millis(700));
         assert_eq!(idle_hint_cooldown, Duration::from_millis(700));
+    }
+
+    #[test]
+    fn clean_anchor_soft_reentry_allows_healthy_delta_to_submit() {
+        let (next_waiting_for_recovery_keyframe, recovery_action) =
+            resolve_recovery_keyframe_action(true, 0, 0, false, true);
+
+        assert!(!next_waiting_for_recovery_keyframe);
+        assert_eq!(recovery_action, RecoveryKeyframeAction::Submit);
+    }
+
+    #[test]
+    fn clean_anchor_soft_reentry_does_not_override_loss_semantics() {
+        let (next_waiting_for_recovery_keyframe, recovery_action) =
+            resolve_recovery_keyframe_action(true, 0, 1, false, true);
+
+        assert!(!next_waiting_for_recovery_keyframe);
+        assert_eq!(
+            recovery_action,
+            RecoveryKeyframeAction::DropAndRequestKeyframe
+        );
+    }
+
+    #[test]
+    fn recovery_wait_without_soft_reentry_remains_waiting() {
+        let (next_waiting_for_recovery_keyframe, recovery_action) =
+            resolve_recovery_keyframe_action(true, 0, 0, false, false);
+
+        assert!(next_waiting_for_recovery_keyframe);
+        assert_eq!(recovery_action, RecoveryKeyframeAction::WaitKeyframe);
+    }
+
+    #[test]
+    fn inspection_admission_rejects_frames_without_bootstrap_or_continuation() {
+        assert_eq!(
+            resolve_inspection_admission(&H264AccessUnitInspection {
+                nals: Vec::new(),
+                parameter_sets: None,
+                width: None,
+                height: None,
+                is_idr: true,
+                has_inband_sps: false,
+                has_inband_pps: false,
+                slice_headers_valid: true,
+                parameter_sets_changed: false,
+                config_changed: false,
+                bootstrap_ready: true,
+                bootstrap_reject_reason: None,
+                commit_state:
+                    crate::media::video::h264::inspection::H264AccessUnitInspector::test_commit_state(),
+            }),
+            super::InspectionAdmission::Accept
+        );
+
+        assert_eq!(
+            resolve_inspection_admission(&H264AccessUnitInspection {
+                nals: Vec::new(),
+                parameter_sets: None,
+                width: None,
+                height: None,
+                is_idr: false,
+                has_inband_sps: false,
+                has_inband_pps: false,
+                slice_headers_valid: true,
+                parameter_sets_changed: false,
+                config_changed: false,
+                bootstrap_ready: false,
+                bootstrap_reject_reason: None,
+                commit_state:
+                    crate::media::video::h264::inspection::H264AccessUnitInspector::test_commit_state(),
+            }),
+            super::InspectionAdmission::AwaitRecoveryKeyframe
+        );
+
+        assert_eq!(
+            resolve_inspection_admission(&H264AccessUnitInspection {
+                nals: Vec::new(),
+                parameter_sets: None,
+                width: None,
+                height: None,
+                is_idr: false,
+                has_inband_sps: false,
+                has_inband_pps: false,
+                slice_headers_valid: false,
+                parameter_sets_changed: false,
+                config_changed: false,
+                bootstrap_ready: false,
+                bootstrap_reject_reason: None,
+                commit_state:
+                    crate::media::video::h264::inspection::H264AccessUnitInspector::test_commit_state(),
+            }),
+            super::InspectionAdmission::AwaitRecoveryKeyframe
+        );
+    }
+
+    #[test]
+    fn clean_keyframe_anchor_records_current_transport_recovery_epoch() {
+        let (tx, rx) = tokio::sync::mpsc::channel(1);
+        let (transport_observation_tx, _transport_observation_rx) =
+            tokio::sync::mpsc::unbounded_channel();
+        let rtcp_port: Arc<dyn RtcRtcpSendPort> = Arc::new(NoopRtcpPort::default());
+        let runtime_stats = Arc::new(Mutex::new(crate::XbxEngineMediaRuntimeStats::default()));
+        let source = RtcVideoFrameSource::new(
+            rx,
+            transport_observation_tx,
+            rtcp_port,
+            runtime_stats.clone(),
+            16,
+            Duration::from_millis(10),
+            Duration::from_millis(20),
+            Duration::from_millis(200),
+            NackSchedulerConfig {
+                max_age_ms: 1_000,
+                frame_deadline_ms: 120,
+                burst_count: 2,
+                retry_interval_ms: 20,
+                max_retry_count: 3,
+            },
+        );
+        drop(tx);
+
+        source.runtime_stats.begin_transport_recovery_episode(100.0);
+        source.record_clean_keyframe_anchor(180.0);
+
+        let stats = runtime_stats.lock().expect("runtime stats lock");
+        assert_eq!(stats.video_anchor_clean_epoch, Some(1));
+        assert_eq!(stats.video_anchor_clean_observed_at_ms, Some(180.0));
+        assert_eq!(
+            stats.video_anchor_clean_source_event.as_deref(),
+            Some("chain-clean-keyframe-submitted")
+        );
+        assert!(!stats.transport_recovery_episode_active);
+        assert_eq!(stats.transport_recovery_episode_closed_at_ms, Some(180.0));
+        assert_eq!(
+            stats.transport_recovery_episode_close_reason.as_deref(),
+            Some("cleanAnchor")
+        );
+    }
+
+    #[tokio::test]
+    async fn bootstrap_keyframe_packets_are_assembled_into_frame() {
+        let (tx, mut transport_observation_rx, mut source) = make_video_source_for_test();
+
+        send_bootstrap_access_unit(&tx, 100, 9000).await;
+        tx.send(make_video_rtp_packet(103, 9016, true, bootstrap_idr_nalu()))
+            .await
+            .expect("next frame packet should flush previous sample");
+        drop(tx);
+
+        let frame = tokio::time::timeout(Duration::from_millis(200), source.recv_frame_inner())
+            .await
+            .expect("frame assembly should finish")
+            .expect("bootstrap frame should be emitted");
+        assert!(frame.is_keyframe);
+        assert!(frame.h264.bootstrap_ready);
+        assert_eq!(frame.rtp_timestamp, 9000);
+        assert!(frame.width > 0);
+        assert!(frame.height > 0);
+        assert!(transport_observation_rx.try_recv().is_err());
+    }
+
+    #[tokio::test]
+    async fn repair_packet_closes_bootstrap_gap_and_allows_frame_assembly() {
+        let (tx, mut transport_observation_rx, mut source) = make_video_source_for_test();
+
+        tx.send(make_video_rtp_packet(100, 9000, false, bootstrap_sps_nalu()))
+            .await
+            .expect("sps packet should enqueue");
+        tx.send(make_video_rtp_packet(102, 9000, true, bootstrap_idr_nalu()))
+            .await
+            .expect("idr packet should enqueue");
+        let mut repair_packet = make_video_rtp_packet(101, 9000, false, bootstrap_pps_nalu());
+        repair_packet.ingress_kind = RtcVideoIngressKind::RtxReinject {
+            repair: RtcVideoRepairMetadata {
+                native_ssrc: 88,
+                native_payload_type: 97,
+                native_sequence_number: 9_001,
+            },
+        };
+        tx.send(repair_packet)
+            .await
+            .expect("repair packet should enqueue");
+        tx.send(make_video_rtp_packet(103, 9016, true, bootstrap_idr_nalu()))
+            .await
+            .expect("next frame packet should flush previous sample");
+        drop(tx);
+
+        let frame = tokio::time::timeout(Duration::from_millis(200), source.recv_frame_inner())
+            .await
+            .expect("frame assembly should finish")
+            .expect("repaired bootstrap frame should be emitted");
+        assert!(frame.is_keyframe);
+        assert!(frame.h264.bootstrap_ready);
+        assert_eq!(frame.rtp_timestamp, 9000);
+        assert!(transport_observation_rx.try_recv().is_err());
+
+        let latest = source
+            .runtime_stats
+            .read(|stats| stats.latest_video_rtx_reinject_observation.clone())
+            .flatten()
+            .expect("repair observation should be recorded");
+        assert_eq!(latest.sequence_number, 101);
+        assert_eq!(latest.rtp_timestamp, 9000);
+        assert_eq!(latest.native_sequence_number, Some(9_001));
+        assert_eq!(latest.repair_ssrc, 88);
+    }
+
+    #[tokio::test]
+    async fn idr_without_parameter_sets_requests_recovery_keyframe_instead_of_emitting_frame() {
+        let (tx, mut transport_observation_rx, mut source) = make_video_source_for_test();
+
+        tx.send(make_video_rtp_packet(100, 9001, true, bootstrap_idr_nalu()))
+            .await
+            .expect("idr packet should enqueue");
+        tx.send(make_video_rtp_packet(101, 9017, true, bootstrap_idr_nalu()))
+            .await
+            .expect("follow-up packet should flush previous sample");
+        drop(tx);
+
+        let frame = tokio::time::timeout(Duration::from_millis(200), source.recv_frame_inner())
+            .await
+            .expect("reader should finish after rx closes");
+        assert!(frame.is_none());
+
+        let observation =
+            tokio::time::timeout(Duration::from_millis(50), transport_observation_rx.recv())
+                .await
+                .expect("await-recovery observation should be emitted")
+                .expect("observation should exist");
+        assert_eq!(
+            observation,
+            TransportObservation::Admission(TransportAdmissionObservation::AwaitRecoveryKeyframe)
+        );
+    }
+
+    #[tokio::test]
+    async fn bootstrap_packets_without_followup_boundary_do_not_emit_partial_frame() {
+        let (tx, mut transport_observation_rx, mut source) = make_video_source_for_test();
+
+        send_bootstrap_access_unit(&tx, 100, 9000).await;
+        drop(tx);
+
+        let frame = tokio::time::timeout(Duration::from_millis(120), source.recv_frame_inner())
+            .await
+            .expect("reader should finish after rx closes");
+        assert!(frame.is_none());
+        assert!(transport_observation_rx.try_recv().is_err());
+    }
+
+    #[tokio::test]
+    async fn repair_rtx_packet_keeps_explicit_provenance_through_source_stage_updates() {
+        let (tx, _transport_observation_rx, mut source) = make_video_source_for_test();
+
+        let mut packet = make_video_rtp_packet(100, 9_000, true, bootstrap_idr_nalu());
+        packet.meta.ssrc = 777;
+        packet.meta.payload_type = 124;
+        packet.ingress_kind = RtcVideoIngressKind::RtxReinject {
+            repair: RtcVideoRepairMetadata {
+                native_ssrc: 99,
+                native_payload_type: 97,
+                native_sequence_number: 4_321,
+            },
+        };
+        tx.send(packet).await.expect("repair packet should enqueue");
+        drop(tx);
+
+        let frame = tokio::time::timeout(Duration::from_millis(200), source.recv_frame_inner())
+            .await
+            .expect("reader should finish after rx closes");
+        assert!(frame.is_none());
+
+        let latest = source
+            .runtime_stats
+            .read(|stats| stats.latest_video_rtx_reinject_observation.clone())
+            .flatten()
+            .expect("repair provenance observation should be recorded");
+        assert_eq!(latest.stage, "adapterResolveMiss");
+        assert_eq!(latest.sequence_number, 100);
+        assert_eq!(latest.repair_ssrc, 99);
+        assert_eq!(latest.primary_ssrc, 777);
+        assert_eq!(latest.native_sequence_number, Some(4_321));
     }
 }

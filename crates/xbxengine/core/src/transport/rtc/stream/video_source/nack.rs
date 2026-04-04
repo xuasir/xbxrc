@@ -5,6 +5,7 @@ use rtc_rtcp::transport_feedbacks::transport_layer_nack::{
 };
 use rtc_shared::marshal::{Marshal, MarshalSize};
 
+use crate::media::video::ingress::budget::{FrameBudgetContext, FrameBudgetWindowSource};
 use crate::media::video::types::FrameRecoveryDisposition;
 use crate::transport::rtc::stream::nack_scheduler::{
     NackBatch, NackObservePolicy, PacketRecoveryDisposition, ResolvedNack, SkippedNackBatch,
@@ -35,16 +36,30 @@ impl RtcVideoFrameSource {
         let cloud_mode = self.is_cloud_transport_profile();
         let startup_mode = self.is_cloud_startup_transport_profile();
         let cloud_rtt_ms = self.cloud_nack_rtt_ms();
+        let base_budget_context = FrameBudgetContext::for_transport(
+            frame_value,
+            self.waiting_for_recovery_keyframe(),
+            Some(cloud_rtt_ms),
+            None,
+            None,
+            startup_mode,
+            FrameBudgetWindowSource::Transport,
+        );
         let deadline_at_ms = cloud_startup_head_hole_deadline_at_ms(
             now_ms,
             self.transport_deadline_tracker
-                .next_transport_deadline_for_value_at_ms(now_ms, frame_value),
+                .next_transport_deadline_with_context_at_ms(
+                    now_ms,
+                    frame_value,
+                    base_budget_context,
+                ),
             cloud_mode,
             startup_mode,
             Some(cloud_rtt_ms),
         );
         let policy = rtp_window_nack_policy(
             frame_value,
+            base_budget_context,
             deadline_at_ms,
             cloud_mode,
             startup_mode,
@@ -171,6 +186,7 @@ impl RtcVideoFrameSource {
                 expired_batch.nack_disposition,
                 expired_batch.frame_playout_deadline_at_ms,
                 expired_batch.frame_unrecoverable_reason,
+                expired_batch.budget_context,
                 now_ms,
             );
             if expired_batch.reason == "deadline" {
@@ -195,6 +211,7 @@ impl RtcVideoFrameSource {
                     frame_playout_deadline_at_ms: expired_batch.frame_playout_deadline_at_ms,
                     nack_disposition: expired_batch.nack_disposition,
                     frame_unrecoverable_reason: expired_batch.frame_unrecoverable_reason,
+                    budget_context: expired_batch.budget_context,
                 },
                 now_ms,
             );
@@ -241,16 +258,30 @@ impl RtcVideoFrameSource {
         let cloud_mode = self.is_cloud_transport_profile();
         let startup_mode = self.is_cloud_startup_transport_profile();
         let cloud_rtt_ms = self.cloud_nack_rtt_ms();
+        let base_budget_context = FrameBudgetContext::for_transport(
+            frame_value,
+            self.waiting_for_recovery_keyframe(),
+            Some(cloud_rtt_ms),
+            None,
+            None,
+            startup_mode,
+            FrameBudgetWindowSource::Transport,
+        );
         let deadline_at_ms = cloud_startup_head_hole_deadline_at_ms(
             now_ms,
             self.transport_deadline_tracker
-                .next_transport_deadline_for_value_at_ms(now_ms, frame_value),
+                .next_transport_deadline_with_context_at_ms(
+                    now_ms,
+                    frame_value,
+                    base_budget_context,
+                ),
             cloud_mode,
             startup_mode,
             Some(cloud_rtt_ms),
         );
         let policy = rtp_gap_nack_policy(
             frame_value,
+            base_budget_context,
             deadline_at_ms,
             cloud_mode,
             startup_mode,
@@ -370,10 +401,17 @@ impl RtcVideoFrameSource {
         if batch.sequences.is_empty() {
             return;
         }
+        let Some(media_ssrc) = self.current_media_ssrc else {
+            crate::xbx_log_warn!(
+                "[RtcVideoFrameSource] skip nack send action={} because media ssrc is unavailable",
+                action
+            );
+            return;
+        };
 
         let nack = TransportLayerNack {
-            sender_ssrc: 0,
-            media_ssrc: 0,
+            sender_ssrc: self.local_rtcp_sender_ssrc,
+            media_ssrc,
             nacks: nack_pairs_from_sequence_numbers(&batch.sequences),
         };
         let mut buf = vec![0u8; nack.marshal_size()];
@@ -420,6 +458,7 @@ impl RtcVideoFrameSource {
                 frame_unrecoverable_reason: batch
                     .frame_unrecoverable_reason
                     .map(|reason| reason.to_string()),
+                frame_budget: None,
                 observed_at_ms: now_ms,
             });
         self.record_video_timeline_observation(
@@ -437,6 +476,7 @@ impl RtcVideoFrameSource {
             resolved.nack_disposition,
             resolved.frame_playout_deadline_at_ms,
             resolved.frame_unrecoverable_reason,
+            resolved.budget_context,
             now_ms,
         );
         self.nack_recovery_ewma_ms =
@@ -473,6 +513,7 @@ impl RtcVideoFrameSource {
                 frame_unrecoverable_reason: resolved
                     .frame_unrecoverable_reason
                     .map(|reason| reason.to_string()),
+                frame_budget: None,
                 observed_at_ms: now_ms,
             },
         );
@@ -542,13 +583,34 @@ impl RtcVideoFrameSource {
         );
         let base_deadline_at_ms = self
             .transport_deadline_tracker
-            .next_transport_deadline_for_value_at_ms(now_ms, frame_value);
+            .next_transport_deadline_with_context_at_ms(
+                now_ms,
+                frame_value,
+                FrameBudgetContext::for_transport(
+                    frame_value,
+                    self.waiting_for_recovery_keyframe(),
+                    Some(self.cloud_nack_rtt_ms()),
+                    None,
+                    None,
+                    self.is_cloud_startup_transport_profile(),
+                    FrameBudgetWindowSource::Recovery,
+                ),
+            );
         let deadline_at_ms =
             self.dynamic_repair_deadline(now_ms, base_deadline_at_ms, repairability);
+        let budget_context = FrameBudgetContext::for_transport(
+            frame_value,
+            self.waiting_for_recovery_keyframe(),
+            Some(self.cloud_nack_rtt_ms()),
+            None,
+            Some(deadline_at_ms),
+            self.is_cloud_startup_transport_profile(),
+            FrameBudgetWindowSource::Recovery,
+        );
         let policy = sample_loss_nack_policy(
             sample_rtp_timestamp,
             frame_is_keyframe,
-            frame_importance,
+            budget_context,
             deadline_at_ms,
             repairability,
             self.is_cloud_transport_profile(),
@@ -678,6 +740,7 @@ impl RtcVideoFrameSource {
             skipped.nack_disposition,
             skipped.frame_playout_deadline_at_ms,
             skipped.frame_unrecoverable_reason,
+            skipped.budget_context,
             now_ms,
         );
         self.record_nack_observation(
@@ -694,6 +757,7 @@ impl RtcVideoFrameSource {
                 frame_playout_deadline_at_ms: skipped.frame_playout_deadline_at_ms,
                 nack_disposition: skipped.nack_disposition,
                 frame_unrecoverable_reason: skipped.frame_unrecoverable_reason,
+                budget_context: skipped.budget_context,
             },
             now_ms,
         );
@@ -706,6 +770,7 @@ impl RtcVideoFrameSource {
         nack_disposition: PacketRecoveryDisposition,
         frame_playout_deadline_at_ms: Option<f64>,
         frame_unrecoverable_reason: Option<&'static str>,
+        budget_context: FrameBudgetContext,
         observed_at_ms: f64,
     ) {
         let Some(frame_recovery_disposition) =
@@ -718,6 +783,7 @@ impl RtcVideoFrameSource {
             frame_playout_deadline_at_ms,
             frame_recovery_disposition,
             frame_unrecoverable_reason,
+            budget_context,
             observed_at_ms,
         );
     }
@@ -758,16 +824,30 @@ impl RtcVideoFrameSource {
                 .max(self.nack_recovery_ewma_ms.max(0.0))
                 .max(retry_interval_ms);
         policy.estimated_recovery_arrival_ms = Some(estimated_recovery_arrival_ms);
+        let frame_value = frame_value_for_importance(policy.frame_importance);
+        policy.budget_context = FrameBudgetContext::for_transport(
+            frame_value,
+            self.waiting_for_recovery_keyframe(),
+            Some(self.cloud_nack_rtt_ms()),
+            Some(estimated_recovery_arrival_ms),
+            policy.deadline_at_ms,
+            self.is_cloud_startup_transport_profile(),
+            window_source_for_policy(policy.source),
+        );
+        if !policy.frame_is_keyframe.unwrap_or(false) {
+            policy.frame_importance = policy.budget_context.frame_importance();
+        }
+        policy.priority = policy.budget_context.repair_priority(frame_value);
 
         let value_tier = classify_repair_value_tier(
-            policy.frame_importance,
-            policy.priority,
-            self.waiting_for_recovery_keyframe(),
-            self.is_cloud_high_rtt_path(),
+            policy.budget_context,
+            policy.frame_is_keyframe.unwrap_or(false),
             self.is_cloud_startup_transport_profile(),
         );
 
-        if self.waiting_for_recovery_keyframe() && !matches!(value_tier, RepairValueTier::Anchor) {
+        if policy.budget_context.prefers_chain_broken()
+            && !matches!(value_tier, RepairValueTier::Anchor)
+        {
             policy.nack_disposition = PacketRecoveryDisposition::SkippedChainBroken;
             if policy.frame_unrecoverable_reason.is_none() {
                 policy.frame_unrecoverable_reason = Some("awaitingRecoveryKeyframe");
@@ -775,7 +855,10 @@ impl RtcVideoFrameSource {
             return policy;
         }
 
-        if self.is_cloud_high_rtt_path() && matches!(value_tier, RepairValueTier::LowValue) {
+        if self.is_cloud_high_rtt_path()
+            && matches!(value_tier, RepairValueTier::LowValue)
+            && policy.budget_context.prefers_low_value_skip()
+        {
             policy.nack_disposition = PacketRecoveryDisposition::SkippedLowValue;
             if policy.frame_unrecoverable_reason.is_none() {
                 policy.frame_unrecoverable_reason = Some("cloudHighRttLowValueAdmission");
@@ -863,6 +946,7 @@ impl RtcVideoFrameSource {
                 flushed_batch.nack_disposition,
                 flushed_batch.frame_playout_deadline_at_ms,
                 flushed_batch.frame_unrecoverable_reason,
+                flushed_batch.budget_context,
                 now_ms,
             );
             self.runtime_stats
@@ -881,6 +965,7 @@ impl RtcVideoFrameSource {
                     frame_playout_deadline_at_ms: flushed_batch.frame_playout_deadline_at_ms,
                     nack_disposition: flushed_batch.nack_disposition,
                     frame_unrecoverable_reason: flushed_batch.frame_unrecoverable_reason,
+                    budget_context: flushed_batch.budget_context,
                 },
                 now_ms,
             );
@@ -966,11 +1051,7 @@ impl RtcVideoFrameSource {
     }
 
     fn current_transport_frame_value(&self) -> FrameValue {
-        if self.waiting_for_recovery_keyframe() {
-            FrameValue::new(true, true, 96 * 1024)
-        } else {
-            self.last_submitted_frame_value
-        }
+        self.last_submitted_frame_value
     }
 
     fn estimate_repairability(
@@ -1072,25 +1153,27 @@ impl RtcVideoFrameSource {
 }
 
 fn classify_repair_value_tier(
-    frame_importance: &'static str,
-    priority: u8,
-    waiting_for_recovery_keyframe: bool,
-    cloud_high_rtt: bool,
+    budget_context: FrameBudgetContext,
+    frame_is_keyframe: bool,
     cloud_startup_mode: bool,
 ) -> RepairValueTier {
-    if frame_importance == "keyframe" || priority >= 3 {
+    if frame_is_keyframe || matches!(budget_context.frame_importance(), "keyframe") {
         return RepairValueTier::Anchor;
     }
-    if frame_importance == "reference" {
-        if waiting_for_recovery_keyframe {
-            return RepairValueTier::Anchor;
-        }
+    if matches!(budget_context.frame_importance(), "reference") {
         return RepairValueTier::Supply;
     }
-    if frame_importance == "delta" && cloud_high_rtt && !cloud_startup_mode {
+    if budget_context.prefers_low_value_skip() && !cloud_startup_mode {
         return RepairValueTier::LowValue;
     }
     RepairValueTier::Supply
+}
+
+fn window_source_for_policy(source: &'static str) -> FrameBudgetWindowSource {
+    match source {
+        "sampleLoss" => FrameBudgetWindowSource::Recovery,
+        _ => FrameBudgetWindowSource::Transport,
+    }
 }
 
 pub(super) fn wrapping_sequence_range(start: u16, end_exclusive: u16) -> Vec<u16> {
@@ -1106,6 +1189,11 @@ pub(super) fn wrapping_sequence_range(start: u16, end_exclusive: u16) -> Vec<u16
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::{Arc, Mutex};
+
+    use crate::transport::rtc::stream::sink::RtcRtcpSendPort;
+    use crate::transport::rtc::stream::video_source::NackSchedulerConfig;
+    use bytes::Bytes;
 
     #[test]
     fn cloud_nack_windows_follow_rtt_without_floor() {
@@ -1146,7 +1234,19 @@ mod tests {
     #[test]
     fn repair_value_tier_marks_delta_as_low_value_on_cloud_high_rtt() {
         assert_eq!(
-            classify_repair_value_tier("delta", 1, false, true, false),
+            classify_repair_value_tier(
+                FrameBudgetContext::for_transport(
+                    FrameValue::new(false, false, 8 * 1024),
+                    false,
+                    Some(160.0),
+                    Some(1_030.0),
+                    Some(1_040.0),
+                    false,
+                    FrameBudgetWindowSource::Transport,
+                ),
+                false,
+                false,
+            ),
             RepairValueTier::LowValue
         );
     }
@@ -1154,7 +1254,19 @@ mod tests {
     #[test]
     fn repair_value_tier_keeps_reference_as_anchor_while_waiting_keyframe() {
         assert_eq!(
-            classify_repair_value_tier("reference", 2, true, true, false),
+            classify_repair_value_tier(
+                FrameBudgetContext::for_transport(
+                    FrameValue::new(false, true, 48 * 1024),
+                    true,
+                    Some(140.0),
+                    Some(1_020.0),
+                    Some(1_050.0),
+                    false,
+                    FrameBudgetWindowSource::Recovery,
+                ),
+                false,
+                false,
+            ),
             RepairValueTier::Anchor
         );
     }
@@ -1162,8 +1274,106 @@ mod tests {
     #[test]
     fn repair_value_tier_marks_reference_as_supply_when_not_waiting_keyframe() {
         assert_eq!(
-            classify_repair_value_tier("reference", 2, false, true, false),
+            classify_repair_value_tier(
+                FrameBudgetContext::for_transport(
+                    FrameValue::new(false, true, 48 * 1024),
+                    false,
+                    Some(140.0),
+                    Some(1_020.0),
+                    Some(1_050.0),
+                    false,
+                    FrameBudgetWindowSource::Transport,
+                ),
+                false,
+                false,
+            ),
             RepairValueTier::Supply
         );
+    }
+
+    #[derive(Clone, Default)]
+    struct CaptureRtcpPort {
+        payloads: Arc<Mutex<Vec<Vec<u8>>>>,
+    }
+
+    impl RtcRtcpSendPort for CaptureRtcpPort {
+        fn send_rtcp(&self, payload: &[u8]) {
+            self.payloads
+                .lock()
+                .expect("payloads lock")
+                .push(payload.to_vec());
+        }
+    }
+
+    #[tokio::test]
+    async fn send_nack_batch_uses_real_media_and_sender_ssrc() {
+        let (tx, rx) = tokio::sync::mpsc::channel(1);
+        let (transport_observation_tx, _transport_observation_rx) =
+            tokio::sync::mpsc::unbounded_channel();
+        let capture = CaptureRtcpPort::default();
+        let payloads = capture.payloads.clone();
+        let rtcp_port: Arc<dyn RtcRtcpSendPort> = Arc::new(capture);
+        let runtime_stats = Arc::new(Mutex::new(crate::XbxEngineMediaRuntimeStats::default()));
+        let mut source = RtcVideoFrameSource::new(
+            rx,
+            transport_observation_tx,
+            rtcp_port,
+            runtime_stats,
+            16,
+            std::time::Duration::from_millis(10),
+            std::time::Duration::from_millis(20),
+            std::time::Duration::from_millis(200),
+            NackSchedulerConfig {
+                max_age_ms: 1_000,
+                frame_deadline_ms: 120,
+                burst_count: 2,
+                retry_interval_ms: 20,
+                max_retry_count: 3,
+            },
+        );
+        drop(tx);
+        source.current_media_ssrc = Some(0x4455_6677);
+        source.local_rtcp_sender_ssrc = 0x1122_3344;
+
+        let batch = NackBatch {
+            sequences: vec![12, 13, 15],
+            retry_count: 1,
+            source: "sampleLoss",
+            frame_rtp_timestamp: Some(0x0102_0304),
+            frame_is_keyframe: Some(false),
+            frame_importance: "delta",
+            deadline_at_ms: Some(1_000.0),
+            estimated_recovery_arrival_ms: Some(950.0),
+            frame_playout_deadline_at_ms: Some(1_020.0),
+            nack_disposition: PacketRecoveryDisposition::Attempted,
+            frame_unrecoverable_reason: None,
+            budget_context: FrameBudgetContext::for_transport(
+                FrameValue::new(false, false, 8 * 1024),
+                false,
+                Some(40.0),
+                None,
+                Some(1_020.0),
+                false,
+                FrameBudgetWindowSource::Transport,
+            ),
+        };
+
+        source.send_nack_batch("sent", &batch, 1_000.0).await;
+
+        let captured = payloads.lock().expect("payloads lock");
+        assert_eq!(captured.len(), 1);
+        let mut raw = Bytes::copy_from_slice(&captured[0]);
+        let packets = rtc_rtcp::packet::unmarshal(&mut raw).expect("nack payload should parse");
+        let nack = packets
+            .into_iter()
+            .find_map(|packet| {
+                packet
+                    .as_any()
+                    .downcast_ref::<TransportLayerNack>()
+                    .cloned()
+            })
+            .expect("expected transport layer nack");
+        assert_eq!(nack.media_ssrc, 0x4455_6677);
+        assert_eq!(nack.sender_ssrc, 0x1122_3344);
     }
 }

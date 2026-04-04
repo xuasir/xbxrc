@@ -1,8 +1,12 @@
 use std::{collections::BTreeSet, panic::AssertUnwindSafe, time::Duration};
 
-use device_query::{DeviceQuery, DeviceState, Keycode};
+use device_query::DeviceState;
+#[cfg(not(target_os = "macos"))]
+use device_query::{DeviceQuery, Keycode};
 use ohmygamepad_protocol::LogicalPadStateDto;
 
+#[cfg(target_os = "macos")]
+use crate::macos_keyboard_hid;
 use crate::{
     OhMyGamepadKeyboardKey, OhMyGamepadKeyboardMapper, OhMyGamepadKeyboardMapping,
     OhMyGamepadService, OhMyGamepadServiceError,
@@ -24,6 +28,7 @@ impl Default for OhMyGamepadDesktopKeyboardListenerConfig {
 }
 
 pub struct OhMyGamepadDesktopKeyboardListener {
+    #[cfg_attr(target_os = "macos", allow(dead_code))]
     device_state: DeviceState,
     mapper: OhMyGamepadKeyboardMapper,
     poll_interval: Duration,
@@ -102,14 +107,22 @@ impl OhMyGamepadDesktopKeyboardListener {
     }
 
     fn read_pressed_keys(&self) -> BTreeSet<OhMyGamepadKeyboardKey> {
-        self.device_state
-            .get_keys()
-            .into_iter()
-            .filter_map(map_keycode)
-            .collect()
+        #[cfg(target_os = "macos")]
+        {
+            return macos_keyboard_hid::read_pressed_keys_hid();
+        }
+        #[cfg(not(target_os = "macos"))]
+        {
+            self.device_state
+                .get_keys()
+                .into_iter()
+                .filter_map(map_keycode)
+                .collect()
+        }
     }
 }
 
+#[cfg(not(target_os = "macos"))]
 fn map_keycode(keycode: Keycode) -> Option<OhMyGamepadKeyboardKey> {
     match keycode {
         Keycode::A => Some(OhMyGamepadKeyboardKey::KeyA),

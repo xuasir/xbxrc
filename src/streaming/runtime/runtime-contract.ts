@@ -24,7 +24,7 @@ export type RuntimeEvent
   = | { type: 'phaseChanged', phase: StreamRuntimePhase }
     | { type: 'connectionStateChanged', state: RTCPeerConnectionState }
     | { type: 'microphoneStateChanged', capturing: boolean, paused: boolean }
-    | { type: 'framePresented' }
+    | { type: 'frameReady' }
     | { type: 'error', error: unknown }
 
 /**

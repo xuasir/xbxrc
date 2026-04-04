@@ -81,10 +81,12 @@ pub enum XbxEngineRuntimeEventDto {
     MediaSurfaceReady {
         surface_id: String,
     },
-    StatsVideoFrameProcessed {
+    /// `renderer_frame_time_ms` 是 renderer 管线完成时间，不等同宿主 host present 时间。
+    /// present freshness 请使用 stats 中的 `latest_video_host_present_time_ms / present_age_ms`。
+    StatsVideoFrameRendered {
         first_frame_packet_arrival_time_ms: f64,
         frame_decoded_time_ms: f64,
-        frame_rendered_time_ms: f64,
+        renderer_frame_time_ms: f64,
     },
     DiagnosticsPulse {
         window_ms: f64,
@@ -132,6 +134,15 @@ pub struct XbxEnginePacketGapObservationDto {
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct XbxEngineFrameBudgetDto {
+    pub recovery_stage: String,
+    pub chain_value: String,
+    pub rtt_slack: String,
+    pub failure_cost: String,
+    pub window_source: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct XbxEngineFrameDropObservationDto {
     pub observation_id: u64,
     pub reason: String,
@@ -142,6 +153,7 @@ pub struct XbxEngineFrameDropObservationDto {
     pub frame_seq: Option<u64>,
     pub frame_recovery_disposition: Option<String>,
     pub frame_unrecoverable_reason: Option<String>,
+    pub frame_budget: Option<XbxEngineFrameBudgetDto>,
     pub observed_at_ms: f64,
     pub width: u32,
     pub height: u32,
@@ -167,6 +179,7 @@ pub struct XbxEngineFrameRecoveryObservationDto {
     pub frame_playout_deadline_at_ms: Option<f64>,
     pub frame_recovery_disposition: String,
     pub frame_unrecoverable_reason: Option<String>,
+    pub frame_budget: Option<XbxEngineFrameBudgetDto>,
     pub observed_at_ms: f64,
 }
 
@@ -187,6 +200,7 @@ pub struct XbxEngineNackObservationDto {
     pub nack_disposition: Option<String>,
     pub frame_playout_deadline_at_ms: Option<f64>,
     pub frame_unrecoverable_reason: Option<String>,
+    pub frame_budget: Option<XbxEngineFrameBudgetDto>,
     pub observed_at_ms: f64,
 }
 
@@ -195,6 +209,10 @@ pub struct XbxEngineVideoEscalationObservationDto {
     pub observation_id: u64,
     pub reason: String,
     pub action: String,
+    pub recovery_stage: String,
+    pub recovery_chain_value: String,
+    pub recovery_failure_cost: String,
+    pub recovery_window_source: String,
     pub observed_at_ms: f64,
 }
 
@@ -318,6 +336,7 @@ pub struct XbxEngineRemoteAnswerObservationDto {
     pub selected_video_payload_type: Option<u8>,
     pub selected_video_mime_type: Option<String>,
     pub selected_video_profile_level_id: Option<String>,
+    pub selected_video_h264_sprop_parameter_sets: Option<Vec<String>>,
     pub accepted_video_rtcp_feedback: Vec<String>,
     pub accepted_audio_rtcp_feedback: Vec<String>,
     pub accepted_video_header_extensions: Vec<String>,
@@ -386,6 +405,42 @@ pub struct XbxEngineDataChannelMessageCatalogObservationDto {
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct XbxEngineKeyframeRequestEpisodeObservationDto {
+    pub episode_id: u64,
+    pub request_reason: Option<String>,
+    pub request_kind: Option<String>,
+    pub status: String,
+    pub requested_at_ms: f64,
+    pub sent_at_ms: Option<f64>,
+    pub deadline_at_ms: Option<f64>,
+    pub first_keyframe_packet_at_ms: Option<f64>,
+    pub first_keyframe_decoded_at_ms: Option<f64>,
+    pub response_rtp_timestamp: Option<u32>,
+    pub response_frame_seq: Option<u64>,
+    pub response_verdict: Option<String>,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct XbxEngineH264InspectionObservationDto {
+    pub observation_id: u64,
+    pub frame_rtp_timestamp: Option<u32>,
+    pub nal_types: Vec<String>,
+    pub has_inband_sps: bool,
+    pub has_inband_pps: bool,
+    pub committed_sps_present: bool,
+    pub committed_pps_present: bool,
+    pub slice_headers_valid: bool,
+    pub delta_continuation_ready: bool,
+    pub parameter_sets_changed: bool,
+    pub config_changed: bool,
+    pub is_idr: bool,
+    pub bootstrap_ready: bool,
+    pub bootstrap_reject_reason: Option<String>,
+    pub admission_accepted: bool,
+    pub observed_at_ms: f64,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct XbxEngineStatsDto {
     pub resolution: String,
     pub rtt: String,
@@ -393,15 +448,16 @@ pub struct XbxEngineStatsDto {
     pub runtime_summary: Option<String>,
     pub primary_issue_chain: Option<String>,
     pub latest_decision_summary: Option<String>,
+    pub remote_profile_baseline: Option<String>,
+    pub remote_profile_dynamic: Option<String>,
+    pub remote_profile_effective_label: Option<String>,
     pub session_phase: Option<String>,
-    pub transport_policy_profile: Option<String>,
-    pub recovery_policy_profile: Option<String>,
+    pub transport_strategy_profile: Option<String>,
+    pub recovery_strategy_profile: Option<String>,
     pub recovery_diagnosis: Option<String>,
-    pub recovery_coupling_mode: Option<String>,
-    pub recovery_coupling_summary: Option<String>,
     pub direct_gaming_bitrate_band: Option<String>,
-    pub video_owner_state: Option<String>,
-    pub video_owner_reason: Option<String>,
+    pub recovery_owner_state: Option<String>,
+    pub recovery_owner_reason: Option<String>,
     pub video_owner_source: Option<String>,
     pub video_owner_observed_at_ms: Option<f64>,
     pub video_health: Option<String>,
@@ -448,6 +504,11 @@ pub struct XbxEngineStatsDto {
     pub video_decoder_hardware_failure_streak: Option<u32>,
     pub latest_video_decoder_hardware_failure_time_ms: Option<f64>,
     pub latest_video_decoder_hardware_failure_status: Option<i32>,
+    pub video_decoder_recovery_state: Option<String>,
+    pub video_decoder_recovery_event: Option<String>,
+    pub video_decoder_recovery_detail: Option<String>,
+    pub video_decoder_recovery_status: Option<i32>,
+    pub video_decoder_recovery_state_changed_at_ms: Option<f64>,
     pub video_renderer_stalled: Option<bool>,
     pub packet_age_ms: Option<f64>,
     pub decode_age_ms: Option<f64>,
@@ -468,9 +529,14 @@ pub struct XbxEngineStatsDto {
     pub host_no_pending_streak: Option<u32>,
     pub host_no_pending_max_streak: Option<u32>,
     pub host_no_pending_pressure_level: Option<String>,
+    pub host_display_tick_epoch: Option<u64>,
+    pub video_present_epoch: Option<u64>,
+    pub host_cadence_phase: Option<String>,
     pub video_present_descriptor_upload_mode: Option<String>,
     pub video_present_descriptor_metal_import_count_total: Option<u64>,
     pub video_present_descriptor_cpu_upload_count_total: Option<u64>,
+    pub latest_keyframe_request_episode: Option<XbxEngineKeyframeRequestEpisodeObservationDto>,
+    pub latest_h264_inspection_observation: Option<XbxEngineH264InspectionObservationDto>,
     pub recovery_keyframe_request_count: Option<u64>,
     pub recovery_decoder_reset_count: Option<u64>,
     pub recovery_reconnect_count: Option<u64>,

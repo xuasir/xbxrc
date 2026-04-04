@@ -205,7 +205,7 @@ watch(
 
 .stream-text-sheet__field-focus[data-focused='true'] .stream-text-sheet__input {
   border-color: var(--color-focus-ring);
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--color-focus-bg);
   color: var(--ui-focus-text);
 }
 

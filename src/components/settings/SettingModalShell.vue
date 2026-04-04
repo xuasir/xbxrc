@@ -40,68 +40,71 @@ function handleClose(): void {
 </script>
 
 <template>
-  <Transition name="setting-modal-shell-transition">
-    <div v-if="props.open" class="setting-modal-shell" @click.self="handleClose">
-      <FocusScope
-        :id="props.scopeId"
-        :active="props.open"
-        :trap="props.trap"
-        :restore-focus="props.restoreFocus"
-        :default-focus-id="props.defaultFocusId || undefined"
-      >
-        <section
-          class="setting-modal-shell__panel ui-overlay-panel"
-          :style="{
-            width: props.width,
-            maxHeight: props.maxHeight,
-          }"
-          :aria-label="props.title"
+  <!-- 挂到 body，避免祖先（如设置页 overflow:hidden）裁剪 fixed 全屏遮罩与面板 -->
+  <Teleport to="body">
+    <Transition name="setting-modal-shell-transition">
+      <div v-if="props.open" class="setting-modal-shell" @click.self="handleClose">
+        <FocusScope
+          :id="props.scopeId"
+          :active="props.open"
+          :trap="props.trap"
+          :restore-focus="props.restoreFocus"
+          :default-focus-id="props.defaultFocusId || undefined"
         >
-          <header class="setting-modal-shell__header">
-            <div class="setting-modal-shell__header-copy">
-              <p v-if="props.eyebrow" class="setting-modal-shell__eyebrow">
-                {{ props.eyebrow }}
-              </p>
-              <p v-else class="setting-modal-shell__eyebrow">
-                {{ t('setting.editor.eyebrow') }}
-              </p>
+          <section
+            class="setting-modal-shell__panel ui-overlay-panel"
+            :style="{
+              width: props.width,
+              maxHeight: props.maxHeight,
+            }"
+            :aria-label="props.title"
+          >
+            <header class="setting-modal-shell__header">
+              <div class="setting-modal-shell__header-copy">
+                <p v-if="props.eyebrow" class="setting-modal-shell__eyebrow">
+                  {{ props.eyebrow }}
+                </p>
+                <p v-else class="setting-modal-shell__eyebrow">
+                  {{ t('setting.editor.eyebrow') }}
+                </p>
 
-              <h2 class="setting-modal-shell__title">
-                {{ props.title }}
-              </h2>
+                <h2 class="setting-modal-shell__title">
+                  {{ props.title }}
+                </h2>
 
-              <p v-if="props.hint" class="setting-modal-shell__hint">
-                {{ props.hint }}
-              </p>
+                <p v-if="props.hint" class="setting-modal-shell__hint">
+                  {{ props.hint }}
+                </p>
 
-              <slot name="headerExtra" />
+                <slot name="headerExtra" />
+              </div>
+
+              <Focusable
+                :id="closeNodeId"
+                as="button"
+                type="button"
+                class="setting-modal-shell__close"
+                :scope-id="props.scopeId"
+                :on-back="handleClose"
+                :aria-label="t('setting.editor.cancel')"
+                @click="handleClose"
+              >
+                <span class="setting-modal-shell__close-icon" aria-hidden="true">✕</span>
+              </Focusable>
+            </header>
+
+            <div class="setting-modal-shell__body">
+              <slot />
             </div>
 
-            <Focusable
-              :id="closeNodeId"
-              as="button"
-              type="button"
-              class="setting-modal-shell__close"
-              :scope-id="props.scopeId"
-              :on-back="handleClose"
-              :aria-label="t('setting.editor.cancel')"
-              @click="handleClose"
-            >
-              <span class="setting-modal-shell__close-icon" aria-hidden="true">✕</span>
-            </Focusable>
-          </header>
-
-          <div class="setting-modal-shell__body">
-            <slot />
-          </div>
-
-          <footer v-if="$slots.footer" class="setting-modal-shell__footer">
-            <slot name="footer" />
-          </footer>
-        </section>
-      </FocusScope>
-    </div>
-  </Transition>
+            <footer v-if="$slots.footer" class="setting-modal-shell__footer">
+              <slot name="footer" />
+            </footer>
+          </section>
+        </FocusScope>
+      </div>
+    </Transition>
+  </Teleport>
 </template>
 
 <style scoped>
@@ -194,7 +197,7 @@ function handleClose(): void {
 
 .setting-modal-shell__footer {
   padding-top: var(--ui-space-md);
-  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  border-top: 1px solid var(--ui-border-subtle);
 }
 
 /* 动画：与现有 setting-*sheet 统一为淡入 + panel scale */

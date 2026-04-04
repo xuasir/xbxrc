@@ -7,6 +7,32 @@ const HOST_RENDER_MIN_FRAME_AGE_MS: f64 = 24.0;
 const HOST_RENDER_MAX_FRAME_AGE_MS: f64 = 75.0;
 const HOST_RENDER_FRAME_AGE_MULTIPLIER: f64 = 2.25;
 const HOST_FRAME_DROP_BACKLOG_LIMIT: usize = 32;
+const HOST_SUBMIT_GAP_WARN_MS: f64 = 100.0;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum HostCadencePhase {
+    Idle,
+    Priming,
+    Steady,
+    Starved,
+}
+
+impl HostCadencePhase {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Idle => "idle",
+            Self::Priming => "priming",
+            Self::Steady => "steady",
+            Self::Starved => "starved",
+        }
+    }
+}
+
+impl Default for HostCadencePhase {
+    fn default() -> Self {
+        Self::Idle
+    }
+}
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct HostFrameDropBacklog {
@@ -60,9 +86,13 @@ impl HostFrameDropBacklog {
 #[derive(Default)]
 pub struct HostCadenceTelemetry {
     pub latest_present_time_ms: Option<f64>,
+    pub latest_submit_time_ms: Option<f64>,
+    display_tick_epoch: u64,
+    present_epoch: u64,
+    cadence_phase: HostCadencePhase,
     recent_present_times_ms: VecDeque<f64>,
     recent_display_tick_times_ms: VecDeque<f64>,
-    pub present_submit_count_total: u64,
+    pub present_enqueue_count_total: u64,
     pub present_drop_count_total: u64,
     pub present_overwrite_count_total: u64,
     pub no_pending_take_count_total: u64,
@@ -75,12 +105,26 @@ impl HostCadenceTelemetry {
     pub fn record_display_tick(&mut self, now_ms: f64) {
         self.recent_display_tick_times_ms.push_back(now_ms);
         self.trim_display_ticks(now_ms);
+        self.display_tick_epoch = self.display_tick_epoch.saturating_add(1);
+        if matches!(self.cadence_phase, HostCadencePhase::Idle) {
+            self.cadence_phase = HostCadencePhase::Priming;
+        }
     }
 
     pub fn record_present(&mut self, now_ms: f64) {
         self.latest_present_time_ms = Some(now_ms);
         self.recent_present_times_ms.push_back(now_ms);
         self.trim_recent(now_ms);
+        self.present_epoch = self.present_epoch.saturating_add(1);
+        self.cadence_phase = HostCadencePhase::Steady;
+    }
+
+    pub fn record_submit(&mut self, now_ms: f64) -> Option<f64> {
+        let submit_gap_ms = self
+            .latest_submit_time_ms
+            .map(|previous| (now_ms - previous).max(0.0));
+        self.latest_submit_time_ms = Some(now_ms);
+        submit_gap_ms
     }
 
     pub fn record_drop(&mut self) {
@@ -111,10 +155,20 @@ impl HostCadenceTelemetry {
         self.no_pending_take_count_total = self.no_pending_take_count_total.saturating_add(1);
         self.no_pending_streak = self.no_pending_streak.saturating_add(1);
         self.no_pending_max_streak = self.no_pending_max_streak.max(self.no_pending_streak);
+        if self.present_epoch > 0 {
+            self.cadence_phase = HostCadencePhase::Starved;
+        }
     }
 
     pub fn clear_no_pending_streak(&mut self) {
         self.no_pending_streak = 0;
+        self.cadence_phase = if self.present_epoch > 0 {
+            HostCadencePhase::Steady
+        } else if self.display_tick_epoch > 0 {
+            HostCadencePhase::Priming
+        } else {
+            HostCadencePhase::Idle
+        };
     }
 
     pub fn take_pending_frame_drops(&mut self) -> Vec<XbxEngineHostVideoFrameDropEvent> {
@@ -138,13 +192,33 @@ impl HostCadenceTelemetry {
             .unwrap_or(HOST_RENDER_MAX_FRAME_AGE_MS)
     }
 
+    pub fn should_warn_submit_gap(&self, submit_gap_ms: f64) -> bool {
+        submit_gap_ms >= HOST_SUBMIT_GAP_WARN_MS
+    }
+
+    pub fn display_tick_epoch(&self) -> u64 {
+        self.display_tick_epoch
+    }
+
+    pub fn present_epoch(&self) -> u64 {
+        self.present_epoch
+    }
+
+    pub fn cadence_phase(&self) -> HostCadencePhase {
+        self.cadence_phase
+    }
+
     pub fn reset_frame_slot(&mut self) {
         self.latest_present_time_ms = None;
+        self.latest_submit_time_ms = None;
+        self.display_tick_epoch = 0;
+        self.present_epoch = 0;
+        self.cadence_phase = HostCadencePhase::Idle;
         self.recent_present_times_ms.clear();
         self.recent_display_tick_times_ms.clear();
         // 会话 detach / reattach 后需要重新统计宿主 present 指标，
         // 否则新会话会继承上一轮 submit/drop/overwrite 计数，诊断会失真。
-        self.present_submit_count_total = 0;
+        self.present_enqueue_count_total = 0;
         self.present_drop_count_total = 0;
         self.present_overwrite_count_total = 0;
         self.no_pending_take_count_total = 0;
@@ -314,7 +388,9 @@ mod tests {
 
     use xbxengine::{XbxEngineRenderFrame, XbxEngineRenderPixelData};
 
-    use super::{HostCadenceTelemetry, ScheduledFrameSlot, ScheduledFrameSubmitOutcome};
+    use super::{
+        HostCadencePhase, HostCadenceTelemetry, ScheduledFrameSlot, ScheduledFrameSubmitOutcome,
+    };
 
     fn mk_frame(frame_seq: u64) -> XbxEngineRenderFrame {
         XbxEngineRenderFrame {
@@ -356,6 +432,29 @@ mod tests {
             }
             other => panic!("expected new epoch frame to be accepted, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn cadence_epoch_and_phase_progress_with_ticks_and_presents() {
+        let mut telemetry = HostCadenceTelemetry::default();
+        assert_eq!(telemetry.display_tick_epoch(), 0);
+        assert_eq!(telemetry.present_epoch(), 0);
+        assert_eq!(telemetry.cadence_phase(), HostCadencePhase::Idle);
+
+        telemetry.record_display_tick(1_000.0);
+        telemetry.record_display_tick(1_016.0);
+        assert_eq!(telemetry.display_tick_epoch(), 2);
+        assert_eq!(telemetry.present_epoch(), 0);
+        assert_eq!(telemetry.cadence_phase(), HostCadencePhase::Priming);
+
+        telemetry.record_present(1_018.0);
+        assert_eq!(telemetry.present_epoch(), 1);
+        assert_eq!(telemetry.cadence_phase(), HostCadencePhase::Steady);
+
+        telemetry.record_no_pending_take();
+        assert_eq!(telemetry.cadence_phase(), HostCadencePhase::Starved);
+        telemetry.clear_no_pending_streak();
+        assert_eq!(telemetry.cadence_phase(), HostCadencePhase::Steady);
     }
 }
 

@@ -26,7 +26,7 @@ interface UseStreamRuntimeHostOptions {
   onConnectionStateChange: (state: RTCPeerConnectionState) => void
   onRuntimeError: (message: string) => void
   onRuntimePhaseChange: (phase: StreamRuntimePhase) => void
-  onFramePresented: () => void
+  onFrameReady: () => void
 }
 
 /**
@@ -147,9 +147,9 @@ export function useStreamRuntimeHost(options: UseStreamRuntimeHostOptions) {
         return
       }
 
-      if (event.type === 'framePresented') {
+      if (event.type === 'frameReady') {
         lastFrameAt.value = Date.now()
-        options.onFramePresented()
+        options.onFrameReady()
         return
       }
 

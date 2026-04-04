@@ -163,3 +163,99 @@ fn run_renderer_loop(
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{run_renderer_loop, RendererMsg};
+    use crate::api::backend::XbxEngineMediaRuntimeStats;
+    use crate::media::video::render::renderer::{XbxRenderFrame, XbxRenderState};
+    use crate::media::video::types::{DecodedFrame, FrameRecoveryDisposition};
+    use crate::runtime_stats_sink::RuntimeStatsSink;
+    use crate::XbxEngineRenderPixelData;
+    use std::sync::mpsc;
+    use std::sync::{Arc, Mutex};
+    use std::time::Instant;
+
+    fn make_decoded_frame(frame_seq: u64, width: u32, height: u32) -> DecodedFrame {
+        let bytes = vec![frame_seq as u8; (width * height * 4) as usize];
+        DecodedFrame {
+            pts: Instant::now(),
+            rtp_timestamp: frame_seq as u32,
+            is_keyframe: frame_seq == 1,
+            budget: crate::media::video::ingress::budget::FrameBudgetContext::default(),
+            frame_recovery_disposition: FrameRecoveryDisposition::Repairing,
+            frame_unrecoverable_reason: None,
+            surface: XbxRenderFrame {
+                width,
+                height,
+                frame_seq,
+                rendered_at_ms: frame_seq as f64,
+                rtp_timestamp: Some(frame_seq as u32),
+                is_keyframe: frame_seq == 1,
+                frame_recovery_disposition: Some("repairing".to_string()),
+                frame_unrecoverable_reason: None,
+                pixel_data: XbxEngineRenderPixelData::Rgba {
+                    bytes: Arc::<[u8]>::from(bytes),
+                },
+            },
+        }
+    }
+
+    #[test]
+    fn renderer_actor_projects_latest_overwrite_decision_into_runtime_stats() {
+        let (tx, rx) = mpsc::sync_channel(4);
+        let render_state = Arc::new(Mutex::new(XbxRenderState::default()));
+        let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
+        let runtime_stats_sink = RuntimeStatsSink::new(runtime_stats.clone());
+
+        tx.send(RendererMsg::Frame(make_decoded_frame(1, 2, 2)))
+            .expect("first frame");
+        tx.send(RendererMsg::Frame(make_decoded_frame(2, 2, 2)))
+            .expect("second frame");
+        tx.send(RendererMsg::Stop).expect("stop");
+
+        run_renderer_loop(rx, render_state.clone(), runtime_stats_sink);
+
+        let stats = runtime_stats.lock().expect("runtime stats lock");
+        assert_eq!(stats.video_renderer_submit_count_total, 2);
+        assert_eq!(
+            stats.latest_observation_label.as_deref(),
+            Some("renderCandidateState")
+        );
+        let summary = stats
+            .latest_observation_summary
+            .clone()
+            .expect("render summary");
+        assert!(summary.contains("latest-overwrite:replace:latestSlotOverwrite:seq=1"));
+        let decision = stats
+            .latest_render_candidate_decision
+            .clone()
+            .expect("latest render decision");
+        assert_eq!(decision.state, "latest-overwrite");
+        assert_eq!(decision.action, "replace");
+        assert_eq!(decision.detail, "latestSlotOverwrite");
+        assert_eq!(decision.frame_seq, Some(1));
+    }
+
+    #[test]
+    fn renderer_actor_counts_present_error_as_drop() {
+        let (tx, rx) = mpsc::sync_channel(2);
+        let render_state = Arc::new(Mutex::new(XbxRenderState::default()));
+        let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
+        let runtime_stats_sink = RuntimeStatsSink::new(runtime_stats.clone());
+
+        let mut bad_frame = make_decoded_frame(7, 2, 2);
+        bad_frame.surface.pixel_data = XbxEngineRenderPixelData::Rgba {
+            bytes: Arc::<[u8]>::from([7u8; 4]),
+        };
+
+        tx.send(RendererMsg::Frame(bad_frame))
+            .expect("bad frame");
+        tx.send(RendererMsg::Stop).expect("stop");
+        run_renderer_loop(rx, render_state, runtime_stats_sink);
+
+        let stats = runtime_stats.lock().expect("runtime stats lock");
+        assert_eq!(stats.video_renderer_submit_count_total, 1);
+        assert_eq!(stats.video_renderer_drop_count_total, 1);
+    }
+}

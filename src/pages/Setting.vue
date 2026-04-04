@@ -706,7 +706,13 @@ onUnmounted(() => {
                       as="button"
                       type="button"
                       class="setting-row"
-                      :class="{ 'setting-row--select': row.control === 'singleSelect' }"
+                      :class="{
+                        'setting-row--select': row.control === 'singleSelect',
+                        'setting-row--inline-expanded':
+                          row.control === 'singleSelect'
+                          && (row.options?.length ?? 0) <= 3
+                          && activeInlineSingleSelectRow?.nodeId === row.nodeId,
+                      }"
                       :scope-id="SPATIAL_NAV_SCOPE_IDS.appShell"
                       :aria-label="row.label"
                       :on-back="
@@ -1127,6 +1133,18 @@ onUnmounted(() => {
   line-height: 1;
   color: var(--color-text-tertiary);
   vertical-align: middle;
+  transition: transform var(--ui-motion-fast) var(--ease-standard);
+}
+
+/* 行内单选展开：与下方选项区连成一体，› 旋转为向下示意 */
+.setting-row--inline-expanded {
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.setting-row--inline-expanded.setting-row--select .setting-row__value::after {
+  transform: rotate(90deg);
+  color: var(--brand-primary);
 }
 
 .setting-content-fade-enter-active,

@@ -27,7 +27,8 @@ use self::presenters::{
     NativeVideoPresenterKind, NoopVideoPresenter,
 };
 use self::scheduling::{
-    HostCadenceTelemetry, HostFrameDropBacklog, ScheduledFrameSlot, ScheduledFrameTakeOutcome,
+    HostCadencePhase, HostCadenceTelemetry, HostFrameDropBacklog, ScheduledFrameSlot,
+    ScheduledFrameTakeOutcome,
 };
 use self::types::{
     DecodedVideoSurface, VideoEffectPipelineKind, VideoPlatformCapabilities, VideoPresenterMode,
@@ -109,17 +110,20 @@ pub struct NativeVideoViewportState {
     pub latest_frame_seq: Option<u64>,
     pub latest_frame_width: Option<u32>,
     pub latest_frame_height: Option<u32>,
-    pub latest_frame_rendered_at_ms: Option<f64>,
+    pub latest_renderer_frame_time_ms: Option<f64>,
     pub present_count_total: u64,
     pub last_present_kind: Option<String>,
     pub latest_host_present_time_ms: Option<f64>,
     pub host_present_fps: f64,
-    pub host_present_submit_count_total: u64,
+    pub host_present_enqueue_count_total: u64,
     pub host_present_drop_count_total: u64,
     pub host_present_overwrite_count_total: u64,
     pub host_no_pending_take_count_total: u64,
     pub host_no_pending_streak: u32,
     pub host_no_pending_max_streak: u32,
+    pub host_display_tick_epoch: u64,
+    pub host_present_epoch: u64,
+    pub host_cadence_phase: Option<String>,
     pub host_display_interval_ms: Option<f64>,
     pub host_frame_age_budget_ms: Option<f64>,
     pub host_descriptor_upload_mode: Option<String>,
@@ -182,7 +186,7 @@ impl NativeVideoRegistry {
             entry.latest_frame_seq = None;
             entry.latest_frame_width = None;
             entry.latest_frame_height = None;
-            entry.latest_frame_rendered_at_ms = None;
+            entry.latest_renderer_frame_time_ms = None;
             entry.last_present_kind = None;
             entry.present_count_total = 0;
         }
@@ -239,7 +243,7 @@ impl NativeVideoRegistry {
         entry.latest_frame_seq = Some(frame.frame_seq);
         entry.latest_frame_width = Some(frame.width);
         entry.latest_frame_height = Some(frame.height);
-        entry.latest_frame_rendered_at_ms = Some(frame.rendered_at_ms);
+        entry.latest_renderer_frame_time_ms = Some(frame.rendered_at_ms);
         entry.present_count_total = entry.present_count_total.saturating_add(1);
         entry.last_present_kind = Some(resolve_present_kind(frame));
 
@@ -500,7 +504,7 @@ fn configure_macos_window_video_host(
 pub(super) struct MacOsWgpuState {
     renderer: Option<wgpu_renderer::WgpuFrameRenderer>,
     latest_frame: Option<XbxEngineRenderFrame>,
-    last_rendered_frame_seq: Option<u64>,
+    last_presented_frame_seq: Option<u64>,
     last_surface_size: Option<(u32, u32)>,
     host_view_ptr: Option<*mut objc2::runtime::AnyObject>,
     host_view_managed: bool,
@@ -512,9 +516,12 @@ pub(super) struct MacOsWgpuState {
 #[derive(Default)]
 pub(super) struct MacOsWgpuTelemetry {
     latest_present_time_ms: Option<f64>,
+    display_tick_epoch: u64,
+    present_epoch: u64,
+    cadence_phase: HostCadencePhase,
     recent_present_times_ms: VecDeque<f64>,
     recent_display_tick_times_ms: VecDeque<f64>,
-    present_submit_count_total: u64,
+    present_enqueue_count_total: u64,
     present_drop_count_total: u64,
     present_overwrite_count_total: u64,
     no_pending_take_count_total: u64,
@@ -531,12 +538,21 @@ impl MacOsWgpuTelemetry {
     fn record_display_tick(&mut self, now_ms: f64) {
         self.recent_display_tick_times_ms.push_back(now_ms);
         self.trim_display_ticks(now_ms);
+        self.display_tick_epoch = self.display_tick_epoch.saturating_add(1);
+        if matches!(
+            self.cadence_phase,
+            HostCadencePhase::Idle
+        ) {
+            self.cadence_phase = HostCadencePhase::Priming;
+        }
     }
 
     fn record_present(&mut self, now_ms: f64) {
         self.latest_present_time_ms = Some(now_ms);
         self.recent_present_times_ms.push_back(now_ms);
         self.trim_recent(now_ms);
+        self.present_epoch = self.present_epoch.saturating_add(1);
+        self.cadence_phase = HostCadencePhase::Steady;
     }
 
     fn record_drop(&mut self) {
@@ -547,10 +563,20 @@ impl MacOsWgpuTelemetry {
         self.no_pending_take_count_total = self.no_pending_take_count_total.saturating_add(1);
         self.no_pending_streak = self.no_pending_streak.saturating_add(1);
         self.no_pending_max_streak = self.no_pending_max_streak.max(self.no_pending_streak);
+        if self.present_epoch > 0 {
+            self.cadence_phase = HostCadencePhase::Starved;
+        }
     }
 
     fn clear_no_pending_streak(&mut self) {
         self.no_pending_streak = 0;
+        self.cadence_phase = if self.present_epoch > 0 {
+            HostCadencePhase::Steady
+        } else if self.display_tick_epoch > 0 {
+            HostCadencePhase::Priming
+        } else {
+            HostCadencePhase::Idle
+        };
     }
 
     fn record_stale_frame_drop(
@@ -590,11 +616,26 @@ impl MacOsWgpuTelemetry {
             .unwrap_or(HOST_RENDER_MAX_FRAME_AGE_MS)
     }
 
+    fn display_tick_epoch(&self) -> u64 {
+        self.display_tick_epoch
+    }
+
+    fn present_epoch(&self) -> u64 {
+        self.present_epoch
+    }
+
+    fn cadence_phase(&self) -> HostCadencePhase {
+        self.cadence_phase
+    }
+
     fn reset_frame_slot(&mut self) {
         self.latest_present_time_ms = None;
+        self.display_tick_epoch = 0;
+        self.present_epoch = 0;
+        self.cadence_phase = HostCadencePhase::Idle;
         self.recent_present_times_ms.clear();
         self.recent_display_tick_times_ms.clear();
-        self.present_submit_count_total = 0;
+        self.present_enqueue_count_total = 0;
         self.present_drop_count_total = 0;
         self.present_overwrite_count_total = 0;
         self.no_pending_take_count_total = 0;
@@ -745,7 +786,7 @@ pub(super) fn run_wgpu_render_tick(
     };
     let should_render = size_changed
         || state.latest_frame.as_ref().map(|frame| frame.frame_seq)
-            != state.last_rendered_frame_seq;
+            != state.last_presented_frame_seq;
     let latest_frame = state.latest_frame.clone();
     if latest_frame.is_none() {
         if let Ok(mut telemetry) = telemetry.lock() {
@@ -754,7 +795,7 @@ pub(super) fn run_wgpu_render_tick(
     } else if let Ok(mut telemetry) = telemetry.lock() {
         telemetry.clear_no_pending_streak();
     }
-    let rendered_seq_before = state.last_rendered_frame_seq;
+    let rendered_seq_before = state.last_presented_frame_seq;
     if size_changed {
         state.last_surface_size = Some((surface_width, surface_height));
     }
@@ -767,7 +808,7 @@ pub(super) fn run_wgpu_render_tick(
     if let Some(frame) = latest_frame {
         if should_render {
             if now_ms - frame.rendered_at_ms > frame_age_budget_ms {
-                state.last_rendered_frame_seq = Some(frame.frame_seq);
+                state.last_presented_frame_seq = Some(frame.frame_seq);
                 state.latest_frame = None;
                 if let Ok(mut telemetry) = telemetry.lock() {
                     telemetry.record_stale_frame_drop(&frame, now_ms, "scheduledFrameStale", 1);
@@ -792,7 +833,7 @@ pub(super) fn run_wgpu_render_tick(
                 );
             } else {
                 let descriptor_upload = renderer.descriptor_upload_telemetry();
-                state.last_rendered_frame_seq = Some(rendered_seq);
+                state.last_presented_frame_seq = Some(rendered_seq);
                 if let Ok(mut telemetry) = telemetry.lock() {
                     telemetry.record_present(now_ms);
                     telemetry.descriptor_upload_mode = descriptor_upload.last_mode;

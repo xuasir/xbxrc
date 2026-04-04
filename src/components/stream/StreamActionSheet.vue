@@ -188,7 +188,7 @@ function handleSelect(id: string): void {
 
 .stream-action-sheet__item--danger[data-focused='true'] {
   background: var(--ui-status-danger);
-  color: #ffffff;
+  color: var(--brand-on-primary);
 }
 
 .stream-action-sheet__item:disabled {

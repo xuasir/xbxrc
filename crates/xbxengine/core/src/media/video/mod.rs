@@ -6,3 +6,6 @@ pub mod pacer;
 
 pub mod render;
 pub mod types;
+
+#[cfg(test)]
+pub(crate) mod test_fixtures;

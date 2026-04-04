@@ -107,10 +107,35 @@ fn normalize_identity_token(value: &str) -> Option<String> {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct RtcVideoRepairMetadata {
+    pub(crate) native_ssrc: u32,
+    pub(crate) native_payload_type: u8,
+    pub(crate) native_sequence_number: u16,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum RtcVideoIngressKind {
+    Primary,
+    RepairPrimaryPassThrough {
+        repair: RtcVideoRepairMetadata,
+    },
+    RtxReinject {
+        repair: RtcVideoRepairMetadata,
+    },
+}
+
+impl Default for RtcVideoIngressKind {
+    fn default() -> Self {
+        Self::Primary
+    }
+}
+
 #[derive(Clone, Debug)]
 pub(crate) struct RtcVideoRtpPacket {
     pub(crate) payload: Vec<u8>,
     pub(crate) meta: RtcRtpPacketMeta,
+    pub(crate) ingress_kind: RtcVideoIngressKind,
 }
 
 impl RtcVideoRtpPacket {

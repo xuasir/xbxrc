@@ -5,6 +5,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use crate::media::video::h264::inspection::H264AccessUnitInspector;
+use crate::media::video::ingress::budget::FrameBudgetContext;
 use crate::transport::rtc::stream::nack_scheduler::{NackScheduler, NackSchedulerConfig};
 use crate::{
     XbxEngineAnchorCandidateFailureReason, XbxEngineAnchorCandidateState,
@@ -57,6 +58,8 @@ pub struct RtcVideoFrameSource {
     current_width: u32,
     current_height: u32,
     recent_rtp_packets: VecDeque<RecentRtpPacket>,
+    current_media_ssrc: Option<u32>,
+    local_rtcp_sender_ssrc: u32,
     packet_gap_observation_id: u64,
     transport_deadline_tracker: TransportFrameDeadlineTracker,
     nack_observation_id: u64,
@@ -120,6 +123,8 @@ impl RtcVideoFrameSource {
             current_width: 0,
             current_height: 0,
             recent_rtp_packets: VecDeque::with_capacity(512),
+            current_media_ssrc: None,
+            local_rtcp_sender_ssrc: generate_local_rtcp_sender_ssrc(),
             packet_gap_observation_id: 0,
             transport_deadline_tracker: TransportFrameDeadlineTracker::new(frame_deadline_ms),
             nack_observation_id: 0,
@@ -208,6 +213,7 @@ impl RtcVideoFrameSource {
         frame_playout_deadline_at_ms: Option<f64>,
         frame_recovery_disposition: FrameRecoveryDisposition,
         frame_unrecoverable_reason: Option<&str>,
+        budget_context: FrameBudgetContext,
         observed_at_ms: f64,
     ) {
         let Some(frame_rtp_timestamp) = frame_rtp_timestamp else {
@@ -222,6 +228,7 @@ impl RtcVideoFrameSource {
                 frame_playout_deadline_at_ms,
                 frame_recovery_disposition: frame_recovery_disposition.as_str().to_string(),
                 frame_unrecoverable_reason: frame_unrecoverable_reason.map(str::to_string),
+                frame_budget: None,
                 observed_at_ms,
             },
         );
@@ -230,6 +237,7 @@ impl RtcVideoFrameSource {
             frame_playout_deadline_at_ms,
             frame_recovery_disposition,
             frame_unrecoverable_reason,
+            budget_context,
         );
         self.record_video_timeline_observation(
             "frame-recovery-ledger-write",
@@ -274,7 +282,12 @@ impl RtcVideoFrameSource {
     pub(super) fn take_frame_recovery_ledger(
         &mut self,
         frame_rtp_timestamp: u32,
-    ) -> (Option<f64>, FrameRecoveryDisposition, Option<String>) {
+    ) -> (
+        Option<f64>,
+        FrameRecoveryDisposition,
+        Option<String>,
+        Option<FrameBudgetContext>,
+    ) {
         if let Some(entry) = self.timeline_state.take_frame_recovery(frame_rtp_timestamp) {
             self.nack_observation_id = self.nack_observation_id.saturating_add(1);
             self.runtime_stats.record_frame_recovery_observation(
@@ -288,6 +301,7 @@ impl RtcVideoFrameSource {
                         .as_str()
                         .to_string(),
                     frame_unrecoverable_reason: entry.frame_unrecoverable_reason.clone(),
+                    frame_budget: None,
                     observed_at_ms: now_ms_f64(),
                 },
             );
@@ -301,9 +315,10 @@ impl RtcVideoFrameSource {
                 entry.frame_playout_deadline_at_ms,
                 entry.frame_recovery_disposition,
                 entry.frame_unrecoverable_reason,
+                Some(entry.budget_context),
             );
         }
-        (None, FrameRecoveryDisposition::Repairing, None)
+        (None, FrameRecoveryDisposition::Repairing, None, None)
     }
 
     pub(super) fn waiting_for_recovery_keyframe(&self) -> bool {
@@ -433,7 +448,7 @@ pub(crate) fn build_rtc_video_frame_source(
         rx,
         transport_observation_tx,
         rtcp_port,
-        runtime_stats,
+        runtime_stats.clone(),
         max_late_packets,
         jitter_buffer_min_delay,
         jitter_buffer_max_delay,
@@ -443,6 +458,7 @@ pub(crate) fn build_rtc_video_frame_source(
     let sink = sink::RtcVideoSourceSink {
         tx,
         payload_route_map: None,
+        runtime_stats: RuntimeStatsSink::new(runtime_stats.clone()),
     };
     let observation_source = RtcVideoTransportObservationSource {
         rx: transport_observation_rx,
@@ -454,4 +470,13 @@ pub(crate) fn build_rtc_video_frame_source(
             transport_observation_source: Box::new(observation_source),
         },
     )
+}
+
+fn generate_local_rtcp_sender_ssrc() -> u32 {
+    let seed = now_ms_f64() as u32;
+    if seed == 0 {
+        1
+    } else {
+        seed
+    }
 }

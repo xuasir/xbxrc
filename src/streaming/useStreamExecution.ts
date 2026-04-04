@@ -97,7 +97,7 @@ type StreamExecutionViewAction
     | { type: 'runtimeConnected', statusText: string }
     | { type: 'runtimeDisconnected' }
     | { type: 'runtimePhaseChanged', phase: StreamRuntimePhase, statusText: string }
-    | { type: 'framePresented' }
+    | { type: 'frameReady' }
     | { type: 'runtimeLaunchRequested', statusText: string }
 
 function reduceViewState(
@@ -259,7 +259,7 @@ function reduceViewState(
               ? 'starting'
               : state.lifecyclePhase,
       }
-    case 'framePresented':
+    case 'frameReady':
       return state.lifecyclePhase === 'failed'
         || state.sessionUiPhase === 'failed'
         || state.sessionUiPhase === 'closed'
@@ -370,9 +370,9 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
         resetExecutionWarning()
       }
     },
-    onFramePresented: () => {
+    onFrameReady: () => {
       if (!closing.value) {
-        dispatchViewAction({ type: 'framePresented' })
+        dispatchViewAction({ type: 'frameReady' })
       }
     },
   })

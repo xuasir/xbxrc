@@ -5,6 +5,7 @@ use tokio::time::Duration;
 
 use crate::api::backend::XbxEngineMediaRuntimeStats;
 use crate::runtime_stats_sink::RuntimeStatsSink;
+use crate::transport::rtc::connection::RtcConnectionService;
 use crate::transport::rtc::stream::audio::{
     build_audio_playback_components, RtcAudioPlaybackSink, XbxRemoteAudioPlaybackSession,
 };
@@ -51,10 +52,30 @@ impl RtcMediaSink for RtcCompositeMediaSink {
     }
 }
 
-struct DummyRtcpPort;
+struct ConnectionRtcpPort {
+    connection: Arc<Mutex<RtcConnectionService>>,
+}
 
-impl RtcRtcpSendPort for DummyRtcpPort {
-    fn send_rtcp(&self, _buf: &[u8]) {}
+impl ConnectionRtcpPort {
+    fn new(connection: Arc<Mutex<RtcConnectionService>>) -> Self {
+        Self { connection }
+    }
+}
+
+impl RtcRtcpSendPort for ConnectionRtcpPort {
+    fn send_rtcp(&self, buf: &[u8]) {
+        let Ok(mut connection) = self.connection.lock() else {
+            crate::xbx_log_warn!(
+                "[xbxengine][rtc][rtcp] drop rtcp payload because connection lock failed"
+            );
+            return;
+        };
+        if let Err(error) = connection.send_video_rtcp_payload(buf) {
+            crate::xbx_log_warn!(
+                "[xbxengine][rtc][rtcp] failed to send video rtcp payload: {error}"
+            );
+        }
+    }
 }
 
 // 负责当前主 frame pipeline 的挂载和音频播放会话管理，
@@ -65,6 +86,7 @@ pub(crate) struct RtcStackMediaPipelineBridge<'a> {
     runtime_config: &'a Arc<Mutex<XbxEngineRuntimeConfig>>,
     audio_volume_bits: &'a Arc<AtomicU32>,
     audio_playback_session: &'a Arc<Mutex<Option<XbxRemoteAudioPlaybackSession>>>,
+    connection: &'a Arc<Mutex<RtcConnectionService>>,
     media: &'a Arc<Mutex<RtcMediaService>>,
     frame_source_tx: &'a Arc<Mutex<Option<FrameSourceSender>>>,
 }
@@ -76,6 +98,7 @@ impl<'a> RtcStackMediaPipelineBridge<'a> {
         runtime_config: &'a Arc<Mutex<XbxEngineRuntimeConfig>>,
         audio_volume_bits: &'a Arc<AtomicU32>,
         audio_playback_session: &'a Arc<Mutex<Option<XbxRemoteAudioPlaybackSession>>>,
+        connection: &'a Arc<Mutex<RtcConnectionService>>,
         media: &'a Arc<Mutex<RtcMediaService>>,
         frame_source_tx: &'a Arc<Mutex<Option<FrameSourceSender>>>,
     ) -> Self {
@@ -85,6 +108,7 @@ impl<'a> RtcStackMediaPipelineBridge<'a> {
             runtime_config,
             audio_volume_bits,
             audio_playback_session,
+            connection,
             media,
             frame_source_tx,
         }
@@ -108,7 +132,7 @@ impl<'a> RtcStackMediaPipelineBridge<'a> {
         let video_pipeline = webrtc.video_pipeline;
         let (video_sink, frame_sources) = build_rtc_video_frame_source(
             8192,
-            Arc::new(DummyRtcpPort),
+            Arc::new(ConnectionRtcpPort::new(self.connection.clone())),
             self.runtime_stats.clone(),
             video_pipeline.jitter_buffer_max_packets.max(64),
             Duration::from_millis(video_pipeline.jitter_buffer_min_delay_ms),

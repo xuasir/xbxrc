@@ -83,11 +83,11 @@ const notices = computed<StreamDiagnosticNoticeViewModel[]>(() => {
   max-width: 100%;
   padding: 10px 14px;
   border-radius: 14px;
-  color: #ffffff;
+  color: var(--ui-page-text);
   font-size: 12px;
   font-weight: 600;
   line-height: 1.4;
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.24);
+  box-shadow: var(--ui-shadow-floating);
 }
 
 .stream-diagnostic-notice-bar__item--info {
@@ -96,8 +96,8 @@ const notices = computed<StreamDiagnosticNoticeViewModel[]>(() => {
 }
 
 .stream-diagnostic-notice-bar__item--warning {
-  background: color-mix(in srgb, var(--ui-scrim-bg), #783612);
-  border: 1px solid rgba(255, 184, 77, 0.28);
+  background: var(--ui-notice-warning-mix);
+  border: 1px solid var(--ui-notice-warning-border);
 }
 
 @media (max-width: 768px) {

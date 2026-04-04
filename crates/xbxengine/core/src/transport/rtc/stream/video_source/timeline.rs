@@ -1,5 +1,6 @@
 use std::collections::BTreeMap;
 
+use crate::media::video::ingress::budget::FrameBudgetContext;
 use crate::media::video::types::FrameRecoveryDisposition;
 use crate::{
     XbxEngineAnchorCandidateFailureReason, XbxEngineAnchorCandidateLedger,
@@ -85,6 +86,7 @@ pub(super) struct FrameRecoveryLedgerEntry {
     pub(super) frame_playout_deadline_at_ms: Option<f64>,
     pub(super) frame_recovery_disposition: FrameRecoveryDisposition,
     pub(super) frame_unrecoverable_reason: Option<String>,
+    pub(super) budget_context: FrameBudgetContext,
 }
 
 #[derive(Clone, Debug)]
@@ -617,11 +619,13 @@ impl VideoTimelineState {
         frame_playout_deadline_at_ms: Option<f64>,
         frame_recovery_disposition: FrameRecoveryDisposition,
         frame_unrecoverable_reason: Option<&str>,
+        budget_context: FrameBudgetContext,
     ) {
         let next_entry = FrameRecoveryLedgerEntry {
             frame_playout_deadline_at_ms,
             frame_recovery_disposition,
             frame_unrecoverable_reason: frame_unrecoverable_reason.map(str::to_string),
+            budget_context,
         };
         if let Some(entry) = self.frame_recovery_ledger.get_mut(&frame_rtp_timestamp) {
             entry.frame_playout_deadline_at_ms = entry
@@ -639,6 +643,7 @@ impl VideoTimelineState {
             if next_entry.frame_unrecoverable_reason.is_some() {
                 entry.frame_unrecoverable_reason = next_entry.frame_unrecoverable_reason;
             }
+            entry.budget_context = next_entry.budget_context;
         } else {
             self.frame_recovery_ledger
                 .insert(frame_rtp_timestamp, next_entry);
@@ -882,7 +887,8 @@ impl VideoTimelineState {
         self.soft_reentry_budget_remaining = CLEAN_ANCHOR_SOFT_REENTRY_BUDGET;
     }
 
-    fn try_consume_soft_reentry_budget(
+    // 供 source 层在 clean anchor 后的短窗内消费，避免 transport-level WaitKeyframe 反复抖动。
+    pub(super) fn try_consume_soft_reentry_budget(
         &mut self,
         now_ms: f64,
         frame_importance: &'static str,
@@ -1014,7 +1020,9 @@ impl VideoTimelineState {
 #[cfg(test)]
 mod tests {
     use super::{ChainState, FrameReceiveState, GapState, VideoTimelineState};
+    use crate::media::video::ingress::budget::FrameBudgetContext;
     use crate::media::video::types::FrameRecoveryDisposition;
+    use crate::media::video::types::FrameValue;
     use crate::{XbxEngineAnchorCandidateFailureReason, XbxEngineAnchorCandidateState};
 
     #[test]
@@ -1240,12 +1248,14 @@ mod tests {
             Some(100.0),
             FrameRecoveryDisposition::UnrecoverableLate,
             Some("late"),
+            FrameBudgetContext::steady_for_value(FrameValue::new(false, false, 12 * 1024)),
         );
         state.record_frame_recovery(
             90_000,
             None,
             FrameRecoveryDisposition::UnrecoverableReferenceChain,
             Some("chain"),
+            FrameBudgetContext::steady_for_value(FrameValue::new(false, true, 48 * 1024)),
         );
         let entry = state.take_frame_recovery(90_000).expect("entry");
         assert_eq!(
@@ -1254,6 +1264,7 @@ mod tests {
         );
         assert_eq!(entry.frame_unrecoverable_reason.as_deref(), Some("chain"));
         assert_eq!(entry.frame_playout_deadline_at_ms, Some(100.0));
+        assert_eq!(entry.budget_context.frame_importance(), "reference");
     }
 
     #[test]

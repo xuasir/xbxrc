@@ -70,15 +70,16 @@ export interface XbxEngineStatsDto {
   runtime_summary?: string
   primary_issue_chain?: string
   latest_decision_summary?: string
+  remote_profile_baseline?: string
+  remote_profile_dynamic?: string
+  remote_profile_effective_label?: string
   session_phase?: string
-  transport_policy_profile?: string
-  recovery_policy_profile?: string
+  transport_strategy_profile?: string
+  recovery_strategy_profile?: string
   recovery_diagnosis?: string
-  recovery_coupling_mode?: string
-  recovery_coupling_summary?: string
   direct_gaming_bitrate_band?: string
-  video_owner_state?: string
-  video_owner_reason?: string
+  recovery_owner_state?: string
+  recovery_owner_reason?: string
   video_owner_source?: string
   video_owner_observed_at_ms?: number
   video_health?: string
@@ -135,6 +136,11 @@ export interface XbxEngineStatsDto {
   video_decoder_hardware_failure_streak?: number
   latest_video_decoder_hardware_failure_time_ms?: number
   latest_video_decoder_hardware_failure_status?: number
+  video_decoder_recovery_state?: string
+  video_decoder_recovery_event?: string
+  video_decoder_recovery_detail?: string
+  video_decoder_recovery_status?: number
+  video_decoder_recovery_state_changed_at_ms?: number
   video_renderer_stalled?: boolean
   packet_age_ms?: number
   decode_age_ms?: number
@@ -150,6 +156,7 @@ export interface XbxEngineStatsDto {
   video_renderer_drop_count_total?: number
   video_present_drop_count_total?: number
   video_present_overwrite_count_total?: number
+  /** 历史命名为 submit，实际语义是宿主 present 队列 enqueue 次数。 */
   video_present_submit_count_total?: number
   host_no_pending_take_count_total?: number
   host_no_pending_streak?: number
@@ -158,6 +165,24 @@ export interface XbxEngineStatsDto {
   video_present_descriptor_upload_mode?: string
   video_present_descriptor_metal_import_count_total?: number
   video_present_descriptor_cpu_upload_count_total?: number
+  latest_h264_inspection_observation?: {
+    observation_id: number
+    frame_rtp_timestamp?: number | null
+    nal_types: string[]
+    has_inband_sps: boolean
+    has_inband_pps: boolean
+    committed_sps_present: boolean
+    committed_pps_present: boolean
+    slice_headers_valid: boolean
+    delta_continuation_ready: boolean
+    parameter_sets_changed: boolean
+    config_changed: boolean
+    is_idr: boolean
+    bootstrap_ready: boolean
+    bootstrap_reject_reason?: string | null
+    admission_accepted: boolean
+    observed_at_ms: number
+  }
   recovery_keyframe_request_count?: number
   recovery_decoder_reset_count?: number
   recovery_reconnect_count?: number
@@ -192,11 +217,34 @@ export interface XbxEngineStatsDto {
     frame_seq?: number | null
     frame_recovery_disposition?: string | null
     frame_unrecoverable_reason?: string | null
+    frame_budget?: {
+      recovery_stage: string
+      chain_value: string
+      rtt_slack: string
+      failure_cost: string
+      window_source: string
+    } | null
     observed_at_ms: number
     width: number
     height: number
     is_keyframe: boolean
     queue_depth: number
+  }
+  latest_video_frame_recovery_observation?: {
+    observation_id: number
+    action: string
+    frame_rtp_timestamp: number
+    frame_playout_deadline_at_ms?: number | null
+    frame_recovery_disposition: string
+    frame_unrecoverable_reason?: string | null
+    frame_budget?: {
+      recovery_stage: string
+      chain_value: string
+      rtt_slack: string
+      failure_cost: string
+      window_source: string
+    } | null
+    observed_at_ms: number
   }
   latest_video_nack_observation?: {
     observation_id: number
@@ -214,6 +262,13 @@ export interface XbxEngineStatsDto {
     nack_disposition?: string | null
     frame_playout_deadline_at_ms?: number | null
     frame_unrecoverable_reason?: string | null
+    frame_budget?: {
+      recovery_stage: string
+      chain_value: string
+      rtt_slack: string
+      failure_cost: string
+      window_source: string
+    } | null
     observed_at_ms: number
   }
   latest_video_escalation_observation?: {
@@ -410,10 +465,10 @@ export type XbxEngineRuntimeEventDto
     }
     | { type: 'media.surfaceReady', surfaceId: string }
     | {
-      type: 'stats.videoFrameProcessed'
+      type: 'stats.videoFrameRendered'
       firstFramePacketArrivalTimeMs: number
       frameDecodedTimeMs: number
-      frameRenderedTimeMs: number
+      rendererFrameTimeMs: number
     }
     | { type: 'error', code: string, message: string }
 

@@ -59,8 +59,8 @@ export function createXbxEngineRuntime(options: {
       emit({ type: 'microphoneStateChanged', ...microphoneState })
       return
     }
-    if (event.type === 'stats.videoFrameProcessed') {
-      emit({ type: 'framePresented' })
+    if (event.type === 'stats.videoFrameRendered') {
+      emit({ type: 'frameReady' })
       return
     }
     if (event.type === 'error') {
@@ -145,10 +145,17 @@ export function createXbxEngineRuntime(options: {
         resolution: snapshot.resolution,
         rtt: snapshot.rtt,
         fps: snapshot.fps,
+        remoteProfileBaseline: snapshot.remote_profile_baseline,
+        remoteProfileDynamic: snapshot.remote_profile_dynamic,
+        remoteProfileEffectiveLabel: snapshot.remote_profile_effective_label,
         sessionPhase: snapshot.session_phase,
-        transportPolicyProfile: snapshot.transport_policy_profile,
-        recoveryPolicyProfile: snapshot.recovery_policy_profile,
+        transportStrategyProfile: snapshot.transport_strategy_profile,
+        recoveryStrategyProfile: snapshot.recovery_strategy_profile,
         recoveryDiagnosis: snapshot.recovery_diagnosis,
+        recoveryOwnerState: snapshot.recovery_owner_state,
+        recoveryOwnerReason: snapshot.recovery_owner_reason,
+        videoOwnerSource: snapshot.video_owner_source,
+        videoOwnerObservedAtMs: snapshot.video_owner_observed_at_ms,
         directGamingBitrateBand: snapshot.direct_gaming_bitrate_band,
         videoHealth: snapshot.video_health,
         stallKind: snapshot.stall_kind,
@@ -190,6 +197,12 @@ export function createXbxEngineRuntime(options: {
         inboundVideoPacketCountTotal: snapshot.inbound_video_packet_count_total,
         videoDecoderResetCount: snapshot.video_decoder_reset_count,
         videoDecoderStalled: snapshot.video_decoder_stalled,
+        videoDecoderRecoveryState: snapshot.video_decoder_recovery_state,
+        videoDecoderRecoveryEvent: snapshot.video_decoder_recovery_event,
+        videoDecoderRecoveryDetail: snapshot.video_decoder_recovery_detail,
+        videoDecoderRecoveryStatus: snapshot.video_decoder_recovery_status,
+        videoDecoderRecoveryStateChangedAtMs:
+          snapshot.video_decoder_recovery_state_changed_at_ms,
         videoRendererStalled: snapshot.video_renderer_stalled,
         packetAgeMs: snapshot.packet_age_ms,
         decodeAgeMs: snapshot.decode_age_ms,
@@ -205,6 +218,7 @@ export function createXbxEngineRuntime(options: {
         videoRendererDropCountTotal: snapshot.video_renderer_drop_count_total,
         videoPresentDropCountTotal: snapshot.video_present_drop_count_total,
         videoPresentOverwriteCountTotal: snapshot.video_present_overwrite_count_total,
+        videoPresentEnqueueCountTotal: snapshot.video_present_submit_count_total,
         videoPresentSubmitCountTotal: snapshot.video_present_submit_count_total,
         videoPresentDescriptorUploadMode: snapshot.video_present_descriptor_upload_mode,
         videoPresentDescriptorMetalImportCountTotal:

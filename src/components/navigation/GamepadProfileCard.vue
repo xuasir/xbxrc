@@ -348,7 +348,7 @@ function formatBoolean(value: boolean): string {
   padding: 2px 8px;
   border-radius: 4px;
   background: var(--brand-primary);
-  color: white;
+  color: var(--brand-on-primary);
   font-size: 10px;
   font-weight: 800;
 }

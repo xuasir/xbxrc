@@ -263,8 +263,14 @@ impl XbxEngineRuntimeState {
             viewport.host_frame_age_budget_ms,
         );
         let _ = runtime.update_host_video_present_metrics(XbxEngineHostVideoPresentMetrics {
+            // 使用 native_video telemetry 的真实 present 时间，统一 runtime/owner/snapshot 语义。
+            latest_host_present_time_ms: viewport.latest_host_present_time_ms,
+            display_tick_epoch: viewport.host_display_tick_epoch,
+            present_epoch: viewport.host_present_epoch,
+            cadence_phase: viewport.host_cadence_phase.clone(),
             present_fps: viewport.host_present_fps,
-            present_submit_count_total: viewport.host_present_submit_count_total,
+            // core 里该字段历史命名为 submit，本质是宿主侧 enqueue 次数。
+            present_submit_count_total: viewport.host_present_enqueue_count_total,
             present_drop_count_total: viewport.host_present_drop_count_total,
             present_overwrite_count_total: viewport.host_present_overwrite_count_total,
             no_pending_take_count_total: viewport.host_no_pending_take_count_total,

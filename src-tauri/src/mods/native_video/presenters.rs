@@ -215,7 +215,7 @@ impl NativeVideoPresenter for MacOsWgpuPresenter {
     fn begin_media_epoch(&mut self) {
         if let Ok(mut state) = self.renderer_state.lock() {
             state.latest_frame = None;
-            state.last_rendered_frame_seq = None;
+            state.last_presented_frame_seq = None;
             state.last_surface_size = None;
         }
         if let Ok(mut telemetry) = self.telemetry.lock() {
@@ -231,8 +231,8 @@ impl NativeVideoPresenter for MacOsWgpuPresenter {
         self.ensure_render_loop();
         let now_ms = now_ms_f64();
         if let Ok(mut telemetry) = self.telemetry.lock() {
-            telemetry.present_submit_count_total =
-                telemetry.present_submit_count_total.saturating_add(1);
+            telemetry.present_enqueue_count_total =
+                telemetry.present_enqueue_count_total.saturating_add(1);
         }
         if self.should_drop_submitted_frame(frame, now_ms) {
             if let Ok(mut telemetry) = self.telemetry.lock() {
@@ -261,8 +261,8 @@ impl NativeVideoPresenter for MacOsWgpuPresenter {
         }
         if let Ok(mut state) = self.renderer_state.lock() {
             if state
-                .last_rendered_frame_seq
-                .is_some_and(|rendered_seq| frame.frame_seq <= rendered_seq)
+                .last_presented_frame_seq
+                .is_some_and(|presented_seq| frame.frame_seq <= presented_seq)
             {
                 record_native_video_timing_event(
                     self.runtime_trace.as_ref(),
@@ -273,14 +273,14 @@ impl NativeVideoPresenter for MacOsWgpuPresenter {
                     serde_json::json!({
                         "outcome": "already_presented",
                         "frameSeq": frame.frame_seq,
-                        "lastRenderedFrameSeq": state.last_rendered_frame_seq,
+                        "lastPresentedFrameSeq": state.last_presented_frame_seq,
                     }),
                 );
                 return;
             }
             let replaced_frame_seq = state.latest_frame.as_ref().map(|latest| latest.frame_seq);
             let overwrote_pending = state.latest_frame.as_ref().is_some_and(|latest| {
-                Some(latest.frame_seq) != state.last_rendered_frame_seq
+                Some(latest.frame_seq) != state.last_presented_frame_seq
                     && latest.frame_seq != frame.frame_seq
             });
             if overwrote_pending {
@@ -322,7 +322,7 @@ impl NativeVideoPresenter for MacOsWgpuPresenter {
                 if let Ok(mut state) = renderer_state.lock() {
                     state.renderer = None;
                     state.latest_frame = None;
-                    state.last_rendered_frame_seq = None;
+                    state.last_presented_frame_seq = None;
                     state.last_surface_size = None;
                     if let Some(host_view_ptr) = state.host_view_ptr.take() {
                         if state.host_view_managed {
@@ -345,12 +345,15 @@ impl NativeVideoPresenter for MacOsWgpuPresenter {
         };
         viewport.latest_host_present_time_ms = telemetry.latest_present_time_ms;
         viewport.host_present_fps = telemetry.present_fps();
-        viewport.host_present_submit_count_total = telemetry.present_submit_count_total;
+        viewport.host_present_enqueue_count_total = telemetry.present_enqueue_count_total;
         viewport.host_present_drop_count_total = telemetry.present_drop_count_total;
         viewport.host_present_overwrite_count_total = telemetry.present_overwrite_count_total;
         viewport.host_no_pending_take_count_total = telemetry.no_pending_take_count_total;
         viewport.host_no_pending_streak = telemetry.no_pending_streak;
         viewport.host_no_pending_max_streak = telemetry.no_pending_max_streak;
+        viewport.host_display_tick_epoch = telemetry.display_tick_epoch();
+        viewport.host_present_epoch = telemetry.present_epoch();
+        viewport.host_cadence_phase = Some(telemetry.cadence_phase().as_str().to_string());
         viewport.host_display_interval_ms = telemetry.display_interval_ms();
         viewport.host_frame_age_budget_ms = Some(telemetry.frame_age_budget_ms());
         viewport.host_descriptor_upload_mode = telemetry.descriptor_upload_mode.clone();
@@ -552,8 +555,8 @@ impl NativeVideoPresenter for MacOsVideoPresenter {
         let now_ms = now_ms_f64();
         if self.should_drop_submitted_frame(frame, now_ms) {
             if let Ok(mut telemetry) = self.telemetry.lock() {
-                telemetry.present_submit_count_total =
-                    telemetry.present_submit_count_total.saturating_add(1);
+                telemetry.present_enqueue_count_total =
+                    telemetry.present_enqueue_count_total.saturating_add(1);
                 telemetry.record_stale_frame_drop(frame, now_ms, "submittedFrameStale", 0);
             }
             record_native_video_timing_event(
@@ -591,8 +594,12 @@ impl NativeVideoPresenter for MacOsVideoPresenter {
             );
             return;
         };
-        telemetry.present_submit_count_total =
-            telemetry.present_submit_count_total.saturating_add(1);
+        let submit_gap_ms = telemetry.record_submit(now_ms);
+        let no_pending_streak_before_submit = telemetry.no_pending_streak;
+        let should_warn_submit_gap =
+            submit_gap_ms.is_some_and(|gap_ms| telemetry.should_warn_submit_gap(gap_ms));
+        telemetry.present_enqueue_count_total =
+            telemetry.present_enqueue_count_total.saturating_add(1);
         let Ok(mut frame_slot) = self.frame_slot.lock() else {
             record_native_video_timing_event(
                 self.runtime_trace.as_ref(),
@@ -626,10 +633,31 @@ impl NativeVideoPresenter for MacOsVideoPresenter {
                         "frameSeq": frame_seq,
                         "frameAgeMs": frame_age_ms,
                         "frameAgeBudgetMs": frame_age_budget_ms,
+                        "submitGapMs": submit_gap_ms,
+                        "noPendingStreakBeforeSubmit": no_pending_streak_before_submit,
                         "overwrotePending": overwrote_pending,
                         "replacedFrameSeq": replaced_frame_seq,
                     }),
                 );
+                if let Some(gap_ms) = submit_gap_ms.filter(|_| should_warn_submit_gap) {
+                    // 只在供帧节奏明显掉速时额外留痕，避免健康阶段刷屏。
+                    record_native_video_timing_event(
+                        self.runtime_trace.as_ref(),
+                        "layer",
+                        "frame_submit_gap",
+                        &self.viewport_id,
+                        &self.window_label,
+                        serde_json::json!({
+                            "frameSeq": frame_seq,
+                            "submitGapMs": gap_ms,
+                            "frameAgeMs": frame_age_ms,
+                            "frameAgeBudgetMs": frame_age_budget_ms,
+                            "noPendingStreakBeforeSubmit": no_pending_streak_before_submit,
+                            "overwrotePending": overwrote_pending,
+                            "replacedFrameSeq": replaced_frame_seq,
+                        }),
+                    );
+                }
             }
             super::scheduling::ScheduledFrameSubmitOutcome::DroppedStale {
                 frame_seq,
@@ -647,6 +675,8 @@ impl NativeVideoPresenter for MacOsVideoPresenter {
                         "frameSeq": frame_seq,
                         "frameAgeMs": frame_age_ms,
                         "frameAgeBudgetMs": frame_age_budget_ms,
+                        "submitGapMs": submit_gap_ms,
+                        "noPendingStreakBeforeSubmit": no_pending_streak_before_submit,
                     }),
                 );
             }
@@ -664,6 +694,8 @@ impl NativeVideoPresenter for MacOsVideoPresenter {
                         "outcome": "already_presented",
                         "frameSeq": frame_seq,
                         "lastPresentedFrameSeq": last_presented_frame_seq,
+                        "submitGapMs": submit_gap_ms,
+                        "noPendingStreakBeforeSubmit": no_pending_streak_before_submit,
                     }),
                 );
             }
@@ -705,12 +737,15 @@ impl NativeVideoPresenter for MacOsVideoPresenter {
         };
         viewport.latest_host_present_time_ms = telemetry.latest_present_time_ms;
         viewport.host_present_fps = telemetry.present_fps();
-        viewport.host_present_submit_count_total = telemetry.present_submit_count_total;
+        viewport.host_present_enqueue_count_total = telemetry.present_enqueue_count_total;
         viewport.host_present_drop_count_total = telemetry.present_drop_count_total;
         viewport.host_present_overwrite_count_total = telemetry.present_overwrite_count_total;
         viewport.host_no_pending_take_count_total = telemetry.no_pending_take_count_total;
         viewport.host_no_pending_streak = telemetry.no_pending_streak;
         viewport.host_no_pending_max_streak = telemetry.no_pending_max_streak;
+        viewport.host_display_tick_epoch = telemetry.display_tick_epoch();
+        viewport.host_present_epoch = telemetry.present_epoch();
+        viewport.host_cadence_phase = Some(telemetry.cadence_phase().as_str().to_string());
         viewport.host_display_interval_ms = telemetry.display_interval_ms();
         viewport.host_frame_age_budget_ms = Some(telemetry.frame_age_budget_ms());
         viewport.host_descriptor_upload_mode = None;

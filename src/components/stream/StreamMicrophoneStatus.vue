@@ -69,12 +69,12 @@ const sourceLabel = computed(() =>
   width: 8px;
   height: 8px;
   border-radius: 999px;
-  background: var(--color-state-tertiary, rgba(255, 255, 255, 0.35));
+  background: color-mix(in srgb, var(--ui-page-text) 35%, transparent);
 }
 
 .stream-microphone-status__dot--live {
-  background: #52c41a;
-  box-shadow: 0 0 10px rgba(82, 196, 26, 0.45);
+  background: var(--color-success);
+  box-shadow: 0 0 10px color-mix(in srgb, var(--color-success) 45%, transparent);
 }
 
 .stream-microphone-status__label {

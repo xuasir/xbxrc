@@ -292,7 +292,7 @@ function emitLogout(): void {
   height: 18px;
   border-radius: var(--ui-radius-pill);
   background: var(--brand-primary);
-  color: #ffffff;
+  color: var(--brand-on-primary);
   display: inline-flex;
   align-items: center;
   justify-content: center;

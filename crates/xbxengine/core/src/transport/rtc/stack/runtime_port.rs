@@ -65,7 +65,9 @@ impl<'a> RtcStackRuntimePort<'a> {
         crate::xbx_log_debug!("[xbxengine][rtc-stack] snapshot_runtime_stats runtime_stats cloned");
         if let Ok(render_state) = self.render_state.lock() {
             let render_signal = render_state.render_signal_snapshot(now_ms);
-            stats.latest_video_present_time_ms = render_signal.latest_present_time_ms;
+            // 语义分层：
+            // - present freshness 统一使用 host telemetry 写入的 latest_video_host_present_time_ms
+            // - render_signal 只负责 renderer stalled 判定，避免与 host present 语义混用
             stats.video_renderer_stalled = render_signal.renderer_stalled;
         }
         crate::xbx_log_debug!("[xbxengine][rtc-stack] snapshot_runtime_stats exit");
@@ -104,6 +106,10 @@ impl<'a> RtcStackRuntimePort<'a> {
         metrics: XbxEngineHostVideoPresentMetrics,
     ) {
         RuntimeStatsSink::new(self.runtime_stats.clone()).update(|stats| {
+            stats.latest_video_host_present_time_ms = metrics.latest_host_present_time_ms;
+            stats.host_display_tick_epoch = metrics.display_tick_epoch;
+            stats.video_present_epoch = metrics.present_epoch;
+            stats.host_cadence_phase = metrics.cadence_phase;
             stats.video_present_fps = metrics.present_fps;
             stats.video_present_submit_count_total = metrics.present_submit_count_total;
             stats.video_present_drop_count_total = metrics.present_drop_count_total;
@@ -132,6 +138,7 @@ impl<'a> RtcStackRuntimePort<'a> {
             frame_seq: event.frame_seq,
             frame_recovery_disposition: event.frame_recovery_disposition,
             frame_unrecoverable_reason: event.frame_unrecoverable_reason,
+            frame_budget: None,
             observed_at_ms: event.observed_at_ms,
             width: event.width,
             height: event.height,

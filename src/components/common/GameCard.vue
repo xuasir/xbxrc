@@ -69,9 +69,9 @@ function handleSelect(): void {
   width: var(--ui-game-card-size);
   height: var(--ui-game-card-size);
   padding: 0;
-  border: 1px solid color-mix(in srgb, var(--color-border-subtle) 86%, rgba(255, 255, 255, 0.06));
+  border: 1px solid color-mix(in srgb, var(--color-border-subtle) 86%, color-mix(in srgb, var(--neutral-1000) 6%, transparent));
   border-radius: var(--ui-game-card-radius);
-  background: color-mix(in srgb, var(--color-surface-2) 94%, rgba(0, 0, 0, 0.12));
+  background: color-mix(in srgb, var(--color-surface-2) 94%, color-mix(in srgb, var(--neutral-0) 12%, transparent));
   color: var(--color-text-primary);
   text-align: left;
   cursor: pointer;
@@ -110,7 +110,7 @@ function handleSelect(): void {
 .game-card__image {
   position: relative;
   z-index: 1;
-  background-color: color-mix(in srgb, var(--color-surface-3) 94%, rgba(0, 0, 0, 0.18));
+  background-color: color-mix(in srgb, var(--color-surface-3) 94%, color-mix(in srgb, var(--neutral-0) 18%, transparent));
   background-position: center;
   background-repeat: no-repeat;
   background-size: cover;
@@ -130,7 +130,12 @@ function handleSelect(): void {
   align-items: flex-end;
   min-height: var(--ui-game-card-title-min-height);
   padding: var(--ui-game-card-title-padding);
-  background: linear-gradient(180deg, transparent, rgba(0, 0, 0, 0.72) 40%, rgba(0, 0, 0, 0.94));
+  background: linear-gradient(
+    180deg,
+    transparent,
+    color-mix(in srgb, var(--neutral-0) 72%, transparent) 40%,
+    color-mix(in srgb, var(--neutral-0) 94%, transparent)
+  );
   opacity: 0.92;
   transform: translateY(6px);
   transition:

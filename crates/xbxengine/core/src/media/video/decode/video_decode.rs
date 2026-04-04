@@ -17,6 +17,24 @@ const MAX_DECODED_FRAME_QUEUE_LEN: usize = 2;
 const HARDWARE_DECODE_FAILURE_BURST_GAP_MS: f64 = 400.0;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum XbxDecodeWorkloadState {
+    AwaitingInput,
+    DrainOutput,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct XbxDecodeWorkloadSnapshot {
+    pub(crate) state: XbxDecodeWorkloadState,
+    pub(crate) pending_output_queue_depth: usize,
+}
+
+impl XbxDecodeWorkloadSnapshot {
+    pub(crate) fn should_drain_output_first(self) -> bool {
+        matches!(self.state, XbxDecodeWorkloadState::DrainOutput)
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum XbxDecodeCandidateState {
     Nominal,
     Backpressure,
@@ -31,6 +49,54 @@ impl XbxDecodeCandidateState {
     }
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum XbxDecodeIngressDemand {
+    PullOutputFirst,
+    AcceptInput,
+}
+
+impl XbxDecodeIngressDemand {
+    pub(crate) fn should_pull_output_first(self) -> bool {
+        matches!(self, Self::PullOutputFirst)
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum XbxVideoRecoveryState {
+    Nominal,
+    WaitingKeyframe,
+    Recovering,
+}
+
+impl XbxVideoRecoveryState {
+    pub(crate) fn as_str(self) -> &'static str {
+        match self {
+            Self::Nominal => "nominal",
+            Self::WaitingKeyframe => "waiting-keyframe",
+            Self::Recovering => "recovering",
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum XbxVideoRecoveryEvent {
+    ExternalResetRequested,
+    BackendFailureEscalated,
+    BootstrapKeyframeAccepted,
+    RecoverySettled,
+}
+
+impl XbxVideoRecoveryEvent {
+    pub(crate) fn as_str(self) -> &'static str {
+        match self {
+            Self::ExternalResetRequested => "external-reset-requested",
+            Self::BackendFailureEscalated => "backend-failure-escalated",
+            Self::BootstrapKeyframeAccepted => "bootstrap-keyframe-accepted",
+            Self::RecoverySettled => "recovery-settled",
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct XbxDecodeCandidateDecisionSnapshot {
     pub(crate) decision_id: u64,
@@ -38,6 +104,18 @@ pub(crate) struct XbxDecodeCandidateDecisionSnapshot {
     pub(crate) action: &'static str,
     pub(crate) detail: &'static str,
     pub(crate) frame_seq: Option<u64>,
+    pub(crate) observed_at_ms: f64,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct XbxVideoRecoveryTransitionSnapshot {
+    pub(crate) transition_id: u64,
+    pub(crate) from_state: XbxVideoRecoveryState,
+    pub(crate) to_state: XbxVideoRecoveryState,
+    pub(crate) event: XbxVideoRecoveryEvent,
+    pub(crate) detail: &'static str,
+    pub(crate) frame_seq: Option<u64>,
+    pub(crate) status: Option<i32>,
     pub(crate) observed_at_ms: f64,
 }
 
@@ -100,7 +178,10 @@ pub(crate) struct XbxVideoDecodeState {
     hardware_decode_failure_streak: u32,
     latest_hardware_decode_failure_time_ms: Option<f64>,
     latest_hardware_decode_failure_status: Option<i32>,
-    waiting_for_recovery_keyframe: bool,
+    recovery_state: XbxVideoRecoveryState,
+    latest_recovery_state_change_time_ms: Option<f64>,
+    latest_recovery_transition: Option<XbxVideoRecoveryTransitionSnapshot>,
+    recovery_transition_id: u64,
     decode_candidate_state: XbxDecodeCandidateState,
     latest_decode_candidate_decision: Option<XbxDecodeCandidateDecisionSnapshot>,
     decode_candidate_decision_id: u64,
@@ -122,7 +203,10 @@ impl XbxVideoDecodeState {
             hardware_decode_failure_streak: 0,
             latest_hardware_decode_failure_time_ms: None,
             latest_hardware_decode_failure_status: None,
-            waiting_for_recovery_keyframe: false,
+            recovery_state: XbxVideoRecoveryState::Nominal,
+            latest_recovery_state_change_time_ms: None,
+            latest_recovery_transition: None,
+            recovery_transition_id: 0,
             decode_candidate_state: XbxDecodeCandidateState::Nominal,
             latest_decode_candidate_decision: None,
             decode_candidate_decision_id: 0,
@@ -138,9 +222,17 @@ impl XbxVideoDecodeState {
         self.last_decode_ok_time_ms = None;
         self.decoder.reset()?;
         self.decoder_reset_count = self.decoder_reset_count.saturating_add(1);
-        self.latest_decoder_reset_time_ms = Some(now_ms_f64());
+        let now_ms = now_ms_f64();
+        self.latest_decoder_reset_time_ms = Some(now_ms);
         self.reset_hardware_failure_streak();
-        self.waiting_for_recovery_keyframe = true;
+        self.transition_recovery_state(
+            XbxVideoRecoveryState::WaitingKeyframe,
+            XbxVideoRecoveryEvent::ExternalResetRequested,
+            "decoderResetRequested",
+            None,
+            None,
+            now_ms,
+        );
         Ok(())
     }
 
@@ -150,7 +242,9 @@ impl XbxVideoDecodeState {
         now_ms: f64,
     ) -> Option<DecodedFrame> {
         self.last_encoded_frame_time_ms = Some(now_ms);
-        if self.waiting_for_recovery_keyframe && !encoded_frame.h264.bootstrap_ready {
+        if matches!(self.recovery_state, XbxVideoRecoveryState::WaitingKeyframe)
+            && !encoded_frame.h264.bootstrap_ready
+        {
             return None;
         }
         if !self.first_video_packet_logged {
@@ -164,22 +258,23 @@ impl XbxVideoDecodeState {
         let target_time = encoded_frame.target_playout_time;
         let rtp_timestamp = encoded_frame.rtp_timestamp;
         let is_keyframe = encoded_frame.is_keyframe;
+        let budget = encoded_frame.budget;
         let frame_recovery_disposition = encoded_frame.frame_recovery_disposition;
         let frame_unrecoverable_reason = encoded_frame.frame_unrecoverable_reason.clone();
+        let recovery_state_before_decode = self.recovery_state;
         let decoded_frame = match self.decoder.decode(encoded_frame, now_ms) {
-            Ok(frame) => {
-                self.waiting_for_recovery_keyframe = false;
-                frame
-            }
+            Ok(frame) => frame,
             Err(error) => {
                 let status = parse_decoder_status_code(&error);
                 crate::xbx_log_error!("[xbxengine][rtc] hardware decode failed: {error}");
                 self.record_hardware_decode_failure(now_ms, status);
-                if should_force_recovery_keyframe(status) {
+                if should_force_recovery_keyframe(status)
+                    || self.hardware_decode_failure_streak >= 3
+                {
                     crate::xbx_log_warn!(
                         "[xbxengine][rtc] decoder entered wait-keyframe recovery after backend failure"
                     );
-                    let _ = self.request_decoder_reset();
+                    let _ = self.request_decoder_reset_with_failure(status, now_ms);
                 }
                 return None;
             }
@@ -187,6 +282,25 @@ impl XbxVideoDecodeState {
         let Some(mut render_frame) = decoded_frame else {
             return None;
         };
+        match recovery_state_before_decode {
+            XbxVideoRecoveryState::WaitingKeyframe => self.transition_recovery_state(
+                XbxVideoRecoveryState::Recovering,
+                XbxVideoRecoveryEvent::BootstrapKeyframeAccepted,
+                "bootstrapKeyframeDecoded",
+                Some(rtp_timestamp as u64),
+                None,
+                now_ms,
+            ),
+            XbxVideoRecoveryState::Recovering => self.transition_recovery_state(
+                XbxVideoRecoveryState::Nominal,
+                XbxVideoRecoveryEvent::RecoverySettled,
+                "recoverySettled",
+                Some(rtp_timestamp as u64),
+                None,
+                now_ms,
+            ),
+            XbxVideoRecoveryState::Nominal => {}
+        }
         self.reset_hardware_failure_streak();
         self.latest_decoded_seq = self.latest_decoded_seq.saturating_add(1);
         self.last_decode_ok_time_ms = Some(now_ms);
@@ -201,6 +315,7 @@ impl XbxVideoDecodeState {
             pts: target_time,
             rtp_timestamp,
             is_keyframe,
+            budget,
             frame_recovery_disposition,
             frame_unrecoverable_reason,
             surface: render_frame,
@@ -239,6 +354,18 @@ impl XbxVideoDecodeState {
         self.latest_hardware_decode_failure_status
     }
 
+    pub(crate) fn recovery_state(&self) -> XbxVideoRecoveryState {
+        self.recovery_state
+    }
+
+    pub(crate) fn latest_recovery_state_change_time_ms(&self) -> Option<f64> {
+        self.latest_recovery_state_change_time_ms
+    }
+
+    pub(crate) fn latest_recovery_transition(&self) -> Option<&XbxVideoRecoveryTransitionSnapshot> {
+        self.latest_recovery_transition.as_ref()
+    }
+
     pub(crate) fn latest_decode_candidate_decision(
         &self,
     ) -> Option<&XbxDecodeCandidateDecisionSnapshot> {
@@ -248,6 +375,49 @@ impl XbxVideoDecodeState {
     pub(crate) fn pop_decoded_frame(&mut self, _now_ms: f64) -> Option<DecodedFrame> {
         // native 路径已经有 pacer 负责 playout 节奏，decode stage 不再额外等待。
         self.decoded_frame_queue.pop_front()
+    }
+
+    pub(crate) fn has_decoded_frame(&self) -> bool {
+        !self.decoded_frame_queue.is_empty()
+    }
+
+    pub(crate) fn workload_snapshot(&self) -> XbxDecodeWorkloadSnapshot {
+        let pending_output_queue_depth = self.decoded_frame_queue.len();
+        let state = if pending_output_queue_depth > 0 {
+            XbxDecodeWorkloadState::DrainOutput
+        } else {
+            XbxDecodeWorkloadState::AwaitingInput
+        };
+        XbxDecodeWorkloadSnapshot {
+            state,
+            pending_output_queue_depth,
+        }
+    }
+
+    pub(crate) fn ingress_demand(&self) -> XbxDecodeIngressDemand {
+        if self.workload_snapshot().should_drain_output_first() {
+            XbxDecodeIngressDemand::PullOutputFirst
+        } else {
+            XbxDecodeIngressDemand::AcceptInput
+        }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn peek_decoded_frame(&self) -> Option<&DecodedFrame> {
+        self.decoded_frame_queue.front()
+    }
+
+    pub(crate) fn decoded_frame_queue_len(&self) -> usize {
+        self.decoded_frame_queue.len()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn decoded_frame_queue_is_full(&self) -> bool {
+        self.decoded_frame_queue.len() >= MAX_DECODED_FRAME_QUEUE_LEN
+    }
+
+    pub(crate) fn requeue_decoded_frame_front(&mut self, frame: DecodedFrame) {
+        self.decoded_frame_queue.push_front(frame);
     }
 
     fn enqueue_decoded_frame(&mut self, frame: DecodedFrame) -> Option<DecodedFrame> {
@@ -309,6 +479,53 @@ impl XbxVideoDecodeState {
         self.latest_hardware_decode_failure_status = None;
     }
 
+    fn request_decoder_reset_with_failure(
+        &mut self,
+        status: Option<i32>,
+        now_ms: f64,
+    ) -> Result<(), XbxEngineRuntimeError> {
+        self.decoded_frame_queue.clear();
+        self.last_decode_ok_time_ms = None;
+        self.decoder.reset()?;
+        self.decoder_reset_count = self.decoder_reset_count.saturating_add(1);
+        self.latest_decoder_reset_time_ms = Some(now_ms);
+        self.reset_hardware_failure_streak();
+        self.transition_recovery_state(
+            XbxVideoRecoveryState::WaitingKeyframe,
+            XbxVideoRecoveryEvent::BackendFailureEscalated,
+            "backendFailureReset",
+            None,
+            status,
+            now_ms,
+        );
+        Ok(())
+    }
+
+    fn transition_recovery_state(
+        &mut self,
+        to_state: XbxVideoRecoveryState,
+        event: XbxVideoRecoveryEvent,
+        detail: &'static str,
+        frame_seq: Option<u64>,
+        status: Option<i32>,
+        observed_at_ms: f64,
+    ) {
+        let from_state = self.recovery_state;
+        self.recovery_state = to_state;
+        self.recovery_transition_id = self.recovery_transition_id.saturating_add(1);
+        self.latest_recovery_state_change_time_ms = Some(observed_at_ms);
+        self.latest_recovery_transition = Some(XbxVideoRecoveryTransitionSnapshot {
+            transition_id: self.recovery_transition_id,
+            from_state,
+            to_state,
+            event,
+            detail,
+            frame_seq,
+            status,
+            observed_at_ms,
+        });
+    }
+
     fn record_decode_candidate_decision(
         &mut self,
         state: XbxDecodeCandidateState,
@@ -351,18 +568,22 @@ impl XbxVideoDecodeState {
             hardware_decode_failure_streak: 0,
             latest_hardware_decode_failure_time_ms: None,
             latest_hardware_decode_failure_status: None,
-            waiting_for_recovery_keyframe: false,
+            recovery_state: XbxVideoRecoveryState::Nominal,
+            latest_recovery_state_change_time_ms: None,
+            latest_recovery_transition: None,
+            recovery_transition_id: 0,
             decode_candidate_state: XbxDecodeCandidateState::Nominal,
             latest_decode_candidate_decision: None,
             decode_candidate_decision_id: 0,
         }
     }
 
-    fn enqueue_decoded_frame_for_test(&mut self, frame: XbxRenderFrame) {
+    pub(crate) fn enqueue_decoded_frame_for_test(&mut self, frame: XbxRenderFrame) {
         let _ = self.enqueue_decoded_frame(DecodedFrame {
             pts: std::time::Instant::now(),
             rtp_timestamp: frame.frame_seq as u32,
             is_keyframe: frame.is_keyframe,
+            budget: crate::media::video::ingress::budget::FrameBudgetContext::default(),
             frame_recovery_disposition: FrameRecoveryDisposition::Repairing,
             frame_unrecoverable_reason: None,
             surface: frame,
@@ -1089,13 +1310,24 @@ mod tests {
     };
     use std::time::{Duration, Instant};
 
-    use super::{XbxDecodeCandidateState, XbxHardwareVideoDecoder, XbxVideoDecodeState};
+    use super::{
+        XbxDecodeCandidateState, XbxDecodeWorkloadState, XbxHardwareVideoDecoder,
+        XbxVideoDecodeState, XbxVideoRecoveryEvent, XbxVideoRecoveryState,
+    };
     use crate::media::video::h264::inspection::{
         H264AccessUnitInspection, H264AccessUnitInspector, H264BootstrapRejectReason,
     };
     use crate::{
+        api::backend::XbxEngineMediaRuntimeStats,
+        media::video::render::renderer::XbxRenderState,
         media::video::render::renderer::XbxRenderFrame,
-        media::video::types::{DecodedFrame, EncodedFrame, FrameRecoveryDisposition},
+        media::video::test_fixtures::{
+            make_bootstrap_assembled_frame, make_video_source_for_test, send_bootstrap_access_unit,
+        },
+        media::video::types::{
+            DecodedFrame, EncodedFrame, FrameRecoveryDisposition,
+        },
+        transport::rtc::stream::adapter_types::FrameSource,
         XbxEngineRenderPixelData,
     };
     use bytes::Bytes;
@@ -1136,6 +1368,188 @@ mod tests {
             .expect("decoder reset should succeed");
 
         assert_eq!(reset_calls.load(Ordering::Relaxed), 1);
+        assert_eq!(
+            state.recovery_state(),
+            XbxVideoRecoveryState::WaitingKeyframe
+        );
+        let transition = state
+            .latest_recovery_transition()
+            .expect("recovery transition should exist");
+        assert_eq!(
+            transition.event,
+            XbxVideoRecoveryEvent::ExternalResetRequested
+        );
+        assert_eq!(transition.to_state, XbxVideoRecoveryState::WaitingKeyframe);
+    }
+
+    #[test]
+    fn recovery_fsm_moves_from_waiting_keyframe_to_recovering_then_nominal() {
+        let decode_calls = Arc::new(AtomicUsize::new(0));
+        let reset_calls = Arc::new(AtomicUsize::new(0));
+        let mut scripted_results = VecDeque::new();
+        scripted_results.push_back(Ok(Some(XbxRenderFrame {
+            width: 2,
+            height: 2,
+            frame_seq: 101,
+            rendered_at_ms: 101.0,
+            rtp_timestamp: Some(101),
+            is_keyframe: true,
+            frame_recovery_disposition: Some("repairing".to_string()),
+            frame_unrecoverable_reason: None,
+            pixel_data: XbxEngineRenderPixelData::Rgba {
+                bytes: Arc::<[u8]>::from([9u8; 16]),
+            },
+        })));
+        scripted_results.push_back(Ok(Some(XbxRenderFrame {
+            width: 2,
+            height: 2,
+            frame_seq: 102,
+            rendered_at_ms: 102.0,
+            rtp_timestamp: Some(102),
+            is_keyframe: false,
+            frame_recovery_disposition: Some("repairing".to_string()),
+            frame_unrecoverable_reason: None,
+            pixel_data: XbxEngineRenderPixelData::Rgba {
+                bytes: Arc::<[u8]>::from([8u8; 16]),
+            },
+        })));
+        let decoder = ScriptedHardwareDecoder {
+            decode_calls: decode_calls.clone(),
+            reset_calls: reset_calls.clone(),
+            scripted_results,
+        };
+        let mut state = XbxVideoDecodeState::new_for_test(20, 30, Box::new(decoder));
+
+        state
+            .request_decoder_reset()
+            .expect("decoder reset should succeed");
+        assert_eq!(
+            state.recovery_state(),
+            XbxVideoRecoveryState::WaitingKeyframe
+        );
+
+        assert!(state
+            .process_encoded_frame(make_encoded_frame(false), 1_000.0)
+            .is_none());
+        assert_eq!(
+            state.recovery_state(),
+            XbxVideoRecoveryState::WaitingKeyframe
+        );
+
+        assert!(state
+            .process_encoded_frame(make_encoded_frame(true), 1_016.0)
+            .is_none());
+        assert_eq!(state.recovery_state(), XbxVideoRecoveryState::Recovering);
+        assert_eq!(
+            state
+                .peek_decoded_frame()
+                .map(|frame| frame.surface.frame_seq),
+            Some(1)
+        );
+        assert_eq!(state.decoded_frame_queue_len(), 1);
+
+        assert!(state
+            .process_encoded_frame(make_encoded_frame(false), 1_032.0)
+            .is_none());
+        assert_eq!(state.recovery_state(), XbxVideoRecoveryState::Nominal);
+        assert_eq!(state.decoded_frame_queue_len(), 2);
+        assert_eq!(
+            state
+                .peek_decoded_frame()
+                .map(|frame| frame.surface.frame_seq),
+            Some(1)
+        );
+
+        let transition = state
+            .latest_recovery_transition()
+            .expect("latest recovery transition should exist");
+        assert_eq!(transition.event, XbxVideoRecoveryEvent::RecoverySettled);
+        assert_eq!(transition.from_state, XbxVideoRecoveryState::Recovering);
+        assert_eq!(transition.to_state, XbxVideoRecoveryState::Nominal);
+        assert_eq!(decode_calls.load(Ordering::Relaxed), 2);
+        assert_eq!(reset_calls.load(Ordering::Relaxed), 1);
+    }
+
+    #[test]
+    fn hardware_decode_failure_escalates_recovery_state_to_waiting_keyframe() {
+        let decode_calls = Arc::new(AtomicUsize::new(0));
+        let reset_calls = Arc::new(AtomicUsize::new(0));
+        let mut scripted_results = VecDeque::new();
+        scripted_results.push_back(Err(crate::XbxEngineRuntimeError::new(
+            "xbxEngineCreateVideoFormatDescriptionFailed:status=-12909",
+        )));
+        let decoder = ScriptedHardwareDecoder {
+            decode_calls: decode_calls.clone(),
+            reset_calls: reset_calls.clone(),
+            scripted_results,
+        };
+        let mut state = XbxVideoDecodeState::new_for_test(20, 30, Box::new(decoder));
+
+        let result = state.process_encoded_frame(make_encoded_frame(true), 2_000.0);
+        assert!(result.is_none());
+        assert_eq!(
+            state.recovery_state(),
+            XbxVideoRecoveryState::WaitingKeyframe
+        );
+        let transition = state
+            .latest_recovery_transition()
+            .expect("recovery transition should exist after backend failure");
+        assert_eq!(
+            transition.event,
+            XbxVideoRecoveryEvent::BackendFailureEscalated
+        );
+        assert_eq!(transition.status, Some(-12909));
+        assert_eq!(reset_calls.load(Ordering::Relaxed), 1);
+        assert_eq!(decode_calls.load(Ordering::Relaxed), 1);
+    }
+
+    #[test]
+    fn repeated_nonfatal_decode_failures_escalate_to_waiting_keyframe_on_third_failure() {
+        let decode_calls = Arc::new(AtomicUsize::new(0));
+        let reset_calls = Arc::new(AtomicUsize::new(0));
+        let mut scripted_results = VecDeque::new();
+        scripted_results.push_back(Err(crate::XbxEngineRuntimeError::new(
+            "decode failed status=-1",
+        )));
+        scripted_results.push_back(Err(crate::XbxEngineRuntimeError::new(
+            "decode failed status=-1",
+        )));
+        scripted_results.push_back(Err(crate::XbxEngineRuntimeError::new(
+            "decode failed status=-1",
+        )));
+        let decoder = ScriptedHardwareDecoder {
+            decode_calls: decode_calls.clone(),
+            reset_calls: reset_calls.clone(),
+            scripted_results,
+        };
+        let mut state = XbxVideoDecodeState::new_for_test(20, 30, Box::new(decoder));
+
+        assert!(state
+            .process_encoded_frame(make_encoded_frame(true), 3_000.0)
+            .is_none());
+        assert_eq!(state.recovery_state(), XbxVideoRecoveryState::Nominal);
+
+        assert!(state
+            .process_encoded_frame(make_encoded_frame(true), 3_016.0)
+            .is_none());
+        assert_eq!(state.recovery_state(), XbxVideoRecoveryState::Nominal);
+
+        assert!(state
+            .process_encoded_frame(make_encoded_frame(true), 3_032.0)
+            .is_none());
+        assert_eq!(
+            state.recovery_state(),
+            XbxVideoRecoveryState::WaitingKeyframe
+        );
+        let transition = state
+            .latest_recovery_transition()
+            .expect("recovery transition should exist after third failure");
+        assert_eq!(
+            transition.event,
+            XbxVideoRecoveryEvent::BackendFailureEscalated
+        );
+        assert_eq!(reset_calls.load(Ordering::Relaxed), 1);
+        assert_eq!(decode_calls.load(Ordering::Relaxed), 3);
     }
 
     #[test]
@@ -1169,6 +1583,175 @@ mod tests {
                 .map(|frame| frame.surface.frame_seq),
             Some(2)
         );
+    }
+
+    #[test]
+    fn peek_decoded_frame_keeps_head_of_queue_intact() {
+        let decoder = SpyHardwareDecoder {
+            reset_calls: Arc::new(AtomicUsize::new(0)),
+        };
+        let mut state = XbxVideoDecodeState::new_for_test(20, 30, Box::new(decoder));
+
+        state.enqueue_decoded_frame_for_test(XbxRenderFrame {
+            width: 2,
+            height: 2,
+            frame_seq: 7,
+            rendered_at_ms: 7.0,
+            rtp_timestamp: Some(7),
+            is_keyframe: true,
+            frame_recovery_disposition: Some("repairing".to_string()),
+            frame_unrecoverable_reason: None,
+            pixel_data: XbxEngineRenderPixelData::Rgba {
+                bytes: Arc::<[u8]>::from([0u8; 16]),
+            },
+        });
+
+        assert_eq!(
+            state
+                .peek_decoded_frame()
+                .map(|frame| frame.surface.frame_seq),
+            Some(7)
+        );
+        assert!(state.has_decoded_frame());
+        assert_eq!(
+            state
+                .peek_decoded_frame()
+                .map(|frame| frame.surface.frame_seq),
+            Some(7)
+        );
+        assert_eq!(
+            state
+                .pop_decoded_frame(8.0)
+                .map(|frame| frame.surface.frame_seq),
+            Some(7)
+        );
+        assert!(!state.has_decoded_frame());
+    }
+
+    #[test]
+    fn peek_decoded_frame_reports_front_without_consuming() {
+        let decoder = SpyHardwareDecoder {
+            reset_calls: Arc::new(AtomicUsize::new(0)),
+        };
+        let mut state = XbxVideoDecodeState::new_for_test(20, 30, Box::new(decoder));
+
+        state.enqueue_decoded_frame_for_test(XbxRenderFrame {
+            width: 2,
+            height: 2,
+            frame_seq: 1,
+            rendered_at_ms: 1.0,
+            rtp_timestamp: Some(1),
+            is_keyframe: true,
+            frame_recovery_disposition: Some("repairing".to_string()),
+            frame_unrecoverable_reason: None,
+            pixel_data: XbxEngineRenderPixelData::Rgba {
+                bytes: Arc::<[u8]>::from([0u8; 16]),
+            },
+        });
+
+        assert!(state.has_decoded_frame());
+        assert_eq!(
+            state
+                .peek_decoded_frame()
+                .map(|frame| frame.surface.frame_seq),
+            Some(1)
+        );
+        assert_eq!(
+            state
+                .peek_decoded_frame()
+                .map(|frame| frame.surface.frame_seq),
+            Some(1)
+        );
+        assert_eq!(
+            state
+                .pop_decoded_frame(2.0)
+                .map(|frame| frame.surface.frame_seq),
+            Some(1)
+        );
+        assert!(!state.has_decoded_frame());
+    }
+
+    #[test]
+    fn decoded_frame_queue_is_full_tracks_capacity_without_consuming() {
+        let decoder = SpyHardwareDecoder {
+            reset_calls: Arc::new(AtomicUsize::new(0)),
+        };
+        let mut state = XbxVideoDecodeState::new_for_test(20, 30, Box::new(decoder));
+
+        assert!(!state.decoded_frame_queue_is_full());
+
+        for seq in 1..=2 {
+            state.enqueue_decoded_frame_for_test(XbxRenderFrame {
+                width: 2,
+                height: 2,
+                frame_seq: seq,
+                rendered_at_ms: seq as f64,
+                rtp_timestamp: Some(seq as u32),
+                is_keyframe: seq == 1,
+                frame_recovery_disposition: Some("repairing".to_string()),
+                frame_unrecoverable_reason: None,
+                pixel_data: XbxEngineRenderPixelData::Rgba {
+                    bytes: Arc::<[u8]>::from([0u8; 16]),
+                },
+            });
+        }
+
+        assert!(state.has_decoded_frame());
+        assert_eq!(
+            state
+                .peek_decoded_frame()
+                .map(|frame| frame.surface.frame_seq),
+            Some(1)
+        );
+        assert!(state.decoded_frame_queue_is_full());
+
+        assert_eq!(
+            state
+                .pop_decoded_frame(3.0)
+                .map(|frame| frame.surface.frame_seq),
+            Some(1)
+        );
+        assert!(!state.decoded_frame_queue_is_full());
+        assert!(state.has_decoded_frame());
+    }
+
+    #[test]
+    fn requeue_decoded_frame_front_restores_head_order_after_backpressure() {
+        let decoder = SpyHardwareDecoder {
+            reset_calls: Arc::new(AtomicUsize::new(0)),
+        };
+        let mut state = XbxVideoDecodeState::new_for_test(20, 30, Box::new(decoder));
+
+        state.enqueue_decoded_frame_for_test(XbxRenderFrame {
+            width: 2,
+            height: 2,
+            frame_seq: 11,
+            rendered_at_ms: 11.0,
+            rtp_timestamp: Some(11),
+            is_keyframe: false,
+            frame_recovery_disposition: Some("repairing".to_string()),
+            frame_unrecoverable_reason: None,
+            pixel_data: XbxEngineRenderPixelData::Rgba {
+                bytes: Arc::<[u8]>::from([0u8; 16]),
+            },
+        });
+
+        let frame = state.pop_decoded_frame(12.0).expect("frame should exist");
+        state.requeue_decoded_frame_front(frame);
+
+        assert_eq!(
+            state
+                .peek_decoded_frame()
+                .map(|frame| frame.surface.frame_seq),
+            Some(11)
+        );
+        assert_eq!(
+            state
+                .pop_decoded_frame(13.0)
+                .map(|frame| frame.surface.frame_seq),
+            Some(11)
+        );
+        assert!(!state.has_decoded_frame());
     }
 
     #[test]
@@ -1209,6 +1792,7 @@ mod tests {
             pts: Instant::now(),
             rtp_timestamp: 3,
             is_keyframe: false,
+            budget: crate::media::video::ingress::budget::FrameBudgetContext::default(),
             frame_recovery_disposition: FrameRecoveryDisposition::Repairing,
             frame_unrecoverable_reason: None,
             surface: XbxRenderFrame {
@@ -1287,6 +1871,44 @@ mod tests {
         assert_eq!(recovered.frame_seq, Some(4));
     }
 
+    #[test]
+    fn workload_snapshot_switches_to_drain_output_when_queue_is_non_empty() {
+        let decoder = SpyHardwareDecoder {
+            reset_calls: Arc::new(AtomicUsize::new(0)),
+        };
+        let mut state = XbxVideoDecodeState::new_for_test(20, 30, Box::new(decoder));
+
+        let initial = state.workload_snapshot();
+        assert_eq!(initial.state, XbxDecodeWorkloadState::AwaitingInput);
+        assert_eq!(initial.pending_output_queue_depth, 0);
+        assert!(!initial.should_drain_output_first());
+
+        state.enqueue_decoded_frame_for_test(XbxRenderFrame {
+            width: 2,
+            height: 2,
+            frame_seq: 1,
+            rendered_at_ms: 1.0,
+            rtp_timestamp: Some(1),
+            is_keyframe: true,
+            frame_recovery_disposition: Some("repairing".to_string()),
+            frame_unrecoverable_reason: None,
+            pixel_data: XbxEngineRenderPixelData::Rgba {
+                bytes: Arc::<[u8]>::from([0u8; 16]),
+            },
+        });
+
+        let queued = state.workload_snapshot();
+        assert_eq!(queued.state, XbxDecodeWorkloadState::DrainOutput);
+        assert_eq!(queued.pending_output_queue_depth, 1);
+        assert!(queued.should_drain_output_first());
+
+        let _ = state.pop_decoded_frame(2.0);
+        let drained = state.workload_snapshot();
+        assert_eq!(drained.state, XbxDecodeWorkloadState::AwaitingInput);
+        assert_eq!(drained.pending_output_queue_depth, 0);
+        assert!(!drained.should_drain_output_first());
+    }
+
     struct ScriptedHardwareDecoder {
         decode_calls: Arc<AtomicUsize>,
         reset_calls: Arc<AtomicUsize>,
@@ -1320,6 +1942,9 @@ mod tests {
             is_keyframe,
             config_changed: false,
             value: crate::media::video::types::FrameValue::new(is_keyframe, false, 1024),
+            budget: crate::media::video::ingress::budget::FrameBudgetContext::steady_for_value(
+                crate::media::video::types::FrameValue::new(is_keyframe, false, 1024),
+            ),
             width: 2560,
             height: 1440,
             rtp_timestamp: if is_keyframe { 1 } else { 2 },
@@ -1381,5 +2006,259 @@ mod tests {
 
         state.process_encoded_frame(make_encoded_frame(true), 1_032.0);
         assert_eq!(decode_calls.load(Ordering::Relaxed), 2);
+    }
+
+    #[test]
+    fn assembled_bootstrap_frame_decodes_and_renders_end_to_end() {
+        let decoder = ScriptedHardwareDecoder {
+            decode_calls: Arc::new(AtomicUsize::new(0)),
+            reset_calls: Arc::new(AtomicUsize::new(0)),
+            scripted_results: VecDeque::from([Ok(Some(XbxRenderFrame {
+                width: 64,
+                height: 64,
+                frame_seq: 0,
+                rendered_at_ms: 0.0,
+                rtp_timestamp: None,
+                is_keyframe: false,
+                frame_recovery_disposition: None,
+                frame_unrecoverable_reason: None,
+                pixel_data: XbxEngineRenderPixelData::Rgba {
+                    bytes: Arc::<[u8]>::from(vec![7u8; 64 * 64 * 4]),
+                },
+            }))]),
+        };
+        let mut state = XbxVideoDecodeState::new_for_test(20, 30, Box::new(decoder));
+        let encoded = make_bootstrap_assembled_frame(9000)
+            .into_encoded_frame(Instant::now() + Duration::from_millis(16));
+
+        assert!(state.process_encoded_frame(encoded, 1_000.0).is_none());
+        let decoded = state
+            .pop_decoded_frame(1_016.0)
+            .expect("decoded frame should be queued");
+        assert_eq!(decoded.surface.frame_seq, 1);
+        assert_eq!(decoded.surface.rtp_timestamp, Some(9000));
+        assert!(decoded.surface.is_keyframe);
+        assert_eq!(
+            decoded.surface.frame_recovery_disposition.as_deref(),
+            Some("repairing")
+        );
+
+        let mut render_state = XbxRenderState::default();
+        let (_stats, outcome) = render_state
+            .present_frame(decoded.surface)
+            .expect("render should accept decoded frame");
+        assert!(!outcome.overwritten_previous_latest);
+        assert_eq!(
+            render_state.peek_latest_frame().map(|frame| frame.frame_seq),
+            Some(1)
+        );
+    }
+
+    #[test]
+    fn backend_failure_then_clean_bootstrap_frames_recover_pipeline_to_nominal() {
+        let decoder = ScriptedHardwareDecoder {
+            decode_calls: Arc::new(AtomicUsize::new(0)),
+            reset_calls: Arc::new(AtomicUsize::new(0)),
+            scripted_results: VecDeque::from([
+                Err(crate::XbxEngineRuntimeError::new(
+                    "xbxEngineCreateVideoFormatDescriptionFailed:status=-12909",
+                )),
+                Ok(Some(XbxRenderFrame {
+                    width: 64,
+                    height: 64,
+                    frame_seq: 0,
+                    rendered_at_ms: 0.0,
+                    rtp_timestamp: None,
+                    is_keyframe: false,
+                    frame_recovery_disposition: None,
+                    frame_unrecoverable_reason: None,
+                    pixel_data: XbxEngineRenderPixelData::Rgba {
+                        bytes: Arc::<[u8]>::from(vec![5u8; 64 * 64 * 4]),
+                    },
+                })),
+                Ok(Some(XbxRenderFrame {
+                    width: 64,
+                    height: 64,
+                    frame_seq: 0,
+                    rendered_at_ms: 0.0,
+                    rtp_timestamp: None,
+                    is_keyframe: false,
+                    frame_recovery_disposition: None,
+                    frame_unrecoverable_reason: None,
+                    pixel_data: XbxEngineRenderPixelData::Rgba {
+                        bytes: Arc::<[u8]>::from(vec![6u8; 64 * 64 * 4]),
+                    },
+                })),
+            ]),
+        };
+        let mut state = XbxVideoDecodeState::new_for_test(20, 30, Box::new(decoder));
+
+        let first = make_bootstrap_assembled_frame(9000)
+            .into_encoded_frame(Instant::now() + Duration::from_millis(16));
+        let second = make_bootstrap_assembled_frame(9016)
+            .into_encoded_frame(Instant::now() + Duration::from_millis(32));
+        let third = make_bootstrap_assembled_frame(9032)
+            .into_encoded_frame(Instant::now() + Duration::from_millis(48));
+
+        assert!(state.process_encoded_frame(first, 1_000.0).is_none());
+        assert_eq!(
+            state.recovery_state(),
+            XbxVideoRecoveryState::WaitingKeyframe
+        );
+
+        assert!(state.process_encoded_frame(second, 1_016.0).is_none());
+        assert_eq!(state.recovery_state(), XbxVideoRecoveryState::Recovering);
+
+        assert!(state.process_encoded_frame(third, 1_032.0).is_none());
+        assert_eq!(state.recovery_state(), XbxVideoRecoveryState::Nominal);
+
+        let first_recovered = state
+            .pop_decoded_frame(1_040.0)
+            .expect("first recovered frame should exist");
+        let second_recovered = state
+            .pop_decoded_frame(1_048.0)
+            .expect("second recovered frame should exist");
+        assert_eq!(first_recovered.surface.frame_seq, 1);
+        assert_eq!(second_recovered.surface.frame_seq, 2);
+
+        let mut render_state = XbxRenderState::default();
+        render_state
+            .present_frame(first_recovered.surface)
+            .expect("first recovered frame should render");
+        render_state
+            .present_frame(second_recovered.surface)
+            .expect("second recovered frame should render");
+        assert_eq!(
+            render_state.peek_latest_frame().map(|frame| frame.frame_seq),
+            Some(2)
+        );
+    }
+
+    #[tokio::test]
+    async fn rtp_to_decode_to_pacer_to_renderer_pipeline_reaches_latest_frame_and_overwrite_signal() {
+        let (tx, _transport_observation_rx, mut source) = make_video_source_for_test();
+        let runtime_stats = Arc::new(std::sync::Mutex::new(XbxEngineMediaRuntimeStats::default()));
+
+        send_bootstrap_access_unit(&tx, 100, 9000).await;
+        send_bootstrap_access_unit(&tx, 103, 9016).await;
+        send_bootstrap_access_unit(&tx, 106, 9032).await;
+        // 再送一个后续 AU，确保前一个 sample 被 SampleBuilder 刷出。
+        send_bootstrap_access_unit(&tx, 109, 9048).await;
+        drop(tx);
+
+        let decoder = ScriptedHardwareDecoder {
+            decode_calls: Arc::new(AtomicUsize::new(0)),
+            reset_calls: Arc::new(AtomicUsize::new(0)),
+            scripted_results: VecDeque::from([
+                Ok(Some(XbxRenderFrame {
+                    width: 64,
+                    height: 64,
+                    frame_seq: 0,
+                    rendered_at_ms: 0.0,
+                    rtp_timestamp: None,
+                    is_keyframe: false,
+                    frame_recovery_disposition: None,
+                    frame_unrecoverable_reason: None,
+                    pixel_data: XbxEngineRenderPixelData::Rgba {
+                        bytes: Arc::<[u8]>::from(vec![1u8; 64 * 64 * 4]),
+                    },
+                })),
+                Ok(Some(XbxRenderFrame {
+                    width: 64,
+                    height: 64,
+                    frame_seq: 0,
+                    rendered_at_ms: 0.0,
+                    rtp_timestamp: None,
+                    is_keyframe: false,
+                    frame_recovery_disposition: None,
+                    frame_unrecoverable_reason: None,
+                    pixel_data: XbxEngineRenderPixelData::Rgba {
+                        bytes: Arc::<[u8]>::from(vec![2u8; 64 * 64 * 4]),
+                    },
+                })),
+                Ok(Some(XbxRenderFrame {
+                    width: 64,
+                    height: 64,
+                    frame_seq: 0,
+                    rendered_at_ms: 0.0,
+                    rtp_timestamp: None,
+                    is_keyframe: false,
+                    frame_recovery_disposition: None,
+                    frame_unrecoverable_reason: None,
+                    pixel_data: XbxEngineRenderPixelData::Rgba {
+                        bytes: Arc::<[u8]>::from(vec![3u8; 64 * 64 * 4]),
+                    },
+                })),
+            ]),
+        };
+        let mut decode_state = XbxVideoDecodeState::new_for_test(20, 30, Box::new(decoder));
+        let render_state = Arc::new(std::sync::Mutex::new(XbxRenderState::default()));
+        let renderer = Arc::new(crate::media::video::render::actor::RendererActorHandle::new(
+            render_state.clone(),
+            runtime_stats.clone(),
+        ));
+        let pacer = crate::media::video::pacer::actor::PacerActorHandle::new(
+            renderer.clone(),
+            runtime_stats.clone(),
+            16,
+        );
+
+        for expected_timestamp in [9000u32, 9016u32, 9032u32] {
+            let assembled = tokio::time::timeout(Duration::from_millis(250), source.recv_frame())
+                .await
+                .expect("source should assemble frame in time")
+                .expect("assembled frame should exist");
+            assert_eq!(assembled.rtp_timestamp, expected_timestamp);
+            let encoded = assembled.into_encoded_frame(Instant::now());
+            assert!(decode_state.process_encoded_frame(encoded, expected_timestamp as f64).is_none());
+            let decoded = decode_state
+                .pop_decoded_frame(expected_timestamp as f64 + 1.0)
+                .expect("decoded frame should be available");
+
+            let submit_deadline = Instant::now() + Duration::from_millis(150);
+            let mut submitted = false;
+            while Instant::now() < submit_deadline {
+                match pacer.submit(decoded.clone()) {
+                    Ok(_) => {
+                        submitted = true;
+                        break;
+                    }
+                    Err(std::sync::mpsc::TrySendError::Full(_)) => {
+                        std::thread::sleep(Duration::from_millis(2));
+                    }
+                    Err(err) => panic!("unexpected pacer submit failure: {err:?}"),
+                }
+            }
+            assert!(submitted, "decoded frame should eventually reach pacer");
+        }
+
+        let render_deadline = Instant::now() + Duration::from_millis(300);
+        let mut latest_seq = None;
+        while Instant::now() < render_deadline {
+            let frame = render_state
+                .lock()
+                .expect("render state lock")
+                .take_latest_frame();
+            if let Some(frame) = frame {
+                latest_seq = Some(frame.frame_seq);
+                if frame.frame_seq >= 3 {
+                    break;
+                }
+            }
+            std::thread::sleep(Duration::from_millis(4));
+        }
+
+        pacer.stop();
+        renderer.stop();
+
+        assert_eq!(latest_seq, Some(3));
+        let stats = runtime_stats.lock().expect("runtime stats lock");
+        assert!(stats.video_renderer_submit_count_total >= 2);
+        let decision = stats
+            .latest_render_candidate_decision
+            .clone()
+            .expect("render candidate decision should exist");
+        assert_eq!(decision.state, "latest-overwrite");
+        assert_eq!(decision.detail, "latestSlotOverwrite");
     }
 }

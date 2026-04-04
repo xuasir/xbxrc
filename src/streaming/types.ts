@@ -47,10 +47,17 @@ export interface StreamPerformanceSnapshot {
   rtt?: string | number
   jit?: string | number
   fps?: string | number
+  remoteProfileBaseline?: string
+  remoteProfileDynamic?: string
+  remoteProfileEffectiveLabel?: string
   sessionPhase?: string
-  transportPolicyProfile?: string
-  recoveryPolicyProfile?: string
+  transportStrategyProfile?: string
+  recoveryStrategyProfile?: string
   recoveryDiagnosis?: string
+  recoveryOwnerState?: string
+  recoveryOwnerReason?: string
+  videoOwnerSource?: string
+  videoOwnerObservedAtMs?: number
   directGamingBitrateBand?: string
   videoHealth?: string
   stallKind?: string
@@ -90,6 +97,11 @@ export interface StreamPerformanceSnapshot {
   inboundVideoPacketCountTotal?: number
   videoDecoderResetCount?: number
   videoDecoderStalled?: boolean
+  videoDecoderRecoveryState?: string
+  videoDecoderRecoveryEvent?: string
+  videoDecoderRecoveryDetail?: string
+  videoDecoderRecoveryStatus?: number
+  videoDecoderRecoveryStateChangedAtMs?: number
   videoRendererStalled?: boolean
   packetAgeMs?: number
   decodeAgeMs?: number
@@ -105,6 +117,7 @@ export interface StreamPerformanceSnapshot {
   videoRendererDropCountTotal?: number
   videoPresentDropCountTotal?: number
   videoPresentOverwriteCountTotal?: number
+  videoPresentEnqueueCountTotal?: number
   videoPresentSubmitCountTotal?: number
   recoveryKeyframeRequestCount?: number
   recoveryDecoderResetCount?: number
@@ -126,16 +139,28 @@ export interface StreamSessionDiagnosticsSnapshot {
   transportCandidatePair?: string
   transportProtocol?: string
   transportAddressFamily?: 'ipv4' | 'ipv6' | 'mixed' | 'unknown'
-  transportPolicyProfile?: string
-  recoveryPolicyProfile?: string
+  transportStrategyProfile?: string
+  recoveryStrategyProfile?: string
+  recoveryInputProfile?: string
+  recoveryInputPortrait?: string
+  remoteProfileBaseline?: string
+  remoteProfileDynamic?: string
+  remoteProfileEffectiveLabel?: string
   sessionPhase?: string
   recoveryDiagnosis?: string
+  recoveryOwnerState?: string
+  recoveryOwnerReason?: string
+  videoDecoderRecoveryState?: string
+  videoDecoderRecoveryEvent?: string
+  videoOwnerSource?: string
   directGamingBitrateBand?: string
   videoHealth?: string
   stallKind?: string
   isRelayPath: boolean
   isRecovering: boolean
   hasNoVideoWarning: boolean
+  transportSummary?: string
+  statusCode: 'noVideo' | 'recovering' | 'owner' | 'stable' | 'inactive'
 }
 
 export type StreamMicrophoneActivationSource = 'none' | 'policy' | 'user'

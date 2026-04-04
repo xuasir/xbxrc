@@ -6,32 +6,7 @@ use crate::{
     transport::rtc::recovery::startup::SessionPhase, XbxEngineWebRtcRuntimeConfig,
 };
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum ScenarioPolicyProfileKind {
-    HomeLanGaming,
-    CloudGaming,
-    RelayGaming,
-}
-
-impl ScenarioPolicyProfileKind {
-    pub(crate) fn as_str(self) -> &'static str {
-        match self {
-            ScenarioPolicyProfileKind::HomeLanGaming => "homeLanGaming",
-            ScenarioPolicyProfileKind::CloudGaming => "cloudGaming",
-            ScenarioPolicyProfileKind::RelayGaming => "relayGaming",
-        }
-    }
-
-    pub(crate) fn reason_prefix(self) -> &'static str {
-        match self {
-            // 保留 home 侧既有 reason 前缀，避免 trace/测试把“home 语义切换”
-            // 误判成策略行为回归。
-            ScenarioPolicyProfileKind::HomeLanGaming => "direct",
-            ScenarioPolicyProfileKind::CloudGaming => "cloud",
-            ScenarioPolicyProfileKind::RelayGaming => "relay",
-        }
-    }
-}
+pub(crate) use xbxengine_protocol::XbxEngineRemoteProfileKindDto as ScenarioPolicyProfileKind;
 
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct DisplaySupplyThresholds {
@@ -146,30 +121,23 @@ impl ScenarioPolicyResolver {
         session_target_type: Option<&XbxEngineTargetTypeDto>,
         transport_path: Option<&str>,
     ) -> ScenarioPolicyProfileKind {
-        match session_target_type {
-            Some(XbxEngineTargetTypeDto::Cloud) => ScenarioPolicyProfileKind::CloudGaming,
-            Some(XbxEngineTargetTypeDto::Home) => {
-                if is_relay_path(transport_path) {
-                    ScenarioPolicyProfileKind::RelayGaming
-                } else {
-                    ScenarioPolicyProfileKind::HomeLanGaming
-                }
-            }
-            None => {
-                if is_relay_path(transport_path) {
-                    ScenarioPolicyProfileKind::RelayGaming
-                } else {
-                    ScenarioPolicyProfileKind::HomeLanGaming
-                }
-            }
-        }
+        ScenarioPolicyProfileKind::resolve(session_target_type, transport_path)
     }
 
     pub(crate) fn resolve_recovery_profile(
         session_target_type: Option<&XbxEngineTargetTypeDto>,
         transport_path: Option<&str>,
     ) -> RecoveryScenarioProfile {
-        match Self::resolve_kind(session_target_type, transport_path) {
+        Self::resolve_recovery_profile_by_kind(Self::resolve_kind(
+            session_target_type,
+            transport_path,
+        ))
+    }
+
+    pub(crate) fn resolve_recovery_profile_by_kind(
+        kind: ScenarioPolicyProfileKind,
+    ) -> RecoveryScenarioProfile {
+        match kind {
             ScenarioPolicyProfileKind::HomeLanGaming => RecoveryScenarioProfile {
                 kind: ScenarioPolicyProfileKind::HomeLanGaming,
                 startup_fast_reset_enabled: true,
@@ -218,14 +186,15 @@ impl ScenarioPolicyResolver {
                 decoder_backend_failure_min_twcc_delivery_ratio: 0.92,
                 decoder_backend_failure_max_twcc_loss_ratio: 0.08,
                 decoder_backend_failure_min_reset_spacing_ms: 800.0,
-                // 云侧允许更慢的关键帧/反馈节奏，避免恢复链过早连跳。
-                escalation_cooldown_ms: 650,
+                // 云侧仍保留较稳的 startup，但恢复节流要比旧档松一档，
+                // 避免 transportAwaitRecoveryKeyframe 长时间被冷却窗压住。
+                escalation_cooldown_ms: 420,
                 escalation_keyframe_burst_threshold: 2,
                 escalation_decoder_reset_burst_threshold: 3,
-                escalation_keyframe_min_interval_ms: 650,
-                escalation_upgrade_window_ms: 2_600,
-                escalation_keyframe_upgrade_min_delay_ms: 550,
-                hard_fallback_transport_await_timeout_ms: 6_500,
+                escalation_keyframe_min_interval_ms: 420,
+                escalation_upgrade_window_ms: 1_800,
+                escalation_keyframe_upgrade_min_delay_ms: 300,
+                hard_fallback_transport_await_timeout_ms: 4_500,
                 display_supply_thresholds: DisplaySupplyThresholds {
                     degraded_no_pending_streak: 64,
                     critical_no_pending_streak: 128,
@@ -288,7 +257,19 @@ impl ScenarioPolicyResolver {
         transport_path: Option<&str>,
         phase: SessionPhase,
     ) -> TransportBweScenarioProfile {
-        match Self::resolve_kind(session_target_type, transport_path) {
+        Self::resolve_transport_bwe_profile_by_kind(
+            config,
+            Self::resolve_kind(session_target_type, transport_path),
+            phase,
+        )
+    }
+
+    pub(crate) fn resolve_transport_bwe_profile_by_kind(
+        config: &XbxEngineWebRtcRuntimeConfig,
+        kind: ScenarioPolicyProfileKind,
+        phase: SessionPhase,
+    ) -> TransportBweScenarioProfile {
+        match kind {
             ScenarioPolicyProfileKind::HomeLanGaming => TransportBweScenarioProfile {
                 kind: ScenarioPolicyProfileKind::HomeLanGaming,
                 stable_feedback_interval_ms: 220.0,
@@ -408,7 +389,17 @@ impl ScenarioPolicyResolver {
         actual_video_bitrate_kbps: Option<f64>,
     ) -> Option<&'static str> {
         let bitrate_kbps = actual_video_bitrate_kbps?;
-        match Self::resolve_kind(session_target_type, transport_path) {
+        Self::classify_bitrate_band_by_kind(
+            Self::resolve_kind(session_target_type, transport_path),
+            bitrate_kbps,
+        )
+    }
+
+    pub(crate) fn classify_bitrate_band_by_kind(
+        kind: ScenarioPolicyProfileKind,
+        bitrate_kbps: f64,
+    ) -> Option<&'static str> {
+        match kind {
             ScenarioPolicyProfileKind::HomeLanGaming => Some(if bitrate_kbps <= 0.0 {
                 "paused"
             } else if bitrate_kbps < 8_000.0 {
@@ -507,10 +498,4 @@ impl ScenarioPolicyResolver {
             max_bitrate_kbps: configured_max_bitrate_kbps,
         }
     }
-}
-
-fn is_relay_path(transport_path: Option<&str>) -> bool {
-    transport_path
-        .map(|path| path.to_ascii_lowercase().starts_with("relay"))
-        .unwrap_or(false)
 }

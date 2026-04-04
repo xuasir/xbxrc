@@ -17,7 +17,7 @@ use crate::runtime_stats_sink::RuntimeStatsSink;
 use crate::{
     PlaceholderXbxEngineMediaBackend, XbxEngineInputBackend, XbxEngineInputStatus,
     XbxEngineMediaBackend, XbxEngineMediaNegotiation, XbxEngineMediaNegotiationRequest,
-    XbxEngineMediaRuntimeStats,
+    XbxEngineMediaRuntimeStats, XbxEngineRenderFrame, XbxEngineRenderPixelData,
 };
 
 use super::{
@@ -33,6 +33,7 @@ struct TestHostBridge {
     poll_ice_batches: Rc<RefCell<Vec<Vec<XbxEngineIceCandidateDto>>>>,
     cancellation_epoch: Rc<Cell<u64>>,
     cancel_after_request_kind: Rc<RefCell<Option<&'static str>>>,
+    call_order: Arc<Mutex<Vec<&'static str>>>,
 }
 
 impl TestHostBridge {
@@ -44,6 +45,7 @@ impl TestHostBridge {
             poll_ice_batches: Rc::new(RefCell::new(Vec::new())),
             cancellation_epoch: Rc::new(Cell::new(0)),
             cancel_after_request_kind: Rc::new(RefCell::new(None)),
+            call_order: Arc::new(Mutex::new(Vec::new())),
         }
     }
 
@@ -58,7 +60,13 @@ impl TestHostBridge {
             poll_ice_batches: Rc::new(RefCell::new(Vec::new())),
             cancellation_epoch: Rc::new(Cell::new(0)),
             cancel_after_request_kind: Rc::new(RefCell::new(None)),
+            call_order: Arc::new(Mutex::new(Vec::new())),
         }
+    }
+
+    fn with_call_order(mut self, call_order: Arc<Mutex<Vec<&'static str>>>) -> Self {
+        self.call_order = call_order;
+        self
     }
 
     fn with_keepalive_failure_message(self, message: impl Into<String>) -> Self {
@@ -75,6 +83,18 @@ impl TestHostBridge {
 impl XbxEngineHostBridge for TestHostBridge {
     fn current_cancellation_epoch(&self) -> u64 {
         self.cancellation_epoch.get()
+    }
+
+    fn present_frame(
+        &mut self,
+        _viewport: &xbxengine_protocol::XbxEngineViewportDto,
+        _surface_id: Option<&str>,
+        _frame: &XbxEngineRenderFrame,
+    ) -> Result<(), XbxEngineRuntimeError> {
+        if let Ok(mut order) = self.call_order.lock() {
+            order.push("present");
+        }
+        Ok(())
     }
 
     fn request(
@@ -229,6 +249,7 @@ fn overwrite_runtime_stats(
 struct ScriptedMediaBackend {
     negotiation: XbxEngineMediaNegotiation,
     runtime_stats: Arc<Mutex<XbxEngineMediaRuntimeStats>>,
+    latest_render_frame: Arc<Mutex<Option<XbxEngineRenderFrame>>>,
     pending_runtime_recovery_action:
         Arc<Mutex<Option<crate::XbxEnginePendingRuntimeRecoveryAction>>>,
     microphone_capturing_calls: Arc<Mutex<Vec<bool>>>,
@@ -239,6 +260,7 @@ struct ScriptedMediaBackend {
     fail_video_keyframe: Arc<Mutex<Option<String>>>,
     fail_decoder_reset: Arc<Mutex<Option<String>>>,
     stop_calls: Arc<Mutex<usize>>,
+    call_order: Arc<Mutex<Vec<&'static str>>>,
 }
 
 impl ScriptedMediaBackend {
@@ -249,6 +271,7 @@ impl ScriptedMediaBackend {
         Self {
             negotiation,
             runtime_stats: Arc::new(Mutex::new(runtime_stats)),
+            latest_render_frame: Arc::new(Mutex::new(None)),
             pending_runtime_recovery_action: Arc::new(Mutex::new(None)),
             microphone_capturing_calls: Arc::new(Mutex::new(Vec::new())),
             local_ice_gathering_complete_calls: Arc::new(Mutex::new(0)),
@@ -258,7 +281,21 @@ impl ScriptedMediaBackend {
             fail_video_keyframe: Arc::new(Mutex::new(None)),
             fail_decoder_reset: Arc::new(Mutex::new(None)),
             stop_calls: Arc::new(Mutex::new(0)),
+            call_order: Arc::new(Mutex::new(Vec::new())),
         }
+    }
+
+    fn with_call_order(mut self, call_order: Arc<Mutex<Vec<&'static str>>>) -> Self {
+        self.call_order = call_order;
+        self
+    }
+
+    fn with_latest_render_frame(self, frame: XbxEngineRenderFrame) -> Self {
+        *self
+            .latest_render_frame
+            .lock()
+            .expect("lock latest render frame") = Some(frame);
+        self
     }
 
     fn with_local_ice_gathering_complete_true_after_calls(mut self, calls: usize) -> Self {
@@ -382,6 +419,9 @@ impl XbxEngineMediaBackend for ScriptedMediaBackend {
     }
 
     fn snapshot_runtime_stats(&self) -> Result<XbxEngineMediaRuntimeStats, XbxEngineRuntimeError> {
+        if let Ok(mut order) = self.call_order.lock() {
+            order.push("snapshot");
+        }
         Ok(self
             .runtime_stats
             .lock()
@@ -394,6 +434,10 @@ impl XbxEngineMediaBackend for ScriptedMediaBackend {
         metrics: crate::XbxEngineHostVideoPresentMetrics,
     ) -> Result<(), XbxEngineRuntimeError> {
         let mut runtime_stats = self.runtime_stats.lock().expect("lock runtime stats");
+        runtime_stats.latest_video_host_present_time_ms = metrics.latest_host_present_time_ms;
+        runtime_stats.host_display_tick_epoch = metrics.display_tick_epoch;
+        runtime_stats.video_present_epoch = metrics.present_epoch;
+        runtime_stats.host_cadence_phase = metrics.cadence_phase;
         runtime_stats.video_present_fps = metrics.present_fps;
         runtime_stats.video_present_submit_count_total = metrics.present_submit_count_total;
         runtime_stats.video_present_drop_count_total = metrics.present_drop_count_total;
@@ -431,14 +475,40 @@ impl XbxEngineMediaBackend for ScriptedMediaBackend {
     fn take_latest_render_frame(
         &mut self,
     ) -> Result<Option<crate::XbxEngineRenderFrame>, XbxEngineRuntimeError> {
-        Ok(None)
+        if let Ok(mut order) = self.call_order.lock() {
+            order.push("take_frame");
+        }
+        Ok(self
+            .latest_render_frame
+            .lock()
+            .expect("lock latest render frame")
+            .clone())
     }
 
     fn acknowledge_latest_render_frame(
         &mut self,
-        _frame_seq: u64,
+        frame_seq: u64,
     ) -> Result<bool, XbxEngineRuntimeError> {
-        Ok(false)
+        if let Ok(mut order) = self.call_order.lock() {
+            order.push("ack");
+        }
+        let mut latest_render_frame = self
+            .latest_render_frame
+            .lock()
+            .expect("lock latest render frame");
+        let Some(frame) = latest_render_frame.as_ref() else {
+            return Ok(false);
+        };
+        if frame.frame_seq != frame_seq {
+            return Ok(false);
+        }
+        let frame_rendered_at_ms = frame.rendered_at_ms;
+        latest_render_frame.take();
+        self.runtime_stats
+            .lock()
+            .expect("lock runtime stats")
+            .latest_video_host_present_time_ms = Some(frame_rendered_at_ms);
+        Ok(true)
     }
 
     fn request_video_keyframe(&mut self) -> Result<(), XbxEngineRuntimeError> {
@@ -506,6 +576,22 @@ fn remote_end_of_candidates_marker() -> XbxEngineIceCandidateDto {
         candidate: "a=end-of-candidates".to_string(),
         sdp_m_line_index: None,
         sdp_mid: None,
+    }
+}
+
+fn render_frame(frame_seq: u64, rendered_at_ms: f64) -> XbxEngineRenderFrame {
+    XbxEngineRenderFrame {
+        width: 1280,
+        height: 720,
+        frame_seq,
+        rendered_at_ms,
+        rtp_timestamp: Some(1_234_567),
+        is_keyframe: true,
+        frame_recovery_disposition: Some("frame-complete-candidate".to_string()),
+        frame_unrecoverable_reason: None,
+        pixel_data: XbxEngineRenderPixelData::Rgba {
+            bytes: vec![0, 0, 0, 255].into(),
+        },
     }
 }
 
@@ -581,6 +667,72 @@ fn start_negotiates_remote_and_reaches_running() {
         XbxEngineRuntimeEventDto::MediaSurfaceReady { surface_id }
         if surface_id == "surface:viewport-1"
     )));
+}
+
+#[test]
+fn runtime_tick_presents_frame_before_snapshotting_runtime_stats() {
+    let requests = Rc::new(RefCell::new(Vec::new()));
+    let events = Rc::new(RefCell::new(Vec::new()));
+    let call_order = Arc::new(Mutex::new(Vec::new()));
+    let rendered_at_ms = 1_000.0;
+    let frame = render_frame(7, rendered_at_ms);
+    let backend = ScriptedMediaBackend::new(
+        XbxEngineMediaNegotiation {
+            local_offer_sdp: "offer".to_string(),
+            local_candidates: Vec::new(),
+            surface_id: "surface:viewport-1".to_string(),
+            video_width: 1280,
+            video_height: 720,
+            first_frame_packet_arrival_time_ms: None,
+            frame_decoded_time_ms: None,
+            frame_rendered_time_ms: None,
+            input_status: XbxEngineInputStatus::default(),
+        },
+        XbxEngineMediaRuntimeStats {
+            transport_state: XbxEngineTransportStateDto::Connected,
+            latest_video_host_present_time_ms: Some(rendered_at_ms - 16.0),
+            latest_video_decode_ok_time_ms: Some(rendered_at_ms - 12.0),
+            latest_video_track_status: Some(crate::XbxEngineVideoTrackStatus {
+                state: "remoteTrackAttached".to_string(),
+                video_width: Some(1280),
+                video_height: Some(720),
+                mime_type: Some("video/h264".to_string()),
+                transport_state: XbxEngineTransportStateDto::Connected,
+                video_bytes_total: 1,
+                video_packet_count_total: 1,
+                audio_bytes_total: 0,
+                observed_at_ms: rendered_at_ms - 16.0,
+            }),
+            host_no_pending_pressure_level: Some("normal".to_string()),
+            host_no_pending_streak: 0,
+            video_present_submit_count_total: 1,
+            ..Default::default()
+        },
+    )
+    .with_call_order(call_order.clone())
+    .with_latest_render_frame(frame.clone());
+    let mut runtime = XbxEngineRuntime::with_media_backend(
+        XbxEngineRuntimeConfig::default(),
+        TestHostBridge::new(requests).with_call_order(call_order.clone()),
+        TestEventSink::new(events),
+        backend,
+    );
+
+    runtime
+        .start(session(), viewport(), 1.0, None, None)
+        .expect("runtime start should succeed");
+    call_order.lock().expect("lock call order").clear();
+
+    runtime.tick();
+
+    assert_eq!(
+        call_order.lock().expect("lock call order").as_slice(),
+        &["take_frame", "present", "ack", "snapshot"]
+    );
+    assert_eq!(
+        runtime.snapshot().frame_rendered_time_ms,
+        Some(rendered_at_ms)
+    );
 }
 
 #[test]
@@ -1414,6 +1566,10 @@ fn runtime_requests_decoder_reset_when_decode_stall_signal_is_active() {
         XbxEngineMediaRuntimeStats {
             transport_state: XbxEngineTransportStateDto::Connected,
             latest_video_packet_arrival_time_ms: Some(now_ms - 20.0),
+            latest_video_host_present_time_ms: Some(now_ms - 100.0),
+            latest_video_decode_ok_time_ms: Some(now_ms - 100.0),
+            video_decoder_stalled: Some(true),
+            video_renderer_stalled: Some(false),
             inbound_video_packet_count_total: 200,
             ..Default::default()
         },
@@ -1433,10 +1589,10 @@ fn runtime_requests_decoder_reset_when_decode_stall_signal_is_active() {
         .expect("runtime start should succeed");
     runtime.health.connected_at_ms = Some(now_ms - 10_000.0);
     runtime.health.last_frame_seq = 10;
-    runtime.health.last_frame_rendered_at_ms = Some(now_ms - 3_000.0);
+    runtime.health.last_frame_rendered_at_ms = Some(now_ms - 100.0);
     runtime.health.inbound_video_packet_count_total = 200;
     runtime.health.last_video_packet_arrival_at_ms = Some(now_ms - 20.0);
-    runtime.health.last_keyframe_request_at_ms = Some(now_ms - 600.0);
+    runtime.health.last_keyframe_request_at_ms = Some(now_ms - 700.0);
     runtime.health.keyframe_requested_for_current_stall = true;
 
     overwrite_runtime_stats(
@@ -1444,6 +1600,10 @@ fn runtime_requests_decoder_reset_when_decode_stall_signal_is_active() {
         XbxEngineMediaRuntimeStats {
             transport_state: XbxEngineTransportStateDto::Connected,
             latest_video_packet_arrival_time_ms: Some(now_ms - 20.0),
+            latest_video_host_present_time_ms: Some(now_ms - 100.0),
+            latest_video_decode_ok_time_ms: Some(now_ms - 100.0),
+            video_decoder_stalled: Some(true),
+            video_renderer_stalled: Some(false),
             inbound_video_packet_count_total: 200,
             ..Default::default()
         },
@@ -1483,7 +1643,7 @@ fn rust_owned_runtime_skips_legacy_runtime_recovery_loop() {
         XbxEngineMediaRuntimeStats {
             transport_state: XbxEngineTransportStateDto::Connected,
             latest_video_packet_arrival_time_ms: Some(now_ms - 20.0),
-            latest_video_present_time_ms: Some(now_ms - 3_000.0),
+            latest_video_host_present_time_ms: Some(now_ms - 3_000.0),
             latest_video_decode_ok_time_ms: Some(now_ms - 3_000.0),
             video_decoder_stalled: Some(true),
             video_renderer_stalled: Some(false),
@@ -1543,7 +1703,7 @@ fn runtime_prefers_explicit_decoder_stall_signal_from_stats() {
         XbxEngineMediaRuntimeStats {
             transport_state: XbxEngineTransportStateDto::Connected,
             latest_video_packet_arrival_time_ms: Some(now_ms - 20.0),
-            latest_video_present_time_ms: Some(now_ms - 100.0),
+            latest_video_host_present_time_ms: Some(now_ms - 100.0),
             latest_video_decode_ok_time_ms: Some(now_ms - 100.0),
             video_decoder_stalled: Some(true),
             video_renderer_stalled: Some(false),
@@ -1575,7 +1735,7 @@ fn runtime_prefers_explicit_decoder_stall_signal_from_stats() {
         XbxEngineMediaRuntimeStats {
             transport_state: XbxEngineTransportStateDto::Connected,
             latest_video_packet_arrival_time_ms: Some(now_ms - 20.0),
-            latest_video_present_time_ms: Some(now_ms - 100.0),
+            latest_video_host_present_time_ms: Some(now_ms - 100.0),
             latest_video_decode_ok_time_ms: Some(now_ms - 100.0),
             video_decoder_stalled: Some(true),
             video_renderer_stalled: Some(false),
@@ -1583,6 +1743,66 @@ fn runtime_prefers_explicit_decoder_stall_signal_from_stats() {
             ..Default::default()
         },
     );
+
+    runtime.tick();
+
+    assert_eq!(*keyframe_calls.lock().expect("lock keyframe calls"), 1);
+    assert_eq!(
+        *decoder_reset_calls
+            .lock()
+            .expect("lock decoder reset calls"),
+        0
+    );
+}
+
+#[test]
+fn runtime_does_not_use_rendered_snapshot_as_present_freshness_signal() {
+    let requests = Rc::new(RefCell::new(Vec::new()));
+    let events = Rc::new(RefCell::new(Vec::new()));
+    let now_ms = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_millis() as f64)
+        .unwrap_or(0.0);
+    let backend = ScriptedMediaBackend::new(
+        XbxEngineMediaNegotiation {
+            local_offer_sdp: "offer".to_string(),
+            local_candidates: Vec::new(),
+            surface_id: "surface:viewport-1".to_string(),
+            video_width: 1280,
+            video_height: 720,
+            first_frame_packet_arrival_time_ms: None,
+            frame_decoded_time_ms: None,
+            frame_rendered_time_ms: Some(now_ms - 80.0),
+            input_status: XbxEngineInputStatus::default(),
+        },
+        XbxEngineMediaRuntimeStats {
+            transport_state: XbxEngineTransportStateDto::Connected,
+            latest_video_packet_arrival_time_ms: Some(now_ms - 20.0),
+            latest_video_host_present_time_ms: None,
+            latest_video_decode_ok_time_ms: None,
+            video_decoder_stalled: Some(true),
+            video_renderer_stalled: Some(false),
+            inbound_video_packet_count_total: 300,
+            ..Default::default()
+        },
+    );
+    let keyframe_calls = backend.keyframe_request_calls.clone();
+    let decoder_reset_calls = backend.decoder_reset_calls.clone();
+    let mut runtime = XbxEngineRuntime::with_media_backend(
+        legacy_runtime_config(),
+        TestHostBridge::new(requests),
+        TestEventSink::new(events),
+        backend,
+    );
+
+    runtime
+        .start(session(), viewport(), 1.0, None, None)
+        .expect("runtime start should succeed");
+    runtime.health.connected_at_ms = Some(now_ms - 10_000.0);
+    runtime.health.last_frame_seq = 20;
+    runtime.health.last_frame_rendered_at_ms = Some(now_ms - 80.0);
+    runtime.health.inbound_video_packet_count_total = 300;
+    runtime.health.last_video_packet_arrival_at_ms = Some(now_ms - 20.0);
 
     runtime.tick();
 
@@ -1618,7 +1838,7 @@ fn runtime_suppresses_recovery_when_decode_activity_is_fresh() {
         XbxEngineMediaRuntimeStats {
             transport_state: XbxEngineTransportStateDto::Connected,
             latest_video_packet_arrival_time_ms: Some(now_ms - 20.0),
-            latest_video_present_time_ms: Some(now_ms - 120.0),
+            latest_video_host_present_time_ms: Some(now_ms - 120.0),
             latest_video_decode_ok_time_ms: Some(now_ms - 80.0),
             video_decoder_stalled: Some(true),
             video_renderer_stalled: Some(false),
@@ -1678,7 +1898,7 @@ fn runtime_requires_stable_stall_window_before_requesting_keyframe() {
         XbxEngineMediaRuntimeStats {
             transport_state: XbxEngineTransportStateDto::Connected,
             latest_video_packet_arrival_time_ms: Some(now_ms - 15.0),
-            latest_video_present_time_ms: Some(now_ms - 470.0),
+            latest_video_host_present_time_ms: Some(now_ms - 470.0),
             latest_video_decode_ok_time_ms: Some(now_ms - 470.0),
             video_decoder_stalled: Some(true),
             video_renderer_stalled: Some(false),
@@ -1730,7 +1950,7 @@ fn runtime_recovery_sequence_stays_keyframe_then_decoder_reset_then_reconnect() 
         XbxEngineMediaRuntimeStats {
             transport_state: XbxEngineTransportStateDto::Connected,
             latest_video_packet_arrival_time_ms: Some(now_ms - 20.0),
-            latest_video_present_time_ms: Some(now_ms - 2_000.0),
+            latest_video_host_present_time_ms: Some(now_ms - 2_000.0),
             latest_video_decode_ok_time_ms: Some(now_ms - 2_000.0),
             video_decoder_stalled: Some(true),
             video_renderer_stalled: Some(false),
@@ -1786,7 +2006,7 @@ fn runtime_recovery_sequence_stays_keyframe_then_decoder_reset_then_reconnect() 
         XbxEngineMediaRuntimeStats {
             transport_state: XbxEngineTransportStateDto::Connected,
             latest_video_packet_arrival_time_ms: Some(now_ms - 20.0),
-            latest_video_present_time_ms: Some(now_ms - 5_000.0),
+            latest_video_host_present_time_ms: Some(now_ms - 5_000.0),
             latest_video_decode_ok_time_ms: Some(now_ms - 5_000.0),
             video_decoder_stalled: Some(true),
             video_renderer_stalled: Some(false),
@@ -1834,7 +2054,7 @@ fn runtime_does_not_emit_error_when_keyframe_request_is_only_control_not_ready()
         XbxEngineMediaRuntimeStats {
             transport_state: XbxEngineTransportStateDto::Connected,
             latest_video_packet_arrival_time_ms: Some(now_ms - 20.0),
-            latest_video_present_time_ms: Some(now_ms - 2_000.0),
+            latest_video_host_present_time_ms: Some(now_ms - 2_000.0),
             latest_video_decode_ok_time_ms: Some(now_ms - 2_000.0),
             video_decoder_stalled: Some(true),
             video_renderer_stalled: Some(false),
@@ -1894,7 +2114,7 @@ fn runtime_does_not_emit_error_when_decoder_reset_is_only_control_not_ready() {
         XbxEngineMediaRuntimeStats {
             transport_state: XbxEngineTransportStateDto::Connected,
             latest_video_packet_arrival_time_ms: Some(now_ms - 20.0),
-            latest_video_present_time_ms: Some(now_ms - 2_000.0),
+            latest_video_host_present_time_ms: Some(now_ms - 2_000.0),
             latest_video_decode_ok_time_ms: Some(now_ms - 2_000.0),
             video_decoder_stalled: Some(true),
             video_renderer_stalled: Some(false),
@@ -1966,6 +2186,10 @@ fn runtime_consumes_pending_transport_reconnect_candidate_once() {
                 observation_id: 42,
                 reason: "transportExpiredDeadline".to_string(),
                 action: "requestReconnectCandidate".to_string(),
+                recovery_stage: "reconnecting".to_string(),
+                recovery_chain_value: "health".to_string(),
+                recovery_failure_cost: "high".to_string(),
+                recovery_window_source: "reconnect-window".to_string(),
                 observed_at_ms: now_ms,
             }),
             ..Default::default()
@@ -2053,6 +2277,10 @@ fn runtime_consumes_pending_transport_reconnect_candidate_even_when_transport_is
                 observation_id: 77,
                 reason: "transportAwaitRecoveryKeyframe".to_string(),
                 action: "requestReconnectCandidate".to_string(),
+                recovery_stage: "reconnecting".to_string(),
+                recovery_chain_value: "anchor".to_string(),
+                recovery_failure_cost: "high".to_string(),
+                recovery_window_source: "reconnect-window".to_string(),
                 observed_at_ms: now_ms,
             }),
             ..Default::default()
@@ -2294,6 +2522,10 @@ fn runtime_stops_reconnect_loop_when_keepalive_reports_session_not_active() {
                 observation_id: 42,
                 reason: "transportExpiredDeadline".to_string(),
                 action: "requestReconnectCandidate".to_string(),
+                recovery_stage: "reconnecting".to_string(),
+                recovery_chain_value: "health".to_string(),
+                recovery_failure_cost: "high".to_string(),
+                recovery_window_source: "reconnect-window".to_string(),
                 observed_at_ms: now_ms,
             }),
             ..Default::default()
@@ -2440,7 +2672,7 @@ fn runtime_waits_for_real_frame_before_populating_first_frame_timestamps() {
     assert_eq!(runtime.snapshot().frame_decoded_time_ms, None);
     assert!(!events.borrow().iter().any(|event| matches!(
         event,
-        XbxEngineRuntimeEventDto::StatsVideoFrameProcessed { .. }
+        XbxEngineRuntimeEventDto::StatsVideoFrameRendered { .. }
     )));
 
     let frame_time_ms = SystemTime::now()
@@ -2474,14 +2706,14 @@ fn runtime_waits_for_real_frame_before_populating_first_frame_timestamps() {
     );
     assert!(events.borrow().iter().any(|event| matches!(
         event,
-        XbxEngineRuntimeEventDto::StatsVideoFrameProcessed {
+        XbxEngineRuntimeEventDto::StatsVideoFrameRendered {
             first_frame_packet_arrival_time_ms,
             frame_decoded_time_ms,
-            frame_rendered_time_ms,
+            renderer_frame_time_ms,
         }
-        if *first_frame_packet_arrival_time_ms == frame_time_ms
-            && *frame_decoded_time_ms == frame_time_ms
-            && *frame_rendered_time_ms == frame_time_ms
+            if *first_frame_packet_arrival_time_ms == frame_time_ms
+                && *frame_decoded_time_ms == frame_time_ms
+                && *renderer_frame_time_ms == frame_time_ms
     )));
 }
 

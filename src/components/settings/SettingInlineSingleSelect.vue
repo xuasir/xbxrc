@@ -34,31 +34,30 @@ function handleClose(): void {
 
 <template>
   <div v-if="props.open" class="setting-inline-select" role="group">
-    <div class="setting-inline-select__list">
+    <!-- Xbox 风格：轨道式分段单选，与上方 setting-row 同色衔接 -->
+    <div class="setting-inline-select__rail" role="radiogroup">
       <Focusable
         v-for="(option, index) in props.options"
         :id="optionNodeId(index)"
         :key="String(option.value)"
         as="button"
         type="button"
-        class="setting-inline-select__option"
-        :class="{ 'setting-inline-select__option--active': props.currentValue === option.value }"
+        class="setting-inline-select__segment"
+        :class="{ 'setting-inline-select__segment--selected': props.currentValue === option.value }"
         :scope-id="props.scopeId"
         :on-back="handleClose"
         :disabled="props.disabled"
         :aria-label="option.label"
+        :aria-checked="props.currentValue === option.value"
+        role="radio"
         @click="emit('select', option.value)"
       >
-        <span
-          class="setting-inline-select__indicator"
-          :class="{ 'setting-inline-select__indicator--active': props.currentValue === option.value }"
-          aria-hidden="true"
-        />
-
-        <span class="setting-inline-select__copy">
-          <span class="setting-inline-select__title">{{ option.label }}</span>
-          <span v-if="option.description" class="setting-inline-select__desc">{{ option.description }}</span>
-          <span v-if="option.meta" class="setting-inline-select__desc">{{ option.meta }}</span>
+        <span class="setting-inline-select__segment-label">{{ option.label }}</span>
+        <span v-if="option.description" class="setting-inline-select__segment-desc">
+          {{ option.description }}
+        </span>
+        <span v-if="option.meta" class="setting-inline-select__segment-desc">
+          {{ option.meta }}
         </span>
       </Focusable>
     </div>
@@ -67,81 +66,120 @@ function handleClose(): void {
 
 <style scoped>
 .setting-inline-select {
-  padding: 8px 12px 12px;
-  border-radius: 12px;
-  background: color-mix(in srgb, var(--ui-page-bg), transparent 20%);
+  /* 吃掉 section-body 的 gap，与上一行 setting-row 拼成一块卡片 */
+  margin-top: -8px;
+  padding: 0 20px 16px;
+  border-radius: 0 0 12px 12px;
+  background: var(--color-state-hover);
+  box-shadow: inset 0 1px 0 var(--ui-border-subtle);
+}
+
+.setting-inline-select__rail {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  gap: 6px;
+  padding: 6px;
+  border-radius: var(--ui-radius-md);
+  background: color-mix(in srgb, var(--ui-page-bg) 22%, var(--color-state-hover));
   border: 1px solid var(--ui-border-subtle);
 }
 
-.setting-inline-select__list {
+.setting-inline-select__segment {
+  flex: 1 1 0;
+  min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 8px;
-}
-
-.setting-inline-select__option {
-  display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 12px 16px;
+  justify-content: center;
+  gap: 3px;
+  padding: 11px 8px;
   border: 2px solid transparent;
   border-radius: var(--ui-radius-sm);
-  background: var(--color-state-hover);
-  color: var(--ui-page-text);
-  text-align: left;
-  transition: all var(--ui-motion-fast);
-}
-
-.setting-inline-select__option--active {
-  background: color-mix(in srgb, var(--brand-primary) 14%, transparent);
-}
-
-.setting-inline-select__indicator {
-  flex: 0 0 auto;
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
   background: transparent;
-  border: 2px solid var(--ui-page-text-soft);
+  color: var(--ui-page-text-soft);
+  text-align: center;
+  cursor: pointer;
+  transition:
+    background-color var(--ui-motion-fast) var(--ease-standard),
+    color var(--ui-motion-fast) var(--ease-standard),
+    border-color var(--ui-motion-fast) var(--ease-standard),
+    box-shadow var(--ui-motion-fast) var(--ease-standard),
+    transform var(--ui-motion-fast) var(--ease-standard);
 }
 
-.setting-inline-select__indicator--active {
-  background: var(--brand-primary);
-  border-color: var(--brand-primary);
-}
-
-.setting-inline-select__copy {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-}
-
-.setting-inline-select__title {
-  font-size: 16px;
-  line-height: 1.2;
-  font-weight: 600;
+.setting-inline-select__segment:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--ui-page-text) 6%, transparent);
   color: var(--ui-page-text);
 }
 
-.setting-inline-select__desc {
-  font-size: 13px;
-  line-height: 1.4;
-  color: var(--ui-page-text-soft);
+.setting-inline-select__segment--selected {
+  background: var(--brand-primary);
+  color: var(--brand-on-primary);
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--brand-primary) 35%, transparent),
+    0 4px 14px color-mix(in srgb, var(--brand-primary) 28%, transparent);
 }
 
-.setting-inline-select__option[data-focused='true'] {
-  background: var(--color-focus-bg-strong);
-  color: var(--ui-focus-text);
+.setting-inline-select__segment--selected:hover:not(:disabled) {
+  background: var(--brand-primary-strong);
+  color: var(--brand-on-primary);
+}
+
+.setting-inline-select__segment[data-focused='true']:not(:disabled) {
+  border-color: var(--color-focus-ring);
   box-shadow: var(--shadow-xbox-focus);
-}
-
-.setting-inline-select__option[data-focused='true'] .setting-inline-select__title,
-.setting-inline-select__option[data-focused='true'] .setting-inline-select__desc {
   color: var(--ui-focus-text);
+  transform: scale(1.02);
+  z-index: 1;
 }
 
-.setting-inline-select__option[data-focused='true'] .setting-inline-select__indicator {
-  border-color: var(--ui-focus-text);
+.setting-inline-select__segment[data-focused='true'].setting-inline-select__segment--selected {
+  background: var(--brand-primary-strong);
+  color: var(--brand-on-primary);
+  border-color: var(--color-focus-ring);
+}
+
+.setting-inline-select__segment[data-focused='true'] .setting-inline-select__segment-label,
+.setting-inline-select__segment[data-focused='true'] .setting-inline-select__segment-desc {
+  color: inherit;
+}
+
+.setting-inline-select__segment:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.setting-inline-select__segment-label {
+  font-size: 14px;
+  line-height: 1.2;
+  font-weight: var(--ui-font-weight-bold);
+  letter-spacing: 0.02em;
+}
+
+.setting-inline-select__segment-desc {
+  font-size: 11px;
+  line-height: 1.35;
+  font-weight: var(--ui-font-weight-medium);
+  opacity: 0.92;
+  max-width: 100%;
+  padding: 0 2px;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+
+.setting-inline-select__segment--selected .setting-inline-select__segment-desc {
+  opacity: 0.9;
+}
+
+:global(html[data-ui-density='narrow']) .setting-inline-select__rail {
+  flex-wrap: wrap;
+}
+
+:global(html[data-ui-density='narrow']) .setting-inline-select__segment {
+  flex: 1 1 calc(50% - 3px);
+  min-width: min(100%, 140px);
 }
 </style>
-

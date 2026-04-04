@@ -74,11 +74,11 @@ export class SdpManipulator {
         index,
       }))
       .sort((left, right) => {
-        if (left.rank !== right.rank) {
-          return right.rank - left.rank
-        }
         if (left.matchesPreference !== right.matchesPreference) {
           return Number(right.matchesPreference) - Number(left.matchesPreference)
+        }
+        if (left.rank !== right.rank) {
+          return right.rank - left.rank
         }
         return left.index - right.index
       })

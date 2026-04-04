@@ -1,5 +1,7 @@
 mod backend;
 mod event;
+#[cfg(target_os = "macos")]
+mod macos_keyboard_hid;
 mod oh_my_gamepad_keyboard;
 mod oh_my_gamepad_keyboard_desktop;
 mod oh_my_gamepad_service;

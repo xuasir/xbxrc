@@ -18,6 +18,7 @@ pub mod escalation;
 pub(crate) mod hard_stall;
 pub(crate) mod nack_outcome;
 pub mod policy;
+pub(crate) mod remote_profile_runtime;
 pub(crate) mod repeat_suppression;
 pub mod runtime_state;
 pub mod signal;

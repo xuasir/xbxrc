@@ -1,6 +1,7 @@
 use std::collections::VecDeque;
 use std::time::{Duration, Instant};
 
+use crate::media::video::ingress::budget::FrameBudgetContext;
 use crate::media::video::types::{EncodedFrame, FrameRecoveryDisposition, VideoCodec};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -95,11 +96,26 @@ impl VideoIngress {
 
 impl FrameScheduler for VideoIngress {
     fn submit(&mut self, frame: EncodedFrame, now: Instant) -> IngressDecision {
+        let config_mismatch = self.current_codec.as_ref() != Some(&frame.codec)
+            || self.current_width != frame.width
+            || self.current_height != frame.height;
+        let mut context = frame.budget;
+        if matches!(
+            frame.frame_recovery_disposition,
+            FrameRecoveryDisposition::UnrecoverableReferenceChain
+        ) {
+            context = FrameBudgetContext::for_ingress_admission(&frame, true, config_mismatch);
+        } else if self.waiting_keyframe {
+            context = FrameBudgetContext::for_ingress_admission(&frame, true, config_mismatch);
+        } else if config_mismatch || frame.config_changed || frame.h264.parameter_sets_changed {
+            context = FrameBudgetContext::for_ingress_admission(&frame, false, true);
+        }
         let disposition = frame.frame_recovery_disposition;
         if matches!(
             disposition,
             FrameRecoveryDisposition::UnrecoverableReferenceChain
-        ) {
+        ) || context.prefers_chain_broken()
+        {
             // 参考链已污染时，直接前置放弃并等待后续 keyframe 重建。
             self.queue.clear();
             self.waiting_keyframe = true;
@@ -140,34 +156,34 @@ impl FrameScheduler for VideoIngress {
         }
 
         if frame.config_changed {
-            if self.waiting_keyframe {
+            if context.prefers_wait_keyframe() {
                 return IngressDecision::WaitKeyframe;
             }
-            self.start_reconfigure();
-            return IngressDecision::Reconfigure;
+            if context.prefers_reconfigure() {
+                self.start_reconfigure();
+                return IngressDecision::Reconfigure;
+            }
         }
 
         // 基础参数变化也会触发必须使用 Keyframe 初始化
-        let config_mismatch = self.current_codec.as_ref() != Some(&frame.codec)
-            || self.current_width != frame.width
-            || self.current_height != frame.height;
-
         if config_mismatch {
-            if self.waiting_keyframe {
+            if context.prefers_wait_keyframe() {
                 return IngressDecision::WaitKeyframe;
             }
-            self.start_reconfigure();
-            return IngressDecision::Reconfigure;
+            if context.prefers_reconfigure() {
+                self.start_reconfigure();
+                return IngressDecision::Reconfigure;
+            }
         }
 
         // 丢弃期间等待关键帧
-        if self.waiting_keyframe {
+        if context.prefers_wait_keyframe() {
             return IngressDecision::WaitKeyframe;
         }
 
         let frame_late_threshold = scale_duration_by_per_mille(
             self.late_frame_drop_threshold,
-            frame.value.late_budget_ratio_per_mille(),
+            context.late_budget_ratio_per_mille(frame.value),
             Duration::from_millis(33),
         );
 
@@ -187,10 +203,20 @@ impl FrameScheduler for VideoIngress {
                 .queue
                 .iter()
                 .enumerate()
-                .map(|(idx, queued)| (idx, queued.value.backlog_priority_score()))
+                .map(|(idx, queued)| {
+                    let queued_context = if self.current_codec.as_ref() != Some(&queued.codec)
+                        || self.current_width != queued.width
+                        || self.current_height != queued.height
+                    {
+                        FrameBudgetContext::for_ingress_admission(queued, false, true)
+                    } else {
+                        queued.budget
+                    };
+                    (idx, queued_context.backlog_priority_score(queued.value))
+                })
                 .min_by_key(|(_, score)| *score)
             {
-                let incoming_score = frame.value.backlog_priority_score();
+                let incoming_score = context.backlog_priority_score(frame.value);
                 if incoming_score <= lowest_score {
                     return IngressDecision::DropBacklog;
                 }
@@ -228,6 +254,7 @@ mod tests {
     use crate::media::video::h264::inspection::{
         H264AccessUnitInspection, H264BootstrapRejectReason,
     };
+    use crate::media::video::ingress::budget::FrameBudgetContext;
     use crate::media::video::types::{
         EncodedFrame, FrameRecoveryDisposition, FrameValue, VideoCodec,
     };
@@ -268,6 +295,7 @@ mod tests {
             is_keyframe,
             config_changed: false,
             value,
+            budget: FrameBudgetContext::steady_for_value(value),
             width: 1920,
             height: 1080,
             rtp_timestamp: 1,

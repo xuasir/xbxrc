@@ -30,10 +30,10 @@ body.stream-ui-window,
   /* 滚动条宽度为0 */
   scrollbar-width: none;
 
-  /* 全面清理 backdrop-filter (避免闪烁) */
-  --ui-scrim-bg: rgba(0, 0, 0, 0.72);
-  --ui-surface-overlay: rgba(18, 18, 22, 0.94);
-  --ui-surface-info-panel: rgba(8, 12, 18, 0.88);
+  /* 全面清理 backdrop-filter (避免闪烁)；色值走 neutral，便于与全局主题 token 对齐 */
+  --ui-scrim-bg: color-mix(in srgb, var(--neutral-0) 72%, transparent);
+  --ui-surface-overlay: color-mix(in srgb, var(--neutral-200) 94%, transparent);
+  --ui-surface-info-panel: color-mix(in srgb, var(--neutral-100) 88%, transparent);
 }
 
 html,

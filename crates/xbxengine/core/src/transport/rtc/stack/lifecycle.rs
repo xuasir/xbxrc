@@ -185,6 +185,7 @@ impl<'a> RtcStackLifecycleBridge<'a> {
             self.runtime_config,
             self.audio_volume_bits,
             self.audio_playback_session,
+            self.connection,
             self.media,
             self.frame_source_tx,
         )

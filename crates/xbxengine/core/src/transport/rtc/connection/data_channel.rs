@@ -40,6 +40,8 @@ const DEFAULT_VIEWPORT_WIDTH: u32 = 1920;
 const DEFAULT_VIEWPORT_HEIGHT: u32 = 1080;
 const INPUT_METADATA_SEQ: u32 = 0;
 const INPUT_METADATA_MAX_TOUCHPOINTS: u8 = 64;
+// 与恢复侧的 keyframe 响应窗保持一致，方便 trace 统一判定 on-time / late / missed。
+const KEYFRAME_REQUEST_RESPONSE_WINDOW_MS: f64 = 960.0;
 
 // phase-1 先只把控制面 channel 拓扑建进 rtc，真正的 ready/handshake 由后续事件循环接管。
 pub(crate) fn bootstrap_default_channels(
@@ -217,6 +219,12 @@ impl RtcConnectionService {
                 "phase1 rtc control replay keyframe sent",
                 runtime_stats,
             )?;
+            let sent_at_ms = now_ms_f64();
+            RuntimeStatsSink::new(runtime_stats.clone()).record_keyframe_request_episode_sent(
+                "control-replay",
+                sent_at_ms,
+                Some(sent_at_ms + KEYFRAME_REQUEST_RESPONSE_WINDOW_MS),
+            );
         }
         if actions.request_decoder_reset {
             self.send_control_payload(

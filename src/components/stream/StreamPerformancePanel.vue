@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { StreamPerformanceSnapshot } from '../../streaming/types'
+import type { StreamPerformanceSnapshot, StreamSessionDiagnosticsSnapshot } from '../../streaming/types'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
@@ -7,6 +7,7 @@ interface StreamPerformancePanelProps {
   visible: boolean
   compact?: boolean
   snapshot: StreamPerformanceSnapshot | null
+  diagnostics: StreamSessionDiagnosticsSnapshot
   resolutionMode?: number
 }
 
@@ -25,14 +26,6 @@ const resolutionText = computed(() => {
 
   return props.resolutionMode === 1081 ? `${resolution}(HQ)` : resolution
 })
-
-function formatKiB(value?: number): string {
-  if (value === undefined || value <= 0) {
-    return '--'
-  }
-
-  return `${(value / 1024).toFixed(1)} KiB`
-}
 
 function formatMs(value?: number): string {
   if (value === undefined || Number.isNaN(value)) {
@@ -66,48 +59,44 @@ function formatFps(value?: string | number): string {
 }
 
 const metrics = computed(() => [
-  { key: 'Path', value: props.snapshot?.transportPath ?? '--' },
-  { key: 'State', value: props.snapshot?.transportState ?? '--' },
+  { key: 'State', value: resolveStatusText() },
   { key: 'RTT', value: props.snapshot?.rtt ?? '--' },
   { key: 'JIT', value: props.snapshot?.jit ?? '--' },
   { key: 'RecvFPS', value: formatFps(props.snapshot?.inboundVideoFps) },
   { key: 'DecFPS', value: formatFps(props.snapshot?.decodeFps) },
   { key: 'PreFPS', value: formatFps(props.snapshot?.presentFps ?? props.snapshot?.fps) },
-  { key: 'FD', value: props.snapshot?.fl ?? '--' },
   { key: 'PL', value: props.snapshot?.pl ?? '--' },
   { key: 'VideoDL', value: formatKbps(props.snapshot?.inboundVideoBitrateKbps) },
   { key: 'TotalDL', value: formatKbps(props.snapshot?.inboundBitrateKbps) },
   { key: 'AudioDL', value: formatKbps(props.snapshot?.inboundAudioBitrateKbps) },
-  { key: 'AudioPlayout', value: formatMs(props.snapshot?.audioPlayoutLatencyMs) },
-  { key: 'AudioAvDelta', value: formatMs(props.snapshot?.audioVideoPlayoutDeltaMs) },
-  { key: 'VideoActual', value: formatKbps(props.snapshot?.videoActualBitrateKbps) },
-  { key: 'BweTarget', value: formatKbps(props.snapshot?.videoTargetRembKbps) },
-  { key: 'BweObserved', value: formatKbps(props.snapshot?.videoObservedRembKbps) },
-  { key: 'VideoActualSrc', value: props.snapshot?.actualVideoBitrateSource ?? '--' },
-  { key: 'TwccRecv', value: formatKbps(props.snapshot?.videoTwccReceiveBitrateKbps) },
-  { key: 'TwccLoss', value: props.snapshot?.videoTwccLossRatio !== undefined ? `${(props.snapshot.videoTwccLossRatio * 100).toFixed(2)}%` : '--' },
-  { key: 'TwccDelivery', value: props.snapshot?.videoTwccDeliveryRatio !== undefined ? `${(props.snapshot.videoTwccDeliveryRatio * 100).toFixed(2)}%` : '--' },
-  { key: 'TwccState', value: props.snapshot?.twccObservationState ?? '--' },
   { key: 'PktAge', value: formatMs(props.snapshot?.packetAgeMs) },
   { key: 'DecAge', value: formatMs(props.snapshot?.decodeAgeMs) },
   { key: 'PreAge', value: formatMs(props.snapshot?.presentAgeMs) },
   { key: 'P2D', value: formatMs(props.snapshot?.packetToDecodeMs) },
   { key: 'D2P', value: formatMs(props.snapshot?.decodeToPresentMs) },
   { key: 'P2P', value: formatMs(props.snapshot?.packetToPresentMs) },
-  { key: 'VideoBytes', value: formatKiB(props.snapshot?.inboundVideoBytesTotal) },
-  { key: 'AudioBytes', value: formatKiB(props.snapshot?.inboundAudioBytesTotal) },
-  { key: 'DecInDrop', value: props.snapshot?.videoDecodeInputDropCountTotal ?? '--' },
-  { key: 'DecOutDrop', value: props.snapshot?.videoDecodeOutputDropCountTotal ?? '--' },
   { key: 'KeyReq', value: props.snapshot?.recoveryKeyframeRequestCount ?? '--' },
   { key: 'Reset', value: props.snapshot?.videoDecoderResetCount ?? '--' },
+  { key: 'DecRec', value: props.snapshot?.videoDecoderRecoveryState ?? '--' },
+  { key: 'DecEvt', value: props.snapshot?.videoDecoderRecoveryEvent ?? '--' },
   { key: 'Reco', value: props.snapshot?.recoveryReconnectCount ?? '--' },
-  { key: 'HardFallbackTimer', value: formatMs(props.snapshot?.recoveryHardFallbackTimerMs) },
-  { key: 'HardFallbackReason', value: props.snapshot?.recoveryHardFallbackTriggerReason ?? '--' },
-  { key: 'HardFallbackReset', value: props.snapshot?.recoveryHardFallbackTimerResetReason ?? '--' },
-  { key: 'LastAct', value: props.snapshot?.lastRecoveryAction ?? '--' },
-  { key: 'LastWhy', value: props.snapshot?.lastRecoveryReason ?? '--' },
-  { key: 'DT', value: props.snapshot?.decode ?? '--' },
 ])
+
+function resolveStatusText(): string {
+  if (props.diagnostics.statusCode === 'noVideo') {
+    return t('streamPage.diagnostics.values.noVideo')
+  }
+  if (props.diagnostics.statusCode === 'recovering') {
+    return t('streamPage.diagnostics.values.recovering')
+  }
+  if (props.diagnostics.statusCode === 'owner' && props.diagnostics.recoveryOwnerState !== undefined) {
+    return props.diagnostics.recoveryOwnerState
+  }
+  if (props.diagnostics.statusCode === 'stable') {
+    return t('streamPage.diagnostics.values.stable')
+  }
+  return t('streamPage.diagnostics.values.inactive')
+}
 </script>
 
 <template>
@@ -148,15 +137,24 @@ const metrics = computed(() => [
   color: var(--ui-page-text);
   font-family: var(--ui-font-family-mono, monospace);
   font-size: 11px;
-  pointer-events: none;
+  /* 需要允许滚动，否则数据超出视口会被裁掉且无法滚动查看 */
+  pointer-events: auto;
   display: flex;
   flex-direction: column;
   gap: 4px;
+  width: min(420px, calc(100vw - 48px));
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .stream-performance--compact {
   flex-direction: row;
   gap: 12px;
+  width: min(1000px, calc(100vw - 48px));
+  max-height: unset;
+  overflow-y: visible;
+  overflow-x: auto;
 }
 
 .stream-performance__title {

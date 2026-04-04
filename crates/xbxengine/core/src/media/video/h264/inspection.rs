@@ -96,15 +96,51 @@ impl H264AccessUnitInspection {
     pub fn bootstrap_parameter_sets(&self) -> Option<&H264ParameterSets> {
         self.parameter_sets.as_ref()
     }
+
+    pub fn committed_sps_present(&self) -> bool {
+        self.commit_state
+            .lock()
+            .expect("h264 commit state poisoned")
+            .committed_sps
+            .is_some()
+    }
+
+    pub fn committed_pps_present(&self) -> bool {
+        self.commit_state
+            .lock()
+            .expect("h264 commit state poisoned")
+            .committed_pps
+            .is_some()
+    }
+
+    pub fn delta_continuation_ready(&self) -> bool {
+        let state = self
+            .commit_state
+            .lock()
+            .expect("h264 commit state poisoned");
+        self.slice_headers_valid
+            && !self.is_idr
+            && self.nals.iter().any(|nal| is_vcl_unit(nal.unit_type))
+            && state.committed_sps.is_some()
+            && state.committed_pps.is_some()
+    }
+
+    pub fn nal_type_labels(&self) -> Vec<String> {
+        self.nals
+            .iter()
+            .map(|nal| format!("{:?}", nal.unit_type))
+            .collect()
+    }
 }
 
 impl H264SeqParameterSet {
-    /// 比较两份 SPS 是否会改变解码语义。
+    /// 比较两份 SPS 是否会改变当前可继续承接的解码上下文。
     ///
-    /// 这里刻意忽略 `seq_parameter_set_id`，因为同一套语义内容换一个 id，
-    /// 对解码能力本身没有影响，只会影响引用标识。
+    /// `seq_parameter_set_id` 也必须纳入比较。即便语义字段一致，只要 id 变了，
+    /// 后续 slice 对参数集的引用关系就已经变化，不能继续沿用旧的 bootstrap/session。
     pub(crate) fn same_decoder_configuration(&self, other: &Self) -> bool {
-        self.parsed.profile_idc == other.parsed.profile_idc
+        self.parsed.seq_parameter_set_id == other.parsed.seq_parameter_set_id
+            && self.parsed.profile_idc == other.parsed.profile_idc
             && self.parsed.constraint_flags == other.parsed.constraint_flags
             && self.parsed.level_idc == other.parsed.level_idc
             && self.parsed.chroma_info == other.parsed.chroma_info
@@ -124,10 +160,10 @@ impl H264SeqParameterSet {
 }
 
 impl H264PicParameterSet {
-    /// 比较两份 PPS 是否会改变解码语义。
+    /// 比较两份 PPS 是否会改变当前可继续承接的解码上下文。
     ///
-    /// `pic_parameter_set_id` / `seq_parameter_set_id` 只是引用标识，这里不拿它们
-    /// 作为是否重配的判定依据。
+    /// `pic_parameter_set_id` / `seq_parameter_set_id` 同样必须参与比较，
+    /// 否则会把“参数集引用图已切换”误判成“同一 preset”。
     pub(crate) fn same_decoder_configuration(&self, other: &Self) -> bool {
         let slice_groups_equal = match (&self.parsed.slice_groups, &other.parsed.slice_groups) {
             (None, None) => true,
@@ -140,7 +176,9 @@ impl H264PicParameterSet {
             _ => false,
         };
 
-        self.parsed.entropy_coding_mode_flag == other.parsed.entropy_coding_mode_flag
+        self.parsed.pic_parameter_set_id == other.parsed.pic_parameter_set_id
+            && self.parsed.seq_parameter_set_id == other.parsed.seq_parameter_set_id
+            && self.parsed.entropy_coding_mode_flag == other.parsed.entropy_coding_mode_flag
             && self.parsed.bottom_field_pic_order_in_frame_present_flag
                 == other.parsed.bottom_field_pic_order_in_frame_present_flag
             && slice_groups_equal
@@ -177,6 +215,18 @@ pub enum H264BootstrapRejectReason {
     MissingPps,
     NonIdrVcl,
     InvalidSliceHeader,
+}
+
+impl H264BootstrapRejectReason {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::NoVcl => "NoVcl",
+            Self::MissingSps => "bootstrapMissingSps",
+            Self::MissingPps => "bootstrapMissingPps",
+            Self::NonIdrVcl => "NonIdrVcl",
+            Self::InvalidSliceHeader => "InvalidSliceHeader",
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -230,6 +280,44 @@ impl H264AccessUnitInspector {
         Arc::new(Mutex::new(H264AccessUnitInspectorState::default()))
     }
 
+    pub fn committed_sps_present(&self) -> bool {
+        self.state
+            .lock()
+            .expect("h264 inspector state poisoned")
+            .committed_sps
+            .is_some()
+    }
+
+    pub fn committed_pps_present(&self) -> bool {
+        self.state
+            .lock()
+            .expect("h264 inspector state poisoned")
+            .committed_pps
+            .is_some()
+    }
+
+    pub fn seed_committed_parameter_sets_if_absent(
+        &self,
+        sps_bytes: &[u8],
+        pps_bytes: &[u8],
+    ) -> Result<bool, H264InspectionError> {
+        let mut state = self.state.lock().expect("h264 inspector state poisoned");
+        if state.committed_sps.is_some() && state.committed_pps.is_some() {
+            return Ok(false);
+        }
+
+        let sps = parse_sps(sps_bytes, 0)?;
+        let mut ctx = Context::new();
+        ctx.put_seq_param_set(sps.parsed.clone());
+        let pps = parse_pps(&ctx, pps_bytes, 1)?;
+        let dimensions = sps.parsed.pixel_dimensions().ok();
+
+        state.committed_sps = Some(sps);
+        state.committed_pps = Some(pps);
+        state.committed_dimensions = dimensions;
+        Ok(true)
+    }
+
     pub fn inspect_access_unit(
         &self,
         payload: &[u8],
@@ -241,6 +329,8 @@ impl H264AccessUnitInspector {
 
         let state = self.state.lock().expect("h264 inspector state poisoned");
         let mut working_ctx = build_context(&state);
+        let committed_sps = state.committed_sps.clone();
+        let committed_pps = state.committed_pps.clone();
         let mut parsed_sps: Option<H264SeqParameterSet> = None;
         let mut parsed_pps: Option<H264PicParameterSet> = None;
         let mut seen_sps = false;
@@ -316,16 +406,20 @@ impl H264AccessUnitInspector {
             }
         }
 
-        let parameter_sets = match (parsed_sps, parsed_pps) {
-            (Some(sps), Some(pps)) => Some(H264ParameterSets { sps, pps }),
-            _ => None,
-        };
+        let parameter_sets = parsed_sps
+            .clone()
+            .or_else(|| committed_sps.clone())
+            .zip(parsed_pps.clone().or_else(|| committed_pps.clone()))
+            .map(|(sps, pps)| H264ParameterSets { sps, pps });
+
+        let effective_sps_present = seen_sps || committed_sps.is_some();
+        let effective_pps_present = seen_pps || committed_pps.is_some();
 
         let bootstrap_reject_reason = if !has_vcl {
             Some(H264BootstrapRejectReason::NoVcl)
-        } else if !seen_sps {
+        } else if !effective_sps_present {
             Some(H264BootstrapRejectReason::MissingSps)
-        } else if !seen_pps {
+        } else if !effective_pps_present {
             Some(H264BootstrapRejectReason::MissingPps)
         } else if !is_idr {
             Some(H264BootstrapRejectReason::NonIdrVcl)
@@ -540,6 +634,62 @@ mod tests {
     }
 
     #[test]
+    fn committed_parameter_sets_allow_idr_bootstrap_without_inband_sets() {
+        let inspector = make_inspector();
+        let bootstrap_payload = hex_literal::hex!(
+            "00 00 00 01 67 64 00 0A AC 72 84 44 26 84 00 00
+             03 00 04 00 00 03 00 CA 3C 48 96 11 80 00 00 00
+             01 68 E8 43 8F 13 21 30 00 00 01 65 88 81 00 05
+             4E 7F 87 DF"
+        );
+        let bootstrap = inspector
+            .inspect_access_unit(&bootstrap_payload)
+            .expect("bootstrap inspection");
+        bootstrap.commit();
+
+        let idr_without_sets = hex_literal::hex!("00 00 00 01 65 88 81 00 05 4E 7F 87 DF");
+        let inspection = inspector
+            .inspect_access_unit(&idr_without_sets)
+            .expect("idr inspection");
+
+        assert!(inspection.bootstrap_ready);
+        assert_eq!(inspection.bootstrap_reject_reason, None);
+        assert!(inspection.parameter_sets.is_some());
+        assert!(!inspection.has_inband_sps);
+        assert!(!inspection.has_inband_pps);
+    }
+
+    #[test]
+    fn partial_inband_parameter_refresh_reuses_committed_counterpart() {
+        let inspector = make_inspector();
+        let bootstrap_payload = hex_literal::hex!(
+            "00 00 00 01 67 64 00 0A AC 72 84 44 26 84 00 00
+             03 00 04 00 00 03 00 CA 3C 48 96 11 80 00 00 00
+             01 68 E8 43 8F 13 21 30 00 00 01 65 88 81 00 05
+             4E 7F 87 DF"
+        );
+        let bootstrap = inspector
+            .inspect_access_unit(&bootstrap_payload)
+            .expect("bootstrap inspection");
+        let committed = bootstrap.parameter_sets.clone().expect("committed sets");
+        bootstrap.commit();
+
+        let refreshed_sps_only = hex_literal::hex!(
+            "00 00 00 01 67 64 00 0A AC 72 84 44 26 84 00 00
+             03 00 04 00 00 03 00 CA 3C 48 96 11 80 00 00 01
+             65 88 81 00 05 4E 7F 87 DF"
+        );
+        let inspection = inspector
+            .inspect_access_unit(&refreshed_sps_only)
+            .expect("refresh inspection");
+        let effective = inspection.parameter_sets.expect("effective parameter sets");
+
+        assert_eq!(effective.pps.raw, committed.pps.raw);
+        assert!(inspection.bootstrap_ready);
+        assert_eq!(inspection.bootstrap_reject_reason, None);
+    }
+
+    #[test]
     fn avcc_payload_excludes_parameter_sets_and_aud() {
         let inspector = make_inspector();
         let payload = hex_literal::hex!(
@@ -559,7 +709,7 @@ mod tests {
     }
 
     #[test]
-    fn semantic_parameter_set_comparison_ignores_id_only_refresh() {
+    fn semantic_parameter_set_comparison_treats_id_refresh_as_configuration_change() {
         let inspector = make_inspector();
         let payload = hex_literal::hex!(
             "00 00 00 01 67 64 00 0A AC 72 84 44 26 84 00 00
@@ -579,9 +729,35 @@ mod tests {
         refreshed.pps.parsed.seq_parameter_set_id =
             h264_reader::nal::sps::SeqParamSetId::from_u32(7).expect("sps id");
 
-        assert!(original.same_decoder_configuration(&refreshed));
+        assert!(!original.same_decoder_configuration(&refreshed));
 
         refreshed.sps.parsed.level_idc = refreshed.sps.parsed.level_idc.saturating_add(1);
         assert!(!original.same_decoder_configuration(&refreshed));
+    }
+
+    #[test]
+    fn seeded_parameter_sets_allow_bootstrap_without_inband_sps_pps() {
+        let inspector = make_inspector();
+        let sps = hex_literal::hex!(
+            "67 64 00 0A AC 72 84 44 26 84 00 00
+             03 00 04 00 00 03 00 CA 3C 48 96 11 80"
+        );
+        let pps = hex_literal::hex!("68 E8 43 8F 13 21 30");
+        let idr_only = hex_literal::hex!("00 00 00 01 65 88 81 00 05 4E 7F 87 DF");
+
+        let seeded = inspector
+            .seed_committed_parameter_sets_if_absent(&sps, &pps)
+            .expect("seed should succeed");
+        assert!(seeded);
+
+        let inspection = inspector
+            .inspect_access_unit(&idr_only)
+            .expect("inspection");
+        assert!(inspection.committed_sps_present());
+        assert!(inspection.committed_pps_present());
+        assert!(inspection.slice_headers_valid);
+        assert!(inspection.is_idr);
+        assert!(inspection.bootstrap_ready);
+        assert_eq!(inspection.bootstrap_reject_reason, None);
     }
 }

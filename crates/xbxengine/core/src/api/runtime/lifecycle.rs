@@ -165,6 +165,9 @@ where
             return;
         }
 
+        // 先把本拍的 present 落到 render/runtime 侧，再拍 policy 需要的 stats，
+        // 避免 owner 读到上一拍的 present 事实。
+        self.present_latest_render_frame();
         let runtime_stats = match self.media_backend.snapshot_runtime_stats() {
             Ok(stats) => stats,
             Err(error) => {
@@ -172,8 +175,6 @@ where
                 return;
             }
         };
-
-        self.present_latest_render_frame();
         self.sync_transport_state(&runtime_stats);
         self.sync_video_packet_stats(&runtime_stats);
         self.sync_video_frame_stats(&runtime_stats);
@@ -304,7 +305,7 @@ where
         let decoder_stall_is_recent_and_aligned = runtime_stats.video_decoder_stalled == Some(true)
             && runtime_stats.video_renderer_stalled != Some(true)
             && runtime_stats
-                .latest_video_present_time_ms
+                .latest_video_host_present_time_ms
                 .zip(runtime_stats.latest_video_decode_ok_time_ms)
                 .is_some_and(|(present_at_ms, decode_ok_at_ms)| {
                     let stall_age_ms = now_ms - present_at_ms.min(decode_ok_at_ms);
@@ -353,15 +354,12 @@ where
                     runtime_stats
                         .latest_video_decode_ok_time_ms
                         .or(self.snapshot.frame_decoded_time_ms)
-                        .or(self.health.last_frame_rendered_at_ms)
                 },
-                latest_frame_rendered_at_ms: if decoder_stall_is_recent_and_aligned {
+                // present freshness 只能来自 host telemetry，禁止回退到 snapshot/health 的 rendered 时钟。
+                latest_frame_presented_at_ms: if decoder_stall_is_recent_and_aligned {
                     None
                 } else {
-                    runtime_stats
-                        .latest_video_present_time_ms
-                        .or(self.snapshot.frame_rendered_time_ms)
-                        .or(self.health.last_frame_rendered_at_ms)
+                    runtime_stats.latest_video_host_present_time_ms
                 },
             },
             decode_render: XbxEngineDecodeRenderSignal {

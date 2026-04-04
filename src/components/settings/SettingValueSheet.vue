@@ -315,7 +315,7 @@ watch(
   margin: 8px 0 0;
   font-size: 12px;
   font-weight: 600;
-  color: #e81123;
+  color: var(--color-danger);
 }
 
 .setting-value-sheet__actions {
@@ -343,7 +343,7 @@ watch(
 
 .setting-value-sheet__action--primary {
   background: var(--brand-primary);
-  color: #ffffff;
+  color: var(--brand-on-primary);
 }
 
 .setting-value-sheet__action[data-focused='true'] {
@@ -355,7 +355,7 @@ watch(
 
 .setting-value-sheet__action--primary[data-focused='true'] {
   background: var(--brand-primary-strong);
-  color: #ffffff;
+  color: var(--brand-on-primary);
 }
 
 .setting-value-sheet-transition-leave-to .setting-value-sheet__panel {

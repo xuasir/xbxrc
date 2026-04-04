@@ -159,7 +159,8 @@ onBeforeUnmount(() => {
   overflow-y: auto;
   overflow-x: hidden;
   overscroll-behavior: contain;
-  padding: 16px 0;
+  /* 左右留白，避免焦点环/box-shadow 被 overflow 裁切 */
+  padding: 16px 10px;
 }
 
 .setting-single-select-popup-sheet__option {

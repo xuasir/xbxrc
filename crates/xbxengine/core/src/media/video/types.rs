@@ -2,6 +2,7 @@ use bytes::Bytes;
 use std::time::Instant;
 
 use super::h264::inspection::H264AccessUnitInspection;
+use crate::media::video::ingress::budget::FrameBudgetContext;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum VideoCodec {
@@ -75,6 +76,7 @@ pub struct AssembledVideoFrame {
     pub is_keyframe: bool,
     pub config_changed: bool,
     pub value: FrameValue,
+    pub(crate) budget: FrameBudgetContext,
 
     pub width: u32,
     pub height: u32,
@@ -97,6 +99,7 @@ impl AssembledVideoFrame {
             is_keyframe: self.is_keyframe,
             config_changed: self.config_changed,
             value: self.value,
+            budget: self.budget,
             width: self.width,
             height: self.height,
             rtp_timestamp: self.rtp_timestamp,
@@ -117,6 +120,7 @@ pub struct EncodedFrame {
     pub is_keyframe: bool,
     pub config_changed: bool,
     pub value: FrameValue,
+    pub(crate) budget: FrameBudgetContext,
 
     pub width: u32,
     pub height: u32,
@@ -132,10 +136,12 @@ pub struct EncodedFrame {
     pub payload: Bytes,
 }
 
+#[derive(Clone, Debug)]
 pub struct DecodedFrame {
     pub pts: Instant,
     pub rtp_timestamp: u32,
     pub is_keyframe: bool,
+    pub(crate) budget: FrameBudgetContext,
     pub frame_recovery_disposition: FrameRecoveryDisposition,
     pub frame_unrecoverable_reason: Option<String>,
 
@@ -164,5 +170,33 @@ impl FrameRecoveryDisposition {
             Self::UnrecoverableLate => Some("late"),
             Self::UnrecoverableReferenceChain => Some("referenceChain"),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{FrameDependency, FrameValue};
+
+    #[test]
+    fn frame_value_keeps_intrinsic_priority_semantics() {
+        let keyframe = FrameValue::new(true, false, 8_192);
+        let refresh_predicted = FrameValue::new(false, true, 1_024);
+        let plain_predicted = FrameValue::new(false, false, 1_024);
+
+        assert_eq!(keyframe.dependency, FrameDependency::Independent);
+        assert_eq!(refresh_predicted.dependency, FrameDependency::Predicted);
+        assert!(keyframe.is_sync_point());
+        assert!(!refresh_predicted.is_sync_point());
+
+        assert!(keyframe.backlog_priority_score() > refresh_predicted.backlog_priority_score());
+        assert!(
+            refresh_predicted.backlog_priority_score() > plain_predicted.backlog_priority_score()
+        );
+        assert_eq!(keyframe.late_budget_ratio_per_mille(), 1_000);
+        assert_eq!(refresh_predicted.late_budget_ratio_per_mille(), 800);
+        assert_eq!(plain_predicted.late_budget_ratio_per_mille(), 500);
+        assert_eq!(keyframe.deadline_budget_ratio_per_mille(), 1_000);
+        assert_eq!(refresh_predicted.deadline_budget_ratio_per_mille(), 700);
+        assert_eq!(plain_predicted.deadline_budget_ratio_per_mille(), 450);
     }
 }

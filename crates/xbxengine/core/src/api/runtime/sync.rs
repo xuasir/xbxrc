@@ -190,7 +190,7 @@ where
         }
 
         self.event_sink
-            .emit(XbxEngineRuntimeEventDto::StatsVideoFrameProcessed {
+            .emit(XbxEngineRuntimeEventDto::StatsVideoFrameRendered {
                 first_frame_packet_arrival_time_ms: self
                     .snapshot
                     .first_frame_packet_arrival_time_ms
@@ -199,7 +199,7 @@ where
                     .snapshot
                     .frame_decoded_time_ms
                     .unwrap_or(frame.rendered_at_ms),
-                frame_rendered_time_ms: frame.rendered_at_ms,
+                renderer_frame_time_ms: frame.rendered_at_ms,
             });
     }
 

@@ -159,7 +159,7 @@ fn read_recent_nack_snapshot(
             return None;
         }
         let present_age_ms = stats
-            .latest_video_present_time_ms
+            .latest_video_host_present_time_ms
             .map(|at_ms| (now_ms - at_ms).max(0.0))
             .unwrap_or(f64::INFINITY);
         let packet_age_ms = stats

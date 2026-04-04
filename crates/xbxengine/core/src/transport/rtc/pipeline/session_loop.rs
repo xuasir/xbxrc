@@ -64,10 +64,9 @@ struct MediaSessionLoop {
     jitter_buffer_min_delay: Duration,
     jitter_buffer_max_delay: Duration,
     severe_deadline_packet_threshold: usize,
-    decode_drain_tick: tokio::time::Interval,
+    decode_demand_epoch: u64,
     frame_event_count: u64,
     transport_event_count: u64,
-    decode_tick_count: u64,
 }
 
 impl MediaSessionLoop {
@@ -79,6 +78,7 @@ impl MediaSessionLoop {
         transport_fact_sink: Arc<Mutex<Vec<TransportFact>>>,
         config: MediaSessionLoopConfig,
     ) -> Self {
+        let decode_demand_epoch = decode_handle.demand_epoch();
         Self {
             frame_rx,
             transport_observation_rx,
@@ -93,10 +93,9 @@ impl MediaSessionLoop {
             jitter_buffer_min_delay: config.jitter_buffer_min_delay,
             jitter_buffer_max_delay: config.jitter_buffer_max_delay,
             severe_deadline_packet_threshold: config.severe_deadline_packet_threshold,
-            decode_drain_tick: tokio::time::interval(Duration::from_millis(4)),
+            decode_demand_epoch,
             frame_event_count: 0,
             transport_event_count: 0,
-            decode_tick_count: 0,
         }
     }
 
@@ -104,15 +103,11 @@ impl MediaSessionLoop {
         crate::xbx_log_info!("[MediaSession] loop started");
         loop {
             tokio::select! {
-                _ = self.decode_drain_tick.tick() => {
-                    self.decode_tick_count = self.decode_tick_count.saturating_add(1);
-                    if self.decode_tick_count == 1 || self.decode_tick_count.is_power_of_two() {
-                        crate::xbx_log_info!(
-                            "[MediaSession] decode drain tick count={}",
-                            self.decode_tick_count
-                        );
-                    }
-                    self.on_decode_drain_tick();
+                changed_epoch = self
+                    .decode_handle
+                    .wait_for_demand_change_since(self.decode_demand_epoch) => {
+                    self.decode_demand_epoch = changed_epoch;
+                    self.drive_decode_pull();
                 }
                 maybe_frame = self.frame_rx.recv() => {
                     let Some(frame) = maybe_frame else {
@@ -147,7 +142,7 @@ impl MediaSessionLoop {
         }
     }
 
-    fn on_decode_drain_tick(&mut self) {
+    fn drive_decode_pull(&mut self) {
         drain_ingress_to_decode(
             &mut self.ingress,
             &self.decode_handle,
@@ -170,6 +165,12 @@ impl MediaSessionLoop {
             is_keyframe: assembled_frame.is_keyframe,
             observed_at_ms: now_ms,
         }));
+        self.runtime_stats
+            .record_keyframe_request_episode_packet_seen(
+                now_ms,
+                Some(assembled_frame.rtp_timestamp),
+                assembled_frame.is_keyframe,
+            );
         if self.frame_event_count == 1 || self.frame_event_count.is_power_of_two() {
             crate::xbx_log_info!(
                 "[MediaSession] frame ts={} size={}x{} keyframe={}",
@@ -251,7 +252,7 @@ impl MediaSessionLoop {
                 );
             }
         }
-        self.on_decode_drain_tick();
+        self.drive_decode_pull();
     }
 
     async fn on_transport_observation(&mut self, observation: TransportObservation) {
@@ -281,6 +282,7 @@ impl MediaSessionLoop {
                 observed_at_ms: hint_now_ms,
             },
         ));
+        self.drive_decode_pull();
     }
 
     // 这里只保留 fact 写入口，避免 session 壳层再感知内部事件细节。

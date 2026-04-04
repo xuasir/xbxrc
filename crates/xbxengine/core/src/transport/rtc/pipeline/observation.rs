@@ -260,6 +260,7 @@ pub(crate) fn record_pipeline_frame_drop(
             .map(FrameRecoveryDisposition::as_str)
             .map(str::to_string),
         frame_unrecoverable_reason: frame_unrecoverable_reason.map(str::to_string),
+        frame_budget: None,
         observed_at_ms,
         width,
         height,

@@ -101,7 +101,7 @@ const visible = computed(() =>
   border: 1px solid var(--ui-border-subtle);
   border-radius: 999px;
   color: var(--ui-page-text);
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.24);
+  box-shadow: var(--ui-shadow-floating);
 }
 
 .stream-badge-row__label {

@@ -1,10 +1,12 @@
 use std::sync::{Arc, Mutex};
 
 use crate::diagnostics::observation_bus::{ObservationBus, ObservationEvent};
+use crate::transport::rtc::recovery::runtime_state::project_recovery_escalation_context;
 use crate::{
     XbxEngineAnchorCandidateFailureReason, XbxEngineAnchorCandidateLedger,
-    XbxEngineAnchorCandidateState, XbxEngineFrameRecoveryObservation, XbxEngineMediaRuntimeStats,
-    XbxEngineRemoteAnswerObservation, XbxEngineRtcBuilderObservation,
+    XbxEngineAnchorCandidateState, XbxEngineFrameRecoveryObservation,
+    XbxEngineH264InspectionObservation, XbxEngineKeyframeRequestEpisodeObservation,
+    XbxEngineMediaRuntimeStats, XbxEngineRemoteAnswerObservation, XbxEngineRtcBuilderObservation,
     XbxEngineTwccExtensionObservation, XbxEngineTwccRemoteStreamObservation,
     XbxEngineVideoEscalationObservation, XbxEngineVideoFrameDropObservation,
     XbxEngineVideoNackObservation, XbxEngineVideoPacketGapObservation,
@@ -135,6 +137,205 @@ impl RuntimeStatsSink {
         observation: XbxEngineVideoRtxReinjectObservation,
     ) {
         self.publish(ObservationEvent::VideoRtxReinject { observation });
+    }
+
+    pub(crate) fn record_keyframe_request_episode_requested(
+        &self,
+        episode_id: u64,
+        request_reason: Option<String>,
+        requested_at_ms: f64,
+        deadline_at_ms: Option<f64>,
+    ) {
+        self.update(|stats| {
+            let should_replace = stats
+                .latest_keyframe_request_episode
+                .as_ref()
+                .map(|episode| episode.episode_id != episode_id)
+                .unwrap_or(true);
+            if should_replace {
+                stats.latest_keyframe_request_episode =
+                    Some(XbxEngineKeyframeRequestEpisodeObservation {
+                        episode_id,
+                        request_reason: request_reason.clone(),
+                        request_kind: None,
+                        status: "requested".to_string(),
+                        requested_at_ms,
+                        sent_at_ms: None,
+                        deadline_at_ms,
+                        first_keyframe_packet_at_ms: None,
+                        first_keyframe_decoded_at_ms: None,
+                        response_rtp_timestamp: None,
+                        response_frame_seq: None,
+                        response_verdict: Some("pending".to_string()),
+                    });
+            } else if let Some(episode) = stats.latest_keyframe_request_episode.as_mut() {
+                if episode.request_reason.is_none() {
+                    episode.request_reason = request_reason.clone();
+                }
+                if episode.requested_at_ms == 0.0 {
+                    episode.requested_at_ms = requested_at_ms;
+                }
+                if episode.deadline_at_ms.is_none() {
+                    episode.deadline_at_ms = deadline_at_ms;
+                }
+                if episode.status != "sent" {
+                    episode.status = "requested".to_string();
+                }
+                if episode.response_verdict.is_none() {
+                    episode.response_verdict = Some("pending".to_string());
+                }
+            }
+            stats.latest_observation_label = Some("keyframeRequestEpisodeRequested".to_string());
+            stats.latest_observation_summary = Some(format!(
+                "episodeId={} reason={} deadlineAtMs={}",
+                episode_id,
+                request_reason.as_deref().unwrap_or("none"),
+                deadline_at_ms
+                    .map(|value| format!("{value:.1}"))
+                    .unwrap_or_else(|| "none".to_string())
+            ));
+        });
+    }
+
+    pub(crate) fn record_keyframe_request_episode_sent(
+        &self,
+        request_kind: &str,
+        sent_at_ms: f64,
+        deadline_at_ms: Option<f64>,
+    ) {
+        self.update(|stats| {
+            if let Some(episode) = stats.latest_keyframe_request_episode.as_mut() {
+                if episode.request_kind.is_none() {
+                    episode.request_kind = Some(request_kind.to_string());
+                }
+                episode.status = "sent".to_string();
+                episode.sent_at_ms = Some(
+                    episode
+                        .sent_at_ms
+                        .map_or(sent_at_ms, |existing| existing.min(sent_at_ms)),
+                );
+                if let Some(deadline_at_ms) = deadline_at_ms {
+                    episode.deadline_at_ms = Some(
+                        episode
+                            .deadline_at_ms
+                            .map_or(deadline_at_ms, |existing| existing.min(deadline_at_ms)),
+                    );
+                }
+                if episode.response_verdict.is_none() {
+                    episode.response_verdict = Some("pending".to_string());
+                }
+                stats.latest_observation_label = Some("keyframeRequestEpisodeSent".to_string());
+                stats.latest_observation_summary = Some(format!(
+                    "episodeId={} requestKind={} sentAtMs={:.1}",
+                    episode.episode_id, request_kind, sent_at_ms
+                ));
+            }
+        });
+    }
+
+    pub(crate) fn record_keyframe_request_episode_timeout(&self, observed_at_ms: f64) {
+        self.update(|stats| {
+            if let Some(episode) = stats.latest_keyframe_request_episode.as_mut() {
+                let Some(deadline_at_ms) = episode.deadline_at_ms else {
+                    return;
+                };
+                if episode.sent_at_ms.is_none()
+                    || observed_at_ms < deadline_at_ms
+                    || !matches!(episode.response_verdict.as_deref(), None | Some("pending"))
+                {
+                    return;
+                }
+                episode.status = "missed".to_string();
+                episode.response_verdict = Some("missed".to_string());
+                stats.latest_observation_label = Some("keyframeRequestEpisodeMissed".to_string());
+                stats.latest_observation_summary = Some(format!(
+                    "episodeId={} deadlineAtMs={:.1} observedAtMs={:.1}",
+                    episode.episode_id, deadline_at_ms, observed_at_ms
+                ));
+            }
+        });
+    }
+
+    pub(crate) fn record_keyframe_request_episode_packet_seen(
+        &self,
+        observed_at_ms: f64,
+        rtp_timestamp: Option<u32>,
+        is_keyframe: bool,
+    ) {
+        if !is_keyframe {
+            return;
+        }
+        self.update(|stats| {
+            if let Some(episode) = stats.latest_keyframe_request_episode.as_mut() {
+                if episode.first_keyframe_packet_at_ms.is_none() {
+                    episode.first_keyframe_packet_at_ms = Some(observed_at_ms);
+                }
+                if episode.response_rtp_timestamp.is_none() {
+                    episode.response_rtp_timestamp = rtp_timestamp;
+                }
+                episode.status = "packet-seen".to_string();
+                episode.response_verdict = Some(match episode.deadline_at_ms {
+                    Some(deadline_at_ms) if observed_at_ms > deadline_at_ms => "late".to_string(),
+                    Some(_) => "on-time".to_string(),
+                    None => "unknown".to_string(),
+                });
+                stats.latest_observation_label =
+                    Some("keyframeRequestEpisodePacketSeen".to_string());
+                stats.latest_observation_summary = Some(format!(
+                    "episodeId={} rtpTimestamp={} observedAtMs={:.1}",
+                    episode.episode_id,
+                    rtp_timestamp
+                        .map(|value| value.to_string())
+                        .unwrap_or_else(|| "none".to_string()),
+                    observed_at_ms
+                ));
+            }
+        });
+    }
+
+    pub(crate) fn record_keyframe_request_episode_decoded(
+        &self,
+        observed_at_ms: f64,
+        rtp_timestamp: u32,
+        frame_seq: u64,
+    ) {
+        self.update(|stats| {
+            if let Some(episode) = stats.latest_keyframe_request_episode.as_mut() {
+                if episode.first_keyframe_packet_at_ms.is_none() {
+                    episode.first_keyframe_packet_at_ms = Some(observed_at_ms);
+                }
+                if episode.first_keyframe_decoded_at_ms.is_none() {
+                    episode.first_keyframe_decoded_at_ms = Some(observed_at_ms);
+                }
+                episode.response_rtp_timestamp =
+                    Some(episode.response_rtp_timestamp.unwrap_or(rtp_timestamp));
+                episode.response_frame_seq = Some(frame_seq);
+                episode.status = "decoded".to_string();
+                if episode.response_verdict.as_deref() == Some("pending") {
+                    episode.response_verdict = Some(match episode.deadline_at_ms {
+                        Some(deadline_at_ms) if observed_at_ms > deadline_at_ms => {
+                            "late".to_string()
+                        }
+                        Some(_) => "on-time".to_string(),
+                        None => "unknown".to_string(),
+                    });
+                }
+                stats.latest_observation_label = Some("keyframeRequestEpisodeDecoded".to_string());
+                stats.latest_observation_summary = Some(format!(
+                    "episodeId={} rtpTimestamp={} frameSeq={} observedAtMs={:.1}",
+                    episode.episode_id, rtp_timestamp, frame_seq, observed_at_ms
+                ));
+            }
+        });
+    }
+
+    pub(crate) fn record_h264_inspection_observation(
+        &self,
+        observation: XbxEngineH264InspectionObservation,
+    ) {
+        self.update(|stats| {
+            stats.latest_h264_inspection_observation = Some(observation);
+        });
     }
 
     pub(crate) fn record_host_video_timing(
@@ -324,7 +525,6 @@ impl RuntimeStatsSink {
                 observed_at_ms,
                 "lifecycleRecovering",
             );
-            Self::apply_clear_transport_clean_anchor(stats);
         });
     }
 
@@ -347,10 +547,15 @@ impl RuntimeStatsSink {
         }
         let action = action.into();
         self.update(|stats| {
+            let context = project_recovery_escalation_context(stats, &reason, &action);
             stats.latest_video_escalation_observation = Some(XbxEngineVideoEscalationObservation {
                 observation_id,
                 reason,
                 action,
+                recovery_stage: context.stage,
+                recovery_chain_value: context.chain_value,
+                recovery_failure_cost: context.failure_cost,
+                recovery_window_source: context.window_source,
                 observed_at_ms,
             });
             stats.transport_recovery_epoch_at_last_escalation = stats.transport_recovery_epoch;
@@ -422,13 +627,11 @@ mod tests {
     }
 
     #[test]
-    fn lifecycle_recovering_completes_episode_and_clears_anchor() {
+    fn lifecycle_recovering_completes_active_episode() {
         let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
         let sink = RuntimeStatsSink::new(runtime_stats.clone());
 
         sink.begin_transport_recovery_episode(10.0);
-        sink.record_transport_clean_anchor(20.0, "chain-clean-keyframe-submitted");
-        sink.begin_transport_recovery_episode(30.0);
         sink.complete_transport_recovery_for_lifecycle_recovering(40.0);
 
         let stats = runtime_stats.lock().expect("runtime stats lock");
@@ -441,5 +644,79 @@ mod tests {
         assert_eq!(stats.video_anchor_clean_epoch, None);
         assert_eq!(stats.video_anchor_clean_observed_at_ms, None);
         assert_eq!(stats.video_anchor_clean_source_event, None);
+    }
+
+    #[test]
+    fn keyframe_request_episode_packet_seen_and_decoded_resolve_verdict() {
+        let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
+        let sink = RuntimeStatsSink::new(runtime_stats.clone());
+
+        sink.record_keyframe_request_episode_requested(
+            77,
+            Some("transportAwaitRecoveryKeyframe".to_string()),
+            100.0,
+            None,
+        );
+        sink.record_keyframe_request_episode_sent("pli", 120.0, Some(200.0));
+        sink.record_keyframe_request_episode_packet_seen(150.0, Some(123456789), true);
+        sink.record_keyframe_request_episode_decoded(160.0, 123456789, 42);
+
+        let stats = runtime_stats.lock().expect("runtime stats lock");
+        let episode = stats
+            .latest_keyframe_request_episode
+            .as_ref()
+            .expect("episode should exist");
+        assert_eq!(episode.status, "decoded");
+        assert_eq!(episode.request_kind.as_deref(), Some("pli"));
+        assert_eq!(episode.sent_at_ms, Some(120.0));
+        assert_eq!(episode.deadline_at_ms, Some(200.0));
+        assert_eq!(episode.first_keyframe_packet_at_ms, Some(150.0));
+        assert_eq!(episode.first_keyframe_decoded_at_ms, Some(160.0));
+        assert_eq!(episode.response_rtp_timestamp, Some(123456789));
+        assert_eq!(episode.response_frame_seq, Some(42));
+        assert_eq!(episode.response_verdict.as_deref(), Some("on-time"));
+        assert_eq!(
+            stats.latest_observation_label.as_deref(),
+            Some("keyframeRequestEpisodeDecoded")
+        );
+    }
+
+    #[test]
+    fn keyframe_request_episode_timeout_marks_missed_when_no_response_arrives() {
+        let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
+        let sink = RuntimeStatsSink::new(runtime_stats.clone());
+
+        sink.record_keyframe_request_episode_requested(
+            88,
+            Some("transportAwaitRecoveryKeyframe".to_string()),
+            100.0,
+            None,
+        );
+        sink.record_keyframe_request_episode_sent("control", 120.0, Some(200.0));
+        sink.record_keyframe_request_episode_timeout(199.0);
+
+        {
+            let stats = runtime_stats.lock().expect("runtime stats lock");
+            let episode = stats
+                .latest_keyframe_request_episode
+                .as_ref()
+                .expect("episode should exist");
+            assert_eq!(episode.status, "sent");
+            assert_eq!(episode.response_verdict.as_deref(), Some("pending"));
+        }
+
+        sink.record_keyframe_request_episode_timeout(200.0);
+
+        let stats = runtime_stats.lock().expect("runtime stats lock");
+        let episode = stats
+            .latest_keyframe_request_episode
+            .as_ref()
+            .expect("episode should exist");
+        assert_eq!(episode.status, "missed");
+        assert_eq!(episode.response_verdict.as_deref(), Some("missed"));
+        assert_eq!(
+            stats.latest_observation_label.as_deref(),
+            Some("keyframeRequestEpisodeMissed")
+        );
     }
 }

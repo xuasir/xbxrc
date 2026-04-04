@@ -1,5 +1,8 @@
 use std::collections::BTreeMap;
 
+use crate::media::video::ingress::budget::FrameBudgetContext;
+use crate::media::video::types::FrameValue;
+
 use super::video_source::timeline::GapState;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -43,6 +46,7 @@ pub struct NackBatch {
     pub frame_playout_deadline_at_ms: Option<f64>,
     pub nack_disposition: PacketRecoveryDisposition,
     pub frame_unrecoverable_reason: Option<&'static str>,
+    pub budget_context: FrameBudgetContext,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -60,6 +64,7 @@ pub struct ResolvedNack {
     pub frame_playout_deadline_at_ms: Option<f64>,
     pub nack_disposition: PacketRecoveryDisposition,
     pub frame_unrecoverable_reason: Option<&'static str>,
+    pub budget_context: FrameBudgetContext,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -75,6 +80,7 @@ pub struct ExpiredNackBatch {
     pub frame_playout_deadline_at_ms: Option<f64>,
     pub nack_disposition: PacketRecoveryDisposition,
     pub frame_unrecoverable_reason: Option<&'static str>,
+    pub budget_context: FrameBudgetContext,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -89,6 +95,7 @@ pub struct SkippedNackBatch {
     pub frame_playout_deadline_at_ms: Option<f64>,
     pub nack_disposition: PacketRecoveryDisposition,
     pub frame_unrecoverable_reason: Option<&'static str>,
+    pub budget_context: FrameBudgetContext,
 }
 
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -115,6 +122,7 @@ struct PendingNack {
     estimated_recovery_arrival_ms: Option<f64>,
     frame_playout_deadline_at_ms: Option<f64>,
     frame_unrecoverable_reason: Option<&'static str>,
+    budget_context: FrameBudgetContext,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -135,6 +143,7 @@ pub struct NackObservePolicy {
     pub frame_is_keyframe: Option<bool>,
     pub frame_importance: &'static str,
     pub priority: u8,
+    pub budget_context: FrameBudgetContext,
     pub estimated_recovery_arrival_ms: Option<f64>,
     pub frame_playout_deadline_at_ms: Option<f64>,
     pub nack_disposition: PacketRecoveryDisposition,
@@ -161,6 +170,7 @@ type PendingMeta = (
     Option<f64>,
     Option<f64>,
     Option<&'static str>,
+    FrameBudgetContext,
 );
 
 impl NackScheduler {
@@ -197,11 +207,7 @@ impl NackScheduler {
             .deadline_at_ms
             .unwrap_or(now_ms + self.config.frame_deadline_ms as f64);
         let estimated_recovery_arrival_ms = policy.estimated_recovery_arrival_ms;
-        let max_retry_count = if estimated_recovery_arrival_ms.is_some() {
-            frame_importance_retry_budget(policy, self.config.max_retry_count)
-        } else {
-            self.config.max_retry_count
-        };
+        let max_retry_count = frame_importance_retry_budget(policy, self.config.max_retry_count);
 
         if now_ms >= deadline_at_ms {
             let skipped = SkippedNackBatch {
@@ -221,6 +227,7 @@ impl NackScheduler {
                     .or(Some(deadline_at_ms)),
                 nack_disposition: PacketRecoveryDisposition::SkippedTooLate,
                 frame_unrecoverable_reason: Some("deadlineExceededBeforeAdmission"),
+                budget_context: policy.budget_context,
             };
             return (None, Some(skipped));
         }
@@ -247,6 +254,7 @@ impl NackScheduler {
                     .or(Some(deadline_at_ms)),
                 nack_disposition: PacketRecoveryDisposition::SkippedTooLate,
                 frame_unrecoverable_reason: Some("estimatedArrivalPastDeadline"),
+                budget_context: policy.budget_context,
             };
             return (None, Some(skipped));
         }
@@ -271,6 +279,7 @@ impl NackScheduler {
                 frame_playout_deadline_at_ms: policy.frame_playout_deadline_at_ms,
                 nack_disposition: policy.nack_disposition,
                 frame_unrecoverable_reason: policy.frame_unrecoverable_reason,
+                budget_context: policy.budget_context,
             };
             return (None, Some(skipped));
         }
@@ -334,6 +343,7 @@ impl NackScheduler {
                 frame_playout_deadline_at_ms: policy.frame_playout_deadline_at_ms,
                 nack_disposition: policy.nack_disposition,
                 frame_unrecoverable_reason: policy.frame_unrecoverable_reason,
+                budget_context: policy.budget_context,
             };
             return (None, Some(skipped));
         }
@@ -369,6 +379,7 @@ impl NackScheduler {
                         .frame_playout_deadline_at_ms
                         .or(Some(deadline_at_ms)),
                     frame_unrecoverable_reason: policy.frame_unrecoverable_reason,
+                    budget_context: policy.budget_context,
                 },
             );
             inserted.push(*sequence);
@@ -391,6 +402,7 @@ impl NackScheduler {
                     .or(Some(deadline_at_ms)),
                 nack_disposition: PacketRecoveryDisposition::Attempted,
                 frame_unrecoverable_reason: policy.frame_unrecoverable_reason,
+                budget_context: policy.budget_context,
             })
         };
         (batch, None)
@@ -416,6 +428,7 @@ impl NackScheduler {
                     pending.estimated_recovery_arrival_ms,
                     pending.frame_playout_deadline_at_ms,
                     pending.frame_unrecoverable_reason,
+                    pending.budget_context,
                 ));
                 return false;
             }
@@ -430,6 +443,7 @@ impl NackScheduler {
                     pending.estimated_recovery_arrival_ms,
                     pending.frame_playout_deadline_at_ms,
                     pending.frame_unrecoverable_reason,
+                    pending.budget_context,
                 ));
                 return false;
             }
@@ -456,6 +470,7 @@ impl NackScheduler {
                     pending.estimated_recovery_arrival_ms,
                     pending.frame_playout_deadline_at_ms,
                     pending.frame_unrecoverable_reason,
+                    pending.budget_context,
                 ));
             }
         }
@@ -481,6 +496,7 @@ impl NackScheduler {
                 pending.estimated_recovery_arrival_ms,
                 pending.frame_playout_deadline_at_ms,
                 pending.frame_unrecoverable_reason,
+                pending.budget_context,
             ));
         }
         retry_candidates.sort_by(|left, right| {
@@ -506,6 +522,7 @@ impl NackScheduler {
             estimated_recovery_arrival_ms,
             frame_playout_deadline_at_ms,
             frame_unrecoverable_reason,
+            budget_context,
         ) in retry_candidates.into_iter().take(burst_count)
         {
             if let Some(pending) = self.pending.get_mut(&sequence) {
@@ -523,6 +540,7 @@ impl NackScheduler {
                     estimated_recovery_arrival_ms,
                     frame_playout_deadline_at_ms,
                     frame_unrecoverable_reason,
+                    budget_context,
                 ));
             }
         }
@@ -541,6 +559,7 @@ impl NackScheduler {
                         estimated_recovery_arrival_ms,
                         frame_playout_deadline_at_ms,
                         frame_unrecoverable_reason,
+                        budget_context,
                     ) = retry_meta.unwrap_or((
                         "rtpWindow",
                         None,
@@ -550,6 +569,7 @@ impl NackScheduler {
                         None,
                         None,
                         None,
+                        FrameBudgetContext::steady_for_value(frame_value_for_importance("unknown")),
                     ));
                     NackBatch {
                         sequences: retry_sequences,
@@ -564,6 +584,7 @@ impl NackScheduler {
                             .or(deadline_at_ms),
                         nack_disposition: PacketRecoveryDisposition::Attempted,
                         frame_unrecoverable_reason,
+                        budget_context,
                     }
                 })
             },
@@ -588,6 +609,9 @@ impl NackScheduler {
                     frame_unrecoverable_reason: expired_deadline_meta
                         .and_then(|meta| meta.7)
                         .or(Some("deadlineExceeded")),
+                    budget_context: expired_deadline_meta.map(|meta| meta.8).unwrap_or_else(|| {
+                        FrameBudgetContext::steady_for_value(frame_value_for_importance("unknown"))
+                    }),
                 },
                 ExpiredNackBatch {
                     sequences: expired_max_age_sequences,
@@ -607,6 +631,9 @@ impl NackScheduler {
                     frame_unrecoverable_reason: expired_max_age_meta
                         .and_then(|meta| meta.7)
                         .or(Some("maxAgeExceeded")),
+                    budget_context: expired_max_age_meta.map(|meta| meta.8).unwrap_or_else(|| {
+                        FrameBudgetContext::steady_for_value(frame_value_for_importance("unknown"))
+                    }),
                 },
                 ExpiredNackBatch {
                     sequences: expired_retry_budget_sequences,
@@ -629,6 +656,13 @@ impl NackScheduler {
                     frame_unrecoverable_reason: expired_retry_budget_meta
                         .and_then(|meta| meta.7)
                         .or(Some("retryBudgetExhausted")),
+                    budget_context: expired_retry_budget_meta.map(|meta| meta.8).unwrap_or_else(
+                        || {
+                            FrameBudgetContext::steady_for_value(frame_value_for_importance(
+                                "unknown",
+                            ))
+                        },
+                    ),
                 },
             ]
             .into_iter()
@@ -664,6 +698,7 @@ impl NackScheduler {
                 } else {
                     pending.frame_unrecoverable_reason
                 },
+                budget_context: pending.budget_context,
             }
         })
     }
@@ -694,6 +729,7 @@ impl NackScheduler {
                     pending.estimated_recovery_arrival_ms,
                     pending.frame_playout_deadline_at_ms,
                     pending.frame_unrecoverable_reason,
+                    pending.budget_context,
                 ));
             }
         }
@@ -714,24 +750,36 @@ impl NackScheduler {
                 .or(flushed_meta.and_then(|meta| meta.4)),
             nack_disposition: PacketRecoveryDisposition::SkippedChainBroken,
             frame_unrecoverable_reason: Some(reason),
+            budget_context: flushed_meta.map(|meta| meta.8).unwrap_or_else(|| {
+                FrameBudgetContext::steady_for_value(frame_value_for_importance("unknown"))
+            }),
         })
     }
 }
 
 fn frame_importance_retry_budget(policy: NackObservePolicy, default_max_retry_count: u8) -> u8 {
-    match policy.frame_importance {
-        "keyframe" => default_max_retry_count.min(1),
-        // supply 层（reference）在高优先级下允许一次重试，低优先级保持 0。
-        "reference" if policy.priority >= 2 => default_max_retry_count.min(1),
-        "reference" => 0,
-        // delta 永远不做 retry，避免在高 RTT 下拖住无价值修复。
-        _ => 0,
+    let value = frame_value_for_importance(policy.frame_importance);
+    let effective_context = if policy.budget_context.frame_importance() == policy.frame_importance {
+        policy.budget_context
+    } else {
+        FrameBudgetContext::steady_for_value(value)
+    };
+    effective_context.retry_budget(value, default_max_retry_count)
+}
+
+fn frame_value_for_importance(frame_importance: &'static str) -> FrameValue {
+    match frame_importance {
+        "keyframe" => FrameValue::new(true, false, 128 * 1024),
+        "reference" => FrameValue::new(false, true, 48 * 1024),
+        _ => FrameValue::new(false, false, 12 * 1024),
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::{NackObservePolicy, NackScheduler, NackSchedulerConfig, PacketRecoveryDisposition};
+    use crate::media::video::ingress::budget::FrameBudgetContext;
+    use crate::media::video::types::FrameValue;
 
     fn base_policy() -> NackObservePolicy {
         NackObservePolicy {
@@ -745,6 +793,11 @@ mod tests {
             frame_is_keyframe: Some(false),
             frame_importance: "delta",
             priority: 1,
+            budget_context: FrameBudgetContext::steady_for_value(FrameValue::new(
+                false,
+                false,
+                12 * 1024,
+            )),
             estimated_recovery_arrival_ms: Some(1_020.0),
             frame_playout_deadline_at_ms: Some(1_050.0),
             nack_disposition: PacketRecoveryDisposition::Attempted,
@@ -930,15 +983,20 @@ mod tests {
         policy.frame_is_keyframe = Some(true);
         policy.frame_importance = "keyframe";
         policy.priority = 3;
+        let expected_budget_context = policy.budget_context;
 
         let (initial_batch, skipped) =
             scheduler.observe_missing_sequences_with_policy(&[20], 1_000.0, policy);
         assert!(skipped.is_none());
-        assert_eq!(initial_batch.expect("initial").sequences, vec![20]);
+        let initial_batch = initial_batch.expect("initial");
+        assert_eq!(initial_batch.sequences, vec![20]);
+        assert_eq!(initial_batch.budget_context, expected_budget_context);
         assert_eq!(scheduler.pending_count(), 1);
 
         let first_retry = scheduler.poll(1_010.0);
-        assert_eq!(first_retry.retry_batch.expect("retry").sequences, vec![20]);
+        let retry_batch = first_retry.retry_batch.expect("retry");
+        assert_eq!(retry_batch.sequences, vec![20]);
+        assert_eq!(retry_batch.budget_context, expected_budget_context);
         assert!(first_retry.expired_batches.is_empty());
         assert_eq!(scheduler.pending_count(), 1);
 
@@ -948,6 +1006,10 @@ mod tests {
         assert_eq!(exhausted.expired_batches.len(), 1);
         assert_eq!(exhausted.expired_batches[0].reason, "retryBudget");
         assert_eq!(exhausted.expired_batches[0].sequences, vec![20]);
+        assert_eq!(
+            exhausted.expired_batches[0].budget_context,
+            expected_budget_context
+        );
     }
 
     #[test]
@@ -993,6 +1055,7 @@ mod tests {
         let mut delta_policy = base_policy();
         delta_policy.frame_is_keyframe = Some(false);
         delta_policy.frame_importance = "delta";
+        let expected_delta_budget_context = delta_policy.budget_context;
         let _ = scheduler.observe_missing_sequences_with_policy(&[30, 31], 1_000.0, delta_policy);
 
         let mut keyframe_policy = base_policy();
@@ -1015,7 +1078,32 @@ mod tests {
             flushed.frame_unrecoverable_reason,
             Some("flushedAfterChainBrokenAdmission")
         );
+        assert_eq!(flushed.budget_context, expected_delta_budget_context);
         assert_eq!(scheduler.pending_count(), 1);
+    }
+
+    #[test]
+    fn resolved_nack_preserves_budget_context() {
+        let mut scheduler = NackScheduler::new(NackSchedulerConfig {
+            max_age_ms: 200,
+            frame_deadline_ms: 500,
+            burst_count: 1,
+            retry_interval_ms: 10,
+            max_retry_count: 3,
+        });
+        let policy = base_policy();
+        let expected_budget_context = policy.budget_context;
+
+        let (initial_batch, skipped) =
+            scheduler.observe_missing_sequences_with_policy(&[88], 1_000.0, policy);
+        assert!(skipped.is_none());
+        assert_eq!(initial_batch.expect("initial").sequences, vec![88]);
+
+        let resolved = scheduler
+            .resolve_sequence(88, 1_005.0)
+            .expect("resolved sequence");
+        assert_eq!(resolved.sequence, 88);
+        assert_eq!(resolved.budget_context, expected_budget_context);
     }
 
     #[test]

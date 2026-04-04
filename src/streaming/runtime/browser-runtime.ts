@@ -170,9 +170,9 @@ export function createBrowserRuntime(options: {
     }
   }
 
-  function markFramePresented(): void {
+  function markFrameReady(): void {
     lastMediaActivityAt = Date.now()
-    emit({ type: 'framePresented' })
+    emit({ type: 'frameReady' })
   }
 
   function applyCurrentDisplayState(): void {
@@ -190,7 +190,7 @@ export function createBrowserRuntime(options: {
     clearFrameTracking()
     frameTrackingCleanup = bindBrowserVideoFrameTracking({
       playerElementId,
-      onFrame: markFramePresented,
+      onFrame: markFrameReady,
     })
   }
 
@@ -225,7 +225,7 @@ export function createBrowserRuntime(options: {
         applyCurrentDisplayState()
       }),
       eventBus.on('stats.videoFrameProcessed', () => {
-        markFramePresented()
+        markFrameReady()
       }),
       eventBus.on('error', ({ error }) => {
         emit({ type: 'error', error })

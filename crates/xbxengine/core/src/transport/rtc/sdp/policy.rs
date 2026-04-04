@@ -208,7 +208,7 @@ fn reorder_h264_payload_types_by_profile(offer_sdp: &str, preferred_profile: &st
             continue;
         }
 
-        // 先按真实 H.264 family 等级排序，preferred 只作为同等级内的微调偏好。
+        // 先满足显式 preset family，再在剩余候选里按 family 等级降序排序。
         let mut h264_payload_entries = lines[section_start + 1..section_end]
             .iter()
             .enumerate()
@@ -232,9 +232,9 @@ fn reorder_h264_payload_types_by_profile(offer_sdp: &str, preferred_profile: &st
         }
         h264_payload_entries.sort_by(|left, right| {
             right
-                .1
-                .cmp(&left.1)
-                .then_with(|| right.2.cmp(&left.2))
+                .2
+                .cmp(&left.2)
+                .then_with(|| right.1.cmp(&left.1))
                 .then_with(|| left.3.cmp(&right.3))
         });
         let preferred_payload_types = h264_payload_entries
@@ -320,13 +320,13 @@ fn normalize_h264_profile_token(profile: &str) -> String {
 
 fn h264_profile_rank(profile_level_id: &str) -> u8 {
     let normalized = normalize_h264_profile_token(profile_level_id);
-    if normalized.starts_with("4d") {
+    if normalized.starts_with("64") {
         3
-    } else if normalized.starts_with("42e") {
+    } else if normalized.starts_with("4d") {
         2
-    } else if normalized.starts_with("420") {
+    } else if normalized.starts_with("42e") {
         1
-    } else if normalized.starts_with("64") {
+    } else if normalized.starts_with("420") {
         0
     } else {
         0
@@ -460,7 +460,7 @@ mod tests {
     }
 
     #[test]
-    fn apply_offer_policy_contract_orders_h264_families_from_xbox_compatible_preference() {
+    fn apply_offer_policy_contract_places_high_family_first_when_high_is_preferred() {
         let patched = apply_offer_policy_contract(
             &sample_offer_sdp(),
             &XbxEngineNegotiationRuntimeConfig {
@@ -470,17 +470,31 @@ mod tests {
                 audio_bitrate_kbps: 192,
                 force_mono_audio: false,
                 prefer_ipv6: false,
-                offer_profile: "4d".to_string(),
+                offer_profile: "64".to_string(),
             },
             Some(&XbxEngineTargetTypeDto::Cloud),
         );
 
-        assert!(patched.contains("m=video 9 UDP/TLS/RTP/SAVPF 106 104 102 108"));
+        assert!(patched.contains("m=video 9 UDP/TLS/RTP/SAVPF 108 106 104 102"));
         assert!(patched.contains("x-google-min-bitrate=12000"));
         assert!(patched.contains("x-google-start-bitrate=25000"));
         assert!(patched.contains("x-google-max-bitrate=60000"));
         assert!(patched.contains("max-fs=14400"));
         assert!(patched.contains("max-fr=60"));
+    }
+
+    #[test]
+    fn apply_offer_policy_contract_keeps_main_ahead_of_baseline_when_main_is_preferred() {
+        let patched = apply_offer_policy_contract(
+            &sample_offer_sdp(),
+            &XbxEngineNegotiationRuntimeConfig {
+                offer_profile: "4d".to_string(),
+                ..Default::default()
+            },
+            Some(&XbxEngineTargetTypeDto::Home),
+        );
+
+        assert!(patched.contains("m=video 9 UDP/TLS/RTP/SAVPF 106 108 104 102"));
     }
 
     #[test]

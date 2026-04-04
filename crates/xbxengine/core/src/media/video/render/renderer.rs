@@ -553,4 +553,44 @@ mod tests {
         assert_eq!(recovered.detail, "latestSlotRecovered");
         assert_eq!(recovered.frame_seq, Some(3));
     }
+
+    #[test]
+    fn render_candidate_state_stays_latest_overwrite_until_latest_slot_is_acknowledged() {
+        let mut state = XbxRenderState::default();
+        let mk_frame = |frame_seq: u64, rendered_at_ms: f64| XbxRenderFrame {
+            width: 2,
+            height: 2,
+            frame_seq,
+            rendered_at_ms,
+            rtp_timestamp: Some(frame_seq as u32),
+            is_keyframe: frame_seq == 1,
+            frame_recovery_disposition: Some("repairing".to_string()),
+            frame_unrecoverable_reason: None,
+            pixel_data: XbxEngineRenderPixelData::Rgba {
+                bytes: Arc::<[u8]>::from([0u8; 16]),
+            },
+        };
+
+        state
+            .present_frame(mk_frame(1, 1_000.0))
+            .expect("first present should work");
+        state
+            .present_frame(mk_frame(2, 1_016.0))
+            .expect("second present should overwrite");
+        state
+            .present_frame(mk_frame(3, 1_032.0))
+            .expect("third present should continue overwriting");
+
+        let pressured = state
+            .latest_render_candidate_decision()
+            .expect("overwrite decision should exist");
+        assert_eq!(
+            pressured.state,
+            super::XbxRenderCandidateState::LatestOverwrite
+        );
+        assert_eq!(pressured.action, "replace");
+        assert_eq!(pressured.detail, "latestSlotOverwrite");
+        assert_eq!(pressured.frame_seq, Some(2));
+        assert_eq!(state.peek_latest_frame().map(|frame| frame.frame_seq), Some(3));
+    }
 }

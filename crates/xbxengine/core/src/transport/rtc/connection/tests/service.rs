@@ -16,8 +16,11 @@ use rtc::peer_connection::transport::{
 use rtc::peer_connection::RTCPeerConnection;
 use rtc::peer_connection::RTCPeerConnectionBuilder;
 use rtc::rtcp::payload_feedbacks::receiver_estimated_maximum_bitrate::ReceiverEstimatedMaximumBitrate;
+use rtc::rtcp::transport_feedbacks::transport_layer_nack::{
+    nack_pairs_from_sequence_numbers, TransportLayerNack,
+};
 use rtc::sansio::Protocol;
-use rtc::shared::marshal::Marshal;
+use rtc::shared::marshal::{Marshal, MarshalSize};
 use rtc::shared::{TaggedBytesMut, TransportContext, TransportProtocol};
 use rtc_rtp::extension::transport_cc_extension::TransportCcExtension;
 
@@ -1134,6 +1137,7 @@ fn request_target_remb_kbps_sends_goog_remb_rtcp() {
                     .as_any()
                     .downcast_ref::<ReceiverEstimatedMaximumBitrate>()
                 {
+                    assert_ne!(remb.sender_ssrc, 0);
                     assert_eq!(remb.bitrate, 25_000_000.0);
                     assert!(remb.ssrcs.len() <= 1);
                     saw_remb = true;
@@ -1162,6 +1166,42 @@ fn request_target_remb_kbps_sends_goog_remb_rtcp() {
 }
 
 #[test]
+fn send_video_rtcp_payload_routes_nack_with_target_ssrc() {
+    let mut service = RtcConnectionService::default();
+    let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
+    let session = XbxEngineSessionDto {
+        session_id: "test-session".to_string(),
+        target_type: XbxEngineTargetTypeDto::Cloud,
+        turn_server: None,
+    };
+
+    service.rebuild(&session, &runtime_stats).unwrap();
+    let (mut answer_pc, mut answer_io, _, _, _, _, _, _) =
+        connect_service_to_answer_peer(&mut service, &runtime_stats);
+    prime_video_recovery_feedback_target(&mut service, &runtime_stats);
+
+    let (_, media_ssrc) = service
+        .controlled_twcc_feedback
+        .preferred_video_feedback_target()
+        .expect("video feedback target");
+    let media_ssrc = media_ssrc.expect("video media ssrc");
+    let nack = TransportLayerNack {
+        sender_ssrc: 0x1122_3344,
+        media_ssrc,
+        nacks: nack_pairs_from_sequence_numbers(&[120, 121, 125]),
+    };
+    let mut buf = vec![0u8; nack.marshal_size()];
+    nack.marshal_to(&mut buf).unwrap();
+
+    service.send_video_rtcp_payload(&buf).unwrap();
+
+    assert!(service
+        .controlled_twcc_feedback
+        .preferred_video_feedback_target()
+        .is_some());
+}
+
+#[test]
 fn target_remb_same_target_is_not_refreshed_periodically() {
     let mut service = RtcConnectionService::default();
     let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
@@ -1172,7 +1212,7 @@ fn target_remb_same_target_is_not_refreshed_periodically() {
     };
 
     service.rebuild(&session, &runtime_stats).unwrap();
-    let (_answer_pc, _answer_io, _, _, _, _, _, _) =
+    let (mut answer_pc, mut answer_io, _, _, _, _, _, _) =
         connect_service_to_answer_peer(&mut service, &runtime_stats);
     let receiver_id = service
         .peer_connection
@@ -1308,8 +1348,9 @@ fn video_recovery_prefers_pli_on_first_request() {
         turn_server: None,
     };
     service.rebuild(&session, &runtime_stats).unwrap();
-    let _ = connect_service_to_answer_peer(&mut service, &runtime_stats);
-    prime_video_feedback_target(&mut service, &runtime_stats);
+    let (mut answer_pc, mut answer_io, _, _, _, _, _, _) =
+        connect_service_to_answer_peer(&mut service, &runtime_stats);
+    prime_video_recovery_feedback_target(&mut service, &runtime_stats);
     if let Ok(mut stats) = runtime_stats.lock() {
         if let Some(remote_answer) = stats.latest_remote_answer_observation.as_mut() {
             remote_answer.accepted_video_rtcp_feedback =
@@ -1338,8 +1379,9 @@ fn video_recovery_escalates_to_fir_within_same_epoch() {
         turn_server: None,
     };
     service.rebuild(&session, &runtime_stats).unwrap();
-    let _ = connect_service_to_answer_peer(&mut service, &runtime_stats);
-    prime_video_feedback_target(&mut service, &runtime_stats);
+    let (mut answer_pc, mut answer_io, _, _, _, _, _, _) =
+        connect_service_to_answer_peer(&mut service, &runtime_stats);
+    prime_video_recovery_feedback_target(&mut service, &runtime_stats);
     if let Ok(mut stats) = runtime_stats.lock() {
         if let Some(remote_answer) = stats.latest_remote_answer_observation.as_mut() {
             remote_answer.accepted_video_rtcp_feedback =
@@ -1350,14 +1392,16 @@ fn video_recovery_escalates_to_fir_within_same_epoch() {
     assert!(service.request_video_keyframe(&runtime_stats).is_ok());
     thread::sleep(Duration::from_millis(220));
     assert!(service.request_video_keyframe(&runtime_stats).is_ok());
-    let second_label = runtime_stats
-        .lock()
-        .ok()
-        .and_then(|stats| stats.latest_observation_label.clone());
-    assert_eq!(second_label.as_deref(), Some("rtcVideoFirRequested"));
-
-    let stats = runtime_stats.lock().expect("runtime stats lock");
+    let stats = runtime_stats.lock().expect("runtime stats lock").clone();
+    assert_eq!(
+        stats.latest_observation_label.as_deref(),
+        Some("rtcVideoFirRequested")
+    );
     assert_eq!(stats.video_pli_request_count_total, 2);
+    assert_eq!(
+        service.video_recovery_transport_state.stage,
+        super::VideoRecoveryTransportStage::FullIntraRequest
+    );
 }
 
 #[test]
@@ -1495,7 +1539,7 @@ fn target_remb_target_change_triggers_new_request() {
     };
 
     service.rebuild(&session, &runtime_stats).unwrap();
-    let (_answer_pc, _answer_io, _, _, _, _, _, _) =
+    let (mut answer_pc, mut answer_io, _, _, _, _, _, _) =
         connect_service_to_answer_peer(&mut service, &runtime_stats);
     let receiver_id = service
         .peer_connection
@@ -2291,12 +2335,12 @@ fn connect_service_to_answer_peer(
 fn prime_video_recovery_feedback_target(
     service: &mut RtcConnectionService,
     runtime_stats: &Arc<Mutex<XbxEngineMediaRuntimeStats>>,
-    answer_pc: &mut RTCPeerConnection,
 ) {
-    let receiver_id = answer_pc
-        .get_receivers()
-        .next()
-        .expect("answer receiver id");
+    let receiver_id = service
+        .peer_connection
+        .as_mut()
+        .and_then(|pc| pc.get_receivers().next())
+        .expect("service receiver id");
     let track_id: MediaStreamTrackId = "video".to_string();
     service
         .controlled_twcc_feedback
@@ -2359,7 +2403,7 @@ fn request_video_keyframe_prefers_pli_when_video_feedback_is_bound() {
     service.rebuild(&session, &runtime_stats).unwrap();
     let (mut answer_pc, mut answer_io, _, _, _, _, _, _) =
         connect_service_to_answer_peer(&mut service, &runtime_stats);
-    prime_video_recovery_feedback_target(&mut service, &runtime_stats, &mut answer_pc);
+    prime_video_recovery_feedback_target(&mut service, &runtime_stats);
 
     service.request_video_keyframe(&runtime_stats).unwrap();
     answer_io.pump(&mut answer_pc).unwrap();
@@ -2387,9 +2431,9 @@ fn request_video_keyframe_upgrades_from_pli_to_fir_then_control() {
     };
 
     service.rebuild(&session, &runtime_stats).unwrap();
-    let (mut answer_pc, mut answer_io, _, _, _, _, _, _) =
+    let (_answer_pc, _answer_io, _, _, _, _, _, _) =
         connect_service_to_answer_peer(&mut service, &runtime_stats);
-    prime_video_recovery_feedback_target(&mut service, &runtime_stats, &mut answer_pc);
+    prime_video_recovery_feedback_target(&mut service, &runtime_stats);
 
     service.request_video_keyframe(&runtime_stats).unwrap();
 
@@ -2414,7 +2458,6 @@ fn request_video_keyframe_upgrades_from_pli_to_fir_then_control() {
         super::VideoRecoveryTransportStage::FullIntraRequest;
     service.video_recovery_transport_state.last_sent_at_ms = Some(now_ms - 420.0);
     service.request_video_keyframe(&runtime_stats).unwrap();
-    answer_io.pump(&mut answer_pc).unwrap();
 
     let stats = runtime_stats.lock().unwrap().clone();
     assert_eq!(
@@ -2441,7 +2484,7 @@ fn request_video_keyframe_clears_stage_after_clean_anchor() {
     service.rebuild(&session, &runtime_stats).unwrap();
     let (mut answer_pc, mut answer_io, _, _, _, _, _, _) =
         connect_service_to_answer_peer(&mut service, &runtime_stats);
-    prime_video_recovery_feedback_target(&mut service, &runtime_stats, &mut answer_pc);
+    prime_video_recovery_feedback_target(&mut service, &runtime_stats);
     service.request_video_keyframe(&runtime_stats).unwrap();
 
     let current_epoch = runtime_stats.lock().unwrap().transport_recovery_epoch;

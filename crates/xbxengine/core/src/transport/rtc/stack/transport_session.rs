@@ -253,6 +253,14 @@ impl<'a> RtcTransportSessionBridge<'a> {
                 observation_id,
                 reason,
             } => {
+                let requested_at_ms = crate::transport::rtc::stats::now_ms_f64();
+                RuntimeStatsSink::new(self.runtime_stats.clone())
+                    .record_keyframe_request_episode_requested(
+                        *observation_id,
+                        Some(reason.clone()),
+                        requested_at_ms,
+                        None,
+                    );
                 let result = self
                     .connection
                     .lock()

@@ -150,7 +150,7 @@ pub struct XbxEngineTransportSignal {
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct XbxEngineMediaSignal {
     pub latest_frame_decoded_at_ms: Option<f64>,
-    pub latest_frame_rendered_at_ms: Option<f64>,
+    pub latest_frame_presented_at_ms: Option<f64>,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -314,8 +314,9 @@ impl XbxEngineRuntimeHealth {
                 audio_stream_alive: false,
             },
             media: XbxEngineMediaSignal {
+                // 兼容旧入口：该入口没有宿主 present telemetry，避免把 rendered 时钟伪装成 present。
                 latest_frame_decoded_at_ms: self.last_frame_rendered_at_ms,
-                latest_frame_rendered_at_ms: self.last_frame_rendered_at_ms,
+                latest_frame_presented_at_ms: None,
             },
             decode_render: XbxEngineDecodeRenderSignal::default(),
         };
@@ -408,7 +409,7 @@ impl XbxEngineRuntimeHealth {
         //   会把已经冻结数秒的画面误判成“系统仍然活跃”
         let latest_media_activity_at_ms = signals
             .media
-            .latest_frame_rendered_at_ms
+            .latest_frame_presented_at_ms
             .or(signals.media.latest_frame_decoded_at_ms);
         let media_stalled_for_ms = latest_media_activity_at_ms
             .map(|at_ms| now_ms - at_ms)
@@ -420,7 +421,7 @@ impl XbxEngineRuntimeHealth {
                     .unwrap_or(now_ms - connected_at_ms)
             });
 
-        if signals.media.latest_frame_rendered_at_ms.is_none()
+        if signals.media.latest_frame_presented_at_ms.is_none()
             && signals
                 .transport
                 .latest_video_packet_arrival_at_ms
@@ -433,7 +434,7 @@ impl XbxEngineRuntimeHealth {
         // 最近仍在持续 decode/present 时，优先相信新鲜活动，避免短抖动误触发恢复。
         let has_fresh_media_activity = signals
             .media
-            .latest_frame_rendered_at_ms
+            .latest_frame_presented_at_ms
             .map(|at_ms| now_ms - at_ms < recent_media_activity_grace_ms)
             .unwrap_or(false)
             || signals
@@ -463,7 +464,7 @@ impl XbxEngineRuntimeHealth {
                 .unwrap_or(true)
             && signals
                 .media
-                .latest_frame_rendered_at_ms
+                .latest_frame_presented_at_ms
                 .map(|at_ms| now_ms - at_ms >= effective_keyframe_request_stall_ms)
                 .unwrap_or(true);
         let can_try_decoder_reset = signals.decode_render.allow_decoder_reset
@@ -549,7 +550,7 @@ mod tests {
                 },
                 media: XbxEngineMediaSignal {
                     latest_frame_decoded_at_ms: Some(1_000.0),
-                    latest_frame_rendered_at_ms: Some(1_000.0),
+                    latest_frame_presented_at_ms: Some(1_000.0),
                 },
                 decode_render: XbxEngineDecodeRenderSignal::default(),
             },
@@ -576,7 +577,7 @@ mod tests {
                 },
                 media: XbxEngineMediaSignal {
                     latest_frame_decoded_at_ms: Some(1_000.0),
-                    latest_frame_rendered_at_ms: Some(1_000.0),
+                    latest_frame_presented_at_ms: Some(1_000.0),
                 },
                 decode_render: XbxEngineDecodeRenderSignal::default(),
             },
@@ -607,7 +608,7 @@ mod tests {
                 },
                 media: XbxEngineMediaSignal {
                     latest_frame_decoded_at_ms: Some(1_000.0),
-                    latest_frame_rendered_at_ms: Some(1_000.0),
+                    latest_frame_presented_at_ms: Some(1_000.0),
                 },
                 decode_render: XbxEngineDecodeRenderSignal::default(),
             },
@@ -637,7 +638,7 @@ mod tests {
                 },
                 media: XbxEngineMediaSignal {
                     latest_frame_decoded_at_ms: Some(1_000.0),
-                    latest_frame_rendered_at_ms: Some(1_000.0),
+                    latest_frame_presented_at_ms: Some(1_000.0),
                 },
                 decode_render: XbxEngineDecodeRenderSignal::default(),
             },
@@ -665,7 +666,7 @@ mod tests {
                 },
                 media: XbxEngineMediaSignal {
                     latest_frame_decoded_at_ms: Some(now_ms - 3_000.0),
-                    latest_frame_rendered_at_ms: Some(now_ms - 3_000.0),
+                    latest_frame_presented_at_ms: Some(now_ms - 3_000.0),
                 },
                 decode_render: XbxEngineDecodeRenderSignal {
                     decoder_stalled: Some(true),
@@ -698,7 +699,7 @@ mod tests {
                 },
                 media: XbxEngineMediaSignal {
                     latest_frame_decoded_at_ms: Some(now_ms - 3_000.0),
-                    latest_frame_rendered_at_ms: Some(now_ms - 3_000.0),
+                    latest_frame_presented_at_ms: Some(now_ms - 3_000.0),
                 },
                 decode_render: XbxEngineDecodeRenderSignal {
                     decoder_stalled: Some(true),
@@ -733,7 +734,7 @@ mod tests {
                 },
                 media: XbxEngineMediaSignal {
                     latest_frame_decoded_at_ms: Some(now_ms - 5_000.0),
-                    latest_frame_rendered_at_ms: Some(now_ms - 5_000.0),
+                    latest_frame_presented_at_ms: Some(now_ms - 5_000.0),
                 },
                 decode_render: XbxEngineDecodeRenderSignal {
                     decoder_stalled: Some(false),
@@ -769,7 +770,7 @@ mod tests {
                 },
                 media: XbxEngineMediaSignal {
                     latest_frame_decoded_at_ms: Some(now_ms - 9_000.0),
-                    latest_frame_rendered_at_ms: Some(now_ms - 9_000.0),
+                    latest_frame_presented_at_ms: Some(now_ms - 9_000.0),
                 },
                 decode_render: XbxEngineDecodeRenderSignal {
                     decoder_stalled: Some(false),
@@ -807,7 +808,7 @@ mod tests {
                 },
                 media: XbxEngineMediaSignal {
                     latest_frame_decoded_at_ms: Some(1_000.0),
-                    latest_frame_rendered_at_ms: Some(1_000.0),
+                    latest_frame_presented_at_ms: Some(1_000.0),
                 },
                 decode_render: XbxEngineDecodeRenderSignal::default(),
             },
@@ -837,7 +838,7 @@ mod tests {
                 },
                 media: XbxEngineMediaSignal {
                     latest_frame_decoded_at_ms: Some(1_000.0),
-                    latest_frame_rendered_at_ms: Some(1_000.0),
+                    latest_frame_presented_at_ms: Some(1_000.0),
                 },
                 decode_render: XbxEngineDecodeRenderSignal {
                     decoder_stalled: Some(false),

@@ -20,14 +20,24 @@ pub(super) struct RuntimeTraceObservationState {
     data_channel_catalog_observation_id: Option<u64>,
     timeline_observation_id: Option<u64>,
     anchor_candidate_observation: Option<(u64, Option<u32>, String, Option<String>, f64)>,
+    h264_inspection_observation: Option<xbxengine_protocol::XbxEngineH264InspectionObservationDto>,
     decode_candidate_decision_id: Option<u64>,
     render_candidate_decision_id: Option<u64>,
     recovery_keyframe_request_count: Option<u64>,
     recovery_decoder_reset_count: Option<u64>,
     recovery_reconnect_count: Option<u64>,
+    keyframe_request_episode:
+        Option<xbxengine_protocol::XbxEngineKeyframeRequestEpisodeObservationDto>,
     recovery_hard_fallback_timer_ms: Option<f64>,
     recovery_hard_fallback_trigger_reason: Option<String>,
     recovery_hard_fallback_timer_reset_reason: Option<String>,
+    decoder_recovery_state: Option<(
+        Option<String>,
+        Option<String>,
+        Option<String>,
+        Option<i32>,
+        Option<f64>,
+    )>,
     transport_state: Option<String>,
     transport_path: Option<String>,
     transport_candidate_pair: Option<String>,
@@ -35,29 +45,33 @@ pub(super) struct RuntimeTraceObservationState {
     transport_address_family: Option<String>,
     latest_video_track_status: Option<xbxengine_protocol::XbxEngineVideoTrackStatusDto>,
     video_remb_bps: Option<u32>,
+    remote_profile_baseline: Option<String>,
+    remote_profile_dynamic: Option<String>,
+    remote_profile_effective_label: Option<String>,
     session_phase: Option<String>,
-    transport_policy_profile: Option<String>,
-    recovery_policy_profile: Option<String>,
+    transport_strategy_profile: Option<String>,
+    recovery_strategy_profile: Option<String>,
     recovery_diagnosis: Option<String>,
-    recovery_coupling_mode: Option<String>,
-    recovery_coupling_summary: Option<String>,
     direct_gaming_bitrate_band: Option<String>,
     runtime_summary: Option<String>,
     primary_issue_chain: Option<String>,
     latest_decision_summary: Option<String>,
-    video_owner_state: Option<String>,
-    video_owner_reason: Option<String>,
+    recovery_owner_state: Option<String>,
+    recovery_owner_reason: Option<String>,
     video_owner_source: Option<String>,
     video_owner_observed_at_ms: Option<f64>,
     video_health: Option<String>,
     stall_kind: Option<String>,
-    host_present_submit_count_total: Option<u64>,
+    host_present_enqueue_count_total: Option<u64>,
     host_present_drop_count_total: Option<u64>,
     host_present_overwrite_count_total: Option<u64>,
     host_no_pending_take_count_total: Option<u64>,
     host_no_pending_streak: Option<u32>,
     host_no_pending_max_streak: Option<u32>,
     host_no_pending_pressure_level: Option<String>,
+    host_display_tick_epoch: Option<u64>,
+    host_present_epoch: Option<u64>,
+    host_cadence_phase: Option<String>,
     host_descriptor_upload_mode: Option<String>,
     host_descriptor_metal_import_count_total: Option<u64>,
     host_descriptor_cpu_upload_count_total: Option<u64>,
@@ -84,14 +98,20 @@ pub(super) fn build_observability_snapshot(stats: &XbxEngineStatsDto) -> serde_j
         "resolution": stats.resolution,
         "fps": stats.fps,
         "rtt": stats.rtt,
+        "frameBudget": latest_frame_budget_snapshot(stats),
         "runtimeSummary": stats.runtime_summary,
         "primaryIssueChain": stats.primary_issue_chain,
         "latestDecisionSummary": stats.latest_decision_summary,
         "videoOwner": {
-            "state": stats.video_owner_state,
-            "reason": stats.video_owner_reason,
+            "state": stats.recovery_owner_state,
+            "reason": stats.recovery_owner_reason,
             "source": stats.video_owner_source,
             "observedAtMs": stats.video_owner_observed_at_ms,
+        },
+        "remoteProfile": {
+            "baseline": stats.remote_profile_baseline,
+            "dynamic": stats.remote_profile_dynamic,
+            "effectiveLabel": stats.remote_profile_effective_label,
         },
         "transport": {
             "path": stats.transport_path,
@@ -99,19 +119,17 @@ pub(super) fn build_observability_snapshot(stats: &XbxEngineStatsDto) -> serde_j
             "protocol": stats.transport_protocol,
             "addressFamily": stats.transport_address_family,
             "state": stats.transport_state,
-            "policyProfile": stats.transport_policy_profile,
+            "strategyProfile": stats.transport_strategy_profile,
             "videoRttSource": stats.video_rtt_source,
             "videoRembBps": stats.video_remb_bps,
         },
         "recovery": {
             "sessionPhase": stats.session_phase,
-            "policyProfile": stats.recovery_policy_profile,
+            "strategyProfile": stats.recovery_strategy_profile,
             "diagnosis": stats.recovery_diagnosis,
-            "couplingMode": stats.recovery_coupling_mode,
-            "couplingSummary": stats.recovery_coupling_summary,
             "videoHealth": stats.video_health,
-            "videoOwnerState": stats.video_owner_state,
-            "videoOwnerReason": stats.video_owner_reason,
+            "videoOwnerState": stats.recovery_owner_state,
+            "videoOwnerReason": stats.recovery_owner_reason,
             "videoOwnerSource": stats.video_owner_source,
             "videoOwnerObservedAtMs": stats.video_owner_observed_at_ms,
             "stallKind": stats.stall_kind,
@@ -125,6 +143,11 @@ pub(super) fn build_observability_snapshot(stats: &XbxEngineStatsDto) -> serde_j
             "lastActionAtMs": stats.last_recovery_action_at_ms,
             "lastReason": stats.last_recovery_reason,
             "reconnectTriggerSource": stats.reconnect_trigger_source,
+            "decoderState": stats.video_decoder_recovery_state,
+            "decoderEvent": stats.video_decoder_recovery_event,
+            "decoderDetail": stats.video_decoder_recovery_detail,
+            "decoderStatus": stats.video_decoder_recovery_status,
+            "decoderStateChangedAtMs": stats.video_decoder_recovery_state_changed_at_ms,
         },
         "directGaming": {
             "bitrateBand": stats.direct_gaming_bitrate_band,
@@ -137,8 +160,6 @@ pub(super) fn build_observability_snapshot(stats: &XbxEngineStatsDto) -> serde_j
             "videoKbps": stats.inbound_video_bitrate_kbps,
             "audioKbps": stats.inbound_audio_bitrate_kbps,
             "actualVideoKbps": stats.video_actual_bitrate_kbps,
-            // legacy: 保留兼容镜像字段，值与 actualVideoBitrateSource 必须一致。
-            "actualVideoSource": stats.actual_video_bitrate_source,
             "actualVideoBitrateSource": stats.actual_video_bitrate_source,
             "bytesTotal": stats.inbound_bytes_total,
             "videoBytesTotal": stats.inbound_video_bytes_total,
@@ -214,13 +235,16 @@ pub(super) fn build_observability_snapshot(stats: &XbxEngineStatsDto) -> serde_j
             "pacerDropCountTotal": stats.video_pacer_drop_count_total,
             "rendererSubmitCountTotal": stats.video_renderer_submit_count_total,
             "rendererDropCountTotal": stats.video_renderer_drop_count_total,
-            "presentSubmitCountTotal": stats.video_present_submit_count_total,
+            "presentEnqueueCountTotal": stats.video_present_submit_count_total,
             "presentDropCountTotal": stats.video_present_drop_count_total,
             "presentOverwriteCountTotal": stats.video_present_overwrite_count_total,
             "noPendingTakeCountTotal": stats.host_no_pending_take_count_total,
             "noPendingStreak": stats.host_no_pending_streak,
             "noPendingMaxStreak": stats.host_no_pending_max_streak,
             "noPendingPressureLevel": stats.host_no_pending_pressure_level,
+            "displayTickEpoch": stats.host_display_tick_epoch,
+            "presentEpoch": stats.video_present_epoch,
+            "cadencePhase": stats.host_cadence_phase,
             "descriptorUploadMode": stats.video_present_descriptor_upload_mode,
             "descriptorMetalImportCountTotal": stats.video_present_descriptor_metal_import_count_total,
             "descriptorCpuUploadCountTotal": stats.video_present_descriptor_cpu_upload_count_total,
@@ -230,6 +254,8 @@ pub(super) fn build_observability_snapshot(stats: &XbxEngineStatsDto) -> serde_j
             "frameDrop": stats.latest_video_frame_drop,
             "frameRecovery": stats.latest_video_frame_recovery_observation,
             "nack": stats.latest_video_nack_observation,
+            "keyframeRequestEpisode": stats.latest_keyframe_request_episode,
+            "h264Inspection": h264_inspection_payload(stats.latest_h264_inspection_observation.as_ref()),
             "timeline": stats.latest_video_timeline_observation,
             "decodeCandidate": stats.latest_decode_candidate_decision,
             "renderCandidate": stats.latest_render_candidate_decision,
@@ -238,6 +264,43 @@ pub(super) fn build_observability_snapshot(stats: &XbxEngineStatsDto) -> serde_j
             "bwe": stats.latest_video_bwe_observation,
             "twcc": stats.latest_video_twcc_observation,
         },
+    })
+}
+
+fn latest_frame_budget_snapshot(stats: &XbxEngineStatsDto) -> Option<serde_json::Value> {
+    let mut latest: Option<(&str, f64, &xbxengine_protocol::XbxEngineFrameBudgetDto)> = None;
+    if let Some(frame_recovery) = stats.latest_video_frame_recovery_observation.as_ref() {
+        if let Some(frame_budget) = frame_recovery.frame_budget.as_ref() {
+            latest = Some(("frameRecovery", frame_recovery.observed_at_ms, frame_budget));
+        }
+    }
+    if let Some(nack) = stats.latest_video_nack_observation.as_ref() {
+        if let Some(frame_budget) = nack.frame_budget.as_ref() {
+            if latest.is_none_or(|(_, observed_at_ms, _)| nack.observed_at_ms >= observed_at_ms) {
+                latest = Some(("nack", nack.observed_at_ms, frame_budget));
+            }
+        }
+    }
+    if let Some(frame_drop) = stats.latest_video_frame_drop.as_ref() {
+        if let Some(frame_budget) = frame_drop.frame_budget.as_ref() {
+            if latest
+                .is_none_or(|(_, observed_at_ms, _)| frame_drop.observed_at_ms >= observed_at_ms)
+            {
+                latest = Some(("frameDrop", frame_drop.observed_at_ms, frame_budget));
+            }
+        }
+    }
+
+    latest.map(|(source, observed_at_ms, budget)| {
+        json!({
+            "source": source,
+            "observedAtMs": observed_at_ms,
+            "recoveryStage": budget.recovery_stage,
+            "chainValue": budget.chain_value,
+            "rttSlack": budget.rtt_slack,
+            "failureCost": budget.failure_cost,
+            "windowSource": budget.window_source,
+        })
     })
 }
 
@@ -293,6 +356,7 @@ pub(super) fn record_runtime_trace_observations(
                     "frameSeq": frame_drop.frame_seq,
                     "frameRecoveryDisposition": frame_drop.frame_recovery_disposition,
                     "frameUnrecoverableReason": frame_drop.frame_unrecoverable_reason,
+                    "frameBudget": frame_drop.frame_budget,
                     "observedAtMs": frame_drop.observed_at_ms,
                     "width": frame_drop.width,
                     "height": frame_drop.height,
@@ -320,6 +384,7 @@ pub(super) fn record_runtime_trace_observations(
                         "frameRtpTimestamp": frame_drop.frame_rtp_timestamp,
                         "frameRecoveryDisposition": frame_drop.frame_recovery_disposition,
                         "frameUnrecoverableReason": frame_drop.frame_unrecoverable_reason,
+                        "frameBudget": frame_drop.frame_budget,
                         "queueDepth": frame_drop.queue_depth,
                         "observedAtMs": frame_drop.observed_at_ms,
                     }),
@@ -342,10 +407,34 @@ pub(super) fn record_runtime_trace_observations(
                     "framePlayoutDeadlineAtMs": frame_recovery.frame_playout_deadline_at_ms,
                     "frameRecoveryDisposition": frame_recovery.frame_recovery_disposition,
                     "frameUnrecoverableReason": frame_recovery.frame_unrecoverable_reason,
+                    "frameBudget": frame_recovery.frame_budget,
                     "observedAtMs": frame_recovery.observed_at_ms,
                 }),
             );
         }
+    }
+
+    let decoder_recovery_state = (
+        stats.video_decoder_recovery_state.clone(),
+        stats.video_decoder_recovery_event.clone(),
+        stats.video_decoder_recovery_detail.clone(),
+        stats.video_decoder_recovery_status,
+        stats.video_decoder_recovery_state_changed_at_ms,
+    );
+    if observation_state.decoder_recovery_state.as_ref() != Some(&decoder_recovery_state) {
+        observation_state.decoder_recovery_state = Some(decoder_recovery_state.clone());
+        runtime_trace.record_event(
+            "xbxengine",
+            "decoderRecoveryStateChanged",
+            session_id,
+            json!({
+                "state": decoder_recovery_state.0,
+                "event": decoder_recovery_state.1,
+                "detail": decoder_recovery_state.2,
+                "status": decoder_recovery_state.3,
+                "stateChangedAtMs": decoder_recovery_state.4,
+            }),
+        );
     }
 
     if let Some(decode_candidate) = stats.latest_decode_candidate_decision.as_ref() {
@@ -416,6 +505,7 @@ pub(super) fn record_runtime_trace_observations(
                     "nackDisposition": nack.nack_disposition,
                     "framePlayoutDeadlineAtMs": nack.frame_playout_deadline_at_ms,
                     "frameUnrecoverableReason": nack.frame_unrecoverable_reason,
+                    "frameBudget": nack.frame_budget,
                     "observedAtMs": nack.observed_at_ms,
                 }),
             );
@@ -535,6 +625,10 @@ pub(super) fn record_runtime_trace_observations(
                     "observationId": escalation.observation_id,
                     "reason": escalation.reason,
                     "action": escalation.action,
+                    "recoveryStage": escalation.recovery_stage,
+                    "recoveryChainValue": escalation.recovery_chain_value,
+                    "recoveryFailureCost": escalation.recovery_failure_cost,
+                    "recoveryWindowSource": escalation.recovery_window_source,
                     "observedAtMs": escalation.observed_at_ms,
                 }),
             );
@@ -716,6 +810,7 @@ pub(super) fn record_runtime_trace_observations(
                     "selectedVideoPayloadType": observation.selected_video_payload_type,
                     "selectedVideoMimeType": observation.selected_video_mime_type,
                     "selectedVideoProfileLevelId": observation.selected_video_profile_level_id,
+                    "selectedVideoH264SpropParameterSets": observation.selected_video_h264_sprop_parameter_sets,
                     "videoPayloadOrder": observation.video_payload_order,
                     "acceptedVideoRtcpFeedback": observation.accepted_video_rtcp_feedback,
                     "acceptedAudioRtcpFeedback": observation.accepted_audio_rtcp_feedback,
@@ -787,35 +882,70 @@ pub(super) fn record_runtime_trace_observations(
         }
     }
 
+    if observation_state.keyframe_request_episode != stats.latest_keyframe_request_episode {
+        observation_state.keyframe_request_episode = stats.latest_keyframe_request_episode.clone();
+        let payload =
+            keyframe_request_episode_payload(stats.latest_keyframe_request_episode.as_ref());
+        runtime_trace.record_state(
+            "xbxengine",
+            "keyframeRequestEpisode",
+            session_id,
+            payload.clone(),
+        );
+        if let Some(episode) = stats.latest_keyframe_request_episode.as_ref() {
+            if let Some(event_name) = keyframe_request_episode_event_name(&episode.status) {
+                runtime_trace.record_event("xbxengine", event_name, session_id, payload);
+            }
+        }
+    }
+
+    if observation_state.h264_inspection_observation != stats.latest_h264_inspection_observation {
+        observation_state.h264_inspection_observation =
+            stats.latest_h264_inspection_observation.clone();
+        if let Some(inspection) = stats.latest_h264_inspection_observation.as_ref() {
+            let payload = h264_inspection_payload(Some(inspection));
+            runtime_trace.record_state("xbxengine", "h264Inspection", session_id, payload.clone());
+            let event_name = if inspection.admission_accepted {
+                "h264InspectionObserved"
+            } else {
+                "h264InspectionRejected"
+            };
+            runtime_trace.record_event("xbxengine", event_name, session_id, payload);
+        }
+    }
+
     if observation_state.session_phase != stats.session_phase
-        || observation_state.transport_policy_profile != stats.transport_policy_profile
-        || observation_state.recovery_policy_profile != stats.recovery_policy_profile
+        || observation_state.remote_profile_baseline != stats.remote_profile_baseline
+        || observation_state.remote_profile_dynamic != stats.remote_profile_dynamic
+        || observation_state.remote_profile_effective_label != stats.remote_profile_effective_label
+        || observation_state.transport_strategy_profile != stats.transport_strategy_profile
+        || observation_state.recovery_strategy_profile != stats.recovery_strategy_profile
         || observation_state.recovery_diagnosis != stats.recovery_diagnosis
-        || observation_state.recovery_coupling_mode != stats.recovery_coupling_mode
-        || observation_state.recovery_coupling_summary != stats.recovery_coupling_summary
         || observation_state.direct_gaming_bitrate_band != stats.direct_gaming_bitrate_band
         || observation_state.runtime_summary != stats.runtime_summary
         || observation_state.primary_issue_chain != stats.primary_issue_chain
         || observation_state.latest_decision_summary != stats.latest_decision_summary
-        || observation_state.video_owner_state != stats.video_owner_state
-        || observation_state.video_owner_reason != stats.video_owner_reason
+        || observation_state.recovery_owner_state != stats.recovery_owner_state
+        || observation_state.recovery_owner_reason != stats.recovery_owner_reason
         || observation_state.video_owner_source != stats.video_owner_source
         || observation_state.video_owner_observed_at_ms != stats.video_owner_observed_at_ms
         || observation_state.video_health != stats.video_health
         || observation_state.stall_kind != stats.stall_kind
     {
         observation_state.session_phase = stats.session_phase.clone();
-        observation_state.transport_policy_profile = stats.transport_policy_profile.clone();
-        observation_state.recovery_policy_profile = stats.recovery_policy_profile.clone();
+        observation_state.remote_profile_baseline = stats.remote_profile_baseline.clone();
+        observation_state.remote_profile_dynamic = stats.remote_profile_dynamic.clone();
+        observation_state.remote_profile_effective_label =
+            stats.remote_profile_effective_label.clone();
+        observation_state.transport_strategy_profile = stats.transport_strategy_profile.clone();
+        observation_state.recovery_strategy_profile = stats.recovery_strategy_profile.clone();
         observation_state.recovery_diagnosis = stats.recovery_diagnosis.clone();
-        observation_state.recovery_coupling_mode = stats.recovery_coupling_mode.clone();
-        observation_state.recovery_coupling_summary = stats.recovery_coupling_summary.clone();
         observation_state.direct_gaming_bitrate_band = stats.direct_gaming_bitrate_band.clone();
         observation_state.runtime_summary = stats.runtime_summary.clone();
         observation_state.primary_issue_chain = stats.primary_issue_chain.clone();
         observation_state.latest_decision_summary = stats.latest_decision_summary.clone();
-        observation_state.video_owner_state = stats.video_owner_state.clone();
-        observation_state.video_owner_reason = stats.video_owner_reason.clone();
+        observation_state.recovery_owner_state = stats.recovery_owner_state.clone();
+        observation_state.recovery_owner_reason = stats.recovery_owner_reason.clone();
         observation_state.video_owner_source = stats.video_owner_source.clone();
         observation_state.video_owner_observed_at_ms = stats.video_owner_observed_at_ms;
         observation_state.video_health = stats.video_health.clone();
@@ -826,17 +956,18 @@ pub(super) fn record_runtime_trace_observations(
             session_id,
             json!({
                 "sessionPhase": stats.session_phase,
-                "transportPolicyProfile": stats.transport_policy_profile,
-                "recoveryPolicyProfile": stats.recovery_policy_profile,
+                "remoteProfileBaseline": stats.remote_profile_baseline,
+                "remoteProfileDynamic": stats.remote_profile_dynamic,
+                "remoteProfileEffectiveLabel": stats.remote_profile_effective_label,
+                "transportStrategyProfile": stats.transport_strategy_profile,
+                "recoveryStrategyProfile": stats.recovery_strategy_profile,
                 "recoveryDiagnosis": stats.recovery_diagnosis,
-                "recoveryCouplingMode": stats.recovery_coupling_mode,
-                "recoveryCouplingSummary": stats.recovery_coupling_summary,
                 "directGamingBitrateBand": stats.direct_gaming_bitrate_band,
                 "runtimeSummary": stats.runtime_summary,
                 "primaryIssueChain": stats.primary_issue_chain,
                 "latestDecisionSummary": stats.latest_decision_summary,
-                "videoOwnerState": stats.video_owner_state,
-                "videoOwnerReason": stats.video_owner_reason,
+                "videoOwnerState": stats.recovery_owner_state,
+                "videoOwnerReason": stats.recovery_owner_reason,
                 "videoOwnerSource": stats.video_owner_source,
                 "videoOwnerObservedAtMs": stats.video_owner_observed_at_ms,
                 "videoHealth": stats.video_health,
@@ -845,7 +976,7 @@ pub(super) fn record_runtime_trace_observations(
         );
     }
 
-    if observation_state.host_present_submit_count_total != stats.video_present_submit_count_total
+    if observation_state.host_present_enqueue_count_total != stats.video_present_submit_count_total
         || observation_state.host_present_drop_count_total != stats.video_present_drop_count_total
         || observation_state.host_present_overwrite_count_total
             != stats.video_present_overwrite_count_total
@@ -854,6 +985,9 @@ pub(super) fn record_runtime_trace_observations(
         || observation_state.host_no_pending_streak != stats.host_no_pending_streak
         || observation_state.host_no_pending_max_streak != stats.host_no_pending_max_streak
         || observation_state.host_no_pending_pressure_level != stats.host_no_pending_pressure_level
+        || observation_state.host_display_tick_epoch != stats.host_display_tick_epoch
+        || observation_state.host_present_epoch != stats.video_present_epoch
+        || observation_state.host_cadence_phase != stats.host_cadence_phase
         || observation_state.host_descriptor_upload_mode
             != stats.video_present_descriptor_upload_mode
         || observation_state.host_descriptor_metal_import_count_total
@@ -861,7 +995,7 @@ pub(super) fn record_runtime_trace_observations(
         || observation_state.host_descriptor_cpu_upload_count_total
             != stats.video_present_descriptor_cpu_upload_count_total
     {
-        observation_state.host_present_submit_count_total = stats.video_present_submit_count_total;
+        observation_state.host_present_enqueue_count_total = stats.video_present_submit_count_total;
         observation_state.host_present_drop_count_total = stats.video_present_drop_count_total;
         observation_state.host_present_overwrite_count_total =
             stats.video_present_overwrite_count_total;
@@ -870,6 +1004,9 @@ pub(super) fn record_runtime_trace_observations(
         observation_state.host_no_pending_max_streak = stats.host_no_pending_max_streak;
         observation_state.host_no_pending_pressure_level =
             stats.host_no_pending_pressure_level.clone();
+        observation_state.host_display_tick_epoch = stats.host_display_tick_epoch;
+        observation_state.host_present_epoch = stats.video_present_epoch;
+        observation_state.host_cadence_phase = stats.host_cadence_phase.clone();
         observation_state.host_descriptor_upload_mode =
             stats.video_present_descriptor_upload_mode.clone();
         observation_state.host_descriptor_metal_import_count_total =
@@ -882,13 +1019,16 @@ pub(super) fn record_runtime_trace_observations(
             session_id,
             json!({
                 "presentFps": stats.present_fps,
-                "presentSubmitCountTotal": stats.video_present_submit_count_total,
+                "presentEnqueueCountTotal": stats.video_present_submit_count_total,
                 "presentDropCountTotal": stats.video_present_drop_count_total,
                 "presentOverwriteCountTotal": stats.video_present_overwrite_count_total,
                 "noPendingTakeCountTotal": stats.host_no_pending_take_count_total,
                 "noPendingStreak": stats.host_no_pending_streak,
                 "noPendingMaxStreak": stats.host_no_pending_max_streak,
                 "noPendingPressureLevel": stats.host_no_pending_pressure_level,
+                "displayTickEpoch": stats.host_display_tick_epoch,
+                "presentEpoch": stats.video_present_epoch,
+                "cadencePhase": stats.host_cadence_phase,
                 "presentAgeMs": stats.present_age_ms,
                 "descriptorUploadMode": stats.video_present_descriptor_upload_mode,
                 "descriptorMetalImportCountTotal": stats.video_present_descriptor_metal_import_count_total,
@@ -1133,6 +1273,65 @@ pub(super) fn record_runtime_trace_observations(
     }
 }
 
+fn keyframe_request_episode_event_name(status: &str) -> Option<&'static str> {
+    match status {
+        "requested" => Some("keyframeRequestEpisodeRequested"),
+        "sent" => Some("keyframeRequestEpisodeSent"),
+        "packet-seen" => Some("keyframeRequestEpisodePacketSeen"),
+        "decoded" => Some("keyframeRequestEpisodeDecoded"),
+        "missed" => Some("keyframeRequestEpisodeMissed"),
+        _ => None,
+    }
+}
+
+fn keyframe_request_episode_payload(
+    episode: Option<&xbxengine_protocol::XbxEngineKeyframeRequestEpisodeObservationDto>,
+) -> serde_json::Value {
+    match episode {
+        Some(episode) => json!({
+            "episodeId": episode.episode_id,
+            "requestReason": episode.request_reason.clone(),
+            "requestKind": episode.request_kind.clone(),
+            "status": episode.status.clone(),
+            "requestedAtMs": episode.requested_at_ms,
+            "sentAtMs": episode.sent_at_ms,
+            "deadlineAtMs": episode.deadline_at_ms,
+            "firstKeyframePacketAtMs": episode.first_keyframe_packet_at_ms,
+            "firstKeyframeDecodedAtMs": episode.first_keyframe_decoded_at_ms,
+            "responseRtpTimestamp": episode.response_rtp_timestamp,
+            "responseFrameSeq": episode.response_frame_seq,
+            "responseVerdict": episode.response_verdict.clone(),
+        }),
+        None => json!(null),
+    }
+}
+
+fn h264_inspection_payload(
+    observation: Option<&xbxengine_protocol::XbxEngineH264InspectionObservationDto>,
+) -> serde_json::Value {
+    match observation {
+        Some(observation) => json!({
+            "observationId": observation.observation_id,
+            "frameRtpTimestamp": observation.frame_rtp_timestamp,
+            "nalTypes": observation.nal_types.clone(),
+            "hasInbandSps": observation.has_inband_sps,
+            "hasInbandPps": observation.has_inband_pps,
+            "committedSpsPresent": observation.committed_sps_present,
+            "committedPpsPresent": observation.committed_pps_present,
+            "sliceHeadersValid": observation.slice_headers_valid,
+            "deltaContinuationReady": observation.delta_continuation_ready,
+            "parameterSetsChanged": observation.parameter_sets_changed,
+            "configChanged": observation.config_changed,
+            "isIdr": observation.is_idr,
+            "bootstrapReady": observation.bootstrap_ready,
+            "bootstrapRejectReason": observation.bootstrap_reject_reason.clone(),
+            "admissionAccepted": observation.admission_accepted,
+            "observedAtMs": observation.observed_at_ms,
+        }),
+        None => json!(null),
+    }
+}
+
 fn is_timeout_source_event(source_event: &str) -> bool {
     source_event.starts_with("timeout-")
 }
@@ -1220,10 +1419,6 @@ mod tests {
         }));
 
         let snapshot = build_observability_snapshot(&stats);
-        assert_eq!(
-            snapshot["bitrate"]["actualVideoSource"],
-            "transport-metrics"
-        );
         assert_eq!(snapshot["bitrate"]["actualVideoKbps"], 8400.0);
         assert_eq!(snapshot["audio"]["audioPlayoutLatencyMs"], 41.5);
         assert_eq!(snapshot["audio"]["audioVideoPlayoutDeltaMs"], 8.5);
@@ -1256,6 +1451,13 @@ mod tests {
                 "frame_playout_deadline_at_ms": 4567.0,
                 "frame_recovery_disposition": "unrecoverable-reference-chain",
                 "frame_unrecoverable_reason": "referenceChainUnrecoverable",
+                "frame_budget": {
+                    "recovery_stage": "awaiting-keyframe",
+                    "chain_value": "supply",
+                    "rtt_slack": "tight",
+                    "failure_cost": "chain-broken",
+                    "window_source": "recovery"
+                },
                 "observed_at_ms": 1234.0
             }
         }));
@@ -1266,7 +1468,6 @@ mod tests {
             snapshot["bitrate"]["actualVideoBitrateSource"],
             "unavailable"
         );
-        assert_eq!(snapshot["bitrate"]["actualVideoSource"], "unavailable");
         assert_eq!(
             snapshot["latest"]["frameRecovery"]["action"],
             "ledgerConsume"
@@ -1278,6 +1479,113 @@ mod tests {
         assert_eq!(
             snapshot["latest"]["frameRecovery"]["frame_unrecoverable_reason"],
             "referenceChainUnrecoverable"
+        );
+        assert_eq!(
+            snapshot["latest"]["frameRecovery"]["frame_budget"]["recovery_stage"],
+            "awaiting-keyframe"
+        );
+        assert_eq!(
+            snapshot["latest"]["frameRecovery"]["frame_budget"]["chain_value"],
+            "supply"
+        );
+        assert_eq!(snapshot["frameBudget"]["source"], "frameRecovery");
+        assert_eq!(snapshot["frameBudget"]["failureCost"], "chain-broken");
+    }
+
+    #[test]
+    fn build_observability_snapshot_includes_latest_keyframe_episode() {
+        let stats = test_stats(json!({
+            "resolution": "",
+            "rtt": "",
+            "fps": 0.0,
+            "pl": "0.00%",
+            "fl": "",
+            "jit": "",
+            "br": "",
+            "decode": "",
+            "latest_keyframe_request_episode": {
+                "episode_id": 91,
+                "request_reason": "transportAwaitRecoveryKeyframe",
+                "request_kind": "pli",
+                "status": "decoded",
+                "requested_at_ms": 1200.0,
+                "sent_at_ms": 1210.0,
+                "deadline_at_ms": 2160.0,
+                "first_keyframe_packet_at_ms": 1400.0,
+                "first_keyframe_decoded_at_ms": 1420.0,
+                "response_rtp_timestamp": 123456789,
+                "response_frame_seq": 77,
+                "response_verdict": "on-time"
+            }
+        }));
+
+        let snapshot = build_observability_snapshot(&stats);
+        assert_eq!(
+            snapshot["latest"]["keyframeRequestEpisode"]["episode_id"],
+            91
+        );
+        assert_eq!(
+            snapshot["latest"]["keyframeRequestEpisode"]["request_reason"],
+            "transportAwaitRecoveryKeyframe"
+        );
+        assert_eq!(
+            snapshot["latest"]["keyframeRequestEpisode"]["response_verdict"],
+            "on-time"
+        );
+    }
+
+    #[test]
+    fn build_observability_snapshot_includes_latest_h264_inspection() {
+        let stats = test_stats(json!({
+            "resolution": "",
+            "rtt": "",
+            "fps": 0.0,
+            "pl": "0.00%",
+            "fl": "",
+            "jit": "",
+            "br": "",
+            "decode": "",
+            "latest_h264_inspection_observation": {
+                "observation_id": 2194672423u64,
+                "frame_rtp_timestamp": 2194672423u32,
+                "nal_types": ["SeqParameterSet", "PicParameterSet", "SliceLayerWithoutPartitioningIdr"],
+                "has_inband_sps": true,
+                "has_inband_pps": true,
+                "committed_sps_present": false,
+                "committed_pps_present": false,
+                "slice_headers_valid": false,
+                "delta_continuation_ready": false,
+                "parameter_sets_changed": true,
+                "config_changed": true,
+                "is_idr": true,
+                "bootstrap_ready": false,
+                "bootstrap_reject_reason": "bootstrapMissingSps",
+                "admission_accepted": false,
+                "observed_at_ms": 1400.0
+            }
+        }));
+
+        let snapshot = build_observability_snapshot(&stats);
+        assert_eq!(
+            snapshot["latest"]["h264Inspection"]["frameRtpTimestamp"],
+            2194672423u32
+        );
+        assert_eq!(snapshot["latest"]["h264Inspection"]["hasInbandSps"], true);
+        assert_eq!(
+            snapshot["latest"]["h264Inspection"]["committedSpsPresent"],
+            false
+        );
+        assert_eq!(
+            snapshot["latest"]["h264Inspection"]["bootstrapRejectReason"],
+            "bootstrapMissingSps"
+        );
+        assert_eq!(
+            snapshot["latest"]["h264Inspection"]["deltaContinuationReady"],
+            false
+        );
+        assert_eq!(
+            snapshot["latest"]["h264Inspection"]["admissionAccepted"],
+            false
         );
     }
 
@@ -1337,15 +1645,13 @@ mod tests {
             "jit": "",
             "br": "",
             "decode": "",
-            "video_owner_state": "rebuildingSupply",
-            "video_owner_reason": "timelineReferenceBroken",
+            "recovery_owner_state": "rebuildingSupply",
+            "recovery_owner_reason": "timelineReferenceBroken",
             "video_owner_source": "anchor",
             "video_owner_observed_at_ms": 2048.0,
             "video_health": "recovering",
             "primary_issue_chain": "recovery:timelineReferenceBroken",
-            "latest_decision_summary": "owner:rebuildingSupply:timelineReferenceBroken",
-            "recovery_coupling_mode": "legacy",
-            "recovery_coupling_summary": "legacy-summary"
+            "latest_decision_summary": "owner:rebuildingSupply:timelineReferenceBroken"
         }));
 
         let snapshot = build_observability_snapshot(&stats);
@@ -1353,8 +1659,6 @@ mod tests {
         assert_eq!(snapshot["videoOwner"]["reason"], "timelineReferenceBroken");
         assert_eq!(snapshot["videoOwner"]["source"], "anchor");
         assert_eq!(snapshot["videoOwner"]["observedAtMs"], 2048.0);
-        assert_eq!(snapshot["recovery"]["couplingMode"], "legacy");
-        assert_eq!(snapshot["recovery"]["couplingSummary"], "legacy-summary");
     }
 
     #[test]
@@ -1483,6 +1787,244 @@ mod tests {
         assert!(contents.contains("\"selectedVideoProfileLevelId\":\"4d002a\""));
         assert!(contents.contains("\"googRembAccepted\":true"));
         assert!(contents.contains("\"transportCcAccepted\":true"));
+    }
+
+    #[test]
+    fn record_runtime_trace_observations_projects_keyframe_episode_lifecycle() {
+        let recorder = std::sync::Arc::new(
+            RuntimeTraceRecorder::new_with_mode("verbose").expect("trace recorder"),
+        );
+        let mut state = RuntimeTraceObservationState::default();
+        let make_stats = |episode_id,
+                          status: &str,
+                          request_kind: Option<&str>,
+                          response_verdict: Option<&str>,
+                          sent_at_ms: Option<f64>,
+                          first_keyframe_packet_at_ms: Option<f64>,
+                          first_keyframe_decoded_at_ms: Option<f64>,
+                          response_rtp_timestamp: Option<u32>,
+                          response_frame_seq: Option<u64>| {
+            test_stats(json!({
+                "resolution": "",
+                "rtt": "",
+                "fps": 0.0,
+                "pl": "0.00%",
+                "fl": "",
+                "jit": "",
+                "br": "",
+                "decode": "",
+                "latest_keyframe_request_episode": {
+                    "episode_id": episode_id,
+                    "request_reason": "transportAwaitRecoveryKeyframe",
+                    "request_kind": request_kind,
+                    "status": status,
+                    "requested_at_ms": 1200.0,
+                    "sent_at_ms": sent_at_ms,
+                    "deadline_at_ms": 2160.0,
+                    "first_keyframe_packet_at_ms": first_keyframe_packet_at_ms,
+                    "first_keyframe_decoded_at_ms": first_keyframe_decoded_at_ms,
+                    "response_rtp_timestamp": response_rtp_timestamp,
+                    "response_frame_seq": response_frame_seq,
+                    "response_verdict": response_verdict
+                }
+            }))
+        };
+
+        record_runtime_trace_observations(
+            &recorder,
+            &mut state,
+            Some("session-1"),
+            &make_stats(
+                91,
+                "requested",
+                None,
+                Some("pending"),
+                None,
+                None,
+                None,
+                None,
+                None,
+            ),
+        );
+        record_runtime_trace_observations(
+            &recorder,
+            &mut state,
+            Some("session-1"),
+            &make_stats(
+                91,
+                "sent",
+                Some("pli"),
+                Some("pending"),
+                Some(1210.0),
+                None,
+                None,
+                None,
+                None,
+            ),
+        );
+        record_runtime_trace_observations(
+            &recorder,
+            &mut state,
+            Some("session-1"),
+            &make_stats(
+                91,
+                "packet-seen",
+                Some("pli"),
+                Some("on-time"),
+                Some(1210.0),
+                Some(1400.0),
+                None,
+                Some(123456789),
+                None,
+            ),
+        );
+        record_runtime_trace_observations(
+            &recorder,
+            &mut state,
+            Some("session-1"),
+            &make_stats(
+                91,
+                "decoded",
+                Some("pli"),
+                Some("on-time"),
+                Some(1210.0),
+                Some(1400.0),
+                Some(1420.0),
+                Some(123456789),
+                Some(77),
+            ),
+        );
+        record_runtime_trace_observations(
+            &recorder,
+            &mut state,
+            Some("session-1"),
+            &make_stats(
+                92,
+                "missed",
+                Some("control"),
+                Some("missed"),
+                Some(1500.0),
+                None,
+                None,
+                None,
+                None,
+            ),
+        );
+
+        let contents =
+            fs::read_to_string(recorder.path().expect("trace path")).expect("trace contents");
+        assert!(contents.contains("\"event\":\"keyframeRequestEpisode\""));
+        assert!(contents.contains("\"status\":\"requested\""));
+        assert!(contents.contains("\"event\":\"keyframeRequestEpisodeRequested\""));
+        assert!(contents.contains("\"event\":\"keyframeRequestEpisodeSent\""));
+        assert!(contents.contains("\"event\":\"keyframeRequestEpisodePacketSeen\""));
+        assert!(contents.contains("\"event\":\"keyframeRequestEpisodeDecoded\""));
+        assert!(contents.contains("\"event\":\"keyframeRequestEpisodeMissed\""));
+        assert!(contents.contains("\"responseVerdict\":\"missed\""));
+    }
+
+    #[test]
+    fn record_runtime_trace_observations_projects_h264_inspection_rejection() {
+        let recorder = std::sync::Arc::new(
+            RuntimeTraceRecorder::new_with_mode("verbose").expect("trace recorder"),
+        );
+        let mut state = RuntimeTraceObservationState::default();
+        let stats = test_stats(json!({
+            "resolution": "",
+            "rtt": "",
+            "fps": 0.0,
+            "pl": "0.00%",
+            "fl": "",
+            "jit": "",
+            "br": "",
+            "decode": "",
+            "latest_h264_inspection_observation": {
+                "observation_id": 2194672423u64,
+                "frame_rtp_timestamp": 2194672423u32,
+                "nal_types": ["SliceLayerWithoutPartitioningIdr"],
+                "has_inband_sps": false,
+                "has_inband_pps": false,
+                "committed_sps_present": false,
+                "committed_pps_present": false,
+                "slice_headers_valid": false,
+                "delta_continuation_ready": false,
+                "parameter_sets_changed": false,
+                "config_changed": false,
+                "is_idr": true,
+                "bootstrap_ready": false,
+                "bootstrap_reject_reason": "bootstrapMissingSps",
+                "admission_accepted": false,
+                "observed_at_ms": 1400.0
+            }
+        }));
+
+        record_runtime_trace_observations(&recorder, &mut state, Some("session-1"), &stats);
+        let entries = read_trace_lines(recorder.as_ref());
+        let state_payload = find_event_payload(&entries, "h264Inspection");
+        assert_eq!(
+            state_payload["bootstrapRejectReason"],
+            "bootstrapMissingSps"
+        );
+        assert_eq!(state_payload["committedSpsPresent"], false);
+        assert_eq!(state_payload["hasInbandSps"], false);
+        assert_eq!(state_payload["hasInbandPps"], false);
+        assert_eq!(state_payload["admissionAccepted"], false);
+        let payload = find_event_payload(&entries, "h264InspectionRejected");
+        assert_eq!(payload["observationId"], 2194672423u64);
+        assert_eq!(payload["frameRtpTimestamp"], 2194672423u32);
+        assert_eq!(payload["bootstrapRejectReason"], "bootstrapMissingSps");
+        assert_eq!(payload["committedSpsPresent"], false);
+        assert_eq!(payload["committedPpsPresent"], false);
+    }
+
+    #[test]
+    fn record_runtime_trace_observations_keeps_bootstrap_gap_delta_slice_as_observed() {
+        let recorder = std::sync::Arc::new(
+            RuntimeTraceRecorder::new_with_mode("verbose").expect("trace recorder"),
+        );
+        let mut state = RuntimeTraceObservationState::default();
+        let stats = test_stats(json!({
+            "resolution": "",
+            "rtt": "",
+            "fps": 0.0,
+            "pl": "0.00%",
+            "fl": "",
+            "jit": "",
+            "br": "",
+            "decode": "",
+            "latest_h264_inspection_observation": {
+                "observation_id": 2194672444u64,
+                "frame_rtp_timestamp": 2194672444u32,
+                "nal_types": ["SliceLayerWithoutPartitioningNonIdr"],
+                "has_inband_sps": false,
+                "has_inband_pps": false,
+                "committed_sps_present": true,
+                "committed_pps_present": true,
+                "slice_headers_valid": true,
+                "delta_continuation_ready": true,
+                "parameter_sets_changed": false,
+                "config_changed": false,
+                "is_idr": false,
+                "bootstrap_ready": false,
+                "bootstrap_reject_reason": "bootstrapMissingSps",
+                "admission_accepted": true,
+                "observed_at_ms": 1400.0
+            }
+        }));
+
+        record_runtime_trace_observations(&recorder, &mut state, Some("session-1"), &stats);
+        let entries = read_trace_lines(recorder.as_ref());
+        let state_payload = find_event_payload(&entries, "h264Inspection");
+        assert_eq!(
+            state_payload["bootstrapRejectReason"],
+            "bootstrapMissingSps"
+        );
+        assert_eq!(state_payload["deltaContinuationReady"], true);
+        assert_eq!(state_payload["admissionAccepted"], true);
+        let payload = find_event_payload(&entries, "h264InspectionObserved");
+        assert_eq!(payload["observationId"], 2194672444u64);
+        assert_eq!(payload["bootstrapRejectReason"], "bootstrapMissingSps");
+        assert_eq!(payload["admissionAccepted"], true);
     }
 
     #[test]
@@ -2268,6 +2810,94 @@ mod tests {
     }
 
     #[test]
+    fn host_present_state_projects_cadence_epoch_signals() {
+        let recorder = std::sync::Arc::new(
+            RuntimeTraceRecorder::new_with_mode("verbose").expect("trace recorder"),
+        );
+        let mut state = RuntimeTraceObservationState::default();
+        let stats = test_stats(json!({
+            "resolution": "",
+            "rtt": "",
+            "fps": 0.0,
+            "pl": "0.00%",
+            "fl": "",
+            "jit": "",
+            "br": "",
+            "decode": "",
+            "present_fps": 59.8,
+            "video_present_submit_count_total": 301,
+            "host_display_tick_epoch": 4096,
+            "video_present_epoch": 3901,
+            "host_cadence_phase": "steady"
+        }));
+
+        record_runtime_trace_observations(&recorder, &mut state, Some("session-1"), &stats);
+        let entries = read_trace_lines(recorder.as_ref());
+        let payload = find_event_payload(&entries, "hostPresentState");
+        assert_eq!(payload["displayTickEpoch"], 4096);
+        assert_eq!(payload["presentEpoch"], 3901);
+        assert_eq!(payload["cadencePhase"], "steady");
+    }
+
+    #[test]
+    fn host_present_state_records_present_age_transition_from_none_to_fresh() {
+        let recorder = std::sync::Arc::new(
+            RuntimeTraceRecorder::new_with_mode("verbose").expect("trace recorder"),
+        );
+        let mut state = RuntimeTraceObservationState::default();
+        let first = test_stats(json!({
+            "resolution": "",
+            "rtt": "",
+            "fps": 0.0,
+            "pl": "0.00%",
+            "fl": "",
+            "jit": "",
+            "br": "",
+            "decode": "",
+            "present_fps": 0.0,
+            "video_present_submit_count_total": 0,
+            "video_present_drop_count_total": 0,
+            "video_present_overwrite_count_total": 0,
+            "host_no_pending_take_count_total": 0,
+            "host_no_pending_streak": 0,
+            "host_no_pending_max_streak": 0,
+            "host_no_pending_pressure_level": "normal",
+            "present_age_ms": null
+        }));
+        let second = test_stats(json!({
+            "resolution": "",
+            "rtt": "",
+            "fps": 0.0,
+            "pl": "0.00%",
+            "fl": "",
+            "jit": "",
+            "br": "",
+            "decode": "",
+            "present_fps": 59.0,
+            "video_present_submit_count_total": 1,
+            "video_present_drop_count_total": 0,
+            "video_present_overwrite_count_total": 0,
+            "host_no_pending_take_count_total": 1,
+            "host_no_pending_streak": 0,
+            "host_no_pending_max_streak": 1,
+            "host_no_pending_pressure_level": "normal",
+            "present_age_ms": 12.0
+        }));
+
+        record_runtime_trace_observations(&recorder, &mut state, Some("session-1"), &first);
+        record_runtime_trace_observations(&recorder, &mut state, Some("session-1"), &second);
+
+        let entries = read_trace_lines(recorder.as_ref());
+        let host_rows: Vec<_> = entries
+            .iter()
+            .filter(|entry| entry["event"] == "hostPresentState")
+            .collect();
+        assert_eq!(host_rows.len(), 2);
+        assert!(host_rows[0]["payload"]["presentAgeMs"].is_null());
+        assert_eq!(host_rows[1]["payload"]["presentAgeMs"], 12.0);
+    }
+
+    #[test]
     fn direct_gaming_state_projects_display_supply_health_and_issue_chain() {
         let recorder = std::sync::Arc::new(
             RuntimeTraceRecorder::new_with_mode("verbose").expect("trace recorder"),
@@ -2283,20 +2913,18 @@ mod tests {
             "br": "",
             "decode": "",
             "session_phase": "steady",
-            "transport_policy_profile": "cloud",
-            "recovery_policy_profile": "cloud",
+            "transport_strategy_profile": "cloud",
+            "recovery_strategy_profile": "cloud",
             "recovery_diagnosis": "adapterIdleTimeout",
             "direct_gaming_bitrate_band": "steady",
             "runtime_summary": "cloud/steady/steady/displaySupplyStarved",
             "primary_issue_chain": "display:supplyStarved",
             "latest_decision_summary": "owner:supplyStarved:supplyStarved",
-            "video_owner_state": "supplyStarved",
-            "video_owner_reason": "supplyStarved",
+            "recovery_owner_state": "supplyStarved",
+            "recovery_owner_reason": "supplyStarved",
             "video_owner_source": "supply",
             "video_owner_observed_at_ms": 3200.0,
             "video_health": "displaySupplyStarved",
-            "recovery_coupling_mode": "legacy",
-            "recovery_coupling_summary": "legacy-summary",
             "stall_kind": "pipelineStall",
             "host_no_pending_take_count_total": 8062,
             "host_no_pending_streak": 1291,
@@ -2315,8 +2943,6 @@ mod tests {
         assert_eq!(payload["videoOwnerSource"], "supply");
         assert_eq!(payload["videoOwnerObservedAtMs"], 3200.0);
         assert_eq!(payload["primaryIssueChain"], "display:supplyStarved");
-        assert_eq!(payload["recoveryCouplingMode"], "legacy");
-        assert_eq!(payload["recoveryCouplingSummary"], "legacy-summary");
         let host_payload = find_event_payload(&entries, "hostPresentState");
         assert_eq!(host_payload["noPendingPressureLevel"], "critical");
         assert_eq!(host_payload["presentAgeMs"], 1624.0);
@@ -2338,12 +2964,10 @@ mod tests {
             "br": "",
             "decode": "",
             "session_phase": "steady",
-            "transport_policy_profile": "cloud",
-            "recovery_policy_profile": "cloud",
-            "recovery_coupling_mode": "rebuildingSupply",
-            "recovery_coupling_summary": "timelineReferenceBroken",
-            "video_owner_state": "rebuildingSupply",
-            "video_owner_reason": "timelineReferenceBroken",
+            "transport_strategy_profile": "cloud",
+            "recovery_strategy_profile": "cloud",
+            "recovery_owner_state": "rebuildingSupply",
+            "recovery_owner_reason": "timelineReferenceBroken",
             "video_owner_source": "anchor",
             "video_owner_observed_at_ms": 4096.0,
             "video_health": "recovering",

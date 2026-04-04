@@ -85,6 +85,9 @@ fn allows_bwe_update(
         ) | (
             VideoSchedulingOwnerState::StableServing,
             VideoHealthContract::Stable
+        ) | (
+            VideoSchedulingOwnerState::DegradedServing,
+            VideoHealthContract::Stable
         )
     )
 }

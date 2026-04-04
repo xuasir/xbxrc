@@ -16,7 +16,7 @@ use crate::transport::rtc::recovery::nack_outcome::{
 use crate::transport::rtc::recovery::policy::RecoveryScenarioProfile;
 use crate::transport::rtc::recovery::repeat_suppression::resolve_recent_repeat_suppression;
 use crate::transport::rtc::recovery::runtime_state::{
-    has_fresh_media_output, resolve_recovery_profile, unix_now_ms,
+    has_fresh_media_output, recovery_stage_label_from_stats, resolve_recovery_profile, unix_now_ms,
 };
 #[cfg(test)]
 use crate::transport::rtc::recovery::runtime_state::{
@@ -72,6 +72,8 @@ pub struct RecoveryCoordinator {
 
 const TRANSPORT_AWAIT_RECOVERY_KEYFRAME_STREAK_WINDOW_MS: f64 = 3_500.0;
 const TRANSPORT_AWAIT_CONNECTED_INGRESS_EVIDENCE_MAX_AGE_MS: f64 = 4_000.0;
+const CLEAN_ANCHOR_EPOCH_GRACE_MAX_DELTA: u64 = 1;
+const CLEAN_ANCHOR_EPOCH_GRACE_WINDOW_MS: f64 = 1_500.0;
 
 impl RecoveryCoordinator {
     pub fn new(
@@ -345,10 +347,19 @@ impl RecoveryCoordinator {
         if timer_ms < profile.hard_fallback_transport_await_timeout_ms as f64 {
             return None;
         }
+        let recovery_stage = RuntimeStatsSink::read_shared(runtime_stats, |stats| {
+            recovery_stage_label_from_stats(stats)
+        })
+        .unwrap_or("steady");
         if !Self::has_transport_await_decoder_reset_attempt_since(runtime_stats, started_at_ms) {
             // staged recovery: hard fallback 超时后，若还能确认 Connected + ingress 仍在推进，
-            // 就允许直接升到 reconnect；否则继续要求先走 decoder reset 尝试。
-            if !Self::has_transport_await_connected_ingress_evidence(runtime_stats, observed_at_ms)
+            // 或者已经处在 reconnecting 阶段，就允许直接升到 reconnect；
+            // 否则继续要求先走 decoder reset 尝试。
+            if recovery_stage != "reconnecting"
+                && !Self::has_transport_await_connected_ingress_evidence(
+                    runtime_stats,
+                    observed_at_ms,
+                )
             {
                 return None;
             }
@@ -387,6 +398,10 @@ impl RecoveryCoordinator {
         ) {
             return None;
         }
+        let recovery_stage = RuntimeStatsSink::read_shared(runtime_stats, |stats| {
+            recovery_stage_label_from_stats(stats)
+        })
+        .unwrap_or("steady");
         let has_stall_evidence = Self::has_transport_await_hard_fallback_evidence(
             runtime_stats,
             observed_at_ms,
@@ -408,7 +423,13 @@ impl RecoveryCoordinator {
                     .suppressed(RecoveryAction::RequestDecoderReset),
             );
         }
-        let streak_threshold = if has_stall_evidence { 2 } else { 3 };
+        let streak_threshold = match (recovery_stage, has_stall_evidence) {
+            ("rebuilding-supply", true) => 1,
+            ("priming", true) => 3,
+            (_, true) => 2,
+            ("priming", false) => 4,
+            _ => 3,
+        };
         if self.await_recovery_keyframe_streak >= streak_threshold {
             Some(
                 self.escalation_controller
@@ -427,7 +448,7 @@ impl RecoveryCoordinator {
         RuntimeStatsSink::read_shared(runtime_stats, |stats| {
             let no_fresh_output = !has_fresh_media_output(stats, now_ms);
             let present_age_ms = stats
-                .latest_video_present_time_ms
+                .latest_video_host_present_time_ms
                 .map(|at_ms| (now_ms - at_ms).max(0.0));
             let present_expired = present_age_ms.is_some_and(|age_ms| {
                 age_ms >= profile.display_supply_thresholds.critical_present_age_ms
@@ -539,15 +560,16 @@ impl RecoveryCoordinator {
         recovery_epoch: u64,
         now_ms: f64,
     ) -> bool {
-        let explicit_clean_anchor = clean_anchor_epoch.is_some_and(|epoch| {
-            Self::clean_anchor_epoch_is_usable(
-                epoch,
-                clean_anchor_observed_at_ms,
-                recovery_epoch,
-                now_ms,
-            )
-        }) && clean_anchor_source_event
-            == Some("chain-clean-keyframe-submitted");
+        let explicit_clean_anchor = clean_anchor_epoch
+            .is_some_and(|epoch| {
+                Self::clean_anchor_epoch_is_usable(
+                    epoch,
+                    clean_anchor_observed_at_ms,
+                    recovery_epoch,
+                    now_ms,
+                )
+            })
+            && clean_anchor_source_event == Some("chain-clean-keyframe-submitted");
         if explicit_clean_anchor {
             return true;
         }
@@ -569,8 +591,6 @@ impl RecoveryCoordinator {
         current_recovery_epoch: u64,
         now_ms: f64,
     ) -> bool {
-        const CLEAN_ANCHOR_EPOCH_GRACE_MAX_DELTA: u64 = 1;
-        const CLEAN_ANCHOR_EPOCH_GRACE_WINDOW_MS: f64 = 1_500.0;
         if anchor_epoch == current_recovery_epoch {
             return true;
         }
@@ -780,10 +800,7 @@ mod tests {
     use crate::transport::rtc::recovery::escalation::{
         RecoveryAction, VideoEscalationConfig, VideoEscalationController, VideoEscalationReason,
     };
-    use crate::transport::rtc::recovery::runtime_state::{
-        resolve_recovery_coupling_state, resolve_recovery_profile, unix_now_ms,
-        RecoveryCouplingMode,
-    };
+    use crate::transport::rtc::recovery::runtime_state::{resolve_recovery_profile, unix_now_ms};
     use crate::transport::rtc::recovery::startup::SessionPhase;
     use crate::XbxEngineMediaRuntimeStats;
     use crate::{
@@ -837,7 +854,7 @@ mod tests {
     }
 
     #[test]
-    fn cloud_uses_relaxed_startup_recovery_profile() {
+    fn cloud_uses_less_throttled_recovery_profile() {
         let mut stats = XbxEngineMediaRuntimeStats::default();
         stats.session_target_type = Some(XbxEngineTargetTypeDto::Cloud);
         stats.transport_path = Some("Direct (host->host)".to_string());
@@ -846,11 +863,11 @@ mod tests {
         assert_eq!(profile.startup_low_quality_retry_delay_ms, 650);
         assert_eq!(profile.startup_low_quality_floor_kbps, 14_000.0);
         assert_eq!(profile.startup_low_quality_recovered_kbps, 20_000.0);
-        assert_eq!(profile.escalation_cooldown_ms, 650);
-        assert_eq!(profile.escalation_keyframe_min_interval_ms, 650);
-        assert_eq!(profile.escalation_upgrade_window_ms, 2_600);
-        assert_eq!(profile.escalation_keyframe_upgrade_min_delay_ms, 550);
-        assert_eq!(profile.hard_fallback_transport_await_timeout_ms, 6_500);
+        assert_eq!(profile.escalation_cooldown_ms, 420);
+        assert_eq!(profile.escalation_keyframe_min_interval_ms, 420);
+        assert_eq!(profile.escalation_upgrade_window_ms, 1_800);
+        assert_eq!(profile.escalation_keyframe_upgrade_min_delay_ms, 300);
+        assert_eq!(profile.hard_fallback_transport_await_timeout_ms, 4_500);
         assert_eq!(
             profile.display_supply_thresholds.degraded_no_pending_streak,
             64
@@ -909,6 +926,7 @@ mod tests {
             nack_disposition: Some("attempted".to_string()),
             frame_playout_deadline_at_ms: None,
             frame_unrecoverable_reason: None,
+            frame_budget: None,
             observed_at_ms,
         }
     }
@@ -1019,7 +1037,7 @@ mod tests {
         let now_ms = unix_now_ms();
         let mut stats = XbxEngineMediaRuntimeStats::default();
         stats.video_renderer_stalled = Some(true);
-        stats.latest_video_present_time_ms = Some(now_ms - 2_000.0);
+        stats.latest_video_host_present_time_ms = Some(now_ms - 2_000.0);
         stats.latest_video_packet_arrival_time_ms = Some(now_ms - 40.0);
         stats.latest_video_nack_observation = Some(make_test_nack_observation(
             "expiredDeadline",
@@ -1046,7 +1064,7 @@ mod tests {
         stats.transport_state = XbxEngineTransportStateDto::Connected;
         stats.latest_video_packet_arrival_time_ms = Some(now_ms - 30.0);
         stats.latest_video_decode_ok_time_ms = Some(now_ms - 1_800.0);
-        stats.latest_video_present_time_ms = Some(now_ms - 1_800.0);
+        stats.latest_video_host_present_time_ms = Some(now_ms - 1_800.0);
         stats.video_renderer_stalled = Some(true);
         stats.latest_video_twcc_observation = Some(healthy_twcc_observation(now_ms - 20.0));
         stats.video_decoder_hardware_failure_streak = 4;
@@ -1078,7 +1096,7 @@ mod tests {
         stats.transport_state = XbxEngineTransportStateDto::Connected;
         stats.latest_video_packet_arrival_time_ms = Some(now_ms - 30.0);
         stats.latest_video_decode_ok_time_ms = Some(now_ms - 1_800.0);
-        stats.latest_video_present_time_ms = Some(now_ms - 1_800.0);
+        stats.latest_video_host_present_time_ms = Some(now_ms - 1_800.0);
         stats.video_renderer_stalled = Some(true);
         stats.latest_video_twcc_observation = Some(healthy_twcc_observation(now_ms - 20.0));
         stats.video_decoder_hardware_failure_streak = 5;
@@ -1104,7 +1122,7 @@ mod tests {
         stats.transport_state = XbxEngineTransportStateDto::Connected;
         stats.latest_video_packet_arrival_time_ms = Some(now_ms - 20.0);
         stats.latest_video_decode_ok_time_ms = Some(now_ms - 1_800.0);
-        stats.latest_video_present_time_ms = Some(now_ms - 1_800.0);
+        stats.latest_video_host_present_time_ms = Some(now_ms - 1_800.0);
         stats.video_renderer_stalled = Some(true);
         stats.latest_video_twcc_observation = Some(healthy_twcc_observation(now_ms - 20.0));
         stats.video_decoder_hardware_failure_streak = 3;
@@ -1117,11 +1135,13 @@ mod tests {
             Duration::from_millis(800),
         );
         assert_eq!(state.phase, SessionPhase::Recovering);
-        assert_eq!(state.recovery_policy_profile, "homeLanGaming");
+        assert_eq!(state.input_profile.baseline, "homeLanGaming");
         assert_eq!(
-            state.coupling.mode,
-            RecoveryCouplingMode::RecoveringReferenceChain
+            state.input_profile.effective_label,
+            "homeLanGaming+decoderConstrained"
         );
+        assert_eq!(state.primary_view.owner_state, "rebuilding-supply");
+        assert_eq!(state.primary_view.owner_reason, "decoderBackendFailure");
         assert_eq!(state.diagnosis_label, "decoderBackendFailure");
     }
 
@@ -1132,7 +1152,7 @@ mod tests {
         stats.transport_state = XbxEngineTransportStateDto::Connected;
         stats.latest_video_packet_arrival_time_ms = Some(now_ms - 20.0);
         stats.latest_video_decode_ok_time_ms = Some(now_ms - 60.0);
-        stats.latest_video_present_time_ms = Some(now_ms - 60.0);
+        stats.latest_video_host_present_time_ms = Some(now_ms - 60.0);
         stats.video_renderer_stalled = Some(false);
         stats.latest_video_twcc_observation = Some(healthy_twcc_observation(now_ms - 20.0));
         stats.video_decoder_hardware_failure_streak = 4;
@@ -1145,8 +1165,9 @@ mod tests {
             Duration::from_millis(800),
         );
         assert_eq!(state.phase, SessionPhase::Steady);
-        assert_eq!(state.recovery_policy_profile, "homeLanGaming");
-        assert_eq!(state.coupling.mode, RecoveryCouplingMode::Healthy);
+        assert_eq!(state.input_profile.baseline, "homeLanGaming");
+        assert_eq!(state.primary_view.owner_state, "stable-serving");
+        assert_eq!(state.primary_view.owner_reason, "transportExpiredDeadline");
         assert_eq!(state.diagnosis_label, "transportExpiredDeadline");
     }
 
@@ -1210,6 +1231,10 @@ mod tests {
                 observation_id: 7,
                 reason: "ingressWaitKeyframe".to_string(),
                 action: "requestKeyframe".to_string(),
+                recovery_stage: "rebuilding-supply".to_string(),
+                recovery_chain_value: "anchor".to_string(),
+                recovery_failure_cost: "medium".to_string(),
+                recovery_window_source: "transport-await-window".to_string(),
                 observed_at_ms: std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)
                     .unwrap()
@@ -1236,6 +1261,10 @@ mod tests {
                 observation_id: 17,
                 reason: "ingressWaitKeyframe".to_string(),
                 action: "requestKeyframe".to_string(),
+                recovery_stage: "rebuilding-supply".to_string(),
+                recovery_chain_value: "anchor".to_string(),
+                recovery_failure_cost: "medium".to_string(),
+                recovery_window_source: "transport-await-window".to_string(),
                 observed_at_ms: now_ms - 40.0,
             });
         let mut coordinator = RecoveryCoordinator::new(
@@ -1257,6 +1286,10 @@ mod tests {
                 observation_id: 9,
                 reason: "ingressWaitKeyframe".to_string(),
                 action: "cooldownSuppressed".to_string(),
+                recovery_stage: "rebuilding-supply".to_string(),
+                recovery_chain_value: "anchor".to_string(),
+                recovery_failure_cost: "low".to_string(),
+                recovery_window_source: "transport-await-window".to_string(),
                 observed_at_ms: now_ms - 50.0,
             });
         let mut coordinator = RecoveryCoordinator::new(
@@ -1270,6 +1303,44 @@ mod tests {
     }
 
     #[test]
+    fn transport_await_mild_lag_in_steady_stage_stays_suppressed_without_stall_evidence() {
+        let now_ms = unix_now_ms();
+        let mut stats = XbxEngineMediaRuntimeStats::default();
+        stats.session_phase = Some("steady".to_string());
+        stats.video_owner_state = Some("stable-serving".to_string());
+        stats.transport_state = XbxEngineTransportStateDto::Connected;
+        stats.video_present_fps = 58.0;
+        stats.latest_video_host_present_time_ms = Some(now_ms - 40.0);
+        stats.latest_video_decode_ok_time_ms = Some(now_ms - 40.0);
+        let shared_stats = Mutex::new(stats);
+        let mut coordinator = RecoveryCoordinator::new(
+            test_escalation_controller(250, 1, 1),
+            Instant::now() - Duration::from_secs(3),
+            Duration::from_millis(800),
+        );
+
+        let first = coordinator.propose_from_owner_signal(
+            RecoveryOwnerSignal {
+                reason: VideoEscalationReason::TransportAwaitRecoveryKeyframe,
+                reason_label: "transportAwaitRecoveryKeyframe".to_string(),
+                observed_at_ms: now_ms,
+            },
+            &shared_stats,
+        );
+        assert_eq!(first.decision.action, RecoveryAction::RequestKeyframe);
+
+        let second = coordinator.propose_from_owner_signal(
+            RecoveryOwnerSignal {
+                reason: VideoEscalationReason::TransportAwaitRecoveryKeyframe,
+                reason_label: "transportAwaitRecoveryKeyframe".to_string(),
+                observed_at_ms: now_ms + 130.0,
+            },
+            &shared_stats,
+        );
+        assert_eq!(second.decision.action, RecoveryAction::CooldownSuppressed);
+    }
+
+    #[test]
     fn recent_idle_timeout_decoder_reset_suppresses_repeat_idle_timeout() {
         let mut stats = XbxEngineMediaRuntimeStats::default();
         stats.transport_recovery_epoch = 3;
@@ -1279,6 +1350,10 @@ mod tests {
                 observation_id: 8,
                 reason: "adapterIdleTimeout".to_string(),
                 action: "requestDecoderReset".to_string(),
+                recovery_stage: "rebuilding-supply".to_string(),
+                recovery_chain_value: "health".to_string(),
+                recovery_failure_cost: "high".to_string(),
+                recovery_window_source: "decoder-reset-window".to_string(),
                 observed_at_ms: std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)
                     .unwrap()
@@ -1304,7 +1379,7 @@ mod tests {
         stats.inbound_video_bitrate_kbps = Some(0.0);
         stats.direct_gaming_bitrate_band = Some("paused".to_string());
         stats.video_present_fps = 0.0;
-        stats.latest_video_present_time_ms = Some(now_ms - 1_600.0);
+        stats.latest_video_host_present_time_ms = Some(now_ms - 1_600.0);
         stats.latest_video_packet_arrival_time_ms = Some(now_ms - 1_600.0);
         stats.latest_video_decoder_reset_time_ms = Some(now_ms - 1_400.0);
         let mut coordinator = RecoveryCoordinator::new(
@@ -1327,7 +1402,7 @@ mod tests {
         stats.inbound_video_bitrate_kbps = Some(0.0);
         stats.direct_gaming_bitrate_band = Some("paused".to_string());
         stats.video_present_fps = 0.0;
-        stats.latest_video_present_time_ms = Some(now_ms - 3_600.0);
+        stats.latest_video_host_present_time_ms = Some(now_ms - 3_600.0);
         stats.latest_video_packet_arrival_time_ms = Some(now_ms - 3_600.0);
         stats.latest_video_decoder_reset_time_ms = Some(now_ms - 2_200.0);
         stats.latest_video_escalation_observation =
@@ -1335,6 +1410,10 @@ mod tests {
                 observation_id: 11,
                 reason: "adapterIdleTimeout".to_string(),
                 action: "cooldownSuppressed".to_string(),
+                recovery_stage: "steady".to_string(),
+                recovery_chain_value: "health".to_string(),
+                recovery_failure_cost: "low".to_string(),
+                recovery_window_source: "session-phase-window".to_string(),
                 observed_at_ms: now_ms - 200.0,
             });
         let mut coordinator = RecoveryCoordinator::new(
@@ -1358,7 +1437,7 @@ mod tests {
         stats.direct_gaming_bitrate_band = Some("paused".to_string());
         stats.video_present_fps = 30.0;
         stats.video_renderer_stalled = Some(true);
-        stats.latest_video_present_time_ms = Some(now_ms - 3_600.0);
+        stats.latest_video_host_present_time_ms = Some(now_ms - 3_600.0);
         stats.latest_video_packet_arrival_time_ms = Some(now_ms - 3_600.0);
         stats.latest_video_decoder_reset_time_ms = Some(now_ms - 2_200.0);
         stats.latest_video_escalation_observation =
@@ -1366,6 +1445,10 @@ mod tests {
                 observation_id: 12,
                 reason: "adapterIdleTimeout".to_string(),
                 action: "cooldownSuppressed".to_string(),
+                recovery_stage: "steady".to_string(),
+                recovery_chain_value: "health".to_string(),
+                recovery_failure_cost: "low".to_string(),
+                recovery_window_source: "session-phase-window".to_string(),
                 observed_at_ms: now_ms - 200.0,
             });
         let mut coordinator = RecoveryCoordinator::new(
@@ -1388,7 +1471,7 @@ mod tests {
         stats.inbound_video_bitrate_kbps = Some(0.0);
         stats.direct_gaming_bitrate_band = Some("paused".to_string());
         stats.video_present_fps = 0.0;
-        stats.latest_video_present_time_ms = Some(now_ms - 3_600.0);
+        stats.latest_video_host_present_time_ms = Some(now_ms - 3_600.0);
         stats.latest_video_packet_arrival_time_ms = Some(now_ms - 3_600.0);
         stats.latest_video_decoder_reset_time_ms = Some(now_ms - 2_200.0);
         stats.latest_video_escalation_observation =
@@ -1396,6 +1479,10 @@ mod tests {
                 observation_id: 13,
                 reason: "transportExpiredDeadline".to_string(),
                 action: "cooldownSuppressed".to_string(),
+                recovery_stage: "steady".to_string(),
+                recovery_chain_value: "health".to_string(),
+                recovery_failure_cost: "low".to_string(),
+                recovery_window_source: "hard-stall-window".to_string(),
                 observed_at_ms: now_ms - 200.0,
             });
         let mut coordinator = RecoveryCoordinator::new(
@@ -1411,40 +1498,52 @@ mod tests {
     }
 
     #[test]
-    fn startup_low_quality_maps_to_coupled_hold_mode() {
+    fn startup_low_quality_falls_back_to_rebuilding_supply_primary_view() {
         let mut stats = XbxEngineMediaRuntimeStats::default();
         stats.session_phase = Some("startup".to_string());
         stats.direct_gaming_bitrate_band = Some("startupLow".to_string());
-        let state = resolve_recovery_coupling_state(&Mutex::new(stats), SessionPhase::Startup);
-        assert_eq!(state.mode, RecoveryCouplingMode::StartupLowQuality);
-        assert!(state.suppress_ramp_up);
-        assert!(state.prefer_hold);
-        assert!(!state.allow_peak_range);
+        let state = RecoveryCoordinator::runtime_state_for_diagnosis(
+            &Mutex::new(stats),
+            "healthy",
+            Instant::now(),
+            Duration::from_millis(800),
+        );
+        assert_eq!(state.primary_view.owner_state, "rebuilding-supply");
+        assert_eq!(state.primary_view.owner_reason, "healthy");
     }
 
     #[test]
-    fn adapter_idle_timeout_maps_to_stalled_coupling() {
+    fn adapter_idle_timeout_falls_back_to_rebuilding_primary_view() {
         let mut stats = XbxEngineMediaRuntimeStats::default();
         stats.recovery_diagnosis = Some("adapterIdleTimeout".to_string());
-        let state = resolve_recovery_coupling_state(&Mutex::new(stats), SessionPhase::Recovering);
-        assert_eq!(state.mode, RecoveryCouplingMode::Stalled);
-        assert!(state.suppress_ramp_up);
-        assert!(state.prefer_hold);
-        assert!(!state.allow_peak_range);
+        let state = RecoveryCoordinator::runtime_state_for_diagnosis(
+            &Mutex::new(stats),
+            "adapterIdleTimeout",
+            Instant::now() - Duration::from_secs(3),
+            Duration::from_millis(800),
+        );
+        assert_eq!(state.phase, SessionPhase::Recovering);
+        assert_eq!(state.primary_view.owner_state, "rebuilding-supply");
+        assert_eq!(state.primary_view.owner_reason, "adapterIdleTimeout");
     }
 
     #[test]
-    fn adapter_idle_timeout_is_ignored_when_output_is_fresh() {
+    fn fresh_output_falls_back_to_stable_primary_view() {
         let now_ms = unix_now_ms();
         let mut stats = XbxEngineMediaRuntimeStats::default();
         stats.recovery_diagnosis = Some("adapterIdleTimeout".to_string());
-        stats.latest_video_present_time_ms = Some(now_ms - 40.0);
+        stats.latest_video_host_present_time_ms = Some(now_ms - 40.0);
         stats.latest_video_decode_ok_time_ms = Some(now_ms - 40.0);
         stats.video_present_fps = 58.0;
-        let state = resolve_recovery_coupling_state(&Mutex::new(stats), SessionPhase::Steady);
-        assert_eq!(state.mode, RecoveryCouplingMode::Healthy);
-        assert!(!state.suppress_ramp_up);
-        assert!(state.allow_peak_range);
+        let state = RecoveryCoordinator::runtime_state_for_diagnosis(
+            &Mutex::new(stats),
+            "adapterIdleTimeout",
+            Instant::now() - Duration::from_secs(3),
+            Duration::from_millis(800),
+        );
+        assert_eq!(state.phase, SessionPhase::Steady);
+        assert_eq!(state.primary_view.owner_state, "stable-serving");
+        assert_eq!(state.primary_view.owner_reason, "healthy");
     }
 
     #[test]
@@ -1457,6 +1556,10 @@ mod tests {
                 observation_id: 1,
                 reason: "adapterIdleTimeout".to_string(),
                 action: "requestDecoderReset".to_string(),
+                recovery_stage: "priming".to_string(),
+                recovery_chain_value: "health".to_string(),
+                recovery_failure_cost: "high".to_string(),
+                recovery_window_source: "startup-grace".to_string(),
                 observed_at_ms: now_ms - 500.0,
             });
         stats.latest_video_track_status = Some(crate::XbxEngineVideoTrackStatus {
@@ -1478,20 +1581,10 @@ mod tests {
             Duration::from_millis(800),
         );
         assert_eq!(state.phase, SessionPhase::Startup);
-        assert_eq!(state.recovery_policy_profile, "homeLanGaming");
-        assert_eq!(state.coupling.mode, RecoveryCouplingMode::Stalled);
+        assert_eq!(state.input_profile.baseline, "homeLanGaming");
+        assert_eq!(state.primary_view.owner_state, "rebuilding-supply");
+        assert_eq!(state.primary_view.owner_reason, "healthy");
         assert_eq!(state.diagnosis_label, "healthy");
-    }
-
-    #[test]
-    fn steady_healthy_output_exits_recovery_coupling() {
-        let mut stats = XbxEngineMediaRuntimeStats::default();
-        stats.inbound_video_bitrate_kbps = Some(16_500.0);
-        stats.video_present_fps = 58.0;
-        let state = resolve_recovery_coupling_state(&Mutex::new(stats), SessionPhase::Steady);
-        assert_eq!(state.mode, RecoveryCouplingMode::Healthy);
-        assert!(!state.suppress_ramp_up);
-        assert!(state.allow_peak_range);
     }
 
     #[test]
@@ -1543,6 +1636,10 @@ mod tests {
                     observation_id: 200,
                     reason: "waitKeyframe".to_string(),
                     action: "requestKeyframe".to_string(),
+                    recovery_stage: "rebuilding-supply".to_string(),
+                    recovery_chain_value: "anchor".to_string(),
+                    recovery_failure_cost: "medium".to_string(),
+                    recovery_window_source: "transport-await-window".to_string(),
                     observed_at_ms: now_ms - 50.0,
                 });
         });
@@ -1604,7 +1701,7 @@ mod tests {
         stats.transport_recovery_epoch = 13;
         stats.transport_state = XbxEngineTransportStateDto::Connected;
         stats.video_renderer_stalled = Some(true);
-        stats.latest_video_present_time_ms = Some(now_ms - 2_000.0);
+        stats.latest_video_host_present_time_ms = Some(now_ms - 2_000.0);
         let shared_stats = Mutex::new(stats);
         let mut coordinator = RecoveryCoordinator::new(
             test_escalation_controller(120, 1, 1),
@@ -1722,6 +1819,66 @@ mod tests {
     }
 
     #[test]
+    fn recent_clean_anchor_candidate_ledger_keeps_transport_await_recovery_keyframe_from_forcing_hard_escalation(
+    ) {
+        let now_ms = unix_now_ms();
+        let mut stats = XbxEngineMediaRuntimeStats::default();
+        stats.transport_recovery_epoch = 12;
+        stats.latest_anchor_candidate_ledger = Some(crate::XbxEngineAnchorCandidateLedger {
+            recovery_epoch: 12,
+            frame_rtp_timestamp: Some(98_765),
+            state: crate::XbxEngineAnchorCandidateState::SubmittedCleanAnchor,
+            source_event: "chain-clean-keyframe-submitted".to_string(),
+            failure_reason: None,
+            observed_at_ms: now_ms - 180.0,
+        });
+        stats.latest_video_timeline_observation = Some(crate::XbxEngineVideoTimelineObservation {
+            observation_id: 43,
+            source_event: "frame-observed".to_string(),
+            gap: None,
+            frame: None,
+            chain: crate::XbxEngineVideoTimelineChainSnapshot {
+                state: "healthy".to_string(),
+                reason: None,
+                observed_at_ms: now_ms - 30.0,
+            },
+            observed_at_ms: now_ms - 30.0,
+        });
+        let shared_stats = Mutex::new(stats);
+        let mut coordinator = RecoveryCoordinator::new(
+            test_escalation_controller(120, 1, 1),
+            Instant::now() - Duration::from_secs(3),
+            Duration::from_millis(800),
+        );
+
+        let _ = coordinator.propose_from_owner_signal(
+            RecoveryOwnerSignal {
+                reason: VideoEscalationReason::TransportAwaitRecoveryKeyframe,
+                reason_label: "transportAwaitRecoveryKeyframe".to_string(),
+                observed_at_ms: now_ms,
+            },
+            &shared_stats,
+        );
+        let _ = coordinator.propose_from_owner_signal(
+            RecoveryOwnerSignal {
+                reason: VideoEscalationReason::TransportAwaitRecoveryKeyframe,
+                reason_label: "transportAwaitRecoveryKeyframe".to_string(),
+                observed_at_ms: now_ms + 60.0,
+            },
+            &shared_stats,
+        );
+        let third = coordinator.propose_from_owner_signal(
+            RecoveryOwnerSignal {
+                reason: VideoEscalationReason::TransportAwaitRecoveryKeyframe,
+                reason_label: "transportAwaitRecoveryKeyframe".to_string(),
+                observed_at_ms: now_ms + 120.0,
+            },
+            &shared_stats,
+        );
+        assert_eq!(third.decision.action, RecoveryAction::CooldownSuppressed);
+    }
+
+    #[test]
     fn clean_anchor_acknowledgement_resets_transport_await_streak() {
         let now_ms = unix_now_ms();
         let mut stats = XbxEngineMediaRuntimeStats::default();
@@ -1776,7 +1933,7 @@ mod tests {
         let mut stats = XbxEngineMediaRuntimeStats::default();
         stats.transport_recovery_epoch = 20;
         stats.video_renderer_stalled = Some(true);
-        stats.latest_video_present_time_ms = Some(now_ms - 6_000.0);
+        stats.latest_video_host_present_time_ms = Some(now_ms - 6_000.0);
         let shared_stats = Mutex::new(stats);
         let mut coordinator = RecoveryCoordinator::new(
             test_escalation_controller(120, 1, 1),
@@ -1809,6 +1966,10 @@ mod tests {
                     observation_id: 901,
                     reason: "transportAwaitRecoveryKeyframe".to_string(),
                     action: "requestDecoderReset".to_string(),
+                    recovery_stage: "rebuilding-supply".to_string(),
+                    recovery_chain_value: "anchor".to_string(),
+                    recovery_failure_cost: "high".to_string(),
+                    recovery_window_source: "transport-await-window".to_string(),
                     observed_at_ms: now_ms + 1_650.0,
                 });
             stats.latest_video_decoder_reset_time_ms = Some(now_ms + 1_700.0);
@@ -1842,12 +2003,52 @@ mod tests {
     }
 
     #[test]
+    fn transport_await_reconnecting_stage_promotes_reconnect_after_hard_fallback_timeout() {
+        let now_ms = unix_now_ms();
+        let mut stats = XbxEngineMediaRuntimeStats::default();
+        stats.transport_recovery_epoch = 31;
+        stats.transport_state = XbxEngineTransportStateDto::Connecting;
+        stats.transport_recovery_episode_active = true;
+        stats.recovery_diagnosis = Some("transportAwaitRecoveryKeyframe".to_string());
+        stats.video_renderer_stalled = Some(true);
+        stats.latest_video_host_present_time_ms = Some(now_ms - 10_000.0);
+        stats.latest_video_packet_arrival_time_ms = Some(now_ms - 10_000.0);
+        let shared_stats = Mutex::new(stats);
+        let mut coordinator = RecoveryCoordinator::new(
+            test_escalation_controller(120, 1, 1),
+            Instant::now() - Duration::from_secs(3),
+            Duration::from_millis(800),
+        );
+
+        let _ = coordinator.propose_from_owner_signal(
+            RecoveryOwnerSignal {
+                reason: VideoEscalationReason::TransportAwaitRecoveryKeyframe,
+                reason_label: "transportAwaitRecoveryKeyframe".to_string(),
+                observed_at_ms: now_ms,
+            },
+            &shared_stats,
+        );
+        let promoted = coordinator.propose_from_owner_signal(
+            RecoveryOwnerSignal {
+                reason: VideoEscalationReason::TransportAwaitRecoveryKeyframe,
+                reason_label: "transportAwaitRecoveryKeyframe".to_string(),
+                observed_at_ms: now_ms + 10_000.0,
+            },
+            &shared_stats,
+        );
+        assert_eq!(
+            promoted.decision.action,
+            RecoveryAction::RequestReconnectCandidate
+        );
+    }
+
+    #[test]
     fn transport_await_hard_fallback_timer_resets_on_healthy_clean_anchor() {
         let now_ms = unix_now_ms();
         let mut stats = XbxEngineMediaRuntimeStats::default();
         stats.transport_recovery_epoch = 30;
         stats.video_renderer_stalled = Some(true);
-        stats.latest_video_present_time_ms = Some(now_ms - 6_000.0);
+        stats.latest_video_host_present_time_ms = Some(now_ms - 6_000.0);
         let shared_stats = Mutex::new(stats);
         let mut coordinator = RecoveryCoordinator::new(
             test_escalation_controller(120, 1, 1),
@@ -1881,7 +2082,7 @@ mod tests {
                     observed_at_ms: now_ms + 100.0,
                 });
             stats.video_renderer_stalled = Some(false);
-            stats.latest_video_present_time_ms = Some(now_ms + 100.0);
+            stats.latest_video_host_present_time_ms = Some(now_ms + 100.0);
         });
         let _ = coordinator.propose_from_owner_signal(
             RecoveryOwnerSignal {
@@ -1910,7 +2111,7 @@ mod tests {
         let mut stats = XbxEngineMediaRuntimeStats::default();
         stats.transport_recovery_epoch = 32;
         stats.video_renderer_stalled = Some(true);
-        stats.latest_video_present_time_ms = Some(now_ms - 6_000.0);
+        stats.latest_video_host_present_time_ms = Some(now_ms - 6_000.0);
         let shared_stats = Mutex::new(stats);
         let mut coordinator = RecoveryCoordinator::new(
             test_escalation_controller(120, 1, 1),
@@ -1964,7 +2165,7 @@ mod tests {
         stats.transport_recovery_epoch = 41;
         stats.transport_state = XbxEngineTransportStateDto::Connected;
         stats.video_renderer_stalled = Some(true);
-        stats.latest_video_present_time_ms = Some(now_ms - 9_000.0);
+        stats.latest_video_host_present_time_ms = Some(now_ms - 9_000.0);
         stats.host_no_pending_pressure_level = Some("critical".to_string());
         stats.host_no_pending_streak = 320;
         stats.inbound_primary_video_bytes_total = 12_000;
@@ -2025,7 +2226,7 @@ mod tests {
                     observed_at_ms: now_ms + 260.0,
                 });
             stats.video_renderer_stalled = Some(false);
-            stats.latest_video_present_time_ms = Some(now_ms + 260.0);
+            stats.latest_video_host_present_time_ms = Some(now_ms + 260.0);
         });
         let _ = coordinator.propose_from_owner_signal(
             RecoveryOwnerSignal {
@@ -2055,7 +2256,7 @@ mod tests {
                     observed_at_ms: now_ms + 6_900.0,
                 });
             stats.video_renderer_stalled = Some(true);
-            stats.latest_video_present_time_ms = Some(now_ms - 10_000.0);
+            stats.latest_video_host_present_time_ms = Some(now_ms - 10_000.0);
             stats.latest_video_track_status = Some(XbxEngineVideoTrackStatus {
                 state: "remoteTrackAttached".to_string(),
                 video_width: Some(2560),
@@ -2089,7 +2290,7 @@ mod tests {
         let mut stats = XbxEngineMediaRuntimeStats::default();
         stats.transport_recovery_epoch = 31;
         stats.video_renderer_stalled = Some(true);
-        stats.latest_video_present_time_ms = Some(now_ms - 6_000.0);
+        stats.latest_video_host_present_time_ms = Some(now_ms - 6_000.0);
         let shared_stats = Mutex::new(stats);
         let mut coordinator = RecoveryCoordinator::new(
             test_escalation_controller(120, 1, 1),

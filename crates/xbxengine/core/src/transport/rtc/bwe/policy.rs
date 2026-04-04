@@ -1,5 +1,3 @@
-#[path = "policy/coupling.rs"]
-mod coupling;
 #[path = "policy/hybrid_rules.rs"]
 mod hybrid_rules;
 #[path = "policy/twcc_rules.rs"]
@@ -7,13 +5,12 @@ mod twcc_rules;
 
 use xbxengine_protocol::XbxEngineTargetTypeDto;
 
-use self::coupling::{resolve_coupled_hold_target, CoupledHoldContext};
 use self::hybrid_rules::{resolve_hybrid_target, HybridRuleContext};
 use self::twcc_rules::{
     resolve_cooldown_or_ramp, resolve_loss_rule, resolve_rtt_rule, TwccRuleContext,
 };
 use crate::transport::rtc::recovery::policy::{ScenarioPolicyProfileKind, ScenarioPolicyResolver};
-use crate::transport::rtc::recovery::runtime_state::RecoveryCouplingState;
+use crate::transport::rtc::recovery::remote_profile_runtime::resolve_runtime_profile_kind;
 use crate::transport::rtc::recovery::startup::SessionPhase;
 use crate::{
     XbxEngineTwccObservationQuality, XbxEngineVideoTwccObservation, XbxEngineWebRtcRuntimeConfig,
@@ -30,22 +27,26 @@ pub(crate) struct TwccGccInput<'a> {
 }
 
 pub(crate) fn resolve_transport_policy_profile_kind(
+    baseline_remote_profile: Option<&str>,
     session_target_type: Option<&XbxEngineTargetTypeDto>,
     transport_path: Option<&str>,
 ) -> ScenarioPolicyProfileKind {
-    ScenarioPolicyResolver::resolve_kind(session_target_type, transport_path)
+    resolve_runtime_profile_kind(baseline_remote_profile, session_target_type, transport_path)
 }
 
 pub(crate) fn classify_scenario_bitrate_band(
+    baseline_remote_profile: Option<&str>,
     session_target_type: Option<&XbxEngineTargetTypeDto>,
     transport_path: Option<&str>,
     actual_video_bitrate_kbps: Option<f64>,
 ) -> Option<&'static str> {
-    ScenarioPolicyResolver::classify_bitrate_band(
+    let bitrate_kbps = actual_video_bitrate_kbps?;
+    let profile_kind = resolve_transport_policy_profile_kind(
+        baseline_remote_profile,
         session_target_type,
         transport_path,
-        actual_video_bitrate_kbps,
-    )
+    );
+    ScenarioPolicyResolver::classify_bitrate_band_by_kind(profile_kind, bitrate_kbps)
 }
 
 /**
@@ -58,10 +59,10 @@ pub(crate) fn resolve_target_remb_kbps(
     actual_kbps: f64,
     loss_ratio: f64,
     rtt_ms: Option<f64>,
+    baseline_remote_profile: Option<&str>,
     session_target_type: Option<&XbxEngineTargetTypeDto>,
     transport_path: Option<&str>,
     session_phase: SessionPhase,
-    recovery_coupling: Option<RecoveryCouplingState>,
     twcc_observation: Option<&XbxEngineVideoTwccObservation>,
     last_sent_remb_kbps: &mut u32,
     hybrid_ramp_cooldown_ticks: &mut u8,
@@ -82,10 +83,14 @@ pub(crate) fn resolve_target_remb_kbps(
         observation,
         rtt_ms,
     });
-    let transport_profile = ScenarioPolicyResolver::resolve_transport_bwe_profile(
-        config,
+    let profile_kind = resolve_transport_policy_profile_kind(
+        baseline_remote_profile,
         session_target_type,
         transport_path,
+    );
+    let transport_profile = ScenarioPolicyResolver::resolve_transport_bwe_profile_by_kind(
+        config,
+        profile_kind,
         session_phase,
     );
 
@@ -95,7 +100,6 @@ pub(crate) fn resolve_target_remb_kbps(
             current_kbps,
             actual_headroom_kbps,
             transport_profile,
-            recovery_coupling,
             twcc_input.as_ref(),
             hybrid_ramp_cooldown_ticks,
         ),
@@ -107,7 +111,6 @@ pub(crate) fn resolve_target_remb_kbps(
                     current_kbps,
                     actual_headroom_kbps,
                     transport_profile,
-                    recovery_coupling,
                     Some(twcc),
                     hybrid_ramp_cooldown_ticks,
                 )
@@ -149,7 +152,6 @@ pub(crate) fn resolve_twcc_gcc_target(
     current_kbps: u32,
     actual_headroom_kbps: u32,
     profile: crate::transport::rtc::recovery::policy::TransportBweScenarioProfile,
-    recovery_coupling: Option<RecoveryCouplingState>,
     twcc_input: Option<&TwccGccInput<'_>>,
     ramp_cooldown_ticks: &mut u8,
 ) -> (u32, String) {
@@ -162,15 +164,7 @@ pub(crate) fn resolve_twcc_gcc_target(
         .unwrap_or(preferred_gaming_floor_kbps);
     let peak_enter_kbps = profile.peak_enter_kbps.unwrap_or(ceiling_kbps);
     let peak_ceiling_kbps = profile.peak_ceiling(ceiling_kbps);
-    let effective_peak_ceiling_kbps = if bounded_gaming_profile
-        && recovery_coupling
-            .as_ref()
-            .is_some_and(|coupling| !coupling.allow_peak_range)
-    {
-        operating_ceiling_kbps.max(preferred_gaming_floor_kbps)
-    } else {
-        peak_ceiling_kbps
-    };
+    let effective_peak_ceiling_kbps = peak_ceiling_kbps;
     let ramp_up_step_kbps = profile.ramp_up_step_kbps;
     let fast_ramp_up_step_kbps = profile.fast_ramp_up_step_kbps;
     let Some(twcc_input) = twcc_input else {
@@ -178,14 +172,7 @@ pub(crate) fn resolve_twcc_gcc_target(
             current_kbps
                 .max(preferred_gaming_floor_kbps)
                 .min(effective_peak_ceiling_kbps.min(ceiling_kbps)),
-            if recovery_coupling
-                .as_ref()
-                .is_some_and(|coupling| coupling.prefer_hold)
-            {
-                profile.reason("coupled-await-feedback-hold")
-            } else {
-                profile.reason("await-feedback")
-            },
+            profile.reason("await-feedback"),
         );
     };
 
@@ -208,7 +195,7 @@ pub(crate) fn resolve_twcc_gcc_target(
         .receive_bitrate_kbps
         .unwrap_or(actual_headroom_kbps as f64)
         .max(1.0);
-    let raw_receive_headroom_kbps =
+    let _raw_receive_headroom_kbps =
         (raw_receive_bitrate_kbps * profile.receive_headroom_factor).round() as u32;
     let receive_bitrate_kbps =
         raw_receive_bitrate_kbps.clamp(floor_kbps as f64, ceiling_kbps as f64) as u32;
@@ -262,33 +249,6 @@ pub(crate) fn resolve_twcc_gcc_target(
         fast_ramp_up_step_kbps,
     };
 
-    if bounded_gaming_profile
-        && recovery_coupling
-            .as_ref()
-            .is_some_and(|coupling| coupling.suppress_ramp_up || coupling.prefer_hold)
-    {
-        return resolve_coupled_hold_target(
-            CoupledHoldContext {
-                config,
-                twcc,
-                profile,
-                coupling: recovery_coupling.expect("checked above"),
-                bounded_gaming_profile,
-                current_kbps,
-                actual_headroom_kbps,
-                desired_kbps,
-                raw_receive_headroom_kbps,
-                receive_headroom_kbps,
-                floor_kbps,
-                ceiling_kbps,
-                preferred_gaming_floor_kbps,
-                operating_ceiling_kbps,
-                effective_peak_ceiling_kbps,
-            },
-            ramp_cooldown_ticks,
-        );
-    }
-
     // RTT 是 transport 侧的直接拥塞信号，优先阻止“loss 还没起但排队已明显增加”的错误 ramp-up。
     if let Some(decision) = resolve_rtt_rule(rule_context, rtt_ms, ramp_cooldown_ticks) {
         return decision;
@@ -305,11 +265,9 @@ pub(crate) fn resolve_twcc_gcc_target(
 mod tests {
     use super::{
         classify_scenario_bitrate_band, resolve_target_remb_kbps,
-        resolve_transport_policy_profile_kind, resolve_twcc_gcc_target, RecoveryCouplingState,
-        SessionPhase,
+        resolve_transport_policy_profile_kind, resolve_twcc_gcc_target, SessionPhase,
     };
     use crate::transport::rtc::recovery::policy::ScenarioPolicyResolver;
-    use crate::transport::rtc::recovery::runtime_state::RecoveryCouplingMode;
     use crate::{XbxEngineVideoTwccObservation, XbxEngineWebRtcRuntimeConfig};
     use xbxengine_protocol::XbxEngineTargetTypeDto;
 
@@ -317,6 +275,7 @@ mod tests {
     fn profile_kind_prioritizes_session_target_type_over_transport_path() {
         assert_eq!(
             resolve_transport_policy_profile_kind(
+                None,
                 Some(&XbxEngineTargetTypeDto::Cloud),
                 Some("Direct (host->host)")
             )
@@ -325,6 +284,7 @@ mod tests {
         );
         assert_eq!(
             resolve_transport_policy_profile_kind(
+                None,
                 Some(&XbxEngineTargetTypeDto::Home),
                 Some("Direct (host->host)")
             )
@@ -333,6 +293,7 @@ mod tests {
         );
         assert_eq!(
             resolve_transport_policy_profile_kind(
+                None,
                 Some(&XbxEngineTargetTypeDto::Home),
                 Some("Relay")
             )
@@ -345,6 +306,7 @@ mod tests {
     fn scenario_bitrate_band_matches_home_and_cloud_operating_ranges() {
         assert_eq!(
             classify_scenario_bitrate_band(
+                None,
                 Some(&XbxEngineTargetTypeDto::Home),
                 Some("Direct (host->host)"),
                 Some(16_000.0),
@@ -353,6 +315,7 @@ mod tests {
         );
         assert_eq!(
             classify_scenario_bitrate_band(
+                None,
                 Some(&XbxEngineTargetTypeDto::Cloud),
                 Some("Direct (host->host)"),
                 Some(22_000.0),
@@ -361,6 +324,7 @@ mod tests {
         );
         assert_eq!(
             classify_scenario_bitrate_band(
+                None,
                 Some(&XbxEngineTargetTypeDto::Cloud),
                 Some("Direct (host->host)"),
                 Some(28_000.0),
@@ -369,6 +333,7 @@ mod tests {
         );
         assert_eq!(
             classify_scenario_bitrate_band(
+                None,
                 Some(&XbxEngineTargetTypeDto::Home),
                 Some("Relay"),
                 Some(16_000.0),
@@ -378,225 +343,16 @@ mod tests {
     }
 
     #[test]
-    fn direct_recovery_coupling_holds_bwe_and_caps_peak() {
-        let observation = XbxEngineVideoTwccObservation {
-            observation_id: 1,
-            source: "local-feedback".to_string(),
-            feedback_packet_count: 1,
-            covered_sequence_start: 1,
-            covered_sequence_end: 120,
-            covered_sequence_span: 120,
-            observed_packet_count: 120,
-            observed_byte_count: 120_000,
-            coverage_ratio: None,
-            ledger_hit_ratio: None,
-            feedback_interval_ms: Some(100.0),
-            arrival_span_ms: Some(100.0),
-            receive_bitrate_kbps: Some(30_000.0),
-            twcc_sample_valid: true,
-
-            twcc_invalid_reason: None,
-
-            quality: crate::XbxEngineTwccObservationQuality::Stable,
-            delivery_ratio: 1.0,
-            packet_loss_ratio: 0.0,
-            observed_at_ms: 1.0,
-        };
-        let coupling = RecoveryCouplingState {
-            mode: RecoveryCouplingMode::RecoveringReferenceChain,
-            suppress_ramp_up: true,
-            prefer_hold: true,
-            allow_peak_range: false,
-        };
-        let mut cooldown = 0;
-        let (target, reason) = resolve_twcc_gcc_target(
-            &XbxEngineWebRtcRuntimeConfig::default(),
-            18_000,
-            20_000,
-            ScenarioPolicyResolver::resolve_transport_bwe_profile(
-                &XbxEngineWebRtcRuntimeConfig::default(),
+    fn profile_kind_prefers_runtime_baseline_remote_profile() {
+        assert_eq!(
+            resolve_transport_policy_profile_kind(
+                Some("cloudGaming"),
                 Some(&XbxEngineTargetTypeDto::Home),
-                Some("Direct (host->host)"),
-                SessionPhase::Recovering,
-            ),
-            Some(coupling),
-            Some(&super::TwccGccInput {
-                observation: &observation,
-                rtt_ms: None,
-            }),
-            &mut cooldown,
+                Some("Relay")
+            )
+            .as_str(),
+            "cloudGaming"
         );
-        assert_eq!(target, 23_000);
-        assert_eq!(reason, "twcc-gcc-direct-recovery-coupled-reference-hold");
-    }
-
-    #[test]
-    fn cloud_recovery_reference_chain_backs_off_under_congestion() {
-        let observation = XbxEngineVideoTwccObservation {
-            observation_id: 3,
-            source: "local-feedback".to_string(),
-            feedback_packet_count: 1,
-            covered_sequence_start: 1,
-            covered_sequence_end: 80,
-            covered_sequence_span: 80,
-            observed_packet_count: 32,
-            observed_byte_count: 32_000,
-            coverage_ratio: None,
-            ledger_hit_ratio: None,
-            feedback_interval_ms: Some(100.0),
-            arrival_span_ms: Some(100.0),
-            receive_bitrate_kbps: Some(8_000.0),
-            twcc_sample_valid: true,
-
-            twcc_invalid_reason: None,
-
-            quality: crate::XbxEngineTwccObservationQuality::Stable,
-            delivery_ratio: 0.40,
-            packet_loss_ratio: 0.60,
-            observed_at_ms: 3.0,
-        };
-        let mut config = XbxEngineWebRtcRuntimeConfig::default();
-        config.remb_floor_kbps = 25_000;
-        config.remb_ceiling_kbps = 50_000;
-        let coupling = RecoveryCouplingState {
-            mode: RecoveryCouplingMode::RecoveringReferenceChain,
-            suppress_ramp_up: true,
-            prefer_hold: true,
-            allow_peak_range: false,
-        };
-        let mut cooldown = 0;
-        let (target, reason) = resolve_twcc_gcc_target(
-            &config,
-            25_000,
-            25_000,
-            ScenarioPolicyResolver::resolve_transport_bwe_profile(
-                &config,
-                Some(&XbxEngineTargetTypeDto::Cloud),
-                Some("Direct (host->host)"),
-                SessionPhase::Recovering,
-            ),
-            Some(coupling),
-            Some(&super::TwccGccInput {
-                observation: &observation,
-                rtt_ms: None,
-            }),
-            &mut cooldown,
-        );
-
-        assert_eq!(target, 21_250);
-        assert_eq!(reason, "twcc-gcc-cloud-recovery-coupled-reference-backoff");
-        assert_eq!(cooldown, 2);
-    }
-
-    #[test]
-    fn cloud_wait_keyframe_coupling_holds_at_cloud_operating_floor() {
-        let observation = XbxEngineVideoTwccObservation {
-            observation_id: 1,
-            source: "local-feedback".to_string(),
-            feedback_packet_count: 1,
-            covered_sequence_start: 1,
-            covered_sequence_end: 120,
-            covered_sequence_span: 120,
-            observed_packet_count: 120,
-            observed_byte_count: 120_000,
-            coverage_ratio: None,
-            ledger_hit_ratio: None,
-            feedback_interval_ms: Some(100.0),
-            arrival_span_ms: Some(100.0),
-            receive_bitrate_kbps: Some(24_000.0),
-            twcc_sample_valid: true,
-
-            twcc_invalid_reason: None,
-
-            quality: crate::XbxEngineTwccObservationQuality::Stable,
-            delivery_ratio: 1.0,
-            packet_loss_ratio: 0.0,
-            observed_at_ms: 1.0,
-        };
-        let coupling = RecoveryCouplingState {
-            mode: RecoveryCouplingMode::WaitingKeyframe,
-            suppress_ramp_up: true,
-            prefer_hold: true,
-            allow_peak_range: false,
-        };
-        let mut cooldown = 0;
-        let (target, reason) = resolve_twcc_gcc_target(
-            &XbxEngineWebRtcRuntimeConfig::default(),
-            12_000,
-            14_000,
-            ScenarioPolicyResolver::resolve_transport_bwe_profile(
-                &XbxEngineWebRtcRuntimeConfig::default(),
-                Some(&XbxEngineTargetTypeDto::Cloud),
-                Some("Direct (host->host)"),
-                SessionPhase::Startup,
-            ),
-            Some(coupling),
-            Some(&super::TwccGccInput {
-                observation: &observation,
-                rtt_ms: None,
-            }),
-            &mut cooldown,
-        );
-        assert_eq!(target, 20_000);
-        assert_eq!(reason, "twcc-gcc-cloud-recovery-coupled-wait-keyframe-hold");
-    }
-
-    #[test]
-    fn cloud_startup_low_quality_backs_off_under_congestion() {
-        let observation = XbxEngineVideoTwccObservation {
-            observation_id: 4,
-            source: "local-feedback".to_string(),
-            feedback_packet_count: 1,
-            covered_sequence_start: 1,
-            covered_sequence_end: 120,
-            covered_sequence_span: 120,
-            observed_packet_count: 24,
-            observed_byte_count: 24_000,
-            coverage_ratio: None,
-            ledger_hit_ratio: None,
-            feedback_interval_ms: Some(100.0),
-            arrival_span_ms: Some(100.0),
-            receive_bitrate_kbps: Some(5_000.0),
-            twcc_sample_valid: true,
-
-            twcc_invalid_reason: None,
-
-            quality: crate::XbxEngineTwccObservationQuality::Stable,
-            delivery_ratio: 0.08,
-            packet_loss_ratio: 0.92,
-            observed_at_ms: 4.0,
-        };
-        let mut config = XbxEngineWebRtcRuntimeConfig::default();
-        config.remb_floor_kbps = 25_000;
-        config.remb_ceiling_kbps = 50_000;
-        let coupling = RecoveryCouplingState {
-            mode: RecoveryCouplingMode::StartupLowQuality,
-            suppress_ramp_up: true,
-            prefer_hold: true,
-            allow_peak_range: false,
-        };
-        let mut cooldown = 0;
-        let (target, reason) = resolve_twcc_gcc_target(
-            &config,
-            25_000,
-            25_000,
-            ScenarioPolicyResolver::resolve_transport_bwe_profile(
-                &config,
-                Some(&XbxEngineTargetTypeDto::Cloud),
-                Some("Direct (host->host)"),
-                SessionPhase::Startup,
-            ),
-            Some(coupling),
-            Some(&super::TwccGccInput {
-                observation: &observation,
-                rtt_ms: None,
-            }),
-            &mut cooldown,
-        );
-
-        assert_eq!(target, 5_500);
-        assert_eq!(reason, "twcc-gcc-cloud-recovery-coupled-startup-backoff");
-        assert_eq!(cooldown, 2);
     }
 
     #[test]
@@ -635,7 +391,6 @@ mod tests {
                 Some("Direct (host->host)"),
                 SessionPhase::Steady,
             ),
-            None,
             Some(&super::TwccGccInput {
                 observation: &observation,
                 rtt_ms: Some(90.0),
@@ -684,7 +439,6 @@ mod tests {
                 Some("Direct"),
                 SessionPhase::Steady,
             ),
-            None,
             Some(&super::TwccGccInput {
                 observation: &observation,
                 rtt_ms: Some(200.0),
@@ -733,7 +487,6 @@ mod tests {
                 Some("Direct"),
                 SessionPhase::Steady,
             ),
-            None,
             Some(&super::TwccGccInput {
                 observation: &observation,
                 rtt_ms: Some(330.0),
@@ -782,7 +535,6 @@ mod tests {
                 Some("Direct"),
                 SessionPhase::Steady,
             ),
-            None,
             Some(&super::TwccGccInput {
                 observation: &observation,
                 rtt_ms: Some(194.0),
@@ -832,7 +584,6 @@ mod tests {
                 Some("Direct (host->host)"),
                 SessionPhase::Steady,
             ),
-            None,
             Some(&super::TwccGccInput {
                 observation: &observation,
                 rtt_ms: Some(35.0),
@@ -881,7 +632,6 @@ mod tests {
                 Some("Direct"),
                 SessionPhase::Steady,
             ),
-            None,
             Some(&super::TwccGccInput {
                 observation: &observation,
                 rtt_ms: Some(180.0),
@@ -939,7 +689,6 @@ mod tests {
                 Some("Direct (host->host)"),
                 SessionPhase::Steady,
             ),
-            None,
             Some(&super::TwccGccInput {
                 observation: &observation,
                 rtt_ms: Some(180.0),
@@ -969,10 +718,10 @@ mod tests {
             12_000.0,
             0.0,
             None,
+            None,
             Some(&XbxEngineTargetTypeDto::Home),
             Some("Direct (host->host)"),
             SessionPhase::Steady,
-            None,
             None,
             &mut last_sent,
             &mut cooldown,
@@ -996,10 +745,10 @@ mod tests {
             16_000.0,
             0.0,
             Some(90.0),
+            None,
             Some(&XbxEngineTargetTypeDto::Home),
             Some("Direct (host->host)"),
             SessionPhase::Steady,
-            None,
             None,
             &mut last_sent,
             &mut cooldown,
@@ -1024,10 +773,10 @@ mod tests {
             12_000.0,
             0.02,
             None,
+            None,
             Some(&XbxEngineTargetTypeDto::Home),
             Some("Direct (host->host)"),
             SessionPhase::Steady,
-            None,
             None,
             &mut last_sent,
             &mut cooldown,
@@ -1052,10 +801,10 @@ mod tests {
             14_000.0,
             0.0,
             None,
+            None,
             Some(&XbxEngineTargetTypeDto::Home),
             Some("Direct (host->host)"),
             SessionPhase::Steady,
-            None,
             None,
             &mut last_sent,
             &mut cooldown,
@@ -1070,10 +819,10 @@ mod tests {
             14_000.0,
             0.0,
             None,
+            None,
             Some(&XbxEngineTargetTypeDto::Home),
             Some("Direct (host->host)"),
             SessionPhase::Steady,
-            None,
             None,
             &mut last_sent,
             &mut cooldown,

@@ -81,7 +81,7 @@ const resolvedAriaLabel = computed(() => {
   text-align: left;
   overflow: hidden;
   cursor: pointer;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.12);
+  box-shadow: var(--ui-shadow-floating);
   transition:
     border-color var(--ui-motion-fast),
     box-shadow var(--ui-motion-fast),
@@ -123,7 +123,8 @@ const resolvedAriaLabel = computed(() => {
   );
   height: auto;
   object-fit: contain;
-  filter: drop-shadow(0 16px 18px rgba(0, 0, 0, 0.34)) drop-shadow(0 6px 8px rgba(0, 0, 0, 0.18));
+  filter: drop-shadow(0 16px 18px color-mix(in srgb, var(--neutral-0) 34%, transparent))
+    drop-shadow(0 6px 8px color-mix(in srgb, var(--neutral-0) 18%, transparent));
 }
 
 .console-status-card__body {

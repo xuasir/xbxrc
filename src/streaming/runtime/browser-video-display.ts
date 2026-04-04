@@ -108,7 +108,7 @@ export function applyBrowserVideoDisplay(input: ApplyBrowserVideoDisplayInput): 
 }
 
 /**
- * 浏览器 runtime 内部直接监听 DOM 帧呈现，外层只接收 framePresented 事件。
+ * 浏览器 runtime 内部直接监听 DOM 帧呈现，外层只接收 frameReady 事件。
  */
 export function bindBrowserVideoFrameTracking(input: {
   playerElementId: string
