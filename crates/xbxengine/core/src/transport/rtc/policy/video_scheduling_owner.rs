@@ -464,7 +464,8 @@ impl VideoSchedulingOwner {
                 input.recovery_epoch,
                 input.observed_at_ms,
             )
-        }) && input.clean_anchor_source_event.as_deref() == Some("chain-clean-keyframe-submitted");
+        }) && input.clean_anchor_source_event.as_deref()
+            == Some("chain-clean-keyframe-submitted");
         if explicit_clean_anchor {
             return true;
         }

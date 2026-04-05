@@ -455,11 +455,7 @@ pub(crate) fn build_rtc_video_frame_source(
         idle_timeout,
         nack_config,
     );
-    let sink = sink::RtcVideoSourceSink {
-        tx,
-        payload_route_map: None,
-        runtime_stats: RuntimeStatsSink::new(runtime_stats.clone()),
-    };
+    let sink = sink::RtcVideoSourceSink::new(tx, RuntimeStatsSink::new(runtime_stats.clone()));
     let observation_source = RtcVideoTransportObservationSource {
         rx: transport_observation_rx,
     };

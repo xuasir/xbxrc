@@ -20,6 +20,9 @@ use super::{
     RtcVideoFrameSource, TransportLossObservation, TransportObservation,
 };
 
+const DISPLAY_STARVED_LOW_VALUE_PRESENT_STALE_MS: f64 = 400.0;
+const DISPLAY_STARVED_LOW_VALUE_NO_PENDING_STREAK_MIN: u32 = 24;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum RepairValueTier {
     Anchor,
@@ -110,6 +113,7 @@ impl RtcVideoFrameSource {
                     Some("cloudHighRttLowValueAdmission") => {
                         XbxEngineAnchorCandidateFailureReason::ChainBrokenCloudHighRttLowValueAdmission
                     }
+                    Some("displayStarvedLowValueAdmission") => XbxEngineAnchorCandidateFailureReason::ChainBrokenDisplayStarvedLowValueAdmission,
                     Some("deadline") => XbxEngineAnchorCandidateFailureReason::GapExpiredDeadline,
                     _ => XbxEngineAnchorCandidateFailureReason::Unknown,
                 }),
@@ -342,6 +346,7 @@ impl RtcVideoFrameSource {
                     Some("cloudHighRttLowValueAdmission") => {
                         XbxEngineAnchorCandidateFailureReason::ChainBrokenCloudHighRttLowValueAdmission
                     }
+                    Some("displayStarvedLowValueAdmission") => XbxEngineAnchorCandidateFailureReason::ChainBrokenDisplayStarvedLowValueAdmission,
                     Some("deadline") => XbxEngineAnchorCandidateFailureReason::GapExpiredDeadline,
                     _ => XbxEngineAnchorCandidateFailureReason::Unknown,
                 }),
@@ -679,6 +684,7 @@ impl RtcVideoFrameSource {
                     Some("cloudHighRttLowValueAdmission") => {
                         XbxEngineAnchorCandidateFailureReason::ChainBrokenCloudHighRttLowValueAdmission
                     }
+                    Some("displayStarvedLowValueAdmission") => XbxEngineAnchorCandidateFailureReason::ChainBrokenDisplayStarvedLowValueAdmission,
                     Some("deadline") => XbxEngineAnchorCandidateFailureReason::GapExpiredDeadline,
                     _ => XbxEngineAnchorCandidateFailureReason::Unknown,
                 }),
@@ -815,6 +821,19 @@ impl RtcVideoFrameSource {
         mut policy: NackObservePolicy,
         now_ms: f64,
     ) -> NackObservePolicy {
+        if self.should_soften_display_starved_low_value_gap(
+            policy.frame_importance,
+            policy.frame_is_keyframe,
+            policy.budget_context,
+            now_ms,
+        ) {
+            policy.nack_disposition = PacketRecoveryDisposition::SkippedLowValue;
+            if policy.frame_unrecoverable_reason.is_none() {
+                policy.frame_unrecoverable_reason = Some("displayStarvedLowValueAdmission");
+            }
+            return policy;
+        }
+
         if !self.is_cloud_transport_profile() {
             return policy;
         }
@@ -850,7 +869,15 @@ impl RtcVideoFrameSource {
         {
             policy.nack_disposition = PacketRecoveryDisposition::SkippedChainBroken;
             if policy.frame_unrecoverable_reason.is_none() {
-                policy.frame_unrecoverable_reason = Some("awaitingRecoveryKeyframe");
+                policy.frame_unrecoverable_reason = Some(
+                    if matches!(value_tier, RepairValueTier::LowValue)
+                        && policy.frame_importance == "delta"
+                    {
+                        "localBackpressureDeltaGap"
+                    } else {
+                        "awaitingRecoveryKeyframe"
+                    },
+                );
             }
             return policy;
         }
@@ -879,6 +906,40 @@ impl RtcVideoFrameSource {
         policy
     }
 
+    fn should_soften_display_starved_low_value_gap(
+        &self,
+        frame_importance: &'static str,
+        frame_is_keyframe: Option<bool>,
+        budget_context: FrameBudgetContext,
+        now_ms: f64,
+    ) -> bool {
+        if frame_importance != "delta" || frame_is_keyframe.unwrap_or(false) {
+            return false;
+        }
+        if !matches!(
+            budget_context.failure_cost,
+            crate::media::video::ingress::budget::FrameBudgetFailureCost::LocalDrop
+        ) {
+            return false;
+        }
+        if !matches!(
+            budget_context.link_value,
+            crate::media::video::ingress::budget::FrameBudgetLinkValue::Disposable
+        ) {
+            return false;
+        }
+        self.runtime_stats
+            .read(|stats| {
+                should_soften_display_starved_low_value_gap_from_runtime(
+                    stats.host_no_pending_pressure_level.as_deref(),
+                    stats.host_no_pending_streak,
+                    stats.latest_video_host_present_time_ms,
+                    now_ms,
+                )
+            })
+            .unwrap_or(false)
+    }
+
     fn is_cloud_high_rtt_path(&self) -> bool {
         self.cloud_nack_rtt_ms() >= 120.0
     }
@@ -889,6 +950,18 @@ impl RtcVideoFrameSource {
         now_ms: f64,
         chain_broken: bool,
     ) {
+        if skipped.frame_importance == "delta"
+            && matches!(
+                skipped.frame_unrecoverable_reason,
+                Some(
+                    "localBackpressureDeltaGap"
+                        | "cloudHighRttLowValueAdmission"
+                        | "displayStarvedLowValueAdmission"
+                )
+            )
+        {
+            return;
+        }
         if skipped.nack_disposition != PacketRecoveryDisposition::SkippedChainBroken
             && !chain_broken
         {
@@ -1149,6 +1222,54 @@ impl RtcVideoFrameSource {
         self.runtime_stats
             .read(|stats| stats.video_rtt_ms.unwrap_or(0.0))
             .unwrap_or(0.0)
+    }
+}
+
+fn should_soften_display_starved_low_value_gap_from_runtime(
+    host_no_pending_pressure_level: Option<&str>,
+    host_no_pending_streak: u32,
+    latest_video_host_present_time_ms: Option<f64>,
+    now_ms: f64,
+) -> bool {
+    if host_no_pending_pressure_level != Some("critical") {
+        return false;
+    }
+    if host_no_pending_streak < DISPLAY_STARVED_LOW_VALUE_NO_PENDING_STREAK_MIN {
+        return false;
+    }
+    latest_video_host_present_time_ms.is_some_and(|present_at_ms| {
+        (now_ms - present_at_ms).max(0.0) >= DISPLAY_STARVED_LOW_VALUE_PRESENT_STALE_MS
+    })
+}
+
+#[cfg(test)]
+mod runtime_softening_tests {
+    use super::should_soften_display_starved_low_value_gap_from_runtime;
+
+    #[test]
+    fn display_starved_runtime_marks_low_value_gap_soft() {
+        assert!(should_soften_display_starved_low_value_gap_from_runtime(
+            Some("critical"),
+            48,
+            Some(1_000.0),
+            1_450.0,
+        ));
+    }
+
+    #[test]
+    fn non_critical_or_fresh_present_does_not_soften_gap() {
+        assert!(!should_soften_display_starved_low_value_gap_from_runtime(
+            Some("elevated"),
+            48,
+            Some(1_000.0),
+            1_450.0,
+        ));
+        assert!(!should_soften_display_starved_low_value_gap_from_runtime(
+            Some("critical"),
+            48,
+            Some(1_200.0),
+            1_450.0,
+        ));
     }
 }
 

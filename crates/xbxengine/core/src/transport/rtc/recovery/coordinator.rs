@@ -50,6 +50,7 @@ pub struct RecoveryCoordinatorProposal {
 enum RecoverySignalDomain {
     Connectivity,
     MediaRecovery,
+    Local,
 }
 
 /**
@@ -160,13 +161,16 @@ impl RecoveryCoordinator {
                 budget_after: self.escalation_controller.budget_state(),
             };
         }
-        if matches!(signal.reason, VideoEscalationReason::AdapterIdleTimeout)
-            && RuntimeStatsSink::read_shared(runtime_stats, |stats| {
-                has_fresh_media_output(stats, unix_now_ms())
-                    && !stats.video_decoder_stalled.unwrap_or(false)
-                    && !stats.video_renderer_stalled.unwrap_or(false)
-            })
-            .unwrap_or(false)
+        if matches!(
+            signal.reason,
+            VideoEscalationReason::AdapterIdleTimeout
+                | VideoEscalationReason::DisplaySupplyCritical
+        ) && RuntimeStatsSink::read_shared(runtime_stats, |stats| {
+            has_fresh_media_output(stats, unix_now_ms())
+                && !stats.video_decoder_stalled.unwrap_or(false)
+                && !stats.video_renderer_stalled.unwrap_or(false)
+        })
+        .unwrap_or(false)
         {
             return RecoveryCoordinatorProposal {
                 signal,
@@ -560,16 +564,15 @@ impl RecoveryCoordinator {
         recovery_epoch: u64,
         now_ms: f64,
     ) -> bool {
-        let explicit_clean_anchor = clean_anchor_epoch
-            .is_some_and(|epoch| {
-                Self::clean_anchor_epoch_is_usable(
-                    epoch,
-                    clean_anchor_observed_at_ms,
-                    recovery_epoch,
-                    now_ms,
-                )
-            })
-            && clean_anchor_source_event == Some("chain-clean-keyframe-submitted");
+        let explicit_clean_anchor = clean_anchor_epoch.is_some_and(|epoch| {
+            Self::clean_anchor_epoch_is_usable(
+                epoch,
+                clean_anchor_observed_at_ms,
+                recovery_epoch,
+                now_ms,
+            )
+        }) && clean_anchor_source_event
+            == Some("chain-clean-keyframe-submitted");
         if explicit_clean_anchor {
             return true;
         }
@@ -780,6 +783,7 @@ impl RecoveryCoordinator {
 fn classify_signal_domain(reason: VideoEscalationReason) -> RecoverySignalDomain {
     match reason {
         VideoEscalationReason::LifecycleRecovering => RecoverySignalDomain::Connectivity,
+        VideoEscalationReason::DisplaySupplyCritical => RecoverySignalDomain::Local,
         VideoEscalationReason::WaitKeyframe
         | VideoEscalationReason::TransportAwaitRecoveryKeyframe
         | VideoEscalationReason::Reconfigure

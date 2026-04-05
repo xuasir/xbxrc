@@ -249,8 +249,7 @@ mod tests {
             bytes: Arc::<[u8]>::from([7u8; 4]),
         };
 
-        tx.send(RendererMsg::Frame(bad_frame))
-            .expect("bad frame");
+        tx.send(RendererMsg::Frame(bad_frame)).expect("bad frame");
         tx.send(RendererMsg::Stop).expect("stop");
         run_renderer_loop(rx, render_state, runtime_stats_sink);
 

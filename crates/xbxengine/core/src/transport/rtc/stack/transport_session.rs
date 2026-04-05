@@ -164,6 +164,7 @@ impl<'a> RtcTransportSessionBridge<'a> {
             TransportCommand::RequestReconnectCandidate {
                 observation_id,
                 reason,
+                reason_domain,
             } => {
                 let result = self
                     .pending_runtime_recovery_action
@@ -176,6 +177,7 @@ impl<'a> RtcTransportSessionBridge<'a> {
                             &mut pending,
                             *observation_id,
                             reason.clone(),
+                            *reason_domain,
                         );
                         let pending_reason = pending.as_ref().map(|action| match action {
                             XbxEnginePendingRuntimeRecoveryAction::RequestReconnectCandidate {
@@ -501,6 +503,7 @@ mod tests {
         bridge.apply_transport_session_command(TransportCommand::RequestReconnectCandidate {
             observation_id: 42,
             reason: "recovering-stream".to_string(),
+            reason_domain: crate::XbxEngineRecoveryReasonDomain::ConnectivityTransport,
         });
 
         let snapshot = runtime_stats.lock().expect("runtime stats lock");
@@ -524,6 +527,7 @@ mod tests {
             XbxEnginePendingRuntimeRecoveryAction::RequestReconnectCandidate {
                 observation_id: 1,
                 reason: "existing".to_string(),
+                reason_domain: crate::XbxEngineRecoveryReasonDomain::ConnectivityTransport,
             },
         )));
         let bridge = build_bridge(runtime_stats.clone(), pending_runtime_recovery_action);
@@ -531,6 +535,7 @@ mod tests {
         bridge.apply_transport_session_command(TransportCommand::RequestReconnectCandidate {
             observation_id: 43,
             reason: "new-reason".to_string(),
+            reason_domain: crate::XbxEngineRecoveryReasonDomain::ConnectivityTransport,
         });
 
         let snapshot = runtime_stats.lock().expect("runtime stats lock");
@@ -547,6 +552,31 @@ mod tests {
     }
 
     #[test]
+    fn reconnect_candidate_stage_preserves_reason_domain_in_pending_action() {
+        let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
+        let pending_runtime_recovery_action = Arc::new(Mutex::new(None));
+        let bridge = build_bridge(runtime_stats, pending_runtime_recovery_action.clone());
+
+        bridge.apply_transport_session_command(TransportCommand::RequestReconnectCandidate {
+            observation_id: 44,
+            reason: "displaySupplyCritical".to_string(),
+            reason_domain: crate::XbxEngineRecoveryReasonDomain::Local,
+        });
+
+        let pending = pending_runtime_recovery_action
+            .lock()
+            .expect("pending reconnect action lock");
+        assert!(matches!(
+            pending.as_ref(),
+            Some(XbxEnginePendingRuntimeRecoveryAction::RequestReconnectCandidate {
+                observation_id: 44,
+                reason,
+                reason_domain: crate::XbxEngineRecoveryReasonDomain::Local,
+            }) if reason == "displaySupplyCritical"
+        ));
+    }
+
+    #[test]
     fn reconnect_advances_recovery_epoch_by_contract() {
         let mut stats = XbxEngineMediaRuntimeStats::default();
         stats.transport_recovery_epoch = 2;
@@ -557,6 +587,7 @@ mod tests {
         bridge.apply_transport_session_command(TransportCommand::RequestReconnectCandidate {
             observation_id: 77,
             reason: "reconnect-needed".to_string(),
+            reason_domain: crate::XbxEngineRecoveryReasonDomain::ConnectivityTransport,
         });
 
         let snapshot = runtime_stats.lock().expect("runtime stats lock");
@@ -607,6 +638,7 @@ mod tests {
             TransportCommand::RequestReconnectCandidate {
                 observation_id: 88,
                 reason: "recovering-stream".to_string(),
+                reason_domain: crate::XbxEngineRecoveryReasonDomain::ConnectivityTransport,
             },
             CommandResultStatus::Deferred {
                 reason: "pendingReason=existing".to_string(),

@@ -52,6 +52,7 @@ mod tests {
         projection.apply_fact(&TransportFact::CommandResult(CommandResultFact {
             command: TransportCommand::RequestReconnectCandidate {
                 reason: "recovering-stream".to_string(),
+                reason_domain: crate::XbxEngineRecoveryReasonDomain::ConnectivityTransport,
                 observation_id: 7,
             },
             status: CommandResultStatus::Deferred {

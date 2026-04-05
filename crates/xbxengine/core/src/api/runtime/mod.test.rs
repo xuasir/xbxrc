@@ -2202,6 +2202,7 @@ fn runtime_consumes_pending_transport_reconnect_candidate_once() {
         crate::XbxEnginePendingRuntimeRecoveryAction::RequestReconnectCandidate {
             observation_id: 42,
             reason: "transportExpiredDeadline".to_string(),
+            reason_domain: crate::XbxEngineRecoveryReasonDomain::ConnectivityTransport,
         },
     );
     let mut runtime = XbxEngineRuntime::with_media_backend(
@@ -2293,6 +2294,7 @@ fn runtime_consumes_pending_transport_reconnect_candidate_even_when_transport_is
         crate::XbxEnginePendingRuntimeRecoveryAction::RequestReconnectCandidate {
             observation_id: 77,
             reason: "transportAwaitRecoveryKeyframe".to_string(),
+            reason_domain: crate::XbxEngineRecoveryReasonDomain::ConnectivityTransport,
         },
     );
     let mut runtime = XbxEngineRuntime::with_media_backend(
@@ -2323,6 +2325,328 @@ fn runtime_consumes_pending_transport_reconnect_candidate_even_when_transport_is
     assert_eq!(
         runtime.snapshot().last_recovery_reason.as_deref(),
         Some("transportReconnectCandidate:transportAwaitRecoveryKeyframe")
+    );
+}
+
+#[test]
+fn runtime_rejects_pending_reconnect_candidate_with_local_domain_reason() {
+    let requests = Rc::new(RefCell::new(Vec::new()));
+    let events = Rc::new(RefCell::new(Vec::new()));
+    let now_ms = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_millis() as f64)
+        .unwrap_or(0.0);
+    let backend = ScriptedMediaBackend::new(
+        XbxEngineMediaNegotiation {
+            local_offer_sdp: "offer".to_string(),
+            local_candidates: Vec::new(),
+            surface_id: "surface:viewport-1".to_string(),
+            video_width: 1280,
+            video_height: 720,
+            first_frame_packet_arrival_time_ms: None,
+            frame_decoded_time_ms: None,
+            frame_rendered_time_ms: None,
+            input_status: XbxEngineInputStatus::default(),
+        },
+        XbxEngineMediaRuntimeStats {
+            transport_state: XbxEngineTransportStateDto::Connected,
+            latest_video_packet_arrival_time_ms: Some(now_ms - 20.0),
+            inbound_video_packet_count_total: 500,
+            latest_video_escalation_observation: Some(crate::XbxEngineVideoEscalationObservation {
+                observation_id: 91,
+                reason: "localBackpressureDeltaGap".to_string(),
+                action: "requestReconnectCandidate".to_string(),
+                recovery_stage: "reconnecting".to_string(),
+                recovery_chain_value: "health".to_string(),
+                recovery_failure_cost: "high".to_string(),
+                recovery_window_source: "reconnect-window".to_string(),
+                observed_at_ms: now_ms,
+            }),
+            ..Default::default()
+        },
+    );
+    *backend
+        .pending_runtime_recovery_action
+        .lock()
+        .expect("lock pending runtime recovery action") = Some(
+        crate::XbxEnginePendingRuntimeRecoveryAction::RequestReconnectCandidate {
+            observation_id: 91,
+            reason: "localBackpressureDeltaGap".to_string(),
+            reason_domain: crate::XbxEngineRecoveryReasonDomain::Local,
+        },
+    );
+    let mut runtime = XbxEngineRuntime::with_media_backend(
+        XbxEngineRuntimeConfig::default(),
+        TestHostBridge::new(requests.clone()),
+        TestEventSink::new(events),
+        backend,
+    );
+
+    runtime
+        .start(session(), viewport(), 1.0, None, None)
+        .expect("runtime start should succeed");
+    requests.borrow_mut().clear();
+
+    runtime.tick();
+
+    let reconnect_request_count = requests
+        .borrow()
+        .iter()
+        .filter(|request| {
+            matches!(
+                request,
+                XbxEngineHostRequestDto::ExchangeOffer { channel, restart, .. }
+                if channel == "media" && *restart
+            )
+        })
+        .count();
+    assert_eq!(reconnect_request_count, 0);
+    assert_eq!(
+        runtime.snapshot().last_recovery_action.as_deref(),
+        Some("reconnectCandidateRejectedByDomainGate")
+    );
+    assert_eq!(
+        runtime.snapshot().last_recovery_reason.as_deref(),
+        Some(
+            "transportReconnectCandidateRejected:domain=local observationId=91 reason=localBackpressureDeltaGap"
+        )
+    );
+}
+
+#[test]
+fn runtime_allows_pending_reconnect_candidate_with_peer_connectivity_reason() {
+    let requests = Rc::new(RefCell::new(Vec::new()));
+    let events = Rc::new(RefCell::new(Vec::new()));
+    let now_ms = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_millis() as f64)
+        .unwrap_or(0.0);
+    let backend = ScriptedMediaBackend::new(
+        XbxEngineMediaNegotiation {
+            local_offer_sdp: "offer".to_string(),
+            local_candidates: Vec::new(),
+            surface_id: "surface:viewport-1".to_string(),
+            video_width: 1280,
+            video_height: 720,
+            first_frame_packet_arrival_time_ms: None,
+            frame_decoded_time_ms: None,
+            frame_rendered_time_ms: None,
+            input_status: XbxEngineInputStatus::default(),
+        },
+        XbxEngineMediaRuntimeStats {
+            transport_state: XbxEngineTransportStateDto::Disconnected,
+            latest_video_packet_arrival_time_ms: Some(now_ms - 20.0),
+            inbound_video_packet_count_total: 500,
+            latest_observation_label: Some("rtcConnectionRecovering".to_string()),
+            latest_observation_summary: Some("peer state transitioned to closed".to_string()),
+            ..Default::default()
+        },
+    );
+    *backend
+        .pending_runtime_recovery_action
+        .lock()
+        .expect("lock pending runtime recovery action") = Some(
+        crate::XbxEnginePendingRuntimeRecoveryAction::RequestReconnectCandidate {
+            observation_id: 92,
+            reason: "peer-closed".to_string(),
+            reason_domain: crate::XbxEngineRecoveryReasonDomain::ConnectivityTransport,
+        },
+    );
+    let mut runtime = XbxEngineRuntime::with_media_backend(
+        XbxEngineRuntimeConfig::default(),
+        TestHostBridge::new(requests.clone()),
+        TestEventSink::new(events),
+        backend,
+    );
+
+    runtime
+        .start(session(), viewport(), 1.0, None, None)
+        .expect("runtime start should succeed");
+    requests.borrow_mut().clear();
+
+    runtime.tick();
+
+    let reconnect_request_count = requests
+        .borrow()
+        .iter()
+        .filter(|request| {
+            matches!(
+                request,
+                XbxEngineHostRequestDto::ExchangeOffer { channel, restart, .. }
+                if channel == "media" && *restart
+            )
+        })
+        .count();
+    assert_eq!(reconnect_request_count, 1);
+    assert_eq!(
+        runtime.snapshot().last_recovery_reason.as_deref(),
+        Some("transportReconnectCandidate:peer-closed")
+    );
+}
+
+#[test]
+fn reconnect_candidate_domain_gate_uses_strong_type_contract() {
+    assert!(
+        crate::XbxEngineRecoveryReasonDomain::ConnectivityTransport
+            .allows_runtime_reconnect_candidate()
+    );
+    assert!(
+        !crate::XbxEngineRecoveryReasonDomain::Local.allows_runtime_reconnect_candidate()
+    );
+    assert!(
+        !crate::XbxEngineRecoveryReasonDomain::Unknown.allows_runtime_reconnect_candidate()
+    );
+}
+
+#[test]
+fn runtime_rejects_pending_reconnect_candidate_with_display_supply_critical_local_domain() {
+    let requests = Rc::new(RefCell::new(Vec::new()));
+    let events = Rc::new(RefCell::new(Vec::new()));
+    let now_ms = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_millis() as f64)
+        .unwrap_or(0.0);
+    let backend = ScriptedMediaBackend::new(
+        XbxEngineMediaNegotiation {
+            local_offer_sdp: "offer".to_string(),
+            local_candidates: Vec::new(),
+            surface_id: "surface:viewport-1".to_string(),
+            video_width: 1280,
+            video_height: 720,
+            first_frame_packet_arrival_time_ms: None,
+            frame_decoded_time_ms: None,
+            frame_rendered_time_ms: None,
+            input_status: XbxEngineInputStatus::default(),
+        },
+        XbxEngineMediaRuntimeStats {
+            transport_state: XbxEngineTransportStateDto::Connected,
+            latest_video_packet_arrival_time_ms: Some(now_ms - 20.0),
+            inbound_video_packet_count_total: 500,
+            latest_video_escalation_observation: Some(crate::XbxEngineVideoEscalationObservation {
+                observation_id: 93,
+                reason: "displaySupplyCritical".to_string(),
+                action: "requestReconnectCandidate".to_string(),
+                recovery_stage: "reconnecting".to_string(),
+                recovery_chain_value: "health".to_string(),
+                recovery_failure_cost: "high".to_string(),
+                recovery_window_source: "reconnect-window".to_string(),
+                observed_at_ms: now_ms,
+            }),
+            ..Default::default()
+        },
+    );
+    *backend
+        .pending_runtime_recovery_action
+        .lock()
+        .expect("lock pending runtime recovery action") = Some(
+        crate::XbxEnginePendingRuntimeRecoveryAction::RequestReconnectCandidate {
+            observation_id: 93,
+            reason: "displaySupplyCritical".to_string(),
+            reason_domain: crate::XbxEngineRecoveryReasonDomain::Local,
+        },
+    );
+    let mut runtime = XbxEngineRuntime::with_media_backend(
+        XbxEngineRuntimeConfig::default(),
+        TestHostBridge::new(requests.clone()),
+        TestEventSink::new(events),
+        backend,
+    );
+
+    runtime
+        .start(session(), viewport(), 1.0, None, None)
+        .expect("runtime start should succeed");
+    requests.borrow_mut().clear();
+
+    runtime.tick();
+
+    let reconnect_request_count = requests
+        .borrow()
+        .iter()
+        .filter(|request| {
+            matches!(
+                request,
+                XbxEngineHostRequestDto::ExchangeOffer { channel, restart, .. }
+                if channel == "media" && *restart
+            )
+        })
+        .count();
+    assert_eq!(reconnect_request_count, 0);
+    assert_eq!(
+        runtime.snapshot().last_recovery_reason.as_deref(),
+        Some(
+            "transportReconnectCandidateRejected:domain=local observationId=93 reason=displaySupplyCritical"
+        )
+    );
+}
+
+#[test]
+fn runtime_allows_pending_reconnect_candidate_with_liveness_timeout_connectivity_domain() {
+    let requests = Rc::new(RefCell::new(Vec::new()));
+    let events = Rc::new(RefCell::new(Vec::new()));
+    let now_ms = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_millis() as f64)
+        .unwrap_or(0.0);
+    let backend = ScriptedMediaBackend::new(
+        XbxEngineMediaNegotiation {
+            local_offer_sdp: "offer".to_string(),
+            local_candidates: Vec::new(),
+            surface_id: "surface:viewport-1".to_string(),
+            video_width: 1280,
+            video_height: 720,
+            first_frame_packet_arrival_time_ms: None,
+            frame_decoded_time_ms: None,
+            frame_rendered_time_ms: None,
+            input_status: XbxEngineInputStatus::default(),
+        },
+        XbxEngineMediaRuntimeStats {
+            transport_state: XbxEngineTransportStateDto::Disconnected,
+            latest_video_packet_arrival_time_ms: Some(now_ms - 20.0),
+            inbound_video_packet_count_total: 500,
+            latest_observation_label: Some("rtcConnectionRecovering".to_string()),
+            latest_observation_summary: Some("liveness timeout escalated to reconnect".to_string()),
+            ..Default::default()
+        },
+    );
+    *backend
+        .pending_runtime_recovery_action
+        .lock()
+        .expect("lock pending runtime recovery action") = Some(
+        crate::XbxEnginePendingRuntimeRecoveryAction::RequestReconnectCandidate {
+            observation_id: 94,
+            reason: "livenessNoProgressTimeout".to_string(),
+            reason_domain: crate::XbxEngineRecoveryReasonDomain::ConnectivityTransport,
+        },
+    );
+    let mut runtime = XbxEngineRuntime::with_media_backend(
+        XbxEngineRuntimeConfig::default(),
+        TestHostBridge::new(requests.clone()),
+        TestEventSink::new(events),
+        backend,
+    );
+
+    runtime
+        .start(session(), viewport(), 1.0, None, None)
+        .expect("runtime start should succeed");
+    requests.borrow_mut().clear();
+
+    runtime.tick();
+
+    let reconnect_request_count = requests
+        .borrow()
+        .iter()
+        .filter(|request| {
+            matches!(
+                request,
+                XbxEngineHostRequestDto::ExchangeOffer { channel, restart, .. }
+                if channel == "media" && *restart
+            )
+        })
+        .count();
+    assert_eq!(reconnect_request_count, 1);
+    assert_eq!(
+        runtime.snapshot().last_recovery_reason.as_deref(),
+        Some("transportReconnectCandidate:livenessNoProgressTimeout")
     );
 }
 
@@ -2360,6 +2684,7 @@ fn runtime_defers_pending_transport_reconnect_candidate_while_reconnecting() {
         crate::XbxEnginePendingRuntimeRecoveryAction::RequestReconnectCandidate {
             observation_id: 77,
             reason: "transportAwaitRecoveryKeyframe".to_string(),
+            reason_domain: crate::XbxEngineRecoveryReasonDomain::ConnectivityTransport,
         },
     );
     let pending = backend.pending_runtime_recovery_action.clone();
@@ -2434,6 +2759,7 @@ fn runtime_applies_transport_reconnect_candidate_cooldown_and_retries_after_wind
         crate::XbxEnginePendingRuntimeRecoveryAction::RequestReconnectCandidate {
             observation_id: 88,
             reason: "transportExpiredDeadline".to_string(),
+            reason_domain: crate::XbxEngineRecoveryReasonDomain::ConnectivityTransport,
         },
     );
     let pending = backend.pending_runtime_recovery_action.clone();
@@ -2538,6 +2864,7 @@ fn runtime_stops_reconnect_loop_when_keepalive_reports_session_not_active() {
         crate::XbxEnginePendingRuntimeRecoveryAction::RequestReconnectCandidate {
             observation_id: 42,
             reason: "transportExpiredDeadline".to_string(),
+            reason_domain: crate::XbxEngineRecoveryReasonDomain::ConnectivityTransport,
         },
     );
     let fail_request_kind = Rc::new(RefCell::new(Some("KeepAliveRemoteSession")));

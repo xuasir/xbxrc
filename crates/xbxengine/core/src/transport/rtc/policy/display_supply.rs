@@ -105,7 +105,7 @@ impl SchedulingDemandSignal {
         match self.classify_display_supply_state(thresholds) {
             DisplaySupplyState::Healthy => None,
             DisplaySupplyState::Degraded => Some(VideoEscalationReason::AdapterThinStream),
-            DisplaySupplyState::Critical => Some(VideoEscalationReason::AdapterIdleTimeout),
+            DisplaySupplyState::Critical => Some(VideoEscalationReason::DisplaySupplyCritical),
         }
     }
 }

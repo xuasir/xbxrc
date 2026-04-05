@@ -505,6 +505,7 @@ impl RtcSessionPolicy {
             decision: proposal.decision,
             reason: proposal.signal.reason,
             reason_label: proposal.signal.reason_label,
+            reason_domain: proposal.signal.reason.reconnect_domain(),
             budget_before: proposal.budget_before,
             budget_after: proposal.budget_after,
         })
@@ -583,12 +584,10 @@ impl RtcSessionPolicy {
                 && stats.latest_video_decode_ok_time_ms.is_none();
             let pipeline_not_stalled = !stats.video_decoder_stalled.unwrap_or(false)
                 && !stats.video_renderer_stalled.unwrap_or(false);
-            let still_within_pre_first_frame_window =
-                (observed_at_ms - track.observed_at_ms).max(0.0)
-                    < self.pre_first_frame_reconnect_fallback_ms();
-            host_feedback_not_ready
-                && pipeline_not_stalled
-                && still_within_pre_first_frame_window
+            let still_within_pre_first_frame_window = (observed_at_ms - track.observed_at_ms)
+                .max(0.0)
+                < self.pre_first_frame_reconnect_fallback_ms();
+            host_feedback_not_ready && pipeline_not_stalled && still_within_pre_first_frame_window
         })
         .unwrap_or(false)
     }
@@ -1400,6 +1399,7 @@ fn map_label_to_escalation_reason(label: &str) -> Option<VideoEscalationReason> 
         "transportAwaitRecoveryKeyframe" => {
             Some(VideoEscalationReason::TransportAwaitRecoveryKeyframe)
         }
+        "displaySupplyCritical" => Some(VideoEscalationReason::DisplaySupplyCritical),
         "ingressReconfigure" => Some(VideoEscalationReason::Reconfigure),
         "decoderBackendFailure" => Some(VideoEscalationReason::DecoderBackendFailure),
         "adapterIdleTimeout" => Some(VideoEscalationReason::AdapterIdleTimeout),
@@ -1433,7 +1433,7 @@ fn map_owner_reason_label_to_escalation_reason(
     match source {
         RecoveryIntentSource::Anchor => map_label_to_escalation_reason(label),
         RecoveryIntentSource::Supply => match label {
-            "displaySupplyCritical" => Some(VideoEscalationReason::AdapterIdleTimeout),
+            "displaySupplyCritical" => Some(VideoEscalationReason::DisplaySupplyCritical),
             "displaySupplyDegraded" => Some(VideoEscalationReason::AdapterThinStream),
             _ => None,
         },

@@ -117,12 +117,8 @@ pub(crate) struct RtcVideoRepairMetadata {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum RtcVideoIngressKind {
     Primary,
-    RepairPrimaryPassThrough {
-        repair: RtcVideoRepairMetadata,
-    },
-    RtxReinject {
-        repair: RtcVideoRepairMetadata,
-    },
+    RepairPrimaryPassThrough { repair: RtcVideoRepairMetadata },
+    RtxReinject { repair: RtcVideoRepairMetadata },
 }
 
 impl Default for RtcVideoIngressKind {

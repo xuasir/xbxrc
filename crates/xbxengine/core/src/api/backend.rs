@@ -411,6 +411,7 @@ pub enum XbxEngineAnchorCandidateFailureReason {
     InspectionRejectedInvalidSliceHeader,
     ChainBrokenReferenceUnrecoverable,
     ChainBrokenCloudHighRttLowValueAdmission,
+    ChainBrokenDisplayStarvedLowValueAdmission,
     GapExpiredDeadline,
     Unknown,
 }
@@ -424,6 +425,7 @@ impl XbxEngineAnchorCandidateFailureReason {
             Self::InspectionRejectedInvalidSliceHeader => "inspectionRejectInvalidSliceHeader",
             Self::ChainBrokenReferenceUnrecoverable => "referenceChainUnrecoverable",
             Self::ChainBrokenCloudHighRttLowValueAdmission => "cloudHighRttLowValueAdmission",
+            Self::ChainBrokenDisplayStarvedLowValueAdmission => "displayStarvedLowValueAdmission",
             Self::GapExpiredDeadline => "gapExpiredDeadline",
             Self::Unknown => "unknown",
         }
@@ -440,9 +442,34 @@ pub struct XbxEngineAnchorCandidateLedger {
     pub observed_at_ms: f64,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum XbxEngineRecoveryReasonDomain {
+    ConnectivityTransport,
+    Local,
+    Unknown,
+}
+
+impl XbxEngineRecoveryReasonDomain {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::ConnectivityTransport => "connectivity-transport",
+            Self::Local => "local",
+            Self::Unknown => "unknown",
+        }
+    }
+
+    pub fn allows_runtime_reconnect_candidate(self) -> bool {
+        matches!(self, Self::ConnectivityTransport)
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum XbxEnginePendingRuntimeRecoveryAction {
-    RequestReconnectCandidate { observation_id: u64, reason: String },
+    RequestReconnectCandidate {
+        observation_id: u64,
+        reason: String,
+        reason_domain: XbxEngineRecoveryReasonDomain,
+    },
 }
 
 #[derive(Clone, Debug, PartialEq)]

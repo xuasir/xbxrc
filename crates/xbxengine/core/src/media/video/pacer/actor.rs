@@ -519,8 +519,7 @@ fn resolve_host_release_wait_duration(
     last_consumed_host_tick_epoch: Option<u64>,
 ) -> Option<Duration> {
     let cadence_signal_active = host_context.display_tick_epoch > 0
-        && (host_context.present_epoch > 0
-            || host_context.cadence_phase.cadence_signal_active());
+        && (host_context.present_epoch > 0 || host_context.cadence_phase.cadence_signal_active());
     if cadence_signal_active {
         let epoch_open = last_consumed_host_tick_epoch
             .map(|last| host_context.display_tick_epoch > last)

@@ -539,10 +539,7 @@ impl MacOsWgpuTelemetry {
         self.recent_display_tick_times_ms.push_back(now_ms);
         self.trim_display_ticks(now_ms);
         self.display_tick_epoch = self.display_tick_epoch.saturating_add(1);
-        if matches!(
-            self.cadence_phase,
-            HostCadencePhase::Idle
-        ) {
+        if matches!(self.cadence_phase, HostCadencePhase::Idle) {
             self.cadence_phase = HostCadencePhase::Priming;
         }
     }

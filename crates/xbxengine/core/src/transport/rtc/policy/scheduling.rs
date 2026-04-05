@@ -100,9 +100,11 @@ pub(crate) fn map_planned_command_to_transport_commands(
         PlannedTransportCommand::ExecuteRecoveryAction {
             decision,
             reason_label,
+            reason_domain,
         } => map_recovery_action_to_transport_commands(
             decision.action,
             reason_label,
+            reason_domain,
             decision.observation_id,
         ),
         PlannedTransportCommand::UpdateTargetRemb {
@@ -119,6 +121,7 @@ pub(crate) fn map_planned_command_to_transport_commands(
 fn map_recovery_action_to_transport_commands(
     action: RecoveryAction,
     reason: String,
+    reason_domain: crate::XbxEngineRecoveryReasonDomain,
     observation_id: u64,
 ) -> Vec<TransportCommand> {
     match action {
@@ -133,6 +136,7 @@ fn map_recovery_action_to_transport_commands(
         RecoveryAction::RequestReconnectCandidate => {
             vec![TransportCommand::RequestReconnectCandidate {
                 reason,
+                reason_domain,
                 observation_id,
             }]
         }
@@ -157,7 +161,11 @@ fn map_recovery_action_to_transport_commands(
 
 #[cfg(test)]
 mod tests {
-    use super::{SchedulingPolicyEngine, SchedulingPolicyInput, TwccWarmupState};
+    use super::{
+        map_planned_command_to_transport_commands, SchedulingPolicyEngine, SchedulingPolicyInput,
+        TwccWarmupState,
+    };
+    use crate::transport::rtc::facts::TransportCommand;
     use crate::transport::rtc::bwe::evaluator::RtcBweEvaluation;
     use crate::transport::rtc::policy::bwe::BwePolicyProposal;
     use crate::transport::rtc::policy::recovery::RecoveryPolicyProposal;
@@ -179,6 +187,7 @@ mod tests {
             },
             reason: VideoEscalationReason::AdapterIdleTimeout,
             reason_label: "adapterIdleTimeout".to_string(),
+            reason_domain: crate::XbxEngineRecoveryReasonDomain::ConnectivityTransport,
             budget_before: RecoveryActionBudgetState {
                 recovery_epoch: 1,
                 keyframe_budget_used: 0,
@@ -259,6 +268,7 @@ mod tests {
                 },
                 reason: VideoEscalationReason::LifecycleRecovering,
                 reason_label: "rtcConnectionRecovering".to_string(),
+                reason_domain: crate::XbxEngineRecoveryReasonDomain::ConnectivityTransport,
                 budget_before: RecoveryActionBudgetState {
                     recovery_epoch: 1,
                     keyframe_budget_used: 0,
@@ -285,14 +295,42 @@ mod tests {
             Some(
                 crate::transport::rtc::policy::planner::PlannedTransportCommand::ExecuteRecoveryAction {
                     decision,
+                    reason_domain,
                     ..
                 },
             ) => {
                 assert_eq!(decision.observation_id, 99);
                 assert_eq!(decision.action, RecoveryAction::RequestReconnectCandidate);
+                assert_eq!(
+                    *reason_domain,
+                    crate::XbxEngineRecoveryReasonDomain::ConnectivityTransport
+                );
             }
             _ => panic!("unexpected command kind"),
         }
+    }
+
+    #[test]
+    fn reconnect_transport_command_mapping_keeps_reason_domain() {
+        let commands = map_planned_command_to_transport_commands(
+            crate::transport::rtc::policy::planner::PlannedTransportCommand::ExecuteRecoveryAction {
+                decision: VideoEscalationDecision {
+                    observation_id: 100,
+                    action: RecoveryAction::RequestReconnectCandidate,
+                },
+                reason_label: "livenessNoProgressTimeout".to_string(),
+                reason_domain: crate::XbxEngineRecoveryReasonDomain::ConnectivityTransport,
+            },
+            0,
+        );
+        assert!(matches!(
+            commands.as_slice(),
+            [TransportCommand::RequestReconnectCandidate {
+                observation_id: 100,
+                reason,
+                reason_domain: crate::XbxEngineRecoveryReasonDomain::ConnectivityTransport,
+            }] if reason == "livenessNoProgressTimeout"
+        ));
     }
 
     #[test]
@@ -309,6 +347,7 @@ mod tests {
                 },
                 reason: VideoEscalationReason::TransportAwaitRecoveryKeyframe,
                 reason_label: "transportAwaitRecoveryKeyframe".to_string(),
+                reason_domain: crate::XbxEngineRecoveryReasonDomain::ConnectivityTransport,
                 budget_before: RecoveryActionBudgetState {
                     recovery_epoch: 1,
                     keyframe_budget_used: 0,

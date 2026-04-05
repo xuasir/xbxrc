@@ -1,4 +1,5 @@
 use crate::transport::rtc::recovery::escalation::VideoEscalationDecision;
+use crate::XbxEngineRecoveryReasonDomain;
 
 use super::bwe::BwePolicyProposal;
 use super::recovery::RecoveryPolicyProposal;
@@ -7,6 +8,7 @@ pub(crate) enum PlannedTransportCommand {
     ExecuteRecoveryAction {
         decision: VideoEscalationDecision,
         reason_label: String,
+        reason_domain: XbxEngineRecoveryReasonDomain,
     },
     UpdateTargetRemb {
         target_remb_kbps: u32,
@@ -42,6 +44,7 @@ impl TransportCommandPlanner {
             commands.push(PlannedTransportCommand::ExecuteRecoveryAction {
                 decision: recovery.decision,
                 reason_label: recovery.reason_label,
+                reason_domain: recovery.reason_domain,
             });
         }
 
@@ -75,6 +78,7 @@ mod tests {
                 },
                 reason: VideoEscalationReason::LifecycleRecovering,
                 reason_label: "rtcConnectionRecovering".to_string(),
+                reason_domain: crate::XbxEngineRecoveryReasonDomain::ConnectivityTransport,
                 budget_before: RecoveryActionBudgetState {
                     recovery_epoch: 1,
                     keyframe_budget_used: 0,
@@ -98,9 +102,63 @@ mod tests {
         });
         assert_eq!(plan.commands.len(), 1);
         match &plan.commands[0] {
-            PlannedTransportCommand::ExecuteRecoveryAction { decision, .. } => {
+            PlannedTransportCommand::ExecuteRecoveryAction {
+                decision,
+                reason_domain,
+                ..
+            } => {
                 assert_eq!(decision.observation_id, 42);
                 assert_eq!(decision.action, RecoveryAction::RequestReconnectCandidate);
+                assert_eq!(
+                    *reason_domain,
+                    crate::XbxEngineRecoveryReasonDomain::ConnectivityTransport
+                );
+            }
+            _ => panic!("expected recovery command"),
+        }
+    }
+
+    #[test]
+    fn planner_preserves_local_reason_domain_for_reconnect_candidate() {
+        let planner = TransportCommandPlanner::new();
+        let plan = planner.plan(PolicyPlanInput {
+            recovery: Some(RecoveryPolicyProposal {
+                decision: VideoEscalationDecision {
+                    observation_id: 43,
+                    action: RecoveryAction::RequestReconnectCandidate,
+                },
+                reason: VideoEscalationReason::DisplaySupplyCritical,
+                reason_label: "displaySupplyCritical".to_string(),
+                reason_domain: crate::XbxEngineRecoveryReasonDomain::Local,
+                budget_before: RecoveryActionBudgetState {
+                    recovery_epoch: 1,
+                    keyframe_budget_used: 0,
+                    keyframe_budget_limit: 3,
+                    decoder_reset_budget_used: 0,
+                    decoder_reset_budget_limit: 2,
+                    reconnect_budget_used: 0,
+                    reconnect_budget_limit: 1,
+                },
+                budget_after: RecoveryActionBudgetState {
+                    recovery_epoch: 1,
+                    keyframe_budget_used: 0,
+                    keyframe_budget_limit: 3,
+                    decoder_reset_budget_used: 0,
+                    decoder_reset_budget_limit: 2,
+                    reconnect_budget_used: 1,
+                    reconnect_budget_limit: 1,
+                },
+            }),
+            bwe: None,
+        });
+        match &plan.commands[0] {
+            PlannedTransportCommand::ExecuteRecoveryAction {
+                reason_label,
+                reason_domain,
+                ..
+            } => {
+                assert_eq!(reason_label, "displaySupplyCritical");
+                assert_eq!(*reason_domain, crate::XbxEngineRecoveryReasonDomain::Local);
             }
             _ => panic!("expected recovery command"),
         }

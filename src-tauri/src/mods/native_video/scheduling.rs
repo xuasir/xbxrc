@@ -386,7 +386,6 @@ impl ScheduledFrameSlot {
 #[path = "scheduling.test.rs"]
 mod tests;
 
-
 fn calculate_recent_fps(recent_times_ms: &VecDeque<f64>) -> f64 {
     if recent_times_ms.len() < 2 {
         return recent_times_ms.len() as f64;

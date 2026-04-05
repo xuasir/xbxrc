@@ -226,12 +226,32 @@ where
         let Some(action) = action else {
             return false;
         };
-        let reason = match action {
+        let (observation_id, reason, reason_domain) = match action {
             crate::XbxEnginePendingRuntimeRecoveryAction::RequestReconnectCandidate {
+                observation_id,
                 reason,
-                ..
-            } => reason,
+                reason_domain,
+            } => (observation_id, reason, reason_domain),
         };
+        if !reason_domain.allows_runtime_reconnect_candidate() {
+            let now_ms = now_ms_f64();
+            self.snapshot.last_recovery_action =
+                Some("reconnectCandidateRejectedByDomainGate".to_string());
+            self.snapshot.last_recovery_action_at_ms = Some(now_ms);
+            self.snapshot.last_recovery_reason = Some(format!(
+                "transportReconnectCandidateRejected:domain={} observationId={} reason={}",
+                reason_domain.as_str(),
+                observation_id,
+                reason
+            ));
+            crate::xbx_log_warn!(
+                "[xbxengine][runtime] reject pending reconnect candidate by domain gate observationId={} domain={} reason={}",
+                observation_id,
+                reason_domain.as_str(),
+                reason
+            );
+            return true;
+        }
         // 只要 transport 已经产出 pending reconnect candidate，就应立即消费执行，
         // 不能再依赖外层连接态门控，否则会出现“已决策但不落地”。
         self.snapshot.last_recovery_action = Some("reconnectCandidateConsumed".to_string());

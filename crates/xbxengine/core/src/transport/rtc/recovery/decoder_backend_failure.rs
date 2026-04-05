@@ -23,6 +23,7 @@ pub(crate) fn resolve_decoder_backend_failure_recovery(
             | VideoEscalationReason::TransportSevereDeadline
             | VideoEscalationReason::TransportSampleLoss
             | VideoEscalationReason::TransportAwaitRecoveryKeyframe
+            | VideoEscalationReason::DisplaySupplyCritical
             | VideoEscalationReason::WaitKeyframe
             | VideoEscalationReason::AdapterIdleTimeout
     ) {

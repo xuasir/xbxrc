@@ -62,6 +62,7 @@ fn inspection_bootstrap_reason(inspection: &H264AccessUnitInspection) -> &'stati
 
 pub(super) fn resolve_recovery_keyframe_action(
     waiting_for_recovery_keyframe: bool,
+    hard_recovery_gap_risk: bool,
     sample_loss_burst_count: u8,
     media_dropped_packets: u16,
     is_keyframe: bool,
@@ -87,6 +88,9 @@ pub(super) fn resolve_recovery_keyframe_action(
     if waiting_for_recovery_keyframe {
         if allow_soft_reentry_submit {
             // clean anchor 后的短窗内，健康 delta 只要还能安全提交，就别继续把链路拖回 recovering。
+            return (false, RecoveryKeyframeAction::Submit);
+        }
+        if !hard_recovery_gap_risk {
             return (false, RecoveryKeyframeAction::Submit);
         }
         return (true, RecoveryKeyframeAction::WaitKeyframe);
@@ -544,6 +548,7 @@ impl RtcVideoFrameSource {
                     "delta"
                 };
                 let waiting_for_recovery_keyframe = self.waiting_for_recovery_keyframe();
+                let hard_recovery_gap_risk = self.timeline_state.has_hard_recovery_gap_risk();
                 let allow_soft_reentry_submit = waiting_for_recovery_keyframe
                     && media_dropped_packets == 0
                     && !is_keyframe
@@ -553,6 +558,7 @@ impl RtcVideoFrameSource {
                 let (next_waiting_for_recovery_keyframe, recovery_action) =
                     resolve_recovery_keyframe_action(
                         waiting_for_recovery_keyframe,
+                        hard_recovery_gap_risk,
                         self.sample_loss_burst_count,
                         media_dropped_packets,
                         is_keyframe,
@@ -761,7 +767,8 @@ impl RtcVideoFrameSource {
                 self.last_packet_time,
                 effective_idle_timeout,
             );
-            let idle_timeout = idle_timeout && !self.should_absorb_idle_timeout(effective_idle_timeout);
+            let idle_timeout =
+                idle_timeout && !self.should_absorb_idle_timeout(effective_idle_timeout);
             let thin_stream_stall = self.should_trigger_thin_stream_stall(now);
 
             if idle_timeout || thin_stream_stall {

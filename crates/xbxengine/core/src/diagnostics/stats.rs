@@ -1393,7 +1393,8 @@ fn classify_stall_kind(
         .unwrap_or(0.0);
     if let Some(owner_reason) = owner.and_then(|owner| owner.reason.as_deref()) {
         return Some(match owner_reason {
-            "adapterIdleTimeout" | "displaySupplyCritical" => "idleTimeout".to_string(),
+            "adapterIdleTimeout" => "idleTimeout".to_string(),
+            "displaySupplyCritical" => "displaySupplyCritical".to_string(),
             "decoderBackendFailure" => "decoderBackendFailure".to_string(),
             "transportSampleLoss" => "sampleLoss".to_string(),
             "transportAwaitRecoveryKeyframe" | "ingressWaitKeyframe" => {

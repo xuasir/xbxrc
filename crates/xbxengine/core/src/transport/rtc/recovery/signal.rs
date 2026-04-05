@@ -6,6 +6,7 @@ use crate::media::video::ingress::scheduler::IngressDecision;
  */
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum VideoRecoverySignal {
+    DisplaySupplyCritical,
     AdapterIdleTimeout,
     AdapterThinStream,
     TransportExpiredDeadline,

@@ -50,6 +50,22 @@ pub(crate) fn resolve_recent_repeat_suppression(
                 return Some(RecoveryAction::CooldownSuppressed);
             }
         }
+        VideoEscalationReason::DisplaySupplyCritical => {
+            let same_local_display_chain = escalation.reason == "displaySupplyCritical";
+            let decoder_reset_inflight = matches!(
+                escalation.action.as_str(),
+                "requestDecoderReset"
+                    | "requestKeyframe+decoderReset"
+                    | "requestKeyframe+decoderReset(startupLowQualityRetry)"
+            );
+            if same_local_display_chain
+                && decoder_reset_inflight
+                && !has_new_transport_recovery_epoch
+                && elapsed_ms <= IDLE_TIMEOUT_REPEAT_SUPPRESS_MS
+            {
+                return Some(RecoveryAction::CooldownSuppressed);
+            }
+        }
         VideoEscalationReason::AdapterIdleTimeout => {
             let same_idle_chain = escalation.reason == "adapterIdleTimeout";
             let decoder_reset_inflight = matches!(

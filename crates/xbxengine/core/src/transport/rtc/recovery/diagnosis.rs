@@ -13,6 +13,10 @@ pub struct VideoRecoveryDiagnosis {
 impl VideoRecoverySignal {
     pub fn diagnose(self) -> VideoRecoveryDiagnosis {
         match self {
+            VideoRecoverySignal::DisplaySupplyCritical => VideoRecoveryDiagnosis {
+                reason: VideoEscalationReason::DisplaySupplyCritical,
+                label: "displaySupplyCritical",
+            },
             VideoRecoverySignal::AdapterIdleTimeout => VideoRecoveryDiagnosis {
                 reason: VideoEscalationReason::AdapterIdleTimeout,
                 label: "adapterIdleTimeout",
@@ -110,5 +114,15 @@ mod tests {
             _ => panic!("ingress frame abandoned should diagnose to wait-keyframe"),
         }
         assert_eq!(diagnosis.label, "ingressFrameAbandoned");
+    }
+
+    #[test]
+    fn display_supply_critical_maps_to_local_display_reason() {
+        let diagnosis = diagnose_transport_signal(VideoRecoverySignal::DisplaySupplyCritical);
+        match diagnosis.reason {
+            VideoEscalationReason::DisplaySupplyCritical => {}
+            _ => panic!("display supply critical should diagnose to local display reason"),
+        }
+        assert_eq!(diagnosis.label, "displaySupplyCritical");
     }
 }

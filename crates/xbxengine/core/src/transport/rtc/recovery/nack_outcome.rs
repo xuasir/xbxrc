@@ -60,6 +60,7 @@ pub(crate) fn resolve_recent_nack_outcome(
                     reason,
                     VideoEscalationReason::WaitKeyframe
                         | VideoEscalationReason::TransportAwaitRecoveryKeyframe
+                        | VideoEscalationReason::DisplaySupplyCritical
                         | VideoEscalationReason::AdapterIdleTimeout
                 )
             {
@@ -105,30 +106,19 @@ pub(crate) fn resolve_recent_nack_outcome(
             } else if is_important
                 && matches!(
                     reason,
-                    VideoEscalationReason::AdapterIdleTimeout
+                    VideoEscalationReason::DisplaySupplyCritical
                         | VideoEscalationReason::TransportSampleLoss
                         | VideoEscalationReason::TransportAwaitRecoveryKeyframe
                         | VideoEscalationReason::WaitKeyframe
                 )
             {
                 let escalated_reason =
-                    if matches!(reason, VideoEscalationReason::AdapterIdleTimeout) {
-                        VideoEscalationReason::TransportAwaitRecoveryKeyframe
+                    if matches!(reason, VideoEscalationReason::DisplaySupplyCritical) {
+                        VideoEscalationReason::DisplaySupplyCritical
                     } else {
                         VideoEscalationReason::TransportSampleLoss
                     };
                 Some(RecentNackOutcomeResolution::Escalate(escalated_reason))
-            } else if is_important
-                && matches!(
-                    reason,
-                    VideoEscalationReason::TransportSampleLoss
-                        | VideoEscalationReason::TransportAwaitRecoveryKeyframe
-                        | VideoEscalationReason::WaitKeyframe
-                )
-            {
-                Some(RecentNackOutcomeResolution::Escalate(
-                    VideoEscalationReason::TransportSampleLoss,
-                ))
             } else {
                 None
             }
@@ -205,5 +195,63 @@ impl CloudStartupExpiredDeadlineBudget {
         self.first_seen_at_ms = None;
         self.last_observation_id = None;
         self.streak = 0;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        resolve_recent_nack_outcome, CloudStartupExpiredDeadlineBudget, RecentNackOutcomeResolution,
+    };
+    use crate::transport::rtc::recovery::escalation::VideoEscalationReason;
+    use crate::transport::rtc::recovery::runtime_state::unix_now_ms;
+    use crate::{XbxEngineMediaRuntimeStats, XbxEngineVideoNackObservation};
+    use std::sync::Mutex;
+    use std::time::{Duration, Instant};
+
+    fn important_expired_nack(now_ms: f64) -> XbxEngineVideoNackObservation {
+        XbxEngineVideoNackObservation {
+            observation_id: 7,
+            action: "expiredDeadline".to_string(),
+            source: "sampleLoss".to_string(),
+            first_sequence: 11,
+            last_sequence: 12,
+            packet_count: 2,
+            retry_count: 1,
+            frame_rtp_timestamp: Some(42),
+            frame_is_keyframe: Some(true),
+            frame_importance: Some("keyframe".to_string()),
+            deadline_at_ms: None,
+            estimated_recovery_arrival_ms: None,
+            nack_disposition: Some("attempted".to_string()),
+            frame_playout_deadline_at_ms: None,
+            frame_unrecoverable_reason: None,
+            frame_budget: None,
+            observed_at_ms: now_ms,
+        }
+    }
+
+    #[test]
+    fn display_supply_critical_nack_outcome_is_not_rewritten_to_transport_await() {
+        let now_ms = unix_now_ms();
+        let stats = Mutex::new(XbxEngineMediaRuntimeStats {
+            latest_video_nack_observation: Some(important_expired_nack(now_ms)),
+            ..XbxEngineMediaRuntimeStats::default()
+        });
+
+        let resolution = resolve_recent_nack_outcome(
+            &stats,
+            &VideoEscalationReason::DisplaySupplyCritical,
+            Instant::now() - Duration::from_secs(3),
+            Duration::from_millis(800),
+            &mut CloudStartupExpiredDeadlineBudget::default(),
+        );
+
+        assert!(matches!(
+            resolution,
+            Some(RecentNackOutcomeResolution::Escalate(
+                VideoEscalationReason::DisplaySupplyCritical
+            ))
+        ));
     }
 }

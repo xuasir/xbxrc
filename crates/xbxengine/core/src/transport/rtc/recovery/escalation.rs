@@ -1,5 +1,7 @@
 use std::time::{Duration, Instant};
 
+use crate::XbxEngineRecoveryReasonDomain;
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum RecoveryAction {
     WaitForBurst,
@@ -33,6 +35,7 @@ impl RecoveryAction {
 enum KeyframeReasonClass {
     WaitKeyframe,
     TransportAwaitRecoveryKeyframe,
+    DisplaySupplyCritical,
     AdapterIdleTimeout,
     AdapterThinStream,
     TransportExpiredDeadline,
@@ -51,6 +54,7 @@ pub enum VideoEscalationReason {
     LifecycleRecovering,
     WaitKeyframe,
     TransportAwaitRecoveryKeyframe,
+    DisplaySupplyCritical,
     Reconfigure,
     DecoderBackendFailure,
     AdapterIdleTimeout,
@@ -67,6 +71,7 @@ impl VideoEscalationReason {
             Self::LifecycleRecovering => "rtcConnectionRecovering",
             Self::WaitKeyframe => "waitKeyframe",
             Self::TransportAwaitRecoveryKeyframe => "transportAwaitRecoveryKeyframe",
+            Self::DisplaySupplyCritical => "displaySupplyCritical",
             Self::Reconfigure => "reconfigure",
             Self::DecoderBackendFailure => "decoderBackendFailure",
             Self::AdapterIdleTimeout => "adapterIdleTimeout",
@@ -75,6 +80,23 @@ impl VideoEscalationReason {
             Self::TransportSevereDeadline => "transportSevereDeadline",
             Self::TransportRecoveredLate => "transportRecoveredLate",
             Self::TransportSampleLoss => "transportSampleLoss",
+        }
+    }
+
+    pub fn reconnect_domain(self) -> XbxEngineRecoveryReasonDomain {
+        match self {
+            Self::LifecycleRecovering => XbxEngineRecoveryReasonDomain::ConnectivityTransport,
+            Self::DisplaySupplyCritical => XbxEngineRecoveryReasonDomain::Local,
+            Self::WaitKeyframe
+            | Self::TransportAwaitRecoveryKeyframe
+            | Self::Reconfigure
+            | Self::DecoderBackendFailure
+            | Self::AdapterIdleTimeout
+            | Self::AdapterThinStream
+            | Self::TransportExpiredDeadline
+            | Self::TransportSevereDeadline
+            | Self::TransportRecoveredLate
+            | Self::TransportSampleLoss => XbxEngineRecoveryReasonDomain::ConnectivityTransport,
         }
     }
 }
@@ -374,6 +396,8 @@ impl VideoEscalationController {
     ) -> VideoEscalationDecision {
         self.next_observation_id = self.next_observation_id.saturating_add(1);
         let now = Instant::now();
+        let allow_reconnect =
+            allow_reconnect && !matches!(reason, VideoEscalationReason::DisplaySupplyCritical);
         let action = match reason {
             VideoEscalationReason::LifecycleRecovering => {
                 self.wait_keyframe_started_at = None;
@@ -386,6 +410,7 @@ impl VideoEscalationController {
             }
             VideoEscalationReason::WaitKeyframe
             | VideoEscalationReason::TransportAwaitRecoveryKeyframe
+            | VideoEscalationReason::DisplaySupplyCritical
             | VideoEscalationReason::AdapterIdleTimeout
             | VideoEscalationReason::AdapterThinStream
             | VideoEscalationReason::TransportExpiredDeadline
@@ -395,6 +420,9 @@ impl VideoEscalationController {
                     VideoEscalationReason::WaitKeyframe => KeyframeReasonClass::WaitKeyframe,
                     VideoEscalationReason::TransportAwaitRecoveryKeyframe => {
                         KeyframeReasonClass::TransportAwaitRecoveryKeyframe
+                    }
+                    VideoEscalationReason::DisplaySupplyCritical => {
+                        KeyframeReasonClass::DisplaySupplyCritical
                     }
                     VideoEscalationReason::AdapterIdleTimeout => {
                         KeyframeReasonClass::AdapterIdleTimeout
@@ -416,6 +444,7 @@ impl VideoEscalationController {
                 let immediate_keyframe_reason = matches!(
                     reason,
                     VideoEscalationReason::TransportAwaitRecoveryKeyframe
+                        | VideoEscalationReason::DisplaySupplyCritical
                         | VideoEscalationReason::TransportExpiredDeadline
                         | VideoEscalationReason::TransportSampleLoss
                         | VideoEscalationReason::AdapterIdleTimeout
@@ -829,7 +858,8 @@ impl VideoEscalationController {
     ) -> bool {
         let can_auto_release = matches!(
             reason_class,
-            KeyframeReasonClass::AdapterIdleTimeout
+            KeyframeReasonClass::DisplaySupplyCritical
+                | KeyframeReasonClass::AdapterIdleTimeout
                 | KeyframeReasonClass::TransportAwaitRecoveryKeyframe
         );
         if !can_auto_release

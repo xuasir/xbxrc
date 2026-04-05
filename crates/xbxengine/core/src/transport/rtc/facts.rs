@@ -1,6 +1,7 @@
 use std::fmt;
 
 use crate::media::video::ingress::scheduler::IngressDecision;
+use crate::XbxEngineRecoveryReasonDomain;
 
 /// 连接生命周期事实，尽量保持中性语义。
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -127,6 +128,7 @@ pub enum TransportCommand {
     },
     RequestReconnectCandidate {
         reason: String,
+        reason_domain: XbxEngineRecoveryReasonDomain,
         observation_id: u64,
     },
     SetTargetRembKbps {

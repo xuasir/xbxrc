@@ -311,8 +311,7 @@ impl QueueHistoryController {
 mod tests {
     use super::{
         FramePacingAction, FramePacingPolicy, HostCadencePhaseHint, HostPacingPressure,
-        QueueHistoryConfig,
-        QueueHistoryController,
+        QueueHistoryConfig, QueueHistoryController,
     };
     use std::time::{Duration, Instant};
 

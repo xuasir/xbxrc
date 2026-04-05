@@ -5,7 +5,9 @@ use bytes::Bytes;
 
 use crate::api::backend::XbxEngineMediaRuntimeStats;
 use crate::media::video::h264::inspection::H264AccessUnitInspector;
-use crate::media::video::types::{AssembledVideoFrame, FrameRecoveryDisposition, FrameValue, VideoCodec};
+use crate::media::video::types::{
+    AssembledVideoFrame, FrameRecoveryDisposition, FrameValue, VideoCodec,
+};
 use crate::transport::rtc::stream::adapter_types::TransportObservation;
 use crate::transport::rtc::stream::nack_scheduler::NackSchedulerConfig;
 use crate::transport::rtc::stream::packet_types::{
@@ -125,7 +127,8 @@ pub(crate) fn make_video_source_for_test() -> (
     RtcVideoFrameSource,
 ) {
     let (tx, rx) = tokio::sync::mpsc::channel(8);
-    let (transport_observation_tx, transport_observation_rx) = tokio::sync::mpsc::unbounded_channel();
+    let (transport_observation_tx, transport_observation_rx) =
+        tokio::sync::mpsc::unbounded_channel();
     let rtcp_port: Arc<dyn RtcRtcpSendPort> = Arc::new(NoopRtcpPort);
     let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
     let source = RtcVideoFrameSource::new(

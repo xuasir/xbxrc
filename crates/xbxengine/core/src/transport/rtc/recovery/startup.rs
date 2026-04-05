@@ -200,6 +200,7 @@ pub fn should_fast_reset_startup_recovery(
             reason,
             VideoEscalationReason::TransportSampleLoss
                 | VideoEscalationReason::WaitKeyframe
+                | VideoEscalationReason::DisplaySupplyCritical
                 | VideoEscalationReason::AdapterIdleTimeout
         )
 }
@@ -289,6 +290,11 @@ mod tests {
         ));
         assert!(should_fast_reset_startup_recovery(
             &VideoEscalationReason::WaitKeyframe,
+            stream_started_at,
+            Duration::from_secs(2),
+        ));
+        assert!(should_fast_reset_startup_recovery(
+            &VideoEscalationReason::DisplaySupplyCritical,
             stream_started_at,
             Duration::from_secs(2),
         ));

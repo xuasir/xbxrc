@@ -94,8 +94,23 @@ struct GapEntry {
     state: GapState,
     frame_rtp_timestamp: Option<u32>,
     frame_importance: &'static str,
+    provenance: GapProvenance,
+    severity: GapSeverity,
     first_observed_at_ms: f64,
     last_updated_at_ms: f64,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum GapProvenance {
+    NetworkOrUnknown,
+    LocalLowValueDrop,
+    Repair,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum GapSeverity {
+    Soft,
+    Hard,
 }
 
 #[derive(Clone, Debug)]
@@ -190,6 +205,30 @@ impl VideoTimelineState {
         self.chain_state = ChainState::Recovering;
     }
 
+    pub(super) fn has_hard_recovery_gap_risk(&self) -> bool {
+        if matches!(self.chain_state, ChainState::Broken) {
+            return true;
+        }
+        if self
+            .gaps
+            .values()
+            .any(|entry| entry.severity == GapSeverity::Hard)
+        {
+            return true;
+        }
+        if self.frame_recovery_ledger.values().any(|entry| {
+            matches!(
+                entry.frame_recovery_disposition,
+                FrameRecoveryDisposition::UnrecoverableReferenceChain
+            )
+        }) {
+            return true;
+        }
+        self.chain_debt_reason
+            .as_deref()
+            .is_some_and(is_hard_recovery_reason)
+    }
+
     pub(super) fn on_recovery_keyframe_requested(&mut self) {
         if self.chain_debt_reason.is_none() {
             self.chain_debt_reason = Some("awaitRecoveryKeyframe".to_string());
@@ -236,6 +275,7 @@ impl VideoTimelineState {
                 now_ms,
                 frame_rtp_timestamp,
                 frame_importance,
+                None,
             );
         }
         if let Some(frame_rtp_timestamp) = frame_rtp_timestamp {
@@ -269,6 +309,7 @@ impl VideoTimelineState {
                 now_ms,
                 frame_rtp_timestamp,
                 frame_importance,
+                None,
             );
         }
         if soft_reentry
@@ -302,6 +343,7 @@ impl VideoTimelineState {
                 now_ms,
                 frame_rtp_timestamp,
                 frame_importance,
+                None,
             );
         }
         if let Some(frame_rtp_timestamp) = frame_rtp_timestamp {
@@ -344,6 +386,7 @@ impl VideoTimelineState {
                 now_ms,
                 frame_rtp_timestamp,
                 frame_importance,
+                None,
             );
         }
         if let Some(frame_rtp_timestamp) = frame_rtp_timestamp {
@@ -385,6 +428,7 @@ impl VideoTimelineState {
             now_ms,
             frame_rtp_timestamp,
             frame_importance,
+            None,
         );
         if let Some(frame_rtp_timestamp) = frame_rtp_timestamp {
             let has_pending_gap = self.gaps.values().any(|entry| {
@@ -444,6 +488,7 @@ impl VideoTimelineState {
                 now_ms,
                 frame_rtp_timestamp,
                 frame_importance,
+                close_reason,
             );
         }
         if let Some(frame_rtp_timestamp) = frame_rtp_timestamp {
@@ -474,14 +519,17 @@ impl VideoTimelineState {
             );
             self.reset_stable_recovery_gate();
             self.chain_state = ChainState::Broken;
-        } else if (matches!(close_reason, Some("cloudHighRttLowValueAdmission")) || soft_reentry)
+        } else if (matches!(
+            close_reason,
+            Some("cloudHighRttLowValueAdmission" | "displayStarvedLowValueAdmission")
+        ) || soft_reentry)
             && !self.has_pending_gap_risk()
             && !matches!(
                 self.chain_state,
                 ChainState::Broken | ChainState::Recovering
             )
         {
-            // Cloud 高 RTT 下的低价值 delta 失包只应降级为局部 repair，不应直接把链路打碎。
+            // 低价值 delta 失包只应降级为局部 repair，不应直接把链路打碎。
             self.chain_state = ChainState::Healthy;
         }
         chain_broken
@@ -712,6 +760,11 @@ impl VideoTimelineState {
         self.chain_state
     }
 
+    #[cfg(test)]
+    pub(super) fn has_hard_recovery_risk_for_test(&self) -> bool {
+        self.has_hard_recovery_gap_risk()
+    }
+
     fn update_gap(
         &mut self,
         sequence: u16,
@@ -719,7 +772,10 @@ impl VideoTimelineState {
         now_ms: f64,
         frame_rtp_timestamp: Option<u32>,
         frame_importance: &'static str,
+        close_reason: Option<&'static str>,
     ) {
+        let (provenance, severity) =
+            classify_gap(state, frame_importance, frame_rtp_timestamp, close_reason);
         if let Some(entry) = self.gaps.get_mut(&sequence) {
             entry.state = state;
             entry.last_updated_at_ms = now_ms;
@@ -727,6 +783,8 @@ impl VideoTimelineState {
             if entry.frame_importance == "unknown" && frame_importance != "unknown" {
                 entry.frame_importance = frame_importance;
             }
+            entry.provenance = provenance;
+            entry.severity = severity;
             return;
         }
         self.gaps.insert(
@@ -735,6 +793,8 @@ impl VideoTimelineState {
                 state,
                 frame_rtp_timestamp,
                 frame_importance,
+                provenance,
+                severity,
                 first_observed_at_ms: now_ms,
                 last_updated_at_ms: now_ms,
             },
@@ -829,6 +889,9 @@ impl VideoTimelineState {
     ) -> bool {
         if matches!(frame_importance, "reference" | "keyframe") {
             return true;
+        }
+        if matches!(close_reason, Some(reason) if is_local_low_value_gap_reason(reason)) {
+            return false;
         }
         if soft_reentry {
             return false;
@@ -1015,6 +1078,64 @@ impl VideoTimelineState {
             ChainState::Healthy => None,
         }
     }
+}
+
+fn classify_gap(
+    state: GapState,
+    frame_importance: &'static str,
+    frame_rtp_timestamp: Option<u32>,
+    close_reason: Option<&'static str>,
+) -> (GapProvenance, GapSeverity) {
+    if matches!(state, GapState::RepairInFlight) {
+        return (
+            GapProvenance::Repair,
+            if matches!(frame_importance, "reference" | "keyframe") {
+                GapSeverity::Hard
+            } else {
+                GapSeverity::Soft
+            },
+        );
+    }
+    if matches!(close_reason, Some(reason) if is_local_low_value_gap_reason(reason)) {
+        return (GapProvenance::LocalLowValueDrop, GapSeverity::Soft);
+    }
+    (
+        GapProvenance::NetworkOrUnknown,
+        if matches!(frame_importance, "reference" | "keyframe")
+            || (frame_rtp_timestamp.is_none()
+                && frame_importance == "delta"
+                && matches!(close_reason, Some("awaitingRecoveryKeyframe")))
+        {
+            GapSeverity::Hard
+        } else {
+            GapSeverity::Soft
+        },
+    )
+}
+
+fn is_local_low_value_gap_reason(reason: &str) -> bool {
+    matches!(
+        reason,
+        "cloudHighRttLowValueAdmission"
+            | "localBackpressureDeltaGap"
+            | "displayStarvedLowValueAdmission"
+    )
+}
+
+fn is_hard_recovery_reason(reason: &str) -> bool {
+    !is_local_low_value_gap_reason(reason)
+        && matches!(
+            reason,
+            "awaitingRecoveryKeyframe"
+                | "awaitRecoveryKeyframe"
+                | "referenceChainUnrecoverable"
+                | "inspectionError"
+                | "inspectionRejectNoVcl"
+                | "bootstrapMissingSps"
+                | "bootstrapMissingPps"
+                | "inspectionRejectNonIdrVcl"
+                | "inspectionRejectInvalidSliceHeader"
+        )
 }
 
 #[cfg(test)]
