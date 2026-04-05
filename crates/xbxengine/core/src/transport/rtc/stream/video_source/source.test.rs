@@ -328,6 +328,84 @@ async fn repair_packet_closes_bootstrap_gap_and_allows_frame_assembly() {
     assert_eq!(latest.rtp_timestamp, 9000);
     assert_eq!(latest.native_sequence_number, Some(9_001));
     assert_eq!(latest.repair_ssrc, 88);
+    assert!(matches!(
+        latest.stage.as_str(),
+        "adapterResolveMiss" | "adapterResolved"
+    ));
+}
+
+#[tokio::test]
+async fn repair_reorder_gap_closure_stays_local_and_records_resolved_gap_match() {
+    let (tx, mut transport_observation_rx, mut source) = make_video_source_for_test();
+
+    tx.send(make_video_rtp_packet(
+        100,
+        9_000,
+        false,
+        bootstrap_sps_nalu(),
+    ))
+    .await
+    .expect("sps packet should enqueue");
+    tx.send(make_video_rtp_packet(
+        102,
+        9_000,
+        true,
+        bootstrap_idr_nalu(),
+    ))
+    .await
+    .expect("idr packet should enqueue");
+    let mut repair_packet = make_video_rtp_packet(101, 9_000, false, bootstrap_pps_nalu());
+    repair_packet.ingress_kind = RtcVideoIngressKind::RtxReinject {
+        repair: RtcVideoRepairMetadata {
+            native_ssrc: 88,
+            native_payload_type: 97,
+            native_sequence_number: 9_001,
+        },
+    };
+    tx.send(repair_packet)
+        .await
+        .expect("repair packet should enqueue");
+    tx.send(make_video_rtp_packet(
+        103,
+        9_016,
+        true,
+        bootstrap_idr_nalu(),
+    ))
+    .await
+    .expect("next frame packet should flush previous sample");
+    drop(tx);
+
+    let frame = tokio::time::timeout(Duration::from_millis(200), source.recv_frame_inner())
+        .await
+        .expect("frame assembly should finish")
+        .expect("repaired bootstrap frame should be emitted");
+    assert!(frame.is_keyframe);
+    assert!(frame.h264.bootstrap_ready);
+    assert_eq!(frame.rtp_timestamp, 9_000);
+
+    let latest = source
+        .runtime_stats
+        .read(|stats| stats.latest_video_rtx_reinject_observation.clone())
+        .flatten()
+        .expect("repair observation should be recorded");
+    assert!(matches!(
+        latest.stage.as_str(),
+        "adapterResolveMiss" | "adapterResolved"
+    ));
+    assert_eq!(latest.sequence_number, 101);
+    assert_eq!(latest.native_sequence_number, Some(9_001));
+    assert_eq!(latest.repair_ssrc, 88);
+    if latest.stage == "adapterResolved" {
+        assert!(latest.matched_nack_range);
+        assert!(latest.matched_pending_gap);
+        assert_eq!(latest.matched_gap_sequence, Some(101));
+    }
+
+    assert!(
+        tokio::time::timeout(Duration::from_millis(50), transport_observation_rx.recv())
+            .await
+            .is_err()
+    );
 }
 
 #[tokio::test]
@@ -374,7 +452,7 @@ async fn bootstrap_packets_without_followup_boundary_do_not_emit_partial_frame()
 
 #[tokio::test]
 async fn repair_rtx_packet_keeps_explicit_provenance_through_source_stage_updates() {
-    let (tx, _transport_observation_rx, mut source) = make_video_source_for_test();
+    let (tx, mut transport_observation_rx, mut source) = make_video_source_for_test();
 
     let mut packet = make_video_rtp_packet(100, 9_000, true, bootstrap_idr_nalu());
     packet.meta.ssrc = 777;
@@ -404,4 +482,59 @@ async fn repair_rtx_packet_keeps_explicit_provenance_through_source_stage_update
     assert_eq!(latest.repair_ssrc, 99);
     assert_eq!(latest.primary_ssrc, 777);
     assert_eq!(latest.native_sequence_number, Some(4_321));
+    assert!(!latest.matched_nack_range);
+    assert!(!latest.matched_pending_gap);
+    assert!(latest.matched_gap_sequence.is_none());
+    assert!(
+        tokio::time::timeout(Duration::from_millis(50), transport_observation_rx.recv())
+            .await
+            .is_err()
+    );
+}
+
+#[tokio::test]
+async fn unmatched_repair_rtx_burst_stays_local_and_does_not_emit_transport_observation() {
+    let (tx, mut transport_observation_rx, mut source) = make_video_source_for_test();
+
+    for offset in 0..5u16 {
+        let mut packet = make_video_rtp_packet(300 + offset, 12_000, false, bootstrap_pps_nalu());
+        packet.meta.ssrc = 777;
+        packet.meta.payload_type = 124;
+        packet.ingress_kind = RtcVideoIngressKind::RtxReinject {
+            repair: RtcVideoRepairMetadata {
+                native_ssrc: 99,
+                native_payload_type: 97,
+                native_sequence_number: 8_000 + offset,
+            },
+        };
+        tx.send(packet)
+            .await
+            .expect("repair burst packet should enqueue");
+    }
+    drop(tx);
+
+    let frame = tokio::time::timeout(Duration::from_millis(200), source.recv_frame_inner())
+        .await
+        .expect("reader should finish after rx closes");
+    assert!(frame.is_none());
+
+    let latest = source
+        .runtime_stats
+        .read(|stats| stats.latest_video_rtx_reinject_observation.clone())
+        .flatten()
+        .expect("repair burst observation should be recorded");
+    assert_eq!(latest.stage, "adapterResolveMiss");
+    assert_eq!(latest.sequence_number, 304);
+    assert_eq!(latest.repair_ssrc, 99);
+    assert_eq!(latest.primary_ssrc, 777);
+    assert_eq!(latest.native_sequence_number, Some(8_004));
+    assert!(!latest.matched_nack_range);
+    assert!(!latest.matched_pending_gap);
+    assert!(latest.matched_gap_sequence.is_none());
+
+    assert!(
+        tokio::time::timeout(Duration::from_millis(50), transport_observation_rx.recv())
+            .await
+            .is_err()
+    );
 }

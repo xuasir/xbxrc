@@ -276,6 +276,7 @@ impl VideoEscalationController {
         self.transport_await_recovery_started_at = None;
         self.transport_deadline_window_started_at = None;
         self.transport_deadline_window_count = 0;
+        self.last_severe_deadline_at = None;
         self.last_keyframe_signal_at = None;
         self.last_decoder_reset_signal_at = None;
         self.last_keyframe_reason_class = None;
@@ -772,6 +773,12 @@ impl VideoEscalationController {
             VideoEscalationReason::TransportSevereDeadline => {
                 self.wait_keyframe_started_at = None;
                 self.transport_await_recovery_started_at = None;
+                let severe_signal_is_stale = self.last_severe_deadline_at.map_or(true, |last| {
+                    last.elapsed() > self.severe_deadline_reconnect_window
+                });
+                if severe_signal_is_stale {
+                    self.reconnect_candidate_signals = 0;
+                }
                 // 大洞 deadline 失效通常说明这一段视频已经不可救，
                 // 这里直接跳过 keyframe burst，优先推到更高一级恢复。
                 self.pending_keyframe_signals = 0;

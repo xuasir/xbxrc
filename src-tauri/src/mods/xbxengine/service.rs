@@ -90,6 +90,7 @@ impl XbxEngineProvider for XbxEngineService {
         tauri::async_runtime::spawn(async move {
             let mut interval =
                 tokio::time::interval(Duration::from_millis(XBXENGINE_TICK_INTERVAL_MS));
+            interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
             while !is_quitting.load(Ordering::Relaxed) {
                 interval.tick().await;
                 let state = runtime_state.clone();

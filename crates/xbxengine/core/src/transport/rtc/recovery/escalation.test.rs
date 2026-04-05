@@ -201,6 +201,55 @@ fn adapter_idle_after_severe_deadline_escalates_to_reconnect_candidate() {
 }
 
 #[test]
+fn adapter_idle_after_severe_deadline_window_expires_does_not_jump_to_reconnect_candidate() {
+    let mut controller = VideoEscalationController::new(VideoEscalationConfig {
+        cooldown_ms: 120,
+        keyframe_burst_threshold: 1,
+        decoder_reset_burst_threshold: 1,
+        keyframe_min_interval_ms: 120,
+        escalation_window_ms: 260,
+        keyframe_upgrade_min_delay_ms: 0,
+    });
+
+    assert_eq!(
+        controller
+            .on_reason(VideoEscalationReason::TransportSevereDeadline)
+            .action,
+        RecoveryAction::CooldownSuppressed
+    );
+    std::thread::sleep(Duration::from_millis(400));
+    let action = controller
+        .on_reason(VideoEscalationReason::AdapterIdleTimeout)
+        .action;
+    assert_ne!(action, RecoveryAction::RequestReconnectCandidate);
+}
+
+#[test]
+fn new_recovery_epoch_clears_severe_deadline_idle_timeout_shortcut() {
+    let mut controller = VideoEscalationController::new(VideoEscalationConfig {
+        cooldown_ms: 120,
+        keyframe_burst_threshold: 1,
+        decoder_reset_burst_threshold: 1,
+        keyframe_min_interval_ms: 120,
+        escalation_window_ms: 260,
+        keyframe_upgrade_min_delay_ms: 0,
+    });
+
+    controller.begin_recovery_epoch(7);
+    assert_eq!(
+        controller
+            .on_reason(VideoEscalationReason::TransportSevereDeadline)
+            .action,
+        RecoveryAction::CooldownSuppressed
+    );
+    controller.begin_recovery_epoch(8);
+    let action = controller
+        .on_reason(VideoEscalationReason::AdapterIdleTimeout)
+        .action;
+    assert_ne!(action, RecoveryAction::RequestReconnectCandidate);
+}
+
+#[test]
 fn persistent_wait_keyframe_escalates_to_decoder_reset() {
     let mut controller = VideoEscalationController::new(VideoEscalationConfig {
         cooldown_ms: 200,

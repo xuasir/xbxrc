@@ -36,10 +36,89 @@ use crate::transport::rtc::connection::dto_to_rtc_candidate;
 use crate::transport::rtc::connection::transport_metrics::publish_transport_metrics_sample;
 use crate::transport::rtc::connection::transport_metrics::RtcTransportMetricsSnapshot;
 use crate::{XbxEngineMediaRuntimeStats, XbxEngineRuntimeError};
+use ohmygamepad_protocol::{
+    LogicalPadId, OhMyGamepadRumbleEffectDto, OhMyGamepadRumbleRequestDto,
+    OhMyGamepadRumbleTargetDto,
+};
 use std::sync::{Arc, Mutex};
 use xbxengine_protocol::{XbxEngineIceCandidateDto, XbxEngineSessionDto, XbxEngineTargetTypeDto};
 
 const HANDSHAKE_ACK_PAYLOAD: &str = r#"{"type":"HandshakeAck"}"#;
+
+fn rumble_request(pad_id: LogicalPadId, strong_magnitude: f32) -> OhMyGamepadRumbleRequestDto {
+    OhMyGamepadRumbleRequestDto {
+        target: OhMyGamepadRumbleTargetDto::LogicalPad { pad_id },
+        effect: OhMyGamepadRumbleEffectDto {
+            strong_magnitude,
+            duration_ms: 120,
+            ..OhMyGamepadRumbleEffectDto::default()
+        },
+    }
+}
+
+#[test]
+fn rumble_queue_coalesces_by_target_and_keeps_latest_effect() {
+    let mut service = RtcConnectionService::default();
+    service.enqueue_pending_gamepad_rumble_requests(vec![
+        rumble_request(LogicalPadId::Pad0, 0.1),
+        rumble_request(LogicalPadId::Pad0, 0.8),
+        rumble_request(LogicalPadId::Pad1, 0.3),
+    ]);
+
+    assert_eq!(service.pending_gamepad_rumble_requests.len(), 2);
+    assert_eq!(
+        service.pending_gamepad_rumble_requests[0].target,
+        OhMyGamepadRumbleTargetDto::LogicalPad {
+            pad_id: LogicalPadId::Pad0,
+        }
+    );
+    assert_eq!(
+        service.pending_gamepad_rumble_requests[0]
+            .effect
+            .strong_magnitude,
+        0.8
+    );
+    assert_eq!(
+        service.pending_gamepad_rumble_requests[1].target,
+        OhMyGamepadRumbleTargetDto::LogicalPad {
+            pad_id: LogicalPadId::Pad1,
+        }
+    );
+}
+
+#[test]
+fn rumble_queue_drains_in_small_batches_per_tick() {
+    let mut service = RtcConnectionService::default();
+    service.enqueue_pending_gamepad_rumble_requests(vec![
+        rumble_request(LogicalPadId::Pad0, 0.1),
+        rumble_request(LogicalPadId::Pad1, 0.2),
+        rumble_request(LogicalPadId::Pad2, 0.3),
+    ]);
+
+    let first_batch = service.take_pending_gamepad_rumble_requests();
+    assert_eq!(first_batch.len(), 2);
+    assert_eq!(
+        first_batch[0].target,
+        OhMyGamepadRumbleTargetDto::LogicalPad {
+            pad_id: LogicalPadId::Pad0,
+        }
+    );
+    assert_eq!(
+        first_batch[1].target,
+        OhMyGamepadRumbleTargetDto::LogicalPad {
+            pad_id: LogicalPadId::Pad1,
+        }
+    );
+
+    let second_batch = service.take_pending_gamepad_rumble_requests();
+    assert_eq!(second_batch.len(), 1);
+    assert_eq!(
+        second_batch[0].target,
+        OhMyGamepadRumbleTargetDto::LogicalPad {
+            pad_id: LogicalPadId::Pad2,
+        }
+    );
+}
 
 #[test]
 fn create_raw_offer_comes_from_real_rtc_peer_connection() {

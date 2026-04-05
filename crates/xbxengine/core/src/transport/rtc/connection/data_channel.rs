@@ -1020,7 +1020,7 @@ impl RtcConnectionService {
                                 self.read_counters.data_channel_messages,
                                 requests.len()
                             );
-                            self.pending_gamepad_rumble_requests.extend(requests);
+                            self.enqueue_pending_gamepad_rumble_requests(requests);
                         }
                     }
                     changed = true;

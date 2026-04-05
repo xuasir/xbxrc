@@ -148,7 +148,6 @@ impl<'a> RtcStackRuntimePort<'a> {
         RuntimeStatsSink::new(self.runtime_stats.clone()).record_video_frame_drop(observation);
     }
 }
-
 fn resolve_no_pending_pressure_level(streak: u32) -> &'static str {
     if streak >= 180 {
         "critical"
@@ -160,3 +159,4 @@ fn resolve_no_pending_pressure_level(streak: u32) -> &'static str {
         "normal"
     }
 }
+

@@ -171,6 +171,11 @@ impl NativeVideoRegistry {
             .get(viewport_id)
             .and_then(|viewport| viewport.surface_id.as_deref())
             != surface_id;
+        let attach_changed = should_reattach_viewport(
+            presenter_missing,
+            presenter_kind_changed,
+            surface_changed,
+        );
         {
             let entry = self
                 .viewports
@@ -179,16 +184,17 @@ impl NativeVideoRegistry {
                     viewport_id: viewport_id.to_string(),
                     ..Default::default()
                 });
-            // 同一个 viewport 在重新协商后会复用同一 surface_id，
-            // 这里把宿主侧 per-epoch 的呈现态先清掉，避免旧帧序号残留。
-            entry.surface_id = surface_id.map(str::to_string);
             entry.window_label = Some(target.window_label().to_string());
-            entry.latest_frame_seq = None;
-            entry.latest_frame_width = None;
-            entry.latest_frame_height = None;
-            entry.latest_renderer_frame_time_ms = None;
-            entry.last_present_kind = None;
-            entry.present_count_total = 0;
+            if attach_changed {
+                // 只有真正重新 attach 时才清 per-epoch 呈现态，避免 no-op attach 把显示链重置掉。
+                entry.surface_id = surface_id.map(str::to_string);
+                entry.latest_frame_seq = None;
+                entry.latest_frame_width = None;
+                entry.latest_frame_height = None;
+                entry.latest_renderer_frame_time_ms = None;
+                entry.last_present_kind = None;
+                entry.present_count_total = 0;
+            }
         }
         if presenter_missing {
             let presenter = self.create_presenter(viewport_id, &target, desired_kind);
@@ -201,8 +207,10 @@ impl NativeVideoRegistry {
             Some(presenter) => presenter,
             None => return false,
         };
-        presenter.attach(surface_id);
-        presenter_missing || presenter_kind_changed || surface_changed
+        if attach_changed {
+            presenter.attach(surface_id);
+        }
+        attach_changed
     }
 
     pub fn detach_viewport(&mut self, viewport_id: &str) {
@@ -393,6 +401,14 @@ fn resolve_presenter_kind_for_mode(
         VideoPresenterMode::NativeDirect => NativeVideoPresenterKind::PlatformNative,
         VideoPresenterMode::GpuDirect => NativeVideoPresenterKind::Wgpu,
     }
+}
+
+fn should_reattach_viewport(
+    presenter_missing: bool,
+    presenter_kind_changed: bool,
+    surface_changed: bool,
+) -> bool {
+    presenter_missing || presenter_kind_changed || surface_changed
 }
 
 pub fn configure_main_window_video_host(app_handle: &AppHandle) {

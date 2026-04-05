@@ -176,17 +176,19 @@ fn compile_video_pipeline(
             }
             RuntimeVideoPipelinePlan {
                 feedback_interval_ms: 100,
-                nack_window_ms: 160,
-                nack_burst_count: 4,
-                nack_max_age_ms: 24,
-                nack_retry_interval_ms: 10,
-                nack_max_retry_count: 2,
-                jitter_buffer_min_delay_ms: 3,
-                jitter_buffer_max_delay_ms: 8,
+                // Home + Rust-owned 仍保持低时延，但给 burst loss 留出更可恢复的 NACK/抖动窗口，
+                // 避免一次参考链缺口很快坠入长期 await recovery keyframe。
+                nack_window_ms: 220,
+                nack_burst_count: 6,
+                nack_max_age_ms: 64,
+                nack_retry_interval_ms: 12,
+                nack_max_retry_count: 3,
+                jitter_buffer_min_delay_ms: 5,
+                jitter_buffer_max_delay_ms: 12,
                 jitter_buffer_max_packets: 384,
-                idle_timeout_ms: 80,
-                late_frame_drop_threshold_ms: 180,
-                backlog_drop_threshold_packets: 4,
+                idle_timeout_ms: 140,
+                late_frame_drop_threshold_ms: 240,
+                backlog_drop_threshold_packets: 6,
             }
         }
     }
@@ -209,7 +211,8 @@ fn compile_recovery(mode: RuntimeMode) -> RuntimeRecoveryPlan {
             first_frame_grace_ms: 1_800,
             keyframe_request_stall_ms: 300,
             keyframe_loss_burst_threshold: 2,
-            decoder_reset_after_keyframe_wait_ms: 120,
+            // 适度延后 decoder reset，减少 burst loss 后过快触发 reset/cooldown 抑制链。
+            decoder_reset_after_keyframe_wait_ms: 240,
             decoder_reset_request_cooldown_ms: 450,
             reconnect_stall_ms: 2_400,
             stall_recovery_cooldown_ms: 1_600,
@@ -270,11 +273,14 @@ mod tests {
         let runtime = compile_runtime(&config, &context).expect("compile runtime");
 
         assert_eq!(runtime.video_pipeline.feedback_interval_ms, 100);
-        assert_eq!(runtime.video_pipeline.nack_max_age_ms, 24);
-        assert_eq!(runtime.video_pipeline.jitter_buffer_max_delay_ms, 8);
-        assert_eq!(runtime.video_pipeline.late_frame_drop_threshold_ms, 180);
+        assert_eq!(runtime.video_pipeline.nack_max_age_ms, 64);
+        assert_eq!(runtime.video_pipeline.nack_max_retry_count, 3);
+        assert_eq!(runtime.video_pipeline.jitter_buffer_max_delay_ms, 12);
+        assert_eq!(runtime.video_pipeline.idle_timeout_ms, 140);
+        assert_eq!(runtime.video_pipeline.late_frame_drop_threshold_ms, 240);
         assert_eq!(runtime.recovery.first_frame_grace_ms, 1_800);
         assert_eq!(runtime.recovery.keyframe_request_stall_ms, 300);
+        assert_eq!(runtime.recovery.decoder_reset_after_keyframe_wait_ms, 240);
         assert_eq!(runtime.recovery.reconnect_stall_ms, 2_400);
     }
 }

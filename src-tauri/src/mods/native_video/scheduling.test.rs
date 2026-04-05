@@ -113,3 +113,26 @@ fn intermittent_no_pending_between_presents_returns_from_starved_to_steady() {
     assert_eq!(telemetry.present_epoch(), 2);
     assert_eq!(telemetry.cadence_phase(), HostCadencePhase::Steady);
 }
+
+#[test]
+fn starved_submit_uses_relaxed_stale_budget_to_accept_recovery_frame() {
+    let mut slot = ScheduledFrameSlot::default();
+    let mut telemetry = HostCadenceTelemetry::default();
+
+    telemetry.record_display_tick(1_000.0);
+    telemetry.record_display_tick(1_008.0);
+    telemetry.record_present(1_010.0);
+    for _ in 0..16 {
+        telemetry.record_no_pending_take();
+    }
+
+    let stale_candidate = XbxEngineRenderFrame {
+        rendered_at_ms: 1_050.0,
+        ..mk_frame(77)
+    };
+
+    match slot.submit_frame(&stale_candidate, 1_210.0, &mut telemetry) {
+        ScheduledFrameSubmitOutcome::Accepted { frame_seq, .. } => assert_eq!(frame_seq, 77),
+        other => panic!("expected starved recovery frame to be accepted, got {other:?}"),
+    }
+}

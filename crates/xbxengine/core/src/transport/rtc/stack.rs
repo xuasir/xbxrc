@@ -38,6 +38,8 @@ use self::lifecycle::RtcStackLifecycleBridge;
 use self::negotiation::RtcStackNegotiationBridge;
 use self::runtime_port::RtcStackRuntimePort;
 use self::transport_session::RtcTransportSessionBridge;
+#[cfg(test)]
+pub(crate) use self::transport_session::RtcTransportSessionBridge as TestRtcTransportSessionBridge;
 
 pub(crate) trait XbxMediaStackPort: Send {
     fn sync_runtime_config(&mut self, runtime_config: XbxEngineRuntimeConfig);

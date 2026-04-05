@@ -6,6 +6,9 @@ const HOST_RENDER_FPS_WINDOW_MS: f64 = 1_000.0;
 const HOST_RENDER_MIN_FRAME_AGE_MS: f64 = 24.0;
 const HOST_RENDER_MAX_FRAME_AGE_MS: f64 = 75.0;
 const HOST_RENDER_FRAME_AGE_MULTIPLIER: f64 = 2.25;
+const HOST_RENDER_RECOVERY_MIN_FRAME_AGE_MS: f64 = 48.0;
+const HOST_RENDER_RECOVERY_MAX_FRAME_AGE_MS: f64 = 180.0;
+const HOST_RENDER_RECOVERY_STREAK_THRESHOLD: u32 = 8;
 const HOST_FRAME_DROP_BACKLOG_LIMIT: usize = 32;
 const HOST_SUBMIT_GAP_WARN_MS: f64 = 100.0;
 
@@ -192,6 +195,22 @@ impl HostCadenceTelemetry {
             .unwrap_or(HOST_RENDER_MAX_FRAME_AGE_MS)
     }
 
+    pub fn stale_frame_age_budget_ms(&self) -> f64 {
+        let base_budget_ms = self.frame_age_budget_ms();
+        if self.present_epoch == 0 {
+            return base_budget_ms.max(HOST_RENDER_RECOVERY_MIN_FRAME_AGE_MS);
+        }
+        if matches!(self.cadence_phase, HostCadencePhase::Starved)
+            || self.no_pending_streak >= HOST_RENDER_RECOVERY_STREAK_THRESHOLD
+        {
+            return (base_budget_ms * 8.0).clamp(
+                HOST_RENDER_RECOVERY_MIN_FRAME_AGE_MS,
+                HOST_RENDER_RECOVERY_MAX_FRAME_AGE_MS,
+            );
+        }
+        base_budget_ms
+    }
+
     pub fn should_warn_submit_gap(&self, submit_gap_ms: f64) -> bool {
         submit_gap_ms >= HOST_SUBMIT_GAP_WARN_MS
     }
@@ -297,7 +316,7 @@ impl ScheduledFrameSlot {
         now_ms: f64,
         telemetry: &mut HostCadenceTelemetry,
     ) -> ScheduledFrameSubmitOutcome {
-        let frame_age_budget_ms = telemetry.frame_age_budget_ms();
+        let frame_age_budget_ms = telemetry.stale_frame_age_budget_ms();
         let frame_age_ms = (now_ms - frame.rendered_at_ms).max(0.0);
         if frame_age_ms > frame_age_budget_ms {
             telemetry.record_stale_frame_drop(frame, now_ms, "scheduledFrameStale", 1);
@@ -354,7 +373,7 @@ impl ScheduledFrameSlot {
                 last_presented_frame_seq: self.last_presented_frame_seq.unwrap_or_default(),
             };
         }
-        let frame_age_budget_ms = telemetry.frame_age_budget_ms();
+        let frame_age_budget_ms = telemetry.stale_frame_age_budget_ms();
         let frame_age_ms = (now_ms - frame.rendered_at_ms).max(0.0);
         if frame_age_ms > frame_age_budget_ms {
             telemetry.record_stale_frame_drop(&frame, now_ms, "scheduledFrameStale", 1);

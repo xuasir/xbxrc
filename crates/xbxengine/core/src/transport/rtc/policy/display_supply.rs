@@ -8,6 +8,14 @@ pub(crate) enum DisplaySupplyState {
     Critical,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum DisplaySupplyCriticalSignal {
+    None,
+    SoftNoPendingAge,
+    HardRendererStall,
+    HardSupplyDrop,
+}
+
 #[derive(Clone, Debug, Default)]
 pub(crate) struct SchedulingDemandSignal {
     pub(crate) no_pending_pressure_level: Option<String>,
@@ -15,6 +23,9 @@ pub(crate) struct SchedulingDemandSignal {
     pub(crate) present_age_ms: Option<f64>,
     pub(crate) decode_age_ms: Option<f64>,
     pub(crate) video_renderer_stalled: bool,
+    pub(crate) host_display_tick_epoch: Option<u64>,
+    pub(crate) host_present_epoch: Option<u64>,
+    pub(crate) host_cadence_phase: Option<String>,
     pub(crate) present_submit_count_total: Option<u64>,
     pub(crate) present_drop_count_total: Option<u64>,
     pub(crate) present_overwrite_count_total: Option<u64>,
@@ -25,18 +36,24 @@ pub(crate) struct SchedulingDemandSignal {
 }
 
 impl SchedulingDemandSignal {
-    pub(crate) fn classify_display_supply_state(
+    pub(crate) fn host_is_priming_without_present(&self) -> bool {
+        matches!(self.host_cadence_phase.as_deref(), Some("priming"))
+            && self.host_display_tick_epoch.unwrap_or_default() > 0
+            && self.host_present_epoch.unwrap_or_default() == 0
+            && self.present_submit_count_total.unwrap_or_default() == 0
+    }
+
+    pub(crate) fn critical_signal(
         &self,
         thresholds: &DisplaySupplyThresholds,
-    ) -> DisplaySupplyState {
+    ) -> DisplaySupplyCriticalSignal {
         if self.video_renderer_stalled {
-            return DisplaySupplyState::Critical;
+            return DisplaySupplyCriticalSignal::HardRendererStall;
+        }
+        if self.host_is_priming_without_present() {
+            return DisplaySupplyCriticalSignal::None;
         }
         let no_pending_streak = self.no_pending_streak.unwrap_or_default();
-        let pressure_high = matches!(
-            self.no_pending_pressure_level.as_deref(),
-            Some("high" | "critical")
-        );
         let pressure_critical =
             matches!(self.no_pending_pressure_level.as_deref(), Some("critical"));
         let present_age_critical = self
@@ -45,12 +62,6 @@ impl SchedulingDemandSignal {
         let decode_age_critical = self
             .decode_age_ms
             .is_some_and(|age| age >= thresholds.critical_decode_age_ms);
-        let present_age_warning = self
-            .present_age_ms
-            .is_some_and(|age| age >= thresholds.degraded_present_age_ms);
-        let decode_age_warning = self
-            .decode_age_ms
-            .is_some_and(|age| age >= thresholds.degraded_decode_age_ms);
         let present_drop_ratio = ratio(
             self.present_drop_count_total,
             self.present_submit_count_total,
@@ -71,6 +82,48 @@ impl SchedulingDemandSignal {
             || pacer_drop_ratio.is_some_and(|value| value >= thresholds.critical_pacer_drop_ratio)
             || renderer_drop_ratio
                 .is_some_and(|value| value >= thresholds.critical_renderer_drop_ratio);
+        if critical_supply_drop {
+            return DisplaySupplyCriticalSignal::HardSupplyDrop;
+        }
+        if (pressure_critical && no_pending_streak >= thresholds.critical_no_pending_streak)
+            && (present_age_critical || decode_age_critical)
+        {
+            return DisplaySupplyCriticalSignal::SoftNoPendingAge;
+        }
+        DisplaySupplyCriticalSignal::None
+    }
+
+    pub(crate) fn classify_display_supply_state(
+        &self,
+        thresholds: &DisplaySupplyThresholds,
+    ) -> DisplaySupplyState {
+        if self.host_is_priming_without_present() {
+            return DisplaySupplyState::Healthy;
+        }
+        let no_pending_streak = self.no_pending_streak.unwrap_or_default();
+        let pressure_high = matches!(
+            self.no_pending_pressure_level.as_deref(),
+            Some("high" | "critical")
+        );
+        let present_age_warning = self
+            .present_age_ms
+            .is_some_and(|age| age >= thresholds.degraded_present_age_ms);
+        let decode_age_warning = self
+            .decode_age_ms
+            .is_some_and(|age| age >= thresholds.degraded_decode_age_ms);
+        let present_drop_ratio = ratio(
+            self.present_drop_count_total,
+            self.present_submit_count_total,
+        );
+        let present_overwrite_ratio = ratio(
+            self.present_overwrite_count_total,
+            self.present_submit_count_total,
+        );
+        let pacer_drop_ratio = ratio(self.pacer_drop_count_total, self.pacer_submit_count_total);
+        let renderer_drop_ratio = ratio(
+            self.renderer_drop_count_total,
+            self.renderer_submit_count_total,
+        );
         let degraded_supply_drop = present_drop_ratio
             .is_some_and(|value| value >= thresholds.degraded_present_drop_ratio)
             || present_overwrite_ratio
@@ -79,12 +132,7 @@ impl SchedulingDemandSignal {
             || renderer_drop_ratio
                 .is_some_and(|value| value >= thresholds.degraded_renderer_drop_ratio);
 
-        if (pressure_critical && no_pending_streak >= thresholds.critical_no_pending_streak)
-            && (present_age_critical || decode_age_critical)
-        {
-            return DisplaySupplyState::Critical;
-        }
-        if critical_supply_drop {
+        if self.critical_signal(thresholds) != DisplaySupplyCriticalSignal::None {
             return DisplaySupplyState::Critical;
         }
         if (pressure_high && no_pending_streak >= thresholds.degraded_no_pending_streak)
@@ -121,7 +169,7 @@ fn ratio(numerator: Option<u64>, denominator: Option<u64>) -> Option<f64> {
 
 #[cfg(test)]
 mod tests {
-    use super::{DisplaySupplyState, SchedulingDemandSignal};
+    use super::{DisplaySupplyCriticalSignal, DisplaySupplyState, SchedulingDemandSignal};
     use crate::transport::rtc::recovery::policy::DisplaySupplyThresholds;
 
     fn cloud_thresholds() -> DisplaySupplyThresholds {
@@ -170,6 +218,9 @@ mod tests {
             present_age_ms: Some(24.0),
             decode_age_ms: Some(18.0),
             video_renderer_stalled: false,
+            host_display_tick_epoch: None,
+            host_present_epoch: None,
+            host_cadence_phase: None,
             present_submit_count_total: Some(1200),
             present_drop_count_total: Some(1),
             present_overwrite_count_total: Some(2),
@@ -192,6 +243,9 @@ mod tests {
             present_age_ms: Some(1200.0),
             decode_age_ms: Some(420.0),
             video_renderer_stalled: true,
+            host_display_tick_epoch: None,
+            host_present_epoch: None,
+            host_cadence_phase: None,
             present_submit_count_total: Some(1200),
             present_drop_count_total: Some(1),
             present_overwrite_count_total: Some(2),
@@ -214,6 +268,9 @@ mod tests {
             present_age_ms: Some(630.0),
             decode_age_ms: Some(340.0),
             video_renderer_stalled: false,
+            host_display_tick_epoch: None,
+            host_present_epoch: None,
+            host_cadence_phase: None,
             present_submit_count_total: Some(1200),
             present_drop_count_total: Some(1),
             present_overwrite_count_total: Some(2),
@@ -241,6 +298,9 @@ mod tests {
             present_age_ms: Some(18.0),
             decode_age_ms: Some(12.0),
             video_renderer_stalled: false,
+            host_display_tick_epoch: None,
+            host_present_epoch: None,
+            host_cadence_phase: None,
             present_submit_count_total: Some(1000),
             present_drop_count_total: Some(6),
             present_overwrite_count_total: Some(190),
@@ -252,6 +312,60 @@ mod tests {
         assert_eq!(
             demand.classify_display_supply_state(&cloud_thresholds()),
             DisplaySupplyState::Critical
+        );
+        assert_eq!(
+            demand.critical_signal(&cloud_thresholds()),
+            DisplaySupplyCriticalSignal::HardSupplyDrop
+        );
+    }
+
+    #[test]
+    fn no_pending_and_aged_present_is_soft_critical_signal() {
+        let demand = SchedulingDemandSignal {
+            no_pending_pressure_level: Some("critical".to_string()),
+            no_pending_streak: Some(120),
+            present_age_ms: Some(980.0),
+            decode_age_ms: Some(360.0),
+            video_renderer_stalled: false,
+            host_display_tick_epoch: None,
+            host_present_epoch: None,
+            host_cadence_phase: None,
+            present_submit_count_total: Some(1200),
+            present_drop_count_total: Some(1),
+            present_overwrite_count_total: Some(2),
+            pacer_submit_count_total: Some(1200),
+            pacer_drop_count_total: Some(0),
+            renderer_submit_count_total: Some(1200),
+            renderer_drop_count_total: Some(0),
+        };
+        assert_eq!(
+            demand.critical_signal(&cloud_thresholds()),
+            DisplaySupplyCriticalSignal::SoftNoPendingAge
+        );
+    }
+
+    #[test]
+    fn renderer_stall_is_hard_critical_signal() {
+        let demand = SchedulingDemandSignal {
+            no_pending_pressure_level: Some("critical".to_string()),
+            no_pending_streak: Some(96),
+            present_age_ms: Some(620.0),
+            decode_age_ms: Some(360.0),
+            video_renderer_stalled: true,
+            host_display_tick_epoch: None,
+            host_present_epoch: None,
+            host_cadence_phase: None,
+            present_submit_count_total: Some(1200),
+            present_drop_count_total: Some(1),
+            present_overwrite_count_total: Some(2),
+            pacer_submit_count_total: Some(1200),
+            pacer_drop_count_total: Some(0),
+            renderer_submit_count_total: Some(1200),
+            renderer_drop_count_total: Some(0),
+        };
+        assert_eq!(
+            demand.critical_signal(&cloud_thresholds()),
+            DisplaySupplyCriticalSignal::HardRendererStall
         );
     }
 }

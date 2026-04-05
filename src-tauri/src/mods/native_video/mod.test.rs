@@ -1,4 +1,4 @@
-use super::{should_update_scale, MacOsWgpuTelemetry};
+use super::{should_reattach_viewport, should_update_scale, MacOsWgpuTelemetry};
 
 #[test]
 fn scale_update_ignores_tiny_jitter() {
@@ -48,4 +48,12 @@ fn wgpu_reset_frame_slot_clears_no_pending_counters() {
     assert_eq!(telemetry.no_pending_take_count_total, 0);
     assert_eq!(telemetry.no_pending_streak, 0);
     assert_eq!(telemetry.no_pending_max_streak, 0);
+}
+
+#[test]
+fn viewport_reattach_only_happens_when_attach_inputs_change() {
+    assert!(!should_reattach_viewport(false, false, false));
+    assert!(should_reattach_viewport(true, false, false));
+    assert!(should_reattach_viewport(false, true, false));
+    assert!(should_reattach_viewport(false, false, true));
 }

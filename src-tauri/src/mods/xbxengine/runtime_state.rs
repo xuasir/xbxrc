@@ -145,19 +145,22 @@ impl XbxEngineRuntimeState {
     }
 
     pub fn tick(&self) -> Result<(), XbxEngineRuntimeError> {
-        let mut runtime = self
-            .runtime
-            .lock()
-            .map_err(|_| XbxEngineRuntimeError::new("xbxEngineRuntimeLockPoisoned"))?;
-        let viewport_id = runtime
-            .snapshot()
-            .viewport
-            .as_ref()
-            .map(|viewport| viewport.viewport_id.clone());
-        self.sync_native_video_host_feedback(&mut runtime, viewport_id.as_deref());
-        runtime.tick();
-        let mut stats_snapshot = runtime.snapshot_stats();
-        self.apply_build_fingerprint(&mut stats_snapshot);
+        let stats_snapshot = {
+            let mut runtime = self
+                .runtime
+                .lock()
+                .map_err(|_| XbxEngineRuntimeError::new("xbxEngineRuntimeLockPoisoned"))?;
+            let viewport_id = runtime
+                .snapshot()
+                .viewport
+                .as_ref()
+                .map(|viewport| viewport.viewport_id.clone());
+            self.sync_native_video_host_feedback(&mut runtime, viewport_id.as_deref());
+            runtime.tick();
+            let mut stats_snapshot = runtime.snapshot_stats();
+            self.apply_build_fingerprint(&mut stats_snapshot);
+            stats_snapshot
+        };
         let session_id = self
             .active_session_id
             .lock()
@@ -197,18 +200,20 @@ impl XbxEngineRuntimeState {
     }
 
     pub fn snapshot_stats(&self) -> AppResult<serde_json::Value> {
-        let mut runtime = self
-            .runtime
-            .lock()
-            .map_err(|_| AppError::XbxEngine("Failed to lock xbxengine runtime".to_string()))?;
-        let viewport_id = runtime
-            .snapshot()
-            .viewport
-            .as_ref()
-            .map(|viewport| viewport.viewport_id.clone());
-        self.sync_native_video_host_feedback(&mut runtime, viewport_id.as_deref());
-        let mut stats = runtime.snapshot_stats();
-        self.apply_build_fingerprint(&mut stats);
+        let stats = {
+            let mut runtime = self.runtime.lock().map_err(|_| {
+                AppError::XbxEngine("Failed to lock xbxengine runtime".to_string())
+            })?;
+            let viewport_id = runtime
+                .snapshot()
+                .viewport
+                .as_ref()
+                .map(|viewport| viewport.viewport_id.clone());
+            self.sync_native_video_host_feedback(&mut runtime, viewport_id.as_deref());
+            let mut stats = runtime.snapshot_stats();
+            self.apply_build_fingerprint(&mut stats);
+            stats
+        };
         Ok(serde_json::to_value(stats)?)
     }
 

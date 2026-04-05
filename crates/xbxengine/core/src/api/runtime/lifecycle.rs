@@ -23,6 +23,8 @@ const ICE_EXCHANGE_TIMEOUT_MS_MIN: f64 = 10_000.0;
 const ICE_EXCHANGE_TIMEOUT_MS_MAX: f64 = 12_000.0;
 const ICE_EXCHANGE_STABLE_SETTLE_WINDOW_MS: f64 = 1_500.0;
 const TRANSPORT_RECONNECT_CANDIDATE_MIN_INTERVAL_MS: f64 = 6_000.0;
+const GAMEPAD_RUMBLE_RUNTIME_TARGET_LIMIT: usize = 4;
+const GAMEPAD_RUMBLE_RUNTIME_DRAIN_PER_TICK_LIMIT: usize = 1;
 
 impl<THostBridge, TEventSink, TMediaBackend>
     XbxEngineRuntime<THostBridge, TEventSink, TMediaBackend>
@@ -456,8 +458,12 @@ where
             );
             return;
         };
+        self.enqueue_pending_gamepad_rumble_requests(rumble_requests);
 
-        for request in rumble_requests {
+        for _ in 0..GAMEPAD_RUMBLE_RUNTIME_DRAIN_PER_TICK_LIMIT {
+            let Some(request) = self.pending_gamepad_rumble_requests.pop_front() else {
+                break;
+            };
             let result = if is_stop_gamepad_rumble_request(&request.effect) {
                 self.host_bridge.stop_gamepad_rumble(request.target.clone())
             } else {
@@ -467,6 +473,25 @@ where
             if let Err(error) = result {
                 self.emit_error("dispatchGamepadRumbleFailed", error.to_string());
             }
+        }
+    }
+
+    fn enqueue_pending_gamepad_rumble_requests(
+        &mut self,
+        requests: Vec<ohmygamepad_protocol::OhMyGamepadRumbleRequestDto>,
+    ) {
+        for request in requests {
+            if let Some(existing_index) = self
+                .pending_gamepad_rumble_requests
+                .iter()
+                .position(|pending| pending.target == request.target)
+            {
+                self.pending_gamepad_rumble_requests.remove(existing_index);
+            }
+            self.pending_gamepad_rumble_requests.push_back(request);
+        }
+        while self.pending_gamepad_rumble_requests.len() > GAMEPAD_RUMBLE_RUNTIME_TARGET_LIMIT {
+            self.pending_gamepad_rumble_requests.pop_front();
         }
     }
 

@@ -23,6 +23,8 @@ pub(super) mod nack_policy;
 pub(super) mod nack_window;
 pub(crate) mod sink;
 pub(crate) mod source;
+#[cfg(test)]
+pub(crate) mod test_fixtures;
 pub(super) mod timeline;
 
 use crate::transport::rtc::stream::frame_cadence::TransportFrameDeadlineTracker;

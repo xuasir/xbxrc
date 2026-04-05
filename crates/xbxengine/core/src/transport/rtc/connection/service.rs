@@ -26,6 +26,8 @@ const VIDEO_RECOVERY_PLI_TO_FIR_MIN_DELAY_MS: f64 = 180.0;
 const VIDEO_RECOVERY_FIR_TO_CONTROL_MIN_DELAY_MS: f64 = 360.0;
 // 与恢复侧的 escalation window 对齐，作为首个 keyframe 响应的统一观测窗口。
 const KEYFRAME_REQUEST_RESPONSE_WINDOW_MS: f64 = 960.0;
+const GAMEPAD_RUMBLE_PENDING_TARGET_LIMIT: usize = 4;
+const GAMEPAD_RUMBLE_DRAIN_PER_TICK_LIMIT: usize = 2;
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 enum VideoRecoveryTransportStage {
@@ -627,7 +629,13 @@ impl RtcConnectionService {
     pub(crate) fn take_pending_gamepad_rumble_requests(
         &mut self,
     ) -> Vec<ohmygamepad_protocol::OhMyGamepadRumbleRequestDto> {
-        std::mem::take(&mut self.pending_gamepad_rumble_requests)
+        let drain_count = self
+            .pending_gamepad_rumble_requests
+            .len()
+            .min(GAMEPAD_RUMBLE_DRAIN_PER_TICK_LIMIT);
+        self.pending_gamepad_rumble_requests
+            .drain(..drain_count)
+            .collect()
     }
 
     pub(crate) fn take_transport_facts(&mut self) -> Vec<TransportFact> {
@@ -637,6 +645,25 @@ impl RtcConnectionService {
     #[cfg(test)]
     pub(crate) fn inject_pump_failure(&mut self) {
         self.pump_failure_injected = true;
+    }
+
+    pub(crate) fn enqueue_pending_gamepad_rumble_requests(
+        &mut self,
+        requests: Vec<ohmygamepad_protocol::OhMyGamepadRumbleRequestDto>,
+    ) {
+        for request in requests {
+            if let Some(existing_index) = self
+                .pending_gamepad_rumble_requests
+                .iter()
+                .position(|existing| existing.target == request.target)
+            {
+                self.pending_gamepad_rumble_requests.remove(existing_index);
+            }
+            self.pending_gamepad_rumble_requests.push(request);
+        }
+        while self.pending_gamepad_rumble_requests.len() > GAMEPAD_RUMBLE_PENDING_TARGET_LIMIT {
+            self.pending_gamepad_rumble_requests.remove(0);
+        }
     }
 }
 

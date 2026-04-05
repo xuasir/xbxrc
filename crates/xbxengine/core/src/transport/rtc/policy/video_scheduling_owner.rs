@@ -1,5 +1,7 @@
 use crate::transport::rtc::facts::ConnectionLifecycleStateFact;
-use crate::transport::rtc::policy::display_supply::{DisplaySupplyState, SchedulingDemandSignal};
+use crate::transport::rtc::policy::display_supply::{
+    DisplaySupplyCriticalSignal, DisplaySupplyState, SchedulingDemandSignal,
+};
 use crate::transport::rtc::recovery::policy::DisplaySupplyThresholds;
 use crate::{XbxEngineAnchorCandidateLedger, XbxEngineAnchorCandidateState};
 
@@ -109,10 +111,18 @@ struct RecoveryIntentCursor {
     emitted_at_ms: f64,
 }
 
+#[derive(Clone, Copy, Debug, Default)]
+struct DisplaySupplyRecoveryGate {
+    soft_critical_since_ms: Option<f64>,
+    pending_supply_starved_since_ms: Option<f64>,
+    pending_supply_starved_label: Option<&'static str>,
+}
+
 pub(crate) struct VideoSchedulingOwner {
     state: VideoSchedulingOwnerState,
     last_intent: Option<RecoveryIntentCursor>,
     last_recovery_epoch: Option<u64>,
+    display_supply_recovery_gate: DisplaySupplyRecoveryGate,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -123,6 +133,8 @@ enum RecoveryCompletionEvidence {
 
 const CLEAN_ANCHOR_EPOCH_GRACE_MAX_DELTA: u64 = 1;
 const CLEAN_ANCHOR_EPOCH_GRACE_WINDOW_MS: f64 = 1_500.0;
+const DISPLAY_SUPPLY_SOFT_CRITICAL_CONFIRM_MS: f64 = 240.0;
+const DISPLAY_SUPPLY_STARVED_CONFIRM_MS: f64 = 180.0;
 
 impl VideoSchedulingOwner {
     pub(crate) fn new() -> Self {
@@ -130,6 +142,7 @@ impl VideoSchedulingOwner {
             state: VideoSchedulingOwnerState::SeekingAnchor,
             last_intent: None,
             last_recovery_epoch: None,
+            display_supply_recovery_gate: DisplaySupplyRecoveryGate::default(),
         }
     }
 
@@ -144,16 +157,31 @@ impl VideoSchedulingOwner {
         {
             // recovery epoch 进入新轮次时，owner 必须解除上轮 intent 的本地抑制。
             self.last_intent = None;
+            self.display_supply_recovery_gate = DisplaySupplyRecoveryGate::default();
         }
         self.last_recovery_epoch = Some(input.recovery_epoch);
         let supply_state = input
             .demand
             .classify_display_supply_state(&input.display_supply_thresholds);
+        let critical_signal = input
+            .demand
+            .critical_signal(&input.display_supply_thresholds);
         let has_clean_anchor_evidence = Self::has_current_clean_anchor_evidence(input);
         let chain_healthy = matches!(
             input.latest_timeline_chain_state.as_deref(),
             Some("healthy")
         );
+        let effective_supply_state = self.resolve_effective_supply_state(
+            input,
+            supply_state,
+            critical_signal,
+            has_clean_anchor_evidence,
+            chain_healthy,
+        );
+        let absorb_soft_display_supply_critical = matches!(
+            critical_signal,
+            DisplaySupplyCriticalSignal::SoftNoPendingAge
+        ) && effective_supply_state != supply_state;
         let clean_anchor_hysteresis = Self::clean_anchor_hysteresis_allows_reentry(input);
         let wait_keyframe_rebuild_priority = Self::should_prioritize_wait_keyframe_rebuild(input);
         let has_anchor_issue = if clean_anchor_hysteresis {
@@ -172,19 +200,27 @@ impl VideoSchedulingOwner {
         let completion_evidence = Self::resolve_recovery_completion_evidence(
             self.state,
             input,
-            supply_state,
+            effective_supply_state,
             has_anchor_issue,
         );
         let supply_absent = Self::supply_is_absent(input);
+        let hold_supply_starved_transition = self.should_hold_supply_starved_transition(
+            input,
+            effective_supply_state,
+            has_anchor_issue,
+            completion_evidence,
+        );
         let next = self.transition(
             self.state,
             input,
             input.connection_state,
             has_anchor_issue,
-            supply_state,
+            effective_supply_state,
             completion_evidence,
             supply_absent,
             has_clean_anchor_evidence,
+            absorb_soft_display_supply_critical,
+            hold_supply_starved_transition,
         );
         self.state = next;
 
@@ -198,7 +234,7 @@ impl VideoSchedulingOwner {
             VideoSchedulingOwnerState::SupplyStarved => VideoHealthContract::Starved,
         };
 
-        let recovery_intent = self.build_recovery_intent(next, input, supply_state);
+        let recovery_intent = self.build_recovery_intent(next, input, effective_supply_state);
         let (reason_label, reason_source) = if let Some(intent) = recovery_intent.as_ref() {
             (
                 intent.reason_label.clone(),
@@ -222,7 +258,7 @@ impl VideoSchedulingOwner {
             current_state,
             next,
             input,
-            supply_state,
+            effective_supply_state,
             has_clean_anchor_evidence,
             has_anchor_issue,
             completion_evidence,
@@ -240,6 +276,45 @@ impl VideoSchedulingOwner {
         }
     }
 
+    fn resolve_effective_supply_state(
+        &mut self,
+        input: &VideoSchedulingOwnerInput,
+        supply_state: DisplaySupplyState,
+        critical_signal: DisplaySupplyCriticalSignal,
+        has_clean_anchor_evidence: bool,
+        chain_healthy: bool,
+    ) -> DisplaySupplyState {
+        if critical_signal != DisplaySupplyCriticalSignal::SoftNoPendingAge {
+            self.display_supply_recovery_gate.soft_critical_since_ms = None;
+            return supply_state;
+        }
+        if !self.should_gate_soft_display_supply_critical(
+            input,
+            has_clean_anchor_evidence,
+            chain_healthy,
+        ) {
+            self.display_supply_recovery_gate.soft_critical_since_ms = None;
+            return supply_state;
+        }
+        let critical_since = self
+            .display_supply_recovery_gate
+            .soft_critical_since_ms
+            .get_or_insert(input.observed_at_ms);
+        let no_pending_streak = input.demand.no_pending_streak.unwrap_or_default();
+        let streak_confirms = no_pending_streak
+            >= input
+                .display_supply_thresholds
+                .critical_no_pending_streak
+                .saturating_mul(2);
+        let time_confirms = (input.observed_at_ms - *critical_since).max(0.0)
+            >= DISPLAY_SUPPLY_SOFT_CRITICAL_CONFIRM_MS;
+        if streak_confirms || time_confirms {
+            DisplaySupplyState::Critical
+        } else {
+            DisplaySupplyState::Degraded
+        }
+    }
+
     fn transition(
         &self,
         current: VideoSchedulingOwnerState,
@@ -250,6 +325,8 @@ impl VideoSchedulingOwner {
         completion_evidence: RecoveryCompletionEvidence,
         supply_absent: bool,
         has_clean_anchor_evidence: bool,
+        absorb_soft_display_supply_critical: bool,
+        hold_supply_starved_transition: bool,
     ) -> VideoSchedulingOwnerState {
         if !matches!(
             connection_state,
@@ -257,11 +334,14 @@ impl VideoSchedulingOwner {
         ) {
             return VideoSchedulingOwnerState::SeekingAnchor;
         }
+        let first_present_grace_active = Self::first_present_grace_active(input);
         match current {
             VideoSchedulingOwnerState::SeekingAnchor => {
                 if has_anchor_issue {
                     VideoSchedulingOwnerState::RebuildingSupply
                 } else if completion_evidence == RecoveryCompletionEvidence::Ready {
+                    VideoSchedulingOwnerState::Priming
+                } else if first_present_grace_active {
                     VideoSchedulingOwnerState::Priming
                 } else if matches!(supply_state, DisplaySupplyState::Healthy) && !supply_absent {
                     VideoSchedulingOwnerState::Priming
@@ -274,6 +354,8 @@ impl VideoSchedulingOwner {
                     VideoSchedulingOwnerState::RebuildingSupply
                 } else if completion_evidence == RecoveryCompletionEvidence::Ready {
                     VideoSchedulingOwnerState::StableServing
+                } else if first_present_grace_active {
+                    VideoSchedulingOwnerState::Priming
                 } else {
                     VideoSchedulingOwnerState::SupplyStarved
                 }
@@ -292,11 +374,15 @@ impl VideoSchedulingOwner {
                     VideoSchedulingOwnerState::RebuildingSupply
                 } else if completion_evidence == RecoveryCompletionEvidence::Ready {
                     VideoSchedulingOwnerState::StableServing
+                } else if absorb_soft_display_supply_critical {
+                    VideoSchedulingOwnerState::DegradedServing
                 } else if Self::should_absorb_steady_jitter(
                     input,
                     supply_state,
                     has_clean_anchor_evidence,
                 ) {
+                    VideoSchedulingOwnerState::DegradedServing
+                } else if hold_supply_starved_transition {
                     VideoSchedulingOwnerState::DegradedServing
                 } else {
                     VideoSchedulingOwnerState::SupplyStarved
@@ -307,11 +393,15 @@ impl VideoSchedulingOwner {
                     VideoSchedulingOwnerState::RebuildingSupply
                 } else if completion_evidence == RecoveryCompletionEvidence::Ready {
                     VideoSchedulingOwnerState::StableServing
+                } else if absorb_soft_display_supply_critical {
+                    VideoSchedulingOwnerState::DegradedServing
                 } else if Self::should_absorb_steady_jitter(
                     input,
                     supply_state,
                     has_clean_anchor_evidence,
                 ) {
+                    VideoSchedulingOwnerState::DegradedServing
+                } else if hold_supply_starved_transition {
                     VideoSchedulingOwnerState::DegradedServing
                 } else {
                     VideoSchedulingOwnerState::SupplyStarved
@@ -386,8 +476,16 @@ impl VideoSchedulingOwner {
             .demand
             .decode_age_ms
             .is_some_and(|age| age <= input.display_supply_thresholds.degraded_decode_age_ms);
+        let can_bridge_present_feedback_gap = current
+            == VideoSchedulingOwnerState::RebuildingSupply
+            && Self::can_close_recovery_with_transient_present_feedback_gap(
+                input,
+                supply_state,
+                has_clean_anchor_evidence,
+                chain_healthy,
+            );
         // 恢复到 stable-serving 需要比“可播放”更稳：单点 freshness 不足以说明供给已真正降压。
-        if !present_fresh || !decode_fresh {
+        if (!present_fresh || !decode_fresh) && !can_bridge_present_feedback_gap {
             return RecoveryCompletionEvidence::NotReady;
         }
         if !Self::supply_pressure_is_settled(input, has_clean_anchor_evidence, chain_healthy) {
@@ -414,6 +512,13 @@ impl VideoSchedulingOwner {
             return RecoveryCompletionEvidence::NotReady;
         }
         RecoveryCompletionEvidence::Ready
+    }
+
+    fn first_present_grace_active(input: &VideoSchedulingOwnerInput) -> bool {
+        if !input.demand.host_is_priming_without_present() {
+            return false;
+        }
+        input.demand.host_display_tick_epoch.unwrap_or_default() > 0
     }
 
     fn supply_recovery_can_settle_without_explicit_clean_anchor(
@@ -454,6 +559,51 @@ impl VideoSchedulingOwner {
             && decode_fresh
             && track_attached
             && track_has_video_bytes
+    }
+
+    fn can_close_recovery_with_transient_present_feedback_gap(
+        input: &VideoSchedulingOwnerInput,
+        supply_state: DisplaySupplyState,
+        has_clean_anchor_evidence: bool,
+        chain_healthy: bool,
+    ) -> bool {
+        if !matches!(supply_state, DisplaySupplyState::Healthy) {
+            return false;
+        }
+        if input.connection_state != ConnectionLifecycleStateFact::Connected {
+            return false;
+        }
+        if !has_clean_anchor_evidence || !chain_healthy {
+            return false;
+        }
+        if input.demand.video_renderer_stalled || input.demand.present_age_ms.is_some() {
+            return false;
+        }
+        if matches!(
+            input.demand.no_pending_pressure_level.as_deref(),
+            Some("high" | "critical")
+        ) {
+            return false;
+        }
+        if input.demand.no_pending_streak.unwrap_or(u32::MAX) > 2 {
+            return false;
+        }
+        let stable_timeline_source = matches!(
+            input.latest_timeline_source_event.as_deref(),
+            Some("frame-complete-candidate" | "frame-observed")
+        );
+        let decode_fresh = input
+            .demand
+            .decode_age_ms
+            .is_some_and(|age| age <= input.display_supply_thresholds.degraded_decode_age_ms);
+        let track_attached = matches!(
+            input.latest_track_state.as_deref(),
+            Some("remoteTrackAttached")
+        );
+        let track_has_video_bytes = input
+            .latest_track_video_bytes_total
+            .is_some_and(|bytes| bytes > 0);
+        stable_timeline_source && decode_fresh && track_attached && track_has_video_bytes
     }
 
     fn has_current_clean_anchor_evidence(input: &VideoSchedulingOwnerInput) -> bool {
@@ -714,6 +864,124 @@ impl VideoSchedulingOwner {
             .latest_track_video_bytes_total
             .is_some_and(|bytes| bytes > 0);
         track_attached && track_has_video_bytes
+    }
+
+    fn should_gate_soft_display_supply_critical(
+        &self,
+        input: &VideoSchedulingOwnerInput,
+        has_clean_anchor_evidence: bool,
+        chain_healthy: bool,
+    ) -> bool {
+        if input.connection_state != ConnectionLifecycleStateFact::Connected {
+            return false;
+        }
+        if !matches!(
+            self.state,
+            VideoSchedulingOwnerState::StableServing
+                | VideoSchedulingOwnerState::DegradedServing
+                | VideoSchedulingOwnerState::SupplyStarved
+        ) {
+            return false;
+        }
+        if input.demand.video_renderer_stalled {
+            return false;
+        }
+        let track_attached = matches!(
+            input.latest_track_state.as_deref(),
+            Some("remoteTrackAttached")
+        );
+        let track_has_video_bytes = input
+            .latest_track_video_bytes_total
+            .is_some_and(|bytes| bytes > 0);
+        track_attached && track_has_video_bytes && (has_clean_anchor_evidence || chain_healthy)
+    }
+
+    fn should_hold_supply_starved_transition(
+        &mut self,
+        input: &VideoSchedulingOwnerInput,
+        supply_state: DisplaySupplyState,
+        has_anchor_issue: bool,
+        completion_evidence: RecoveryCompletionEvidence,
+    ) -> bool {
+        if has_anchor_issue || completion_evidence == RecoveryCompletionEvidence::Ready {
+            self.display_supply_recovery_gate
+                .pending_supply_starved_since_ms = None;
+            self.display_supply_recovery_gate
+                .pending_supply_starved_label = None;
+            return false;
+        }
+        if !matches!(
+            self.state,
+            VideoSchedulingOwnerState::StableServing | VideoSchedulingOwnerState::DegradedServing
+        ) {
+            self.display_supply_recovery_gate
+                .pending_supply_starved_since_ms = None;
+            self.display_supply_recovery_gate
+                .pending_supply_starved_label = None;
+            return false;
+        }
+        let label = match supply_state {
+            DisplaySupplyState::Critical => "displaySupplyCritical",
+            DisplaySupplyState::Degraded => "displaySupplyDegraded",
+            DisplaySupplyState::Healthy => {
+                self.display_supply_recovery_gate
+                    .pending_supply_starved_since_ms = None;
+                self.display_supply_recovery_gate
+                    .pending_supply_starved_label = None;
+                return false;
+            }
+        };
+        if input.connection_state != ConnectionLifecycleStateFact::Connected
+            || input.demand.video_renderer_stalled
+        {
+            self.display_supply_recovery_gate
+                .pending_supply_starved_since_ms = None;
+            self.display_supply_recovery_gate
+                .pending_supply_starved_label = None;
+            return false;
+        }
+        let chain_healthy = matches!(
+            input.latest_timeline_chain_state.as_deref(),
+            Some("healthy")
+        );
+        let track_attached = matches!(
+            input.latest_track_state.as_deref(),
+            Some("remoteTrackAttached")
+        );
+        let track_has_video_bytes = input
+            .latest_track_video_bytes_total
+            .is_some_and(|bytes| bytes > 0);
+        let decode_fresh = input
+            .demand
+            .decode_age_ms
+            .is_some_and(|age| age <= input.display_supply_thresholds.degraded_decode_age_ms * 1.5);
+        if !(chain_healthy && track_attached && track_has_video_bytes && decode_fresh) {
+            self.display_supply_recovery_gate
+                .pending_supply_starved_since_ms = None;
+            self.display_supply_recovery_gate
+                .pending_supply_starved_label = None;
+            return false;
+        }
+        if self
+            .display_supply_recovery_gate
+            .pending_supply_starved_label
+            != Some(label)
+        {
+            self.display_supply_recovery_gate
+                .pending_supply_starved_label = Some(label);
+            self.display_supply_recovery_gate
+                .pending_supply_starved_since_ms = Some(input.observed_at_ms);
+            return true;
+        }
+        let Some(since_ms) = self
+            .display_supply_recovery_gate
+            .pending_supply_starved_since_ms
+        else {
+            self.display_supply_recovery_gate
+                .pending_supply_starved_since_ms = Some(input.observed_at_ms);
+            return true;
+        };
+        (input.observed_at_ms - since_ms).max(0.0) < DISPLAY_SUPPLY_STARVED_CONFIRM_MS
     }
 
     fn build_recovery_intent(

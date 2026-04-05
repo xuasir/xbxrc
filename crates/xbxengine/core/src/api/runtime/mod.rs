@@ -1,3 +1,4 @@
+use std::collections::VecDeque;
 use std::error::Error;
 use std::fmt::{Display, Formatter};
 
@@ -314,6 +315,7 @@ pub struct XbxEngineRuntime<
     session: Option<XbxEngineSessionDto>,
     snapshot: XbxEngineRuntimeSnapshot,
     health: XbxEngineRuntimeHealth,
+    pending_gamepad_rumble_requests: VecDeque<OhMyGamepadRumbleRequestDto>,
 }
 
 impl<THostBridge, TEventSink>
@@ -358,6 +360,7 @@ where
             session: None,
             snapshot: XbxEngineRuntimeSnapshot::default(),
             health: XbxEngineRuntimeHealth::default(),
+            pending_gamepad_rumble_requests: VecDeque::new(),
         }
     }
 

@@ -69,6 +69,7 @@ pub struct RecoveryCoordinator {
     await_recovery_keyframe_last_seen_at_ms: Option<f64>,
     await_recovery_keyframe_streak_started_at_ms: Option<f64>,
     await_recovery_hard_fallback_started_at_ms: Option<f64>,
+    await_recovery_hard_fallback_epoch: Option<u64>,
 }
 
 const TRANSPORT_AWAIT_RECOVERY_KEYFRAME_STREAK_WINDOW_MS: f64 = 3_500.0;
@@ -92,6 +93,7 @@ impl RecoveryCoordinator {
             await_recovery_keyframe_last_seen_at_ms: None,
             await_recovery_keyframe_streak_started_at_ms: None,
             await_recovery_hard_fallback_started_at_ms: None,
+            await_recovery_hard_fallback_epoch: None,
         }
     }
 
@@ -123,6 +125,9 @@ impl RecoveryCoordinator {
             .begin_recovery_epoch(recovery_epoch);
         let budget_before = self.escalation_controller.budget_state();
         self.track_await_recovery_keyframe_streak(signal.reason, signal.observed_at_ms);
+        if signal.reason != VideoEscalationReason::TransportAwaitRecoveryKeyframe {
+            self.clear_transport_await_hard_fallback("nonAwaitReason");
+        }
         if let Some(decision) =
             self.resolve_decoder_backend_failure_recovery(runtime_stats, &signal.reason)
         {
@@ -221,8 +226,9 @@ impl RecoveryCoordinator {
         self.await_recovery_keyframe_streak = 0;
         self.await_recovery_keyframe_last_seen_at_ms = None;
         self.await_recovery_keyframe_streak_started_at_ms = None;
-        // 手动确认 clean anchor 只清理 keyframe 侧的阶段性噪声。
-        // hard-fallback 计时的内部起点要保留，避免短暂健康帧把既有坏窗彻底打散。
+        // clean anchor 代表当前 recovery epoch 已经拿到明确健康证据；
+        // lingering hard-fallback 计时不能跨过这类恢复成功信号继续累积。
+        self.clear_transport_await_hard_fallback("cleanAnchorAcknowledged");
         self.escalation_controller.reset_keyframe_epoch();
     }
 
@@ -318,6 +324,12 @@ impl RecoveryCoordinator {
         if reason != VideoEscalationReason::TransportAwaitRecoveryKeyframe {
             return None;
         }
+        if self
+            .await_recovery_hard_fallback_epoch
+            .is_some_and(|epoch| epoch != recovery_epoch)
+        {
+            self.reset_transport_await_hard_fallback(runtime_stats, "recoveryEpochAdvanced", true);
+        }
         let explicit_healthy_with_clean_anchor =
             Self::transport_await_soft_reentry_is_recent_and_healthy(
                 runtime_stats,
@@ -325,7 +337,11 @@ impl RecoveryCoordinator {
                 observed_at_ms,
             );
         if explicit_healthy_with_clean_anchor {
-            self.reset_transport_await_hard_fallback(runtime_stats, "explicitHealthyCleanAnchor");
+            self.reset_transport_await_hard_fallback(
+                runtime_stats,
+                "explicitHealthyCleanAnchor",
+                true,
+            );
             return None;
         }
         let has_evidence = Self::has_transport_await_hard_fallback_evidence(
@@ -333,16 +349,14 @@ impl RecoveryCoordinator {
             observed_at_ms,
             profile,
         );
-        if self.await_recovery_hard_fallback_started_at_ms.is_none() && !has_evidence {
-            RuntimeStatsSink::update_shared(runtime_stats, |stats| {
-                stats.recovery_hard_fallback_timer_ms = None;
-                stats.recovery_hard_fallback_trigger_reason = None;
-            });
+        if !has_evidence {
+            self.reset_transport_await_hard_fallback(runtime_stats, "stallEvidenceCleared", true);
             return None;
         }
         let started_at_ms = *self
             .await_recovery_hard_fallback_started_at_ms
             .get_or_insert(observed_at_ms);
+        self.await_recovery_hard_fallback_epoch = Some(recovery_epoch);
         let timer_ms = (observed_at_ms - started_at_ms).max(0.0);
         RuntimeStatsSink::update_shared(runtime_stats, |stats| {
             stats.recovery_hard_fallback_timer_ms = Some(timer_ms);
@@ -355,16 +369,18 @@ impl RecoveryCoordinator {
             recovery_stage_label_from_stats(stats)
         })
         .unwrap_or("steady");
+        let connected_ingress_evidence =
+            Self::has_transport_await_connected_ingress_evidence(runtime_stats, observed_at_ms);
+        if connected_ingress_evidence {
+            return Some(
+                self.escalation_controller
+                    .suppressed(RecoveryAction::CooldownSuppressed),
+            );
+        }
         if !Self::has_transport_await_decoder_reset_attempt_since(runtime_stats, started_at_ms) {
-            // staged recovery: hard fallback 超时后，若还能确认 Connected + ingress 仍在推进，
-            // 或者已经处在 reconnecting 阶段，就允许直接升到 reconnect；
-            // 否则继续要求先走 decoder reset 尝试。
-            if recovery_stage != "reconnecting"
-                && !Self::has_transport_await_connected_ingress_evidence(
-                    runtime_stats,
-                    observed_at_ms,
-                )
-            {
+            // hard fallback 只接受“持续坏窗 + 已经失去本地恢复进展”的升级。
+            // 如果还没有 decoder reset 尝试，除 reconnecting 以外都先留在本地恢复链。
+            if recovery_stage != "reconnecting" {
                 return None;
             }
         }
@@ -471,11 +487,21 @@ impl RecoveryCoordinator {
         .unwrap_or(false)
     }
 
+    fn clear_transport_await_hard_fallback(&mut self, reset_reason: &str) {
+        self.await_recovery_hard_fallback_started_at_ms = None;
+        self.await_recovery_hard_fallback_epoch = None;
+        let _ = reset_reason;
+    }
+
     fn reset_transport_await_hard_fallback(
         &mut self,
         runtime_stats: &Mutex<XbxEngineMediaRuntimeStats>,
         reset_reason: &str,
+        clear_internal_state: bool,
     ) {
+        if clear_internal_state {
+            self.clear_transport_await_hard_fallback(reset_reason);
+        }
         RuntimeStatsSink::update_shared(runtime_stats, |stats| {
             stats.recovery_hard_fallback_timer_ms = None;
             stats.recovery_hard_fallback_trigger_reason = None;
@@ -526,7 +552,12 @@ impl RecoveryCoordinator {
                             && (now_ms - track.observed_at_ms).max(0.0)
                                 <= TRANSPORT_AWAIT_CONNECTED_INGRESS_EVIDENCE_MAX_AGE_MS
                     });
-            track_attached_and_recent && stats.inbound_primary_video_bytes_total > 0
+            // 仅“还在收包”不足以证明局部恢复仍有效；必须仍有新输出推进，
+            // 否则会把 connected-but-unrecoverable 长时间压在 cooldownSuppressed。
+            let output_still_progressing = has_fresh_media_output(stats, now_ms);
+            track_attached_and_recent
+                && stats.inbound_primary_video_bytes_total > 0
+                && output_still_progressing
         })
         .unwrap_or(false)
     }
@@ -782,18 +813,18 @@ impl RecoveryCoordinator {
 
 fn classify_signal_domain(reason: VideoEscalationReason) -> RecoverySignalDomain {
     match reason {
-        VideoEscalationReason::LifecycleRecovering => RecoverySignalDomain::Connectivity,
+        VideoEscalationReason::LifecycleRecovering
+        | VideoEscalationReason::TransportExpiredDeadline
+        | VideoEscalationReason::TransportSevereDeadline
+        | VideoEscalationReason::TransportRecoveredLate
+        | VideoEscalationReason::TransportSampleLoss => RecoverySignalDomain::Connectivity,
         VideoEscalationReason::DisplaySupplyCritical => RecoverySignalDomain::Local,
         VideoEscalationReason::WaitKeyframe
         | VideoEscalationReason::TransportAwaitRecoveryKeyframe
         | VideoEscalationReason::Reconfigure
         | VideoEscalationReason::DecoderBackendFailure
         | VideoEscalationReason::AdapterIdleTimeout
-        | VideoEscalationReason::AdapterThinStream
-        | VideoEscalationReason::TransportExpiredDeadline
-        | VideoEscalationReason::TransportSevereDeadline
-        | VideoEscalationReason::TransportRecoveredLate
-        | VideoEscalationReason::TransportSampleLoss => RecoverySignalDomain::MediaRecovery,
+        | VideoEscalationReason::AdapterThinStream => RecoverySignalDomain::MediaRecovery,
     }
 }
 
