@@ -56,7 +56,7 @@ struct TestHostBridge {
     cancel_after_request_kind: Rc<RefCell<Option<&'static str>>>,
     call_order: Arc<Mutex<Vec<&'static str>>>,
     rumble_requests: Rc<Mutex<Vec<OhMyGamepadRumbleRequestDto>>>,
-    stopped_rumble_targets: Rc<Mutex<Vec<OhMyGamepadRumbleTargetDto>>>,
+    clear_rumble_calls: Rc<Mutex<usize>>,
 }
 
 impl TestHostBridge {
@@ -70,7 +70,7 @@ impl TestHostBridge {
             cancel_after_request_kind: Rc::new(RefCell::new(None)),
             call_order: Arc::new(Mutex::new(Vec::new())),
             rumble_requests: Rc::new(Mutex::new(Vec::new())),
-            stopped_rumble_targets: Rc::new(Mutex::new(Vec::new())),
+            clear_rumble_calls: Rc::new(Mutex::new(0)),
         }
     }
 
@@ -87,7 +87,7 @@ impl TestHostBridge {
             cancel_after_request_kind: Rc::new(RefCell::new(None)),
             call_order: Arc::new(Mutex::new(Vec::new())),
             rumble_requests: Rc::new(Mutex::new(Vec::new())),
-            stopped_rumble_targets: Rc::new(Mutex::new(Vec::new())),
+            clear_rumble_calls: Rc::new(Mutex::new(0)),
         }
     }
 
@@ -182,12 +182,12 @@ impl XbxEngineHostBridge for TestHostBridge {
         })
     }
 
-    fn play_gamepad_rumble(
+    fn submit_gamepad_rumble_request(
         &mut self,
         request: OhMyGamepadRumbleRequestDto,
     ) -> Result<(), XbxEngineRuntimeError> {
         if let Ok(mut order) = self.call_order.lock() {
-            order.push("rumble_play");
+            order.push("rumble_submit");
         }
         self.rumble_requests
             .lock()
@@ -196,17 +196,15 @@ impl XbxEngineHostBridge for TestHostBridge {
         Ok(())
     }
 
-    fn stop_gamepad_rumble(
-        &mut self,
-        target: OhMyGamepadRumbleTargetDto,
-    ) -> Result<(), XbxEngineRuntimeError> {
+    fn clear_pending_gamepad_rumble_requests(&mut self) -> Result<(), XbxEngineRuntimeError> {
         if let Ok(mut order) = self.call_order.lock() {
-            order.push("rumble_stop");
+            order.push("rumble_clear");
         }
-        self.stopped_rumble_targets
+        let mut clear_calls = self
+            .clear_rumble_calls
             .lock()
-            .expect("lock stopped rumble targets")
-            .push(target);
+            .expect("lock clear rumble calls");
+        *clear_calls += 1;
         Ok(())
     }
 }
@@ -1151,17 +1149,23 @@ fn runtime_tick_prioritizes_present_before_budgeted_rumble_work() {
 
     assert_eq!(
         call_order.lock().expect("lock call order").as_slice(),
-        &["take_frame", "present", "ack", "snapshot", "rumble_play"]
+        &[
+            "take_frame",
+            "present",
+            "ack",
+            "snapshot",
+            "rumble_submit",
+            "rumble_submit",
+        ]
     );
-    assert_eq!(rumble_requests.lock().expect("lock rumble requests").len(), 1);
-
-    runtime.tick();
-
-    assert_eq!(rumble_requests.lock().expect("lock rumble requests").len(), 2);
+    assert_eq!(
+        rumble_requests.lock().expect("lock rumble requests").len(),
+        2
+    );
 }
 
 #[test]
-fn runtime_tick_coalesces_runtime_rumble_backlog_by_target() {
+fn runtime_tick_submits_backend_rumble_requests_without_runtime_backlog() {
     let requests = Rc::new(RefCell::new(Vec::new()));
     let events = Rc::new(RefCell::new(Vec::new()));
     let backend = ScriptedMediaBackend::new(
@@ -1215,19 +1219,25 @@ fn runtime_tick_coalesces_runtime_rumble_backlog_by_target() {
         .expect("runtime start should succeed");
 
     runtime.tick();
-    runtime.tick();
 
     let rumble_requests = rumble_requests.lock().expect("lock rumble requests");
-    assert_eq!(rumble_requests.len(), 2);
+    assert_eq!(rumble_requests.len(), 3);
     assert_eq!(
         rumble_requests[0].target,
         OhMyGamepadRumbleTargetDto::LogicalPad {
             pad_id: LogicalPadId::Pad0,
         }
     );
-    assert_eq!(rumble_requests[0].effect.strong_magnitude, 0.9);
+    assert_eq!(rumble_requests[0].effect.strong_magnitude, 0.2);
     assert_eq!(
         rumble_requests[1].target,
+        OhMyGamepadRumbleTargetDto::LogicalPad {
+            pad_id: LogicalPadId::Pad0,
+        }
+    );
+    assert_eq!(rumble_requests[1].effect.strong_magnitude, 0.9);
+    assert_eq!(
+        rumble_requests[2].target,
         OhMyGamepadRumbleTargetDto::LogicalPad {
             pad_id: LogicalPadId::Pad1,
         }

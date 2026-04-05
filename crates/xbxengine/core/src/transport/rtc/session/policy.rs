@@ -759,9 +759,9 @@ impl RtcSessionPolicy {
             let ingress_is_fresh = stats
                 .latest_video_packet_arrival_time_ms
                 .is_some_and(|at_ms| (observed_at_ms - at_ms).max(0.0) <= FRESH_INGRESS_MAX_AGE_MS)
-                && stats
-                    .latest_video_decode_ok_time_ms
-                    .is_some_and(|at_ms| (observed_at_ms - at_ms).max(0.0) <= FRESH_INGRESS_MAX_AGE_MS);
+                && stats.latest_video_decode_ok_time_ms.is_some_and(|at_ms| {
+                    (observed_at_ms - at_ms).max(0.0) <= FRESH_INGRESS_MAX_AGE_MS
+                });
             let pipeline_not_stalled = !stats.video_decoder_stalled.unwrap_or(false)
                 && !stats.video_renderer_stalled.unwrap_or(false);
             chain_healthy && track_attached_with_video && ingress_is_fresh && pipeline_not_stalled
@@ -1316,7 +1316,8 @@ impl RtcSessionPolicy {
             )
         })
         .unwrap_or((
-            None, None, None, None, false, None, None, None, None, None, None, None, None, None, None,
+            None, None, None, None, false, None, None, None, None, None, None, None, None, None,
+            None,
         ));
         SchedulingDemandSignal {
             no_pending_pressure_level,

@@ -23,8 +23,6 @@ const ICE_EXCHANGE_TIMEOUT_MS_MIN: f64 = 10_000.0;
 const ICE_EXCHANGE_TIMEOUT_MS_MAX: f64 = 12_000.0;
 const ICE_EXCHANGE_STABLE_SETTLE_WINDOW_MS: f64 = 1_500.0;
 const TRANSPORT_RECONNECT_CANDIDATE_MIN_INTERVAL_MS: f64 = 6_000.0;
-const GAMEPAD_RUMBLE_RUNTIME_TARGET_LIMIT: usize = 4;
-const GAMEPAD_RUMBLE_RUNTIME_DRAIN_PER_TICK_LIMIT: usize = 1;
 
 impl<THostBridge, TEventSink, TMediaBackend>
     XbxEngineRuntime<THostBridge, TEventSink, TMediaBackend>
@@ -41,6 +39,7 @@ where
         runtime: Option<XbxEngineRuntimeProjectionDto>,
         render: Option<XbxEngineRenderProjectionDto>,
     ) -> Result<(), XbxEngineRuntimeError> {
+        self.host_bridge.clear_pending_gamepad_rumble_requests()?;
         let previous_config = self.config.clone();
         let previous_state = self.state.clone();
         let previous_session = self.session.clone();
@@ -139,6 +138,9 @@ where
     }
 
     pub fn stop(&mut self) {
+        if let Err(error) = self.host_bridge.clear_pending_gamepad_rumble_requests() {
+            self.emit_error("clearPendingGamepadRumbleRequestsFailed", error.to_string());
+        }
         let viewport_id = self
             .snapshot
             .viewport
@@ -458,40 +460,10 @@ where
             );
             return;
         };
-        self.enqueue_pending_gamepad_rumble_requests(rumble_requests);
-
-        for _ in 0..GAMEPAD_RUMBLE_RUNTIME_DRAIN_PER_TICK_LIMIT {
-            let Some(request) = self.pending_gamepad_rumble_requests.pop_front() else {
-                break;
-            };
-            let result = if is_stop_gamepad_rumble_request(&request.effect) {
-                self.host_bridge.stop_gamepad_rumble(request.target.clone())
-            } else {
-                self.host_bridge.play_gamepad_rumble(request.clone())
-            };
-
-            if let Err(error) = result {
+        for request in rumble_requests {
+            if let Err(error) = self.host_bridge.submit_gamepad_rumble_request(request) {
                 self.emit_error("dispatchGamepadRumbleFailed", error.to_string());
             }
-        }
-    }
-
-    fn enqueue_pending_gamepad_rumble_requests(
-        &mut self,
-        requests: Vec<ohmygamepad_protocol::OhMyGamepadRumbleRequestDto>,
-    ) {
-        for request in requests {
-            if let Some(existing_index) = self
-                .pending_gamepad_rumble_requests
-                .iter()
-                .position(|pending| pending.target == request.target)
-            {
-                self.pending_gamepad_rumble_requests.remove(existing_index);
-            }
-            self.pending_gamepad_rumble_requests.push_back(request);
-        }
-        while self.pending_gamepad_rumble_requests.len() > GAMEPAD_RUMBLE_RUNTIME_TARGET_LIMIT {
-            self.pending_gamepad_rumble_requests.pop_front();
         }
     }
 
@@ -1213,7 +1185,7 @@ fn runtime_stats_indicate_transport_recovering(
         })
 }
 
-fn is_stop_gamepad_rumble_request(effect: &OhMyGamepadRumbleEffectDto) -> bool {
+pub(crate) fn is_stop_gamepad_rumble_request(effect: &OhMyGamepadRumbleEffectDto) -> bool {
     effect.duration_ms == 0
         && effect.start_delay_ms == 0
         && effect.repeat == 0

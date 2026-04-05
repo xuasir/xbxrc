@@ -159,4 +159,3 @@ fn resolve_no_pending_pressure_level(streak: u32) -> &'static str {
         "normal"
     }
 }
-

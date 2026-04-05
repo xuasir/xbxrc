@@ -3,9 +3,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex as StdMutex};
 use std::time::{Duration, Instant};
 
-use ohmygamepad_protocol::{
-    OhMyGamepadRumbleRequestDto, OhMyGamepadRumbleResultDto, OhMyGamepadRumbleTargetDto,
-};
+use ohmygamepad_protocol::OhMyGamepadRumbleRequestDto;
 use tauri::{AppHandle, Manager};
 use xbxengine::{
     create_active_media_backend, OhMyGamepadXbxEngineInputBackend, XbxEngineEventSink,
@@ -26,6 +24,7 @@ use crate::mods::streaming::{
     StreamingSubmitIceParams,
 };
 use crate::mods::xbxengine::build_info::current_build_fingerprint_with_effective;
+use crate::mods::xbxengine::rumble_worker::GamepadRumbleWorkerHandle;
 use crate::mods::xbxengine::trace_projection::{
     build_observability_snapshot, record_runtime_trace_observations, should_skip_trace_tick,
     RuntimeTraceObservationState,
@@ -39,6 +38,15 @@ type TauriXbxEngineRuntime = XbxEngineRuntime<
     Box<dyn XbxEngineMediaBackend>,
 >;
 
+#[derive(Debug)]
+struct NativeVideoHostFeedbackSnapshot {
+    viewport_id: String,
+    host_display_interval_ms: Option<f64>,
+    host_frame_age_budget_ms: Option<f64>,
+    present_metrics: XbxEngineHostVideoPresentMetrics,
+    pending_frame_drops: Vec<xbxengine::XbxEngineHostVideoFrameDropEvent>,
+}
+
 /// 运行态只负责持有 runtime 实例和并发访问。
 pub struct XbxEngineRuntimeState {
     runtime: StdMutex<TauriXbxEngineRuntime>,
@@ -50,6 +58,7 @@ pub struct XbxEngineRuntimeState {
     last_trace_observation: StdMutex<RuntimeTraceObservationState>,
     active_session_id: StdMutex<Option<String>>,
     cancellation_epoch: Arc<AtomicU64>,
+    rumble_worker: GamepadRumbleWorkerHandle,
 }
 
 impl XbxEngineRuntimeState {
@@ -70,6 +79,7 @@ impl XbxEngineRuntimeState {
         let input_backend = Box::new(OhMyGamepadXbxEngineInputBackend::new());
         let media_backend =
             create_active_media_backend(input_backend, XbxEngineRuntimeConfig::default());
+        let rumble_worker = GamepadRumbleWorkerHandle::new(app_handle.clone(), runtime_trace.clone());
         let runtime = XbxEngineRuntime::with_media_backend(
             XbxEngineRuntimeConfig::default(),
             TauriXbxEngineHostBridge {
@@ -77,6 +87,7 @@ impl XbxEngineRuntimeState {
                 native_video: native_video.clone(),
                 runtime_trace: runtime_trace.clone(),
                 cancellation_epoch: cancellation_epoch.clone(),
+                rumble_worker: rumble_worker.clone(),
             },
             TauriXbxEngineEventSink {
                 bridge: Arc::new(StdMutex::new(event_bridge)),
@@ -94,6 +105,7 @@ impl XbxEngineRuntimeState {
             last_trace_observation: StdMutex::new(RuntimeTraceObservationState::default()),
             active_session_id: StdMutex::new(None),
             cancellation_epoch,
+            rumble_worker,
         }
     }
 
@@ -145,17 +157,14 @@ impl XbxEngineRuntimeState {
     }
 
     pub fn tick(&self) -> Result<(), XbxEngineRuntimeError> {
+        let viewport_id = self.current_viewport_id()?;
+        let native_video_feedback = self.collect_native_video_host_feedback(viewport_id.as_deref());
         let stats_snapshot = {
             let mut runtime = self
                 .runtime
                 .lock()
                 .map_err(|_| XbxEngineRuntimeError::new("xbxEngineRuntimeLockPoisoned"))?;
-            let viewport_id = runtime
-                .snapshot()
-                .viewport
-                .as_ref()
-                .map(|viewport| viewport.viewport_id.clone());
-            self.sync_native_video_host_feedback(&mut runtime, viewport_id.as_deref());
+            self.apply_native_video_host_feedback(&mut runtime, native_video_feedback);
             runtime.tick();
             let mut stats_snapshot = runtime.snapshot_stats();
             self.apply_build_fingerprint(&mut stats_snapshot);
@@ -200,21 +209,27 @@ impl XbxEngineRuntimeState {
     }
 
     pub fn snapshot_stats(&self) -> AppResult<serde_json::Value> {
+        let viewport_id = self
+            .current_viewport_id()
+            .map_err(|_| AppError::XbxEngine("Failed to lock xbxengine runtime".to_string()))?;
+        let native_video_feedback = self.collect_native_video_host_feedback(viewport_id.as_deref());
         let stats = {
-            let mut runtime = self.runtime.lock().map_err(|_| {
-                AppError::XbxEngine("Failed to lock xbxengine runtime".to_string())
-            })?;
-            let viewport_id = runtime
-                .snapshot()
-                .viewport
-                .as_ref()
-                .map(|viewport| viewport.viewport_id.clone());
-            self.sync_native_video_host_feedback(&mut runtime, viewport_id.as_deref());
+            let mut runtime = self
+                .runtime
+                .lock()
+                .map_err(|_| AppError::XbxEngine("Failed to lock xbxengine runtime".to_string()))?;
+            self.apply_native_video_host_feedback(&mut runtime, native_video_feedback);
             let mut stats = runtime.snapshot_stats();
             self.apply_build_fingerprint(&mut stats);
             stats
         };
         Ok(serde_json::to_value(stats)?)
+    }
+
+    pub fn shutdown(&self) {
+        if let Err(error) = self.rumble_worker.shutdown() {
+            log::warn!("xbxengine rumble worker shutdown failed: {}", error);
+        }
     }
 
     fn record_runtime_trace_observations(
@@ -249,43 +264,80 @@ impl XbxEngineRuntimeState {
         ));
     }
 
-    fn sync_native_video_host_feedback(
+    fn current_viewport_id(&self) -> Result<Option<String>, XbxEngineRuntimeError> {
+        let runtime = self
+            .runtime
+            .lock()
+            .map_err(|_| XbxEngineRuntimeError::new("xbxEngineRuntimeLockPoisoned"))?;
+        Ok(runtime
+            .snapshot()
+            .viewport
+            .as_ref()
+            .map(|viewport| viewport.viewport_id.clone()))
+    }
+
+    fn collect_native_video_host_feedback(
         &self,
-        runtime: &mut TauriXbxEngineRuntime,
         viewport_id: Option<&str>,
-    ) {
+    ) -> Option<NativeVideoHostFeedbackSnapshot> {
         let Some(viewport_id) = viewport_id else {
-            return;
+            return None;
         };
         let Ok(mut registry) = self.native_video.lock() else {
-            return;
+            return None;
         };
         let Some(viewport) = registry.snapshot(viewport_id) else {
+            return None;
+        };
+        Some(NativeVideoHostFeedbackSnapshot {
+            viewport_id: viewport_id.to_string(),
+            host_display_interval_ms: viewport.host_display_interval_ms,
+            host_frame_age_budget_ms: viewport.host_frame_age_budget_ms,
+            present_metrics: XbxEngineHostVideoPresentMetrics {
+                // 使用 native_video telemetry 的真实 present 时间，统一 runtime/owner/snapshot 语义。
+                latest_host_present_time_ms: viewport.latest_host_present_time_ms,
+                display_tick_epoch: viewport.host_display_tick_epoch,
+                present_epoch: viewport.host_present_epoch,
+                cadence_phase: viewport.host_cadence_phase.clone(),
+                present_fps: viewport.host_present_fps,
+                // core 里该字段历史命名为 submit，本质是宿主侧 enqueue 次数。
+                present_submit_count_total: viewport.host_present_enqueue_count_total,
+                present_drop_count_total: viewport.host_present_drop_count_total,
+                present_overwrite_count_total: viewport.host_present_overwrite_count_total,
+                no_pending_take_count_total: viewport.host_no_pending_take_count_total,
+                no_pending_streak: viewport.host_no_pending_streak,
+                no_pending_max_streak: viewport.host_no_pending_max_streak,
+                descriptor_upload_mode: viewport.host_descriptor_upload_mode.clone(),
+                descriptor_metal_import_count_total: viewport
+                    .host_descriptor_metal_import_count_total,
+                descriptor_cpu_upload_count_total: viewport.host_descriptor_cpu_upload_count_total,
+            },
+            pending_frame_drops: registry.take_pending_host_frame_drops(viewport_id),
+        })
+    }
+
+    fn apply_native_video_host_feedback(
+        &self,
+        runtime: &mut TauriXbxEngineRuntime,
+        feedback: Option<NativeVideoHostFeedbackSnapshot>,
+    ) {
+        let Some(feedback) = feedback else {
             return;
         };
+        let runtime_viewport_id = runtime
+            .snapshot()
+            .viewport
+            .as_ref()
+            .map(|viewport| viewport.viewport_id.as_str());
+        if runtime_viewport_id != Some(feedback.viewport_id.as_str()) {
+            return;
+        }
         let _ = runtime.update_host_video_timing(
-            viewport.host_display_interval_ms,
-            viewport.host_frame_age_budget_ms,
+            feedback.host_display_interval_ms,
+            feedback.host_frame_age_budget_ms,
         );
-        let _ = runtime.update_host_video_present_metrics(XbxEngineHostVideoPresentMetrics {
-            // 使用 native_video telemetry 的真实 present 时间，统一 runtime/owner/snapshot 语义。
-            latest_host_present_time_ms: viewport.latest_host_present_time_ms,
-            display_tick_epoch: viewport.host_display_tick_epoch,
-            present_epoch: viewport.host_present_epoch,
-            cadence_phase: viewport.host_cadence_phase.clone(),
-            present_fps: viewport.host_present_fps,
-            // core 里该字段历史命名为 submit，本质是宿主侧 enqueue 次数。
-            present_submit_count_total: viewport.host_present_enqueue_count_total,
-            present_drop_count_total: viewport.host_present_drop_count_total,
-            present_overwrite_count_total: viewport.host_present_overwrite_count_total,
-            no_pending_take_count_total: viewport.host_no_pending_take_count_total,
-            no_pending_streak: viewport.host_no_pending_streak,
-            no_pending_max_streak: viewport.host_no_pending_max_streak,
-            descriptor_upload_mode: viewport.host_descriptor_upload_mode.clone(),
-            descriptor_metal_import_count_total: viewport.host_descriptor_metal_import_count_total,
-            descriptor_cpu_upload_count_total: viewport.host_descriptor_cpu_upload_count_total,
-        });
-        for drop in registry.take_pending_host_frame_drops(viewport_id) {
+        let _ = runtime.update_host_video_present_metrics(feedback.present_metrics);
+        for drop in feedback.pending_frame_drops {
             let _ = runtime.record_host_video_frame_drop(drop);
         }
     }
@@ -393,6 +445,7 @@ struct TauriXbxEngineHostBridge {
     native_video: NativeVideoRegistryRef,
     runtime_trace: RuntimeTraceRecorderRef,
     cancellation_epoch: Arc<AtomicU64>,
+    rumble_worker: GamepadRumbleWorkerHandle,
 }
 
 impl TauriXbxEngineHostBridge {
@@ -617,32 +670,6 @@ impl TauriXbxEngineHostBridge {
         registry.present_frame(viewport_id, surface_id, frame);
         Ok(())
     }
-
-    fn log_gamepad_rumble_result(
-        &self,
-        event_name: &'static str,
-        request_summary: serde_json::Value,
-        result: &OhMyGamepadRumbleResultDto,
-    ) {
-        self.runtime_trace.record_event(
-            "xbxengine-host",
-            event_name,
-            None,
-            serde_json::json!({
-                "request": request_summary,
-                "accepted": result.accepted,
-                "reason": result.reason,
-                "resolvedDeviceIds": result.resolved_device_ids,
-            }),
-        );
-        if !result.accepted {
-            log::warn!(
-                "[xbxengine][host] gamepad rumble rejected reason={:?} resolved_device_ids={:?}",
-                result.reason,
-                result.resolved_device_ids
-            );
-        }
-    }
 }
 
 impl XbxEngineHostBridge for TauriXbxEngineHostBridge {
@@ -674,60 +701,15 @@ impl XbxEngineHostBridge for TauriXbxEngineHostBridge {
         self.present_native_frame(&viewport.viewport_id, surface_id, frame)
     }
 
-    fn play_gamepad_rumble(
+    fn submit_gamepad_rumble_request(
         &mut self,
         request: OhMyGamepadRumbleRequestDto,
     ) -> Result<(), XbxEngineRuntimeError> {
-        let state = self
-            .app_state()
-            .map_err(map_app_error("playGamepadRumble"))?;
-        let vibration_config = state.config.get_streaming_config();
-        let request_summary = serde_json::to_value(&request).unwrap_or(serde_json::Value::Null);
-        if !vibration_config.vibration {
-            let result = OhMyGamepadRumbleResultDto {
-                accepted: false,
-                reason: Some(
-                    ohmygamepad_protocol::OhMyGamepadRumbleRejectionReasonDto::Unsupported,
-                ),
-                resolved_device_ids: Vec::new(),
-            };
-            self.log_gamepad_rumble_result("playGamepadRumbleResult", request_summary, &result);
-            return Ok(());
-        }
-        let result = state
-            .gamepad
-            .play_rumble(request)
-            .map_err(|error| map_app_error("playGamepadRumble")(AppError::Gamepad(error)))?;
-        self.log_gamepad_rumble_result("playGamepadRumbleResult", request_summary, &result);
-        Ok(())
+        self.rumble_worker.submit_request(request)
     }
 
-    fn stop_gamepad_rumble(
-        &mut self,
-        target: OhMyGamepadRumbleTargetDto,
-    ) -> Result<(), XbxEngineRuntimeError> {
-        let state = self
-            .app_state()
-            .map_err(map_app_error("stopGamepadRumble"))?;
-        let vibration_config = state.config.get_streaming_config();
-        let request_summary = serde_json::json!({ "target": &target });
-        if !vibration_config.vibration {
-            let result = OhMyGamepadRumbleResultDto {
-                accepted: false,
-                reason: Some(
-                    ohmygamepad_protocol::OhMyGamepadRumbleRejectionReasonDto::Unsupported,
-                ),
-                resolved_device_ids: Vec::new(),
-            };
-            self.log_gamepad_rumble_result("stopGamepadRumbleResult", request_summary, &result);
-            return Ok(());
-        }
-        let result = state
-            .gamepad
-            .stop_rumble(target)
-            .map_err(|error| map_app_error("stopGamepadRumble")(AppError::Gamepad(error)))?;
-        self.log_gamepad_rumble_result("stopGamepadRumbleResult", request_summary, &result);
-        Ok(())
+    fn clear_pending_gamepad_rumble_requests(&mut self) -> Result<(), XbxEngineRuntimeError> {
+        self.rumble_worker.clear_pending_requests()
     }
 
     fn request(
@@ -784,7 +766,7 @@ impl XbxEngineEventSink for TauriXbxEngineEventSink {
     }
 }
 
-fn map_app_error(action: &'static str) -> impl FnOnce(AppError) -> XbxEngineRuntimeError {
+pub(super) fn map_app_error(action: &'static str) -> impl FnOnce(AppError) -> XbxEngineRuntimeError {
     move |error| XbxEngineRuntimeError::new(format!("{action}:{error}"))
 }
 

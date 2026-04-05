@@ -403,7 +403,10 @@ fn poll_prioritizes_high_value_batches_under_burst_limit() {
     let (reference_batch, reference_skipped) =
         scheduler.observe_missing_sequences_with_policy(&[10, 11], 1_000.0, reference_policy);
     assert!(reference_skipped.is_none());
-    assert_eq!(reference_batch.expect("reference initial").sequences, vec![10, 11]);
+    assert_eq!(
+        reference_batch.expect("reference initial").sequences,
+        vec![10, 11]
+    );
 
     let mut keyframe_policy = base_policy();
     keyframe_policy.frame_is_keyframe = Some(true);
@@ -414,7 +417,10 @@ fn poll_prioritizes_high_value_batches_under_burst_limit() {
     let (keyframe_batch, keyframe_skipped) =
         scheduler.observe_missing_sequences_with_policy(&[20, 21], 1_001.0, keyframe_policy);
     assert!(keyframe_skipped.is_none());
-    assert_eq!(keyframe_batch.expect("keyframe initial").sequences, vec![20, 21]);
+    assert_eq!(
+        keyframe_batch.expect("keyframe initial").sequences,
+        vec![20, 21]
+    );
 
     let polled = scheduler.poll(1_011.0);
     let retry_batch = polled.retry_batch.expect("retry batch");
@@ -597,10 +603,7 @@ fn low_value_skip_cache_does_not_block_later_attempted_admission() {
     let (first_batch, first_skipped) =
         scheduler.observe_missing_sequences_with_policy(&[10], 1_000.0, skipped_policy);
     assert!(first_batch.is_none());
-    assert_eq!(
-        first_skipped.expect("first skipped").sequences,
-        vec![10]
-    );
+    assert_eq!(first_skipped.expect("first skipped").sequences, vec![10]);
     assert_eq!(scheduler.pending_count(), 0);
 
     let mut attempted_policy = skipped_policy;
@@ -639,7 +642,10 @@ fn poll_separates_deadline_max_age_and_retry_budget_expirations() {
     assert_eq!(retry_initial.expect("retry initial").sequences, vec![30]);
 
     let first_retry = scheduler.poll(1_010.0);
-    assert_eq!(first_retry.retry_batch.expect("first retry").sequences, vec![30]);
+    assert_eq!(
+        first_retry.retry_batch.expect("first retry").sequences,
+        vec![30]
+    );
     assert!(first_retry.expired_batches.is_empty());
     assert_eq!(scheduler.pending_count(), 1);
 
@@ -737,7 +743,10 @@ fn flush_reobserve_and_resolve_interleaving_keeps_state_consistent() {
     let (reobserve_batch, reobserve_skipped) =
         scheduler.observe_missing_sequences_with_policy(&[31], 1_005.0, reference_policy);
     assert!(reobserve_skipped.is_none());
-    assert_eq!(reobserve_batch.expect("reobserve batch").sequences, vec![31]);
+    assert_eq!(
+        reobserve_batch.expect("reobserve batch").sequences,
+        vec![31]
+    );
     assert_eq!(scheduler.pending_count(), 2);
 
     let resolved = scheduler

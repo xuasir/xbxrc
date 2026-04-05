@@ -1,4 +1,7 @@
-use super::{should_reattach_viewport, should_update_scale, MacOsWgpuTelemetry};
+use super::{
+    resolve_host_timing_record_policy, should_emit_sampled_host_timing, should_reattach_viewport,
+    should_update_scale, HostTimingRecordPolicy, MacOsWgpuTelemetry,
+};
 
 #[test]
 fn scale_update_ignores_tiny_jitter() {
@@ -56,4 +59,27 @@ fn viewport_reattach_only_happens_when_attach_inputs_change() {
     assert!(should_reattach_viewport(true, false, false));
     assert!(should_reattach_viewport(false, true, false));
     assert!(should_reattach_viewport(false, false, true));
+}
+
+#[test]
+fn host_timing_record_policy_marks_hot_stages_as_sampled() {
+    assert_eq!(
+        resolve_host_timing_record_policy("frame_submit"),
+        HostTimingRecordPolicy::Sampled
+    );
+    assert_eq!(
+        resolve_host_timing_record_policy("sample_presented"),
+        HostTimingRecordPolicy::Sampled
+    );
+    assert_eq!(
+        resolve_host_timing_record_policy("first_present"),
+        HostTimingRecordPolicy::Always
+    );
+}
+
+#[test]
+fn sampled_host_timing_requires_min_interval() {
+    assert!(should_emit_sampled_host_timing(None, 1_000.0));
+    assert!(!should_emit_sampled_host_timing(Some(1_000.0), 1_500.0));
+    assert!(should_emit_sampled_host_timing(Some(1_000.0), 2_000.0));
 }

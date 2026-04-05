@@ -3,6 +3,10 @@ use xbxengine_protocol::XbxEngineStatsDto;
 
 use crate::mods::runtime_trace::RuntimeTraceRecorderRef;
 
+const DIRECT_GAMING_STATE_SAMPLE_INTERVAL_MS: f64 = 1_000.0;
+const HOST_PRESENT_STATE_SAMPLE_EPOCH_INTERVAL: u64 = 60;
+const VIDEO_TRACK_STATE_SAMPLE_INTERVAL_MS: f64 = 1_000.0;
+
 #[derive(Default)]
 pub(super) struct RuntimeTraceObservationState {
     packet_gap_observation_id: Option<u64>,
@@ -60,6 +64,7 @@ pub(super) struct RuntimeTraceObservationState {
     recovery_owner_reason: Option<String>,
     video_owner_source: Option<String>,
     video_owner_observed_at_ms: Option<f64>,
+    video_owner_observed_at_bucket: Option<u64>,
     video_health: Option<String>,
     stall_kind: Option<String>,
     host_present_enqueue_count_total: Option<u64>,
@@ -85,6 +90,14 @@ pub(super) struct RuntimeTraceObservationState {
     timeline_chain_reason: Option<String>,
     video_decoder_stalled: Option<bool>,
     video_renderer_stalled: Option<bool>,
+    video_track_state_signature: Option<(
+        String,
+        Option<u32>,
+        Option<u32>,
+        Option<String>,
+        xbxengine_protocol::XbxEngineTransportStateDto,
+    )>,
+    video_track_state_bucket: Option<u64>,
 }
 
 pub(super) fn should_skip_trace_tick(session_id: Option<&str>, stats: &XbxEngineStatsDto) -> bool {
@@ -914,6 +927,8 @@ pub(super) fn record_runtime_trace_observations(
         }
     }
 
+    let current_video_owner_observed_at_bucket =
+        sample_bucket_ms(stats.video_owner_observed_at_ms, DIRECT_GAMING_STATE_SAMPLE_INTERVAL_MS);
     if observation_state.session_phase != stats.session_phase
         || observation_state.remote_profile_baseline != stats.remote_profile_baseline
         || observation_state.remote_profile_dynamic != stats.remote_profile_dynamic
@@ -928,7 +943,7 @@ pub(super) fn record_runtime_trace_observations(
         || observation_state.recovery_owner_state != stats.recovery_owner_state
         || observation_state.recovery_owner_reason != stats.recovery_owner_reason
         || observation_state.video_owner_source != stats.video_owner_source
-        || observation_state.video_owner_observed_at_ms != stats.video_owner_observed_at_ms
+        || observation_state.video_owner_observed_at_bucket != current_video_owner_observed_at_bucket
         || observation_state.video_health != stats.video_health
         || observation_state.stall_kind != stats.stall_kind
     {
@@ -948,6 +963,7 @@ pub(super) fn record_runtime_trace_observations(
         observation_state.recovery_owner_reason = stats.recovery_owner_reason.clone();
         observation_state.video_owner_source = stats.video_owner_source.clone();
         observation_state.video_owner_observed_at_ms = stats.video_owner_observed_at_ms;
+        observation_state.video_owner_observed_at_bucket = current_video_owner_observed_at_bucket;
         observation_state.video_health = stats.video_health.clone();
         observation_state.stall_kind = stats.stall_kind.clone();
         runtime_trace.record_state(
@@ -976,24 +992,37 @@ pub(super) fn record_runtime_trace_observations(
         );
     }
 
-    if observation_state.host_present_enqueue_count_total != stats.video_present_submit_count_total
-        || observation_state.host_present_drop_count_total != stats.video_present_drop_count_total
-        || observation_state.host_present_overwrite_count_total
-            != stats.video_present_overwrite_count_total
-        || observation_state.host_no_pending_take_count_total
-            != stats.host_no_pending_take_count_total
-        || observation_state.host_no_pending_streak != stats.host_no_pending_streak
-        || observation_state.host_no_pending_max_streak != stats.host_no_pending_max_streak
-        || observation_state.host_no_pending_pressure_level != stats.host_no_pending_pressure_level
-        || observation_state.host_display_tick_epoch != stats.host_display_tick_epoch
-        || observation_state.host_present_epoch != stats.video_present_epoch
+    let host_present_semantic_changed = observation_state.host_no_pending_pressure_level
+        != stats.host_no_pending_pressure_level
         || observation_state.host_cadence_phase != stats.host_cadence_phase
-        || observation_state.host_descriptor_upload_mode
-            != stats.video_present_descriptor_upload_mode
-        || observation_state.host_descriptor_metal_import_count_total
-            != stats.video_present_descriptor_metal_import_count_total
-        || observation_state.host_descriptor_cpu_upload_count_total
-            != stats.video_present_descriptor_cpu_upload_count_total
+        || observation_state.host_descriptor_upload_mode != stats.video_present_descriptor_upload_mode;
+    let host_present_counter_regressed = observation_state
+        .host_present_enqueue_count_total
+        .zip(stats.video_present_submit_count_total)
+        .is_some_and(|(previous, current)| current < previous)
+        || observation_state
+            .host_present_drop_count_total
+            .zip(stats.video_present_drop_count_total)
+            .is_some_and(|(previous, current)| current < previous)
+        || observation_state
+            .host_present_overwrite_count_total
+            .zip(stats.video_present_overwrite_count_total)
+            .is_some_and(|(previous, current)| current < previous)
+        || observation_state
+            .host_no_pending_take_count_total
+            .zip(stats.host_no_pending_take_count_total)
+            .is_some_and(|(previous, current)| current < previous);
+    let host_present_sample_due = observation_state
+        .host_display_tick_epoch
+        .zip(stats.host_display_tick_epoch)
+        .is_none_or(|(previous, current)| {
+            current.saturating_sub(previous) >= HOST_PRESENT_STATE_SAMPLE_EPOCH_INTERVAL
+        });
+    if host_present_semantic_changed
+        || host_present_counter_regressed
+        || host_present_sample_due
+        || observation_state.host_display_tick_epoch.is_none()
+        || stats.host_display_tick_epoch.is_none()
     {
         observation_state.host_present_enqueue_count_total = stats.video_present_submit_count_total;
         observation_state.host_present_drop_count_total = stats.video_present_drop_count_total;
@@ -1200,9 +1229,21 @@ pub(super) fn record_runtime_trace_observations(
         }
     }
 
-    if observation_state.latest_video_track_status != stats.latest_video_track_status {
-        observation_state.latest_video_track_status = stats.latest_video_track_status.clone();
-        if let Some(status) = stats.latest_video_track_status.as_ref() {
+    if let Some(status) = stats.latest_video_track_status.as_ref() {
+        let signature = (
+            status.state.clone(),
+            status.video_width,
+            status.video_height,
+            status.mime_type.clone(),
+            status.transport_state.clone(),
+        );
+        let bucket = sample_bucket_ms(Some(status.observed_at_ms), VIDEO_TRACK_STATE_SAMPLE_INTERVAL_MS);
+        let identity_changed = observation_state.video_track_state_signature.as_ref() != Some(&signature);
+        let sampled_tick = observation_state.video_track_state_bucket != bucket;
+        if identity_changed || sampled_tick {
+            observation_state.video_track_state_signature = Some(signature);
+            observation_state.video_track_state_bucket = bucket;
+            observation_state.latest_video_track_status = Some(status.clone());
             runtime_trace.record_state(
                 "xbxengine",
                 "videoTrackState",
@@ -1220,6 +1261,10 @@ pub(super) fn record_runtime_trace_observations(
                 }),
             );
         }
+    } else {
+        observation_state.latest_video_track_status = None;
+        observation_state.video_track_state_signature = None;
+        observation_state.video_track_state_bucket = None;
     }
 
     if observation_state.video_decoder_stalled != stats.video_decoder_stalled {
@@ -1345,6 +1390,14 @@ fn is_chain_transition_source_event(source_event: &str) -> bool {
 
 fn is_chain_flush_source_event(source_event: &str) -> bool {
     source_event == "gap-expired-chain-flush"
+}
+
+fn sample_bucket_ms(value: Option<f64>, interval_ms: f64) -> Option<u64> {
+    let observed_at_ms = value?;
+    if !observed_at_ms.is_finite() || observed_at_ms < 0.0 || interval_ms <= 0.0 {
+        return None;
+    }
+    Some((observed_at_ms / interval_ms).floor() as u64)
 }
 
 #[cfg(test)]

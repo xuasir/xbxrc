@@ -11,7 +11,7 @@ use xbxengine::{MacOsCVPixelBufferDescriptor, XbxEngineRenderFrame, XbxEngineRen
 use super::scheduling::{HostCadenceTelemetry, ScheduledFrameSlot};
 use super::{
     drop_display_layer, drop_wgpu_host_view, now_ms_f64, prepare_layer_sample_for_present,
-    record_native_video_timing_event, record_native_video_trace, run_layer_present_tick,
+    record_native_video_timing_event_lazy, record_native_video_trace, run_layer_present_tick,
     run_wgpu_render_tick, LayerSamplePrepareOutcome, MacOsDisplayLinkHandle,
     MacOsLayerDisplayLinkHandle, MacOsLayerState, MacOsWgpuState, MacOsWgpuTelemetry,
     NativeVideoViewportState,
@@ -238,17 +238,19 @@ impl NativeVideoPresenter for MacOsWgpuPresenter {
             if let Ok(mut telemetry) = self.telemetry.lock() {
                 telemetry.record_stale_frame_drop(frame, now_ms, "submittedFrameStale", 0);
             }
-            record_native_video_timing_event(
+            record_native_video_timing_event_lazy(
                 self.runtime_trace.as_ref(),
                 "wgpu",
                 "frame_submit",
                 &self.viewport_id,
                 &self.window_label,
-                serde_json::json!({
-                    "outcome": "stale",
-                    "frameSeq": frame.frame_seq,
-                    "frameAgeMs": (now_ms - frame.rendered_at_ms).max(0.0),
-                }),
+                || {
+                    serde_json::json!({
+                        "outcome": "stale",
+                        "frameSeq": frame.frame_seq,
+                        "frameAgeMs": (now_ms - frame.rendered_at_ms).max(0.0),
+                    })
+                },
             );
             log::debug!(
                 "[native_video][wgpu] reject stale submitted frame viewport={} window={} frame_seq={} age_ms={:.2}",
@@ -264,17 +266,19 @@ impl NativeVideoPresenter for MacOsWgpuPresenter {
                 .last_presented_frame_seq
                 .is_some_and(|presented_seq| frame.frame_seq <= presented_seq)
             {
-                record_native_video_timing_event(
+                record_native_video_timing_event_lazy(
                     self.runtime_trace.as_ref(),
                     "wgpu",
                     "frame_submit",
                     &self.viewport_id,
                     &self.window_label,
-                    serde_json::json!({
-                        "outcome": "already_presented",
-                        "frameSeq": frame.frame_seq,
-                        "lastPresentedFrameSeq": state.last_presented_frame_seq,
-                    }),
+                    || {
+                        serde_json::json!({
+                            "outcome": "already_presented",
+                            "frameSeq": frame.frame_seq,
+                            "lastPresentedFrameSeq": state.last_presented_frame_seq,
+                        })
+                    },
                 );
                 return;
             }
@@ -290,19 +294,21 @@ impl NativeVideoPresenter for MacOsWgpuPresenter {
                 }
             }
             state.latest_frame = Some(frame.clone());
-            record_native_video_timing_event(
+            record_native_video_timing_event_lazy(
                 self.runtime_trace.as_ref(),
                 "wgpu",
                 "frame_submit",
                 &self.viewport_id,
                 &self.window_label,
-                serde_json::json!({
-                    "outcome": "accepted",
-                    "frameSeq": frame.frame_seq,
-                    "frameAgeMs": (now_ms - frame.rendered_at_ms).max(0.0),
-                    "overwrotePending": overwrote_pending,
-                    "replacedFrameSeq": replaced_frame_seq,
-                }),
+                || {
+                    serde_json::json!({
+                        "outcome": "accepted",
+                        "frameSeq": frame.frame_seq,
+                        "frameAgeMs": (now_ms - frame.rendered_at_ms).max(0.0),
+                        "overwrotePending": overwrote_pending,
+                        "replacedFrameSeq": replaced_frame_seq,
+                    })
+                },
             );
         }
     }
@@ -539,16 +545,18 @@ impl NativeVideoPresenter for MacOsVideoPresenter {
             .or_else(|| self.surface_id.clone());
         self.ensure_render_loop();
         if !frame_has_cv_pixelbuffer(frame) {
-            record_native_video_timing_event(
+            record_native_video_timing_event_lazy(
                 self.runtime_trace.as_ref(),
                 "layer",
                 "frame_submit",
                 &self.viewport_id,
                 &self.window_label,
-                serde_json::json!({
-                    "outcome": "rejected_non_cv_pixelbuffer",
-                    "frameSeq": frame.frame_seq,
-                }),
+                || {
+                    serde_json::json!({
+                        "outcome": "rejected_non_cv_pixelbuffer",
+                        "frameSeq": frame.frame_seq,
+                    })
+                },
             );
             return;
         }
@@ -559,17 +567,19 @@ impl NativeVideoPresenter for MacOsVideoPresenter {
                     telemetry.present_enqueue_count_total.saturating_add(1);
                 telemetry.record_stale_frame_drop(frame, now_ms, "submittedFrameStale", 0);
             }
-            record_native_video_timing_event(
+            record_native_video_timing_event_lazy(
                 self.runtime_trace.as_ref(),
                 "layer",
                 "frame_submit",
                 &self.viewport_id,
                 &self.window_label,
-                serde_json::json!({
-                    "outcome": "stale",
-                    "frameSeq": frame.frame_seq,
-                    "frameAgeMs": (now_ms - frame.rendered_at_ms).max(0.0),
-                }),
+                || {
+                    serde_json::json!({
+                        "outcome": "stale",
+                        "frameSeq": frame.frame_seq,
+                        "frameAgeMs": (now_ms - frame.rendered_at_ms).max(0.0),
+                    })
+                },
             );
             log::debug!(
                 "[native_video][layer] reject stale submitted frame viewport={} window={} frame_seq={} age_ms={:.2}",
@@ -581,16 +591,18 @@ impl NativeVideoPresenter for MacOsVideoPresenter {
             return;
         }
         let Ok(mut telemetry) = self.telemetry.lock() else {
-            record_native_video_timing_event(
+            record_native_video_timing_event_lazy(
                 self.runtime_trace.as_ref(),
                 "layer",
                 "frame_submit_failed",
                 &self.viewport_id,
                 &self.window_label,
-                serde_json::json!({
-                    "reason": "telemetryLockFailed",
-                    "frameSeq": frame.frame_seq,
-                }),
+                || {
+                    serde_json::json!({
+                        "reason": "telemetryLockFailed",
+                        "frameSeq": frame.frame_seq,
+                    })
+                },
             );
             return;
         };
@@ -601,16 +613,18 @@ impl NativeVideoPresenter for MacOsVideoPresenter {
         telemetry.present_enqueue_count_total =
             telemetry.present_enqueue_count_total.saturating_add(1);
         let Ok(mut frame_slot) = self.frame_slot.lock() else {
-            record_native_video_timing_event(
+            record_native_video_timing_event_lazy(
                 self.runtime_trace.as_ref(),
                 "layer",
                 "frame_submit_failed",
                 &self.viewport_id,
                 &self.window_label,
-                serde_json::json!({
-                    "reason": "frameSlotLockFailed",
-                    "frameSeq": frame.frame_seq,
-                }),
+                || {
+                    serde_json::json!({
+                        "reason": "frameSlotLockFailed",
+                        "frameSeq": frame.frame_seq,
+                    })
+                },
             );
             return;
         };
@@ -622,40 +636,44 @@ impl NativeVideoPresenter for MacOsVideoPresenter {
                 frame_age_ms,
                 frame_age_budget_ms,
             } => {
-                record_native_video_timing_event(
+                record_native_video_timing_event_lazy(
                     self.runtime_trace.as_ref(),
                     "layer",
                     "frame_submit",
                     &self.viewport_id,
                     &self.window_label,
-                    serde_json::json!({
-                        "outcome": "accepted",
-                        "frameSeq": frame_seq,
-                        "frameAgeMs": frame_age_ms,
-                        "frameAgeBudgetMs": frame_age_budget_ms,
-                        "submitGapMs": submit_gap_ms,
-                        "noPendingStreakBeforeSubmit": no_pending_streak_before_submit,
-                        "overwrotePending": overwrote_pending,
-                        "replacedFrameSeq": replaced_frame_seq,
-                    }),
+                    || {
+                        serde_json::json!({
+                            "outcome": "accepted",
+                            "frameSeq": frame_seq,
+                            "frameAgeMs": frame_age_ms,
+                            "frameAgeBudgetMs": frame_age_budget_ms,
+                            "submitGapMs": submit_gap_ms,
+                            "noPendingStreakBeforeSubmit": no_pending_streak_before_submit,
+                            "overwrotePending": overwrote_pending,
+                            "replacedFrameSeq": replaced_frame_seq,
+                        })
+                    },
                 );
                 if let Some(gap_ms) = submit_gap_ms.filter(|_| should_warn_submit_gap) {
                     // 只在供帧节奏明显掉速时额外留痕，避免健康阶段刷屏。
-                    record_native_video_timing_event(
+                    record_native_video_timing_event_lazy(
                         self.runtime_trace.as_ref(),
                         "layer",
                         "frame_submit_gap",
                         &self.viewport_id,
                         &self.window_label,
-                        serde_json::json!({
-                            "frameSeq": frame_seq,
-                            "submitGapMs": gap_ms,
-                            "frameAgeMs": frame_age_ms,
-                            "frameAgeBudgetMs": frame_age_budget_ms,
-                            "noPendingStreakBeforeSubmit": no_pending_streak_before_submit,
-                            "overwrotePending": overwrote_pending,
-                            "replacedFrameSeq": replaced_frame_seq,
-                        }),
+                        || {
+                            serde_json::json!({
+                                "frameSeq": frame_seq,
+                                "submitGapMs": gap_ms,
+                                "frameAgeMs": frame_age_ms,
+                                "frameAgeBudgetMs": frame_age_budget_ms,
+                                "noPendingStreakBeforeSubmit": no_pending_streak_before_submit,
+                                "overwrotePending": overwrote_pending,
+                                "replacedFrameSeq": replaced_frame_seq,
+                            })
+                        },
                     );
                 }
             }
@@ -664,39 +682,43 @@ impl NativeVideoPresenter for MacOsVideoPresenter {
                 frame_age_ms,
                 frame_age_budget_ms,
             } => {
-                record_native_video_timing_event(
+                record_native_video_timing_event_lazy(
                     self.runtime_trace.as_ref(),
                     "layer",
                     "frame_submit",
                     &self.viewport_id,
                     &self.window_label,
-                    serde_json::json!({
-                        "outcome": "stale",
-                        "frameSeq": frame_seq,
-                        "frameAgeMs": frame_age_ms,
-                        "frameAgeBudgetMs": frame_age_budget_ms,
-                        "submitGapMs": submit_gap_ms,
-                        "noPendingStreakBeforeSubmit": no_pending_streak_before_submit,
-                    }),
+                    || {
+                        serde_json::json!({
+                            "outcome": "stale",
+                            "frameSeq": frame_seq,
+                            "frameAgeMs": frame_age_ms,
+                            "frameAgeBudgetMs": frame_age_budget_ms,
+                            "submitGapMs": submit_gap_ms,
+                            "noPendingStreakBeforeSubmit": no_pending_streak_before_submit,
+                        })
+                    },
                 );
             }
             super::scheduling::ScheduledFrameSubmitOutcome::RejectedAlreadyPresented {
                 frame_seq,
                 last_presented_frame_seq,
             } => {
-                record_native_video_timing_event(
+                record_native_video_timing_event_lazy(
                     self.runtime_trace.as_ref(),
                     "layer",
                     "frame_submit",
                     &self.viewport_id,
                     &self.window_label,
-                    serde_json::json!({
-                        "outcome": "already_presented",
-                        "frameSeq": frame_seq,
-                        "lastPresentedFrameSeq": last_presented_frame_seq,
-                        "submitGapMs": submit_gap_ms,
-                        "noPendingStreakBeforeSubmit": no_pending_streak_before_submit,
-                    }),
+                    || {
+                        serde_json::json!({
+                            "outcome": "already_presented",
+                            "frameSeq": frame_seq,
+                            "lastPresentedFrameSeq": last_presented_frame_seq,
+                            "submitGapMs": submit_gap_ms,
+                            "noPendingStreakBeforeSubmit": no_pending_streak_before_submit,
+                        })
+                    },
                 );
             }
         }

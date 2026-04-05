@@ -42,11 +42,17 @@ const HOST_RENDER_MAX_FRAME_AGE_MS: f64 = 75.0;
 const HOST_RENDER_FRAME_AGE_MULTIPLIER: f64 = 2.25;
 const HOST_TIMING_QUEUE_WARN_MS: f64 = 24.0;
 const HOST_TIMING_TICK_WARN_MS: f64 = 24.0;
+const HOST_TIMING_SAMPLED_STAGE_INTERVAL_MS: f64 = 1_000.0;
 
 static RUNTIME_TRACE: OnceLock<Mutex<Option<RuntimeTraceRecorderRef>>> = OnceLock::new();
+static HOST_TIMING_STAGE_SAMPLE_TS_MS: OnceLock<Mutex<HashMap<String, f64>>> = OnceLock::new();
 
 fn runtime_trace_slot() -> &'static Mutex<Option<RuntimeTraceRecorderRef>> {
     RUNTIME_TRACE.get_or_init(|| Mutex::new(None))
+}
+
+fn host_timing_stage_sample_slot() -> &'static Mutex<HashMap<String, f64>> {
+    HOST_TIMING_STAGE_SAMPLE_TS_MS.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
 pub(crate) fn set_runtime_trace_recorder(runtime_trace: RuntimeTraceRecorderRef) {
@@ -73,9 +79,33 @@ fn record_native_video_timing_event(
     window_label: &str,
     payload: serde_json::Value,
 ) {
+    record_native_video_timing_event_lazy(
+        runtime_trace,
+        pipeline,
+        stage,
+        viewport_id,
+        window_label,
+        move || payload,
+    );
+}
+
+pub(super) fn record_native_video_timing_event_lazy<F>(
+    runtime_trace: Option<&RuntimeTraceRecorderRef>,
+    pipeline: &str,
+    stage: &str,
+    viewport_id: &str,
+    window_label: &str,
+    payload_builder: F,
+) where
+    F: FnOnce() -> serde_json::Value,
+{
     let Some(runtime_trace) = runtime_trace else {
         return;
     };
+    let now_ms = now_ms_f64();
+    if !should_emit_host_timing_event(pipeline, stage, viewport_id, window_label, now_ms) {
+        return;
+    }
     runtime_trace.record_event(
         "native_video",
         "hostTiming",
@@ -85,10 +115,55 @@ fn record_native_video_timing_event(
             "stage": stage,
             "viewportId": viewport_id,
             "windowLabel": window_label,
-            "tsMs": now_ms_f64(),
-            "details": payload,
+            "tsMs": now_ms,
+            "details": payload_builder(),
         }),
     );
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum HostTimingRecordPolicy {
+    Always,
+    Sampled,
+}
+
+fn resolve_host_timing_record_policy(stage: &str) -> HostTimingRecordPolicy {
+    match stage {
+        // 高频阶段在 present/pre-present 主链上会逐帧触发，按窗口采样降级。
+        "frame_submit"
+        | "frame_slot_take_skipped"
+        | "prepare_sample_ready"
+        | "sample_presented" => HostTimingRecordPolicy::Sampled,
+        _ => HostTimingRecordPolicy::Always,
+    }
+}
+
+fn should_emit_sampled_host_timing(last_emit_ts_ms: Option<f64>, now_ms: f64) -> bool {
+    last_emit_ts_ms.map_or(true, |last_ts_ms| {
+        now_ms - last_ts_ms >= HOST_TIMING_SAMPLED_STAGE_INTERVAL_MS
+    })
+}
+
+fn should_emit_host_timing_event(
+    pipeline: &str,
+    stage: &str,
+    viewport_id: &str,
+    window_label: &str,
+    now_ms: f64,
+) -> bool {
+    if resolve_host_timing_record_policy(stage) == HostTimingRecordPolicy::Always {
+        return true;
+    }
+    let Ok(mut sampled_stage_ts_ms) = host_timing_stage_sample_slot().lock() else {
+        return false;
+    };
+    let key = format!("{pipeline}:{stage}:{viewport_id}:{window_label}");
+    let should_emit =
+        should_emit_sampled_host_timing(sampled_stage_ts_ms.get(&key).copied(), now_ms);
+    if should_emit {
+        sampled_stage_ts_ms.insert(key, now_ms);
+    }
+    should_emit
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -171,11 +246,8 @@ impl NativeVideoRegistry {
             .get(viewport_id)
             .and_then(|viewport| viewport.surface_id.as_deref())
             != surface_id;
-        let attach_changed = should_reattach_viewport(
-            presenter_missing,
-            presenter_kind_changed,
-            surface_changed,
-        );
+        let attach_changed =
+            should_reattach_viewport(presenter_missing, presenter_kind_changed, surface_changed);
         {
             let entry = self
                 .viewports
@@ -1519,15 +1591,17 @@ pub(super) fn run_layer_present_tick(
     if let Some(dispatch_ms) = dispatch_requested_at_ms {
         let queue_delay_ms = (tick_started_at_ms - dispatch_ms).max(0.0);
         if queue_delay_ms >= HOST_TIMING_QUEUE_WARN_MS {
-            record_native_video_timing_event(
+            record_native_video_timing_event_lazy(
                 runtime_trace.as_ref(),
                 "layer",
                 "run_on_main_thread_delay",
                 viewport_id,
                 window.label(),
-                serde_json::json!({
-                    "queueDelayMs": queue_delay_ms,
-                }),
+                || {
+                    serde_json::json!({
+                        "queueDelayMs": queue_delay_ms,
+                    })
+                },
             );
             log::warn!(
                 "[native_video][timing] pipeline=layer stage=run_on_main_thread_delay viewport={} window={} queueDelayMs={:.2}",
@@ -1538,40 +1612,44 @@ pub(super) fn run_layer_present_tick(
         }
     }
     let Ok(mut layer_state_guard) = layer_state.lock() else {
-        record_native_video_timing_event(
+        record_native_video_timing_event_lazy(
             runtime_trace.as_ref(),
             "layer",
             "present_tick_failed",
             viewport_id,
             window.label(),
-            serde_json::json!({
-                "reason": "layerStateLockFailed",
-            }),
+            || {
+                serde_json::json!({
+                    "reason": "layerStateLockFailed",
+                })
+            },
         );
         return;
     };
     let Some(layer_ptr) = ensure_display_layer(window, &mut layer_state_guard) else {
-        record_native_video_timing_event(
+        record_native_video_timing_event_lazy(
             runtime_trace.as_ref(),
             "layer",
             "present_tick_blocked",
             viewport_id,
             window.label(),
-            serde_json::json!({
-                "reason": "displayLayerUnavailable",
-            }),
+            || {
+                serde_json::json!({
+                    "reason": "displayLayerUnavailable",
+                })
+            },
         );
         return;
     };
     if !layer_state_guard.first_present_logged {
         layer_state_guard.first_present_logged = true;
-        record_native_video_timing_event(
+        record_native_video_timing_event_lazy(
             runtime_trace.as_ref(),
             "layer",
             "first_present",
             viewport_id,
             window.label(),
-            serde_json::json!({}),
+            || serde_json::json!({}),
         );
         log::info!(
             "[native_video][macos] first layer present for viewport={} window={}",
@@ -1580,15 +1658,17 @@ pub(super) fn run_layer_present_tick(
         );
     }
     let Some(prepared_sample) = layer_state_guard.pending_sample.take() else {
-        record_native_video_timing_event(
+        record_native_video_timing_event_lazy(
             runtime_trace.as_ref(),
             "layer",
             "present_tick_blocked",
             viewport_id,
             window.label(),
-            serde_json::json!({
-                "reason": "pendingSampleMissing",
-            }),
+            || {
+                serde_json::json!({
+                    "reason": "pendingSampleMissing",
+                })
+            },
         );
         return;
     };
@@ -1604,32 +1684,36 @@ pub(super) fn run_layer_present_tick(
     if let Ok(mut telemetry_state) = telemetry.lock() {
         telemetry_state.record_present(now_ms);
     }
-    record_native_video_timing_event(
+    record_native_video_timing_event_lazy(
         runtime_trace.as_ref(),
         "layer",
         "sample_presented",
         viewport_id,
         window.label(),
-        serde_json::json!({
-            "frameSeq": sample_frame_seq,
-            "width": sample_width,
-            "height": sample_height,
-            "frameAgeMs": (now_ms - sample_rendered_at_ms).max(0.0),
-            "frameRecoveryDisposition": sample_frame_recovery_disposition,
-            "frameUnrecoverableReason": sample_frame_unrecoverable_reason,
-        }),
+        || {
+            serde_json::json!({
+                "frameSeq": sample_frame_seq,
+                "width": sample_width,
+                "height": sample_height,
+                "frameAgeMs": (now_ms - sample_rendered_at_ms).max(0.0),
+                "frameRecoveryDisposition": sample_frame_recovery_disposition,
+                "frameUnrecoverableReason": sample_frame_unrecoverable_reason,
+            })
+        },
     );
     let tick_total_ms = (now_ms_f64() - tick_started_at_ms).max(0.0);
     if tick_total_ms >= HOST_TIMING_TICK_WARN_MS {
-        record_native_video_timing_event(
+        record_native_video_timing_event_lazy(
             runtime_trace.as_ref(),
             "layer",
             "tick_total",
             viewport_id,
             window.label(),
-            serde_json::json!({
-                "totalMs": tick_total_ms,
-            }),
+            || {
+                serde_json::json!({
+                    "totalMs": tick_total_ms,
+                })
+            },
         );
         log::warn!(
             "[native_video][timing] pipeline=layer stage=tick_total viewport={} window={} totalMs={:.2}",
@@ -1784,15 +1868,17 @@ pub(super) fn prepare_layer_sample_for_present(
     let mut telemetry_state = match telemetry.lock() {
         Ok(state) => state,
         Err(_) => {
-            record_native_video_timing_event(
+            record_native_video_timing_event_lazy(
                 runtime_trace,
                 "layer",
                 "prepare_sample_failed",
                 viewport_id,
                 window_label,
-                json!({
-                    "reason": "telemetryLockFailed",
-                }),
+                || {
+                    json!({
+                        "reason": "telemetryLockFailed",
+                    })
+                },
             );
             return LayerSamplePrepareOutcome::Failed;
         }
@@ -1800,15 +1886,17 @@ pub(super) fn prepare_layer_sample_for_present(
     telemetry_state.record_display_tick(now_ms);
     let frame_take_outcome = {
         let Ok(mut frame_slot_state) = frame_slot.lock() else {
-            record_native_video_timing_event(
+            record_native_video_timing_event_lazy(
                 runtime_trace,
                 "layer",
                 "prepare_sample_failed",
                 viewport_id,
                 window_label,
-                json!({
-                    "reason": "frameSlotLockFailed",
-                }),
+                || {
+                    json!({
+                        "reason": "frameSlotLockFailed",
+                    })
+                },
             );
             return LayerSamplePrepareOutcome::Failed;
         };
@@ -1817,15 +1905,17 @@ pub(super) fn prepare_layer_sample_for_present(
     let frame = match frame_take_outcome {
         ScheduledFrameTakeOutcome::Ready(frame) => frame,
         ScheduledFrameTakeOutcome::NoPendingFrame => {
-            record_native_video_timing_event(
+            record_native_video_timing_event_lazy(
                 runtime_trace,
                 "layer",
                 "frame_slot_take_skipped",
                 viewport_id,
                 window_label,
-                json!({
-                    "reason": "noPendingFrame",
-                }),
+                || {
+                    json!({
+                        "reason": "noPendingFrame",
+                    })
+                },
             );
             return LayerSamplePrepareOutcome::SkippedNoReadyFrame;
         }
@@ -1833,17 +1923,19 @@ pub(super) fn prepare_layer_sample_for_present(
             frame_seq,
             last_presented_frame_seq,
         } => {
-            record_native_video_timing_event(
+            record_native_video_timing_event_lazy(
                 runtime_trace,
                 "layer",
                 "frame_slot_take_skipped",
                 viewport_id,
                 window_label,
-                json!({
-                    "reason": "frameAlreadyPresented",
-                    "frameSeq": frame_seq,
-                    "lastPresentedFrameSeq": last_presented_frame_seq,
-                }),
+                || {
+                    json!({
+                        "reason": "frameAlreadyPresented",
+                        "frameSeq": frame_seq,
+                        "lastPresentedFrameSeq": last_presented_frame_seq,
+                    })
+                },
             );
             return LayerSamplePrepareOutcome::Failed;
         }
@@ -1852,18 +1944,20 @@ pub(super) fn prepare_layer_sample_for_present(
             frame_age_ms,
             frame_age_budget_ms,
         } => {
-            record_native_video_timing_event(
+            record_native_video_timing_event_lazy(
                 runtime_trace,
                 "layer",
                 "frame_slot_take_dropped",
                 viewport_id,
                 window_label,
-                json!({
-                    "reason": "scheduledFrameStale",
-                    "frameSeq": frame.frame_seq,
-                    "frameAgeMs": frame_age_ms,
-                    "frameAgeBudgetMs": frame_age_budget_ms,
-                }),
+                || {
+                    json!({
+                        "reason": "scheduledFrameStale",
+                        "frameSeq": frame.frame_seq,
+                        "frameAgeMs": frame_age_ms,
+                        "frameAgeBudgetMs": frame_age_budget_ms,
+                    })
+                },
             );
             return LayerSamplePrepareOutcome::Failed;
         }
@@ -1872,16 +1966,18 @@ pub(super) fn prepare_layer_sample_for_present(
     drop(telemetry_state);
 
     let XbxEngineRenderPixelData::Descriptor { handle } = &frame.pixel_data else {
-        record_native_video_timing_event(
+        record_native_video_timing_event_lazy(
             runtime_trace,
             "layer",
             "prepare_sample_failed",
             viewport_id,
             window_label,
-            json!({
-                "reason": "nonDescriptorPixelData",
-                "frameSeq": frame.frame_seq,
-            }),
+            || {
+                json!({
+                    "reason": "nonDescriptorPixelData",
+                    "frameSeq": frame.frame_seq,
+                })
+            },
         );
         return LayerSamplePrepareOutcome::Failed;
     };
@@ -1889,44 +1985,50 @@ pub(super) fn prepare_layer_sample_for_present(
         .as_ref()
         .downcast_ref::<MacOsCVPixelBufferDescriptor>()
     else {
-        record_native_video_timing_event(
+        record_native_video_timing_event_lazy(
             runtime_trace,
             "layer",
             "prepare_sample_failed",
             viewport_id,
             window_label,
-            json!({
-                "reason": "nonCvPixelBufferDescriptor",
-                "frameSeq": frame.frame_seq,
-            }),
+            || {
+                json!({
+                    "reason": "nonCvPixelBufferDescriptor",
+                    "frameSeq": frame.frame_seq,
+                })
+            },
         );
         return LayerSamplePrepareOutcome::Failed;
     };
     if descriptor.ptr.is_null() {
-        record_native_video_timing_event(
+        record_native_video_timing_event_lazy(
             runtime_trace,
             "layer",
             "prepare_sample_failed",
             viewport_id,
             window_label,
-            json!({
-                "reason": "descriptorPointerNull",
-                "frameSeq": frame.frame_seq,
-            }),
+            || {
+                json!({
+                    "reason": "descriptorPointerNull",
+                    "frameSeq": frame.frame_seq,
+                })
+            },
         );
         return LayerSamplePrepareOutcome::Failed;
     }
     let Ok(mut layer_state_guard) = layer_state.lock() else {
-        record_native_video_timing_event(
+        record_native_video_timing_event_lazy(
             runtime_trace,
             "layer",
             "prepare_sample_failed",
             viewport_id,
             window_label,
-            json!({
-                "reason": "layerStateLockFailed",
-                "frameSeq": frame.frame_seq,
-            }),
+            || {
+                json!({
+                    "reason": "layerStateLockFailed",
+                    "frameSeq": frame.frame_seq,
+                })
+            },
         );
         return LayerSamplePrepareOutcome::Failed;
     };
@@ -1942,38 +2044,42 @@ pub(super) fn prepare_layer_sample_for_present(
             used_cached_format_description,
         } => (sample, used_cached_format_description),
         PreparedLayerSampleOutcome::Failed { reason, status } => {
-            record_native_video_timing_event(
+            record_native_video_timing_event_lazy(
                 runtime_trace,
                 "layer",
                 "prepare_sample_failed",
                 viewport_id,
                 window_label,
-                json!({
-                    "reason": reason,
-                    "frameSeq": frame.frame_seq,
-                    "status": status,
-                }),
+                || {
+                    json!({
+                        "reason": reason,
+                        "frameSeq": frame.frame_seq,
+                        "status": status,
+                    })
+                },
             );
             return LayerSamplePrepareOutcome::Failed;
         }
     };
     layer_state_guard.pending_sample = Some(sample);
     let frame_age_ms = (now_ms - frame.rendered_at_ms).max(0.0);
-    record_native_video_timing_event(
+    record_native_video_timing_event_lazy(
         runtime_trace,
         "layer",
         "prepare_sample_ready",
         viewport_id,
         window_label,
-        json!({
-            "frameSeq": frame.frame_seq,
-            "width": frame.width,
-            "height": frame.height,
-            "frameAgeMs": frame_age_ms,
-            "frameAgeBudgetMs": frame_age_budget_ms,
-            "usedCachedFormatDescription": used_cached_format_description,
-            "replacedPendingFrameSeq": replaced_pending_frame_seq,
-        }),
+        || {
+            json!({
+                "frameSeq": frame.frame_seq,
+                "width": frame.width,
+                "height": frame.height,
+                "frameAgeMs": frame_age_ms,
+                "frameAgeBudgetMs": frame_age_budget_ms,
+                "usedCachedFormatDescription": used_cached_format_description,
+                "replacedPendingFrameSeq": replaced_pending_frame_seq,
+            })
+        },
     );
     LayerSamplePrepareOutcome::Prepared
 }

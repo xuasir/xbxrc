@@ -1,6 +1,7 @@
 pub(crate) mod build_info;
 pub mod events;
 pub mod rpc;
+mod rumble_worker;
 pub mod runtime_state;
 pub mod service;
 mod trace_projection;

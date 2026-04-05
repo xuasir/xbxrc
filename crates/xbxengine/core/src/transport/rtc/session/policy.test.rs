@@ -4119,8 +4119,8 @@ fn recovery_integration_stale_transport_await_after_completion_evidence_stays_no
 }
 
 #[test]
-fn recovery_integration_home_local_display_recovery_then_stale_transport_await_replay_stays_absorbed()
-{
+fn recovery_integration_home_local_display_recovery_then_stale_transport_await_replay_stays_absorbed(
+) {
     let mut harness =
         RecoveryIntegrationHarness::new(Some(xbxengine_protocol::XbxEngineTargetTypeDto::Home));
 
@@ -4170,7 +4170,10 @@ fn recovery_integration_home_local_display_recovery_then_stale_transport_await_r
                 });
         },
     );
-    assert!(baseline.is_empty(), "unexpected baseline commands: {baseline:?}");
+    assert!(
+        baseline.is_empty(),
+        "unexpected baseline commands: {baseline:?}"
+    );
 
     let burst = harness.apply(
         7_120.0,
@@ -7003,8 +7006,8 @@ fn recovery_integration_home_short_idle_blackhole_is_absorbed_until_progress_ret
 }
 
 #[test]
-fn recovery_integration_home_connected_ingress_without_output_progress_reenters_local_transport_recovery()
-{
+fn recovery_integration_home_connected_ingress_without_output_progress_reenters_local_transport_recovery(
+) {
     let mut harness =
         RecoveryIntegrationHarness::new(Some(xbxengine_protocol::XbxEngineTargetTypeDto::Home));
 
@@ -7121,8 +7124,8 @@ fn recovery_integration_home_connected_ingress_without_output_progress_reenters_
 }
 
 #[test]
-fn recovery_integration_cloud_stale_transport_await_replay_reenters_local_recovery_when_output_stalls()
-{
+fn recovery_integration_cloud_stale_transport_await_replay_reenters_local_recovery_when_output_stalls(
+) {
     let mut harness =
         RecoveryIntegrationHarness::new(Some(xbxengine_protocol::XbxEngineTargetTypeDto::Cloud));
 
@@ -7171,10 +7174,9 @@ fn recovery_integration_cloud_stale_transport_await_replay_reenters_local_recove
                 });
         },
     );
-    assert!(reconnect.iter().any(|command| matches!(
-        command,
-        TransportCommand::RequestReconnectCandidate { .. }
-    )));
+    assert!(reconnect
+        .iter()
+        .any(|command| matches!(command, TransportCommand::RequestReconnectCandidate { .. })));
 
     let replay = harness.apply_with_recovery_observed_at(
         8_740.0,
@@ -7294,7 +7296,10 @@ fn recovery_integration_fresh_transport_await_absorption_expires_once_output_sta
                 });
         },
     );
-    assert!(baseline.is_empty(), "unexpected baseline commands: {baseline:?}");
+    assert!(
+        baseline.is_empty(),
+        "unexpected baseline commands: {baseline:?}"
+    );
 
     let absorbed = harness.apply_with_recovery_observed_at(
         9_240.0,
@@ -7455,7 +7460,10 @@ fn recovery_integration_home_stale_transport_await_absorption_expires_once_outpu
                 });
         },
     );
-    assert!(baseline.is_empty(), "unexpected baseline commands: {baseline:?}");
+    assert!(
+        baseline.is_empty(),
+        "unexpected baseline commands: {baseline:?}"
+    );
 
     let absorbed = harness.apply_with_recovery_observed_at(
         10_040.0,
@@ -7557,8 +7565,8 @@ fn recovery_integration_home_stale_transport_await_absorption_expires_once_outpu
 }
 
 #[test]
-fn recovery_integration_home_burst_input_rumble_display_pressure_then_stale_transport_await_replay_stays_absorbed()
-{
+fn recovery_integration_home_burst_input_rumble_display_pressure_then_stale_transport_await_replay_stays_absorbed(
+) {
     let mut harness =
         RecoveryIntegrationHarness::new(Some(xbxengine_protocol::XbxEngineTargetTypeDto::Home));
 
@@ -7616,7 +7624,10 @@ fn recovery_integration_home_burst_input_rumble_display_pressure_then_stale_tran
                 });
         },
     );
-    assert!(baseline.is_empty(), "unexpected baseline commands: {baseline:?}");
+    assert!(
+        baseline.is_empty(),
+        "unexpected baseline commands: {baseline:?}"
+    );
 
     let burst = harness.apply(
         11_120.0,
@@ -7693,7 +7704,10 @@ fn recovery_integration_home_burst_input_rumble_display_pressure_then_stale_tran
             .latest_recovery_decision_ledger
             .as_ref()
             .expect("recovery decision ledger");
-        assert_eq!(ledger.input_signal, "adapterThinStream:displaySupplyDegraded");
+        assert_eq!(
+            ledger.input_signal,
+            "adapterThinStream:displaySupplyDegraded"
+        );
         assert_eq!(ledger.action_selected, "cooldownSuppressed");
     });
 
@@ -7808,8 +7822,7 @@ fn recovery_integration_home_burst_input_rumble_display_pressure_then_stale_tran
 }
 
 #[test]
-fn recovery_integration_home_burst_input_rumble_submit_gap_and_latest_slot_overwrite_stays_local()
-{
+fn recovery_integration_home_burst_input_rumble_submit_gap_and_latest_slot_overwrite_stays_local() {
     let mut harness =
         RecoveryIntegrationHarness::new(Some(xbxengine_protocol::XbxEngineTargetTypeDto::Home));
 
@@ -7876,10 +7889,9 @@ fn recovery_integration_home_burst_input_rumble_submit_gap_and_latest_slot_overw
         },
     );
     assert!(
-        commands.iter().all(|command| !matches!(
-            command,
-            TransportCommand::RequestReconnectCandidate { .. }
-        )),
+        commands
+            .iter()
+            .all(|command| !matches!(command, TransportCommand::RequestReconnectCandidate { .. })),
         "local burst-input stall should not escalate to reconnect: {commands:?}"
     );
     harness.with_stats(|stats| {

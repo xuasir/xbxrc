@@ -110,6 +110,7 @@ impl XbxEngineProvider for XbxEngineService {
 
     async fn shutdown(&self) {
         let _ = self.dispatch_control("StopRuntime", None).await;
+        self.runtime_state.shutdown();
     }
 }
 

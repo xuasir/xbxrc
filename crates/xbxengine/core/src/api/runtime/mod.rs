@@ -1,4 +1,3 @@
-use std::collections::VecDeque;
 use std::error::Error;
 use std::fmt::{Display, Formatter};
 
@@ -270,6 +269,21 @@ pub trait XbxEngineHostBridge {
         Ok(())
     }
 
+    fn submit_gamepad_rumble_request(
+        &mut self,
+        request: OhMyGamepadRumbleRequestDto,
+    ) -> Result<(), XbxEngineRuntimeError> {
+        if crate::api::runtime::lifecycle::is_stop_gamepad_rumble_request(&request.effect) {
+            self.stop_gamepad_rumble(request.target)
+        } else {
+            self.play_gamepad_rumble(request)
+        }
+    }
+
+    fn clear_pending_gamepad_rumble_requests(&mut self) -> Result<(), XbxEngineRuntimeError> {
+        Ok(())
+    }
+
     fn current_cancellation_epoch(&self) -> u64 {
         0
     }
@@ -315,7 +329,6 @@ pub struct XbxEngineRuntime<
     session: Option<XbxEngineSessionDto>,
     snapshot: XbxEngineRuntimeSnapshot,
     health: XbxEngineRuntimeHealth,
-    pending_gamepad_rumble_requests: VecDeque<OhMyGamepadRumbleRequestDto>,
 }
 
 impl<THostBridge, TEventSink>
@@ -360,7 +373,6 @@ where
             session: None,
             snapshot: XbxEngineRuntimeSnapshot::default(),
             health: XbxEngineRuntimeHealth::default(),
-            pending_gamepad_rumble_requests: VecDeque::new(),
         }
     }
 
