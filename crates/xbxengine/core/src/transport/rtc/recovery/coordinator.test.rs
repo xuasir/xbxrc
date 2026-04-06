@@ -529,7 +529,7 @@ fn recent_wait_keyframe_recovery_suppresses_repeat_wait_keyframe() {
     );
     let decision = coordinator
         .on_reason_with_runtime_stats(VideoEscalationReason::WaitKeyframe, &Mutex::new(stats));
-    assert_eq!(decision.action, RecoveryAction::CooldownSuppressed);
+    assert_eq!(decision.action, RecoveryAction::CoalescedKeyframeInFlight);
 }
 
 #[test]
@@ -617,7 +617,10 @@ fn transport_await_mild_lag_in_steady_stage_stays_suppressed_without_stall_evide
         },
         &shared_stats,
     );
-    assert_eq!(second.decision.action, RecoveryAction::CooldownSuppressed);
+    assert_eq!(
+        second.decision.action,
+        RecoveryAction::CoalescedKeyframeInFlight
+    );
 }
 
 #[test]
@@ -647,7 +650,10 @@ fn recent_idle_timeout_decoder_reset_suppresses_repeat_idle_timeout() {
         VideoEscalationReason::AdapterIdleTimeout,
         &Mutex::new(stats),
     );
-    assert_eq!(decision.action, RecoveryAction::CooldownSuppressed);
+    assert_eq!(
+        decision.action,
+        RecoveryAction::CoalescedDecoderResetInFlight
+    );
 }
 
 #[test]
@@ -683,7 +689,7 @@ fn trace_1775319678083_short_adapter_idle_timeout_burst_stays_in_decoder_reset_s
         .on_reason_with_runtime_stats(VideoEscalationReason::AdapterIdleTimeout, &shared_stats);
     assert_eq!(
         first.action,
-        RecoveryAction::CooldownSuppressed,
+        RecoveryAction::CoalescedDecoderResetInFlight,
         "trace 1775319678083 的短促 idle burst 首次重复不应直接跳重连"
     );
 
@@ -691,7 +697,7 @@ fn trace_1775319678083_short_adapter_idle_timeout_burst_stays_in_decoder_reset_s
         .on_reason_with_runtime_stats(VideoEscalationReason::AdapterIdleTimeout, &shared_stats);
     assert_eq!(
         second.action,
-        RecoveryAction::CooldownSuppressed,
+        RecoveryAction::CoalescedDecoderResetInFlight,
         "同一短窗内的第二次 idle timeout 仍应停留在 decoder reset 阶段"
     );
 }
@@ -947,7 +953,7 @@ fn wait_keyframe_escalation_budget_is_released_after_new_epoch() {
 
     let second = coordinator
         .on_reason_with_runtime_stats(VideoEscalationReason::WaitKeyframe, &shared_stats);
-    assert_eq!(second.action, RecoveryAction::CooldownSuppressed);
+    assert_eq!(second.action, RecoveryAction::CoalescedKeyframeInFlight);
 
     RuntimeStatsSink::update_shared(&shared_stats, |stats| {
         stats.transport_recovery_epoch = 9;
@@ -1001,7 +1007,10 @@ fn coordinator_staged_recovery_avoids_single_keyframe_hang_for_transport_await()
         },
         &shared_stats,
     );
-    assert_eq!(second.decision.action, RecoveryAction::CooldownSuppressed);
+    assert_eq!(
+        second.decision.action,
+        RecoveryAction::CoalescedKeyframeInFlight
+    );
 
     std::thread::sleep(Duration::from_millis(420));
     let third = coordinator.propose_from_owner_signal(
@@ -1148,7 +1157,10 @@ fn recent_clean_anchor_keeps_transport_await_recovery_keyframe_from_forcing_hard
         },
         &shared_stats,
     );
-    assert_eq!(third.decision.action, RecoveryAction::CooldownSuppressed);
+    assert_eq!(
+        third.decision.action,
+        RecoveryAction::CoalescedKeyframeInFlight
+    );
 }
 
 #[test]
@@ -1220,7 +1232,10 @@ fn recent_clean_anchor_candidate_ledger_keeps_transport_await_recovery_keyframe_
         },
         &shared_stats,
     );
-    assert_eq!(third.decision.action, RecoveryAction::CooldownSuppressed);
+    assert_eq!(
+        third.decision.action,
+        RecoveryAction::CoalescedKeyframeInFlight
+    );
 }
 
 #[test]
@@ -1793,7 +1808,10 @@ fn transport_await_hard_fallback_keeps_connected_ingress_local_when_decoder_rese
         timeout.decision.action,
         RecoveryAction::RequestReconnectCandidate
     );
-    assert_eq!(timeout.decision.action, RecoveryAction::CooldownSuppressed);
+    assert_eq!(
+        timeout.decision.action,
+        RecoveryAction::CoalescedKeyframeInFlight
+    );
 }
 
 #[test]

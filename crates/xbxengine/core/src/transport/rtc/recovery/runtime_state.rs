@@ -332,6 +332,14 @@ fn recovery_stage_label(stats: &XbxEngineMediaRuntimeStats) -> &'static str {
     ) {
         return "priming";
     }
+    if stats.transport_recovery_episode_active
+        && stats
+            .video_anchor_clean_epoch
+            .is_some_and(|epoch| epoch == stats.transport_recovery_epoch)
+        && matches!(stats.video_owner_state.as_deref(), Some("stable-serving"))
+    {
+        return "ramp-up";
+    }
     if matches!(
         stats.video_owner_state.as_deref(),
         Some("rebuilding-supply" | "supply-starved")
@@ -378,7 +386,10 @@ fn recovery_failure_cost_label(action: &str) -> &'static str {
         "requestDecoderReset"
         | "requestKeyframe+decoderReset"
         | "requestKeyframe+decoderReset(startupLowQualityRetry)" => "high",
-        "requestKeyframe" | "startupLowQualityRetry" => "medium",
+        "requestKeyframe"
+        | "startupLowQualityRetry"
+        | "coalesced:keyframeInFlight"
+        | "coalesced:decoderResetInFlight" => "medium",
         "waitForBurst" | "waitForDecoderResetBurst" | "cooldownSuppressed" => "low",
         _ => "medium",
     }

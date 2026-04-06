@@ -7,6 +7,7 @@ import type {
 } from './runtime-contract'
 import { events } from '../../services/events'
 import { rpc } from '../../services/rpc'
+import type { XbxEngineStatsDto } from '../../shared/rpc/xbxengine'
 
 function toRuntimeReconnectReason(reason: StreamRuntimeReconnectReason) {
   if (reason === 'ice-failed') {
@@ -141,6 +142,7 @@ export function createXbxEngineRuntime(options: {
     },
     snapshotStats: async (): Promise<StreamStats> => {
       const snapshot = await rpc.xbxEngine.snapshotStats()
+      const streamLifecyclePhase = resolveRuntimeLifecyclePhase(snapshot)
       return {
         resolution: snapshot.resolution,
         rtt: snapshot.rtt,
@@ -148,7 +150,8 @@ export function createXbxEngineRuntime(options: {
         remoteProfileBaseline: snapshot.remote_profile_baseline,
         remoteProfileDynamic: snapshot.remote_profile_dynamic,
         remoteProfileEffectiveLabel: snapshot.remote_profile_effective_label,
-        sessionPhase: snapshot.session_phase,
+        streamLifecyclePhase,
+        sessionPhase: streamLifecyclePhase,
         transportStrategyProfile: snapshot.transport_strategy_profile,
         recoveryStrategyProfile: snapshot.recovery_strategy_profile,
         recoveryDiagnosis: snapshot.recovery_diagnosis,
@@ -246,4 +249,12 @@ export function createXbxEngineRuntime(options: {
       }
     },
   }
+}
+
+function resolveRuntimeLifecyclePhase(snapshot: XbxEngineStatsDto): string | undefined {
+  return snapshot.runtime_lifecycle_phase
+    ?? snapshot.unified_lifecycle_phase
+    ?? snapshot.session_lifecycle_phase
+    ?? snapshot.stream_lifecycle_phase
+    ?? snapshot.session_phase
 }

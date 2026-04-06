@@ -290,11 +290,16 @@
           "startupLowQuality": "启动低画质"
         },
         "sessionPhase": {
+          "startup": "启动中",
           "connecting": "连接中",
           "handshaking": "握手",
           "priming": "首帧准备",
           "steady": "稳态",
-          "recovering": "恢复中"
+          "recovering": "恢复中",
+          "ramp-up": "恢复爬坡",
+          "degraded": "降级运行",
+          "failed": "失败",
+          "closed": "已关闭"
         },
         "ownerState": {
           "seeking-anchor": "寻找锚点",

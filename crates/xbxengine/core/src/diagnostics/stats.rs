@@ -409,6 +409,12 @@ pub fn build_xbxengine_stats(
         video_owner,
         now_ms,
     );
+    let lifecycle_phase = classify_unified_lifecycle(
+        runtime_stats,
+        recovery_runtime_state.as_ref(),
+        video_owner,
+        now_ms,
+    );
     let runtime_remote_profile = resolve_runtime_remote_profile_strings(runtime_stats, now_ms);
     let remote_profile_baseline = recovery_runtime_state
         .as_ref()
@@ -472,6 +478,7 @@ pub fn build_xbxengine_stats(
         remote_profile_dynamic,
         remote_profile_effective_label,
         session_phase: display_phase,
+        stream_lifecycle_phase: lifecycle_phase,
         transport_strategy_profile,
         recovery_strategy_profile,
         recovery_diagnosis,
@@ -1315,6 +1322,55 @@ fn build_rtx_reinject_note(runtime_stats: Option<&XbxEngineMediaRuntimeStats>) -
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum UnifiedLifecycleState {
+    Startup,
+    Recovering,
+    RampUp,
+    Steady,
+    Degraded,
+    Failed,
+    Closed,
+}
+
+impl UnifiedLifecycleState {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Startup => "startup",
+            Self::Recovering => "recovering",
+            Self::RampUp => "ramp-up",
+            Self::Steady => "steady",
+            Self::Degraded => "degraded",
+            Self::Failed => "failed",
+            Self::Closed => "closed",
+        }
+    }
+
+    fn from_runtime_value(value: &str) -> Option<Self> {
+        match value {
+            "startup" | "connecting" | "handshaking" | "priming" => Some(Self::Startup),
+            "recovering" => Some(Self::Recovering),
+            "ramp-up" => Some(Self::RampUp),
+            "steady" => Some(Self::Steady),
+            "degraded" | "degraded-serving" => Some(Self::Degraded),
+            "failed" | "failed-terminal" => Some(Self::Failed),
+            "closed" => Some(Self::Closed),
+            _ => None,
+        }
+    }
+}
+
+fn classify_unified_lifecycle(
+    runtime_stats: Option<&XbxEngineMediaRuntimeStats>,
+    runtime_state: Option<&RecoveryRuntimeState>,
+    owner: Option<&VideoOwnerContract>,
+    now_ms: f64,
+) -> Option<String> {
+    let stats = runtime_stats?;
+    let phase = compute_unified_lifecycle(stats, runtime_state, owner, now_ms);
+    Some(phase.as_str().to_string())
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum DisplaySessionPhase {
     Connecting,
     Handshaking,
@@ -1386,6 +1442,84 @@ fn compute_display_phase(
         return DisplaySessionPhase::Priming;
     }
     DisplaySessionPhase::Steady
+}
+
+fn compute_unified_lifecycle(
+    stats: &XbxEngineMediaRuntimeStats,
+    runtime_state: Option<&RecoveryRuntimeState>,
+    owner: Option<&VideoOwnerContract>,
+    now_ms: f64,
+) -> UnifiedLifecycleState {
+    if let Some(phase) = stats
+        .session_phase
+        .as_deref()
+        .and_then(UnifiedLifecycleState::from_runtime_value)
+    {
+        if phase != UnifiedLifecycleState::Steady {
+            return phase;
+        }
+    }
+    let transport_state = format!("{:?}", stats.transport_state);
+    if transport_state == "Closed" {
+        return UnifiedLifecycleState::Closed;
+    }
+    if transport_state == "Failed"
+        || stats
+            .latest_recovery_decision_ledger
+            .as_ref()
+            .is_some_and(|ledger| ledger.state_after == "failed-terminal")
+    {
+        return UnifiedLifecycleState::Failed;
+    }
+    if let Some(owner) = owner {
+        return match owner.state.as_str() {
+            "degraded-serving" => UnifiedLifecycleState::Degraded,
+            "stable-serving" => {
+                if stats.transport_recovery_episode_active {
+                    UnifiedLifecycleState::RampUp
+                } else {
+                    UnifiedLifecycleState::Steady
+                }
+            }
+            "rebuilding-supply" | "supply-starved" => UnifiedLifecycleState::Recovering,
+            "seeking-anchor" | "priming" => UnifiedLifecycleState::Startup,
+            _ => UnifiedLifecycleState::Steady,
+        };
+    }
+    if transport_state != "Connected" {
+        return UnifiedLifecycleState::Startup;
+    }
+    if stats.message_handshake_acked_at_ms.is_none() {
+        return UnifiedLifecycleState::Startup;
+    }
+    if !has_visible_video_output(stats) || stats.control_ready_at_ms.is_none() {
+        return UnifiedLifecycleState::Startup;
+    }
+    if let Some(phase) = stats.session_phase.as_deref() {
+        if phase == "recovering" {
+            return UnifiedLifecycleState::Recovering;
+        }
+        if phase == "ramp-up" {
+            return UnifiedLifecycleState::RampUp;
+        }
+    }
+    let fresh_output = has_recent_video_output(stats, now_ms);
+    if !fresh_output
+        && runtime_state
+            .map(|state| {
+                state.phase == crate::transport::rtc::recovery::startup::SessionPhase::Recovering
+            })
+            .unwrap_or_else(|| stats.session_phase.as_deref() == Some("recovering"))
+    {
+        return UnifiedLifecycleState::Recovering;
+    }
+    if runtime_state
+        .map(|state| state.phase == crate::transport::rtc::recovery::startup::SessionPhase::Startup)
+        .unwrap_or(false)
+    {
+        return UnifiedLifecycleState::Startup;
+    }
+    UnifiedLifecycleState::Steady
 }
 
 fn has_visible_video_output(stats: &XbxEngineMediaRuntimeStats) -> bool {

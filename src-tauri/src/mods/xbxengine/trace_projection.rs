@@ -65,6 +65,7 @@ pub(super) struct RuntimeTraceObservationState {
     video_owner_source: Option<String>,
     video_owner_observed_at_ms: Option<f64>,
     video_owner_observed_at_bucket: Option<u64>,
+    unified_lifecycle: Option<String>,
     video_health: Option<String>,
     stall_kind: Option<String>,
     host_present_enqueue_count_total: Option<u64>,
@@ -107,6 +108,7 @@ pub(super) fn should_skip_trace_tick(session_id: Option<&str>, stats: &XbxEngine
 /// 统一观测快照：把 UI 与离线分析真正关心的状态压成单条 snapshot，避免继续手工拼
 /// `statsSnapshot + directGamingState + hostPresentState`。
 pub(super) fn build_observability_snapshot(stats: &XbxEngineStatsDto) -> serde_json::Value {
+    let unified_lifecycle = resolve_unified_lifecycle(stats);
     json!({
         "resolution": stats.resolution,
         "fps": stats.fps,
@@ -137,6 +139,8 @@ pub(super) fn build_observability_snapshot(stats: &XbxEngineStatsDto) -> serde_j
             "videoRembBps": stats.video_remb_bps,
         },
         "recovery": {
+            "lifecycle": unified_lifecycle,
+            "streamLifecyclePhase": unified_lifecycle,
             "sessionPhase": stats.session_phase,
             "strategyProfile": stats.recovery_strategy_profile,
             "diagnosis": stats.recovery_diagnosis,
@@ -278,6 +282,38 @@ pub(super) fn build_observability_snapshot(stats: &XbxEngineStatsDto) -> serde_j
             "twcc": stats.latest_video_twcc_observation,
         },
     })
+}
+
+fn resolve_unified_lifecycle(stats: &XbxEngineStatsDto) -> &'static str {
+    if let Some(phase) = stats.stream_lifecycle_phase.as_deref() {
+        match phase {
+            "startup" => return "startup",
+            "recovering" => return "recovering",
+            "ramp-up" => return "ramp-up",
+            "steady" => return "steady",
+            "degraded" => return "degraded",
+            "failed" => return "failed",
+            "closed" => return "closed",
+            _ => {}
+        }
+    }
+    if let Some(phase) = stats.session_phase.as_deref() {
+        match phase {
+            "connecting" | "handshaking" | "priming" | "startup" => return "startup",
+            "recovering" => return "recovering",
+            "ramp-up" => return "ramp-up",
+            "steady" => return "steady",
+            "degraded" => return "degraded",
+            "failed" => return "failed",
+            "closed" => return "closed",
+            _ => {}
+        }
+    }
+    match stats.transport_state.as_deref() {
+        Some("Closed") => "closed",
+        Some("Failed") => "failed",
+        _ => "startup",
+    }
 }
 
 fn latest_frame_budget_snapshot(stats: &XbxEngineStatsDto) -> Option<serde_json::Value> {
@@ -947,6 +983,7 @@ pub(super) fn record_runtime_trace_observations(
         || observation_state.video_owner_source != stats.video_owner_source
         || observation_state.video_owner_observed_at_bucket
             != current_video_owner_observed_at_bucket
+        || observation_state.unified_lifecycle.as_deref() != Some(resolve_unified_lifecycle(stats))
         || observation_state.video_health != stats.video_health
         || observation_state.stall_kind != stats.stall_kind
     {
@@ -967,6 +1004,7 @@ pub(super) fn record_runtime_trace_observations(
         observation_state.video_owner_source = stats.video_owner_source.clone();
         observation_state.video_owner_observed_at_ms = stats.video_owner_observed_at_ms;
         observation_state.video_owner_observed_at_bucket = current_video_owner_observed_at_bucket;
+        observation_state.unified_lifecycle = Some(resolve_unified_lifecycle(stats).to_string());
         observation_state.video_health = stats.video_health.clone();
         observation_state.stall_kind = stats.stall_kind.clone();
         runtime_trace.record_state(
@@ -974,6 +1012,8 @@ pub(super) fn record_runtime_trace_observations(
             "directGamingState",
             session_id,
             json!({
+                "lifecycle": resolve_unified_lifecycle(stats),
+                "streamLifecyclePhase": resolve_unified_lifecycle(stats),
                 "sessionPhase": stats.session_phase,
                 "remoteProfileBaseline": stats.remote_profile_baseline,
                 "remoteProfileDynamic": stats.remote_profile_dynamic,

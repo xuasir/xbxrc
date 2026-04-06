@@ -128,6 +128,7 @@ pub(crate) struct VideoSchedulingOwner {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum RecoveryCompletionEvidence {
     NotReady,
+    ServingReady,
     Ready,
 }
 
@@ -366,6 +367,8 @@ impl VideoSchedulingOwner {
                     VideoSchedulingOwnerState::RebuildingSupply
                 } else if completion_evidence == RecoveryCompletionEvidence::Ready {
                     VideoSchedulingOwnerState::StableServing
+                } else if completion_evidence == RecoveryCompletionEvidence::ServingReady {
+                    VideoSchedulingOwnerState::DegradedServing
                 } else {
                     VideoSchedulingOwnerState::RebuildingSupply
                 }
@@ -394,6 +397,8 @@ impl VideoSchedulingOwner {
                     VideoSchedulingOwnerState::RebuildingSupply
                 } else if completion_evidence == RecoveryCompletionEvidence::Ready {
                     VideoSchedulingOwnerState::StableServing
+                } else if completion_evidence == RecoveryCompletionEvidence::ServingReady {
+                    VideoSchedulingOwnerState::DegradedServing
                 } else if absorb_soft_display_supply_critical {
                     VideoSchedulingOwnerState::DegradedServing
                 } else if Self::should_absorb_steady_jitter(
@@ -413,6 +418,8 @@ impl VideoSchedulingOwner {
                     VideoSchedulingOwnerState::RebuildingSupply
                 } else if completion_evidence == RecoveryCompletionEvidence::Ready {
                     VideoSchedulingOwnerState::StableServing
+                } else if completion_evidence == RecoveryCompletionEvidence::ServingReady {
+                    VideoSchedulingOwnerState::DegradedServing
                 } else {
                     VideoSchedulingOwnerState::SupplyStarved
                 }
@@ -467,6 +474,17 @@ impl VideoSchedulingOwner {
             return RecoveryCompletionEvidence::Ready;
         }
         if has_anchor_issue || !matches!(supply_state, DisplaySupplyState::Healthy) {
+            if matches!(
+                current,
+                VideoSchedulingOwnerState::RebuildingSupply
+                    | VideoSchedulingOwnerState::SupplyStarved
+            ) && Self::can_restore_serving_after_clean_anchor(
+                input,
+                has_clean_anchor_evidence,
+                chain_healthy,
+            ) {
+                return RecoveryCompletionEvidence::ServingReady;
+            }
             return RecoveryCompletionEvidence::NotReady;
         }
         let present_fresh = input
@@ -487,9 +505,31 @@ impl VideoSchedulingOwner {
             );
         // 恢复到 stable-serving 需要比“可播放”更稳：单点 freshness 不足以说明供给已真正降压。
         if (!present_fresh || !decode_fresh) && !can_bridge_present_feedback_gap {
+            if matches!(
+                current,
+                VideoSchedulingOwnerState::RebuildingSupply
+                    | VideoSchedulingOwnerState::SupplyStarved
+            ) && Self::can_restore_serving_after_clean_anchor(
+                input,
+                has_clean_anchor_evidence,
+                chain_healthy,
+            ) {
+                return RecoveryCompletionEvidence::ServingReady;
+            }
             return RecoveryCompletionEvidence::NotReady;
         }
         if !Self::supply_pressure_is_settled(input, has_clean_anchor_evidence, chain_healthy) {
+            if matches!(
+                current,
+                VideoSchedulingOwnerState::RebuildingSupply
+                    | VideoSchedulingOwnerState::SupplyStarved
+            ) && Self::can_restore_serving_after_clean_anchor(
+                input,
+                has_clean_anchor_evidence,
+                chain_healthy,
+            ) {
+                return RecoveryCompletionEvidence::ServingReady;
+            }
             return RecoveryCompletionEvidence::NotReady;
         }
         // audioOnly / 无视频字节属于“供给未恢复”，不能提前回到 stable-serving。
@@ -607,6 +647,52 @@ impl VideoSchedulingOwner {
         stable_timeline_source && decode_fresh && track_attached && track_has_video_bytes
     }
 
+    fn can_restore_serving_after_clean_anchor(
+        input: &VideoSchedulingOwnerInput,
+        has_clean_anchor_evidence: bool,
+        chain_healthy: bool,
+    ) -> bool {
+        if input.connection_state != ConnectionLifecycleStateFact::Connected {
+            return false;
+        }
+        if !has_clean_anchor_evidence || !chain_healthy {
+            return false;
+        }
+        if input.demand.video_renderer_stalled {
+            return false;
+        }
+        let track_audio_only = matches!(input.latest_track_state.as_deref(), Some("audioOnly"));
+        let track_attached = matches!(
+            input.latest_track_state.as_deref(),
+            Some("remoteTrackAttached")
+        );
+        let track_has_video_bytes = input
+            .latest_track_video_bytes_total
+            .is_some_and(|bytes| bytes > 0);
+        if track_audio_only || !track_attached || !track_has_video_bytes {
+            return false;
+        }
+        // 统一仲裁下，clean anchor 一旦成立，owner 应尽快退出 recovering，
+        // 让 steady/degraded 分支继续吸收供给抖动，而不是继续卡在 rebuilding-supply。
+        let decode_serviceable = input
+            .demand
+            .decode_age_ms
+            .is_some_and(|age| age <= input.display_supply_thresholds.critical_decode_age_ms);
+        if !decode_serviceable {
+            return false;
+        }
+        input
+            .demand
+            .present_age_ms
+            .is_some_and(|age| age <= input.display_supply_thresholds.critical_present_age_ms)
+            || Self::can_close_recovery_with_transient_present_feedback_gap(
+                input,
+                DisplaySupplyState::Healthy,
+                has_clean_anchor_evidence,
+                chain_healthy,
+            )
+    }
+
     fn has_current_clean_anchor_evidence(input: &VideoSchedulingOwnerInput) -> bool {
         let explicit_clean_anchor = input.clean_anchor_epoch.is_some_and(|epoch| {
             Self::clean_anchor_epoch_is_usable(
@@ -658,7 +744,7 @@ impl VideoSchedulingOwner {
                         && candidate.source_event == "chain-clean-keyframe-submitted"
                 });
         if current_state != VideoSchedulingOwnerState::RebuildingSupply
-            || next_state == VideoSchedulingOwnerState::StableServing
+            || next_state != VideoSchedulingOwnerState::RebuildingSupply
             || !has_visible_clean_anchor_fact
         {
             return None;

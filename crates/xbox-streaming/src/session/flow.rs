@@ -1608,7 +1608,10 @@ fn decide_startup_progress_action(
     last_recovery_signal_at_ms: &mut u64,
     closed_recovery_grace_ms: u64,
 ) -> StartupProgressAction {
-    if progress.phase == SessionPhase::SessionReady {
+    if matches!(
+        progress.phase,
+        SessionPhase::RuntimeStarting | SessionPhase::SessionReady
+    ) {
         return StartupProgressAction::Ready;
     }
 

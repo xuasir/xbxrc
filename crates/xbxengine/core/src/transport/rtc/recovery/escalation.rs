@@ -7,6 +7,8 @@ pub enum RecoveryAction {
     WaitForBurst,
     WaitForDecoderResetBurst,
     CooldownSuppressed,
+    CoalescedKeyframeInFlight,
+    CoalescedDecoderResetInFlight,
     StartupGraceSuppressed,
     RequestKeyframe,
     RequestDecoderReset,
@@ -21,6 +23,8 @@ impl RecoveryAction {
             Self::WaitForBurst => "waitForBurst",
             Self::WaitForDecoderResetBurst => "waitForDecoderResetBurst",
             Self::CooldownSuppressed => "cooldownSuppressed",
+            Self::CoalescedKeyframeInFlight => "coalesced:keyframeInFlight",
+            Self::CoalescedDecoderResetInFlight => "coalesced:decoderResetInFlight",
             Self::StartupGraceSuppressed => "startupGraceSuppressed",
             Self::RequestKeyframe => "requestKeyframe",
             Self::RequestDecoderReset => "requestDecoderReset",
@@ -264,6 +268,24 @@ impl VideoEscalationController {
         self.clear_keyframe_epoch();
     }
 
+    pub fn acknowledge_stable_recovery(&mut self) {
+        self.pending_keyframe_signals = 0;
+        self.pending_decoder_reset_signals = 0;
+        self.reconnect_candidate_signals = 0;
+        self.last_keyframe_request_at = None;
+        self.last_decoder_reset_at = None;
+        self.last_severe_deadline_at = None;
+        self.last_keyframe_signal_at = None;
+        self.last_decoder_reset_signal_at = None;
+        self.last_keyframe_reason_class = None;
+        self.last_decoder_reset_reason_class = None;
+        self.wait_keyframe_started_at = None;
+        self.transport_await_recovery_started_at = None;
+        self.transport_deadline_window_started_at = None;
+        self.transport_deadline_window_count = 0;
+        self.clear_keyframe_epoch();
+    }
+
     pub fn begin_recovery_epoch(&mut self, recovery_epoch: u64) {
         if self.recovery_epoch == recovery_epoch {
             return;
@@ -350,6 +372,8 @@ impl VideoEscalationController {
             RecoveryAction::WaitForBurst
             | RecoveryAction::WaitForDecoderResetBurst
             | RecoveryAction::CooldownSuppressed
+            | RecoveryAction::CoalescedKeyframeInFlight
+            | RecoveryAction::CoalescedDecoderResetInFlight
             | RecoveryAction::StartupGraceSuppressed
             | RecoveryAction::StartupLowQualityRetry => RecoveryActionContract {
                 owner: None,
@@ -381,6 +405,8 @@ impl VideoEscalationController {
             RecoveryAction::WaitForBurst
             | RecoveryAction::WaitForDecoderResetBurst
             | RecoveryAction::CooldownSuppressed
+            | RecoveryAction::CoalescedKeyframeInFlight
+            | RecoveryAction::CoalescedDecoderResetInFlight
             | RecoveryAction::StartupGraceSuppressed
             | RecoveryAction::StartupLowQualityRetry => {}
         }
@@ -583,10 +609,10 @@ impl VideoEscalationController {
                             if self.keyframe_budget_used < self.keyframe_budget_limit {
                                 RecoveryAction::RequestKeyframe
                             } else {
-                                RecoveryAction::CooldownSuppressed
+                                self.coalesced_keyframe_in_flight()
                             }
                         } else {
-                            RecoveryAction::CooldownSuppressed
+                            self.coalesced_keyframe_in_flight()
                         }
                     } else if repeated_thin_stream_after_keyframe
                         && self
@@ -605,6 +631,8 @@ impl VideoEscalationController {
                         } else {
                             RecoveryAction::CooldownSuppressed
                         }
+                    } else if repeated_thin_stream_after_keyframe {
+                        self.coalesced_decoder_reset_in_flight()
                     } else if repeated_idle_timeout_after_keyframe
                         && self
                             .last_decoder_reset_at
@@ -622,6 +650,8 @@ impl VideoEscalationController {
                         } else {
                             RecoveryAction::CooldownSuppressed
                         }
+                    } else if repeated_idle_timeout_after_keyframe {
+                        self.coalesced_decoder_reset_in_flight()
                     } else if repeated_sample_loss_after_keyframe
                         && self
                             .last_decoder_reset_at
@@ -639,6 +669,8 @@ impl VideoEscalationController {
                         } else {
                             RecoveryAction::CooldownSuppressed
                         }
+                    } else if repeated_sample_loss_after_keyframe {
+                        self.coalesced_decoder_reset_in_flight()
                     } else if persistent_wait_keyframe
                         && self
                             .last_decoder_reset_at
@@ -656,6 +688,8 @@ impl VideoEscalationController {
                         } else {
                             RecoveryAction::CooldownSuppressed
                         }
+                    } else if persistent_wait_keyframe {
+                        self.coalesced_decoder_reset_in_flight()
                     } else if hard_stuck_transport_await_recovery_keyframe
                         && (self.decoder_reset_budget_used >= self.decoder_reset_budget_limit
                             || self
@@ -685,6 +719,8 @@ impl VideoEscalationController {
                         } else {
                             RecoveryAction::CooldownSuppressed
                         }
+                    } else if persistent_transport_await_recovery_keyframe {
+                        self.coalesced_decoder_reset_in_flight()
                     } else if self.pending_keyframe_signals < self.keyframe_burst_threshold {
                         RecoveryAction::WaitForBurst
                     } else if self.try_release_keyframe_epoch_for_same_reason(reason_class, now) {
@@ -716,7 +752,7 @@ impl VideoEscalationController {
                             RecoveryAction::CooldownSuppressed
                         }
                     } else {
-                        RecoveryAction::CooldownSuppressed
+                        self.coalesced_keyframe_in_flight()
                     }
                 }
             }
@@ -767,7 +803,7 @@ impl VideoEscalationController {
                         RecoveryAction::CooldownSuppressed
                     }
                 } else {
-                    RecoveryAction::CooldownSuppressed
+                    self.coalesced_decoder_reset_in_flight()
                 }
             }
             VideoEscalationReason::TransportSevereDeadline => {
@@ -890,6 +926,14 @@ impl VideoEscalationController {
         self.keyframe_epoch_active = false;
         self.keyframe_epoch_started_at = None;
         self.keyframe_epoch_reason_class = None;
+    }
+
+    fn coalesced_keyframe_in_flight(&self) -> RecoveryAction {
+        RecoveryAction::CoalescedKeyframeInFlight
+    }
+
+    fn coalesced_decoder_reset_in_flight(&self) -> RecoveryAction {
+        RecoveryAction::CoalescedDecoderResetInFlight
     }
 }
 

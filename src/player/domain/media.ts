@@ -16,6 +16,7 @@ export interface StreamStats {
   resolution: string
   rtt: string
   fps: number
+  streamLifecyclePhase?: string
   remoteProfileBaseline?: string
   remoteProfileDynamic?: string
   remoteProfileEffectiveLabel?: string

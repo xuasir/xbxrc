@@ -23,6 +23,10 @@ import { events } from '../services/events'
 import { rpc } from '../services/rpc'
 import { buildStreamDiagnosticsSnapshot } from './diagnostics'
 import { bindStreamEnhancements, resolveStreamEnhancementMounts } from './enhancements'
+import {
+  NO_FRAME_RECENT_ACTIVITY_MS,
+  NO_FRAME_WARNING_DELAY_MS,
+} from './no-frame-warning'
 import { useStreamRuntimeHost } from './runtime/runtime-host'
 import {
   buildSessionHealthSnapshot,
@@ -57,8 +61,6 @@ const RUNTIME_PHASE_STATUS_KEYS: Record<StreamRuntimePhase, string> = {
   reconnecting: 'streamPage.status.reconnecting',
 }
 
-const NO_FRAME_WARNING_DELAY_MS = 20_000
-const NO_FRAME_RECENT_ACTIVITY_MS = 20_000
 const STREAM_UI_HOST_RESET_EVENT = 'stream-ui-host-reset'
 
 type BrowserTimeout = number

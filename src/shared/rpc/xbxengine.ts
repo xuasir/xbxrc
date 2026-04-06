@@ -73,6 +73,12 @@ export interface XbxEngineStatsDto {
   remote_profile_baseline?: string
   remote_profile_dynamic?: string
   remote_profile_effective_label?: string
+  stream_lifecycle_phase?: string
+  /** 新统一生命周期语义（Rust 主权）；前端优先消费该字段。 */
+  runtime_lifecycle_phase?: string
+  /** 兼容命名：部分版本可能使用 unified/session 前缀。 */
+  unified_lifecycle_phase?: string
+  session_lifecycle_phase?: string
   session_phase?: string
   transport_strategy_profile?: string
   recovery_strategy_profile?: string

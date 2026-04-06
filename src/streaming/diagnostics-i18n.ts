@@ -39,7 +39,7 @@ export function translateDiagnosticsStallKind(
   return translateEnum(te, t, 'stallKind', raw, 'streamPage.diagnostics.values.none')
 }
 
-/** sessionPhase：connecting / handshaking / priming / steady / recovering */
+/** sessionPhase / streamLifecyclePhase：startup / ramp-up / degraded 等统一语义，旧版本回退 connecting / priming 等 */
 export function translateDiagnosticsSessionPhase(
   te: DiagnosticsExists,
   t: DiagnosticsTranslate,

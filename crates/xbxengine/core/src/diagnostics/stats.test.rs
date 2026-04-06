@@ -92,9 +92,76 @@ fn runtime_summary_uses_remote_profile_input_and_owner_state_as_main_view() {
     };
 
     let dto = build_xbxengine_stats(&test_snapshot(), Some(&stats));
+    let summary = dto.runtime_summary.expect("runtime summary");
+    assert!(summary
+        .starts_with("cloudGaming+cloudHighRtt/handshaking/steady/rebuilding-supply/recovering"));
+}
+
+#[test]
+fn stream_lifecycle_phase_projects_unified_semantics() {
+    let startup = XbxEngineMediaRuntimeStats {
+        transport_state: XbxEngineTransportStateDto::Connecting,
+        ..XbxEngineMediaRuntimeStats::default()
+    };
+    let steady = XbxEngineMediaRuntimeStats {
+        transport_state: XbxEngineTransportStateDto::Connected,
+        message_handshake_acked_at_ms: Some(10.0),
+        control_ready_at_ms: Some(10.0),
+        latest_video_host_present_time_ms: Some(10.0),
+        video_owner_state: Some("stable-serving".to_string()),
+        ..XbxEngineMediaRuntimeStats::default()
+    };
+    let degraded = XbxEngineMediaRuntimeStats {
+        transport_state: XbxEngineTransportStateDto::Connected,
+        message_handshake_acked_at_ms: Some(10.0),
+        control_ready_at_ms: Some(10.0),
+        latest_video_host_present_time_ms: Some(10.0),
+        video_owner_state: Some("degraded-serving".to_string()),
+        ..XbxEngineMediaRuntimeStats::default()
+    };
+    let failed = XbxEngineMediaRuntimeStats {
+        transport_state: XbxEngineTransportStateDto::Failed,
+        ..XbxEngineMediaRuntimeStats::default()
+    };
+    let closed = XbxEngineMediaRuntimeStats {
+        transport_state: XbxEngineTransportStateDto::Closed,
+        ..XbxEngineMediaRuntimeStats::default()
+    };
+    let recovering = XbxEngineMediaRuntimeStats {
+        session_phase: Some("recovering".to_string()),
+        ..XbxEngineMediaRuntimeStats::default()
+    };
+    let ramp_up = XbxEngineMediaRuntimeStats {
+        session_phase: Some("ramp-up".to_string()),
+        ..XbxEngineMediaRuntimeStats::default()
+    };
+
+    let startup_dto = build_xbxengine_stats(&test_snapshot(), Some(&startup));
+    let steady_dto = build_xbxengine_stats(&test_snapshot(), Some(&steady));
+    let degraded_dto = build_xbxengine_stats(&test_snapshot(), Some(&degraded));
+    let failed_dto = build_xbxengine_stats(&test_snapshot(), Some(&failed));
+    let closed_dto = build_xbxengine_stats(&test_snapshot(), Some(&closed));
+    let recovering_dto = build_xbxengine_stats(&test_snapshot(), Some(&recovering));
+    let ramp_up_dto = build_xbxengine_stats(&test_snapshot(), Some(&ramp_up));
+
     assert_eq!(
-        dto.runtime_summary.as_deref(),
-        Some("cloudGaming+cloudHighRtt/handshaking/steady/rebuilding-supply/recovering")
+        startup_dto.stream_lifecycle_phase.as_deref(),
+        Some("startup")
+    );
+    assert_eq!(steady_dto.stream_lifecycle_phase.as_deref(), Some("steady"));
+    assert_eq!(
+        degraded_dto.stream_lifecycle_phase.as_deref(),
+        Some("degraded")
+    );
+    assert_eq!(failed_dto.stream_lifecycle_phase.as_deref(), Some("failed"));
+    assert_eq!(closed_dto.stream_lifecycle_phase.as_deref(), Some("closed"));
+    assert_eq!(
+        recovering_dto.stream_lifecycle_phase.as_deref(),
+        Some("recovering")
+    );
+    assert_eq!(
+        ramp_up_dto.stream_lifecycle_phase.as_deref(),
+        Some("ramp-up")
     );
 }
 
@@ -325,6 +392,7 @@ fn build_stats_uses_handshaking_phase_before_handshake_ack() {
     let dto = build_xbxengine_stats(&test_snapshot(), Some(&stats));
 
     assert_eq!(dto.session_phase.as_deref(), Some("handshaking"));
+    assert_eq!(dto.stream_lifecycle_phase.as_deref(), Some("startup"));
     assert_eq!(dto.video_health, None);
     assert_eq!(dto.primary_issue_chain, None);
 }
@@ -345,6 +413,7 @@ fn build_stats_uses_priming_phase_before_first_present() {
     let dto = build_xbxengine_stats(&test_snapshot(), Some(&stats));
 
     assert_eq!(dto.session_phase.as_deref(), Some("priming"));
+    assert_eq!(dto.stream_lifecycle_phase.as_deref(), Some("startup"));
     assert_eq!(dto.video_health, None);
     assert_eq!(dto.primary_issue_chain, None);
 }
@@ -397,10 +466,72 @@ fn build_stats_only_turns_healthy_after_first_present() {
     let dto = build_xbxengine_stats(&test_snapshot(), Some(&stats));
 
     assert_eq!(dto.session_phase.as_deref(), Some("steady"));
+    assert_eq!(dto.stream_lifecycle_phase.as_deref(), Some("steady"));
     assert_eq!(dto.video_health.as_deref(), Some("healthy"));
     assert_eq!(dto.recovery_owner_state.as_deref(), Some("stable-serving"));
     assert_eq!(dto.video_owner_source.as_deref(), Some("anchor"));
     assert_eq!(dto.primary_issue_chain.as_deref(), Some("steady:healthy"));
+}
+
+#[test]
+fn build_stats_projects_ramp_up_without_overwriting_legacy_session_phase() {
+    let now_ms = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as f64;
+    let stats = XbxEngineMediaRuntimeStats {
+        transport_state: XbxEngineTransportStateDto::Connected,
+        transport_policy_profile: Some("cloud".to_string()),
+        session_phase: Some("steady".to_string()),
+        transport_recovery_episode_active: true,
+        direct_gaming_bitrate_band: Some("steady".to_string()),
+        message_handshake_acked_at_ms: Some(now_ms - 100.0),
+        control_ready_at_ms: Some(now_ms - 90.0),
+        latest_video_host_present_time_ms: Some(now_ms - 20.0),
+        latest_video_decode_ok_time_ms: Some(now_ms - 20.0),
+        video_present_submit_count_total: 1,
+        video_present_fps: 60.0,
+        video_owner_state: Some("stable-serving".to_string()),
+        video_owner_reason: Some("steady".to_string()),
+        video_owner_source: Some("anchor".to_string()),
+        video_owner_observed_at_ms: Some(now_ms - 5.0),
+        ..XbxEngineMediaRuntimeStats::default()
+    };
+
+    let dto = build_xbxengine_stats(&test_snapshot(), Some(&stats));
+
+    assert_eq!(dto.session_phase.as_deref(), Some("steady"));
+    assert_eq!(dto.stream_lifecycle_phase.as_deref(), Some("ramp-up"));
+}
+
+#[test]
+fn build_stats_projects_degraded_without_overwriting_legacy_session_phase() {
+    let now_ms = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as f64;
+    let stats = XbxEngineMediaRuntimeStats {
+        transport_state: XbxEngineTransportStateDto::Connected,
+        transport_policy_profile: Some("cloud".to_string()),
+        session_phase: Some("steady".to_string()),
+        direct_gaming_bitrate_band: Some("steady".to_string()),
+        message_handshake_acked_at_ms: Some(now_ms - 100.0),
+        control_ready_at_ms: Some(now_ms - 90.0),
+        latest_video_host_present_time_ms: Some(now_ms - 20.0),
+        latest_video_decode_ok_time_ms: Some(now_ms - 20.0),
+        video_present_submit_count_total: 1,
+        video_present_fps: 60.0,
+        video_owner_state: Some("degraded-serving".to_string()),
+        video_owner_reason: Some("degradedSteady".to_string()),
+        video_owner_source: Some("anchor".to_string()),
+        video_owner_observed_at_ms: Some(now_ms - 5.0),
+        ..XbxEngineMediaRuntimeStats::default()
+    };
+
+    let dto = build_xbxengine_stats(&test_snapshot(), Some(&stats));
+
+    assert_eq!(dto.session_phase.as_deref(), Some("steady"));
+    assert_eq!(dto.stream_lifecycle_phase.as_deref(), Some("degraded"));
 }
 
 #[test]
@@ -430,6 +561,7 @@ fn build_stats_reports_recovering_after_first_present_when_output_turns_stale() 
     let dto = build_xbxengine_stats(&test_snapshot(), Some(&stats));
 
     assert_eq!(dto.session_phase.as_deref(), Some("recovering"));
+    assert_eq!(dto.stream_lifecycle_phase.as_deref(), Some("recovering"));
     assert_eq!(dto.video_health.as_deref(), Some("recovering"));
     assert_eq!(
         dto.primary_issue_chain.as_deref(),

@@ -47,9 +47,11 @@ export interface StreamPerformanceSnapshot {
   rtt?: string | number
   jit?: string | number
   fps?: string | number
+  streamLifecyclePhase?: string
   remoteProfileBaseline?: string
   remoteProfileDynamic?: string
   remoteProfileEffectiveLabel?: string
+  /** 统一生命周期语义优先（startup/recovering/ramp-up/steady/degraded...）；旧版本回退到 legacy sessionPhase。 */
   sessionPhase?: string
   transportStrategyProfile?: string
   recoveryStrategyProfile?: string
@@ -134,6 +136,7 @@ export interface StreamPerformanceSnapshot {
 
 export interface StreamSessionDiagnosticsSnapshot {
   isActive: boolean
+  streamLifecyclePhase?: string
   regionName?: string
   serverHost?: string
   turnSource: 'none' | 'custom' | 'fallback'

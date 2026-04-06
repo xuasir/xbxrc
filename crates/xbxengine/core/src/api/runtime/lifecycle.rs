@@ -710,6 +710,9 @@ where
             answer_sdp.len(),
             negotiation.local_candidates.len(),
         );
+        // 这里的 ready 只表示远端描述已生效、媒体表面已可绑定；
+        // transport 连通与首帧渲染仍由后续 stats/health 事实驱动。
+        self.record_media_ready(&negotiation);
         self.emit_phase(XbxEngineRuntimePhaseDto::Connecting);
         self.health.observed_transport_state = XbxEngineTransportStateDto::Connecting;
         self.emit_transport_state(XbxEngineTransportStateDto::Connecting);
@@ -730,7 +733,6 @@ where
         );
         self.snapshot.last_answer_sdp = Some(answer_sdp);
         self.snapshot.last_remote_candidates = remote_candidates;
-        self.record_media_ready(&negotiation);
         self.record_input_status(&negotiation.input_status);
         self.sync_runtime_activity_snapshot();
         Ok(())

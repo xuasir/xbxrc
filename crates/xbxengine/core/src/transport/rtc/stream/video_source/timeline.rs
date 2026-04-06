@@ -246,6 +246,13 @@ impl VideoTimelineState {
     }
 
     pub(super) fn on_clean_keyframe_submitted(&mut self) {
+        if self.has_unresolved_hard_gap_issue() {
+            self.reset_stable_recovery_gate();
+            if !matches!(self.chain_state, ChainState::Broken) {
+                self.chain_state = ChainState::Recovering;
+            }
+            return;
+        }
         self.clear_chain_debt();
         self.reset_stable_recovery_gate();
         self.chain_state = ChainState::Healthy;
@@ -878,6 +885,21 @@ impl VideoTimelineState {
                     FrameRecoveryDisposition::Repairing
                 )
             })
+    }
+
+    fn has_unresolved_hard_gap_issue(&self) -> bool {
+        if self.gaps.values().any(|entry| {
+            entry.severity == GapSeverity::Hard
+                && !matches!(entry.state, GapState::Resolved | GapState::Expired)
+        }) {
+            return true;
+        }
+        self.frame_recovery_ledger.values().any(|entry| {
+            matches!(
+                entry.frame_recovery_disposition,
+                FrameRecoveryDisposition::UnrecoverableReferenceChain
+            )
+        })
     }
 
     fn should_expired_gap_break_chain(

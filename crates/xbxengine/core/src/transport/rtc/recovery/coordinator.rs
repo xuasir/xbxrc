@@ -229,7 +229,11 @@ impl RecoveryCoordinator {
         // clean anchor 代表当前 recovery epoch 已经拿到明确健康证据；
         // lingering hard-fallback 计时不能跨过这类恢复成功信号继续累积。
         self.clear_transport_await_hard_fallback("cleanAnchorAcknowledged");
-        self.escalation_controller.reset_keyframe_epoch();
+    }
+
+    pub fn acknowledge_stable_recovery(&mut self) {
+        self.acknowledge_clean_anchor();
+        self.escalation_controller.acknowledge_stable_recovery();
     }
 
     fn on_reason_with_policy(
@@ -270,7 +274,7 @@ impl RecoveryCoordinator {
                 recovery_epoch,
                 observed_at_ms,
             )
-            && escalation_decision.action != RecoveryAction::CooldownSuppressed
+            && !Self::is_non_executing_recovery_action(escalation_decision.action)
         {
             escalation_decision = self
                 .escalation_controller
@@ -407,7 +411,10 @@ impl RecoveryCoordinator {
     ) -> Option<VideoEscalationDecision> {
         const TRANSPORT_AWAIT_CONNECTED_BAD_WINDOW_STAGE_MIN_MS: f64 = 120.0;
         if reason != VideoEscalationReason::TransportAwaitRecoveryKeyframe
-            || current_action != RecoveryAction::CooldownSuppressed
+            || !matches!(
+                current_action,
+                RecoveryAction::CooldownSuppressed | RecoveryAction::CoalescedKeyframeInFlight
+            )
         {
             return None;
         }
@@ -571,6 +578,7 @@ impl RecoveryCoordinator {
             // 与 session policy 的 `healthy_media_baseline` 对齐：时间线 healthy + clean anchor
             // 单独不足以证明端到端已恢复；否则会在 decode/呈现仍卡住时错误压制 PLI/decoder reset。
             Self::transport_await_objective_media_healthy(stats, now_ms)
+                && !Self::has_unresolved_transport_await_issue(stats)
                 && Self::has_recent_clean_anchor_evidence(
                     stats.video_anchor_clean_epoch,
                     stats.video_anchor_clean_observed_at_ms,
@@ -581,6 +589,41 @@ impl RecoveryCoordinator {
                 )
         })
         .unwrap_or(false)
+    }
+
+    fn has_unresolved_transport_await_issue(stats: &XbxEngineMediaRuntimeStats) -> bool {
+        const TRANSPORT_AWAIT_UNRESOLVED_REASONS: [&str; 3] = [
+            "awaitingRecoveryKeyframe",
+            "awaitRecoveryKeyframe",
+            "referenceChainUnrecoverable",
+        ];
+        let Some(timeline) = stats.latest_video_timeline_observation.as_ref() else {
+            return false;
+        };
+        if timeline
+            .chain
+            .reason
+            .as_deref()
+            .is_some_and(|reason| TRANSPORT_AWAIT_UNRESOLVED_REASONS.contains(&reason))
+        {
+            return true;
+        }
+        if timeline
+            .frame
+            .as_ref()
+            .and_then(|frame| frame.close_reason.as_deref())
+            .is_some_and(|reason| TRANSPORT_AWAIT_UNRESOLVED_REASONS.contains(&reason))
+        {
+            return true;
+        }
+        timeline.gap.as_ref().is_some_and(|gap| {
+            !matches!(gap.state.as_str(), "resolved" | "expired")
+                && timeline
+                    .chain
+                    .reason
+                    .as_deref()
+                    .is_some_and(|reason| TRANSPORT_AWAIT_UNRESOLVED_REASONS.contains(&reason))
+        })
     }
 
     /// transport-await 软回退判定用的客观媒体健康：与 `should_absorb_stale_transport_await_replay` 一致。
@@ -597,17 +640,16 @@ impl RecoveryCoordinator {
         if !chain_healthy {
             return false;
         }
-        let track_attached_with_video = stats
-            .latest_video_track_status
-            .as_ref()
-            .is_some_and(|track| {
-                track.state == "remoteTrackAttached" && track.video_bytes_total > 0
-            });
+        let track_attached_with_video =
+            stats
+                .latest_video_track_status
+                .as_ref()
+                .is_some_and(|track| {
+                    track.state == "remoteTrackAttached" && track.video_bytes_total > 0
+                });
         let pipeline_not_stalled = !stats.video_decoder_stalled.unwrap_or(false)
             && !stats.video_renderer_stalled.unwrap_or(false);
-        track_attached_with_video
-            && pipeline_not_stalled
-            && has_fresh_media_output(stats, now_ms)
+        track_attached_with_video && pipeline_not_stalled && has_fresh_media_output(stats, now_ms)
     }
 
     fn has_recent_clean_anchor_evidence(
@@ -831,6 +873,20 @@ impl RecoveryCoordinator {
         reason: &VideoEscalationReason,
     ) -> Option<VideoEscalationDecision> {
         resolve_persistent_stall_recovery(runtime_stats, reason)
+    }
+}
+
+impl RecoveryCoordinator {
+    fn is_non_executing_recovery_action(action: RecoveryAction) -> bool {
+        matches!(
+            action,
+            RecoveryAction::CooldownSuppressed
+                | RecoveryAction::CoalescedKeyframeInFlight
+                | RecoveryAction::CoalescedDecoderResetInFlight
+                | RecoveryAction::WaitForBurst
+                | RecoveryAction::WaitForDecoderResetBurst
+                | RecoveryAction::StartupGraceSuppressed
+        )
     }
 }
 

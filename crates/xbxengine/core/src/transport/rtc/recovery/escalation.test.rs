@@ -106,7 +106,7 @@ fn repeated_transport_deadline_failures_are_throttled_within_epoch() {
         controller
             .on_reason(VideoEscalationReason::TransportExpiredDeadline)
             .action,
-        RecoveryAction::CooldownSuppressed
+        RecoveryAction::CoalescedKeyframeInFlight
     );
     // keyframe_min_interval 在控制器内部有最小下限，需跨过窗口后才能再次发 keyframe。
     std::thread::sleep(Duration::from_millis(130));
@@ -114,14 +114,14 @@ fn repeated_transport_deadline_failures_are_throttled_within_epoch() {
         controller
             .on_reason(VideoEscalationReason::TransportExpiredDeadline)
             .action,
-        RecoveryAction::CooldownSuppressed
+        RecoveryAction::CoalescedKeyframeInFlight
     );
     std::thread::sleep(Duration::from_millis(130));
     assert_eq!(
         controller
             .on_reason(VideoEscalationReason::TransportExpiredDeadline)
             .action,
-        RecoveryAction::CooldownSuppressed
+        RecoveryAction::CoalescedKeyframeInFlight
     );
 }
 
@@ -147,7 +147,7 @@ fn transport_deadline_storm_within_same_window_does_not_reconnect() {
             controller
                 .on_reason(VideoEscalationReason::TransportExpiredDeadline)
                 .action,
-            RecoveryAction::CooldownSuppressed
+            RecoveryAction::CoalescedKeyframeInFlight
         );
     }
 }
@@ -270,7 +270,7 @@ fn persistent_wait_keyframe_escalates_to_decoder_reset() {
         controller
             .on_reason(VideoEscalationReason::WaitKeyframe)
             .action,
-        RecoveryAction::CooldownSuppressed
+        RecoveryAction::CoalescedKeyframeInFlight
     );
     std::thread::sleep(Duration::from_millis(210));
     assert_eq!(
@@ -397,21 +397,21 @@ fn await_recovery_keyframe_is_throttled_within_same_epoch() {
         controller
             .on_reason(VideoEscalationReason::TransportAwaitRecoveryKeyframe)
             .action,
-        RecoveryAction::CooldownSuppressed
+        RecoveryAction::CoalescedKeyframeInFlight
     );
     std::thread::sleep(Duration::from_millis(130));
     assert_eq!(
         controller
             .on_reason(VideoEscalationReason::TransportAwaitRecoveryKeyframe)
             .action,
-        RecoveryAction::CooldownSuppressed
+        RecoveryAction::CoalescedKeyframeInFlight
     );
     std::thread::sleep(Duration::from_millis(130));
     assert_eq!(
         controller
             .on_reason(VideoEscalationReason::TransportAwaitRecoveryKeyframe)
             .action,
-        RecoveryAction::CooldownSuppressed
+        RecoveryAction::CoalescedKeyframeInFlight
     );
 }
 
@@ -470,7 +470,7 @@ fn keyframe_epoch_resets_on_reason_change() {
         controller
             .on_reason(VideoEscalationReason::TransportAwaitRecoveryKeyframe)
             .action,
-        RecoveryAction::CooldownSuppressed
+        RecoveryAction::CoalescedKeyframeInFlight
     );
     std::thread::sleep(Duration::from_millis(200));
     assert_eq!(
@@ -502,7 +502,7 @@ fn keyframe_epoch_can_be_reset_explicitly_after_recovery() {
         controller
             .on_reason(VideoEscalationReason::TransportAwaitRecoveryKeyframe)
             .action,
-        RecoveryAction::CooldownSuppressed
+        RecoveryAction::CoalescedKeyframeInFlight
     );
     controller.reset_keyframe_epoch();
     std::thread::sleep(Duration::from_millis(220));
@@ -561,7 +561,7 @@ fn idle_timeout_is_throttled_within_window_and_releases_after_window() {
         controller
             .on_reason(VideoEscalationReason::AdapterIdleTimeout)
             .action,
-        RecoveryAction::CooldownSuppressed
+        RecoveryAction::CoalescedKeyframeInFlight
     );
     std::thread::sleep(Duration::from_millis(140));
     assert_eq!(
@@ -594,7 +594,7 @@ fn await_recovery_keyframe_is_throttled_within_window_and_releases_after_window(
         controller
             .on_reason(VideoEscalationReason::TransportAwaitRecoveryKeyframe)
             .action,
-        RecoveryAction::CooldownSuppressed
+        RecoveryAction::CoalescedKeyframeInFlight
     );
     std::thread::sleep(Duration::from_millis(140));
     assert_eq!(
@@ -626,14 +626,14 @@ fn cooldown_window_prevents_keyframe_storm() {
         controller
             .on_reason(VideoEscalationReason::TransportExpiredDeadline)
             .action,
-        RecoveryAction::CooldownSuppressed
+        RecoveryAction::CoalescedKeyframeInFlight
     );
     std::thread::sleep(Duration::from_millis(230));
     assert_eq!(
         controller
             .on_reason(VideoEscalationReason::TransportExpiredDeadline)
             .action,
-        RecoveryAction::CooldownSuppressed
+        RecoveryAction::CoalescedKeyframeInFlight
     );
 }
 
@@ -812,4 +812,16 @@ fn action_contract_defines_owner_budget_and_epoch_rules() {
     assert!(!suppressed.budget_consumed_on_proposal);
     assert!(suppressed.budget_kind.is_none());
     assert!(!suppressed.advances_recovery_epoch_on_success);
+
+    let keyframe_coalesced =
+        VideoEscalationController::action_contract(RecoveryAction::CoalescedKeyframeInFlight);
+    assert!(!keyframe_coalesced.budget_consumed_on_proposal);
+    assert!(keyframe_coalesced.budget_kind.is_none());
+    assert!(!keyframe_coalesced.advances_recovery_epoch_on_success);
+
+    let decoder_reset_coalesced =
+        VideoEscalationController::action_contract(RecoveryAction::CoalescedDecoderResetInFlight);
+    assert!(!decoder_reset_coalesced.budget_consumed_on_proposal);
+    assert!(decoder_reset_coalesced.budget_kind.is_none());
+    assert!(!decoder_reset_coalesced.advances_recovery_epoch_on_success);
 }

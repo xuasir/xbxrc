@@ -209,8 +209,29 @@ fn connected_soft_supply_spike_holds_in_degraded_serving_before_starved() {
         380.0,
         1,
     ));
-    assert_eq!(sustained.state, VideoSchedulingOwnerState::SupplyStarved);
-    let intent = sustained.recovery_intent.expect("supply intent");
+    assert_eq!(sustained.state, VideoSchedulingOwnerState::DegradedServing);
+    assert!(sustained.recovery_intent.is_none());
+
+    let starved = owner.evaluate(&input(
+        ConnectionLifecycleStateFact::Connected,
+        None,
+        SchedulingDemandSignal {
+            no_pending_pressure_level: Some("critical".to_string()),
+            no_pending_streak: Some(300),
+            present_age_ms: Some(1_800.0),
+            decode_age_ms: Some(20.0),
+            video_renderer_stalled: false,
+            ..SchedulingDemandSignal::default()
+        },
+        Some("healthy"),
+        Some("frame-complete-candidate"),
+        Some("remoteTrackAttached"),
+        Some(80_000),
+        520.0,
+        1,
+    ));
+    assert_eq!(starved.state, VideoSchedulingOwnerState::SupplyStarved);
+    let intent = starved.recovery_intent.expect("supply intent");
     assert_eq!(intent.reason_label, "displaySupplyCritical");
 }
 
@@ -1399,6 +1420,58 @@ fn clean_anchor_recovery_can_close_on_transient_present_feedback_gap() {
     let healed = owner.evaluate(&missing_present);
     assert_eq!(healed.state, VideoSchedulingOwnerState::StableServing);
     assert_eq!(healed.health, VideoHealthContract::Stable);
+}
+
+#[test]
+fn clean_anchor_recovery_can_exit_supply_starved_to_degraded_serving_before_full_supply_reset() {
+    let mut owner = VideoSchedulingOwner::new();
+    let _ = owner.evaluate(&input(
+        ConnectionLifecycleStateFact::Connected,
+        None,
+        SchedulingDemandSignal {
+            no_pending_pressure_level: Some("critical".to_string()),
+            no_pending_streak: Some(160),
+            present_age_ms: Some(1_100.0),
+            decode_age_ms: Some(620.0),
+            video_renderer_stalled: true,
+            ..SchedulingDemandSignal::default()
+        },
+        Some("healthy"),
+        Some("frame-complete-candidate"),
+        Some("remoteTrackAttached"),
+        Some(20_000),
+        1_500.0,
+        8,
+    ));
+
+    let mut recovering = input(
+        ConnectionLifecycleStateFact::Connected,
+        None,
+        SchedulingDemandSignal {
+            no_pending_pressure_level: Some("normal".to_string()),
+            no_pending_streak: Some(0),
+            present_age_ms: Some(18.0),
+            decode_age_ms: Some(12.0),
+            video_renderer_stalled: false,
+            present_submit_count_total: Some(10),
+            present_drop_count_total: Some(2),
+            ..SchedulingDemandSignal::default()
+        },
+        Some("healthy"),
+        Some("frame-observed"),
+        Some("remoteTrackAttached"),
+        Some(96_000),
+        1_540.0,
+        8,
+    );
+    recovering.clean_anchor_epoch = Some(8);
+    recovering.clean_anchor_observed_at_ms = Some(1_538.0);
+    recovering.clean_anchor_source_event = Some("chain-clean-keyframe-submitted".to_string());
+
+    let output = owner.evaluate(&recovering);
+    assert_eq!(output.state, VideoSchedulingOwnerState::DegradedServing);
+    assert_eq!(output.health, VideoHealthContract::Stable);
+    assert!(output.recovery_intent.is_none());
 }
 
 #[test]

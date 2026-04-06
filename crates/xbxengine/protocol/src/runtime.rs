@@ -445,6 +445,7 @@ pub struct XbxEngineStatsDto {
     pub resolution: String,
     pub rtt: String,
     pub fps: f64,
+    pub stream_lifecycle_phase: Option<String>,
     pub runtime_summary: Option<String>,
     pub primary_issue_chain: Option<String>,
     pub latest_decision_summary: Option<String>,

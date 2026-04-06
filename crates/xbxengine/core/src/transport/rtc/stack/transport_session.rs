@@ -21,6 +21,33 @@ use crate::XbxEngineRuntimeError;
 
 /// 控制面 decoder reset 最短间隔：短窗内多条决策会共用一次 RTC 请求，避免反复 advance recovery epoch。
 const DECODER_RESET_CONTROL_MIN_SPACING_MS: f64 = 600.0;
+/// 恢复命令族的 in-flight 观察窗口：用于识别同族合并与升级，而不是回落到泛化 cooldown。
+const RECOVERY_COMMAND_FAMILY_IN_FLIGHT_WINDOW_MS: f64 = 960.0;
+const RECOVERY_COMMAND_REASON_FAMILY_IN_FLIGHT_DECODER_RESET: &str =
+    "familyInFlight:decoderResetInFlight";
+const RECOVERY_COMMAND_REASON_FAMILY_IN_FLIGHT_CONTROL_PENDING: &str =
+    "familyInFlight:controlChannelPending";
+const RECOVERY_COMMAND_REASON_SAME_FAMILY_KEYFRAME_COALESCED: &str =
+    "sameFamilyCoalesced:keyframeInFlight";
+const RECOVERY_COMMAND_REASON_SAME_FAMILY_DECODER_RESET_COALESCED: &str =
+    "sameFamilyCoalesced:decoderResetInFlight";
+const RECOVERY_COMMAND_REASON_SAME_FAMILY_TRANSPORT_STAGE_COALESCED: &str =
+    "sameFamilyCoalesced:transportStageSuppressed";
+const RECOVERY_COMMAND_SEMANTIC_FAMILY_UPGRADE_KEYFRAME_TO_DECODER_RESET: &str =
+    "familyUpgrade:keyframeInFlight->decoderReset";
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum RecoveryCommandKind {
+    RequestKeyframe,
+    RequestDecoderReset,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+enum RecoveryCommandFamilyDecision {
+    Proceed,
+    Defer { reason: String },
+    Upgrade { detail: String },
+}
 
 // 负责把 transport fact/command 和 connection/media 副作用桥接起来，
 // 让 stack.rs 只保留编排入口。
@@ -148,6 +175,15 @@ impl<'a> RtcTransportSessionBridge<'a> {
         command: TransportCommand,
         status: CommandResultStatus,
     ) {
+        self.record_transport_command_status_with_semantic(command, status, None);
+    }
+
+    fn record_transport_command_status_with_semantic(
+        &self,
+        command: TransportCommand,
+        status: CommandResultStatus,
+        semantic_detail: Option<String>,
+    ) {
         let observed_at_ms = crate::transport::rtc::stats::now_ms_f64();
         // CommandResult 若同步回灌到 session，会在同一调用栈里触发
         // apply_command -> command_result -> apply_command 的递归环。
@@ -159,7 +195,18 @@ impl<'a> RtcTransportSessionBridge<'a> {
                 observed_at_ms,
             }));
         }
-        self.update_recovery_decision_command_result(&command, &status, observed_at_ms);
+        self.update_recovery_decision_command_result(
+            &command,
+            &status,
+            observed_at_ms,
+            semantic_detail.as_deref(),
+        );
+        self.record_transport_command_semantic_observation(
+            &command,
+            &status,
+            semantic_detail.as_deref(),
+            observed_at_ms,
+        );
     }
 
     pub(crate) fn apply_transport_session_command(&self, command: TransportCommand) {
@@ -259,6 +306,20 @@ impl<'a> RtcTransportSessionBridge<'a> {
                 reason,
             } => {
                 let requested_at_ms = crate::transport::rtc::stats::now_ms_f64();
+                match self.resolve_recovery_command_family_decision(
+                    RecoveryCommandKind::RequestKeyframe,
+                    requested_at_ms,
+                ) {
+                    RecoveryCommandFamilyDecision::Defer { reason } => {
+                        self.record_transport_command_status(
+                            command,
+                            CommandResultStatus::Deferred { reason },
+                        );
+                        return;
+                    }
+                    RecoveryCommandFamilyDecision::Upgrade { .. }
+                    | RecoveryCommandFamilyDecision::Proceed => {}
+                }
                 RuntimeStatsSink::new(self.runtime_stats.clone())
                     .record_keyframe_request_episode_requested(
                         *observation_id,
@@ -273,7 +334,18 @@ impl<'a> RtcTransportSessionBridge<'a> {
                     .and_then(|mut connection| {
                         connection.request_video_keyframe(self.runtime_stats)
                     });
-                if result.is_ok() {
+                let latest_observation_label =
+                    RuntimeStatsSink::read_shared(self.runtime_stats.as_ref(), |stats| {
+                        stats.latest_observation_label.clone()
+                    })
+                    .flatten();
+                let (command_status, semantic_detail) = self
+                    .resolve_recovery_command_status_from_result(
+                        RecoveryCommandKind::RequestKeyframe,
+                        &result,
+                        latest_observation_label.as_deref(),
+                    );
+                if matches!(command_status, CommandResultStatus::Succeeded) {
                     if let Some(action) = self.resolve_recovery_keyframe_action_label() {
                         self.record_recovery_escalation_observation(
                             *observation_id,
@@ -283,36 +355,34 @@ impl<'a> RtcTransportSessionBridge<'a> {
                         );
                     }
                 }
-                self.record_transport_command_result(command, &result);
+                self.record_transport_command_status_with_semantic(
+                    command,
+                    command_status,
+                    semantic_detail,
+                );
             }
             TransportCommand::RequestDecoderReset {
                 observation_id,
                 reason,
             } => {
                 let now_ms = crate::transport::rtc::stats::now_ms_f64();
-                let coalesce_recent_control_reset = RuntimeStatsSink::read_shared(
-                    self.runtime_stats.as_ref(),
-                    |stats| {
-                        stats
-                            .latest_video_escalation_observation
-                            .as_ref()
-                            .is_some_and(|obs| {
-                                obs.action == "requestDecoderReset"
-                                    && (now_ms - obs.observed_at_ms).max(0.0)
-                                        < DECODER_RESET_CONTROL_MIN_SPACING_MS
-                            })
-                    },
-                )
-                .unwrap_or(false);
-                if coalesce_recent_control_reset {
-                    self.record_transport_command_status(
-                        command,
-                        CommandResultStatus::Deferred {
-                            reason: "coalescedRecentDecoderResetControl".to_string(),
-                        },
-                    );
-                    return;
-                }
+                let family_decision = self.resolve_recovery_command_family_decision(
+                    RecoveryCommandKind::RequestDecoderReset,
+                    now_ms,
+                );
+                let family_upgrade_detail = match &family_decision {
+                    RecoveryCommandFamilyDecision::Defer { reason } => {
+                        self.record_transport_command_status(
+                            command,
+                            CommandResultStatus::Deferred {
+                                reason: reason.clone(),
+                            },
+                        );
+                        return;
+                    }
+                    RecoveryCommandFamilyDecision::Upgrade { detail } => Some(detail.clone()),
+                    RecoveryCommandFamilyDecision::Proceed => None,
+                };
                 let result = self
                     .connection
                     .lock()
@@ -320,7 +390,13 @@ impl<'a> RtcTransportSessionBridge<'a> {
                     .and_then(|mut connection| {
                         connection.request_decoder_reset(self.runtime_stats)
                     });
-                if result.is_ok() {
+                let (command_status, semantic_detail) = self
+                    .resolve_recovery_command_status_from_result(
+                        RecoveryCommandKind::RequestDecoderReset,
+                        &result,
+                        None,
+                    );
+                if matches!(command_status, CommandResultStatus::Succeeded) {
                     self.record_recovery_escalation_observation(
                         *observation_id,
                         reason.clone(),
@@ -328,7 +404,11 @@ impl<'a> RtcTransportSessionBridge<'a> {
                         RecoveryAction::RequestDecoderReset,
                     );
                 }
-                self.record_transport_command_result(command, &result);
+                self.record_transport_command_status_with_semantic(
+                    command,
+                    command_status,
+                    semantic_detail.or(family_upgrade_detail),
+                );
             }
             TransportCommand::SetTargetRembKbps {
                 target_kbps,
@@ -439,6 +519,7 @@ impl<'a> RtcTransportSessionBridge<'a> {
         command: &TransportCommand,
         status: &CommandResultStatus,
         observed_at_ms: f64,
+        semantic_detail: Option<&str>,
     ) {
         let decision_id = match command {
             TransportCommand::RequestKeyframe { observation_id, .. }
@@ -460,18 +541,198 @@ impl<'a> RtcTransportSessionBridge<'a> {
             CommandResultStatus::Failed { error } => ("failed".to_string(), Some(error.clone())),
         };
         RuntimeStatsSink::new(self.runtime_stats.clone()).update(|stats| {
+            let apply_update = |ledger: &mut crate::XbxEngineRecoveryDecisionLedgerObservation| {
+                ledger.command_result = Some(result_label.clone());
+                ledger.command_detail = Some(self.build_command_detail(
+                    command_name,
+                    detail.as_deref(),
+                    semantic_detail,
+                ));
+                ledger.observed_at_ms = observed_at_ms;
+            };
+            if let Some(index) = stats
+                .recent_recovery_decision_ledgers
+                .iter()
+                .rposition(|ledger| ledger.decision_id == decision_id)
+            {
+                apply_update(&mut stats.recent_recovery_decision_ledgers[index]);
+            }
             if let Some(ledger) = stats.latest_recovery_decision_ledger.as_mut() {
                 if ledger.decision_id != decision_id {
                     return;
                 }
-                ledger.command_result = Some(result_label.clone());
-                ledger.command_detail = Some(match detail.as_deref() {
-                    Some(raw) => format!("command={command_name} detail={raw}"),
-                    None => format!("command={command_name}"),
-                });
-                ledger.observed_at_ms = observed_at_ms;
+                apply_update(ledger);
             }
         });
+    }
+
+    fn build_command_detail(
+        &self,
+        command_name: &str,
+        status_detail: Option<&str>,
+        semantic_detail: Option<&str>,
+    ) -> String {
+        let mut detail = format!("command={command_name}");
+        if let Some(raw) = status_detail {
+            detail.push_str(" detail=");
+            detail.push_str(raw);
+        }
+        if let Some(semantic) = semantic_detail {
+            detail.push_str(" semantic=");
+            detail.push_str(semantic);
+        }
+        detail
+    }
+
+    fn record_transport_command_semantic_observation(
+        &self,
+        command: &TransportCommand,
+        status: &CommandResultStatus,
+        semantic_detail: Option<&str>,
+        observed_at_ms: f64,
+    ) {
+        let command_name = match command {
+            TransportCommand::RequestKeyframe { .. } => "requestKeyframe",
+            TransportCommand::RequestDecoderReset { .. } => "requestDecoderReset",
+            TransportCommand::RequestReconnectCandidate { .. } => "requestReconnectCandidate",
+            TransportCommand::SetTargetRembKbps { .. } => "setTargetRembKbps",
+        };
+        let status_name = match status {
+            CommandResultStatus::Succeeded => "succeeded",
+            CommandResultStatus::Deferred { .. } => "deferred",
+            CommandResultStatus::Failed { .. } => "failed",
+        };
+        let status_detail = match status {
+            CommandResultStatus::Deferred { reason } => Some(reason.as_str()),
+            CommandResultStatus::Failed { error } => Some(error.as_str()),
+            CommandResultStatus::Succeeded => None,
+        };
+        RuntimeStatsSink::new(self.runtime_stats.clone()).record_transport_command_semantic(
+            command_name,
+            status_name,
+            status_detail,
+            semantic_detail,
+            observed_at_ms,
+        );
+    }
+
+    fn resolve_recovery_command_status_from_result(
+        &self,
+        command_kind: RecoveryCommandKind,
+        result: &Result<(), XbxEngineRuntimeError>,
+        latest_observation_label: Option<&str>,
+    ) -> (CommandResultStatus, Option<String>) {
+        match result {
+            Ok(()) => {
+                if matches!(command_kind, RecoveryCommandKind::RequestKeyframe)
+                    && latest_observation_label == Some("rtcVideoRecoverySuppressed")
+                {
+                    return (
+                        CommandResultStatus::Deferred {
+                            reason: RECOVERY_COMMAND_REASON_SAME_FAMILY_TRANSPORT_STAGE_COALESCED
+                                .to_string(),
+                        },
+                        None,
+                    );
+                }
+                (CommandResultStatus::Succeeded, None)
+            }
+            Err(error) => {
+                let error_text = error.to_string();
+                if self.is_control_channel_not_ready_error(command_kind, &error_text) {
+                    return (
+                        CommandResultStatus::Deferred {
+                            reason: RECOVERY_COMMAND_REASON_FAMILY_IN_FLIGHT_CONTROL_PENDING
+                                .to_string(),
+                        },
+                        None,
+                    );
+                }
+                (CommandResultStatus::Failed { error: error_text }, None)
+            }
+        }
+    }
+
+    fn is_control_channel_not_ready_error(
+        &self,
+        command_kind: RecoveryCommandKind,
+        error: &str,
+    ) -> bool {
+        match command_kind {
+            RecoveryCommandKind::RequestKeyframe => {
+                error.contains("xbxEngineRtcControlChannelNotReadyForKeyframe")
+            }
+            RecoveryCommandKind::RequestDecoderReset => {
+                error.contains("xbxEngineRtcControlChannelNotReadyForDecoderReset")
+            }
+        }
+    }
+
+    fn resolve_recovery_command_family_decision(
+        &self,
+        command_kind: RecoveryCommandKind,
+        now_ms: f64,
+    ) -> RecoveryCommandFamilyDecision {
+        let (keyframe_in_flight, decoder_reset_in_flight) =
+            RuntimeStatsSink::read_shared(self.runtime_stats.as_ref(), |stats| {
+                let keyframe_in_flight = stats
+                    .latest_keyframe_request_episode
+                    .as_ref()
+                    .is_some_and(|episode| {
+                        let pending_verdict =
+                            matches!(episode.response_verdict.as_deref(), None | Some("pending"));
+                        let in_flight_status =
+                            matches!(episode.status.as_str(), "requested" | "sent");
+                        let within_window = (now_ms - episode.requested_at_ms).max(0.0)
+                            <= RECOVERY_COMMAND_FAMILY_IN_FLIGHT_WINDOW_MS;
+                        pending_verdict && in_flight_status && within_window
+                    });
+                let decoder_reset_in_flight = stats
+                    .latest_video_escalation_observation
+                    .as_ref()
+                    .is_some_and(|obs| {
+                        matches!(
+                            obs.action.as_str(),
+                            "requestDecoderReset"
+                                | "requestKeyframe+decoderReset"
+                                | "requestKeyframe+decoderReset(startupLowQualityRetry)"
+                        ) && (now_ms - obs.observed_at_ms).max(0.0)
+                            < DECODER_RESET_CONTROL_MIN_SPACING_MS
+                    });
+                (keyframe_in_flight, decoder_reset_in_flight)
+            })
+            .unwrap_or((false, false));
+
+        match command_kind {
+            RecoveryCommandKind::RequestKeyframe => {
+                if decoder_reset_in_flight {
+                    return RecoveryCommandFamilyDecision::Defer {
+                        reason: RECOVERY_COMMAND_REASON_FAMILY_IN_FLIGHT_DECODER_RESET.to_string(),
+                    };
+                }
+                if keyframe_in_flight {
+                    return RecoveryCommandFamilyDecision::Defer {
+                        reason: RECOVERY_COMMAND_REASON_SAME_FAMILY_KEYFRAME_COALESCED.to_string(),
+                    };
+                }
+                RecoveryCommandFamilyDecision::Proceed
+            }
+            RecoveryCommandKind::RequestDecoderReset => {
+                if decoder_reset_in_flight {
+                    return RecoveryCommandFamilyDecision::Defer {
+                        reason: RECOVERY_COMMAND_REASON_SAME_FAMILY_DECODER_RESET_COALESCED
+                            .to_string(),
+                    };
+                }
+                if keyframe_in_flight {
+                    return RecoveryCommandFamilyDecision::Upgrade {
+                        detail: RECOVERY_COMMAND_SEMANTIC_FAMILY_UPGRADE_KEYFRAME_TO_DECODER_RESET
+                            .to_string(),
+                    };
+                }
+                RecoveryCommandFamilyDecision::Proceed
+            }
+        }
     }
 }
 
@@ -679,22 +940,60 @@ mod tests {
     }
 
     #[test]
+    fn deferred_keyframe_command_does_not_overwrite_active_episode() {
+        let now_ms = crate::transport::rtc::stats::now_ms_f64();
+        let mut stats = XbxEngineMediaRuntimeStats::default();
+        stats.latest_keyframe_request_episode =
+            Some(crate::XbxEngineKeyframeRequestEpisodeObservation {
+                episode_id: 11,
+                request_reason: Some("transportAwaitRecoveryKeyframe".to_string()),
+                request_kind: None,
+                status: "requested".to_string(),
+                requested_at_ms: now_ms,
+                sent_at_ms: None,
+                deadline_at_ms: None,
+                first_keyframe_packet_at_ms: None,
+                first_keyframe_decoded_at_ms: None,
+                response_rtp_timestamp: None,
+                response_frame_seq: None,
+                response_verdict: Some("pending".to_string()),
+            });
+        let runtime_stats = Arc::new(Mutex::new(stats));
+        let pending_runtime_recovery_action = Arc::new(Mutex::new(None));
+        let bridge = build_bridge(runtime_stats.clone(), pending_runtime_recovery_action);
+
+        bridge.apply_transport_session_command(TransportCommand::RequestKeyframe {
+            observation_id: 22,
+            reason: "ingressWaitKeyframe".to_string(),
+        });
+
+        let snapshot = runtime_stats.lock().expect("runtime stats lock");
+        let episode = snapshot
+            .latest_keyframe_request_episode
+            .as_ref()
+            .expect("active episode should remain");
+        assert_eq!(episode.episode_id, 11);
+        assert_eq!(episode.status, "requested");
+    }
+
+    #[test]
     fn command_result_updates_matching_recovery_decision_ledger() {
         let mut stats = XbxEngineMediaRuntimeStats::default();
-        stats.latest_recovery_decision_ledger =
-            Some(crate::XbxEngineRecoveryDecisionLedgerObservation {
-                decision_id: 88,
-                state_before: "recovering".to_string(),
-                state_after: "reconnecting".to_string(),
-                input_signal: "liveness:livenessNoProgressTimeout".to_string(),
-                gate_result: "pass".to_string(),
-                action_selected: "requestReconnectCandidate".to_string(),
-                budget_before: None,
-                budget_after: None,
-                command_result: None,
-                command_detail: None,
-                observed_at_ms: 10.0,
-            });
+        let matching_ledger = crate::XbxEngineRecoveryDecisionLedgerObservation {
+            decision_id: 88,
+            state_before: "recovering".to_string(),
+            state_after: "reconnecting".to_string(),
+            input_signal: "liveness:livenessNoProgressTimeout".to_string(),
+            gate_result: "pass".to_string(),
+            action_selected: "requestReconnectCandidate".to_string(),
+            budget_before: None,
+            budget_after: None,
+            command_result: None,
+            command_detail: None,
+            observed_at_ms: 10.0,
+        };
+        stats.latest_recovery_decision_ledger = Some(matching_ledger.clone());
+        stats.recent_recovery_decision_ledgers.push(matching_ledger);
         let runtime_stats = Arc::new(Mutex::new(stats));
         let pending_runtime_recovery_action = Arc::new(Mutex::new(None));
         let bridge = build_bridge(runtime_stats.clone(), pending_runtime_recovery_action);
@@ -719,6 +1018,86 @@ mod tests {
         assert_eq!(
             ledger.command_detail.as_deref(),
             Some("command=requestReconnectCandidate detail=pendingReason=existing")
+        );
+        let historical_ledger = snapshot
+            .recent_recovery_decision_ledgers
+            .iter()
+            .find(|ledger| ledger.decision_id == 88)
+            .expect("historical decision ledger");
+        assert_eq!(
+            historical_ledger.command_result.as_deref(),
+            Some("deferred")
+        );
+    }
+
+    #[test]
+    fn command_result_updates_historical_ledger_when_latest_has_rotated() {
+        let mut stats = XbxEngineMediaRuntimeStats::default();
+        stats.recent_recovery_decision_ledgers.push(
+            crate::XbxEngineRecoveryDecisionLedgerObservation {
+                decision_id: 88,
+                state_before: "recovering".to_string(),
+                state_after: "reconnecting".to_string(),
+                input_signal: "liveness:livenessNoProgressTimeout".to_string(),
+                gate_result: "pass".to_string(),
+                action_selected: "requestReconnectCandidate".to_string(),
+                budget_before: None,
+                budget_after: None,
+                command_result: None,
+                command_detail: None,
+                observed_at_ms: 10.0,
+            },
+        );
+        stats.latest_recovery_decision_ledger =
+            Some(crate::XbxEngineRecoveryDecisionLedgerObservation {
+                decision_id: 99,
+                state_before: "recovering".to_string(),
+                state_after: "recovering".to_string(),
+                input_signal: "none".to_string(),
+                gate_result: "no-signal".to_string(),
+                action_selected: "none".to_string(),
+                budget_before: None,
+                budget_after: None,
+                command_result: None,
+                command_detail: None,
+                observed_at_ms: 11.0,
+            });
+        let runtime_stats = Arc::new(Mutex::new(stats));
+        let pending_runtime_recovery_action = Arc::new(Mutex::new(None));
+        let bridge = build_bridge(runtime_stats.clone(), pending_runtime_recovery_action);
+
+        bridge.record_transport_command_status(
+            TransportCommand::RequestReconnectCandidate {
+                observation_id: 88,
+                reason: "recovering-stream".to_string(),
+                reason_domain: crate::XbxEngineRecoveryReasonDomain::ConnectivityTransport,
+            },
+            CommandResultStatus::Succeeded,
+        );
+
+        let snapshot = runtime_stats.lock().expect("runtime stats lock");
+        assert_eq!(
+            snapshot
+                .latest_recovery_decision_ledger
+                .as_ref()
+                .map(|ledger| ledger.decision_id),
+            Some(99)
+        );
+        assert_eq!(
+            snapshot
+                .latest_recovery_decision_ledger
+                .as_ref()
+                .and_then(|ledger| ledger.command_result.as_deref()),
+            None
+        );
+        let historical_ledger = snapshot
+            .recent_recovery_decision_ledgers
+            .iter()
+            .find(|ledger| ledger.decision_id == 88)
+            .expect("historical decision ledger");
+        assert_eq!(
+            historical_ledger.command_result.as_deref(),
+            Some("succeeded")
         );
     }
 }

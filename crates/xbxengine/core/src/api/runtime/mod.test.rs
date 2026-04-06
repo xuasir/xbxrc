@@ -1008,13 +1008,39 @@ fn start_negotiates_remote_and_reaches_running() {
             XbxEngineRuntimePhaseDto::ExchangingIce,
         ]
     );
-    assert!(events.borrow().iter().any(|event| matches!(
+    let event_log = events.borrow();
+    let media_surface_ready_index = event_log
+        .iter()
+        .position(|event| {
+            matches!(
+                event,
+                XbxEngineRuntimeEventDto::MediaSurfaceReady { surface_id }
+                if surface_id == "surface:viewport-1"
+            )
+        })
+        .expect("media surface ready should be emitted");
+    let exchanging_ice_index = event_log
+        .iter()
+        .position(|event| {
+            matches!(
+                event,
+                XbxEngineRuntimeEventDto::RuntimePhaseChanged {
+                    phase: XbxEngineRuntimePhaseDto::ExchangingIce,
+                }
+            )
+        })
+        .expect("exchanging ice phase should be emitted");
+    assert!(
+        media_surface_ready_index < exchanging_ice_index,
+        "media surface ready should no longer wait for full ICE exchange"
+    );
+    assert!(event_log.iter().any(|event| matches!(
         event,
         XbxEngineRuntimeEventDto::TransportConnectionStateChanged {
             state: XbxEngineTransportStateDto::Connected,
         }
     )));
-    assert!(events.borrow().iter().any(|event| matches!(
+    assert!(event_log.iter().any(|event| matches!(
         event,
         XbxEngineRuntimeEventDto::MediaSurfaceReady { surface_id }
         if surface_id == "surface:viewport-1"

@@ -290,11 +290,16 @@
           "startupLowQuality": "Startup low quality"
         },
         "sessionPhase": {
+          "startup": "Startup",
           "connecting": "Connecting",
           "handshaking": "Handshaking",
           "priming": "Priming",
           "steady": "Steady",
-          "recovering": "Recovering"
+          "recovering": "Recovering",
+          "ramp-up": "Recovery ramp-up",
+          "degraded": "Degraded",
+          "failed": "Failed",
+          "closed": "Closed"
         },
         "ownerState": {
           "seeking-anchor": "Seeking anchor",

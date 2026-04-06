@@ -155,6 +155,8 @@ fn map_recovery_action_to_transport_commands(
         RecoveryAction::WaitForBurst
         | RecoveryAction::WaitForDecoderResetBurst
         | RecoveryAction::CooldownSuppressed
+        | RecoveryAction::CoalescedKeyframeInFlight
+        | RecoveryAction::CoalescedDecoderResetInFlight
         | RecoveryAction::StartupGraceSuppressed => Vec::new(),
     }
 }

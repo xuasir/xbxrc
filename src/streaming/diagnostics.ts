@@ -4,15 +4,13 @@ import type {
   StreamSessionLifecyclePhase,
   StreamSessionMetadataProjection,
 } from './types'
-
-/** 与 useStreamExecution 中 NO_FRAME_RECENT_ACTIVITY_MS 对齐：近期有 host 帧则不应再报「无画面」。 */
-const HOST_FRAME_SUPPRESSES_NO_VIDEO_MS = 20_000
+import { NO_FRAME_RECENT_ACTIVITY_MS } from './no-frame-warning'
 
 function hasRecentHostPresentFrame(lastHostFrameAtMs: number | null | undefined): boolean {
   if (lastHostFrameAtMs === null || lastHostFrameAtMs === undefined) {
     return false
   }
-  return Date.now() - lastHostFrameAtMs < HOST_FRAME_SUPPRESSES_NO_VIDEO_MS
+  return Date.now() - lastHostFrameAtMs < NO_FRAME_RECENT_ACTIVITY_MS
 }
 
 /**
@@ -33,6 +31,7 @@ export function buildStreamDiagnosticsSnapshot(input: {
   const transportProtocol = input.runtimeSnapshot?.transportProtocol?.trim() || undefined
   const transportAddressFamily = input.runtimeSnapshot?.transportAddressFamily
   const sessionPhase = input.runtimeSnapshot?.sessionPhase
+  const unifiedLifecyclePhase = resolveUnifiedLifecyclePhase(input.runtimeSnapshot)
   const recoveryOwnerState = input.runtimeSnapshot?.recoveryOwnerState
   const recoveryOwnerReason = input.runtimeSnapshot?.recoveryOwnerReason
   const videoDecoderRecoveryState = input.runtimeSnapshot?.videoDecoderRecoveryState
@@ -68,16 +67,22 @@ export function buildStreamDiagnosticsSnapshot(input: {
     = videoHealth === 'displaySupplyStarved'
       || recoveryOwnerState === 'supply-starved'
 
-  const isRecovering
-    = sessionPhase === 'recovering'
-      || input.lifecyclePhase === 'recovering'
-      || videoHealth === 'recovering'
-      || isDecoderRecovering(videoDecoderRecoveryState)
-      || isOwnerTransportRecovering(recoveryOwnerState)
-  const isActive = input.lifecyclePhase === 'playing' || input.lifecyclePhase === 'recovering'
+  const isRecovering = unifiedLifecyclePhase !== undefined
+    ? unifiedLifecyclePhase === 'recovering'
+    : (
+        input.lifecyclePhase === 'recovering'
+        || sessionPhase === 'recovering'
+        || videoHealth === 'recovering'
+        || isDecoderRecovering(videoDecoderRecoveryState)
+        || isOwnerTransportRecovering(recoveryOwnerState)
+      )
+  const isActive = unifiedLifecyclePhase !== undefined
+    ? isCanonicalActiveLifecycle(unifiedLifecyclePhase)
+    : (input.lifecyclePhase === 'playing' || input.lifecyclePhase === 'recovering')
 
   return {
     isActive,
+    streamLifecyclePhase: unifiedLifecyclePhase,
     regionName,
     serverHost: parseServerHost(input.metadata?.serverBaseUrl),
     turnSource: input.metadata?.turnSource ?? 'none',
@@ -114,7 +119,6 @@ export function buildStreamDiagnosticsSnapshot(input: {
       isRecovering,
       isActive,
       recoveryOwnerState,
-      videoDecoderRecoveryState,
     }),
   }
 }
@@ -163,12 +167,11 @@ function resolveStatusCode(input: {
   isRecovering: boolean
   isActive: boolean
   recoveryOwnerState?: string
-  videoDecoderRecoveryState?: string
 }): 'noVideo' | 'recovering' | 'owner' | 'stable' | 'inactive' {
   if (input.hasNoVideoWarning) {
     return 'noVideo'
   }
-  if (input.isRecovering || isDecoderRecovering(input.videoDecoderRecoveryState)) {
+  if (input.isRecovering) {
     return 'recovering'
   }
   if (input.recoveryOwnerState !== undefined && input.recoveryOwnerState.trim() !== '') {
@@ -179,6 +182,44 @@ function resolveStatusCode(input: {
   }
   return 'inactive'
 }
+
+function resolveUnifiedLifecyclePhase(
+  snapshot: StreamPerformanceSnapshot | null,
+): CanonicalLifecyclePhase | undefined {
+  const raw = snapshot?.streamLifecyclePhase?.trim()
+    || snapshot?.sessionPhase?.trim()
+    || undefined
+  if (raw === undefined) {
+    return undefined
+  }
+  if (raw === 'startup'
+    || raw === 'recovering'
+    || raw === 'ramp-up'
+    || raw === 'steady'
+    || raw === 'degraded'
+    || raw === 'failed'
+    || raw === 'closed') {
+    return raw
+  }
+  return undefined
+}
+
+function isCanonicalActiveLifecycle(phase: CanonicalLifecyclePhase): boolean {
+  return phase === 'startup'
+    || phase === 'recovering'
+    || phase === 'ramp-up'
+    || phase === 'steady'
+    || phase === 'degraded'
+}
+
+type CanonicalLifecyclePhase
+  = 'startup'
+    | 'recovering'
+    | 'ramp-up'
+    | 'steady'
+    | 'degraded'
+    | 'failed'
+    | 'closed'
 
 function resolveRecoveryInputPortrait(snapshot: StreamPerformanceSnapshot | null): string | undefined {
   const effective = snapshot?.remoteProfileEffectiveLabel?.trim()

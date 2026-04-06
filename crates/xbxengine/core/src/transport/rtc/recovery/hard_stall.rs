@@ -155,6 +155,7 @@ impl HardStallSnapshot {
                     "requestDecoderReset"
                         | "requestKeyframe+decoderReset"
                         | "requestKeyframe+decoderReset(startupLowQualityRetry)"
+                        | "coalesced:decoderResetInFlight"
                         | "cooldownSuppressed"
                 )
             )

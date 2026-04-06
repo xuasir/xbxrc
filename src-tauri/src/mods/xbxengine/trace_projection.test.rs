@@ -1582,6 +1582,8 @@ fn direct_gaming_state_projects_display_supply_health_and_issue_chain() {
     let payload = find_event_payload(&entries, "directGamingState");
 
     assert_eq!(payload["videoHealth"], "displaySupplyStarved");
+    assert_eq!(payload["lifecycle"], "steady");
+    assert_eq!(payload["streamLifecyclePhase"], "steady");
     assert_eq!(payload["videoOwnerState"], "supplyStarved");
     assert_eq!(payload["videoOwnerReason"], "supplyStarved");
     assert_eq!(payload["videoOwnerSource"], "supply");
@@ -1590,6 +1592,41 @@ fn direct_gaming_state_projects_display_supply_health_and_issue_chain() {
     let host_payload = find_event_payload(&entries, "hostPresentState");
     assert_eq!(host_payload["noPendingPressureLevel"], "critical");
     assert_eq!(host_payload["presentAgeMs"], 1624.0);
+}
+
+#[test]
+fn observability_snapshot_projects_unified_lifecycle_in_recovery_node() {
+    let recorder = std::sync::Arc::new(
+        RuntimeTraceRecorder::new_with_mode("verbose").expect("trace recorder"),
+    );
+    let mut state = RuntimeTraceObservationState::default();
+    let stats = test_stats(json!({
+        "resolution": "",
+        "rtt": "",
+        "fps": 0.0,
+        "pl": "0.00%",
+        "fl": "",
+        "jit": "",
+        "br": "",
+        "decode": "",
+        "session_phase": "steady",
+        "stream_lifecycle_phase": "recovering",
+        "recovery_strategy_profile": "cloud",
+        "recovery_diagnosis": "transportAwaitRecoveryKeyframe"
+    }));
+
+    record_runtime_trace_observations(&recorder, &mut state, Some("session-1"), &stats);
+    let entries = read_trace_lines(recorder.as_ref());
+    let direct_payload = find_event_payload(&entries, "directGamingState");
+    assert_eq!(direct_payload["lifecycle"], "recovering");
+    assert_eq!(direct_payload["streamLifecyclePhase"], "recovering");
+
+    let snapshot_payload = build_observability_snapshot(&stats);
+    assert_eq!(snapshot_payload["recovery"]["lifecycle"], "recovering");
+    assert_eq!(
+        snapshot_payload["recovery"]["streamLifecyclePhase"],
+        "recovering"
+    );
 }
 
 #[test]
