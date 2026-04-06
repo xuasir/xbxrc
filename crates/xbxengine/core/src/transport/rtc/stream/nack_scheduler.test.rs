@@ -193,12 +193,13 @@ fn admission_skipped_too_late_is_not_throttled_by_low_value_cache() {
 
 #[test]
 fn retry_budget_exhausted_is_finalized_and_dequeued() {
+    // Anchor retry_budget = default_max_retry_count.min(3)；用 1 保持「首轮 poll 即耗尽」的断言粒度。
     let mut scheduler = NackScheduler::new(NackSchedulerConfig {
         max_age_ms: 200,
         frame_deadline_ms: 500,
         burst_count: 1,
         retry_interval_ms: 10,
-        max_retry_count: 3,
+        max_retry_count: 1,
     });
     let mut policy = base_policy();
     policy.frame_is_keyframe = Some(true);
@@ -623,12 +624,13 @@ fn low_value_skip_cache_does_not_block_later_attempted_admission() {
 
 #[test]
 fn poll_separates_deadline_max_age_and_retry_budget_expirations() {
+    // 同上：单次 tick 内要同时出现 deadline / maxAge / retryBudget 三种过期，需限制 default_max_retry_count。
     let mut scheduler = NackScheduler::new(NackSchedulerConfig {
         max_age_ms: 200,
         frame_deadline_ms: 500,
         burst_count: 1,
         retry_interval_ms: 10,
-        max_retry_count: 3,
+        max_retry_count: 1,
     });
 
     let mut retry_budget_policy = base_policy();

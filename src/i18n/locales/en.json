@@ -240,7 +240,11 @@
         "decoderState": "Decode Recovery",
         "band": "Bitrate Band",
         "health": "Video Health",
+        "videoHealth": "Video Health",
+        "primaryIssueChain": "Primary Issue Chain",
+        "latestDecision": "Latest Decision",
         "stall": "Stall Kind",
+        "stallKind": "Stall Kind",
         "status": "Status"
       },
       "values": {
@@ -248,13 +252,109 @@
         "none": "None",
         "stable": "Stable",
         "recovering": "Recovering",
+        "displaySupplyLimited": "Display supply dip",
         "inactive": "Inactive",
         "noVideo": "No Video Warning"
       },
       "notices": {
         "recovering": "Connection is recovering. Stream quality may fluctuate briefly.",
+        "displaySupplyLimited": "Display-side supply is briefly tight (not the main transport recovery path). You may see minor stutter.",
         "relayPath": "The current media path is using relay transport.",
         "noVideo": "Connected for a while but still no picture. Exiting and reconnecting is safer."
+      },
+      "enums": {
+        "videoHealth": {
+          "priming": "Priming first frames",
+          "healthy": "Healthy",
+          "recovering": "Recovering",
+          "displaySupplyStarved": "Display supply limited",
+          "waitingKeyframe": "Waiting for keyframe",
+          "stalled": "Stalled"
+        },
+        "stallKind": {
+          "none": "None",
+          "recovering": "Recovering (generic)",
+          "pipelineStall": "Decode/present pipeline stall",
+          "waitingKeyframe": "Waiting for keyframe",
+          "idleTimeout": "Idle timeout",
+          "displaySupplyCritical": "Display supply critical",
+          "displaySupplyDegraded": "Display supply degraded",
+          "displayDegradedSteady": "Mild steady-state degradation",
+          "displaySupplyStarved": "Display supply starved",
+          "decoderBackendFailure": "Decoder backend failure",
+          "sampleLoss": "Transport sample loss",
+          "reconfigure": "Reconfigure",
+          "startupPriming": "Startup / priming",
+          "transportRecovering": "Transport recovery (not keyframe wait)",
+          "videoPaused": "Video paused",
+          "startupLowQuality": "Startup low quality"
+        },
+        "sessionPhase": {
+          "connecting": "Connecting",
+          "handshaking": "Handshaking",
+          "priming": "Priming",
+          "steady": "Steady",
+          "recovering": "Recovering"
+        },
+        "ownerState": {
+          "seeking-anchor": "Seeking anchor",
+          "priming": "Priming",
+          "stable-serving": "Stable serving",
+          "degraded-serving": "Degraded serving",
+          "rebuilding-supply": "Rebuilding supply",
+          "supply-starved": "Supply starved"
+        },
+        "ownerReason": {
+          "steady": "Steady",
+          "supplyStarved": "Supply starved",
+          "degradedSteady": "Degraded steady",
+          "seekingAnchor": "Seeking anchor",
+          "priming": "Priming",
+          "rebuildingSupply": "Rebuilding supply",
+          "transportAwaitRecoveryKeyframe": "Awaiting recovery keyframe",
+          "ingressWaitKeyframe": "Ingress waiting keyframe",
+          "displaySupplyCritical": "Display supply critical",
+          "displaySupplyDegraded": "Display supply degraded",
+          "adapterThinStream": "Adapter thin stream",
+          "adapterIdleTimeout": "Adapter idle timeout"
+        },
+        "decoderRecovery": {
+          "nominal": "Nominal",
+          "recovering": "Recovering",
+          "failed": "Failed",
+          "unknown": "Unknown"
+        },
+        "issuePrefix": {
+          "startup": "Startup",
+          "steady": "Steady",
+          "display": "Display",
+          "recovery": "Recovery",
+          "owner": "Owner"
+        },
+        "issueDetail": {
+          "priming": "Priming",
+          "healthy": "Healthy",
+          "supplyStarved": "Supply starved",
+          "transportAwaitRecoveryKeyframe": "Awaiting recovery keyframe",
+          "timelineReferenceBroken": "Reference chain broken",
+          "displaySupplyCritical": "Display supply critical",
+          "displaySupplyDegraded": "Display supply degraded",
+          "adapterThinStream": "Thin stream"
+        },
+        "primaryIssueChain": {
+          "steady__healthy": "Steady · healthy",
+          "startup__priming": "Startup · priming",
+          "display__supplyStarved": "Display · supply starved",
+          "recovery__transportAwaitRecoveryKeyframe": "Recovery · awaiting keyframe"
+        },
+        "latestDecision": {
+          "owner__stable-serving__steady": "Owner: stable serving / steady",
+          "owner__supply-starved__supplyStarved": "Owner: supply starved",
+          "owner__rebuilding-supply__transportAwaitRecoveryKeyframe": "Owner: rebuilding / awaiting keyframe",
+          "owner__seeking-anchor__seekingAnchor": "Owner: seeking anchor",
+          "owner__priming__priming": "Owner: priming",
+          "owner__degraded-serving__degradedSteady": "Owner: degraded serving / degraded steady"
+        }
       }
     },
     "failed": {

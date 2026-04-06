@@ -11,6 +11,7 @@ const HOST_RENDER_RECOVERY_MAX_FRAME_AGE_MS: f64 = 180.0;
 const HOST_RENDER_RECOVERY_STREAK_THRESHOLD: u32 = 8;
 const HOST_FRAME_DROP_BACKLOG_LIMIT: usize = 32;
 const HOST_SUBMIT_GAP_WARN_MS: f64 = 100.0;
+const SCHEDULED_FRAME_QUEUE_CAPACITY: usize = 3;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum HostCadencePhase {
@@ -269,7 +270,8 @@ impl HostCadenceTelemetry {
 
 #[derive(Default)]
 pub struct ScheduledFrameSlot {
-    latest_frame: Option<XbxEngineRenderFrame>,
+    displayed_frame: Option<XbxEngineRenderFrame>,
+    pending_frames: VecDeque<XbxEngineRenderFrame>,
     last_presented_frame_seq: Option<u64>,
     pub render_loop_started: bool,
 }
@@ -297,11 +299,8 @@ pub enum ScheduledFrameSubmitOutcome {
 #[derive(Debug)]
 pub enum ScheduledFrameTakeOutcome {
     Ready(XbxEngineRenderFrame),
+    RetainedDisplayedFrame,
     NoPendingFrame,
-    RejectedAlreadyPresented {
-        frame_seq: u64,
-        last_presented_frame_seq: u64,
-    },
     DroppedStale {
         frame: XbxEngineRenderFrame,
         frame_age_ms: f64,
@@ -335,16 +334,23 @@ impl ScheduledFrameSlot {
                 last_presented_frame_seq: self.last_presented_frame_seq.unwrap_or_default(),
             };
         }
-        let replaced_frame_seq = self.latest_frame.as_ref().map(|latest| latest.frame_seq);
-        let mut overwrote_pending = false;
-        if self.latest_frame.as_ref().is_some_and(|latest| {
-            Some(latest.frame_seq) != self.last_presented_frame_seq
-                && latest.frame_seq != frame.frame_seq
-        }) {
-            telemetry.record_overwrite();
-            overwrote_pending = true;
+        let pending_back_seq = self.pending_frames.back().map(|pending| pending.frame_seq);
+        if pending_back_seq.is_some_and(|frame_seq| frame.frame_seq <= frame_seq) {
+            return ScheduledFrameSubmitOutcome::RejectedAlreadyPresented {
+                frame_seq: frame.frame_seq,
+                last_presented_frame_seq: pending_back_seq.unwrap_or_default(),
+            };
         }
-        self.latest_frame = Some(frame.clone());
+        let mut replaced_frame_seq = None;
+        let mut overwrote_pending = false;
+        if self.pending_frames.len() >= SCHEDULED_FRAME_QUEUE_CAPACITY {
+            if let Some(replaced) = self.pending_frames.pop_front() {
+                replaced_frame_seq = Some(replaced.frame_seq);
+                overwrote_pending = true;
+                telemetry.record_overwrite();
+            }
+        }
+        self.pending_frames.push_back(frame.clone());
         ScheduledFrameSubmitOutcome::Accepted {
             frame_seq: frame.frame_seq,
             overwrote_pending,
@@ -359,45 +365,64 @@ impl ScheduledFrameSlot {
         now_ms: f64,
         telemetry: &mut HostCadenceTelemetry,
     ) -> ScheduledFrameTakeOutcome {
-        let Some(frame) = self.latest_frame.take() else {
-            telemetry.record_no_pending_take();
-            return ScheduledFrameTakeOutcome::NoPendingFrame;
-        };
-        telemetry.clear_no_pending_streak();
-        if self
-            .last_presented_frame_seq
-            .is_some_and(|frame_seq| frame.frame_seq <= frame_seq)
-        {
-            return ScheduledFrameTakeOutcome::RejectedAlreadyPresented {
-                frame_seq: frame.frame_seq,
-                last_presented_frame_seq: self.last_presented_frame_seq.unwrap_or_default(),
+        loop {
+            let Some(frame) = self.pending_frames.pop_front() else {
+                break;
             };
+            if self
+                .last_presented_frame_seq
+                .is_some_and(|frame_seq| frame.frame_seq <= frame_seq)
+            {
+                continue;
+            }
+            let frame_age_budget_ms = telemetry.stale_frame_age_budget_ms();
+            let frame_age_ms = (now_ms - frame.rendered_at_ms).max(0.0);
+            if frame_age_ms > frame_age_budget_ms {
+                telemetry.record_stale_frame_drop(
+                    &frame,
+                    now_ms,
+                    "scheduledFrameStale",
+                    self.queue_depth(),
+                );
+                if self.pending_frames.is_empty() && self.displayed_frame.is_none() {
+                    return ScheduledFrameTakeOutcome::DroppedStale {
+                        frame,
+                        frame_age_ms,
+                        frame_age_budget_ms,
+                    };
+                }
+                continue;
+            }
+            self.last_presented_frame_seq = Some(frame.frame_seq);
+            self.displayed_frame = Some(frame.clone());
+            telemetry.clear_no_pending_streak();
+            return ScheduledFrameTakeOutcome::Ready(frame);
         }
-        let frame_age_budget_ms = telemetry.stale_frame_age_budget_ms();
-        let frame_age_ms = (now_ms - frame.rendered_at_ms).max(0.0);
-        if frame_age_ms > frame_age_budget_ms {
-            telemetry.record_stale_frame_drop(&frame, now_ms, "scheduledFrameStale", 1);
-            return ScheduledFrameTakeOutcome::DroppedStale {
-                frame,
-                frame_age_ms,
-                frame_age_budget_ms,
-            };
+        if self.displayed_frame.is_some() {
+            telemetry.clear_no_pending_streak();
+            return ScheduledFrameTakeOutcome::RetainedDisplayedFrame;
         }
-        self.last_presented_frame_seq = Some(frame.frame_seq);
-        ScheduledFrameTakeOutcome::Ready(frame)
+        telemetry.record_no_pending_take();
+        ScheduledFrameTakeOutcome::NoPendingFrame
     }
 
     pub fn reset(&mut self) {
-        self.latest_frame = None;
+        self.displayed_frame = None;
+        self.pending_frames.clear();
         self.last_presented_frame_seq = None;
         self.render_loop_started = false;
     }
 
     pub fn begin_media_epoch(&mut self) {
-        self.latest_frame = None;
+        self.displayed_frame = None;
+        self.pending_frames.clear();
         self.last_presented_frame_seq = None;
         // 媒体 epoch 刷新时只清去重态，不动 render_loop_started，
         // 否则会把仍在运行的 display link / fallback loop 误判成需要重启。
+    }
+
+    fn queue_depth(&self) -> usize {
+        self.pending_frames.len() + usize::from(self.displayed_frame.is_some())
     }
 }
 

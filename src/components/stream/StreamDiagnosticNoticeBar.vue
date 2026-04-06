@@ -12,7 +12,7 @@ interface StreamDiagnosticNoticeBarProps {
 }
 
 interface StreamDiagnosticNoticeViewModel {
-  id: 'recovering' | 'relayPath' | 'noVideo'
+  id: 'recovering' | 'displaySupply' | 'relayPath' | 'noVideo'
   severity: 'info' | 'warning'
   text: string
 }
@@ -29,6 +29,13 @@ const notices = computed<StreamDiagnosticNoticeViewModel[]>(() => {
       id: 'recovering',
       severity: 'info',
       text: t('streamPage.diagnostics.notices.recovering'),
+    })
+  }
+  else if (props.diagnostics.isDisplaySupplyLimited) {
+    items.push({
+      id: 'displaySupply',
+      severity: 'info',
+      text: t('streamPage.diagnostics.notices.displaySupplyLimited'),
     })
   }
 

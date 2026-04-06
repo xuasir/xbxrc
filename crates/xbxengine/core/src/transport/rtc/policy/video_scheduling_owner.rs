@@ -133,8 +133,9 @@ enum RecoveryCompletionEvidence {
 
 const CLEAN_ANCHOR_EPOCH_GRACE_MAX_DELTA: u64 = 1;
 const CLEAN_ANCHOR_EPOCH_GRACE_WINDOW_MS: f64 = 1_500.0;
-const DISPLAY_SUPPLY_SOFT_CRITICAL_CONFIRM_MS: f64 = 240.0;
-const DISPLAY_SUPPLY_STARVED_CONFIRM_MS: f64 = 180.0;
+const DISPLAY_SUPPLY_SOFT_CRITICAL_CONFIRM_MS: f64 = 260.0;
+/// Stable→supply-starved 确认窗：略加长以减少 healthy↔starved 阈值抖动（薄码流/调度微抖）。
+const DISPLAY_SUPPLY_STARVED_CONFIRM_MS: f64 = 280.0;
 
 impl VideoSchedulingOwner {
     pub(crate) fn new() -> Self {

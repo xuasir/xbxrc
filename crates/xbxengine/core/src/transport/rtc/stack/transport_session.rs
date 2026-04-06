@@ -19,6 +19,9 @@ use crate::transport::rtc::session::policy::RtcSessionPolicy;
 use crate::transport::rtc::stream::RtcMediaService;
 use crate::XbxEngineRuntimeError;
 
+/// 控制面 decoder reset 最短间隔：短窗内多条决策会共用一次 RTC 请求，避免反复 advance recovery epoch。
+const DECODER_RESET_CONTROL_MIN_SPACING_MS: f64 = 600.0;
+
 // 负责把 transport fact/command 和 connection/media 副作用桥接起来，
 // 让 stack.rs 只保留编排入口。
 pub(crate) struct RtcTransportSessionBridge<'a> {
@@ -286,6 +289,30 @@ impl<'a> RtcTransportSessionBridge<'a> {
                 observation_id,
                 reason,
             } => {
+                let now_ms = crate::transport::rtc::stats::now_ms_f64();
+                let coalesce_recent_control_reset = RuntimeStatsSink::read_shared(
+                    self.runtime_stats.as_ref(),
+                    |stats| {
+                        stats
+                            .latest_video_escalation_observation
+                            .as_ref()
+                            .is_some_and(|obs| {
+                                obs.action == "requestDecoderReset"
+                                    && (now_ms - obs.observed_at_ms).max(0.0)
+                                        < DECODER_RESET_CONTROL_MIN_SPACING_MS
+                            })
+                    },
+                )
+                .unwrap_or(false);
+                if coalesce_recent_control_reset {
+                    self.record_transport_command_status(
+                        command,
+                        CommandResultStatus::Deferred {
+                            reason: "coalescedRecentDecoderResetControl".to_string(),
+                        },
+                    );
+                    return;
+                }
                 let result = self
                     .connection
                     .lock()
@@ -460,7 +487,10 @@ mod tests {
     use crate::transport::rtc::session::clock::SystemSessionClock;
     use crate::transport::rtc::session::policy::RtcSessionPolicy;
     use crate::transport::rtc::stream::RtcMediaService;
-    use crate::{XbxEngineMediaRuntimeStats, XbxEnginePendingRuntimeRecoveryAction};
+    use crate::{
+        XbxEngineMediaRuntimeStats, XbxEnginePendingRuntimeRecoveryAction,
+        XbxEngineVideoEscalationObservation,
+    };
 
     use super::RtcTransportSessionBridge;
 
@@ -611,6 +641,41 @@ mod tests {
         let reconnect =
             VideoEscalationController::action_contract(RecoveryAction::RequestReconnectCandidate);
         assert!(reconnect.advances_recovery_epoch_on_success);
+    }
+
+    #[test]
+    fn decoder_reset_is_deferred_when_control_reset_observation_is_recent() {
+        let now_ms = crate::transport::rtc::stats::now_ms_f64();
+        let mut stats = XbxEngineMediaRuntimeStats::default();
+        stats.transport_recovery_epoch = 7;
+        stats.latest_video_escalation_observation = Some(XbxEngineVideoEscalationObservation {
+            observation_id: 101,
+            reason: "transportAwaitRecoveryKeyframe".to_string(),
+            action: "requestDecoderReset".to_string(),
+            recovery_stage: "rebuilding-supply".to_string(),
+            recovery_chain_value: "anchor".to_string(),
+            recovery_failure_cost: "high".to_string(),
+            recovery_window_source: "hard-fallback-window".to_string(),
+            observed_at_ms: now_ms,
+        });
+        let runtime_stats = Arc::new(Mutex::new(stats));
+        let pending_runtime_recovery_action = Arc::new(Mutex::new(None));
+        let bridge = build_bridge(runtime_stats.clone(), pending_runtime_recovery_action);
+
+        bridge.apply_transport_session_command(TransportCommand::RequestDecoderReset {
+            observation_id: 202,
+            reason: "transportAwaitRecoveryKeyframe".to_string(),
+        });
+
+        let snapshot = runtime_stats.lock().expect("runtime stats lock");
+        assert_eq!(snapshot.transport_recovery_epoch, 7);
+        assert_eq!(
+            snapshot
+                .latest_video_escalation_observation
+                .as_ref()
+                .map(|obs| obs.observation_id),
+            Some(101)
+        );
     }
 
     #[test]

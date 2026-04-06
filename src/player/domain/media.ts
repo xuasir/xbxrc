@@ -29,6 +29,9 @@ export interface StreamStats {
   videoOwnerObservedAtMs?: number
   directGamingBitrateBand?: string
   videoHealth?: string
+  /** 与 videoHealth 并列的主诊断链（如 steady:healthy / display:supplyStarved） */
+  primaryIssueChain?: string
+  latestDecisionSummary?: string
   stallKind?: string
   inboundVideoFps?: number
   decodeFps?: number

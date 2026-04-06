@@ -5,6 +5,16 @@ import type {
   StreamSessionMetadataProjection,
 } from './types'
 
+/** 与 useStreamExecution 中 NO_FRAME_RECENT_ACTIVITY_MS 对齐：近期有 host 帧则不应再报「无画面」。 */
+const HOST_FRAME_SUPPRESSES_NO_VIDEO_MS = 20_000
+
+function hasRecentHostPresentFrame(lastHostFrameAtMs: number | null | undefined): boolean {
+  if (lastHostFrameAtMs === null || lastHostFrameAtMs === undefined) {
+    return false
+  }
+  return Date.now() - lastHostFrameAtMs < HOST_FRAME_SUPPRESSES_NO_VIDEO_MS
+}
+
 /**
  * 诊断视图统一从 runtime snapshot + metadata 投影，避免页面层继续散着猜状态。
  */
@@ -13,6 +23,8 @@ export function buildStreamDiagnosticsSnapshot(input: {
   runtimeSnapshot: StreamPerformanceSnapshot | null
   lifecyclePhase: StreamSessionLifecyclePhase
   warningVisible: boolean
+  /** runtime host 最近一次 frameReady 时间戳；有则优先认为已有画面输出 */
+  lastHostFrameAtMs?: number | null
 }): StreamSessionDiagnosticsSnapshot {
   const region = input.metadata?.region
   const regionName = region?.displayName ?? region?.shortName ?? region?.name ?? undefined
@@ -28,6 +40,8 @@ export function buildStreamDiagnosticsSnapshot(input: {
   const videoOwnerSource = input.runtimeSnapshot?.videoOwnerSource
   const recoveryDiagnosis = input.runtimeSnapshot?.recoveryDiagnosis
   const videoHealth = input.runtimeSnapshot?.videoHealth
+  const primaryIssueChain = input.runtimeSnapshot?.primaryIssueChain
+  const latestDecisionSummary = input.runtimeSnapshot?.latestDecisionSummary
   const stallKind = input.runtimeSnapshot?.stallKind
   const transportSummary = resolveTransportSummary({
     transportPath,
@@ -37,17 +51,29 @@ export function buildStreamDiagnosticsSnapshot(input: {
   })
   const recoveryInputPortrait = resolveRecoveryInputPortrait(input.runtimeSnapshot)
   const recoveryInputProfile = resolveRecoveryInputProfile(input.runtimeSnapshot)
-  const hasNoVideoWarning
-    = input.warningVisible
+  const hasRecentFrame = hasRecentHostPresentFrame(input.lastHostFrameAtMs)
+  const hasStatsVideoActivity =
+    (input.runtimeSnapshot?.presentFps ?? 0) >= 1
+    || (input.runtimeSnapshot?.decodeFps ?? 0) >= 1
+    || (input.runtimeSnapshot?.inboundVideoFps ?? 0) >= 1
+  const hasVideoOutputEvidence = hasRecentFrame || hasStatsVideoActivity
+
+  const hasNoVideoWarning =
+    !hasVideoOutputEvidence
+    && (input.warningVisible
       || videoHealth === 'waitingKeyframe'
       || videoHealth === 'stalled'
-      || stallKind === 'idleTimeout'
+      || stallKind === 'idleTimeout')
+  const isDisplaySupplyLimited
+    = videoHealth === 'displaySupplyStarved'
+      || recoveryOwnerState === 'supply-starved'
+
   const isRecovering
     = sessionPhase === 'recovering'
       || input.lifecyclePhase === 'recovering'
       || videoHealth === 'recovering'
       || isDecoderRecovering(videoDecoderRecoveryState)
-      || isOwnerRecovering(recoveryOwnerState)
+      || isOwnerTransportRecovering(recoveryOwnerState)
   const isActive = input.lifecyclePhase === 'playing' || input.lifecyclePhase === 'recovering'
 
   return {
@@ -75,9 +101,12 @@ export function buildStreamDiagnosticsSnapshot(input: {
     videoOwnerSource,
     directGamingBitrateBand: input.runtimeSnapshot?.directGamingBitrateBand,
     videoHealth,
+    primaryIssueChain,
+    latestDecisionSummary,
     stallKind,
     isRelayPath: transportPath?.toLowerCase().startsWith('relay') === true,
     isRecovering,
+    isDisplaySupplyLimited,
     hasNoVideoWarning,
     transportSummary,
     statusCode: resolveStatusCode({
@@ -182,12 +211,16 @@ function resolveRecoveryInputProfile(snapshot: StreamPerformanceSnapshot | null)
   return undefined
 }
 
-function isOwnerRecovering(ownerState?: string): boolean {
+/** 仅将「传输/锚点/启动」类 owner 视作恢复中；supply-starved 归为显示供给，不在此列 */
+function isOwnerTransportRecovering(ownerState?: string): boolean {
   if (ownerState === undefined || ownerState.trim() === '') {
     return false
   }
-  const normalized = ownerState.toLowerCase()
-  return normalized !== 'stable-serving' && normalized !== 'stableserving'
+  const normalized = ownerState.toLowerCase().replaceAll('-', '')
+  if (normalized === 'stableserving' || normalized === 'supplystarved') {
+    return false
+  }
+  return true
 }
 
 function isDecoderRecovering(state?: string): boolean {

@@ -4,6 +4,7 @@ use xbxengine::{XbxEngineRenderFrame, XbxEngineRenderPixelData};
 
 use super::{
     HostCadencePhase, HostCadenceTelemetry, ScheduledFrameSlot, ScheduledFrameSubmitOutcome,
+    ScheduledFrameTakeOutcome,
 };
 
 fn mk_frame(frame_seq: u64) -> XbxEngineRenderFrame {
@@ -46,6 +47,112 @@ fn begin_media_epoch_clears_presented_history_without_stopping_render_loop() {
         }
         other => panic!("expected new epoch frame to be accepted, got {other:?}"),
     }
+}
+
+#[test]
+fn take_reuses_last_presented_frame_without_counting_no_pending() {
+    let mut slot = ScheduledFrameSlot::default();
+    let mut telemetry = HostCadenceTelemetry::default();
+
+    match slot.submit_frame(&mk_frame(11), 1_010.0, &mut telemetry) {
+        ScheduledFrameSubmitOutcome::Accepted { .. } => {}
+        other => panic!("expected accepted frame, got {other:?}"),
+    }
+    match slot.take_ready_frame(1_020.0, &mut telemetry) {
+        ScheduledFrameTakeOutcome::Ready(frame) => assert_eq!(frame.frame_seq, 11),
+        other => panic!("expected ready frame, got {other:?}"),
+    }
+    match slot.take_ready_frame(1_036.0, &mut telemetry) {
+        ScheduledFrameTakeOutcome::RetainedDisplayedFrame => {}
+        other => panic!("expected retained displayed frame marker, got {other:?}"),
+    }
+
+    assert_eq!(telemetry.no_pending_take_count_total, 0);
+    assert_eq!(telemetry.no_pending_streak, 0);
+}
+
+#[test]
+fn submit_uses_bounded_queue_and_drops_oldest_pending_on_overflow() {
+    let mut slot = ScheduledFrameSlot::default();
+    let mut telemetry = HostCadenceTelemetry::default();
+
+    for frame_seq in 1..=4 {
+        match slot.submit_frame(
+            &mk_frame(frame_seq),
+            1_010.0 + frame_seq as f64,
+            &mut telemetry,
+        ) {
+            ScheduledFrameSubmitOutcome::Accepted {
+                overwrote_pending,
+                replaced_frame_seq,
+                ..
+            } => {
+                if frame_seq < 4 {
+                    assert!(!overwrote_pending);
+                    assert_eq!(replaced_frame_seq, None);
+                } else {
+                    assert!(overwrote_pending);
+                    assert_eq!(replaced_frame_seq, Some(1));
+                }
+            }
+            other => panic!("expected accepted frame, got {other:?}"),
+        }
+    }
+
+    match slot.take_ready_frame(1_030.0, &mut telemetry) {
+        ScheduledFrameTakeOutcome::Ready(frame) => assert_eq!(frame.frame_seq, 2),
+        other => panic!("expected oldest surviving pending frame, got {other:?}"),
+    }
+    match slot.take_ready_frame(1_046.0, &mut telemetry) {
+        ScheduledFrameTakeOutcome::Ready(frame) => assert_eq!(frame.frame_seq, 3),
+        other => panic!("expected next pending frame, got {other:?}"),
+    }
+    match slot.take_ready_frame(1_062.0, &mut telemetry) {
+        ScheduledFrameTakeOutcome::Ready(frame) => assert_eq!(frame.frame_seq, 4),
+        other => panic!("expected newest pending frame, got {other:?}"),
+    }
+    match slot.take_ready_frame(1_078.0, &mut telemetry) {
+        ScheduledFrameTakeOutcome::RetainedDisplayedFrame => {}
+        other => {
+            panic!("expected retained displayed frame marker after queue drains, got {other:?}")
+        }
+    }
+
+    assert_eq!(telemetry.present_overwrite_count_total, 1);
+    assert_eq!(telemetry.no_pending_take_count_total, 0);
+}
+
+#[test]
+fn stale_pending_frame_falls_back_to_displayed_frame_instead_of_starving() {
+    let mut slot = ScheduledFrameSlot::default();
+    let mut telemetry = HostCadenceTelemetry::default();
+
+    match slot.submit_frame(&mk_frame(40), 1_010.0, &mut telemetry) {
+        ScheduledFrameSubmitOutcome::Accepted { .. } => {}
+        other => panic!("expected accepted frame, got {other:?}"),
+    }
+    match slot.take_ready_frame(1_020.0, &mut telemetry) {
+        ScheduledFrameTakeOutcome::Ready(frame) => assert_eq!(frame.frame_seq, 40),
+        other => panic!("expected ready frame, got {other:?}"),
+    }
+
+    let stale_pending = XbxEngineRenderFrame {
+        rendered_at_ms: 1_030.0,
+        ..mk_frame(41)
+    };
+    match slot.submit_frame(&stale_pending, 1_035.0, &mut telemetry) {
+        ScheduledFrameSubmitOutcome::Accepted { .. } => {}
+        other => panic!("expected accepted frame, got {other:?}"),
+    }
+
+    match slot.take_ready_frame(1_240.0, &mut telemetry) {
+        ScheduledFrameTakeOutcome::RetainedDisplayedFrame => {}
+        other => panic!("expected fallback to retained displayed frame marker, got {other:?}"),
+    }
+
+    assert_eq!(telemetry.present_drop_count_total, 1);
+    assert_eq!(telemetry.no_pending_take_count_total, 0);
+    assert_eq!(telemetry.no_pending_streak, 0);
 }
 
 #[test]

@@ -240,7 +240,11 @@
         "decoderState": "解码恢复态",
         "band": "码率档位",
         "health": "视频健康",
+        "videoHealth": "视频健康",
+        "primaryIssueChain": "主问题链",
+        "latestDecision": "最新决策摘要",
         "stall": "卡顿类型",
+        "stallKind": "卡顿类型",
         "status": "状态"
       },
       "values": {
@@ -248,13 +252,109 @@
         "none": "未使用",
         "stable": "正常",
         "recovering": "恢复中",
+        "displaySupplyLimited": "显示供给波动",
         "inactive": "未激活",
         "noVideo": "无画面告警"
       },
       "notices": {
         "recovering": "连接正在恢复中，画面质量可能会短暂波动。",
+        "displaySupplyLimited": "显示侧供给短暂吃紧（非传输主恢复），画面可能轻微抖动。",
         "relayPath": "当前媒体链路正在使用中继传输。",
         "noVideo": "连接已建立一段时间但仍无画面，退出后重新连接会更稳妥。"
+      },
+      "enums": {
+        "videoHealth": {
+          "priming": "首帧准备中",
+          "healthy": "健康",
+          "recovering": "恢复中",
+          "displaySupplyStarved": "显示供给不足",
+          "waitingKeyframe": "等待关键帧",
+          "stalled": "停滞"
+        },
+        "stallKind": {
+          "none": "无",
+          "recovering": "广义恢复（未细分）",
+          "pipelineStall": "解码/呈现管线卡住",
+          "waitingKeyframe": "等待关键帧",
+          "idleTimeout": "空闲超时",
+          "displaySupplyCritical": "显示供给危急",
+          "displaySupplyDegraded": "显示供给下降",
+          "displayDegradedSteady": "稳定态轻微降级",
+          "displaySupplyStarved": "显示供给不足",
+          "decoderBackendFailure": "解码后端故障",
+          "sampleLoss": "传输采样丢失",
+          "reconfigure": "重配置",
+          "startupPriming": "启动/首帧准备",
+          "transportRecovering": "传输侧恢复（非等帧）",
+          "videoPaused": "视频暂停",
+          "startupLowQuality": "启动低画质"
+        },
+        "sessionPhase": {
+          "connecting": "连接中",
+          "handshaking": "握手",
+          "priming": "首帧准备",
+          "steady": "稳态",
+          "recovering": "恢复中"
+        },
+        "ownerState": {
+          "seeking-anchor": "寻找锚点",
+          "priming": "首帧准备",
+          "stable-serving": "稳定输出",
+          "degraded-serving": "降级输出",
+          "rebuilding-supply": "重建供给",
+          "supply-starved": "供给不足"
+        },
+        "ownerReason": {
+          "steady": "稳态",
+          "supplyStarved": "供给不足",
+          "degradedSteady": "稳态降级",
+          "seekingAnchor": "寻找锚点",
+          "priming": "首帧准备",
+          "rebuildingSupply": "重建供给",
+          "transportAwaitRecoveryKeyframe": "等待恢复关键帧",
+          "ingressWaitKeyframe": "入口等待关键帧",
+          "displaySupplyCritical": "显示供给危急",
+          "displaySupplyDegraded": "显示供给下降",
+          "adapterThinStream": "适配器薄码流",
+          "adapterIdleTimeout": "适配器空闲超时"
+        },
+        "decoderRecovery": {
+          "nominal": "正常",
+          "recovering": "恢复中",
+          "failed": "失败",
+          "unknown": "未知"
+        },
+        "issuePrefix": {
+          "startup": "启动",
+          "steady": "稳态",
+          "display": "显示",
+          "recovery": "恢复",
+          "owner": "调度主视图"
+        },
+        "issueDetail": {
+          "priming": "首帧准备",
+          "healthy": "健康",
+          "supplyStarved": "供给不足",
+          "transportAwaitRecoveryKeyframe": "等待恢复关键帧",
+          "timelineReferenceBroken": "参考链断裂",
+          "displaySupplyCritical": "显示供给危急",
+          "displaySupplyDegraded": "显示供给下降",
+          "adapterThinStream": "薄码流"
+        },
+        "primaryIssueChain": {
+          "steady__healthy": "稳态 · 健康",
+          "startup__priming": "启动 · 首帧准备",
+          "display__supplyStarved": "显示 · 供给不足",
+          "recovery__transportAwaitRecoveryKeyframe": "恢复 · 等待恢复关键帧"
+        },
+        "latestDecision": {
+          "owner__stable-serving__steady": "主视图：稳定输出 / 稳态",
+          "owner__supply-starved__supplyStarved": "主视图：供给不足",
+          "owner__rebuilding-supply__transportAwaitRecoveryKeyframe": "主视图：重建供给 / 等待恢复关键帧",
+          "owner__seeking-anchor__seekingAnchor": "主视图：寻找锚点",
+          "owner__priming__priming": "主视图：首帧准备",
+          "owner__degraded-serving__degradedSteady": "主视图：降级输出 / 稳态降级"
+        }
       }
     },
     "failed": {

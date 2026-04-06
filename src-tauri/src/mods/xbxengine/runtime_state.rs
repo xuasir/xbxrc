@@ -79,7 +79,8 @@ impl XbxEngineRuntimeState {
         let input_backend = Box::new(OhMyGamepadXbxEngineInputBackend::new());
         let media_backend =
             create_active_media_backend(input_backend, XbxEngineRuntimeConfig::default());
-        let rumble_worker = GamepadRumbleWorkerHandle::new(app_handle.clone(), runtime_trace.clone());
+        let rumble_worker =
+            GamepadRumbleWorkerHandle::new(app_handle.clone(), runtime_trace.clone());
         let runtime = XbxEngineRuntime::with_media_backend(
             XbxEngineRuntimeConfig::default(),
             TauriXbxEngineHostBridge {
@@ -766,7 +767,9 @@ impl XbxEngineEventSink for TauriXbxEngineEventSink {
     }
 }
 
-pub(super) fn map_app_error(action: &'static str) -> impl FnOnce(AppError) -> XbxEngineRuntimeError {
+pub(super) fn map_app_error(
+    action: &'static str,
+) -> impl FnOnce(AppError) -> XbxEngineRuntimeError {
     move |error| XbxEngineRuntimeError::new(format!("{action}:{error}"))
 }
 

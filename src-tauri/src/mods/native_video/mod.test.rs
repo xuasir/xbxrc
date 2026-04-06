@@ -68,6 +68,10 @@ fn host_timing_record_policy_marks_hot_stages_as_sampled() {
         HostTimingRecordPolicy::Sampled
     );
     assert_eq!(
+        resolve_host_timing_record_policy("prepare_sample_ready"),
+        HostTimingRecordPolicy::Sampled
+    );
+    assert_eq!(
         resolve_host_timing_record_policy("sample_presented"),
         HostTimingRecordPolicy::Sampled
     );

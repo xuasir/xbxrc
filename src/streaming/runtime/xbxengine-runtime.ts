@@ -158,6 +158,8 @@ export function createXbxEngineRuntime(options: {
         videoOwnerObservedAtMs: snapshot.video_owner_observed_at_ms,
         directGamingBitrateBand: snapshot.direct_gaming_bitrate_band,
         videoHealth: snapshot.video_health,
+        primaryIssueChain: snapshot.primary_issue_chain,
+        latestDecisionSummary: snapshot.latest_decision_summary,
         stallKind: snapshot.stall_kind,
         inboundVideoFps: snapshot.inbound_video_fps,
         decodeFps: snapshot.decode_fps,

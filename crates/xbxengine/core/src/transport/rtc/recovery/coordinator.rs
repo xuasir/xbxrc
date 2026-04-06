@@ -568,13 +568,9 @@ impl RecoveryCoordinator {
         now_ms: f64,
     ) -> bool {
         RuntimeStatsSink::read_shared(runtime_stats, |stats| {
-            let chain_healthy = stats
-                .latest_video_timeline_observation
-                .as_ref()
-                .is_some_and(|observation: &XbxEngineVideoTimelineObservation| {
-                    observation.chain.state == "healthy"
-                });
-            chain_healthy
+            // 与 session policy 的 `healthy_media_baseline` 对齐：时间线 healthy + clean anchor
+            // 单独不足以证明端到端已恢复；否则会在 decode/呈现仍卡住时错误压制 PLI/decoder reset。
+            Self::transport_await_objective_media_healthy(stats, now_ms)
                 && Self::has_recent_clean_anchor_evidence(
                     stats.video_anchor_clean_epoch,
                     stats.video_anchor_clean_observed_at_ms,
@@ -585,6 +581,33 @@ impl RecoveryCoordinator {
                 )
         })
         .unwrap_or(false)
+    }
+
+    /// transport-await 软回退判定用的客观媒体健康：与 `should_absorb_stale_transport_await_replay` 一致。
+    fn transport_await_objective_media_healthy(
+        stats: &XbxEngineMediaRuntimeStats,
+        now_ms: f64,
+    ) -> bool {
+        let chain_healthy = stats
+            .latest_video_timeline_observation
+            .as_ref()
+            .is_some_and(|observation: &XbxEngineVideoTimelineObservation| {
+                observation.chain.state == "healthy"
+            });
+        if !chain_healthy {
+            return false;
+        }
+        let track_attached_with_video = stats
+            .latest_video_track_status
+            .as_ref()
+            .is_some_and(|track| {
+                track.state == "remoteTrackAttached" && track.video_bytes_total > 0
+            });
+        let pipeline_not_stalled = !stats.video_decoder_stalled.unwrap_or(false)
+            && !stats.video_renderer_stalled.unwrap_or(false);
+        track_attached_with_video
+            && pipeline_not_stalled
+            && has_fresh_media_output(stats, now_ms)
     }
 
     fn has_recent_clean_anchor_evidence(

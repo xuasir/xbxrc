@@ -1206,13 +1206,26 @@ fn build_transport_recovery_note(
     runtime_stats: Option<&XbxEngineMediaRuntimeStats>,
 ) -> Option<String> {
     let stats = runtime_stats?;
-    if stats.transport_recovery_epoch == 0 {
-        return None;
+    let mut parts: Vec<String> = Vec::new();
+    if stats.transport_recovery_epoch > 0 {
+        if stats.transport_recovery_episode_active {
+            parts.push(format!("repoch:{}:active", stats.transport_recovery_epoch));
+        } else {
+            parts.push(format!("repoch:{}", stats.transport_recovery_epoch));
+        }
     }
-    if stats.transport_recovery_episode_active {
-        Some(format!("repoch:{}:active", stats.transport_recovery_epoch))
+    // 便于 trace/面板对齐：transport-await 长窗时标明关注点（主机 IDR / 本端干净锚）。
+    if stats
+        .video_owner_reason
+        .as_deref()
+        .is_some_and(|r| r == "transportAwaitRecoveryKeyframe")
+    {
+        parts.push("awaitKeyframe:hostIdrOrCleanAnchor".to_string());
+    }
+    if parts.is_empty() {
+        None
     } else {
-        Some(format!("repoch:{}", stats.transport_recovery_epoch))
+        Some(parts.join("|"))
     }
 }
 
@@ -1395,12 +1408,19 @@ fn classify_stall_kind(
         return Some(match owner_reason {
             "adapterIdleTimeout" => "idleTimeout".to_string(),
             "displaySupplyCritical" => "displaySupplyCritical".to_string(),
+            "displaySupplyDegraded" => "displaySupplyDegraded".to_string(),
             "decoderBackendFailure" => "decoderBackendFailure".to_string(),
             "transportSampleLoss" => "sampleLoss".to_string(),
             "transportAwaitRecoveryKeyframe" | "ingressWaitKeyframe" => {
                 "waitingKeyframe".to_string()
             }
             "reconfigure" => "reconfigure".to_string(),
+            // steady 主路径不应落在笼统 recovering，避免与传输/解码恢复混淆。
+            "steady" => "none".to_string(),
+            "degradedSteady" => "displayDegradedSteady".to_string(),
+            "supplyStarved" => "displaySupplyStarved".to_string(),
+            "seekingAnchor" | "priming" => "startupPriming".to_string(),
+            "rebuildingSupply" => "transportRecovering".to_string(),
             _ => {
                 if stats.video_decoder_stalled == Some(true)
                     || stats.video_renderer_stalled == Some(true)

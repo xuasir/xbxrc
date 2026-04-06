@@ -249,7 +249,9 @@ impl FrameBudgetContext {
     pub(crate) fn retry_budget(&self, value: FrameValue, default_max_retry_count: u8) -> u8 {
         match (self.link_value, self.failure_cost, self.rtt_slack) {
             (_, FrameBudgetFailureCost::ChainBroken, FrameBudgetRttSlack::Exhausted) => 0,
-            (FrameBudgetLinkValue::Anchor, _, _) => default_max_retry_count.min(1),
+            // Anchor 洞 previously capped at 1 extra poll retry → initial NACK + 1 retry 就 budget 耗尽，
+            // 云/高 RTT 下易过早 expiredRetryBudget，迫使时间线 broken 与 decoder reset 风暴。
+            (FrameBudgetLinkValue::Anchor, _, _) => default_max_retry_count.min(3),
             (FrameBudgetLinkValue::Supply, FrameBudgetFailureCost::ChainBroken, _) => {
                 default_max_retry_count.min(1)
             }

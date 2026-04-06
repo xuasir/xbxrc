@@ -1093,6 +1093,18 @@ fn recent_clean_anchor_keeps_transport_await_recovery_keyframe_from_forcing_hard
     stats.video_anchor_clean_epoch = Some(12);
     stats.video_anchor_clean_observed_at_ms = Some(now_ms - 180.0);
     stats.video_anchor_clean_source_event = Some("chain-clean-keyframe-submitted".to_string());
+    stats.latest_video_host_present_time_ms = Some(now_ms);
+    stats.latest_video_track_status = Some(XbxEngineVideoTrackStatus {
+        state: "remoteTrackAttached".to_string(),
+        video_width: Some(1280),
+        video_height: Some(720),
+        mime_type: Some("video/H264".to_string()),
+        transport_state: XbxEngineTransportStateDto::Connected,
+        video_bytes_total: 64_000,
+        video_packet_count_total: 500,
+        audio_bytes_total: 2_000,
+        observed_at_ms: now_ms,
+    });
     stats.latest_video_timeline_observation = Some(crate::XbxEngineVideoTimelineObservation {
         observation_id: 42,
         source_event: "frame-observed".to_string(),
@@ -1145,6 +1157,18 @@ fn recent_clean_anchor_candidate_ledger_keeps_transport_await_recovery_keyframe_
     let now_ms = unix_now_ms();
     let mut stats = XbxEngineMediaRuntimeStats::default();
     stats.transport_recovery_epoch = 12;
+    stats.latest_video_host_present_time_ms = Some(now_ms);
+    stats.latest_video_track_status = Some(XbxEngineVideoTrackStatus {
+        state: "remoteTrackAttached".to_string(),
+        video_width: Some(1280),
+        video_height: Some(720),
+        mime_type: Some("video/H264".to_string()),
+        transport_state: XbxEngineTransportStateDto::Connected,
+        video_bytes_total: 64_000,
+        video_packet_count_total: 500,
+        audio_bytes_total: 2_000,
+        observed_at_ms: now_ms,
+    });
     stats.latest_anchor_candidate_ledger = Some(crate::XbxEngineAnchorCandidateLedger {
         recovery_epoch: 12,
         frame_rtp_timestamp: Some(98_765),
@@ -1399,6 +1423,17 @@ fn transport_await_hard_fallback_timer_resets_on_healthy_clean_anchor() {
         });
         stats.video_renderer_stalled = Some(false);
         stats.latest_video_host_present_time_ms = Some(now_ms + 100.0);
+        stats.latest_video_track_status = Some(XbxEngineVideoTrackStatus {
+            state: "remoteTrackAttached".to_string(),
+            video_width: Some(1920),
+            video_height: Some(1080),
+            mime_type: Some("video/H264".to_string()),
+            transport_state: XbxEngineTransportStateDto::Connected,
+            video_bytes_total: 72_000,
+            video_packet_count_total: 600,
+            audio_bytes_total: 3_000,
+            observed_at_ms: now_ms + 100.0,
+        });
     });
     let _ = coordinator.propose_from_owner_signal(
         RecoveryOwnerSignal {

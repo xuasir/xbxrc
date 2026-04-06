@@ -372,6 +372,8 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
     },
     onFrameReady: () => {
       if (!closing.value) {
+        // 首帧/后续帧到达时必须收起「长时间无画面」计时与浮层，否则画面已出仍会一直提示。
+        resetExecutionWarning()
         dispatchViewAction({ type: 'frameReady' })
       }
     },
@@ -390,6 +392,7 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
       runtimeSnapshot: runtimeHost.performanceSnapshot.value,
       lifecyclePhase: lifecyclePhase.value,
       warningVisible: warningVisible.value,
+      lastHostFrameAtMs: runtimeHost.lastFrameAt.value,
     })
   })
   const enhancements = computed<StreamEnhancementMountSnapshot>(() => {

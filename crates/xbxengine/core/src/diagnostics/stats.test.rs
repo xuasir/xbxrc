@@ -133,6 +133,34 @@ fn display_supply_critical_uses_dedicated_stall_kind() {
 }
 
 #[test]
+fn supply_starved_owner_maps_stall_kind_to_display_supply_starved() {
+    let stats = XbxEngineMediaRuntimeStats {
+        transport_state: XbxEngineTransportStateDto::Connected,
+        video_owner_state: Some("supply-starved".to_string()),
+        video_owner_reason: Some("supplyStarved".to_string()),
+        video_owner_source: Some("steady".to_string()),
+        ..XbxEngineMediaRuntimeStats::default()
+    };
+
+    let dto = build_xbxengine_stats(&test_snapshot(), Some(&stats));
+    assert_eq!(dto.stall_kind.as_deref(), Some("displaySupplyStarved"));
+}
+
+#[test]
+fn stable_serving_steady_stall_kind_is_none_not_recovering() {
+    let stats = XbxEngineMediaRuntimeStats {
+        transport_state: XbxEngineTransportStateDto::Connected,
+        video_owner_state: Some("stable-serving".to_string()),
+        video_owner_reason: Some("steady".to_string()),
+        video_owner_source: Some("steady".to_string()),
+        ..XbxEngineMediaRuntimeStats::default()
+    };
+
+    let dto = build_xbxengine_stats(&test_snapshot(), Some(&stats));
+    assert_eq!(dto.stall_kind.as_deref(), Some("none"));
+}
+
+#[test]
 fn runtime_summary_includes_repair_probe_note_when_active() {
     let stats = XbxEngineMediaRuntimeStats {
         transport_state: XbxEngineTransportStateDto::Connected,

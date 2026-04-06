@@ -759,7 +759,6 @@ pub(super) struct MacOsLayerState {
     display_layer_ptr: Option<*mut objc2::runtime::AnyObject>,
     first_present_logged: bool,
     cached_format_desc: Option<CachedFormatDescription>,
-    pending_sample: Option<PreparedLayerSample>,
     last_layer_bounds: Option<[f64; 4]>,
     last_layer_scale: Option<f64>,
 }
@@ -1283,7 +1282,6 @@ impl MacOsDisplayLinkHandle {
 struct MacOsLayerDisplayLinkContext {
     viewport_id: String,
     window_label: String,
-    app_handle: AppHandle,
     layer_state: Arc<Mutex<MacOsLayerState>>,
     frame_slot: Arc<Mutex<ScheduledFrameSlot>>,
     telemetry: Arc<Mutex<HostCadenceTelemetry>>,
@@ -1305,7 +1303,6 @@ impl MacOsLayerDisplayLinkHandle {
     fn start(
         viewport_id: String,
         window_label: String,
-        app_handle: AppHandle,
         layer_state: Arc<Mutex<MacOsLayerState>>,
         frame_slot: Arc<Mutex<ScheduledFrameSlot>>,
         telemetry: Arc<Mutex<HostCadenceTelemetry>>,
@@ -1315,7 +1312,6 @@ impl MacOsLayerDisplayLinkHandle {
         let context = Box::new(MacOsLayerDisplayLinkContext {
             viewport_id,
             window_label,
-            app_handle,
             layer_state,
             frame_slot,
             telemetry,
@@ -1459,59 +1455,15 @@ unsafe extern "C" fn macos_layer_display_link_callback(
     if context.render_loop_pending.swap(true, Ordering::Relaxed) {
         return 0;
     }
-    let Some(window) = context.app_handle.get_window(&context.window_label) else {
-        context.render_loop_pending.store(false, Ordering::Relaxed);
-        return 0;
-    };
-    let layer_state = context.layer_state.clone();
-    let frame_slot = context.frame_slot.clone();
-    let telemetry = context.telemetry.clone();
-    let render_loop_pending = context.render_loop_pending.clone();
-    let viewport_id = context.viewport_id.clone();
-    let runtime_trace = context.runtime_trace.clone();
-    let window_for_task = window.clone();
-    let prepare_outcome = prepare_layer_sample_for_present(
-        &layer_state,
-        &frame_slot,
-        &telemetry,
+    run_layer_present_tick(
         &context.viewport_id,
         &context.window_label,
-        context.runtime_trace.as_ref(),
+        &context.layer_state,
+        &context.frame_slot,
+        &context.telemetry,
+        &context.render_loop_pending,
+        context.runtime_trace.clone(),
     );
-    if !matches!(prepare_outcome, LayerSamplePrepareOutcome::Prepared) {
-        context.render_loop_pending.store(false, Ordering::Relaxed);
-        return 0;
-    }
-    let dispatch_requested_at_ms = now_ms_f64();
-    if let Err(error) = window.run_on_main_thread(move || {
-        run_layer_present_tick(
-            &window_for_task,
-            &viewport_id,
-            &layer_state,
-            &telemetry,
-            &render_loop_pending,
-            Some(dispatch_requested_at_ms),
-            runtime_trace,
-        );
-    }) {
-        record_native_video_timing_event(
-            context.runtime_trace.as_ref(),
-            "layer",
-            "run_on_main_thread_enqueue_failed",
-            &context.viewport_id,
-            &context.window_label,
-            serde_json::json!({
-                "error": error.to_string(),
-            }),
-        );
-        context.render_loop_pending.store(false, Ordering::Relaxed);
-        log::warn!(
-            "[native_video][timing] pipeline=layer stage=run_on_main_thread_enqueue_failed viewport={} window={} error={}",
-            context.viewport_id,
-            context.window_label,
-            error
-        );
-    }
     0
 }
 
@@ -1578,100 +1530,84 @@ fn calculate_recent_interval_ms(recent_times_ms: &VecDeque<f64>) -> Option<f64> 
 
 #[cfg(target_os = "macos")]
 pub(super) fn run_layer_present_tick(
-    window: &Window,
     viewport_id: &str,
+    window_label: &str,
     layer_state: &Arc<Mutex<MacOsLayerState>>,
+    frame_slot: &Arc<Mutex<ScheduledFrameSlot>>,
     telemetry: &Arc<Mutex<HostCadenceTelemetry>>,
     render_loop_pending: &Arc<AtomicBool>,
-    dispatch_requested_at_ms: Option<f64>,
     runtime_trace: Option<RuntimeTraceRecorderRef>,
 ) {
     let tick_started_at_ms = now_ms_f64();
     let _pending_guard = PendingFlagGuard::new(render_loop_pending.clone());
-    if let Some(dispatch_ms) = dispatch_requested_at_ms {
-        let queue_delay_ms = (tick_started_at_ms - dispatch_ms).max(0.0);
-        if queue_delay_ms >= HOST_TIMING_QUEUE_WARN_MS {
+    let prepare_outcome = prepare_layer_sample_for_present(
+        layer_state,
+        frame_slot,
+        telemetry,
+        viewport_id,
+        window_label,
+        runtime_trace.as_ref(),
+    );
+    let prepared_sample = match prepare_outcome {
+        LayerSamplePrepareOutcome::Prepared { sample } => sample,
+        LayerSamplePrepareOutcome::RetainedDisplayedFrame
+        | LayerSamplePrepareOutcome::SkippedNoReadyFrame
+        | LayerSamplePrepareOutcome::Failed => {
+            return;
+        }
+    };
+    let (layer_ptr, first_present) = {
+        let Ok(mut layer_state_guard) = layer_state.lock() else {
             record_native_video_timing_event_lazy(
                 runtime_trace.as_ref(),
                 "layer",
-                "run_on_main_thread_delay",
+                "present_tick_failed",
                 viewport_id,
-                window.label(),
+                window_label,
                 || {
                     serde_json::json!({
-                        "queueDelayMs": queue_delay_ms,
+                        "reason": "layerStateLockFailed",
                     })
                 },
             );
-            log::warn!(
-                "[native_video][timing] pipeline=layer stage=run_on_main_thread_delay viewport={} window={} queueDelayMs={:.2}",
+            return;
+        };
+        let Some(layer_ptr) = layer_state_guard.display_layer_ptr else {
+            record_native_video_timing_event_lazy(
+                runtime_trace.as_ref(),
+                "layer",
+                "present_tick_blocked",
                 viewport_id,
-                window.label(),
-                queue_delay_ms
+                window_label,
+                || {
+                    serde_json::json!({
+                        "reason": "displayLayerUnavailable",
+                    })
+                },
             );
+            return;
+        };
+        let first_present = !layer_state_guard.first_present_logged;
+        if first_present {
+            layer_state_guard.first_present_logged = true;
         }
-    }
-    let Ok(mut layer_state_guard) = layer_state.lock() else {
-        record_native_video_timing_event_lazy(
-            runtime_trace.as_ref(),
-            "layer",
-            "present_tick_failed",
-            viewport_id,
-            window.label(),
-            || {
-                serde_json::json!({
-                    "reason": "layerStateLockFailed",
-                })
-            },
-        );
-        return;
+        (layer_ptr, first_present)
     };
-    let Some(layer_ptr) = ensure_display_layer(window, &mut layer_state_guard) else {
-        record_native_video_timing_event_lazy(
-            runtime_trace.as_ref(),
-            "layer",
-            "present_tick_blocked",
-            viewport_id,
-            window.label(),
-            || {
-                serde_json::json!({
-                    "reason": "displayLayerUnavailable",
-                })
-            },
-        );
-        return;
-    };
-    if !layer_state_guard.first_present_logged {
-        layer_state_guard.first_present_logged = true;
+    if first_present {
         record_native_video_timing_event_lazy(
             runtime_trace.as_ref(),
             "layer",
             "first_present",
             viewport_id,
-            window.label(),
+            window_label,
             || serde_json::json!({}),
         );
         log::info!(
             "[native_video][macos] first layer present for viewport={} window={}",
             viewport_id,
-            window.label()
+            window_label
         );
     }
-    let Some(prepared_sample) = layer_state_guard.pending_sample.take() else {
-        record_native_video_timing_event_lazy(
-            runtime_trace.as_ref(),
-            "layer",
-            "present_tick_blocked",
-            viewport_id,
-            window.label(),
-            || {
-                serde_json::json!({
-                    "reason": "pendingSampleMissing",
-                })
-            },
-        );
-        return;
-    };
     let sample_frame_seq = prepared_sample.frame_seq;
     let sample_width = prepared_sample.width;
     let sample_height = prepared_sample.height;
@@ -1679,7 +1615,6 @@ pub(super) fn run_layer_present_tick(
     let sample_frame_recovery_disposition = prepared_sample.frame_recovery_disposition.clone();
     let sample_frame_unrecoverable_reason = prepared_sample.frame_unrecoverable_reason.clone();
     present_cv_pixelbuffer(layer_ptr, prepared_sample);
-    drop(layer_state_guard);
     let now_ms = now_ms_f64();
     if let Ok(mut telemetry_state) = telemetry.lock() {
         telemetry_state.record_present(now_ms);
@@ -1689,7 +1624,7 @@ pub(super) fn run_layer_present_tick(
         "layer",
         "sample_presented",
         viewport_id,
-        window.label(),
+        window_label,
         || {
             serde_json::json!({
                 "frameSeq": sample_frame_seq,
@@ -1708,7 +1643,7 @@ pub(super) fn run_layer_present_tick(
             "layer",
             "tick_total",
             viewport_id,
-            window.label(),
+            window_label,
             || {
                 serde_json::json!({
                     "totalMs": tick_total_ms,
@@ -1718,7 +1653,7 @@ pub(super) fn run_layer_present_tick(
         log::warn!(
             "[native_video][timing] pipeline=layer stage=tick_total viewport={} window={} totalMs={:.2}",
             viewport_id,
-            window.label(),
+            window_label,
             tick_total_ms
         );
     }
@@ -1839,7 +1774,6 @@ pub(super) fn drop_display_layer(window: &Window, state: &mut MacOsLayerState) {
         return;
     };
     state.cached_format_desc = None;
-    state.pending_sample = None;
     state.last_layer_bounds = None;
     state.last_layer_scale = None;
     let ns_view_ptr = match window.ns_view() {
@@ -1904,6 +1838,9 @@ pub(super) fn prepare_layer_sample_for_present(
     };
     let frame = match frame_take_outcome {
         ScheduledFrameTakeOutcome::Ready(frame) => frame,
+        ScheduledFrameTakeOutcome::RetainedDisplayedFrame => {
+            return LayerSamplePrepareOutcome::RetainedDisplayedFrame;
+        }
         ScheduledFrameTakeOutcome::NoPendingFrame => {
             record_native_video_timing_event_lazy(
                 runtime_trace,
@@ -1918,26 +1855,6 @@ pub(super) fn prepare_layer_sample_for_present(
                 },
             );
             return LayerSamplePrepareOutcome::SkippedNoReadyFrame;
-        }
-        ScheduledFrameTakeOutcome::RejectedAlreadyPresented {
-            frame_seq,
-            last_presented_frame_seq,
-        } => {
-            record_native_video_timing_event_lazy(
-                runtime_trace,
-                "layer",
-                "frame_slot_take_skipped",
-                viewport_id,
-                window_label,
-                || {
-                    json!({
-                        "reason": "frameAlreadyPresented",
-                        "frameSeq": frame_seq,
-                        "lastPresentedFrameSeq": last_presented_frame_seq,
-                    })
-                },
-            );
-            return LayerSamplePrepareOutcome::Failed;
         }
         ScheduledFrameTakeOutcome::DroppedStale {
             frame,
@@ -2032,10 +1949,6 @@ pub(super) fn prepare_layer_sample_for_present(
         );
         return LayerSamplePrepareOutcome::Failed;
     };
-    let replaced_pending_frame_seq = layer_state_guard
-        .pending_sample
-        .as_ref()
-        .map(|sample| sample.frame_seq);
     let sample_prepare_outcome =
         prepare_cv_pixelbuffer_sample(&mut layer_state_guard, descriptor, &frame);
     let (sample, used_cached_format_description) = match sample_prepare_outcome {
@@ -2061,7 +1974,6 @@ pub(super) fn prepare_layer_sample_for_present(
             return LayerSamplePrepareOutcome::Failed;
         }
     };
-    layer_state_guard.pending_sample = Some(sample);
     let frame_age_ms = (now_ms - frame.rendered_at_ms).max(0.0);
     record_native_video_timing_event_lazy(
         runtime_trace,
@@ -2077,11 +1989,10 @@ pub(super) fn prepare_layer_sample_for_present(
                 "frameAgeMs": frame_age_ms,
                 "frameAgeBudgetMs": frame_age_budget_ms,
                 "usedCachedFormatDescription": used_cached_format_description,
-                "replacedPendingFrameSeq": replaced_pending_frame_seq,
             })
         },
     );
-    LayerSamplePrepareOutcome::Prepared
+    LayerSamplePrepareOutcome::Prepared { sample }
 }
 
 #[cfg(target_os = "macos")]
@@ -2317,7 +2228,8 @@ pub(super) enum PreparedLayerSampleOutcome {
 #[cfg(target_os = "macos")]
 #[derive(Debug)]
 pub(super) enum LayerSamplePrepareOutcome {
-    Prepared,
+    Prepared { sample: PreparedLayerSample },
+    RetainedDisplayedFrame,
     SkippedNoReadyFrame,
     Failed,
 }

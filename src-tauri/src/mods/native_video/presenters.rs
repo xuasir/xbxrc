@@ -10,11 +10,10 @@ use xbxengine::{MacOsCVPixelBufferDescriptor, XbxEngineRenderFrame, XbxEngineRen
 
 use super::scheduling::{HostCadenceTelemetry, ScheduledFrameSlot};
 use super::{
-    drop_display_layer, drop_wgpu_host_view, now_ms_f64, prepare_layer_sample_for_present,
+    drop_display_layer, drop_wgpu_host_view, ensure_display_layer, now_ms_f64,
     record_native_video_timing_event_lazy, record_native_video_trace, run_layer_present_tick,
-    run_wgpu_render_tick, LayerSamplePrepareOutcome, MacOsDisplayLinkHandle,
-    MacOsLayerDisplayLinkHandle, MacOsLayerState, MacOsWgpuState, MacOsWgpuTelemetry,
-    NativeVideoViewportState,
+    run_wgpu_render_tick, MacOsDisplayLinkHandle, MacOsLayerDisplayLinkHandle, MacOsLayerState,
+    MacOsWgpuState, MacOsWgpuTelemetry, NativeVideoViewportState,
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -415,6 +414,40 @@ impl MacOsVideoPresenter {
         }
     }
 
+    fn ensure_layer_ready_on_main_thread(&self) {
+        let Some(window) = self.app_handle.get_window(&self.window_label) else {
+            return;
+        };
+        let layer_state = self.layer_state.clone();
+        let viewport_id = self.viewport_id.clone();
+        let window_label = self.window_label.clone();
+        let runtime_trace = self.runtime_trace.clone();
+        let window_for_task = window.clone();
+        let _ = window.run_on_main_thread(move || {
+            let Ok(mut state) = layer_state.lock() else {
+                record_native_video_timing_event_lazy(
+                    runtime_trace.as_ref(),
+                    "layer",
+                    "display_layer_init_failed",
+                    &viewport_id,
+                    &window_label,
+                    || serde_json::json!({ "reason": "layerStateLockFailed" }),
+                );
+                return;
+            };
+            if ensure_display_layer(&window_for_task, &mut state).is_none() {
+                record_native_video_timing_event_lazy(
+                    runtime_trace.as_ref(),
+                    "layer",
+                    "display_layer_init_failed",
+                    &viewport_id,
+                    &window_label,
+                    || serde_json::json!({ "reason": "displayLayerUnavailable" }),
+                );
+            }
+        });
+    }
+
     fn ensure_render_loop(&mut self) {
         let Ok(mut frame_slot) = self.frame_slot.lock() else {
             return;
@@ -424,11 +457,11 @@ impl MacOsVideoPresenter {
         }
         frame_slot.render_loop_started = true;
         self.render_loop_stop.store(false, Ordering::Relaxed);
+        self.ensure_layer_ready_on_main_thread();
         if self.display_link.is_none() {
             if let Ok(display_link) = MacOsLayerDisplayLinkHandle::start(
                 self.viewport_id.clone(),
                 self.window_label.clone(),
-                self.app_handle.clone(),
                 self.layer_state.clone(),
                 self.frame_slot.clone(),
                 self.telemetry.clone(),
@@ -453,7 +486,6 @@ impl MacOsVideoPresenter {
         );
         let viewport_id = self.viewport_id.clone();
         let window_label = self.window_label.clone();
-        let app_handle = self.app_handle.clone();
         let layer_state = self.layer_state.clone();
         let frame_slot = self.frame_slot.clone();
         let telemetry = self.telemetry.clone();
@@ -469,41 +501,15 @@ impl MacOsVideoPresenter {
                     if render_loop_pending.swap(true, Ordering::Relaxed) {
                         continue;
                     }
-                    let Some(window) = app_handle.get_window(&window_label) else {
-                        render_loop_pending.store(false, Ordering::Relaxed);
-                        continue;
-                    };
-                    let layer_state = layer_state.clone();
-                    let frame_slot = frame_slot.clone();
-                    let telemetry = telemetry.clone();
-                    let render_loop_pending = render_loop_pending.clone();
-                    let viewport_id = viewport_id.clone();
-                    let window_for_task = window.clone();
-                    let runtime_trace_for_task = runtime_trace.clone();
-                    let dispatch_requested_at_ms = now_ms_f64();
-                    let prepare_outcome = prepare_layer_sample_for_present(
+                    run_layer_present_tick(
+                        &viewport_id,
+                        &window_label,
                         &layer_state,
                         &frame_slot,
                         &telemetry,
-                        &viewport_id,
-                        &window_label,
-                        runtime_trace_for_task.as_ref(),
+                        &render_loop_pending,
+                        runtime_trace.clone(),
                     );
-                    if !matches!(prepare_outcome, LayerSamplePrepareOutcome::Prepared) {
-                        render_loop_pending.store(false, Ordering::Relaxed);
-                        continue;
-                    }
-                    let _ = window.run_on_main_thread(move || {
-                        run_layer_present_tick(
-                            &window_for_task,
-                            &viewport_id,
-                            &layer_state,
-                            &telemetry,
-                            &render_loop_pending,
-                            Some(dispatch_requested_at_ms),
-                            runtime_trace_for_task,
-                        );
-                    });
                 }
             })
             .expect("Failed to spawn macOS layer render loop");

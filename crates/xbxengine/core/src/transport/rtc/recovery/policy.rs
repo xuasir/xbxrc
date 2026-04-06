@@ -160,8 +160,8 @@ impl ScenarioPolicyResolver {
                 display_supply_thresholds: DisplaySupplyThresholds {
                     degraded_no_pending_streak: 80,
                     critical_no_pending_streak: 150,
-                    degraded_present_age_ms: 240.0,
-                    degraded_decode_age_ms: 180.0,
+                    degraded_present_age_ms: 265.0,
+                    degraded_decode_age_ms: 200.0,
                     critical_present_age_ms: 720.0,
                     critical_decode_age_ms: 420.0,
                     degraded_present_drop_ratio: 0.04,
@@ -198,8 +198,8 @@ impl ScenarioPolicyResolver {
                 display_supply_thresholds: DisplaySupplyThresholds {
                     degraded_no_pending_streak: 64,
                     critical_no_pending_streak: 128,
-                    degraded_present_age_ms: 180.0,
-                    degraded_decode_age_ms: 140.0,
+                    degraded_present_age_ms: 200.0,
+                    degraded_decode_age_ms: 155.0,
                     critical_present_age_ms: 600.0,
                     critical_decode_age_ms: 320.0,
                     degraded_present_drop_ratio: 0.03,
@@ -234,8 +234,8 @@ impl ScenarioPolicyResolver {
                 display_supply_thresholds: DisplaySupplyThresholds {
                     degraded_no_pending_streak: 64,
                     critical_no_pending_streak: 128,
-                    degraded_present_age_ms: 220.0,
-                    degraded_decode_age_ms: 170.0,
+                    degraded_present_age_ms: 240.0,
+                    degraded_decode_age_ms: 188.0,
                     critical_present_age_ms: 650.0,
                     critical_decode_age_ms: 360.0,
                     degraded_present_drop_ratio: 0.035,

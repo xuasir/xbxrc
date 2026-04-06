@@ -107,12 +107,7 @@ fn drain_incoming_commands(
     loop {
         match receiver.try_recv() {
             Ok(command) => {
-                apply_command(
-                    command,
-                    pending_requests,
-                    active_targets,
-                    shutting_down,
-                );
+                apply_command(command, pending_requests, active_targets, shutting_down);
             }
             Err(TryRecvError::Empty) => break,
             Err(TryRecvError::Disconnected) => {
@@ -185,7 +180,8 @@ fn dispatch_request(
     } else {
         request.clone()
     };
-    let request_summary = serde_json::to_value(&effective_request).unwrap_or(serde_json::Value::Null);
+    let request_summary =
+        serde_json::to_value(&effective_request).unwrap_or(serde_json::Value::Null);
     let event_name = if is_stop_gamepad_rumble_request(&effective_request.effect) {
         "stopGamepadRumbleResult"
     } else {
@@ -207,7 +203,10 @@ fn dispatch_request(
                 request_summary,
                 &error.to_string(),
             );
-            log::warn!("[xbxengine][host] gamepad rumble host call failed: {}", error);
+            log::warn!(
+                "[xbxengine][host] gamepad rumble host call failed: {}",
+                error
+            );
         }
     }
 }
@@ -221,18 +220,18 @@ fn execute_request(
         .ok_or_else(|| {
             AppError::XbxEngine("AppState unavailable for xbxengine host bridge".to_string())
         })
-        .map_err(map_app_error(if is_stop_gamepad_rumble_request(&request.effect) {
-            "stopGamepadRumble"
-        } else {
-            "playGamepadRumble"
-        }))?;
+        .map_err(map_app_error(
+            if is_stop_gamepad_rumble_request(&request.effect) {
+                "stopGamepadRumble"
+            } else {
+                "playGamepadRumble"
+            },
+        ))?;
     let vibration_config = state.config.get_streaming_config();
     if !vibration_config.vibration {
         return Ok(OhMyGamepadRumbleResultDto {
             accepted: false,
-            reason: Some(
-                ohmygamepad_protocol::OhMyGamepadRumbleRejectionReasonDto::Unsupported,
-            ),
+            reason: Some(ohmygamepad_protocol::OhMyGamepadRumbleRejectionReasonDto::Unsupported),
             resolved_device_ids: Vec::new(),
         });
     }
@@ -257,7 +256,10 @@ fn track_active_target(
         active_targets.retain(|target| *target != request.target);
         return;
     }
-    if !active_targets.iter().any(|target| *target == request.target) {
+    if !active_targets
+        .iter()
+        .any(|target| *target == request.target)
+    {
         active_targets.push(request.target.clone());
     }
 }

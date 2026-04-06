@@ -93,6 +93,9 @@ function resolveStatusText(): string {
     return props.diagnostics.recoveryOwnerState
   }
   if (props.diagnostics.statusCode === 'stable') {
+    if (props.diagnostics.isDisplaySupplyLimited) {
+      return t('streamPage.diagnostics.values.displaySupplyLimited')
+    }
     return t('streamPage.diagnostics.values.stable')
   }
   return t('streamPage.diagnostics.values.inactive')

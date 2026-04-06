@@ -575,8 +575,9 @@ fn supply_starved_dwell_resets_when_supply_reason_label_changes() {
     assert!(still_held.recovery_intent.is_none());
 
     let mut confirmed = critical_pressure.clone();
-    confirmed.observed_at_ms = 2_420.0;
-    confirmed.clean_anchor_observed_at_ms = Some(2_419.0);
+    // 须超过 DISPLAY_SUPPLY_STARVED_CONFIRM_MS（与 owner 内常量对齐）
+    confirmed.observed_at_ms = 2_520.0;
+    confirmed.clean_anchor_observed_at_ms = Some(2_519.0);
     let starved = owner.evaluate(&confirmed);
     assert_eq!(starved.state, VideoSchedulingOwnerState::SupplyStarved);
     assert_eq!(
@@ -667,8 +668,8 @@ fn supply_starved_dwell_clears_after_brief_recovery_before_restarting() {
     assert!(still_held.recovery_intent.is_none());
 
     let mut confirmed = critical_again.clone();
-    confirmed.observed_at_ms = 3_420.0;
-    confirmed.clean_anchor_observed_at_ms = Some(3_419.0);
+    confirmed.observed_at_ms = 3_520.0;
+    confirmed.clean_anchor_observed_at_ms = Some(3_519.0);
     let starved = owner.evaluate(&confirmed);
     assert_eq!(starved.state, VideoSchedulingOwnerState::SupplyStarved);
     assert_eq!(

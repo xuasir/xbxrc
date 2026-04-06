@@ -3,6 +3,16 @@ import type {
   StreamEnhancementMountState,
   StreamSessionDiagnosticsSnapshot,
 } from '../../streaming/types'
+import {
+  translateDiagnosticsDecoderRecovery,
+  translateDiagnosticsLatestDecision,
+  translateDiagnosticsOwnerReason,
+  translateDiagnosticsOwnerState,
+  translateDiagnosticsPrimaryIssueChain,
+  translateDiagnosticsSessionPhase,
+  translateDiagnosticsStallKind,
+  translateDiagnosticsVideoHealth,
+} from '../../streaming/diagnostics-i18n'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
@@ -20,22 +30,26 @@ interface StreamDiagnosticsRowViewModel {
     | 'path'
     | 'inputPortrait'
     | 'phase'
+    | 'videoHealth'
+    | 'primaryIssueChain'
+    | 'latestDecision'
     | 'ownerState'
     | 'ownerReason'
     | 'decoderState'
+    | 'stallKind'
     | 'status'
   value: string
 }
 
 interface StreamDiagnosticsNoticeViewModel {
-  id: 'recovering' | 'relayPath' | 'noVideo'
+  id: 'recovering' | 'displaySupply' | 'relayPath' | 'noVideo'
   severity: 'info' | 'warning'
   text: string
 }
 
 const props = defineProps<StreamDiagnosticsPanelProps>()
 
-const { t } = useI18n()
+const { t, te } = useI18n()
 
 const panelVisible = computed(() =>
   props.visible && props.mount.phase === 'mounted',
@@ -67,20 +81,35 @@ const rows = computed<StreamDiagnosticsRowViewModel[]>(() => [
   },
   {
     key: 'phase',
-    value: props.diagnostics.sessionPhase ?? t('streamPage.diagnostics.values.unknown'),
+    value: translateDiagnosticsSessionPhase(te, t, props.diagnostics.sessionPhase),
+  },
+  {
+    key: 'videoHealth',
+    value: translateDiagnosticsVideoHealth(te, t, props.diagnostics.videoHealth),
+  },
+  {
+    key: 'primaryIssueChain',
+    value: translateDiagnosticsPrimaryIssueChain(te, t, props.diagnostics.primaryIssueChain),
+  },
+  {
+    key: 'latestDecision',
+    value: translateDiagnosticsLatestDecision(te, t, props.diagnostics.latestDecisionSummary),
   },
   {
     key: 'decoderState',
-    value:
-      props.diagnostics.videoDecoderRecoveryState ?? t('streamPage.diagnostics.values.unknown'),
+    value: translateDiagnosticsDecoderRecovery(te, t, props.diagnostics.videoDecoderRecoveryState),
   },
   {
     key: 'ownerState',
-    value: props.diagnostics.recoveryOwnerState ?? t('streamPage.diagnostics.values.unknown'),
+    value: translateDiagnosticsOwnerState(te, t, props.diagnostics.recoveryOwnerState),
   },
   {
     key: 'ownerReason',
-    value: props.diagnostics.recoveryOwnerReason ?? t('streamPage.diagnostics.values.none'),
+    value: translateDiagnosticsOwnerReason(te, t, props.diagnostics.recoveryOwnerReason),
+  },
+  {
+    key: 'stallKind',
+    value: translateDiagnosticsStallKind(te, t, props.diagnostics.stallKind),
   },
   {
     key: 'status',
@@ -96,6 +125,13 @@ const notices = computed<StreamDiagnosticsNoticeViewModel[]>(() => {
       id: 'recovering',
       severity: 'info',
       text: t('streamPage.diagnostics.notices.recovering'),
+    })
+  }
+  else if (props.diagnostics.isDisplaySupplyLimited) {
+    items.push({
+      id: 'displaySupply',
+      severity: 'info',
+      text: t('streamPage.diagnostics.notices.displaySupplyLimited'),
     })
   }
 

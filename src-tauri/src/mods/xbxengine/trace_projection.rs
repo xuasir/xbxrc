@@ -927,8 +927,10 @@ pub(super) fn record_runtime_trace_observations(
         }
     }
 
-    let current_video_owner_observed_at_bucket =
-        sample_bucket_ms(stats.video_owner_observed_at_ms, DIRECT_GAMING_STATE_SAMPLE_INTERVAL_MS);
+    let current_video_owner_observed_at_bucket = sample_bucket_ms(
+        stats.video_owner_observed_at_ms,
+        DIRECT_GAMING_STATE_SAMPLE_INTERVAL_MS,
+    );
     if observation_state.session_phase != stats.session_phase
         || observation_state.remote_profile_baseline != stats.remote_profile_baseline
         || observation_state.remote_profile_dynamic != stats.remote_profile_dynamic
@@ -943,7 +945,8 @@ pub(super) fn record_runtime_trace_observations(
         || observation_state.recovery_owner_state != stats.recovery_owner_state
         || observation_state.recovery_owner_reason != stats.recovery_owner_reason
         || observation_state.video_owner_source != stats.video_owner_source
-        || observation_state.video_owner_observed_at_bucket != current_video_owner_observed_at_bucket
+        || observation_state.video_owner_observed_at_bucket
+            != current_video_owner_observed_at_bucket
         || observation_state.video_health != stats.video_health
         || observation_state.stall_kind != stats.stall_kind
     {
@@ -995,7 +998,8 @@ pub(super) fn record_runtime_trace_observations(
     let host_present_semantic_changed = observation_state.host_no_pending_pressure_level
         != stats.host_no_pending_pressure_level
         || observation_state.host_cadence_phase != stats.host_cadence_phase
-        || observation_state.host_descriptor_upload_mode != stats.video_present_descriptor_upload_mode;
+        || observation_state.host_descriptor_upload_mode
+            != stats.video_present_descriptor_upload_mode;
     let host_present_counter_regressed = observation_state
         .host_present_enqueue_count_total
         .zip(stats.video_present_submit_count_total)
@@ -1237,8 +1241,12 @@ pub(super) fn record_runtime_trace_observations(
             status.mime_type.clone(),
             status.transport_state.clone(),
         );
-        let bucket = sample_bucket_ms(Some(status.observed_at_ms), VIDEO_TRACK_STATE_SAMPLE_INTERVAL_MS);
-        let identity_changed = observation_state.video_track_state_signature.as_ref() != Some(&signature);
+        let bucket = sample_bucket_ms(
+            Some(status.observed_at_ms),
+            VIDEO_TRACK_STATE_SAMPLE_INTERVAL_MS,
+        );
+        let identity_changed =
+            observation_state.video_track_state_signature.as_ref() != Some(&signature);
         let sampled_tick = observation_state.video_track_state_bucket != bucket;
         if identity_changed || sampled_tick {
             observation_state.video_track_state_signature = Some(signature);

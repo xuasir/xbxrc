@@ -60,6 +60,8 @@ export interface StreamPerformanceSnapshot {
   videoOwnerObservedAtMs?: number
   directGamingBitrateBand?: string
   videoHealth?: string
+  primaryIssueChain?: string
+  latestDecisionSummary?: string
   stallKind?: string
   inboundVideoFps?: number
   decodeFps?: number
@@ -155,9 +157,13 @@ export interface StreamSessionDiagnosticsSnapshot {
   videoOwnerSource?: string
   directGamingBitrateBand?: string
   videoHealth?: string
+  primaryIssueChain?: string
+  latestDecisionSummary?: string
   stallKind?: string
   isRelayPath: boolean
   isRecovering: boolean
+  /** 显示供给受限（非传输/解码主恢复链），单独提示避免与「连接恢复中」混淆 */
+  isDisplaySupplyLimited: boolean
   hasNoVideoWarning: boolean
   transportSummary?: string
   statusCode: 'noVideo' | 'recovering' | 'owner' | 'stable' | 'inactive'
