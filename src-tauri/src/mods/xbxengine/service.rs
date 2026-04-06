@@ -1,9 +1,11 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex as StdMutex};
 use std::time::Duration;
+use std::time::Instant;
 
 use async_trait::async_trait;
 use serde::Deserialize;
+use serde_json::json;
 use serde_json::Value;
 use tauri::AppHandle;
 use xbxengine_protocol::{
@@ -28,6 +30,7 @@ const XBXENGINE_TICK_INTERVAL_MS: u64 = 16;
 pub struct XbxEngineService {
     runtime_state: Arc<XbxEngineRuntimeState>,
     last_runtime_event: Arc<StdMutex<Option<Value>>>,
+    runtime_trace: RuntimeTraceRecorderRef,
 }
 
 impl XbxEngineService {
@@ -47,6 +50,7 @@ impl XbxEngineService {
                 stats_snapshot_interval,
             )),
             last_runtime_event,
+            runtime_trace,
         }
     }
 }
@@ -55,13 +59,33 @@ impl XbxEngineService {
 impl XbxEngineProvider for XbxEngineService {
     async fn dispatch_control(&self, command_name: &str, params: Option<Value>) -> AppResult<()> {
         let command = parse_control_command(command_name, params)?;
+        record_dispatch_trace(
+            &self.runtime_trace,
+            command_name,
+            &command,
+            "requested",
+            None,
+            None,
+        );
+        let started_at = Instant::now();
         let runtime_state = self.runtime_state.clone();
-        tauri::async_runtime::spawn_blocking(move || runtime_state.apply_control(command))
-            .await
-            .map_err(|error| {
-                AppError::XbxEngine(format!("xbxengine control task join failed: {error}"))
-            })?
-            .map_err(|error| AppError::XbxEngine(error.to_string()))
+        let command_for_trace = command.clone();
+        let result =
+            tauri::async_runtime::spawn_blocking(move || runtime_state.apply_control(command))
+                .await
+                .map_err(|error| {
+                    AppError::XbxEngine(format!("xbxengine control task join failed: {error}"))
+                })?
+                .map_err(|error| AppError::XbxEngine(error.to_string()));
+        record_dispatch_trace(
+            &self.runtime_trace,
+            command_name,
+            &command_for_trace,
+            "completed",
+            Some(started_at.elapsed().as_millis()),
+            result.as_ref().err(),
+        );
+        result
     }
 
     async fn snapshot_stats(&self) -> AppResult<Value> {
@@ -366,6 +390,101 @@ fn parse_control_command(
         other => Err(AppError::InvalidParams(format!(
             "Unsupported xbxengine control command: {other}"
         ))),
+    }
+}
+
+fn record_dispatch_trace(
+    runtime_trace: &RuntimeTraceRecorderRef,
+    command_name: &str,
+    command: &XbxEngineControlCommandDto,
+    stage: &'static str,
+    duration_ms: Option<u128>,
+    error: Option<&AppError>,
+) {
+    let Some((event_name, session_id, viewport_id, target_type)) =
+        trace_event_summary(command_name, command, stage)
+    else {
+        return;
+    };
+    runtime_trace.record_event(
+        "xbxengine-host",
+        event_name,
+        session_id.as_deref(),
+        json!({
+            "command": command_name,
+            "sessionId": session_id,
+            "viewportId": viewport_id,
+            "targetType": target_type,
+            "durationMs": duration_ms,
+            "ok": error.is_none(),
+            "errorCode": error.map(AppError::code),
+            "errorMessage": error.map(ToString::to_string),
+        }),
+    );
+}
+
+fn trace_event_summary(
+    command_name: &str,
+    command: &XbxEngineControlCommandDto,
+    stage: &'static str,
+) -> Option<(
+    &'static str,
+    Option<String>,
+    Option<String>,
+    Option<&'static str>,
+)> {
+    match (command_name, command, stage) {
+        (
+            "AttachViewport",
+            XbxEngineControlCommandDto::AttachViewport { viewport },
+            "requested",
+        ) => Some((
+            "runtimeAttachViewportDispatchRequested",
+            None,
+            Some(viewport.viewport_id.clone()),
+            None,
+        )),
+        (
+            "AttachViewport",
+            XbxEngineControlCommandDto::AttachViewport { viewport },
+            "completed",
+        ) => Some((
+            "runtimeAttachViewportDispatchCompleted",
+            None,
+            Some(viewport.viewport_id.clone()),
+            None,
+        )),
+        (
+            "StartRuntime",
+            XbxEngineControlCommandDto::StartRuntime {
+                session, viewport, ..
+            },
+            "requested",
+        ) => Some((
+            "runtimeStartDispatchRequested",
+            Some(session.session_id.clone()),
+            Some(viewport.viewport_id.clone()),
+            Some(match session.target_type {
+                XbxEngineTargetTypeDto::Home => "home",
+                XbxEngineTargetTypeDto::Cloud => "cloud",
+            }),
+        )),
+        (
+            "StartRuntime",
+            XbxEngineControlCommandDto::StartRuntime {
+                session, viewport, ..
+            },
+            "completed",
+        ) => Some((
+            "runtimeStartDispatchCompleted",
+            Some(session.session_id.clone()),
+            Some(viewport.viewport_id.clone()),
+            Some(match session.target_type {
+                XbxEngineTargetTypeDto::Home => "home",
+                XbxEngineTargetTypeDto::Cloud => "cloud",
+            }),
+        )),
+        _ => None,
     }
 }
 

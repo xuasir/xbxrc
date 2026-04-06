@@ -133,6 +133,10 @@ pub struct RtcSessionPolicy {
 }
 
 impl RtcSessionPolicy {
+    fn ledger_has_pending_command(ledger: &XbxEngineRecoveryDecisionLedgerObservation) -> bool {
+        ledger.action_selected != "none" && ledger.command_result.is_none()
+    }
+
     fn owner_state_is_steady_serving(owner_state: VideoSchedulingOwnerState) -> bool {
         matches!(
             owner_state,
@@ -389,6 +393,9 @@ impl RtcSessionPolicy {
         let twcc_warmup_state = self.resolve_twcc_warmup_state();
         let has_media_recovery_surface = recovery_intent.is_some();
         let active_media_recovery_intent = recovery_intent.filter(|intent| intent.emit);
+        let passive_anchor_recovery_intent = recovery_intent.filter(|intent| {
+            Self::should_forward_passive_anchor_recovery_surface(owner_state, intent)
+        });
         let lifecycle_disconnected =
             snapshot.connection.lifecycle_state == ConnectionLifecycleStateFact::Disconnected;
         let lifecycle_recovering =
@@ -472,7 +479,9 @@ impl RtcSessionPolicy {
                         .unwrap_or_else(|| reason.label().to_string()),
                     observed_at_ms,
                 }
-            } else if let Some(intent) = active_media_recovery_intent {
+            } else if let Some(intent) =
+                active_media_recovery_intent.or(passive_anchor_recovery_intent)
+            {
                 if self.should_hold_pre_first_frame_connected_idle_timeout(
                     snapshot,
                     owner_state,
@@ -1111,6 +1120,15 @@ impl RtcSessionPolicy {
         }
     }
 
+    fn should_forward_passive_anchor_recovery_surface(
+        owner_state: VideoSchedulingOwnerState,
+        intent: &RecoveryIntentContract,
+    ) -> bool {
+        !intent.emit
+            && owner_state == VideoSchedulingOwnerState::RebuildingSupply
+            && intent.source == RecoveryIntentSource::Anchor
+    }
+
     fn should_enter_failed_terminal(
         &self,
         proposal: &crate::transport::rtc::recovery::coordinator::RecoveryCoordinatorProposal,
@@ -1621,6 +1639,7 @@ impl RtcSessionPolicy {
             clean_anchor_source_event: Option<String>,
             latest_anchor_candidate_ledger: Option<crate::XbxEngineAnchorCandidateLedger>,
             latest_video_track_status: Option<crate::XbxEngineVideoTrackStatus>,
+            latest_h264_inspection_observation: Option<crate::XbxEngineH264InspectionObservation>,
         }
 
         let owner_facts =
@@ -1632,6 +1651,9 @@ impl RtcSessionPolicy {
                 clean_anchor_source_event: stats.video_anchor_clean_source_event.clone(),
                 latest_anchor_candidate_ledger: stats.latest_anchor_candidate_ledger.clone(),
                 latest_video_track_status: stats.latest_video_track_status.clone(),
+                latest_h264_inspection_observation: stats
+                    .latest_h264_inspection_observation
+                    .clone(),
             })
             .unwrap_or_default();
         let anchor_reason_label = owner_facts
@@ -1673,6 +1695,30 @@ impl RtcSessionPolicy {
             latest_timeline_source_event,
             latest_track_state,
             latest_track_video_bytes_total,
+            latest_h264_bootstrap_ready: owner_facts
+                .latest_h264_inspection_observation
+                .as_ref()
+                .map(|inspection| inspection.bootstrap_ready),
+            latest_h264_bootstrap_reject_reason: owner_facts
+                .latest_h264_inspection_observation
+                .as_ref()
+                .and_then(|inspection| inspection.bootstrap_reject_reason.clone()),
+            latest_h264_committed_sps_present: owner_facts
+                .latest_h264_inspection_observation
+                .as_ref()
+                .map(|inspection| inspection.committed_sps_present),
+            latest_h264_committed_pps_present: owner_facts
+                .latest_h264_inspection_observation
+                .as_ref()
+                .map(|inspection| inspection.committed_pps_present),
+            latest_h264_delta_continuation_ready: owner_facts
+                .latest_h264_inspection_observation
+                .as_ref()
+                .map(|inspection| inspection.delta_continuation_ready),
+            latest_h264_observed_at_ms: owner_facts
+                .latest_h264_inspection_observation
+                .as_ref()
+                .map(|inspection| inspection.observed_at_ms),
             display_supply_thresholds: profile.display_supply_thresholds,
             observed_at_ms,
         };
@@ -1686,7 +1732,7 @@ impl RtcSessionPolicy {
             stats.video_owner_source = Some(owner_output.reason_source.as_str().to_string());
             stats.video_owner_observed_at_ms = Some(owner_output.observed_at_ms);
         });
-        if owner_output.state == VideoSchedulingOwnerState::StableServing
+        if Self::owner_state_is_steady_serving(owner_output.state)
             && owner_input
                 .clean_anchor_epoch
                 .is_some_and(|epoch| epoch == owner_input.recovery_epoch)
@@ -1807,7 +1853,6 @@ impl RtcSessionPolicy {
             observed_at_ms,
         };
         RuntimeStatsSink::new(self.runtime_stats.clone()).update(|stats| {
-            stats.latest_recovery_decision_ledger = Some(ledger.clone());
             stats.recent_recovery_decision_ledgers.push(ledger.clone());
             if stats.recent_recovery_decision_ledgers.len()
                 > RECENT_RECOVERY_DECISION_LEDGER_CAPACITY
@@ -1815,6 +1860,16 @@ impl RtcSessionPolicy {
                 let overflow = stats.recent_recovery_decision_ledgers.len()
                     - RECENT_RECOVERY_DECISION_LEDGER_CAPACITY;
                 stats.recent_recovery_decision_ledgers.drain(0..overflow);
+            }
+            let keep_existing_latest_pending = stats
+                .latest_recovery_decision_ledger
+                .as_ref()
+                .is_some_and(|latest| {
+                    Self::ledger_has_pending_command(latest)
+                        && !Self::ledger_has_pending_command(&ledger)
+                });
+            if !keep_existing_latest_pending {
+                stats.latest_recovery_decision_ledger = Some(ledger.clone());
             }
         });
     }
@@ -1833,7 +1888,8 @@ impl RtcSessionPolicy {
                 RecoveryLivenessState::Reconnecting
             }
             ConnectionLifecycleStateFact::Connected => match owner_state {
-                VideoSchedulingOwnerState::StableServing => {
+                VideoSchedulingOwnerState::StableServing
+                | VideoSchedulingOwnerState::DegradedServing => {
                     let ramp_up_active =
                         RuntimeStatsSink::read_shared(self.runtime_stats.as_ref(), |stats| {
                             stats.transport_recovery_episode_active
@@ -1848,8 +1904,7 @@ impl RtcSessionPolicy {
                         RecoveryLivenessState::Stable
                     }
                 }
-                VideoSchedulingOwnerState::DegradedServing
-                | VideoSchedulingOwnerState::SeekingAnchor
+                VideoSchedulingOwnerState::SeekingAnchor
                 | VideoSchedulingOwnerState::Priming
                 | VideoSchedulingOwnerState::RebuildingSupply
                 | VideoSchedulingOwnerState::SupplyStarved => RecoveryLivenessState::Recovering,

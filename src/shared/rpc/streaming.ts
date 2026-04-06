@@ -252,9 +252,12 @@ export type StreamingSessionPhase
     | 'closed'
     | 'failed'
 
+export type StreamingRuntimeLaunchState = 'blocked' | 'ready' | 'closed' | 'failed'
+
 export interface StreamingSessionProgressSnapshot {
   sessionId: string
   phase: StreamingSessionPhase
+  runtimeLaunchState: StreamingRuntimeLaunchState
   statusTextKey: string
   queueSeconds?: number
   queue?: StreamingQueueDetails

@@ -282,6 +282,18 @@ impl RuntimeStatsSink {
         });
     }
 
+    pub(crate) fn record_video_rtcp_send_failure(&self, observed_at_ms: f64, reason: &str) {
+        self.update(|stats| {
+            stats.latest_video_rtcp_send_failure_time_ms = Some(observed_at_ms);
+            stats.latest_video_rtcp_send_failure_reason = Some(reason.to_string());
+            stats.latest_observation_label = Some("rtcVideoRtcpSendFailed".to_string());
+            stats.latest_observation_summary = Some(format!(
+                "video rtcp send failed at {:.1} reason={reason}",
+                observed_at_ms
+            ));
+        });
+    }
+
     pub(crate) fn record_keyframe_request_episode_packet_seen(
         &self,
         observed_at_ms: f64,

@@ -67,6 +67,12 @@ fn input(
         latest_timeline_source_event: timeline_source_event.map(str::to_string),
         latest_track_state: track_state.map(str::to_string),
         latest_track_video_bytes_total: track_video_bytes_total,
+        latest_h264_bootstrap_ready: None,
+        latest_h264_bootstrap_reject_reason: None,
+        latest_h264_committed_sps_present: None,
+        latest_h264_committed_pps_present: None,
+        latest_h264_delta_continuation_ready: None,
+        latest_h264_observed_at_ms: None,
         display_supply_thresholds: thresholds(),
         observed_at_ms,
         latest_anchor_candidate_ledger: None,
@@ -274,6 +280,159 @@ fn anchor_cleared_and_supply_healthy_returns_to_stable_serving() {
     assert_eq!(output.state, VideoSchedulingOwnerState::StableServing);
     assert_eq!(output.health, VideoHealthContract::Stable);
     assert!(output.recovery_intent.is_none());
+}
+
+#[test]
+fn recent_non_idr_codec_evidence_keeps_owner_in_rebuilding_supply() {
+    let mut owner = VideoSchedulingOwner::new();
+    let _ = owner.evaluate(&input(
+        ConnectionLifecycleStateFact::Connected,
+        Some("transportAwaitRecoveryKeyframe"),
+        SchedulingDemandSignal::default(),
+        Some("recovering"),
+        Some("frame-await-recovery-keyframe"),
+        Some("remoteTrackAttached"),
+        Some(10_000),
+        300.0,
+        1,
+    ));
+
+    let mut codec_blocked = input(
+        ConnectionLifecycleStateFact::Connected,
+        None,
+        SchedulingDemandSignal {
+            no_pending_pressure_level: Some("normal".to_string()),
+            no_pending_streak: Some(0),
+            present_age_ms: Some(12.0),
+            decode_age_ms: Some(9.0),
+            video_renderer_stalled: false,
+            ..SchedulingDemandSignal::default()
+        },
+        Some("healthy"),
+        Some("frame-complete-candidate"),
+        Some("remoteTrackAttached"),
+        Some(64_000),
+        340.0,
+        1,
+    );
+    codec_blocked.clean_anchor_epoch = Some(1);
+    codec_blocked.clean_anchor_observed_at_ms = Some(338.0);
+    codec_blocked.clean_anchor_source_event = Some("chain-clean-keyframe-submitted".to_string());
+    codec_blocked.latest_h264_bootstrap_ready = Some(false);
+    codec_blocked.latest_h264_bootstrap_reject_reason = Some("NonIdrVcl".to_string());
+    codec_blocked.latest_h264_observed_at_ms = Some(339.0);
+
+    let blocked = owner.evaluate(&codec_blocked);
+    assert_eq!(blocked.state, VideoSchedulingOwnerState::RebuildingSupply);
+    assert_eq!(blocked.health, VideoHealthContract::Recovering);
+    assert!(blocked
+        .recovery_intent
+        .as_ref()
+        .is_some_and(|intent| intent.reason_label == "transportAwaitRecoveryKeyframe"));
+}
+
+#[test]
+fn non_idr_with_committed_sets_and_delta_ready_does_not_block_recovery_exit() {
+    let mut owner = VideoSchedulingOwner::new();
+    let _ = owner.evaluate(&input(
+        ConnectionLifecycleStateFact::Connected,
+        Some("transportAwaitRecoveryKeyframe"),
+        SchedulingDemandSignal::default(),
+        Some("recovering"),
+        Some("frame-await-recovery-keyframe"),
+        Some("remoteTrackAttached"),
+        Some(10_000),
+        300.0,
+        1,
+    ));
+
+    let mut recoverable = input(
+        ConnectionLifecycleStateFact::Connected,
+        None,
+        SchedulingDemandSignal {
+            no_pending_pressure_level: Some("normal".to_string()),
+            no_pending_streak: Some(0),
+            present_age_ms: Some(12.0),
+            decode_age_ms: Some(9.0),
+            video_renderer_stalled: false,
+            ..SchedulingDemandSignal::default()
+        },
+        Some("healthy"),
+        Some("frame-complete-candidate"),
+        Some("remoteTrackAttached"),
+        Some(64_000),
+        340.0,
+        1,
+    );
+    recoverable.clean_anchor_epoch = Some(1);
+    recoverable.clean_anchor_observed_at_ms = Some(338.0);
+    recoverable.clean_anchor_source_event = Some("chain-clean-keyframe-submitted".to_string());
+    recoverable.latest_h264_bootstrap_ready = Some(false);
+    recoverable.latest_h264_bootstrap_reject_reason = Some("NonIdrVcl".to_string());
+    recoverable.latest_h264_committed_sps_present = Some(true);
+    recoverable.latest_h264_committed_pps_present = Some(true);
+    recoverable.latest_h264_delta_continuation_ready = Some(true);
+    recoverable.latest_h264_observed_at_ms = Some(339.0);
+
+    let output = owner.evaluate(&recoverable);
+    assert_eq!(output.state, VideoSchedulingOwnerState::StableServing);
+    assert_eq!(output.health, VideoHealthContract::Stable);
+}
+
+#[test]
+fn transient_anchor_noise_with_clean_anchor_and_delta_ready_does_not_stick_recovery() {
+    let mut owner = VideoSchedulingOwner::new();
+    let _ = owner.evaluate(&input(
+        ConnectionLifecycleStateFact::Connected,
+        Some("transportAwaitRecoveryKeyframe"),
+        SchedulingDemandSignal::default(),
+        Some("recovering"),
+        Some("frame-await-recovery-keyframe"),
+        Some("remoteTrackAttached"),
+        Some(10_000),
+        300.0,
+        1,
+    ));
+
+    let mut recoverable = input(
+        ConnectionLifecycleStateFact::Connected,
+        Some("transportAwaitRecoveryKeyframe"),
+        SchedulingDemandSignal {
+            no_pending_pressure_level: Some("normal".to_string()),
+            no_pending_streak: Some(0),
+            present_age_ms: Some(12.0),
+            decode_age_ms: Some(9.0),
+            video_renderer_stalled: false,
+            ..SchedulingDemandSignal::default()
+        },
+        Some("repairing"),
+        Some("nack-observation"),
+        Some("remoteTrackAttached"),
+        Some(64_000),
+        340.0,
+        1,
+    );
+    recoverable.clean_anchor_epoch = Some(1);
+    recoverable.clean_anchor_observed_at_ms = Some(338.0);
+    recoverable.clean_anchor_source_event = Some("chain-clean-keyframe-submitted".to_string());
+    recoverable.latest_h264_bootstrap_ready = Some(false);
+    recoverable.latest_h264_bootstrap_reject_reason = Some("NonIdrVcl".to_string());
+    recoverable.latest_h264_committed_sps_present = Some(true);
+    recoverable.latest_h264_committed_pps_present = Some(true);
+    recoverable.latest_h264_delta_continuation_ready = Some(true);
+    recoverable.latest_h264_observed_at_ms = Some(339.0);
+    recoverable.latest_anchor_candidate_ledger = Some(crate::XbxEngineAnchorCandidateLedger {
+        state: crate::XbxEngineAnchorCandidateState::Observed,
+        source_event: "frame-complete-candidate".to_string(),
+        frame_rtp_timestamp: Some(9_000),
+        observed_at_ms: 339.0,
+        recovery_epoch: 1,
+        failure_reason: None,
+    });
+
+    let output = owner.evaluate(&recoverable);
+    assert_eq!(output.state, VideoSchedulingOwnerState::StableServing);
+    assert_eq!(output.health, VideoHealthContract::Stable);
 }
 
 #[test]

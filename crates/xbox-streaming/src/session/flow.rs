@@ -135,12 +135,23 @@ pub enum SessionPhase {
     Failed,
 }
 
+/// runtime 启动门槛：由后端显式下发，前端不再从 phase 文案侧推断。
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum RuntimeLaunchState {
+    Blocked,
+    Ready,
+    Closed,
+    Failed,
+}
+
 /// 会话进度快照：不泄漏 plan/token，仅表达当前阶段和展示所需信息。
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct SessionProgressSnapshot {
     pub session_id: String,
     pub phase: SessionPhase,
+    pub runtime_launch_state: RuntimeLaunchState,
     pub status_text_key: String,
     pub queue_seconds: Option<u64>,
     pub queue: Option<crate::session::monitor::QueueDetails>,
@@ -1308,6 +1319,7 @@ pub(crate) fn build_session_progress_snapshot<S: SessionFlowSnapshot>(
 ) -> SessionProgressSnapshot {
     let runtime = record.snapshot.runtime_snapshot();
     let phase = resolve_session_phase(&runtime);
+    let runtime_launch_state = resolve_runtime_launch_state(phase);
     let queue_seconds = runtime
         .queue
         .as_ref()
@@ -1325,6 +1337,7 @@ pub(crate) fn build_session_progress_snapshot<S: SessionFlowSnapshot>(
     SessionProgressSnapshot {
         session_id: record.snapshot.session_id().to_string(),
         phase,
+        runtime_launch_state,
         status_text_key: default_status_text_key(phase).to_string(),
         queue_seconds,
         queue,
@@ -1362,6 +1375,18 @@ fn default_status_text_key(phase: SessionPhase) -> &'static str {
         SessionPhase::Closing => "streamPage.status.disconnecting",
         SessionPhase::Closed => "streamPage.status.disconnected",
         SessionPhase::Failed => "streamPage.errors.startFailed",
+    }
+}
+
+fn resolve_runtime_launch_state(phase: SessionPhase) -> RuntimeLaunchState {
+    match phase {
+        SessionPhase::SessionReady => RuntimeLaunchState::Ready,
+        SessionPhase::Closing | SessionPhase::Closed => RuntimeLaunchState::Closed,
+        SessionPhase::Failed => RuntimeLaunchState::Failed,
+        SessionPhase::Creating
+        | SessionPhase::WaitingSessionReady
+        | SessionPhase::RuntimeStarting
+        | SessionPhase::Recovering => RuntimeLaunchState::Blocked,
     }
 }
 

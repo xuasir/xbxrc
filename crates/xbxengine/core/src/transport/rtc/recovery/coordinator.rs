@@ -6,8 +6,8 @@ use crate::transport::rtc::recovery::decoder_backend_failure::{
     resolve_decoder_backend_failure_recovery, DecoderBackendFailureResolution,
 };
 use crate::transport::rtc::recovery::escalation::{
-    RecoveryAction, RecoveryActionBudgetState, VideoEscalationController, VideoEscalationDecision,
-    VideoEscalationReason,
+    KeyframeTransportFeedback, RecoveryAction, RecoveryActionBudgetState,
+    VideoEscalationController, VideoEscalationDecision, VideoEscalationReason,
 };
 use crate::transport::rtc::recovery::hard_stall::resolve_persistent_stall_recovery;
 use crate::transport::rtc::recovery::nack_outcome::{
@@ -123,6 +123,7 @@ impl RecoveryCoordinator {
                 .unwrap_or(0);
         self.escalation_controller
             .begin_recovery_epoch(recovery_epoch);
+        self.sync_keyframe_transport_feedback(runtime_stats, signal.observed_at_ms);
         let budget_before = self.escalation_controller.budget_state();
         self.track_await_recovery_keyframe_streak(signal.reason, signal.observed_at_ms);
         if signal.reason != VideoEscalationReason::TransportAwaitRecoveryKeyframe {
@@ -203,6 +204,42 @@ impl RecoveryCoordinator {
             budget_before,
             budget_after: self.escalation_controller.budget_state(),
         }
+    }
+
+    fn sync_keyframe_transport_feedback(
+        &mut self,
+        runtime_stats: &Mutex<XbxEngineMediaRuntimeStats>,
+        observed_at_ms: f64,
+    ) {
+        let feedback = RuntimeStatsSink::read_shared(runtime_stats, |stats| {
+            let Some(episode) = stats.latest_keyframe_request_episode.as_ref() else {
+                return KeyframeTransportFeedback::None;
+            };
+            let pending_verdict =
+                matches!(episode.response_verdict.as_deref(), None | Some("pending"));
+            if !pending_verdict {
+                return KeyframeTransportFeedback::Terminal;
+            }
+            let within_window = episode
+                .deadline_at_ms
+                .map(|deadline_at_ms| observed_at_ms <= deadline_at_ms)
+                .unwrap_or(true);
+            if !within_window {
+                return KeyframeTransportFeedback::Terminal;
+            }
+            if episode.sent_at_ms.is_some()
+                && matches!(episode.status.as_str(), "requested" | "sent")
+            {
+                KeyframeTransportFeedback::SentPending
+            } else if episode.sent_at_ms.is_none() && episode.status == "requested" {
+                KeyframeTransportFeedback::UnsentPending
+            } else {
+                KeyframeTransportFeedback::Terminal
+            }
+        })
+        .unwrap_or(KeyframeTransportFeedback::None);
+        self.escalation_controller
+            .reconcile_keyframe_transport_feedback(feedback);
     }
 
     pub fn propose_lifecycle_reconnect(
@@ -434,6 +471,8 @@ impl RecoveryCoordinator {
             observed_at_ms,
             profile,
         );
+        let has_stage_upgrade_pressure =
+            Self::has_transport_await_stage_upgrade_pressure(runtime_stats, observed_at_ms);
         if has_stall_evidence
             && self.await_recovery_keyframe_streak >= 2
             && self
@@ -450,11 +489,16 @@ impl RecoveryCoordinator {
                     .suppressed(RecoveryAction::RequestDecoderReset),
             );
         }
-        let streak_threshold = match (recovery_stage, has_stall_evidence) {
-            ("rebuilding-supply", true) => 1,
-            ("priming", true) => 3,
-            (_, true) => 2,
-            ("priming", false) => 4,
+        let streak_threshold = match (
+            recovery_stage,
+            has_stall_evidence,
+            has_stage_upgrade_pressure,
+        ) {
+            (_, true, true) => 1,
+            ("rebuilding-supply", true, false) => 1,
+            ("priming", true, false) => 3,
+            (_, true, false) => 2,
+            ("priming", false, false) => 4,
             _ => 3,
         };
         if self.await_recovery_keyframe_streak >= streak_threshold {
@@ -490,6 +534,58 @@ impl RecoveryCoordinator {
                 || no_fresh_output
                 || present_expired
                 || no_pending_critical
+        })
+        .unwrap_or(false)
+    }
+
+    fn has_transport_await_stage_upgrade_pressure(
+        runtime_stats: &Mutex<XbxEngineMediaRuntimeStats>,
+        now_ms: f64,
+    ) -> bool {
+        RuntimeStatsSink::read_shared(runtime_stats, |stats| {
+            let thin_stall_timeline = stats
+                .latest_video_timeline_observation
+                .as_ref()
+                .is_some_and(|timeline| {
+                    (now_ms - timeline.observed_at_ms).max(0.0) <= 1_500.0
+                        && (matches!(timeline.chain.reason.as_deref(), Some("streamThinStall"))
+                            || matches!(
+                                timeline.source_event.as_str(),
+                                "timeout-stream-thin-stall"
+                            ))
+                });
+            let expired_deadline =
+                stats
+                    .latest_video_nack_observation
+                    .as_ref()
+                    .is_some_and(|nack| {
+                        (now_ms - nack.observed_at_ms).max(0.0) <= 1_500.0
+                            && nack.action == "expiredDeadline"
+                    });
+            let unsent_keyframe_request = stats
+                .latest_keyframe_request_episode
+                .as_ref()
+                .is_some_and(|episode| {
+                    matches!(episode.response_verdict.as_deref(), None | Some("pending"))
+                        && episode.status == "requested"
+                        && episode.sent_at_ms.is_none()
+                        && (now_ms - episode.requested_at_ms).max(0.0) <= 1_500.0
+                });
+            let recent_rtcp_failure = stats
+                .latest_video_rtcp_send_failure_time_ms
+                .is_some_and(|failed_at_ms| (now_ms - failed_at_ms).max(0.0) <= 1_500.0)
+                && matches!(
+                    stats.latest_video_rtcp_send_failure_reason.as_deref(),
+                    Some(
+                        "xbxEngineRtcPeerConnectionUnavailable"
+                            | "xbxEngineRtcVideoRtcpFeedbackTargetUnavailable"
+                            | "xbxEngineRtcReceiverLookupFailedForVideoRtcp"
+                    )
+                );
+            thin_stall_timeline
+                || expired_deadline
+                || unsent_keyframe_request
+                || recent_rtcp_failure
         })
         .unwrap_or(false)
     }

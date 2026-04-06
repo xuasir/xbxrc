@@ -188,6 +188,7 @@ pub struct VideoEscalationController {
     keyframe_epoch_active: bool,
     keyframe_epoch_started_at: Option<Instant>,
     keyframe_epoch_reason_class: Option<KeyframeReasonClass>,
+    keyframe_budget_reservation_active: bool,
     recovery_epoch: u64,
     keyframe_budget_used: u8,
     decoder_reset_budget_used: u8,
@@ -252,6 +253,7 @@ impl VideoEscalationController {
             keyframe_epoch_active: false,
             keyframe_epoch_started_at: None,
             keyframe_epoch_reason_class: None,
+            keyframe_budget_reservation_active: false,
             recovery_epoch: 0,
             keyframe_budget_used: 0,
             decoder_reset_budget_used: 0,
@@ -284,6 +286,7 @@ impl VideoEscalationController {
         self.transport_deadline_window_started_at = None;
         self.transport_deadline_window_count = 0;
         self.clear_keyframe_epoch();
+        self.keyframe_budget_reservation_active = false;
     }
 
     pub fn begin_recovery_epoch(&mut self, recovery_epoch: u64) {
@@ -307,6 +310,7 @@ impl VideoEscalationController {
         self.decoder_reset_budget_used = 0;
         self.reconnect_budget_used = 0;
         self.clear_keyframe_epoch();
+        self.keyframe_budget_reservation_active = false;
     }
 
     pub fn on_reason_with_epoch(
@@ -388,19 +392,23 @@ impl VideoEscalationController {
         match action {
             RecoveryAction::RequestKeyframe => {
                 self.keyframe_budget_used = self.keyframe_budget_used.saturating_add(1);
+                self.keyframe_budget_reservation_active = true;
             }
             RecoveryAction::RequestDecoderReset => {
                 self.decoder_reset_budget_used = self.decoder_reset_budget_used.saturating_add(1);
                 self.clear_keyframe_epoch();
+                self.keyframe_budget_reservation_active = false;
             }
             RecoveryAction::RequestReconnectCandidate => {
                 self.reconnect_budget_used = self.reconnect_budget_used.saturating_add(1);
                 self.clear_keyframe_epoch();
+                self.keyframe_budget_reservation_active = false;
             }
             RecoveryAction::RequestKeyframeAndDecoderReset => {
                 self.keyframe_budget_used = self.keyframe_budget_used.saturating_add(1);
                 self.decoder_reset_budget_used = self.decoder_reset_budget_used.saturating_add(1);
                 self.clear_keyframe_epoch();
+                self.keyframe_budget_reservation_active = false;
             }
             RecoveryAction::WaitForBurst
             | RecoveryAction::WaitForDecoderResetBurst
@@ -409,6 +417,25 @@ impl VideoEscalationController {
             | RecoveryAction::CoalescedDecoderResetInFlight
             | RecoveryAction::StartupGraceSuppressed
             | RecoveryAction::StartupLowQualityRetry => {}
+        }
+    }
+
+    pub fn reconcile_keyframe_transport_feedback(&mut self, feedback: KeyframeTransportFeedback) {
+        match feedback {
+            KeyframeTransportFeedback::UnsentPending => {
+                if self.keyframe_budget_reservation_active {
+                    self.keyframe_budget_used = self.keyframe_budget_used.saturating_sub(1);
+                    self.keyframe_budget_reservation_active = false;
+                }
+                // requested 但尚未 sent 不应继续占着 keyframe epoch，否则 owner 会被假在飞态锁住。
+                self.clear_keyframe_epoch();
+            }
+            KeyframeTransportFeedback::SentPending => {
+                self.keyframe_budget_reservation_active = false;
+            }
+            KeyframeTransportFeedback::Terminal | KeyframeTransportFeedback::None => {
+                self.keyframe_budget_reservation_active = false;
+            }
         }
     }
 
@@ -935,6 +962,14 @@ impl VideoEscalationController {
     fn coalesced_decoder_reset_in_flight(&self) -> RecoveryAction {
         RecoveryAction::CoalescedDecoderResetInFlight
     }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum KeyframeTransportFeedback {
+    None,
+    UnsentPending,
+    SentPending,
+    Terminal,
 }
 
 #[cfg(test)]

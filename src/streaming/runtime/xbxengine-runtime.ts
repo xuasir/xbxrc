@@ -40,6 +40,20 @@ export function createXbxEngineRuntime(options: {
     }
   }
 
+  function recordLaunchTraceEvent(
+    event: string,
+    payload: Record<string, unknown>,
+    sessionId?: string,
+  ): void {
+    void rpc.runtimeTrace.recordEvent({
+      event,
+      sessionId,
+      payload,
+    }).catch(() => {
+      // trace 失败不能影响 runtime 启动主链
+    })
+  }
+
   const unsubscribe = events.on('streaming.xbxEngineRuntimeEvent', (event) => {
     if (event.type === 'runtime.phaseChanged') {
       emit({ type: 'phaseChanged', phase: event.phase })
@@ -74,9 +88,22 @@ export function createXbxEngineRuntime(options: {
 
   return {
     async launch(spec) {
+      recordLaunchTraceEvent('runtimeAttachViewportRequested', {
+        viewportId: viewportElementId,
+        targetType: spec.targetType,
+      }, spec.sessionId)
       await rpc.xbxEngine.attachViewport({
         viewportId: viewportElementId,
       })
+      recordLaunchTraceEvent('runtimeAttachViewportCompleted', {
+        viewportId: viewportElementId,
+        targetType: spec.targetType,
+      }, spec.sessionId)
+      recordLaunchTraceEvent('runtimeStartRequested', {
+        viewportId: viewportElementId,
+        targetType: spec.targetType,
+        turnMode: spec.runtime.turnServer === null ? 'direct' : 'fallback',
+      }, spec.sessionId)
       await rpc.xbxEngine.startRuntime({
         session: {
           sessionId: spec.sessionId,
@@ -90,6 +117,11 @@ export function createXbxEngineRuntime(options: {
         render: spec.render,
         audioVolume,
       })
+      recordLaunchTraceEvent('runtimeStartCompleted', {
+        viewportId: viewportElementId,
+        targetType: spec.targetType,
+        turnMode: spec.runtime.turnServer === null ? 'direct' : 'fallback',
+      }, spec.sessionId)
     },
     async stop(reason?: string) {
       unsubscribe()

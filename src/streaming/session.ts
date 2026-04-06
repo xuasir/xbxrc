@@ -29,6 +29,7 @@ export type SessionUiPhase
 
 export interface SessionHealthSnapshot {
   phase: StreamingSessionProgress['phase']
+  runtimeLaunchState: StreamingSessionProgress['runtimeLaunchState']
   queueSeconds?: number
   queue?: {
     estimatedTotalWaitTimeInSeconds?: number
@@ -239,6 +240,7 @@ export function buildSessionHealthSnapshot(
 ): SessionHealthSnapshot {
   return {
     phase: progress.phase,
+    runtimeLaunchState: progress.runtimeLaunchState,
     queueSeconds: progress.queueSeconds,
     queue: progress.queue,
     errorCode: progress.errorCode,

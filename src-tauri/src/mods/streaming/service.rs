@@ -28,8 +28,8 @@ use xbox_streaming::{
     Config as DomainStreamingConfig, Context as DomainContext,
     DisplayOptions as DomainDisplayOptions, FallbackTurnProvider, HostAddr as DomainHostAddr,
     IceCandidate as DomainIceCandidate, Plan as StreamingPlan, RemoteConsoleSnapshot, RuntimeFact,
-    RuntimePreference, SessionFlowError, SessionFlowProvider, SessionFlowService,
-    SessionFlowStartupErrorHint as DomainStartupErrorHint,
+    RuntimeLaunchState as DomainRuntimeLaunchState, RuntimePreference, SessionFlowError,
+    SessionFlowProvider, SessionFlowService, SessionFlowStartupErrorHint as DomainStartupErrorHint,
     SessionFlowStartupErrorKind as DomainStartupErrorKind, SessionPhase as DomainSessionPhase,
     SessionProgressSnapshot, SessionStartupBoundedRetryReason as DomainStartupBoundedRetryReason,
     SessionStartupBoundedRetrySnapshot as DomainStartupBoundedRetrySnapshot,
@@ -413,6 +413,7 @@ impl SessionFlowProvider for TauriSessionFlowProvider {
                 "targetType": target_type,
                 "targetId": target_id,
                 "phase": progress.phase,
+                "runtimeLaunchState": progress.runtime_launch_state,
                 "statusTextKey": progress.status_text_key,
                 "streamState": stream_state,
                 "playerState": player_state,
@@ -1314,6 +1315,7 @@ fn map_domain_progress_snapshot(
     StreamingSessionProgressSnapshot {
         session_id: progress.session_id,
         phase,
+        runtime_launch_state: map_domain_runtime_launch_state(progress.runtime_launch_state),
         status_text_key: progress.status_text_key,
         queue_seconds: progress.queue_seconds,
         queue: progress.queue.map(Into::into),
@@ -1345,6 +1347,15 @@ fn map_domain_session_phase(phase: DomainSessionPhase) -> StreamingSessionPhase 
         DomainSessionPhase::Closing => StreamingSessionPhase::Closing,
         DomainSessionPhase::Closed => StreamingSessionPhase::Closed,
         DomainSessionPhase::Failed => StreamingSessionPhase::Failed,
+    }
+}
+
+fn map_domain_runtime_launch_state(state: DomainRuntimeLaunchState) -> StreamingRuntimeLaunchState {
+    match state {
+        DomainRuntimeLaunchState::Blocked => StreamingRuntimeLaunchState::Blocked,
+        DomainRuntimeLaunchState::Ready => StreamingRuntimeLaunchState::Ready,
+        DomainRuntimeLaunchState::Closed => StreamingRuntimeLaunchState::Closed,
+        DomainRuntimeLaunchState::Failed => StreamingRuntimeLaunchState::Failed,
     }
 }
 

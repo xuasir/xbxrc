@@ -16,19 +16,25 @@ pub(crate) fn resolve_recent_repeat_suppression(
     reason: &VideoEscalationReason,
 ) -> Option<RecoveryAction> {
     let now_ms = unix_now_ms();
-    let (escalation, has_new_transport_recovery_epoch, active_transport_await_debt) =
-        RuntimeStatsSink::read_shared(runtime_stats, |stats| {
-            let escalation = stats.latest_video_escalation_observation.clone()?;
-            let has_new_transport_recovery_epoch =
-                stats.transport_recovery_epoch > stats.transport_recovery_epoch_at_last_escalation;
-            let active_transport_await_debt = has_active_transport_await_debt(stats, now_ms);
-            Some((
-                escalation,
-                has_new_transport_recovery_epoch,
-                active_transport_await_debt,
-            ))
-        })
-        .flatten()?;
+    let (
+        escalation,
+        has_new_transport_recovery_epoch,
+        active_transport_await_debt,
+        active_keyframe_inflight,
+    ) = RuntimeStatsSink::read_shared(runtime_stats, |stats| {
+        let escalation = stats.latest_video_escalation_observation.clone()?;
+        let has_new_transport_recovery_epoch =
+            stats.transport_recovery_epoch > stats.transport_recovery_epoch_at_last_escalation;
+        let active_transport_await_debt = has_active_transport_await_debt(stats, now_ms);
+        let active_keyframe_inflight = has_active_keyframe_inflight(stats, now_ms);
+        Some((
+            escalation,
+            has_new_transport_recovery_epoch,
+            active_transport_await_debt,
+            active_keyframe_inflight,
+        ))
+    })
+    .flatten()?;
     let elapsed_ms = now_ms - escalation.observed_at_ms;
     if elapsed_ms < 0.0 {
         return None;
@@ -44,8 +50,10 @@ pub(crate) fn resolve_recent_repeat_suppression(
                     | "ingressFrameAbandoned"
                     | "transportAwaitRecoveryKeyframe"
             );
-            let active_recovery_action =
-                coalesced_action_for_existing_family(escalation.action.as_str());
+            let active_recovery_action = coalesced_action_for_existing_family(
+                escalation.action.as_str(),
+                active_keyframe_inflight,
+            );
             if same_wait_keyframe_chain
                 && active_recovery_action.is_some()
                 && active_transport_await_debt
@@ -63,7 +71,7 @@ pub(crate) fn resolve_recent_repeat_suppression(
         VideoEscalationReason::DisplaySupplyCritical => {
             let same_local_display_chain = escalation.reason == "displaySupplyCritical";
             let decoder_reset_inflight = matches!(
-                coalesced_action_for_existing_family(escalation.action.as_str()),
+                coalesced_action_for_existing_family(escalation.action.as_str(), false),
                 Some(RecoveryAction::CoalescedDecoderResetInFlight)
             );
             if same_local_display_chain
@@ -77,7 +85,7 @@ pub(crate) fn resolve_recent_repeat_suppression(
         VideoEscalationReason::AdapterIdleTimeout => {
             let same_idle_chain = escalation.reason == "adapterIdleTimeout";
             let decoder_reset_inflight = matches!(
-                coalesced_action_for_existing_family(escalation.action.as_str()),
+                coalesced_action_for_existing_family(escalation.action.as_str(), false),
                 Some(RecoveryAction::CoalescedDecoderResetInFlight)
             );
             if same_idle_chain
@@ -94,7 +102,10 @@ pub(crate) fn resolve_recent_repeat_suppression(
     None
 }
 
-fn coalesced_action_for_existing_family(action: &str) -> Option<RecoveryAction> {
+fn coalesced_action_for_existing_family(
+    action: &str,
+    active_keyframe_inflight: bool,
+) -> Option<RecoveryAction> {
     if matches!(
         action,
         "requestDecoderReset"
@@ -103,10 +114,40 @@ fn coalesced_action_for_existing_family(action: &str) -> Option<RecoveryAction> 
     ) {
         return Some(RecoveryAction::CoalescedDecoderResetInFlight);
     }
-    if action.starts_with("requestKeyframe") {
+    if action.starts_with("requestKeyframe") && active_keyframe_inflight {
         return Some(RecoveryAction::CoalescedKeyframeInFlight);
     }
     None
+}
+
+fn has_active_keyframe_inflight(stats: &XbxEngineMediaRuntimeStats, now_ms: f64) -> bool {
+    if has_recent_keyframe_rtcp_unavailable(stats, now_ms) {
+        return false;
+    }
+    stats
+        .latest_keyframe_request_episode
+        .as_ref()
+        .is_some_and(|episode| {
+            matches!(episode.response_verdict.as_deref(), None | Some("pending"))
+                && matches!(episode.status.as_str(), "requested" | "sent")
+                && episode.sent_at_ms.is_some()
+                && episode.deadline_at_ms.unwrap_or(now_ms + 1.0) >= now_ms
+        })
+}
+
+fn has_recent_keyframe_rtcp_unavailable(stats: &XbxEngineMediaRuntimeStats, now_ms: f64) -> bool {
+    stats
+        .recent_recovery_decision_ledgers
+        .iter()
+        .rev()
+        .any(|ledger| {
+            (now_ms - ledger.observed_at_ms).max(0.0) <= TRANSPORT_AWAIT_DEBT_FRESH_MS
+                && ledger.action_selected.starts_with("requestKeyframe")
+                && ledger.command_result.as_deref() != Some("succeeded")
+                && ledger.command_detail.as_deref().is_some_and(|detail| {
+                    detail.contains("xbxEngineRtcVideoRtcpFeedbackTargetUnavailable")
+                })
+        })
 }
 
 fn has_active_transport_await_debt(stats: &XbxEngineMediaRuntimeStats, now_ms: f64) -> bool {
@@ -174,7 +215,6 @@ fn is_unresolved_transport_await_timeline(timeline: &XbxEngineVideoTimelineObser
                 | "awaitRecoveryKeyframe"
                 | "referenceChainUnrecoverable"
                 | "transportAwaitRecoveryKeyframe"
-                | "streamThinStall"
                 | "gapRepairInFlight"
         )
     ) || matches!(
@@ -183,6 +223,5 @@ fn is_unresolved_transport_await_timeline(timeline: &XbxEngineVideoTimelineObser
             | "gap-repair-in-flight"
             | "gap-reorder-pending"
             | "nack-observation"
-            | "timeout-stream-thin-stall"
     ))
 }

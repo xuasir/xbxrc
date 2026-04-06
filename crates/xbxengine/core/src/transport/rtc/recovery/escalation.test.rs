@@ -1,6 +1,6 @@
 use super::{
-    RecoveryAction, RecoveryBudgetKind, VideoEscalationConfig, VideoEscalationController,
-    VideoEscalationReason,
+    KeyframeTransportFeedback, RecoveryAction, RecoveryBudgetKind, VideoEscalationConfig,
+    VideoEscalationController, VideoEscalationReason,
 };
 use std::time::Duration;
 
@@ -788,6 +788,52 @@ fn keyframe_budget_resets_after_new_recovery_epoch() {
             .action,
         RecoveryAction::RequestKeyframe
     );
+}
+
+#[test]
+fn unsent_pending_keyframe_feedback_rolls_back_provisional_budget() {
+    let mut controller = VideoEscalationController::new(VideoEscalationConfig {
+        cooldown_ms: 120,
+        keyframe_burst_threshold: 1,
+        decoder_reset_burst_threshold: 1,
+        keyframe_min_interval_ms: 240,
+        escalation_window_ms: 480,
+        keyframe_upgrade_min_delay_ms: 0,
+    });
+    controller.begin_recovery_epoch(8);
+    let first = controller
+        .on_reason(VideoEscalationReason::TransportAwaitRecoveryKeyframe)
+        .action;
+    assert_eq!(first, RecoveryAction::RequestKeyframe);
+    assert_eq!(controller.budget_state().keyframe_budget_used, 1);
+
+    controller.reconcile_keyframe_transport_feedback(KeyframeTransportFeedback::UnsentPending);
+    assert_eq!(controller.budget_state().keyframe_budget_used, 0);
+
+    let second = controller
+        .on_reason(VideoEscalationReason::TransportAwaitRecoveryKeyframe)
+        .action;
+    assert_eq!(second, RecoveryAction::CoalescedKeyframeInFlight);
+}
+
+#[test]
+fn sent_pending_keyframe_feedback_keeps_budget_consumed() {
+    let mut controller = VideoEscalationController::new(VideoEscalationConfig {
+        cooldown_ms: 120,
+        keyframe_burst_threshold: 1,
+        decoder_reset_burst_threshold: 1,
+        keyframe_min_interval_ms: 240,
+        escalation_window_ms: 480,
+        keyframe_upgrade_min_delay_ms: 0,
+    });
+    controller.begin_recovery_epoch(8);
+    let first = controller
+        .on_reason(VideoEscalationReason::TransportAwaitRecoveryKeyframe)
+        .action;
+    assert_eq!(first, RecoveryAction::RequestKeyframe);
+
+    controller.reconcile_keyframe_transport_feedback(KeyframeTransportFeedback::SentPending);
+    assert_eq!(controller.budget_state().keyframe_budget_used, 1);
 }
 
 #[test]

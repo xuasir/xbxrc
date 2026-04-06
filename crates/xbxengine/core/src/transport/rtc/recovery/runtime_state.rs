@@ -340,6 +340,13 @@ fn recovery_stage_label(stats: &XbxEngineMediaRuntimeStats) -> &'static str {
     {
         return "ramp-up";
     }
+    if owner_state_has_steady_output_semantics(stats)
+        && has_fresh_media_output(stats, unix_now_ms())
+        && !stats.video_decoder_stalled.unwrap_or(false)
+        && !stats.video_renderer_stalled.unwrap_or(false)
+    {
+        return "steady";
+    }
     if matches!(
         stats.video_owner_state.as_deref(),
         Some("rebuilding-supply" | "supply-starved")
@@ -443,6 +450,9 @@ fn resolve_effective_diagnosis_label_from_stats(
     diagnosis_label: &str,
     now_ms: f64,
 ) -> String {
+    if should_absorb_stale_recovery_diagnosis(stats, diagnosis_label, now_ms) {
+        return "healthy".to_string();
+    }
     if diagnosis_label == "adapterIdleTimeout"
         && is_audio_only_track(stats)
         && has_recent_recovery_action(stats, now_ms)
@@ -626,6 +636,33 @@ pub(crate) fn has_fresh_media_output(stats: &XbxEngineMediaRuntimeStats, now_ms:
     present_fresh || decode_fresh || stats.video_present_fps >= 10.0
 }
 
+fn owner_state_has_steady_output_semantics(stats: &XbxEngineMediaRuntimeStats) -> bool {
+    matches!(
+        stats.video_owner_state.as_deref(),
+        Some("stable-serving" | "degraded-serving")
+    )
+}
+
+fn should_absorb_stale_recovery_diagnosis(
+    stats: &XbxEngineMediaRuntimeStats,
+    diagnosis_label: &str,
+    now_ms: f64,
+) -> bool {
+    if !matches!(
+        diagnosis_label,
+        "transportAwaitRecoveryKeyframe"
+            | "transportExpiredDeadline"
+            | "transportSevereDeadline"
+            | "transportSampleLoss"
+    ) {
+        return false;
+    }
+    owner_state_has_steady_output_semantics(stats)
+        && has_fresh_media_output(stats, now_ms)
+        && !stats.video_decoder_stalled.unwrap_or(false)
+        && !stats.video_renderer_stalled.unwrap_or(false)
+}
+
 pub(crate) fn decoder_backend_failure_signal_is_active(
     stats: &XbxEngineMediaRuntimeStats,
     profile: RecoveryScenarioProfile,
@@ -724,4 +761,62 @@ fn resolve_runtime_recovery_profile_at(
         .map(|profile| profile.baseline)
         .unwrap_or_else(|| resolve_runtime_baseline_profile_kind(stats));
     ScenarioPolicyResolver::resolve_recovery_profile_by_kind(baseline_profile)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{recovery_stage_label, resolve_effective_diagnosis_label_from_stats, unix_now_ms};
+    use crate::XbxEngineMediaRuntimeStats;
+
+    #[test]
+    fn degraded_owner_absorbs_stale_transport_expired_deadline_when_output_is_fresh() {
+        let now_ms = unix_now_ms();
+        let stats = XbxEngineMediaRuntimeStats {
+            session_phase: Some("recovering".to_string()),
+            recovery_diagnosis: Some("transportExpiredDeadline".to_string()),
+            video_owner_state: Some("degraded-serving".to_string()),
+            latest_video_host_present_time_ms: Some(now_ms - 18.0),
+            latest_video_decode_ok_time_ms: Some(now_ms - 12.0),
+            video_present_fps: 60.0,
+            video_decoder_stalled: Some(false),
+            video_renderer_stalled: Some(false),
+            ..XbxEngineMediaRuntimeStats::default()
+        };
+
+        assert_eq!(
+            resolve_effective_diagnosis_label_from_stats(
+                &stats,
+                "transportExpiredDeadline",
+                now_ms
+            ),
+            "healthy"
+        );
+        assert_eq!(recovery_stage_label(&stats), "steady");
+    }
+
+    #[test]
+    fn degraded_owner_does_not_absorb_transport_await_when_renderer_is_stalled() {
+        let now_ms = unix_now_ms();
+        let stats = XbxEngineMediaRuntimeStats {
+            session_phase: Some("recovering".to_string()),
+            recovery_diagnosis: Some("transportAwaitRecoveryKeyframe".to_string()),
+            video_owner_state: Some("degraded-serving".to_string()),
+            latest_video_host_present_time_ms: Some(now_ms - 18.0),
+            latest_video_decode_ok_time_ms: Some(now_ms - 12.0),
+            video_present_fps: 60.0,
+            video_decoder_stalled: Some(false),
+            video_renderer_stalled: Some(true),
+            ..XbxEngineMediaRuntimeStats::default()
+        };
+
+        assert_eq!(
+            resolve_effective_diagnosis_label_from_stats(
+                &stats,
+                "transportAwaitRecoveryKeyframe",
+                now_ms
+            ),
+            "transportAwaitRecoveryKeyframe"
+        );
+        assert_eq!(recovery_stage_label(&stats), "rebuilding-supply");
+    }
 }

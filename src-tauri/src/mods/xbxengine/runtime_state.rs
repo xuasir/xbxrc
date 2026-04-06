@@ -121,6 +121,7 @@ impl XbxEngineRuntimeState {
     ) -> Result<(), XbxEngineRuntimeError> {
         let command_value = serde_json::to_value(&command).unwrap_or(serde_json::Value::Null);
         let session_id = extract_command_session_id(&command);
+        record_control_apply_trace(&self.runtime_trace, &command, "entered", None, None);
         self.runtime_trace.record_event(
             "xbxengine",
             "controlCommand",
@@ -154,7 +155,18 @@ impl XbxEngineRuntimeState {
             .runtime
             .lock()
             .map_err(|_| XbxEngineRuntimeError::new("xbxEngineRuntimeLockPoisoned"))?;
-        runtime.apply_control(command)
+        record_control_apply_trace(&self.runtime_trace, &command, "lockAcquired", None, None);
+        let started_at = Instant::now();
+        let command_for_trace = command.clone();
+        let result = runtime.apply_control(command);
+        record_control_apply_trace(
+            &self.runtime_trace,
+            &command_for_trace,
+            "completed",
+            Some(started_at.elapsed().as_millis()),
+            result.as_ref().err(),
+        );
+        result
     }
 
     pub fn tick(&self) -> Result<(), XbxEngineRuntimeError> {
@@ -780,6 +792,83 @@ fn extract_command_session_id(command: &XbxEngineControlCommandDto) -> Option<St
         }
         _ => None,
     }
+}
+
+fn extract_command_viewport_id(command: &XbxEngineControlCommandDto) -> Option<String> {
+    match command {
+        XbxEngineControlCommandDto::StartRuntime { viewport, .. }
+        | XbxEngineControlCommandDto::AttachViewport { viewport } => {
+            Some(viewport.viewport_id.clone())
+        }
+        _ => None,
+    }
+}
+
+fn extract_command_target_type(command: &XbxEngineControlCommandDto) -> Option<&'static str> {
+    match command {
+        XbxEngineControlCommandDto::StartRuntime { session, .. } => {
+            Some(match session.target_type {
+                xbxengine_protocol::XbxEngineTargetTypeDto::Home => "home",
+                xbxengine_protocol::XbxEngineTargetTypeDto::Cloud => "cloud",
+            })
+        }
+        _ => None,
+    }
+}
+
+fn control_apply_event_name(
+    command: &XbxEngineControlCommandDto,
+    stage: &'static str,
+) -> Option<&'static str> {
+    match (command, stage) {
+        (XbxEngineControlCommandDto::AttachViewport { .. }, "entered") => {
+            Some("runtimeAttachViewportApplyEntered")
+        }
+        (XbxEngineControlCommandDto::AttachViewport { .. }, "lockAcquired") => {
+            Some("runtimeAttachViewportRuntimeLockAcquired")
+        }
+        (XbxEngineControlCommandDto::AttachViewport { .. }, "completed") => {
+            Some("runtimeAttachViewportApplyCompleted")
+        }
+        (XbxEngineControlCommandDto::StartRuntime { .. }, "entered") => {
+            Some("runtimeStartApplyEntered")
+        }
+        (XbxEngineControlCommandDto::StartRuntime { .. }, "lockAcquired") => {
+            Some("runtimeStartRuntimeLockAcquired")
+        }
+        (XbxEngineControlCommandDto::StartRuntime { .. }, "completed") => {
+            Some("runtimeStartApplyCompleted")
+        }
+        _ => None,
+    }
+}
+
+fn record_control_apply_trace(
+    runtime_trace: &RuntimeTraceRecorderRef,
+    command: &XbxEngineControlCommandDto,
+    stage: &'static str,
+    duration_ms: Option<u128>,
+    error: Option<&XbxEngineRuntimeError>,
+) {
+    let Some(event_name) = control_apply_event_name(command, stage) else {
+        return;
+    };
+    let session_id = extract_command_session_id(command);
+    let viewport_id = extract_command_viewport_id(command);
+    let target_type = extract_command_target_type(command);
+    runtime_trace.record_event(
+        "xbxengine-host",
+        event_name,
+        session_id.as_deref(),
+        serde_json::json!({
+            "sessionId": session_id,
+            "viewportId": viewport_id,
+            "targetType": target_type,
+            "durationMs": duration_ms,
+            "ok": error.is_none(),
+            "error": error.map(ToString::to_string),
+        }),
+    );
 }
 
 #[cfg(test)]

@@ -487,11 +487,21 @@ pub enum StreamingSessionPhase {
     Failed,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum StreamingRuntimeLaunchState {
+    Blocked,
+    Ready,
+    Closed,
+    Failed,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct StreamingSessionProgressSnapshot {
     pub session_id: String,
     pub phase: StreamingSessionPhase,
+    pub runtime_launch_state: StreamingRuntimeLaunchState,
     pub status_text_key: String,
     pub queue_seconds: Option<u64>,
     pub queue: Option<StreamingQueueDetails>,
@@ -518,6 +528,17 @@ impl StreamingSessionProgressSnapshot {
             "pending" => StreamingSessionPhase::WaitingSessionReady,
             _ => StreamingSessionPhase::Creating,
         };
+        let runtime_launch_state = match phase {
+            StreamingSessionPhase::SessionReady => StreamingRuntimeLaunchState::Ready,
+            StreamingSessionPhase::Closing | StreamingSessionPhase::Closed => {
+                StreamingRuntimeLaunchState::Closed
+            }
+            StreamingSessionPhase::Failed => StreamingRuntimeLaunchState::Failed,
+            StreamingSessionPhase::Creating
+            | StreamingSessionPhase::WaitingSessionReady
+            | StreamingSessionPhase::RuntimeStarting
+            | StreamingSessionPhase::Recovering => StreamingRuntimeLaunchState::Blocked,
+        };
 
         let queue_seconds = session
             .queue
@@ -527,6 +548,7 @@ impl StreamingSessionProgressSnapshot {
         Self {
             session_id: session.id.clone(),
             phase: phase.clone(),
+            runtime_launch_state,
             status_text_key: match phase {
                 StreamingSessionPhase::Creating => "streamPage.status.creatingSession".to_string(),
                 StreamingSessionPhase::WaitingSessionReady => {

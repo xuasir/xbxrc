@@ -80,6 +80,10 @@ fn started_player_state_maps_to_session_ready_phase() {
 
     assert_eq!(phase, SessionPhase::SessionReady);
     assert_eq!(
+        resolve_runtime_launch_state(phase),
+        RuntimeLaunchState::Ready
+    );
+    assert_eq!(
         default_status_text_key(phase),
         "streamPage.status.startingPlayer"
     );
@@ -101,6 +105,7 @@ fn build_session_progress_snapshot_uses_session_ready_for_started_session() {
     let progress = build_session_progress_snapshot(record);
 
     assert_eq!(progress.phase, SessionPhase::SessionReady);
+    assert_eq!(progress.runtime_launch_state, RuntimeLaunchState::Ready);
     assert_eq!(progress.status_text_key, "streamPage.status.startingPlayer");
 }
 
@@ -347,6 +352,7 @@ fn startup_progress(phase: SessionPhase, error_message: Option<&str>) -> Session
     SessionProgressSnapshot {
         session_id: "session-1".to_string(),
         phase,
+        runtime_launch_state: resolve_runtime_launch_state(phase),
         status_text_key: "key".to_string(),
         queue_seconds: None,
         queue: None,
@@ -361,6 +367,7 @@ fn failed_progress_server_registration_signal_carries_structured_hint() {
     let progress = SessionProgressSnapshot {
             session_id: "session-1".to_string(),
             phase: SessionPhase::Failed,
+            runtime_launch_state: RuntimeLaunchState::Failed,
             status_text_key: "key".to_string(),
             queue_seconds: None,
             queue: None,

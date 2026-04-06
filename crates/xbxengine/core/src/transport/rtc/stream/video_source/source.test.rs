@@ -9,11 +9,12 @@ use crate::media::video::test_fixtures::{
     make_video_source_for_test, send_bootstrap_access_unit, NoopRtcpPort,
 };
 use crate::transport::rtc::stream::adapter_types::{
-    TransportAdmissionObservation, TransportObservation,
+    TransportAdmissionObservation, TransportLossObservation, TransportObservation,
 };
 use crate::transport::rtc::stream::packet_types::{RtcVideoIngressKind, RtcVideoRepairMetadata};
 use crate::transport::rtc::stream::sink::RtcRtcpSendPort;
 use crate::transport::rtc::stream::video_source::NackSchedulerConfig;
+use crate::XbxEngineRemoteAnswerObservation;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use xbxengine_protocol::{XbxEngineTargetTypeDto, XbxEngineTransportStateDto};
@@ -432,6 +433,59 @@ async fn idr_without_parameter_sets_requests_recovery_keyframe_instead_of_emitti
             .expect("observation should exist");
     assert_eq!(
         observation,
+        TransportObservation::Admission(TransportAdmissionObservation::AwaitRecoveryKeyframe)
+    );
+}
+
+#[tokio::test]
+async fn startup_h264_without_sprop_requests_keyframe_before_first_bad_frame_recovery() {
+    let (tx, mut transport_observation_rx, mut source) = make_video_source_for_test();
+    source.runtime_stats.update(|stats| {
+        stats.session_phase = Some("priming".to_string());
+        stats.transport_state = XbxEngineTransportStateDto::Connected;
+        stats.latest_remote_answer_observation = Some(XbxEngineRemoteAnswerObservation {
+            observation_id: 1,
+            video_payload_order: vec![124],
+            selected_video_payload_type: Some(124),
+            selected_video_mime_type: Some("video/h264".to_string()),
+            selected_video_profile_level_id: Some("4d002a".to_string()),
+            selected_video_h264_sprop_parameter_sets: None,
+            accepted_video_rtcp_feedback: vec!["nack:pli".to_string()],
+            accepted_audio_rtcp_feedback: Vec::new(),
+            accepted_video_header_extensions: Vec::new(),
+            accepted_audio_header_extensions: Vec::new(),
+            observed_at_ms: 10.0,
+        });
+    });
+
+    tx.send(make_video_rtp_packet(100, 9001, true, bootstrap_idr_nalu()))
+        .await
+        .expect("idr packet should enqueue");
+    tx.send(make_video_rtp_packet(101, 9017, true, bootstrap_idr_nalu()))
+        .await
+        .expect("follow-up packet should flush previous sample");
+    drop(tx);
+
+    let frame = tokio::time::timeout(Duration::from_millis(200), source.recv_frame_inner())
+        .await
+        .expect("reader should finish after rx closes");
+    assert!(frame.is_none());
+
+    let first = tokio::time::timeout(Duration::from_millis(50), transport_observation_rx.recv())
+        .await
+        .expect("startup keyframe request observation should be emitted")
+        .expect("observation should exist");
+    assert_eq!(
+        first,
+        TransportObservation::Loss(TransportLossObservation::RecoveryKeyframeRequested)
+    );
+
+    let second = tokio::time::timeout(Duration::from_millis(50), transport_observation_rx.recv())
+        .await
+        .expect("await-recovery observation should be emitted")
+        .expect("observation should exist");
+    assert_eq!(
+        second,
         TransportObservation::Admission(TransportAdmissionObservation::AwaitRecoveryKeyframe)
     );
 }

@@ -506,6 +506,7 @@ fn expired_reference_nack_pushes_idle_timeout_into_recovery_chain() {
 
 #[test]
 fn recent_wait_keyframe_recovery_suppresses_repeat_wait_keyframe() {
+    let now_ms = unix_now_ms();
     let mut stats = XbxEngineMediaRuntimeStats::default();
     stats.transport_recovery_epoch = 4;
     stats.transport_recovery_epoch_at_last_escalation = 4;
@@ -517,10 +518,21 @@ fn recent_wait_keyframe_recovery_suppresses_repeat_wait_keyframe() {
         recovery_chain_value: "anchor".to_string(),
         recovery_failure_cost: "medium".to_string(),
         recovery_window_source: "transport-await-window".to_string(),
-        observed_at_ms: std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_millis() as f64,
+        observed_at_ms: now_ms,
+    });
+    stats.latest_keyframe_request_episode = Some(crate::XbxEngineKeyframeRequestEpisodeObservation {
+        episode_id: 7,
+        request_reason: Some("waitKeyframe".to_string()),
+        request_kind: Some("pli".to_string()),
+        status: "sent".to_string(),
+        requested_at_ms: now_ms,
+        sent_at_ms: Some(now_ms),
+        deadline_at_ms: Some(now_ms + 240.0),
+        first_keyframe_packet_at_ms: None,
+        first_keyframe_decoded_at_ms: None,
+        response_rtp_timestamp: None,
+        response_frame_seq: None,
+        response_verdict: Some("pending".to_string()),
     });
     let mut coordinator = RecoveryCoordinator::new(
         test_escalation_controller(250, 2, 2),
@@ -530,6 +542,61 @@ fn recent_wait_keyframe_recovery_suppresses_repeat_wait_keyframe() {
     let decision = coordinator
         .on_reason_with_runtime_stats(VideoEscalationReason::WaitKeyframe, &Mutex::new(stats));
     assert_eq!(decision.action, RecoveryAction::CoalescedKeyframeInFlight);
+}
+
+#[test]
+fn recent_wait_keyframe_without_sent_episode_does_not_coalesce_keyframe_inflight() {
+    let now_ms = unix_now_ms();
+    let mut stats = XbxEngineMediaRuntimeStats::default();
+    stats.transport_recovery_epoch = 4;
+    stats.transport_recovery_epoch_at_last_escalation = 4;
+    stats.latest_video_escalation_observation = Some(crate::XbxEngineVideoEscalationObservation {
+        observation_id: 70,
+        reason: "transportAwaitRecoveryKeyframe".to_string(),
+        action: "requestKeyframe".to_string(),
+        recovery_stage: "rebuilding-supply".to_string(),
+        recovery_chain_value: "anchor".to_string(),
+        recovery_failure_cost: "medium".to_string(),
+        recovery_window_source: "transport-await-window".to_string(),
+        observed_at_ms: now_ms,
+    });
+    stats.latest_keyframe_request_episode = Some(crate::XbxEngineKeyframeRequestEpisodeObservation {
+        episode_id: 70,
+        request_reason: Some("transportAwaitRecoveryKeyframe".to_string()),
+        request_kind: None,
+        status: "requested".to_string(),
+        requested_at_ms: now_ms,
+        sent_at_ms: None,
+        deadline_at_ms: Some(now_ms + 240.0),
+        first_keyframe_packet_at_ms: None,
+        first_keyframe_decoded_at_ms: None,
+        response_rtp_timestamp: None,
+        response_frame_seq: None,
+        response_verdict: Some("pending".to_string()),
+    });
+    stats.latest_video_timeline_observation = Some(crate::XbxEngineVideoTimelineObservation {
+        observation_id: 71,
+        source_event: "frame-await-recovery-keyframe".to_string(),
+        gap: None,
+        frame: None,
+        chain: crate::XbxEngineVideoTimelineChainSnapshot {
+            state: "recovering".to_string(),
+            reason: Some("transportAwaitRecoveryKeyframe".to_string()),
+            observed_at_ms: now_ms,
+        },
+        observed_at_ms: now_ms,
+    });
+    let mut coordinator = RecoveryCoordinator::new(
+        test_escalation_controller(250, 2, 2),
+        Instant::now(),
+        Duration::from_millis(800),
+    );
+
+    let decision = coordinator.on_reason_with_runtime_stats(
+        VideoEscalationReason::TransportAwaitRecoveryKeyframe,
+        &Mutex::new(stats),
+    );
+    assert_ne!(decision.action, RecoveryAction::CoalescedKeyframeInFlight);
 }
 
 #[test]
@@ -621,6 +688,268 @@ fn transport_await_mild_lag_in_steady_stage_stays_suppressed_without_stall_evide
         second.decision.action,
         RecoveryAction::CoalescedKeyframeInFlight
     );
+}
+
+#[test]
+fn unsent_requested_keyframe_is_rolled_back_before_transport_await_stage_upgrade() {
+    let now_ms = unix_now_ms();
+    let mut stats = XbxEngineMediaRuntimeStats::default();
+    stats.session_phase = Some("recovering".to_string());
+    stats.transport_recovery_epoch = 19;
+    stats.transport_state = XbxEngineTransportStateDto::Connected;
+    stats.host_no_pending_pressure_level = Some("critical".to_string());
+    stats.host_no_pending_streak = 220;
+    stats.latest_video_host_present_time_ms = Some(now_ms - 1_900.0);
+    stats.latest_video_decode_ok_time_ms = Some(now_ms - 600.0);
+    stats.latest_video_packet_arrival_time_ms = Some(now_ms - 10.0);
+    stats.video_decoder_stalled = Some(false);
+    stats.video_renderer_stalled = Some(true);
+    let shared_stats = Mutex::new(stats);
+    let mut coordinator = RecoveryCoordinator::new(
+        VideoEscalationController::new(VideoEscalationConfig {
+            cooldown_ms: 120,
+            keyframe_burst_threshold: 1,
+            decoder_reset_burst_threshold: 1,
+            keyframe_min_interval_ms: 240,
+            escalation_window_ms: 480,
+            keyframe_upgrade_min_delay_ms: 0,
+        }),
+        Instant::now() - Duration::from_secs(3),
+        Duration::from_millis(800),
+    );
+
+    let first = coordinator.propose_from_owner_signal(
+        RecoveryOwnerSignal {
+            reason: VideoEscalationReason::TransportAwaitRecoveryKeyframe,
+            reason_label: "transportAwaitRecoveryKeyframe".to_string(),
+            observed_at_ms: now_ms,
+        },
+        &shared_stats,
+    );
+    assert_eq!(first.decision.action, RecoveryAction::RequestKeyframe);
+    assert_eq!(first.budget_after.keyframe_budget_used, 1);
+
+    RuntimeStatsSink::update_shared(&shared_stats, |stats| {
+        stats.latest_keyframe_request_episode =
+            Some(crate::XbxEngineKeyframeRequestEpisodeObservation {
+                episode_id: first.decision.observation_id,
+                request_reason: Some("transportAwaitRecoveryKeyframe".to_string()),
+                request_kind: None,
+                status: "requested".to_string(),
+                requested_at_ms: now_ms,
+                sent_at_ms: None,
+                deadline_at_ms: Some(now_ms + 960.0),
+                first_keyframe_packet_at_ms: None,
+                first_keyframe_decoded_at_ms: None,
+                response_rtp_timestamp: None,
+                response_frame_seq: None,
+                response_verdict: Some("pending".to_string()),
+            });
+    });
+
+    std::thread::sleep(Duration::from_millis(140));
+    let second = coordinator.propose_from_owner_signal(
+        RecoveryOwnerSignal {
+            reason: VideoEscalationReason::TransportAwaitRecoveryKeyframe,
+            reason_label: "transportAwaitRecoveryKeyframe".to_string(),
+            observed_at_ms: now_ms + 140.0,
+        },
+        &shared_stats,
+    );
+    assert_eq!(second.budget_before.keyframe_budget_used, 0);
+    assert_eq!(second.decision.action, RecoveryAction::RequestDecoderReset);
+}
+
+#[test]
+fn thin_stall_timeout_alone_does_not_keep_transport_await_repeat_suppressed() {
+    let now_ms = unix_now_ms();
+    let mut stats = XbxEngineMediaRuntimeStats::default();
+    stats.transport_recovery_epoch = 27;
+    stats.transport_recovery_epoch_at_last_escalation = 27;
+    stats.latest_video_escalation_observation = Some(crate::XbxEngineVideoEscalationObservation {
+        observation_id: 901,
+        reason: "transportAwaitRecoveryKeyframe".to_string(),
+        action: "requestKeyframe".to_string(),
+        recovery_stage: "rebuilding-supply".to_string(),
+        recovery_chain_value: "transportAwaitRecoveryKeyframe".to_string(),
+        recovery_failure_cost: "medium".to_string(),
+        recovery_window_source: "owner".to_string(),
+        observed_at_ms: now_ms - 420.0,
+    });
+    stats.latest_video_timeline_observation = Some(crate::XbxEngineVideoTimelineObservation {
+        observation_id: 902,
+        source_event: "timeout-stream-thin-stall".to_string(),
+        gap: None,
+        frame: None,
+        chain: crate::XbxEngineVideoTimelineChainSnapshot {
+            state: "broken".to_string(),
+            reason: Some("streamThinStall".to_string()),
+            observed_at_ms: now_ms - 20.0,
+        },
+        observed_at_ms: now_ms - 20.0,
+    });
+    let mut coordinator = RecoveryCoordinator::new(
+        test_escalation_controller(120, 1, 1),
+        Instant::now() - Duration::from_secs(3),
+        Duration::from_millis(800),
+    );
+
+    let decision = coordinator.on_reason_with_runtime_stats(
+        VideoEscalationReason::TransportAwaitRecoveryKeyframe,
+        &Mutex::new(stats),
+    );
+    assert_ne!(decision.action, RecoveryAction::CoalescedKeyframeInFlight);
+}
+
+#[test]
+fn sent_pending_keyframe_with_thin_stall_pressure_upgrades_to_decoder_reset() {
+    let now_ms = unix_now_ms();
+    let mut stats = XbxEngineMediaRuntimeStats::default();
+    stats.session_phase = Some("recovering".to_string());
+    stats.transport_recovery_epoch = 28;
+    stats.transport_state = XbxEngineTransportStateDto::Connected;
+    stats.host_no_pending_pressure_level = Some("critical".to_string());
+    stats.host_no_pending_streak = 220;
+    stats.latest_video_host_present_time_ms = Some(now_ms - 2_100.0);
+    stats.latest_video_decode_ok_time_ms = Some(now_ms - 1_700.0);
+    stats.latest_video_packet_arrival_time_ms = Some(now_ms - 20.0);
+    stats.video_decoder_stalled = Some(false);
+    stats.video_renderer_stalled = Some(true);
+    let shared_stats = Mutex::new(stats);
+    let mut coordinator = RecoveryCoordinator::new(
+        VideoEscalationController::new(VideoEscalationConfig {
+            cooldown_ms: 120,
+            keyframe_burst_threshold: 1,
+            decoder_reset_burst_threshold: 1,
+            keyframe_min_interval_ms: 240,
+            escalation_window_ms: 480,
+            keyframe_upgrade_min_delay_ms: 0,
+        }),
+        Instant::now() - Duration::from_secs(3),
+        Duration::from_millis(800),
+    );
+
+    let first = coordinator.propose_from_owner_signal(
+        RecoveryOwnerSignal {
+            reason: VideoEscalationReason::TransportAwaitRecoveryKeyframe,
+            reason_label: "transportAwaitRecoveryKeyframe".to_string(),
+            observed_at_ms: now_ms,
+        },
+        &shared_stats,
+    );
+    assert_eq!(first.decision.action, RecoveryAction::RequestKeyframe);
+
+    RuntimeStatsSink::update_shared(&shared_stats, |stats| {
+        stats.latest_keyframe_request_episode =
+            Some(crate::XbxEngineKeyframeRequestEpisodeObservation {
+                episode_id: first.decision.observation_id,
+                request_reason: Some("transportAwaitRecoveryKeyframe".to_string()),
+                request_kind: None,
+                status: "sent".to_string(),
+                requested_at_ms: now_ms,
+                sent_at_ms: Some(now_ms + 10.0),
+                deadline_at_ms: Some(now_ms + 960.0),
+                first_keyframe_packet_at_ms: None,
+                first_keyframe_decoded_at_ms: None,
+                response_rtp_timestamp: None,
+                response_frame_seq: None,
+                response_verdict: Some("pending".to_string()),
+            });
+        stats.latest_video_timeline_observation = Some(crate::XbxEngineVideoTimelineObservation {
+            observation_id: 903,
+            source_event: "timeout-stream-thin-stall".to_string(),
+            gap: None,
+            frame: None,
+            chain: crate::XbxEngineVideoTimelineChainSnapshot {
+                state: "broken".to_string(),
+                reason: Some("streamThinStall".to_string()),
+                observed_at_ms: now_ms + 140.0,
+            },
+            observed_at_ms: now_ms + 140.0,
+        });
+    });
+
+    std::thread::sleep(Duration::from_millis(140));
+    let second = coordinator.propose_from_owner_signal(
+        RecoveryOwnerSignal {
+            reason: VideoEscalationReason::TransportAwaitRecoveryKeyframe,
+            reason_label: "transportAwaitRecoveryKeyframe".to_string(),
+            observed_at_ms: now_ms + 140.0,
+        },
+        &shared_stats,
+    );
+    assert_eq!(second.decision.action, RecoveryAction::RequestDecoderReset);
+}
+
+#[test]
+fn sent_pending_keyframe_with_recent_rtcp_unavailable_upgrades_to_decoder_reset() {
+    let now_ms = unix_now_ms();
+    let mut stats = XbxEngineMediaRuntimeStats::default();
+    stats.session_phase = Some("recovering".to_string());
+    stats.transport_recovery_epoch = 29;
+    stats.transport_state = XbxEngineTransportStateDto::Connected;
+    stats.host_no_pending_pressure_level = Some("critical".to_string());
+    stats.host_no_pending_streak = 220;
+    stats.latest_video_host_present_time_ms = Some(now_ms - 2_100.0);
+    stats.latest_video_decode_ok_time_ms = Some(now_ms - 1_700.0);
+    stats.latest_video_packet_arrival_time_ms = Some(now_ms - 20.0);
+    stats.video_decoder_stalled = Some(false);
+    stats.video_renderer_stalled = Some(true);
+    let shared_stats = Mutex::new(stats);
+    let mut coordinator = RecoveryCoordinator::new(
+        VideoEscalationController::new(VideoEscalationConfig {
+            cooldown_ms: 120,
+            keyframe_burst_threshold: 1,
+            decoder_reset_burst_threshold: 1,
+            keyframe_min_interval_ms: 240,
+            escalation_window_ms: 480,
+            keyframe_upgrade_min_delay_ms: 0,
+        }),
+        Instant::now() - Duration::from_secs(3),
+        Duration::from_millis(800),
+    );
+
+    let first = coordinator.propose_from_owner_signal(
+        RecoveryOwnerSignal {
+            reason: VideoEscalationReason::TransportAwaitRecoveryKeyframe,
+            reason_label: "transportAwaitRecoveryKeyframe".to_string(),
+            observed_at_ms: now_ms,
+        },
+        &shared_stats,
+    );
+    assert_eq!(first.decision.action, RecoveryAction::RequestKeyframe);
+
+    RuntimeStatsSink::update_shared(&shared_stats, |stats| {
+        stats.latest_keyframe_request_episode =
+            Some(crate::XbxEngineKeyframeRequestEpisodeObservation {
+                episode_id: first.decision.observation_id,
+                request_reason: Some("transportAwaitRecoveryKeyframe".to_string()),
+                request_kind: Some("pli".to_string()),
+                status: "sent".to_string(),
+                requested_at_ms: now_ms,
+                sent_at_ms: Some(now_ms + 10.0),
+                deadline_at_ms: Some(now_ms + 960.0),
+                first_keyframe_packet_at_ms: None,
+                first_keyframe_decoded_at_ms: None,
+                response_rtp_timestamp: None,
+                response_frame_seq: None,
+                response_verdict: Some("pending".to_string()),
+            });
+        stats.latest_video_rtcp_send_failure_time_ms = Some(now_ms + 130.0);
+        stats.latest_video_rtcp_send_failure_reason =
+            Some("xbxEngineRtcVideoRtcpFeedbackTargetUnavailable".to_string());
+    });
+
+    std::thread::sleep(Duration::from_millis(140));
+    let second = coordinator.propose_from_owner_signal(
+        RecoveryOwnerSignal {
+            reason: VideoEscalationReason::TransportAwaitRecoveryKeyframe,
+            reason_label: "transportAwaitRecoveryKeyframe".to_string(),
+            observed_at_ms: now_ms + 140.0,
+        },
+        &shared_stats,
+    );
+    assert_eq!(second.decision.action, RecoveryAction::RequestDecoderReset);
 }
 
 #[test]

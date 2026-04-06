@@ -313,6 +313,12 @@ export function useStreamRuntimeHost(options: UseStreamRuntimeHostOptions) {
     runtimeStarted.value = true
     await nextTick()
     await sleep(500)
+    void recordRuntimeTraceEvent('runtimeLaunchReadyToInvoke', {
+      targetType: input.targetType,
+      mode: input.runtime.mode,
+      turnMode: launchSpec.runtime.turnServer === null ? 'direct' : 'fallback',
+      useFallbackTurn: attempt.useFallbackTurn,
+    }, input.sessionId)
 
     runtimeToken += 1
     const token = runtimeToken
@@ -325,6 +331,12 @@ export function useStreamRuntimeHost(options: UseStreamRuntimeHostOptions) {
     activeConnected = false
     const nextRuntime = ensureRuntime(input.runtime.mode)
     bindRuntimeEvents(nextRuntime, token)
+    void recordRuntimeTraceEvent('runtimeLaunchPortBound', {
+      targetType: input.targetType,
+      mode: input.runtime.mode,
+      turnMode: launchSpec.runtime.turnServer === null ? 'direct' : 'fallback',
+      useFallbackTurn: attempt.useFallbackTurn,
+    }, input.sessionId)
     await nextRuntime.launch(launchSpec)
     nextRuntime.applyDisplayState({
       displayOptions: displayOptions.value,

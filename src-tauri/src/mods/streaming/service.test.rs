@@ -8,8 +8,8 @@ use super::{
 };
 use crate::mods::data::DataHostSummary;
 use crate::mods::streaming::types::{
-    StreamingConfigSnapshot, StreamingDisplayOptionsValue, StreamingSessionPhase,
-    StreamingSessionProgressSnapshot,
+    StreamingConfigSnapshot, StreamingDisplayOptionsValue, StreamingRuntimeLaunchState,
+    StreamingSessionPhase, StreamingSessionProgressSnapshot,
 };
 use serde_json::json;
 use xbox_streaming::{
@@ -146,6 +146,7 @@ fn domain_progress_hint_maps_to_structured_progress_error() {
     let progress = map_domain_progress_snapshot(DomainSessionProgressSnapshot {
             session_id: "session-1".to_string(),
             phase: DomainSessionPhase::Failed,
+            runtime_launch_state: xbox_streaming::RuntimeLaunchState::Failed,
             status_text_key: "streamPage.errors.startFailed".to_string(),
             queue_seconds: None,
             queue: None,
@@ -176,6 +177,10 @@ fn domain_progress_hint_maps_to_structured_progress_error() {
             .map(|retry| retry.retry_count),
         Some(1)
     );
+    assert_eq!(
+        progress.runtime_launch_state,
+        StreamingRuntimeLaunchState::Failed
+    );
 }
 
 #[test]
@@ -183,6 +188,7 @@ fn fallback_progress_registration_message_maps_structured_error() {
     let progress = build_fallback_progress_snapshot(StreamingSessionProgressSnapshot {
             session_id: "session-1".to_string(),
             phase: StreamingSessionPhase::Failed,
+            runtime_launch_state: StreamingRuntimeLaunchState::Failed,
             status_text_key: "streamPage.errors.startFailed".to_string(),
             queue_seconds: None,
             queue: None,
@@ -220,6 +226,7 @@ fn fallback_progress_without_raw_error_keeps_structured_error_empty() {
     let progress = build_fallback_progress_snapshot(StreamingSessionProgressSnapshot {
         session_id: "session-1".to_string(),
         phase: StreamingSessionPhase::WaitingSessionReady,
+        runtime_launch_state: StreamingRuntimeLaunchState::Blocked,
         status_text_key: "streamPage.status.waitingSession".to_string(),
         queue_seconds: None,
         queue: None,
@@ -236,6 +243,7 @@ fn fallback_progress_network_message_maps_retryable_network_error() {
     let progress = build_fallback_progress_snapshot(StreamingSessionProgressSnapshot {
         session_id: "session-1".to_string(),
         phase: StreamingSessionPhase::Recovering,
+        runtime_launch_state: StreamingRuntimeLaunchState::Blocked,
         status_text_key: "streamPage.status.reconnecting".to_string(),
         queue_seconds: None,
         queue: None,

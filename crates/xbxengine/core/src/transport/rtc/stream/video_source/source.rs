@@ -124,6 +124,58 @@ pub(super) fn detect_forward_gap(
 }
 
 impl RtcVideoFrameSource {
+    fn should_request_startup_bootstrap_keyframe(&self) -> bool {
+        if self.startup_bootstrap_keyframe_requested {
+            return false;
+        }
+        if self.h264_inspector.committed_sps_present()
+            && self.h264_inspector.committed_pps_present()
+        {
+            return false;
+        }
+
+        self.runtime_stats
+            .read(|stats| {
+                let session_is_startup = matches!(
+                    stats.session_phase.as_deref(),
+                    Some("startup" | "handshaking" | "priming")
+                );
+                let transport_connected =
+                    stats.transport_state == XbxEngineTransportStateDto::Connected;
+                let answer_missing_sprop = stats
+                    .latest_remote_answer_observation
+                    .as_ref()
+                    .is_some_and(|observation| {
+                        observation.selected_video_mime_type.as_deref() == Some("video/h264")
+                            && observation
+                                .selected_video_h264_sprop_parameter_sets
+                                .as_ref()
+                                .is_none_or(|sets| sets.is_empty())
+                    });
+                session_is_startup && transport_connected && answer_missing_sprop
+            })
+            .unwrap_or(false)
+    }
+
+    fn maybe_request_startup_bootstrap_keyframe(&mut self, sample_timestamp: u32) {
+        if !self.should_request_startup_bootstrap_keyframe() {
+            return;
+        }
+
+        self.startup_bootstrap_keyframe_requested = true;
+        let now_ms = now_ms_f64();
+        self.timeline_state.on_recovery_keyframe_requested();
+        self.record_video_timeline_observation(
+            "startup-bootstrap-keyframe-requested",
+            None,
+            Some(sample_timestamp),
+            now_ms,
+        );
+        self.queue_transport_observation(TransportObservation::Loss(
+            TransportLossObservation::RecoveryKeyframeRequested,
+        ));
+    }
+
     fn maybe_seed_h264_bootstrap_from_remote_answer(&self) {
         if self.h264_inspector.committed_sps_present()
             && self.h264_inspector.committed_pps_present()
@@ -393,6 +445,7 @@ impl RtcVideoFrameSource {
                 self.current_assembly_packet_count = 0;
                 let payload = sample.data.to_vec();
                 self.assembled_frame_count = self.assembled_frame_count.saturating_add(1);
+                self.maybe_request_startup_bootstrap_keyframe(sample.packet_timestamp);
                 self.maybe_seed_h264_bootstrap_from_remote_answer();
                 let inspection = match self.h264_inspector.inspect_access_unit(&payload) {
                     Ok(inspection) => inspection,

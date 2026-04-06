@@ -682,8 +682,10 @@ impl<'a> RtcTransportSessionBridge<'a> {
                         let pending_verdict =
                             matches!(episode.response_verdict.as_deref(), None | Some("pending"));
                         let in_flight_status =
-                            matches!(episode.status.as_str(), "requested" | "sent");
-                        let within_window = (now_ms - episode.requested_at_ms).max(0.0)
+                            matches!(episode.status.as_str(), "requested" | "sent")
+                                && episode.sent_at_ms.is_some();
+                        let anchor_at_ms = episode.sent_at_ms.unwrap_or(episode.requested_at_ms);
+                        let within_window = (now_ms - anchor_at_ms).max(0.0)
                             <= RECOVERY_COMMAND_FAMILY_IN_FLIGHT_WINDOW_MS;
                         pending_verdict && in_flight_status && within_window
                     });
@@ -940,7 +942,7 @@ mod tests {
     }
 
     #[test]
-    fn deferred_keyframe_command_does_not_overwrite_active_episode() {
+    fn unsent_requested_keyframe_does_not_hold_family_gate() {
         let now_ms = crate::transport::rtc::stats::now_ms_f64();
         let mut stats = XbxEngineMediaRuntimeStats::default();
         stats.latest_keyframe_request_episode =
@@ -971,8 +973,8 @@ mod tests {
         let episode = snapshot
             .latest_keyframe_request_episode
             .as_ref()
-            .expect("active episode should remain");
-        assert_eq!(episode.episode_id, 11);
+            .expect("new episode should be recorded");
+        assert_eq!(episode.episode_id, 22);
         assert_eq!(episode.status, "requested");
     }
 

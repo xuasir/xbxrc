@@ -54,11 +54,18 @@ impl RtcMediaSink for RtcCompositeMediaSink {
 
 struct ConnectionRtcpPort {
     connection: Arc<Mutex<RtcConnectionService>>,
+    runtime_stats: Arc<Mutex<XbxEngineMediaRuntimeStats>>,
 }
 
 impl ConnectionRtcpPort {
-    fn new(connection: Arc<Mutex<RtcConnectionService>>) -> Self {
-        Self { connection }
+    fn new(
+        connection: Arc<Mutex<RtcConnectionService>>,
+        runtime_stats: Arc<Mutex<XbxEngineMediaRuntimeStats>>,
+    ) -> Self {
+        Self {
+            connection,
+            runtime_stats,
+        }
     }
 }
 
@@ -73,6 +80,10 @@ impl RtcRtcpSendPort for ConnectionRtcpPort {
         if let Err(error) = connection.send_video_rtcp_payload(buf) {
             crate::xbx_log_warn!(
                 "[xbxengine][rtc][rtcp] failed to send video rtcp payload: {error}"
+            );
+            RuntimeStatsSink::new(self.runtime_stats.clone()).record_video_rtcp_send_failure(
+                crate::transport::rtc::recovery::runtime_state::unix_now_ms(),
+                &error.to_string(),
             );
         }
     }
@@ -132,7 +143,10 @@ impl<'a> RtcStackMediaPipelineBridge<'a> {
         let video_pipeline = webrtc.video_pipeline;
         let (video_sink, frame_sources) = build_rtc_video_frame_source(
             8192,
-            Arc::new(ConnectionRtcpPort::new(self.connection.clone())),
+            Arc::new(ConnectionRtcpPort::new(
+                self.connection.clone(),
+                self.runtime_stats.clone(),
+            )),
             self.runtime_stats.clone(),
             video_pipeline.jitter_buffer_max_packets.max(64),
             Duration::from_millis(video_pipeline.jitter_buffer_min_delay_ms),

@@ -408,7 +408,10 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
   const enhancementBindings = computed(() => bindStreamEnhancements(enhancements.value))
   const runtimeLaunchSpec = computed<RuntimeLaunchSpec | null>(() => {
     const execution = sessionExecution.value
-    if (execution === null || sessionHealth.value?.phase !== 'sessionReady') {
+    // runtime 启动必须继续尊重既有 session provisioning 时序：
+    // startSession 返回 execution 只表示会话元数据已可用，不代表服务端已经允许 exchangeOffer。
+    // 启动门槛由后端显式下发的 runtimeLaunchState 主权控制，前端不再从 phase 文案侧推断。
+    if (execution === null || sessionHealth.value?.runtimeLaunchState !== 'ready') {
       return null
     }
 
