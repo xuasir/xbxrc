@@ -282,6 +282,65 @@ impl RuntimeStatsSink {
         });
     }
 
+    pub(crate) fn record_keyframe_request_episode_deferred(
+        &self,
+        observed_at_ms: f64,
+        detail: &str,
+    ) {
+        self.update(|stats| {
+            let mut updated_episode = None;
+            if let Some(episode) = stats.latest_keyframe_request_episode.as_mut() {
+                if episode.sent_at_ms.is_some()
+                    || !matches!(episode.response_verdict.as_deref(), None | Some("pending"))
+                {
+                    return;
+                }
+                episode.status = "deferred".to_string();
+                episode.response_verdict = Some("transportDeferred".to_string());
+                stats.latest_observation_label = Some("keyframeRequestEpisodeDeferred".to_string());
+                stats.latest_observation_summary = Some(format!(
+                    "episodeId={} observedAtMs={:.1} detail={detail}",
+                    episode.episode_id, observed_at_ms
+                ));
+                updated_episode = Some(episode.clone());
+            }
+            if let Some(episode) = updated_episode {
+                sync_recent_keyframe_request_episode(stats, episode);
+            }
+        });
+    }
+
+    pub(crate) fn record_keyframe_request_episode_failed(&self, observed_at_ms: f64, detail: &str) {
+        self.update(|stats| {
+            let mut updated_episode = None;
+            if let Some(episode) = stats.latest_keyframe_request_episode.as_mut() {
+                if episode.sent_at_ms.is_some()
+                    || !matches!(episode.response_verdict.as_deref(), None | Some("pending"))
+                {
+                    return;
+                }
+                episode.status = "failed".to_string();
+                episode.response_verdict = Some("transportFailed".to_string());
+                stats.latest_observation_label = Some("keyframeRequestEpisodeFailed".to_string());
+                stats.latest_observation_summary = Some(format!(
+                    "episodeId={} observedAtMs={:.1} detail={detail}",
+                    episode.episode_id, observed_at_ms
+                ));
+                updated_episode = Some(episode.clone());
+            }
+            if let Some(episode) = updated_episode {
+                sync_recent_keyframe_request_episode(stats, episode);
+            }
+        });
+    }
+
+    #[allow(dead_code)]
+    pub(crate) fn record_keyframe_request_episode_unsent_expired(&self, observed_at_ms: f64) {
+        self.update(|stats| {
+            expire_latest_keyframe_request_episode_if_unsent(stats, observed_at_ms);
+        });
+    }
+
     pub(crate) fn record_video_rtcp_send_failure(&self, observed_at_ms: f64, reason: &str) {
         self.update(|stats| {
             stats.latest_video_rtcp_send_failure_time_ms = Some(observed_at_ms);
@@ -727,6 +786,38 @@ fn apply_keyframe_request_episode_sent(
     }
 }
 
+pub(crate) fn expire_latest_keyframe_request_episode_if_unsent(
+    stats: &mut XbxEngineMediaRuntimeStats,
+    observed_at_ms: f64,
+) -> bool {
+    let mut updated_episode = None;
+    let mut latest_summary = None;
+    if let Some(episode) = stats.latest_keyframe_request_episode.as_mut() {
+        if episode.sent_at_ms.is_some()
+            || episode.status != "requested"
+            || !matches!(episode.response_verdict.as_deref(), None | Some("pending"))
+        {
+            return false;
+        }
+        episode.status = "expired-unsent".to_string();
+        episode.response_verdict = Some("unsentExpired".to_string());
+        latest_summary = Some(format!(
+            "episodeId={} requestedAtMs={:.1} observedAtMs={:.1}",
+            episode.episode_id, episode.requested_at_ms, observed_at_ms
+        ));
+        updated_episode = Some(episode.clone());
+    }
+    if latest_summary.is_some() {
+        stats.latest_observation_label = Some("keyframeRequestEpisodeUnsentExpired".to_string());
+        stats.latest_observation_summary = latest_summary;
+    }
+    if let Some(episode) = updated_episode {
+        sync_recent_keyframe_request_episode(stats, episode);
+        return true;
+    }
+    false
+}
+
 #[cfg(test)]
 mod tests {
     use std::sync::{Arc, Mutex};
@@ -897,6 +988,61 @@ mod tests {
         assert_eq!(
             stats.latest_observation_label.as_deref(),
             Some("keyframeRequestEpisodeMissed")
+        );
+    }
+
+    #[test]
+    fn keyframe_request_episode_deferred_marks_unsent_terminal() {
+        let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
+        let sink = RuntimeStatsSink::new(runtime_stats.clone());
+
+        sink.record_keyframe_request_episode_requested(
+            89,
+            Some("ingressWaitKeyframe".to_string()),
+            100.0,
+            None,
+        );
+        sink.record_keyframe_request_episode_deferred(120.0, "familyInFlight:controlPending");
+
+        let stats = runtime_stats.lock().expect("runtime stats lock");
+        let episode = stats
+            .latest_keyframe_request_episode
+            .as_ref()
+            .expect("episode should exist");
+        assert_eq!(episode.status, "deferred");
+        assert_eq!(
+            episode.response_verdict.as_deref(),
+            Some("transportDeferred")
+        );
+        assert_eq!(
+            stats.latest_observation_label.as_deref(),
+            Some("keyframeRequestEpisodeDeferred")
+        );
+    }
+
+    #[test]
+    fn keyframe_request_episode_unsent_expiry_marks_terminal() {
+        let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
+        let sink = RuntimeStatsSink::new(runtime_stats.clone());
+
+        sink.record_keyframe_request_episode_requested(
+            90,
+            Some("ingressWaitKeyframe".to_string()),
+            100.0,
+            None,
+        );
+        sink.record_keyframe_request_episode_unsent_expired(360.0);
+
+        let stats = runtime_stats.lock().expect("runtime stats lock");
+        let episode = stats
+            .latest_keyframe_request_episode
+            .as_ref()
+            .expect("episode should exist");
+        assert_eq!(episode.status, "expired-unsent");
+        assert_eq!(episode.response_verdict.as_deref(), Some("unsentExpired"));
+        assert_eq!(
+            stats.latest_observation_label.as_deref(),
+            Some("keyframeRequestEpisodeUnsentExpired")
         );
     }
 }

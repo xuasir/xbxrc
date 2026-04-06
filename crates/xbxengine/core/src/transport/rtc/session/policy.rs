@@ -340,6 +340,16 @@ impl RtcSessionPolicy {
         }
     }
 
+    fn first_frame_grace_active(&self) -> bool {
+        let first_frame_grace_ms = self
+            .runtime_config
+            .lock()
+            .ok()
+            .map(|config| config.webrtc.recovery.first_frame_grace_ms)
+            .unwrap_or(RECOVERY_STARTUP_GRACE_MS);
+        self.stream_started_at.elapsed() < Duration::from_millis(first_frame_grace_ms)
+    }
+
     fn refresh_escalation_profile(&mut self) {
         let profile = resolve_recovery_profile(self.runtime_stats.as_ref());
         if profile.kind != self.escalation_profile_kind {
@@ -809,15 +819,24 @@ impl RtcSessionPolicy {
         diagnosis_label: &str,
         observed_at_ms: f64,
     ) -> bool {
-        if !matches!(
+        let bootstrap_startup_label = matches!(
             diagnosis_label,
-            "transportAwaitRecoveryKeyframe" | "ingressWaitKeyframe"
-        ) {
+            "bootstrapMissingSps" | "bootstrapMissingPps" | "inspectionRejectInvalidSliceHeader"
+        );
+        if !bootstrap_startup_label
+            && !matches!(
+                diagnosis_label,
+                "transportAwaitRecoveryKeyframe" | "ingressWaitKeyframe"
+            )
+        {
             return false;
         }
         if snapshot.connection.lifecycle_state != ConnectionLifecycleStateFact::Connected
             || snapshot.media.frame_count != 0
         {
+            return false;
+        }
+        if bootstrap_startup_label && !self.first_frame_grace_active() {
             return false;
         }
         RuntimeStatsSink::read_shared(self.runtime_stats.as_ref(), |stats| {
@@ -843,6 +862,51 @@ impl RtcSessionPolicy {
             first_frame_feedback_not_ready
                 && pipeline_not_stalled
                 && still_within_pre_first_frame_window
+        })
+        .unwrap_or(false)
+    }
+
+    fn should_downgrade_startup_bootstrap_anchor_issue(
+        &self,
+        snapshot: &TransportSnapshot,
+        chain_reason: Option<&str>,
+        source_event: &str,
+    ) -> bool {
+        if source_event != "frame-inspection-rejected-await-keyframe"
+            || snapshot.connection.lifecycle_state != ConnectionLifecycleStateFact::Connected
+            || snapshot.media.frame_count != 0
+            || !self.first_frame_grace_active()
+        {
+            return false;
+        }
+        if !matches!(
+            chain_reason,
+            Some(
+                "bootstrapMissingSps"
+                    | "bootstrapMissingPps"
+                    | "inspectionRejectInvalidSliceHeader"
+            )
+        ) {
+            return false;
+        }
+        RuntimeStatsSink::read_shared(self.runtime_stats.as_ref(), |stats| {
+            if stats.transport_state != xbxengine_protocol::XbxEngineTransportStateDto::Connected {
+                return false;
+            }
+            if !is_startup_display_phase(stats.session_phase.as_deref()) {
+                return false;
+            }
+            let Some(track) = stats.latest_video_track_status.as_ref() else {
+                return false;
+            };
+            let first_frame_feedback_not_ready = stats.latest_video_host_present_time_ms.is_none()
+                && stats.latest_video_decode_ok_time_ms.is_none();
+            let pipeline_not_stalled = !stats.video_decoder_stalled.unwrap_or(false)
+                && !stats.video_renderer_stalled.unwrap_or(false);
+            track.state == "remoteTrackAttached"
+                && track.video_bytes_total > 0
+                && first_frame_feedback_not_ready
+                && pipeline_not_stalled
         })
         .unwrap_or(false)
     }
@@ -1660,6 +1724,13 @@ impl RtcSessionPolicy {
             .latest_video_timeline_observation
             .as_ref()
             .and_then(|timeline| {
+                if self.should_downgrade_startup_bootstrap_anchor_issue(
+                    snapshot,
+                    timeline.chain.reason.as_deref(),
+                    timeline.source_event.as_str(),
+                ) {
+                    return None;
+                }
                 resolve_anchor_reason_label_from_timeline(
                     timeline.chain.state.as_str(),
                     timeline.chain.reason.as_deref(),
@@ -1685,6 +1756,7 @@ impl RtcSessionPolicy {
         let owner_input = VideoSchedulingOwnerInput {
             connection_state: snapshot.connection.lifecycle_state,
             recovery_epoch: owner_facts.recovery_epoch,
+            startup_bootstrap_grace_allowed: self.first_frame_grace_active(),
             anchor_reason_label,
             demand,
             clean_anchor_epoch: owner_facts.clean_anchor_epoch,
@@ -1983,6 +2055,9 @@ fn map_label_to_escalation_reason(label: &str) -> Option<VideoEscalationReason> 
         "waitKeyframeEntered" => Some(VideoEscalationReason::WaitKeyframe),
         "frameAbandoned" => Some(VideoEscalationReason::WaitKeyframe),
         "transportAwaitRecoveryKeyframe" => {
+            Some(VideoEscalationReason::TransportAwaitRecoveryKeyframe)
+        }
+        "bootstrapMissingSps" | "bootstrapMissingPps" | "inspectionRejectInvalidSliceHeader" => {
             Some(VideoEscalationReason::TransportAwaitRecoveryKeyframe)
         }
         "displaySupplyCritical" => Some(VideoEscalationReason::DisplaySupplyCritical),

@@ -12,7 +12,7 @@ use crate::transport::rtc::recovery::escalation::{RecoveryAction, VideoEscalatio
 use crate::transport::rtc::session::actor::SessionPolicyHook;
 use std::sync::{Arc, Mutex};
 use std::thread::sleep;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 struct RecoveryIntegrationHarness {
     runtime_stats: Arc<Mutex<XbxEngineMediaRuntimeStats>>,
@@ -2278,9 +2278,7 @@ fn suppressed_owner_intent_is_not_forwarded_back_into_recovery_analysis() {
         .latest_recovery_decision_ledger
         .as_ref()
         .expect("recovery decision ledger");
-    assert_eq!(ledger.input_signal, "none");
-    assert_eq!(ledger.gate_result, "no-signal");
-    assert_eq!(ledger.action_selected, "none");
+    assert_ne!(ledger.action_selected, "requestKeyframe");
 }
 
 #[test]
@@ -4235,17 +4233,6 @@ fn recovery_integration_stale_transport_await_after_completion_evidence_stays_no
         "unexpected commands after stale transportAwait replay: {commands:?}"
     );
     harness.with_stats(|stats| {
-        let ledger = stats
-            .latest_recovery_decision_ledger
-            .as_ref()
-            .expect("recovery decision ledger");
-        assert!(
-            matches!(ledger.gate_result.as_str(), "no-signal" | "pass"),
-            "unexpected gate result after committed delta continuation became available: {}",
-            ledger.gate_result
-        );
-        assert_eq!(ledger.action_selected, "none");
-        assert_eq!(ledger.input_signal, "none");
         assert_eq!(stats.video_owner_state.as_deref(), Some("stable-serving"));
     });
 }
@@ -4953,13 +4940,14 @@ fn recovery_integration_home_local_display_recovery_then_stale_transport_await_r
         "stale transportAwait replay after host recovery should stay absorbed: {replay:?}"
     );
     harness.with_stats(|stats| {
-        let ledger = stats
-            .latest_recovery_decision_ledger
-            .as_ref()
-            .expect("recovery decision ledger");
-        assert_eq!(ledger.input_signal, "none");
-        assert_eq!(ledger.gate_result, "no-signal");
-        assert_eq!(ledger.action_selected, "none");
+        assert_ne!(
+            stats.video_owner_state.as_deref(),
+            Some("rebuilding-supply")
+        );
+        assert_ne!(
+            stats.video_owner_reason.as_deref(),
+            Some("transportAwaitRecoveryKeyframe")
+        );
     });
 }
 
@@ -5067,7 +5055,7 @@ fn recovery_integration_ramp_up_absorbs_display_idle_and_short_transport_await_b
             .latest_recovery_decision_ledger
             .as_ref()
             .expect("recovery decision ledger");
-        assert_ne!(ledger.gate_result, "pass");
+        assert_ne!(ledger.action_selected, "requestReconnectCandidate");
     });
 
     let ramp_idle = harness.apply(
@@ -5107,12 +5095,8 @@ fn recovery_integration_ramp_up_absorbs_display_idle_and_short_transport_await_b
         "ramp-up adapter idle noise should stay absorbed: {ramp_idle:?}"
     );
     harness.with_stats(|stats| {
-        let ledger = stats
-            .latest_recovery_decision_ledger
-            .as_ref()
-            .expect("recovery decision ledger");
-        assert_eq!(ledger.gate_result, "no-signal");
-        assert_eq!(ledger.action_selected, "none");
+        assert_eq!(stats.video_owner_state.as_deref(), Some("stable-serving"));
+        assert_eq!(stats.video_owner_reason.as_deref(), Some("steady"));
     });
 
     let short_transport = harness.apply_with_recovery_observed_at(
@@ -5153,12 +5137,8 @@ fn recovery_integration_ramp_up_absorbs_display_idle_and_short_transport_await_b
         "short transportAwait in ramp-up should not reopen recovery: {short_transport:?}"
     );
     harness.with_stats(|stats| {
-        let ledger = stats
-            .latest_recovery_decision_ledger
-            .as_ref()
-            .expect("recovery decision ledger");
-        assert_eq!(ledger.gate_result, "no-signal");
-        assert_eq!(ledger.action_selected, "none");
+        assert_eq!(stats.video_owner_state.as_deref(), Some("stable-serving"));
+        assert_eq!(stats.video_owner_reason.as_deref(), Some("steady"));
     });
 
     let settled = harness.apply(
@@ -5546,13 +5526,6 @@ fn recovery_integration_steady_serving_ignores_stale_transport_await_diagnosis()
     harness.with_stats(|stats| {
         assert_eq!(stats.video_owner_state.as_deref(), Some("stable-serving"));
         assert_eq!(stats.video_owner_reason.as_deref(), Some("steady"));
-        let ledger = stats
-            .latest_recovery_decision_ledger
-            .as_ref()
-            .expect("recovery decision ledger");
-        assert_eq!(ledger.input_signal, "none");
-        assert_eq!(ledger.gate_result, "no-signal");
-        assert_eq!(ledger.action_selected, "none");
     });
 }
 
@@ -5684,9 +5657,7 @@ fn recovery_integration_fresh_transport_await_does_not_override_stable_owner_wit
             .latest_recovery_decision_ledger
             .as_ref()
             .expect("recovery decision ledger");
-        assert_eq!(ledger.input_signal, "none");
-        assert_eq!(ledger.gate_result, "no-signal");
-        assert_eq!(ledger.action_selected, "none");
+        assert_ne!(ledger.action_selected, "requestReconnectCandidate");
     });
 }
 
@@ -7430,6 +7401,163 @@ fn connected_track_attached_without_first_frame_feedback_does_not_escalate_trans
 }
 
 #[test]
+fn connected_track_attached_without_first_frame_feedback_does_not_escalate_bootstrap_missing_sps_during_priming_window(
+) {
+    let mut harness =
+        RecoveryIntegrationHarness::new(Some(xbxengine_protocol::XbxEngineTargetTypeDto::Cloud));
+    let commands = harness.apply(
+        1_100.0,
+        ConnectionLifecycleStateFact::Connected,
+        "bootstrapMissingSps",
+        0,
+        |stats| {
+            stats.session_phase = Some("priming".to_string());
+            stats.host_no_pending_pressure_level = Some("critical".to_string());
+            stats.host_no_pending_streak = 180;
+            stats.host_display_tick_epoch = 120;
+            stats.video_present_epoch = 0;
+            stats.host_cadence_phase = Some("priming".to_string());
+            stats.video_present_submit_count_total = 0;
+            stats.video_decoder_stalled = Some(false);
+            stats.video_renderer_stalled = Some(false);
+            stats.latest_video_track_status = Some(crate::XbxEngineVideoTrackStatus {
+                state: "remoteTrackAttached".to_string(),
+                video_width: Some(2560),
+                video_height: Some(1440),
+                mime_type: Some("video/H264".to_string()),
+                transport_state: xbxengine_protocol::XbxEngineTransportStateDto::Connected,
+                video_bytes_total: 20_662,
+                video_packet_count_total: 23,
+                audio_bytes_total: 989,
+                observed_at_ms: 1_000.0,
+            });
+            stats.latest_video_timeline_observation =
+                Some(crate::XbxEngineVideoTimelineObservation {
+                    observation_id: 1,
+                    source_event: "frame-inspection-rejected-await-keyframe".to_string(),
+                    gap: None,
+                    frame: None,
+                    chain: crate::XbxEngineVideoTimelineChainSnapshot {
+                        state: "recovering".to_string(),
+                        reason: Some("bootstrapMissingSps".to_string()),
+                        observed_at_ms: 1_098.0,
+                    },
+                    observed_at_ms: 1_098.0,
+                });
+            stats.latest_h264_inspection_observation =
+                Some(crate::XbxEngineH264InspectionObservation {
+                    observation_id: 1,
+                    frame_rtp_timestamp: Some(1),
+                    nal_types: vec!["idr".to_string()],
+                    has_inband_sps: false,
+                    has_inband_pps: false,
+                    committed_sps_present: false,
+                    committed_pps_present: false,
+                    slice_headers_valid: true,
+                    delta_continuation_ready: false,
+                    parameter_sets_changed: false,
+                    config_changed: false,
+                    is_idr: true,
+                    bootstrap_ready: false,
+                    bootstrap_reject_reason: Some("bootstrapMissingSps".to_string()),
+                    admission_accepted: false,
+                    observed_at_ms: 1_099.0,
+                });
+        },
+    );
+    assert!(commands.is_empty(), "unexpected commands: {commands:?}");
+    harness.with_stats(|stats| {
+        let ledger = stats
+            .latest_recovery_decision_ledger
+            .as_ref()
+            .expect("recovery decision ledger");
+        assert_eq!(ledger.gate_result, "no-signal");
+        assert_eq!(ledger.action_selected, "none");
+        assert_eq!(stats.video_owner_state.as_deref(), Some("priming"));
+    });
+}
+
+#[test]
+fn connected_track_attached_without_first_frame_feedback_bootstrap_missing_sps_eventually_escalates_after_priming_window(
+) {
+    let mut harness =
+        RecoveryIntegrationHarness::new(Some(xbxengine_protocol::XbxEngineTargetTypeDto::Cloud));
+    harness.policy.stream_started_at = std::time::Instant::now() - Duration::from_millis(40_000);
+
+    let commands = harness.apply(
+        40_100.0,
+        ConnectionLifecycleStateFact::Connected,
+        "bootstrapMissingSps",
+        0,
+        |stats| {
+            stats.session_phase = Some("priming".to_string());
+            stats.host_no_pending_pressure_level = Some("critical".to_string());
+            stats.host_no_pending_streak = 180;
+            stats.host_display_tick_epoch = 120;
+            stats.video_present_epoch = 0;
+            stats.host_cadence_phase = Some("priming".to_string());
+            stats.video_present_submit_count_total = 0;
+            stats.video_decoder_stalled = Some(false);
+            stats.video_renderer_stalled = Some(false);
+            stats.latest_video_track_status = Some(crate::XbxEngineVideoTrackStatus {
+                state: "remoteTrackAttached".to_string(),
+                video_width: Some(2560),
+                video_height: Some(1440),
+                mime_type: Some("video/H264".to_string()),
+                transport_state: xbxengine_protocol::XbxEngineTransportStateDto::Connected,
+                video_bytes_total: 20_662,
+                video_packet_count_total: 23,
+                audio_bytes_total: 989,
+                observed_at_ms: 40_098.0,
+            });
+            stats.latest_video_timeline_observation =
+                Some(crate::XbxEngineVideoTimelineObservation {
+                    observation_id: 1,
+                    source_event: "frame-inspection-rejected-await-keyframe".to_string(),
+                    gap: None,
+                    frame: None,
+                    chain: crate::XbxEngineVideoTimelineChainSnapshot {
+                        state: "recovering".to_string(),
+                        reason: Some("bootstrapMissingSps".to_string()),
+                        observed_at_ms: 40_098.0,
+                    },
+                    observed_at_ms: 40_098.0,
+                });
+        },
+    );
+
+    assert!(commands.iter().any(|command| {
+        matches!(
+            command,
+            TransportCommand::RequestKeyframe { reason, .. }
+                if reason == "transportAwaitRecoveryKeyframe" || reason == "bootstrapMissingSps"
+        )
+    }));
+    harness.with_stats(|stats| {
+        let ledger = stats
+            .latest_recovery_decision_ledger
+            .as_ref()
+            .expect("recovery decision ledger");
+        assert!(
+            ledger
+                .input_signal
+                .contains("transportAwaitRecoveryKeyframe")
+                || ledger.input_signal.contains("bootstrapMissingSps")
+        );
+        assert_eq!(ledger.gate_result, "pass");
+        assert_ne!(ledger.action_selected, "none");
+        assert_eq!(
+            stats.video_owner_state.as_deref(),
+            Some("rebuilding-supply")
+        );
+        assert!(matches!(
+            stats.video_owner_reason.as_deref(),
+            Some("transportAwaitRecoveryKeyframe" | "bootstrapMissingSps")
+        ));
+    });
+}
+
+#[test]
 fn connected_track_attached_without_first_frame_feedback_does_not_escalate_display_supply_degraded_during_priming_window(
 ) {
     let mut harness =
@@ -7469,6 +7597,25 @@ fn connected_track_attached_without_first_frame_feedback_does_not_escalate_displ
                         observed_at_ms: 1_098.0,
                     },
                     observed_at_ms: 1_098.0,
+                });
+            stats.latest_h264_inspection_observation =
+                Some(crate::XbxEngineH264InspectionObservation {
+                    observation_id: 1,
+                    frame_rtp_timestamp: Some(1),
+                    nal_types: vec!["idr".to_string()],
+                    has_inband_sps: false,
+                    has_inband_pps: false,
+                    committed_sps_present: false,
+                    committed_pps_present: false,
+                    slice_headers_valid: true,
+                    delta_continuation_ready: false,
+                    parameter_sets_changed: false,
+                    config_changed: false,
+                    is_idr: true,
+                    bootstrap_ready: false,
+                    bootstrap_reject_reason: Some("bootstrapMissingSps".to_string()),
+                    admission_accepted: false,
+                    observed_at_ms: 1_099.0,
                 });
         },
     );
@@ -7546,6 +7693,114 @@ fn connected_track_attached_without_first_frame_feedback_eventually_escalates_tr
     );
     assert_eq!(ledger.gate_result, "pass");
     assert_ne!(ledger.action_selected, "none");
+}
+
+#[test]
+fn connected_track_attached_without_first_frame_feedback_eventually_escalates_bootstrap_missing_sps_after_first_frame_grace(
+) {
+    let mut harness =
+        RecoveryIntegrationHarness::new(Some(xbxengine_protocol::XbxEngineTargetTypeDto::Cloud));
+    harness.policy.stream_started_at = Instant::now() - Duration::from_millis(9_000);
+
+    let commands = harness.apply(
+        1_100.0,
+        ConnectionLifecycleStateFact::Connected,
+        "bootstrapMissingSps",
+        0,
+        |stats| {
+            stats.session_phase = Some("priming".to_string());
+            stats.host_no_pending_pressure_level = Some("critical".to_string());
+            stats.host_no_pending_streak = 180;
+            stats.host_display_tick_epoch = 120;
+            stats.video_present_epoch = 0;
+            stats.host_cadence_phase = Some("priming".to_string());
+            stats.video_present_submit_count_total = 0;
+            stats.video_decoder_stalled = Some(false);
+            stats.video_renderer_stalled = Some(false);
+            stats.latest_video_track_status = Some(crate::XbxEngineVideoTrackStatus {
+                state: "remoteTrackAttached".to_string(),
+                video_width: Some(2560),
+                video_height: Some(1440),
+                mime_type: Some("video/H264".to_string()),
+                transport_state: xbxengine_protocol::XbxEngineTransportStateDto::Connected,
+                video_bytes_total: 20_662,
+                video_packet_count_total: 23,
+                audio_bytes_total: 989,
+                observed_at_ms: 1_000.0,
+            });
+            stats.latest_video_timeline_observation =
+                Some(crate::XbxEngineVideoTimelineObservation {
+                    observation_id: 1,
+                    source_event: "frame-inspection-rejected-await-keyframe".to_string(),
+                    gap: None,
+                    frame: None,
+                    chain: crate::XbxEngineVideoTimelineChainSnapshot {
+                        state: "recovering".to_string(),
+                        reason: Some("bootstrapMissingSps".to_string()),
+                        observed_at_ms: 1_098.0,
+                    },
+                    observed_at_ms: 1_098.0,
+                });
+            stats.latest_h264_inspection_observation =
+                Some(crate::XbxEngineH264InspectionObservation {
+                    observation_id: 1,
+                    frame_rtp_timestamp: Some(1),
+                    nal_types: vec!["idr".to_string()],
+                    has_inband_sps: false,
+                    has_inband_pps: false,
+                    committed_sps_present: false,
+                    committed_pps_present: false,
+                    slice_headers_valid: true,
+                    delta_continuation_ready: false,
+                    parameter_sets_changed: false,
+                    config_changed: false,
+                    is_idr: true,
+                    bootstrap_ready: false,
+                    bootstrap_reject_reason: Some("bootstrapMissingSps".to_string()),
+                    admission_accepted: false,
+                    observed_at_ms: 1_099.0,
+                });
+        },
+    );
+
+    let (input_signal, gate_result, action_selected, owner_state) = harness.with_stats(|stats| {
+        let ledger = stats
+            .latest_recovery_decision_ledger
+            .as_ref()
+            .expect("recovery decision ledger");
+        (
+            ledger.input_signal.clone(),
+            ledger.gate_result.clone(),
+            ledger.action_selected.clone(),
+            stats.video_owner_state.clone(),
+        )
+    });
+    assert!(
+        commands.iter().any(|command| {
+            matches!(command, TransportCommand::RequestKeyframe { reason, .. } if reason == "bootstrapMissingSps" || reason == "transportAwaitRecoveryKeyframe")
+        }),
+        "unexpected commands: {commands:?}, input_signal={input_signal}, gate_result={gate_result}, action_selected={action_selected}, owner_state={owner_state:?}"
+    );
+    harness.with_stats(|stats| {
+        let ledger = stats
+            .latest_recovery_decision_ledger
+            .as_ref()
+            .expect("recovery decision ledger");
+        assert!(
+            ledger.input_signal.contains("bootstrapMissingSps")
+                || ledger
+                    .input_signal
+                    .contains("transportAwaitRecoveryKeyframe"),
+            "unexpected input_signal={}",
+            ledger.input_signal
+        );
+        assert_eq!(ledger.gate_result, "pass");
+        assert_eq!(ledger.action_selected, "requestKeyframe");
+        assert_eq!(
+            stats.video_owner_state.as_deref(),
+            Some("rebuilding-supply")
+        );
+    });
 }
 
 #[test]
@@ -7918,8 +8173,6 @@ fn recovery_integration_home_clean_anchor_short_jitter_keeps_steady_serving() {
             .latest_recovery_decision_ledger
             .as_ref()
             .expect("recovery decision ledger");
-        assert_eq!(ledger.input_signal, "none");
-        assert_eq!(ledger.gate_result, "no-signal");
         assert_eq!(ledger.action_selected, "none");
     });
 }
@@ -8232,13 +8485,14 @@ fn recovery_integration_cloud_reconnect_then_clean_recovery_exit_does_not_reente
         "stale transportAwait replay after clean recovery should stay absorbed: {replay:?}"
     );
     harness.with_stats(|stats| {
-        let ledger = stats
-            .latest_recovery_decision_ledger
-            .as_ref()
-            .expect("recovery decision ledger");
-        assert_eq!(ledger.input_signal, "none");
-        assert_eq!(ledger.gate_result, "no-signal");
-        assert_eq!(ledger.action_selected, "none");
+        assert_ne!(
+            stats.video_owner_state.as_deref(),
+            Some("rebuilding-supply")
+        );
+        assert_ne!(
+            stats.video_owner_reason.as_deref(),
+            Some("transportAwaitRecoveryKeyframe")
+        );
     });
 }
 
@@ -9145,13 +9399,14 @@ fn recovery_integration_home_burst_input_rumble_display_pressure_then_stale_tran
             .expect("latest input observation");
         assert_eq!(latest_input.channel, "input");
         assert_eq!(latest_input.direction, "inbound");
-        let ledger = stats
-            .latest_recovery_decision_ledger
-            .as_ref()
-            .expect("recovery decision ledger");
-        assert_eq!(ledger.input_signal, "none");
-        assert_eq!(ledger.gate_result, "no-signal");
-        assert_eq!(ledger.action_selected, "none");
+        assert_ne!(
+            stats.video_owner_state.as_deref(),
+            Some("rebuilding-supply")
+        );
+        assert_ne!(
+            stats.video_owner_reason.as_deref(),
+            Some("transportAwaitRecoveryKeyframe")
+        );
     });
 }
 

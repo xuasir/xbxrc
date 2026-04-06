@@ -72,6 +72,7 @@ impl VideoSchedulingOwnerState {
 pub(crate) struct VideoSchedulingOwnerInput {
     pub(crate) connection_state: ConnectionLifecycleStateFact,
     pub(crate) recovery_epoch: u64,
+    pub(crate) startup_bootstrap_grace_allowed: bool,
     pub(crate) anchor_reason_label: Option<String>,
     pub(crate) demand: SchedulingDemandSignal,
     pub(crate) clean_anchor_epoch: Option<u64>,
@@ -195,8 +196,11 @@ impl VideoSchedulingOwner {
         let wait_keyframe_rebuild_priority = Self::should_prioritize_wait_keyframe_rebuild(input);
         let codec_recovery_keyframe_blocked =
             Self::codec_still_awaits_recovery_keyframe(current_state, input);
-        let has_anchor_issue = if wait_keyframe_rebuild_priority || codec_recovery_keyframe_blocked
-        {
+        let startup_bootstrap_grace_active =
+            Self::startup_bootstrap_grace_active(current_state, input);
+        let has_anchor_issue = if startup_bootstrap_grace_active {
+            false
+        } else if wait_keyframe_rebuild_priority || codec_recovery_keyframe_blocked {
             true
         } else if Self::transient_anchor_noise_can_settle(input, has_clean_anchor_evidence) {
             false
@@ -574,6 +578,58 @@ impl VideoSchedulingOwner {
         input.demand.host_display_tick_epoch.unwrap_or_default() > 0
     }
 
+    fn first_present_feedback_gap_active(input: &VideoSchedulingOwnerInput) -> bool {
+        input.demand.host_display_tick_epoch.unwrap_or_default() > 0
+            && input.demand.host_present_epoch.unwrap_or_default() == 0
+            && input.demand.present_submit_count_total.unwrap_or_default() == 0
+    }
+
+    fn startup_bootstrap_grace_active(
+        current: VideoSchedulingOwnerState,
+        input: &VideoSchedulingOwnerInput,
+    ) -> bool {
+        if !matches!(
+            current,
+            VideoSchedulingOwnerState::SeekingAnchor | VideoSchedulingOwnerState::Priming
+        ) {
+            return false;
+        }
+        if !input.startup_bootstrap_grace_allowed {
+            return false;
+        }
+        if input.connection_state != ConnectionLifecycleStateFact::Connected {
+            return false;
+        }
+        if !Self::first_present_grace_active(input) {
+            return false;
+        }
+        let bootstrap_reject_in_startup = matches!(
+            input.latest_h264_bootstrap_reject_reason.as_deref(),
+            Some(
+                "bootstrapMissingSps"
+                    | "bootstrapMissingPps"
+                    | "inspectionRejectInvalidSliceHeader"
+            )
+        ) && input.latest_h264_bootstrap_ready == Some(false);
+        if !bootstrap_reject_in_startup {
+            return false;
+        }
+        let track_attached = matches!(
+            input.latest_track_state.as_deref(),
+            Some("remoteTrackAttached")
+        );
+        let track_has_video_bytes = input
+            .latest_track_video_bytes_total
+            .is_some_and(|bytes| bytes > 0);
+        if !track_attached || !track_has_video_bytes {
+            return false;
+        }
+        matches!(
+            input.latest_timeline_source_event.as_deref(),
+            Some("frame-inspection-rejected-await-keyframe" | "frame-await-recovery-keyframe")
+        )
+    }
+
     fn supply_recovery_can_settle_without_explicit_clean_anchor(
         input: &VideoSchedulingOwnerInput,
         supply_state: DisplaySupplyState,
@@ -632,14 +688,17 @@ impl VideoSchedulingOwner {
         if input.demand.video_renderer_stalled || input.demand.present_age_ms.is_some() {
             return false;
         }
-        if matches!(
-            input.demand.no_pending_pressure_level.as_deref(),
-            Some("high" | "critical")
-        ) {
-            return false;
-        }
-        if input.demand.no_pending_streak.unwrap_or(u32::MAX) > 2 {
-            return false;
+        let first_present_feedback_gap_active = Self::first_present_feedback_gap_active(input);
+        if !first_present_feedback_gap_active {
+            if matches!(
+                input.demand.no_pending_pressure_level.as_deref(),
+                Some("high" | "critical")
+            ) {
+                return false;
+            }
+            if input.demand.no_pending_streak.unwrap_or(u32::MAX) > 2 {
+                return false;
+            }
         }
         let stable_timeline_source = matches!(
             input.latest_timeline_source_event.as_deref(),

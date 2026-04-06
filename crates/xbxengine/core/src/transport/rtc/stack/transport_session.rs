@@ -12,7 +12,9 @@ use crate::transport::rtc::executor::peer::{
 use crate::transport::rtc::facts::{
     CommandResultFact, CommandResultStatus, TimerFact, TransportCommand, TransportFact,
 };
-use crate::transport::rtc::recovery::escalation::{RecoveryAction, VideoEscalationController};
+use crate::transport::rtc::recovery::escalation::{
+    RecoveryAction, VideoEscalationController, VideoEscalationReason,
+};
 use crate::transport::rtc::session::actor::SessionActor;
 use crate::transport::rtc::session::clock::SystemSessionClock;
 use crate::transport::rtc::session::policy::RtcSessionPolicy;
@@ -35,7 +37,6 @@ const RECOVERY_COMMAND_REASON_SAME_FAMILY_TRANSPORT_STAGE_COALESCED: &str =
     "sameFamilyCoalesced:transportStageSuppressed";
 const RECOVERY_COMMAND_SEMANTIC_FAMILY_UPGRADE_KEYFRAME_TO_DECODER_RESET: &str =
     "familyUpgrade:keyframeInFlight->decoderReset";
-
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum RecoveryCommandKind {
     RequestKeyframe,
@@ -355,6 +356,17 @@ impl<'a> RtcTransportSessionBridge<'a> {
                         );
                     }
                 }
+                match &command_status {
+                    CommandResultStatus::Deferred { reason } => {
+                        RuntimeStatsSink::new(self.runtime_stats.clone())
+                            .record_keyframe_request_episode_deferred(requested_at_ms, reason);
+                    }
+                    CommandResultStatus::Failed { error } => {
+                        RuntimeStatsSink::new(self.runtime_stats.clone())
+                            .record_keyframe_request_episode_failed(requested_at_ms, error);
+                    }
+                    CommandResultStatus::Succeeded => {}
+                }
                 self.record_transport_command_status_with_semantic(
                     command,
                     command_status,
@@ -488,14 +500,26 @@ impl<'a> RtcTransportSessionBridge<'a> {
         recovery_action: RecoveryAction,
     ) {
         let observed_at_ms = crate::transport::rtc::stats::now_ms_f64();
-        let contract = VideoEscalationController::action_contract(recovery_action);
+        let advances_recovery_epoch = self
+            .should_advance_transport_recovery_epoch_on_success(recovery_action, reason.as_str());
         RuntimeStatsSink::new(self.runtime_stats.clone()).record_recovery_escalation_success(
             observation_id,
             reason,
             action.as_str(),
             observed_at_ms,
-            contract.advances_recovery_epoch_on_success,
+            advances_recovery_epoch,
         );
+    }
+
+    fn should_advance_transport_recovery_epoch_on_success(
+        &self,
+        recovery_action: RecoveryAction,
+        reason_label: &str,
+    ) -> bool {
+        VideoEscalationController::action_success_advances_transport_recovery_epoch(
+            recovery_action,
+            VideoEscalationReason::from_recovery_reason_label(reason_label),
+        )
     }
 
     fn resolve_recovery_keyframe_action_label(&self) -> Option<String> {
@@ -745,7 +769,7 @@ mod tests {
     use crate::api::runtime::XbxEngineRuntimeConfig;
     use crate::transport::rtc::connection::RtcConnectionService;
     use crate::transport::rtc::facts::{CommandResultStatus, TransportCommand};
-    use crate::transport::rtc::recovery::escalation::{RecoveryAction, VideoEscalationController};
+    use crate::transport::rtc::recovery::escalation::RecoveryAction;
     use crate::transport::rtc::session::actor::SessionActor;
     use crate::transport::rtc::session::clock::SystemSessionClock;
     use crate::transport::rtc::session::policy::RtcSessionPolicy;
@@ -894,16 +918,19 @@ mod tests {
     }
 
     #[test]
-    fn epoch_advance_contract_is_defined_by_recovery_owner_layer() {
-        let keyframe = VideoEscalationController::action_contract(RecoveryAction::RequestKeyframe);
-        assert!(!keyframe.advances_recovery_epoch_on_success);
+    fn transport_session_maps_local_decoder_reset_reason_to_non_advancing_epoch_policy() {
+        let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
+        let pending_runtime_recovery_action = Arc::new(Mutex::new(None));
+        let bridge = build_bridge(runtime_stats, pending_runtime_recovery_action);
 
-        let reset = VideoEscalationController::action_contract(RecoveryAction::RequestDecoderReset);
-        assert!(reset.advances_recovery_epoch_on_success);
-
-        let reconnect =
-            VideoEscalationController::action_contract(RecoveryAction::RequestReconnectCandidate);
-        assert!(reconnect.advances_recovery_epoch_on_success);
+        assert!(!bridge.should_advance_transport_recovery_epoch_on_success(
+            RecoveryAction::RequestDecoderReset,
+            "displaySupplyDegraded",
+        ));
+        assert!(bridge.should_advance_transport_recovery_epoch_on_success(
+            RecoveryAction::RequestDecoderReset,
+            "transportAwaitRecoveryKeyframe",
+        ));
     }
 
     #[test]
@@ -975,7 +1002,11 @@ mod tests {
             .as_ref()
             .expect("new episode should be recorded");
         assert_eq!(episode.episode_id, 22);
-        assert_eq!(episode.status, "requested");
+        assert_eq!(episode.status, "deferred");
+        assert_eq!(
+            episode.response_verdict.as_deref(),
+            Some("transportDeferred")
+        );
     }
 
     #[test]

@@ -567,41 +567,41 @@ fn failed_server_never_registered_error_code_is_exhausted_immediately() {
 }
 
 #[test]
-fn failed_server_registration_error_is_exhausted_immediately() {
+fn failed_server_registration_error_is_retryable_once() {
     assert_eq!(
-            decide_home_session_ready_recreate_retry(
-                true,
-                0,
+        decide_home_session_ready_recreate_retry(
+            true,
+            0,
+            "Agent : ServerNeverRegistered : Server never registered with service : State WaitingForServerToRegister",
+            Some(SessionPhase::Failed),
+            Some("Failed"),
+            None,
+            Some(
                 "Agent : ServerNeverRegistered : Server never registered with service : State WaitingForServerToRegister",
-                Some(SessionPhase::Failed),
-                Some("Failed"),
-                None,
-                Some(
-                    "Agent : ServerNeverRegistered : Server never registered with service : State WaitingForServerToRegister",
-                ),
             ),
-            Some(SessionReadyRetryDecision::Exhausted(
-                SessionReadyRecreateRetryReason::WaitingForServerRegistration,
-            ))
-        );
+        ),
+        Some(SessionReadyRetryDecision::Retry(
+            SessionReadyRecreateRetryReason::WaitingForServerRegistration,
+        ))
+    );
 }
 
 #[test]
-fn waiting_for_server_registration_retry_signal_is_exhausted_bounded_retry() {
+fn waiting_for_server_registration_retry_signal_is_retryable_once_bounded_retry() {
     assert_eq!(
-            decide_home_session_ready_recreate_retry(
-                true,
-                0,
-                "HTTP 500: Xccs : ErrorCallingWNS : Send command failed : State WaitingForServerToRegister",
-                Some(SessionPhase::WaitingSessionReady),
-                Some("Provisioning"),
-                Some("ServerNeverRegistered"),
-                Some("ServerNeverRegistered"),
-            ),
-            Some(SessionReadyRetryDecision::Exhausted(
-                SessionReadyRecreateRetryReason::WaitingForServerRegistration,
-            ))
-        );
+        decide_home_session_ready_recreate_retry(
+            true,
+            0,
+            "HTTP 500: Xccs : ErrorCallingWNS : Send command failed : State WaitingForServerToRegister",
+            Some(SessionPhase::WaitingSessionReady),
+            Some("Provisioning"),
+            Some("ServerNeverRegistered"),
+            Some("ServerNeverRegistered"),
+        ),
+        Some(SessionReadyRetryDecision::Retry(
+            SessionReadyRecreateRetryReason::WaitingForServerRegistration,
+        ))
+    );
 }
 
 #[test]
@@ -672,19 +672,19 @@ fn non_provisioning_state_is_not_retryable() {
 #[test]
 fn home_waiting_for_server_registration_is_exhausted_in_provisioning() {
     assert_eq!(
-            decide_home_session_ready_recreate_retry(
-                true,
-                0,
-                "HTTP 500: Xccs : ErrorCallingWNS : Send command failed : State WaitingForServerToRegister",
-                Some(SessionPhase::Failed),
-                Some("Provisioning"),
-                Some("ServerNeverRegistered"),
-                Some("ServerNeverRegistered"),
-            ),
-            Some(SessionReadyRetryDecision::Exhausted(
-                SessionReadyRecreateRetryReason::WaitingForServerRegistration,
-            ))
-        );
+        decide_home_session_ready_recreate_retry(
+            true,
+            1,
+            "HTTP 500: Xccs : ErrorCallingWNS : Send command failed : State WaitingForServerToRegister",
+            Some(SessionPhase::Failed),
+            Some("Provisioning"),
+            Some("ServerNeverRegistered"),
+            Some("ServerNeverRegistered"),
+        ),
+        Some(SessionReadyRetryDecision::Exhausted(
+            SessionReadyRecreateRetryReason::WaitingForServerRegistration,
+        ))
+    );
 }
 
 #[test]

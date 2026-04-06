@@ -250,7 +250,39 @@ fn new_recovery_epoch_clears_severe_deadline_idle_timeout_shortcut() {
 }
 
 #[test]
-fn persistent_wait_keyframe_escalates_to_decoder_reset() {
+fn persistent_wait_keyframe_without_failure_evidence_does_not_escalate_to_decoder_reset() {
+    let mut controller = VideoEscalationController::new(VideoEscalationConfig {
+        cooldown_ms: 200,
+        keyframe_burst_threshold: 1,
+        decoder_reset_burst_threshold: 2,
+        keyframe_upgrade_min_delay_ms: 150,
+        ..VideoEscalationConfig::default()
+    });
+
+    assert_eq!(
+        controller
+            .on_reason(VideoEscalationReason::WaitKeyframe)
+            .action,
+        RecoveryAction::RequestKeyframe
+    );
+    std::thread::sleep(Duration::from_millis(210));
+    assert_eq!(
+        controller
+            .on_reason(VideoEscalationReason::WaitKeyframe)
+            .action,
+        RecoveryAction::CoalescedKeyframeInFlight
+    );
+    std::thread::sleep(Duration::from_millis(210));
+    assert_eq!(
+        controller
+            .on_reason_with_epoch_policy(VideoEscalationReason::WaitKeyframe, 0, true, true, false)
+            .action,
+        RecoveryAction::CoalescedKeyframeInFlight
+    );
+}
+
+#[test]
+fn persistent_wait_keyframe_with_failure_evidence_can_escalate_to_decoder_reset() {
     let mut controller = VideoEscalationController::new(VideoEscalationConfig {
         cooldown_ms: 200,
         keyframe_burst_threshold: 1,
@@ -837,37 +869,97 @@ fn sent_pending_keyframe_feedback_keeps_budget_consumed() {
 }
 
 #[test]
-fn action_contract_defines_owner_budget_and_epoch_rules() {
+fn decoder_reset_budget_waits_for_transport_confirmation() {
+    let mut controller = VideoEscalationController::new(VideoEscalationConfig {
+        cooldown_ms: 120,
+        keyframe_burst_threshold: 1,
+        decoder_reset_burst_threshold: 1,
+        keyframe_min_interval_ms: 240,
+        escalation_window_ms: 480,
+        keyframe_upgrade_min_delay_ms: 0,
+    });
+    controller.begin_recovery_epoch(9);
+
+    let first = controller
+        .on_reason(VideoEscalationReason::DecoderBackendFailure)
+        .action;
+    assert_eq!(first, RecoveryAction::RequestDecoderReset);
+    assert_eq!(controller.budget_state().decoder_reset_budget_used, 0);
+
+    controller.register_decoder_reset_started();
+    assert_eq!(controller.budget_state().decoder_reset_budget_used, 1);
+
+    let second = controller
+        .on_reason(VideoEscalationReason::DecoderBackendFailure)
+        .action;
+    assert_eq!(second, RecoveryAction::CoalescedDecoderResetInFlight);
+}
+
+#[test]
+fn action_contract_defines_owner_and_budget_rules() {
     let keyframe = VideoEscalationController::action_contract(RecoveryAction::RequestKeyframe);
     assert!(keyframe.budget_consumed_on_proposal);
     assert_eq!(keyframe.budget_kind, Some(RecoveryBudgetKind::Keyframe));
-    assert!(!keyframe.advances_recovery_epoch_on_success);
 
     let reset = VideoEscalationController::action_contract(RecoveryAction::RequestDecoderReset);
-    assert!(reset.budget_consumed_on_proposal);
+    assert!(!reset.budget_consumed_on_proposal);
     assert_eq!(reset.budget_kind, Some(RecoveryBudgetKind::DecoderReset));
-    assert!(reset.advances_recovery_epoch_on_success);
 
     let reconnect =
         VideoEscalationController::action_contract(RecoveryAction::RequestReconnectCandidate);
     assert!(reconnect.budget_consumed_on_proposal);
     assert_eq!(reconnect.budget_kind, Some(RecoveryBudgetKind::Reconnect));
-    assert!(reconnect.advances_recovery_epoch_on_success);
 
     let suppressed = VideoEscalationController::action_contract(RecoveryAction::CooldownSuppressed);
     assert!(!suppressed.budget_consumed_on_proposal);
     assert!(suppressed.budget_kind.is_none());
-    assert!(!suppressed.advances_recovery_epoch_on_success);
 
     let keyframe_coalesced =
         VideoEscalationController::action_contract(RecoveryAction::CoalescedKeyframeInFlight);
     assert!(!keyframe_coalesced.budget_consumed_on_proposal);
     assert!(keyframe_coalesced.budget_kind.is_none());
-    assert!(!keyframe_coalesced.advances_recovery_epoch_on_success);
 
     let decoder_reset_coalesced =
         VideoEscalationController::action_contract(RecoveryAction::CoalescedDecoderResetInFlight);
     assert!(!decoder_reset_coalesced.budget_consumed_on_proposal);
     assert!(decoder_reset_coalesced.budget_kind.is_none());
-    assert!(!decoder_reset_coalesced.advances_recovery_epoch_on_success);
+
+    let combined =
+        VideoEscalationController::action_contract(RecoveryAction::RequestKeyframeAndDecoderReset);
+    assert!(!combined.budget_consumed_on_proposal);
+    assert_eq!(combined.budget_kind, Some(RecoveryBudgetKind::DecoderReset));
+}
+
+#[test]
+fn epoch_advance_rule_is_reason_aware_for_local_decoder_reset_paths() {
+    assert!(
+        !VideoEscalationController::action_success_advances_transport_recovery_epoch(
+            RecoveryAction::RequestKeyframe,
+            Some(VideoEscalationReason::TransportAwaitRecoveryKeyframe),
+        )
+    );
+    assert!(
+        VideoEscalationController::action_success_advances_transport_recovery_epoch(
+            RecoveryAction::RequestDecoderReset,
+            Some(VideoEscalationReason::TransportAwaitRecoveryKeyframe),
+        )
+    );
+    assert!(
+        !VideoEscalationController::action_success_advances_transport_recovery_epoch(
+            RecoveryAction::RequestDecoderReset,
+            Some(VideoEscalationReason::AdapterThinStream),
+        )
+    );
+    assert!(
+        !VideoEscalationController::action_success_advances_transport_recovery_epoch(
+            RecoveryAction::RequestKeyframeAndDecoderReset,
+            Some(VideoEscalationReason::DecoderBackendFailure),
+        )
+    );
+    assert!(
+        VideoEscalationController::action_success_advances_transport_recovery_epoch(
+            RecoveryAction::RequestReconnectCandidate,
+            Some(VideoEscalationReason::AdapterThinStream),
+        )
+    );
 }

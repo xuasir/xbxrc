@@ -58,6 +58,7 @@ fn input(
     VideoSchedulingOwnerInput {
         connection_state,
         recovery_epoch,
+        startup_bootstrap_grace_allowed: true,
         anchor_reason_label: anchor_reason_label.map(str::to_string),
         demand,
         clean_anchor_epoch: None,
@@ -514,6 +515,52 @@ fn connected_lingering_no_pending_with_clean_anchor_can_return_to_stable_serving
     assert_eq!(output.state, VideoSchedulingOwnerState::StableServing);
     assert_eq!(output.health, VideoHealthContract::Stable);
     assert!(output.recovery_intent.is_none());
+}
+
+#[test]
+fn first_present_feedback_lag_with_clean_anchor_exits_rebuilding_supply() {
+    let mut owner = VideoSchedulingOwner::new();
+    let _ = owner.evaluate(&input(
+        ConnectionLifecycleStateFact::Connected,
+        Some("transportAwaitRecoveryKeyframe"),
+        SchedulingDemandSignal::default(),
+        Some("recovering"),
+        Some("frame-await-recovery-keyframe"),
+        Some("remoteTrackAttached"),
+        Some(24_000),
+        620.0,
+        1,
+    ));
+
+    let mut recoverable = input(
+        ConnectionLifecycleStateFact::Connected,
+        None,
+        SchedulingDemandSignal {
+            no_pending_pressure_level: Some("critical".to_string()),
+            no_pending_streak: Some(220),
+            present_age_ms: None,
+            decode_age_ms: Some(10.0),
+            host_cadence_phase: Some("priming".to_string()),
+            host_display_tick_epoch: Some(720),
+            host_present_epoch: Some(0),
+            present_submit_count_total: Some(0),
+            video_renderer_stalled: false,
+            ..SchedulingDemandSignal::default()
+        },
+        Some("healthy"),
+        Some("frame-complete-candidate"),
+        Some("remoteTrackAttached"),
+        Some(42_000),
+        640.0,
+        1,
+    );
+    recoverable.clean_anchor_epoch = Some(1);
+    recoverable.clean_anchor_observed_at_ms = Some(639.0);
+    recoverable.clean_anchor_source_event = Some("chain-clean-keyframe-submitted".to_string());
+
+    let output = owner.evaluate(&recoverable);
+    assert_eq!(output.state, VideoSchedulingOwnerState::DegradedServing);
+    assert_eq!(output.health, VideoHealthContract::Stable);
 }
 
 #[test]
@@ -1117,6 +1164,77 @@ fn priming_without_first_present_stays_in_priming_until_first_present_arrives() 
     ));
     assert_eq!(priming.state, VideoSchedulingOwnerState::Priming);
     assert_eq!(priming.health, VideoHealthContract::Startup);
+}
+
+#[test]
+fn startup_bootstrap_missing_sps_stays_priming_and_does_not_emit_recovery_intent() {
+    let mut owner = VideoSchedulingOwner::new();
+    let mut bootstrap_pending = input(
+        ConnectionLifecycleStateFact::Connected,
+        Some("transportAwaitRecoveryKeyframe"),
+        SchedulingDemandSignal {
+            no_pending_pressure_level: Some("critical".to_string()),
+            no_pending_streak: Some(180),
+            present_age_ms: None,
+            decode_age_ms: None,
+            video_renderer_stalled: false,
+            host_display_tick_epoch: Some(120),
+            host_present_epoch: Some(0),
+            host_cadence_phase: Some("priming".to_string()),
+            present_submit_count_total: Some(0),
+            ..SchedulingDemandSignal::default()
+        },
+        Some("recovering"),
+        Some("frame-inspection-rejected-await-keyframe"),
+        Some("remoteTrackAttached"),
+        Some(20_000),
+        1_100.0,
+        1,
+    );
+    bootstrap_pending.latest_h264_bootstrap_ready = Some(false);
+    bootstrap_pending.latest_h264_bootstrap_reject_reason = Some("bootstrapMissingSps".to_string());
+    bootstrap_pending.latest_h264_observed_at_ms = Some(1_099.0);
+
+    let output = owner.evaluate(&bootstrap_pending);
+    assert_eq!(output.state, VideoSchedulingOwnerState::Priming);
+    assert_eq!(output.health, VideoHealthContract::Startup);
+    assert!(output.recovery_intent.is_none());
+}
+
+#[test]
+fn post_first_present_bootstrap_missing_sps_still_enters_rebuilding_supply() {
+    let mut owner = VideoSchedulingOwner::new();
+    let mut post_first_present = input(
+        ConnectionLifecycleStateFact::Connected,
+        Some("transportAwaitRecoveryKeyframe"),
+        SchedulingDemandSignal {
+            no_pending_pressure_level: Some("critical".to_string()),
+            no_pending_streak: Some(180),
+            present_age_ms: Some(420.0),
+            decode_age_ms: Some(380.0),
+            video_renderer_stalled: false,
+            host_display_tick_epoch: Some(360),
+            host_present_epoch: Some(8),
+            host_cadence_phase: Some("steady".to_string()),
+            present_submit_count_total: Some(64),
+            ..SchedulingDemandSignal::default()
+        },
+        Some("recovering"),
+        Some("frame-inspection-rejected-await-keyframe"),
+        Some("remoteTrackAttached"),
+        Some(120_000),
+        2_200.0,
+        3,
+    );
+    post_first_present.latest_h264_bootstrap_ready = Some(false);
+    post_first_present.latest_h264_bootstrap_reject_reason =
+        Some("bootstrapMissingSps".to_string());
+    post_first_present.latest_h264_observed_at_ms = Some(2_199.0);
+
+    let output = owner.evaluate(&post_first_present);
+    assert_eq!(output.state, VideoSchedulingOwnerState::RebuildingSupply);
+    assert_eq!(output.health, VideoHealthContract::Recovering);
+    assert!(output.recovery_intent.is_some());
 }
 
 #[test]

@@ -103,6 +103,31 @@ impl VideoEscalationReason {
             | Self::TransportSampleLoss => XbxEngineRecoveryReasonDomain::ConnectivityTransport,
         }
     }
+
+    pub fn from_recovery_reason_label(label: &str) -> Option<Self> {
+        match label {
+            "rtcConnectionRecovering" => Some(Self::LifecycleRecovering),
+            "waitKeyframe"
+            | "ingressWaitKeyframe"
+            | "ingressFrameAbandoned"
+            | "waitKeyframeEntered"
+            | "frameAbandoned" => Some(Self::WaitKeyframe),
+            "transportAwaitRecoveryKeyframe"
+            | "bootstrapMissingSps"
+            | "bootstrapMissingPps"
+            | "inspectionRejectInvalidSliceHeader" => Some(Self::TransportAwaitRecoveryKeyframe),
+            "displaySupplyCritical" => Some(Self::DisplaySupplyCritical),
+            "displaySupplyDegraded" | "adapterThinStream" => Some(Self::AdapterThinStream),
+            "ingressReconfigure" | "reconfigure" => Some(Self::Reconfigure),
+            "decoderBackendFailure" => Some(Self::DecoderBackendFailure),
+            "adapterIdleTimeout" => Some(Self::AdapterIdleTimeout),
+            "transportExpiredDeadline" => Some(Self::TransportExpiredDeadline),
+            "transportSevereDeadline" => Some(Self::TransportSevereDeadline),
+            "transportRecoveredLate" => Some(Self::TransportRecoveredLate),
+            "transportSampleLoss" => Some(Self::TransportSampleLoss),
+            _ => None,
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -125,7 +150,6 @@ pub struct RecoveryActionContract {
     pub owner: Option<RecoveryActionOwner>,
     pub budget_kind: Option<RecoveryBudgetKind>,
     pub budget_consumed_on_proposal: bool,
-    pub advances_recovery_epoch_on_success: bool,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -318,7 +342,7 @@ impl VideoEscalationController {
         reason: VideoEscalationReason,
         recovery_epoch: u64,
     ) -> VideoEscalationDecision {
-        self.on_reason_with_epoch_policy(reason, recovery_epoch, true)
+        self.on_reason_with_epoch_policy(reason, recovery_epoch, true, true, true)
     }
 
     pub fn on_reason_with_epoch_policy(
@@ -326,9 +350,16 @@ impl VideoEscalationController {
         reason: VideoEscalationReason,
         recovery_epoch: u64,
         allow_reconnect: bool,
+        allow_transport_await_stage_escalation: bool,
+        allow_wait_keyframe_stage_escalation: bool,
     ) -> VideoEscalationDecision {
         self.begin_recovery_epoch(recovery_epoch);
-        self.on_reason_with_policy(reason, allow_reconnect)
+        self.on_reason_with_policy_controlled(
+            reason,
+            allow_reconnect,
+            allow_transport_await_stage_escalation,
+            allow_wait_keyframe_stage_escalation,
+        )
     }
 
     pub fn budget_state(&self) -> RecoveryActionBudgetState {
@@ -353,25 +384,21 @@ impl VideoEscalationController {
                 owner: Some(RecoveryActionOwner::Keyframe),
                 budget_kind: Some(RecoveryBudgetKind::Keyframe),
                 budget_consumed_on_proposal: true,
-                advances_recovery_epoch_on_success: false,
             },
             RecoveryAction::RequestDecoderReset => RecoveryActionContract {
                 owner: Some(RecoveryActionOwner::DecoderReset),
                 budget_kind: Some(RecoveryBudgetKind::DecoderReset),
-                budget_consumed_on_proposal: true,
-                advances_recovery_epoch_on_success: true,
+                budget_consumed_on_proposal: false,
             },
             RecoveryAction::RequestReconnectCandidate => RecoveryActionContract {
                 owner: Some(RecoveryActionOwner::Reconnect),
                 budget_kind: Some(RecoveryBudgetKind::Reconnect),
                 budget_consumed_on_proposal: true,
-                advances_recovery_epoch_on_success: true,
             },
             RecoveryAction::RequestKeyframeAndDecoderReset => RecoveryActionContract {
                 owner: Some(RecoveryActionOwner::DecoderReset),
                 budget_kind: Some(RecoveryBudgetKind::DecoderReset),
-                budget_consumed_on_proposal: true,
-                advances_recovery_epoch_on_success: true,
+                budget_consumed_on_proposal: false,
             },
             RecoveryAction::WaitForBurst
             | RecoveryAction::WaitForDecoderResetBurst
@@ -383,8 +410,35 @@ impl VideoEscalationController {
                 owner: None,
                 budget_kind: None,
                 budget_consumed_on_proposal: false,
-                advances_recovery_epoch_on_success: false,
             },
+        }
+    }
+
+    pub fn action_success_advances_transport_recovery_epoch(
+        action: RecoveryAction,
+        reason: Option<VideoEscalationReason>,
+    ) -> bool {
+        match action {
+            RecoveryAction::RequestReconnectCandidate => true,
+            RecoveryAction::RequestDecoderReset
+            | RecoveryAction::RequestKeyframeAndDecoderReset => !matches!(
+                reason,
+                Some(
+                    VideoEscalationReason::DisplaySupplyCritical
+                        | VideoEscalationReason::AdapterIdleTimeout
+                        | VideoEscalationReason::AdapterThinStream
+                        | VideoEscalationReason::Reconfigure
+                        | VideoEscalationReason::DecoderBackendFailure
+                )
+            ),
+            RecoveryAction::RequestKeyframe
+            | RecoveryAction::WaitForBurst
+            | RecoveryAction::WaitForDecoderResetBurst
+            | RecoveryAction::CooldownSuppressed
+            | RecoveryAction::CoalescedKeyframeInFlight
+            | RecoveryAction::CoalescedDecoderResetInFlight
+            | RecoveryAction::StartupGraceSuppressed
+            | RecoveryAction::StartupLowQualityRetry => false,
         }
     }
 
@@ -394,11 +448,7 @@ impl VideoEscalationController {
                 self.keyframe_budget_used = self.keyframe_budget_used.saturating_add(1);
                 self.keyframe_budget_reservation_active = true;
             }
-            RecoveryAction::RequestDecoderReset => {
-                self.decoder_reset_budget_used = self.decoder_reset_budget_used.saturating_add(1);
-                self.clear_keyframe_epoch();
-                self.keyframe_budget_reservation_active = false;
-            }
+            RecoveryAction::RequestDecoderReset => {}
             RecoveryAction::RequestReconnectCandidate => {
                 self.reconnect_budget_used = self.reconnect_budget_used.saturating_add(1);
                 self.clear_keyframe_epoch();
@@ -406,9 +456,7 @@ impl VideoEscalationController {
             }
             RecoveryAction::RequestKeyframeAndDecoderReset => {
                 self.keyframe_budget_used = self.keyframe_budget_used.saturating_add(1);
-                self.decoder_reset_budget_used = self.decoder_reset_budget_used.saturating_add(1);
-                self.clear_keyframe_epoch();
-                self.keyframe_budget_reservation_active = false;
+                self.keyframe_budget_reservation_active = true;
             }
             RecoveryAction::WaitForBurst
             | RecoveryAction::WaitForDecoderResetBurst
@@ -418,6 +466,15 @@ impl VideoEscalationController {
             | RecoveryAction::StartupGraceSuppressed
             | RecoveryAction::StartupLowQualityRetry => {}
         }
+    }
+
+    pub fn register_decoder_reset_started(&mut self) {
+        let now = Instant::now();
+        self.decoder_reset_budget_used = self.decoder_reset_budget_used.saturating_add(1);
+        self.last_decoder_reset_at = Some(now);
+        self.last_keyframe_request_at = Some(now);
+        self.clear_keyframe_epoch();
+        self.keyframe_budget_reservation_active = false;
     }
 
     pub fn reconcile_keyframe_transport_feedback(&mut self, feedback: KeyframeTransportFeedback) {
@@ -447,6 +504,16 @@ impl VideoEscalationController {
         &mut self,
         reason: VideoEscalationReason,
         allow_reconnect: bool,
+    ) -> VideoEscalationDecision {
+        self.on_reason_with_policy_controlled(reason, allow_reconnect, true, true)
+    }
+
+    fn on_reason_with_policy_controlled(
+        &mut self,
+        reason: VideoEscalationReason,
+        allow_reconnect: bool,
+        allow_transport_await_stage_escalation: bool,
+        allow_wait_keyframe_stage_escalation: bool,
     ) -> VideoEscalationDecision {
         self.next_observation_id = self.next_observation_id.saturating_add(1);
         let now = Instant::now();
@@ -650,9 +717,6 @@ impl VideoEscalationController {
                         self.pending_decoder_reset_signals = 0;
                         self.reconnect_candidate_signals =
                             self.reconnect_candidate_signals.saturating_add(1);
-                        self.last_decoder_reset_at = Some(now);
-                        self.last_keyframe_request_at = Some(now);
-                        self.clear_keyframe_epoch();
                         if self.decoder_reset_budget_used < self.decoder_reset_budget_limit {
                             RecoveryAction::RequestDecoderReset
                         } else {
@@ -669,9 +733,6 @@ impl VideoEscalationController {
                         self.pending_decoder_reset_signals = 0;
                         self.reconnect_candidate_signals =
                             self.reconnect_candidate_signals.saturating_add(1);
-                        self.last_decoder_reset_at = Some(now);
-                        self.last_keyframe_request_at = Some(now);
-                        self.clear_keyframe_epoch();
                         if self.decoder_reset_budget_used < self.decoder_reset_budget_limit {
                             RecoveryAction::RequestDecoderReset
                         } else {
@@ -688,9 +749,6 @@ impl VideoEscalationController {
                         self.pending_decoder_reset_signals = 0;
                         self.reconnect_candidate_signals =
                             self.reconnect_candidate_signals.saturating_add(1);
-                        self.last_decoder_reset_at = Some(now);
-                        self.last_keyframe_request_at = Some(now);
-                        self.clear_keyframe_epoch();
                         if self.decoder_reset_budget_used < self.decoder_reset_budget_limit {
                             RecoveryAction::RequestDecoderReset
                         } else {
@@ -699,6 +757,7 @@ impl VideoEscalationController {
                     } else if repeated_sample_loss_after_keyframe {
                         self.coalesced_decoder_reset_in_flight()
                     } else if persistent_wait_keyframe
+                        && allow_wait_keyframe_stage_escalation
                         && self
                             .last_decoder_reset_at
                             .map_or(true, |last| last.elapsed() >= self.cooldown)
@@ -707,17 +766,15 @@ impl VideoEscalationController {
                         self.pending_decoder_reset_signals = 0;
                         self.reconnect_candidate_signals =
                             self.reconnect_candidate_signals.saturating_add(1);
-                        self.last_decoder_reset_at = Some(now);
-                        self.last_keyframe_request_at = Some(now);
-                        self.clear_keyframe_epoch();
                         if self.decoder_reset_budget_used < self.decoder_reset_budget_limit {
                             RecoveryAction::RequestDecoderReset
                         } else {
                             RecoveryAction::CooldownSuppressed
                         }
-                    } else if persistent_wait_keyframe {
+                    } else if persistent_wait_keyframe && allow_wait_keyframe_stage_escalation {
                         self.coalesced_decoder_reset_in_flight()
                     } else if hard_stuck_transport_await_recovery_keyframe
+                        && allow_transport_await_stage_escalation
                         && (self.decoder_reset_budget_used >= self.decoder_reset_budget_limit
                             || self
                                 .last_decoder_reset_at
@@ -730,6 +787,7 @@ impl VideoEscalationController {
                         self.clear_keyframe_epoch();
                         self.resolve_reconnect_or_decoder_reset_fallback(now, allow_reconnect)
                     } else if persistent_transport_await_recovery_keyframe
+                        && allow_transport_await_stage_escalation
                         && self
                             .last_decoder_reset_at
                             .map_or(true, |last| last.elapsed() >= self.cooldown)
@@ -738,15 +796,14 @@ impl VideoEscalationController {
                         self.pending_decoder_reset_signals = 0;
                         self.reconnect_candidate_signals =
                             self.reconnect_candidate_signals.saturating_add(1);
-                        self.last_decoder_reset_at = Some(now);
-                        self.last_keyframe_request_at = Some(now);
-                        self.clear_keyframe_epoch();
                         if self.decoder_reset_budget_used < self.decoder_reset_budget_limit {
                             RecoveryAction::RequestDecoderReset
                         } else {
                             RecoveryAction::CooldownSuppressed
                         }
-                    } else if persistent_transport_await_recovery_keyframe {
+                    } else if persistent_transport_await_recovery_keyframe
+                        && allow_transport_await_stage_escalation
+                    {
                         self.coalesced_decoder_reset_in_flight()
                     } else if self.pending_keyframe_signals < self.keyframe_burst_threshold {
                         RecoveryAction::WaitForBurst
@@ -821,9 +878,6 @@ impl VideoEscalationController {
                     self.pending_decoder_reset_signals = 0;
                     self.reconnect_candidate_signals =
                         self.reconnect_candidate_signals.saturating_add(1);
-                    self.last_decoder_reset_at = Some(now);
-                    self.last_keyframe_request_at = Some(now);
-                    self.clear_keyframe_epoch();
                     if self.decoder_reset_budget_used < self.decoder_reset_budget_limit {
                         RecoveryAction::RequestDecoderReset
                     } else {
@@ -866,7 +920,7 @@ impl VideoEscalationController {
 
     fn resolve_reconnect_or_decoder_reset_fallback(
         &mut self,
-        now: Instant,
+        _now: Instant,
         allow_reconnect: bool,
     ) -> RecoveryAction {
         if allow_reconnect {
@@ -880,9 +934,6 @@ impl VideoEscalationController {
             .last_decoder_reset_at
             .map_or(true, |last| last.elapsed() >= self.cooldown)
         {
-            self.last_decoder_reset_at = Some(now);
-            self.last_keyframe_request_at = Some(now);
-            self.clear_keyframe_epoch();
             if self.decoder_reset_budget_used < self.decoder_reset_budget_limit {
                 RecoveryAction::RequestDecoderReset
             } else {

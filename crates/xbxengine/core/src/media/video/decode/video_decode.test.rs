@@ -6,9 +6,10 @@ use std::sync::{
 use std::time::{Duration, Instant};
 
 use super::{
-    XbxDecodeCandidateState, XbxDecodeWorkloadState, XbxHardwareVideoDecoder, XbxVideoDecodeState,
-    XbxVideoRecoveryEvent, XbxVideoRecoveryState,
+    XbxDecodeCandidateState, XbxDecodeWorkloadState, XbxVideoDecodeState, XbxVideoRecoveryEvent,
+    XbxVideoRecoveryState,
 };
+use crate::media::video::decode::backend::XbxVideoDecoderBackend;
 use crate::media::video::h264::inspection::{
     H264AccessUnitInspection, H264AccessUnitInspector, H264BootstrapRejectReason,
 };
@@ -29,7 +30,7 @@ struct SpyHardwareDecoder {
     reset_calls: Arc<AtomicUsize>,
 }
 
-impl XbxHardwareVideoDecoder for SpyHardwareDecoder {
+impl XbxVideoDecoderBackend for SpyHardwareDecoder {
     fn backend_name(&self) -> &'static str {
         "spy"
     }
@@ -608,7 +609,7 @@ struct ScriptedHardwareDecoder {
     scripted_results: VecDeque<Result<Option<XbxRenderFrame>, crate::XbxEngineRuntimeError>>,
 }
 
-impl XbxHardwareVideoDecoder for ScriptedHardwareDecoder {
+impl XbxVideoDecoderBackend for ScriptedHardwareDecoder {
     fn backend_name(&self) -> &'static str {
         "scripted"
     }
