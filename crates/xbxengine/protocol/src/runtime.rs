@@ -172,6 +172,16 @@ pub struct XbxEnginePipelineCandidateDecisionObservationDto {
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct XbxEngineVideoDecoderProbeObservationDto {
+    pub observation_id: u64,
+    pub selected_backend_name: String,
+    pub selected_backend_kind: String,
+    pub fallback_count: u32,
+    pub fallback_summary: Option<String>,
+    pub observed_at_ms: f64,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct XbxEngineFrameRecoveryObservationDto {
     pub observation_id: u64,
     pub action: String,
@@ -502,6 +512,7 @@ pub struct XbxEngineStatsDto {
     pub latest_video_track_status: Option<XbxEngineVideoTrackStatusDto>,
     pub video_decoder_reset_count: Option<u64>,
     pub video_decoder_stalled: Option<bool>,
+    pub latest_video_decoder_probe_observation: Option<XbxEngineVideoDecoderProbeObservationDto>,
     pub video_decoder_hardware_failure_streak: Option<u32>,
     pub latest_video_decoder_hardware_failure_time_ms: Option<f64>,
     pub latest_video_decoder_hardware_failure_status: Option<i32>,

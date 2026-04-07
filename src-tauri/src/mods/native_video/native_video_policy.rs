@@ -22,7 +22,11 @@ pub fn resolve_video_pipeline_plan(
         }
         // Windows 现阶段先把 GPU direct 定成默认方向；
         // presenter/effect 能力位先收进 policy，后续补真实实现时不再改合同。
-        VideoPlatformKind::Windows if capabilities.supports_gpu_direct => {
+        VideoPlatformKind::Windows
+            if capabilities.supports_gpu_direct
+                && (surface.native_kind == VideoNativeSurfaceKind::WindowsD3d11Texture
+                    || !surface.is_native_handle()) =>
+        {
             resolve_gpu_plan(requested_surface_id, capabilities)
         }
         _ if capabilities.supports_gpu_direct => {

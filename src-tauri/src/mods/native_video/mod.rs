@@ -17,15 +17,18 @@ mod native_video_policy;
 mod presenters;
 mod scheduling;
 mod types;
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", target_os = "windows"))]
 mod wgpu_renderer;
 
 use self::effects::{NoopVideoEffectPipeline, VideoEffectPipeline, WgpuVideoEffectPipeline};
 use self::native_video_policy::{resolve_initial_video_pipeline_plan, resolve_video_pipeline_plan};
+#[cfg(target_os = "windows")]
+use self::presenters::WindowsWgpuPresenter;
 use self::presenters::{
-    resolve_present_kind, MacOsVideoPresenter, MacOsWgpuPresenter, NativeVideoPresenter,
-    NativeVideoPresenterKind, NoopVideoPresenter,
+    resolve_present_kind, NativeVideoPresenter, NativeVideoPresenterKind, NoopVideoPresenter,
 };
+#[cfg(target_os = "macos")]
+use self::presenters::{MacOsVideoPresenter, MacOsWgpuPresenter};
 use self::scheduling::{
     HostCadencePhase, HostCadenceTelemetry, HostFrameDropBacklog, ScheduledFrameSlot,
     ScheduledFrameTakeOutcome,
@@ -133,7 +136,13 @@ fn resolve_host_timing_record_policy(stage: &str) -> HostTimingRecordPolicy {
         "frame_submit"
         | "frame_slot_take_skipped"
         | "prepare_sample_ready"
-        | "sample_presented" => HostTimingRecordPolicy::Sampled,
+        | "sample_presented"
+        | "run_on_main_thread_delay"
+        | "tick_total"
+        | "frame_submit_gap"
+        | "frame_submit_failed"
+        | "present_tick_failed"
+        | "present_tick_blocked" => HostTimingRecordPolicy::Sampled,
         _ => HostTimingRecordPolicy::Always,
     }
 }
@@ -403,6 +412,19 @@ impl NativeVideoRegistry {
                     app_handle,
                     self.runtime_trace.clone(),
                 ));
+            }
+        }
+        #[cfg(target_os = "windows")]
+        {
+            if let Some(app_handle) = self.app_handle.clone() {
+                if kind == NativeVideoPresenterKind::Wgpu {
+                    return Box::new(WindowsWgpuPresenter::new(
+                        viewport_id,
+                        target.window_label(),
+                        app_handle,
+                        self.runtime_trace.clone(),
+                    ));
+                }
             }
         }
         Box::new(NoopVideoPresenter::new(viewport_id, target.window_label()))
@@ -811,12 +833,6 @@ pub(super) fn run_wgpu_render_tick(
                     "queueDelayMs": queue_delay_ms,
                 }),
             );
-            log::warn!(
-                "[native_video][timing] pipeline=wgpu stage=run_on_main_thread_delay viewport={} window={} queueDelayMs={:.2}",
-                viewport_id,
-                window.label(),
-                queue_delay_ms
-            );
         }
     }
     let Ok(mut state) = renderer_state.lock() else {
@@ -838,11 +854,6 @@ pub(super) fn run_wgpu_render_tick(
             surface_height,
         )) {
             Ok(renderer) => {
-                log::info!(
-                    "[native_video][wgpu] renderer created for viewport={} window={}",
-                    viewport_id,
-                    window.label()
-                );
                 state.renderer = Some(renderer);
                 state.last_surface_size = Some((surface_width, surface_height));
             }
@@ -897,13 +908,6 @@ pub(super) fn run_wgpu_render_tick(
                 if let Ok(mut telemetry) = telemetry.lock() {
                     telemetry.record_stale_frame_drop(&frame, now_ms, "scheduledFrameStale", 1);
                 }
-                log::debug!(
-                    "[native_video][wgpu] drop stale frame viewport={} window={} frame_seq={} age_ms={:.2}",
-                    viewport_id,
-                    window.label(),
-                    frame.frame_seq,
-                    now_ms - frame.rendered_at_ms
-                );
                 return;
             }
             let rendered_seq = frame.frame_seq;
@@ -942,12 +946,6 @@ pub(super) fn run_wgpu_render_tick(
             serde_json::json!({
                 "totalMs": tick_total_ms,
             }),
-        );
-        log::warn!(
-            "[native_video][timing] pipeline=wgpu stage=tick_total viewport={} window={} totalMs={:.2}",
-            viewport_id,
-            window.label(),
-            tick_total_ms
         );
     }
 }
@@ -1375,16 +1373,9 @@ unsafe extern "C" fn macos_display_link_callback(
     _flags_out: *mut u64,
     display_link_context: *mut std::ffi::c_void,
 ) -> i32 {
-    let callback_ts_ms = now_ms_f64();
     let Some(context) = (display_link_context as *mut MacOsDisplayLinkContext).as_ref() else {
         return 0;
     };
-    log::debug!(
-        "[native_video][timing] pipeline=wgpu stage=display_link_callback viewport={} window={} callbackTsMs={:.3}",
-        context.viewport_id,
-        context.window_label,
-        callback_ts_ms
-    );
     if context.render_loop_pending.swap(true, Ordering::Relaxed) {
         return 0;
     }
@@ -1423,12 +1414,6 @@ unsafe extern "C" fn macos_display_link_callback(
             }),
         );
         context.render_loop_pending.store(false, Ordering::Relaxed);
-        log::warn!(
-            "[native_video][timing] pipeline=wgpu stage=run_on_main_thread_enqueue_failed viewport={} window={} error={}",
-            context.viewport_id,
-            context.window_label,
-            error
-        );
     }
     0
 }
@@ -1442,16 +1427,9 @@ unsafe extern "C" fn macos_layer_display_link_callback(
     _flags_out: *mut u64,
     display_link_context: *mut std::ffi::c_void,
 ) -> i32 {
-    let callback_ts_ms = now_ms_f64();
     let Some(context) = (display_link_context as *mut MacOsLayerDisplayLinkContext).as_ref() else {
         return 0;
     };
-    log::debug!(
-        "[native_video][timing] pipeline=layer stage=display_link_callback viewport={} window={} callbackTsMs={:.3}",
-        context.viewport_id,
-        context.window_label,
-        callback_ts_ms
-    );
     if context.render_loop_pending.swap(true, Ordering::Relaxed) {
         return 0;
     }
@@ -1602,11 +1580,6 @@ pub(super) fn run_layer_present_tick(
             window_label,
             || serde_json::json!({}),
         );
-        log::info!(
-            "[native_video][macos] first layer present for viewport={} window={}",
-            viewport_id,
-            window_label
-        );
     }
     let sample_frame_seq = prepared_sample.frame_seq;
     let sample_width = prepared_sample.width;
@@ -1649,12 +1622,6 @@ pub(super) fn run_layer_present_tick(
                     "totalMs": tick_total_ms,
                 })
             },
-        );
-        log::warn!(
-            "[native_video][timing] pipeline=layer stage=tick_total viewport={} window={} totalMs={:.2}",
-            viewport_id,
-            window_label,
-            tick_total_ms
         );
     }
 }
@@ -1701,11 +1668,6 @@ pub(super) fn ensure_display_layer(
                         "boundsChanged": bounds_changed,
                         "windowLabel": window.label(),
                     }),
-                );
-                log::debug!(
-                    "[native_video][layer] layout updated scale_changed={} bounds_changed={}",
-                    scale_changed,
-                    bounds_changed
                 );
             }
         });
@@ -1758,7 +1720,6 @@ pub(super) fn ensure_display_layer(
                 "windowLabel": window.label(),
             }),
         );
-        log::info!("[native_video][macos] display layer created");
     });
 
     state.display_layer_ptr

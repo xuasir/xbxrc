@@ -129,6 +129,55 @@ impl Drop for MacOsCVPixelBufferDescriptor {
 unsafe impl Send for MacOsCVPixelBufferDescriptor {}
 unsafe impl Sync for MacOsCVPixelBufferDescriptor {}
 
+pub struct WindowsD3d11TextureDescriptor {
+    pub texture_ptr: *mut std::ffi::c_void,
+    pub shared_handle: *mut std::ffi::c_void,
+    pub dxgi_format: u32,
+    pub array_slice: u32,
+    pub color_matrix: MacOsVideoColorMatrix,
+    pub color_primaries: MacOsVideoColorPrimaries,
+    pub transfer_function: MacOsVideoTransferFunction,
+    pub color_range: MacOsVideoColorRange,
+    pub chroma_location: MacOsVideoChromaLocation,
+    pub drop_fn:
+        Option<Box<dyn FnOnce(*mut std::ffi::c_void, *mut std::ffi::c_void) + Send + Sync>>,
+}
+
+impl std::fmt::Debug for WindowsD3d11TextureDescriptor {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("WindowsD3d11TextureDescriptor")
+            .field("texture_ptr", &self.texture_ptr)
+            .field("shared_handle", &self.shared_handle)
+            .field("dxgi_format", &self.dxgi_format)
+            .field("array_slice", &self.array_slice)
+            .field("color_matrix", &self.color_matrix)
+            .field("color_primaries", &self.color_primaries)
+            .field("transfer_function", &self.transfer_function)
+            .field("color_range", &self.color_range)
+            .field("chroma_location", &self.chroma_location)
+            .field(
+                "drop_fn",
+                &if self.drop_fn.is_some() {
+                    "Some(<closure>)"
+                } else {
+                    "None"
+                },
+            )
+            .finish()
+    }
+}
+
+impl Drop for WindowsD3d11TextureDescriptor {
+    fn drop(&mut self) {
+        if let Some(drop_fn) = self.drop_fn.take() {
+            drop_fn(self.texture_ptr, self.shared_handle);
+        }
+    }
+}
+
+unsafe impl Send for WindowsD3d11TextureDescriptor {}
+unsafe impl Sync for WindowsD3d11TextureDescriptor {}
+
 #[derive(Clone, Debug)]
 pub enum XbxEngineRenderPixelData {
     Rgba {
@@ -236,6 +285,16 @@ pub struct XbxEnginePipelineCandidateDecisionObservation {
     pub action: String,
     pub detail: String,
     pub frame_seq: Option<u64>,
+    pub observed_at_ms: f64,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct XbxEngineVideoDecoderProbeObservation {
+    pub observation_id: u64,
+    pub selected_backend_name: String,
+    pub selected_backend_kind: String,
+    pub fallback_count: u32,
+    pub fallback_summary: Option<String>,
     pub observed_at_ms: f64,
 }
 
@@ -838,6 +897,7 @@ pub struct XbxEngineMediaRuntimeStats {
     pub video_decode_fps: f64,
     pub video_decoder_stalled: Option<bool>,
     pub video_decoder_backend_name: Option<String>,
+    pub latest_video_decoder_probe_observation: Option<XbxEngineVideoDecoderProbeObservation>,
     pub video_decoder_hardware_failure_streak: u32,
     pub latest_video_decoder_hardware_failure_time_ms: Option<f64>,
     pub latest_video_decoder_hardware_failure_status: Option<i32>,
@@ -991,6 +1051,7 @@ impl Default for XbxEngineMediaRuntimeStats {
             video_decode_fps: 0.0,
             video_decoder_stalled: None,
             video_decoder_backend_name: None,
+            latest_video_decoder_probe_observation: None,
             video_decoder_hardware_failure_streak: 0,
             latest_video_decoder_hardware_failure_time_ms: None,
             latest_video_decoder_hardware_failure_status: None,

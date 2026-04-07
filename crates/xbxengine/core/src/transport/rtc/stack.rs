@@ -36,7 +36,7 @@ mod transport_session;
 use self::input_loop::RtcInputStreamController;
 use self::lifecycle::RtcStackLifecycleBridge;
 use self::negotiation::RtcStackNegotiationBridge;
-use self::runtime_port::RtcStackRuntimePort;
+use self::runtime_port::{LocalDecoderResetPolicyState, RtcStackRuntimePort};
 use self::transport_session::RtcTransportSessionBridge;
 #[cfg(test)]
 pub(crate) use self::transport_session::RtcTransportSessionBridge as TestRtcTransportSessionBridge;
@@ -111,6 +111,9 @@ pub(crate) struct XbxActiveMediaStack {
     audio_playback_session: Arc<Mutex<Option<XbxRemoteAudioPlaybackSession>>>,
     connection: Arc<Mutex<RtcConnectionService>>,
     media: Arc<Mutex<RtcMediaService>>,
+    local_decoder_reset_handle:
+        Arc<Mutex<Option<Arc<crate::media::video::decode::actor::DecodeActorHandle>>>>,
+    local_decoder_reset_policy: Arc<Mutex<LocalDecoderResetPolicyState>>,
     transport_session: Arc<Mutex<SessionActor<SystemSessionClock, RtcSessionPolicy>>>,
     transport_fact_sink: Arc<Mutex<Vec<TransportFact>>>,
     input_stream: RtcInputStreamController,
@@ -159,7 +162,13 @@ impl XbxActiveMediaStack {
     }
 
     fn runtime_port(&self) -> RtcStackRuntimePort<'_> {
-        RtcStackRuntimePort::new(&self.runtime_stats, &self.render_state, &self.media)
+        RtcStackRuntimePort::new(
+            &self.runtime_stats,
+            &self.render_state,
+            &self.media,
+            &self.local_decoder_reset_handle,
+            &self.local_decoder_reset_policy,
+        )
     }
 
     pub(crate) fn new(runtime_config: XbxEngineRuntimeConfig) -> Self {
@@ -179,6 +188,7 @@ impl XbxActiveMediaStack {
         let data_channel_state = Arc::new(Mutex::new(XbxDataChannelState::default()));
         let render_state = Arc::new(Mutex::new(XbxRenderState::default()));
         let transport_fact_sink = Arc::new(Mutex::new(Vec::new()));
+        let local_decoder_reset_handle = Arc::new(Mutex::new(None));
         spawn_media_supervisor(
             media_runtime.handle().clone(),
             frame_source_rx,
@@ -187,6 +197,7 @@ impl XbxActiveMediaStack {
                 render_state: render_state.clone(),
                 transport_fact_sink: transport_fact_sink.clone(),
                 runtime_config: runtime_config_for_supervisor,
+                local_decoder_reset_handle: local_decoder_reset_handle.clone(),
             },
         );
         let connection = Arc::new(Mutex::new(RtcConnectionService::default()));
@@ -209,6 +220,10 @@ impl XbxActiveMediaStack {
             audio_playback_session: Arc::new(Mutex::new(None)),
             connection,
             media: Arc::new(Mutex::new(RtcMediaService::default())),
+            local_decoder_reset_handle,
+            local_decoder_reset_policy: Arc::new(Mutex::new(
+                LocalDecoderResetPolicyState::default(),
+            )),
             transport_session: Arc::new(Mutex::new(SessionActor::new(
                 SystemSessionClock,
                 RtcSessionPolicy::new(runtime_config.clone(), runtime_stats.clone()),

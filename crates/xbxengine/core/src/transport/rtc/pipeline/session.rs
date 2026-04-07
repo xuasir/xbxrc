@@ -31,6 +31,12 @@ pub(super) struct ActiveMediaSession {
 }
 
 impl ActiveMediaSession {
+    pub(super) fn decode_handle(
+        &self,
+    ) -> Arc<crate::media::video::decode::actor::DecodeActorHandle> {
+        self.decode.clone()
+    }
+
     pub(super) fn stop(self) {
         self.decode.stop();
         self.pacer.stop();

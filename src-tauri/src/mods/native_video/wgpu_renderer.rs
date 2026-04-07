@@ -1,4 +1,4 @@
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", target_os = "windows"))]
 use std::borrow::Cow;
 #[cfg(target_os = "macos")]
 use std::collections::VecDeque;
@@ -14,13 +14,26 @@ use raw_window_handle::{
     AppKitDisplayHandle, AppKitWindowHandle, DisplayHandle, HandleError, HasDisplayHandle,
     HasWindowHandle, WindowHandle,
 };
-#[cfg(target_os = "macos")]
+#[cfg(target_os = "windows")]
+use raw_window_handle::{
+    DisplayHandle, HandleError, HasDisplayHandle, HasWindowHandle, Win32WindowHandle, WindowHandle,
+    WindowsDisplayHandle,
+};
+#[cfg(target_os = "windows")]
+use std::num::NonZeroIsize;
+#[cfg(target_os = "windows")]
+use tauri::Window;
+#[cfg(target_os = "windows")]
+use windows::Win32::Foundation::HANDLE;
+#[cfg(target_os = "windows")]
+use xbxengine::WindowsD3d11TextureDescriptor;
+#[cfg(any(target_os = "macos", target_os = "windows"))]
 use xbxengine::{
     MacOsCVPixelBufferDescriptor, MacOsVideoChromaLocation, MacOsVideoColorMatrix,
     MacOsVideoColorRange, XbxEngineRenderFrame, XbxEngineRenderPixelData,
 };
 
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", target_os = "windows"))]
 const COPY_SHADER: &str = r#"
 @group(0) @binding(0)
 var frame_texture: texture_2d<f32>;
@@ -58,7 +71,7 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
 }
 "#;
 
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", target_os = "windows"))]
 const NV12_SHADER: &str = r#"
 @group(0) @binding(0)
 var y_texture: texture_2d<f32>;
@@ -118,6 +131,46 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
   return vec4<f32>(rgb, 1.0);
 }
 "#;
+
+#[cfg(target_os = "windows")]
+struct Win32SurfaceTarget {
+    hwnd: NonZeroIsize,
+    hinstance: Option<NonZeroIsize>,
+}
+
+#[cfg(target_os = "windows")]
+unsafe impl Send for Win32SurfaceTarget {}
+
+#[cfg(target_os = "windows")]
+unsafe impl Sync for Win32SurfaceTarget {}
+
+#[cfg(target_os = "windows")]
+impl Win32SurfaceTarget {
+    fn new(hwnd: isize, hinstance: Option<isize>) -> Result<Self, String> {
+        let hwnd =
+            NonZeroIsize::new(hwnd).ok_or_else(|| "xbxEngineWgpuHwndUnavailable".to_string())?;
+        Ok(Self {
+            hwnd,
+            hinstance: hinstance.and_then(NonZeroIsize::new),
+        })
+    }
+}
+
+#[cfg(target_os = "windows")]
+impl HasDisplayHandle for Win32SurfaceTarget {
+    fn display_handle(&self) -> Result<DisplayHandle<'_>, HandleError> {
+        Ok(unsafe { DisplayHandle::borrow_raw(WindowsDisplayHandle::new().into()) })
+    }
+}
+
+#[cfg(target_os = "windows")]
+impl HasWindowHandle for Win32SurfaceTarget {
+    fn window_handle(&self) -> Result<WindowHandle<'_>, HandleError> {
+        let mut raw = Win32WindowHandle::new(self.hwnd);
+        raw.hinstance = self.hinstance;
+        Ok(unsafe { WindowHandle::borrow_raw(raw.into()) })
+    }
+}
 
 #[cfg(target_os = "macos")]
 struct AppKitSurfaceTarget {
@@ -221,7 +274,7 @@ mod macos_bindings {
     }
 }
 
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", target_os = "windows"))]
 struct RgbaTextureBundle {
     width: u32,
     height: u32,
@@ -268,7 +321,7 @@ struct Nv12TextureBundle {
     _external_refs: Vec<CoreVideoRetainedRef>,
 }
 
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", target_os = "windows"))]
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
 struct Nv12ColorParamsStd140 {
@@ -295,7 +348,7 @@ impl FrameTextureBundle {
     }
 }
 
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", target_os = "windows"))]
 #[derive(Clone, Debug, Default)]
 pub struct DescriptorUploadTelemetry {
     pub last_mode: Option<String>,
@@ -1159,7 +1212,821 @@ impl WgpuFrameRenderer {
     }
 }
 
-#[cfg(target_os = "macos")]
+#[cfg(target_os = "windows")]
+struct WindowsImportedNv12TextureBundle {
+    width: u32,
+    height: u32,
+    _texture: wgpu::Texture,
+    params_buffer: wgpu::Buffer,
+    bind_group: wgpu::BindGroup,
+}
+
+#[cfg(target_os = "windows")]
+enum WindowsFrameTextureBundle {
+    Rgba(RgbaTextureBundle),
+    Bgra(RgbaTextureBundle),
+    Nv12(Nv12TextureBundle),
+    ImportedNv12(WindowsImportedNv12TextureBundle),
+}
+
+#[cfg(target_os = "windows")]
+impl WindowsFrameTextureBundle {
+    fn dimensions(&self) -> (u32, u32) {
+        match self {
+            Self::Rgba(bundle) | Self::Bgra(bundle) => (bundle.width, bundle.height),
+            Self::Nv12(bundle) => (bundle.width, bundle.height),
+            Self::ImportedNv12(bundle) => (bundle.width, bundle.height),
+        }
+    }
+}
+
+#[cfg(target_os = "windows")]
+struct Nv12TextureBundle {
+    width: u32,
+    height: u32,
+    y_texture: wgpu::Texture,
+    uv_texture: wgpu::Texture,
+    params_buffer: wgpu::Buffer,
+    bind_group: wgpu::BindGroup,
+}
+
+#[cfg(target_os = "windows")]
+pub struct WgpuFrameRenderer {
+    surface: wgpu::Surface<'static>,
+    device: wgpu::Device,
+    queue: wgpu::Queue,
+    surface_config: wgpu::SurfaceConfiguration,
+    copy_render_pipeline: wgpu::RenderPipeline,
+    nv12_render_pipeline: wgpu::RenderPipeline,
+    copy_bind_group_layout: wgpu::BindGroupLayout,
+    nv12_bind_group_layout: wgpu::BindGroupLayout,
+    copy_sampler: wgpu::Sampler,
+    uv_sampler: wgpu::Sampler,
+    last_descriptor_upload_mode: Option<&'static str>,
+    descriptor_import_count_total: u64,
+    descriptor_cpu_upload_count_total: u64,
+    latest_frame: Option<XbxEngineRenderFrame>,
+    frame_texture: Option<WindowsFrameTextureBundle>,
+}
+
+#[cfg(target_os = "windows")]
+impl WgpuFrameRenderer {
+    pub async fn new_from_win32_window(
+        window: &Window,
+        width: u32,
+        height: u32,
+    ) -> Result<Self, String> {
+        let (hwnd, hinstance) = extract_window_handles(window)?;
+        let target = Win32SurfaceTarget::new(hwnd, hinstance)?;
+        let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
+            backends: wgpu::Backends::VULKAN,
+            ..Default::default()
+        });
+        let surface = instance
+            .create_surface(target)
+            .map_err(|error| format!("xbxEngineCreateWgpuSurfaceFailed:{error}"))?;
+        let adapter = instance
+            .request_adapter(&wgpu::RequestAdapterOptions {
+                power_preference: wgpu::PowerPreference::HighPerformance,
+                force_fallback_adapter: false,
+                compatible_surface: Some(&surface),
+            })
+            .await
+            .map_err(|error| format!("xbxEngineWgpuAdapterUnavailable:{error}"))?;
+
+        let required_features =
+            wgpu::Features::TEXTURE_FORMAT_NV12 | wgpu::Features::VULKAN_EXTERNAL_MEMORY_WIN32;
+        let available_features = adapter.features();
+        if !available_features.contains(required_features) {
+            return Err(format!(
+                "xbxEngineWgpuAdapterMissingFeatures:required={required_features:?}:available={available_features:?}"
+            ));
+        }
+
+        let (device, queue) = adapter
+            .request_device(&wgpu::DeviceDescriptor {
+                label: Some("xbxrc-native-video-device"),
+                required_features,
+                required_limits: adapter.limits(),
+                experimental_features: wgpu::ExperimentalFeatures::disabled(),
+                memory_hints: wgpu::MemoryHints::default(),
+                trace: wgpu::Trace::default(),
+            })
+            .await
+            .map_err(|error| format!("xbxEngineCreateWgpuDeviceFailed:{error}"))?;
+
+        let surface_caps = surface.get_capabilities(&adapter);
+        let surface_format = choose_surface_format(&surface_caps);
+        let surface_config = wgpu::SurfaceConfiguration {
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+            format: surface_format,
+            width: width.max(1),
+            height: height.max(1),
+            present_mode: choose_present_mode(&surface_caps),
+            alpha_mode: surface_caps.alpha_modes[0],
+            view_formats: vec![],
+            desired_maximum_frame_latency: 2,
+        };
+        surface.configure(&device, &surface_config);
+
+        let copy_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("xbxrc-native-video-copy-shader"),
+            source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(COPY_SHADER)),
+        });
+        let nv12_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("xbxrc-native-video-nv12-shader"),
+            source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(NV12_SHADER)),
+        });
+
+        let copy_bind_group_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: Some("xbxrc-native-video-copy-bind-group-layout"),
+                entries: &[
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Texture {
+                            multisampled: false,
+                            view_dimension: wgpu::TextureViewDimension::D2,
+                            sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                        },
+                        count: None,
+                    },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 1,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                        count: None,
+                    },
+                ],
+            });
+        let nv12_bind_group_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: Some("xbxrc-native-video-nv12-bind-group-layout"),
+                entries: &[
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Texture {
+                            multisampled: false,
+                            view_dimension: wgpu::TextureViewDimension::D2,
+                            sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                        },
+                        count: None,
+                    },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 1,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Texture {
+                            multisampled: false,
+                            view_dimension: wgpu::TextureViewDimension::D2,
+                            sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                        },
+                        count: None,
+                    },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 2,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                        count: None,
+                    },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 3,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Uniform,
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    },
+                ],
+            });
+        let copy_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+            label: Some("xbxrc-native-video-copy-sampler"),
+            mag_filter: wgpu::FilterMode::Nearest,
+            min_filter: wgpu::FilterMode::Nearest,
+            mipmap_filter: wgpu::MipmapFilterMode::Nearest,
+            ..Default::default()
+        });
+        let uv_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+            label: Some("xbxrc-native-video-uv-sampler"),
+            mag_filter: wgpu::FilterMode::Linear,
+            min_filter: wgpu::FilterMode::Linear,
+            mipmap_filter: wgpu::MipmapFilterMode::Nearest,
+            ..Default::default()
+        });
+
+        let copy_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some("xbxrc-native-video-copy-pipeline-layout"),
+            bind_group_layouts: &[&copy_bind_group_layout],
+            immediate_size: 0,
+        });
+        let copy_render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("xbxrc-native-video-copy-pipeline"),
+            layout: Some(&copy_pipeline_layout),
+            vertex: wgpu::VertexState {
+                module: &copy_shader,
+                entry_point: Some("vs_main"),
+                buffers: &[],
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
+            },
+            fragment: Some(wgpu::FragmentState {
+                module: &copy_shader,
+                entry_point: Some("fs_main"),
+                targets: &[Some(wgpu::ColorTargetState {
+                    format: surface_format,
+                    blend: Some(wgpu::BlendState::REPLACE),
+                    write_mask: wgpu::ColorWrites::ALL,
+                })],
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
+            }),
+            primitive: wgpu::PrimitiveState::default(),
+            depth_stencil: None,
+            multisample: wgpu::MultisampleState::default(),
+            multiview_mask: None,
+            cache: None,
+        });
+
+        let nv12_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some("xbxrc-native-video-nv12-pipeline-layout"),
+            bind_group_layouts: &[&nv12_bind_group_layout],
+            immediate_size: 0,
+        });
+        let nv12_render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("xbxrc-native-video-nv12-pipeline"),
+            layout: Some(&nv12_pipeline_layout),
+            vertex: wgpu::VertexState {
+                module: &nv12_shader,
+                entry_point: Some("vs_main"),
+                buffers: &[],
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
+            },
+            fragment: Some(wgpu::FragmentState {
+                module: &nv12_shader,
+                entry_point: Some("fs_main"),
+                targets: &[Some(wgpu::ColorTargetState {
+                    format: surface_format,
+                    blend: Some(wgpu::BlendState::REPLACE),
+                    write_mask: wgpu::ColorWrites::ALL,
+                })],
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
+            }),
+            primitive: wgpu::PrimitiveState::default(),
+            depth_stencil: None,
+            multisample: wgpu::MultisampleState::default(),
+            multiview_mask: None,
+            cache: None,
+        });
+
+        Ok(Self {
+            surface,
+            device,
+            queue,
+            surface_config,
+            copy_render_pipeline,
+            nv12_render_pipeline,
+            copy_bind_group_layout,
+            nv12_bind_group_layout,
+            copy_sampler,
+            uv_sampler,
+            last_descriptor_upload_mode: None,
+            descriptor_import_count_total: 0,
+            descriptor_cpu_upload_count_total: 0,
+            latest_frame: None,
+            frame_texture: None,
+        })
+    }
+
+    pub fn update_surface_size(&mut self, width: u32, height: u32) {
+        if width == 0 || height == 0 {
+            return;
+        }
+        if self.surface_config.width == width && self.surface_config.height == height {
+            return;
+        }
+        self.surface_config.width = width;
+        self.surface_config.height = height;
+        self.surface.configure(&self.device, &self.surface_config);
+    }
+
+    pub fn update_frame(&mut self, frame: XbxEngineRenderFrame) {
+        self.latest_frame = Some(frame);
+    }
+
+    pub fn descriptor_upload_telemetry(&self) -> DescriptorUploadTelemetry {
+        DescriptorUploadTelemetry {
+            last_mode: self.last_descriptor_upload_mode.map(str::to_string),
+            metal_import_count_total: self.descriptor_import_count_total,
+            cpu_upload_count_total: self.descriptor_cpu_upload_count_total,
+        }
+    }
+
+    pub fn render(&mut self) -> Result<(), String> {
+        if let Some(frame) = self.latest_frame.take() {
+            self.upload_frame(&frame)?;
+        }
+
+        let surface_texture = match self.surface.get_current_texture() {
+            Ok(texture) => texture,
+            Err(wgpu::SurfaceError::Lost | wgpu::SurfaceError::Outdated) => {
+                self.surface.configure(&self.device, &self.surface_config);
+                return Ok(());
+            }
+            Err(wgpu::SurfaceError::Timeout) => return Ok(()),
+            Err(wgpu::SurfaceError::Other) => return Ok(()),
+            Err(wgpu::SurfaceError::OutOfMemory) => {
+                return Err("xbxEngineWgpuSurfaceOutOfMemory".to_string());
+            }
+        };
+
+        let surface_view = surface_texture
+            .texture
+            .create_view(&wgpu::TextureViewDescriptor::default());
+        let mut encoder = self
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("xbxrc-native-video-render-encoder"),
+            });
+        {
+            let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("xbxrc-native-video-render-pass"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: &surface_view,
+                    resolve_target: None,
+                    depth_slice: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(wgpu::Color {
+                            r: 0.0,
+                            g: 0.0,
+                            b: 0.0,
+                            a: 1.0,
+                        }),
+                        store: wgpu::StoreOp::Store,
+                    },
+                })],
+                depth_stencil_attachment: None,
+                occlusion_query_set: None,
+                timestamp_writes: None,
+                multiview_mask: None,
+            });
+            if let Some(frame_texture) = self.frame_texture.as_ref() {
+                let (source_width, source_height) = frame_texture.dimensions();
+                let viewport = compute_aspect_fit_viewport(
+                    self.surface_config.width,
+                    self.surface_config.height,
+                    source_width,
+                    source_height,
+                );
+                render_pass.set_viewport(
+                    viewport.x as f32,
+                    viewport.y as f32,
+                    viewport.width as f32,
+                    viewport.height as f32,
+                    0.0,
+                    1.0,
+                );
+                render_pass.set_scissor_rect(
+                    viewport.x,
+                    viewport.y,
+                    viewport.width.max(1),
+                    viewport.height.max(1),
+                );
+                match frame_texture {
+                    WindowsFrameTextureBundle::Rgba(bundle)
+                    | WindowsFrameTextureBundle::Bgra(bundle) => {
+                        render_pass.set_pipeline(&self.copy_render_pipeline);
+                        render_pass.set_bind_group(0, &bundle.bind_group, &[]);
+                    }
+                    WindowsFrameTextureBundle::Nv12(bundle) => {
+                        render_pass.set_pipeline(&self.nv12_render_pipeline);
+                        render_pass.set_bind_group(0, &bundle.bind_group, &[]);
+                    }
+                    WindowsFrameTextureBundle::ImportedNv12(bundle) => {
+                        render_pass.set_pipeline(&self.nv12_render_pipeline);
+                        render_pass.set_bind_group(0, &bundle.bind_group, &[]);
+                    }
+                }
+                render_pass.draw(0..3, 0..1);
+            }
+        }
+        self.queue.submit(Some(encoder.finish()));
+        surface_texture.present();
+        Ok(())
+    }
+
+    fn upload_frame(&mut self, frame: &XbxEngineRenderFrame) -> Result<(), String> {
+        match &frame.pixel_data {
+            XbxEngineRenderPixelData::Rgba { bytes } => {
+                self.ensure_rgba_texture(
+                    frame.width,
+                    frame.height,
+                    wgpu::TextureFormat::Rgba8Unorm,
+                );
+                let Some(WindowsFrameTextureBundle::Rgba(bundle)) = self.frame_texture.as_ref()
+                else {
+                    return Err("xbxEngineWgpuFrameTextureMissing".to_string());
+                };
+                self.queue.write_texture(
+                    wgpu::TexelCopyTextureInfo {
+                        texture: &bundle.texture,
+                        mip_level: 0,
+                        origin: wgpu::Origin3d::ZERO,
+                        aspect: wgpu::TextureAspect::All,
+                    },
+                    bytes.as_ref(),
+                    wgpu::TexelCopyBufferLayout {
+                        offset: 0,
+                        bytes_per_row: Some(frame.width * 4),
+                        rows_per_image: Some(frame.height),
+                    },
+                    wgpu::Extent3d {
+                        width: frame.width,
+                        height: frame.height,
+                        depth_or_array_layers: 1,
+                    },
+                );
+                self.last_descriptor_upload_mode = None;
+            }
+            XbxEngineRenderPixelData::Bgra { bytes } => {
+                self.ensure_rgba_texture(
+                    frame.width,
+                    frame.height,
+                    wgpu::TextureFormat::Bgra8Unorm,
+                );
+                let Some(WindowsFrameTextureBundle::Bgra(bundle)) = self.frame_texture.as_ref()
+                else {
+                    return Err("xbxEngineWgpuFrameTextureMissing".to_string());
+                };
+                self.queue.write_texture(
+                    wgpu::TexelCopyTextureInfo {
+                        texture: &bundle.texture,
+                        mip_level: 0,
+                        origin: wgpu::Origin3d::ZERO,
+                        aspect: wgpu::TextureAspect::All,
+                    },
+                    bytes.as_ref(),
+                    wgpu::TexelCopyBufferLayout {
+                        offset: 0,
+                        bytes_per_row: Some(frame.width * 4),
+                        rows_per_image: Some(frame.height),
+                    },
+                    wgpu::Extent3d {
+                        width: frame.width,
+                        height: frame.height,
+                        depth_or_array_layers: 1,
+                    },
+                );
+                self.last_descriptor_upload_mode = None;
+            }
+            XbxEngineRenderPixelData::Nv12 {
+                y_plane,
+                uv_plane,
+                y_stride,
+                uv_stride,
+            } => {
+                self.ensure_nv12_texture(
+                    frame.width,
+                    frame.height,
+                    build_nv12_color_params(
+                        MacOsVideoColorMatrix::Bt709,
+                        MacOsVideoColorRange::Video,
+                        MacOsVideoChromaLocation::Center,
+                        frame.width,
+                        frame.height,
+                    ),
+                );
+                let Some(WindowsFrameTextureBundle::Nv12(bundle)) = self.frame_texture.as_ref()
+                else {
+                    return Err("xbxEngineWgpuFrameTextureMissing".to_string());
+                };
+                self.queue.write_texture(
+                    wgpu::TexelCopyTextureInfo {
+                        texture: &bundle.y_texture,
+                        mip_level: 0,
+                        origin: wgpu::Origin3d::ZERO,
+                        aspect: wgpu::TextureAspect::All,
+                    },
+                    y_plane.as_ref(),
+                    wgpu::TexelCopyBufferLayout {
+                        offset: 0,
+                        bytes_per_row: Some(*y_stride),
+                        rows_per_image: Some(frame.height),
+                    },
+                    wgpu::Extent3d {
+                        width: frame.width,
+                        height: frame.height,
+                        depth_or_array_layers: 1,
+                    },
+                );
+                self.queue.write_texture(
+                    wgpu::TexelCopyTextureInfo {
+                        texture: &bundle.uv_texture,
+                        mip_level: 0,
+                        origin: wgpu::Origin3d::ZERO,
+                        aspect: wgpu::TextureAspect::All,
+                    },
+                    uv_plane.as_ref(),
+                    wgpu::TexelCopyBufferLayout {
+                        offset: 0,
+                        bytes_per_row: Some(*uv_stride),
+                        rows_per_image: Some(frame.height.div_ceil(2)),
+                    },
+                    wgpu::Extent3d {
+                        width: frame.width / 2,
+                        height: frame.height.div_ceil(2),
+                        depth_or_array_layers: 1,
+                    },
+                );
+                self.last_descriptor_upload_mode = None;
+            }
+            XbxEngineRenderPixelData::Descriptor { handle } => {
+                let Some(descriptor) = handle.downcast_ref::<WindowsD3d11TextureDescriptor>()
+                else {
+                    return Err("xbxEngineWgpuDescriptorUnsupported".to_string());
+                };
+                self.import_d3d11_descriptor(
+                    descriptor,
+                    frame.frame_seq,
+                    frame.width,
+                    frame.height,
+                )?;
+            }
+        }
+        Ok(())
+    }
+
+    fn ensure_rgba_texture(&mut self, width: u32, height: u32, format: wgpu::TextureFormat) {
+        let matches_existing = match (self.frame_texture.as_ref(), format) {
+            (Some(WindowsFrameTextureBundle::Rgba(bundle)), wgpu::TextureFormat::Rgba8Unorm) => {
+                bundle.width == width && bundle.height == height
+            }
+            (Some(WindowsFrameTextureBundle::Bgra(bundle)), wgpu::TextureFormat::Bgra8Unorm) => {
+                bundle.width == width && bundle.height == height
+            }
+            _ => false,
+        };
+        if matches_existing {
+            return;
+        }
+        let texture = self.device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("xbxrc-native-video-rgba-texture"),
+            size: wgpu::Extent3d {
+                width,
+                height,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+            view_formats: &[],
+        });
+        let texture_view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+        let bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("xbxrc-native-video-rgba-bind-group"),
+            layout: &self.copy_bind_group_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&texture_view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&self.copy_sampler),
+                },
+            ],
+        });
+        let bundle = RgbaTextureBundle {
+            width,
+            height,
+            texture,
+            bind_group,
+        };
+        self.frame_texture = Some(if format == wgpu::TextureFormat::Bgra8Unorm {
+            WindowsFrameTextureBundle::Bgra(bundle)
+        } else {
+            WindowsFrameTextureBundle::Rgba(bundle)
+        });
+    }
+
+    fn ensure_nv12_texture(&mut self, width: u32, height: u32, params: Nv12ColorParamsStd140) {
+        let matches_existing = matches!(
+            self.frame_texture.as_ref(),
+            Some(WindowsFrameTextureBundle::Nv12(bundle)) if bundle.width == width && bundle.height == height
+        );
+        if matches_existing {
+            if let Some(WindowsFrameTextureBundle::Nv12(bundle)) = self.frame_texture.as_ref() {
+                upload_nv12_params(&self.queue, &bundle.params_buffer, &params);
+            }
+            return;
+        }
+        let y_texture = self.device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("xbxrc-native-video-y-texture"),
+            size: wgpu::Extent3d {
+                width,
+                height,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::R8Unorm,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+            view_formats: &[],
+        });
+        let uv_texture = self.device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("xbxrc-native-video-uv-texture"),
+            size: wgpu::Extent3d {
+                width: width / 2,
+                height: height.div_ceil(2),
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Rg8Unorm,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+            view_formats: &[],
+        });
+        let y_view = y_texture.create_view(&wgpu::TextureViewDescriptor::default());
+        let uv_view = uv_texture.create_view(&wgpu::TextureViewDescriptor::default());
+        let params_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("xbxrc-native-video-nv12-params-buffer"),
+            size: std::mem::size_of::<Nv12ColorParamsStd140>() as u64,
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+        upload_nv12_params(&self.queue, &params_buffer, &params);
+        let bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("xbxrc-native-video-nv12-bind-group"),
+            layout: &self.nv12_bind_group_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&y_view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::TextureView(&uv_view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: wgpu::BindingResource::Sampler(&self.uv_sampler),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 3,
+                    resource: params_buffer.as_entire_binding(),
+                },
+            ],
+        });
+        self.frame_texture = Some(WindowsFrameTextureBundle::Nv12(Nv12TextureBundle {
+            width,
+            height,
+            y_texture,
+            uv_texture,
+            params_buffer,
+            bind_group,
+        }));
+    }
+
+    fn import_d3d11_descriptor(
+        &mut self,
+        descriptor: &WindowsD3d11TextureDescriptor,
+        _frame_seq: u64,
+        width: u32,
+        height: u32,
+    ) -> Result<(), String> {
+        let format = match descriptor.dxgi_format as i32 {
+            103 => wgpu::TextureFormat::NV12,
+            _ => {
+                return Err(format!(
+                    "xbxEngineWgpuDescriptorUnsupportedDxgiFormat:{}",
+                    descriptor.dxgi_format
+                ));
+            }
+        };
+        let hal_desc = wgpu_hal::TextureDescriptor {
+            label: Some("xbxrc-native-video-imported-d3d11-texture"),
+            size: wgpu::Extent3d {
+                width,
+                height,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format,
+            usage: wgpu::TextureUses::RESOURCE,
+            memory_flags: wgpu_hal::MemoryFlags::empty(),
+            view_formats: vec![],
+        };
+        let wgpu_desc = wgpu::TextureDescriptor {
+            label: Some("xbxrc-native-video-imported-d3d11-texture"),
+            size: wgpu::Extent3d {
+                width,
+                height,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING,
+            view_formats: &[],
+        };
+        let imported_texture = {
+            let Some(hal_device) = (unsafe { self.device.as_hal::<wgpu_hal::api::Vulkan>() })
+            else {
+                return Err("xbxEngineWgpuHalDeviceUnavailable".to_string());
+            };
+            let hal_texture = unsafe {
+                hal_device
+                    .texture_from_d3d11_shared_handle(HANDLE(descriptor.shared_handle), &hal_desc)
+                    .map_err(|error| {
+                        format!("xbxEngineWgpuImportD3d11SharedHandleFailed:{error:?}")
+                    })?
+            };
+            unsafe {
+                self.device
+                    .create_texture_from_hal::<wgpu_hal::api::Vulkan>(hal_texture, &wgpu_desc)
+            }
+        };
+        let params = build_nv12_color_params(
+            descriptor.color_matrix,
+            descriptor.color_range,
+            descriptor.chroma_location,
+            width,
+            height,
+        );
+        let y_view = imported_texture.create_view(&wgpu::TextureViewDescriptor {
+            label: Some("xbxrc-native-video-imported-nv12-y-view"),
+            format: Some(wgpu::TextureFormat::R8Unorm),
+            dimension: Some(wgpu::TextureViewDimension::D2),
+            usage: Some(wgpu::TextureUsages::TEXTURE_BINDING),
+            aspect: wgpu::TextureAspect::Plane0,
+            base_mip_level: 0,
+            mip_level_count: Some(1),
+            base_array_layer: 0,
+            array_layer_count: Some(1),
+        });
+        let uv_view = imported_texture.create_view(&wgpu::TextureViewDescriptor {
+            label: Some("xbxrc-native-video-imported-nv12-uv-view"),
+            format: Some(wgpu::TextureFormat::Rg8Unorm),
+            dimension: Some(wgpu::TextureViewDimension::D2),
+            usage: Some(wgpu::TextureUsages::TEXTURE_BINDING),
+            aspect: wgpu::TextureAspect::Plane1,
+            base_mip_level: 0,
+            mip_level_count: Some(1),
+            base_array_layer: 0,
+            array_layer_count: Some(1),
+        });
+        let params_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("xbxrc-native-video-imported-nv12-params-buffer"),
+            size: std::mem::size_of::<Nv12ColorParamsStd140>() as u64,
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+        upload_nv12_params(&self.queue, &params_buffer, &params);
+        let bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("xbxrc-native-video-imported-nv12-bind-group"),
+            layout: &self.nv12_bind_group_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&y_view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::TextureView(&uv_view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: wgpu::BindingResource::Sampler(&self.uv_sampler),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 3,
+                    resource: params_buffer.as_entire_binding(),
+                },
+            ],
+        });
+        self.frame_texture = Some(WindowsFrameTextureBundle::ImportedNv12(
+            WindowsImportedNv12TextureBundle {
+                width,
+                height,
+                _texture: imported_texture,
+                params_buffer,
+                bind_group,
+            },
+        ));
+        self.last_descriptor_upload_mode = Some("vulkan-d3d11-shared-handle");
+        self.descriptor_import_count_total = self.descriptor_import_count_total.saturating_add(1);
+        Ok(())
+    }
+}
+
+#[cfg(any(target_os = "macos", target_os = "windows"))]
 fn upload_nv12_params(
     queue: &wgpu::Queue,
     params_buffer: &wgpu::Buffer,
@@ -1174,7 +2041,7 @@ fn upload_nv12_params(
     queue.write_buffer(params_buffer, 0, bytes);
 }
 
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", target_os = "windows"))]
 fn build_nv12_color_params(
     matrix: MacOsVideoColorMatrix,
     range: MacOsVideoColorRange,
@@ -1342,7 +2209,7 @@ fn import_metal_texture_to_wgpu(
     })
 }
 
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", target_os = "windows"))]
 fn choose_surface_format(capabilities: &wgpu::SurfaceCapabilities) -> wgpu::TextureFormat {
     for format in [
         wgpu::TextureFormat::Bgra8Unorm,
@@ -1357,7 +2224,7 @@ fn choose_surface_format(capabilities: &wgpu::SurfaceCapabilities) -> wgpu::Text
     capabilities.formats[0]
 }
 
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", target_os = "windows"))]
 struct AspectFitViewport {
     x: u32,
     y: u32,
@@ -1365,7 +2232,7 @@ struct AspectFitViewport {
     height: u32,
 }
 
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", target_os = "windows"))]
 fn compute_aspect_fit_viewport(
     surface_width: u32,
     surface_height: u32,
@@ -1403,7 +2270,7 @@ fn compute_aspect_fit_viewport(
     }
 }
 
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", target_os = "windows"))]
 fn choose_present_mode(capabilities: &wgpu::SurfaceCapabilities) -> wgpu::PresentMode {
     if capabilities
         .present_modes
@@ -1412,4 +2279,17 @@ fn choose_present_mode(capabilities: &wgpu::SurfaceCapabilities) -> wgpu::Presen
         return wgpu::PresentMode::AutoVsync;
     }
     wgpu::PresentMode::Fifo
+}
+
+#[cfg(target_os = "windows")]
+fn extract_window_handles(window: &Window) -> Result<(isize, Option<isize>), String> {
+    let window_handle = window
+        .window_handle()
+        .map_err(|error| format!("xbxEngineWindowHandleUnavailable:{error}"))?;
+    match window_handle.as_raw() {
+        RawWindowHandle::Win32(handle) => {
+            Ok((handle.hwnd.get(), handle.hinstance.map(|value| value.get())))
+        }
+        other => Err(format!("xbxEngineUnsupportedRawWindowHandle:{other:?}")),
+    }
 }

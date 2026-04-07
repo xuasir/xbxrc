@@ -1,7 +1,7 @@
 use xbxengine::{
     MacOsCVPixelBufferDescriptor, MacOsVideoChromaLocation, MacOsVideoColorMatrix,
     MacOsVideoColorPrimaries, MacOsVideoColorRange, MacOsVideoTransferFunction,
-    XbxEngineRenderFrame, XbxEngineRenderPixelData,
+    WindowsD3d11TextureDescriptor, XbxEngineRenderFrame, XbxEngineRenderPixelData,
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -29,6 +29,7 @@ pub enum VideoSurfacePixelFormat {
     Bgra8,
     Nv12,
     MacOsCvPixelBuffer,
+    WindowsD3d11Texture,
     UnknownDescriptor,
 }
 
@@ -42,6 +43,7 @@ pub enum VideoSurfaceAccessKind {
 pub enum VideoNativeSurfaceKind {
     None,
     MacOsCvPixelBuffer,
+    WindowsD3d11Texture,
     Unknown,
 }
 
@@ -123,6 +125,23 @@ impl DecodedVideoSurface {
                         },
                         access_kind: VideoSurfaceAccessKind::NativeHandle,
                         native_kind: VideoNativeSurfaceKind::MacOsCvPixelBuffer,
+                    }
+                } else if let Some(descriptor) =
+                    any_ref.downcast_ref::<WindowsD3d11TextureDescriptor>()
+                {
+                    Self {
+                        width: frame.width,
+                        height: frame.height,
+                        pixel_format: VideoSurfacePixelFormat::WindowsD3d11Texture,
+                        color: VideoColorMetadata {
+                            matrix: descriptor.color_matrix,
+                            primaries: descriptor.color_primaries,
+                            transfer: descriptor.transfer_function,
+                            range: descriptor.color_range,
+                            chroma_location: descriptor.chroma_location,
+                        },
+                        access_kind: VideoSurfaceAccessKind::NativeHandle,
+                        native_kind: VideoNativeSurfaceKind::WindowsD3d11Texture,
                     }
                 } else {
                     Self {

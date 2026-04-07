@@ -15,12 +15,72 @@ use crate::XbxEngineRuntimeError;
 use super::runtime_stats::merge_media_snapshot_into_runtime_stats;
 
 static HOST_FRAME_DROP_OBSERVATION_ID: AtomicU64 = AtomicU64::new(0);
+const HOST_TIMING_DISPLAY_INTERVAL_RECREATE_THRESHOLD_MS: f64 = 3.0;
+const HOST_TIMING_FRAME_AGE_BUDGET_RECREATE_THRESHOLD_MS: f64 = 8.0;
+const HOST_TIMING_LOCAL_RESET_COOLDOWN_MS: f64 = 1_500.0;
+
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+struct HostVideoTimingSample {
+    host_display_interval_ms: Option<f64>,
+    host_frame_age_budget_ms: Option<f64>,
+}
+
+#[derive(Debug, Default)]
+pub(crate) struct LocalDecoderResetPolicyState {
+    last_sample: Option<HostVideoTimingSample>,
+    last_reset_at_ms: Option<f64>,
+}
+
+impl LocalDecoderResetPolicyState {
+    fn observe_host_timing_change(
+        &mut self,
+        host_display_interval_ms: Option<f64>,
+        host_frame_age_budget_ms: Option<f64>,
+        observed_at_ms: f64,
+    ) -> Option<String> {
+        let next = HostVideoTimingSample {
+            host_display_interval_ms,
+            host_frame_age_budget_ms,
+        };
+        let previous = self.last_sample.replace(next)?;
+        let display_delta_ms = timing_delta_ms(
+            previous.host_display_interval_ms,
+            next.host_display_interval_ms,
+        );
+        let frame_age_budget_delta_ms = timing_delta_ms(
+            previous.host_frame_age_budget_ms,
+            next.host_frame_age_budget_ms,
+        );
+        let display_changed = display_delta_ms
+            .is_some_and(|delta| delta >= HOST_TIMING_DISPLAY_INTERVAL_RECREATE_THRESHOLD_MS);
+        let budget_changed = frame_age_budget_delta_ms
+            .is_some_and(|delta| delta >= HOST_TIMING_FRAME_AGE_BUDGET_RECREATE_THRESHOLD_MS);
+        if !display_changed && !budget_changed {
+            return None;
+        }
+        if self.last_reset_at_ms.is_some_and(|last| {
+            (observed_at_ms - last).max(0.0) < HOST_TIMING_LOCAL_RESET_COOLDOWN_MS
+        }) {
+            return None;
+        }
+        self.last_reset_at_ms = Some(observed_at_ms);
+        Some(build_host_timing_reset_reason(
+            previous,
+            next,
+            display_delta_ms,
+            frame_age_budget_delta_ms,
+        ))
+    }
+}
 
 // 负责 render/runtime 只读与轻写入口，避免 stack.rs 持续膨胀。
 pub(crate) struct RtcStackRuntimePort<'a> {
     runtime_stats: &'a Arc<Mutex<XbxEngineMediaRuntimeStats>>,
     render_state: &'a Arc<Mutex<XbxRenderState>>,
     media: &'a Arc<Mutex<RtcMediaService>>,
+    local_decoder_reset_handle:
+        &'a Arc<Mutex<Option<Arc<crate::media::video::decode::actor::DecodeActorHandle>>>>,
+    local_decoder_reset_policy: &'a Arc<Mutex<LocalDecoderResetPolicyState>>,
 }
 
 impl<'a> RtcStackRuntimePort<'a> {
@@ -28,11 +88,17 @@ impl<'a> RtcStackRuntimePort<'a> {
         runtime_stats: &'a Arc<Mutex<XbxEngineMediaRuntimeStats>>,
         render_state: &'a Arc<Mutex<XbxRenderState>>,
         media: &'a Arc<Mutex<RtcMediaService>>,
+        local_decoder_reset_handle: &'a Arc<
+            Mutex<Option<Arc<crate::media::video::decode::actor::DecodeActorHandle>>>,
+        >,
+        local_decoder_reset_policy: &'a Arc<Mutex<LocalDecoderResetPolicyState>>,
     ) -> Self {
         Self {
             runtime_stats,
             render_state,
             media,
+            local_decoder_reset_handle,
+            local_decoder_reset_policy,
         }
     }
 
@@ -97,8 +163,42 @@ impl<'a> RtcStackRuntimePort<'a> {
         host_display_interval_ms: Option<f64>,
         host_frame_age_budget_ms: Option<f64>,
     ) {
-        RuntimeStatsSink::new(self.runtime_stats.clone())
-            .record_host_video_timing(host_display_interval_ms, host_frame_age_budget_ms);
+        let runtime_stats = RuntimeStatsSink::new(self.runtime_stats.clone());
+        runtime_stats.record_host_video_timing(host_display_interval_ms, host_frame_age_budget_ms);
+        let now_ms = crate::transport::rtc::stats::now_ms_f64();
+        let reset_reason = self
+            .local_decoder_reset_policy
+            .lock()
+            .ok()
+            .and_then(|mut policy| {
+                policy.observe_host_timing_change(
+                    host_display_interval_ms,
+                    host_frame_age_budget_ms,
+                    now_ms,
+                )
+            });
+        let Some(reason) = reset_reason else {
+            return;
+        };
+        let local_decoder_handle = self
+            .local_decoder_reset_handle
+            .lock()
+            .ok()
+            .and_then(|handle| handle.clone());
+        runtime_stats.update(|stats| {
+            stats.latest_observation_label = Some(
+                if local_decoder_handle.is_some() {
+                    "videoDecoderLocalResetQueued"
+                } else {
+                    "videoDecoderLocalResetSkipped"
+                }
+                .to_string(),
+            );
+            stats.latest_observation_summary = Some(reason.clone());
+        });
+        if let Some(handle) = local_decoder_handle {
+            handle.request_local_decoder_reset(reason, now_ms);
+        }
     }
 
     pub(crate) fn update_host_video_present_metrics(
@@ -148,6 +248,37 @@ impl<'a> RtcStackRuntimePort<'a> {
         RuntimeStatsSink::new(self.runtime_stats.clone()).record_video_frame_drop(observation);
     }
 }
+
+fn timing_delta_ms(previous: Option<f64>, next: Option<f64>) -> Option<f64> {
+    match (previous, next) {
+        (Some(previous), Some(next)) => Some((next - previous).abs()),
+        _ => None,
+    }
+}
+
+fn build_host_timing_reset_reason(
+    previous: HostVideoTimingSample,
+    next: HostVideoTimingSample,
+    display_delta_ms: Option<f64>,
+    frame_age_budget_delta_ms: Option<f64>,
+) -> String {
+    format!(
+        "hostTimingShift displayInterval={}=>{} delta={} frameAgeBudget={}=>{} delta={}",
+        format_timing_value(previous.host_display_interval_ms),
+        format_timing_value(next.host_display_interval_ms),
+        format_timing_value(display_delta_ms),
+        format_timing_value(previous.host_frame_age_budget_ms),
+        format_timing_value(next.host_frame_age_budget_ms),
+        format_timing_value(frame_age_budget_delta_ms),
+    )
+}
+
+fn format_timing_value(value: Option<f64>) -> String {
+    value
+        .map(|value| format!("{value:.2}"))
+        .unwrap_or_else(|| "none".to_string())
+}
+
 fn resolve_no_pending_pressure_level(streak: u32) -> &'static str {
     if streak >= 180 {
         "critical"
@@ -157,5 +288,52 @@ fn resolve_no_pending_pressure_level(streak: u32) -> &'static str {
         "elevated"
     } else {
         "normal"
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::LocalDecoderResetPolicyState;
+
+    #[test]
+    fn small_host_timing_change_does_not_trigger_local_decoder_reset() {
+        let mut state = LocalDecoderResetPolicyState::default();
+
+        assert!(state
+            .observe_host_timing_change(Some(16.67), Some(25.0), 1_000.0)
+            .is_none());
+        assert!(state
+            .observe_host_timing_change(Some(17.10), Some(29.0), 1_100.0)
+            .is_none());
+    }
+
+    #[test]
+    fn obvious_host_timing_change_triggers_local_decoder_reset() {
+        let mut state = LocalDecoderResetPolicyState::default();
+
+        assert!(state
+            .observe_host_timing_change(Some(16.67), Some(25.0), 1_000.0)
+            .is_none());
+        let reason = state
+            .observe_host_timing_change(Some(33.33), Some(40.0), 3_000.0)
+            .expect("obvious timing shift should trigger local reset");
+
+        assert!(reason.contains("hostTimingShift"));
+        assert!(reason.contains("16.67=>33.33"));
+    }
+
+    #[test]
+    fn reset_trigger_is_debounced_within_cooldown_window() {
+        let mut state = LocalDecoderResetPolicyState::default();
+
+        assert!(state
+            .observe_host_timing_change(Some(16.67), Some(25.0), 1_000.0)
+            .is_none());
+        assert!(state
+            .observe_host_timing_change(Some(33.33), Some(40.0), 3_000.0)
+            .is_some());
+        assert!(state
+            .observe_host_timing_change(Some(16.67), Some(25.0), 3_400.0)
+            .is_none());
     }
 }

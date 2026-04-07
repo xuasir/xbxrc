@@ -1,6 +1,8 @@
 use std::collections::VecDeque;
 
-use super::backend::{create_video_decoder_backend, XbxVideoDecoderBackend};
+use super::backend::{
+    create_video_decoder_backend_with_probe, XbxVideoDecoderBackend, XbxVideoDecoderProbeSummary,
+};
 #[cfg(test)]
 use crate::media::video::render::renderer::XbxRenderFrame;
 #[cfg(test)]
@@ -12,6 +14,8 @@ use crate::{
 
 const MAX_DECODED_FRAME_QUEUE_LEN: usize = 2;
 const HARDWARE_DECODE_FAILURE_BURST_GAP_MS: f64 = 400.0;
+type XbxVideoDecoderFactory =
+    Box<dyn FnMut() -> (Box<dyn XbxVideoDecoderBackend>, XbxVideoDecoderProbeSummary) + Send>;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum XbxDecodeWorkloadState {
@@ -77,7 +81,7 @@ impl XbxVideoRecoveryState {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum XbxVideoRecoveryEvent {
-    ExternalResetRequested,
+    ExternalDecoderResetRequested,
     BackendFailureEscalated,
     BootstrapKeyframeAccepted,
     RecoverySettled,
@@ -86,7 +90,7 @@ pub(crate) enum XbxVideoRecoveryEvent {
 impl XbxVideoRecoveryEvent {
     pub(crate) fn as_str(self) -> &'static str {
         match self {
-            Self::ExternalResetRequested => "external-reset-requested",
+            Self::ExternalDecoderResetRequested => "external-decoder-reset-requested",
             Self::BackendFailureEscalated => "backend-failure-escalated",
             Self::BootstrapKeyframeAccepted => "bootstrap-keyframe-accepted",
             Self::RecoverySettled => "recovery-settled",
@@ -116,8 +120,19 @@ pub(crate) struct XbxVideoRecoveryTransitionSnapshot {
     pub(crate) observed_at_ms: f64,
 }
 
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct XbxVideoDecoderProbeSnapshot {
+    pub(crate) observation_id: u64,
+    pub(crate) selected_backend_name: String,
+    pub(crate) selected_backend_kind: String,
+    pub(crate) fallback_count: u32,
+    pub(crate) fallback_summary: Option<String>,
+    pub(crate) observed_at_ms: f64,
+}
+
 pub(crate) struct XbxVideoDecodeState {
     decoder: Box<dyn XbxVideoDecoderBackend>,
+    decoder_factory: XbxVideoDecoderFactory,
     latest_decoded_seq: u64,
     first_video_packet_logged: bool,
     decoded_frame_queue: VecDeque<DecodedFrame>,
@@ -133,6 +148,7 @@ pub(crate) struct XbxVideoDecodeState {
     latest_recovery_state_change_time_ms: Option<f64>,
     latest_recovery_transition: Option<XbxVideoRecoveryTransitionSnapshot>,
     recovery_transition_id: u64,
+    latest_decoder_probe: Option<XbxVideoDecoderProbeSnapshot>,
     decode_candidate_state: XbxDecodeCandidateState,
     latest_decode_candidate_decision: Option<XbxDecodeCandidateDecisionSnapshot>,
     decode_candidate_decision_id: u64,
@@ -141,8 +157,13 @@ pub(crate) struct XbxVideoDecodeState {
 impl XbxVideoDecodeState {
     pub(crate) fn new(min_delay_ms: u64, max_delay_ms: u64) -> Result<Self, XbxEngineRuntimeError> {
         let _ = (min_delay_ms, max_delay_ms);
+        let observed_at_ms = now_ms_f64();
+        let mut decoder_factory: XbxVideoDecoderFactory =
+            Box::new(create_video_decoder_backend_with_probe);
+        let (decoder, probe) = decoder_factory();
         Ok(Self {
-            decoder: create_video_decoder_backend(),
+            decoder,
+            decoder_factory,
             latest_decoded_seq: 0,
             first_video_packet_logged: false,
             decoded_frame_queue: VecDeque::new(),
@@ -158,6 +179,11 @@ impl XbxVideoDecodeState {
             latest_recovery_state_change_time_ms: None,
             latest_recovery_transition: None,
             recovery_transition_id: 0,
+            latest_decoder_probe: Some(Self::build_decoder_probe_snapshot(
+                1,
+                probe,
+                observed_at_ms,
+            )),
             decode_candidate_state: XbxDecodeCandidateState::Nominal,
             latest_decode_candidate_decision: None,
             decode_candidate_decision_id: 0,
@@ -165,20 +191,20 @@ impl XbxVideoDecodeState {
     }
 
     /**
-     * 响应恢复控制面的 decoder reset：清空待释放队列，并重置硬解会话。
+     * 响应恢复控制面的 decoder reset：清空待释放队列，并重建本地解码 backend。
      * 这里不更改外部恢复阈值，只做局部状态收敛。
      */
-    pub(crate) fn request_decoder_reset(&mut self) -> Result<(), XbxEngineRuntimeError> {
+    pub(crate) fn request_local_decoder_reset(&mut self) -> Result<(), XbxEngineRuntimeError> {
         self.decoded_frame_queue.clear();
         self.last_decode_ok_time_ms = None;
-        self.decoder.reset()?;
-        self.decoder_reset_count = self.decoder_reset_count.saturating_add(1);
         let now_ms = now_ms_f64();
+        self.reset_decoder_backend(now_ms);
+        self.decoder_reset_count = self.decoder_reset_count.saturating_add(1);
         self.latest_decoder_reset_time_ms = Some(now_ms);
         self.reset_hardware_failure_streak();
         self.transition_recovery_state(
             XbxVideoRecoveryState::WaitingKeyframe,
-            XbxVideoRecoveryEvent::ExternalResetRequested,
+            XbxVideoRecoveryEvent::ExternalDecoderResetRequested,
             "decoderResetRequested",
             None,
             None,
@@ -200,11 +226,6 @@ impl XbxVideoDecodeState {
         }
         if !self.first_video_packet_logged {
             self.first_video_packet_logged = true;
-            crate::xbx_log_info!(
-                "[xbxengine][rtc] first encoded video frame received ts={} bytes={}",
-                encoded_frame.rtp_timestamp,
-                encoded_frame.payload.len()
-            );
         }
         let target_time = encoded_frame.target_playout_time;
         let rtp_timestamp = encoded_frame.rtp_timestamp;
@@ -217,15 +238,17 @@ impl XbxVideoDecodeState {
             Ok(frame) => frame,
             Err(error) => {
                 let status = parse_decoder_status_code(&error);
-                crate::xbx_log_error!("[xbxengine][rtc] hardware decode failed: {error}");
                 self.record_hardware_decode_failure(now_ms, status);
+                if self.hardware_decode_failure_streak == 1 {
+                    crate::xbx_log_warn!(
+                        "[xbxengine][rtc] hardware decode failed status={:?} err={error}",
+                        status
+                    );
+                }
                 if should_force_recovery_keyframe(status)
                     || self.hardware_decode_failure_streak >= 3
                 {
-                    crate::xbx_log_warn!(
-                        "[xbxengine][rtc] decoder entered wait-keyframe recovery after backend failure"
-                    );
-                    let _ = self.request_decoder_reset_with_failure(status, now_ms);
+                    let _ = self.reset_decoder_with_failure(status, now_ms);
                 }
                 return None;
             }
@@ -317,6 +340,10 @@ impl XbxVideoDecodeState {
         self.latest_recovery_transition.as_ref()
     }
 
+    pub(crate) fn latest_decoder_probe(&self) -> Option<&XbxVideoDecoderProbeSnapshot> {
+        self.latest_decoder_probe.as_ref()
+    }
+
     pub(crate) fn latest_decode_candidate_decision(
         &self,
     ) -> Option<&XbxDecodeCandidateDecisionSnapshot> {
@@ -378,10 +405,6 @@ impl XbxVideoDecodeState {
         while self.decoded_frame_queue.len() >= MAX_DECODED_FRAME_QUEUE_LEN {
             let dropped = self.decoded_frame_queue.pop_front();
             if let Some(d) = dropped {
-                crate::xbx_log_warn!(
-                    "[xbxengine][vt] enqueue_decoded_frame: queue FULL, dropping old frame seq={}",
-                    d.surface.frame_seq
-                );
                 dropped_frame = Some(d);
             }
             self.decoded_frame_drop_count = self.decoded_frame_drop_count.saturating_add(1);
@@ -430,14 +453,14 @@ impl XbxVideoDecodeState {
         self.latest_hardware_decode_failure_status = None;
     }
 
-    fn request_decoder_reset_with_failure(
+    fn reset_decoder_with_failure(
         &mut self,
         status: Option<i32>,
         now_ms: f64,
     ) -> Result<(), XbxEngineRuntimeError> {
         self.decoded_frame_queue.clear();
         self.last_decode_ok_time_ms = None;
-        self.decoder.reset()?;
+        self.reset_decoder_backend(now_ms);
         self.decoder_reset_count = self.decoder_reset_count.saturating_add(1);
         self.latest_decoder_reset_time_ms = Some(now_ms);
         self.reset_hardware_failure_streak();
@@ -450,6 +473,21 @@ impl XbxVideoDecodeState {
             now_ms,
         );
         Ok(())
+    }
+
+    fn reset_decoder_backend(&mut self, observed_at_ms: f64) {
+        let (decoder, probe) = (self.decoder_factory)();
+        self.decoder = decoder;
+        let next_observation_id = self
+            .latest_decoder_probe
+            .as_ref()
+            .map(|probe| probe.observation_id.saturating_add(1))
+            .unwrap_or(1);
+        self.latest_decoder_probe = Some(Self::build_decoder_probe_snapshot(
+            next_observation_id,
+            probe,
+            observed_at_ms,
+        ));
     }
 
     fn transition_recovery_state(
@@ -496,6 +534,21 @@ impl XbxVideoDecodeState {
             observed_at_ms,
         });
     }
+
+    fn build_decoder_probe_snapshot(
+        observation_id: u64,
+        probe: XbxVideoDecoderProbeSummary,
+        observed_at_ms: f64,
+    ) -> XbxVideoDecoderProbeSnapshot {
+        XbxVideoDecoderProbeSnapshot {
+            observation_id,
+            selected_backend_name: probe.selected_backend_name,
+            selected_backend_kind: probe.selected_backend_kind,
+            fallback_count: probe.fallback_count,
+            fallback_summary: probe.fallback_summary,
+            observed_at_ms,
+        }
+    }
 }
 
 #[cfg(test)]
@@ -505,9 +558,26 @@ impl XbxVideoDecodeState {
         max_delay_ms: u64,
         decoder: Box<dyn XbxVideoDecoderBackend>,
     ) -> Self {
+        Self::new_for_test_with_factory(
+            min_delay_ms,
+            max_delay_ms,
+            decoder,
+            Box::new(|| {
+                panic!("test decoder factory was not configured for decoder reset path");
+            }),
+        )
+    }
+
+    fn new_for_test_with_factory(
+        min_delay_ms: u64,
+        max_delay_ms: u64,
+        decoder: Box<dyn XbxVideoDecoderBackend>,
+        decoder_factory: XbxVideoDecoderFactory,
+    ) -> Self {
         let _ = (min_delay_ms, max_delay_ms);
         Self {
             decoder,
+            decoder_factory,
             latest_decoded_seq: 0,
             first_video_packet_logged: false,
             decoded_frame_queue: VecDeque::new(),
@@ -523,6 +593,7 @@ impl XbxVideoDecodeState {
             latest_recovery_state_change_time_ms: None,
             latest_recovery_transition: None,
             recovery_transition_id: 0,
+            latest_decoder_probe: None,
             decode_candidate_state: XbxDecodeCandidateState::Nominal,
             latest_decode_candidate_decision: None,
             decode_candidate_decision_id: 0,

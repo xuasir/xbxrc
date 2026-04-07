@@ -29,8 +29,8 @@
   3. 视频处理流水线 (media/video/)
   引擎建立了一套基于 Actor 模型 的高性能视频流水线：
    * Ingress (入站调度)：VideoIngress 负责根据帧序号和 PTS 过滤过期帧，并在配置变更或丢失参考帧时强制等待关键帧。
-   * Decode (硬解加速)：
-       * 抽象了硬件解码接口，目前针对 macOS 实现了 VideoToolbox 插件，支持 H.264 硬件解码。
+   * Decode (统一解码后端)：
+       * 当前已切到统一的 FFmpeg H.264 backend：macOS 优先走 `FFmpeg VideoToolbox`，其余当前实现优先走 `FFmpeg software decode`，并保留 legacy `VideoToolbox` 作为短期 fallback。
        * 采用独立线程的 DecodeActor，避免解码延迟阻塞主逻辑。
    * Pacer (起搏器)：XbxPacerActor 根据 PTS 逻辑平滑视频发布，处理网络抖动带来的帧堆积（Catch-up 模式）。
    * Render (渲染对接)：XbxRenderState 提供了一个“最新帧槽位”，使得宿主 UI（如 Tauri 窗口）能以只读方式、零拷贝地消费解码后的 CVPixelBuffer 或像素数据。

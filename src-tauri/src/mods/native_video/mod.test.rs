@@ -76,6 +76,18 @@ fn host_timing_record_policy_marks_hot_stages_as_sampled() {
         HostTimingRecordPolicy::Sampled
     );
     assert_eq!(
+        resolve_host_timing_record_policy("tick_total"),
+        HostTimingRecordPolicy::Sampled
+    );
+    assert_eq!(
+        resolve_host_timing_record_policy("run_on_main_thread_delay"),
+        HostTimingRecordPolicy::Sampled
+    );
+    assert_eq!(
+        resolve_host_timing_record_policy("present_tick_blocked"),
+        HostTimingRecordPolicy::Sampled
+    );
+    assert_eq!(
         resolve_host_timing_record_policy("first_present"),
         HostTimingRecordPolicy::Always
     );

@@ -11,6 +11,7 @@ const WAIT_KEYFRAME_REPEAT_SUPPRESS_MS: f64 = 260.0;
 const WAIT_KEYFRAME_DECODER_RESET_REPEAT_SUPPRESS_MS: f64 = 620.0;
 const IDLE_TIMEOUT_REPEAT_SUPPRESS_MS: f64 = 360.0;
 const TRANSPORT_AWAIT_DEBT_FRESH_MS: f64 = 900.0;
+const DECODER_RESET_PROGRESS_HOLD_MS: f64 = 900.0;
 
 pub(crate) fn resolve_recent_repeat_suppression(
     runtime_stats: &Mutex<XbxEngineMediaRuntimeStats>,
@@ -22,17 +23,20 @@ pub(crate) fn resolve_recent_repeat_suppression(
         has_new_transport_recovery_epoch,
         active_transport_await_debt,
         active_keyframe_inflight,
+        active_decoder_reset_family,
     ) = RuntimeStatsSink::read_shared(runtime_stats, |stats| {
         let escalation = stats.latest_video_escalation_observation.clone()?;
         let has_new_transport_recovery_epoch =
             stats.transport_recovery_epoch > stats.transport_recovery_epoch_at_last_escalation;
         let active_transport_await_debt = has_active_transport_await_debt(stats, now_ms);
         let active_keyframe_inflight = has_active_keyframe_inflight(stats, now_ms);
+        let active_decoder_reset_family = has_active_decoder_reset_family(stats, now_ms);
         Some((
             escalation,
             has_new_transport_recovery_epoch,
             active_transport_await_debt,
             active_keyframe_inflight,
+            active_decoder_reset_family,
         ))
     })
     .flatten()?;
@@ -63,6 +67,7 @@ pub(crate) fn resolve_recent_repeat_suppression(
             let active_recovery_action = coalesced_action_for_existing_family(
                 escalation.action.as_str(),
                 active_keyframe_inflight,
+                active_decoder_reset_family,
             );
             let decoder_reset_inflight = matches!(
                 active_recovery_action,
@@ -91,7 +96,11 @@ pub(crate) fn resolve_recent_repeat_suppression(
         VideoEscalationReason::DisplaySupplyCritical => {
             let same_local_display_chain = escalation.reason == "displaySupplyCritical";
             let decoder_reset_inflight = matches!(
-                coalesced_action_for_existing_family(escalation.action.as_str(), false),
+                coalesced_action_for_existing_family(
+                    escalation.action.as_str(),
+                    false,
+                    active_decoder_reset_family,
+                ),
                 Some(RecoveryAction::CoalescedDecoderResetInFlight)
             );
             if same_local_display_chain
@@ -104,7 +113,11 @@ pub(crate) fn resolve_recent_repeat_suppression(
         VideoEscalationReason::AdapterIdleTimeout => {
             let same_idle_chain = escalation.reason == "adapterIdleTimeout";
             let decoder_reset_inflight = matches!(
-                coalesced_action_for_existing_family(escalation.action.as_str(), false),
+                coalesced_action_for_existing_family(
+                    escalation.action.as_str(),
+                    false,
+                    active_decoder_reset_family,
+                ),
                 Some(RecoveryAction::CoalescedDecoderResetInFlight)
             );
             if same_idle_chain
@@ -122,6 +135,7 @@ pub(crate) fn resolve_recent_repeat_suppression(
             let active_action = coalesced_action_for_existing_family(
                 escalation.action.as_str(),
                 active_keyframe_inflight,
+                active_decoder_reset_family,
             );
             if same_thin_stream_chain
                 && active_action.is_some()
@@ -137,7 +151,8 @@ pub(crate) fn resolve_recent_repeat_suppression(
         && matches!(
             coalesced_action_for_existing_family(
                 escalation.action.as_str(),
-                active_keyframe_inflight
+                active_keyframe_inflight,
+                active_decoder_reset_family,
             ),
             Some(RecoveryAction::CoalescedDecoderResetInFlight)
         )
@@ -152,13 +167,15 @@ pub(crate) fn resolve_recent_repeat_suppression(
 fn coalesced_action_for_existing_family(
     action: &str,
     active_keyframe_inflight: bool,
+    active_decoder_reset_family: bool,
 ) -> Option<RecoveryAction> {
     if matches!(
         action,
         "requestDecoderReset"
             | "requestKeyframe+decoderReset"
             | "requestKeyframe+decoderReset(startupLowQualityRetry)"
-    ) {
+    ) && active_decoder_reset_family
+    {
         return Some(RecoveryAction::CoalescedDecoderResetInFlight);
     }
     if action.starts_with("requestKeyframe") && active_keyframe_inflight {
@@ -180,6 +197,50 @@ fn has_active_keyframe_inflight(stats: &XbxEngineMediaRuntimeStats, now_ms: f64)
                 && episode.sent_at_ms.is_some()
                 && episode.deadline_at_ms.unwrap_or(now_ms + 1.0) >= now_ms
         })
+}
+
+fn has_active_decoder_reset_family(stats: &XbxEngineMediaRuntimeStats, now_ms: f64) -> bool {
+    let Some(attempt_at_ms) = latest_decoder_reset_family_attempt_ms(stats) else {
+        return false;
+    };
+    if (now_ms - attempt_at_ms).max(0.0) > DECODER_RESET_PROGRESS_HOLD_MS {
+        return false;
+    }
+    !has_post_decoder_reset_progress(stats, attempt_at_ms)
+}
+
+fn latest_decoder_reset_family_attempt_ms(stats: &XbxEngineMediaRuntimeStats) -> Option<f64> {
+    let action_attempt_ms =
+        stats
+            .latest_video_escalation_observation
+            .as_ref()
+            .and_then(|observation| {
+                matches!(
+                    observation.action.as_str(),
+                    "requestDecoderReset"
+                        | "requestKeyframe+decoderReset"
+                        | "requestKeyframe+decoderReset(startupLowQualityRetry)"
+                )
+                .then_some(observation.observed_at_ms)
+            });
+    match (stats.latest_video_decoder_reset_time_ms, action_attempt_ms) {
+        (Some(reset_at_ms), Some(action_at_ms)) => Some(reset_at_ms.max(action_at_ms)),
+        (Some(reset_at_ms), None) => Some(reset_at_ms),
+        (None, Some(action_at_ms)) => Some(action_at_ms),
+        (None, None) => None,
+    }
+}
+
+fn has_post_decoder_reset_progress(stats: &XbxEngineMediaRuntimeStats, attempt_at_ms: f64) -> bool {
+    stats
+        .latest_video_decode_ok_time_ms
+        .is_some_and(|at_ms| at_ms > attempt_at_ms)
+        || stats
+            .latest_video_host_present_time_ms
+            .is_some_and(|at_ms| at_ms > attempt_at_ms)
+        || stats
+            .video_anchor_clean_observed_at_ms
+            .is_some_and(|at_ms| at_ms > attempt_at_ms)
 }
 
 fn has_recent_keyframe_rtcp_unavailable(stats: &XbxEngineMediaRuntimeStats, now_ms: f64) -> bool {
@@ -277,7 +338,7 @@ fn is_unresolved_transport_await_timeline(timeline: &XbxEngineVideoTimelineObser
 mod tests {
     use std::sync::Mutex;
 
-    use super::resolve_recent_repeat_suppression;
+    use super::{resolve_recent_repeat_suppression, DECODER_RESET_PROGRESS_HOLD_MS};
     use crate::transport::rtc::recovery::escalation::{RecoveryAction, VideoEscalationReason};
     use crate::transport::rtc::recovery::runtime_state::unix_now_ms;
     use crate::{XbxEngineMediaRuntimeStats, XbxEngineVideoEscalationObservation};
@@ -351,5 +412,33 @@ mod tests {
         );
 
         assert_eq!(action, Some(RecoveryAction::CoalescedKeyframeInFlight));
+    }
+
+    #[test]
+    fn local_idle_timeout_does_not_coalesce_stale_decoder_reset_family_without_progress() {
+        let now_ms = unix_now_ms();
+        let stats = XbxEngineMediaRuntimeStats {
+            latest_video_escalation_observation: Some(XbxEngineVideoEscalationObservation {
+                observation_id: 3,
+                reason: "adapterIdleTimeout".to_string(),
+                action: "requestDecoderReset".to_string(),
+                recovery_stage: "degraded-serving".to_string(),
+                recovery_chain_value: "health".to_string(),
+                recovery_failure_cost: "high".to_string(),
+                recovery_window_source: "decoder-reset-window".to_string(),
+                observed_at_ms: now_ms - (DECODER_RESET_PROGRESS_HOLD_MS + 20.0),
+            }),
+            latest_video_decoder_reset_time_ms: Some(
+                now_ms - (DECODER_RESET_PROGRESS_HOLD_MS + 20.0),
+            ),
+            ..XbxEngineMediaRuntimeStats::default()
+        };
+
+        let action = resolve_recent_repeat_suppression(
+            &Mutex::new(stats),
+            &VideoEscalationReason::AdapterIdleTimeout,
+        );
+
+        assert_ne!(action, Some(RecoveryAction::CoalescedDecoderResetInFlight));
     }
 }

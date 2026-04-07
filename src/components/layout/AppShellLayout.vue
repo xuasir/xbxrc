@@ -8,7 +8,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { navigationEngine } from '@/navigation/core'
 import { playNavSound, triggerNavHaptic } from '@/navigation/core/haptics'
 import { FocusScope } from '@/navigation/core/vue'
-import controllerStatusIcon from '../../assets/nav/no-ctrl.svg'
+import controllerStatusIcon from '../../assets/nav/ctrl.svg'
 import settingIcon from '../../assets/nav/setting.svg'
 import xboxLogoIcon from '../../assets/nav/xbox-logo.svg'
 import xcloudIcon from '../../assets/nav/xcloud.svg'
@@ -85,6 +85,13 @@ const hasConnectedGamepad = computed(() =>
 )
 const resolvedStatusText = computed(() => {
   return authState.value?.isAuthenticated ? t('userMenu.loggedIn') : t('userMenu.loggedOut')
+})
+
+watch(hasConnectedGamepad, (connected) => {
+  if (!connected && isGamepadCardOpen.value) {
+    // 控制器断开时避免卡片悬空展示
+    closeGamepadCard()
+  }
 })
 
 async function loadShellUserState(): Promise<void> {
@@ -291,6 +298,7 @@ onUnmounted(() => {
         :active-nav="activeNav"
         :profile-image-url="resolvedAvatarUrl"
         :controller-active="isGamepadCardOpen || hasConnectedGamepad"
+        :show-controller="hasConnectedGamepad"
         @select="handleTopNavSelect"
       />
 

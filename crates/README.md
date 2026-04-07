@@ -68,7 +68,10 @@
 - gamepad owner 当前固定为 Rust 侧单实例 `ohmygamepad-host`
 - 主线宿主目标固定为 `Tauri`
 - transport 主线固定为 `rtc` sans-io 体系
-- 当前 active 视频链固定为 `openh264` 软解 + 最小 headless `wgpu` render backend
+- 当前 active 视频链已切到 `FFmpeg H.264 decode backend` 主线：
+  - macOS 优先 `FFmpeg VideoToolbox`
+  - 其余当前实现优先 `FFmpeg software decode`
+  - 渲染桥继续复用现有 `wgpu` / native video present
 - render 目标固定为 `wgpu + winit`
 
 当前 `src-tauri` 已接回 `ohmygamepad-host` 这条共享 gamepad 链路，但 `xbxengine` 宿主桥仍处于收口阶段；

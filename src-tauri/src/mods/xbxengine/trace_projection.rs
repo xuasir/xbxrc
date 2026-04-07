@@ -25,7 +25,7 @@ pub(super) struct RuntimeTraceObservationState {
     timeline_observation_id: Option<u64>,
     anchor_candidate_observation: Option<(u64, Option<u32>, String, Option<String>, f64)>,
     h264_inspection_observation: Option<xbxengine_protocol::XbxEngineH264InspectionObservationDto>,
-    decode_candidate_decision_id: Option<u64>,
+    decoder_probe_observation_id: Option<u64>,
     render_candidate_decision_id: Option<u64>,
     recovery_keyframe_request_count: Option<u64>,
     recovery_decoder_reset_count: Option<u64>,
@@ -165,6 +165,7 @@ pub(super) fn build_observability_snapshot(stats: &XbxEngineStatsDto) -> serde_j
             "decoderDetail": stats.video_decoder_recovery_detail,
             "decoderStatus": stats.video_decoder_recovery_status,
             "decoderStateChangedAtMs": stats.video_decoder_recovery_state_changed_at_ms,
+            "decoderProbe": stats.latest_video_decoder_probe_observation,
         },
         "directGaming": {
             "bitrateBand": stats.direct_gaming_bitrate_band,
@@ -424,7 +425,6 @@ pub(super) fn record_runtime_trace_observations(
                 }),
             );
             let decision_event_name = match frame_drop.stage.as_deref() {
-                Some("decode") => Some("decodeCandidateDecision"),
                 Some("pacer" | "render") => Some("renderCandidateDecision"),
                 _ => None,
             };
@@ -480,7 +480,14 @@ pub(super) fn record_runtime_trace_observations(
         stats.video_decoder_recovery_status,
         stats.video_decoder_recovery_state_changed_at_ms,
     );
-    if observation_state.decoder_recovery_state.as_ref() != Some(&decoder_recovery_state) {
+    let has_decoder_recovery_signal = decoder_recovery_state.0.is_some()
+        || decoder_recovery_state.1.is_some()
+        || decoder_recovery_state.2.is_some()
+        || decoder_recovery_state.3.is_some()
+        || decoder_recovery_state.4.is_some();
+    if has_decoder_recovery_signal
+        && observation_state.decoder_recovery_state.as_ref() != Some(&decoder_recovery_state)
+    {
         observation_state.decoder_recovery_state = Some(decoder_recovery_state.clone());
         runtime_trace.record_event(
             "xbxengine",
@@ -496,20 +503,20 @@ pub(super) fn record_runtime_trace_observations(
         );
     }
 
-    if let Some(decode_candidate) = stats.latest_decode_candidate_decision.as_ref() {
-        if observation_state.decode_candidate_decision_id != Some(decode_candidate.decision_id) {
-            observation_state.decode_candidate_decision_id = Some(decode_candidate.decision_id);
+    if let Some(decoder_probe) = stats.latest_video_decoder_probe_observation.as_ref() {
+        if observation_state.decoder_probe_observation_id != Some(decoder_probe.observation_id) {
+            observation_state.decoder_probe_observation_id = Some(decoder_probe.observation_id);
             runtime_trace.record_event(
                 "xbxengine",
-                "decodeCandidateStateTransition",
+                "decoderBackendProbeObserved",
                 session_id,
                 json!({
-                    "decisionId": decode_candidate.decision_id,
-                    "state": decode_candidate.state,
-                    "action": decode_candidate.action,
-                    "detail": decode_candidate.detail,
-                    "frameSeq": decode_candidate.frame_seq,
-                    "observedAtMs": decode_candidate.observed_at_ms,
+                    "observationId": decoder_probe.observation_id,
+                    "selectedBackendName": decoder_probe.selected_backend_name,
+                    "selectedBackendKind": decoder_probe.selected_backend_kind,
+                    "fallbackCount": decoder_probe.fallback_count,
+                    "fallbackSummary": decoder_probe.fallback_summary,
+                    "observedAtMs": decoder_probe.observed_at_ms,
                 }),
             );
         }
@@ -1251,6 +1258,16 @@ pub(super) fn record_runtime_trace_observations(
     {
         observation_state.latest_observation_label = stats.latest_observation_label.clone();
         observation_state.latest_observation_summary = stats.latest_observation_summary.clone();
+        if stats.latest_observation_label.as_deref() == Some("videoDecoderLocalResetFailed") {
+            runtime_trace.record_event(
+                "xbxengine",
+                "videoDecoderLocalResetFailed",
+                session_id,
+                json!({
+                    "summary": stats.latest_observation_summary,
+                }),
+            );
+        }
     }
 
     if observation_state.latest_target_remb_action != stats.latest_target_remb_action

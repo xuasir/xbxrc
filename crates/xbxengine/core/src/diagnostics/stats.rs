@@ -567,6 +567,21 @@ pub fn build_xbxengine_stats(
         }),
         video_decoder_reset_count: runtime_stats.map(|stats| stats.video_decoder_reset_count),
         video_decoder_stalled: runtime_stats.and_then(|stats| stats.video_decoder_stalled),
+        latest_video_decoder_probe_observation: runtime_stats.and_then(|stats| {
+            stats
+                .latest_video_decoder_probe_observation
+                .as_ref()
+                .map(
+                    |probe| xbxengine_protocol::XbxEngineVideoDecoderProbeObservationDto {
+                        observation_id: probe.observation_id,
+                        selected_backend_name: probe.selected_backend_name.clone(),
+                        selected_backend_kind: probe.selected_backend_kind.clone(),
+                        fallback_count: probe.fallback_count,
+                        fallback_summary: probe.fallback_summary.clone(),
+                        observed_at_ms: probe.observed_at_ms,
+                    },
+                )
+        }),
         video_decoder_hardware_failure_streak: runtime_stats
             .map(|stats| stats.video_decoder_hardware_failure_streak),
         latest_video_decoder_hardware_failure_time_ms: runtime_stats

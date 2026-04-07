@@ -15,6 +15,8 @@ pub(crate) struct MediaSupervisorContext {
     pub(crate) render_state: Arc<Mutex<XbxRenderState>>,
     pub(crate) transport_fact_sink: Arc<Mutex<Vec<TransportFact>>>,
     pub(crate) runtime_config: XbxEngineRuntimeConfig,
+    pub(crate) local_decoder_reset_handle:
+        Arc<Mutex<Option<Arc<crate::media::video::decode::actor::DecodeActorHandle>>>>,
 }
 
 pub(crate) fn spawn_media_supervisor(
@@ -35,10 +37,13 @@ pub(crate) fn spawn_media_supervisor(
             }
 
             if let Some(session) = active_session.take() {
+                if let Ok(mut handle) = context.local_decoder_reset_handle.lock() {
+                    *handle = None;
+                }
                 session.stop();
             }
 
-            active_session = Some(spawn_media_session(
+            let session = spawn_media_session(
                 frame_source,
                 MediaSessionContext {
                     runtime_stats: context.runtime_stats.clone(),
@@ -46,7 +51,15 @@ pub(crate) fn spawn_media_supervisor(
                     transport_fact_sink: context.transport_fact_sink.clone(),
                     runtime_config: context.runtime_config.clone(),
                 },
-            ));
+            );
+            if let Ok(mut handle) = context.local_decoder_reset_handle.lock() {
+                *handle = Some(session.decode_handle());
+            }
+            active_session = Some(session);
+        }
+
+        if let Ok(mut handle) = context.local_decoder_reset_handle.lock() {
+            *handle = None;
         }
     });
 }

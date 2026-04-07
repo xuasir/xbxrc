@@ -499,6 +499,9 @@ impl VideoEscalationController {
             }
             KeyframeTransportFeedback::Terminal | KeyframeTransportFeedback::None => {
                 self.keyframe_budget_reservation_active = false;
+                // terminal 代表这一轮 family 已经结束；
+                // 不论是成功、deferred、packet-seen 还是失败，都不能继续占着 in-flight family。
+                self.clear_keyframe_epoch();
             }
         }
     }

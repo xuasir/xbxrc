@@ -20,6 +20,7 @@ const PENDING_PACER_RETRY_TIMEOUT_MS: u64 = 4;
 
 pub enum DecodeMsg {
     Frame(EncodedFrame),
+    LocalDecoderReset { reason: String, observed_at_ms: f64 },
     Stop,
 }
 
@@ -137,6 +138,20 @@ impl DecodeActorHandle {
     pub fn stop(&self) {
         let _ = self.tx.send(DecodeMsg::Stop);
     }
+
+    pub fn request_local_decoder_reset(&self, reason: impl Into<String>, observed_at_ms: f64) {
+        let reason = reason.into();
+        if let Err(err) = self.tx.send(DecodeMsg::LocalDecoderReset {
+            reason: reason.clone(),
+            observed_at_ms,
+        }) {
+            crate::xbx_log_warn!(
+                "[XbxDecodeActor] local decoder reset request dropped because decode thread disconnected reason={} err={}",
+                reason,
+                err
+            );
+        }
+    }
 }
 
 fn run_decode_loop(
@@ -200,9 +215,6 @@ fn run_decode_loop(
                 Some(dropped_frame.surface.frame_seq),
                 Some(dropped_frame.frame_recovery_disposition),
                 dropped_frame.frame_unrecoverable_reason.as_deref(),
-            );
-            crate::xbx_log_warn!(
-                "[XbxDecodeActor] pacer unavailable detail=pacerDisconnected, drop frame"
             );
             continue;
         }
@@ -272,11 +284,6 @@ fn run_decode_loop(
                 DecodeMsg::Frame(frame) => {
                     release_decode_slot(&available_slots, &demand_epoch, &demand_notify);
                     let now_ms = crate::media::video::decode::video_decode::now_ms_f64();
-                    crate::xbx_log_warn!(
-                        "[XbxDecodeActor] processing frame ts={} len={}",
-                        frame.rtp_timestamp,
-                        frame.payload.len()
-                    );
                     if let Some(dropped_frame) = decode_state.process_encoded_frame(frame, now_ms) {
                         record_pipeline_frame_drop(
                             &runtime_stats,
@@ -357,6 +364,35 @@ fn run_decode_loop(
                         }
                     }
                     sync_decode_runtime_stats(&runtime_stats, &decode_state, now_ms);
+                }
+                DecodeMsg::LocalDecoderReset {
+                    reason,
+                    observed_at_ms,
+                } => {
+                    runtime_stats.update(|stats| {
+                        stats.latest_observation_label =
+                            Some("videoDecoderLocalResetRequested".to_string());
+                        stats.latest_observation_summary =
+                            Some(format!("reason={reason} observedAtMs={observed_at_ms:.3}"));
+                    });
+                    if let Err(error) = decode_state.request_local_decoder_reset() {
+                        crate::xbx_log_warn!(
+                            "[XbxDecodeActor] local decoder reset failed reason={} err={}",
+                            reason,
+                            error
+                        );
+                        runtime_stats.update(|stats| {
+                            stats.latest_observation_label =
+                                Some("videoDecoderLocalResetFailed".to_string());
+                            stats.latest_observation_summary =
+                                Some(format!("reason={reason} err={error}"));
+                        });
+                    }
+                    sync_decode_runtime_stats(
+                        &runtime_stats,
+                        &decode_state,
+                        crate::media::video::decode::video_decode::now_ms_f64(),
+                    );
                 }
                 DecodeMsg::Stop => {
                     input_closed = true;
@@ -504,6 +540,17 @@ fn sync_decode_runtime_stats(
         stats.video_decoder_recovery_status = decode_state
             .latest_recovery_transition()
             .and_then(|transition| transition.status);
+        stats.latest_video_decoder_probe_observation =
+            decode_state.latest_decoder_probe().map(|probe| {
+                crate::XbxEngineVideoDecoderProbeObservation {
+                    observation_id: probe.observation_id,
+                    selected_backend_name: probe.selected_backend_name.clone(),
+                    selected_backend_kind: probe.selected_backend_kind.clone(),
+                    fallback_count: probe.fallback_count,
+                    fallback_summary: probe.fallback_summary.clone(),
+                    observed_at_ms: probe.observed_at_ms,
+                }
+            });
         stats.video_decoder_stalled = Some(video_decoder_stalled);
     });
 }

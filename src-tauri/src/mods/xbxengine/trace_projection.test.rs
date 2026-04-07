@@ -32,6 +32,10 @@ fn event_payloads(entries: &[Value], event: &str) -> Vec<Value> {
         .collect()
 }
 
+fn has_event(entries: &[Value], event: &str) -> bool {
+    entries.iter().any(|entry| entry["event"] == event)
+}
+
 #[test]
 fn build_observability_snapshot_includes_source_state_and_build_fingerprint() {
     let stats = test_stats(json!({
@@ -1223,7 +1227,7 @@ fn decoder_and_renderer_stall_transition_are_triggered_independently() {
 }
 
 #[test]
-fn frame_drop_decode_stage_projects_decode_candidate_decision() {
+fn frame_drop_decode_stage_does_not_project_decode_candidate_decision() {
     let recorder = std::sync::Arc::new(
         RuntimeTraceRecorder::new_with_mode("verbose").expect("trace recorder"),
     );
@@ -1257,11 +1261,8 @@ fn frame_drop_decode_stage_projects_decode_candidate_decision() {
 
     record_runtime_trace_observations(&recorder, &mut state, Some("session-1"), &stats);
     let entries = read_trace_lines(recorder.as_ref());
-    assert!(entries.iter().any(|entry| entry["event"] == "frameDropped"));
-    let payload = find_event_payload(&entries, "decodeCandidateDecision");
-    assert_eq!(payload["stage"], "decode");
-    assert_eq!(payload["detail"], "outputQueueOverflow");
-    assert_eq!(payload["reason"], "dropBackpressure");
+    assert!(has_event(&entries, "frameDropped"));
+    assert!(!has_event(&entries, "decodeCandidateDecision"));
 }
 
 #[test]
@@ -1351,7 +1352,7 @@ fn frame_drop_unknown_stage_does_not_project_candidate_decision() {
 }
 
 #[test]
-fn decode_candidate_state_projects_transition_event() {
+fn decode_candidate_state_does_not_project_transition_event() {
     let recorder = std::sync::Arc::new(
         RuntimeTraceRecorder::new_with_mode("verbose").expect("trace recorder"),
     );
@@ -1377,11 +1378,32 @@ fn decode_candidate_state_projects_transition_event() {
 
     record_runtime_trace_observations(&recorder, &mut state, Some("session-1"), &stats);
     let entries = read_trace_lines(recorder.as_ref());
-    let payload = find_event_payload(&entries, "decodeCandidateStateTransition");
-    assert_eq!(payload["decisionId"], 701);
-    assert_eq!(payload["state"], "backpressure");
-    assert_eq!(payload["detail"], "outputQueueOverflow");
-    assert_eq!(payload["frameSeq"], 42);
+    assert!(!has_event(&entries, "decodeCandidateStateTransition"));
+}
+
+#[test]
+fn decoder_local_reset_failed_projects_runtime_trace_event() {
+    let recorder = std::sync::Arc::new(
+        RuntimeTraceRecorder::new_with_mode("verbose").expect("trace recorder"),
+    );
+    let mut state = RuntimeTraceObservationState::default();
+    let stats = test_stats(json!({
+        "resolution": "",
+        "rtt": "",
+        "fps": 0.0,
+        "pl": "0.00%",
+        "fl": "",
+        "jit": "",
+        "br": "",
+        "decode": "",
+        "latest_observation_label": "videoDecoderLocalResetFailed",
+        "latest_observation_summary": "reason=stall err=backend unavailable"
+    }));
+
+    record_runtime_trace_observations(&recorder, &mut state, Some("session-1"), &stats);
+    let entries = read_trace_lines(recorder.as_ref());
+    let payload = find_event_payload(&entries, "videoDecoderLocalResetFailed");
+    assert_eq!(payload["summary"], "reason=stall err=backend unavailable");
 }
 
 #[test]

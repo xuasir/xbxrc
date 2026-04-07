@@ -12,6 +12,7 @@ interface TopNavBarProps {
   activeNav?: 'xhome' | 'xcloud' | 'setting'
   profileImageUrl?: string
   controllerActive?: boolean
+  showController?: boolean
 }
 
 const props = withDefaults(defineProps<TopNavBarProps>(), {
@@ -19,6 +20,7 @@ const props = withDefaults(defineProps<TopNavBarProps>(), {
   activeNav: 'xhome',
   profileImageUrl: '',
   controllerActive: false,
+  showController: true,
 })
 
 const emit = defineEmits<{
@@ -75,6 +77,7 @@ function emitSelect(node: TopNavNodeKey): void {
 
     <div class="top-nav__group top-nav__group--right">
       <SpatialNavIconButton
+        v-if="props.showController"
         :id="SPATIAL_NAV_NODE_IDS.topNav.controller"
         label="Controller Status"
         :icon-src="getIcon('controller')"
