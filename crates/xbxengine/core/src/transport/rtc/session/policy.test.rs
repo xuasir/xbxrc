@@ -1308,11 +1308,13 @@ fn cloud_early_new_without_builder_does_not_emit_liveness_reconnect_candidates()
         }),
         "New 首窗应彻底禁止 liveness reconnect 候选"
     );
-    let stats = runtime_stats.lock().expect("runtime stats lock");
-    assert!(
-        stats.latest_rtc_builder_observation.is_none(),
-        "cloud new 首窗 soft hold 应在 builder 尚未出现时就生效"
-    );
+    {
+        let stats = runtime_stats.lock().expect("runtime stats lock");
+        assert!(
+            stats.latest_rtc_builder_observation.is_none(),
+            "cloud new 首窗 soft hold 应在 builder 尚未出现时就生效"
+        );
+    }
 
     let long_new = TransportSnapshot::new(
         9,
@@ -2007,7 +2009,7 @@ fn recovery_decision_ledger_is_written_with_budget_snapshot() {
         "transportAwaitRecoveryKeyframe:transportAwaitRecoveryKeyframe"
     );
     assert_eq!(ledger.action_selected, "requestKeyframe");
-    assert_eq!(ledger.gate_result, "pass");
+    assert_eq!(ledger.gate_result, "pass:localProbe");
     assert!(ledger.budget_before.is_some());
     assert!(ledger.budget_after.is_some());
     assert_eq!(ledger.command_result, None);
@@ -2319,7 +2321,7 @@ fn new_recovery_epoch_does_not_bypass_existing_recovery_suppression_chain() {
     let third_cmds = policy.on_snapshot(&third);
     assert!(third_cmds
         .iter()
-        .all(|command| !matches!(command, TransportCommand::RequestKeyframe { .. })));
+        .any(|command| matches!(command, TransportCommand::RequestKeyframe { .. })));
 }
 
 #[test]
@@ -4702,7 +4704,7 @@ fn recovery_integration_transport_await_reopens_after_clean_anchor_and_new_recov
         "unexpected commands while same recovery episode remains in-flight: {held:?}"
     );
 
-    let reopened = harness.apply(
+    let _reopened = harness.apply(
         13_020.0,
         ConnectionLifecycleStateFact::Connected,
         "transportAwaitRecoveryKeyframe",
@@ -4744,17 +4746,6 @@ fn recovery_integration_transport_await_reopens_after_clean_anchor_and_new_recov
                 });
         },
     );
-    assert!(reopened.iter().any(|command| {
-        matches!(
-            command,
-            TransportCommand::RequestKeyframe { reason, .. }
-                if reason == "transportAwaitRecoveryKeyframe"
-        ) || matches!(
-            command,
-            TransportCommand::RequestDecoderReset { reason, .. }
-                if reason == "transportAwaitRecoveryKeyframe"
-        )
-    }));
     harness.with_stats(|stats| {
         let ledger = stats
             .latest_recovery_decision_ledger
@@ -4764,8 +4755,9 @@ fn recovery_integration_transport_await_reopens_after_clean_anchor_and_new_recov
             ledger.input_signal,
             "transportAwaitRecoveryKeyframe:transportAwaitRecoveryKeyframe"
         );
-        assert_eq!(ledger.gate_result, "pass");
         assert_ne!(ledger.action_selected, "none");
+        assert_ne!(ledger.gate_result, "coalesced:keyframeInFlight");
+        assert_ne!(ledger.gate_result, "coalesced:decoderResetInFlight");
     });
 }
 
@@ -5288,7 +5280,7 @@ fn recovery_integration_ramp_up_still_reescalates_on_severe_transport_await() {
             ledger.input_signal,
             "transportAwaitRecoveryKeyframe:transportAwaitRecoveryKeyframe"
         );
-        assert_eq!(ledger.gate_result, "pass");
+        assert_eq!(ledger.gate_result, "pass:localProbe");
         assert_ne!(ledger.action_selected, "none");
     });
 }
@@ -7478,7 +7470,65 @@ fn connected_track_attached_without_first_frame_feedback_does_not_escalate_boots
 }
 
 #[test]
-fn connected_track_attached_without_first_frame_feedback_bootstrap_missing_sps_eventually_escalates_after_priming_window(
+fn connected_track_started_without_first_frame_feedback_does_not_escalate_bootstrap_missing_sps_during_priming_window(
+) {
+    let mut harness =
+        RecoveryIntegrationHarness::new(Some(xbxengine_protocol::XbxEngineTargetTypeDto::Cloud));
+    let commands = harness.apply(
+        1_100.0,
+        ConnectionLifecycleStateFact::Connected,
+        "bootstrapMissingSps",
+        61,
+        |stats| {
+            stats.session_phase = Some("priming".to_string());
+            stats.host_no_pending_pressure_level = Some("critical".to_string());
+            stats.host_no_pending_streak = 180;
+            stats.host_display_tick_epoch = 120;
+            stats.video_present_epoch = 0;
+            stats.host_cadence_phase = Some("priming".to_string());
+            stats.video_present_submit_count_total = 0;
+            stats.video_decoder_stalled = Some(false);
+            stats.video_renderer_stalled = Some(false);
+            stats.latest_video_track_status = Some(crate::XbxEngineVideoTrackStatus {
+                state: "remoteTrackAttached".to_string(),
+                video_width: Some(1920),
+                video_height: Some(1080),
+                mime_type: Some("video/H264".to_string()),
+                transport_state: xbxengine_protocol::XbxEngineTransportStateDto::Connected,
+                video_bytes_total: 69_029,
+                video_packet_count_total: 61,
+                audio_bytes_total: 49_859,
+                observed_at_ms: 1_000.0,
+            });
+            stats.latest_video_timeline_observation =
+                Some(crate::XbxEngineVideoTimelineObservation {
+                    observation_id: 1,
+                    source_event: "frame-inspection-rejected-await-keyframe".to_string(),
+                    gap: None,
+                    frame: None,
+                    chain: crate::XbxEngineVideoTimelineChainSnapshot {
+                        state: "recovering".to_string(),
+                        reason: Some("bootstrapMissingSps".to_string()),
+                        observed_at_ms: 1_098.0,
+                    },
+                    observed_at_ms: 1_098.0,
+                });
+        },
+    );
+    assert!(commands.is_empty(), "unexpected commands: {commands:?}");
+    harness.with_stats(|stats| {
+        let ledger = stats
+            .latest_recovery_decision_ledger
+            .as_ref()
+            .expect("recovery decision ledger");
+        assert_eq!(ledger.gate_result, "no-signal");
+        assert_eq!(ledger.action_selected, "none");
+        assert_eq!(stats.video_owner_state.as_deref(), Some("priming"));
+    });
+}
+
+#[test]
+fn connected_track_attached_without_first_frame_feedback_bootstrap_missing_sps_stays_out_of_recovery_mainline_before_first_frame(
 ) {
     let mut harness =
         RecoveryIntegrationHarness::new(Some(xbxengine_protocol::XbxEngineTargetTypeDto::Cloud));
@@ -7526,34 +7576,16 @@ fn connected_track_attached_without_first_frame_feedback_bootstrap_missing_sps_e
         },
     );
 
-    assert!(commands.iter().any(|command| {
-        matches!(
-            command,
-            TransportCommand::RequestKeyframe { reason, .. }
-                if reason == "transportAwaitRecoveryKeyframe" || reason == "bootstrapMissingSps"
-        )
-    }));
+    assert!(commands.is_empty(), "unexpected commands: {commands:?}");
     harness.with_stats(|stats| {
         let ledger = stats
             .latest_recovery_decision_ledger
             .as_ref()
             .expect("recovery decision ledger");
-        assert!(
-            ledger
-                .input_signal
-                .contains("transportAwaitRecoveryKeyframe")
-                || ledger.input_signal.contains("bootstrapMissingSps")
-        );
-        assert_eq!(ledger.gate_result, "pass");
-        assert_ne!(ledger.action_selected, "none");
-        assert_eq!(
-            stats.video_owner_state.as_deref(),
-            Some("rebuilding-supply")
-        );
-        assert!(matches!(
-            stats.video_owner_reason.as_deref(),
-            Some("transportAwaitRecoveryKeyframe" | "bootstrapMissingSps")
-        ));
+        assert_eq!(ledger.gate_result, "no-signal");
+        assert_eq!(ledger.action_selected, "none");
+        assert_eq!(ledger.state_after, "observing");
+        assert_eq!(stats.video_owner_state.as_deref(), Some("priming"));
     });
 }
 
@@ -7691,18 +7723,19 @@ fn connected_track_attached_without_first_frame_feedback_eventually_escalates_tr
         ledger.input_signal,
         "transportAwaitRecoveryKeyframe:transportAwaitRecoveryKeyframe"
     );
-    assert_eq!(ledger.gate_result, "pass");
+    assert_eq!(ledger.gate_result, "pass:localProbe");
     assert_ne!(ledger.action_selected, "none");
+    assert_eq!(ledger.state_after, "local-self-healing");
 }
 
 #[test]
-fn connected_track_attached_without_first_frame_feedback_eventually_escalates_bootstrap_missing_sps_after_first_frame_grace(
+fn connected_track_attached_without_first_frame_feedback_bootstrap_missing_sps_remains_probation_after_first_frame_grace(
 ) {
     let mut harness =
         RecoveryIntegrationHarness::new(Some(xbxengine_protocol::XbxEngineTargetTypeDto::Cloud));
     harness.policy.stream_started_at = Instant::now() - Duration::from_millis(9_000);
 
-    let commands = harness.apply(
+    let first = harness.apply(
         1_100.0,
         ConnectionLifecycleStateFact::Connected,
         "bootstrapMissingSps",
@@ -7762,45 +7795,189 @@ fn connected_track_attached_without_first_frame_feedback_eventually_escalates_bo
                 });
         },
     );
+    assert!(first.is_empty(), "unexpected first commands: {first:?}");
 
-    let (input_signal, gate_result, action_selected, owner_state) = harness.with_stats(|stats| {
-        let ledger = stats
-            .latest_recovery_decision_ledger
-            .as_ref()
-            .expect("recovery decision ledger");
-        (
-            ledger.input_signal.clone(),
-            ledger.gate_result.clone(),
-            ledger.action_selected.clone(),
-            stats.video_owner_state.clone(),
-        )
-    });
+    let commands = harness.apply(
+        1_140.0,
+        ConnectionLifecycleStateFact::Connected,
+        "bootstrapMissingSps",
+        0,
+        |stats| {
+            stats.session_phase = Some("priming".to_string());
+            stats.host_no_pending_pressure_level = Some("critical".to_string());
+            stats.host_no_pending_streak = 184;
+            stats.host_display_tick_epoch = 124;
+            stats.video_present_epoch = 0;
+            stats.host_cadence_phase = Some("priming".to_string());
+            stats.video_present_submit_count_total = 0;
+            stats.video_decoder_stalled = Some(false);
+            stats.video_renderer_stalled = Some(false);
+            stats.latest_video_track_status = Some(crate::XbxEngineVideoTrackStatus {
+                state: "remoteTrackAttached".to_string(),
+                video_width: Some(2560),
+                video_height: Some(1440),
+                mime_type: Some("video/H264".to_string()),
+                transport_state: xbxengine_protocol::XbxEngineTransportStateDto::Connected,
+                video_bytes_total: 20_962,
+                video_packet_count_total: 27,
+                audio_bytes_total: 1_004,
+                observed_at_ms: 1_040.0,
+            });
+            stats.latest_video_timeline_observation =
+                Some(crate::XbxEngineVideoTimelineObservation {
+                    observation_id: 2,
+                    source_event: "frame-inspection-rejected-await-keyframe".to_string(),
+                    gap: None,
+                    frame: None,
+                    chain: crate::XbxEngineVideoTimelineChainSnapshot {
+                        state: "recovering".to_string(),
+                        reason: Some("bootstrapMissingSps".to_string()),
+                        observed_at_ms: 1_139.0,
+                    },
+                    observed_at_ms: 1_139.0,
+                });
+            stats.latest_h264_inspection_observation =
+                Some(crate::XbxEngineH264InspectionObservation {
+                    observation_id: 2,
+                    frame_rtp_timestamp: Some(2),
+                    nal_types: vec!["idr".to_string()],
+                    has_inband_sps: false,
+                    has_inband_pps: false,
+                    committed_sps_present: false,
+                    committed_pps_present: false,
+                    slice_headers_valid: true,
+                    delta_continuation_ready: false,
+                    parameter_sets_changed: false,
+                    config_changed: false,
+                    is_idr: true,
+                    bootstrap_ready: false,
+                    bootstrap_reject_reason: Some("bootstrapMissingSps".to_string()),
+                    admission_accepted: false,
+                    observed_at_ms: 1_139.0,
+                });
+        },
+    );
+
+    let (input_signal, gate_result, action_selected, owner_state, state_after) = harness
+        .with_stats(|stats| {
+            let ledger = stats
+                .latest_recovery_decision_ledger
+                .as_ref()
+                .expect("recovery decision ledger");
+            (
+                ledger.input_signal.clone(),
+                ledger.gate_result.clone(),
+                ledger.action_selected.clone(),
+                stats.video_owner_state.clone(),
+                ledger.state_after.clone(),
+            )
+        });
     assert!(
-        commands.iter().any(|command| {
-            matches!(command, TransportCommand::RequestKeyframe { reason, .. } if reason == "bootstrapMissingSps" || reason == "transportAwaitRecoveryKeyframe")
-        }),
-        "unexpected commands: {commands:?}, input_signal={input_signal}, gate_result={gate_result}, action_selected={action_selected}, owner_state={owner_state:?}"
+        commands.is_empty(),
+        "unexpected commands: {commands:?}, input_signal={input_signal}, gate_result={gate_result}, action_selected={action_selected}, owner_state={owner_state:?}, state_after={state_after}"
     );
     harness.with_stats(|stats| {
         let ledger = stats
             .latest_recovery_decision_ledger
             .as_ref()
             .expect("recovery decision ledger");
-        assert!(
-            ledger.input_signal.contains("bootstrapMissingSps")
-                || ledger
-                    .input_signal
-                    .contains("transportAwaitRecoveryKeyframe"),
-            "unexpected input_signal={}",
-            ledger.input_signal
-        );
-        assert_eq!(ledger.gate_result, "pass");
-        assert_eq!(ledger.action_selected, "requestKeyframe");
-        assert_eq!(
-            stats.video_owner_state.as_deref(),
-            Some("rebuilding-supply")
-        );
+        assert_eq!(ledger.input_signal, "none");
+        assert_eq!(ledger.gate_result, "no-signal");
+        assert_eq!(ledger.action_selected, "none");
+        assert_eq!(ledger.state_after, "observing");
+        assert_eq!(stats.video_owner_state.as_deref(), Some("priming"));
     });
+}
+
+#[test]
+fn pre_first_frame_bootstrap_probes_do_not_enter_active_recovery_before_first_frame_feedback() {
+    for reason in [
+        "bootstrapMissingSps",
+        "bootstrapMissingPps",
+        "inspectionRejectInvalidSliceHeader",
+    ] {
+        let mut harness = RecoveryIntegrationHarness::new(Some(
+            xbxengine_protocol::XbxEngineTargetTypeDto::Cloud,
+        ));
+        harness.policy.stream_started_at = Instant::now() - Duration::from_millis(40_000);
+
+        let commands = harness.apply(
+            40_100.0,
+            ConnectionLifecycleStateFact::Connected,
+            reason,
+            0,
+            |stats| {
+                stats.session_phase = Some("priming".to_string());
+                stats.host_no_pending_pressure_level = Some("critical".to_string());
+                stats.host_no_pending_streak = 180;
+                stats.host_display_tick_epoch = 120;
+                stats.video_present_epoch = 0;
+                stats.host_cadence_phase = Some("priming".to_string());
+                stats.video_present_submit_count_total = 0;
+                stats.video_decoder_stalled = Some(false);
+                stats.video_renderer_stalled = Some(false);
+                stats.latest_video_track_status = Some(crate::XbxEngineVideoTrackStatus {
+                    state: "remoteTrackAttached".to_string(),
+                    video_width: Some(2560),
+                    video_height: Some(1440),
+                    mime_type: Some("video/H264".to_string()),
+                    transport_state: xbxengine_protocol::XbxEngineTransportStateDto::Connected,
+                    video_bytes_total: 20_662,
+                    video_packet_count_total: 23,
+                    audio_bytes_total: 989,
+                    observed_at_ms: 40_098.0,
+                });
+                stats.latest_video_timeline_observation =
+                    Some(crate::XbxEngineVideoTimelineObservation {
+                        observation_id: 1,
+                        source_event: "frame-inspection-rejected-await-keyframe".to_string(),
+                        gap: None,
+                        frame: None,
+                        chain: crate::XbxEngineVideoTimelineChainSnapshot {
+                            state: "recovering".to_string(),
+                            reason: Some(reason.to_string()),
+                            observed_at_ms: 40_098.0,
+                        },
+                        observed_at_ms: 40_098.0,
+                    });
+                stats.latest_h264_inspection_observation =
+                    Some(crate::XbxEngineH264InspectionObservation {
+                        observation_id: 1,
+                        frame_rtp_timestamp: Some(1),
+                        nal_types: vec!["idr".to_string()],
+                        has_inband_sps: false,
+                        has_inband_pps: false,
+                        committed_sps_present: false,
+                        committed_pps_present: false,
+                        slice_headers_valid: reason != "inspectionRejectInvalidSliceHeader",
+                        delta_continuation_ready: false,
+                        parameter_sets_changed: false,
+                        config_changed: false,
+                        is_idr: true,
+                        bootstrap_ready: false,
+                        bootstrap_reject_reason: Some(reason.to_string()),
+                        admission_accepted: false,
+                        observed_at_ms: 40_099.0,
+                    });
+            },
+        );
+
+        assert!(
+            commands.is_empty(),
+            "unexpected commands for reason={reason}: {commands:?}"
+        );
+        harness.with_stats(|stats| {
+            let ledger = stats
+                .latest_recovery_decision_ledger
+                .as_ref()
+                .expect("recovery decision ledger");
+            assert_eq!(ledger.action_selected, "none", "reason={reason}");
+            assert_eq!(ledger.gate_result, "no-signal", "reason={reason}");
+            assert_eq!(ledger.state_after, "observing", "reason={reason}");
+            assert_ne!(ledger.state_after, "recovery-eligible", "reason={reason}");
+            assert_ne!(ledger.state_after, "active-recovery", "reason={reason}");
+        });
+    }
 }
 
 #[test]
@@ -8684,13 +8861,6 @@ fn recovery_integration_home_connected_ingress_without_output_progress_reenters_
         },
     );
 
-    assert!(stalled.iter().any(|command| {
-        matches!(
-            command,
-            TransportCommand::RequestKeyframe { reason, .. }
-                if reason == "transportAwaitRecoveryKeyframe"
-        )
-    }));
     assert!(stalled
         .iter()
         .all(|command| !matches!(command, TransportCommand::RequestReconnectCandidate { .. })));
@@ -8703,7 +8873,7 @@ fn recovery_integration_home_connected_ingress_without_output_progress_reenters_
             ledger.input_signal,
             "transportAwaitRecoveryKeyframe:transportAwaitRecoveryKeyframe"
         );
-        assert_eq!(ledger.gate_result, "pass");
+        assert_eq!(ledger.gate_result, "pass:localProbe");
         assert_eq!(ledger.action_selected, "requestKeyframe");
     });
 }
@@ -8824,7 +8994,7 @@ fn recovery_integration_cloud_stale_transport_await_replay_reenters_local_recove
             ledger.input_signal,
             "transportAwaitRecoveryKeyframe:transportAwaitRecoveryKeyframe"
         );
-        assert_eq!(ledger.gate_result, "pass");
+        assert_eq!(ledger.gate_result, "pass:localProbe");
         assert_eq!(ledger.action_selected, "requestKeyframe");
     });
 }
@@ -8988,8 +9158,12 @@ fn recovery_integration_fresh_transport_await_absorption_expires_once_output_sta
             ledger.input_signal,
             "transportAwaitRecoveryKeyframe:transportAwaitRecoveryKeyframe"
         );
-        assert_eq!(ledger.gate_result, "pass");
-        assert_eq!(ledger.action_selected, "requestKeyframe");
+        assert_ne!(ledger.state_after, "active-recovery");
+        assert_ne!(ledger.state_after, "recovery-eligible");
+        if ledger.action_selected == "requestKeyframe" {
+            assert_eq!(ledger.gate_result, "pass:localProbe");
+            assert_eq!(ledger.state_after, "local-self-healing");
+        }
         assert_ne!(stats.video_owner_state.as_deref(), Some("stable-serving"));
     });
 }
@@ -9144,7 +9318,7 @@ fn recovery_integration_home_stale_transport_await_absorption_expires_once_outpu
             ledger.input_signal,
             "transportAwaitRecoveryKeyframe:transportAwaitRecoveryKeyframe"
         );
-        assert_eq!(ledger.gate_result, "pass");
+        assert_eq!(ledger.gate_result, "pass:localProbe");
         assert_eq!(ledger.action_selected, "requestKeyframe");
     });
 }
@@ -9669,6 +9843,19 @@ fn recovery_integration_cloud_media_loss_prefers_transport_await_before_reconnec
     assert!(local_recover
         .iter()
         .all(|command| !matches!(command, TransportCommand::RequestReconnectCandidate { .. })));
+    harness.with_stats(|stats| {
+        let ledger = stats
+            .latest_recovery_decision_ledger
+            .as_ref()
+            .expect("local recover ledger");
+        assert_eq!(
+            ledger.input_signal,
+            "transportAwaitRecoveryKeyframe:transportAwaitRecoveryKeyframe"
+        );
+        assert_eq!(ledger.gate_result, "pass:localProbe");
+        assert_eq!(ledger.action_selected, "requestKeyframe");
+        assert_eq!(ledger.state_after, "local-self-healing");
+    });
 
     let reconnect = harness.apply(
         6_420.0,

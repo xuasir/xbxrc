@@ -1202,6 +1202,138 @@ fn startup_bootstrap_missing_sps_stays_priming_and_does_not_emit_recovery_intent
 }
 
 #[test]
+fn first_transport_await_probe_with_clean_anchor_stays_out_of_rebuilding_supply() {
+    let mut owner = VideoSchedulingOwner::new();
+    let mut priming = input(
+        ConnectionLifecycleStateFact::Connected,
+        None,
+        SchedulingDemandSignal {
+            no_pending_pressure_level: Some("normal".to_string()),
+            no_pending_streak: Some(0),
+            present_age_ms: Some(12.0),
+            decode_age_ms: Some(10.0),
+            video_renderer_stalled: false,
+            ..SchedulingDemandSignal::default()
+        },
+        Some("healthy"),
+        Some("frame-complete-candidate"),
+        Some("remoteTrackAttached"),
+        Some(120_000),
+        1_000.0,
+        5,
+    );
+    priming.clean_anchor_epoch = Some(5);
+    priming.clean_anchor_observed_at_ms = Some(999.0);
+    priming.clean_anchor_source_event = Some("chain-clean-keyframe-submitted".to_string());
+    assert_eq!(
+        owner.evaluate(&priming).state,
+        VideoSchedulingOwnerState::Priming
+    );
+
+    let stable = owner.evaluate(&priming);
+    assert_eq!(stable.state, VideoSchedulingOwnerState::StableServing);
+
+    let mut weak_probe = input(
+        ConnectionLifecycleStateFact::Connected,
+        Some("transportAwaitRecoveryKeyframe"),
+        SchedulingDemandSignal {
+            no_pending_pressure_level: Some("critical".to_string()),
+            no_pending_streak: Some(220),
+            present_age_ms: Some(18.0),
+            decode_age_ms: Some(14.0),
+            video_renderer_stalled: false,
+            ..SchedulingDemandSignal::default()
+        },
+        Some("healthy"),
+        Some("frame-await-recovery-keyframe"),
+        Some("remoteTrackAttached"),
+        Some(128_000),
+        1_060.0,
+        5,
+    );
+    weak_probe.clean_anchor_epoch = Some(5);
+    weak_probe.clean_anchor_observed_at_ms = Some(1_058.0);
+    weak_probe.clean_anchor_source_event = Some("chain-clean-keyframe-submitted".to_string());
+
+    let output = owner.evaluate(&weak_probe);
+    assert_eq!(output.state, VideoSchedulingOwnerState::StableServing);
+    assert_eq!(output.health, VideoHealthContract::Stable);
+    assert!(output.recovery_intent.is_none());
+}
+
+#[test]
+fn transport_await_with_rejected_anchor_candidate_enters_rebuilding_supply() {
+    let mut owner = VideoSchedulingOwner::new();
+    let mut hard_probe = input(
+        ConnectionLifecycleStateFact::Connected,
+        Some("transportAwaitRecoveryKeyframe"),
+        SchedulingDemandSignal {
+            no_pending_pressure_level: Some("critical".to_string()),
+            no_pending_streak: Some(220),
+            present_age_ms: Some(420.0),
+            decode_age_ms: Some(380.0),
+            video_renderer_stalled: false,
+            ..SchedulingDemandSignal::default()
+        },
+        Some("recovering"),
+        Some("frame-await-recovery-keyframe"),
+        Some("remoteTrackAttached"),
+        Some(120_000),
+        1_400.0,
+        7,
+    );
+    hard_probe.latest_anchor_candidate_ledger = Some(crate::XbxEngineAnchorCandidateLedger {
+        state: crate::XbxEngineAnchorCandidateState::Rejected,
+        source_event: "frame-await-recovery-keyframe".to_string(),
+        frame_rtp_timestamp: Some(7_001),
+        recovery_epoch: 7,
+        failure_reason: Some(
+            crate::XbxEngineAnchorCandidateFailureReason::AwaitingRecoveryKeyframe,
+        ),
+        observed_at_ms: 1_399.0,
+    });
+
+    let output = owner.evaluate(&hard_probe);
+    assert_eq!(output.state, VideoSchedulingOwnerState::RebuildingSupply);
+    assert_eq!(output.health, VideoHealthContract::Recovering);
+    let intent = output.recovery_intent.expect("anchor intent");
+    assert_eq!(intent.source, RecoveryIntentSource::Anchor);
+    assert_eq!(intent.reason_label, "transportAwaitRecoveryKeyframe");
+}
+
+#[test]
+fn startup_bootstrap_reject_source_without_persisted_h264_state_stays_priming() {
+    let mut owner = VideoSchedulingOwner::new();
+    let bootstrap_pending = input(
+        ConnectionLifecycleStateFact::Connected,
+        Some("transportAwaitRecoveryKeyframe"),
+        SchedulingDemandSignal {
+            no_pending_pressure_level: Some("critical".to_string()),
+            no_pending_streak: Some(180),
+            present_age_ms: None,
+            decode_age_ms: None,
+            video_renderer_stalled: false,
+            host_display_tick_epoch: Some(120),
+            host_present_epoch: Some(0),
+            host_cadence_phase: Some("priming".to_string()),
+            present_submit_count_total: Some(0),
+            ..SchedulingDemandSignal::default()
+        },
+        Some("recovering"),
+        Some("frame-inspection-rejected-await-keyframe"),
+        Some("remoteTrackAttached"),
+        Some(69_029),
+        1_100.0,
+        1,
+    );
+
+    let output = owner.evaluate(&bootstrap_pending);
+    assert_eq!(output.state, VideoSchedulingOwnerState::Priming);
+    assert_eq!(output.health, VideoHealthContract::Startup);
+    assert!(output.recovery_intent.is_none());
+}
+
+#[test]
 fn post_first_present_bootstrap_missing_sps_still_enters_rebuilding_supply() {
     let mut owner = VideoSchedulingOwner::new();
     let mut post_first_present = input(
@@ -1556,11 +1688,9 @@ fn critical_wait_keyframe_noise_prefers_rebuilding_over_supply_starved_even_with
     noisy.clean_anchor_source_event = Some("chain-clean-keyframe-submitted".to_string());
 
     let output = owner.evaluate(&noisy);
-    assert_eq!(output.state, VideoSchedulingOwnerState::RebuildingSupply);
-    assert_eq!(output.health, VideoHealthContract::Recovering);
-    let intent = output.recovery_intent.expect("anchor intent");
-    assert_eq!(intent.source, RecoveryIntentSource::Anchor);
-    assert_eq!(intent.reason_label, "transportAwaitRecoveryKeyframe");
+    assert_eq!(output.state, VideoSchedulingOwnerState::StableServing);
+    assert_eq!(output.health, VideoHealthContract::Stable);
+    assert!(output.recovery_intent.is_none());
 }
 
 #[test]

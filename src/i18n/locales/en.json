@@ -294,6 +294,11 @@
           "connecting": "Connecting",
           "handshaking": "Handshaking",
           "priming": "Priming",
+          "observing": "Observing",
+          "local-self-healing": "Local self-healing",
+          "recovery-eligible": "Recovery eligible",
+          "active-recovery": "Active recovery",
+          "recovery-blocked": "Recovery blocked",
           "steady": "Steady",
           "recovering": "Recovering",
           "ramp-up": "Recovery ramp-up",
@@ -334,6 +339,11 @@
           "steady": "Steady",
           "display": "Display",
           "recovery": "Recovery",
+          "observing": "Observing",
+          "local-self-healing": "Local self-healing",
+          "recovery-eligible": "Recovery eligible",
+          "active-recovery": "Active recovery",
+          "recovery-blocked": "Recovery blocked",
           "owner": "Owner"
         },
         "issueDetail": {
@@ -359,6 +369,24 @@
           "owner__seeking-anchor__seekingAnchor": "Owner: seeking anchor",
           "owner__priming__priming": "Owner: priming",
           "owner__degraded-serving__degradedSteady": "Owner: degraded serving / degraded steady"
+        },
+        "latestDecisionPrefix": {
+          "decision": "Decision",
+          "phase": "Phase",
+          "owner": "Owner"
+        },
+        "latestDecisionAction": {
+          "requestKeyframe": "Request keyframe",
+          "requestDecoderReset": "Request decoder reset",
+          "requestReconnectCandidate": "Request reconnect candidate",
+          "requestKeyframe+decoderReset": "Request keyframe + decoder reset",
+          "requestKeyframe+decoderReset(startupLowQualityRetry)": "Startup low quality retry",
+          "waitForBurst": "Wait for burst evidence",
+          "waitForDecoderResetBurst": "Wait for decoder-reset burst evidence",
+          "cooldownSuppressed": "Suppressed by cooldown",
+          "coalesced:keyframeInFlight": "Keyframe already in flight",
+          "coalesced:decoderResetInFlight": "Decoder reset already in flight",
+          "none": "No action"
         }
       }
     },

@@ -198,7 +198,16 @@ impl VideoSchedulingOwner {
             Self::codec_still_awaits_recovery_keyframe(current_state, input);
         let startup_bootstrap_grace_active =
             Self::startup_bootstrap_grace_active(current_state, input);
+        let transport_await_local_probe_probation_active =
+            Self::transport_await_local_probe_probation_active(
+                current_state,
+                input,
+                has_clean_anchor_evidence,
+                chain_healthy,
+            );
         let has_anchor_issue = if startup_bootstrap_grace_active {
+            false
+        } else if transport_await_local_probe_probation_active {
             false
         } else if wait_keyframe_rebuild_priority || codec_recovery_keyframe_blocked {
             true
@@ -611,7 +620,11 @@ impl VideoSchedulingOwner {
                     | "inspectionRejectInvalidSliceHeader"
             )
         ) && input.latest_h264_bootstrap_ready == Some(false);
-        if !bootstrap_reject_in_startup {
+        let bootstrap_reject_source_pending = matches!(
+            input.latest_timeline_source_event.as_deref(),
+            Some("frame-inspection-rejected-await-keyframe")
+        );
+        if !bootstrap_reject_in_startup && !bootstrap_reject_source_pending {
             return false;
         }
         let track_attached = matches!(
@@ -898,10 +911,8 @@ impl VideoSchedulingOwner {
         if no_pending_streak < input.display_supply_thresholds.critical_no_pending_streak {
             return false;
         }
-        matches!(
-            input.latest_timeline_source_event.as_deref(),
-            Some("frame-await-recovery-keyframe" | "frame-inspection-rejected-await-keyframe")
-        )
+        Self::is_transport_await_probe_signal(input)
+            && Self::has_transport_await_hard_rebuild_evidence(input)
     }
 
     fn codec_still_awaits_recovery_keyframe(
@@ -1056,6 +1067,86 @@ impl VideoSchedulingOwner {
             input.latest_timeline_source_event.as_deref(),
             Some("frame-await-recovery-keyframe" | "frame-inspection-rejected-await-keyframe")
         )
+    }
+
+    fn transport_await_local_probe_probation_active(
+        current: VideoSchedulingOwnerState,
+        input: &VideoSchedulingOwnerInput,
+        has_clean_anchor_evidence: bool,
+        chain_healthy: bool,
+    ) -> bool {
+        if !matches!(
+            current,
+            VideoSchedulingOwnerState::StableServing | VideoSchedulingOwnerState::DegradedServing
+        ) {
+            return false;
+        }
+        if !has_clean_anchor_evidence || !chain_healthy {
+            return false;
+        }
+        if !Self::is_transport_await_probe_signal(input) {
+            return false;
+        }
+        !Self::has_transport_await_hard_rebuild_evidence(input)
+    }
+
+    fn is_transport_await_probe_signal(input: &VideoSchedulingOwnerInput) -> bool {
+        matches!(
+            input.latest_timeline_source_event.as_deref(),
+            Some("frame-await-recovery-keyframe" | "frame-inspection-rejected-await-keyframe")
+        )
+    }
+
+    fn has_transport_await_hard_rebuild_evidence(input: &VideoSchedulingOwnerInput) -> bool {
+        Self::has_rejected_transport_await_anchor_candidate(input)
+            || Self::has_post_startup_transport_await_bootstrap_failure(input)
+            || Self::transport_await_chain_is_hard_broken(input)
+    }
+
+    fn has_rejected_transport_await_anchor_candidate(input: &VideoSchedulingOwnerInput) -> bool {
+        input
+            .latest_anchor_candidate_ledger
+            .as_ref()
+            .is_some_and(|candidate| {
+                candidate.recovery_epoch == input.recovery_epoch
+                    && candidate.state == XbxEngineAnchorCandidateState::Rejected
+                    && matches!(
+                        candidate.failure_reason,
+                        Some(
+                            crate::XbxEngineAnchorCandidateFailureReason::AwaitingRecoveryKeyframe
+                                | crate::XbxEngineAnchorCandidateFailureReason::InspectionRejectedMissingSps
+                                | crate::XbxEngineAnchorCandidateFailureReason::InspectionRejectedMissingPps
+                                | crate::XbxEngineAnchorCandidateFailureReason::InspectionRejectedInvalidSliceHeader
+                                | crate::XbxEngineAnchorCandidateFailureReason::ChainBrokenReferenceUnrecoverable
+                                | crate::XbxEngineAnchorCandidateFailureReason::GapExpiredDeadline
+                        )
+                    )
+            })
+    }
+
+    fn has_post_startup_transport_await_bootstrap_failure(
+        input: &VideoSchedulingOwnerInput,
+    ) -> bool {
+        if Self::first_present_feedback_gap_active(input) {
+            return false;
+        }
+        if input.latest_h264_bootstrap_ready != Some(false) {
+            return false;
+        }
+        matches!(
+            input.latest_h264_bootstrap_reject_reason.as_deref(),
+            Some(
+                "bootstrapMissingSps"
+                    | "bootstrapMissingPps"
+                    | "inspectionRejectInvalidSliceHeader"
+                    | "NonIdrVcl"
+            )
+        )
+    }
+
+    fn transport_await_chain_is_hard_broken(input: &VideoSchedulingOwnerInput) -> bool {
+        input.latest_timeline_chain_state.as_deref() == Some("broken")
+            && Self::is_transport_await_probe_signal(input)
     }
 
     fn supply_is_absent(input: &VideoSchedulingOwnerInput) -> bool {

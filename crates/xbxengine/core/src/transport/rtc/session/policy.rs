@@ -63,7 +63,11 @@ const RECENT_RECOVERY_DECISION_LEDGER_CAPACITY: usize = 64;
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum RecoveryLivenessState {
     Detecting,
-    Recovering,
+    Observing,
+    LocalSelfHealing,
+    RecoveryEligible,
+    ActiveRecovery,
+    RecoveryBlocked,
     RampUp,
     Reconnecting,
     Stable,
@@ -81,7 +85,11 @@ impl RecoveryLivenessState {
     fn as_str(self) -> &'static str {
         match self {
             Self::Detecting => "detecting",
-            Self::Recovering => "recovering",
+            Self::Observing => "observing",
+            Self::LocalSelfHealing => "local-self-healing",
+            Self::RecoveryEligible => "recovery-eligible",
+            Self::ActiveRecovery => "active-recovery",
+            Self::RecoveryBlocked => "recovery-blocked",
             Self::RampUp => "ramp-up",
             Self::Reconnecting => "reconnecting",
             Self::Stable => "stable",
@@ -831,12 +839,7 @@ impl RtcSessionPolicy {
         {
             return false;
         }
-        if snapshot.connection.lifecycle_state != ConnectionLifecycleStateFact::Connected
-            || snapshot.media.frame_count != 0
-        {
-            return false;
-        }
-        if bootstrap_startup_label && !self.first_frame_grace_active() {
+        if snapshot.connection.lifecycle_state != ConnectionLifecycleStateFact::Connected {
             return false;
         }
         RuntimeStatsSink::read_shared(self.runtime_stats.as_ref(), |stats| {
@@ -874,8 +877,6 @@ impl RtcSessionPolicy {
     ) -> bool {
         if source_event != "frame-inspection-rejected-await-keyframe"
             || snapshot.connection.lifecycle_state != ConnectionLifecycleStateFact::Connected
-            || snapshot.media.frame_count != 0
-            || !self.first_frame_grace_active()
         {
             return false;
         }
@@ -903,10 +904,48 @@ impl RtcSessionPolicy {
                 && stats.latest_video_decode_ok_time_ms.is_none();
             let pipeline_not_stalled = !stats.video_decoder_stalled.unwrap_or(false)
                 && !stats.video_renderer_stalled.unwrap_or(false);
+            let still_within_pre_first_frame_window = (snapshot.now_ms - track.observed_at_ms)
+                .max(0.0)
+                < self.pre_first_frame_reconnect_fallback_ms();
             track.state == "remoteTrackAttached"
                 && track.video_bytes_total > 0
                 && first_frame_feedback_not_ready
                 && pipeline_not_stalled
+                && still_within_pre_first_frame_window
+        })
+        .unwrap_or(false)
+    }
+
+    fn startup_bootstrap_probation_active(
+        &self,
+        snapshot: &TransportSnapshot,
+        observed_at_ms: f64,
+    ) -> bool {
+        if snapshot.connection.lifecycle_state != ConnectionLifecycleStateFact::Connected {
+            return false;
+        }
+        RuntimeStatsSink::read_shared(self.runtime_stats.as_ref(), |stats| {
+            if stats.transport_state != xbxengine_protocol::XbxEngineTransportStateDto::Connected {
+                return false;
+            }
+            if !is_startup_display_phase(stats.session_phase.as_deref()) {
+                return false;
+            }
+            let Some(track) = stats.latest_video_track_status.as_ref() else {
+                return false;
+            };
+            let first_frame_feedback_not_ready = stats.latest_video_host_present_time_ms.is_none()
+                && stats.latest_video_decode_ok_time_ms.is_none();
+            let pipeline_not_stalled = !stats.video_decoder_stalled.unwrap_or(false)
+                && !stats.video_renderer_stalled.unwrap_or(false);
+            let still_within_pre_first_frame_window = (observed_at_ms - track.observed_at_ms)
+                .max(0.0)
+                < self.pre_first_frame_reconnect_fallback_ms();
+            track.state == "remoteTrackAttached"
+                && track.video_bytes_total > 0
+                && first_frame_feedback_not_ready
+                && pipeline_not_stalled
+                && still_within_pre_first_frame_window
         })
         .unwrap_or(false)
     }
@@ -1756,7 +1795,8 @@ impl RtcSessionPolicy {
         let owner_input = VideoSchedulingOwnerInput {
             connection_state: snapshot.connection.lifecycle_state,
             recovery_epoch: owner_facts.recovery_epoch,
-            startup_bootstrap_grace_allowed: self.first_frame_grace_active(),
+            startup_bootstrap_grace_allowed: self
+                .startup_bootstrap_probation_active(snapshot, snapshot.now_ms),
             anchor_reason_label,
             demand,
             clean_anchor_epoch: owner_facts.clean_anchor_epoch,
@@ -1851,18 +1891,22 @@ impl RtcSessionPolicy {
         owner_state: VideoSchedulingOwnerState,
         proposal: Option<&RecoveryPolicyProposal>,
     ) {
-        let state_after = self.resolve_recovery_state(snapshot, owner_state);
+        let state_after = self.resolve_recovery_state(snapshot, owner_state, proposal);
         let state_before = self.last_recovery_state.unwrap_or(state_after);
         self.last_recovery_state = Some(state_after);
         let observed_at_ms = Self::resolve_policy_observed_at_ms(snapshot);
         let (decision_id, input_signal, gate_result, action_selected, budget_before, budget_after) =
             if let Some(proposal) = proposal {
                 let contract = VideoEscalationController::action_contract(proposal.decision.action);
+                let local_probe_only =
+                    self.is_non_escalating_keyframe_probe(proposal, observed_at_ms);
                 let failed_terminal = self.failed_terminal_since_ms.is_some()
                     && self.failed_terminal_reason.as_deref() == Some("reconnectBudgetExhausted")
                     && proposal.reason == VideoEscalationReason::LifecycleRecovering;
                 let gate_result = if failed_terminal {
                     "terminal:reconnectBudgetExhausted".to_string()
+                } else if local_probe_only {
+                    "pass:localProbe".to_string()
                 } else if matches!(
                     proposal.decision.action,
                     RecoveryAction::CoalescedKeyframeInFlight
@@ -1950,6 +1994,7 @@ impl RtcSessionPolicy {
         &self,
         snapshot: &TransportSnapshot,
         owner_state: VideoSchedulingOwnerState,
+        proposal: Option<&RecoveryPolicyProposal>,
     ) -> RecoveryLivenessState {
         if self.failed_terminal_since_ms.is_some() {
             return RecoveryLivenessState::FailedTerminal;
@@ -1960,6 +2005,15 @@ impl RtcSessionPolicy {
                 RecoveryLivenessState::Reconnecting
             }
             ConnectionLifecycleStateFact::Connected => match owner_state {
+                VideoSchedulingOwnerState::SeekingAnchor | VideoSchedulingOwnerState::Priming => {
+                    if proposal.is_some_and(|proposal| {
+                        self.is_non_escalating_keyframe_probe(proposal, snapshot.now_ms)
+                    }) {
+                        RecoveryLivenessState::LocalSelfHealing
+                    } else {
+                        RecoveryLivenessState::Observing
+                    }
+                }
                 VideoSchedulingOwnerState::StableServing
                 | VideoSchedulingOwnerState::DegradedServing => {
                     let ramp_up_active =
@@ -1972,17 +2026,98 @@ impl RtcSessionPolicy {
                         .unwrap_or(false);
                     if ramp_up_active {
                         RecoveryLivenessState::RampUp
+                    } else if proposal.is_some_and(|proposal| {
+                        self.is_non_escalating_keyframe_probe(proposal, snapshot.now_ms)
+                    }) {
+                        RecoveryLivenessState::LocalSelfHealing
+                    } else if proposal.is_some_and(|proposal| {
+                        Self::is_blocked_recovery_action(proposal.decision.action)
+                    }) {
+                        RecoveryLivenessState::LocalSelfHealing
                     } else {
                         RecoveryLivenessState::Stable
                     }
                 }
-                VideoSchedulingOwnerState::SeekingAnchor
-                | VideoSchedulingOwnerState::Priming
-                | VideoSchedulingOwnerState::RebuildingSupply
-                | VideoSchedulingOwnerState::SupplyStarved => RecoveryLivenessState::Recovering,
+                VideoSchedulingOwnerState::RebuildingSupply
+                | VideoSchedulingOwnerState::SupplyStarved => {
+                    if let Some(proposal) = proposal {
+                        if self.is_non_escalating_keyframe_probe(proposal, snapshot.now_ms) {
+                            RecoveryLivenessState::LocalSelfHealing
+                        } else if Self::is_active_recovery_action(proposal.decision.action) {
+                            RecoveryLivenessState::ActiveRecovery
+                        } else if Self::is_blocked_recovery_action(proposal.decision.action) {
+                            RecoveryLivenessState::RecoveryBlocked
+                        } else {
+                            RecoveryLivenessState::RecoveryEligible
+                        }
+                    } else {
+                        RecoveryLivenessState::RecoveryEligible
+                    }
+                }
             },
             _ => RecoveryLivenessState::Detecting,
         }
+    }
+
+    fn is_non_escalating_keyframe_probe(
+        &self,
+        proposal: &RecoveryPolicyProposal,
+        observed_at_ms: f64,
+    ) -> bool {
+        self.is_pre_first_frame_bootstrap_probe(proposal)
+            || self.is_exploratory_transport_await_keyframe(proposal, observed_at_ms)
+    }
+
+    fn is_pre_first_frame_bootstrap_probe(&self, proposal: &RecoveryPolicyProposal) -> bool {
+        if !matches!(
+            proposal.reason_label.as_str(),
+            "bootstrapMissingSps" | "bootstrapMissingPps" | "inspectionRejectInvalidSliceHeader"
+        ) {
+            return false;
+        }
+        RuntimeStatsSink::read_shared(self.runtime_stats.as_ref(), |stats| {
+            stats.latest_video_host_present_time_ms.is_none()
+                && stats.latest_video_decode_ok_time_ms.is_none()
+        })
+        .unwrap_or(false)
+    }
+
+    fn is_exploratory_transport_await_keyframe(
+        &self,
+        proposal: &RecoveryPolicyProposal,
+        observed_at_ms: f64,
+    ) -> bool {
+        proposal.reason == VideoEscalationReason::TransportAwaitRecoveryKeyframe
+            && proposal.reason_label == "transportAwaitRecoveryKeyframe"
+            && proposal.decision.action == RecoveryAction::RequestKeyframe
+            && !RecoveryCoordinator::transport_await_has_hard_recovery_evidence(
+                self.runtime_stats.as_ref(),
+                proposal.budget_before.recovery_epoch,
+                observed_at_ms,
+            )
+    }
+
+    fn is_active_recovery_action(action: RecoveryAction) -> bool {
+        matches!(
+            action,
+            RecoveryAction::RequestKeyframe
+                | RecoveryAction::RequestDecoderReset
+                | RecoveryAction::RequestReconnectCandidate
+                | RecoveryAction::RequestKeyframeAndDecoderReset
+        )
+    }
+
+    fn is_blocked_recovery_action(action: RecoveryAction) -> bool {
+        matches!(
+            action,
+            RecoveryAction::WaitForBurst
+                | RecoveryAction::WaitForDecoderResetBurst
+                | RecoveryAction::CooldownSuppressed
+                | RecoveryAction::CoalescedKeyframeInFlight
+                | RecoveryAction::CoalescedDecoderResetInFlight
+                | RecoveryAction::StartupGraceSuppressed
+                | RecoveryAction::StartupLowQualityRetry
+        )
     }
 
     fn next_recovery_decision_ledger_id(&mut self) -> u64 {

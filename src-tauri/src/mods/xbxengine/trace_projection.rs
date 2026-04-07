@@ -288,6 +288,11 @@ fn resolve_unified_lifecycle(stats: &XbxEngineStatsDto) -> &'static str {
     if let Some(phase) = stats.stream_lifecycle_phase.as_deref() {
         match phase {
             "startup" => return "startup",
+            "observing" => return "observing",
+            "local-self-healing" => return "local-self-healing",
+            "recovery-eligible" => return "recovery-eligible",
+            "active-recovery" => return "active-recovery",
+            "recovery-blocked" => return "recovery-blocked",
             "recovering" => return "recovering",
             "ramp-up" => return "ramp-up",
             "steady" => return "steady",
@@ -300,6 +305,11 @@ fn resolve_unified_lifecycle(stats: &XbxEngineStatsDto) -> &'static str {
     if let Some(phase) = stats.session_phase.as_deref() {
         match phase {
             "connecting" | "handshaking" | "priming" | "startup" => return "startup",
+            "observing" => return "observing",
+            "local-self-healing" => return "local-self-healing",
+            "recovery-eligible" => return "recovery-eligible",
+            "active-recovery" => return "active-recovery",
+            "recovery-blocked" => return "recovery-blocked",
             "recovering" => return "recovering",
             "ramp-up" => return "ramp-up",
             "steady" => return "steady",

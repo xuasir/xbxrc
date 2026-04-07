@@ -39,7 +39,7 @@ export function translateDiagnosticsStallKind(
   return translateEnum(te, t, 'stallKind', raw, 'streamPage.diagnostics.values.none')
 }
 
-/** sessionPhase / streamLifecyclePhase：startup / ramp-up / degraded 等统一语义，旧版本回退 connecting / priming 等 */
+/** sessionPhase / streamLifecyclePhase：startup / observing / active-recovery / ramp-up / degraded 等统一语义，旧版本回退 connecting / priming 等 */
 export function translateDiagnosticsSessionPhase(
   te: DiagnosticsExists,
   t: DiagnosticsTranslate,
@@ -116,5 +116,34 @@ export function translateDiagnosticsLatestDecision(
     return t('streamPage.diagnostics.values.none')
   }
   const flatKey = `${BASE}.latestDecision.${raw.replace(/:/g, '__')}`
-  return te(flatKey) ? t(flatKey) : raw
+  if (te(flatKey)) {
+    return t(flatKey)
+  }
+  const parts = raw.split(':')
+  if (parts.length < 3) {
+    return raw
+  }
+  if (parts[0] === 'decision') {
+    const phase = translateEnum(te, t, 'sessionPhase', parts[1], 'streamPage.diagnostics.values.unknown')
+    const actionKey = `${BASE}.latestDecisionAction.${parts.slice(2).join(':')}`
+    const action = te(actionKey) ? t(actionKey) : parts.slice(2).join(':')
+    const prefixKey = `${BASE}.latestDecisionPrefix.decision`
+    const prefix = te(prefixKey) ? t(prefixKey) : 'Decision'
+    return `${prefix}：${phase} / ${action}`
+  }
+  if (parts[0] === 'phase') {
+    const phase = translateEnum(te, t, 'sessionPhase', parts[1], 'streamPage.diagnostics.values.unknown')
+    const reason = translateEnum(te, t, 'ownerReason', parts.slice(2).join(':'), 'streamPage.diagnostics.values.none')
+    const prefixKey = `${BASE}.latestDecisionPrefix.phase`
+    const prefix = te(prefixKey) ? t(prefixKey) : 'Phase'
+    return `${prefix}：${phase} / ${reason}`
+  }
+  if (parts[0] === 'owner') {
+    const ownerState = translateEnum(te, t, 'ownerState', parts[1], 'streamPage.diagnostics.values.unknown')
+    const ownerReason = translateEnum(te, t, 'ownerReason', parts.slice(2).join(':'), 'streamPage.diagnostics.values.none')
+    const prefixKey = `${BASE}.latestDecisionPrefix.owner`
+    const prefix = te(prefixKey) ? t(prefixKey) : 'Owner'
+    return `${prefix}：${ownerState} / ${ownerReason}`
+  }
+  return raw
 }

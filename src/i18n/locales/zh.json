@@ -294,6 +294,11 @@
           "connecting": "连接中",
           "handshaking": "握手",
           "priming": "首帧准备",
+          "observing": "观测中",
+          "local-self-healing": "局部自愈中",
+          "recovery-eligible": "具备恢复资格",
+          "active-recovery": "主动恢复中",
+          "recovery-blocked": "恢复受阻",
           "steady": "稳态",
           "recovering": "恢复中",
           "ramp-up": "恢复爬坡",
@@ -334,6 +339,11 @@
           "steady": "稳态",
           "display": "显示",
           "recovery": "恢复",
+          "observing": "观测",
+          "local-self-healing": "局部自愈",
+          "recovery-eligible": "恢复资格",
+          "active-recovery": "主动恢复",
+          "recovery-blocked": "恢复受阻",
           "owner": "调度主视图"
         },
         "issueDetail": {
@@ -359,6 +369,24 @@
           "owner__seeking-anchor__seekingAnchor": "主视图：寻找锚点",
           "owner__priming__priming": "主视图：首帧准备",
           "owner__degraded-serving__degradedSteady": "主视图：降级输出 / 稳态降级"
+        },
+        "latestDecisionPrefix": {
+          "decision": "决策",
+          "phase": "阶段",
+          "owner": "主视图"
+        },
+        "latestDecisionAction": {
+          "requestKeyframe": "请求关键帧",
+          "requestDecoderReset": "请求解码器重置",
+          "requestReconnectCandidate": "请求重连候选",
+          "requestKeyframe+decoderReset": "请求关键帧 + 解码器重置",
+          "requestKeyframe+decoderReset(startupLowQualityRetry)": "启动低画质重试",
+          "waitForBurst": "等待突发证据",
+          "waitForDecoderResetBurst": "等待重置突发证据",
+          "cooldownSuppressed": "冷却中抑制",
+          "coalesced:keyframeInFlight": "关键帧请求在途",
+          "coalesced:decoderResetInFlight": "解码器重置在途",
+          "none": "无动作"
         }
       }
     },

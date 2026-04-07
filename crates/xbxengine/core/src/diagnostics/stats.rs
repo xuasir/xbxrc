@@ -56,10 +56,19 @@ fn project_video_owner_contract(
 }
 
 fn should_project_runtime_owner_fallback(stats: &XbxEngineMediaRuntimeStats) -> bool {
-    stats.session_phase.as_deref() == Some("recovering")
-        || (stats.message_handshake_acked_at_ms.is_some()
-            && stats.control_ready_at_ms.is_some()
-            && has_visible_video_output(stats))
+    matches!(
+        stats.session_phase.as_deref(),
+        Some(
+            "recovering"
+                | "observing"
+                | "local-self-healing"
+                | "recovery-eligible"
+                | "active-recovery"
+                | "recovery-blocked"
+        )
+    ) || (stats.message_handshake_acked_at_ms.is_some()
+        && stats.control_ready_at_ms.is_some()
+        && has_visible_video_output(stats))
 }
 
 fn map_owner_state_to_video_health(owner_state: &str) -> String {
@@ -453,8 +462,8 @@ pub fn build_xbxengine_stats(
         stall_kind.as_deref(),
     );
     let latest_decision_summary = build_latest_decision_summary(
-        snapshot,
         runtime_stats,
+        display_phase.as_deref(),
         video_owner,
         observation_note.as_deref(),
         transport_recovery_note.as_deref(),
@@ -1151,11 +1160,27 @@ fn build_runtime_summary(
 // 将当前主问题链显式归类，避免每次回归都手工拼 diagnosis/band/health。
 fn build_primary_issue_chain(
     runtime_stats: Option<&XbxEngineMediaRuntimeStats>,
-    _display_phase: Option<&str>,
+    display_phase: Option<&str>,
     video_owner: Option<&VideoOwnerContract>,
     _stall_kind: Option<&str>,
 ) -> Option<String> {
-    let _ = runtime_stats?;
+    let stats = runtime_stats?;
+    let recovery_reason = video_owner
+        .and_then(|owner| owner.reason.as_deref())
+        .or(stats.recovery_diagnosis.as_deref())
+        .unwrap_or("none");
+    match display_phase.unwrap_or("unknown") {
+        "observing" => return Some(format!("observing:{recovery_reason}")),
+        "local-self-healing" => {
+            return Some(format!("local-self-healing:{recovery_reason}"));
+        }
+        "recovery-eligible" => return Some(format!("recovery-eligible:{recovery_reason}")),
+        "active-recovery" | "recovering" => {
+            return Some(format!("active-recovery:{recovery_reason}"));
+        }
+        "recovery-blocked" => return Some(format!("recovery-blocked:{recovery_reason}")),
+        _ => {}
+    }
     let owner = video_owner?;
     match owner.state.as_str() {
         "seeking-anchor" | "priming" => Some("startup:priming".to_string()),
@@ -1182,15 +1207,30 @@ fn build_primary_issue_chain(
 
 // 把最近一次真正影响行为的决策压成摘要，便于对照 trace 和面板。
 fn build_latest_decision_summary(
-    _snapshot: &XbxEngineRuntimeSnapshot,
     runtime_stats: Option<&XbxEngineMediaRuntimeStats>,
+    display_phase: Option<&str>,
     video_owner: Option<&VideoOwnerContract>,
     _observation_note: Option<&str>,
     _transport_recovery_note: Option<&str>,
     _repair_probe_note: Option<&str>,
     _reinject_note: Option<&str>,
 ) -> Option<String> {
-    let _ = runtime_stats?;
+    let stats = runtime_stats?;
+    if let Some(ledger) = stats.latest_recovery_decision_ledger.as_ref() {
+        return Some(format!(
+            "decision:{}:{}",
+            ledger.state_after, ledger.action_selected
+        ));
+    }
+    if let Some(phase) = display_phase {
+        if let Some(owner) = video_owner {
+            return Some(format!(
+                "phase:{}:{}",
+                phase,
+                owner.reason.as_deref().unwrap_or("none")
+            ));
+        }
+    }
     let owner = video_owner?;
     Some(format!(
         "owner:{}:{}",
@@ -1324,7 +1364,11 @@ fn build_rtx_reinject_note(runtime_stats: Option<&XbxEngineMediaRuntimeStats>) -
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum UnifiedLifecycleState {
     Startup,
-    Recovering,
+    Observing,
+    LocalSelfHealing,
+    RecoveryEligible,
+    ActiveRecovery,
+    RecoveryBlocked,
     RampUp,
     Steady,
     Degraded,
@@ -1336,7 +1380,11 @@ impl UnifiedLifecycleState {
     fn as_str(self) -> &'static str {
         match self {
             Self::Startup => "startup",
-            Self::Recovering => "recovering",
+            Self::Observing => "observing",
+            Self::LocalSelfHealing => "local-self-healing",
+            Self::RecoveryEligible => "recovery-eligible",
+            Self::ActiveRecovery => "active-recovery",
+            Self::RecoveryBlocked => "recovery-blocked",
             Self::RampUp => "ramp-up",
             Self::Steady => "steady",
             Self::Degraded => "degraded",
@@ -1348,7 +1396,12 @@ impl UnifiedLifecycleState {
     fn from_runtime_value(value: &str) -> Option<Self> {
         match value {
             "startup" | "connecting" | "handshaking" | "priming" => Some(Self::Startup),
-            "recovering" => Some(Self::Recovering),
+            "observing" => Some(Self::Observing),
+            "local-self-healing" => Some(Self::LocalSelfHealing),
+            "recovery-eligible" => Some(Self::RecoveryEligible),
+            "active-recovery" => Some(Self::ActiveRecovery),
+            "recovery-blocked" => Some(Self::RecoveryBlocked),
+            "recovering" => Some(Self::ActiveRecovery),
             "ramp-up" => Some(Self::RampUp),
             "steady" => Some(Self::Steady),
             "degraded" | "degraded-serving" => Some(Self::Degraded),
@@ -1481,7 +1534,7 @@ fn compute_unified_lifecycle(
                     UnifiedLifecycleState::Steady
                 }
             }
-            "rebuilding-supply" | "supply-starved" => UnifiedLifecycleState::Recovering,
+            "rebuilding-supply" | "supply-starved" => UnifiedLifecycleState::RecoveryEligible,
             "seeking-anchor" | "priming" => UnifiedLifecycleState::Startup,
             _ => UnifiedLifecycleState::Steady,
         };
@@ -1496,8 +1549,20 @@ fn compute_unified_lifecycle(
         return UnifiedLifecycleState::Startup;
     }
     if let Some(phase) = stats.session_phase.as_deref() {
-        if phase == "recovering" {
-            return UnifiedLifecycleState::Recovering;
+        if phase == "observing" {
+            return UnifiedLifecycleState::Observing;
+        }
+        if phase == "local-self-healing" {
+            return UnifiedLifecycleState::LocalSelfHealing;
+        }
+        if phase == "recovery-eligible" {
+            return UnifiedLifecycleState::RecoveryEligible;
+        }
+        if phase == "active-recovery" || phase == "recovering" {
+            return UnifiedLifecycleState::ActiveRecovery;
+        }
+        if phase == "recovery-blocked" {
+            return UnifiedLifecycleState::RecoveryBlocked;
         }
         if phase == "ramp-up" {
             return UnifiedLifecycleState::RampUp;
@@ -1509,9 +1574,16 @@ fn compute_unified_lifecycle(
             .map(|state| {
                 state.phase == crate::transport::rtc::recovery::startup::SessionPhase::Recovering
             })
-            .unwrap_or_else(|| stats.session_phase.as_deref() == Some("recovering"))
+            .unwrap_or_else(|| {
+                matches!(
+                    stats.session_phase.as_deref(),
+                    Some(
+                        "recovering" | "recovery-eligible" | "active-recovery" | "recovery-blocked"
+                    )
+                )
+            })
     {
-        return UnifiedLifecycleState::Recovering;
+        return UnifiedLifecycleState::ActiveRecovery;
     }
     if runtime_state
         .map(|state| state.phase == crate::transport::rtc::recovery::startup::SessionPhase::Startup)
@@ -1586,9 +1658,12 @@ fn classify_stall_kind(
     if !fresh_output
         && (recovery_phase
             == Some(crate::transport::rtc::recovery::startup::SessionPhase::Recovering)
-            || stats.session_phase.as_deref() == Some("recovering"))
+            || matches!(
+                stats.session_phase.as_deref(),
+                Some("recovering" | "recovery-eligible" | "active-recovery" | "recovery-blocked")
+            ))
     {
-        return Some("recovering".to_string());
+        return Some("active-recovery".to_string());
     }
     Some("none".to_string())
 }

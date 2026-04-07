@@ -315,7 +315,10 @@ fn primary_view_from_mode(
 fn project_phase_from_stats(stats: &XbxEngineMediaRuntimeStats) -> SessionPhase {
     match stats.session_phase.as_deref() {
         Some("startup" | "handshaking" | "priming") => SessionPhase::Startup,
-        Some("recovering") => SessionPhase::Recovering,
+        Some(
+            "recovering" | "observing" | "local-self-healing" | "recovery-eligible"
+            | "active-recovery" | "recovery-blocked",
+        ) => SessionPhase::Recovering,
         _ => SessionPhase::Steady,
     }
 }
@@ -331,6 +334,21 @@ fn recovery_stage_label(stats: &XbxEngineMediaRuntimeStats) -> &'static str {
         Some("startup" | "handshaking" | "priming")
     ) {
         return "priming";
+    }
+    if matches!(
+        stats.session_phase.as_deref(),
+        Some("observing" | "local-self-healing")
+    ) {
+        return "observe-anomaly";
+    }
+    if matches!(stats.session_phase.as_deref(), Some("recovery-eligible")) {
+        return "recovery-eligible";
+    }
+    if matches!(stats.session_phase.as_deref(), Some("active-recovery")) {
+        return "active-recovery";
+    }
+    if matches!(stats.session_phase.as_deref(), Some("recovery-blocked")) {
+        return "recovery-blocked";
     }
     if stats.transport_recovery_episode_active
         && stats
@@ -397,7 +415,10 @@ fn recovery_failure_cost_label(action: &str) -> &'static str {
         | "startupLowQualityRetry"
         | "coalesced:keyframeInFlight"
         | "coalesced:decoderResetInFlight" => "medium",
-        "waitForBurst" | "waitForDecoderResetBurst" | "cooldownSuppressed" => "low",
+        "waitForBurst"
+        | "waitForDecoderResetBurst"
+        | "cooldownSuppressed"
+        | "startupGraceSuppressed" => "low",
         _ => "medium",
     }
 }

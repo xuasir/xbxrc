@@ -3,6 +3,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { Focusable } from '@/navigation/core/vue'
+import seriesSImage from '../assets/console/series-s.jpeg'
 import seriesXImage from '../assets/console/series-x.png'
 import BrandedLoading from '../components/common/BrandedLoading.vue'
 import ConsoleStatusCard from '../components/common/ConsoleStatusCard.vue'
@@ -52,7 +53,12 @@ function resolveHostConsoleType(host: HostSummary): string {
 }
 
 function resolveConsoleImage(consoleType: string): string {
-  void consoleType
+  if (consoleType === 'Series S') {
+    return seriesSImage
+  }
+  if (consoleType === 'Series X') {
+    return seriesXImage
+  }
   return seriesXImage
 }
 

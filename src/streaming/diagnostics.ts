@@ -68,10 +68,15 @@ export function buildStreamDiagnosticsSnapshot(input: {
       || recoveryOwnerState === 'supply-starved'
 
   const isRecovering = unifiedLifecyclePhase !== undefined
-    ? unifiedLifecyclePhase === 'recovering'
+    ? isCanonicalRecoveryLifecycle(unifiedLifecyclePhase)
     : (
         input.lifecyclePhase === 'recovering'
         || sessionPhase === 'recovering'
+        || sessionPhase === 'observing'
+        || sessionPhase === 'local-self-healing'
+        || sessionPhase === 'recovery-eligible'
+        || sessionPhase === 'active-recovery'
+        || sessionPhase === 'recovery-blocked'
         || videoHealth === 'recovering'
         || isDecoderRecovering(videoDecoderRecoveryState)
         || isOwnerTransportRecovering(recoveryOwnerState)
@@ -193,6 +198,11 @@ function resolveUnifiedLifecyclePhase(
     return undefined
   }
   if (raw === 'startup'
+    || raw === 'observing'
+    || raw === 'local-self-healing'
+    || raw === 'recovery-eligible'
+    || raw === 'active-recovery'
+    || raw === 'recovery-blocked'
     || raw === 'recovering'
     || raw === 'ramp-up'
     || raw === 'steady'
@@ -206,14 +216,33 @@ function resolveUnifiedLifecyclePhase(
 
 function isCanonicalActiveLifecycle(phase: CanonicalLifecyclePhase): boolean {
   return phase === 'startup'
+    || phase === 'observing'
+    || phase === 'local-self-healing'
+    || phase === 'recovery-eligible'
+    || phase === 'active-recovery'
+    || phase === 'recovery-blocked'
     || phase === 'recovering'
     || phase === 'ramp-up'
     || phase === 'steady'
     || phase === 'degraded'
 }
 
+function isCanonicalRecoveryLifecycle(phase: CanonicalLifecyclePhase): boolean {
+  return phase === 'observing'
+    || phase === 'local-self-healing'
+    || phase === 'recovery-eligible'
+    || phase === 'active-recovery'
+    || phase === 'recovery-blocked'
+    || phase === 'recovering'
+}
+
 type CanonicalLifecyclePhase
   = 'startup'
+    | 'observing'
+    | 'local-self-healing'
+    | 'recovery-eligible'
+    | 'active-recovery'
+    | 'recovery-blocked'
     | 'recovering'
     | 'ramp-up'
     | 'steady'
