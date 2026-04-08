@@ -299,6 +299,37 @@ pub struct XbxEngineVideoDecoderProbeObservation {
 }
 
 #[derive(Clone, Debug, PartialEq)]
+pub struct XbxEngineVideoDecoderBootstrapGateObservation {
+    pub observation_id: u64,
+    pub recovery_state: String,
+    pub frame_rtp_timestamp: u32,
+    pub is_idr: bool,
+    pub has_inband_sps: bool,
+    pub has_inband_pps: bool,
+    pub committed_sps_present: bool,
+    pub committed_pps_present: bool,
+    pub bootstrap_ready: bool,
+    pub bootstrap_reject_reason: Option<String>,
+    pub observed_at_ms: f64,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct XbxEngineDecodeOutputPathObservation {
+    pub observation_id: u64,
+    pub verdict: String,
+    pub detail: String,
+    pub frame_rtp_timestamp: u32,
+    pub is_keyframe: bool,
+    pub status: Option<i32>,
+    pub send_packet_status: Option<i32>,
+    pub receive_frame_status: Option<i32>,
+    pub backend_no_output_streak: Option<u32>,
+    pub input_frames_since_last_decoded: Option<u32>,
+    pub bootstrap_reject_reason: Option<String>,
+    pub observed_at_ms: f64,
+}
+
+#[derive(Clone, Debug, PartialEq)]
 pub struct XbxEngineHostVideoFrameDropEvent {
     pub stage: Option<String>,
     pub action: Option<String>,
@@ -390,7 +421,7 @@ pub struct XbxEngineRecoveryBudgetSnapshot {
     pub reconnect_budget_limit: u8,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct XbxEngineRecoveryDecisionLedgerObservation {
     pub decision_id: u64,
     pub state_before: String,
@@ -400,6 +431,8 @@ pub struct XbxEngineRecoveryDecisionLedgerObservation {
     pub action_selected: String,
     pub budget_before: Option<XbxEngineRecoveryBudgetSnapshot>,
     pub budget_after: Option<XbxEngineRecoveryBudgetSnapshot>,
+    pub trigger_observation_label: Option<String>,
+    pub trigger_observation_summary: Option<String>,
     pub command_result: Option<String>,
     pub command_detail: Option<String>,
     pub observed_at_ms: f64,
@@ -752,15 +785,20 @@ pub struct XbxEngineDataChannelMessageCatalogObservation {
     pub observed_at_ms: f64,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct XbxEngineKeyframeRequestEpisodeObservation {
     pub episode_id: u64,
     pub request_reason: Option<String>,
     pub request_kind: Option<String>,
     pub status: String,
+    pub status_detail: Option<String>,
     pub requested_at_ms: f64,
     pub sent_at_ms: Option<f64>,
     pub deadline_at_ms: Option<f64>,
+    pub transport_detail: Option<String>,
+    pub first_video_packet_at_ms: Option<f64>,
+    pub first_video_packet_rtp_timestamp: Option<u32>,
+    pub first_video_packet_is_keyframe: Option<bool>,
     pub first_keyframe_packet_at_ms: Option<f64>,
     pub first_keyframe_decoded_at_ms: Option<f64>,
     pub response_rtp_timestamp: Option<u32>,
@@ -773,6 +811,8 @@ pub struct XbxEngineH264InspectionObservation {
     pub observation_id: u64,
     pub frame_rtp_timestamp: Option<u32>,
     pub nal_types: Vec<String>,
+    pub nal_count: u16,
+    pub vcl_nal_count: u16,
     pub has_inband_sps: bool,
     pub has_inband_pps: bool,
     pub committed_sps_present: bool,
@@ -782,6 +822,8 @@ pub struct XbxEngineH264InspectionObservation {
     pub parameter_sets_changed: bool,
     pub config_changed: bool,
     pub is_idr: bool,
+    pub sample_width: Option<u32>,
+    pub sample_height: Option<u32>,
     pub bootstrap_ready: bool,
     pub bootstrap_reject_reason: Option<String>,
     pub admission_accepted: bool,
@@ -795,6 +837,9 @@ pub struct XbxEngineMediaRuntimeStats {
     pub session_phase: Option<String>,
     pub message_handshake_acked_at_ms: Option<f64>,
     pub control_ready_at_ms: Option<f64>,
+    pub control_pending_replay_action_count: u8,
+    pub control_pending_replay_since_ms: Option<f64>,
+    pub control_pending_replay_summary: Option<String>,
     pub transport_policy_profile: Option<String>,
     pub recovery_policy_profile: Option<String>,
     pub recovery_diagnosis: Option<String>,
@@ -898,6 +943,9 @@ pub struct XbxEngineMediaRuntimeStats {
     pub video_decoder_stalled: Option<bool>,
     pub video_decoder_backend_name: Option<String>,
     pub latest_video_decoder_probe_observation: Option<XbxEngineVideoDecoderProbeObservation>,
+    pub latest_video_decoder_bootstrap_gate_observation:
+        Option<XbxEngineVideoDecoderBootstrapGateObservation>,
+    pub latest_decode_output_path_observation: Option<XbxEngineDecodeOutputPathObservation>,
     pub video_decoder_hardware_failure_streak: u32,
     pub latest_video_decoder_hardware_failure_time_ms: Option<f64>,
     pub latest_video_decoder_hardware_failure_status: Option<i32>,
@@ -950,6 +998,9 @@ impl Default for XbxEngineMediaRuntimeStats {
             session_phase: None,
             message_handshake_acked_at_ms: None,
             control_ready_at_ms: None,
+            control_pending_replay_action_count: 0,
+            control_pending_replay_since_ms: None,
+            control_pending_replay_summary: None,
             transport_policy_profile: None,
             recovery_policy_profile: None,
             recovery_diagnosis: None,
@@ -1052,6 +1103,8 @@ impl Default for XbxEngineMediaRuntimeStats {
             video_decoder_stalled: None,
             video_decoder_backend_name: None,
             latest_video_decoder_probe_observation: None,
+            latest_video_decoder_bootstrap_gate_observation: None,
+            latest_decode_output_path_observation: None,
             video_decoder_hardware_failure_streak: 0,
             latest_video_decoder_hardware_failure_time_ms: None,
             latest_video_decoder_hardware_failure_status: None,

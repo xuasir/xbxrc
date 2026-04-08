@@ -101,6 +101,8 @@ fn h264_inspection_dto_from_observation(
             observation_id: observation.observation_id,
             frame_rtp_timestamp: observation.frame_rtp_timestamp,
             nal_types: observation.nal_types.clone(),
+            nal_count: observation.nal_count,
+            vcl_nal_count: observation.vcl_nal_count,
             has_inband_sps: observation.has_inband_sps,
             has_inband_pps: observation.has_inband_pps,
             committed_sps_present: observation.committed_sps_present,
@@ -110,6 +112,8 @@ fn h264_inspection_dto_from_observation(
             parameter_sets_changed: observation.parameter_sets_changed,
             config_changed: observation.config_changed,
             is_idr: observation.is_idr,
+            sample_width: observation.sample_width,
+            sample_height: observation.sample_height,
             bootstrap_ready: observation.bootstrap_ready,
             bootstrap_reject_reason: observation.bootstrap_reject_reason.clone(),
             admission_accepted: observation.admission_accepted,
@@ -443,12 +447,14 @@ pub fn build_xbxengine_stats(
     let transport_recovery_note = build_transport_recovery_note(runtime_stats);
     let repair_probe_note = build_repair_probe_note(runtime_stats);
     let reinject_note = build_rtx_reinject_note(runtime_stats);
+    let summary_phase =
+        resolve_runtime_summary_phase(display_phase.as_deref(), lifecycle_phase.as_deref());
     let runtime_summary = build_runtime_summary(
         runtime_stats,
         remote_profile_effective_label.as_deref(),
         remote_profile_baseline.as_deref(),
         video_owner,
-        display_phase.as_deref(),
+        summary_phase,
         video_health.as_deref(),
         observation_note.as_deref(),
         transport_recovery_note.as_deref(),
@@ -457,13 +463,13 @@ pub fn build_xbxengine_stats(
     );
     let primary_issue_chain = build_primary_issue_chain(
         runtime_stats,
-        display_phase.as_deref(),
+        lifecycle_phase.as_deref(),
         video_owner,
         stall_kind.as_deref(),
     );
     let latest_decision_summary = build_latest_decision_summary(
         runtime_stats,
-        display_phase.as_deref(),
+        lifecycle_phase.as_deref(),
         video_owner,
         observation_note.as_deref(),
         transport_recovery_note.as_deref(),
@@ -582,6 +588,48 @@ pub fn build_xbxengine_stats(
                     },
                 )
         }),
+        latest_video_decoder_bootstrap_gate_observation: runtime_stats.and_then(|stats| {
+            stats
+                .latest_video_decoder_bootstrap_gate_observation
+                .as_ref()
+                .map(|observation| {
+                    xbxengine_protocol::XbxEngineVideoDecoderBootstrapGateObservationDto {
+                        observation_id: observation.observation_id,
+                        recovery_state: observation.recovery_state.clone(),
+                        frame_rtp_timestamp: observation.frame_rtp_timestamp,
+                        is_idr: observation.is_idr,
+                        has_inband_sps: observation.has_inband_sps,
+                        has_inband_pps: observation.has_inband_pps,
+                        committed_sps_present: observation.committed_sps_present,
+                        committed_pps_present: observation.committed_pps_present,
+                        bootstrap_ready: observation.bootstrap_ready,
+                        bootstrap_reject_reason: observation.bootstrap_reject_reason.clone(),
+                        observed_at_ms: observation.observed_at_ms,
+                    }
+                })
+        }),
+        latest_decode_output_path_observation: runtime_stats.and_then(|stats| {
+            stats
+                .latest_decode_output_path_observation
+                .as_ref()
+                .map(
+                    |observation| xbxengine_protocol::XbxEngineDecodeOutputPathObservationDto {
+                        observation_id: observation.observation_id,
+                        verdict: observation.verdict.clone(),
+                        detail: observation.detail.clone(),
+                        frame_rtp_timestamp: observation.frame_rtp_timestamp,
+                        is_keyframe: observation.is_keyframe,
+                        status: observation.status,
+                        send_packet_status: observation.send_packet_status,
+                        receive_frame_status: observation.receive_frame_status,
+                        backend_no_output_streak: observation.backend_no_output_streak,
+                        input_frames_since_last_decoded: observation
+                            .input_frames_since_last_decoded,
+                        bootstrap_reject_reason: observation.bootstrap_reject_reason.clone(),
+                        observed_at_ms: observation.observed_at_ms,
+                    },
+                )
+        }),
         video_decoder_hardware_failure_streak: runtime_stats
             .map(|stats| stats.video_decoder_hardware_failure_streak),
         latest_video_decoder_hardware_failure_time_ms: runtime_stats
@@ -637,6 +685,10 @@ pub fn build_xbxengine_stats(
             .map(|stats| stats.video_present_descriptor_metal_import_count_total),
         video_present_descriptor_cpu_upload_count_total: runtime_stats
             .map(|stats| stats.video_present_descriptor_cpu_upload_count_total),
+        latest_video_rtcp_send_failure_time_ms: runtime_stats
+            .and_then(|stats| stats.latest_video_rtcp_send_failure_time_ms),
+        latest_video_rtcp_send_failure_reason: runtime_stats
+            .and_then(|stats| stats.latest_video_rtcp_send_failure_reason.clone()),
         latest_keyframe_request_episode: runtime_stats.and_then(|stats| {
             stats
                 .latest_keyframe_request_episode
@@ -647,9 +699,14 @@ pub fn build_xbxengine_stats(
                         request_reason: episode.request_reason.clone(),
                         request_kind: episode.request_kind.clone(),
                         status: episode.status.clone(),
+                        status_detail: episode.status_detail.clone(),
                         requested_at_ms: episode.requested_at_ms,
                         sent_at_ms: episode.sent_at_ms,
                         deadline_at_ms: episode.deadline_at_ms,
+                        transport_detail: episode.transport_detail.clone(),
+                        first_video_packet_at_ms: episode.first_video_packet_at_ms,
+                        first_video_packet_rtp_timestamp: episode.first_video_packet_rtp_timestamp,
+                        first_video_packet_is_keyframe: episode.first_video_packet_is_keyframe,
                         first_keyframe_packet_at_ms: episode.first_keyframe_packet_at_ms,
                         first_keyframe_decoded_at_ms: episode.first_keyframe_decoded_at_ms,
                         response_rtp_timestamp: episode.response_rtp_timestamp,
@@ -838,6 +895,8 @@ pub fn build_xbxengine_stats(
                                 reconnect_budget_limit: budget.reconnect_budget_limit,
                             }
                         }),
+                        trigger_observation_label: ledger.trigger_observation_label.clone(),
+                        trigger_observation_summary: ledger.trigger_observation_summary.clone(),
                         command_result: ledger.command_result.clone(),
                         command_detail: ledger.command_detail.clone(),
                         observed_at_ms: ledger.observed_at_ms,
@@ -1172,6 +1231,19 @@ fn build_runtime_summary(
     ))
 }
 
+fn resolve_runtime_summary_phase<'a>(
+    display_phase: Option<&'a str>,
+    lifecycle_phase: Option<&'a str>,
+) -> Option<&'a str> {
+    match lifecycle_phase {
+        Some(
+            "observing" | "local-self-healing" | "recovery-eligible" | "active-recovery"
+            | "recovery-blocked" | "recovering" | "ramp-up" | "degraded" | "failed" | "closed",
+        ) => lifecycle_phase,
+        _ => display_phase,
+    }
+}
+
 // 将当前主问题链显式归类，避免每次回归都手工拼 diagnosis/band/health。
 fn build_primary_issue_chain(
     runtime_stats: Option<&XbxEngineMediaRuntimeStats>,
@@ -1184,6 +1256,17 @@ fn build_primary_issue_chain(
         .and_then(|owner| owner.reason.as_deref())
         .or(stats.recovery_diagnosis.as_deref())
         .unwrap_or("none");
+    if let Some(owner) = video_owner {
+        match owner.state.as_str() {
+            "supply-starved" => {
+                return Some(format!(
+                    "display:{}",
+                    owner.reason.as_deref().unwrap_or("supply-starved")
+                ));
+            }
+            _ => {}
+        }
+    }
     match display_phase.unwrap_or("unknown") {
         "observing" => return Some(format!("observing:{recovery_reason}")),
         "local-self-healing" => {
@@ -1232,6 +1315,11 @@ fn build_latest_decision_summary(
 ) -> Option<String> {
     let stats = runtime_stats?;
     if let Some(ledger) = stats.latest_recovery_decision_ledger.as_ref() {
+        if ledger.gate_result.contains("reconnectGranted:")
+            || ledger.gate_result.contains("reconnectBlocked:")
+        {
+            return Some(format!("reconnect:{}", ledger.gate_result));
+        }
         return Some(format!(
             "decision:{}:{}",
             ledger.state_after, ledger.action_selected
@@ -1283,6 +1371,12 @@ fn build_transport_recovery_note(
         .is_some_and(|r| r == "transportAwaitRecoveryKeyframe")
     {
         parts.push("awaitKeyframe:hostIdrOrCleanAnchor".to_string());
+    } else if stats
+        .video_owner_reason
+        .as_deref()
+        .is_some_and(|r| r == "bootstrapInFlight")
+    {
+        parts.push("bootstrapInFlight:cleanAnchorPending".to_string());
     }
     if parts.is_empty() {
         None
@@ -1379,6 +1473,7 @@ fn build_rtx_reinject_note(runtime_stats: Option<&XbxEngineMediaRuntimeStats>) -
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum UnifiedLifecycleState {
     Startup,
+    Recovering,
     Observing,
     LocalSelfHealing,
     RecoveryEligible,
@@ -1395,6 +1490,7 @@ impl UnifiedLifecycleState {
     fn as_str(self) -> &'static str {
         match self {
             Self::Startup => "startup",
+            Self::Recovering => "recovering",
             Self::Observing => "observing",
             Self::LocalSelfHealing => "local-self-healing",
             Self::RecoveryEligible => "recovery-eligible",
@@ -1411,12 +1507,12 @@ impl UnifiedLifecycleState {
     fn from_runtime_value(value: &str) -> Option<Self> {
         match value {
             "startup" | "connecting" | "handshaking" | "priming" => Some(Self::Startup),
+            "recovering" => Some(Self::Recovering),
             "observing" => Some(Self::Observing),
             "local-self-healing" => Some(Self::LocalSelfHealing),
             "recovery-eligible" => Some(Self::RecoveryEligible),
             "active-recovery" => Some(Self::ActiveRecovery),
             "recovery-blocked" => Some(Self::RecoveryBlocked),
-            "recovering" => Some(Self::ActiveRecovery),
             "ramp-up" => Some(Self::RampUp),
             "steady" => Some(Self::Steady),
             "degraded" | "degraded-serving" => Some(Self::Degraded),

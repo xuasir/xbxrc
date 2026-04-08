@@ -240,6 +240,36 @@ fn build_observability_snapshot_includes_latest_h264_inspection() {
         snapshot["latest"]["h264Inspection"]["admissionAccepted"],
         false
     );
+    assert_eq!(
+        snapshot["latest"]["h264Inspection"]["linkedEpisodeId"],
+        Value::Null
+    );
+}
+
+#[test]
+fn build_observability_snapshot_includes_latest_rtcp_send_failure() {
+    let stats = test_stats(json!({
+        "resolution": "",
+        "rtt": "",
+        "fps": 0.0,
+        "pl": "0.00%",
+        "fl": "",
+        "jit": "",
+        "br": "",
+        "decode": "",
+        "latest_video_rtcp_send_failure_time_ms": 1500.0,
+        "latest_video_rtcp_send_failure_reason": "rtcp-write-failed"
+    }));
+
+    let snapshot = build_observability_snapshot(&stats);
+    assert_eq!(
+        snapshot["latest"]["rtcpSendFailure"]["observedAtMs"],
+        1500.0
+    );
+    assert_eq!(
+        snapshot["latest"]["rtcpSendFailure"]["reason"],
+        "rtcp-write-failed"
+    );
 }
 
 #[test]
@@ -569,6 +599,51 @@ fn record_runtime_trace_observations_projects_keyframe_episode_lifecycle() {
     assert!(contents.contains("\"event\":\"keyframeRequestEpisodeDecoded\""));
     assert!(contents.contains("\"event\":\"keyframeRequestEpisodeMissed\""));
     assert!(contents.contains("\"responseVerdict\":\"missed\""));
+    assert!(contents.contains("\"requestToFirstPacketMs\":200.0"));
+    assert!(contents.contains("\"requestToFirstDecodeMs\":220.0"));
+    assert!(contents.contains("\"timedOut\":true"));
+}
+
+#[test]
+fn record_runtime_trace_observations_projects_keyframe_response_observed_event() {
+    let recorder = std::sync::Arc::new(
+        RuntimeTraceRecorder::new_with_mode("verbose").expect("trace recorder"),
+    );
+    let mut state = RuntimeTraceObservationState::default();
+    let stats = test_stats(json!({
+        "resolution": "",
+        "rtt": "",
+        "fps": 0.0,
+        "pl": "0.00%",
+        "fl": "",
+        "jit": "",
+        "br": "",
+        "decode": "",
+        "latest_keyframe_request_episode": {
+            "episode_id": 93,
+            "request_reason": "transportAwaitRecoveryKeyframe",
+            "request_kind": "pli",
+            "status": "response-observed",
+            "status_detail": "bootstrapMissingSps",
+            "requested_at_ms": 1200.0,
+            "sent_at_ms": 1210.0,
+            "deadline_at_ms": 2160.0,
+            "first_video_packet_at_ms": 1300.0,
+            "first_video_packet_rtp_timestamp": 123456000,
+            "first_video_packet_is_keyframe": true,
+            "first_keyframe_packet_at_ms": 1300.0,
+            "response_rtp_timestamp": 123456000,
+            "response_verdict": "pending"
+        }
+    }));
+
+    record_runtime_trace_observations(&recorder, &mut state, Some("session-1"), &stats);
+    let entries = read_trace_lines(recorder.as_ref());
+    let payload = find_event_payload(&entries, "keyframeRequestEpisodeResponseObserved");
+    assert_eq!(payload["episodeId"], 93);
+    assert_eq!(payload["status"], "response-observed");
+    assert_eq!(payload["statusDetail"], "bootstrapMissingSps");
+    assert_eq!(payload["firstVideoPacketIsKeyframe"], true);
 }
 
 #[test]
@@ -617,6 +692,7 @@ fn record_runtime_trace_observations_projects_h264_inspection_rejection() {
     assert_eq!(state_payload["hasInbandSps"], false);
     assert_eq!(state_payload["hasInbandPps"], false);
     assert_eq!(state_payload["admissionAccepted"], false);
+    assert_eq!(state_payload["linkedEpisodeId"], Value::Null);
     let payload = find_event_payload(&entries, "h264InspectionRejected");
     assert_eq!(payload["observationId"], 2194672423u64);
     assert_eq!(payload["frameRtpTimestamp"], 2194672423u32);
@@ -673,6 +749,89 @@ fn record_runtime_trace_observations_keeps_bootstrap_gap_delta_slice_as_observed
     assert_eq!(payload["observationId"], 2194672444u64);
     assert_eq!(payload["bootstrapRejectReason"], "bootstrapMissingSps");
     assert_eq!(payload["admissionAccepted"], true);
+}
+
+#[test]
+fn record_runtime_trace_observations_correlates_keyframe_and_h264_context() {
+    let recorder = std::sync::Arc::new(
+        RuntimeTraceRecorder::new_with_mode("verbose").expect("trace recorder"),
+    );
+    let mut state = RuntimeTraceObservationState::default();
+    let stats = test_stats(json!({
+        "resolution": "",
+        "rtt": "",
+        "fps": 0.0,
+        "pl": "0.00%",
+        "fl": "",
+        "jit": "",
+        "br": "",
+        "decode": "",
+        "latest_keyframe_request_episode": {
+            "episode_id": 91,
+            "request_reason": "transportAwaitRecoveryKeyframe",
+            "request_kind": "pli",
+            "status": "packet-seen",
+            "requested_at_ms": 1200.0,
+            "sent_at_ms": 1210.0,
+            "deadline_at_ms": 2160.0,
+            "first_keyframe_packet_at_ms": 1400.0,
+            "response_rtp_timestamp": 2194672423u32,
+            "response_verdict": "on-time"
+        },
+        "latest_h264_inspection_observation": {
+            "observation_id": 2194672423u64,
+            "frame_rtp_timestamp": 2194672423u32,
+            "nal_types": ["SliceLayerWithoutPartitioningNonIdr"],
+            "nal_count": 1,
+            "vcl_nal_count": 1,
+            "has_inband_sps": false,
+            "has_inband_pps": false,
+            "committed_sps_present": false,
+            "committed_pps_present": false,
+            "slice_headers_valid": false,
+            "delta_continuation_ready": false,
+            "parameter_sets_changed": false,
+            "config_changed": false,
+            "is_idr": false,
+            "sample_width": 1280,
+            "sample_height": 720,
+            "bootstrap_ready": false,
+            "bootstrap_reject_reason": "bootstrapMissingSps",
+            "admission_accepted": false,
+            "observed_at_ms": 1401.0
+        },
+        "latest_video_rtcp_send_failure_time_ms": 1300.0,
+        "latest_video_rtcp_send_failure_reason": "rtcp-write-failed"
+    }));
+
+    record_runtime_trace_observations(&recorder, &mut state, Some("session-1"), &stats);
+
+    let entries = read_trace_lines(recorder.as_ref());
+    let episode_payload = find_event_payload(&entries, "keyframeRequestEpisode");
+    assert_eq!(
+        episode_payload["linkedH264BootstrapRejectReason"],
+        "bootstrapMissingSps"
+    );
+    assert_eq!(episode_payload["linkedH264AdmissionAccepted"], false);
+    assert_eq!(
+        episode_payload["recentRtcpSendFailureReason"],
+        "rtcp-write-failed"
+    );
+
+    let inspection_payload = find_event_payload(&entries, "h264Inspection");
+    assert_eq!(inspection_payload["linkedEpisodeId"], 91);
+    assert_eq!(inspection_payload["linkedEpisodeStatus"], "packet-seen");
+    assert_eq!(
+        inspection_payload["linkedEpisodeRequestReason"],
+        "transportAwaitRecoveryKeyframe"
+    );
+    assert_eq!(
+        inspection_payload["isRecoveryKeyframeResponseContext"],
+        true
+    );
+
+    let rtcp_failure_payload = find_event_payload(&entries, "videoRtcpSendFailureObserved");
+    assert_eq!(rtcp_failure_payload["reason"], "rtcp-write-failed");
 }
 
 #[test]
@@ -1404,6 +1563,90 @@ fn decoder_local_reset_failed_projects_runtime_trace_event() {
     let entries = read_trace_lines(recorder.as_ref());
     let payload = find_event_payload(&entries, "videoDecoderLocalResetFailed");
     assert_eq!(payload["summary"], "reason=stall err=backend unavailable");
+}
+
+#[test]
+fn decoder_bootstrap_gate_rejected_projects_runtime_trace_event() {
+    let recorder = std::sync::Arc::new(
+        RuntimeTraceRecorder::new_with_mode("verbose").expect("trace recorder"),
+    );
+    let mut state = RuntimeTraceObservationState::default();
+    let stats = test_stats(json!({
+        "resolution": "",
+        "rtt": "",
+        "fps": 0.0,
+        "pl": "0.00%",
+        "fl": "",
+        "jit": "",
+        "br": "",
+        "decode": "",
+        "latest_video_decoder_bootstrap_gate_observation": {
+            "observation_id": 7,
+            "recovery_state": "waiting-keyframe",
+            "frame_rtp_timestamp": 2359556541u32,
+            "is_idr": false,
+            "has_inband_sps": false,
+            "has_inband_pps": false,
+            "committed_sps_present": true,
+            "committed_pps_present": true,
+            "bootstrap_ready": false,
+            "bootstrap_reject_reason": "NonIdrVcl",
+            "observed_at_ms": 1400.0
+        }
+    }));
+
+    record_runtime_trace_observations(&recorder, &mut state, Some("session-1"), &stats);
+    let entries = read_trace_lines(recorder.as_ref());
+    let payload = find_event_payload(&entries, "decoderBootstrapGateRejected");
+    assert_eq!(payload["observationId"], 7);
+    assert_eq!(payload["recoveryState"], "waiting-keyframe");
+    assert_eq!(payload["bootstrapRejectReason"], "NonIdrVcl");
+    assert_eq!(payload["committedSpsPresent"], true);
+    assert_eq!(payload["bootstrapReady"], false);
+}
+
+#[test]
+fn decode_output_path_observation_projects_runtime_trace_event() {
+    let recorder = std::sync::Arc::new(
+        RuntimeTraceRecorder::new_with_mode("verbose").expect("trace recorder"),
+    );
+    let mut state = RuntimeTraceObservationState::default();
+    let stats = test_stats(json!({
+        "resolution": "",
+        "rtt": "",
+        "fps": 0.0,
+        "pl": "0.00%",
+        "fl": "",
+        "jit": "",
+        "br": "",
+        "decode": "",
+        "latest_decode_output_path_observation": {
+            "observation_id": 11,
+            "verdict": "backend-no-output",
+            "detail": "backendNoOutput",
+            "frame_rtp_timestamp": 2359556541u32,
+            "is_keyframe": true,
+            "status": null,
+            "send_packet_status": -11,
+            "receive_frame_status": -35,
+            "backend_no_output_streak": 4,
+            "input_frames_since_last_decoded": 9,
+            "bootstrap_reject_reason": null,
+            "observed_at_ms": 1416.0
+        }
+    }));
+
+    record_runtime_trace_observations(&recorder, &mut state, Some("session-1"), &stats);
+    let entries = read_trace_lines(recorder.as_ref());
+    let payload = find_event_payload(&entries, "decodeOutputPathObserved");
+    assert_eq!(payload["observationId"], 11);
+    assert_eq!(payload["verdict"], "backend-no-output");
+    assert_eq!(payload["detail"], "backendNoOutput");
+    assert_eq!(payload["isKeyframe"], true);
+    assert_eq!(payload["sendPacketStatus"], -11);
+    assert_eq!(payload["receiveFrameStatus"], -35);
+    assert_eq!(payload["backendNoOutputStreak"], 4);
+    assert_eq!(payload["inputFramesSinceLastDecoded"], 9);
 }
 
 #[test]

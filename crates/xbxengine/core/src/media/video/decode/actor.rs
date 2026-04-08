@@ -152,6 +152,17 @@ impl DecodeActorHandle {
             );
         }
     }
+
+    #[cfg(test)]
+    pub(crate) fn from_test_sender(tx: SyncSender<DecodeMsg>) -> Self {
+        Self {
+            tx,
+            available_slots: Arc::new(AtomicUsize::new(DECODE_MAILBOX_CAPACITY)),
+            pending_output_backpressure: Arc::new(AtomicBool::new(false)),
+            demand_epoch: Arc::new(AtomicU64::new(1)),
+            demand_notify: Arc::new(Notify::new()),
+        }
+    }
 }
 
 fn run_decode_loop(
@@ -375,18 +386,30 @@ fn run_decode_loop(
                         stats.latest_observation_summary =
                             Some(format!("reason={reason} observedAtMs={observed_at_ms:.3}"));
                     });
-                    if let Err(error) = decode_state.request_local_decoder_reset() {
-                        crate::xbx_log_warn!(
-                            "[XbxDecodeActor] local decoder reset failed reason={} err={}",
-                            reason,
-                            error
-                        );
-                        runtime_stats.update(|stats| {
-                            stats.latest_observation_label =
-                                Some("videoDecoderLocalResetFailed".to_string());
-                            stats.latest_observation_summary =
-                                Some(format!("reason={reason} err={error}"));
-                        });
+                    match decode_state.request_local_decoder_reset() {
+                        Ok(true) => {}
+                        Ok(false) => {
+                            runtime_stats.update(|stats| {
+                                stats.latest_observation_label =
+                                    Some("videoDecoderLocalResetCoalesced".to_string());
+                                stats.latest_observation_summary = Some(format!(
+                                    "reason={reason} detail=awaitSuccessEdgeOrBarrier"
+                                ));
+                            });
+                        }
+                        Err(error) => {
+                            crate::xbx_log_warn!(
+                                "[XbxDecodeActor] local decoder reset failed reason={} err={}",
+                                reason,
+                                error
+                            );
+                            runtime_stats.update(|stats| {
+                                stats.latest_observation_label =
+                                    Some("videoDecoderLocalResetFailed".to_string());
+                                stats.latest_observation_summary =
+                                    Some(format!("reason={reason} err={error}"));
+                            });
+                        }
                     }
                     sync_decode_runtime_stats(
                         &runtime_stats,
@@ -550,6 +573,39 @@ fn sync_decode_runtime_stats(
                     fallback_summary: probe.fallback_summary.clone(),
                     observed_at_ms: probe.observed_at_ms,
                 }
+            });
+        stats.latest_video_decoder_bootstrap_gate_observation = decode_state
+            .latest_bootstrap_gate_observation()
+            .map(
+                |observation| crate::XbxEngineVideoDecoderBootstrapGateObservation {
+                    observation_id: observation.observation_id,
+                    recovery_state: observation.recovery_state.as_str().to_string(),
+                    frame_rtp_timestamp: observation.frame_rtp_timestamp,
+                    is_idr: observation.is_idr,
+                    has_inband_sps: observation.has_inband_sps,
+                    has_inband_pps: observation.has_inband_pps,
+                    committed_sps_present: observation.committed_sps_present,
+                    committed_pps_present: observation.committed_pps_present,
+                    bootstrap_ready: observation.bootstrap_ready,
+                    bootstrap_reject_reason: observation.bootstrap_reject_reason.clone(),
+                    observed_at_ms: observation.observed_at_ms,
+                },
+            );
+        stats.latest_decode_output_path_observation = decode_state
+            .latest_decode_output_path_observation()
+            .map(|observation| crate::XbxEngineDecodeOutputPathObservation {
+                observation_id: observation.observation_id,
+                verdict: observation.verdict.as_str().to_string(),
+                detail: observation.detail.to_string(),
+                frame_rtp_timestamp: observation.frame_rtp_timestamp,
+                is_keyframe: observation.is_keyframe,
+                status: observation.status,
+                send_packet_status: observation.send_packet_status,
+                receive_frame_status: observation.receive_frame_status,
+                backend_no_output_streak: observation.backend_no_output_streak,
+                input_frames_since_last_decoded: observation.input_frames_since_last_decoded,
+                bootstrap_reject_reason: observation.bootstrap_reject_reason.clone(),
+                observed_at_ms: observation.observed_at_ms,
             });
         stats.video_decoder_stalled = Some(video_decoder_stalled);
     });

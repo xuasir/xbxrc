@@ -26,12 +26,15 @@ pub(super) struct RuntimeTraceObservationState {
     anchor_candidate_observation: Option<(u64, Option<u32>, String, Option<String>, f64)>,
     h264_inspection_observation: Option<xbxengine_protocol::XbxEngineH264InspectionObservationDto>,
     decoder_probe_observation_id: Option<u64>,
+    decoder_bootstrap_gate_observation_id: Option<u64>,
+    decode_output_path_observation_id: Option<u64>,
     render_candidate_decision_id: Option<u64>,
     recovery_keyframe_request_count: Option<u64>,
     recovery_decoder_reset_count: Option<u64>,
     recovery_reconnect_count: Option<u64>,
     keyframe_request_episode:
         Option<xbxengine_protocol::XbxEngineKeyframeRequestEpisodeObservationDto>,
+    latest_video_rtcp_send_failure_signature: Option<(String, String)>,
     recovery_hard_fallback_timer_ms: Option<f64>,
     recovery_hard_fallback_trigger_reason: Option<String>,
     recovery_hard_fallback_timer_reset_reason: Option<String>,
@@ -166,6 +169,8 @@ pub(super) fn build_observability_snapshot(stats: &XbxEngineStatsDto) -> serde_j
             "decoderStatus": stats.video_decoder_recovery_status,
             "decoderStateChangedAtMs": stats.video_decoder_recovery_state_changed_at_ms,
             "decoderProbe": stats.latest_video_decoder_probe_observation,
+            "decoderBootstrapGate": stats.latest_video_decoder_bootstrap_gate_observation,
+            "decodeOutputPath": stats.latest_decode_output_path_observation,
         },
         "directGaming": {
             "bitrateBand": stats.direct_gaming_bitrate_band,
@@ -272,8 +277,12 @@ pub(super) fn build_observability_snapshot(stats: &XbxEngineStatsDto) -> serde_j
             "frameDrop": stats.latest_video_frame_drop,
             "frameRecovery": stats.latest_video_frame_recovery_observation,
             "nack": stats.latest_video_nack_observation,
+            "rtcpSendFailure": latest_rtcp_send_failure_snapshot(stats),
             "keyframeRequestEpisode": stats.latest_keyframe_request_episode,
-            "h264Inspection": h264_inspection_payload(stats.latest_h264_inspection_observation.as_ref()),
+            "h264Inspection": h264_inspection_payload(
+                stats.latest_h264_inspection_observation.as_ref(),
+                stats.latest_keyframe_request_episode.as_ref(),
+            ),
             "timeline": stats.latest_video_timeline_observation,
             "decodeCandidate": stats.latest_decode_candidate_decision,
             "renderCandidate": stats.latest_render_candidate_decision,
@@ -370,6 +379,29 @@ pub(super) fn record_runtime_trace_observations(
     session_id: Option<&str>,
     stats: &XbxEngineStatsDto,
 ) {
+    let latest_rtcp_send_failure = latest_rtcp_send_failure_from_stats(stats);
+    let latest_rtcp_send_failure_signature = latest_rtcp_send_failure
+        .as_ref()
+        .map(|(observed_at_ms, reason)| (format!("{observed_at_ms:.1}"), reason.clone()));
+    if observation_state.latest_video_rtcp_send_failure_signature
+        != latest_rtcp_send_failure_signature
+    {
+        observation_state.latest_video_rtcp_send_failure_signature =
+            latest_rtcp_send_failure_signature;
+        if let Some((observed_at_ms, reason)) = latest_rtcp_send_failure.as_ref() {
+            runtime_trace.record_event(
+                "xbxengine",
+                "videoRtcpSendFailureObserved",
+                session_id,
+                json!({
+                    "observedAtMs": observed_at_ms,
+                    "reason": reason,
+                    "source": "latestObservation",
+                }),
+            );
+        }
+    }
+
     if let Some(packet_gap) = stats.latest_video_packet_gap.as_ref() {
         if observation_state.packet_gap_observation_id != Some(packet_gap.observation_id) {
             observation_state.packet_gap_observation_id = Some(packet_gap.observation_id);
@@ -517,6 +549,61 @@ pub(super) fn record_runtime_trace_observations(
                     "fallbackCount": decoder_probe.fallback_count,
                     "fallbackSummary": decoder_probe.fallback_summary,
                     "observedAtMs": decoder_probe.observed_at_ms,
+                }),
+            );
+        }
+    }
+
+    if let Some(observation) = stats
+        .latest_video_decoder_bootstrap_gate_observation
+        .as_ref()
+    {
+        if observation_state.decoder_bootstrap_gate_observation_id
+            != Some(observation.observation_id)
+        {
+            observation_state.decoder_bootstrap_gate_observation_id =
+                Some(observation.observation_id);
+            runtime_trace.record_event(
+                "xbxengine",
+                "decoderBootstrapGateRejected",
+                session_id,
+                json!({
+                    "observationId": observation.observation_id,
+                    "recoveryState": observation.recovery_state,
+                    "frameRtpTimestamp": observation.frame_rtp_timestamp,
+                    "isIdr": observation.is_idr,
+                    "hasInbandSps": observation.has_inband_sps,
+                    "hasInbandPps": observation.has_inband_pps,
+                    "committedSpsPresent": observation.committed_sps_present,
+                    "committedPpsPresent": observation.committed_pps_present,
+                    "bootstrapReady": observation.bootstrap_ready,
+                    "bootstrapRejectReason": observation.bootstrap_reject_reason,
+                    "observedAtMs": observation.observed_at_ms,
+                }),
+            );
+        }
+    }
+
+    if let Some(observation) = stats.latest_decode_output_path_observation.as_ref() {
+        if observation_state.decode_output_path_observation_id != Some(observation.observation_id) {
+            observation_state.decode_output_path_observation_id = Some(observation.observation_id);
+            runtime_trace.record_event(
+                "xbxengine",
+                "decodeOutputPathObserved",
+                session_id,
+                json!({
+                    "observationId": observation.observation_id,
+                    "verdict": observation.verdict,
+                    "detail": observation.detail,
+                    "frameRtpTimestamp": observation.frame_rtp_timestamp,
+                    "isKeyframe": observation.is_keyframe,
+                    "status": observation.status,
+                    "sendPacketStatus": observation.send_packet_status,
+                    "receiveFrameStatus": observation.receive_frame_status,
+                    "backendNoOutputStreak": observation.backend_no_output_streak,
+                    "inputFramesSinceLastDecoded": observation.input_frames_since_last_decoded,
+                    "bootstrapRejectReason": observation.bootstrap_reject_reason,
+                    "observedAtMs": observation.observed_at_ms,
                 }),
             );
         }
@@ -950,8 +1037,11 @@ pub(super) fn record_runtime_trace_observations(
 
     if observation_state.keyframe_request_episode != stats.latest_keyframe_request_episode {
         observation_state.keyframe_request_episode = stats.latest_keyframe_request_episode.clone();
-        let payload =
-            keyframe_request_episode_payload(stats.latest_keyframe_request_episode.as_ref());
+        let payload = keyframe_request_episode_payload(
+            stats.latest_keyframe_request_episode.as_ref(),
+            stats.latest_h264_inspection_observation.as_ref(),
+            latest_rtcp_send_failure.as_ref(),
+        );
         runtime_trace.record_state(
             "xbxengine",
             "keyframeRequestEpisode",
@@ -969,7 +1059,10 @@ pub(super) fn record_runtime_trace_observations(
         observation_state.h264_inspection_observation =
             stats.latest_h264_inspection_observation.clone();
         if let Some(inspection) = stats.latest_h264_inspection_observation.as_ref() {
-            let payload = h264_inspection_payload(Some(inspection));
+            let payload = h264_inspection_payload(
+                Some(inspection),
+                stats.latest_keyframe_request_episode.as_ref(),
+            );
             runtime_trace.record_state("xbxengine", "h264Inspection", session_id, payload.clone());
             let event_name = if inspection.admission_accepted {
                 "h264InspectionObserved"
@@ -1397,6 +1490,7 @@ fn keyframe_request_episode_event_name(status: &str) -> Option<&'static str> {
     match status {
         "requested" => Some("keyframeRequestEpisodeRequested"),
         "sent" => Some("keyframeRequestEpisodeSent"),
+        "response-observed" => Some("keyframeRequestEpisodeResponseObserved"),
         "packet-seen" => Some("keyframeRequestEpisodePacketSeen"),
         "decoded" => Some("keyframeRequestEpisodeDecoded"),
         "missed" => Some("keyframeRequestEpisodeMissed"),
@@ -1406,6 +1500,8 @@ fn keyframe_request_episode_event_name(status: &str) -> Option<&'static str> {
 
 fn keyframe_request_episode_payload(
     episode: Option<&xbxengine_protocol::XbxEngineKeyframeRequestEpisodeObservationDto>,
+    h264_inspection: Option<&xbxengine_protocol::XbxEngineH264InspectionObservationDto>,
+    latest_rtcp_send_failure: Option<&(f64, String)>,
 ) -> serde_json::Value {
     match episode {
         Some(episode) => json!({
@@ -1413,14 +1509,29 @@ fn keyframe_request_episode_payload(
             "requestReason": episode.request_reason.clone(),
             "requestKind": episode.request_kind.clone(),
             "status": episode.status.clone(),
+            "statusDetail": episode.status_detail.clone(),
             "requestedAtMs": episode.requested_at_ms,
             "sentAtMs": episode.sent_at_ms,
             "deadlineAtMs": episode.deadline_at_ms,
+            "transportDetail": episode.transport_detail.clone(),
+            "firstVideoPacketAtMs": episode.first_video_packet_at_ms,
+            "firstVideoPacketRtpTimestamp": episode.first_video_packet_rtp_timestamp,
+            "firstVideoPacketIsKeyframe": episode.first_video_packet_is_keyframe,
             "firstKeyframePacketAtMs": episode.first_keyframe_packet_at_ms,
             "firstKeyframeDecodedAtMs": episode.first_keyframe_decoded_at_ms,
             "responseRtpTimestamp": episode.response_rtp_timestamp,
             "responseFrameSeq": episode.response_frame_seq,
             "responseVerdict": episode.response_verdict.clone(),
+            "requestToFirstPacketMs": duration_ms(episode.requested_at_ms, episode.first_keyframe_packet_at_ms),
+            "requestToFirstDecodeMs": duration_ms(episode.requested_at_ms, episode.first_keyframe_decoded_at_ms),
+            "sentToFirstPacketMs": episode.sent_at_ms.and_then(|sent_at_ms| duration_ms(sent_at_ms, episode.first_keyframe_packet_at_ms)),
+            "sentToFirstDecodeMs": episode.sent_at_ms.and_then(|sent_at_ms| duration_ms(sent_at_ms, episode.first_keyframe_decoded_at_ms)),
+            "timedOut": keyframe_episode_timed_out(episode),
+            "recentRtcpSendFailureObservedAtMs": latest_rtcp_send_failure.map(|(observed_at_ms, _)| *observed_at_ms),
+            "recentRtcpSendFailureReason": latest_rtcp_send_failure.map(|(_, reason)| reason.clone()),
+            "linkedH264BootstrapRejectReason": h264_inspection.and_then(|inspection| inspection.bootstrap_reject_reason.clone()),
+            "linkedH264AdmissionAccepted": h264_inspection.map(|inspection| inspection.admission_accepted),
+            "linkedH264ObservedAtMs": h264_inspection.map(|inspection| inspection.observed_at_ms),
         }),
         None => json!(null),
     }
@@ -1428,12 +1539,15 @@ fn keyframe_request_episode_payload(
 
 fn h264_inspection_payload(
     observation: Option<&xbxengine_protocol::XbxEngineH264InspectionObservationDto>,
+    keyframe_episode: Option<&xbxengine_protocol::XbxEngineKeyframeRequestEpisodeObservationDto>,
 ) -> serde_json::Value {
     match observation {
         Some(observation) => json!({
             "observationId": observation.observation_id,
             "frameRtpTimestamp": observation.frame_rtp_timestamp,
             "nalTypes": observation.nal_types.clone(),
+            "nalCount": observation.nal_count,
+            "vclNalCount": observation.vcl_nal_count,
             "hasInbandSps": observation.has_inband_sps,
             "hasInbandPps": observation.has_inband_pps,
             "committedSpsPresent": observation.committed_sps_present,
@@ -1443,13 +1557,83 @@ fn h264_inspection_payload(
             "parameterSetsChanged": observation.parameter_sets_changed,
             "configChanged": observation.config_changed,
             "isIdr": observation.is_idr,
+            "sampleWidth": observation.sample_width,
+            "sampleHeight": observation.sample_height,
             "bootstrapReady": observation.bootstrap_ready,
             "bootstrapRejectReason": observation.bootstrap_reject_reason.clone(),
             "admissionAccepted": observation.admission_accepted,
             "observedAtMs": observation.observed_at_ms,
+            "linkedEpisodeId": keyframe_episode.map(|episode| episode.episode_id),
+            "linkedEpisodeStatus": keyframe_episode.map(|episode| episode.status.clone()),
+            "linkedEpisodeRequestReason": keyframe_episode.and_then(|episode| episode.request_reason.clone()),
+            "linkedEpisodeResponseVerdict": keyframe_episode.and_then(|episode| episode.response_verdict.clone()),
+            "isRecoveryKeyframeResponseContext": keyframe_episode_response_context(keyframe_episode, Some(observation)),
         }),
         None => json!(null),
     }
+}
+
+fn duration_ms(start_ms: f64, end_ms: Option<f64>) -> Option<f64> {
+    end_ms.map(|end_ms| (end_ms - start_ms).max(0.0))
+}
+
+fn keyframe_episode_timed_out(
+    episode: &xbxengine_protocol::XbxEngineKeyframeRequestEpisodeObservationDto,
+) -> bool {
+    episode.status == "missed" || matches!(episode.response_verdict.as_deref(), Some("missed"))
+}
+
+fn keyframe_episode_response_context(
+    keyframe_episode: Option<&xbxengine_protocol::XbxEngineKeyframeRequestEpisodeObservationDto>,
+    h264_inspection: Option<&xbxengine_protocol::XbxEngineH264InspectionObservationDto>,
+) -> bool {
+    let Some(keyframe_episode) = keyframe_episode else {
+        return false;
+    };
+    if keyframe_episode.request_reason.as_deref() != Some("transportAwaitRecoveryKeyframe") {
+        return false;
+    }
+    if !matches!(keyframe_episode.status.as_str(), "packet-seen" | "decoded") {
+        return false;
+    }
+    let Some(h264_inspection) = h264_inspection else {
+        return true;
+    };
+    match (
+        keyframe_episode.response_rtp_timestamp,
+        h264_inspection.frame_rtp_timestamp,
+    ) {
+        (Some(episode_rtp_timestamp), Some(frame_rtp_timestamp)) => {
+            episode_rtp_timestamp == frame_rtp_timestamp
+        }
+        _ => true,
+    }
+}
+
+fn latest_rtcp_send_failure_from_stats(stats: &XbxEngineStatsDto) -> Option<(f64, String)> {
+    if let (Some(observed_at_ms), Some(reason)) = (
+        stats.latest_video_rtcp_send_failure_time_ms,
+        stats.latest_video_rtcp_send_failure_reason.clone(),
+    ) {
+        return Some((observed_at_ms, reason));
+    }
+    if stats.latest_observation_label.as_deref() != Some("rtcVideoRtcpSendFailed") {
+        return None;
+    }
+    let summary = stats.latest_observation_summary.as_deref()?;
+    let prefix = "video rtcp send failed at ";
+    let rest = summary.strip_prefix(prefix)?;
+    let (observed_at_ms_text, reason_text) = rest.split_once(" reason=")?;
+    let observed_at_ms = observed_at_ms_text.trim().parse::<f64>().ok()?;
+    Some((observed_at_ms, reason_text.to_string()))
+}
+
+fn latest_rtcp_send_failure_snapshot(stats: &XbxEngineStatsDto) -> Option<serde_json::Value> {
+    let (observed_at_ms, reason) = latest_rtcp_send_failure_from_stats(stats)?;
+    Some(json!({
+        "observedAtMs": observed_at_ms,
+        "reason": reason,
+    }))
 }
 
 fn is_timeout_source_event(source_event: &str) -> bool {

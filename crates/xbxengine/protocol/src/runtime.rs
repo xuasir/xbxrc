@@ -182,6 +182,37 @@ pub struct XbxEngineVideoDecoderProbeObservationDto {
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct XbxEngineVideoDecoderBootstrapGateObservationDto {
+    pub observation_id: u64,
+    pub recovery_state: String,
+    pub frame_rtp_timestamp: u32,
+    pub is_idr: bool,
+    pub has_inband_sps: bool,
+    pub has_inband_pps: bool,
+    pub committed_sps_present: bool,
+    pub committed_pps_present: bool,
+    pub bootstrap_ready: bool,
+    pub bootstrap_reject_reason: Option<String>,
+    pub observed_at_ms: f64,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct XbxEngineDecodeOutputPathObservationDto {
+    pub observation_id: u64,
+    pub verdict: String,
+    pub detail: String,
+    pub frame_rtp_timestamp: u32,
+    pub is_keyframe: bool,
+    pub status: Option<i32>,
+    pub send_packet_status: Option<i32>,
+    pub receive_frame_status: Option<i32>,
+    pub backend_no_output_streak: Option<u32>,
+    pub input_frames_since_last_decoded: Option<u32>,
+    pub bootstrap_reject_reason: Option<String>,
+    pub observed_at_ms: f64,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct XbxEngineFrameRecoveryObservationDto {
     pub observation_id: u64,
     pub action: String,
@@ -247,6 +278,8 @@ pub struct XbxEngineRecoveryDecisionLedgerObservationDto {
     pub action_selected: String,
     pub budget_before: Option<XbxEngineRecoveryBudgetSnapshotDto>,
     pub budget_after: Option<XbxEngineRecoveryBudgetSnapshotDto>,
+    pub trigger_observation_label: Option<String>,
+    pub trigger_observation_summary: Option<String>,
     pub command_result: Option<String>,
     pub command_detail: Option<String>,
     pub observed_at_ms: f64,
@@ -420,9 +453,19 @@ pub struct XbxEngineKeyframeRequestEpisodeObservationDto {
     pub request_reason: Option<String>,
     pub request_kind: Option<String>,
     pub status: String,
+    #[serde(default)]
+    pub status_detail: Option<String>,
     pub requested_at_ms: f64,
     pub sent_at_ms: Option<f64>,
     pub deadline_at_ms: Option<f64>,
+    #[serde(default)]
+    pub transport_detail: Option<String>,
+    #[serde(default)]
+    pub first_video_packet_at_ms: Option<f64>,
+    #[serde(default)]
+    pub first_video_packet_rtp_timestamp: Option<u32>,
+    #[serde(default)]
+    pub first_video_packet_is_keyframe: Option<bool>,
     pub first_keyframe_packet_at_ms: Option<f64>,
     pub first_keyframe_decoded_at_ms: Option<f64>,
     pub response_rtp_timestamp: Option<u32>,
@@ -435,6 +478,10 @@ pub struct XbxEngineH264InspectionObservationDto {
     pub observation_id: u64,
     pub frame_rtp_timestamp: Option<u32>,
     pub nal_types: Vec<String>,
+    #[serde(default)]
+    pub nal_count: u16,
+    #[serde(default)]
+    pub vcl_nal_count: u16,
     pub has_inband_sps: bool,
     pub has_inband_pps: bool,
     pub committed_sps_present: bool,
@@ -444,6 +491,10 @@ pub struct XbxEngineH264InspectionObservationDto {
     pub parameter_sets_changed: bool,
     pub config_changed: bool,
     pub is_idr: bool,
+    #[serde(default)]
+    pub sample_width: Option<u32>,
+    #[serde(default)]
+    pub sample_height: Option<u32>,
     pub bootstrap_ready: bool,
     pub bootstrap_reject_reason: Option<String>,
     pub admission_accepted: bool,
@@ -513,6 +564,9 @@ pub struct XbxEngineStatsDto {
     pub video_decoder_reset_count: Option<u64>,
     pub video_decoder_stalled: Option<bool>,
     pub latest_video_decoder_probe_observation: Option<XbxEngineVideoDecoderProbeObservationDto>,
+    pub latest_video_decoder_bootstrap_gate_observation:
+        Option<XbxEngineVideoDecoderBootstrapGateObservationDto>,
+    pub latest_decode_output_path_observation: Option<XbxEngineDecodeOutputPathObservationDto>,
     pub video_decoder_hardware_failure_streak: Option<u32>,
     pub latest_video_decoder_hardware_failure_time_ms: Option<f64>,
     pub latest_video_decoder_hardware_failure_status: Option<i32>,
@@ -547,6 +601,10 @@ pub struct XbxEngineStatsDto {
     pub video_present_descriptor_upload_mode: Option<String>,
     pub video_present_descriptor_metal_import_count_total: Option<u64>,
     pub video_present_descriptor_cpu_upload_count_total: Option<u64>,
+    #[serde(default)]
+    pub latest_video_rtcp_send_failure_time_ms: Option<f64>,
+    #[serde(default)]
+    pub latest_video_rtcp_send_failure_reason: Option<String>,
     pub latest_keyframe_request_episode: Option<XbxEngineKeyframeRequestEpisodeObservationDto>,
     pub latest_h264_inspection_observation: Option<XbxEngineH264InspectionObservationDto>,
     pub recovery_keyframe_request_count: Option<u64>,

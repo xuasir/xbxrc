@@ -6,10 +6,12 @@ use std::sync::{
 use std::time::{Duration, Instant};
 
 use super::{
-    XbxDecodeCandidateState, XbxDecodeWorkloadState, XbxVideoDecodeState, XbxVideoRecoveryEvent,
-    XbxVideoRecoveryState,
+    XbxDecodeCandidateState, XbxDecodeOutputPathVerdict, XbxDecodeWorkloadState,
+    XbxVideoDecodeState, XbxVideoRecoveryEvent, XbxVideoRecoveryState,
 };
-use crate::media::video::decode::backend::{XbxVideoDecoderBackend, XbxVideoDecoderProbeSummary};
+use crate::media::video::decode::backend::{
+    XbxVideoDecoderBackend, XbxVideoDecoderBackendDecodeOutcome, XbxVideoDecoderProbeSummary,
+};
 use crate::media::video::h264::inspection::{
     H264AccessUnitInspection, H264AccessUnitInspector, H264BootstrapRejectReason,
 };
@@ -37,8 +39,12 @@ impl XbxVideoDecoderBackend for SpyHardwareDecoder {
         &mut self,
         _encoded_frame: EncodedFrame,
         _now_ms: f64,
-    ) -> Result<Option<XbxRenderFrame>, crate::XbxEngineRuntimeError> {
-        Ok(None)
+    ) -> Result<XbxVideoDecoderBackendDecodeOutcome, crate::XbxEngineRuntimeError> {
+        Ok(XbxVideoDecoderBackendDecodeOutcome {
+            frame: None,
+            send_packet_status: None,
+            receive_frame_status: None,
+        })
     }
 }
 
@@ -203,6 +209,132 @@ fn recovery_fsm_moves_from_waiting_keyframe_to_recovering_then_nominal() {
     assert_eq!(transition.from_state, XbxVideoRecoveryState::Recovering);
     assert_eq!(transition.to_state, XbxVideoRecoveryState::Nominal);
     assert_eq!(decode_calls.load(Ordering::Relaxed), 2);
+}
+
+#[test]
+fn waiting_keyframe_non_bootstrap_frame_records_bootstrap_gate_observation() {
+    let decoder = SpyHardwareDecoder;
+    let decoder_factory = Box::new(|| {
+        (
+            Box::new(ScriptedHardwareDecoder {
+                backend_name: "scripted-recreated",
+                decode_calls: Arc::new(AtomicUsize::new(0)),
+                scripted_results: VecDeque::new(),
+            }) as Box<dyn XbxVideoDecoderBackend>,
+            XbxVideoDecoderProbeSummary {
+                selected_backend_name: "scripted-recreated".to_string(),
+                selected_backend_kind: "software".to_string(),
+                fallback_count: 1,
+                fallback_summary: Some("external-reset-recreate".to_string()),
+            },
+        )
+    });
+    let mut state =
+        XbxVideoDecodeState::new_for_test_with_factory(20, 30, Box::new(decoder), decoder_factory);
+
+    state
+        .request_local_decoder_reset()
+        .expect("decoder reset should succeed");
+    assert!(state
+        .process_encoded_frame(make_encoded_frame(false), 1_000.0)
+        .is_none());
+
+    let observation = state
+        .latest_bootstrap_gate_observation()
+        .expect("bootstrap gate observation should exist");
+    assert_eq!(
+        observation.recovery_state,
+        XbxVideoRecoveryState::WaitingKeyframe
+    );
+    assert_eq!(observation.frame_rtp_timestamp, 2);
+    assert!(!observation.is_idr);
+    assert!(!observation.has_inband_sps);
+    assert!(!observation.has_inband_pps);
+    assert!(!observation.bootstrap_ready);
+    assert_eq!(
+        observation.bootstrap_reject_reason.as_deref(),
+        Some(H264BootstrapRejectReason::MissingSps.as_str())
+    );
+
+    let output_observation = state
+        .latest_decode_output_path_observation()
+        .expect("decode output path observation should exist");
+    assert_eq!(
+        output_observation.verdict,
+        XbxDecodeOutputPathVerdict::BootstrapGateRejected
+    );
+    assert_eq!(output_observation.detail, "bootstrapGateRejected");
+    assert_eq!(
+        output_observation.bootstrap_reject_reason.as_deref(),
+        Some(H264BootstrapRejectReason::MissingSps.as_str())
+    );
+}
+
+#[test]
+fn backend_no_output_records_decode_output_path_observation() {
+    let decoder = ScriptedHardwareDecoder {
+        backend_name: "scripted",
+        decode_calls: Arc::new(AtomicUsize::new(0)),
+        scripted_results: VecDeque::from([Ok(None)]),
+    };
+    let mut state = XbxVideoDecodeState::new_for_test(20, 30, Box::new(decoder));
+
+    assert!(state
+        .process_encoded_frame(make_encoded_frame(true), 1_000.0)
+        .is_none());
+
+    let observation = state
+        .latest_decode_output_path_observation()
+        .expect("decode output path observation should exist");
+    assert_eq!(
+        observation.verdict,
+        XbxDecodeOutputPathVerdict::BackendNoOutput
+    );
+    assert_eq!(observation.detail, "backendNoOutput");
+    assert_eq!(observation.frame_rtp_timestamp, 1);
+    assert!(observation.is_keyframe);
+    assert_eq!(observation.status, None);
+}
+
+#[test]
+fn duplicate_local_decoder_reset_without_success_edge_is_coalesced() {
+    let decoder = SpyHardwareDecoder;
+    let reset_calls = Arc::new(AtomicUsize::new(0));
+    let reset_calls_for_factory = reset_calls.clone();
+    let decoder_factory = Box::new(move || {
+        let call_index = reset_calls_for_factory.fetch_add(1, Ordering::Relaxed);
+        (
+            Box::new(ScriptedHardwareDecoder {
+                backend_name: if call_index == 0 {
+                    "replacement-1"
+                } else {
+                    "replacement-2"
+                },
+                decode_calls: Arc::new(AtomicUsize::new(0)),
+                scripted_results: VecDeque::new(),
+            }) as Box<dyn XbxVideoDecoderBackend>,
+            XbxVideoDecoderProbeSummary {
+                selected_backend_name: "replacement".to_string(),
+                selected_backend_kind: "software".to_string(),
+                fallback_count: 1,
+                fallback_summary: Some("reset-recreate".to_string()),
+            },
+        )
+    });
+    let mut state =
+        XbxVideoDecodeState::new_for_test_with_factory(20, 30, Box::new(decoder), decoder_factory);
+
+    let first = state
+        .request_local_decoder_reset()
+        .expect("first decoder reset should succeed");
+    let second = state
+        .request_local_decoder_reset()
+        .expect("duplicate decoder reset should be coalesced");
+
+    assert!(first);
+    assert!(!second);
+    assert_eq!(reset_calls.load(Ordering::Relaxed), 1);
+    assert_eq!(state.decoder_reset_count(), 1);
 }
 
 #[test]
@@ -677,9 +809,16 @@ impl XbxVideoDecoderBackend for ScriptedHardwareDecoder {
         &mut self,
         _encoded_frame: EncodedFrame,
         _now_ms: f64,
-    ) -> Result<Option<XbxRenderFrame>, crate::XbxEngineRuntimeError> {
+    ) -> Result<XbxVideoDecoderBackendDecodeOutcome, crate::XbxEngineRuntimeError> {
         self.decode_calls.fetch_add(1, Ordering::Relaxed);
-        self.scripted_results.pop_front().unwrap_or(Ok(None))
+        match self.scripted_results.pop_front().unwrap_or(Ok(None)) {
+            Ok(frame) => Ok(XbxVideoDecoderBackendDecodeOutcome {
+                frame,
+                send_packet_status: None,
+                receive_frame_status: None,
+            }),
+            Err(error) => Err(error),
+        }
     }
 }
 
