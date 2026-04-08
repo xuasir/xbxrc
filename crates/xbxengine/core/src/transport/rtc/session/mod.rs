@@ -1,4 +1,9 @@
 pub mod actor;
 pub mod clock;
+pub mod connectivity_reason;
+pub mod expensive_recovery_gate;
+pub mod facts;
 pub mod mailbox;
 pub mod policy;
+pub mod recovery_ramp_guard;
+pub mod startup_compat;

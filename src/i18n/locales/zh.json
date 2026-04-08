@@ -251,13 +251,17 @@
         "unknown": "--",
         "none": "未使用",
         "stable": "正常",
+        "probing": "局部探测/自愈中",
         "recovering": "恢复中",
+        "blocked": "恢复受阻",
         "displaySupplyLimited": "显示供给波动",
         "inactive": "未激活",
         "noVideo": "无画面告警"
       },
       "notices": {
+        "probing": "系统正在做局部探测或自愈，还没有进入昂贵恢复。",
         "recovering": "连接正在恢复中，画面质量可能会短暂波动。",
+        "blocked": "恢复动作当前被预算、门禁或在途动作阻断，需要等待当前恢复窗结束。",
         "displaySupplyLimited": "显示侧供给短暂吃紧（非传输主恢复），画面可能轻微抖动。",
         "relayPath": "当前媒体链路正在使用中继传输。",
         "noVideo": "连接已建立一段时间但仍无画面，退出后重新连接会更稳妥。"
@@ -360,9 +364,11 @@
           "steady__healthy": "稳态 · 健康",
           "startup__priming": "启动 · 首帧准备",
           "display__supplyStarved": "显示 · 供给不足",
+          "local-self-healing__transportAwaitRecoveryKeyframe": "局部自愈 · 等待恢复关键帧",
           "recovery__transportAwaitRecoveryKeyframe": "恢复 · 等待恢复关键帧"
         },
         "latestDecision": {
+          "phase__local-self-healing__transportAwaitRecoveryKeyframe": "阶段：局部自愈 / 等待恢复关键帧",
           "owner__stable-serving__steady": "主视图：稳定输出 / 稳态",
           "owner__supply-starved__supplyStarved": "主视图：供给不足",
           "owner__rebuilding-supply__transportAwaitRecoveryKeyframe": "主视图：重建供给 / 等待恢复关键帧",
@@ -374,6 +380,15 @@
           "decision": "决策",
           "phase": "阶段",
           "owner": "主视图"
+        },
+        "latestDecisionReconnect": {
+          "pass__reconnectGranted__connectivityEvidence": "重连：已放行 / 连接层证据成立",
+          "pass__reconnectGranted__localRecoveryExhausted": "重连：已放行 / 本地恢复窗已耗尽",
+          "suppressed__reconnectBlocked__lifecycleOverlap": "重连：已阻断 / 生命周期恢复与媒体恢复重叠",
+          "suppressed__reconnectBlocked__twccWarmup__builderConfigured": "重连：已阻断 / TWCC 预热中（builder 已配置）",
+          "suppressed__reconnectBlocked__twccWarmup__missingLocalFeedback": "重连：已阻断 / TWCC 预热中（缺少本地反馈）",
+          "suppressed__reconnectBlocked__mediaGate__localRecoveryActive": "重连：已阻断 / 本地 keyframe、decode 或 reset 恢复窗仍在生效",
+          "suppressed__reconnectBlocked__mediaGate__missingHardEvidence": "重连：已阻断 / 仍缺少硬故障证据"
         },
         "latestDecisionAction": {
           "requestKeyframe": "请求关键帧",

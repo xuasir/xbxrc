@@ -12,6 +12,8 @@ const WAIT_KEYFRAME_DECODER_RESET_REPEAT_SUPPRESS_MS: f64 = 620.0;
 const IDLE_TIMEOUT_REPEAT_SUPPRESS_MS: f64 = 360.0;
 const TRANSPORT_AWAIT_DEBT_FRESH_MS: f64 = 900.0;
 const DECODER_RESET_PROGRESS_HOLD_MS: f64 = 900.0;
+const INVALID_KEYFRAME_RESPONSE_GRACE_MS: f64 = 220.0;
+const INVALID_KEYFRAME_RESPONSE_FRESH_MS: f64 = 1_500.0;
 
 pub(crate) fn resolve_recent_repeat_suppression(
     runtime_stats: &Mutex<XbxEngineMediaRuntimeStats>,
@@ -206,6 +208,9 @@ fn has_active_decoder_reset_family(stats: &XbxEngineMediaRuntimeStats, now_ms: f
     if (now_ms - attempt_at_ms).max(0.0) > DECODER_RESET_PROGRESS_HOLD_MS {
         return false;
     }
+    if has_transport_await_invalid_keyframe_response(stats, attempt_at_ms, now_ms) {
+        return false;
+    }
     !has_post_decoder_reset_progress(stats, attempt_at_ms)
 }
 
@@ -241,6 +246,51 @@ fn has_post_decoder_reset_progress(stats: &XbxEngineMediaRuntimeStats, attempt_a
         || stats
             .video_anchor_clean_observed_at_ms
             .is_some_and(|at_ms| at_ms > attempt_at_ms)
+}
+
+fn has_transport_await_invalid_keyframe_response(
+    stats: &XbxEngineMediaRuntimeStats,
+    attempt_at_ms: f64,
+    now_ms: f64,
+) -> bool {
+    let packet_seen_without_decode =
+        stats
+            .latest_keyframe_request_episode
+            .as_ref()
+            .is_some_and(|episode| {
+                episode.request_reason.as_deref() == Some("transportAwaitRecoveryKeyframe")
+                    && episode.status == "packet-seen"
+                    && episode.first_keyframe_decoded_at_ms.is_none()
+                    && episode
+                        .first_keyframe_packet_at_ms
+                        .is_some_and(|packet_at_ms| {
+                            packet_at_ms >= attempt_at_ms
+                                && (now_ms - packet_at_ms).max(0.0)
+                                    >= INVALID_KEYFRAME_RESPONSE_GRACE_MS
+                        })
+            });
+    if packet_seen_without_decode && has_active_transport_await_debt(stats, now_ms) {
+        return true;
+    }
+    stats
+        .latest_h264_inspection_observation
+        .as_ref()
+        .is_some_and(|inspection| {
+            inspection.observed_at_ms >= attempt_at_ms
+                && (now_ms - inspection.observed_at_ms).max(0.0)
+                    <= INVALID_KEYFRAME_RESPONSE_FRESH_MS
+                && !inspection.bootstrap_ready
+                && matches!(
+                    inspection.bootstrap_reject_reason.as_deref(),
+                    Some(
+                        "NonIdrVcl"
+                            | "bootstrapMissingSps"
+                            | "bootstrapMissingPps"
+                            | "inspectionRejectInvalidSliceHeader"
+                    )
+                )
+                && has_active_transport_await_debt(stats, now_ms)
+        })
 }
 
 fn has_recent_keyframe_rtcp_unavailable(stats: &XbxEngineMediaRuntimeStats, now_ms: f64) -> bool {
@@ -393,9 +443,14 @@ mod tests {
                     request_reason: Some("displaySupplyDegraded".to_string()),
                     request_kind: Some("pli".to_string()),
                     status: "sent".to_string(),
+                    status_detail: None,
                     requested_at_ms: now_ms,
                     sent_at_ms: Some(now_ms),
                     deadline_at_ms: Some(now_ms + 120.0),
+                    transport_detail: None,
+                    first_video_packet_at_ms: None,
+                    first_video_packet_rtp_timestamp: None,
+                    first_video_packet_is_keyframe: None,
                     first_keyframe_packet_at_ms: None,
                     first_keyframe_decoded_at_ms: None,
                     response_rtp_timestamp: None,
@@ -437,6 +492,89 @@ mod tests {
         let action = resolve_recent_repeat_suppression(
             &Mutex::new(stats),
             &VideoEscalationReason::AdapterIdleTimeout,
+        );
+
+        assert_ne!(action, Some(RecoveryAction::CoalescedDecoderResetInFlight));
+    }
+
+    #[test]
+    fn invalid_transport_await_keyframe_response_does_not_keep_decoder_reset_family_inflight() {
+        let now_ms = unix_now_ms();
+        let stats = XbxEngineMediaRuntimeStats {
+            transport_recovery_epoch: 22,
+            transport_recovery_epoch_at_last_escalation: 22,
+            latest_video_escalation_observation: Some(XbxEngineVideoEscalationObservation {
+                observation_id: 4,
+                reason: "transportAwaitRecoveryKeyframe".to_string(),
+                action: "requestDecoderReset".to_string(),
+                recovery_stage: "rebuilding-supply".to_string(),
+                recovery_chain_value: "anchor".to_string(),
+                recovery_failure_cost: "high".to_string(),
+                recovery_window_source: "transport-await-window".to_string(),
+                observed_at_ms: now_ms - 240.0,
+            }),
+            latest_video_decoder_reset_time_ms: Some(now_ms - 235.0),
+            latest_video_timeline_observation: Some(crate::XbxEngineVideoTimelineObservation {
+                observation_id: 5,
+                source_event: "frame-await-recovery-keyframe".to_string(),
+                gap: None,
+                frame: None,
+                chain: crate::XbxEngineVideoTimelineChainSnapshot {
+                    state: "recovering".to_string(),
+                    reason: Some("awaitingRecoveryKeyframe".to_string()),
+                    observed_at_ms: now_ms - 20.0,
+                },
+                observed_at_ms: now_ms - 20.0,
+            }),
+            latest_keyframe_request_episode: Some(
+                crate::XbxEngineKeyframeRequestEpisodeObservation {
+                    episode_id: 4,
+                    request_reason: Some("transportAwaitRecoveryKeyframe".to_string()),
+                    request_kind: Some("pli".to_string()),
+                    status: "packet-seen".to_string(),
+                    status_detail: None,
+                    requested_at_ms: now_ms - 260.0,
+                    sent_at_ms: Some(now_ms - 250.0),
+                    deadline_at_ms: Some(now_ms + 200.0),
+                    transport_detail: None,
+                    first_video_packet_at_ms: None,
+                    first_video_packet_rtp_timestamp: None,
+                    first_video_packet_is_keyframe: None,
+                    first_keyframe_packet_at_ms: Some(now_ms - 230.0),
+                    first_keyframe_decoded_at_ms: None,
+                    response_rtp_timestamp: Some(4_444),
+                    response_frame_seq: None,
+                    response_verdict: Some("on-time".to_string()),
+                },
+            ),
+            latest_h264_inspection_observation: Some(crate::XbxEngineH264InspectionObservation {
+                observation_id: 6,
+                frame_rtp_timestamp: Some(4_444),
+                nal_types: vec!["SliceLayerWithoutPartitioningNonIdr".to_string()],
+                nal_count: 1,
+                vcl_nal_count: 1,
+                has_inband_sps: false,
+                has_inband_pps: false,
+                committed_sps_present: true,
+                committed_pps_present: true,
+                slice_headers_valid: true,
+                delta_continuation_ready: false,
+                parameter_sets_changed: false,
+                config_changed: false,
+                is_idr: false,
+                sample_width: None,
+                sample_height: None,
+                bootstrap_ready: false,
+                bootstrap_reject_reason: Some("NonIdrVcl".to_string()),
+                admission_accepted: true,
+                observed_at_ms: now_ms - 225.0,
+            }),
+            ..XbxEngineMediaRuntimeStats::default()
+        };
+
+        let action = resolve_recent_repeat_suppression(
+            &Mutex::new(stats),
+            &VideoEscalationReason::TransportAwaitRecoveryKeyframe,
         );
 
         assert_ne!(action, Some(RecoveryAction::CoalescedDecoderResetInFlight));

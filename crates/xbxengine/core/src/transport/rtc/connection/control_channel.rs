@@ -17,6 +17,7 @@ pub(crate) struct RtcControlChannelState {
     pub(crate) control_bootstrapped_after_handshake: bool,
     pub(crate) pending_keyframe_request: bool,
     pub(crate) pending_decoder_reset: bool,
+    pub(crate) pending_replay_since_ms: Option<f64>,
     pub(crate) keyboard_pointer_enabled: bool,
 }
 
@@ -29,20 +30,24 @@ impl RtcControlChannelService {
     pub(crate) fn reset(&mut self) {
         let pending_keyframe_request = self.state.pending_keyframe_request;
         let pending_decoder_reset = self.state.pending_decoder_reset;
+        let pending_replay_since_ms = self.state.pending_replay_since_ms;
         let keyboard_pointer_enabled = self.state.keyboard_pointer_enabled;
         self.state = RtcControlChannelState::default();
         self.state.pending_keyframe_request = pending_keyframe_request;
         self.state.pending_decoder_reset = pending_decoder_reset;
+        self.state.pending_replay_since_ms = pending_replay_since_ms;
         self.state.keyboard_pointer_enabled = keyboard_pointer_enabled;
     }
 
     pub(crate) fn clear_pending_replay_actions(&mut self) {
         self.state.pending_keyframe_request = false;
         self.state.pending_decoder_reset = false;
+        self.state.pending_replay_since_ms = None;
     }
 
     pub(crate) fn clear_pending_keyframe_request(&mut self) {
         self.state.pending_keyframe_request = false;
+        self.refresh_pending_replay_since();
     }
 
     pub(crate) fn open_message_channel(&mut self) {
@@ -111,9 +116,11 @@ impl RtcControlChannelService {
     pub(crate) fn request_video_keyframe(&mut self) -> Result<(), XbxEngineRuntimeError> {
         if self.is_control_ready() {
             self.state.pending_keyframe_request = false;
+            self.refresh_pending_replay_since();
             return Ok(());
         }
         self.state.pending_keyframe_request = true;
+        self.mark_pending_replay();
         Err(XbxEngineRuntimeError::new(
             "xbxEngineRtcControlChannelNotReadyForKeyframe",
         ))
@@ -122,9 +129,11 @@ impl RtcControlChannelService {
     pub(crate) fn request_decoder_reset(&mut self) -> Result<(), XbxEngineRuntimeError> {
         if self.is_control_ready() {
             self.state.pending_decoder_reset = false;
+            self.refresh_pending_replay_since();
             return Ok(());
         }
         self.state.pending_decoder_reset = true;
+        self.mark_pending_replay();
         Err(XbxEngineRuntimeError::new(
             "xbxEngineRtcControlChannelNotReadyForDecoderReset",
         ))
@@ -147,6 +156,14 @@ impl RtcControlChannelService {
 
     pub(crate) fn has_pending_replay_actions(&self) -> bool {
         self.state.pending_keyframe_request || self.state.pending_decoder_reset
+    }
+
+    pub(crate) fn pending_replay_action_count(&self) -> u8 {
+        self.state.pending_keyframe_request as u8 + self.state.pending_decoder_reset as u8
+    }
+
+    pub(crate) fn pending_replay_since_ms(&self) -> Option<f64> {
+        self.state.pending_replay_since_ms
     }
 
     pub(crate) fn peek_replay_actions_if_ready(&self) -> Option<RtcControlReplayActions> {
@@ -174,6 +191,18 @@ impl RtcControlChannelService {
 
     pub(crate) fn state(&self) -> &RtcControlChannelState {
         &self.state
+    }
+
+    fn mark_pending_replay(&mut self) {
+        if self.state.pending_replay_since_ms.is_none() {
+            self.state.pending_replay_since_ms = Some(crate::transport::rtc::stats::now_ms_f64());
+        }
+    }
+
+    fn refresh_pending_replay_since(&mut self) {
+        if !self.has_pending_replay_actions() {
+            self.state.pending_replay_since_ms = None;
+        }
     }
 }
 

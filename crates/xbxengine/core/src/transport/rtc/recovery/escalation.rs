@@ -90,14 +90,14 @@ impl VideoEscalationReason {
     pub fn reconnect_domain(self) -> XbxEngineRecoveryReasonDomain {
         match self {
             Self::LifecycleRecovering => XbxEngineRecoveryReasonDomain::ConnectivityTransport,
-            Self::DisplaySupplyCritical => XbxEngineRecoveryReasonDomain::Local,
             Self::WaitKeyframe
             | Self::TransportAwaitRecoveryKeyframe
+            | Self::DisplaySupplyCritical
             | Self::Reconfigure
             | Self::DecoderBackendFailure
             | Self::AdapterIdleTimeout
-            | Self::AdapterThinStream
-            | Self::TransportExpiredDeadline
+            | Self::AdapterThinStream => XbxEngineRecoveryReasonDomain::Local,
+            Self::TransportExpiredDeadline
             | Self::TransportSevereDeadline
             | Self::TransportRecoveredLate
             | Self::TransportSampleLoss => XbxEngineRecoveryReasonDomain::ConnectivityTransport,
@@ -528,8 +528,7 @@ impl VideoEscalationController {
     ) -> VideoEscalationDecision {
         self.next_observation_id = self.next_observation_id.saturating_add(1);
         let now = Instant::now();
-        let allow_reconnect =
-            allow_reconnect && !matches!(reason, VideoEscalationReason::DisplaySupplyCritical);
+        let allow_reconnect = allow_reconnect && reason_allows_connectivity_fallback(reason);
         let action = match reason {
             VideoEscalationReason::LifecycleRecovering => {
                 self.wait_keyframe_started_at = None;
@@ -633,31 +632,14 @@ impl VideoEscalationController {
                         self.pending_keyframe_signals.saturating_add(1)
                     };
                     self.pending_decoder_reset_signals = 0;
-                    let repeated_thin_stream_after_keyframe =
-                        matches!(reason, VideoEscalationReason::AdapterThinStream)
-                            && self.last_keyframe_request_at.map_or(false, |last| {
-                                let elapsed = last.elapsed();
-                                elapsed >= self.keyframe_upgrade_min_delay
-                                    && elapsed <= self.escalation_window
-                            });
-                    let repeated_idle_timeout_after_keyframe =
-                        matches!(reason, VideoEscalationReason::AdapterIdleTimeout)
-                            && self.last_keyframe_request_at.map_or(false, |last| {
-                                let elapsed = last.elapsed();
-                                elapsed >= self.keyframe_upgrade_min_delay
-                                    && elapsed <= self.escalation_window
-                            });
-                    let repeated_sample_loss_after_keyframe =
-                        matches!(reason, VideoEscalationReason::TransportSampleLoss)
-                            && self.last_keyframe_request_at.map_or(false, |last| {
-                                let elapsed = last.elapsed();
-                                elapsed >= self.keyframe_upgrade_min_delay
-                                    && elapsed <= self.escalation_window
-                            });
                     let persistent_wait_keyframe =
                         matches!(reason, VideoEscalationReason::WaitKeyframe)
                             && self.wait_keyframe_started_at.map_or(false, |started_at| {
-                                now.duration_since(started_at) >= self.cooldown.mul_f32(2.0)
+                                now.duration_since(started_at)
+                                    >= self
+                                        .cooldown
+                                        .mul_f32(2.0)
+                                        .max(self.keyframe_upgrade_min_delay)
                             });
                     let persistent_transport_await_recovery_keyframe = matches!(
                         reason,
@@ -665,7 +647,8 @@ impl VideoEscalationController {
                     ) && self
                         .transport_await_recovery_started_at
                         .map_or(false, |started_at| {
-                            now.duration_since(started_at) >= self.escalation_window
+                            now.duration_since(started_at)
+                                >= self.escalation_window.max(self.keyframe_upgrade_min_delay)
                         });
                     let hard_stuck_transport_await_recovery_keyframe = matches!(
                         reason,
@@ -719,54 +702,6 @@ impl VideoEscalationController {
                         } else {
                             self.coalesced_keyframe_in_flight()
                         }
-                    } else if repeated_thin_stream_after_keyframe
-                        && self
-                            .last_decoder_reset_at
-                            .map_or(true, |last| last.elapsed() >= self.cooldown)
-                    {
-                        self.pending_keyframe_signals = 0;
-                        self.pending_decoder_reset_signals = 0;
-                        self.reconnect_candidate_signals =
-                            self.reconnect_candidate_signals.saturating_add(1);
-                        if self.decoder_reset_budget_used < self.decoder_reset_budget_limit {
-                            RecoveryAction::RequestDecoderReset
-                        } else {
-                            RecoveryAction::CooldownSuppressed
-                        }
-                    } else if repeated_thin_stream_after_keyframe {
-                        self.coalesced_decoder_reset_in_flight()
-                    } else if repeated_idle_timeout_after_keyframe
-                        && self
-                            .last_decoder_reset_at
-                            .map_or(true, |last| last.elapsed() >= self.cooldown)
-                    {
-                        self.pending_keyframe_signals = 0;
-                        self.pending_decoder_reset_signals = 0;
-                        self.reconnect_candidate_signals =
-                            self.reconnect_candidate_signals.saturating_add(1);
-                        if self.decoder_reset_budget_used < self.decoder_reset_budget_limit {
-                            RecoveryAction::RequestDecoderReset
-                        } else {
-                            RecoveryAction::CooldownSuppressed
-                        }
-                    } else if repeated_idle_timeout_after_keyframe {
-                        self.coalesced_decoder_reset_in_flight()
-                    } else if repeated_sample_loss_after_keyframe
-                        && self
-                            .last_decoder_reset_at
-                            .map_or(true, |last| last.elapsed() >= self.cooldown.mul_f32(0.5))
-                    {
-                        self.pending_keyframe_signals = 0;
-                        self.pending_decoder_reset_signals = 0;
-                        self.reconnect_candidate_signals =
-                            self.reconnect_candidate_signals.saturating_add(1);
-                        if self.decoder_reset_budget_used < self.decoder_reset_budget_limit {
-                            RecoveryAction::RequestDecoderReset
-                        } else {
-                            RecoveryAction::CooldownSuppressed
-                        }
-                    } else if repeated_sample_loss_after_keyframe {
-                        self.coalesced_decoder_reset_in_flight()
                     } else if persistent_wait_keyframe
                         && allow_wait_keyframe_stage_escalation
                         && self
@@ -1036,6 +971,17 @@ impl VideoEscalationController {
     fn coalesced_decoder_reset_in_flight(&self) -> RecoveryAction {
         RecoveryAction::CoalescedDecoderResetInFlight
     }
+}
+
+fn reason_allows_connectivity_fallback(reason: VideoEscalationReason) -> bool {
+    matches!(
+        reason,
+        VideoEscalationReason::LifecycleRecovering
+            | VideoEscalationReason::TransportExpiredDeadline
+            | VideoEscalationReason::TransportSevereDeadline
+            | VideoEscalationReason::TransportRecoveredLate
+            | VideoEscalationReason::TransportSampleLoss
+    )
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

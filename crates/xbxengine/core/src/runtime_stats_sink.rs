@@ -173,9 +173,14 @@ impl RuntimeStatsSink {
                     request_reason: request_reason.clone(),
                     request_kind: None,
                     status: "requested".to_string(),
+                    status_detail: None,
                     requested_at_ms,
                     sent_at_ms: None,
                     deadline_at_ms,
+                    transport_detail: None,
+                    first_video_packet_at_ms: None,
+                    first_video_packet_rtp_timestamp: None,
+                    first_video_packet_is_keyframe: None,
                     first_keyframe_packet_at_ms: None,
                     first_keyframe_decoded_at_ms: None,
                     response_rtp_timestamp: None,
@@ -227,9 +232,14 @@ impl RuntimeStatsSink {
                         request_reason: None,
                         request_kind: Some(request_kind.to_string()),
                         status: "sent".to_string(),
+                        status_detail: None,
                         requested_at_ms: sent_at_ms,
                         sent_at_ms: Some(sent_at_ms),
                         deadline_at_ms,
+                        transport_detail: None,
+                        first_video_packet_at_ms: None,
+                        first_video_packet_rtp_timestamp: None,
+                        first_video_packet_is_keyframe: None,
                         first_keyframe_packet_at_ms: None,
                         first_keyframe_decoded_at_ms: None,
                         response_rtp_timestamp: None,
@@ -267,6 +277,7 @@ impl RuntimeStatsSink {
                 {
                     return;
                 }
+                episode.status_detail = Some("deadlineExpired".to_string());
                 episode.status = "missed".to_string();
                 episode.response_verdict = Some("missed".to_string());
                 stats.latest_observation_label = Some("keyframeRequestEpisodeMissed".to_string());
@@ -295,6 +306,8 @@ impl RuntimeStatsSink {
                 {
                     return;
                 }
+                episode.status_detail = Some(detail.to_string());
+                episode.transport_detail = Some(detail.to_string());
                 episode.status = "deferred".to_string();
                 episode.response_verdict = Some("transportDeferred".to_string());
                 stats.latest_observation_label = Some("keyframeRequestEpisodeDeferred".to_string());
@@ -319,6 +332,8 @@ impl RuntimeStatsSink {
                 {
                     return;
                 }
+                episode.status_detail = Some(detail.to_string());
+                episode.transport_detail = Some(detail.to_string());
                 episode.status = "failed".to_string();
                 episode.response_verdict = Some("transportFailed".to_string());
                 stats.latest_observation_label = Some("keyframeRequestEpisodeFailed".to_string());
@@ -359,33 +374,103 @@ impl RuntimeStatsSink {
         rtp_timestamp: Option<u32>,
         is_keyframe: bool,
     ) {
-        if !is_keyframe {
-            return;
-        }
         self.update(|stats| {
             let mut updated_episode = None;
             if let Some(episode) = stats.latest_keyframe_request_episode.as_mut() {
-                if episode.first_keyframe_packet_at_ms.is_none() {
+                if episode.first_video_packet_at_ms.is_none() {
+                    episode.first_video_packet_at_ms = Some(observed_at_ms);
+                }
+                if episode.first_video_packet_rtp_timestamp.is_none() {
+                    episode.first_video_packet_rtp_timestamp = rtp_timestamp;
+                }
+                if episode.first_video_packet_is_keyframe.is_none() {
+                    episode.first_video_packet_is_keyframe = Some(is_keyframe);
+                }
+                if !is_keyframe {
+                    updated_episode = Some(episode.clone());
+                } else {
+                    if episode.first_keyframe_packet_at_ms.is_none() {
+                        episode.first_keyframe_packet_at_ms = Some(observed_at_ms);
+                    }
+                    if episode.response_rtp_timestamp.is_none() {
+                        episode.response_rtp_timestamp = rtp_timestamp;
+                    }
+                    episode.status = "packet-seen".to_string();
+                    episode.response_verdict = Some(match episode.deadline_at_ms {
+                        Some(deadline_at_ms) if observed_at_ms > deadline_at_ms => {
+                            "late".to_string()
+                        }
+                        Some(_) => "on-time".to_string(),
+                        None => "unknown".to_string(),
+                    });
+                    stats.latest_observation_label =
+                        Some("keyframeRequestEpisodePacketSeen".to_string());
+                    stats.latest_observation_summary = Some(format!(
+                        "episodeId={} rtpTimestamp={} observedAtMs={:.1}",
+                        episode.episode_id,
+                        rtp_timestamp
+                            .map(|value| value.to_string())
+                            .unwrap_or_else(|| "none".to_string()),
+                        observed_at_ms
+                    ));
+                    updated_episode = Some(episode.clone());
+                }
+            }
+            if let Some(episode) = updated_episode {
+                sync_recent_keyframe_request_episode(stats, episode);
+            }
+        });
+    }
+
+    pub(crate) fn record_keyframe_request_episode_response_observed(
+        &self,
+        observed_at_ms: f64,
+        rtp_timestamp: Option<u32>,
+        is_keyframe: bool,
+        detail: &str,
+    ) {
+        self.update(|stats| {
+            let mut updated_episode = None;
+            if let Some(episode) = stats.latest_keyframe_request_episode.as_mut() {
+                if episode.sent_at_ms.is_none()
+                    || !matches!(episode.response_verdict.as_deref(), None | Some("pending"))
+                {
+                    return;
+                }
+
+                let mut changed = false;
+                if episode.first_video_packet_at_ms.is_none() {
+                    episode.first_video_packet_at_ms = Some(observed_at_ms);
+                    episode.first_video_packet_rtp_timestamp = rtp_timestamp;
+                    episode.first_video_packet_is_keyframe = Some(is_keyframe);
+                    episode.status = "response-observed".to_string();
+                    episode.status_detail = Some(detail.to_string());
+                    changed = true;
+                }
+
+                if is_keyframe && episode.first_keyframe_packet_at_ms.is_none() {
                     episode.first_keyframe_packet_at_ms = Some(observed_at_ms);
+                    if episode.response_rtp_timestamp.is_none() {
+                        episode.response_rtp_timestamp = rtp_timestamp;
+                    }
+                    episode.status = "response-observed".to_string();
+                    episode.status_detail = Some(detail.to_string());
+                    changed = true;
                 }
-                if episode.response_rtp_timestamp.is_none() {
-                    episode.response_rtp_timestamp = rtp_timestamp;
+
+                if !changed {
+                    return;
                 }
-                episode.status = "packet-seen".to_string();
-                episode.response_verdict = Some(match episode.deadline_at_ms {
-                    Some(deadline_at_ms) if observed_at_ms > deadline_at_ms => "late".to_string(),
-                    Some(_) => "on-time".to_string(),
-                    None => "unknown".to_string(),
-                });
+
                 stats.latest_observation_label =
-                    Some("keyframeRequestEpisodePacketSeen".to_string());
+                    Some("keyframeRequestEpisodeResponseObserved".to_string());
                 stats.latest_observation_summary = Some(format!(
-                    "episodeId={} rtpTimestamp={} observedAtMs={:.1}",
+                    "episodeId={} rtpTimestamp={} isKeyframe={} detail={detail}",
                     episode.episode_id,
                     rtp_timestamp
                         .map(|value| value.to_string())
                         .unwrap_or_else(|| "none".to_string()),
-                    observed_at_ms
+                    is_keyframe
                 ));
                 updated_episode = Some(episode.clone());
             }
@@ -769,6 +854,7 @@ fn apply_keyframe_request_episode_sent(
         episode.request_kind = Some(request_kind.to_string());
     }
     episode.status = "sent".to_string();
+    episode.status_detail = None;
     episode.sent_at_ms = Some(
         episode
             .sent_at_ms
@@ -799,6 +885,7 @@ pub(crate) fn expire_latest_keyframe_request_episode_if_unsent(
         {
             return false;
         }
+        episode.status_detail = Some("expiredUnsent".to_string());
         episode.status = "expired-unsent".to_string();
         episode.response_verdict = Some("unsentExpired".to_string());
         latest_summary = Some(format!(
@@ -949,6 +1036,53 @@ mod tests {
         assert_eq!(
             stats.latest_observation_label.as_deref(),
             Some("keyframeRequestEpisodeDecoded")
+        );
+    }
+
+    #[test]
+    fn keyframe_request_episode_response_observed_tracks_non_keyframe_then_rejected_keyframe() {
+        let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
+        let sink = RuntimeStatsSink::new(runtime_stats.clone());
+
+        sink.record_keyframe_request_episode_requested(
+            90,
+            Some("transportAwaitRecoveryKeyframe".to_string()),
+            100.0,
+            None,
+        );
+        sink.record_keyframe_request_episode_sent("pli", 120.0, Some(200.0));
+        sink.record_keyframe_request_episode_response_observed(
+            140.0,
+            Some(123),
+            false,
+            "firstResponseNonKeyframe",
+        );
+        sink.record_keyframe_request_episode_response_observed(
+            170.0,
+            Some(456),
+            true,
+            "bootstrapMissingSps",
+        );
+
+        let stats = runtime_stats.lock().expect("runtime stats lock");
+        let episode = stats
+            .latest_keyframe_request_episode
+            .as_ref()
+            .expect("episode should exist");
+        assert_eq!(episode.status, "response-observed");
+        assert_eq!(
+            episode.status_detail.as_deref(),
+            Some("bootstrapMissingSps")
+        );
+        assert_eq!(episode.first_video_packet_at_ms, Some(140.0));
+        assert_eq!(episode.first_video_packet_rtp_timestamp, Some(123));
+        assert_eq!(episode.first_video_packet_is_keyframe, Some(false));
+        assert_eq!(episode.first_keyframe_packet_at_ms, Some(170.0));
+        assert_eq!(episode.response_rtp_timestamp, Some(456));
+        assert_eq!(episode.response_verdict.as_deref(), Some("pending"));
+        assert_eq!(
+            stats.latest_observation_label.as_deref(),
+            Some("keyframeRequestEpisodeResponseObserved")
         );
     }
 

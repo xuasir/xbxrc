@@ -60,13 +60,19 @@ pub(crate) struct XbxVideoDecoderProbeSummary {
     pub(crate) fallback_summary: Option<String>,
 }
 
+pub(crate) struct XbxVideoDecoderBackendDecodeOutcome {
+    pub(crate) frame: Option<XbxRenderFrame>,
+    pub(crate) send_packet_status: Option<i32>,
+    pub(crate) receive_frame_status: Option<i32>,
+}
+
 pub(crate) trait XbxVideoDecoderBackend: Send {
     fn backend_name(&self) -> &'static str;
     fn decode(
         &mut self,
         encoded_frame: EncodedFrame,
         now_ms: f64,
-    ) -> Result<Option<XbxRenderFrame>, XbxEngineRuntimeError>;
+    ) -> Result<XbxVideoDecoderBackendDecodeOutcome, XbxEngineRuntimeError>;
 }
 
 #[derive(Default)]
@@ -81,8 +87,12 @@ impl XbxVideoDecoderBackend for NoopXbxVideoDecoderBackend {
         &mut self,
         _encoded_frame: EncodedFrame,
         _now_ms: f64,
-    ) -> Result<Option<XbxRenderFrame>, XbxEngineRuntimeError> {
-        Ok(None)
+    ) -> Result<XbxVideoDecoderBackendDecodeOutcome, XbxEngineRuntimeError> {
+        Ok(XbxVideoDecoderBackendDecodeOutcome {
+            frame: None,
+            send_packet_status: None,
+            receive_frame_status: None,
+        })
     }
 }
 

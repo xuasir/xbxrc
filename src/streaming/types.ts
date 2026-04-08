@@ -169,7 +169,14 @@ export interface StreamSessionDiagnosticsSnapshot {
   isDisplaySupplyLimited: boolean
   hasNoVideoWarning: boolean
   transportSummary?: string
-  statusCode: 'noVideo' | 'recovering' | 'owner' | 'stable' | 'inactive'
+  statusCode:
+    | 'noVideo'
+    | 'probing'
+    | 'recovering'
+    | 'blocked'
+    | 'owner'
+    | 'stable'
+    | 'inactive'
 }
 
 export type StreamMicrophoneActivationSource = 'none' | 'policy' | 'user'

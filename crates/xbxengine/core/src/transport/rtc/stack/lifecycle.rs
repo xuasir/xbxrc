@@ -35,6 +35,8 @@ pub(crate) struct RtcStackLifecycleBridge<'a> {
     audio_playback_session: &'a Arc<Mutex<Option<XbxRemoteAudioPlaybackSession>>>,
     connection: &'a Arc<Mutex<RtcConnectionService>>,
     media: &'a Arc<Mutex<RtcMediaService>>,
+    local_decoder_reset_handle:
+        &'a Arc<Mutex<Option<Arc<crate::media::video::decode::actor::DecodeActorHandle>>>>,
     transport_session: &'a Arc<Mutex<SessionActor<SystemSessionClock, RtcSessionPolicy>>>,
     transport_fact_sink: &'a Arc<Mutex<Vec<TransportFact>>>,
     input_stream: &'a mut RtcInputStreamController,
@@ -56,6 +58,9 @@ impl<'a> RtcStackLifecycleBridge<'a> {
         audio_playback_session: &'a Arc<Mutex<Option<XbxRemoteAudioPlaybackSession>>>,
         connection: &'a Arc<Mutex<RtcConnectionService>>,
         media: &'a Arc<Mutex<RtcMediaService>>,
+        local_decoder_reset_handle: &'a Arc<
+            Mutex<Option<Arc<crate::media::video::decode::actor::DecodeActorHandle>>>,
+        >,
         transport_session: &'a Arc<Mutex<SessionActor<SystemSessionClock, RtcSessionPolicy>>>,
         transport_fact_sink: &'a Arc<Mutex<Vec<TransportFact>>>,
         input_stream: &'a mut RtcInputStreamController,
@@ -72,6 +77,7 @@ impl<'a> RtcStackLifecycleBridge<'a> {
             audio_playback_session,
             connection,
             media,
+            local_decoder_reset_handle,
             transport_session,
             transport_fact_sink,
             input_stream,
@@ -173,6 +179,7 @@ impl<'a> RtcStackLifecycleBridge<'a> {
             self.pending_runtime_recovery_action,
             self.connection,
             self.media,
+            self.local_decoder_reset_handle,
             self.transport_session,
             self.transport_fact_sink,
         )

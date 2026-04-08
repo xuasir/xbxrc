@@ -127,6 +127,7 @@ impl XbxActiveMediaStack {
             &self.pending_runtime_recovery_action,
             &self.connection,
             &self.media,
+            &self.local_decoder_reset_handle,
             &self.transport_session,
             &self.transport_fact_sink,
         )
@@ -155,6 +156,7 @@ impl XbxActiveMediaStack {
             &self.audio_playback_session,
             &self.connection,
             &self.media,
+            &self.local_decoder_reset_handle,
             &self.transport_session,
             &self.transport_fact_sink,
             &mut self.input_stream,
@@ -382,10 +384,8 @@ impl XbxMediaStackPort for XbxActiveMediaStack {
 
     fn request_decoder_reset(&mut self) -> Result<(), XbxEngineRuntimeError> {
         let result = self
-            .connection
-            .lock()
-            .map_err(|_| XbxEngineRuntimeError::new("xbxEngineRtcConnectionLockFailed"))?
-            .request_decoder_reset(&self.runtime_stats);
+            .transport_bridge()
+            .request_local_decoder_reset("stack.manualRequest".to_string());
         self.record_transport_command_result(
             TransportCommand::RequestDecoderReset {
                 reason: "stack.manualRequest".to_string(),

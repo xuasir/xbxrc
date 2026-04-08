@@ -149,8 +149,10 @@ impl RtcConnectionService {
         runtime_stats: &Arc<Mutex<XbxEngineMediaRuntimeStats>>,
     ) -> Result<(), XbxEngineRuntimeError> {
         if let Err(error) = self.control_service.request_decoder_reset() {
+            self.sync_control_replay_runtime_stats(runtime_stats);
             return Err(error);
         }
+        self.sync_control_replay_runtime_stats(runtime_stats);
         self.send_control_payload(
             build_control_decoder_reset_payload(),
             "rtcControlDecoderResetRequested",
@@ -179,6 +181,7 @@ impl RtcConnectionService {
                     .is_ok()
                 {
                     self.control_service.clear_pending_keyframe_request();
+                    self.sync_control_replay_runtime_stats(runtime_stats);
                     self.video_recovery_transport_state.stage =
                         VideoRecoveryTransportStage::PictureLossIndication;
                     self.video_recovery_transport_state.last_sent_at_ms =
@@ -190,6 +193,7 @@ impl RtcConnectionService {
             VideoRecoveryTransportStage::FullIntraRequest => {
                 if self.send_video_full_intra_request(runtime_stats).is_ok() {
                     self.control_service.clear_pending_keyframe_request();
+                    self.sync_control_replay_runtime_stats(runtime_stats);
                     self.video_recovery_transport_state.stage =
                         VideoRecoveryTransportStage::FullIntraRequest;
                     self.video_recovery_transport_state.last_sent_at_ms =
@@ -401,6 +405,7 @@ impl RtcConnectionService {
         observation_label: &str,
     ) -> Result<(), XbxEngineRuntimeError> {
         let result = self.control_service.request_video_keyframe();
+        self.sync_control_replay_runtime_stats(runtime_stats);
         self.video_recovery_transport_state.stage = VideoRecoveryTransportStage::ControlKeyframe;
         self.video_recovery_transport_state.last_sent_at_ms =
             Some(crate::transport::rtc::stats::now_ms_f64());
@@ -446,6 +451,28 @@ impl RtcConnectionService {
         RuntimeStatsSink::new(runtime_stats.clone()).update(|stats| {
             stats.latest_observation_label = Some(label.to_string());
             stats.latest_observation_summary = Some(summary.to_string());
+        });
+    }
+
+    pub(super) fn sync_control_replay_runtime_stats(
+        &self,
+        runtime_stats: &Arc<Mutex<XbxEngineMediaRuntimeStats>>,
+    ) {
+        let pending_count = self.control_service.pending_replay_action_count();
+        let pending_since_ms = self.control_service.pending_replay_since_ms();
+        RuntimeStatsSink::new(runtime_stats.clone()).update(|stats| {
+            stats.control_pending_replay_action_count = pending_count;
+            stats.control_pending_replay_since_ms = pending_since_ms;
+            stats.control_pending_replay_summary = if pending_count == 0 {
+                None
+            } else {
+                Some(format!(
+                    "keyframe={} decoderReset={} ready={}",
+                    self.control_service.state().pending_keyframe_request,
+                    self.control_service.state().pending_decoder_reset,
+                    self.control_service.is_control_ready()
+                ))
+            };
         });
     }
 

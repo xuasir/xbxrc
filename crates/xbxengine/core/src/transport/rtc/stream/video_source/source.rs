@@ -20,6 +20,16 @@ use crate::{
 };
 use xbxengine_protocol::{XbxEngineTargetTypeDto, XbxEngineTransportStateDto};
 
+const FIRST_FRAME_ACQUISITION_MAX_REQUEST_COUNT: u8 = 2;
+const SAMPLE_LOSS_WAIT_KEYFRAME_THRESHOLD: u8 = 3;
+const SAMPLE_LOSS_BURST_CLEAR_CLEAN_SAMPLE_COUNT: u8 = 6;
+const IDLE_TIMEOUT_CONFIRMATION_GRACE_MIN_MS: u64 = 120;
+const IDLE_TIMEOUT_CONFIRMATION_GRACE_MAX_MS: u64 = 220;
+const THIN_STREAM_CONFIRMATION_GRACE_MIN_MS: u64 = 90;
+const THIN_STREAM_CONFIRMATION_GRACE_MAX_MS: u64 = 180;
+const WAITING_KEYFRAME_CONTINUATION_WINDOW_MS: f64 = 120.0;
+const WAITING_KEYFRAME_CONTINUATION_MAX_FRAMES: u32 = 3;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum RecoveryKeyframeAction {
     Submit,
@@ -34,14 +44,52 @@ pub(super) enum InspectionAdmission {
     AwaitRecoveryKeyframe,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum FirstFrameAcquisitionRequestKind {
+    Initial,
+    Followup,
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+struct FirstFrameAcquisitionRuntimeContext {
+    session_is_startup: bool,
+    transport_connected: bool,
+    answer_missing_sprop: bool,
+    first_frame_acquired: bool,
+    audio_started: bool,
+    video_track_audio_only: bool,
+    video_track_media_seen: bool,
+}
+
+impl FirstFrameAcquisitionRuntimeContext {
+    fn chain_active(&self) -> bool {
+        self.session_is_startup
+            && self.transport_connected
+            && self.answer_missing_sprop
+            && !self.first_frame_acquired
+    }
+
+    fn followup_evidence_ready(&self) -> bool {
+        self.audio_started || self.video_track_audio_only || self.video_track_media_seen
+    }
+}
+
 pub(super) fn resolve_inspection_admission(
     inspection: &H264AccessUnitInspection,
+    first_frame_acquired: bool,
+    decoder_bootstrap_no_output_continuation_allowed: bool,
 ) -> InspectionAdmission {
     if !inspection.slice_headers_valid {
         return InspectionAdmission::AwaitRecoveryKeyframe;
     }
 
-    if inspection.bootstrap_ready || inspection.delta_continuation_ready() {
+    if inspection.bootstrap_ready {
+        return InspectionAdmission::Accept;
+    }
+
+    if (first_frame_acquired || decoder_bootstrap_no_output_continuation_allowed)
+        && inspection.delta_continuation_ready()
+    {
         return InspectionAdmission::Accept;
     }
 
@@ -60,7 +108,21 @@ fn inspection_bootstrap_reason(inspection: &H264AccessUnitInspection) -> &'stati
     }
 }
 
+fn keyframe_episode_response_detail(
+    inspection: &H264AccessUnitInspection,
+    admission: InspectionAdmission,
+) -> &'static str {
+    if !inspection.is_idr {
+        return "firstResponseNonKeyframe";
+    }
+    match admission {
+        InspectionAdmission::Accept => "firstKeyframeAccepted",
+        InspectionAdmission::AwaitRecoveryKeyframe => inspection_bootstrap_reason(inspection),
+    }
+}
+
 pub(super) fn resolve_recovery_keyframe_action(
+    first_frame_acquired: bool,
     waiting_for_recovery_keyframe: bool,
     hard_recovery_gap_risk: bool,
     sample_loss_burst_count: u8,
@@ -79,13 +141,17 @@ pub(super) fn resolve_recovery_keyframe_action(
     }
 
     if media_dropped_packets > 0 {
-        if sample_loss_burst_count >= 2 {
+        // 小抖动先留在 drop + request keyframe，只有连续坏窗才进入 waitKeyframe。
+        if sample_loss_burst_count >= SAMPLE_LOSS_WAIT_KEYFRAME_THRESHOLD {
             return (true, RecoveryKeyframeAction::TriggerWaitKeyframe);
         }
         return (false, RecoveryKeyframeAction::DropAndRequestKeyframe);
     }
 
     if waiting_for_recovery_keyframe {
+        if !first_frame_acquired {
+            return (true, RecoveryKeyframeAction::WaitKeyframe);
+        }
         if allow_soft_reentry_submit {
             // clean anchor 后的短窗内，健康 delta 只要还能安全提交，就别继续把链路拖回 recovering。
             return (false, RecoveryKeyframeAction::Submit);
@@ -124,53 +190,161 @@ pub(super) fn detect_forward_gap(
 }
 
 impl RtcVideoFrameSource {
-    fn should_request_startup_bootstrap_keyframe(&self) -> bool {
-        if self.startup_bootstrap_keyframe_requested {
-            return false;
-        }
-        if self.h264_inspector.committed_sps_present()
-            && self.h264_inspector.committed_pps_present()
+    fn decoder_bootstrap_no_output_continuation_allowed(
+        &self,
+        inspection: &H264AccessUnitInspection,
+        first_frame_acquired: bool,
+        now_ms: f64,
+    ) -> bool {
+        if first_frame_acquired
+            || inspection.is_idr
+            || inspection.bootstrap_ready
+            || !inspection.slice_headers_valid
+            || !inspection.delta_continuation_ready()
+            || !inspection.committed_sps_present()
+            || !inspection.committed_pps_present()
+            || !self.waiting_for_recovery_keyframe()
         {
             return false;
         }
 
         self.runtime_stats
             .read(|stats| {
-                let session_is_startup = matches!(
+                let Some(observation) = stats.latest_decode_output_path_observation.as_ref() else {
+                    return false;
+                };
+                if observation.verdict != "backend-no-output"
+                    || observation.detail != "backendNoOutputAfterBootstrapKeyframe"
+                    || !observation.is_keyframe
+                {
+                    return false;
+                }
+                let age_ms = now_ms - observation.observed_at_ms;
+                if !(0.0..=WAITING_KEYFRAME_CONTINUATION_WINDOW_MS).contains(&age_ms) {
+                    return false;
+                }
+                observation
+                    .input_frames_since_last_decoded
+                    .is_some_and(|count| {
+                        count <= WAITING_KEYFRAME_CONTINUATION_MAX_FRAMES.saturating_add(1)
+                    })
+            })
+            .unwrap_or(false)
+    }
+
+    fn clear_pending_timeout_confirmations(&mut self) {
+        self.pending_idle_timeout_since = None;
+        self.pending_thin_stream_since = None;
+    }
+
+    fn first_frame_acquired(stats: &crate::XbxEngineMediaRuntimeStats) -> bool {
+        stats.latest_video_decode_ok_time_ms.is_some()
+            || stats.latest_video_host_present_time_ms.is_some()
+            || stats.video_present_submit_count_total > 0
+            || stats.video_present_epoch > 0
+    }
+
+    fn first_frame_acquisition_runtime_context(
+        &self,
+    ) -> Option<FirstFrameAcquisitionRuntimeContext> {
+        self.runtime_stats.read(|stats| {
+            let video_track = stats.latest_video_track_status.as_ref();
+            FirstFrameAcquisitionRuntimeContext {
+                session_is_startup: matches!(
                     stats.session_phase.as_deref(),
                     Some("startup" | "handshaking" | "priming")
-                );
-                let transport_connected =
-                    stats.transport_state == XbxEngineTransportStateDto::Connected;
-                let answer_missing_sprop = stats
-                    .latest_remote_answer_observation
-                    .as_ref()
-                    .is_some_and(|observation| {
+                ),
+                transport_connected: stats.transport_state == XbxEngineTransportStateDto::Connected,
+                answer_missing_sprop: stats.latest_remote_answer_observation.as_ref().is_some_and(
+                    |observation| {
                         observation.selected_video_mime_type.as_deref() == Some("video/h264")
                             && observation
                                 .selected_video_h264_sprop_parameter_sets
                                 .as_ref()
                                 .is_none_or(|sets| sets.is_empty())
-                    });
-                session_is_startup && transport_connected && answer_missing_sprop
-            })
-            .unwrap_or(false)
+                    },
+                ),
+                first_frame_acquired: Self::first_frame_acquired(stats),
+                audio_started: stats.latest_audio_playout_time_ms.is_some(),
+                video_track_audio_only: video_track
+                    .is_some_and(|track| track.state.as_str() == "audioOnly"),
+                video_track_media_seen: video_track.is_some_and(|track| {
+                    track.video_bytes_total > 0 || track.video_packet_count_total > 0
+                }),
+            }
+        })
     }
 
-    fn maybe_request_startup_bootstrap_keyframe(&mut self, sample_timestamp: u32) {
-        if !self.should_request_startup_bootstrap_keyframe() {
-            return;
+    fn should_request_first_frame_acquisition_keyframe(
+        &self,
+        request_kind: FirstFrameAcquisitionRequestKind,
+    ) -> bool {
+        if self.first_frame_acquisition_keyframe_request_count
+            >= FIRST_FRAME_ACQUISITION_MAX_REQUEST_COUNT
+        {
+            return false;
         }
 
-        self.startup_bootstrap_keyframe_requested = true;
+        let Some(context) = self.first_frame_acquisition_runtime_context() else {
+            return false;
+        };
+        if !context.chain_active() {
+            return false;
+        }
+
+        match request_kind {
+            FirstFrameAcquisitionRequestKind::Initial => {
+                self.first_frame_acquisition_keyframe_request_count == 0
+            }
+            FirstFrameAcquisitionRequestKind::Followup => {
+                self.first_frame_acquisition_keyframe_request_count == 1
+                    && context.followup_evidence_ready()
+            }
+        }
+    }
+
+    fn should_request_first_frame_acquisition_followup_keyframe(
+        &self,
+        inspection: &H264AccessUnitInspection,
+    ) -> bool {
+        let reject_reason_matches = matches!(
+            inspection.bootstrap_reject_reason,
+            Some(
+                H264BootstrapRejectReason::MissingSps
+                    | H264BootstrapRejectReason::MissingPps
+                    | H264BootstrapRejectReason::NonIdrVcl
+                    | H264BootstrapRejectReason::InvalidSliceHeader
+            )
+        ) || !inspection.slice_headers_valid;
+        reject_reason_matches
+            && !inspection.bootstrap_ready
+            && self.should_request_first_frame_acquisition_keyframe(
+                FirstFrameAcquisitionRequestKind::Followup,
+            )
+    }
+
+    fn maybe_request_first_frame_acquisition_keyframe(
+        &mut self,
+        frame_rtp_timestamp: Option<u32>,
+        request_kind: FirstFrameAcquisitionRequestKind,
+    ) {
+        if !self.should_request_first_frame_acquisition_keyframe(request_kind) {
+            return;
+        }
+        self.first_frame_acquisition_keyframe_request_count = self
+            .first_frame_acquisition_keyframe_request_count
+            .saturating_add(1);
         let now_ms = now_ms_f64();
         self.timeline_state.on_recovery_keyframe_requested();
-        self.record_video_timeline_observation(
-            "startup-bootstrap-keyframe-requested",
-            None,
-            Some(sample_timestamp),
-            now_ms,
-        );
+        let event_name = match request_kind {
+            FirstFrameAcquisitionRequestKind::Initial => {
+                "first-frame-acquisition-keyframe-requested"
+            }
+            FirstFrameAcquisitionRequestKind::Followup => {
+                "first-frame-acquisition-keyframe-followup-requested"
+            }
+        };
+        self.record_video_timeline_observation(event_name, None, frame_rtp_timestamp, now_ms);
         self.queue_transport_observation(TransportObservation::Loss(
             TransportLossObservation::RecoveryKeyframeRequested,
         ));
@@ -240,6 +414,63 @@ impl RtcVideoFrameSource {
                 && self.current_assembly_packet_count > 0
                 && self.current_assembly_packet_count <= self.thin_stream_packet_threshold
         })
+    }
+
+    fn thin_stream_confirmation_grace(&self) -> std::time::Duration {
+        self.assembly_stall_timeout.div_f32(3.0).clamp(
+            std::time::Duration::from_millis(THIN_STREAM_CONFIRMATION_GRACE_MIN_MS),
+            std::time::Duration::from_millis(THIN_STREAM_CONFIRMATION_GRACE_MAX_MS),
+        )
+    }
+
+    fn idle_timeout_confirmation_grace(
+        &self,
+        idle_timeout: std::time::Duration,
+    ) -> std::time::Duration {
+        idle_timeout.div_f32(2.0).clamp(
+            std::time::Duration::from_millis(IDLE_TIMEOUT_CONFIRMATION_GRACE_MIN_MS),
+            std::time::Duration::from_millis(IDLE_TIMEOUT_CONFIRMATION_GRACE_MAX_MS),
+        )
+    }
+
+    fn should_confirm_transient_timeout_signal(
+        pending_since: &mut Option<std::time::Instant>,
+        now: std::time::Instant,
+        confirmation_grace: std::time::Duration,
+    ) -> bool {
+        match pending_since {
+            Some(first_seen_at) if now.duration_since(*first_seen_at) >= confirmation_grace => {
+                *pending_since = None;
+                true
+            }
+            Some(_) => false,
+            None => {
+                *pending_since = Some(now);
+                false
+            }
+        }
+    }
+
+    fn should_emit_confirmed_idle_timeout(
+        &mut self,
+        now: std::time::Instant,
+        idle_timeout: std::time::Duration,
+    ) -> bool {
+        let confirmation_grace = self.idle_timeout_confirmation_grace(idle_timeout);
+        Self::should_confirm_transient_timeout_signal(
+            &mut self.pending_idle_timeout_since,
+            now,
+            confirmation_grace,
+        )
+    }
+
+    fn should_emit_confirmed_thin_stream_stall(&mut self, now: std::time::Instant) -> bool {
+        let confirmation_grace = self.thin_stream_confirmation_grace();
+        Self::should_confirm_transient_timeout_signal(
+            &mut self.pending_thin_stream_since,
+            now,
+            confirmation_grace,
+        )
     }
 
     fn should_prioritize_reinject_drain(&self) -> bool {
@@ -440,12 +671,16 @@ impl RtcVideoFrameSource {
         loop {
             self.maybe_run_nack_maintenance().await;
             if let Some(sample) = self.sample_builder.pop() {
+                self.clear_pending_timeout_confirmations();
                 self.last_packet_time = std::time::Instant::now();
                 self.assembling_frame_start = None;
                 self.current_assembly_packet_count = 0;
                 let payload = sample.data.to_vec();
                 self.assembled_frame_count = self.assembled_frame_count.saturating_add(1);
-                self.maybe_request_startup_bootstrap_keyframe(sample.packet_timestamp);
+                self.maybe_request_first_frame_acquisition_keyframe(
+                    Some(sample.packet_timestamp),
+                    FirstFrameAcquisitionRequestKind::Initial,
+                );
                 self.maybe_seed_h264_bootstrap_from_remote_answer();
                 let inspection = match self.h264_inspector.inspect_access_unit(&payload) {
                     Ok(inspection) => inspection,
@@ -490,7 +725,21 @@ impl RtcVideoFrameSource {
                     }
                 };
                 let inspection_now_ms = now_ms_f64();
-                let inspection_admission = resolve_inspection_admission(&inspection);
+                let first_frame_acquired = self
+                    .runtime_stats
+                    .read(|stats| Self::first_frame_acquired(stats))
+                    .unwrap_or(false);
+                let decoder_bootstrap_no_output_continuation_allowed = self
+                    .decoder_bootstrap_no_output_continuation_allowed(
+                        &inspection,
+                        first_frame_acquired,
+                        inspection_now_ms,
+                    );
+                let inspection_admission = resolve_inspection_admission(
+                    &inspection,
+                    first_frame_acquired,
+                    decoder_bootstrap_no_output_continuation_allowed,
+                );
                 let admission_accepted =
                     matches!(inspection_admission, InspectionAdmission::Accept);
                 // bootstrap_reject_reason 只描述当前 AU 是否具备自举条件，不代表 delta slice 不能继续承接。
@@ -499,6 +748,16 @@ impl RtcVideoFrameSource {
                         observation_id: u64::from(sample.packet_timestamp),
                         frame_rtp_timestamp: Some(sample.packet_timestamp),
                         nal_types: inspection.nal_type_labels(),
+                        nal_count: inspection.nals.len() as u16,
+                        vcl_nal_count: inspection
+                            .nals
+                            .iter()
+                            .filter(|nal| matches!(
+                                nal.unit_type,
+                                h264_reader::nal::UnitType::SliceLayerWithoutPartitioningIdr
+                                    | h264_reader::nal::UnitType::SliceLayerWithoutPartitioningNonIdr
+                            ))
+                            .count() as u16,
                         has_inband_sps: inspection.has_inband_sps,
                         has_inband_pps: inspection.has_inband_pps,
                         committed_sps_present: inspection.committed_sps_present(),
@@ -508,6 +767,8 @@ impl RtcVideoFrameSource {
                         parameter_sets_changed: inspection.parameter_sets_changed,
                         config_changed: inspection.config_changed,
                         is_idr: inspection.is_idr,
+                        sample_width: inspection.width,
+                        sample_height: inspection.height,
                         bootstrap_ready: inspection.bootstrap_ready,
                         bootstrap_reject_reason: inspection
                             .bootstrap_reject_reason
@@ -516,6 +777,19 @@ impl RtcVideoFrameSource {
                         observed_at_ms: inspection_now_ms,
                     },
                 );
+                self.runtime_stats
+                    .record_keyframe_request_episode_response_observed(
+                        inspection_now_ms,
+                        Some(sample.packet_timestamp),
+                        inspection.is_idr,
+                        keyframe_episode_response_detail(&inspection, inspection_admission),
+                    );
+                if self.should_request_first_frame_acquisition_followup_keyframe(&inspection) {
+                    self.maybe_request_first_frame_acquisition_keyframe(
+                        Some(sample.packet_timestamp),
+                        FirstFrameAcquisitionRequestKind::Followup,
+                    );
+                }
                 match inspection_admission {
                     InspectionAdmission::Accept => {}
                     InspectionAdmission::AwaitRecoveryKeyframe => {
@@ -587,7 +861,7 @@ impl RtcVideoFrameSource {
                     self.clean_samples_since_loss = 0;
                 } else if self.sample_loss_burst_count > 0 {
                     self.clean_samples_since_loss = self.clean_samples_since_loss.saturating_add(1);
-                    if self.clean_samples_since_loss >= 4 {
+                    if self.clean_samples_since_loss >= SAMPLE_LOSS_BURST_CLEAR_CLEAN_SAMPLE_COUNT {
                         self.sample_loss_burst_count = 0;
                         self.clean_samples_since_loss = 0;
                     }
@@ -603,6 +877,7 @@ impl RtcVideoFrameSource {
                 let waiting_for_recovery_keyframe = self.waiting_for_recovery_keyframe();
                 let hard_recovery_gap_risk = self.timeline_state.has_hard_recovery_gap_risk();
                 let allow_soft_reentry_submit = waiting_for_recovery_keyframe
+                    && first_frame_acquired
                     && media_dropped_packets == 0
                     && !is_keyframe
                     && self
@@ -610,6 +885,7 @@ impl RtcVideoFrameSource {
                         .try_consume_soft_reentry_budget(frame_now_ms, frame_importance);
                 let (next_waiting_for_recovery_keyframe, recovery_action) =
                     resolve_recovery_keyframe_action(
+                        first_frame_acquired,
                         waiting_for_recovery_keyframe,
                         hard_recovery_gap_risk,
                         self.sample_loss_burst_count,
@@ -632,7 +908,7 @@ impl RtcVideoFrameSource {
 
                 let sample_loss_frame_importance = if is_keyframe {
                     "keyframe"
-                } else if self.sample_loss_burst_count >= 2 {
+                } else if self.sample_loss_burst_count >= SAMPLE_LOSS_WAIT_KEYFRAME_THRESHOLD {
                     "reference"
                 } else {
                     "delta"
@@ -823,6 +1099,18 @@ impl RtcVideoFrameSource {
             let idle_timeout =
                 idle_timeout && !self.should_absorb_idle_timeout(effective_idle_timeout);
             let thin_stream_stall = self.should_trigger_thin_stream_stall(now);
+            let idle_timeout = if idle_timeout {
+                self.should_emit_confirmed_idle_timeout(now, effective_idle_timeout)
+            } else {
+                self.pending_idle_timeout_since = None;
+                false
+            };
+            let thin_stream_stall = if thin_stream_stall {
+                self.should_emit_confirmed_thin_stream_stall(now)
+            } else {
+                self.pending_thin_stream_since = None;
+                false
+            };
 
             if idle_timeout || thin_stream_stall {
                 let timeout_reason = if thin_stream_stall {
@@ -894,6 +1182,7 @@ impl RtcVideoFrameSource {
             }
             match tokio::time::timeout(read_timeout, self.rx.recv()).await {
                 Ok(Some(rtp_video_packet)) => {
+                    self.clear_pending_timeout_confirmations();
                     self.received_packet_count = self.received_packet_count.saturating_add(1);
                     let ingress_kind = rtp_video_packet.ingress_kind;
                     let rtp = rtp_video_packet.to_rtp_packet();

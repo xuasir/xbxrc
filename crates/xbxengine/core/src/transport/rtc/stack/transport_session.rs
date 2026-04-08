@@ -58,6 +58,8 @@ pub(crate) struct RtcTransportSessionBridge<'a> {
     pending_runtime_recovery_action: &'a Arc<Mutex<Option<XbxEnginePendingRuntimeRecoveryAction>>>,
     connection: &'a Arc<Mutex<RtcConnectionService>>,
     media: &'a Arc<Mutex<RtcMediaService>>,
+    local_decoder_reset_handle:
+        &'a Arc<Mutex<Option<Arc<crate::media::video::decode::actor::DecodeActorHandle>>>>,
     transport_session: &'a Arc<Mutex<SessionActor<SystemSessionClock, RtcSessionPolicy>>>,
     transport_fact_sink: &'a Arc<Mutex<Vec<TransportFact>>>,
 }
@@ -71,6 +73,9 @@ impl<'a> RtcTransportSessionBridge<'a> {
         >,
         connection: &'a Arc<Mutex<RtcConnectionService>>,
         media: &'a Arc<Mutex<RtcMediaService>>,
+        local_decoder_reset_handle: &'a Arc<
+            Mutex<Option<Arc<crate::media::video::decode::actor::DecodeActorHandle>>>,
+        >,
         transport_session: &'a Arc<Mutex<SessionActor<SystemSessionClock, RtcSessionPolicy>>>,
         transport_fact_sink: &'a Arc<Mutex<Vec<TransportFact>>>,
     ) -> Self {
@@ -80,6 +85,7 @@ impl<'a> RtcTransportSessionBridge<'a> {
             pending_runtime_recovery_action,
             connection,
             media,
+            local_decoder_reset_handle,
             transport_session,
             transport_fact_sink,
         }
@@ -395,19 +401,13 @@ impl<'a> RtcTransportSessionBridge<'a> {
                     RecoveryCommandFamilyDecision::Upgrade { detail } => Some(detail.clone()),
                     RecoveryCommandFamilyDecision::Proceed => None,
                 };
-                let result = self
-                    .connection
-                    .lock()
-                    .map_err(|_| XbxEngineRuntimeError::new("xbxEngineRtcConnectionLockFailed"))
-                    .and_then(|mut connection| {
-                        connection.request_decoder_reset(self.runtime_stats)
-                    });
-                let (command_status, semantic_detail) = self
-                    .resolve_recovery_command_status_from_result(
-                        RecoveryCommandKind::RequestDecoderReset,
-                        &result,
-                        None,
-                    );
+                let command_status =
+                    match self.request_local_decoder_reset(format!("recoveryCommand:{reason}")) {
+                        Ok(()) => CommandResultStatus::Succeeded,
+                        Err(error) => CommandResultStatus::Deferred {
+                            reason: error.to_string(),
+                        },
+                    };
                 if matches!(command_status, CommandResultStatus::Succeeded) {
                     self.record_recovery_escalation_observation(
                         *observation_id,
@@ -419,7 +419,7 @@ impl<'a> RtcTransportSessionBridge<'a> {
                 self.record_transport_command_status_with_semantic(
                     command,
                     command_status,
-                    semantic_detail.or(family_upgrade_detail),
+                    family_upgrade_detail,
                 );
             }
             TransportCommand::SetTargetRembKbps {
@@ -490,6 +490,45 @@ impl<'a> RtcTransportSessionBridge<'a> {
                 self.record_transport_command_result(command, &result);
             }
         }
+    }
+
+    fn queue_local_decoder_reset(&self, reason: String, observed_at_ms: f64) -> bool {
+        let local_decoder_handle = self
+            .local_decoder_reset_handle
+            .lock()
+            .ok()
+            .and_then(|handle| handle.clone());
+        RuntimeStatsSink::update_shared(self.runtime_stats, |stats| {
+            stats.latest_observation_label = Some(
+                if local_decoder_handle.is_some() {
+                    "videoDecoderLocalResetQueued"
+                } else {
+                    "videoDecoderLocalResetSkipped"
+                }
+                .to_string(),
+            );
+            stats.latest_observation_summary = Some(format!(
+                "reason={reason} source=recoveryCommand observedAtMs={observed_at_ms:.3}"
+            ));
+        });
+        if let Some(handle) = local_decoder_handle {
+            handle.request_local_decoder_reset(reason, observed_at_ms);
+            return true;
+        }
+        false
+    }
+
+    pub(crate) fn request_local_decoder_reset(
+        &self,
+        reason: String,
+    ) -> Result<(), XbxEngineRuntimeError> {
+        let observed_at_ms = crate::transport::rtc::stats::now_ms_f64();
+        if self.queue_local_decoder_reset(reason, observed_at_ms) {
+            return Ok(());
+        }
+        Err(XbxEngineRuntimeError::new(
+            "xbxEngineRtcLocalDecoderResetHandleUnavailable",
+        ))
     }
 
     fn record_recovery_escalation_observation(
@@ -764,9 +803,11 @@ impl<'a> RtcTransportSessionBridge<'a> {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::mpsc;
     use std::sync::{Arc, Mutex};
 
     use crate::api::runtime::XbxEngineRuntimeConfig;
+    use crate::media::video::decode::actor::{DecodeActorHandle, DecodeMsg};
     use crate::transport::rtc::connection::RtcConnectionService;
     use crate::transport::rtc::facts::{CommandResultStatus, TransportCommand};
     use crate::transport::rtc::recovery::escalation::RecoveryAction;
@@ -785,6 +826,18 @@ mod tests {
         runtime_stats: Arc<Mutex<XbxEngineMediaRuntimeStats>>,
         pending_runtime_recovery_action: Arc<Mutex<Option<XbxEnginePendingRuntimeRecoveryAction>>>,
     ) -> RtcTransportSessionBridge<'static> {
+        build_bridge_with_local_decoder_reset_handle(
+            runtime_stats,
+            pending_runtime_recovery_action,
+            Arc::new(Mutex::new(None)),
+        )
+    }
+
+    fn build_bridge_with_local_decoder_reset_handle(
+        runtime_stats: Arc<Mutex<XbxEngineMediaRuntimeStats>>,
+        pending_runtime_recovery_action: Arc<Mutex<Option<XbxEnginePendingRuntimeRecoveryAction>>>,
+        local_decoder_reset_handle: Arc<Mutex<Option<Arc<DecodeActorHandle>>>>,
+    ) -> RtcTransportSessionBridge<'static> {
         let runtime_stats = Box::leak(Box::new(runtime_stats));
         let runtime_config = Box::leak(Box::new(Arc::new(Mutex::new(
             XbxEngineRuntimeConfig::default(),
@@ -794,6 +847,7 @@ mod tests {
             RtcConnectionService::default(),
         ))));
         let media = Box::leak(Box::new(Arc::new(Mutex::new(RtcMediaService::default()))));
+        let local_decoder_reset_handle = Box::leak(Box::new(local_decoder_reset_handle));
         let transport_session = Box::leak(Box::new(Arc::new(Mutex::new(SessionActor::new(
             SystemSessionClock,
             RtcSessionPolicy::new(runtime_config.clone(), runtime_stats.clone()),
@@ -806,9 +860,93 @@ mod tests {
             pending_runtime_recovery_action,
             connection,
             media,
+            local_decoder_reset_handle,
             transport_session,
             transport_fact_sink,
         )
+    }
+
+    #[test]
+    fn queue_local_decoder_reset_marks_skipped_when_handle_missing() {
+        let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
+        let pending_runtime_recovery_action = Arc::new(Mutex::new(None));
+        let bridge = build_bridge(runtime_stats.clone(), pending_runtime_recovery_action);
+
+        assert!(!bridge.queue_local_decoder_reset("recoveryCommand:test".to_string(), 321.0,));
+
+        let snapshot = runtime_stats.lock().expect("runtime stats lock");
+        assert_eq!(
+            snapshot.latest_observation_label.as_deref(),
+            Some("videoDecoderLocalResetSkipped")
+        );
+        assert!(snapshot
+            .latest_observation_summary
+            .as_deref()
+            .is_some_and(|summary| summary.contains("source=recoveryCommand")));
+    }
+
+    #[test]
+    fn queue_local_decoder_reset_enqueues_message_when_handle_available() {
+        let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
+        let pending_runtime_recovery_action = Arc::new(Mutex::new(None));
+        let (tx, rx) = mpsc::sync_channel(1);
+        let handle = Arc::new(DecodeActorHandle::from_test_sender(tx));
+        let bridge = build_bridge_with_local_decoder_reset_handle(
+            runtime_stats.clone(),
+            pending_runtime_recovery_action,
+            Arc::new(Mutex::new(Some(handle))),
+        );
+
+        assert!(bridge.queue_local_decoder_reset("recoveryCommand:test".to_string(), 654.0,));
+
+        let snapshot = runtime_stats.lock().expect("runtime stats lock");
+        assert_eq!(
+            snapshot.latest_observation_label.as_deref(),
+            Some("videoDecoderLocalResetQueued")
+        );
+        drop(snapshot);
+        let msg = rx.recv().expect("local decoder reset message");
+        match msg {
+            DecodeMsg::LocalDecoderReset {
+                reason,
+                observed_at_ms,
+            } => {
+                assert_eq!(reason, "recoveryCommand:test");
+                assert_eq!(observed_at_ms, 654.0);
+            }
+            _ => panic!("unexpected decode message"),
+        }
+    }
+
+    #[test]
+    fn request_decoder_reset_command_enqueues_local_reset_without_connection_support() {
+        let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
+        let pending_runtime_recovery_action = Arc::new(Mutex::new(None));
+        let (tx, rx) = mpsc::sync_channel(1);
+        let handle = Arc::new(DecodeActorHandle::from_test_sender(tx));
+        let bridge = build_bridge_with_local_decoder_reset_handle(
+            runtime_stats.clone(),
+            pending_runtime_recovery_action,
+            Arc::new(Mutex::new(Some(handle))),
+        );
+
+        bridge.apply_transport_session_command(TransportCommand::RequestDecoderReset {
+            observation_id: 42,
+            reason: "transportAwaitRecoveryKeyframe".to_string(),
+        });
+
+        let msg = rx.recv().expect("local decoder reset message");
+        match msg {
+            DecodeMsg::LocalDecoderReset { reason, .. } => {
+                assert_eq!(reason, "recoveryCommand:transportAwaitRecoveryKeyframe");
+            }
+            _ => panic!("unexpected decode message"),
+        }
+        let snapshot = runtime_stats.lock().expect("runtime stats lock");
+        assert_eq!(
+            snapshot.latest_observation_label.as_deref(),
+            Some("videoDecoderLocalResetQueued")
+        );
     }
 
     #[test]
@@ -978,9 +1116,14 @@ mod tests {
                 request_reason: Some("transportAwaitRecoveryKeyframe".to_string()),
                 request_kind: None,
                 status: "requested".to_string(),
+                status_detail: None,
                 requested_at_ms: now_ms,
                 sent_at_ms: None,
                 deadline_at_ms: None,
+                transport_detail: None,
+                first_video_packet_at_ms: None,
+                first_video_packet_rtp_timestamp: None,
+                first_video_packet_is_keyframe: None,
                 first_keyframe_packet_at_ms: None,
                 first_keyframe_decoded_at_ms: None,
                 response_rtp_timestamp: None,
@@ -1021,6 +1164,8 @@ mod tests {
             action_selected: "requestReconnectCandidate".to_string(),
             budget_before: None,
             budget_after: None,
+            trigger_observation_label: None,
+            trigger_observation_summary: None,
             command_result: None,
             command_detail: None,
             observed_at_ms: 10.0,
@@ -1076,6 +1221,8 @@ mod tests {
                 action_selected: "requestReconnectCandidate".to_string(),
                 budget_before: None,
                 budget_after: None,
+                trigger_observation_label: None,
+                trigger_observation_summary: None,
                 command_result: None,
                 command_detail: None,
                 observed_at_ms: 10.0,
@@ -1091,6 +1238,8 @@ mod tests {
                 action_selected: "none".to_string(),
                 budget_before: None,
                 budget_after: None,
+                trigger_observation_label: None,
+                trigger_observation_summary: None,
                 command_result: None,
                 command_detail: None,
                 observed_at_ms: 11.0,

@@ -122,16 +122,16 @@ impl FfmpegSoftwareDecoder {
         Ok(())
     }
 
-    fn send_packet(&mut self) -> Result<(), XbxEngineRuntimeError> {
+    fn send_packet(&mut self) -> Result<i32, XbxEngineRuntimeError> {
         let send_status = unsafe { ffi::avcodec_send_packet(self.codec_ctx, self.packet) };
         if send_status >= 0 {
-            return Ok(());
+            return Ok(send_status);
         }
         if send_status == av_err_eagain() {
             let _ = self.receive_decoded_frame()?;
             let retry_status = unsafe { ffi::avcodec_send_packet(self.codec_ctx, self.packet) };
             if retry_status >= 0 {
-                return Ok(());
+                return Ok(retry_status);
             }
             return Err(ffmpeg_error(
                 "xbxEngineFfmpegSendPacketRetryFailed",
@@ -139,15 +139,17 @@ impl FfmpegSoftwareDecoder {
             ));
         }
         if send_status == av_err_eof() {
-            return Ok(());
+            return Ok(send_status);
         }
         Err(ffmpeg_error("xbxEngineFfmpegSendPacketFailed", send_status))
     }
 
-    fn receive_decoded_frame(&mut self) -> Result<Option<XbxRenderFrame>, XbxEngineRuntimeError> {
+    fn receive_decoded_frame(
+        &mut self,
+    ) -> Result<(Option<XbxRenderFrame>, i32), XbxEngineRuntimeError> {
         let receive_status = unsafe { ffi::avcodec_receive_frame(self.codec_ctx, self.frame) };
         if receive_status == av_err_eagain() || receive_status == av_err_eof() {
-            return Ok(None);
+            return Ok((None, receive_status));
         }
         if receive_status < 0 {
             return Err(ffmpeg_error(
@@ -160,7 +162,7 @@ impl FfmpegSoftwareDecoder {
         unsafe {
             ffi::av_frame_unref(self.frame);
         }
-        Ok(Some(frame))
+        Ok((Some(frame), receive_status))
     }
 
     fn convert_frame_to_bgra(&mut self) -> Result<XbxRenderFrame, XbxEngineRuntimeError> {
@@ -255,14 +257,23 @@ impl super::backend::XbxVideoDecoderBackend for FfmpegSoftwareDecoder {
         &mut self,
         encoded_frame: EncodedFrame,
         _now_ms: f64,
-    ) -> Result<Option<XbxRenderFrame>, XbxEngineRuntimeError> {
+    ) -> Result<super::backend::XbxVideoDecoderBackendDecodeOutcome, XbxEngineRuntimeError> {
         if encoded_frame.payload.is_empty() {
-            return Ok(None);
+            return Ok(super::backend::XbxVideoDecoderBackendDecodeOutcome {
+                frame: None,
+                send_packet_status: None,
+                receive_frame_status: None,
+            });
         }
 
         self.queue_packet(encoded_frame.payload.as_ref())?;
-        self.send_packet()?;
-        self.receive_decoded_frame()
+        let send_packet_status = self.send_packet()?;
+        let (frame, receive_frame_status) = self.receive_decoded_frame()?;
+        Ok(super::backend::XbxVideoDecoderBackendDecodeOutcome {
+            frame,
+            send_packet_status: Some(send_packet_status),
+            receive_frame_status: Some(receive_frame_status),
+        })
     }
 }
 

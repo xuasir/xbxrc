@@ -3,7 +3,7 @@ use super::{
     resolve_recovery_keyframe_action, should_absorb_idle_timeout_for_steady_gap,
     should_trigger_idle_timeout, RecoveryKeyframeAction, RtcVideoFrameSource,
 };
-use crate::media::video::h264::inspection::H264AccessUnitInspection;
+use crate::media::video::h264::inspection::{H264AccessUnitInspection, H264AccessUnitInspector};
 use crate::media::video::test_fixtures::{
     bootstrap_idr_nalu, bootstrap_pps_nalu, bootstrap_sps_nalu, make_video_rtp_packet,
     make_video_source_for_test, send_bootstrap_access_unit, NoopRtcpPort,
@@ -14,10 +14,62 @@ use crate::transport::rtc::stream::adapter_types::{
 use crate::transport::rtc::stream::packet_types::{RtcVideoIngressKind, RtcVideoRepairMetadata};
 use crate::transport::rtc::stream::sink::RtcRtcpSendPort;
 use crate::transport::rtc::stream::video_source::NackSchedulerConfig;
-use crate::XbxEngineRemoteAnswerObservation;
+use crate::{XbxEngineRemoteAnswerObservation, XbxEngineVideoTrackStatus};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use xbxengine_protocol::{XbxEngineTargetTypeDto, XbxEngineTransportStateDto};
+
+fn startup_h264_answer_without_sprop() -> XbxEngineRemoteAnswerObservation {
+    XbxEngineRemoteAnswerObservation {
+        observation_id: 1,
+        video_payload_order: vec![124],
+        selected_video_payload_type: Some(124),
+        selected_video_mime_type: Some("video/h264".to_string()),
+        selected_video_profile_level_id: Some("4d002a".to_string()),
+        selected_video_h264_sprop_parameter_sets: None,
+        accepted_video_rtcp_feedback: vec!["nack:pli".to_string()],
+        accepted_audio_rtcp_feedback: Vec::new(),
+        accepted_video_header_extensions: Vec::new(),
+        accepted_audio_header_extensions: Vec::new(),
+        observed_at_ms: 10.0,
+    }
+}
+
+fn bootstrap_non_idr_nalu() -> Vec<u8> {
+    let mut nalu = bootstrap_idr_nalu().to_vec();
+    nalu[0] = 0x41;
+    nalu
+}
+
+#[test]
+fn first_timeout_detection_only_starts_confirmation_window() {
+    let now = Instant::now();
+    let mut pending_since = None;
+
+    assert!(
+        !RtcVideoFrameSource::should_confirm_transient_timeout_signal(
+            &mut pending_since,
+            now,
+            Duration::from_millis(120),
+        )
+    );
+    assert!(pending_since.is_some());
+}
+
+#[test]
+fn timeout_detection_after_confirmation_window_is_emitted() {
+    let now = Instant::now();
+    let mut pending_since = Some(now);
+
+    assert!(
+        RtcVideoFrameSource::should_confirm_transient_timeout_signal(
+            &mut pending_since,
+            now + Duration::from_millis(130),
+            Duration::from_millis(120),
+        )
+    );
+    assert!(pending_since.is_none());
+}
 
 #[test]
 fn idle_timeout_is_suppressed_before_first_packet() {
@@ -115,7 +167,7 @@ fn no_render_slack_or_no_fresh_output_still_emits_idle_timeout_observation() {
 #[test]
 fn clean_anchor_soft_reentry_allows_healthy_delta_to_submit() {
     let (next_waiting_for_recovery_keyframe, recovery_action) =
-        resolve_recovery_keyframe_action(true, false, 0, 0, false, true);
+        resolve_recovery_keyframe_action(true, true, false, 0, 0, false, true);
 
     assert!(!next_waiting_for_recovery_keyframe);
     assert_eq!(recovery_action, RecoveryKeyframeAction::Submit);
@@ -124,7 +176,7 @@ fn clean_anchor_soft_reentry_allows_healthy_delta_to_submit() {
 #[test]
 fn clean_anchor_soft_reentry_does_not_override_loss_semantics() {
     let (next_waiting_for_recovery_keyframe, recovery_action) =
-        resolve_recovery_keyframe_action(true, false, 0, 1, false, true);
+        resolve_recovery_keyframe_action(true, true, false, 0, 1, false, true);
 
     assert!(!next_waiting_for_recovery_keyframe);
     assert_eq!(
@@ -134,9 +186,30 @@ fn clean_anchor_soft_reentry_does_not_override_loss_semantics() {
 }
 
 #[test]
+fn short_sample_loss_burst_stays_in_drop_and_request_keyframe() {
+    let (next_waiting_for_recovery_keyframe, recovery_action) =
+        resolve_recovery_keyframe_action(true, false, false, 2, 1, false, false);
+
+    assert!(!next_waiting_for_recovery_keyframe);
+    assert_eq!(
+        recovery_action,
+        RecoveryKeyframeAction::DropAndRequestKeyframe
+    );
+}
+
+#[test]
+fn only_longer_sample_loss_burst_enters_wait_keyframe() {
+    let (next_waiting_for_recovery_keyframe, recovery_action) =
+        resolve_recovery_keyframe_action(true, false, false, 3, 1, false, false);
+
+    assert!(next_waiting_for_recovery_keyframe);
+    assert_eq!(recovery_action, RecoveryKeyframeAction::TriggerWaitKeyframe);
+}
+
+#[test]
 fn recovery_wait_without_soft_reentry_remains_waiting() {
     let (next_waiting_for_recovery_keyframe, recovery_action) =
-        resolve_recovery_keyframe_action(true, true, 0, 0, false, false);
+        resolve_recovery_keyframe_action(true, true, true, 0, 0, false, false);
 
     assert!(next_waiting_for_recovery_keyframe);
     assert_eq!(recovery_action, RecoveryKeyframeAction::WaitKeyframe);
@@ -145,10 +218,19 @@ fn recovery_wait_without_soft_reentry_remains_waiting() {
 #[test]
 fn low_value_local_gap_wait_is_absorbed_without_transport_wait_upgrade() {
     let (next_waiting_for_recovery_keyframe, recovery_action) =
-        resolve_recovery_keyframe_action(true, false, 0, 0, false, false);
+        resolve_recovery_keyframe_action(true, true, false, 0, 0, false, false);
 
     assert!(!next_waiting_for_recovery_keyframe);
     assert_eq!(recovery_action, RecoveryKeyframeAction::Submit);
+}
+
+#[test]
+fn pre_first_frame_wait_does_not_absorb_non_keyframe_delta() {
+    let (next_waiting_for_recovery_keyframe, recovery_action) =
+        resolve_recovery_keyframe_action(false, true, false, 0, 0, false, false);
+
+    assert!(next_waiting_for_recovery_keyframe);
+    assert_eq!(recovery_action, RecoveryKeyframeAction::WaitKeyframe);
 }
 
 #[test]
@@ -169,7 +251,7 @@ fn inspection_admission_rejects_frames_without_bootstrap_or_continuation() {
             bootstrap_reject_reason: None,
             commit_state:
                 crate::media::video::h264::inspection::H264AccessUnitInspector::test_commit_state(),
-        }),
+        }, false, false),
         super::InspectionAdmission::Accept
     );
 
@@ -189,7 +271,7 @@ fn inspection_admission_rejects_frames_without_bootstrap_or_continuation() {
             bootstrap_reject_reason: None,
             commit_state:
                 crate::media::video::h264::inspection::H264AccessUnitInspector::test_commit_state(),
-        }),
+        }, false, false),
         super::InspectionAdmission::AwaitRecoveryKeyframe
     );
 
@@ -209,8 +291,35 @@ fn inspection_admission_rejects_frames_without_bootstrap_or_continuation() {
             bootstrap_reject_reason: None,
             commit_state:
                 crate::media::video::h264::inspection::H264AccessUnitInspector::test_commit_state(),
-        }),
+        }, false, false),
         super::InspectionAdmission::AwaitRecoveryKeyframe
+    );
+}
+
+#[test]
+fn pre_first_frame_non_idr_continuation_is_rejected_until_first_frame_exists() {
+    let inspector = H264AccessUnitInspector::new();
+    inspector
+        .seed_committed_parameter_sets_if_absent(&bootstrap_sps_nalu(), &bootstrap_pps_nalu())
+        .expect("seed committed parameter sets");
+    let mut payload = vec![0, 0, 0, 1];
+    payload.extend_from_slice(&bootstrap_non_idr_nalu());
+    let inspection = inspector
+        .inspect_access_unit(&payload)
+        .expect("inspect non-idr access unit");
+
+    assert!(inspection.delta_continuation_ready());
+    assert_eq!(
+        resolve_inspection_admission(&inspection, false, false),
+        super::InspectionAdmission::AwaitRecoveryKeyframe
+    );
+    assert_eq!(
+        resolve_inspection_admission(&inspection, false, true),
+        super::InspectionAdmission::Accept
+    );
+    assert_eq!(
+        resolve_inspection_admission(&inspection, true, false),
+        super::InspectionAdmission::Accept
     );
 }
 
@@ -250,12 +359,9 @@ fn clean_keyframe_anchor_records_current_transport_recovery_epoch() {
         stats.video_anchor_clean_source_event.as_deref(),
         Some("chain-clean-keyframe-submitted")
     );
-    assert!(!stats.transport_recovery_episode_active);
-    assert_eq!(stats.transport_recovery_episode_closed_at_ms, Some(180.0));
-    assert_eq!(
-        stats.transport_recovery_episode_close_reason.as_deref(),
-        Some("cleanAnchor")
-    );
+    assert!(stats.transport_recovery_episode_active);
+    assert_eq!(stats.transport_recovery_episode_closed_at_ms, None);
+    assert_eq!(stats.transport_recovery_episode_close_reason, None);
 }
 
 #[tokio::test]
@@ -443,19 +549,7 @@ async fn startup_h264_without_sprop_requests_keyframe_before_first_bad_frame_rec
     source.runtime_stats.update(|stats| {
         stats.session_phase = Some("priming".to_string());
         stats.transport_state = XbxEngineTransportStateDto::Connected;
-        stats.latest_remote_answer_observation = Some(XbxEngineRemoteAnswerObservation {
-            observation_id: 1,
-            video_payload_order: vec![124],
-            selected_video_payload_type: Some(124),
-            selected_video_mime_type: Some("video/h264".to_string()),
-            selected_video_profile_level_id: Some("4d002a".to_string()),
-            selected_video_h264_sprop_parameter_sets: None,
-            accepted_video_rtcp_feedback: vec!["nack:pli".to_string()],
-            accepted_audio_rtcp_feedback: Vec::new(),
-            accepted_video_header_extensions: Vec::new(),
-            accepted_audio_header_extensions: Vec::new(),
-            observed_at_ms: 10.0,
-        });
+        stats.latest_remote_answer_observation = Some(startup_h264_answer_without_sprop());
     });
 
     tx.send(make_video_rtp_packet(100, 9001, true, bootstrap_idr_nalu()))
@@ -488,6 +582,274 @@ async fn startup_h264_without_sprop_requests_keyframe_before_first_bad_frame_rec
         second,
         TransportObservation::Admission(TransportAdmissionObservation::AwaitRecoveryKeyframe)
     );
+    assert!(transport_observation_rx.try_recv().is_err());
+}
+
+#[tokio::test]
+async fn startup_h264_without_sprop_and_audio_only_emits_single_followup_bootstrap_request() {
+    let (tx, mut transport_observation_rx, mut source) = make_video_source_for_test();
+    source.runtime_stats.update(|stats| {
+        stats.session_phase = Some("priming".to_string());
+        stats.transport_state = XbxEngineTransportStateDto::Connected;
+        stats.latest_remote_answer_observation = Some(startup_h264_answer_without_sprop());
+        stats.latest_audio_playout_time_ms = Some(16.0);
+        stats.latest_video_track_status = Some(XbxEngineVideoTrackStatus {
+            state: "audioOnly".to_string(),
+            video_width: None,
+            video_height: None,
+            mime_type: Some("video/h264".to_string()),
+            transport_state: XbxEngineTransportStateDto::Connected,
+            video_bytes_total: 0,
+            video_packet_count_total: 0,
+            audio_bytes_total: 2_048,
+            observed_at_ms: 18.0,
+        });
+    });
+
+    let non_idr = bootstrap_non_idr_nalu();
+    tx.send(make_video_rtp_packet(100, 9_001, true, &non_idr))
+        .await
+        .expect("non-idr packet should enqueue");
+    tx.send(make_video_rtp_packet(101, 9_017, true, &non_idr))
+        .await
+        .expect("follow-up packet should flush previous sample");
+    drop(tx);
+
+    let frame = tokio::time::timeout(Duration::from_millis(200), source.recv_frame_inner())
+        .await
+        .expect("reader should finish after rx closes");
+    assert!(frame.is_none());
+
+    let first = tokio::time::timeout(Duration::from_millis(50), transport_observation_rx.recv())
+        .await
+        .expect("initial bootstrap request observation should be emitted")
+        .expect("observation should exist");
+    assert_eq!(
+        first,
+        TransportObservation::Loss(TransportLossObservation::RecoveryKeyframeRequested)
+    );
+
+    let second = tokio::time::timeout(Duration::from_millis(50), transport_observation_rx.recv())
+        .await
+        .expect("follow-up bootstrap request observation should be emitted")
+        .expect("observation should exist");
+    assert_eq!(
+        second,
+        TransportObservation::Loss(TransportLossObservation::RecoveryKeyframeRequested)
+    );
+
+    let third = tokio::time::timeout(Duration::from_millis(50), transport_observation_rx.recv())
+        .await
+        .expect("await-recovery observation should be emitted")
+        .expect("observation should exist");
+    assert_eq!(
+        third,
+        TransportObservation::Admission(TransportAdmissionObservation::AwaitRecoveryKeyframe)
+    );
+    assert!(transport_observation_rx.try_recv().is_err());
+}
+
+#[tokio::test]
+async fn first_frame_acquisition_priority_non_idr_with_committed_parameter_sets_emits_followup_and_await_recovery_before_first_frame_edge(
+) {
+    let (tx, mut transport_observation_rx, mut source) = make_video_source_for_test();
+    source.runtime_stats.update(|stats| {
+        stats.session_phase = Some("priming".to_string());
+        stats.transport_state = XbxEngineTransportStateDto::Connected;
+        stats.latest_remote_answer_observation = Some(startup_h264_answer_without_sprop());
+        stats.latest_audio_playout_time_ms = Some(16.0);
+        stats.latest_video_track_status = Some(XbxEngineVideoTrackStatus {
+            state: "remoteTrackAttached".to_string(),
+            video_width: Some(1920),
+            video_height: Some(1080),
+            mime_type: Some("video/h264".to_string()),
+            transport_state: XbxEngineTransportStateDto::Connected,
+            video_bytes_total: 4_096,
+            video_packet_count_total: 32,
+            audio_bytes_total: 2_048,
+            observed_at_ms: 18.0,
+        });
+    });
+    source
+        .h264_inspector
+        .seed_committed_parameter_sets_if_absent(&bootstrap_sps_nalu(), &bootstrap_pps_nalu())
+        .expect("committed parameter sets should seed successfully");
+
+    let non_idr = bootstrap_non_idr_nalu();
+    tx.send(make_video_rtp_packet(100, 9_001, true, &non_idr))
+        .await
+        .expect("non-idr packet should enqueue");
+    tx.send(make_video_rtp_packet(101, 9_017, true, &non_idr))
+        .await
+        .expect("follow-up packet should flush previous sample");
+    drop(tx);
+
+    let frame = tokio::time::timeout(Duration::from_millis(200), source.recv_frame_inner())
+        .await
+        .expect("reader should finish after rx closes");
+    assert!(frame.is_none());
+
+    let first = tokio::time::timeout(Duration::from_millis(50), transport_observation_rx.recv())
+        .await
+        .expect("initial bootstrap request observation should be emitted")
+        .expect("observation should exist");
+    assert_eq!(
+        first,
+        TransportObservation::Loss(TransportLossObservation::RecoveryKeyframeRequested)
+    );
+
+    let second = tokio::time::timeout(Duration::from_millis(50), transport_observation_rx.recv())
+        .await
+        .expect("follow-up bootstrap request observation should be emitted")
+        .expect("observation should exist");
+    assert_eq!(
+        second,
+        TransportObservation::Loss(TransportLossObservation::RecoveryKeyframeRequested)
+    );
+
+    let third = tokio::time::timeout(Duration::from_millis(50), transport_observation_rx.recv())
+        .await
+        .expect("await-recovery observation should be emitted")
+        .expect("observation should exist");
+    assert_eq!(
+        third,
+        TransportObservation::Admission(TransportAdmissionObservation::AwaitRecoveryKeyframe)
+    );
+    assert!(transport_observation_rx.try_recv().is_err());
+}
+
+#[tokio::test]
+async fn first_frame_acquisition_followup_request_is_disabled_after_first_frame_feedback() {
+    let (tx, mut transport_observation_rx, mut source) = make_video_source_for_test();
+    source.runtime_stats.update(|stats| {
+        stats.session_phase = Some("priming".to_string());
+        stats.transport_state = XbxEngineTransportStateDto::Connected;
+        stats.latest_remote_answer_observation = Some(startup_h264_answer_without_sprop());
+        stats.latest_audio_playout_time_ms = Some(16.0);
+        stats.latest_video_decode_ok_time_ms = Some(14.0);
+        stats.latest_video_host_present_time_ms = Some(15.0);
+        stats.video_present_epoch = 1;
+        stats.latest_video_track_status = Some(XbxEngineVideoTrackStatus {
+            state: "audioOnly".to_string(),
+            video_width: None,
+            video_height: None,
+            mime_type: Some("video/h264".to_string()),
+            transport_state: XbxEngineTransportStateDto::Connected,
+            video_bytes_total: 512,
+            video_packet_count_total: 2,
+            audio_bytes_total: 2_048,
+            observed_at_ms: 18.0,
+        });
+    });
+
+    let non_idr = bootstrap_non_idr_nalu();
+    tx.send(make_video_rtp_packet(100, 9_001, true, &non_idr))
+        .await
+        .expect("non-idr packet should enqueue");
+    tx.send(make_video_rtp_packet(101, 9_017, true, &non_idr))
+        .await
+        .expect("follow-up packet should flush previous sample");
+    drop(tx);
+
+    let frame = tokio::time::timeout(Duration::from_millis(200), source.recv_frame_inner())
+        .await
+        .expect("reader should finish after rx closes");
+    assert!(frame.is_none());
+
+    let observation =
+        tokio::time::timeout(Duration::from_millis(50), transport_observation_rx.recv())
+            .await
+            .expect("await-recovery observation should be emitted")
+            .expect("observation should exist");
+    assert_eq!(
+        observation,
+        TransportObservation::Admission(TransportAdmissionObservation::AwaitRecoveryKeyframe)
+    );
+    assert!(transport_observation_rx.try_recv().is_err());
+}
+
+#[tokio::test]
+async fn first_frame_acquisition_followup_stays_enabled_before_first_frame_even_with_committed_parameter_sets(
+) {
+    let (tx, mut transport_observation_rx, mut source) = make_video_source_for_test();
+    source.runtime_stats.update(|stats| {
+        stats.session_phase = Some("priming".to_string());
+        stats.transport_state = XbxEngineTransportStateDto::Connected;
+        stats.latest_remote_answer_observation = Some(startup_h264_answer_without_sprop());
+        stats.latest_audio_playout_time_ms = Some(16.0);
+        stats.latest_video_track_status = Some(XbxEngineVideoTrackStatus {
+            state: "remoteTrackAttached".to_string(),
+            video_width: None,
+            video_height: None,
+            mime_type: Some("video/h264".to_string()),
+            transport_state: XbxEngineTransportStateDto::Connected,
+            video_bytes_total: 18_106,
+            video_packet_count_total: 16,
+            audio_bytes_total: 2_048,
+            observed_at_ms: 18.0,
+        });
+    });
+
+    send_bootstrap_access_unit(&tx, 100, 9_000).await;
+    tx.send(make_video_rtp_packet(
+        103,
+        9_016,
+        true,
+        bootstrap_idr_nalu(),
+    ))
+    .await
+    .expect("boundary packet should flush bootstrap sample");
+
+    let bootstrap_frame =
+        tokio::time::timeout(Duration::from_millis(200), source.recv_frame_inner())
+            .await
+            .expect("bootstrap frame should assemble")
+            .expect("bootstrap frame should be emitted");
+    assert!(bootstrap_frame.is_keyframe);
+    assert!(bootstrap_frame.h264.bootstrap_ready);
+
+    let initial = tokio::time::timeout(Duration::from_millis(50), transport_observation_rx.recv())
+        .await
+        .expect("initial bootstrap request observation should be emitted")
+        .expect("observation should exist");
+    assert_eq!(
+        initial,
+        TransportObservation::Loss(TransportLossObservation::RecoveryKeyframeRequested)
+    );
+
+    let non_idr = bootstrap_non_idr_nalu();
+    tx.send(make_video_rtp_packet(103, 9_016, true, &non_idr))
+        .await
+        .expect("non-idr packet should enqueue");
+    tx.send(make_video_rtp_packet(104, 9_032, true, &non_idr))
+        .await
+        .expect("follow-up packet should flush previous sample");
+    drop(tx);
+
+    let frame = tokio::time::timeout(Duration::from_millis(200), source.recv_frame_inner())
+        .await
+        .expect("reader should finish after rx closes");
+    assert!(frame.is_none());
+
+    let followup = tokio::time::timeout(Duration::from_millis(50), transport_observation_rx.recv())
+        .await
+        .expect("follow-up bootstrap request observation should be emitted")
+        .expect("observation should exist");
+    assert_eq!(
+        followup,
+        TransportObservation::Loss(TransportLossObservation::RecoveryKeyframeRequested)
+    );
+
+    let await_recovery =
+        tokio::time::timeout(Duration::from_millis(50), transport_observation_rx.recv())
+            .await
+            .expect("await-recovery observation should be emitted")
+            .expect("observation should exist");
+    assert_eq!(
+        await_recovery,
+        TransportObservation::Admission(TransportAdmissionObservation::AwaitRecoveryKeyframe)
+    );
+    assert!(transport_observation_rx.try_recv().is_err());
 }
 
 #[tokio::test]

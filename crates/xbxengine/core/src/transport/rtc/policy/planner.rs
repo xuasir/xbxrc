@@ -79,6 +79,7 @@ mod tests {
                 reason: VideoEscalationReason::LifecycleRecovering,
                 reason_label: "rtcConnectionRecovering".to_string(),
                 reason_domain: crate::XbxEngineRecoveryReasonDomain::ConnectivityTransport,
+                reconnect_gate_detail: None,
                 budget_before: RecoveryActionBudgetState {
                     recovery_epoch: 1,
                     keyframe_budget_used: 0,
@@ -130,6 +131,7 @@ mod tests {
                 reason: VideoEscalationReason::DisplaySupplyCritical,
                 reason_label: "displaySupplyCritical".to_string(),
                 reason_domain: crate::XbxEngineRecoveryReasonDomain::Local,
+                reconnect_gate_detail: None,
                 budget_before: RecoveryActionBudgetState {
                     recovery_epoch: 1,
                     keyframe_budget_used: 0,

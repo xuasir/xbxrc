@@ -235,6 +235,7 @@ impl RtcConnectionService {
             )?;
         }
         self.control_service.clear_pending_replay_actions();
+        self.sync_control_replay_runtime_stats(runtime_stats);
         RuntimeStatsSink::new(runtime_stats.clone()).update(|stats| {
             stats.latest_observation_label = Some("rtcControlReplayConsumed".to_string());
             stats.latest_observation_summary = Some(format!(
@@ -620,6 +621,7 @@ impl RtcConnectionService {
                 )?;
             } else {
                 let _ = self.control_service.request_video_keyframe();
+                self.sync_control_replay_runtime_stats(runtime_stats);
                 RuntimeStatsSink::new(runtime_stats.clone()).update(|stats| {
                     stats.latest_observation_label =
                         Some("rtcControlDelayedKeyframePrimeDeferred".to_string());

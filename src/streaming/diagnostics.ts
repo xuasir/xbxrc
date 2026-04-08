@@ -121,6 +121,8 @@ export function buildStreamDiagnosticsSnapshot(input: {
     transportSummary,
     statusCode: resolveStatusCode({
       hasNoVideoWarning,
+      unifiedLifecyclePhase,
+      sessionPhase,
       isRecovering,
       isActive,
       recoveryOwnerState,
@@ -169,12 +171,21 @@ function formatAddressFamily(family?: 'ipv4' | 'ipv6' | 'mixed' | 'unknown'): st
 
 function resolveStatusCode(input: {
   hasNoVideoWarning: boolean
+  unifiedLifecyclePhase?: CanonicalLifecyclePhase
+  sessionPhase?: string
   isRecovering: boolean
   isActive: boolean
   recoveryOwnerState?: string
-}): 'noVideo' | 'recovering' | 'owner' | 'stable' | 'inactive' {
+}): 'noVideo' | 'probing' | 'recovering' | 'blocked' | 'owner' | 'stable' | 'inactive' {
   if (input.hasNoVideoWarning) {
     return 'noVideo'
+  }
+  const lifecycle = input.unifiedLifecyclePhase ?? normalizeLegacyRecoveryLifecycle(input.sessionPhase)
+  if (lifecycle === 'observing' || lifecycle === 'local-self-healing') {
+    return 'probing'
+  }
+  if (lifecycle === 'recovery-blocked') {
+    return 'blocked'
   }
   if (input.isRecovering) {
     return 'recovering'
@@ -186,6 +197,24 @@ function resolveStatusCode(input: {
     return 'stable'
   }
   return 'inactive'
+}
+
+function normalizeLegacyRecoveryLifecycle(
+  sessionPhase?: string,
+): CanonicalLifecyclePhase | undefined {
+  const raw = sessionPhase?.trim()
+  if (raw === undefined || raw === '') {
+    return undefined
+  }
+  if (raw === 'observing'
+    || raw === 'local-self-healing'
+    || raw === 'recovery-blocked'
+    || raw === 'recovery-eligible'
+    || raw === 'active-recovery'
+    || raw === 'recovering') {
+    return raw
+  }
+  return undefined
 }
 
 function resolveUnifiedLifecyclePhase(

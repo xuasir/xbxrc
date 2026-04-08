@@ -30,6 +30,15 @@ impl TwccWarmupState {
     pub(crate) fn blocks_bwe_updates(self) -> bool {
         matches!(self, Self::BuilderConfigured | Self::MissingLocalFeedback)
     }
+
+    pub(crate) fn label(self) -> &'static str {
+        match self {
+            Self::Inactive => "inactive",
+            Self::BuilderConfigured => "builderConfigured",
+            Self::MissingLocalFeedback => "missingLocalFeedback",
+            Self::LocalFeedbackReady => "localFeedbackReady",
+        }
+    }
 }
 
 pub(crate) struct SchedulingPolicyInput {
@@ -190,6 +199,7 @@ mod tests {
             reason: VideoEscalationReason::AdapterIdleTimeout,
             reason_label: "adapterIdleTimeout".to_string(),
             reason_domain: crate::XbxEngineRecoveryReasonDomain::ConnectivityTransport,
+            reconnect_gate_detail: None,
             budget_before: RecoveryActionBudgetState {
                 recovery_epoch: 1,
                 keyframe_budget_used: 0,
@@ -271,6 +281,7 @@ mod tests {
                 reason: VideoEscalationReason::LifecycleRecovering,
                 reason_label: "rtcConnectionRecovering".to_string(),
                 reason_domain: crate::XbxEngineRecoveryReasonDomain::ConnectivityTransport,
+                reconnect_gate_detail: None,
                 budget_before: RecoveryActionBudgetState {
                     recovery_epoch: 1,
                     keyframe_budget_used: 0,
@@ -350,6 +361,7 @@ mod tests {
                 reason: VideoEscalationReason::TransportAwaitRecoveryKeyframe,
                 reason_label: "transportAwaitRecoveryKeyframe".to_string(),
                 reason_domain: crate::XbxEngineRecoveryReasonDomain::ConnectivityTransport,
+                reconnect_gate_detail: None,
                 budget_before: RecoveryActionBudgetState {
                     recovery_epoch: 1,
                     keyframe_budget_used: 0,

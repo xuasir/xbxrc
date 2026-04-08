@@ -8,12 +8,13 @@ use std::time::{Duration, Instant};
 use super::{
     XbxDecodeCandidateState, XbxDecodeOutputPathVerdict, XbxDecodeWorkloadState,
     XbxVideoDecodeState, XbxVideoRecoveryEvent, XbxVideoRecoveryState,
+    WAITING_KEYFRAME_CONTINUATION_MAX_FRAMES,
 };
 use crate::media::video::decode::backend::{
     XbxVideoDecoderBackend, XbxVideoDecoderBackendDecodeOutcome, XbxVideoDecoderProbeSummary,
 };
 use crate::media::video::h264::inspection::{
-    H264AccessUnitInspection, H264AccessUnitInspector, H264BootstrapRejectReason,
+    H264AccessUnitInspection, H264AccessUnitInspector, H264BootstrapRejectReason, H264NalUnit,
 };
 use crate::{
     api::backend::XbxEngineMediaRuntimeStats,
@@ -27,6 +28,7 @@ use crate::{
     XbxEngineRenderPixelData,
 };
 use bytes::Bytes;
+use h264_reader::nal::UnitType;
 
 struct SpyHardwareDecoder;
 
@@ -294,6 +296,189 @@ fn backend_no_output_records_decode_output_path_observation() {
     assert_eq!(observation.frame_rtp_timestamp, 1);
     assert!(observation.is_keyframe);
     assert_eq!(observation.status, None);
+}
+
+#[test]
+fn waiting_keyframe_bootstrap_no_output_allows_safe_continuation_decode() {
+    let decode_calls = Arc::new(AtomicUsize::new(0));
+    let decoder = SpyHardwareDecoder;
+    let decode_calls_for_factory = decode_calls.clone();
+    let mut scripted_results_for_factory = Some(VecDeque::from([Ok(None), Ok(None)]));
+    let decoder_factory = Box::new(move || {
+        (
+            Box::new(ScriptedHardwareDecoder {
+                backend_name: "scripted-replacement",
+                decode_calls: decode_calls_for_factory.clone(),
+                scripted_results: scripted_results_for_factory.take().unwrap_or_default(),
+            }) as Box<dyn XbxVideoDecoderBackend>,
+            XbxVideoDecoderProbeSummary {
+                selected_backend_name: "scripted-replacement".to_string(),
+                selected_backend_kind: "software".to_string(),
+                fallback_count: 1,
+                fallback_summary: Some("external-reset-recreate".to_string()),
+            },
+        )
+    });
+    let mut state =
+        XbxVideoDecodeState::new_for_test_with_factory(20, 30, Box::new(decoder), decoder_factory);
+
+    state
+        .request_local_decoder_reset()
+        .expect("decoder reset should succeed");
+
+    let bootstrap = make_bootstrap_assembled_frame(101)
+        .into_encoded_frame(Instant::now() + Duration::from_millis(16));
+    let continuation_commit_state = bootstrap.h264.commit_state.clone();
+    bootstrap.h264.commit();
+    assert!(state.process_encoded_frame(bootstrap, 1_000.0).is_none());
+    assert_eq!(decode_calls.load(Ordering::Relaxed), 1);
+    assert_eq!(
+        state
+            .latest_decode_output_path_observation()
+            .expect("observation should exist")
+            .detail,
+        "backendNoOutputAfterBootstrapKeyframe"
+    );
+
+    let mut continuation = make_encoded_frame(false);
+    continuation.rtp_timestamp = 102;
+    continuation.h264 = H264AccessUnitInspection {
+        nals: vec![H264NalUnit {
+            range: 0..1,
+            unit_type: UnitType::SliceLayerWithoutPartitioningNonIdr,
+        }],
+        parameter_sets: None,
+        width: Some(2560),
+        height: Some(1440),
+        is_idr: false,
+        has_inband_sps: false,
+        has_inband_pps: false,
+        slice_headers_valid: true,
+        parameter_sets_changed: false,
+        config_changed: false,
+        bootstrap_ready: false,
+        bootstrap_reject_reason: Some(H264BootstrapRejectReason::NonIdrVcl),
+        commit_state: continuation_commit_state,
+    };
+
+    assert!(state.process_encoded_frame(continuation, 1_008.0).is_none());
+    assert_eq!(decode_calls.load(Ordering::Relaxed), 2);
+    let observation = state
+        .latest_decode_output_path_observation()
+        .expect("decode output path observation should exist");
+    assert_eq!(
+        observation.verdict,
+        XbxDecodeOutputPathVerdict::BackendNoOutput
+    );
+    assert_eq!(observation.detail, "backendNoOutputAfterContinuationBypass");
+}
+
+#[test]
+fn waiting_keyframe_continuation_rejects_again_after_frame_budget_exhausted() {
+    let decode_calls = Arc::new(AtomicUsize::new(0));
+    let decoder = SpyHardwareDecoder;
+    let decode_calls_for_factory = decode_calls.clone();
+    let mut scripted_results_for_factory = Some(VecDeque::from(vec![
+        Ok(None);
+        (WAITING_KEYFRAME_CONTINUATION_MAX_FRAMES + 2)
+            as usize
+    ]));
+    let decoder_factory = Box::new(move || {
+        (
+            Box::new(ScriptedHardwareDecoder {
+                backend_name: "scripted-replacement",
+                decode_calls: decode_calls_for_factory.clone(),
+                scripted_results: scripted_results_for_factory.take().unwrap_or_default(),
+            }) as Box<dyn XbxVideoDecoderBackend>,
+            XbxVideoDecoderProbeSummary {
+                selected_backend_name: "scripted-replacement".to_string(),
+                selected_backend_kind: "software".to_string(),
+                fallback_count: 1,
+                fallback_summary: Some("external-reset-recreate".to_string()),
+            },
+        )
+    });
+    let mut state =
+        XbxVideoDecodeState::new_for_test_with_factory(20, 30, Box::new(decoder), decoder_factory);
+
+    state
+        .request_local_decoder_reset()
+        .expect("decoder reset should succeed");
+
+    let bootstrap = make_bootstrap_assembled_frame(201)
+        .into_encoded_frame(Instant::now() + Duration::from_millis(16));
+    let continuation_commit_state = bootstrap.h264.commit_state.clone();
+    bootstrap.h264.commit();
+    assert!(state.process_encoded_frame(bootstrap, 2_000.0).is_none());
+    assert_eq!(decode_calls.load(Ordering::Relaxed), 1);
+
+    for index in 0..WAITING_KEYFRAME_CONTINUATION_MAX_FRAMES {
+        let mut continuation = make_encoded_frame(false);
+        continuation.rtp_timestamp = 202 + index;
+        continuation.h264 = H264AccessUnitInspection {
+            nals: vec![H264NalUnit {
+                range: 0..1,
+                unit_type: UnitType::SliceLayerWithoutPartitioningNonIdr,
+            }],
+            parameter_sets: None,
+            width: Some(2560),
+            height: Some(1440),
+            is_idr: false,
+            has_inband_sps: false,
+            has_inband_pps: false,
+            slice_headers_valid: true,
+            parameter_sets_changed: false,
+            config_changed: false,
+            bootstrap_ready: false,
+            bootstrap_reject_reason: Some(H264BootstrapRejectReason::NonIdrVcl),
+            commit_state: continuation_commit_state.clone(),
+        };
+        assert!(state
+            .process_encoded_frame(continuation, 2_005.0 + f64::from(index))
+            .is_none());
+    }
+    assert_eq!(
+        decode_calls.load(Ordering::Relaxed),
+        (WAITING_KEYFRAME_CONTINUATION_MAX_FRAMES + 1) as usize
+    );
+
+    let mut exhausted = make_encoded_frame(false);
+    exhausted.rtp_timestamp = 299;
+    exhausted.h264 = H264AccessUnitInspection {
+        nals: vec![H264NalUnit {
+            range: 0..1,
+            unit_type: UnitType::SliceLayerWithoutPartitioningNonIdr,
+        }],
+        parameter_sets: None,
+        width: Some(2560),
+        height: Some(1440),
+        is_idr: false,
+        has_inband_sps: false,
+        has_inband_pps: false,
+        slice_headers_valid: true,
+        parameter_sets_changed: false,
+        config_changed: false,
+        bootstrap_ready: false,
+        bootstrap_reject_reason: Some(H264BootstrapRejectReason::NonIdrVcl),
+        commit_state: continuation_commit_state,
+    };
+    assert!(state.process_encoded_frame(exhausted, 2_020.0).is_none());
+    assert_eq!(
+        decode_calls.load(Ordering::Relaxed),
+        (WAITING_KEYFRAME_CONTINUATION_MAX_FRAMES + 1) as usize
+    );
+    let observation = state
+        .latest_decode_output_path_observation()
+        .expect("decode output path observation should exist");
+    assert_eq!(
+        observation.verdict,
+        XbxDecodeOutputPathVerdict::BootstrapGateRejected
+    );
+    assert_eq!(observation.detail, "bootstrapGateRejected");
+    assert_eq!(
+        observation.bootstrap_reject_reason.as_deref(),
+        Some(H264BootstrapRejectReason::NonIdrVcl.as_str())
+    );
 }
 
 #[test]

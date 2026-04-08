@@ -72,7 +72,7 @@ impl VideoSchedulingOwnerState {
 pub(crate) struct VideoSchedulingOwnerInput {
     pub(crate) connection_state: ConnectionLifecycleStateFact,
     pub(crate) recovery_epoch: u64,
-    pub(crate) startup_bootstrap_grace_allowed: bool,
+    pub(crate) first_frame_acquisition_priority_allowed: bool,
     pub(crate) anchor_reason_label: Option<String>,
     pub(crate) demand: SchedulingDemandSignal,
     pub(crate) clean_anchor_epoch: Option<u64>,
@@ -97,18 +97,50 @@ pub(crate) struct VideoSchedulingOwnerInput {
 pub(crate) struct RecoveryIntentContract {
     pub(crate) emit: bool,
     pub(crate) source: RecoveryIntentSource,
+    pub(crate) reason: OwnerRecoveryReason,
     pub(crate) reason_label: String,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum OwnerRecoveryReason {
+    TransportAwaitRecoveryKeyframe,
+    DisplaySupplyCritical,
+    DisplaySupplyDegraded,
+}
+
+impl OwnerRecoveryReason {
+    pub(crate) fn source(self) -> RecoveryIntentSource {
+        match self {
+            Self::TransportAwaitRecoveryKeyframe => RecoveryIntentSource::Anchor,
+            Self::DisplaySupplyCritical | Self::DisplaySupplyDegraded => {
+                RecoveryIntentSource::Supply
+            }
+        }
+    }
+
+    pub(crate) fn as_reason_label(self) -> &'static str {
+        match self {
+            Self::TransportAwaitRecoveryKeyframe => "transportAwaitRecoveryKeyframe",
+            Self::DisplaySupplyCritical => "displaySupplyCritical",
+            Self::DisplaySupplyDegraded => "displaySupplyDegraded",
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct VideoSchedulingOwnerDiagnostics {
+    pub(crate) reason_label: String,
+    pub(crate) reason_source: VideoSchedulingOwnerContractSource,
+    pub(crate) temporary_diagnostic_summary: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct VideoSchedulingOwnerOutput {
     pub(crate) state: VideoSchedulingOwnerState,
     pub(crate) health: VideoHealthContract,
-    pub(crate) reason_label: String,
-    pub(crate) reason_source: VideoSchedulingOwnerContractSource,
     pub(crate) observed_at_ms: f64,
     pub(crate) recovery_intent: Option<RecoveryIntentContract>,
-    pub(crate) temporary_diagnostic_summary: Option<String>,
+    pub(crate) diagnostics: VideoSchedulingOwnerDiagnostics,
 }
 
 #[derive(Clone, Debug)]
@@ -145,6 +177,7 @@ const DISPLAY_SUPPLY_SOFT_CRITICAL_CONFIRM_MS: f64 = 260.0;
 /// Stable→supply-starved 确认窗：略加长以减少 healthy↔starved 阈值抖动（薄码流/调度微抖）。
 const DISPLAY_SUPPLY_STARVED_CONFIRM_MS: f64 = 280.0;
 const RECENT_H264_RECOVERY_BLOCKER_MAX_AGE_MS: f64 = 220.0;
+const BOOTSTRAP_IN_FLIGHT_GRACE_MS: f64 = 320.0;
 
 impl VideoSchedulingOwner {
     pub(crate) fn new() -> Self {
@@ -196,8 +229,8 @@ impl VideoSchedulingOwner {
         let wait_keyframe_rebuild_priority = Self::should_prioritize_wait_keyframe_rebuild(input);
         let codec_recovery_keyframe_blocked =
             Self::codec_still_awaits_recovery_keyframe(current_state, input);
-        let startup_bootstrap_grace_active =
-            Self::startup_bootstrap_grace_active(current_state, input);
+        let first_frame_acquisition_priority_active =
+            Self::first_frame_acquisition_priority_active(current_state, input);
         let transport_await_local_probe_probation_active =
             Self::transport_await_local_probe_probation_active(
                 current_state,
@@ -205,7 +238,7 @@ impl VideoSchedulingOwner {
                 has_clean_anchor_evidence,
                 chain_healthy,
             );
-        let has_anchor_issue = if startup_bootstrap_grace_active {
+        let has_anchor_issue = if first_frame_acquisition_priority_active {
             false
         } else if transport_await_local_probe_probation_active {
             false
@@ -259,7 +292,8 @@ impl VideoSchedulingOwner {
             VideoSchedulingOwnerState::SupplyStarved => VideoHealthContract::Starved,
         };
 
-        let recovery_intent = self.build_recovery_intent(next, input, effective_supply_state);
+        let recovery_intent =
+            self.build_recovery_intent(next, input, effective_supply_state, completion_evidence);
         let (reason_label, reason_source) = if let Some(intent) = recovery_intent.as_ref() {
             (
                 intent.reason_label.clone(),
@@ -293,11 +327,13 @@ impl VideoSchedulingOwner {
         VideoSchedulingOwnerOutput {
             state: next,
             health,
-            reason_label,
-            reason_source,
             observed_at_ms: input.observed_at_ms,
             recovery_intent,
-            temporary_diagnostic_summary,
+            diagnostics: VideoSchedulingOwnerDiagnostics {
+                reason_label,
+                reason_source,
+                temporary_diagnostic_summary,
+            },
         }
     }
 
@@ -593,7 +629,7 @@ impl VideoSchedulingOwner {
             && input.demand.present_submit_count_total.unwrap_or_default() == 0
     }
 
-    fn startup_bootstrap_grace_active(
+    fn first_frame_acquisition_priority_active(
         current: VideoSchedulingOwnerState,
         input: &VideoSchedulingOwnerInput,
     ) -> bool {
@@ -603,7 +639,7 @@ impl VideoSchedulingOwner {
         ) {
             return false;
         }
-        if !input.startup_bootstrap_grace_allowed {
+        if !input.first_frame_acquisition_priority_allowed {
             return false;
         }
         if input.connection_state != ConnectionLifecycleStateFact::Connected {
@@ -612,17 +648,11 @@ impl VideoSchedulingOwner {
         if !Self::first_present_grace_active(input) {
             return false;
         }
-        let bootstrap_reject_in_startup = matches!(
-            input.latest_h264_bootstrap_reject_reason.as_deref(),
-            Some(
-                "bootstrapMissingSps"
-                    | "bootstrapMissingPps"
-                    | "inspectionRejectInvalidSliceHeader"
-            )
-        ) && input.latest_h264_bootstrap_ready == Some(false);
+        let bootstrap_reject_in_startup = input.latest_h264_bootstrap_ready == Some(false)
+            && input.latest_h264_bootstrap_reject_reason.is_some();
         let bootstrap_reject_source_pending = matches!(
             input.latest_timeline_source_event.as_deref(),
-            Some("frame-inspection-rejected-await-keyframe")
+            Some("frame-inspection-rejected-await-keyframe" | "frame-await-recovery-keyframe")
         );
         if !bootstrap_reject_in_startup && !bootstrap_reject_source_pending {
             return false;
@@ -756,12 +786,18 @@ impl VideoSchedulingOwner {
         if track_audio_only || !track_attached || !track_has_video_bytes {
             return false;
         }
+        let media_continuity_ready = Self::has_recent_serviceable_media_continuity(
+            input,
+            has_clean_anchor_evidence,
+            chain_healthy,
+        );
         // 统一仲裁下，clean anchor 一旦成立，owner 应尽快退出 recovering，
         // 让 steady/degraded 分支继续吸收供给抖动，而不是继续卡在 rebuilding-supply。
         let decode_serviceable = input
             .demand
             .decode_age_ms
-            .is_some_and(|age| age <= input.display_supply_thresholds.critical_decode_age_ms);
+            .is_some_and(|age| age <= input.display_supply_thresholds.critical_decode_age_ms)
+            || media_continuity_ready;
         if !decode_serviceable {
             return false;
         }
@@ -775,6 +811,49 @@ impl VideoSchedulingOwner {
                 has_clean_anchor_evidence,
                 chain_healthy,
             )
+            || media_continuity_ready
+    }
+
+    fn has_recent_serviceable_media_continuity(
+        input: &VideoSchedulingOwnerInput,
+        has_clean_anchor_evidence: bool,
+        chain_healthy: bool,
+    ) -> bool {
+        if input.connection_state != ConnectionLifecycleStateFact::Connected {
+            return false;
+        }
+        if !has_clean_anchor_evidence || !chain_healthy || input.demand.video_renderer_stalled {
+            return false;
+        }
+        let track_attached = matches!(
+            input.latest_track_state.as_deref(),
+            Some("remoteTrackAttached")
+        );
+        let track_has_video_bytes = input
+            .latest_track_video_bytes_total
+            .is_some_and(|bytes| bytes > 0);
+        if !track_attached || !track_has_video_bytes {
+            return false;
+        }
+        let stable_timeline_source = matches!(
+            input.latest_timeline_source_event.as_deref(),
+            Some("frame-complete-candidate" | "frame-observed")
+        );
+        if !stable_timeline_source {
+            return false;
+        }
+        let continuity_metadata_ready = input.latest_h264_committed_sps_present == Some(true)
+            && input.latest_h264_committed_pps_present == Some(true)
+            && input.latest_h264_delta_continuation_ready == Some(true);
+        if !continuity_metadata_ready {
+            return false;
+        }
+        input
+            .latest_h264_observed_at_ms
+            .is_some_and(|observed_at_ms| {
+                (input.observed_at_ms - observed_at_ms).max(0.0)
+                    <= RECENT_H264_RECOVERY_BLOCKER_MAX_AGE_MS
+            })
     }
 
     fn has_current_clean_anchor_evidence(input: &VideoSchedulingOwnerInput) -> bool {
@@ -1328,38 +1407,41 @@ impl VideoSchedulingOwner {
         state: VideoSchedulingOwnerState,
         input: &VideoSchedulingOwnerInput,
         supply_state: DisplaySupplyState,
+        completion_evidence: RecoveryCompletionEvidence,
     ) -> Option<RecoveryIntentContract> {
         let contract = match state {
             VideoSchedulingOwnerState::RebuildingSupply => {
-                let label = input
-                    .anchor_reason_label
-                    .clone()
-                    .unwrap_or_else(|| "transportAwaitRecoveryKeyframe".to_string());
+                let reason = OwnerRecoveryReason::TransportAwaitRecoveryKeyframe;
+                let label = if Self::bootstrap_in_flight_active(input, completion_evidence) {
+                    "bootstrapInFlight".to_string()
+                } else {
+                    input
+                        .anchor_reason_label
+                        .clone()
+                        .unwrap_or_else(|| reason.as_reason_label().to_string())
+                };
                 Some(RecoveryIntentContract {
-                    emit: self.should_emit_intent(
-                        RecoveryIntentSource::Anchor,
-                        &label,
-                        input.observed_at_ms,
-                    ),
-                    source: RecoveryIntentSource::Anchor,
+                    emit: self.should_emit_intent(reason.source(), &label, input.observed_at_ms),
+                    source: reason.source(),
+                    reason,
                     reason_label: label,
                 })
             }
             VideoSchedulingOwnerState::SupplyStarved => {
-                let label = match supply_state {
-                    DisplaySupplyState::Critical => "displaySupplyCritical",
-                    DisplaySupplyState::Degraded => "displaySupplyDegraded",
+                let reason = match supply_state {
+                    DisplaySupplyState::Critical => OwnerRecoveryReason::DisplaySupplyCritical,
+                    DisplaySupplyState::Degraded => OwnerRecoveryReason::DisplaySupplyDegraded,
                     DisplaySupplyState::Healthy => return None,
-                }
-                .to_string();
+                };
                 Some(RecoveryIntentContract {
                     emit: self.should_emit_intent(
-                        RecoveryIntentSource::Supply,
-                        &label,
+                        reason.source(),
+                        reason.as_reason_label(),
                         input.observed_at_ms,
                     ),
-                    source: RecoveryIntentSource::Supply,
-                    reason_label: label,
+                    source: reason.source(),
+                    reason,
+                    reason_label: reason.as_reason_label().to_string(),
                 })
             }
             VideoSchedulingOwnerState::SeekingAnchor
@@ -1371,6 +1453,57 @@ impl VideoSchedulingOwner {
             }
         };
         contract
+    }
+
+    fn bootstrap_in_flight_active(
+        input: &VideoSchedulingOwnerInput,
+        completion_evidence: RecoveryCompletionEvidence,
+    ) -> bool {
+        if completion_evidence != RecoveryCompletionEvidence::NotReady {
+            return false;
+        }
+        let Some(submitted_at_ms) = Self::latest_clean_anchor_submitted_at_ms(input) else {
+            return false;
+        };
+        if (input.observed_at_ms - submitted_at_ms).max(0.0) > BOOTSTRAP_IN_FLIGHT_GRACE_MS {
+            return false;
+        }
+        if input.connection_state != ConnectionLifecycleStateFact::Connected {
+            return false;
+        }
+        if !matches!(
+            input.latest_track_state.as_deref(),
+            Some("remoteTrackAttached")
+        ) {
+            return false;
+        }
+        input
+            .latest_track_video_bytes_total
+            .is_some_and(|bytes| bytes > 0)
+    }
+
+    fn latest_clean_anchor_submitted_at_ms(input: &VideoSchedulingOwnerInput) -> Option<f64> {
+        let explicit = input.clean_anchor_epoch.is_some_and(|epoch| {
+            epoch == input.recovery_epoch
+                && input.clean_anchor_source_event.as_deref()
+                    == Some("chain-clean-keyframe-submitted")
+        });
+        let candidate = input
+            .latest_anchor_candidate_ledger
+            .as_ref()
+            .filter(|candidate| {
+                candidate.recovery_epoch == input.recovery_epoch
+                    && candidate.state == XbxEngineAnchorCandidateState::SubmittedCleanAnchor
+                    && candidate.source_event == "chain-clean-keyframe-submitted"
+            })
+            .map(|candidate| candidate.observed_at_ms);
+        match (explicit, input.clean_anchor_observed_at_ms, candidate) {
+            (true, Some(explicit_at_ms), Some(candidate_at_ms)) => {
+                Some(explicit_at_ms.max(candidate_at_ms))
+            }
+            (true, Some(explicit_at_ms), None) => Some(explicit_at_ms),
+            (_, _, candidate_at_ms) => candidate_at_ms,
+        }
     }
 
     fn should_emit_intent(

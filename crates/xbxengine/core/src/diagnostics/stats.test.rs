@@ -94,7 +94,7 @@ fn runtime_summary_uses_remote_profile_input_and_owner_state_as_main_view() {
     let dto = build_xbxengine_stats(&test_snapshot(), Some(&stats));
     let summary = dto.runtime_summary.expect("runtime summary");
     assert!(summary
-        .starts_with("cloudGaming+cloudHighRtt/handshaking/steady/rebuilding-supply/recovering"));
+        .starts_with("cloudGaming+cloudHighRtt/recovering/steady/rebuilding-supply/recovering"));
 }
 
 #[test]
@@ -181,7 +181,95 @@ fn latest_decision_summary_is_driven_by_canonical_owner_contract() {
     let dto = build_xbxengine_stats(&test_snapshot(), Some(&stats));
     assert_eq!(
         dto.latest_decision_summary.as_deref(),
-        Some("owner:rebuilding-supply:transportAwaitRecoveryKeyframe")
+        Some("phase:recovery-eligible:transportAwaitRecoveryKeyframe")
+    );
+}
+
+#[test]
+fn latest_decision_summary_surfaces_reconnect_gate_detail_when_present() {
+    let stats = XbxEngineMediaRuntimeStats {
+        transport_state: XbxEngineTransportStateDto::Connected,
+        latest_recovery_decision_ledger: Some(crate::XbxEngineRecoveryDecisionLedgerObservation {
+            decision_id: 9,
+            state_before: "recovery-eligible".to_string(),
+            state_after: "recovery-blocked".to_string(),
+            input_signal: "transportAwaitRecoveryKeyframe:transportAwaitRecoveryKeyframe"
+                .to_string(),
+            gate_result: "suppressed:reconnectBlocked:mediaGate:localRecoveryActive".to_string(),
+            action_selected: "cooldownSuppressed".to_string(),
+            budget_before: None,
+            budget_after: None,
+            trigger_observation_label: None,
+            trigger_observation_summary: None,
+            command_result: None,
+            command_detail: None,
+            observed_at_ms: 1000.0,
+        }),
+        ..XbxEngineMediaRuntimeStats::default()
+    };
+
+    let dto = build_xbxengine_stats(&test_snapshot(), Some(&stats));
+    assert_eq!(
+        dto.latest_decision_summary.as_deref(),
+        Some("reconnect:suppressed:reconnectBlocked:mediaGate:localRecoveryActive")
+    );
+}
+
+#[test]
+fn runtime_summary_and_issue_chain_use_local_self_healing_lifecycle_when_present() {
+    let stats = XbxEngineMediaRuntimeStats {
+        transport_state: XbxEngineTransportStateDto::Connected,
+        transport_policy_profile: Some("cloud".to_string()),
+        baseline_remote_profile: Some("cloudGaming".to_string()),
+        effective_remote_profile_label: Some("cloudGaming".to_string()),
+        session_phase: Some("local-self-healing".to_string()),
+        direct_gaming_bitrate_band: Some("steady".to_string()),
+        video_owner_state: Some("rebuilding-supply".to_string()),
+        video_owner_reason: Some("transportAwaitRecoveryKeyframe".to_string()),
+        ..XbxEngineMediaRuntimeStats::default()
+    };
+
+    let dto = build_xbxengine_stats(&test_snapshot(), Some(&stats));
+
+    assert_eq!(
+        dto.runtime_summary.as_deref(),
+        Some("cloudGaming/local-self-healing/steady/rebuilding-supply/recovering | awaitKeyframe:hostIdrOrCleanAnchor")
+    );
+    assert_eq!(
+        dto.primary_issue_chain.as_deref(),
+        Some("local-self-healing:transportAwaitRecoveryKeyframe")
+    );
+    assert_eq!(
+        dto.latest_decision_summary.as_deref(),
+        Some("phase:local-self-healing:transportAwaitRecoveryKeyframe")
+    );
+}
+
+#[test]
+fn runtime_summary_surfaces_bootstrap_in_flight_note() {
+    let stats = XbxEngineMediaRuntimeStats {
+        transport_state: XbxEngineTransportStateDto::Connected,
+        transport_policy_profile: Some("cloud".to_string()),
+        baseline_remote_profile: Some("cloudGaming".to_string()),
+        effective_remote_profile_label: Some("cloudGaming".to_string()),
+        session_phase: Some("local-self-healing".to_string()),
+        direct_gaming_bitrate_band: Some("steady".to_string()),
+        video_owner_state: Some("rebuilding-supply".to_string()),
+        video_owner_reason: Some("bootstrapInFlight".to_string()),
+        ..XbxEngineMediaRuntimeStats::default()
+    };
+
+    let dto = build_xbxengine_stats(&test_snapshot(), Some(&stats));
+
+    assert_eq!(
+        dto.runtime_summary.as_deref(),
+        Some(
+            "cloudGaming/local-self-healing/steady/rebuilding-supply/recovering | bootstrapInFlight:cleanAnchorPending"
+        )
+    );
+    assert_eq!(
+        dto.latest_decision_summary.as_deref(),
+        Some("phase:local-self-healing:bootstrapInFlight")
     );
 }
 
@@ -343,11 +431,11 @@ fn owner_contract_projection_reads_canonical_runtime_owner_fields() {
     assert_eq!(dto.video_health.as_deref(), Some("recovering"));
     assert_eq!(
         dto.primary_issue_chain.as_deref(),
-        Some("recovery:timelineReferenceBroken")
+        Some("recovery-eligible:timelineReferenceBroken")
     );
     assert_eq!(
         dto.latest_decision_summary.as_deref(),
-        Some("owner:rebuilding-supply:timelineReferenceBroken")
+        Some("phase:recovery-eligible:timelineReferenceBroken")
     );
     // coupling 字段仅保留为辅助观测，不参与 owner 语义。
 }
@@ -376,7 +464,7 @@ fn owner_contract_falls_back_to_runtime_state_primary_view() {
     );
     assert_eq!(
         dto.latest_decision_summary.as_deref(),
-        Some("owner:rebuilding-supply:transportAwaitRecoveryKeyframe")
+        Some("phase:recovering:transportAwaitRecoveryKeyframe")
     );
 }
 
@@ -565,7 +653,7 @@ fn build_stats_reports_recovering_after_first_present_when_output_turns_stale() 
     assert_eq!(dto.video_health.as_deref(), Some("recovering"));
     assert_eq!(
         dto.primary_issue_chain.as_deref(),
-        Some("recovery:adapterIdleTimeout")
+        Some("active-recovery:adapterIdleTimeout")
     );
 }
 
@@ -720,11 +808,11 @@ fn build_stats_prioritizes_recent_timeline_recovering_over_healthy_summary() {
     assert_eq!(dto.video_owner_source.as_deref(), Some("anchor"));
     assert_eq!(
         dto.primary_issue_chain.as_deref(),
-        Some("recovery:inspectionRejectInvalidSliceHeader")
+        Some("recovery-eligible:inspectionRejectInvalidSliceHeader")
     );
     assert_eq!(
         dto.latest_decision_summary.as_deref(),
-        Some("owner:rebuilding-supply:inspectionRejectInvalidSliceHeader")
+        Some("phase:recovery-eligible:inspectionRejectInvalidSliceHeader")
     );
 }
 
@@ -790,11 +878,11 @@ fn build_stats_prioritizes_recent_timeline_broken_over_steady_healthy() {
     assert_eq!(dto.video_owner_source.as_deref(), Some("anchor"));
     assert_eq!(
         dto.primary_issue_chain.as_deref(),
-        Some("recovery:cloudHighRttLowValueAdmission")
+        Some("recovery-eligible:cloudHighRttLowValueAdmission")
     );
     assert_eq!(
         dto.latest_decision_summary.as_deref(),
-        Some("owner:rebuilding-supply:cloudHighRttLowValueAdmission")
+        Some("phase:recovery-eligible:cloudHighRttLowValueAdmission")
     );
 }
 
@@ -845,11 +933,11 @@ fn build_stats_owner_contract_prefers_canonical_owner_over_coupling_signals() {
     assert_eq!(dto.video_owner_source.as_deref(), Some("anchor"));
     assert_eq!(
         dto.primary_issue_chain.as_deref(),
-        Some("recovery:inspectionRejectInvalidSliceHeader")
+        Some("recovery-eligible:inspectionRejectInvalidSliceHeader")
     );
     assert_eq!(
         dto.latest_decision_summary.as_deref(),
-        Some("owner:rebuilding-supply:inspectionRejectInvalidSliceHeader")
+        Some("phase:recovery-eligible:inspectionRejectInvalidSliceHeader")
     );
 }
 

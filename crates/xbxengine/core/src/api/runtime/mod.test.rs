@@ -818,6 +818,7 @@ fn build_transport_session_bridge(
         RtcConnectionService::default(),
     ))));
     let media = Box::leak(Box::new(Arc::new(Mutex::new(RtcMediaService::default()))));
+    let local_decoder_reset_handle = Box::leak(Box::new(Arc::new(Mutex::new(None))));
     let transport_session = Box::leak(Box::new(Arc::new(Mutex::new(SessionActor::new(
         SystemSessionClock,
         RtcSessionPolicy::new(runtime_config.clone(), runtime_stats.clone()),
@@ -829,6 +830,7 @@ fn build_transport_session_bridge(
         pending_runtime_recovery_action,
         connection,
         media,
+        local_decoder_reset_handle,
         transport_session,
         transport_fact_sink,
     )

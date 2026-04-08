@@ -42,7 +42,7 @@ interface StreamDiagnosticsRowViewModel {
 }
 
 interface StreamDiagnosticsNoticeViewModel {
-  id: 'recovering' | 'displaySupply' | 'relayPath' | 'noVideo'
+  id: 'probing' | 'recovering' | 'blocked' | 'displaySupply' | 'relayPath' | 'noVideo'
   severity: 'info' | 'warning'
   text: string
 }
@@ -120,7 +120,21 @@ const rows = computed<StreamDiagnosticsRowViewModel[]>(() => [
 const notices = computed<StreamDiagnosticsNoticeViewModel[]>(() => {
   const items: StreamDiagnosticsNoticeViewModel[] = []
 
-  if (props.diagnostics.isRecovering) {
+  if (props.diagnostics.statusCode === 'probing') {
+    items.push({
+      id: 'probing',
+      severity: 'info',
+      text: t('streamPage.diagnostics.notices.probing'),
+    })
+  }
+  else if (props.diagnostics.statusCode === 'blocked') {
+    items.push({
+      id: 'blocked',
+      severity: 'warning',
+      text: t('streamPage.diagnostics.notices.blocked'),
+    })
+  }
+  else if (props.diagnostics.isRecovering) {
     items.push({
       id: 'recovering',
       severity: 'info',
@@ -158,8 +172,14 @@ function resolveStatusText(): string {
   if (props.diagnostics.statusCode === 'noVideo') {
     return t('streamPage.diagnostics.values.noVideo')
   }
+  if (props.diagnostics.statusCode === 'probing') {
+    return t('streamPage.diagnostics.values.probing')
+  }
   if (props.diagnostics.statusCode === 'recovering') {
     return t('streamPage.diagnostics.values.recovering')
+  }
+  if (props.diagnostics.statusCode === 'blocked') {
+    return t('streamPage.diagnostics.values.blocked')
   }
   if (props.diagnostics.statusCode === 'owner' && props.diagnostics.recoveryOwnerState !== undefined) {
     return props.diagnostics.recoveryOwnerState

@@ -1210,12 +1210,13 @@ async fn multi_stage_replay_steady_local_noise_expired_then_recover_stays_stable
         "transportExpiredDeadline:transportExpiredDeadline",
     );
 
-    harness.mark_transport_recovered(profile.baseline.now_ms + 128.0);
+    harness.mark_transport_recovered(profile.baseline.now_ms + 928.0);
     let recovered_snapshot =
         harness.build_connected_snapshot(6, profile.baseline.now_ms + 930.0, 260, "none");
+    let recovered_commands = policy.on_snapshot(&recovered_snapshot);
     assert!(
-        policy.on_snapshot(&recovered_snapshot).is_empty(),
-        "unexpected recovered commands"
+        recovered_commands.is_empty(),
+        "unexpected recovered commands: {recovered_commands:?}"
     );
 }
 

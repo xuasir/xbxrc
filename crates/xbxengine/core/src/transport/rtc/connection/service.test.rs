@@ -1952,6 +1952,34 @@ fn service_replays_pending_control_requests_after_control_close_and_rebuild() {
 }
 
 #[test]
+fn delayed_keyframe_prime_deferred_syncs_pending_replay_runtime_stats() {
+    let mut service = RtcConnectionService::default();
+    let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
+
+    service.delayed_keyframe_prime_due_at_ms = Some(0.0);
+
+    service.run_delayed_control_actions(&runtime_stats).unwrap();
+
+    let stats = runtime_stats.lock().expect("runtime stats").clone();
+    assert_eq!(service.delayed_keyframe_prime_due_at_ms, None);
+    assert!(service.control_service.state().pending_keyframe_request);
+    assert_eq!(stats.control_pending_replay_action_count, 1);
+    assert!(stats.control_pending_replay_since_ms.is_some());
+    assert_eq!(
+        stats.latest_observation_label.as_deref(),
+        Some("rtcControlDelayedKeyframePrimeDeferred")
+    );
+    assert!(stats
+        .control_pending_replay_summary
+        .as_deref()
+        .is_some_and(|summary| {
+            summary.contains("keyframe=true")
+                && summary.contains("decoderReset=false")
+                && summary.contains("ready=false")
+        }));
+}
+
+#[test]
 fn message_channel_close_publishes_disconnected_lifecycle_signal() {
     let mut service = RtcConnectionService::default();
     let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));

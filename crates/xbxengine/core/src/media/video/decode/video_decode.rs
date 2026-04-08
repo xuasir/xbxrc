@@ -14,6 +14,9 @@ use crate::{
 
 const MAX_DECODED_FRAME_QUEUE_LEN: usize = 2;
 const HARDWARE_DECODE_FAILURE_BURST_GAP_MS: f64 = 400.0;
+const LOCAL_DECODER_RESET_REPLAY_BARRIER_MS: f64 = 900.0;
+const WAITING_KEYFRAME_CONTINUATION_WINDOW_MS: f64 = 120.0;
+const WAITING_KEYFRAME_CONTINUATION_MAX_FRAMES: u32 = 3;
 type XbxVideoDecoderFactory =
     Box<dyn FnMut() -> (Box<dyn XbxVideoDecoderBackend>, XbxVideoDecoderProbeSummary) + Send>;
 
@@ -130,6 +133,56 @@ pub(crate) struct XbxVideoDecoderProbeSnapshot {
     pub(crate) observed_at_ms: f64,
 }
 
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct XbxVideoDecoderBootstrapGateObservationSnapshot {
+    pub(crate) observation_id: u64,
+    pub(crate) recovery_state: XbxVideoRecoveryState,
+    pub(crate) frame_rtp_timestamp: u32,
+    pub(crate) is_idr: bool,
+    pub(crate) has_inband_sps: bool,
+    pub(crate) has_inband_pps: bool,
+    pub(crate) committed_sps_present: bool,
+    pub(crate) committed_pps_present: bool,
+    pub(crate) bootstrap_ready: bool,
+    pub(crate) bootstrap_reject_reason: Option<String>,
+    pub(crate) observed_at_ms: f64,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum XbxDecodeOutputPathVerdict {
+    BootstrapGateRejected,
+    BackendError,
+    BackendNoOutput,
+    DecodedFrame,
+}
+
+impl XbxDecodeOutputPathVerdict {
+    pub(crate) fn as_str(self) -> &'static str {
+        match self {
+            Self::BootstrapGateRejected => "bootstrap-gate-rejected",
+            Self::BackendError => "backend-error",
+            Self::BackendNoOutput => "backend-no-output",
+            Self::DecodedFrame => "decoded-frame",
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct XbxDecodeOutputPathObservationSnapshot {
+    pub(crate) observation_id: u64,
+    pub(crate) verdict: XbxDecodeOutputPathVerdict,
+    pub(crate) detail: &'static str,
+    pub(crate) frame_rtp_timestamp: u32,
+    pub(crate) is_keyframe: bool,
+    pub(crate) status: Option<i32>,
+    pub(crate) send_packet_status: Option<i32>,
+    pub(crate) receive_frame_status: Option<i32>,
+    pub(crate) backend_no_output_streak: Option<u32>,
+    pub(crate) input_frames_since_last_decoded: Option<u32>,
+    pub(crate) bootstrap_reject_reason: Option<String>,
+    pub(crate) observed_at_ms: f64,
+}
+
 pub(crate) struct XbxVideoDecodeState {
     decoder: Box<dyn XbxVideoDecoderBackend>,
     decoder_factory: XbxVideoDecoderFactory,
@@ -140,6 +193,7 @@ pub(crate) struct XbxVideoDecodeState {
     last_encoded_frame_time_ms: Option<f64>,
     decoder_reset_count: u64,
     latest_decoder_reset_time_ms: Option<f64>,
+    last_decoder_reset_success_edge_at_ms: Option<f64>,
     decoded_frame_drop_count: u64,
     hardware_decode_failure_streak: u32,
     latest_hardware_decode_failure_time_ms: Option<f64>,
@@ -149,6 +203,14 @@ pub(crate) struct XbxVideoDecodeState {
     latest_recovery_transition: Option<XbxVideoRecoveryTransitionSnapshot>,
     recovery_transition_id: u64,
     latest_decoder_probe: Option<XbxVideoDecoderProbeSnapshot>,
+    latest_bootstrap_gate_observation: Option<XbxVideoDecoderBootstrapGateObservationSnapshot>,
+    bootstrap_gate_observation_id: u64,
+    latest_decode_output_path_observation: Option<XbxDecodeOutputPathObservationSnapshot>,
+    decode_output_path_observation_id: u64,
+    backend_no_output_streak: u32,
+    input_frames_since_last_decoded: u32,
+    waiting_keyframe_continuation_deadline_ms: Option<f64>,
+    waiting_keyframe_continuation_frames_left: u32,
     decode_candidate_state: XbxDecodeCandidateState,
     latest_decode_candidate_decision: Option<XbxDecodeCandidateDecisionSnapshot>,
     decode_candidate_decision_id: u64,
@@ -171,6 +233,7 @@ impl XbxVideoDecodeState {
             last_encoded_frame_time_ms: None,
             decoder_reset_count: 0,
             latest_decoder_reset_time_ms: None,
+            last_decoder_reset_success_edge_at_ms: None,
             decoded_frame_drop_count: 0,
             hardware_decode_failure_streak: 0,
             latest_hardware_decode_failure_time_ms: None,
@@ -184,6 +247,14 @@ impl XbxVideoDecodeState {
                 probe,
                 observed_at_ms,
             )),
+            latest_bootstrap_gate_observation: None,
+            bootstrap_gate_observation_id: 0,
+            latest_decode_output_path_observation: None,
+            decode_output_path_observation_id: 0,
+            backend_no_output_streak: 0,
+            input_frames_since_last_decoded: 0,
+            waiting_keyframe_continuation_deadline_ms: None,
+            waiting_keyframe_continuation_frames_left: 0,
             decode_candidate_state: XbxDecodeCandidateState::Nominal,
             latest_decode_candidate_decision: None,
             decode_candidate_decision_id: 0,
@@ -194,14 +265,27 @@ impl XbxVideoDecodeState {
      * 响应恢复控制面的 decoder reset：清空待释放队列，并重建本地解码 backend。
      * 这里不更改外部恢复阈值，只做局部状态收敛。
      */
-    pub(crate) fn request_local_decoder_reset(&mut self) -> Result<(), XbxEngineRuntimeError> {
+    pub(crate) fn request_local_decoder_reset(&mut self) -> Result<bool, XbxEngineRuntimeError> {
+        let now_ms = now_ms_f64();
+        if self
+            .latest_decoder_reset_time_ms
+            .is_some_and(|last_reset_at_ms| {
+                (now_ms - last_reset_at_ms).max(0.0) <= LOCAL_DECODER_RESET_REPLAY_BARRIER_MS
+                    && self
+                        .last_decoder_reset_success_edge_at_ms
+                        .is_none_or(|success_at_ms| success_at_ms <= last_reset_at_ms)
+            })
+        {
+            return Ok(false);
+        }
         self.decoded_frame_queue.clear();
         self.last_decode_ok_time_ms = None;
-        let now_ms = now_ms_f64();
         self.reset_decoder_backend(now_ms);
         self.decoder_reset_count = self.decoder_reset_count.saturating_add(1);
         self.latest_decoder_reset_time_ms = Some(now_ms);
+        self.last_decoder_reset_success_edge_at_ms = None;
         self.reset_hardware_failure_streak();
+        self.clear_waiting_keyframe_continuation();
         self.transition_recovery_state(
             XbxVideoRecoveryState::WaitingKeyframe,
             XbxVideoRecoveryEvent::ExternalDecoderResetRequested,
@@ -210,7 +294,7 @@ impl XbxVideoDecodeState {
             None,
             now_ms,
         );
-        Ok(())
+        Ok(true)
     }
 
     pub(crate) fn process_encoded_frame(
@@ -219,14 +303,41 @@ impl XbxVideoDecodeState {
         now_ms: f64,
     ) -> Option<DecodedFrame> {
         self.last_encoded_frame_time_ms = Some(now_ms);
+        let frame_rtp_timestamp = encoded_frame.rtp_timestamp;
+        let frame_is_keyframe = encoded_frame.is_keyframe;
+        let continuation_gate_bypassed =
+            matches!(self.recovery_state, XbxVideoRecoveryState::WaitingKeyframe)
+                && !encoded_frame.h264.bootstrap_ready
+                && self.try_consume_waiting_keyframe_continuation_allowance(&encoded_frame, now_ms);
         if matches!(self.recovery_state, XbxVideoRecoveryState::WaitingKeyframe)
             && !encoded_frame.h264.bootstrap_ready
+            && !continuation_gate_bypassed
         {
+            let bootstrap_reject_reason = encoded_frame
+                .h264
+                .bootstrap_reject_reason
+                .map(|reason| reason.as_str().to_string());
+            self.record_bootstrap_gate_observation(&encoded_frame, now_ms);
+            self.record_decode_output_path_observation(
+                XbxDecodeOutputPathVerdict::BootstrapGateRejected,
+                "bootstrapGateRejected",
+                frame_rtp_timestamp,
+                frame_is_keyframe,
+                None,
+                None,
+                None,
+                None,
+                None,
+                bootstrap_reject_reason,
+                now_ms,
+            );
             return None;
         }
         if !self.first_video_packet_logged {
             self.first_video_packet_logged = true;
         }
+        self.input_frames_since_last_decoded =
+            self.input_frames_since_last_decoded.saturating_add(1);
         let target_time = encoded_frame.target_playout_time;
         let rtp_timestamp = encoded_frame.rtp_timestamp;
         let is_keyframe = encoded_frame.is_keyframe;
@@ -234,11 +345,32 @@ impl XbxVideoDecodeState {
         let frame_recovery_disposition = encoded_frame.frame_recovery_disposition;
         let frame_unrecoverable_reason = encoded_frame.frame_unrecoverable_reason.clone();
         let recovery_state_before_decode = self.recovery_state;
-        let decoded_frame = match self.decoder.decode(encoded_frame, now_ms) {
-            Ok(frame) => frame,
+        let decode_outcome = match self.decoder.decode(encoded_frame, now_ms) {
+            Ok(outcome) => outcome,
             Err(error) => {
+                if matches!(
+                    recovery_state_before_decode,
+                    XbxVideoRecoveryState::WaitingKeyframe
+                ) && frame_is_keyframe
+                {
+                    self.clear_waiting_keyframe_continuation();
+                }
                 let status = parse_decoder_status_code(&error);
                 self.record_hardware_decode_failure(now_ms, status);
+                self.backend_no_output_streak = 0;
+                self.record_decode_output_path_observation(
+                    XbxDecodeOutputPathVerdict::BackendError,
+                    "backendError",
+                    frame_rtp_timestamp,
+                    frame_is_keyframe,
+                    status,
+                    None,
+                    None,
+                    None,
+                    Some(self.input_frames_since_last_decoded),
+                    None,
+                    now_ms,
+                );
                 if self.hardware_decode_failure_streak == 1 {
                     crate::xbx_log_warn!(
                         "[xbxengine][rtc] hardware decode failed status={:?} err={error}",
@@ -253,9 +385,50 @@ impl XbxVideoDecodeState {
                 return None;
             }
         };
+        let decoded_frame = decode_outcome.frame;
         let Some(mut render_frame) = decoded_frame else {
+            let waiting_keyframe_bootstrap_no_output = matches!(
+                recovery_state_before_decode,
+                XbxVideoRecoveryState::WaitingKeyframe
+            ) && frame_is_keyframe;
+            if waiting_keyframe_bootstrap_no_output {
+                self.arm_waiting_keyframe_continuation(now_ms);
+            }
+            self.backend_no_output_streak = self.backend_no_output_streak.saturating_add(1);
+            self.record_decode_output_path_observation(
+                XbxDecodeOutputPathVerdict::BackendNoOutput,
+                if continuation_gate_bypassed {
+                    "backendNoOutputAfterContinuationBypass"
+                } else if waiting_keyframe_bootstrap_no_output {
+                    "backendNoOutputAfterBootstrapKeyframe"
+                } else {
+                    "backendNoOutput"
+                },
+                frame_rtp_timestamp,
+                frame_is_keyframe,
+                None,
+                decode_outcome.send_packet_status,
+                decode_outcome.receive_frame_status,
+                Some(self.backend_no_output_streak),
+                Some(self.input_frames_since_last_decoded),
+                None,
+                now_ms,
+            );
             return None;
         };
+        if matches!(
+            recovery_state_before_decode,
+            XbxVideoRecoveryState::WaitingKeyframe
+        ) && frame_is_keyframe
+        {
+            self.clear_waiting_keyframe_continuation();
+        }
+        if self
+            .latest_decoder_reset_time_ms
+            .is_some_and(|last_reset_at_ms| now_ms > last_reset_at_ms)
+        {
+            self.last_decoder_reset_success_edge_at_ms = Some(now_ms);
+        }
         match recovery_state_before_decode {
             XbxVideoRecoveryState::WaitingKeyframe => self.transition_recovery_state(
                 XbxVideoRecoveryState::Recovering,
@@ -276,8 +449,27 @@ impl XbxVideoDecodeState {
             XbxVideoRecoveryState::Nominal => {}
         }
         self.reset_hardware_failure_streak();
+        self.backend_no_output_streak = 0;
         self.latest_decoded_seq = self.latest_decoded_seq.saturating_add(1);
         self.last_decode_ok_time_ms = Some(now_ms);
+        self.record_decode_output_path_observation(
+            XbxDecodeOutputPathVerdict::DecodedFrame,
+            if continuation_gate_bypassed {
+                "decodedFrameReadyAfterContinuationBypass"
+            } else {
+                "decodedFrameReady"
+            },
+            frame_rtp_timestamp,
+            frame_is_keyframe,
+            None,
+            decode_outcome.send_packet_status,
+            decode_outcome.receive_frame_status,
+            Some(self.backend_no_output_streak),
+            Some(self.input_frames_since_last_decoded),
+            None,
+            now_ms,
+        );
+        self.input_frames_since_last_decoded = 0;
         render_frame.frame_seq = self.latest_decoded_seq;
         render_frame.rendered_at_ms = now_ms;
         render_frame.rtp_timestamp = Some(rtp_timestamp);
@@ -342,6 +534,18 @@ impl XbxVideoDecodeState {
 
     pub(crate) fn latest_decoder_probe(&self) -> Option<&XbxVideoDecoderProbeSnapshot> {
         self.latest_decoder_probe.as_ref()
+    }
+
+    pub(crate) fn latest_bootstrap_gate_observation(
+        &self,
+    ) -> Option<&XbxVideoDecoderBootstrapGateObservationSnapshot> {
+        self.latest_bootstrap_gate_observation.as_ref()
+    }
+
+    pub(crate) fn latest_decode_output_path_observation(
+        &self,
+    ) -> Option<&XbxDecodeOutputPathObservationSnapshot> {
+        self.latest_decode_output_path_observation.as_ref()
     }
 
     pub(crate) fn latest_decode_candidate_decision(
@@ -464,6 +668,9 @@ impl XbxVideoDecodeState {
         self.decoder_reset_count = self.decoder_reset_count.saturating_add(1);
         self.latest_decoder_reset_time_ms = Some(now_ms);
         self.reset_hardware_failure_streak();
+        self.backend_no_output_streak = 0;
+        self.input_frames_since_last_decoded = 0;
+        self.clear_waiting_keyframe_continuation();
         self.transition_recovery_state(
             XbxVideoRecoveryState::WaitingKeyframe,
             XbxVideoRecoveryEvent::BackendFailureEscalated,
@@ -549,6 +756,99 @@ impl XbxVideoDecodeState {
             observed_at_ms,
         }
     }
+
+    fn record_bootstrap_gate_observation(
+        &mut self,
+        encoded_frame: &EncodedFrame,
+        observed_at_ms: f64,
+    ) {
+        self.bootstrap_gate_observation_id = self.bootstrap_gate_observation_id.saturating_add(1);
+        self.latest_bootstrap_gate_observation =
+            Some(XbxVideoDecoderBootstrapGateObservationSnapshot {
+                observation_id: self.bootstrap_gate_observation_id,
+                recovery_state: self.recovery_state,
+                frame_rtp_timestamp: encoded_frame.rtp_timestamp,
+                is_idr: encoded_frame.h264.is_idr,
+                has_inband_sps: encoded_frame.h264.has_inband_sps,
+                has_inband_pps: encoded_frame.h264.has_inband_pps,
+                committed_sps_present: encoded_frame.h264.committed_sps_present(),
+                committed_pps_present: encoded_frame.h264.committed_pps_present(),
+                bootstrap_ready: encoded_frame.h264.bootstrap_ready,
+                bootstrap_reject_reason: encoded_frame
+                    .h264
+                    .bootstrap_reject_reason
+                    .map(|reason| reason.as_str().to_string()),
+                observed_at_ms,
+            });
+    }
+
+    fn record_decode_output_path_observation(
+        &mut self,
+        verdict: XbxDecodeOutputPathVerdict,
+        detail: &'static str,
+        frame_rtp_timestamp: u32,
+        is_keyframe: bool,
+        status: Option<i32>,
+        send_packet_status: Option<i32>,
+        receive_frame_status: Option<i32>,
+        backend_no_output_streak: Option<u32>,
+        input_frames_since_last_decoded: Option<u32>,
+        bootstrap_reject_reason: Option<String>,
+        observed_at_ms: f64,
+    ) {
+        self.decode_output_path_observation_id =
+            self.decode_output_path_observation_id.saturating_add(1);
+        self.latest_decode_output_path_observation = Some(XbxDecodeOutputPathObservationSnapshot {
+            observation_id: self.decode_output_path_observation_id,
+            verdict,
+            detail,
+            frame_rtp_timestamp,
+            is_keyframe,
+            status,
+            send_packet_status,
+            receive_frame_status,
+            backend_no_output_streak,
+            input_frames_since_last_decoded,
+            bootstrap_reject_reason,
+            observed_at_ms,
+        });
+    }
+
+    fn arm_waiting_keyframe_continuation(&mut self, now_ms: f64) {
+        self.waiting_keyframe_continuation_deadline_ms =
+            Some(now_ms + WAITING_KEYFRAME_CONTINUATION_WINDOW_MS);
+        self.waiting_keyframe_continuation_frames_left = WAITING_KEYFRAME_CONTINUATION_MAX_FRAMES;
+    }
+
+    fn clear_waiting_keyframe_continuation(&mut self) {
+        self.waiting_keyframe_continuation_deadline_ms = None;
+        self.waiting_keyframe_continuation_frames_left = 0;
+    }
+
+    fn try_consume_waiting_keyframe_continuation_allowance(
+        &mut self,
+        encoded_frame: &EncodedFrame,
+        now_ms: f64,
+    ) -> bool {
+        let within_window = self
+            .waiting_keyframe_continuation_deadline_ms
+            .is_some_and(|deadline_ms| now_ms <= deadline_ms);
+        if !within_window || self.waiting_keyframe_continuation_frames_left == 0 {
+            self.clear_waiting_keyframe_continuation();
+            return false;
+        }
+        // 仅放行可安全承接 bootstrap keyframe 的 continuation。
+        if !encoded_frame.h264.delta_continuation_ready()
+            || !encoded_frame.h264.committed_sps_present()
+            || !encoded_frame.h264.committed_pps_present()
+        {
+            return false;
+        }
+        self.waiting_keyframe_continuation_frames_left = self
+            .waiting_keyframe_continuation_frames_left
+            .saturating_sub(1);
+        true
+    }
 }
 
 #[cfg(test)]
@@ -585,6 +885,7 @@ impl XbxVideoDecodeState {
             last_encoded_frame_time_ms: None,
             decoder_reset_count: 0,
             latest_decoder_reset_time_ms: None,
+            last_decoder_reset_success_edge_at_ms: None,
             decoded_frame_drop_count: 0,
             hardware_decode_failure_streak: 0,
             latest_hardware_decode_failure_time_ms: None,
@@ -594,6 +895,14 @@ impl XbxVideoDecodeState {
             latest_recovery_transition: None,
             recovery_transition_id: 0,
             latest_decoder_probe: None,
+            latest_bootstrap_gate_observation: None,
+            bootstrap_gate_observation_id: 0,
+            latest_decode_output_path_observation: None,
+            decode_output_path_observation_id: 0,
+            backend_no_output_streak: 0,
+            input_frames_since_last_decoded: 0,
+            waiting_keyframe_continuation_deadline_ms: None,
+            waiting_keyframe_continuation_frames_left: 0,
             decode_candidate_state: XbxDecodeCandidateState::Nominal,
             latest_decode_candidate_decision: None,
             decode_candidate_decision_id: 0,

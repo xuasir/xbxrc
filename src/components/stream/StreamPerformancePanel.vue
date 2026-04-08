@@ -86,8 +86,14 @@ function resolveStatusText(): string {
   if (props.diagnostics.statusCode === 'noVideo') {
     return t('streamPage.diagnostics.values.noVideo')
   }
+  if (props.diagnostics.statusCode === 'probing') {
+    return t('streamPage.diagnostics.values.probing')
+  }
   if (props.diagnostics.statusCode === 'recovering') {
     return t('streamPage.diagnostics.values.recovering')
+  }
+  if (props.diagnostics.statusCode === 'blocked') {
+    return t('streamPage.diagnostics.values.blocked')
   }
   if (props.diagnostics.statusCode === 'owner' && props.diagnostics.recoveryOwnerState !== undefined) {
     return props.diagnostics.recoveryOwnerState

@@ -145,5 +145,12 @@ export function translateDiagnosticsLatestDecision(
     const prefix = te(prefixKey) ? t(prefixKey) : 'Owner'
     return `${prefix}：${ownerState} / ${ownerReason}`
   }
+  if (parts[0] === 'reconnect') {
+    const gateKey = `${BASE}.latestDecisionReconnect.${parts.slice(1).join('__')}`
+    if (te(gateKey)) {
+      return t(gateKey)
+    }
+    return `Reconnect: ${parts.slice(1).join(' / ')}`
+  }
   return raw
 }

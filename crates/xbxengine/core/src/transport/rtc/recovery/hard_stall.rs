@@ -6,15 +6,12 @@ use crate::runtime_stats_sink::RuntimeStatsSink;
 use crate::transport::rtc::recovery::escalation::{
     RecoveryAction, VideoEscalationDecision, VideoEscalationReason,
 };
-use crate::transport::rtc::recovery::runtime_state::{
-    recovery_stage_label_from_stats, unix_now_ms,
-};
+use crate::transport::rtc::recovery::runtime_state::unix_now_ms;
 use crate::XbxEngineMediaRuntimeStats;
 
 pub(crate) const HARD_STALL_DECODER_RESET_MS: f64 = 1_200.0;
 pub(crate) const HARD_STALL_RECONNECT_MS: f64 = 3_000.0;
 pub(crate) const HARD_STALL_MIN_RESET_SPACING_MS: f64 = 1_200.0;
-pub(crate) const HARD_STALL_MIN_RECONNECT_SPACING_MS: f64 = 1_800.0;
 
 struct HardStallSnapshot {
     transport_state: XbxEngineTransportStateDto,
@@ -23,8 +20,6 @@ struct HardStallSnapshot {
     packet_age_ms: f64,
     effective_present_fps: f64,
     direct_gaming_bitrate_band: Option<String>,
-    latest_action: Option<String>,
-    recovery_stage: String,
     since_last_decoder_reset_ms: f64,
 }
 
@@ -49,27 +44,9 @@ pub(crate) fn resolve_persistent_stall_recovery(
         return None;
     }
 
-    if snapshot.should_escalate_to_reconnect() {
-        return Some(VideoEscalationDecision {
-            observation_id: 0,
-            action: if snapshot.recovery_stage == "steady"
-                && matches!(
-                    snapshot.latest_action.as_deref(),
-                    Some(
-                        "requestDecoderReset"
-                            | "requestKeyframe+decoderReset"
-                            | "requestKeyframe+decoderReset(startupLowQualityRetry)"
-                    )
-                ) {
-                RecoveryAction::RequestReconnectCandidate
-            } else {
-                RecoveryAction::RequestDecoderReset
-            },
-        });
-    }
-
     // 连接域与媒体域解耦后，transport stall 仍属于媒体恢复域：
-    // 即使是 deadline 类硬停顿，也先走 decoder reset，不直接触发 reconnect。
+    // 即使是 deadline 类硬停顿或长时间 paused，也只推进本地 decoder reset；
+    // reconnect 必须继续由连接域证据驱动，而不是由媒体停顿旁路直接产出。
     if matches!(
         reason,
         VideoEscalationReason::TransportExpiredDeadline
@@ -99,7 +76,6 @@ fn read_hard_stall_snapshot(
 ) -> Option<HardStallSnapshot> {
     let now_ms = unix_now_ms();
     RuntimeStatsSink::read_shared(runtime_stats, |stats| {
-        let recovery_stage = recovery_stage_label_from_stats(stats);
         let present_age_ms = stats
             .latest_video_host_present_time_ms
             .map(|at_ms| (now_ms - at_ms).max(0.0))
@@ -121,11 +97,6 @@ fn read_hard_stall_snapshot(
                 .unwrap_or(HARD_STALL_RECONNECT_MS),
             effective_present_fps,
             direct_gaming_bitrate_band: stats.direct_gaming_bitrate_band.clone(),
-            latest_action: stats
-                .latest_video_escalation_observation
-                .as_ref()
-                .map(|observation| observation.action.clone()),
-            recovery_stage: recovery_stage.to_string(),
             since_last_decoder_reset_ms: stats
                 .latest_video_decoder_reset_time_ms
                 .map(|at_ms| (now_ms - at_ms).max(0.0))
@@ -142,22 +113,5 @@ impl HardStallSnapshot {
             && self.effective_present_fps <= 1.0
             && self.present_age_ms >= HARD_STALL_DECODER_RESET_MS
             && self.packet_age_ms >= HARD_STALL_DECODER_RESET_MS
-    }
-
-    fn should_escalate_to_reconnect(&self) -> bool {
-        self.present_age_ms >= HARD_STALL_RECONNECT_MS
-            && self.packet_age_ms >= HARD_STALL_RECONNECT_MS
-            && self.since_last_decoder_reset_ms >= HARD_STALL_MIN_RECONNECT_SPACING_MS
-            && self.recovery_stage != "rebuilding-supply"
-            && matches!(
-                self.latest_action.as_deref(),
-                Some(
-                    "requestDecoderReset"
-                        | "requestKeyframe+decoderReset"
-                        | "requestKeyframe+decoderReset(startupLowQualityRetry)"
-                        | "coalesced:decoderResetInFlight"
-                        | "cooldownSuppressed"
-                )
-            )
     }
 }

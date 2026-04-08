@@ -465,6 +465,7 @@ impl RtcConnectionService {
         self.control_service.close_control_channel();
         self.control_service.close_message_channel();
         self.control_service.clear_pending_replay_actions();
+        self.sync_control_replay_runtime_stats(runtime_stats);
         self.video_recovery_transport_state = Default::default();
         if let Ok(mut stats) = runtime_stats.lock() {
             stats.message_handshake_acked_at_ms = None;
