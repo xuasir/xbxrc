@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { DisplayOptionsValue } from '../streaming/types'
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { Focusable, FocusScope } from '@/navigation/core/vue'
@@ -20,6 +20,7 @@ import { rpc } from '../services/rpc'
 import { resolveEnhancementBinding } from '../streaming/enhancements'
 import { useStreamExecution } from '../streaming/useStreamExecution'
 import { useXStreamPageUi } from '../streaming/xstream-page-ui'
+import { useGamepadRouteForStreamOverlay } from './stream/useGamepadRouteForStreamOverlay'
 
 const { t } = useI18n()
 const router = useRouter()
@@ -100,40 +101,27 @@ const {
   closeSheet,
 } = pageActions
 
-// 精细化管理手柄输入路由：当 UI 覆盖层（菜单、设置等）打开时，将手柄路由至 shell-ui；关闭后切回 stream-session。
-watch(
-  () => ({
-    isAnySheetOpen: isMenuSheetOpen.value
-      || isDisplaySheetOpen.value
-      || isAudioSheetOpen.value
-      || isTextSheetOpen.value
-      || showFailedSheet.value
-      || showWarningSheet.value,
-    sessionId: execution.sessionId.value,
-  }),
-  (next, prev) => {
-    // 只有在 sessionId 存在且有效时才进行切换逻辑
-    if (next.sessionId === '') {
+// 精细化管理手柄输入路由：当 UI 覆盖层打开时路由至 shell-ui；关闭后切回 stream-session。
+useGamepadRouteForStreamOverlay({
+  isAnyOverlayOpen: computed(() =>
+    isMenuSheetOpen.value
+    || isDisplaySheetOpen.value
+    || isAudioSheetOpen.value
+    || isTextSheetOpen.value
+    || showFailedSheet.value
+    || showWarningSheet.value,
+  ),
+  sessionId: execution.sessionId,
+  applyRouteTarget: async (target) => {
+    if (target.kind === 'shell-ui') {
+      await rpc.gamepad.setRouteTarget({ target: { kind: 'shell-ui' } })
       return
     }
-
-    if (next.isAnySheetOpen) {
-      // 打开任意覆盖层，切到 UI 模式
-      void rpc.gamepad.setRouteTarget({
-        target: { kind: 'shell-ui' },
-      })
-    }
-    else if (prev?.isAnySheetOpen === true && !next.isAnySheetOpen) {
-      // 覆盖层全部关闭，切回游戏模式
-      void rpc.gamepad.setRouteTarget({
-        target: {
-          kind: 'stream-session',
-          sessionId: next.sessionId,
-        },
-      })
-    }
+    await rpc.gamepad.setRouteTarget({
+      target: { kind: 'stream-session', sessionId: target.sessionId },
+    })
   },
-)
+})
 
 function applyStreamUiWindowClass(active: boolean): void {
   // 串流页运行在上层透明 UI 窗口，需要显式切换全局页面底色。

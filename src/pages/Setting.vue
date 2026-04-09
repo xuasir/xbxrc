@@ -1,8 +1,7 @@
 <script setup lang="ts">
-import type { SettingFieldControl, SettingFieldDefinition, SettingFieldInputDefinition, SettingSectionDefinition, SettingSelectOptionDefinition } from '@shared/config/domain-definition'
-import type { EventUnsubscribe } from '@shared/events/client'
-import type { GamepadRuntimeSnapshotDto, LogicalPadSnapshotDto } from '@shared/gamepad/contract'
+import type { SettingFieldDefinition, SettingSectionDefinition, SettingSelectOptionDefinition } from '@shared/config/domain-definition'
 import type { SettingTabKey } from '../navigation/spatial-nav.constants'
+import type { SettingIndexedSection, SettingRow, SettingSection, SettingTabNavItem } from './settings/setting-types'
 import {
   CONFIG_FIELD_DEFINITIONS,
   CONFIG_GROUP_DEFINITIONS,
@@ -11,21 +10,20 @@ import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { navigationEngine, syncHapticsConfig } from '@/navigation/core'
 import { playNavSound, triggerNavHaptic } from '@/navigation/core/haptics'
-import { Focusable } from '@/navigation/core/vue'
 import { applyTheme } from '../app/theme'
 import BrandedLoading from '../components/common/BrandedLoading.vue'
 import SettingDisplayOptionsSheet from '../components/settings/SettingDisplayOptionsSheet.vue'
-import SettingInlineSingleSelect from '../components/settings/SettingInlineSingleSelect.vue'
 import SettingSingleSelectPopupSheet from '../components/settings/SettingSingleSelectPopupSheet.vue'
-import SettingToggleRow from '../components/settings/SettingToggleRow.vue'
 import SettingValueSheet from '../components/settings/SettingValueSheet.vue'
 import { resolveUiLocale, setUiLocale } from '../i18n'
 import {
   SPATIAL_NAV_NODE_IDS,
   SPATIAL_NAV_SCOPE_IDS,
 } from '../navigation/spatial-nav.constants'
-import { events } from '../services/events'
 import { rpc } from '../services/rpc'
+import SettingGamepadSection from './settings/SettingGamepadSection.vue'
+import SettingSectionList from './settings/SettingSectionList.vue'
+import SettingSidebar from './settings/SettingSidebar.vue'
 
 type SettingGroupMap = Awaited<ReturnType<typeof rpc.config.getGroups>>
 
@@ -35,31 +33,6 @@ interface SettingTabItem {
   key: SettingTabKey
   label: string
   nodeId: string
-}
-
-interface SettingTabNavItem extends SettingTabItem {
-  order: number
-  upNeighborId: string
-  downNeighborId?: string
-  rightNeighborId?: string
-}
-
-interface SettingRow {
-  key: string
-  label: string
-  description?: string
-  value: unknown
-  valueText: string
-  control: SettingFieldControl
-  options?: readonly SettingSelectOptionDefinition[]
-  input?: SettingFieldInputDefinition
-  nodeId: string
-}
-
-interface SettingSection {
-  key: string
-  label: string
-  rows: SettingRow[]
 }
 
 interface DisplayOptionsValue {
@@ -102,101 +75,6 @@ const activeValueEditorRow = ref<SettingRow | null>(null)
 const activeDisplayOptionsRow = ref<SettingRow | null>(null)
 const { t, te } = useI18n()
 let disposeTabSwitch: (() => void) | undefined
-let disposeGamepadRuntimeSnapshot: EventUnsubscribe | undefined
-let disposeGamepadPadSnapshot: EventUnsubscribe | undefined
-
-const gamepadSnapshot = ref<GamepadRuntimeSnapshotDto | null>(null)
-const isGamepadSnapshotLoading = ref(false)
-const gamepadDebugEnabled = ref(false)
-const lastPadSnapshot = ref<LogicalPadSnapshotDto | null>(null)
-let lastPadSnapshotAt = 0
-
-const connectedGamepadCount = computed(() =>
-  gamepadSnapshot.value?.devices.filter(device => device.connected).length ?? 0,
-)
-
-const gamepadRouteLabel = computed(() => {
-  const target = gamepadSnapshot.value?.routeTarget
-  if (target === undefined || target === null) {
-    return t('setting.gamepad.route.none')
-  }
-  if (target.kind === 'stream-session') {
-    return t('setting.gamepad.route.streamSession')
-  }
-  return t('setting.gamepad.route.shellUi')
-})
-
-const gamepadHapticsSummary = computed(() => {
-  const haptics = gamepadSnapshot.value?.haptics
-  if (!haptics || haptics.provider === 'none') {
-    return t('setting.gamepad.haptics.none')
-  }
-
-  const parts: string[] = []
-  if (haptics.supportsBasicRumble) {
-    parts.push(t('setting.gamepad.haptics.basic'))
-  }
-  if (haptics.supportsAdvancedHaptics) {
-    parts.push(t('setting.gamepad.haptics.advanced'))
-  }
-  if (haptics.supportsAutoTarget) {
-    parts.push(t('setting.gamepad.haptics.autoTarget'))
-  }
-
-  if (parts.length === 0) {
-    return t('setting.gamepad.haptics.providerOnly')
-  }
-
-  return parts.join(' · ')
-})
-
-const isGamepadTestRumbleDisabled = computed(() => {
-  if (isGamepadSnapshotLoading.value) {
-    return true
-  }
-  const snapshot = gamepadSnapshot.value
-  if (!snapshot) {
-    return true
-  }
-  if (!snapshot.haptics.supportsBasicRumble && !snapshot.haptics.supportsAdvancedHaptics) {
-    return true
-  }
-  return connectedGamepadCount.value === 0
-})
-
-const debugPadSummary = computed(() => {
-  if (!gamepadDebugEnabled.value || lastPadSnapshot.value === null) {
-    return ''
-  }
-  const snapshot = lastPadSnapshot.value
-  const pressed: string[] = []
-  const buttons = snapshot.state.buttons
-  if (buttons.south > 0.5)
-    pressed.push('A')
-  if (buttons.east > 0.5)
-    pressed.push('B')
-  if (buttons.west > 0.5)
-    pressed.push('X')
-  if (buttons.north > 0.5)
-    pressed.push('Y')
-  if (buttons.dpadUp > 0.5)
-    pressed.push('D↑')
-  if (buttons.dpadDown > 0.5)
-    pressed.push('D↓')
-  if (buttons.dpadLeft > 0.5)
-    pressed.push('D←')
-  if (buttons.dpadRight > 0.5)
-    pressed.push('D→')
-
-  const stickInfo = `LS(${snapshot.state.leftStick.x.toFixed(2)}, ${snapshot.state.leftStick.y.toFixed(2)})`
-  const pressedText = pressed.length > 0 ? pressed.join(', ') : t('setting.gamepad.debug.none')
-
-  return t('setting.gamepad.debug.summary', {
-    padId: snapshot.padId,
-    buttons: pressedText,
-    sticks: stickInfo,
-  })
-})
 
 function translateOrFallback(key: string, fallback: string): string {
   return te(key) ? t(key) : fallback
@@ -331,7 +209,7 @@ const activeRows = computed<SettingRow[]>(() =>
   activeSections.value.flatMap(section => section.rows),
 )
 
-const activeSectionRows = computed(() =>
+const activeSectionRows = computed<SettingIndexedSection[]>(() =>
   // 保持 section 视觉分组的同时，继续复用一条连续的空间导航顺序
   activeSections.value.map(section => ({
     ...section,
@@ -375,8 +253,6 @@ const isStreamingExpertResetPending = computed(
   () => pendingActionKey.value === STREAMING_EXPERT_RESET_ACTION_KEY,
 )
 
-const inputPrimaryDeviceId = computed(() => gamepadSnapshot.value?.haptics.defaultDeviceId ?? null)
-
 async function syncConfigGroups(): Promise<void> {
   const nextGroupState = await rpc.config.getGroups()
   groupState.value = nextGroupState
@@ -384,79 +260,6 @@ async function syncConfigGroups(): Promise<void> {
   setUiLocale(appConfig.locale as string)
   applyTheme(appConfig.theme as any)
   syncHapticsConfig(appConfig.ui_haptics !== false, appConfig.ui_audio !== false)
-}
-
-async function loadGamepadRuntimeSnapshot(): Promise<void> {
-  isGamepadSnapshotLoading.value = true
-  try {
-    gamepadSnapshot.value = await rpc.gamepad.getRuntimeSnapshot()
-  }
-  catch {
-    // 避免手柄子系统错误影响设置页主流程
-    gamepadSnapshot.value = null
-  }
-  finally {
-    isGamepadSnapshotLoading.value = false
-  }
-}
-
-async function handleTestGamepadRumble(): Promise<void> {
-  if (isGamepadTestRumbleDisabled.value) {
-    return
-  }
-
-  try {
-    await rpc.gamepad.playRumble({
-      request: {
-        target: { kind: 'auto' },
-        effect: {
-          startDelayMs: 0,
-          durationMs: 120,
-          strongMagnitude: 0.4,
-          weakMagnitude: 0.2,
-          leftTrigger: 0.2,
-          rightTrigger: 0.4,
-          repeat: 0,
-        },
-      },
-    })
-  }
-  catch {
-    // 手柄不支持或驱动异常时静默，不打断设置页体验
-  }
-}
-
-async function handleSetPrimarySamplingDevice(deviceId: string | null): Promise<void> {
-  try {
-    await rpc.gamepad.setPrimarySamplingDevice({ deviceId })
-    await loadGamepadRuntimeSnapshot()
-  }
-  catch {
-    // 保持静默，避免设置页出现与宿主实现强耦合的错误提示
-  }
-}
-
-async function handleToggleDeviceSampling(deviceId: string, paused: boolean): Promise<void> {
-  try {
-    if (paused) {
-      await rpc.gamepad.resumeSamplingDevice({ deviceId })
-    }
-    else {
-      const accepted = window.confirm(t('setting.gamepad.pauseConfirm'))
-      if (!accepted) {
-        return
-      }
-      await rpc.gamepad.pauseSamplingDevice({ deviceId })
-    }
-    await loadGamepadRuntimeSnapshot()
-  }
-  catch {
-    // 同样静默失败
-  }
-}
-
-function handleToggleGamepadDebug(): void {
-  gamepadDebugEnabled.value = !gamepadDebugEnabled.value
 }
 
 async function loadConfigGroups(): Promise<void> {
@@ -517,6 +320,7 @@ async function persistRowValue(
     await syncConfigGroups()
 
     if (RESTART_REQUIRED_KEYS.has(row.key)) {
+      // eslint-disable-next-line no-alert
       const accepted = window.confirm(t('setting.effects.restartConfirm'))
       if (accepted) {
         await rpc.app.restart()
@@ -696,6 +500,7 @@ async function handleResetStreamingExpert(): Promise<void> {
     return
   }
 
+  // eslint-disable-next-line no-alert
   const accepted = window.confirm(t('setting.streaming.expert.resetConfirm'))
   if (!accepted) {
     return
@@ -738,7 +543,6 @@ function handleWindowKeydown(event: KeyboardEvent): void {
 
 onMounted(() => {
   void loadConfigGroups()
-  void loadGamepadRuntimeSnapshot()
   window.addEventListener('keydown', handleWindowKeydown)
 
   // 注册 LT/RT 二级 Tab 切换
@@ -757,20 +561,6 @@ onMounted(() => {
       triggerNavHaptic('boundary')
     }
   })
-  disposeGamepadRuntimeSnapshot = events.on('gamepad.runtimeSnapshot', (snapshot) => {
-    gamepadSnapshot.value = snapshot
-  })
-  disposeGamepadPadSnapshot = events.on('gamepad.padSnapshot', (snapshot) => {
-    if (!gamepadDebugEnabled.value) {
-      return
-    }
-    const now = Date.now()
-    if (now - lastPadSnapshotAt < 100) {
-      return
-    }
-    lastPadSnapshotAt = now
-    lastPadSnapshot.value = snapshot
-  })
 })
 
 onUnmounted(() => {
@@ -783,44 +573,18 @@ onUnmounted(() => {
     disposeTabSwitch()
     disposeTabSwitch = undefined
   }
-  if (disposeGamepadRuntimeSnapshot !== undefined) {
-    disposeGamepadRuntimeSnapshot()
-    disposeGamepadRuntimeSnapshot = undefined
-  }
-  if (disposeGamepadPadSnapshot !== undefined) {
-    disposeGamepadPadSnapshot()
-    disposeGamepadPadSnapshot = undefined
-  }
 })
 </script>
 
 <template>
   <section class="setting-page ui-page-shell">
     <div class="setting-page__layout">
-      <aside class="setting-sidebar" :aria-label="t('setting.aria.groups')">
-        <header class="setting-sidebar__header">
-          <h1 class="setting-sidebar__title">
-            {{ t('setting.title') }}
-          </h1>
-        </header>
-
-        <nav class="setting-sidebar__nav">
-          <Focusable
-            v-for="tab in tabNavItems"
-            :id="tab.nodeId"
-            :key="tab.key"
-            as="button"
-            type="button"
-            class="setting-sidebar__tab"
-            :class="{ 'setting-sidebar__tab--active': activeTabKey === tab.key }"
-            :scope-id="SPATIAL_NAV_SCOPE_IDS.appShell"
-            :aria-label="tab.label"
-            @click="() => handleTabChange(tab.key)"
-          >
-            <span class="setting-sidebar__tab-label">{{ tab.label }}</span>
-          </Focusable>
-        </nav>
-      </aside>
+      <SettingSidebar
+        :tabs="tabNavItems"
+        :active-tab-key="activeTabKey"
+        :scope-id="SPATIAL_NAV_SCOPE_IDS.appShell"
+        @tab-change="handleTabChange"
+      />
 
       <section
         class="setting-panel"
@@ -842,269 +606,25 @@ onUnmounted(() => {
               {{ t('setting.states.emptyGroup') }}
             </div>
 
-            <div v-else class="setting-panel__list">
-              <section
-                v-for="section in activeSectionRows"
-
-                :key="section.key"
-                class="setting-panel__section"
-                :aria-label="section.label"
-              >
-                <header
-                  class="setting-panel__section-header"
-                  :class="{
-                    'setting-panel__section-header--expert':
-                      activeTabKey === 'streaming' && section.key === 'expert',
-                  }"
-                >
-                  <h2 class="setting-panel__section-title">
-                    {{ section.label }}
-                  </h2>
-                  <Focusable
-                    v-if="activeTabKey === 'streaming' && section.key === 'expert'"
-                    :id="STREAMING_EXPERT_RESET_NODE_ID"
-                    as="button"
-                    type="button"
-                    class="setting-panel__expert-reset"
-                    :scope-id="SPATIAL_NAV_SCOPE_IDS.appShell"
-                    :aria-label="t('setting.streaming.expert.reset')"
-                    :disabled="pendingActionKey !== null"
-                    @click="() => void handleResetStreamingExpert()"
-                  >
-                    {{
-                      isStreamingExpertResetPending
-                        ? t('setting.streaming.expert.resetting')
-                        : t('setting.streaming.expert.reset')
-                    }}
-                  </Focusable>
-                </header>
-                <p
-                  v-if="activeTabKey === 'streaming' && section.key === 'expert'"
-                  class="setting-panel__expert-risk"
-                >
-                  {{ t('setting.streaming.expert.riskHint') }}
-                </p>
-
-                <div class="setting-panel__section-body">
-                  <template v-for="row in section.rows" :key="row.nodeId">
-                    <SettingToggleRow
-                      v-if="row.control === 'toggle'"
-                      :id="row.nodeId"
-                      :scope-id="SPATIAL_NAV_SCOPE_IDS.appShell"
-                      :label="row.label"
-                      :enabled="row.value === true"
-                      :order="row.index"
-                      @confirm="() => void handleRowConfirm(row)"
-                    />
-
-                    <Focusable
-                      v-else
-                      :id="row.nodeId"
-                      as="button"
-                      type="button"
-                      class="setting-row"
-                      :class="{
-                        'setting-row--select': row.control === 'singleSelect',
-                        'setting-row--inline-expanded':
-                          row.control === 'singleSelect'
-                          && (row.options?.length ?? 0) <= 3
-                          && activeInlineSingleSelectRow?.nodeId === row.nodeId,
-                      }"
-                      :scope-id="SPATIAL_NAV_SCOPE_IDS.appShell"
-                      :aria-label="row.label"
-                      :on-back="
-                        row.control === 'singleSelect'
-                          && (row.options?.length ?? 0) <= 3
-                          && activeInlineSingleSelectRow?.nodeId === row.nodeId
-                          ? () => {
-                            activeInlineSingleSelectRow = null
-                          }
-                          : undefined
-                      "
-                      @click="() => void handleRowConfirm(row)"
-                    >
-                      <span class="setting-row__copy">
-                        <span class="setting-row__label">{{ row.label }}</span>
-                        <span v-if="row.description" class="setting-row__desc">{{
-                          row.description
-                        }}</span>
-                      </span>
-                      <span class="setting-row__value">{{ row.valueText }}</span>
-                    </Focusable>
-
-                    <SettingInlineSingleSelect
-                      v-if="
-                        row.control === 'singleSelect'
-                          && (row.options?.length ?? 0) <= 3
-                          && activeInlineSingleSelectRow?.nodeId === row.nodeId
-                      "
-                      :open="true"
-                      :scope-id="SPATIAL_NAV_SCOPE_IDS.appShell"
-                      :row-node-id="row.nodeId"
-                      :options="row.options ?? []"
-                      :current-value="
-                        typeof row.value === 'string' || typeof row.value === 'number'
-                          ? row.key === 'locale'
-                            ? resolveUiLocale(row.value)
-                            : row.value
-                          : null
-                      "
-                      :disabled="pendingActionKey !== null"
-                      @close="activeInlineSingleSelectRow = null"
-                      @select="(value) => void handleInlineSingleSelect(value)"
-                    />
-                  </template>
-                </div>
-              </section>
-
-              <section
+            <div v-else>
+              <SettingSectionList
+                :active-tab-key="activeTabKey"
+                :sections="activeSectionRows"
+                :scope-id="SPATIAL_NAV_SCOPE_IDS.appShell"
+                :pending-action-key="pendingActionKey"
+                :active-inline-single-select-row-node-id="activeInlineSingleSelectRow?.nodeId ?? null"
+                :streaming-expert-reset-node-id="STREAMING_EXPERT_RESET_NODE_ID"
+                :is-streaming-expert-reset-pending="isStreamingExpertResetPending"
+                @row-confirm="(row) => void handleRowConfirm(row)"
+                @close-inline-single-select="activeInlineSingleSelectRow = null"
+                @inline-single-select="(value) => void handleInlineSingleSelect(value)"
+                @reset-streaming-expert="() => void handleResetStreamingExpert()"
+              />
+              <SettingGamepadSection
                 v-if="activeTabKey === 'input'"
-                class="setting-panel__section setting-panel__section--gamepad"
-                :aria-label="t('setting.gamepad.sectionLabel')"
-              >
-                <header class="setting-panel__section-header">
-                  <h2 class="setting-panel__section-title">
-                    {{ t('setting.gamepad.sectionLabel') }}
-                  </h2>
-                </header>
-
-                <div class="setting-panel__section-body setting-panel__section-body--gamepad">
-                  <div class="setting-gamepad__summary">
-                    <p class="setting-gamepad__summary-title">
-                      {{ t('setting.gamepad.summaryTitle') }}
-                    </p>
-                    <p class="setting-gamepad__summary-desc">
-                      {{ t('setting.gamepad.summaryDescription') }}
-                    </p>
-                  </div>
-
-                  <div class="setting-gamepad__grid">
-                    <div class="setting-gamepad__item">
-                      <p class="setting-gamepad__item-label">
-                        {{ t('setting.gamepad.connectedLabel') }}
-                      </p>
-                      <p class="setting-gamepad__item-value">
-                        {{
-                          connectedGamepadCount > 0
-                            ? t('setting.gamepad.connectedCount', {
-                              count: connectedGamepadCount,
-                            })
-                            : t('setting.gamepad.connectedNone')
-                        }}
-                      </p>
-                    </div>
-
-                    <div class="setting-gamepad__item">
-                      <p class="setting-gamepad__item-label">
-                        {{ t('setting.gamepad.routeLabel') }}
-                      </p>
-                      <p class="setting-gamepad__item-value">
-                        {{ gamepadRouteLabel }}
-                      </p>
-                    </div>
-
-                    <div class="setting-gamepad__item">
-                      <p class="setting-gamepad__item-label">
-                        {{ t('setting.gamepad.hapticsLabel') }}
-                      </p>
-                      <p class="setting-gamepad__item-value">
-                        {{ gamepadHapticsSummary }}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div
-                    v-if="gamepadSnapshot?.devices?.length"
-                    class="setting-gamepad__device-list"
-                  >
-                    <div
-                      v-for="device in gamepadSnapshot.devices"
-                      :key="device.deviceId"
-                      class="setting-gamepad__device"
-                    >
-                      <div class="setting-gamepad__device-main">
-                        <div>
-                          <p class="setting-gamepad__device-name">
-                            {{ device.name }}
-                          </p>
-                          <p class="setting-gamepad__device-meta">
-                            <span>
-                              {{ device.connected
-                                ? t('setting.gamepad.deviceStatus.connected')
-                                : t('setting.gamepad.deviceStatus.disconnected') }}
-                            </span>
-                            <span v-if="device.isDefaultTarget" class="setting-gamepad__device-badge">
-                              {{ t('gamepadCard.defaultBadge') }}
-                            </span>
-                          </p>
-                        </div>
-                      </div>
-
-                      <div class="setting-gamepad__device-actions">
-                        <button
-                          type="button"
-                          class="setting-gamepad__chip"
-                          :disabled="inputPrimaryDeviceId === device.deviceId"
-                          @click="() => void handleSetPrimarySamplingDevice(device.deviceId)"
-                        >
-                          {{
-                            inputPrimaryDeviceId === device.deviceId
-                              ? t('setting.gamepad.primaryDeviceCurrent')
-                              : t('setting.gamepad.primaryDeviceSet')
-                          }}
-                        </button>
-
-                        <button
-                          type="button"
-                          class="setting-gamepad__chip"
-                          @click="
-                            () =>
-                              void handleToggleDeviceSampling(
-                                device.deviceId,
-                                !device.capabilities.basicRumble && !device.capabilities.advancedHaptics,
-                              )
-                          "
-                        >
-                          {{ t('setting.gamepad.toggleSampling') }}
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-
-                  <Focusable
-                    :id="`${SPATIAL_NAV_NODE_IDS.settingTabs.input}.gamepad.testRumble`"
-                    as="button"
-                    type="button"
-                    class="setting-gamepad__action"
-                    :scope-id="SPATIAL_NAV_SCOPE_IDS.appShell"
-                    :disabled="isGamepadTestRumbleDisabled"
-                    @click="() => void handleTestGamepadRumble()"
-                  >
-                    <span class="setting-gamepad__action-label">
-                      {{ t('setting.gamepad.testRumbleLabel') }}
-                    </span>
-                    <span class="setting-gamepad__action-hint">
-                      {{ t('setting.gamepad.testRumbleHint') }}
-                    </span>
-                  </Focusable>
-
-                  <button
-                    type="button"
-                    class="setting-gamepad__debug-toggle"
-                    @click="handleToggleGamepadDebug"
-                  >
-                    {{
-                      gamepadDebugEnabled
-                        ? t('setting.gamepad.debug.disable')
-                        : t('setting.gamepad.debug.enable')
-                    }}
-                  </button>
-
-                  <p v-if="debugPadSummary" class="setting-gamepad__debug-summary">
-                    {{ debugPadSummary }}
-                  </p>
-                </div>
-              </section>
+                :scope-id="SPATIAL_NAV_SCOPE_IDS.appShell"
+                :nav-node-base-id="SPATIAL_NAV_NODE_IDS.settingTabs.input"
+              />
             </div>
           </div>
         </Transition>
@@ -1197,102 +717,6 @@ onUnmounted(() => {
   padding: 0;
 }
 
-.setting-sidebar {
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 32px;
-  padding: 44px 20px 32px; /* Reduced from 32px to account for nav padding */
-  background: var(--ui-page-bg);
-  position: relative;
-  z-index: 2;
-  border-right: 1px solid var(--ui-border-subtle);
-}
-
-.setting-sidebar__header {
-  padding: 0 16px;
-}
-
-.setting-sidebar__title {
-  margin: 0;
-  font-size: clamp(24px, 3vw, 32px);
-  line-height: 1.1;
-  font-weight: 900;
-  letter-spacing: -0.02em;
-  color: var(--color-text-primary);
-}
-
-.setting-sidebar__nav {
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  overflow-y: auto;
-  overflow-x: visible; /* Allow horizontal overflow for scale */
-  padding: 12px 16px; /* Safe zone for focus scale */
-  margin: 0 -4px; /* Slight offset adjustment */
-}
-
-.setting-sidebar__tab {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  width: 100%;
-  min-height: 52px;
-  padding: 0 20px;
-  border: 2px solid transparent;
-  border-radius: 8px;
-  background: transparent;
-  color: var(--color-text-secondary);
-  text-align: left;
-  transition: all var(--ui-motion-fast);
-  transform-origin: left center;
-}
-
-.setting-sidebar__tab:hover {
-  background: var(--color-state-hover);
-  color: var(--color-text-primary);
-}
-
-.setting-sidebar__tab::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 12px;
-  bottom: 12px;
-  width: 4px;
-  background: var(--brand-primary);
-  border-radius: 0 2px 2px 0;
-  opacity: 0;
-  transition: opacity var(--ui-motion-fast);
-}
-
-.setting-sidebar__tab--active {
-  background: var(--color-state-selected);
-  color: var(--ui-page-text);
-}
-
-.setting-sidebar__tab--active::before {
-  opacity: 1;
-}
-
-.setting-sidebar__tab[data-focused='true'] {
-  background: var(--color-focus-bg-strong);
-  color: var(--ui-focus-text);
-  box-shadow: var(--shadow-xbox-focus);
-  z-index: 10;
-}
-
-.setting-sidebar__tab[data-focused='true']::before {
-  background: var(--brand-primary);
-}
-
-.setting-sidebar__tab-label {
-  font-size: 16px;
-  line-height: 1.2;
-  font-weight: 700;
-}
-
 .setting-panel {
   min-height: 0;
   height: 100%;
@@ -1322,335 +746,6 @@ onUnmounted(() => {
   color: var(--color-text-primary);
 }
 
-.setting-panel__list {
-  width: 100%;
-  margin: 0;
-  padding: 0 64px 80px;
-}
-
-.setting-panel__section + .setting-panel__section {
-  margin-top: 56px;
-}
-
-.setting-panel__section-header {
-  margin-bottom: 16px;
-  padding: 0;
-  border-bottom: 1px solid var(--ui-border-subtle);
-}
-
-.setting-panel__section-header--expert {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-
-.setting-panel__section-title {
-  margin: 0 0 12px;
-  font-size: 14px;
-  font-weight: var(--ui-font-weight-black);
-  text-transform: uppercase;
-  letter-spacing: 0.15em;
-  color: var(--brand-primary);
-  text-shadow: 0 0 12px color-mix(in srgb, var(--brand-primary), transparent 70%);
-}
-
-.setting-panel__expert-reset {
-  margin-bottom: 10px;
-  min-height: 34px;
-  padding: 0 12px;
-  border: 1px solid var(--ui-border-subtle);
-  border-radius: 8px;
-  background: transparent;
-  color: var(--color-text-secondary);
-  font-size: 12px;
-  font-weight: var(--ui-font-weight-black);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  transition: all var(--ui-motion-fast);
-}
-
-.setting-panel__expert-reset[data-focused='true'] {
-  background: var(--color-focus-bg-strong);
-  color: var(--ui-focus-text);
-  border-color: color-mix(in srgb, var(--color-danger), transparent 50%);
-  box-shadow: var(--shadow-xbox-focus);
-}
-
-.setting-panel__expert-reset:disabled {
-  opacity: 0.6;
-}
-
-.setting-panel__expert-risk {
-  margin: -4px 0 14px;
-  padding: 10px 12px;
-  border-left: 3px solid var(--color-warning);
-  background: color-mix(in srgb, var(--color-warning), transparent 86%);
-  color: color-mix(in srgb, var(--color-warning), var(--neutral-0) 20%);
-  font-size: 13px;
-  line-height: 1.5;
-}
-
-.setting-panel__section-body {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.setting-panel__section-body--gamepad {
-  gap: 16px;
-}
-
-.setting-gamepad__summary-title {
-  margin: 0 0 4px;
-  font-size: 16px;
-  font-weight: var(--ui-font-weight-bold);
-}
-
-.setting-gamepad__summary-desc {
-  margin: 0;
-  font-size: 13px;
-  color: var(--color-text-tertiary);
-}
-
-.setting-gamepad__grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 12px;
-}
-
-.setting-gamepad__item-label {
-  margin: 0 0 2px;
-  font-size: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.12em;
-  color: var(--color-text-tertiary);
-}
-
-.setting-gamepad__item-value {
-  margin: 0;
-  font-size: 14px;
-  font-weight: var(--ui-font-weight-bold);
-}
-
-.setting-gamepad__action {
-  align-self: flex-start;
-  margin-top: 8px;
-  padding: 10px 16px;
-  border-radius: 999px;
-  border: 1px solid var(--ui-border-subtle);
-  background: color-mix(in srgb, var(--ui-surface-overlay), transparent 10%);
-  display: inline-flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 2px;
-  cursor: pointer;
-  transition: all var(--ui-motion-fast);
-}
-
-.setting-gamepad__action[data-focused='true'] {
-  background: var(--color-focus-bg-strong);
-  color: var(--ui-focus-text);
-  box-shadow: var(--shadow-xbox-focus);
-}
-
-.setting-gamepad__action:disabled {
-  opacity: 0.6;
-  cursor: default;
-}
-
-.setting-gamepad__action-label {
-  font-size: 14px;
-  font-weight: var(--ui-font-weight-bold);
-}
-
-.setting-gamepad__action-hint {
-  font-size: 12px;
-  color: var(--color-text-tertiary);
-}
-
-.setting-gamepad__debug-toggle {
-  margin-top: 8px;
-  padding: 4px 10px;
-  border-radius: 999px;
-  border: 1px dashed var(--ui-border-subtle);
-  background: transparent;
-  font-size: 12px;
-  color: var(--color-text-tertiary);
-  cursor: pointer;
-}
-
-.setting-gamepad__debug-summary {
-  margin: 4px 0 0;
-  font-size: 12px;
-  font-family: var(--ui-font-mono, monospace);
-  color: var(--color-text-tertiary);
-}
-
-.setting-gamepad__device-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin-top: 8px;
-}
-
-.setting-gamepad__device {
-  padding: 8px 12px;
-  border-radius: 10px;
-  border: 1px solid var(--ui-border-subtle);
-  background: color-mix(in srgb, var(--ui-surface-overlay), transparent 8%);
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.setting-gamepad__device-main {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.setting-gamepad__device-name {
-  margin: 0;
-  font-size: 14px;
-  font-weight: var(--ui-font-weight-bold);
-}
-
-.setting-gamepad__device-meta {
-  margin: 2px 0 0;
-  font-size: 12px;
-  color: var(--color-text-tertiary);
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.setting-gamepad__device-badge {
-  padding: 1px 6px;
-  border-radius: 999px;
-  background: var(--brand-primary);
-  color: var(--brand-on-primary);
-  font-size: 10px;
-  font-weight: var(--ui-font-weight-bold);
-}
-
-.setting-gamepad__device-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.setting-gamepad__chip {
-  padding: 4px 10px;
-  border-radius: 999px;
-  border: 1px solid var(--ui-border-subtle);
-  background: color-mix(in srgb, var(--ui-surface-overlay), transparent 8%);
-  font-size: 12px;
-  cursor: pointer;
-  transition: all var(--ui-motion-fast);
-}
-
-.setting-gamepad__chip:disabled {
-  opacity: 0.7;
-  cursor: default;
-}
-
-.setting-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--ui-settings-row-gap);
-  width: 100%;
-  min-height: 72px;
-  padding: 12px 20px;
-  border: 2px solid transparent;
-  border-radius: 12px;
-  background: var(--color-state-hover);
-  color: var(--color-text-primary);
-  text-align: left;
-  transition: all var(--ui-motion-fast) var(--ease-standard);
-}
-
-.setting-row:hover {
-  background: var(--color-state-hover);
-}
-
-.setting-row[data-focused='true'] {
-  background: var(--color-focus-bg-strong);
-  color: var(--ui-focus-text);
-  box-shadow: var(--shadow-xbox-focus);
-  z-index: 5;
-}
-
-.setting-row[data-focused='true'] .setting-row__label {
-  color: var(--ui-focus-text);
-}
-
-.setting-row[data-focused='true'] .setting-row__desc {
-  color: var(--color-text-secondary);
-}
-
-.setting-row[data-focused='true'] .setting-row__value {
-  color: var(--brand-primary);
-}
-
-.setting-row__copy {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-width: 0;
-}
-
-.setting-row__label {
-  font-size: 18px;
-  line-height: 1.2;
-  font-weight: var(--ui-font-weight-bold);
-  color: var(--color-text-primary);
-}
-
-.setting-row__desc {
-  font-size: 14px;
-  line-height: 1.5;
-  color: var(--color-text-tertiary);
-  opacity: 0.8;
-}
-
-.setting-row__value {
-  flex: 0 0 auto;
-  font-size: 16px;
-  font-weight: var(--ui-font-weight-black);
-  letter-spacing: var(--letter-spacing-loose);
-  color: var(--brand-primary);
-  text-shadow: 0 0 12px color-mix(in srgb, var(--brand-primary), transparent 60%);
-}
-
-.setting-row--select .setting-row__value {
-  color: var(--color-text-secondary);
-}
-
-.setting-row--select .setting-row__value::after {
-  content: '›';
-  display: inline-block;
-  margin-left: 12px;
-  font-size: 22px;
-  line-height: 1;
-  color: var(--color-text-tertiary);
-  vertical-align: middle;
-  transition: transform var(--ui-motion-fast) var(--ease-standard);
-}
-
-/* 行内单选展开：与下方选项区连成一体，› 旋转为向下示意 */
-.setting-row--inline-expanded {
-  border-bottom-left-radius: 0;
-  border-bottom-right-radius: 0;
-}
-
-.setting-row--inline-expanded.setting-row--select .setting-row__value::after {
-  transform: rotate(90deg);
-  color: var(--brand-primary);
-}
-
 .setting-content-fade-enter-active,
 .setting-content-fade-leave-active {
   transition:
@@ -1674,10 +769,5 @@ onUnmounted(() => {
 
 :global(html[data-ui-density='narrow']) .setting-page__layout {
   grid-template-columns: 1fr;
-}
-
-:global(html[data-ui-density='narrow']) .setting-sidebar {
-  mask-image: none;
-  border-bottom: 1px solid var(--ui-border-subtle);
 }
 </style>
