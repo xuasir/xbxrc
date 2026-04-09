@@ -330,6 +330,35 @@ pub struct XbxEngineDecodeOutputPathObservation {
 }
 
 #[derive(Clone, Debug, PartialEq)]
+pub struct XbxEngineRemoteFrameCaptureObservation {
+    pub observation_id: u64,
+    pub trigger: String,
+    pub backend_name: String,
+    pub frame_rtp_timestamp: u32,
+    pub is_keyframe: bool,
+    pub width: u32,
+    pub height: u32,
+    pub payload_bytes: usize,
+    pub payload_fingerprint: u64,
+    pub payload_prefix_hex: String,
+    pub nal_types: Vec<String>,
+    pub nal_count: u16,
+    pub has_inband_sps: bool,
+    pub has_inband_pps: bool,
+    pub bootstrap_ready: bool,
+    pub bootstrap_reject_reason: Option<String>,
+    pub parameter_sets_changed: bool,
+    pub config_changed: bool,
+    pub slice_headers_valid: bool,
+    pub send_packet_status: Option<i32>,
+    pub receive_frame_status: Option<i32>,
+    pub status: Option<i32>,
+    pub backend_no_output_streak: Option<u32>,
+    pub input_frames_since_last_decoded: Option<u32>,
+    pub observed_at_ms: f64,
+}
+
+#[derive(Clone, Debug, PartialEq)]
 pub struct XbxEngineHostVideoFrameDropEvent {
     pub stage: Option<String>,
     pub action: Option<String>,
@@ -946,6 +975,7 @@ pub struct XbxEngineMediaRuntimeStats {
     pub latest_video_decoder_bootstrap_gate_observation:
         Option<XbxEngineVideoDecoderBootstrapGateObservation>,
     pub latest_decode_output_path_observation: Option<XbxEngineDecodeOutputPathObservation>,
+    pub latest_remote_frame_capture_observation: Option<XbxEngineRemoteFrameCaptureObservation>,
     pub video_decoder_hardware_failure_streak: u32,
     pub latest_video_decoder_hardware_failure_time_ms: Option<f64>,
     pub latest_video_decoder_hardware_failure_status: Option<i32>,
@@ -1105,6 +1135,7 @@ impl Default for XbxEngineMediaRuntimeStats {
             latest_video_decoder_probe_observation: None,
             latest_video_decoder_bootstrap_gate_observation: None,
             latest_decode_output_path_observation: None,
+            latest_remote_frame_capture_observation: None,
             video_decoder_hardware_failure_streak: 0,
             latest_video_decoder_hardware_failure_time_ms: None,
             latest_video_decoder_hardware_failure_status: None,

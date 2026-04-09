@@ -5,6 +5,33 @@ use crate::transport::rtc::stream::nack_scheduler::{NackObservePolicy, PacketRec
 pub(super) const CLOUD_STARTUP_HEAD_HOLE_DEADLINE_FLOOR_MS: f64 = 320.0;
 pub(super) const CLOUD_NACK_RTT_MARGIN_MS: f64 = 80.0;
 pub(super) const CLOUD_STARTUP_NACK_RTT_MARGIN_MS: f64 = 140.0;
+// 高 RTT 子画像：额外放宽 NACK 窗口，避免在长 RTT + 抖动下频繁 nackExpired。
+// 从 100ms 开始分档：这能覆盖“中等 RTT 但抖动/重排明显”的场景。
+pub(super) const CLOUD_HIGH_RTT_MS: f64 = 100.0;
+pub(super) const CLOUD_SEVERE_RTT_MS: f64 = 200.0;
+pub(super) const CLOUD_EXTREME_RTT_MS: f64 = 300.0;
+pub(super) const CLOUD_HIGH_RTT_EXTRA_MARGIN_MS: f64 = 40.0;
+pub(super) const CLOUD_SEVERE_RTT_EXTRA_MARGIN_MS: f64 = 80.0;
+pub(super) const CLOUD_EXTREME_RTT_EXTRA_MARGIN_MS: f64 = 140.0;
+
+pub(super) fn cloud_nack_rtt_margin_ms(startup_mode: bool, cloud_rtt_ms: Option<f64>) -> f64 {
+    let rtt_ms = cloud_rtt_ms.unwrap_or(0.0);
+    let base = if startup_mode {
+        CLOUD_STARTUP_NACK_RTT_MARGIN_MS
+    } else {
+        CLOUD_NACK_RTT_MARGIN_MS
+    };
+    let extra = if rtt_ms >= CLOUD_EXTREME_RTT_MS {
+        CLOUD_EXTREME_RTT_EXTRA_MARGIN_MS
+    } else if rtt_ms >= CLOUD_SEVERE_RTT_MS {
+        CLOUD_SEVERE_RTT_EXTRA_MARGIN_MS
+    } else if rtt_ms >= CLOUD_HIGH_RTT_MS {
+        CLOUD_HIGH_RTT_EXTRA_MARGIN_MS
+    } else {
+        0.0
+    };
+    base + extra
+}
 
 pub(super) fn cloud_startup_head_hole_deadline_at_ms(
     now_ms: f64,
@@ -17,12 +44,13 @@ pub(super) fn cloud_startup_head_hole_deadline_at_ms(
         return deadline_at_ms;
     }
     let rtt_ms = cloud_rtt_ms.unwrap_or(0.0);
+    let rtt_margin_ms = cloud_nack_rtt_margin_ms(startup_mode, cloud_rtt_ms);
     let deadline_floor_ms = now_ms
         + if startup_mode {
-            (rtt_ms + CLOUD_STARTUP_NACK_RTT_MARGIN_MS)
+            (rtt_ms + rtt_margin_ms)
                 .max(CLOUD_STARTUP_HEAD_HOLE_DEADLINE_FLOOR_MS)
         } else {
-            rtt_ms + CLOUD_NACK_RTT_MARGIN_MS
+            rtt_ms + rtt_margin_ms
         };
     deadline_at_ms.max(deadline_floor_ms)
 }
@@ -38,11 +66,7 @@ pub(super) fn cloud_nack_max_age_ms(
     }
 
     let rtt_ms = cloud_rtt_ms.unwrap_or(0.0);
-    let rtt_margin_ms = if startup_mode {
-        CLOUD_STARTUP_NACK_RTT_MARGIN_MS
-    } else {
-        CLOUD_NACK_RTT_MARGIN_MS
-    };
+    let rtt_margin_ms = cloud_nack_rtt_margin_ms(startup_mode, cloud_rtt_ms);
     base_max_age_ms.max((rtt_ms + rtt_margin_ms).round() as u64)
 }
 

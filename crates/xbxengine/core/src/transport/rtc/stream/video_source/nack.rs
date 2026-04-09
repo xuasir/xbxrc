@@ -1170,13 +1170,13 @@ impl RtcVideoFrameSource {
             // startup + cloud 需要更宽的首洞修复窗口，避免刚出画就把恢复链判死。
             let rtt_ms = self.cloud_nack_rtt_ms();
             base_window_ms = base_window_ms
-                .max(rtt_ms + CLOUD_STARTUP_NACK_RTT_MARGIN_MS)
+                .max(rtt_ms + cloud_nack_rtt_margin_ms(true, Some(rtt_ms)))
                 .max(CLOUD_STARTUP_HEAD_HOLE_DEADLINE_FLOOR_MS);
             (1.05 + repairability * 0.7).clamp(1.05, 1.7)
         } else if self.is_cloud_transport_profile() {
             // cloud 场景直接按运行时 RTT 放宽恢复窗口，不再额外加硬下限。
             let rtt_ms = self.cloud_nack_rtt_ms();
-            base_window_ms = base_window_ms.max(rtt_ms + CLOUD_NACK_RTT_MARGIN_MS);
+            base_window_ms = base_window_ms.max(rtt_ms + cloud_nack_rtt_margin_ms(false, Some(rtt_ms)));
             (0.95 + repairability * 0.65).clamp(0.95, 1.55)
         } else {
             (0.75 + repairability * 0.55).clamp(0.75, 1.3)

@@ -14,6 +14,7 @@ use crate::{XbxEngineRenderPixelData, XbxEngineRuntimeError};
 
 use super::backend_ffmpeg::{
     av_err_eagain, av_err_eof, error_from_message, ffmpeg_error, ffmpeg_init_once,
+    receive_decoded_frames_until_eagain,
 };
 
 pub(crate) fn try_create_ffmpeg_macos_videotoolbox_backend(
@@ -26,6 +27,7 @@ struct FfmpegMacOsVideoToolboxDecoder {
     packet: *mut ffi::AVPacket,
     frame: *mut ffi::AVFrame,
     hw_device_ctx: *mut ffi::AVBufferRef,
+    force_annexb_input: bool,
 }
 
 unsafe impl Send for FfmpegMacOsVideoToolboxDecoder {}
@@ -49,9 +51,12 @@ impl FfmpegMacOsVideoToolboxDecoder {
             ));
         }
         unsafe {
-            (*codec_ctx).flags2 |= ffi::AV_CODEC_FLAG2_CHUNKS as i32;
+            // 这里不打开 CHUNKS：上游喂入的是完整 access unit（帧级别），
+            // CHUNKS 会让 H264 边界语义更松散，在 VideoToolbox 路径上更容易出现长时间不出帧。
             (*codec_ctx).thread_count = 1;
             (*codec_ctx).thread_type = 0;
+            // RTP 90kHz 时间基，尽量给硬解路径稳定的 pts/dts 语义。
+            (*codec_ctx).pkt_timebase = ffi::AVRational { num: 1, den: 90_000 };
         }
 
         let packet = unsafe { ffi::av_packet_alloc() };
@@ -135,10 +140,16 @@ impl FfmpegMacOsVideoToolboxDecoder {
             packet,
             frame,
             hw_device_ctx,
+            force_annexb_input: false,
         })
     }
 
-    fn queue_packet(&mut self, payload: &[u8]) -> Result<(), XbxEngineRuntimeError> {
+    fn queue_packet(
+        &mut self,
+        payload: &[u8],
+        is_keyframe: bool,
+        rtp_timestamp: u32,
+    ) -> Result<(), XbxEngineRuntimeError> {
         if payload.is_empty() {
             return Ok(());
         }
@@ -159,6 +170,16 @@ impl FfmpegMacOsVideoToolboxDecoder {
                 ));
             }
             std::ptr::copy_nonoverlapping(payload.as_ptr(), (*self.packet).data, payload.len());
+            (*self.packet).flags = if is_keyframe {
+                ffi::AV_PKT_FLAG_KEY as i32
+            } else {
+                0
+            };
+            // `pkt_timebase` 的语义见 FFmpeg `n8.1` 的 `libavcodec/avcodec.h`：
+            // “Timebase in which pkt_dts/pts and AVPacket.dts/pts are expressed.”
+            // 但在我们这里，RTP timestamp 并不等价于严格的 decode/present timeline（可能存在 B 帧重排等），
+            // 因此不强行填充 pts/dts，交由解码器按 bitstream 自行推导。
+            let _ = rtp_timestamp;
             (*self.packet).pts = ffi::AV_NOPTS_VALUE;
             (*self.packet).dts = ffi::AV_NOPTS_VALUE;
         }
@@ -172,7 +193,7 @@ impl FfmpegMacOsVideoToolboxDecoder {
             return Ok(send_status);
         }
         if send_status == av_err_eagain() {
-            let _ = self.receive_decoded_frame()?;
+            let _ = receive_decoded_frames_until_eagain(|| self.receive_decoded_frame())?;
             let retry_status = unsafe { ffi::avcodec_send_packet(self.codec_ctx, self.packet) };
             if retry_status >= 0 {
                 return Ok(retry_status);
@@ -282,17 +303,32 @@ impl super::backend::XbxVideoDecoderBackend for FfmpegMacOsVideoToolboxDecoder {
     ) -> Result<super::backend::XbxVideoDecoderBackendDecodeOutcome, XbxEngineRuntimeError> {
         if encoded_frame.payload.is_empty() {
             return Ok(super::backend::XbxVideoDecoderBackendDecodeOutcome {
-                frame: None,
+                frames: Vec::new(),
                 send_packet_status: None,
                 receive_frame_status: None,
             });
         }
+        // 兼容性优先：VideoToolbox 在部分流上对 AVCC 输入不稳定，固定走 Annex-B。
+        self.force_annexb_input = true;
+        self.decode_with_payload(encoded_frame)
+    }
+}
 
-        self.queue_packet(encoded_frame.payload.as_ref())?;
+impl FfmpegMacOsVideoToolboxDecoder {
+    fn decode_with_payload(
+        &mut self,
+        encoded_frame: EncodedFrame,
+    ) -> Result<super::backend::XbxVideoDecoderBackendDecodeOutcome, XbxEngineRuntimeError> {
+        self.queue_packet(
+            encoded_frame.payload.as_ref(),
+            encoded_frame.is_keyframe,
+            encoded_frame.rtp_timestamp,
+        )?;
         let send_packet_status = self.send_packet()?;
-        let (frame, receive_frame_status) = self.receive_decoded_frame()?;
+        let (frames, receive_frame_status) =
+            receive_decoded_frames_until_eagain(|| self.receive_decoded_frame())?;
         Ok(super::backend::XbxVideoDecoderBackendDecodeOutcome {
-            frame,
+            frames,
             send_packet_status: Some(send_packet_status),
             receive_frame_status: Some(receive_frame_status),
         })

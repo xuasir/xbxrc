@@ -10919,7 +10919,7 @@ fn media_reconnect_candidate_waits_for_success_edge_before_regrant() {
 }
 
 #[test]
-fn cloud_high_rtt_repeated_transport_expired_deadline_third_hit_reconnects() {
+fn cloud_high_rtt_repeated_transport_expired_deadline_second_hit_reconnects() {
     let runtime_config = Arc::new(Mutex::new(XbxEngineRuntimeConfig::default()));
     let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
     if let Ok(mut stats) = runtime_stats.lock() {
@@ -10968,11 +10968,7 @@ fn cloud_high_rtt_repeated_transport_expired_deadline_third_hit_reconnects() {
     connection.latest_loss_ratio_1s = Some(0.04);
     connection.last_observed_at_ms = Some(10_000.0);
 
-    for (version, now_ms, expect_reconnect) in [
-        (1, 10_000.0, false),
-        (2, 10_460.0, false),
-        (3, 10_920.0, true),
-    ] {
+    for (version, now_ms, expect_reconnect) in [(1, 10_000.0, false), (2, 10_460.0, true)] {
         let snapshot = TransportSnapshot::new(
             version,
             now_ms,
@@ -11019,7 +11015,7 @@ fn cloud_high_rtt_repeated_transport_expired_deadline_third_hit_reconnects() {
                 TransportCommand::RequestReconnectCandidate { .. }
             )));
         }
-        if version < 3 {
+        if version < 2 {
             sleep(Duration::from_millis(450));
         }
     }

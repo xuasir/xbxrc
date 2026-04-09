@@ -223,6 +223,8 @@ pub struct VideoEscalationController {
     next_observation_id: u64,
 }
 
+const CONNECTIVITY_DEADLINE_RECONNECT_HIT_THRESHOLD: u8 = 2;
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct VideoEscalationDecision {
     pub observation_id: u64,
@@ -679,7 +681,9 @@ impl VideoEscalationController {
                             self.transport_deadline_window_count =
                                 self.transport_deadline_window_count.saturating_add(1);
                         }
-                        if self.transport_deadline_window_count >= 3 {
+                        if self.transport_deadline_window_count
+                            >= CONNECTIVITY_DEADLINE_RECONNECT_HIT_THRESHOLD
+                        {
                             self.pending_keyframe_signals = 0;
                             self.pending_decoder_reset_signals = 0;
                             self.reconnect_candidate_signals =
@@ -854,7 +858,9 @@ impl VideoEscalationController {
                 self.reconnect_candidate_signals =
                     self.reconnect_candidate_signals.saturating_add(1);
                 self.last_severe_deadline_at = Some(now);
-                if self.reconnect_candidate_signals >= 2 {
+                if self.reconnect_candidate_signals
+                    >= CONNECTIVITY_DEADLINE_RECONNECT_HIT_THRESHOLD
+                {
                     self.clear_keyframe_epoch();
                     self.resolve_reconnect_or_decoder_reset_fallback(now, allow_reconnect)
                 } else {

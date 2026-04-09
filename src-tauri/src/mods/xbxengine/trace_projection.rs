@@ -28,6 +28,7 @@ pub(super) struct RuntimeTraceObservationState {
     decoder_probe_observation_id: Option<u64>,
     decoder_bootstrap_gate_observation_id: Option<u64>,
     decode_output_path_observation_id: Option<u64>,
+    remote_frame_capture_observation_id: Option<u64>,
     render_candidate_decision_id: Option<u64>,
     recovery_keyframe_request_count: Option<u64>,
     recovery_decoder_reset_count: Option<u64>,
@@ -171,6 +172,7 @@ pub(super) fn build_observability_snapshot(stats: &XbxEngineStatsDto) -> serde_j
             "decoderProbe": stats.latest_video_decoder_probe_observation,
             "decoderBootstrapGate": stats.latest_video_decoder_bootstrap_gate_observation,
             "decodeOutputPath": stats.latest_decode_output_path_observation,
+            "remoteFrameCapture": stats.latest_remote_frame_capture_observation,
         },
         "directGaming": {
             "bitrateBand": stats.direct_gaming_bitrate_band,
@@ -603,6 +605,45 @@ pub(super) fn record_runtime_trace_observations(
                     "backendNoOutputStreak": observation.backend_no_output_streak,
                     "inputFramesSinceLastDecoded": observation.input_frames_since_last_decoded,
                     "bootstrapRejectReason": observation.bootstrap_reject_reason,
+                    "observedAtMs": observation.observed_at_ms,
+                }),
+            );
+        }
+    }
+
+    if let Some(observation) = stats.latest_remote_frame_capture_observation.as_ref() {
+        if observation_state.remote_frame_capture_observation_id != Some(observation.observation_id)
+        {
+            observation_state.remote_frame_capture_observation_id = Some(observation.observation_id);
+            runtime_trace.record_event(
+                "xbxengine",
+                "remoteFrameCaptured",
+                session_id,
+                json!({
+                    "observationId": observation.observation_id,
+                    "trigger": observation.trigger,
+                    "backendName": observation.backend_name,
+                    "frameRtpTimestamp": observation.frame_rtp_timestamp,
+                    "isKeyframe": observation.is_keyframe,
+                    "width": observation.width,
+                    "height": observation.height,
+                    "payloadBytes": observation.payload_bytes,
+                    "payloadFingerprint": observation.payload_fingerprint,
+                    "payloadPrefixHex": observation.payload_prefix_hex,
+                    "nalTypes": observation.nal_types,
+                    "nalCount": observation.nal_count,
+                    "hasInbandSps": observation.has_inband_sps,
+                    "hasInbandPps": observation.has_inband_pps,
+                    "bootstrapReady": observation.bootstrap_ready,
+                    "bootstrapRejectReason": observation.bootstrap_reject_reason,
+                    "parameterSetsChanged": observation.parameter_sets_changed,
+                    "configChanged": observation.config_changed,
+                    "sliceHeadersValid": observation.slice_headers_valid,
+                    "status": observation.status,
+                    "sendPacketStatus": observation.send_packet_status,
+                    "receiveFrameStatus": observation.receive_frame_status,
+                    "backendNoOutputStreak": observation.backend_no_output_streak,
+                    "inputFramesSinceLastDecoded": observation.input_frames_since_last_decoded,
                     "observedAtMs": observation.observed_at_ms,
                 }),
             );

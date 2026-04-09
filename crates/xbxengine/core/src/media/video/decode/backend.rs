@@ -61,8 +61,10 @@ pub(crate) struct XbxVideoDecoderProbeSummary {
 }
 
 pub(crate) struct XbxVideoDecoderBackendDecodeOutcome {
-    pub(crate) frame: Option<XbxRenderFrame>,
+    /// 本轮 send 之后 decoder 产出的全部帧（含 drain 循环），可能为空或多于 1。
+    pub(crate) frames: Vec<XbxRenderFrame>,
     pub(crate) send_packet_status: Option<i32>,
+    /// 最后一轮 `avcodec_receive_frame` 的返回值（成功时为 ≥0，排空结束为 EAGAIN/EOF）。
     pub(crate) receive_frame_status: Option<i32>,
 }
 
@@ -89,7 +91,7 @@ impl XbxVideoDecoderBackend for NoopXbxVideoDecoderBackend {
         _now_ms: f64,
     ) -> Result<XbxVideoDecoderBackendDecodeOutcome, XbxEngineRuntimeError> {
         Ok(XbxVideoDecoderBackendDecodeOutcome {
-            frame: None,
+            frames: Vec::new(),
             send_packet_status: None,
             receive_frame_status: None,
         })
@@ -147,6 +149,41 @@ pub(crate) fn create_video_decoder_backend_with_probe(
         fallback_summary: (!fallback_details.is_empty()).then(|| fallback_details.join(" -> ")),
     };
     (decoder, summary)
+}
+
+pub(crate) fn create_software_video_decoder_backend_with_probe(
+) -> (Box<dyn XbxVideoDecoderBackend>, XbxVideoDecoderProbeSummary) {
+    let candidate = XbxVideoBackendCandidate {
+        kind: XbxVideoDecoderBackendKind::Software,
+        backend_name: "ffmpeg-software",
+    };
+    match super::backend_ffmpeg_software::try_create_ffmpeg_software_backend() {
+        Ok(decoder) => {
+            let summary = XbxVideoDecoderProbeSummary {
+                selected_backend_name: decoder.backend_name().to_string(),
+                selected_backend_kind: XbxVideoDecoderBackendKind::Software.as_str().to_string(),
+                fallback_count: 0,
+                fallback_summary: None,
+            };
+            (decoder, summary)
+        }
+        Err(error) => {
+            let decoder = Box::<NoopXbxVideoDecoderBackend>::default();
+            let summary = XbxVideoDecoderProbeSummary {
+                selected_backend_name: decoder.backend_name().to_string(),
+                selected_backend_kind: XbxVideoDecoderBackendKind::Placeholder.as_str().to_string(),
+                fallback_count: 1,
+                fallback_summary: Some(format!(
+                    "{}({}/{}):{}",
+                    candidate.backend_name,
+                    candidate.kind.as_str(),
+                    XbxVideoBackendFailureReason::InitializationFailed.as_str(),
+                    error
+                )),
+            };
+            (decoder, summary)
+        }
+    }
 }
 
 fn resolve_selected_backend_kind(backend_name: &str) -> XbxVideoDecoderBackendKind {

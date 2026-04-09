@@ -646,7 +646,7 @@ fn await_recovery_keyframe_is_throttled_within_window_and_releases_after_window(
 }
 
 #[test]
-fn cooldown_window_prevents_keyframe_storm() {
+fn expired_deadline_second_window_can_upgrade_to_reconnect_candidate() {
     let mut controller = VideoEscalationController::new(VideoEscalationConfig {
         cooldown_ms: 220,
         keyframe_burst_threshold: 1,
@@ -673,7 +673,7 @@ fn cooldown_window_prevents_keyframe_storm() {
         controller
             .on_reason(VideoEscalationReason::TransportExpiredDeadline)
             .action,
-        RecoveryAction::CoalescedKeyframeInFlight
+        RecoveryAction::RequestReconnectCandidate
     );
 }
 

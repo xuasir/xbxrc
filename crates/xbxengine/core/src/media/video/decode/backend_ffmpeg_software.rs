@@ -8,6 +8,7 @@ use crate::{XbxEngineRenderPixelData, XbxEngineRuntimeError};
 
 use super::backend_ffmpeg::{
     av_err_eagain, av_err_eof, error_from_message, ffmpeg_error, ffmpeg_init_once,
+    receive_decoded_frames_until_eagain,
 };
 
 pub(crate) fn try_create_ffmpeg_software_backend(
@@ -128,7 +129,7 @@ impl FfmpegSoftwareDecoder {
             return Ok(send_status);
         }
         if send_status == av_err_eagain() {
-            let _ = self.receive_decoded_frame()?;
+            let _ = receive_decoded_frames_until_eagain(|| self.receive_decoded_frame())?;
             let retry_status = unsafe { ffi::avcodec_send_packet(self.codec_ctx, self.packet) };
             if retry_status >= 0 {
                 return Ok(retry_status);
@@ -260,7 +261,7 @@ impl super::backend::XbxVideoDecoderBackend for FfmpegSoftwareDecoder {
     ) -> Result<super::backend::XbxVideoDecoderBackendDecodeOutcome, XbxEngineRuntimeError> {
         if encoded_frame.payload.is_empty() {
             return Ok(super::backend::XbxVideoDecoderBackendDecodeOutcome {
-                frame: None,
+                frames: Vec::new(),
                 send_packet_status: None,
                 receive_frame_status: None,
             });
@@ -268,9 +269,10 @@ impl super::backend::XbxVideoDecoderBackend for FfmpegSoftwareDecoder {
 
         self.queue_packet(encoded_frame.payload.as_ref())?;
         let send_packet_status = self.send_packet()?;
-        let (frame, receive_frame_status) = self.receive_decoded_frame()?;
+        let (frames, receive_frame_status) =
+            receive_decoded_frames_until_eagain(|| self.receive_decoded_frame())?;
         Ok(super::backend::XbxVideoDecoderBackendDecodeOutcome {
-            frame,
+            frames,
             send_packet_status: Some(send_packet_status),
             receive_frame_status: Some(receive_frame_status),
         })

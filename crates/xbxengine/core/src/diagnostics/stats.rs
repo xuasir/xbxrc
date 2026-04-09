@@ -630,6 +630,41 @@ pub fn build_xbxengine_stats(
                     },
                 )
         }),
+        latest_remote_frame_capture_observation: runtime_stats.and_then(|stats| {
+            stats
+                .latest_remote_frame_capture_observation
+                .as_ref()
+                .map(
+                    |observation| xbxengine_protocol::XbxEngineRemoteFrameCaptureObservationDto {
+                        observation_id: observation.observation_id,
+                        trigger: observation.trigger.clone(),
+                        backend_name: observation.backend_name.clone(),
+                        frame_rtp_timestamp: observation.frame_rtp_timestamp,
+                        is_keyframe: observation.is_keyframe,
+                        width: observation.width,
+                        height: observation.height,
+                        payload_bytes: observation.payload_bytes,
+                        payload_fingerprint: observation.payload_fingerprint,
+                        payload_prefix_hex: observation.payload_prefix_hex.clone(),
+                        nal_types: observation.nal_types.clone(),
+                        nal_count: observation.nal_count,
+                        has_inband_sps: observation.has_inband_sps,
+                        has_inband_pps: observation.has_inband_pps,
+                        bootstrap_ready: observation.bootstrap_ready,
+                        bootstrap_reject_reason: observation.bootstrap_reject_reason.clone(),
+                        parameter_sets_changed: observation.parameter_sets_changed,
+                        config_changed: observation.config_changed,
+                        slice_headers_valid: observation.slice_headers_valid,
+                        send_packet_status: observation.send_packet_status,
+                        receive_frame_status: observation.receive_frame_status,
+                        status: observation.status,
+                        backend_no_output_streak: observation.backend_no_output_streak,
+                        input_frames_since_last_decoded: observation
+                            .input_frames_since_last_decoded,
+                        observed_at_ms: observation.observed_at_ms,
+                    },
+                )
+        }),
         video_decoder_hardware_failure_streak: runtime_stats
             .map(|stats| stats.video_decoder_hardware_failure_streak),
         latest_video_decoder_hardware_failure_time_ms: runtime_stats

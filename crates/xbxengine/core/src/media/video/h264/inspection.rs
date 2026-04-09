@@ -93,6 +93,55 @@ impl H264AccessUnitInspection {
         avcc_payload
     }
 
+    pub fn effective_parameter_sets(&self) -> Option<H264ParameterSets> {
+        if let Some(parameter_sets) = self.parameter_sets.clone() {
+            return Some(parameter_sets);
+        }
+        let state = self
+            .commit_state
+            .lock()
+            .expect("h264 commit state poisoned");
+        state
+            .committed_sps
+            .clone()
+            .zip(state.committed_pps.clone())
+            .map(|(sps, pps)| H264ParameterSets { sps, pps })
+    }
+
+    /// 为硬解 backend 构造 AVCC access unit。
+    /// 当关键帧/配置变化时，把当前生效的 SPS/PPS 一并前置，避免硬解器只拿到裸 VCL。
+    pub fn build_decoder_avcc_payload(
+        &self,
+        payload: &[u8],
+        prepend_parameter_sets: bool,
+    ) -> Vec<u8> {
+        let mut avcc_payload = Vec::with_capacity(payload.len() + self.nals.len() * 4 + 128);
+        if prepend_parameter_sets {
+            if let Some(parameter_sets) = self.effective_parameter_sets() {
+                push_avcc_nal(&mut avcc_payload, &parameter_sets.sps.raw);
+                push_avcc_nal(&mut avcc_payload, &parameter_sets.pps.raw);
+            }
+        }
+        for nal in &self.nals {
+            if nal.range.is_empty() {
+                continue;
+            }
+            if nal.unit_type == UnitType::AccessUnitDelimiter {
+                continue;
+            }
+            if prepend_parameter_sets
+                && matches!(
+                    nal.unit_type,
+                    UnitType::SeqParameterSet | UnitType::PicParameterSet
+                )
+            {
+                continue;
+            }
+            push_avcc_nal(&mut avcc_payload, &payload[nal.range.clone()]);
+        }
+        avcc_payload
+    }
+
     pub fn bootstrap_parameter_sets(&self) -> Option<&H264ParameterSets> {
         self.parameter_sets.as_ref()
     }
@@ -157,6 +206,15 @@ impl H264SeqParameterSet {
             && self.parsed.frame_cropping == other.parsed.frame_cropping
             && self.parsed.vui_parameters == other.parsed.vui_parameters
     }
+}
+
+fn push_avcc_nal(out: &mut Vec<u8>, nal_bytes: &[u8]) {
+    if nal_bytes.is_empty() {
+        return;
+    }
+    let len = nal_bytes.len() as u32;
+    out.extend_from_slice(&len.to_be_bytes());
+    out.extend_from_slice(nal_bytes);
 }
 
 impl H264PicParameterSet {
@@ -705,6 +763,35 @@ mod tests {
         assert!(!avcc.windows(2).any(|window| window == [0x09, 0xF0]));
         assert!(!avcc.windows(1).any(|window| window == [0x67]));
         assert!(!avcc.windows(1).any(|window| window == [0x68]));
+        assert!(avcc.windows(1).any(|window| window == [0x65]));
+    }
+
+    #[test]
+    fn decoder_avcc_payload_can_prepend_committed_parameter_sets() {
+        let inspector = make_inspector();
+        let sps = hex_literal::hex!(
+            "67 64 00 0A AC 72 84 44 26 84 00 00
+             03 00 04 00 00 03 00 CA 3C 48 96 11 80"
+        );
+        let pps = hex_literal::hex!("68 E8 43 8F 13 21 30");
+        let idr_only = hex_literal::hex!("00 00 00 01 65 88 81 00 05 4E 7F 87 DF");
+
+        inspector
+            .seed_committed_parameter_sets_if_absent(&sps, &pps)
+            .expect("seed should succeed");
+        let inspection = inspector
+            .inspect_access_unit(&idr_only)
+            .expect("inspection");
+
+        let avcc = inspection.build_decoder_avcc_payload(&idr_only, true);
+        let expected_sps_len = (sps.len() as u32).to_be_bytes();
+        let expected_pps_len = (pps.len() as u32).to_be_bytes();
+
+        assert!(avcc.starts_with(expected_sps_len.as_slice()));
+        assert!(avcc[4..].starts_with(&sps));
+        let pps_offset = 4 + sps.len();
+        assert!(avcc[pps_offset..].starts_with(expected_pps_len.as_slice()));
+        assert!(avcc[(pps_offset + 4)..].starts_with(&pps));
         assert!(avcc.windows(1).any(|window| window == [0x65]));
     }
 

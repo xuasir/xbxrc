@@ -22,7 +22,8 @@ use crate::{
 };
 
 use super::backend_ffmpeg::{
-    av_err_eagain, av_err_eof, error_from_message, ffmpeg_error, ffmpeg_init_once,
+    av_err_eagain, av_err_eof, av_err_invaliddata, error_from_message, ffmpeg_error,
+    ffmpeg_init_once, receive_decoded_frames_until_eagain, runtime_error_status_code,
 };
 
 pub(crate) fn try_create_ffmpeg_windows_d3d11va_backend(
@@ -211,7 +212,7 @@ impl FfmpegWindowsD3d11vaDecoder {
             return Ok(send_status);
         }
         if send_status == av_err_eagain() {
-            let _ = self.receive_decoded_frame()?;
+            let _ = receive_decoded_frames_until_eagain(|| self.receive_decoded_frame())?;
             let retry_status = unsafe { ffi::avcodec_send_packet(self.codec_ctx, self.packet) };
             if retry_status >= 0 {
                 return Ok(retry_status);
@@ -469,17 +470,67 @@ impl super::backend::XbxVideoDecoderBackend for FfmpegWindowsD3d11vaDecoder {
     ) -> Result<super::backend::XbxVideoDecoderBackendDecodeOutcome, XbxEngineRuntimeError> {
         if encoded_frame.payload.is_empty() {
             return Ok(super::backend::XbxVideoDecoderBackendDecodeOutcome {
-                frame: None,
+                frames: Vec::new(),
                 send_packet_status: None,
                 receive_frame_status: None,
             });
         }
 
-        self.queue_packet(encoded_frame.payload.as_ref())?;
+        let decoder_payload = encoded_frame.h264.build_decoder_avcc_payload(
+            encoded_frame.payload.as_ref(),
+            encoded_frame.is_keyframe
+                || encoded_frame.config_changed
+                || encoded_frame.h264.parameter_sets_changed,
+        );
+        if decoder_payload.is_empty() {
+            return Ok(super::backend::XbxVideoDecoderBackendDecodeOutcome {
+                frames: Vec::new(),
+                send_packet_status: None,
+                receive_frame_status: None,
+            });
+        }
+        let nal_labels = encoded_frame.h264.nal_type_labels().join("|");
+        let bootstrap_reject_reason = encoded_frame
+            .h264
+            .bootstrap_reject_reason
+            .map(|reason| reason.as_str())
+            .unwrap_or("none");
+
+        match self.decode_with_payload(decoder_payload.as_ref()) {
+            Ok(outcome) => Ok(outcome),
+            Err(error)
+                if runtime_error_status_code(&error) == Some(av_err_invaliddata())
+                    && decoder_payload.as_slice() != encoded_frame.payload.as_ref() =>
+            {
+                log::warn!(
+                    "[video][decode][ffmpeg-d3d11va] invalid AVCC payload, retry with Annex-B packet rtpTs={} keyframe={} bootstrapReady={} bootstrapReject={} nalCount={} nalTypes={} avccBytes={} annexbBytes={}",
+                    encoded_frame.rtp_timestamp,
+                    encoded_frame.is_keyframe,
+                    encoded_frame.h264.bootstrap_ready,
+                    bootstrap_reject_reason,
+                    encoded_frame.h264.nals.len(),
+                    nal_labels,
+                    decoder_payload.len(),
+                    encoded_frame.payload.len()
+                );
+                self.decode_with_payload(encoded_frame.payload.as_ref())
+            }
+            Err(error) => Err(error),
+        }
+    }
+}
+
+impl FfmpegWindowsD3d11vaDecoder {
+    fn decode_with_payload(
+        &mut self,
+        payload: &[u8],
+    ) -> Result<super::backend::XbxVideoDecoderBackendDecodeOutcome, XbxEngineRuntimeError> {
+        self.queue_packet(payload)?;
         let send_packet_status = self.send_packet()?;
-        let (frame, receive_frame_status) = self.receive_decoded_frame()?;
+        let (frames, receive_frame_status) =
+            receive_decoded_frames_until_eagain(|| self.receive_decoded_frame())?;
         Ok(super::backend::XbxVideoDecoderBackendDecodeOutcome {
-            frame,
+            frames,
             send_packet_status: Some(send_packet_status),
             receive_frame_status: Some(receive_frame_status),
         })
