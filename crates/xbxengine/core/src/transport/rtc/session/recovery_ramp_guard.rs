@@ -35,7 +35,7 @@ pub(crate) fn should_absorb_light_recovery_signal_during_ramp_up(
     if owner_state != VideoSchedulingOwnerState::StableServing
         || matches!(
             proposal.decision.action,
-            RecoveryAction::RequestReconnectCandidate | RecoveryAction::RequestDecoderReset
+            RecoveryAction::RequestReconnectCandidate
         )
     {
         return false;

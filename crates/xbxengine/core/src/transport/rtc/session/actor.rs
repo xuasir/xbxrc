@@ -1,6 +1,6 @@
 use std::collections::VecDeque;
 
-use crate::transport::rtc::facts::{TransportCommand, TransportFact};
+use crate::transport::rtc::facts::{SessionCommand, TransportFact};
 use crate::transport::rtc::projection::{
     BweProjection, ConnectionProjection, DiagnosticsProjection, MediaProjection,
     RecoveryProjection, TransportSnapshot,
@@ -10,7 +10,7 @@ use super::{clock::SessionClock, mailbox::SessionMailbox};
 
 /// policy hook 先保留最小接口，当前默认 no-op。
 pub trait SessionPolicyHook {
-    fn on_snapshot(&mut self, _snapshot: &TransportSnapshot) -> Vec<TransportCommand> {
+    fn on_snapshot(&mut self, _snapshot: &TransportSnapshot) -> Vec<SessionCommand> {
         Vec::new()
     }
 }
@@ -36,7 +36,7 @@ where
     recovery: RecoveryProjection,
     bwe: BweProjection,
     diagnostics: DiagnosticsProjection,
-    pending_commands: VecDeque<TransportCommand>,
+    pending_commands: VecDeque<SessionCommand>,
 }
 
 impl<C, P> SessionActor<C, P>
@@ -76,7 +76,7 @@ where
         processed
     }
 
-    pub fn pop_next_command(&mut self) -> Option<TransportCommand> {
+    pub fn pop_next_command(&mut self) -> Option<SessionCommand> {
         self.pending_commands.pop_front()
     }
 

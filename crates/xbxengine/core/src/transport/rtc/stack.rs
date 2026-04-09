@@ -383,17 +383,8 @@ impl XbxMediaStackPort for XbxActiveMediaStack {
     }
 
     fn request_decoder_reset(&mut self) -> Result<(), XbxEngineRuntimeError> {
-        let result = self
-            .transport_bridge()
-            .request_local_decoder_reset("stack.manualRequest".to_string());
-        self.record_transport_command_result(
-            TransportCommand::RequestDecoderReset {
-                reason: "stack.manualRequest".to_string(),
-                observation_id: 0,
-            },
-            &result,
-        );
-        result
+        self.transport_bridge()
+            .request_local_decoder_reset("stack.manualRequest".to_string())
     }
 
     fn update_host_video_timing(

@@ -69,7 +69,8 @@ pub(crate) fn resolve_runtime_reconnect_reason_domain(
     action: RecoveryAction,
 ) -> XbxEngineRecoveryReasonDomain {
     if action != RecoveryAction::RequestReconnectCandidate {
-        return reason.reconnect_domain();
+        // 非 reconnect 动作属于本地维护域，不再借道连接域语义。
+        return XbxEngineRecoveryReasonDomain::Local;
     }
     match reason {
         VideoEscalationReason::LifecycleRecovering
@@ -86,5 +87,40 @@ pub(crate) fn resolve_runtime_reconnect_reason_domain(
         | VideoEscalationReason::DecoderBackendFailure
         | VideoEscalationReason::AdapterIdleTimeout
         | VideoEscalationReason::AdapterThinStream => XbxEngineRecoveryReasonDomain::Local,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::resolve_runtime_reconnect_reason_domain;
+    use crate::transport::rtc::recovery::escalation::{RecoveryAction, VideoEscalationReason};
+
+    #[test]
+    fn non_reconnect_actions_always_resolve_to_local_domain() {
+        assert_eq!(
+            resolve_runtime_reconnect_reason_domain(
+                VideoEscalationReason::TransportExpiredDeadline,
+                RecoveryAction::RequestDecoderReset,
+            ),
+            crate::XbxEngineRecoveryReasonDomain::Local
+        );
+        assert_eq!(
+            resolve_runtime_reconnect_reason_domain(
+                VideoEscalationReason::TransportSevereDeadline,
+                RecoveryAction::RequestKeyframe,
+            ),
+            crate::XbxEngineRecoveryReasonDomain::Local
+        );
+    }
+
+    #[test]
+    fn reconnect_candidate_keeps_transport_domain_for_deadline_paths() {
+        assert_eq!(
+            resolve_runtime_reconnect_reason_domain(
+                VideoEscalationReason::TransportExpiredDeadline,
+                RecoveryAction::RequestReconnectCandidate,
+            ),
+            crate::XbxEngineRecoveryReasonDomain::ConnectivityTransport
+        );
     }
 }

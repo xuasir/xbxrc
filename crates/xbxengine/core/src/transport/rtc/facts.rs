@@ -138,6 +138,12 @@ pub enum TransportCommand {
     },
 }
 
+#[derive(Clone, Debug, PartialEq)]
+pub enum SessionCommand {
+    Transport(TransportCommand),
+    LocalDecoderReset { reason: String, observation_id: u64 },
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum CommandResultStatus {
     Succeeded,

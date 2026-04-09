@@ -689,15 +689,11 @@ impl RecoveryCoordinator {
                 escalation_decision.action,
             );
         }
-        let action = if startup_fast_reset
+        let action = escalation_decision.action;
+        if startup_fast_reset
             && !transport_await_first_frame_priority_active
-            && escalation_decision.action == RecoveryAction::RequestKeyframe
+            && action == RecoveryAction::RequestKeyframe
         {
-            RecoveryAction::RequestKeyframeAndDecoderReset
-        } else {
-            escalation_decision.action
-        };
-        if startup_fast_reset && action == RecoveryAction::RequestKeyframeAndDecoderReset {
             self.startup_probe.arm(Instant::now());
         }
         VideoEscalationDecision {
@@ -1174,8 +1170,7 @@ impl RecoveryCoordinator {
             | RecoveryAction::CooldownSuppressed => action,
             RecoveryAction::CoalescedDecoderResetInFlight
             | RecoveryAction::WaitForDecoderResetBurst
-            | RecoveryAction::StartupGraceSuppressed
-            | RecoveryAction::StartupLowQualityRetry => RecoveryAction::WaitForBurst,
+            | RecoveryAction::StartupGraceSuppressed => RecoveryAction::WaitForBurst,
             _ => {
                 if Self::has_recent_transport_await_keyframe_attempt(
                     runtime_stats,
@@ -2142,7 +2137,7 @@ impl RecoveryCoordinator {
 
         Some(
             self.escalation_controller
-                .suppressed(RecoveryAction::StartupLowQualityRetry),
+                .suppressed(RecoveryAction::RequestKeyframe),
         )
     }
 

@@ -339,7 +339,9 @@ fn repeated_hardware_backend_no_output_falls_back_to_software_decoder() {
         30,
         Box::new(decoder),
         Box::new(|| {
-            panic!("decoder reset factory should not be used in backend no-output soft fallback test");
+            panic!(
+                "decoder reset factory should not be used in backend no-output soft fallback test"
+            );
         }),
         software_decoder_factory,
     );
@@ -1042,6 +1044,44 @@ fn enqueue_decoded_frame_returns_dropped_oldest_frame() {
     assert_eq!(decision.action, "drop");
     assert_eq!(decision.detail, "outputQueueOverflow");
     assert_eq!(decision.frame_seq, Some(1));
+}
+
+#[test]
+fn enqueue_decoded_frame_drops_stale_frame_before_queueing() {
+    let decoder = SpyHardwareDecoder;
+    let mut state = XbxVideoDecodeState::new_for_test(20, 30, Box::new(decoder));
+
+    let dropped = state.enqueue_decoded_frame(DecodedFrame {
+        pts: Instant::now() - Duration::from_millis(20),
+        rtp_timestamp: 7,
+        is_keyframe: false,
+        budget: crate::media::video::ingress::budget::FrameBudgetContext::default(),
+        frame_recovery_disposition: FrameRecoveryDisposition::Repairing,
+        frame_unrecoverable_reason: None,
+        surface: XbxRenderFrame {
+            width: 2,
+            height: 2,
+            frame_seq: 7,
+            rendered_at_ms: 7.0,
+            rtp_timestamp: Some(7),
+            is_keyframe: false,
+            frame_recovery_disposition: Some("repairing".to_string()),
+            frame_unrecoverable_reason: None,
+            pixel_data: XbxEngineRenderPixelData::Rgba {
+                bytes: Arc::<[u8]>::from([7u8; 16]),
+            },
+        },
+    });
+
+    assert_eq!(dropped.map(|frame| frame.surface.frame_seq), Some(7));
+    assert_eq!(state.decoded_frame_queue_len(), 0);
+    assert_eq!(state.decoded_frame_drop_count(), 1);
+    let decision = state
+        .latest_decode_candidate_decision()
+        .expect("candidate decision");
+    assert_eq!(decision.action, "drop");
+    assert_eq!(decision.detail, "staleAfterDecode");
+    assert_eq!(decision.frame_seq, Some(7));
 }
 
 #[test]

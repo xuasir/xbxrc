@@ -10,7 +10,7 @@ use crate::transport::rtc::recovery::runtime_state::unix_now_ms;
 use crate::XbxEngineMediaRuntimeStats;
 
 pub(crate) const HARD_STALL_DECODER_RESET_MS: f64 = 1_200.0;
-pub(crate) const HARD_STALL_RECONNECT_MS: f64 = 3_000.0;
+pub(crate) const HARD_STALL_SAMPLE_AGE_FALLBACK_MS: f64 = 3_000.0;
 pub(crate) const HARD_STALL_MIN_RESET_SPACING_MS: f64 = 1_200.0;
 
 struct HardStallSnapshot {
@@ -79,7 +79,7 @@ fn read_hard_stall_snapshot(
         let present_age_ms = stats
             .latest_video_host_present_time_ms
             .map(|at_ms| (now_ms - at_ms).max(0.0))
-            .unwrap_or(HARD_STALL_RECONNECT_MS);
+            .unwrap_or(HARD_STALL_SAMPLE_AGE_FALLBACK_MS);
         let effective_present_fps = if stats.video_renderer_stalled.unwrap_or(false)
             || present_age_ms >= HARD_STALL_DECODER_RESET_MS
         {
@@ -94,7 +94,7 @@ fn read_hard_stall_snapshot(
             packet_age_ms: stats
                 .latest_video_packet_arrival_time_ms
                 .map(|at_ms| (now_ms - at_ms).max(0.0))
-                .unwrap_or(HARD_STALL_RECONNECT_MS),
+                .unwrap_or(HARD_STALL_SAMPLE_AGE_FALLBACK_MS),
             effective_present_fps,
             direct_gaming_bitrate_band: stats.direct_gaming_bitrate_band.clone(),
             since_last_decoder_reset_ms: stats

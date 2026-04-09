@@ -9,13 +9,13 @@ use crate::api::runtime::XbxEngineRuntimeConfig;
 use crate::runtime_stats_sink::RuntimeStatsSink;
 use crate::transport::rtc::bwe::evaluator::RtcBweEvaluation;
 use crate::transport::rtc::bwe::policy::resolve_target_remb_kbps;
-use crate::transport::rtc::facts::{ConnectionLifecycleStateFact, TransportCommand};
+use crate::transport::rtc::facts::{ConnectionLifecycleStateFact, SessionCommand};
 use crate::transport::rtc::policy::bwe::BwePolicyProposal;
 use crate::transport::rtc::policy::display_supply::SchedulingDemandSignal;
 use crate::transport::rtc::policy::planner::PlannedTransportCommand;
 use crate::transport::rtc::policy::recovery::RecoveryPolicyProposal;
 use crate::transport::rtc::policy::scheduling::{
-    map_planned_command_to_transport_commands, SchedulingPolicyEngine, SchedulingPolicyInput,
+    map_planned_command_to_session_commands, SchedulingPolicyEngine, SchedulingPolicyInput,
     TwccWarmupState,
 };
 use crate::transport::rtc::policy::video_scheduling_owner::{
@@ -238,7 +238,7 @@ impl Default for RtcSessionPolicy {
 }
 
 impl SessionPolicyHook for RtcSessionPolicy {
-    fn on_snapshot(&mut self, snapshot: &TransportSnapshot) -> Vec<TransportCommand> {
+    fn on_snapshot(&mut self, snapshot: &TransportSnapshot) -> Vec<SessionCommand> {
         self.refresh_escalation_profile();
         self.sync_recovery_epoch();
         self.refresh_successful_media_edge();
@@ -1531,8 +1531,8 @@ impl RtcSessionPolicy {
         &mut self,
         command: PlannedTransportCommand,
         bwe_observation_id: u64,
-    ) -> Vec<TransportCommand> {
-        map_planned_command_to_transport_commands(command, bwe_observation_id)
+    ) -> Vec<SessionCommand> {
+        map_planned_command_to_session_commands(command, bwe_observation_id)
     }
 
     fn build_scheduling_demand_signal(&self) -> SchedulingDemandSignal {
@@ -1847,7 +1847,6 @@ impl RtcSessionPolicy {
             proposal.decision.action,
             RecoveryAction::RequestDecoderReset
                 | RecoveryAction::RequestReconnectCandidate
-                | RecoveryAction::RequestKeyframeAndDecoderReset
                 | RecoveryAction::CoalescedDecoderResetInFlight
                 | RecoveryAction::WaitForDecoderResetBurst
         )
@@ -1890,9 +1889,7 @@ impl RtcSessionPolicy {
     fn is_active_recovery_action(action: RecoveryAction) -> bool {
         matches!(
             action,
-            RecoveryAction::RequestDecoderReset
-                | RecoveryAction::RequestReconnectCandidate
-                | RecoveryAction::RequestKeyframeAndDecoderReset
+            RecoveryAction::RequestDecoderReset | RecoveryAction::RequestReconnectCandidate
         )
     }
 
@@ -1905,7 +1902,6 @@ impl RtcSessionPolicy {
                 | RecoveryAction::CoalescedKeyframeInFlight
                 | RecoveryAction::CoalescedDecoderResetInFlight
                 | RecoveryAction::StartupGraceSuppressed
-                | RecoveryAction::StartupLowQualityRetry
         )
     }
 

@@ -13,8 +13,6 @@ pub enum RecoveryAction {
     RequestKeyframe,
     RequestDecoderReset,
     RequestReconnectCandidate,
-    RequestKeyframeAndDecoderReset,
-    StartupLowQualityRetry,
 }
 
 impl RecoveryAction {
@@ -29,8 +27,6 @@ impl RecoveryAction {
             Self::RequestKeyframe => "requestKeyframe",
             Self::RequestDecoderReset => "requestDecoderReset",
             Self::RequestReconnectCandidate => "requestReconnectCandidate",
-            Self::RequestKeyframeAndDecoderReset => "requestKeyframe+decoderReset",
-            Self::StartupLowQualityRetry => "requestKeyframe+decoderReset(startupLowQualityRetry)",
         }
     }
 }
@@ -401,18 +397,12 @@ impl VideoEscalationController {
                 budget_kind: Some(RecoveryBudgetKind::Reconnect),
                 budget_recorded_on_execution: true,
             },
-            RecoveryAction::RequestKeyframeAndDecoderReset => RecoveryActionContract {
-                owner: Some(RecoveryActionOwner::DecoderReset),
-                budget_kind: Some(RecoveryBudgetKind::DecoderReset),
-                budget_recorded_on_execution: true,
-            },
             RecoveryAction::WaitForBurst
             | RecoveryAction::WaitForDecoderResetBurst
             | RecoveryAction::CooldownSuppressed
             | RecoveryAction::CoalescedKeyframeInFlight
             | RecoveryAction::CoalescedDecoderResetInFlight
-            | RecoveryAction::StartupGraceSuppressed
-            | RecoveryAction::StartupLowQualityRetry => RecoveryActionContract {
+            | RecoveryAction::StartupGraceSuppressed => RecoveryActionContract {
                 owner: None,
                 budget_kind: None,
                 budget_recorded_on_execution: false,
@@ -426,25 +416,14 @@ impl VideoEscalationController {
     ) -> bool {
         match action {
             RecoveryAction::RequestReconnectCandidate => true,
-            RecoveryAction::RequestDecoderReset
-            | RecoveryAction::RequestKeyframeAndDecoderReset => !matches!(
-                reason,
-                Some(
-                    VideoEscalationReason::DisplaySupplyCritical
-                        | VideoEscalationReason::AdapterIdleTimeout
-                        | VideoEscalationReason::AdapterThinStream
-                        | VideoEscalationReason::Reconfigure
-                        | VideoEscalationReason::DecoderBackendFailure
-                )
-            ),
+            RecoveryAction::RequestDecoderReset => false,
             RecoveryAction::RequestKeyframe
             | RecoveryAction::WaitForBurst
             | RecoveryAction::WaitForDecoderResetBurst
             | RecoveryAction::CooldownSuppressed
             | RecoveryAction::CoalescedKeyframeInFlight
             | RecoveryAction::CoalescedDecoderResetInFlight
-            | RecoveryAction::StartupGraceSuppressed
-            | RecoveryAction::StartupLowQualityRetry => false,
+            | RecoveryAction::StartupGraceSuppressed => false,
         }
     }
 
@@ -455,16 +434,12 @@ impl VideoEscalationController {
             }
             RecoveryAction::RequestDecoderReset => {}
             RecoveryAction::RequestReconnectCandidate => {}
-            RecoveryAction::RequestKeyframeAndDecoderReset => {
-                self.keyframe_budget_reservation_active = true;
-            }
             RecoveryAction::WaitForBurst
             | RecoveryAction::WaitForDecoderResetBurst
             | RecoveryAction::CooldownSuppressed
             | RecoveryAction::CoalescedKeyframeInFlight
             | RecoveryAction::CoalescedDecoderResetInFlight
-            | RecoveryAction::StartupGraceSuppressed
-            | RecoveryAction::StartupLowQualityRetry => {}
+            | RecoveryAction::StartupGraceSuppressed => {}
         }
     }
 
@@ -858,8 +833,7 @@ impl VideoEscalationController {
                 self.reconnect_candidate_signals =
                     self.reconnect_candidate_signals.saturating_add(1);
                 self.last_severe_deadline_at = Some(now);
-                if self.reconnect_candidate_signals
-                    >= CONNECTIVITY_DEADLINE_RECONNECT_HIT_THRESHOLD
+                if self.reconnect_candidate_signals >= CONNECTIVITY_DEADLINE_RECONNECT_HIT_THRESHOLD
                 {
                     self.clear_keyframe_epoch();
                     self.resolve_reconnect_or_decoder_reset_fallback(now, allow_reconnect)

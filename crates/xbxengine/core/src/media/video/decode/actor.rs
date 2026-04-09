@@ -609,33 +609,35 @@ fn sync_decode_runtime_stats(
             });
         stats.latest_remote_frame_capture_observation = decode_state
             .latest_remote_frame_capture_observation()
-            .map(|observation| crate::XbxEngineRemoteFrameCaptureObservation {
-                observation_id: observation.observation_id,
-                trigger: observation.trigger.to_string(),
-                backend_name: observation.backend_name.clone(),
-                frame_rtp_timestamp: observation.frame_rtp_timestamp,
-                is_keyframe: observation.is_keyframe,
-                width: observation.width,
-                height: observation.height,
-                payload_bytes: observation.payload_bytes,
-                payload_fingerprint: observation.payload_fingerprint,
-                payload_prefix_hex: observation.payload_prefix_hex.clone(),
-                nal_types: observation.nal_types.clone(),
-                nal_count: observation.nal_count,
-                has_inband_sps: observation.has_inband_sps,
-                has_inband_pps: observation.has_inband_pps,
-                bootstrap_ready: observation.bootstrap_ready,
-                bootstrap_reject_reason: observation.bootstrap_reject_reason.clone(),
-                parameter_sets_changed: observation.parameter_sets_changed,
-                config_changed: observation.config_changed,
-                slice_headers_valid: observation.slice_headers_valid,
-                send_packet_status: observation.send_packet_status,
-                receive_frame_status: observation.receive_frame_status,
-                status: observation.status,
-                backend_no_output_streak: observation.backend_no_output_streak,
-                input_frames_since_last_decoded: observation.input_frames_since_last_decoded,
-                observed_at_ms: observation.observed_at_ms,
-            });
+            .map(
+                |observation| crate::XbxEngineRemoteFrameCaptureObservation {
+                    observation_id: observation.observation_id,
+                    trigger: observation.trigger.to_string(),
+                    backend_name: observation.backend_name.clone(),
+                    frame_rtp_timestamp: observation.frame_rtp_timestamp,
+                    is_keyframe: observation.is_keyframe,
+                    width: observation.width,
+                    height: observation.height,
+                    payload_bytes: observation.payload_bytes,
+                    payload_fingerprint: observation.payload_fingerprint,
+                    payload_prefix_hex: observation.payload_prefix_hex.clone(),
+                    nal_types: observation.nal_types.clone(),
+                    nal_count: observation.nal_count,
+                    has_inband_sps: observation.has_inband_sps,
+                    has_inband_pps: observation.has_inband_pps,
+                    bootstrap_ready: observation.bootstrap_ready,
+                    bootstrap_reject_reason: observation.bootstrap_reject_reason.clone(),
+                    parameter_sets_changed: observation.parameter_sets_changed,
+                    config_changed: observation.config_changed,
+                    slice_headers_valid: observation.slice_headers_valid,
+                    send_packet_status: observation.send_packet_status,
+                    receive_frame_status: observation.receive_frame_status,
+                    status: observation.status,
+                    backend_no_output_streak: observation.backend_no_output_streak,
+                    input_frames_since_last_decoded: observation.input_frames_since_last_decoded,
+                    observed_at_ms: observation.observed_at_ms,
+                },
+            );
         stats.video_decoder_stalled = Some(video_decoder_stalled);
     });
 }

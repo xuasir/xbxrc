@@ -122,6 +122,7 @@ where
 
         match reconnect_result {
             Ok(()) => {
+                self.request_keyframe_after_reconnect_settled(reconnect_started_at_ms);
                 self.state = XbxEngineRuntimeState::Running;
                 Ok(())
             }
@@ -159,6 +160,22 @@ where
         self.health = crate::XbxEngineRuntimeHealth::default();
         self.state = XbxEngineRuntimeState::Stopped;
         self.emit_transport_state(XbxEngineTransportStateDto::Closed);
+    }
+
+    fn request_keyframe_after_reconnect_settled(&mut self, now_ms: f64) {
+        if let Err(error) = self.media_backend.request_video_keyframe() {
+            if is_control_channel_not_ready_error(&error) {
+                return;
+            }
+            self.emit_error("requestReconnectSettledKeyframeFailed", error.to_string());
+            return;
+        }
+        self.health.mark_keyframe_requested(now_ms);
+        self.snapshot.recovery_keyframe_request_count = self
+            .snapshot
+            .recovery_keyframe_request_count
+            .saturating_add(1);
+        self.snapshot.last_recovery_reason = Some("reconnectSettled:keyframeRequested".to_string());
     }
 
     pub fn tick(&mut self) {

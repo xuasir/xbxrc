@@ -3,7 +3,9 @@ use super::{NackSchedulerConfig, RtcVideoFrameSource};
 use crate::api::runtime::XbxEngineRuntimeConfig;
 use crate::media::video::test_fixtures::NoopRtcpPort;
 use crate::runtime_stats_sink::RuntimeStatsSink;
-use crate::transport::rtc::facts::{ConnectionLifecycleStateFact, TransportCommand};
+use crate::transport::rtc::facts::{
+    ConnectionLifecycleStateFact, SessionCommand, TransportCommand,
+};
 use crate::transport::rtc::projection::{
     BweProjection, ConnectionProjection, DiagnosticsProjection, MediaProjection,
     RecoveryProjection, TransportSnapshot,
@@ -261,7 +263,14 @@ impl LocalIngressReplayFixture {
             self.runtime_stats(),
         );
         let snapshot = self.build_connected_snapshot(1, now_ms, 240, "none");
-        policy.on_snapshot(&snapshot)
+        policy
+            .on_snapshot(&snapshot)
+            .into_iter()
+            .filter_map(|command| match command {
+                SessionCommand::Transport(command) => Some(command),
+                SessionCommand::LocalDecoderReset { .. } => None,
+            })
+            .collect()
     }
 
     pub(crate) fn build_connected_snapshot(

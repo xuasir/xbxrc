@@ -614,7 +614,8 @@ pub(super) fn record_runtime_trace_observations(
     if let Some(observation) = stats.latest_remote_frame_capture_observation.as_ref() {
         if observation_state.remote_frame_capture_observation_id != Some(observation.observation_id)
         {
-            observation_state.remote_frame_capture_observation_id = Some(observation.observation_id);
+            observation_state.remote_frame_capture_observation_id =
+                Some(observation.observation_id);
             runtime_trace.record_event(
                 "xbxengine",
                 "remoteFrameCaptured",

@@ -29,6 +29,9 @@ const RENDER_QUEUE_RETRY_TIMEOUT_MS: u64 = 4;
 const HOST_RELEASE_GATE_ALIGNMENT_SLACK_MS: f64 = 1.5;
 const HOST_RELEASE_GATE_STALE_GRACE_MULTIPLIER: f64 = 2.5;
 const HOST_PRIMING_REUSE_WAIT_RATIO: u64 = 2;
+const RENDER_QUEUE_STALE_SLACK_DELTA_MS: u64 = 4;
+const RENDER_QUEUE_STALE_SLACK_REFERENCE_MS: u64 = 8;
+const RENDER_QUEUE_STALE_SLACK_KEYFRAME_MS: u64 = 12;
 
 impl PacerActorHandle {
     pub fn new(
@@ -361,17 +364,75 @@ fn enqueue_render_frame(
     frame_drop_observation_id: &mut u64,
 ) {
     if render_queue.len() >= RENDER_QUEUE_MAX_FRAMES {
+        let now = Instant::now();
+        if let Some(existing_frame) = render_queue.front() {
+            if !should_replace_render_queue_head(existing_frame, &frame, now) {
+                record_pacer_frame_drop(
+                    runtime_stats,
+                    frame_drop_observation_id,
+                    "rendererQueueRejectLowerValue",
+                    frame,
+                    render_queue.len(),
+                );
+                return;
+            }
+        }
         if let Some(replaced_frame) = render_queue.pop_front() {
+            let detail = if render_frame_is_stale(&replaced_frame, now) {
+                "rendererQueueReplaceStale"
+            } else {
+                "rendererQueueOverflow"
+            };
             record_pacer_frame_drop(
                 runtime_stats,
                 frame_drop_observation_id,
-                "rendererQueueOverflow",
+                detail,
                 replaced_frame,
                 render_queue.len(),
             );
         }
     }
     render_queue.push_back(frame);
+}
+
+fn should_replace_render_queue_head(
+    existing_frame: &DecodedFrame,
+    incoming_frame: &DecodedFrame,
+    now: Instant,
+) -> bool {
+    if render_frame_is_stale(existing_frame, now) {
+        return true;
+    }
+    let existing_priority = render_frame_priority(existing_frame);
+    let incoming_priority = render_frame_priority(incoming_frame);
+    if incoming_priority > existing_priority {
+        return true;
+    }
+    if incoming_priority < existing_priority {
+        return false;
+    }
+    incoming_frame.pts >= existing_frame.pts
+}
+
+fn render_frame_priority(frame: &DecodedFrame) -> u8 {
+    match frame.budget.frame_importance() {
+        "keyframe" => 3,
+        "reference" => 2,
+        _ => 1,
+    }
+}
+
+fn render_frame_is_stale(frame: &DecodedFrame, now: Instant) -> bool {
+    now > frame.pts + render_frame_stale_slack(frame)
+}
+
+fn render_frame_stale_slack(frame: &DecodedFrame) -> Duration {
+    let millis = match frame.budget.frame_importance() {
+        "keyframe" => RENDER_QUEUE_STALE_SLACK_KEYFRAME_MS,
+        "reference" => RENDER_QUEUE_STALE_SLACK_REFERENCE_MS,
+        _ => RENDER_QUEUE_STALE_SLACK_DELTA_MS,
+    };
+    Duration::from_millis(millis)
 }
 
 #[derive(Debug)]

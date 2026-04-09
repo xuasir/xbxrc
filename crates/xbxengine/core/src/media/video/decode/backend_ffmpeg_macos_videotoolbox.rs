@@ -56,7 +56,10 @@ impl FfmpegMacOsVideoToolboxDecoder {
             (*codec_ctx).thread_count = 1;
             (*codec_ctx).thread_type = 0;
             // RTP 90kHz 时间基，尽量给硬解路径稳定的 pts/dts 语义。
-            (*codec_ctx).pkt_timebase = ffi::AVRational { num: 1, den: 90_000 };
+            (*codec_ctx).pkt_timebase = ffi::AVRational {
+                num: 1,
+                den: 90_000,
+            };
         }
 
         let packet = unsafe { ffi::av_packet_alloc() };

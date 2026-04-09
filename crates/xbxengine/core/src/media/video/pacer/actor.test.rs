@@ -4,6 +4,7 @@ use std::time::{Duration, Instant};
 
 use super::{
     drive_ready_frames_with_submit, flush_pending_render_output_with_submit, next_wait_duration,
+    render_frame_is_stale, render_frame_priority, should_replace_render_queue_head,
     resolve_cadence_sleep_guard_override_ms, resolve_host_release_wait_duration,
     HostCadencePhaseHint, HostPacingContext, PendingRenderSubmitResult,
     PendingRenderSubmitResultWithFrame,
@@ -41,6 +42,22 @@ fn make_decoded_frame(frame_seq: u64) -> DecodedFrame {
             },
         },
     }
+}
+
+fn make_keyframe_decoded_frame(frame_seq: u64) -> DecodedFrame {
+    let mut frame = make_decoded_frame(frame_seq);
+    frame.budget = crate::media::video::ingress::budget::FrameBudgetContext::for_transport(
+        crate::media::video::types::FrameValue::new(true, false, 64 * 1024),
+        false,
+        Some(30.0),
+        Some(1_000.0),
+        Some(1_050.0),
+        false,
+        crate::media::video::ingress::budget::FrameBudgetWindowSource::Transport,
+    );
+    frame.is_keyframe = true;
+    frame.surface.is_keyframe = true;
+    frame
 }
 
 #[test]
@@ -88,6 +105,31 @@ fn pending_render_output_reports_disconnect_without_silently_requeueing() {
 
     assert!(matches!(result, PendingRenderSubmitResult::Disconnected(_)));
     assert!(render_queue.is_empty());
+}
+
+#[test]
+fn render_queue_keeps_existing_higher_priority_frame() {
+    let existing = make_keyframe_decoded_frame(101);
+    let incoming = make_decoded_frame(102);
+    assert!(!should_replace_render_queue_head(
+        &existing,
+        &incoming,
+        Instant::now()
+    ));
+    assert!(render_frame_priority(&existing) > render_frame_priority(&incoming));
+}
+
+#[test]
+fn render_queue_replaces_existing_stale_frame_even_if_priority_is_lower() {
+    let mut existing = make_keyframe_decoded_frame(201);
+    existing.pts = Instant::now() - Duration::from_millis(20);
+    let incoming = make_decoded_frame(202);
+    assert!(render_frame_is_stale(&existing, Instant::now()));
+    assert!(should_replace_render_queue_head(
+        &existing,
+        &incoming,
+        Instant::now()
+    ));
 }
 
 #[test]

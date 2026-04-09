@@ -975,10 +975,13 @@ fn action_contract_defines_owner_and_budget_rules() {
     assert!(!decoder_reset_coalesced.budget_recorded_on_execution);
     assert!(decoder_reset_coalesced.budget_kind.is_none());
 
-    let combined =
-        VideoEscalationController::action_contract(RecoveryAction::RequestKeyframeAndDecoderReset);
-    assert!(combined.budget_recorded_on_execution);
-    assert_eq!(combined.budget_kind, Some(RecoveryBudgetKind::DecoderReset));
+    let decoder_reset =
+        VideoEscalationController::action_contract(RecoveryAction::RequestDecoderReset);
+    assert!(decoder_reset.budget_recorded_on_execution);
+    assert_eq!(
+        decoder_reset.budget_kind,
+        Some(RecoveryBudgetKind::DecoderReset)
+    );
 }
 
 #[test]
@@ -1055,7 +1058,7 @@ fn epoch_advance_rule_is_reason_aware_for_local_decoder_reset_paths() {
         )
     );
     assert!(
-        VideoEscalationController::action_success_advances_transport_recovery_epoch(
+        !VideoEscalationController::action_success_advances_transport_recovery_epoch(
             RecoveryAction::RequestDecoderReset,
             Some(VideoEscalationReason::TransportAwaitRecoveryKeyframe),
         )
@@ -1064,12 +1067,6 @@ fn epoch_advance_rule_is_reason_aware_for_local_decoder_reset_paths() {
         !VideoEscalationController::action_success_advances_transport_recovery_epoch(
             RecoveryAction::RequestDecoderReset,
             Some(VideoEscalationReason::AdapterThinStream),
-        )
-    );
-    assert!(
-        !VideoEscalationController::action_success_advances_transport_recovery_epoch(
-            RecoveryAction::RequestKeyframeAndDecoderReset,
-            Some(VideoEscalationReason::DecoderBackendFailure),
         )
     );
     assert!(

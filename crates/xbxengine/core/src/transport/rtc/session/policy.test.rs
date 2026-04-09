@@ -2,7 +2,9 @@ use super::RtcSessionPolicy;
 use crate::api::backend::{XbxEngineMediaRuntimeStats, XbxEngineVideoTwccObservation};
 use crate::api::runtime::XbxEngineRuntimeConfig;
 use crate::runtime_stats_sink::RuntimeStatsSink;
-use crate::transport::rtc::facts::{ConnectionLifecycleStateFact, TransportCommand};
+use crate::transport::rtc::facts::{
+    ConnectionLifecycleStateFact, SessionCommand, TransportCommand,
+};
 use crate::transport::rtc::policy::display_supply::SchedulingDemandSignal;
 use crate::transport::rtc::policy::recovery::resolve_runtime_reconnect_reason_domain;
 use crate::transport::rtc::projection::{
@@ -14,6 +16,16 @@ use crate::transport::rtc::session::actor::SessionPolicyHook;
 use std::sync::{Arc, Mutex};
 use std::thread::sleep;
 use std::time::{Duration, Instant};
+
+fn transport_commands(commands: Vec<SessionCommand>) -> Vec<TransportCommand> {
+    commands
+        .into_iter()
+        .filter_map(|command| match command {
+            SessionCommand::Transport(command) => Some(command),
+            SessionCommand::LocalDecoderReset { .. } => None,
+        })
+        .collect()
+}
 
 struct RecoveryIntegrationHarness {
     runtime_stats: Arc<Mutex<XbxEngineMediaRuntimeStats>>,
@@ -92,7 +104,14 @@ impl RecoveryIntegrationHarness {
             DiagnosticsProjection::default(),
         );
         self.next_version = self.next_version.saturating_add(1);
-        self.policy.on_snapshot(&snapshot)
+        self.policy
+            .on_snapshot(&snapshot)
+            .into_iter()
+            .filter_map(|command| match command {
+                SessionCommand::Transport(command) => Some(command),
+                SessionCommand::LocalDecoderReset { .. } => None,
+            })
+            .collect()
     }
 
     fn with_stats<R>(&self, reader: impl FnOnce(&XbxEngineMediaRuntimeStats) -> R) -> R {
@@ -199,7 +218,7 @@ fn reconnect_command_is_throttled_and_re_emitted_during_continuous_recovering() 
         BweProjection::default(),
         DiagnosticsProjection::default(),
     );
-    let first_commands = policy.on_snapshot(&first);
+    let first_commands = transport_commands(policy.on_snapshot(&first));
     assert!(first_commands
         .iter()
         .any(|command| { matches!(command, TransportCommand::RequestReconnectCandidate { .. }) }));
@@ -319,7 +338,7 @@ fn disconnected_surface_emits_lifecycle_reconnect_without_waiting_no_progress_ti
         BweProjection::default(),
         DiagnosticsProjection::default(),
     );
-    let first_commands = policy.on_snapshot(&first);
+    let first_commands = transport_commands(policy.on_snapshot(&first));
     assert!(first_commands
         .iter()
         .any(|command| { matches!(command, TransportCommand::RequestReconnectCandidate { .. }) }));
@@ -344,7 +363,7 @@ fn fallback_transport_await_recovery_keyframe_is_not_blocked_before_coordinator(
         "transportAwaitRecoveryKeyframe",
         100.0,
     );
-    let commands = policy.on_snapshot(&snapshot);
+    let commands = transport_commands(policy.on_snapshot(&snapshot));
     assert!(commands
         .iter()
         .any(|command| matches!(command, TransportCommand::RequestKeyframe { .. })));
@@ -377,7 +396,7 @@ fn pre_first_frame_bootstrap_missing_sps_emits_local_keyframe_probe() {
         "bootstrapMissingSps",
         100.0,
     );
-    let commands = policy.on_snapshot(&snapshot);
+    let commands = transport_commands(policy.on_snapshot(&snapshot));
     assert!(commands.iter().any(
         |command| matches!(command, TransportCommand::RequestKeyframe { reason, .. } if reason == "bootstrapMissingSps")
     ));
@@ -439,7 +458,7 @@ fn pre_first_frame_bootstrap_missing_sps_with_recent_episode_coalesces_probe() {
         "bootstrapMissingSps",
         100.0,
     );
-    let commands = policy.on_snapshot(&snapshot);
+    let commands = transport_commands(policy.on_snapshot(&snapshot));
     assert!(
         commands
             .iter()
@@ -488,7 +507,7 @@ fn connecting_startup_without_progress_triggers_lifecycle_reconnect() {
         BweProjection::default(),
         DiagnosticsProjection::default(),
     );
-    let first_commands = policy.on_snapshot(&first);
+    let first_commands = transport_commands(policy.on_snapshot(&first));
     assert!(first_commands
         .iter()
         .all(|command| { !matches!(command, TransportCommand::RequestReconnectCandidate { .. }) }));
@@ -588,7 +607,7 @@ fn connecting_seeking_anchor_without_progress_triggers_lifecycle_reconnect() {
         BweProjection::default(),
         DiagnosticsProjection::default(),
     );
-    let first_commands = policy.on_snapshot(&first);
+    let first_commands = transport_commands(policy.on_snapshot(&first));
     assert!(first_commands
         .iter()
         .all(|command| { !matches!(command, TransportCommand::RequestReconnectCandidate { .. }) }));
@@ -634,7 +653,7 @@ fn connecting_without_semantic_hints_still_triggers_liveness_reconnect() {
         BweProjection::default(),
         DiagnosticsProjection::default(),
     );
-    let first_commands = policy.on_snapshot(&first);
+    let first_commands = transport_commands(policy.on_snapshot(&first));
     assert!(first_commands
         .iter()
         .all(|command| { !matches!(command, TransportCommand::RequestReconnectCandidate { .. }) }));
@@ -766,7 +785,7 @@ fn lifecycle_reconnect_attempt_limit_enters_failed_terminal() {
         BweProjection::default(),
         DiagnosticsProjection::default(),
     );
-    let first_commands = policy.on_snapshot(&first);
+    let first_commands = transport_commands(policy.on_snapshot(&first));
     assert!(first_commands
         .iter()
         .any(|command| { matches!(command, TransportCommand::RequestReconnectCandidate { .. }) }));
@@ -1041,7 +1060,7 @@ fn same_tick_failed_terminal_does_not_forward_original_reconnect_proposal() {
         },
         DiagnosticsProjection::default(),
     );
-    let first_commands = policy.on_snapshot(&first);
+    let first_commands = transport_commands(policy.on_snapshot(&first));
     assert!(first_commands
         .iter()
         .all(|command| !matches!(command, TransportCommand::RequestReconnectCandidate { .. })));
@@ -1082,7 +1101,7 @@ fn same_tick_failed_terminal_does_not_forward_original_reconnect_proposal() {
         DiagnosticsProjection::default(),
     );
 
-    let commands = policy.on_snapshot(&snapshot);
+    let commands = transport_commands(policy.on_snapshot(&snapshot));
     assert!(
         commands
             .iter()
@@ -1403,7 +1422,7 @@ fn cloud_early_connecting_without_builder_waits_for_long_terminal_window() {
         BweProjection::default(),
         DiagnosticsProjection::default(),
     );
-    let first_commands = policy.on_snapshot(&first);
+    let first_commands = transport_commands(policy.on_snapshot(&first));
     assert!(first_commands
         .iter()
         .all(|command| { !matches!(command, TransportCommand::RequestReconnectCandidate { .. }) }));
@@ -1482,7 +1501,7 @@ fn cloud_early_connecting_without_builder_waits_for_long_terminal_window() {
             BweProjection::default(),
             DiagnosticsProjection::default(),
         );
-        let commands = policy.on_snapshot(&snapshot);
+        let commands = transport_commands(policy.on_snapshot(&snapshot));
         assert!(
             commands.iter().any(|command| {
                 matches!(command, TransportCommand::RequestReconnectCandidate { .. })
@@ -1549,7 +1568,7 @@ fn cloud_early_new_without_builder_does_not_emit_liveness_reconnect_candidates()
         BweProjection::default(),
         DiagnosticsProjection::default(),
     );
-    let first_commands = policy.on_snapshot(&first);
+    let first_commands = transport_commands(policy.on_snapshot(&first));
     assert!(first_commands
         .iter()
         .all(|command| { !matches!(command, TransportCommand::RequestReconnectCandidate { .. }) }));
@@ -1572,7 +1591,7 @@ fn cloud_early_new_without_builder_does_not_emit_liveness_reconnect_candidates()
             BweProjection::default(),
             DiagnosticsProjection::default(),
         );
-        let commands = policy.on_snapshot(&snapshot);
+        let commands = transport_commands(policy.on_snapshot(&snapshot));
         assert!(
             commands.iter().all(|command| {
                 !matches!(command, TransportCommand::RequestReconnectCandidate { .. })
@@ -1710,7 +1729,7 @@ fn cloud_early_recovering_without_builder_waits_for_long_terminal_window() {
             BweProjection::default(),
             DiagnosticsProjection::default(),
         );
-        let commands = policy.on_snapshot(&snapshot);
+        let commands = transport_commands(policy.on_snapshot(&snapshot));
         assert!(
             commands.iter().any(|command| {
                 matches!(command, TransportCommand::RequestReconnectCandidate { .. })
@@ -1817,7 +1836,7 @@ fn cloud_hard_disconnect_reconnect_budget_exhaustion_enters_failed_terminal_with
             BweProjection::default(),
             DiagnosticsProjection::default(),
         );
-        let commands = policy.on_snapshot(&snapshot);
+        let commands = transport_commands(policy.on_snapshot(&snapshot));
         assert!(
             commands.iter().any(|command| {
                 matches!(command, TransportCommand::RequestReconnectCandidate { .. })
@@ -1906,7 +1925,7 @@ fn connecting_without_target_type_keeps_reconnecting_before_long_terminal_window
             BweProjection::default(),
             DiagnosticsProjection::default(),
         );
-        let commands = policy.on_snapshot(&snapshot);
+        let commands = transport_commands(policy.on_snapshot(&snapshot));
         if idx == 0 {
             assert!(commands.iter().all(|command| {
                 !matches!(command, TransportCommand::RequestReconnectCandidate { .. })
@@ -2088,7 +2107,7 @@ fn command_success_without_frames_does_not_reset_liveness_budget() {
         BweProjection::default(),
         DiagnosticsProjection::default(),
     );
-    let first_commands = policy.on_snapshot(&first);
+    let first_commands = transport_commands(policy.on_snapshot(&first));
     assert!(first_commands
         .iter()
         .all(|command| { !matches!(command, TransportCommand::RequestReconnectCandidate { .. }) }));
@@ -2219,7 +2238,7 @@ fn connected_ingress_progress_without_present_progress_does_not_force_reconnect(
         BweProjection::default(),
         DiagnosticsProjection::default(),
     );
-    let first_commands = policy.on_snapshot(&first);
+    let first_commands = transport_commands(policy.on_snapshot(&first));
     assert!(first_commands
         .iter()
         .all(|command| { !matches!(command, TransportCommand::RequestReconnectCandidate { .. }) }));
@@ -2287,7 +2306,7 @@ fn recovery_decision_ledger_is_written_with_budget_snapshot() {
         "transportAwaitRecoveryKeyframe",
         320.0,
     );
-    let commands = policy.on_snapshot(&snapshot);
+    let commands = transport_commands(policy.on_snapshot(&snapshot));
     assert!(commands
         .iter()
         .any(|command| matches!(command, TransportCommand::RequestKeyframe { .. })));
@@ -2319,7 +2338,7 @@ fn recovery_decision_ledger_keeps_pending_action_latest_while_recent_history_rec
         "transportAwaitRecoveryKeyframe",
         320.0,
     );
-    let first_commands = policy.on_snapshot(&first);
+    let first_commands = transport_commands(policy.on_snapshot(&first));
     assert!(first_commands
         .iter()
         .any(|command| matches!(command, TransportCommand::RequestKeyframe { .. })));
@@ -2363,7 +2382,7 @@ fn recovery_decision_ledger_allows_no_signal_to_be_latest_after_pending_command_
         "transportAwaitRecoveryKeyframe",
         320.0,
     );
-    let first_commands = policy.on_snapshot(&first);
+    let first_commands = transport_commands(policy.on_snapshot(&first));
     assert!(first_commands
         .iter()
         .any(|command| matches!(command, TransportCommand::RequestKeyframe { .. })));
@@ -2406,7 +2425,7 @@ fn high_no_pending_but_fresh_present_does_not_force_keyframe() {
         "waitKeyframeEntered",
         220.0,
     );
-    let commands = policy.on_snapshot(&snapshot);
+    let commands = transport_commands(policy.on_snapshot(&snapshot));
     assert!(commands
         .iter()
         .all(|command| !matches!(command, TransportCommand::RequestKeyframe { .. })));
@@ -2458,7 +2477,7 @@ fn display_supply_critical_does_not_trigger_reconnect_candidate() {
     }
     let mut policy = RtcSessionPolicy::new(runtime_config, runtime_stats);
     let snapshot = build_snapshot(ConnectionLifecycleStateFact::Connected, "none", 365.0);
-    let commands = policy.on_snapshot(&snapshot);
+    let commands = transport_commands(policy.on_snapshot(&snapshot));
 
     assert!(commands
         .iter()
@@ -2631,7 +2650,7 @@ fn owner_contract_drives_display_supply_recovery_reason() {
     }
     let mut policy = RtcSessionPolicy::new(runtime_config, runtime_stats);
     let snapshot = build_snapshot(ConnectionLifecycleStateFact::Connected, "none", 400.0);
-    let commands = policy.on_snapshot(&snapshot);
+    let commands = transport_commands(policy.on_snapshot(&snapshot));
     let reason = commands.into_iter().find_map(|cmd| match cmd {
         TransportCommand::RequestKeyframe { reason, .. } => Some(reason),
         _ => None,
@@ -2738,7 +2757,7 @@ fn display_supply_critical_does_not_stage_reconnect_candidate() {
     }
     let mut policy = RtcSessionPolicy::new(runtime_config, runtime_stats);
     let first = build_snapshot(ConnectionLifecycleStateFact::Connected, "none", 400.0);
-    let first_commands = policy.on_snapshot(&first);
+    let first_commands = transport_commands(policy.on_snapshot(&first));
     assert!(first_commands.iter().any(|command| {
         matches!(command, TransportCommand::RequestKeyframe { reason, .. } if reason == "displaySupplyCritical")
     }));
@@ -3405,17 +3424,25 @@ fn display_supply_thresholds_differ_between_home_and_cloud_profiles() {
 }
 
 #[test]
-fn decoder_backend_failure_can_emit_decoder_reset_command() {
+fn decoder_backend_failure_no_longer_maps_to_transport_decoder_reset_command() {
     let mut policy = RtcSessionPolicy::default();
     let snapshot = build_snapshot(
         ConnectionLifecycleStateFact::Connected,
         "decoderBackendFailure",
         180.0,
     );
-    let commands = policy.on_snapshot(&snapshot);
+    let commands = transport_commands(policy.on_snapshot(&snapshot));
     assert!(commands
         .iter()
-        .any(|command| matches!(command, TransportCommand::RequestDecoderReset { .. })));
+        .all(|command| !matches!(command, TransportCommand::RequestDecoderReset { .. })));
+    let ledger = policy
+        .runtime_stats
+        .lock()
+        .expect("runtime stats lock")
+        .latest_recovery_decision_ledger
+        .clone()
+        .expect("recovery decision ledger");
+    assert_eq!(ledger.action_selected, "requestDecoderReset");
 }
 
 #[test]
@@ -3450,7 +3477,7 @@ fn bwe_tick_emits_target_remb_update_when_metrics_are_healthy() {
         bwe,
         DiagnosticsProjection::default(),
     );
-    let commands = policy.on_snapshot(&snapshot);
+    let commands = transport_commands(policy.on_snapshot(&snapshot));
     let command = commands
         .into_iter()
         .find_map(|command| {
@@ -3633,7 +3660,7 @@ fn cloud_builder_configured_warmup_blocks_bwe_update() {
         DiagnosticsProjection::default(),
     );
 
-    let commands = policy.on_snapshot(&snapshot);
+    let commands = transport_commands(policy.on_snapshot(&snapshot));
     assert!(!commands
         .iter()
         .any(|command| matches!(command, TransportCommand::SetTargetRembKbps { .. })));
@@ -3707,7 +3734,7 @@ fn cloud_valid_local_feedback_restores_bwe_after_warmup() {
         DiagnosticsProjection::default(),
     );
 
-    let commands = policy.on_snapshot(&snapshot);
+    let commands = transport_commands(policy.on_snapshot(&snapshot));
     assert!(commands
         .iter()
         .any(|command| matches!(command, TransportCommand::SetTargetRembKbps { .. })));
@@ -3851,7 +3878,7 @@ fn cloud_builder_configured_uses_more_relaxed_lifecycle_reconnect_interval_than_
         BweProjection::default(),
         DiagnosticsProjection::default(),
     );
-    let first_commands = policy.on_snapshot(&first);
+    let first_commands = transport_commands(policy.on_snapshot(&first));
     assert!(first_commands
         .iter()
         .any(|command| { matches!(command, TransportCommand::RequestReconnectCandidate { .. }) }));
@@ -3963,7 +3990,7 @@ fn cloud_local_feedback_ready_restores_default_cloud_reconnect_interval() {
         BweProjection::default(),
         DiagnosticsProjection::default(),
     );
-    let first_commands = policy.on_snapshot(&first);
+    let first_commands = transport_commands(policy.on_snapshot(&first));
     assert!(first_commands
         .iter()
         .any(|command| { matches!(command, TransportCommand::RequestReconnectCandidate { .. }) }));
@@ -4123,7 +4150,7 @@ fn reconnect_keeps_priority_over_recovery_and_bwe() {
         bwe,
         DiagnosticsProjection::default(),
     );
-    let commands = policy.on_snapshot(&snapshot);
+    let commands = transport_commands(policy.on_snapshot(&snapshot));
     assert_eq!(commands.len(), 1);
     assert!(matches!(
         commands[0],
@@ -4251,7 +4278,7 @@ fn stale_adapter_idle_timeout_does_not_replay_during_steady_progress() {
         DiagnosticsProjection::default(),
     );
 
-    let commands = policy.on_snapshot(&snapshot);
+    let commands = transport_commands(policy.on_snapshot(&snapshot));
     assert!(commands
         .iter()
         .all(|command| !matches!(command, TransportCommand::RequestDecoderReset { .. })));
@@ -4356,7 +4383,7 @@ fn stale_transport_await_does_not_replay_during_steady_progress() {
         DiagnosticsProjection::default(),
     );
 
-    let commands = policy.on_snapshot(&snapshot);
+    let commands = transport_commands(policy.on_snapshot(&snapshot));
     assert!(commands.is_empty(), "unexpected commands: {commands:?}");
     let stats = runtime_stats.lock().expect("runtime stats lock");
     let ledger = stats
@@ -4707,10 +4734,6 @@ fn recovery_integration_same_unresolved_gap_transport_await_reuses_in_flight_fam
             command,
             TransportCommand::RequestKeyframe { reason, .. }
                 if reason == "transportAwaitRecoveryKeyframe"
-        ) || matches!(
-            command,
-            TransportCommand::RequestDecoderReset { reason, .. }
-                if reason == "transportAwaitRecoveryKeyframe"
         )
     }));
 
@@ -4850,10 +4873,6 @@ fn recovery_integration_passive_anchor_surface_still_feeds_transport_await_famil
         matches!(
             command,
             TransportCommand::RequestKeyframe { reason, .. }
-                if reason == "transportAwaitRecoveryKeyframe"
-        ) || matches!(
-            command,
-            TransportCommand::RequestDecoderReset { reason, .. }
                 if reason == "transportAwaitRecoveryKeyframe"
         )
     }));
@@ -5587,10 +5606,6 @@ fn recovery_integration_ramp_up_still_reescalates_on_severe_transport_await() {
         matches!(
             command,
             TransportCommand::RequestKeyframe { reason, .. }
-                if reason == "transportAwaitRecoveryKeyframe"
-        ) || matches!(
-            command,
-            TransportCommand::RequestDecoderReset { reason, .. }
                 if reason == "transportAwaitRecoveryKeyframe"
         )
     }));
@@ -7152,7 +7167,7 @@ fn active_adapter_idle_timeout_is_suppressed_when_render_output_is_still_fresh()
         DiagnosticsProjection::default(),
     );
 
-    let commands = policy.on_snapshot(&snapshot);
+    let commands = transport_commands(policy.on_snapshot(&snapshot));
     assert!(commands.is_empty(), "unexpected commands: {commands:?}");
     let stats = runtime_stats.lock().expect("runtime stats lock");
     let ledger = stats
@@ -7191,10 +7206,10 @@ fn active_adapter_idle_timeout_still_reaches_recovery_path() {
         DiagnosticsProjection::default(),
     );
 
-    let commands = policy.on_snapshot(&snapshot);
+    let commands = transport_commands(policy.on_snapshot(&snapshot));
     assert!(commands
         .iter()
-        .any(|command| { matches!(command, TransportCommand::RequestDecoderReset { .. }) }));
+        .all(|command| !matches!(command, TransportCommand::RequestDecoderReset { .. })));
     let stats = runtime_stats.lock().expect("runtime stats lock");
     let ledger = stats
         .latest_recovery_decision_ledger
@@ -7202,6 +7217,7 @@ fn active_adapter_idle_timeout_still_reaches_recovery_path() {
         .expect("recovery decision ledger");
     assert_eq!(ledger.input_signal, "adapterIdleTimeout:adapterIdleTimeout");
     assert_eq!(ledger.gate_result, "pass");
+    assert_eq!(ledger.action_selected, "requestDecoderReset");
 }
 
 #[test]
@@ -7292,7 +7308,7 @@ fn realtime_adapter_idle_timeout_is_absorbed_when_render_output_is_fresh() {
         DiagnosticsProjection::default(),
     );
 
-    let commands = policy.on_snapshot(&snapshot);
+    let commands = transport_commands(policy.on_snapshot(&snapshot));
     assert!(commands
         .iter()
         .all(|command| !matches!(command, TransportCommand::RequestDecoderReset { .. })));
@@ -7607,7 +7623,7 @@ fn connected_track_attached_without_host_feedback_does_not_escalate_adapter_idle
         DiagnosticsProjection::default(),
     );
 
-    let commands = policy.on_snapshot(&snapshot);
+    let commands = transport_commands(policy.on_snapshot(&snapshot));
     assert!(commands
         .iter()
         .all(|command| !matches!(command, TransportCommand::RequestDecoderReset { .. })));
@@ -7669,7 +7685,7 @@ fn connected_track_attached_without_host_feedback_stays_out_of_expensive_recover
         DiagnosticsProjection::default(),
     );
 
-    let commands = policy.on_snapshot(&snapshot);
+    let commands = transport_commands(policy.on_snapshot(&snapshot));
     assert!(commands
         .iter()
         .all(|command| !matches!(command, TransportCommand::RequestReconnectCandidate { .. })));
@@ -7733,7 +7749,7 @@ fn connected_track_attached_without_first_frame_feedback_does_not_escalate_trans
         DiagnosticsProjection::default(),
     );
 
-    let commands = policy.on_snapshot(&snapshot);
+    let commands = transport_commands(policy.on_snapshot(&snapshot));
     assert!(commands
         .iter()
         .all(|command| !matches!(command, TransportCommand::RequestDecoderReset { .. })));
@@ -8093,7 +8109,7 @@ fn connected_track_attached_without_first_frame_feedback_stays_in_local_acquisit
         DiagnosticsProjection::default(),
     );
 
-    let commands = policy.on_snapshot(&snapshot);
+    let commands = transport_commands(policy.on_snapshot(&snapshot));
     assert!(commands
         .iter()
         .all(|command| !matches!(command, TransportCommand::RequestReconnectCandidate { .. })));
@@ -8189,7 +8205,7 @@ fn non_idr_with_recovery_keyframe_requested_enters_transport_await_chain_after_p
         DiagnosticsProjection::default(),
     );
 
-    let commands = policy.on_snapshot(&snapshot);
+    let commands = transport_commands(policy.on_snapshot(&snapshot));
     let stats = runtime_stats.lock().expect("runtime stats lock");
     let ledger = stats
         .latest_recovery_decision_ledger
@@ -8654,7 +8670,7 @@ fn trace_1775292592042_short_idle_timeout_burst_is_absorbed_while_present_progre
         BweProjection::default(),
         DiagnosticsProjection::default(),
     );
-    let first_commands = policy.on_snapshot(&first);
+    let first_commands = transport_commands(policy.on_snapshot(&first));
     assert!(
         first_commands.is_empty(),
         "trace 1775292592042 的轻抖动首拍不应升级: {first_commands:?}"
@@ -9091,7 +9107,7 @@ fn cloud_startup_transport_progress_does_not_reconnect_before_first_frame() {
         },
         DiagnosticsProjection::default(),
     );
-    let first_commands = policy.on_snapshot(&first);
+    let first_commands = transport_commands(policy.on_snapshot(&first));
     assert!(first_commands
         .iter()
         .all(|command| !matches!(command, TransportCommand::RequestReconnectCandidate { .. })));
@@ -10579,7 +10595,7 @@ fn cloud_high_rtt_repeated_transport_severe_deadline_second_hit_reconnects() {
         },
         DiagnosticsProjection::default(),
     );
-    let first_commands = policy.on_snapshot(&first);
+    let first_commands = transport_commands(policy.on_snapshot(&first));
     assert!(first_commands
         .iter()
         .all(|command| !matches!(command, TransportCommand::RequestReconnectCandidate { .. })));
@@ -10996,7 +11012,7 @@ fn cloud_high_rtt_repeated_transport_expired_deadline_second_hit_reconnects() {
             },
             DiagnosticsProjection::default(),
         );
-        let commands = policy.on_snapshot(&snapshot);
+        let commands = transport_commands(policy.on_snapshot(&snapshot));
         if expect_reconnect {
             assert!(commands.iter().any(|command| {
                 matches!(

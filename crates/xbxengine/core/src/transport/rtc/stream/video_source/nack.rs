@@ -22,6 +22,8 @@ use super::{
 
 const DISPLAY_STARVED_LOW_VALUE_PRESENT_STALE_MS: f64 = 400.0;
 const DISPLAY_STARVED_LOW_VALUE_NO_PENDING_STREAK_MIN: u32 = 24;
+const LOW_VALUE_NEAR_DEADLINE_GUARD_MS: f64 = 12.0;
+const SUPPLY_NEAR_DEADLINE_GUARD_MS: f64 = 6.0;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum RepairValueTier {
@@ -893,6 +895,34 @@ impl RtcVideoFrameSource {
             return policy;
         }
 
+        if matches!(value_tier, RepairValueTier::LowValue)
+            && should_skip_low_value_near_deadline(
+                estimated_recovery_arrival_ms,
+                policy.deadline_at_ms,
+                LOW_VALUE_NEAR_DEADLINE_GUARD_MS,
+            )
+        {
+            policy.nack_disposition = PacketRecoveryDisposition::SkippedLowValue;
+            if policy.frame_unrecoverable_reason.is_none() {
+                policy.frame_unrecoverable_reason = Some("estimatedArrivalNearDeadlineLowValue");
+            }
+            return policy;
+        }
+
+        if matches!(value_tier, RepairValueTier::Supply)
+            && should_skip_non_anchor_near_deadline(
+                estimated_recovery_arrival_ms,
+                policy.deadline_at_ms,
+                SUPPLY_NEAR_DEADLINE_GUARD_MS,
+            )
+        {
+            policy.nack_disposition = PacketRecoveryDisposition::SkippedTooLate;
+            if policy.frame_unrecoverable_reason.is_none() {
+                policy.frame_unrecoverable_reason = Some("estimatedArrivalNearDeadlineSupply");
+            }
+            return policy;
+        }
+
         if let Some(deadline_at_ms) = policy.deadline_at_ms {
             if estimated_recovery_arrival_ms > deadline_at_ms {
                 policy.nack_disposition = PacketRecoveryDisposition::SkippedTooLate;
@@ -1176,7 +1206,8 @@ impl RtcVideoFrameSource {
         } else if self.is_cloud_transport_profile() {
             // cloud 场景直接按运行时 RTT 放宽恢复窗口，不再额外加硬下限。
             let rtt_ms = self.cloud_nack_rtt_ms();
-            base_window_ms = base_window_ms.max(rtt_ms + cloud_nack_rtt_margin_ms(false, Some(rtt_ms)));
+            base_window_ms =
+                base_window_ms.max(rtt_ms + cloud_nack_rtt_margin_ms(false, Some(rtt_ms)));
             (0.95 + repairability * 0.65).clamp(0.95, 1.55)
         } else {
             (0.75 + repairability * 0.55).clamp(0.75, 1.3)
@@ -1244,7 +1275,10 @@ fn should_soften_display_starved_low_value_gap_from_runtime(
 
 #[cfg(test)]
 mod runtime_softening_tests {
-    use super::should_soften_display_starved_low_value_gap_from_runtime;
+    use super::{
+        should_skip_low_value_near_deadline, should_skip_non_anchor_near_deadline,
+        should_soften_display_starved_low_value_gap_from_runtime,
+    };
 
     #[test]
     fn display_starved_runtime_marks_low_value_gap_soft() {
@@ -1271,6 +1305,34 @@ mod runtime_softening_tests {
             1_450.0,
         ));
     }
+
+    #[test]
+    fn low_value_near_deadline_guard_triggers_before_hard_late() {
+        assert!(should_skip_low_value_near_deadline(
+            1_032.0,
+            Some(1_040.0),
+            12.0,
+        ));
+        assert!(!should_skip_low_value_near_deadline(
+            1_020.0,
+            Some(1_040.0),
+            12.0,
+        ));
+    }
+
+    #[test]
+    fn supply_near_deadline_guard_triggers_with_tighter_window() {
+        assert!(should_skip_non_anchor_near_deadline(
+            1_035.0,
+            Some(1_040.0),
+            6.0,
+        ));
+        assert!(!should_skip_non_anchor_near_deadline(
+            1_030.0,
+            Some(1_040.0),
+            6.0,
+        ));
+    }
 }
 
 fn classify_repair_value_tier(
@@ -1295,6 +1357,24 @@ fn window_source_for_policy(source: &'static str) -> FrameBudgetWindowSource {
         "sampleLoss" => FrameBudgetWindowSource::Recovery,
         _ => FrameBudgetWindowSource::Transport,
     }
+}
+
+fn should_skip_low_value_near_deadline(
+    estimated_recovery_arrival_ms: f64,
+    deadline_at_ms: Option<f64>,
+    guard_ms: f64,
+) -> bool {
+    deadline_at_ms
+        .is_some_and(|deadline_at_ms| estimated_recovery_arrival_ms + guard_ms >= deadline_at_ms)
+}
+
+fn should_skip_non_anchor_near_deadline(
+    estimated_recovery_arrival_ms: f64,
+    deadline_at_ms: Option<f64>,
+    guard_ms: f64,
+) -> bool {
+    deadline_at_ms
+        .is_some_and(|deadline_at_ms| estimated_recovery_arrival_ms + guard_ms >= deadline_at_ms)
 }
 
 pub(super) fn wrapping_sequence_range(start: u16, end_exclusive: u16) -> Vec<u16> {

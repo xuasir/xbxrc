@@ -47,8 +47,7 @@ pub(super) fn cloud_startup_head_hole_deadline_at_ms(
     let rtt_margin_ms = cloud_nack_rtt_margin_ms(startup_mode, cloud_rtt_ms);
     let deadline_floor_ms = now_ms
         + if startup_mode {
-            (rtt_ms + rtt_margin_ms)
-                .max(CLOUD_STARTUP_HEAD_HOLE_DEADLINE_FLOOR_MS)
+            (rtt_ms + rtt_margin_ms).max(CLOUD_STARTUP_HEAD_HOLE_DEADLINE_FLOOR_MS)
         } else {
             rtt_ms + rtt_margin_ms
         };

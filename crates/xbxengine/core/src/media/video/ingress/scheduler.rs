@@ -92,6 +92,23 @@ impl VideoIngress {
 
         Some(reasons.join(","))
     }
+
+    fn drain_expired_queued_frames(&mut self, now: Instant) {
+        while self.queue.front().is_some_and(|frame| {
+            Self::is_frame_too_late(frame, now, self.late_frame_drop_threshold)
+        }) {
+            self.queue.pop_front();
+        }
+    }
+
+    fn is_frame_too_late(frame: &EncodedFrame, now: Instant, base_threshold: Duration) -> bool {
+        let frame_late_threshold = scale_duration_by_per_mille(
+            base_threshold,
+            frame.budget.late_budget_ratio_per_mille(frame.value),
+            Duration::from_millis(33),
+        );
+        now > frame.target_playout_time + frame_late_threshold
+    }
 }
 
 impl FrameScheduler for VideoIngress {
@@ -181,13 +198,7 @@ impl FrameScheduler for VideoIngress {
             return IngressDecision::WaitKeyframe;
         }
 
-        let frame_late_threshold = scale_duration_by_per_mille(
-            self.late_frame_drop_threshold,
-            context.late_budget_ratio_per_mille(frame.value),
-            Duration::from_millis(33),
-        );
-
-        if now > frame.target_playout_time + frame_late_threshold {
+        if Self::is_frame_too_late(&frame, now, self.late_frame_drop_threshold) {
             crate::xbx_log_warn!(
                 "[VideoIngress] frame too late, dropping. now={:?}, target={:?}",
                 now,
@@ -195,6 +206,9 @@ impl FrameScheduler for VideoIngress {
             );
             return IngressDecision::DropLate;
         }
+
+        // 先清掉已失效的旧帧，避免它们继续占住 ingress backlog 扩大尾延迟。
+        self.drain_expired_queued_frames(now);
 
         // Rule 3: Backlog 控制
         if self.queue.len() >= self.max_size {
@@ -380,6 +394,41 @@ mod tests {
         assert_eq!(ingress.queue_depth(), 1);
         let queued = ingress.pop().expect("frame should remain queued");
         assert!(queued.value.is_sync_point());
+    }
+
+    #[test]
+    fn expired_backlog_frames_are_drained_before_admitting_fresh_frame() {
+        let now = Instant::now();
+        let mut ingress = VideoIngress::new(2, Duration::from_millis(250));
+
+        assert_eq!(
+            ingress.submit(
+                make_frame(now, FrameValue::new(true, true, 64 * 1024), true, 0),
+                now
+            ),
+            IngressDecision::Submit
+        );
+
+        let stale_delta = make_frame(now, FrameValue::new(false, false, 8 * 1024), false, -500);
+        assert_eq!(ingress.submit(stale_delta, now), IngressDecision::DropLate);
+
+        let much_later = now + Duration::from_millis(500);
+        let fresh_delta = make_frame(
+            much_later,
+            FrameValue::new(false, true, 6 * 1024),
+            false,
+            20,
+        );
+        assert_eq!(
+            ingress.submit(fresh_delta, much_later),
+            IngressDecision::Submit
+        );
+        assert_eq!(ingress.queue_depth(), 1);
+        let queued = ingress.pop().expect("fresh frame should remain queued");
+        assert_eq!(
+            queued.target_playout_time,
+            much_later + Duration::from_millis(20)
+        );
     }
 
     #[test]

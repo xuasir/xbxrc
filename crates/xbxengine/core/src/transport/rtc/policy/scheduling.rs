@@ -1,4 +1,4 @@
-use crate::transport::rtc::facts::TransportCommand;
+use crate::transport::rtc::facts::{SessionCommand, TransportCommand};
 use crate::transport::rtc::policy::bwe::BwePolicyProposal;
 use crate::transport::rtc::policy::planner::{
     PlannedTransportCommand, PolicyPlanInput, TransportCommandPlanner,
@@ -101,16 +101,16 @@ fn allows_bwe_update(
     )
 }
 
-pub(crate) fn map_planned_command_to_transport_commands(
+pub(crate) fn map_planned_command_to_session_commands(
     command: PlannedTransportCommand,
     bwe_observation_id: u64,
-) -> Vec<TransportCommand> {
+) -> Vec<SessionCommand> {
     match command {
         PlannedTransportCommand::ExecuteRecoveryAction {
             decision,
             reason_label,
             reason_domain,
-        } => map_recovery_action_to_transport_commands(
+        } => map_recovery_action_to_session_commands(
             decision.action,
             reason_label,
             reason_domain,
@@ -119,48 +119,40 @@ pub(crate) fn map_planned_command_to_transport_commands(
         PlannedTransportCommand::UpdateTargetRemb {
             target_remb_kbps,
             decision_reason,
-        } => vec![TransportCommand::SetTargetRembKbps {
-            target_kbps: target_remb_kbps,
-            reason: decision_reason,
-            observation_id: bwe_observation_id,
-        }],
+        } => vec![SessionCommand::Transport(
+            TransportCommand::SetTargetRembKbps {
+                target_kbps: target_remb_kbps,
+                reason: decision_reason,
+                observation_id: bwe_observation_id,
+            },
+        )],
     }
 }
 
-fn map_recovery_action_to_transport_commands(
+fn map_recovery_action_to_session_commands(
     action: RecoveryAction,
     reason: String,
     reason_domain: crate::XbxEngineRecoveryReasonDomain,
     observation_id: u64,
-) -> Vec<TransportCommand> {
+) -> Vec<SessionCommand> {
     match action {
-        RecoveryAction::RequestKeyframe => vec![TransportCommand::RequestKeyframe {
+        RecoveryAction::RequestKeyframe => vec![SessionCommand::Transport(
+            TransportCommand::RequestKeyframe {
+                reason,
+                observation_id,
+            },
+        )],
+        RecoveryAction::RequestDecoderReset => vec![SessionCommand::LocalDecoderReset {
             reason,
             observation_id,
         }],
-        RecoveryAction::RequestDecoderReset => vec![TransportCommand::RequestDecoderReset {
-            reason,
-            observation_id,
-        }],
-        RecoveryAction::RequestReconnectCandidate => {
-            vec![TransportCommand::RequestReconnectCandidate {
+        RecoveryAction::RequestReconnectCandidate => vec![SessionCommand::Transport(
+            TransportCommand::RequestReconnectCandidate {
                 reason,
                 reason_domain,
                 observation_id,
-            }]
-        }
-        RecoveryAction::RequestKeyframeAndDecoderReset | RecoveryAction::StartupLowQualityRetry => {
-            vec![
-                TransportCommand::RequestKeyframe {
-                    reason: reason.clone(),
-                    observation_id,
-                },
-                TransportCommand::RequestDecoderReset {
-                    reason,
-                    observation_id,
-                },
-            ]
-        }
+            },
+        )],
         RecoveryAction::WaitForBurst
         | RecoveryAction::WaitForDecoderResetBurst
         | RecoveryAction::CooldownSuppressed
@@ -173,11 +165,11 @@ fn map_recovery_action_to_transport_commands(
 #[cfg(test)]
 mod tests {
     use super::{
-        map_planned_command_to_transport_commands, SchedulingPolicyEngine, SchedulingPolicyInput,
+        map_planned_command_to_session_commands, SchedulingPolicyEngine, SchedulingPolicyInput,
         TwccWarmupState,
     };
     use crate::transport::rtc::bwe::evaluator::RtcBweEvaluation;
-    use crate::transport::rtc::facts::TransportCommand;
+    use crate::transport::rtc::facts::{SessionCommand, TransportCommand};
     use crate::transport::rtc::policy::bwe::BwePolicyProposal;
     use crate::transport::rtc::policy::recovery::RecoveryPolicyProposal;
     use crate::transport::rtc::policy::video_scheduling_owner::{
@@ -325,7 +317,7 @@ mod tests {
 
     #[test]
     fn reconnect_transport_command_mapping_keeps_reason_domain() {
-        let commands = map_planned_command_to_transport_commands(
+        let commands = map_planned_command_to_session_commands(
             crate::transport::rtc::policy::planner::PlannedTransportCommand::ExecuteRecoveryAction {
                 decision: VideoEscalationDecision {
                     observation_id: 100,
@@ -338,11 +330,33 @@ mod tests {
         );
         assert!(matches!(
             commands.as_slice(),
-            [TransportCommand::RequestReconnectCandidate {
+            [SessionCommand::Transport(TransportCommand::RequestReconnectCandidate {
                 observation_id: 100,
                 reason,
                 reason_domain: crate::XbxEngineRecoveryReasonDomain::ConnectivityTransport,
-            }] if reason == "livenessNoProgressTimeout"
+            })] if reason == "livenessNoProgressTimeout"
+        ));
+    }
+
+    #[test]
+    fn local_decoder_reset_maps_to_local_session_command() {
+        let commands = map_planned_command_to_session_commands(
+            crate::transport::rtc::policy::planner::PlannedTransportCommand::ExecuteRecoveryAction {
+                decision: VideoEscalationDecision {
+                    observation_id: 101,
+                    action: RecoveryAction::RequestDecoderReset,
+                },
+                reason_label: "decoderBackendFailure".to_string(),
+                reason_domain: crate::XbxEngineRecoveryReasonDomain::Local,
+            },
+            0,
+        );
+        assert!(matches!(
+            commands.as_slice(),
+            [SessionCommand::LocalDecoderReset {
+                observation_id: 101,
+                reason,
+            }] if reason == "decoderBackendFailure"
         ));
     }
 

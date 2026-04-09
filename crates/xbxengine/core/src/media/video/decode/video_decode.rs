@@ -1,5 +1,6 @@
 use std::collections::VecDeque;
 use std::hash::{Hash, Hasher};
+use std::time::{Duration, Instant};
 
 use super::backend::{
     create_software_video_decoder_backend_with_probe, create_video_decoder_backend_with_probe,
@@ -22,6 +23,9 @@ const HARDWARE_NO_OUTPUT_SOFT_FALLBACK_WINDOW_MS: f64 = 80.0;
 const LOCAL_DECODER_RESET_REPLAY_BARRIER_MS: f64 = 900.0;
 const WAITING_KEYFRAME_CONTINUATION_WINDOW_MS: f64 = 120.0;
 const WAITING_KEYFRAME_CONTINUATION_MAX_FRAMES: u32 = 3;
+const DECODE_QUEUE_STALE_SLACK_DISPOSABLE_MS: u64 = 6;
+const DECODE_QUEUE_STALE_SLACK_SUPPLY_MS: u64 = 14;
+const DECODE_QUEUE_STALE_SLACK_ANCHOR_MS: u64 = 22;
 type XbxVideoDecoderFactory =
     Box<dyn FnMut() -> (Box<dyn XbxVideoDecoderBackend>, XbxVideoDecoderProbeSummary) + Send>;
 
@@ -508,8 +512,7 @@ impl XbxVideoDecodeState {
             }
             self.backend_no_output_streak = self.backend_no_output_streak.saturating_add(1);
             if self.decoder_backend_is_hardware() && self.latest_decoded_seq == 0 {
-                self.first_hardware_no_output_at_ms
-                    .get_or_insert(now_ms);
+                self.first_hardware_no_output_at_ms.get_or_insert(now_ms);
             }
             self.record_decode_output_path_observation(
                 XbxDecodeOutputPathVerdict::BackendNoOutput,
@@ -590,7 +593,10 @@ impl XbxVideoDecodeState {
             }
             // bootstrap 关键帧常伴随 parameter_sets_changed；若已无输出且已打开 continuation 窗口，
             // 不要立刻 reset（reset 会清 continuation，导致后续 delta 无法再试解）。
-            if frame_is_keyframe && frame_parameter_sets_changed && !waiting_keyframe_bootstrap_no_output {
+            if frame_is_keyframe
+                && frame_parameter_sets_changed
+                && !waiting_keyframe_bootstrap_no_output
+            {
                 crate::xbx_log_warn!(
                     "[xbxengine][rtc] keyframe no-output after parameter-set change, reset local decoder backend={} rtpTs={} noOutputStreak={} sendStatus={:?} receiveStatus={:?}",
                     self.decoder.backend_name(),
@@ -859,6 +865,17 @@ impl XbxVideoDecodeState {
     fn enqueue_decoded_frame(&mut self, frame: DecodedFrame) -> Option<DecodedFrame> {
         let incoming_frame_seq = frame.surface.frame_seq;
         let observed_at_ms = frame.surface.rendered_at_ms;
+        if Self::decoded_frame_is_stale(&frame, Instant::now()) {
+            self.decoded_frame_drop_count = self.decoded_frame_drop_count.saturating_add(1);
+            self.record_decode_candidate_decision(
+                XbxDecodeCandidateState::Backpressure,
+                "drop",
+                "staleAfterDecode",
+                Some(incoming_frame_seq),
+                observed_at_ms,
+            );
+            return Some(frame);
+        }
         let mut dropped_frame = None;
         while self.decoded_frame_queue.len() >= MAX_DECODED_FRAME_QUEUE_LEN {
             let dropped = self.decoded_frame_queue.pop_front();
@@ -889,6 +906,19 @@ impl XbxVideoDecodeState {
             );
         }
         dropped_frame
+    }
+
+    fn decoded_frame_is_stale(frame: &DecodedFrame, now: Instant) -> bool {
+        now > frame.pts + Self::decoded_frame_stale_slack(frame)
+    }
+
+    fn decoded_frame_stale_slack(frame: &DecodedFrame) -> Duration {
+        let millis = match frame.budget.frame_importance() {
+            "keyframe" => DECODE_QUEUE_STALE_SLACK_ANCHOR_MS,
+            "reference" => DECODE_QUEUE_STALE_SLACK_SUPPLY_MS,
+            _ => DECODE_QUEUE_STALE_SLACK_DISPOSABLE_MS,
+        };
+        Duration::from_millis(millis)
     }
 
     // 连续硬解失败用于 recovery 诊断：只在短窗口内累加，避免偶发错误误触发。
@@ -925,9 +955,9 @@ impl XbxVideoDecodeState {
                     XbxVideoRecoveryState::WaitingKeyframe
                 ))
             && (self.backend_no_output_streak >= HARDWARE_NO_OUTPUT_SOFT_FALLBACK_THRESHOLD
-                || self
-                    .first_hardware_no_output_at_ms
-                    .is_some_and(|t0| (now_ms - t0).max(0.0) >= HARDWARE_NO_OUTPUT_SOFT_FALLBACK_WINDOW_MS))
+                || self.first_hardware_no_output_at_ms.is_some_and(|t0| {
+                    (now_ms - t0).max(0.0) >= HARDWARE_NO_OUTPUT_SOFT_FALLBACK_WINDOW_MS
+                }))
     }
 
     fn reset_decoder_with_failure(
@@ -1187,40 +1217,41 @@ impl XbxVideoDecodeState {
     ) {
         self.remote_frame_capture_observation_id =
             self.remote_frame_capture_observation_id.saturating_add(1);
-        self.latest_remote_frame_capture_observation = Some(XbxRemoteFrameCaptureObservationSnapshot {
-            observation_id: self.remote_frame_capture_observation_id,
-            trigger,
-            backend_name: self.decoder.backend_name().to_string(),
-            frame_rtp_timestamp,
-            is_keyframe,
-            width,
-            height,
-            payload_bytes,
-            payload_fingerprint,
-            payload_prefix_hex: payload_prefix_hex.to_string(),
-            nal_types: if frame_nal_labels.is_empty() {
-                Vec::new()
-            } else {
-                frame_nal_labels
-                    .split('|')
-                    .map(ToString::to_string)
-                    .collect::<Vec<_>>()
-            },
-            nal_count: frame_nal_count as u16,
-            has_inband_sps,
-            has_inband_pps,
-            bootstrap_ready,
-            bootstrap_reject_reason,
-            parameter_sets_changed,
-            config_changed,
-            slice_headers_valid,
-            send_packet_status,
-            receive_frame_status,
-            status,
-            backend_no_output_streak,
-            input_frames_since_last_decoded,
-            observed_at_ms,
-        });
+        self.latest_remote_frame_capture_observation =
+            Some(XbxRemoteFrameCaptureObservationSnapshot {
+                observation_id: self.remote_frame_capture_observation_id,
+                trigger,
+                backend_name: self.decoder.backend_name().to_string(),
+                frame_rtp_timestamp,
+                is_keyframe,
+                width,
+                height,
+                payload_bytes,
+                payload_fingerprint,
+                payload_prefix_hex: payload_prefix_hex.to_string(),
+                nal_types: if frame_nal_labels.is_empty() {
+                    Vec::new()
+                } else {
+                    frame_nal_labels
+                        .split('|')
+                        .map(ToString::to_string)
+                        .collect::<Vec<_>>()
+                },
+                nal_count: frame_nal_count as u16,
+                has_inband_sps,
+                has_inband_pps,
+                bootstrap_ready,
+                bootstrap_reject_reason,
+                parameter_sets_changed,
+                config_changed,
+                slice_headers_valid,
+                send_packet_status,
+                receive_frame_status,
+                status,
+                backend_no_output_streak,
+                input_frames_since_last_decoded,
+                observed_at_ms,
+            });
     }
 
     fn arm_waiting_keyframe_continuation(&mut self, now_ms: f64) {
