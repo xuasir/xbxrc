@@ -133,8 +133,11 @@ For complex tasks, execution must follow this order:
 
 - Complex tasks must create an RFC plan file under `docs/rfcs/` before execution starts.
 - Complex tasks should create the RFC from `docs/rfcs/_template.md` by default, and keep it concise unless the task genuinely needs more detail.
+- Every RFC must contain an explicit completion marker near the top, using `Completion: 未完成` or `Completion: 已完成`.
+- Every RFC must also keep a current execution state field such as `planned / in-progress / blocked / completed`, and update it as the work progresses.
 - The RFC should describe background, goals, scope, non-goals, impacted modules, implementation steps, validation plan, risks, and progress checkpoints.
 - During execution, all interim progress tracking should stay in the RFC until the task is fully completed.
+- While the task is still underway, the RFC should remain marked `Completion: 未完成`; only after all scoped work and validation are complete may it be switched to `Completion: 已完成`.
 - If the solution changes materially during implementation, update the RFC instead of letting execution drift away from the plan.
 - Do not create RFCs for small / straightforward tasks that can be tracked sufficiently in `docs/project-task.md`.
 
