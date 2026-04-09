@@ -508,6 +508,15 @@
       "basicRumble": "基础震动",
       "advancedHaptics": "高级震动",
       "battery": "电池信息"
+    },
+    "capabilitySummary": {
+      "basicOnly": "支持基础震动",
+      "advancedOnly": "支持高级震动",
+      "batteryOnly": "提供电池状态",
+      "basicAdvanced": "支持基础震动和高级震动",
+      "basicBattery": "支持基础震动，并提供电池状态",
+      "advancedBattery": "支持高级震动，并提供电池状态",
+      "basicAdvancedBattery": "支持基础震动、高级震动和电池状态"
     }
   },
   "setting": {
@@ -527,6 +536,44 @@
       "clearShort": "清空",
       "cancel": "取消",
       "save": "保存"
+    },
+    "gamepad": {
+      "sectionLabel": "手柄与输入",
+      "summaryTitle": "已检测到的手柄",
+      "summaryDescription": "概览当前连接的手柄，以及输入路由的去向。",
+      "connectedLabel": "连接中的手柄",
+      "connectedNone": "当前没有连接的手柄",
+      "connectedCount": "已连接 {count} 个",
+      "routeLabel": "输入路由",
+      "route": {
+        "shellUi": "应用界面",
+        "streamSession": "串流会话",
+        "none": "暂无路由信息"
+      },
+      "hapticsLabel": "震动与触觉",
+      "haptics": {
+        "none": "当前不可用",
+        "basic": "基础震动",
+        "advanced": "高级震动",
+        "autoTarget": "自动选择目标手柄",
+        "providerOnly": "已提供震动能力"
+      },
+      "testRumbleLabel": "测试震动",
+      "testRumbleHint": "在当前活动手柄上触发一小段震动",
+      "deviceStatus": {
+        "connected": "已连接",
+        "disconnected": "未连接"
+      },
+      "primaryDeviceCurrent": "当前主手柄",
+      "primaryDeviceSet": "设为主手柄",
+      "toggleSampling": "切换采样",
+      "pauseConfirm": "暂停该手柄的采样？暂停后输入将不会再发送，直到手动恢复。",
+      "debug": {
+        "enable": "开启输入调试视图",
+        "disable": "关闭输入调试视图",
+        "none": "当前无按键按下",
+        "summary": "逻辑手柄 {padId}：{buttons} · {sticks}"
+      }
     },
     "effects": {
       "restartConfirm": "该设置需要重启应用后生效，是否现在重启？"

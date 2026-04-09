@@ -3,8 +3,8 @@ import type { GamepadRuntimeSnapshotDto } from '@shared/gamepad/contract'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Focusable, FocusScope } from '@/navigation/core/vue'
-import { SPATIAL_NAV_NODE_IDS, SPATIAL_NAV_SCOPE_IDS } from '../../navigation/spatial-nav.constants'
 import seriesCtrlImageUrl from '../../assets/ctrl/series-ctrl.jpeg'
+import { SPATIAL_NAV_NODE_IDS, SPATIAL_NAV_SCOPE_IDS } from '../../navigation/spatial-nav.constants'
 
 interface GamepadProfileCardProps {
   open: boolean
@@ -20,6 +20,42 @@ const emit = defineEmits<{
 const { t } = useI18n()
 
 const connectedDevices = computed(() => props.snapshot?.devices.filter(device => device.connected) ?? [])
+
+const showCapabilitySummary = computed(() => {
+  return connectedDevices.value.some((device) => {
+    const caps = device.effectiveCapabilities
+    return caps.basicRumble || caps.advancedHaptics || caps.battery
+  })
+})
+
+const capabilitySummaryKey = computed(() => {
+  const hasBasic = connectedDevices.value.some(device => device.effectiveCapabilities.basicRumble)
+  const hasAdvanced = connectedDevices.value.some(device => device.effectiveCapabilities.advancedHaptics)
+  const hasBattery = connectedDevices.value.some(device => device.effectiveCapabilities.battery)
+
+  if (hasBasic && hasAdvanced && hasBattery) {
+    return 'gamepadCard.capabilitySummary.basicAdvancedBattery'
+  }
+  if (hasBasic && hasAdvanced) {
+    return 'gamepadCard.capabilitySummary.basicAdvanced'
+  }
+  if (hasAdvanced && hasBattery) {
+    return 'gamepadCard.capabilitySummary.advancedBattery'
+  }
+  if (hasBasic && hasBattery) {
+    return 'gamepadCard.capabilitySummary.basicBattery'
+  }
+  if (hasAdvanced) {
+    return 'gamepadCard.capabilitySummary.advancedOnly'
+  }
+  if (hasBasic) {
+    return 'gamepadCard.capabilitySummary.basicOnly'
+  }
+  if (hasBattery) {
+    return 'gamepadCard.capabilitySummary.batteryOnly'
+  }
+  return ''
+})
 
 const panelStyle = computed(() => {
   return {
@@ -95,6 +131,13 @@ function formatConnection(connection: string | null): string {
           <div class="gamepad-card__divider" aria-hidden="true" />
 
           <div class="gamepad-card__content">
+            <p
+              v-if="showCapabilitySummary && capabilitySummaryKey"
+              class="gamepad-card__capability-summary"
+            >
+              {{ t(capabilitySummaryKey) }}
+            </p>
+
             <div v-if="connectedDevices.length > 0" class="gamepad-card__device-list">
               <article
                 v-for="device in connectedDevices"
@@ -285,6 +328,12 @@ function formatConnection(connection: string | null): string {
   display: flex;
   flex-direction: column;
   gap: 12px;
+}
+
+.gamepad-card__capability-summary {
+  font-size: 12px;
+  color: var(--ui-page-text-soft);
+  padding: 0 8px 4px;
 }
 
 .gamepad-card__device-list {

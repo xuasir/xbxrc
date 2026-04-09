@@ -508,6 +508,15 @@
       "basicRumble": "Basic rumble",
       "advancedHaptics": "Advanced haptics",
       "battery": "Battery info"
+    },
+    "capabilitySummary": {
+      "basicOnly": "Supports rumble",
+      "advancedOnly": "Supports advanced haptics",
+      "batteryOnly": "Reports battery status",
+      "basicAdvanced": "Supports rumble and advanced haptics",
+      "basicBattery": "Supports rumble; reports battery status",
+      "advancedBattery": "Supports advanced haptics; reports battery status",
+      "basicAdvancedBattery": "Supports rumble, advanced haptics, and battery status"
     }
   },
   "setting": {
@@ -527,6 +536,44 @@
       "clearShort": "Clear",
       "cancel": "Cancel",
       "save": "Save"
+    },
+    "gamepad": {
+      "sectionLabel": "Controllers & input",
+      "summaryTitle": "Detected controllers",
+      "summaryDescription": "Overview of connected controllers and how input is currently routed.",
+      "connectedLabel": "Connected controllers",
+      "connectedNone": "No connected controller",
+      "connectedCount": "{count} connected",
+      "routeLabel": "Input route",
+      "route": {
+        "shellUi": "Shell UI",
+        "streamSession": "Streaming session",
+        "none": "Not available"
+      },
+      "hapticsLabel": "Haptics",
+      "haptics": {
+        "none": "No haptics available",
+        "basic": "Basic rumble",
+        "advanced": "Advanced haptics",
+        "autoTarget": "Auto target routing",
+        "providerOnly": "Provider available"
+      },
+      "testRumbleLabel": "Test rumble",
+      "testRumbleHint": "Trigger a short rumble on the active controller",
+      "deviceStatus": {
+        "connected": "Connected",
+        "disconnected": "Disconnected"
+      },
+      "primaryDeviceCurrent": "Primary device",
+      "primaryDeviceSet": "Set as primary",
+      "toggleSampling": "Toggle sampling",
+      "pauseConfirm": "Pause sampling for this controller? It will no longer send input until resumed.",
+      "debug": {
+        "enable": "Enable input debug overlay",
+        "disable": "Disable input debug overlay",
+        "none": "No button pressed",
+        "summary": "Pad {padId}: {buttons} · {sticks}"
+      }
     },
     "effects": {
       "restartConfirm": "This setting requires an app restart to take effect. Restart now?"
