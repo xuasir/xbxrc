@@ -24,6 +24,8 @@ const DISPLAY_STARVED_LOW_VALUE_PRESENT_STALE_MS: f64 = 400.0;
 const DISPLAY_STARVED_LOW_VALUE_NO_PENDING_STREAK_MIN: u32 = 24;
 const LOW_VALUE_NEAR_DEADLINE_GUARD_MS: f64 = 12.0;
 const SUPPLY_NEAR_DEADLINE_GUARD_MS: f64 = 6.0;
+const CLEAN_ANCHOR_TRANSPORT_SUPPLY_WINDOW_MS: f64 = 320.0;
+const CLEAN_ANCHOR_TRANSPORT_SUPPLY_FRESH_MEDIA_MS: f64 = 320.0;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum RepairValueTier {
@@ -37,7 +39,7 @@ impl RtcVideoFrameSource {
         let now_ms = now_ms_f64();
         let pending_before = self.nack_scheduler.pending_count();
         let missing_sequences = self.nack_window.missing_seq_numbers(self.nack_skip_last_n);
-        let frame_value = self.current_transport_frame_value();
+        let frame_value = self.current_transport_frame_value_for_transport_gap(now_ms);
         let cloud_mode = self.is_cloud_transport_profile();
         let startup_mode = self.is_cloud_startup_transport_profile();
         let cloud_rtt_ms = self.cloud_nack_rtt_ms();
@@ -260,7 +262,7 @@ impl RtcVideoFrameSource {
         if missing_sequences.is_empty() {
             return;
         }
-        let frame_value = self.current_transport_frame_value();
+        let frame_value = self.current_transport_frame_value_for_transport_gap(now_ms);
         let cloud_mode = self.is_cloud_transport_profile();
         let startup_mode = self.is_cloud_startup_transport_profile();
         let cloud_rtt_ms = self.cloud_nack_rtt_ms();
@@ -1153,8 +1155,56 @@ impl RtcVideoFrameSource {
         });
     }
 
-    fn current_transport_frame_value(&self) -> FrameValue {
-        self.last_submitted_frame_value
+    fn current_transport_frame_value_for_transport_gap(&self, now_ms: f64) -> FrameValue {
+        let last_value = self.last_submitted_frame_value;
+        if last_value.is_sync_point() || last_value.refresh_boost {
+            return last_value;
+        }
+        if self.waiting_for_recovery_keyframe() {
+            return last_value;
+        }
+
+        let should_promote = self
+            .runtime_stats
+            .read(|stats| {
+                if stats.session_target_type != Some(XbxEngineTargetTypeDto::Cloud) {
+                    return false;
+                }
+                let has_current_clean_anchor = stats
+                    .video_anchor_clean_epoch
+                    .is_some_and(|epoch| epoch == stats.transport_recovery_epoch)
+                    && stats.video_anchor_clean_source_event.as_deref()
+                        == Some("chain-clean-keyframe-submitted");
+                if !has_current_clean_anchor {
+                    return false;
+                }
+                let clean_anchor_recent =
+                    stats
+                        .video_anchor_clean_observed_at_ms
+                        .is_some_and(|at_ms| {
+                            (now_ms - at_ms).max(0.0) <= CLEAN_ANCHOR_TRANSPORT_SUPPLY_WINDOW_MS
+                        });
+                if !clean_anchor_recent {
+                    return false;
+                }
+                let present_fresh = stats
+                    .latest_video_host_present_time_ms
+                    .is_some_and(|at_ms| {
+                        (now_ms - at_ms).max(0.0) <= CLEAN_ANCHOR_TRANSPORT_SUPPLY_FRESH_MEDIA_MS
+                    });
+                let decode_fresh = stats.latest_video_decode_ok_time_ms.is_some_and(|at_ms| {
+                    (now_ms - at_ms).max(0.0) <= CLEAN_ANCHOR_TRANSPORT_SUPPLY_FRESH_MEDIA_MS
+                });
+                present_fresh || decode_fresh
+            })
+            .unwrap_or(false);
+
+        if should_promote {
+            // clean anchor 后的短窗内，transport gap 仍可能落在刚建立的新参考链上；
+            // 这里把 plain delta 提升为 refresh_boost，复用既有 Supply 预算语义。
+            return FrameValue::new(false, true, last_value.payload_size_bytes);
+        }
+        last_value
     }
 
     fn estimate_repairability(
@@ -1395,6 +1445,7 @@ mod tests {
     use crate::transport::rtc::stream::sink::RtcRtcpSendPort;
     use crate::transport::rtc::stream::video_source::NackSchedulerConfig;
     use bytes::Bytes;
+    use xbxengine_protocol::XbxEngineTargetTypeDto;
 
     #[test]
     fn cloud_nack_windows_follow_rtt_without_floor() {
@@ -1490,6 +1541,130 @@ mod tests {
             ),
             RepairValueTier::Supply
         );
+    }
+
+    #[test]
+    fn recent_clean_anchor_promotes_transport_gap_value_to_supply_on_cloud() {
+        let (_tx, rx) = tokio::sync::mpsc::channel(1);
+        let (transport_observation_tx, _transport_observation_rx) =
+            tokio::sync::mpsc::unbounded_channel();
+        let rtcp_port: Arc<dyn RtcRtcpSendPort> = Arc::new(CaptureRtcpPort::default());
+        let runtime_stats = Arc::new(Mutex::new(crate::XbxEngineMediaRuntimeStats::default()));
+        let mut source = RtcVideoFrameSource::new(
+            rx,
+            transport_observation_tx,
+            rtcp_port,
+            runtime_stats.clone(),
+            16,
+            std::time::Duration::from_millis(10),
+            std::time::Duration::from_millis(20),
+            std::time::Duration::from_millis(200),
+            NackSchedulerConfig {
+                max_age_ms: 1_000,
+                frame_deadline_ms: 120,
+                burst_count: 2,
+                retry_interval_ms: 20,
+                max_retry_count: 3,
+            },
+        );
+        source.last_submitted_frame_value = FrameValue::new(false, false, 12 * 1024);
+        {
+            let mut stats = runtime_stats.lock().expect("runtime stats lock");
+            stats.session_target_type = Some(XbxEngineTargetTypeDto::Cloud);
+            stats.transport_recovery_epoch = 7;
+            stats.video_anchor_clean_epoch = Some(7);
+            stats.video_anchor_clean_observed_at_ms = Some(1_000.0);
+            stats.video_anchor_clean_source_event =
+                Some("chain-clean-keyframe-submitted".to_string());
+            stats.latest_video_host_present_time_ms = Some(1_120.0);
+            stats.latest_video_decode_ok_time_ms = Some(1_118.0);
+        }
+
+        let value = source.current_transport_frame_value_for_transport_gap(1_200.0);
+        assert_eq!(value, FrameValue::new(false, true, 12 * 1024));
+    }
+
+    #[test]
+    fn stale_clean_anchor_does_not_promote_transport_gap_value() {
+        let (_tx, rx) = tokio::sync::mpsc::channel(1);
+        let (transport_observation_tx, _transport_observation_rx) =
+            tokio::sync::mpsc::unbounded_channel();
+        let rtcp_port: Arc<dyn RtcRtcpSendPort> = Arc::new(CaptureRtcpPort::default());
+        let runtime_stats = Arc::new(Mutex::new(crate::XbxEngineMediaRuntimeStats::default()));
+        let mut source = RtcVideoFrameSource::new(
+            rx,
+            transport_observation_tx,
+            rtcp_port,
+            runtime_stats.clone(),
+            16,
+            std::time::Duration::from_millis(10),
+            std::time::Duration::from_millis(20),
+            std::time::Duration::from_millis(200),
+            NackSchedulerConfig {
+                max_age_ms: 1_000,
+                frame_deadline_ms: 120,
+                burst_count: 2,
+                retry_interval_ms: 20,
+                max_retry_count: 3,
+            },
+        );
+        source.last_submitted_frame_value = FrameValue::new(false, false, 12 * 1024);
+        {
+            let mut stats = runtime_stats.lock().expect("runtime stats lock");
+            stats.session_target_type = Some(XbxEngineTargetTypeDto::Cloud);
+            stats.transport_recovery_epoch = 7;
+            stats.video_anchor_clean_epoch = Some(7);
+            stats.video_anchor_clean_observed_at_ms = Some(1_000.0);
+            stats.video_anchor_clean_source_event =
+                Some("chain-clean-keyframe-submitted".to_string());
+            stats.latest_video_host_present_time_ms = Some(1_120.0);
+            stats.latest_video_decode_ok_time_ms = Some(1_118.0);
+        }
+
+        let value = source.current_transport_frame_value_for_transport_gap(1_400.0);
+        assert_eq!(value, FrameValue::new(false, false, 12 * 1024));
+    }
+
+    #[test]
+    fn waiting_keyframe_keeps_transport_gap_value_unpromoted() {
+        let (_tx, rx) = tokio::sync::mpsc::channel(1);
+        let (transport_observation_tx, _transport_observation_rx) =
+            tokio::sync::mpsc::unbounded_channel();
+        let rtcp_port: Arc<dyn RtcRtcpSendPort> = Arc::new(CaptureRtcpPort::default());
+        let runtime_stats = Arc::new(Mutex::new(crate::XbxEngineMediaRuntimeStats::default()));
+        let mut source = RtcVideoFrameSource::new(
+            rx,
+            transport_observation_tx,
+            rtcp_port,
+            runtime_stats.clone(),
+            16,
+            std::time::Duration::from_millis(10),
+            std::time::Duration::from_millis(20),
+            std::time::Duration::from_millis(200),
+            NackSchedulerConfig {
+                max_age_ms: 1_000,
+                frame_deadline_ms: 120,
+                burst_count: 2,
+                retry_interval_ms: 20,
+                max_retry_count: 3,
+            },
+        );
+        source.last_submitted_frame_value = FrameValue::new(false, false, 12 * 1024);
+        source.set_waiting_for_recovery_keyframe(true);
+        {
+            let mut stats = runtime_stats.lock().expect("runtime stats lock");
+            stats.session_target_type = Some(XbxEngineTargetTypeDto::Cloud);
+            stats.transport_recovery_epoch = 7;
+            stats.video_anchor_clean_epoch = Some(7);
+            stats.video_anchor_clean_observed_at_ms = Some(1_000.0);
+            stats.video_anchor_clean_source_event =
+                Some("chain-clean-keyframe-submitted".to_string());
+            stats.latest_video_host_present_time_ms = Some(1_120.0);
+            stats.latest_video_decode_ok_time_ms = Some(1_118.0);
+        }
+
+        let value = source.current_transport_frame_value_for_transport_gap(1_200.0);
+        assert_eq!(value, FrameValue::new(false, false, 12 * 1024));
     }
 
     #[derive(Clone, Default)]

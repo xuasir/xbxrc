@@ -128,12 +128,12 @@ where
         match reconnect_result {
             Ok(()) => {
                 let settled_at_ms = now_ms_f64();
-                let reconnect_settled_keyframe_in_flight =
-                    pre_reconnect_last_recovery_action.as_deref() == Some("requestKeyframe")
-                        && pre_reconnect_last_recovery_action_at_ms.is_some_and(|last| {
-                            (settled_at_ms - last).max(0.0)
-                                < RECONNECT_SETTLED_KEYFRAME_MIN_INTERVAL_MS
-                        });
+                let reconnect_settled_keyframe_in_flight = pre_reconnect_last_recovery_action
+                    .as_deref()
+                    == Some("requestKeyframe")
+                    && pre_reconnect_last_recovery_action_at_ms.is_some_and(|last| {
+                        (settled_at_ms - last).max(0.0) < RECONNECT_SETTLED_KEYFRAME_MIN_INTERVAL_MS
+                    });
                 self.request_keyframe_after_reconnect_settled(
                     settled_at_ms,
                     reconnect_settled_keyframe_in_flight,

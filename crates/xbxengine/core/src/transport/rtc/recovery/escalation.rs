@@ -514,7 +514,11 @@ impl VideoEscalationController {
                 self.pending_decoder_reset_signals = 0;
                 self.reconnect_candidate_signals = 0;
                 self.clear_keyframe_epoch();
-                self.resolve_reconnect_or_decoder_reset_fallback(now, allow_reconnect)
+                self.resolve_reconnect_or_decoder_reset_fallback(
+                    now,
+                    allow_reconnect,
+                    VideoEscalationReason::LifecycleRecovering,
+                )
             }
             VideoEscalationReason::WaitKeyframe
             | VideoEscalationReason::TransportAwaitRecoveryKeyframe
@@ -569,7 +573,8 @@ impl VideoEscalationController {
                     self.reconnect_candidate_signals =
                         self.reconnect_candidate_signals.saturating_add(1);
                     self.clear_keyframe_epoch();
-                    self.resolve_reconnect_or_decoder_reset_fallback(now, allow_reconnect)
+                    // severe deadline 窗口内的 idle 按连接域坏窗处理，优先 reconnect，禁止退回本地 decoder reset。
+                    self.resolve_reconnect_or_decoder_reset_fallback(now, true, reason)
                 } else {
                     if matches!(reason, VideoEscalationReason::WaitKeyframe) {
                         // WaitKeyframe 的“持续时长”要跨 burst 保留，
@@ -664,7 +669,11 @@ impl VideoEscalationController {
                             self.reconnect_candidate_signals =
                                 self.reconnect_candidate_signals.saturating_add(1);
                             self.clear_keyframe_epoch();
-                            self.resolve_reconnect_or_decoder_reset_fallback(now, allow_reconnect)
+                            self.resolve_reconnect_or_decoder_reset_fallback(
+                                now,
+                                allow_reconnect,
+                                VideoEscalationReason::TransportExpiredDeadline,
+                            )
                         } else if self
                             .last_keyframe_request_at
                             .map_or(true, |last| last.elapsed() >= self.cooldown)
@@ -710,7 +719,11 @@ impl VideoEscalationController {
                         self.reconnect_candidate_signals =
                             self.reconnect_candidate_signals.saturating_add(1);
                         self.clear_keyframe_epoch();
-                        self.resolve_reconnect_or_decoder_reset_fallback(now, allow_reconnect)
+                        self.resolve_reconnect_or_decoder_reset_fallback(
+                            now,
+                            allow_reconnect,
+                            VideoEscalationReason::TransportAwaitRecoveryKeyframe,
+                        )
                     } else if persistent_transport_await_recovery_keyframe
                         && allow_transport_await_stage_escalation
                         && self
@@ -836,7 +849,11 @@ impl VideoEscalationController {
                 if self.reconnect_candidate_signals >= CONNECTIVITY_DEADLINE_RECONNECT_HIT_THRESHOLD
                 {
                     self.clear_keyframe_epoch();
-                    self.resolve_reconnect_or_decoder_reset_fallback(now, allow_reconnect)
+                    self.resolve_reconnect_or_decoder_reset_fallback(
+                        now,
+                        allow_reconnect,
+                        VideoEscalationReason::TransportSevereDeadline,
+                    )
                 } else {
                     RecoveryAction::CooldownSuppressed
                 }
@@ -853,6 +870,7 @@ impl VideoEscalationController {
         &mut self,
         _now: Instant,
         allow_reconnect: bool,
+        escalation_reason: VideoEscalationReason,
     ) -> RecoveryAction {
         if allow_reconnect {
             return if self.reconnect_budget_used < self.reconnect_budget_limit {
@@ -860,6 +878,15 @@ impl VideoEscalationController {
             } else {
                 RecoveryAction::CooldownSuppressed
             };
+        }
+        // 连接域升级在策略禁止 reconnect 时不得吸收为本地 decoder reset（传输坏窗 ≠ 解码器故障）。
+        if matches!(
+            escalation_reason,
+            VideoEscalationReason::LifecycleRecovering
+                | VideoEscalationReason::TransportExpiredDeadline
+                | VideoEscalationReason::TransportSevereDeadline
+        ) {
+            return RecoveryAction::CooldownSuppressed;
         }
         if self
             .last_decoder_reset_at

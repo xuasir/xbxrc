@@ -5,8 +5,8 @@ use ohmygamepad_protocol::{OhMyGamepadRumbleRequestDto, OhMyGamepadRumbleTargetD
 use xbxengine_protocol::{
     XbxEngineDisplayStateDto, XbxEngineHostRequestDto, XbxEngineHostResponseDto,
     XbxEngineIceCandidateDto, XbxEngineInputEventDto, XbxEnginePresentationMilestoneDto,
-    XbxEngineRuntimeEventDto, XbxEngineSessionDto, XbxEngineStatsDto,
-    XbxEngineVideoTrackStatusDto, XbxEngineViewportDto,
+    XbxEngineRuntimeEventDto, XbxEngineSessionDto, XbxEngineStatsDto, XbxEngineVideoTrackStatusDto,
+    XbxEngineViewportDto,
 };
 
 use crate::{

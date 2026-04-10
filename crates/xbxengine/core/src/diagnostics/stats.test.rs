@@ -303,7 +303,7 @@ fn runtime_summary_surfaces_bootstrap_in_flight_note() {
         session_phase: Some("local-self-healing".to_string()),
         direct_gaming_bitrate_band: Some("steady".to_string()),
         video_owner_state: Some("rebuilding-supply".to_string()),
-        video_owner_reason: Some("bootstrapInFlight".to_string()),
+        video_owner_reason: Some("recoverySustaining".to_string()),
         ..XbxEngineMediaRuntimeStats::default()
     };
 
@@ -312,12 +312,40 @@ fn runtime_summary_surfaces_bootstrap_in_flight_note() {
     assert_eq!(
         dto.runtime_summary.as_deref(),
         Some(
-            "cloudGaming/local-self-healing/steady/rebuilding-supply/recovering | bootstrapInFlight:cleanAnchorPending"
+            "cloudGaming/local-self-healing/steady/rebuilding-supply/recovering | recoverySustaining:cleanAnchorHolding"
         )
     );
     assert_eq!(
         dto.latest_decision_summary.as_deref(),
-        Some("phase:local-self-healing:bootstrapInFlight")
+        Some("phase:local-self-healing:recoverySustaining")
+    );
+}
+
+#[test]
+fn runtime_summary_surfaces_recovery_sustaining_note() {
+    let stats = XbxEngineMediaRuntimeStats {
+        transport_state: XbxEngineTransportStateDto::Connected,
+        transport_policy_profile: Some("cloud".to_string()),
+        baseline_remote_profile: Some("cloudGaming".to_string()),
+        effective_remote_profile_label: Some("cloudGaming".to_string()),
+        session_phase: Some("local-self-healing".to_string()),
+        direct_gaming_bitrate_band: Some("steady".to_string()),
+        video_owner_state: Some("rebuilding-supply".to_string()),
+        video_owner_reason: Some("recoverySustaining".to_string()),
+        ..XbxEngineMediaRuntimeStats::default()
+    };
+
+    let dto = build_xbxengine_stats(&test_snapshot(), Some(&stats));
+
+    assert_eq!(
+        dto.runtime_summary.as_deref(),
+        Some(
+            "cloudGaming/local-self-healing/steady/rebuilding-supply/recovering | recoverySustaining:cleanAnchorHolding"
+        )
+    );
+    assert_eq!(
+        dto.latest_decision_summary.as_deref(),
+        Some("phase:local-self-healing:recoverySustaining")
     );
 }
 

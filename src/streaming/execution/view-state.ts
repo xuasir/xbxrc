@@ -209,7 +209,10 @@ export function reduceViewState(
         ? state
         : {
             ...state,
+            isConnected: true,
+            isLoading: false,
             statusText: action.statusText,
+            sessionUiPhase: 'connected',
             lifecyclePhase: 'playing',
           }
     case 'runtimePhaseChanged':
@@ -233,6 +236,9 @@ export function reduceViewState(
         ? state
         : {
             ...state,
+            isConnected: true,
+            isLoading: false,
+            sessionUiPhase: 'connected',
             lifecyclePhase: 'playing',
           }
     case 'runtimeLaunchRequested':
@@ -246,4 +252,3 @@ export function reduceViewState(
       }
   }
 }
-

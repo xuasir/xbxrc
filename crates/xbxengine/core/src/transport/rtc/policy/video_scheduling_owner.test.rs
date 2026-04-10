@@ -1876,11 +1876,11 @@ fn submitted_clean_anchor_marks_rebuilding_supply_as_bootstrap_in_flight() {
     let output = owner.evaluate(&pending);
     assert_eq!(output.state, VideoSchedulingOwnerState::RebuildingSupply);
     let intent = output.recovery_intent.expect("bootstrap in flight intent");
-    assert_eq!(intent.reason_label, "bootstrapInFlight");
+    assert_eq!(intent.reason_label, "recoverySustaining");
 }
 
 #[test]
-fn submitted_clean_anchor_outside_grace_falls_back_to_transport_await_reason() {
+fn submitted_clean_anchor_within_sustaining_phase_keeps_bootstrap_in_flight_reason() {
     let mut owner = VideoSchedulingOwner::new();
     let _ = owner.evaluate(&input(
         ConnectionLifecycleStateFact::Connected,
@@ -1922,6 +1922,108 @@ fn submitted_clean_anchor_outside_grace_falls_back_to_transport_await_reason() {
         source_event: "chain-clean-keyframe-submitted".to_string(),
         failure_reason: None,
         observed_at_ms: 1_255.0,
+    });
+
+    let output = owner.evaluate(&pending);
+    assert_eq!(output.state, VideoSchedulingOwnerState::RebuildingSupply);
+    let intent = output.recovery_intent.expect("transport await intent");
+    assert_eq!(intent.reason_label, "recoverySustaining");
+}
+
+#[test]
+fn sustaining_recovery_with_serviceable_output_exits_rebuilding_supply_as_degraded() {
+    let mut owner = VideoSchedulingOwner::new();
+    let _ = owner.evaluate(&input(
+        ConnectionLifecycleStateFact::Connected,
+        Some("transportAwaitRecoveryKeyframe"),
+        SchedulingDemandSignal::default(),
+        Some("recovering"),
+        Some("frame-await-recovery-keyframe"),
+        Some("remoteTrackAttached"),
+        Some(64_000),
+        1_000.0,
+        17,
+    ));
+
+    let mut sustaining = input(
+        ConnectionLifecycleStateFact::Connected,
+        Some("transportAwaitRecoveryKeyframe"),
+        SchedulingDemandSignal {
+            no_pending_pressure_level: Some("critical".to_string()),
+            no_pending_streak: Some(180),
+            present_age_ms: Some(420.0),
+            decode_age_ms: Some(260.0),
+            video_renderer_stalled: false,
+            ..SchedulingDemandSignal::default()
+        },
+        Some("sustaining-recovery"),
+        Some("frame-observed"),
+        Some("remoteTrackAttached"),
+        Some(120_000),
+        1_180.0,
+        17,
+    );
+    sustaining.clean_anchor_epoch = Some(17);
+    sustaining.clean_anchor_observed_at_ms = Some(1_120.0);
+    sustaining.clean_anchor_source_event = Some("chain-clean-keyframe-submitted".to_string());
+    sustaining.latest_anchor_candidate_ledger = Some(crate::XbxEngineAnchorCandidateLedger {
+        recovery_epoch: 17,
+        frame_rtp_timestamp: Some(17_001),
+        state: crate::XbxEngineAnchorCandidateState::SubmittedCleanAnchor,
+        source_event: "chain-clean-keyframe-submitted".to_string(),
+        failure_reason: None,
+        observed_at_ms: 1_120.0,
+    });
+
+    let output = owner.evaluate(&sustaining);
+    assert_eq!(output.state, VideoSchedulingOwnerState::DegradedServing);
+    assert_eq!(output.health, VideoHealthContract::Stable);
+    assert!(output.recovery_intent.is_none());
+}
+
+#[test]
+fn sustaining_phase_stops_when_hard_rebuild_evidence_reappears() {
+    let mut owner = VideoSchedulingOwner::new();
+    let _ = owner.evaluate(&input(
+        ConnectionLifecycleStateFact::Connected,
+        Some("transportAwaitRecoveryKeyframe"),
+        SchedulingDemandSignal::default(),
+        Some("recovering"),
+        Some("frame-await-recovery-keyframe"),
+        Some("remoteTrackAttached"),
+        Some(64_000),
+        1_000.0,
+        7,
+    ));
+
+    let mut pending = input(
+        ConnectionLifecycleStateFact::Connected,
+        Some("transportAwaitRecoveryKeyframe"),
+        SchedulingDemandSignal {
+            no_pending_pressure_level: Some("critical".to_string()),
+            no_pending_streak: Some(180),
+            present_age_ms: Some(420.0),
+            decode_age_ms: Some(380.0),
+            video_renderer_stalled: false,
+            ..SchedulingDemandSignal::default()
+        },
+        Some("broken"),
+        Some("frame-await-recovery-keyframe"),
+        Some("remoteTrackAttached"),
+        Some(120_000),
+        1_650.0,
+        7,
+    );
+    pending.clean_anchor_epoch = Some(7);
+    pending.clean_anchor_observed_at_ms = Some(1_250.0);
+    pending.clean_anchor_source_event = Some("chain-clean-keyframe-submitted".to_string());
+    pending.latest_anchor_candidate_ledger = Some(crate::XbxEngineAnchorCandidateLedger {
+        recovery_epoch: 7,
+        frame_rtp_timestamp: Some(7_001),
+        state: crate::XbxEngineAnchorCandidateState::Rejected,
+        source_event: "frame-await-recovery-keyframe".to_string(),
+        failure_reason: Some(crate::XbxEngineAnchorCandidateFailureReason::GapExpiredDeadline),
+        observed_at_ms: 1_640.0,
     });
 
     let output = owner.evaluate(&pending);
@@ -2062,8 +2164,8 @@ fn clean_anchor_recovery_can_close_on_transient_present_feedback_gap() {
     missing_present.clean_anchor_observed_at_ms = Some(1_518.0);
     missing_present.clean_anchor_source_event = Some("chain-clean-keyframe-submitted".to_string());
     let healed = owner.evaluate(&missing_present);
-    assert_eq!(healed.state, VideoSchedulingOwnerState::StableServing);
-    assert_eq!(healed.health, VideoHealthContract::Stable);
+    assert_eq!(healed.state, VideoSchedulingOwnerState::RebuildingSupply);
+    assert_eq!(healed.health, VideoHealthContract::Recovering);
 }
 
 #[test]

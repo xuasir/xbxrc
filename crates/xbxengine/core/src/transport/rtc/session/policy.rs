@@ -24,6 +24,10 @@ use crate::transport::rtc::policy::video_scheduling_owner::{
     VideoSchedulingOwnerState,
 };
 use crate::transport::rtc::projection::TransportSnapshot;
+use crate::transport::rtc::recovery::contract::{
+    has_unresolved_transport_await_issue_from_observation, is_ingress_waiting_keyframe,
+    is_media_healthy_baseline,
+};
 use crate::transport::rtc::recovery::coordinator::{
     RecoveryCoordinator, RecoveryCoordinatorProposal, RecoveryOwnerSignal,
 };
@@ -90,7 +94,12 @@ fn recovery_decision_ledger_recovery_epoch(
         .budget_after
         .as_ref()
         .map(|budget| budget.recovery_epoch)
-        .or_else(|| ledger.budget_before.as_ref().map(|budget| budget.recovery_epoch))
+        .or_else(|| {
+            ledger
+                .budget_before
+                .as_ref()
+                .map(|budget| budget.recovery_epoch)
+        })
 }
 
 /// 与当前 `transport_recovery_epoch` 对齐的观测下界：排除上一轮恢复在滑窗内遗留的自愈痕迹。
@@ -106,7 +115,9 @@ fn ledger_input_signals_transport_await_recovery_keyframe(
         .contains(TRANSPORT_AWAIT_RECOVERY_KEYFRAME_DIAGNOSIS)
 }
 
-fn is_transport_await_keyframe_episode(episode: &XbxEngineKeyframeRequestEpisodeObservation) -> bool {
+fn is_transport_await_keyframe_episode(
+    episode: &XbxEngineKeyframeRequestEpisodeObservation,
+) -> bool {
     episode.request_reason.as_deref() == Some(TRANSPORT_AWAIT_RECOVERY_KEYFRAME_DIAGNOSIS)
 }
 
@@ -202,8 +213,10 @@ impl RecoveryObservationSnapshot {
     }
 
     fn allows_transport_await_reconnect_fallback(&self, observed_at_ms: f64) -> bool {
-        let has_media_stage_signal =
-            self.ingress_active || self.reassembly_active || self.decode_active || self.render_active;
+        let has_media_stage_signal = self.ingress_active
+            || self.reassembly_active
+            || self.decode_active
+            || self.render_active;
         self.rtc_connectivity_connected
             && !self.reconnect_in_flight
             && !self.stable_serving
@@ -236,7 +249,7 @@ fn is_first_frame_acquisition_reason_label(value: &str) -> bool {
         value,
         "bootstrapMissingSps"
             | "bootstrapMissingPps"
-            | "bootstrapInFlight"
+            | "recoverySustaining"
             | "inspectionRejectInvalidSliceHeader"
             | "NonIdrVcl"
             | "transportAwaitRecoveryKeyframe"
@@ -928,17 +941,16 @@ impl RtcSessionPolicy {
                 ]
                 .into_iter()
                 .flatten()
-                .max_by(|left, right| {
-                    left.partial_cmp(right).unwrap_or(std::cmp::Ordering::Equal)
-                }),
+                .max_by(|left, right| left.partial_cmp(right).unwrap_or(std::cmp::Ordering::Equal)),
                 last_video_decode_ok_at: stats.latest_video_decode_ok_time_ms,
                 last_keyframe_requested_at,
                 last_keyframe_decoded_at,
-                local_decoder_reset_count_in_window: Self::count_recent_transport_await_decoder_resets(
-                    stats,
-                    observed_at_ms,
-                    RECOVERY_OBSERVATION_WINDOW_MS,
-                ),
+                local_decoder_reset_count_in_window:
+                    Self::count_recent_transport_await_decoder_resets(
+                        stats,
+                        observed_at_ms,
+                        RECOVERY_OBSERVATION_WINDOW_MS,
+                    ),
                 keyframe_request_count_in_window:
                     Self::count_recent_transport_await_keyframe_requests(
                         stats,
@@ -1026,6 +1038,10 @@ impl RtcSessionPolicy {
             return false;
         }
         RuntimeStatsSink::read_shared(self.runtime_stats.as_ref(), |stats| {
+            let transport_await_unresolved = stats
+                .latest_video_timeline_observation
+                .as_ref()
+                .is_some_and(has_unresolved_transport_await_issue_from_observation);
             let current_clean_anchor = stats
                 .video_anchor_clean_epoch
                 .is_some_and(|epoch| epoch == stats.transport_recovery_epoch)
@@ -1035,64 +1051,48 @@ impl RtcSessionPolicy {
                 .latest_video_timeline_observation
                 .as_ref()
                 .is_some_and(|timeline| timeline.chain.state == "healthy");
-            let track_attached_with_video =
-                stats
-                    .latest_video_track_status
-                    .as_ref()
-                    .is_some_and(|track| {
-                        track.state == "remoteTrackAttached" && track.video_bytes_total > 0
-                    });
-            let pipeline_not_stalled = !stats.video_decoder_stalled.unwrap_or(false)
-                && !stats.video_renderer_stalled.unwrap_or(false);
-            let healthy_media_baseline = chain_healthy
-                && track_attached_with_video
-                && pipeline_not_stalled
-                && has_fresh_media_output(stats, observed_at_ms);
-            if Self::owner_state_is_steady_serving(owner_state) && healthy_media_baseline {
+            let decode_age_ms = stats
+                .latest_video_decode_ok_time_ms
+                .map(|at_ms| (observed_at_ms - at_ms).max(0.0));
+            let present_age_ms = stats
+                .latest_video_host_present_time_ms
+                .map(|at_ms| (observed_at_ms - at_ms).max(0.0));
+            let (track_state, track_video_bytes_total) = stats
+                .latest_video_track_status
+                .as_ref()
+                .map(|track| (Some(track.state.as_str()), Some(track.video_bytes_total)))
+                .unwrap_or((None, None));
+            let healthy_media_baseline = is_media_healthy_baseline(
+                true,
+                chain_healthy,
+                track_state,
+                track_video_bytes_total,
+                decode_age_ms,
+                present_age_ms,
+                500.0,
+                500.0,
+                stats.video_decoder_stalled.unwrap_or(false),
+                stats.video_renderer_stalled.unwrap_or(false),
+            ) && has_fresh_media_output(stats, observed_at_ms);
+            let recovered_hard_gate =
+                !transport_await_unresolved && current_clean_anchor && healthy_media_baseline;
+            if Self::owner_state_is_steady_serving(owner_state) && recovered_hard_gate {
                 return true;
             }
             let diagnosis_is_stale = snapshot.recovery.last_observed_at_ms.is_some_and(|last| {
                 (observed_at_ms - last).max(0.0) > STALE_TRANSPORT_AWAIT_REPLAY_MAX_AGE_MS
             });
-            diagnosis_is_stale && current_clean_anchor && healthy_media_baseline
+            diagnosis_is_stale && recovered_hard_gate
         })
         .unwrap_or(false)
     }
 
     fn has_unresolved_transport_await_issue(stats: &crate::XbxEngineMediaRuntimeStats) -> bool {
-        const TRANSPORT_AWAIT_UNRESOLVED_REASONS: [&str; 3] = [
-            "awaitingRecoveryKeyframe",
-            "awaitRecoveryKeyframe",
-            "referenceChainUnrecoverable",
-        ];
         let timeline = match stats.latest_video_timeline_observation.as_ref() {
             Some(timeline) => timeline,
             None => return false,
         };
-        if timeline
-            .chain
-            .reason
-            .as_deref()
-            .is_some_and(|reason| TRANSPORT_AWAIT_UNRESOLVED_REASONS.contains(&reason))
-        {
-            return true;
-        }
-        if timeline
-            .frame
-            .as_ref()
-            .and_then(|frame| frame.close_reason.as_deref())
-            .is_some_and(|reason| TRANSPORT_AWAIT_UNRESOLVED_REASONS.contains(&reason))
-        {
-            return true;
-        }
-        timeline.gap.as_ref().is_some_and(|gap| {
-            !matches!(gap.state.as_str(), "resolved" | "expired")
-                && timeline
-                    .chain
-                    .reason
-                    .as_deref()
-                    .is_some_and(|reason| TRANSPORT_AWAIT_UNRESOLVED_REASONS.contains(&reason))
-        })
+        has_unresolved_transport_await_issue_from_observation(timeline)
     }
 
     fn should_hold_pre_first_frame_connected_idle_timeout(
@@ -1816,6 +1816,36 @@ impl RtcSessionPolicy {
             absorb_first_frame_acquisition_anchor_issue,
         );
         let owner_output = self.scheduling_owner.evaluate(&owner_input);
+        let recovery_transport_await_unresolved = owner_facts
+            .latest_video_timeline_observation
+            .as_ref()
+            .is_some_and(has_unresolved_transport_await_issue_from_observation);
+        let recovery_ingress_waiting = owner_facts
+            .latest_video_timeline_observation
+            .as_ref()
+            .is_some_and(|timeline| {
+                is_ingress_waiting_keyframe(
+                    Some(timeline.chain.state.as_str()),
+                    timeline.chain.reason.as_deref(),
+                    Some(timeline.source_event.as_str()),
+                )
+            });
+        let recovery_phase = match owner_output.state {
+            VideoSchedulingOwnerState::SeekingAnchor | VideoSchedulingOwnerState::Priming => {
+                "priming"
+            }
+            VideoSchedulingOwnerState::RebuildingSupply => "recovering",
+            VideoSchedulingOwnerState::SupplyStarved => "starved",
+            VideoSchedulingOwnerState::DegradedServing => "degraded",
+            VideoSchedulingOwnerState::StableServing => "stable",
+        };
+        let recovery_exit_gate = if recovery_ingress_waiting {
+            "blocked:ingress-waiting"
+        } else if recovery_transport_await_unresolved {
+            "blocked:transport-await-unresolved"
+        } else {
+            "open"
+        };
         // canonical owner contract 由 owner state machine 直接写入 runtime stats，
         // 不再维护 recovery coupling 的并行语义轴。
         sink.update(|stats| {
@@ -1825,6 +1855,10 @@ impl RtcSessionPolicy {
             stats.video_owner_source =
                 Some(owner_output.diagnostics.reason_source.as_str().to_string());
             stats.video_owner_observed_at_ms = Some(owner_output.observed_at_ms);
+            stats.recovery_phase = Some(recovery_phase.to_string());
+            stats.recovery_exit_gate = Some(recovery_exit_gate.to_string());
+            stats.recovery_ingress_waiting = Some(recovery_ingress_waiting);
+            stats.recovery_transport_await_unresolved = Some(recovery_transport_await_unresolved);
         });
         let has_unresolved_transport_await_issue =
             RuntimeStatsSink::read_shared(self.runtime_stats.as_ref(), |stats| {

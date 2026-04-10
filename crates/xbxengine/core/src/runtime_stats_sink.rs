@@ -198,6 +198,7 @@ impl RuntimeStatsSink {
                     .map(|value| format!("{value:.1}"))
                     .unwrap_or_else(|| "none".to_string())
             ));
+            emit_keyframe_closure_probe(stats, "requested", requested_at_ms);
         });
     }
 
@@ -261,12 +262,14 @@ impl RuntimeStatsSink {
                 "episodeId={} requestKind={} sentAtMs={:.1}",
                 episode.episode_id, request_kind, sent_at_ms
             ));
+            emit_keyframe_closure_probe(stats, "sent", sent_at_ms);
         });
     }
 
     pub(crate) fn record_keyframe_request_episode_timeout(&self, observed_at_ms: f64) {
         self.update(|stats| {
             let mut updated_episode = None;
+            let mut should_probe = false;
             if let Some(episode) = stats.latest_keyframe_request_episode.as_mut() {
                 let Some(deadline_at_ms) = episode.deadline_at_ms else {
                     return;
@@ -286,9 +289,13 @@ impl RuntimeStatsSink {
                     episode.episode_id, deadline_at_ms, observed_at_ms
                 ));
                 updated_episode = Some(episode.clone());
+                should_probe = true;
             }
             if let Some(episode) = updated_episode {
                 sync_recent_keyframe_request_episode(stats, episode);
+            }
+            if should_probe {
+                emit_keyframe_closure_probe(stats, "timeout", observed_at_ms);
             }
         });
     }
@@ -300,6 +307,7 @@ impl RuntimeStatsSink {
     ) {
         self.update(|stats| {
             let mut updated_episode = None;
+            let mut should_probe = false;
             if let Some(episode) = stats.latest_keyframe_request_episode.as_mut() {
                 if episode.sent_at_ms.is_some()
                     || !matches!(episode.response_verdict.as_deref(), None | Some("pending"))
@@ -316,9 +324,13 @@ impl RuntimeStatsSink {
                     episode.episode_id, observed_at_ms
                 ));
                 updated_episode = Some(episode.clone());
+                should_probe = true;
             }
             if let Some(episode) = updated_episode {
                 sync_recent_keyframe_request_episode(stats, episode);
+            }
+            if should_probe {
+                emit_keyframe_closure_probe(stats, "deferred", observed_at_ms);
             }
         });
     }
@@ -326,6 +338,7 @@ impl RuntimeStatsSink {
     pub(crate) fn record_keyframe_request_episode_failed(&self, observed_at_ms: f64, detail: &str) {
         self.update(|stats| {
             let mut updated_episode = None;
+            let mut should_probe = false;
             if let Some(episode) = stats.latest_keyframe_request_episode.as_mut() {
                 if episode.sent_at_ms.is_some()
                     || !matches!(episode.response_verdict.as_deref(), None | Some("pending"))
@@ -342,9 +355,13 @@ impl RuntimeStatsSink {
                     episode.episode_id, observed_at_ms
                 ));
                 updated_episode = Some(episode.clone());
+                should_probe = true;
             }
             if let Some(episode) = updated_episode {
                 sync_recent_keyframe_request_episode(stats, episode);
+            }
+            if should_probe {
+                emit_keyframe_closure_probe(stats, "failed", observed_at_ms);
             }
         });
     }
@@ -376,6 +393,7 @@ impl RuntimeStatsSink {
     ) {
         self.update(|stats| {
             let mut updated_episode = None;
+            let mut should_probe = false;
             if let Some(episode) = stats.latest_keyframe_request_episode.as_mut() {
                 if episode.first_video_packet_at_ms.is_none() {
                     episode.first_video_packet_at_ms = Some(observed_at_ms);
@@ -414,10 +432,14 @@ impl RuntimeStatsSink {
                         observed_at_ms
                     ));
                     updated_episode = Some(episode.clone());
+                    should_probe = true;
                 }
             }
             if let Some(episode) = updated_episode {
                 sync_recent_keyframe_request_episode(stats, episode);
+            }
+            if should_probe {
+                emit_keyframe_closure_probe(stats, "packet-seen", observed_at_ms);
             }
         });
     }
@@ -431,6 +453,7 @@ impl RuntimeStatsSink {
     ) {
         self.update(|stats| {
             let mut updated_episode = None;
+            let mut should_probe = false;
             if let Some(episode) = stats.latest_keyframe_request_episode.as_mut() {
                 if episode.sent_at_ms.is_none()
                     || !matches!(episode.response_verdict.as_deref(), None | Some("pending"))
@@ -473,9 +496,13 @@ impl RuntimeStatsSink {
                     is_keyframe
                 ));
                 updated_episode = Some(episode.clone());
+                should_probe = true;
             }
             if let Some(episode) = updated_episode {
                 sync_recent_keyframe_request_episode(stats, episode);
+            }
+            if should_probe {
+                emit_keyframe_closure_probe(stats, "response-observed", observed_at_ms);
             }
         });
     }
@@ -488,6 +515,7 @@ impl RuntimeStatsSink {
     ) {
         self.update(|stats| {
             let mut updated_episode = None;
+            let mut should_probe = false;
             if let Some(episode) = stats.latest_keyframe_request_episode.as_mut() {
                 if episode.first_keyframe_packet_at_ms.is_none() {
                     episode.first_keyframe_packet_at_ms = Some(observed_at_ms);
@@ -514,9 +542,13 @@ impl RuntimeStatsSink {
                     episode.episode_id, rtp_timestamp, frame_seq, observed_at_ms
                 ));
                 updated_episode = Some(episode.clone());
+                should_probe = true;
             }
             if let Some(episode) = updated_episode {
                 sync_recent_keyframe_request_episode(stats, episode);
+            }
+            if should_probe {
+                emit_keyframe_closure_probe(stats, "decoded", observed_at_ms);
             }
         });
     }
@@ -691,6 +723,7 @@ impl RuntimeStatsSink {
                 failure_reason,
                 observed_at_ms,
             });
+            emit_keyframe_closure_probe(stats, "anchor-candidate", observed_at_ms);
         });
     }
 
@@ -723,6 +756,7 @@ impl RuntimeStatsSink {
     pub(crate) fn record_transport_clean_anchor(&self, observed_at_ms: f64, source_event: &str) {
         self.update(|stats| {
             Self::apply_transport_clean_anchor(stats, observed_at_ms, source_event);
+            emit_keyframe_closure_probe(stats, "clean-anchor", observed_at_ms);
         });
     }
 
@@ -870,6 +904,65 @@ fn apply_keyframe_request_episode_sent(
     if episode.response_verdict.is_none() {
         episode.response_verdict = Some("pending".to_string());
     }
+}
+
+fn emit_keyframe_closure_probe(
+    stats: &XbxEngineMediaRuntimeStats,
+    stage: &str,
+    observed_at_ms: f64,
+) {
+    let (episode_id, sent_at_ms, response_seen, decoded_at_ms, response_verdict) = stats
+        .latest_keyframe_request_episode
+        .as_ref()
+        .map(|episode| {
+            (
+                Some(episode.episode_id),
+                episode.sent_at_ms,
+                episode
+                    .first_keyframe_packet_at_ms
+                    .or(episode.first_video_packet_at_ms),
+                episode.first_keyframe_decoded_at_ms,
+                episode.response_verdict.clone(),
+            )
+        })
+        .unwrap_or((None, None, None, None, None));
+    let (anchor_state, anchor_source, anchor_epoch) = stats
+        .latest_anchor_candidate_ledger
+        .as_ref()
+        .map(|candidate| {
+            (
+                Some(format!("{:?}", candidate.state)),
+                Some(candidate.source_event.clone()),
+                Some(candidate.recovery_epoch),
+            )
+        })
+        .unwrap_or((None, None, None));
+    let clean_anchor_committed = stats.video_anchor_clean_observed_at_ms.is_some();
+    // 关键帧恢复闭环：request -> response -> decode -> clean-anchor。
+    crate::xbx_log_warn!(
+        "[keyframe-closure] stage={} atMs={:.1} episodeId={} sentAtMs={} responseSeenAtMs={} decodedAtMs={} verdict={} anchorState={} anchorSource={} anchorEpoch={} cleanAnchorCommitted={}",
+        stage,
+        observed_at_ms,
+        episode_id
+            .map(|value| value.to_string())
+            .unwrap_or_else(|| "none".to_string()),
+        sent_at_ms
+            .map(|value| format!("{value:.1}"))
+            .unwrap_or_else(|| "none".to_string()),
+        response_seen
+            .map(|value| format!("{value:.1}"))
+            .unwrap_or_else(|| "none".to_string()),
+        decoded_at_ms
+            .map(|value| format!("{value:.1}"))
+            .unwrap_or_else(|| "none".to_string()),
+        response_verdict.unwrap_or_else(|| "none".to_string()),
+        anchor_state.unwrap_or_else(|| "none".to_string()),
+        anchor_source.unwrap_or_else(|| "none".to_string()),
+        anchor_epoch
+            .map(|value| value.to_string())
+            .unwrap_or_else(|| "none".to_string()),
+        clean_anchor_committed
+    );
 }
 
 pub(crate) fn expire_latest_keyframe_request_episode_if_unsent(

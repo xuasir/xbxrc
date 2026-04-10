@@ -1,7 +1,6 @@
 use xbxengine_protocol::{
     XbxEnginePresentationMilestoneDto, XbxEngineRuntimeEventDto, XbxEngineRuntimePhaseDto,
-    XbxEngineTransportStateDto,
-    XbxEngineVideoTrackStatusDto,
+    XbxEngineTransportStateDto, XbxEngineVideoTrackStatusDto,
 };
 
 use super::{XbxEngineEventSink, XbxEngineHostBridge, XbxEngineRuntime};
@@ -262,12 +261,11 @@ where
     pub(super) fn sync_presentation_milestone(&mut self, stats: &XbxEngineMediaRuntimeStats) {
         let now_ms = super::now_ms_f64();
         let (milestone, stage) = self.resolve_presentation_milestone(stats, now_ms);
-        let next_failed_stage =
-            if matches!(milestone, XbxEnginePresentationMilestoneDto::Failed) {
-                stage.clone()
-            } else {
-                None
-            };
+        let next_failed_stage = if matches!(milestone, XbxEnginePresentationMilestoneDto::Failed) {
+            stage.clone()
+        } else {
+            None
+        };
         if self.snapshot.presentation_milestone.as_ref() == Some(&milestone)
             && self.snapshot.presentation_failed_stage == next_failed_stage
         {
@@ -333,13 +331,19 @@ where
             XbxEngineTransportStateDto::New
             | XbxEngineTransportStateDto::Connecting
             | XbxEngineTransportStateDto::Disconnected => {
-                return (XbxEnginePresentationMilestoneDto::Idle, Some("transport".to_string()));
+                return (
+                    XbxEnginePresentationMilestoneDto::Idle,
+                    Some("transport".to_string()),
+                );
             }
             XbxEngineTransportStateDto::Connected => {}
         }
 
         if !Self::connected_milestone_ready(stats) {
-            return (XbxEnginePresentationMilestoneDto::Idle, Some("transport".to_string()));
+            return (
+                XbxEnginePresentationMilestoneDto::Idle,
+                Some("transport".to_string()),
+            );
         }
 
         if Self::media_ready_milestone_ready(stats, now_ms) {
@@ -372,7 +376,10 @@ where
             stats.control_ready_at_ms.is_some() || stats.message_handshake_acked_at_ms.is_some();
         let media_ingress_ready = stats.latest_video_packet_arrival_time_ms.is_some()
             || stats.latest_video_track_status.is_some()
-            || stats.latest_video_stream_width.zip(stats.latest_video_stream_height).is_some();
+            || stats
+                .latest_video_stream_width
+                .zip(stats.latest_video_stream_height)
+                .is_some();
         control_plane_ready && media_ingress_ready
     }
 

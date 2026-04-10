@@ -2455,7 +2455,7 @@ fn hard_paused_stream_with_renderer_stall_prefers_decoder_reset_over_reconnect()
 }
 
 #[test]
-fn transport_expired_deadline_hard_pause_prefers_decoder_reset_over_reconnect() {
+fn transport_expired_deadline_hard_pause_does_not_bypass_to_decoder_reset() {
     let now_ms = unix_now_ms();
     let mut stats = XbxEngineMediaRuntimeStats::default();
     stats.transport_state = XbxEngineTransportStateDto::Connected;
@@ -2484,7 +2484,8 @@ fn transport_expired_deadline_hard_pause_prefers_decoder_reset_over_reconnect() 
         VideoEscalationReason::TransportExpiredDeadline,
         &Mutex::new(stats),
     );
-    assert_eq!(decision.action, RecoveryAction::RequestDecoderReset);
+    // 连接域 deadline 不走 hard_stall 的本地 decoder reset 旁路，交给 escalation 连接域链。
+    assert_eq!(decision.action, RecoveryAction::RequestKeyframe);
 }
 
 #[test]
@@ -3583,6 +3584,20 @@ fn bootstrap_in_flight_signal_stays_in_local_probe_domain() {
     let now_ms = unix_now_ms();
     let mut stats = XbxEngineMediaRuntimeStats::default();
     stats.transport_recovery_epoch = 12;
+    stats.latest_video_timeline_observation = Some(crate::XbxEngineVideoTimelineObservation {
+        observation_id: 777,
+        source_event: "frame-observed".to_string(),
+        gap: None,
+        frame: None,
+        chain: crate::XbxEngineVideoTimelineChainSnapshot {
+            state: "recovering".to_string(),
+            reason: Some("awaitingRecoveryKeyframe".to_string()),
+            observed_at_ms: now_ms - 60.0,
+        },
+        observed_at_ms: now_ms - 60.0,
+    });
+    stats.latest_video_decode_ok_time_ms = Some(now_ms - 90.0);
+    stats.latest_video_host_present_time_ms = Some(now_ms - 70.0);
     stats.latest_video_track_status = Some(XbxEngineVideoTrackStatus {
         state: "remoteTrackAttached".to_string(),
         video_width: Some(1280),
@@ -3617,7 +3632,7 @@ fn bootstrap_in_flight_signal_stays_in_local_probe_domain() {
     let proposal = coordinator.propose_from_owner_signal(
         RecoveryOwnerSignal {
             reason: VideoEscalationReason::TransportAwaitRecoveryKeyframe,
-            reason_label: "bootstrapInFlight".to_string(),
+            reason_label: "recoverySustaining".to_string(),
             observed_at_ms: now_ms,
         },
         &shared_stats,

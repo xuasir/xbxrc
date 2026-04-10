@@ -165,18 +165,18 @@ fn no_render_slack_or_no_fresh_output_still_emits_idle_timeout_observation() {
 }
 
 #[test]
-fn clean_anchor_soft_reentry_allows_healthy_delta_to_submit() {
+fn recovery_wait_without_hard_risk_allows_healthy_delta_to_submit() {
     let (next_waiting_for_recovery_keyframe, recovery_action) =
-        resolve_recovery_keyframe_action(true, true, false, 0, 0, false, true);
+        resolve_recovery_keyframe_action(true, true, false, false, 0, 0, false);
 
     assert!(!next_waiting_for_recovery_keyframe);
     assert_eq!(recovery_action, RecoveryKeyframeAction::Submit);
 }
 
 #[test]
-fn clean_anchor_soft_reentry_does_not_override_loss_semantics() {
+fn recovery_wait_does_not_override_loss_semantics() {
     let (next_waiting_for_recovery_keyframe, recovery_action) =
-        resolve_recovery_keyframe_action(true, true, false, 0, 1, false, true);
+        resolve_recovery_keyframe_action(true, true, false, false, 0, 1, false);
 
     assert!(!next_waiting_for_recovery_keyframe);
     assert_eq!(
@@ -188,7 +188,7 @@ fn clean_anchor_soft_reentry_does_not_override_loss_semantics() {
 #[test]
 fn short_sample_loss_burst_stays_in_drop_and_request_keyframe() {
     let (next_waiting_for_recovery_keyframe, recovery_action) =
-        resolve_recovery_keyframe_action(true, false, false, 2, 1, false, false);
+        resolve_recovery_keyframe_action(true, false, false, false, 2, 1, false);
 
     assert!(!next_waiting_for_recovery_keyframe);
     assert_eq!(
@@ -200,25 +200,16 @@ fn short_sample_loss_burst_stays_in_drop_and_request_keyframe() {
 #[test]
 fn only_longer_sample_loss_burst_enters_wait_keyframe() {
     let (next_waiting_for_recovery_keyframe, recovery_action) =
-        resolve_recovery_keyframe_action(true, false, false, 3, 1, false, false);
+        resolve_recovery_keyframe_action(true, false, false, false, 3, 1, false);
 
     assert!(next_waiting_for_recovery_keyframe);
     assert_eq!(recovery_action, RecoveryKeyframeAction::TriggerWaitKeyframe);
 }
 
 #[test]
-fn recovery_wait_without_soft_reentry_remains_waiting() {
-    let (next_waiting_for_recovery_keyframe, recovery_action) =
-        resolve_recovery_keyframe_action(true, true, true, 0, 0, false, false);
-
-    assert!(next_waiting_for_recovery_keyframe);
-    assert_eq!(recovery_action, RecoveryKeyframeAction::WaitKeyframe);
-}
-
-#[test]
 fn low_value_local_gap_wait_is_absorbed_without_transport_wait_upgrade() {
     let (next_waiting_for_recovery_keyframe, recovery_action) =
-        resolve_recovery_keyframe_action(true, true, false, 0, 0, false, false);
+        resolve_recovery_keyframe_action(true, true, false, false, 0, 0, false);
 
     assert!(!next_waiting_for_recovery_keyframe);
     assert_eq!(recovery_action, RecoveryKeyframeAction::Submit);
@@ -227,7 +218,25 @@ fn low_value_local_gap_wait_is_absorbed_without_transport_wait_upgrade() {
 #[test]
 fn pre_first_frame_wait_does_not_absorb_non_keyframe_delta() {
     let (next_waiting_for_recovery_keyframe, recovery_action) =
-        resolve_recovery_keyframe_action(false, true, false, 0, 0, false, false);
+        resolve_recovery_keyframe_action(false, true, false, false, 0, 0, false);
+
+    assert!(next_waiting_for_recovery_keyframe);
+    assert_eq!(recovery_action, RecoveryKeyframeAction::WaitKeyframe);
+}
+
+#[test]
+fn sustaining_recovery_prefers_keepalive_over_reenter_wait_keyframe() {
+    let (next_waiting_for_recovery_keyframe, recovery_action) =
+        resolve_recovery_keyframe_action(true, true, true, true, 0, 0, false);
+
+    assert!(!next_waiting_for_recovery_keyframe);
+    assert_eq!(recovery_action, RecoveryKeyframeAction::Submit);
+}
+
+#[test]
+fn hard_recovery_wait_without_building_phase_still_reenters_wait_keyframe() {
+    let (next_waiting_for_recovery_keyframe, recovery_action) =
+        resolve_recovery_keyframe_action(true, true, false, true, 0, 0, false);
 
     assert!(next_waiting_for_recovery_keyframe);
     assert_eq!(recovery_action, RecoveryKeyframeAction::WaitKeyframe);
@@ -251,7 +260,7 @@ fn inspection_admission_rejects_frames_without_bootstrap_or_continuation() {
             bootstrap_reject_reason: None,
             commit_state:
                 crate::media::video::h264::inspection::H264AccessUnitInspector::test_commit_state(),
-        }, false, false),
+        }, false, false, false),
         super::InspectionAdmission::Accept
     );
 
@@ -271,7 +280,7 @@ fn inspection_admission_rejects_frames_without_bootstrap_or_continuation() {
             bootstrap_reject_reason: None,
             commit_state:
                 crate::media::video::h264::inspection::H264AccessUnitInspector::test_commit_state(),
-        }, false, false),
+        }, false, false, false),
         super::InspectionAdmission::AwaitRecoveryKeyframe
     );
 
@@ -291,7 +300,7 @@ fn inspection_admission_rejects_frames_without_bootstrap_or_continuation() {
             bootstrap_reject_reason: None,
             commit_state:
                 crate::media::video::h264::inspection::H264AccessUnitInspector::test_commit_state(),
-        }, false, false),
+        }, false, false, false),
         super::InspectionAdmission::AwaitRecoveryKeyframe
     );
 }
@@ -310,17 +319,72 @@ fn pre_first_frame_non_idr_continuation_is_rejected_until_first_frame_exists() {
 
     assert!(inspection.delta_continuation_ready());
     assert_eq!(
-        resolve_inspection_admission(&inspection, false, false),
+        resolve_inspection_admission(&inspection, false, false, false),
         super::InspectionAdmission::AwaitRecoveryKeyframe
     );
     assert_eq!(
-        resolve_inspection_admission(&inspection, false, true),
+        resolve_inspection_admission(&inspection, false, true, false),
         super::InspectionAdmission::Accept
     );
     assert_eq!(
-        resolve_inspection_admission(&inspection, true, false),
+        resolve_inspection_admission(&inspection, true, false, false),
         super::InspectionAdmission::Accept
     );
+}
+
+#[test]
+fn sustaining_recovery_continuation_is_accepted_before_first_frame_output() {
+    let inspector = H264AccessUnitInspector::new();
+    inspector
+        .seed_committed_parameter_sets_if_absent(&bootstrap_sps_nalu(), &bootstrap_pps_nalu())
+        .expect("seed committed parameter sets");
+    let mut payload = vec![0, 0, 0, 1];
+    payload.extend_from_slice(&bootstrap_non_idr_nalu());
+    let inspection = inspector
+        .inspect_access_unit(&payload)
+        .expect("inspect non-idr access unit");
+
+    assert!(inspection.delta_continuation_ready());
+    assert_eq!(
+        resolve_inspection_admission(&inspection, false, false, true),
+        super::InspectionAdmission::Accept
+    );
+}
+
+#[tokio::test]
+async fn sustaining_recovery_reject_restarts_recovery_keyframe_request() {
+    let (tx, mut transport_observation_rx, mut source) = make_video_source_for_test();
+    source.timeline_state.on_clean_keyframe_submitted();
+
+    assert!(source.timeline_state.in_sustaining_recovery());
+    assert!(!source.waiting_for_recovery_keyframe());
+
+    let non_idr = bootstrap_non_idr_nalu();
+    tx.send(make_video_rtp_packet(100, 9_001, true, &non_idr))
+        .await
+        .expect("non-idr packet should enqueue");
+    tx.send(make_video_rtp_packet(101, 9_017, true, &non_idr))
+        .await
+        .expect("follow-up packet should flush previous sample");
+    drop(tx);
+
+    let frame = tokio::time::timeout(Duration::from_millis(200), source.recv_frame_inner())
+        .await
+        .expect("reader should finish after rx closes");
+    assert!(frame.is_none());
+
+    let observation =
+        tokio::time::timeout(Duration::from_millis(50), transport_observation_rx.recv())
+            .await
+            .expect("sustaining reject should request a new recovery keyframe")
+            .expect("observation should exist");
+    assert_eq!(
+        observation,
+        TransportObservation::Loss(TransportLossObservation::RecoveryKeyframeRequested)
+    );
+    assert!(transport_observation_rx.try_recv().is_err());
+    assert!(source.waiting_for_recovery_keyframe());
+    assert!(!source.timeline_state.in_sustaining_recovery());
 }
 
 #[test]
@@ -384,6 +448,51 @@ async fn bootstrap_keyframe_packets_are_assembled_into_frame() {
     assert!(frame.width > 0);
     assert!(frame.height > 0);
     assert!(transport_observation_rx.try_recv().is_err());
+}
+
+#[tokio::test]
+async fn clean_keyframe_then_consecutive_non_idr_continuation_does_not_fall_back_to_wait_keyframe()
+{
+    let (tx, mut transport_observation_rx, mut source) = make_video_source_for_test();
+    source
+        .timeline_state
+        .on_admission_await_recovery_keyframe(Some("awaitingRecoveryKeyframe"));
+    source
+        .timeline_state
+        .mark_gap_reorder_pending(&[401], 0.5, Some(8_900), "reference");
+    assert!(source.timeline_state.waiting_for_recovery_keyframe());
+    assert!(source.timeline_state.has_hard_recovery_risk_for_test());
+
+    send_bootstrap_access_unit(&tx, 100, 9_000).await;
+    let non_idr = bootstrap_non_idr_nalu();
+    tx.send(make_video_rtp_packet(103, 9_016, true, &non_idr))
+        .await
+        .expect("first continuation should flush bootstrap sample");
+    tx.send(make_video_rtp_packet(104, 9_032, true, &non_idr))
+        .await
+        .expect("second continuation should flush first continuation");
+    tx.send(make_video_rtp_packet(105, 9_048, true, &non_idr))
+        .await
+        .expect("third continuation should flush second continuation");
+    tx.send(make_video_rtp_packet(106, 9_064, true, &non_idr))
+        .await
+        .expect("tail continuation should flush third continuation");
+    drop(tx);
+
+    let bootstrap_frame =
+        tokio::time::timeout(Duration::from_millis(200), source.recv_frame_inner())
+            .await
+            .expect("bootstrap frame should assemble")
+            .expect("bootstrap frame should be emitted");
+    assert!(bootstrap_frame.is_keyframe);
+    assert!(!source.timeline_state.waiting_for_recovery_keyframe());
+    assert!(!source.timeline_state.has_hard_recovery_risk_for_test());
+
+    for _ in 0..3 {
+        let _ = tokio::time::timeout(Duration::from_millis(200), source.recv_frame_inner()).await;
+    }
+
+    while transport_observation_rx.try_recv().is_ok() {}
 }
 
 #[tokio::test]

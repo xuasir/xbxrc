@@ -25,6 +25,23 @@ fn chain_broken_then_keyframe_request_enters_recovering() {
 }
 
 #[test]
+fn sustaining_recovery_is_not_reported_as_waiting_keyframe() {
+    let mut state = VideoTimelineState::new();
+    state.observe_anchor_candidate(
+        8,
+        Some(95_050),
+        "chain-clean-keyframe-submitted",
+        XbxEngineAnchorCandidateState::SubmittedCleanAnchor,
+        None,
+        12.0,
+    );
+    state.on_clean_keyframe_submitted();
+
+    assert_eq!(state.chain_state(), ChainState::SustainingRecovery);
+    assert!(!state.waiting_for_recovery_keyframe());
+}
+
+#[test]
 fn per_gap_lifecycle_is_tracked() {
     let mut state = VideoTimelineState::new();
     state.observe_gap(&[10, 11], 1.0, Some(90_000), "reference");
@@ -370,7 +387,7 @@ fn broken_chain_is_not_whitened_by_delta_until_clean_keyframe() {
     assert_eq!(state.chain_state(), ChainState::Broken);
 
     state.on_clean_keyframe_submitted();
-    assert_eq!(state.chain_state(), ChainState::Healthy);
+    assert_eq!(state.chain_state(), ChainState::SustainingRecovery);
 }
 
 #[test]
@@ -403,7 +420,7 @@ fn anonymous_cloud_low_value_delta_gap_does_not_break_chain() {
     assert_eq!(state.chain_state(), ChainState::Healthy);
 
     state.on_clean_keyframe_submitted();
-    assert_eq!(state.chain_state(), ChainState::Healthy);
+    assert_eq!(state.chain_state(), ChainState::SustainingRecovery);
 }
 
 #[test]
@@ -480,7 +497,7 @@ fn wait_keyframe_gate_creates_chain_debt_until_clean_keyframe() {
     assert_eq!(state.chain_state(), ChainState::Recovering);
 
     state.on_clean_keyframe_submitted();
-    assert_eq!(state.chain_state(), ChainState::Healthy);
+    assert_eq!(state.chain_state(), ChainState::SustainingRecovery);
 }
 
 #[test]
@@ -507,7 +524,7 @@ fn recovering_chain_only_clean_anchor_submission_can_return_healthy() {
     assert_eq!(state.chain_state(), ChainState::Recovering);
 
     state.on_clean_keyframe_submitted();
-    assert_eq!(state.chain_state(), ChainState::Healthy);
+    assert_eq!(state.chain_state(), ChainState::SustainingRecovery);
 }
 
 #[test]
@@ -539,10 +556,10 @@ fn clean_anchor_short_window_softens_delta_reorder_reentry() {
         10.0,
     );
     state.on_clean_keyframe_submitted();
-    assert_eq!(state.chain_state(), ChainState::Healthy);
+    assert_eq!(state.chain_state(), ChainState::SustainingRecovery);
 
     state.mark_gap_reorder_pending(&[501], 10.5, None, "delta");
-    assert_eq!(state.chain_state(), ChainState::Healthy);
+    assert_eq!(state.chain_state(), ChainState::SustainingRecovery);
 
     let chain_broken = state.mark_gap_expired(
         &[501],
@@ -552,11 +569,11 @@ fn clean_anchor_short_window_softens_delta_reorder_reentry() {
         Some("awaitingRecoveryKeyframe"),
     );
     assert!(!chain_broken);
-    assert_eq!(state.chain_state(), ChainState::Healthy);
+    assert_eq!(state.chain_state(), ChainState::SustainingRecovery);
 }
 
 #[test]
-fn clean_anchor_soft_reentry_budget_exhaustion_restores_hard_semantics() {
+fn clean_anchor_building_window_softens_delta_expiry_without_frame_budget() {
     let mut state = VideoTimelineState::new();
     state.observe_anchor_candidate(
         22,
@@ -567,9 +584,9 @@ fn clean_anchor_soft_reentry_budget_exhaustion_restores_hard_semantics() {
         20.0,
     );
     state.on_clean_keyframe_submitted();
-    assert_eq!(state.chain_state(), ChainState::Healthy);
+    assert_eq!(state.chain_state(), ChainState::SustainingRecovery);
 
-    for sequence in [601u16, 602, 603] {
+    for sequence in [601u16, 602, 603, 604, 605, 606] {
         let chain_broken = state.mark_gap_expired(
             &[sequence],
             20.1,
@@ -578,22 +595,12 @@ fn clean_anchor_soft_reentry_budget_exhaustion_restores_hard_semantics() {
             Some("awaitingRecoveryKeyframe"),
         );
         assert!(!chain_broken);
-        assert_eq!(state.chain_state(), ChainState::Healthy);
+        assert_eq!(state.chain_state(), ChainState::SustainingRecovery);
     }
-
-    let chain_broken = state.mark_gap_expired(
-        &[604],
-        20.2,
-        None,
-        "delta",
-        Some("awaitingRecoveryKeyframe"),
-    );
-    assert!(chain_broken);
-    assert_eq!(state.chain_state(), ChainState::Broken);
 }
 
 #[test]
-fn clean_anchor_soft_reentry_does_not_relax_reference_break() {
+fn clean_anchor_building_phase_does_not_relax_reference_break() {
     let mut state = VideoTimelineState::new();
     state.observe_anchor_candidate(
         23,
@@ -604,7 +611,7 @@ fn clean_anchor_soft_reentry_does_not_relax_reference_break() {
         30.0,
     );
     state.on_clean_keyframe_submitted();
-    assert_eq!(state.chain_state(), ChainState::Healthy);
+    assert_eq!(state.chain_state(), ChainState::SustainingRecovery);
 
     let chain_broken = state.mark_gap_expired(
         &[701],
@@ -615,6 +622,132 @@ fn clean_anchor_soft_reentry_does_not_relax_reference_break() {
     );
     assert!(chain_broken);
     assert_eq!(state.chain_state(), ChainState::Broken);
+}
+
+#[test]
+fn observation_only_building_phase_softening_is_time_based() {
+    let mut state = VideoTimelineState::new();
+    state.observe_anchor_candidate(
+        23,
+        Some(130_001),
+        "chain-clean-keyframe-submitted",
+        XbxEngineAnchorCandidateState::SubmittedCleanAnchor,
+        None,
+        30.0,
+    );
+    state.on_clean_keyframe_submitted();
+    assert_eq!(state.chain_state(), ChainState::SustainingRecovery);
+
+    state.mark_gap_reorder_pending(&[741], 30.1, None, "delta");
+    state.mark_gap_nack_candidate(&[741], 30.2, None, "delta");
+    state.mark_gap_repair_in_flight(&[741], 30.3, None, "delta");
+    state.mark_gap_resolved(741, 30.4, None, "delta");
+
+    assert!(state.recovery_chain_building_phase_active(30.5, "delta"));
+    assert!(state.recovery_chain_building_phase_active(30.6, "delta"));
+    assert!(state.recovery_chain_building_phase_active(30.7, "delta"));
+    assert!(state.recovery_chain_building_phase_active(31.0, "delta"));
+}
+
+#[test]
+fn submit_side_building_phase_probe_is_time_based() {
+    let mut state = VideoTimelineState::new();
+    state.observe_anchor_candidate(
+        24,
+        Some(130_101),
+        "chain-clean-keyframe-submitted",
+        XbxEngineAnchorCandidateState::SubmittedCleanAnchor,
+        None,
+        40.0,
+    );
+    state.on_clean_keyframe_submitted();
+
+    assert!(state.recovery_chain_building_phase_active(40.1, "delta"));
+    assert!(state.recovery_chain_building_phase_active(40.2, "delta"));
+    assert!(state.recovery_chain_building_phase_active(40.3, "delta"));
+    assert!(state.recovery_chain_building_phase_active(41.1, "delta"));
+}
+
+#[test]
+fn sustaining_recovery_timeout_falls_back_to_recovering() {
+    let mut state = VideoTimelineState::new();
+    state.observe_anchor_candidate(
+        25,
+        Some(130_201),
+        "chain-clean-keyframe-submitted",
+        XbxEngineAnchorCandidateState::SubmittedCleanAnchor,
+        None,
+        50.0,
+    );
+    state.on_clean_keyframe_submitted();
+    assert_eq!(state.chain_state(), ChainState::SustainingRecovery);
+
+    state.on_timeout_detected();
+
+    assert_eq!(state.chain_state(), ChainState::Recovering);
+    assert!(state.waiting_for_recovery_keyframe());
+    let observation =
+        state.snapshot_for_observation(1, "timeout-stream-thin-stall", None, None, 51.0);
+    assert_eq!(
+        observation.chain.reason.as_deref(),
+        Some("awaitRecoveryKeyframe")
+    );
+}
+
+#[test]
+fn clean_anchor_submission_retires_older_reorder_debt() {
+    let mut state = VideoTimelineState::new();
+    state.observe_gap(&[901], 1.0, Some(100_001), "reference");
+    state.mark_gap_reorder_pending(&[901], 2.0, Some(100_001), "reference");
+    assert_eq!(state.chain_state(), ChainState::Repairing);
+
+    state.observe_anchor_candidate(
+        24,
+        Some(100_100),
+        "chain-clean-keyframe-submitted",
+        XbxEngineAnchorCandidateState::SubmittedCleanAnchor,
+        None,
+        10.0,
+    );
+    state.on_clean_keyframe_submitted();
+
+    assert_eq!(state.chain_state(), ChainState::SustainingRecovery);
+    assert_eq!(state.gap_state_of(901), None);
+}
+
+#[test]
+fn stable_continuation_can_retire_aged_older_reorder_debt() {
+    let mut state = VideoTimelineState::new();
+    state.observe_gap(&[911], 1.0, Some(100_001), "reference");
+    state.mark_gap_reorder_pending(&[911], 2.0, Some(100_001), "reference");
+    assert_eq!(state.chain_state(), ChainState::Repairing);
+
+    state.observe_frame(100_100, 10.0, Some(false), "delta");
+    state.mark_frame_complete_candidate(100_100, 20.0, Some(false), "delta");
+    assert_eq!(state.chain_state(), ChainState::Repairing);
+    assert_eq!(state.gap_state_of(911), Some(GapState::ReorderPending));
+
+    state.observe_frame(100_101, 300.0, Some(false), "delta");
+    state.mark_frame_complete_candidate(100_101, 320.0, Some(false), "delta");
+
+    assert_eq!(state.gap_state_of(911), None);
+    assert_eq!(state.chain_state(), ChainState::Healthy);
+}
+
+#[test]
+fn stable_continuation_does_not_retire_newer_reorder_debt() {
+    let mut state = VideoTimelineState::new();
+    state.observe_gap(&[921], 1.0, Some(100_200), "reference");
+    state.mark_gap_reorder_pending(&[921], 2.0, Some(100_200), "reference");
+    assert_eq!(state.chain_state(), ChainState::Repairing);
+
+    state.observe_frame(100_100, 10.0, Some(false), "delta");
+    state.mark_frame_complete_candidate(100_100, 20.0, Some(false), "delta");
+    state.observe_frame(100_101, 300.0, Some(false), "delta");
+    state.mark_frame_complete_candidate(100_101, 320.0, Some(false), "delta");
+
+    assert_eq!(state.gap_state_of(921), Some(GapState::ReorderPending));
+    assert_eq!(state.chain_state(), ChainState::Repairing);
 }
 
 #[test]

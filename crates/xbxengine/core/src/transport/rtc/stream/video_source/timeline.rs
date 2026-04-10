@@ -11,8 +11,8 @@ use crate::{
 
 const RECOVERY_STABLE_MIN_CLEAN_FRAMES: u8 = 2;
 const RECOVERY_STABLE_MIN_WINDOW_MS: f64 = 120.0;
-const CLEAN_ANCHOR_SOFT_REENTRY_WINDOW_MS: f64 = 1_200.0;
-const CLEAN_ANCHOR_SOFT_REENTRY_BUDGET: u8 = 3;
+const STALE_REORDER_DEBT_RETIRE_MIN_AGE_MS: f64 = 240.0;
+const RECOVERY_CHAIN_BUILDING_PHASE_MAX_MS: f64 = 1_200.0;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum GapState {
@@ -66,6 +66,7 @@ pub(super) enum ChainState {
     Repairing,
     Broken,
     Recovering,
+    SustainingRecovery,
     Stalled,
 }
 
@@ -76,6 +77,7 @@ impl ChainState {
             Self::Repairing => "repairing",
             Self::Broken => "broken",
             Self::Recovering => "recovering",
+            Self::SustainingRecovery => "sustaining-recovery",
             Self::Stalled => "stalled",
         }
     }
@@ -152,8 +154,7 @@ pub(super) struct VideoTimelineState {
     stable_recovery_started_at_ms: Option<f64>,
     stable_recovery_clean_frame_streak: u8,
     stable_recovery_last_frame_rtp_timestamp: Option<u32>,
-    soft_reentry_protection_until_ms: Option<f64>,
-    soft_reentry_budget_remaining: u8,
+    recovery_chain_building_deadline_ms: Option<f64>,
 }
 
 impl VideoTimelineState {
@@ -170,8 +171,7 @@ impl VideoTimelineState {
             stable_recovery_started_at_ms: None,
             stable_recovery_clean_frame_streak: 0,
             stable_recovery_last_frame_rtp_timestamp: None,
-            soft_reentry_protection_until_ms: None,
-            soft_reentry_budget_remaining: 0,
+            recovery_chain_building_deadline_ms: None,
         }
     }
 
@@ -182,12 +182,19 @@ impl VideoTimelineState {
         )
     }
 
+    pub(super) fn in_sustaining_recovery(&self) -> bool {
+        self.chain_state == ChainState::SustainingRecovery
+    }
+
     pub(super) fn apply_wait_keyframe_gate(&mut self, waiting: bool) {
         if waiting {
             self.has_chain_debt = true;
             self.chain_debt_reason = Some("awaitRecoveryKeyframe".to_string());
             self.reset_stable_recovery_gate();
             self.chain_state = ChainState::Recovering;
+            return;
+        }
+        if self.chain_state == ChainState::SustainingRecovery {
             return;
         }
         if self.has_unrecoverable_frame_or_chain_debt() {
@@ -205,15 +212,21 @@ impl VideoTimelineState {
         self.chain_state = ChainState::Recovering;
     }
 
+    pub(super) fn on_sustaining_recovery_failed(&mut self, reason: &'static str) {
+        self.has_chain_debt = true;
+        self.chain_debt_reason = Some(reason.to_string());
+        self.reset_stable_recovery_gate();
+        self.chain_state = ChainState::Recovering;
+    }
+
     pub(super) fn has_hard_recovery_gap_risk(&self) -> bool {
         if matches!(self.chain_state, ChainState::Broken) {
             return true;
         }
-        if self
-            .gaps
-            .values()
-            .any(|entry| entry.severity == GapSeverity::Hard)
-        {
+        if self.gaps.values().any(|entry| {
+            entry.severity == GapSeverity::Hard
+                && !matches!(entry.state, GapState::Resolved | GapState::Expired)
+        }) {
             return true;
         }
         if self.frame_recovery_ledger.values().any(|entry| {
@@ -246,21 +259,26 @@ impl VideoTimelineState {
     }
 
     pub(super) fn on_clean_keyframe_submitted(&mut self) {
-        if self.has_unresolved_hard_gap_issue() {
-            self.reset_stable_recovery_gate();
-            if !matches!(self.chain_state, ChainState::Broken) {
-                self.chain_state = ChainState::Recovering;
-            }
-            return;
+        if let Some(anchor_ts) = self
+            .latest_anchor_candidate
+            .as_ref()
+            .and_then(|candidate| candidate.frame_rtp_timestamp)
+        {
+            self.retire_stale_hard_reorder_debt_before(anchor_ts);
         }
         self.clear_chain_debt();
         self.reset_stable_recovery_gate();
-        self.chain_state = ChainState::Healthy;
+        self.chain_state = ChainState::SustainingRecovery;
+        // 进入正式恢复保活阶段后，清掉旧 gap 观测，避免 pre-anchor 噪声立刻把链路拉回 broken。
         self.gaps.clear();
-        self.arm_soft_reentry_protection_window();
+        self.arm_recovery_chain_building_phase();
     }
 
     pub(super) fn on_timeout_detected(&mut self) {
+        if self.chain_state == ChainState::SustainingRecovery {
+            self.on_sustaining_recovery_failed("awaitRecoveryKeyframe");
+            return;
+        }
         if self.waiting_for_recovery_keyframe() {
             return;
         }
@@ -308,7 +326,7 @@ impl VideoTimelineState {
         frame_rtp_timestamp: Option<u32>,
         frame_importance: &'static str,
     ) {
-        let soft_reentry = self.try_consume_soft_reentry_budget(now_ms, frame_importance);
+        let soft_reentry = self.recovery_sustaining_softened(now_ms, frame_importance);
         for sequence in sequences {
             self.update_gap(
                 *sequence,
@@ -322,11 +340,13 @@ impl VideoTimelineState {
         if soft_reentry
             && matches!(
                 self.chain_state,
-                ChainState::Healthy | ChainState::Repairing
+                ChainState::Healthy | ChainState::Repairing | ChainState::SustainingRecovery
             )
         {
             // clean anchor 短窗内的 delta 重入只做软观测，不把 owner 重新拖回恢复态。
-            self.chain_state = ChainState::Healthy;
+            if self.chain_state != ChainState::SustainingRecovery {
+                self.chain_state = ChainState::Healthy;
+            }
             return;
         }
         if matches!(self.chain_state, ChainState::Healthy) {
@@ -342,7 +362,7 @@ impl VideoTimelineState {
         frame_rtp_timestamp: Option<u32>,
         frame_importance: &'static str,
     ) {
-        let soft_reentry = self.try_consume_soft_reentry_budget(now_ms, frame_importance);
+        let soft_reentry = self.recovery_sustaining_softened(now_ms, frame_importance);
         for sequence in sequences {
             self.update_gap(
                 *sequence,
@@ -366,10 +386,12 @@ impl VideoTimelineState {
         if soft_reentry
             && matches!(
                 self.chain_state,
-                ChainState::Healthy | ChainState::Repairing
+                ChainState::Healthy | ChainState::Repairing | ChainState::SustainingRecovery
             )
         {
-            self.chain_state = ChainState::Healthy;
+            if self.chain_state != ChainState::SustainingRecovery {
+                self.chain_state = ChainState::Healthy;
+            }
             return;
         }
         if matches!(self.chain_state, ChainState::Healthy) {
@@ -385,7 +407,7 @@ impl VideoTimelineState {
         frame_rtp_timestamp: Option<u32>,
         frame_importance: &'static str,
     ) {
-        let soft_reentry = self.try_consume_soft_reentry_budget(now_ms, frame_importance);
+        let soft_reentry = self.recovery_sustaining_softened(now_ms, frame_importance);
         for sequence in sequences {
             self.update_gap(
                 *sequence,
@@ -409,10 +431,12 @@ impl VideoTimelineState {
         if soft_reentry
             && matches!(
                 self.chain_state,
-                ChainState::Healthy | ChainState::Repairing
+                ChainState::Healthy | ChainState::Repairing | ChainState::SustainingRecovery
             )
         {
-            self.chain_state = ChainState::Healthy;
+            if self.chain_state != ChainState::SustainingRecovery {
+                self.chain_state = ChainState::Healthy;
+            }
             return;
         }
         if matches!(self.chain_state, ChainState::Healthy) {
@@ -428,7 +452,7 @@ impl VideoTimelineState {
         frame_rtp_timestamp: Option<u32>,
         frame_importance: &'static str,
     ) {
-        let soft_reentry = self.try_consume_soft_reentry_budget(now_ms, frame_importance);
+        let soft_reentry = self.recovery_sustaining_softened(now_ms, frame_importance);
         self.update_gap(
             sequence,
             GapState::Resolved,
@@ -459,13 +483,17 @@ impl VideoTimelineState {
                     || self.has_unrecoverable_frame_or_chain_debt()
                 {
                     if soft_reentry {
-                        self.chain_state = ChainState::Healthy;
+                        if self.chain_state != ChainState::SustainingRecovery {
+                            self.chain_state = ChainState::Healthy;
+                        }
+                    } else if self.chain_state == ChainState::SustainingRecovery {
+                        self.chain_state = ChainState::SustainingRecovery;
                     } else {
                         self.chain_state = ChainState::Recovering;
                     }
                 } else if !matches!(
                     self.chain_state,
-                    ChainState::Broken | ChainState::Recovering
+                    ChainState::Broken | ChainState::Recovering | ChainState::SustainingRecovery
                 ) {
                     // gap-resolved 只意味着 supply debt 减轻，不能直接把链路回白为 healthy。
                     self.chain_state = if soft_reentry {
@@ -537,7 +565,9 @@ impl VideoTimelineState {
             )
         {
             // 低价值 delta 失包只应降级为局部 repair，不应直接把链路打碎。
-            self.chain_state = ChainState::Healthy;
+            if self.chain_state != ChainState::SustainingRecovery {
+                self.chain_state = ChainState::Healthy;
+            }
         }
         chain_broken
     }
@@ -557,7 +587,10 @@ impl VideoTimelineState {
         }
         if matches!(
             self.chain_state,
-            ChainState::Repairing | ChainState::Recovering | ChainState::Stalled
+            ChainState::Repairing
+                | ChainState::Recovering
+                | ChainState::SustainingRecovery
+                | ChainState::Stalled
         ) && self.stable_recovery_started_at_ms.is_none()
         {
             self.stable_recovery_started_at_ms = Some(now_ms);
@@ -659,12 +692,18 @@ impl VideoTimelineState {
         }
         if matches!(
             self.chain_state,
-            ChainState::Repairing | ChainState::Stalled
-        ) && !self.has_pending_gap_risk()
-            && !self.has_unrecoverable_frame_or_chain_debt()
-            && self.passes_stable_recovery_gate(frame_rtp_timestamp, now_ms)
-        {
-            self.chain_state = ChainState::Healthy;
+            ChainState::Repairing | ChainState::SustainingRecovery | ChainState::Stalled
+        ) {
+            let stable_ready = self.passes_stable_recovery_gate(frame_rtp_timestamp, now_ms);
+            if stable_ready {
+                self.retire_aged_stale_hard_reorder_debt_before(frame_rtp_timestamp, now_ms);
+            }
+            if stable_ready
+                && !self.has_pending_gap_risk()
+                && !self.has_unrecoverable_frame_or_chain_debt()
+            {
+                self.chain_state = ChainState::Healthy;
+            }
         }
     }
 
@@ -909,6 +948,9 @@ impl VideoTimelineState {
         close_reason: Option<&'static str>,
         soft_reentry: bool,
     ) -> bool {
+        if self.chain_state == ChainState::SustainingRecovery && frame_importance == "delta" {
+            return false;
+        }
         if matches!(frame_importance, "reference" | "keyframe") {
             return true;
         }
@@ -954,26 +996,71 @@ impl VideoTimelineState {
         self.stable_recovery_last_frame_rtp_timestamp = None;
     }
 
-    fn arm_soft_reentry_protection_window(&mut self) {
+    fn retire_stale_hard_reorder_debt_before(&mut self, watermark_rtp_timestamp: u32) {
+        self.gaps.retain(|_, entry| {
+            let unresolved_hard_gap = entry.severity == GapSeverity::Hard
+                && !matches!(entry.state, GapState::Resolved | GapState::Expired);
+            if !unresolved_hard_gap {
+                return true;
+            }
+            entry
+                .frame_rtp_timestamp
+                .is_some_and(|gap_ts| gap_ts >= watermark_rtp_timestamp)
+        });
+        self.frame_recovery_ledger.retain(|frame_ts, entry| {
+            if !matches!(
+                entry.frame_recovery_disposition,
+                FrameRecoveryDisposition::UnrecoverableReferenceChain
+            ) {
+                return true;
+            }
+            *frame_ts >= watermark_rtp_timestamp
+        });
+        if !self.has_unresolved_hard_gap_issue()
+            && self
+                .chain_debt_reason
+                .as_deref()
+                .is_some_and(is_hard_recovery_reason)
+        {
+            self.clear_chain_debt();
+        }
+    }
+
+    fn retire_aged_stale_hard_reorder_debt_before(
+        &mut self,
+        watermark_rtp_timestamp: u32,
+        now_ms: f64,
+    ) {
+        self.gaps.retain(|_, entry| {
+            if entry.severity != GapSeverity::Hard || entry.state != GapState::ReorderPending {
+                return true;
+            }
+            let Some(gap_ts) = entry.frame_rtp_timestamp else {
+                return true;
+            };
+            if gap_ts >= watermark_rtp_timestamp {
+                return true;
+            }
+            now_ms - entry.last_updated_at_ms < STALE_REORDER_DEBT_RETIRE_MIN_AGE_MS
+        });
+    }
+
+    fn arm_recovery_chain_building_phase(&mut self) {
         let Some(candidate) = self.latest_anchor_candidate.as_ref() else {
-            self.soft_reentry_protection_until_ms = None;
-            self.soft_reentry_budget_remaining = 0;
+            self.recovery_chain_building_deadline_ms = None;
             return;
         };
         if candidate.state != XbxEngineAnchorCandidateState::SubmittedCleanAnchor
             || candidate.source_event != "chain-clean-keyframe-submitted"
         {
-            self.soft_reentry_protection_until_ms = None;
-            self.soft_reentry_budget_remaining = 0;
+            self.recovery_chain_building_deadline_ms = None;
             return;
         }
-        self.soft_reentry_protection_until_ms =
-            Some(candidate.observed_at_ms + CLEAN_ANCHOR_SOFT_REENTRY_WINDOW_MS);
-        self.soft_reentry_budget_remaining = CLEAN_ANCHOR_SOFT_REENTRY_BUDGET;
+        self.recovery_chain_building_deadline_ms =
+            Some(candidate.observed_at_ms + RECOVERY_CHAIN_BUILDING_PHASE_MAX_MS);
     }
 
-    // 供 source 层在 clean anchor 后的短窗内消费，避免 transport-level WaitKeyframe 反复抖动。
-    pub(super) fn try_consume_soft_reentry_budget(
+    pub(super) fn recovery_chain_building_phase_active(
         &mut self,
         now_ms: f64,
         frame_importance: &'static str,
@@ -981,12 +1068,8 @@ impl VideoTimelineState {
         if frame_importance != "delta" {
             return false;
         }
-        self.refresh_soft_reentry_protection(now_ms);
-        if self.soft_reentry_budget_remaining == 0 {
-            return false;
-        }
-        self.soft_reentry_budget_remaining = self.soft_reentry_budget_remaining.saturating_sub(1);
-        true
+        self.refresh_recovery_chain_building_phase(now_ms);
+        self.recovery_chain_building_deadline_ms.is_some()
     }
 
     fn can_soften_expired_delta_reentry(
@@ -998,17 +1081,29 @@ impl VideoTimelineState {
         if !matches!(close_reason, Some("awaitingRecoveryKeyframe")) {
             return false;
         }
-        self.try_consume_soft_reentry_budget(now_ms, frame_importance)
+        if self.chain_state == ChainState::SustainingRecovery && frame_importance == "delta" {
+            return true;
+        }
+        self.recovery_chain_building_phase_active(now_ms, frame_importance)
     }
 
-    fn refresh_soft_reentry_protection(&mut self, now_ms: f64) {
-        let Some(until_ms) = self.soft_reentry_protection_until_ms else {
-            self.soft_reentry_budget_remaining = 0;
+    fn recovery_sustaining_softened(
+        &mut self,
+        now_ms: f64,
+        frame_importance: &'static str,
+    ) -> bool {
+        if self.chain_state == ChainState::SustainingRecovery && frame_importance == "delta" {
+            return true;
+        }
+        self.recovery_chain_building_phase_active(now_ms, frame_importance)
+    }
+
+    fn refresh_recovery_chain_building_phase(&mut self, now_ms: f64) {
+        let Some(until_ms) = self.recovery_chain_building_deadline_ms else {
             return;
         };
         if now_ms > until_ms {
-            self.soft_reentry_protection_until_ms = None;
-            self.soft_reentry_budget_remaining = 0;
+            self.recovery_chain_building_deadline_ms = None;
         }
     }
 
@@ -1095,6 +1190,7 @@ impl VideoTimelineState {
         match self.chain_state {
             ChainState::Broken => Some("referenceChainUnrecoverable".to_string()),
             ChainState::Recovering => Some("awaitRecoveryKeyframe".to_string()),
+            ChainState::SustainingRecovery => Some("recoverySustaining".to_string()),
             ChainState::Repairing => Some("gapRepairInFlight".to_string()),
             ChainState::Stalled => Some("streamStalled".to_string()),
             ChainState::Healthy => None,
@@ -1158,6 +1254,44 @@ fn is_hard_recovery_reason(reason: &str) -> bool {
                 | "inspectionRejectNonIdrVcl"
                 | "inspectionRejectInvalidSliceHeader"
         )
+}
+
+#[cfg(test)]
+mod inline_recovery_tests {
+    use super::{ChainState, VideoTimelineState};
+    use crate::XbxEngineAnchorCandidateState;
+
+    #[test]
+    fn resolved_hard_gap_no_longer_keeps_hard_recovery_risk() {
+        let mut state = VideoTimelineState::new();
+        state.mark_gap_reorder_pending(&[501], 1.0, Some(90_001), "reference");
+        assert!(state.has_hard_recovery_risk_for_test());
+
+        state.mark_gap_resolved(501, 2.0, Some(90_001), "reference");
+        assert!(!state.has_hard_recovery_risk_for_test());
+    }
+
+    #[test]
+    fn clean_anchor_retires_pre_anchor_hard_debt() {
+        let mut state = VideoTimelineState::new();
+        state.on_admission_await_recovery_keyframe(Some("awaitingRecoveryKeyframe"));
+        state.mark_gap_reorder_pending(&[601], 1.0, Some(90_001), "reference");
+        assert!(state.has_hard_recovery_risk_for_test());
+
+        state.observe_anchor_candidate(
+            7,
+            Some(90_050),
+            "chain-clean-keyframe-submitted",
+            XbxEngineAnchorCandidateState::SubmittedCleanAnchor,
+            None,
+            2.0,
+        );
+        state.on_clean_keyframe_submitted();
+
+        assert_eq!(state.chain_state(), ChainState::SustainingRecovery);
+        assert!(!state.waiting_for_recovery_keyframe());
+        assert!(!state.has_hard_recovery_risk_for_test());
+    }
 }
 
 #[cfg(test)]

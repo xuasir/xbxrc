@@ -131,7 +131,7 @@ fn is_first_frame_acquisition_reason_label(value: &str) -> bool {
         value,
         "bootstrapMissingSps"
             | "bootstrapMissingPps"
-            | "bootstrapInFlight"
+            | "recoverySustaining"
             | "inspectionRejectInvalidSliceHeader"
             | "NonIdrVcl"
             | "transportAwaitRecoveryKeyframe"

@@ -178,7 +178,7 @@ fn severe_transport_deadline_requires_repeat_before_reconnect() {
 }
 
 #[test]
-fn adapter_idle_after_severe_deadline_stays_in_local_recovery_chain() {
+fn adapter_idle_after_severe_deadline_prefers_reconnect_over_decoder_reset() {
     let mut controller = VideoEscalationController::new(VideoEscalationConfig {
         cooldown_ms: 200,
         keyframe_burst_threshold: 2,
@@ -196,7 +196,7 @@ fn adapter_idle_after_severe_deadline_stays_in_local_recovery_chain() {
         controller
             .on_reason(VideoEscalationReason::AdapterIdleTimeout)
             .action,
-        RecoveryAction::RequestDecoderReset
+        RecoveryAction::RequestReconnectCandidate
     );
 }
 
@@ -748,7 +748,7 @@ fn reconnect_budget_is_single_shot_per_recovery_epoch() {
 }
 
 #[test]
-fn media_policy_disallows_reconnect_for_severe_deadline() {
+fn media_policy_disallows_reconnect_for_severe_deadline_does_not_fallback_to_decoder_reset() {
     let mut controller = VideoEscalationController::new(VideoEscalationConfig {
         cooldown_ms: 120,
         keyframe_burst_threshold: 1,
@@ -768,7 +768,7 @@ fn media_policy_disallows_reconnect_for_severe_deadline() {
         controller
             .on_reason_with_policy(VideoEscalationReason::TransportSevereDeadline, false)
             .action,
-        RecoveryAction::RequestDecoderReset
+        RecoveryAction::CooldownSuppressed
     );
 }
 

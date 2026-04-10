@@ -4,6 +4,7 @@ use xbxengine_protocol::XbxEngineTransportStateDto;
 
 use crate::runtime_stats_sink::expire_latest_keyframe_request_episode_if_unsent;
 use crate::runtime_stats_sink::RuntimeStatsSink;
+use crate::transport::rtc::recovery::contract::has_unresolved_transport_await_issue_from_observation;
 use crate::transport::rtc::recovery::decoder_backend_failure::{
     resolve_decoder_backend_failure_recovery, DecoderBackendFailureResolution,
 };
@@ -93,8 +94,8 @@ const TRANSPORT_AWAIT_KEYFRAME_PACKET_ONLY_GRACE_MS: f64 = 220.0;
 const TRANSPORT_AWAIT_KEYFRAME_DECODED_GRACE_MS: f64 = 220.0;
 const TRANSPORT_AWAIT_DECODER_RESET_INFLIGHT_GRACE_MS: f64 = 900.0;
 const TRANSPORT_AWAIT_INVALID_KEYFRAME_RESPONSE_FRESH_MS: f64 = 1_500.0;
-const TRANSPORT_AWAIT_BOOTSTRAP_IN_FLIGHT_GRACE_MS: f64 = 320.0;
-const TRANSPORT_AWAIT_BOOTSTRAP_SUCCESS_PROGRESS_MIN_SPAN_MS: f64 = 120.0;
+const TRANSPORT_AWAIT_RECOVERY_SUSTAINING_MAX_AGE_MS: f64 = 2_400.0;
+const TRANSPORT_AWAIT_RECOVERY_SUSTAINING_PROGRESS_MAX_AGE_MS: f64 = 900.0;
 const CONNECTIVITY_JITTER_ABSORB_PRESENT_AGE_MAX_MS: f64 = 280.0;
 
 impl RecoveryCoordinator {
@@ -116,7 +117,13 @@ impl RecoveryCoordinator {
         now_ms: f64,
         bootstrap_in_flight_hint: bool,
     ) -> Option<TransportAwaitRecoveryStage> {
-        if bootstrap_in_flight_hint {
+        if bootstrap_in_flight_hint
+            && Self::transport_await_bootstrap_in_flight_active(
+                runtime_stats,
+                recovery_epoch,
+                now_ms,
+            )
+        {
             return Some(TransportAwaitRecoveryStage::BootstrapInFlight);
         }
         if Self::has_transport_await_stage_escalation_failure_evidence(
@@ -480,19 +487,26 @@ impl RecoveryCoordinator {
         runtime_stats: &Mutex<XbxEngineMediaRuntimeStats>,
         observed_at_ms: f64,
     ) -> VideoEscalationDecision {
-        let bootstrap_in_flight_hint = reason == VideoEscalationReason::TransportAwaitRecoveryKeyframe
-            && reason_label == "bootstrapInFlight";
-        // bootstrapInFlight 只作为“短时暂停升级”的软护栏：
-        // - 暂停 transport-await 的升级推进；
-        // - 不清空坏窗历史，避免长期反复 reset 导致恢复链失忆。
-        let bootstrap_in_flight_soft_hold_active = bootstrap_in_flight_hint
-            && Self::transport_await_bootstrap_in_flight_active(
-                runtime_stats,
-                recovery_epoch,
-                observed_at_ms,
-            );
+        let bootstrap_in_flight_hint = reason
+            == VideoEscalationReason::TransportAwaitRecoveryKeyframe
+            && Self::is_recovery_sustaining_reason_label(reason_label);
         let signal_domain = classify_signal_domain(reason);
-        let transport_await_hard_evidence = if bootstrap_in_flight_soft_hold_active {
+        let transport_await_recovery_stage = (reason
+            == VideoEscalationReason::TransportAwaitRecoveryKeyframe)
+            .then(|| {
+                Self::transport_await_recovery_stage(
+                    runtime_stats,
+                    recovery_epoch,
+                    observed_at_ms,
+                    bootstrap_in_flight_hint,
+                )
+            })
+            .flatten();
+        let transport_await_probe_keyframe_qualified =
+            transport_await_recovery_stage == Some(TransportAwaitRecoveryStage::ProbeKeyframe);
+        let transport_await_bootstrap_in_flight_qualified =
+            transport_await_recovery_stage == Some(TransportAwaitRecoveryStage::BootstrapInFlight);
+        let transport_await_hard_evidence = if transport_await_bootstrap_in_flight_qualified {
             false
         } else {
             reason != VideoEscalationReason::TransportAwaitRecoveryKeyframe
@@ -502,21 +516,6 @@ impl RecoveryCoordinator {
                     observed_at_ms,
                 )
         };
-        let transport_await_recovery_stage = (reason
-            == VideoEscalationReason::TransportAwaitRecoveryKeyframe)
-            .then(|| {
-                Self::transport_await_recovery_stage(
-                    runtime_stats,
-                    recovery_epoch,
-                    observed_at_ms,
-                    bootstrap_in_flight_soft_hold_active,
-                )
-            })
-            .flatten();
-        let transport_await_probe_keyframe_qualified =
-            transport_await_recovery_stage == Some(TransportAwaitRecoveryStage::ProbeKeyframe);
-        let transport_await_bootstrap_in_flight_qualified =
-            transport_await_recovery_stage == Some(TransportAwaitRecoveryStage::BootstrapInFlight);
         let transport_await_await_decode_progress_qualified = transport_await_recovery_stage
             == Some(TransportAwaitRecoveryStage::AwaitDecodeProgress);
         let transport_await_await_reset_progress_qualified = transport_await_recovery_stage
@@ -611,6 +610,38 @@ impl RecoveryCoordinator {
             escalation_decision = self
                 .escalation_controller
                 .suppressed(RecoveryAction::WaitForBurst);
+        }
+        if reason == VideoEscalationReason::TransportAwaitRecoveryKeyframe
+            && matches!(
+                escalation_decision.action,
+                RecoveryAction::CoalescedKeyframeInFlight
+            )
+            && Self::transport_await_ingress_still_waiting(
+                runtime_stats,
+                recovery_epoch,
+                observed_at_ms,
+            )
+            && Self::has_transport_await_stage_escalation_failure_evidence(
+                runtime_stats,
+                recovery_epoch,
+                observed_at_ms,
+            )
+            && Self::has_keyframe_stage_escalation_failure_evidence(
+                runtime_stats,
+                recovery_epoch,
+                observed_at_ms,
+            )
+            && !Self::transport_await_soft_reentry_is_recent_and_healthy(
+                runtime_stats,
+                recovery_epoch,
+                observed_at_ms,
+            )
+            && !transport_await_bootstrap_in_flight_qualified
+            && !transport_await_first_frame_priority_active
+        {
+            escalation_decision = self
+                .escalation_controller
+                .suppressed(RecoveryAction::RequestDecoderReset);
         }
         if reason == VideoEscalationReason::TransportAwaitRecoveryKeyframe
             && Self::transport_await_soft_reentry_is_recent_and_healthy(
@@ -714,7 +745,7 @@ impl RecoveryCoordinator {
     fn resolve_transport_await_hard_fallback(
         &mut self,
         reason: VideoEscalationReason,
-        reason_label: &str,
+        _reason_label: &str,
         recovery_epoch: u64,
         profile: RecoveryScenarioProfile,
         runtime_stats: &Mutex<XbxEngineMediaRuntimeStats>,
@@ -734,13 +765,11 @@ impl RecoveryCoordinator {
             );
             return None;
         }
-        if reason_label == "bootstrapInFlight"
-            && Self::transport_await_bootstrap_in_flight_active(
-                runtime_stats,
-                recovery_epoch,
-                observed_at_ms,
-            )
-        {
+        if Self::transport_await_bootstrap_in_flight_active(
+            runtime_stats,
+            recovery_epoch,
+            observed_at_ms,
+        ) {
             return None;
         }
         if self
@@ -838,12 +867,13 @@ impl RecoveryCoordinator {
         current_action: RecoveryAction,
     ) -> Option<VideoEscalationDecision> {
         const TRANSPORT_AWAIT_CONNECTED_BAD_WINDOW_STAGE_MIN_MS: f64 = 120.0;
-        let bootstrap_in_flight_soft_hold_active = reason_label == "bootstrapInFlight"
-            && Self::transport_await_bootstrap_in_flight_active(
-                runtime_stats,
-                recovery_epoch,
-                observed_at_ms,
-            );
+        let bootstrap_in_flight_soft_hold_active =
+            Self::is_recovery_sustaining_reason_label(reason_label)
+                && Self::transport_await_bootstrap_in_flight_active(
+                    runtime_stats,
+                    recovery_epoch,
+                    observed_at_ms,
+                );
         if reason != VideoEscalationReason::TransportAwaitRecoveryKeyframe
             || bootstrap_in_flight_soft_hold_active
             || !matches!(
@@ -1052,6 +1082,13 @@ impl RecoveryCoordinator {
         const TRANSPORT_AWAIT_HARD_EVIDENCE_FRESH_MS: f64 = 1_500.0;
         RuntimeStatsSink::read_shared(runtime_stats, |stats| {
             if Self::transport_await_pre_first_frame_availability_active_from_stats(stats, now_ms) {
+                return false;
+            }
+            if Self::transport_await_bootstrap_in_flight_active_from_stats(
+                stats,
+                recovery_epoch,
+                now_ms,
+            ) {
                 return false;
             }
             if Self::transport_await_first_frame_acquisition_priority_active_from_stats(stats, now_ms) {
@@ -1305,6 +1342,13 @@ impl RecoveryCoordinator {
         const TRANSPORT_AWAIT_FAILURE_EVIDENCE_FRESH_MS: f64 = 1_500.0;
         RuntimeStatsSink::read_shared(runtime_stats, |stats| {
             if Self::transport_await_pre_first_frame_availability_active_from_stats(stats, now_ms) {
+                return false;
+            }
+            if Self::transport_await_bootstrap_in_flight_active_from_stats(
+                stats,
+                recovery_epoch,
+                now_ms,
+            ) {
                 return false;
             }
             let rejected_anchor_without_usable_clean_anchor = stats
@@ -1675,7 +1719,31 @@ impl RecoveryCoordinator {
         let Some(submitted_at_ms) = recent_clean_anchor_submitted_at_ms else {
             return false;
         };
-        if (now_ms - submitted_at_ms).max(0.0) > TRANSPORT_AWAIT_BOOTSTRAP_IN_FLIGHT_GRACE_MS {
+        if (now_ms - submitted_at_ms).max(0.0) > TRANSPORT_AWAIT_RECOVERY_SUSTAINING_MAX_AGE_MS {
+            return false;
+        }
+        if stats.transport_state != XbxEngineTransportStateDto::Connected {
+            return false;
+        }
+        if stats.video_renderer_stalled.unwrap_or(false) {
+            return false;
+        }
+        let track_attached_with_video =
+            stats
+                .latest_video_track_status
+                .as_ref()
+                .is_some_and(|track| {
+                    track.state == "remoteTrackAttached" && track.video_bytes_total > 0
+                });
+        if !track_attached_with_video {
+            return false;
+        }
+        if Self::transport_await_has_recent_unusable_nonidr_keyframe_response(
+            stats,
+            recovery_epoch,
+            now_ms,
+            None,
+        ) {
             return false;
         }
         let decode_progress_after_submit = stats
@@ -1691,13 +1759,28 @@ impl RecoveryCoordinator {
         .into_iter()
         .flatten()
         .max_by(|left, right| left.partial_cmp(right).unwrap_or(std::cmp::Ordering::Equal));
-        let sustained_progress_after_submit = decode_progress_after_submit
-            && present_progress_after_submit
-            && latest_output_progress_at_ms.is_some_and(|latest_at_ms| {
-                (latest_at_ms - submitted_at_ms).max(0.0)
-                    >= TRANSPORT_AWAIT_BOOTSTRAP_SUCCESS_PROGRESS_MIN_SPAN_MS
+        let timeline_progress_visible = stats
+            .latest_video_timeline_observation
+            .as_ref()
+            .is_some_and(|timeline| {
+                (now_ms - timeline.observed_at_ms).max(0.0)
+                    <= TRANSPORT_AWAIT_RECOVERY_SUSTAINING_PROGRESS_MAX_AGE_MS
+                    && matches!(
+                        timeline.source_event.as_str(),
+                        "frame-complete-candidate"
+                            | "frame-observed"
+                            | "gap-repair-in-flight"
+                            | "gap-resolved"
+                            | "gap-reorder-pending"
+                    )
             });
-        !sustained_progress_after_submit
+        let output_progress_recent = latest_output_progress_at_ms.is_some_and(|latest_at_ms| {
+            latest_at_ms > submitted_at_ms
+                && (now_ms - latest_at_ms).max(0.0)
+                    <= TRANSPORT_AWAIT_RECOVERY_SUSTAINING_PROGRESS_MAX_AGE_MS
+        });
+        (decode_progress_after_submit || present_progress_after_submit || timeline_progress_visible)
+            && (output_progress_recent || timeline_progress_visible)
     }
 
     fn transport_await_packet_seen_without_decode_failure(
@@ -1950,38 +2033,36 @@ impl RecoveryCoordinator {
     }
 
     fn has_unresolved_transport_await_issue(stats: &XbxEngineMediaRuntimeStats) -> bool {
-        const TRANSPORT_AWAIT_UNRESOLVED_REASONS: [&str; 3] = [
-            "awaitingRecoveryKeyframe",
-            "awaitRecoveryKeyframe",
-            "referenceChainUnrecoverable",
-        ];
         let Some(timeline) = stats.latest_video_timeline_observation.as_ref() else {
             return false;
         };
-        if timeline
-            .chain
-            .reason
-            .as_deref()
-            .is_some_and(|reason| TRANSPORT_AWAIT_UNRESOLVED_REASONS.contains(&reason))
-        {
-            return true;
-        }
-        if timeline
-            .frame
-            .as_ref()
-            .and_then(|frame| frame.close_reason.as_deref())
-            .is_some_and(|reason| TRANSPORT_AWAIT_UNRESOLVED_REASONS.contains(&reason))
-        {
-            return true;
-        }
-        timeline.gap.as_ref().is_some_and(|gap| {
-            !matches!(gap.state.as_str(), "resolved" | "expired")
-                && timeline
-                    .chain
-                    .reason
-                    .as_deref()
-                    .is_some_and(|reason| TRANSPORT_AWAIT_UNRESOLVED_REASONS.contains(&reason))
+        has_unresolved_transport_await_issue_from_observation(timeline)
+    }
+
+    fn transport_await_ingress_still_waiting(
+        runtime_stats: &Mutex<XbxEngineMediaRuntimeStats>,
+        recovery_epoch: u64,
+        now_ms: f64,
+    ) -> bool {
+        RuntimeStatsSink::read_shared(runtime_stats, |stats| {
+            if stats.transport_recovery_epoch != recovery_epoch {
+                return false;
+            }
+            let timeline_waiting = stats
+                .latest_video_timeline_observation
+                .as_ref()
+                .is_some_and(has_unresolved_transport_await_issue_from_observation);
+            if !timeline_waiting {
+                return false;
+            }
+            let last_waiting_at_ms = stats
+                .latest_video_timeline_observation
+                .as_ref()
+                .map(|timeline| timeline.observed_at_ms)
+                .unwrap_or(now_ms);
+            (now_ms - last_waiting_at_ms).max(0.0) <= 1_200.0
         })
+        .unwrap_or(false)
     }
 
     /// transport-await 软回退判定用的客观媒体健康：与 `should_absorb_stale_transport_await_replay` 一致。
@@ -2293,6 +2374,10 @@ impl RecoveryCoordinator {
 }
 
 impl RecoveryCoordinator {
+    fn is_recovery_sustaining_reason_label(reason_label: &str) -> bool {
+        reason_label == "recoverySustaining"
+    }
+
     fn is_non_executing_recovery_action(action: RecoveryAction) -> bool {
         matches!(
             action,

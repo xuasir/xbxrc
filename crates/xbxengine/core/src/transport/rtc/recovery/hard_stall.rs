@@ -44,20 +44,13 @@ pub(crate) fn resolve_persistent_stall_recovery(
         return None;
     }
 
-    // 连接域与媒体域解耦后，transport stall 仍属于媒体恢复域：
-    // 即使是 deadline 类硬停顿或长时间 paused，也只推进本地 decoder reset；
-    // reconnect 必须继续由连接域证据驱动，而不是由媒体停顿旁路直接产出。
+    // 连接域 deadline 不在媒体硬停顿旁路里发 decoder reset，避免把传输坏窗误当成本地解码器问题；
+    // 升级由 escalation 的连接域路径（reconnect / cooldown）处理。
     if matches!(
         reason,
         VideoEscalationReason::TransportExpiredDeadline
             | VideoEscalationReason::TransportSevereDeadline
     ) {
-        if snapshot.since_last_decoder_reset_ms >= HARD_STALL_MIN_RESET_SPACING_MS {
-            return Some(VideoEscalationDecision {
-                observation_id: 0,
-                action: RecoveryAction::RequestDecoderReset,
-            });
-        }
         return None;
     }
 

@@ -29,15 +29,35 @@ export function createXbxEngineRuntime(options: {
   const listeners = new Set<(event: RuntimeEvent) => void>()
   const viewportElementId = options.playerElementId
   let audioVolume = options.initialAudioVolume
+  let transportState: RTCPeerConnectionState = 'new'
   let microphoneState = {
     capturing: false,
     paused: false,
   }
+  let pendingLegacyMediaReady = false
 
   function emit(event: RuntimeEvent): void {
     for (const listener of listeners) {
       listener(event)
     }
+  }
+
+  function emitLegacyMediaReadyMilestone(now: number): void {
+    pendingLegacyMediaReady = false
+    emit({
+      type: 'presentationMilestoneChanged',
+      milestone: 'connected',
+      connectedAtMs: now,
+      mediaReadyAtMs: null,
+      stage: 'connected',
+    })
+    emit({
+      type: 'presentationMilestoneChanged',
+      milestone: 'mediaReady',
+      connectedAtMs: now,
+      mediaReadyAtMs: now,
+      stage: 'mediaReady',
+    })
   }
 
   function recordLaunchTraceEvent(
@@ -60,10 +80,21 @@ export function createXbxEngineRuntime(options: {
       return
     }
     if (event.type === 'transport.connectionState') {
+      transportState = event.state as RTCPeerConnectionState
       emit({
         type: 'connectionStateChanged',
-        state: event.state as RTCPeerConnectionState,
+        state: transportState,
       })
+      if (transportState === 'connected' && pendingLegacyMediaReady) {
+        emitLegacyMediaReadyMilestone(Date.now())
+      }
+      return
+    }
+    if (event.type === 'media.videoReady') {
+      pendingLegacyMediaReady = true
+      if (transportState === 'connected') {
+        emitLegacyMediaReadyMilestone(Date.now())
+      }
       return
     }
     if (event.type === 'presentation.milestoneChanged') {

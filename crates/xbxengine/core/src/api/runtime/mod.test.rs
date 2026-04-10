@@ -12,16 +12,18 @@ use ohmygamepad_protocol::{
 use xbxengine_protocol::{
     XbxEngineControlCommandDto, XbxEngineDisplayOptionsDto, XbxEngineDisplayStateDto,
     XbxEngineHostRequestDto, XbxEngineHostResponseDto, XbxEngineIceCandidateDto,
-    XbxEngineInputEventDto, XbxEngineReconnectReasonDto, XbxEngineRenderProjectionDto,
-    XbxEnginePresentationMilestoneDto, XbxEngineRuntimeCodecPreferenceDto,
-    XbxEngineRuntimeEventDto, XbxEngineRuntimePhaseDto, XbxEngineRuntimeProjectionDto,
-    XbxEngineRuntimeRecoveryDto, XbxEngineRuntimeVideoPipelineDto, XbxEngineSessionDto,
-    XbxEngineTargetTypeDto, XbxEngineTransportStateDto, XbxEngineViewportDto,
+    XbxEngineInputEventDto, XbxEnginePresentationMilestoneDto, XbxEngineReconnectReasonDto,
+    XbxEngineRenderProjectionDto, XbxEngineRuntimeCodecPreferenceDto, XbxEngineRuntimeEventDto,
+    XbxEngineRuntimePhaseDto, XbxEngineRuntimeProjectionDto, XbxEngineRuntimeRecoveryDto,
+    XbxEngineRuntimeVideoPipelineDto, XbxEngineSessionDto, XbxEngineTargetTypeDto,
+    XbxEngineTransportStateDto, XbxEngineViewportDto,
 };
 
 use crate::runtime_stats_sink::RuntimeStatsSink;
 use crate::transport::rtc::connection::RtcConnectionService;
-use crate::transport::rtc::facts::{ConnectionLifecycleStateFact, SessionCommand, TransportCommand};
+use crate::transport::rtc::facts::{
+    ConnectionLifecycleStateFact, SessionCommand, TransportCommand,
+};
 use crate::transport::rtc::projection::{
     BweProjection, ConnectionProjection, DiagnosticsProjection, MediaProjection,
     RecoveryProjection, TransportSnapshot,
@@ -4085,7 +4087,10 @@ async fn runtime_cloud_recovery_replay_accepts_transport_reconnect_after_local_n
             ledger.input_signal,
             "rtcConnectionRecovering:rtcConnectionRecovering"
         );
-        assert_eq!(ledger.gate_result, "pass:reconnectGranted:connectivityEvidence");
+        assert_eq!(
+            ledger.gate_result,
+            "pass:reconnectGranted:connectivityEvidence"
+        );
         assert_eq!(ledger.action_selected, "requestReconnectCandidate");
         assert_eq!(ledger.state_after, "reconnecting");
         assert!(ledger.budget_before.is_some());
@@ -4127,12 +4132,9 @@ async fn runtime_cloud_recovery_replay_accepts_transport_reconnect_after_local_n
     );
 
     fixture.mark_transport_recovered(profile.baseline.now_ms + 900.0);
-    let recovered_commands = transport_commands(policy.on_snapshot(&fixture.build_connected_snapshot(
-        3,
-        profile.baseline.now_ms + 930.0,
-        260,
-        "none",
-    )));
+    let recovered_commands = transport_commands(policy.on_snapshot(
+        &fixture.build_connected_snapshot(3, profile.baseline.now_ms + 930.0, 260, "none"),
+    ));
     assert!(
         recovered_commands.is_empty(),
         "unexpected commands after recovery exit: {recovered_commands:?}"
@@ -4528,7 +4530,10 @@ async fn runtime_cloud_replay_promotes_expired_deadline_to_transport_reconnect_a
             ledger.input_signal,
             "transportExpiredDeadline:transportExpiredDeadline"
         );
-        assert_eq!(ledger.gate_result, "pass:reconnectGranted:connectivityEvidence");
+        assert_eq!(
+            ledger.gate_result,
+            "pass:reconnectGranted:connectivityEvidence"
+        );
         assert_eq!(ledger.action_selected, "requestReconnectCandidate");
     }
     bridge.apply_transport_session_command(SessionCommand::Transport(reconnect_candidate));

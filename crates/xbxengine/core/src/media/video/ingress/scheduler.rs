@@ -109,6 +109,32 @@ impl VideoIngress {
         );
         now > frame.target_playout_time + frame_late_threshold
     }
+
+    fn can_exit_waiting_keyframe_with_recovery_continuation(
+        &self,
+        frame: &EncodedFrame,
+        config_mismatch: bool,
+    ) -> bool {
+        if !self.waiting_keyframe || config_mismatch || frame.config_changed {
+            return false;
+        }
+        if self.current_codec.as_ref() != Some(&frame.codec)
+            || self.current_width == 0
+            || self.current_height == 0
+        {
+            return false;
+        }
+        if frame.h264.parameter_sets_changed {
+            return false;
+        }
+        if !frame.h264.committed_sps_present() || !frame.h264.committed_pps_present() {
+            return false;
+        }
+        if frame.h264.delta_continuation_ready() {
+            return true;
+        }
+        frame.is_keyframe && frame.h264.is_idr && frame.h264.slice_headers_valid
+    }
 }
 
 impl FrameScheduler for VideoIngress {
@@ -142,8 +168,8 @@ impl FrameScheduler for VideoIngress {
             return IngressDecision::DropUnrecoverable;
         }
 
-        // bootstrap_ready 是更严格的准入门槛：必须是干净 IDR、带完整参数集且语法有效。
-        // 只有这类 access unit 才允许解除等待态并进入硬解。
+        // 冷启动仍坚持 clean bootstrap；恢复期则允许在“已有 committed 参数集 +
+        // continuation 可承接”的前提下先退出硬等待，优先保活恢复链。
         if frame.h264.bootstrap_ready {
             self.current_codec = Some(frame.codec.clone());
             self.current_width = frame.width;
@@ -152,6 +178,14 @@ impl FrameScheduler for VideoIngress {
             frame.h264.commit();
 
             // 永远优先: 清空 backlog
+            self.queue.clear();
+            self.queue.push_back(frame);
+            return IngressDecision::Submit;
+        }
+
+        if self.can_exit_waiting_keyframe_with_recovery_continuation(&frame, config_mismatch) {
+            self.waiting_keyframe = false;
+            frame.h264.commit();
             self.queue.clear();
             self.queue.push_back(frame);
             return IngressDecision::Submit;
@@ -295,6 +329,32 @@ mod tests {
             },
             commit_state:
                 crate::media::video::h264::inspection::H264AccessUnitInspector::test_commit_state(),
+        }
+    }
+
+    fn make_h264_inspection_with_commit_state(
+        template: &H264AccessUnitInspection,
+        bootstrap_ready: bool,
+        is_idr: bool,
+    ) -> H264AccessUnitInspection {
+        H264AccessUnitInspection {
+            nals: Vec::new(),
+            parameter_sets: None,
+            width: Some(1920),
+            height: Some(1080),
+            is_idr,
+            has_inband_sps: bootstrap_ready,
+            has_inband_pps: bootstrap_ready,
+            slice_headers_valid: true,
+            parameter_sets_changed: false,
+            config_changed: false,
+            bootstrap_ready,
+            bootstrap_reject_reason: if bootstrap_ready {
+                None
+            } else {
+                Some(H264BootstrapRejectReason::NonIdrVcl)
+            },
+            commit_state: template.commit_state.clone(),
         }
     }
 
@@ -464,6 +524,46 @@ mod tests {
             ingress.submit(dirty_keyframe, now),
             IngressDecision::WaitKeyframe
         );
+    }
+
+    #[test]
+    fn recovery_continuation_can_exit_waiting_keyframe_after_committed_bootstrap() {
+        let now = Instant::now();
+        let mut ingress = VideoIngress::new(4, Duration::from_millis(250));
+
+        let clean_bootstrap = make_frame(now, FrameValue::new(true, true, 64 * 1024), true, 0);
+        assert_eq!(
+            ingress.submit(clean_bootstrap.clone(), now),
+            IngressDecision::Submit
+        );
+        let _ = ingress.pop();
+
+        ingress.start_reconfigure();
+
+        let continuation = EncodedFrame {
+            h264: make_h264_inspection_with_commit_state(&clean_bootstrap.h264, false, false),
+            ..make_frame(now, FrameValue::new(false, true, 8 * 1024), false, 0)
+        };
+        assert_eq!(continuation.h264.committed_sps_present(), true);
+        assert_eq!(continuation.h264.committed_pps_present(), true);
+        assert_eq!(continuation.h264.delta_continuation_ready(), true);
+        assert_eq!(ingress.submit(continuation, now), IngressDecision::Submit);
+        assert_eq!(ingress.queue_depth(), 1);
+    }
+
+    #[test]
+    fn cold_start_delta_without_committed_context_stays_in_wait_keyframe() {
+        let now = Instant::now();
+        let mut ingress = VideoIngress::new(4, Duration::from_millis(250));
+
+        let delta = EncodedFrame {
+            h264: make_h264_inspection(false),
+            ..make_frame(now, FrameValue::new(false, true, 8 * 1024), false, 0)
+        };
+        assert!(!delta.h264.committed_sps_present());
+        assert!(!delta.h264.committed_pps_present());
+        assert!(!delta.h264.delta_continuation_ready());
+        assert_eq!(ingress.submit(delta, now), IngressDecision::WaitKeyframe);
     }
 
     #[test]

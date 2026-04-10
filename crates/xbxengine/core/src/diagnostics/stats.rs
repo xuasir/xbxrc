@@ -58,15 +58,16 @@ fn project_video_owner_contract(
 fn map_presentation_milestone(
     milestone: Option<&XbxEnginePresentationMilestoneDto>,
 ) -> Option<String> {
-    milestone.map(|value| match value {
-        XbxEnginePresentationMilestoneDto::Idle => "idle",
-        XbxEnginePresentationMilestoneDto::Connected => "connected",
-        XbxEnginePresentationMilestoneDto::MediaReady => "mediaReady",
-        XbxEnginePresentationMilestoneDto::Degraded => "degraded",
-        XbxEnginePresentationMilestoneDto::Failed => "failed",
-        XbxEnginePresentationMilestoneDto::Closed => "closed",
-    })
-    .map(str::to_string)
+    milestone
+        .map(|value| match value {
+            XbxEnginePresentationMilestoneDto::Idle => "idle",
+            XbxEnginePresentationMilestoneDto::Connected => "connected",
+            XbxEnginePresentationMilestoneDto::MediaReady => "mediaReady",
+            XbxEnginePresentationMilestoneDto::Degraded => "degraded",
+            XbxEnginePresentationMilestoneDto::Failed => "failed",
+            XbxEnginePresentationMilestoneDto::Closed => "closed",
+        })
+        .map(str::to_string)
 }
 
 fn should_project_runtime_owner_fallback(stats: &XbxEngineMediaRuntimeStats) -> bool {
@@ -1466,9 +1467,9 @@ fn build_transport_recovery_note(
     } else if stats
         .video_owner_reason
         .as_deref()
-        .is_some_and(|r| r == "bootstrapInFlight")
+        .is_some_and(|r| r == "recoverySustaining")
     {
-        parts.push("bootstrapInFlight:cleanAnchorPending".to_string());
+        parts.push("recoverySustaining:cleanAnchorHolding".to_string());
     }
     if parts.is_empty() {
         None

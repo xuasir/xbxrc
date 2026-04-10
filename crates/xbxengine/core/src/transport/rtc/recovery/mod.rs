@@ -11,6 +11,7 @@
 //! - startup：启动阶段特殊恢复逻辑
 //! - policy：场景策略（Home/Cloud/Relay）
 
+pub(crate) mod contract;
 pub mod coordinator;
 pub(crate) mod decoder_backend_failure;
 pub mod diagnosis;

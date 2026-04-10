@@ -78,6 +78,7 @@ pub(super) fn resolve_inspection_admission(
     inspection: &H264AccessUnitInspection,
     first_frame_acquired: bool,
     decoder_bootstrap_no_output_continuation_allowed: bool,
+    sustaining_recovery_continuation_allowed: bool,
 ) -> InspectionAdmission {
     if !inspection.slice_headers_valid {
         return InspectionAdmission::AwaitRecoveryKeyframe;
@@ -87,7 +88,9 @@ pub(super) fn resolve_inspection_admission(
         return InspectionAdmission::Accept;
     }
 
-    if (first_frame_acquired || decoder_bootstrap_no_output_continuation_allowed)
+    if (first_frame_acquired
+        || decoder_bootstrap_no_output_continuation_allowed
+        || sustaining_recovery_continuation_allowed)
         && inspection.delta_continuation_ready()
     {
         return InspectionAdmission::Accept;
@@ -124,11 +127,11 @@ fn keyframe_episode_response_detail(
 pub(super) fn resolve_recovery_keyframe_action(
     first_frame_acquired: bool,
     waiting_for_recovery_keyframe: bool,
+    sustaining_recovery_active: bool,
     hard_recovery_gap_risk: bool,
     sample_loss_burst_count: u8,
     media_dropped_packets: u16,
     is_keyframe: bool,
-    allow_soft_reentry_submit: bool,
 ) -> (bool, RecoveryKeyframeAction) {
     // 带丢包的 keyframe/reference 不能继续喂给解码器，否则很容易把本地参考链喂脏，
     // 在 macOS 上会直接放大成 VideoToolbox 连续 bad-data 回调。
@@ -152,8 +155,9 @@ pub(super) fn resolve_recovery_keyframe_action(
         if !first_frame_acquired {
             return (true, RecoveryKeyframeAction::WaitKeyframe);
         }
-        if allow_soft_reentry_submit {
-            // clean anchor 后的短窗内，健康 delta 只要还能安全提交，就别继续把链路拖回 recovering。
+        if sustaining_recovery_active {
+            // 正式恢复保活阶段的目标是先维持连续输出，而不是再次掉回 wait-keyframe。
+            // 只要当前帧仍是健康 continuation，就继续提交，真正的稳定退出交给 timeline gate。
             return (false, RecoveryKeyframeAction::Submit);
         }
         if !hard_recovery_gap_risk {
@@ -735,10 +739,19 @@ impl RtcVideoFrameSource {
                         first_frame_acquired,
                         inspection_now_ms,
                     );
+                // clean anchor 已成立后，恢复保活期里的健康 continuation 不能再被“尚未首帧出图”
+                // 这条旧 bootstrap 语义重新打回等待关键帧。
+                let sustaining_recovery_continuation_allowed =
+                    self.timeline_state.in_sustaining_recovery()
+                        && inspection.slice_headers_valid
+                        && inspection.delta_continuation_ready()
+                        && inspection.committed_sps_present()
+                        && inspection.committed_pps_present();
                 let inspection_admission = resolve_inspection_admission(
                     &inspection,
                     first_frame_acquired,
                     decoder_bootstrap_no_output_continuation_allowed,
+                    sustaining_recovery_continuation_allowed,
                 );
                 let admission_accepted =
                     matches!(inspection_admission, InspectionAdmission::Accept);
@@ -801,9 +814,17 @@ impl RtcVideoFrameSource {
                             inspection.bootstrap_reject_reason,
                             inspection.slice_headers_valid
                         );
-                        self.set_waiting_for_recovery_keyframe(true);
-                        self.timeline_state
-                            .on_admission_await_recovery_keyframe(Some(reject_reason));
+                        let sustaining_recovery_failed =
+                            self.timeline_state.in_sustaining_recovery();
+                        if sustaining_recovery_failed {
+                            self.set_waiting_for_recovery_keyframe(true);
+                            self.timeline_state
+                                .on_sustaining_recovery_failed(reject_reason);
+                        } else {
+                            self.set_waiting_for_recovery_keyframe(true);
+                            self.timeline_state
+                                .on_admission_await_recovery_keyframe(Some(reject_reason));
+                        }
                         self.timeline_state.observe_frame(
                             sample.packet_timestamp,
                             now_ms,
@@ -817,8 +838,13 @@ impl RtcVideoFrameSource {
                             "unknown",
                             Some(reject_reason),
                         );
+                        let rejection_source_event = if sustaining_recovery_failed {
+                            "frame-inspection-rejected-trigger-recovery-keyframe"
+                        } else {
+                            "frame-inspection-rejected-await-keyframe"
+                        };
                         self.record_video_timeline_observation(
-                            "frame-inspection-rejected-await-keyframe",
+                            rejection_source_event,
                             None,
                             Some(sample.packet_timestamp),
                             now_ms,
@@ -837,14 +863,26 @@ impl RtcVideoFrameSource {
                         };
                         self.record_anchor_candidate_ledger(
                             Some(sample.packet_timestamp),
-                            "frame-inspection-rejected-await-keyframe",
+                            rejection_source_event,
                             XbxEngineAnchorCandidateState::Rejected,
                             Some(failure_reason),
                             now_ms,
                         );
-                        self.queue_transport_observation(TransportObservation::Admission(
-                            TransportAdmissionObservation::AwaitRecoveryKeyframe,
-                        ));
+                        if sustaining_recovery_failed {
+                            self.record_video_timeline_observation(
+                                "chain-recovery-keyframe-requested",
+                                None,
+                                Some(sample.packet_timestamp),
+                                now_ms,
+                            );
+                            self.queue_transport_observation(TransportObservation::Loss(
+                                TransportLossObservation::RecoveryKeyframeRequested,
+                            ));
+                        } else {
+                            self.queue_transport_observation(TransportObservation::Admission(
+                                TransportAdmissionObservation::AwaitRecoveryKeyframe,
+                            ));
+                        }
                         continue;
                     }
                 }
@@ -875,23 +913,23 @@ impl RtcVideoFrameSource {
                     "delta"
                 };
                 let waiting_for_recovery_keyframe = self.waiting_for_recovery_keyframe();
+                let sustaining_recovery_active = self.timeline_state.in_sustaining_recovery();
                 let hard_recovery_gap_risk = self.timeline_state.has_hard_recovery_gap_risk();
-                let allow_soft_reentry_submit = waiting_for_recovery_keyframe
-                    && first_frame_acquired
-                    && media_dropped_packets == 0
-                    && !is_keyframe
-                    && self
-                        .timeline_state
-                        .try_consume_soft_reentry_budget(frame_now_ms, frame_importance);
+                let healthy_delta_continuation = !is_keyframe
+                    && frame_importance == "delta"
+                    && inspection.slice_headers_valid
+                    && inspection.delta_continuation_ready()
+                    && inspection.committed_sps_present()
+                    && inspection.committed_pps_present();
                 let (next_waiting_for_recovery_keyframe, recovery_action) =
                     resolve_recovery_keyframe_action(
                         first_frame_acquired,
                         waiting_for_recovery_keyframe,
+                        sustaining_recovery_active && healthy_delta_continuation,
                         hard_recovery_gap_risk,
                         self.sample_loss_burst_count,
                         media_dropped_packets,
                         is_keyframe,
-                        allow_soft_reentry_submit,
                     );
                 self.set_waiting_for_recovery_keyframe(next_waiting_for_recovery_keyframe);
 
@@ -1124,6 +1162,7 @@ impl RtcVideoFrameSource {
                     "timeout-stream-idle"
                 };
                 let timeout_now_ms = now_ms_f64();
+                let sustaining_recovery_failed = self.timeline_state.in_sustaining_recovery();
                 self.timeline_state.record_timeout_reason(timeout_reason);
                 self.timeline_state.on_timeout_detected();
                 self.record_video_timeline_observation(
@@ -1142,11 +1181,23 @@ impl RtcVideoFrameSource {
                     now.duration_since(t) >= effective_idle_hint_cooldown
                 }) {
                     self.last_idle_hint_time = Some(now);
-                    self.queue_transport_observation(if thin_stream_stall {
-                        TransportObservation::StreamThinStall
+                    if sustaining_recovery_failed {
+                        self.record_video_timeline_observation(
+                            "chain-recovery-keyframe-requested",
+                            None,
+                            None,
+                            timeout_now_ms,
+                        );
+                        self.queue_transport_observation(TransportObservation::Loss(
+                            TransportLossObservation::RecoveryKeyframeRequested,
+                        ));
                     } else {
-                        TransportObservation::StreamIdleTimeout
-                    });
+                        self.queue_transport_observation(if thin_stream_stall {
+                            TransportObservation::StreamThinStall
+                        } else {
+                            TransportObservation::StreamIdleTimeout
+                        });
+                    }
                 }
                 continue;
             }
