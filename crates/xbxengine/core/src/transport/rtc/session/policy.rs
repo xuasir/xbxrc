@@ -1,9 +1,10 @@
+use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use crate::api::backend::{
-    XbxEngineMediaRuntimeStats, XbxEngineRecoveryBudgetSnapshot,
-    XbxEngineRecoveryDecisionLedgerObservation,
+    XbxEngineKeyframeRequestEpisodeObservation, XbxEngineMediaRuntimeStats,
+    XbxEngineRecoveryBudgetSnapshot, XbxEngineRecoveryDecisionLedgerObservation,
 };
 use crate::api::runtime::XbxEngineRuntimeConfig;
 use crate::runtime_stats_sink::RuntimeStatsSink;
@@ -76,6 +77,64 @@ const CLOUD_LIVENESS_RECONNECT_ATTEMPT_LIMIT: u8 = 6;
 const ADAPTER_IDLE_RENDER_SLACK_MIN_MS: f64 = 220.0;
 const ADAPTER_IDLE_RENDER_SLACK_MAX_MS: f64 = 450.0;
 const RECENT_RECOVERY_DECISION_LEDGER_CAPACITY: usize = 64;
+const RECOVERY_OBSERVATION_WINDOW_MS: f64 = 3_000.0;
+const RECOVERY_OBSERVATION_NO_PROGRESS_FALLBACK_MS: f64 = 1_200.0;
+const RECOVERY_OBSERVATION_KEYFRAME_WINDOW_MS: f64 = 900.0;
+/// `transportAwaitRecoveryKeyframe` 门控用的观测仅统计该诊断链，避免同 epoch 内其它 keyframe/decoder 自愈污染。
+const TRANSPORT_AWAIT_RECOVERY_KEYFRAME_DIAGNOSIS: &str = "transportAwaitRecoveryKeyframe";
+
+fn recovery_decision_ledger_recovery_epoch(
+    ledger: &XbxEngineRecoveryDecisionLedgerObservation,
+) -> Option<u64> {
+    ledger
+        .budget_after
+        .as_ref()
+        .map(|budget| budget.recovery_epoch)
+        .or_else(|| ledger.budget_before.as_ref().map(|budget| budget.recovery_epoch))
+}
+
+/// 与当前 `transport_recovery_epoch` 对齐的观测下界：排除上一轮恢复在滑窗内遗留的自愈痕迹。
+fn recovery_observation_epoch_floor_ms(stats: &XbxEngineMediaRuntimeStats) -> f64 {
+    stats.transport_recovery_episode_opened_at_ms.unwrap_or(0.0)
+}
+
+fn ledger_input_signals_transport_await_recovery_keyframe(
+    ledger: &XbxEngineRecoveryDecisionLedgerObservation,
+) -> bool {
+    ledger
+        .input_signal
+        .contains(TRANSPORT_AWAIT_RECOVERY_KEYFRAME_DIAGNOSIS)
+}
+
+fn is_transport_await_keyframe_episode(episode: &XbxEngineKeyframeRequestEpisodeObservation) -> bool {
+    episode.request_reason.as_deref() == Some(TRANSPORT_AWAIT_RECOVERY_KEYFRAME_DIAGNOSIS)
+}
+
+/// 取当前 stats 下最近一条 transport-await keyframe episode 的请求/解码时间（用于 reconnect fallback 门控）。
+fn transport_await_keyframe_episode_latest_times(
+    stats: &XbxEngineMediaRuntimeStats,
+) -> (Option<f64>, Option<f64>) {
+    let mut best_requested_at_ms: Option<f64> = None;
+    let mut best_first_keyframe_decoded_at_ms: Option<f64> = None;
+
+    let mut consider = |episode: &XbxEngineKeyframeRequestEpisodeObservation| {
+        if !is_transport_await_keyframe_episode(episode) {
+            return;
+        }
+        if best_requested_at_ms.is_none_or(|prev| episode.requested_at_ms >= prev) {
+            best_requested_at_ms = Some(episode.requested_at_ms);
+            best_first_keyframe_decoded_at_ms = episode.first_keyframe_decoded_at_ms;
+        }
+    };
+
+    for episode in stats.recent_keyframe_request_episodes.iter() {
+        consider(episode);
+    }
+    if let Some(episode) = stats.latest_keyframe_request_episode.as_ref() {
+        consider(episode);
+    }
+    (best_requested_at_ms, best_first_keyframe_decoded_at_ms)
+}
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum RecoveryLivenessState {
@@ -96,6 +155,63 @@ struct ConnectedRenderLivenessSignal {
     latest_video_host_present_time_ms: Option<f64>,
     inbound_primary_video_bytes_total: u64,
     no_pending_pressure_is_high: bool,
+}
+
+#[derive(Clone, Debug)]
+struct RecoveryObservationSnapshot {
+    ingress_active: bool,
+    reassembly_active: bool,
+    decode_active: bool,
+    render_active: bool,
+    rtc_connectivity_connected: bool,
+    reconnect_in_flight: bool,
+    stable_serving: bool,
+    last_media_progress_at: Option<f64>,
+    last_video_decode_ok_at: Option<f64>,
+    last_keyframe_requested_at: Option<f64>,
+    last_keyframe_decoded_at: Option<f64>,
+    local_decoder_reset_count_in_window: u32,
+    keyframe_request_count_in_window: u32,
+}
+
+impl RecoveryObservationSnapshot {
+    /// 仅计入与 `transportAwaitRecoveryKeyframe` 链对齐的 decoder reset / keyframe；不包含 NACK skip：
+    /// `latest_video_nack_observation` 无恢复链语义，同 epoch 内任意 skip 会误满足「已尝试局部自愈」。
+    fn local_self_healing_attempted(&self) -> bool {
+        self.local_decoder_reset_count_in_window > 0 || self.keyframe_request_count_in_window > 0
+    }
+
+    fn media_progress_is_stalled_long_enough(&self, observed_at_ms: f64) -> bool {
+        let latest_progress = [
+            self.last_media_progress_at,
+            self.last_video_decode_ok_at,
+            self.last_keyframe_decoded_at,
+        ]
+        .into_iter()
+        .flatten()
+        .max_by(|left, right| left.partial_cmp(right).unwrap_or(std::cmp::Ordering::Equal));
+        latest_progress.is_some_and(|last| {
+            (observed_at_ms - last).max(0.0) >= RECOVERY_OBSERVATION_NO_PROGRESS_FALLBACK_MS
+        })
+    }
+
+    fn outside_keyframe_recovery_window(&self, observed_at_ms: f64) -> bool {
+        self.last_keyframe_requested_at.is_none_or(|last| {
+            (observed_at_ms - last).max(0.0) >= RECOVERY_OBSERVATION_KEYFRAME_WINDOW_MS
+        })
+    }
+
+    fn allows_transport_await_reconnect_fallback(&self, observed_at_ms: f64) -> bool {
+        let has_media_stage_signal =
+            self.ingress_active || self.reassembly_active || self.decode_active || self.render_active;
+        self.rtc_connectivity_connected
+            && !self.reconnect_in_flight
+            && !self.stable_serving
+            && has_media_stage_signal
+            && self.local_self_healing_attempted()
+            && self.media_progress_is_stalled_long_enough(observed_at_ms)
+            && self.outside_keyframe_recovery_window(observed_at_ms)
+    }
 }
 
 impl RecoveryLivenessState {
@@ -469,6 +585,8 @@ impl RtcSessionPolicy {
             return None;
         }
         let observed_at_ms = Self::resolve_policy_observed_at_ms(snapshot);
+        let recovery_observation =
+            self.capture_recovery_observation_snapshot(snapshot, owner_state, observed_at_ms);
         let twcc_warmup_state = self.resolve_twcc_warmup_state();
         let has_media_recovery_surface = recovery_intent.is_some();
         let active_media_recovery_intent = recovery_intent.filter(|intent| intent.emit);
@@ -706,6 +824,12 @@ impl RtcSessionPolicy {
                 .liveness_reconnect_attempts_without_progress
                 .saturating_add(1);
         }
+        if proposal.signal.reason == VideoEscalationReason::TransportAwaitRecoveryKeyframe
+            && proposal.decision.action == RecoveryAction::RequestReconnectCandidate
+            && !recovery_observation.allows_transport_await_reconnect_fallback(observed_at_ms)
+        {
+            proposal.decision.action = RecoveryAction::CooldownSuppressed;
+        }
         if proposal.decision.action == RecoveryAction::RequestReconnectCandidate {
             self.record_reconnect_grant_without_success_edge();
         }
@@ -772,6 +896,119 @@ impl RtcSessionPolicy {
                 && has_fresh_media_output(stats, observed_at_ms)
         })
         .unwrap_or(false)
+    }
+
+    /// 仅服务于 `transportAwaitRecoveryKeyframe` → reconnect fallback 门控：keyframe/decoder 证据必须与该诊断链一致。
+    fn capture_recovery_observation_snapshot(
+        &self,
+        snapshot: &TransportSnapshot,
+        owner_state: VideoSchedulingOwnerState,
+        observed_at_ms: f64,
+    ) -> RecoveryObservationSnapshot {
+        RuntimeStatsSink::read_shared(self.runtime_stats.as_ref(), |stats| {
+            let (last_keyframe_requested_at, last_keyframe_decoded_at) =
+                transport_await_keyframe_episode_latest_times(stats);
+            RecoveryObservationSnapshot {
+                ingress_active: stats.latest_video_packet_arrival_time_ms.is_some(),
+                reassembly_active: stats.latest_video_packet_sequence.is_some(),
+                decode_active: stats.latest_video_decode_ok_time_ms.is_some(),
+                render_active: stats.latest_video_host_present_time_ms.is_some(),
+                rtc_connectivity_connected: snapshot.connection.lifecycle_state
+                    == ConnectionLifecycleStateFact::Connected,
+                reconnect_in_flight: matches!(
+                    snapshot.connection.lifecycle_state,
+                    ConnectionLifecycleStateFact::Connecting
+                        | ConnectionLifecycleStateFact::Recovering
+                ),
+                stable_serving: owner_state == VideoSchedulingOwnerState::StableServing,
+                last_media_progress_at: [
+                    stats.latest_video_packet_arrival_time_ms,
+                    stats.latest_video_decode_ok_time_ms,
+                    stats.latest_video_host_present_time_ms,
+                ]
+                .into_iter()
+                .flatten()
+                .max_by(|left, right| {
+                    left.partial_cmp(right).unwrap_or(std::cmp::Ordering::Equal)
+                }),
+                last_video_decode_ok_at: stats.latest_video_decode_ok_time_ms,
+                last_keyframe_requested_at,
+                last_keyframe_decoded_at,
+                local_decoder_reset_count_in_window: Self::count_recent_transport_await_decoder_resets(
+                    stats,
+                    observed_at_ms,
+                    RECOVERY_OBSERVATION_WINDOW_MS,
+                ),
+                keyframe_request_count_in_window:
+                    Self::count_recent_transport_await_keyframe_requests(
+                        stats,
+                        observed_at_ms,
+                        RECOVERY_OBSERVATION_WINDOW_MS,
+                    ),
+            }
+        })
+        .unwrap_or_else(|| RecoveryObservationSnapshot {
+            ingress_active: false,
+            reassembly_active: false,
+            decode_active: false,
+            render_active: false,
+            rtc_connectivity_connected: false,
+            reconnect_in_flight: false,
+            stable_serving: false,
+            last_media_progress_at: None,
+            last_video_decode_ok_at: None,
+            last_keyframe_requested_at: None,
+            last_keyframe_decoded_at: None,
+            local_decoder_reset_count_in_window: 0,
+            keyframe_request_count_in_window: 0,
+        })
+    }
+
+    fn count_recent_transport_await_decoder_resets(
+        stats: &crate::XbxEngineMediaRuntimeStats,
+        observed_at_ms: f64,
+        window_ms: f64,
+    ) -> u32 {
+        let current_epoch = stats.transport_recovery_epoch;
+        stats
+            .recent_recovery_decision_ledgers
+            .iter()
+            .filter(|ledger| {
+                ledger.action_selected == "requestDecoderReset"
+                    && ledger_input_signals_transport_await_recovery_keyframe(ledger)
+                    && (observed_at_ms - ledger.observed_at_ms).max(0.0) <= window_ms
+                    && recovery_decision_ledger_recovery_epoch(ledger) == Some(current_epoch)
+            })
+            .count() as u32
+    }
+
+    fn count_recent_transport_await_keyframe_requests(
+        stats: &crate::XbxEngineMediaRuntimeStats,
+        observed_at_ms: f64,
+        window_ms: f64,
+    ) -> u32 {
+        let epoch_floor_ms = recovery_observation_epoch_floor_ms(stats);
+        let mut seen_episode_ids = HashSet::new();
+        let mut count = 0u32;
+        for episode in stats
+            .recent_keyframe_request_episodes
+            .iter()
+            .chain(stats.latest_keyframe_request_episode.iter())
+        {
+            if !is_transport_await_keyframe_episode(episode) {
+                continue;
+            }
+            if episode.requested_at_ms < epoch_floor_ms {
+                continue;
+            }
+            if (observed_at_ms - episode.requested_at_ms).max(0.0) > window_ms {
+                continue;
+            }
+            if seen_episode_ids.insert(episode.episode_id) {
+                count = count.saturating_add(1);
+            }
+        }
+        count
     }
 
     fn should_absorb_stale_transport_await_replay(

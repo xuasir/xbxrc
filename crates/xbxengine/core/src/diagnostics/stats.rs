@@ -1350,6 +1350,15 @@ fn build_latest_decision_summary(
 ) -> Option<String> {
     let stats = runtime_stats?;
     if let Some(ledger) = stats.latest_recovery_decision_ledger.as_ref() {
+        if is_network_session_recovery_decision(ledger) {
+            return Some(format!("network_session_recovery:{}", ledger.gate_result));
+        }
+        if is_local_decoder_maintenance_decision(ledger.action_selected.as_str()) {
+            return Some(format!(
+                "local_decoder_maintenance:{}:{}",
+                ledger.state_after, ledger.action_selected
+            ));
+        }
         if ledger.gate_result.contains("reconnectGranted:")
             || ledger.gate_result.contains("reconnectBlocked:")
         {
@@ -1375,6 +1384,28 @@ fn build_latest_decision_summary(
         owner.state,
         owner.reason.as_deref().unwrap_or("none")
     ))
+}
+
+fn is_network_session_recovery_decision(
+    ledger: &crate::XbxEngineRecoveryDecisionLedgerObservation,
+) -> bool {
+    ledger.action_selected == "requestReconnectCandidate"
+        || ledger.gate_result.contains("reconnectGranted:")
+        || ledger.gate_result.contains("reconnectBlocked:")
+}
+
+fn is_local_decoder_maintenance_decision(action_selected: &str) -> bool {
+    matches!(
+        action_selected,
+        "requestDecoderReset"
+            | "requestKeyframe"
+            | "coalesced:keyframeInFlight"
+            | "coalesced:decoderResetInFlight"
+            | "waitForBurst"
+            | "waitForDecoderResetBurst"
+            | "cooldownSuppressed"
+            | "startupGraceSuppressed"
+    )
 }
 
 fn build_observation_note(runtime_stats: Option<&XbxEngineMediaRuntimeStats>) -> Option<String> {

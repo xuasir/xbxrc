@@ -410,7 +410,7 @@ fn recovery_failure_cost_label(action: &str) -> &'static str {
         "requestReconnectCandidate" => "high",
         "requestDecoderReset"
         | "requestKeyframe+decoderReset"
-        | "requestKeyframe+decoderReset(startupLowQualityRetry)" => "high",
+        | "requestKeyframe+decoderReset(startupLowQualityRetry)" => "medium",
         "requestKeyframe"
         | "startupLowQualityRetry"
         | "coalesced:keyframeInFlight"
@@ -440,7 +440,7 @@ fn recovery_window_source_label(stats: &XbxEngineMediaRuntimeStats, reason: &str
         reason,
         "adapterIdleTimeout" | "decoderBackendFailure" | "reconfigure" | "ingressReconfigure"
     ) {
-        return "decoder-reset-window";
+        return "local-maintenance-window";
     }
     if matches!(
         reason,

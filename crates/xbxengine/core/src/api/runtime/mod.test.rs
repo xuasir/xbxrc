@@ -20,7 +20,7 @@ use xbxengine_protocol::{
 
 use crate::runtime_stats_sink::RuntimeStatsSink;
 use crate::transport::rtc::connection::RtcConnectionService;
-use crate::transport::rtc::facts::{ConnectionLifecycleStateFact, TransportCommand};
+use crate::transport::rtc::facts::{ConnectionLifecycleStateFact, SessionCommand, TransportCommand};
 use crate::transport::rtc::projection::{
     BweProjection, ConnectionProjection, DiagnosticsProjection, MediaProjection,
     RecoveryProjection, TransportSnapshot,
@@ -45,6 +45,16 @@ use super::{
     XbxEngineEventSink, XbxEngineHostBridge, XbxEngineReconnectTriggerSource, XbxEngineRuntime,
     XbxEngineRuntimeConfig, XbxEngineRuntimeError, XbxEngineRuntimeState,
 };
+
+fn transport_commands(commands: Vec<SessionCommand>) -> Vec<TransportCommand> {
+    commands
+        .into_iter()
+        .filter_map(|command| match command {
+            SessionCommand::Transport(command) => Some(command),
+            SessionCommand::LocalDecoderReset { .. } => None,
+        })
+        .collect()
+}
 
 #[derive(Clone)]
 struct TestHostBridge {
@@ -1683,6 +1693,111 @@ fn reconnect_keeps_remote_session_alive_before_restart_negotiation() {
             phase: XbxEngineRuntimePhaseDto::Reconnecting,
         }
     )));
+}
+
+#[test]
+fn reconnect_settled_keyframe_is_deferred_when_keyframe_is_already_in_flight() {
+    let requests = Rc::new(RefCell::new(Vec::new()));
+    let events = Rc::new(RefCell::new(Vec::new()));
+    let backend = ScriptedMediaBackend::new(
+        XbxEngineMediaNegotiation {
+            local_offer_sdp: "offer".to_string(),
+            local_candidates: Vec::new(),
+            surface_id: "surface:viewport-1".to_string(),
+            video_width: 1280,
+            video_height: 720,
+            first_frame_packet_arrival_time_ms: None,
+            frame_decoded_time_ms: None,
+            frame_rendered_time_ms: None,
+            input_status: XbxEngineInputStatus::default(),
+        },
+        XbxEngineMediaRuntimeStats {
+            transport_state: XbxEngineTransportStateDto::Connected,
+            ..Default::default()
+        },
+    );
+    let keyframe_calls = backend.keyframe_request_calls.clone();
+    let mut runtime = XbxEngineRuntime::with_media_backend(
+        XbxEngineRuntimeConfig::default(),
+        TestHostBridge::new(requests),
+        TestEventSink::new(events),
+        backend,
+    );
+    runtime
+        .start(session(), viewport(), 1.0, None, None)
+        .expect("runtime start should succeed");
+    runtime.snapshot.last_recovery_action = Some("requestKeyframe".to_string());
+    runtime.snapshot.last_recovery_action_at_ms = Some(
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|duration| duration.as_millis() as f64)
+            .unwrap_or(0.0),
+    );
+
+    runtime
+        .request_reconnect(
+            XbxEngineReconnectReasonDto::MediaStalled,
+            XbxEngineReconnectTriggerSource::Policy,
+        )
+        .expect("runtime reconnect should succeed");
+
+    assert_eq!(*keyframe_calls.lock().expect("lock keyframe calls"), 0);
+    assert_eq!(
+        runtime.snapshot().last_recovery_reason.as_deref(),
+        Some("reconnectSettled:keyframeDeferred:keyframeInFlight")
+    );
+}
+
+#[test]
+fn reconnect_settled_keyframe_is_deferred_during_cooldown_window() {
+    let requests = Rc::new(RefCell::new(Vec::new()));
+    let events = Rc::new(RefCell::new(Vec::new()));
+    let backend = ScriptedMediaBackend::new(
+        XbxEngineMediaNegotiation {
+            local_offer_sdp: "offer".to_string(),
+            local_candidates: Vec::new(),
+            surface_id: "surface:viewport-1".to_string(),
+            video_width: 1280,
+            video_height: 720,
+            first_frame_packet_arrival_time_ms: None,
+            frame_decoded_time_ms: None,
+            frame_rendered_time_ms: None,
+            input_status: XbxEngineInputStatus::default(),
+        },
+        XbxEngineMediaRuntimeStats {
+            transport_state: XbxEngineTransportStateDto::Connected,
+            ..Default::default()
+        },
+    );
+    let keyframe_calls = backend.keyframe_request_calls.clone();
+    let mut runtime = XbxEngineRuntime::with_media_backend(
+        XbxEngineRuntimeConfig::default(),
+        TestHostBridge::new(requests),
+        TestEventSink::new(events),
+        backend,
+    );
+    runtime
+        .start(session(), viewport(), 1.0, None, None)
+        .expect("runtime start should succeed");
+    runtime.health.last_keyframe_request_at_ms = Some(
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|duration| duration.as_millis() as f64)
+            .unwrap_or(0.0),
+    );
+
+    runtime
+        .request_reconnect(
+            XbxEngineReconnectReasonDto::MediaStalled,
+            XbxEngineReconnectTriggerSource::Policy,
+        )
+        .expect("runtime reconnect should succeed");
+
+    assert_eq!(*keyframe_calls.lock().expect("lock keyframe calls"), 0);
+    assert_eq!(
+        runtime.snapshot().last_recovery_reason.as_deref(),
+        Some("reconnectSettled:keyframeDeferred:cooldown")
+    );
 }
 
 #[test]
@@ -3881,11 +3996,13 @@ async fn runtime_cloud_recovery_replay_accepts_transport_reconnect_after_local_n
         .expect("runtime start should succeed");
     requests.borrow_mut().clear();
 
-    bridge.apply_transport_session_command(TransportCommand::RequestReconnectCandidate {
-        observation_id: 501,
-        reason: "transportAwaitRecoveryKeyframe".to_string(),
-        reason_domain: crate::XbxEngineRecoveryReasonDomain::Local,
-    });
+    bridge.apply_transport_session_command(SessionCommand::Transport(
+        TransportCommand::RequestReconnectCandidate {
+            observation_id: 501,
+            reason: "transportAwaitRecoveryKeyframe".to_string(),
+            reason_domain: crate::XbxEngineRecoveryReasonDomain::Local,
+        },
+    ));
     runtime.tick();
     assert_eq!(
         runtime.snapshot().last_recovery_action.as_deref(),
@@ -3895,12 +4012,12 @@ async fn runtime_cloud_recovery_replay_accepts_transport_reconnect_after_local_n
     assert_eq!(initial_restart_count, 0);
 
     let mut policy = RtcSessionPolicy::new(runtime_config, runtime_stats.clone());
-    let local_recover = policy.on_snapshot(&fixture.build_connected_snapshot(
+    let local_recover = transport_commands(policy.on_snapshot(&fixture.build_connected_snapshot(
         1,
         profile.baseline.now_ms,
         240,
         "transportAwaitRecoveryKeyframe",
-    ));
+    )));
     assert!(local_recover.iter().any(|command| {
         matches!(
             command,
@@ -3930,13 +4047,13 @@ async fn runtime_cloud_recovery_replay_accepts_transport_reconnect_after_local_n
     }
 
     fixture.mark_transport_connectivity_degraded(profile.baseline.now_ms + 30.0);
-    let reconnect_commands = policy.on_snapshot(&build_recovering_snapshot(
+    let reconnect_commands = transport_commands(policy.on_snapshot(&build_recovering_snapshot(
         &fixture,
         2,
         profile.baseline.now_ms + 420.0,
         240,
         "rtcConnectionRecovering",
-    ));
+    )));
     let reconnect_candidate = reconnect_commands
         .iter()
         .find(|command| {
@@ -3973,7 +4090,7 @@ async fn runtime_cloud_recovery_replay_accepts_transport_reconnect_after_local_n
         assert!(ledger.budget_before.is_some());
         assert!(ledger.budget_after.is_some());
     }
-    bridge.apply_transport_session_command(reconnect_candidate);
+    bridge.apply_transport_session_command(SessionCommand::Transport(reconnect_candidate));
     {
         let stats = runtime_stats.lock().expect("runtime stats lock");
         let escalation = stats
@@ -4009,12 +4126,12 @@ async fn runtime_cloud_recovery_replay_accepts_transport_reconnect_after_local_n
     );
 
     fixture.mark_transport_recovered(profile.baseline.now_ms + 900.0);
-    let recovered_commands = policy.on_snapshot(&fixture.build_connected_snapshot(
+    let recovered_commands = transport_commands(policy.on_snapshot(&fixture.build_connected_snapshot(
         3,
         profile.baseline.now_ms + 930.0,
         260,
         "none",
-    ));
+    )));
     assert!(
         recovered_commands.is_empty(),
         "unexpected commands after recovery exit: {recovered_commands:?}"
@@ -4112,18 +4229,18 @@ async fn runtime_home_clean_anchor_short_jitter_replay_never_reaches_reconnect()
     }
 
     let mut policy = RtcSessionPolicy::new(runtime_config, runtime_stats.clone());
-    let first = policy.on_snapshot(&fixture.build_connected_snapshot(
+    let first = transport_commands(policy.on_snapshot(&fixture.build_connected_snapshot(
         1,
         profile.baseline.now_ms,
         144,
         "adapterIdleTimeout",
-    ));
+    )));
     assert!(
         first.is_empty(),
         "home clean-anchor short jitter first hit should stay absorbed: {first:?}"
     );
     for command in first.iter().cloned() {
-        bridge.apply_transport_session_command(command);
+        bridge.apply_transport_session_command(SessionCommand::Transport(command));
     }
 
     {
@@ -4143,18 +4260,18 @@ async fn runtime_home_clean_anchor_short_jitter_replay_never_reaches_reconnect()
             timeline.chain.observed_at_ms = profile.baseline.now_ms + 36.0;
         }
     }
-    let second = policy.on_snapshot(&fixture.build_connected_snapshot(
+    let second = transport_commands(policy.on_snapshot(&fixture.build_connected_snapshot(
         2,
         profile.baseline.now_ms + 38.0,
         145,
         "adapterIdleTimeout",
-    ));
+    )));
     assert!(
         second.is_empty(),
         "home clean-anchor short jitter should stay absorbed while progress returns: {second:?}"
     );
     for command in second.iter().cloned() {
-        bridge.apply_transport_session_command(command);
+        bridge.apply_transport_session_command(SessionCommand::Transport(command));
     }
 
     {
@@ -4279,7 +4396,7 @@ fn runtime_home_hard_disconnect_candidate_reaches_reconnect_restart() {
         BweProjection::default(),
         DiagnosticsProjection::default(),
     );
-    let commands = policy.on_snapshot(&snapshot);
+    let commands = transport_commands(policy.on_snapshot(&snapshot));
     let reconnect_candidate = commands
         .iter()
         .find(|command| {
@@ -4293,7 +4410,7 @@ fn runtime_home_hard_disconnect_candidate_reaches_reconnect_restart() {
         })
         .cloned()
         .expect("home hard disconnect reconnect candidate");
-    bridge.apply_transport_session_command(reconnect_candidate);
+    bridge.apply_transport_session_command(SessionCommand::Transport(reconnect_candidate));
     runtime.tick();
 
     assert_eq!(count_media_restart_requests(&requests), 1);
@@ -4352,54 +4469,54 @@ async fn runtime_cloud_replay_promotes_expired_deadline_to_transport_reconnect_a
     requests.borrow_mut().clear();
 
     let mut policy = RtcSessionPolicy::new(runtime_config, runtime_stats.clone());
-    let steady = policy.on_snapshot(&fixture.build_connected_snapshot(
+    let steady = transport_commands(policy.on_snapshot(&fixture.build_connected_snapshot(
         1,
         profile.baseline.now_ms,
         240,
         "none",
-    ));
+    )));
     assert!(steady.is_empty(), "unexpected steady commands: {steady:?}");
 
-    let local_noise = policy.on_snapshot(&fixture.build_connected_snapshot(
+    let local_noise = transport_commands(policy.on_snapshot(&fixture.build_connected_snapshot(
         2,
         profile.baseline.now_ms + 10.0,
         241,
         "none",
-    ));
+    )));
     assert!(
         local_noise.is_empty(),
         "unexpected local noise commands: {local_noise:?}"
     );
 
     fixture.mark_transport_connectivity_degraded(profile.baseline.now_ms + 30.0);
-    let expired_first = policy.on_snapshot(&fixture.build_connected_snapshot(
+    let expired_first = transport_commands(policy.on_snapshot(&fixture.build_connected_snapshot(
         3,
         profile.baseline.now_ms + 30.0,
         241,
         "transportExpiredDeadline",
-    ));
+    )));
     assert!(expired_first
         .iter()
         .all(|command| !matches!(command, TransportCommand::RequestReconnectCandidate { .. })));
 
     tokio::time::sleep(Duration::from_millis(450)).await;
-    let expired_second = policy.on_snapshot(&fixture.build_connected_snapshot(
+    let expired_second = transport_commands(policy.on_snapshot(&fixture.build_connected_snapshot(
         4,
         profile.baseline.now_ms + 450.0,
         241,
         "transportExpiredDeadline",
-    ));
+    )));
     assert!(expired_second
         .iter()
         .all(|command| !matches!(command, TransportCommand::RequestReconnectCandidate { .. })));
 
     tokio::time::sleep(Duration::from_millis(450)).await;
-    let expired_third = policy.on_snapshot(&fixture.build_connected_snapshot(
+    let expired_third = transport_commands(policy.on_snapshot(&fixture.build_connected_snapshot(
         5,
         profile.baseline.now_ms + 900.0,
         241,
         "transportExpiredDeadline",
-    ));
+    )));
     let reconnect_candidate = expired_third
         .iter()
         .find(|command| {
@@ -4424,7 +4541,7 @@ async fn runtime_cloud_replay_promotes_expired_deadline_to_transport_reconnect_a
         assert_eq!(ledger.gate_result, "pass");
         assert_eq!(ledger.action_selected, "requestReconnectCandidate");
     }
-    bridge.apply_transport_session_command(reconnect_candidate);
+    bridge.apply_transport_session_command(SessionCommand::Transport(reconnect_candidate));
     assert!(matches!(
         pending_runtime_recovery_action
             .lock()
@@ -4445,12 +4562,12 @@ async fn runtime_cloud_replay_promotes_expired_deadline_to_transport_reconnect_a
     );
 
     fixture.mark_transport_recovered(profile.baseline.now_ms + 930.0);
-    let recovered = policy.on_snapshot(&fixture.build_connected_snapshot(
+    let recovered = transport_commands(policy.on_snapshot(&fixture.build_connected_snapshot(
         6,
         profile.baseline.now_ms + 960.0,
         260,
         "none",
-    ));
+    )));
     assert!(
         recovered.is_empty(),
         "unexpected commands after expired deadline recovery exit: {recovered:?}"
@@ -4544,12 +4661,12 @@ async fn runtime_home_render_deadline_jitter_replay_stays_local_and_never_reache
     requests.borrow_mut().clear();
 
     let mut policy = RtcSessionPolicy::new(runtime_config, runtime_stats.clone());
-    let commands = policy.on_snapshot(&fixture.build_connected_snapshot(
+    let commands = transport_commands(policy.on_snapshot(&fixture.build_connected_snapshot(
         1,
         profile.baseline.now_ms,
         96,
         "displaySupplyCritical",
-    ));
+    )));
     assert!(commands.iter().any(|command| {
         matches!(
             command,
@@ -4560,7 +4677,7 @@ async fn runtime_home_render_deadline_jitter_replay_stays_local_and_never_reache
         .iter()
         .all(|command| !matches!(command, TransportCommand::RequestReconnectCandidate { .. })));
     for command in commands.iter().cloned() {
-        bridge.apply_transport_session_command(command);
+        bridge.apply_transport_session_command(SessionCommand::Transport(command));
     }
 
     {
@@ -4644,9 +4761,9 @@ async fn runtime_cloud_startup_transport_progress_replay_does_not_reconnect_befo
     requests.borrow_mut().clear();
 
     let mut policy = RtcSessionPolicy::new(runtime_config, runtime_stats.clone());
-    let first = policy.on_snapshot(&build_connecting_startup_snapshot(
+    let first = transport_commands(policy.on_snapshot(&build_connecting_startup_snapshot(
         1, 10_000.0, "none", 185.0, 8_500.0,
-    ));
+    )));
     assert!(first
         .iter()
         .all(|command| !matches!(command, TransportCommand::RequestReconnectCandidate { .. })));
@@ -4659,9 +4776,9 @@ async fn runtime_cloud_startup_transport_progress_replay_does_not_reconnect_befo
             track.observed_at_ms = 21_500.0;
         }
     }
-    let second = policy.on_snapshot(&build_connecting_startup_snapshot(
+    let second = transport_commands(policy.on_snapshot(&build_connecting_startup_snapshot(
         2, 21_600.0, "none", 190.0, 8_200.0,
-    ));
+    )));
     assert!(second
         .iter()
         .all(|command| !matches!(command, TransportCommand::RequestReconnectCandidate { .. })));

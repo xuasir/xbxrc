@@ -211,7 +211,37 @@ fn latest_decision_summary_surfaces_reconnect_gate_detail_when_present() {
     let dto = build_xbxengine_stats(&test_snapshot(), Some(&stats));
     assert_eq!(
         dto.latest_decision_summary.as_deref(),
-        Some("reconnect:suppressed:reconnectBlocked:mediaGate:localRecoveryActive")
+        Some("network_session_recovery:suppressed:reconnectBlocked:mediaGate:localRecoveryActive")
+    );
+}
+
+#[test]
+fn latest_decision_summary_marks_local_decoder_maintenance_family() {
+    let stats = XbxEngineMediaRuntimeStats {
+        transport_state: XbxEngineTransportStateDto::Connected,
+        latest_recovery_decision_ledger: Some(crate::XbxEngineRecoveryDecisionLedgerObservation {
+            decision_id: 42,
+            state_before: "active-recovery".to_string(),
+            state_after: "local-self-healing".to_string(),
+            input_signal: "transportAwaitRecoveryKeyframe:transportAwaitRecoveryKeyframe"
+                .to_string(),
+            gate_result: "pass".to_string(),
+            action_selected: "requestDecoderReset".to_string(),
+            budget_before: None,
+            budget_after: None,
+            trigger_observation_label: None,
+            trigger_observation_summary: None,
+            command_result: None,
+            command_detail: None,
+            observed_at_ms: 1_000.0,
+        }),
+        ..XbxEngineMediaRuntimeStats::default()
+    };
+
+    let dto = build_xbxengine_stats(&test_snapshot(), Some(&stats));
+    assert_eq!(
+        dto.latest_decision_summary.as_deref(),
+        Some("local_decoder_maintenance:local-self-healing:requestDecoderReset")
     );
 }
 

@@ -1,6 +1,6 @@
 use super::RtcVideoSourceSink;
 use crate::media::video::test_fixtures::bootstrap_pps_nalu;
-use crate::transport::rtc::facts::{ConnectionLifecycleStateFact, TransportCommand};
+use crate::transport::rtc::facts::{ConnectionLifecycleStateFact, SessionCommand, TransportCommand};
 use crate::transport::rtc::projection::{
     BweProjection, ConnectionProjection, DiagnosticsProjection, MediaProjection,
     RecoveryProjection, TransportSnapshot,
@@ -40,6 +40,16 @@ fn assert_has_connectivity_reconnect_candidate(commands: &[TransportCommand], re
                 && *reason_domain == XbxEngineRecoveryReasonDomain::ConnectivityTransport
         )
     }));
+}
+
+fn transport_commands(commands: Vec<SessionCommand>) -> Vec<TransportCommand> {
+    commands
+        .into_iter()
+        .filter_map(|command| match command {
+            SessionCommand::Transport(command) => Some(command),
+            SessionCommand::LocalDecoderReset { .. } => None,
+        })
+        .collect()
 }
 
 fn assert_latest_recovery_input_signal(
@@ -1017,7 +1027,7 @@ async fn local_repair_noise_does_not_block_following_repeated_transport_severe_d
         BweProjection::default(),
         DiagnosticsProjection::default(),
     );
-    let healthy_commands = policy.on_snapshot(&healthy_snapshot);
+    let healthy_commands = transport_commands(policy.on_snapshot(&healthy_snapshot));
     assert!(healthy_commands
         .iter()
         .all(|command| !matches!(command, TransportCommand::RequestReconnectCandidate { .. })));
@@ -1048,7 +1058,7 @@ async fn local_repair_noise_does_not_block_following_repeated_transport_severe_d
         BweProjection::default(),
         DiagnosticsProjection::default(),
     );
-    let first_commands = policy.on_snapshot(&first_deadline);
+    let first_commands = transport_commands(policy.on_snapshot(&first_deadline));
     assert_no_reconnect_candidate(&first_commands);
 
     let second_deadline = TransportSnapshot::new(
@@ -1069,7 +1079,7 @@ async fn local_repair_noise_does_not_block_following_repeated_transport_severe_d
         BweProjection::default(),
         DiagnosticsProjection::default(),
     );
-    let second_commands = policy.on_snapshot(&second_deadline);
+    let second_commands = transport_commands(policy.on_snapshot(&second_deadline));
     assert_has_connectivity_reconnect_candidate(&second_commands, "transportSevereDeadline");
 }
 
@@ -1087,7 +1097,7 @@ async fn multi_stage_replay_steady_local_noise_severe_then_recover_stays_stable(
     );
 
     let steady_snapshot = harness.build_connected_snapshot(1, profile.baseline.now_ms, 240, "none");
-    let steady_commands = policy.on_snapshot(&steady_snapshot);
+    let steady_commands = transport_commands(policy.on_snapshot(&steady_snapshot));
     assert!(
         steady_commands.is_empty(),
         "unexpected steady commands: {steady_commands:?}"
@@ -1105,7 +1115,7 @@ async fn multi_stage_replay_steady_local_noise_severe_then_recover_stays_stable(
     }
     let local_noise_snapshot =
         harness.build_connected_snapshot(2, profile.baseline.now_ms + 10.0, 241, "none");
-    let local_noise_commands = policy.on_snapshot(&local_noise_snapshot);
+    let local_noise_commands = transport_commands(policy.on_snapshot(&local_noise_snapshot));
     assert!(
         local_noise_commands.is_empty(),
         "unexpected local noise commands: {local_noise_commands:?}"
@@ -1119,7 +1129,7 @@ async fn multi_stage_replay_steady_local_noise_severe_then_recover_stays_stable(
         241,
         "transportSevereDeadline",
     );
-    let severe_first_commands = policy.on_snapshot(&severe_first);
+    let severe_first_commands = transport_commands(policy.on_snapshot(&severe_first));
     assert_no_reconnect_candidate(&severe_first_commands);
 
     let severe_second = harness.build_connected_snapshot(
@@ -1128,7 +1138,7 @@ async fn multi_stage_replay_steady_local_noise_severe_then_recover_stays_stable(
         241,
         "transportSevereDeadline",
     );
-    let severe_second_commands = policy.on_snapshot(&severe_second);
+    let severe_second_commands = transport_commands(policy.on_snapshot(&severe_second));
     assert_has_connectivity_reconnect_candidate(&severe_second_commands, "transportSevereDeadline");
     assert_latest_recovery_input_signal(
         &runtime_stats,
@@ -1139,7 +1149,7 @@ async fn multi_stage_replay_steady_local_noise_severe_then_recover_stays_stable(
 
     let recovered_snapshot =
         harness.build_connected_snapshot(5, profile.baseline.now_ms + 130.0, 260, "none");
-    let recovered_commands = policy.on_snapshot(&recovered_snapshot);
+    let recovered_commands = transport_commands(policy.on_snapshot(&recovered_snapshot));
     assert!(
         recovered_commands.is_empty(),
         "unexpected recovered commands: {recovered_commands:?}"
@@ -1161,14 +1171,14 @@ async fn multi_stage_replay_steady_local_noise_expired_then_recover_stays_stable
 
     let steady_snapshot = harness.build_connected_snapshot(1, profile.baseline.now_ms, 240, "none");
     assert!(
-        policy.on_snapshot(&steady_snapshot).is_empty(),
+        transport_commands(policy.on_snapshot(&steady_snapshot)).is_empty(),
         "unexpected steady commands"
     );
 
     let local_noise_snapshot =
         harness.build_connected_snapshot(2, profile.baseline.now_ms + 10.0, 241, "none");
     assert!(
-        policy.on_snapshot(&local_noise_snapshot).is_empty(),
+        transport_commands(policy.on_snapshot(&local_noise_snapshot)).is_empty(),
         "unexpected local noise commands"
     );
 
@@ -1180,7 +1190,7 @@ async fn multi_stage_replay_steady_local_noise_expired_then_recover_stays_stable
         241,
         "transportExpiredDeadline",
     );
-    let expired_first_commands = policy.on_snapshot(&expired_first);
+    let expired_first_commands = transport_commands(policy.on_snapshot(&expired_first));
     assert_no_reconnect_candidate(&expired_first_commands);
 
     tokio::time::sleep(Duration::from_millis(450)).await;
@@ -1190,7 +1200,7 @@ async fn multi_stage_replay_steady_local_noise_expired_then_recover_stays_stable
         241,
         "transportExpiredDeadline",
     );
-    let expired_second_commands = policy.on_snapshot(&expired_second);
+    let expired_second_commands = transport_commands(policy.on_snapshot(&expired_second));
     assert_no_reconnect_candidate(&expired_second_commands);
 
     tokio::time::sleep(Duration::from_millis(450)).await;
@@ -1200,7 +1210,7 @@ async fn multi_stage_replay_steady_local_noise_expired_then_recover_stays_stable
         241,
         "transportExpiredDeadline",
     );
-    let expired_third_commands = policy.on_snapshot(&expired_third);
+    let expired_third_commands = transport_commands(policy.on_snapshot(&expired_third));
     assert_has_connectivity_reconnect_candidate(
         &expired_third_commands,
         "transportExpiredDeadline",
@@ -1213,7 +1223,7 @@ async fn multi_stage_replay_steady_local_noise_expired_then_recover_stays_stable
     harness.mark_transport_recovered(profile.baseline.now_ms + 928.0);
     let recovered_snapshot =
         harness.build_connected_snapshot(6, profile.baseline.now_ms + 930.0, 260, "none");
-    let recovered_commands = policy.on_snapshot(&recovered_snapshot);
+    let recovered_commands = transport_commands(policy.on_snapshot(&recovered_snapshot));
     assert!(
         recovered_commands.is_empty(),
         "unexpected recovered commands: {recovered_commands:?}"
@@ -1235,14 +1245,14 @@ async fn multi_stage_replay_steady_local_noise_sample_loss_then_recover_stays_lo
 
     let steady_snapshot = harness.build_connected_snapshot(1, profile.baseline.now_ms, 240, "none");
     assert!(
-        policy.on_snapshot(&steady_snapshot).is_empty(),
+        transport_commands(policy.on_snapshot(&steady_snapshot)).is_empty(),
         "unexpected steady commands"
     );
 
     let local_noise_snapshot =
         harness.build_connected_snapshot(2, profile.baseline.now_ms + 10.0, 241, "none");
     assert!(
-        policy.on_snapshot(&local_noise_snapshot).is_empty(),
+        transport_commands(policy.on_snapshot(&local_noise_snapshot)).is_empty(),
         "unexpected local noise commands"
     );
 
@@ -1253,7 +1263,7 @@ async fn multi_stage_replay_steady_local_noise_sample_loss_then_recover_stays_lo
         241,
         "transportSampleLoss",
     );
-    let sample_loss_commands = policy.on_snapshot(&sample_loss);
+    let sample_loss_commands = transport_commands(policy.on_snapshot(&sample_loss));
     assert_no_reconnect_candidate(&sample_loss_commands);
     assert_latest_recovery_input_signal(&runtime_stats, "transportSampleLoss:transportSampleLoss");
 
@@ -1261,7 +1271,7 @@ async fn multi_stage_replay_steady_local_noise_sample_loss_then_recover_stays_lo
     let recovered_snapshot =
         harness.build_connected_snapshot(4, profile.baseline.now_ms + 130.0, 260, "none");
     assert!(
-        policy.on_snapshot(&recovered_snapshot).is_empty(),
+        transport_commands(policy.on_snapshot(&recovered_snapshot)).is_empty(),
         "unexpected recovered commands"
     );
 }
@@ -1281,14 +1291,14 @@ async fn multi_stage_replay_steady_local_noise_recovered_late_then_recover_stays
 
     let steady_snapshot = harness.build_connected_snapshot(1, profile.baseline.now_ms, 240, "none");
     assert!(
-        policy.on_snapshot(&steady_snapshot).is_empty(),
+        transport_commands(policy.on_snapshot(&steady_snapshot)).is_empty(),
         "unexpected steady commands"
     );
 
     let local_noise_snapshot =
         harness.build_connected_snapshot(2, profile.baseline.now_ms + 10.0, 241, "none");
     assert!(
-        policy.on_snapshot(&local_noise_snapshot).is_empty(),
+        transport_commands(policy.on_snapshot(&local_noise_snapshot)).is_empty(),
         "unexpected local noise commands"
     );
 
@@ -1299,7 +1309,7 @@ async fn multi_stage_replay_steady_local_noise_recovered_late_then_recover_stays
         241,
         "transportRecoveredLate",
     );
-    let recovered_late_commands = policy.on_snapshot(&recovered_late);
+    let recovered_late_commands = transport_commands(policy.on_snapshot(&recovered_late));
     assert_no_reconnect_candidate(&recovered_late_commands);
     assert_latest_recovery_input_signal(
         &runtime_stats,
@@ -1310,7 +1320,7 @@ async fn multi_stage_replay_steady_local_noise_recovered_late_then_recover_stays
     let recovered_snapshot =
         harness.build_connected_snapshot(4, profile.baseline.now_ms + 130.0, 260, "none");
     assert!(
-        policy.on_snapshot(&recovered_snapshot).is_empty(),
+        transport_commands(policy.on_snapshot(&recovered_snapshot)).is_empty(),
         "unexpected recovered commands"
     );
 }

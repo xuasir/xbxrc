@@ -412,7 +412,7 @@ impl VideoEscalationController {
 
     pub fn action_success_advances_transport_recovery_epoch(
         action: RecoveryAction,
-        reason: Option<VideoEscalationReason>,
+        _reason: Option<VideoEscalationReason>,
     ) -> bool {
         match action {
             RecoveryAction::RequestReconnectCandidate => true,

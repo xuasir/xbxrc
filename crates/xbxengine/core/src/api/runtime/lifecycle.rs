@@ -23,6 +23,7 @@ const ICE_EXCHANGE_TIMEOUT_MS_MIN: f64 = 10_000.0;
 const ICE_EXCHANGE_TIMEOUT_MS_MAX: f64 = 12_000.0;
 const ICE_EXCHANGE_STABLE_SETTLE_WINDOW_MS: f64 = 1_500.0;
 const TRANSPORT_RECONNECT_CANDIDATE_MIN_INTERVAL_MS: f64 = 6_000.0;
+const RECONNECT_SETTLED_KEYFRAME_MIN_INTERVAL_MS: f64 = 800.0;
 
 impl<THostBridge, TEventSink, TMediaBackend>
     XbxEngineRuntime<THostBridge, TEventSink, TMediaBackend>
@@ -90,6 +91,10 @@ where
         let previous_health = self.health.clone();
         let session_id = self.require_session_id()?;
         let reconnect_started_at_ms = now_ms_f64();
+        // 冻结重连前的 last_recovery_action，供协商完成后用「完成时刻」做短时去重（不用 keyframe_requested_for_current_stall：重连耗时长时该布尔会陈旧误伤）。
+        let pre_reconnect_last_recovery_action = self.snapshot.last_recovery_action.clone();
+        let pre_reconnect_last_recovery_action_at_ms = self.snapshot.last_recovery_action_at_ms;
+        let reconnect_settled_last_keyframe_request_at = self.health.last_keyframe_request_at_ms;
         let operation_epoch = self.host_bridge.current_cancellation_epoch();
         self.state = XbxEngineRuntimeState::Reconnecting;
         self.health.mark_reconnect_started(reconnect_started_at_ms);
@@ -122,7 +127,18 @@ where
 
         match reconnect_result {
             Ok(()) => {
-                self.request_keyframe_after_reconnect_settled(reconnect_started_at_ms);
+                let settled_at_ms = now_ms_f64();
+                let reconnect_settled_keyframe_in_flight =
+                    pre_reconnect_last_recovery_action.as_deref() == Some("requestKeyframe")
+                        && pre_reconnect_last_recovery_action_at_ms.is_some_and(|last| {
+                            (settled_at_ms - last).max(0.0)
+                                < RECONNECT_SETTLED_KEYFRAME_MIN_INTERVAL_MS
+                        });
+                self.request_keyframe_after_reconnect_settled(
+                    settled_at_ms,
+                    reconnect_settled_keyframe_in_flight,
+                    reconnect_settled_last_keyframe_request_at,
+                );
                 self.state = XbxEngineRuntimeState::Running;
                 Ok(())
             }
@@ -162,9 +178,28 @@ where
         self.emit_transport_state(XbxEngineTransportStateDto::Closed);
     }
 
-    fn request_keyframe_after_reconnect_settled(&mut self, now_ms: f64) {
+    fn request_keyframe_after_reconnect_settled(
+        &mut self,
+        now_ms: f64,
+        keyframe_in_flight: bool,
+        last_keyframe_request_at_ms: Option<f64>,
+    ) {
+        if keyframe_in_flight {
+            self.snapshot.last_recovery_reason =
+                Some("reconnectSettled:keyframeDeferred:keyframeInFlight".to_string());
+            return;
+        }
+        if last_keyframe_request_at_ms.is_some_and(|last| {
+            (now_ms - last).max(0.0) < RECONNECT_SETTLED_KEYFRAME_MIN_INTERVAL_MS
+        }) {
+            self.snapshot.last_recovery_reason =
+                Some("reconnectSettled:keyframeDeferred:cooldown".to_string());
+            return;
+        }
         if let Err(error) = self.media_backend.request_video_keyframe() {
             if is_control_channel_not_ready_error(&error) {
+                self.snapshot.last_recovery_reason =
+                    Some("reconnectSettled:keyframeDeferred:controlNotReady".to_string());
                 return;
             }
             self.emit_error("requestReconnectSettledKeyframeFailed", error.to_string());

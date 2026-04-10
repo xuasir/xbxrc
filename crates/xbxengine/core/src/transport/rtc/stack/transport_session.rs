@@ -254,7 +254,7 @@ impl<'a> RtcTransportSessionBridge<'a> {
                     self.record_recovery_escalation_observation(
                         *observation_id,
                         reason.clone(),
-                        "requestDecoderReset".to_string(),
+                        RecoveryAction::RequestDecoderReset.label().to_string(),
                         RecoveryAction::RequestDecoderReset,
                     );
                 }
@@ -1029,11 +1029,13 @@ mod tests {
         let pending_runtime_recovery_action = Arc::new(Mutex::new(None));
         let bridge = build_bridge(runtime_stats.clone(), pending_runtime_recovery_action);
 
-        bridge.apply_transport_session_command(TransportCommand::RequestReconnectCandidate {
-            observation_id: 42,
-            reason: "recovering-stream".to_string(),
-            reason_domain: crate::XbxEngineRecoveryReasonDomain::ConnectivityTransport,
-        });
+        bridge.apply_transport_session_command(SessionCommand::Transport(
+            TransportCommand::RequestReconnectCandidate {
+                observation_id: 42,
+                reason: "recovering-stream".to_string(),
+                reason_domain: crate::XbxEngineRecoveryReasonDomain::ConnectivityTransport,
+            },
+        ));
 
         let snapshot = runtime_stats.lock().expect("runtime stats lock");
         let escalation = snapshot
@@ -1061,11 +1063,13 @@ mod tests {
         )));
         let bridge = build_bridge(runtime_stats.clone(), pending_runtime_recovery_action);
 
-        bridge.apply_transport_session_command(TransportCommand::RequestReconnectCandidate {
-            observation_id: 43,
-            reason: "new-reason".to_string(),
-            reason_domain: crate::XbxEngineRecoveryReasonDomain::ConnectivityTransport,
-        });
+        bridge.apply_transport_session_command(SessionCommand::Transport(
+            TransportCommand::RequestReconnectCandidate {
+                observation_id: 43,
+                reason: "new-reason".to_string(),
+                reason_domain: crate::XbxEngineRecoveryReasonDomain::ConnectivityTransport,
+            },
+        ));
 
         let snapshot = runtime_stats.lock().expect("runtime stats lock");
         let escalation = snapshot
@@ -1086,11 +1090,13 @@ mod tests {
         let pending_runtime_recovery_action = Arc::new(Mutex::new(None));
         let bridge = build_bridge(runtime_stats, pending_runtime_recovery_action.clone());
 
-        bridge.apply_transport_session_command(TransportCommand::RequestReconnectCandidate {
-            observation_id: 44,
-            reason: "displaySupplyCritical".to_string(),
-            reason_domain: crate::XbxEngineRecoveryReasonDomain::Local,
-        });
+        bridge.apply_transport_session_command(SessionCommand::Transport(
+            TransportCommand::RequestReconnectCandidate {
+                observation_id: 44,
+                reason: "displaySupplyCritical".to_string(),
+                reason_domain: crate::XbxEngineRecoveryReasonDomain::Local,
+            },
+        ));
 
         let pending = pending_runtime_recovery_action
             .lock()
@@ -1113,11 +1119,13 @@ mod tests {
         let pending_runtime_recovery_action = Arc::new(Mutex::new(None));
         let bridge = build_bridge(runtime_stats.clone(), pending_runtime_recovery_action);
 
-        bridge.apply_transport_session_command(TransportCommand::RequestReconnectCandidate {
-            observation_id: 77,
-            reason: "reconnect-needed".to_string(),
-            reason_domain: crate::XbxEngineRecoveryReasonDomain::ConnectivityTransport,
-        });
+        bridge.apply_transport_session_command(SessionCommand::Transport(
+            TransportCommand::RequestReconnectCandidate {
+                observation_id: 77,
+                reason: "reconnect-needed".to_string(),
+                reason_domain: crate::XbxEngineRecoveryReasonDomain::ConnectivityTransport,
+            },
+        ));
 
         let snapshot = runtime_stats.lock().expect("runtime stats lock");
         let escalation = snapshot
@@ -1139,7 +1147,7 @@ mod tests {
             RecoveryAction::RequestDecoderReset,
             "displaySupplyDegraded",
         ));
-        assert!(bridge.should_advance_transport_recovery_epoch_on_success(
+        assert!(!bridge.should_advance_transport_recovery_epoch_on_success(
             RecoveryAction::RequestDecoderReset,
             "transportAwaitRecoveryKeyframe",
         ));
@@ -1208,10 +1216,12 @@ mod tests {
         let pending_runtime_recovery_action = Arc::new(Mutex::new(None));
         let bridge = build_bridge(runtime_stats.clone(), pending_runtime_recovery_action);
 
-        bridge.apply_transport_session_command(TransportCommand::RequestKeyframe {
-            observation_id: 22,
-            reason: "ingressWaitKeyframe".to_string(),
-        });
+        bridge.apply_transport_session_command(SessionCommand::Transport(
+            TransportCommand::RequestKeyframe {
+                observation_id: 22,
+                reason: "ingressWaitKeyframe".to_string(),
+            },
+        ));
 
         let snapshot = runtime_stats.lock().expect("runtime stats lock");
         let episode = snapshot

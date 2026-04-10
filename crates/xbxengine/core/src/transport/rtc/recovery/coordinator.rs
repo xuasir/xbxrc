@@ -1382,8 +1382,12 @@ impl RecoveryCoordinator {
                 .latest_video_escalation_observation
                 .as_ref()
                 .is_some_and(|observation| {
-                    observation.action == "requestDecoderReset"
-                        && observation.observed_at_ms >= started_at_ms
+                    matches!(
+                        observation.action.as_str(),
+                        "requestDecoderReset"
+                            | "requestKeyframe+decoderReset"
+                            | "requestKeyframe+decoderReset(startupLowQualityRetry)"
+                    ) && observation.observed_at_ms >= started_at_ms
                 });
             decoder_reset_applied || decoder_reset_requested
         })
