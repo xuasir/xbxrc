@@ -88,6 +88,10 @@ export function buildStreamDiagnosticsSnapshot(input: {
   return {
     isActive,
     streamLifecyclePhase: unifiedLifecyclePhase,
+    presentationMilestone: input.runtimeSnapshot?.presentationMilestone,
+    connectedMilestoneElapsedMs: input.runtimeSnapshot?.connectedMilestoneElapsedMs,
+    mediaReadyMilestoneElapsedMs: input.runtimeSnapshot?.mediaReadyMilestoneElapsedMs,
+    presentationFailedStage: input.runtimeSnapshot?.presentationFailedStage,
     regionName,
     serverHost: parseServerHost(input.metadata?.serverBaseUrl),
     turnSource: input.metadata?.turnSource ?? 'none',

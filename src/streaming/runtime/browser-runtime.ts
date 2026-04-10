@@ -106,6 +106,9 @@ export function createBrowserRuntime(options: {
   let stallCheckTimer: number | null = null
   let nextAllowedStallRecoveryAt = 0
   let frameTrackingCleanup: (() => void) | null = null
+  let connectedMilestoneAt: number | null = null
+  let mediaReadyMilestoneAt: number | null = null
+  let pendingConnectedMilestone = false
 
   function emit(event: RuntimeEvent): void {
     for (const listener of listeners) {
@@ -145,7 +148,25 @@ export function createBrowserRuntime(options: {
     client = null
     clearClientSubscriptions()
     clearFrameTracking()
+    connectedMilestoneAt = null
+    mediaReadyMilestoneAt = null
+    pendingConnectedMilestone = false
     currentClient?.close()
+  }
+
+  function emitConnectedMilestoneIfPending(now: number, stage: 'connected' | 'mediaReady'): void {
+    if (!pendingConnectedMilestone || connectedMilestoneAt !== null) {
+      return
+    }
+    connectedMilestoneAt = now
+    pendingConnectedMilestone = false
+    emit({
+      type: 'presentationMilestoneChanged',
+      milestone: 'connected',
+      connectedAtMs: connectedMilestoneAt,
+      mediaReadyAtMs: null,
+      stage,
+    })
   }
 
   async function attachGamepadSession(sessionId: string): Promise<void> {
@@ -171,7 +192,19 @@ export function createBrowserRuntime(options: {
   }
 
   function markFrameReady(): void {
-    lastMediaActivityAt = Date.now()
+    const now = Date.now()
+    lastMediaActivityAt = now
+    emitConnectedMilestoneIfPending(now, 'mediaReady')
+    if (connectedMilestoneAt !== null && mediaReadyMilestoneAt === null) {
+      mediaReadyMilestoneAt = now
+      emit({
+        type: 'presentationMilestoneChanged',
+        milestone: 'mediaReady',
+        connectedAtMs: connectedMilestoneAt,
+        mediaReadyAtMs: mediaReadyMilestoneAt,
+        stage: 'mediaReady',
+      })
+    }
     emit({ type: 'frameReady' })
   }
 
@@ -199,6 +232,9 @@ export function createBrowserRuntime(options: {
     if (state === 'connected') {
       const now = Date.now()
       connectedAt = now
+      connectedMilestoneAt = null
+      mediaReadyMilestoneAt = null
+      pendingConnectedMilestone = true
       lastMediaActivityAt = now
       nextAllowedStallRecoveryAt = 0
       applyCurrentDisplayState()
@@ -208,6 +244,16 @@ export function createBrowserRuntime(options: {
     if (state === 'closed' || state === 'failed' || state === 'disconnected') {
       connectedAt = null
       lastMediaActivityAt = null
+      pendingConnectedMilestone = false
+      emit({
+        type: 'presentationMilestoneChanged',
+        milestone: state === 'closed' ? 'closed' : state === 'failed' ? 'failed' : 'idle',
+        connectedAtMs: null,
+        mediaReadyAtMs: null,
+        stage: 'transport',
+      })
+      connectedMilestoneAt = null
+      mediaReadyMilestoneAt = null
     }
   }
 
@@ -222,6 +268,9 @@ export function createBrowserRuntime(options: {
         emit({ type: 'microphoneStateChanged', capturing, paused })
       }),
       eventBus.on('media.videoReady', () => {
+        if (transportState === 'connected') {
+          emitConnectedMilestoneIfPending(Date.now(), 'connected')
+        }
         applyCurrentDisplayState()
       }),
       eventBus.on('stats.videoFrameProcessed', () => {

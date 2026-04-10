@@ -1,4 +1,4 @@
-use xbxengine_protocol::XbxEngineStatsDto;
+use xbxengine_protocol::{XbxEnginePresentationMilestoneDto, XbxEngineStatsDto};
 
 use crate::transport::rtc::recovery::remote_profile_runtime::classify_runtime_remote_profile;
 use crate::transport::rtc::recovery::runtime_state::{
@@ -53,6 +53,20 @@ fn project_video_owner_contract(
         source: Some(runtime_state_owner_source(state.phase).to_string()),
         observed_at_ms: None,
     })
+}
+
+fn map_presentation_milestone(
+    milestone: Option<&XbxEnginePresentationMilestoneDto>,
+) -> Option<String> {
+    milestone.map(|value| match value {
+        XbxEnginePresentationMilestoneDto::Idle => "idle",
+        XbxEnginePresentationMilestoneDto::Connected => "connected",
+        XbxEnginePresentationMilestoneDto::MediaReady => "mediaReady",
+        XbxEnginePresentationMilestoneDto::Degraded => "degraded",
+        XbxEnginePresentationMilestoneDto::Failed => "failed",
+        XbxEnginePresentationMilestoneDto::Closed => "closed",
+    })
+    .map(str::to_string)
 }
 
 fn should_project_runtime_owner_fallback(stats: &XbxEngineMediaRuntimeStats) -> bool {
@@ -428,6 +442,14 @@ pub fn build_xbxengine_stats(
         video_owner,
         now_ms,
     );
+    let presentation_milestone =
+        map_presentation_milestone(snapshot.presentation_milestone.as_ref());
+    let connected_milestone_elapsed_ms = snapshot
+        .connected_milestone_at_ms
+        .map(|at| (now_ms - at).max(0.0));
+    let media_ready_milestone_elapsed_ms = snapshot
+        .media_ready_milestone_at_ms
+        .map(|at| (now_ms - at).max(0.0));
     let runtime_remote_profile = resolve_runtime_remote_profile_strings(runtime_stats, now_ms);
     let remote_profile_baseline = recovery_runtime_state
         .as_ref()
@@ -487,6 +509,10 @@ pub fn build_xbxengine_stats(
         rtt,
         fps,
         runtime_summary,
+        presentation_milestone,
+        connected_milestone_elapsed_ms,
+        media_ready_milestone_elapsed_ms,
+        presentation_failed_stage: snapshot.presentation_failed_stage.clone(),
         primary_issue_chain,
         latest_decision_summary,
         remote_profile_baseline,

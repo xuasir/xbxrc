@@ -4,8 +4,9 @@ use std::fmt::{Display, Formatter};
 use ohmygamepad_protocol::{OhMyGamepadRumbleRequestDto, OhMyGamepadRumbleTargetDto};
 use xbxengine_protocol::{
     XbxEngineDisplayStateDto, XbxEngineHostRequestDto, XbxEngineHostResponseDto,
-    XbxEngineIceCandidateDto, XbxEngineInputEventDto, XbxEngineRuntimeEventDto,
-    XbxEngineSessionDto, XbxEngineStatsDto, XbxEngineVideoTrackStatusDto, XbxEngineViewportDto,
+    XbxEngineIceCandidateDto, XbxEngineInputEventDto, XbxEnginePresentationMilestoneDto,
+    XbxEngineRuntimeEventDto, XbxEngineSessionDto, XbxEngineStatsDto,
+    XbxEngineVideoTrackStatusDto, XbxEngineViewportDto,
 };
 
 use crate::{
@@ -193,6 +194,10 @@ pub struct XbxEngineRuntimeSnapshot {
     pub first_frame_packet_arrival_time_ms: Option<f64>,
     pub frame_decoded_time_ms: Option<f64>,
     pub frame_rendered_time_ms: Option<f64>,
+    pub presentation_milestone: Option<XbxEnginePresentationMilestoneDto>,
+    pub connected_milestone_at_ms: Option<f64>,
+    pub media_ready_milestone_at_ms: Option<f64>,
+    pub presentation_failed_stage: Option<String>,
     pub latest_video_track_status: Option<XbxEngineVideoTrackStatusDto>,
     pub recovery_keyframe_request_count: u64,
     pub recovery_decoder_reset_count: u64,

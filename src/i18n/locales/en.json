@@ -107,6 +107,8 @@
       "waitingResources": "Waiting for streaming resources...",
       "waitingQueue": "Waiting in queue... {seconds}s",
       "connected": "Connected",
+      "connectedWaitingMedia": "Connected, waiting for stable video...",
+      "mediaReady": "Video is stable",
       "reconnecting": "Restoring connection...",
       "connecting": "Connecting..."
     },

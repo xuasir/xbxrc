@@ -17,6 +17,10 @@ export interface StreamStats {
   rtt: string
   fps: number
   streamLifecyclePhase?: string
+  presentationMilestone?: string
+  connectedMilestoneElapsedMs?: number
+  mediaReadyMilestoneElapsedMs?: number
+  presentationFailedStage?: string
   remoteProfileBaseline?: string
   remoteProfileDynamic?: string
   remoteProfileEffectiveLabel?: string

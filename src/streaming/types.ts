@@ -32,6 +32,14 @@ export type StreamSessionLifecyclePhase
     | 'stopped'
     | 'failed'
 
+export type StreamPresentationMilestone
+  = | 'idle'
+    | 'connected'
+    | 'mediaReady'
+    | 'degraded'
+    | 'failed'
+    | 'closed'
+
 export interface RuntimeLaunchSpec {
   sessionId: string
   targetType: StreamingTargetType
@@ -48,6 +56,10 @@ export interface StreamPerformanceSnapshot {
   jit?: string | number
   fps?: string | number
   streamLifecyclePhase?: string
+  presentationMilestone?: string
+  connectedMilestoneElapsedMs?: number
+  mediaReadyMilestoneElapsedMs?: number
+  presentationFailedStage?: string
   remoteProfileBaseline?: string
   remoteProfileDynamic?: string
   remoteProfileEffectiveLabel?: string
@@ -137,6 +149,10 @@ export interface StreamPerformanceSnapshot {
 export interface StreamSessionDiagnosticsSnapshot {
   isActive: boolean
   streamLifecyclePhase?: string
+  presentationMilestone?: string
+  connectedMilestoneElapsedMs?: number
+  mediaReadyMilestoneElapsedMs?: number
+  presentationFailedStage?: string
   regionName?: string
   serverHost?: string
   turnSource: 'none' | 'custom' | 'fallback'

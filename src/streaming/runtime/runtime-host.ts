@@ -3,6 +3,7 @@ import type {
   DisplayOptionsValue,
   RuntimeLaunchSpec,
   StreamMicrophoneActivationSource,
+  StreamPresentationMilestone,
   StreamMicrophoneSnapshot,
   StreamRenderProjection,
 } from '../types'
@@ -24,6 +25,12 @@ type BrowserInterval = number
 interface UseStreamRuntimeHostOptions {
   playerElementId: string
   onConnectionStateChange: (state: RTCPeerConnectionState) => void
+  onPresentationMilestoneChange: (input: {
+    milestone: StreamPresentationMilestone
+    connectedAtMs?: number | null
+    mediaReadyAtMs?: number | null
+    stage?: string | null
+  }) => void
   onRuntimeError: (message: string) => void
   onRuntimePhaseChange: (phase: StreamRuntimePhase) => void
   onFrameReady: () => void
@@ -133,6 +140,16 @@ export function useStreamRuntimeHost(options: UseStreamRuntimeHostOptions) {
           return
         }
         options.onConnectionStateChange(event.state)
+        return
+      }
+
+      if (event.type === 'presentationMilestoneChanged') {
+        options.onPresentationMilestoneChange({
+          milestone: event.milestone,
+          connectedAtMs: event.connectedAtMs ?? null,
+          mediaReadyAtMs: event.mediaReadyAtMs ?? null,
+          stage: event.stage ?? null,
+        })
         return
       }
 

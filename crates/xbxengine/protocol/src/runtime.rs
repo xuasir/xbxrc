@@ -45,6 +45,16 @@ pub enum XbxEngineTransportStateDto {
     Closed,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum XbxEnginePresentationMilestoneDto {
+    Idle,
+    Connected,
+    MediaReady,
+    Degraded,
+    Failed,
+    Closed,
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct XbxEngineVideoTrackStatusDto {
@@ -71,9 +81,16 @@ pub enum XbxEngineRuntimeEventDto {
         capturing: bool,
         paused: bool,
     },
+    /// `MediaVideoReady` 保持历史兼容语义：只表示媒体协商/尺寸 ready。
     MediaVideoReady {
         width: u32,
         height: u32,
+    },
+    PresentationMilestoneChanged {
+        milestone: XbxEnginePresentationMilestoneDto,
+        connected_at_ms: Option<f64>,
+        media_ready_at_ms: Option<f64>,
+        stage: Option<String>,
     },
     MediaVideoTrackStatusChanged {
         status: XbxEngineVideoTrackStatusDto,
@@ -536,6 +553,10 @@ pub struct XbxEngineStatsDto {
     pub rtt: String,
     pub fps: f64,
     pub stream_lifecycle_phase: Option<String>,
+    pub presentation_milestone: Option<String>,
+    pub connected_milestone_elapsed_ms: Option<f64>,
+    pub media_ready_milestone_elapsed_ms: Option<f64>,
+    pub presentation_failed_stage: Option<String>,
     pub runtime_summary: Option<String>,
     pub primary_issue_chain: Option<String>,
     pub latest_decision_summary: Option<String>,

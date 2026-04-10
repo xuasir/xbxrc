@@ -351,7 +351,7 @@ export function resolveStartupPhaseStatusTextKey(
     case 'startingRuntime':
       return 'streamPage.status.startingPlayer'
     case 'ready':
-      return 'streamPage.status.connected'
+      return 'streamPage.status.connectedWaitingMedia'
     case 'failed':
       return 'streamPage.errorTitle'
   }
@@ -368,7 +368,7 @@ export function resolveStartupPhasePrimaryStatusTextKey(
     case 'startingRuntime':
       return 'streamPage.status.startingStream'
     case 'ready':
-      return 'streamPage.status.connected'
+      return 'streamPage.status.connectedWaitingMedia'
     case 'failed':
       return 'streamPage.errorTitle'
   }

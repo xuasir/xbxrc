@@ -7,6 +7,13 @@ import type {
 
 export type XbxEngineReconnectReason = 'networkLost' | 'iceFailed' | 'mediaStalled'
 export type XbxEngineStreamingMode = 'cloudGaming' | 'localHost' | 'cloudHost'
+export type XbxEnginePresentationMilestone
+  = | 'idle'
+    | 'connected'
+    | 'mediaReady'
+    | 'degraded'
+    | 'failed'
+    | 'closed'
 
 export interface XbxEngineSessionDto {
   sessionId: string
@@ -74,6 +81,10 @@ export interface XbxEngineStatsDto {
   remote_profile_dynamic?: string
   remote_profile_effective_label?: string
   stream_lifecycle_phase?: string
+  presentation_milestone?: string
+  connected_milestone_elapsed_ms?: number
+  media_ready_milestone_elapsed_ms?: number
+  presentation_failed_stage?: string
   /** 新统一生命周期语义（Rust 主权）；前端优先消费该字段。 */
   runtime_lifecycle_phase?: string
   /** 兼容命名：部分版本可能使用 unified/session 前缀。 */
@@ -455,6 +466,13 @@ export type XbxEngineRuntimeEventDto
     | { type: 'transport.connectionState', state: XbxEngineTransportState }
     | { type: 'chat.stateChanged', capturing: boolean, paused: boolean }
     | { type: 'media.videoReady', width: number, height: number }
+    | {
+      type: 'presentation.milestoneChanged'
+      milestone: XbxEnginePresentationMilestone
+      connectedAtMs?: number | null
+      mediaReadyAtMs?: number | null
+      stage?: string | null
+    }
     | {
       type: 'media.videoTrackStatusChanged'
       status: {

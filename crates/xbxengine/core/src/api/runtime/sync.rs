@@ -1,5 +1,6 @@
 use xbxengine_protocol::{
-    XbxEngineRuntimeEventDto, XbxEngineRuntimePhaseDto, XbxEngineTransportStateDto,
+    XbxEnginePresentationMilestoneDto, XbxEngineRuntimeEventDto, XbxEngineRuntimePhaseDto,
+    XbxEngineTransportStateDto,
     XbxEngineVideoTrackStatusDto,
 };
 
@@ -8,6 +9,8 @@ use crate::{
     XbxEngineInputStatus, XbxEngineMediaBackend, XbxEngineMediaNegotiation,
     XbxEngineMediaRuntimeStats,
 };
+
+const MEDIA_READY_PRESENT_FRESHNESS_WINDOW_MS: f64 = 1_500.0;
 
 impl<THostBridge, TEventSink, TMediaBackend>
     XbxEngineRuntime<THostBridge, TEventSink, TMediaBackend>
@@ -106,6 +109,22 @@ where
             .emit(XbxEngineRuntimeEventDto::TransportConnectionStateChanged { state });
     }
 
+    pub(super) fn emit_presentation_milestone(
+        &mut self,
+        milestone: XbxEnginePresentationMilestoneDto,
+        connected_at_ms: Option<f64>,
+        media_ready_at_ms: Option<f64>,
+        stage: Option<String>,
+    ) {
+        self.event_sink
+            .emit(XbxEngineRuntimeEventDto::PresentationMilestoneChanged {
+                milestone,
+                connected_at_ms,
+                media_ready_at_ms,
+                stage,
+            });
+    }
+
     pub(super) fn emit_error(&mut self, code: impl Into<String>, message: impl Into<String>) {
         self.event_sink
             .emit(XbxEngineRuntimeEventDto::ErrorReported {
@@ -131,6 +150,7 @@ where
         self.sync_video_track_status(&runtime_stats);
         self.sync_video_packet_stats(&runtime_stats);
         self.sync_video_frame_stats(&runtime_stats);
+        self.sync_presentation_milestone(&runtime_stats);
         crate::xbx_log_debug!("[xbxengine][runtime][sync] sync_runtime_activity_snapshot exit");
     }
 
@@ -237,5 +257,135 @@ where
         self.snapshot.latest_video_track_status = Some(status.clone());
         self.event_sink
             .emit(XbxEngineRuntimeEventDto::MediaVideoTrackStatusChanged { status });
+    }
+
+    pub(super) fn sync_presentation_milestone(&mut self, stats: &XbxEngineMediaRuntimeStats) {
+        let now_ms = super::now_ms_f64();
+        let (milestone, stage) = self.resolve_presentation_milestone(stats, now_ms);
+        let next_failed_stage =
+            if matches!(milestone, XbxEnginePresentationMilestoneDto::Failed) {
+                stage.clone()
+            } else {
+                None
+            };
+        if self.snapshot.presentation_milestone.as_ref() == Some(&milestone)
+            && self.snapshot.presentation_failed_stage == next_failed_stage
+        {
+            return;
+        }
+
+        match milestone {
+            XbxEnginePresentationMilestoneDto::Connected => {
+                self.snapshot
+                    .connected_milestone_at_ms
+                    .get_or_insert(now_ms);
+                self.snapshot.media_ready_milestone_at_ms = None;
+            }
+            XbxEnginePresentationMilestoneDto::MediaReady => {
+                self.snapshot
+                    .connected_milestone_at_ms
+                    .get_or_insert(now_ms);
+                self.snapshot
+                    .media_ready_milestone_at_ms
+                    .get_or_insert(now_ms);
+            }
+            XbxEnginePresentationMilestoneDto::Degraded => {
+                self.snapshot
+                    .connected_milestone_at_ms
+                    .get_or_insert(now_ms);
+            }
+            XbxEnginePresentationMilestoneDto::Failed
+            | XbxEnginePresentationMilestoneDto::Closed
+            | XbxEnginePresentationMilestoneDto::Idle => {
+                self.snapshot.connected_milestone_at_ms = None;
+                self.snapshot.media_ready_milestone_at_ms = None;
+            }
+        }
+        self.snapshot.presentation_failed_stage = next_failed_stage;
+
+        self.snapshot.presentation_milestone = Some(milestone.clone());
+        self.emit_presentation_milestone(
+            milestone,
+            self.snapshot.connected_milestone_at_ms,
+            self.snapshot.media_ready_milestone_at_ms,
+            stage,
+        );
+    }
+
+    fn resolve_presentation_milestone(
+        &self,
+        stats: &XbxEngineMediaRuntimeStats,
+        now_ms: f64,
+    ) -> (XbxEnginePresentationMilestoneDto, Option<String>) {
+        match stats.transport_state {
+            XbxEngineTransportStateDto::Closed => {
+                return (
+                    XbxEnginePresentationMilestoneDto::Closed,
+                    Some("transport".to_string()),
+                );
+            }
+            XbxEngineTransportStateDto::Failed => {
+                return (
+                    XbxEnginePresentationMilestoneDto::Failed,
+                    Some("transport".to_string()),
+                );
+            }
+            XbxEngineTransportStateDto::New
+            | XbxEngineTransportStateDto::Connecting
+            | XbxEngineTransportStateDto::Disconnected => {
+                return (XbxEnginePresentationMilestoneDto::Idle, Some("transport".to_string()));
+            }
+            XbxEngineTransportStateDto::Connected => {}
+        }
+
+        if !Self::connected_milestone_ready(stats) {
+            return (XbxEnginePresentationMilestoneDto::Idle, Some("transport".to_string()));
+        }
+
+        if Self::media_ready_milestone_ready(stats, now_ms) {
+            return (
+                XbxEnginePresentationMilestoneDto::MediaReady,
+                Some("mediaReady".to_string()),
+            );
+        }
+
+        let degraded = matches!(
+            self.snapshot.presentation_milestone,
+            Some(XbxEnginePresentationMilestoneDto::MediaReady)
+                | Some(XbxEnginePresentationMilestoneDto::Degraded)
+        );
+        if degraded {
+            return (
+                XbxEnginePresentationMilestoneDto::Degraded,
+                Some("mediaStartup".to_string()),
+            );
+        }
+
+        (
+            XbxEnginePresentationMilestoneDto::Connected,
+            Some("connected".to_string()),
+        )
+    }
+
+    fn connected_milestone_ready(stats: &XbxEngineMediaRuntimeStats) -> bool {
+        let control_plane_ready =
+            stats.control_ready_at_ms.is_some() || stats.message_handshake_acked_at_ms.is_some();
+        let media_ingress_ready = stats.latest_video_packet_arrival_time_ms.is_some()
+            || stats.latest_video_track_status.is_some()
+            || stats.latest_video_stream_width.zip(stats.latest_video_stream_height).is_some();
+        control_plane_ready && media_ingress_ready
+    }
+
+    fn media_ready_milestone_ready(stats: &XbxEngineMediaRuntimeStats, now_ms: f64) -> bool {
+        let has_recent_present = stats
+            .latest_video_host_present_time_ms
+            .map(|presented_at_ms| (now_ms - presented_at_ms).max(0.0))
+            .is_some_and(|age_ms| age_ms <= MEDIA_READY_PRESENT_FRESHNESS_WINDOW_MS);
+        let has_display_output =
+            stats.video_present_fps >= 1.0 || stats.latest_video_frame.is_some();
+        let stable_output = stats.video_renderer_stalled != Some(true)
+            && stats.video_decoder_stalled != Some(true)
+            && stats.host_no_pending_pressure_level.as_deref() != Some("critical");
+        has_recent_present && has_display_output && stable_output
     }
 }

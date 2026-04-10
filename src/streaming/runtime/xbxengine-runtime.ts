@@ -66,6 +66,16 @@ export function createXbxEngineRuntime(options: {
       })
       return
     }
+    if (event.type === 'presentation.milestoneChanged') {
+      emit({
+        type: 'presentationMilestoneChanged',
+        milestone: event.milestone,
+        connectedAtMs: event.connectedAtMs ?? null,
+        mediaReadyAtMs: event.mediaReadyAtMs ?? null,
+        stage: event.stage ?? null,
+      })
+      return
+    }
     if (event.type === 'chat.stateChanged') {
       microphoneState = {
         capturing: event.capturing,
@@ -183,6 +193,10 @@ export function createXbxEngineRuntime(options: {
         remoteProfileDynamic: snapshot.remote_profile_dynamic,
         remoteProfileEffectiveLabel: snapshot.remote_profile_effective_label,
         streamLifecyclePhase,
+        presentationMilestone: snapshot.presentation_milestone ?? undefined,
+        connectedMilestoneElapsedMs: snapshot.connected_milestone_elapsed_ms ?? undefined,
+        mediaReadyMilestoneElapsedMs: snapshot.media_ready_milestone_elapsed_ms ?? undefined,
+        presentationFailedStage: snapshot.presentation_failed_stage ?? undefined,
         sessionPhase: streamLifecyclePhase,
         transportStrategyProfile: snapshot.transport_strategy_profile,
         recoveryStrategyProfile: snapshot.recovery_strategy_profile,

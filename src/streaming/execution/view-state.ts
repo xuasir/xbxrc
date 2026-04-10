@@ -53,6 +53,7 @@ export type StreamExecutionViewAction
     | { type: 'startPreparing', statusText: string }
     | { type: 'retryRequested' }
     | { type: 'runtimeConnected', statusText: string }
+    | { type: 'runtimeMediaReady', statusText: string }
     | { type: 'runtimeDisconnected' }
     | { type: 'runtimePhaseChanged', phase: StreamRuntimePhase, statusText: string }
     | { type: 'frameReady' }
@@ -203,6 +204,14 @@ export function reduceViewState(
         isLoading: false,
         lifecyclePhase: state.lifecyclePhase === 'failed' ? 'failed' : 'stopped',
       }
+    case 'runtimeMediaReady':
+      return state.sessionUiPhase === 'failed' || state.sessionUiPhase === 'closed'
+        ? state
+        : {
+            ...state,
+            statusText: action.statusText,
+            lifecyclePhase: 'playing',
+          }
     case 'runtimePhaseChanged':
       if (state.sessionUiPhase === 'failed' || state.sessionUiPhase === 'closed') {
         return state

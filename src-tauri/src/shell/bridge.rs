@@ -3,7 +3,7 @@ use crate::mods::runtime_trace::RuntimeTraceRecorderRef;
 use crate::mods::xbxengine::events;
 use std::sync::{Arc, Mutex as StdMutex};
 use tauri::AppHandle;
-use xbxengine_protocol::XbxEngineRuntimeEventDto;
+use xbxengine_protocol::{XbxEnginePresentationMilestoneDto, XbxEngineRuntimeEventDto};
 
 #[derive(Clone, Debug, Default)]
 pub struct TauriEngineWindowState {
@@ -12,6 +12,7 @@ pub struct TauriEngineWindowState {
     pub video_size: Option<(u32, u32)>,
     pub runtime_phase: Option<xbxengine_protocol::XbxEngineRuntimePhaseDto>,
     pub transport_state: Option<xbxengine_protocol::XbxEngineTransportStateDto>,
+    pub presentation_milestone: Option<XbxEnginePresentationMilestoneDto>,
     pub last_error: Option<String>,
 }
 
@@ -59,6 +60,9 @@ impl TauriEngineWindowHost for TauriEngineEventBridge {
             }
             XbxEngineRuntimeEventDto::TransportConnectionStateChanged { state } => {
                 self.state.transport_state = Some(state.clone());
+            }
+            XbxEngineRuntimeEventDto::PresentationMilestoneChanged { milestone, .. } => {
+                self.state.presentation_milestone = Some(milestone.clone());
             }
             XbxEngineRuntimeEventDto::MediaSurfaceReady { surface_id } => {
                 self.state.surface_id = Some(surface_id.clone());

@@ -13,6 +13,14 @@ export type StreamRuntimePhase
     | 'connecting'
     | 'reconnecting'
 
+export type StreamPresentationMilestone
+  = | 'idle'
+    | 'connected'
+    | 'mediaReady'
+    | 'degraded'
+    | 'failed'
+    | 'closed'
+
 export type StreamRuntimeReconnectReason = 'network-lost' | 'ice-failed' | 'media-stalled'
 
 export interface RuntimeDisplayState {
@@ -23,6 +31,13 @@ export interface RuntimeDisplayState {
 export type RuntimeEvent
   = | { type: 'phaseChanged', phase: StreamRuntimePhase }
     | { type: 'connectionStateChanged', state: RTCPeerConnectionState }
+    | {
+      type: 'presentationMilestoneChanged'
+      milestone: StreamPresentationMilestone
+      connectedAtMs?: number | null
+      mediaReadyAtMs?: number | null
+      stage?: string | null
+    }
     | { type: 'microphoneStateChanged', capturing: boolean, paused: boolean }
     | { type: 'frameReady' }
     | { type: 'error', error: unknown }

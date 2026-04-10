@@ -107,6 +107,8 @@
       "waitingResources": "正在等待串流资源...",
       "waitingQueue": "正在排队，预计还需 {seconds} 秒",
       "connected": "已连接",
+      "connectedWaitingMedia": "已连接，正在等待画面稳定...",
+      "mediaReady": "画面已稳定",
       "reconnecting": "正在尝试恢复连接...",
       "connecting": "正在连接..."
     },

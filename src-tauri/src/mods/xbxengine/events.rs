@@ -1,6 +1,7 @@
 use serde_json::{json, Value};
 use xbxengine_protocol::{
-    XbxEngineRuntimeEventDto, XbxEngineRuntimePhaseDto, XbxEngineTransportStateDto,
+    XbxEnginePresentationMilestoneDto, XbxEngineRuntimeEventDto, XbxEngineRuntimePhaseDto,
+    XbxEngineTransportStateDto,
 };
 
 pub const STREAMING_XBXENGINE_RUNTIME_EVENT_CHANNEL: &str = "streaming:xbxengine-runtime-event";
@@ -27,6 +28,17 @@ fn map_transport_state(state: &XbxEngineTransportStateDto) -> &'static str {
     }
 }
 
+fn map_presentation_milestone(state: &XbxEnginePresentationMilestoneDto) -> &'static str {
+    match state {
+        XbxEnginePresentationMilestoneDto::Idle => "idle",
+        XbxEnginePresentationMilestoneDto::Connected => "connected",
+        XbxEnginePresentationMilestoneDto::MediaReady => "mediaReady",
+        XbxEnginePresentationMilestoneDto::Degraded => "degraded",
+        XbxEnginePresentationMilestoneDto::Failed => "failed",
+        XbxEnginePresentationMilestoneDto::Closed => "closed",
+    }
+}
+
 /// xbxengine runtime 事件到 shared 约定 payload 的映射。
 pub fn map_runtime_event(event: &XbxEngineRuntimeEventDto) -> Option<Value> {
     match event {
@@ -47,6 +59,18 @@ pub fn map_runtime_event(event: &XbxEngineRuntimeEventDto) -> Option<Value> {
             "type": "media.videoReady",
             "width": width,
             "height": height
+        })),
+        XbxEngineRuntimeEventDto::PresentationMilestoneChanged {
+            milestone,
+            connected_at_ms,
+            media_ready_at_ms,
+            stage,
+        } => Some(json!({
+            "type": "presentation.milestoneChanged",
+            "milestone": map_presentation_milestone(milestone),
+            "connectedAtMs": connected_at_ms,
+            "mediaReadyAtMs": media_ready_at_ms,
+            "stage": stage
         })),
         XbxEngineRuntimeEventDto::MediaVideoTrackStatusChanged { status } => Some(json!({
             "type": "media.videoTrackStatusChanged",

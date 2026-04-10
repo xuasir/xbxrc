@@ -41,7 +41,6 @@ import {
   createStreamRouteState,
   getRemoteSessionProgress,
   loadStreamConfigSnapshot,
-  mapProgressToSessionUiPhase,
   persistStreamDisplayOptions,
   powerOffRemoteConsole,
   resolveProgressError,
@@ -124,11 +123,6 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
   const runtimeHost = useStreamRuntimeHost({
     playerElementId: 'stream-page-video',
     onConnectionStateChange: (state) => {
-      if (state === 'connected') {
-        handlePlayerConnected()
-        return
-      }
-
       if (state === 'failed' || state === 'closed') {
         resetExecutionWarning()
         handlePlayerDisconnected()
@@ -137,6 +131,17 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
           return
         }
         handlePlayerError(options.t('streamPage.errors.connectionClosed'))
+      }
+    },
+    onPresentationMilestoneChange: ({ milestone }) => {
+      if (milestone === 'connected' || milestone === 'degraded') {
+        handlePlayerConnected('streamPage.status.connectedWaitingMedia')
+        return
+      }
+      if (milestone === 'mediaReady') {
+        handlePlayerConnected('streamPage.status.connectedWaitingMedia')
+        resetExecutionWarning()
+        handlePlayerMediaReady()
       }
     },
     onRuntimeError: (message) => {
@@ -445,10 +450,17 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
     }
   }
 
-  function handlePlayerConnected(): void {
+  function handlePlayerConnected(statusTextKey = 'streamPage.status.connectedWaitingMedia'): void {
     dispatchViewAction({
       type: 'runtimeConnected',
-      statusText: options.t('streamPage.status.connected'),
+      statusText: options.t(statusTextKey),
+    })
+  }
+
+  function handlePlayerMediaReady(): void {
+    dispatchViewAction({
+      type: 'runtimeMediaReady',
+      statusText: options.t('streamPage.status.mediaReady'),
     })
   }
 

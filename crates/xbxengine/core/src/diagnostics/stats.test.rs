@@ -1,4 +1,4 @@
-use xbxengine_protocol::XbxEngineTransportStateDto;
+use xbxengine_protocol::{XbxEnginePresentationMilestoneDto, XbxEngineTransportStateDto};
 
 use super::*;
 use crate::api::runtime::XbxEngineRuntimeSnapshot;
@@ -25,6 +25,10 @@ fn test_snapshot() -> XbxEngineRuntimeSnapshot {
         first_frame_packet_arrival_time_ms: None,
         frame_decoded_time_ms: None,
         frame_rendered_time_ms: None,
+        presentation_milestone: None,
+        connected_milestone_at_ms: None,
+        media_ready_milestone_at_ms: None,
+        presentation_failed_stage: None,
         latest_video_track_status: None,
         recovery_keyframe_request_count: 0,
         recovery_decoder_reset_count: 0,
@@ -34,6 +38,20 @@ fn test_snapshot() -> XbxEngineRuntimeSnapshot {
         last_recovery_reason: None,
         reconnect_trigger_source: None,
     }
+}
+
+#[test]
+fn stats_project_presentation_milestone_and_elapsed_ms() {
+    let mut snapshot = test_snapshot();
+    snapshot.presentation_milestone = Some(XbxEnginePresentationMilestoneDto::MediaReady);
+    snapshot.connected_milestone_at_ms = Some(100.0);
+    snapshot.media_ready_milestone_at_ms = Some(400.0);
+
+    let dto = build_xbxengine_stats(&snapshot, Some(&XbxEngineMediaRuntimeStats::default()));
+
+    assert_eq!(dto.presentation_milestone.as_deref(), Some("mediaReady"));
+    assert!(dto.connected_milestone_elapsed_ms.is_some());
+    assert!(dto.media_ready_milestone_elapsed_ms.is_some());
 }
 
 #[test]
