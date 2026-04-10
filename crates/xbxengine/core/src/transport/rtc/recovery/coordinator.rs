@@ -94,6 +94,7 @@ const TRANSPORT_AWAIT_KEYFRAME_DECODED_GRACE_MS: f64 = 220.0;
 const TRANSPORT_AWAIT_DECODER_RESET_INFLIGHT_GRACE_MS: f64 = 900.0;
 const TRANSPORT_AWAIT_INVALID_KEYFRAME_RESPONSE_FRESH_MS: f64 = 1_500.0;
 const TRANSPORT_AWAIT_BOOTSTRAP_IN_FLIGHT_GRACE_MS: f64 = 320.0;
+const TRANSPORT_AWAIT_BOOTSTRAP_SUCCESS_PROGRESS_MIN_SPAN_MS: f64 = 120.0;
 const CONNECTIVITY_JITTER_ABSORB_PRESENT_AGE_MAX_MS: f64 = 280.0;
 
 impl RecoveryCoordinator {
@@ -479,10 +480,19 @@ impl RecoveryCoordinator {
         runtime_stats: &Mutex<XbxEngineMediaRuntimeStats>,
         observed_at_ms: f64,
     ) -> VideoEscalationDecision {
-        let bootstrap_in_flight = reason == VideoEscalationReason::TransportAwaitRecoveryKeyframe
+        let bootstrap_in_flight_hint = reason == VideoEscalationReason::TransportAwaitRecoveryKeyframe
             && reason_label == "bootstrapInFlight";
+        // bootstrapInFlight 只作为“短时暂停升级”的软护栏：
+        // - 暂停 transport-await 的升级推进；
+        // - 不清空坏窗历史，避免长期反复 reset 导致恢复链失忆。
+        let bootstrap_in_flight_soft_hold_active = bootstrap_in_flight_hint
+            && Self::transport_await_bootstrap_in_flight_active(
+                runtime_stats,
+                recovery_epoch,
+                observed_at_ms,
+            );
         let signal_domain = classify_signal_domain(reason);
-        let transport_await_hard_evidence = if bootstrap_in_flight {
+        let transport_await_hard_evidence = if bootstrap_in_flight_soft_hold_active {
             false
         } else {
             reason != VideoEscalationReason::TransportAwaitRecoveryKeyframe
@@ -499,7 +509,7 @@ impl RecoveryCoordinator {
                     runtime_stats,
                     recovery_epoch,
                     observed_at_ms,
-                    bootstrap_in_flight,
+                    bootstrap_in_flight_soft_hold_active,
                 )
             })
             .flatten();
@@ -567,7 +577,6 @@ impl RecoveryCoordinator {
             && transport_await_bootstrap_in_flight_qualified
             && !Self::is_non_executing_recovery_action(escalation_decision.action)
         {
-            self.clear_transport_await_hard_fallback("bootstrapInFlight");
             escalation_decision = self
                 .escalation_controller
                 .suppressed(RecoveryAction::WaitForBurst);
@@ -725,8 +734,13 @@ impl RecoveryCoordinator {
             );
             return None;
         }
-        if reason_label == "bootstrapInFlight" {
-            self.reset_transport_await_hard_fallback(runtime_stats, "bootstrapInFlight", true);
+        if reason_label == "bootstrapInFlight"
+            && Self::transport_await_bootstrap_in_flight_active(
+                runtime_stats,
+                recovery_epoch,
+                observed_at_ms,
+            )
+        {
             return None;
         }
         if self
@@ -824,8 +838,14 @@ impl RecoveryCoordinator {
         current_action: RecoveryAction,
     ) -> Option<VideoEscalationDecision> {
         const TRANSPORT_AWAIT_CONNECTED_BAD_WINDOW_STAGE_MIN_MS: f64 = 120.0;
+        let bootstrap_in_flight_soft_hold_active = reason_label == "bootstrapInFlight"
+            && Self::transport_await_bootstrap_in_flight_active(
+                runtime_stats,
+                recovery_epoch,
+                observed_at_ms,
+            );
         if reason != VideoEscalationReason::TransportAwaitRecoveryKeyframe
-            || reason_label == "bootstrapInFlight"
+            || bootstrap_in_flight_soft_hold_active
             || !matches!(
                 current_action,
                 RecoveryAction::CooldownSuppressed | RecoveryAction::CoalescedKeyframeInFlight
@@ -1658,13 +1678,26 @@ impl RecoveryCoordinator {
         if (now_ms - submitted_at_ms).max(0.0) > TRANSPORT_AWAIT_BOOTSTRAP_IN_FLIGHT_GRACE_MS {
             return false;
         }
-        let progressed_after_submit = stats
+        let decode_progress_after_submit = stats
+            .latest_video_decode_ok_time_ms
+            .is_some_and(|decoded_at_ms| decoded_at_ms > submitted_at_ms);
+        let present_progress_after_submit = stats
             .latest_video_host_present_time_ms
-            .is_some_and(|presented_at_ms| presented_at_ms > submitted_at_ms)
-            || stats
-                .latest_video_decode_ok_time_ms
-                .is_some_and(|decoded_at_ms| decoded_at_ms > submitted_at_ms);
-        !progressed_after_submit
+            .is_some_and(|presented_at_ms| presented_at_ms > submitted_at_ms);
+        let latest_output_progress_at_ms = [
+            stats.latest_video_decode_ok_time_ms,
+            stats.latest_video_host_present_time_ms,
+        ]
+        .into_iter()
+        .flatten()
+        .max_by(|left, right| left.partial_cmp(right).unwrap_or(std::cmp::Ordering::Equal));
+        let sustained_progress_after_submit = decode_progress_after_submit
+            && present_progress_after_submit
+            && latest_output_progress_at_ms.is_some_and(|latest_at_ms| {
+                (latest_at_ms - submitted_at_ms).max(0.0)
+                    >= TRANSPORT_AWAIT_BOOTSTRAP_SUCCESS_PROGRESS_MIN_SPAN_MS
+            });
+        !sustained_progress_after_submit
     }
 
     fn transport_await_packet_seen_without_decode_failure(
