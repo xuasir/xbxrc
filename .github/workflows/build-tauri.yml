@@ -1,0 +1,74 @@
+name: Build Tauri
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - "release/**"
+
+concurrency:
+  group: build-tauri-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    permissions:
+      contents: read
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            label: macos
+          - os: windows-latest
+            label: windows
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install LLVM (Windows, bindgen)
+        if: runner.os == 'Windows'
+        uses: KyleMayes/install-llvm-action@v2
+        with:
+          version: "18.1"
+
+      - name: pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Rust toolchain
+        uses: dtolnay/rust-toolchain@1.93.1
+        with:
+          components: rustfmt, clippy
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          # 工作区根在仓库根目录，共享 target/
+          shared-key: tauri-${{ matrix.label }}
+
+      - name: Install JS dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build Tauri bundles
+        run: pnpm tauri build
+        env:
+          CI: true
+
+      - name: Upload bundle artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: xbxrc-bundles-${{ matrix.label }}
+          if-no-files-found: error
+          path: target/release/bundle/
