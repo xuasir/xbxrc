@@ -11434,3 +11434,6 @@ fn cloud_high_rtt_sample_loss_then_recovered_late_stays_local_until_severe_deadl
         assert_eq!(ledger.action_selected, "requestReconnectCandidate");
     });
 }
+
+#[path = "playback_phase_integration/mod.rs"]
+mod playback_phase_integration;
