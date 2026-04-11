@@ -5,6 +5,7 @@ use bytes::Bytes;
 
 use crate::media::video::ingress::budget::FrameBudgetContext;
 use crate::media::video::types::{AssembledVideoFrame, FrameValue, VideoCodec};
+use crate::transport::rtc::recovery::contract::FrameValue as RecoveryFrameValue;
 use crate::transport::rtc::stream::adapter_types::{
     FrameSource, TransportAdmissionObservation, TransportLossObservation, TransportObservation,
     TransportObservationSource,
@@ -21,7 +22,6 @@ use crate::{
 use xbxengine_protocol::{XbxEngineTargetTypeDto, XbxEngineTransportStateDto};
 
 const FIRST_FRAME_ACQUISITION_MAX_REQUEST_COUNT: u8 = 2;
-const SAMPLE_LOSS_WAIT_KEYFRAME_THRESHOLD: u8 = 3;
 const SAMPLE_LOSS_BURST_CLEAR_CLEAN_SAMPLE_COUNT: u8 = 6;
 const IDLE_TIMEOUT_CONFIRMATION_GRACE_MIN_MS: u64 = 120;
 const IDLE_TIMEOUT_CONFIRMATION_GRACE_MAX_MS: u64 = 220;
@@ -34,7 +34,6 @@ const WAITING_KEYFRAME_CONTINUATION_MAX_FRAMES: u32 = 3;
 pub(super) enum RecoveryKeyframeAction {
     Submit,
     DropAndRequestKeyframe,
-    TriggerWaitKeyframe,
     WaitKeyframe,
 }
 
@@ -129,14 +128,15 @@ pub(super) fn resolve_recovery_keyframe_action(
     waiting_for_recovery_keyframe: bool,
     sustaining_recovery_active: bool,
     hard_recovery_gap_risk: bool,
-    sample_loss_burst_count: u8,
+    _sample_loss_burst_count: u8,
     media_dropped_packets: u16,
     is_keyframe: bool,
 ) -> (bool, RecoveryKeyframeAction) {
     // 带丢包的 keyframe/reference 不能继续喂给解码器，否则很容易把本地参考链喂脏，
     // 在 macOS 上会直接放大成 VideoToolbox 连续 bad-data 回调。
     if is_keyframe && media_dropped_packets > 0 {
-        return (true, RecoveryKeyframeAction::TriggerWaitKeyframe);
+        // 这里仍只保留 decoder safety：丢弃坏 keyframe，但恢复升级交给统一 NACK/recovery admission。
+        return (false, RecoveryKeyframeAction::DropAndRequestKeyframe);
     }
 
     if is_keyframe {
@@ -144,10 +144,7 @@ pub(super) fn resolve_recovery_keyframe_action(
     }
 
     if media_dropped_packets > 0 {
-        // 小抖动先留在 drop + request keyframe，只有连续坏窗才进入 waitKeyframe。
-        if sample_loss_burst_count >= SAMPLE_LOSS_WAIT_KEYFRAME_THRESHOLD {
-            return (true, RecoveryKeyframeAction::TriggerWaitKeyframe);
-        }
+        // sample loss 的升级门交给统一 NACK/recovery admission；source 这里只保留解码安全职责。
         return (false, RecoveryKeyframeAction::DropAndRequestKeyframe);
     }
 
@@ -351,6 +348,94 @@ impl RtcVideoFrameSource {
         self.record_video_timeline_observation(event_name, None, frame_rtp_timestamp, now_ms);
         self.queue_transport_observation(TransportObservation::Loss(
             TransportLossObservation::RecoveryKeyframeRequested,
+        ));
+    }
+
+    pub(super) fn request_recovery_keyframe_from_source(
+        &mut self,
+        source_event: &'static str,
+        frame_rtp_timestamp: Option<u32>,
+        now_ms: f64,
+    ) {
+        self.timeline_state.on_recovery_keyframe_requested();
+        self.record_video_timeline_observation(source_event, None, frame_rtp_timestamp, now_ms);
+        self.queue_transport_observation(TransportObservation::Loss(
+            TransportLossObservation::RecoveryKeyframeRequested,
+        ));
+    }
+
+    pub(super) fn request_recovery_keyframe_soft_from_source(
+        &mut self,
+        source_event: &'static str,
+        frame_rtp_timestamp: Option<u32>,
+        now_ms: f64,
+    ) {
+        self.timeline_state.on_recovery_keyframe_requested_soft();
+        self.record_video_timeline_observation(source_event, None, frame_rtp_timestamp, now_ms);
+        self.queue_transport_observation(TransportObservation::Loss(
+            TransportLossObservation::RecoveryKeyframeRequested,
+        ));
+    }
+
+    fn enter_recovery_wait_from_source(
+        &mut self,
+        source_event: &'static str,
+        frame_rtp_timestamp: Option<u32>,
+        candidate_state: XbxEngineAnchorCandidateState,
+        failure_reason: Option<XbxEngineAnchorCandidateFailureReason>,
+        timeline_reason: &'static str,
+        requested_frame_value: RecoveryFrameValue,
+        invalid_bootstrap_metadata_ready: bool,
+        now_ms: f64,
+    ) {
+        let should_soft_request = self
+            .runtime_stats
+            .read(|stats| {
+                let invalid_bootstrap_reason = match timeline_reason {
+                    "inspectionRejectNonIdrVcl" => Some("NonIdrVcl"),
+                    "bootstrapMissingSps"
+                    | "bootstrapMissingPps"
+                    | "inspectionRejectInvalidSliceHeader" => Some(timeline_reason),
+                    _ => None,
+                };
+                Self::should_soft_request_recovery_keyframe(
+                    stats,
+                    now_ms,
+                    invalid_bootstrap_reason,
+                    invalid_bootstrap_metadata_ready,
+                    !matches!(requested_frame_value, RecoveryFrameValue::RecoveryAnchor),
+                    false,
+                )
+            })
+            .unwrap_or(false);
+        if should_soft_request {
+            self.request_recovery_keyframe_soft_from_source(
+                source_event,
+                frame_rtp_timestamp,
+                now_ms,
+            );
+            self.record_anchor_candidate_ledger(
+                frame_rtp_timestamp,
+                source_event,
+                candidate_state,
+                failure_reason,
+                now_ms,
+            );
+            return;
+        }
+        self.set_waiting_for_recovery_keyframe(true);
+        self.timeline_state
+            .on_admission_await_recovery_keyframe(Some(timeline_reason));
+        self.record_video_timeline_observation(source_event, None, frame_rtp_timestamp, now_ms);
+        self.record_anchor_candidate_ledger(
+            frame_rtp_timestamp,
+            source_event,
+            candidate_state,
+            failure_reason,
+            now_ms,
+        );
+        self.queue_transport_observation(TransportObservation::Admission(
+            TransportAdmissionObservation::AwaitRecoveryKeyframe,
         ));
     }
 
@@ -693,9 +778,6 @@ impl RtcVideoFrameSource {
                         crate::xbx_log_error!(
                             "[RtcVideoFrameSource] h264 inspection failed: {error}"
                         );
-                        self.set_waiting_for_recovery_keyframe(true);
-                        self.timeline_state
-                            .on_admission_await_recovery_keyframe(Some("inspectionError"));
                         self.timeline_state.observe_frame(
                             sample.packet_timestamp,
                             now_ms,
@@ -709,22 +791,16 @@ impl RtcVideoFrameSource {
                             "unknown",
                             Some("inspectionError"),
                         );
-                        self.record_video_timeline_observation(
+                        self.enter_recovery_wait_from_source(
                             "frame-inspection-error-await-keyframe",
-                            None,
                             Some(sample.packet_timestamp),
-                            now_ms,
-                        );
-                        self.record_anchor_candidate_ledger(
-                            Some(sample.packet_timestamp),
-                            "frame-inspection-error-await-keyframe",
                             XbxEngineAnchorCandidateState::Rejected,
                             Some(XbxEngineAnchorCandidateFailureReason::Unknown),
+                            "inspectionError",
+                            RecoveryFrameValue::RecoveryAnchor,
+                            false,
                             now_ms,
                         );
-                        self.queue_transport_observation(TransportObservation::Admission(
-                            TransportAdmissionObservation::AwaitRecoveryKeyframe,
-                        ));
                         continue;
                     }
                 };
@@ -843,12 +919,6 @@ impl RtcVideoFrameSource {
                         } else {
                             "frame-inspection-rejected-await-keyframe"
                         };
-                        self.record_video_timeline_observation(
-                            rejection_source_event,
-                            None,
-                            Some(sample.packet_timestamp),
-                            now_ms,
-                        );
                         let failure_reason = match reject_reason {
                             "bootstrapMissingSps" => {
                                 XbxEngineAnchorCandidateFailureReason::InspectionRejectedMissingSps
@@ -861,27 +931,69 @@ impl RtcVideoFrameSource {
                             }
                             _ => XbxEngineAnchorCandidateFailureReason::Unknown,
                         };
-                        self.record_anchor_candidate_ledger(
-                            Some(sample.packet_timestamp),
-                            rejection_source_event,
-                            XbxEngineAnchorCandidateState::Rejected,
-                            Some(failure_reason),
-                            now_ms,
-                        );
                         if sustaining_recovery_failed {
                             self.record_video_timeline_observation(
-                                "chain-recovery-keyframe-requested",
+                                rejection_source_event,
                                 None,
                                 Some(sample.packet_timestamp),
                                 now_ms,
                             );
-                            self.queue_transport_observation(TransportObservation::Loss(
-                                TransportLossObservation::RecoveryKeyframeRequested,
-                            ));
+                            self.record_anchor_candidate_ledger(
+                                Some(sample.packet_timestamp),
+                                rejection_source_event,
+                                XbxEngineAnchorCandidateState::Rejected,
+                                Some(failure_reason),
+                                now_ms,
+                            );
+                            let should_soft_request = self
+                                .runtime_stats
+                                .read(|stats| {
+                                    Self::should_soft_request_recovery_keyframe(
+                                        stats,
+                                        now_ms,
+                                        match reject_reason {
+                                            "inspectionRejectNonIdrVcl" => Some("NonIdrVcl"),
+                                            "bootstrapMissingSps"
+                                            | "bootstrapMissingPps"
+                                            | "inspectionRejectInvalidSliceHeader" => {
+                                                Some(reject_reason)
+                                            }
+                                            _ => None,
+                                        },
+                                        inspection.committed_sps_present()
+                                            && inspection.committed_pps_present()
+                                            && inspection.delta_continuation_ready(),
+                                        true,
+                                        true,
+                                    )
+                                })
+                                .unwrap_or(false);
+                            if should_soft_request {
+                                self.request_recovery_keyframe_soft_from_source(
+                                    "chain-recovery-keyframe-requested",
+                                    Some(sample.packet_timestamp),
+                                    now_ms,
+                                );
+                            } else {
+                                self.request_recovery_keyframe_from_source(
+                                    "chain-recovery-keyframe-requested",
+                                    Some(sample.packet_timestamp),
+                                    now_ms,
+                                );
+                            }
                         } else {
-                            self.queue_transport_observation(TransportObservation::Admission(
-                                TransportAdmissionObservation::AwaitRecoveryKeyframe,
-                            ));
+                            self.enter_recovery_wait_from_source(
+                                rejection_source_event,
+                                Some(sample.packet_timestamp),
+                                XbxEngineAnchorCandidateState::Rejected,
+                                Some(failure_reason),
+                                reject_reason,
+                                RecoveryFrameValue::RecoveryAnchor,
+                                inspection.committed_sps_present()
+                                    && inspection.committed_pps_present()
+                                    && inspection.delta_continuation_ready(),
+                                now_ms,
+                            );
                         }
                         continue;
                     }
@@ -912,20 +1024,24 @@ impl RtcVideoFrameSource {
                 } else {
                     "delta"
                 };
-                let waiting_for_recovery_keyframe = self.waiting_for_recovery_keyframe();
-                let sustaining_recovery_active = self.timeline_state.in_sustaining_recovery();
-                let hard_recovery_gap_risk = self.timeline_state.has_hard_recovery_gap_risk();
                 let healthy_delta_continuation = !is_keyframe
                     && frame_importance == "delta"
                     && inspection.slice_headers_valid
                     && inspection.delta_continuation_ready()
                     && inspection.committed_sps_present()
                     && inspection.committed_pps_present();
+                if healthy_delta_continuation {
+                    let _ = self
+                        .timeline_state
+                        .reopen_delta_continuation_after_clean_anchor(frame_now_ms);
+                }
+                let waiting_for_recovery_keyframe = self.waiting_for_recovery_keyframe();
+                let hard_recovery_gap_risk = self.timeline_state.has_hard_recovery_gap_risk();
                 let (next_waiting_for_recovery_keyframe, recovery_action) =
                     resolve_recovery_keyframe_action(
                         first_frame_acquired,
                         waiting_for_recovery_keyframe,
-                        sustaining_recovery_active && healthy_delta_continuation,
+                        self.timeline_state.in_sustaining_recovery() && healthy_delta_continuation,
                         hard_recovery_gap_risk,
                         self.sample_loss_burst_count,
                         media_dropped_packets,
@@ -944,14 +1060,6 @@ impl RtcVideoFrameSource {
                     );
                 }
 
-                let sample_loss_frame_importance = if is_keyframe {
-                    "keyframe"
-                } else if self.sample_loss_burst_count >= SAMPLE_LOSS_WAIT_KEYFRAME_THRESHOLD {
-                    "reference"
-                } else {
-                    "delta"
-                };
-
                 match recovery_action {
                     RecoveryKeyframeAction::Submit => {}
                     RecoveryKeyframeAction::DropAndRequestKeyframe => {
@@ -960,7 +1068,7 @@ impl RtcVideoFrameSource {
                                 sample.packet_timestamp,
                                 media_dropped_packets,
                                 is_keyframe,
-                                sample_loss_frame_importance,
+                                frame_importance,
                             )
                             .await;
                         if !nack_started {
@@ -970,40 +1078,22 @@ impl RtcVideoFrameSource {
                         }
                         continue;
                     }
-                    RecoveryKeyframeAction::TriggerWaitKeyframe => {
-                        let now_ms = now_ms_f64();
-                        self.timeline_state.on_recovery_keyframe_requested();
-                        self.record_video_timeline_observation(
-                            "chain-recovery-keyframe-requested",
-                            None,
-                            Some(sample.packet_timestamp),
-                            now_ms,
-                        );
-                        self.queue_transport_observation(TransportObservation::Loss(
-                            TransportLossObservation::RecoveryKeyframeRequested,
-                        ));
-                        continue;
-                    }
                     RecoveryKeyframeAction::WaitKeyframe => {
                         let now_ms = now_ms_f64();
-                        self.timeline_state
-                            .on_admission_await_recovery_keyframe(Some("awaitingRecoveryKeyframe"));
-                        self.record_video_timeline_observation(
+                        self.enter_recovery_wait_from_source(
                             "frame-await-recovery-keyframe",
-                            None,
                             Some(sample.packet_timestamp),
-                            now_ms,
-                        );
-                        self.record_anchor_candidate_ledger(
-                            Some(sample.packet_timestamp),
-                            "frame-await-recovery-keyframe",
                             XbxEngineAnchorCandidateState::AwaitingRecovery,
                             Some(XbxEngineAnchorCandidateFailureReason::AwaitingRecoveryKeyframe),
+                            "awaitingRecoveryKeyframe",
+                            if frame_importance == "reference" {
+                                RecoveryFrameValue::Reference
+                            } else {
+                                RecoveryFrameValue::Continuity
+                            },
+                            false,
                             now_ms,
                         );
-                        self.queue_transport_observation(TransportObservation::Loss(
-                            TransportLossObservation::AwaitRecoveryKeyframe,
-                        ));
                         continue;
                     }
                 }
@@ -1182,15 +1272,32 @@ impl RtcVideoFrameSource {
                 }) {
                     self.last_idle_hint_time = Some(now);
                     if sustaining_recovery_failed {
-                        self.record_video_timeline_observation(
-                            "chain-recovery-keyframe-requested",
-                            None,
-                            None,
-                            timeout_now_ms,
-                        );
-                        self.queue_transport_observation(TransportObservation::Loss(
-                            TransportLossObservation::RecoveryKeyframeRequested,
-                        ));
+                        let should_soft_request = self
+                            .runtime_stats
+                            .read(|stats| {
+                                Self::should_soft_request_recovery_keyframe(
+                                    stats,
+                                    timeout_now_ms,
+                                    None,
+                                    false,
+                                    false,
+                                    true,
+                                )
+                            })
+                            .unwrap_or(false);
+                        if should_soft_request {
+                            self.request_recovery_keyframe_soft_from_source(
+                                "chain-recovery-keyframe-requested",
+                                None,
+                                timeout_now_ms,
+                            );
+                        } else {
+                            self.request_recovery_keyframe_from_source(
+                                "chain-recovery-keyframe-requested",
+                                None,
+                                timeout_now_ms,
+                            );
+                        }
                     } else {
                         self.queue_transport_observation(if thin_stream_stall {
                             TransportObservation::StreamThinStall

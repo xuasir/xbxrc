@@ -364,6 +364,34 @@ impl VideoEscalationController {
         )
     }
 
+    pub fn reopen_transport_await_keyframe(
+        &mut self,
+        recovery_epoch: u64,
+    ) -> VideoEscalationDecision {
+        self.begin_recovery_epoch(recovery_epoch);
+        self.next_observation_id = self.next_observation_id.saturating_add(1);
+        let now = Instant::now();
+        self.pending_keyframe_signals = 0;
+        self.pending_decoder_reset_signals = 0;
+        self.reconnect_candidate_signals = 0;
+        self.wait_keyframe_started_at = None;
+        self.transport_await_recovery_started_at = Some(now);
+        self.last_keyframe_signal_at = Some(now);
+        self.last_keyframe_reason_class = Some(KeyframeReasonClass::TransportAwaitRecoveryKeyframe);
+        self.clear_keyframe_epoch();
+        self.keyframe_budget_reservation_active = false;
+        let action = if self.can_allocate_keyframe_attempt() {
+            self.last_keyframe_request_at = Some(now);
+            RecoveryAction::RequestKeyframe
+        } else {
+            RecoveryAction::CooldownSuppressed
+        };
+        VideoEscalationDecision {
+            observation_id: self.next_observation_id,
+            action,
+        }
+    }
+
     pub fn budget_state(&self) -> RecoveryActionBudgetState {
         RecoveryActionBudgetState {
             recovery_epoch: self.recovery_epoch,

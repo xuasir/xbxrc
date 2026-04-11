@@ -4,6 +4,10 @@ use crate::runtime_stats_sink::RuntimeStatsSink;
 use crate::transport::rtc::policy::display_supply::SchedulingDemandSignal;
 use crate::transport::rtc::policy::video_scheduling_owner::VideoSchedulingOwnerInput;
 use crate::transport::rtc::projection::TransportSnapshot;
+use crate::transport::rtc::recovery::contract::{
+    current_clean_anchor_observed_at_ms, has_current_transport_await_issue_from_observation,
+    is_transport_await_probe_source_event,
+};
 use crate::transport::rtc::recovery::escalation::VideoEscalationReason;
 use crate::transport::rtc::recovery::policy::DisplaySupplyThresholds;
 use crate::XbxEngineAnchorCandidateLedger;
@@ -142,6 +146,7 @@ pub(crate) fn build_owner_input(
         clean_anchor_observed_at_ms: owner_facts.clean_anchor_observed_at_ms,
         clean_anchor_source_event: owner_facts.clean_anchor_source_event.clone(),
         latest_anchor_candidate_ledger: owner_facts.latest_anchor_candidate_ledger.clone(),
+        latest_video_timeline_observation: owner_facts.latest_video_timeline_observation.clone(),
         latest_timeline_chain_state,
         latest_timeline_source_event,
         latest_track_state,
@@ -186,24 +191,95 @@ fn resolve_anchor_reason_label(
             if absorb_first_frame_acquisition_anchor_issue {
                 return None;
             }
-            resolve_anchor_reason_label_from_timeline(
-                timeline.chain.state.as_str(),
-                timeline.chain.reason.as_deref(),
-                timeline.source_event.as_str(),
-            )
+            resolve_anchor_reason_label_from_timeline(owner_facts, timeline)
         })
 }
 
 fn resolve_anchor_reason_label_from_timeline(
-    chain_state: &str,
-    chain_reason: Option<&str>,
-    source_event: &str,
+    owner_facts: &OwnerRuntimeFacts,
+    timeline: &XbxEngineVideoTimelineObservation,
 ) -> Option<String> {
-    let label = match (chain_state, chain_reason, source_event) {
-        ("broken", Some(reason), _) | ("recovering", Some(reason), _) => reason,
-        (_, _, "frame-await-recovery-keyframe") => "transportAwaitRecoveryKeyframe",
-        (_, _, "frame-inspection-rejected-await-keyframe") => "transportAwaitRecoveryKeyframe",
+    let current_clean_anchor_at_ms = current_clean_anchor_observed_at_ms(
+        owner_facts.clean_anchor_epoch,
+        owner_facts.clean_anchor_observed_at_ms,
+        owner_facts.clean_anchor_source_event.as_deref(),
+        owner_facts.recovery_epoch,
+    );
+    let current_transport_await_probe =
+        is_transport_await_probe_source_event(Some(timeline.source_event.as_str()))
+            && current_clean_anchor_at_ms
+                .is_none_or(|clean_anchor_at_ms| timeline.observed_at_ms > clean_anchor_at_ms);
+    let label = match (
+        has_current_transport_await_issue_from_observation(timeline, current_clean_anchor_at_ms),
+        current_transport_await_probe,
+        timeline.chain.state.as_str(),
+        timeline.chain.reason.as_deref(),
+        timeline.source_event.as_str(),
+    ) {
+        (true, _, "broken", Some(reason), _) | (true, _, "recovering", Some(reason), _) => reason,
+        (_, true, _, _, "frame-await-recovery-keyframe") => "transportAwaitRecoveryKeyframe",
+        (_, true, _, _, "frame-inspection-rejected-await-keyframe") => {
+            "transportAwaitRecoveryKeyframe"
+        }
         _ => return None,
     };
     VideoEscalationReason::from_recovery_reason_label(label).map(|_| label.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn stale_transport_await_timeline_after_clean_anchor_does_not_raise_anchor_reason() {
+        let facts = OwnerRuntimeFacts {
+            recovery_epoch: 7,
+            clean_anchor_epoch: Some(7),
+            clean_anchor_observed_at_ms: Some(120.0),
+            clean_anchor_source_event: Some("chain-clean-keyframe-submitted".to_string()),
+            latest_video_timeline_observation: Some(crate::XbxEngineVideoTimelineObservation {
+                observation_id: 1,
+                source_event: "frame-await-recovery-keyframe".to_string(),
+                gap: None,
+                frame: None,
+                chain: crate::XbxEngineVideoTimelineChainSnapshot {
+                    state: "recovering".to_string(),
+                    reason: Some("transportAwaitRecoveryKeyframe".to_string()),
+                    observed_at_ms: 110.0,
+                },
+                observed_at_ms: 110.0,
+            }),
+            ..OwnerRuntimeFacts::default()
+        };
+
+        assert_eq!(resolve_anchor_reason_label(&facts, false), None);
+    }
+
+    #[test]
+    fn fresh_transport_await_timeline_still_raises_anchor_reason() {
+        let facts = OwnerRuntimeFacts {
+            recovery_epoch: 7,
+            clean_anchor_epoch: Some(7),
+            clean_anchor_observed_at_ms: Some(120.0),
+            clean_anchor_source_event: Some("chain-clean-keyframe-submitted".to_string()),
+            latest_video_timeline_observation: Some(crate::XbxEngineVideoTimelineObservation {
+                observation_id: 2,
+                source_event: "frame-await-recovery-keyframe".to_string(),
+                gap: None,
+                frame: None,
+                chain: crate::XbxEngineVideoTimelineChainSnapshot {
+                    state: "recovering".to_string(),
+                    reason: Some("transportAwaitRecoveryKeyframe".to_string()),
+                    observed_at_ms: 130.0,
+                },
+                observed_at_ms: 130.0,
+            }),
+            ..OwnerRuntimeFacts::default()
+        };
+
+        assert_eq!(
+            resolve_anchor_reason_label(&facts, false),
+            Some("transportAwaitRecoveryKeyframe".to_string())
+        );
+    }
 }

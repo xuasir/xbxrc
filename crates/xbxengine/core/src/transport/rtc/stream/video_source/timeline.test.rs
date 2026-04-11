@@ -669,6 +669,49 @@ fn submit_side_building_phase_probe_is_time_based() {
 }
 
 #[test]
+fn stale_wait_keyframe_debt_reopens_to_sustaining_when_clean_anchor_allows_delta_continuation() {
+    let mut state = VideoTimelineState::new();
+    state.observe_anchor_candidate(
+        26,
+        Some(130_301),
+        "chain-clean-keyframe-submitted",
+        XbxEngineAnchorCandidateState::SubmittedCleanAnchor,
+        None,
+        60.0,
+    );
+    state.on_clean_keyframe_submitted();
+    state.on_admission_await_recovery_keyframe(Some("awaitingRecoveryKeyframe"));
+    assert_eq!(state.chain_state(), ChainState::Recovering);
+
+    assert!(state.reopen_delta_continuation_after_clean_anchor(60.2));
+    assert_eq!(state.chain_state(), ChainState::SustainingRecovery);
+    assert!(!state.waiting_for_recovery_keyframe());
+    assert!(!state.has_hard_recovery_risk_for_test());
+}
+
+#[test]
+fn repair_in_flight_hard_gap_does_not_block_clean_anchor_delta_reopen() {
+    let mut state = VideoTimelineState::new();
+    state.observe_anchor_candidate(
+        27,
+        Some(130_401),
+        "chain-clean-keyframe-submitted",
+        XbxEngineAnchorCandidateState::SubmittedCleanAnchor,
+        None,
+        70.0,
+    );
+    state.on_clean_keyframe_submitted();
+    state.on_admission_await_recovery_keyframe(Some("awaitingRecoveryKeyframe"));
+    state.mark_gap_repair_in_flight(&[841], 70.1, Some(130_450), "keyframe");
+    assert_eq!(state.chain_state(), ChainState::Recovering);
+    assert!(state.has_hard_recovery_risk_for_test());
+
+    assert!(state.reopen_delta_continuation_after_clean_anchor(70.2));
+    assert_eq!(state.chain_state(), ChainState::SustainingRecovery);
+    assert!(!state.waiting_for_recovery_keyframe());
+}
+
+#[test]
 fn sustaining_recovery_timeout_falls_back_to_recovering() {
     let mut state = VideoTimelineState::new();
     state.observe_anchor_candidate(

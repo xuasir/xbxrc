@@ -276,7 +276,10 @@ impl RuntimeStatsSink {
                 };
                 if episode.sent_at_ms.is_none()
                     || observed_at_ms < deadline_at_ms
-                    || !matches!(episode.response_verdict.as_deref(), None | Some("pending"))
+                    || matches!(
+                        episode.response_verdict.as_deref(),
+                        Some("transportDeferred" | "transportFailed" | "missed")
+                    )
                 {
                     return;
                 }
@@ -310,7 +313,10 @@ impl RuntimeStatsSink {
             let mut should_probe = false;
             if let Some(episode) = stats.latest_keyframe_request_episode.as_mut() {
                 if episode.sent_at_ms.is_some()
-                    || !matches!(episode.response_verdict.as_deref(), None | Some("pending"))
+                    || matches!(
+                        episode.response_verdict.as_deref(),
+                        Some("transportDeferred" | "transportFailed" | "missed")
+                    )
                 {
                     return;
                 }
@@ -341,7 +347,10 @@ impl RuntimeStatsSink {
             let mut should_probe = false;
             if let Some(episode) = stats.latest_keyframe_request_episode.as_mut() {
                 if episode.sent_at_ms.is_some()
-                    || !matches!(episode.response_verdict.as_deref(), None | Some("pending"))
+                    || matches!(
+                        episode.response_verdict.as_deref(),
+                        Some("transportDeferred" | "transportFailed" | "missed")
+                    )
                 {
                     return;
                 }
@@ -456,7 +465,10 @@ impl RuntimeStatsSink {
             let mut should_probe = false;
             if let Some(episode) = stats.latest_keyframe_request_episode.as_mut() {
                 if episode.sent_at_ms.is_none()
-                    || !matches!(episode.response_verdict.as_deref(), None | Some("pending"))
+                    || matches!(
+                        episode.response_verdict.as_deref(),
+                        Some("transportDeferred" | "transportFailed" | "missed")
+                    )
                 {
                     return;
                 }

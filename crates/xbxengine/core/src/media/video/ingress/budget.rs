@@ -253,10 +253,21 @@ impl FrameBudgetContext {
             // 云/高 RTT 下易过早 expiredRetryBudget，迫使时间线 broken 与 decoder reset 风暴。
             (FrameBudgetLinkValue::Anchor, _, _) => default_max_retry_count.min(3),
             (FrameBudgetLinkValue::Supply, FrameBudgetFailureCost::ChainBroken, _) => {
-                default_max_retry_count.min(1)
+                default_max_retry_count.min(2)
             }
             (FrameBudgetLinkValue::Supply, _, FrameBudgetRttSlack::Exhausted) => 0,
             (FrameBudgetLinkValue::Supply, _, _) if value.refresh_boost => {
+                default_max_retry_count.min(2)
+            }
+            (
+                FrameBudgetLinkValue::Supply,
+                _,
+                FrameBudgetRttSlack::Unknown | FrameBudgetRttSlack::Ample,
+            ) if matches!(
+                self.recovery_phase,
+                FrameBudgetRecoveryPhase::Repairing | FrameBudgetRecoveryPhase::AwaitingKeyframe
+            ) || matches!(self.window_source, FrameBudgetWindowSource::Recovery) =>
+            {
                 default_max_retry_count.min(1)
             }
             (FrameBudgetLinkValue::Supply, _, _) => 0,
@@ -554,5 +565,45 @@ mod tests {
         assert_eq!(context.link_value, FrameBudgetLinkValue::Supply);
         assert_eq!(context.failure_cost, FrameBudgetFailureCost::ChainBroken);
         assert!(context.prefers_chain_broken());
+    }
+
+    #[test]
+    fn recovery_window_reference_gets_two_retry_budget() {
+        let context = FrameBudgetContext::for_transport(
+            FrameValue::new(false, true, 48 * 1024),
+            false,
+            Some(90.0),
+            Some(1_018.0),
+            Some(1_040.0),
+            false,
+            FrameBudgetWindowSource::Recovery,
+        );
+
+        assert_eq!(context.link_value, FrameBudgetLinkValue::Supply);
+        assert_eq!(context.failure_cost, FrameBudgetFailureCost::LocalDrop);
+        assert_eq!(
+            context.retry_budget(FrameValue::new(false, true, 48 * 1024), 3),
+            2
+        );
+    }
+
+    #[test]
+    fn refresh_boost_supply_gets_two_retry_budget() {
+        let context = FrameBudgetContext::for_transport(
+            FrameValue::new(false, true, 48 * 1024),
+            false,
+            Some(90.0),
+            Some(1_018.0),
+            Some(1_060.0),
+            false,
+            FrameBudgetWindowSource::Recovery,
+        );
+
+        assert_eq!(context.link_value, FrameBudgetLinkValue::Supply);
+        assert_eq!(context.failure_cost, FrameBudgetFailureCost::LocalDrop);
+        assert_eq!(
+            context.retry_budget(FrameValue::new(false, true, 48 * 1024), 3),
+            2
+        );
     }
 }

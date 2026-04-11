@@ -1,6 +1,8 @@
 use crate::media::video::ingress::budget::FrameBudgetContext;
 use crate::media::video::types::FrameValue;
 use crate::transport::rtc::stream::nack_scheduler::{NackObservePolicy, PacketRecoveryDisposition};
+// 传输层 NACK 预算仍以媒体 `FrameValue` 为输入；与恢复合同 `recovery::contract::FrameValue` 的映射集中在
+// `contract::media_frame_value_from_recovery_semantics` 与 `nack.rs` 的 timeline 融合路径，避免在此处并行定义语义。
 
 pub(super) const CLOUD_STARTUP_HEAD_HOLE_DEADLINE_FLOOR_MS: f64 = 320.0;
 pub(super) const CLOUD_NACK_RTT_MARGIN_MS: f64 = 80.0;

@@ -301,6 +301,14 @@ export interface XbxEngineStatsDto {
     input_signal: string
     gate_result: string
     action_selected: string
+    frame_value?: string | null
+    gap_severity?: string | null
+    recovery_episode_stage?: string | null
+    recovery_episode_progress_at_ms?: number | null
+    coalescing_mode?: string | null
+    unlock_reason?: string | null
+    preempt_reason?: string | null
+    recovery_primary_action?: string | null
     budget_before?: {
       recovery_epoch: number
       keyframe_budget_used: number
@@ -319,6 +327,8 @@ export interface XbxEngineStatsDto {
       reconnect_budget_used: number
       reconnect_budget_limit: number
     } | null
+    trigger_observation_label?: string | null
+    trigger_observation_summary?: string | null
     command_result?: string | null
     command_detail?: string | null
     observed_at_ms: number

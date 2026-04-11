@@ -3,10 +3,16 @@ use crate::transport::rtc::policy::display_supply::{
     DisplaySupplyCriticalSignal, DisplaySupplyState, SchedulingDemandSignal,
 };
 use crate::transport::rtc::recovery::contract::{
-    is_ingress_waiting_keyframe, is_media_healthy_baseline, is_transport_await_probe_source_event,
+    current_clean_anchor_observed_at_ms, derive_gap_severity_from_timeline_observation,
+    frame_value_from_gap_severity, has_current_transport_await_issue_from_observation,
+    is_ingress_waiting_keyframe, is_invalid_recovery_bootstrap_reject_reason,
+    is_media_healthy_baseline, is_transport_await_probe_source_event, FrameValue,
 };
 use crate::transport::rtc::recovery::policy::DisplaySupplyThresholds;
-use crate::{XbxEngineAnchorCandidateLedger, XbxEngineAnchorCandidateState};
+use crate::{
+    XbxEngineAnchorCandidateLedger, XbxEngineAnchorCandidateState,
+    XbxEngineVideoTimelineObservation,
+};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum VideoSchedulingOwnerState {
@@ -82,6 +88,8 @@ pub(crate) struct VideoSchedulingOwnerInput {
     pub(crate) clean_anchor_observed_at_ms: Option<f64>,
     pub(crate) clean_anchor_source_event: Option<String>,
     pub(crate) latest_anchor_candidate_ledger: Option<XbxEngineAnchorCandidateLedger>,
+    /// 与下面 chain/source 字段同源；优先用此完整观测驱动 `is_ingress_waiting_keyframe` 等合同入口，避免 reason 丢失。
+    pub(crate) latest_video_timeline_observation: Option<XbxEngineVideoTimelineObservation>,
     pub(crate) latest_timeline_chain_state: Option<String>,
     pub(crate) latest_timeline_source_event: Option<String>,
     pub(crate) latest_track_state: Option<String>,
@@ -94,6 +102,28 @@ pub(crate) struct VideoSchedulingOwnerInput {
     pub(crate) latest_h264_observed_at_ms: Option<f64>,
     pub(crate) display_supply_thresholds: DisplaySupplyThresholds,
     pub(crate) observed_at_ms: f64,
+}
+
+impl VideoSchedulingOwnerInput {
+    fn effective_chain_state(&self) -> Option<&str> {
+        self.latest_video_timeline_observation
+            .as_ref()
+            .map(|o| o.chain.state.as_str())
+            .or(self.latest_timeline_chain_state.as_deref())
+    }
+
+    fn effective_chain_reason(&self) -> Option<&str> {
+        self.latest_video_timeline_observation
+            .as_ref()
+            .and_then(|o| o.chain.reason.as_deref())
+    }
+
+    fn effective_source_event(&self) -> Option<&str> {
+        self.latest_video_timeline_observation
+            .as_ref()
+            .map(|o| o.source_event.as_str())
+            .or(self.latest_timeline_source_event.as_deref())
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -213,14 +243,11 @@ impl VideoSchedulingOwner {
             .demand
             .critical_signal(&input.display_supply_thresholds);
         let has_clean_anchor_evidence = Self::has_current_clean_anchor_evidence(input);
-        let chain_healthy = matches!(
-            input.latest_timeline_chain_state.as_deref(),
-            Some("healthy")
-        );
+        let chain_healthy = matches!(input.effective_chain_state(), Some("healthy"));
         let ingress_waiting_keyframe = is_ingress_waiting_keyframe(
-            input.latest_timeline_chain_state.as_deref(),
-            None,
-            input.latest_timeline_source_event.as_deref(),
+            input.effective_chain_state(),
+            input.effective_chain_reason(),
+            input.effective_source_event(),
         );
         let effective_supply_state = self.resolve_effective_supply_state(
             input,
@@ -255,6 +282,12 @@ impl VideoSchedulingOwner {
         } else if Self::transient_anchor_noise_can_settle(input, has_clean_anchor_evidence) {
             false
         } else if clean_anchor_hysteresis {
+            false
+        } else if Self::can_release_rebuild_after_terminal_invalid_bootstrap(
+            input,
+            effective_supply_state,
+            has_clean_anchor_evidence,
+        ) {
             false
         } else if has_clean_anchor_evidence && chain_healthy {
             // clean anchor 已经成立且链路 healthy 时，旧的 anchor reason 不应继续把 owner
@@ -431,12 +464,12 @@ impl VideoSchedulingOwner {
                 }
             }
             VideoSchedulingOwnerState::RebuildingSupply => {
-                if has_anchor_issue {
-                    VideoSchedulingOwnerState::RebuildingSupply
-                } else if completion_evidence == RecoveryCompletionEvidence::Ready {
+                if completion_evidence == RecoveryCompletionEvidence::Ready {
                     VideoSchedulingOwnerState::StableServing
                 } else if completion_evidence == RecoveryCompletionEvidence::ServingReady {
                     VideoSchedulingOwnerState::DegradedServing
+                } else if has_anchor_issue {
+                    VideoSchedulingOwnerState::RebuildingSupply
                 } else {
                     VideoSchedulingOwnerState::RebuildingSupply
                 }
@@ -517,10 +550,8 @@ impl VideoSchedulingOwner {
                     && candidate.source_event == "chain-clean-keyframe-submitted"
                     && candidate.recovery_epoch != input.recovery_epoch
             });
-        let chain_healthy = matches!(
-            input.latest_timeline_chain_state.as_deref(),
-            Some("healthy")
-        ) || transient_anchor_noise_settled;
+        let chain_healthy = matches!(input.effective_chain_state(), Some("healthy"))
+            || transient_anchor_noise_settled;
         let media_healthy_baseline = is_media_healthy_baseline(
             input.connection_state == ConnectionLifecycleStateFact::Connected,
             chain_healthy,
@@ -533,14 +564,30 @@ impl VideoSchedulingOwner {
             false,
             input.demand.video_renderer_stalled,
         );
-        if ingress_waiting_keyframe {
+        let transport_await_waiting_released = ingress_waiting_keyframe
+            && Self::transport_await_waiting_released_by_facts(input, supply_state);
+        let terminal_invalid_bootstrap_serving_ready = current
+            == VideoSchedulingOwnerState::RebuildingSupply
+            && Self::can_release_rebuild_after_terminal_invalid_bootstrap(
+                input,
+                supply_state,
+                has_clean_anchor_evidence,
+            );
+        if ingress_waiting_keyframe
+            && !transport_await_waiting_released
+            && !terminal_invalid_bootstrap_serving_ready
+        {
             return RecoveryCompletionEvidence::NotReady;
         }
         if current == VideoSchedulingOwnerState::RebuildingSupply {
-            if has_stale_clean_anchor_fact && !has_clean_anchor_evidence {
+            if has_stale_clean_anchor_fact
+                && !has_clean_anchor_evidence
+                && !terminal_invalid_bootstrap_serving_ready
+            {
                 return RecoveryCompletionEvidence::NotReady;
             }
             if !has_clean_anchor_evidence
+                && !terminal_invalid_bootstrap_serving_ready
                 && !Self::supply_recovery_can_settle_without_explicit_clean_anchor(
                     input,
                     supply_state,
@@ -558,6 +605,9 @@ impl VideoSchedulingOwner {
             )
         {
             return RecoveryCompletionEvidence::Ready;
+        }
+        if terminal_invalid_bootstrap_serving_ready {
+            return RecoveryCompletionEvidence::ServingReady;
         }
         if matches!(
             current,
@@ -626,7 +676,7 @@ impl VideoSchedulingOwner {
             }
             return RecoveryCompletionEvidence::NotReady;
         }
-        if !media_healthy_baseline {
+        if !media_healthy_baseline && !transport_await_waiting_released {
             return RecoveryCompletionEvidence::NotReady;
         }
         // audioOnly / 无视频字节属于“供给未恢复”，不能提前回到 stable-serving。
@@ -637,20 +687,144 @@ impl VideoSchedulingOwner {
         if track_audio_only && !track_has_video_bytes {
             return RecoveryCompletionEvidence::NotReady;
         }
-        if !chain_healthy {
+        if !chain_healthy && !transport_await_waiting_released {
             return RecoveryCompletionEvidence::NotReady;
         }
         let recovery_noise_source = matches!(
-            input.latest_timeline_source_event.as_deref(),
+            input.effective_source_event(),
             Some("frame-await-recovery-keyframe")
                 | Some("frame-inspection-rejected-await-keyframe")
                 | Some("frame-inspection-rejected-trigger-recovery-keyframe")
                 | Some("gap-repair-in-flight")
         );
-        if recovery_noise_source && !(has_clean_anchor_evidence && chain_healthy) {
+        if recovery_noise_source
+            && !(has_clean_anchor_evidence && (chain_healthy || transport_await_waiting_released))
+        {
             return RecoveryCompletionEvidence::NotReady;
         }
         RecoveryCompletionEvidence::Ready
+    }
+
+    fn transport_await_waiting_released_by_facts(
+        input: &VideoSchedulingOwnerInput,
+        supply_state: DisplaySupplyState,
+    ) -> bool {
+        let terminal_invalid_bootstrap_release_ready =
+            Self::has_fresh_terminal_invalid_bootstrap_release_evidence(input);
+        if input.connection_state != ConnectionLifecycleStateFact::Connected {
+            return false;
+        }
+        if !Self::has_current_clean_anchor_evidence(input)
+            && !terminal_invalid_bootstrap_release_ready
+        {
+            return false;
+        }
+        if input.demand.video_renderer_stalled {
+            return false;
+        }
+        let Some(timeline) = input.latest_video_timeline_observation.as_ref() else {
+            return false;
+        };
+        if terminal_invalid_bootstrap_release_ready {
+            if matches!(supply_state, DisplaySupplyState::Critical) {
+                return false;
+            }
+        } else if !matches!(supply_state, DisplaySupplyState::Healthy) {
+            return false;
+        }
+        if !terminal_invalid_bootstrap_release_ready
+            && Self::has_transport_await_hard_rebuild_evidence(input)
+        {
+            return false;
+        }
+        let gap_severity = derive_gap_severity_from_timeline_observation(timeline);
+        let frame_value = frame_value_from_gap_severity(gap_severity);
+        if !terminal_invalid_bootstrap_release_ready
+            && !matches!(frame_value, Some(FrameValue::RecoveryAnchor))
+        {
+            return false;
+        }
+        if !terminal_invalid_bootstrap_release_ready
+            && !is_transport_await_probe_source_event(Some(timeline.source_event.as_str()))
+            && !has_current_transport_await_issue_from_observation(
+                timeline,
+                current_clean_anchor_observed_at_ms(
+                    input.clean_anchor_epoch,
+                    input.clean_anchor_observed_at_ms,
+                    input.clean_anchor_source_event.as_deref(),
+                    input.recovery_epoch,
+                ),
+            )
+        {
+            return false;
+        }
+        let decode_fresh = input
+            .demand
+            .decode_age_ms
+            .is_some_and(|age| age <= input.display_supply_thresholds.degraded_decode_age_ms);
+        let present_fresh = input
+            .demand
+            .present_age_ms
+            .is_some_and(|age| age <= input.display_supply_thresholds.degraded_present_age_ms)
+            || Self::first_present_feedback_gap_active(input);
+        let track_attached = matches!(
+            input.latest_track_state.as_deref(),
+            Some("remoteTrackAttached")
+        );
+        let track_has_video_bytes = input
+            .latest_track_video_bytes_total
+            .is_some_and(|bytes| bytes > 0);
+        decode_fresh && present_fresh && track_attached && track_has_video_bytes
+    }
+
+    fn terminal_invalid_bootstrap_has_serviceable_output(
+        input: &VideoSchedulingOwnerInput,
+        supply_state: DisplaySupplyState,
+    ) -> bool {
+        if matches!(supply_state, DisplaySupplyState::Critical) {
+            return false;
+        }
+        let decode_fresh = input
+            .demand
+            .decode_age_ms
+            .is_some_and(|age| age <= input.display_supply_thresholds.degraded_decode_age_ms);
+        let present_fresh = input
+            .demand
+            .present_age_ms
+            .is_some_and(|age| age <= input.display_supply_thresholds.degraded_present_age_ms)
+            || Self::first_present_feedback_gap_active(input);
+        let track_attached = matches!(
+            input.latest_track_state.as_deref(),
+            Some("remoteTrackAttached")
+        );
+        let track_has_video_bytes = input
+            .latest_track_video_bytes_total
+            .is_some_and(|bytes| bytes > 0);
+        decode_fresh && present_fresh && track_attached && track_has_video_bytes
+    }
+
+    fn has_fresh_terminal_invalid_bootstrap_release_evidence(
+        input: &VideoSchedulingOwnerInput,
+    ) -> bool {
+        if input.latest_h264_bootstrap_ready != Some(false)
+            || !is_invalid_recovery_bootstrap_reject_reason(
+                input.latest_h264_bootstrap_reject_reason.as_deref(),
+            )
+        {
+            return false;
+        }
+        let metadata_ready = input.latest_h264_committed_sps_present == Some(true)
+            && input.latest_h264_committed_pps_present == Some(true)
+            && input.latest_h264_delta_continuation_ready == Some(true);
+        if !metadata_ready {
+            return false;
+        }
+        input
+            .latest_h264_observed_at_ms
+            .is_some_and(|observed_at_ms| {
+                (input.observed_at_ms - observed_at_ms).max(0.0)
+                    <= RECENT_H264_RECOVERY_BLOCKER_MAX_AGE_MS
+            })
     }
 
     fn first_present_grace_active(input: &VideoSchedulingOwnerInput) -> bool {
@@ -664,6 +838,34 @@ impl VideoSchedulingOwner {
         input.demand.host_display_tick_epoch.unwrap_or_default() > 0
             && input.demand.host_present_epoch.unwrap_or_default() == 0
             && input.demand.present_submit_count_total.unwrap_or_default() == 0
+    }
+
+    fn can_release_rebuild_after_terminal_invalid_bootstrap(
+        input: &VideoSchedulingOwnerInput,
+        supply_state: DisplaySupplyState,
+        has_clean_anchor_evidence: bool,
+    ) -> bool {
+        if input.connection_state != ConnectionLifecycleStateFact::Connected {
+            return false;
+        }
+        if matches!(supply_state, DisplaySupplyState::Critical) {
+            return false;
+        }
+        if input.demand.video_renderer_stalled {
+            return false;
+        }
+        if Self::has_rejected_transport_await_anchor_candidate(input) {
+            return false;
+        }
+        if !Self::has_fresh_terminal_invalid_bootstrap_release_evidence(input) {
+            return false;
+        }
+        if has_clean_anchor_evidence {
+            return Self::terminal_invalid_bootstrap_has_serviceable_output(input, supply_state);
+        }
+        // 没有 clean anchor 时，只有在当前输出仍可服务且本次 bootstrap 明确不可用时，
+        // 才允许退出 rebuilding-supply，避免把“等不到 clean anchor”的坏链锁死成永久恢复态。
+        Self::terminal_invalid_bootstrap_has_serviceable_output(input, supply_state)
     }
 
     fn first_frame_acquisition_priority_active(
@@ -688,7 +890,7 @@ impl VideoSchedulingOwner {
         let bootstrap_reject_in_startup = input.latest_h264_bootstrap_ready == Some(false)
             && input.latest_h264_bootstrap_reject_reason.is_some();
         let bootstrap_reject_source_pending = matches!(
-            input.latest_timeline_source_event.as_deref(),
+            input.effective_source_event(),
             Some(
                 "frame-inspection-rejected-await-keyframe"
                     | "frame-inspection-rejected-trigger-recovery-keyframe"
@@ -709,7 +911,7 @@ impl VideoSchedulingOwner {
             return false;
         }
         matches!(
-            input.latest_timeline_source_event.as_deref(),
+            input.effective_source_event(),
             Some(
                 "frame-inspection-rejected-await-keyframe"
                     | "frame-inspection-rejected-trigger-recovery-keyframe"
@@ -733,7 +935,7 @@ impl VideoSchedulingOwner {
             return false;
         }
         let stable_timeline_source = matches!(
-            input.latest_timeline_source_event.as_deref(),
+            input.effective_source_event(),
             Some("frame-complete-candidate")
         );
         let present_fresh = input
@@ -789,7 +991,7 @@ impl VideoSchedulingOwner {
             }
         }
         let stable_timeline_source = matches!(
-            input.latest_timeline_source_event.as_deref(),
+            input.effective_source_event(),
             Some("frame-complete-candidate" | "frame-observed")
         );
         let decode_fresh = input
@@ -818,6 +1020,9 @@ impl VideoSchedulingOwner {
             return false;
         }
         if input.demand.video_renderer_stalled {
+            return false;
+        }
+        if Self::has_unresolved_invalid_bootstrap_blocker(input) {
             return false;
         }
         let track_audio_only = matches!(input.latest_track_state.as_deref(), Some("audioOnly"));
@@ -881,7 +1086,7 @@ impl VideoSchedulingOwner {
             return false;
         }
         let stable_timeline_source = matches!(
-            input.latest_timeline_source_event.as_deref(),
+            input.effective_source_event(),
             Some("frame-complete-candidate" | "frame-observed")
         );
         if !stable_timeline_source {
@@ -973,8 +1178,8 @@ impl VideoSchedulingOwner {
                 .latest_anchor_candidate_ledger
                 .as_ref()
                 .map(|candidate| candidate.recovery_epoch),
-            input.latest_timeline_chain_state.as_deref(),
-            input.latest_timeline_source_event.as_deref(),
+            input.effective_chain_state(),
+            input.effective_source_event(),
             input.latest_track_state.as_deref(),
             input.latest_track_video_bytes_total,
             input.demand.present_age_ms,
@@ -1014,7 +1219,7 @@ impl VideoSchedulingOwner {
     fn clean_anchor_hysteresis_allows_reentry(input: &VideoSchedulingOwnerInput) -> bool {
         Self::has_current_clean_anchor_evidence(input)
             && matches!(
-                input.latest_timeline_source_event.as_deref(),
+                input.effective_source_event(),
                 Some(
                     "gap-reorder-pending"
                         | "gap-resolved"
@@ -1124,7 +1329,7 @@ impl VideoSchedulingOwner {
             return false;
         }
         matches!(
-            input.latest_timeline_source_event.as_deref(),
+            input.effective_source_event(),
             Some("nack-observation" | "gap-repair-in-flight" | "gap-resolved")
         )
     }
@@ -1184,10 +1389,23 @@ impl VideoSchedulingOwner {
     }
 
     fn timeline_indicates_anchor_issue(input: &VideoSchedulingOwnerInput) -> bool {
+        if let Some(observation) = input.latest_video_timeline_observation.as_ref() {
+            if has_current_transport_await_issue_from_observation(
+                observation,
+                current_clean_anchor_observed_at_ms(
+                    input.clean_anchor_epoch,
+                    input.clean_anchor_observed_at_ms,
+                    input.clean_anchor_source_event.as_deref(),
+                    input.recovery_epoch,
+                ),
+            ) {
+                return true;
+            }
+        }
         is_ingress_waiting_keyframe(
-            input.latest_timeline_chain_state.as_deref(),
-            None,
-            input.latest_timeline_source_event.as_deref(),
+            input.effective_chain_state(),
+            input.effective_chain_reason(),
+            input.effective_source_event(),
         )
     }
 
@@ -1199,7 +1417,9 @@ impl VideoSchedulingOwner {
     ) -> bool {
         if !matches!(
             current,
-            VideoSchedulingOwnerState::StableServing | VideoSchedulingOwnerState::DegradedServing
+            VideoSchedulingOwnerState::StableServing
+                | VideoSchedulingOwnerState::DegradedServing
+                | VideoSchedulingOwnerState::SupplyStarved
         ) {
             return false;
         }
@@ -1213,7 +1433,7 @@ impl VideoSchedulingOwner {
     }
 
     fn is_transport_await_probe_signal(input: &VideoSchedulingOwnerInput) -> bool {
-        is_transport_await_probe_source_event(input.latest_timeline_source_event.as_deref())
+        is_transport_await_probe_source_event(input.effective_source_event())
     }
 
     fn has_transport_await_hard_rebuild_evidence(input: &VideoSchedulingOwnerInput) -> bool {
@@ -1252,6 +1472,24 @@ impl VideoSchedulingOwner {
         if input.latest_h264_bootstrap_ready != Some(false) {
             return false;
         }
+        let Some(observed_at_ms) = input.latest_h264_observed_at_ms else {
+            return false;
+        };
+        if (input.observed_at_ms - observed_at_ms).max(0.0)
+            > RECENT_H264_RECOVERY_BLOCKER_MAX_AGE_MS
+        {
+            return false;
+        }
+        if current_clean_anchor_observed_at_ms(
+            input.clean_anchor_epoch,
+            input.clean_anchor_observed_at_ms,
+            input.clean_anchor_source_event.as_deref(),
+            input.recovery_epoch,
+        )
+        .is_some_and(|clean_anchor_at_ms| clean_anchor_at_ms >= observed_at_ms)
+        {
+            return false;
+        }
         matches!(
             input.latest_h264_bootstrap_reject_reason.as_deref(),
             Some(
@@ -1264,7 +1502,7 @@ impl VideoSchedulingOwner {
     }
 
     fn transport_await_chain_is_hard_broken(input: &VideoSchedulingOwnerInput) -> bool {
-        input.latest_timeline_chain_state.as_deref() == Some("broken")
+        input.effective_chain_state() == Some("broken")
             && Self::is_transport_await_probe_signal(input)
     }
 
@@ -1398,10 +1636,7 @@ impl VideoSchedulingOwner {
                 .pending_supply_starved_label = None;
             return false;
         }
-        let chain_healthy = matches!(
-            input.latest_timeline_chain_state.as_deref(),
-            Some("healthy")
-        );
+        let chain_healthy = matches!(input.effective_chain_state(), Some("healthy"));
         let track_attached = matches!(
             input.latest_track_state.as_deref(),
             Some("remoteTrackAttached")
@@ -1545,7 +1780,7 @@ impl VideoSchedulingOwner {
             .is_some_and(|age| age <= input.display_supply_thresholds.critical_present_age_ms)
             || Self::first_present_feedback_gap_active(input);
         let timeline_progress_visible = matches!(
-            input.latest_timeline_source_event.as_deref(),
+            input.effective_source_event(),
             Some(
                 "frame-complete-candidate"
                     | "frame-observed"
@@ -1579,6 +1814,28 @@ impl VideoSchedulingOwner {
             (true, Some(explicit_at_ms), None) => Some(explicit_at_ms),
             (_, _, candidate_at_ms) => candidate_at_ms,
         }
+    }
+
+    fn has_unresolved_invalid_bootstrap_blocker(input: &VideoSchedulingOwnerInput) -> bool {
+        if input.latest_h264_bootstrap_ready != Some(false)
+            || !is_invalid_recovery_bootstrap_reject_reason(
+                input.latest_h264_bootstrap_reject_reason.as_deref(),
+            )
+        {
+            return false;
+        }
+        let Some(observed_at_ms) = input.latest_h264_observed_at_ms else {
+            return false;
+        };
+        if (input.observed_at_ms - observed_at_ms).max(0.0)
+            > RECENT_H264_RECOVERY_BLOCKER_MAX_AGE_MS
+        {
+            return false;
+        }
+        let metadata_ready = input.latest_h264_committed_sps_present == Some(true)
+            && input.latest_h264_committed_pps_present == Some(true)
+            && input.latest_h264_delta_continuation_ready == Some(true);
+        !metadata_ready
     }
 
     fn should_emit_intent(

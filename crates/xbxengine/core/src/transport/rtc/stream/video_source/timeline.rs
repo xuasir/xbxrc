@@ -97,7 +97,7 @@ struct GapEntry {
     frame_rtp_timestamp: Option<u32>,
     frame_importance: &'static str,
     provenance: GapProvenance,
-    severity: GapSeverity,
+    severity: TimelineGapHardness,
     first_observed_at_ms: f64,
     last_updated_at_ms: f64,
 }
@@ -109,8 +109,10 @@ enum GapProvenance {
     Repair,
 }
 
+/// 时间线内部的缺洞“硬度”，与 `recovery::contract::GapSeverity`（Minor/Reference/…）正交；
+/// 统一语义帧价值由 contract 从 `XbxEngineVideoTimelineObservation` 推导。
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum GapSeverity {
+enum TimelineGapHardness {
     Soft,
     Hard,
 }
@@ -224,7 +226,7 @@ impl VideoTimelineState {
             return true;
         }
         if self.gaps.values().any(|entry| {
-            entry.severity == GapSeverity::Hard
+            entry.severity == TimelineGapHardness::Hard
                 && !matches!(entry.state, GapState::Resolved | GapState::Expired)
         }) {
             return true;
@@ -248,6 +250,12 @@ impl VideoTimelineState {
         }
         self.reset_stable_recovery_gate();
         self.chain_state = ChainState::Recovering;
+    }
+
+    pub(super) fn on_recovery_keyframe_requested_soft(&mut self) {
+        self.chain_debt_reason = Some("recoveryKeyframeRequested".to_string());
+        self.reset_stable_recovery_gate();
+        self.chain_state = ChainState::Repairing;
     }
 
     pub(super) fn on_chain_broken(&mut self) {
@@ -928,8 +936,26 @@ impl VideoTimelineState {
 
     fn has_unresolved_hard_gap_issue(&self) -> bool {
         if self.gaps.values().any(|entry| {
-            entry.severity == GapSeverity::Hard
+            entry.severity == TimelineGapHardness::Hard
                 && !matches!(entry.state, GapState::Resolved | GapState::Expired)
+        }) {
+            return true;
+        }
+        self.frame_recovery_ledger.values().any(|entry| {
+            matches!(
+                entry.frame_recovery_disposition,
+                FrameRecoveryDisposition::UnrecoverableReferenceChain
+            )
+        })
+    }
+
+    fn has_blocking_hard_gap_issue_for_delta_continuation(&self) -> bool {
+        if self.gaps.values().any(|entry| {
+            entry.severity == TimelineGapHardness::Hard
+                && !matches!(
+                    entry.state,
+                    GapState::Resolved | GapState::Expired | GapState::RepairInFlight
+                )
         }) {
             return true;
         }
@@ -998,7 +1024,7 @@ impl VideoTimelineState {
 
     fn retire_stale_hard_reorder_debt_before(&mut self, watermark_rtp_timestamp: u32) {
         self.gaps.retain(|_, entry| {
-            let unresolved_hard_gap = entry.severity == GapSeverity::Hard
+            let unresolved_hard_gap = entry.severity == TimelineGapHardness::Hard
                 && !matches!(entry.state, GapState::Resolved | GapState::Expired);
             if !unresolved_hard_gap {
                 return true;
@@ -1032,7 +1058,9 @@ impl VideoTimelineState {
         now_ms: f64,
     ) {
         self.gaps.retain(|_, entry| {
-            if entry.severity != GapSeverity::Hard || entry.state != GapState::ReorderPending {
+            if entry.severity != TimelineGapHardness::Hard
+                || entry.state != GapState::ReorderPending
+            {
                 return true;
             }
             let Some(gap_ts) = entry.frame_rtp_timestamp else {
@@ -1070,6 +1098,44 @@ impl VideoTimelineState {
         }
         self.refresh_recovery_chain_building_phase(now_ms);
         self.recovery_chain_building_deadline_ms.is_some()
+    }
+
+    pub(super) fn reopen_delta_continuation_after_clean_anchor(&mut self, now_ms: f64) -> bool {
+        self.refresh_recovery_chain_building_phase(now_ms);
+        let clean_anchor_active = self
+            .latest_anchor_candidate
+            .as_ref()
+            .is_some_and(|candidate| {
+                candidate.state == XbxEngineAnchorCandidateState::SubmittedCleanAnchor
+                    && candidate.source_event == "chain-clean-keyframe-submitted"
+                    && candidate.observed_at_ms <= now_ms
+                    && (self.recovery_chain_building_deadline_ms.is_some()
+                        || (now_ms - candidate.observed_at_ms).max(0.0)
+                            <= RECOVERY_CHAIN_BUILDING_PHASE_MAX_MS)
+            });
+        if !clean_anchor_active || self.has_blocking_hard_gap_issue_for_delta_continuation() {
+            return false;
+        }
+        let waiting_like_debt = self.chain_debt_reason.as_deref().is_none_or(|reason| {
+            matches!(
+                reason,
+                "awaitRecoveryKeyframe" | "awaitingRecoveryKeyframe" | "inspectionRejectNonIdrVcl"
+            )
+        });
+        if !waiting_like_debt {
+            return false;
+        }
+        if matches!(
+            self.chain_state,
+            ChainState::Recovering | ChainState::Broken
+        ) {
+            self.clear_chain_debt();
+            self.reset_stable_recovery_gate();
+            self.chain_state = ChainState::SustainingRecovery;
+            self.arm_recovery_chain_building_phase();
+            return true;
+        }
+        self.chain_state == ChainState::SustainingRecovery
     }
 
     fn can_soften_expired_delta_reentry(
@@ -1203,19 +1269,19 @@ fn classify_gap(
     frame_importance: &'static str,
     frame_rtp_timestamp: Option<u32>,
     close_reason: Option<&'static str>,
-) -> (GapProvenance, GapSeverity) {
+) -> (GapProvenance, TimelineGapHardness) {
     if matches!(state, GapState::RepairInFlight) {
         return (
             GapProvenance::Repair,
             if matches!(frame_importance, "reference" | "keyframe") {
-                GapSeverity::Hard
+                TimelineGapHardness::Hard
             } else {
-                GapSeverity::Soft
+                TimelineGapHardness::Soft
             },
         );
     }
     if matches!(close_reason, Some(reason) if is_local_low_value_gap_reason(reason)) {
-        return (GapProvenance::LocalLowValueDrop, GapSeverity::Soft);
+        return (GapProvenance::LocalLowValueDrop, TimelineGapHardness::Soft);
     }
     (
         GapProvenance::NetworkOrUnknown,
@@ -1224,9 +1290,9 @@ fn classify_gap(
                 && frame_importance == "delta"
                 && matches!(close_reason, Some("awaitingRecoveryKeyframe")))
         {
-            GapSeverity::Hard
+            TimelineGapHardness::Hard
         } else {
-            GapSeverity::Soft
+            TimelineGapHardness::Soft
         },
     )
 }

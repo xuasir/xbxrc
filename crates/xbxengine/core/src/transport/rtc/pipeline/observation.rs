@@ -194,7 +194,7 @@ pub(super) fn map_transport_observation_to_hint_label(
         ) => "transportSampleLoss",
         TransportObservation::Loss(
             crate::transport::rtc::stream::adapter_types::TransportLossObservation::RecoveryKeyframeRequested,
-        ) => "transportAwaitRecoveryKeyframe",
+        ) => "transportRecoveryKeyframeRequested",
         TransportObservation::Loss(
             crate::transport::rtc::stream::adapter_types::TransportLossObservation::AwaitRecoveryKeyframe,
         ) => "transportAwaitRecoveryKeyframe",
@@ -277,11 +277,11 @@ mod tests {
     };
 
     #[test]
-    fn recovery_keyframe_requested_maps_to_transport_await_recovery_keyframe() {
+    fn recovery_keyframe_requested_maps_to_distinct_recovery_request_label() {
         let label = map_transport_observation_to_hint_label(
             &TransportObservation::Loss(TransportLossObservation::RecoveryKeyframeRequested),
             64,
         );
-        assert_eq!(label, "transportAwaitRecoveryKeyframe");
+        assert_eq!(label, "transportRecoveryKeyframeRequested");
     }
 }

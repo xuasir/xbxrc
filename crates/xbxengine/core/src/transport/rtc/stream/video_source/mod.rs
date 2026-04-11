@@ -16,6 +16,10 @@ use super::packet_types::RtcVideoRtpPacket;
 use super::sink::RtcRtcpSendPort;
 use crate::media::video::types::{FrameRecoveryDisposition, FrameValue};
 use crate::runtime_stats_sink::RuntimeStatsSink;
+use crate::transport::rtc::recovery::contract::{
+    current_clean_anchor_observed_at_ms, has_current_transport_await_issue_from_observation,
+    is_invalid_recovery_bootstrap_reject_reason,
+};
 use xbxengine_protocol::XbxEngineTransportStateDto;
 
 pub(crate) mod nack;
@@ -83,6 +87,9 @@ pub struct RtcVideoFrameSource {
     assembled_frame_count: u64,
     transport_observation_emit_count: u64,
 }
+
+const SOURCE_SERVICEABLE_DECODE_MAX_AGE_MS: f64 = 180.0;
+const SOURCE_SERVICEABLE_PRESENT_MAX_AGE_MS: f64 = 220.0;
 
 pub struct RtcVideoTransportObservationSource {
     pub(crate) rx: tokio::sync::mpsc::UnboundedReceiver<TransportObservation>,
@@ -335,6 +342,77 @@ impl RtcVideoFrameSource {
 
     pub(super) fn set_waiting_for_recovery_keyframe(&mut self, waiting: bool) {
         self.timeline_state.apply_wait_keyframe_gate(waiting);
+    }
+
+    fn has_serviceable_output_for_soft_recovery_request(
+        stats: &XbxEngineMediaRuntimeStats,
+        now_ms: f64,
+    ) -> bool {
+        if stats.transport_state != XbxEngineTransportStateDto::Connected
+            || stats.video_renderer_stalled == Some(true)
+        {
+            return false;
+        }
+        let track_attached = stats
+            .latest_video_track_status
+            .as_ref()
+            .is_some_and(|status| {
+                status.state == "remoteTrackAttached" && status.video_bytes_total > 0
+            });
+        if !track_attached {
+            return false;
+        }
+        let decode_fresh = stats
+            .latest_video_decode_ok_time_ms
+            .is_some_and(|at_ms| (now_ms - at_ms).max(0.0) <= SOURCE_SERVICEABLE_DECODE_MAX_AGE_MS);
+        let present_fresh = stats
+            .latest_video_host_present_time_ms
+            .is_some_and(|at_ms| {
+                (now_ms - at_ms).max(0.0) <= SOURCE_SERVICEABLE_PRESENT_MAX_AGE_MS
+            });
+        decode_fresh && present_fresh
+    }
+
+    fn has_current_transport_await_issue_in_source(stats: &XbxEngineMediaRuntimeStats) -> bool {
+        let Some(timeline) = stats.latest_video_timeline_observation.as_ref() else {
+            return false;
+        };
+        has_current_transport_await_issue_from_observation(
+            timeline,
+            current_clean_anchor_observed_at_ms(
+                stats.video_anchor_clean_epoch,
+                stats.video_anchor_clean_observed_at_ms,
+                stats.video_anchor_clean_source_event.as_deref(),
+                stats.transport_recovery_epoch,
+            ),
+        )
+    }
+
+    pub(super) fn should_soft_request_recovery_keyframe(
+        stats: &XbxEngineMediaRuntimeStats,
+        now_ms: f64,
+        invalid_bootstrap_reason: Option<&str>,
+        invalid_bootstrap_metadata_ready: bool,
+        allow_non_anchor_soft_request: bool,
+        allow_anchor_soft_request: bool,
+    ) -> bool {
+        let has_current_clean_anchor = current_clean_anchor_observed_at_ms(
+            stats.video_anchor_clean_epoch,
+            stats.video_anchor_clean_observed_at_ms,
+            stats.video_anchor_clean_source_event.as_deref(),
+            stats.transport_recovery_epoch,
+        )
+        .is_some();
+        if !has_current_clean_anchor
+            || Self::has_current_transport_await_issue_in_source(stats)
+            || !Self::has_serviceable_output_for_soft_recovery_request(stats, now_ms)
+        {
+            return false;
+        }
+        let invalid_bootstrap_ready =
+            is_invalid_recovery_bootstrap_reject_reason(invalid_bootstrap_reason)
+                && invalid_bootstrap_metadata_ready;
+        invalid_bootstrap_ready || allow_non_anchor_soft_request || allow_anchor_soft_request
     }
 
     pub(super) fn record_video_timeline_observation(

@@ -935,6 +935,14 @@ pub fn build_xbxengine_stats(
                         input_signal: ledger.input_signal.clone(),
                         gate_result: ledger.gate_result.clone(),
                         action_selected: ledger.action_selected.clone(),
+                        frame_value: ledger.frame_value.clone(),
+                        gap_severity: ledger.gap_severity.clone(),
+                        recovery_episode_stage: ledger.recovery_episode_stage.clone(),
+                        recovery_episode_progress_at_ms: ledger.recovery_episode_progress_at_ms,
+                        coalescing_mode: ledger.coalescing_mode.clone(),
+                        unlock_reason: ledger.unlock_reason.clone(),
+                        preempt_reason: ledger.preempt_reason.clone(),
+                        recovery_primary_action: ledger.recovery_primary_action.clone(),
                         budget_before: ledger.budget_before.as_ref().map(|budget| {
                             xbxengine_protocol::XbxEngineRecoveryBudgetSnapshotDto {
                                 recovery_epoch: budget.recovery_epoch,
