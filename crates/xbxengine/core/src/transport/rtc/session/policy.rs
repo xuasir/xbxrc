@@ -543,6 +543,7 @@ impl RtcSessionPolicy {
         }
     }
 
+    #[allow(dead_code)]
     fn first_frame_grace_active(&self) -> bool {
         let first_frame_grace_ms = self
             .runtime_config
@@ -1397,6 +1398,7 @@ impl RtcSessionPolicy {
             self.reconnect_grants_without_success_edge.saturating_add(1);
     }
 
+    #[allow(dead_code)]
     fn media_reconnect_block_reason(
         &self,
         snapshot: &TransportSnapshot,

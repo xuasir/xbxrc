@@ -9,6 +9,7 @@ pub enum TransportAdmissionObservation {
 pub enum TransportLossObservation {
     PacketLossDetected,
     RecoveryKeyframeRequested,
+    #[allow(dead_code)]
     AwaitRecoveryKeyframe,
 }
 

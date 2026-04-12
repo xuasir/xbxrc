@@ -16,6 +16,7 @@ const RECOVERY_CHAIN_BUILDING_PHASE_MAX_MS: f64 = 1_200.0;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum GapState {
+    #[allow(dead_code)]
     Idle,
     Observed,
     ReorderPending,
@@ -98,6 +99,7 @@ struct GapEntry {
     frame_importance: &'static str,
     provenance: GapProvenance,
     severity: TimelineGapHardness,
+    #[allow(dead_code)]
     first_observed_at_ms: f64,
     last_updated_at_ms: f64,
 }
@@ -120,6 +122,7 @@ enum TimelineGapHardness {
 #[derive(Clone, Debug)]
 struct FrameEntry {
     state: FrameReceiveState,
+    #[allow(dead_code)]
     first_observed_at_ms: f64,
     last_updated_at_ms: f64,
     is_keyframe: Option<bool>,

@@ -715,7 +715,7 @@ where
         restart: bool,
         operation_epoch: u64,
     ) -> Result<(), XbxEngineRuntimeError> {
-        crate::xbx_log_warn!(
+        crate::xbx_log_debug!(
             "[xbxengine][runtime][ice] negotiate_remote start restart={restart} state={:?}",
             self.state
         );
@@ -730,7 +730,7 @@ where
 
         self.snapshot.negotiation_attempt_count += 1;
         self.snapshot.last_offer_sdp = Some(negotiation.local_offer_sdp.clone());
-        crate::xbx_log_warn!(
+        crate::xbx_log_debug!(
             "[xbxengine][runtime][ice] negotiate_remote prepared offer len={} local_candidates={} surface_id={} video={}x{}",
             negotiation.local_offer_sdp.len(),
             negotiation.local_candidates.len(),
@@ -749,7 +749,7 @@ where
                 restart,
             },
         )?)?;
-        crate::xbx_log_warn!(
+        crate::xbx_log_debug!(
             "[xbxengine][runtime][ice] exchange offer response received answer_len={}",
             answer_sdp.len()
         );
@@ -758,7 +758,7 @@ where
         self.ensure_operation_active(operation_epoch)?;
         self.media_backend
             .apply_remote_description(answer_sdp.clone(), Vec::new())?;
-        crate::xbx_log_warn!(
+        crate::xbx_log_debug!(
             "[xbxengine][runtime][ice] remote description applied answer_len={} local_candidates_snapshot_pending={}",
             answer_sdp.len(),
             negotiation.local_candidates.len(),
@@ -769,9 +769,9 @@ where
         self.emit_phase(XbxEngineRuntimePhaseDto::Connecting);
         self.health.observed_transport_state = XbxEngineTransportStateDto::Connecting;
         self.emit_transport_state(XbxEngineTransportStateDto::Connecting);
-        crate::xbx_log_warn!("[xbxengine][runtime][ice] before sync_runtime_activity_snapshot");
+        crate::xbx_log_debug!("[xbxengine][runtime][ice] before sync_runtime_activity_snapshot");
         self.sync_runtime_activity_snapshot();
-        crate::xbx_log_warn!(
+        crate::xbx_log_debug!(
             "[xbxengine][runtime][ice] after sync_runtime_activity_snapshot entering exchange loop"
         );
         let remote_candidates = self.exchange_remote_ice_incrementally(
@@ -780,7 +780,7 @@ where
             restart,
             operation_epoch,
         )?;
-        crate::xbx_log_warn!(
+        crate::xbx_log_debug!(
             "[xbxengine][runtime][ice] exchange_remote_ice_incrementally returned remote_candidates={}",
             remote_candidates.len()
         );
@@ -823,7 +823,7 @@ where
             &initial_local_candidates,
             &mut sent_local_candidates,
         )?;
-        crate::xbx_log_warn!(
+        crate::xbx_log_debug!(
             "[xbxengine][runtime][ice] initial submit batch candidates={} summary={} offer_candidates={} initial_candidates={}",
             initial_local_candidates_batch.len(),
             Self::summarize_ice_candidate_kinds(&initial_local_candidates_batch),
@@ -831,7 +831,7 @@ where
             initial_local_candidates.len(),
         );
         if !initial_local_candidates_batch.is_empty() {
-            crate::xbx_log_warn!(
+            crate::xbx_log_debug!(
                 "[xbxengine][runtime][ice] submitting initial local candidates restart={restart}"
             );
             self.emit_phase(XbxEngineRuntimePhaseDto::ExchangingIce);
@@ -885,7 +885,7 @@ where
                 last_progress_at_ms = now_ms_f64();
                 made_progress = true;
             }
-            crate::xbx_log_warn!(
+            crate::xbx_log_debug!(
                 "[xbxengine][runtime][ice] exchange loop local_candidates={} submitted={} local_gathering_complete={} remote_eoc_seen={} local_eoc_submitted={} stable_elapsed_ms={:.0} remote_accumulated={}",
                 outbound_local_candidates.len(),
                 submitted_local_candidates,
@@ -902,7 +902,7 @@ where
                 }
                 // 先把当前批次真实候选送出去，再继续轮询后续 trickle。
                 self.ensure_operation_active(operation_epoch)?;
-                crate::xbx_log_warn!(
+                crate::xbx_log_debug!(
                     "[xbxengine][runtime][ice] submitting local candidates batch size={} summary={} restart={restart}",
                     outbound_local_candidates.len(),
                     Self::summarize_ice_candidate_kinds(&outbound_local_candidates),
@@ -922,12 +922,12 @@ where
                 made_progress = true;
             } else if !submitted_local_candidates {
                 if local_gathering_complete {
-                    crate::xbx_log_warn!(
+                    crate::xbx_log_debug!(
                         "[xbxengine][runtime][ice] skip initial submit because gathering completed before first batch"
                     );
                     break;
                 }
-                crate::xbx_log_warn!(
+                crate::xbx_log_debug!(
                     "[xbxengine][runtime][ice] waiting for first local candidate batch"
                 );
                 std::thread::sleep(Duration::from_millis(ICE_EXCHANGE_IDLE_BACKOFF_MS));
@@ -935,7 +935,7 @@ where
             }
 
             self.ensure_operation_active(operation_epoch)?;
-            crate::xbx_log_warn!(
+            crate::xbx_log_debug!(
                 "[xbxengine][runtime][ice] polling remote candidates restart={restart}"
             );
             let remote_candidates = Self::extract_poll_ice_response(self.host_bridge.request(
@@ -944,7 +944,7 @@ where
                     restart,
                 },
             )?)?;
-            crate::xbx_log_warn!(
+            crate::xbx_log_debug!(
                 "[xbxengine][runtime][ice] polled remote candidates count={} summary={}",
                 remote_candidates.len(),
                 Self::summarize_ice_candidate_kinds(&remote_candidates),
@@ -959,7 +959,7 @@ where
                 made_progress = true;
             }
             if remote_end_of_candidates_seen {
-                crate::xbx_log_warn!("[xbxengine][runtime][ice] remote end-of-candidates observed");
+                crate::xbx_log_debug!("[xbxengine][runtime][ice] remote end-of-candidates observed");
             }
 
             let next_remote_candidates =
@@ -971,7 +971,7 @@ where
                 aggregated_remote_candidates.extend(next_remote_candidates);
                 last_progress_at_ms = now_ms_f64();
                 made_progress = true;
-                crate::xbx_log_warn!(
+                crate::xbx_log_debug!(
                     "[xbxengine][runtime][ice] applied remote candidates batch size={} summary={} accumulated={}",
                     applied_batch_len,
                     Self::summarize_ice_candidate_kinds(&aggregated_remote_candidates),
@@ -982,7 +982,7 @@ where
             self.sync_runtime_activity_snapshot();
 
             if self.health.connected_at_ms.is_some() {
-                crate::xbx_log_warn!(
+                crate::xbx_log_debug!(
                     "[xbxengine][runtime][ice] exchange loop exit because transport connected local_summary={} remote_summary={}",
                     Self::summarize_ice_candidate_kinds_from_set(&sent_local_candidates),
                     Self::summarize_ice_candidate_kinds(&aggregated_remote_candidates),
@@ -998,7 +998,7 @@ where
                     has_new_local_candidates,
                     local_candidates_stable_elapsed_ms,
                 ) {
-                    crate::xbx_log_warn!(
+                    crate::xbx_log_debug!(
                         "[xbxengine][runtime][ice] exchange loop exit because candidates settled local_summary={} remote_summary={} local_gathering_complete={} stable_elapsed_ms={:.0}",
                         Self::summarize_ice_candidate_kinds_from_set(&sent_local_candidates),
                         Self::summarize_ice_candidate_kinds(&aggregated_remote_candidates),
@@ -1008,7 +1008,7 @@ where
                     break;
                 }
                 if local_gathering_complete && remote_end_of_candidates_seen {
-                    crate::xbx_log_warn!(
+                    crate::xbx_log_debug!(
                         "[xbxengine][runtime][ice] exchange loop exit because gathering complete and remote eoc seen local_summary={} remote_summary={}",
                         Self::summarize_ice_candidate_kinds_from_set(&sent_local_candidates),
                         Self::summarize_ice_candidate_kinds(&aggregated_remote_candidates),
@@ -1026,7 +1026,7 @@ where
                     break;
                 }
             } else if local_gathering_complete && remote_end_of_candidates_seen {
-                crate::xbx_log_warn!(
+                crate::xbx_log_debug!(
                     "[xbxengine][runtime][ice] exchange loop exit because gathering complete and remote eoc seen before submit local_summary={} remote_summary={}",
                     Self::summarize_ice_candidate_kinds_from_set(&sent_local_candidates),
                     Self::summarize_ice_candidate_kinds(&aggregated_remote_candidates),
@@ -1040,7 +1040,7 @@ where
             }
         }
 
-        crate::xbx_log_warn!(
+        crate::xbx_log_debug!(
             "[xbxengine][runtime][ice] exchange loop finished local_summary={} remote_summary={} remote_total={}",
             Self::summarize_ice_candidate_kinds_from_set(&sent_local_candidates),
             Self::summarize_ice_candidate_kinds(&aggregated_remote_candidates),

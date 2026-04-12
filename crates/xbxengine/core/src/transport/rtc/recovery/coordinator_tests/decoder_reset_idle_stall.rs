@@ -1,19 +1,17 @@
 use super::super::{RecoveryCoordinator, RecoveryOwnerSignal, TransportAwaitRecoveryStage};
 use crate::runtime_stats_sink::RuntimeStatsSink;
 use crate::transport::rtc::recovery::escalation::{
-    RecoveryAction, VideoEscalationConfig, VideoEscalationController, VideoEscalationReason,
+    RecoveryAction, VideoEscalationReason,
 };
-use crate::transport::rtc::recovery::runtime_state::{resolve_recovery_profile, unix_now_ms};
+use crate::transport::rtc::recovery::runtime_state::unix_now_ms;
 use crate::transport::rtc::recovery::startup::SessionPhase;
 use crate::XbxEngineMediaRuntimeStats;
-use crate::{
-    XbxEngineVideoNackObservation, XbxEngineVideoTrackStatus, XbxEngineVideoTwccObservation,
-};
+use crate::XbxEngineVideoTrackStatus;
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
-use xbxengine_protocol::{XbxEngineTargetTypeDto, XbxEngineTransportStateDto};
+use xbxengine_protocol::XbxEngineTransportStateDto;
 
-use super::harness::{healthy_twcc_observation, make_test_nack_observation, test_escalation_controller};
+use super::harness::test_escalation_controller;
 
 #[test]
 fn recent_idle_timeout_decoder_reset_suppresses_repeat_idle_timeout() {

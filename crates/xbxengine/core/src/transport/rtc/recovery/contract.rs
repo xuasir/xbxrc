@@ -10,10 +10,12 @@ use crate::{
 /// 不允许在其他模块并行定义同名语义。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum FrameValue {
+    #[allow(dead_code)]
     Disposable,
     Continuity,
     Reference,
     RecoveryAnchor,
+    #[allow(dead_code)]
     CleanAnchor,
 }
 
@@ -90,12 +92,14 @@ pub(crate) fn recovery_episode_stage_from_status(status: &str) -> Option<Recover
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[allow(dead_code)]
 pub(crate) enum CoalescingMode {
     Merge,
     Refresh,
     Preempt,
 }
 
+#[allow(dead_code)]
 impl CoalescingMode {
     pub(crate) fn as_str(self) -> &'static str {
         match self {

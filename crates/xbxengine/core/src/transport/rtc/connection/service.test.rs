@@ -1255,7 +1255,7 @@ fn send_video_rtcp_payload_routes_nack_with_target_ssrc() {
     };
 
     service.rebuild(&session, &runtime_stats).unwrap();
-    let (mut answer_pc, mut answer_io, _, _, _, _, _, _) =
+    let (_answer_pc, _answer_io, _, _, _, _, _, _) =
         connect_service_to_answer_peer(&mut service, &runtime_stats);
     prime_video_recovery_feedback_target(&mut service, &runtime_stats);
 
@@ -1291,7 +1291,7 @@ fn target_remb_same_target_is_not_refreshed_periodically() {
     };
 
     service.rebuild(&session, &runtime_stats).unwrap();
-    let (mut answer_pc, mut answer_io, _, _, _, _, _, _) =
+    let (_answer_pc, _answer_io, _, _, _, _, _, _) =
         connect_service_to_answer_peer(&mut service, &runtime_stats);
     let receiver_id = service
         .peer_connection
@@ -1427,7 +1427,7 @@ fn video_recovery_prefers_pli_on_first_request() {
         turn_server: None,
     };
     service.rebuild(&session, &runtime_stats).unwrap();
-    let (mut answer_pc, mut answer_io, _, _, _, _, _, _) =
+    let (_answer_pc, _answer_io, _, _, _, _, _, _) =
         connect_service_to_answer_peer(&mut service, &runtime_stats);
     prime_video_recovery_feedback_target(&mut service, &runtime_stats);
     if let Ok(mut stats) = runtime_stats.lock() {
@@ -1458,7 +1458,7 @@ fn video_recovery_escalates_to_fir_within_same_epoch() {
         turn_server: None,
     };
     service.rebuild(&session, &runtime_stats).unwrap();
-    let (mut answer_pc, mut answer_io, _, _, _, _, _, _) =
+    let (_answer_pc, _answer_io, _, _, _, _, _, _) =
         connect_service_to_answer_peer(&mut service, &runtime_stats);
     prime_video_recovery_feedback_target(&mut service, &runtime_stats);
     if let Ok(mut stats) = runtime_stats.lock() {
@@ -1618,7 +1618,7 @@ fn target_remb_target_change_triggers_new_request() {
     };
 
     service.rebuild(&session, &runtime_stats).unwrap();
-    let (mut answer_pc, mut answer_io, _, _, _, _, _, _) =
+    let (_answer_pc, _answer_io, _, _, _, _, _, _) =
         connect_service_to_answer_peer(&mut service, &runtime_stats);
     let receiver_id = service
         .peer_connection

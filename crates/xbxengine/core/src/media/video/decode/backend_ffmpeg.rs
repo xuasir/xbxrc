@@ -40,6 +40,7 @@ pub(crate) fn av_err_eof() -> i32 {
     ffi::AVERROR_EOF
 }
 
+#[allow(dead_code)]
 pub(crate) fn av_err_invaliddata() -> i32 {
     ffi::AVERROR_INVALIDDATA
 }
@@ -62,6 +63,7 @@ where
     }
 }
 
+#[allow(dead_code)]
 pub(crate) fn runtime_error_status_code(error: &XbxEngineRuntimeError) -> Option<i32> {
     let message = error.to_string();
     let status = message.split("status=").nth(1)?;

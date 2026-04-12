@@ -207,6 +207,7 @@ impl RtcIoRuntime {
         Ok(candidates)
     }
 
+    #[allow(dead_code)]
     pub(crate) fn local_candidate(&self) -> Result<RTCIceCandidateInit, XbxEngineRuntimeError> {
         self.local_host_candidates()?
             .into_iter()
@@ -811,6 +812,7 @@ fn discover_local_interface_ips() -> Vec<IpAddr> {
         .collect()
 }
 
+#[allow(dead_code)]
 fn choose_preferred_advertised_ip(mut ips: Vec<IpAddr>) -> Option<IpAddr> {
     sort_advertised_ips_by_priority(&mut ips, false);
     ips.into_iter().next()

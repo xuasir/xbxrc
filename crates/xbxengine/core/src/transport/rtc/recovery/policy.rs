@@ -132,6 +132,7 @@ impl ScenarioPolicyResolver {
         ScenarioPolicyProfileKind::resolve(session_target_type, transport_path)
     }
 
+    #[allow(dead_code)]
     pub(crate) fn resolve_recovery_profile(
         session_target_type: Option<&XbxEngineTargetTypeDto>,
         transport_path: Option<&str>,
@@ -259,6 +260,7 @@ impl ScenarioPolicyResolver {
         }
     }
 
+    #[allow(dead_code)]
     pub(crate) fn resolve_transport_bwe_profile(
         config: &XbxEngineWebRtcRuntimeConfig,
         session_target_type: Option<&XbxEngineTargetTypeDto>,
@@ -391,6 +393,7 @@ impl ScenarioPolicyResolver {
         }
     }
 
+    #[allow(dead_code)]
     pub(crate) fn classify_bitrate_band(
         session_target_type: Option<&XbxEngineTargetTypeDto>,
         transport_path: Option<&str>,
@@ -403,6 +406,7 @@ impl ScenarioPolicyResolver {
         )
     }
 
+    #[allow(dead_code)]
     pub(crate) fn classify_bitrate_band_by_kind(
         kind: ScenarioPolicyProfileKind,
         bitrate_kbps: f64,

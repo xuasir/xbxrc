@@ -28,6 +28,7 @@ impl TransportFrameDeadlineTracker {
         self.last_frame_arrival_at_ms = Some(frame_arrival_at_ms);
     }
 
+    #[allow(dead_code)]
     pub(super) fn next_transport_deadline_for_value_at_ms(
         &self,
         now_ms: f64,

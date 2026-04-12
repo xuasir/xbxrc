@@ -67,6 +67,7 @@ impl RecoveryPolicyProposal {
 
 /// `latest_recovery_decision_ledger` 的「待 command 回填」仅适用于会下发 `TransportCommand` 的动作；
 /// 抑制/等待/合并占位等不会走 `transport_session::update_recovery_decision_command_result`。
+#[allow(dead_code)]
 pub(crate) fn ledger_action_selected_expects_command_result(action_selected: &str) -> bool {
     matches!(
         action_selected,
@@ -74,6 +75,7 @@ pub(crate) fn ledger_action_selected_expects_command_result(action_selected: &st
     )
 }
 
+#[allow(dead_code)]
 pub(crate) fn recovery_decision_ledger_has_pending_transport_command(
     ledger: &XbxEngineRecoveryDecisionLedgerObservation,
 ) -> bool {

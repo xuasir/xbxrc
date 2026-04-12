@@ -126,6 +126,7 @@ impl RtcControlChannelService {
         ))
     }
 
+    #[allow(dead_code)]
     pub(crate) fn request_decoder_reset(&mut self) -> Result<(), XbxEngineRuntimeError> {
         if self.is_control_ready() {
             self.state.pending_decoder_reset = false;
@@ -145,6 +146,7 @@ impl RtcControlChannelService {
             && self.state.control_bootstrapped_after_handshake
     }
 
+    #[allow(dead_code)]
     pub(crate) fn is_control_actionable(&self) -> bool {
         if self.is_control_ready() {
             return true;
@@ -182,6 +184,7 @@ impl RtcControlChannelService {
         Some(actions)
     }
 
+    #[allow(dead_code)]
     pub(crate) fn take_replay_actions_if_ready(&mut self) -> Option<RtcControlReplayActions> {
         let actions = self.peek_replay_actions_if_ready()?;
         // 控制面可执行后，待回放请求只消费一次，避免重复下发。

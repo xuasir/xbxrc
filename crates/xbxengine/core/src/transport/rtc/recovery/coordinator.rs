@@ -224,6 +224,7 @@ impl RecoveryCoordinator {
         Some(TransportAwaitRecoveryStage::ProbeKeyframe)
     }
 
+    #[allow(dead_code)]
     pub(crate) fn transport_await_recovery_stage_from_runtime(
         runtime_stats: &Mutex<XbxEngineMediaRuntimeStats>,
         now_ms: f64,
@@ -2015,6 +2016,7 @@ impl RecoveryCoordinator {
         })
     }
 
+    #[allow(dead_code)]
     fn transport_await_lane(
         runtime_stats: &Mutex<XbxEngineMediaRuntimeStats>,
         now_ms: f64,
@@ -2270,6 +2272,7 @@ impl RecoveryCoordinator {
             })
     }
 
+    #[allow(dead_code)]
     fn transport_await_has_recent_invalid_bootstrap_for_episode(
         stats: &XbxEngineMediaRuntimeStats,
         episode: &crate::XbxEngineKeyframeRequestEpisodeObservation,

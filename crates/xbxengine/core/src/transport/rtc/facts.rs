@@ -129,6 +129,7 @@ pub enum TransportCommand {
         reason: String,
         observation_id: u64,
     },
+    #[allow(dead_code)]
     RequestDecoderReset {
         reason: String,
         observation_id: u64,

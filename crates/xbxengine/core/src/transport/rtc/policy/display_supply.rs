@@ -146,6 +146,7 @@ impl SchedulingDemandSignal {
         DisplaySupplyState::Healthy
     }
 
+    #[allow(dead_code)]
     pub(crate) fn escalation_reason_for_display_supply(
         &self,
         thresholds: &DisplaySupplyThresholds,

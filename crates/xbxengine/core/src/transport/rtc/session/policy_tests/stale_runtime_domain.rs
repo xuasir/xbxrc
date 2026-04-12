@@ -1,27 +1,18 @@
-use super::super::{RecoveryObservationSnapshot, RtcSessionPolicy};
-use crate::api::backend::{XbxEngineMediaRuntimeStats, XbxEngineVideoTwccObservation};
+use super::super::RtcSessionPolicy;
+use crate::api::backend::XbxEngineMediaRuntimeStats;
 use crate::api::runtime::XbxEngineRuntimeConfig;
 use crate::runtime_stats_sink::RuntimeStatsSink;
 use crate::transport::rtc::facts::{
-    ConnectionLifecycleStateFact, SessionCommand, TransportCommand,
+    ConnectionLifecycleStateFact, TransportCommand,
 };
-use crate::transport::rtc::policy::display_supply::SchedulingDemandSignal;
-use crate::transport::rtc::policy::recovery::resolve_runtime_reconnect_reason_domain;
 use crate::transport::rtc::projection::{
     BweProjection, ConnectionProjection, DiagnosticsProjection, MediaProjection,
     RecoveryProjection, TransportSnapshot,
 };
-use crate::transport::rtc::recovery::escalation::{RecoveryAction, VideoEscalationReason};
 use crate::transport::rtc::session::actor::SessionPolicyHook;
 use std::sync::{Arc, Mutex};
-use std::thread::sleep;
-use std::time::{Duration, Instant};
 
-use super::harness::{
-    assert_recovery_family_hold_semantics, build_demand_for_stats,
-    classify_supply_state_with_profile, set_input_rumble_burst, transport_commands,
-    RecoveryIntegrationHarness,
-};
+use super::harness::transport_commands;
 
 #[test]
 fn stale_adapter_idle_timeout_does_not_replay_during_steady_progress() {

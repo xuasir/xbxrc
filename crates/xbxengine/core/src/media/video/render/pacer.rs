@@ -66,6 +66,7 @@ pub(crate) struct FramePacingPolicy {
 }
 
 impl FramePacingPolicy {
+    #[allow(dead_code)]
     pub(crate) fn new(refresh_interval_ms: u64) -> Self {
         Self::with_dynamic_budget(refresh_interval_ms, None, None)
     }

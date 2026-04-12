@@ -144,6 +144,7 @@ impl RtcConnectionService {
         self.request_video_recovery_keyframe(runtime_stats)
     }
 
+    #[allow(dead_code)]
     pub(crate) fn request_decoder_reset(
         &mut self,
         runtime_stats: &Arc<Mutex<XbxEngineMediaRuntimeStats>>,

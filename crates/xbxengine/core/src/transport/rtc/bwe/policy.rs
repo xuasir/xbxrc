@@ -34,6 +34,7 @@ pub(crate) fn resolve_transport_policy_profile_kind(
     resolve_runtime_profile_kind(baseline_remote_profile, session_target_type, transport_path)
 }
 
+#[allow(dead_code)]
 pub(crate) fn classify_scenario_bitrate_band(
     baseline_remote_profile: Option<&str>,
     session_target_type: Option<&XbxEngineTargetTypeDto>,

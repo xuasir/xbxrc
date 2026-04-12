@@ -11,12 +11,14 @@ use h264_reader::{
 
 #[derive(Clone, Debug)]
 pub struct H264SeqParameterSet {
+    #[allow(dead_code)]
     pub raw: Vec<u8>,
     pub parsed: SeqParameterSet,
 }
 
 #[derive(Clone, Debug)]
 pub struct H264PicParameterSet {
+    #[allow(dead_code)]
     pub raw: Vec<u8>,
     pub parsed: PicParameterSet,
 }
@@ -29,6 +31,7 @@ pub struct H264ParameterSets {
 
 #[derive(Clone, Debug)]
 pub struct H264NalUnit {
+    #[allow(dead_code)]
     pub range: Range<usize>,
     pub unit_type: UnitType,
 }
@@ -71,6 +74,7 @@ impl H264AccessUnitInspection {
         }
     }
 
+    #[allow(dead_code)]
     pub fn build_avcc_payload(&self, payload: &[u8]) -> Vec<u8> {
         let mut avcc_payload = Vec::with_capacity(payload.len() + self.nals.len() * 4);
         for nal in &self.nals {
@@ -93,6 +97,7 @@ impl H264AccessUnitInspection {
         avcc_payload
     }
 
+    #[allow(dead_code)]
     pub fn effective_parameter_sets(&self) -> Option<H264ParameterSets> {
         if let Some(parameter_sets) = self.parameter_sets.clone() {
             return Some(parameter_sets);
@@ -110,6 +115,7 @@ impl H264AccessUnitInspection {
 
     /// 为硬解 backend 构造 AVCC access unit。
     /// 当关键帧/配置变化时，把当前生效的 SPS/PPS 一并前置，避免硬解器只拿到裸 VCL。
+    #[allow(dead_code)]
     pub fn build_decoder_avcc_payload(
         &self,
         payload: &[u8],
@@ -142,6 +148,7 @@ impl H264AccessUnitInspection {
         avcc_payload
     }
 
+    #[allow(dead_code)]
     pub fn bootstrap_parameter_sets(&self) -> Option<&H264ParameterSets> {
         self.parameter_sets.as_ref()
     }
@@ -208,6 +215,7 @@ impl H264SeqParameterSet {
     }
 }
 
+#[allow(dead_code)]
 fn push_avcc_nal(out: &mut Vec<u8>, nal_bytes: &[u8]) {
     if nal_bytes.is_empty() {
         return;
@@ -222,6 +230,7 @@ impl H264PicParameterSet {
     ///
     /// `pic_parameter_set_id` / `seq_parameter_set_id` 同样必须参与比较，
     /// 否则会把“参数集引用图已切换”误判成“同一 preset”。
+    #[allow(dead_code)]
     pub(crate) fn same_decoder_configuration(&self, other: &Self) -> bool {
         let slice_groups_equal = match (&self.parsed.slice_groups, &other.parsed.slice_groups) {
             (None, None) => true,
@@ -260,6 +269,7 @@ impl H264PicParameterSet {
 
 impl H264ParameterSets {
     /// 比较一组参数集是否会改变当前解码配置。
+    #[allow(dead_code)]
     pub(crate) fn same_decoder_configuration(&self, other: &Self) -> bool {
         self.sps.same_decoder_configuration(&other.sps)
             && self.pps.same_decoder_configuration(&other.pps)

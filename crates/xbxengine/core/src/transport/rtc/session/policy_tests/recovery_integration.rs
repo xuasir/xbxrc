@@ -1,12 +1,9 @@
-use super::super::{RecoveryObservationSnapshot, RtcSessionPolicy};
+use super::super::RtcSessionPolicy;
 use crate::api::backend::{XbxEngineMediaRuntimeStats, XbxEngineVideoTwccObservation};
 use crate::api::runtime::XbxEngineRuntimeConfig;
-use crate::runtime_stats_sink::RuntimeStatsSink;
 use crate::transport::rtc::facts::{
-    ConnectionLifecycleStateFact, SessionCommand, TransportCommand,
+    ConnectionLifecycleStateFact, TransportCommand,
 };
-use crate::transport::rtc::policy::display_supply::SchedulingDemandSignal;
-use crate::transport::rtc::policy::recovery::resolve_runtime_reconnect_reason_domain;
 use crate::transport::rtc::projection::{
     BweProjection, ConnectionProjection, DiagnosticsProjection, MediaProjection,
     RecoveryProjection, TransportSnapshot,
@@ -18,8 +15,7 @@ use std::thread::sleep;
 use std::time::{Duration, Instant};
 
 use super::harness::{
-    assert_recovery_family_hold_semantics, build_demand_for_stats, build_snapshot,
-    classify_supply_state_with_profile, set_input_rumble_burst, transport_commands,
+    assert_recovery_family_hold_semantics, set_input_rumble_burst, transport_commands,
     RecoveryIntegrationHarness,
 };
 

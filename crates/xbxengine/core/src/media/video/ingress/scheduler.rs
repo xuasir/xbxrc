@@ -312,7 +312,7 @@ mod tests {
     };
     use bytes::Bytes;
     use h264_reader::nal::UnitType;
-    use std::sync::Arc;
+    
     use std::time::{Duration, Instant};
 
     fn make_h264_inspection(bootstrap_ready: bool) -> H264AccessUnitInspection {

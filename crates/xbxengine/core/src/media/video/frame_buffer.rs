@@ -1,9 +1,11 @@
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[allow(dead_code)]
 pub(crate) struct FrameReleasePolicy {
     min_delay_ms: f64,
     max_delay_ms: f64,
 }
 
+#[allow(dead_code)]
 impl FrameReleasePolicy {
     pub(crate) fn new(min_delay_ms: u64, max_delay_ms: u64) -> Self {
         let bounded_min = min_delay_ms.min(max_delay_ms.max(1));

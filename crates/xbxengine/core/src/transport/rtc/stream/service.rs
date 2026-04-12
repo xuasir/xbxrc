@@ -37,6 +37,7 @@ impl RtcMediaService {
     }
 
     // 兼容第一阶段旧调用点；后续连接层可直接切到 observe_ingress_packet。
+    #[allow(dead_code)]
     pub(crate) fn observe_raw_packet(
         &mut self,
         packet_kind: MediaPacketKind,
