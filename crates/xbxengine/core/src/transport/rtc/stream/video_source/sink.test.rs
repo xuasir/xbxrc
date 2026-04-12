@@ -1025,6 +1025,7 @@ async fn local_repair_noise_does_not_block_following_repeated_transport_severe_d
             successful_action_count: 0,
             failed_action_count: 0,
             last_observed_at_ms: Some(profile.baseline.now_ms),
+            ..Default::default()
         },
         BweProjection::default(),
         DiagnosticsProjection::default(),
@@ -1056,6 +1057,7 @@ async fn local_repair_noise_does_not_block_following_repeated_transport_severe_d
             successful_action_count: 0,
             failed_action_count: 0,
             last_observed_at_ms: Some(profile.baseline.now_ms + 20.0),
+            ..Default::default()
         },
         BweProjection::default(),
         DiagnosticsProjection::default(),
@@ -1077,6 +1079,7 @@ async fn local_repair_noise_does_not_block_following_repeated_transport_severe_d
             successful_action_count: 0,
             failed_action_count: 0,
             last_observed_at_ms: Some(profile.baseline.now_ms + 60.0),
+            ..Default::default()
         },
         BweProjection::default(),
         DiagnosticsProjection::default(),

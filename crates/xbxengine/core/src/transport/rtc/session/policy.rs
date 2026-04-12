@@ -72,8 +72,6 @@ const CLOUD_RECOVERING_RECONNECT_PROPOSAL_INTERVAL_MS: f64 = 2_500.0;
 const CLOUD_BUILDER_CONFIGURED_RECONNECT_PROPOSAL_INTERVAL_MS: f64 = 4_500.0;
 const CLOUD_MISSING_LOCAL_FEEDBACK_RECONNECT_PROPOSAL_INTERVAL_MS: f64 = 3_500.0;
 const RECOVERY_NO_PROGRESS_RECONNECT_FALLBACK_MS: f64 = 4_000.0;
-const RECOVERY_PRE_FIRST_FRAME_RECONNECT_FALLBACK_MS: f64 = 15_000.0;
-const CLOUD_RECOVERY_PRE_FIRST_FRAME_RECONNECT_FALLBACK_MS: f64 = 35_000.0;
 const CONNECTING_PRE_FIRST_FRAME_FAILED_TERMINAL_MIN_MS: f64 = 90_000.0;
 const CONNECTED_PRESENT_STALL_RECONNECT_FALLBACK_MS: f64 = 10_000.0;
 const CONNECTED_PRESENT_STALL_MIN_AGE_MS: f64 = 1_500.0;
@@ -302,6 +300,7 @@ pub struct RtcSessionPolicy {
     reconnect_grants_without_success_edge: u8,
     last_recovery_state: Option<RecoveryLedgerNarrativeState>,
     next_recovery_decision_ledger_id: u64,
+    last_seen_decoder_reset_family_coalesce_deferred_count: u64,
 }
 
 impl RtcSessionPolicy {
@@ -362,6 +361,7 @@ impl RtcSessionPolicy {
             reconnect_grants_without_success_edge: 0,
             last_recovery_state: None,
             next_recovery_decision_ledger_id: 0,
+            last_seen_decoder_reset_family_coalesce_deferred_count: 0,
         }
     }
 }
@@ -379,6 +379,7 @@ impl SessionPolicyHook for RtcSessionPolicy {
     fn on_snapshot(&mut self, snapshot: &TransportSnapshot) -> Vec<SessionCommand> {
         self.refresh_escalation_profile();
         self.sync_recovery_epoch();
+        self.sync_decoder_reset_family_coalesce_deferred_feedback(snapshot);
         self.refresh_successful_media_edge();
         let observed_at_ms = Self::resolve_policy_observed_at_ms(snapshot);
         let orchestration = build_rtc_session_policy_orchestration_input(
@@ -436,6 +437,20 @@ impl SessionPolicyHook for RtcSessionPolicy {
 }
 
 impl RtcSessionPolicy {
+    /// transport bridge 上报 decoder reset 同族合并 defer，回滚 escalation 侧 burst 误计。
+    fn sync_decoder_reset_family_coalesce_deferred_feedback(&mut self, snapshot: &TransportSnapshot) {
+        let count = snapshot.recovery.decoder_reset_family_coalesce_deferred_count;
+        if count <= self.last_seen_decoder_reset_family_coalesce_deferred_count {
+            return;
+        }
+        let delta = count - self.last_seen_decoder_reset_family_coalesce_deferred_count;
+        self.last_seen_decoder_reset_family_coalesce_deferred_count = count;
+        for _ in 0..delta {
+            self.recovery_coordinator
+                .rollback_decoder_reset_burst_after_transport_family_defer();
+        }
+    }
+
     fn resolve_twcc_warmup_state(&self) -> TwccWarmupState {
         RuntimeStatsSink::read_shared(self.runtime_stats.as_ref(), |stats| {
             if stats.session_target_type != Some(xbxengine_protocol::XbxEngineTargetTypeDto::Cloud)
@@ -508,12 +523,7 @@ impl RtcSessionPolicy {
     }
 
     fn pre_first_frame_reconnect_fallback_ms(&self) -> f64 {
-        // 云侧首帧前容忍更长 no-progress 窗口，降低误触发重连。
-        if self.is_cloud_gaming_profile() {
-            CLOUD_RECOVERY_PRE_FIRST_FRAME_RECONNECT_FALLBACK_MS
-        } else {
-            RECOVERY_PRE_FIRST_FRAME_RECONNECT_FALLBACK_MS
-        }
+        resolve_recovery_profile(self.runtime_stats.as_ref()).pre_first_frame_reconnect_fallback_ms()
     }
 
     fn liveness_reconnect_attempt_limit(&self) -> u8 {
@@ -560,6 +570,7 @@ impl RtcSessionPolicy {
             self.reconnect_grants_without_success_edge = 0;
             self.last_recovery_state = None;
             self.next_recovery_decision_ledger_id = 0;
+            self.last_seen_decoder_reset_family_coalesce_deferred_count = 0;
         }
     }
 

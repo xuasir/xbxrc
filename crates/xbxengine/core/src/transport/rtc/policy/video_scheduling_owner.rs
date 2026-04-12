@@ -936,12 +936,18 @@ impl VideoSchedulingOwner {
         if !track_attached || !track_has_video_bytes {
             return false;
         }
-        matches!(
+        // 除显式 wait-keyframe 外，ingress 等关键帧 / gap 修复噪声也应保持首帧前保护，避免时间线先滑到 gap-* 即失效。
+        is_ingress_waiting_keyframe(
+            input.effective_chain_state(),
+            input.effective_chain_reason(),
+            input.effective_source_event(),
+        ) || matches!(
             input.effective_source_event(),
             Some(
                 "frame-inspection-rejected-await-keyframe"
                     | "frame-inspection-rejected-trigger-recovery-keyframe"
                     | "frame-await-recovery-keyframe"
+                    | "gap-repair-in-flight"
             )
         )
     }

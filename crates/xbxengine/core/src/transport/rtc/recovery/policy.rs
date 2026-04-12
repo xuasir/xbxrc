@@ -60,6 +60,14 @@ impl RecoveryScenarioProfile {
             keyframe_upgrade_min_delay_ms: self.escalation_keyframe_upgrade_min_delay_ms,
         }
     }
+
+    /// 首帧前「容忍无出图」窗口上限（毫秒），与 `session::policy` 昂贵恢复门控一致：云 35s，其余 15s。
+    pub(crate) fn pre_first_frame_reconnect_fallback_ms(self) -> f64 {
+        match self.kind {
+            ScenarioPolicyProfileKind::CloudGaming => 35_000.0,
+            _ => 15_000.0,
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug)]

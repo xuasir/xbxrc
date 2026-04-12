@@ -81,6 +81,21 @@ fn cloud_uses_less_throttled_recovery_profile() {
     );
 }
 
+#[test]
+fn recovery_profile_pre_first_frame_fallback_ms_matches_session_policy() {
+    let mut home = XbxEngineMediaRuntimeStats::default();
+    home.session_target_type = Some(XbxEngineTargetTypeDto::Home);
+    home.transport_path = Some("Direct (host->host)".to_string());
+    let home_profile = resolve_recovery_profile(&Mutex::new(home));
+    assert_eq!(home_profile.pre_first_frame_reconnect_fallback_ms(), 15_000.0);
+
+    let mut cloud = XbxEngineMediaRuntimeStats::default();
+    cloud.session_target_type = Some(XbxEngineTargetTypeDto::Cloud);
+    cloud.transport_path = Some("Direct (host->host)".to_string());
+    let cloud_profile = resolve_recovery_profile(&Mutex::new(cloud));
+    assert_eq!(cloud_profile.pre_first_frame_reconnect_fallback_ms(), 35_000.0);
+}
+
 fn healthy_twcc_observation(now_ms: f64) -> XbxEngineVideoTwccObservation {
     XbxEngineVideoTwccObservation {
         observation_id: 1,
@@ -1040,6 +1055,7 @@ fn first_frame_acquisition_transport_await_probe_stays_local() {
     stats.video_present_epoch = 0;
     stats.video_present_submit_count_total = 0;
     stats.latest_video_packet_arrival_time_ms = Some(now_ms - 8.0);
+    stats.first_video_packet_arrival_time_ms = Some(now_ms - 100.0);
     stats.latest_video_track_status = Some(XbxEngineVideoTrackStatus {
         state: "remoteTrackAttached".to_string(),
         video_width: Some(1920),
@@ -1160,6 +1176,7 @@ fn first_frame_acquisition_transport_await_stall_still_stays_in_keyframe_domain(
     stats.video_present_submit_count_total = 0;
     stats.video_decoder_stalled = Some(true);
     stats.video_renderer_stalled = Some(true);
+    stats.first_video_packet_arrival_time_ms = Some(now_ms - 4_000.0);
     stats.latest_video_track_status = Some(XbxEngineVideoTrackStatus {
         state: "remoteTrackAttached".to_string(),
         video_width: Some(1920),
@@ -1263,6 +1280,7 @@ fn startup_non_idr_transport_await_probe_stays_local_before_first_frame() {
     stats.video_present_epoch = 0;
     stats.video_present_submit_count_total = 0;
     stats.latest_video_packet_arrival_time_ms = Some(now_ms - 8.0);
+    stats.first_video_packet_arrival_time_ms = Some(now_ms - 100.0);
     stats.video_decoder_stalled = Some(false);
     stats.video_renderer_stalled = Some(false);
     stats.latest_video_track_status = Some(XbxEngineVideoTrackStatus {
@@ -1389,6 +1407,7 @@ fn first_frame_acquisition_missing_pps_packet_seen_stays_local_before_first_fram
     stats.video_present_epoch = 0;
     stats.video_present_submit_count_total = 0;
     stats.latest_video_packet_arrival_time_ms = Some(now_ms - 8.0);
+    stats.first_video_packet_arrival_time_ms = Some(now_ms - 100.0);
     stats.video_decoder_stalled = Some(false);
     stats.video_renderer_stalled = Some(false);
     stats.latest_video_track_status = Some(XbxEngineVideoTrackStatus {
@@ -5383,5 +5402,29 @@ fn transport_recovered_late_does_not_inherit_severe_deadline_reconnect_counter()
     assert!(matches!(
         recovered_late.decision.action,
         RecoveryAction::RequestKeyframe | RecoveryAction::CooldownSuppressed
+    ));
+}
+
+#[test]
+fn coordinator_burst_rollback_warranted_covers_transport_await_suppress_pairs() {
+    assert!(RecoveryCoordinator::coordinator_burst_rollback_warranted(
+        RecoveryAction::RequestKeyframe,
+        RecoveryAction::WaitForBurst,
+    ));
+    assert!(!RecoveryCoordinator::coordinator_burst_rollback_warranted(
+        RecoveryAction::RequestKeyframe,
+        RecoveryAction::CooldownSuppressed,
+    ));
+    assert!(RecoveryCoordinator::coordinator_burst_rollback_warranted(
+        RecoveryAction::RequestKeyframe,
+        RecoveryAction::CoalescedDecoderResetInFlight,
+    ));
+    assert!(RecoveryCoordinator::coordinator_burst_rollback_warranted(
+        RecoveryAction::RequestDecoderReset,
+        RecoveryAction::CoalescedDecoderResetInFlight,
+    ));
+    assert!(!RecoveryCoordinator::coordinator_burst_rollback_warranted(
+        RecoveryAction::WaitForBurst,
+        RecoveryAction::WaitForBurst,
     ));
 }

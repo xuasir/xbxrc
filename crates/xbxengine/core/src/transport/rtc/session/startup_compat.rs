@@ -77,7 +77,7 @@ pub(crate) fn should_hold_pre_first_frame_display_supply_degraded(
     reason_label: &str,
     observed_at_ms: f64,
     runtime_stats: &Mutex<XbxEngineMediaRuntimeStats>,
-    _pre_first_frame_reconnect_fallback_ms: f64,
+    pre_first_frame_reconnect_fallback_ms: f64,
 ) -> bool {
     if source != RecoveryIntentSource::Supply
         || reason_label != "displaySupplyDegraded"
@@ -96,7 +96,13 @@ pub(crate) fn should_hold_pre_first_frame_display_supply_degraded(
         if track.state != "remoteTrackAttached" || track.video_bytes_total == 0 {
             return false;
         }
-        let _ = observed_at_ms;
+        if !pre_first_frame_fallback_within_window(
+            stats,
+            observed_at_ms,
+            pre_first_frame_reconnect_fallback_ms,
+        ) {
+            return false;
+        }
         stats.latest_video_host_present_time_ms.is_none()
             && stats.latest_video_decode_ok_time_ms.is_none()
     })
@@ -106,7 +112,7 @@ pub(crate) fn should_hold_pre_first_frame_display_supply_degraded(
 fn first_frame_acquisition_window_active(
     runtime_stats: &Mutex<XbxEngineMediaRuntimeStats>,
     observed_at_ms: f64,
-    _pre_first_frame_reconnect_fallback_ms: f64,
+    pre_first_frame_reconnect_fallback_ms: f64,
     _require_startup_surface: bool,
 ) -> bool {
     RuntimeStatsSink::read_shared(runtime_stats, |stats| {
@@ -119,11 +125,30 @@ fn first_frame_acquisition_window_active(
         if track.state != "remoteTrackAttached" || track.video_bytes_total == 0 {
             return false;
         }
-        let _ = observed_at_ms;
+        if !pre_first_frame_fallback_within_window(
+            stats,
+            observed_at_ms,
+            pre_first_frame_reconnect_fallback_ms,
+        ) {
+            return false;
+        }
         stats.latest_video_host_present_time_ms.is_none()
             && stats.latest_video_decode_ok_time_ms.is_none()
     })
     .unwrap_or(false)
+}
+
+/// 首帧前抑制/保护：以首路视频包到达时间为锚，超过 `pre_first_frame_reconnect_fallback_ms` 即失效。
+/// 无 `first_video_packet_arrival_time_ms` 时不视为「可无限延长」窗口（避免永久压制恢复）。
+fn pre_first_frame_fallback_within_window(
+    stats: &XbxEngineMediaRuntimeStats,
+    observed_at_ms: f64,
+    pre_first_frame_reconnect_fallback_ms: f64,
+) -> bool {
+    match stats.first_video_packet_arrival_time_ms {
+        Some(t0) => (observed_at_ms - t0).max(0.0) <= pre_first_frame_reconnect_fallback_ms,
+        None => false,
+    }
 }
 
 fn is_first_frame_acquisition_reason_label(value: &str) -> bool {

@@ -1338,6 +1338,44 @@ fn startup_bootstrap_non_idr_stays_priming_and_does_not_emit_recovery_intent() {
 }
 
 #[test]
+fn startup_bootstrap_pending_with_gap_repair_in_flight_stays_priming_without_recovery_intent() {
+    let mut owner = VideoSchedulingOwner::new();
+    let mut bootstrap_pending = input(
+        ConnectionLifecycleStateFact::Connected,
+        Some("transportAwaitRecoveryKeyframe"),
+        SchedulingDemandSignal {
+            no_pending_pressure_level: Some("critical".to_string()),
+            no_pending_streak: Some(180),
+            present_age_ms: None,
+            decode_age_ms: None,
+            video_renderer_stalled: false,
+            host_display_tick_epoch: Some(120),
+            host_present_epoch: Some(0),
+            host_cadence_phase: Some("priming".to_string()),
+            present_submit_count_total: Some(0),
+            ..SchedulingDemandSignal::default()
+        },
+        Some("recovering"),
+        Some("gap-repair-in-flight"),
+        Some("remoteTrackAttached"),
+        Some(20_000),
+        1_100.0,
+        1,
+    );
+    bootstrap_pending.latest_h264_bootstrap_ready = Some(false);
+    bootstrap_pending.latest_h264_bootstrap_reject_reason = Some("NonIdrVcl".to_string());
+    bootstrap_pending.latest_h264_committed_sps_present = Some(true);
+    bootstrap_pending.latest_h264_committed_pps_present = Some(true);
+    bootstrap_pending.latest_h264_delta_continuation_ready = Some(true);
+    bootstrap_pending.latest_h264_observed_at_ms = Some(1_099.0);
+
+    let output = owner.evaluate(&bootstrap_pending);
+    assert_eq!(output.state, VideoSchedulingOwnerState::Priming);
+    assert_eq!(output.health, VideoHealthContract::Startup);
+    assert!(output.recovery_intent.is_none());
+}
+
+#[test]
 fn first_transport_await_probe_with_clean_anchor_stays_out_of_rebuilding_supply() {
     let mut owner = VideoSchedulingOwner::new();
     let mut priming = input(

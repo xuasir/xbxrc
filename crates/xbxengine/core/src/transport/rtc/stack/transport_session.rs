@@ -10,8 +10,8 @@ use crate::transport::rtc::executor::peer::{
     stage_reconnect_candidate, StageReconnectCandidateOutcome,
 };
 use crate::transport::rtc::facts::{
-    CommandResultFact, CommandResultStatus, SessionCommand, TimerFact, TransportCommand,
-    TransportFact,
+    CommandResultFact, CommandResultStatus, RecoveryEscalationFact, SessionCommand, TimerFact,
+    TransportCommand, TransportFact,
 };
 use crate::transport::rtc::recovery::contract::{
     derive_gap_severity_with_episode_stall, frame_value_from_gap_severity,
@@ -123,6 +123,21 @@ fn has_transport_await_invalid_keyframe_response_after_decoder_reset(
     if episode.request_reason.as_deref() != Some("transportAwaitRecoveryKeyframe") {
         return false;
     }
+    let Some(inspection) = stats.latest_h264_inspection_observation.as_ref() else {
+        return false;
+    };
+    if inspection.observed_at_ms < attempt_at_ms
+        || (now_ms - inspection.observed_at_ms).max(0.0) > INVALID_KEYFRAME_RESPONSE_FRESH_MS
+    {
+        return false;
+    }
+    // NonIdrVcl：reset 后只要 inspection 在 attempt 之后且仍新鲜，即可认定无效响应，
+    // 不必等待 packet-seen/decoded episode 边沿（与 keyframe 占坑侧 invalid-bootstrap 语义对齐）。
+    if !inspection.bootstrap_ready
+        && inspection.bootstrap_reject_reason.as_deref() == Some("NonIdrVcl")
+    {
+        return true;
+    }
     let packet_seen_without_decode = episode.status == "packet-seen"
         && episode.first_keyframe_decoded_at_ms.is_none()
         && episode
@@ -139,20 +154,11 @@ fn has_transport_await_invalid_keyframe_response_after_decoder_reset(
     if !(packet_seen_without_decode || decoded_without_clean_anchor) {
         return false;
     }
-    let Some(inspection) = stats.latest_h264_inspection_observation.as_ref() else {
-        return false;
-    };
-    if inspection.observed_at_ms < attempt_at_ms
-        || (now_ms - inspection.observed_at_ms).max(0.0) > INVALID_KEYFRAME_RESPONSE_FRESH_MS
-    {
-        return false;
-    }
     !inspection.bootstrap_ready
         && matches!(
             inspection.bootstrap_reject_reason.as_deref(),
             Some(
-                "NonIdrVcl"
-                    | "bootstrapMissingSps"
+                "bootstrapMissingSps"
                     | "bootstrapMissingPps"
                     | "inspectionRejectInvalidSliceHeader"
             )
@@ -405,6 +411,15 @@ impl<'a> RtcTransportSessionBridge<'a> {
                             },
                             family_semantic_detail,
                         );
+                        if reason.contains(RECOVERY_COMMAND_REASON_SAME_FAMILY_DECODER_RESET_COALESCED)
+                        {
+                            if let Ok(mut pending) = self.transport_fact_sink.lock() {
+                                pending.push(TransportFact::Recovery(
+                                    RecoveryEscalationFact::DecoderResetFamilyCoalesceDeferred,
+                                ));
+                            }
+                            self.drain_transport_fact_sink();
+                        }
                         return;
                     }
                     RecoveryCommandFamilyDecision::Refresh { detail } => Some(detail.clone()),
@@ -1595,6 +1610,136 @@ mod tests {
         }));
     }
 
+    /// decoder reset 后新鲜 NonIdrVcl：episode 尚未进入 packet-seen/decoded 也应解除 decoderResetInFlight，
+    /// 避免同族合并无限压制后续 reset。
+    #[test]
+    fn invalid_transport_await_non_idr_vcl_unlocks_decoder_reset_gate_without_packet_seen_episode(
+    ) {
+        let now_ms = crate::transport::rtc::stats::now_ms_f64();
+        let mut stats = XbxEngineMediaRuntimeStats::default();
+        stats.transport_recovery_epoch = 5;
+        stats.latest_video_decoder_reset_time_ms = Some(now_ms - 70.0);
+        stats.latest_video_escalation_observation = Some(XbxEngineVideoEscalationObservation {
+            observation_id: 41,
+            reason: "transportAwaitRecoveryKeyframe".to_string(),
+            action: "requestDecoderReset".to_string(),
+            recovery_stage: "rebuilding-supply".to_string(),
+            recovery_chain_value: "anchor".to_string(),
+            recovery_failure_cost: "medium".to_string(),
+            recovery_window_source: "hard-fallback-window".to_string(),
+            observed_at_ms: now_ms - 60.0,
+        });
+        stats.latest_keyframe_request_episode =
+            Some(crate::XbxEngineKeyframeRequestEpisodeObservation {
+                episode_id: 19,
+                request_reason: Some("transportAwaitRecoveryKeyframe".to_string()),
+                request_kind: Some("pli".to_string()),
+                status: "sent".to_string(),
+                status_detail: None,
+                requested_at_ms: now_ms - 260.0,
+                sent_at_ms: Some(now_ms - 220.0),
+                deadline_at_ms: Some(now_ms + 500.0),
+                transport_detail: None,
+                first_video_packet_at_ms: None,
+                first_video_packet_rtp_timestamp: None,
+                first_video_packet_is_keyframe: None,
+                first_keyframe_packet_at_ms: None,
+                first_keyframe_decoded_at_ms: None,
+                response_rtp_timestamp: None,
+                response_frame_seq: None,
+                response_verdict: None,
+            });
+        stats.latest_h264_inspection_observation =
+            Some(crate::XbxEngineH264InspectionObservation {
+                observation_id: 78,
+                frame_rtp_timestamp: Some(7_002),
+                nal_types: vec!["SliceLayerWithoutPartitioningNonIdr".to_string()],
+                nal_count: 1,
+                vcl_nal_count: 1,
+                has_inband_sps: false,
+                has_inband_pps: false,
+                committed_sps_present: true,
+                committed_pps_present: true,
+                slice_headers_valid: true,
+                delta_continuation_ready: true,
+                parameter_sets_changed: false,
+                config_changed: false,
+                is_idr: false,
+                sample_width: Some(1920),
+                sample_height: Some(1080),
+                bootstrap_ready: false,
+                bootstrap_reject_reason: Some("NonIdrVcl".to_string()),
+                admission_accepted: true,
+                observed_at_ms: now_ms - 45.0,
+            });
+        stats.latest_recovery_decision_ledger =
+            Some(crate::XbxEngineRecoveryDecisionLedgerObservation {
+                decision_id: 43,
+                state_before: "recovering".to_string(),
+                state_after: "recovering".to_string(),
+                input_signal: "transportAwaitRecoveryKeyframe:transportAwaitRecoveryKeyframe"
+                    .to_string(),
+                gate_result: "pass".to_string(),
+                action_selected: "requestDecoderReset".to_string(),
+                frame_value: None,
+                gap_severity: None,
+                recovery_episode_stage: None,
+                recovery_episode_progress_at_ms: None,
+                coalescing_mode: None,
+                unlock_reason: None,
+                preempt_reason: None,
+                recovery_primary_action: None,
+                budget_before: None,
+                budget_after: None,
+                trigger_observation_label: None,
+                trigger_observation_summary: None,
+                command_result: None,
+                command_detail: None,
+                observed_at_ms: now_ms,
+            });
+        stats.recent_recovery_decision_ledgers =
+            vec![stats.latest_recovery_decision_ledger.clone().unwrap()];
+
+        let runtime_stats = Arc::new(Mutex::new(stats));
+        let pending_runtime_recovery_action = Arc::new(Mutex::new(None));
+        let (tx, rx) = mpsc::sync_channel(1);
+        let handle = Arc::new(DecodeActorHandle::from_test_sender(tx));
+        let bridge = build_bridge_with_local_decoder_reset_handle(
+            runtime_stats.clone(),
+            pending_runtime_recovery_action,
+            Arc::new(Mutex::new(Some(handle))),
+        );
+
+        bridge.apply_transport_session_command(SessionCommand::LocalDecoderReset {
+            observation_id: 43,
+            reason: "transportAwaitRecoveryKeyframe".to_string(),
+        });
+
+        let msg = rx.recv().expect("decoder reset should proceed");
+        match msg {
+            DecodeMsg::LocalDecoderReset { reason, .. } => {
+                assert_eq!(reason, "recoveryCommand:transportAwaitRecoveryKeyframe");
+            }
+            _ => panic!("unexpected decode message"),
+        }
+
+        let snapshot = runtime_stats.lock().expect("runtime stats lock");
+        let ledger = snapshot
+            .latest_recovery_decision_ledger
+            .as_ref()
+            .expect("ledger");
+        assert!(
+            ledger.unlock_reason.as_deref() == Some("decoderResetInvalidRecoveryResponse")
+                || ledger.unlock_reason.as_deref() == Some("bootstrapRejected:invalidBootstrap"),
+            "unexpected unlock_reason: {:?}",
+            ledger.unlock_reason
+        );
+        assert_eq!(ledger.command_result.as_deref(), Some("succeeded"));
+        assert!(ledger.command_detail.as_deref().is_some_and(|detail| {
+            !detail.contains("sameFamilyCoalesced:decoderResetInFlight")
+        }));
+    }
+
     #[test]
     fn reconnect_candidate_records_escalation_observation_when_staged() {
         let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
@@ -1812,6 +1957,8 @@ mod tests {
     fn decoded_keyframe_without_clean_anchor_does_not_hold_family_gate_after_hold_window() {
         // 模拟：关键帧已解码，但没有 clean anchor 提交，且已超过短 hold 窗口。
         // 期望：新的 keyframe 请求不应被 same-family in-flight 长期压制。
+        // 占坑判定先要求 anchor 仍在 RECOVERY_COMMAND_FAMILY_IN_FLIGHT_WINDOW_MS 内，
+        // 否则不会进入 decoded hold 分支；时间轴需落在窗口内才能测「hold 过期解锁」。
         let now_ms = crate::transport::rtc::stats::now_ms_f64();
         let mut stats = XbxEngineMediaRuntimeStats::default();
         stats.transport_recovery_epoch = 3;
@@ -1822,20 +1969,47 @@ mod tests {
                 request_kind: Some("pli".to_string()),
                 status: "decoded".to_string(),
                 status_detail: None,
-                requested_at_ms: now_ms - 2_000.0,
-                sent_at_ms: Some(now_ms - 1_500.0),
+                requested_at_ms: now_ms - 800.0,
+                sent_at_ms: Some(now_ms - 600.0),
                 deadline_at_ms: Some(now_ms + 1_000.0),
                 transport_detail: None,
-                first_video_packet_at_ms: Some(now_ms - 1_480.0),
+                first_video_packet_at_ms: Some(now_ms - 580.0),
                 first_video_packet_rtp_timestamp: Some(123),
                 first_video_packet_is_keyframe: Some(true),
-                first_keyframe_packet_at_ms: Some(now_ms - 1_480.0),
-                first_keyframe_decoded_at_ms: Some(now_ms - 1_200.0),
+                first_keyframe_packet_at_ms: Some(now_ms - 580.0),
+                // 解码点足够早，使 (now - decoded) > KEYFRAME_DECODED_PENDING_COMMIT_HOLD_MS
+                first_keyframe_decoded_at_ms: Some(now_ms - 900.0),
                 response_rtp_timestamp: Some(123),
                 response_frame_seq: Some(456),
                 response_verdict: Some("pending".to_string()),
             });
         // 未提交 clean anchor：video_anchor_clean_epoch=None
+        stats.latest_recovery_decision_ledger =
+            Some(crate::XbxEngineRecoveryDecisionLedgerObservation {
+                decision_id: 22,
+                state_before: "detecting".to_string(),
+                state_after: "detecting".to_string(),
+                input_signal: "none".to_string(),
+                gate_result: "pass".to_string(),
+                action_selected: "requestKeyframe".to_string(),
+                frame_value: None,
+                gap_severity: None,
+                recovery_episode_stage: None,
+                recovery_episode_progress_at_ms: None,
+                coalescing_mode: None,
+                unlock_reason: None,
+                preempt_reason: None,
+                recovery_primary_action: None,
+                budget_before: None,
+                budget_after: None,
+                trigger_observation_label: None,
+                trigger_observation_summary: None,
+                command_result: None,
+                command_detail: None,
+                observed_at_ms: now_ms,
+            });
+        stats.recent_recovery_decision_ledgers =
+            vec![stats.latest_recovery_decision_ledger.clone().unwrap()];
 
         let runtime_stats = Arc::new(Mutex::new(stats));
         let pending_runtime_recovery_action = Arc::new(Mutex::new(None));
@@ -1854,7 +2028,19 @@ mod tests {
             .as_ref()
             .expect("episode should exist");
         assert_eq!(episode.episode_id, 22);
-        assert_ne!(episode.status, "deferred");
+        // transport 在无 peer/control 时仍会 transportDeferred；家族门控语义看 ledger（与 non_idr 用例一致）。
+        let ledger = snapshot
+            .latest_recovery_decision_ledger
+            .as_ref()
+            .expect("ledger");
+        assert_eq!(
+            ledger.unlock_reason.as_deref(),
+            Some("decodedPendingCommitExpired")
+        );
+        assert_ne!(ledger.coalescing_mode.as_deref(), Some("Merge"));
+        assert!(ledger.command_detail.as_deref().map_or(true, |detail| {
+            !detail.contains("sameFamilyCoalesced:keyframeInFlight")
+        }));
     }
 
     #[test]
@@ -2396,8 +2582,9 @@ mod tests {
                 request_kind: Some("pli".to_string()),
                 status: "sent".to_string(),
                 status_detail: None,
-                requested_at_ms: now_ms - 2_000.0,
-                sent_at_ms: Some(now_ms - 1_500.0),
+                requested_at_ms: now_ms - 1_000.0,
+                // 须在 in-flight 窗口内且超过 KEYFRAME_NO_PROGRESS_STALL_MS，才能命中 episodeStalledNoProgress
+                sent_at_ms: Some(now_ms - 920.0),
                 deadline_at_ms: Some(now_ms + 1_000.0),
                 transport_detail: None,
                 first_video_packet_at_ms: None,
@@ -2472,7 +2659,6 @@ mod tests {
             .as_ref()
             .expect("episode should exist");
         assert_eq!(episode.episode_id, 22);
-        assert_ne!(episode.status, "deferred");
 
         let ledger = snapshot
             .latest_recovery_decision_ledger
@@ -2484,6 +2670,10 @@ mod tests {
         );
         assert_eq!(ledger.recovery_episode_stage.as_deref(), Some("Stalled"));
         assert_eq!(ledger.gap_severity.as_deref(), Some("RecoveryBlocked"));
+        assert_ne!(ledger.coalescing_mode.as_deref(), Some("Merge"));
+        assert!(ledger.command_detail.as_deref().map_or(true, |detail| {
+            !detail.contains("sameFamilyCoalesced:keyframeInFlight")
+        }));
     }
 
     // 主 gap 断言矩阵（对应 RFC：24573/30191/35010/41446）
@@ -2673,8 +2863,8 @@ mod tests {
                 request_kind: Some("pli".to_string()),
                 status: "sent".to_string(),
                 status_detail: None,
-                requested_at_ms: now_ms - 2_000.0,
-                sent_at_ms: Some(now_ms - 1_500.0),
+                requested_at_ms: now_ms - 1_000.0,
+                sent_at_ms: Some(now_ms - 920.0),
                 deadline_at_ms: Some(now_ms + 800.0),
                 transport_detail: None,
                 first_video_packet_at_ms: None,

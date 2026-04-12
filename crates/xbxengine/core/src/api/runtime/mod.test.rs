@@ -894,6 +894,7 @@ fn build_recovering_snapshot(
             successful_action_count: 0,
             failed_action_count: 0,
             last_observed_at_ms: Some(now_ms),
+            ..Default::default()
         },
         BweProjection {
             latest_rtt_ms: Some(220.0),
@@ -933,6 +934,7 @@ fn build_connecting_startup_snapshot(
             successful_action_count: 0,
             failed_action_count: 0,
             last_observed_at_ms: Some(now_ms),
+            ..Default::default()
         },
         BweProjection {
             latest_rtt_ms: Some(rtt_ms),
@@ -4395,6 +4397,7 @@ fn runtime_home_hard_disconnect_candidate_reaches_reconnect_restart() {
             successful_action_count: 0,
             failed_action_count: 0,
             last_observed_at_ms: Some(12_020.0),
+            ..Default::default()
         },
         BweProjection::default(),
         DiagnosticsProjection::default(),

@@ -1,4 +1,6 @@
-use crate::transport::rtc::facts::{CommandResultStatus, MediaFact, TransportFact};
+use crate::transport::rtc::facts::{
+    CommandResultStatus, MediaFact, RecoveryEscalationFact, TransportFact,
+};
 
 #[derive(Clone, Debug, PartialEq, Default)]
 pub struct RecoveryProjection {
@@ -7,6 +9,8 @@ pub struct RecoveryProjection {
     pub successful_action_count: u64,
     pub failed_action_count: u64,
     pub last_observed_at_ms: Option<f64>,
+    /// 由 `TransportFact::Recovery(DecoderResetFamilyCoalesceDeferred)` 累加，供 policy 回滚 burst。
+    pub decoder_reset_family_coalesce_deferred_count: u64,
 }
 
 impl RecoveryProjection {
@@ -33,6 +37,11 @@ impl RecoveryProjection {
                         self.failed_action_count = self.failed_action_count.saturating_add(1);
                     }
                 }
+            }
+            TransportFact::Recovery(RecoveryEscalationFact::DecoderResetFamilyCoalesceDeferred) => {
+                self.decoder_reset_family_coalesce_deferred_count = self
+                    .decoder_reset_family_coalesce_deferred_count
+                    .saturating_add(1);
             }
             _ => {}
         }

@@ -15,7 +15,8 @@ use crate::transport::rtc::recovery::decoder_backend_failure::{
 };
 use crate::transport::rtc::recovery::escalation::{
     KeyframeTransportFeedback, RecoveryAction, RecoveryActionBudgetState,
-    VideoEscalationController, VideoEscalationDecision, VideoEscalationReason,
+    VideoEscalationBurstRollbackSnapshot, VideoEscalationController, VideoEscalationDecision,
+    VideoEscalationReason,
 };
 use crate::transport::rtc::recovery::hard_stall::resolve_persistent_stall_recovery;
 use crate::transport::rtc::recovery::nack_outcome::{
@@ -24,7 +25,8 @@ use crate::transport::rtc::recovery::nack_outcome::{
 use crate::transport::rtc::recovery::policy::RecoveryScenarioProfile;
 use crate::transport::rtc::recovery::repeat_suppression::resolve_recent_repeat_suppression;
 use crate::transport::rtc::recovery::runtime_state::{
-    has_fresh_media_output, recovery_stage_label_from_stats, resolve_recovery_profile, unix_now_ms,
+    has_fresh_media_output, recovery_stage_label_from_stats, resolve_recovery_profile,
+    resolve_runtime_recovery_profile, unix_now_ms,
 };
 #[cfg(test)]
 use crate::transport::rtc::recovery::runtime_state::{
@@ -513,6 +515,11 @@ impl RecoveryCoordinator {
         self.last_synced_reconnect_observation_id = Some(observation_id);
     }
 
+    pub(crate) fn rollback_decoder_reset_burst_after_transport_family_defer(&mut self) {
+        self.escalation_controller
+            .rollback_decoder_reset_burst_after_transport_family_defer();
+    }
+
     pub fn propose_lifecycle_reconnect(
         &mut self,
         reason_label: String,
@@ -630,32 +637,44 @@ impl RecoveryCoordinator {
                 self.stream_started_at,
                 self.startup_grace,
             );
-        let mut escalation_decision = if phase == SessionPhase::Startup
+        let (mut escalation_decision, burst_rollback_snap): (
+            VideoEscalationDecision,
+            Option<VideoEscalationBurstRollbackSnapshot>,
+        ) = if phase == SessionPhase::Startup
             && should_suppress_startup_escalation(
                 &reason,
                 self.stream_started_at,
                 self.startup_grace,
             ) {
-            self.escalation_controller
-                .suppressed(RecoveryAction::StartupGraceSuppressed)
+            (
+                self.escalation_controller
+                    .suppressed(RecoveryAction::StartupGraceSuppressed),
+                None,
+            )
         } else if signal_domain == RecoverySignalDomain::Connectivity
             && reason != VideoEscalationReason::LifecycleRecovering
             && Self::should_absorb_connectivity_jitter(runtime_stats, reason, observed_at_ms)
         {
             // 小幅连接域抖动下，若本地 media edge 仍持续推进，则先吸收在本地观察层，
             // 避免将 transient deadline/sample-loss 直接推入 reconnect 升级计数。
-            self.escalation_controller
-                .suppressed(RecoveryAction::CooldownSuppressed)
+            (
+                self.escalation_controller
+                    .suppressed(RecoveryAction::CooldownSuppressed),
+                None,
+            )
         } else {
-            self.escalation_controller.on_reason_with_epoch_policy(
+            let snap = self.escalation_controller.capture_burst_rollback_snapshot();
+            let decision = self.escalation_controller.on_reason_with_epoch_policy(
                 reason,
                 recovery_epoch,
                 signal_domain == RecoverySignalDomain::Connectivity,
                 allow_transport_await_stage_escalation,
                 allow_wait_keyframe_stage_escalation,
                 allow_reconfigure_stage_escalation,
-            )
+            );
+            (decision, Some(snap))
         };
+        let naive_action = escalation_decision.action;
         if reason == VideoEscalationReason::TransportAwaitRecoveryKeyframe
             && transport_await_bootstrap_in_flight_qualified
             && !transport_await_sustaining_shattered
@@ -829,6 +848,11 @@ impl RecoveryCoordinator {
                 observed_at_ms,
                 escalation_decision.action,
             );
+        }
+        if let Some(snap) = burst_rollback_snap {
+            if Self::coordinator_burst_rollback_warranted(naive_action, escalation_decision.action) {
+                self.escalation_controller.restore_burst_rollback_snapshot(snap);
+            }
         }
         let action = escalation_decision.action;
         if startup_fast_reset
@@ -1369,8 +1393,19 @@ impl RecoveryCoordinator {
         if !track_attached_with_video {
             return false;
         }
-        let _ = now_ms;
-        true
+        // 与 `session::startup_compat` 对齐：首帧前抑制有上限，避免永久挡住无效关键帧判定。
+        Self::transport_await_pre_first_frame_fallback_within_window(stats, now_ms)
+    }
+
+    fn transport_await_pre_first_frame_fallback_within_window(
+        stats: &XbxEngineMediaRuntimeStats,
+        observed_at_ms: f64,
+    ) -> bool {
+        let fallback_ms = resolve_runtime_recovery_profile(stats).pre_first_frame_reconnect_fallback_ms();
+        match stats.first_video_packet_arrival_time_ms {
+            Some(t0) => (observed_at_ms - t0).max(0.0) <= fallback_ms,
+            None => false,
+        }
     }
 
     fn constrain_transport_await_first_frame_action(
@@ -1804,6 +1839,11 @@ impl RecoveryCoordinator {
             .is_some_and(|inspection| {
                 inspection.observed_at_ms >= attempt_at_ms
                     && inspection.admission_accepted
+                    // admission 为 Accept 时 continuation 可能仍带 bootstrap_reject_reason（仅描述 AU 自举），
+                    // 不应与「尝试后仍不可用关键帧响应」混为一谈。
+                    && !(inspection.delta_continuation_ready
+                        && inspection.committed_sps_present
+                        && inspection.committed_pps_present)
                     && matches!(
                         inspection.bootstrap_reject_reason.as_deref(),
                         Some(
@@ -2756,6 +2796,37 @@ impl RecoveryCoordinator {
                 | RecoveryAction::WaitForBurst
                 | RecoveryAction::WaitForDecoderResetBurst
                 | RecoveryAction::StartupGraceSuppressed
+        )
+    }
+
+    /// `on_reason_with_epoch_policy` 已推进 burst 计数后，若 coordinator 将动作压成等待/合并，
+    /// 应回滚计数，避免“未执行仍吃 burst”。
+    ///
+    /// 注意：不把 `CooldownSuppressed` 纳入回滚——该结果常来自 soft reentry 等后处理，
+    /// 回滚会破坏连续 `propose` 下 escalation 累积状态，导致无法稳定得到 `CoalescedKeyframeInFlight`。
+    fn coordinator_burst_rollback_warranted(
+        naive: RecoveryAction,
+        final_action: RecoveryAction,
+    ) -> bool {
+        matches!(
+            (naive, final_action),
+            (RecoveryAction::RequestKeyframe, RecoveryAction::WaitForBurst)
+                | (
+                    RecoveryAction::RequestKeyframe,
+                    RecoveryAction::CoalescedDecoderResetInFlight
+                )
+                | (
+                    RecoveryAction::RequestDecoderReset,
+                    RecoveryAction::CoalescedDecoderResetInFlight
+                )
+                | (
+                    RecoveryAction::CoalescedKeyframeInFlight,
+                    RecoveryAction::CoalescedDecoderResetInFlight
+                )
+                | (
+                    RecoveryAction::CoalescedKeyframeInFlight,
+                    RecoveryAction::WaitForBurst
+                )
         )
     }
 }
