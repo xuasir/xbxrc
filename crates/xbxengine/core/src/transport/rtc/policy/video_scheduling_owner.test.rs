@@ -78,6 +78,8 @@ fn input(
         display_supply_thresholds: thresholds(),
         observed_at_ms,
         latest_anchor_candidate_ledger: None,
+        latest_decode_candidate_detail: None,
+        latest_decode_candidate_observed_at_ms: None,
     }
 }
 
@@ -2062,6 +2064,79 @@ fn sustaining_phase_stops_when_hard_rebuild_evidence_reappears() {
         state: crate::XbxEngineAnchorCandidateState::Rejected,
         source_event: "frame-await-recovery-keyframe".to_string(),
         failure_reason: Some(crate::XbxEngineAnchorCandidateFailureReason::GapExpiredDeadline),
+        observed_at_ms: 1_640.0,
+    });
+
+    let output = owner.evaluate(&pending);
+    assert_eq!(output.state, VideoSchedulingOwnerState::RebuildingSupply);
+    let intent = output.recovery_intent.expect("transport await intent");
+    assert_eq!(intent.reason_label, "transportAwaitRecoveryKeyframe");
+}
+
+#[test]
+fn sustaining_phase_stops_when_transport_await_reappears_after_clean_anchor() {
+    let mut owner = VideoSchedulingOwner::new();
+    let _ = owner.evaluate(&input(
+        ConnectionLifecycleStateFact::Connected,
+        Some("transportAwaitRecoveryKeyframe"),
+        SchedulingDemandSignal::default(),
+        Some("recovering"),
+        Some("frame-await-recovery-keyframe"),
+        Some("remoteTrackAttached"),
+        Some(64_000),
+        1_000.0,
+        7,
+    ));
+
+    let mut pending = input(
+        ConnectionLifecycleStateFact::Connected,
+        Some("transportAwaitRecoveryKeyframe"),
+        SchedulingDemandSignal {
+            no_pending_pressure_level: Some("critical".to_string()),
+            no_pending_streak: Some(180),
+            present_age_ms: Some(420.0),
+            decode_age_ms: Some(380.0),
+            video_renderer_stalled: false,
+            ..SchedulingDemandSignal::default()
+        },
+        Some("recovering"),
+        Some("frame-await-recovery-keyframe"),
+        Some("remoteTrackAttached"),
+        Some(120_000),
+        1_650.0,
+        7,
+    );
+    pending.clean_anchor_epoch = Some(7);
+    pending.clean_anchor_observed_at_ms = Some(1_250.0);
+    pending.clean_anchor_source_event = Some("chain-clean-keyframe-submitted".to_string());
+    pending.latest_anchor_candidate_ledger = Some(crate::XbxEngineAnchorCandidateLedger {
+        recovery_epoch: 7,
+        frame_rtp_timestamp: Some(7_001),
+        state: crate::XbxEngineAnchorCandidateState::SubmittedCleanAnchor,
+        source_event: "chain-clean-keyframe-submitted".to_string(),
+        failure_reason: None,
+        observed_at_ms: 1_255.0,
+    });
+    pending.latest_video_timeline_observation = Some(crate::XbxEngineVideoTimelineObservation {
+        observation_id: 77,
+        source_event: "gap-repair-in-flight".to_string(),
+        gap: Some(crate::XbxEngineVideoTimelineGapSnapshot {
+            state: "repair-in-flight".to_string(),
+            sequence: Some(701),
+            frame_rtp_timestamp: Some(70_100),
+            frame_importance: Some("keyframe".to_string()),
+            budget_importance: Some("reference".to_string()),
+            evidence_importance: Some("keyframe".to_string()),
+            gap_dependency_confidence: Some("bound".to_string()),
+            observed_at_ms: 1_640.0,
+        }),
+        frame: None,
+        chain: crate::XbxEngineVideoTimelineChainSnapshot {
+            state: "recovering".to_string(),
+            reason: Some("transportAwaitRecoveryKeyframe".to_string()),
+            chain_break_evidence: None,
+            observed_at_ms: 1_640.0,
+        },
         observed_at_ms: 1_640.0,
     });
 

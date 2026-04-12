@@ -278,6 +278,7 @@
           "healthy": "健康",
           "recovering": "恢复中",
           "displaySupplyStarved": "显示供给不足",
+          "hostPresentStalled": "Host 出图停滞",
           "waitingKeyframe": "等待关键帧",
           "stalled": "停滞"
         },
@@ -291,6 +292,7 @@
           "displaySupplyDegraded": "显示供给下降",
           "displayDegradedSteady": "稳定态轻微降级",
           "displaySupplyStarved": "显示供给不足",
+          "hostPresentStalled": "Host 出图停滞",
           "decoderBackendFailure": "解码后端故障",
           "sampleLoss": "传输采样丢失",
           "reconfigure": "重配置",
@@ -336,6 +338,7 @@
           "ingressWaitKeyframe": "入口等待关键帧",
           "displaySupplyCritical": "显示供给危急",
           "displaySupplyDegraded": "显示供给下降",
+          "hostPresentStalled": "Host 出图停滞",
           "adapterThinStream": "适配器薄码流",
           "adapterIdleTimeout": "适配器空闲超时"
         },

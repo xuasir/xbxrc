@@ -1050,6 +1050,8 @@ pub struct XbxEngineMediaRuntimeStats {
     pub host_no_pending_pressure_level: Option<String>,
     pub host_display_tick_epoch: u64,
     pub video_present_epoch: u64,
+    /// 由 session policy 写入：host present 停滞时仅允许关键帧进入解码。
+    pub host_present_stall_decode_throttle: bool,
     pub host_cadence_phase: Option<String>,
     pub video_present_descriptor_upload_mode: Option<String>,
     pub video_present_descriptor_metal_import_count_total: u64,
@@ -1220,6 +1222,7 @@ impl Default for XbxEngineMediaRuntimeStats {
             host_no_pending_pressure_level: None,
             host_display_tick_epoch: 0,
             video_present_epoch: 0,
+            host_present_stall_decode_throttle: false,
             host_cadence_phase: None,
             video_present_descriptor_upload_mode: None,
             video_present_descriptor_metal_import_count_total: 0,

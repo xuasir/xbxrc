@@ -116,7 +116,10 @@ fn should_project_runtime_owner_fallback(stats: &XbxEngineMediaRuntimeStats) -> 
         && has_visible_video_output(stats))
 }
 
-fn map_owner_state_to_video_health(owner_state: &str) -> String {
+fn map_owner_state_to_video_health(owner_state: &str, owner_reason: Option<&str>) -> String {
+    if owner_state == "supply-starved" && owner_reason == Some("hostPresentStalled") {
+        return "hostPresentStalled".to_string();
+    }
     match owner_state {
         "seeking-anchor" | "priming" => "priming".to_string(),
         "stable-serving" | "degraded-serving" => "healthy".to_string(),
@@ -500,9 +503,9 @@ pub fn build_xbxengine_stats(
     let recovery_rfc_stage = runtime_stats.and_then(|s| s.recovery_rfc_authoritative_stage.clone());
     let recovery_rfc_ceiling =
         runtime_stats.and_then(|s| s.recovery_rfc_authoritative_ceiling.clone());
-    let video_health = video_owner
-        .as_ref()
-        .map(|owner| map_owner_state_to_video_health(owner.state.as_str()));
+    let video_health = video_owner.as_ref().map(|owner| {
+        map_owner_state_to_video_health(owner.state.as_str(), owner.reason.as_deref())
+    });
     let observation_note = build_observation_note(runtime_stats);
     let transport_recovery_note = build_transport_recovery_note(runtime_stats);
     let repair_probe_note = build_repair_probe_note(runtime_stats);
@@ -822,6 +825,8 @@ pub fn build_xbxengine_stats(
         last_recovery_action_at_ms: snapshot.last_recovery_action_at_ms,
         last_recovery_reason: snapshot.last_recovery_reason.clone(),
         reconnect_trigger_source: snapshot.reconnect_trigger_source.clone(),
+        host_present_take_empty_streak: Some(snapshot.host_present_take_empty_streak),
+        host_present_latest_render_slot_at_ms: snapshot.host_present_latest_render_slot_at_ms,
         latest_decode_candidate_decision: runtime_stats.and_then(|stats| {
             stats
                 .latest_decode_candidate_decision
@@ -1872,6 +1877,7 @@ fn classify_stall_kind(
             "steady" => "none".to_string(),
             "degradedSteady" => "displayDegradedSteady".to_string(),
             "supplyStarved" => "displaySupplyStarved".to_string(),
+            "hostPresentStalled" => "hostPresentStalled".to_string(),
             "seekingAnchor" | "priming" => "startupPriming".to_string(),
             "rebuildingSupply" => "transportRecovering".to_string(),
             _ => {

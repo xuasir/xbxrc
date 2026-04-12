@@ -540,6 +540,67 @@ fn clean_keyframe_anchor_records_current_transport_recovery_epoch() {
     assert_eq!(stats.transport_recovery_episode_close_reason, None);
 }
 
+#[test]
+fn packet_loss_detected_does_not_reopen_episode_but_keyframe_request_does() {
+    let (_tx, rx) = tokio::sync::mpsc::channel(1);
+    let (transport_observation_tx, _transport_observation_rx) =
+        tokio::sync::mpsc::unbounded_channel();
+    let rtcp_port: Arc<dyn RtcRtcpSendPort> = Arc::new(NoopRtcpPort::default());
+    let runtime_stats = Arc::new(Mutex::new(crate::XbxEngineMediaRuntimeStats::default()));
+    let mut source = RtcVideoFrameSource::new(
+        rx,
+        transport_observation_tx,
+        rtcp_port,
+        runtime_stats.clone(),
+        16,
+        Duration::from_millis(10),
+        Duration::from_millis(20),
+        Duration::from_millis(200),
+        NackSchedulerConfig {
+            max_age_ms: 1_000,
+            frame_deadline_ms: 120,
+            burst_count: 2,
+            retry_interval_ms: 20,
+            max_retry_count: 3,
+        },
+    );
+
+    source.runtime_stats.begin_transport_recovery_episode(100.0);
+    source.record_clean_keyframe_anchor(140.0);
+    source
+        .runtime_stats
+        .complete_transport_recovery_after_stable_settle(180.0);
+
+    source.queue_transport_observation(TransportObservation::Loss(
+        TransportLossObservation::PacketLossDetected,
+    ));
+
+    {
+        let stats = runtime_stats.lock().expect("runtime stats lock");
+        assert_eq!(stats.transport_recovery_epoch, 1);
+        assert!(!stats.transport_recovery_episode_active);
+        assert_eq!(stats.video_anchor_clean_epoch, Some(1));
+        assert_eq!(
+            stats.video_anchor_clean_source_event.as_deref(),
+            Some("chain-clean-keyframe-submitted")
+        );
+    }
+
+    source.queue_transport_observation(TransportObservation::Loss(
+        TransportLossObservation::RecoveryKeyframeRequested,
+    ));
+
+    let stats = runtime_stats.lock().expect("runtime stats lock");
+    assert_eq!(stats.transport_recovery_epoch, 2);
+    assert!(stats.transport_recovery_episode_active);
+    assert!(stats
+        .transport_recovery_episode_opened_at_ms
+        .is_some_and(|opened_at_ms| opened_at_ms >= 180.0));
+    assert_eq!(stats.video_anchor_clean_epoch, None);
+    assert_eq!(stats.video_anchor_clean_observed_at_ms, None);
+    assert_eq!(stats.video_anchor_clean_source_event, None);
+}
+
 #[tokio::test]
 async fn bootstrap_keyframe_packets_are_assembled_into_frame() {
     let (tx, mut transport_observation_rx, mut source) = make_video_source_for_test();

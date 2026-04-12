@@ -9,7 +9,7 @@ use crate::transport::rtc::policy::scheduling::TwccWarmupState;
 use crate::transport::rtc::policy::video_scheduling_owner::VideoSchedulingOwnerState;
 use crate::transport::rtc::projection::TransportSnapshot;
 use crate::transport::rtc::recovery::contract::{
-    current_clean_anchor_observed_at_ms, has_current_transport_await_issue_from_observation,
+    has_current_clean_anchor_from_stats, has_current_transport_await_issue_from_stats,
 };
 use crate::transport::rtc::recovery::coordinator::{
     RecoveryCoordinator, RecoveryCoordinatorProposal,
@@ -216,14 +216,9 @@ impl<'a> ExpensiveRecoveryGate<'a> {
         if awaiting_success_edge_after_grant {
             return Some("mediaGate:awaitSuccessEdge");
         }
-        let current_clean_anchor = RuntimeStatsSink::read_shared(self.runtime_stats, |stats| {
-            stats
-                .video_anchor_clean_epoch
-                .is_some_and(|epoch| epoch == stats.transport_recovery_epoch)
-                && stats.video_anchor_clean_source_event.as_deref()
-                    == Some("chain-clean-keyframe-submitted")
-        })
-        .unwrap_or(false);
+        let current_clean_anchor =
+            RuntimeStatsSink::read_shared(self.runtime_stats, has_current_clean_anchor_from_stats)
+                .unwrap_or(false);
         let local_progress_active = current_clean_anchor
             || RuntimeStatsSink::read_shared(self.runtime_stats, |stats| {
                 has_fresh_media_output(stats, observed_at_ms)
@@ -242,19 +237,7 @@ impl<'a> ExpensiveRecoveryGate<'a> {
 }
 
 fn stats_has_unresolved_transport_await_issue(stats: &XbxEngineMediaRuntimeStats) -> bool {
-    let timeline = match stats.latest_video_timeline_observation.as_ref() {
-        Some(timeline) => timeline,
-        None => return false,
-    };
-    has_current_transport_await_issue_from_observation(
-        timeline,
-        current_clean_anchor_observed_at_ms(
-            stats.video_anchor_clean_epoch,
-            stats.video_anchor_clean_observed_at_ms,
-            stats.video_anchor_clean_source_event.as_deref(),
-            stats.transport_recovery_epoch,
-        ),
-    )
+    has_current_transport_await_issue_from_stats(stats)
 }
 
 pub(crate) fn resolve_reconnect_grant_detail(proposal: &RecoveryCoordinatorProposal) -> String {

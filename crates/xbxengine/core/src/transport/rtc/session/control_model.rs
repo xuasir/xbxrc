@@ -88,7 +88,9 @@ pub(crate) fn owner_recovery_reason_to_escalation_reason(
         OwnerRecoveryReason::TransportAwaitRecoveryKeyframe => {
             VideoEscalationReason::TransportAwaitRecoveryKeyframe
         }
-        OwnerRecoveryReason::DisplaySupplyCritical => VideoEscalationReason::DisplaySupplyCritical,
+        OwnerRecoveryReason::DisplaySupplyCritical | OwnerRecoveryReason::HostPresentStalled => {
+            VideoEscalationReason::DisplaySupplyCritical
+        }
         OwnerRecoveryReason::DisplaySupplyDegraded => VideoEscalationReason::AdapterThinStream,
     }
 }

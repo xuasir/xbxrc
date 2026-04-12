@@ -26,9 +26,10 @@ use crate::transport::rtc::policy::video_scheduling_owner::{
 };
 use crate::transport::rtc::projection::TransportSnapshot;
 use crate::transport::rtc::recovery::contract::{
-    current_clean_anchor_observed_at_ms, has_current_transport_await_issue_from_observation,
-    is_ingress_waiting_keyframe, is_media_healthy_baseline,
-    is_terminal_transport_await_deferred_episode,
+    current_clean_anchor_observed_at_ms, has_current_clean_anchor_from_stats,
+    has_current_transport_await_issue_from_observation,
+    has_current_transport_await_issue_from_stats, is_ingress_waiting_keyframe,
+    is_media_healthy_baseline, is_terminal_transport_await_deferred_episode,
 };
 use crate::transport::rtc::recovery::coordinator::{
     RecoveryCoordinator, RecoveryCoordinatorProposal, RecoveryOwnerSignal,
@@ -670,15 +671,11 @@ impl RtcSessionPolicy {
             .as_deref()
             .and_then(resolve_connectivity_fallback_reason);
         let owner_signal = if force_lifecycle_reconnect || allow_periodic_lifecycle_reconnect {
-            let has_current_clean_anchor =
-                RuntimeStatsSink::read_shared(self.runtime_stats.as_ref(), |stats| {
-                    stats
-                        .video_anchor_clean_epoch
-                        .is_some_and(|epoch| epoch == stats.transport_recovery_epoch)
-                        && stats.video_anchor_clean_source_event.as_deref()
-                            == Some("chain-clean-keyframe-submitted")
-                })
-                .unwrap_or(false);
+            let has_current_clean_anchor = RuntimeStatsSink::read_shared(
+                self.runtime_stats.as_ref(),
+                has_current_clean_anchor_from_stats,
+            )
+            .unwrap_or(false);
             RuntimeStatsSink::new(self.runtime_stats.clone())
                 .complete_transport_recovery_for_lifecycle_recovering(observed_at_ms);
             if self.liveness_reconnect_attempts_without_progress
@@ -960,11 +957,7 @@ impl RtcSessionPolicy {
             return false;
         }
         RuntimeStatsSink::read_shared(self.runtime_stats.as_ref(), |stats| {
-            let current_clean_anchor = stats
-                .video_anchor_clean_epoch
-                .is_some_and(|epoch| epoch == stats.transport_recovery_epoch)
-                && stats.video_anchor_clean_source_event.as_deref()
-                    == Some("chain-clean-keyframe-submitted");
+            let current_clean_anchor = has_current_clean_anchor_from_stats(stats);
             let pipeline_not_stalled = !stats.video_decoder_stalled.unwrap_or(false)
                 && !stats.video_renderer_stalled.unwrap_or(false);
             let render_has_headroom = !matches!(
@@ -1111,11 +1104,7 @@ impl RtcSessionPolicy {
             return false;
         }
         RuntimeStatsSink::read_shared(self.runtime_stats.as_ref(), |stats| {
-            let current_clean_anchor = stats
-                .video_anchor_clean_epoch
-                .is_some_and(|epoch| epoch == stats.transport_recovery_epoch)
-                && stats.video_anchor_clean_source_event.as_deref()
-                    == Some("chain-clean-keyframe-submitted");
+            let current_clean_anchor = has_current_clean_anchor_from_stats(stats);
             let clean_anchor_pipeline_evidence = stats.video_anchor_clean_source_event.as_deref()
                 == Some("chain-clean-keyframe-submitted")
                 && stats.video_anchor_clean_observed_at_ms.is_some();
@@ -1197,19 +1186,7 @@ impl RtcSessionPolicy {
     /// transport-await 未决口径与 `recovery::contract` 一致；gap 严重度推导见
     /// `derive_gap_severity_from_timeline_observation` / `derive_gap_severity_with_episode_stall`。
     fn has_unresolved_transport_await_issue(stats: &crate::XbxEngineMediaRuntimeStats) -> bool {
-        let timeline = match stats.latest_video_timeline_observation.as_ref() {
-            Some(timeline) => timeline,
-            None => return false,
-        };
-        has_current_transport_await_issue_from_observation(
-            timeline,
-            current_clean_anchor_observed_at_ms(
-                stats.video_anchor_clean_epoch,
-                stats.video_anchor_clean_observed_at_ms,
-                stats.video_anchor_clean_source_event.as_deref(),
-                stats.transport_recovery_epoch,
-            ),
-        )
+        has_current_transport_await_issue_from_stats(stats)
     }
 
     fn has_terminal_deferred_transport_await_issue(
@@ -1289,11 +1266,7 @@ impl RtcSessionPolicy {
             return false;
         }
         RuntimeStatsSink::read_shared(self.runtime_stats.as_ref(), |stats| {
-            let current_clean_anchor = stats
-                .video_anchor_clean_epoch
-                .is_some_and(|epoch| epoch == stats.transport_recovery_epoch)
-                && stats.video_anchor_clean_source_event.as_deref()
-                    == Some("chain-clean-keyframe-submitted");
+            let current_clean_anchor = has_current_clean_anchor_from_stats(stats);
             let terminal_deferred_transport_await =
                 Self::has_terminal_deferred_transport_await_issue(
                     stats,
@@ -1365,11 +1338,7 @@ impl RtcSessionPolicy {
             if stats.transport_state != xbxengine_protocol::XbxEngineTransportStateDto::Connected {
                 return false;
             }
-            let current_clean_anchor = stats
-                .video_anchor_clean_epoch
-                .is_some_and(|epoch| epoch == stats.transport_recovery_epoch)
-                && stats.video_anchor_clean_source_event.as_deref()
-                    == Some("chain-clean-keyframe-submitted");
+            let current_clean_anchor = has_current_clean_anchor_from_stats(stats);
             let pipeline_not_stalled = !stats.video_decoder_stalled.unwrap_or(false)
                 && !stats.video_renderer_stalled.unwrap_or(false);
             let present_fresh = stats
@@ -1994,6 +1963,8 @@ impl RtcSessionPolicy {
                 Some(orchestration.recovery_profile_kind.as_str().to_string());
             stats.video_owner_state = Some(owner_output.state.as_str().to_string());
             stats.video_owner_reason = Some(owner_output.diagnostics.reason_label.clone());
+            stats.host_present_stall_decode_throttle =
+                owner_output.diagnostics.reason_label == "hostPresentStalled";
             stats.video_owner_source =
                 Some(owner_output.diagnostics.reason_source.as_str().to_string());
             stats.video_owner_observed_at_ms = Some(owner_output.observed_at_ms);

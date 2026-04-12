@@ -275,6 +275,8 @@ pub(super) fn build_observability_snapshot(stats: &XbxEngineStatsDto) -> serde_j
             "noPendingPressureLevel": stats.host_no_pending_pressure_level,
             "displayTickEpoch": stats.host_display_tick_epoch,
             "presentEpoch": stats.video_present_epoch,
+            "hostPresentTakeEmptyStreak": stats.host_present_take_empty_streak,
+            "hostPresentLatestRenderSlotAtMs": stats.host_present_latest_render_slot_at_ms,
             "cadencePhase": stats.host_cadence_phase,
             "descriptorUploadMode": stats.video_present_descriptor_upload_mode,
             "descriptorMetalImportCountTotal": stats.video_present_descriptor_metal_import_count_total,

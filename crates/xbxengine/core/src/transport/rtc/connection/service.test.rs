@@ -35,7 +35,10 @@ use crate::transport::rtc::connection::data_channel::{
 use crate::transport::rtc::connection::dto_to_rtc_candidate;
 use crate::transport::rtc::connection::transport_metrics::publish_transport_metrics_sample;
 use crate::transport::rtc::connection::transport_metrics::RtcTransportMetricsSnapshot;
-use crate::{XbxEngineMediaRuntimeStats, XbxEngineRuntimeError};
+use crate::{
+    XbxEngineMediaRuntimeStats, XbxEngineRuntimeError, XbxEngineVideoTimelineChainSnapshot,
+    XbxEngineVideoTimelineGapSnapshot, XbxEngineVideoTimelineObservation,
+};
 use ohmygamepad_protocol::{
     LogicalPadId, OhMyGamepadRumbleEffectDto, OhMyGamepadRumbleRequestDto,
     OhMyGamepadRumbleTargetDto,
@@ -2597,6 +2600,8 @@ fn request_video_keyframe_clears_stage_after_clean_anchor() {
     let current_epoch = runtime_stats.lock().unwrap().transport_recovery_epoch;
     RuntimeStatsSink::new(runtime_stats.clone()).update(|stats| {
         stats.video_anchor_clean_epoch = Some(current_epoch);
+        stats.video_anchor_clean_observed_at_ms = Some(100.0);
+        stats.video_anchor_clean_source_event = Some("chain-clean-keyframe-submitted".to_string());
     });
 
     service.request_video_keyframe(&runtime_stats).unwrap();
@@ -2610,5 +2615,63 @@ fn request_video_keyframe_clears_stage_after_clean_anchor() {
     assert_eq!(
         service.video_recovery_transport_state.stage,
         super::VideoRecoveryTransportStage::None
+    );
+}
+
+#[test]
+fn request_video_keyframe_does_not_suppress_stale_clean_anchor_when_transport_await_reappears() {
+    let mut service = RtcConnectionService::default();
+    let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
+    let session = XbxEngineSessionDto {
+        session_id: "test-session".to_string(),
+        target_type: XbxEngineTargetTypeDto::Cloud,
+        turn_server: None,
+    };
+
+    service.rebuild(&session, &runtime_stats).unwrap();
+    let (mut answer_pc, mut answer_io, _, _, _, _, _, _) =
+        connect_service_to_answer_peer(&mut service, &runtime_stats);
+    prime_video_recovery_feedback_target(&mut service, &runtime_stats);
+
+    let current_epoch = runtime_stats.lock().unwrap().transport_recovery_epoch;
+    RuntimeStatsSink::new(runtime_stats.clone()).update(|stats| {
+        stats.video_anchor_clean_epoch = Some(current_epoch);
+        stats.video_anchor_clean_observed_at_ms = Some(100.0);
+        stats.video_anchor_clean_source_event = Some("chain-clean-keyframe-submitted".to_string());
+        stats.latest_video_timeline_observation = Some(XbxEngineVideoTimelineObservation {
+            observation_id: 1,
+            source_event: "gap-repair-in-flight".to_string(),
+            gap: Some(XbxEngineVideoTimelineGapSnapshot {
+                state: "repair-in-flight".to_string(),
+                sequence: Some(44389),
+                frame_rtp_timestamp: Some(1739835093),
+                frame_importance: Some("keyframe".to_string()),
+                budget_importance: Some("reference".to_string()),
+                evidence_importance: Some("keyframe".to_string()),
+                gap_dependency_confidence: Some("bound".to_string()),
+                observed_at_ms: 180.0,
+            }),
+            frame: None,
+            chain: XbxEngineVideoTimelineChainSnapshot {
+                state: "repairing".to_string(),
+                reason: Some("transportAwaitRecoveryKeyframe".to_string()),
+                chain_break_evidence: None,
+                observed_at_ms: 180.0,
+            },
+            observed_at_ms: 180.0,
+        });
+    });
+
+    service.request_video_keyframe(&runtime_stats).unwrap();
+    answer_io.pump(&mut answer_pc).unwrap();
+
+    let stats = runtime_stats.lock().unwrap().clone();
+    assert_eq!(
+        stats.latest_observation_label.as_deref(),
+        Some("rtcVideoPliRequested")
+    );
+    assert_eq!(
+        service.video_recovery_transport_state.stage,
+        super::VideoRecoveryTransportStage::PictureLossIndication
     );
 }

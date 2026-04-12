@@ -683,6 +683,25 @@ impl TauriXbxEngineHostBridge {
         registry.present_frame(viewport_id, surface_id, frame);
         Ok(())
     }
+
+    fn reset_native_presenter_for_host_stall(
+        &self,
+        viewport_id: &str,
+    ) -> Result<(), XbxEngineRuntimeError> {
+        let Ok(mut registry) = self.native_video.lock() else {
+            return Err(XbxEngineRuntimeError::new(
+                "xbxEngineNativeVideoRegistryLockFailed",
+            ));
+        };
+        registry.reset_presenter_for_host_stall_recovery(viewport_id);
+        self.runtime_trace.record_state(
+            "xbxengine-host",
+            "nativePresenterResetHostStall",
+            None,
+            serde_json::json!({ "viewportId": viewport_id }),
+        );
+        Ok(())
+    }
 }
 
 impl XbxEngineHostBridge for TauriXbxEngineHostBridge {
@@ -712,6 +731,13 @@ impl XbxEngineHostBridge for TauriXbxEngineHostBridge {
         frame: &xbxengine::XbxEngineRenderFrame,
     ) -> Result<(), XbxEngineRuntimeError> {
         self.present_native_frame(&viewport.viewport_id, surface_id, frame)
+    }
+
+    fn reset_native_video_presenter_for_host_stall(
+        &mut self,
+        viewport_id: &str,
+    ) -> Result<(), XbxEngineRuntimeError> {
+        self.reset_native_presenter_for_host_stall(viewport_id)
     }
 
     fn submit_gamepad_rumble_request(

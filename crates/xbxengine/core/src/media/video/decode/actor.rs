@@ -15,7 +15,7 @@ use crate::transport::rtc::pipeline::observation::record_pipeline_frame_drop;
 const DECODER_STALL_PACKET_FRESH_MAX_AGE_MS: f64 = 400.0;
 const DECODER_STALL_DECODE_AGE_MS: f64 = 1_000.0;
 const DECODE_MAILBOX_CAPACITY: usize = 2;
-const DECODE_OUTPUT_QUEUE_CAPACITY: usize = 2;
+const DECODE_OUTPUT_QUEUE_CAPACITY: usize = 3;
 const PENDING_PACER_RETRY_TIMEOUT_MS: u64 = 4;
 
 pub enum DecodeMsg {

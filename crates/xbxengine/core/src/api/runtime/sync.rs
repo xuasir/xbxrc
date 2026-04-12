@@ -3,10 +3,10 @@ use xbxengine_protocol::{
     XbxEngineTransportStateDto, XbxEngineVideoTrackStatusDto,
 };
 
-use super::{XbxEngineEventSink, XbxEngineHostBridge, XbxEngineRuntime};
+use super::{now_ms_f64, XbxEngineEventSink, XbxEngineHostBridge, XbxEngineRuntime};
 use crate::{
     XbxEngineInputStatus, XbxEngineMediaBackend, XbxEngineMediaNegotiation,
-    XbxEngineMediaRuntimeStats,
+    XbxEngineMediaRuntimeStats, XbxEngineRuntimeState,
 };
 
 const MEDIA_READY_PRESENT_FRESHNESS_WINDOW_MS: f64 = 1_500.0;
@@ -73,8 +73,19 @@ where
             }
         };
         let Some(frame) = frame else {
+            if matches!(
+                self.state,
+                XbxEngineRuntimeState::Running | XbxEngineRuntimeState::Reconnecting
+            ) {
+                self.snapshot.host_present_take_empty_streak = self
+                    .snapshot
+                    .host_present_take_empty_streak
+                    .saturating_add(1);
+            }
             return;
         };
+        self.snapshot.host_present_take_empty_streak = 0;
+        self.snapshot.host_present_latest_render_slot_at_ms = Some(now_ms_f64());
         if let Err(error) =
             self.host_bridge
                 .present_frame(&viewport, self.snapshot.surface_id.as_deref(), &frame)

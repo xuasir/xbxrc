@@ -150,6 +150,8 @@ export interface StreamPerformanceSnapshot {
   lastRecoveryAction?: string
   lastRecoveryActionAtMs?: number
   lastRecoveryReason?: string
+  hostPresentTakeEmptyStreak?: number
+  hostPresentLatestRenderSlotAtMs?: number
 }
 
 export interface StreamSessionDiagnosticsSnapshot {

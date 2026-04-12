@@ -1,6 +1,7 @@
 use std::sync::Mutex;
 
 use crate::runtime_stats_sink::RuntimeStatsSink;
+use crate::transport::rtc::recovery::contract::has_current_clean_anchor_from_stats;
 use crate::transport::rtc::recovery::escalation::{RecoveryAction, VideoEscalationReason};
 use crate::transport::rtc::recovery::keyframe_lifecycle::{
     derive_keyframe_lifecycle_phase, KeyframeRequestLifecyclePhase,
@@ -98,7 +99,10 @@ pub(crate) fn resolve_recent_repeat_suppression(
             }
         }
         VideoEscalationReason::DisplaySupplyCritical => {
-            let same_local_display_chain = escalation.reason == "displaySupplyCritical";
+            let same_local_display_chain = matches!(
+                escalation.reason.as_str(),
+                "displaySupplyCritical" | "hostPresentStalled"
+            );
             let decoder_reset_inflight = matches!(
                 coalesced_action_for_existing_family(
                     escalation.action.as_str(),
@@ -370,11 +374,7 @@ fn has_objective_transport_recovery_success(
     stats: &XbxEngineMediaRuntimeStats,
     now_ms: f64,
 ) -> bool {
-    let current_clean_anchor = stats
-        .video_anchor_clean_epoch
-        .is_some_and(|epoch| epoch == stats.transport_recovery_epoch)
-        && stats.video_anchor_clean_source_event.as_deref()
-            == Some("chain-clean-keyframe-submitted");
+    let current_clean_anchor = has_current_clean_anchor_from_stats(stats);
     let chain_healthy = stats
         .latest_video_timeline_observation
         .as_ref()
@@ -445,6 +445,32 @@ mod tests {
         let action = resolve_recent_repeat_suppression(
             &Mutex::new(stats),
             &VideoEscalationReason::AdapterIdleTimeout,
+        );
+
+        assert_eq!(action, Some(RecoveryAction::CoalescedDecoderResetInFlight));
+    }
+
+    #[test]
+    fn host_present_stalled_coalesces_with_display_supply_critical_decoder_reset_suppression() {
+        let now_ms = unix_now_ms();
+        let stats = XbxEngineMediaRuntimeStats {
+            latest_video_escalation_observation: Some(XbxEngineVideoEscalationObservation {
+                observation_id: 42,
+                reason: "hostPresentStalled".to_string(),
+                action: "requestDecoderReset".to_string(),
+                recovery_stage: "degraded-serving".to_string(),
+                recovery_chain_value: "health".to_string(),
+                recovery_failure_cost: "high".to_string(),
+                recovery_window_source: "decoder-reset-window".to_string(),
+                observed_at_ms: now_ms,
+            }),
+            latest_video_decoder_reset_time_ms: Some(now_ms),
+            ..XbxEngineMediaRuntimeStats::default()
+        };
+
+        let action = resolve_recent_repeat_suppression(
+            &Mutex::new(stats),
+            &VideoEscalationReason::DisplaySupplyCritical,
         );
 
         assert_eq!(action, Some(RecoveryAction::CoalescedDecoderResetInFlight));

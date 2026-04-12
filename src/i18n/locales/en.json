@@ -278,6 +278,7 @@
           "healthy": "Healthy",
           "recovering": "Recovering",
           "displaySupplyStarved": "Display supply limited",
+          "hostPresentStalled": "Host present stalled",
           "waitingKeyframe": "Waiting for keyframe",
           "stalled": "Stalled"
         },
@@ -291,6 +292,7 @@
           "displaySupplyDegraded": "Display supply degraded",
           "displayDegradedSteady": "Mild steady-state degradation",
           "displaySupplyStarved": "Display supply starved",
+          "hostPresentStalled": "Host present stalled",
           "decoderBackendFailure": "Decoder backend failure",
           "sampleLoss": "Transport sample loss",
           "reconfigure": "Reconfigure",
@@ -336,6 +338,7 @@
           "ingressWaitKeyframe": "Ingress waiting keyframe",
           "displaySupplyCritical": "Display supply critical",
           "displaySupplyDegraded": "Display supply degraded",
+          "hostPresentStalled": "Host present stalled",
           "adapterThinStream": "Adapter thin stream",
           "adapterIdleTimeout": "Adapter idle timeout"
         },

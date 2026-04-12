@@ -37,6 +37,8 @@ fn test_snapshot() -> XbxEngineRuntimeSnapshot {
         last_recovery_action_at_ms: None,
         last_recovery_reason: None,
         reconnect_trigger_source: None,
+        host_present_take_empty_streak: 0,
+        host_present_latest_render_slot_at_ms: None,
     }
 }
 

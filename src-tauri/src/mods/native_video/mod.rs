@@ -302,6 +302,17 @@ impl NativeVideoRegistry {
         self.viewports.remove(viewport_id);
     }
 
+    /// Host present 停滞自愈：仅拆掉 presenter，保留 viewport 元数据，下一帧 `present_frame` 会重建。
+    pub fn reset_presenter_for_host_stall_recovery(&mut self, viewport_id: &str) {
+        if let Some(mut presenter) = self.presenters.remove(viewport_id) {
+            presenter.detach();
+        }
+        record_native_video_trace(
+            "presenterResetForHostStall",
+            serde_json::json!({ "viewportId": viewport_id }),
+        );
+    }
+
     /**
      * 当前先把 frame 所有权收归 Tauri 宿主，并记录最近一帧状态。
      * 后续接入 Metal/CALayer 时，直接在这里替换成真实 native presenter。

@@ -56,6 +56,26 @@ impl VideoIngress {
         self.queue.len()
     }
 
+    pub fn peek_front(&self) -> Option<&EncodedFrame> {
+        self.queue.front()
+    }
+
+    /// Host present 解码节流：丢弃队首连续非关键帧（最多 `max_total`），避免队头 delta 挡住后续 IDR（HOL）。
+    pub fn discard_non_keyframe_prefix_for_host_stall(&mut self, max_total: usize) -> usize {
+        let mut discarded = 0usize;
+        while discarded < max_total {
+            match self.queue.front() {
+                None => break,
+                Some(f) if f.is_keyframe => break,
+                Some(_) => {
+                    self.queue.pop_front();
+                    discarded += 1;
+                }
+            }
+        }
+        discarded
+    }
+
     /// decode handoff 失败时，把已出队的帧放回 ingress 头部，等待下一次 budget 窗口。
     pub fn requeue_front(&mut self, frame: EncodedFrame) {
         self.queue.push_front(frame);
@@ -291,6 +311,14 @@ impl FrameScheduler for VideoIngress {
 
     fn pop(&mut self) -> Option<EncodedFrame> {
         self.queue.pop_front()
+    }
+}
+
+#[cfg(test)]
+impl VideoIngress {
+    /// 单测注入队列形态（不经 `submit` 完整语义），用于节流/HOL 等纯队列行为。
+    pub fn test_push_back_unchecked(&mut self, frame: EncodedFrame) {
+        self.queue.push_back(frame);
     }
 }
 
@@ -650,5 +678,32 @@ mod tests {
             ingress.submit(next_delta, now),
             IngressDecision::WaitKeyframe
         );
+    }
+
+    #[test]
+    fn discard_non_keyframe_prefix_for_host_stall_reveals_keyframe() {
+        let now = Instant::now();
+        let mut ingress = VideoIngress::new(8, Duration::from_millis(250));
+        ingress.test_push_back_unchecked(make_frame(
+            now,
+            FrameValue::new(false, false, 8 * 1024),
+            false,
+            0,
+        ));
+        ingress.test_push_back_unchecked(make_frame(
+            now,
+            FrameValue::new(false, false, 8 * 1024),
+            false,
+            10,
+        ));
+        ingress.test_push_back_unchecked(make_frame(
+            now,
+            FrameValue::new(true, true, 64 * 1024),
+            true,
+            20,
+        ));
+        assert_eq!(ingress.discard_non_keyframe_prefix_for_host_stall(512), 2);
+        let popped = FrameScheduler::pop(&mut ingress).expect("keyframe after discard");
+        assert!(popped.is_keyframe);
     }
 }

@@ -139,6 +139,16 @@ impl XbxEngineHostBridge for TestHostBridge {
         Ok(())
     }
 
+    fn reset_native_video_presenter_for_host_stall(
+        &mut self,
+        _viewport_id: &str,
+    ) -> Result<(), XbxEngineRuntimeError> {
+        if let Ok(mut order) = self.call_order.lock() {
+            order.push("resetNativePresenterHostStall");
+        }
+        Ok(())
+    }
+
     fn request(
         &mut self,
         request: XbxEngineHostRequestDto,

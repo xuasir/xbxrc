@@ -235,6 +235,7 @@ where
         self.sync_transport_state(&runtime_stats);
         self.sync_video_packet_stats(&runtime_stats);
         self.sync_video_frame_stats(&runtime_stats);
+        self.maybe_reset_native_presenter_for_host_stall(&runtime_stats);
         self.drive_pending_gamepad_rumble_requests();
         if self.maybe_handle_terminal_session_kick(&runtime_stats) {
             return;
@@ -254,6 +255,34 @@ where
 
     fn recovery_actions_owned_by_transport_policy(&self) -> bool {
         self.config.runtime_name == "rust-owned"
+    }
+
+    fn maybe_reset_native_presenter_for_host_stall(
+        &mut self,
+        runtime_stats: &crate::XbxEngineMediaRuntimeStats,
+    ) {
+        if runtime_stats.video_owner_reason.as_deref() != Some("hostPresentStalled") {
+            return;
+        }
+        let now = now_ms_f64();
+        const COOLDOWN_MS: f64 = 2_500.0;
+        if self
+            .health
+            .last_native_presenter_reset_at_ms
+            .is_some_and(|t| now - t < COOLDOWN_MS)
+        {
+            return;
+        }
+        let Some(vp) = self.snapshot.viewport.as_ref() else {
+            return;
+        };
+        if self
+            .host_bridge
+            .reset_native_video_presenter_for_host_stall(&vp.viewport_id)
+            .is_ok()
+        {
+            self.health.last_native_presenter_reset_at_ms = Some(now);
+        }
     }
 
     fn maybe_consume_pending_runtime_recovery_action(

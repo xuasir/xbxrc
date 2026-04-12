@@ -19,6 +19,9 @@ use crate::transport::rtc::connection::{
 };
 use crate::transport::rtc::events::RtcConnectionLifecycleState;
 use crate::transport::rtc::facts::TransportFact;
+use crate::transport::rtc::recovery::contract::{
+    has_current_clean_anchor_from_stats, has_current_transport_await_issue_from_stats,
+};
 use crate::transport::rtc::stream::{RtcMediaIngressPacket, RtcRtpPacketMeta};
 use crate::{XbxEngineMediaRuntimeStats, XbxEngineRuntimeError};
 
@@ -214,31 +217,39 @@ impl RtcConnectionService {
         runtime_stats: &Arc<Mutex<XbxEngineMediaRuntimeStats>>,
     ) -> VideoRecoveryTransportStage {
         let now_ms = crate::transport::rtc::stats::now_ms_f64();
-        let (current_epoch, clean_anchor_epoch, supports_pli, supports_fir) =
-            RuntimeStatsSink::read_shared(runtime_stats, |stats| {
-                let supported = stats
-                    .latest_remote_answer_observation
-                    .as_ref()
-                    .map(|observation| {
-                        let pli_supported = observation
-                            .accepted_video_rtcp_feedback
-                            .iter()
-                            .any(|feedback| feedback == "nack:pli");
-                        let fir_supported = observation
-                            .accepted_video_rtcp_feedback
-                            .iter()
-                            .any(|feedback| feedback == "ccm:fir");
-                        (pli_supported, fir_supported)
-                    })
-                    .unwrap_or((false, false));
-                (
-                    stats.transport_recovery_epoch,
-                    stats.video_anchor_clean_epoch,
-                    supported.0,
-                    supported.1,
-                )
-            })
-            .unwrap_or((0, None, false, false));
+        let (
+            current_epoch,
+            has_unresolved_transport_await_after_clean_anchor,
+            has_current_clean_anchor,
+            supports_pli,
+            supports_fir,
+        ) = RuntimeStatsSink::read_shared(runtime_stats, |stats| {
+            let supported = stats
+                .latest_remote_answer_observation
+                .as_ref()
+                .map(|observation| {
+                    let pli_supported = observation
+                        .accepted_video_rtcp_feedback
+                        .iter()
+                        .any(|feedback| feedback == "nack:pli");
+                    let fir_supported = observation
+                        .accepted_video_rtcp_feedback
+                        .iter()
+                        .any(|feedback| feedback == "ccm:fir");
+                    (pli_supported, fir_supported)
+                })
+                .unwrap_or((false, false));
+            let has_unresolved_transport_await_after_clean_anchor =
+                has_current_transport_await_issue_from_stats(stats);
+            (
+                stats.transport_recovery_epoch,
+                has_unresolved_transport_await_after_clean_anchor,
+                has_current_clean_anchor_from_stats(stats),
+                supported.0,
+                supported.1,
+            )
+        })
+        .unwrap_or((0, false, false, false, false));
 
         if self.video_recovery_transport_state.recovery_epoch != current_epoch {
             self.video_recovery_transport_state = VideoRecoveryTransportState {
@@ -247,7 +258,7 @@ impl RtcConnectionService {
             };
         }
 
-        if clean_anchor_epoch == Some(current_epoch) {
+        if has_current_clean_anchor && !has_unresolved_transport_await_after_clean_anchor {
             self.video_recovery_transport_state.stage = VideoRecoveryTransportStage::None;
             self.video_recovery_transport_state.last_sent_at_ms = None;
             return VideoRecoveryTransportStage::None;

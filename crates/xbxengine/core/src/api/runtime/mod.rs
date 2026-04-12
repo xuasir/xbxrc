@@ -206,6 +206,10 @@ pub struct XbxEngineRuntimeSnapshot {
     pub last_recovery_action_at_ms: Option<f64>,
     pub last_recovery_reason: Option<String>,
     pub reconnect_trigger_source: Option<String>,
+    /// 连续 `take_latest_render_frame` 得到 `None` 的 tick 数（仅 Running 态递增）。
+    pub host_present_take_empty_streak: u32,
+    /// 最近一次成功从 render slot 取到帧的时间（ms）。
+    pub host_present_latest_render_slot_at_ms: Option<f64>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -256,6 +260,14 @@ pub trait XbxEngineHostBridge {
         _viewport: &XbxEngineViewportDto,
         _surface_id: Option<&str>,
         _frame: &XbxEngineRenderFrame,
+    ) -> Result<(), XbxEngineRuntimeError> {
+        Ok(())
+    }
+
+    /// Host present 停滞时由 runtime 触发：detach 本机 presenter，下一帧 `present_frame` 会重建。
+    fn reset_native_video_presenter_for_host_stall(
+        &mut self,
+        _viewport_id: &str,
     ) -> Result<(), XbxEngineRuntimeError> {
         Ok(())
     }

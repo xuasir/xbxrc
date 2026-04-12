@@ -105,6 +105,7 @@ pub struct XbxEngineRuntimeHealth {
     pub stall_candidate_started_at_ms: Option<f64>,
     pub keyframe_requested_for_current_stall: bool,
     pub decoder_reset_requested_for_current_stall: bool,
+    pub last_native_presenter_reset_at_ms: Option<f64>,
 }
 
 impl Default for XbxEngineRuntimeHealth {
@@ -123,6 +124,7 @@ impl Default for XbxEngineRuntimeHealth {
             stall_candidate_started_at_ms: None,
             keyframe_requested_for_current_stall: false,
             decoder_reset_requested_for_current_stall: false,
+            last_native_presenter_reset_at_ms: None,
         }
     }
 }

@@ -91,6 +91,9 @@ pub struct RecoveryCoordinator {
     await_recovery_keyframe_streak_started_at_ms: Option<f64>,
     await_recovery_hard_fallback_started_at_ms: Option<f64>,
     await_recovery_hard_fallback_epoch: Option<u64>,
+    /// `NonIdrVcl` 下 present epoch 不前进时用于短窗强制 keyframe。
+    non_idr_present_stall_epoch: Option<u64>,
+    non_idr_present_stall_started_at_ms: Option<f64>,
     last_synced_decoder_reset_observation_id: Option<u64>,
     last_synced_reconnect_observation_id: Option<u64>,
 }
@@ -256,6 +259,8 @@ impl RecoveryCoordinator {
             await_recovery_keyframe_streak_started_at_ms: None,
             await_recovery_hard_fallback_started_at_ms: None,
             await_recovery_hard_fallback_epoch: None,
+            non_idr_present_stall_epoch: None,
+            non_idr_present_stall_started_at_ms: None,
             last_synced_decoder_reset_observation_id: None,
             last_synced_reconnect_observation_id: None,
         }
@@ -875,6 +880,74 @@ impl RecoveryCoordinator {
         }
     }
 
+    /// transport-await 下连续 `NonIdrVcl` 且出图不恢复时，在硬超时之前优先再推一帧 keyframe 请求。
+    fn maybe_force_keyframe_non_idr_present_stall(
+        &mut self,
+        runtime_stats: &Mutex<XbxEngineMediaRuntimeStats>,
+        recovery_epoch: u64,
+        observed_at_ms: f64,
+        profile: RecoveryScenarioProfile,
+    ) -> Option<VideoEscalationDecision> {
+        const NON_IDR_PRESENT_STALL_FORCE_MS: f64 = 900.0;
+        let snapshot = RuntimeStatsSink::read_shared(runtime_stats, |stats| {
+            let clean_ms = current_clean_anchor_observed_at_ms(
+                stats.video_anchor_clean_epoch,
+                stats.video_anchor_clean_observed_at_ms,
+                stats.video_anchor_clean_source_event.as_deref(),
+                stats.transport_recovery_epoch,
+            );
+            let transport_await_diag = stats
+                .latest_video_timeline_observation
+                .as_ref()
+                .is_some_and(|t| has_current_transport_await_issue_from_observation(t, clean_ms));
+            let non_idr_fresh = stats
+                .latest_h264_inspection_observation
+                .as_ref()
+                .is_some_and(|o| {
+                    o.bootstrap_reject_reason.as_deref() == Some("NonIdrVcl")
+                        && (observed_at_ms - o.observed_at_ms).max(0.0) <= 2_000.0
+                });
+            let present_epoch = stats.video_present_epoch;
+            let present_stalled = stats
+                .latest_video_host_present_time_ms
+                .map(|t| {
+                    (observed_at_ms - t).max(0.0)
+                        >= profile.display_supply_thresholds.degraded_present_age_ms
+                })
+                .unwrap_or(true)
+                || stats.video_present_fps <= 1.0;
+            (
+                transport_await_diag,
+                non_idr_fresh,
+                present_epoch,
+                present_stalled,
+            )
+        })?;
+        let (transport_await_diag, non_idr_fresh, present_epoch, present_stalled) = snapshot;
+        if !(transport_await_diag && non_idr_fresh && present_stalled) {
+            self.non_idr_present_stall_epoch = None;
+            self.non_idr_present_stall_started_at_ms = None;
+            return None;
+        }
+        if self.non_idr_present_stall_epoch != Some(present_epoch) {
+            self.non_idr_present_stall_epoch = Some(present_epoch);
+            self.non_idr_present_stall_started_at_ms = Some(observed_at_ms);
+            return None;
+        }
+        let started = self.non_idr_present_stall_started_at_ms?;
+        if (observed_at_ms - started).max(0.0) < NON_IDR_PRESENT_STALL_FORCE_MS {
+            return None;
+        }
+        RuntimeStatsSink::update_shared(runtime_stats, |stats| {
+            stats.recovery_hard_fallback_trigger_reason =
+                Some("transportAwaitNonIdrPresentStallKeyframe".to_string());
+        });
+        Some(self.escalation_controller.on_reason_with_epoch(
+            VideoEscalationReason::TransportAwaitRecoveryKeyframe,
+            recovery_epoch,
+        ))
+    }
+
     fn resolve_transport_await_hard_fallback(
         &mut self,
         reason: VideoEscalationReason,
@@ -933,6 +1006,14 @@ impl RecoveryCoordinator {
         if !has_evidence {
             self.reset_transport_await_hard_fallback(runtime_stats, "stallEvidenceCleared", true);
             return None;
+        }
+        if let Some(decision) = self.maybe_force_keyframe_non_idr_present_stall(
+            runtime_stats,
+            recovery_epoch,
+            observed_at_ms,
+            profile,
+        ) {
+            return Some(decision);
         }
         let started_at_ms = *self
             .await_recovery_hard_fallback_started_at_ms
@@ -1738,6 +1819,8 @@ impl RecoveryCoordinator {
     fn clear_transport_await_hard_fallback(&mut self, reset_reason: &str) {
         self.await_recovery_hard_fallback_started_at_ms = None;
         self.await_recovery_hard_fallback_epoch = None;
+        self.non_idr_present_stall_epoch = None;
+        self.non_idr_present_stall_started_at_ms = None;
         let _ = reset_reason;
     }
 

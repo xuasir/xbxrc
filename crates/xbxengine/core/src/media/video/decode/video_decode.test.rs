@@ -790,11 +790,11 @@ fn repeated_nonfatal_decode_failures_escalate_to_waiting_keyframe_on_third_failu
 }
 
 #[test]
-fn decoded_queue_keeps_latest_two_frames_under_pressure() {
+fn decoded_queue_keeps_latest_three_frames_under_pressure() {
     let decoder = SpyHardwareDecoder;
     let mut state = XbxVideoDecodeState::new_for_test(20, 30, Box::new(decoder));
 
-    for seq in 1..=3 {
+    for seq in 1..=4 {
         state.enqueue_decoded_frame_for_test(XbxRenderFrame {
             width: 2,
             height: 2,
@@ -810,7 +810,7 @@ fn decoded_queue_keeps_latest_two_frames_under_pressure() {
         });
     }
 
-    assert_eq!(state.decoded_frame_queue.len(), 2);
+    assert_eq!(state.decoded_frame_queue.len(), 3);
     assert_eq!(
         state
             .decoded_frame_queue
@@ -909,7 +909,7 @@ fn decoded_frame_queue_is_full_tracks_capacity_without_consuming() {
 
     assert!(!state.decoded_frame_queue_is_full());
 
-    for seq in 1..=2 {
+    for seq in 1..=3 {
         state.enqueue_decoded_frame_for_test(XbxRenderFrame {
             width: 2,
             height: 2,
@@ -1012,10 +1012,23 @@ fn enqueue_decoded_frame_returns_dropped_oldest_frame() {
             bytes: Arc::<[u8]>::from([1u8; 16]),
         },
     });
+    state.enqueue_decoded_frame_for_test(XbxRenderFrame {
+        width: 2,
+        height: 2,
+        frame_seq: 3,
+        rendered_at_ms: 3.0,
+        rtp_timestamp: Some(3),
+        is_keyframe: false,
+        frame_recovery_disposition: Some("repairing".to_string()),
+        frame_unrecoverable_reason: None,
+        pixel_data: XbxEngineRenderPixelData::Rgba {
+            bytes: Arc::<[u8]>::from([2u8; 16]),
+        },
+    });
 
     let dropped = state.enqueue_decoded_frame(DecodedFrame {
         pts: Instant::now(),
-        rtp_timestamp: 3,
+        rtp_timestamp: 4,
         is_keyframe: false,
         budget: crate::media::video::ingress::budget::FrameBudgetContext::default(),
         frame_recovery_disposition: FrameRecoveryDisposition::Repairing,
@@ -1023,14 +1036,14 @@ fn enqueue_decoded_frame_returns_dropped_oldest_frame() {
         surface: XbxRenderFrame {
             width: 2,
             height: 2,
-            frame_seq: 3,
-            rendered_at_ms: 3.0,
-            rtp_timestamp: Some(3),
+            frame_seq: 4,
+            rendered_at_ms: 4.0,
+            rtp_timestamp: Some(4),
             is_keyframe: false,
             frame_recovery_disposition: Some("repairing".to_string()),
             frame_unrecoverable_reason: None,
             pixel_data: XbxEngineRenderPixelData::Rgba {
-                bytes: Arc::<[u8]>::from([2u8; 16]),
+                bytes: Arc::<[u8]>::from([3u8; 16]),
             },
         },
     });
@@ -1089,7 +1102,7 @@ fn decode_candidate_state_recovers_to_nominal_after_pressure_is_relieved() {
     let decoder = SpyHardwareDecoder;
     let mut state = XbxVideoDecodeState::new_for_test(20, 30, Box::new(decoder));
 
-    for seq in 1..=3 {
+    for seq in 1..=4 {
         state.enqueue_decoded_frame_for_test(XbxRenderFrame {
             width: 2,
             height: 2,
@@ -1109,7 +1122,7 @@ fn decode_candidate_state_recovers_to_nominal_after_pressure_is_relieved() {
         .expect("backpressure decision");
     assert_eq!(pressured.state, XbxDecodeCandidateState::Backpressure);
 
-    let _ = state.pop_decoded_frame(4.0);
+    let _ = state.pop_decoded_frame(5.0);
     state.enqueue_decoded_frame_for_test(XbxRenderFrame {
         width: 2,
         height: 2,

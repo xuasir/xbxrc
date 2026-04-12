@@ -19,6 +19,9 @@ pub(super) fn drain_ingress_to_decode(
     frame_count: u64,
     observation: &MediaSupervisorObservationState,
 ) {
+    let host_stall_throttle = runtime_stats
+        .read(|stats| stats.host_present_stall_decode_throttle)
+        .unwrap_or(false);
     loop {
         let demand = decode_handle.demand_snapshot();
         if !demand.accepts_input {
@@ -29,6 +32,16 @@ pub(super) fn drain_ingress_to_decode(
                 );
             }
             break;
+        }
+        if host_stall_throttle {
+            // 队头非关键帧会阻塞后续 IDR 入解码邮箱；有界丢弃前缀，避免把节流变成主动卡死。
+            const MAX_HOST_STALL_HEAD_DISCARDS: usize = 512;
+            ingress.discard_non_keyframe_prefix_for_host_stall(MAX_HOST_STALL_HEAD_DISCARDS);
+            match ingress.peek_front() {
+                None => break,
+                Some(front) if !front.is_keyframe => break,
+                _ => {}
+            }
         }
         let Some(frame) = ingress.pop() else {
             break;

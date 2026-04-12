@@ -2,6 +2,7 @@ use std::sync::Mutex;
 
 use crate::runtime_stats_sink::RuntimeStatsSink;
 use crate::transport::rtc::policy::video_scheduling_owner::VideoSchedulingOwnerState;
+use crate::transport::rtc::recovery::contract::has_current_clean_anchor_from_stats;
 use crate::transport::rtc::recovery::coordinator::RecoveryCoordinatorProposal;
 use crate::transport::rtc::recovery::escalation::{RecoveryAction, VideoEscalationReason};
 use crate::transport::rtc::recovery::runtime_state::has_fresh_media_output;
@@ -16,10 +17,7 @@ pub(crate) struct RecoveryRampResolution {
 
 pub(crate) fn ramp_up_active(runtime_stats: &Mutex<XbxEngineMediaRuntimeStats>) -> bool {
     RuntimeStatsSink::read_shared(runtime_stats, |stats| {
-        stats.transport_recovery_episode_active
-            && stats
-                .video_anchor_clean_epoch
-                .is_some_and(|epoch| epoch == stats.transport_recovery_epoch)
+        stats.transport_recovery_episode_active && has_current_clean_anchor_from_stats(stats)
     })
     .unwrap_or(false)
 }
@@ -49,11 +47,7 @@ pub(crate) fn should_absorb_light_recovery_signal_during_ramp_up(
         return false;
     }
     RuntimeStatsSink::read_shared(runtime_stats, |stats| {
-        let current_clean_anchor = stats
-            .video_anchor_clean_epoch
-            .is_some_and(|epoch| epoch == stats.transport_recovery_epoch)
-            && stats.video_anchor_clean_source_event.as_deref()
-                == Some("chain-clean-keyframe-submitted");
+        let current_clean_anchor = has_current_clean_anchor_from_stats(stats);
         if !current_clean_anchor || !stats.transport_recovery_episode_active {
             return false;
         }

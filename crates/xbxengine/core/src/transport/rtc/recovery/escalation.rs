@@ -116,7 +116,7 @@ impl VideoEscalationReason {
             | "bootstrapMissingSps"
             | "bootstrapMissingPps"
             | "inspectionRejectInvalidSliceHeader" => Some(Self::TransportAwaitRecoveryKeyframe),
-            "displaySupplyCritical" => Some(Self::DisplaySupplyCritical),
+            "displaySupplyCritical" | "hostPresentStalled" => Some(Self::DisplaySupplyCritical),
             "displaySupplyDegraded" | "adapterThinStream" => Some(Self::AdapterThinStream),
             "ingressReconfigure" | "reconfigure" => Some(Self::Reconfigure),
             "decoderBackendFailure" => Some(Self::DecoderBackendFailure),

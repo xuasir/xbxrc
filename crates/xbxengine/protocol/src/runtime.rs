@@ -715,6 +715,12 @@ pub struct XbxEngineStatsDto {
     /// policy | runtime | other — 与宿主侧 `restart=true` 重协商观测对齐
     #[serde(default)]
     pub reconnect_trigger_source: Option<String>,
+    /// runtime 侧连续未取到 render 帧的 tick 计数。
+    #[serde(default)]
+    pub host_present_take_empty_streak: Option<u32>,
+    /// 最近一次成功从 render slot 取到帧的时间（ms）。
+    #[serde(default)]
+    pub host_present_latest_render_slot_at_ms: Option<f64>,
     pub latest_decode_candidate_decision: Option<XbxEnginePipelineCandidateDecisionObservationDto>,
     pub latest_render_candidate_decision: Option<XbxEnginePipelineCandidateDecisionObservationDto>,
     pub latest_video_packet_gap: Option<XbxEnginePacketGapObservationDto>,

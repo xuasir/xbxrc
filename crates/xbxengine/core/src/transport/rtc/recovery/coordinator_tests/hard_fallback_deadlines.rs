@@ -1373,3 +1373,109 @@ fn coordinator_burst_rollback_warranted_covers_transport_await_suppress_pairs() 
         RecoveryAction::WaitForBurst,
     ));
 }
+
+/// `NonIdrVcl` + transport-await + 出图停滞：在硬超时之前应能强制再推一帧关键帧请求（见 `maybe_force_keyframe_non_idr_present_stall`）。
+#[test]
+fn transport_await_non_idr_with_present_stall_forces_keyframe_after_elapsed_epoch_hold() {
+    let now_ms = 2_900_000.0;
+    let mut stats = XbxEngineMediaRuntimeStats::default();
+    stats.session_target_type = Some(XbxEngineTargetTypeDto::Cloud);
+    stats.transport_recovery_epoch = 77;
+    stats.transport_state = XbxEngineTransportStateDto::Connected;
+    stats.video_present_epoch = 3;
+    stats.video_present_fps = 0.0;
+    stats.latest_video_host_present_time_ms = Some(now_ms - 3_000.0);
+    stats.latest_video_decode_ok_time_ms = Some(now_ms - 3_000.0);
+    stats.inbound_primary_video_bytes_total = 50_000;
+    stats.latest_video_track_status = Some(XbxEngineVideoTrackStatus {
+        state: "remoteTrackAttached".to_string(),
+        video_width: Some(1920),
+        video_height: Some(1080),
+        mime_type: Some("video/H264".to_string()),
+        transport_state: XbxEngineTransportStateDto::Connected,
+        video_bytes_total: 80_000,
+        video_packet_count_total: 300,
+        audio_bytes_total: 1_000,
+        observed_at_ms: now_ms,
+    });
+    stats.latest_video_timeline_observation = Some(crate::XbxEngineVideoTimelineObservation {
+        observation_id: 7701,
+        source_event: "frame-await-recovery-keyframe".to_string(),
+        gap: None,
+        frame: None,
+        chain: crate::XbxEngineVideoTimelineChainSnapshot {
+            state: "recovering".to_string(),
+            reason: Some("transportAwaitRecoveryKeyframe".to_string()),
+            chain_break_evidence: None,
+            observed_at_ms: now_ms,
+        },
+        observed_at_ms: now_ms,
+    });
+    stats.latest_h264_inspection_observation = Some(crate::XbxEngineH264InspectionObservation {
+        observation_id: 7702,
+        bootstrap_reject_reason: Some("NonIdrVcl".to_string()),
+        observed_at_ms: now_ms,
+        ..Default::default()
+    });
+
+    let shared_stats = Mutex::new(stats);
+    let mut coordinator = RecoveryCoordinator::new(
+        test_escalation_controller(120, 1, 1),
+        Instant::now() - Duration::from_secs(3),
+        Duration::from_millis(800),
+    );
+
+    let _first = coordinator.propose_from_owner_signal(
+        RecoveryOwnerSignal {
+            reason: VideoEscalationReason::TransportAwaitRecoveryKeyframe,
+            reason_label: "transportAwaitRecoveryKeyframe".to_string(),
+            observed_at_ms: now_ms,
+        },
+        &shared_stats,
+    );
+    assert_ne!(
+        RuntimeStatsSink::read_shared(&shared_stats, |s| s
+            .recovery_hard_fallback_trigger_reason
+            .clone())
+        .flatten(),
+        Some("transportAwaitNonIdrPresentStallKeyframe".to_string()),
+    );
+
+    let later = now_ms + 950.0;
+    RuntimeStatsSink::update_shared(&shared_stats, |s| {
+        if let Some(t) = s.latest_video_timeline_observation.as_mut() {
+            t.observed_at_ms = later;
+            t.chain.observed_at_ms = later;
+        }
+        if let Some(h) = s.latest_h264_inspection_observation.as_mut() {
+            h.observed_at_ms = later;
+        }
+    });
+
+    let second = coordinator.propose_from_owner_signal(
+        RecoveryOwnerSignal {
+            reason: VideoEscalationReason::TransportAwaitRecoveryKeyframe,
+            reason_label: "transportAwaitRecoveryKeyframe".to_string(),
+            observed_at_ms: later,
+        },
+        &shared_stats,
+    );
+
+    let trigger = RuntimeStatsSink::read_shared(&shared_stats, |s| {
+        s.recovery_hard_fallback_trigger_reason.clone()
+    })
+    .flatten();
+    assert_eq!(
+        trigger,
+        Some("transportAwaitNonIdrPresentStallKeyframe".to_string()),
+        "non-idr present-stall path should record explicit hard-fallback trigger reason"
+    );
+    assert!(
+        matches!(
+            second.decision.action,
+            RecoveryAction::RequestKeyframe | RecoveryAction::CoalescedKeyframeInFlight
+        ),
+        "unexpected decision {:?}",
+        second.decision.action
+    );
+}

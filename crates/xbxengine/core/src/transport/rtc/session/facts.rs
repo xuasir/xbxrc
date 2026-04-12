@@ -93,6 +93,8 @@ pub(crate) struct OwnerRuntimeFacts {
     pub(crate) latest_anchor_candidate_ledger: Option<XbxEngineAnchorCandidateLedger>,
     pub(crate) latest_video_track_status: Option<XbxEngineVideoTrackStatus>,
     pub(crate) latest_h264_inspection_observation: Option<XbxEngineH264InspectionObservation>,
+    pub(crate) latest_decode_candidate_detail: Option<String>,
+    pub(crate) latest_decode_candidate_observed_at_ms: Option<f64>,
 }
 
 pub(crate) fn build_scheduling_demand_signal(
@@ -172,6 +174,14 @@ pub(crate) fn read_owner_runtime_facts(
         latest_anchor_candidate_ledger: stats.latest_anchor_candidate_ledger.clone(),
         latest_video_track_status: stats.latest_video_track_status.clone(),
         latest_h264_inspection_observation: stats.latest_h264_inspection_observation.clone(),
+        latest_decode_candidate_detail: stats
+            .latest_decode_candidate_decision
+            .as_ref()
+            .map(|d| d.detail.clone()),
+        latest_decode_candidate_observed_at_ms: stats
+            .latest_decode_candidate_decision
+            .as_ref()
+            .map(|d| d.observed_at_ms),
     })
     .unwrap_or_default()
 }
@@ -244,6 +254,8 @@ pub(crate) fn build_owner_input(
             .map(|inspection| inspection.observed_at_ms),
         display_supply_thresholds,
         observed_at_ms,
+        latest_decode_candidate_detail: owner_facts.latest_decode_candidate_detail.clone(),
+        latest_decode_candidate_observed_at_ms: owner_facts.latest_decode_candidate_observed_at_ms,
     }
 }
 
@@ -266,18 +278,9 @@ fn resolve_anchor_reason_label_from_timeline(
     owner_facts: &OwnerRuntimeFacts,
     timeline: &XbxEngineVideoTimelineObservation,
 ) -> Option<String> {
-    let current_clean_anchor_at_ms = current_clean_anchor_observed_at_ms(
-        owner_facts.clean_anchor_epoch,
-        owner_facts.clean_anchor_observed_at_ms,
-        owner_facts.clean_anchor_source_event.as_deref(),
-        owner_facts.recovery_epoch,
-    );
-    let current_transport_await_probe =
-        is_transport_await_probe_source_event(Some(timeline.source_event.as_str()))
-            && current_clean_anchor_at_ms
-                .is_none_or(|clean_anchor_at_ms| timeline.observed_at_ms > clean_anchor_at_ms);
+    let current_transport_await_probe = is_current_transport_await_probe(owner_facts, timeline);
     let label = match (
-        has_current_transport_await_issue_from_observation(timeline, current_clean_anchor_at_ms),
+        has_current_transport_await_issue(owner_facts, timeline),
         current_transport_await_probe,
         timeline.chain.state.as_str(),
         timeline.chain.reason.as_deref(),
@@ -293,6 +296,34 @@ fn resolve_anchor_reason_label_from_timeline(
     // 时间线分支已给出结构化上下文；此处仅校验 `reason` 字符串是否为已知 wire 标签（与 `escalation` 单点映射一致），
     // 禁止把任意 `recovery_diagnosis` 反推成恢复语义。
     VideoEscalationReason::from_recovery_reason_label(label).map(|_| label.to_string())
+}
+
+fn current_clean_anchor_at_ms(owner_facts: &OwnerRuntimeFacts) -> Option<f64> {
+    current_clean_anchor_observed_at_ms(
+        owner_facts.clean_anchor_epoch,
+        owner_facts.clean_anchor_observed_at_ms,
+        owner_facts.clean_anchor_source_event.as_deref(),
+        owner_facts.recovery_epoch,
+    )
+}
+
+fn has_current_transport_await_issue(
+    owner_facts: &OwnerRuntimeFacts,
+    timeline: &XbxEngineVideoTimelineObservation,
+) -> bool {
+    has_current_transport_await_issue_from_observation(
+        timeline,
+        current_clean_anchor_at_ms(owner_facts),
+    )
+}
+
+fn is_current_transport_await_probe(
+    owner_facts: &OwnerRuntimeFacts,
+    timeline: &XbxEngineVideoTimelineObservation,
+) -> bool {
+    is_transport_await_probe_source_event(Some(timeline.source_event.as_str()))
+        && current_clean_anchor_at_ms(owner_facts)
+            .is_none_or(|clean_anchor_at_ms| timeline.observed_at_ms > clean_anchor_at_ms)
 }
 
 #[cfg(test)]

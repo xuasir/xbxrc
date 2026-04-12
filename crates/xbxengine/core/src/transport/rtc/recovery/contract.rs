@@ -1,7 +1,7 @@
 use crate::media::video::types::FrameValue as MediaFrameValue;
 use crate::{
     XbxEngineH264InspectionObservation, XbxEngineKeyframeRequestEpisodeObservation,
-    XbxEngineVideoTimelineObservation,
+    XbxEngineMediaRuntimeStats, XbxEngineVideoTimelineObservation,
 };
 
 /// 恢复系统的统一“事实模型”合同。
@@ -274,6 +274,21 @@ pub(crate) fn current_clean_anchor_observed_at_ms(
     }
 }
 
+pub(crate) fn current_clean_anchor_observed_at_ms_from_stats(
+    stats: &XbxEngineMediaRuntimeStats,
+) -> Option<f64> {
+    current_clean_anchor_observed_at_ms(
+        stats.video_anchor_clean_epoch,
+        stats.video_anchor_clean_observed_at_ms,
+        stats.video_anchor_clean_source_event.as_deref(),
+        stats.transport_recovery_epoch,
+    )
+}
+
+pub(crate) fn has_current_clean_anchor_from_stats(stats: &XbxEngineMediaRuntimeStats) -> bool {
+    current_clean_anchor_observed_at_ms_from_stats(stats).is_some()
+}
+
 pub(crate) fn has_current_transport_await_issue_from_observation(
     timeline: &XbxEngineVideoTimelineObservation,
     current_clean_anchor_observed_at_ms: Option<f64>,
@@ -281,6 +296,20 @@ pub(crate) fn has_current_transport_await_issue_from_observation(
     has_unresolved_transport_await_issue_from_observation(timeline)
         && current_clean_anchor_observed_at_ms
             .is_none_or(|clean_anchor_at_ms| timeline.observed_at_ms > clean_anchor_at_ms)
+}
+
+pub(crate) fn has_current_transport_await_issue_from_stats(
+    stats: &XbxEngineMediaRuntimeStats,
+) -> bool {
+    stats
+        .latest_video_timeline_observation
+        .as_ref()
+        .is_some_and(|timeline| {
+            has_current_transport_await_issue_from_observation(
+                timeline,
+                current_clean_anchor_observed_at_ms_from_stats(stats),
+            )
+        })
 }
 
 /// 从 timeline 观测推导统一 `GapSeverity`（不含 episode stalled→RecoveryBlocked，见
