@@ -1129,8 +1129,14 @@ fn build_stats_prefers_owner_reason_for_recovery_diagnosis() {
         dto.recovery_diagnosis.as_deref(),
         Some("inspectionRejectInvalidSliceHeader")
     );
-    assert_eq!(dto.recovery_rfc_fault_domain.as_deref(), Some("ReferenceChain"));
-    assert_eq!(dto.recovery_rfc_stage.as_deref(), Some("RecoveringToStable"));
+    assert_eq!(
+        dto.recovery_rfc_fault_domain.as_deref(),
+        Some("ReferenceChain")
+    );
+    assert_eq!(
+        dto.recovery_rfc_stage.as_deref(),
+        Some("RecoveringToStable")
+    );
     assert_eq!(dto.recovery_rfc_ceiling.as_deref(), Some("LocalRecover"));
 }
 

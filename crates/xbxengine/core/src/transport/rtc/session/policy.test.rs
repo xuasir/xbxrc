@@ -143,7 +143,7 @@ impl RecoveryIntegrationHarness {
                 successful_action_count: 0,
                 failed_action_count: 0,
                 last_observed_at_ms: Some(recovery_observed_at_ms),
-            ..Default::default()
+                ..Default::default()
             },
             BweProjection::default(),
             DiagnosticsProjection::default(),
@@ -374,7 +374,7 @@ fn disconnected_surface_emits_lifecycle_reconnect_without_waiting_no_progress_ti
         successful_action_count: 0,
         failed_action_count: 0,
         last_observed_at_ms: Some(100.0),
-            ..Default::default()
+        ..Default::default()
     };
     let first = TransportSnapshot::new(
         1,
@@ -546,7 +546,7 @@ fn connecting_startup_without_progress_triggers_lifecycle_reconnect() {
         successful_action_count: 0,
         failed_action_count: 0,
         last_observed_at_ms: Some(100.0),
-            ..Default::default()
+        ..Default::default()
     };
     let first = TransportSnapshot::new(
         1,
@@ -647,7 +647,7 @@ fn connecting_seeking_anchor_without_progress_triggers_lifecycle_reconnect() {
         successful_action_count: 0,
         failed_action_count: 0,
         last_observed_at_ms: Some(100.0),
-            ..Default::default()
+        ..Default::default()
     };
     let first = TransportSnapshot::new(
         1,
@@ -694,7 +694,7 @@ fn connecting_without_semantic_hints_still_triggers_liveness_reconnect() {
         successful_action_count: 0,
         failed_action_count: 0,
         last_observed_at_ms: Some(100.0),
-            ..Default::default()
+        ..Default::default()
     };
     let first = TransportSnapshot::new(
         1,
@@ -758,7 +758,7 @@ fn new_state_does_not_emit_liveness_reconnect_before_connecting() {
         successful_action_count: 0,
         failed_action_count: 0,
         last_observed_at_ms: Some(100.0),
-            ..Default::default()
+        ..Default::default()
     };
 
     let first = TransportSnapshot::new(
@@ -823,7 +823,7 @@ fn lifecycle_reconnect_attempt_limit_enters_failed_terminal() {
         successful_action_count: 0,
         failed_action_count: 0,
         last_observed_at_ms: Some(100.0),
-            ..Default::default()
+        ..Default::default()
     };
     let media = MediaProjection {
         frame_count: 1,
@@ -938,7 +938,7 @@ fn failed_terminal_clears_after_successful_progress_and_rearms_reconnect() {
         successful_action_count: 0,
         failed_action_count: 0,
         last_observed_at_ms: Some(100.0),
-            ..Default::default()
+        ..Default::default()
     };
     let media = MediaProjection {
         frame_count: 1,
@@ -1270,7 +1270,7 @@ fn pre_first_frame_transport_progress_uses_relaxed_liveness_timeout() {
         successful_action_count: 0,
         failed_action_count: 0,
         last_observed_at_ms: Some(100.0),
-            ..Default::default()
+        ..Default::default()
     };
 
     let first = TransportSnapshot::new(
@@ -1339,7 +1339,7 @@ fn recovering_pre_first_frame_without_transport_progress_uses_relaxed_liveness_t
         successful_action_count: 0,
         failed_action_count: 0,
         last_observed_at_ms: Some(100.0),
-            ..Default::default()
+        ..Default::default()
     };
 
     let first = TransportSnapshot::new(
@@ -1471,7 +1471,7 @@ fn cloud_early_connecting_without_builder_waits_for_long_terminal_window() {
         successful_action_count: 0,
         failed_action_count: 0,
         last_observed_at_ms: Some(100.0),
-            ..Default::default()
+        ..Default::default()
     };
     let media = MediaProjection::default();
 
@@ -1618,7 +1618,7 @@ fn cloud_early_new_without_builder_does_not_emit_liveness_reconnect_candidates()
         successful_action_count: 0,
         failed_action_count: 0,
         last_observed_at_ms: Some(100.0),
-            ..Default::default()
+        ..Default::default()
     };
     let media = MediaProjection::default();
 
@@ -1725,7 +1725,7 @@ fn cloud_early_recovering_without_builder_waits_for_long_terminal_window() {
         successful_action_count: 0,
         failed_action_count: 0,
         last_observed_at_ms: Some(100.0),
-            ..Default::default()
+        ..Default::default()
     };
     let media = MediaProjection::default();
 
@@ -1850,7 +1850,7 @@ fn cloud_hard_disconnect_reconnect_budget_exhaustion_enters_failed_terminal_with
         successful_action_count: 0,
         failed_action_count: 0,
         last_observed_at_ms: Some(100.0),
-            ..Default::default()
+        ..Default::default()
     };
     let media = MediaProjection::default();
 
@@ -1971,7 +1971,7 @@ fn connecting_without_target_type_keeps_reconnecting_before_long_terminal_window
         successful_action_count: 0,
         failed_action_count: 0,
         last_observed_at_ms: Some(100.0),
-            ..Default::default()
+        ..Default::default()
     };
     let media = MediaProjection::default();
 
@@ -2062,7 +2062,7 @@ fn recovering_without_first_frame_does_not_emit_periodic_reconnect() {
         successful_action_count: 0,
         failed_action_count: 0,
         last_observed_at_ms: Some(100.0),
-            ..Default::default()
+        ..Default::default()
     };
 
     let first = TransportSnapshot::new(
@@ -2110,7 +2110,7 @@ fn liveness_uses_snapshot_now_when_last_observed_stalls() {
         successful_action_count: 0,
         failed_action_count: 0,
         last_observed_at_ms: Some(100.0),
-            ..Default::default()
+        ..Default::default()
     };
     let media = MediaProjection {
         frame_count: 0,
@@ -2160,7 +2160,7 @@ fn command_success_without_frames_does_not_reset_liveness_budget() {
         successful_action_count: 0,
         failed_action_count: 0,
         last_observed_at_ms: Some(100.0),
-            ..Default::default()
+        ..Default::default()
     };
     let media = MediaProjection {
         frame_count: 0,
@@ -2293,7 +2293,7 @@ fn connected_ingress_progress_without_present_progress_does_not_force_reconnect(
         successful_action_count: 0,
         failed_action_count: 0,
         last_observed_at_ms: Some(100.0),
-            ..Default::default()
+        ..Default::default()
     };
 
     let first = TransportSnapshot::new(
@@ -3898,7 +3898,7 @@ fn cloud_builder_configured_warmup_does_not_block_lifecycle_reconnect() {
         successful_action_count: 0,
         failed_action_count: 0,
         last_observed_at_ms: Some(100.0),
-            ..Default::default()
+        ..Default::default()
     };
     let first = TransportSnapshot::new(
         1,
@@ -3956,7 +3956,7 @@ fn cloud_builder_configured_uses_more_relaxed_lifecycle_reconnect_interval_than_
         successful_action_count: 0,
         failed_action_count: 0,
         last_observed_at_ms: Some(100.0),
-            ..Default::default()
+        ..Default::default()
     };
 
     let first = TransportSnapshot::new(
@@ -4069,7 +4069,7 @@ fn cloud_local_feedback_ready_restores_default_cloud_reconnect_interval() {
         successful_action_count: 0,
         failed_action_count: 0,
         last_observed_at_ms: Some(100.0),
-            ..Default::default()
+        ..Default::default()
     };
 
     let first = TransportSnapshot::new(
@@ -4221,7 +4221,7 @@ fn reconnect_keeps_priority_over_recovery_and_bwe() {
         successful_action_count: 0,
         failed_action_count: 0,
         last_observed_at_ms: Some(100.0),
-            ..Default::default()
+        ..Default::default()
     };
     let bwe = BweProjection {
         latest_rtt_ms: Some(40.0),
@@ -9135,7 +9135,7 @@ fn build_snapshot(
         successful_action_count: 0,
         failed_action_count: 0,
         last_observed_at_ms: Some(observed_at_ms),
-            ..Default::default()
+        ..Default::default()
     };
     TransportSnapshot::new(
         1,
@@ -11284,7 +11284,7 @@ fn cloud_high_rtt_repeated_transport_expired_deadline_second_hit_reconnects() {
                 successful_action_count: 0,
                 failed_action_count: 0,
                 last_observed_at_ms: Some(now_ms),
-            ..Default::default()
+                ..Default::default()
             },
             BweProjection {
                 latest_rtt_ms: Some(260.0),

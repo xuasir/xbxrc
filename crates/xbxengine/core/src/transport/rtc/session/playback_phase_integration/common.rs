@@ -17,7 +17,10 @@ pub(crate) fn assert_cmds_have_no_reconnect(cmds: &[TransportCommand], case_id: 
     );
 }
 
-pub(crate) fn fill_twcc_stable_local_feedback(stats: &mut XbxEngineMediaRuntimeStats, obs_wall: f64) {
+pub(crate) fn fill_twcc_stable_local_feedback(
+    stats: &mut XbxEngineMediaRuntimeStats,
+    obs_wall: f64,
+) {
     stats.latest_video_twcc_observation = Some(XbxEngineVideoTwccObservation {
         observation_id: 700,
         source: "local-feedback".to_string(),

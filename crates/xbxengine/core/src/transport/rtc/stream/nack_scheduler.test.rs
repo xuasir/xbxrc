@@ -259,10 +259,7 @@ fn reference_packet_with_supply_priority_gets_up_to_two_poll_retries() {
     assert!(first_retry.expired_batches.is_empty());
 
     let second_retry = scheduler.poll(1_020.0);
-    assert_eq!(
-        second_retry.retry_batch.expect("retry").sequences,
-        vec![60]
-    );
+    assert_eq!(second_retry.retry_batch.expect("retry").sequences, vec![60]);
     assert!(second_retry.expired_batches.is_empty());
 
     let exhausted = scheduler.poll(1_030.0);

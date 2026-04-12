@@ -5,13 +5,13 @@ use std::time::{Duration, Instant};
 use xbxengine_protocol::{XbxEngineRemoteProfileKindDto, XbxEngineTransportStateDto};
 
 use crate::runtime_stats_sink::RuntimeStatsSink;
+use crate::transport::rtc::recovery::escalation_label::escalation_structured_label;
 use crate::transport::rtc::recovery::policy::{RecoveryScenarioProfile, ScenarioPolicyResolver};
 use crate::transport::rtc::recovery::remote_profile_runtime::{
     classify_runtime_remote_profile, resolve_runtime_baseline_profile_kind,
 };
 #[cfg(test)]
 use crate::transport::rtc::recovery::startup::resolve_session_phase;
-use crate::transport::rtc::recovery::escalation_label::escalation_structured_label;
 use crate::transport::rtc::recovery::startup::{
     extract_startup_recovery_bitrate_kbps, SessionPhase,
 };
@@ -125,11 +125,8 @@ pub(crate) fn project_runtime_state_from_stats(
     let phase = project_phase_from_stats(stats);
     // 有效标签与吸收规则只基于结构化链；`recovery_diagnosis` 不参与 `RecoveryRuntimeState` 推导（展示由 diagnostics 单独解析）。
     let raw_for_effective_label = escalation_structured_label(stats).unwrap_or("healthy");
-    let diagnosis_label = resolve_effective_diagnosis_label_from_stats(
-        stats,
-        raw_for_effective_label,
-        now_ms,
-    );
+    let diagnosis_label =
+        resolve_effective_diagnosis_label_from_stats(stats, raw_for_effective_label, now_ms);
     RecoveryRuntimeState {
         phase,
         input_profile: resolve_input_profile_from_stats(stats, now_ms),

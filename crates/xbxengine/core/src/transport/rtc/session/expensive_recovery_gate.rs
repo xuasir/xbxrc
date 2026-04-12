@@ -128,8 +128,10 @@ impl<'a> ExpensiveRecoveryGate<'a> {
             return;
         }
         let domain = resolve_session_fault_domain(proposal.signal.reason);
-        if !decode_or_display_fault_requires_transport_evidence(domain, SessionCostCeiling::TransportRecover)
-        {
+        if !decode_or_display_fault_requires_transport_evidence(
+            domain,
+            SessionCostCeiling::TransportRecover,
+        ) {
             return;
         }
         let no_progress = recovery_no_progress_since_ms.is_some_and(|since| {
@@ -146,10 +148,7 @@ impl<'a> ExpensiveRecoveryGate<'a> {
                 observed_at_ms,
             )
             || (snapshot.connection.lifecycle_state == ConnectionLifecycleStateFact::Recovering
-                && snapshot
-                    .recovery
-                    .latest_diagnosis_label
-                    .as_deref()
+                && snapshot.recovery.latest_diagnosis_label.as_deref()
                     == Some("rtcConnectionRecovering")
                 && has_connected_connectivity_failure_evidence)
             || snapshot.connection.lifecycle_state != ConnectionLifecycleStateFact::Connected;

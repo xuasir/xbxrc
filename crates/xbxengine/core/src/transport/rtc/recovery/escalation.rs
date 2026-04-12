@@ -531,7 +531,10 @@ impl VideoEscalationController {
     }
 
     /// 回滚 burst 相关状态；**不**动 `next_observation_id`，以便与后续 `suppressed()` 链对齐。
-    pub(crate) fn restore_burst_rollback_snapshot(&mut self, s: VideoEscalationBurstRollbackSnapshot) {
+    pub(crate) fn restore_burst_rollback_snapshot(
+        &mut self,
+        s: VideoEscalationBurstRollbackSnapshot,
+    ) {
         self.pending_keyframe_signals = s.pending_keyframe_signals;
         self.pending_decoder_reset_signals = s.pending_decoder_reset_signals;
         self.reconnect_candidate_signals = s.reconnect_candidate_signals;

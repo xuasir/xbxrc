@@ -411,7 +411,8 @@ impl<'a> RtcTransportSessionBridge<'a> {
                             },
                             family_semantic_detail,
                         );
-                        if reason.contains(RECOVERY_COMMAND_REASON_SAME_FAMILY_DECODER_RESET_COALESCED)
+                        if reason
+                            .contains(RECOVERY_COMMAND_REASON_SAME_FAMILY_DECODER_RESET_COALESCED)
                         {
                             if let Ok(mut pending) = self.transport_fact_sink.lock() {
                                 pending.push(TransportFact::Recovery(
@@ -1613,8 +1614,8 @@ mod tests {
     /// decoder reset 后新鲜 NonIdrVcl：episode 尚未进入 packet-seen/decoded 也应解除 decoderResetInFlight，
     /// 避免同族合并无限压制后续 reset。
     #[test]
-    fn invalid_transport_await_non_idr_vcl_unlocks_decoder_reset_gate_without_packet_seen_episode(
-    ) {
+    fn invalid_transport_await_non_idr_vcl_unlocks_decoder_reset_gate_without_packet_seen_episode()
+    {
         let now_ms = crate::transport::rtc::stats::now_ms_f64();
         let mut stats = XbxEngineMediaRuntimeStats::default();
         stats.transport_recovery_epoch = 5;

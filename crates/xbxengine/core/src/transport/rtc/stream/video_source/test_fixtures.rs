@@ -300,7 +300,7 @@ impl LocalIngressReplayFixture {
                 successful_action_count: 0,
                 failed_action_count: 0,
                 last_observed_at_ms: Some(now_ms),
-            ..Default::default()
+                ..Default::default()
             },
             BweProjection::default(),
             DiagnosticsProjection::default(),

@@ -270,7 +270,8 @@ impl VideoSchedulingOwner {
         let absorb_soft_display_supply_critical = matches!(
             critical_signal,
             DisplaySupplyCriticalSignal::SoftNoPendingAge
-        ) && effective_supply_state != classified_supply_state;
+        ) && effective_supply_state
+            != classified_supply_state;
         let clean_anchor_hysteresis = Self::clean_anchor_hysteresis_allows_reentry(input);
         let wait_keyframe_rebuild_priority = Self::should_prioritize_wait_keyframe_rebuild(input);
         let codec_recovery_keyframe_blocked =
@@ -1849,10 +1850,9 @@ impl VideoSchedulingOwner {
                 input.effective_source_event(),
                 Some("frame-complete-candidate" | "frame-observed")
             );
-        let timeline_counts = timeline_progress_visible && !steady_timeline_without_present_feedback;
-        decode_serviceable && !transient_host_present_gap
-            || present_serviceable
-            || timeline_counts
+        let timeline_counts =
+            timeline_progress_visible && !steady_timeline_without_present_feedback;
+        decode_serviceable && !transient_host_present_gap || present_serviceable || timeline_counts
     }
 
     fn latest_clean_anchor_submitted_at_ms(input: &VideoSchedulingOwnerInput) -> Option<f64> {

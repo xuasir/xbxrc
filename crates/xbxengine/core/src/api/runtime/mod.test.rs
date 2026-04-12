@@ -65,6 +65,7 @@ struct TestHostBridge {
     fail_request_kind: Rc<RefCell<Option<&'static str>>>,
     fail_keepalive_message: Rc<RefCell<Option<String>>>,
     poll_ice_batches: Rc<RefCell<Vec<Vec<XbxEngineIceCandidateDto>>>>,
+    default_remote_end_of_candidates: Rc<Cell<bool>>,
     cancellation_epoch: Rc<Cell<u64>>,
     cancel_after_request_kind: Rc<RefCell<Option<&'static str>>>,
     call_order: Arc<Mutex<Vec<&'static str>>>,
@@ -79,6 +80,7 @@ impl TestHostBridge {
             fail_request_kind: Rc::new(RefCell::new(None)),
             fail_keepalive_message: Rc::new(RefCell::new(None)),
             poll_ice_batches: Rc::new(RefCell::new(Vec::new())),
+            default_remote_end_of_candidates: Rc::new(Cell::new(true)),
             cancellation_epoch: Rc::new(Cell::new(0)),
             cancel_after_request_kind: Rc::new(RefCell::new(None)),
             call_order: Arc::new(Mutex::new(Vec::new())),
@@ -96,6 +98,7 @@ impl TestHostBridge {
             fail_request_kind,
             fail_keepalive_message: Rc::new(RefCell::new(None)),
             poll_ice_batches: Rc::new(RefCell::new(Vec::new())),
+            default_remote_end_of_candidates: Rc::new(Cell::new(true)),
             cancellation_epoch: Rc::new(Cell::new(0)),
             cancel_after_request_kind: Rc::new(RefCell::new(None)),
             call_order: Arc::new(Mutex::new(Vec::new())),
@@ -116,6 +119,11 @@ impl TestHostBridge {
 
     fn with_poll_ice_batches(self, batches: Vec<Vec<XbxEngineIceCandidateDto>>) -> Self {
         *self.poll_ice_batches.borrow_mut() = batches;
+        self
+    }
+
+    fn without_default_remote_end_of_candidates(self) -> Self {
+        self.default_remote_end_of_candidates.set(false);
         self
     }
 }
@@ -180,7 +188,11 @@ impl XbxEngineHostBridge for TestHostBridge {
             XbxEngineHostRequestDto::SubmitIce { .. } => XbxEngineHostResponseDto::IceSubmitted,
             XbxEngineHostRequestDto::PollIce { .. } => {
                 let candidates = if self.poll_ice_batches.borrow().is_empty() {
-                    Vec::new()
+                    if self.default_remote_end_of_candidates.get() {
+                        vec![remote_end_of_candidates_marker()]
+                    } else {
+                        Vec::new()
+                    }
                 } else {
                     self.poll_ice_batches.borrow_mut().remove(0)
                 };
@@ -1724,7 +1736,7 @@ fn reconnect_settled_keyframe_is_deferred_when_keyframe_is_already_in_flight() {
     let keyframe_calls = backend.keyframe_request_calls.clone();
     let mut runtime = XbxEngineRuntime::with_media_backend(
         XbxEngineRuntimeConfig::default(),
-        TestHostBridge::new(requests),
+        TestHostBridge::new(requests).without_default_remote_end_of_candidates(),
         TestEventSink::new(events),
         backend,
     );
@@ -1777,7 +1789,7 @@ fn reconnect_settled_keyframe_is_deferred_during_cooldown_window() {
     let keyframe_calls = backend.keyframe_request_calls.clone();
     let mut runtime = XbxEngineRuntime::with_media_backend(
         XbxEngineRuntimeConfig::default(),
-        TestHostBridge::new(requests),
+        TestHostBridge::new(requests).without_default_remote_end_of_candidates(),
         TestEventSink::new(events),
         backend,
     );
@@ -1931,7 +1943,7 @@ fn default_media_backend_is_swappable_but_preserves_runtime_contract() {
     let events = Rc::new(RefCell::new(Vec::new()));
     let mut runtime = XbxEngineRuntime::with_media_backend(
         XbxEngineRuntimeConfig::default(),
-        TestHostBridge::new(requests),
+        TestHostBridge::new(requests).without_default_remote_end_of_candidates(),
         TestEventSink::new(events),
         backend,
     );

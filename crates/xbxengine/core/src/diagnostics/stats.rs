@@ -460,11 +460,13 @@ pub fn build_xbxengine_stats(
         .map(|state| state.input_profile.effective_label.clone())
         .or_else(|| runtime_remote_profile.effective_label.clone());
     let recovery_strategy_profile = resolve_recovery_strategy_profile(runtime_stats);
-    let recovery_diagnosis = resolve_recovery_diagnosis(recovery_runtime_state.as_ref(), video_owner);
-    let recovery_rfc_fault_domain = runtime_stats
-        .and_then(|s| s.recovery_rfc_authoritative_fault_domain.clone());
+    let recovery_diagnosis =
+        resolve_recovery_diagnosis(recovery_runtime_state.as_ref(), video_owner);
+    let recovery_rfc_fault_domain =
+        runtime_stats.and_then(|s| s.recovery_rfc_authoritative_fault_domain.clone());
     let recovery_rfc_stage = runtime_stats.and_then(|s| s.recovery_rfc_authoritative_stage.clone());
-    let recovery_rfc_ceiling = runtime_stats.and_then(|s| s.recovery_rfc_authoritative_ceiling.clone());
+    let recovery_rfc_ceiling =
+        runtime_stats.and_then(|s| s.recovery_rfc_authoritative_ceiling.clone());
     let video_health = video_owner
         .as_ref()
         .map(|owner| map_owner_state_to_video_health(owner.state.as_str()));

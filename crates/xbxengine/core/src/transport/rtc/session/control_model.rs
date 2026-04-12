@@ -8,7 +8,9 @@
 //! - `RecoverySignalDomain` 不得独立演化语义，仅作 coordinator 内部桶。
 //! - `CostCeiling` 动作梯子：`Absorb` → `LocalRecover` → `TransportRecover`（见 `SessionCostCeiling` / `session_cost_ceiling_for_recovery_action`）。
 
-use crate::transport::rtc::policy::video_scheduling_owner::{OwnerRecoveryReason, VideoSchedulingOwnerState};
+use crate::transport::rtc::policy::video_scheduling_owner::{
+    OwnerRecoveryReason, VideoSchedulingOwnerState,
+};
 use crate::transport::rtc::recovery::escalation::{RecoveryAction, VideoEscalationReason};
 
 /// 对应 RFC `FaultDomain`。
@@ -104,7 +106,8 @@ pub(crate) fn resolve_session_fault_domain(reason: VideoEscalationReason) -> Ses
         | VideoEscalationReason::TransportSevereDeadline
         | VideoEscalationReason::TransportRecoveredLate
         | VideoEscalationReason::TransportSampleLoss => SessionFaultDomain::Transport,
-        VideoEscalationReason::WaitKeyframe | VideoEscalationReason::TransportAwaitRecoveryKeyframe => {
+        VideoEscalationReason::WaitKeyframe
+        | VideoEscalationReason::TransportAwaitRecoveryKeyframe => {
             SessionFaultDomain::ReferenceChain
         }
         VideoEscalationReason::Reconfigure | VideoEscalationReason::DecoderBackendFailure => {
@@ -116,7 +119,9 @@ pub(crate) fn resolve_session_fault_domain(reason: VideoEscalationReason) -> Ses
     }
 }
 
-pub(crate) fn resolve_session_recovery_stage(state: VideoSchedulingOwnerState) -> SessionRecoveryStage {
+pub(crate) fn resolve_session_recovery_stage(
+    state: VideoSchedulingOwnerState,
+) -> SessionRecoveryStage {
     match state {
         VideoSchedulingOwnerState::SeekingAnchor | VideoSchedulingOwnerState::Priming => {
             SessionRecoveryStage::Bootstrap
@@ -130,7 +135,9 @@ pub(crate) fn resolve_session_recovery_stage(state: VideoSchedulingOwnerState) -
 
 /// 故障域在 RFC 动作梯子上的**理论上限**（DTO `recovery_rfc_fault_domain` + 派生 max tier），
 /// 不等于当前拍经 gate 后已选动作的层级；后者见 `session_cost_ceiling_for_recovery_action` 与 DTO `recovery_rfc_ceiling`。
-pub(crate) fn session_cost_ceiling_for_fault_domain(domain: SessionFaultDomain) -> SessionCostCeiling {
+pub(crate) fn session_cost_ceiling_for_fault_domain(
+    domain: SessionFaultDomain,
+) -> SessionCostCeiling {
     match domain {
         SessionFaultDomain::Transport => SessionCostCeiling::TransportRecover,
         SessionFaultDomain::ReferenceChain
@@ -139,7 +146,9 @@ pub(crate) fn session_cost_ceiling_for_fault_domain(domain: SessionFaultDomain) 
     }
 }
 
-pub(crate) fn session_cost_ceiling_for_recovery_action(action: RecoveryAction) -> SessionCostCeiling {
+pub(crate) fn session_cost_ceiling_for_recovery_action(
+    action: RecoveryAction,
+) -> SessionCostCeiling {
     match action {
         RecoveryAction::RequestReconnectCandidate => SessionCostCeiling::TransportRecover,
         RecoveryAction::RequestKeyframe | RecoveryAction::RequestDecoderReset => {
@@ -154,7 +163,10 @@ pub(crate) fn session_cost_ceiling_for_recovery_action(action: RecoveryAction) -
     }
 }
 
-pub(crate) fn cost_ceiling_monotonic_allows(from: SessionCostCeiling, to: SessionCostCeiling) -> bool {
+pub(crate) fn cost_ceiling_monotonic_allows(
+    from: SessionCostCeiling,
+    to: SessionCostCeiling,
+) -> bool {
     let rank = |c: SessionCostCeiling| match c {
         SessionCostCeiling::Absorb => 0,
         SessionCostCeiling::LocalRecover => 1,

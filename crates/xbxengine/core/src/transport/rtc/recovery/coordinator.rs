@@ -850,8 +850,10 @@ impl RecoveryCoordinator {
             );
         }
         if let Some(snap) = burst_rollback_snap {
-            if Self::coordinator_burst_rollback_warranted(naive_action, escalation_decision.action) {
-                self.escalation_controller.restore_burst_rollback_snapshot(snap);
+            if Self::coordinator_burst_rollback_warranted(naive_action, escalation_decision.action)
+            {
+                self.escalation_controller
+                    .restore_burst_rollback_snapshot(snap);
             }
         }
         let action = escalation_decision.action;
@@ -1401,7 +1403,8 @@ impl RecoveryCoordinator {
         stats: &XbxEngineMediaRuntimeStats,
         observed_at_ms: f64,
     ) -> bool {
-        let fallback_ms = resolve_runtime_recovery_profile(stats).pre_first_frame_reconnect_fallback_ms();
+        let fallback_ms =
+            resolve_runtime_recovery_profile(stats).pre_first_frame_reconnect_fallback_ms();
         match stats.first_video_packet_arrival_time_ms {
             Some(t0) => (observed_at_ms - t0).max(0.0) <= fallback_ms,
             None => false,
@@ -2810,23 +2813,22 @@ impl RecoveryCoordinator {
     ) -> bool {
         matches!(
             (naive, final_action),
-            (RecoveryAction::RequestKeyframe, RecoveryAction::WaitForBurst)
-                | (
-                    RecoveryAction::RequestKeyframe,
-                    RecoveryAction::CoalescedDecoderResetInFlight
-                )
-                | (
-                    RecoveryAction::RequestDecoderReset,
-                    RecoveryAction::CoalescedDecoderResetInFlight
-                )
-                | (
-                    RecoveryAction::CoalescedKeyframeInFlight,
-                    RecoveryAction::CoalescedDecoderResetInFlight
-                )
-                | (
-                    RecoveryAction::CoalescedKeyframeInFlight,
-                    RecoveryAction::WaitForBurst
-                )
+            (
+                RecoveryAction::RequestKeyframe,
+                RecoveryAction::WaitForBurst
+            ) | (
+                RecoveryAction::RequestKeyframe,
+                RecoveryAction::CoalescedDecoderResetInFlight
+            ) | (
+                RecoveryAction::RequestDecoderReset,
+                RecoveryAction::CoalescedDecoderResetInFlight
+            ) | (
+                RecoveryAction::CoalescedKeyframeInFlight,
+                RecoveryAction::CoalescedDecoderResetInFlight
+            ) | (
+                RecoveryAction::CoalescedKeyframeInFlight,
+                RecoveryAction::WaitForBurst
+            )
         )
     }
 }

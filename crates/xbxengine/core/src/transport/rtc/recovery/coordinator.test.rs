@@ -87,13 +87,19 @@ fn recovery_profile_pre_first_frame_fallback_ms_matches_session_policy() {
     home.session_target_type = Some(XbxEngineTargetTypeDto::Home);
     home.transport_path = Some("Direct (host->host)".to_string());
     let home_profile = resolve_recovery_profile(&Mutex::new(home));
-    assert_eq!(home_profile.pre_first_frame_reconnect_fallback_ms(), 15_000.0);
+    assert_eq!(
+        home_profile.pre_first_frame_reconnect_fallback_ms(),
+        15_000.0
+    );
 
     let mut cloud = XbxEngineMediaRuntimeStats::default();
     cloud.session_target_type = Some(XbxEngineTargetTypeDto::Cloud);
     cloud.transport_path = Some("Direct (host->host)".to_string());
     let cloud_profile = resolve_recovery_profile(&Mutex::new(cloud));
-    assert_eq!(cloud_profile.pre_first_frame_reconnect_fallback_ms(), 35_000.0);
+    assert_eq!(
+        cloud_profile.pre_first_frame_reconnect_fallback_ms(),
+        35_000.0
+    );
 }
 
 fn healthy_twcc_observation(now_ms: f64) -> XbxEngineVideoTwccObservation {

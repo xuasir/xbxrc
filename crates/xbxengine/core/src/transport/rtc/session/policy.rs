@@ -46,11 +46,11 @@ use crate::transport::rtc::session::connectivity_reason::{
     map_label_to_escalation_reason, parse_session_phase, resolve_connectivity_fallback_reason,
     resolve_lifecycle_reconnect_reason_label,
 };
-use crate::transport::rtc::session::expensive_recovery_gate::ExpensiveRecoveryGate;
 use crate::transport::rtc::session::control_model::{
     owner_recovery_reason_to_escalation_reason, resolve_session_fault_domain,
     resolve_session_recovery_stage, session_cost_ceiling_for_recovery_action, SessionFaultDomain,
 };
+use crate::transport::rtc::session::expensive_recovery_gate::ExpensiveRecoveryGate;
 use crate::transport::rtc::session::facts::{
     build_rtc_session_policy_orchestration_input, RtcSessionPolicyOrchestrationInput,
 };
@@ -438,8 +438,13 @@ impl SessionPolicyHook for RtcSessionPolicy {
 
 impl RtcSessionPolicy {
     /// transport bridge 上报 decoder reset 同族合并 defer，回滚 escalation 侧 burst 误计。
-    fn sync_decoder_reset_family_coalesce_deferred_feedback(&mut self, snapshot: &TransportSnapshot) {
-        let count = snapshot.recovery.decoder_reset_family_coalesce_deferred_count;
+    fn sync_decoder_reset_family_coalesce_deferred_feedback(
+        &mut self,
+        snapshot: &TransportSnapshot,
+    ) {
+        let count = snapshot
+            .recovery
+            .decoder_reset_family_coalesce_deferred_count;
         if count <= self.last_seen_decoder_reset_family_coalesce_deferred_count {
             return;
         }
@@ -523,7 +528,8 @@ impl RtcSessionPolicy {
     }
 
     fn pre_first_frame_reconnect_fallback_ms(&self) -> f64 {
-        resolve_recovery_profile(self.runtime_stats.as_ref()).pre_first_frame_reconnect_fallback_ms()
+        resolve_recovery_profile(self.runtime_stats.as_ref())
+            .pre_first_frame_reconnect_fallback_ms()
     }
 
     fn liveness_reconnect_attempt_limit(&self) -> u8 {
@@ -1073,7 +1079,8 @@ impl RtcSessionPolicy {
         observed_at_ms: f64,
     ) -> bool {
         const STALE_TRANSPORT_AWAIT_REPLAY_MAX_AGE_MS: f64 = 220.0;
-        if snapshot.recovery.latest_diagnosis_label.as_deref() != Some("transportAwaitRecoveryKeyframe")
+        if snapshot.recovery.latest_diagnosis_label.as_deref()
+            != Some("transportAwaitRecoveryKeyframe")
         {
             return false;
         }
@@ -1086,9 +1093,7 @@ impl RtcSessionPolicy {
                 .is_some_and(|epoch| epoch == stats.transport_recovery_epoch)
                 && stats.video_anchor_clean_source_event.as_deref()
                     == Some("chain-clean-keyframe-submitted");
-            let clean_anchor_pipeline_evidence = stats
-                .video_anchor_clean_source_event
-                .as_deref()
+            let clean_anchor_pipeline_evidence = stats.video_anchor_clean_source_event.as_deref()
                 == Some("chain-clean-keyframe-submitted")
                 && stats.video_anchor_clean_observed_at_ms.is_some();
             let terminal_deferred_transport_await =
@@ -1961,9 +1966,8 @@ impl RtcSessionPolicy {
         // canonical owner contract 由 owner state machine 直接写入 runtime stats，
         // 不再维护 recovery coupling 的并行语义轴。
         sink.update(|stats| {
-            stats.recovery_policy_profile = Some(
-                orchestration.recovery_profile_kind.as_str().to_string(),
-            );
+            stats.recovery_policy_profile =
+                Some(orchestration.recovery_profile_kind.as_str().to_string());
             stats.video_owner_state = Some(owner_output.state.as_str().to_string());
             stats.video_owner_reason = Some(owner_output.diagnostics.reason_label.clone());
             stats.video_owner_source =
@@ -2046,7 +2050,9 @@ impl RtcSessionPolicy {
                         .map(|reason| format!("terminal:{reason}"))
                         .unwrap_or_else(|| "no-signal".to_string()),
                     if terminal_reason.is_some() {
-                        RecoveryLedgerNarrativeState::FailedTerminal.as_str().to_string()
+                        RecoveryLedgerNarrativeState::FailedTerminal
+                            .as_str()
+                            .to_string()
                     } else {
                         "none".to_string()
                     },
@@ -2085,15 +2091,16 @@ impl RtcSessionPolicy {
                         .to_string(),
                 );
                 stats.recovery_rfc_authoritative_fault_domain = Some(
-                    resolve_session_fault_domain(p.reason).as_rfc_str().to_string(),
+                    resolve_session_fault_domain(p.reason)
+                        .as_rfc_str()
+                        .to_string(),
                 );
                 stats.recovery_rfc_authoritative_stage = Some(
                     resolve_session_recovery_stage(owner_state)
                         .as_rfc_str()
                         .to_string(),
                 );
-                stats.recovery_active_escalation_reason =
-                    Some(p.reason.label().to_string());
+                stats.recovery_active_escalation_reason = Some(p.reason.label().to_string());
             } else {
                 stats.recovery_rfc_authoritative_ceiling = None;
                 stats.recovery_rfc_authoritative_fault_domain = None;

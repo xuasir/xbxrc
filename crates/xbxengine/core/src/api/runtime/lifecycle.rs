@@ -22,6 +22,7 @@ use crate::{
 const ICE_EXCHANGE_TIMEOUT_MS_MIN: f64 = 10_000.0;
 const ICE_EXCHANGE_TIMEOUT_MS_MAX: f64 = 12_000.0;
 const ICE_EXCHANGE_STABLE_SETTLE_WINDOW_MS: f64 = 1_500.0;
+const ICE_EXCHANGE_IDLE_BACKOFF_MS: u64 = 60;
 const TRANSPORT_RECONNECT_CANDIDATE_MIN_INTERVAL_MS: f64 = 6_000.0;
 const RECONNECT_SETTLED_KEYFRAME_MIN_INTERVAL_MS: f64 = 800.0;
 
@@ -854,6 +855,7 @@ where
                 &mut sent_local_candidates,
             )?;
             let has_new_local_candidates = !outbound_local_candidates.is_empty();
+            let mut made_progress = false;
             let now_ms = now_ms_f64();
             if has_new_local_candidates {
                 local_candidates_stable_since_ms = None;
@@ -881,6 +883,7 @@ where
             if local_gathering_complete && !last_local_gathering_complete {
                 last_local_gathering_complete = true;
                 last_progress_at_ms = now_ms_f64();
+                made_progress = true;
             }
             crate::xbx_log_warn!(
                 "[xbxengine][runtime][ice] exchange loop local_candidates={} submitted={} local_gathering_complete={} remote_eoc_seen={} local_eoc_submitted={} stable_elapsed_ms={:.0} remote_accumulated={}",
@@ -916,6 +919,7 @@ where
                     submitted_local_end_of_candidates = true;
                 }
                 last_progress_at_ms = now_ms_f64();
+                made_progress = true;
             } else if !submitted_local_candidates {
                 if local_gathering_complete {
                     crate::xbx_log_warn!(
@@ -926,7 +930,7 @@ where
                 crate::xbx_log_warn!(
                     "[xbxengine][runtime][ice] waiting for first local candidate batch"
                 );
-                std::thread::sleep(Duration::from_millis(60));
+                std::thread::sleep(Duration::from_millis(ICE_EXCHANGE_IDLE_BACKOFF_MS));
                 continue;
             }
 
@@ -952,6 +956,7 @@ where
                 .any(|candidate| is_end_of_candidates_marker(&candidate.candidate));
             if remote_end_of_candidates_seen && !had_remote_end_of_candidates {
                 last_progress_at_ms = now_ms_f64();
+                made_progress = true;
             }
             if remote_end_of_candidates_seen {
                 crate::xbx_log_warn!("[xbxengine][runtime][ice] remote end-of-candidates observed");
@@ -965,6 +970,7 @@ where
                     .add_remote_ice_candidates(next_remote_candidates.clone())?;
                 aggregated_remote_candidates.extend(next_remote_candidates);
                 last_progress_at_ms = now_ms_f64();
+                made_progress = true;
                 crate::xbx_log_warn!(
                     "[xbxengine][runtime][ice] applied remote candidates batch size={} summary={} accumulated={}",
                     applied_batch_len,
@@ -1026,6 +1032,11 @@ where
                     Self::summarize_ice_candidate_kinds(&aggregated_remote_candidates),
                 );
                 break;
+            }
+
+            if !made_progress {
+                // 空轮询时主动退避，避免测试与运行态都进入高频忙等。
+                std::thread::sleep(Duration::from_millis(ICE_EXCHANGE_IDLE_BACKOFF_MS));
             }
         }
 

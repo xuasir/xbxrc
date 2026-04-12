@@ -1,7 +1,7 @@
 //! RFC PLY-EDGE-10 .. PLY-EDGE-18
 
-use super::common::{assert_cmds_have_no_reconnect, wall_observed_ms};
 use super::super::RecoveryIntegrationHarness;
+use super::common::{assert_cmds_have_no_reconnect, wall_observed_ms};
 use crate::transport::rtc::facts::ConnectionLifecycleStateFact;
 
 #[test]
@@ -23,24 +23,25 @@ fn playback_phase_edge10_gap_recovered_with_timeline_recovering_must_not_imply_s
             stats.latest_video_host_present_time_ms = Some(t - 1_300.0);
             stats.latest_video_decode_ok_time_ms = Some(t - 500.0);
             stats.video_renderer_stalled = Some(true);
-            stats.latest_video_timeline_observation = Some(crate::XbxEngineVideoTimelineObservation {
-                observation_id: 14_000,
-                source_event: "gap-resolved".to_string(),
-                gap: Some(crate::XbxEngineVideoTimelineGapSnapshot {
-                    state: "repaired".to_string(),
-                    sequence: Some(9),
-                    frame_rtp_timestamp: Some(200),
-                    frame_importance: Some("keyframe".to_string()),
-                    observed_at_ms: t - 4.0,
-                }),
-                frame: None,
-                chain: crate::XbxEngineVideoTimelineChainSnapshot {
-                    state: "recovering".to_string(),
-                    reason: Some("transportAwaitRecoveryKeyframe".to_string()),
+            stats.latest_video_timeline_observation =
+                Some(crate::XbxEngineVideoTimelineObservation {
+                    observation_id: 14_000,
+                    source_event: "gap-resolved".to_string(),
+                    gap: Some(crate::XbxEngineVideoTimelineGapSnapshot {
+                        state: "repaired".to_string(),
+                        sequence: Some(9),
+                        frame_rtp_timestamp: Some(200),
+                        frame_importance: Some("keyframe".to_string()),
+                        observed_at_ms: t - 4.0,
+                    }),
+                    frame: None,
+                    chain: crate::XbxEngineVideoTimelineChainSnapshot {
+                        state: "recovering".to_string(),
+                        reason: Some("transportAwaitRecoveryKeyframe".to_string()),
+                        observed_at_ms: t - 2.0,
+                    },
                     observed_at_ms: t - 2.0,
-                },
-                observed_at_ms: t - 2.0,
-            });
+                });
             stats.latest_video_track_status = Some(crate::XbxEngineVideoTrackStatus {
                 state: "remoteTrackAttached".to_string(),
                 video_width: Some(1920),
@@ -115,18 +116,19 @@ fn playback_phase_edge11_expired_unsent_keyframe_episode_must_surface_decision()
                 audio_bytes_total: 47_500,
                 observed_at_ms: t - 2.0,
             });
-            stats.latest_video_timeline_observation = Some(crate::XbxEngineVideoTimelineObservation {
-                observation_id: 14_101,
-                source_event: "frame-await-recovery-keyframe".to_string(),
-                gap: None,
-                frame: None,
-                chain: crate::XbxEngineVideoTimelineChainSnapshot {
-                    state: "recovering".to_string(),
-                    reason: Some("transportAwaitRecoveryKeyframe".to_string()),
+            stats.latest_video_timeline_observation =
+                Some(crate::XbxEngineVideoTimelineObservation {
+                    observation_id: 14_101,
+                    source_event: "frame-await-recovery-keyframe".to_string(),
+                    gap: None,
+                    frame: None,
+                    chain: crate::XbxEngineVideoTimelineChainSnapshot {
+                        state: "recovering".to_string(),
+                        reason: Some("transportAwaitRecoveryKeyframe".to_string()),
+                        observed_at_ms: t - 2.0,
+                    },
                     observed_at_ms: t - 2.0,
-                },
-                observed_at_ms: t - 2.0,
-            });
+                });
         },
     );
     harness.with_stats(|stats| {
@@ -162,7 +164,8 @@ fn playback_phase_edge12_deadline_expired_episode_must_not_stay_no_signal() {
             stats.video_renderer_stalled = Some(true);
             stats.video_anchor_clean_epoch = Some(260);
             stats.video_anchor_clean_observed_at_ms = Some(t - 800.0);
-            stats.video_anchor_clean_source_event = Some("chain-clean-keyframe-submitted".to_string());
+            stats.video_anchor_clean_source_event =
+                Some("chain-clean-keyframe-submitted".to_string());
             stats.latest_keyframe_request_episode =
                 Some(crate::XbxEngineKeyframeRequestEpisodeObservation {
                     episode_id: 14_200,
@@ -194,18 +197,19 @@ fn playback_phase_edge12_deadline_expired_episode_must_not_stay_no_signal() {
                 audio_bytes_total: 48_000,
                 observed_at_ms: t - 2.0,
             });
-            stats.latest_video_timeline_observation = Some(crate::XbxEngineVideoTimelineObservation {
-                observation_id: 14_201,
-                source_event: "frame-await-recovery-keyframe".to_string(),
-                gap: None,
-                frame: None,
-                chain: crate::XbxEngineVideoTimelineChainSnapshot {
-                    state: "recovering".to_string(),
-                    reason: Some("transportAwaitRecoveryKeyframe".to_string()),
+            stats.latest_video_timeline_observation =
+                Some(crate::XbxEngineVideoTimelineObservation {
+                    observation_id: 14_201,
+                    source_event: "frame-await-recovery-keyframe".to_string(),
+                    gap: None,
+                    frame: None,
+                    chain: crate::XbxEngineVideoTimelineChainSnapshot {
+                        state: "recovering".to_string(),
+                        reason: Some("transportAwaitRecoveryKeyframe".to_string()),
+                        observed_at_ms: t - 2.0,
+                    },
                     observed_at_ms: t - 2.0,
-                },
-                observed_at_ms: t - 2.0,
-            });
+                });
         },
     );
     harness.with_stats(|stats| {
@@ -255,28 +259,35 @@ fn playback_phase_edge13_degraded_then_steady_must_not_regress_to_priming() {
                 audio_bytes_total: 55_000,
                 observed_at_ms: t - 1.0,
             });
-            stats.latest_video_timeline_observation = Some(crate::XbxEngineVideoTimelineObservation {
-                observation_id: 14_300,
-                source_event: "frame-observed".to_string(),
-                gap: None,
-                frame: None,
-                chain: crate::XbxEngineVideoTimelineChainSnapshot {
-                    state: "healthy".to_string(),
-                    reason: None,
+            stats.latest_video_timeline_observation =
+                Some(crate::XbxEngineVideoTimelineObservation {
+                    observation_id: 14_300,
+                    source_event: "frame-observed".to_string(),
+                    gap: None,
+                    frame: None,
+                    chain: crate::XbxEngineVideoTimelineChainSnapshot {
+                        state: "healthy".to_string(),
+                        reason: None,
+                        observed_at_ms: t,
+                    },
                     observed_at_ms: t,
-                },
-                observed_at_ms: t,
-            });
+                });
         },
     );
     let t1 = t0 + 50.0;
-    let _ = harness.apply(t1, ConnectionLifecycleStateFact::Connected, "none", 1081, |stats| {
-        let t = t1;
-        stats.host_no_pending_pressure_level = Some("normal".to_string());
-        stats.host_no_pending_streak = 0;
-        stats.latest_video_host_present_time_ms = Some(t - 25.0);
-        stats.latest_video_decode_ok_time_ms = Some(t - 20.0);
-    });
+    let _ = harness.apply(
+        t1,
+        ConnectionLifecycleStateFact::Connected,
+        "none",
+        1081,
+        |stats| {
+            let t = t1;
+            stats.host_no_pending_pressure_level = Some("normal".to_string());
+            stats.host_no_pending_streak = 0;
+            stats.latest_video_host_present_time_ms = Some(t - 25.0);
+            stats.latest_video_decode_ok_time_ms = Some(t - 20.0);
+        },
+    );
     harness.with_stats(|stats| {
         assert_ne!(
             stats.video_owner_state.as_deref(),
@@ -291,40 +302,47 @@ fn playback_phase_edge14_connected_high_ingress_low_output_must_not_emit_connect
     let mut harness =
         RecoveryIntegrationHarness::new(Some(xbxengine_protocol::XbxEngineTargetTypeDto::Cloud));
     let t = wall_observed_ms();
-    let cmds = harness.apply(t, ConnectionLifecycleStateFact::Connected, "none", 1090, |stats| {
-        stats.session_phase = Some("recovering".to_string());
-        stats.transport_recovery_epoch = 280;
-        stats.transport_state = xbxengine_protocol::XbxEngineTransportStateDto::Connected;
-        stats.host_no_pending_pressure_level = Some("critical".to_string());
-        stats.host_no_pending_streak = 260;
-        stats.latest_video_host_present_time_ms = Some(t - 8_000.0);
-        stats.latest_video_decode_ok_time_ms = Some(t - 7_500.0);
-        stats.video_renderer_stalled = Some(true);
-        stats.inbound_primary_video_bytes_total = 5_000_000;
-        stats.latest_video_track_status = Some(crate::XbxEngineVideoTrackStatus {
-            state: "remoteTrackAttached".to_string(),
-            video_width: Some(1920),
-            video_height: Some(1080),
-            mime_type: Some("video/H264".to_string()),
-            transport_state: xbxengine_protocol::XbxEngineTransportStateDto::Connected,
-            video_bytes_total: 2_000_000,
-            video_packet_count_total: 18_000,
-            audio_bytes_total: 200_000,
-            observed_at_ms: t - 1.0,
-        });
-        stats.latest_video_timeline_observation = Some(crate::XbxEngineVideoTimelineObservation {
-            observation_id: 14_400,
-            source_event: "frame-await-recovery-keyframe".to_string(),
-            gap: None,
-            frame: None,
-            chain: crate::XbxEngineVideoTimelineChainSnapshot {
-                state: "recovering".to_string(),
-                reason: Some("transportAwaitRecoveryKeyframe".to_string()),
-                observed_at_ms: t - 2.0,
-            },
-            observed_at_ms: t - 2.0,
-        });
-    });
+    let cmds = harness.apply(
+        t,
+        ConnectionLifecycleStateFact::Connected,
+        "none",
+        1090,
+        |stats| {
+            stats.session_phase = Some("recovering".to_string());
+            stats.transport_recovery_epoch = 280;
+            stats.transport_state = xbxengine_protocol::XbxEngineTransportStateDto::Connected;
+            stats.host_no_pending_pressure_level = Some("critical".to_string());
+            stats.host_no_pending_streak = 260;
+            stats.latest_video_host_present_time_ms = Some(t - 8_000.0);
+            stats.latest_video_decode_ok_time_ms = Some(t - 7_500.0);
+            stats.video_renderer_stalled = Some(true);
+            stats.inbound_primary_video_bytes_total = 5_000_000;
+            stats.latest_video_track_status = Some(crate::XbxEngineVideoTrackStatus {
+                state: "remoteTrackAttached".to_string(),
+                video_width: Some(1920),
+                video_height: Some(1080),
+                mime_type: Some("video/H264".to_string()),
+                transport_state: xbxengine_protocol::XbxEngineTransportStateDto::Connected,
+                video_bytes_total: 2_000_000,
+                video_packet_count_total: 18_000,
+                audio_bytes_total: 200_000,
+                observed_at_ms: t - 1.0,
+            });
+            stats.latest_video_timeline_observation =
+                Some(crate::XbxEngineVideoTimelineObservation {
+                    observation_id: 14_400,
+                    source_event: "frame-await-recovery-keyframe".to_string(),
+                    gap: None,
+                    frame: None,
+                    chain: crate::XbxEngineVideoTimelineChainSnapshot {
+                        state: "recovering".to_string(),
+                        reason: Some("transportAwaitRecoveryKeyframe".to_string()),
+                        observed_at_ms: t - 2.0,
+                    },
+                    observed_at_ms: t - 2.0,
+                });
+        },
+    );
     assert_cmds_have_no_reconnect(&cmds, "PLY-EDGE-14");
 }
 
@@ -358,18 +376,19 @@ fn playback_phase_edge15_recovery_settled_then_reset_must_keep_ledger_coherent()
                 audio_bytes_total: 50_000,
                 observed_at_ms: t - 1.0,
             });
-            stats.latest_video_timeline_observation = Some(crate::XbxEngineVideoTimelineObservation {
-                observation_id: 14_500,
-                source_event: "frame-observed".to_string(),
-                gap: None,
-                frame: None,
-                chain: crate::XbxEngineVideoTimelineChainSnapshot {
-                    state: "healthy".to_string(),
-                    reason: None,
+            stats.latest_video_timeline_observation =
+                Some(crate::XbxEngineVideoTimelineObservation {
+                    observation_id: 14_500,
+                    source_event: "frame-observed".to_string(),
+                    gap: None,
+                    frame: None,
+                    chain: crate::XbxEngineVideoTimelineChainSnapshot {
+                        state: "healthy".to_string(),
+                        reason: None,
+                        observed_at_ms: t,
+                    },
                     observed_at_ms: t,
-                },
-                observed_at_ms: t,
-            });
+                });
         },
     );
     let t1 = t0 + 25.0;
@@ -438,18 +457,19 @@ fn playback_phase_edge16_reconfigure_then_transport_await_must_resolve_single_do
                 audio_bytes_total: 49_000,
                 observed_at_ms: t - 2.0,
             });
-            stats.latest_video_timeline_observation = Some(crate::XbxEngineVideoTimelineObservation {
-                observation_id: 14_600,
-                source_event: "frame-await-recovery-keyframe".to_string(),
-                gap: None,
-                frame: None,
-                chain: crate::XbxEngineVideoTimelineChainSnapshot {
-                    state: "recovering".to_string(),
-                    reason: Some("transportAwaitRecoveryKeyframe".to_string()),
+            stats.latest_video_timeline_observation =
+                Some(crate::XbxEngineVideoTimelineObservation {
+                    observation_id: 14_600,
+                    source_event: "frame-await-recovery-keyframe".to_string(),
+                    gap: None,
+                    frame: None,
+                    chain: crate::XbxEngineVideoTimelineChainSnapshot {
+                        state: "recovering".to_string(),
+                        reason: Some("transportAwaitRecoveryKeyframe".to_string()),
+                        observed_at_ms: t - 2.0,
+                    },
                     observed_at_ms: t - 2.0,
-                },
-                observed_at_ms: t - 2.0,
-            });
+                });
         },
     );
     let has_ledger = harness.with_stats(|s| s.latest_recovery_decision_ledger.is_some());
@@ -478,24 +498,25 @@ fn playback_phase_edge17_gap_resolved_timeline_must_not_mask_unresolved_transpor
             stats.latest_video_host_present_time_ms = Some(t - 1_400.0);
             stats.latest_video_decode_ok_time_ms = Some(t - 520.0);
             stats.video_renderer_stalled = Some(true);
-            stats.latest_video_timeline_observation = Some(crate::XbxEngineVideoTimelineObservation {
-                observation_id: 14_700,
-                source_event: "gap-resolved".to_string(),
-                gap: Some(crate::XbxEngineVideoTimelineGapSnapshot {
-                    state: "repaired".to_string(),
-                    sequence: Some(3),
-                    frame_rtp_timestamp: Some(50),
-                    frame_importance: Some("delta".to_string()),
-                    observed_at_ms: t - 4.0,
-                }),
-                frame: None,
-                chain: crate::XbxEngineVideoTimelineChainSnapshot {
-                    state: "recovering".to_string(),
-                    reason: Some("transportAwaitRecoveryKeyframe".to_string()),
+            stats.latest_video_timeline_observation =
+                Some(crate::XbxEngineVideoTimelineObservation {
+                    observation_id: 14_700,
+                    source_event: "gap-resolved".to_string(),
+                    gap: Some(crate::XbxEngineVideoTimelineGapSnapshot {
+                        state: "repaired".to_string(),
+                        sequence: Some(3),
+                        frame_rtp_timestamp: Some(50),
+                        frame_importance: Some("delta".to_string()),
+                        observed_at_ms: t - 4.0,
+                    }),
+                    frame: None,
+                    chain: crate::XbxEngineVideoTimelineChainSnapshot {
+                        state: "recovering".to_string(),
+                        reason: Some("transportAwaitRecoveryKeyframe".to_string()),
+                        observed_at_ms: t - 2.0,
+                    },
                     observed_at_ms: t - 2.0,
-                },
-                observed_at_ms: t - 2.0,
-            });
+                });
             stats.latest_video_track_status = Some(crate::XbxEngineVideoTrackStatus {
                 state: "remoteTrackAttached".to_string(),
                 video_width: Some(1920),
@@ -526,41 +547,48 @@ fn playback_phase_edge18_null_surface_equivalent_must_not_promote_stable_without
     let mut harness =
         RecoveryIntegrationHarness::new(Some(xbxengine_protocol::XbxEngineTargetTypeDto::Cloud));
     let t = wall_observed_ms();
-    let _ = harness.apply(t, ConnectionLifecycleStateFact::Connected, "none", 1130, |stats| {
-        stats.session_phase = Some("steady".to_string());
-        stats.transport_recovery_epoch = 320;
-        stats.transport_state = xbxengine_protocol::XbxEngineTransportStateDto::Connected;
-        stats.host_no_pending_pressure_level = Some("critical".to_string());
-        stats.host_no_pending_streak = 8;
-        stats.host_cadence_phase = Some("priming".to_string());
-        stats.video_present_submit_count_total = 0;
-        stats.video_present_epoch = 0;
-        stats.latest_video_host_present_time_ms = None;
-        stats.latest_video_decode_ok_time_ms = None;
-        stats.latest_video_track_status = Some(crate::XbxEngineVideoTrackStatus {
-            state: "remoteTrackAttached".to_string(),
-            video_width: Some(1920),
-            video_height: Some(1080),
-            mime_type: Some("video/H264".to_string()),
-            transport_state: xbxengine_protocol::XbxEngineTransportStateDto::Connected,
-            video_bytes_total: 50_000,
-            video_packet_count_total: 400,
-            audio_bytes_total: 8_000,
-            observed_at_ms: t,
-        });
-        stats.latest_video_timeline_observation = Some(crate::XbxEngineVideoTimelineObservation {
-            observation_id: 14_800,
-            source_event: "frame-observed".to_string(),
-            gap: None,
-            frame: None,
-            chain: crate::XbxEngineVideoTimelineChainSnapshot {
-                state: "healthy".to_string(),
-                reason: None,
+    let _ = harness.apply(
+        t,
+        ConnectionLifecycleStateFact::Connected,
+        "none",
+        1130,
+        |stats| {
+            stats.session_phase = Some("steady".to_string());
+            stats.transport_recovery_epoch = 320;
+            stats.transport_state = xbxengine_protocol::XbxEngineTransportStateDto::Connected;
+            stats.host_no_pending_pressure_level = Some("critical".to_string());
+            stats.host_no_pending_streak = 8;
+            stats.host_cadence_phase = Some("priming".to_string());
+            stats.video_present_submit_count_total = 0;
+            stats.video_present_epoch = 0;
+            stats.latest_video_host_present_time_ms = None;
+            stats.latest_video_decode_ok_time_ms = None;
+            stats.latest_video_track_status = Some(crate::XbxEngineVideoTrackStatus {
+                state: "remoteTrackAttached".to_string(),
+                video_width: Some(1920),
+                video_height: Some(1080),
+                mime_type: Some("video/H264".to_string()),
+                transport_state: xbxengine_protocol::XbxEngineTransportStateDto::Connected,
+                video_bytes_total: 50_000,
+                video_packet_count_total: 400,
+                audio_bytes_total: 8_000,
                 observed_at_ms: t,
-            },
-            observed_at_ms: t,
-        });
-    });
+            });
+            stats.latest_video_timeline_observation =
+                Some(crate::XbxEngineVideoTimelineObservation {
+                    observation_id: 14_800,
+                    source_event: "frame-observed".to_string(),
+                    gap: None,
+                    frame: None,
+                    chain: crate::XbxEngineVideoTimelineChainSnapshot {
+                        state: "healthy".to_string(),
+                        reason: None,
+                        observed_at_ms: t,
+                    },
+                    observed_at_ms: t,
+                });
+        },
+    );
     harness.with_stats(|stats| {
         assert_ne!(
             stats.video_owner_state.as_deref(),
