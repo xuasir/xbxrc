@@ -245,12 +245,18 @@ impl LocalIngressReplayFixture {
                 frame_rtp_timestamp: Some(frame_rtp_timestamp),
                 is_keyframe: Some(false),
                 frame_importance: Some("delta".to_string()),
+                budget_importance: None,
+
+                evidence_importance: None,
+
                 close_reason: None,
                 observed_at_ms: now_ms,
             }),
             chain: crate::XbxEngineVideoTimelineChainSnapshot {
                 state: "healthy".to_string(),
                 reason: None,
+                chain_break_evidence: None,
+
                 observed_at_ms: now_ms,
             },
             observed_at_ms: now_ms,

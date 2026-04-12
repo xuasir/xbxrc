@@ -1221,10 +1221,7 @@ async fn multi_stage_replay_steady_local_noise_expired_then_recover_stays_stable
         .chain(expired_third_commands.iter())
         .cloned()
         .collect();
-    assert_has_connectivity_reconnect_candidate(
-        &merged_expired_later,
-        "transportExpiredDeadline",
-    );
+    assert_has_connectivity_reconnect_candidate(&merged_expired_later, "transportExpiredDeadline");
     assert_latest_recovery_input_signal(
         &runtime_stats,
         "transportExpiredDeadline:transportExpiredDeadline",

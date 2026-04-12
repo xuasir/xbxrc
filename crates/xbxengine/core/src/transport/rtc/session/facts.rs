@@ -314,6 +314,8 @@ mod tests {
                 chain: crate::XbxEngineVideoTimelineChainSnapshot {
                     state: "recovering".to_string(),
                     reason: Some("transportAwaitRecoveryKeyframe".to_string()),
+                    chain_break_evidence: None,
+
                     observed_at_ms: 110.0,
                 },
                 observed_at_ms: 110.0,
@@ -339,6 +341,8 @@ mod tests {
                 chain: crate::XbxEngineVideoTimelineChainSnapshot {
                     state: "recovering".to_string(),
                     reason: Some("transportAwaitRecoveryKeyframe".to_string()),
+                    chain_break_evidence: None,
+
                     observed_at_ms: 130.0,
                 },
                 observed_at_ms: 130.0,

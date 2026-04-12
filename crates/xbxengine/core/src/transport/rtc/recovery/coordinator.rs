@@ -967,11 +967,21 @@ impl RecoveryCoordinator {
                 observed_at_ms,
             );
         if !decoder_reset_attempted {
-            // hard fallback 只接受“持续坏窗 + 已经失去本地恢复进展”的升级。
-            // 如果还没有 decoder reset 尝试，除 reconnecting 以外都先留在本地恢复链。
+            // hard fallback 超时且已确认没有任何本地输出推进时，必须至少落到一次
+            // decoder reset / reconnect fallback；否则会把 transport-await 长时间锁死在
+            // waitForBurst / keyframe defer 的本地回路里。
+            let decision = self.transport_await_decoder_reset_or_reconnect_fallback(
+                runtime_stats,
+                recovery_epoch,
+                observed_at_ms,
+            );
             if recovery_stage != "reconnecting" {
-                return None;
+                RuntimeStatsSink::update_shared(runtime_stats, |stats| {
+                    stats.recovery_hard_fallback_trigger_reason =
+                        Some("transportAwaitRecoveryKeyframeTimeout".to_string());
+                });
             }
+            return Some(decision);
         }
         if decoder_reset_still_in_flight {
             return Some(
@@ -1580,10 +1590,7 @@ impl RecoveryCoordinator {
         if let Some(episode) = stats.latest_keyframe_request_episode.as_ref() {
             if episode.request_reason.as_deref() == Some("transportAwaitRecoveryKeyframe")
                 && episode.sent_at_ms.is_some()
-                && matches!(
-                    episode.response_verdict.as_deref(),
-                    Some("missed" | "late")
-                )
+                && matches!(episode.response_verdict.as_deref(), Some("missed" | "late"))
             {
                 return true;
             }

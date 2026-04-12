@@ -1,30 +1,19 @@
+use super::super::{XbxEngineRuntime, XbxEngineRuntimeConfig, XbxEngineRuntimeState};
 use super::fixtures::*;
-use super::super::{
-    XbxEngineRuntime,
-    XbxEngineRuntimeConfig, XbxEngineRuntimeState,
-};
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use xbxengine_protocol::{
-    XbxEngineHostRequestDto,
-    XbxEngineTransportStateDto,
-};
+use xbxengine_protocol::{XbxEngineHostRequestDto, XbxEngineTransportStateDto};
 
-use crate::transport::rtc::facts::{
-    SessionCommand, TransportCommand,
-};
+use crate::transport::rtc::facts::{SessionCommand, TransportCommand};
 use crate::transport::rtc::session::actor::SessionPolicyHook;
 use crate::transport::rtc::session::policy::RtcSessionPolicy;
 use crate::transport::rtc::stream::video_source::test_fixtures::{
     run_local_ingress_replay_profile, LocalIngressReplayFixture,
 };
-use crate::{
-    XbxEngineInputStatus, XbxEngineMediaNegotiation,
-    XbxEngineMediaRuntimeStats,
-};
+use crate::{XbxEngineInputStatus, XbxEngineMediaNegotiation, XbxEngineMediaRuntimeStats};
 
 #[test]
 fn runtime_consumes_pending_transport_reconnect_candidate_once() {
@@ -1513,4 +1502,3 @@ async fn runtime_home_clean_anchor_short_jitter_replay_never_reaches_reconnect()
         .expect("lock pending runtime recovery action")
         .is_none());
 }
-

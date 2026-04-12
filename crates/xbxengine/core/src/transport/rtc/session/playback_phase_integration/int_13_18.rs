@@ -59,6 +59,8 @@ fn playback_phase_int13_decoder_reset_burst_must_be_bounded_per_window() {
                         chain: crate::XbxEngineVideoTimelineChainSnapshot {
                             state: "recovering".to_string(),
                             reason: Some("transportAwaitRecoveryKeyframe".to_string()),
+                            chain_break_evidence: None,
+
                             observed_at_ms: t - 2.0,
                         },
                         observed_at_ms: t - 2.0,
@@ -121,6 +123,8 @@ fn playback_phase_int14_remote_track_ingress_growth_alone_must_not_force_stable_
                     chain: crate::XbxEngineVideoTimelineChainSnapshot {
                         state: "recovering".to_string(),
                         reason: Some("transportAwaitRecoveryKeyframe".to_string()),
+                        chain_break_evidence: None,
+
                         observed_at_ms: t - 2.0,
                     },
                     observed_at_ms: t - 2.0,
@@ -231,6 +235,8 @@ fn playback_phase_int16_post_first_present_noise_must_resolve_or_enter_controlle
                     chain: crate::XbxEngineVideoTimelineChainSnapshot {
                         state: "healthy".to_string(),
                         reason: None,
+                        chain_break_evidence: None,
+
                         observed_at_ms: t,
                     },
                     observed_at_ms: t,
@@ -298,6 +304,8 @@ fn playback_phase_int17_stable_serving_does_not_regress_to_priming_on_milestone_
                     chain: crate::XbxEngineVideoTimelineChainSnapshot {
                         state: "recovering".to_string(),
                         reason: Some("transportAwaitRecoveryKeyframe".to_string()),
+                        chain_break_evidence: None,
+
                         observed_at_ms: t1,
                     },
                     observed_at_ms: t1,
@@ -377,6 +385,8 @@ fn playback_phase_int17_stable_serving_does_not_regress_to_priming_on_milestone_
                     chain: crate::XbxEngineVideoTimelineChainSnapshot {
                         state: "healthy".to_string(),
                         reason: None,
+                        chain_break_evidence: None,
+
                         observed_at_ms: t3,
                     },
                     observed_at_ms: t3,
@@ -438,12 +448,20 @@ fn playback_phase_int18_owner_supply_state_flip_requires_timeline_anchor_evidenc
                         sequence: Some(2),
                         frame_rtp_timestamp: Some(100),
                         frame_importance: Some("delta".to_string()),
+                        budget_importance: None,
+
+                        evidence_importance: None,
+
+                        gap_dependency_confidence: None,
+
                         observed_at_ms: t - 5.0,
                     }),
                     frame: None,
                     chain: crate::XbxEngineVideoTimelineChainSnapshot {
                         state: "recovering".to_string(),
                         reason: Some("transportAwaitRecoveryKeyframe".to_string()),
+                        chain_break_evidence: None,
+
                         observed_at_ms: t - 2.0,
                     },
                     observed_at_ms: t - 2.0,

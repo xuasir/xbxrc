@@ -87,7 +87,9 @@ impl RtcMediaIngressPacket {
 pub(crate) enum RtcMediaPacketSource {
     #[allow(dead_code)]
     Unknown,
-    Track { track_id: String },
+    Track {
+        track_id: String,
+    },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

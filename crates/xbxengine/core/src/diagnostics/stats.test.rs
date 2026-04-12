@@ -862,12 +862,18 @@ fn build_stats_prioritizes_recent_timeline_recovering_over_healthy_summary() {
                 frame_rtp_timestamp: Some(123),
                 is_keyframe: Some(false),
                 frame_importance: Some("unknown".to_string()),
+                budget_importance: None,
+
+                evidence_importance: None,
+
                 close_reason: Some("inspectionRejectInvalidSliceHeader".to_string()),
                 observed_at_ms: now_ms - 20.0,
             }),
             chain: crate::XbxEngineVideoTimelineChainSnapshot {
                 state: "recovering".to_string(),
                 reason: Some("inspectionRejectInvalidSliceHeader".to_string()),
+                chain_break_evidence: None,
+
                 observed_at_ms: now_ms - 20.0,
             },
             observed_at_ms: now_ms - 20.0,
@@ -935,6 +941,12 @@ fn build_stats_prioritizes_recent_timeline_broken_over_steady_healthy() {
                 sequence: Some(38022),
                 frame_rtp_timestamp: Some(456),
                 frame_importance: Some("delta".to_string()),
+                budget_importance: None,
+
+                evidence_importance: None,
+
+                gap_dependency_confidence: None,
+
                 observed_at_ms: now_ms - 15.0,
             }),
             frame: Some(crate::XbxEngineVideoTimelineFrameSnapshot {
@@ -942,12 +954,18 @@ fn build_stats_prioritizes_recent_timeline_broken_over_steady_healthy() {
                 frame_rtp_timestamp: Some(456),
                 is_keyframe: Some(false),
                 frame_importance: Some("delta".to_string()),
+                budget_importance: None,
+
+                evidence_importance: None,
+
                 close_reason: None,
                 observed_at_ms: now_ms - 15.0,
             }),
             chain: crate::XbxEngineVideoTimelineChainSnapshot {
                 state: "broken".to_string(),
                 reason: Some("cloudHighRttLowValueAdmission".to_string()),
+                chain_break_evidence: None,
+
                 observed_at_ms: now_ms - 15.0,
             },
             observed_at_ms: now_ms - 15.0,
@@ -1007,6 +1025,8 @@ fn build_stats_owner_contract_prefers_canonical_owner_over_coupling_signals() {
             chain: crate::XbxEngineVideoTimelineChainSnapshot {
                 state: "recovering".to_string(),
                 reason: Some("inspectionRejectInvalidSliceHeader".to_string()),
+                chain_break_evidence: None,
+
                 observed_at_ms: now_ms - 15.0,
             },
             observed_at_ms: now_ms - 15.0,

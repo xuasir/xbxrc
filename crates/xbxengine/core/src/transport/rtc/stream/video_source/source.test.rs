@@ -1,5 +1,5 @@
 use super::{
-    resolve_effective_idle_controls, resolve_inspection_admission,
+    now_ms_f64, resolve_effective_idle_controls, resolve_inspection_admission,
     resolve_recovery_keyframe_action, should_absorb_idle_timeout_for_steady_gap,
     should_trigger_idle_timeout, RecoveryKeyframeAction, RtcVideoFrameSource,
 };
@@ -209,6 +209,8 @@ fn clean_anchor_serviceable_output_allows_soft_recovery_keyframe_request_after_i
         chain: crate::XbxEngineVideoTimelineChainSnapshot {
             state: "healthy".to_string(),
             reason: None,
+            chain_break_evidence: None,
+
             observed_at_ms: now_ms - 12.0,
         },
         observed_at_ms: now_ms - 12.0,
@@ -236,12 +238,20 @@ fn unresolved_current_transport_issue_blocks_soft_recovery_keyframe_request() {
             sequence: Some(99),
             frame_rtp_timestamp: None,
             frame_importance: Some("reference".to_string()),
+            budget_importance: None,
+
+            evidence_importance: None,
+
+            gap_dependency_confidence: None,
+
             observed_at_ms: now_ms - 5.0,
         }),
         frame: None,
         chain: crate::XbxEngineVideoTimelineChainSnapshot {
             state: "recovering".to_string(),
             reason: Some("transportAwaitRecoveryKeyframe".to_string()),
+            chain_break_evidence: None,
+
             observed_at_ms: now_ms - 5.0,
         },
         observed_at_ms: now_ms - 5.0,
@@ -453,6 +463,9 @@ fn sustaining_recovery_continuation_is_accepted_before_first_frame_output() {
 #[tokio::test]
 async fn sustaining_recovery_reject_restarts_recovery_keyframe_request() {
     let (tx, mut transport_observation_rx, mut source) = make_video_source_for_test();
+    source
+        .timeline_state
+        .on_clean_keyframe_ingress(9_000, now_ms_f64());
     source.timeline_state.on_clean_keyframe_submitted();
 
     assert!(source.timeline_state.in_sustaining_recovery());
@@ -556,9 +569,13 @@ async fn clean_keyframe_then_consecutive_non_idr_continuation_does_not_fall_back
     source
         .timeline_state
         .on_admission_await_recovery_keyframe(Some("awaitingRecoveryKeyframe"));
-    source
-        .timeline_state
-        .mark_gap_reorder_pending(&[401], 0.5, Some(8_900), "reference");
+    source.timeline_state.mark_gap_reorder_pending(
+        &[401],
+        0.5,
+        Some(8_900),
+        "reference",
+        "reference",
+    );
     assert!(source.timeline_state.waiting_for_recovery_keyframe());
     assert!(source.timeline_state.has_hard_recovery_risk_for_test());
 
@@ -615,12 +632,20 @@ async fn stale_wait_after_clean_anchor_still_submits_delta_continuation() {
         stats.latest_video_decode_ok_time_ms = Some(1.0);
         stats.latest_video_host_present_time_ms = Some(1.0);
     });
+    source
+        .timeline_state
+        .on_clean_keyframe_ingress(bootstrap_frame.rtp_timestamp, now_ms_f64());
+    source.timeline_state.on_clean_keyframe_submitted();
 
     source.set_waiting_for_recovery_keyframe(true);
     assert!(source.waiting_for_recovery_keyframe());
-    source
-        .timeline_state
-        .mark_gap_repair_in_flight(&[401], 2.0, Some(9_000), "keyframe");
+    source.timeline_state.mark_gap_repair_in_flight(
+        &[401],
+        2.0,
+        Some(9_000),
+        "keyframe",
+        "keyframe",
+    );
     assert!(source.timeline_state.has_hard_recovery_risk_for_test());
 
     tx.send(make_video_rtp_packet(104, 9_032, true, &non_idr))

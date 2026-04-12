@@ -27,6 +27,54 @@ const SUPPLY_NEAR_DEADLINE_GUARD_MS: f64 = 6.0;
 const CLEAN_ANCHOR_TRANSPORT_SUPPLY_WINDOW_MS: f64 = 320.0;
 const CLEAN_ANCHOR_TRANSPORT_SUPPLY_FRESH_MEDIA_MS: f64 = 320.0;
 
+fn gap_expired_skipped_anchor_failure_reason(
+    frame_unrecoverable_reason: Option<&'static str>,
+) -> XbxEngineAnchorCandidateFailureReason {
+    match frame_unrecoverable_reason {
+        Some("referenceChainUnrecoverable") => {
+            XbxEngineAnchorCandidateFailureReason::ChainBrokenReferenceUnrecoverable
+        }
+        Some("sampleLossLowRepairability" | "sampleLossReferenceLowRepairability") => {
+            XbxEngineAnchorCandidateFailureReason::ChainBrokenReferenceUnrecoverable
+        }
+        Some("cloudHighRttLowValueAdmission") => {
+            XbxEngineAnchorCandidateFailureReason::TransportLowValueCloudHighRttAdmission
+        }
+        Some("displayStarvedLowValueAdmission") => {
+            XbxEngineAnchorCandidateFailureReason::TransportLowValueDisplayStarvedAdmission
+        }
+        Some("estimatedArrivalNearDeadlineSupplyRecovery") => {
+            XbxEngineAnchorCandidateFailureReason::TransportTimingNearDeadlineSupplyRecovery
+        }
+        Some("deadline") => XbxEngineAnchorCandidateFailureReason::GapExpiredDeadline,
+        _ => XbxEngineAnchorCandidateFailureReason::Unknown,
+    }
+}
+
+/// transport 路径上仅有显式 keyframe 标记才写入 gap 的媒体证据 importance。
+pub(super) fn gap_transport_evidence(frame_is_keyframe: Option<bool>) -> &'static str {
+    if frame_is_keyframe == Some(true) {
+        "keyframe"
+    } else {
+        "unknown"
+    }
+}
+
+/// 仅这些 reason 允许在 timeline 未记坏链时仍由 `SkippedChainBroken` 触发 reference 恢复。
+fn nack_reference_chain_recovery_evidence(reason: Option<&'static str>) -> bool {
+    matches!(
+        reason,
+        Some(
+            "awaitingRecoveryKeyframe"
+                | "localBackpressureDeltaGap"
+                | "sampleLossReferenceLowRepairability"
+                | "referenceChainUnrecoverable"
+                | "deadlineExceededBeforeAdmission"
+                | "estimatedArrivalPastDeadline"
+        )
+    )
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum RepairValueTier {
     Anchor,
@@ -54,14 +102,7 @@ impl RtcVideoFrameSource {
         let Some(repairability) = repairability else {
             return false;
         };
-        if matches!(value_tier, RepairValueTier::Anchor) {
-            return false;
-        }
-        match value_tier {
-            RepairValueTier::Supply => repairability <= 0.45,
-            RepairValueTier::LowValue => repairability <= 0.5,
-            RepairValueTier::Anchor => false,
-        }
+        matches!(value_tier, RepairValueTier::Supply) && repairability <= 0.45
     }
 
     fn transport_nack_repair_phase(&self) -> TransportRepairPhase {
@@ -72,32 +113,6 @@ impl RtcVideoFrameSource {
         } else {
             TransportRepairPhase::Steady
         }
-    }
-
-    fn should_promote_recovery_pressure_low_value_skip(
-        &self,
-        phase: TransportRepairPhase,
-        source: &'static str,
-        frame_importance: &'static str,
-        frame_unrecoverable_reason: Option<&'static str>,
-        repairability: Option<f64>,
-    ) -> bool {
-        if phase != TransportRepairPhase::Recovery {
-            return false;
-        }
-        let low_value_reason_matches = matches!(
-            frame_unrecoverable_reason,
-            Some(
-                "localBackpressureDeltaGap"
-                    | "cloudHighRttLowValueAdmission"
-                    | "displayStarvedLowValueAdmission"
-                    | "estimatedArrivalNearDeadlineLowValue"
-            )
-        );
-        let low_repairability_sample_loss = source == "sampleLoss"
-            && repairability.is_some_and(|value| value <= 0.5)
-            && frame_importance == "delta";
-        (frame_importance == "delta" && low_value_reason_matches) || low_repairability_sample_loss
     }
 
     fn transport_nack_recovery_pressure_active(&self) -> bool {
@@ -176,6 +191,7 @@ impl RtcVideoFrameSource {
             now_ms,
             None,
             policy.frame_importance,
+            gap_transport_evidence(policy.frame_is_keyframe),
         );
         if let Some(sequence) = missing_sequences.first().copied() {
             self.record_video_timeline_observation(
@@ -195,6 +211,7 @@ impl RtcVideoFrameSource {
                 now_ms,
                 skipped.frame_rtp_timestamp,
                 skipped.frame_importance,
+                gap_transport_evidence(skipped.frame_is_keyframe),
                 skipped.frame_unrecoverable_reason,
             );
             if let Some(sequence) = skipped.sequences.first().copied() {
@@ -209,23 +226,9 @@ impl RtcVideoFrameSource {
                 skipped.frame_rtp_timestamp,
                 "gap-expired-skipped",
                 XbxEngineAnchorCandidateState::Rejected,
-                Some(match skipped.frame_unrecoverable_reason {
-                    Some("referenceChainUnrecoverable") => {
-                        XbxEngineAnchorCandidateFailureReason::ChainBrokenReferenceUnrecoverable
-                    }
-                    Some(
-                        "sampleLossLowRepairability" | "sampleLossReferenceLowRepairability",
-                    ) => XbxEngineAnchorCandidateFailureReason::ChainBrokenReferenceUnrecoverable,
-                    Some("cloudHighRttLowValueAdmission") => {
-                        XbxEngineAnchorCandidateFailureReason::ChainBrokenCloudHighRttLowValueAdmission
-                    }
-                    Some("displayStarvedLowValueAdmission") => XbxEngineAnchorCandidateFailureReason::ChainBrokenDisplayStarvedLowValueAdmission,
-                    Some("estimatedArrivalNearDeadlineRecoverySupply") => {
-                        XbxEngineAnchorCandidateFailureReason::ChainBrokenReferenceUnrecoverable
-                    }
-                    Some("deadline") => XbxEngineAnchorCandidateFailureReason::GapExpiredDeadline,
-                    _ => XbxEngineAnchorCandidateFailureReason::Unknown,
-                }),
+                Some(gap_expired_skipped_anchor_failure_reason(
+                    skipped.frame_unrecoverable_reason,
+                )),
                 now_ms,
             );
             self.record_nack_skipped(skipped, now_ms);
@@ -237,6 +240,7 @@ impl RtcVideoFrameSource {
                 now_ms,
                 initial_batch.frame_rtp_timestamp,
                 initial_batch.frame_importance,
+                gap_transport_evidence(initial_batch.frame_is_keyframe),
             );
             if let Some(sequence) = initial_batch.sequences.first().copied() {
                 self.record_video_timeline_observation(
@@ -283,6 +287,7 @@ impl RtcVideoFrameSource {
                 now_ms,
                 expired_batch.frame_rtp_timestamp,
                 expired_batch.frame_importance,
+                gap_transport_evidence(expired_batch.frame_is_keyframe),
                 expired_batch.frame_unrecoverable_reason,
             );
             if let Some(sequence) = expired_batch.sequences.first().copied() {
@@ -341,6 +346,7 @@ impl RtcVideoFrameSource {
                 now_ms,
                 retry_batch.frame_rtp_timestamp,
                 retry_batch.frame_importance,
+                gap_transport_evidence(retry_batch.frame_is_keyframe),
             );
             if let Some(sequence) = retry_batch.sequences.first().copied() {
                 self.record_video_timeline_observation(
@@ -400,8 +406,13 @@ impl RtcVideoFrameSource {
             startup_mode,
             Some(cloud_rtt_ms),
         );
-        self.timeline_state
-            .observe_gap(&missing_sequences, now_ms, None, policy.frame_importance);
+        self.timeline_state.observe_gap(
+            &missing_sequences,
+            now_ms,
+            None,
+            policy.frame_importance,
+            gap_transport_evidence(policy.frame_is_keyframe),
+        );
         if let Some(sequence) = missing_sequences.first().copied() {
             self.record_video_timeline_observation(
                 "gap-observed-forward",
@@ -415,6 +426,7 @@ impl RtcVideoFrameSource {
             now_ms,
             None,
             policy.frame_importance,
+            gap_transport_evidence(policy.frame_is_keyframe),
         );
         if let Some(sequence) = missing_sequences.first().copied() {
             self.record_video_timeline_observation(
@@ -434,6 +446,7 @@ impl RtcVideoFrameSource {
                 now_ms,
                 skipped.frame_rtp_timestamp,
                 skipped.frame_importance,
+                gap_transport_evidence(skipped.frame_is_keyframe),
                 skipped.frame_unrecoverable_reason,
             );
             if let Some(sequence) = skipped.sequences.first().copied() {
@@ -448,23 +461,9 @@ impl RtcVideoFrameSource {
                 skipped.frame_rtp_timestamp,
                 "gap-expired-skipped",
                 XbxEngineAnchorCandidateState::Rejected,
-                Some(match skipped.frame_unrecoverable_reason {
-                    Some("referenceChainUnrecoverable") => {
-                        XbxEngineAnchorCandidateFailureReason::ChainBrokenReferenceUnrecoverable
-                    }
-                    Some(
-                        "sampleLossLowRepairability" | "sampleLossReferenceLowRepairability",
-                    ) => XbxEngineAnchorCandidateFailureReason::ChainBrokenReferenceUnrecoverable,
-                    Some("cloudHighRttLowValueAdmission") => {
-                        XbxEngineAnchorCandidateFailureReason::ChainBrokenCloudHighRttLowValueAdmission
-                    }
-                    Some("displayStarvedLowValueAdmission") => XbxEngineAnchorCandidateFailureReason::ChainBrokenDisplayStarvedLowValueAdmission,
-                    Some("estimatedArrivalNearDeadlineRecoverySupply") => {
-                        XbxEngineAnchorCandidateFailureReason::ChainBrokenReferenceUnrecoverable
-                    }
-                    Some("deadline") => XbxEngineAnchorCandidateFailureReason::GapExpiredDeadline,
-                    _ => XbxEngineAnchorCandidateFailureReason::Unknown,
-                }),
+                Some(gap_expired_skipped_anchor_failure_reason(
+                    skipped.frame_unrecoverable_reason,
+                )),
                 now_ms,
             );
             self.record_nack_skipped(skipped, now_ms);
@@ -478,6 +477,7 @@ impl RtcVideoFrameSource {
             now_ms,
             initial_batch.frame_rtp_timestamp,
             initial_batch.frame_importance,
+            gap_transport_evidence(initial_batch.frame_is_keyframe),
         );
         if let Some(sequence) = initial_batch.sequences.first().copied() {
             self.record_video_timeline_observation(
@@ -746,6 +746,7 @@ impl RtcVideoFrameSource {
             now_ms,
             Some(sample_rtp_timestamp),
             frame_importance,
+            gap_transport_evidence(Some(frame_is_keyframe)),
         );
         if let Some(sequence) = missing_sequences.first().copied() {
             self.record_video_timeline_observation(
@@ -760,6 +761,7 @@ impl RtcVideoFrameSource {
             now_ms,
             Some(sample_rtp_timestamp),
             frame_importance,
+            gap_transport_evidence(Some(frame_is_keyframe)),
         );
         if let Some(sequence) = missing_sequences.first().copied() {
             self.record_video_timeline_observation(
@@ -782,6 +784,7 @@ impl RtcVideoFrameSource {
                 now_ms,
                 skipped.frame_rtp_timestamp,
                 skipped.frame_importance,
+                gap_transport_evidence(skipped.frame_is_keyframe),
                 skipped.frame_unrecoverable_reason,
             );
             if let Some(sequence) = skipped.sequences.first().copied() {
@@ -796,23 +799,9 @@ impl RtcVideoFrameSource {
                 skipped.frame_rtp_timestamp,
                 "gap-expired-skipped",
                 XbxEngineAnchorCandidateState::Rejected,
-                Some(match skipped.frame_unrecoverable_reason {
-                    Some("referenceChainUnrecoverable") => {
-                        XbxEngineAnchorCandidateFailureReason::ChainBrokenReferenceUnrecoverable
-                    }
-                    Some(
-                        "sampleLossLowRepairability" | "sampleLossReferenceLowRepairability",
-                    ) => XbxEngineAnchorCandidateFailureReason::ChainBrokenReferenceUnrecoverable,
-                    Some("cloudHighRttLowValueAdmission") => {
-                        XbxEngineAnchorCandidateFailureReason::ChainBrokenCloudHighRttLowValueAdmission
-                    }
-                    Some("displayStarvedLowValueAdmission") => XbxEngineAnchorCandidateFailureReason::ChainBrokenDisplayStarvedLowValueAdmission,
-                    Some("estimatedArrivalNearDeadlineRecoverySupply") => {
-                        XbxEngineAnchorCandidateFailureReason::ChainBrokenReferenceUnrecoverable
-                    }
-                    Some("deadline") => XbxEngineAnchorCandidateFailureReason::GapExpiredDeadline,
-                    _ => XbxEngineAnchorCandidateFailureReason::Unknown,
-                }),
+                Some(gap_expired_skipped_anchor_failure_reason(
+                    skipped.frame_unrecoverable_reason,
+                )),
                 now_ms,
             );
             self.record_nack_skipped(skipped, now_ms);
@@ -826,6 +815,7 @@ impl RtcVideoFrameSource {
             now_ms,
             batch.frame_rtp_timestamp,
             batch.frame_importance,
+            gap_transport_evidence(batch.frame_is_keyframe),
         );
         if let Some(sequence) = batch.sequences.first().copied() {
             self.record_video_timeline_observation(
@@ -954,17 +944,7 @@ impl RtcVideoFrameSource {
             policy.budget_context,
             now_ms,
         ) {
-            policy.nack_disposition = if self.should_promote_recovery_pressure_low_value_skip(
-                repair_phase,
-                policy.source,
-                policy.frame_importance,
-                Some("displayStarvedLowValueAdmission"),
-                repairability,
-            ) {
-                PacketRecoveryDisposition::SkippedChainBroken
-            } else {
-                PacketRecoveryDisposition::SkippedLowValue
-            };
+            policy.nack_disposition = PacketRecoveryDisposition::SkippedLowValue;
             if policy.frame_unrecoverable_reason.is_none() {
                 policy.frame_unrecoverable_reason = Some("displayStarvedLowValueAdmission");
             }
@@ -1027,12 +1007,7 @@ impl RtcVideoFrameSource {
         ) {
             policy.nack_disposition = PacketRecoveryDisposition::SkippedChainBroken;
             if policy.frame_unrecoverable_reason.is_none() {
-                policy.frame_unrecoverable_reason =
-                    Some(if matches!(value_tier, RepairValueTier::Supply) {
-                        "sampleLossReferenceLowRepairability"
-                    } else {
-                        "sampleLossLowRepairability"
-                    });
+                policy.frame_unrecoverable_reason = Some("sampleLossReferenceLowRepairability");
             }
             return policy;
         }
@@ -1041,17 +1016,7 @@ impl RtcVideoFrameSource {
             && matches!(value_tier, RepairValueTier::LowValue)
             && policy.budget_context.prefers_low_value_skip()
         {
-            policy.nack_disposition = if self.should_promote_recovery_pressure_low_value_skip(
-                repair_phase,
-                policy.source,
-                policy.frame_importance,
-                Some("cloudHighRttLowValueAdmission"),
-                repairability,
-            ) {
-                PacketRecoveryDisposition::SkippedChainBroken
-            } else {
-                PacketRecoveryDisposition::SkippedLowValue
-            };
+            policy.nack_disposition = PacketRecoveryDisposition::SkippedLowValue;
             if policy.frame_unrecoverable_reason.is_none() {
                 policy.frame_unrecoverable_reason = Some("cloudHighRttLowValueAdmission");
             }
@@ -1065,17 +1030,7 @@ impl RtcVideoFrameSource {
                 LOW_VALUE_NEAR_DEADLINE_GUARD_MS,
             )
         {
-            policy.nack_disposition = if self.should_promote_recovery_pressure_low_value_skip(
-                repair_phase,
-                policy.source,
-                policy.frame_importance,
-                Some("estimatedArrivalNearDeadlineLowValue"),
-                repairability,
-            ) {
-                PacketRecoveryDisposition::SkippedChainBroken
-            } else {
-                PacketRecoveryDisposition::SkippedLowValue
-            };
+            policy.nack_disposition = PacketRecoveryDisposition::SkippedLowValue;
             if policy.frame_unrecoverable_reason.is_none() {
                 policy.frame_unrecoverable_reason = Some("estimatedArrivalNearDeadlineLowValue");
             }
@@ -1090,20 +1045,18 @@ impl RtcVideoFrameSource {
             )
         {
             if repair_phase == TransportRepairPhase::Recovery {
-                policy.nack_disposition = PacketRecoveryDisposition::SkippedChainBroken;
-                if policy.frame_unrecoverable_reason.is_none() {
-                    policy.frame_unrecoverable_reason =
-                        Some("estimatedArrivalNearDeadlineRecoverySupply");
-                }
-            } else if repair_phase == TransportRepairPhase::Steady {
                 policy.nack_disposition = PacketRecoveryDisposition::SkippedTooLate;
                 if policy.frame_unrecoverable_reason.is_none() {
-                    policy.frame_unrecoverable_reason = Some("estimatedArrivalNearDeadlineSupply");
+                    policy.frame_unrecoverable_reason =
+                        Some("estimatedArrivalNearDeadlineSupplyRecovery");
                 }
-            } else {
-                // 建链期对 supply/reference 给予更宽的补缺窗口，避免刚起流就过早切到 keyframe 恢复。
                 return policy;
             }
+            if repair_phase == TransportRepairPhase::Steady {
+                // 与 Startup 一致：先尝试 NACK，由 scheduler deadline/max_age/retry 收口。
+                return policy;
+            }
+            // 建链期对 supply/reference 给予更宽的补缺窗口，避免刚起流就过早切到 keyframe 恢复。
             return policy;
         }
 
@@ -1164,38 +1117,23 @@ impl RtcVideoFrameSource {
         now_ms: f64,
         chain_broken: bool,
     ) {
-        let promote_low_value_skip = self.should_promote_recovery_pressure_low_value_skip(
-            self.transport_nack_repair_phase(),
-            skipped.source,
-            skipped.frame_importance,
-            skipped.frame_unrecoverable_reason,
-            None,
-        );
-        if skipped.frame_importance == "delta"
-            && matches!(
-                skipped.frame_unrecoverable_reason,
-                Some(
-                    "localBackpressureDeltaGap"
-                        | "cloudHighRttLowValueAdmission"
-                        | "displayStarvedLowValueAdmission"
-                )
-            )
-            && !chain_broken
-            && !promote_low_value_skip
-        {
-            return;
-        }
-        if skipped.nack_disposition != PacketRecoveryDisposition::SkippedChainBroken
-            && !chain_broken
-            && !promote_low_value_skip
-        {
+        let trigger = match skipped.nack_disposition {
+            PacketRecoveryDisposition::SkippedLowValue
+            | PacketRecoveryDisposition::SkippedTooLate => chain_broken,
+            PacketRecoveryDisposition::SkippedChainBroken => {
+                chain_broken
+                    || nack_reference_chain_recovery_evidence(skipped.frame_unrecoverable_reason)
+            }
+            PacketRecoveryDisposition::Attempted => return,
+        };
+        if !trigger {
             return;
         }
         self.maybe_trigger_reference_chain_recovery(
             skipped.frame_rtp_timestamp,
             Some(skipped.sequences.as_slice()),
             now_ms,
-            chain_broken || promote_low_value_skip,
+            true,
         );
     }
 
@@ -1229,6 +1167,7 @@ impl RtcVideoFrameSource {
                 now_ms,
                 flushed_batch.frame_rtp_timestamp,
                 flushed_batch.frame_importance,
+                gap_transport_evidence(flushed_batch.frame_is_keyframe),
                 flushed_batch.frame_unrecoverable_reason,
             );
             if let Some(sequence) = flushed_batch.sequences.first().copied() {
@@ -1424,7 +1363,7 @@ impl RtcVideoFrameSource {
         use crate::transport::rtc::recovery::contract::{
             derive_gap_severity_from_timeline_observation, frame_value_from_gap_severity,
             gap_severity_indicates_transport_recovery_pressure,
-            media_frame_value_from_recovery_semantics,
+            media_frame_value_from_recovery_semantics, GapSeverity,
         };
         self.runtime_stats
             .read(|stats| {
@@ -1432,6 +1371,11 @@ impl RtcVideoFrameSource {
                     return base;
                 };
                 let gs = derive_gap_severity_from_timeline_observation(timeline);
+                // transport 反灌只提升到 supply/reference，避免闭环把上下文再抬成 anchor。
+                let gs = match gs {
+                    GapSeverity::ChainBroken | GapSeverity::AnchorGap => GapSeverity::ReferenceGap,
+                    other => other,
+                };
                 if !gap_severity_indicates_transport_recovery_pressure(gs) {
                     return base;
                 }
@@ -1441,7 +1385,9 @@ impl RtcVideoFrameSource {
                 let hinted =
                     media_frame_value_from_recovery_semantics(semantic, base.payload_size_bytes);
                 if hinted.is_sync_point() {
-                    return hinted;
+                    // transport gap 没有真实帧归属，不能把恢复语义直接抬成媒体 sync-point；
+                    // 否则会把普通丢包伪装成 keyframe gap，沿着 NACK/timeline 路径过早打断链。
+                    return FrameValue::new(false, true, base.payload_size_bytes);
                 }
                 if hinted.refresh_boost && !base.is_sync_point() {
                     return hinted;
@@ -1921,6 +1867,78 @@ mod tests {
     }
 
     #[test]
+    fn transport_gap_chain_broken_timeline_does_not_promote_to_pseudo_keyframe() {
+        let (_tx, rx) = tokio::sync::mpsc::channel(1);
+        let (transport_observation_tx, _transport_observation_rx) =
+            tokio::sync::mpsc::unbounded_channel();
+        let rtcp_port: Arc<dyn RtcRtcpSendPort> = Arc::new(CaptureRtcpPort::default());
+        let runtime_stats = Arc::new(Mutex::new(crate::XbxEngineMediaRuntimeStats::default()));
+        let mut source = RtcVideoFrameSource::new(
+            rx,
+            transport_observation_tx,
+            rtcp_port,
+            runtime_stats.clone(),
+            16,
+            std::time::Duration::from_millis(10),
+            std::time::Duration::from_millis(20),
+            std::time::Duration::from_millis(200),
+            NackSchedulerConfig {
+                max_age_ms: 1_000,
+                frame_deadline_ms: 120,
+                burst_count: 2,
+                retry_interval_ms: 20,
+                max_retry_count: 3,
+            },
+        );
+        source.last_submitted_frame_value = FrameValue::new(false, false, 12 * 1024);
+        {
+            let mut stats = runtime_stats.lock().expect("runtime stats lock");
+            stats.latest_video_timeline_observation =
+                Some(crate::XbxEngineVideoTimelineObservation {
+                    observation_id: 6,
+                    source_event: "gap-repair-in-flight".to_string(),
+                    gap: Some(crate::XbxEngineVideoTimelineGapSnapshot {
+                        state: "repair-in-flight".to_string(),
+                        sequence: Some(23913),
+                        frame_rtp_timestamp: None,
+                        frame_importance: Some("keyframe".to_string()),
+                        budget_importance: None,
+
+                        evidence_importance: None,
+
+                        gap_dependency_confidence: None,
+
+                        observed_at_ms: 200.0,
+                    }),
+                    frame: Some(crate::XbxEngineVideoTimelineFrameSnapshot {
+                        state: "complete-candidate".to_string(),
+                        frame_rtp_timestamp: Some(2680907269),
+                        is_keyframe: Some(false),
+                        frame_importance: Some("delta".to_string()),
+                        budget_importance: None,
+
+                        evidence_importance: None,
+
+                        close_reason: None,
+                        observed_at_ms: 200.0,
+                    }),
+                    chain: crate::XbxEngineVideoTimelineChainSnapshot {
+                        state: "broken".to_string(),
+                        reason: Some("referenceChainUnrecoverable".to_string()),
+                        chain_break_evidence: None,
+
+                        observed_at_ms: 200.0,
+                    },
+                    observed_at_ms: 200.0,
+                });
+        }
+
+        let value = source.current_transport_frame_value_for_transport_gap(220.0);
+        assert_eq!(value, FrameValue::new(false, true, 12 * 1024));
+        assert!(!value.is_sync_point());
+    }
+
+    #[test]
     fn transport_gap_uses_recovery_window_when_timeline_shows_recovery_pressure() {
         let (_tx, rx) = tokio::sync::mpsc::channel(1);
         let (transport_observation_tx, _transport_observation_rx) =
@@ -1955,12 +1973,20 @@ mod tests {
                         sequence: Some(33),
                         frame_rtp_timestamp: None,
                         frame_importance: Some("reference".to_string()),
+                        budget_importance: None,
+
+                        evidence_importance: None,
+
+                        gap_dependency_confidence: None,
+
                         observed_at_ms: 100.0,
                     }),
                     frame: None,
                     chain: crate::XbxEngineVideoTimelineChainSnapshot {
                         state: "repairing".to_string(),
                         reason: Some("transportAwaitRecoveryKeyframe".to_string()),
+                        chain_break_evidence: None,
+
                         observed_at_ms: 100.0,
                     },
                     observed_at_ms: 100.0,
@@ -2010,12 +2036,20 @@ mod tests {
                         sequence: Some(57),
                         frame_rtp_timestamp: None,
                         frame_importance: Some("reference".to_string()),
+                        budget_importance: None,
+
+                        evidence_importance: None,
+
+                        gap_dependency_confidence: None,
+
                         observed_at_ms: 140.0,
                     }),
                     frame: None,
                     chain: crate::XbxEngineVideoTimelineChainSnapshot {
                         state: "recovering".to_string(),
                         reason: Some("transportAwaitRecoveryKeyframe".to_string()),
+                        chain_break_evidence: None,
+
                         observed_at_ms: 140.0,
                     },
                     observed_at_ms: 140.0,
@@ -2047,7 +2081,7 @@ mod tests {
     }
 
     #[test]
-    fn sample_loss_low_repairability_promotes_low_value_skip_to_chain_broken() {
+    fn sample_loss_low_repairability_delta_does_not_escalate_to_chain_broken() {
         let (_tx, rx) = tokio::sync::mpsc::channel(1);
         let (transport_observation_tx, _transport_observation_rx) =
             tokio::sync::mpsc::unbounded_channel();
@@ -2098,11 +2132,11 @@ mod tests {
 
         assert_eq!(
             resolved.nack_disposition,
-            PacketRecoveryDisposition::SkippedChainBroken
+            PacketRecoveryDisposition::SkippedLowValue
         );
         assert_eq!(
             resolved.frame_unrecoverable_reason,
-            Some("sampleLossLowRepairability")
+            Some("cloudHighRttLowValueAdmission")
         );
     }
 
@@ -2167,7 +2201,7 @@ mod tests {
     }
 
     #[test]
-    fn display_starved_low_value_skip_under_recovery_pressure_promotes_chain_broken() {
+    fn display_starved_low_value_skip_stays_skipped_low_value_under_recovery_pressure() {
         let (_tx, rx) = tokio::sync::mpsc::channel(1);
         let (transport_observation_tx, _transport_observation_rx) =
             tokio::sync::mpsc::unbounded_channel();
@@ -2201,12 +2235,20 @@ mod tests {
                         sequence: Some(58),
                         frame_rtp_timestamp: None,
                         frame_importance: Some("reference".to_string()),
+                        budget_importance: None,
+
+                        evidence_importance: None,
+
+                        gap_dependency_confidence: None,
+
                         observed_at_ms: 150.0,
                     }),
                     frame: None,
                     chain: crate::XbxEngineVideoTimelineChainSnapshot {
                         state: "recovering".to_string(),
                         reason: Some("transportAwaitRecoveryKeyframe".to_string()),
+                        chain_break_evidence: None,
+
                         observed_at_ms: 150.0,
                     },
                     observed_at_ms: 150.0,
@@ -2236,7 +2278,7 @@ mod tests {
 
         assert_eq!(
             resolved.nack_disposition,
-            PacketRecoveryDisposition::SkippedChainBroken
+            PacketRecoveryDisposition::SkippedLowValue
         );
         assert_eq!(
             resolved.frame_unrecoverable_reason,
@@ -2303,7 +2345,7 @@ mod tests {
     }
 
     #[test]
-    fn steady_supply_near_deadline_stays_too_late_without_recovery_escalation() {
+    fn steady_supply_near_deadline_keeps_nack_attempt_like_startup() {
         let (_tx, rx) = tokio::sync::mpsc::channel(1);
         let (transport_observation_tx, _transport_observation_rx) =
             tokio::sync::mpsc::unbounded_channel();
@@ -2355,16 +2397,13 @@ mod tests {
 
         assert_eq!(
             resolved.nack_disposition,
-            PacketRecoveryDisposition::SkippedTooLate
+            PacketRecoveryDisposition::Attempted
         );
-        assert_eq!(
-            resolved.frame_unrecoverable_reason,
-            Some("estimatedArrivalNearDeadlineSupply")
-        );
+        assert_eq!(resolved.frame_unrecoverable_reason, None);
     }
 
     #[test]
-    fn recovery_supply_near_deadline_escalates_chain_broken() {
+    fn recovery_supply_near_deadline_is_skipped_too_late_not_chain_broken() {
         let (_tx, rx) = tokio::sync::mpsc::channel(1);
         let (transport_observation_tx, _transport_observation_rx) =
             tokio::sync::mpsc::unbounded_channel();
@@ -2400,12 +2439,20 @@ mod tests {
                         sequence: Some(61),
                         frame_rtp_timestamp: None,
                         frame_importance: Some("reference".to_string()),
+                        budget_importance: None,
+
+                        evidence_importance: None,
+
+                        gap_dependency_confidence: None,
+
                         observed_at_ms: 150.0,
                     }),
                     frame: None,
                     chain: crate::XbxEngineVideoTimelineChainSnapshot {
                         state: "recovering".to_string(),
                         reason: Some("transportAwaitRecoveryKeyframe".to_string()),
+                        chain_break_evidence: None,
+
                         observed_at_ms: 150.0,
                     },
                     observed_at_ms: 150.0,
@@ -2434,11 +2481,11 @@ mod tests {
 
         assert_eq!(
             resolved.nack_disposition,
-            PacketRecoveryDisposition::SkippedChainBroken
+            PacketRecoveryDisposition::SkippedTooLate
         );
         assert_eq!(
             resolved.frame_unrecoverable_reason,
-            Some("estimatedArrivalNearDeadlineRecoverySupply")
+            Some("estimatedArrivalNearDeadlineSupplyRecovery")
         );
     }
 
@@ -2477,12 +2524,20 @@ mod tests {
                         sequence: Some(44),
                         frame_rtp_timestamp: None,
                         frame_importance: Some("reference".to_string()),
+                        budget_importance: None,
+
+                        evidence_importance: None,
+
+                        gap_dependency_confidence: None,
+
                         observed_at_ms: 120.0,
                     }),
                     frame: None,
                     chain: crate::XbxEngineVideoTimelineChainSnapshot {
                         state: "recovering".to_string(),
                         reason: Some("transportAwaitRecoveryKeyframe".to_string()),
+                        chain_break_evidence: None,
+
                         observed_at_ms: 120.0,
                     },
                     observed_at_ms: 120.0,
@@ -2516,6 +2571,90 @@ mod tests {
         );
 
         assert!(source.waiting_for_recovery_keyframe());
+    }
+
+    #[test]
+    fn low_value_skip_does_not_trigger_recovery_without_timeline_chain_broken() {
+        let (_tx, rx) = tokio::sync::mpsc::channel(1);
+        let (transport_observation_tx, _transport_observation_rx) =
+            tokio::sync::mpsc::unbounded_channel();
+        let rtcp_port: Arc<dyn RtcRtcpSendPort> = Arc::new(CaptureRtcpPort::default());
+        let runtime_stats = Arc::new(Mutex::new(crate::XbxEngineMediaRuntimeStats::default()));
+        let mut source = RtcVideoFrameSource::new(
+            rx,
+            transport_observation_tx,
+            rtcp_port,
+            runtime_stats.clone(),
+            16,
+            std::time::Duration::from_millis(10),
+            std::time::Duration::from_millis(20),
+            std::time::Duration::from_millis(200),
+            NackSchedulerConfig {
+                max_age_ms: 1_000,
+                frame_deadline_ms: 120,
+                burst_count: 2,
+                retry_interval_ms: 20,
+                max_retry_count: 3,
+            },
+        );
+        {
+            let mut stats = runtime_stats.lock().expect("runtime stats lock");
+            stats.latest_video_timeline_observation =
+                Some(crate::XbxEngineVideoTimelineObservation {
+                    observation_id: 2,
+                    source_event: "gap-repair-in-flight".to_string(),
+                    gap: Some(crate::XbxEngineVideoTimelineGapSnapshot {
+                        state: "repair-in-flight".to_string(),
+                        sequence: Some(44),
+                        frame_rtp_timestamp: None,
+                        frame_importance: Some("reference".to_string()),
+                        budget_importance: None,
+
+                        evidence_importance: None,
+
+                        gap_dependency_confidence: None,
+
+                        observed_at_ms: 120.0,
+                    }),
+                    frame: None,
+                    chain: crate::XbxEngineVideoTimelineChainSnapshot {
+                        state: "recovering".to_string(),
+                        reason: Some("transportAwaitRecoveryKeyframe".to_string()),
+                        chain_break_evidence: None,
+
+                        observed_at_ms: 120.0,
+                    },
+                    observed_at_ms: 120.0,
+                });
+        }
+
+        source.maybe_handle_chain_broken(
+            &crate::transport::rtc::stream::nack_scheduler::SkippedNackBatch {
+                sequences: vec![44],
+                source: "rtpGap",
+                frame_rtp_timestamp: Some(91_200),
+                frame_is_keyframe: Some(false),
+                frame_importance: "delta",
+                deadline_at_ms: Some(160.0),
+                estimated_recovery_arrival_ms: Some(170.0),
+                frame_playout_deadline_at_ms: Some(160.0),
+                nack_disposition: PacketRecoveryDisposition::SkippedLowValue,
+                frame_unrecoverable_reason: Some("cloudHighRttLowValueAdmission"),
+                budget_context: FrameBudgetContext::for_transport(
+                    FrameValue::new(false, false, 12 * 1024),
+                    false,
+                    Some(160.0),
+                    Some(170.0),
+                    Some(160.0),
+                    false,
+                    FrameBudgetWindowSource::Recovery,
+                ),
+            },
+            140.0,
+            false,
+        );
+
+        assert!(!source.waiting_for_recovery_keyframe());
     }
 
     #[derive(Clone, Default)]

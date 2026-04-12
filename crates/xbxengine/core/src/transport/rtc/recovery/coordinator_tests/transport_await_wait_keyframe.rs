@@ -202,6 +202,8 @@ fn soft_transport_await_signal_stays_in_local_recovery_chain() {
         chain: crate::XbxEngineVideoTimelineChainSnapshot {
             state: "recovering".to_string(),
             reason: Some("awaitingRecoveryKeyframe".to_string()),
+            chain_break_evidence: None,
+
             observed_at_ms: now_ms - 10.0,
         },
         observed_at_ms: now_ms - 10.0,
@@ -247,8 +249,8 @@ fn soft_transport_await_signal_stays_in_local_recovery_chain() {
             response_rtp_timestamp: Some(1_000),
             response_frame_seq: Some(42),
             response_verdict: Some("on-time".to_string()),
-                lifecycle_phase: None,
-            });
+            lifecycle_phase: None,
+        });
     let shared_stats = Mutex::new(stats);
     let mut coordinator = RecoveryCoordinator::new(
         VideoEscalationController::new(VideoEscalationConfig {
@@ -312,6 +314,8 @@ fn first_frame_acquisition_transport_await_probe_stays_local() {
         chain: crate::XbxEngineVideoTimelineChainSnapshot {
             state: "recovering".to_string(),
             reason: Some("awaitingRecoveryKeyframe".to_string()),
+            chain_break_evidence: None,
+
             observed_at_ms: now_ms - 10.0,
         },
         observed_at_ms: now_ms - 10.0,
@@ -434,6 +438,8 @@ fn first_frame_acquisition_transport_await_stall_still_stays_in_keyframe_domain(
         chain: crate::XbxEngineVideoTimelineChainSnapshot {
             state: "recovering".to_string(),
             reason: Some("awaitingRecoveryKeyframe".to_string()),
+            chain_break_evidence: None,
+
             observed_at_ms: now_ms - 4_000.0,
         },
         observed_at_ms: now_ms - 4_000.0,
@@ -541,6 +547,8 @@ fn startup_non_idr_transport_await_probe_stays_local_before_first_frame() {
         chain: crate::XbxEngineVideoTimelineChainSnapshot {
             state: "recovering".to_string(),
             reason: Some("awaitingRecoveryKeyframe".to_string()),
+            chain_break_evidence: None,
+
             observed_at_ms: now_ms - 10.0,
         },
         observed_at_ms: now_ms - 10.0,
@@ -669,6 +677,8 @@ fn first_frame_acquisition_missing_pps_packet_seen_stays_local_before_first_fram
         chain: crate::XbxEngineVideoTimelineChainSnapshot {
             state: "recovering".to_string(),
             reason: Some("awaitingRecoveryKeyframe".to_string()),
+            chain_break_evidence: None,
+
             observed_at_ms: now_ms - 10.0,
         },
         observed_at_ms: now_ms - 10.0,
@@ -714,8 +724,8 @@ fn first_frame_acquisition_missing_pps_packet_seen_stays_local_before_first_fram
             response_rtp_timestamp: Some(9_024),
             response_frame_seq: None,
             response_verdict: Some("on-time".to_string()),
-                lifecycle_phase: None,
-            });
+            lifecycle_phase: None,
+        });
     stats.latest_anchor_candidate_ledger = Some(crate::XbxEngineAnchorCandidateLedger {
         state: crate::XbxEngineAnchorCandidateState::Rejected,
         source_event: "frame-inspection-rejected-await-keyframe".to_string(),
@@ -796,6 +806,8 @@ fn post_first_frame_bootstrap_missing_pps_can_upgrade_to_decoder_reset() {
         chain: crate::XbxEngineVideoTimelineChainSnapshot {
             state: "recovering".to_string(),
             reason: Some("awaitingRecoveryKeyframe".to_string()),
+            chain_break_evidence: None,
+
             observed_at_ms: now_ms - 10.0,
         },
         observed_at_ms: now_ms - 10.0,
@@ -922,6 +934,8 @@ fn weak_transport_await_streak_does_not_preload_decoder_reset_upgrade() {
         chain: crate::XbxEngineVideoTimelineChainSnapshot {
             state: "recovering".to_string(),
             reason: Some("awaitingRecoveryKeyframe".to_string()),
+            chain_break_evidence: None,
+
             observed_at_ms: now_ms - 10.0,
         },
         observed_at_ms: now_ms - 10.0,
@@ -1103,6 +1117,8 @@ fn thin_stall_timeout_alone_does_not_keep_transport_await_repeat_suppressed() {
         chain: crate::XbxEngineVideoTimelineChainSnapshot {
             state: "broken".to_string(),
             reason: Some("streamThinStall".to_string()),
+            chain_break_evidence: None,
+
             observed_at_ms: now_ms - 20.0,
         },
         observed_at_ms: now_ms - 20.0,
@@ -1188,6 +1204,8 @@ fn sent_pending_keyframe_with_thin_stall_pressure_upgrades_to_decoder_reset() {
             chain: crate::XbxEngineVideoTimelineChainSnapshot {
                 state: "broken".to_string(),
                 reason: Some("streamThinStall".to_string()),
+                chain_break_evidence: None,
+
                 observed_at_ms: now_ms + 140.0,
             },
             observed_at_ms: now_ms + 140.0,
@@ -1354,6 +1372,8 @@ fn decoded_transport_await_keyframe_without_clean_anchor_upgrades_to_decoder_res
             chain: crate::XbxEngineVideoTimelineChainSnapshot {
                 state: "recovering".to_string(),
                 reason: Some("awaitingRecoveryKeyframe".to_string()),
+                chain_break_evidence: None,
+
                 observed_at_ms: now_ms + 360.0,
             },
             observed_at_ms: now_ms + 360.0,
@@ -1533,6 +1553,8 @@ fn rejected_transport_await_anchor_candidate_upgrades_to_decoder_reset() {
             chain: crate::XbxEngineVideoTimelineChainSnapshot {
                 state: "broken".to_string(),
                 reason: Some("referenceChainUnrecoverable".to_string()),
+                chain_break_evidence: None,
+
                 observed_at_ms: now_ms + 140.0,
             },
             observed_at_ms: now_ms + 140.0,
@@ -1550,4 +1572,3 @@ fn rejected_transport_await_anchor_candidate_upgrades_to_decoder_reset() {
     );
     assert_eq!(second.decision.action, RecoveryAction::RequestDecoderReset);
 }
-

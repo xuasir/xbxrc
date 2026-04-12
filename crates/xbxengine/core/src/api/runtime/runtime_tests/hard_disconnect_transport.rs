@@ -1,8 +1,5 @@
+use super::super::{XbxEngineRuntime, XbxEngineRuntimeConfig};
 use super::fixtures::*;
-use super::super::{
-    XbxEngineRuntime,
-    XbxEngineRuntimeConfig,
-};
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
@@ -22,10 +19,7 @@ use crate::transport::rtc::session::policy::RtcSessionPolicy;
 use crate::transport::rtc::stream::video_source::test_fixtures::{
     run_local_ingress_replay_profile, LocalIngressReplayFixture,
 };
-use crate::{
-    XbxEngineInputStatus, XbxEngineMediaNegotiation,
-    XbxEngineMediaRuntimeStats,
-};
+use crate::{XbxEngineInputStatus, XbxEngineMediaNegotiation, XbxEngineMediaRuntimeStats};
 
 #[test]
 fn runtime_home_hard_disconnect_candidate_reaches_reconnect_restart() {
@@ -64,6 +58,8 @@ fn runtime_home_hard_disconnect_candidate_reaches_reconnect_restart() {
             chain: crate::XbxEngineVideoTimelineChainSnapshot {
                 state: "healthy".to_string(),
                 reason: None,
+                chain_break_evidence: None,
+
                 observed_at_ms: 11_998.0,
             },
             observed_at_ms: 11_998.0,

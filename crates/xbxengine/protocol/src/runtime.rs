@@ -345,6 +345,12 @@ pub struct XbxEngineVideoTimelineGapSnapshotDto {
     pub sequence: Option<u16>,
     pub frame_rtp_timestamp: Option<u32>,
     pub frame_importance: Option<String>,
+    #[serde(default)]
+    pub budget_importance: Option<String>,
+    #[serde(default)]
+    pub evidence_importance: Option<String>,
+    #[serde(default)]
+    pub gap_dependency_confidence: Option<String>,
     pub observed_at_ms: f64,
 }
 
@@ -354,6 +360,10 @@ pub struct XbxEngineVideoTimelineFrameSnapshotDto {
     pub frame_rtp_timestamp: Option<u32>,
     pub is_keyframe: Option<bool>,
     pub frame_importance: Option<String>,
+    #[serde(default)]
+    pub budget_importance: Option<String>,
+    #[serde(default)]
+    pub evidence_importance: Option<String>,
     pub close_reason: Option<String>,
     pub observed_at_ms: f64,
 }
@@ -362,6 +372,8 @@ pub struct XbxEngineVideoTimelineFrameSnapshotDto {
 pub struct XbxEngineVideoTimelineChainSnapshotDto {
     pub state: String,
     pub reason: Option<String>,
+    #[serde(default)]
+    pub chain_break_evidence: Option<String>,
     pub observed_at_ms: f64,
 }
 

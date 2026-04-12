@@ -1,25 +1,21 @@
-use super::fixtures::*;
 use super::super::{
-    XbxEngineReconnectTriggerSource, XbxEngineRuntime,
-    XbxEngineRuntimeConfig, XbxEngineRuntimeState,
+    XbxEngineReconnectTriggerSource, XbxEngineRuntime, XbxEngineRuntimeConfig,
+    XbxEngineRuntimeState,
 };
+use super::fixtures::*;
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use ohmygamepad_protocol::{
-    LogicalPadId,
-    OhMyGamepadRumbleTargetDto,
-};
+use ohmygamepad_protocol::{LogicalPadId, OhMyGamepadRumbleTargetDto};
 use xbxengine_protocol::{
     XbxEngineControlCommandDto, XbxEngineDisplayOptionsDto, XbxEngineDisplayStateDto,
-    XbxEngineHostRequestDto, XbxEngineIceCandidateDto,
-    XbxEngineInputEventDto, XbxEngineReconnectReasonDto,
-    XbxEngineRenderProjectionDto, XbxEngineRuntimeCodecPreferenceDto, XbxEngineRuntimeEventDto,
-    XbxEngineRuntimePhaseDto, XbxEngineRuntimeProjectionDto, XbxEngineRuntimeRecoveryDto,
-    XbxEngineRuntimeVideoPipelineDto,
-    XbxEngineTransportStateDto, XbxEngineViewportDto,
+    XbxEngineHostRequestDto, XbxEngineIceCandidateDto, XbxEngineInputEventDto,
+    XbxEngineReconnectReasonDto, XbxEngineRenderProjectionDto, XbxEngineRuntimeCodecPreferenceDto,
+    XbxEngineRuntimeEventDto, XbxEngineRuntimePhaseDto, XbxEngineRuntimeProjectionDto,
+    XbxEngineRuntimeRecoveryDto, XbxEngineRuntimeVideoPipelineDto, XbxEngineTransportStateDto,
+    XbxEngineViewportDto,
 };
 
 use crate::{

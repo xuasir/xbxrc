@@ -12,7 +12,7 @@ use crate::{
 const RECOVERY_STABLE_MIN_CLEAN_FRAMES: u8 = 2;
 const RECOVERY_STABLE_MIN_WINDOW_MS: f64 = 120.0;
 const STALE_REORDER_DEBT_RETIRE_MIN_AGE_MS: f64 = 240.0;
-const RECOVERY_CHAIN_BUILDING_PHASE_MAX_MS: f64 = 1_200.0;
+pub(super) const RECOVERY_CHAIN_BUILDING_PHASE_MAX_MS: f64 = 1_200.0;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum GapState {
@@ -96,7 +96,10 @@ pub(super) struct FrameRecoveryLedgerEntry {
 struct GapEntry {
     state: GapState,
     frame_rtp_timestamp: Option<u32>,
-    frame_importance: &'static str,
+    /// NACK / `FrameBudgetContext` 调度 importance，不等价于媒体断链证据。
+    budget_importance: &'static str,
+    /// 媒体因果侧（绑定帧、IDR、参数集变更等）importance。
+    evidence_importance: &'static str,
     provenance: GapProvenance,
     severity: TimelineGapHardness,
     #[allow(dead_code)]
@@ -126,7 +129,8 @@ struct FrameEntry {
     first_observed_at_ms: f64,
     last_updated_at_ms: f64,
     is_keyframe: Option<bool>,
-    frame_importance: &'static str,
+    budget_importance: &'static str,
+    evidence_importance: &'static str,
     close_reason: Option<&'static str>,
 }
 
@@ -160,6 +164,12 @@ pub(super) struct VideoTimelineState {
     stable_recovery_clean_frame_streak: u8,
     stable_recovery_last_frame_rtp_timestamp: Option<u32>,
     recovery_chain_building_deadline_ms: Option<f64>,
+    /// 干净 IDR 已进入 sustaining 但尚未写入全局 clean-anchor stats 时的墙钟锚点。
+    clean_anchor_ingress_observed_at_ms: Option<f64>,
+    /// 最近一次断链归因（供 trace / contract 门控）。
+    last_chain_break_evidence: Option<String>,
+    /// 已观测到干净 IDR 建链，但尚未提交全局 `SubmittedCleanAnchor` 的 RTP 时间戳。
+    pending_clean_anchor_rtp_ts: Option<u32>,
 }
 
 impl VideoTimelineState {
@@ -177,6 +187,9 @@ impl VideoTimelineState {
             stable_recovery_clean_frame_streak: 0,
             stable_recovery_last_frame_rtp_timestamp: None,
             recovery_chain_building_deadline_ms: None,
+            clean_anchor_ingress_observed_at_ms: None,
+            last_chain_break_evidence: None,
+            pending_clean_anchor_rtp_ts: None,
         }
     }
 
@@ -221,6 +234,7 @@ impl VideoTimelineState {
         self.has_chain_debt = true;
         self.chain_debt_reason = Some(reason.to_string());
         self.reset_stable_recovery_gate();
+        self.reset_clean_anchor_ingress_window();
         self.chain_state = ChainState::Recovering;
     }
 
@@ -265,24 +279,100 @@ impl VideoTimelineState {
         if self.chain_debt_reason.is_none() {
             self.chain_debt_reason = Some("referenceChainUnrecoverable".to_string());
         }
+        self.last_chain_break_evidence
+            .get_or_insert_with(|| "externalChainBroken".to_string());
         self.reset_stable_recovery_gate();
+        self.reset_clean_anchor_ingress_window();
         self.chain_state = ChainState::Broken;
     }
 
-    pub(super) fn on_clean_keyframe_submitted(&mut self) {
-        if let Some(anchor_ts) = self
-            .latest_anchor_candidate
-            .as_ref()
-            .and_then(|candidate| candidate.frame_rtp_timestamp)
-        {
-            self.retire_stale_hard_reorder_debt_before(anchor_ts);
-        }
+    /// 组装出干净 IDR 后的本地 sustaining 语义；全局 `video_anchor_clean_*` 须在 decode/present 推进后再提交。
+    pub(super) fn on_clean_keyframe_ingress(
+        &mut self,
+        anchor_rtp_timestamp: u32,
+        observed_at_ms: f64,
+    ) {
+        self.retire_stale_hard_reorder_debt_before(anchor_rtp_timestamp);
         self.clear_chain_debt();
         self.reset_stable_recovery_gate();
         self.chain_state = ChainState::SustainingRecovery;
         // 进入正式恢复保活阶段后，清掉旧 gap 观测，避免 pre-anchor 噪声立刻把链路拉回 broken。
         self.gaps.clear();
+        self.clean_anchor_ingress_observed_at_ms = Some(observed_at_ms);
+        self.recovery_chain_building_deadline_ms =
+            Some(observed_at_ms + RECOVERY_CHAIN_BUILDING_PHASE_MAX_MS);
+        // recovery anchor 已观测；全局 clean-anchor stats 在链路稳定后由 source 提交。
+        self.pending_clean_anchor_rtp_ts = Some(anchor_rtp_timestamp);
+    }
+
+    /// stats/ledger 已写入 `SubmittedCleanAnchor` 后，清 ingress 元数据并按 ledger 刷新 building 截止。
+    pub(super) fn on_clean_anchor_stats_committed(&mut self) {
+        // 先 arm：若尚无 ledger candidate，仍依赖 `clean_anchor_ingress_observed_at_ms` 计算截止。
         self.arm_recovery_chain_building_phase();
+        self.clean_anchor_ingress_observed_at_ms = None;
+    }
+
+    /// source 侧在写完 anchor ledger 后调用，与 [`on_clean_anchor_stats_committed`] 等价。
+    pub(super) fn on_clean_keyframe_submitted(&mut self) {
+        self.on_clean_anchor_stats_committed();
+    }
+
+    /// 稳定窗口满足后提交 clean-anchor：返回待提交的 IDR RTP 时间戳。
+    pub(super) fn take_clean_anchor_stats_commit_if_stable(
+        &mut self,
+        complete_candidate_rtp_ts: u32,
+        now_ms: f64,
+    ) -> Option<u32> {
+        let pending = self.pending_clean_anchor_rtp_ts?;
+        if complete_candidate_rtp_ts <= pending {
+            return None;
+        }
+        if !self.passes_stable_recovery_gate(complete_candidate_rtp_ts, now_ms) {
+            return None;
+        }
+        self.pending_clean_anchor_rtp_ts = None;
+        Some(pending)
+    }
+
+    /// 媒体路径在帧级确认后，把证据写回已绑定到该 RTP 时间戳的 gap。
+    pub(super) fn apply_media_evidence_to_gaps_for_frame(
+        &mut self,
+        frame_rtp_timestamp: u32,
+        evidence_importance: &'static str,
+        now_ms: f64,
+    ) {
+        if evidence_importance == "unknown" {
+            return;
+        }
+        for entry in self.gaps.values_mut() {
+            if entry.frame_rtp_timestamp != Some(frame_rtp_timestamp) {
+                continue;
+            }
+            entry.evidence_importance = evidence_importance;
+            entry.last_updated_at_ms = now_ms;
+            let merged_ts = entry.frame_rtp_timestamp;
+            let media = effective_media_importance_for_gap(
+                entry.budget_importance,
+                entry.evidence_importance,
+                merged_ts,
+            );
+            let (provenance, severity) = classify_gap(entry.state, media, merged_ts, None);
+            entry.provenance = provenance;
+            entry.severity = severity;
+        }
+    }
+
+    /// decode/present 长时间未验证 clean anchor：丢弃 ingress 软窗并回到等待关键帧。
+    #[allow(dead_code)] // 供输出侧钝化路径接入；当前主路径尚未调用。
+    pub(super) fn abandon_clean_anchor_pipeline_pending(&mut self) {
+        let has_committed_ledger = self.latest_anchor_candidate.as_ref().is_some_and(|c| {
+            c.state == XbxEngineAnchorCandidateState::SubmittedCleanAnchor
+                && c.source_event == "chain-clean-keyframe-submitted"
+        });
+        self.reset_clean_anchor_ingress_window();
+        if !has_committed_ledger && self.chain_state == ChainState::SustainingRecovery {
+            self.on_sustaining_recovery_failed("awaitRecoveryKeyframe");
+        }
     }
 
     pub(super) fn on_timeout_detected(&mut self) {
@@ -294,6 +384,7 @@ impl VideoTimelineState {
             return;
         }
         self.reset_stable_recovery_gate();
+        self.reset_clean_anchor_ingress_window();
         self.chain_state = ChainState::Stalled;
     }
 
@@ -302,7 +393,8 @@ impl VideoTimelineState {
         sequences: &[u16],
         now_ms: f64,
         frame_rtp_timestamp: Option<u32>,
-        frame_importance: &'static str,
+        budget_importance: &'static str,
+        evidence_importance: &'static str,
     ) {
         for sequence in sequences {
             self.update_gap(
@@ -310,7 +402,8 @@ impl VideoTimelineState {
                 GapState::Observed,
                 now_ms,
                 frame_rtp_timestamp,
-                frame_importance,
+                budget_importance,
+                evidence_importance,
                 None,
             );
         }
@@ -320,12 +413,14 @@ impl VideoTimelineState {
                 FrameReceiveState::GapPresent,
                 now_ms,
                 None,
-                frame_importance,
+                budget_importance,
+                evidence_importance,
                 None,
             );
         }
         if matches!(self.chain_state, ChainState::Healthy) {
             self.reset_stable_recovery_gate();
+            self.reset_clean_anchor_ingress_window();
             self.chain_state = ChainState::Repairing;
         }
     }
@@ -335,16 +430,18 @@ impl VideoTimelineState {
         sequences: &[u16],
         now_ms: f64,
         frame_rtp_timestamp: Option<u32>,
-        frame_importance: &'static str,
+        budget_importance: &'static str,
+        evidence_importance: &'static str,
     ) {
-        let soft_reentry = self.recovery_sustaining_softened(now_ms, frame_importance);
+        let soft_reentry = self.recovery_sustaining_softened(now_ms, budget_importance);
         for sequence in sequences {
             self.update_gap(
                 *sequence,
                 GapState::ReorderPending,
                 now_ms,
                 frame_rtp_timestamp,
-                frame_importance,
+                budget_importance,
+                evidence_importance,
                 None,
             );
         }
@@ -371,16 +468,18 @@ impl VideoTimelineState {
         sequences: &[u16],
         now_ms: f64,
         frame_rtp_timestamp: Option<u32>,
-        frame_importance: &'static str,
+        budget_importance: &'static str,
+        evidence_importance: &'static str,
     ) {
-        let soft_reentry = self.recovery_sustaining_softened(now_ms, frame_importance);
+        let soft_reentry = self.recovery_sustaining_softened(now_ms, budget_importance);
         for sequence in sequences {
             self.update_gap(
                 *sequence,
                 GapState::NackCandidate,
                 now_ms,
                 frame_rtp_timestamp,
-                frame_importance,
+                budget_importance,
+                evidence_importance,
                 None,
             );
         }
@@ -390,7 +489,8 @@ impl VideoTimelineState {
                 FrameReceiveState::Repairing,
                 now_ms,
                 None,
-                frame_importance,
+                budget_importance,
+                evidence_importance,
                 None,
             );
         }
@@ -416,16 +516,18 @@ impl VideoTimelineState {
         sequences: &[u16],
         now_ms: f64,
         frame_rtp_timestamp: Option<u32>,
-        frame_importance: &'static str,
+        budget_importance: &'static str,
+        evidence_importance: &'static str,
     ) {
-        let soft_reentry = self.recovery_sustaining_softened(now_ms, frame_importance);
+        let soft_reentry = self.recovery_sustaining_softened(now_ms, budget_importance);
         for sequence in sequences {
             self.update_gap(
                 *sequence,
                 GapState::RepairInFlight,
                 now_ms,
                 frame_rtp_timestamp,
-                frame_importance,
+                budget_importance,
+                evidence_importance,
                 None,
             );
         }
@@ -435,7 +537,8 @@ impl VideoTimelineState {
                 FrameReceiveState::Repairing,
                 now_ms,
                 None,
-                frame_importance,
+                budget_importance,
+                evidence_importance,
                 None,
             );
         }
@@ -461,15 +564,17 @@ impl VideoTimelineState {
         sequence: u16,
         now_ms: f64,
         frame_rtp_timestamp: Option<u32>,
-        frame_importance: &'static str,
+        budget_importance: &'static str,
+        evidence_importance: &'static str,
     ) {
-        let soft_reentry = self.recovery_sustaining_softened(now_ms, frame_importance);
+        let soft_reentry = self.recovery_sustaining_softened(now_ms, budget_importance);
         self.update_gap(
             sequence,
             GapState::Resolved,
             now_ms,
             frame_rtp_timestamp,
-            frame_importance,
+            budget_importance,
+            evidence_importance,
             None,
         );
         if let Some(frame_rtp_timestamp) = frame_rtp_timestamp {
@@ -486,7 +591,8 @@ impl VideoTimelineState {
                 },
                 now_ms,
                 None,
-                frame_importance,
+                budget_importance,
+                evidence_importance,
                 None,
             );
             if !has_pending_gap {
@@ -522,18 +628,20 @@ impl VideoTimelineState {
         sequences: &[u16],
         now_ms: f64,
         frame_rtp_timestamp: Option<u32>,
-        frame_importance: &'static str,
+        budget_importance: &'static str,
+        evidence_importance: &'static str,
         close_reason: Option<&'static str>,
     ) -> bool {
         let soft_reentry =
-            self.can_soften_expired_delta_reentry(now_ms, frame_importance, close_reason);
+            self.can_soften_expired_delta_reentry(now_ms, budget_importance, close_reason);
         for sequence in sequences {
             self.update_gap(
                 *sequence,
                 GapState::Expired,
                 now_ms,
                 frame_rtp_timestamp,
-                frame_importance,
+                budget_importance,
+                evidence_importance,
                 close_reason,
             );
         }
@@ -543,13 +651,15 @@ impl VideoTimelineState {
                 FrameReceiveState::Closed,
                 now_ms,
                 None,
-                frame_importance,
+                budget_importance,
+                evidence_importance,
                 close_reason,
             );
         }
         let chain_broken = self.should_expired_gap_break_chain(
             frame_rtp_timestamp,
-            frame_importance,
+            budget_importance,
+            evidence_importance,
             close_reason,
             soft_reentry,
         );
@@ -558,12 +668,27 @@ impl VideoTimelineState {
             self.chain_debt_reason = Some(
                 self.expired_gap_chain_break_reason(
                     frame_rtp_timestamp,
-                    frame_importance,
+                    budget_importance,
+                    evidence_importance,
                     close_reason,
                 )
                 .to_string(),
             );
+            self.last_chain_break_evidence = Some(
+                if self.frame_rtp_has_unrecoverable_reference_ledger(frame_rtp_timestamp) {
+                    "frameLedgerUnrecoverableReferenceChain"
+                } else {
+                    expired_gap_chain_break_evidence(
+                        frame_rtp_timestamp,
+                        budget_importance,
+                        evidence_importance,
+                        close_reason,
+                    )
+                }
+                .to_string(),
+            );
             self.reset_stable_recovery_gate();
+            self.reset_clean_anchor_ingress_window();
             self.chain_state = ChainState::Broken;
         } else if (matches!(
             close_reason,
@@ -590,6 +715,7 @@ impl VideoTimelineState {
         is_keyframe: Option<bool>,
         frame_importance: &'static str,
     ) {
+        self.apply_media_evidence_to_gaps_for_frame(frame_rtp_timestamp, frame_importance, now_ms);
         // 一旦有新帧进入，timeout 原因仅作为“最近一次”观测信息，不应持续粘住后续链路原因。
         self.timeout_reason = None;
         if matches!(self.chain_state, ChainState::Stalled) {
@@ -611,6 +737,7 @@ impl VideoTimelineState {
             FrameReceiveState::Open,
             now_ms,
             is_keyframe,
+            frame_importance,
             frame_importance,
             None,
         );
@@ -675,6 +802,7 @@ impl VideoTimelineState {
             now_ms,
             is_keyframe,
             frame_importance,
+            frame_importance,
             close_reason,
         );
     }
@@ -691,6 +819,7 @@ impl VideoTimelineState {
             FrameReceiveState::CompleteCandidate,
             now_ms,
             _is_keyframe,
+            _frame_importance,
             _frame_importance,
             None,
         );
@@ -767,7 +896,10 @@ impl VideoTimelineState {
                 frame_recovery_disposition,
                 FrameRecoveryDisposition::UnrecoverableReferenceChain
             ) {
+                self.last_chain_break_evidence =
+                    Some("frameLedgerUnrecoverableReferenceChain".to_string());
                 self.reset_stable_recovery_gate();
+                self.reset_clean_anchor_ingress_window();
                 self.chain_state = ChainState::Broken;
             }
         }
@@ -812,7 +944,6 @@ impl VideoTimelineState {
             .map(|entry| entry.state)
     }
 
-    #[cfg(test)]
     pub(super) fn chain_state(&self) -> ChainState {
         self.chain_state
     }
@@ -828,28 +959,40 @@ impl VideoTimelineState {
         state: GapState,
         now_ms: f64,
         frame_rtp_timestamp: Option<u32>,
-        frame_importance: &'static str,
+        budget_importance: &'static str,
+        evidence_importance: &'static str,
         close_reason: Option<&'static str>,
     ) {
-        let (provenance, severity) =
-            classify_gap(state, frame_importance, frame_rtp_timestamp, close_reason);
         if let Some(entry) = self.gaps.get_mut(&sequence) {
             entry.state = state;
             entry.last_updated_at_ms = now_ms;
             entry.frame_rtp_timestamp = entry.frame_rtp_timestamp.or(frame_rtp_timestamp);
-            if entry.frame_importance == "unknown" && frame_importance != "unknown" {
-                entry.frame_importance = frame_importance;
-            }
+            entry.budget_importance =
+                merge_importance_lane(entry.budget_importance, budget_importance);
+            entry.evidence_importance =
+                merge_importance_lane(entry.evidence_importance, evidence_importance);
+            let merged_ts = entry.frame_rtp_timestamp;
+            let media = effective_media_importance_for_gap(
+                entry.budget_importance,
+                entry.evidence_importance,
+                merged_ts,
+            );
+            let (provenance, severity) = classify_gap(state, media, merged_ts, close_reason);
             entry.provenance = provenance;
             entry.severity = severity;
             return;
         }
+        let merged_ts = frame_rtp_timestamp;
+        let media =
+            effective_media_importance_for_gap(budget_importance, evidence_importance, merged_ts);
+        let (provenance, severity) = classify_gap(state, media, merged_ts, close_reason);
         self.gaps.insert(
             sequence,
             GapEntry {
                 state,
                 frame_rtp_timestamp,
-                frame_importance,
+                budget_importance,
+                evidence_importance,
                 provenance,
                 severity,
                 first_observed_at_ms: now_ms,
@@ -864,16 +1007,18 @@ impl VideoTimelineState {
         state: FrameReceiveState,
         now_ms: f64,
         is_keyframe: Option<bool>,
-        frame_importance: &'static str,
+        budget_importance: &'static str,
+        evidence_importance: &'static str,
         close_reason: Option<&'static str>,
     ) {
         if let Some(entry) = self.frames.get_mut(&frame_rtp_timestamp) {
             entry.state = state;
             entry.last_updated_at_ms = now_ms;
             entry.is_keyframe = entry.is_keyframe.or(is_keyframe);
-            if entry.frame_importance == "unknown" && frame_importance != "unknown" {
-                entry.frame_importance = frame_importance;
-            }
+            entry.budget_importance =
+                merge_importance_lane(entry.budget_importance, budget_importance);
+            entry.evidence_importance =
+                merge_importance_lane(entry.evidence_importance, evidence_importance);
             if close_reason.is_some() {
                 entry.close_reason = close_reason;
             }
@@ -886,7 +1031,8 @@ impl VideoTimelineState {
                 first_observed_at_ms: now_ms,
                 last_updated_at_ms: now_ms,
                 is_keyframe,
-                frame_importance,
+                budget_importance,
+                evidence_importance,
                 close_reason,
             },
         );
@@ -916,6 +1062,7 @@ impl VideoTimelineState {
             chain: XbxEngineVideoTimelineChainSnapshot {
                 state: self.chain_state.as_str().to_string(),
                 reason: self.chain_reason(frame_rtp_timestamp),
+                chain_break_evidence: self.last_chain_break_evidence.clone(),
                 observed_at_ms: now_ms,
             },
         }
@@ -970,17 +1117,40 @@ impl VideoTimelineState {
         })
     }
 
+    fn frame_rtp_has_unrecoverable_reference_ledger(
+        &self,
+        frame_rtp_timestamp: Option<u32>,
+    ) -> bool {
+        frame_rtp_timestamp.is_some_and(|ts| {
+            self.frame_recovery_ledger.get(&ts).is_some_and(|entry| {
+                matches!(
+                    entry.frame_recovery_disposition,
+                    FrameRecoveryDisposition::UnrecoverableReferenceChain
+                )
+            })
+        })
+    }
+
     fn should_expired_gap_break_chain(
         &self,
         frame_rtp_timestamp: Option<u32>,
-        frame_importance: &str,
+        budget_importance: &'static str,
+        evidence_importance: &'static str,
         close_reason: Option<&'static str>,
         soft_reentry: bool,
     ) -> bool {
-        if self.chain_state == ChainState::SustainingRecovery && frame_importance == "delta" {
+        if self.frame_rtp_has_unrecoverable_reference_ledger(frame_rtp_timestamp) {
+            return true;
+        }
+        let media = effective_media_importance_for_gap(
+            budget_importance,
+            evidence_importance,
+            frame_rtp_timestamp,
+        );
+        if self.chain_state == ChainState::SustainingRecovery && media == "delta" {
             return false;
         }
-        if matches!(frame_importance, "reference" | "keyframe") {
+        if matches!(media, "reference" | "keyframe") {
             return true;
         }
         if matches!(close_reason, Some(reason) if is_local_low_value_gap_reason(reason)) {
@@ -990,17 +1160,23 @@ impl VideoTimelineState {
             return false;
         }
         frame_rtp_timestamp.is_none()
-            && frame_importance == "delta"
+            && media == "delta"
             && matches!(close_reason, Some("awaitingRecoveryKeyframe"))
     }
 
     fn expired_gap_chain_break_reason(
         &self,
         frame_rtp_timestamp: Option<u32>,
-        frame_importance: &str,
+        budget_importance: &'static str,
+        evidence_importance: &'static str,
         close_reason: Option<&'static str>,
     ) -> &'static str {
-        if frame_rtp_timestamp.is_none() && frame_importance == "delta" {
+        let media = effective_media_importance_for_gap(
+            budget_importance,
+            evidence_importance,
+            frame_rtp_timestamp,
+        );
+        if frame_rtp_timestamp.is_none() && media == "delta" {
             if let Some(reason @ "awaitingRecoveryKeyframe") = close_reason {
                 return reason;
             }
@@ -1011,6 +1187,7 @@ impl VideoTimelineState {
     fn clear_chain_debt(&mut self) {
         self.has_chain_debt = false;
         self.chain_debt_reason = None;
+        self.last_chain_break_evidence = None;
         self.frame_recovery_ledger.retain(|_, entry| {
             matches!(
                 entry.frame_recovery_disposition,
@@ -1076,19 +1253,25 @@ impl VideoTimelineState {
         });
     }
 
+    fn reset_clean_anchor_ingress_window(&mut self) {
+        self.clean_anchor_ingress_observed_at_ms = None;
+        self.recovery_chain_building_deadline_ms = None;
+    }
+
     fn arm_recovery_chain_building_phase(&mut self) {
-        let Some(candidate) = self.latest_anchor_candidate.as_ref() else {
-            self.recovery_chain_building_deadline_ms = None;
-            return;
-        };
-        if candidate.state != XbxEngineAnchorCandidateState::SubmittedCleanAnchor
-            || candidate.source_event != "chain-clean-keyframe-submitted"
-        {
-            self.recovery_chain_building_deadline_ms = None;
-            return;
+        if let Some(candidate) = self.latest_anchor_candidate.as_ref() {
+            if candidate.state == XbxEngineAnchorCandidateState::SubmittedCleanAnchor
+                && candidate.source_event == "chain-clean-keyframe-submitted"
+            {
+                self.recovery_chain_building_deadline_ms =
+                    Some(candidate.observed_at_ms + RECOVERY_CHAIN_BUILDING_PHASE_MAX_MS);
+                return;
+            }
         }
-        self.recovery_chain_building_deadline_ms =
-            Some(candidate.observed_at_ms + RECOVERY_CHAIN_BUILDING_PHASE_MAX_MS);
+        if let Some(ingress_ms) = self.clean_anchor_ingress_observed_at_ms {
+            self.recovery_chain_building_deadline_ms =
+                Some(ingress_ms + RECOVERY_CHAIN_BUILDING_PHASE_MAX_MS);
+        }
     }
 
     pub(super) fn recovery_chain_building_phase_active(
@@ -1105,17 +1288,17 @@ impl VideoTimelineState {
 
     pub(super) fn reopen_delta_continuation_after_clean_anchor(&mut self, now_ms: f64) -> bool {
         self.refresh_recovery_chain_building_phase(now_ms);
-        let clean_anchor_active = self
-            .latest_anchor_candidate
-            .as_ref()
-            .is_some_and(|candidate| {
-                candidate.state == XbxEngineAnchorCandidateState::SubmittedCleanAnchor
-                    && candidate.source_event == "chain-clean-keyframe-submitted"
-                    && candidate.observed_at_ms <= now_ms
-                    && (self.recovery_chain_building_deadline_ms.is_some()
-                        || (now_ms - candidate.observed_at_ms).max(0.0)
-                            <= RECOVERY_CHAIN_BUILDING_PHASE_MAX_MS)
-            });
+        let clean_anchor_active = self.recovery_chain_building_deadline_ms.is_some()
+            || self
+                .latest_anchor_candidate
+                .as_ref()
+                .is_some_and(|candidate| {
+                    candidate.state == XbxEngineAnchorCandidateState::SubmittedCleanAnchor
+                        && candidate.source_event == "chain-clean-keyframe-submitted"
+                        && candidate.observed_at_ms <= now_ms
+                        && (now_ms - candidate.observed_at_ms).max(0.0)
+                            <= RECOVERY_CHAIN_BUILDING_PHASE_MAX_MS
+                });
         if !clean_anchor_active || self.has_blocking_hard_gap_issue_for_delta_continuation() {
             return false;
         }
@@ -1197,15 +1380,27 @@ impl VideoTimelineState {
         frame_rtp_timestamp: Option<u32>,
         now_ms: f64,
     ) -> Option<XbxEngineVideoTimelineGapSnapshot> {
+        let map_entry = |sequence: u16, entry: &GapEntry| -> XbxEngineVideoTimelineGapSnapshot {
+            let conf = if entry.frame_rtp_timestamp.is_some() {
+                "bound"
+            } else {
+                "anonymous"
+            };
+            let evidence = entry.evidence_importance.to_string();
+            XbxEngineVideoTimelineGapSnapshot {
+                state: entry.state.as_str().to_string(),
+                sequence: Some(sequence),
+                frame_rtp_timestamp: entry.frame_rtp_timestamp,
+                frame_importance: Some(evidence.clone()),
+                budget_importance: Some(entry.budget_importance.to_string()),
+                evidence_importance: Some(evidence),
+                gap_dependency_confidence: Some(conf.to_string()),
+                observed_at_ms: entry.last_updated_at_ms.max(now_ms),
+            }
+        };
         if let Some(sequence) = gap_sequence {
             if let Some(entry) = self.gaps.get(&sequence) {
-                return Some(XbxEngineVideoTimelineGapSnapshot {
-                    state: entry.state.as_str().to_string(),
-                    sequence: Some(sequence),
-                    frame_rtp_timestamp: entry.frame_rtp_timestamp,
-                    frame_importance: Some(entry.frame_importance.to_string()),
-                    observed_at_ms: entry.last_updated_at_ms.max(now_ms),
-                });
+                return Some(map_entry(sequence, entry));
             }
         }
         let candidate = frame_rtp_timestamp
@@ -1215,13 +1410,7 @@ impl VideoTimelineState {
                     .find(|(_, entry)| entry.frame_rtp_timestamp == Some(frame_ts))
             })
             .or_else(|| self.gaps.last_key_value());
-        candidate.map(|(sequence, entry)| XbxEngineVideoTimelineGapSnapshot {
-            state: entry.state.as_str().to_string(),
-            sequence: Some(*sequence),
-            frame_rtp_timestamp: entry.frame_rtp_timestamp,
-            frame_importance: Some(entry.frame_importance.to_string()),
-            observed_at_ms: entry.last_updated_at_ms.max(now_ms),
-        })
+        candidate.map(|(sequence, entry)| map_entry(*sequence, entry))
     }
 
     fn resolve_frame_snapshot(
@@ -1232,13 +1421,18 @@ impl VideoTimelineState {
         let candidate = frame_rtp_timestamp
             .and_then(|frame_ts| self.frames.get_key_value(&frame_ts))
             .or_else(|| self.frames.last_key_value());
-        candidate.map(|(frame_ts, entry)| XbxEngineVideoTimelineFrameSnapshot {
-            state: entry.state.as_str().to_string(),
-            frame_rtp_timestamp: Some(*frame_ts),
-            is_keyframe: entry.is_keyframe,
-            frame_importance: Some(entry.frame_importance.to_string()),
-            close_reason: entry.close_reason.map(str::to_string),
-            observed_at_ms: entry.last_updated_at_ms.max(now_ms),
+        candidate.map(|(frame_ts, entry)| {
+            let ev = entry.evidence_importance.to_string();
+            XbxEngineVideoTimelineFrameSnapshot {
+                state: entry.state.as_str().to_string(),
+                frame_rtp_timestamp: Some(*frame_ts),
+                is_keyframe: entry.is_keyframe,
+                frame_importance: Some(ev.clone()),
+                budget_importance: Some(entry.budget_importance.to_string()),
+                evidence_importance: Some(ev),
+                close_reason: entry.close_reason.map(str::to_string),
+                observed_at_ms: entry.last_updated_at_ms.max(now_ms),
+            }
         })
     }
 
@@ -1267,16 +1461,63 @@ impl VideoTimelineState {
     }
 }
 
+fn merge_importance_lane(prev: &'static str, incoming: &'static str) -> &'static str {
+    if incoming != "unknown" {
+        incoming
+    } else {
+        prev
+    }
+}
+
+/// 媒体因果 importance：匿名缺洞不把预算 reference/keyframe 当作硬参考。
+fn effective_media_importance_for_gap(
+    budget: &'static str,
+    evidence: &'static str,
+    frame_rtp_timestamp: Option<u32>,
+) -> &'static str {
+    if frame_rtp_timestamp.is_none() {
+        return "delta";
+    }
+    if evidence != "unknown" {
+        evidence
+    } else {
+        budget
+    }
+}
+
+fn expired_gap_chain_break_evidence(
+    frame_rtp_timestamp: Option<u32>,
+    budget_importance: &'static str,
+    evidence_importance: &'static str,
+    close_reason: Option<&'static str>,
+) -> &'static str {
+    let media = effective_media_importance_for_gap(
+        budget_importance,
+        evidence_importance,
+        frame_rtp_timestamp,
+    );
+    if frame_rtp_timestamp.is_none()
+        && media == "delta"
+        && matches!(close_reason, Some("awaitingRecoveryKeyframe"))
+    {
+        return "anonymousAwaitingKeyframeDelta";
+    }
+    if matches!(media, "reference" | "keyframe") {
+        return "boundMediaLikeGapExpired";
+    }
+    "genericGapExpired"
+}
+
 fn classify_gap(
     state: GapState,
-    frame_importance: &'static str,
+    media_importance: &'static str,
     frame_rtp_timestamp: Option<u32>,
     close_reason: Option<&'static str>,
 ) -> (GapProvenance, TimelineGapHardness) {
     if matches!(state, GapState::RepairInFlight) {
         return (
             GapProvenance::Repair,
-            if matches!(frame_importance, "reference" | "keyframe") {
+            if matches!(media_importance, "reference" | "keyframe") {
                 TimelineGapHardness::Hard
             } else {
                 TimelineGapHardness::Soft
@@ -1288,9 +1529,9 @@ fn classify_gap(
     }
     (
         GapProvenance::NetworkOrUnknown,
-        if matches!(frame_importance, "reference" | "keyframe")
+        if matches!(media_importance, "reference" | "keyframe")
             || (frame_rtp_timestamp.is_none()
-                && frame_importance == "delta"
+                && media_importance == "delta"
                 && matches!(close_reason, Some("awaitingRecoveryKeyframe")))
         {
             TimelineGapHardness::Hard
@@ -1306,6 +1547,7 @@ fn is_local_low_value_gap_reason(reason: &str) -> bool {
         "cloudHighRttLowValueAdmission"
             | "localBackpressureDeltaGap"
             | "displayStarvedLowValueAdmission"
+            | "estimatedArrivalNearDeadlineLowValue"
     )
 }
 
@@ -1328,15 +1570,14 @@ fn is_hard_recovery_reason(reason: &str) -> bool {
 #[cfg(test)]
 mod inline_recovery_tests {
     use super::{ChainState, VideoTimelineState};
-    use crate::XbxEngineAnchorCandidateState;
 
     #[test]
     fn resolved_hard_gap_no_longer_keeps_hard_recovery_risk() {
         let mut state = VideoTimelineState::new();
-        state.mark_gap_reorder_pending(&[501], 1.0, Some(90_001), "reference");
+        state.mark_gap_reorder_pending(&[501], 1.0, Some(90_001), "reference", "reference");
         assert!(state.has_hard_recovery_risk_for_test());
 
-        state.mark_gap_resolved(501, 2.0, Some(90_001), "reference");
+        state.mark_gap_resolved(501, 2.0, Some(90_001), "reference", "reference");
         assert!(!state.has_hard_recovery_risk_for_test());
     }
 
@@ -1344,18 +1585,10 @@ mod inline_recovery_tests {
     fn clean_anchor_retires_pre_anchor_hard_debt() {
         let mut state = VideoTimelineState::new();
         state.on_admission_await_recovery_keyframe(Some("awaitingRecoveryKeyframe"));
-        state.mark_gap_reorder_pending(&[601], 1.0, Some(90_001), "reference");
+        state.mark_gap_reorder_pending(&[601], 1.0, Some(90_001), "reference", "reference");
         assert!(state.has_hard_recovery_risk_for_test());
 
-        state.observe_anchor_candidate(
-            7,
-            Some(90_050),
-            "chain-clean-keyframe-submitted",
-            XbxEngineAnchorCandidateState::SubmittedCleanAnchor,
-            None,
-            2.0,
-        );
-        state.on_clean_keyframe_submitted();
+        state.on_clean_keyframe_ingress(90_050, 2.0);
 
         assert_eq!(state.chain_state(), ChainState::SustainingRecovery);
         assert!(!state.waiting_for_recovery_keyframe());

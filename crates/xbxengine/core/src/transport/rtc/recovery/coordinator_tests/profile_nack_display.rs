@@ -1,8 +1,6 @@
 use super::super::{RecoveryCoordinator, RecoveryOwnerSignal};
 use crate::runtime_stats_sink::RuntimeStatsSink;
-use crate::transport::rtc::recovery::escalation::{
-    RecoveryAction, VideoEscalationReason,
-};
+use crate::transport::rtc::recovery::escalation::{RecoveryAction, VideoEscalationReason};
 use crate::transport::rtc::recovery::runtime_state::{resolve_recovery_profile, unix_now_ms};
 use crate::transport::rtc::recovery::startup::SessionPhase;
 use crate::XbxEngineMediaRuntimeStats;
@@ -10,7 +8,9 @@ use std::sync::Mutex;
 use std::time::{Duration, Instant};
 use xbxengine_protocol::{XbxEngineTargetTypeDto, XbxEngineTransportStateDto};
 
-use super::harness::{healthy_twcc_observation, make_test_nack_observation, test_escalation_controller};
+use super::harness::{
+    healthy_twcc_observation, make_test_nack_observation, test_escalation_controller,
+};
 
 #[test]
 fn home_lan_uses_aggressive_startup_recovery_profile() {
@@ -490,8 +490,8 @@ fn recent_wait_keyframe_recovery_suppresses_repeat_wait_keyframe() {
             response_rtp_timestamp: None,
             response_frame_seq: None,
             response_verdict: Some("pending".to_string()),
-                lifecycle_phase: None,
-            });
+            lifecycle_phase: None,
+        });
     let mut coordinator = RecoveryCoordinator::new(
         test_escalation_controller(250, 2, 2),
         Instant::now(),
@@ -567,8 +567,8 @@ fn recent_wait_keyframe_without_sent_episode_does_not_coalesce_keyframe_inflight
             response_rtp_timestamp: None,
             response_frame_seq: None,
             response_verdict: Some("pending".to_string()),
-                lifecycle_phase: None,
-            });
+            lifecycle_phase: None,
+        });
     stats.latest_video_timeline_observation = Some(crate::XbxEngineVideoTimelineObservation {
         observation_id: 71,
         source_event: "frame-await-recovery-keyframe".to_string(),
@@ -577,6 +577,8 @@ fn recent_wait_keyframe_without_sent_episode_does_not_coalesce_keyframe_inflight
         chain: crate::XbxEngineVideoTimelineChainSnapshot {
             state: "recovering".to_string(),
             reason: Some("transportAwaitRecoveryKeyframe".to_string()),
+            chain_break_evidence: None,
+
             observed_at_ms: now_ms,
         },
         observed_at_ms: now_ms,

@@ -44,7 +44,7 @@ fn playback_phase_edge01_transport_deferred_flood_must_not_mark_recovery_success
                     response_rtp_timestamp: None,
                     response_frame_seq: None,
                     response_verdict: Some("transportDeferred".to_string()),
-                lifecycle_phase: None,
+                    lifecycle_phase: None,
                 });
             stats.latest_video_track_status = Some(crate::XbxEngineVideoTrackStatus {
                 state: "remoteTrackAttached".to_string(),
@@ -66,6 +66,8 @@ fn playback_phase_edge01_transport_deferred_flood_must_not_mark_recovery_success
                     chain: crate::XbxEngineVideoTimelineChainSnapshot {
                         state: "recovering".to_string(),
                         reason: Some("transportAwaitRecoveryKeyframe".to_string()),
+                        chain_break_evidence: None,
+
                         observed_at_ms: t - 2.0,
                     },
                     observed_at_ms: t - 2.0,
@@ -143,6 +145,8 @@ fn playback_phase_edge02_non_idr_vcl_with_delta_ready_must_not_exit_to_stable_se
                     chain: crate::XbxEngineVideoTimelineChainSnapshot {
                         state: "recovering".to_string(),
                         reason: Some("transportAwaitRecoveryKeyframe".to_string()),
+                        chain_break_evidence: None,
+
                         observed_at_ms: t - 2.0,
                     },
                     observed_at_ms: t - 2.0,
@@ -201,6 +205,8 @@ fn playback_phase_edge03_long_coalesce_keyframe_inflight_must_not_be_eternally_s
                         chain: crate::XbxEngineVideoTimelineChainSnapshot {
                             state: "recovering".to_string(),
                             reason: Some("transportAwaitRecoveryKeyframe".to_string()),
+                            chain_break_evidence: None,
+
                             observed_at_ms: t - 2.0,
                         },
                         observed_at_ms: t - 2.0,
@@ -267,6 +273,8 @@ fn playback_phase_edge04_wait_for_burst_repeated_must_eventually_emit_action_or_
                         chain: crate::XbxEngineVideoTimelineChainSnapshot {
                             state: "recovering".to_string(),
                             reason: Some("transportAwaitRecoveryKeyframe".to_string()),
+                            chain_break_evidence: None,
+
                             observed_at_ms: t - 2.0,
                         },
                         observed_at_ms: t - 2.0,
@@ -388,6 +396,8 @@ fn playback_phase_edge06_decoder_reset_inflight_coalesce_must_respect_budget_sig
                     chain: crate::XbxEngineVideoTimelineChainSnapshot {
                         state: "recovering".to_string(),
                         reason: Some("transportAwaitRecoveryKeyframe".to_string()),
+                        chain_break_evidence: None,
+
                         observed_at_ms: t - 2.0,
                     },
                     observed_at_ms: t - 2.0,
@@ -459,6 +469,8 @@ fn playback_phase_edge07_audio_twcc_ignored_must_not_block_video_recovery_gate()
                     chain: crate::XbxEngineVideoTimelineChainSnapshot {
                         state: "recovering".to_string(),
                         reason: Some("transportAwaitRecoveryKeyframe".to_string()),
+                        chain_break_evidence: None,
+
                         observed_at_ms: t - 2.0,
                     },
                     observed_at_ms: t - 2.0,
@@ -559,6 +571,8 @@ fn playback_phase_edge09_high_present_overwrite_must_not_force_stable_serving_wh
                     chain: crate::XbxEngineVideoTimelineChainSnapshot {
                         state: "recovering".to_string(),
                         reason: Some("transportAwaitRecoveryKeyframe".to_string()),
+                        chain_break_evidence: None,
+
                         observed_at_ms: t - 2.0,
                     },
                     observed_at_ms: t - 2.0,

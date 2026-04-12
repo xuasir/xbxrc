@@ -210,7 +210,10 @@ fn has_active_keyframe_inflight(stats: &XbxEngineMediaRuntimeStats, now_ms: f64)
             if episode.sent_at_ms.is_none() {
                 return false;
             }
-            if episode.deadline_at_ms.is_some_and(|deadline| deadline < now_ms) {
+            if episode
+                .deadline_at_ms
+                .is_some_and(|deadline| deadline < now_ms)
+            {
                 return false;
             }
             if has_transport_await_invalid_keyframe_response(
@@ -550,6 +553,8 @@ mod tests {
                 chain: crate::XbxEngineVideoTimelineChainSnapshot {
                     state: "recovering".to_string(),
                     reason: Some("awaitingRecoveryKeyframe".to_string()),
+                    chain_break_evidence: None,
+
                     observed_at_ms: now_ms - 20.0,
                 },
                 observed_at_ms: now_ms - 20.0,

@@ -995,6 +995,9 @@ pub fn build_xbxengine_stats(
                                 sequence: gap.sequence,
                                 frame_rtp_timestamp: gap.frame_rtp_timestamp,
                                 frame_importance: gap.frame_importance.clone(),
+                                budget_importance: gap.budget_importance.clone(),
+                                evidence_importance: gap.evidence_importance.clone(),
+                                gap_dependency_confidence: gap.gap_dependency_confidence.clone(),
                                 observed_at_ms: gap.observed_at_ms,
                             }
                         }),
@@ -1004,6 +1007,8 @@ pub fn build_xbxengine_stats(
                                 frame_rtp_timestamp: frame.frame_rtp_timestamp,
                                 is_keyframe: frame.is_keyframe,
                                 frame_importance: frame.frame_importance.clone(),
+                                budget_importance: frame.budget_importance.clone(),
+                                evidence_importance: frame.evidence_importance.clone(),
                                 close_reason: frame.close_reason.clone(),
                                 observed_at_ms: frame.observed_at_ms,
                             }
@@ -1011,6 +1016,7 @@ pub fn build_xbxengine_stats(
                         chain: xbxengine_protocol::XbxEngineVideoTimelineChainSnapshotDto {
                             state: timeline.chain.state.clone(),
                             reason: timeline.chain.reason.clone(),
+                            chain_break_evidence: timeline.chain.chain_break_evidence.clone(),
                             observed_at_ms: timeline.chain.observed_at_ms,
                         },
                         observed_at_ms: timeline.observed_at_ms,

@@ -1,9 +1,7 @@
 use super::super::RtcSessionPolicy;
 use crate::api::backend::{XbxEngineMediaRuntimeStats, XbxEngineVideoTwccObservation};
 use crate::api::runtime::XbxEngineRuntimeConfig;
-use crate::transport::rtc::facts::{
-    ConnectionLifecycleStateFact, TransportCommand,
-};
+use crate::transport::rtc::facts::{ConnectionLifecycleStateFact, TransportCommand};
 use crate::transport::rtc::projection::{
     BweProjection, ConnectionProjection, DiagnosticsProjection, MediaProjection,
     RecoveryProjection, TransportSnapshot,
@@ -56,6 +54,8 @@ fn recovery_integration_transport_await_exits_after_completion_evidence() {
                     chain: crate::XbxEngineVideoTimelineChainSnapshot {
                         state: "recovering".to_string(),
                         reason: Some("transportAwaitRecoveryKeyframe".to_string()),
+                        chain_break_evidence: None,
+
                         observed_at_ms: 900.0,
                     },
                     observed_at_ms: 900.0,
@@ -143,6 +143,8 @@ fn recovery_integration_stale_transport_await_after_completion_evidence_stays_no
                     chain: crate::XbxEngineVideoTimelineChainSnapshot {
                         state: "recovering".to_string(),
                         reason: Some("transportAwaitRecoveryKeyframe".to_string()),
+                        chain_break_evidence: None,
+
                         observed_at_ms: 900.0,
                     },
                     observed_at_ms: 900.0,
@@ -230,6 +232,8 @@ fn recovery_integration_recent_transport_await_exits_when_non_idr_has_committed_
                     chain: crate::XbxEngineVideoTimelineChainSnapshot {
                         state: "recovering".to_string(),
                         reason: Some("transportAwaitRecoveryKeyframe".to_string()),
+                        chain_break_evidence: None,
+
                         observed_at_ms: 900.0,
                     },
                     observed_at_ms: 900.0,
@@ -352,6 +356,8 @@ fn recovery_integration_same_unresolved_gap_transport_await_reuses_in_flight_fam
                     chain: crate::XbxEngineVideoTimelineChainSnapshot {
                         state: "recovering".to_string(),
                         reason: Some("transportAwaitRecoveryKeyframe".to_string()),
+                        chain_break_evidence: None,
+
                         observed_at_ms: now_ms - 2.0,
                     },
                     observed_at_ms: now_ms - 2.0,
@@ -413,7 +419,7 @@ fn recovery_integration_same_unresolved_gap_transport_await_reuses_in_flight_fam
                         response_rtp_timestamp: None,
                         response_frame_seq: None,
                         response_verdict: Some("pending".to_string()),
-                    lifecycle_phase: None,
+                        lifecycle_phase: None,
                     });
                 if let Some(track) = stats.latest_video_track_status.as_mut() {
                     track.video_bytes_total += 8_000;
@@ -493,6 +499,8 @@ fn recovery_integration_passive_anchor_surface_still_feeds_transport_await_famil
                     chain: crate::XbxEngineVideoTimelineChainSnapshot {
                         state: "recovering".to_string(),
                         reason: Some("transportAwaitRecoveryKeyframe".to_string()),
+                        chain_break_evidence: None,
+
                         observed_at_ms: now_ms - 2.0,
                     },
                     observed_at_ms: now_ms - 2.0,
@@ -618,6 +626,8 @@ fn recovery_integration_transport_await_reopens_after_clean_anchor_and_new_recov
                     chain: crate::XbxEngineVideoTimelineChainSnapshot {
                         state: "recovering".to_string(),
                         reason: Some("transportAwaitRecoveryKeyframe".to_string()),
+                        chain_break_evidence: None,
+
                         observed_at_ms: now_ms - 2.0,
                     },
                     observed_at_ms: now_ms - 2.0,
@@ -663,7 +673,7 @@ fn recovery_integration_transport_await_reopens_after_clean_anchor_and_new_recov
                     response_rtp_timestamp: None,
                     response_frame_seq: None,
                     response_verdict: Some("pending".to_string()),
-                lifecycle_phase: None,
+                    lifecycle_phase: None,
                 });
         },
     );
@@ -708,6 +718,8 @@ fn recovery_integration_transport_await_reopens_after_clean_anchor_and_new_recov
                     chain: crate::XbxEngineVideoTimelineChainSnapshot {
                         state: "recovering".to_string(),
                         reason: Some("transportAwaitRecoveryKeyframe".to_string()),
+                        chain_break_evidence: None,
+
                         observed_at_ms: now_ms - 2.0,
                     },
                     observed_at_ms: now_ms - 2.0,
@@ -780,6 +792,8 @@ fn recovery_integration_home_local_display_recovery_then_stale_transport_await_r
                     chain: crate::XbxEngineVideoTimelineChainSnapshot {
                         state: "healthy".to_string(),
                         reason: None,
+                        chain_break_evidence: None,
+
                         observed_at_ms: 6_998.0,
                     },
                     observed_at_ms: 6_998.0,
@@ -961,6 +975,8 @@ fn recovery_integration_ramp_up_absorbs_display_idle_and_short_transport_await_b
                     chain: crate::XbxEngineVideoTimelineChainSnapshot {
                         state: "recovering".to_string(),
                         reason: Some("transportAwaitRecoveryKeyframe".to_string()),
+                        chain_break_evidence: None,
+
                         observed_at_ms: now_ms - 4.0,
                     },
                     observed_at_ms: now_ms - 4.0,
@@ -1192,6 +1208,8 @@ fn recovery_integration_ramp_up_still_reescalates_on_severe_transport_await() {
                     chain: crate::XbxEngineVideoTimelineChainSnapshot {
                         state: "healthy".to_string(),
                         reason: None,
+                        chain_break_evidence: None,
+
                         observed_at_ms: 12_998.0,
                     },
                     observed_at_ms: 12_998.0,
@@ -1305,6 +1323,8 @@ fn recovery_integration_degraded_serving_does_not_close_as_recovered() {
                     chain: crate::XbxEngineVideoTimelineChainSnapshot {
                         state: "healthy".to_string(),
                         reason: None,
+                        chain_break_evidence: None,
+
                         observed_at_ms: now_ms - 2.0,
                     },
                     observed_at_ms: now_ms - 2.0,
@@ -1441,6 +1461,8 @@ fn recovery_integration_steady_serving_ignores_stale_transport_await_diagnosis()
                     chain: crate::XbxEngineVideoTimelineChainSnapshot {
                         state: "healthy".to_string(),
                         reason: None,
+                        chain_break_evidence: None,
+
                         observed_at_ms: now_ms - 2.0,
                     },
                     observed_at_ms: now_ms - 2.0,
@@ -1534,6 +1556,8 @@ fn recovery_integration_fresh_transport_await_does_not_override_stable_owner_wit
                     chain: crate::XbxEngineVideoTimelineChainSnapshot {
                         state: "recovering".to_string(),
                         reason: Some("transportAwaitRecoveryKeyframe".to_string()),
+                        chain_break_evidence: None,
+
                         observed_at_ms: 900.0,
                     },
                     observed_at_ms: 900.0,
@@ -1664,6 +1688,8 @@ fn recovery_integration_local_display_stays_local_recovery() {
                     chain: crate::XbxEngineVideoTimelineChainSnapshot {
                         state: "healthy".to_string(),
                         reason: None,
+                        chain_break_evidence: None,
+
                         observed_at_ms: 760.0,
                     },
                     observed_at_ms: 760.0,
@@ -1738,6 +1764,8 @@ fn recovery_integration_stale_idle_is_absorbed_but_transport_failure_still_recon
                     chain: crate::XbxEngineVideoTimelineChainSnapshot {
                         state: "healthy".to_string(),
                         reason: None,
+                        chain_break_evidence: None,
+
                         observed_at_ms: 995.0,
                     },
                     observed_at_ms: 995.0,
@@ -1836,6 +1864,8 @@ fn recovery_integration_fresh_transport_await_absorption_does_not_block_followin
                     chain: crate::XbxEngineVideoTimelineChainSnapshot {
                         state: "healthy".to_string(),
                         reason: None,
+                        chain_break_evidence: None,
+
                         observed_at_ms: now_ms - 2.0,
                     },
                     observed_at_ms: now_ms - 2.0,
@@ -1965,6 +1995,8 @@ fn recovery_integration_recovering_lifecycle_overrides_fresh_transport_await_abs
                     chain: crate::XbxEngineVideoTimelineChainSnapshot {
                         state: "healthy".to_string(),
                         reason: None,
+                        chain_break_evidence: None,
+
                         observed_at_ms: now_ms - 2.0,
                     },
                     observed_at_ms: now_ms - 2.0,
@@ -2043,6 +2075,8 @@ fn recovery_integration_transport_deadline_overrides_same_tick_local_display_rec
                     chain: crate::XbxEngineVideoTimelineChainSnapshot {
                         state: "healthy".to_string(),
                         reason: None,
+                        chain_break_evidence: None,
+
                         observed_at_ms: now_ms - 4.0,
                     },
                     observed_at_ms: now_ms - 4.0,
@@ -2114,6 +2148,8 @@ fn recovery_integration_transport_severe_deadline_overrides_same_tick_local_disp
                     chain: crate::XbxEngineVideoTimelineChainSnapshot {
                         state: "healthy".to_string(),
                         reason: None,
+                        chain_break_evidence: None,
+
                         observed_at_ms: now_ms - 5.0,
                     },
                     observed_at_ms: now_ms - 5.0,
@@ -2188,6 +2224,8 @@ fn recovery_integration_transport_deadline_overrides_same_tick_local_transport_a
                     chain: crate::XbxEngineVideoTimelineChainSnapshot {
                         state: "recovering".to_string(),
                         reason: Some("transportAwaitRecoveryKeyframe".to_string()),
+                        chain_break_evidence: None,
+
                         observed_at_ms: now_ms - 3.0,
                     },
                     observed_at_ms: now_ms - 3.0,
@@ -2259,6 +2297,8 @@ fn recovery_integration_transport_severe_deadline_overrides_same_tick_local_tran
                     chain: crate::XbxEngineVideoTimelineChainSnapshot {
                         state: "recovering".to_string(),
                         reason: Some("transportAwaitRecoveryKeyframe".to_string()),
+                        chain_break_evidence: None,
+
                         observed_at_ms: now_ms - 4.0,
                     },
                     observed_at_ms: now_ms - 4.0,
@@ -2333,6 +2373,8 @@ fn recovery_integration_repeated_transport_severe_deadline_upgrades_to_connectiv
                     chain: crate::XbxEngineVideoTimelineChainSnapshot {
                         state: "recovering".to_string(),
                         reason: Some("transportAwaitRecoveryKeyframe".to_string()),
+                        chain_break_evidence: None,
+
                         observed_at_ms: now_ms - 5.0,
                     },
                     observed_at_ms: now_ms - 5.0,
@@ -2446,6 +2488,8 @@ fn recovery_integration_repeated_transport_expired_deadline_upgrades_to_connecti
                         chain: crate::XbxEngineVideoTimelineChainSnapshot {
                             state: "recovering".to_string(),
                             reason: Some("transportAwaitRecoveryKeyframe".to_string()),
+                            chain_break_evidence: None,
+
                             observed_at_ms: now_ms - 5.0,
                         },
                         observed_at_ms: now_ms - 5.0,
@@ -2529,6 +2573,8 @@ fn recovery_integration_transport_sample_loss_overrides_same_tick_local_display_
                     chain: crate::XbxEngineVideoTimelineChainSnapshot {
                         state: "healthy".to_string(),
                         reason: None,
+                        chain_break_evidence: None,
+
                         observed_at_ms: now_ms - 4.0,
                     },
                     observed_at_ms: now_ms - 4.0,
@@ -2598,6 +2644,8 @@ fn recovery_integration_transport_sample_loss_overrides_same_tick_local_transpor
                     chain: crate::XbxEngineVideoTimelineChainSnapshot {
                         state: "recovering".to_string(),
                         reason: Some("transportAwaitRecoveryKeyframe".to_string()),
+                        chain_break_evidence: None,
+
                         observed_at_ms: now_ms - 3.0,
                     },
                     observed_at_ms: now_ms - 3.0,
@@ -2668,6 +2716,8 @@ fn recovery_integration_transport_recovered_late_overrides_same_tick_local_displ
                     chain: crate::XbxEngineVideoTimelineChainSnapshot {
                         state: "healthy".to_string(),
                         reason: None,
+                        chain_break_evidence: None,
+
                         observed_at_ms: now_ms - 4.0,
                     },
                     observed_at_ms: now_ms - 4.0,
@@ -2737,6 +2787,8 @@ fn recovery_integration_transport_recovered_late_overrides_same_tick_local_trans
                     chain: crate::XbxEngineVideoTimelineChainSnapshot {
                         state: "recovering".to_string(),
                         reason: Some("transportAwaitRecoveryKeyframe".to_string()),
+                        chain_break_evidence: None,
+
                         observed_at_ms: now_ms - 3.0,
                     },
                     observed_at_ms: now_ms - 3.0,
@@ -2904,6 +2956,8 @@ fn realtime_adapter_idle_timeout_is_absorbed_when_render_output_is_fresh() {
             chain: crate::XbxEngineVideoTimelineChainSnapshot {
                 state: "healthy".to_string(),
                 reason: None,
+                chain_break_evidence: None,
+
                 observed_at_ms: 998.0,
             },
             observed_at_ms: 998.0,
@@ -3019,6 +3073,8 @@ fn recovery_integration_local_ingress_drop_stays_no_signal_under_healthy_baselin
                     chain: crate::XbxEngineVideoTimelineChainSnapshot {
                         state: "healthy".to_string(),
                         reason: None,
+                        chain_break_evidence: None,
+
                         observed_at_ms: 1_198.0,
                     },
                     observed_at_ms: 1_198.0,
@@ -3144,6 +3200,8 @@ fn recovery_integration_local_ingress_and_stale_idle_stay_no_signal_under_health
                     chain: crate::XbxEngineVideoTimelineChainSnapshot {
                         state: "healthy".to_string(),
                         reason: None,
+                        chain_break_evidence: None,
+
                         observed_at_ms: 1_298.0,
                     },
                     observed_at_ms: 1_298.0,
@@ -3459,6 +3517,8 @@ fn connected_track_attached_without_first_frame_feedback_does_not_escalate_boots
                     chain: crate::XbxEngineVideoTimelineChainSnapshot {
                         state: "recovering".to_string(),
                         reason: Some("bootstrapMissingSps".to_string()),
+                        chain_break_evidence: None,
+
                         observed_at_ms: 1_098.0,
                     },
                     observed_at_ms: 1_098.0,
@@ -3546,6 +3606,8 @@ fn connected_track_started_without_first_frame_feedback_does_not_escalate_bootst
                     chain: crate::XbxEngineVideoTimelineChainSnapshot {
                         state: "recovering".to_string(),
                         reason: Some("bootstrapMissingSps".to_string()),
+                        chain_break_evidence: None,
+
                         observed_at_ms: 1_098.0,
                     },
                     observed_at_ms: 1_098.0,
@@ -3612,6 +3674,8 @@ fn connected_track_attached_without_first_frame_feedback_bootstrap_missing_sps_s
                     chain: crate::XbxEngineVideoTimelineChainSnapshot {
                         state: "recovering".to_string(),
                         reason: Some("bootstrapMissingSps".to_string()),
+                        chain_break_evidence: None,
+
                         observed_at_ms: 40_098.0,
                     },
                     observed_at_ms: 40_098.0,
@@ -3675,6 +3739,8 @@ fn connected_track_attached_without_first_frame_feedback_does_not_escalate_displ
                     chain: crate::XbxEngineVideoTimelineChainSnapshot {
                         state: "healthy".to_string(),
                         reason: None,
+                        chain_break_evidence: None,
+
                         observed_at_ms: 1_098.0,
                     },
                     observed_at_ms: 1_098.0,
@@ -3921,6 +3987,8 @@ fn connected_track_attached_without_first_frame_feedback_bootstrap_missing_sps_r
                     chain: crate::XbxEngineVideoTimelineChainSnapshot {
                         state: "recovering".to_string(),
                         reason: Some("bootstrapMissingSps".to_string()),
+                        chain_break_evidence: None,
+
                         observed_at_ms: 1_098.0,
                     },
                     observed_at_ms: 1_098.0,
@@ -3992,6 +4060,8 @@ fn connected_track_attached_without_first_frame_feedback_bootstrap_missing_sps_r
                     chain: crate::XbxEngineVideoTimelineChainSnapshot {
                         state: "recovering".to_string(),
                         reason: Some("bootstrapMissingSps".to_string()),
+                        chain_break_evidence: None,
+
                         observed_at_ms: 1_139.0,
                     },
                     observed_at_ms: 1_139.0,
@@ -4107,6 +4177,8 @@ fn pre_first_frame_bootstrap_probes_do_not_enter_active_recovery_before_first_fr
                         chain: crate::XbxEngineVideoTimelineChainSnapshot {
                             state: "recovering".to_string(),
                             reason: Some(reason.to_string()),
+                            chain_break_evidence: None,
+
                             observed_at_ms: 40_098.0,
                         },
                         observed_at_ms: 40_098.0,
@@ -4214,6 +4286,8 @@ fn pre_first_frame_transport_await_stall_does_not_upgrade_to_reset_or_reconnect(
                     chain: crate::XbxEngineVideoTimelineChainSnapshot {
                         state: "recovering".to_string(),
                         reason: Some("awaitingRecoveryKeyframe".to_string()),
+                        chain_break_evidence: None,
+
                         observed_at_ms: 36_000.0,
                     },
                     observed_at_ms: 36_000.0,
@@ -4237,7 +4311,7 @@ fn pre_first_frame_transport_await_stall_does_not_upgrade_to_reset_or_reconnect(
                     response_rtp_timestamp: None,
                     response_frame_seq: None,
                     response_verdict: Some("pending".to_string()),
-                lifecycle_phase: None,
+                    lifecycle_phase: None,
                 });
         },
     );
@@ -4295,6 +4369,8 @@ fn trace_1775292592042_short_idle_timeout_burst_is_absorbed_while_present_progre
             chain: crate::XbxEngineVideoTimelineChainSnapshot {
                 state: "healthy".to_string(),
                 reason: None,
+                chain_break_evidence: None,
+
                 observed_at_ms: 1_002.0,
             },
             observed_at_ms: 1_002.0,
@@ -4422,6 +4498,8 @@ fn unstable_hold_requires_consecutive_confirmation_before_emit() {
             chain: crate::XbxEngineVideoTimelineChainSnapshot {
                 state: "healthy".to_string(),
                 reason: None,
+                chain_break_evidence: None,
+
                 observed_at_ms: now_ms - 6.0,
             },
             observed_at_ms: now_ms - 6.0,
@@ -4552,6 +4630,8 @@ fn recovery_integration_home_clean_anchor_short_jitter_keeps_steady_serving() {
                     chain: crate::XbxEngineVideoTimelineChainSnapshot {
                         state: "healthy".to_string(),
                         reason: None,
+                        chain_break_evidence: None,
+
                         observed_at_ms: 1_998.0,
                     },
                     observed_at_ms: 1_998.0,
@@ -4656,6 +4736,8 @@ fn recovery_integration_home_render_deadline_jitter_stays_local_display_path() {
                     chain: crate::XbxEngineVideoTimelineChainSnapshot {
                         state: "healthy".to_string(),
                         reason: None,
+                        chain_break_evidence: None,
+
                         observed_at_ms: 2_395.0,
                     },
                     observed_at_ms: 2_395.0,
@@ -4835,6 +4917,8 @@ fn recovery_integration_cloud_reconnect_then_clean_recovery_exit_does_not_reente
                     chain: crate::XbxEngineVideoTimelineChainSnapshot {
                         state: "recovering".to_string(),
                         reason: Some("transportAwaitRecoveryKeyframe".to_string()),
+                        chain_break_evidence: None,
+
                         observed_at_ms: 3_995.0,
                     },
                     observed_at_ms: 3_995.0,
@@ -4979,6 +5063,8 @@ fn recovery_integration_home_short_idle_blackhole_is_absorbed_until_progress_ret
                     chain: crate::XbxEngineVideoTimelineChainSnapshot {
                         state: "healthy".to_string(),
                         reason: None,
+                        chain_break_evidence: None,
+
                         observed_at_ms: 4_997.0,
                     },
                     observed_at_ms: 4_997.0,
@@ -5074,6 +5160,8 @@ fn recovery_integration_home_connected_ingress_without_output_progress_reenters_
                     chain: crate::XbxEngineVideoTimelineChainSnapshot {
                         state: "healthy".to_string(),
                         reason: None,
+                        chain_break_evidence: None,
+
                         observed_at_ms: 5_397.0,
                     },
                     observed_at_ms: 5_397.0,
@@ -5115,6 +5203,8 @@ fn recovery_integration_home_connected_ingress_without_output_progress_reenters_
                     chain: crate::XbxEngineVideoTimelineChainSnapshot {
                         state: "recovering".to_string(),
                         reason: Some("transportAwaitRecoveryKeyframe".to_string()),
+                        chain_break_evidence: None,
+
                         observed_at_ms: 6_118.0,
                     },
                     observed_at_ms: 6_118.0,
@@ -5189,6 +5279,8 @@ fn recovery_integration_cloud_stale_transport_await_replay_reenters_local_recove
                     chain: crate::XbxEngineVideoTimelineChainSnapshot {
                         state: "recovering".to_string(),
                         reason: Some("transportAwaitRecoveryKeyframe".to_string()),
+                        chain_break_evidence: None,
+
                         observed_at_ms: 7_995.0,
                     },
                     observed_at_ms: 7_995.0,
@@ -5234,6 +5326,8 @@ fn recovery_integration_cloud_stale_transport_await_replay_reenters_local_recove
                     chain: crate::XbxEngineVideoTimelineChainSnapshot {
                         state: "recovering".to_string(),
                         reason: Some("transportAwaitRecoveryKeyframe".to_string()),
+                        chain_break_evidence: None,
+
                         observed_at_ms: 8_738.0,
                     },
                     observed_at_ms: 8_738.0,
@@ -5311,6 +5405,8 @@ fn recovery_integration_fresh_transport_await_absorption_expires_once_output_sta
                     chain: crate::XbxEngineVideoTimelineChainSnapshot {
                         state: "healthy".to_string(),
                         reason: None,
+                        chain_break_evidence: None,
+
                         observed_at_ms: now_ms - 2.0,
                     },
                     observed_at_ms: now_ms - 2.0,
@@ -5398,6 +5494,8 @@ fn recovery_integration_fresh_transport_await_absorption_expires_once_output_sta
                     chain: crate::XbxEngineVideoTimelineChainSnapshot {
                         state: "recovering".to_string(),
                         reason: Some("transportAwaitRecoveryKeyframe".to_string()),
+                        chain_break_evidence: None,
+
                         observed_at_ms: now_ms - 2.0,
                     },
                     observed_at_ms: now_ms - 2.0,
@@ -5480,6 +5578,8 @@ fn recovery_integration_home_stale_transport_await_absorption_expires_once_outpu
                     chain: crate::XbxEngineVideoTimelineChainSnapshot {
                         state: "healthy".to_string(),
                         reason: None,
+                        chain_break_evidence: None,
+
                         observed_at_ms: 9_798.0,
                     },
                     observed_at_ms: 9_798.0,
@@ -5560,6 +5660,8 @@ fn recovery_integration_home_stale_transport_await_absorption_expires_once_outpu
                     chain: crate::XbxEngineVideoTimelineChainSnapshot {
                         state: "recovering".to_string(),
                         reason: Some("transportAwaitRecoveryKeyframe".to_string()),
+                        chain_break_evidence: None,
+
                         observed_at_ms: 10_718.0,
                     },
                     observed_at_ms: 10_718.0,
@@ -5644,6 +5746,8 @@ fn recovery_integration_home_burst_input_rumble_display_pressure_then_stale_tran
                     chain: crate::XbxEngineVideoTimelineChainSnapshot {
                         state: "healthy".to_string(),
                         reason: None,
+                        chain_break_evidence: None,
+
                         observed_at_ms: 10_998.0,
                     },
                     observed_at_ms: 10_998.0,
@@ -5706,7 +5810,7 @@ fn recovery_integration_home_burst_input_rumble_display_pressure_then_stale_tran
                     response_rtp_timestamp: None,
                     response_frame_seq: None,
                     response_verdict: None,
-                lifecycle_phase: None,
+                    lifecycle_phase: None,
                 });
             set_input_rumble_burst(stats, 2, 11_118.0, 32);
             if let Some(track) = stats.latest_video_track_status.as_mut() {
@@ -5918,6 +6022,8 @@ fn recovery_integration_home_burst_input_rumble_submit_gap_and_latest_slot_overw
                     chain: crate::XbxEngineVideoTimelineChainSnapshot {
                         state: "healthy".to_string(),
                         reason: None,
+                        chain_break_evidence: None,
+
                         observed_at_ms: 12_599.0,
                     },
                     observed_at_ms: 12_599.0,
@@ -5991,6 +6097,8 @@ fn recovery_integration_home_hard_disconnect_emits_connectivity_reconnect_withou
                     chain: crate::XbxEngineVideoTimelineChainSnapshot {
                         state: "healthy".to_string(),
                         reason: None,
+                        chain_break_evidence: None,
+
                         observed_at_ms: now_ms - 2.0,
                     },
                     observed_at_ms: now_ms - 2.0,
@@ -6107,6 +6215,8 @@ fn recovery_integration_cloud_media_loss_prefers_transport_await_before_reconnec
                     chain: crate::XbxEngineVideoTimelineChainSnapshot {
                         state: "recovering".to_string(),
                         reason: Some("transportAwaitRecoveryKeyframe".to_string()),
+                        chain_break_evidence: None,
+
                         observed_at_ms: 5_998.0,
                     },
                     observed_at_ms: 5_998.0,
@@ -6193,6 +6303,8 @@ fn cloud_high_rtt_repeated_transport_severe_deadline_second_hit_reconnects() {
             chain: crate::XbxEngineVideoTimelineChainSnapshot {
                 state: "recovering".to_string(),
                 reason: Some("transportAwaitRecoveryKeyframe".to_string()),
+                chain_break_evidence: None,
+
                 observed_at_ms: 7_540.0,
             },
             observed_at_ms: 7_540.0,
@@ -6301,6 +6413,8 @@ fn media_reconnect_candidate_is_blocked_while_transport_await_reset_progress_is_
             chain: crate::XbxEngineVideoTimelineChainSnapshot {
                 state: "recovering".to_string(),
                 reason: Some("awaitingRecoveryKeyframe".to_string()),
+                chain_break_evidence: None,
+
                 observed_at_ms: now_ms,
             },
             observed_at_ms: now_ms,
@@ -6401,6 +6515,8 @@ fn media_reconnect_candidate_is_blocked_while_control_replay_backlog_is_active()
             chain: crate::XbxEngineVideoTimelineChainSnapshot {
                 state: "recovering".to_string(),
                 reason: Some("awaitingRecoveryKeyframe".to_string()),
+                chain_break_evidence: None,
+
                 observed_at_ms: now_ms,
             },
             observed_at_ms: now_ms,
@@ -6487,6 +6603,8 @@ fn media_reconnect_candidate_waits_for_success_edge_before_regrant() {
             chain: crate::XbxEngineVideoTimelineChainSnapshot {
                 state: "recovering".to_string(),
                 reason: Some("awaitingRecoveryKeyframe".to_string()),
+                chain_break_evidence: None,
+
                 observed_at_ms: now_ms,
             },
             observed_at_ms: now_ms,
@@ -6510,7 +6628,7 @@ fn media_reconnect_candidate_waits_for_success_edge_before_regrant() {
                 response_rtp_timestamp: None,
                 response_frame_seq: None,
                 response_verdict: Some("missed".to_string()),
-            lifecycle_phase: None,
+                lifecycle_phase: None,
             });
     }
     let mut policy = RtcSessionPolicy::new(runtime_config, runtime_stats);
@@ -6615,6 +6733,8 @@ fn cloud_high_rtt_repeated_transport_expired_deadline_second_hit_reconnects() {
             chain: crate::XbxEngineVideoTimelineChainSnapshot {
                 state: "recovering".to_string(),
                 reason: Some("transportAwaitRecoveryKeyframe".to_string()),
+                chain_break_evidence: None,
+
                 observed_at_ms: 9_500.0,
             },
             observed_at_ms: 9_500.0,
@@ -6729,6 +6849,8 @@ fn cloud_high_rtt_sample_loss_then_recovered_late_stays_local_until_severe_deadl
                     chain: crate::XbxEngineVideoTimelineChainSnapshot {
                         state: "recovering".to_string(),
                         reason: Some("transportAwaitRecoveryKeyframe".to_string()),
+                        chain_break_evidence: None,
+
                         observed_at_ms: now_ms - 4.0,
                     },
                     observed_at_ms: now_ms - 4.0,

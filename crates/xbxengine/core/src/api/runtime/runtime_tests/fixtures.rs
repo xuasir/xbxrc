@@ -6,14 +6,12 @@ use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use ohmygamepad_protocol::{
-    OhMyGamepadRumbleEffectDto, OhMyGamepadRumbleRequestDto,
-    OhMyGamepadRumbleTargetDto,
+    OhMyGamepadRumbleEffectDto, OhMyGamepadRumbleRequestDto, OhMyGamepadRumbleTargetDto,
 };
 use xbxengine_protocol::{
-    XbxEngineDisplayStateDto,
-    XbxEngineHostRequestDto, XbxEngineHostResponseDto, XbxEngineIceCandidateDto,
-    XbxEngineInputEventDto, XbxEngineRuntimeEventDto, XbxEngineSessionDto, XbxEngineTargetTypeDto,
-    XbxEngineTransportStateDto, XbxEngineViewportDto,
+    XbxEngineDisplayStateDto, XbxEngineHostRequestDto, XbxEngineHostResponseDto,
+    XbxEngineIceCandidateDto, XbxEngineInputEventDto, XbxEngineRuntimeEventDto,
+    XbxEngineSessionDto, XbxEngineTargetTypeDto, XbxEngineTransportStateDto, XbxEngineViewportDto,
 };
 
 use crate::runtime_stats_sink::RuntimeStatsSink;
@@ -30,19 +28,19 @@ use crate::transport::rtc::session::clock::SystemSessionClock;
 use crate::transport::rtc::session::policy::RtcSessionPolicy;
 use crate::transport::rtc::stack::TestRtcTransportSessionBridge as RtcTransportSessionBridge;
 use crate::transport::rtc::stream::video_source::test_fixtures::{
-    LocalIngressHealthyBaseline, LocalIngressReplayFixture,
-    LocalIngressReplayPacket, LocalIngressReplayProfile,
+    LocalIngressHealthyBaseline, LocalIngressReplayFixture, LocalIngressReplayPacket,
+    LocalIngressReplayProfile,
 };
 use crate::transport::rtc::stream::RtcMediaService;
 use crate::{
-    XbxEngineInputBackend, XbxEngineInputStatus,
-    XbxEngineMediaBackend, XbxEngineMediaNegotiation, XbxEngineMediaNegotiationRequest,
-    XbxEngineMediaRuntimeStats, XbxEngineRenderFrame, XbxEngineRenderPixelData,
+    XbxEngineInputBackend, XbxEngineInputStatus, XbxEngineMediaBackend, XbxEngineMediaNegotiation,
+    XbxEngineMediaNegotiationRequest, XbxEngineMediaRuntimeStats, XbxEngineRenderFrame,
+    XbxEngineRenderPixelData,
 };
 
 use super::super::{
-    XbxEngineEventSink, XbxEngineHostBridge, XbxEngineRuntime,
-    XbxEngineRuntimeConfig, XbxEngineRuntimeError,
+    XbxEngineEventSink, XbxEngineHostBridge, XbxEngineRuntime, XbxEngineRuntimeConfig,
+    XbxEngineRuntimeError,
 };
 
 pub(crate) fn transport_commands(commands: Vec<SessionCommand>) -> Vec<TransportCommand> {
@@ -374,7 +372,10 @@ impl ScriptedMediaBackend {
         self
     }
 
-    pub(crate) fn with_local_ice_gathering_complete_true_after_calls(mut self, calls: usize) -> Self {
+    pub(crate) fn with_local_ice_gathering_complete_true_after_calls(
+        mut self,
+        calls: usize,
+    ) -> Self {
         self.local_ice_gathering_complete_true_after_calls = calls;
         self
     }
@@ -857,7 +858,9 @@ pub(crate) fn build_transport_session_bridge(
     )
 }
 
-pub(crate) fn repair_overflow_runtime_replay_profile(repair_limit: usize) -> LocalIngressReplayProfile {
+pub(crate) fn repair_overflow_runtime_replay_profile(
+    repair_limit: usize,
+) -> LocalIngressReplayProfile {
     LocalIngressReplayProfile {
         channel_capacity: 1,
         packets: (10u16..=(11 + repair_limit as u16))
@@ -958,7 +961,9 @@ pub(crate) fn build_connecting_startup_snapshot(
     )
 }
 
-pub(crate) fn count_media_restart_requests(requests: &Rc<RefCell<Vec<XbxEngineHostRequestDto>>>) -> usize {
+pub(crate) fn count_media_restart_requests(
+    requests: &Rc<RefCell<Vec<XbxEngineHostRequestDto>>>,
+) -> usize {
     requests
         .borrow()
         .iter()
@@ -971,4 +976,3 @@ pub(crate) fn count_media_restart_requests(requests: &Rc<RefCell<Vec<XbxEngineHo
         })
         .count()
 }
-

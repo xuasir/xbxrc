@@ -959,7 +959,9 @@ where
                 made_progress = true;
             }
             if remote_end_of_candidates_seen {
-                crate::xbx_log_debug!("[xbxengine][runtime][ice] remote end-of-candidates observed");
+                crate::xbx_log_debug!(
+                    "[xbxengine][runtime][ice] remote end-of-candidates observed"
+                );
             }
 
             let next_remote_candidates =

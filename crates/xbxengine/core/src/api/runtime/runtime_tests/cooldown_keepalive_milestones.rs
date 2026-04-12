@@ -1,8 +1,5 @@
+use super::super::{XbxEngineRuntime, XbxEngineRuntimeConfig, XbxEngineRuntimeState};
 use super::fixtures::*;
-use super::super::{
-    XbxEngineRuntime,
-    XbxEngineRuntimeConfig, XbxEngineRuntimeState,
-};
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -12,10 +9,7 @@ use xbxengine_protocol::{
     XbxEngineTransportStateDto,
 };
 
-use crate::{
-    XbxEngineInputStatus, XbxEngineMediaNegotiation,
-    XbxEngineMediaRuntimeStats,
-};
+use crate::{XbxEngineInputStatus, XbxEngineMediaNegotiation, XbxEngineMediaRuntimeStats};
 
 #[test]
 fn runtime_applies_transport_reconnect_candidate_cooldown_and_retries_after_window() {

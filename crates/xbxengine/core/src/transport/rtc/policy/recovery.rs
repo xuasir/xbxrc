@@ -112,7 +112,8 @@ pub(crate) fn resolve_runtime_reconnect_reason_domain(
 #[cfg(test)]
 mod tests {
     use super::{
-        ledger_action_selected_expects_command_result, recovery_decision_ledger_has_pending_transport_command,
+        ledger_action_selected_expects_command_result,
+        recovery_decision_ledger_has_pending_transport_command,
         resolve_runtime_reconnect_reason_domain,
     };
     use crate::api::backend::XbxEngineRecoveryDecisionLedgerObservation;
@@ -198,9 +199,13 @@ mod tests {
 
         let mut issued = suppressed.clone();
         issued.action_selected = RecoveryAction::RequestKeyframe.label().to_string();
-        assert!(recovery_decision_ledger_has_pending_transport_command(&issued));
+        assert!(recovery_decision_ledger_has_pending_transport_command(
+            &issued
+        ));
 
         issued.command_result = Some("succeeded".to_string());
-        assert!(!recovery_decision_ledger_has_pending_transport_command(&issued));
+        assert!(!recovery_decision_ledger_has_pending_transport_command(
+            &issued
+        ));
     }
 }

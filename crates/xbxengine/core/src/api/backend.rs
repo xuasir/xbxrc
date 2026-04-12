@@ -480,7 +480,14 @@ pub struct XbxEngineVideoTimelineGapSnapshot {
     pub state: String,
     pub sequence: Option<u16>,
     pub frame_rtp_timestamp: Option<u32>,
+    /// 兼容旧 trace：与 `evidence_importance` 一致时表示媒体/因果侧 importance。
     pub frame_importance: Option<String>,
+    /// NACK/预算调度侧 importance（`link_value` 映射），不等价于媒体断链证据。
+    pub budget_importance: Option<String>,
+    /// gap 归属帧上的媒体因果 importance（IDR / 参数集变更 / delta）。
+    pub evidence_importance: Option<String>,
+    /// `bound` / `anonymous` / `inferred`：缺洞是否已绑定具体 RTP 帧时间戳。
+    pub gap_dependency_confidence: Option<String>,
     pub observed_at_ms: f64,
 }
 
@@ -490,6 +497,8 @@ pub struct XbxEngineVideoTimelineFrameSnapshot {
     pub frame_rtp_timestamp: Option<u32>,
     pub is_keyframe: Option<bool>,
     pub frame_importance: Option<String>,
+    pub budget_importance: Option<String>,
+    pub evidence_importance: Option<String>,
     pub close_reason: Option<String>,
     pub observed_at_ms: f64,
 }
@@ -498,6 +507,8 @@ pub struct XbxEngineVideoTimelineFrameSnapshot {
 pub struct XbxEngineVideoTimelineChainSnapshot {
     pub state: String,
     pub reason: Option<String>,
+    /// 最近一次进入 `broken` 时可归因的证据标签（如 `boundReferenceGapExpired`）。
+    pub chain_break_evidence: Option<String>,
     pub observed_at_ms: f64,
 }
 
@@ -539,8 +550,11 @@ pub enum XbxEngineAnchorCandidateFailureReason {
     InspectionRejectedMissingPps,
     InspectionRejectedInvalidSliceHeader,
     ChainBrokenReferenceUnrecoverable,
-    ChainBrokenCloudHighRttLowValueAdmission,
-    ChainBrokenDisplayStarvedLowValueAdmission,
+    /// 传输层低价值准入放弃，不表示参考链已断（`as_str` 仍为历史观测键）。
+    TransportLowValueCloudHighRttAdmission,
+    TransportLowValueDisplayStarvedAdmission,
+    /// Recovery 期 supply 近 deadline 的时效性跳过，非 reference-chain 证据。
+    TransportTimingNearDeadlineSupplyRecovery,
     GapExpiredDeadline,
     Unknown,
 }
@@ -553,8 +567,11 @@ impl XbxEngineAnchorCandidateFailureReason {
             Self::InspectionRejectedMissingPps => "bootstrapMissingPps",
             Self::InspectionRejectedInvalidSliceHeader => "inspectionRejectInvalidSliceHeader",
             Self::ChainBrokenReferenceUnrecoverable => "referenceChainUnrecoverable",
-            Self::ChainBrokenCloudHighRttLowValueAdmission => "cloudHighRttLowValueAdmission",
-            Self::ChainBrokenDisplayStarvedLowValueAdmission => "displayStarvedLowValueAdmission",
+            Self::TransportLowValueCloudHighRttAdmission => "cloudHighRttLowValueAdmission",
+            Self::TransportLowValueDisplayStarvedAdmission => "displayStarvedLowValueAdmission",
+            Self::TransportTimingNearDeadlineSupplyRecovery => {
+                "estimatedArrivalNearDeadlineSupplyRecovery"
+            }
             Self::GapExpiredDeadline => "gapExpiredDeadline",
             Self::Unknown => "unknown",
         }

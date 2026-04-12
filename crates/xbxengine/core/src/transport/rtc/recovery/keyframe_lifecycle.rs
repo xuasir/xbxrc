@@ -39,18 +39,12 @@ pub(crate) fn derive_keyframe_lifecycle_phase(
         return KeyframeRequestLifecyclePhase::Success;
     }
 
-    if matches!(
-        status,
-        "deferred" | "failed" | "missed" | "expired-unsent"
-    ) || matches!(
-        verdict,
-        Some(
-            "transportDeferred"
-                | "transportFailed"
-                | "missed"
-                | "unsentExpired"
+    if matches!(status, "deferred" | "failed" | "missed" | "expired-unsent")
+        || matches!(
+            verdict,
+            Some("transportDeferred" | "transportFailed" | "missed" | "unsentExpired")
         )
-    ) {
+    {
         return KeyframeRequestLifecyclePhase::Failure;
     }
 

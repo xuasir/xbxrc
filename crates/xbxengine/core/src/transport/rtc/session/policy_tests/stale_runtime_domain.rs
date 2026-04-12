@@ -2,9 +2,7 @@ use super::super::RtcSessionPolicy;
 use crate::api::backend::XbxEngineMediaRuntimeStats;
 use crate::api::runtime::XbxEngineRuntimeConfig;
 use crate::runtime_stats_sink::RuntimeStatsSink;
-use crate::transport::rtc::facts::{
-    ConnectionLifecycleStateFact, TransportCommand,
-};
+use crate::transport::rtc::facts::{ConnectionLifecycleStateFact, TransportCommand};
 use crate::transport::rtc::projection::{
     BweProjection, ConnectionProjection, DiagnosticsProjection, MediaProjection,
     RecoveryProjection, TransportSnapshot,
@@ -50,6 +48,8 @@ fn stale_adapter_idle_timeout_does_not_replay_during_steady_progress() {
             chain: crate::XbxEngineVideoTimelineChainSnapshot {
                 state: "healthy".to_string(),
                 reason: None,
+                chain_break_evidence: None,
+
                 observed_at_ms: 995.0,
             },
             observed_at_ms: 995.0,
@@ -156,6 +156,8 @@ fn stale_transport_await_does_not_replay_during_steady_progress() {
             chain: crate::XbxEngineVideoTimelineChainSnapshot {
                 state: "healthy".to_string(),
                 reason: None,
+                chain_break_evidence: None,
+
                 observed_at_ms: 998.0,
             },
             observed_at_ms: 998.0,
@@ -266,6 +268,8 @@ fn stale_transport_await_replay_is_absorbed_after_terminal_deferred_invalid_resp
             chain: crate::XbxEngineVideoTimelineChainSnapshot {
                 state: "recovering".to_string(),
                 reason: Some("transportAwaitRecoveryKeyframe".to_string()),
+                chain_break_evidence: None,
+
                 observed_at_ms: 1_000.0,
             },
             observed_at_ms: 1_000.0,
@@ -383,4 +387,3 @@ fn stale_transport_await_replay_is_absorbed_after_terminal_deferred_invalid_resp
     assert_eq!(ledger.action_selected, "none");
     assert_eq!(ledger.input_signal, "none");
 }
-

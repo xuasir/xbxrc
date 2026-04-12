@@ -2370,12 +2370,20 @@ fn clean_anchor_with_terminal_invalid_bootstrap_releases_rebuilding_supply() {
             sequence: Some(33),
             frame_rtp_timestamp: None,
             frame_importance: Some("reference".to_string()),
+            budget_importance: None,
+
+            evidence_importance: None,
+
+            gap_dependency_confidence: None,
+
             observed_at_ms: 139.0,
         }),
         frame: None,
         chain: crate::XbxEngineVideoTimelineChainSnapshot {
             state: "broken".to_string(),
             reason: None,
+            chain_break_evidence: None,
+
             observed_at_ms: 139.0,
         },
         observed_at_ms: 139.0,
@@ -2435,12 +2443,20 @@ fn terminal_invalid_bootstrap_without_clean_anchor_releases_rebuilding_supply_wh
             sequence: Some(61),
             frame_rtp_timestamp: None,
             frame_importance: Some("reference".to_string()),
+            budget_importance: None,
+
+            evidence_importance: None,
+
+            gap_dependency_confidence: None,
+
             observed_at_ms: 139.0,
         }),
         frame: None,
         chain: crate::XbxEngineVideoTimelineChainSnapshot {
             state: "broken".to_string(),
             reason: None,
+            chain_break_evidence: None,
+
             observed_at_ms: 139.0,
         },
         observed_at_ms: 139.0,
@@ -2500,12 +2516,20 @@ fn terminal_invalid_bootstrap_without_clean_anchor_and_without_serviceable_outpu
             sequence: Some(62),
             frame_rtp_timestamp: None,
             frame_importance: Some("reference".to_string()),
+            budget_importance: None,
+
+            evidence_importance: None,
+
+            gap_dependency_confidence: None,
+
             observed_at_ms: 139.0,
         }),
         frame: None,
         chain: crate::XbxEngineVideoTimelineChainSnapshot {
             state: "broken".to_string(),
             reason: None,
+            chain_break_evidence: None,
+
             observed_at_ms: 139.0,
         },
         observed_at_ms: 139.0,
@@ -2567,12 +2591,20 @@ fn degraded_supply_still_releases_terminal_invalid_bootstrap_waiting() {
             sequence: Some(52),
             frame_rtp_timestamp: None,
             frame_importance: Some("reference".to_string()),
+            budget_importance: None,
+
+            evidence_importance: None,
+
+            gap_dependency_confidence: None,
+
             observed_at_ms: 139.0,
         }),
         frame: None,
         chain: crate::XbxEngineVideoTimelineChainSnapshot {
             state: "broken".to_string(),
             reason: None,
+            chain_break_evidence: None,
+
             observed_at_ms: 139.0,
         },
         observed_at_ms: 139.0,

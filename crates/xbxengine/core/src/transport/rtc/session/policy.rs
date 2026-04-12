@@ -790,10 +790,7 @@ impl RtcSessionPolicy {
         };
         // intent 路径可能把 transport-await 表面映射成 `WaitKeyframe` 等枚举，但仍携带同一诊断标签；
         // 吸收 stale replay 必须以 snapshot 诊断为准，而不能只看 `owner_signal.reason`。
-        let stale_transport_await_diag = snapshot
-            .recovery
-            .latest_diagnosis_label
-            .as_deref()
+        let stale_transport_await_diag = snapshot.recovery.latest_diagnosis_label.as_deref()
             == Some("transportAwaitRecoveryKeyframe");
         let stale_transport_await_absorb = stale_transport_await_diag
             && self.should_absorb_stale_transport_await_replay(

@@ -296,6 +296,9 @@ pub(crate) fn derive_gap_severity_from_timeline_observation(
     }
     let reason = timeline.chain.reason.as_deref();
     if matches!(reason, Some("referenceChainUnrecoverable")) {
+        if chain_broken_observation_lacks_media_evidence(timeline) {
+            return GapSeverity::ReferenceGap;
+        }
         return GapSeverity::ChainBroken;
     }
     if matches!(
@@ -310,6 +313,29 @@ pub(crate) fn derive_gap_severity_from_timeline_observation(
         return GapSeverity::ReferenceGap;
     }
     GapSeverity::MinorGap
+}
+
+/// 纯 transport 预算抬价 + 匿名缺洞时，不把 `chain.reason` 上的坏链语义升级成 `ChainBroken`。
+fn chain_broken_observation_lacks_media_evidence(
+    timeline: &XbxEngineVideoTimelineObservation,
+) -> bool {
+    let Some(gap) = timeline.gap.as_ref() else {
+        return false;
+    };
+    if gap.frame_rtp_timestamp.is_some() {
+        return false;
+    }
+    if gap.gap_dependency_confidence.as_deref() == Some("bound") {
+        return false;
+    }
+    let evidence = gap.evidence_importance.as_deref().unwrap_or("unknown");
+    if evidence != "unknown" {
+        return false;
+    }
+    matches!(
+        gap.budget_importance.as_deref(),
+        Some("reference" | "keyframe")
+    )
 }
 
 /// 与 keyframe episode stalled（无推进边沿）叠加时，将严重度提升为 `RecoveryBlocked`。
@@ -385,4 +411,43 @@ pub(crate) fn is_media_healthy_baseline(
     let decode_fresh = decode_age_ms.is_some_and(|age| age <= decode_fresh_limit_ms);
     let present_fresh = present_age_ms.is_some_and(|age| age <= present_fresh_limit_ms);
     track_attached && has_video_bytes && decode_fresh && present_fresh
+}
+
+#[cfg(test)]
+mod derive_gap_observation_tests {
+    use super::*;
+    use crate::{
+        XbxEngineVideoTimelineChainSnapshot, XbxEngineVideoTimelineGapSnapshot,
+        XbxEngineVideoTimelineObservation,
+    };
+
+    #[test]
+    fn chain_broken_reason_with_anonymous_budget_only_gap_maps_to_reference_severity() {
+        let obs = XbxEngineVideoTimelineObservation {
+            observation_id: 1,
+            source_event: "t".into(),
+            gap: Some(XbxEngineVideoTimelineGapSnapshot {
+                state: "observed".into(),
+                sequence: Some(1),
+                frame_rtp_timestamp: None,
+                frame_importance: Some("unknown".into()),
+                budget_importance: Some("reference".into()),
+                evidence_importance: Some("unknown".into()),
+                gap_dependency_confidence: Some("anonymous".into()),
+                observed_at_ms: 0.0,
+            }),
+            frame: None,
+            chain: XbxEngineVideoTimelineChainSnapshot {
+                state: "broken".into(),
+                reason: Some("referenceChainUnrecoverable".into()),
+                chain_break_evidence: None,
+                observed_at_ms: 0.0,
+            },
+            observed_at_ms: 0.0,
+        };
+        assert_eq!(
+            derive_gap_severity_from_timeline_observation(&obs),
+            GapSeverity::ReferenceGap
+        );
+    }
 }

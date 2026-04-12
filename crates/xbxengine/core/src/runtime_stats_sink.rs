@@ -636,7 +636,8 @@ impl RuntimeStatsSink {
                     .latest_keyframe_request_episode
                     .as_ref()
                     .and_then(|episode| {
-                        if episode.request_reason.as_deref() == Some("transportAwaitRecoveryKeyframe")
+                        if episode.request_reason.as_deref()
+                            == Some("transportAwaitRecoveryKeyframe")
                             && episode.sent_at_ms.is_some()
                             && matches!(
                                 observation.bootstrap_reject_reason.as_deref(),
@@ -966,9 +967,8 @@ fn maybe_count_keyframe_sent_terminal_failure(
         return;
     }
     stats.keyframe_sent_failure_last_counted_episode_id = Some(episode_id);
-    stats.keyframe_consecutive_sent_failures = stats
-        .keyframe_consecutive_sent_failures
-        .saturating_add(1);
+    stats.keyframe_consecutive_sent_failures =
+        stats.keyframe_consecutive_sent_failures.saturating_add(1);
 }
 
 fn trim_recent_keyframe_request_episodes(stats: &mut XbxEngineMediaRuntimeStats) {
@@ -1037,29 +1037,23 @@ fn emit_keyframe_closure_probe(
     stage: &str,
     observed_at_ms: f64,
 ) {
-    let (
-        episode_id,
-        sent_at_ms,
-        response_seen,
-        decoded_at_ms,
-        response_verdict,
-        lifecycle_phase,
-    ) = stats
-        .latest_keyframe_request_episode
-        .as_ref()
-        .map(|episode| {
-            (
-                Some(episode.episode_id),
-                episode.sent_at_ms,
-                episode
-                    .first_keyframe_packet_at_ms
-                    .or(episode.first_video_packet_at_ms),
-                episode.first_keyframe_decoded_at_ms,
-                episode.response_verdict.clone(),
-                episode.lifecycle_phase.clone(),
-            )
-        })
-        .unwrap_or((None, None, None, None, None, None));
+    let (episode_id, sent_at_ms, response_seen, decoded_at_ms, response_verdict, lifecycle_phase) =
+        stats
+            .latest_keyframe_request_episode
+            .as_ref()
+            .map(|episode| {
+                (
+                    Some(episode.episode_id),
+                    episode.sent_at_ms,
+                    episode
+                        .first_keyframe_packet_at_ms
+                        .or(episode.first_video_packet_at_ms),
+                    episode.first_keyframe_decoded_at_ms,
+                    episode.response_verdict.clone(),
+                    episode.lifecycle_phase.clone(),
+                )
+            })
+            .unwrap_or((None, None, None, None, None, None));
     let (anchor_state, anchor_source, anchor_epoch) = stats
         .latest_anchor_candidate_ledger
         .as_ref()

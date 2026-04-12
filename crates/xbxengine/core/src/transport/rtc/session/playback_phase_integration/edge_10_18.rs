@@ -32,12 +32,20 @@ fn playback_phase_edge10_gap_recovered_with_timeline_recovering_must_not_imply_s
                         sequence: Some(9),
                         frame_rtp_timestamp: Some(200),
                         frame_importance: Some("keyframe".to_string()),
+                        budget_importance: None,
+
+                        evidence_importance: None,
+
+                        gap_dependency_confidence: None,
+
                         observed_at_ms: t - 4.0,
                     }),
                     frame: None,
                     chain: crate::XbxEngineVideoTimelineChainSnapshot {
                         state: "recovering".to_string(),
                         reason: Some("transportAwaitRecoveryKeyframe".to_string()),
+                        chain_break_evidence: None,
+
                         observed_at_ms: t - 2.0,
                     },
                     observed_at_ms: t - 2.0,
@@ -104,7 +112,7 @@ fn playback_phase_edge11_expired_unsent_keyframe_episode_must_surface_decision()
                     response_rtp_timestamp: None,
                     response_frame_seq: None,
                     response_verdict: None,
-                lifecycle_phase: None,
+                    lifecycle_phase: None,
                 });
             stats.latest_video_track_status = Some(crate::XbxEngineVideoTrackStatus {
                 state: "remoteTrackAttached".to_string(),
@@ -126,6 +134,8 @@ fn playback_phase_edge11_expired_unsent_keyframe_episode_must_surface_decision()
                     chain: crate::XbxEngineVideoTimelineChainSnapshot {
                         state: "recovering".to_string(),
                         reason: Some("transportAwaitRecoveryKeyframe".to_string()),
+                        chain_break_evidence: None,
+
                         observed_at_ms: t - 2.0,
                     },
                     observed_at_ms: t - 2.0,
@@ -186,7 +196,7 @@ fn playback_phase_edge12_deadline_expired_episode_must_not_stay_no_signal() {
                     response_rtp_timestamp: None,
                     response_frame_seq: None,
                     response_verdict: Some("missed".to_string()),
-                lifecycle_phase: None,
+                    lifecycle_phase: None,
                 });
             stats.latest_video_track_status = Some(crate::XbxEngineVideoTrackStatus {
                 state: "remoteTrackAttached".to_string(),
@@ -208,6 +218,8 @@ fn playback_phase_edge12_deadline_expired_episode_must_not_stay_no_signal() {
                     chain: crate::XbxEngineVideoTimelineChainSnapshot {
                         state: "recovering".to_string(),
                         reason: Some("transportAwaitRecoveryKeyframe".to_string()),
+                        chain_break_evidence: None,
+
                         observed_at_ms: t - 2.0,
                     },
                     observed_at_ms: t - 2.0,
@@ -270,6 +282,8 @@ fn playback_phase_edge13_degraded_then_steady_must_not_regress_to_priming() {
                     chain: crate::XbxEngineVideoTimelineChainSnapshot {
                         state: "healthy".to_string(),
                         reason: None,
+                        chain_break_evidence: None,
+
                         observed_at_ms: t,
                     },
                     observed_at_ms: t,
@@ -339,6 +353,8 @@ fn playback_phase_edge14_connected_high_ingress_low_output_must_not_emit_connect
                     chain: crate::XbxEngineVideoTimelineChainSnapshot {
                         state: "recovering".to_string(),
                         reason: Some("transportAwaitRecoveryKeyframe".to_string()),
+                        chain_break_evidence: None,
+
                         observed_at_ms: t - 2.0,
                     },
                     observed_at_ms: t - 2.0,
@@ -387,6 +403,8 @@ fn playback_phase_edge15_recovery_settled_then_reset_must_keep_ledger_coherent()
                     chain: crate::XbxEngineVideoTimelineChainSnapshot {
                         state: "healthy".to_string(),
                         reason: None,
+                        chain_break_evidence: None,
+
                         observed_at_ms: t,
                     },
                     observed_at_ms: t,
@@ -468,6 +486,8 @@ fn playback_phase_edge16_reconfigure_then_transport_await_must_resolve_single_do
                     chain: crate::XbxEngineVideoTimelineChainSnapshot {
                         state: "recovering".to_string(),
                         reason: Some("transportAwaitRecoveryKeyframe".to_string()),
+                        chain_break_evidence: None,
+
                         observed_at_ms: t - 2.0,
                     },
                     observed_at_ms: t - 2.0,
@@ -509,12 +529,20 @@ fn playback_phase_edge17_gap_resolved_timeline_must_not_mask_unresolved_transpor
                         sequence: Some(3),
                         frame_rtp_timestamp: Some(50),
                         frame_importance: Some("delta".to_string()),
+                        budget_importance: None,
+
+                        evidence_importance: None,
+
+                        gap_dependency_confidence: None,
+
                         observed_at_ms: t - 4.0,
                     }),
                     frame: None,
                     chain: crate::XbxEngineVideoTimelineChainSnapshot {
                         state: "recovering".to_string(),
                         reason: Some("transportAwaitRecoveryKeyframe".to_string()),
+                        chain_break_evidence: None,
+
                         observed_at_ms: t - 2.0,
                     },
                     observed_at_ms: t - 2.0,
@@ -585,6 +613,8 @@ fn playback_phase_edge18_null_surface_equivalent_must_not_promote_stable_without
                     chain: crate::XbxEngineVideoTimelineChainSnapshot {
                         state: "healthy".to_string(),
                         reason: None,
+                        chain_break_evidence: None,
+
                         observed_at_ms: t,
                     },
                     observed_at_ms: t,

@@ -1,9 +1,7 @@
 use super::super::RtcSessionPolicy;
 use crate::api::backend::XbxEngineMediaRuntimeStats;
 use crate::api::runtime::XbxEngineRuntimeConfig;
-use crate::transport::rtc::facts::{
-    ConnectionLifecycleStateFact, TransportCommand,
-};
+use crate::transport::rtc::facts::{ConnectionLifecycleStateFact, TransportCommand};
 use crate::transport::rtc::projection::{
     BweProjection, ConnectionProjection, DiagnosticsProjection, MediaProjection,
     RecoveryProjection, TransportSnapshot,
@@ -275,7 +273,7 @@ fn pre_first_frame_bootstrap_missing_sps_with_recent_episode_coalesces_probe() {
                 response_rtp_timestamp: None,
                 response_frame_seq: None,
                 response_verdict: None,
-            lifecycle_phase: None,
+                lifecycle_phase: None,
             });
     }
     let mut policy = RtcSessionPolicy::new(runtime_config, runtime_stats.clone());
@@ -852,6 +850,8 @@ fn same_tick_failed_terminal_does_not_forward_original_reconnect_proposal() {
             chain: crate::XbxEngineVideoTimelineChainSnapshot {
                 state: "recovering".to_string(),
                 reason: Some("transportAwaitRecoveryKeyframe".to_string()),
+                chain_break_evidence: None,
+
                 observed_at_ms: 7_540.0,
             },
             observed_at_ms: 7_540.0,
@@ -1209,6 +1209,8 @@ fn pre_first_frame_display_supply_degraded_does_not_upgrade_recovery() {
                     chain: crate::XbxEngineVideoTimelineChainSnapshot {
                         state: "healthy".to_string(),
                         reason: None,
+                        chain_break_evidence: None,
+
                         observed_at_ms: 10_118.0,
                     },
                     observed_at_ms: 10_118.0,
@@ -2142,4 +2144,3 @@ fn connected_ingress_progress_without_present_progress_does_not_force_reconnect(
         .expect("recovery decision ledger");
     assert_ne!(ledger.action_selected, "requestReconnectCandidate");
 }
-

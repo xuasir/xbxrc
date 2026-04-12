@@ -1,9 +1,7 @@
 use crate::transport::rtc::recovery::escalation::{
     VideoEscalationConfig, VideoEscalationController,
 };
-use crate::{
-    XbxEngineVideoNackObservation, XbxEngineVideoTwccObservation,
-};
+use crate::{XbxEngineVideoNackObservation, XbxEngineVideoTwccObservation};
 pub(super) fn test_escalation_controller(
     cooldown_ms: u64,
     keyframe_burst_threshold: u8,

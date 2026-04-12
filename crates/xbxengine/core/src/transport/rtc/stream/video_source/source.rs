@@ -1,4 +1,7 @@
-use super::{build_sample_builder, now_ms_f64, UINT16SIZE_HALF};
+use super::{
+    build_sample_builder, nack::gap_transport_evidence, now_ms_f64, timeline::ChainState,
+    UINT16SIZE_HALF,
+};
 use crate::media::video::h264::inspection::{H264AccessUnitInspection, H264BootstrapRejectReason};
 use base64::Engine as _;
 use bytes::Bytes;
@@ -1120,13 +1123,15 @@ impl RtcVideoFrameSource {
                     frame_now_ms,
                 );
                 if is_keyframe && media_dropped_packets == 0 {
-                    self.record_clean_keyframe_anchor(frame_now_ms);
-                    self.record_video_timeline_observation(
-                        "chain-clean-keyframe-submitted",
-                        None,
-                        Some(sample.packet_timestamp),
-                        frame_now_ms,
-                    );
+                    let needs_recovery_anchor = self.timeline_state.waiting_for_recovery_keyframe()
+                        || matches!(
+                            self.timeline_state.chain_state(),
+                            ChainState::Broken | ChainState::Recovering
+                        );
+                    if needs_recovery_anchor {
+                        self.timeline_state
+                            .on_clean_keyframe_ingress(sample.packet_timestamp, frame_now_ms);
+                    }
                 }
                 let assembled_at = std::time::Instant::now();
                 self.transport_deadline_tracker
@@ -1184,16 +1189,27 @@ impl RtcVideoFrameSource {
                     complete_candidate_now_ms,
                 );
 
-                if is_keyframe && media_dropped_packets == 0 {
+                if let Some(committed_ts) = self
+                    .timeline_state
+                    .take_clean_anchor_stats_commit_if_stable(
+                        sample.packet_timestamp,
+                        complete_candidate_now_ms,
+                    )
+                {
+                    self.record_clean_keyframe_anchor(complete_candidate_now_ms);
+                    self.record_video_timeline_observation(
+                        "chain-clean-keyframe-submitted",
+                        None,
+                        Some(committed_ts),
+                        complete_candidate_now_ms,
+                    );
                     self.record_anchor_candidate_ledger(
-                        Some(sample.packet_timestamp),
+                        Some(committed_ts),
                         "chain-clean-keyframe-submitted",
                         XbxEngineAnchorCandidateState::SubmittedCleanAnchor,
                         None,
-                        frame_now_ms,
+                        complete_candidate_now_ms,
                     );
-                    // 先把当前 clean anchor candidate 写进 timeline，再开软重入窗口，
-                    // 避免 arm 时还拿到旧的 anchor candidate。
                     self.timeline_state.on_clean_keyframe_submitted();
                 }
 
@@ -1377,6 +1393,7 @@ impl RtcVideoFrameSource {
                             now_ms,
                             Some(rtp.header.timestamp),
                             "unknown",
+                            "unknown",
                         );
                         if let Some(sequence) = missing_sequences.first().copied() {
                             self.record_video_timeline_observation(
@@ -1400,6 +1417,7 @@ impl RtcVideoFrameSource {
                             now_ms,
                             resolved.frame_rtp_timestamp,
                             resolved.frame_importance,
+                            gap_transport_evidence(resolved.frame_is_keyframe),
                         );
                         self.record_video_timeline_observation(
                             "gap-resolved",

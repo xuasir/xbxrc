@@ -13,9 +13,7 @@ use crate::transport::rtc::recovery::escalation::{RecoveryAction, VideoEscalatio
 use crate::transport::rtc::session::actor::SessionPolicyHook;
 use std::sync::{Arc, Mutex};
 
-use super::harness::{
-    assert_recovery_family_hold_semantics, build_snapshot, transport_commands,
-};
+use super::harness::{assert_recovery_family_hold_semantics, build_snapshot, transport_commands};
 
 #[test]
 fn bwe_tick_emits_target_remb_update_when_metrics_are_healthy() {
@@ -771,4 +769,3 @@ fn runtime_reconnect_reason_domain_keeps_severe_deadline_transport_connectivity(
         crate::XbxEngineRecoveryReasonDomain::ConnectivityTransport
     );
 }
-

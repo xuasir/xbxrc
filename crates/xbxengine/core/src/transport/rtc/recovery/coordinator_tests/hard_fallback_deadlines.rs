@@ -1,8 +1,6 @@
 use super::super::{RecoveryCoordinator, RecoveryOwnerSignal};
 use crate::runtime_stats_sink::RuntimeStatsSink;
-use crate::transport::rtc::recovery::escalation::{
-    RecoveryAction, VideoEscalationReason,
-};
+use crate::transport::rtc::recovery::escalation::{RecoveryAction, VideoEscalationReason};
 use crate::transport::rtc::recovery::runtime_state::unix_now_ms;
 use crate::XbxEngineMediaRuntimeStats;
 use crate::XbxEngineVideoTrackStatus;
@@ -75,6 +73,8 @@ fn transport_await_hard_fallback_does_not_inherit_timeout_window_after_decoder_r
             chain: crate::XbxEngineVideoTimelineChainSnapshot {
                 state: "healthy".to_string(),
                 reason: None,
+                chain_break_evidence: None,
+
                 observed_at_ms: now_ms + 5_060.0,
             },
             observed_at_ms: now_ms + 5_060.0,
@@ -104,6 +104,8 @@ fn transport_await_hard_fallback_does_not_inherit_timeout_window_after_decoder_r
             chain: crate::XbxEngineVideoTimelineChainSnapshot {
                 state: "recovering".to_string(),
                 reason: Some("transportAwaitRecoveryKeyframe".to_string()),
+                chain_break_evidence: None,
+
                 observed_at_ms: now_ms + 5_240.0,
             },
             observed_at_ms: now_ms + 5_240.0,
@@ -143,7 +145,7 @@ fn transport_await_hard_fallback_does_not_inherit_timeout_window_after_decoder_r
 }
 
 #[test]
-fn transport_await_hard_fallback_requires_decoder_reset_attempt_before_reconnect() {
+fn transport_await_hard_fallback_timeout_can_enter_decoder_reset_without_current_window_attempt() {
     let now_ms = unix_now_ms();
     let mut stats = XbxEngineMediaRuntimeStats::default();
     stats.transport_recovery_epoch = 32;
@@ -188,7 +190,7 @@ fn transport_await_hard_fallback_requires_decoder_reset_attempt_before_reconnect
         timeout.decision.action,
         RecoveryAction::RequestReconnectCandidate
     );
-    assert_ne!(timeout.decision.action, RecoveryAction::RequestDecoderReset);
+    assert_eq!(timeout.decision.action, RecoveryAction::RequestDecoderReset);
 }
 
 #[test]
@@ -253,6 +255,8 @@ fn transport_await_hard_fallback_keeps_connected_ingress_local_when_decoder_rese
             chain: crate::XbxEngineVideoTimelineChainSnapshot {
                 state: "healthy".to_string(),
                 reason: None,
+                chain_break_evidence: None,
+
                 observed_at_ms: now_ms + 260.0,
             },
             observed_at_ms: now_ms + 260.0,
@@ -283,6 +287,8 @@ fn transport_await_hard_fallback_keeps_connected_ingress_local_when_decoder_rese
             chain: crate::XbxEngineVideoTimelineChainSnapshot {
                 state: "recovering".to_string(),
                 reason: Some("streamThinStall".to_string()),
+                chain_break_evidence: None,
+
                 observed_at_ms: now_ms + 6_900.0,
             },
             observed_at_ms: now_ms + 6_900.0,
@@ -374,6 +380,8 @@ fn transport_await_hard_fallback_does_not_treat_ingress_without_output_as_local_
             chain: crate::XbxEngineVideoTimelineChainSnapshot {
                 state: "recovering".to_string(),
                 reason: Some("awaitingRecoveryKeyframe".to_string()),
+                chain_break_evidence: None,
+
                 observed_at_ms: now_ms + 6_900.0,
             },
             observed_at_ms: now_ms + 6_900.0,
@@ -478,6 +486,8 @@ fn transport_await_hard_fallback_decoder_reset_budget_exhaustion_upgrades_to_rec
             chain: crate::XbxEngineVideoTimelineChainSnapshot {
                 state: "recovering".to_string(),
                 reason: Some("awaitingRecoveryKeyframe".to_string()),
+                chain_break_evidence: None,
+
                 observed_at_ms: now_ms + 6_900.0,
             },
             observed_at_ms: now_ms + 6_900.0,
@@ -580,6 +590,8 @@ fn transport_await_hard_fallback_keeps_local_when_decode_progress_is_fresh_witho
             chain: crate::XbxEngineVideoTimelineChainSnapshot {
                 state: "recovering".to_string(),
                 reason: Some("awaitingRecoveryKeyframe".to_string()),
+                chain_break_evidence: None,
+
                 observed_at_ms: now_ms + 6_900.0,
             },
             observed_at_ms: now_ms + 6_900.0,
@@ -672,6 +684,8 @@ fn transport_await_hard_fallback_does_not_treat_nonidr_packet_seen_as_local_deco
             chain: crate::XbxEngineVideoTimelineChainSnapshot {
                 state: "recovering".to_string(),
                 reason: Some("awaitingRecoveryKeyframe".to_string()),
+                chain_break_evidence: None,
+
                 observed_at_ms: now_ms + 6_900.0,
             },
             observed_at_ms: now_ms + 6_900.0,
@@ -808,6 +822,8 @@ fn transport_await_hard_fallback_upgrades_to_decoder_reset_after_decode_progress
             chain: crate::XbxEngineVideoTimelineChainSnapshot {
                 state: "recovering".to_string(),
                 reason: Some("awaitingRecoveryKeyframe".to_string()),
+                chain_break_evidence: None,
+
                 observed_at_ms: now_ms + 6_900.0,
             },
             observed_at_ms: now_ms + 6_900.0,
@@ -847,6 +863,8 @@ fn transport_await_hard_fallback_upgrades_to_decoder_reset_after_decode_progress
             chain: crate::XbxEngineVideoTimelineChainSnapshot {
                 state: "recovering".to_string(),
                 reason: Some("awaitingRecoveryKeyframe".to_string()),
+                chain_break_evidence: None,
+
                 observed_at_ms: now_ms + 7_180.0,
             },
             observed_at_ms: now_ms + 7_180.0,

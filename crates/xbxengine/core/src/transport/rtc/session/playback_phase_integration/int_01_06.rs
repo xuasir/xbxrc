@@ -49,6 +49,8 @@ fn playback_phase_int01_no_first_present_must_not_promote_stable_serving() {
                     chain: crate::XbxEngineVideoTimelineChainSnapshot {
                         state: "healthy".to_string(),
                         reason: None,
+                        chain_break_evidence: None,
+
                         observed_at_ms: t,
                     },
                     observed_at_ms: t,
@@ -123,6 +125,8 @@ fn playback_phase_int02_decode_overflow_with_fresh_present_must_not_emit_reconne
                     chain: crate::XbxEngineVideoTimelineChainSnapshot {
                         state: "recovering".to_string(),
                         reason: Some("transportAwaitRecoveryKeyframe".to_string()),
+                        chain_break_evidence: None,
+
                         observed_at_ms: t - 3.0,
                     },
                     observed_at_ms: t - 3.0,
@@ -175,6 +179,8 @@ fn playback_phase_int03_repeated_stale_present_pulse_must_not_reconnect_storm() 
                         chain: crate::XbxEngineVideoTimelineChainSnapshot {
                             state: "healthy".to_string(),
                             reason: None,
+                            chain_break_evidence: None,
+
                             observed_at_ms: t,
                         },
                         observed_at_ms: t,
@@ -234,6 +240,8 @@ fn playback_phase_int04_transport_await_family_hold_must_not_stick_forever_on_sa
                     chain: crate::XbxEngineVideoTimelineChainSnapshot {
                         state: "recovering".to_string(),
                         reason: Some("transportAwaitRecoveryKeyframe".to_string()),
+                        chain_break_evidence: None,
+
                         observed_at_ms: t - 2.0,
                     },
                     observed_at_ms: t - 2.0,
@@ -440,6 +448,8 @@ fn playback_phase_int06_clean_anchor_progress_must_exit_toward_serving_not_starv
                     chain: crate::XbxEngineVideoTimelineChainSnapshot {
                         state: "recovering".to_string(),
                         reason: Some("transportAwaitRecoveryKeyframe".to_string()),
+                        chain_break_evidence: None,
+
                         observed_at_ms: t,
                     },
                     observed_at_ms: t,

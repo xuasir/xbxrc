@@ -160,7 +160,8 @@ fn pre_first_frame_fallback_within_window(
             if track.state != "remoteTrackAttached" || track.video_bytes_total == 0 {
                 return false;
             }
-            (observed_at_ms - track.observed_at_ms).max(0.0) <= pre_first_frame_reconnect_fallback_ms
+            (observed_at_ms - track.observed_at_ms).max(0.0)
+                <= pre_first_frame_reconnect_fallback_ms
         }
     }
 }

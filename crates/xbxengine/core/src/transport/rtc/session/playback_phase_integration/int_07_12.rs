@@ -48,12 +48,20 @@ fn playback_phase_int07_cloud_high_rtt_with_transport_await_must_not_emit_connec
                         sequence: Some(1),
                         frame_rtp_timestamp: Some(900),
                         frame_importance: Some("keyframe".to_string()),
+                        budget_importance: None,
+
+                        evidence_importance: None,
+
+                        gap_dependency_confidence: None,
+
                         observed_at_ms: t - 4.0,
                     }),
                     frame: None,
                     chain: crate::XbxEngineVideoTimelineChainSnapshot {
                         state: "recovering".to_string(),
                         reason: Some("transportAwaitRecoveryKeyframe".to_string()),
+                        chain_break_evidence: None,
+
                         observed_at_ms: t - 2.0,
                     },
                     observed_at_ms: t - 2.0,
@@ -113,6 +121,8 @@ fn playback_phase_int08_hard_fallback_reconnect_requires_evidence_not_uncapped_s
                     chain: crate::XbxEngineVideoTimelineChainSnapshot {
                         state: "recovering".to_string(),
                         reason: Some("transportAwaitRecoveryKeyframe".to_string()),
+                        chain_break_evidence: None,
+
                         observed_at_ms: t - 2.0,
                     },
                     observed_at_ms: t - 2.0,
@@ -173,6 +183,8 @@ fn playback_phase_int09_coalesced_keyframe_inflight_sequence_must_eventually_cha
                         chain: crate::XbxEngineVideoTimelineChainSnapshot {
                             state: "recovering".to_string(),
                             reason: Some("transportAwaitRecoveryKeyframe".to_string()),
+                            chain_break_evidence: None,
+
                             observed_at_ms: t - 2.0,
                         },
                         observed_at_ms: t - 2.0,
@@ -233,7 +245,7 @@ fn playback_phase_int10_transport_deferred_episode_must_not_promote_stable_servi
                     response_rtp_timestamp: None,
                     response_frame_seq: None,
                     response_verdict: Some("transportDeferred".to_string()),
-                lifecycle_phase: None,
+                    lifecycle_phase: None,
                 });
             stats.latest_video_track_status = Some(crate::XbxEngineVideoTrackStatus {
                 state: "remoteTrackAttached".to_string(),
@@ -255,6 +267,8 @@ fn playback_phase_int10_transport_deferred_episode_must_not_promote_stable_servi
                     chain: crate::XbxEngineVideoTimelineChainSnapshot {
                         state: "recovering".to_string(),
                         reason: Some("transportAwaitRecoveryKeyframe".to_string()),
+                        chain_break_evidence: None,
+
                         observed_at_ms: t - 2.0,
                     },
                     observed_at_ms: t - 2.0,
@@ -308,7 +322,7 @@ fn playback_phase_int11_terminal_invalid_bootstrap_must_request_keyframe_or_stro
                     response_rtp_timestamp: None,
                     response_frame_seq: None,
                     response_verdict: Some("transportDeferred".to_string()),
-                lifecycle_phase: None,
+                    lifecycle_phase: None,
                 });
             stats.latest_h264_inspection_observation =
                 Some(crate::XbxEngineH264InspectionObservation {
@@ -353,6 +367,8 @@ fn playback_phase_int11_terminal_invalid_bootstrap_must_request_keyframe_or_stro
                     chain: crate::XbxEngineVideoTimelineChainSnapshot {
                         state: "recovering".to_string(),
                         reason: Some("transportAwaitRecoveryKeyframe".to_string()),
+                        chain_break_evidence: None,
+
                         observed_at_ms: t - 2.0,
                     },
                     observed_at_ms: t - 2.0,
@@ -419,6 +435,8 @@ fn playback_phase_int12_recovery_settled_plus_progress_must_not_stay_blocked() {
                     chain: crate::XbxEngineVideoTimelineChainSnapshot {
                         state: "healthy".to_string(),
                         reason: None,
+                        chain_break_evidence: None,
+
                         observed_at_ms: t,
                     },
                     observed_at_ms: t,
