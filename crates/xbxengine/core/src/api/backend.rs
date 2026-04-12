@@ -841,6 +841,8 @@ pub struct XbxEngineKeyframeRequestEpisodeObservation {
     pub response_rtp_timestamp: Option<u32>,
     pub response_frame_seq: Option<u64>,
     pub response_verdict: Option<String>,
+    /// 生命周期阶段：`requesting` / `sent` / `packetSeen` / `decoded` / `success` / `failure`
+    pub lifecycle_phase: Option<String>,
 }
 
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -956,6 +958,10 @@ pub struct XbxEngineMediaRuntimeStats {
     pub latest_data_channel_message_catalog_observation:
         Option<XbxEngineDataChannelMessageCatalogObservation>,
     pub recent_keyframe_request_episodes: Vec<XbxEngineKeyframeRequestEpisodeObservation>,
+    /// 连续「已发出且终端失败」的 keyframe 请求次数（用于 decoder reset 门槛；clean anchor / 新 recovery epoch 清零）。
+    pub keyframe_consecutive_sent_failures: u8,
+    /// 已为 `keyframe_consecutive_sent_failures` 计数过的 episode，避免重复累加。
+    pub keyframe_sent_failure_last_counted_episode_id: Option<u64>,
     pub transport_recovery_epoch: u64,
     pub transport_recovery_epoch_at_last_escalation: u64,
     pub video_repair_probe_stream_bind_count_total: u64,
@@ -1125,6 +1131,8 @@ impl Default for XbxEngineMediaRuntimeStats {
             latest_video_rtx_reinject_observation: None,
             latest_data_channel_message_catalog_observation: None,
             recent_keyframe_request_episodes: Vec::new(),
+            keyframe_consecutive_sent_failures: 0,
+            keyframe_sent_failure_last_counted_episode_id: None,
             transport_recovery_epoch: 0,
             transport_recovery_epoch_at_last_escalation: 0,
             video_repair_probe_stream_bind_count_total: 0,

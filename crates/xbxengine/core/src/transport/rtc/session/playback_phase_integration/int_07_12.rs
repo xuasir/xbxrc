@@ -1,6 +1,6 @@
 //! RFC PLY-INT-07 .. PLY-INT-12
 
-use super::super::RecoveryIntegrationHarness;
+use super::super::harness::RecoveryIntegrationHarness;
 use super::common::{assert_cmds_have_no_reconnect, wall_observed_ms};
 use crate::transport::rtc::facts::{ConnectionLifecycleStateFact, TransportCommand};
 
@@ -233,6 +233,7 @@ fn playback_phase_int10_transport_deferred_episode_must_not_promote_stable_servi
                     response_rtp_timestamp: None,
                     response_frame_seq: None,
                     response_verdict: Some("transportDeferred".to_string()),
+                lifecycle_phase: None,
                 });
             stats.latest_video_track_status = Some(crate::XbxEngineVideoTrackStatus {
                 state: "remoteTrackAttached".to_string(),
@@ -307,6 +308,7 @@ fn playback_phase_int11_terminal_invalid_bootstrap_must_request_keyframe_or_stro
                     response_rtp_timestamp: None,
                     response_frame_seq: None,
                     response_verdict: Some("transportDeferred".to_string()),
+                lifecycle_phase: None,
                 });
             stats.latest_h264_inspection_observation =
                 Some(crate::XbxEngineH264InspectionObservation {

@@ -1521,6 +1521,7 @@ mod tests {
                 response_rtp_timestamp: Some(7_001),
                 response_frame_seq: Some(88),
                 response_verdict: Some("on-time".to_string()),
+            lifecycle_phase: None,
             });
         stats.latest_h264_inspection_observation =
             Some(crate::XbxEngineH264InspectionObservation {
@@ -1649,6 +1650,7 @@ mod tests {
                 response_rtp_timestamp: None,
                 response_frame_seq: None,
                 response_verdict: None,
+            lifecycle_phase: None,
             });
         stats.latest_h264_inspection_observation =
             Some(crate::XbxEngineH264InspectionObservation {
@@ -1929,6 +1931,7 @@ mod tests {
                 response_rtp_timestamp: None,
                 response_frame_seq: None,
                 response_verdict: Some("pending".to_string()),
+            lifecycle_phase: None,
             });
         let runtime_stats = Arc::new(Mutex::new(stats));
         let pending_runtime_recovery_action = Arc::new(Mutex::new(None));
@@ -1983,6 +1986,7 @@ mod tests {
                 response_rtp_timestamp: Some(123),
                 response_frame_seq: Some(456),
                 response_verdict: Some("pending".to_string()),
+            lifecycle_phase: None,
             });
         // 未提交 clean anchor：video_anchor_clean_epoch=None
         stats.latest_recovery_decision_ledger =
@@ -2071,6 +2075,7 @@ mod tests {
                 response_rtp_timestamp: None,
                 response_frame_seq: None,
                 response_verdict: Some("pending".to_string()),
+            lifecycle_phase: None,
             });
         stats.latest_h264_inspection_observation =
             Some(crate::XbxEngineH264InspectionObservation {
@@ -2183,6 +2188,7 @@ mod tests {
                 response_rtp_timestamp: None,
                 response_frame_seq: None,
                 response_verdict: Some("pending".to_string()),
+            lifecycle_phase: None,
             });
         stats.latest_recovery_decision_ledger =
             Some(crate::XbxEngineRecoveryDecisionLedgerObservation {
@@ -2258,6 +2264,7 @@ mod tests {
                 response_rtp_timestamp: None,
                 response_frame_seq: None,
                 response_verdict: Some("transportDeferred".to_string()),
+            lifecycle_phase: None,
             });
         stats.latest_recovery_decision_ledger =
             Some(crate::XbxEngineRecoveryDecisionLedgerObservation {
@@ -2332,6 +2339,7 @@ mod tests {
                 response_rtp_timestamp: None,
                 response_frame_seq: None,
                 response_verdict: Some("pending".to_string()),
+            lifecycle_phase: None,
             });
         stats.latest_recovery_decision_ledger =
             Some(crate::XbxEngineRecoveryDecisionLedgerObservation {
@@ -2409,6 +2417,7 @@ mod tests {
                 response_rtp_timestamp: None,
                 response_frame_seq: None,
                 response_verdict: Some("pending".to_string()),
+            lifecycle_phase: None,
             });
         stats.latest_video_timeline_observation = Some(crate::XbxEngineVideoTimelineObservation {
             observation_id: 1,
@@ -2503,6 +2512,7 @@ mod tests {
                 response_rtp_timestamp: None,
                 response_frame_seq: None,
                 response_verdict: Some("pending".to_string()),
+            lifecycle_phase: None,
             });
         stats.latest_video_timeline_observation = Some(crate::XbxEngineVideoTimelineObservation {
             observation_id: 1,
@@ -2596,6 +2606,7 @@ mod tests {
                 response_rtp_timestamp: None,
                 response_frame_seq: None,
                 response_verdict: Some("pending".to_string()),
+            lifecycle_phase: None,
             });
         stats.latest_video_timeline_observation = Some(crate::XbxEngineVideoTimelineObservation {
             observation_id: 1,
@@ -2714,6 +2725,7 @@ mod tests {
                 response_rtp_timestamp: None,
                 response_frame_seq: None,
                 response_verdict: Some("pending".to_string()),
+            lifecycle_phase: None,
             });
         stats.latest_recovery_decision_ledger =
             Some(crate::XbxEngineRecoveryDecisionLedgerObservation {
@@ -2803,6 +2815,7 @@ mod tests {
                 response_rtp_timestamp: None,
                 response_frame_seq: None,
                 response_verdict: Some("pending".to_string()),
+            lifecycle_phase: None,
             });
         stats.latest_recovery_decision_ledger =
             Some(crate::XbxEngineRecoveryDecisionLedgerObservation {
@@ -2876,6 +2889,7 @@ mod tests {
                 response_rtp_timestamp: None,
                 response_frame_seq: None,
                 response_verdict: Some("pending".to_string()),
+            lifecycle_phase: None,
             });
         stats.latest_video_timeline_observation = Some(crate::XbxEngineVideoTimelineObservation {
             observation_id: 35010,
@@ -2989,6 +3003,7 @@ mod tests {
                 response_rtp_timestamp: None,
                 response_frame_seq: None,
                 response_verdict: Some("on-time".to_string()),
+            lifecycle_phase: None,
             });
         stats.latest_recovery_decision_ledger =
             Some(crate::XbxEngineRecoveryDecisionLedgerObservation {

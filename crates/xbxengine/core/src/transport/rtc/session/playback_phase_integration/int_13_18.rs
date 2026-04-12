@@ -1,6 +1,6 @@
 //! RFC PLY-INT-13 .. PLY-INT-18
 
-use super::super::RecoveryIntegrationHarness;
+use super::super::harness::RecoveryIntegrationHarness;
 use super::common::{
     assert_cmds_have_no_reconnect, fill_twcc_stable_local_feedback, wall_observed_ms,
 };

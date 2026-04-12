@@ -1,6 +1,6 @@
 //! RFC PLY-EDGE-10 .. PLY-EDGE-18
 
-use super::super::RecoveryIntegrationHarness;
+use super::super::harness::RecoveryIntegrationHarness;
 use super::common::{assert_cmds_have_no_reconnect, wall_observed_ms};
 use crate::transport::rtc::facts::ConnectionLifecycleStateFact;
 
@@ -104,6 +104,7 @@ fn playback_phase_edge11_expired_unsent_keyframe_episode_must_surface_decision()
                     response_rtp_timestamp: None,
                     response_frame_seq: None,
                     response_verdict: None,
+                lifecycle_phase: None,
                 });
             stats.latest_video_track_status = Some(crate::XbxEngineVideoTrackStatus {
                 state: "remoteTrackAttached".to_string(),
@@ -185,6 +186,7 @@ fn playback_phase_edge12_deadline_expired_episode_must_not_stay_no_signal() {
                     response_rtp_timestamp: None,
                     response_frame_seq: None,
                     response_verdict: Some("missed".to_string()),
+                lifecycle_phase: None,
                 });
             stats.latest_video_track_status = Some(crate::XbxEngineVideoTrackStatus {
                 state: "remoteTrackAttached".to_string(),

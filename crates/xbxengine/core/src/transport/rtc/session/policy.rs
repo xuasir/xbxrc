@@ -304,6 +304,8 @@ pub struct RtcSessionPolicy {
 }
 
 impl RtcSessionPolicy {
+    /// 仅用于 `latest_recovery_decision_ledger` headline 保留判定：与「会下发 TransportCommand」的
+    /// `recovery_decision_ledger_has_pending_transport_command` 不同，localProbe 等叙事占位也要挡住覆盖。
     fn ledger_has_pending_command(ledger: &XbxEngineRecoveryDecisionLedgerObservation) -> bool {
         ledger.action_selected != "none" && ledger.command_result.is_none()
     }
@@ -785,6 +787,23 @@ impl RtcSessionPolicy {
                 }
             }
         };
+        // intent 路径可能把 transport-await 表面映射成 `WaitKeyframe` 等枚举，但仍携带同一诊断标签；
+        // 吸收 stale replay 必须以 snapshot 诊断为准，而不能只看 `owner_signal.reason`。
+        let stale_transport_await_diag = snapshot
+            .recovery
+            .latest_diagnosis_label
+            .as_deref()
+            == Some("transportAwaitRecoveryKeyframe");
+        let stale_transport_await_absorb = stale_transport_await_diag
+            && self.should_absorb_stale_transport_await_replay(
+                snapshot,
+                owner_state,
+                owner_signal.reason_label.as_str(),
+                observed_at_ms,
+            );
+        if stale_transport_await_absorb {
+            return None;
+        }
         let mut proposal = self
             .recovery_coordinator
             .propose_from_owner_signal(owner_signal, self.runtime_stats.as_ref());
@@ -2115,6 +2134,8 @@ impl RtcSessionPolicy {
                     - RECENT_RECOVERY_DECISION_LEDGER_CAPACITY;
                 stats.recent_recovery_decision_ledgers.drain(0..overflow);
             }
+            // 若 latest 仍表示「命令已选、等待 TransportCommand 回填」，而本拍推导出的 ledger 更弱（无 pending），
+            // 默认保留 headline，避免在 command_result 回填前把叙事覆盖成「空窗」。
             let keep_existing_latest_pending = stats
                 .latest_recovery_decision_ledger
                 .as_ref()
@@ -2357,5 +2378,5 @@ fn map_budget_snapshot(
 }
 
 #[cfg(test)]
-#[path = "policy.test.rs"]
+#[path = "policy_tests/mod.rs"]
 mod tests;

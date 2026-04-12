@@ -788,6 +788,11 @@ impl RecoveryCoordinator {
                 recovery_epoch,
                 observed_at_ms,
             )
+            && Self::transport_await_decoder_reset_keyframe_gate_satisfied(
+                runtime_stats,
+                recovery_epoch,
+                observed_at_ms,
+            )
             && !transport_await_first_frame_priority_active
         {
             // 一旦同一 recovery epoch 已经出现明确的 keyframe-stage failure evidence，
@@ -1541,6 +1546,106 @@ impl RecoveryCoordinator {
                 && (unresolved_transport_await || lacks_recent_clean_anchor)
         })
         .unwrap_or(false)
+    }
+
+    /// `requestDecoderReset`：除本地合并外，要求「≥2 次真实已发出失败」或单次硬证据
+    /// （packet_seen 无解码 / anchor 拒绝 / decoded 仍无可用 clean anchor）。
+    fn transport_await_decoder_reset_keyframe_gate_satisfied(
+        runtime_stats: &Mutex<XbxEngineMediaRuntimeStats>,
+        recovery_epoch: u64,
+        now_ms: f64,
+    ) -> bool {
+        RuntimeStatsSink::read_shared(runtime_stats, |stats| {
+            Self::transport_await_decoder_reset_keyframe_gate_satisfied_from_stats(
+                stats,
+                recovery_epoch,
+                now_ms,
+            )
+        })
+        .unwrap_or(false)
+    }
+
+    fn transport_await_decoder_reset_keyframe_gate_satisfied_from_stats(
+        stats: &XbxEngineMediaRuntimeStats,
+        recovery_epoch: u64,
+        now_ms: f64,
+    ) -> bool {
+        if stats.keyframe_consecutive_sent_failures >= 2 {
+            return true;
+        }
+        if Self::transport_await_packet_seen_without_decode_failure(stats, recovery_epoch, now_ms) {
+            return true;
+        }
+        if let Some(episode) = stats.latest_keyframe_request_episode.as_ref() {
+            if episode.request_reason.as_deref() == Some("transportAwaitRecoveryKeyframe")
+                && episode.sent_at_ms.is_some()
+                && matches!(
+                    episode.response_verdict.as_deref(),
+                    Some("missed" | "late")
+                )
+            {
+                return true;
+            }
+        }
+        Self::transport_await_decoder_reset_single_shot_keyframe_evidence_from_stats(
+            stats,
+            recovery_epoch,
+            now_ms,
+        )
+    }
+
+    fn transport_await_decoder_reset_single_shot_keyframe_evidence_from_stats(
+        stats: &XbxEngineMediaRuntimeStats,
+        recovery_epoch: u64,
+        now_ms: f64,
+    ) -> bool {
+        const TRANSPORT_AWAIT_FAILURE_EVIDENCE_FRESH_MS: f64 = 1_500.0;
+        const TRANSPORT_AWAIT_KEYFRAME_UNUSABLE_GRACE_MS: f64 = 220.0;
+        let rejected_anchor_without_usable_clean_anchor = stats
+            .latest_anchor_candidate_ledger
+            .as_ref()
+            .is_some_and(|candidate| {
+                candidate.recovery_epoch == recovery_epoch
+                    && (now_ms - candidate.observed_at_ms).max(0.0) <= TRANSPORT_AWAIT_FAILURE_EVIDENCE_FRESH_MS
+                    && candidate.state == XbxEngineAnchorCandidateState::Rejected
+                    && matches!(
+                        candidate.failure_reason,
+                        Some(
+                            XbxEngineAnchorCandidateFailureReason::AwaitingRecoveryKeyframe
+                                | XbxEngineAnchorCandidateFailureReason::InspectionRejectedMissingSps
+                                | XbxEngineAnchorCandidateFailureReason::InspectionRejectedMissingPps
+                                | XbxEngineAnchorCandidateFailureReason::InspectionRejectedInvalidSliceHeader
+                                | XbxEngineAnchorCandidateFailureReason::ChainBrokenReferenceUnrecoverable
+                                | XbxEngineAnchorCandidateFailureReason::GapExpiredDeadline
+                        )
+                    )
+            });
+        if rejected_anchor_without_usable_clean_anchor {
+            return true;
+        }
+        let Some(episode) = stats.latest_keyframe_request_episode.as_ref() else {
+            return false;
+        };
+        if episode.request_reason.as_deref() != Some("transportAwaitRecoveryKeyframe") {
+            return false;
+        }
+        let unresolved_transport_await = Self::has_unresolved_transport_await_issue(stats);
+        let lacks_recent_clean_anchor = !Self::has_recent_clean_anchor_evidence(
+            stats.video_anchor_clean_epoch,
+            stats.video_anchor_clean_observed_at_ms,
+            stats.video_anchor_clean_source_event.as_deref(),
+            stats.latest_anchor_candidate_ledger.as_ref(),
+            recovery_epoch,
+            now_ms,
+        );
+        episode.status == "decoded"
+            && episode
+                .first_keyframe_decoded_at_ms
+                .is_some_and(|decoded_at_ms| {
+                    (now_ms - decoded_at_ms).max(0.0) >= TRANSPORT_AWAIT_KEYFRAME_UNUSABLE_GRACE_MS
+                })
+            && unresolved_transport_await
+            && lacks_recent_clean_anchor
     }
 
     fn has_keyframe_stage_escalation_failure_evidence(
@@ -2849,5 +2954,5 @@ fn classify_signal_domain(reason: VideoEscalationReason) -> RecoverySignalDomain
 }
 
 #[cfg(test)]
-#[path = "coordinator.test.rs"]
+#[path = "coordinator_tests/mod.rs"]
 mod tests;

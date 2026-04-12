@@ -4,6 +4,7 @@
 use std::sync::{Arc, Mutex};
 
 use crate::diagnostics::observation_bus::{ObservationBus, ObservationEvent};
+use crate::transport::rtc::recovery::keyframe_lifecycle::apply_keyframe_episode_lifecycle_field;
 use crate::transport::rtc::recovery::runtime_state::project_recovery_escalation_context;
 use crate::{
     XbxEngineAnchorCandidateFailureReason, XbxEngineAnchorCandidateLedger,
@@ -39,6 +40,8 @@ impl RuntimeStatsSink {
         stats.transport_recovery_episode_closed_at_ms = None;
         stats.transport_recovery_episode_close_reason = None;
         Self::apply_clear_transport_clean_anchor(stats);
+        stats.keyframe_consecutive_sent_failures = 0;
+        stats.keyframe_sent_failure_last_counted_episode_id = None;
         stats.transport_recovery_epoch
     }
 
@@ -52,6 +55,8 @@ impl RuntimeStatsSink {
         stats.transport_recovery_episode_closed_at_ms = None;
         stats.transport_recovery_episode_close_reason = None;
         Self::apply_clear_transport_clean_anchor(stats);
+        stats.keyframe_consecutive_sent_failures = 0;
+        stats.keyframe_sent_failure_last_counted_episode_id = None;
         stats.transport_recovery_epoch
     }
 
@@ -76,6 +81,25 @@ impl RuntimeStatsSink {
         stats.video_anchor_clean_epoch = Some(stats.transport_recovery_epoch);
         stats.video_anchor_clean_observed_at_ms = Some(observed_at_ms);
         stats.video_anchor_clean_source_event = Some(source_event.to_string());
+        stats.keyframe_consecutive_sent_failures = 0;
+        stats.keyframe_sent_failure_last_counted_episode_id = None;
+        let transport_recovery_epoch = stats.transport_recovery_epoch;
+        let video_anchor_clean_epoch = stats.video_anchor_clean_epoch;
+        let video_anchor_clean_observed_at_ms = stats.video_anchor_clean_observed_at_ms;
+        if let Some(episode) = stats.latest_keyframe_request_episode.as_mut() {
+            episode.status = "succeeded".to_string();
+            episode.response_verdict = Some("cleanAnchorCommitted".to_string());
+            episode.status_detail = None;
+            episode.transport_detail = None;
+            apply_keyframe_episode_lifecycle_field(
+                transport_recovery_epoch,
+                video_anchor_clean_epoch,
+                video_anchor_clean_observed_at_ms,
+                episode,
+            );
+            let updated = episode.clone();
+            sync_recent_keyframe_request_episode(stats, updated);
+        }
     }
 
     pub(crate) fn apply_clear_transport_clean_anchor(stats: &mut XbxEngineMediaRuntimeStats) {
@@ -189,6 +213,7 @@ impl RuntimeStatsSink {
                     response_rtp_timestamp: None,
                     response_frame_seq: None,
                     response_verdict: Some("pending".to_string()),
+                    lifecycle_phase: None,
                 },
             );
             stats.latest_keyframe_request_episode = Some(episode);
@@ -249,6 +274,7 @@ impl RuntimeStatsSink {
                         response_rtp_timestamp: None,
                         response_frame_seq: None,
                         response_verdict: Some("pending".to_string()),
+                        lifecycle_phase: None,
                     };
                     apply_keyframe_request_episode_sent(
                         &mut episode,
@@ -271,8 +297,12 @@ impl RuntimeStatsSink {
 
     pub(crate) fn record_keyframe_request_episode_timeout(&self, observed_at_ms: f64) {
         self.update(|stats| {
+            let transport_recovery_epoch = stats.transport_recovery_epoch;
+            let video_anchor_clean_epoch = stats.video_anchor_clean_epoch;
+            let video_anchor_clean_observed_at_ms = stats.video_anchor_clean_observed_at_ms;
             let mut updated_episode = None;
             let mut should_probe = false;
+            let mut count_episode_id = None;
             if let Some(episode) = stats.latest_keyframe_request_episode.as_mut() {
                 let Some(deadline_at_ms) = episode.deadline_at_ms else {
                     return;
@@ -289,6 +319,13 @@ impl RuntimeStatsSink {
                 episode.status_detail = Some("deadlineExpired".to_string());
                 episode.status = "missed".to_string();
                 episode.response_verdict = Some("missed".to_string());
+                count_episode_id = Some(episode.episode_id);
+                apply_keyframe_episode_lifecycle_field(
+                    transport_recovery_epoch,
+                    video_anchor_clean_epoch,
+                    video_anchor_clean_observed_at_ms,
+                    episode,
+                );
                 stats.latest_observation_label = Some("keyframeRequestEpisodeMissed".to_string());
                 stats.latest_observation_summary = Some(format!(
                     "episodeId={} deadlineAtMs={:.1} observedAtMs={:.1}",
@@ -296,6 +333,9 @@ impl RuntimeStatsSink {
                 ));
                 updated_episode = Some(episode.clone());
                 should_probe = true;
+            }
+            if let Some(episode_id) = count_episode_id {
+                maybe_count_keyframe_sent_terminal_failure(stats, episode_id);
             }
             if let Some(episode) = updated_episode {
                 sync_recent_keyframe_request_episode(stats, episode);
@@ -312,6 +352,9 @@ impl RuntimeStatsSink {
         detail: &str,
     ) {
         self.update(|stats| {
+            let transport_recovery_epoch = stats.transport_recovery_epoch;
+            let video_anchor_clean_epoch = stats.video_anchor_clean_epoch;
+            let video_anchor_clean_observed_at_ms = stats.video_anchor_clean_observed_at_ms;
             let mut updated_episode = None;
             let mut should_probe = false;
             if let Some(episode) = stats.latest_keyframe_request_episode.as_mut() {
@@ -327,6 +370,12 @@ impl RuntimeStatsSink {
                 episode.transport_detail = Some(detail.to_string());
                 episode.status = "deferred".to_string();
                 episode.response_verdict = Some("transportDeferred".to_string());
+                apply_keyframe_episode_lifecycle_field(
+                    transport_recovery_epoch,
+                    video_anchor_clean_epoch,
+                    video_anchor_clean_observed_at_ms,
+                    episode,
+                );
                 stats.latest_observation_label = Some("keyframeRequestEpisodeDeferred".to_string());
                 stats.latest_observation_summary = Some(format!(
                     "episodeId={} observedAtMs={:.1} detail={detail}",
@@ -346,6 +395,9 @@ impl RuntimeStatsSink {
 
     pub(crate) fn record_keyframe_request_episode_failed(&self, observed_at_ms: f64, detail: &str) {
         self.update(|stats| {
+            let transport_recovery_epoch = stats.transport_recovery_epoch;
+            let video_anchor_clean_epoch = stats.video_anchor_clean_epoch;
+            let video_anchor_clean_observed_at_ms = stats.video_anchor_clean_observed_at_ms;
             let mut updated_episode = None;
             let mut should_probe = false;
             if let Some(episode) = stats.latest_keyframe_request_episode.as_mut() {
@@ -361,6 +413,12 @@ impl RuntimeStatsSink {
                 episode.transport_detail = Some(detail.to_string());
                 episode.status = "failed".to_string();
                 episode.response_verdict = Some("transportFailed".to_string());
+                apply_keyframe_episode_lifecycle_field(
+                    transport_recovery_epoch,
+                    video_anchor_clean_epoch,
+                    video_anchor_clean_observed_at_ms,
+                    episode,
+                );
                 stats.latest_observation_label = Some("keyframeRequestEpisodeFailed".to_string());
                 stats.latest_observation_summary = Some(format!(
                     "episodeId={} observedAtMs={:.1} detail={detail}",
@@ -573,6 +631,31 @@ impl RuntimeStatsSink {
         observation: XbxEngineH264InspectionObservation,
     ) {
         self.update(|stats| {
+            let bump_episode_id =
+                stats
+                    .latest_keyframe_request_episode
+                    .as_ref()
+                    .and_then(|episode| {
+                        if episode.request_reason.as_deref() == Some("transportAwaitRecoveryKeyframe")
+                            && episode.sent_at_ms.is_some()
+                            && matches!(
+                                observation.bootstrap_reject_reason.as_deref(),
+                                Some(
+                                    "NonIdrVcl"
+                                        | "bootstrapMissingSps"
+                                        | "bootstrapMissingPps"
+                                        | "inspectionRejectInvalidSliceHeader"
+                                )
+                            )
+                        {
+                            Some(episode.episode_id)
+                        } else {
+                            None
+                        }
+                    });
+            if let Some(episode_id) = bump_episode_id {
+                maybe_count_keyframe_sent_terminal_failure(stats, episode_id);
+            }
             stats.latest_h264_inspection_observation = Some(observation);
         });
     }
@@ -845,7 +928,10 @@ fn upsert_keyframe_request_episode(
     update: impl FnOnce(&mut XbxEngineKeyframeRequestEpisodeObservation),
     create: impl FnOnce() -> XbxEngineKeyframeRequestEpisodeObservation,
 ) -> XbxEngineKeyframeRequestEpisodeObservation {
-    if let Some(index) = stats
+    let transport_recovery_epoch = stats.transport_recovery_epoch;
+    let video_anchor_clean_epoch = stats.video_anchor_clean_epoch;
+    let video_anchor_clean_observed_at_ms = stats.video_anchor_clean_observed_at_ms;
+    let mut episode = if let Some(index) = stats
         .recent_keyframe_request_episodes
         .iter()
         .position(|episode| episode.episode_id == episode_id)
@@ -854,16 +940,35 @@ fn upsert_keyframe_request_episode(
         update(episode);
         let cloned = episode.clone();
         stats.recent_keyframe_request_episodes.remove(index);
-        stats.recent_keyframe_request_episodes.push(cloned.clone());
-        trim_recent_keyframe_request_episodes(stats);
-        return cloned;
-    }
-
-    let mut episode = create();
-    update(&mut episode);
+        cloned
+    } else {
+        let mut episode = create();
+        update(&mut episode);
+        episode
+    };
+    apply_keyframe_episode_lifecycle_field(
+        transport_recovery_epoch,
+        video_anchor_clean_epoch,
+        video_anchor_clean_observed_at_ms,
+        &mut episode,
+    );
     stats.recent_keyframe_request_episodes.push(episode.clone());
     trim_recent_keyframe_request_episodes(stats);
     episode
+}
+
+/// 对「已发出且本轮 episode 终端失败」计数一次，供 decoder reset 门槛与诊断使用。
+fn maybe_count_keyframe_sent_terminal_failure(
+    stats: &mut XbxEngineMediaRuntimeStats,
+    episode_id: u64,
+) {
+    if stats.keyframe_sent_failure_last_counted_episode_id == Some(episode_id) {
+        return;
+    }
+    stats.keyframe_sent_failure_last_counted_episode_id = Some(episode_id);
+    stats.keyframe_consecutive_sent_failures = stats
+        .keyframe_consecutive_sent_failures
+        .saturating_add(1);
 }
 
 fn trim_recent_keyframe_request_episodes(stats: &mut XbxEngineMediaRuntimeStats) {
@@ -879,8 +984,14 @@ fn trim_recent_keyframe_request_episodes(stats: &mut XbxEngineMediaRuntimeStats)
 
 fn sync_recent_keyframe_request_episode(
     stats: &mut XbxEngineMediaRuntimeStats,
-    episode: XbxEngineKeyframeRequestEpisodeObservation,
+    mut episode: XbxEngineKeyframeRequestEpisodeObservation,
 ) {
+    apply_keyframe_episode_lifecycle_field(
+        stats.transport_recovery_epoch,
+        stats.video_anchor_clean_epoch,
+        stats.video_anchor_clean_observed_at_ms,
+        &mut episode,
+    );
     if let Some(index) = stats
         .recent_keyframe_request_episodes
         .iter()
@@ -926,7 +1037,14 @@ fn emit_keyframe_closure_probe(
     stage: &str,
     observed_at_ms: f64,
 ) {
-    let (episode_id, sent_at_ms, response_seen, decoded_at_ms, response_verdict) = stats
+    let (
+        episode_id,
+        sent_at_ms,
+        response_seen,
+        decoded_at_ms,
+        response_verdict,
+        lifecycle_phase,
+    ) = stats
         .latest_keyframe_request_episode
         .as_ref()
         .map(|episode| {
@@ -938,9 +1056,10 @@ fn emit_keyframe_closure_probe(
                     .or(episode.first_video_packet_at_ms),
                 episode.first_keyframe_decoded_at_ms,
                 episode.response_verdict.clone(),
+                episode.lifecycle_phase.clone(),
             )
         })
-        .unwrap_or((None, None, None, None, None));
+        .unwrap_or((None, None, None, None, None, None));
     let (anchor_state, anchor_source, anchor_epoch) = stats
         .latest_anchor_candidate_ledger
         .as_ref()
@@ -953,14 +1072,18 @@ fn emit_keyframe_closure_probe(
         })
         .unwrap_or((None, None, None));
     let clean_anchor_committed = stats.video_anchor_clean_observed_at_ms.is_some();
+    let sent_failure_streak = stats.keyframe_consecutive_sent_failures;
     // 关键帧恢复闭环：request -> response -> decode -> clean-anchor。
     crate::xbx_log_warn!(
-        "[keyframe-closure] stage={} atMs={:.1} episodeId={} sentAtMs={} responseSeenAtMs={} decodedAtMs={} verdict={} anchorState={} anchorSource={} anchorEpoch={} cleanAnchorCommitted={}",
+        "[keyframe-closure] stage={} atMs={:.1} episodeId={} lifecycle={} sentAtMs={} responseSeenAtMs={} decodedAtMs={} verdict={} sentFailureStreak={} anchorState={} anchorSource={} anchorEpoch={} cleanAnchorCommitted={}",
         stage,
         observed_at_ms,
         episode_id
             .map(|value| value.to_string())
             .unwrap_or_else(|| "none".to_string()),
+        lifecycle_phase
+            .as_deref()
+            .unwrap_or("none"),
         sent_at_ms
             .map(|value| format!("{value:.1}"))
             .unwrap_or_else(|| "none".to_string()),
@@ -971,6 +1094,7 @@ fn emit_keyframe_closure_probe(
             .map(|value| format!("{value:.1}"))
             .unwrap_or_else(|| "none".to_string()),
         response_verdict.unwrap_or_else(|| "none".to_string()),
+        sent_failure_streak,
         anchor_state.unwrap_or_else(|| "none".to_string()),
         anchor_source.unwrap_or_else(|| "none".to_string()),
         anchor_epoch
@@ -984,6 +1108,9 @@ pub(crate) fn expire_latest_keyframe_request_episode_if_unsent(
     stats: &mut XbxEngineMediaRuntimeStats,
     observed_at_ms: f64,
 ) -> bool {
+    let transport_recovery_epoch = stats.transport_recovery_epoch;
+    let video_anchor_clean_epoch = stats.video_anchor_clean_epoch;
+    let video_anchor_clean_observed_at_ms = stats.video_anchor_clean_observed_at_ms;
     let mut updated_episode = None;
     let mut latest_summary = None;
     if let Some(episode) = stats.latest_keyframe_request_episode.as_mut() {
@@ -996,6 +1123,12 @@ pub(crate) fn expire_latest_keyframe_request_episode_if_unsent(
         episode.status_detail = Some("expiredUnsent".to_string());
         episode.status = "expired-unsent".to_string();
         episode.response_verdict = Some("unsentExpired".to_string());
+        apply_keyframe_episode_lifecycle_field(
+            transport_recovery_epoch,
+            video_anchor_clean_epoch,
+            video_anchor_clean_observed_at_ms,
+            episode,
+        );
         latest_summary = Some(format!(
             "episodeId={} requestedAtMs={:.1} observedAtMs={:.1}",
             episode.episode_id, episode.requested_at_ms, observed_at_ms

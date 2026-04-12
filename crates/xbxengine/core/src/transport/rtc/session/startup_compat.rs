@@ -139,7 +139,10 @@ fn first_frame_acquisition_window_active(
 }
 
 /// 首帧前抑制/保护：以首路视频包到达时间为锚，超过 `pre_first_frame_reconnect_fallback_ms` 即失效。
-/// 无 `first_video_packet_arrival_time_ms` 时不视为「可无限延长」窗口（避免永久压制恢复）。
+/// 无 `first_video_packet_arrival_time_ms` 时：仅在显式 `session_phase=priming` 且已附着视频轨时，
+/// 用 `latest_video_track_status.observed_at_ms` 作为临时窗口锚（与 `VideoSchedulingOwnerInput`
+/// 单测里 `first_frame_acquisition_priority_allowed: true` 的语义对齐），仍受同一毫秒上限约束，
+/// 避免无首包时间戳时首帧采集优先门控永久失效。
 fn pre_first_frame_fallback_within_window(
     stats: &XbxEngineMediaRuntimeStats,
     observed_at_ms: f64,
@@ -147,7 +150,18 @@ fn pre_first_frame_fallback_within_window(
 ) -> bool {
     match stats.first_video_packet_arrival_time_ms {
         Some(t0) => (observed_at_ms - t0).max(0.0) <= pre_first_frame_reconnect_fallback_ms,
-        None => false,
+        None => {
+            if stats.session_phase.as_deref() != Some("priming") {
+                return false;
+            }
+            let Some(track) = stats.latest_video_track_status.as_ref() else {
+                return false;
+            };
+            if track.state != "remoteTrackAttached" || track.video_bytes_total == 0 {
+                return false;
+            }
+            (observed_at_ms - track.observed_at_ms).max(0.0) <= pre_first_frame_reconnect_fallback_ms
+        }
     }
 }
 

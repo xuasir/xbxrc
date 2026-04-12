@@ -1,6 +1,6 @@
 //! RFC PLY-EDGE-01 .. PLY-EDGE-09
 
-use super::super::RecoveryIntegrationHarness;
+use super::super::harness::RecoveryIntegrationHarness;
 use super::common::{
     assert_cmds_have_no_reconnect, fill_twcc_stable_local_feedback, wall_observed_ms,
 };
@@ -44,6 +44,7 @@ fn playback_phase_edge01_transport_deferred_flood_must_not_mark_recovery_success
                     response_rtp_timestamp: None,
                     response_frame_seq: None,
                     response_verdict: Some("transportDeferred".to_string()),
+                lifecycle_phase: None,
                 });
             stats.latest_video_track_status = Some(crate::XbxEngineVideoTrackStatus {
                 state: "remoteTrackAttached".to_string(),

@@ -781,6 +781,7 @@ pub fn build_xbxengine_stats(
                         response_rtp_timestamp: episode.response_rtp_timestamp,
                         response_frame_seq: episode.response_frame_seq,
                         response_verdict: episode.response_verdict.clone(),
+                        lifecycle_phase: episode.lifecycle_phase.clone(),
                     },
                 )
         }),

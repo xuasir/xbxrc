@@ -492,5 +492,5 @@ fn now_ms_f64() -> f64 {
 }
 
 #[cfg(test)]
-#[path = "mod.test.rs"]
+#[path = "runtime_tests/mod.rs"]
 mod tests;

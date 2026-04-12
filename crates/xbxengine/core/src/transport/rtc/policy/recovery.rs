@@ -1,3 +1,4 @@
+use crate::api::backend::XbxEngineRecoveryDecisionLedgerObservation;
 use crate::transport::rtc::recovery::escalation::{
     RecoveryAction, RecoveryActionBudgetState, VideoEscalationController, VideoEscalationDecision,
     VideoEscalationReason,
@@ -64,6 +65,22 @@ impl RecoveryPolicyProposal {
     }
 }
 
+/// `latest_recovery_decision_ledger` 的「待 command 回填」仅适用于会下发 `TransportCommand` 的动作；
+/// 抑制/等待/合并占位等不会走 `transport_session::update_recovery_decision_command_result`。
+pub(crate) fn ledger_action_selected_expects_command_result(action_selected: &str) -> bool {
+    matches!(
+        action_selected,
+        "requestKeyframe" | "requestDecoderReset" | "requestReconnectCandidate"
+    )
+}
+
+pub(crate) fn recovery_decision_ledger_has_pending_transport_command(
+    ledger: &XbxEngineRecoveryDecisionLedgerObservation,
+) -> bool {
+    ledger.command_result.is_none()
+        && ledger_action_selected_expects_command_result(ledger.action_selected.as_str())
+}
+
 pub(crate) fn resolve_runtime_reconnect_reason_domain(
     reason: VideoEscalationReason,
     action: RecoveryAction,
@@ -92,7 +109,11 @@ pub(crate) fn resolve_runtime_reconnect_reason_domain(
 
 #[cfg(test)]
 mod tests {
-    use super::resolve_runtime_reconnect_reason_domain;
+    use super::{
+        ledger_action_selected_expects_command_result, recovery_decision_ledger_has_pending_transport_command,
+        resolve_runtime_reconnect_reason_domain,
+    };
+    use crate::api::backend::XbxEngineRecoveryDecisionLedgerObservation;
     use crate::transport::rtc::recovery::escalation::{RecoveryAction, VideoEscalationReason};
 
     #[test]
@@ -122,5 +143,62 @@ mod tests {
             ),
             crate::XbxEngineRecoveryReasonDomain::ConnectivityTransport
         );
+    }
+
+    #[test]
+    fn ledger_expects_command_result_only_for_transport_owner_actions() {
+        assert!(ledger_action_selected_expects_command_result(
+            RecoveryAction::RequestKeyframe.label()
+        ));
+        assert!(ledger_action_selected_expects_command_result(
+            RecoveryAction::RequestDecoderReset.label()
+        ));
+        assert!(ledger_action_selected_expects_command_result(
+            RecoveryAction::RequestReconnectCandidate.label()
+        ));
+        assert!(!ledger_action_selected_expects_command_result(
+            RecoveryAction::CooldownSuppressed.label()
+        ));
+        assert!(!ledger_action_selected_expects_command_result(
+            RecoveryAction::WaitForBurst.label()
+        ));
+    }
+
+    #[test]
+    fn recovery_decision_ledger_pending_matches_transport_command_semantics() {
+        let suppressed = XbxEngineRecoveryDecisionLedgerObservation {
+            decision_id: 1,
+            state_before: "stable".to_string(),
+            state_after: "stable".to_string(),
+            input_signal: "x".to_string(),
+            gate_result: "suppressed:cooldownSuppressed".to_string(),
+            action_selected: RecoveryAction::CooldownSuppressed.label().to_string(),
+            frame_value: None,
+            gap_severity: None,
+            recovery_episode_stage: None,
+            recovery_episode_progress_at_ms: None,
+            coalescing_mode: None,
+            unlock_reason: None,
+            preempt_reason: None,
+            recovery_primary_action: None,
+            budget_before: None,
+            budget_after: None,
+            trigger_observation_label: None,
+            trigger_observation_summary: None,
+            command_result: None,
+            command_detail: None,
+            observed_at_ms: 0.0,
+        };
+        assert!(
+            !recovery_decision_ledger_has_pending_transport_command(&suppressed),
+            "抑制类动作不应被当作等待 TransportCommand 回填"
+        );
+
+        let mut issued = suppressed.clone();
+        issued.action_selected = RecoveryAction::RequestKeyframe.label().to_string();
+        assert!(recovery_decision_ledger_has_pending_transport_command(&issued));
+
+        issued.command_result = Some("succeeded".to_string());
+        assert!(!recovery_decision_ledger_has_pending_transport_command(&issued));
     }
 }

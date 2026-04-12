@@ -18,6 +18,7 @@ pub mod diagnosis;
 pub mod escalation;
 pub(crate) mod escalation_label;
 pub(crate) mod hard_stall;
+pub(crate) mod keyframe_lifecycle;
 pub(crate) mod nack_outcome;
 pub mod policy;
 pub(crate) mod remote_profile_runtime;

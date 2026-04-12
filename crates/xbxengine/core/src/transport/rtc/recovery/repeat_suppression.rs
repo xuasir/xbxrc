@@ -2,6 +2,9 @@ use std::sync::Mutex;
 
 use crate::runtime_stats_sink::RuntimeStatsSink;
 use crate::transport::rtc::recovery::escalation::{RecoveryAction, VideoEscalationReason};
+use crate::transport::rtc::recovery::keyframe_lifecycle::{
+    derive_keyframe_lifecycle_phase, KeyframeRequestLifecyclePhase,
+};
 use crate::transport::rtc::recovery::runtime_state::{has_fresh_media_output, unix_now_ms};
 use crate::{
     XbxEngineAnchorCandidateState, XbxEngineMediaRuntimeStats, XbxEngineVideoTimelineObservation,
@@ -14,8 +17,6 @@ const TRANSPORT_AWAIT_DEBT_FRESH_MS: f64 = 900.0;
 const DECODER_RESET_PROGRESS_HOLD_MS: f64 = 900.0;
 const INVALID_KEYFRAME_RESPONSE_GRACE_MS: f64 = 220.0;
 const INVALID_KEYFRAME_RESPONSE_FRESH_MS: f64 = 1_500.0;
-const KEYFRAME_DECODED_PENDING_COMMIT_HOLD_MS: f64 = 420.0;
-
 pub(crate) fn resolve_recent_repeat_suppression(
     runtime_stats: &Mutex<XbxEngineMediaRuntimeStats>,
     reason: &VideoEscalationReason,
@@ -191,40 +192,40 @@ fn has_active_keyframe_inflight(stats: &XbxEngineMediaRuntimeStats, now_ms: f64)
     if has_recent_keyframe_rtcp_unavailable(stats, now_ms) {
         return false;
     }
-    stats
-        .latest_keyframe_request_episode
-        .as_ref()
-        .is_some_and(|episode| {
+    let Some(episode) = stats.latest_keyframe_request_episode.as_ref() else {
+        return false;
+    };
+    let phase = derive_keyframe_lifecycle_phase(
+        stats.transport_recovery_epoch,
+        stats.video_anchor_clean_epoch,
+        stats.video_anchor_clean_observed_at_ms,
+        episode,
+    );
+    match phase {
+        KeyframeRequestLifecyclePhase::Success
+        | KeyframeRequestLifecyclePhase::Failure
+        | KeyframeRequestLifecyclePhase::Decoded
+        | KeyframeRequestLifecyclePhase::Requesting => false,
+        KeyframeRequestLifecyclePhase::Sent | KeyframeRequestLifecyclePhase::PacketSeen => {
+            if episode.sent_at_ms.is_none() {
+                return false;
+            }
+            if episode.deadline_at_ms.is_some_and(|deadline| deadline < now_ms) {
+                return false;
+            }
+            if has_transport_await_invalid_keyframe_response(
+                stats,
+                episode.sent_at_ms.unwrap_or(episode.requested_at_ms),
+                now_ms,
+            ) {
+                return false;
+            }
             !matches!(
                 episode.response_verdict.as_deref(),
                 Some("transportDeferred" | "transportFailed" | "missed")
-            ) && matches!(
-                episode.status.as_str(),
-                "requested" | "sent" | "response-observed" | "decoded"
-            ) && episode.sent_at_ms.is_some()
-                && episode.deadline_at_ms.unwrap_or(now_ms + 1.0) >= now_ms
-                && !has_transport_await_invalid_keyframe_response(
-                    stats,
-                    episode.sent_at_ms.unwrap_or(episode.requested_at_ms),
-                    now_ms,
-                )
-                && {
-                    // 已解码但未 clean anchor commit 的 episode，只允许短暂占坑。
-                    if episode.status != "decoded" {
-                        return true;
-                    }
-                    if matches!(
-                        stats.video_anchor_clean_epoch,
-                        Some(epoch) if epoch == stats.transport_recovery_epoch
-                    ) {
-                        return false;
-                    }
-                    let decoded_at_ms = episode
-                        .first_keyframe_decoded_at_ms
-                        .unwrap_or(episode.sent_at_ms.unwrap_or(episode.requested_at_ms));
-                    (now_ms - decoded_at_ms).max(0.0) <= KEYFRAME_DECODED_PENDING_COMMIT_HOLD_MS
-                }
-        })
+            )
+        }
+    }
 }
 
 fn has_active_decoder_reset_family(stats: &XbxEngineMediaRuntimeStats, now_ms: f64) -> bool {
@@ -482,6 +483,7 @@ mod tests {
                     response_rtp_timestamp: None,
                     response_frame_seq: None,
                     response_verdict: Some("pending".to_string()),
+                    lifecycle_phase: None,
                 },
             ),
             ..XbxEngineMediaRuntimeStats::default()
@@ -571,6 +573,7 @@ mod tests {
                     response_rtp_timestamp: Some(4_444),
                     response_frame_seq: None,
                     response_verdict: Some("on-time".to_string()),
+                    lifecycle_phase: None,
                 },
             ),
             latest_h264_inspection_observation: Some(crate::XbxEngineH264InspectionObservation {

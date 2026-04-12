@@ -525,6 +525,8 @@ pub struct XbxEngineKeyframeRequestEpisodeObservationDto {
     pub response_rtp_timestamp: Option<u32>,
     pub response_frame_seq: Option<u64>,
     pub response_verdict: Option<String>,
+    #[serde(default)]
+    pub lifecycle_phase: Option<String>,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
