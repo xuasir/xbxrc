@@ -338,6 +338,12 @@ impl H264AccessUnitInspector {
         Arc::new(Mutex::new(H264AccessUnitInspectorState::default()))
     }
 
+    /// 供其它模块单测构造与 inspector 共享的 `commit_state`（与 `H264AccessUnitInspection` 对齐）。
+    #[cfg(test)]
+    pub(crate) fn shared_commit_state(&self) -> Arc<Mutex<H264AccessUnitInspectorState>> {
+        Arc::clone(&self.state)
+    }
+
     pub fn committed_sps_present(&self) -> bool {
         self.state
             .lock()

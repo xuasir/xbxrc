@@ -34,6 +34,9 @@ use crate::transport::rtc::recovery::startup::{
     resolve_session_phase, should_fast_reset_startup_recovery, should_suppress_startup_escalation,
     SessionPhase, StartupRecoveryProbe,
 };
+use crate::transport::rtc::session::control_model::{
+    resolve_session_fault_domain, SessionFaultDomain,
+};
 use crate::{
     XbxEngineAnchorCandidateFailureReason, XbxEngineAnchorCandidateLedger,
     XbxEngineAnchorCandidateState, XbxEngineMediaRuntimeStats, XbxEngineVideoTimelineObservation,
@@ -2757,23 +2760,19 @@ impl RecoveryCoordinator {
     }
 }
 
-fn classify_signal_domain(reason: VideoEscalationReason) -> RecoverySignalDomain {
-    match reason {
-        VideoEscalationReason::LifecycleRecovering
-        | VideoEscalationReason::TransportExpiredDeadline
-        | VideoEscalationReason::TransportSevereDeadline
-        | VideoEscalationReason::TransportRecoveredLate
-        | VideoEscalationReason::TransportSampleLoss => RecoverySignalDomain::Connectivity,
-        VideoEscalationReason::DisplaySupplyCritical
-        | VideoEscalationReason::Reconfigure
-        | VideoEscalationReason::DecoderBackendFailure
-        | VideoEscalationReason::AdapterIdleTimeout
-        | VideoEscalationReason::AdapterThinStream => RecoverySignalDomain::Local,
-        VideoEscalationReason::WaitKeyframe
-        | VideoEscalationReason::TransportAwaitRecoveryKeyframe => {
-            RecoverySignalDomain::MediaRecovery
+// RFC：与 `session::control_model::resolve_session_fault_domain` 单源对齐后再映射到 coordinator 内部桶。
+fn fault_domain_to_recovery_signal_domain(domain: SessionFaultDomain) -> RecoverySignalDomain {
+    match domain {
+        SessionFaultDomain::Transport => RecoverySignalDomain::Connectivity,
+        SessionFaultDomain::ReferenceChain => RecoverySignalDomain::MediaRecovery,
+        SessionFaultDomain::DecodePipeline | SessionFaultDomain::DisplaySupply => {
+            RecoverySignalDomain::Local
         }
     }
+}
+
+fn classify_signal_domain(reason: VideoEscalationReason) -> RecoverySignalDomain {
+    fault_domain_to_recovery_signal_domain(resolve_session_fault_domain(reason))
 }
 
 #[cfg(test)]

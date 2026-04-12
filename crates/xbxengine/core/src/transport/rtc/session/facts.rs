@@ -1,4 +1,7 @@
-use std::sync::Mutex;
+//! Session 层运行期事实拼装：`OwnerRuntimeFacts`、`VideoSchedulingOwnerInput` 等。
+//! RFC：顶层编排入口在 `session::policy`；本模块不承载 transport 昂贵恢复主权。
+
+use std::sync::{Arc, Mutex};
 
 use crate::runtime_stats_sink::RuntimeStatsSink;
 use crate::transport::rtc::policy::display_supply::SchedulingDemandSignal;
@@ -9,12 +12,76 @@ use crate::transport::rtc::recovery::contract::{
     is_transport_await_probe_source_event,
 };
 use crate::transport::rtc::recovery::escalation::VideoEscalationReason;
-use crate::transport::rtc::recovery::policy::DisplaySupplyThresholds;
+use crate::transport::rtc::recovery::policy::{DisplaySupplyThresholds, ScenarioPolicyProfileKind};
+use crate::transport::rtc::recovery::remote_profile_runtime::persist_runtime_remote_profile_facts;
+use crate::transport::rtc::recovery::runtime_state::resolve_recovery_profile;
 use crate::XbxEngineAnchorCandidateLedger;
 use crate::XbxEngineH264InspectionObservation;
 use crate::XbxEngineMediaRuntimeStats;
 use crate::XbxEngineVideoTimelineObservation;
 use crate::XbxEngineVideoTrackStatus;
+
+use super::startup_compat::{
+    first_frame_acquisition_priority_active, should_absorb_first_frame_acquisition_anchor_issue,
+};
+
+/// RFC Batch 1：`session::policy` 主路径只读此聚合，不直接散落读取 stats 子字段拼装 owner 输入。
+#[derive(Clone, Debug)]
+pub(crate) struct RtcSessionPolicyOrchestrationInput {
+    /// 与 `owner_input.demand` 同源；按 RFC 字段表保留，供顶层只读聚合扩展。
+    #[allow(dead_code)]
+    pub(crate) demand: SchedulingDemandSignal,
+    pub(crate) owner_facts: OwnerRuntimeFacts,
+    pub(crate) owner_input: VideoSchedulingOwnerInput,
+    pub(crate) recovery_profile_kind: ScenarioPolicyProfileKind,
+}
+
+/// 与合入前一致的顺序：`demand` 在 `persist_runtime_remote_profile_facts` 之前采集（避免 persist 副作用改变 demand）。
+pub(crate) fn build_rtc_session_policy_orchestration_input(
+    snapshot: &TransportSnapshot,
+    runtime_stats: &Arc<Mutex<XbxEngineMediaRuntimeStats>>,
+    observed_at_ms: f64,
+    pre_first_frame_reconnect_fallback_ms: f64,
+) -> RtcSessionPolicyOrchestrationInput {
+    let demand = build_scheduling_demand_signal(runtime_stats.as_ref());
+    RuntimeStatsSink::new(runtime_stats.clone()).update(|stats| {
+        persist_runtime_remote_profile_facts(stats, observed_at_ms);
+    });
+    let profile = resolve_recovery_profile(runtime_stats.as_ref());
+    let owner_facts = read_owner_runtime_facts(runtime_stats.as_ref());
+    let absorb_first_frame_acquisition_anchor_issue = owner_facts
+        .latest_video_timeline_observation
+        .as_ref()
+        .is_some_and(|timeline| {
+            should_absorb_first_frame_acquisition_anchor_issue(
+                snapshot,
+                timeline.chain.reason.as_deref(),
+                timeline.source_event.as_str(),
+                runtime_stats.as_ref(),
+                pre_first_frame_reconnect_fallback_ms,
+            )
+        });
+    let owner_input = build_owner_input(
+        snapshot,
+        demand.clone(),
+        &owner_facts,
+        first_frame_acquisition_priority_active(
+            snapshot,
+            snapshot.now_ms,
+            runtime_stats.as_ref(),
+            pre_first_frame_reconnect_fallback_ms,
+        ),
+        profile.display_supply_thresholds,
+        observed_at_ms,
+        absorb_first_frame_acquisition_anchor_issue,
+    );
+    RtcSessionPolicyOrchestrationInput {
+        demand,
+        owner_facts,
+        owner_input,
+        recovery_profile_kind: profile.kind,
+    }
+}
 
 #[derive(Clone, Debug, Default)]
 pub(crate) struct OwnerRuntimeFacts {
@@ -223,6 +290,8 @@ fn resolve_anchor_reason_label_from_timeline(
         }
         _ => return None,
     };
+    // 时间线分支已给出结构化上下文；此处仅校验 `reason` 字符串是否为已知 wire 标签（与 `escalation` 单点映射一致），
+    // 禁止把任意 `recovery_diagnosis` 反推成恢复语义。
     VideoEscalationReason::from_recovery_reason_label(label).map(|_| label.to_string())
 }
 

@@ -206,6 +206,10 @@ pub(crate) fn is_ingress_waiting_keyframe(
     if is_recovery_sustaining_observation(chain_state, chain_reason) {
         return false;
     }
+    if matches!(chain_state, Some("healthy")) {
+        // 链路已 healthy 时，不应再被尚未回填的 transport-await reason 锁在 ingress waiting。
+        return false;
+    }
     let probe_event_waiting = is_transport_await_probe_source_event(source_event)
         && !matches!(chain_state, Some("healthy"));
     matches!(chain_state, Some("broken" | "recovering"))
@@ -216,6 +220,9 @@ pub(crate) fn is_ingress_waiting_keyframe(
 pub(crate) fn has_unresolved_transport_await_issue_from_observation(
     timeline: &XbxEngineVideoTimelineObservation,
 ) -> bool {
+    if matches!(timeline.chain.state.as_str(), "healthy") {
+        return false;
+    }
     if is_recovery_sustaining_observation(
         Some(timeline.chain.state.as_str()),
         timeline.chain.reason.as_deref(),

@@ -1,5 +1,6 @@
 pub mod actor;
 pub mod clock;
+pub(crate) mod control_model;
 pub mod connectivity_reason;
 pub mod expensive_recovery_gate;
 pub mod facts;

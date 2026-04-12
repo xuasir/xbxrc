@@ -1,3 +1,7 @@
+//! 视频恢复升级：`RecoveryAction` 与 `VideoEscalationReason`。
+//! RFC `CostCeiling` 单调梯子：`Absorb`（等待/抑制/合并）→ `LocalRecover`（关键帧/解码器重置）
+//! → `TransportRecover`（`RequestReconnectCandidate`）；门控在 `session::policy` / `ExpensiveRecoveryGate`。
+
 use std::time::{Duration, Instant};
 
 use crate::XbxEngineRecoveryReasonDomain;

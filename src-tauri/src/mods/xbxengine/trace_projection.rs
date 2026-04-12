@@ -60,6 +60,9 @@ pub(super) struct RuntimeTraceObservationState {
     transport_strategy_profile: Option<String>,
     recovery_strategy_profile: Option<String>,
     recovery_diagnosis: Option<String>,
+    recovery_rfc_fault_domain: Option<String>,
+    recovery_rfc_stage: Option<String>,
+    recovery_rfc_ceiling: Option<String>,
     direct_gaming_bitrate_band: Option<String>,
     runtime_summary: Option<String>,
     primary_issue_chain: Option<String>,
@@ -148,6 +151,9 @@ pub(super) fn build_observability_snapshot(stats: &XbxEngineStatsDto) -> serde_j
             "sessionPhase": stats.session_phase,
             "strategyProfile": stats.recovery_strategy_profile,
             "diagnosis": stats.recovery_diagnosis,
+            "rfcFaultDomain": stats.recovery_rfc_fault_domain,
+            "rfcStage": stats.recovery_rfc_stage,
+            "rfcCeiling": stats.recovery_rfc_ceiling,
             "videoHealth": stats.video_health,
             "videoOwnerState": stats.recovery_owner_state,
             "videoOwnerReason": stats.recovery_owner_reason,
@@ -1134,6 +1140,9 @@ pub(super) fn record_runtime_trace_observations(
         || observation_state.transport_strategy_profile != stats.transport_strategy_profile
         || observation_state.recovery_strategy_profile != stats.recovery_strategy_profile
         || observation_state.recovery_diagnosis != stats.recovery_diagnosis
+        || observation_state.recovery_rfc_fault_domain != stats.recovery_rfc_fault_domain
+        || observation_state.recovery_rfc_stage != stats.recovery_rfc_stage
+        || observation_state.recovery_rfc_ceiling != stats.recovery_rfc_ceiling
         || observation_state.direct_gaming_bitrate_band != stats.direct_gaming_bitrate_band
         || observation_state.runtime_summary != stats.runtime_summary
         || observation_state.primary_issue_chain != stats.primary_issue_chain
@@ -1155,6 +1164,9 @@ pub(super) fn record_runtime_trace_observations(
         observation_state.transport_strategy_profile = stats.transport_strategy_profile.clone();
         observation_state.recovery_strategy_profile = stats.recovery_strategy_profile.clone();
         observation_state.recovery_diagnosis = stats.recovery_diagnosis.clone();
+        observation_state.recovery_rfc_fault_domain = stats.recovery_rfc_fault_domain.clone();
+        observation_state.recovery_rfc_stage = stats.recovery_rfc_stage.clone();
+        observation_state.recovery_rfc_ceiling = stats.recovery_rfc_ceiling.clone();
         observation_state.direct_gaming_bitrate_band = stats.direct_gaming_bitrate_band.clone();
         observation_state.runtime_summary = stats.runtime_summary.clone();
         observation_state.primary_issue_chain = stats.primary_issue_chain.clone();
@@ -1181,6 +1193,9 @@ pub(super) fn record_runtime_trace_observations(
                 "transportStrategyProfile": stats.transport_strategy_profile,
                 "recoveryStrategyProfile": stats.recovery_strategy_profile,
                 "recoveryDiagnosis": stats.recovery_diagnosis,
+                "recoveryRfcFaultDomain": stats.recovery_rfc_fault_domain,
+                "recoveryRfcStage": stats.recovery_rfc_stage,
+                "recoveryRfcCeiling": stats.recovery_rfc_ceiling,
                 "directGamingBitrateBand": stats.direct_gaming_bitrate_band,
                 "runtimeSummary": stats.runtime_summary,
                 "primaryIssueChain": stats.primary_issue_chain,

@@ -880,6 +880,14 @@ pub struct XbxEngineMediaRuntimeStats {
     pub transport_policy_profile: Option<String>,
     pub recovery_policy_profile: Option<String>,
     pub recovery_diagnosis: Option<String>,
+    /// 与当拍 `RecoveryPolicyProposal.decision.action` 同源的 RFC cost tier；投影到 `XbxEngineStatsDto.recovery_rfc_ceiling`。
+    pub recovery_rfc_authoritative_ceiling: Option<String>,
+    /// 与当拍 `RecoveryPolicyProposal.reason` 同源的 RFC 故障域（`SessionFaultDomain::as_rfc_str()`）。
+    pub recovery_rfc_authoritative_fault_domain: Option<String>,
+    /// 与当拍 `VideoSchedulingOwnerState` 映射的 RFC 阶段（`SessionRecoveryStage::as_rfc_str()`）。
+    pub recovery_rfc_authoritative_stage: Option<String>,
+    /// 当拍 `RecoveryPolicyProposal.reason` 的稳定标签（`VideoEscalationReason::label()`）；供控制面替代 `recovery_diagnosis`。
+    pub recovery_active_escalation_reason: Option<String>,
     pub recovery_phase: Option<String>,
     pub recovery_exit_gate: Option<String>,
     pub recovery_ingress_waiting: Option<bool>,
@@ -1046,6 +1054,10 @@ impl Default for XbxEngineMediaRuntimeStats {
             transport_policy_profile: None,
             recovery_policy_profile: None,
             recovery_diagnosis: None,
+            recovery_rfc_authoritative_ceiling: None,
+            recovery_rfc_authoritative_fault_domain: None,
+            recovery_rfc_authoritative_stage: None,
+            recovery_active_escalation_reason: None,
             recovery_phase: None,
             recovery_exit_gate: None,
             recovery_ingress_waiting: None,

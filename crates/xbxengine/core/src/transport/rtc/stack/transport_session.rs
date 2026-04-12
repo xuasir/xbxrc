@@ -796,6 +796,7 @@ impl<'a> RtcTransportSessionBridge<'a> {
     ) -> bool {
         VideoEscalationController::action_success_advances_transport_recovery_epoch(
             recovery_action,
+            // 边界入站：栈层仅持有 wire label，映射到枚举以复用 coordinator 合同。
             VideoEscalationReason::from_recovery_reason_label(reason_label),
         )
     }

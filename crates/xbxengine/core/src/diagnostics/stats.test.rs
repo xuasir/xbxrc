@@ -536,7 +536,7 @@ fn owner_contract_projection_reads_canonical_runtime_owner_fields() {
 fn owner_contract_falls_back_to_runtime_state_primary_view() {
     let stats = XbxEngineMediaRuntimeStats {
         session_phase: Some("recovering".to_string()),
-        recovery_diagnosis: Some("transportAwaitRecoveryKeyframe".to_string()),
+        recovery_active_escalation_reason: Some("transportAwaitRecoveryKeyframe".to_string()),
         ..XbxEngineMediaRuntimeStats::default()
     };
 
@@ -730,7 +730,6 @@ fn build_stats_reports_recovering_after_first_present_when_output_turns_stale() 
         latest_video_host_present_time_ms: Some(now_ms - 800.0),
         latest_video_decode_ok_time_ms: Some(now_ms - 800.0),
         video_present_submit_count_total: 1,
-        recovery_diagnosis: Some("adapterIdleTimeout".to_string()),
         video_owner_state: Some("rebuilding-supply".to_string()),
         video_owner_reason: Some("adapterIdleTimeout".to_string()),
         video_owner_source: Some("anchor".to_string()),
@@ -803,7 +802,7 @@ fn build_stats_projects_host_cadence_epoch_fields() {
 }
 
 #[test]
-fn build_stats_ignores_stale_recovery_diagnosis_when_output_is_fresh() {
+fn build_stats_steady_healthy_when_output_fresh_and_owner_stable() {
     let now_ms = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
@@ -813,7 +812,6 @@ fn build_stats_ignores_stale_recovery_diagnosis_when_output_is_fresh() {
         transport_policy_profile: Some("cloud".to_string()),
         session_phase: Some("steady".to_string()),
         direct_gaming_bitrate_band: Some("steady".to_string()),
-        recovery_diagnosis: Some("adapterIdleTimeout".to_string()),
         message_handshake_acked_at_ms: Some(now_ms - 80.0),
         control_ready_at_ms: Some(now_ms - 70.0),
         latest_video_host_present_time_ms: Some(now_ms - 35.0),
@@ -1120,6 +1118,9 @@ fn build_stats_prefers_owner_reason_for_recovery_diagnosis() {
         recovery_diagnosis: Some("transportExpiredDeadline".to_string()),
         video_owner_state: Some("rebuilding-supply".to_string()),
         video_owner_reason: Some("inspectionRejectInvalidSliceHeader".to_string()),
+        recovery_rfc_authoritative_fault_domain: Some("ReferenceChain".to_string()),
+        recovery_rfc_authoritative_stage: Some("RecoveringToStable".to_string()),
+        recovery_rfc_authoritative_ceiling: Some("LocalRecover".to_string()),
         ..XbxEngineMediaRuntimeStats::default()
     };
 
@@ -1128,6 +1129,29 @@ fn build_stats_prefers_owner_reason_for_recovery_diagnosis() {
         dto.recovery_diagnosis.as_deref(),
         Some("inspectionRejectInvalidSliceHeader")
     );
+    assert_eq!(dto.recovery_rfc_fault_domain.as_deref(), Some("ReferenceChain"));
+    assert_eq!(dto.recovery_rfc_stage.as_deref(), Some("RecoveringToStable"));
+    assert_eq!(dto.recovery_rfc_ceiling.as_deref(), Some("LocalRecover"));
+}
+
+#[test]
+fn recovery_rfc_dto_fields_mirror_authoritative_runtime_stats() {
+    let stats = XbxEngineMediaRuntimeStats {
+        recovery_diagnosis: Some("base".to_string()),
+        recovery_active_escalation_reason: Some("base".to_string()),
+        video_owner_state: Some("stable-serving".to_string()),
+        video_owner_reason: None,
+        recovery_rfc_authoritative_fault_domain: Some("Transport".to_string()),
+        recovery_rfc_authoritative_stage: Some("Stable".to_string()),
+        recovery_rfc_authoritative_ceiling: Some("Absorb".to_string()),
+        ..XbxEngineMediaRuntimeStats::default()
+    };
+
+    let dto = build_xbxengine_stats(&test_snapshot(), Some(&stats));
+    assert_eq!(dto.recovery_diagnosis.as_deref(), Some("base"));
+    assert_eq!(dto.recovery_rfc_fault_domain.as_deref(), Some("Transport"));
+    assert_eq!(dto.recovery_rfc_stage.as_deref(), Some("Stable"));
+    assert_eq!(dto.recovery_rfc_ceiling.as_deref(), Some("Absorb"));
 }
 
 #[test]

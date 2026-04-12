@@ -1,5 +1,6 @@
 use xbxengine_protocol::{XbxEnginePresentationMilestoneDto, XbxEngineStatsDto};
 
+use crate::transport::rtc::recovery::escalation_label::escalation_structured_label;
 use crate::transport::rtc::recovery::remote_profile_runtime::classify_runtime_remote_profile;
 use crate::transport::rtc::recovery::runtime_state::{
     project_runtime_state_from_stats, resolve_runtime_recovery_profile, RecoveryRuntimeState,
@@ -315,14 +316,12 @@ fn resolve_recovery_strategy_profile(
 }
 
 fn resolve_recovery_diagnosis(
-    runtime_stats: Option<&XbxEngineMediaRuntimeStats>,
     runtime_state: Option<&RecoveryRuntimeState>,
     owner: Option<&VideoOwnerContract>,
 ) -> Option<String> {
     owner
         .and_then(|owner| owner.reason.clone())
         .or_else(|| runtime_state.map(|state| state.diagnosis_label.clone()))
-        .or_else(|| runtime_stats.and_then(|stats| stats.recovery_diagnosis.clone()))
 }
 
 /**
@@ -461,8 +460,11 @@ pub fn build_xbxengine_stats(
         .map(|state| state.input_profile.effective_label.clone())
         .or_else(|| runtime_remote_profile.effective_label.clone());
     let recovery_strategy_profile = resolve_recovery_strategy_profile(runtime_stats);
-    let recovery_diagnosis =
-        resolve_recovery_diagnosis(runtime_stats, recovery_runtime_state.as_ref(), video_owner);
+    let recovery_diagnosis = resolve_recovery_diagnosis(recovery_runtime_state.as_ref(), video_owner);
+    let recovery_rfc_fault_domain = runtime_stats
+        .and_then(|s| s.recovery_rfc_authoritative_fault_domain.clone());
+    let recovery_rfc_stage = runtime_stats.and_then(|s| s.recovery_rfc_authoritative_stage.clone());
+    let recovery_rfc_ceiling = runtime_stats.and_then(|s| s.recovery_rfc_authoritative_ceiling.clone());
     let video_health = video_owner
         .as_ref()
         .map(|owner| map_owner_state_to_video_health(owner.state.as_str()));
@@ -524,6 +526,9 @@ pub fn build_xbxengine_stats(
         transport_strategy_profile,
         recovery_strategy_profile,
         recovery_diagnosis,
+        recovery_rfc_fault_domain,
+        recovery_rfc_stage,
+        recovery_rfc_ceiling,
         direct_gaming_bitrate_band: runtime_stats
             .and_then(|stats| stats.direct_gaming_bitrate_band.clone()),
         recovery_owner_state,
@@ -1324,7 +1329,7 @@ fn build_primary_issue_chain(
     let stats = runtime_stats?;
     let recovery_reason = video_owner
         .and_then(|owner| owner.reason.as_deref())
-        .or(stats.recovery_diagnosis.as_deref())
+        .or_else(|| escalation_structured_label(stats))
         .unwrap_or("none");
     if let Some(owner) = video_owner {
         match owner.state.as_str() {

@@ -9,6 +9,7 @@ use crate::transport::rtc::recovery::contract::{
     is_media_healthy_baseline, is_transport_await_probe_source_event, FrameValue,
 };
 use crate::transport::rtc::recovery::policy::DisplaySupplyThresholds;
+use crate::transport::rtc::session::control_model::SessionFaultDomain;
 use crate::{
     XbxEngineAnchorCandidateLedger, XbxEngineAnchorCandidateState,
     XbxEngineVideoTimelineObservation,
@@ -141,6 +142,16 @@ pub(crate) enum OwnerRecoveryReason {
     DisplaySupplyDegraded,
 }
 
+impl RecoveryIntentContract {
+    /// RFC：FaultDomain 只从 `session::control_model` 导出，避免与 `session::policy` 并行推导。
+    #[allow(dead_code)]
+    pub(crate) fn session_fault_domain(&self) -> SessionFaultDomain {
+        crate::transport::rtc::session::control_model::resolve_session_fault_domain_from_owner_recovery_reason(
+            self.reason,
+        )
+    }
+}
+
 impl OwnerRecoveryReason {
     pub(crate) fn source(self) -> RecoveryIntentSource {
         match self {
@@ -236,7 +247,7 @@ impl VideoSchedulingOwner {
             self.display_supply_recovery_gate = DisplaySupplyRecoveryGate::default();
         }
         self.last_recovery_epoch = Some(input.recovery_epoch);
-        let supply_state = input
+        let classified_supply_state = input
             .demand
             .classify_display_supply_state(&input.display_supply_thresholds);
         let critical_signal = input
@@ -251,7 +262,7 @@ impl VideoSchedulingOwner {
         );
         let effective_supply_state = self.resolve_effective_supply_state(
             input,
-            supply_state,
+            classified_supply_state,
             critical_signal,
             has_clean_anchor_evidence,
             chain_healthy,
@@ -259,7 +270,7 @@ impl VideoSchedulingOwner {
         let absorb_soft_display_supply_critical = matches!(
             critical_signal,
             DisplaySupplyCriticalSignal::SoftNoPendingAge
-        ) && effective_supply_state != supply_state;
+        ) && effective_supply_state != classified_supply_state;
         let clean_anchor_hysteresis = Self::clean_anchor_hysteresis_allows_reentry(input);
         let wait_keyframe_rebuild_priority = Self::should_prioritize_wait_keyframe_rebuild(input);
         let codec_recovery_keyframe_blocked =
@@ -300,6 +311,7 @@ impl VideoSchedulingOwner {
             self.state,
             input,
             effective_supply_state,
+            classified_supply_state,
             has_anchor_issue,
             ingress_waiting_keyframe,
         );
@@ -531,7 +543,8 @@ impl VideoSchedulingOwner {
     fn resolve_recovery_completion_evidence(
         current: VideoSchedulingOwnerState,
         input: &VideoSchedulingOwnerInput,
-        supply_state: DisplaySupplyState,
+        effective_supply_state: DisplaySupplyState,
+        classified_supply_state: DisplaySupplyState,
         has_anchor_issue: bool,
         ingress_waiting_keyframe: bool,
     ) -> RecoveryCompletionEvidence {
@@ -565,12 +578,12 @@ impl VideoSchedulingOwner {
             input.demand.video_renderer_stalled,
         );
         let transport_await_waiting_released = ingress_waiting_keyframe
-            && Self::transport_await_waiting_released_by_facts(input, supply_state);
+            && Self::transport_await_waiting_released_by_facts(input, effective_supply_state);
         let terminal_invalid_bootstrap_serving_ready = current
             == VideoSchedulingOwnerState::RebuildingSupply
             && Self::can_release_rebuild_after_terminal_invalid_bootstrap(
                 input,
-                supply_state,
+                effective_supply_state,
                 has_clean_anchor_evidence,
             );
         if ingress_waiting_keyframe
@@ -590,7 +603,7 @@ impl VideoSchedulingOwner {
                 && !terminal_invalid_bootstrap_serving_ready
                 && !Self::supply_recovery_can_settle_without_explicit_clean_anchor(
                     input,
-                    supply_state,
+                    classified_supply_state,
                     chain_healthy,
                 )
             {
@@ -600,14 +613,18 @@ impl VideoSchedulingOwner {
         if current == VideoSchedulingOwnerState::SupplyStarved
             && Self::supply_recovery_can_settle_without_explicit_clean_anchor(
                 input,
-                supply_state,
+                classified_supply_state,
                 chain_healthy,
             )
         {
             return RecoveryCompletionEvidence::Ready;
         }
         if terminal_invalid_bootstrap_serving_ready {
-            return RecoveryCompletionEvidence::ServingReady;
+            // 仅 broken 链走 terminal-invalid 的 ServingReady；repairing/healthy 等交给后续 Ready
+            // 判定（见 transient_anchor_noise / non_idr 与 degraded_supply_still_releases）。
+            if matches!(input.effective_chain_state(), Some("broken")) {
+                return RecoveryCompletionEvidence::ServingReady;
+            }
         }
         if matches!(
             current,
@@ -617,7 +634,7 @@ impl VideoSchedulingOwner {
         {
             return RecoveryCompletionEvidence::ServingReady;
         }
-        if has_anchor_issue || !matches!(supply_state, DisplaySupplyState::Healthy) {
+        if has_anchor_issue || !matches!(classified_supply_state, DisplaySupplyState::Healthy) {
             if matches!(
                 current,
                 VideoSchedulingOwnerState::RebuildingSupply
@@ -626,6 +643,7 @@ impl VideoSchedulingOwner {
                 input,
                 has_clean_anchor_evidence,
                 chain_healthy,
+                classified_supply_state,
             ) {
                 return RecoveryCompletionEvidence::ServingReady;
             }
@@ -643,7 +661,7 @@ impl VideoSchedulingOwner {
             == VideoSchedulingOwnerState::RebuildingSupply
             && Self::can_close_recovery_with_transient_present_feedback_gap(
                 input,
-                supply_state,
+                classified_supply_state,
                 has_clean_anchor_evidence,
                 chain_healthy,
             );
@@ -657,6 +675,7 @@ impl VideoSchedulingOwner {
                 input,
                 has_clean_anchor_evidence,
                 chain_healthy,
+                classified_supply_state,
             ) {
                 return RecoveryCompletionEvidence::ServingReady;
             }
@@ -671,6 +690,7 @@ impl VideoSchedulingOwner {
                 input,
                 has_clean_anchor_evidence,
                 chain_healthy,
+                classified_supply_state,
             ) {
                 return RecoveryCompletionEvidence::ServingReady;
             }
@@ -861,6 +881,12 @@ impl VideoSchedulingOwner {
             return false;
         }
         if has_clean_anchor_evidence {
+            // broken 链 + 终端 deferred invalid 时，display 可能暂时不满足 degraded fresh，
+            // 但仍需退出 rebuilding-supply 进入 degraded-serving 吸收尾风险（见单测
+            // degraded_supply_still_releases_terminal_invalid_bootstrap_waiting）。
+            if matches!(input.effective_chain_state(), Some("broken")) {
+                return true;
+            }
             return Self::terminal_invalid_bootstrap_has_serviceable_output(input, supply_state);
         }
         // 没有 clean anchor 时，只有在当前输出仍可服务且本次 bootstrap 明确不可用时，
@@ -1012,6 +1038,7 @@ impl VideoSchedulingOwner {
         input: &VideoSchedulingOwnerInput,
         has_clean_anchor_evidence: bool,
         chain_healthy: bool,
+        supply_state: DisplaySupplyState,
     ) -> bool {
         if input.connection_state != ConnectionLifecycleStateFact::Connected {
             return false;
@@ -1057,7 +1084,7 @@ impl VideoSchedulingOwner {
             .is_some_and(|age| age <= input.display_supply_thresholds.critical_present_age_ms)
             || Self::can_close_recovery_with_transient_present_feedback_gap(
                 input,
-                DisplaySupplyState::Healthy,
+                supply_state,
                 has_clean_anchor_evidence,
                 chain_healthy,
             )
@@ -1766,10 +1793,29 @@ impl VideoSchedulingOwner {
         if !track_has_video_bytes || input.demand.video_renderer_stalled {
             return false;
         }
-        Self::has_recovery_sustaining_progress_signal(input)
+        if !Self::has_recovery_sustaining_progress_signal(input) {
+            return false;
+        }
+        // present/decode 均已达 degraded 新鲜阈值时，交给后续完整分支判定 `Ready`，避免此处 `ServingReady`
+        // 把状态推到 degraded-serving 后无法在同一拍收口到 stable（见 policy 多阶段 clean anchor 用例）。
+        let present_fresh_for_ready_path = input
+            .demand
+            .present_age_ms
+            .is_some_and(|age| age <= input.display_supply_thresholds.degraded_present_age_ms)
+            || Self::first_present_feedback_gap_active(input);
+        let decode_fresh_for_ready_path = input
+            .demand
+            .decode_age_ms
+            .is_some_and(|age| age <= input.display_supply_thresholds.degraded_decode_age_ms);
+        if present_fresh_for_ready_path && decode_fresh_for_ready_path {
+            return false;
+        }
+        true
     }
 
     fn has_recovery_sustaining_progress_signal(input: &VideoSchedulingOwnerInput) -> bool {
+        let transient_host_present_gap = input.demand.present_age_ms.is_none()
+            && !Self::first_present_feedback_gap_active(input);
         let decode_serviceable = input
             .demand
             .decode_age_ms
@@ -1789,7 +1835,18 @@ impl VideoSchedulingOwner {
                     | "gap-reorder-pending"
             )
         );
-        decode_serviceable || present_serviceable || timeline_progress_visible
+        // clean anchor 后可能出现「解码已更新但 host present 时间戳尚未写回」的短窗；此时不能仅靠 decode
+        // 或 frame-observed 等稳态 timeline 源认定 sustaining 已可退出 rebuilding（见 policy 单测
+        // clean_anchor_healthy_chain_can_close_recovery_on_transient_present_feedback_gap）。
+        let steady_timeline_without_present_feedback = transient_host_present_gap
+            && matches!(
+                input.effective_source_event(),
+                Some("frame-complete-candidate" | "frame-observed")
+            );
+        let timeline_counts = timeline_progress_visible && !steady_timeline_without_present_feedback;
+        decode_serviceable && !transient_host_present_gap
+            || present_serviceable
+            || timeline_counts
     }
 
     fn latest_clean_anchor_submitted_at_ms(input: &VideoSchedulingOwnerInput) -> Option<f64> {

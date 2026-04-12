@@ -27,7 +27,11 @@ export interface StreamStats {
   sessionPhase?: string
   transportStrategyProfile?: string
   recoveryStrategyProfile?: string
+  /** 后端聚合展示；优先看 recoveryOwnerReason、primaryIssueChain 与 RFC 三字段。 */
   recoveryDiagnosis?: string
+  recoveryRfcFaultDomain?: string
+  recoveryRfcStage?: string
+  recoveryRfcCeiling?: string
   recoveryOwnerState?: string
   recoveryOwnerReason?: string
   videoOwnerSource?: string

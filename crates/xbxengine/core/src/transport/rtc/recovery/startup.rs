@@ -3,6 +3,7 @@ use std::time::{Duration, Instant};
 
 use crate::runtime_stats_sink::RuntimeStatsSink;
 use crate::transport::rtc::recovery::escalation::VideoEscalationReason;
+use crate::transport::rtc::recovery::escalation_label::escalation_structured_label;
 use crate::transport::rtc::recovery::policy::RecoveryScenarioProfile;
 use crate::transport::rtc::recovery::runtime_state::resolve_runtime_recovery_profile;
 use crate::XbxEngineMediaRuntimeStats;
@@ -74,7 +75,7 @@ impl StartupRecoveryProbe {
             RuntimeStatsSink::read_shared(runtime_stats, |stats| {
                 let effective_bitrate = extract_startup_recovery_bitrate_kbps(stats);
                 let waiting_for_clean_video = matches!(
-                    stats.recovery_diagnosis.as_deref(),
+                    escalation_structured_label(stats),
                     Some(
                         "ingressWaitKeyframe"
                             | "ingressFrameAbandoned"
@@ -149,8 +150,8 @@ fn resolve_session_phase_from_stats(
         .latest_video_host_present_time_ms
         .map(|at_ms| (now_ms_f64() - at_ms).max(0.0))
         .unwrap_or(f64::INFINITY);
-    let active_recovery_diagnosis = matches!(
-        stats.recovery_diagnosis.as_deref(),
+    let active_recovery_escalation = matches!(
+        escalation_structured_label(stats),
         Some(
             "waitKeyframe"
                 | "ingressWaitKeyframe"
@@ -171,7 +172,7 @@ fn resolve_session_phase_from_stats(
     let degraded_output = effective_bitrate > 0.0
         && effective_bitrate < profile.startup_low_quality_recovered_kbps
         && stats.video_present_fps < RECOVERING_PRESENT_FPS;
-    if active_recovery_diagnosis || stalled_output || degraded_output {
+    if active_recovery_escalation || stalled_output || degraded_output {
         SessionPhase::Recovering
     } else {
         SessionPhase::Steady
@@ -403,7 +404,7 @@ mod tests {
         probe.arm(Instant::now());
         let mut stats = XbxEngineMediaRuntimeStats::default();
         stats.inbound_video_bitrate_kbps = Some(0.0);
-        stats.recovery_diagnosis = Some("ingressWaitKeyframe".to_string());
+        stats.recovery_active_escalation_reason = Some("ingressWaitKeyframe".to_string());
         stats.direct_gaming_bitrate_band = Some("startupLow".to_string());
         let runtime_stats = Mutex::new(stats);
 
@@ -484,12 +485,12 @@ mod tests {
     }
 
     #[test]
-    fn session_phase_marks_active_recovery_diagnosis_as_recovering() {
+    fn session_phase_marks_active_recovery_escalation_as_recovering() {
         let stream_started_at = Instant::now() - Duration::from_secs(5);
         let mut stats = XbxEngineMediaRuntimeStats::default();
         stats.inbound_video_bitrate_kbps = Some(9_000.0);
         stats.video_present_fps = 42.0;
-        stats.recovery_diagnosis = Some("adapterIdleTimeout".to_string());
+        stats.recovery_active_escalation_reason = Some("adapterIdleTimeout".to_string());
         assert_eq!(
             resolve_session_phase_from_stats(
                 Some(&stats),
@@ -506,7 +507,7 @@ mod tests {
         let mut stats = XbxEngineMediaRuntimeStats::default();
         stats.inbound_video_bitrate_kbps = Some(14_000.0);
         stats.video_present_fps = 59.0;
-        stats.recovery_diagnosis = Some("adapterIdleTimeout".to_string());
+        stats.recovery_active_escalation_reason = Some("adapterIdleTimeout".to_string());
         assert_eq!(
             resolve_session_phase_from_stats(
                 Some(&stats),

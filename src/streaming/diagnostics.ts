@@ -38,6 +38,9 @@ export function buildStreamDiagnosticsSnapshot(input: {
   const videoDecoderRecoveryEvent = input.runtimeSnapshot?.videoDecoderRecoveryEvent
   const videoOwnerSource = input.runtimeSnapshot?.videoOwnerSource
   const recoveryDiagnosis = input.runtimeSnapshot?.recoveryDiagnosis
+  const recoveryRfcFaultDomain = input.runtimeSnapshot?.recoveryRfcFaultDomain
+  const recoveryRfcStage = input.runtimeSnapshot?.recoveryRfcStage
+  const recoveryRfcCeiling = input.runtimeSnapshot?.recoveryRfcCeiling
   const videoHealth = input.runtimeSnapshot?.videoHealth
   const primaryIssueChain = input.runtimeSnapshot?.primaryIssueChain
   const latestDecisionSummary = input.runtimeSnapshot?.latestDecisionSummary
@@ -108,8 +111,11 @@ export function buildStreamDiagnosticsSnapshot(input: {
     remoteProfileEffectiveLabel: input.runtimeSnapshot?.remoteProfileEffectiveLabel,
     sessionPhase,
     recoveryDiagnosis,
+    recoveryRfcFaultDomain,
+    recoveryRfcStage,
+    recoveryRfcCeiling,
     recoveryOwnerState,
-    recoveryOwnerReason: recoveryOwnerReason ?? recoveryDiagnosis,
+    recoveryOwnerReason,
     videoDecoderRecoveryState,
     videoDecoderRecoveryEvent,
     videoOwnerSource,

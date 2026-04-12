@@ -11,6 +11,7 @@ use crate::transport::rtc::recovery::remote_profile_runtime::{
 };
 #[cfg(test)]
 use crate::transport::rtc::recovery::startup::resolve_session_phase;
+use crate::transport::rtc::recovery::escalation_label::escalation_structured_label;
 use crate::transport::rtc::recovery::startup::{
     extract_startup_recovery_bitrate_kbps, SessionPhase,
 };
@@ -122,9 +123,11 @@ pub(crate) fn project_runtime_state_from_stats(
 ) -> RecoveryRuntimeState {
     let now_ms = unix_now_ms();
     let phase = project_phase_from_stats(stats);
+    // 有效标签与吸收规则只基于结构化链；`recovery_diagnosis` 不参与 `RecoveryRuntimeState` 推导（展示由 diagnostics 单独解析）。
+    let raw_for_effective_label = escalation_structured_label(stats).unwrap_or("healthy");
     let diagnosis_label = resolve_effective_diagnosis_label_from_stats(
         stats,
-        stats.recovery_diagnosis.as_deref().unwrap_or("healthy"),
+        raw_for_effective_label,
         now_ms,
     );
     RecoveryRuntimeState {
@@ -369,7 +372,7 @@ fn recovery_stage_label(stats: &XbxEngineMediaRuntimeStats) -> &'static str {
         stats.video_owner_state.as_deref(),
         Some("rebuilding-supply" | "supply-starved")
     ) || matches!(
-        stats.recovery_diagnosis.as_deref(),
+        escalation_structured_label(stats),
         Some(
             "waitKeyframe"
                 | "transportAwaitRecoveryKeyframe"
@@ -511,7 +514,7 @@ fn current_owner_mode_from_stats(
     stats: &XbxEngineMediaRuntimeStats,
     phase: SessionPhase,
 ) -> RecoveryOwnerMode {
-    let diagnosis = stats.recovery_diagnosis.clone();
+    let diagnosis = escalation_structured_label(stats).map(str::to_string);
     let effective_bitrate_kbps = extract_startup_recovery_bitrate_kbps(stats).unwrap_or(0.0);
     let baseline_profile = resolve_runtime_baseline_profile_kind(stats);
     let recovery_profile =
@@ -600,7 +603,7 @@ fn resolve_recovery_owner_mode(
         decoder_stalled,
         renderer_stalled,
     )) = RuntimeStatsSink::read_shared(runtime_stats, |stats| {
-        let diagnosis = stats.recovery_diagnosis.clone();
+        let diagnosis = escalation_structured_label(stats).map(str::to_string);
         let effective_bitrate_kbps = extract_startup_recovery_bitrate_kbps(stats).unwrap_or(0.0);
         let baseline_profile = resolve_runtime_baseline_profile_kind(stats);
         let recovery_profile =
@@ -794,7 +797,7 @@ mod tests {
         let now_ms = unix_now_ms();
         let stats = XbxEngineMediaRuntimeStats {
             session_phase: Some("recovering".to_string()),
-            recovery_diagnosis: Some("transportExpiredDeadline".to_string()),
+            recovery_active_escalation_reason: Some("transportExpiredDeadline".to_string()),
             video_owner_state: Some("degraded-serving".to_string()),
             latest_video_host_present_time_ms: Some(now_ms - 18.0),
             latest_video_decode_ok_time_ms: Some(now_ms - 12.0),
@@ -820,7 +823,7 @@ mod tests {
         let now_ms = unix_now_ms();
         let stats = XbxEngineMediaRuntimeStats {
             session_phase: Some("recovering".to_string()),
-            recovery_diagnosis: Some("transportAwaitRecoveryKeyframe".to_string()),
+            recovery_active_escalation_reason: Some("transportAwaitRecoveryKeyframe".to_string()),
             video_owner_state: Some("degraded-serving".to_string()),
             latest_video_host_present_time_ms: Some(now_ms - 18.0),
             latest_video_decode_ok_time_ms: Some(now_ms - 12.0),

@@ -94,6 +94,9 @@ export interface XbxEngineStatsDto {
   transport_strategy_profile?: string
   recovery_strategy_profile?: string
   recovery_diagnosis?: string
+  recovery_rfc_fault_domain?: string
+  recovery_rfc_stage?: string
+  recovery_rfc_ceiling?: string
   direct_gaming_bitrate_band?: string
   recovery_owner_state?: string
   recovery_owner_reason?: string

@@ -1,3 +1,6 @@
+//! 媒体 `XbxEngineMediaRuntimeStats` 的统一写入入口（sink）。
+//! RFC：采集面只承载事实；诊断映射在 `diagnostics` / `trace_projection`，不得反向驱动控制决策。
+
 use std::sync::{Arc, Mutex};
 
 use crate::diagnostics::observation_bus::{ObservationBus, ObservationEvent};

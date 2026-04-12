@@ -1,3 +1,6 @@
+//! Ingress 调度：`IngressDecision` 与 `VideoIngress`。
+//! RFC：准入与本地丢弃决策归属本层；禁止输出 transport 级 `TransportRecover` 决策。
+
 use std::collections::VecDeque;
 use std::time::{Duration, Instant};
 
@@ -300,16 +303,28 @@ fn scale_duration_by_per_mille(base: Duration, ratio_per_mille: u16, floor: Dura
 mod tests {
     use super::{FrameScheduler, IngressDecision, VideoIngress};
     use crate::media::video::h264::inspection::{
-        H264AccessUnitInspection, H264BootstrapRejectReason,
+        H264AccessUnitInspection, H264AccessUnitInspector, H264BootstrapRejectReason, H264NalUnit,
     };
     use crate::media::video::ingress::budget::FrameBudgetContext;
+    use crate::media::video::test_fixtures::{bootstrap_pps_nalu, bootstrap_sps_nalu};
     use crate::media::video::types::{
         EncodedFrame, FrameRecoveryDisposition, FrameValue, VideoCodec,
     };
     use bytes::Bytes;
+    use h264_reader::nal::UnitType;
+    use std::sync::Arc;
     use std::time::{Duration, Instant};
 
     fn make_h264_inspection(bootstrap_ready: bool) -> H264AccessUnitInspection {
+        let commit_state = if bootstrap_ready {
+            let inspector = H264AccessUnitInspector::new();
+            inspector
+                .seed_committed_parameter_sets_if_absent(bootstrap_sps_nalu(), bootstrap_pps_nalu())
+                .expect("fixture sps/pps seed");
+            inspector.shared_commit_state()
+        } else {
+            H264AccessUnitInspector::test_commit_state()
+        };
         H264AccessUnitInspection {
             nals: Vec::new(),
             parameter_sets: None,
@@ -327,8 +342,7 @@ mod tests {
             } else {
                 Some(H264BootstrapRejectReason::MissingSps)
             },
-            commit_state:
-                crate::media::video::h264::inspection::H264AccessUnitInspector::test_commit_state(),
+            commit_state,
         }
     }
 
@@ -540,8 +554,15 @@ mod tests {
 
         ingress.start_reconfigure();
 
+        let mut continuation_h264 =
+            make_h264_inspection_with_commit_state(&clean_bootstrap.h264, false, false);
+        // `delta_continuation_ready` 要求存在 VCL NAL；仅测 ingress 出口，占位一条即可。
+        continuation_h264.nals.push(H264NalUnit {
+            range: 0..0,
+            unit_type: UnitType::SliceLayerWithoutPartitioningNonIdr,
+        });
         let continuation = EncodedFrame {
-            h264: make_h264_inspection_with_commit_state(&clean_bootstrap.h264, false, false),
+            h264: continuation_h264,
             ..make_frame(now, FrameValue::new(false, true, 8 * 1024), false, 0)
         };
         assert_eq!(continuation.h264.committed_sps_present(), true);

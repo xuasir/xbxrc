@@ -1,3 +1,6 @@
+//! WebRTC NACK 调度：包级时效、可恢复性与 `PacketRecoveryDisposition`。
+//! RFC：包价值评估归属本层；禁止在此直接决定 reconnect / failed-terminal（见 `session::policy`）。
+
 use std::collections::BTreeMap;
 
 use crate::media::video::ingress::budget::FrameBudgetContext;

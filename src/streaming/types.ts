@@ -67,7 +67,13 @@ export interface StreamPerformanceSnapshot {
   sessionPhase?: string
   transportStrategyProfile?: string
   recoveryStrategyProfile?: string
+  /**
+   * 后端聚合后的展示文案；权威语义优先看 recoveryOwnerReason、primaryIssueChain 与 RFC 三字段。
+   */
   recoveryDiagnosis?: string
+  recoveryRfcFaultDomain?: string
+  recoveryRfcStage?: string
+  recoveryRfcCeiling?: string
   recoveryOwnerState?: string
   recoveryOwnerReason?: string
   videoOwnerSource?: string
@@ -168,7 +174,13 @@ export interface StreamSessionDiagnosticsSnapshot {
   remoteProfileDynamic?: string
   remoteProfileEffectiveLabel?: string
   sessionPhase?: string
+  /**
+   * 后端聚合后的展示文案；权威语义优先看 recoveryOwnerReason、primaryIssueChain 与 RFC 三字段。
+   */
   recoveryDiagnosis?: string
+  recoveryRfcFaultDomain?: string
+  recoveryRfcStage?: string
+  recoveryRfcCeiling?: string
   recoveryOwnerState?: string
   recoveryOwnerReason?: string
   videoDecoderRecoveryState?: string

@@ -35,6 +35,10 @@ interface StreamDiagnosticsRowViewModel {
     | 'latestDecision'
     | 'ownerState'
     | 'ownerReason'
+    | 'rfcFaultDomain'
+    | 'rfcStage'
+    | 'rfcCeiling'
+    | 'recoveryDiagnosis'
     | 'decoderState'
     | 'stallKind'
     | 'status'
@@ -106,6 +110,26 @@ const rows = computed<StreamDiagnosticsRowViewModel[]>(() => [
   {
     key: 'ownerReason',
     value: translateDiagnosticsOwnerReason(te, t, props.diagnostics.recoveryOwnerReason),
+  },
+  {
+    key: 'rfcFaultDomain',
+    value: props.diagnostics.recoveryRfcFaultDomain?.trim()
+      || t('streamPage.diagnostics.values.unknown'),
+  },
+  {
+    key: 'rfcStage',
+    value: props.diagnostics.recoveryRfcStage?.trim()
+      || t('streamPage.diagnostics.values.unknown'),
+  },
+  {
+    key: 'rfcCeiling',
+    value: props.diagnostics.recoveryRfcCeiling?.trim()
+      || t('streamPage.diagnostics.values.unknown'),
+  },
+  {
+    key: 'recoveryDiagnosis',
+    value: props.diagnostics.recoveryDiagnosis?.trim()
+      || t('streamPage.diagnostics.values.unknown'),
   },
   {
     key: 'stallKind',

@@ -235,7 +235,7 @@ fn retry_budget_exhausted_is_finalized_and_dequeued() {
 }
 
 #[test]
-fn reference_packet_with_supply_priority_gets_single_retry_budget() {
+fn reference_packet_with_supply_priority_gets_up_to_two_poll_retries() {
     let mut scheduler = NackScheduler::new(NackSchedulerConfig {
         max_age_ms: 200,
         frame_deadline_ms: 500,
@@ -258,7 +258,14 @@ fn reference_packet_with_supply_priority_gets_single_retry_budget() {
     assert_eq!(first_retry.retry_batch.expect("retry").sequences, vec![60]);
     assert!(first_retry.expired_batches.is_empty());
 
-    let exhausted = scheduler.poll(1_020.0);
+    let second_retry = scheduler.poll(1_020.0);
+    assert_eq!(
+        second_retry.retry_batch.expect("retry").sequences,
+        vec![60]
+    );
+    assert!(second_retry.expired_batches.is_empty());
+
+    let exhausted = scheduler.poll(1_030.0);
     assert!(exhausted.retry_batch.is_none());
     assert_eq!(exhausted.expired_batches.len(), 1);
     assert_eq!(exhausted.expired_batches[0].reason, "retryBudget");

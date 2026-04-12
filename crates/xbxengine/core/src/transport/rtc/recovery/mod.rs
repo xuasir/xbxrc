@@ -16,6 +16,7 @@ pub mod coordinator;
 pub(crate) mod decoder_backend_failure;
 pub mod diagnosis;
 pub mod escalation;
+pub(crate) mod escalation_label;
 pub(crate) mod hard_stall;
 pub(crate) mod nack_outcome;
 pub mod policy;

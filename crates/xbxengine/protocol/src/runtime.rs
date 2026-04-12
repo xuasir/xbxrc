@@ -575,6 +575,15 @@ pub struct XbxEngineStatsDto {
     pub transport_strategy_profile: Option<String>,
     pub recovery_strategy_profile: Option<String>,
     pub recovery_diagnosis: Option<String>,
+    /// 与 `MediaRuntimeStats.recovery_rfc_authoritative_fault_domain` 同源；不拼入 `recovery_diagnosis`。
+    #[serde(default)]
+    pub recovery_rfc_fault_domain: Option<String>,
+    /// 与 `recovery_rfc_authoritative_stage` 同源。
+    #[serde(default)]
+    pub recovery_rfc_stage: Option<String>,
+    /// 与 `recovery_rfc_authoritative_ceiling` 同源。
+    #[serde(default)]
+    pub recovery_rfc_ceiling: Option<String>,
     pub direct_gaming_bitrate_band: Option<String>,
     pub recovery_owner_state: Option<String>,
     pub recovery_owner_reason: Option<String>,

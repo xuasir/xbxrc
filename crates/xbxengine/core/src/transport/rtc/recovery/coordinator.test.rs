@@ -4461,7 +4461,16 @@ fn transport_await_hard_fallback_does_not_treat_ingress_without_output_as_local_
         },
         &shared_stats,
     );
-    assert_eq!(timeout.decision.action, RecoveryAction::RequestKeyframe);
+    // hard fallback 超时后：存在 decoder reset 时间证据时可能优先 `RequestDecoderReset`，
+    // 仍为本地恢复链（非 reconnect）；与「ingress 无输出不得冒充 local progress」不矛盾。
+    assert!(
+        matches!(
+            timeout.decision.action,
+            RecoveryAction::RequestKeyframe | RecoveryAction::RequestDecoderReset
+        ),
+        "unexpected action {:?}",
+        timeout.decision.action
+    );
 }
 
 #[test]

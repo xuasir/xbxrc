@@ -1,3 +1,6 @@
+//! 帧级预算：`FrameBudgetContext`、链路价值与 RTT slack。
+//! RFC：帧级价值不上升到 `session::policy`；禁止在此直接下发 transport 级昂贵恢复动作。
+
 use std::time::Duration;
 
 use crate::media::video::types::{AssembledVideoFrame, EncodedFrame, FrameValue};
