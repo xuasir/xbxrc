@@ -45,6 +45,7 @@ fn playback_phase_edge01_transport_deferred_flood_must_not_mark_recovery_success
                     response_frame_seq: None,
                     response_verdict: Some("transportDeferred".to_string()),
                     lifecycle_phase: None,
+                    retired_at_ms: None,
                 });
             stats.latest_video_track_status = Some(crate::XbxEngineVideoTrackStatus {
                 state: "remoteTrackAttached".to_string(),
@@ -124,6 +125,8 @@ fn playback_phase_edge02_non_idr_vcl_with_delta_ready_must_not_exit_to_stable_se
                     bootstrap_reject_reason: Some("NonIdrVcl".to_string()),
                     admission_accepted: false,
                     observed_at_ms: t - 4.0,
+
+                    ..Default::default()
                 });
             stats.latest_video_track_status = Some(crate::XbxEngineVideoTrackStatus {
                 state: "remoteTrackAttached".to_string(),

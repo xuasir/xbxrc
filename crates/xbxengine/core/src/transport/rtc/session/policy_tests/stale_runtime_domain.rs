@@ -294,6 +294,7 @@ fn stale_transport_await_replay_is_absorbed_after_terminal_deferred_invalid_resp
                 response_frame_seq: None,
                 response_verdict: Some("transportDeferred".to_string()),
                 lifecycle_phase: None,
+                retired_at_ms: None,
             });
         stats.latest_h264_inspection_observation =
             Some(crate::XbxEngineH264InspectionObservation {
@@ -317,6 +318,8 @@ fn stale_transport_await_replay_is_absorbed_after_terminal_deferred_invalid_resp
                 bootstrap_reject_reason: Some("NonIdrVcl".to_string()),
                 admission_accepted: true,
                 observed_at_ms: 1_000.0,
+
+                ..Default::default()
             });
     }
     let mut policy = RtcSessionPolicy::new(runtime_config, runtime_stats.clone());

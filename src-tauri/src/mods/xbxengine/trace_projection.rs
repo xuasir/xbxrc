@@ -289,7 +289,7 @@ pub(super) fn build_observability_snapshot(stats: &XbxEngineStatsDto) -> serde_j
             "keyframeRequestEpisode": stats.latest_keyframe_request_episode,
             "h264Inspection": h264_inspection_payload(
                 stats.latest_h264_inspection_observation.as_ref(),
-                stats.latest_keyframe_request_episode.as_ref(),
+                stats,
             ),
             "timeline": stats.latest_video_timeline_observation,
             "decodeCandidate": stats.latest_decode_candidate_decision,
@@ -1115,10 +1115,7 @@ pub(super) fn record_runtime_trace_observations(
         observation_state.h264_inspection_observation =
             stats.latest_h264_inspection_observation.clone();
         if let Some(inspection) = stats.latest_h264_inspection_observation.as_ref() {
-            let payload = h264_inspection_payload(
-                Some(inspection),
-                stats.latest_keyframe_request_episode.as_ref(),
-            );
+            let payload = h264_inspection_payload(Some(inspection), stats);
             runtime_trace.record_state("xbxengine", "h264Inspection", session_id, payload.clone());
             let event_name = if inspection.admission_accepted {
                 "h264InspectionObserved"
@@ -1587,6 +1584,7 @@ fn keyframe_request_episode_payload(
             "responseRtpTimestamp": episode.response_rtp_timestamp,
             "responseFrameSeq": episode.response_frame_seq,
             "responseVerdict": episode.response_verdict.clone(),
+            "retiredAtMs": episode.retired_at_ms,
             "requestToFirstPacketMs": duration_ms(episode.requested_at_ms, episode.first_keyframe_packet_at_ms),
             "requestToFirstDecodeMs": duration_ms(episode.requested_at_ms, episode.first_keyframe_decoded_at_ms),
             "sentToFirstPacketMs": episode.sent_at_ms.and_then(|sent_at_ms| duration_ms(sent_at_ms, episode.first_keyframe_packet_at_ms)),
@@ -1602,38 +1600,167 @@ fn keyframe_request_episode_payload(
     }
 }
 
+fn find_keyframe_episode_dto(
+    stats: &XbxEngineStatsDto,
+    episode_id: u64,
+) -> Option<xbxengine_protocol::XbxEngineKeyframeRequestEpisodeObservationDto> {
+    stats
+        .latest_keyframe_request_episode
+        .as_ref()
+        .filter(|episode| episode.episode_id == episode_id)
+        .cloned()
+        .or_else(|| {
+            stats
+                .recent_keyframe_request_episodes
+                .iter()
+                .find(|episode| episode.episode_id == episode_id)
+                .cloned()
+        })
+}
+
+fn collect_keyframe_episode_dto_candidates(
+    stats: &XbxEngineStatsDto,
+) -> Vec<xbxengine_protocol::XbxEngineKeyframeRequestEpisodeObservationDto> {
+    let mut out: Vec<xbxengine_protocol::XbxEngineKeyframeRequestEpisodeObservationDto> =
+        Vec::new();
+    if let Some(episode) = stats.latest_keyframe_request_episode.as_ref() {
+        out.push(episode.clone());
+    }
+    for episode in stats.recent_keyframe_request_episodes.iter() {
+        if !out
+            .iter()
+            .any(|existing| existing.episode_id == episode.episode_id)
+        {
+            out.push(episode.clone());
+        }
+    }
+    out
+}
+
+fn keyframe_episode_dto_observability_active(
+    episode: &xbxengine_protocol::XbxEngineKeyframeRequestEpisodeObservationDto,
+) -> bool {
+    episode.retired_at_ms.is_none()
+}
+
+fn select_keyframe_episode_dto_for_h264(
+    stats: &XbxEngineStatsDto,
+    inspection: &xbxengine_protocol::XbxEngineH264InspectionObservationDto,
+) -> Option<xbxengine_protocol::XbxEngineKeyframeRequestEpisodeObservationDto> {
+    let candidates = collect_keyframe_episode_dto_candidates(stats);
+    if let Some(rtp) = inspection.frame_rtp_timestamp {
+        if let Some(episode) = candidates
+            .iter()
+            .find(|episode| episode.response_rtp_timestamp == Some(rtp))
+        {
+            return Some(episode.clone());
+        }
+        if let Some(episode) = candidates
+            .iter()
+            .find(|episode| episode.first_video_packet_rtp_timestamp == Some(rtp))
+        {
+            return Some(episode.clone());
+        }
+    }
+    const WINDOW_MS: f64 = 10_000.0;
+    let mut best: Option<xbxengine_protocol::XbxEngineKeyframeRequestEpisodeObservationDto> = None;
+    let mut best_delta = f64::INFINITY;
+    for episode in candidates.iter().filter(|episode| {
+        keyframe_episode_dto_observability_active(episode)
+            && episode.request_reason.as_deref() == Some("transportAwaitRecoveryKeyframe")
+    }) {
+        let anchor_ms = episode.sent_at_ms.unwrap_or(episode.requested_at_ms);
+        let delta = (inspection.observed_at_ms - anchor_ms).abs();
+        if delta < WINDOW_MS && delta < best_delta {
+            best_delta = delta;
+            best = Some(episode.clone());
+        }
+    }
+    best
+}
+
+fn resolve_h264_linked_episode(
+    stats: &XbxEngineStatsDto,
+    observation: &xbxengine_protocol::XbxEngineH264InspectionObservationDto,
+) -> Option<xbxengine_protocol::XbxEngineKeyframeRequestEpisodeObservationDto> {
+    if let Some(id) = observation.bound_episode_id {
+        if let Some(episode) = find_keyframe_episode_dto(stats, id) {
+            return Some(episode);
+        }
+    }
+    select_keyframe_episode_dto_for_h264(stats, observation)
+}
+
+fn resolve_is_recovery_keyframe_response_context(
+    observation: &xbxengine_protocol::XbxEngineH264InspectionObservationDto,
+    linked: Option<&xbxengine_protocol::XbxEngineKeyframeRequestEpisodeObservationDto>,
+) -> bool {
+    if let Some(flag) = observation.bound_as_recovery_response {
+        return flag;
+    }
+    keyframe_episode_response_context(linked, Some(observation))
+}
+
 fn h264_inspection_payload(
     observation: Option<&xbxengine_protocol::XbxEngineH264InspectionObservationDto>,
-    keyframe_episode: Option<&xbxengine_protocol::XbxEngineKeyframeRequestEpisodeObservationDto>,
+    stats: &XbxEngineStatsDto,
 ) -> serde_json::Value {
     match observation {
-        Some(observation) => json!({
-            "observationId": observation.observation_id,
-            "frameRtpTimestamp": observation.frame_rtp_timestamp,
-            "nalTypes": observation.nal_types.clone(),
-            "nalCount": observation.nal_count,
-            "vclNalCount": observation.vcl_nal_count,
-            "hasInbandSps": observation.has_inband_sps,
-            "hasInbandPps": observation.has_inband_pps,
-            "committedSpsPresent": observation.committed_sps_present,
-            "committedPpsPresent": observation.committed_pps_present,
-            "sliceHeadersValid": observation.slice_headers_valid,
-            "deltaContinuationReady": observation.delta_continuation_ready,
-            "parameterSetsChanged": observation.parameter_sets_changed,
-            "configChanged": observation.config_changed,
-            "isIdr": observation.is_idr,
-            "sampleWidth": observation.sample_width,
-            "sampleHeight": observation.sample_height,
-            "bootstrapReady": observation.bootstrap_ready,
-            "bootstrapRejectReason": observation.bootstrap_reject_reason.clone(),
-            "admissionAccepted": observation.admission_accepted,
-            "observedAtMs": observation.observed_at_ms,
-            "linkedEpisodeId": keyframe_episode.map(|episode| episode.episode_id),
-            "linkedEpisodeStatus": keyframe_episode.map(|episode| episode.status.clone()),
-            "linkedEpisodeRequestReason": keyframe_episode.and_then(|episode| episode.request_reason.clone()),
-            "linkedEpisodeResponseVerdict": keyframe_episode.and_then(|episode| episode.response_verdict.clone()),
-            "isRecoveryKeyframeResponseContext": keyframe_episode_response_context(keyframe_episode, Some(observation)),
-        }),
+        Some(observation) => {
+            let linked_full = resolve_h264_linked_episode(stats, observation);
+            let is_recovery =
+                resolve_is_recovery_keyframe_response_context(observation, linked_full.as_ref());
+            let (linked_id, linked_status, linked_reason, linked_verdict) = if is_recovery {
+                if let Some(ref episode) = linked_full {
+                    (
+                        Some(episode.episode_id),
+                        Some(episode.status.clone()),
+                        episode.request_reason.clone(),
+                        episode.response_verdict.clone(),
+                    )
+                } else {
+                    (
+                        observation.bound_episode_id,
+                        observation.bound_episode_status.clone(),
+                        None,
+                        None,
+                    )
+                }
+            } else {
+                (None, None, None, None)
+            };
+            json!({
+                "observationId": observation.observation_id,
+                "frameRtpTimestamp": observation.frame_rtp_timestamp,
+                "nalTypes": observation.nal_types.clone(),
+                "nalCount": observation.nal_count,
+                "vclNalCount": observation.vcl_nal_count,
+                "hasInbandSps": observation.has_inband_sps,
+                "hasInbandPps": observation.has_inband_pps,
+                "committedSpsPresent": observation.committed_sps_present,
+                "committedPpsPresent": observation.committed_pps_present,
+                "sliceHeadersValid": observation.slice_headers_valid,
+                "deltaContinuationReady": observation.delta_continuation_ready,
+                "parameterSetsChanged": observation.parameter_sets_changed,
+                "configChanged": observation.config_changed,
+                "isIdr": observation.is_idr,
+                "sampleWidth": observation.sample_width,
+                "sampleHeight": observation.sample_height,
+                "bootstrapReady": observation.bootstrap_ready,
+                "bootstrapRejectReason": observation.bootstrap_reject_reason.clone(),
+                "admissionAccepted": observation.admission_accepted,
+                "observedAtMs": observation.observed_at_ms,
+                "boundEpisodeId": observation.bound_episode_id,
+                "boundEpisodeStatus": observation.bound_episode_status.clone(),
+                "boundAsRecoveryResponse": observation.bound_as_recovery_response,
+                "boundResponseRtpTimestamp": observation.bound_response_rtp_timestamp,
+                "linkedEpisodeId": linked_id,
+                "linkedEpisodeStatus": linked_status,
+                "linkedEpisodeRequestReason": linked_reason,
+                "linkedEpisodeResponseVerdict": linked_verdict,
+                "isRecoveryKeyframeResponseContext": is_recovery,
+            })
+        }
         None => json!(null),
     }
 }
@@ -1658,11 +1785,14 @@ fn keyframe_episode_response_context(
     if keyframe_episode.request_reason.as_deref() != Some("transportAwaitRecoveryKeyframe") {
         return false;
     }
-    if !matches!(keyframe_episode.status.as_str(), "packet-seen" | "decoded") {
+    if !matches!(
+        keyframe_episode.status.as_str(),
+        "packet-seen" | "decoded" | "response-observed"
+    ) {
         return false;
     }
     let Some(h264_inspection) = h264_inspection else {
-        return true;
+        return false;
     };
     match (
         keyframe_episode.response_rtp_timestamp,
@@ -1671,7 +1801,7 @@ fn keyframe_episode_response_context(
         (Some(episode_rtp_timestamp), Some(frame_rtp_timestamp)) => {
             episode_rtp_timestamp == frame_rtp_timestamp
         }
-        _ => true,
+        _ => false,
     }
 }
 

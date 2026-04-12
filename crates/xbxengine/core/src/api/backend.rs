@@ -860,6 +860,8 @@ pub struct XbxEngineKeyframeRequestEpisodeObservation {
     pub response_verdict: Option<String>,
     /// 生命周期阶段：`requesting` / `sent` / `packetSeen` / `decoded` / `success` / `failure`
     pub lifecycle_phase: Option<String>,
+    /// clean-anchor 成功后标记观测退场：默认可观测启发式匹配跳过；RTP 精确对齐时仍可绑定。
+    pub retired_at_ms: Option<f64>,
 }
 
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -884,6 +886,10 @@ pub struct XbxEngineH264InspectionObservation {
     pub bootstrap_reject_reason: Option<String>,
     pub admission_accepted: bool,
     pub observed_at_ms: f64,
+    pub bound_episode_id: Option<u64>,
+    pub bound_episode_status: Option<String>,
+    pub bound_as_recovery_response: Option<bool>,
+    pub bound_response_rtp_timestamp: Option<u32>,
 }
 
 #[derive(Clone, Debug, PartialEq)]

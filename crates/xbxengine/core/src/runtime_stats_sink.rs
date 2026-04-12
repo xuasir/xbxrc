@@ -91,6 +91,7 @@ impl RuntimeStatsSink {
             episode.response_verdict = Some("cleanAnchorCommitted".to_string());
             episode.status_detail = None;
             episode.transport_detail = None;
+            episode.retired_at_ms = Some(observed_at_ms);
             apply_keyframe_episode_lifecycle_field(
                 transport_recovery_epoch,
                 video_anchor_clean_epoch,
@@ -214,6 +215,7 @@ impl RuntimeStatsSink {
                     response_frame_seq: None,
                     response_verdict: Some("pending".to_string()),
                     lifecycle_phase: None,
+                    retired_at_ms: None,
                 },
             );
             stats.latest_keyframe_request_episode = Some(episode);
@@ -226,7 +228,13 @@ impl RuntimeStatsSink {
                     .map(|value| format!("{value:.1}"))
                     .unwrap_or_else(|| "none".to_string())
             ));
-            emit_keyframe_closure_probe(stats, "requested", requested_at_ms);
+            emit_keyframe_closure_probe(
+                &*stats,
+                "requested",
+                requested_at_ms,
+                stats.latest_keyframe_request_episode.as_ref(),
+                None,
+            );
         });
     }
 
@@ -275,6 +283,7 @@ impl RuntimeStatsSink {
                         response_frame_seq: None,
                         response_verdict: Some("pending".to_string()),
                         lifecycle_phase: None,
+                        retired_at_ms: None,
                     };
                     apply_keyframe_request_episode_sent(
                         &mut episode,
@@ -291,7 +300,7 @@ impl RuntimeStatsSink {
                 "episodeId={} requestKind={} sentAtMs={:.1}",
                 episode.episode_id, request_kind, sent_at_ms
             ));
-            emit_keyframe_closure_probe(stats, "sent", sent_at_ms);
+            emit_keyframe_closure_probe(&*stats, "sent", sent_at_ms, Some(&episode), None);
         });
     }
 
@@ -341,7 +350,13 @@ impl RuntimeStatsSink {
                 sync_recent_keyframe_request_episode(stats, episode);
             }
             if should_probe {
-                emit_keyframe_closure_probe(stats, "timeout", observed_at_ms);
+                emit_keyframe_closure_probe(
+                    &*stats,
+                    "timeout",
+                    observed_at_ms,
+                    stats.latest_keyframe_request_episode.as_ref(),
+                    None,
+                );
             }
         });
     }
@@ -388,7 +403,13 @@ impl RuntimeStatsSink {
                 sync_recent_keyframe_request_episode(stats, episode);
             }
             if should_probe {
-                emit_keyframe_closure_probe(stats, "deferred", observed_at_ms);
+                emit_keyframe_closure_probe(
+                    &*stats,
+                    "deferred",
+                    observed_at_ms,
+                    stats.latest_keyframe_request_episode.as_ref(),
+                    None,
+                );
             }
         });
     }
@@ -431,7 +452,13 @@ impl RuntimeStatsSink {
                 sync_recent_keyframe_request_episode(stats, episode);
             }
             if should_probe {
-                emit_keyframe_closure_probe(stats, "failed", observed_at_ms);
+                emit_keyframe_closure_probe(
+                    &*stats,
+                    "failed",
+                    observed_at_ms,
+                    stats.latest_keyframe_request_episode.as_ref(),
+                    None,
+                );
             }
         });
     }
@@ -509,7 +536,13 @@ impl RuntimeStatsSink {
                 sync_recent_keyframe_request_episode(stats, episode);
             }
             if should_probe {
-                emit_keyframe_closure_probe(stats, "packet-seen", observed_at_ms);
+                emit_keyframe_closure_probe(
+                    &*stats,
+                    "packet-seen",
+                    observed_at_ms,
+                    stats.latest_keyframe_request_episode.as_ref(),
+                    None,
+                );
             }
         });
     }
@@ -575,7 +608,13 @@ impl RuntimeStatsSink {
                 sync_recent_keyframe_request_episode(stats, episode);
             }
             if should_probe {
-                emit_keyframe_closure_probe(stats, "response-observed", observed_at_ms);
+                emit_keyframe_closure_probe(
+                    &*stats,
+                    "response-observed",
+                    observed_at_ms,
+                    stats.latest_keyframe_request_episode.as_ref(),
+                    None,
+                );
             }
         });
     }
@@ -621,14 +660,20 @@ impl RuntimeStatsSink {
                 sync_recent_keyframe_request_episode(stats, episode);
             }
             if should_probe {
-                emit_keyframe_closure_probe(stats, "decoded", observed_at_ms);
+                emit_keyframe_closure_probe(
+                    &*stats,
+                    "decoded",
+                    observed_at_ms,
+                    stats.latest_keyframe_request_episode.as_ref(),
+                    None,
+                );
             }
         });
     }
 
     pub(crate) fn record_h264_inspection_observation(
         &self,
-        observation: XbxEngineH264InspectionObservation,
+        mut observation: XbxEngineH264InspectionObservation,
     ) {
         self.update(|stats| {
             let bump_episode_id =
@@ -656,6 +701,22 @@ impl RuntimeStatsSink {
                     });
             if let Some(episode_id) = bump_episode_id {
                 maybe_count_keyframe_sent_terminal_failure(stats, episode_id);
+            }
+            let selected = select_episode_snapshot_for_h264_inspection(stats, &observation);
+            if let Some(ref episode) = selected {
+                observation.bound_episode_id = Some(episode.episode_id);
+                observation.bound_episode_status = Some(episode.status.clone());
+                observation.bound_response_rtp_timestamp = episode.response_rtp_timestamp;
+                observation.bound_as_recovery_response =
+                    Some(inspection_matches_recovery_keyframe_response(
+                        episode,
+                        observation.frame_rtp_timestamp,
+                    ));
+            } else {
+                observation.bound_episode_id = None;
+                observation.bound_episode_status = None;
+                observation.bound_response_rtp_timestamp = None;
+                observation.bound_as_recovery_response = Some(false);
             }
             stats.latest_h264_inspection_observation = Some(observation);
         });
@@ -814,15 +875,23 @@ impl RuntimeStatsSink {
         observed_at_ms: f64,
     ) {
         self.update(|stats| {
-            stats.latest_anchor_candidate_ledger = Some(XbxEngineAnchorCandidateLedger {
+            let ledger = XbxEngineAnchorCandidateLedger {
                 recovery_epoch,
                 frame_rtp_timestamp,
                 state,
                 source_event: source_event.to_string(),
                 failure_reason,
                 observed_at_ms,
-            });
-            emit_keyframe_closure_probe(stats, "anchor-candidate", observed_at_ms);
+            };
+            stats.latest_anchor_candidate_ledger = Some(ledger.clone());
+            let bound_episode = select_episode_snapshot_for_anchor_ledger(stats, &ledger);
+            emit_keyframe_closure_probe(
+                &*stats,
+                "anchor-candidate",
+                observed_at_ms,
+                bound_episode.as_ref(),
+                Some(&ledger),
+            );
         });
     }
 
@@ -855,7 +924,13 @@ impl RuntimeStatsSink {
     pub(crate) fn record_transport_clean_anchor(&self, observed_at_ms: f64, source_event: &str) {
         self.update(|stats| {
             Self::apply_transport_clean_anchor(stats, observed_at_ms, source_event);
-            emit_keyframe_closure_probe(stats, "clean-anchor", observed_at_ms);
+            emit_keyframe_closure_probe(
+                &*stats,
+                "clean-anchor",
+                observed_at_ms,
+                stats.latest_keyframe_request_episode.as_ref(),
+                stats.latest_anchor_candidate_ledger.as_ref(),
+            );
         });
     }
 
@@ -986,6 +1061,7 @@ fn sync_recent_keyframe_request_episode(
     stats: &mut XbxEngineMediaRuntimeStats,
     mut episode: XbxEngineKeyframeRequestEpisodeObservation,
 ) {
+    let episode_id = episode.episode_id;
     apply_keyframe_episode_lifecycle_field(
         stats.transport_recovery_epoch,
         stats.video_anchor_clean_epoch,
@@ -998,10 +1074,21 @@ fn sync_recent_keyframe_request_episode(
         .position(|candidate| candidate.episode_id == episode.episode_id)
     {
         stats.recent_keyframe_request_episodes[index] = episode;
-        return;
+    } else {
+        stats.recent_keyframe_request_episodes.push(episode);
+        trim_recent_keyframe_request_episodes(stats);
     }
-    stats.recent_keyframe_request_episodes.push(episode);
-    trim_recent_keyframe_request_episodes(stats);
+    // `latest` 与 `recent` 曾分叉：recent 在 sync 时刷新了 lifecycle，latest 需同步，probe 才一致。
+    if let Some(latest) = stats.latest_keyframe_request_episode.as_mut() {
+        if latest.episode_id == episode_id {
+            apply_keyframe_episode_lifecycle_field(
+                stats.transport_recovery_epoch,
+                stats.video_anchor_clean_epoch,
+                stats.video_anchor_clean_observed_at_ms,
+                latest,
+            );
+        }
+    }
 }
 
 fn apply_keyframe_request_episode_sent(
@@ -1032,15 +1119,154 @@ fn apply_keyframe_request_episode_sent(
     }
 }
 
+/// 当前 recovery epoch 下是否已观测到与本 epoch 对齐的 clean anchor（控制态，非单次 probe 语义）。
+fn recovery_window_has_clean_anchor(stats: &XbxEngineMediaRuntimeStats) -> bool {
+    stats.video_anchor_clean_observed_at_ms.is_some()
+        && stats.video_anchor_clean_epoch == Some(stats.transport_recovery_epoch)
+}
+
+fn keyframe_episode_observability_active(
+    episode: &XbxEngineKeyframeRequestEpisodeObservation,
+) -> bool {
+    episode.retired_at_ms.is_none()
+}
+
+fn collect_keyframe_episode_candidates(
+    stats: &XbxEngineMediaRuntimeStats,
+) -> Vec<XbxEngineKeyframeRequestEpisodeObservation> {
+    let mut out: Vec<XbxEngineKeyframeRequestEpisodeObservation> = Vec::new();
+    if let Some(episode) = stats.latest_keyframe_request_episode.as_ref() {
+        out.push(episode.clone());
+    }
+    for episode in stats.recent_keyframe_request_episodes.iter() {
+        if !out
+            .iter()
+            .any(|existing| existing.episode_id == episode.episode_id)
+        {
+            out.push(episode.clone());
+        }
+    }
+    out
+}
+
+fn select_episode_snapshot_for_h264_inspection(
+    stats: &XbxEngineMediaRuntimeStats,
+    inspection: &XbxEngineH264InspectionObservation,
+) -> Option<XbxEngineKeyframeRequestEpisodeObservation> {
+    let candidates = collect_keyframe_episode_candidates(stats);
+    if let Some(rtp) = inspection.frame_rtp_timestamp {
+        if let Some(episode) = candidates
+            .iter()
+            .find(|episode| episode.response_rtp_timestamp == Some(rtp))
+        {
+            return Some(episode.clone());
+        }
+        if let Some(episode) = candidates
+            .iter()
+            .find(|episode| episode.first_video_packet_rtp_timestamp == Some(rtp))
+        {
+            return Some(episode.clone());
+        }
+    }
+    const WINDOW_MS: f64 = 10_000.0;
+    let mut best: Option<XbxEngineKeyframeRequestEpisodeObservation> = None;
+    let mut best_delta = f64::INFINITY;
+    for episode in candidates.iter().filter(|episode| {
+        keyframe_episode_observability_active(episode)
+            && episode.request_reason.as_deref() == Some("transportAwaitRecoveryKeyframe")
+    }) {
+        let anchor_ms = episode.sent_at_ms.unwrap_or(episode.requested_at_ms);
+        let delta = (inspection.observed_at_ms - anchor_ms).abs();
+        if delta < WINDOW_MS && delta < best_delta {
+            best_delta = delta;
+            best = Some(episode.clone());
+        }
+    }
+    best
+}
+
+fn inspection_matches_recovery_keyframe_response(
+    episode: &XbxEngineKeyframeRequestEpisodeObservation,
+    frame_rtp_timestamp: Option<u32>,
+) -> bool {
+    if episode.request_reason.as_deref() != Some("transportAwaitRecoveryKeyframe") {
+        return false;
+    }
+    if !matches!(
+        episode.status.as_str(),
+        "packet-seen" | "decoded" | "response-observed"
+    ) {
+        return false;
+    }
+    match (episode.response_rtp_timestamp, frame_rtp_timestamp) {
+        (Some(a), Some(b)) => a == b,
+        _ => false,
+    }
+}
+
+/// 将 anchor ledger 与同帧/同 recovery 上下文的 episode 绑定，避免 probe 硬拼全局 latest。
+fn select_episode_snapshot_for_anchor_ledger(
+    stats: &XbxEngineMediaRuntimeStats,
+    ledger: &XbxEngineAnchorCandidateLedger,
+) -> Option<XbxEngineKeyframeRequestEpisodeObservation> {
+    let candidates = collect_keyframe_episode_candidates(stats);
+    if let Some(rtp) = ledger.frame_rtp_timestamp {
+        if let Some(episode) = candidates
+            .iter()
+            .find(|episode| episode.response_rtp_timestamp == Some(rtp))
+        {
+            return Some(episode.clone());
+        }
+        if let Some(episode) = candidates
+            .iter()
+            .find(|episode| episode.first_video_packet_rtp_timestamp == Some(rtp))
+        {
+            return Some(episode.clone());
+        }
+    }
+    if ledger.recovery_epoch == stats.transport_recovery_epoch {
+        let mut transport_await: Vec<&XbxEngineKeyframeRequestEpisodeObservation> = candidates
+            .iter()
+            .filter(|episode| {
+                keyframe_episode_observability_active(episode)
+                    && episode.request_reason.as_deref() == Some("transportAwaitRecoveryKeyframe")
+                    && episode.sent_at_ms.is_some()
+            })
+            .collect();
+        transport_await.sort_by_key(|episode| episode.episode_id);
+        if let Some(episode) = transport_await.last() {
+            return Some((*episode).clone());
+        }
+    }
+    const WINDOW_MS: f64 = 10_000.0;
+    if ledger.recovery_epoch != stats.transport_recovery_epoch {
+        return None;
+    }
+    let mut best: Option<XbxEngineKeyframeRequestEpisodeObservation> = None;
+    let mut best_delta = f64::INFINITY;
+    for episode in candidates.iter().filter(|episode| {
+        keyframe_episode_observability_active(episode)
+            && episode.request_reason.as_deref() == Some("transportAwaitRecoveryKeyframe")
+    }) {
+        let anchor_ms = episode.sent_at_ms.unwrap_or(episode.requested_at_ms);
+        let delta = (ledger.observed_at_ms - anchor_ms).abs();
+        if delta < WINDOW_MS && delta < best_delta {
+            best_delta = delta;
+            best = Some(episode.clone());
+        }
+    }
+    best
+}
+
 fn emit_keyframe_closure_probe(
     stats: &XbxEngineMediaRuntimeStats,
     stage: &str,
     observed_at_ms: f64,
+    episode: Option<&XbxEngineKeyframeRequestEpisodeObservation>,
+    anchor: Option<&XbxEngineAnchorCandidateLedger>,
 ) {
     let (episode_id, sent_at_ms, response_seen, decoded_at_ms, response_verdict, lifecycle_phase) =
-        stats
-            .latest_keyframe_request_episode
-            .as_ref()
+        episode
             .map(|episode| {
                 (
                     Some(episode.episode_id),
@@ -1054,9 +1280,7 @@ fn emit_keyframe_closure_probe(
                 )
             })
             .unwrap_or((None, None, None, None, None, None));
-    let (anchor_state, anchor_source, anchor_epoch) = stats
-        .latest_anchor_candidate_ledger
-        .as_ref()
+    let (anchor_state, anchor_source, anchor_epoch) = anchor
         .map(|candidate| {
             (
                 Some(format!("{:?}", candidate.state)),
@@ -1065,11 +1289,13 @@ fn emit_keyframe_closure_probe(
             )
         })
         .unwrap_or((None, None, None));
-    let clean_anchor_committed = stats.video_anchor_clean_observed_at_ms.is_some();
+    let recovery_has_clean_anchor = recovery_window_has_clean_anchor(stats);
+    let probe_clean_anchor = stage == "clean-anchor";
     let sent_failure_streak = stats.keyframe_consecutive_sent_failures;
     // 关键帧恢复闭环：request -> response -> decode -> clean-anchor。
+    // cleanAnchorCommitted 与 recoveryHasCleanAnchor 对齐（仅当前 recovery epoch）；probeCleanAnchor 标记单次 clean-anchor probe。
     crate::xbx_log_warn!(
-        "[keyframe-closure] stage={} atMs={:.1} episodeId={} lifecycle={} sentAtMs={} responseSeenAtMs={} decodedAtMs={} verdict={} sentFailureStreak={} anchorState={} anchorSource={} anchorEpoch={} cleanAnchorCommitted={}",
+        "[keyframe-closure] stage={} atMs={:.1} episodeId={} lifecycle={} sentAtMs={} responseSeenAtMs={} decodedAtMs={} verdict={} sentFailureStreak={} anchorState={} anchorSource={} anchorEpoch={} cleanAnchorCommitted={} recoveryHasCleanAnchor={} probeCleanAnchor={}",
         stage,
         observed_at_ms,
         episode_id
@@ -1094,7 +1320,9 @@ fn emit_keyframe_closure_probe(
         anchor_epoch
             .map(|value| value.to_string())
             .unwrap_or_else(|| "none".to_string()),
-        clean_anchor_committed
+        recovery_has_clean_anchor,
+        recovery_has_clean_anchor,
+        probe_clean_anchor
     );
 }
 
@@ -1180,6 +1408,30 @@ mod tests {
         assert!(stats.transport_recovery_episode_active);
         assert_eq!(stats.transport_recovery_episode_closed_at_ms, None);
         assert_eq!(stats.transport_recovery_episode_close_reason, None);
+    }
+
+    #[test]
+    fn clean_anchor_sets_retired_at_ms_on_latest_keyframe_episode() {
+        let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
+        let sink = RuntimeStatsSink::new(runtime_stats.clone());
+
+        sink.begin_transport_recovery_episode(10.0);
+        sink.record_keyframe_request_episode_requested(
+            7,
+            Some("transportAwaitRecoveryKeyframe".to_string()),
+            15.0,
+            None,
+        );
+        sink.record_keyframe_request_episode_sent("pli", 16.0, None);
+        sink.record_transport_clean_anchor(20.0, "chain-clean-keyframe-submitted");
+
+        let stats = runtime_stats.lock().expect("runtime stats lock");
+        let episode = stats
+            .latest_keyframe_request_episode
+            .as_ref()
+            .expect("keyframe episode");
+        assert_eq!(episode.retired_at_ms, Some(20.0));
+        assert_eq!(episode.status, "succeeded");
     }
 
     #[test]
@@ -1413,5 +1665,82 @@ mod tests {
             stats.latest_observation_label.as_deref(),
             Some("keyframeRequestEpisodeUnsentExpired")
         );
+    }
+
+    #[test]
+    fn keyframe_response_observed_keeps_lifecycle_in_sync_between_latest_and_recent() {
+        let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
+        let sink = RuntimeStatsSink::new(runtime_stats.clone());
+        sink.record_keyframe_request_episode_requested(
+            1,
+            Some("transportAwaitRecoveryKeyframe".to_string()),
+            100.0,
+            None,
+        );
+        sink.record_keyframe_request_episode_sent("pli", 110.0, Some(500.0));
+        sink.record_keyframe_request_episode_response_observed(
+            120.0,
+            Some(999),
+            false,
+            "firstResponseNonKeyframe",
+        );
+        let stats = runtime_stats.lock().expect("runtime stats lock");
+        let latest = stats
+            .latest_keyframe_request_episode
+            .as_ref()
+            .expect("latest episode");
+        let recent = stats
+            .recent_keyframe_request_episodes
+            .iter()
+            .find(|e| e.episode_id == 1)
+            .expect("recent episode");
+        assert_eq!(latest.lifecycle_phase, recent.lifecycle_phase);
+        assert_eq!(latest.lifecycle_phase.as_deref(), Some("packetSeen"));
+    }
+
+    #[test]
+    fn h264_inspection_binds_episode_when_frame_rtp_matches_response() {
+        use crate::XbxEngineH264InspectionObservation;
+
+        let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
+        let sink = RuntimeStatsSink::new(runtime_stats.clone());
+        sink.record_keyframe_request_episode_requested(
+            42,
+            Some("transportAwaitRecoveryKeyframe".to_string()),
+            100.0,
+            None,
+        );
+        sink.record_keyframe_request_episode_sent("pli", 110.0, None);
+        sink.record_keyframe_request_episode_packet_seen(120.0, Some(777), true);
+        sink.record_h264_inspection_observation(XbxEngineH264InspectionObservation {
+            observation_id: 1,
+            frame_rtp_timestamp: Some(777),
+            nal_types: Vec::new(),
+            nal_count: 0,
+            vcl_nal_count: 0,
+            has_inband_sps: false,
+            has_inband_pps: false,
+            committed_sps_present: false,
+            committed_pps_present: false,
+            slice_headers_valid: true,
+            delta_continuation_ready: true,
+            parameter_sets_changed: false,
+            config_changed: false,
+            is_idr: true,
+            sample_width: None,
+            sample_height: None,
+            bootstrap_ready: true,
+            bootstrap_reject_reason: None,
+            admission_accepted: true,
+            observed_at_ms: 125.0,
+            ..Default::default()
+        });
+        let stats = runtime_stats.lock().expect("runtime stats lock");
+        let h264 = stats
+            .latest_h264_inspection_observation
+            .as_ref()
+            .expect("h264 observation");
+        assert_eq!(h264.bound_episode_id, Some(42));
+        assert!(h264.bound_as_recovery_response.unwrap_or(false));
     }
 }

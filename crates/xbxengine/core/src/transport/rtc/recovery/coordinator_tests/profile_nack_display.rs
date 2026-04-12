@@ -491,6 +491,7 @@ fn recent_wait_keyframe_recovery_suppresses_repeat_wait_keyframe() {
             response_frame_seq: None,
             response_verdict: Some("pending".to_string()),
             lifecycle_phase: None,
+            retired_at_ms: None,
         });
     let mut coordinator = RecoveryCoordinator::new(
         test_escalation_controller(250, 2, 2),
@@ -568,6 +569,7 @@ fn recent_wait_keyframe_without_sent_episode_does_not_coalesce_keyframe_inflight
             response_frame_seq: None,
             response_verdict: Some("pending".to_string()),
             lifecycle_phase: None,
+            retired_at_ms: None,
         });
     stats.latest_video_timeline_observation = Some(crate::XbxEngineVideoTimelineObservation {
         observation_id: 71,

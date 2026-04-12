@@ -246,6 +246,7 @@ fn playback_phase_int10_transport_deferred_episode_must_not_promote_stable_servi
                     response_frame_seq: None,
                     response_verdict: Some("transportDeferred".to_string()),
                     lifecycle_phase: None,
+                    retired_at_ms: None,
                 });
             stats.latest_video_track_status = Some(crate::XbxEngineVideoTrackStatus {
                 state: "remoteTrackAttached".to_string(),
@@ -323,6 +324,7 @@ fn playback_phase_int11_terminal_invalid_bootstrap_must_request_keyframe_or_stro
                     response_frame_seq: None,
                     response_verdict: Some("transportDeferred".to_string()),
                     lifecycle_phase: None,
+                    retired_at_ms: None,
                 });
             stats.latest_h264_inspection_observation =
                 Some(crate::XbxEngineH264InspectionObservation {
@@ -346,6 +348,8 @@ fn playback_phase_int11_terminal_invalid_bootstrap_must_request_keyframe_or_stro
                     bootstrap_reject_reason: Some("NonIdrVcl".to_string()),
                     admission_accepted: false,
                     observed_at_ms: t - 5.0,
+
+                    ..Default::default()
                 });
             stats.latest_video_track_status = Some(crate::XbxEngineVideoTrackStatus {
                 state: "remoteTrackAttached".to_string(),

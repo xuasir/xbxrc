@@ -539,6 +539,8 @@ pub struct XbxEngineKeyframeRequestEpisodeObservationDto {
     pub response_verdict: Option<String>,
     #[serde(default)]
     pub lifecycle_phase: Option<String>,
+    #[serde(default)]
+    pub retired_at_ms: Option<f64>,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
@@ -567,6 +569,15 @@ pub struct XbxEngineH264InspectionObservationDto {
     pub bootstrap_reject_reason: Option<String>,
     pub admission_accepted: bool,
     pub observed_at_ms: f64,
+    /// 生成观测时绑定的 keyframe episode（避免 trace 层二次推断失真）。
+    #[serde(default)]
+    pub bound_episode_id: Option<u64>,
+    #[serde(default)]
+    pub bound_episode_status: Option<String>,
+    #[serde(default)]
+    pub bound_as_recovery_response: Option<bool>,
+    #[serde(default)]
+    pub bound_response_rtp_timestamp: Option<u32>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -688,6 +699,9 @@ pub struct XbxEngineStatsDto {
     #[serde(default)]
     pub latest_video_rtcp_send_failure_reason: Option<String>,
     pub latest_keyframe_request_episode: Option<XbxEngineKeyframeRequestEpisodeObservationDto>,
+    /// 近期 keyframe 请求 episode 历史，供诊断与 H264 观测绑定；默认空。
+    #[serde(default)]
+    pub recent_keyframe_request_episodes: Vec<XbxEngineKeyframeRequestEpisodeObservationDto>,
     pub latest_h264_inspection_observation: Option<XbxEngineH264InspectionObservationDto>,
     pub recovery_keyframe_request_count: Option<u64>,
     pub recovery_decoder_reset_count: Option<u64>,

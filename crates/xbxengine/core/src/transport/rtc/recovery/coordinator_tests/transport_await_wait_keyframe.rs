@@ -113,6 +113,7 @@ fn unsent_requested_keyframe_is_rolled_back_before_transport_await_stage_upgrade
                 response_frame_seq: None,
                 response_verdict: Some("pending".to_string()),
                 lifecycle_phase: None,
+                retired_at_ms: None,
             });
     });
 
@@ -229,6 +230,8 @@ fn soft_transport_await_signal_stays_in_local_recovery_chain() {
         bootstrap_reject_reason: Some("NonIdrVcl".to_string()),
         admission_accepted: true,
         observed_at_ms: now_ms - 9.0,
+
+        ..Default::default()
     });
     stats.latest_keyframe_request_episode =
         Some(crate::XbxEngineKeyframeRequestEpisodeObservation {
@@ -250,6 +253,7 @@ fn soft_transport_await_signal_stays_in_local_recovery_chain() {
             response_frame_seq: Some(42),
             response_verdict: Some("on-time".to_string()),
             lifecycle_phase: None,
+            retired_at_ms: None,
         });
     let shared_stats = Mutex::new(stats);
     let mut coordinator = RecoveryCoordinator::new(
@@ -341,6 +345,8 @@ fn first_frame_acquisition_transport_await_probe_stays_local() {
         bootstrap_reject_reason: Some("bootstrapMissingSps".to_string()),
         admission_accepted: true,
         observed_at_ms: now_ms - 9.0,
+
+        ..Default::default()
     });
     let shared_stats = Mutex::new(stats);
     let mut coordinator = RecoveryCoordinator::new(
@@ -387,6 +393,7 @@ fn first_frame_acquisition_transport_await_probe_stays_local() {
                 response_frame_seq: None,
                 response_verdict: Some("pending".to_string()),
                 lifecycle_phase: None,
+                retired_at_ms: None,
             });
     });
 
@@ -489,6 +496,7 @@ fn first_frame_acquisition_transport_await_stall_still_stays_in_keyframe_domain(
                 response_frame_seq: None,
                 response_verdict: Some("pending".to_string()),
                 lifecycle_phase: None,
+                retired_at_ms: None,
             });
     });
 
@@ -574,6 +582,8 @@ fn startup_non_idr_transport_await_probe_stays_local_before_first_frame() {
         bootstrap_reject_reason: Some("NonIdrVcl".to_string()),
         admission_accepted: true,
         observed_at_ms: now_ms - 9.0,
+
+        ..Default::default()
     });
     let shared_stats = Mutex::new(stats);
     let mut coordinator = RecoveryCoordinator::new(
@@ -620,6 +630,7 @@ fn startup_non_idr_transport_await_probe_stays_local_before_first_frame() {
                 response_frame_seq: None,
                 response_verdict: Some("on-time".to_string()),
                 lifecycle_phase: None,
+                retired_at_ms: None,
             });
     });
 
@@ -704,6 +715,8 @@ fn first_frame_acquisition_missing_pps_packet_seen_stays_local_before_first_fram
         bootstrap_reject_reason: Some("bootstrapMissingPps".to_string()),
         admission_accepted: true,
         observed_at_ms: now_ms - 9.0,
+
+        ..Default::default()
     });
     stats.latest_keyframe_request_episode =
         Some(crate::XbxEngineKeyframeRequestEpisodeObservation {
@@ -725,6 +738,7 @@ fn first_frame_acquisition_missing_pps_packet_seen_stays_local_before_first_fram
             response_frame_seq: None,
             response_verdict: Some("on-time".to_string()),
             lifecycle_phase: None,
+            retired_at_ms: None,
         });
     stats.latest_anchor_candidate_ledger = Some(crate::XbxEngineAnchorCandidateLedger {
         state: crate::XbxEngineAnchorCandidateState::Rejected,
@@ -833,6 +847,8 @@ fn post_first_frame_bootstrap_missing_pps_can_upgrade_to_decoder_reset() {
         bootstrap_reject_reason: Some("bootstrapMissingPps".to_string()),
         admission_accepted: true,
         observed_at_ms: now_ms - 9.0,
+
+        ..Default::default()
     });
     let shared_stats = Mutex::new(stats);
     let mut coordinator = RecoveryCoordinator::new(
@@ -879,6 +895,7 @@ fn post_first_frame_bootstrap_missing_pps_can_upgrade_to_decoder_reset() {
                 response_frame_seq: None,
                 response_verdict: Some("on-time".to_string()),
                 lifecycle_phase: None,
+                retired_at_ms: None,
             });
         stats.latest_anchor_candidate_ledger = Some(crate::XbxEngineAnchorCandidateLedger {
             state: crate::XbxEngineAnchorCandidateState::Rejected,
@@ -985,6 +1002,7 @@ fn weak_transport_await_streak_does_not_preload_decoder_reset_upgrade() {
                 response_frame_seq: None,
                 response_verdict: Some("pending".to_string()),
                 lifecycle_phase: None,
+                retired_at_ms: None,
             });
     });
 
@@ -1195,6 +1213,7 @@ fn sent_pending_keyframe_with_thin_stall_pressure_upgrades_to_decoder_reset() {
                 response_frame_seq: None,
                 response_verdict: Some("pending".to_string()),
                 lifecycle_phase: None,
+                retired_at_ms: None,
             });
         stats.latest_video_timeline_observation = Some(crate::XbxEngineVideoTimelineObservation {
             observation_id: 903,
@@ -1286,6 +1305,7 @@ fn sent_pending_keyframe_with_recent_rtcp_unavailable_does_not_upgrade_to_decode
                 response_frame_seq: None,
                 response_verdict: Some("pending".to_string()),
                 lifecycle_phase: None,
+                retired_at_ms: None,
             });
         stats.latest_video_rtcp_send_failure_time_ms = Some(now_ms + 130.0);
         stats.latest_video_rtcp_send_failure_reason =
@@ -1363,6 +1383,7 @@ fn decoded_transport_await_keyframe_without_clean_anchor_upgrades_to_decoder_res
                 response_frame_seq: Some(55),
                 response_verdict: Some("on-time".to_string()),
                 lifecycle_phase: None,
+                retired_at_ms: None,
             });
         stats.latest_video_timeline_observation = Some(crate::XbxEngineVideoTimelineObservation {
             observation_id: 905,
@@ -1452,6 +1473,7 @@ fn missed_transport_await_keyframe_episode_upgrades_to_decoder_reset() {
                 response_frame_seq: None,
                 response_verdict: Some("missed".to_string()),
                 lifecycle_phase: None,
+                retired_at_ms: None,
             });
     });
 

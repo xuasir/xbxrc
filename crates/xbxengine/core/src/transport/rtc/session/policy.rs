@@ -131,6 +131,9 @@ fn transport_await_keyframe_episode_latest_times(
     let mut best_first_keyframe_decoded_at_ms: Option<f64> = None;
 
     let mut consider = |episode: &XbxEngineKeyframeRequestEpisodeObservation| {
+        if episode.retired_at_ms.is_some() {
+            return;
+        }
         if !is_transport_await_keyframe_episode(episode) {
             return;
         }
@@ -1072,6 +1075,9 @@ impl RtcSessionPolicy {
             .iter()
             .chain(stats.latest_keyframe_request_episode.iter())
         {
+            if episode.retired_at_ms.is_some() {
+                continue;
+            }
             if !is_transport_await_keyframe_episode(episode) {
                 continue;
             }

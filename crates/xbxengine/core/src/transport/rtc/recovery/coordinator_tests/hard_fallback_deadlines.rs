@@ -717,6 +717,7 @@ fn transport_await_hard_fallback_does_not_treat_nonidr_packet_seen_as_local_deco
                 response_frame_seq: None,
                 response_verdict: Some("late".to_string()),
                 lifecycle_phase: None,
+                retired_at_ms: None,
             });
         stats.latest_h264_inspection_observation =
             Some(crate::XbxEngineH264InspectionObservation {
@@ -740,6 +741,8 @@ fn transport_await_hard_fallback_does_not_treat_nonidr_packet_seen_as_local_deco
                 bootstrap_reject_reason: Some("NonIdrVcl".to_string()),
                 admission_accepted: true,
                 observed_at_ms: now_ms + 6_960.0,
+
+                ..Default::default()
             });
     });
 

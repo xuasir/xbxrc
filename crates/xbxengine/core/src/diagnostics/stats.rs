@@ -6,7 +6,36 @@ use crate::transport::rtc::recovery::runtime_state::{
     project_runtime_state_from_stats, resolve_runtime_recovery_profile, RecoveryRuntimeState,
 };
 use crate::transport::rtc::recovery::startup::SessionPhase;
-use crate::{XbxEngineMediaRuntimeStats, XbxEngineRuntimeSnapshot};
+use crate::{
+    XbxEngineH264InspectionObservation, XbxEngineKeyframeRequestEpisodeObservation,
+    XbxEngineMediaRuntimeStats, XbxEngineRuntimeSnapshot,
+};
+
+fn keyframe_request_episode_to_protocol_dto(
+    episode: &XbxEngineKeyframeRequestEpisodeObservation,
+) -> xbxengine_protocol::XbxEngineKeyframeRequestEpisodeObservationDto {
+    xbxengine_protocol::XbxEngineKeyframeRequestEpisodeObservationDto {
+        episode_id: episode.episode_id,
+        request_reason: episode.request_reason.clone(),
+        request_kind: episode.request_kind.clone(),
+        status: episode.status.clone(),
+        status_detail: episode.status_detail.clone(),
+        requested_at_ms: episode.requested_at_ms,
+        sent_at_ms: episode.sent_at_ms,
+        deadline_at_ms: episode.deadline_at_ms,
+        transport_detail: episode.transport_detail.clone(),
+        first_video_packet_at_ms: episode.first_video_packet_at_ms,
+        first_video_packet_rtp_timestamp: episode.first_video_packet_rtp_timestamp,
+        first_video_packet_is_keyframe: episode.first_video_packet_is_keyframe,
+        first_keyframe_packet_at_ms: episode.first_keyframe_packet_at_ms,
+        first_keyframe_decoded_at_ms: episode.first_keyframe_decoded_at_ms,
+        response_rtp_timestamp: episode.response_rtp_timestamp,
+        response_frame_seq: episode.response_frame_seq,
+        response_verdict: episode.response_verdict.clone(),
+        lifecycle_phase: episode.lifecycle_phase.clone(),
+        retired_at_ms: episode.retired_at_ms,
+    }
+}
 
 #[derive(Clone, Debug)]
 struct VideoOwnerContract {
@@ -110,7 +139,7 @@ fn frame_budget_dto_from_observation(
 }
 
 fn h264_inspection_dto_from_observation(
-    observation: Option<&crate::XbxEngineH264InspectionObservation>,
+    observation: Option<&XbxEngineH264InspectionObservation>,
 ) -> Option<xbxengine_protocol::XbxEngineH264InspectionObservationDto> {
     observation.map(
         |observation| xbxengine_protocol::XbxEngineH264InspectionObservationDto {
@@ -134,6 +163,10 @@ fn h264_inspection_dto_from_observation(
             bootstrap_reject_reason: observation.bootstrap_reject_reason.clone(),
             admission_accepted: observation.admission_accepted,
             observed_at_ms: observation.observed_at_ms,
+            bound_episode_id: observation.bound_episode_id,
+            bound_episode_status: observation.bound_episode_status.clone(),
+            bound_as_recovery_response: observation.bound_as_recovery_response,
+            bound_response_rtp_timestamp: observation.bound_response_rtp_timestamp,
         },
     )
 }
@@ -762,29 +795,17 @@ pub fn build_xbxengine_stats(
             stats
                 .latest_keyframe_request_episode
                 .as_ref()
-                .map(
-                    |episode| xbxengine_protocol::XbxEngineKeyframeRequestEpisodeObservationDto {
-                        episode_id: episode.episode_id,
-                        request_reason: episode.request_reason.clone(),
-                        request_kind: episode.request_kind.clone(),
-                        status: episode.status.clone(),
-                        status_detail: episode.status_detail.clone(),
-                        requested_at_ms: episode.requested_at_ms,
-                        sent_at_ms: episode.sent_at_ms,
-                        deadline_at_ms: episode.deadline_at_ms,
-                        transport_detail: episode.transport_detail.clone(),
-                        first_video_packet_at_ms: episode.first_video_packet_at_ms,
-                        first_video_packet_rtp_timestamp: episode.first_video_packet_rtp_timestamp,
-                        first_video_packet_is_keyframe: episode.first_video_packet_is_keyframe,
-                        first_keyframe_packet_at_ms: episode.first_keyframe_packet_at_ms,
-                        first_keyframe_decoded_at_ms: episode.first_keyframe_decoded_at_ms,
-                        response_rtp_timestamp: episode.response_rtp_timestamp,
-                        response_frame_seq: episode.response_frame_seq,
-                        response_verdict: episode.response_verdict.clone(),
-                        lifecycle_phase: episode.lifecycle_phase.clone(),
-                    },
-                )
+                .map(keyframe_request_episode_to_protocol_dto)
         }),
+        recent_keyframe_request_episodes: runtime_stats
+            .map(|stats| {
+                stats
+                    .recent_keyframe_request_episodes
+                    .iter()
+                    .map(keyframe_request_episode_to_protocol_dto)
+                    .collect()
+            })
+            .unwrap_or_default(),
         latest_h264_inspection_observation: runtime_stats.and_then(|stats| {
             h264_inspection_dto_from_observation(stats.latest_h264_inspection_observation.as_ref())
         }),

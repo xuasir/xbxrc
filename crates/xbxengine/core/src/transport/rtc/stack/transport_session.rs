@@ -1522,6 +1522,7 @@ mod tests {
                 response_frame_seq: Some(88),
                 response_verdict: Some("on-time".to_string()),
                 lifecycle_phase: None,
+                retired_at_ms: None,
             });
         stats.latest_h264_inspection_observation =
             Some(crate::XbxEngineH264InspectionObservation {
@@ -1545,6 +1546,8 @@ mod tests {
                 bootstrap_reject_reason: Some("NonIdrVcl".to_string()),
                 admission_accepted: true,
                 observed_at_ms: now_ms - 45.0,
+
+                ..Default::default()
             });
         stats.latest_recovery_decision_ledger =
             Some(crate::XbxEngineRecoveryDecisionLedgerObservation {
@@ -1651,6 +1654,7 @@ mod tests {
                 response_frame_seq: None,
                 response_verdict: None,
                 lifecycle_phase: None,
+                retired_at_ms: None,
             });
         stats.latest_h264_inspection_observation =
             Some(crate::XbxEngineH264InspectionObservation {
@@ -1674,6 +1678,8 @@ mod tests {
                 bootstrap_reject_reason: Some("NonIdrVcl".to_string()),
                 admission_accepted: true,
                 observed_at_ms: now_ms - 45.0,
+
+                ..Default::default()
             });
         stats.latest_recovery_decision_ledger =
             Some(crate::XbxEngineRecoveryDecisionLedgerObservation {
@@ -1932,6 +1938,7 @@ mod tests {
                 response_frame_seq: None,
                 response_verdict: Some("pending".to_string()),
                 lifecycle_phase: None,
+                retired_at_ms: None,
             });
         let runtime_stats = Arc::new(Mutex::new(stats));
         let pending_runtime_recovery_action = Arc::new(Mutex::new(None));
@@ -1987,6 +1994,7 @@ mod tests {
                 response_frame_seq: Some(456),
                 response_verdict: Some("pending".to_string()),
                 lifecycle_phase: None,
+                retired_at_ms: None,
             });
         // 未提交 clean anchor：video_anchor_clean_epoch=None
         stats.latest_recovery_decision_ledger =
@@ -2076,6 +2084,7 @@ mod tests {
                 response_frame_seq: None,
                 response_verdict: Some("pending".to_string()),
                 lifecycle_phase: None,
+                retired_at_ms: None,
             });
         stats.latest_h264_inspection_observation =
             Some(crate::XbxEngineH264InspectionObservation {
@@ -2099,6 +2108,8 @@ mod tests {
                 bootstrap_reject_reason: Some("NonIdrVcl".to_string()),
                 admission_accepted: true,
                 observed_at_ms: now_ms - 10.0,
+
+                ..Default::default()
             });
         stats.latest_recovery_decision_ledger =
             Some(crate::XbxEngineRecoveryDecisionLedgerObservation {
@@ -2189,6 +2200,7 @@ mod tests {
                 response_frame_seq: None,
                 response_verdict: Some("pending".to_string()),
                 lifecycle_phase: None,
+                retired_at_ms: None,
             });
         stats.latest_recovery_decision_ledger =
             Some(crate::XbxEngineRecoveryDecisionLedgerObservation {
@@ -2265,6 +2277,7 @@ mod tests {
                 response_frame_seq: None,
                 response_verdict: Some("transportDeferred".to_string()),
                 lifecycle_phase: None,
+                retired_at_ms: None,
             });
         stats.latest_recovery_decision_ledger =
             Some(crate::XbxEngineRecoveryDecisionLedgerObservation {
@@ -2340,6 +2353,7 @@ mod tests {
                 response_frame_seq: None,
                 response_verdict: Some("pending".to_string()),
                 lifecycle_phase: None,
+                retired_at_ms: None,
             });
         stats.latest_recovery_decision_ledger =
             Some(crate::XbxEngineRecoveryDecisionLedgerObservation {
@@ -2418,6 +2432,7 @@ mod tests {
                 response_frame_seq: None,
                 response_verdict: Some("pending".to_string()),
                 lifecycle_phase: None,
+                retired_at_ms: None,
             });
         stats.latest_video_timeline_observation = Some(crate::XbxEngineVideoTimelineObservation {
             observation_id: 1,
@@ -2521,6 +2536,7 @@ mod tests {
                 response_frame_seq: None,
                 response_verdict: Some("pending".to_string()),
                 lifecycle_phase: None,
+                retired_at_ms: None,
             });
         stats.latest_video_timeline_observation = Some(crate::XbxEngineVideoTimelineObservation {
             observation_id: 1,
@@ -2623,6 +2639,7 @@ mod tests {
                 response_frame_seq: None,
                 response_verdict: Some("pending".to_string()),
                 lifecycle_phase: None,
+                retired_at_ms: None,
             });
         stats.latest_video_timeline_observation = Some(crate::XbxEngineVideoTimelineObservation {
             observation_id: 1,
@@ -2752,6 +2769,7 @@ mod tests {
                 response_frame_seq: None,
                 response_verdict: Some("pending".to_string()),
                 lifecycle_phase: None,
+                retired_at_ms: None,
             });
         stats.latest_recovery_decision_ledger =
             Some(crate::XbxEngineRecoveryDecisionLedgerObservation {
@@ -2850,6 +2868,7 @@ mod tests {
                 response_frame_seq: None,
                 response_verdict: Some("pending".to_string()),
                 lifecycle_phase: None,
+                retired_at_ms: None,
             });
         stats.latest_recovery_decision_ledger =
             Some(crate::XbxEngineRecoveryDecisionLedgerObservation {
@@ -2924,6 +2943,7 @@ mod tests {
                 response_frame_seq: None,
                 response_verdict: Some("pending".to_string()),
                 lifecycle_phase: None,
+                retired_at_ms: None,
             });
         stats.latest_video_timeline_observation = Some(crate::XbxEngineVideoTimelineObservation {
             observation_id: 35010,
@@ -3054,6 +3074,7 @@ mod tests {
                 response_frame_seq: None,
                 response_verdict: Some("on-time".to_string()),
                 lifecycle_phase: None,
+                retired_at_ms: None,
             });
         stats.latest_recovery_decision_ledger =
             Some(crate::XbxEngineRecoveryDecisionLedgerObservation {

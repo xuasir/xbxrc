@@ -113,6 +113,7 @@ fn playback_phase_edge11_expired_unsent_keyframe_episode_must_surface_decision()
                     response_frame_seq: None,
                     response_verdict: None,
                     lifecycle_phase: None,
+                    retired_at_ms: None,
                 });
             stats.latest_video_track_status = Some(crate::XbxEngineVideoTrackStatus {
                 state: "remoteTrackAttached".to_string(),
@@ -197,6 +198,7 @@ fn playback_phase_edge12_deadline_expired_episode_must_not_stay_no_signal() {
                     response_frame_seq: None,
                     response_verdict: Some("missed".to_string()),
                     lifecycle_phase: None,
+                    retired_at_ms: None,
                 });
             stats.latest_video_track_status = Some(crate::XbxEngineVideoTrackStatus {
                 state: "remoteTrackAttached".to_string(),

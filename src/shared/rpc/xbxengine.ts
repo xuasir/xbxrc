@@ -202,6 +202,10 @@ export interface XbxEngineStatsDto {
     bootstrap_reject_reason?: string | null
     admission_accepted: boolean
     observed_at_ms: number
+    bound_episode_id?: number | null
+    bound_episode_status?: string | null
+    bound_as_recovery_response?: boolean | null
+    bound_response_rtp_timestamp?: number | null
   }
   recovery_keyframe_request_count?: number
   recovery_decoder_reset_count?: number

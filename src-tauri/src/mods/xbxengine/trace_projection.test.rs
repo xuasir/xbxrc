@@ -1966,3 +1966,109 @@ fn direct_gaming_state_owner_contract_unchanged_does_not_repeat_transition() {
         .iter()
         .any(|entry| entry["event"] == "videoTimelineObserved"));
 }
+
+#[test]
+fn h264_inspection_snapshot_unlinks_when_frame_rtp_mismatches_keyframe_episode() {
+    let stats = test_stats(json!({
+        "resolution": "1920x1080",
+        "rtt": "0",
+        "fps": 60.0,
+        "pl": "0",
+        "fl": "",
+        "jit": "0",
+        "br": "0",
+        "decode": "",
+        "latest_keyframe_request_episode": {
+            "episode_id": 1,
+            "request_reason": "transportAwaitRecoveryKeyframe",
+            "request_kind": "pli",
+            "status": "missed",
+            "requested_at_ms": 100.0,
+            "sent_at_ms": 110.0,
+            "deadline_at_ms": 200.0,
+            "first_keyframe_packet_at_ms": null,
+            "first_keyframe_decoded_at_ms": null,
+            "response_rtp_timestamp": 111,
+            "response_frame_seq": null,
+            "response_verdict": "missed"
+        },
+        "recent_keyframe_request_episodes": [],
+        "latest_h264_inspection_observation": {
+            "observation_id": 5,
+            "frame_rtp_timestamp": 999999,
+            "nal_types": [],
+            "has_inband_sps": false,
+            "has_inband_pps": false,
+            "committed_sps_present": true,
+            "committed_pps_present": true,
+            "slice_headers_valid": true,
+            "delta_continuation_ready": true,
+            "parameter_sets_changed": false,
+            "config_changed": false,
+            "is_idr": false,
+            "bootstrap_ready": true,
+            "admission_accepted": true,
+            "observed_at_ms": 500.0,
+            "bound_as_recovery_response": false
+        }
+    }));
+
+    let snapshot = build_observability_snapshot(&stats);
+    let h264 = &snapshot["latest"]["h264Inspection"];
+    assert_eq!(h264["linkedEpisodeId"], json!(null));
+    assert_eq!(h264["linkedEpisodeStatus"], json!(null));
+    assert_eq!(h264["isRecoveryKeyframeResponseContext"], false);
+}
+
+#[test]
+fn h264_inspection_time_window_skips_retired_keyframe_episode() {
+    let stats = test_stats(json!({
+        "resolution": "1920x1080",
+        "rtt": "0",
+        "fps": 60.0,
+        "pl": "0",
+        "fl": "",
+        "jit": "0",
+        "br": "0",
+        "decode": "",
+        "latest_keyframe_request_episode": null,
+        "recent_keyframe_request_episodes": [{
+            "episode_id": 9,
+            "request_reason": "transportAwaitRecoveryKeyframe",
+            "request_kind": "pli",
+            "status": "packet-seen",
+            "requested_at_ms": 100.0,
+            "sent_at_ms": 110.0,
+            "deadline_at_ms": 500.0,
+            "first_keyframe_packet_at_ms": 120.0,
+            "first_keyframe_decoded_at_ms": null,
+            "response_rtp_timestamp": 555,
+            "response_frame_seq": null,
+            "response_verdict": "unknown",
+            "retired_at_ms": 400.0
+        }],
+        "latest_h264_inspection_observation": {
+            "observation_id": 3,
+            "frame_rtp_timestamp": 999,
+            "nal_types": [],
+            "has_inband_sps": false,
+            "has_inband_pps": false,
+            "committed_sps_present": true,
+            "committed_pps_present": true,
+            "slice_headers_valid": true,
+            "delta_continuation_ready": true,
+            "parameter_sets_changed": false,
+            "config_changed": false,
+            "is_idr": false,
+            "bootstrap_ready": true,
+            "admission_accepted": true,
+            "observed_at_ms": 115.0,
+            "bound_as_recovery_response": false
+        }
+    }));
+
+    let snapshot = build_observability_snapshot(&stats);
+    let h264 = &snapshot["latest"]["h264Inspection"];
+    assert_eq!(h264["linkedEpisodeId"], json!(null));
+    assert_eq!(h264["isRecoveryKeyframeResponseContext"], false);
+}

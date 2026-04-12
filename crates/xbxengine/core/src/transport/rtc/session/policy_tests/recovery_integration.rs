@@ -283,6 +283,8 @@ fn recovery_integration_recent_transport_await_exits_when_non_idr_has_committed_
                     bootstrap_reject_reason: Some("NonIdrVcl".to_string()),
                     admission_accepted: true,
                     observed_at_ms: now_ms - 1.0,
+
+                    ..Default::default()
                 });
             if let Some(timeline) = stats.latest_video_timeline_observation.as_mut() {
                 timeline.source_event = "frame-complete-candidate".to_string();
@@ -420,6 +422,7 @@ fn recovery_integration_same_unresolved_gap_transport_await_reuses_in_flight_fam
                         response_frame_seq: None,
                         response_verdict: Some("pending".to_string()),
                         lifecycle_phase: None,
+                        retired_at_ms: None,
                     });
                 if let Some(track) = stats.latest_video_track_status.as_mut() {
                     track.video_bytes_total += 8_000;
@@ -674,6 +677,7 @@ fn recovery_integration_transport_await_reopens_after_clean_anchor_and_new_recov
                     response_frame_seq: None,
                     response_verdict: Some("pending".to_string()),
                     lifecycle_phase: None,
+                    retired_at_ms: None,
                 });
         },
     );
@@ -3545,6 +3549,8 @@ fn connected_track_attached_without_first_frame_feedback_does_not_escalate_boots
                     bootstrap_reject_reason: Some("bootstrapMissingSps".to_string()),
                     admission_accepted: false,
                     observed_at_ms: 1_099.0,
+
+                    ..Default::default()
                 });
         },
     );
@@ -3767,6 +3773,8 @@ fn connected_track_attached_without_first_frame_feedback_does_not_escalate_displ
                     bootstrap_reject_reason: Some("bootstrapMissingSps".to_string()),
                     admission_accepted: false,
                     observed_at_ms: 1_099.0,
+
+                    ..Default::default()
                 });
         },
     );
@@ -3898,6 +3906,8 @@ fn non_idr_with_recovery_keyframe_requested_enters_transport_await_chain_after_p
                 bootstrap_reject_reason: Some("NonIdrVcl".to_string()),
                 admission_accepted: false,
                 observed_at_ms: 36_999.0,
+
+                ..Default::default()
             });
     }
     let mut policy = RtcSessionPolicy::new(runtime_config, runtime_stats.clone());
@@ -4015,6 +4025,8 @@ fn connected_track_attached_without_first_frame_feedback_bootstrap_missing_sps_r
                     bootstrap_reject_reason: Some("bootstrapMissingSps".to_string()),
                     admission_accepted: false,
                     observed_at_ms: 1_099.0,
+
+                    ..Default::default()
                 });
         },
     );
@@ -4088,6 +4100,8 @@ fn connected_track_attached_without_first_frame_feedback_bootstrap_missing_sps_r
                     bootstrap_reject_reason: Some("bootstrapMissingSps".to_string()),
                     admission_accepted: false,
                     observed_at_ms: 1_139.0,
+
+                    ..Default::default()
                 });
         },
     );
@@ -4209,6 +4223,8 @@ fn pre_first_frame_bootstrap_probes_do_not_enter_active_recovery_before_first_fr
                         bootstrap_reject_reason: Some(reason.to_string()),
                         admission_accepted: false,
                         observed_at_ms: 40_099.0,
+
+                        ..Default::default()
                     });
             },
         );
@@ -4312,6 +4328,7 @@ fn pre_first_frame_transport_await_stall_does_not_upgrade_to_reset_or_reconnect(
                     response_frame_seq: None,
                     response_verdict: Some("pending".to_string()),
                     lifecycle_phase: None,
+                    retired_at_ms: None,
                 });
         },
     );
@@ -5811,6 +5828,7 @@ fn recovery_integration_home_burst_input_rumble_display_pressure_then_stale_tran
                     response_frame_seq: None,
                     response_verdict: None,
                     lifecycle_phase: None,
+                    retired_at_ms: None,
                 });
             set_input_rumble_burst(stats, 2, 11_118.0, 32);
             if let Some(track) = stats.latest_video_track_status.as_mut() {
@@ -6629,6 +6647,7 @@ fn media_reconnect_candidate_waits_for_success_edge_before_regrant() {
                 response_frame_seq: None,
                 response_verdict: Some("missed".to_string()),
                 lifecycle_phase: None,
+                retired_at_ms: None,
             });
     }
     let mut policy = RtcSessionPolicy::new(runtime_config, runtime_stats);

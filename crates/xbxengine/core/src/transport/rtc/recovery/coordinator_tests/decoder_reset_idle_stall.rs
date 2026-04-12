@@ -479,6 +479,7 @@ fn packet_seen_transport_await_episode_upgrades_to_decoder_reset_after_decode_gr
                 response_frame_seq: None,
                 response_verdict: Some("on-time".to_string()),
                 lifecycle_phase: None,
+                retired_at_ms: None,
             });
     });
 
@@ -567,6 +568,7 @@ fn deferred_transport_await_episode_does_not_keep_keyframe_family_in_flight() {
                 response_frame_seq: None,
                 response_verdict: Some("transportDeferred".to_string()),
                 lifecycle_phase: None,
+                retired_at_ms: None,
             });
         stats.latest_h264_inspection_observation =
             Some(crate::XbxEngineH264InspectionObservation {
@@ -590,6 +592,8 @@ fn deferred_transport_await_episode_does_not_keep_keyframe_family_in_flight() {
                 bootstrap_reject_reason: Some("NonIdrVcl".to_string()),
                 admission_accepted: true,
                 observed_at_ms: now_ms + 1.0,
+
+                ..Default::default()
             });
     });
 
@@ -666,6 +670,7 @@ fn stale_transport_await_decoder_reset_without_progress_can_reopen_decoder_reset
             response_frame_seq: None,
             response_verdict: Some("missed".to_string()),
             lifecycle_phase: None,
+            retired_at_ms: None,
         });
     stats.latest_video_escalation_observation = Some(crate::XbxEngineVideoEscalationObservation {
         observation_id: 8001,
@@ -761,6 +766,7 @@ fn invalid_transport_await_keyframe_response_releases_decoder_reset_inflight() {
             response_frame_seq: None,
             response_verdict: Some("on-time".to_string()),
             lifecycle_phase: None,
+            retired_at_ms: None,
         });
     stats.latest_h264_inspection_observation = Some(crate::XbxEngineH264InspectionObservation {
         observation_id: 9201,
@@ -783,6 +789,8 @@ fn invalid_transport_await_keyframe_response_releases_decoder_reset_inflight() {
         bootstrap_reject_reason: Some("NonIdrVcl".to_string()),
         admission_accepted: true,
         observed_at_ms: now_ms - 225.0,
+
+        ..Default::default()
     });
     stats.latest_video_escalation_observation = Some(crate::XbxEngineVideoEscalationObservation {
         observation_id: 9202,
@@ -863,6 +871,7 @@ fn transport_await_lane_distinguishes_probe_decode_and_reset_progress() {
             response_frame_seq: None,
             response_verdict: Some("pending".to_string()),
             lifecycle_phase: None,
+            retired_at_ms: None,
         });
     let shared_stats = Mutex::new(stats);
 
@@ -956,6 +965,7 @@ fn transport_await_invalid_nonidr_response_releases_reset_and_decode_wait_lanes(
             response_frame_seq: None,
             response_verdict: Some("on-time".to_string()),
             lifecycle_phase: None,
+            retired_at_ms: None,
         });
     stats.latest_h264_inspection_observation = Some(crate::XbxEngineH264InspectionObservation {
         observation_id: 8_520,
@@ -978,6 +988,8 @@ fn transport_await_invalid_nonidr_response_releases_reset_and_decode_wait_lanes(
         bootstrap_reject_reason: Some("NonIdrVcl".to_string()),
         admission_accepted: true,
         observed_at_ms: now_ms - 10.0,
+
+        ..Default::default()
     });
     stats.latest_video_escalation_observation = Some(crate::XbxEngineVideoEscalationObservation {
         observation_id: 8_521,
@@ -1051,6 +1063,7 @@ fn transport_await_invalid_nonidr_inspection_after_reset_does_not_coalesce_stale
             response_frame_seq: None,
             response_verdict: Some("missed".to_string()),
             lifecycle_phase: None,
+            retired_at_ms: None,
         });
     stats.latest_h264_inspection_observation = Some(crate::XbxEngineH264InspectionObservation {
         observation_id: 8_620,
@@ -1073,6 +1086,8 @@ fn transport_await_invalid_nonidr_inspection_after_reset_does_not_coalesce_stale
         bootstrap_reject_reason: Some("NonIdrVcl".to_string()),
         admission_accepted: true,
         observed_at_ms: now_ms - 10.0,
+
+        ..Default::default()
     });
     stats.latest_video_escalation_observation = Some(crate::XbxEngineVideoEscalationObservation {
         observation_id: 8_621,
@@ -1559,6 +1574,7 @@ fn bootstrap_in_flight_signal_stays_in_local_probe_domain() {
             response_frame_seq: None,
             response_verdict: None,
             lifecycle_phase: None,
+            retired_at_ms: None,
         });
     stats.latest_video_timeline_observation = Some(crate::XbxEngineVideoTimelineObservation {
         observation_id: 777,
@@ -1646,6 +1662,7 @@ fn transport_await_nonidr_breaks_sustaining_wait_burst_suppression() {
             response_frame_seq: None,
             response_verdict: None,
             lifecycle_phase: None,
+            retired_at_ms: None,
         });
     stats.latest_video_timeline_observation = Some(crate::XbxEngineVideoTimelineObservation {
         observation_id: 888,
@@ -1703,6 +1720,8 @@ fn transport_await_nonidr_breaks_sustaining_wait_burst_suppression() {
         bootstrap_reject_reason: Some("NonIdrVcl".to_string()),
         admission_accepted: true,
         observed_at_ms: now_ms - 30.0,
+
+        ..Default::default()
     });
     let shared_stats = Mutex::new(stats);
     let mut coordinator = RecoveryCoordinator::new(

@@ -487,6 +487,7 @@ mod tests {
                     response_frame_seq: None,
                     response_verdict: Some("pending".to_string()),
                     lifecycle_phase: None,
+                    retired_at_ms: None,
                 },
             ),
             ..XbxEngineMediaRuntimeStats::default()
@@ -579,6 +580,7 @@ mod tests {
                     response_frame_seq: None,
                     response_verdict: Some("on-time".to_string()),
                     lifecycle_phase: None,
+                    retired_at_ms: None,
                 },
             ),
             latest_h264_inspection_observation: Some(crate::XbxEngineH264InspectionObservation {
@@ -602,6 +604,8 @@ mod tests {
                 bootstrap_reject_reason: Some("NonIdrVcl".to_string()),
                 admission_accepted: true,
                 observed_at_ms: now_ms - 225.0,
+
+                ..Default::default()
             }),
             ..XbxEngineMediaRuntimeStats::default()
         };

@@ -867,6 +867,7 @@ impl RtcVideoFrameSource {
                             .map(|reason| reason.as_str().to_string()),
                         admission_accepted,
                         observed_at_ms: inspection_now_ms,
+                        ..Default::default()
                     },
                 );
                 self.runtime_stats

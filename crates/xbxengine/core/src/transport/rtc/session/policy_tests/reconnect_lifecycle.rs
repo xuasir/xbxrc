@@ -274,6 +274,7 @@ fn pre_first_frame_bootstrap_missing_sps_with_recent_episode_coalesces_probe() {
                 response_frame_seq: None,
                 response_verdict: None,
                 lifecycle_phase: None,
+                retired_at_ms: None,
             });
     }
     let mut policy = RtcSessionPolicy::new(runtime_config, runtime_stats.clone());
