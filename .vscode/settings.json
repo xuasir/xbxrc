@@ -6,5 +6,6 @@
     "xcloud",
     "xhome",
     "xsts"
-  ]
+  ],
+  "kiroAgent.configureMCP": "Disabled"
 }

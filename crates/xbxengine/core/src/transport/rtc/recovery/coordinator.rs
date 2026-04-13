@@ -2487,6 +2487,36 @@ impl RecoveryCoordinator {
         if episode.request_reason.as_deref() != Some("transportAwaitRecoveryKeyframe") {
             return false;
         }
+        let unresolved_transport_await = Self::has_unresolved_transport_await_issue(stats);
+        let has_recent_clean_anchor = Self::has_recent_clean_anchor_evidence(
+            stats.video_anchor_clean_epoch,
+            stats.video_anchor_clean_observed_at_ms,
+            stats.video_anchor_clean_source_event.as_deref(),
+            stats.latest_anchor_candidate_ledger.as_ref(),
+            recovery_epoch,
+            now_ms,
+        );
+        let lacks_recent_clean_anchor = !has_recent_clean_anchor;
+        let Some(inspection) = stats.latest_h264_inspection_observation.as_ref() else {
+            return false;
+        };
+        if (now_ms - inspection.observed_at_ms).max(0.0)
+            > TRANSPORT_AWAIT_UNUSABLE_RESPONSE_FRESH_MS
+        {
+            return false;
+        }
+        if unresolved_transport_await
+            && lacks_recent_clean_anchor
+            && is_terminal_transport_await_deferred_episode(
+                episode,
+                Some(inspection),
+                has_recent_clean_anchor,
+                now_ms,
+                TRANSPORT_AWAIT_UNUSABLE_RESPONSE_FRESH_MS,
+            )
+        {
+            return true;
+        }
         if !matches!(episode.status.as_str(), "packet-seen" | "decoded") {
             return false;
         }
@@ -2500,14 +2530,6 @@ impl RecoveryCoordinator {
             return false;
         }
         if (now_ms - response_at_ms).max(0.0) > TRANSPORT_AWAIT_UNUSABLE_RESPONSE_FRESH_MS {
-            return false;
-        }
-        let Some(inspection) = stats.latest_h264_inspection_observation.as_ref() else {
-            return false;
-        };
-        if (now_ms - inspection.observed_at_ms).max(0.0)
-            > TRANSPORT_AWAIT_UNUSABLE_RESPONSE_FRESH_MS
-        {
             return false;
         }
         let reject_reason_unusable = matches!(
@@ -2538,15 +2560,6 @@ impl RecoveryCoordinator {
         if !track_attached_with_video {
             return false;
         }
-        let unresolved_transport_await = Self::has_unresolved_transport_await_issue(stats);
-        let lacks_recent_clean_anchor = !Self::has_recent_clean_anchor_evidence(
-            stats.video_anchor_clean_epoch,
-            stats.video_anchor_clean_observed_at_ms,
-            stats.video_anchor_clean_source_event.as_deref(),
-            stats.latest_anchor_candidate_ledger.as_ref(),
-            recovery_epoch,
-            now_ms,
-        );
         unresolved_transport_await && lacks_recent_clean_anchor
     }
 
