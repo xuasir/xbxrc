@@ -669,6 +669,11 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
           : streamConfig.value.resolution,
       ),
       performanceStyle: computed(() => streamConfig.value.performance_style === true),
+      runtimeMode: computed(() =>
+        sessionExecution.value?.runtime.mode
+        ?? streamConfig.value.stream_runtime_mode
+        ?? 'webrtc-direct'
+      ),
       metadata: sessionMetadata,
       capabilities: sessionCapabilities,
       diagnostics,

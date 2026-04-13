@@ -54,6 +54,7 @@ const {
   displayOptions,
   resolutionMode,
   performanceStyle,
+  runtimeMode,
   performanceVisible,
   diagnosticsVisible,
   performanceSnapshot,
@@ -501,6 +502,7 @@ async function handleStreamMenuAction(id: string): Promise<void> {
         :visible="diagnosticsVisible"
         :diagnostics="diagnostics"
         :mount="diagnosticsBinding"
+        :runtime-mode="runtimeMode"
       />
       <StreamPerformancePanel
         :visible="performanceVisible && (isConnected || performanceBinding.phase === 'mounted')"
@@ -508,6 +510,7 @@ async function handleStreamMenuAction(id: string): Promise<void> {
         :snapshot="performanceSnapshot"
         :diagnostics="diagnostics"
         :resolution-mode="resolutionMode"
+        :runtime-mode="runtimeMode"
       />
       <StreamMicrophoneStatus
         :mount="microphoneBinding"

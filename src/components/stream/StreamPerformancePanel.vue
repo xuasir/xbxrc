@@ -9,6 +9,7 @@ interface StreamPerformancePanelProps {
   snapshot: StreamPerformanceSnapshot | null
   diagnostics: StreamSessionDiagnosticsSnapshot
   resolutionMode?: number
+  runtimeMode: 'webrtc-direct' | 'rust-owned'
 }
 
 const props = withDefaults(defineProps<StreamPerformancePanelProps>(), {
@@ -17,11 +18,12 @@ const props = withDefaults(defineProps<StreamPerformancePanelProps>(), {
 })
 
 const { t } = useI18n()
+const isBrowserMode = computed(() => props.runtimeMode === 'webrtc-direct')
 
 const resolutionText = computed(() => {
   const resolution = props.snapshot?.resolution
   if (resolution === undefined || resolution === '') {
-    return '--'
+    return isBrowserMode.value ? '' : '--'
   }
 
   return props.resolutionMode === 1081 ? `${resolution}(HQ)` : resolution
@@ -80,7 +82,23 @@ const metrics = computed(() => [
   { key: 'DecRec', value: props.snapshot?.videoDecoderRecoveryState ?? '--' },
   { key: 'DecEvt', value: props.snapshot?.videoDecoderRecoveryEvent ?? '--' },
   { key: 'Reco', value: props.snapshot?.recoveryReconnectCount ?? '--' },
-])
+].filter((item) => {
+  if (!isBrowserMode.value) {
+    return true
+  }
+  if (item.value === '--') {
+    return false
+  }
+  return (
+    item.key === 'State'
+    || item.key === 'RTT'
+    || item.key === 'JIT'
+    || item.key === 'PL'
+    || item.key === 'RecvFPS'
+    || item.key === 'DecFPS'
+    || item.key === 'PreFPS'
+  )
+}))
 
 function resolveStatusText(): string {
   if (props.diagnostics.statusCode === 'noVideo') {
@@ -114,14 +132,14 @@ function resolveStatusText(): string {
       {{ t('streamPage.performance.title') }}
     </strong>
     <template v-if="props.compact">
-      <span class="stream-performance__metric">{{ resolutionText }}</span>
+      <span v-if="resolutionText !== ''" class="stream-performance__metric">{{ resolutionText }}</span>
       <span v-for="metric in metrics" :key="metric.key" class="stream-performance__metric">
         {{ t(`streamPage.performance.metrics.${metric.key}`) }}: {{ metric.value }}
       </span>
     </template>
 
     <template v-else>
-      <div class="stream-performance__row">
+      <div v-if="resolutionText !== ''" class="stream-performance__row">
         <span>{{ t('streamPage.performance.metrics.Resolution') }}</span>
         <strong>{{ resolutionText }}</strong>
       </div>

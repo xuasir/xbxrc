@@ -20,6 +20,7 @@ interface StreamDiagnosticsPanelProps {
   visible: boolean
   mount: StreamEnhancementMountState
   diagnostics: StreamSessionDiagnosticsSnapshot
+  runtimeMode: 'webrtc-direct' | 'rust-owned'
 }
 
 interface StreamDiagnosticsRowViewModel {
@@ -54,123 +55,99 @@ interface StreamDiagnosticsNoticeViewModel {
 const props = defineProps<StreamDiagnosticsPanelProps>()
 
 const { t, te } = useI18n()
+const isBrowserMode = computed(() => props.runtimeMode === 'webrtc-direct')
 
 const panelVisible = computed(() =>
   props.visible && props.mount.phase === 'mounted',
 )
 
-const rows = computed<StreamDiagnosticsRowViewModel[]>(() => [
-  {
-    key: 'region',
-    value: props.diagnostics.regionName ?? t('streamPage.diagnostics.values.unknown'),
-  },
-  {
-    key: 'server',
-    value: props.diagnostics.serverHost ?? t('streamPage.diagnostics.values.unknown'),
-  },
-  {
-    key: 'relay',
-    value:
-      props.diagnostics.turnSource === 'none'
-        ? t('streamPage.diagnostics.values.none')
-        : t(`streamPage.badges.turnSources.${props.diagnostics.turnSource}`),
-  },
-  {
-    key: 'path',
-    value: props.diagnostics.transportSummary ?? t('streamPage.diagnostics.values.unknown'),
-  },
-  {
-    key: 'inputPortrait',
-    value: props.diagnostics.recoveryInputPortrait ?? t('streamPage.diagnostics.values.unknown'),
-  },
-  {
-    key: 'phase',
-    value: translateDiagnosticsSessionPhase(te, t, props.diagnostics.sessionPhase),
-  },
-  {
-    key: 'videoHealth',
-    value: translateDiagnosticsVideoHealth(te, t, props.diagnostics.videoHealth),
-  },
-  {
-    key: 'primaryIssueChain',
-    value: translateDiagnosticsPrimaryIssueChain(te, t, props.diagnostics.primaryIssueChain),
-  },
-  {
-    key: 'latestDecision',
-    value: translateDiagnosticsLatestDecision(te, t, props.diagnostics.latestDecisionSummary),
-  },
-  {
-    key: 'decoderState',
-    value: translateDiagnosticsDecoderRecovery(te, t, props.diagnostics.videoDecoderRecoveryState),
-  },
-  {
-    key: 'ownerState',
-    value: translateDiagnosticsOwnerState(te, t, props.diagnostics.recoveryOwnerState),
-  },
-  {
-    key: 'ownerReason',
-    value: translateDiagnosticsOwnerReason(te, t, props.diagnostics.recoveryOwnerReason),
-  },
-  {
-    key: 'rfcFaultDomain',
-    value: props.diagnostics.recoveryRfcFaultDomain?.trim()
-      || t('streamPage.diagnostics.values.unknown'),
-  },
-  {
-    key: 'rfcStage',
-    value: props.diagnostics.recoveryRfcStage?.trim()
-      || t('streamPage.diagnostics.values.unknown'),
-  },
-  {
-    key: 'rfcCeiling',
-    value: props.diagnostics.recoveryRfcCeiling?.trim()
-      || t('streamPage.diagnostics.values.unknown'),
-  },
-  {
-    key: 'recoveryDiagnosis',
-    value: props.diagnostics.recoveryDiagnosis?.trim()
-      || t('streamPage.diagnostics.values.unknown'),
-  },
-  {
-    key: 'stallKind',
-    value: translateDiagnosticsStallKind(te, t, props.diagnostics.stallKind),
-  },
-  {
-    key: 'status',
-    value: resolveStatusText(),
-  },
-])
+const rows = computed<StreamDiagnosticsRowViewModel[]>(() => {
+  const browserMode = isBrowserMode.value
+  const items: StreamDiagnosticsRowViewModel[] = []
+
+  const pushIf = (
+    key: StreamDiagnosticsRowViewModel['key'],
+    value: string | undefined,
+    required = false,
+  ): void => {
+    const normalized = value?.trim()
+    if (!required && browserMode && (normalized === undefined || normalized === '')) {
+      return
+    }
+    if (normalized === undefined || normalized === '') {
+      return
+    }
+    items.push({ key, value: normalized })
+  }
+
+  pushIf('region', props.diagnostics.regionName ?? t('streamPage.diagnostics.values.unknown'), true)
+  pushIf('server', props.diagnostics.serverHost ?? t('streamPage.diagnostics.values.unknown'), true)
+  pushIf(
+    'relay',
+    props.diagnostics.turnSource === 'none'
+      ? t('streamPage.diagnostics.values.none')
+      : t(`streamPage.badges.turnSources.${props.diagnostics.turnSource}`),
+    true,
+  )
+  pushIf('path', props.diagnostics.transportSummary ?? t('streamPage.diagnostics.values.unknown'), true)
+  if (!browserMode) {
+    pushIf('inputPortrait', props.diagnostics.recoveryInputPortrait ?? t('streamPage.diagnostics.values.unknown'), true)
+  }
+  const phaseValue = browserMode && (props.diagnostics.sessionPhase?.trim() ?? '') === ''
+    ? undefined
+    : translateDiagnosticsSessionPhase(te, t, props.diagnostics.sessionPhase)
+  pushIf('phase', phaseValue, !browserMode)
+  if (!browserMode) {
+    pushIf('videoHealth', translateDiagnosticsVideoHealth(te, t, props.diagnostics.videoHealth), true)
+    pushIf('primaryIssueChain', translateDiagnosticsPrimaryIssueChain(te, t, props.diagnostics.primaryIssueChain), true)
+    pushIf('latestDecision', translateDiagnosticsLatestDecision(te, t, props.diagnostics.latestDecisionSummary), true)
+    pushIf('decoderState', translateDiagnosticsDecoderRecovery(te, t, props.diagnostics.videoDecoderRecoveryState), true)
+    pushIf('ownerState', translateDiagnosticsOwnerState(te, t, props.diagnostics.recoveryOwnerState), true)
+    pushIf('ownerReason', translateDiagnosticsOwnerReason(te, t, props.diagnostics.recoveryOwnerReason), true)
+    pushIf('rfcFaultDomain', props.diagnostics.recoveryRfcFaultDomain?.trim() || t('streamPage.diagnostics.values.unknown'), true)
+    pushIf('rfcStage', props.diagnostics.recoveryRfcStage?.trim() || t('streamPage.diagnostics.values.unknown'), true)
+    pushIf('rfcCeiling', props.diagnostics.recoveryRfcCeiling?.trim() || t('streamPage.diagnostics.values.unknown'), true)
+    pushIf('recoveryDiagnosis', props.diagnostics.recoveryDiagnosis?.trim() || t('streamPage.diagnostics.values.unknown'), true)
+    pushIf('stallKind', translateDiagnosticsStallKind(te, t, props.diagnostics.stallKind), true)
+  }
+  pushIf('status', resolveStatusText(), true)
+
+  return items
+})
 
 const notices = computed<StreamDiagnosticsNoticeViewModel[]>(() => {
   const items: StreamDiagnosticsNoticeViewModel[] = []
+  const browserMode = isBrowserMode.value
 
-  if (props.diagnostics.statusCode === 'probing') {
-    items.push({
-      id: 'probing',
-      severity: 'info',
-      text: t('streamPage.diagnostics.notices.probing'),
-    })
-  }
-  else if (props.diagnostics.statusCode === 'blocked') {
-    items.push({
-      id: 'blocked',
-      severity: 'warning',
-      text: t('streamPage.diagnostics.notices.blocked'),
-    })
-  }
-  else if (props.diagnostics.isRecovering) {
-    items.push({
-      id: 'recovering',
-      severity: 'info',
-      text: t('streamPage.diagnostics.notices.recovering'),
-    })
-  }
-  else if (props.diagnostics.isDisplaySupplyLimited) {
-    items.push({
-      id: 'displaySupply',
-      severity: 'info',
-      text: t('streamPage.diagnostics.notices.displaySupplyLimited'),
-    })
+  if (!browserMode) {
+    if (props.diagnostics.statusCode === 'probing') {
+      items.push({
+        id: 'probing',
+        severity: 'info',
+        text: t('streamPage.diagnostics.notices.probing'),
+      })
+    }
+    else if (props.diagnostics.statusCode === 'blocked') {
+      items.push({
+        id: 'blocked',
+        severity: 'warning',
+        text: t('streamPage.diagnostics.notices.blocked'),
+      })
+    }
+    else if (props.diagnostics.isRecovering) {
+      items.push({
+        id: 'recovering',
+        severity: 'info',
+        text: t('streamPage.diagnostics.notices.recovering'),
+      })
+    }
+    else if (props.diagnostics.isDisplaySupplyLimited) {
+      items.push({
+        id: 'displaySupply',
+        severity: 'info',
+        text: t('streamPage.diagnostics.notices.displaySupplyLimited'),
+      })
+    }
   }
 
   if (props.diagnostics.isRelayPath) {
