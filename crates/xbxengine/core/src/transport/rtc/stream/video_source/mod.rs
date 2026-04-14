@@ -34,6 +34,10 @@ pub(super) mod timeline;
 use crate::transport::rtc::stream::frame_cadence::TransportFrameDeadlineTracker;
 
 use self::nack_window::NackSequenceWindow;
+use self::nack_policy::{
+    NACK_MAINTENANCE_TICK_INTERVAL_MS, RECOVERY_KEYFRAME_RETRY_INTERVAL_MS,
+    RECOVERY_KEYFRAME_RETRY_TIMEOUT_MS,
+};
 use self::timeline::VideoTimelineState;
 
 use crate::transport::rtc::stream::adapter_types::{
@@ -80,6 +84,13 @@ pub struct RtcVideoFrameSource {
     last_transport_observation_at: Option<std::time::Instant>,
     timeline_state: VideoTimelineState,
     wait_keyframe_observation_cooldown: std::time::Duration,
+    nack_maintenance_tick_interval: std::time::Duration,
+    last_nack_maintenance_tick_at: std::time::Instant,
+    waiting_recovery_keyframe_since_ms: Option<f64>,
+    recovery_keyframe_retry_timeout_ms: f64,
+    recovery_keyframe_retry_interval_ms: f64,
+    next_recovery_keyframe_retry_at_ms: Option<f64>,
+    recovery_keyframe_retry_count: u16,
     sample_loss_burst_count: u8,
     clean_samples_since_loss: u8,
     last_submitted_frame_value: FrameValue,
@@ -156,6 +167,13 @@ impl RtcVideoFrameSource {
             last_transport_observation_at: None,
             timeline_state: VideoTimelineState::new(),
             wait_keyframe_observation_cooldown: Duration::from_millis(350),
+            nack_maintenance_tick_interval: Duration::from_millis(NACK_MAINTENANCE_TICK_INTERVAL_MS),
+            last_nack_maintenance_tick_at: std::time::Instant::now(),
+            waiting_recovery_keyframe_since_ms: None,
+            recovery_keyframe_retry_timeout_ms: RECOVERY_KEYFRAME_RETRY_TIMEOUT_MS,
+            recovery_keyframe_retry_interval_ms: RECOVERY_KEYFRAME_RETRY_INTERVAL_MS,
+            next_recovery_keyframe_retry_at_ms: None,
+            recovery_keyframe_retry_count: 0,
             sample_loss_burst_count: 0,
             clean_samples_since_loss: 0,
             last_submitted_frame_value: FrameValue::new(false, false, 12 * 1024),
@@ -351,6 +369,20 @@ impl RtcVideoFrameSource {
     }
 
     pub(super) fn set_waiting_for_recovery_keyframe(&mut self, waiting: bool) {
+        let now_ms = now_ms_f64();
+        if waiting {
+            if self.waiting_recovery_keyframe_since_ms.is_none() {
+                self.waiting_recovery_keyframe_since_ms = Some(now_ms);
+            }
+            if self.next_recovery_keyframe_retry_at_ms.is_none() {
+                self.next_recovery_keyframe_retry_at_ms =
+                    Some(now_ms + self.recovery_keyframe_retry_timeout_ms);
+            }
+        } else {
+            self.waiting_recovery_keyframe_since_ms = None;
+            self.next_recovery_keyframe_retry_at_ms = None;
+            self.recovery_keyframe_retry_count = 0;
+        }
         self.timeline_state.apply_wait_keyframe_gate(waiting);
     }
 

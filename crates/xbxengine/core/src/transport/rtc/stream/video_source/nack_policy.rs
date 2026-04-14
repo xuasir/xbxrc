@@ -15,6 +15,11 @@ pub(super) const CLOUD_EXTREME_RTT_MS: f64 = 300.0;
 pub(super) const CLOUD_HIGH_RTT_EXTRA_MARGIN_MS: f64 = 40.0;
 pub(super) const CLOUD_SEVERE_RTT_EXTRA_MARGIN_MS: f64 = 80.0;
 pub(super) const CLOUD_EXTREME_RTT_EXTRA_MARGIN_MS: f64 = 140.0;
+pub(super) const NACK_MAINTENANCE_TICK_INTERVAL_MS: u64 = 10;
+pub(super) const RECOVERY_KEYFRAME_RETRY_TIMEOUT_MS: f64 = 700.0;
+pub(super) const RECOVERY_KEYFRAME_RETRY_INTERVAL_MS: f64 = 450.0;
+pub(super) const RECOVERY_KEYFRAME_RETRY_MAX_COUNT: u16 = 8;
+pub(super) const OOS_REPAIRABILITY_PENALTY: f64 = 0.08;
 
 pub(super) fn cloud_nack_rtt_margin_ms(startup_mode: bool, cloud_rtt_ms: Option<f64>) -> f64 {
     let rtt_ms = cloud_rtt_ms.unwrap_or(0.0);

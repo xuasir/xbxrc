@@ -2,6 +2,7 @@ use super::{
     build_sample_builder, nack::gap_transport_evidence, now_ms_f64, timeline::ChainState,
     UINT16SIZE_HALF,
 };
+use super::nack_policy::RECOVERY_KEYFRAME_RETRY_MAX_COUNT;
 use super::nack_window::{NackWindowAddOutcome, SequenceRange};
 use crate::media::video::h264::inspection::{H264AccessUnitInspection, H264BootstrapRejectReason};
 use base64::Engine as _;
@@ -198,6 +199,56 @@ pub(super) fn detect_forward_gap(
 }
 
 impl RtcVideoFrameSource {
+    fn nack_maintenance_timeout(&self, base_timeout: std::time::Duration) -> std::time::Duration {
+        let elapsed = self.last_nack_maintenance_tick_at.elapsed();
+        let until_tick = if elapsed >= self.nack_maintenance_tick_interval {
+            std::time::Duration::ZERO
+        } else {
+            self.nack_maintenance_tick_interval - elapsed
+        };
+        base_timeout.min(until_tick)
+    }
+
+    pub(super) fn should_run_nack_maintenance_tick(&self) -> bool {
+        self.last_nack_maintenance_tick_at.elapsed() >= self.nack_maintenance_tick_interval
+    }
+
+    pub(super) fn maybe_retry_waiting_recovery_keyframe(&mut self, now_ms: f64) {
+        if !self.waiting_for_recovery_keyframe() {
+            return;
+        }
+        let should_retry = self
+            .next_recovery_keyframe_retry_at_ms
+            .is_some_and(|next_retry_at_ms| now_ms >= next_retry_at_ms);
+        if !should_retry {
+            return;
+        }
+        // 超过重试上限后停止发送请求，避免服务端无响应时无限重试。
+        if self.recovery_keyframe_retry_count >= RECOVERY_KEYFRAME_RETRY_MAX_COUNT {
+            crate::xbx_log_warn!(
+                "[RtcVideoFrameSource] recovery keyframe retry limit reached count={} waiting_since_ms={:?}",
+                self.recovery_keyframe_retry_count,
+                self.waiting_recovery_keyframe_since_ms
+            );
+            // 清空 next_retry_at_ms，不再触发后续重试。
+            self.next_recovery_keyframe_retry_at_ms = None;
+            return;
+        }
+        self.request_recovery_keyframe_from_source(
+            "chain-recovery-keyframe-timeout-retry",
+            None,
+            now_ms,
+        );
+        self.recovery_keyframe_retry_count = self.recovery_keyframe_retry_count.saturating_add(1);
+        self.next_recovery_keyframe_retry_at_ms =
+            Some(now_ms + self.recovery_keyframe_retry_interval_ms);
+        crate::xbx_log_warn!(
+            "[RtcVideoFrameSource] recovery keyframe wait timeout retry count={} waiting_since_ms={:?}",
+            self.recovery_keyframe_retry_count,
+            self.waiting_recovery_keyframe_since_ms
+        );
+    }
+
     fn decoder_bootstrap_no_output_continuation_allowed(
         &self,
         inspection: &H264AccessUnitInspection,
@@ -870,6 +921,9 @@ impl RtcVideoFrameSource {
 
     pub(super) async fn recv_frame_inner(&mut self) -> Option<AssembledVideoFrame> {
         loop {
+            if self.should_run_nack_maintenance_tick() {
+                self.maybe_run_nack_maintenance().await;
+            }
             if let Some(sample) = self.sample_builder.pop() {
                 self.clear_pending_timeout_confirmations();
                 self.last_packet_time = std::time::Instant::now();
@@ -1441,6 +1495,7 @@ impl RtcVideoFrameSource {
             } else {
                 std::time::Duration::from_millis(50)
             };
+            let read_timeout = self.nack_maintenance_timeout(read_timeout);
             if let Some(observation) = self
                 .runtime_stats
                 .read(|stats| stats.latest_video_rtx_reinject_observation.clone())

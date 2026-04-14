@@ -151,6 +151,11 @@ impl RtcVideoFrameSource {
 
     pub(super) async fn maybe_run_nack_maintenance(&mut self) {
         let now_ms = now_ms_f64();
+        // 只有真正到了 tick 间隔才更新时间戳，避免包到达路径频繁调用时持续推迟下次 tick。
+        if self.should_run_nack_maintenance_tick() {
+            self.last_nack_maintenance_tick_at = std::time::Instant::now();
+        }
+        self.maybe_retry_waiting_recovery_keyframe(now_ms);
         let pending_before = self.nack_scheduler.pending_count();
         let missing_sequences = self.nack_window.missing_seq_numbers(self.nack_skip_last_n);
         let stale_sequences = self
@@ -699,7 +704,9 @@ impl RtcVideoFrameSource {
         let now_ms = now_ms_f64();
         let mut missing_sequences =
             self.collect_missing_sequences_for_sample(sample_rtp_timestamp, media_dropped_packets);
+        let mut used_recent_fallback = false;
         if missing_sequences.is_empty() {
+            used_recent_fallback = true;
             missing_sequences = self.collect_recent_missing_sequences(media_dropped_packets);
         }
         if missing_sequences.is_empty() {
@@ -714,6 +721,7 @@ impl RtcVideoFrameSource {
             media_dropped_packets,
             missing_sequences.len().min(u16::MAX as usize) as u16,
             window_source,
+            Some(sample_rtp_timestamp),
         );
         let base_deadline_at_ms = self
             .transport_deadline_tracker
@@ -852,7 +860,11 @@ impl RtcVideoFrameSource {
                 &missing_sequences,
                 inserted_count,
                 now_ms,
-                "sampleLoss",
+                if used_recent_fallback {
+                    "sampleLossFallback"
+                } else {
+                    "sampleLoss"
+                },
                 Some(sample_rtp_timestamp),
                 Some((missing_sequences.len() + 1).min(u16::MAX as usize) as u16),
                 Some(media_dropped_packets),
@@ -991,6 +1003,27 @@ impl RtcVideoFrameSource {
             policy.frame_is_keyframe.unwrap_or(false),
             self.is_cloud_startup_transport_profile(),
         );
+        let frame_seen_oos = policy
+            .frame_rtp_timestamp
+            .is_some_and(|timestamp| self.frame_seen_oos(timestamp));
+        let oos_recently_active = self.oos_recently_active(now_ms);
+        let oos_signal_active = frame_seen_oos || oos_recently_active;
+        if oos_signal_active && !policy.frame_is_keyframe.unwrap_or(false) {
+            policy.priority = policy.priority.saturating_sub(1).max(1);
+            // OOS + LowValue + delta：降级为 SkippedLowValue，但必须先让 prefers_chain_broken
+            // 检查通过，避免跳过 SkippedChainBroken 语义（chain broken 需要触发恢复流程）。
+            if matches!(value_tier, RepairValueTier::LowValue)
+                && policy.frame_importance == "delta"
+                && policy.nack_disposition == PacketRecoveryDisposition::Attempted
+                && !policy.budget_context.prefers_chain_broken()
+            {
+                policy.nack_disposition = PacketRecoveryDisposition::SkippedLowValue;
+                if policy.frame_unrecoverable_reason.is_none() {
+                    policy.frame_unrecoverable_reason = Some("oosLowValueAdmission");
+                }
+                return policy;
+            }
+        }
 
         if policy.budget_context.prefers_chain_broken()
             && !matches!(value_tier, RepairValueTier::Anchor)
@@ -1413,6 +1446,7 @@ impl RtcVideoFrameSource {
         media_dropped_packets: u16,
         missing_sequence_count: u16,
         window_source: FrameBudgetWindowSource,
+        frame_rtp_timestamp: Option<u32>,
     ) -> f64 {
         let base = match frame_importance {
             "keyframe" => 0.95,
@@ -1446,12 +1480,20 @@ impl RtcVideoFrameSource {
         } else {
             0.0
         };
+        let oos_penalty = if frame_rtp_timestamp.is_some_and(|timestamp| self.frame_seen_oos(timestamp))
+            || self.oos_recently_active(now_ms_f64())
+        {
+            OOS_REPAIRABILITY_PENALTY
+        } else {
+            0.0
+        };
         (base + recovery_bonus + phase_adjustment
             - burst_penalty
             - late_penalty
             - missing_penalty
             - waiting_penalty
-            - window_penalty)
+            - window_penalty
+            - oos_penalty)
             .clamp(0.25, 1.0)
     }
 
@@ -2207,6 +2249,161 @@ mod tests {
         assert_eq!(
             resolved.frame_unrecoverable_reason,
             Some("sampleLossReferenceLowRepairability")
+        );
+    }
+
+    #[test]
+    fn oos_signal_lowers_non_keyframe_admission_priority() {
+        let (_tx, rx) = tokio::sync::mpsc::channel(1);
+        let (transport_observation_tx, _transport_observation_rx) =
+            tokio::sync::mpsc::unbounded_channel();
+        let rtcp_port: Arc<dyn RtcRtcpSendPort> = Arc::new(CaptureRtcpPort::default());
+        let runtime_stats = Arc::new(Mutex::new(crate::XbxEngineMediaRuntimeStats::default()));
+        let mut source = RtcVideoFrameSource::new(
+            rx,
+            transport_observation_tx,
+            rtcp_port,
+            runtime_stats.clone(),
+            16,
+            std::time::Duration::from_millis(10),
+            std::time::Duration::from_millis(20),
+            std::time::Duration::from_millis(200),
+            NackSchedulerConfig {
+                max_age_ms: 1_000,
+                frame_deadline_ms: 120,
+                burst_count: 2,
+                retry_interval_ms: 20,
+                max_retry_count: 3,
+            },
+        );
+        {
+            let mut stats = runtime_stats.lock().expect("runtime stats lock");
+            stats.session_target_type = Some(XbxEngineTargetTypeDto::Cloud);
+            stats.video_rtt_ms = Some(80.0);
+        }
+        source.recent_oos_active_until_ms = Some(220.0);
+
+        let policy = sample_loss_nack_policy(
+            91_400,
+            false,
+            FrameBudgetContext::for_transport(
+                FrameValue::new(false, true, 48 * 1024),
+                false,
+                Some(80.0),
+                None,
+                Some(260.0),
+                false,
+                FrameBudgetWindowSource::Transport,
+            ),
+            260.0,
+            0.7,
+            true,
+            false,
+            Some(80.0),
+        );
+        let base_priority = policy.priority;
+        let resolved = source.with_cloud_latency_admission_policy(policy, 180.0, Some(0.7));
+
+        assert_eq!(
+            resolved.nack_disposition,
+            PacketRecoveryDisposition::Attempted
+        );
+        assert!(resolved.priority < base_priority);
+    }
+
+    #[test]
+    fn oos_signal_with_low_value_delta_is_skipped_but_reference_is_not() {
+        // OOS + LowValue + delta（非 chain broken 状态）应被降级为 SkippedLowValue。
+        // OOS + reference 帧不应被降级（frame_importance != "delta" 条件不满足）。
+        let (_tx, rx) = tokio::sync::mpsc::channel(1);
+        let (transport_observation_tx, _transport_observation_rx) =
+            tokio::sync::mpsc::unbounded_channel();
+        let rtcp_port: Arc<dyn RtcRtcpSendPort> = Arc::new(CaptureRtcpPort::default());
+        let runtime_stats = Arc::new(Mutex::new(crate::XbxEngineMediaRuntimeStats::default()));
+        let mut source = RtcVideoFrameSource::new(
+            rx,
+            transport_observation_tx,
+            rtcp_port,
+            runtime_stats.clone(),
+            16,
+            std::time::Duration::from_millis(10),
+            std::time::Duration::from_millis(20),
+            std::time::Duration::from_millis(200),
+            NackSchedulerConfig {
+                max_age_ms: 1_000,
+                frame_deadline_ms: 120,
+                burst_count: 2,
+                retry_interval_ms: 20,
+                max_retry_count: 3,
+            },
+        );
+        {
+            let mut stats = runtime_stats.lock().expect("runtime stats lock");
+            stats.session_target_type = Some(XbxEngineTargetTypeDto::Cloud);
+            stats.video_rtt_ms = Some(120.0); // >= 100ms 使 rtt_slack = Tight
+        }
+        // 激活 OOS 信号。
+        source.recent_oos_active_until_ms = Some(220.0);
+
+        // delta 帧（LowValue tier，非 chain broken）：OOS 应降级为 SkippedLowValue。
+        // 需要 RTT >= 120ms 且 deadline - estimated_arrival <= 12ms 使 rtt_slack = Tight，
+        // 从而 prefers_low_value_skip() 为 true，value_tier = LowValue。
+        // estimated_arrival ≈ now_ms(180) + rtt*0.5(60) = 240，deadline=248 → slack=8 → Tight。
+        let delta_policy = sample_loss_nack_policy(
+            91_400,
+            false,
+            FrameBudgetContext::for_transport(
+                FrameValue::new(false, false, 12 * 1024),
+                false, // 非 chain broken 状态
+                Some(120.0),
+                None,
+                Some(248.0),
+                false,
+                FrameBudgetWindowSource::Transport,
+            ),
+            248.0,
+            0.5,
+            true,
+            false,
+            Some(120.0),
+        );
+        let delta_resolved = source.with_cloud_latency_admission_policy(delta_policy, 180.0, Some(0.5));
+        assert_eq!(
+            delta_resolved.nack_disposition,
+            PacketRecoveryDisposition::SkippedLowValue
+        );
+        assert_eq!(
+            delta_resolved.frame_unrecoverable_reason,
+            Some("oosLowValueAdmission")
+        );
+
+        // reference 帧：OOS 路径的 frame_importance == "delta" 条件不满足，不应被降级。
+        let ref_policy = sample_loss_nack_policy(
+            91_401,
+            false,
+            FrameBudgetContext::for_transport(
+                FrameValue::new(false, true, 48 * 1024),
+                false,
+                Some(80.0),
+                None,
+                Some(260.0),
+                false,
+                FrameBudgetWindowSource::Transport,
+            ),
+            260.0,
+            0.8,
+            true,
+            false,
+            Some(80.0),
+        );
+        let ref_resolved = source.with_cloud_latency_admission_policy(ref_policy, 180.0, Some(0.8));
+        assert_ne!(
+            ref_resolved.nack_disposition,
+            PacketRecoveryDisposition::SkippedLowValue
+        );
+        assert_ne!(
+            ref_resolved.frame_unrecoverable_reason,
+            Some("oosLowValueAdmission")
         );
     }
 

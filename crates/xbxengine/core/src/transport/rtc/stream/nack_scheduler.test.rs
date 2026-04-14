@@ -192,6 +192,54 @@ fn admission_skipped_too_late_is_not_throttled_by_low_value_cache() {
 }
 
 #[test]
+fn existing_pending_merges_with_stricter_and_more_aggressive_policy() {
+    let mut scheduler = NackScheduler::new(NackSchedulerConfig {
+        max_age_ms: 500,
+        frame_deadline_ms: 2_000,
+        burst_count: 1,
+        retry_interval_ms: 40,
+        max_retry_count: 1,
+    });
+    let mut first_policy = base_policy();
+    first_policy.source = "rtpWindow";
+    first_policy.deadline_at_ms = Some(2_000.0);
+    first_policy.retry_interval_ms = Some(30);
+    first_policy.max_age_ms = Some(400);
+    first_policy.frame_is_keyframe = Some(true);
+    first_policy.frame_importance = "keyframe";
+    first_policy.priority = 3;
+    first_policy.max_tracked_sequences = Some(1);
+    let (first_batch, skipped) =
+        scheduler.observe_missing_sequences_with_policy(&[33], 1_000.0, first_policy);
+    assert!(skipped.is_none());
+    assert_eq!(first_batch.expect("first batch").sequences, vec![33]);
+
+    let mut second_policy = base_policy();
+    second_policy.source = "rtpGap";
+    second_policy.deadline_at_ms = Some(1_500.0);
+    second_policy.retry_interval_ms = Some(10);
+    second_policy.max_age_ms = Some(120);
+    second_policy.frame_is_keyframe = Some(true);
+    second_policy.frame_importance = "keyframe";
+    second_policy.max_tracked_sequences = Some(1);
+    second_policy.priority = 3;
+    let (second_batch, second_skipped) =
+        scheduler.observe_missing_sequences_with_policy(&[33], 1_001.0, second_policy);
+    assert!(second_batch.is_none());
+    assert!(second_skipped.is_none());
+
+    let retry = scheduler.poll(1_011.0);
+    assert_eq!(retry.retry_batch.expect("merged retry").sequences, vec![33]);
+
+    let expired = scheduler.poll(1_510.0);
+    assert!(expired.retry_batch.is_none());
+    assert_eq!(expired.expired_batches.len(), 1);
+    assert_eq!(expired.expired_batches[0].reason, "deadline");
+    assert_eq!(expired.expired_batches[0].source, "rtpGap");
+    assert_eq!(expired.expired_batches[0].sequences, vec![33]);
+}
+
+#[test]
 fn retry_budget_exhausted_is_finalized_and_dequeued() {
     // Anchor retry_budget = default_max_retry_count.min(3)；用 1 保持「首轮 poll 即耗尽」的断言粒度。
     let mut scheduler = NackScheduler::new(NackSchedulerConfig {

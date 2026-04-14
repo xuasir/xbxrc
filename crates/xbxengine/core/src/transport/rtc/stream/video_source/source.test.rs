@@ -726,6 +726,61 @@ async fn stale_wait_after_clean_anchor_still_submits_delta_continuation() {
     assert!(transport_observation_rx.try_recv().is_err());
 }
 
+#[test]
+fn waiting_recovery_keyframe_timeout_triggers_retry_request() {
+    let (_tx, mut transport_observation_rx, mut source) = make_video_source_for_test();
+    source.set_waiting_for_recovery_keyframe(true);
+    // 强制 next_retry_at_ms 为过去时间，确保触发重试。
+    source.next_recovery_keyframe_retry_at_ms = Some(0.0);
+
+    let before_ms = now_ms_f64();
+    source.maybe_retry_waiting_recovery_keyframe(before_ms);
+
+    assert_eq!(source.recovery_keyframe_retry_count, 1);
+    // next_retry_at_ms 应推进到 before_ms + retry_interval，用固定基准比较避免时间竞争。
+    assert!(
+        source
+            .next_recovery_keyframe_retry_at_ms
+            .is_some_and(|at| at > before_ms)
+    );
+    assert!(matches!(
+        transport_observation_rx.try_recv(),
+        Ok(TransportObservation::Loss(
+            TransportLossObservation::RecoveryKeyframeRequested
+        ))
+    ));
+}
+
+#[test]
+fn waiting_recovery_keyframe_stops_retrying_after_max_count() {
+    let (_tx, mut transport_observation_rx, mut source) = make_video_source_for_test();
+    source.set_waiting_for_recovery_keyframe(true);
+
+    // 把 retry_count 推到上限前一次。
+    use crate::transport::rtc::stream::video_source::nack_policy::RECOVERY_KEYFRAME_RETRY_MAX_COUNT;
+    source.recovery_keyframe_retry_count = RECOVERY_KEYFRAME_RETRY_MAX_COUNT - 1;
+    source.next_recovery_keyframe_retry_at_ms = Some(0.0);
+    let now = now_ms_f64();
+
+    // 最后一次合法重试。
+    source.maybe_retry_waiting_recovery_keyframe(now);
+    assert_eq!(
+        source.recovery_keyframe_retry_count,
+        RECOVERY_KEYFRAME_RETRY_MAX_COUNT
+    );
+    assert!(transport_observation_rx.try_recv().is_ok());
+
+    // 再次触发：已达上限，不再发请求，next_retry_at_ms 被清空。
+    source.next_recovery_keyframe_retry_at_ms = Some(0.0);
+    source.maybe_retry_waiting_recovery_keyframe(now);
+    assert_eq!(
+        source.recovery_keyframe_retry_count,
+        RECOVERY_KEYFRAME_RETRY_MAX_COUNT
+    );
+    assert!(source.next_recovery_keyframe_retry_at_ms.is_none());
+    assert!(transport_observation_rx.try_recv().is_err());
+}
+
 #[tokio::test]
 async fn repair_packet_closes_bootstrap_gap_and_allows_frame_assembly() {
     let (tx, mut transport_observation_rx, mut source) = make_video_source_for_test();

@@ -353,7 +353,53 @@ impl NackScheduler {
 
         let mut inserted = Vec::new();
         for (index, sequence) in sequences.iter().take(max_tracked_sequences).enumerate() {
-            if self.pending.contains_key(sequence) {
+            if let Some(pending) = self.pending.get_mut(sequence) {
+                // 已有 pending 时执行“有界合并”：
+                // 1) deadline/max_age/retry_interval 只朝更严格方向收敛；
+                // 2) retry budget/priority 朝更积极方向提升，避免路径先后顺序影响恢复强度。
+                pending.deadline_at_ms = pending.deadline_at_ms.min(deadline_at_ms);
+                pending.max_age_ms = pending.max_age_ms.min(max_age_ms);
+                // retry_interval 收紧后，把 last_sent_at_ms 对齐到 now_ms，
+                // 避免旧时间戳导致下次 poll 时用新的更短间隔提前触发额外重试。
+                if retry_interval_ms < pending.retry_interval_ms {
+                    pending.last_sent_at_ms = now_ms;
+                }
+                pending.retry_interval_ms = pending.retry_interval_ms.min(retry_interval_ms);
+                pending.max_retry_count = pending.max_retry_count.max(max_retry_count);
+                pending.priority = pending.priority.max(policy.priority);
+                pending.frame_is_keyframe =
+                    Some(pending.frame_is_keyframe.unwrap_or(false) || policy.frame_is_keyframe.unwrap_or(false));
+                if pending.source != "rtpGap" && policy.source == "rtpGap" {
+                    pending.source = "rtpGap";
+                }
+                pending.frame_importance = if pending.frame_is_keyframe.unwrap_or(false) {
+                    "keyframe"
+                } else if matches!(pending.frame_importance, "reference")
+                    || matches!(policy.frame_importance, "reference")
+                {
+                    "reference"
+                } else {
+                    "delta"
+                };
+                pending.frame_rtp_timestamp = pending.frame_rtp_timestamp.or(policy.frame_rtp_timestamp);
+                pending.estimated_recovery_arrival_ms = match (
+                    pending.estimated_recovery_arrival_ms,
+                    estimated_recovery_arrival_ms,
+                ) {
+                    (Some(existing), Some(next)) => Some(existing.min(next)),
+                    (None, Some(next)) => Some(next),
+                    (Some(existing), None) => Some(existing),
+                    (None, None) => None,
+                };
+                pending.frame_playout_deadline_at_ms = match (
+                    pending.frame_playout_deadline_at_ms,
+                    policy.frame_playout_deadline_at_ms.or(Some(deadline_at_ms)),
+                ) {
+                    (Some(existing), Some(next)) => Some(existing.min(next)),
+                    (None, Some(next)) => Some(next),
+                    (Some(existing), None) => Some(existing),
+                    (None, None) => None,
+                };
                 continue;
             }
             let last_sent_at_ms = if inserted.len() < burst_count && index < burst_count {
