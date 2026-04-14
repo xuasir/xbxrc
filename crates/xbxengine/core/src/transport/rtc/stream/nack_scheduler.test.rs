@@ -766,3 +766,38 @@ fn flush_reobserve_and_resolve_interleaving_keeps_state_consistent() {
     assert_eq!(polled.retry_batch.expect("retry batch").sequences, vec![31]);
     assert_eq!(scheduler.pending_count(), 1);
 }
+
+#[test]
+fn prune_rtp_window_pending_not_missing_removes_only_stale_rtp_window_entries() {
+    let mut scheduler = NackScheduler::new(NackSchedulerConfig {
+        max_age_ms: 200,
+        frame_deadline_ms: 300,
+        burst_count: 3,
+        retry_interval_ms: 40,
+        max_retry_count: 3,
+    });
+    let mut policy = base_policy();
+    policy.source = "rtpWindow";
+    let _ = scheduler.observe_missing_sequences_with_policy(&[10, 11, 12], 1_000.0, policy);
+    let stale = scheduler.prune_rtp_window_pending_not_missing(&[10, 12]);
+    assert_eq!(stale, vec![11]);
+    assert_eq!(scheduler.pending_count(), 2);
+}
+
+#[test]
+fn prune_pending_in_range_supports_wrapping_range() {
+    let mut scheduler = NackScheduler::new(NackSchedulerConfig {
+        max_age_ms: 200,
+        frame_deadline_ms: 300,
+        burst_count: 8,
+        retry_interval_ms: 40,
+        max_retry_count: 3,
+    });
+    let mut policy = base_policy();
+    policy.source = "rtpWindow";
+    let _ = scheduler.observe_missing_sequences_with_policy(&[65534, 65535, 0, 1, 5], 1_000.0, policy);
+
+    let removed = scheduler.prune_pending_in_range(65535, 2);
+    assert_eq!(removed, vec![0, 1, 65535]);
+    assert_eq!(scheduler.pending_count(), 1);
+}

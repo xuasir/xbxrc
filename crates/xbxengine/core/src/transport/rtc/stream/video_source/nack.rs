@@ -153,6 +153,16 @@ impl RtcVideoFrameSource {
         let now_ms = now_ms_f64();
         let pending_before = self.nack_scheduler.pending_count();
         let missing_sequences = self.nack_window.missing_seq_numbers(self.nack_skip_last_n);
+        let stale_sequences = self
+            .nack_scheduler
+            .prune_rtp_window_pending_not_missing(&missing_sequences);
+        if !stale_sequences.is_empty() {
+            crate::xbx_log_info!(
+                "[RtcVideoFrameSource] prune stale rtpWindow pending count={} skip_last_n={}",
+                stale_sequences.len(),
+                self.nack_skip_last_n
+            );
+        }
         let frame_value = self.current_transport_frame_value_for_transport_gap(now_ms);
         let cloud_mode = self.is_cloud_transport_profile();
         let startup_mode = self.is_cloud_startup_transport_profile();

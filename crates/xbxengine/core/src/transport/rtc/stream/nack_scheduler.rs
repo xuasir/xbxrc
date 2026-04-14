@@ -1,7 +1,7 @@
 //! WebRTC NACK 调度：包级时效、可恢复性与 `PacketRecoveryDisposition`。
 //! RFC：包价值评估归属本层；禁止在此直接决定 reconnect / failed-terminal（见 `session::policy`）。
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use crate::media::video::ingress::budget::FrameBudgetContext;
 use crate::media::video::types::FrameValue;
@@ -706,6 +706,34 @@ impl NackScheduler {
         })
     }
 
+    pub fn prune_rtp_window_pending_not_missing(&mut self, still_missing: &[u16]) -> Vec<u16> {
+        let missing: BTreeSet<u16> = still_missing.iter().copied().collect();
+        let stale_sequences: Vec<u16> = self
+            .pending
+            .iter()
+            .filter_map(|(sequence, pending)| {
+                (pending.source == "rtpWindow" && !missing.contains(sequence)).then_some(*sequence)
+            })
+            .collect();
+        for sequence in &stale_sequences {
+            self.pending.remove(sequence);
+        }
+        stale_sequences
+    }
+
+    pub fn prune_pending_in_range(&mut self, start: u16, end_exclusive: u16) -> Vec<u16> {
+        let stale_sequences: Vec<u16> = self
+            .pending
+            .keys()
+            .copied()
+            .filter(|sequence| sequence_in_wrapping_range(*sequence, start, end_exclusive))
+            .collect();
+        for sequence in &stale_sequences {
+            self.pending.remove(sequence);
+        }
+        stale_sequences
+    }
+
     pub fn pending_count(&self) -> usize {
         self.pending.len()
     }
@@ -757,6 +785,17 @@ impl NackScheduler {
                 FrameBudgetContext::steady_for_value(frame_value_for_importance("unknown"))
             }),
         })
+    }
+}
+
+fn sequence_in_wrapping_range(sequence: u16, start: u16, end_exclusive: u16) -> bool {
+    if start == end_exclusive {
+        return false;
+    }
+    if start < end_exclusive {
+        (start..end_exclusive).contains(&sequence)
+    } else {
+        sequence >= start || sequence < end_exclusive
     }
 }
 

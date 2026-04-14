@@ -2,6 +2,7 @@ use super::{
     build_sample_builder, nack::gap_transport_evidence, now_ms_f64, timeline::ChainState,
     UINT16SIZE_HALF,
 };
+use super::nack_window::{NackWindowAddOutcome, SequenceRange};
 use crate::media::video::h264::inspection::{H264AccessUnitInspection, H264BootstrapRejectReason};
 use base64::Engine as _;
 use bytes::Bytes;
@@ -32,6 +33,9 @@ const THIN_STREAM_CONFIRMATION_GRACE_MIN_MS: u64 = 90;
 const THIN_STREAM_CONFIRMATION_GRACE_MAX_MS: u64 = 180;
 const WAITING_KEYFRAME_CONTINUATION_WINDOW_MS: f64 = 120.0;
 const WAITING_KEYFRAME_CONTINUATION_MAX_FRAMES: u32 = 3;
+const OOS_ACTIVITY_COOLDOWN_MS: f64 = 30_000.0;
+const OOS_DEPTH_WINDOW_CAPACITY: usize = 64;
+const FRAME_OOS_TRACK_CAPACITY: usize = 64;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum RecoveryKeyframeAction {
@@ -759,9 +763,113 @@ impl RtcVideoFrameSource {
             .unwrap_or(false)
     }
 
+    fn on_nack_window_add_outcome(
+        &mut self,
+        outcome: NackWindowAddOutcome,
+        rtp_timestamp: u32,
+        now_ms: f64,
+    ) {
+        if outcome.is_oos {
+            self.oos_event_count = self.oos_event_count.saturating_add(1);
+            self.recent_oos_active_until_ms = Some(now_ms + OOS_ACTIVITY_COOLDOWN_MS);
+            self.mark_frame_oos(rtp_timestamp);
+            let frame_has_oos = self.frame_seen_oos(rtp_timestamp);
+            let recent_oos_active = self.oos_recently_active(now_ms);
+            if let Some(distance) = outcome.oos_distance_from_end {
+                if self.recent_oos_depths.len() >= OOS_DEPTH_WINDOW_CAPACITY {
+                    self.recent_oos_depths.pop_front();
+                }
+                self.recent_oos_depths.push_back(distance);
+                self.update_dynamic_nack_skip_last_n();
+            }
+            if self.oos_event_count == 1 || self.oos_event_count.is_power_of_two() {
+                crate::xbx_log_info!(
+                    "[RtcVideoFrameSource] oos event seq={} distance={:?} skip_last_n={}",
+                    outcome.seq,
+                    outcome.oos_distance_from_end,
+                    self.nack_skip_last_n
+                );
+                crate::xbx_log_info!(
+                    "[RtcVideoFrameSource] oos signal frame_ts={} frame_has_oos={} recent_active={}",
+                    rtp_timestamp,
+                    frame_has_oos,
+                    recent_oos_active
+                );
+            }
+        }
+
+        if outcome.overflow_advanced {
+            self.nack_window_overflow_count = self.nack_window_overflow_count.saturating_add(1);
+            if let Some(range) = outcome.overflow_pruned_range {
+                self.prune_pending_nack_for_window_range(range, now_ms);
+            }
+        }
+    }
+
+    fn update_dynamic_nack_skip_last_n(&mut self) {
+        if self.recent_oos_depths.is_empty() {
+            self.nack_skip_last_n = 2;
+            return;
+        }
+        let mut samples: Vec<u16> = self.recent_oos_depths.iter().copied().collect();
+        samples.sort_unstable();
+        let p75_index = ((samples.len().saturating_sub(1) * 3) / 4).min(samples.len() - 1);
+        let target = samples[p75_index].clamp(1, 8);
+        if target > self.nack_skip_last_n {
+            self.nack_skip_last_n = (self.nack_skip_last_n + 1).min(8);
+        } else if target < self.nack_skip_last_n {
+            self.nack_skip_last_n = self.nack_skip_last_n.saturating_sub(1).max(1);
+        }
+    }
+
+    fn prune_pending_nack_for_window_range(&mut self, range: SequenceRange, now_ms: f64) {
+        let removed = self
+            .nack_scheduler
+            .prune_pending_in_range(range.start, range.end_exclusive);
+        if removed.is_empty() {
+            return;
+        }
+        crate::xbx_log_info!(
+            "[RtcVideoFrameSource] nack window overflow pruned pending={} range={}..{} total={}",
+            removed.len(),
+            range.start,
+            range.end_exclusive,
+            self.nack_window_overflow_count
+        );
+        if let Some(first) = removed.first().copied() {
+            self.record_video_timeline_observation("gap-overflow-pruned", Some(first), None, now_ms);
+        }
+    }
+
+    fn mark_frame_oos(&mut self, rtp_timestamp: u32) {
+        if let Some((_, flag)) = self
+            .frame_oos_flags
+            .iter_mut()
+            .find(|(timestamp, _)| *timestamp == rtp_timestamp)
+        {
+            *flag = true;
+            return;
+        }
+        if self.frame_oos_flags.len() >= FRAME_OOS_TRACK_CAPACITY {
+            self.frame_oos_flags.pop_front();
+        }
+        self.frame_oos_flags.push_back((rtp_timestamp, true));
+    }
+
+    pub(super) fn frame_seen_oos(&self, rtp_timestamp: u32) -> bool {
+        self.frame_oos_flags
+            .iter()
+            .find(|(timestamp, _)| *timestamp == rtp_timestamp)
+            .is_some_and(|(_, flag)| *flag)
+    }
+
+    pub(super) fn oos_recently_active(&self, now_ms: f64) -> bool {
+        self.recent_oos_active_until_ms
+            .is_some_and(|until_ms| now_ms <= until_ms)
+    }
+
     pub(super) async fn recv_frame_inner(&mut self) -> Option<AssembledVideoFrame> {
         loop {
-            self.maybe_run_nack_maintenance().await;
             if let Some(sample) = self.sample_builder.pop() {
                 self.clear_pending_timeout_confirmations();
                 self.last_packet_time = std::time::Instant::now();
@@ -1370,6 +1478,8 @@ impl RtcVideoFrameSource {
                         self.current_assembly_packet_count.saturating_add(1);
                     let seq = rtp.header.sequence_number;
                     let now_ms = now_ms_f64();
+                    let add_outcome = self.nack_window.add(seq);
+                    self.on_nack_window_add_outcome(add_outcome, rtp.header.timestamp, now_ms);
                     let reinject_observation = self.reinject_observation_for_ingress(
                         ingress_kind,
                         rtp.header.ssrc,
@@ -1381,33 +1491,6 @@ impl RtcVideoFrameSource {
                         self.runtime_stats
                             .record_video_rtx_reinject(observation.clone());
                     }
-                    let (next_highest_sequence, forward_gap) =
-                        detect_forward_gap(self.last_highest_rtp_sequence, seq);
-                    self.last_highest_rtp_sequence = next_highest_sequence;
-                    if let Some((expected_sequence, received_sequence)) = forward_gap {
-                        let missing_sequences = super::nack::wrapping_sequence_range(
-                            expected_sequence,
-                            received_sequence,
-                        );
-                        self.timeline_state.observe_gap(
-                            &missing_sequences,
-                            now_ms,
-                            Some(rtp.header.timestamp),
-                            "unknown",
-                            "unknown",
-                        );
-                        if let Some(sequence) = missing_sequences.first().copied() {
-                            self.record_video_timeline_observation(
-                                "gap-observed-forward-packet",
-                                Some(sequence),
-                                Some(rtp.header.timestamp),
-                                now_ms,
-                            );
-                        }
-                        self.observe_forward_gap_and_nack(expected_sequence, received_sequence)
-                            .await;
-                    }
-                    self.nack_window.add(seq);
                     self.push_recent_rtp_packet(seq, rtp.header.timestamp);
                     if let Some(observation) = reinject_observation.as_ref() {
                         self.record_reinject_stage(observation, "sampleBuilderPush", now_ms);
@@ -1450,6 +1533,33 @@ impl RtcVideoFrameSource {
                     } else if let Some(observation) = reinject_observation.as_ref() {
                         self.record_reinject_stage(observation, "adapterResolveMiss", now_ms);
                     }
+                    let (next_highest_sequence, forward_gap) =
+                        detect_forward_gap(self.last_highest_rtp_sequence, seq);
+                    self.last_highest_rtp_sequence = next_highest_sequence;
+                    if let Some((expected_sequence, received_sequence)) = forward_gap {
+                        let missing_sequences = super::nack::wrapping_sequence_range(
+                            expected_sequence,
+                            received_sequence,
+                        );
+                        self.timeline_state.observe_gap(
+                            &missing_sequences,
+                            now_ms,
+                            Some(rtp.header.timestamp),
+                            "unknown",
+                            "unknown",
+                        );
+                        if let Some(sequence) = missing_sequences.first().copied() {
+                            self.record_video_timeline_observation(
+                                "gap-observed-forward-packet",
+                                Some(sequence),
+                                Some(rtp.header.timestamp),
+                                now_ms,
+                            );
+                        }
+                        self.observe_forward_gap_and_nack(expected_sequence, received_sequence)
+                            .await;
+                    }
+                    self.maybe_run_nack_maintenance().await;
                     if seq % 100 == 0 {
                         crate::xbx_log_info!(
                             "[RtcVideoFrameSource] RTP packet received: seq={}, ts={}",
@@ -1476,7 +1586,9 @@ impl RtcVideoFrameSource {
                     crate::xbx_log_error!("[RtcVideoFrameSource] rx closed");
                     return None;
                 }
-                Err(_) => {}
+                Err(_) => {
+                    self.maybe_run_nack_maintenance().await;
+                }
             }
         }
     }
