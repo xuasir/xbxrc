@@ -702,12 +702,14 @@ impl RtcVideoFrameSource {
         frame_importance: &'static str,
     ) -> bool {
         let now_ms = now_ms_f64();
+        let attributed_dropped_packets =
+            self.attributed_drop_count_for_frame(sample_rtp_timestamp, media_dropped_packets);
         let mut missing_sequences =
-            self.collect_missing_sequences_for_sample(sample_rtp_timestamp, media_dropped_packets);
+            self.collect_missing_sequences_for_sample(sample_rtp_timestamp, attributed_dropped_packets);
         let mut used_recent_fallback = false;
         if missing_sequences.is_empty() {
             used_recent_fallback = true;
-            missing_sequences = self.collect_recent_missing_sequences(media_dropped_packets);
+            missing_sequences = self.collect_recent_missing_sequences(attributed_dropped_packets);
         }
         if missing_sequences.is_empty() {
             return false;
@@ -718,7 +720,7 @@ impl RtcVideoFrameSource {
         let window_source = self.transport_nack_window_source();
         let repairability = self.estimate_repairability(
             frame_importance,
-            media_dropped_packets,
+            attributed_dropped_packets,
             missing_sequences.len().min(u16::MAX as usize) as u16,
             window_source,
             Some(sample_rtp_timestamp),
@@ -867,7 +869,7 @@ impl RtcVideoFrameSource {
                 },
                 Some(sample_rtp_timestamp),
                 Some((missing_sequences.len() + 1).min(u16::MAX as usize) as u16),
-                Some(media_dropped_packets),
+                Some(attributed_dropped_packets),
                 Some(frame_is_keyframe),
                 Some(frame_importance),
             );
@@ -1487,13 +1489,22 @@ impl RtcVideoFrameSource {
         } else {
             0.0
         };
+        let head_missing_penalty = if frame_rtp_timestamp
+            .is_some_and(|timestamp| self.frame_seen_head_missing(timestamp))
+            || self.head_missing_recently_active(now_ms_f64())
+        {
+            0.12
+        } else {
+            0.0
+        };
         (base + recovery_bonus + phase_adjustment
             - burst_penalty
             - late_penalty
             - missing_penalty
             - waiting_penalty
             - window_penalty
-            - oos_penalty)
+            - oos_penalty
+            - head_missing_penalty)
             .clamp(0.25, 1.0)
     }
 

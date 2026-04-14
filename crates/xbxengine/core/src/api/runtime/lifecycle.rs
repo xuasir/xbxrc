@@ -687,6 +687,7 @@ where
                 backlog_drop_threshold_packets: runtime
                     .video_pipeline
                     .backlog_drop_threshold_packets,
+                jitter_early_emit_enabled: runtime.video_pipeline.jitter_early_emit_enabled,
             };
             self.config.webrtc.recovery = XbxEngineRecoveryRuntimeConfig {
                 first_frame_grace_ms: runtime.recovery.first_frame_grace_ms,

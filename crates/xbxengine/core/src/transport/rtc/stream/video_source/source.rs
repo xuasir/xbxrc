@@ -7,6 +7,7 @@ use super::nack_window::{NackWindowAddOutcome, SequenceRange};
 use crate::media::video::h264::inspection::{H264AccessUnitInspection, H264BootstrapRejectReason};
 use base64::Engine as _;
 use bytes::Bytes;
+use rtc_rtp::packet::Packet;
 
 use crate::media::video::ingress::budget::FrameBudgetContext;
 use crate::media::video::types::{AssembledVideoFrame, FrameValue, VideoCodec};
@@ -37,6 +38,7 @@ const WAITING_KEYFRAME_CONTINUATION_MAX_FRAMES: u32 = 3;
 const OOS_ACTIVITY_COOLDOWN_MS: f64 = 30_000.0;
 const OOS_DEPTH_WINDOW_CAPACITY: usize = 64;
 const FRAME_OOS_TRACK_CAPACITY: usize = 64;
+const HEAD_MISSING_ACTIVITY_COOLDOWN_MS: f64 = 30_000.0;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum RecoveryKeyframeAction {
@@ -199,6 +201,114 @@ pub(super) fn detect_forward_gap(
 }
 
 impl RtcVideoFrameSource {
+    fn maybe_emit_jitter_early_boundary(&mut self) {
+        if !self.jitter_early_emit_enabled {
+            return;
+        }
+        let Some(boundary) = self.pending_marker_boundary else {
+            return;
+        };
+        if boundary.observed_at.elapsed() < self.jitter_early_emit_wait {
+            return;
+        }
+        // 合成边界包：payload 必须至少 2 字节，否则 H264Packet::is_partition_head 返回 false，
+        // depacketize 也会因 ErrShortPacket 失败。用 AUD NAL（type=9）作为最小合法 payload，
+        // 它不携带图像数据，不会污染帧内容，且 SampleBuilder 会把它当作独立 partition head。
+        // timestamp 偏移 +1 确保 SampleBuilder 识别为新帧边界，从而触发上一帧的 pop()。
+        let synthetic = Packet {
+            header: rtc_rtp::header::Header {
+                version: 2,
+                marker: false,
+                payload_type: boundary.media_payload_type,
+                sequence_number: boundary.sequence.wrapping_add(1),
+                timestamp: boundary.rtp_timestamp.wrapping_add(1),
+                ssrc: self.current_media_ssrc.unwrap_or_default(),
+                ..Default::default()
+            },
+            // AUD NAL unit (type=9): 0x09 = forbidden_zero_bit(0) | nal_ref_idc(00) | nal_unit_type(01001)
+            payload: Bytes::from_static(&[0x09, 0xF0]),
+        };
+        self.sample_builder.push(synthetic);
+        self.pending_marker_boundary = None;
+        self.jitter_early_emit_count = self.jitter_early_emit_count.saturating_add(1);
+        if self.jitter_early_emit_count == 1 || self.jitter_early_emit_count.is_power_of_two() {
+            crate::xbx_log_info!(
+                "[RtcVideoFrameSource] jitter early emit injected count={} ts={} wait_ms={}",
+                self.jitter_early_emit_count,
+                boundary.rtp_timestamp,
+                boundary.observed_at.elapsed().as_millis()
+            );
+        }
+    }
+
+    fn mark_frame_head_missing_signal(&mut self, rtp_timestamp: u32) {
+        if let Some((_, flag)) = self
+            .frame_head_missing_flags
+            .iter_mut()
+            .find(|(timestamp, _)| *timestamp == rtp_timestamp)
+        {
+            *flag = true;
+        } else {
+            if self.frame_head_missing_flags.len() >= FRAME_OOS_TRACK_CAPACITY {
+                self.frame_head_missing_flags.pop_front();
+            }
+            self.frame_head_missing_flags.push_back((rtp_timestamp, true));
+        }
+        self.recent_head_missing_active_until_ms = Some(now_ms_f64() + HEAD_MISSING_ACTIVITY_COOLDOWN_MS);
+        self.jitter_head_missing_signal_count = self.jitter_head_missing_signal_count.saturating_add(1);
+        if self.jitter_head_missing_signal_count == 1
+            || self.jitter_head_missing_signal_count.is_power_of_two()
+        {
+            crate::xbx_log_warn!(
+                "[RtcVideoFrameSource] frame head-missing signal count={} ts={}",
+                self.jitter_head_missing_signal_count,
+                rtp_timestamp
+            );
+        }
+    }
+
+    pub(super) fn frame_seen_head_missing(&self, rtp_timestamp: u32) -> bool {
+        self.frame_head_missing_flags
+            .iter()
+            .find(|(timestamp, _)| *timestamp == rtp_timestamp)
+            .is_some_and(|(_, flag)| *flag)
+    }
+
+    pub(super) fn head_missing_recently_active(&self, now_ms: f64) -> bool {
+        self.recent_head_missing_active_until_ms
+            .is_some_and(|until_ms| now_ms <= until_ms)
+    }
+
+    pub(super) fn record_frame_drop_attribution(&mut self, rtp_timestamp: u32, dropped: u16) {
+        if dropped == 0 {
+            return;
+        }
+        if let Some((_, count)) = self
+            .frame_drop_buckets
+            .iter_mut()
+            .find(|(timestamp, _)| *timestamp == rtp_timestamp)
+        {
+            *count = count.saturating_add(dropped);
+            return;
+        }
+        if self.frame_drop_buckets.len() >= FRAME_OOS_TRACK_CAPACITY {
+            self.frame_drop_buckets.pop_front();
+        }
+        self.frame_drop_buckets.push_back((rtp_timestamp, dropped));
+    }
+
+    pub(super) fn attributed_drop_count_for_frame(
+        &self,
+        rtp_timestamp: u32,
+        fallback: u16,
+    ) -> u16 {
+        self.frame_drop_buckets
+            .iter()
+            .find(|(timestamp, _)| *timestamp == rtp_timestamp)
+            .map(|(_, count)| *count)
+            .unwrap_or(fallback)
+    }
+
     fn nack_maintenance_timeout(&self, base_timeout: std::time::Duration) -> std::time::Duration {
         let elapsed = self.last_nack_maintenance_tick_at.elapsed();
         let until_tick = if elapsed >= self.nack_maintenance_tick_interval {
@@ -924,7 +1034,17 @@ impl RtcVideoFrameSource {
             if self.should_run_nack_maintenance_tick() {
                 self.maybe_run_nack_maintenance().await;
             }
+            self.maybe_emit_jitter_early_boundary();
             if let Some(sample) = self.sample_builder.pop() {
+                if let Some(boundary) = self.pending_marker_boundary {
+                    let wait_ms = boundary.observed_at.elapsed().as_millis();
+                    crate::xbx_log_debug!(
+                        "[RtcVideoFrameSource] marker->sample wait ts={} wait_ms={}",
+                        sample.packet_timestamp,
+                        wait_ms
+                    );
+                    self.pending_marker_boundary = None;
+                }
                 self.clear_pending_timeout_confirmations();
                 self.last_packet_time = std::time::Instant::now();
                 self.assembling_frame_start = None;
@@ -1045,9 +1165,20 @@ impl RtcVideoFrameSource {
                         FirstFrameAcquisitionRequestKind::Followup,
                     );
                 }
+                let media_dropped_packets = sample
+                    .prev_dropped_packets
+                    .saturating_sub(sample.prev_padding_packets);
                 match inspection_admission {
                     InspectionAdmission::Accept => {}
                     InspectionAdmission::AwaitRecoveryKeyframe => {
+                        if media_dropped_packets > 0
+                            && (matches!(
+                                inspection.bootstrap_reject_reason,
+                                Some(H264BootstrapRejectReason::InvalidSliceHeader)
+                            ) || !inspection.slice_headers_valid)
+                        {
+                            self.mark_frame_head_missing_signal(sample.packet_timestamp);
+                        }
                         let now_ms = now_ms_f64();
                         let reject_reason = inspection_bootstrap_reason(&inspection);
                         crate::xbx_log_warn!(
@@ -1166,10 +1297,8 @@ impl RtcVideoFrameSource {
                 }
                 let is_keyframe = inspection.is_idr;
                 let config_changed = inspection.config_changed;
-                let media_dropped_packets = sample
-                    .prev_dropped_packets
-                    .saturating_sub(sample.prev_padding_packets);
                 if media_dropped_packets > 0 {
+                    self.record_frame_drop_attribution(sample.packet_timestamp, media_dropped_packets);
                     self.sample_loss_burst_count = self.sample_loss_burst_count.saturating_add(1);
                     self.clean_samples_since_loss = 0;
                 } else if is_keyframe {
@@ -1634,6 +1763,26 @@ impl RtcVideoFrameSource {
                     }
                     if !matches!(ingress_kind, RtcVideoIngressKind::RtxReinject { .. }) {
                         self.current_media_ssrc = Some(rtp.header.ssrc);
+                    }
+                    if rtp.header.marker {
+                        self.jitter_marker_seen_count = self.jitter_marker_seen_count.saturating_add(1);
+                        self.pending_marker_boundary = Some(super::PendingMarkerBoundary {
+                            sequence: rtp.header.sequence_number,
+                            rtp_timestamp: rtp.header.timestamp,
+                            media_payload_type: rtp.header.payload_type,
+                            observed_at: std::time::Instant::now(),
+                        });
+                        if self.jitter_marker_seen_count == 1
+                            || self.jitter_marker_seen_count.is_power_of_two()
+                        {
+                            crate::xbx_log_debug!(
+                                "[RtcVideoFrameSource] marker observed count={} seq={} ts={} early_emit={}",
+                                self.jitter_marker_seen_count,
+                                rtp.header.sequence_number,
+                                rtp.header.timestamp,
+                                self.jitter_early_emit_enabled
+                            );
+                        }
                     }
                     self.sample_builder.push(rtp);
                 }

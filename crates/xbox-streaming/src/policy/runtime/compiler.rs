@@ -153,6 +153,7 @@ fn compile_video_pipeline(
             idle_timeout_ms: 150,
             late_frame_drop_threshold_ms: 500,
             backlog_drop_threshold_packets: 10,
+            jitter_early_emit_enabled: false,
         },
         RuntimeMode::RustOwned => {
             if remote_profile.is_cloud() {
@@ -172,6 +173,7 @@ fn compile_video_pipeline(
                     idle_timeout_ms: 260,
                     late_frame_drop_threshold_ms: 900,
                     backlog_drop_threshold_packets: 14,
+                    jitter_early_emit_enabled: false,
                 };
             }
             RuntimeVideoPipelinePlan {
@@ -189,6 +191,7 @@ fn compile_video_pipeline(
                 idle_timeout_ms: 140,
                 late_frame_drop_threshold_ms: 240,
                 backlog_drop_threshold_packets: 6,
+                jitter_early_emit_enabled: false,
             }
         }
     }

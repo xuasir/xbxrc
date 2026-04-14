@@ -71,6 +71,9 @@ pub struct RtcVideoFrameSource {
     oos_event_count: u64,
     nack_window_overflow_count: u64,
     frame_oos_flags: VecDeque<(u32, bool)>,
+    frame_head_missing_flags: VecDeque<(u32, bool)>,
+    frame_drop_buckets: VecDeque<(u32, u16)>,
+    recent_head_missing_active_until_ms: Option<f64>,
     last_highest_rtp_sequence: Option<u16>,
     current_width: u32,
     current_height: u32,
@@ -102,6 +105,12 @@ pub struct RtcVideoFrameSource {
     received_packet_count: u64,
     assembled_frame_count: u64,
     transport_observation_emit_count: u64,
+    jitter_early_emit_enabled: bool,
+    jitter_early_emit_wait: Duration,
+    pending_marker_boundary: Option<PendingMarkerBoundary>,
+    jitter_marker_seen_count: u64,
+    jitter_early_emit_count: u64,
+    jitter_head_missing_signal_count: u64,
 }
 
 const SOURCE_SERVICEABLE_DECODE_MAX_AGE_MS: f64 = 180.0;
@@ -154,6 +163,9 @@ impl RtcVideoFrameSource {
             oos_event_count: 0,
             nack_window_overflow_count: 0,
             frame_oos_flags: VecDeque::with_capacity(64),
+            frame_head_missing_flags: VecDeque::with_capacity(64),
+            frame_drop_buckets: VecDeque::with_capacity(64),
+            recent_head_missing_active_until_ms: None,
             last_highest_rtp_sequence: None,
             current_width: 0,
             current_height: 0,
@@ -185,6 +197,12 @@ impl RtcVideoFrameSource {
             received_packet_count: 0,
             assembled_frame_count: 0,
             transport_observation_emit_count: 0,
+            jitter_early_emit_enabled: false,
+            jitter_early_emit_wait: Duration::from_millis(3),
+            pending_marker_boundary: None,
+            jitter_marker_seen_count: 0,
+            jitter_early_emit_count: 0,
+            jitter_head_missing_signal_count: 0,
         }
     }
 
@@ -531,6 +549,14 @@ struct RecentRtpPacket {
     rtp_timestamp: u32,
 }
 
+#[derive(Clone, Copy)]
+struct PendingMarkerBoundary {
+    sequence: u16,
+    rtp_timestamp: u32,
+    media_payload_type: u8,
+    observed_at: std::time::Instant,
+}
+
 pub(super) fn build_sample_builder(
     max_late_packets: u16,
     max_time_delay: Duration,
@@ -565,6 +591,7 @@ pub(crate) fn build_rtc_video_frame_source(
     jitter_buffer_max_delay: Duration,
     idle_timeout: std::time::Duration,
     nack_config: NackSchedulerConfig,
+    jitter_early_emit_enabled: bool,
 ) -> (
     Box<dyn super::sink::RtcMediaSink>,
     VideoFramePipelineSources,
@@ -572,7 +599,7 @@ pub(crate) fn build_rtc_video_frame_source(
     let (tx, rx) = tokio::sync::mpsc::channel::<RtcVideoRtpPacket>(ingress_capacity.max(256));
     let (transport_observation_tx, transport_observation_rx) =
         tokio::sync::mpsc::unbounded_channel::<TransportObservation>();
-    let source = RtcVideoFrameSource::new(
+    let mut source = RtcVideoFrameSource::new(
         rx,
         transport_observation_tx,
         rtcp_port,
@@ -583,6 +610,7 @@ pub(crate) fn build_rtc_video_frame_source(
         idle_timeout,
         nack_config,
     );
+    source.jitter_early_emit_enabled = jitter_early_emit_enabled;
     let sink = sink::RtcVideoSourceSink::new(tx, RuntimeStatsSink::new(runtime_stats.clone()));
     let observation_source = RtcVideoTransportObservationSource {
         rx: transport_observation_rx,
@@ -604,3 +632,12 @@ fn generate_local_rtcp_sender_ssrc() -> u32 {
         seed
     }
 }
+
+#[cfg(test)]
+impl RtcVideoFrameSource {
+    pub(crate) fn set_jitter_early_emit_enabled(&mut self, enabled: bool) {
+        self.jitter_early_emit_enabled = enabled;
+    }
+}
+
+

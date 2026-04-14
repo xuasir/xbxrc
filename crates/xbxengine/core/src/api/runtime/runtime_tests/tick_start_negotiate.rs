@@ -561,6 +561,7 @@ fn start_runtime_control_consumes_execution_spec() {
                     idle_timeout_ms: 222,
                     late_frame_drop_threshold_ms: 444,
                     backlog_drop_threshold_packets: 11,
+                    jitter_early_emit_enabled: false,
                 },
                 recovery: XbxEngineRuntimeRecoveryDto {
                     first_frame_grace_ms: 7_000,

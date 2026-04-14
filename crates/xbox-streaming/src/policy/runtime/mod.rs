@@ -141,6 +141,7 @@ pub struct RuntimeVideoPipelinePlan {
     pub idle_timeout_ms: u64,
     pub late_frame_drop_threshold_ms: u64,
     pub backlog_drop_threshold_packets: u16,
+    pub jitter_early_emit_enabled: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]

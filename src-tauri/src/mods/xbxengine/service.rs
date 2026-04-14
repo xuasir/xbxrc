@@ -547,6 +547,7 @@ fn to_runtime_projection(projection: StreamingRuntimeProjection) -> XbxEngineRun
             backlog_drop_threshold_packets: projection
                 .video_pipeline
                 .backlog_drop_threshold_packets,
+            jitter_early_emit_enabled: projection.video_pipeline.jitter_early_emit_enabled,
         },
         recovery: XbxEngineRuntimeRecoveryDto {
             first_frame_grace_ms: projection.recovery.first_frame_grace_ms,

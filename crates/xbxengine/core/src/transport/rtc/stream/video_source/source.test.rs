@@ -1262,6 +1262,23 @@ async fn bootstrap_packets_without_followup_boundary_do_not_emit_partial_frame()
 }
 
 #[tokio::test]
+async fn bootstrap_packets_without_followup_boundary_can_emit_when_early_emit_enabled() {
+    // 默认行为保持不变，这里仅验证实验开关打开时可提前出帧。
+    let (tx, mut transport_observation_rx, mut source) = make_video_source_for_test();
+    source.set_jitter_early_emit_enabled(true);
+    send_bootstrap_access_unit(&tx, 100, 9000).await;
+    let frame = tokio::time::timeout(Duration::from_millis(200), source.recv_frame_inner())
+        .await
+        .expect("reader should finish");
+    drop(tx);
+
+    let frame = frame.expect("early emit should materialize a frame");
+    assert!(frame.is_keyframe);
+    assert_eq!(frame.rtp_timestamp, 9000);
+    assert!(transport_observation_rx.try_recv().is_err());
+}
+
+#[tokio::test]
 async fn repair_rtx_packet_keeps_explicit_provenance_through_source_stage_updates() {
     let (tx, mut transport_observation_rx, mut source) = make_video_source_for_test();
 

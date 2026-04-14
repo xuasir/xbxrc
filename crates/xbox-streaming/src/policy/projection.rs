@@ -33,6 +33,7 @@ pub struct RuntimeVideoPipelineProjection {
     pub idle_timeout_ms: u64,
     pub late_frame_drop_threshold_ms: u64,
     pub backlog_drop_threshold_packets: u16,
+    pub jitter_early_emit_enabled: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -292,6 +293,7 @@ fn project_video_pipeline(
         idle_timeout_ms: plan.idle_timeout_ms,
         late_frame_drop_threshold_ms: plan.late_frame_drop_threshold_ms,
         backlog_drop_threshold_packets: plan.backlog_drop_threshold_packets,
+        jitter_early_emit_enabled: plan.jitter_early_emit_enabled,
     }
 }
 

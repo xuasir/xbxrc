@@ -83,6 +83,7 @@ pub struct XbxEngineVideoPipelineRuntimeConfig {
     pub idle_timeout_ms: u64,
     pub late_frame_drop_threshold_ms: u64,
     pub backlog_drop_threshold_packets: u16,
+    pub jitter_early_emit_enabled: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -127,6 +128,7 @@ impl XbxEngineWebRtcRuntimeConfig {
                 idle_timeout_ms: 150,
                 late_frame_drop_threshold_ms: 500,
                 backlog_drop_threshold_packets: 10,
+                jitter_early_emit_enabled: false,
             },
             rtt_diagnostics: XbxEngineRttDiagnosticsRuntimeConfig::default(),
             recovery: XbxEngineRecoveryRuntimeConfig::default(),

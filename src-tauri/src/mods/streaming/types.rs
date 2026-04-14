@@ -184,6 +184,7 @@ pub struct StreamingRuntimeVideoPipelineProjection {
     pub idle_timeout_ms: u64,
     pub late_frame_drop_threshold_ms: u64,
     pub backlog_drop_threshold_packets: u16,
+    pub jitter_early_emit_enabled: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -350,6 +351,7 @@ impl From<DomainRuntimePlanProjection> for StreamingRuntimeProjection {
                 backlog_drop_threshold_packets: projection
                     .video_pipeline
                     .backlog_drop_threshold_packets,
+                jitter_early_emit_enabled: projection.video_pipeline.jitter_early_emit_enabled,
             },
             recovery: StreamingRuntimeRecoveryProjection {
                 first_frame_grace_ms: projection.recovery.first_frame_grace_ms,

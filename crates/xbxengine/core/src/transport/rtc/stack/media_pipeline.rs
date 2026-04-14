@@ -162,6 +162,7 @@ impl<'a> RtcStackMediaPipelineBridge<'a> {
                 retry_interval_ms: video_pipeline.nack_retry_interval_ms.max(10),
                 max_retry_count: video_pipeline.nack_max_retry_count.max(1),
             },
+            video_pipeline.jitter_early_emit_enabled,
         );
         let mut audio_session = None;
         let audio_sink = match build_audio_playback_components(
