@@ -136,6 +136,8 @@ Overlay surfaces use `--ui-surface-overlay` (= `#1a1b1e` dark) and `--ui-surface
 
 Real usage note: Setting page group title uses `clamp(32px, 4vw, 44px)` with `font-weight: 900` and `letter-spacing: -0.02em` — this is a deliberate exception for the hero moment.
 
+Naming note: `--ui-text-body-xl` is a legacy name in this codebase and is intentionally smaller than `--ui-text-body-md`. For new UI, choose body text tokens by actual pixel size and nearby component precedent, not by suffix semantics alone.
+
 ---
 
 ## 5. SPACING
@@ -214,7 +216,7 @@ Overlay transitions: layer opacity `250ms ease`, panel transform `350ms var(--ea
 --ui-shadow-overlay:  (defined per density, e.g. 0 19px 44px rgba(0,0,0,0.42))
 ```
 
-Content cards use `--ui-shadow-floating`. Overlays use `--ui-shadow-overlay`. Focus uses `--shadow-xbox-focus`.
+Content cards may use `--ui-shadow-floating` when following established component patterns. Overlays use `--ui-shadow-overlay`. Focus uses `--shadow-xbox-focus`. Avoid introducing ad-hoc shadow values.
 
 ---
 

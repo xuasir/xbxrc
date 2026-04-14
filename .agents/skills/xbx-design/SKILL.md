@@ -1,8 +1,8 @@
 ---
 name: xbx-design
 description: This skill should be used when the user explicitly says "xbx style", "xbx design", "/xbx-design", or directly asks to use/apply the XBX design system. NEVER trigger automatically for generic UI or design tasks.
-version: 2.0.0
-allowed-tools: [Read, Write, Edit, Glob, Grep]
+version: 2.1.0
+allowed-tools: [ReadFile, ApplyPatch, Glob, rg]
 ---
 
 # XBX UI Design System
@@ -24,13 +24,13 @@ A gamepad-first desktop UI toolkit for the Xbox Remote Client (xbxrc). Every pat
 
 **Gamepad is primary input.** Every interactive element must be a `Focusable` node. Mouse/keyboard are secondary.
 
-**Token-first.** No raw hex or hardcoded px in `<style scoped>`. All values come from CSS custom properties. When a token doesn't exist yet, add it to `_theme-semantic.scss` — don't inline it.
+**Token-first.** Prefer CSS custom properties for spacing, color, size, radius, motion, and hierarchy decisions. Avoid raw hex and arbitrary px values in `<style scoped>`. Limited structural constants (e.g. 1–2px hairlines, precise effect parameters already used in nearby components) are allowed when they match existing patterns. When a semantic token is missing, add it to `_theme-semantic.scss` instead of inventing one-off values.
 
 **Density is automatic.** Four levels (`comfortable` / `standard` / `compact` / `narrow`) are driven by `data-ui-density` on `<html>`. Token overrides in `_theme-semantic.scss` handle the rest — no media queries, no conditional classes in components.
 
 **Focus ring is the hero state.** `box-shadow: var(--shadow-xbox-focus)` is the signature affordance. Never suppress it. Never replace it with a plain outline.
 
-**Surfaces, not shadows.** Content elevation = background color step (`--ui-surface-panel` → `--ui-surface-panel-strong`). Drop shadows only on overlays and focus rings.
+**Surfaces first, shadows with intent.** Content elevation should primarily come from surface steps (`--ui-surface-panel` → `--ui-surface-panel-strong`). For card-like content that already follows existing patterns, use approved tokens (e.g. `--ui-shadow-floating`) instead of ad-hoc shadow values. Overlays and focus states keep using their dedicated shadow tokens.
 
 ---
 
@@ -92,7 +92,7 @@ Font stack always via `--ui-font-family` (`Segoe UI`, `WestEuropean`, `Microsoft
 | `--ui-text-title-md` | 20px | Section headings, modal titles |
 | `--ui-text-body-lg` | 19px | Console card description |
 | `--ui-text-body-md` | 17px | Standard body, logout label |
-| `--ui-text-body-xl` | 16px | Supporting body, setting row label |
+| `--ui-text-body-xl` | 16px | Supporting body, setting row label (legacy name: this token is smaller than `--ui-text-body-md`) |
 | `--ui-text-body-sm` | 13px | Captions, eyebrow labels, tabs |
 
 Line heights: `--ui-line-height-tight` (1.1) for headings, `--ui-line-height-default` (1.2) for UI, `--ui-line-height-relaxed` (1.3) for body copy.
@@ -159,11 +159,11 @@ For layout that must change at `narrow`, use `:global(html[data-ui-density='narr
 
 ## 8. ANTI-PATTERNS
 
-- No hardcoded hex or px in `<style scoped>` — use tokens
+- Prefer tokens; avoid ad-hoc hex/px values in `<style scoped>`
 - No `outline` suppression without replacing with `box-shadow: var(--shadow-xbox-focus)`
 - No skeleton screens — use `BrandedLoading` component
 - No toast popups — use inline status text
-- No drop shadows on content cards — elevation = background color step
+- No ad-hoc drop shadows on content cards — use surface hierarchy first, and only approved shadow tokens (e.g. `--ui-shadow-floating`) where existing patterns require it
 - No `border-radius > 16px` on cards (16px is the max in use)
 - No gradients in UI chrome (loading ring and brand aura are the only exceptions)
 - No new interactive element without `Focusable` + `scope-id`
