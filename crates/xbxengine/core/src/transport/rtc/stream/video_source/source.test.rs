@@ -352,6 +352,62 @@ fn hard_recovery_wait_without_building_phase_still_reenters_wait_keyframe() {
 }
 
 #[test]
+fn drop_and_request_action_contract_keeps_resolver_stateless() {
+    let (next_waiting_for_recovery_keyframe, recovery_action) =
+        resolve_recovery_keyframe_action(true, true, false, true, 3, 2, false);
+
+    assert_eq!(recovery_action, RecoveryKeyframeAction::DropAndRequestKeyframe);
+    // resolve 层只给出动作，等待态由 action 分支显式处理，避免隐式耦合。
+    assert!(!next_waiting_for_recovery_keyframe);
+}
+
+#[tokio::test]
+async fn drop_and_request_fallback_without_missing_sequences_requests_keyframe() {
+    let (_tx, mut transport_observation_rx, mut source) = make_video_source_for_test();
+
+    source
+        .handle_drop_and_request_keyframe_action(12_345, 2, false, "delta")
+        .await;
+
+    let mut saw_recovery_request = false;
+    let mut saw_packet_loss_detected = false;
+    while let Ok(observation) = transport_observation_rx.try_recv() {
+        if observation == TransportObservation::Loss(TransportLossObservation::RecoveryKeyframeRequested) {
+            saw_recovery_request = true;
+        }
+        if observation == TransportObservation::Loss(TransportLossObservation::PacketLossDetected) {
+            saw_packet_loss_detected = true;
+        }
+    }
+    assert!(saw_recovery_request);
+    assert!(saw_packet_loss_detected);
+}
+
+#[test]
+fn sustaining_recovery_exit_gate_requires_recent_decoder_feedback() {
+    let (_tx, _transport_observation_rx, source) = make_video_source_for_test();
+    let now_ms = now_ms_f64();
+
+    source.runtime_stats.update(|stats| {
+        stats.latest_video_decode_ok_time_ms = Some(now_ms - 50.0);
+        stats.video_decoder_stalled = Some(false);
+        stats.video_renderer_stalled = Some(false);
+    });
+    assert!(source.decoder_feedback_allows_sustaining_exit(now_ms));
+
+    source.runtime_stats.update(|stats| {
+        stats.latest_video_decode_ok_time_ms = Some(now_ms - 450.0);
+    });
+    assert!(!source.decoder_feedback_allows_sustaining_exit(now_ms));
+
+    source.runtime_stats.update(|stats| {
+        stats.latest_video_decode_ok_time_ms = Some(now_ms - 20.0);
+        stats.video_decoder_stalled = Some(true);
+    });
+    assert!(!source.decoder_feedback_allows_sustaining_exit(now_ms));
+}
+
+#[test]
 fn inspection_admission_rejects_frames_without_bootstrap_or_continuation() {
     assert_eq!(
         resolve_inspection_admission(&H264AccessUnitInspection {

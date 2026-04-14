@@ -201,6 +201,93 @@ pub(super) fn detect_forward_gap(
 }
 
 impl RtcVideoFrameSource {
+    async fn handle_drop_and_request_keyframe_action(
+        &mut self,
+        sample_rtp_timestamp: u32,
+        media_dropped_packets: u16,
+        is_keyframe: bool,
+        frame_importance: &'static str,
+    ) {
+        let nack_started = self
+            .observe_sample_loss_and_nack(
+                sample_rtp_timestamp,
+                media_dropped_packets,
+                is_keyframe,
+                frame_importance,
+            )
+            .await;
+        if nack_started {
+            return;
+        }
+
+        // NACK 无法定位有效缺失序列号时，直接升级为显式 keyframe 恢复请求，
+        // 避免仅上报 PacketLossDetected 后链路没有后续恢复动作。
+        let now_ms = now_ms_f64();
+        let should_soft_request = self
+            .runtime_stats
+            .read(|stats| {
+                Self::should_soft_request_recovery_keyframe(
+                    stats,
+                    now_ms,
+                    None,
+                    false,
+                    true,
+                    false,
+                )
+            })
+            .unwrap_or(false);
+        if should_soft_request {
+            self.request_recovery_keyframe_soft_from_source(
+                "frame-drop-loss-no-missing-seq-soft-request",
+                Some(sample_rtp_timestamp),
+                now_ms,
+            );
+        } else {
+            self.set_waiting_for_recovery_keyframe(true);
+            self.timeline_state
+                .on_admission_await_recovery_keyframe(Some("sampleLossNoMissingSequence"));
+            self.record_video_timeline_observation(
+                "frame-drop-loss-no-missing-seq-await-recovery",
+                None,
+                Some(sample_rtp_timestamp),
+                now_ms,
+            );
+            self.queue_transport_observation(TransportObservation::Admission(
+                TransportAdmissionObservation::AwaitRecoveryKeyframe,
+            ));
+            self.request_recovery_keyframe_from_source(
+                "frame-drop-loss-no-missing-seq-hard-request",
+                Some(sample_rtp_timestamp),
+                now_ms,
+            );
+        }
+        self.record_anchor_candidate_ledger(
+            Some(sample_rtp_timestamp),
+            "frame-drop-loss-no-missing-seq",
+            XbxEngineAnchorCandidateState::Rejected,
+            Some(XbxEngineAnchorCandidateFailureReason::AwaitingRecoveryKeyframe),
+            now_ms,
+        );
+        self.queue_transport_observation(TransportObservation::Loss(
+            TransportLossObservation::PacketLossDetected,
+        ));
+    }
+
+    fn decoder_feedback_allows_sustaining_exit(&self, now_ms: f64) -> bool {
+        const SUSTAINING_EXIT_DECODE_OK_MAX_AGE_MS: f64 = 300.0;
+        self.runtime_stats
+            .read(|stats| {
+                if stats.video_decoder_stalled == Some(true)
+                    || stats.video_renderer_stalled == Some(true)
+                {
+                    return false;
+                }
+                stats.latest_video_decode_ok_time_ms
+                    .is_some_and(|at_ms| (now_ms - at_ms).max(0.0) <= SUSTAINING_EXIT_DECODE_OK_MAX_AGE_MS)
+            })
+            .unwrap_or(true)
+    }
+
     fn maybe_emit_jitter_early_boundary(&mut self) {
         if !self.jitter_early_emit_enabled {
             return;
@@ -1342,7 +1429,6 @@ impl RtcVideoFrameSource {
                         media_dropped_packets,
                         is_keyframe,
                     );
-                self.set_waiting_for_recovery_keyframe(next_waiting_for_recovery_keyframe);
 
                 if media_dropped_packets > 0 {
                     self.runtime_stats
@@ -1356,24 +1442,22 @@ impl RtcVideoFrameSource {
                 }
 
                 match recovery_action {
-                    RecoveryKeyframeAction::Submit => {}
+                    RecoveryKeyframeAction::Submit => {
+                        self.set_waiting_for_recovery_keyframe(next_waiting_for_recovery_keyframe);
+                    }
                     RecoveryKeyframeAction::DropAndRequestKeyframe => {
-                        let nack_started = self
-                            .observe_sample_loss_and_nack(
-                                sample.packet_timestamp,
-                                media_dropped_packets,
-                                is_keyframe,
-                                frame_importance,
-                            )
-                            .await;
-                        if !nack_started {
-                            self.queue_transport_observation(TransportObservation::Loss(
-                                TransportLossObservation::PacketLossDetected,
-                            ));
-                        }
+                        self.set_waiting_for_recovery_keyframe(next_waiting_for_recovery_keyframe);
+                        self.handle_drop_and_request_keyframe_action(
+                            sample.packet_timestamp,
+                            media_dropped_packets,
+                            is_keyframe,
+                            frame_importance,
+                        )
+                        .await;
                         continue;
                     }
                     RecoveryKeyframeAction::WaitKeyframe => {
+                        self.set_waiting_for_recovery_keyframe(next_waiting_for_recovery_keyframe);
                         let now_ms = now_ms_f64();
                         self.enter_recovery_wait_from_source(
                             "frame-await-recovery-keyframe",
@@ -1461,25 +1545,36 @@ impl RtcVideoFrameSource {
                     inspection.bootstrap_ready
                 );
                 let complete_candidate_now_ms = now_ms_f64();
-                self.timeline_state.mark_frame_complete_candidate(
-                    sample.packet_timestamp,
-                    complete_candidate_now_ms,
-                    Some(is_keyframe),
-                    frame_importance,
-                );
-                self.record_video_timeline_observation(
-                    "frame-complete-candidate",
-                    None,
-                    Some(sample.packet_timestamp),
-                    complete_candidate_now_ms,
-                );
-                self.record_anchor_candidate_ledger(
-                    Some(sample.packet_timestamp),
-                    "frame-complete-candidate",
-                    XbxEngineAnchorCandidateState::Observed,
-                    None,
-                    complete_candidate_now_ms,
-                );
+                let can_exit_sustaining_recovery = !self.timeline_state.in_sustaining_recovery()
+                    || self.decoder_feedback_allows_sustaining_exit(complete_candidate_now_ms);
+                if can_exit_sustaining_recovery {
+                    self.timeline_state.mark_frame_complete_candidate(
+                        sample.packet_timestamp,
+                        complete_candidate_now_ms,
+                        Some(is_keyframe),
+                        frame_importance,
+                    );
+                    self.record_video_timeline_observation(
+                        "frame-complete-candidate",
+                        None,
+                        Some(sample.packet_timestamp),
+                        complete_candidate_now_ms,
+                    );
+                    self.record_anchor_candidate_ledger(
+                        Some(sample.packet_timestamp),
+                        "frame-complete-candidate",
+                        XbxEngineAnchorCandidateState::Observed,
+                        None,
+                        complete_candidate_now_ms,
+                    );
+                } else {
+                    self.record_video_timeline_observation(
+                        "frame-complete-candidate-decode-feedback-blocked",
+                        None,
+                        Some(sample.packet_timestamp),
+                        complete_candidate_now_ms,
+                    );
+                }
 
                 if let Some(committed_ts) = self
                     .timeline_state
