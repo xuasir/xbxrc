@@ -11,6 +11,9 @@ pub(crate) trait RtcMediaSink: Send + Sync {
         _route_reason: &str,
         _rtp_meta: Option<&RtcRtpPacketMeta>,
     );
+
+    /// 定时驱动点，由外部 tick task 定期调用，用于排空背压队列中的积压包。
+    fn on_tick(&mut self, _now: std::time::Instant) {}
 }
 
 pub(crate) trait RtcRtcpSendPort: Send + Sync {

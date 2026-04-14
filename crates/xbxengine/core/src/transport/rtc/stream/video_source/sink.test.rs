@@ -22,7 +22,7 @@ use crate::transport::rtc::stream::video_source::test_fixtures::{
 };
 use crate::XbxEngineRecoveryReasonDomain;
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 fn assert_no_reconnect_candidate(commands: &[TransportCommand]) {
     assert!(commands
@@ -531,7 +531,7 @@ async fn full_queue_keeps_latest_best_effort_packet_locally() {
         .await
         .expect("channel should contain first packet");
     assert_eq!(first.meta.sequence_number, 1);
-    sink.flush_pending();
+    sink.test_flush_pending();
     let second = rx
         .recv()
         .await
@@ -625,10 +625,10 @@ async fn priority_packet_is_buffered_ahead_of_best_effort_under_backpressure() {
 
     let first = rx.recv().await.expect("first packet should exist");
     assert_eq!(first.meta.sequence_number, 10);
-    sink.flush_pending();
+    sink.test_flush_pending();
     let second = rx.recv().await.expect("priority packet should flush first");
     assert_eq!(second.meta.sequence_number, 12);
-    sink.flush_pending();
+    sink.test_flush_pending();
     let third = rx.recv().await.expect("best-effort should flush last");
     assert_eq!(third.meta.sequence_number, 11);
 }
@@ -779,7 +779,7 @@ async fn repair_burst_yields_to_best_effort_after_burst_cap() {
 
     let mut flushed = Vec::new();
     for _ in 0..6 {
-        sink.flush_pending();
+        sink.test_flush_pending();
         let packet = tokio::time::timeout(Duration::from_millis(50), rx.recv())
             .await
             .expect("flush should enqueue packet")
@@ -790,6 +790,153 @@ async fn repair_burst_yields_to_best_effort_after_burst_cap() {
     assert_eq!(&flushed[..4], &[10, 11, 12, 13]);
     assert_eq!(flushed[4], 2);
     assert_eq!(flushed[5], 14);
+}
+
+#[tokio::test]
+async fn enqueue_under_backpressure_schedules_follow_up_flush() {
+    let (tx, mut rx) = tokio::sync::mpsc::channel(1);
+    let mut sink = build_sink(tx);
+    let make_packet = |sequence_number: u16| {
+        let packet = RtcMediaIngressPacket::new(
+            MediaPacketKind::Rtp,
+            4,
+            RtcMediaPacketSource::Track {
+                track_id: "video-main".to_string(),
+            },
+        )
+        .with_rtp_payload(vec![0x41, 0x88, 0x81, 0x00]);
+        let meta = RtcRtpPacketMeta {
+            ssrc: 7,
+            payload_type: 124,
+            sequence_number,
+            timestamp: 4_000 + u32::from(sequence_number),
+            marker: false,
+        };
+        (packet, meta)
+    };
+
+    let (packet1, meta1) = make_packet(1);
+    sink.on_raw_packet(
+        &packet1,
+        RtcMediaRouteLabel::PrimaryVideo,
+        "route=primaryVideo",
+        Some(&meta1),
+    );
+    let (packet2, meta2) = make_packet(2);
+    sink.on_raw_packet(
+        &packet2,
+        RtcMediaRouteLabel::PrimaryVideo,
+        "route=primaryVideo",
+        Some(&meta2),
+    );
+
+    assert!(sink.test_has_scheduled_flush());
+    let first = rx.recv().await.expect("first packet should be queued");
+    assert_eq!(first.meta.sequence_number, 1);
+}
+
+#[tokio::test]
+async fn due_scheduled_flush_runs_on_tick() {
+    let (tx, mut rx) = tokio::sync::mpsc::channel(1);
+    let mut sink = build_sink(tx);
+    let make_packet = |sequence_number: u16| {
+        let packet = RtcMediaIngressPacket::new(
+            MediaPacketKind::Rtp,
+            4,
+            RtcMediaPacketSource::Track {
+                track_id: "video-main".to_string(),
+            },
+        )
+        .with_rtp_payload(vec![0x41, 0x88, 0x81, 0x00]);
+        let meta = RtcRtpPacketMeta {
+            ssrc: 7,
+            payload_type: 124,
+            sequence_number,
+            timestamp: 5_000 + u32::from(sequence_number),
+            marker: false,
+        };
+        (packet, meta)
+    };
+
+    let (packet1, meta1) = make_packet(1);
+    sink.on_raw_packet(
+        &packet1,
+        RtcMediaRouteLabel::PrimaryVideo,
+        "route=primaryVideo",
+        Some(&meta1),
+    );
+    let (packet2, meta2) = make_packet(2);
+    sink.on_raw_packet(
+        &packet2,
+        RtcMediaRouteLabel::PrimaryVideo,
+        "route=primaryVideo",
+        Some(&meta2),
+    );
+    assert!(sink.test_has_scheduled_flush());
+
+    let first = rx.recv().await.expect("first packet should exist");
+    assert_eq!(first.meta.sequence_number, 1);
+
+    // 模拟 tick task 到期触发：直接调用 on_tick 并传入已到期的时间点
+    sink.test_force_flush_due_now();
+    sink.on_tick(Instant::now());
+
+    let second = tokio::time::timeout(Duration::from_millis(50), rx.recv())
+        .await
+        .expect("on_tick should flush pending packet")
+        .expect("pending packet should exist");
+    assert_eq!(second.meta.sequence_number, 2);
+}
+
+#[tokio::test]
+async fn draining_pending_queue_clears_scheduled_flush() {
+    let (tx, mut rx) = tokio::sync::mpsc::channel(1);
+    let mut sink = build_sink(tx);
+    let make_packet = |sequence_number: u16| {
+        let packet = RtcMediaIngressPacket::new(
+            MediaPacketKind::Rtp,
+            4,
+            RtcMediaPacketSource::Track {
+                track_id: "video-main".to_string(),
+            },
+        )
+        .with_rtp_payload(vec![0x41, 0x88, 0x81, 0x00]);
+        let meta = RtcRtpPacketMeta {
+            ssrc: 7,
+            payload_type: 124,
+            sequence_number,
+            timestamp: 6_000 + u32::from(sequence_number),
+            marker: false,
+        };
+        (packet, meta)
+    };
+
+    let (packet1, meta1) = make_packet(1);
+    sink.on_raw_packet(
+        &packet1,
+        RtcMediaRouteLabel::PrimaryVideo,
+        "route=primaryVideo",
+        Some(&meta1),
+    );
+    let (packet2, meta2) = make_packet(2);
+    sink.on_raw_packet(
+        &packet2,
+        RtcMediaRouteLabel::PrimaryVideo,
+        "route=primaryVideo",
+        Some(&meta2),
+    );
+    assert!(sink.test_has_scheduled_flush());
+
+    let first = rx.recv().await.expect("first packet should exist");
+    assert_eq!(first.meta.sequence_number, 1);
+
+    sink.test_flush_pending();
+    let second = tokio::time::timeout(Duration::from_millis(50), rx.recv())
+        .await
+        .expect("flush should enqueue pending packet")
+        .expect("pending packet should exist");
+    assert_eq!(second.meta.sequence_number, 2);
+    assert!(!sink.test_has_scheduled_flush());
 }
 
 #[tokio::test]

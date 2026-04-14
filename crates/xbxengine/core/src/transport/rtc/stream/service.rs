@@ -77,6 +77,11 @@ impl RtcMediaService {
         self.sink
             .apply_payload_route_map(self.payload_route_map.clone());
     }
+
+    /// 定时驱动点，由外部 tick task 调用，转发给 sink 排空背压队列。
+    pub(crate) fn tick(&mut self) {
+        self.sink.on_tick(std::time::Instant::now());
+    }
 }
 
 #[cfg(test)]

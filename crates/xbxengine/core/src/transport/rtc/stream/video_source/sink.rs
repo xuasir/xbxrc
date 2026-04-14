@@ -7,11 +7,13 @@ use crate::transport::rtc::stream::packet_types::{
 use crate::transport::rtc::stream::sink::RtcMediaSink;
 use crate::{XbxEngineVideoFrameDropObservation, XbxEngineVideoRtxReinjectObservation};
 use std::collections::VecDeque;
+use std::time::{Duration, Instant};
 
 const DEFAULT_PRIORITY_BACKLOG_LIMIT: usize = 32;
 const MAX_BEST_EFFORT_BACKLOG_LIMIT: usize = 8;
 const MIN_REPAIR_BACKLOG_LIMIT: usize = 5;
 const MAX_REPAIR_BURST_BEFORE_BEST_EFFORT: u8 = 4;
+const SCHEDULED_FLUSH_TICK_MS: u64 = 4;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum IngressBackpressureClass {
@@ -32,6 +34,8 @@ pub(crate) struct RtcVideoSourceSink {
     best_effort_backlog_limit: usize,
     repair_burst_streak: u8,
     next_drop_observation_id: u64,
+    flush_tick: Duration,
+    next_flush_due_at: Option<Instant>,
 }
 
 impl RtcVideoSourceSink {
@@ -56,10 +60,12 @@ impl RtcVideoSourceSink {
             best_effort_backlog_limit,
             repair_burst_streak: 0,
             next_drop_observation_id: 0,
+            flush_tick: Duration::from_millis(SCHEDULED_FLUSH_TICK_MS),
+            next_flush_due_at: None,
         }
     }
 
-    fn flush_pending(&mut self) {
+    fn flush_pending(&mut self, now: Instant) {
         loop {
             if let Some(packet) = self.pending_priority_primary.pop_front() {
                 if self.try_send_packet(packet.clone()) {
@@ -101,16 +107,27 @@ impl RtcVideoSourceSink {
 
             break;
         }
+        self.update_flush_schedule_after_attempt(now);
     }
 
     #[cfg(test)]
     pub(crate) fn test_flush_pending(&mut self) {
-        self.flush_pending();
+        self.flush_pending(Instant::now());
     }
 
     #[cfg(test)]
     pub(crate) fn test_repair_backlog_limit(&self) -> usize {
         self.repair_backlog_limit
+    }
+
+    #[cfg(test)]
+    pub(crate) fn test_has_scheduled_flush(&self) -> bool {
+        self.next_flush_due_at.is_some()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn test_force_flush_due_now(&mut self) {
+        self.next_flush_due_at = Some(Instant::now());
     }
 
     fn enqueue_local_backpressure(
@@ -193,6 +210,29 @@ impl RtcVideoSourceSink {
             + self.pending_best_effort.len()
     }
 
+    fn has_pending_packets(&self) -> bool {
+        !(self.pending_priority_primary.is_empty()
+            && self.pending_repair.is_empty()
+            && self.pending_best_effort.is_empty())
+    }
+
+    fn schedule_flush_if_needed(&mut self, now: Instant) {
+        if !self.has_pending_packets() || self.next_flush_due_at.is_some() {
+            return;
+        }
+        self.next_flush_due_at = Some(now + self.flush_tick);
+    }
+
+    fn update_flush_schedule_after_attempt(&mut self, now: Instant) {
+        if !self.has_pending_packets() {
+            self.next_flush_due_at = None;
+            return;
+        }
+        if self.next_flush_due_at.is_none() {
+            self.next_flush_due_at = Some(now + self.flush_tick);
+        }
+    }
+
     fn try_send_packet(&mut self, packet: RtcVideoRtpPacket) -> bool {
         match self.tx.try_send(packet.clone()) {
             Ok(()) => {
@@ -229,6 +269,7 @@ impl RtcMediaSink for RtcVideoSourceSink {
         _route_reason: &str,
         rtp_meta: Option<&RtcRtpPacketMeta>,
     ) {
+        let now = Instant::now();
         let Some(normalized) = normalize_video_packet(
             packet,
             route_label,
@@ -238,7 +279,6 @@ impl RtcMediaSink for RtcVideoSourceSink {
             return;
         };
 
-        self.flush_pending();
         if self.try_send_packet(normalized.clone()) {
             return;
         }
@@ -250,7 +290,16 @@ impl RtcMediaSink for RtcVideoSourceSink {
             normalized.meta.timestamp
         );
         self.enqueue_local_backpressure(normalized, class);
-        self.flush_pending();
+        self.schedule_flush_if_needed(now);
+        self.flush_pending(now);
+    }
+
+    /// 由外部 tick task 定期调用（约每 4ms），在包稀疏场景下主动排空背压队列。
+    fn on_tick(&mut self, now: Instant) {
+        if self.next_flush_due_at.is_some_and(|due| now >= due) {
+            self.next_flush_due_at = None;
+            self.flush_pending(now);
+        }
     }
 }
 

@@ -13,6 +13,9 @@ use crate::transport::rtc::stream::sink::RtcRtcpSendPort;
 use crate::transport::rtc::stream::{build_rtc_video_frame_source, RtcMediaService, RtcMediaSink};
 use crate::XbxEngineRuntimeConfig;
 
+/// sink 背压队列定时 flush 的间隔，与 sink 内部的 flush_tick 保持一致。
+const SINK_FLUSH_TICK_INTERVAL_MS: u64 = 4;
+
 pub(super) type FrameSourceSender = tokio::sync::mpsc::Sender<
     crate::transport::rtc::stream::adapter_types::VideoFramePipelineSources,
 >;
@@ -192,6 +195,27 @@ impl<'a> RtcStackMediaPipelineBridge<'a> {
         } else if let Some(session) = audio_session.take() {
             session.stop();
         }
+        // 启动背压队列定时 flush task。
+        // 使用 Weak 引用：当 media 被 reset/drop 后 Weak 升级失败，task 自动退出，无需显式 stop。
+        let media_weak = Arc::downgrade(self.media);
+        self.media_runtime.spawn(async move {
+            let mut ticker =
+                tokio::time::interval(Duration::from_millis(SINK_FLUSH_TICK_INTERVAL_MS));
+            ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+            ticker.tick().await;
+            loop {
+                ticker.tick().await;
+                let Some(media) = media_weak.upgrade() else {
+                    break;
+                };
+                {
+                    if let Ok(mut guard) = media.lock() {
+                        guard.tick();
+                    }
+                }
+                drop(media);
+            }
+        });
         let send_result = self
             .frame_source_tx
             .lock()
