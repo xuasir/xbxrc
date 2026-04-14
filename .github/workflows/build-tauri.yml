@@ -30,11 +30,31 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Install system dependencies (macOS)
+        if: runner.os == 'macOS'
+        run: brew install opus
+
       - name: Install LLVM (Windows, bindgen)
         if: runner.os == 'Windows'
         uses: KyleMayes/install-llvm-action@v2
         with:
           version: "18.1"
+
+      - name: Install OpenSSL (Windows)
+        if: runner.os == 'Windows'
+        run: choco install openssl --no-progress -y
+        shell: pwsh
+
+      - name: Set OPENSSL_DIR (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          $opensslDir = "C:\Program Files\OpenSSL-Win64"
+          if (-not (Test-Path $opensslDir)) {
+            $opensslDir = "C:\Program Files\OpenSSL"
+          }
+          echo "OPENSSL_DIR=$opensslDir" >> $env:GITHUB_ENV
+          echo "OPENSSL_STATIC=1" >> $env:GITHUB_ENV
+        shell: pwsh
 
       - name: pnpm
         uses: pnpm/action-setup@v4
