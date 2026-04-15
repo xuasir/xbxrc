@@ -1,4 +1,5 @@
 use crate::media::video::types::FrameValue as MediaFrameValue;
+use crate::media::video::h264::inspection::H264AccessUnitInspection;
 use crate::{
     XbxEngineH264InspectionObservation, XbxEngineKeyframeRequestEpisodeObservation,
     XbxEngineMediaRuntimeStats, XbxEngineVideoTimelineObservation,
@@ -142,6 +143,13 @@ pub(crate) fn is_invalid_recovery_bootstrap_reject_reason(reason: Option<&str>) 
                 | "inspectionRejectInvalidSliceHeader"
         )
     )
+}
+
+pub(crate) fn is_recovery_delta_continuation_ready(inspection: &H264AccessUnitInspection) -> bool {
+    inspection.slice_headers_valid
+        && inspection.delta_continuation_ready()
+        && inspection.committed_sps_present()
+        && inspection.committed_pps_present()
 }
 
 pub(crate) fn inspection_has_invalid_recovery_bootstrap(

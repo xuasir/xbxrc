@@ -1621,7 +1621,7 @@ async fn rtp_to_decode_to_pacer_to_renderer_pipeline_reaches_latest_frame_and_ov
                     break;
                 }
                 Err(std::sync::mpsc::TrySendError::Full(_)) => {
-                    std::thread::sleep(Duration::from_millis(2));
+                    tokio::time::sleep(Duration::from_millis(2)).await;
                 }
                 Err(err) => panic!("unexpected pacer submit failure: {err:?}"),
             }
@@ -1642,7 +1642,7 @@ async fn rtp_to_decode_to_pacer_to_renderer_pipeline_reaches_latest_frame_and_ov
                 break;
             }
         }
-        std::thread::sleep(Duration::from_millis(4));
+        tokio::time::sleep(Duration::from_millis(4)).await;
     }
 
     pacer.stop();

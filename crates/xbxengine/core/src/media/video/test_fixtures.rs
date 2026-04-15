@@ -116,6 +116,7 @@ pub(crate) fn make_bootstrap_assembled_frame(rtp_timestamp: u32) -> AssembledVid
         frame_recovery_disposition: FrameRecoveryDisposition::Repairing,
         frame_unrecoverable_reason: None,
         assembled_at: Instant::now(),
+        playout_base_at: None,
         h264: inspection,
         payload: Bytes::from(payload.to_vec()),
     }
@@ -126,7 +127,9 @@ pub(crate) fn make_video_source_for_test() -> (
     tokio::sync::mpsc::UnboundedReceiver<TransportObservation>,
     RtcVideoFrameSource,
 ) {
-    let (tx, rx) = tokio::sync::mpsc::channel(8);
+    // 测试里经常会先批量灌入多个 AU（每个 AU 拆成多包 RTP）。
+    // 缓冲太小会导致 send() 在未开始消费前就阻塞，从而表现为“cargo test 卡死”。
+    let (tx, rx) = tokio::sync::mpsc::channel(64);
     let (transport_observation_tx, transport_observation_rx) =
         tokio::sync::mpsc::unbounded_channel();
     let rtcp_port: Arc<dyn RtcRtcpSendPort> = Arc::new(NoopRtcpPort);

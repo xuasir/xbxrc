@@ -87,6 +87,8 @@ pub struct AssembledVideoFrame {
     pub frame_unrecoverable_reason: Option<String>,
 
     pub assembled_at: Instant,
+    /// 物化阶段计算 target playout 的时间基准，优先取首包到达时刻。
+    pub playout_base_at: Option<Instant>,
 
     pub h264: H264AccessUnitInspection,
     pub payload: Bytes,

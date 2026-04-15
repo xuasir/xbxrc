@@ -320,7 +320,7 @@ pub(crate) fn materialize_ingress_frame_with_context(
     context: FrameBudgetContext,
 ) -> EncodedFrame {
     let playout_delay = resolve_playout_delay(frame.value, min_delay, max_delay, context);
-    let target_playout_time = frame.assembled_at + playout_delay;
+    let target_playout_time = frame.playout_base_at.unwrap_or(frame.assembled_at) + playout_delay;
     frame.into_encoded_frame(target_playout_time)
 }
 
@@ -330,17 +330,36 @@ fn resolve_playout_delay(
     max_delay: Duration,
     context: FrameBudgetContext,
 ) -> Duration {
-    if matches!(context.link_value, FrameBudgetLinkValue::Anchor)
-        || matches!(context.failure_cost, FrameBudgetFailureCost::ChainBroken)
-    {
-        return max_delay.max(min_delay);
+    let anchor_or_chain_broken = matches!(context.link_value, FrameBudgetLinkValue::Anchor)
+        || matches!(context.failure_cost, FrameBudgetFailureCost::ChainBroken);
+    let mut ratio = context.deadline_budget_ratio_per_mille(value);
+    if anchor_or_chain_broken {
+        // 恢复关键帧在 RTT 已知且充裕时允许收紧 ratio，避免恒定顶格 max_delay。
+        // Unknown 表示没有 RTT 信息，保守处理不干预；Exhausted 表示余量耗尽，
+        // 同样不收紧（让 ratio 保持高位以保留最大等待窗口）。
+        ratio = match context.rtt_slack {
+            FrameBudgetRttSlack::Ample => ratio.min(700),
+            FrameBudgetRttSlack::Tight => ratio.min(960),
+            FrameBudgetRttSlack::Exhausted => ratio.min(1_100),
+            FrameBudgetRttSlack::Unknown => ratio,
+        };
     }
-
-    let ratio = context.deadline_budget_ratio_per_mille(value) as u128;
+    let ratio = ratio as u128;
     let min_ms = min_delay.as_millis();
     let max_ms = max_delay.as_millis().max(min_ms);
     let spread_ms = max_ms.saturating_sub(min_ms);
-    let scaled_ms = min_ms + (spread_ms * ratio / 1_000);
+    let mut scaled_ms = min_ms + (spread_ms * ratio / 1_000);
+    if anchor_or_chain_broken {
+        // 防抖偏置：在 ratio 已被 cap 后叠加一个小的固定增量，防止 ratio 恰好落在
+        // cap 边界时被截断导致窗口过窄。Unknown 场景 ratio 未被 cap，偏置最大以保守兜底。
+        let protection_bias_ms: u128 = match context.rtt_slack {
+            FrameBudgetRttSlack::Ample => 2,
+            FrameBudgetRttSlack::Tight => 4,
+            FrameBudgetRttSlack::Exhausted => 5,
+            FrameBudgetRttSlack::Unknown => 7,
+        };
+        scaled_ms = scaled_ms.saturating_add(protection_bias_ms).min(max_ms);
+    }
     Duration::from_millis(scaled_ms as u64).max(min_delay)
 }
 
@@ -515,6 +534,7 @@ mod tests {
                 frame_recovery_disposition: FrameRecoveryDisposition::Repairing,
                 frame_unrecoverable_reason: None,
                 assembled_at,
+                playout_base_at: None,
                 h264: make_h264_inspection(true),
                 payload: Bytes::from_static(b"k"),
             },
@@ -539,6 +559,7 @@ mod tests {
                 frame_recovery_disposition: FrameRecoveryDisposition::Repairing,
                 frame_unrecoverable_reason: None,
                 assembled_at,
+                playout_base_at: None,
                 h264: make_h264_inspection(false),
                 payload: Bytes::from_static(b"d"),
             },
@@ -608,5 +629,61 @@ mod tests {
             context.retry_budget(FrameValue::new(false, true, 48 * 1024), 3),
             2
         );
+    }
+
+    #[test]
+    fn materialization_prefers_playout_base_at_when_present() {
+        let assembled_at = Instant::now();
+        let playout_base_at = assembled_at - Duration::from_millis(15);
+        let encoded = materialize_ingress_frame(
+            AssembledVideoFrame {
+                codec: VideoCodec::H264,
+                is_keyframe: false,
+                config_changed: false,
+                value: FrameValue::new(false, false, 8 * 1024),
+                budget: FrameBudgetContext::for_transport(
+                    FrameValue::new(false, false, 8 * 1024),
+                    false,
+                    Some(40.0),
+                    Some(1_000.0),
+                    Some(1_100.0),
+                    false,
+                    FrameBudgetWindowSource::Playout,
+                ),
+                width: 1920,
+                height: 1080,
+                rtp_timestamp: 3,
+                frame_playout_deadline_at_ms: None,
+                frame_recovery_disposition: FrameRecoveryDisposition::Repairing,
+                frame_unrecoverable_reason: None,
+                assembled_at,
+                playout_base_at: Some(playout_base_at),
+                h264: make_h264_inspection(false),
+                payload: Bytes::from_static(b"d"),
+            },
+            Duration::from_millis(8),
+            Duration::from_millis(30),
+        );
+        assert!(encoded.target_playout_time < assembled_at + Duration::from_millis(25));
+    }
+
+    #[test]
+    fn adaptive_anchor_delay_is_not_stuck_at_max_delay_under_ample_rtt() {
+        let context = FrameBudgetContext::for_transport(
+            FrameValue::new(true, true, 64 * 1024),
+            false,
+            Some(28.0),
+            Some(1_000.0),
+            Some(1_100.0),
+            false,
+            FrameBudgetWindowSource::Recovery,
+        );
+        let delay = super::resolve_playout_delay(
+            FrameValue::new(true, true, 64 * 1024),
+            Duration::from_millis(20),
+            Duration::from_millis(30),
+            context,
+        );
+        assert!(delay < Duration::from_millis(30));
     }
 }

@@ -9,9 +9,13 @@ use base64::Engine as _;
 use bytes::Bytes;
 use rtc_rtp::packet::Packet;
 
-use crate::media::video::ingress::budget::FrameBudgetContext;
+use crate::media::video::ingress::budget::{
+    FrameBudgetContext, FrameBudgetRttSlack, FrameBudgetWindowSource,
+};
 use crate::media::video::types::{AssembledVideoFrame, FrameValue, VideoCodec};
-use crate::transport::rtc::recovery::contract::FrameValue as RecoveryFrameValue;
+use crate::transport::rtc::recovery::contract::{
+    is_recovery_delta_continuation_ready, FrameValue as RecoveryFrameValue,
+};
 use crate::transport::rtc::stream::adapter_types::{
     FrameSource, TransportAdmissionObservation, TransportLossObservation, TransportObservation,
     TransportObservationSource,
@@ -39,6 +43,7 @@ const OOS_ACTIVITY_COOLDOWN_MS: f64 = 30_000.0;
 const OOS_DEPTH_WINDOW_CAPACITY: usize = 64;
 const FRAME_OOS_TRACK_CAPACITY: usize = 64;
 const HEAD_MISSING_ACTIVITY_COOLDOWN_MS: f64 = 30_000.0;
+const FRAME_PLAYOUT_BASE_TRACK_CAPACITY: usize = 96;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum RecoveryKeyframeAction {
@@ -100,7 +105,7 @@ pub(super) fn resolve_inspection_admission(
     if (first_frame_acquired
         || decoder_bootstrap_no_output_continuation_allowed
         || sustaining_recovery_continuation_allowed)
-        && inspection.delta_continuation_ready()
+        && is_recovery_delta_continuation_ready(inspection)
     {
         return InspectionAdmission::Accept;
     }
@@ -394,6 +399,77 @@ impl RtcVideoFrameSource {
             .find(|(timestamp, _)| *timestamp == rtp_timestamp)
             .map(|(_, count)| *count)
             .unwrap_or(fallback)
+    }
+
+    fn remember_frame_playout_base_candidate(
+        &mut self,
+        rtp_timestamp: u32,
+        observed_at: std::time::Instant,
+    ) {
+        if self
+            .frame_playout_base_times
+            .iter()
+            .any(|(timestamp, _)| *timestamp == rtp_timestamp)
+        {
+            return;
+        }
+        if self.frame_playout_base_times.len() >= FRAME_PLAYOUT_BASE_TRACK_CAPACITY {
+            self.frame_playout_base_times.pop_front();
+        }
+        self.frame_playout_base_times
+            .push_back((rtp_timestamp, observed_at));
+    }
+
+    fn take_frame_playout_base_at(&mut self, rtp_timestamp: u32) -> Option<std::time::Instant> {
+        let index = self
+            .frame_playout_base_times
+            .iter()
+            .position(|(timestamp, _)| *timestamp == rtp_timestamp)?;
+        self.frame_playout_base_times
+            .remove(index)
+            .map(|(_, observed_at)| observed_at)
+    }
+
+    fn build_ingress_materialization_fallback_budget(
+        &self,
+        frame_value: FrameValue,
+        frame_playout_deadline_at_ms: Option<f64>,
+        frame_unrecoverable_reason: Option<&str>,
+    ) -> FrameBudgetContext {
+        let window_source = if frame_playout_deadline_at_ms.is_some() {
+            FrameBudgetWindowSource::Recovery
+        } else {
+            FrameBudgetWindowSource::Playout
+        };
+        let cloud_rtt_ms = self.cloud_nack_rtt_ms();
+        let now_ms = now_ms_f64();
+        let estimated_recovery_arrival_ms = if cloud_rtt_ms > 0.0 {
+            Some(now_ms + cloud_rtt_ms)
+        } else {
+            None
+        };
+        let fallback = FrameBudgetContext::for_transport(
+            frame_value,
+            self.waiting_for_recovery_keyframe(),
+            Some(cloud_rtt_ms),
+            estimated_recovery_arrival_ms,
+            frame_playout_deadline_at_ms,
+            self.is_cloud_startup_transport_profile(),
+            window_source,
+        );
+        // RTT 不可用时（Unknown），for_transport 构造的 context 在 rtt_slack 维度上
+        // 与 for_ingress_materialization_parts 相同，但其他字段（window_source、failure_cost）
+        // 可能因 waiting_keyframe 状态而不同，会引入非预期的 ratio 偏移。
+        // 退回到 for_ingress_materialization_parts 以保持与原有行为一致，避免在
+        // RTT 信息缺失时引入额外的不确定性。
+        if matches!(fallback.rtt_slack, FrameBudgetRttSlack::Unknown) {
+            return FrameBudgetContext::for_ingress_materialization_parts(
+                frame_value,
+                frame_playout_deadline_at_ms,
+                frame_unrecoverable_reason,
+            );
+        }
+        fallback
     }
 
     fn nack_maintenance_timeout(&self, base_timeout: std::time::Duration) -> std::time::Duration {
@@ -1408,10 +1484,7 @@ impl RtcVideoFrameSource {
                 };
                 let healthy_delta_continuation = !is_keyframe
                     && frame_importance == "delta"
-                    && inspection.slice_headers_valid
-                    && inspection.delta_continuation_ready()
-                    && inspection.committed_sps_present()
-                    && inspection.committed_pps_present();
+                    && is_recovery_delta_continuation_ready(&inspection);
                 if healthy_delta_continuation {
                     let _ = self
                         .timeline_state
@@ -1510,6 +1583,9 @@ impl RtcVideoFrameSource {
                     }
                 }
                 let assembled_at = std::time::Instant::now();
+                // 优先取首包到达时刻作为 playout 基准，减少 SampleBuilder 等待引入的固有延迟。
+                // 找不到记录时保持 None，物化层会 fallback 到 assembled_at，语义上有区别。
+                let playout_base_at = self.take_frame_playout_base_at(sample.packet_timestamp);
                 self.transport_deadline_tracker
                     .record_frame_arrival(now_ms_f64());
                 let (
@@ -1519,12 +1595,44 @@ impl RtcVideoFrameSource {
                     ledger_budget_context,
                 ) = self.take_frame_recovery_ledger(sample.packet_timestamp);
                 let frame_budget = ledger_budget_context.unwrap_or_else(|| {
-                    FrameBudgetContext::for_ingress_materialization_parts(
+                    self.build_ingress_materialization_fallback_budget(
                         frame_value,
                         frame_playout_deadline_at_ms,
                         frame_unrecoverable_reason.as_deref(),
                     )
                 });
+                self.ingress_budget_materialized_count =
+                    self.ingress_budget_materialized_count.saturating_add(1);
+                if ledger_budget_context.is_none() {
+                    self.ingress_budget_fallback_count =
+                        self.ingress_budget_fallback_count.saturating_add(1);
+                    if matches!(frame_budget.rtt_slack, FrameBudgetRttSlack::Unknown) {
+                        self.ingress_budget_unknown_rtt_count =
+                            self.ingress_budget_unknown_rtt_count.saturating_add(1);
+                    }
+                    if self.ingress_budget_fallback_count == 1
+                        || self.ingress_budget_fallback_count.is_power_of_two()
+                    {
+                        let unknown_ratio = if self.ingress_budget_fallback_count == 0 {
+                            0.0
+                        } else {
+                            (self.ingress_budget_unknown_rtt_count as f64 * 100.0)
+                                / (self.ingress_budget_fallback_count as f64)
+                        };
+                        crate::xbx_log_info!(
+                            "[RtcVideoFrameSource] ingress fallback budget count={} unknown_rtt_count={} unknown_ratio={:.1}% rtt_slack={:?} base_source={}",
+                            self.ingress_budget_fallback_count,
+                            self.ingress_budget_unknown_rtt_count,
+                            unknown_ratio,
+                            frame_budget.rtt_slack,
+                            if playout_base_at.is_none() {
+                                "assembledAt"
+                            } else {
+                                "firstPacketAt"
+                            }
+                        );
+                    }
+                }
                 if self.assembled_frame_count == 1 || self.assembled_frame_count.is_power_of_two() {
                     crate::xbx_log_info!(
                         "[RtcVideoFrameSource] assembled frame count={} ts={} len={} keyframe={} bootstrap={}",
@@ -1613,6 +1721,7 @@ impl RtcVideoFrameSource {
                     frame_recovery_disposition,
                     frame_unrecoverable_reason,
                     assembled_at,
+                    playout_base_at,
                     h264: inspection,
                     payload: Bytes::from(payload),
                 });
@@ -1749,6 +1858,10 @@ impl RtcVideoFrameSource {
                     let ingress_kind = rtp_video_packet.ingress_kind;
                     let rtp = rtp_video_packet.to_rtp_packet();
                     self.last_packet_time = std::time::Instant::now();
+                    self.remember_frame_playout_base_candidate(
+                        rtp.header.timestamp,
+                        self.last_packet_time,
+                    );
                     if self.assembling_frame_start.is_none() {
                         self.assembling_frame_start = Some(self.last_packet_time);
                         self.current_assembly_packet_count = 0;

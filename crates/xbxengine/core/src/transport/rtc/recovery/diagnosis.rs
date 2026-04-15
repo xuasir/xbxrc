@@ -64,6 +64,12 @@ impl VideoIngressSignal {
                 reason: VideoEscalationReason::WaitKeyframe,
                 label: "ingressFrameAbandoned",
             },
+            // FrameQueued 表示帧已入队（backlog 替换），不触发恢复升级，
+            // 此变体不应进入 diagnose 路径，但为穷举完整性保留一个无害映射。
+            VideoIngressSignal::FrameQueued => VideoRecoveryDiagnosis {
+                reason: VideoEscalationReason::WaitKeyframe,
+                label: "ingressFrameQueued",
+            },
             VideoIngressSignal::Reconfigure => VideoRecoveryDiagnosis {
                 reason: VideoEscalationReason::Reconfigure,
                 label: "ingressReconfigure",

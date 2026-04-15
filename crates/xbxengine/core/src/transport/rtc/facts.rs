@@ -71,7 +71,8 @@ pub enum PeerFact {
 pub enum IngressDecisionFact {
     Submit,
     DropLate,
-    DropBacklog,
+    DropBacklogIncoming,
+    DropBacklogEvictQueued,
     DropUnrecoverable,
     WaitKeyframe,
     Reconfigure,
@@ -82,7 +83,8 @@ impl From<&IngressDecision> for IngressDecisionFact {
         match decision {
             IngressDecision::Submit => Self::Submit,
             IngressDecision::DropLate => Self::DropLate,
-            IngressDecision::DropBacklog => Self::DropBacklog,
+            IngressDecision::DropBacklogIncoming => Self::DropBacklogIncoming,
+            IngressDecision::DropBacklogEvictQueued => Self::DropBacklogEvictQueued,
             IngressDecision::DropUnrecoverable => Self::DropUnrecoverable,
             IngressDecision::WaitKeyframe => Self::WaitKeyframe,
             IngressDecision::Reconfigure => Self::Reconfigure,

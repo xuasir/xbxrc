@@ -22,6 +22,8 @@ pub(super) fn drain_ingress_to_decode(
     let host_stall_throttle = runtime_stats
         .read(|stats| stats.host_present_stall_decode_throttle)
         .unwrap_or(false);
+    let now = std::time::Instant::now();
+    let _ = ingress.drain_expired_for_decode(now);
     loop {
         let demand = decode_handle.demand_snapshot();
         if !demand.accepts_input {

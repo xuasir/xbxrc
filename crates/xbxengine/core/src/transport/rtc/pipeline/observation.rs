@@ -67,7 +67,8 @@ impl MediaSupervisorObservationState {
         if !matches!(
             decision,
             IngressDecision::DropLate
-                | IngressDecision::DropBacklog
+                | IngressDecision::DropBacklogIncoming
+                | IngressDecision::DropBacklogEvictQueued
                 | IngressDecision::DropUnrecoverable
                 | IngressDecision::WaitKeyframe
                 | IngressDecision::Reconfigure
@@ -139,7 +140,8 @@ fn map_ingress_drop_reason(
     match decision {
         IngressDecision::Submit => "submit".to_string(),
         IngressDecision::DropLate => "dropLate".to_string(),
-        IngressDecision::DropBacklog => "dropBacklog".to_string(),
+        IngressDecision::DropBacklogIncoming => "dropBacklogIncoming".to_string(),
+        IngressDecision::DropBacklogEvictQueued => "dropBacklogEvictQueued".to_string(),
         IngressDecision::DropUnrecoverable => {
             let detail = reason.unwrap_or("late");
             let wait_keyframe_hint = if detail == "referenceChain" {
@@ -174,7 +176,8 @@ fn map_ingress_action(decision: &IngressDecision) -> &'static str {
     match decision {
         IngressDecision::Submit => "submit",
         IngressDecision::DropLate => "drop",
-        IngressDecision::DropBacklog => "drop",
+        IngressDecision::DropBacklogIncoming => "drop",
+        IngressDecision::DropBacklogEvictQueued => "evict",
         IngressDecision::DropUnrecoverable => "drop",
         IngressDecision::WaitKeyframe => "defer",
         IngressDecision::Reconfigure => "reconfigure",

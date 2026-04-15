@@ -55,7 +55,8 @@ impl MediaProjection {
                     }
                     IngressDecisionFact::Submit
                     | IngressDecisionFact::DropLate
-                    | IngressDecisionFact::DropBacklog
+                    | IngressDecisionFact::DropBacklogIncoming
+                    | IngressDecisionFact::DropBacklogEvictQueued
                     | IngressDecisionFact::DropUnrecoverable => {}
                 }
             }

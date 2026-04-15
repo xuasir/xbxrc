@@ -1548,7 +1548,7 @@ impl RtcVideoFrameSource {
             .unwrap_or(false)
     }
 
-    fn is_cloud_startup_transport_profile(&self) -> bool {
+    pub(super) fn is_cloud_startup_transport_profile(&self) -> bool {
         self.runtime_stats
             .read(|stats| {
                 let cloud_mode = matches!(
@@ -1568,7 +1568,7 @@ impl RtcVideoFrameSource {
             .unwrap_or(false)
     }
 
-    fn cloud_nack_rtt_ms(&self) -> f64 {
+    pub(super) fn cloud_nack_rtt_ms(&self) -> f64 {
         self.runtime_stats
             .read(|stats| stats.video_rtt_ms.unwrap_or(0.0))
             .unwrap_or(0.0)

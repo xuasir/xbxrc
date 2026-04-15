@@ -73,6 +73,7 @@ pub struct RtcVideoFrameSource {
     frame_oos_flags: VecDeque<(u32, bool)>,
     frame_head_missing_flags: VecDeque<(u32, bool)>,
     frame_drop_buckets: VecDeque<(u32, u16)>,
+    frame_playout_base_times: VecDeque<(u32, std::time::Instant)>,
     recent_head_missing_active_until_ms: Option<f64>,
     last_highest_rtp_sequence: Option<u16>,
     current_width: u32,
@@ -111,6 +112,9 @@ pub struct RtcVideoFrameSource {
     jitter_marker_seen_count: u64,
     jitter_early_emit_count: u64,
     jitter_head_missing_signal_count: u64,
+    ingress_budget_materialized_count: u64,
+    ingress_budget_fallback_count: u64,
+    ingress_budget_unknown_rtt_count: u64,
 }
 
 const SOURCE_SERVICEABLE_DECODE_MAX_AGE_MS: f64 = 180.0;
@@ -165,6 +169,7 @@ impl RtcVideoFrameSource {
             frame_oos_flags: VecDeque::with_capacity(64),
             frame_head_missing_flags: VecDeque::with_capacity(64),
             frame_drop_buckets: VecDeque::with_capacity(64),
+            frame_playout_base_times: VecDeque::with_capacity(64),
             recent_head_missing_active_until_ms: None,
             last_highest_rtp_sequence: None,
             current_width: 0,
@@ -203,6 +208,9 @@ impl RtcVideoFrameSource {
             jitter_marker_seen_count: 0,
             jitter_early_emit_count: 0,
             jitter_head_missing_signal_count: 0,
+            ingress_budget_materialized_count: 0,
+            ingress_budget_fallback_count: 0,
+            ingress_budget_unknown_rtt_count: 0,
         }
     }
 

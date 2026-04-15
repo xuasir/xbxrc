@@ -6,12 +6,14 @@ use std::time::{Duration, Instant};
 
 use crate::media::video::ingress::budget::FrameBudgetContext;
 use crate::media::video::types::{EncodedFrame, FrameRecoveryDisposition, VideoCodec};
+use crate::transport::rtc::recovery::contract::is_recovery_delta_continuation_ready;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum IngressDecision {
     Submit,
     DropLate,
-    DropBacklog,
+    DropBacklogIncoming,
+    DropBacklogEvictQueued,
     DropUnrecoverable,
     WaitKeyframe,
     Reconfigure,
@@ -28,9 +30,12 @@ pub struct VideoIngress {
     max_size: usize,
     late_frame_drop_threshold: Duration,
     waiting_keyframe: bool,
-    current_width: u32,
-    current_height: u32,
-    current_codec: Option<VideoCodec>,
+    observed_width: u32,
+    observed_height: u32,
+    observed_codec: Option<VideoCodec>,
+    committed_width: u32,
+    committed_height: u32,
+    committed_codec: Option<VideoCodec>,
 }
 
 impl VideoIngress {
@@ -40,9 +45,12 @@ impl VideoIngress {
             max_size,
             late_frame_drop_threshold,
             waiting_keyframe: true,
-            current_width: 0,
-            current_height: 0,
-            current_codec: None,
+            observed_width: 0,
+            observed_height: 0,
+            observed_codec: None,
+            committed_width: 0,
+            committed_height: 0,
+            committed_codec: None,
         }
     }
 
@@ -50,6 +58,10 @@ impl VideoIngress {
     pub fn start_reconfigure(&mut self) {
         self.queue.clear();
         self.waiting_keyframe = true;
+    }
+
+    pub fn drain_expired_for_decode(&mut self, now: Instant) -> usize {
+        self.drain_expired_queued_frames(now, "decodePull")
     }
 
     pub fn queue_depth(&self) -> usize {
@@ -84,12 +96,12 @@ impl VideoIngress {
     /// 返回这帧若触发 reconfigure 时的具体原因，便于把 trace 收敛到参数集/尺寸/codec 维度。
     pub fn describe_reconfigure_reason(&self, frame: &EncodedFrame) -> Option<String> {
         let codec_changed = self
-            .current_codec
+            .committed_codec
             .as_ref()
             .is_some_and(|codec| codec != &frame.codec);
-        let dimensions_changed = self.current_width != 0
-            && self.current_height != 0
-            && (self.current_width != frame.width || self.current_height != frame.height);
+        let dimensions_changed = self.committed_width != 0
+            && self.committed_height != 0
+            && (self.committed_width != frame.width || self.committed_height != frame.height);
 
         let mut reasons = Vec::new();
         if frame.h264.parameter_sets_changed {
@@ -116,12 +128,35 @@ impl VideoIngress {
         Some(reasons.join(","))
     }
 
-    fn drain_expired_queued_frames(&mut self, now: Instant) {
+    fn drain_expired_queued_frames(&mut self, now: Instant, source: &'static str) -> usize {
+        let mut drained = 0usize;
         while self.queue.front().is_some_and(|frame| {
             Self::is_frame_too_late(frame, now, self.late_frame_drop_threshold)
         }) {
             self.queue.pop_front();
+            drained = drained.saturating_add(1);
         }
+        if drained > 0 {
+            crate::xbx_log_debug!(
+                "[VideoIngress] drained expired queued frames count={} source={}",
+                drained,
+                source
+            );
+        }
+        drained
+    }
+
+    fn observe_stream_params(&mut self, frame: &EncodedFrame) {
+        self.observed_codec = Some(frame.codec.clone());
+        self.observed_width = frame.width;
+        self.observed_height = frame.height;
+    }
+
+    fn commit_stream_params(&mut self, frame: &EncodedFrame) {
+        self.committed_codec = Some(frame.codec.clone());
+        self.committed_width = frame.width;
+        self.committed_height = frame.height;
+        self.observe_stream_params(frame);
     }
 
     fn is_frame_too_late(frame: &EncodedFrame, now: Instant, base_threshold: Duration) -> bool {
@@ -138,33 +173,34 @@ impl VideoIngress {
         frame: &EncodedFrame,
         config_mismatch: bool,
     ) -> bool {
+        // 冷启动时 committed_* 为空，config_mismatch 必然为 true，此路径不可能触发。
+        // 只有 bootstrap_ready IDR 建立 committed 参数集后，后续 delta 才能走这条路。
+        // 注意：原来还允许 `bootstrap_ready=false` 的 IDR 走此路径，现已删除——
+        // 这类帧会在上游 `is_keyframe` 分支（步骤 7）处理，返回 WaitKeyframe，行为不变。
         if !self.waiting_keyframe || config_mismatch || frame.config_changed {
             return false;
         }
-        if self.current_codec.as_ref() != Some(&frame.codec)
-            || self.current_width == 0
-            || self.current_height == 0
+        if self.committed_codec.as_ref() != Some(&frame.codec)
+            || self.committed_width == 0
+            || self.committed_height == 0
         {
             return false;
         }
         if frame.h264.parameter_sets_changed {
             return false;
         }
-        if !frame.h264.committed_sps_present() || !frame.h264.committed_pps_present() {
+        if !is_recovery_delta_continuation_ready(&frame.h264) {
             return false;
         }
-        if frame.h264.delta_continuation_ready() {
-            return true;
-        }
-        frame.is_keyframe && frame.h264.is_idr && frame.h264.slice_headers_valid
+        true
     }
 }
 
 impl FrameScheduler for VideoIngress {
     fn submit(&mut self, frame: EncodedFrame, now: Instant) -> IngressDecision {
-        let config_mismatch = self.current_codec.as_ref() != Some(&frame.codec)
-            || self.current_width != frame.width
-            || self.current_height != frame.height;
+        let config_mismatch = self.committed_codec.as_ref() != Some(&frame.codec)
+            || self.committed_width != frame.width
+            || self.committed_height != frame.height;
         let mut context = frame.budget;
         if matches!(
             frame.frame_recovery_disposition,
@@ -194,9 +230,7 @@ impl FrameScheduler for VideoIngress {
         // 冷启动仍坚持 clean bootstrap；恢复期则允许在“已有 committed 参数集 +
         // continuation 可承接”的前提下先退出硬等待，优先保活恢复链。
         if frame.h264.bootstrap_ready {
-            self.current_codec = Some(frame.codec.clone());
-            self.current_width = frame.width;
-            self.current_height = frame.height;
+            self.commit_stream_params(&frame);
             self.waiting_keyframe = false;
             frame.h264.commit();
 
@@ -207,6 +241,10 @@ impl FrameScheduler for VideoIngress {
         }
 
         if self.can_exit_waiting_keyframe_with_recovery_continuation(&frame, config_mismatch) {
+            self.commit_stream_params(&frame);
+            // continuation 放行即承认当前流参数可用，commit 后 waiting_keyframe 退出。
+            // 冷启动下 committed_* 为空导致 config_mismatch=true，此分支不可能触发，
+            // 因此 commit_stream_params 不会在没有 committed 基准的情况下被调用。
             self.waiting_keyframe = false;
             frame.h264.commit();
             self.queue.clear();
@@ -215,14 +253,13 @@ impl FrameScheduler for VideoIngress {
         }
 
         if frame.is_keyframe {
-            self.current_codec = Some(frame.codec.clone());
-            self.current_width = frame.width;
-            self.current_height = frame.height;
+            self.observe_stream_params(&frame);
 
             if self.waiting_keyframe {
                 return IngressDecision::WaitKeyframe;
             }
 
+            self.commit_stream_params(&frame);
             frame.h264.commit();
             self.queue.clear();
             self.queue.push_back(frame);
@@ -265,7 +302,7 @@ impl FrameScheduler for VideoIngress {
         }
 
         // 先清掉已失效的旧帧，避免它们继续占住 ingress backlog 扩大尾延迟。
-        self.drain_expired_queued_frames(now);
+        self.drain_expired_queued_frames(now, "submit");
 
         // Rule 3: Backlog 控制
         if self.queue.len() >= self.max_size {
@@ -275,9 +312,9 @@ impl FrameScheduler for VideoIngress {
                 .iter()
                 .enumerate()
                 .map(|(idx, queued)| {
-                    let queued_context = if self.current_codec.as_ref() != Some(&queued.codec)
-                        || self.current_width != queued.width
-                        || self.current_height != queued.height
+                    let queued_context = if self.committed_codec.as_ref() != Some(&queued.codec)
+                        || self.committed_width != queued.width
+                        || self.committed_height != queued.height
                     {
                         FrameBudgetContext::for_ingress_admission(queued, false, true)
                     } else {
@@ -289,19 +326,19 @@ impl FrameScheduler for VideoIngress {
             {
                 let incoming_score = context.backlog_priority_score(frame.value);
                 if incoming_score <= lowest_score {
-                    return IngressDecision::DropBacklog;
+                    return IngressDecision::DropBacklogIncoming;
                 }
                 self.queue.remove(lowest_idx);
                 frame.h264.commit();
                 self.queue.push_back(frame);
-                return IngressDecision::DropBacklog;
+                return IngressDecision::DropBacklogEvictQueued;
             }
             if !frame.value.is_sync_point() {
-                return IngressDecision::DropBacklog;
+                return IngressDecision::DropBacklogIncoming;
             }
             frame.h264.commit();
             self.queue.push_back(frame);
-            return IngressDecision::DropBacklog;
+            return IngressDecision::DropBacklogEvictQueued;
         }
 
         frame.h264.commit();
@@ -491,11 +528,33 @@ mod tests {
         let refresh_delta = make_frame(now, FrameValue::new(false, true, 6 * 1024), false, 0);
         assert_eq!(
             ingress.submit(refresh_delta, now),
-            IngressDecision::DropBacklog
+            IngressDecision::DropBacklogIncoming
         );
         assert_eq!(ingress.queue_depth(), 1);
         let queued = ingress.pop().expect("frame should remain queued");
         assert!(queued.value.is_sync_point());
+    }
+
+    #[test]
+    fn backlog_evict_reports_distinct_decision() {
+        let now = Instant::now();
+        let mut ingress = VideoIngress::new(1, Duration::from_millis(250));
+        assert_eq!(
+            ingress.submit(
+                make_frame(now, FrameValue::new(true, true, 64 * 1024), true, 0),
+                now
+            ),
+            IngressDecision::Submit
+        );
+
+        let mut low_value = ingress.pop().expect("seed frame");
+        low_value.value = FrameValue::new(false, false, 2 * 1024);
+        ingress.test_push_back_unchecked(low_value);
+        let incoming_high = make_frame(now, FrameValue::new(true, false, 32 * 1024), false, 5);
+        assert_eq!(
+            ingress.submit(incoming_high, now),
+            IngressDecision::DropBacklogEvictQueued
+        );
     }
 
     #[test]
@@ -612,6 +671,26 @@ mod tests {
         assert!(!delta.h264.committed_sps_present());
         assert!(!delta.h264.committed_pps_present());
         assert!(!delta.h264.delta_continuation_ready());
+        assert_eq!(ingress.submit(delta, now), IngressDecision::WaitKeyframe);
+    }
+
+    #[test]
+    fn dirty_keyframe_updates_observed_but_not_committed_state() {
+        let now = Instant::now();
+        let mut ingress = VideoIngress::new(4, Duration::from_millis(250));
+        let bootstrap = make_frame(now, FrameValue::new(true, true, 64 * 1024), true, 0);
+        assert_eq!(ingress.submit(bootstrap, now), IngressDecision::Submit);
+        ingress.start_reconfigure();
+
+        let mut dirty_keyframe = make_frame(now, FrameValue::new(true, false, 64 * 1024), true, 0);
+        dirty_keyframe.h264 = make_h264_inspection(false);
+        dirty_keyframe.width = 2560;
+        dirty_keyframe.height = 1440;
+        assert_eq!(
+            ingress.submit(dirty_keyframe, now),
+            IngressDecision::WaitKeyframe
+        );
+        let delta = make_frame(now, FrameValue::new(false, true, 8 * 1024), false, 0);
         assert_eq!(ingress.submit(delta, now), IngressDecision::WaitKeyframe);
     }
 
