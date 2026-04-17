@@ -32,7 +32,18 @@ jobs:
 
       - name: Install system dependencies (macOS)
         if: runner.os == 'macOS'
-        run: brew install opus
+        run: brew install opus pkg-config ffmpeg
+
+      - name: Setup vcpkg and install FFmpeg (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $vcpkgRoot = "${{ runner.temp }}\vcpkg"
+          git clone https://github.com/microsoft/vcpkg.git $vcpkgRoot
+          & "$vcpkgRoot\bootstrap-vcpkg.bat" -disableMetrics
+          & "$vcpkgRoot\vcpkg.exe" install ffmpeg:x64-windows
+          echo "VCPKG_ROOT=$vcpkgRoot" >> $env:GITHUB_ENV
+          echo "VCPKG_DEFAULT_TRIPLET=x64-windows" >> $env:GITHUB_ENV
 
       - name: Install LLVM (Windows, bindgen)
         if: runner.os == 'Windows'
@@ -68,8 +79,10 @@ jobs:
           cache: pnpm
 
       - name: Rust toolchain
-        uses: dtolnay/rust-toolchain@1.93.1
+        # `uses` 这里必须引用 action 的分支/标签，Rust 版本要放到 `toolchain` 参数里。
+        uses: dtolnay/rust-toolchain@stable
         with:
+          toolchain: 1.93.1
           components: rustfmt, clippy
 
       - name: Rust cache
