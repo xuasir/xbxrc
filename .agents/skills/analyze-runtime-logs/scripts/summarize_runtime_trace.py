@@ -86,6 +86,7 @@ INTERESTING_SIGNAL_FIELDS = (
 HEALTHY_SESSION_PHASES = {"unknown", "connecting", "active", "steady", "healthy", "ready", "playing", "running"}
 HEALTHY_VIDEO_STATES = {"unknown", "connecting", "healthy", "ready", "active"}
 HEALTHY_TRANSPORT_STATES = {"new", "connecting", "checking", "connected", "completed"}
+HEALTHY_CHAIN_STATES = {"healthy", "steady"}
 BAD_STATE_HINTS = (
     "error",
     "fail",
@@ -284,6 +285,109 @@ def extract_successful_action_sample(row: dict[str, Any]) -> tuple[int, int] | N
     return None
 
 
+def event_payload(row: dict[str, Any], expected_event: str) -> dict[str, Any] | None:
+    if str(row.get("event", "")) != expected_event:
+        return None
+    payload = row.get("payload")
+    if not isinstance(payload, dict):
+        return None
+    return payload
+
+
+def get_int(payload: dict[str, Any], *keys: str) -> int | None:
+    value = payload_get(payload, *keys)
+    return value if isinstance(value, int) else None
+
+
+def get_number(payload: dict[str, Any], *keys: str) -> float | int | None:
+    value = payload_get(payload, *keys)
+    return value if isinstance(value, (int, float)) else None
+
+
+def safe_ratio(numerator: int, denominator: int) -> float | None:
+    if denominator <= 0:
+        return None
+    return numerator / denominator
+
+
+def round_score(value: float) -> float:
+    return round(value, 4)
+
+
+def extract_repairability_value(payload: Any) -> float | int | None:
+    if not isinstance(payload, dict):
+        return None
+    return get_number(
+        payload,
+        "repairabilityScore",
+        "repairability_score",
+        "repairability",
+        "repairabilityIndex",
+        "repairability_index",
+    )
+
+
+def get_text(payload: dict[str, Any], *keys: str) -> str | None:
+    value = payload_get(payload, *keys)
+    return normalize_text(value)
+
+
+def keyframe_episode_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [row for row in rows if event_payload(row, "keyframeRequestEpisode") is not None]
+
+
+def nack_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [
+        row
+        for row in rows
+        if str(row.get("event", "")) in {"nackSent", "nackRecovered", "nackSkipped", "nackExpired"}
+    ]
+
+
+def chain_transition_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [row for row in rows if event_payload(row, "videoChainTransition") is not None]
+
+
+def is_keyframe_related_ledger(payload: dict[str, Any]) -> bool:
+    haystacks = [
+        get_text(payload, "inputSignal", "input_signal"),
+        get_text(payload, "gateResult", "gate_result"),
+        get_text(payload, "actionSelected", "action_selected"),
+        get_text(payload, "recoveryPrimaryAction", "recovery_primary_action"),
+        get_text(payload, "commandDetail", "command_detail"),
+    ]
+    return any(
+        text and any(needle in text.lower() for needle in ("keyframe", "transportawaitrecoverykeyframe"))
+        for text in haystacks
+    )
+
+
+def classify_ledger_suppression(payload: dict[str, Any]) -> tuple[str, str] | None:
+    gate_result = get_text(payload, "gateResult", "gate_result")
+    action_selected = get_text(payload, "actionSelected", "action_selected")
+    for value in (gate_result, action_selected):
+        if not value:
+            continue
+        lowered = value.lower()
+        if lowered.startswith("suppressed:"):
+            return "suppressed", value.split(":", 1)[1]
+        if lowered.startswith("coalesced:"):
+            return "coalesced", value.split(":", 1)[1]
+        if "cooldownsuppressed" in lowered:
+            return "suppressed", "cooldownSuppressed"
+    return None
+
+
+def is_effective_chain_state(payload: dict[str, Any]) -> bool:
+    chain = payload.get("chain")
+    if isinstance(chain, dict):
+        state = normalize_state(chain.get("state"))
+        if state in HEALTHY_CHAIN_STATES:
+            return True
+    state = normalize_state(payload_get(payload, "state"))
+    return state in HEALTHY_CHAIN_STATES
+
+
 def collect_connecting_windows(rows: list[dict[str, Any]]) -> list[tuple[int, int]]:
     sorted_rows = sorted(rows, key=lambda item: (row_ts(item) or 0, row_seq(item) or 0))
     windows: list[tuple[int, int]] = []
@@ -314,6 +418,8 @@ def analyze_recovery_audit(rows: list[dict[str, Any]], silence_threshold_ms: int
     ledger_times: list[int] = []
     failed_terminal_entries: list[dict[str, Any]] = []
     failed_terminal_reasons: Counter[str] = Counter()
+    keyframe_suppression_counts: Counter[str] = Counter()
+    keyframe_suppression_samples: list[dict[str, Any]] = []
 
     for row in sorted_rows:
         payload = extract_recovery_ledger(row)
@@ -324,6 +430,23 @@ def analyze_recovery_audit(rows: list[dict[str, Any]], silence_threshold_ms: int
             continue
         ledger_rows.append(row)
         ledger_times.append(ts)
+        if is_keyframe_related_ledger(payload):
+            suppression = classify_ledger_suppression(payload)
+            if suppression is not None:
+                family, detail = suppression
+                keyframe_suppression_counts[f"{family}:{detail}"] += 1
+                keyframe_suppression_samples.append(
+                    {
+                        "seq": row_seq(row),
+                        "tsMs": ts,
+                        "decisionId": payload_get(payload, "decisionId", "decision_id"),
+                        "inputSignal": payload_get(payload, "inputSignal", "input_signal"),
+                        "gateResult": payload_get(payload, "gateResult", "gate_result"),
+                        "actionSelected": payload_get(payload, "actionSelected", "action_selected"),
+                        "suppressionType": family,
+                        "suppressionDetail": detail,
+                    }
+                )
         state_after = payload_get(payload, "stateAfter", "state_after")
         if not is_failed_terminal(state_after):
             continue
@@ -422,6 +545,313 @@ def analyze_recovery_audit(rows: list[dict[str, Any]], silence_threshold_ms: int
             }
         )
 
+    keyframe_episodes: dict[int, dict[str, Any]] = {}
+    for row in keyframe_episode_rows(sorted_rows):
+        payload = event_payload(row, "keyframeRequestEpisode")
+        if payload is None:
+            continue
+        episode_id = get_int(payload, "episodeId", "episode_id")
+        if episode_id is None:
+            continue
+        episode = keyframe_episodes.setdefault(
+            episode_id,
+            {
+                "episodeId": episode_id,
+                "seq": row_seq(row),
+                "rowTsMs": row_ts(row),
+                "requestReason": get_text(payload, "requestReason", "request_reason"),
+                "requestKind": get_text(payload, "requestKind", "request_kind"),
+                "statuses": [],
+                "finalStatus": None,
+                "statusDetail": None,
+                "responseVerdict": None,
+                "timedOut": False,
+                "requestedAtMs": None,
+                "sentAtMs": None,
+                "deadlineAtMs": None,
+                "retiredAtMs": None,
+                "firstVideoPacketAtMs": None,
+                "firstKeyframePacketAtMs": None,
+                "firstKeyframeDecodedAtMs": None,
+                "requestToFirstPacketMs": None,
+                "requestToFirstDecodeMs": None,
+                "linkedH264AdmissionAccepted": None,
+                "linkedH264BootstrapRejectReason": None,
+                "chainRecovered": False,
+                "chainRecoveredAtMs": None,
+                "chainRecoveryReason": None,
+                "chainFailureAfterSuccess": False,
+                "chainFailureAtMs": None,
+                "chainFailureReason": None,
+                "effective": False,
+            },
+        )
+        status = get_text(payload, "status")
+        if status:
+            episode["statuses"].append(status)
+            episode["finalStatus"] = status
+        episode["statusDetail"] = get_text(payload, "statusDetail", "status_detail")
+        episode["responseVerdict"] = get_text(payload, "responseVerdict", "response_verdict")
+        episode["timedOut"] = bool(payload_get(payload, "timedOut", "timed_out")) or episode["timedOut"]
+        for field in (
+            "requestedAtMs",
+            "sentAtMs",
+            "deadlineAtMs",
+            "retiredAtMs",
+            "firstVideoPacketAtMs",
+            "firstKeyframePacketAtMs",
+            "firstKeyframeDecodedAtMs",
+            "requestToFirstPacketMs",
+            "requestToFirstDecodeMs",
+        ):
+            value = get_number(payload, field)
+            if value is not None:
+                episode[field] = value
+        if payload_get(payload, "linkedH264AdmissionAccepted") is not None:
+            episode["linkedH264AdmissionAccepted"] = bool(payload_get(payload, "linkedH264AdmissionAccepted"))
+        reject_reason = get_text(payload, "linkedH264BootstrapRejectReason")
+        if reject_reason:
+            episode["linkedH264BootstrapRejectReason"] = reject_reason
+
+    chain_rows = chain_transition_rows(sorted_rows)
+    for episode in keyframe_episodes.values():
+        success_ts = episode["firstKeyframeDecodedAtMs"] or episode["firstKeyframePacketAtMs"] or episode["firstVideoPacketAtMs"]
+        if success_ts is None:
+            continue
+        window_end = episode["retiredAtMs"] or episode["deadlineAtMs"]
+        if window_end is None:
+            window_end = success_ts + 5000
+        for row in chain_rows:
+            payload = event_payload(row, "videoChainTransition")
+            ts = row_ts(row)
+            if payload is None or ts is None or ts < success_ts or ts > window_end:
+                continue
+            chain = payload.get("chain")
+            chain_state = None
+            chain_reason = None
+            if isinstance(chain, dict):
+                chain_state = normalize_state(chain.get("state"))
+                chain_reason = get_text(chain, "reason")
+            if chain_state in HEALTHY_CHAIN_STATES:
+                episode["chainRecovered"] = True
+                episode["chainRecoveredAtMs"] = ts
+                episode["chainRecoveryReason"] = chain_reason
+                episode["effective"] = episode["firstKeyframeDecodedAtMs"] is not None
+                break
+            if episode["firstKeyframeDecodedAtMs"] is not None and chain_state in {"broken", "recovering", "repairing", "stalled", "waiting-keyframe"}:
+                episode["chainFailureAfterSuccess"] = True
+                episode["chainFailureAtMs"] = ts
+                episode["chainFailureReason"] = chain_reason or chain_state
+
+    keyframe_status_counts = Counter()
+    keyframe_reason_counts = Counter()
+    keyframe_request_kind_counts = Counter()
+    keyframe_response_verdict_counts = Counter()
+    keyframe_failure_reasons = Counter()
+    keyframe_effective_failures = Counter()
+    keyframe_samples: list[dict[str, Any]] = []
+    keyframe_sent_count = 0
+    keyframe_response_observed_count = 0
+    keyframe_packet_seen_count = 0
+    keyframe_decoded_count = 0
+    keyframe_missed_count = 0
+    keyframe_invalid_response_count = 0
+    keyframe_chain_recovered_count = 0
+    keyframe_chain_failed_after_success_count = 0
+    for episode in sorted(keyframe_episodes.values(), key=lambda item: (item["requestedAtMs"] or 0, item["episodeId"])):
+        final_status = episode["finalStatus"] or "unknown"
+        keyframe_status_counts[final_status] += 1
+        keyframe_reason_counts[episode["requestReason"] or "unknown"] += 1
+        keyframe_request_kind_counts[episode["requestKind"] or "unknown"] += 1
+        if episode["responseVerdict"]:
+            keyframe_response_verdict_counts[str(episode["responseVerdict"])] += 1
+        if episode["sentAtMs"] is not None or "sent" in episode["statuses"]:
+            keyframe_sent_count += 1
+        if (
+            episode["firstVideoPacketAtMs"] is not None
+            or episode["firstKeyframePacketAtMs"] is not None
+            or final_status in {"response-observed", "packet-seen", "decoded"}
+        ):
+            keyframe_response_observed_count += 1
+        if episode["firstKeyframePacketAtMs"] is not None or final_status in {"packet-seen", "decoded"}:
+            keyframe_packet_seen_count += 1
+        if episode["firstKeyframeDecodedAtMs"] is not None or final_status == "decoded":
+            keyframe_decoded_count += 1
+        if final_status == "missed" or episode["timedOut"]:
+            keyframe_missed_count += 1
+        invalid_reason = episode["linkedH264BootstrapRejectReason"]
+        if invalid_reason:
+            keyframe_invalid_response_count += 1
+            keyframe_failure_reasons[invalid_reason] += 1
+        elif episode["linkedH264AdmissionAccepted"] is False:
+            keyframe_invalid_response_count += 1
+            keyframe_failure_reasons["h264-admission-rejected"] += 1
+        elif final_status == "missed" or episode["timedOut"]:
+            keyframe_failure_reasons["missed-or-timeout"] += 1
+        elif episode["responseVerdict"] and str(episode["responseVerdict"]).lower() not in {"decoded", "accepted", "packet-seen", "response-observed"}:
+            keyframe_failure_reasons[str(episode["responseVerdict"])] += 1
+        if episode["chainRecovered"]:
+            keyframe_chain_recovered_count += 1
+        elif episode["firstKeyframeDecodedAtMs"] is not None:
+            keyframe_effective_failures["decoded-without-healthy-chain"] += 1
+        if episode["chainFailureAfterSuccess"]:
+            keyframe_chain_failed_after_success_count += 1
+            keyframe_effective_failures[episode["chainFailureReason"] or "chain-not-recovered"] += 1
+        keyframe_samples.append(
+            {
+                "episodeId": episode["episodeId"],
+                "requestReason": episode["requestReason"],
+                "requestKind": episode["requestKind"],
+                "finalStatus": final_status,
+                "responseVerdict": episode["responseVerdict"],
+                "timedOut": episode["timedOut"],
+                "firstKeyframeDecodedAtMs": episode["firstKeyframeDecodedAtMs"],
+                "chainRecovered": episode["chainRecovered"],
+                "chainRecoveredAtMs": episode["chainRecoveredAtMs"],
+                "linkedH264AdmissionAccepted": episode["linkedH264AdmissionAccepted"],
+                "linkedH264BootstrapRejectReason": episode["linkedH264BootstrapRejectReason"],
+                "effective": episode["effective"],
+            }
+        )
+
+    nack_action_counts = Counter()
+    nack_source_counts = Counter()
+    nack_disposition_counts = Counter()
+    nack_unrecoverable_reason_counts = Counter()
+    nack_samples: list[dict[str, Any]] = []
+    nack_sent_count = 0
+    nack_recovered_count = 0
+    nack_recovered_late_count = 0
+    nack_skipped_count = 0
+    nack_expired_count = 0
+    nack_effective_count = 0
+    nack_ineffective_count = 0
+    for row in nack_rows(sorted_rows):
+        payload = row.get("payload")
+        if not isinstance(payload, dict):
+            continue
+        action = get_text(payload, "action") or str(row.get("event", "unknown"))
+        source = get_text(payload, "source") or "unknown"
+        disposition = get_text(payload, "nackDisposition", "nack_disposition")
+        unrecoverable_reason = get_text(payload, "frameUnrecoverableReason", "frame_unrecoverable_reason")
+        nack_action_counts[action] += 1
+        nack_source_counts[source] += 1
+        if disposition:
+            nack_disposition_counts[disposition] += 1
+        if unrecoverable_reason:
+            nack_unrecoverable_reason_counts[unrecoverable_reason] += 1
+        if str(row.get("event", "")) == "nackSent":
+            nack_sent_count += 1
+        elif str(row.get("event", "")) == "nackRecovered":
+            nack_recovered_count += 1
+            if action.lower() == "recovered":
+                nack_effective_count += 1
+            else:
+                nack_recovered_late_count += 1
+                nack_ineffective_count += 1
+        elif str(row.get("event", "")) == "nackSkipped":
+            nack_skipped_count += 1
+            nack_ineffective_count += 1
+        elif str(row.get("event", "")) == "nackExpired":
+            nack_expired_count += 1
+            nack_ineffective_count += 1
+        nack_samples.append(
+            {
+                "seq": row_seq(row),
+                "tsMs": row_ts(row),
+                "event": row.get("event"),
+                "action": action,
+                "source": source,
+                "retryCount": get_int(payload, "retryCount", "retry_count"),
+                "frameIsKeyframe": payload_get(payload, "frameIsKeyframe", "frame_is_keyframe"),
+                "frameImportance": get_text(payload, "frameImportance", "frame_importance"),
+                "nackDisposition": disposition,
+                "frameUnrecoverableReason": unrecoverable_reason,
+            }
+        )
+
+    repairability_samples: list[dict[str, Any]] = []
+    repairability_missing_streak = 0
+    repairability_max_missing_streak = 0
+    repairability_last_ts: int | None = None
+    repairability_longest_missing_gap_ms = 0
+    for row in sorted_rows:
+        ts = row_ts(row)
+        if ts is None:
+            continue
+        payload = row.get("payload")
+        score = extract_repairability_value(payload)
+        if score is None:
+            repairability_missing_streak += 1
+            repairability_max_missing_streak = max(
+                repairability_max_missing_streak,
+                repairability_missing_streak,
+            )
+            continue
+        score_value = float(score)
+        if repairability_last_ts is not None:
+            repairability_longest_missing_gap_ms = max(
+                repairability_longest_missing_gap_ms,
+                ts - repairability_last_ts,
+            )
+        repairability_last_ts = ts
+        repairability_missing_streak = 0
+        repairability_samples.append(
+            {
+                "seq": row_seq(row),
+                "tsMs": ts,
+                "event": row.get("event"),
+                "domain": row.get("domain"),
+                "score": score_value,
+            }
+        )
+
+    repairability_score_values = [sample["score"] for sample in repairability_samples]
+    repairability_stats: dict[str, Any] = {
+        "sampleCount": len(repairability_samples),
+        "samples": repairability_samples,
+        "persistence": {
+            "presentRowRatio": round_score(
+                safe_ratio(len(repairability_samples), len(sorted_rows)) or 0.0
+            ),
+            "longestMissingGapMs": repairability_longest_missing_gap_ms,
+            "maxMissingStreakRows": repairability_max_missing_streak,
+        },
+    }
+    if repairability_score_values:
+        repairability_stats.update(
+            {
+                "first": repairability_score_values[0],
+                "last": repairability_score_values[-1],
+                "min": min(repairability_score_values),
+                "max": max(repairability_score_values),
+                "avg": round_score(sum(repairability_score_values) / len(repairability_score_values)),
+            }
+        )
+
+    keyframe_chain_build_success_rate = safe_ratio(
+        keyframe_chain_recovered_count,
+        keyframe_decoded_count,
+    )
+    nack_effectiveness_rate = safe_ratio(nack_effective_count, nack_sent_count)
+    keyframe_effective_rate = safe_ratio(
+        sum(1 for episode in keyframe_episodes.values() if episode["effective"]),
+        len(keyframe_episodes),
+    )
+    repairability_persistence_rate = repairability_stats["persistence"]["presentRowRatio"]
+    recovery_score_components = {
+        "keyframeEffectiveRate": keyframe_effective_rate or 0.0,
+        "chainBuildSuccessRate": keyframe_chain_build_success_rate or 0.0,
+        "nackEffectiveRate": nack_effectiveness_rate or 0.0,
+        "repairabilityPersistenceRate": repairability_persistence_rate,
+    }
+    recovery_effectiveness_score = round_score(
+        recovery_score_components["keyframeEffectiveRate"] * 0.3
+        + recovery_score_components["chainBuildSuccessRate"] * 0.35
+        + recovery_score_components["nackEffectiveRate"] * 0.25
+        + recovery_score_components["repairabilityPersistenceRate"] * 0.1
+    )
+
     return {
         "recoveryLedgerRows": len(ledger_rows),
         "connectingWindows": len(connecting_windows),
@@ -434,6 +864,58 @@ def analyze_recovery_audit(rows: list[dict[str, Any]], silence_threshold_ms: int
         "unlockEvidence": unlock_evidence,
         "successfulActionSamples": len(successful_samples),
         "successfulActionIncrements": successful_action_increments,
+        "keyframeEffectiveness": {
+            "episodeCount": len(keyframe_episodes),
+            "statusCounts": dict(keyframe_status_counts),
+            "requestReasonCounts": dict(keyframe_reason_counts),
+            "requestKindCounts": dict(keyframe_request_kind_counts),
+            "responseVerdictCounts": dict(keyframe_response_verdict_counts),
+            "sentCount": keyframe_sent_count,
+            "responseObservedCount": keyframe_response_observed_count,
+            "packetSeenCount": keyframe_packet_seen_count,
+            "decodedCount": keyframe_decoded_count,
+            "missedCount": keyframe_missed_count,
+            "invalidResponseCount": keyframe_invalid_response_count,
+            "chainRecoveredCount": keyframe_chain_recovered_count,
+            "chainBuildSuccessRate": round_score(keyframe_chain_build_success_rate or 0.0),
+            "chainFailedAfterSuccessCount": keyframe_chain_failed_after_success_count,
+            "effectiveCount": sum(1 for episode in keyframe_episodes.values() if episode["effective"]),
+            "effectiveRate": round_score(keyframe_effective_rate or 0.0),
+            "suppressionCounts": dict(keyframe_suppression_counts),
+            "failureReasons": dict(keyframe_failure_reasons),
+            "effectiveFailureReasons": dict(keyframe_effective_failures),
+            "episodes": keyframe_samples,
+            "suppressionSamples": keyframe_suppression_samples,
+        },
+        "nackEffectiveness": {
+            "eventCount": len(nack_samples),
+            "actionCounts": dict(nack_action_counts),
+            "sourceCounts": dict(nack_source_counts),
+            "dispositionCounts": dict(nack_disposition_counts),
+            "unrecoverableReasonCounts": dict(nack_unrecoverable_reason_counts),
+            "sentCount": nack_sent_count,
+            "recoveredCount": nack_recovered_count,
+            "recoveredLateCount": nack_recovered_late_count,
+            "skippedCount": nack_skipped_count,
+            "expiredCount": nack_expired_count,
+            "effectiveCount": nack_effective_count,
+            "ineffectiveCount": nack_ineffective_count,
+            "effectiveRate": round_score(nack_effectiveness_rate or 0.0),
+            "events": nack_samples,
+        },
+        "repairabilityPersistence": repairability_stats,
+        "recoveryEffectiveness": {
+            "score": recovery_effectiveness_score,
+            "components": {
+                key: round_score(value) for key, value in recovery_score_components.items()
+            },
+            "weights": {
+                "keyframeEffectiveRate": 0.3,
+                "chainBuildSuccessRate": 0.35,
+                "nackEffectiveRate": 0.25,
+                "repairabilityPersistenceRate": 0.1,
+            },
+        },
     }
 
 
@@ -968,6 +1450,100 @@ def print_recovery_audit(profile: TraceProfile, sample_limit: int) -> None:
         "  - "
         f"successful_action_samples={audit['successfulActionSamples']} "
         f"increments={audit['successfulActionIncrements']}"
+    )
+    keyframe = audit["keyframeEffectiveness"]
+    suppression_text = ", ".join(
+        f"{name}={count}" for name, count in sorted(keyframe["suppressionCounts"].items())
+    ) or "none"
+    failure_text = ", ".join(
+        f"{name}={count}" for name, count in sorted(keyframe["failureReasons"].items())
+    ) or "none"
+    effective_failure_text = ", ".join(
+        f"{name}={count}" for name, count in sorted(keyframe["effectiveFailureReasons"].items())
+    ) or "none"
+    print("  - keyframe_effectiveness:")
+    print(
+        "    - "
+        f"episodes={keyframe['episodeCount']} sent={keyframe['sentCount']} "
+        f"response_observed={keyframe['responseObservedCount']} packet_seen={keyframe['packetSeenCount']} "
+        f"decoded={keyframe['decodedCount']} missed={keyframe['missedCount']} "
+        f"invalid_response={keyframe['invalidResponseCount']} effective={keyframe['effectiveCount']} "
+        f"effective_rate={keyframe['effectiveRate']}"
+    )
+    print(
+        "    - "
+        f"chain_recovered={keyframe['chainRecoveredCount']} "
+        f"chain_build_success_rate={keyframe['chainBuildSuccessRate']} "
+        f"chain_failed_after_success={keyframe['chainFailedAfterSuccessCount']} "
+        f"suppression={suppression_text}"
+    )
+    print(f"    - failure_reasons={failure_text}")
+    print(f"    - effective_failure_reasons={effective_failure_text}")
+    for item in keyframe["episodes"][:sample_limit]:
+        print(
+            "    - "
+            f"episode={item['episodeId']} reason={item['requestReason']} kind={item['requestKind']} "
+            f"status={item['finalStatus']} verdict={item['responseVerdict']} timed_out={item['timedOut']} "
+            f"decoded_at={item['firstKeyframeDecodedAtMs']} chain_recovered={item['chainRecovered']} "
+            f"effective={item['effective']} h264_ok={item['linkedH264AdmissionAccepted']} "
+            f"bootstrap_reject={item['linkedH264BootstrapRejectReason']}"
+        )
+    nack = audit["nackEffectiveness"]
+    action_text = ", ".join(f"{name}={count}" for name, count in sorted(nack["actionCounts"].items())) or "none"
+    disposition_text = ", ".join(
+        f"{name}={count}" for name, count in sorted(nack["dispositionCounts"].items())
+    ) or "none"
+    unrecoverable_text = ", ".join(
+        f"{name}={count}" for name, count in sorted(nack["unrecoverableReasonCounts"].items())
+    ) or "none"
+    print("  - nack_effectiveness:")
+    print(
+        "    - "
+        f"events={nack['eventCount']} sent={nack['sentCount']} recovered={nack['recoveredCount']} "
+        f"recovered_late={nack['recoveredLateCount']} skipped={nack['skippedCount']} "
+        f"expired={nack['expiredCount']} effective={nack['effectiveCount']} "
+        f"ineffective={nack['ineffectiveCount']} effective_rate={nack['effectiveRate']}"
+    )
+    print(f"    - actions={action_text}")
+    print(f"    - disposition={disposition_text}")
+    print(f"    - unrecoverable_reasons={unrecoverable_text}")
+    for item in nack["events"][:sample_limit]:
+        print(
+            "    - "
+            f"seq={item['seq']} tsMs={item['tsMs']} event={item['event']} action={item['action']} "
+            f"source={item['source']} retry={item['retryCount']} "
+            f"frame_is_keyframe={item['frameIsKeyframe']} importance={item['frameImportance']} "
+            f"disposition={item['nackDisposition']} unrecoverable={item['frameUnrecoverableReason']}"
+        )
+    repairability = audit["repairabilityPersistence"]
+    persistence = repairability["persistence"]
+    print("  - repairability_persistence:")
+    print(
+        "    - "
+        f"samples={repairability['sampleCount']} present_row_ratio={persistence['presentRowRatio']} "
+        f"longest_missing_gap_ms={persistence['longestMissingGapMs']} "
+        f"max_missing_streak_rows={persistence['maxMissingStreakRows']}"
+    )
+    if repairability["sampleCount"] > 0:
+        print(
+            "    - "
+            f"first={repairability['first']} last={repairability['last']} "
+            f"min={repairability['min']} max={repairability['max']} avg={repairability['avg']}"
+        )
+    for item in repairability["samples"][:sample_limit]:
+        print(
+            "    - "
+            f"seq={item['seq']} tsMs={item['tsMs']} domain={item['domain']} "
+            f"event={item['event']} score={item['score']}"
+        )
+    recovery_effectiveness = audit["recoveryEffectiveness"]
+    component_text = ", ".join(
+        f"{name}={value}" for name, value in sorted(recovery_effectiveness["components"].items())
+    )
+    print("  - recovery_effectiveness:")
+    print(
+        "    - "
+        f"score={recovery_effectiveness['score']} components={component_text}"
     )
 
 

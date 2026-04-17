@@ -71,6 +71,21 @@ Keep these cases distinct:
 - media ingress is present but local pipeline is backpressured
 - performance is degraded without a terminal failure
 
+For keyframe and NACK analysis, split outcomes further:
+
+- keyframe request was suppressed or coalesced before send
+- keyframe request was sent but no response was observed
+- response packet arrived but H264 bootstrap / admission rejected it
+- keyframe decoded but chain did not return to `healthy`
+- NACK recovered in time
+- NACK recovered late
+- NACK was skipped by policy
+- NACK expired and should hand off to keyframe / stronger recovery
+- chain build success rate (decoded -> healthy chain) aggregation
+- NACK effective rate aggregation
+- repairability score persistence continuity (sample coverage / missing streak / missing gap)
+- recovery effectiveness composite score (keyframe + chain build + NACK + repairability persistence)
+
 ### 6. Evaluate Performance Explicitly
 
 For performance analysis, always state:
@@ -96,12 +111,19 @@ Use this template unless the user asks for something else:
 - earliest relevant anchors with `seq` / `tsMs`
 - first abnormal signal
 - terminal symptom or recovery point
+- if recovery is involved: request issued, response observed, decoded, chain rebuilt, or failed handoff point
 
 ### Findings
 
 - high-confidence finding
 - secondary observations
 - competing hypotheses if confidence is limited
+- if keyframe/NACK is involved, say whether it was effective, merely attempted, or explicitly invalid
+- include aggregate rates/scores when available:
+  - `keyframeEffectiveness.chainBuildSuccessRate`
+  - `nackEffectiveness.effectiveRate`
+  - `repairabilityPersistence`
+  - `recoveryEffectiveness.score`
 
 ### Evidence
 
@@ -124,3 +146,7 @@ Use this template unless the user asks for something else:
 - `remoteManagementEnabled`, `consoleStreamingEnabled`, and address-count snapshots are often decisive for home streaming preflight analysis.
 - For `xbxengine` traces, watch for transport progress, ingress activity, recovery state, keyframe flow, and backlog or capacity warnings before blaming rendering.
 - When performance degrades without a hard failure, compare `snapshot` rows and recovery decisions before focusing on individual debug lines.
+- `keyframeRequestEpisode` is the canonical keyframe request lifecycle. Prefer it over `recovery_keyframe_request_count` when the question is about success/failure/effectiveness.
+- `videoChainTransition` is the quickest structured check for “关键帧成功后是否真的建链恢复 healthy”.
+- `nackSent` / `nackRecovered` / `nackSkipped` / `nackExpired` already encode terminal NACK outcome classes; pair them with `nackDisposition` and `frameUnrecoverableReason`.
+- repairability score may appear as `repairabilityScore` / `repairability_score` / `repairability` / `repairabilityIndex`; persistence should be judged from continuity, not single-point value.

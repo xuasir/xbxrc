@@ -20,6 +20,12 @@ Use this skill for `runtime-logs/runtime-trace-*.jsonl` analysis in this reposit
 7. Read [`references/log-schema.md`](references/log-schema.md) when you need field semantics (including `traceMode` on schema v2+).
 8. Read [`references/analysis-playbook.md`](references/analysis-playbook.md) when you need the project-specific workflow, output contract, or heuristics.
 9. Re-open the raw trace around the key `seq` / `tsMs` window before making conclusions.
+10. For recovery regressions, always read the script's `recovery_audit.keyframeEffectiveness` and `recovery_audit.nackEffectiveness`, not only aggregate request counters.
+11. For recovery quality scoring, also read:
+   - `recovery_audit.keyframeEffectiveness.chainBuildSuccessRate`
+   - `recovery_audit.nackEffectiveness.effectiveRate`
+   - `recovery_audit.repairabilityPersistence`
+   - `recovery_audit.recoveryEffectiveness`
 
 ## Follow This Workflow
 
@@ -32,12 +38,24 @@ Use this skill for `runtime-logs/runtime-trace-*.jsonl` analysis in this reposit
 7. Correlate front-end, Tauri, service, and `xbxengine` observations before inferring causality.
 8. Distinguish evidence from hypothesis. State uncertainty explicitly when the trace is incomplete.
 9. Recommend the next diagnostic step only after listing the missing evidence.
+10. When the question involves keyframe or NACK behavior, separate:
+   - attempted vs suppressed/coalesced
+   - sent vs response observed vs packet seen vs decoded
+   - decoded vs chain rebuilt vs merely saw ingress
+   - recovered vs recovered late vs skipped vs expired
 
 ## Use The Bundled Resources
 
 - Use [`scripts/summarize_runtime_trace.py`](scripts/summarize_runtime_trace.py) first for row counts, domains, sessions, log levels, and suspicious rows.
 - Read [`references/log-schema.md`](references/log-schema.md) for the JSONL envelope, row categories, and interpretation rules.
 - Read [`references/analysis-playbook.md`](references/analysis-playbook.md) for project-specific analysis steps, common focus areas, and reporting format.
+- The script now surfaces structured recovery effectiveness:
+  - `keyframeEffectiveness`: request suppression, sent/seen/decoded progression, invalid H264 response, decoded-after-success but chain not rebuilt, and effective recovery count.
+  - `nackEffectiveness`: `nackSent` / `nackRecovered` / `nackSkipped` / `nackExpired`, plus disposition and unrecoverable-reason breakdown.
+  - `keyframeEffectiveness.chainBuildSuccessRate`: 建链成功率聚合统计（`chainRecoveredCount / decodedCount`）。
+  - `nackEffectiveness.effectiveRate`: NACK 有效性聚合统计（`effectiveCount / sentCount`）。
+  - `repairabilityPersistence`: repairability 评分样本、均值区间、缺口长度、缺失连续段等持久化统计。
+  - `recoveryEffectiveness`: 综合恢复有效性评分（由 keyframe、建链、NACK、repairability 持久化加权得到）。
 
 ## Reporting Contract
 
@@ -50,6 +68,16 @@ Return results in this shape unless the user asked for a different format:
 5. Evidence: concrete rows or field changes that support the conclusion.
 6. Gaps: what the trace cannot prove yet.
 7. Next Actions: code paths, extra logs, or experiments to run next.
+8. If keyframe or NACK is involved, explicitly state:
+   - whether the request was suppressed/coalesced
+   - whether a usable response arrived
+   - whether decode succeeded
+   - whether chain/播放链路真正恢复 healthy
+   - whether NACK was effective, late, skipped, or expired
+   - chain build success rate 聚合值
+   - NACK effective rate 聚合值
+   - repairability 持久化统计是否连续
+   - recovery effectiveness 综合评分及其主要分项
 
 ## Guardrails
 
@@ -59,3 +87,4 @@ Return results in this shape unless the user asked for a different format:
 - Quote only the minimum needed from raw logs; summarize the rest.
 - Flag missing instrumentation when the trace cannot prove a causal link.
 - Compare multiple traces only after normalizing by phase, `sessionId`, and timestamp window.
+- Do not treat `recovery_keyframe_request_count` or raw `nack` counts as outcome metrics; use episode/disposition/effectiveness fields first.
