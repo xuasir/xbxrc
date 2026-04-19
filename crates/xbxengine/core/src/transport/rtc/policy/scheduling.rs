@@ -210,6 +210,9 @@ mod tests {
                 reconnect_budget_used: 0,
                 reconnect_budget_limit: 1,
             },
+            coalescing_mode: None,
+            unlock_reason: None,
+            preempt_reason: None,
         }
     }
 
@@ -292,6 +295,9 @@ mod tests {
                     reconnect_budget_used: 1,
                     reconnect_budget_limit: 1,
                 },
+                coalescing_mode: None,
+                unlock_reason: None,
+                preempt_reason: None,
             }),
             bwe: None,
         });
@@ -373,7 +379,7 @@ mod tests {
                     action: RecoveryAction::RequestKeyframe,
                 },
                 reason: VideoEscalationReason::TransportAwaitRecoveryKeyframe,
-                reason_label: "transportAwaitRecoveryKeyframe".to_string(),
+                reason_label: "transportAwaitRecoveryAnchor".to_string(),
                 reason_domain: crate::XbxEngineRecoveryReasonDomain::ConnectivityTransport,
                 reconnect_gate_detail: None,
                 budget_before: RecoveryActionBudgetState {
@@ -394,6 +400,9 @@ mod tests {
                     reconnect_budget_used: 0,
                     reconnect_budget_limit: 1,
                 },
+                coalescing_mode: None,
+                unlock_reason: None,
+                preempt_reason: None,
             }),
             bwe: Some(BwePolicyProposal {
                 evaluation: RtcBweEvaluation {

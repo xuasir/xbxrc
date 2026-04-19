@@ -15,7 +15,7 @@ pub(crate) fn should_absorb_first_frame_acquisition_anchor_issue(
     runtime_stats: &Mutex<XbxEngineMediaRuntimeStats>,
     pre_first_frame_reconnect_fallback_ms: f64,
 ) -> bool {
-    if source_event != "frame-inspection-rejected-await-keyframe"
+    if source_event != "frame-inspection-rejected-await-anchor"
         || snapshot.connection.lifecycle_state != ConnectionLifecycleStateFact::Connected
     {
         return false;
@@ -174,7 +174,7 @@ fn is_first_frame_acquisition_reason_label(value: &str) -> bool {
             | "recoverySustaining"
             | "inspectionRejectInvalidSliceHeader"
             | "NonIdrVcl"
-            | "transportAwaitRecoveryKeyframe"
+            | "transportAwaitRecoveryAnchor"
             | "ingressWaitKeyframe"
     )
 }

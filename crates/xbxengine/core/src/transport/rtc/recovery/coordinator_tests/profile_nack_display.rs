@@ -1,7 +1,9 @@
 use super::super::{RecoveryCoordinator, RecoveryOwnerSignal};
 use crate::runtime_stats_sink::RuntimeStatsSink;
 use crate::transport::rtc::recovery::escalation::{RecoveryAction, VideoEscalationReason};
-use crate::transport::rtc::recovery::runtime_state::{resolve_recovery_profile, unix_now_ms};
+use crate::transport::rtc::recovery::runtime_state::{
+    resolve_recovery_profile, test_support::runtime_state_for_diagnosis, unix_now_ms,
+};
 use crate::transport::rtc::recovery::startup::SessionPhase;
 use crate::XbxEngineMediaRuntimeStats;
 use std::sync::Mutex;
@@ -90,7 +92,7 @@ fn recovered_nack_suppresses_transport_sample_loss_escalation() {
     let mut stats = XbxEngineMediaRuntimeStats::default();
     stats.latest_video_nack_observation = Some(make_test_nack_observation(
         "recovered",
-        "delta",
+        "disposable",
         0,
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -161,7 +163,7 @@ fn display_supply_critical_stays_local_when_important_nack_expires() {
     let mut stats = XbxEngineMediaRuntimeStats::default();
     stats.latest_video_nack_observation = Some(make_test_nack_observation(
         "expiredDeadline",
-        "keyframe",
+        "anchor",
         1,
         observed_at_ms,
     ));
@@ -171,16 +173,17 @@ fn display_supply_critical_stays_local_when_important_nack_expires() {
         Instant::now(),
         Duration::from_millis(800),
     );
+    let signal = RecoveryOwnerSignal {
+        reason: VideoEscalationReason::DisplaySupplyCritical,
+        reason_label: "displaySupplyCritical".to_string(),
+        observed_at_ms,
+    };
     let proposal = coordinator.propose_from_owner_signal(
-        RecoveryOwnerSignal {
-            reason: VideoEscalationReason::DisplaySupplyCritical,
-            reason_label: "displaySupplyCritical".to_string(),
-            observed_at_ms,
-        },
+        signal.clone(),
         &shared_stats,
     );
     assert_ne!(
-        proposal.signal.reason,
+        signal.reason,
         VideoEscalationReason::TransportAwaitRecoveryKeyframe
     );
     assert_ne!(
@@ -195,7 +198,7 @@ fn expired_delta_nack_stays_suppressed_without_stall_signal() {
     stats.session_target_type = Some(xbxengine_protocol::XbxEngineTargetTypeDto::Home);
     stats.latest_video_nack_observation = Some(make_test_nack_observation(
         "expiredDeadline",
-        "delta",
+        "disposable",
         2,
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -230,7 +233,7 @@ fn expired_delta_nack_in_cloud_requires_continuous_budget_before_keyframe() {
 
     stats.latest_video_nack_observation = Some(make_test_nack_observation(
         "expiredDeadline",
-        "delta",
+        "disposable",
         2,
         observed_at_ms,
     ));
@@ -275,7 +278,7 @@ fn expired_delta_nack_requests_keyframe_when_pipeline_is_stalled() {
     stats.latest_video_packet_arrival_time_ms = Some(now_ms - 40.0);
     stats.latest_video_nack_observation = Some(make_test_nack_observation(
         "expiredDeadline",
-        "delta",
+        "disposable",
         2,
         now_ms,
     ));
@@ -306,7 +309,7 @@ fn decoder_backend_failure_prioritizes_decoder_reset_over_transport_suppression(
     stats.latest_video_decoder_reset_time_ms = Some(now_ms - 2_500.0);
     stats.latest_video_nack_observation = Some(make_test_nack_observation(
         "expiredDeadline",
-        "delta",
+        "disposable",
         2,
         now_ms,
     ));
@@ -362,7 +365,7 @@ fn runtime_state_overrides_transport_diagnosis_to_decoder_backend_failure() {
     stats.video_decoder_hardware_failure_streak = 3;
     stats.latest_video_decoder_hardware_failure_time_ms = Some(now_ms - 20.0);
 
-    let state = RecoveryCoordinator::runtime_state_for_diagnosis(
+    let state = runtime_state_for_diagnosis(
         &Mutex::new(stats),
         "transportExpiredDeadline",
         Instant::now() - Duration::from_secs(3),
@@ -392,7 +395,7 @@ fn runtime_state_keeps_transport_diagnosis_when_pipeline_is_still_advancing() {
     stats.video_decoder_hardware_failure_streak = 4;
     stats.latest_video_decoder_hardware_failure_time_ms = Some(now_ms - 20.0);
 
-    let state = RecoveryCoordinator::runtime_state_for_diagnosis(
+    let state = runtime_state_for_diagnosis(
         &Mutex::new(stats),
         "transportExpiredDeadline",
         Instant::now() - Duration::from_secs(3),
@@ -410,7 +413,7 @@ fn recovered_reference_nack_waits_for_burst_in_wait_keyframe_chain() {
     let mut stats = XbxEngineMediaRuntimeStats::default();
     let mut observation = make_test_nack_observation(
         "recovered",
-        "reference",
+        "supply",
         0,
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -434,7 +437,7 @@ fn expired_reference_nack_pushes_idle_timeout_into_recovery_chain() {
     let mut stats = XbxEngineMediaRuntimeStats::default();
     let mut observation = make_test_nack_observation(
         "expiredDeadline",
-        "reference",
+        "supply",
         2,
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -541,7 +544,7 @@ fn recent_wait_keyframe_without_sent_episode_does_not_coalesce_keyframe_inflight
     stats.transport_recovery_epoch_at_last_escalation = 4;
     stats.latest_video_escalation_observation = Some(crate::XbxEngineVideoEscalationObservation {
         observation_id: 70,
-        reason: "transportAwaitRecoveryKeyframe".to_string(),
+        reason: "transportAwaitRecoveryAnchor".to_string(),
         action: "requestKeyframe".to_string(),
         recovery_stage: "rebuilding-supply".to_string(),
         recovery_chain_value: "anchor".to_string(),
@@ -552,7 +555,7 @@ fn recent_wait_keyframe_without_sent_episode_does_not_coalesce_keyframe_inflight
     stats.latest_keyframe_request_episode =
         Some(crate::XbxEngineKeyframeRequestEpisodeObservation {
             episode_id: 70,
-            request_reason: Some("transportAwaitRecoveryKeyframe".to_string()),
+            request_reason: Some("transportAwaitRecoveryAnchor".to_string()),
             request_kind: None,
             status: "requested".to_string(),
             status_detail: None,
@@ -573,12 +576,12 @@ fn recent_wait_keyframe_without_sent_episode_does_not_coalesce_keyframe_inflight
         });
     stats.latest_video_timeline_observation = Some(crate::XbxEngineVideoTimelineObservation {
         observation_id: 71,
-        source_event: "frame-await-recovery-keyframe".to_string(),
+        source_event: "frame-await-recovery-anchor".to_string(),
         gap: None,
         frame: None,
         chain: crate::XbxEngineVideoTimelineChainSnapshot {
             state: "recovering".to_string(),
-            reason: Some("transportAwaitRecoveryKeyframe".to_string()),
+            reason: Some("transportAwaitRecoveryAnchor".to_string()),
             chain_break_evidence: None,
 
             observed_at_ms: now_ms,
@@ -632,7 +635,7 @@ fn rejected_wait_keyframe_anchor_candidate_upgrades_to_decoder_reset() {
         transport_recovery_epoch: 13,
         latest_anchor_candidate_ledger: Some(crate::XbxEngineAnchorCandidateLedger {
             state: crate::XbxEngineAnchorCandidateState::Rejected,
-            source_event: "frame-await-recovery-keyframe".to_string(),
+            source_event: "frame-await-recovery-anchor".to_string(),
             frame_rtp_timestamp: Some(2207340890),
             recovery_epoch: 13,
             failure_reason: Some(

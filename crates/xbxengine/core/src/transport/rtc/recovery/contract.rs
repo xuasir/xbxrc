@@ -1,5 +1,5 @@
-use crate::media::video::types::FrameValue as MediaFrameValue;
 use crate::media::video::h264::inspection::H264AccessUnitInspection;
+use crate::media::video::types::FrameValue as MediaFrameValue;
 use crate::{
     XbxEngineH264InspectionObservation, XbxEngineKeyframeRequestEpisodeObservation,
     XbxEngineMediaRuntimeStats, XbxEngineVideoTimelineObservation,
@@ -59,10 +59,44 @@ pub(crate) enum RecoveryEpisodeStage {
     Sent,
     ResponseObserved,
     Decoded,
-    CleanAnchorCommitted,
     Deferred,
-    Stalled,
     Expired,
+}
+
+/// RFC: 恢复进度统一六级语义，作为跨层事实口径。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum RecoveryProgressLevel {
+    WaitingResponse,
+    ContinuationSeen,
+    AnchorSeen,
+    Decoded,
+    CleanAnchorCommitted,
+    DisplayStable,
+}
+
+impl RecoveryProgressLevel {
+    pub(crate) fn as_str(self) -> &'static str {
+        match self {
+            Self::WaitingResponse => "WaitingResponse",
+            Self::ContinuationSeen => "ContinuationSeen",
+            Self::AnchorSeen => "AnchorSeen",
+            Self::Decoded => "Decoded",
+            Self::CleanAnchorCommitted => "CleanAnchorCommitted",
+            Self::DisplayStable => "DisplayStable",
+        }
+    }
+}
+
+pub(crate) fn recovery_progress_level_from_str(value: &str) -> Option<RecoveryProgressLevel> {
+    match value {
+        "WaitingResponse" => Some(RecoveryProgressLevel::WaitingResponse),
+        "ContinuationSeen" => Some(RecoveryProgressLevel::ContinuationSeen),
+        "AnchorSeen" => Some(RecoveryProgressLevel::AnchorSeen),
+        "Decoded" => Some(RecoveryProgressLevel::Decoded),
+        "CleanAnchorCommitted" => Some(RecoveryProgressLevel::CleanAnchorCommitted),
+        "DisplayStable" => Some(RecoveryProgressLevel::DisplayStable),
+        _ => None,
+    }
 }
 
 impl RecoveryEpisodeStage {
@@ -72,9 +106,7 @@ impl RecoveryEpisodeStage {
             Self::Sent => "Sent",
             Self::ResponseObserved => "ResponseObserved",
             Self::Decoded => "Decoded",
-            Self::CleanAnchorCommitted => "CleanAnchorCommitted",
             Self::Deferred => "Deferred",
-            Self::Stalled => "Stalled",
             Self::Expired => "Expired",
         }
     }
@@ -92,29 +124,85 @@ pub(crate) fn recovery_episode_stage_from_status(status: &str) -> Option<Recover
     }
 }
 
+pub(crate) fn recovery_progress_level_from_episode(
+    status: &str,
+    response_verdict: Option<&str>,
+    first_video_packet_is_keyframe: Option<bool>,
+    first_keyframe_packet_at_ms: Option<f64>,
+    first_keyframe_decoded_at_ms: Option<f64>,
+    has_current_clean_anchor: bool,
+    has_display_stable: bool,
+) -> Option<RecoveryProgressLevel> {
+    if has_display_stable {
+        return Some(RecoveryProgressLevel::DisplayStable);
+    }
+    if has_current_clean_anchor || response_verdict == Some("cleanAnchorCommitted") {
+        return Some(RecoveryProgressLevel::CleanAnchorCommitted);
+    }
+    if first_keyframe_decoded_at_ms.is_some() || status == "decoded" {
+        return Some(RecoveryProgressLevel::Decoded);
+    }
+    if first_keyframe_packet_at_ms.is_some()
+        || first_video_packet_is_keyframe == Some(true)
+        || matches!(status, "packet-seen")
+    {
+        return Some(RecoveryProgressLevel::AnchorSeen);
+    }
+    if matches!(status, "response-observed")
+        || (first_video_packet_is_keyframe == Some(false) && response_verdict != Some("pending"))
+    {
+        return Some(RecoveryProgressLevel::ContinuationSeen);
+    }
+    if matches!(
+        status,
+        "requested" | "sent" | "deferred" | "failed" | "expired-unsent" | "missed"
+    ) {
+        return Some(RecoveryProgressLevel::WaitingResponse);
+    }
+    None
+}
+
+pub(crate) fn recovery_progress_missing_anchor(progress: Option<RecoveryProgressLevel>) -> bool {
+    matches!(
+        progress,
+        Some(RecoveryProgressLevel::WaitingResponse | RecoveryProgressLevel::ContinuationSeen)
+            | None
+    )
+}
+
+pub(crate) fn recovery_progress_allows_decoder_reset(
+    progress: Option<RecoveryProgressLevel>,
+) -> bool {
+    matches!(
+        progress,
+        Some(
+            RecoveryProgressLevel::AnchorSeen
+                | RecoveryProgressLevel::Decoded
+                | RecoveryProgressLevel::CleanAnchorCommitted
+                | RecoveryProgressLevel::DisplayStable
+        )
+    )
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[allow(dead_code)]
 pub(crate) enum CoalescingMode {
     Merge,
     Refresh,
-    Preempt,
 }
 
-#[allow(dead_code)]
 impl CoalescingMode {
     pub(crate) fn as_str(self) -> &'static str {
         match self {
             Self::Merge => "Merge",
             Self::Refresh => "Refresh",
-            Self::Preempt => "Preempt",
         }
     }
 }
 
 const TRANSPORT_AWAIT_UNRESOLVED_REASONS: [&str; 4] = [
-    "transportAwaitRecoveryKeyframe",
-    "awaitingRecoveryKeyframe",
-    "awaitRecoveryKeyframe",
+    "transportAwaitRecoveryAnchor",
+    "awaitingRecoveryAnchor",
+    "awaitRecoveryAnchor",
     "referenceChainUnrecoverable",
 ];
 
@@ -126,9 +214,9 @@ pub(crate) fn is_transport_await_probe_source_event(source_event: Option<&str>) 
     matches!(
         source_event,
         Some(
-            "frame-await-recovery-keyframe"
-                | "frame-inspection-rejected-await-keyframe"
-                | "frame-inspection-rejected-trigger-recovery-keyframe"
+            "frame-await-recovery-anchor"
+                | "frame-inspection-rejected-await-anchor"
+                | "frame-inspection-rejected-trigger-recovery-anchor"
         )
     )
 }
@@ -137,8 +225,7 @@ pub(crate) fn is_invalid_recovery_bootstrap_reject_reason(reason: Option<&str>) 
     matches!(
         reason,
         Some(
-            "NonIdrVcl"
-                | "bootstrapMissingSps"
+            "bootstrapMissingSps"
                 | "bootstrapMissingPps"
                 | "inspectionRejectInvalidSliceHeader"
         )
@@ -161,6 +248,8 @@ pub(crate) fn inspection_has_invalid_recovery_bootstrap(
         )
 }
 
+const CURRENT_TRANSPORT_AWAIT_INVALID_BOOTSTRAP_FRESH_MS: f64 = 220.0;
+
 pub(crate) fn is_terminal_transport_await_deferred_episode(
     episode: &XbxEngineKeyframeRequestEpisodeObservation,
     inspection: Option<&XbxEngineH264InspectionObservation>,
@@ -168,7 +257,7 @@ pub(crate) fn is_terminal_transport_await_deferred_episode(
     now_ms: f64,
     fresh_window_ms: f64,
 ) -> bool {
-    if episode.request_reason.as_deref() != Some("transportAwaitRecoveryKeyframe") {
+    if episode.request_reason.as_deref() != Some("transportAwaitRecoveryAnchor") {
         return false;
     }
     let stage = recovery_episode_stage_from_status(episode.status.as_str());
@@ -274,7 +363,7 @@ pub(crate) fn current_clean_anchor_observed_at_ms(
     recovery_epoch: u64,
 ) -> Option<f64> {
     if clean_anchor_epoch == Some(recovery_epoch)
-        && clean_anchor_source_event == Some("chain-clean-keyframe-submitted")
+        && clean_anchor_source_event == Some("chain-clean-anchor-submitted")
     {
         clean_anchor_observed_at_ms
     } else {
@@ -309,14 +398,33 @@ pub(crate) fn has_current_transport_await_issue_from_observation(
 pub(crate) fn has_current_transport_await_issue_from_stats(
     stats: &XbxEngineMediaRuntimeStats,
 ) -> bool {
+    let current_clean_anchor_observed_at_ms = current_clean_anchor_observed_at_ms_from_stats(stats);
+    let Some(timeline) = stats.latest_video_timeline_observation.as_ref() else {
+        return false;
+    };
+    if has_current_transport_await_issue_from_observation(
+        timeline,
+        current_clean_anchor_observed_at_ms,
+    ) {
+        return true;
+    }
+    if !is_recovery_sustaining_observation(
+        Some(timeline.chain.state.as_str()),
+        timeline.chain.reason.as_deref(),
+    ) {
+        return false;
+    }
+    let Some(clean_anchor_at_ms) = current_clean_anchor_observed_at_ms else {
+        return false;
+    };
     stats
-        .latest_video_timeline_observation
+        .latest_h264_inspection_observation
         .as_ref()
-        .is_some_and(|timeline| {
-            has_current_transport_await_issue_from_observation(
-                timeline,
-                current_clean_anchor_observed_at_ms_from_stats(stats),
-            )
+        .is_some_and(|inspection| {
+            inspection.observed_at_ms >= clean_anchor_at_ms
+                && (timeline.observed_at_ms - inspection.observed_at_ms).max(0.0)
+                    <= CURRENT_TRANSPORT_AWAIT_INVALID_BOOTSTRAP_FRESH_MS
+                && inspection_has_invalid_recovery_bootstrap(inspection)
         })
 }
 
@@ -340,9 +448,7 @@ pub(crate) fn derive_gap_severity_from_timeline_observation(
     }
     if matches!(
         reason,
-        Some(
-            "awaitingRecoveryKeyframe" | "awaitRecoveryKeyframe" | "transportAwaitRecoveryKeyframe",
-        )
+        Some("awaitingRecoveryAnchor" | "awaitRecoveryAnchor" | "transportAwaitRecoveryAnchor",)
     ) {
         return GapSeverity::AnchorGap;
     }
@@ -369,10 +475,7 @@ fn chain_broken_observation_lacks_media_evidence(
     if evidence != "unknown" {
         return false;
     }
-    matches!(
-        gap.budget_importance.as_deref(),
-        Some("reference" | "keyframe")
-    )
+    matches!(gap.budget_importance.as_deref(), Some("supply" | "anchor"))
 }
 
 /// 与 keyframe episode stalled（无推进边沿）叠加时，将严重度提升为 `RecoveryBlocked`。
@@ -385,9 +488,9 @@ pub(crate) fn derive_gap_severity_with_episode_stall(
         if matches!(
             reason,
             Some(
-                "awaitingRecoveryKeyframe"
-                    | "awaitRecoveryKeyframe"
-                    | "transportAwaitRecoveryKeyframe"
+                "awaitingRecoveryAnchor"
+                    | "awaitRecoveryAnchor"
+                    | "transportAwaitRecoveryAnchor"
                     | "referenceChainUnrecoverable",
             )
         ) {
@@ -454,6 +557,7 @@ pub(crate) fn is_media_healthy_baseline(
 mod derive_gap_observation_tests {
     use super::*;
     use crate::{
+        XbxEngineH264InspectionObservation, XbxEngineMediaRuntimeStats,
         XbxEngineVideoTimelineChainSnapshot, XbxEngineVideoTimelineGapSnapshot,
         XbxEngineVideoTimelineObservation,
     };
@@ -468,7 +572,7 @@ mod derive_gap_observation_tests {
                 sequence: Some(1),
                 frame_rtp_timestamp: None,
                 frame_importance: Some("unknown".into()),
-                budget_importance: Some("reference".into()),
+                budget_importance: Some("supply".into()),
                 evidence_importance: Some("unknown".into()),
                 gap_dependency_confidence: Some("anonymous".into()),
                 observed_at_ms: 0.0,
@@ -486,5 +590,217 @@ mod derive_gap_observation_tests {
             derive_gap_severity_from_timeline_observation(&obs),
             GapSeverity::ReferenceGap
         );
+    }
+
+    #[test]
+    fn fresh_invalid_bootstrap_breaks_sustaining_recovery_suppression_after_clean_anchor() {
+        let mut stats = XbxEngineMediaRuntimeStats::default();
+        stats.transport_recovery_epoch = 7;
+        stats.video_anchor_clean_epoch = Some(7);
+        stats.video_anchor_clean_observed_at_ms = Some(100.0);
+        stats.video_anchor_clean_source_event = Some("chain-clean-anchor-submitted".into());
+        stats.latest_video_timeline_observation = Some(XbxEngineVideoTimelineObservation {
+            observation_id: 1,
+            source_event: "frame-complete-candidate-decode-feedback-blocked".into(),
+            gap: Some(XbxEngineVideoTimelineGapSnapshot {
+                state: "expired".into(),
+                sequence: Some(1),
+                frame_rtp_timestamp: None,
+                frame_importance: Some("anchor".into()),
+                budget_importance: Some("disposable".into()),
+                evidence_importance: Some("anchor".into()),
+                gap_dependency_confidence: Some("anonymous".into()),
+                observed_at_ms: 180.0,
+            }),
+            frame: None,
+            chain: XbxEngineVideoTimelineChainSnapshot {
+                state: "sustaining-recovery".into(),
+                reason: Some("recoverySustaining".into()),
+                chain_break_evidence: None,
+                observed_at_ms: 180.0,
+            },
+            observed_at_ms: 180.0,
+        });
+        stats.latest_h264_inspection_observation = Some(XbxEngineH264InspectionObservation {
+            observation_id: 2,
+            frame_rtp_timestamp: Some(7001),
+            nal_types: vec!["SliceLayerWithoutPartitioningNonIdr".into()],
+            nal_count: 1,
+            vcl_nal_count: 1,
+            has_inband_sps: false,
+            has_inband_pps: false,
+            committed_sps_present: true,
+            committed_pps_present: true,
+            slice_headers_valid: true,
+            delta_continuation_ready: true,
+            parameter_sets_changed: false,
+            config_changed: false,
+            is_idr: false,
+            sample_width: Some(1920),
+            sample_height: Some(1080),
+            bootstrap_ready: false,
+            bootstrap_reject_reason: Some("NonIdrVcl".into()),
+            admission_accepted: true,
+            observed_at_ms: 190.0,
+            ..Default::default()
+        });
+
+        assert!(!has_current_transport_await_issue_from_stats(&stats));
+    }
+
+    #[test]
+    fn stale_invalid_bootstrap_does_not_break_sustaining_recovery_suppression() {
+        let mut stats = XbxEngineMediaRuntimeStats::default();
+        stats.transport_recovery_epoch = 7;
+        stats.video_anchor_clean_epoch = Some(7);
+        stats.video_anchor_clean_observed_at_ms = Some(100.0);
+        stats.video_anchor_clean_source_event = Some("chain-clean-anchor-submitted".into());
+        stats.latest_video_timeline_observation = Some(XbxEngineVideoTimelineObservation {
+            observation_id: 1,
+            source_event: "frame-complete-candidate-decode-feedback-blocked".into(),
+            gap: Some(XbxEngineVideoTimelineGapSnapshot {
+                state: "expired".into(),
+                sequence: Some(1),
+                frame_rtp_timestamp: None,
+                frame_importance: Some("anchor".into()),
+                budget_importance: Some("disposable".into()),
+                evidence_importance: Some("anchor".into()),
+                gap_dependency_confidence: Some("anonymous".into()),
+                observed_at_ms: 500.0,
+            }),
+            frame: None,
+            chain: XbxEngineVideoTimelineChainSnapshot {
+                state: "sustaining-recovery".into(),
+                reason: Some("recoverySustaining".into()),
+                chain_break_evidence: None,
+                observed_at_ms: 500.0,
+            },
+            observed_at_ms: 500.0,
+        });
+        stats.latest_h264_inspection_observation = Some(XbxEngineH264InspectionObservation {
+            observation_id: 2,
+            frame_rtp_timestamp: Some(7001),
+            nal_types: vec!["SliceLayerWithoutPartitioningNonIdr".into()],
+            nal_count: 1,
+            vcl_nal_count: 1,
+            has_inband_sps: false,
+            has_inband_pps: false,
+            committed_sps_present: true,
+            committed_pps_present: true,
+            slice_headers_valid: true,
+            delta_continuation_ready: true,
+            parameter_sets_changed: false,
+            config_changed: false,
+            is_idr: false,
+            sample_width: Some(1920),
+            sample_height: Some(1080),
+            bootstrap_ready: false,
+            bootstrap_reject_reason: Some("NonIdrVcl".into()),
+            admission_accepted: true,
+            observed_at_ms: 190.0,
+            ..Default::default()
+        });
+
+        assert!(!has_current_transport_await_issue_from_stats(&stats));
+    }
+
+    #[test]
+    fn recovery_progress_level_mapping_follows_rfc_order() {
+        assert_eq!(
+            recovery_progress_level_from_episode(
+                "requested",
+                Some("pending"),
+                None,
+                None,
+                None,
+                false,
+                false
+            ),
+            Some(RecoveryProgressLevel::WaitingResponse)
+        );
+        assert_eq!(
+            recovery_progress_level_from_episode(
+                "response-observed",
+                Some("on-time"),
+                Some(false),
+                None,
+                None,
+                false,
+                false
+            ),
+            Some(RecoveryProgressLevel::ContinuationSeen)
+        );
+        assert_eq!(
+            recovery_progress_level_from_episode(
+                "packet-seen",
+                Some("on-time"),
+                Some(true),
+                Some(10.0),
+                None,
+                false,
+                false
+            ),
+            Some(RecoveryProgressLevel::AnchorSeen)
+        );
+        assert_eq!(
+            recovery_progress_level_from_episode(
+                "decoded",
+                Some("on-time"),
+                Some(true),
+                Some(10.0),
+                Some(20.0),
+                false,
+                false
+            ),
+            Some(RecoveryProgressLevel::Decoded)
+        );
+        assert_eq!(
+            recovery_progress_level_from_episode(
+                "decoded",
+                Some("cleanAnchorCommitted"),
+                Some(true),
+                Some(10.0),
+                Some(20.0),
+                true,
+                false
+            ),
+            Some(RecoveryProgressLevel::CleanAnchorCommitted)
+        );
+        assert_eq!(
+            recovery_progress_level_from_episode(
+                "decoded",
+                Some("cleanAnchorCommitted"),
+                Some(true),
+                Some(10.0),
+                Some(20.0),
+                true,
+                true
+            ),
+            Some(RecoveryProgressLevel::DisplayStable)
+        );
+    }
+
+    #[test]
+    fn recovery_progress_gap_helpers_match_contract() {
+        assert!(recovery_progress_missing_anchor(Some(
+            RecoveryProgressLevel::WaitingResponse
+        )));
+        assert!(recovery_progress_missing_anchor(Some(
+            RecoveryProgressLevel::ContinuationSeen
+        )));
+        assert!(!recovery_progress_missing_anchor(Some(
+            RecoveryProgressLevel::AnchorSeen
+        )));
+        assert_eq!(
+            recovery_progress_level_from_str("ContinuationSeen"),
+            Some(RecoveryProgressLevel::ContinuationSeen)
+        );
+        assert_eq!(recovery_progress_level_from_str("unknown"), None);
+        assert!(recovery_progress_allows_decoder_reset(Some(
+            RecoveryProgressLevel::Decoded
+        )));
+        assert!(!recovery_progress_allows_decoder_reset(Some(
+            RecoveryProgressLevel::ContinuationSeen
+        )));
     }
 }

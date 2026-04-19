@@ -181,7 +181,7 @@ fn fallback_transport_await_recovery_keyframe_is_not_blocked_before_coordinator(
     let mut policy = RtcSessionPolicy::new(runtime_config, runtime_stats);
     let snapshot = build_snapshot(
         ConnectionLifecycleStateFact::Connected,
-        "transportAwaitRecoveryKeyframe",
+        "transportAwaitRecoveryAnchor",
         100.0,
     );
     let commands = transport_commands(policy.on_snapshot(&snapshot));
@@ -230,7 +230,7 @@ fn pre_first_frame_bootstrap_missing_sps_emits_local_keyframe_probe() {
         .expect("recovery decision ledger");
     assert_eq!(
         ledger.input_signal,
-        "transportAwaitRecoveryKeyframe:bootstrapMissingSps"
+        "transportAwaitRecoveryAnchor:bootstrapMissingSps"
     );
     assert_eq!(ledger.action_selected, "requestKeyframe");
 }
@@ -298,7 +298,7 @@ fn pre_first_frame_bootstrap_missing_sps_with_recent_episode_coalesces_probe() {
         .expect("recovery decision ledger");
     assert_eq!(
         ledger.input_signal,
-        "transportAwaitRecoveryKeyframe:bootstrapMissingSps"
+        "transportAwaitRecoveryAnchor:bootstrapMissingSps"
     );
     assert_recovery_family_hold_semantics(
         ledger.gate_result.as_str(),
@@ -798,7 +798,7 @@ fn connected_ingress_without_success_output_can_enter_failed_terminal_after_reco
             ..MediaProjection::default()
         },
         RecoveryProjection {
-            latest_diagnosis_label: Some("transportAwaitRecoveryKeyframe".to_string()),
+            latest_diagnosis_label: Some("transportAwaitRecoveryAnchor".to_string()),
             pending_action: false,
             successful_action_count: 0,
             failed_action_count: 0,
@@ -845,12 +845,12 @@ fn same_tick_failed_terminal_does_not_forward_original_reconnect_proposal() {
         });
         stats.latest_video_timeline_observation = Some(crate::XbxEngineVideoTimelineObservation {
             observation_id: 1,
-            source_event: "frame-await-recovery-keyframe".to_string(),
+            source_event: "frame-await-recovery-anchor".to_string(),
             gap: None,
             frame: None,
             chain: crate::XbxEngineVideoTimelineChainSnapshot {
                 state: "recovering".to_string(),
-                reason: Some("transportAwaitRecoveryKeyframe".to_string()),
+                reason: Some("transportAwaitRecoveryAnchor".to_string()),
                 chain_break_evidence: None,
 
                 observed_at_ms: 7_540.0,

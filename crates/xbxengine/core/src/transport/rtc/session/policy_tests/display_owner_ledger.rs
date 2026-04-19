@@ -19,7 +19,7 @@ fn recovery_decision_ledger_is_written_with_budget_snapshot() {
     let mut policy = RtcSessionPolicy::new(runtime_config, runtime_stats.clone());
     let snapshot = build_snapshot(
         ConnectionLifecycleStateFact::Connected,
-        "transportAwaitRecoveryKeyframe",
+        "transportAwaitRecoveryAnchor",
         320.0,
     );
     let commands = transport_commands(policy.on_snapshot(&snapshot));
@@ -34,7 +34,7 @@ fn recovery_decision_ledger_is_written_with_budget_snapshot() {
         .expect("recovery decision ledger");
     assert_eq!(
         ledger.input_signal,
-        "transportAwaitRecoveryKeyframe:transportAwaitRecoveryKeyframe"
+        "transportAwaitRecoveryAnchor:transportAwaitRecoveryAnchor"
     );
     assert_eq!(ledger.action_selected, "requestKeyframe");
     assert_eq!(ledger.gate_result, "pass:localProbe");
@@ -51,7 +51,7 @@ fn recovery_decision_ledger_keeps_pending_action_latest_while_recent_history_rec
 
     let first = build_snapshot(
         ConnectionLifecycleStateFact::Connected,
-        "transportAwaitRecoveryKeyframe",
+        "transportAwaitRecoveryAnchor",
         320.0,
     );
     let first_commands = transport_commands(policy.on_snapshot(&first));
@@ -95,7 +95,7 @@ fn recovery_decision_ledger_allows_no_signal_to_be_latest_after_pending_command_
 
     let first = build_snapshot(
         ConnectionLifecycleStateFact::Connected,
-        "transportAwaitRecoveryKeyframe",
+        "transportAwaitRecoveryAnchor",
         320.0,
     );
     let first_commands = transport_commands(policy.on_snapshot(&first));
@@ -162,9 +162,17 @@ fn critical_display_supply_uses_recovery_controller_budget() {
     let mut policy = RtcSessionPolicy::new(runtime_config, runtime_stats.clone());
     let mut snapshot = build_snapshot(ConnectionLifecycleStateFact::Connected, "none", 360.0);
     let first = transport_commands(policy.on_snapshot(&snapshot));
-    assert!(first
-        .iter()
-        .any(|command| matches!(command, TransportCommand::RequestKeyframe { .. })));
+    assert!(
+        first.iter().all(|command| {
+            !matches!(
+                command,
+                TransportCommand::RequestKeyframe { .. }
+                    | TransportCommand::RequestDecoderReset { .. }
+                    | TransportCommand::RequestReconnectCandidate { .. }
+            )
+        }),
+        "display supply critical should be absorbed locally (no media commands): {first:?}"
+    );
 
     snapshot.version = 2;
     snapshot.now_ms = 361.0;
@@ -174,7 +182,7 @@ fn critical_display_supply_uses_recovery_controller_budget() {
         second
             .iter()
             .all(|command| !matches!(command, TransportCommand::RequestKeyframe { .. })),
-        "second snapshot should be suppressed by escalation cooldown budget"
+        "display supply signal should not emit keyframe commands"
     );
 }
 
@@ -195,12 +203,14 @@ fn display_supply_critical_does_not_trigger_reconnect_candidate() {
     let snapshot = build_snapshot(ConnectionLifecycleStateFact::Connected, "none", 365.0);
     let commands = transport_commands(policy.on_snapshot(&snapshot));
 
-    assert!(commands
-        .iter()
-        .any(|command| matches!(command, TransportCommand::RequestKeyframe { .. })));
-    assert!(commands
-        .iter()
-        .all(|command| !matches!(command, TransportCommand::RequestReconnectCandidate { .. })));
+    assert!(commands.iter().all(|command| {
+        !matches!(
+            command,
+            TransportCommand::RequestKeyframe { .. }
+                | TransportCommand::RequestDecoderReset { .. }
+                | TransportCommand::RequestReconnectCandidate { .. }
+        )
+    }));
 }
 
 #[test]
@@ -262,16 +272,29 @@ fn recovery_intent_is_suppressed_within_same_epoch_via_coordinator_chain() {
     let mut first = build_snapshot(ConnectionLifecycleStateFact::Connected, "none", 500.0);
     first.version = 1;
     let first_cmds = transport_commands(policy.on_snapshot(&first));
-    assert!(first_cmds
-        .iter()
-        .any(|command| matches!(command, TransportCommand::RequestKeyframe { .. })));
+    assert!(
+        first_cmds.iter().all(|command| {
+            !matches!(
+                command,
+                TransportCommand::RequestKeyframe { .. }
+                    | TransportCommand::RequestDecoderReset { .. }
+                    | TransportCommand::RequestReconnectCandidate { .. }
+            )
+        }),
+        "display supply critical should not feed coordinator chain: {first_cmds:?}"
+    );
 
     let mut second = build_snapshot(ConnectionLifecycleStateFact::Connected, "none", 501.0);
     second.version = 2;
     let second_cmds = transport_commands(policy.on_snapshot(&second));
-    assert!(second_cmds
-        .iter()
-        .all(|command| !matches!(command, TransportCommand::RequestKeyframe { .. })));
+    assert!(second_cmds.iter().all(|command| {
+        !matches!(
+            command,
+            TransportCommand::RequestKeyframe { .. }
+                | TransportCommand::RequestDecoderReset { .. }
+                | TransportCommand::RequestReconnectCandidate { .. }
+        )
+    }));
 }
 
 #[test]
@@ -290,9 +313,14 @@ fn suppressed_owner_intent_is_not_forwarded_back_into_recovery_analysis() {
     let mut policy = RtcSessionPolicy::new(runtime_config, runtime_stats.clone());
     let first = build_snapshot(ConnectionLifecycleStateFact::Connected, "none", 500.0);
     let first_cmds = transport_commands(policy.on_snapshot(&first));
-    assert!(first_cmds
-        .iter()
-        .any(|command| matches!(command, TransportCommand::RequestKeyframe { .. })));
+    assert!(first_cmds.iter().all(|command| {
+        !matches!(
+            command,
+            TransportCommand::RequestKeyframe { .. }
+                | TransportCommand::RequestDecoderReset { .. }
+                | TransportCommand::RequestReconnectCandidate { .. }
+        )
+    }));
 
     let second = build_snapshot(
         ConnectionLifecycleStateFact::Connected,
@@ -300,17 +328,22 @@ fn suppressed_owner_intent_is_not_forwarded_back_into_recovery_analysis() {
         501.0,
     );
     let second_cmds = transport_commands(policy.on_snapshot(&second));
-    assert!(second_cmds
-        .iter()
-        .all(|command| !matches!(command, TransportCommand::RequestKeyframe { .. })));
+    assert!(second_cmds.iter().all(|command| {
+        !matches!(
+            command,
+            TransportCommand::RequestKeyframe { .. }
+                | TransportCommand::RequestDecoderReset { .. }
+                | TransportCommand::RequestReconnectCandidate { .. }
+        )
+    }));
     let stats = runtime_stats.lock().expect("runtime stats lock");
     let ledger = stats
         .latest_recovery_decision_ledger
         .as_ref()
         .expect("recovery decision ledger");
     assert!(
-        ledger.gate_result.starts_with("pass"),
-        "suppressed owner intent should stay in local recovery analysis path: {}",
+        ledger.gate_result == "no-signal",
+        "display domain signals should not enter media recovery analysis: {}",
         ledger.gate_result
     );
 }
@@ -333,16 +366,26 @@ fn new_recovery_epoch_does_not_bypass_existing_recovery_suppression_chain() {
     let mut first = build_snapshot(ConnectionLifecycleStateFact::Connected, "none", 700.0);
     first.version = 1;
     let first_cmds = transport_commands(policy.on_snapshot(&first));
-    assert!(first_cmds
-        .iter()
-        .any(|command| matches!(command, TransportCommand::RequestKeyframe { .. })));
+    assert!(first_cmds.iter().all(|command| {
+        !matches!(
+            command,
+            TransportCommand::RequestKeyframe { .. }
+                | TransportCommand::RequestDecoderReset { .. }
+                | TransportCommand::RequestReconnectCandidate { .. }
+        )
+    }));
 
     let mut second = build_snapshot(ConnectionLifecycleStateFact::Connected, "none", 701.0);
     second.version = 2;
     let second_cmds = transport_commands(policy.on_snapshot(&second));
-    assert!(second_cmds
-        .iter()
-        .all(|command| !matches!(command, TransportCommand::RequestKeyframe { .. })));
+    assert!(second_cmds.iter().all(|command| {
+        !matches!(
+            command,
+            TransportCommand::RequestKeyframe { .. }
+                | TransportCommand::RequestDecoderReset { .. }
+                | TransportCommand::RequestReconnectCandidate { .. }
+        )
+    }));
 
     if let Ok(mut stats) = runtime_stats.lock() {
         stats.transport_recovery_epoch = 4;
@@ -351,9 +394,14 @@ fn new_recovery_epoch_does_not_bypass_existing_recovery_suppression_chain() {
     let mut third = build_snapshot(ConnectionLifecycleStateFact::Connected, "none", 703.0);
     third.version = 3;
     let third_cmds = transport_commands(policy.on_snapshot(&third));
-    assert!(third_cmds
-        .iter()
-        .any(|command| matches!(command, TransportCommand::RequestKeyframe { .. })));
+    assert!(third_cmds.iter().all(|command| {
+        !matches!(
+            command,
+            TransportCommand::RequestKeyframe { .. }
+                | TransportCommand::RequestDecoderReset { .. }
+                | TransportCommand::RequestReconnectCandidate { .. }
+        )
+    }));
 }
 
 #[test]
@@ -368,14 +416,14 @@ fn owner_contract_drives_display_supply_recovery_reason() {
         stats.latest_video_decode_ok_time_ms = Some(now_ms - 600.0);
         stats.video_renderer_stalled = Some(true);
     }
-    let mut policy = RtcSessionPolicy::new(runtime_config, runtime_stats);
+    let mut policy = RtcSessionPolicy::new(runtime_config, runtime_stats.clone());
     let snapshot = build_snapshot(ConnectionLifecycleStateFact::Connected, "none", 400.0);
-    let commands = transport_commands(policy.on_snapshot(&snapshot));
-    let reason = commands.into_iter().find_map(|cmd| match cmd {
-        TransportCommand::RequestKeyframe { reason, .. } => Some(reason),
-        _ => None,
-    });
-    assert_eq!(reason.as_deref(), Some("displaySupplyCritical"));
+    let _ = transport_commands(policy.on_snapshot(&snapshot));
+    let stats = runtime_stats.lock().expect("runtime stats lock");
+    assert_eq!(
+        stats.video_owner_reason.as_deref(),
+        Some("displaySupplyCritical")
+    );
 }
 
 #[test]
@@ -390,7 +438,7 @@ fn soft_display_supply_critical_is_absorbed_before_recovery_command() {
         stats.transport_recovery_epoch = 1;
         stats.video_anchor_clean_epoch = Some(1);
         stats.video_anchor_clean_observed_at_ms = Some(390.0);
-        stats.video_anchor_clean_source_event = Some("chain-clean-keyframe-submitted".to_string());
+        stats.video_anchor_clean_source_event = Some("chain-clean-anchor-submitted".to_string());
         stats.host_no_pending_pressure_level = Some("normal".to_string());
         stats.host_no_pending_streak = 0;
         stats.latest_video_host_present_time_ms = Some(now_ms - 12.0);
@@ -460,9 +508,17 @@ fn soft_display_supply_critical_is_absorbed_before_recovery_command() {
 
     let fourth = build_snapshot(ConnectionLifecycleStateFact::Connected, "none", 760.0);
     let fourth_cmds = transport_commands(policy.on_snapshot(&fourth));
-    assert!(fourth_cmds.iter().any(|command| {
-        matches!(command, TransportCommand::RequestKeyframe { reason, .. } if reason == "displaySupplyCritical")
-    }));
+    assert!(
+        fourth_cmds.iter().all(|command| {
+            !matches!(
+                command,
+                TransportCommand::RequestKeyframe { .. }
+                    | TransportCommand::RequestDecoderReset { .. }
+                    | TransportCommand::RequestReconnectCandidate { .. }
+            )
+        }),
+        "soft critical should remain local even after renderer stall: {fourth_cmds:?}"
+    );
 }
 
 #[test]
@@ -480,20 +536,27 @@ fn display_supply_critical_does_not_stage_reconnect_candidate() {
     let mut policy = RtcSessionPolicy::new(runtime_config, runtime_stats);
     let first = build_snapshot(ConnectionLifecycleStateFact::Connected, "none", 400.0);
     let first_commands = transport_commands(policy.on_snapshot(&first));
-    assert!(first_commands.iter().any(|command| {
-        matches!(command, TransportCommand::RequestKeyframe { reason, .. } if reason == "displaySupplyCritical")
+    assert!(first_commands.iter().all(|command| {
+        !matches!(
+            command,
+            TransportCommand::RequestKeyframe { .. }
+                | TransportCommand::RequestDecoderReset { .. }
+                | TransportCommand::RequestReconnectCandidate { .. }
+        )
     }));
-    assert!(first_commands
-        .iter()
-        .all(|command| { !matches!(command, TransportCommand::RequestReconnectCandidate { .. }) }));
 
     let mut second = build_snapshot(ConnectionLifecycleStateFact::Connected, "none", 820.0);
     second.version = 2;
     second.recovery.last_observed_at_ms = Some(820.0);
     let second_commands = transport_commands(policy.on_snapshot(&second));
-    assert!(second_commands
-        .iter()
-        .all(|command| { !matches!(command, TransportCommand::RequestReconnectCandidate { .. }) }));
+    assert!(second_commands.iter().all(|command| {
+        !matches!(
+            command,
+            TransportCommand::RequestKeyframe { .. }
+                | TransportCommand::RequestDecoderReset { .. }
+                | TransportCommand::RequestReconnectCandidate { .. }
+        )
+    }));
 }
 
 #[test]
@@ -549,7 +612,7 @@ fn owner_keeps_rebuilding_supply_when_timeline_keeps_awaiting_recovery_keyframe(
         });
         stats.latest_video_timeline_observation = Some(crate::XbxEngineVideoTimelineObservation {
             observation_id: 1,
-            source_event: "frame-await-recovery-keyframe".to_string(),
+            source_event: "frame-await-recovery-anchor".to_string(),
             gap: None,
             frame: None,
             chain: crate::XbxEngineVideoTimelineChainSnapshot {
@@ -575,7 +638,7 @@ fn owner_keeps_rebuilding_supply_when_timeline_keeps_awaiting_recovery_keyframe(
     );
     assert_eq!(
         stats.video_owner_reason.as_deref(),
-        Some("transportAwaitRecoveryKeyframe")
+        Some("transportAwaitRecoveryAnchor")
     );
 }
 
@@ -603,12 +666,12 @@ fn owner_anchor_reason_is_derived_from_timeline_chain_reason_not_recovery_diagno
         });
         stats.latest_video_timeline_observation = Some(crate::XbxEngineVideoTimelineObservation {
             observation_id: 11,
-            source_event: "frame-await-recovery-keyframe".to_string(),
+            source_event: "frame-await-recovery-anchor".to_string(),
             gap: None,
             frame: None,
             chain: crate::XbxEngineVideoTimelineChainSnapshot {
                 state: "recovering".to_string(),
-                reason: Some("awaitRecoveryKeyframe".to_string()),
+                reason: Some("awaitRecoveryAnchor".to_string()),
                 chain_break_evidence: None,
 
                 observed_at_ms: 910.0,
@@ -630,7 +693,7 @@ fn owner_anchor_reason_is_derived_from_timeline_chain_reason_not_recovery_diagno
     );
     assert_eq!(
         stats.video_owner_reason.as_deref(),
-        Some("transportAwaitRecoveryKeyframe")
+        Some("transportAwaitRecoveryAnchor")
     );
 }
 
@@ -675,7 +738,7 @@ fn owner_exits_recovering_after_recovery_completion_evidence() {
     }
     let recovering = build_snapshot(
         ConnectionLifecycleStateFact::Connected,
-        "transportAwaitRecoveryKeyframe",
+        "transportAwaitRecoveryAnchor",
         900.0,
     );
     let _ = transport_commands(policy.on_snapshot(&recovering));
@@ -687,7 +750,7 @@ fn owner_exits_recovering_after_recovery_completion_evidence() {
         stats.latest_video_decode_ok_time_ms = Some(now_ms - 12.0);
         stats.video_anchor_clean_epoch = Some(stats.transport_recovery_epoch);
         stats.video_anchor_clean_observed_at_ms = Some(now_ms - 15.0);
-        stats.video_anchor_clean_source_event = Some("chain-clean-keyframe-submitted".to_string());
+        stats.video_anchor_clean_source_event = Some("chain-clean-anchor-submitted".to_string());
         if let Some(timeline) = stats.latest_video_timeline_observation.as_mut() {
             timeline.source_event = "frame-observed".to_string();
             timeline.chain.state = "healthy".to_string();
@@ -726,12 +789,12 @@ fn frame_observed_without_clean_anchor_fact_cannot_exit_recovering() {
         });
         stats.latest_video_timeline_observation = Some(crate::XbxEngineVideoTimelineObservation {
             observation_id: 1,
-            source_event: "frame-await-recovery-keyframe".to_string(),
+            source_event: "frame-await-recovery-anchor".to_string(),
             gap: None,
             frame: None,
             chain: crate::XbxEngineVideoTimelineChainSnapshot {
                 state: "recovering".to_string(),
-                reason: Some("transportAwaitRecoveryKeyframe".to_string()),
+                reason: Some("transportAwaitRecoveryAnchor".to_string()),
                 chain_break_evidence: None,
 
                 observed_at_ms: 900.0,
@@ -790,12 +853,12 @@ fn clean_anchor_healthy_chain_can_close_recovery_on_transient_present_feedback_g
         });
         stats.latest_video_timeline_observation = Some(crate::XbxEngineVideoTimelineObservation {
             observation_id: 1,
-            source_event: "frame-await-recovery-keyframe".to_string(),
+            source_event: "frame-await-recovery-anchor".to_string(),
             gap: None,
             frame: None,
             chain: crate::XbxEngineVideoTimelineChainSnapshot {
                 state: "recovering".to_string(),
-                reason: Some("transportAwaitRecoveryKeyframe".to_string()),
+                reason: Some("transportAwaitRecoveryAnchor".to_string()),
                 chain_break_evidence: None,
 
                 observed_at_ms: 900.0,
@@ -805,7 +868,7 @@ fn clean_anchor_healthy_chain_can_close_recovery_on_transient_present_feedback_g
     }
     let recovering = build_snapshot(
         ConnectionLifecycleStateFact::Connected,
-        "transportAwaitRecoveryKeyframe",
+        "transportAwaitRecoveryAnchor",
         900.0,
     );
     let _ = transport_commands(policy.on_snapshot(&recovering));
@@ -817,7 +880,7 @@ fn clean_anchor_healthy_chain_can_close_recovery_on_transient_present_feedback_g
         stats.latest_video_decode_ok_time_ms = Some(now_ms - 9.0);
         stats.video_anchor_clean_epoch = Some(stats.transport_recovery_epoch);
         stats.video_anchor_clean_observed_at_ms = Some(now_ms - 10.0);
-        stats.video_anchor_clean_source_event = Some("chain-clean-keyframe-submitted".to_string());
+        stats.video_anchor_clean_source_event = Some("chain-clean-anchor-submitted".to_string());
         if let Some(timeline) = stats.latest_video_timeline_observation.as_mut() {
             timeline.source_event = "frame-observed".to_string();
             timeline.chain.state = "healthy".to_string();
@@ -861,12 +924,12 @@ fn clean_anchor_healthy_chain_stays_recovering_when_present_feedback_gap_is_not_
         });
         stats.latest_video_timeline_observation = Some(crate::XbxEngineVideoTimelineObservation {
             observation_id: 1,
-            source_event: "frame-await-recovery-keyframe".to_string(),
+            source_event: "frame-await-recovery-anchor".to_string(),
             gap: None,
             frame: None,
             chain: crate::XbxEngineVideoTimelineChainSnapshot {
                 state: "recovering".to_string(),
-                reason: Some("transportAwaitRecoveryKeyframe".to_string()),
+                reason: Some("transportAwaitRecoveryAnchor".to_string()),
                 chain_break_evidence: None,
 
                 observed_at_ms: 900.0,
@@ -876,7 +939,7 @@ fn clean_anchor_healthy_chain_stays_recovering_when_present_feedback_gap_is_not_
     }
     let recovering = build_snapshot(
         ConnectionLifecycleStateFact::Connected,
-        "transportAwaitRecoveryKeyframe",
+        "transportAwaitRecoveryAnchor",
         900.0,
     );
     let _ = transport_commands(policy.on_snapshot(&recovering));
@@ -889,7 +952,7 @@ fn clean_anchor_healthy_chain_stays_recovering_when_present_feedback_gap_is_not_
         stats.latest_video_decode_ok_time_ms = Some(now_ms - 9.0);
         stats.video_anchor_clean_epoch = Some(stats.transport_recovery_epoch);
         stats.video_anchor_clean_observed_at_ms = Some(now_ms - 10.0);
-        stats.video_anchor_clean_source_event = Some("chain-clean-keyframe-submitted".to_string());
+        stats.video_anchor_clean_source_event = Some("chain-clean-anchor-submitted".to_string());
         if let Some(timeline) = stats.latest_video_timeline_observation.as_mut() {
             timeline.source_event = "frame-observed".to_string();
             timeline.chain.state = "healthy".to_string();
@@ -944,12 +1007,12 @@ fn frame_complete_candidate_without_clean_anchor_fact_can_exit_recovering() {
         });
         stats.latest_video_timeline_observation = Some(crate::XbxEngineVideoTimelineObservation {
             observation_id: 1,
-            source_event: "frame-await-recovery-keyframe".to_string(),
+            source_event: "frame-await-recovery-anchor".to_string(),
             gap: None,
             frame: None,
             chain: crate::XbxEngineVideoTimelineChainSnapshot {
                 state: "recovering".to_string(),
-                reason: Some("transportAwaitRecoveryKeyframe".to_string()),
+                reason: Some("transportAwaitRecoveryAnchor".to_string()),
                 chain_break_evidence: None,
 
                 observed_at_ms: 900.0,
@@ -987,7 +1050,7 @@ fn lifecycle_recovering_clears_stale_clean_anchor_fact() {
     if let Ok(mut stats) = runtime_stats.lock() {
         stats.video_anchor_clean_epoch = Some(5);
         stats.video_anchor_clean_observed_at_ms = Some(1000.0);
-        stats.video_anchor_clean_source_event = Some("chain-clean-keyframe-submitted".to_string());
+        stats.video_anchor_clean_source_event = Some("chain-clean-anchor-submitted".to_string());
     }
     let mut policy = RtcSessionPolicy::new(runtime_config, runtime_stats.clone());
     let mut connection = ConnectionProjection::default();
@@ -1026,12 +1089,12 @@ fn lifecycle_recovering_preserves_current_clean_anchor_fact() {
         stats.transport_recovery_epoch = 5;
         stats.latest_video_timeline_observation = Some(crate::XbxEngineVideoTimelineObservation {
             observation_id: 5,
-            source_event: "frame-await-recovery-keyframe".to_string(),
+            source_event: "frame-await-recovery-anchor".to_string(),
             gap: None,
             frame: None,
             chain: crate::XbxEngineVideoTimelineChainSnapshot {
                 state: "recovering".to_string(),
-                reason: Some("transportAwaitRecoveryKeyframe".to_string()),
+                reason: Some("transportAwaitRecoveryAnchor".to_string()),
                 chain_break_evidence: None,
 
                 observed_at_ms: 1095.0,
@@ -1073,7 +1136,7 @@ fn lifecycle_recovering_preserves_current_clean_anchor_fact() {
     if let Ok(mut stats) = runtime_stats.lock() {
         stats.video_anchor_clean_epoch = Some(current_epoch);
         stats.video_anchor_clean_observed_at_ms = Some(1200.0);
-        stats.video_anchor_clean_source_event = Some("chain-clean-keyframe-submitted".to_string());
+        stats.video_anchor_clean_source_event = Some("chain-clean-anchor-submitted".to_string());
         stats.host_no_pending_pressure_level = Some("normal".to_string());
         stats.host_no_pending_streak = 0;
         stats.latest_video_host_present_time_ms = Some(1290.0);
@@ -1133,7 +1196,7 @@ fn lifecycle_recovering_preserves_current_clean_anchor_fact() {
     assert_eq!(stats.video_anchor_clean_observed_at_ms, Some(1200.0));
     assert_eq!(
         stats.video_anchor_clean_source_event.as_deref(),
-        Some("chain-clean-keyframe-submitted")
+        Some("chain-clean-anchor-submitted")
     );
 }
 

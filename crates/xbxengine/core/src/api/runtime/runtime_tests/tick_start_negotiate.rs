@@ -1295,7 +1295,7 @@ fn runtime_requests_decoder_reset_when_decode_stall_signal_is_active() {
     let keyframe_calls = backend.keyframe_request_calls.clone();
     let decoder_reset_calls = backend.decoder_reset_calls.clone();
     let mut runtime = XbxEngineRuntime::with_media_backend(
-        legacy_runtime_config(),
+        browser_runtime_config(),
         TestHostBridge::new(requests),
         TestEventSink::new(events),
         backend,
@@ -1432,7 +1432,7 @@ fn runtime_prefers_explicit_decoder_stall_signal_from_stats() {
     let keyframe_calls = backend.keyframe_request_calls.clone();
     let decoder_reset_calls = backend.decoder_reset_calls.clone();
     let mut runtime = XbxEngineRuntime::with_media_backend(
-        legacy_runtime_config(),
+        browser_runtime_config(),
         TestHostBridge::new(requests),
         TestEventSink::new(events),
         backend,
@@ -1506,7 +1506,7 @@ fn runtime_does_not_use_rendered_snapshot_as_present_freshness_signal() {
     let keyframe_calls = backend.keyframe_request_calls.clone();
     let decoder_reset_calls = backend.decoder_reset_calls.clone();
     let mut runtime = XbxEngineRuntime::with_media_backend(
-        legacy_runtime_config(),
+        browser_runtime_config(),
         TestHostBridge::new(requests),
         TestEventSink::new(events),
         backend,
@@ -1566,7 +1566,7 @@ fn runtime_suppresses_recovery_when_decode_activity_is_fresh() {
     let keyframe_calls = backend.keyframe_request_calls.clone();
     let decoder_reset_calls = backend.decoder_reset_calls.clone();
     let mut runtime = XbxEngineRuntime::with_media_backend(
-        legacy_runtime_config(),
+        browser_runtime_config(),
         TestHostBridge::new(requests),
         TestEventSink::new(events),
         backend,
@@ -1625,7 +1625,7 @@ fn runtime_requires_stable_stall_window_before_requesting_keyframe() {
     );
     let keyframe_calls = backend.keyframe_request_calls.clone();
     let mut runtime = XbxEngineRuntime::with_media_backend(
-        legacy_runtime_config(),
+        browser_runtime_config(),
         TestHostBridge::new(requests),
         TestEventSink::new(events),
         backend,
@@ -1679,7 +1679,7 @@ fn runtime_recovery_sequence_stays_keyframe_then_decoder_reset_then_reconnect() 
     let keyframe_calls = backend.keyframe_request_calls.clone();
     let decoder_reset_calls = backend.decoder_reset_calls.clone();
     let mut runtime = XbxEngineRuntime::with_media_backend(
-        legacy_runtime_config(),
+        browser_runtime_config(),
         TestHostBridge::new(requests.clone()),
         TestEventSink::new(events),
         backend,
@@ -1781,7 +1781,7 @@ fn runtime_does_not_emit_error_when_keyframe_request_is_only_control_not_ready()
     )
     .with_keyframe_error_message("xbxEngineRtcControlChannelNotReadyForKeyframe");
     let mut runtime = XbxEngineRuntime::with_media_backend(
-        legacy_runtime_config(),
+        browser_runtime_config(),
         TestHostBridge::new(requests),
         TestEventSink::new(events.clone()),
         backend,
@@ -1841,7 +1841,7 @@ fn runtime_does_not_emit_error_when_decoder_reset_is_only_control_not_ready() {
     )
     .with_decoder_reset_error_message("xbxEngineRtcControlChannelNotReadyForDecoderReset");
     let mut runtime = XbxEngineRuntime::with_media_backend(
-        legacy_runtime_config(),
+        browser_runtime_config(),
         TestHostBridge::new(requests),
         TestEventSink::new(events.clone()),
         backend,

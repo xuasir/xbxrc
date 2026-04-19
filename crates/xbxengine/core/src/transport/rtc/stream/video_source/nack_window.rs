@@ -224,7 +224,7 @@ mod tests {
             outcome.overflow_pruned_range,
             Some(SequenceRange {
                 start: 2,
-                end_exclusive: 16  // truncated_until 本身不是被放弃的包
+                end_exclusive: 16 // truncated_until 本身不是被放弃的包
             })
         );
     }

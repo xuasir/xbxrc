@@ -57,7 +57,7 @@ export function translateDiagnosticsOwnerState(
   return translateEnum(te, t, 'ownerState', raw, 'streamPage.diagnostics.values.unknown')
 }
 
-/** recoveryOwnerReason：transportAwaitRecoveryKeyframe / supplyStarved … */
+/** recoveryOwnerReason：transportAwaitRecoveryAnchor / supplyStarved … */
 export function translateDiagnosticsOwnerReason(
   te: DiagnosticsExists,
   t: DiagnosticsTranslate,
@@ -76,7 +76,7 @@ export function translateDiagnosticsDecoderRecovery(
 }
 
 /**
- * primaryIssueChain：steady:healthy、display:supplyStarved、recovery:transportAwaitRecoveryKeyframe …
+ * primaryIssueChain：steady:healthy、display:supplyStarved、recovery:transportAwaitRecoveryAnchor …
  * 优先整串词条；否则按「前缀 · 细节」拼接翻译。
  */
 export function translateDiagnosticsPrimaryIssueChain(
@@ -105,7 +105,7 @@ export function translateDiagnosticsPrimaryIssueChain(
 }
 
 /**
- * latestDecisionSummary：owner:rebuilding-supply:transportAwaitRecoveryKeyframe …
+ * latestDecisionSummary：owner:rebuilding-supply:transportAwaitRecoveryAnchor …
  */
 export function translateDiagnosticsLatestDecision(
   te: DiagnosticsExists,

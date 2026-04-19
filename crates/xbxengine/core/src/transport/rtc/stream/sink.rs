@@ -17,7 +17,7 @@ pub(crate) trait RtcMediaSink: Send + Sync {
 }
 
 pub(crate) trait RtcRtcpSendPort: Send + Sync {
-    fn send_rtcp(&self, _payload: &[u8]);
+    fn send_rtcp(&self, _payload: &[u8]) -> Result<(), String>;
 }
 
 #[derive(Default)]

@@ -138,7 +138,7 @@ fn runtime_consumes_pending_transport_reconnect_candidate_even_when_transport_is
             inbound_video_packet_count_total: 500,
             latest_video_escalation_observation: Some(crate::XbxEngineVideoEscalationObservation {
                 observation_id: 77,
-                reason: "transportAwaitRecoveryKeyframe".to_string(),
+                reason: "transportAwaitRecoveryAnchor".to_string(),
                 action: "requestReconnectCandidate".to_string(),
                 recovery_stage: "reconnecting".to_string(),
                 recovery_chain_value: "anchor".to_string(),
@@ -155,7 +155,7 @@ fn runtime_consumes_pending_transport_reconnect_candidate_even_when_transport_is
         .expect("lock pending runtime recovery action") = Some(
         crate::XbxEnginePendingRuntimeRecoveryAction::RequestReconnectCandidate {
             observation_id: 77,
-            reason: "transportAwaitRecoveryKeyframe".to_string(),
+            reason: "transportAwaitRecoveryAnchor".to_string(),
             reason_domain: crate::XbxEngineRecoveryReasonDomain::ConnectivityTransport,
         },
     );
@@ -186,7 +186,7 @@ fn runtime_consumes_pending_transport_reconnect_candidate_even_when_transport_is
     assert_eq!(reconnect_request_count, 1);
     assert_eq!(
         runtime.snapshot().last_recovery_reason.as_deref(),
-        Some("transportReconnectCandidate:transportAwaitRecoveryKeyframe")
+        Some("transportReconnectCandidate:transportAwaitRecoveryAnchor")
     );
 }
 
@@ -539,7 +539,7 @@ fn runtime_defers_pending_transport_reconnect_candidate_while_reconnecting() {
         .expect("lock pending runtime recovery action") = Some(
         crate::XbxEnginePendingRuntimeRecoveryAction::RequestReconnectCandidate {
             observation_id: 77,
-            reason: "transportAwaitRecoveryKeyframe".to_string(),
+            reason: "transportAwaitRecoveryAnchor".to_string(),
             reason_domain: crate::XbxEngineRecoveryReasonDomain::ConnectivityTransport,
         },
     );
@@ -694,7 +694,7 @@ fn runtime_pending_reconnect_candidate_matrix_keeps_transport_await_local_but_al
     let cases = [
         PendingReconnectCandidateMatrixCase {
             observation_id: 195,
-            reason: "transportAwaitRecoveryKeyframe",
+            reason: "transportAwaitRecoveryAnchor",
             reason_domain: crate::XbxEngineRecoveryReasonDomain::Local,
             transport_state: XbxEngineTransportStateDto::Connected,
             observation_kind: PendingReconnectCandidateObservationKind::VideoEscalation {
@@ -703,7 +703,7 @@ fn runtime_pending_reconnect_candidate_matrix_keeps_transport_await_local_but_al
             expected_reconnect_request_count: 0,
             expected_last_action: Some("reconnectCandidateRejectedByDomainGate"),
             expected_last_reason:
-                "transportReconnectCandidateRejected:domain=local observationId=195 reason=transportAwaitRecoveryKeyframe",
+                "transportReconnectCandidateRejected:domain=local observationId=195 reason=transportAwaitRecoveryAnchor",
         },
         PendingReconnectCandidateMatrixCase {
             observation_id: 196,
@@ -768,7 +768,7 @@ fn runtime_rejects_replayed_local_pending_reconnect_candidates_without_request_s
             inbound_video_packet_count_total: 500,
             latest_video_escalation_observation: Some(crate::XbxEngineVideoEscalationObservation {
                 observation_id: 201,
-                reason: "transportAwaitRecoveryKeyframe".to_string(),
+                reason: "transportAwaitRecoveryAnchor".to_string(),
                 action: "requestReconnectCandidate".to_string(),
                 recovery_stage: "rebuilding-supply".to_string(),
                 recovery_chain_value: "anchor".to_string(),
@@ -785,7 +785,7 @@ fn runtime_rejects_replayed_local_pending_reconnect_candidates_without_request_s
         .expect("lock pending runtime recovery action") = Some(
         crate::XbxEnginePendingRuntimeRecoveryAction::RequestReconnectCandidate {
             observation_id: 201,
-            reason: "transportAwaitRecoveryKeyframe".to_string(),
+            reason: "transportAwaitRecoveryAnchor".to_string(),
             reason_domain: crate::XbxEngineRecoveryReasonDomain::Local,
         },
     );
@@ -808,7 +808,7 @@ fn runtime_rejects_replayed_local_pending_reconnect_candidates_without_request_s
         .expect("lock pending runtime recovery action") = Some(
         crate::XbxEnginePendingRuntimeRecoveryAction::RequestReconnectCandidate {
             observation_id: 202,
-            reason: "transportAwaitRecoveryKeyframe".to_string(),
+            reason: "transportAwaitRecoveryAnchor".to_string(),
             reason_domain: crate::XbxEngineRecoveryReasonDomain::Local,
         },
     );
@@ -833,7 +833,7 @@ fn runtime_rejects_replayed_local_pending_reconnect_candidates_without_request_s
     assert_eq!(
         runtime.snapshot().last_recovery_reason.as_deref(),
         Some(
-            "transportReconnectCandidateRejected:domain=local observationId=202 reason=transportAwaitRecoveryKeyframe"
+            "transportReconnectCandidateRejected:domain=local observationId=202 reason=transportAwaitRecoveryAnchor"
         )
     );
     assert!(pending
@@ -868,7 +868,7 @@ fn runtime_accepts_transport_candidate_after_local_candidate_was_rejected() {
             inbound_video_packet_count_total: 500,
             latest_video_escalation_observation: Some(crate::XbxEngineVideoEscalationObservation {
                 observation_id: 211,
-                reason: "transportAwaitRecoveryKeyframe".to_string(),
+                reason: "transportAwaitRecoveryAnchor".to_string(),
                 action: "requestReconnectCandidate".to_string(),
                 recovery_stage: "rebuilding-supply".to_string(),
                 recovery_chain_value: "anchor".to_string(),
@@ -885,7 +885,7 @@ fn runtime_accepts_transport_candidate_after_local_candidate_was_rejected() {
         .expect("lock pending runtime recovery action") = Some(
         crate::XbxEnginePendingRuntimeRecoveryAction::RequestReconnectCandidate {
             observation_id: 211,
-            reason: "transportAwaitRecoveryKeyframe".to_string(),
+            reason: "transportAwaitRecoveryAnchor".to_string(),
             reason_domain: crate::XbxEngineRecoveryReasonDomain::Local,
         },
     );
@@ -1080,7 +1080,7 @@ fn runtime_accepts_recovering_candidate_after_local_transport_await_candidate_wa
             inbound_video_packet_count_total: 500,
             latest_video_escalation_observation: Some(crate::XbxEngineVideoEscalationObservation {
                 observation_id: 231,
-                reason: "transportAwaitRecoveryKeyframe".to_string(),
+                reason: "transportAwaitRecoveryAnchor".to_string(),
                 action: "requestReconnectCandidate".to_string(),
                 recovery_stage: "rebuilding-supply".to_string(),
                 recovery_chain_value: "anchor".to_string(),
@@ -1097,7 +1097,7 @@ fn runtime_accepts_recovering_candidate_after_local_transport_await_candidate_wa
         .expect("lock pending runtime recovery action") = Some(
         crate::XbxEnginePendingRuntimeRecoveryAction::RequestReconnectCandidate {
             observation_id: 231,
-            reason: "transportAwaitRecoveryKeyframe".to_string(),
+            reason: "transportAwaitRecoveryAnchor".to_string(),
             reason_domain: crate::XbxEngineRecoveryReasonDomain::Local,
         },
     );
@@ -1209,7 +1209,7 @@ async fn runtime_cloud_recovery_replay_accepts_transport_reconnect_after_local_n
     bridge.apply_transport_session_command(SessionCommand::Transport(
         TransportCommand::RequestReconnectCandidate {
             observation_id: 501,
-            reason: "transportAwaitRecoveryKeyframe".to_string(),
+            reason: "transportAwaitRecoveryAnchor".to_string(),
             reason_domain: crate::XbxEngineRecoveryReasonDomain::Local,
         },
     ));
@@ -1226,13 +1226,13 @@ async fn runtime_cloud_recovery_replay_accepts_transport_reconnect_after_local_n
         1,
         profile.baseline.now_ms,
         240,
-        "transportAwaitRecoveryKeyframe",
+        "transportAwaitRecoveryAnchor",
     )));
     assert!(local_recover.iter().any(|command| {
         matches!(
             command,
             TransportCommand::RequestKeyframe { reason, .. }
-                if reason == "transportAwaitRecoveryKeyframe"
+                if reason == "transportAwaitRecoveryAnchor"
         )
     }));
     assert!(local_recover
@@ -1249,7 +1249,7 @@ async fn runtime_cloud_recovery_replay_accepts_transport_reconnect_after_local_n
             .expect("local recovery decision ledger");
         assert_eq!(
             ledger.input_signal,
-            "transportAwaitRecoveryKeyframe:transportAwaitRecoveryKeyframe"
+            "transportAwaitRecoveryAnchor:transportAwaitRecoveryAnchor"
         );
         assert_eq!(ledger.gate_result, "pass:localProbe");
         assert_eq!(ledger.action_selected, "requestKeyframe");
@@ -1283,7 +1283,7 @@ async fn runtime_cloud_recovery_replay_accepts_transport_reconnect_after_local_n
         );
         assert_eq!(
             stats.video_owner_reason.as_deref(),
-            Some("transportAwaitRecoveryKeyframe")
+            Some("transportAwaitRecoveryAnchor")
         );
         assert_eq!(stats.video_owner_source.as_deref(), Some("anchor"));
         let ledger = stats
@@ -1371,7 +1371,7 @@ async fn runtime_home_clean_anchor_short_jitter_replay_never_reaches_reconnect()
         stats.transport_recovery_epoch = 12;
         stats.video_anchor_clean_epoch = Some(12);
         stats.video_anchor_clean_observed_at_ms = Some(profile.baseline.now_ms - 3.0);
-        stats.video_anchor_clean_source_event = Some("chain-clean-keyframe-submitted".to_string());
+        stats.video_anchor_clean_source_event = Some("chain-clean-anchor-submitted".to_string());
         stats.host_no_pending_pressure_level = Some("high".to_string());
         stats.host_no_pending_streak = 3;
         stats.latest_video_host_present_time_ms = Some(profile.baseline.now_ms - 8.0);

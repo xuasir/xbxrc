@@ -20,7 +20,9 @@ use crate::transport::rtc::stream::video_source::RtcVideoFrameSource;
 pub(crate) struct NoopRtcpPort;
 
 impl RtcRtcpSendPort for NoopRtcpPort {
-    fn send_rtcp(&self, _payload: &[u8]) {}
+    fn send_rtcp(&self, _payload: &[u8]) -> Result<(), String> {
+        Ok(())
+    }
 }
 
 pub(crate) fn bootstrap_sps_nalu() -> &'static [u8] {
@@ -116,7 +118,7 @@ pub(crate) fn make_bootstrap_assembled_frame(rtp_timestamp: u32) -> AssembledVid
         frame_recovery_disposition: FrameRecoveryDisposition::Repairing,
         frame_unrecoverable_reason: None,
         assembled_at: Instant::now(),
-        playout_base_at: None,
+        first_packet_arrived_at: None,
         h264: inspection,
         payload: Bytes::from(payload.to_vec()),
     }

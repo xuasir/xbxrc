@@ -17,7 +17,7 @@ fn playback_phase_int13_decoder_reset_burst_must_be_bounded_per_window() {
         let _cmds = harness.apply(
             t,
             ConnectionLifecycleStateFact::Connected,
-            "transportAwaitRecoveryKeyframe",
+            "transportAwaitRecoveryAnchor",
             500 + u64::from(i),
             |stats| {
                 stats.session_phase = Some("recovering".to_string());
@@ -31,7 +31,7 @@ fn playback_phase_int13_decoder_reset_burst_must_be_bounded_per_window() {
                 stats.latest_video_escalation_observation =
                     Some(crate::XbxEngineVideoEscalationObservation {
                         observation_id: 7000 + u64::from(i),
-                        reason: "transportAwaitRecoveryKeyframe".to_string(),
+                        reason: "transportAwaitRecoveryAnchor".to_string(),
                         action: "requestDecoderReset".to_string(),
                         recovery_stage: "rebuilding-supply".to_string(),
                         recovery_chain_value: "anchor".to_string(),
@@ -53,12 +53,12 @@ fn playback_phase_int13_decoder_reset_burst_must_be_bounded_per_window() {
                 stats.latest_video_timeline_observation =
                     Some(crate::XbxEngineVideoTimelineObservation {
                         observation_id: 7100 + u64::from(i),
-                        source_event: "frame-await-recovery-keyframe".to_string(),
+                        source_event: "frame-await-recovery-anchor".to_string(),
                         gap: None,
                         frame: None,
                         chain: crate::XbxEngineVideoTimelineChainSnapshot {
                             state: "recovering".to_string(),
-                            reason: Some("transportAwaitRecoveryKeyframe".to_string()),
+                            reason: Some("transportAwaitRecoveryAnchor".to_string()),
                             chain_break_evidence: None,
 
                             observed_at_ms: t - 2.0,
@@ -117,12 +117,12 @@ fn playback_phase_int14_remote_track_ingress_growth_alone_must_not_force_stable_
             stats.latest_video_timeline_observation =
                 Some(crate::XbxEngineVideoTimelineObservation {
                     observation_id: 8000,
-                    source_event: "frame-await-recovery-keyframe".to_string(),
+                    source_event: "frame-await-recovery-anchor".to_string(),
                     gap: None,
                     frame: None,
                     chain: crate::XbxEngineVideoTimelineChainSnapshot {
                         state: "recovering".to_string(),
-                        reason: Some("transportAwaitRecoveryKeyframe".to_string()),
+                        reason: Some("transportAwaitRecoveryAnchor".to_string()),
                         chain_break_evidence: None,
 
                         observed_at_ms: t - 2.0,
@@ -273,7 +273,7 @@ fn playback_phase_int17_stable_serving_does_not_regress_to_priming_on_milestone_
     let _ = harness.apply(
         t1,
         ConnectionLifecycleStateFact::Connected,
-        "transportAwaitRecoveryKeyframe",
+        "transportAwaitRecoveryAnchor",
         100,
         |stats| {
             stats.transport_recovery_epoch = 30;
@@ -298,12 +298,12 @@ fn playback_phase_int17_stable_serving_does_not_regress_to_priming_on_milestone_
             stats.latest_video_timeline_observation =
                 Some(crate::XbxEngineVideoTimelineObservation {
                     observation_id: 10,
-                    source_event: "frame-await-recovery-keyframe".to_string(),
+                    source_event: "frame-await-recovery-anchor".to_string(),
                     gap: None,
                     frame: None,
                     chain: crate::XbxEngineVideoTimelineChainSnapshot {
                         state: "recovering".to_string(),
-                        reason: Some("transportAwaitRecoveryKeyframe".to_string()),
+                        reason: Some("transportAwaitRecoveryAnchor".to_string()),
                         chain_break_evidence: None,
 
                         observed_at_ms: t1,
@@ -327,7 +327,7 @@ fn playback_phase_int17_stable_serving_does_not_regress_to_priming_on_milestone_
             stats.video_anchor_clean_epoch = Some(stats.transport_recovery_epoch);
             stats.video_anchor_clean_observed_at_ms = Some(t2 - 15.0);
             stats.video_anchor_clean_source_event =
-                Some("chain-clean-keyframe-submitted".to_string());
+                Some("chain-clean-anchor-submitted".to_string());
             if let Some(timeline) = stats.latest_video_timeline_observation.as_mut() {
                 timeline.source_event = "frame-observed".to_string();
                 timeline.chain.state = "healthy".to_string();
@@ -364,7 +364,7 @@ fn playback_phase_int17_stable_serving_does_not_regress_to_priming_on_milestone_
             stats.video_anchor_clean_epoch = Some(stats.transport_recovery_epoch);
             stats.video_anchor_clean_observed_at_ms = Some(t3 - 14.0);
             stats.video_anchor_clean_source_event =
-                Some("chain-clean-keyframe-submitted".to_string());
+                Some("chain-clean-anchor-submitted".to_string());
             stats.latest_video_track_status = Some(crate::XbxEngineVideoTrackStatus {
                 state: "remoteTrackAttached".to_string(),
                 video_width: Some(1920),
@@ -412,7 +412,7 @@ fn playback_phase_int18_owner_supply_state_flip_requires_timeline_anchor_evidenc
     let _ = harness.apply(
         t0,
         ConnectionLifecycleStateFact::Connected,
-        "transportAwaitRecoveryKeyframe",
+        "transportAwaitRecoveryAnchor",
         900,
         |stats| {
             let t = t0;
@@ -427,7 +427,7 @@ fn playback_phase_int18_owner_supply_state_flip_requires_timeline_anchor_evidenc
             stats.video_anchor_clean_epoch = Some(120);
             stats.video_anchor_clean_observed_at_ms = Some(t - 300.0);
             stats.video_anchor_clean_source_event =
-                Some("chain-clean-keyframe-submitted".to_string());
+                Some("chain-clean-anchor-submitted".to_string());
             stats.latest_video_track_status = Some(crate::XbxEngineVideoTrackStatus {
                 state: "remoteTrackAttached".to_string(),
                 video_width: Some(1920),
@@ -442,7 +442,7 @@ fn playback_phase_int18_owner_supply_state_flip_requires_timeline_anchor_evidenc
             stats.latest_video_timeline_observation =
                 Some(crate::XbxEngineVideoTimelineObservation {
                     observation_id: 8200,
-                    source_event: "frame-await-recovery-keyframe".to_string(),
+                    source_event: "frame-await-recovery-anchor".to_string(),
                     gap: Some(crate::XbxEngineVideoTimelineGapSnapshot {
                         state: "open".to_string(),
                         sequence: Some(2),
@@ -459,7 +459,7 @@ fn playback_phase_int18_owner_supply_state_flip_requires_timeline_anchor_evidenc
                     frame: None,
                     chain: crate::XbxEngineVideoTimelineChainSnapshot {
                         state: "recovering".to_string(),
-                        reason: Some("transportAwaitRecoveryKeyframe".to_string()),
+                        reason: Some("transportAwaitRecoveryAnchor".to_string()),
                         chain_break_evidence: None,
 
                         observed_at_ms: t - 2.0,

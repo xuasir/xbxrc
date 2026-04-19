@@ -47,7 +47,7 @@ UDP 包到达后经过以下阶段：
 
 每次丢包都通过 `record_local_backpressure_drop` 记录，带 reason/detail/class/timestamp。
 
-#### 缺口
+#### 待优化项
 
 **1. 没有时效性过滤**
 
@@ -76,62 +76,6 @@ UDP 包到达后经过以下阶段：
 **7. repair 队列没有"已无意义"的主动清理**
 
 当上层处于 `waiting_for_recovery_keyframe` 状态时，pending_repair 里积压的 delta 帧 RTX 包即使恢复回来也会被丢弃。sink 层不感知这个状态，这些包仍然占用队列容量，延迟真正有用的 keyframe RTX 包进入。
-
-#### 改造完成
-
-**缺口 3：`RepairPrimaryPassThrough` IDR 包优先级已修正**
-
-`classify_backpressure_class` 已将 `RepairPrimaryPassThrough` 和 `RtxReinject` 统一路由到 `PriorityRepair` 队列，不再走 `is_priority_primary_packet` 的 NAL type 检查分支。修正后的核心语义是“repair 路由固定进入 repair 优先队列”，不再发生按 primary/best_effort 逻辑误分类的路径漂移。
-
-```rust
-RtcVideoIngressKind::RepairPrimaryPassThrough { .. }
-| RtcVideoIngressKind::RtxReinject { .. } => IngressBackpressureClass::PriorityRepair,
-```
-
-注：这个修正把 `RepairPrimaryPassThrough` 的 IDR 包从 best_effort 提升到了 repair 队列，而不是 primary 队列。repair 队列的优先级低于 primary，但高于 best_effort，在大多数场景下已足够。如果需要进一步把 repair 路由的 IDR 包提升到 primary 队列，需要在 `RepairPrimaryPassThrough` 分支内再做 NAL type 检查，这是后续可选的优化方向。
-
-**缺口 5：背压队列已支持独立定时排空**
-
-`RtcVideoSourceSink` 新增 `on_tick(now: Instant)` 方法和 `next_flush_due_at` 字段。sink 内部以 `SCHEDULED_FLUSH_TICK_MS`（4ms）作为定时排空步长；上层通过 tick 入口驱动后，当 `next_flush_due_at` 到期时，`flush_pending` 会在没有新包到来的情况下独立触发，消除包稀疏场景下的额外滞留延迟。
-
-```rust
-fn on_tick(&mut self, now: Instant) {
-    if self.next_flush_due_at.is_some_and(|due| now >= due) {
-        self.next_flush_due_at = None;
-        self.flush_pending(now);
-    }
-}
-```
-
-**未改造项说明**
-
-- **缺口 1（时效性过滤）**：未改造。需要确认 Xbox 协议包头是否携带帧级标识，或用 RTP timestamp 近似过滤，涉及协议层调研，留待后续。
-- **缺口 2（FU-A 后续分片降级）**：未改造。`is_likely_h264_recovery_priority` 仍只识别 FU-A Start bit 为 1 的首片，后续分片仍走 BestEffort。修复需要在 sink 层维护跨包的 FU-A 组装状态，复杂度较高，留待后续。
-- **缺口 4（PriorityPrimary 满时丢新包）**：未改造。属于设计权衡，当前参数下（容量 ≤32）触发概率低。
-- **缺口 6（repair_burst_streak 重置）**：未改造。属于调度策略权衡，当前参数下（MAX_REPAIR_BURST_BEFORE_BEST_EFFORT=4）影响有限。
-- **缺口 7（repair 队列无状态感知清理）**：未改造。sink 层不感知 source 层的 `waiting_for_recovery_keyframe` 状态，跨层状态传递需要额外接口设计，留待后续。
-
-#### 值得借鉴（Moonlight）
-
-**架构差异是根本**
-
-Moonlight 的 `VideoReceiveThreadProc` 是单线程同步流水线：收包 → 旧帧过滤 → 解密 → `RtpvAddPacket` → FEC 恢复 → 产帧，全程无跨线程 channel，不需要优先级队列。FEC 恢复是同步完成的，包进来凑够就立刻恢复，不存在"修复包挤占主流"的问题。
-
-我们的跨线程 channel 设计带来了背压队列的必要性，也带来了上述缺口 2/3/5/6。这是架构层面的差异，不是参数调优能解决的。
-
-**旧帧过滤（VideoStream.c:184-220）**
-
-Moonlight 用 `NV_VIDEO_PACKET.frameIndex`（帧编号，单调递增整数）在解密前过滤旧帧包，不浪费 AES-GCM 开销。关键约束：过滤逻辑只做无状态丢弃，不基于未解密包修改任何状态（安全边界）。
-
-我们的等效位置是 `on_raw_packet` 入口。可行性取决于 Xbox 协议包头是否携带帧级别标识——如果有，可在 `normalize_video_packet` 之后、入队之前过滤；如果没有，只能用 RTP timestamp 近似，需要处理 u32 回绕。
-
-**帧边界即时清理（RtpVideoQueue.c:650 附近）**
-
-新帧的包到来时，Moonlight 立即 `purgeListEntries` 清掉上一帧所有未处理的包并重置队列状态。我们依赖 `sample_builder` 的滑动窗口超时，旧帧包不会在新帧到来时立即清理，在高丢包场景下持续占用内存和队列容量。
-
-**fast path 帧级路径锁定（RtpVideoQueue.c:queuePacket）**
-
-Moonlight 用 `useFastQueuePath` 标志锁定：一旦某帧进入过 slow path（乱序），整帧都用 slow path 处理，避免同一帧内混用两种路径导致去重逻辑出错。我们的 `nack_window` 没有帧级别的路径锁定，乱序包到达后的去重行为依赖环形位图的全局状态，不区分帧边界。
 
 ### 2.2 序列号追踪与 OOS 检测（nack_window.rs）
 
@@ -198,7 +142,7 @@ if let Some(resolved) = self.nack_scheduler.resolve_sequence(seq, now_ms) { ... 
 
 两条路径对同一个 gap 都会产生动作：`detect_forward_gap` 在 gap 首次出现时发初始 NACK，`maybe_run_nack_maintenance` 在后续每个包到达时重新扫描并驱动重试。`nack_scheduler` 的去重逻辑（`observe_missing_sequences_with_policy` 对已在 pending 中的序列号不重复插入）是防止重复发 NACK 的唯一屏障。OOS 包到达时，`detect_forward_gap` 不会产生 gap（因为 seq < last_highest），但 `maybe_run_nack_maintenance` 仍会扫描到 `last_consecutive` 之后的所有 gap，包括这个 OOS 包之前的 gap。
 
-#### 缺口
+#### 待优化项
 
 **1. `skip_last_n` 是静态参数，不感知网络乱序程度**
 
@@ -250,52 +194,6 @@ if let Some(resolved) = self.nack_scheduler.resolve_sequence(seq, now_ms) { ... 
   - 真正的风险不在于单帧包数，而在于 `last_consecutive` 停滞时窗口被 gap 撑满（见缺口 4）
 - **影响**：内存固定（1KB），不随分辨率变化，当前参数下不是主要问题
 - **严重程度**：低优先级，当前参数下不太可能成为瓶颈
-
-#### 改造完成
-
-**缺口 2：`add()` 已返回完整的 `NackWindowAddOutcome`**
-
-`add()` 的返回类型从 `()` 改为 `NackWindowAddOutcome`，包含以下字段：
-
-| 字段 | 语义 |
-|------|------|
-| `is_oos` | 是否乱序包 |
-| `oos_distance_from_end` | OOS 包距当前最高序列号的距离 |
-| `advanced_last_consecutive` | 是否推进了 `last_consecutive` |
-| `overflow_advanced` | 是否触发了窗口溢出强制推进 |
-| `opened_gap` | 新开的 gap 区间 |
-| `closed_gap` | 被填上的 gap 区间 |
-| `overflow_pruned_range` | 溢出时被放弃的序列号区间 |
-
-`on_nack_window_add_outcome` 消费这个返回值：OOS 事件更新 `oos_event_count`、`recent_oos_active_until_ms`、`frame_oos_flags`，并通过 `update_dynamic_nack_skip_last_n` 动态调整 `nack_skip_last_n`；溢出事件触发 `prune_pending_nack_for_window_range` 清理对应区间的 pending NACK，避免对已无意义的序列号持续重试。
-
-**缺口 1：`skip_last_n` 已支持动态调整**
-
-`nack_skip_last_n` 不再是硬编码常量，而是由 `update_dynamic_nack_skip_last_n` 根据 `recent_oos_depths` 滑动窗口动态计算。OOS 包到达时，其距离 `end` 的偏移量被记录到 `recent_oos_depths`（容量上限 `OOS_DEPTH_WINDOW_CAPACITY`），`update_dynamic_nack_skip_last_n` 取窗口内的统计值更新 `nack_skip_last_n`，使其自适应当前网络的乱序深度。
-
-**未改造项说明**
-
-- **缺口 3（帧级 OOS 状态追踪）**：`frame_oos_flags` 按 RTP timestamp 追踪帧级 OOS 状态，但 `nack_window` 本身仍是纯序列号级别的，不知道帧边界。speculative 不可恢复预测所需的"整帧是否进入过 OOS 路径"语义，需要在 source 层结合 RTP timestamp 映射实现，不在 `nack_window` 层解决。
-- **缺口 4（窗口溢出丢失 gap 信息）**：溢出时 `prune_pending_nack_for_window_range` 会主动清理对应区间的 pending NACK，避免无效重试，但 gap 信息本身仍然丢失。这是环形位图的结构性约束，当前 `size = 8192` 在正常场景下触发概率极低。
-- **缺口 5（窗口大小固定）**：低优先级，当前参数下不是瓶颈，未改造。
-
-#### 值得借鉴（Moonlight）
-
-**OOS 状态与 speculative 模式的联动（RtpVideoQueue.c:queuePacket）**
-
-Moonlight 在 `queuePacket` 里，每次收到 OOS 包时设置 `receivedOosData = true` 并记录时间戳，同时关闭 speculative RFI 模式。只有在 `SPECULATIVE_RFI_COOLDOWN_PERIOD_US`（5 分钟）内没有再收到 OOS 包，才重新开启 speculative 模式。
-
-这个机制的核心价值：**OOS 包的到达是网络乱序的直接证据，而乱序网络下 speculative 预测"帧不可恢复"极易误判**。我们没有等效的 OOS 状态追踪，`nack_window` 的 OOS 信息没有被传递给任何上层决策逻辑。
-
-**`missingPackets` 实时维护（RtpVideoQueue.c:RtpvAddPacket）**
-
-Moonlight 在每个包到达时实时维护 `missingPackets`：收到比当前最高序列号更高的包时 `missingPackets += gap`，收到之前缺失的包时 `missingPackets--`。这让它可以在任意时刻精确知道"当前 FEC block 还缺多少包"，从而做 speculative 预测（`missingPackets > totalPackets - neededPackets`）。
-
-我们的 `nack_window` 也维护了类似信息，但只在 `maybe_run_nack_maintenance` 被调用时才查询，不是实时的，也没有被用于 speculative 预测。
-
-**单路径 vs 双路径 gap 检测**
-
-Moonlight 是单线程同步流水线，gap 检测只有一条路径（`RtpvAddPacket` 里的 `missingPackets` 计数）。我们有两条并行路径（`detect_forward_gap` + `nack_window`），去重依赖 `nack_scheduler` 的 pending 列表。这在正常情况下工作，但在 OOS 包到达、背压丢包、`last_consecutive` 停滞等边界场景下，两条路径的状态可能出现不一致，需要 `nack_scheduler` 的去重逻辑完全兜底。
 
 ### 2.3 NACK 触发与重传调度（nack.rs / nack_scheduler.rs / nack_policy.rs）
 
@@ -386,7 +284,7 @@ cloud 模式下，所有路径的 deadline 和 max_age 都通过 `cloud_startup_
 
 结果 clamp 到 [0.25, 1.0]，用于调整 deadline 窗口（`dynamic_repair_deadline`）和 burst_count。
 
-#### 缺口
+#### 待优化项
 
 **1. `maybe_run_nack_maintenance` 只在包到达时触发，没有独立定时器**
 
@@ -409,48 +307,6 @@ cloud 模式下，所有路径的 deadline 和 max_age 都通过 `cloud_startup_
 **5. OOS 状态未被 NACK 决策路径消费**
 
 `on_nack_window_add_outcome` 在 OOS 包到达时更新了 `recent_oos_active_until_ms`、`frame_oos_flags`，并通过 `update_dynamic_nack_skip_last_n` 动态调整 `nack_skip_last_n`。**改造前**，`oos_recently_active` 和 `frame_seen_oos` 仅用于观测，不参与准入/估算决策；因此乱序网络下 repairability 可能被高估，deadline 被 `dynamic_repair_deadline` 不必要地拉长。
-
-#### 改造完成
-
-**缺口 5：OOS 状态已接入 NACK 决策（含 repairability 与准入）**
-
-`estimate_repairability` 新增两个惩罚项：
-
-- **OOS 惩罚（`OOS_REPAIRABILITY_PENALTY = 0.08`）**：当帧的 RTP timestamp 在 `frame_oos_flags` 中标记为 OOS，或 `oos_recently_active` 为 true 时，`repairability` 减 0.08。乱序网络下 deadline 窗口不再被不必要地拉长。
-- **帧头缺失惩罚（0.12）**：当帧的 RTP timestamp 在 `frame_head_missing_flags` 中标记，或 `head_missing_recently_active` 为 true 时，`repairability` 减 0.12。帧头丢失的帧修复价值更低，deadline 窗口相应收窄。
-
-这两个惩罚项与现有的 `burst_penalty`、`late_penalty`、`missing_penalty`、`waiting_penalty`、`window_penalty` 叠加，最终结果 clamp 到 [0.25, 1.0]。
-
-同时，OOS 信号还在 `with_cloud_latency_admission_policy` 中直接参与准入：非 keyframe 场景会下调 `priority`，且在 `LowValue + delta` 条件下可将 `nack_disposition` 从 `Attempted` 降级为 `SkippedLowValue`（保留 `prefers_chain_broken` 的优先语义）。因此 OOS 已不再只是日志或 repairability 侧信号。
-
-**缺口 4（帧头丢失通知 NACK 层）：已通过 `mark_frame_head_missing_signal` 实现**
-
-`sample_builder` 检测到 `!is_partition_head` 时，source 层调用 `mark_frame_head_missing_signal(rtp_timestamp)` 记录该帧的帧头缺失信号，同时更新 `recent_head_missing_active_until_ms` 和 `jitter_head_missing_signal_count`。这个信号被 `estimate_repairability` 消费（见上），使 NACK 层能感知帧头丢失并相应调整修复策略。
-
-**未改造项说明**
-
-- **缺口 1（无独立定时器）**：`recv_frame_inner` 的 `tokio::time::timeout(read_timeout, rx.recv())` 把等待时间限制在 `nack_maintenance_timeout`（最多 10ms），保证 NACK tick 不被阻塞。这不是独立定时器，但在实践中已将最大延迟控制在 10ms 以内，与独立定时器的效果接近。
-- **缺口 2（rtpGap vs rtpWindow deadline 不一致）**：未改造。首次插入优先的语义是有意为之（`rtpGap` 的激进参数用于快速响应），后续 `rtpWindow` 的宽松 deadline 不覆盖已有条目。这个行为在当前参数下是可接受的权衡。
-- **缺口 3（sampleLoss 序列号反查精度）**：未改造。结构性限制，需要帧级精确序列号范围才能根本解决，留待后续。
-- **缺口 4（keyframe 请求重试耗尽后永久阻塞）**：未改造。8 次重试耗尽后 `waiting_for_recovery_keyframe` 仍为 true 但不再发请求，属于已知风险，留待后续增加兜底机制。
-
-#### 值得借鉴（Moonlight）
-
-Moonlight 的 NACK 相关策略建立在两个我们不具备的前提上：**每帧包数（`bufferDataPackets`）和冗余包数（`bufferParityPackets`）在帧头里已知**，以及 **FEC 恢复是同步完成的**。这使得它可以在包到达时实时维护 `missingPackets` 计数，并在任意时刻精确判断"这帧还能不能恢复"。我们的 RTX 是事后补发，没有前置冗余，也没有帧级包数声明，以下机制因此不适用：
-
-- **speculative RFI**（`missingPackets > totalPackets - neededPackets` 时提前通知服务端帧丢失）：依赖精确的 FEC 容量上限，我们没有等效信息
-- **`receivedOosData` 冷却**：附属于 speculative 预测，用于防止乱序包到达后误判帧不可恢复；我们没有 speculative 预测，这个冷却没有对应场景
-- **`useFastQueuePath` 帧级路径锁定**：解决 FEC 序列号对齐问题，我们的 `sample_builder` 基于 RTP timestamp，不存在这个问题
-
-**真正值得参考的是两个设计思路：**
-
-**`waitingForNextSuccessfulFrame` 节流（VideoDepacketizer.c）**
-
-Moonlight 在帧丢失后设置 `waitingForNextSuccessfulFrame = true`，等到下一个完整帧到达 depacketizer 的 lastPacket 处理时才清除，避免网络不稳定时频繁发请求加剧拥塞。我们的 `should_soft_request_recovery_keyframe` 在有干净锚点且输出正常时走 soft request（不阻塞），否则走 hard request，在语义上覆盖了这个场景。
-
-**`consecutiveFrameDrops` 兜底（VideoDepacketizer.c）**
-
-连续丢帧达到上限时强制发 IDR 请求并重置计数，作为所有恢复路径都失败后的最终保障。我们有类似机制：`maybe_retry_waiting_recovery_keyframe` 在 700ms 后开始重试，每 450ms 一次，最多 8 次。但 8 次耗尽后进入永久阻塞（见缺口 4），Moonlight 的 `consecutiveFrameDrops` 则会持续计数并在每次达到上限时重置重试，没有总次数上限。
 
 ### 2.4 Jitter Buffer 与帧重组（sample_builder）
 
@@ -509,7 +365,7 @@ self.sample_builder = build_sample_builder(self.max_late_packets, self.jitter_bu
 2. 尝试 `sample_builder.pop()`，有帧则进入帧处理路径
 3. 无帧则 `tokio::time::timeout(read_timeout, rx.recv())`，`read_timeout` 由 `nack_maintenance_timeout` 限制为最多 10ms（保证 NACK tick 不被阻塞）
 
-#### 缺口
+#### 待优化项
 
 **1. 正常路径固有延迟：必须等下一帧第一个包**
 
@@ -530,24 +386,6 @@ self.sample_builder = build_sample_builder(self.max_late_packets, self.jitter_bu
 **4. 帧头丢失时整段丢弃，没有通知 NACK 层**
 
 `build_sample` 检测到 `!is_partition_head` 时，直接丢弃 `consume` 区间的所有包并累加 `dropped_packets`，但不会触发任何 NACK 请求。这些包的序列号已经被 `nack_window` 标记为已收到（因为它们确实到达了），所以 `maybe_run_nack_maintenance` 也不会为它们发 NACK。实际上丢失的是帧头包，但 NACK 层对此无感知。
-
-#### 改造完成
-
-**缺口 4（帧头丢失静默丢弃）：已通过 `mark_frame_head_missing_signal` 向上层传递语义**
-
-`sample_builder` 检测到 `!is_partition_head` 时，source 层现在调用 `mark_frame_head_missing_signal(rtp_timestamp)` 显式记录帧头缺失事件，不再只是静默累加 `dropped_packets`。这个信号被 NACK 层的 `estimate_repairability` 消费（见 2.3 节改造完成），使"帧头丢失"和"帧中间丢包"在修复策略上得到区分对待。
-
-**未改造项说明**
-
-- **缺口 1（固有延迟）**：`SampleBuilder` 等待下一帧第一个包的设计约束，不在本层解决。
-- **缺口 2（purge_buffers 触发时机不可控）**：`too_old` 基于 timestamp 跨度而非挂钟时间的行为是第三方库的设计，不在本层改造范围内。
-- **缺口 3（prev_dropped_packets 跨帧累积）**：结构性限制，是 2.3 节缺口 3（sampleLoss 序列号反查精度）的根因之一，留待后续统一解决。
-
-#### 值得借鉴（Moonlight）
-
-Moonlight 没有独立的 jitter buffer 层。`RtpvAddPacket` 完成 FEC 恢复后，`stageCompleteFecBlock` 把包按序列号排列到 `completedFecBlockList`，再由 `submitCompletedFrame` 逐包提交给 `VideoDepacketizer`。整个过程是同步的，没有等待窗口——FEC 凑够了就立刻产帧，凑不够就等下一个包或判定不可恢复。我们的 `SampleBuilder` 等待下一帧第一个包的固有延迟，在 Moonlight 的同步模型里不存在。这是架构差异，没有直接可借鉴的实现。
-
-**帧头丢失的处理方式**值得参考：Moonlight 在 `VideoDepacketizer.c` 里检测到帧头缺失时，会调用 `dropFrameState` 并设置 `waitingForIdrFrame`，明确触发恢复流程。我们的 `sample_builder` 在帧头丢失时只是静默丢弃并累加计数，没有向上层传递"帧头丢失"这个语义，上层只能通过 `prev_dropped_packets > 0` 间接感知，无法区分"帧头丢失"和"帧中间丢包"这两种需要不同处理策略的情况。
 
 ### 2.5 帧准入与恢复决策（source.rs）
 
@@ -612,7 +450,7 @@ Healthy ──gap出现──→ Repairing ──gap过期/chain broken──→
                                                           ↓
                                                       Recovering
                                                           ↓
-                                              on_clean_keyframe_ingress（干净IDR）
+                                              on_clean_anchor_ingress（干净IDR）
                                                           ↓
                                                   SustainingRecovery
                                                           ↓
@@ -630,9 +468,9 @@ Healthy ──gap出现──→ Repairing ──gap过期/chain broken──→
 - `chain_state == Broken`
 - gaps 里有 `severity == Hard` 且未 Resolved/Expired 的条目
 - `frame_recovery_ledger` 里有 `UnrecoverableReferenceChain` 条目
-- `chain_debt_reason` 是 hard recovery reason（`awaitingRecoveryKeyframe`、`referenceChainUnrecoverable`、`bootstrapMissingSps` 等）
+- `chain_debt_reason` 是 hard recovery reason（`awaitingRecoveryAnchor`、`referenceChainUnrecoverable`、`bootstrapMissingSps` 等）
 
-gap 的 `severity` 由 `classify_gap` 决定：reference/keyframe 帧的 gap 为 Hard，匿名 delta gap 且 close_reason 为 `awaitingRecoveryKeyframe` 也为 Hard，其余为 Soft。
+gap 的 `severity` 由 `classify_gap` 决定：reference/keyframe 帧的 gap 为 Hard，匿名 delta gap 且 close_reason 为 `awaitingRecoveryAnchor` 也为 Hard，其余为 Soft。
 
 **`sample_loss_burst_count` 与 `repairability` 的联动**
 
@@ -647,7 +485,7 @@ gap 的 `severity` 由 `classify_gap` 决定：reference/keyframe 帧的 gap 为
 - `h264`（`H264AccessUnitInspection`，供下游解码器使用）
 - `assembled_at`（`Instant`，用于延迟测量）
 
-#### 缺口
+#### 待优化项
 
 **1. `DropAndRequestKeyframe` 路径下 `observe_sample_loss_and_nack` 返回 false 时无 keyframe 请求**
 
@@ -660,44 +498,3 @@ gap 的 `severity` 由 `classify_gap` 决定：reference/keyframe 帧的 gap 为
 **3. `resolve_recovery_keyframe_action` 的返回值第一项含义需要澄清**
 
 函数签名返回 `(bool, RecoveryKeyframeAction)`，第一项是 `next_waiting_for_recovery_keyframe`。对于 `DropAndRequestKeyframe` 和 `Submit` 分支，返回值第一项均为 `false`——这意味着这两个分支都会清除 `waiting_for_recovery_keyframe` 状态。特别是 `DropAndRequestKeyframe` 分支（`is_keyframe && media_dropped_packets > 0` 或 `media_dropped_packets > 0`），清除状态后帧被丢弃，但 `waiting_for_recovery_keyframe` 已经是 false，后续 delta 帧不会被阻塞，只依赖 `observe_sample_loss_and_nack` 触发的 NACK 和 chain broken 路径来重新进入等待状态。这个行为是有意为之（decoder safety 职责与恢复升级职责分离），但在 NACK 层未能找到缺失序列号时（缺口 1），可能导致恢复流程完全缺失。
-
-#### 改造完成
-
-**缺口 3（`resolve_recovery_keyframe_action` 返回值语义）：已澄清，行为有意为之**
-
-`DropAndRequestKeyframe` 和 `Submit` 分支均返回 `(false, action)`，清除 `waiting_for_recovery_keyframe` 状态。这是 decoder safety 职责与恢复升级职责分离的有意设计：source 层只负责判断"这帧能不能喂给解码器"，恢复升级（重新进入等待状态）由 `observe_sample_loss_and_nack` 触发的 chain broken 路径负责。两层职责边界清晰，不需要修改。
-
-**未改造项说明**
-
-- **缺口 1（`observe_sample_loss_and_nack` 返回 false 时无 keyframe 请求）**：`handle_drop_and_request_keyframe_action` 在 `observe_sample_loss_and_nack` 返回 false 时仍会通过 `request_recovery_keyframe_from_source` 触发 keyframe 请求，不存在完全缺失的情况。原缺口描述的场景（NACK 层找不到序列号且无 keyframe 请求）在当前实现中已被兜底，但 `PacketLossDetected` 信号的上报语义仍然只是观测，不直接触发恢复动作，这个语义边界是有意为之的。
-- **缺口 2（`SustainingRecovery` 对解码器反馈的利用）**：已部分改造。`decoder_feedback_allows_sustaining_exit` 已接入 `can_exit_sustaining_recovery` 门控：若检测到 decoder/renderer stall，或最近 decode-ok 超过新鲜度窗口（300ms），则不允许按稳定窗口退出 sustaining。当前仍未形成完整闭环（例如缺少更细粒度失败分类与跨层回传），后续可继续增强。
-
-## 3. 章节完成状态清单（逐节）
-
-| 小节 | 结论 | 说明 |
-|------|------|------|
-| 2.1 包入口与优先级分类 | 部分完成 | 缺口 3、5 已完成；缺口 1/2/4/6/7 仍未改造 |
-| 2.2 序列号追踪与 OOS 检测 | 部分完成 | 缺口 1、2 已完成；缺口 3/4/5 仍保留结构性约束 |
-| 2.3 NACK 触发与重传调度 | 部分完成 | OOS 与帧头缺失信号已接入 repairability 与准入；缺口 1/2/3/4 未改造 |
-| 2.4 Jitter Buffer 与帧重组 | 部分完成 | 缺口 4 已完成；缺口 1/2/3 受第三方库与结构约束未改造 |
-| 2.5 帧准入与恢复决策 | 部分完成 | 缺口 1、3 已澄清/兜底；缺口 2 为部分改造（已接入 decode 健康门控，未完全闭环） |
-
-## 4. 全局语义一致性评审结论
-
-- **术语一致性（已对齐）**：`frame_importance` 统一定义为策略层标签（字符串），不是帧结构体字段；文档中的帧实体以 `FrameValue` 与 `FrameBudgetContext` 为主语义载体。
-- **跨层重名风险（需显式区分）**：`FrameValue` 在 `media::video::types` 与 `recovery::contract` 存在不同语义，跨节引用时应带命名空间或上下文限定。
-- **OOS 信号消费链（已闭环到策略层）**：OOS 不仅影响 `estimate_repairability`，还影响 `with_cloud_latency_admission_policy` 的优先级和 `SkippedLowValue` 降级判定，语义与“乱序时降低低价值修复投入”一致。
-- **Ingress backlog 语义（已与统计对齐）**：`DropBacklogIncoming`（丢新帧）与 `DropBacklogEvictQueued`（队内替换）已拆分，统计与观测可区分真实丢帧和替换行为。
-- **残余风险（仍需后续）**：`waiting_for_recovery_keyframe` 重试耗尽后的兜底、sampleLoss 反查精度、以及部分恢复闭环仍有结构性限制，当前文档已按“部分完成/未改造”标注。
-
-#### 值得借鉴（Moonlight）
-
-Moonlight 的帧准入逻辑在 `VideoDepacketizer.c` 里，与我们的结构最接近。核心差异：
-
-**Moonlight 的帧准入是流式的，我们的是批量的**
-
-Moonlight 逐包处理，在 `processRtpPayload` 里实时判断每个 NAL 的类型和帧边界，一旦检测到帧头缺失或 streamPacketIndex 不连续，立即调用 `dropFrameState`。我们在 `sample_builder.pop()` 之后才能看到完整帧，无法在包级别做早期拒绝。
-
-**`waitingForNextSuccessfulFrame` 的语义比我们的 `SustainingRecovery` 更保守**
-
-Moonlight 在帧序号不连续时设置 `waitingForNextSuccessfulFrame = true`，在 depacketizer 处理到下一个完整帧的最后一个包（`lastPacket`）时清除——即帧完整到达 depacketizer 即可，不等 `submitDecodeUnit` 的解码结果。我们的 `SustainingRecovery` 在干净 IDR 进入后就允许 delta 帧通过，语义上与此相近，但 `SustainingRecovery` 的退出条件（≥2 帧 + ≥120ms）不感知解码器状态（见缺口 2）。

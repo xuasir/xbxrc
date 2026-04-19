@@ -88,14 +88,14 @@ pub struct AssembledVideoFrame {
 
     pub assembled_at: Instant,
     /// 物化阶段计算 target playout 的时间基准，优先取首包到达时刻。
-    pub playout_base_at: Option<Instant>,
+    pub first_packet_arrived_at: Option<Instant>,
 
     pub h264: H264AccessUnitInspection,
     pub payload: Bytes,
 }
 
 impl AssembledVideoFrame {
-    pub fn into_encoded_frame(self, target_playout_time: Instant) -> EncodedFrame {
+    pub fn into_encoded_frame(self, target_playout_instant: Instant) -> EncodedFrame {
         EncodedFrame {
             codec: self.codec,
             is_keyframe: self.is_keyframe,
@@ -108,7 +108,7 @@ impl AssembledVideoFrame {
             frame_playout_deadline_at_ms: self.frame_playout_deadline_at_ms,
             frame_recovery_disposition: self.frame_recovery_disposition,
             frame_unrecoverable_reason: self.frame_unrecoverable_reason,
-            target_playout_time,
+            target_playout_instant,
             h264: self.h264,
             payload: self.payload,
         }
@@ -132,7 +132,7 @@ pub struct EncodedFrame {
     pub frame_recovery_disposition: FrameRecoveryDisposition,
     pub frame_unrecoverable_reason: Option<String>,
 
-    pub target_playout_time: Instant,
+    pub target_playout_instant: Instant,
 
     pub h264: H264AccessUnitInspection,
     pub payload: Bytes,

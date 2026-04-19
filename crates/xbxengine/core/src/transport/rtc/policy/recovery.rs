@@ -1,4 +1,5 @@
 use crate::api::backend::XbxEngineRecoveryDecisionLedgerObservation;
+use crate::transport::rtc::recovery::contract::CoalescingMode;
 use crate::transport::rtc::recovery::escalation::{
     RecoveryAction, RecoveryActionBudgetState, VideoEscalationController, VideoEscalationDecision,
     VideoEscalationReason,
@@ -14,6 +15,10 @@ pub(crate) struct RecoveryPolicyProposal {
     pub(crate) reconnect_gate_detail: Option<String>,
     pub(crate) budget_before: RecoveryActionBudgetState,
     pub(crate) budget_after: RecoveryActionBudgetState,
+    // Coalescing 语义（从 CoordinatorProposal 传递）
+    pub(crate) coalescing_mode: Option<CoalescingMode>,
+    pub(crate) unlock_reason: Option<String>,
+    pub(crate) preempt_reason: Option<String>,
 }
 
 impl RecoveryPolicyProposal {
@@ -178,6 +183,7 @@ mod tests {
             action_selected: RecoveryAction::CooldownSuppressed.label().to_string(),
             frame_value: None,
             gap_severity: None,
+            repairability: None,
             recovery_episode_stage: None,
             recovery_episode_progress_at_ms: None,
             coalescing_mode: None,

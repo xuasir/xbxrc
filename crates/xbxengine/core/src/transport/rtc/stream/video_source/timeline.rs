@@ -193,7 +193,7 @@ impl VideoTimelineState {
         }
     }
 
-    pub(super) fn waiting_for_recovery_keyframe(&self) -> bool {
+    pub(super) fn chain_requires_recovery_anchor(&self) -> bool {
         matches!(
             self.chain_state,
             ChainState::Broken | ChainState::Recovering
@@ -207,7 +207,7 @@ impl VideoTimelineState {
     pub(super) fn apply_wait_keyframe_gate(&mut self, waiting: bool) {
         if waiting {
             self.has_chain_debt = true;
-            self.chain_debt_reason = Some("awaitRecoveryKeyframe".to_string());
+            self.chain_debt_reason = Some("awaitRecoveryAnchor".to_string());
             self.reset_stable_recovery_gate();
             self.chain_state = ChainState::Recovering;
             return;
@@ -225,7 +225,7 @@ impl VideoTimelineState {
 
     pub(super) fn on_admission_await_recovery_keyframe(&mut self, reason: Option<&'static str>) {
         self.has_chain_debt = true;
-        self.chain_debt_reason = Some(reason.unwrap_or("awaitingRecoveryKeyframe").to_string());
+        self.chain_debt_reason = Some(reason.unwrap_or("awaitingRecoveryAnchor").to_string());
         self.reset_stable_recovery_gate();
         self.chain_state = ChainState::Recovering;
     }
@@ -263,7 +263,7 @@ impl VideoTimelineState {
 
     pub(super) fn on_recovery_keyframe_requested(&mut self) {
         if self.chain_debt_reason.is_none() {
-            self.chain_debt_reason = Some("awaitRecoveryKeyframe".to_string());
+            self.chain_debt_reason = Some("awaitRecoveryAnchor".to_string());
         }
         self.reset_stable_recovery_gate();
         self.chain_state = ChainState::Recovering;
@@ -287,7 +287,7 @@ impl VideoTimelineState {
     }
 
     /// 组装出干净 IDR 后的本地 sustaining 语义；全局 `video_anchor_clean_*` 须在 decode/present 推进后再提交。
-    pub(super) fn on_clean_keyframe_ingress(
+    pub(super) fn on_clean_anchor_ingress(
         &mut self,
         anchor_rtp_timestamp: u32,
         observed_at_ms: f64,
@@ -313,7 +313,7 @@ impl VideoTimelineState {
     }
 
     /// source 侧在写完 anchor ledger 后调用，与 [`on_clean_anchor_stats_committed`] 等价。
-    pub(super) fn on_clean_keyframe_submitted(&mut self) {
+    pub(super) fn on_clean_anchor_submitted(&mut self) {
         self.on_clean_anchor_stats_committed();
     }
 
@@ -367,20 +367,20 @@ impl VideoTimelineState {
     pub(super) fn abandon_clean_anchor_pipeline_pending(&mut self) {
         let has_committed_ledger = self.latest_anchor_candidate.as_ref().is_some_and(|c| {
             c.state == XbxEngineAnchorCandidateState::SubmittedCleanAnchor
-                && c.source_event == "chain-clean-keyframe-submitted"
+                && c.source_event == "chain-clean-anchor-submitted"
         });
         self.reset_clean_anchor_ingress_window();
         if !has_committed_ledger && self.chain_state == ChainState::SustainingRecovery {
-            self.on_sustaining_recovery_failed("awaitRecoveryKeyframe");
+            self.on_sustaining_recovery_failed("awaitRecoveryAnchor");
         }
     }
 
     pub(super) fn on_timeout_detected(&mut self) {
         if self.chain_state == ChainState::SustainingRecovery {
-            self.on_sustaining_recovery_failed("awaitRecoveryKeyframe");
+            self.on_sustaining_recovery_failed("awaitRecoveryAnchor");
             return;
         }
-        if self.waiting_for_recovery_keyframe() {
+        if self.chain_requires_recovery_anchor() {
             return;
         }
         self.reset_stable_recovery_gate();
@@ -596,7 +596,7 @@ impl VideoTimelineState {
                 None,
             );
             if !has_pending_gap {
-                if self.waiting_for_recovery_keyframe()
+                if self.chain_requires_recovery_anchor()
                     || self.has_unrecoverable_frame_or_chain_debt()
                 {
                     if soft_reentry {
@@ -1147,10 +1147,10 @@ impl VideoTimelineState {
             evidence_importance,
             frame_rtp_timestamp,
         );
-        if self.chain_state == ChainState::SustainingRecovery && media == "delta" {
+        if self.chain_state == ChainState::SustainingRecovery && media == "disposable" {
             return false;
         }
-        if matches!(media, "reference" | "keyframe") {
+        if matches!(media, "supply" | "anchor") {
             return true;
         }
         if matches!(close_reason, Some(reason) if is_local_low_value_gap_reason(reason)) {
@@ -1160,8 +1160,8 @@ impl VideoTimelineState {
             return false;
         }
         frame_rtp_timestamp.is_none()
-            && media == "delta"
-            && matches!(close_reason, Some("awaitingRecoveryKeyframe"))
+            && media == "disposable"
+            && matches!(close_reason, Some("awaitingRecoveryAnchor"))
     }
 
     fn expired_gap_chain_break_reason(
@@ -1176,8 +1176,8 @@ impl VideoTimelineState {
             evidence_importance,
             frame_rtp_timestamp,
         );
-        if frame_rtp_timestamp.is_none() && media == "delta" {
-            if let Some(reason @ "awaitingRecoveryKeyframe") = close_reason {
+        if frame_rtp_timestamp.is_none() && media == "disposable" {
+            if let Some(reason @ "awaitingRecoveryAnchor") = close_reason {
                 return reason;
             }
         }
@@ -1261,7 +1261,7 @@ impl VideoTimelineState {
     fn arm_recovery_chain_building_phase(&mut self) {
         if let Some(candidate) = self.latest_anchor_candidate.as_ref() {
             if candidate.state == XbxEngineAnchorCandidateState::SubmittedCleanAnchor
-                && candidate.source_event == "chain-clean-keyframe-submitted"
+                && candidate.source_event == "chain-clean-anchor-submitted"
             {
                 self.recovery_chain_building_deadline_ms =
                     Some(candidate.observed_at_ms + RECOVERY_CHAIN_BUILDING_PHASE_MAX_MS);
@@ -1279,7 +1279,7 @@ impl VideoTimelineState {
         now_ms: f64,
         frame_importance: &'static str,
     ) -> bool {
-        if frame_importance != "delta" {
+        if frame_importance != "disposable" {
             return false;
         }
         self.refresh_recovery_chain_building_phase(now_ms);
@@ -1294,7 +1294,7 @@ impl VideoTimelineState {
                 .as_ref()
                 .is_some_and(|candidate| {
                     candidate.state == XbxEngineAnchorCandidateState::SubmittedCleanAnchor
-                        && candidate.source_event == "chain-clean-keyframe-submitted"
+                        && candidate.source_event == "chain-clean-anchor-submitted"
                         && candidate.observed_at_ms <= now_ms
                         && (now_ms - candidate.observed_at_ms).max(0.0)
                             <= RECOVERY_CHAIN_BUILDING_PHASE_MAX_MS
@@ -1305,7 +1305,7 @@ impl VideoTimelineState {
         let waiting_like_debt = self.chain_debt_reason.as_deref().is_none_or(|reason| {
             matches!(
                 reason,
-                "awaitRecoveryKeyframe" | "awaitingRecoveryKeyframe" | "inspectionRejectNonIdrVcl"
+                "awaitRecoveryAnchor" | "awaitingRecoveryAnchor" | "inspectionRejectNonIdrVcl"
             )
         });
         if !waiting_like_debt {
@@ -1330,10 +1330,10 @@ impl VideoTimelineState {
         frame_importance: &'static str,
         close_reason: Option<&'static str>,
     ) -> bool {
-        if !matches!(close_reason, Some("awaitingRecoveryKeyframe")) {
+        if !matches!(close_reason, Some("awaitingRecoveryAnchor")) {
             return false;
         }
-        if self.chain_state == ChainState::SustainingRecovery && frame_importance == "delta" {
+        if self.chain_state == ChainState::SustainingRecovery && frame_importance == "disposable" {
             return true;
         }
         self.recovery_chain_building_phase_active(now_ms, frame_importance)
@@ -1344,7 +1344,7 @@ impl VideoTimelineState {
         now_ms: f64,
         frame_importance: &'static str,
     ) -> bool {
-        if self.chain_state == ChainState::SustainingRecovery && frame_importance == "delta" {
+        if self.chain_state == ChainState::SustainingRecovery && frame_importance == "disposable" {
             return true;
         }
         self.recovery_chain_building_phase_active(now_ms, frame_importance)
@@ -1452,7 +1452,7 @@ impl VideoTimelineState {
         }
         match self.chain_state {
             ChainState::Broken => Some("referenceChainUnrecoverable".to_string()),
-            ChainState::Recovering => Some("awaitRecoveryKeyframe".to_string()),
+            ChainState::Recovering => Some("awaitRecoveryAnchor".to_string()),
             ChainState::SustainingRecovery => Some("recoverySustaining".to_string()),
             ChainState::Repairing => Some("gapRepairInFlight".to_string()),
             ChainState::Stalled => Some("streamStalled".to_string()),
@@ -1469,14 +1469,14 @@ fn merge_importance_lane(prev: &'static str, incoming: &'static str) -> &'static
     }
 }
 
-/// 媒体因果 importance：匿名缺洞不把预算 reference/keyframe 当作硬参考。
+/// 媒体因果 importance：匿名缺洞不把预算 supply/anchor 当作硬参考。
 fn effective_media_importance_for_gap(
     budget: &'static str,
     evidence: &'static str,
     frame_rtp_timestamp: Option<u32>,
 ) -> &'static str {
     if frame_rtp_timestamp.is_none() {
-        return "delta";
+        return "disposable";
     }
     if evidence != "unknown" {
         evidence
@@ -1497,12 +1497,12 @@ fn expired_gap_chain_break_evidence(
         frame_rtp_timestamp,
     );
     if frame_rtp_timestamp.is_none()
-        && media == "delta"
-        && matches!(close_reason, Some("awaitingRecoveryKeyframe"))
+        && media == "disposable"
+        && matches!(close_reason, Some("awaitingRecoveryAnchor"))
     {
         return "anonymousAwaitingKeyframeDelta";
     }
-    if matches!(media, "reference" | "keyframe") {
+    if matches!(media, "supply" | "anchor") {
         return "boundMediaLikeGapExpired";
     }
     "genericGapExpired"
@@ -1517,7 +1517,7 @@ fn classify_gap(
     if matches!(state, GapState::RepairInFlight) {
         return (
             GapProvenance::Repair,
-            if matches!(media_importance, "reference" | "keyframe") {
+            if matches!(media_importance, "supply" | "anchor") {
                 TimelineGapHardness::Hard
             } else {
                 TimelineGapHardness::Soft
@@ -1529,10 +1529,10 @@ fn classify_gap(
     }
     (
         GapProvenance::NetworkOrUnknown,
-        if matches!(media_importance, "reference" | "keyframe")
+        if matches!(media_importance, "supply" | "anchor")
             || (frame_rtp_timestamp.is_none()
-                && media_importance == "delta"
-                && matches!(close_reason, Some("awaitingRecoveryKeyframe")))
+                && media_importance == "disposable"
+                && matches!(close_reason, Some("awaitingRecoveryAnchor")))
         {
             TimelineGapHardness::Hard
         } else {
@@ -1555,8 +1555,8 @@ fn is_hard_recovery_reason(reason: &str) -> bool {
     !is_local_low_value_gap_reason(reason)
         && matches!(
             reason,
-            "awaitingRecoveryKeyframe"
-                | "awaitRecoveryKeyframe"
+            "awaitingRecoveryAnchor"
+                | "awaitRecoveryAnchor"
                 | "referenceChainUnrecoverable"
                 | "inspectionError"
                 | "inspectionRejectNoVcl"
@@ -1574,24 +1574,24 @@ mod inline_recovery_tests {
     #[test]
     fn resolved_hard_gap_no_longer_keeps_hard_recovery_risk() {
         let mut state = VideoTimelineState::new();
-        state.mark_gap_reorder_pending(&[501], 1.0, Some(90_001), "reference", "reference");
+        state.mark_gap_reorder_pending(&[501], 1.0, Some(90_001), "supply", "supply");
         assert!(state.has_hard_recovery_risk_for_test());
 
-        state.mark_gap_resolved(501, 2.0, Some(90_001), "reference", "reference");
+        state.mark_gap_resolved(501, 2.0, Some(90_001), "supply", "supply");
         assert!(!state.has_hard_recovery_risk_for_test());
     }
 
     #[test]
     fn clean_anchor_retires_pre_anchor_hard_debt() {
         let mut state = VideoTimelineState::new();
-        state.on_admission_await_recovery_keyframe(Some("awaitingRecoveryKeyframe"));
-        state.mark_gap_reorder_pending(&[601], 1.0, Some(90_001), "reference", "reference");
+        state.on_admission_await_recovery_keyframe(Some("awaitingRecoveryAnchor"));
+        state.mark_gap_reorder_pending(&[601], 1.0, Some(90_001), "supply", "supply");
         assert!(state.has_hard_recovery_risk_for_test());
 
-        state.on_clean_keyframe_ingress(90_050, 2.0);
+        state.on_clean_anchor_ingress(90_050, 2.0);
 
         assert_eq!(state.chain_state(), ChainState::SustainingRecovery);
-        assert!(!state.waiting_for_recovery_keyframe());
+        assert!(!state.chain_requires_recovery_anchor());
         assert!(!state.has_hard_recovery_risk_for_test());
     }
 }

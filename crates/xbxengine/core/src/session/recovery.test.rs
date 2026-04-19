@@ -260,6 +260,63 @@ fn recovery_signals_request_reconnect_on_pipeline_stall_even_with_fresh_packets(
 }
 
 #[test]
+fn expired_max_age_is_treated_as_recent_nack_failure() {
+    let now_ms = 10_000.0;
+    let action = XbxEngineRuntimeHealth {
+        connected_at_ms: Some(1_000.0),
+        ..Default::default()
+    }
+    .next_recovery_action_with_signals(
+        now_ms,
+        true,
+        XbxEngineRecoverySignals {
+            transport: XbxEngineTransportSignal {
+                transport_connected: true,
+                connected_at_ms: Some(1_000.0),
+                latest_video_packet_arrival_at_ms: Some(now_ms - 2_000.0),
+                latest_nack_expired_at_ms: Some(now_ms - 50.0),
+                latest_nack_expired_frame_is_keyframe: true,
+                ..Default::default()
+            },
+            media: XbxEngineMediaSignal {
+                latest_frame_decoded_at_ms: Some(now_ms - 5_000.0),
+                latest_frame_presented_at_ms: Some(now_ms - 5_000.0),
+            },
+            decode_render: XbxEngineDecodeRenderSignal::default(),
+        },
+    );
+    assert_eq!(action, Some(XbxEngineRecoveryAction::RequestVideoKeyframe));
+}
+
+#[test]
+fn recovered_late_still_counts_as_recent_nack_recovery() {
+    let now_ms = 10_000.0;
+    let action = XbxEngineRuntimeHealth {
+        connected_at_ms: Some(1_000.0),
+        ..Default::default()
+    }
+    .next_recovery_action_with_signals(
+        now_ms,
+        true,
+        XbxEngineRecoverySignals {
+            transport: XbxEngineTransportSignal {
+                transport_connected: true,
+                connected_at_ms: Some(1_000.0),
+                latest_video_packet_arrival_at_ms: Some(now_ms - 3_000.0),
+                latest_nack_recovered_at_ms: Some(now_ms - 40.0),
+                ..Default::default()
+            },
+            media: XbxEngineMediaSignal {
+                latest_frame_decoded_at_ms: Some(now_ms - 5_000.0),
+                latest_frame_presented_at_ms: Some(now_ms - 5_000.0),
+            },
+            decode_render: XbxEngineDecodeRenderSignal::default(),
+        },
+    );
+    assert_eq!(action, None);
+}
+
+#[test]
 fn recovery_config_override_changes_keyframe_trigger_threshold() {
     let health = XbxEngineRuntimeHealth {
         connected_at_ms: Some(1_000.0),

@@ -74,7 +74,7 @@ impl VideoEscalationReason {
         match self {
             Self::LifecycleRecovering => "rtcConnectionRecovering",
             Self::WaitKeyframe => "waitKeyframe",
-            Self::TransportAwaitRecoveryKeyframe => "transportAwaitRecoveryKeyframe",
+            Self::TransportAwaitRecoveryKeyframe => "transportAwaitRecoveryAnchor",
             Self::DisplaySupplyCritical => "displaySupplyCritical",
             Self::Reconfigure => "reconfigure",
             Self::DecoderBackendFailure => "decoderBackendFailure",
@@ -112,7 +112,7 @@ impl VideoEscalationReason {
             | "ingressFrameAbandoned"
             | "waitKeyframeEntered"
             | "frameAbandoned" => Some(Self::WaitKeyframe),
-            "transportAwaitRecoveryKeyframe"
+            "transportAwaitRecoveryAnchor"
             | "bootstrapMissingSps"
             | "bootstrapMissingPps"
             | "inspectionRejectInvalidSliceHeader" => Some(Self::TransportAwaitRecoveryKeyframe),
@@ -232,33 +232,6 @@ pub struct VideoEscalationDecision {
 }
 
 /// `RecoveryCoordinator` 可能在 `on_reason_with_epoch_policy` 之后把决策压成 WaitForBurst /
-/// Coalesced* / CooldownSuppressed；此处快照用于回滚 burst 相关可变状态，避免“未执行动作仍吃掉计数”。
-#[derive(Clone, Copy, Debug)]
-pub(crate) struct VideoEscalationBurstRollbackSnapshot {
-    pub(crate) pending_keyframe_signals: u8,
-    pub(crate) pending_decoder_reset_signals: u8,
-    pub(crate) reconnect_candidate_signals: u8,
-    pub(crate) last_keyframe_request_at: Option<Instant>,
-    pub(crate) last_decoder_reset_at: Option<Instant>,
-    pub(crate) last_severe_deadline_at: Option<Instant>,
-    pub(crate) last_keyframe_signal_at: Option<Instant>,
-    pub(crate) last_decoder_reset_signal_at: Option<Instant>,
-    pub(crate) last_keyframe_reason_class: Option<KeyframeReasonClass>,
-    pub(crate) last_decoder_reset_reason_class: Option<DecoderResetReasonClass>,
-    pub(crate) wait_keyframe_started_at: Option<Instant>,
-    pub(crate) transport_await_recovery_started_at: Option<Instant>,
-    pub(crate) transport_deadline_window_started_at: Option<Instant>,
-    pub(crate) transport_deadline_window_count: u8,
-    pub(crate) keyframe_epoch_active: bool,
-    pub(crate) keyframe_epoch_started_at: Option<Instant>,
-    pub(crate) keyframe_epoch_reason_class: Option<KeyframeReasonClass>,
-    pub(crate) keyframe_budget_reservation_active: bool,
-    pub(crate) recovery_epoch: u64,
-    pub(crate) keyframe_budget_used: u8,
-    pub(crate) decoder_reset_budget_used: u8,
-    pub(crate) reconnect_budget_used: u8,
-}
-
 impl VideoEscalationController {
     pub fn new(config: VideoEscalationConfig) -> Self {
         let cooldown = Duration::from_millis(config.cooldown_ms.max(20));
@@ -501,72 +474,6 @@ impl VideoEscalationController {
             | RecoveryAction::CoalescedDecoderResetInFlight
             | RecoveryAction::StartupGraceSuppressed => {}
         }
-    }
-
-    pub(crate) fn capture_burst_rollback_snapshot(&self) -> VideoEscalationBurstRollbackSnapshot {
-        VideoEscalationBurstRollbackSnapshot {
-            pending_keyframe_signals: self.pending_keyframe_signals,
-            pending_decoder_reset_signals: self.pending_decoder_reset_signals,
-            reconnect_candidate_signals: self.reconnect_candidate_signals,
-            last_keyframe_request_at: self.last_keyframe_request_at,
-            last_decoder_reset_at: self.last_decoder_reset_at,
-            last_severe_deadline_at: self.last_severe_deadline_at,
-            last_keyframe_signal_at: self.last_keyframe_signal_at,
-            last_decoder_reset_signal_at: self.last_decoder_reset_signal_at,
-            last_keyframe_reason_class: self.last_keyframe_reason_class,
-            last_decoder_reset_reason_class: self.last_decoder_reset_reason_class,
-            wait_keyframe_started_at: self.wait_keyframe_started_at,
-            transport_await_recovery_started_at: self.transport_await_recovery_started_at,
-            transport_deadline_window_started_at: self.transport_deadline_window_started_at,
-            transport_deadline_window_count: self.transport_deadline_window_count,
-            keyframe_epoch_active: self.keyframe_epoch_active,
-            keyframe_epoch_started_at: self.keyframe_epoch_started_at,
-            keyframe_epoch_reason_class: self.keyframe_epoch_reason_class,
-            keyframe_budget_reservation_active: self.keyframe_budget_reservation_active,
-            recovery_epoch: self.recovery_epoch,
-            keyframe_budget_used: self.keyframe_budget_used,
-            decoder_reset_budget_used: self.decoder_reset_budget_used,
-            reconnect_budget_used: self.reconnect_budget_used,
-        }
-    }
-
-    /// 回滚 burst 相关状态；**不**动 `next_observation_id`，以便与后续 `suppressed()` 链对齐。
-    pub(crate) fn restore_burst_rollback_snapshot(
-        &mut self,
-        s: VideoEscalationBurstRollbackSnapshot,
-    ) {
-        self.pending_keyframe_signals = s.pending_keyframe_signals;
-        self.pending_decoder_reset_signals = s.pending_decoder_reset_signals;
-        self.reconnect_candidate_signals = s.reconnect_candidate_signals;
-        self.last_keyframe_request_at = s.last_keyframe_request_at;
-        self.last_decoder_reset_at = s.last_decoder_reset_at;
-        self.last_severe_deadline_at = s.last_severe_deadline_at;
-        self.last_keyframe_signal_at = s.last_keyframe_signal_at;
-        self.last_decoder_reset_signal_at = s.last_decoder_reset_signal_at;
-        self.last_keyframe_reason_class = s.last_keyframe_reason_class;
-        self.last_decoder_reset_reason_class = s.last_decoder_reset_reason_class;
-        self.wait_keyframe_started_at = s.wait_keyframe_started_at;
-        self.transport_await_recovery_started_at = s.transport_await_recovery_started_at;
-        self.transport_deadline_window_started_at = s.transport_deadline_window_started_at;
-        self.transport_deadline_window_count = s.transport_deadline_window_count;
-        self.keyframe_epoch_active = s.keyframe_epoch_active;
-        self.keyframe_epoch_started_at = s.keyframe_epoch_started_at;
-        self.keyframe_epoch_reason_class = s.keyframe_epoch_reason_class;
-        self.keyframe_budget_reservation_active = s.keyframe_budget_reservation_active;
-        self.recovery_epoch = s.recovery_epoch;
-        self.keyframe_budget_used = s.keyframe_budget_used;
-        self.decoder_reset_budget_used = s.decoder_reset_budget_used;
-        self.reconnect_budget_used = s.reconnect_budget_used;
-    }
-
-    /// transport 层同族合并导致 decoder reset 未执行时，撤销上一拍对 decoder-reset burst 的计数。
-    pub(crate) fn rollback_decoder_reset_burst_after_transport_family_defer(&mut self) {
-        self.pending_decoder_reset_signals = self.pending_decoder_reset_signals.saturating_sub(1);
-    }
-
-    #[cfg(test)]
-    pub(crate) fn test_pending_decoder_reset_burst_signals(&self) -> u8 {
-        self.pending_decoder_reset_signals
     }
 
     pub fn register_reconnect_started(&mut self) {

@@ -60,6 +60,51 @@ fn runtime_state_owner_source(phase: SessionPhase) -> &'static str {
     }
 }
 
+fn should_project_recent_nack_owner_fallback(
+    stats: &XbxEngineMediaRuntimeStats,
+    now_ms: f64,
+) -> Option<VideoOwnerContract> {
+    let nack_obs = stats.latest_video_nack_observation.as_ref()?;
+    if !matches!(
+        nack_obs.action.as_str(),
+        "expiredDeadline" | "expiredMaxAge"
+    ) {
+        return None;
+    }
+    if (now_ms - nack_obs.observed_at_ms).max(0.0) > crate::session::recovery::NACK_RECENT_GRACE_MS
+    {
+        return None;
+    }
+    let escalation_reason = stats.recovery_active_escalation_reason.as_ref()?;
+    if !escalation_reason.starts_with("transport") {
+        return None;
+    }
+    if stats
+        .video_anchor_clean_observed_at_ms
+        .is_some_and(|anchor_at_ms| anchor_at_ms >= nack_obs.observed_at_ms)
+    {
+        return None;
+    }
+    if stats
+        .latest_video_decode_ok_time_ms
+        .is_some_and(|decode_at_ms| decode_at_ms >= nack_obs.observed_at_ms)
+    {
+        return None;
+    }
+    if stats
+        .latest_video_host_present_time_ms
+        .is_some_and(|present_at_ms| present_at_ms >= nack_obs.observed_at_ms)
+    {
+        return None;
+    }
+    Some(VideoOwnerContract {
+        state: "recovering".to_string(),
+        reason: Some(escalation_reason.clone()),
+        source: Some("nack".to_string()),
+        observed_at_ms: Some(nack_obs.observed_at_ms),
+    })
+}
+
 fn project_video_owner_contract(
     runtime_stats: Option<&XbxEngineMediaRuntimeStats>,
     runtime_state: Option<&RecoveryRuntimeState>,
@@ -72,6 +117,9 @@ fn project_video_owner_contract(
                 source: stats.video_owner_source.clone(),
                 observed_at_ms: stats.video_owner_observed_at_ms,
             });
+        }
+        if let Some(owner) = should_project_recent_nack_owner_fallback(stats, now_ms_f64()) {
+            return Some(owner);
         }
         if !should_project_runtime_owner_fallback(stats) {
             return None;
@@ -198,7 +246,7 @@ fn normalize_budget_failure_cost(
     ) || frame_unrecoverable_reason.is_some_and(|reason| {
         matches!(
             reason,
-            "referenceChainUnrecoverable" | "awaitingRecoveryKeyframe" | "chainBroken"
+            "referenceChainUnrecoverable" | "awaitingRecoveryAnchor" | "chainBroken"
         )
     }) || matches!(nack_disposition, Some("skippedChainBroken"))
     {
@@ -214,16 +262,16 @@ fn normalize_budget_failure_cost(
     }
     if matches!(
         frame_unrecoverable_reason,
-        Some("waitKeyframe" | "awaitingRecoveryKeyframe")
+        Some("waitKeyframe" | "awaitingRecoveryAnchor")
     ) {
-        return "wait-keyframe".to_string();
+        return "wait-anchor".to_string();
     }
     "local-drop".to_string()
 }
 
 fn normalize_budget_recovery_stage(failure_cost: &str, window_source: &str) -> String {
     match (failure_cost, window_source) {
-        ("chain-broken" | "wait-keyframe", _) => "awaiting-keyframe".to_string(),
+        ("chain-broken" | "wait-anchor", _) => "awaiting-anchor".to_string(),
         ("reconfigure", _) => "reconfiguring".to_string(),
         (_, "recovery") => "repairing".to_string(),
         _ => "steady".to_string(),
@@ -1493,6 +1541,13 @@ fn build_observation_note(runtime_stats: Option<&XbxEngineMediaRuntimeStats>) ->
     Some(format!("{label}:{summary}"))
 }
 
+fn now_ms_f64() -> f64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|duration| duration.as_millis() as f64)
+        .unwrap_or(0.0)
+}
+
 fn build_transport_recovery_note(
     runtime_stats: Option<&XbxEngineMediaRuntimeStats>,
 ) -> Option<String> {
@@ -1509,7 +1564,7 @@ fn build_transport_recovery_note(
     if stats
         .video_owner_reason
         .as_deref()
-        .is_some_and(|r| r == "transportAwaitRecoveryKeyframe")
+        .is_some_and(|r| r == "transportAwaitRecoveryAnchor")
     {
         parts.push("awaitKeyframe:hostIdrOrCleanAnchor".to_string());
     } else if stats
@@ -1869,9 +1924,7 @@ fn classify_stall_kind(
             "displaySupplyDegraded" => "displaySupplyDegraded".to_string(),
             "decoderBackendFailure" => "decoderBackendFailure".to_string(),
             "transportSampleLoss" => "sampleLoss".to_string(),
-            "transportAwaitRecoveryKeyframe" | "ingressWaitKeyframe" => {
-                "waitingKeyframe".to_string()
-            }
+            "transportAwaitRecoveryAnchor" | "ingressWaitKeyframe" => "waitingKeyframe".to_string(),
             "reconfigure" => "reconfigure".to_string(),
             // steady 主路径不应落在笼统 recovering，避免与传输/解码恢复混淆。
             "steady" => "none".to_string(),
@@ -1931,7 +1984,8 @@ fn has_recent_video_output(stats: &XbxEngineMediaRuntimeStats, now_ms: f64) -> b
         .latest_video_decode_ok_time_ms
         .map(|at_ms| now_ms - at_ms < RECENT_VIDEO_OUTPUT_WINDOW_MS)
         .unwrap_or(false);
-    present_fresh || decode_fresh || stats.video_present_fps >= 10.0
+    // 只检查真实事件时间戳，不使用平滑 FPS 指标避免误判
+    present_fresh || decode_fresh
 }
 
 fn estimate_audio_inbound_bitrate_kbps(

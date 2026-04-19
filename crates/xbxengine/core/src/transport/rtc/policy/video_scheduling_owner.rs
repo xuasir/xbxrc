@@ -106,6 +106,9 @@ pub(crate) struct VideoSchedulingOwnerInput {
     /// 解码输出候选最近一次 detail（如 `outputQueueOverflow`），用于恢复完成门控。
     pub(crate) latest_decode_candidate_detail: Option<String>,
     pub(crate) latest_decode_candidate_observed_at_ms: Option<f64>,
+    /// 渲染输出候选最近一次 detail（如 `rendererQueueOverflow`），用于恢复完成门控。
+    pub(crate) latest_renderer_candidate_detail: Option<String>,
+    pub(crate) latest_renderer_candidate_observed_at_ms: Option<f64>,
 }
 
 impl VideoSchedulingOwnerInput {
@@ -169,7 +172,7 @@ impl OwnerRecoveryReason {
 
     pub(crate) fn as_reason_label(self) -> &'static str {
         match self {
-            Self::TransportAwaitRecoveryKeyframe => "transportAwaitRecoveryKeyframe",
+            Self::TransportAwaitRecoveryKeyframe => "transportAwaitRecoveryAnchor",
             Self::DisplaySupplyCritical => "displaySupplyCritical",
             Self::DisplaySupplyDegraded => "displaySupplyDegraded",
             Self::HostPresentStalled => "hostPresentStalled",
@@ -337,11 +340,15 @@ impl VideoSchedulingOwner {
                 has_clean_anchor_evidence,
                 chain_healthy,
             );
+        let invalid_bootstrap_waiting_keyframe_blocked =
+            Self::invalid_bootstrap_waiting_keyframe_blocked(input, effective_supply_state);
         let has_anchor_issue = if first_frame_acquisition_priority_active {
             false
         } else if transport_await_local_probe_probation_active {
             false
         } else if wait_keyframe_rebuild_priority || codec_recovery_keyframe_blocked {
+            true
+        } else if invalid_bootstrap_waiting_keyframe_blocked {
             true
         } else if Self::transient_anchor_noise_can_settle(input, has_clean_anchor_evidence) {
             false
@@ -656,13 +663,13 @@ impl VideoSchedulingOwner {
         let has_stale_clean_anchor_fact = input.clean_anchor_epoch.is_some_and(|epoch| {
             epoch != input.recovery_epoch
                 && input.clean_anchor_source_event.as_deref()
-                    == Some("chain-clean-keyframe-submitted")
+                    == Some("chain-clean-anchor-submitted")
         }) || input
             .latest_anchor_candidate_ledger
             .as_ref()
             .is_some_and(|candidate| {
                 candidate.state == XbxEngineAnchorCandidateState::SubmittedCleanAnchor
-                    && candidate.source_event == "chain-clean-keyframe-submitted"
+                    && candidate.source_event == "chain-clean-anchor-submitted"
                     && candidate.recovery_epoch != input.recovery_epoch
             });
         let chain_healthy = matches!(input.effective_chain_state(), Some("healthy"))
@@ -814,9 +821,9 @@ impl VideoSchedulingOwner {
         }
         let recovery_noise_source = matches!(
             input.effective_source_event(),
-            Some("frame-await-recovery-keyframe")
-                | Some("frame-inspection-rejected-await-keyframe")
-                | Some("frame-inspection-rejected-trigger-recovery-keyframe")
+            Some("frame-await-recovery-anchor")
+                | Some("frame-inspection-rejected-await-anchor")
+                | Some("frame-inspection-rejected-trigger-recovery-anchor")
                 | Some("gap-repair-in-flight")
         );
         if recovery_noise_source
@@ -996,6 +1003,21 @@ impl VideoSchedulingOwner {
         Self::terminal_invalid_bootstrap_has_serviceable_output(input, supply_state)
     }
 
+    fn invalid_bootstrap_waiting_keyframe_blocked(
+        input: &VideoSchedulingOwnerInput,
+        supply_state: DisplaySupplyState,
+    ) -> bool {
+        if Self::first_present_feedback_gap_active(input) {
+            return false;
+        }
+        if !Self::has_fresh_terminal_invalid_bootstrap_release_evidence(input) {
+            return false;
+        }
+        // `NonIdrVcl` 虽然说明参数集已齐，但只要当前 decode/present 供给已经不可服务，
+        // owner 仍应继续停在 rebuilding-supply，避免误滑回 displaySupplyStarved。
+        !Self::terminal_invalid_bootstrap_has_serviceable_output(input, supply_state)
+    }
+
     fn first_frame_acquisition_priority_active(
         current: VideoSchedulingOwnerState,
         input: &VideoSchedulingOwnerInput,
@@ -1020,9 +1042,9 @@ impl VideoSchedulingOwner {
         let bootstrap_reject_source_pending = matches!(
             input.effective_source_event(),
             Some(
-                "frame-inspection-rejected-await-keyframe"
-                    | "frame-inspection-rejected-trigger-recovery-keyframe"
-                    | "frame-await-recovery-keyframe"
+                "frame-inspection-rejected-await-anchor"
+                    | "frame-inspection-rejected-trigger-recovery-anchor"
+                    | "frame-await-recovery-anchor"
             )
         );
         if !bootstrap_reject_in_startup && !bootstrap_reject_source_pending {
@@ -1046,9 +1068,9 @@ impl VideoSchedulingOwner {
         ) || matches!(
             input.effective_source_event(),
             Some(
-                "frame-inspection-rejected-await-keyframe"
-                    | "frame-inspection-rejected-trigger-recovery-keyframe"
-                    | "frame-await-recovery-keyframe"
+                "frame-inspection-rejected-await-anchor"
+                    | "frame-inspection-rejected-trigger-recovery-anchor"
+                    | "frame-await-recovery-anchor"
                     | "gap-repair-in-flight"
             )
         )
@@ -1149,6 +1171,15 @@ impl VideoSchedulingOwner {
                 .is_some_and(|t| (input.observed_at_ms - t).max(0.0) <= 800.0)
     }
 
+    fn renderer_queue_overflow_recent(input: &VideoSchedulingOwnerInput) -> bool {
+        matches!(
+            input.latest_renderer_candidate_detail.as_deref(),
+            Some("rendererQueueOverflow" | "rendererQueueRejectLowerValue")
+        ) && input
+            .latest_renderer_candidate_observed_at_ms
+            .is_some_and(|t| (input.observed_at_ms - t).max(0.0) <= 800.0)
+    }
+
     fn can_restore_serving_after_clean_anchor(
         input: &VideoSchedulingOwnerInput,
         has_clean_anchor_evidence: bool,
@@ -1161,9 +1192,8 @@ impl VideoSchedulingOwner {
         if !has_clean_anchor_evidence || !chain_healthy {
             return false;
         }
-        if Self::decode_output_queue_overflow_recent(input) {
-            return false;
-        }
+        // RFC: 解码后队列溢出/本地丢帧属于显示域调度问题，不应阻断 recovery-to-serving；
+        // 允许尽快回到 serving，让 release-clock + local drop 吸收局部积压。
         if input.demand.video_renderer_stalled {
             return false;
         }
@@ -1260,7 +1290,7 @@ impl VideoSchedulingOwner {
                 input.observed_at_ms,
             )
         }) && input.clean_anchor_source_event.as_deref()
-            == Some("chain-clean-keyframe-submitted");
+            == Some("chain-clean-anchor-submitted");
         if explicit_clean_anchor {
             return true;
         }
@@ -1269,7 +1299,7 @@ impl VideoSchedulingOwner {
             .as_ref()
             .is_some_and(|candidate| {
                 candidate.state == XbxEngineAnchorCandidateState::SubmittedCleanAnchor
-                    && candidate.source_event == "chain-clean-keyframe-submitted"
+                    && candidate.source_event == "chain-clean-anchor-submitted"
                     && Self::clean_anchor_epoch_is_usable(
                         candidate.recovery_epoch,
                         Some(candidate.observed_at_ms),
@@ -1293,13 +1323,13 @@ impl VideoSchedulingOwner {
         // 临时诊断：只在 clean anchor 可见但 owner 仍未回稳时打点，方便直接回看同拍事实。
         let has_visible_clean_anchor_fact = has_clean_anchor_evidence
             || input.clean_anchor_epoch.is_some()
-            || input.clean_anchor_source_event.as_deref() == Some("chain-clean-keyframe-submitted")
+            || input.clean_anchor_source_event.as_deref() == Some("chain-clean-anchor-submitted")
             || input
                 .latest_anchor_candidate_ledger
                 .as_ref()
                 .is_some_and(|candidate| {
                     candidate.state == XbxEngineAnchorCandidateState::SubmittedCleanAnchor
-                        && candidate.source_event == "chain-clean-keyframe-submitted"
+                        && candidate.source_event == "chain-clean-anchor-submitted"
                 });
         if current_state != VideoSchedulingOwnerState::RebuildingSupply
             || next_state != VideoSchedulingOwnerState::RebuildingSupply
@@ -1660,7 +1690,6 @@ impl VideoSchedulingOwner {
                 "bootstrapMissingSps"
                     | "bootstrapMissingPps"
                     | "inspectionRejectInvalidSliceHeader"
-                    | "NonIdrVcl"
             )
         )
     }
@@ -2002,7 +2031,7 @@ impl VideoSchedulingOwner {
         let explicit = input.clean_anchor_epoch.is_some_and(|epoch| {
             epoch == input.recovery_epoch
                 && input.clean_anchor_source_event.as_deref()
-                    == Some("chain-clean-keyframe-submitted")
+                    == Some("chain-clean-anchor-submitted")
         });
         let candidate = input
             .latest_anchor_candidate_ledger
@@ -2010,7 +2039,7 @@ impl VideoSchedulingOwner {
             .filter(|candidate| {
                 candidate.recovery_epoch == input.recovery_epoch
                     && candidate.state == XbxEngineAnchorCandidateState::SubmittedCleanAnchor
-                    && candidate.source_event == "chain-clean-keyframe-submitted"
+                    && candidate.source_event == "chain-clean-anchor-submitted"
             })
             .map(|candidate| candidate.observed_at_ms);
         match (explicit, input.clean_anchor_observed_at_ms, candidate) {

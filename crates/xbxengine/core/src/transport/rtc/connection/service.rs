@@ -22,6 +22,7 @@ use crate::transport::rtc::facts::TransportFact;
 use crate::transport::rtc::recovery::contract::{
     has_current_clean_anchor_from_stats, has_current_transport_await_issue_from_stats,
 };
+use crate::transport::rtc::stats::now_ms_f64;
 use crate::transport::rtc::stream::{RtcMediaIngressPacket, RtcRtpPacketMeta};
 use crate::{XbxEngineMediaRuntimeStats, XbxEngineRuntimeError};
 
@@ -39,6 +40,25 @@ enum VideoRecoveryTransportStage {
     PictureLossIndication,
     FullIntraRequest,
     ControlKeyframe,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum VideoKeyframeRequestOutcome {
+    Suppressed,
+    RequestedPli,
+    RequestedFir,
+    RequestedControl,
+}
+
+impl VideoKeyframeRequestOutcome {
+    pub(crate) fn escalation_action_label(self) -> Option<String> {
+        match self {
+            Self::Suppressed => None,
+            Self::RequestedPli => Some("requestKeyframe(pli)".to_string()),
+            Self::RequestedFir => Some("requestKeyframe(fir)".to_string()),
+            Self::RequestedControl => Some("requestKeyframe".to_string()),
+        }
+    }
 }
 
 #[derive(Clone, Debug, Default)]
@@ -145,6 +165,14 @@ impl RtcConnectionService {
         runtime_stats: &Arc<Mutex<XbxEngineMediaRuntimeStats>>,
     ) -> Result<(), XbxEngineRuntimeError> {
         self.request_video_recovery_keyframe(runtime_stats)
+            .map(|_| ())
+    }
+
+    pub(crate) fn request_video_keyframe_with_outcome(
+        &mut self,
+        runtime_stats: &Arc<Mutex<XbxEngineMediaRuntimeStats>>,
+    ) -> Result<VideoKeyframeRequestOutcome, XbxEngineRuntimeError> {
+        self.request_video_recovery_keyframe(runtime_stats)
     }
 
     #[allow(dead_code)]
@@ -168,7 +196,7 @@ impl RtcConnectionService {
     fn request_video_recovery_keyframe(
         &mut self,
         runtime_stats: &Arc<Mutex<XbxEngineMediaRuntimeStats>>,
-    ) -> Result<(), XbxEngineRuntimeError> {
+    ) -> Result<VideoKeyframeRequestOutcome, XbxEngineRuntimeError> {
         self.sync_video_recovery_transport_state(runtime_stats);
         match self.resolve_video_recovery_transport_stage(runtime_stats) {
             VideoRecoveryTransportStage::None => {
@@ -177,32 +205,47 @@ impl RtcConnectionService {
                     "rtcVideoRecoverySuppressed",
                     "phase1 rtc video recovery suppressed by active clean anchor or duplicate stage",
                 );
-                Ok(())
+                Ok(VideoKeyframeRequestOutcome::Suppressed)
             }
             VideoRecoveryTransportStage::PictureLossIndication => {
-                if self
-                    .send_video_picture_loss_indication(runtime_stats)
-                    .is_ok()
-                {
-                    self.control_service.clear_pending_keyframe_request();
-                    self.sync_control_replay_runtime_stats(runtime_stats);
-                    self.video_recovery_transport_state.stage =
-                        VideoRecoveryTransportStage::PictureLossIndication;
-                    self.video_recovery_transport_state.last_sent_at_ms =
-                        Some(crate::transport::rtc::stats::now_ms_f64());
-                    return Ok(());
+                match self.send_video_picture_loss_indication(runtime_stats) {
+                    Ok(_) => {
+                        self.control_service.clear_pending_keyframe_request();
+                        self.sync_control_replay_runtime_stats(runtime_stats);
+                        self.video_recovery_transport_state.stage =
+                            VideoRecoveryTransportStage::PictureLossIndication;
+                        self.video_recovery_transport_state.last_sent_at_ms =
+                            Some(crate::transport::rtc::stats::now_ms_f64());
+                        return Ok(VideoKeyframeRequestOutcome::RequestedPli);
+                    }
+                    Err(e) => {
+                        RuntimeStatsSink::new(runtime_stats.clone())
+                            .record_keyframe_request_episode_failed(
+                                crate::transport::rtc::stats::now_ms_f64(),
+                                &format!("pliSendFailed: {}", e),
+                            );
+                    }
                 }
                 self.send_control_keyframe_request(runtime_stats, "rtcVideoPliFallbackControl")
             }
             VideoRecoveryTransportStage::FullIntraRequest => {
-                if self.send_video_full_intra_request(runtime_stats).is_ok() {
-                    self.control_service.clear_pending_keyframe_request();
-                    self.sync_control_replay_runtime_stats(runtime_stats);
-                    self.video_recovery_transport_state.stage =
-                        VideoRecoveryTransportStage::FullIntraRequest;
-                    self.video_recovery_transport_state.last_sent_at_ms =
-                        Some(crate::transport::rtc::stats::now_ms_f64());
-                    return Ok(());
+                match self.send_video_full_intra_request(runtime_stats) {
+                    Ok(_) => {
+                        self.control_service.clear_pending_keyframe_request();
+                        self.sync_control_replay_runtime_stats(runtime_stats);
+                        self.video_recovery_transport_state.stage =
+                            VideoRecoveryTransportStage::FullIntraRequest;
+                        self.video_recovery_transport_state.last_sent_at_ms =
+                            Some(crate::transport::rtc::stats::now_ms_f64());
+                        return Ok(VideoKeyframeRequestOutcome::RequestedFir);
+                    }
+                    Err(e) => {
+                        RuntimeStatsSink::new(runtime_stats.clone())
+                            .record_keyframe_request_episode_failed(
+                                crate::transport::rtc::stats::now_ms_f64(),
+                                &format!("firSendFailed: {}", e),
+                            );
+                    }
                 }
                 self.send_control_keyframe_request(runtime_stats, "rtcVideoFirFallbackControl")
             }
@@ -216,7 +259,7 @@ impl RtcConnectionService {
         &mut self,
         runtime_stats: &Arc<Mutex<XbxEngineMediaRuntimeStats>>,
     ) -> VideoRecoveryTransportStage {
-        let now_ms = crate::transport::rtc::stats::now_ms_f64();
+        let now_ms = now_ms_f64();
         let (
             current_epoch,
             has_unresolved_transport_await_after_clean_anchor,
@@ -252,11 +295,10 @@ impl RtcConnectionService {
         .unwrap_or((0, false, false, false, false));
 
         if self.video_recovery_transport_state.recovery_epoch != current_epoch {
-            self.video_recovery_transport_state = VideoRecoveryTransportState {
-                recovery_epoch: current_epoch,
-                ..Default::default()
-            };
+            self.video_recovery_transport_state.stage = VideoRecoveryTransportStage::None;
+            self.video_recovery_transport_state.last_sent_at_ms = None;
         }
+        self.video_recovery_transport_state.recovery_epoch = current_epoch;
 
         if has_current_clean_anchor && !has_unresolved_transport_await_after_clean_anchor {
             self.video_recovery_transport_state.stage = VideoRecoveryTransportStage::None;
@@ -280,20 +322,20 @@ impl RtcConnectionService {
                 }
             }
             VideoRecoveryTransportStage::PictureLossIndication => {
-                if supports_fir && elapsed_ms >= VIDEO_RECOVERY_PLI_TO_FIR_MIN_DELAY_MS {
+                if elapsed_ms < VIDEO_RECOVERY_PLI_TO_FIR_MIN_DELAY_MS {
+                    return VideoRecoveryTransportStage::None;
+                }
+                if supports_fir {
                     VideoRecoveryTransportStage::FullIntraRequest
-                } else if !supports_fir && elapsed_ms >= VIDEO_RECOVERY_PLI_TO_FIR_MIN_DELAY_MS {
-                    VideoRecoveryTransportStage::ControlKeyframe
                 } else {
-                    VideoRecoveryTransportStage::None
+                    VideoRecoveryTransportStage::ControlKeyframe
                 }
             }
             VideoRecoveryTransportStage::FullIntraRequest => {
-                if elapsed_ms >= VIDEO_RECOVERY_FIR_TO_CONTROL_MIN_DELAY_MS {
-                    VideoRecoveryTransportStage::ControlKeyframe
-                } else {
-                    VideoRecoveryTransportStage::None
+                if elapsed_ms < VIDEO_RECOVERY_FIR_TO_CONTROL_MIN_DELAY_MS {
+                    return VideoRecoveryTransportStage::None;
                 }
+                VideoRecoveryTransportStage::ControlKeyframe
             }
             VideoRecoveryTransportStage::ControlKeyframe => VideoRecoveryTransportStage::None,
         }
@@ -415,7 +457,7 @@ impl RtcConnectionService {
         &mut self,
         runtime_stats: &Arc<Mutex<XbxEngineMediaRuntimeStats>>,
         observation_label: &str,
-    ) -> Result<(), XbxEngineRuntimeError> {
+    ) -> Result<VideoKeyframeRequestOutcome, XbxEngineRuntimeError> {
         let result = self.control_service.request_video_keyframe();
         self.sync_control_replay_runtime_stats(runtime_stats);
         self.video_recovery_transport_state.stage = VideoRecoveryTransportStage::ControlKeyframe;
@@ -451,7 +493,7 @@ impl RtcConnectionService {
             stats.video_pli_request_count_total =
                 stats.video_pli_request_count_total.saturating_add(1);
         });
-        Ok(())
+        Ok(VideoKeyframeRequestOutcome::RequestedControl)
     }
 
     fn record_video_recovery_observation(
@@ -496,11 +538,10 @@ impl RtcConnectionService {
             RuntimeStatsSink::read_shared(runtime_stats, |stats| stats.transport_recovery_epoch)
                 .unwrap_or(0);
         if self.video_recovery_transport_state.recovery_epoch != current_epoch {
-            self.video_recovery_transport_state = VideoRecoveryTransportState {
-                recovery_epoch: current_epoch,
-                ..Default::default()
-            };
+            self.video_recovery_transport_state.stage = VideoRecoveryTransportStage::None;
+            self.video_recovery_transport_state.last_sent_at_ms = None;
         }
+        self.video_recovery_transport_state.recovery_epoch = current_epoch;
     }
 
     pub(crate) fn request_target_remb_kbps(

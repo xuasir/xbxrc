@@ -31,5 +31,5 @@ pub(crate) use fact_mapping::{map_connection_lifecycle_state_fact, map_data_chan
 pub(crate) use sdp_candidate::{
     extract_local_candidates_from_offer_sdp, is_end_of_candidates_marker,
 };
-pub(crate) use service::RtcConnectionService;
+pub(crate) use service::{RtcConnectionService, VideoKeyframeRequestOutcome};
 pub(crate) use text_preview::short_text_preview;

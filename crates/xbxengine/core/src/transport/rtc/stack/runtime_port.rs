@@ -51,6 +51,11 @@ impl LocalDecoderResetPolicyState {
             previous.host_frame_age_budget_ms,
             next.host_frame_age_budget_ms,
         );
+        // presenter 重建 / 首帧 priming 会经历 `Some(..) <-> None` 的宿主 timing 过渡，
+        // 这属于宿主显示链切 epoch 的正常抖动，不应误判为 decoder 需要重建。
+        if previous.host_display_interval_ms.is_none() || next.host_display_interval_ms.is_none() {
+            return None;
+        }
         let display_changed = display_delta_ms
             .is_some_and(|delta| delta >= HOST_TIMING_DISPLAY_INTERVAL_RECREATE_THRESHOLD_MS);
         let budget_changed = frame_age_budget_delta_ms
@@ -320,6 +325,18 @@ mod tests {
 
         assert!(reason.contains("hostTimingShift"));
         assert!(reason.contains("16.67=>33.33"));
+    }
+
+    #[test]
+    fn presenter_epoch_rebuild_timing_shift_does_not_trigger_local_decoder_reset() {
+        let mut state = LocalDecoderResetPolicyState::default();
+
+        assert!(state
+            .observe_host_timing_change(Some(8.32), Some(24.0), 1_000.0)
+            .is_none());
+        assert!(state
+            .observe_host_timing_change(None, Some(75.0), 3_000.0)
+            .is_none());
     }
 
     #[test]

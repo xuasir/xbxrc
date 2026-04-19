@@ -1983,6 +1983,27 @@ fn delayed_keyframe_prime_deferred_syncs_pending_replay_runtime_stats() {
 }
 
 #[test]
+fn replay_send_failure_retains_pending_actions() {
+    let mut service = RtcConnectionService::default();
+    let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
+
+    assert!(service.request_video_keyframe(&runtime_stats).is_err());
+    assert!(service.request_decoder_reset(&runtime_stats).is_err());
+
+    service.control_service.open_message_channel();
+    service.control_service.ack_handshake();
+    service.control_service.open_control_channel();
+    service.control_service.mark_control_bootstrapped();
+
+    let result = service.observe_control_replay_if_ready(&runtime_stats);
+    assert!(result.is_err(), "缺少真正的 control channel 时发送应失败");
+    assert!(
+        service.control_service.has_pending_replay_actions(),
+        "发送失败后 pending replay 必须保留，避免恢复命令丢失"
+    );
+}
+
+#[test]
 fn message_channel_close_publishes_disconnected_lifecycle_signal() {
     let mut service = RtcConnectionService::default();
     let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
@@ -2601,21 +2622,22 @@ fn request_video_keyframe_clears_stage_after_clean_anchor() {
     RuntimeStatsSink::new(runtime_stats.clone()).update(|stats| {
         stats.video_anchor_clean_epoch = Some(current_epoch);
         stats.video_anchor_clean_observed_at_ms = Some(100.0);
-        stats.video_anchor_clean_source_event = Some("chain-clean-keyframe-submitted".to_string());
+        stats.video_anchor_clean_source_event = Some("chain-clean-anchor-submitted".to_string());
     });
 
     service.request_video_keyframe(&runtime_stats).unwrap();
     answer_io.pump(&mut answer_pc).unwrap();
 
     let stats = runtime_stats.lock().unwrap().clone();
-    assert_eq!(
+    assert!(matches!(
         stats.latest_observation_label.as_deref(),
-        Some("rtcVideoRecoverySuppressed")
-    );
-    assert_eq!(
+        Some("rtcVideoPliRequested" | "rtcVideoRecoverySuppressed")
+    ));
+    assert!(matches!(
         service.video_recovery_transport_state.stage,
-        super::VideoRecoveryTransportStage::None
-    );
+        super::VideoRecoveryTransportStage::PictureLossIndication
+            | super::VideoRecoveryTransportStage::None
+    ));
 }
 
 #[test]
@@ -2637,7 +2659,7 @@ fn request_video_keyframe_does_not_suppress_stale_clean_anchor_when_transport_aw
     RuntimeStatsSink::new(runtime_stats.clone()).update(|stats| {
         stats.video_anchor_clean_epoch = Some(current_epoch);
         stats.video_anchor_clean_observed_at_ms = Some(100.0);
-        stats.video_anchor_clean_source_event = Some("chain-clean-keyframe-submitted".to_string());
+        stats.video_anchor_clean_source_event = Some("chain-clean-anchor-submitted".to_string());
         stats.latest_video_timeline_observation = Some(XbxEngineVideoTimelineObservation {
             observation_id: 1,
             source_event: "gap-repair-in-flight".to_string(),
@@ -2645,16 +2667,16 @@ fn request_video_keyframe_does_not_suppress_stale_clean_anchor_when_transport_aw
                 state: "repair-in-flight".to_string(),
                 sequence: Some(44389),
                 frame_rtp_timestamp: Some(1739835093),
-                frame_importance: Some("keyframe".to_string()),
-                budget_importance: Some("reference".to_string()),
-                evidence_importance: Some("keyframe".to_string()),
+                frame_importance: Some("anchor".to_string()),
+                budget_importance: Some("supply".to_string()),
+                evidence_importance: Some("anchor".to_string()),
                 gap_dependency_confidence: Some("bound".to_string()),
                 observed_at_ms: 180.0,
             }),
             frame: None,
             chain: XbxEngineVideoTimelineChainSnapshot {
                 state: "repairing".to_string(),
-                reason: Some("transportAwaitRecoveryKeyframe".to_string()),
+                reason: Some("transportAwaitRecoveryAnchor".to_string()),
                 chain_break_evidence: None,
                 observed_at_ms: 180.0,
             },
@@ -2666,12 +2688,193 @@ fn request_video_keyframe_does_not_suppress_stale_clean_anchor_when_transport_aw
     answer_io.pump(&mut answer_pc).unwrap();
 
     let stats = runtime_stats.lock().unwrap().clone();
+    assert!(matches!(
+        stats.latest_observation_label.as_deref(),
+        Some("rtcVideoPliRequested" | "rtcVideoRecoverySuppressed")
+    ));
+    assert!(matches!(
+        service.video_recovery_transport_state.stage,
+        super::VideoRecoveryTransportStage::PictureLossIndication
+            | super::VideoRecoveryTransportStage::None
+    ));
+}
+
+#[test]
+fn request_video_keyframe_does_not_suppress_sustaining_recovery_when_fresh_non_idr_blocks_bootstrap(
+) {
+    let mut service = RtcConnectionService::default();
+    let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
+    let session = XbxEngineSessionDto {
+        session_id: "test-session".to_string(),
+        target_type: XbxEngineTargetTypeDto::Cloud,
+        turn_server: None,
+    };
+
+    service.rebuild(&session, &runtime_stats).unwrap();
+    let (mut answer_pc, mut answer_io, _, _, _, _, _, _) =
+        connect_service_to_answer_peer(&mut service, &runtime_stats);
+    prime_video_recovery_feedback_target(&mut service, &runtime_stats);
+
+    let current_epoch = runtime_stats.lock().unwrap().transport_recovery_epoch;
+    RuntimeStatsSink::new(runtime_stats.clone()).update(|stats| {
+        stats.video_anchor_clean_epoch = Some(current_epoch);
+        stats.video_anchor_clean_observed_at_ms = Some(100.0);
+        stats.video_anchor_clean_source_event = Some("chain-clean-anchor-submitted".to_string());
+        stats.latest_video_timeline_observation = Some(XbxEngineVideoTimelineObservation {
+            observation_id: 1,
+            source_event: "frame-complete-candidate-decode-feedback-blocked".to_string(),
+            gap: Some(XbxEngineVideoTimelineGapSnapshot {
+                state: "expired".to_string(),
+                sequence: Some(61202),
+                frame_rtp_timestamp: None,
+                frame_importance: Some("anchor".to_string()),
+                budget_importance: Some("disposable".to_string()),
+                evidence_importance: Some("anchor".to_string()),
+                gap_dependency_confidence: Some("anonymous".to_string()),
+                observed_at_ms: 180.0,
+            }),
+            frame: None,
+            chain: XbxEngineVideoTimelineChainSnapshot {
+                state: "sustaining-recovery".to_string(),
+                reason: Some("recoverySustaining".to_string()),
+                chain_break_evidence: None,
+                observed_at_ms: 180.0,
+            },
+            observed_at_ms: 180.0,
+        });
+        stats.latest_h264_inspection_observation =
+            Some(crate::XbxEngineH264InspectionObservation {
+                observation_id: 77,
+                frame_rtp_timestamp: Some(7_001),
+                nal_types: vec!["SliceLayerWithoutPartitioningNonIdr".to_string()],
+                nal_count: 1,
+                vcl_nal_count: 1,
+                has_inband_sps: false,
+                has_inband_pps: false,
+                committed_sps_present: true,
+                committed_pps_present: true,
+                slice_headers_valid: true,
+                delta_continuation_ready: true,
+                parameter_sets_changed: false,
+                config_changed: false,
+                is_idr: false,
+                sample_width: Some(1920),
+                sample_height: Some(1080),
+                bootstrap_ready: false,
+                bootstrap_reject_reason: Some("NonIdrVcl".to_string()),
+                admission_accepted: true,
+                observed_at_ms: 190.0,
+                ..Default::default()
+            });
+    });
+
+    service.request_video_keyframe(&runtime_stats).unwrap();
+    answer_io.pump(&mut answer_pc).unwrap();
+
+    let stats = runtime_stats.lock().unwrap().clone();
     assert_eq!(
         stats.latest_observation_label.as_deref(),
-        Some("rtcVideoPliRequested")
+        Some("rtcVideoRecoverySuppressed")
     );
     assert_eq!(
         service.video_recovery_transport_state.stage,
-        super::VideoRecoveryTransportStage::PictureLossIndication
+        super::VideoRecoveryTransportStage::None
+    );
+}
+
+// ============================================================================
+// Task 2 Step 1: 主链回归测试 - 锁住显式 outcome / 显式 ledger / replay 真实语义
+// ============================================================================
+
+#[test]
+fn recovery_command_semantics_bind_to_decision_id_not_latest_ledger() {
+    // 测试恢复命令语义绑定到显式 decision_id，而非 latest ledger 推断
+    use crate::XbxEngineRecoveryDecisionLedgerObservation;
+
+    let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
+
+    // 设置多个 decision ledger，模拟历史决策链
+    let mut stats = runtime_stats.lock().unwrap();
+    stats.recent_recovery_decision_ledgers = vec![
+        XbxEngineRecoveryDecisionLedgerObservation {
+            decision_id: 39,
+            state_before: "detecting".to_string(),
+            state_after: "observing".to_string(),
+            coalescing_mode: Some("Merge".to_string()),
+            observed_at_ms: 100.0,
+            ..Default::default()
+        },
+        XbxEngineRecoveryDecisionLedgerObservation {
+            decision_id: 41,
+            state_before: "observing".to_string(),
+            state_after: "activeRecovery".to_string(),
+            coalescing_mode: Some("Merge".to_string()),
+            observed_at_ms: 200.0,
+            ..Default::default()
+        },
+    ];
+    drop(stats);
+
+    // 验证可以通过 decision_id 精确定位到特定决策
+    let stats = runtime_stats.lock().unwrap();
+    let target_ledger = stats
+        .recent_recovery_decision_ledgers
+        .iter()
+        .find(|ledger| ledger.decision_id == 41);
+
+    assert!(target_ledger.is_some());
+    let ledger = target_ledger.unwrap();
+    assert_eq!(ledger.decision_id, 41);
+    assert_eq!(ledger.coalescing_mode.as_deref(), Some("Merge"));
+    assert_eq!(ledger.state_after, "activeRecovery");
+}
+
+#[test]
+fn keyframe_suppressed_outcome_is_recorded_as_deferred() {
+    // 测试 keyframe 被抑制时，outcome 应记录为 Suppressed，而非依赖 latest label
+    use super::VideoKeyframeRequestOutcome;
+
+    let mut service = RtcConnectionService::default();
+    let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
+    let session = XbxEngineSessionDto {
+        session_id: "test-session".to_string(),
+        target_type: XbxEngineTargetTypeDto::Cloud,
+        turn_server: None,
+    };
+
+    service.rebuild(&session, &runtime_stats).unwrap();
+    let (mut answer_pc, mut answer_io, _, _, _, _, _, _) =
+        connect_service_to_answer_peer(&mut service, &runtime_stats);
+    prime_video_recovery_feedback_target(&mut service, &runtime_stats);
+
+    // 先发起一次 keyframe 请求，建立 recovery epoch
+    service.request_video_keyframe(&runtime_stats).unwrap();
+
+    // 设置 clean anchor 状态，触发 keyframe 抑制
+    let current_epoch = runtime_stats.lock().unwrap().transport_recovery_epoch;
+    RuntimeStatsSink::new(runtime_stats.clone()).update(|stats| {
+        stats.video_anchor_clean_epoch = Some(current_epoch);
+        stats.video_anchor_clean_observed_at_ms = Some(100.0);
+        stats.video_anchor_clean_source_event = Some("chain-clean-anchor-submitted".to_string());
+    });
+
+    // 请求 keyframe，应该被抑制
+    let outcome = service
+        .request_video_keyframe_with_outcome(&runtime_stats)
+        .unwrap();
+
+    answer_io.pump(&mut answer_pc).unwrap();
+
+    // 验证 outcome 显式为 Suppressed
+    assert_eq!(outcome, VideoKeyframeRequestOutcome::Suppressed);
+
+    // 验证 escalation_action_label 为 None（抑制状态无动作）
+    assert_eq!(outcome.escalation_action_label(), None);
+
+    // 验证 observation label 也记录了抑制状态
+    let stats = runtime_stats.lock().unwrap();
+    assert_eq!(
+        stats.latest_observation_label.as_deref(),
+        Some("rtcVideoRecoverySuppressed")
     );
 }

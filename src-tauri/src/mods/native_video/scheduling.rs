@@ -9,9 +9,28 @@ const HOST_RENDER_FRAME_AGE_MULTIPLIER: f64 = 2.25;
 const HOST_RENDER_RECOVERY_MIN_FRAME_AGE_MS: f64 = 48.0;
 const HOST_RENDER_RECOVERY_MAX_FRAME_AGE_MS: f64 = 180.0;
 const HOST_RENDER_RECOVERY_STREAK_THRESHOLD: u32 = 8;
+const HOST_RENDER_RECOVERY_KEYFRAME_MIN_FRAME_AGE_MS: f64 = 48.0;
 const HOST_FRAME_DROP_BACKLOG_LIMIT: usize = 32;
 const HOST_SUBMIT_GAP_WARN_MS: f64 = 100.0;
 const SCHEDULED_FRAME_QUEUE_CAPACITY: usize = 3;
+
+fn format_optional_seq(value: Option<u64>) -> String {
+    value
+        .map(|seq| seq.to_string())
+        .unwrap_or_else(|| "-".to_string())
+}
+
+fn format_frame_seq_list(frame_seqs: &[u64]) -> String {
+    if frame_seqs.is_empty() {
+        "-".to_string()
+    } else {
+        frame_seqs
+            .iter()
+            .map(u64::to_string)
+            .collect::<Vec<_>>()
+            .join(",")
+    }
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum HostCadencePhase {
@@ -95,6 +114,7 @@ pub struct HostCadenceTelemetry {
     present_epoch: u64,
     cadence_phase: HostCadencePhase,
     recent_present_times_ms: VecDeque<f64>,
+    recent_submit_times_ms: VecDeque<f64>,
     recent_display_tick_times_ms: VecDeque<f64>,
     pub present_enqueue_count_total: u64,
     pub present_drop_count_total: u64,
@@ -105,6 +125,21 @@ pub struct HostCadenceTelemetry {
     pending_frame_drops: HostFrameDropBacklog,
 }
 
+#[derive(Clone, Debug, PartialEq)]
+pub struct HostCadenceTelemetryDiagnostics {
+    pub latest_present_time_ms: Option<f64>,
+    pub latest_submit_time_ms: Option<f64>,
+    pub display_tick_epoch: u64,
+    pub present_epoch: u64,
+    pub cadence_phase: HostCadencePhase,
+    pub no_pending_take_count_total: u64,
+    pub no_pending_streak: u32,
+    pub no_pending_max_streak: u32,
+    pub present_enqueue_count_total: u64,
+    pub present_drop_count_total: u64,
+    pub present_overwrite_count_total: u64,
+}
+
 impl HostCadenceTelemetry {
     pub fn record_display_tick(&mut self, now_ms: f64) {
         self.recent_display_tick_times_ms.push_back(now_ms);
@@ -113,6 +148,7 @@ impl HostCadenceTelemetry {
         if matches!(self.cadence_phase, HostCadencePhase::Idle) {
             self.cadence_phase = HostCadencePhase::Priming;
         }
+        self.log_host_flow("display_tick", None, None, None, None);
     }
 
     pub fn record_present(&mut self, now_ms: f64) {
@@ -121,6 +157,7 @@ impl HostCadenceTelemetry {
         self.trim_recent(now_ms);
         self.present_epoch = self.present_epoch.saturating_add(1);
         self.cadence_phase = HostCadencePhase::Steady;
+        self.log_host_flow("present", None, None, None, None);
     }
 
     pub fn record_submit(&mut self, now_ms: f64) -> Option<f64> {
@@ -128,6 +165,9 @@ impl HostCadenceTelemetry {
             .latest_submit_time_ms
             .map(|previous| (now_ms - previous).max(0.0));
         self.latest_submit_time_ms = Some(now_ms);
+        self.recent_submit_times_ms.push_back(now_ms);
+        self.trim_submit_times(now_ms);
+        self.log_host_flow("submit_telemetry", None, None, None, submit_gap_ms);
         submit_gap_ms
     }
 
@@ -187,8 +227,23 @@ impl HostCadenceTelemetry {
         calculate_recent_interval_ms(&self.recent_display_tick_times_ms)
     }
 
+    pub fn submit_interval_ms(&self) -> Option<f64> {
+        calculate_recent_interval_ms(&self.recent_submit_times_ms)
+    }
+
+    pub fn effective_frame_interval_ms(&self) -> Option<f64> {
+        match (self.display_interval_ms(), self.submit_interval_ms()) {
+            (Some(display_interval_ms), Some(submit_interval_ms)) => {
+                Some(display_interval_ms.max(submit_interval_ms))
+            }
+            (Some(display_interval_ms), None) => Some(display_interval_ms),
+            (None, Some(submit_interval_ms)) => Some(submit_interval_ms),
+            (None, None) => None,
+        }
+    }
+
     pub fn frame_age_budget_ms(&self) -> f64 {
-        self.display_interval_ms()
+        self.effective_frame_interval_ms()
             .map(|interval_ms| {
                 (interval_ms * HOST_RENDER_FRAME_AGE_MULTIPLIER)
                     .clamp(HOST_RENDER_MIN_FRAME_AGE_MS, HOST_RENDER_MAX_FRAME_AGE_MS)
@@ -208,6 +263,21 @@ impl HostCadenceTelemetry {
                 HOST_RENDER_RECOVERY_MIN_FRAME_AGE_MS,
                 HOST_RENDER_RECOVERY_MAX_FRAME_AGE_MS,
             );
+        }
+        base_budget_ms
+    }
+
+    pub fn stale_frame_age_budget_for_frame(&self, frame: &XbxEngineRenderFrame) -> f64 {
+        let base_budget_ms = self.stale_frame_age_budget_ms();
+        // 恢复期关键帧经常发生在 host stall 之后的首个可恢复窗口。
+        // 这类帧只要已经进入 pending，不应再被 24ms 的稳态阈值立刻打掉。
+        if frame.is_keyframe
+            && matches!(
+                frame.frame_recovery_disposition.as_deref(),
+                Some("repairing") | Some("rebuilding-supply")
+            )
+        {
+            return base_budget_ms.max(HOST_RENDER_RECOVERY_KEYFRAME_MIN_FRAME_AGE_MS);
         }
         base_budget_ms
     }
@@ -235,6 +305,7 @@ impl HostCadenceTelemetry {
         self.present_epoch = 0;
         self.cadence_phase = HostCadencePhase::Idle;
         self.recent_present_times_ms.clear();
+        self.recent_submit_times_ms.clear();
         self.recent_display_tick_times_ms.clear();
         // 会话 detach / reattach 后需要重新统计宿主 present 指标，
         // 否则新会话会继承上一轮 submit/drop/overwrite 计数，诊断会失真。
@@ -247,6 +318,63 @@ impl HostCadenceTelemetry {
         self.pending_frame_drops.reset();
     }
 
+    pub fn diagnostics_snapshot(&self) -> HostCadenceTelemetryDiagnostics {
+        HostCadenceTelemetryDiagnostics {
+            latest_present_time_ms: self.latest_present_time_ms,
+            latest_submit_time_ms: self.latest_submit_time_ms,
+            display_tick_epoch: self.display_tick_epoch,
+            present_epoch: self.present_epoch,
+            cadence_phase: self.cadence_phase,
+            no_pending_take_count_total: self.no_pending_take_count_total,
+            no_pending_streak: self.no_pending_streak,
+            no_pending_max_streak: self.no_pending_max_streak,
+            present_enqueue_count_total: self.present_enqueue_count_total,
+            present_drop_count_total: self.present_drop_count_total,
+            present_overwrite_count_total: self.present_overwrite_count_total,
+        }
+    }
+
+    fn log_host_flow(
+        &self,
+        event: &str,
+        frame_seq: Option<u64>,
+        slot_diag: Option<&ScheduledFrameSlotDiagnostics>,
+        replaced_frame_seq: Option<u64>,
+        submit_gap_ms: Option<f64>,
+    ) {
+        let displayed_frame_seq = slot_diag.and_then(|diag| diag.displayed_frame_seq);
+        let pending_frame_seqs = slot_diag
+            .map(|diag| format_frame_seq_list(&diag.pending_frame_seqs))
+            .unwrap_or_else(|| "-".to_string());
+        let queue_depth = slot_diag
+            .map(|diag| diag.queue_depth.to_string())
+            .unwrap_or_else(|| "-".to_string());
+        let pending_queue_depth = slot_diag
+            .map(|diag| diag.pending_queue_depth.to_string())
+            .unwrap_or_else(|| "-".to_string());
+        let last_presented_frame_seq = slot_diag.and_then(|diag| diag.last_presented_frame_seq);
+        let replaced_frame_seq = format_optional_seq(replaced_frame_seq);
+        let submit_gap_ms = submit_gap_ms
+            .map(|gap| format!("{gap:.2}"))
+            .unwrap_or_else(|| "-".to_string());
+        log::info!(
+            "[playback-flow][host] event={} frame_seq={} displayed_frame_seq={} last_presented_frame_seq={} pending_frame_seqs={} queue_depth={} pending_queue_depth={} display_tick_epoch={} present_epoch={} submit_gap_ms={} replaced_frame_seq={} no_pending_streak={} cadence_phase={}",
+            event,
+            format_optional_seq(frame_seq),
+            format_optional_seq(displayed_frame_seq),
+            format_optional_seq(last_presented_frame_seq),
+            pending_frame_seqs,
+            queue_depth,
+            pending_queue_depth,
+            self.display_tick_epoch,
+            self.present_epoch,
+            submit_gap_ms,
+            replaced_frame_seq,
+            self.no_pending_streak,
+            self.cadence_phase.as_str(),
+        );
+    }
+
     fn trim_recent(&mut self, now_ms: f64) {
         while self
             .recent_present_times_ms
@@ -254,6 +382,16 @@ impl HostCadenceTelemetry {
             .is_some_and(|ts_ms| now_ms - *ts_ms > HOST_RENDER_FPS_WINDOW_MS)
         {
             self.recent_present_times_ms.pop_front();
+        }
+    }
+
+    fn trim_submit_times(&mut self, now_ms: f64) {
+        while self
+            .recent_submit_times_ms
+            .front()
+            .is_some_and(|ts_ms| now_ms - *ts_ms > HOST_RENDER_FPS_WINDOW_MS)
+        {
+            self.recent_submit_times_ms.pop_front();
         }
     }
 
@@ -273,6 +411,17 @@ pub struct ScheduledFrameSlot {
     displayed_frame: Option<XbxEngineRenderFrame>,
     pending_frames: VecDeque<XbxEngineRenderFrame>,
     last_presented_frame_seq: Option<u64>,
+    pub render_loop_started: bool,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct ScheduledFrameSlotDiagnostics {
+    pub displayed_frame_seq: Option<u64>,
+    pub pending_frame_seqs: Vec<u64>,
+    pub last_presented_frame_seq: Option<u64>,
+    pub queue_depth: usize,
+    pub pending_queue_depth: usize,
+    pub has_displayed_frame: bool,
     pub render_loop_started: bool,
 }
 
@@ -315,10 +464,21 @@ impl ScheduledFrameSlot {
         now_ms: f64,
         telemetry: &mut HostCadenceTelemetry,
     ) -> ScheduledFrameSubmitOutcome {
-        let frame_age_budget_ms = telemetry.stale_frame_age_budget_ms();
+        let frame_seq = frame.frame_seq;
+        let frame_age_budget_ms = telemetry.stale_frame_age_budget_for_frame(frame);
         let frame_age_ms = (now_ms - frame.rendered_at_ms).max(0.0);
         if frame_age_ms > frame_age_budget_ms {
             telemetry.record_stale_frame_drop(frame, now_ms, "scheduledFrameStale", 1);
+            self.log_host_flow(
+                "submit",
+                Some(frame_seq),
+                "DroppedStale",
+                None,
+                false,
+                frame_age_ms,
+                frame_age_budget_ms,
+                telemetry,
+            );
             return ScheduledFrameSubmitOutcome::DroppedStale {
                 frame_seq: frame.frame_seq,
                 frame_age_ms,
@@ -329,6 +489,16 @@ impl ScheduledFrameSlot {
             .last_presented_frame_seq
             .is_some_and(|frame_seq| frame.frame_seq <= frame_seq)
         {
+            self.log_host_flow(
+                "submit",
+                Some(frame_seq),
+                "RejectedAlreadyPresented",
+                None,
+                false,
+                frame_age_ms,
+                frame_age_budget_ms,
+                telemetry,
+            );
             return ScheduledFrameSubmitOutcome::RejectedAlreadyPresented {
                 frame_seq: frame.frame_seq,
                 last_presented_frame_seq: self.last_presented_frame_seq.unwrap_or_default(),
@@ -336,6 +506,16 @@ impl ScheduledFrameSlot {
         }
         let pending_back_seq = self.pending_frames.back().map(|pending| pending.frame_seq);
         if pending_back_seq.is_some_and(|frame_seq| frame.frame_seq <= frame_seq) {
+            self.log_host_flow(
+                "submit",
+                Some(frame_seq),
+                "RejectedAlreadyPresented",
+                None,
+                false,
+                frame_age_ms,
+                frame_age_budget_ms,
+                telemetry,
+            );
             return ScheduledFrameSubmitOutcome::RejectedAlreadyPresented {
                 frame_seq: frame.frame_seq,
                 last_presented_frame_seq: pending_back_seq.unwrap_or_default(),
@@ -351,6 +531,16 @@ impl ScheduledFrameSlot {
             }
         }
         self.pending_frames.push_back(frame.clone());
+        self.log_host_flow(
+            "submit",
+            Some(frame_seq),
+            "Accepted",
+            replaced_frame_seq,
+            overwrote_pending,
+            frame_age_ms,
+            frame_age_budget_ms,
+            telemetry,
+        );
         ScheduledFrameSubmitOutcome::Accepted {
             frame_seq: frame.frame_seq,
             overwrote_pending,
@@ -373,9 +563,19 @@ impl ScheduledFrameSlot {
                 .last_presented_frame_seq
                 .is_some_and(|frame_seq| frame.frame_seq <= frame_seq)
             {
+                self.log_host_flow(
+                    "take",
+                    Some(frame.frame_seq),
+                    "RejectedAlreadyPresented",
+                    None,
+                    false,
+                    0.0,
+                    0.0,
+                    telemetry,
+                );
                 continue;
             }
-            let frame_age_budget_ms = telemetry.stale_frame_age_budget_ms();
+            let frame_age_budget_ms = telemetry.stale_frame_age_budget_for_frame(&frame);
             let frame_age_ms = (now_ms - frame.rendered_at_ms).max(0.0);
             if frame_age_ms > frame_age_budget_ms {
                 telemetry.record_stale_frame_drop(
@@ -385,24 +585,74 @@ impl ScheduledFrameSlot {
                     self.queue_depth(),
                 );
                 if self.pending_frames.is_empty() && self.displayed_frame.is_none() {
+                    self.log_host_flow(
+                        "take",
+                        Some(frame.frame_seq),
+                        "DroppedStale",
+                        None,
+                        false,
+                        frame_age_ms,
+                        frame_age_budget_ms,
+                        telemetry,
+                    );
                     return ScheduledFrameTakeOutcome::DroppedStale {
                         frame,
                         frame_age_ms,
                         frame_age_budget_ms,
                     };
                 }
+                self.log_host_flow(
+                    "take",
+                    Some(frame.frame_seq),
+                    "DroppedStale",
+                    None,
+                    false,
+                    frame_age_ms,
+                    frame_age_budget_ms,
+                    telemetry,
+                );
                 continue;
             }
             self.last_presented_frame_seq = Some(frame.frame_seq);
             self.displayed_frame = Some(frame.clone());
             telemetry.clear_no_pending_streak();
+            self.log_host_flow(
+                "take",
+                Some(frame.frame_seq),
+                "Ready",
+                None,
+                false,
+                frame_age_ms,
+                frame_age_budget_ms,
+                telemetry,
+            );
             return ScheduledFrameTakeOutcome::Ready(frame);
         }
         if self.displayed_frame.is_some() {
             telemetry.clear_no_pending_streak();
+            self.log_host_flow(
+                "take",
+                self.displayed_frame.as_ref().map(|frame| frame.frame_seq),
+                "RetainedDisplayedFrame",
+                None,
+                false,
+                0.0,
+                0.0,
+                telemetry,
+            );
             return ScheduledFrameTakeOutcome::RetainedDisplayedFrame;
         }
         telemetry.record_no_pending_take();
+        self.log_host_flow(
+            "take",
+            None,
+            "NoPendingFrame",
+            None,
+            false,
+            0.0,
+            0.0,
+            telemetry,
+        );
         ScheduledFrameTakeOutcome::NoPendingFrame
     }
 
@@ -421,8 +671,57 @@ impl ScheduledFrameSlot {
         // 否则会把仍在运行的 display link / fallback loop 误判成需要重启。
     }
 
+    pub fn diagnostics_snapshot(&self) -> ScheduledFrameSlotDiagnostics {
+        ScheduledFrameSlotDiagnostics {
+            displayed_frame_seq: self.displayed_frame.as_ref().map(|frame| frame.frame_seq),
+            pending_frame_seqs: self
+                .pending_frames
+                .iter()
+                .map(|frame| frame.frame_seq)
+                .collect(),
+            last_presented_frame_seq: self.last_presented_frame_seq,
+            queue_depth: self.queue_depth(),
+            pending_queue_depth: self.pending_frames.len(),
+            has_displayed_frame: self.displayed_frame.is_some(),
+            render_loop_started: self.render_loop_started,
+        }
+    }
+
     fn queue_depth(&self) -> usize {
         self.pending_frames.len() + usize::from(self.displayed_frame.is_some())
+    }
+
+    fn log_host_flow(
+        &self,
+        event: &str,
+        frame_seq: Option<u64>,
+        slot_outcome: &str,
+        replaced_frame_seq: Option<u64>,
+        overwrote_pending: bool,
+        frame_age_ms: f64,
+        frame_age_budget_ms: f64,
+        telemetry: &HostCadenceTelemetry,
+    ) {
+        let diagnostics = self.diagnostics_snapshot();
+        log::info!(
+            "[playback-flow][host] event={} slot_outcome={} frame_seq={} displayed_frame_seq={} last_presented_frame_seq={} pending_frame_seqs={} queue_depth={} pending_queue_depth={} display_tick_epoch={} present_epoch={} overwrote_pending={} replaced_frame_seq={} frame_age_ms={:.2} frame_age_budget_ms={:.2} no_pending_streak={} cadence_phase={}",
+            event,
+            slot_outcome,
+            format_optional_seq(frame_seq),
+            format_optional_seq(diagnostics.displayed_frame_seq),
+            format_optional_seq(diagnostics.last_presented_frame_seq),
+            format_frame_seq_list(&diagnostics.pending_frame_seqs),
+            diagnostics.queue_depth,
+            diagnostics.pending_queue_depth,
+            telemetry.display_tick_epoch(),
+            telemetry.present_epoch(),
+            overwrote_pending,
+            format_optional_seq(replaced_frame_seq),
+            frame_age_ms,
+            frame_age_budget_ms,
+            telemetry.no_pending_streak,
+            telemetry.cadence_phase().as_str(),
+        );
     }
 }
 

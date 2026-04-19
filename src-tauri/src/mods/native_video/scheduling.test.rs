@@ -179,6 +179,24 @@ fn cadence_epoch_and_phase_progress_with_ticks_and_presents() {
 }
 
 #[test]
+fn telemetry_diagnostics_snapshot_captures_epochs_and_no_pending_state() {
+    let mut telemetry = HostCadenceTelemetry::default();
+
+    telemetry.record_display_tick(1_000.0);
+    telemetry.record_display_tick(1_016.0);
+    telemetry.record_present(1_018.0);
+    telemetry.record_no_pending_take();
+
+    let snapshot = telemetry.diagnostics_snapshot();
+    assert_eq!(snapshot.display_tick_epoch, 2);
+    assert_eq!(snapshot.present_epoch, 1);
+    assert_eq!(snapshot.cadence_phase, HostCadencePhase::Starved);
+    assert_eq!(snapshot.no_pending_streak, 1);
+    assert_eq!(snapshot.no_pending_take_count_total, 1);
+    assert_eq!(snapshot.present_enqueue_count_total, 0);
+}
+
+#[test]
 fn no_pending_before_first_present_stays_in_priming() {
     let mut telemetry = HostCadenceTelemetry::default();
 
@@ -242,4 +260,86 @@ fn starved_submit_uses_relaxed_stale_budget_to_accept_recovery_frame() {
         ScheduledFrameSubmitOutcome::Accepted { frame_seq, .. } => assert_eq!(frame_seq, 77),
         other => panic!("expected starved recovery frame to be accepted, got {other:?}"),
     }
+}
+
+#[test]
+fn recovery_keyframe_is_not_dropped_as_stale_immediately_after_submit() {
+    let mut slot = ScheduledFrameSlot::default();
+    let mut telemetry = HostCadenceTelemetry::default();
+
+    match slot.submit_frame(&mk_frame(20), 1_012.0, &mut telemetry) {
+        ScheduledFrameSubmitOutcome::Accepted { .. } => {}
+        other => panic!("expected accepted frame, got {other:?}"),
+    }
+    match slot.take_ready_frame(1_012.0, &mut telemetry) {
+        ScheduledFrameTakeOutcome::Ready(frame) => assert_eq!(frame.frame_seq, 20),
+        other => panic!("expected ready frame, got {other:?}"),
+    }
+
+    let recovery_keyframe = XbxEngineRenderFrame {
+        frame_seq: 27,
+        rendered_at_ms: 1_671.0,
+        is_keyframe: true,
+        frame_recovery_disposition: Some("repairing".to_string()),
+        ..mk_frame(27)
+    };
+
+    match slot.submit_frame(&recovery_keyframe, 1_687.0, &mut telemetry) {
+        ScheduledFrameSubmitOutcome::Accepted { frame_seq, .. } => assert_eq!(frame_seq, 27),
+        other => panic!("expected accepted recovery keyframe, got {other:?}"),
+    }
+
+    match slot.take_ready_frame(1_696.0, &mut telemetry) {
+        ScheduledFrameTakeOutcome::Ready(frame) => assert_eq!(frame.frame_seq, 27),
+        other => panic!("expected recovery keyframe to stay eligible for present, got {other:?}"),
+    }
+}
+
+#[test]
+fn low_video_fps_submit_interval_relaxes_host_stale_budget_under_high_refresh_ticks() {
+    let mut telemetry = HostCadenceTelemetry::default();
+
+    for index in 0..6 {
+        telemetry.record_display_tick(1_000.0 + index as f64 * 8.33);
+    }
+
+    let first_gap = telemetry.record_submit(1_000.0);
+    let second_gap = telemetry.record_submit(1_033.0);
+    let third_gap = telemetry.record_submit(1_066.0);
+
+    assert_eq!(first_gap, None);
+    assert_eq!(second_gap, Some(33.0));
+    assert_eq!(third_gap, Some(33.0));
+    assert!(
+        telemetry.frame_age_budget_ms() >= 70.0,
+        "expected video-fps-aware budget under high-refresh host, got {}",
+        telemetry.frame_age_budget_ms()
+    );
+}
+
+#[test]
+fn slot_diagnostics_snapshot_reports_displayed_and_pending_frames() {
+    let mut slot = ScheduledFrameSlot::default();
+    let mut telemetry = HostCadenceTelemetry::default();
+
+    match slot.submit_frame(&mk_frame(11), 1_010.0, &mut telemetry) {
+        ScheduledFrameSubmitOutcome::Accepted { .. } => {}
+        other => panic!("expected accepted frame, got {other:?}"),
+    }
+    match slot.submit_frame(&mk_frame(12), 1_012.0, &mut telemetry) {
+        ScheduledFrameSubmitOutcome::Accepted { .. } => {}
+        other => panic!("expected accepted frame, got {other:?}"),
+    }
+    match slot.take_ready_frame(1_020.0, &mut telemetry) {
+        ScheduledFrameTakeOutcome::Ready(frame) => assert_eq!(frame.frame_seq, 11),
+        other => panic!("expected ready frame, got {other:?}"),
+    }
+
+    let snapshot = slot.diagnostics_snapshot();
+    assert_eq!(snapshot.displayed_frame_seq, Some(11));
+    assert_eq!(snapshot.pending_frame_seqs, vec![12]);
+    assert_eq!(snapshot.last_presented_frame_seq, Some(11));
+    assert_eq!(snapshot.queue_depth, 2);
+    assert_eq!(snapshot.pending_queue_depth, 1);
+    assert!(snapshot.has_displayed_frame);
 }

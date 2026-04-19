@@ -3,8 +3,9 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use super::{
-    drive_ready_frames_with_submit, flush_pending_render_output_with_submit, next_wait_duration,
-    render_frame_is_stale, render_frame_priority, resolve_cadence_sleep_guard_override_ms,
+    drive_ready_frames_with_submit, flush_pending_render_output_with_submit,
+    format_render_backpressure_summary, next_wait_duration, render_frame_is_stale,
+    render_frame_priority, resolve_cadence_sleep_guard_override_ms,
     resolve_host_release_wait_duration, should_replace_render_queue_head, HostCadencePhaseHint,
     HostPacingContext, PendingRenderSubmitResult, PendingRenderSubmitResultWithFrame,
 };
@@ -70,12 +71,12 @@ fn pending_render_output_keeps_frame_on_backpressure_until_retry_succeeds() {
         if submit_calls == 1 {
             PendingRenderSubmitResultWithFrame::BackpressureWithFrame(frame)
         } else {
-            PendingRenderSubmitResultWithFrame::Submitted
+            PendingRenderSubmitResultWithFrame::Submitted(frame)
         }
     });
 
     assert_eq!(submit_calls, 1);
-    assert!(matches!(first, PendingRenderSubmitResult::Backpressure));
+    assert!(matches!(first, PendingRenderSubmitResult::Backpressure(_)));
     assert_eq!(render_queue.len(), 1);
     assert_eq!(
         render_queue.front().map(|frame| frame.surface.frame_seq),
@@ -85,11 +86,11 @@ fn pending_render_output_keeps_frame_on_backpressure_until_retry_succeeds() {
     let second = flush_pending_render_output_with_submit(&mut render_queue, |frame| {
         submit_calls += 1;
         assert_eq!(frame.surface.frame_seq, 1);
-        PendingRenderSubmitResultWithFrame::Submitted
+        PendingRenderSubmitResultWithFrame::Submitted(frame)
     });
 
     assert_eq!(submit_calls, 2);
-    assert!(matches!(second, PendingRenderSubmitResult::Submitted));
+    assert!(matches!(second, PendingRenderSubmitResult::Submitted(_)));
     assert!(render_queue.is_empty());
 }
 
@@ -104,6 +105,30 @@ fn pending_render_output_reports_disconnect_without_silently_requeueing() {
 
     assert!(matches!(result, PendingRenderSubmitResult::Disconnected(_)));
     assert!(render_queue.is_empty());
+}
+
+#[test]
+fn render_backpressure_summary_includes_host_epochs_and_queue_depths() {
+    let host_context = HostPacingContext {
+        host_refresh_interval_ms: 17,
+        release_interval_ms: 17,
+        host_frame_age_budget_ms: Some(75.0),
+        latest_host_present_time_ms: Some(1_000.0),
+        display_tick_epoch: 11,
+        present_epoch: 7,
+        cadence_phase: HostCadencePhaseHint::Starved,
+        pressure: HostPacingPressure::default(),
+        video_rtt_ms: None,
+        video_nack_recovery_rtt_ms: None,
+    };
+
+    let summary = format_render_backpressure_summary(3, 1, &host_context);
+    assert!(summary.contains("pacingQueueDepth=3"));
+    assert!(summary.contains("pendingRenderQueueDepth=1"));
+    assert!(summary.contains("hostTickEpoch=11"));
+    assert!(summary.contains("presentEpoch=7"));
+    assert!(summary.contains("cadencePhase=starved"));
+    assert!(summary.contains("hostFrameAgeBudgetMs=75.0"));
 }
 
 #[test]
@@ -143,13 +168,16 @@ fn next_wait_duration_respects_host_release_gate() {
 #[test]
 fn host_release_gate_disables_itself_when_host_present_is_stale() {
     let context = HostPacingContext {
-        refresh_interval_ms: 16,
+        host_refresh_interval_ms: 16,
+        release_interval_ms: 16,
         host_frame_age_budget_ms: Some(36.0),
         latest_host_present_time_ms: Some(1_000.0),
         display_tick_epoch: 0,
         present_epoch: 0,
         cadence_phase: HostCadencePhaseHint::Unknown,
         pressure: HostPacingPressure::default(),
+        video_rtt_ms: None,
+        video_nack_recovery_rtt_ms: None,
     };
     let wait = resolve_host_release_wait_duration(&context, 1_100.0, None);
     assert!(wait.is_none());
@@ -158,13 +186,16 @@ fn host_release_gate_disables_itself_when_host_present_is_stale() {
 #[test]
 fn host_release_gate_waits_until_next_host_tick_window() {
     let context = HostPacingContext {
-        refresh_interval_ms: 16,
+        host_refresh_interval_ms: 16,
+        release_interval_ms: 16,
         host_frame_age_budget_ms: Some(36.0),
         latest_host_present_time_ms: Some(1_000.0),
         display_tick_epoch: 0,
         present_epoch: 0,
         cadence_phase: HostCadencePhaseHint::Unknown,
         pressure: HostPacingPressure::default(),
+        video_rtt_ms: None,
+        video_nack_recovery_rtt_ms: None,
     };
     let wait = resolve_host_release_wait_duration(&context, 1_006.0, None)
         .expect("host gate should request a wait");
@@ -175,13 +206,16 @@ fn host_release_gate_waits_until_next_host_tick_window() {
 #[test]
 fn host_release_gate_prefers_new_display_tick_epoch_over_time_window() {
     let context = HostPacingContext {
-        refresh_interval_ms: 16,
+        host_refresh_interval_ms: 16,
+        release_interval_ms: 16,
         host_frame_age_budget_ms: Some(36.0),
         latest_host_present_time_ms: Some(1_000.0),
         display_tick_epoch: 9,
         present_epoch: 4,
         cadence_phase: HostCadencePhaseHint::Steady,
         pressure: HostPacingPressure::default(),
+        video_rtt_ms: None,
+        video_nack_recovery_rtt_ms: None,
     };
     let wait = resolve_host_release_wait_duration(&context, 1_006.0, Some(8));
     assert!(wait.is_none());
@@ -190,13 +224,16 @@ fn host_release_gate_prefers_new_display_tick_epoch_over_time_window() {
 #[test]
 fn host_release_gate_blocks_reusing_same_display_tick_epoch_until_fallback_window() {
     let context = HostPacingContext {
-        refresh_interval_ms: 16,
+        host_refresh_interval_ms: 16,
+        release_interval_ms: 16,
         host_frame_age_budget_ms: Some(36.0),
         latest_host_present_time_ms: Some(1_000.0),
         display_tick_epoch: 9,
         present_epoch: 4,
         cadence_phase: HostCadencePhaseHint::Steady,
         pressure: HostPacingPressure::default(),
+        video_rtt_ms: None,
+        video_nack_recovery_rtt_ms: None,
     };
     let wait = resolve_host_release_wait_duration(&context, 1_006.0, Some(9))
         .expect("same tick epoch should still gate release");
@@ -206,13 +243,16 @@ fn host_release_gate_blocks_reusing_same_display_tick_epoch_until_fallback_windo
 #[test]
 fn host_release_gate_blocks_reusing_same_priming_tick_before_first_present() {
     let context = HostPacingContext {
-        refresh_interval_ms: 16,
+        host_refresh_interval_ms: 16,
+        release_interval_ms: 16,
         host_frame_age_budget_ms: Some(36.0),
         latest_host_present_time_ms: None,
         display_tick_epoch: 9,
         present_epoch: 0,
         cadence_phase: HostCadencePhaseHint::Priming,
         pressure: HostPacingPressure::default(),
+        video_rtt_ms: None,
+        video_nack_recovery_rtt_ms: None,
     };
     let wait = resolve_host_release_wait_duration(&context, 1_006.0, Some(9))
         .expect("priming should block reusing the same host tick before first present");
@@ -220,15 +260,47 @@ fn host_release_gate_blocks_reusing_same_priming_tick_before_first_present() {
 }
 
 #[test]
+fn host_release_gate_allows_same_tick_reuse_when_high_refresh_host_lags_present_feedback() {
+    let context = HostPacingContext {
+        host_refresh_interval_ms: 7,
+        release_interval_ms: 33,
+        host_frame_age_budget_ms: Some(36.0),
+        latest_host_present_time_ms: Some(1_000.0),
+        display_tick_epoch: 166,
+        present_epoch: 5,
+        cadence_phase: HostCadencePhaseHint::Steady,
+        pressure: HostPacingPressure {
+            cadence_phase: HostCadencePhaseHint::Steady,
+            no_pending_pressure_level: Some("normal".to_string()),
+            no_pending_streak: 0,
+            present_overwrite_count_total: 0,
+            present_submit_count_total: 5,
+            present_fps: Some(7.27),
+            display_fps: Some(144.0),
+        },
+        video_rtt_ms: None,
+        video_nack_recovery_rtt_ms: None,
+    };
+    let wait = resolve_host_release_wait_duration(&context, 1_008.0, Some(166));
+    assert!(
+        wait.is_none(),
+        "high-refresh host with lagging present feedback should allow same-tick reuse"
+    );
+}
+
+#[test]
 fn host_release_gate_releases_same_tick_immediately_when_host_is_starved() {
     let context = HostPacingContext {
-        refresh_interval_ms: 16,
+        host_refresh_interval_ms: 16,
+        release_interval_ms: 16,
         host_frame_age_budget_ms: Some(36.0),
         latest_host_present_time_ms: Some(1_000.0),
         display_tick_epoch: 9,
         present_epoch: 4,
         cadence_phase: HostCadencePhaseHint::Starved,
         pressure: HostPacingPressure::default(),
+        video_rtt_ms: None,
+        video_nack_recovery_rtt_ms: None,
     };
     let wait = resolve_host_release_wait_duration(&context, 1_006.0, Some(9));
     assert!(wait.is_none());
@@ -237,13 +309,16 @@ fn host_release_gate_releases_same_tick_immediately_when_host_is_starved() {
 #[test]
 fn cadence_sleep_guard_override_shortens_sleep_during_priming() {
     let host_context = HostPacingContext {
-        refresh_interval_ms: 16,
+        host_refresh_interval_ms: 16,
+        release_interval_ms: 16,
         host_frame_age_budget_ms: Some(36.0),
         latest_host_present_time_ms: None,
         display_tick_epoch: 1,
         present_epoch: 0,
         cadence_phase: HostCadencePhaseHint::Priming,
         pressure: HostPacingPressure::default(),
+        video_rtt_ms: None,
+        video_nack_recovery_rtt_ms: None,
     };
     assert_eq!(
         resolve_cadence_sleep_guard_override_ms(&host_context),
@@ -254,13 +329,16 @@ fn cadence_sleep_guard_override_shortens_sleep_during_priming() {
 #[test]
 fn cadence_sleep_guard_override_disables_sleep_when_host_is_starved() {
     let host_context = HostPacingContext {
-        refresh_interval_ms: 16,
+        host_refresh_interval_ms: 16,
+        release_interval_ms: 16,
         host_frame_age_budget_ms: Some(36.0),
         latest_host_present_time_ms: Some(1_000.0),
         display_tick_epoch: 9,
         present_epoch: 4,
         cadence_phase: HostCadencePhaseHint::Starved,
         pressure: HostPacingPressure::default(),
+        video_rtt_ms: None,
+        video_nack_recovery_rtt_ms: None,
     };
     assert_eq!(
         resolve_cadence_sleep_guard_override_ms(&host_context),
@@ -281,20 +359,25 @@ fn drive_ready_frames_holds_due_frame_until_host_release_window_opens() {
     let mut last_consumed_host_tick_epoch = None;
     let mut render_backpressure_active = false;
     let host_context = HostPacingContext {
-        refresh_interval_ms: 16,
+        host_refresh_interval_ms: 16,
+        release_interval_ms: 16,
         host_frame_age_budget_ms: Some(36.0),
         latest_host_present_time_ms: Some(crate::media::video::decode::video_decode::now_ms_f64()),
         display_tick_epoch: 0,
         present_epoch: 0,
         cadence_phase: HostCadencePhaseHint::Unknown,
         pressure: HostPacingPressure::default(),
+        video_rtt_ms: None,
+        video_nack_recovery_rtt_ms: None,
     };
     let pacing_policy = FramePacingPolicy::with_dynamic_budget(
-        host_context.refresh_interval_ms,
+        host_context.release_interval_ms, // 使用release限速间隔
         host_context
             .host_frame_age_budget_ms
             .map(|budget_ms| budget_ms.round() as u64),
         resolve_cadence_sleep_guard_override_ms(&host_context),
+        host_context.video_rtt_ms,
+        host_context.video_nack_recovery_rtt_ms,
     );
     let mut submit_calls = 0usize;
 
@@ -311,7 +394,7 @@ fn drive_ready_frames_holds_due_frame_until_host_release_window_opens() {
         &mut render_backpressure_active,
         |_render_queue| {
             submit_calls += 1;
-            PendingRenderSubmitResult::Submitted
+            PendingRenderSubmitResult::Submitted(make_decoded_frame(1))
         },
     );
 
@@ -334,7 +417,8 @@ fn drive_ready_frames_retries_pending_render_output_after_backpressure_clears() 
     let mut last_consumed_host_tick_epoch = None;
     let mut render_backpressure_active = false;
     let host_context = HostPacingContext {
-        refresh_interval_ms: 16,
+        host_refresh_interval_ms: 16,
+        release_interval_ms: 16,
         host_frame_age_budget_ms: Some(36.0),
         latest_host_present_time_ms: Some(
             crate::media::video::decode::video_decode::now_ms_f64() - 64.0,
@@ -343,13 +427,17 @@ fn drive_ready_frames_retries_pending_render_output_after_backpressure_clears() 
         present_epoch: 0,
         cadence_phase: HostCadencePhaseHint::Unknown,
         pressure: HostPacingPressure::default(),
+        video_rtt_ms: None,
+        video_nack_recovery_rtt_ms: None,
     };
     let pacing_policy = FramePacingPolicy::with_dynamic_budget(
-        host_context.refresh_interval_ms,
+        host_context.release_interval_ms, // 使用release限速间隔
         host_context
             .host_frame_age_budget_ms
             .map(|budget_ms| budget_ms.round() as u64),
         resolve_cadence_sleep_guard_override_ms(&host_context),
+        host_context.video_rtt_ms,
+        host_context.video_nack_recovery_rtt_ms,
     );
     let mut submitted_seqs = Vec::new();
     let mut flush_calls = 0usize;
@@ -368,13 +456,13 @@ fn drive_ready_frames_retries_pending_render_output_after_backpressure_clears() 
         |render_queue| {
             flush_calls += 1;
             if render_queue.is_empty() {
-                return PendingRenderSubmitResult::Submitted;
+                return PendingRenderSubmitResult::Submitted(make_decoded_frame(0));
             }
             let frame = render_queue
                 .pop_front()
                 .expect("render queue should contain frame during flush");
-            render_queue.push_front(frame);
-            PendingRenderSubmitResult::Backpressure
+            render_queue.push_front(frame.clone());
+            PendingRenderSubmitResult::Backpressure(frame)
         },
     );
 
@@ -400,7 +488,7 @@ fn drive_ready_frames_retries_pending_render_output_after_backpressure_clears() 
                 .pop_front()
                 .expect("render queue should still contain pending frame");
             submitted_seqs.push(frame.surface.frame_seq);
-            PendingRenderSubmitResult::Submitted
+            PendingRenderSubmitResult::Submitted(frame)
         },
     );
 

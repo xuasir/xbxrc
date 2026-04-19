@@ -1142,6 +1142,7 @@ impl NativeVideoPresenter for MacOsVideoPresenter {
             submit_gap_ms.is_some_and(|gap_ms| telemetry.should_warn_submit_gap(gap_ms));
         telemetry.present_enqueue_count_total =
             telemetry.present_enqueue_count_total.saturating_add(1);
+        let telemetry_diag = telemetry.diagnostics_snapshot();
         let Ok(mut frame_slot) = self.frame_slot.lock() else {
             record_native_video_timing_event_lazy(
                 self.runtime_trace.as_ref(),
@@ -1166,6 +1167,7 @@ impl NativeVideoPresenter for MacOsVideoPresenter {
                 frame_age_ms,
                 frame_age_budget_ms,
             } => {
+                let slot_diag = frame_slot.diagnostics_snapshot();
                 record_native_video_timing_event_lazy(
                     self.runtime_trace.as_ref(),
                     "layer",
@@ -1182,6 +1184,14 @@ impl NativeVideoPresenter for MacOsVideoPresenter {
                             "noPendingStreakBeforeSubmit": no_pending_streak_before_submit,
                             "overwrotePending": overwrote_pending,
                             "replacedFrameSeq": replaced_frame_seq,
+                            "displayedFrameSeq": slot_diag.displayed_frame_seq,
+                            "pendingFrameSeqs": slot_diag.pending_frame_seqs,
+                            "lastPresentedFrameSeq": slot_diag.last_presented_frame_seq,
+                            "queueDepth": slot_diag.queue_depth,
+                            "pendingQueueDepth": slot_diag.pending_queue_depth,
+                            "hostDisplayTickEpoch": telemetry_diag.display_tick_epoch,
+                            "hostPresentEpoch": telemetry_diag.present_epoch,
+                            "hostCadencePhase": telemetry_diag.cadence_phase.as_str(),
                         })
                     },
                 );
@@ -1202,6 +1212,12 @@ impl NativeVideoPresenter for MacOsVideoPresenter {
                                 "noPendingStreakBeforeSubmit": no_pending_streak_before_submit,
                                 "overwrotePending": overwrote_pending,
                                 "replacedFrameSeq": replaced_frame_seq,
+                                "displayedFrameSeq": slot_diag.displayed_frame_seq,
+                                "pendingFrameSeqs": slot_diag.pending_frame_seqs,
+                                "queueDepth": slot_diag.queue_depth,
+                                "pendingQueueDepth": slot_diag.pending_queue_depth,
+                                "hostDisplayTickEpoch": telemetry_diag.display_tick_epoch,
+                                "hostPresentEpoch": telemetry_diag.present_epoch,
                             })
                         },
                     );
@@ -1212,6 +1228,7 @@ impl NativeVideoPresenter for MacOsVideoPresenter {
                 frame_age_ms,
                 frame_age_budget_ms,
             } => {
+                let slot_diag = frame_slot.diagnostics_snapshot();
                 record_native_video_timing_event_lazy(
                     self.runtime_trace.as_ref(),
                     "layer",
@@ -1226,6 +1243,13 @@ impl NativeVideoPresenter for MacOsVideoPresenter {
                             "frameAgeBudgetMs": frame_age_budget_ms,
                             "submitGapMs": submit_gap_ms,
                             "noPendingStreakBeforeSubmit": no_pending_streak_before_submit,
+                            "displayedFrameSeq": slot_diag.displayed_frame_seq,
+                            "pendingFrameSeqs": slot_diag.pending_frame_seqs,
+                            "queueDepth": slot_diag.queue_depth,
+                            "pendingQueueDepth": slot_diag.pending_queue_depth,
+                            "hostDisplayTickEpoch": telemetry_diag.display_tick_epoch,
+                            "hostPresentEpoch": telemetry_diag.present_epoch,
+                            "hostCadencePhase": telemetry_diag.cadence_phase.as_str(),
                         })
                     },
                 );
@@ -1234,6 +1258,7 @@ impl NativeVideoPresenter for MacOsVideoPresenter {
                 frame_seq,
                 last_presented_frame_seq,
             } => {
+                let slot_diag = frame_slot.diagnostics_snapshot();
                 record_native_video_timing_event_lazy(
                     self.runtime_trace.as_ref(),
                     "layer",
@@ -1247,6 +1272,13 @@ impl NativeVideoPresenter for MacOsVideoPresenter {
                             "lastPresentedFrameSeq": last_presented_frame_seq,
                             "submitGapMs": submit_gap_ms,
                             "noPendingStreakBeforeSubmit": no_pending_streak_before_submit,
+                            "displayedFrameSeq": slot_diag.displayed_frame_seq,
+                            "pendingFrameSeqs": slot_diag.pending_frame_seqs,
+                            "queueDepth": slot_diag.queue_depth,
+                            "pendingQueueDepth": slot_diag.pending_queue_depth,
+                            "hostDisplayTickEpoch": telemetry_diag.display_tick_epoch,
+                            "hostPresentEpoch": telemetry_diag.present_epoch,
+                            "hostCadencePhase": telemetry_diag.cadence_phase.as_str(),
                         })
                     },
                 );

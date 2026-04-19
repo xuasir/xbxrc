@@ -2,7 +2,7 @@
 
 更新时间：2026-04-15
 
-本文梳理从 `AssembledVideoFrame` 离开 source 层到最终呈现这段链路的现有实现与能力缺口。与 `packet-to-frame-pipeline.md` 衔接：入口是 `recv_frame_inner` 返回的 `AssembledVideoFrame`，出口是 Renderer 的 present 回调。
+本文梳理从 `AssembledVideoFrame` 离开 source 层到最终呈现这段链路的现有实现与待优化项。与 `packet-to-frame-pipeline.md` 衔接：入口是 `recv_frame_inner` 返回的 `AssembledVideoFrame`，出口是 Renderer 的 present 回调。
 
 ## 1. 链路全貌
 
@@ -79,38 +79,11 @@ target_playout_time = playout_base_at.unwrap_or(assembled_at)
 - `prefers_chain_broken / prefers_wait_keyframe / prefers_reconfigure`：ingress 调度的门控判断
 - `frame_importance`：`FrameBudgetContext` 在 NACK/准入策略侧生成的重要性标签字符串（`"keyframe" / "reference" / "delta"`）；它不是 `AssembledVideoFrame`/`EncodedFrame` 的结构字段
 
-#### 缺口
+#### 待优化项
 
-**1. `assembled_at` 是 source 层产帧时的 `Instant`，不是包到达时间**
+**1. `assembled_at` 包含 SampleBuilder 固有延迟**
 
 当前优先使用 `playout_base_at`（若存在）作为基准，缺失时回退到 `assembled_at`。`assembled_at` 是 `sample_builder.pop()` 返回时记录的时刻，已包含 `SampleBuilder` 等待下一帧第一个包的固有延迟（约一个帧间隔，60fps ≈ 16.7ms）；因此在无 `playout_base_at` 回退路径下，`target_playout_time` 仍可能相对媒体时间偏晚。
-
-**2. `rtt_slack` 在物化阶段始终为 `Unknown`**
-
-`for_ingress_materialization_parts` 构造的 `FrameBudgetContext` 里 `rtt_slack` 硬编码为 `FrameBudgetRttSlack::Unknown`。只有 `for_transport`（NACK 路径）才会根据 `cloud_rtt_ms` 和 `estimated_recovery_arrival_ms` 计算真实的 `rtt_slack`。
-
-物化阶段用的 `context` 来自 `frame.budget`（source 层写入），如果 source 层走的是 `for_ingress_materialization_parts` fallback 路径（`take_frame_recovery_ledger` 返回 None 时），`rtt_slack` 就是 `Unknown`，导致 `adjust_budget_ratio` 里 rtt_slack 分支不生效，`deadline_budget_ratio_per_mille` 偏高，delta 帧的 `playout_delay` 偏向 `max_delay` 端。
-
-**3. `Anchor` 和 `ChainBroken` 帧的 `playout_delay` 固定为 `max_delay`，不感知实际网络状态**
-
-恢复帧（IDR 或 chain broken 场景）的 `playout_delay` 直接取 `max_delay`（30ms），不考虑当前网络是否已经稳定、RTT 是否很低。在本地局域网场景下，这 30ms 是不必要的固定开销。
-
-#### 改造完成
-
-**缺口 2：`rtt_slack` 已部分改造（以 source fallback 为主）**
-
-`for_ingress_materialization_parts` 仍保持 `rtt_slack = Unknown` 默认值；当前改造点在 source 层的 `build_ingress_materialization_fallback_budget`：优先用 `FrameBudgetContext::for_transport` 计算 RTT 感知的 context，仅在 RTT 不可用（`Unknown`）时回退到 `for_ingress_materialization_parts`。因此，`rtt_slack` 的有效计算已接入物化链路，但并非由 `for_ingress_materialization_parts` 直接承担。
-
-**未改造项说明**
-
-- **缺口 1（`assembled_at` 包含 SampleBuilder 固有延迟）**：部分改造。已引入 `playout_base_at` 作为优先基准，降低对 `assembled_at` 的依赖；但在 `playout_base_at` 缺失回退时，固有延迟仍存在。
-- **缺口 3（Anchor/ChainBroken 帧固定 max_delay）**：已改造。`resolve_playout_delay` 已对 Anchor/ChainBroken 场景引入 RTT 感知 ratio cap 与 protection bias（Ample/Tight/Exhausted/Unknown 分档），不再是恒定顶格 `max_delay`。
-
-#### 值得借鉴（Moonlight）
-
-Moonlight 没有等效的物化层。帧从 `submitDecodeUnit` 直接送 `avcodec_send_packet`，解码完成后进 Pacer，由 V-sync 信号驱动出队送 render。整个路径没有 `target_playout_time` 的计算，没有基于帧价值的 playout delay 差异化——帧时序完全由显示器刷新率决定，是纯拉模型。
-
-我们的推模型（在物化时预算 `target_playout_time`）是针对云游戏高 RTT、NACK 恢复窗口、参考链价值等场景的必要设计，Moonlight 的简单性来自它不需要处理这些场景。这个阶段没有可借鉴的实现。
 
 ### 2.2 Ingress 调度（ingress/scheduler.rs）
 
@@ -192,52 +165,9 @@ delta 帧的有效迟到阈值约 250ms，IDR 帧约 500ms。`now > target_playo
 - `UnrecoverableReferenceChain` 到达 → `true`，清空队列
 - `start_reconfigure()` 调用 → `true`，清空队列
 
-#### 改造完成
+#### 待优化项
 
-**缺口 4：backlog 决策语义已拆分**
-
-`DropBacklog` 已拆分为 `DropBacklogIncoming` 与 `DropBacklogEvictQueued`。调用侧统计可以区分"真实丢新帧"与"队列内替换"，避免把替换行为误计为丢帧。返回值与真实行为严格对齐：发生队列替换时返回 `DropBacklogEvictQueued`，仅丢弃新帧时返回 `DropBacklogIncoming`。
-
-**缺口 5：过期队列清理改为双触发**
-
-过期清理不再只在 `submit` 触发。`drain_expired_for_decode()` 方法提供独立的清理入口，在 `drain_ingress_to_decode` 的 decode pull 路径也会触发，避免低帧率/静默窗口中队列过期帧长期占坑。
-
-**缺口 6：waiting continuation 判定契约已收敛**
-
-source 与 ingress 都改为复用同一 `is_recovery_delta_continuation_ready` 契约（`slice_headers_valid + committed SPS/PPS + delta_continuation_ready`），降低两层放行条件漂移风险。
-
-**缺口 7：keyframe 参数状态已分离**
-
-Ingress 内部改为 `observed_*` 与 `committed_*` 双状态：
-
-```rust
-observed_width: u32,
-observed_height: u32,
-observed_codec: Option<VideoCodec>,
-committed_width: u32,
-committed_height: u32,
-committed_codec: Option<VideoCodec>,
-```
-
-`waiting_keyframe` 下收到 dirty keyframe 时只更新 `observed_*`，不更新 `committed_*`；continuation 放行只依赖 `committed_*`，避免半提交误放行。
-
-#### 值得借鉴（Moonlight）
-
-Moonlight 在这个阶段没有等效层。`submitDecodeUnit` 直接把帧送给 FFmpeg 解码器，没有队列、没有积压控制、没有迟到判断。唯一的门控是：第一帧必须是 IDR（`m_FramesIn == 0 && du->frameType != FRAME_TYPE_IDR` → `DR_NEED_IDR`）。
-
-这个简单性来自 Moonlight 的同步流水线——FEC 恢复完成后帧立即提交，不存在帧在 ingress 队列里积压的场景。我们的异步架构（source → channel → session_loop → ingress → decode）需要这一层做缓冲和门控，没有可借鉴的实现。
-
-### 2.2 小节改造状态清单（2.1~2.2）
-
-| 小节 | 结论 | 说明 |
-|------|------|------|
-| 2.1 Ingress 物化 | 部分完成 | `rtt_slack` 计算经 source fallback 接入；`playout_base_at` 已接入；Anchor/ChainBroken 已加 RTT 感知收敛；仍有 `assembled_at` 回退路径固有延迟 |
-| 2.2 Ingress 调度 | 部分完成 | backlog 决策拆分、过期双触发、continuation 契约收敛、observed/committed 双状态均已落地；其余为既有架构权衡 |
-
-术语对照（跨文档统一口径）：
-- `media::video::types::FrameValue`：帧自身价值（Independent/Predicted + refresh_boost），用于物化/调度基础分。
-- `recovery::contract::FrameValue`：恢复策略价值分层（Disposable/Continuity/Reference/RecoveryAnchor/CleanAnchor），用于恢复升级与策略预算。
-- `frame_importance`：策略标签字符串，不是帧结构字段。
+无待优化项。backlog 决策拆分、过期双触发、continuation 契约收敛、observed/committed 双状态均已落地；其余为既有架构权衡。
 
 ### 2.3 恢复诊断与 RecoveryCoordinator（recovery/）
 
@@ -319,19 +249,15 @@ sustaining 窗口（`BootstrapInFlight`）期间会抑制升级，避免把正�
 
 `VideoEscalationBurstRollbackSnapshot` 在 `on_reason_with_epoch_policy` 之前快照 burst 相关状态。若 coordinator 最终把动作压成 `WaitForBurst` / `CoalescedDecoderResetInFlight` 等非执行动作，则回滚快照，避免"未执行仍吃掉 burst 计数"。
 
-#### 缺口
+#### 待优化项
 
-**1. `DropBacklogEvictQueued` 在 `VideoIngressSignal` 里的映射已修正**
+**1. `DropBacklogEvictQueued` 映射语义**
 
-原来 `DropBacklogEvictQueued` 映射到 `WaitKeyframe`，会让 recovery 诊断误判为帧丢失。已修正为新增 `FrameQueued` 变体，不触发恢复升级。
+拆分前 `DropBacklog` 统一映射到 `WaitKeyframe`，会让 recovery 诊断把"队列内替换"误判为帧丢失，可能触发多余的 keyframe 请求。拆分后新增 `FrameQueued` 变体，`DropBacklogEvictQueued` 映射到 `FrameQueued`，不触发恢复升级。
 
-**2. `ingressFrameQueued` 标签未接入 `VideoEscalationReason::from_recovery_reason_label`**
+**2. `FrameQueued` 实际上是死代码路径**
 
-`diagnosis.rs` 的 `FrameQueued` 变体目前只有穷举兜底，`from_recovery_reason_label` 里没有 `"ingressFrameQueued"` 的映射条目。如果后续 label 被写入 runtime stats 并被 coordinator 消费，需要补充映射。当前 `FrameQueued` 不进入 coordinator 主链，暂无影响。
-
-#### 值得借鉴（Moonlight）
-
-Moonlight 没有等效的恢复协调层。丢包后直接请求 IDR（`requestIdrFrame`），没有 burst 计数、没有 epoch 预算、没有分阶段升级。简单性来自 Moonlight 不需要处理云游戏高 RTT 下的 NACK 恢复窗口和 decoder reset 风暴。
+`diagnosis.rs` 的 `FrameQueued` 变体保留了穷举兜底实现（映射到 `ingressFrameQueued` 标签），但这段代码实际上不会被执行。真正的保护在 `session_loop.rs` 的上游过滤：`VideoIngressSignal::from_decision` 只在 `WaitKeyframe | DropUnrecoverable | Reconfigure` 三种决策上触发 `diagnose_ingress_signal` 调用，`DropBacklogEvictQueued` 根本不进入该路径。
 
 ---
 
@@ -365,19 +291,15 @@ Moonlight 没有等效的恢复协调层。丢包后直接请求 IDR（`requestI
 
 `process_encoded_frame` 返回被挤出的帧时，decode loop 调用 `record_pipeline_frame_drop` 记录 `outputQueueOverflow`，不静默丢弃。
 
-#### 缺口
+#### 待优化项
 
-**1. 解码输出队列容量固定为 3，不感知 Pacer 的实际消费速率**
+**1. 解码输出队列容量固定为 3**
 
 `DECODE_OUTPUT_QUEUE_CAPACITY = 3` 是硬编码常量。在 Pacer 因 renderer 背压暂停消费时，decode loop 会持续产出帧直到队列满，然后进入背压等待。这个容量在高帧率（60fps）下约 50ms 的缓冲，基本合理，但没有动态调整能力。
 
-**2. `PENDING_PACER_RETRY_TIMEOUT_MS = 4ms` 的轮询在背压期间持续占用 CPU**
+**2. 背压轮询的 CPU 开销**
 
-背压期间 decode loop 每 4ms 轮询一次，没有条件变量通知机制。在 Pacer 长时间背压（如 renderer 卡住）时会产生不必要的 CPU 消耗。
-
-#### 值得借鉴（Moonlight）
-
-Moonlight 的解码是同步调用 `avcodec_send_packet` + `avcodec_receive_frame`，没有独立线程，没有背压机制。解码完成后帧直接进 Pacer 队列。我们的异步 actor 模型在解码耗时抖动时有更好的隔离性，但引入了背压轮询的开销。
+背压期间 decode loop 每 4ms 轮询一次（`PENDING_PACER_RETRY_TIMEOUT_MS`），没有条件变量通知机制。在 Pacer 长时间背压（如 renderer 卡住）时会产生不必要的 CPU 消耗。
 
 ---
 
@@ -440,23 +362,21 @@ Pacer 用宿主机 present 回调的 epoch（`host_display_tick_epoch`）和 `la
 
 被替换的帧记录为 `rendererQueueReplaceStale` 或 `rendererQueueOverflow`，被拒绝的新帧记录为 `rendererQueueRejectLowerValue`。
 
+"过期"的判定有分档：`render_frame_stale_slack` 按帧重要性给出不同的宽限时间（delta=4ms，reference=8ms，keyframe=12ms），重要帧有更长的等待窗口再被替换。
+
 **`cadence_lag_ratio` 驱动的 sleep guard 动态调整**
 
 `resolve_cadence_sleep_guard_override_ms` 在 cadence lag ≥ 55% 时把 sleep guard 压到 0（立即出帧），在 25%~55% 时压到半个刷新间隔，避免帧率落后时 Pacer 还在等待 sleep guard 到期。
 
-#### 缺口
+#### 待优化项
 
 **1. `catch_up_threshold` 固定为 500ms，不感知当前网络 RTT**
 
-catch-up 阈值是 `host_frame_age_budget_ms`（来自 runtime stats）或默认 500ms。在云游戏高 RTT 场景下，500ms 的阈值可能导致正常的高延迟帧被误判为需要 catch-up 丢弃。`host_frame_age_budget_ms` 的来源和更新逻辑需要确认是否已经感知 RTT。
+catch-up 阈值是 `host_frame_age_budget_ms`（来自 runtime stats）或默认 500ms。`host_frame_age_budget_ms` 由宿主机侧写入，计算公式为 `display_interval_ms × HOST_RENDER_FRAME_AGE_MULTIPLIER`，是纯本地显示器刷新率计算，不感知 RTT（已通过 Q4 采集日志确认，见第 3 节）。在云游戏高 RTT 场景下，500ms 的阈值可能导致正常的高延迟帧被误判为需要 catch-up 丢弃。
 
-**2. `pacing_queue` 容量固定为 3，与 ingress 队列容量（10）不成比例**
+**2. `pacing_queue` 容量固定为 3**
 
 ingress 最多缓冲 10 帧，但 pacing_queue 只有 3 帧。在 ingress 积压快速释放时，decode → pacer 的突发可能导致 pacing_queue 频繁触发 `queueCap` 丢帧。
-
-#### 值得借鉴（Moonlight）
-
-Moonlight 的 `frameDropTarget` 只基于 `PacingQueueHistory`（队列历史是否持续 >1）动态调整，逻辑简单。我们的 `QueueHistoryController.decide_drop_target` 额外感知了 `host_no_pending_pressure`、`present_overwrite_ratio`、`cadence_lag_ratio`、`HostCadencePhaseHint` 等多个维度，这些维度都有对应的实际压力场景，不存在冗余。Moonlight 的简单性来自它不需要处理宿主机 present 节拍对齐和云游戏帧率不确定性。
 
 ---
 
@@ -482,16 +402,14 @@ Moonlight 的 `frameDropTarget` 只基于 `PacingQueueHistory`（队列历史是
 
 `XbxRenderState` 维护 `latest_render_candidate_decision`，记录最近一次 present 的决策（state/action/detail/frame_seq）。Renderer actor 在 decision_id 变化时同步到 runtime stats，供 recovery 诊断消费。
 
-#### 缺口
+#### 待优化项
 
-**1. Renderer mailbox 容量为 1，Pacer 背压时无法区分"renderer 慢"和"renderer 卡死"**
+**1. Renderer mailbox 容量为 1，背压时无法区分慢和卡死**
 
 Pacer 在 `render_backpressure_active` 时每 4ms 重试一次，没有超时机制。若 Renderer 线程因 `render_state.lock()` 阻塞（宿主机 present 回调耗时过长），Pacer 会持续等待，无法主动丢帧或上报 stall。`video_renderer_stalled` 的判定依赖 recovery 层的外部观测，不是 Renderer 自身上报。
 
-**2. present 失败只记录 drop，不区分可恢复错误和致命错误**
+值得注意的是，`render_state.lock()` 失败（mutex 中毒）也会触发 `video_renderer_drop_count_total` 计数并跳过当前帧，这条路径在正常运行中不会触发，但与 present 失败路径共用同一个 drop 计数器，无法从统计上区分。
+
+**2. present 失败只记录 drop，不区分错误类型**
 
 `present_frame` 返回 `Err` 时统一记录 `presentError` 并继续运行。没有连续失败计数，无法触发 decoder reset 或 reconnect 升级。
-
-#### 值得借鉴（Moonlight）
-
-Moonlight 的 Renderer 直接在 display-link 回调里调用 `glDrawArrays`，是纯拉模型。我们的推模型（Pacer 主动推帧给 Renderer）在帧率不确定时有更好的控制权，但引入了 mailbox 背压和 present 阻塞的风险。

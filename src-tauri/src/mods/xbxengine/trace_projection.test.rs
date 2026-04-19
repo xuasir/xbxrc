@@ -105,7 +105,7 @@ fn build_observability_snapshot_includes_latest_frame_recovery() {
             "frame_recovery_disposition": "unrecoverable-reference-chain",
             "frame_unrecoverable_reason": "referenceChainUnrecoverable",
             "frame_budget": {
-                "recovery_stage": "awaiting-keyframe",
+                "recovery_stage": "awaiting-anchor",
                 "chain_value": "supply",
                 "rtt_slack": "tight",
                 "failure_cost": "chain-broken",
@@ -135,7 +135,7 @@ fn build_observability_snapshot_includes_latest_frame_recovery() {
     );
     assert_eq!(
         snapshot["latest"]["frameRecovery"]["frame_budget"]["recovery_stage"],
-        "awaiting-keyframe"
+        "awaiting-anchor"
     );
     assert_eq!(
         snapshot["latest"]["frameRecovery"]["frame_budget"]["chain_value"],
@@ -158,7 +158,7 @@ fn build_observability_snapshot_includes_latest_keyframe_episode() {
         "decode": "",
         "latest_keyframe_request_episode": {
             "episode_id": 91,
-            "request_reason": "transportAwaitRecoveryKeyframe",
+            "request_reason": "transportAwaitRecoveryAnchor",
             "request_kind": "pli",
             "status": "decoded",
             "requested_at_ms": 1200.0,
@@ -179,7 +179,7 @@ fn build_observability_snapshot_includes_latest_keyframe_episode() {
     );
     assert_eq!(
         snapshot["latest"]["keyframeRequestEpisode"]["request_reason"],
-        "transportAwaitRecoveryKeyframe"
+        "transportAwaitRecoveryAnchor"
     );
     assert_eq!(
         snapshot["latest"]["keyframeRequestEpisode"]["response_verdict"],
@@ -493,7 +493,7 @@ fn record_runtime_trace_observations_projects_keyframe_episode_lifecycle() {
             "decode": "",
             "latest_keyframe_request_episode": {
                 "episode_id": episode_id,
-                "request_reason": "transportAwaitRecoveryKeyframe",
+                "request_reason": "transportAwaitRecoveryAnchor",
                 "request_kind": request_kind,
                 "status": status,
                 "requested_at_ms": 1200.0,
@@ -621,7 +621,7 @@ fn record_runtime_trace_observations_projects_keyframe_response_observed_event()
         "decode": "",
         "latest_keyframe_request_episode": {
             "episode_id": 93,
-            "request_reason": "transportAwaitRecoveryKeyframe",
+            "request_reason": "transportAwaitRecoveryAnchor",
             "request_kind": "pli",
             "status": "response-observed",
             "status_detail": "bootstrapMissingSps",
@@ -768,7 +768,7 @@ fn record_runtime_trace_observations_correlates_keyframe_and_h264_context() {
         "decode": "",
         "latest_keyframe_request_episode": {
             "episode_id": 91,
-            "request_reason": "transportAwaitRecoveryKeyframe",
+            "request_reason": "transportAwaitRecoveryAnchor",
             "request_kind": "pli",
             "status": "packet-seen",
             "requested_at_ms": 1200.0,
@@ -823,7 +823,7 @@ fn record_runtime_trace_observations_correlates_keyframe_and_h264_context() {
     assert_eq!(inspection_payload["linkedEpisodeStatus"], "packet-seen");
     assert_eq!(
         inspection_payload["linkedEpisodeRequestReason"],
-        "transportAwaitRecoveryKeyframe"
+        "transportAwaitRecoveryAnchor"
     );
     assert_eq!(
         inspection_payload["isRecoveryKeyframeResponseContext"],
@@ -832,6 +832,185 @@ fn record_runtime_trace_observations_correlates_keyframe_and_h264_context() {
 
     let rtcp_failure_payload = find_event_payload(&entries, "videoRtcpSendFailureObserved");
     assert_eq!(rtcp_failure_payload["reason"], "rtcp-write-failed");
+}
+
+#[test]
+fn record_runtime_trace_observations_projects_keyframe_episode_recovery_diagnostics() {
+    let recorder = std::sync::Arc::new(
+        RuntimeTraceRecorder::new_with_mode("verbose").expect("trace recorder"),
+    );
+    let mut state = RuntimeTraceObservationState::default();
+    let stats = test_stats(json!({
+        "resolution": "",
+        "rtt": "",
+        "fps": 0.0,
+        "pl": "0.00%",
+        "fl": "",
+        "jit": "",
+        "br": "",
+        "decode": "",
+        "latest_keyframe_request_episode": {
+            "episode_id": 101,
+            "request_reason": "transportAwaitRecoveryAnchor",
+            "request_kind": "pli",
+            "status": "response-observed",
+            "requested_at_ms": 1200.0,
+            "sent_at_ms": 1210.0,
+            "deadline_at_ms": 2160.0,
+            "first_video_packet_at_ms": 1300.0,
+            "first_video_packet_rtp_timestamp": 22334455,
+            "first_video_packet_is_keyframe": false,
+            "response_verdict": "pending"
+        },
+        "latest_h264_inspection_observation": {
+            "observation_id": 22334455u64,
+            "frame_rtp_timestamp": 22334455u32,
+            "nal_types": ["SliceLayerWithoutPartitioningNonIdr"],
+            "nal_count": 1,
+            "vcl_nal_count": 1,
+            "has_inband_sps": false,
+            "has_inband_pps": false,
+            "committed_sps_present": true,
+            "committed_pps_present": true,
+            "slice_headers_valid": true,
+            "delta_continuation_ready": true,
+            "parameter_sets_changed": false,
+            "config_changed": false,
+            "is_idr": false,
+            "sample_width": 1920,
+            "sample_height": 1080,
+            "bootstrap_ready": false,
+            "bootstrap_reject_reason": "NonIdrVcl",
+            "admission_accepted": true,
+            "observed_at_ms": 1300.0
+        },
+        "latest_video_timeline_observation": {
+            "observation_id": 77,
+            "source_event": "frame-inspection-rejected-await-anchor",
+            "gap": {
+                "state": "expired",
+                "sequence": 28519,
+                "frame_rtp_timestamp": 22334455,
+                "frame_importance": "anchor",
+                "budget_importance": "anchor",
+                "evidence_importance": "anchor",
+                "gap_dependency_confidence": "bound",
+                "observed_at_ms": 1300.0
+            },
+            "frame": {
+                "state": "closed",
+                "frame_rtp_timestamp": 22334455,
+                "is_keyframe": false,
+                "frame_importance": "unknown",
+                "budget_importance": "unknown",
+                "evidence_importance": "unknown",
+                "close_reason": "inspectionRejectNonIdrVcl",
+                "observed_at_ms": 1300.0
+            },
+            "chain": {
+                "state": "recovering",
+                "reason": "awaitingRecoveryAnchor",
+                "observed_at_ms": 1300.0
+            },
+            "observed_at_ms": 1300.0
+        },
+        "latest_anchor_candidate_ledger": {
+            "recovery_epoch": 9,
+            "frame_rtp_timestamp": 22334455,
+            "state": "rejected",
+            "source_event": "frame-inspection-rejected-await-anchor",
+            "failure_reason": "unknown",
+            "observed_at_ms": 1300.0
+        },
+        "latest_decode_candidate_decision": {
+            "decision_id": 5,
+            "state": "blocked",
+            "action": "drop",
+            "detail": "outputQueueOverflow",
+            "frame_seq": 12,
+            "observed_at_ms": 1301.0
+        },
+        "latest_decode_output_path_observation": {
+            "observation_id": 6,
+            "verdict": "decoded-frame",
+            "detail": "decodedFrameReady",
+            "frame_rtp_timestamp": 22334455,
+            "is_keyframe": true,
+            "send_packet_status": 0,
+            "receive_frame_status": -35,
+            "backend_no_output_streak": 0,
+            "input_frames_since_last_decoded": 1,
+            "bootstrap_reject_reason": null,
+            "observed_at_ms": 1302.0
+        },
+        "latest_video_frame_drop": {
+            "observation_id": 7,
+            "reason": "decode:drop:outputQueueOverflow",
+            "stage": "decode",
+            "action": "drop",
+            "detail": "outputQueueOverflow",
+            "frame_rtp_timestamp": 22334455,
+            "frame_seq": 12,
+            "frame_recovery_disposition": "repairing",
+            "observed_at_ms": 1303.0,
+            "width": 1920,
+            "height": 1080,
+            "is_keyframe": false,
+            "queue_depth": 3
+        },
+        "latest_recovery_decision_ledger": {
+            "decision_id": 9001,
+            "state_before": "observing",
+            "state_after": "recovery-blocked",
+            "input_signal": "transportAwaitRecoveryAnchor:transportAwaitRecoveryAnchor",
+            "gate_result": "coalesced:keyframeInFlight",
+            "action_selected": "coalesced:keyframeInFlight",
+            "recovery_episode_stage": "bootstrap",
+            "budget_after": {
+                "recovery_epoch": 9,
+                "keyframe_budget_used": 1,
+                "keyframe_budget_limit": 255,
+                "decoder_reset_budget_used": 0,
+                "decoder_reset_budget_limit": 255,
+                "reconnect_budget_used": 0,
+                "reconnect_budget_limit": 1
+            },
+            "observed_at_ms": 1304.0
+        }
+    }));
+
+    record_runtime_trace_observations(&recorder, &mut state, Some("session-1"), &stats);
+
+    let entries = read_trace_lines(recorder.as_ref());
+    let payload = find_event_payload(&entries, "keyframeRequestEpisode");
+    assert_eq!(
+        payload["diagnosticPendingReason"],
+        "anchorRejected:h264Reject:NonIdrVcl"
+    );
+    assert_eq!(payload["diagnosticRecoveryEpoch"], 9);
+    assert_eq!(
+        payload["diagnosticTimelineSourceEvent"],
+        "frame-inspection-rejected-await-anchor"
+    );
+    assert_eq!(payload["diagnosticTimelineChainState"], "recovering");
+    assert_eq!(
+        payload["diagnosticTimelineChainReason"],
+        "awaitingRecoveryAnchor"
+    );
+    assert_eq!(payload["diagnosticAnchorState"], "rejected");
+    assert_eq!(payload["diagnosticAnchorFailureReason"], "unknown");
+    assert_eq!(
+        payload["diagnosticAnchorSourceEvent"],
+        "frame-inspection-rejected-await-anchor"
+    );
+    assert_eq!(payload["diagnosticDecodeCandidateAction"], "drop");
+    assert_eq!(
+        payload["diagnosticDecodeCandidateDetail"],
+        "outputQueueOverflow"
+    );
+    assert_eq!(payload["diagnosticFrameDropDetail"], "outputQueueOverflow");
+    assert_eq!(payload["diagnosticFrameDropQueueDepth"], 3);
+    assert_eq!(payload["diagnosticDecodeOutputDetail"], "decodedFrameReady");
 }
 
 #[test]
@@ -989,7 +1168,7 @@ fn anchor_candidate_ledger_projects_event() {
             "recovery_epoch": 9,
             "frame_rtp_timestamp": 123456799,
             "state": "rejected",
-            "source_event": "frame-inspection-rejected-await-keyframe",
+            "source_event": "frame-inspection-rejected-await-anchor",
             "failure_reason": "inspectionRejectInvalidSliceHeader",
             "observed_at_ms": 2250.0
         }
@@ -1002,7 +1181,7 @@ fn anchor_candidate_ledger_projects_event() {
     assert_eq!(payload["state"], "rejected");
     assert_eq!(
         payload["sourceEvent"],
-        "frame-inspection-rejected-await-keyframe"
+        "frame-inspection-rejected-await-anchor"
     );
     assert_eq!(
         payload["failureReason"],
@@ -1849,6 +2028,7 @@ fn direct_gaming_state_projects_display_supply_health_and_issue_chain() {
     assert_eq!(payload["videoHealth"], "displaySupplyStarved");
     assert_eq!(payload["lifecycle"], "steady");
     assert_eq!(payload["streamLifecyclePhase"], "steady");
+    assert_eq!(payload["recoveryDiagnosis"], "adapterIdleTimeout");
     assert_eq!(payload["videoOwnerState"], "supplyStarved");
     assert_eq!(payload["videoOwnerReason"], "supplyStarved");
     assert_eq!(payload["videoOwnerSource"], "supply");
@@ -1877,7 +2057,7 @@ fn observability_snapshot_projects_unified_lifecycle_in_recovery_node() {
         "session_phase": "steady",
         "stream_lifecycle_phase": "recovering",
         "recovery_strategy_profile": "cloud",
-        "recovery_diagnosis": "transportAwaitRecoveryKeyframe"
+        "recovery_diagnosis": "transportAwaitRecoveryAnchor"
     }));
 
     record_runtime_trace_observations(&recorder, &mut state, Some("session-1"), &stats);
@@ -1892,6 +2072,61 @@ fn observability_snapshot_projects_unified_lifecycle_in_recovery_node() {
         snapshot_payload["recovery"]["streamLifecyclePhase"],
         "recovering"
     );
+    assert_eq!(
+        snapshot_payload["recovery"]["diagnosis"],
+        "transportAwaitRecoveryAnchor"
+    );
+}
+
+#[test]
+fn direct_gaming_state_emits_transition_when_only_diagnosis_changes() {
+    let recorder = std::sync::Arc::new(
+        RuntimeTraceRecorder::new_with_mode("verbose").expect("trace recorder"),
+    );
+    let mut state = RuntimeTraceObservationState::default();
+
+    let baseline = test_stats(json!({
+        "resolution": "",
+        "rtt": "",
+        "fps": 0.0,
+        "pl": "0.00%",
+        "fl": "",
+        "jit": "",
+        "br": "",
+        "decode": "",
+        "session_phase": "recovering",
+        "stream_lifecycle_phase": "recovering",
+        "recovery_strategy_profile": "cloud",
+        "recovery_diagnosis": "transportAwaitRecoveryAnchor",
+        "recovery_owner_state": "rebuilding-supply",
+        "recovery_owner_reason": "transportAwaitRecoveryAnchor"
+    }));
+    record_runtime_trace_observations(&recorder, &mut state, Some("session-1"), &baseline);
+
+    let changed_diagnosis = test_stats(json!({
+        "resolution": "",
+        "rtt": "",
+        "fps": 0.0,
+        "pl": "0.00%",
+        "fl": "",
+        "jit": "",
+        "br": "",
+        "decode": "",
+        "session_phase": "recovering",
+        "stream_lifecycle_phase": "recovering",
+        "recovery_strategy_profile": "cloud",
+        "recovery_diagnosis": "decoderBackendFailure",
+        "recovery_owner_state": "rebuilding-supply",
+        "recovery_owner_reason": "transportAwaitRecoveryAnchor"
+    }));
+    record_runtime_trace_observations(&recorder, &mut state, Some("session-1"), &changed_diagnosis);
+
+    let entries = read_trace_lines(recorder.as_ref());
+    let rows = event_payloads(&entries, "directGamingState");
+    assert_eq!(rows.len(), 2);
+    assert_eq!(rows[0]["recoveryDiagnosis"], "transportAwaitRecoveryAnchor");
+    assert_eq!(rows[1]["recoveryDiagnosis"], "decoderBackendFailure");
+    assert_eq!(rows[1]["videoOwnerReason"], "transportAwaitRecoveryAnchor");
 }
 
 #[test]
@@ -1980,7 +2215,7 @@ fn h264_inspection_snapshot_unlinks_when_frame_rtp_mismatches_keyframe_episode()
         "decode": "",
         "latest_keyframe_request_episode": {
             "episode_id": 1,
-            "request_reason": "transportAwaitRecoveryKeyframe",
+            "request_reason": "transportAwaitRecoveryAnchor",
             "request_kind": "pli",
             "status": "missed",
             "requested_at_ms": 100.0,
@@ -2034,7 +2269,7 @@ fn h264_inspection_time_window_skips_retired_keyframe_episode() {
         "latest_keyframe_request_episode": null,
         "recent_keyframe_request_episodes": [{
             "episode_id": 9,
-            "request_reason": "transportAwaitRecoveryKeyframe",
+            "request_reason": "transportAwaitRecoveryAnchor",
             "request_kind": "pli",
             "status": "packet-seen",
             "requested_at_ms": 100.0,

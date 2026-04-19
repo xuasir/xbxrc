@@ -11,8 +11,7 @@ use crate::{
     media::video::types::AssembledVideoFrame,
     runtime_stats_sink::RuntimeStatsSink,
     transport::rtc::facts::{IngressDecisionFact, MediaFact, TransportFact},
-    transport::rtc::recovery::diagnosis::diagnose_ingress_signal,
-    transport::rtc::recovery::signal::VideoIngressSignal,
+    transport::rtc::recovery::escalation::VideoEscalationReason,
     transport::rtc::stream::adapter_types::TransportObservation,
     XbxEngineMediaRuntimeStats,
 };
@@ -228,9 +227,15 @@ impl MediaSessionLoop {
                 | IngressDecision::DropUnrecoverable
                 | IngressDecision::Reconfigure
         ) {
-            let ingress_signal = VideoIngressSignal::from_decision(&decision);
-            let diagnosis = diagnose_ingress_signal(ingress_signal);
-            let hint_label = diagnosis.label;
+            // 直接从decision映射到reason，不再经过signal/diagnosis两层
+            let reason = match &decision {
+                IngressDecision::WaitKeyframe => VideoEscalationReason::WaitKeyframe,
+                IngressDecision::Reconfigure => VideoEscalationReason::Reconfigure,
+                IngressDecision::DropUnrecoverable => VideoEscalationReason::WaitKeyframe, // frameAbandoned也映射到WaitKeyframe
+                _ => VideoEscalationReason::WaitKeyframe,
+            };
+            let hint_label = reason.label();
+
             if self
                 .observation
                 .should_log_transport_hint(hint_label, now_ms)

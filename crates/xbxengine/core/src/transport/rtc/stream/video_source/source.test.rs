@@ -25,7 +25,7 @@ fn serviceable_runtime_stats(now_ms: f64) -> crate::XbxEngineMediaRuntimeStats {
     stats.transport_recovery_epoch = 7;
     stats.video_anchor_clean_epoch = Some(7);
     stats.video_anchor_clean_observed_at_ms = Some(now_ms - 20.0);
-    stats.video_anchor_clean_source_event = Some("chain-clean-keyframe-submitted".to_string());
+    stats.video_anchor_clean_source_event = Some("chain-clean-anchor-submitted".to_string());
     stats.latest_video_decode_ok_time_ms = Some(now_ms - 24.0);
     stats.latest_video_host_present_time_ms = Some(now_ms - 28.0);
     stats.video_renderer_stalled = Some(false);
@@ -146,7 +146,7 @@ fn steady_idle_timeout_is_absorbed_when_render_output_is_still_fresh() {
         XbxEngineTransportStateDto::Connected,
         3,
         Some(3),
-        Some("chain-clean-keyframe-submitted"),
+        Some("chain-clean-anchor-submitted"),
         Some(1_000.0 - 90.0),
         Some(1_000.0 - 70.0),
         Some(false),
@@ -163,7 +163,7 @@ fn no_render_slack_or_no_fresh_output_still_emits_idle_timeout_observation() {
         XbxEngineTransportStateDto::Connected,
         3,
         Some(3),
-        Some("chain-clean-keyframe-submitted"),
+        Some("chain-clean-anchor-submitted"),
         Some(1_000.0 - 520.0),
         Some(1_000.0 - 510.0),
         Some(false),
@@ -190,10 +190,10 @@ fn no_render_slack_or_no_fresh_output_still_emits_idle_timeout_observation() {
 
 #[test]
 fn recovery_wait_without_hard_risk_allows_healthy_delta_to_submit() {
-    let (next_waiting_for_recovery_keyframe, recovery_action) =
+    let (next_is_blocking_non_keyframe_admission, recovery_action) =
         resolve_recovery_keyframe_action(true, true, false, false, 0, 0, false);
 
-    assert!(!next_waiting_for_recovery_keyframe);
+    assert!(!next_is_blocking_non_keyframe_admission);
     assert_eq!(recovery_action, RecoveryKeyframeAction::Submit);
 }
 
@@ -232,12 +232,12 @@ fn unresolved_current_transport_issue_blocks_soft_recovery_keyframe_request() {
     let mut stats = serviceable_runtime_stats(now_ms);
     stats.latest_video_timeline_observation = Some(crate::XbxEngineVideoTimelineObservation {
         observation_id: 2,
-        source_event: "frame-await-recovery-keyframe".to_string(),
+        source_event: "frame-await-recovery-anchor".to_string(),
         gap: Some(crate::XbxEngineVideoTimelineGapSnapshot {
             state: "pending".to_string(),
             sequence: Some(99),
             frame_rtp_timestamp: None,
-            frame_importance: Some("reference".to_string()),
+            frame_importance: Some("supply".to_string()),
             budget_importance: None,
 
             evidence_importance: None,
@@ -249,7 +249,7 @@ fn unresolved_current_transport_issue_blocks_soft_recovery_keyframe_request() {
         frame: None,
         chain: crate::XbxEngineVideoTimelineChainSnapshot {
             state: "recovering".to_string(),
-            reason: Some("transportAwaitRecoveryKeyframe".to_string()),
+            reason: Some("transportAwaitRecoveryAnchor".to_string()),
             chain_break_evidence: None,
 
             observed_at_ms: now_ms - 5.0,
@@ -269,10 +269,10 @@ fn unresolved_current_transport_issue_blocks_soft_recovery_keyframe_request() {
 
 #[test]
 fn recovery_wait_does_not_override_loss_semantics() {
-    let (next_waiting_for_recovery_keyframe, recovery_action) =
+    let (next_is_blocking_non_keyframe_admission, recovery_action) =
         resolve_recovery_keyframe_action(true, true, false, false, 0, 1, false);
 
-    assert!(!next_waiting_for_recovery_keyframe);
+    assert!(!next_is_blocking_non_keyframe_admission);
     assert_eq!(
         recovery_action,
         RecoveryKeyframeAction::DropAndRequestKeyframe
@@ -281,10 +281,10 @@ fn recovery_wait_does_not_override_loss_semantics() {
 
 #[test]
 fn lossy_keyframe_defers_to_nack_recovery_admission() {
-    let (next_waiting_for_recovery_keyframe, recovery_action) =
+    let (next_is_blocking_non_keyframe_admission, recovery_action) =
         resolve_recovery_keyframe_action(true, false, false, true, 0, 2, true);
 
-    assert!(!next_waiting_for_recovery_keyframe);
+    assert!(!next_is_blocking_non_keyframe_admission);
     assert_eq!(
         recovery_action,
         RecoveryKeyframeAction::DropAndRequestKeyframe
@@ -293,10 +293,10 @@ fn lossy_keyframe_defers_to_nack_recovery_admission() {
 
 #[test]
 fn short_sample_loss_burst_stays_in_drop_and_request_keyframe() {
-    let (next_waiting_for_recovery_keyframe, recovery_action) =
+    let (next_is_blocking_non_keyframe_admission, recovery_action) =
         resolve_recovery_keyframe_action(true, false, false, false, 2, 1, false);
 
-    assert!(!next_waiting_for_recovery_keyframe);
+    assert!(!next_is_blocking_non_keyframe_admission);
     assert_eq!(
         recovery_action,
         RecoveryKeyframeAction::DropAndRequestKeyframe
@@ -305,10 +305,10 @@ fn short_sample_loss_burst_stays_in_drop_and_request_keyframe() {
 
 #[test]
 fn longer_sample_loss_burst_still_defers_to_nack_recovery_admission() {
-    let (next_waiting_for_recovery_keyframe, recovery_action) =
+    let (next_is_blocking_non_keyframe_admission, recovery_action) =
         resolve_recovery_keyframe_action(true, false, false, false, 3, 1, false);
 
-    assert!(!next_waiting_for_recovery_keyframe);
+    assert!(!next_is_blocking_non_keyframe_admission);
     assert_eq!(
         recovery_action,
         RecoveryKeyframeAction::DropAndRequestKeyframe
@@ -317,48 +317,51 @@ fn longer_sample_loss_burst_still_defers_to_nack_recovery_admission() {
 
 #[test]
 fn low_value_local_gap_wait_is_absorbed_without_transport_wait_upgrade() {
-    let (next_waiting_for_recovery_keyframe, recovery_action) =
+    let (next_is_blocking_non_keyframe_admission, recovery_action) =
         resolve_recovery_keyframe_action(true, true, false, false, 0, 0, false);
 
-    assert!(!next_waiting_for_recovery_keyframe);
+    assert!(!next_is_blocking_non_keyframe_admission);
     assert_eq!(recovery_action, RecoveryKeyframeAction::Submit);
 }
 
 #[test]
 fn pre_first_frame_wait_does_not_absorb_non_keyframe_delta() {
-    let (next_waiting_for_recovery_keyframe, recovery_action) =
+    let (next_is_blocking_non_keyframe_admission, recovery_action) =
         resolve_recovery_keyframe_action(false, true, false, false, 0, 0, false);
 
-    assert!(next_waiting_for_recovery_keyframe);
+    assert!(next_is_blocking_non_keyframe_admission);
     assert_eq!(recovery_action, RecoveryKeyframeAction::WaitKeyframe);
 }
 
 #[test]
 fn sustaining_recovery_prefers_keepalive_over_reenter_wait_keyframe() {
-    let (next_waiting_for_recovery_keyframe, recovery_action) =
+    let (next_is_blocking_non_keyframe_admission, recovery_action) =
         resolve_recovery_keyframe_action(true, true, true, true, 0, 0, false);
 
-    assert!(!next_waiting_for_recovery_keyframe);
+    assert!(!next_is_blocking_non_keyframe_admission);
     assert_eq!(recovery_action, RecoveryKeyframeAction::Submit);
 }
 
 #[test]
 fn hard_recovery_wait_without_building_phase_still_reenters_wait_keyframe() {
-    let (next_waiting_for_recovery_keyframe, recovery_action) =
+    let (next_is_blocking_non_keyframe_admission, recovery_action) =
         resolve_recovery_keyframe_action(true, true, false, true, 0, 0, false);
 
-    assert!(next_waiting_for_recovery_keyframe);
+    assert!(next_is_blocking_non_keyframe_admission);
     assert_eq!(recovery_action, RecoveryKeyframeAction::WaitKeyframe);
 }
 
 #[test]
 fn drop_and_request_action_contract_keeps_resolver_stateless() {
-    let (next_waiting_for_recovery_keyframe, recovery_action) =
+    let (next_is_blocking_non_keyframe_admission, recovery_action) =
         resolve_recovery_keyframe_action(true, true, false, true, 3, 2, false);
 
-    assert_eq!(recovery_action, RecoveryKeyframeAction::DropAndRequestKeyframe);
+    assert_eq!(
+        recovery_action,
+        RecoveryKeyframeAction::DropAndRequestKeyframe
+    );
     // resolve 层只给出动作，等待态由 action 分支显式处理，避免隐式耦合。
-    assert!(!next_waiting_for_recovery_keyframe);
+    assert!(!next_is_blocking_non_keyframe_admission);
 }
 
 #[tokio::test]
@@ -366,13 +369,15 @@ async fn drop_and_request_fallback_without_missing_sequences_requests_keyframe()
     let (_tx, mut transport_observation_rx, mut source) = make_video_source_for_test();
 
     source
-        .handle_drop_and_request_keyframe_action(12_345, 2, false, "delta")
+        .handle_drop_and_request_keyframe_action(12_345, 2, false, "disposable")
         .await;
 
     let mut saw_recovery_request = false;
     let mut saw_packet_loss_detected = false;
     while let Ok(observation) = transport_observation_rx.try_recv() {
-        if observation == TransportObservation::Loss(TransportLossObservation::RecoveryKeyframeRequested) {
+        if observation
+            == TransportObservation::Loss(TransportLossObservation::RecoveryKeyframeRequested)
+        {
             saw_recovery_request = true;
         }
         if observation == TransportObservation::Loss(TransportLossObservation::PacketLossDetected) {
@@ -521,11 +526,11 @@ async fn sustaining_recovery_reject_restarts_recovery_keyframe_request() {
     let (tx, mut transport_observation_rx, mut source) = make_video_source_for_test();
     source
         .timeline_state
-        .on_clean_keyframe_ingress(9_000, now_ms_f64());
-    source.timeline_state.on_clean_keyframe_submitted();
+        .on_clean_anchor_ingress(9_000, now_ms_f64());
+    source.timeline_state.on_clean_anchor_submitted();
 
     assert!(source.timeline_state.in_sustaining_recovery());
-    assert!(!source.waiting_for_recovery_keyframe());
+    assert!(!source.is_blocking_non_keyframe_admission());
 
     let non_idr = bootstrap_non_idr_nalu();
     tx.send(make_video_rtp_packet(100, 9_001, true, &non_idr))
@@ -551,12 +556,12 @@ async fn sustaining_recovery_reject_restarts_recovery_keyframe_request() {
         TransportObservation::Loss(TransportLossObservation::RecoveryKeyframeRequested)
     );
     assert!(transport_observation_rx.try_recv().is_err());
-    assert!(source.waiting_for_recovery_keyframe());
+    assert!(source.is_blocking_non_keyframe_admission());
     assert!(!source.timeline_state.in_sustaining_recovery());
 }
 
 #[test]
-fn clean_keyframe_anchor_records_current_transport_recovery_epoch() {
+fn clean_anchor_records_current_transport_recovery_epoch() {
     let (tx, rx) = tokio::sync::mpsc::channel(1);
     let (transport_observation_tx, _transport_observation_rx) =
         tokio::sync::mpsc::unbounded_channel();
@@ -582,14 +587,14 @@ fn clean_keyframe_anchor_records_current_transport_recovery_epoch() {
     drop(tx);
 
     source.runtime_stats.begin_transport_recovery_episode(100.0);
-    source.record_clean_keyframe_anchor(180.0);
+    source.record_clean_anchor(180.0);
 
     let stats = runtime_stats.lock().expect("runtime stats lock");
     assert_eq!(stats.video_anchor_clean_epoch, Some(1));
     assert_eq!(stats.video_anchor_clean_observed_at_ms, Some(180.0));
     assert_eq!(
         stats.video_anchor_clean_source_event.as_deref(),
-        Some("chain-clean-keyframe-submitted")
+        Some("chain-clean-anchor-submitted")
     );
     assert!(stats.transport_recovery_episode_active);
     assert_eq!(stats.transport_recovery_episode_closed_at_ms, None);
@@ -622,7 +627,7 @@ fn packet_loss_detected_does_not_reopen_episode_but_keyframe_request_does() {
     );
 
     source.runtime_stats.begin_transport_recovery_episode(100.0);
-    source.record_clean_keyframe_anchor(140.0);
+    source.record_clean_anchor(140.0);
     source
         .runtime_stats
         .complete_transport_recovery_after_stable_settle(180.0);
@@ -638,7 +643,7 @@ fn packet_loss_detected_does_not_reopen_episode_but_keyframe_request_does() {
         assert_eq!(stats.video_anchor_clean_epoch, Some(1));
         assert_eq!(
             stats.video_anchor_clean_source_event.as_deref(),
-            Some("chain-clean-keyframe-submitted")
+            Some("chain-clean-anchor-submitted")
         );
     }
 
@@ -680,20 +685,15 @@ async fn bootstrap_keyframe_packets_are_assembled_into_frame() {
 }
 
 #[tokio::test]
-async fn clean_keyframe_then_consecutive_non_idr_continuation_does_not_fall_back_to_wait_keyframe()
-{
+async fn clean_anchor_then_consecutive_non_idr_continuation_does_not_fall_back_to_wait_keyframe() {
     let (tx, mut transport_observation_rx, mut source) = make_video_source_for_test();
     source
         .timeline_state
-        .on_admission_await_recovery_keyframe(Some("awaitingRecoveryKeyframe"));
-    source.timeline_state.mark_gap_reorder_pending(
-        &[401],
-        0.5,
-        Some(8_900),
-        "reference",
-        "reference",
-    );
-    assert!(source.timeline_state.waiting_for_recovery_keyframe());
+        .on_admission_await_recovery_keyframe(Some("awaitingRecoveryAnchor"));
+    source
+        .timeline_state
+        .mark_gap_reorder_pending(&[401], 0.5, Some(8_900), "supply", "supply");
+    assert!(source.timeline_state.chain_requires_recovery_anchor());
     assert!(source.timeline_state.has_hard_recovery_risk_for_test());
 
     send_bootstrap_access_unit(&tx, 100, 9_000).await;
@@ -718,7 +718,7 @@ async fn clean_keyframe_then_consecutive_non_idr_continuation_does_not_fall_back
             .expect("bootstrap frame should assemble")
             .expect("bootstrap frame should be emitted");
     assert!(bootstrap_frame.is_keyframe);
-    assert!(!source.timeline_state.waiting_for_recovery_keyframe());
+    assert!(!source.timeline_state.chain_requires_recovery_anchor());
     assert!(!source.timeline_state.has_hard_recovery_risk_for_test());
 
     for _ in 0..3 {
@@ -751,18 +751,14 @@ async fn stale_wait_after_clean_anchor_still_submits_delta_continuation() {
     });
     source
         .timeline_state
-        .on_clean_keyframe_ingress(bootstrap_frame.rtp_timestamp, now_ms_f64());
-    source.timeline_state.on_clean_keyframe_submitted();
+        .on_clean_anchor_ingress(bootstrap_frame.rtp_timestamp, now_ms_f64());
+    source.timeline_state.on_clean_anchor_submitted();
 
-    source.set_waiting_for_recovery_keyframe(true);
-    assert!(source.waiting_for_recovery_keyframe());
-    source.timeline_state.mark_gap_repair_in_flight(
-        &[401],
-        2.0,
-        Some(9_000),
-        "keyframe",
-        "keyframe",
-    );
+    source.set_is_blocking_non_keyframe_admission(true);
+    assert!(source.is_blocking_non_keyframe_admission());
+    source
+        .timeline_state
+        .mark_gap_repair_in_flight(&[401], 2.0, Some(9_000), "anchor", "anchor");
     assert!(source.timeline_state.has_hard_recovery_risk_for_test());
 
     tx.send(make_video_rtp_packet(104, 9_032, true, &non_idr))
@@ -778,14 +774,14 @@ async fn stale_wait_after_clean_anchor_still_submits_delta_continuation() {
         .expect("continuation frame should assemble")
         .expect("continuation frame should still be emitted");
     assert!(!frame.is_keyframe);
-    assert!(!source.waiting_for_recovery_keyframe());
+    assert!(!source.is_blocking_non_keyframe_admission());
     assert!(transport_observation_rx.try_recv().is_err());
 }
 
 #[test]
 fn waiting_recovery_keyframe_timeout_triggers_retry_request() {
     let (_tx, mut transport_observation_rx, mut source) = make_video_source_for_test();
-    source.set_waiting_for_recovery_keyframe(true);
+    source.set_is_blocking_non_keyframe_admission(true);
     // 强制 next_retry_at_ms 为过去时间，确保触发重试。
     source.next_recovery_keyframe_retry_at_ms = Some(0.0);
 
@@ -794,11 +790,9 @@ fn waiting_recovery_keyframe_timeout_triggers_retry_request() {
 
     assert_eq!(source.recovery_keyframe_retry_count, 1);
     // next_retry_at_ms 应推进到 before_ms + retry_interval，用固定基准比较避免时间竞争。
-    assert!(
-        source
-            .next_recovery_keyframe_retry_at_ms
-            .is_some_and(|at| at > before_ms)
-    );
+    assert!(source
+        .next_recovery_keyframe_retry_at_ms
+        .is_some_and(|at| at > before_ms));
     assert!(matches!(
         transport_observation_rx.try_recv(),
         Ok(TransportObservation::Loss(
@@ -810,7 +804,7 @@ fn waiting_recovery_keyframe_timeout_triggers_retry_request() {
 #[test]
 fn waiting_recovery_keyframe_stops_retrying_after_max_count() {
     let (_tx, mut transport_observation_rx, mut source) = make_video_source_for_test();
-    source.set_waiting_for_recovery_keyframe(true);
+    source.set_is_blocking_non_keyframe_admission(true);
 
     // 把 retry_count 推到上限前一次。
     use crate::transport::rtc::stream::video_source::nack_policy::RECOVERY_KEYFRAME_RETRY_MAX_COUNT;

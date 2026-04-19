@@ -1,28 +1,26 @@
 //! rtc 媒体链恢复子域。
 //!
-//! 四层恢复架构：
-//! - signal：观测事实信号
-//! - diagnosis：信号 → 恢复原因映射
-//! - escalation：burst/cooldown 决策引擎
-//! - coordinator：编排完整决策链
-//! - executor：由 rtc 顶层 executor 层统一执行
+//! 当前恢复架构：
+//! - observation：统一观察层（替代signal + diagnosis）
+//! - state_machine：恢复状态机（替代escalation + 部分coordinator）
+//! - action_coordinator：动作协调器（简化的coordinator）
 //!
 //! 以及配套的：
 //! - startup：启动阶段特殊恢复逻辑
 //! - policy：场景策略（Home/Cloud/Relay）
 
 pub(crate) mod contract;
-pub mod coordinator;
-pub(crate) mod decoder_backend_failure;
-pub mod diagnosis;
+pub(crate) mod coordinator;
 pub mod escalation;
 pub(crate) mod escalation_label;
-pub(crate) mod hard_stall;
 pub(crate) mod keyframe_lifecycle;
-pub(crate) mod nack_outcome;
-pub mod policy;
+pub(crate) mod policy;
 pub(crate) mod remote_profile_runtime;
-pub(crate) mod repeat_suppression;
-pub mod runtime_state;
-pub mod signal;
+pub(crate) mod runtime_state;
 pub mod startup;
+
+// 新的简化模块
+pub(crate) mod action_coordinator;
+pub(crate) mod observation;
+pub(crate) mod state_coordinator;
+pub(crate) mod state_machine;

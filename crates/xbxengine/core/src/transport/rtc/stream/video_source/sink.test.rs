@@ -1,4 +1,4 @@
-use super::RtcVideoSourceSink;
+use super::{FrameBoundaryTracker, RtcVideoSourceSink};
 use crate::media::video::test_fixtures::bootstrap_pps_nalu;
 use crate::transport::rtc::facts::{
     ConnectionLifecycleStateFact, SessionCommand, TransportCommand,
@@ -70,7 +70,11 @@ fn build_sink(
     tx: tokio::sync::mpsc::Sender<crate::transport::rtc::stream::packet_types::RtcVideoRtpPacket>,
 ) -> RtcVideoSourceSink {
     let (_, runtime_stats) = runtime_stats_pair();
-    RtcVideoSourceSink::new(tx, runtime_stats)
+    RtcVideoSourceSink::new(
+        tx,
+        runtime_stats,
+        Arc::new(Mutex::new(FrameBoundaryTracker::new())),
+    )
 }
 
 fn repair_overflow_replay_profile(repair_limit: usize) -> LocalIngressReplayProfile {
@@ -637,7 +641,11 @@ async fn priority_packet_is_buffered_ahead_of_best_effort_under_backpressure() {
 async fn replacing_pending_best_effort_records_local_backpressure_drop() {
     let (runtime_stats, sink_stats) = runtime_stats_pair();
     let (tx, _rx) = tokio::sync::mpsc::channel(1);
-    let mut sink = RtcVideoSourceSink::new(tx, sink_stats);
+    let mut sink = RtcVideoSourceSink::new(
+        tx,
+        sink_stats,
+        Arc::new(Mutex::new(FrameBoundaryTracker::new())),
+    );
 
     let make_packet = |sequence_number: u16| {
         let packet = RtcMediaIngressPacket::new(
@@ -943,7 +951,11 @@ async fn draining_pending_queue_clears_scheduled_flush() {
 async fn repair_queue_overflow_drops_oldest_pending_repair_packet() {
     let (runtime_stats, sink_stats) = runtime_stats_pair();
     let (tx, _rx) = tokio::sync::mpsc::channel(1);
-    let mut sink = RtcVideoSourceSink::new(tx, sink_stats);
+    let mut sink = RtcVideoSourceSink::new(
+        tx,
+        sink_stats,
+        Arc::new(Mutex::new(FrameBoundaryTracker::new())),
+    );
     sink.payload_route_map = parse_payload_route_map_from_answer(concat!(
         "v=0\r\n",
         "m=video 9 UDP/TLS/RTP/SAVPF 124 97\r\n",
@@ -1033,7 +1045,11 @@ async fn repair_queue_overflow_drops_oldest_pending_repair_packet() {
 async fn repair_overflow_drops_oldest_repair_and_records_backpressure() {
     let (runtime_stats, sink_stats) = runtime_stats_pair();
     let (tx, _rx) = tokio::sync::mpsc::channel(1);
-    let mut sink = RtcVideoSourceSink::new(tx, sink_stats);
+    let mut sink = RtcVideoSourceSink::new(
+        tx,
+        sink_stats,
+        Arc::new(Mutex::new(FrameBoundaryTracker::new())),
+    );
     sink.payload_route_map = parse_payload_route_map_from_answer(concat!(
         "v=0\r\n",
         "m=video 9 UDP/TLS/RTP/SAVPF 124 97\r\n",

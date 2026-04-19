@@ -274,6 +274,16 @@ pub trait XbxEngineHostBridge {
         Ok(())
     }
 
+    /// 显示域本地自愈：detach 本机 presenter（或相关显示管线资源），下一帧 `present_frame` 会重建。
+    /// `reason` 用于 trace/诊断（例如 displaySupplyCritical / displaySupplyDegraded）。
+    fn reset_native_video_presenter_for_display_recovery(
+        &mut self,
+        _viewport_id: &str,
+        _reason: &str,
+    ) -> Result<(), XbxEngineRuntimeError> {
+        Ok(())
+    }
+
     fn play_gamepad_rumble(
         &mut self,
         _request: OhMyGamepadRumbleRequestDto,

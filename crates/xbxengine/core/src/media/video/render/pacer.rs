@@ -68,19 +68,31 @@ pub(crate) struct FramePacingPolicy {
 impl FramePacingPolicy {
     #[allow(dead_code)]
     pub(crate) fn new(refresh_interval_ms: u64) -> Self {
-        Self::with_dynamic_budget(refresh_interval_ms, None, None)
+        Self::with_dynamic_budget(refresh_interval_ms, None, None, None, None)
     }
 
     pub(crate) fn with_dynamic_budget(
         refresh_interval_ms: u64,
         catch_up_threshold_ms: Option<u64>,
         long_sleep_guard_ms: Option<u64>,
+        video_rtt_ms: Option<f64>,
+        video_nack_recovery_rtt_ms: Option<f64>,
     ) -> Self {
         let normalized_refresh_interval_ms =
             refresh_interval_ms.clamp(MIN_REFRESH_INTERVAL_MS, MAX_REFRESH_INTERVAL_MS);
+
+        // RTT 感知的 catch-up 阈值：max(500ms, 2 × RTT + jitter_buffer_max_delay)
+        // 优先使用 NACK recovery RTT（更准确），回退到 video RTT
+        let rtt_aware_threshold_ms = video_nack_recovery_rtt_ms.or(video_rtt_ms).map(|rtt_ms| {
+            // 2 × RTT + 保守的 jitter buffer 估计（30ms）
+            let threshold = (2.0 * rtt_ms + 30.0).round() as u64;
+            threshold.max(DEFAULT_CATCH_UP_THRESHOLD_MS)
+        });
+
         Self {
             catch_up_threshold: Duration::from_millis(
                 catch_up_threshold_ms
+                    .or(rtt_aware_threshold_ms)
                     .unwrap_or(DEFAULT_CATCH_UP_THRESHOLD_MS)
                     .max(1),
             ),
@@ -164,6 +176,16 @@ pub(crate) enum HostCadencePhaseHint {
 }
 
 impl HostCadencePhaseHint {
+    pub(crate) fn as_str(self) -> &'static str {
+        match self {
+            Self::Idle => "idle",
+            Self::Priming => "priming",
+            Self::Steady => "steady",
+            Self::Starved => "starved",
+            Self::Unknown => "unknown",
+        }
+    }
+
     pub(crate) fn from_stats(value: Option<&str>) -> Self {
         match value {
             Some("idle") => Self::Idle,
@@ -350,7 +372,7 @@ mod tests {
 
     #[test]
     fn pacing_uses_zero_sleep_guard_override_to_submit_now_for_short_gap() {
-        let policy = FramePacingPolicy::with_dynamic_budget(16, None, Some(0));
+        let policy = FramePacingPolicy::with_dynamic_budget(16, None, Some(0), None, None);
         let now = Instant::now();
         let deadline = now + Duration::from_millis(10);
         let decision = policy.decide(now, deadline, false, None);

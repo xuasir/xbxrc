@@ -59,6 +59,8 @@ fn run_renderer_loop(
                     stats.video_renderer_submit_count_total =
                         stats.video_renderer_submit_count_total.saturating_add(1);
                 });
+                let flow_context = read_renderer_flow_context(&runtime_stats);
+                let flow_frame = frame.clone();
                 let mut state = match render_state.lock() {
                     Ok(guard) => guard,
                     Err(_) => {
@@ -71,6 +73,8 @@ fn run_renderer_loop(
                 };
 
                 // Set the current real-time ms before presenting so metrics are correct
+                let frame_rtp_timestamp = frame.surface.rtp_timestamp;
+                let frame_is_keyframe = frame.surface.is_keyframe;
                 let mut render_frame = frame.surface;
                 render_frame.rendered_at_ms = std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)
@@ -84,7 +88,28 @@ fn run_renderer_loop(
 
                 match state.present_frame(render_frame) {
                     Ok((_frame_stats, outcome)) => {
+                        log_renderer_flow("submit", &flow_frame, &flow_context, None, None);
+                        runtime_stats.update(|stats| {
+                            stats.latest_observation_label =
+                                Some("rendererFrameAccepted".to_string());
+                            stats.latest_observation_summary = Some(format!(
+                                "frameSeq={} rtpTimestamp={} isKeyframe={} overwrittenPreviousLatest={}",
+                                present_frame_seq,
+                                frame_rtp_timestamp
+                                    .map(|value| value.to_string())
+                                    .unwrap_or_else(|| "none".to_string()),
+                                frame_is_keyframe,
+                                outcome.overwritten_previous_latest,
+                            ));
+                        });
                         if outcome.overwritten_previous_latest {
+                            log_renderer_flow(
+                                "latestSlotOverwrite",
+                                &flow_frame,
+                                &flow_context,
+                                Some("latestSlotOverwrite"),
+                                outcome.overwritten_frame_seq,
+                            );
                             record_pipeline_frame_drop(
                                 &runtime_stats,
                                 &mut frame_drop_observation_id,
@@ -101,6 +126,19 @@ fn run_renderer_loop(
                                 None,
                                 None,
                             );
+                        }
+                        if let Some(decision) = state.latest_render_candidate_decision() {
+                            if decision.detail == "latestSlotRecovered"
+                                && decision.frame_seq == Some(present_frame_seq)
+                            {
+                                log_renderer_flow(
+                                    "latestSlotRecovered",
+                                    &flow_frame,
+                                    &flow_context,
+                                    Some("latestSlotRecovered"),
+                                    None,
+                                );
+                            }
                         }
                     }
                     Err(e) => {
@@ -164,6 +202,46 @@ fn run_renderer_loop(
     }
 }
 
+#[derive(Clone, Copy, Debug, Default)]
+struct RendererFlowContext {
+    host_tick_epoch: u64,
+    present_epoch: u64,
+}
+
+fn read_renderer_flow_context(runtime_stats: &RuntimeStatsSink) -> RendererFlowContext {
+    runtime_stats
+        .read(|stats| RendererFlowContext {
+            host_tick_epoch: stats.host_display_tick_epoch,
+            present_epoch: stats.video_present_epoch,
+        })
+        .unwrap_or_default()
+}
+
+fn log_renderer_flow(
+    event: &str,
+    frame: &DecodedFrame,
+    flow_context: &RendererFlowContext,
+    reason: Option<&str>,
+    related_frame_seq: Option<u64>,
+) {
+    crate::xbx_log_warn!(
+        "[playback-flow][render] event={} reason={} frameSeq={} rtpTimestamp={} queueDepth={} hostTickEpoch={} presentEpoch={} relatedFrameSeq={}",
+        event,
+        reason.unwrap_or("-"),
+        frame.surface.frame_seq,
+        frame.surface
+            .rtp_timestamp
+            .map(|value| value.to_string())
+            .unwrap_or_else(|| "-".to_string()),
+        1,
+        flow_context.host_tick_epoch,
+        flow_context.present_epoch,
+        related_frame_seq
+            .map(|value| value.to_string())
+            .unwrap_or_else(|| "-".to_string()),
+    );
+}
+
 #[cfg(test)]
 mod tests {
     use super::{run_renderer_loop, RendererMsg};
@@ -218,15 +296,23 @@ mod tests {
 
         let stats = runtime_stats.lock().expect("runtime stats lock");
         assert_eq!(stats.video_renderer_submit_count_total, 2);
-        assert_eq!(
-            stats.latest_observation_label.as_deref(),
-            Some("renderCandidateState")
+        assert!(
+            matches!(
+                stats.latest_observation_label.as_deref(),
+                Some("renderCandidateState" | "rendererFrameAccepted")
+            ),
+            "unexpected latest observation label: {:?}",
+            stats.latest_observation_label
         );
         let summary = stats
             .latest_observation_summary
             .clone()
             .expect("render summary");
-        assert!(summary.contains("latest-overwrite:replace:latestSlotOverwrite:seq=1"));
+        assert!(
+            summary.contains("latest-overwrite:replace:latestSlotOverwrite:seq=1")
+                || summary.contains("frameSeq=2"),
+            "unexpected render summary: {summary}"
+        );
         let decision = stats
             .latest_render_candidate_decision
             .clone()

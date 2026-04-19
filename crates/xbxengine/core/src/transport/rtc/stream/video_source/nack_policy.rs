@@ -87,20 +87,20 @@ pub(super) fn sample_loss_nack_policy(
     cloud_rtt_floor_ms: Option<f64>,
 ) -> NackObservePolicy {
     let frame_importance = if frame_is_keyframe {
-        "keyframe"
+        "anchor"
     } else {
-        budget_context.frame_importance()
+        budget_context.recovery_value_tier()
     };
     let (base_max_age_ms, base_retry_interval_ms, base_burst_count, base_priority) =
         match (cloud_mode, startup_mode, frame_importance) {
-            (true, true, "keyframe") => (360.0, 40.0, 8.0, 3u8),
-            (true, true, "reference") => (300.0, 34.0, 7.0, 2u8),
+            (true, true, "anchor") => (360.0, 40.0, 8.0, 3u8),
+            (true, true, "supply") => (300.0, 34.0, 7.0, 2u8),
             (true, true, _) => (240.0, 28.0, 6.0, 1u8),
-            (true, false, "keyframe") => (240.0, 32.0, 6.0, 3u8),
-            (true, false, "reference") => (180.0, 26.0, 5.0, 2u8),
+            (true, false, "anchor") => (240.0, 32.0, 6.0, 3u8),
+            (true, false, "supply") => (180.0, 26.0, 5.0, 2u8),
             (true, false, _) => (120.0, 22.0, 4.0, 1u8),
-            (false, _, "keyframe") => (30.0, 10.0, 4.0, 3u8),
-            (false, _, "reference") => (20.0, 8.0, 3.0, 2u8),
+            (false, _, "anchor") => (30.0, 10.0, 4.0, 3u8),
+            (false, _, "supply") => (20.0, 8.0, 3.0, 2u8),
             (false, _, _) => (14.0, 6.0, 2.0, 1u8),
         };
     let max_age_ms = cloud_nack_max_age_ms(
@@ -127,14 +127,14 @@ pub(super) fn sample_loss_nack_policy(
         retry_interval_ms: Some(retry_interval_ms),
         burst_count: Some(burst_count),
         max_tracked_sequences: Some(match (cloud_mode, startup_mode, frame_importance) {
-            (true, true, "keyframe") => 24,
-            (true, true, "reference") => 18,
+            (true, true, "anchor") => 24,
+            (true, true, "supply") => 18,
             (true, true, _) => 14,
-            (true, false, "keyframe") => 18,
-            (true, false, "reference") => 12,
+            (true, false, "anchor") => 18,
+            (true, false, "supply") => 12,
             (true, false, _) => 8,
-            (false, _, "keyframe") => 12,
-            (false, _, "reference") => 8,
+            (false, _, "anchor") => 12,
+            (false, _, "supply") => 8,
             (false, _, _) => 4,
         }),
         frame_rtp_timestamp: Some(sample_rtp_timestamp),
@@ -175,14 +175,14 @@ pub(super) fn rtp_window_nack_policy(
         retry_interval_ms: Some(retry_interval_ms),
         burst_count: Some(burst_count),
         max_tracked_sequences: Some(match (cloud_mode, startup_mode, frame_importance) {
-            (true, true, "keyframe") => 20,
-            (true, true, "reference") => 14,
+            (true, true, "anchor") => 20,
+            (true, true, "supply") => 14,
             (true, true, _) => 10,
-            (true, false, "keyframe") => 14,
-            (true, false, "reference") => 10,
+            (true, false, "anchor") => 14,
+            (true, false, "supply") => 10,
             (true, false, _) => 6,
-            (false, _, "keyframe") => 10,
-            (false, _, "reference") => 6,
+            (false, _, "anchor") => 10,
+            (false, _, "supply") => 6,
             (false, _, _) => 4,
         }),
         frame_rtp_timestamp: None,
@@ -227,14 +227,14 @@ pub(super) fn rtp_gap_nack_policy(
         }),
         burst_count: Some(burst_count.saturating_add(1)),
         max_tracked_sequences: Some(match (cloud_mode, startup_mode, frame_importance) {
-            (true, true, "keyframe") => 22,
-            (true, true, "reference") => 16,
+            (true, true, "anchor") => 22,
+            (true, true, "supply") => 16,
             (true, true, _) => 12,
-            (true, false, "keyframe") => 16,
-            (true, false, "reference") => 12,
+            (true, false, "anchor") => 16,
+            (true, false, "supply") => 12,
             (true, false, _) => 8,
-            (false, _, "keyframe") => 12,
-            (false, _, "reference") => 8,
+            (false, _, "anchor") => 12,
+            (false, _, "supply") => 8,
             (false, _, _) => 4,
         }),
         frame_rtp_timestamp: None,
@@ -255,17 +255,17 @@ fn transport_policy_tuple(
     cloud_mode: bool,
     startup_mode: bool,
 ) -> (&'static str, bool, u64, u16, u8) {
-    let frame_importance = budget_context.frame_importance();
-    let frame_is_keyframe = matches!(frame_importance, "keyframe") || frame_value.is_sync_point();
+    let frame_importance = budget_context.recovery_value_tier();
+    let frame_is_keyframe = matches!(frame_importance, "anchor") || frame_value.is_sync_point();
     let (retry_interval_ms, burst_count) = match (cloud_mode, startup_mode, frame_importance) {
-        (true, true, "keyframe") => (30, 8),
-        (true, true, "reference") => (26, 7),
+        (true, true, "anchor") => (30, 8),
+        (true, true, "supply") => (26, 7),
         (true, true, _) => (22, 6),
-        (true, false, "keyframe") => (24, 6),
-        (true, false, "reference") => (20, 5),
+        (true, false, "anchor") => (24, 6),
+        (true, false, "supply") => (20, 5),
         (true, false, _) => (16, 4),
-        (false, _, "keyframe") => (8, 4),
-        (false, _, "reference") => (7, 3),
+        (false, _, "anchor") => (8, 4),
+        (false, _, "supply") => (7, 3),
         (false, _, _) => (6, 2),
     };
     let priority = budget_context.repair_priority(frame_value);
@@ -278,10 +278,21 @@ fn transport_policy_tuple(
     )
 }
 
+/// 将媒体语义标签转换为恢复语义标签
+/// media_type_label (H.264 inspection) -> recovery_label (budget tier)
+pub(super) fn recovery_label_for_media_label(media_label: &'static str) -> &'static str {
+    match media_label {
+        "keyframe" => "anchor",
+        "reference" => "supply",
+        "delta" => "disposable",
+        _ => "disposable",
+    }
+}
+
 pub(super) fn frame_value_for_importance(frame_importance: &'static str) -> FrameValue {
     match frame_importance {
-        "keyframe" => FrameValue::new(true, false, 128 * 1024),
-        "reference" => FrameValue::new(false, true, 48 * 1024),
+        "anchor" => FrameValue::new(true, false, 128 * 1024),
+        "supply" => FrameValue::new(false, true, 48 * 1024),
         _ => FrameValue::new(false, false, 12 * 1024),
     }
 }

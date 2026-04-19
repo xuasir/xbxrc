@@ -1,4 +1,5 @@
 use super::sink::RtcVideoSourceSink;
+use super::FrameBoundaryTracker;
 use super::{NackSchedulerConfig, RtcVideoFrameSource};
 use crate::api::runtime::XbxEngineRuntimeConfig;
 use crate::media::video::test_fixtures::NoopRtcpPort;
@@ -104,7 +105,11 @@ impl LocalIngressReplayFixture {
             tokio::sync::mpsc::unbounded_channel();
         let source =
             build_source_with_runtime_stats(runtime_stats.clone(), rx, transport_observation_tx);
-        let mut sink = RtcVideoSourceSink::new(tx, sink_stats);
+        let mut sink = RtcVideoSourceSink::new(
+            tx,
+            sink_stats,
+            Arc::new(Mutex::new(FrameBoundaryTracker::new())),
+        );
         sink.payload_route_map = repair_video_route_map();
         Self {
             runtime_stats,
@@ -244,7 +249,7 @@ impl LocalIngressReplayFixture {
                 state: "complete-candidate".to_string(),
                 frame_rtp_timestamp: Some(frame_rtp_timestamp),
                 is_keyframe: Some(false),
-                frame_importance: Some("delta".to_string()),
+                frame_importance: Some("disposable".to_string()),
                 budget_importance: None,
 
                 evidence_importance: None,
@@ -331,9 +336,9 @@ impl LocalIngressReplayFixture {
             track.observed_at_ms = observed_at_ms;
         }
         if let Some(timeline) = stats.latest_video_timeline_observation.as_mut() {
-            timeline.source_event = "frame-await-recovery-keyframe".to_string();
+            timeline.source_event = "frame-await-recovery-anchor".to_string();
             timeline.chain.state = "recovering".to_string();
-            timeline.chain.reason = Some("transportAwaitRecoveryKeyframe".to_string());
+            timeline.chain.reason = Some("transportAwaitRecoveryAnchor".to_string());
             timeline.chain.observed_at_ms = observed_at_ms;
             timeline.observed_at_ms = observed_at_ms;
         }
@@ -352,7 +357,7 @@ impl LocalIngressReplayFixture {
         stats.video_decoder_stalled = Some(false);
         stats.video_anchor_clean_epoch = Some(stats.transport_recovery_epoch);
         stats.video_anchor_clean_observed_at_ms = Some(observed_at_ms);
-        stats.video_anchor_clean_source_event = Some("chain-clean-keyframe-submitted".to_string());
+        stats.video_anchor_clean_source_event = Some("chain-clean-anchor-submitted".to_string());
         if let Some(track) = stats.latest_video_track_status.as_mut() {
             track.transport_state = XbxEngineTransportStateDto::Connected;
             track.video_bytes_total += 32_000;

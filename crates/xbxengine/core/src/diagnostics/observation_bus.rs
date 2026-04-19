@@ -541,7 +541,7 @@ fn apply_event(stats: &mut XbxEngineMediaRuntimeStats, event: ObservationEvent) 
             stats.latest_video_nack_observation = Some(observation);
         }
         ObservationEvent::VideoTimelineObserved { observation } => {
-            if observation.source_event == "chain-clean-keyframe-submitted" {
+            if observation.source_event == "chain-clean-anchor-submitted" {
                 RuntimeStatsSink::apply_transport_clean_anchor(
                     stats,
                     observation.observed_at_ms,

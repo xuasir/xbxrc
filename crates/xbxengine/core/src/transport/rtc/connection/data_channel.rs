@@ -225,6 +225,8 @@ impl RtcConnectionService {
                 sent_at_ms,
                 Some(sent_at_ms + KEYFRAME_REQUEST_RESPONSE_WINDOW_MS),
             );
+            self.control_service.clear_pending_keyframe_request();
+            self.sync_control_replay_runtime_stats(runtime_stats);
         }
         if actions.request_decoder_reset {
             self.send_control_payload(
@@ -233,9 +235,9 @@ impl RtcConnectionService {
                 "phase1 rtc control replay decoder reset sent",
                 runtime_stats,
             )?;
+            self.control_service.clear_pending_decoder_reset_request();
+            self.sync_control_replay_runtime_stats(runtime_stats);
         }
-        self.control_service.clear_pending_replay_actions();
-        self.sync_control_replay_runtime_stats(runtime_stats);
         RuntimeStatsSink::new(runtime_stats.clone()).update(|stats| {
             stats.latest_observation_label = Some("rtcControlReplayConsumed".to_string());
             stats.latest_observation_summary = Some(format!(

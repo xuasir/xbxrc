@@ -1,8 +1,8 @@
 use rtc_media::io::sample_builder::SampleBuilder;
 use rtc_rtp::codec::h264::H264Packet;
-use std::collections::VecDeque;
-use std::sync::Arc;
-use std::time::Duration;
+use std::collections::{HashMap, VecDeque};
+use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
 
 use crate::media::video::h264::inspection::H264AccessUnitInspector;
 use crate::media::video::ingress::budget::FrameBudgetContext;
@@ -33,11 +33,11 @@ pub(super) mod timeline;
 
 use crate::transport::rtc::stream::frame_cadence::TransportFrameDeadlineTracker;
 
-use self::nack_window::NackSequenceWindow;
 use self::nack_policy::{
     NACK_MAINTENANCE_TICK_INTERVAL_MS, RECOVERY_KEYFRAME_RETRY_INTERVAL_MS,
     RECOVERY_KEYFRAME_RETRY_TIMEOUT_MS,
 };
+use self::nack_window::NackSequenceWindow;
 use self::timeline::VideoTimelineState;
 
 use crate::transport::rtc::stream::adapter_types::{
@@ -115,6 +115,7 @@ pub struct RtcVideoFrameSource {
     ingress_budget_materialized_count: u64,
     ingress_budget_fallback_count: u64,
     ingress_budget_unknown_rtt_count: u64,
+    frame_boundary: Arc<Mutex<FrameBoundaryTracker>>,
 }
 
 const SOURCE_SERVICEABLE_DECODE_MAX_AGE_MS: f64 = 180.0;
@@ -184,7 +185,9 @@ impl RtcVideoFrameSource {
             last_transport_observation_at: None,
             timeline_state: VideoTimelineState::new(),
             wait_keyframe_observation_cooldown: Duration::from_millis(350),
-            nack_maintenance_tick_interval: Duration::from_millis(NACK_MAINTENANCE_TICK_INTERVAL_MS),
+            nack_maintenance_tick_interval: Duration::from_millis(
+                NACK_MAINTENANCE_TICK_INTERVAL_MS,
+            ),
             last_nack_maintenance_tick_at: std::time::Instant::now(),
             waiting_recovery_keyframe_since_ms: None,
             recovery_keyframe_retry_timeout_ms: RECOVERY_KEYFRAME_RETRY_TIMEOUT_MS,
@@ -211,6 +214,7 @@ impl RtcVideoFrameSource {
             ingress_budget_materialized_count: 0,
             ingress_budget_fallback_count: 0,
             ingress_budget_unknown_rtt_count: 0,
+            frame_boundary: Arc::new(Mutex::new(FrameBoundaryTracker::new())),
         }
     }
 
@@ -390,11 +394,11 @@ impl RtcVideoFrameSource {
         (None, FrameRecoveryDisposition::Repairing, None, None)
     }
 
-    pub(super) fn waiting_for_recovery_keyframe(&self) -> bool {
-        self.timeline_state.waiting_for_recovery_keyframe()
+    pub(super) fn is_blocking_non_keyframe_admission(&self) -> bool {
+        self.timeline_state.chain_requires_recovery_anchor()
     }
 
-    pub(super) fn set_waiting_for_recovery_keyframe(&mut self, waiting: bool) {
+    pub(super) fn set_is_blocking_non_keyframe_admission(&mut self, waiting: bool) {
         let now_ms = now_ms_f64();
         if waiting {
             if self.waiting_recovery_keyframe_since_ms.is_none() {
@@ -588,6 +592,162 @@ fn capitalize_reason(reason: &str) -> String {
     }
 }
 
+const UINT32SIZE_HALF: u32 = 0x8000_0000;
+const FRAME_BOUNDARY_COMPLETED_CAPACITY: usize = 8;
+const FRAME_BOUNDARY_STALE_FRAME_COUNT: u32 = 3;
+const FRAME_BOUNDARY_STALE_TS_GAP: u32 = 3 * 3000;
+const FRAME_BOUNDARY_TIMEOUT_MS: u64 = 100;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum FramePriority {
+    Normal,
+    High,
+}
+
+#[derive(Clone, Debug)]
+struct CompletedFrame {
+    rtp_timestamp: u32,
+    seq_range: (u16, u16),
+    #[allow(dead_code)]
+    completed_at: Instant,
+    #[allow(dead_code)]
+    priority: FramePriority,
+}
+
+#[derive(Clone, Debug)]
+struct ActiveFrame {
+    #[allow(dead_code)]
+    rtp_timestamp: u32,
+    first_seq: u16,
+    last_seq: u16,
+    priority: FramePriority,
+    first_seen_at: Instant,
+    marker_seen: bool,
+}
+
+pub(super) struct FrameBoundaryTracker {
+    completed_frames: VecDeque<CompletedFrame>,
+    active_frames: HashMap<u32, ActiveFrame>,
+    highest_timestamp_seen: Option<u32>,
+}
+
+impl FrameBoundaryTracker {
+    pub(super) fn new() -> Self {
+        Self {
+            completed_frames: VecDeque::with_capacity(FRAME_BOUNDARY_COMPLETED_CAPACITY),
+            active_frames: HashMap::new(),
+            highest_timestamp_seen: None,
+        }
+    }
+
+    pub(super) fn on_packet_arrived(&mut self, seq: u16, ts: u32, marker: bool, is_priority: bool) {
+        if self.highest_timestamp_seen.is_none()
+            || ts.wrapping_sub(self.highest_timestamp_seen.unwrap()) < UINT32SIZE_HALF
+        {
+            self.highest_timestamp_seen = Some(ts);
+        }
+
+        let active = self.active_frames.entry(ts).or_insert_with(|| ActiveFrame {
+            rtp_timestamp: ts,
+            first_seq: seq,
+            last_seq: seq,
+            priority: if is_priority {
+                FramePriority::High
+            } else {
+                FramePriority::Normal
+            },
+            first_seen_at: Instant::now(),
+            marker_seen: false,
+        });
+
+        if seq.wrapping_sub(active.first_seq) >= UINT16SIZE_HALF {
+            active.first_seq = seq;
+        }
+        if seq.wrapping_sub(active.last_seq) < UINT16SIZE_HALF {
+            active.last_seq = seq;
+        }
+
+        if is_priority {
+            active.priority = FramePriority::High;
+        }
+
+        if marker {
+            active.marker_seen = true;
+        }
+    }
+
+    pub(super) fn maybe_finalize_frames(&mut self, now: Instant) {
+        let highest_ts = self.highest_timestamp_seen.unwrap_or(0);
+
+        self.active_frames.retain(|&ts, active| {
+            let marker_confirmed = active.marker_seen
+                && ts != highest_ts
+                && highest_ts.wrapping_sub(ts) < UINT32SIZE_HALF;
+
+            let ts_gap = highest_ts.wrapping_sub(ts);
+            let stale_by_timestamp =
+                ts_gap > FRAME_BOUNDARY_STALE_TS_GAP && ts_gap < UINT32SIZE_HALF;
+
+            let stale_by_time = now.duration_since(active.first_seen_at)
+                > Duration::from_millis(FRAME_BOUNDARY_TIMEOUT_MS);
+
+            if marker_confirmed || stale_by_timestamp || stale_by_time {
+                if self.completed_frames.len() >= FRAME_BOUNDARY_COMPLETED_CAPACITY {
+                    self.completed_frames.pop_front();
+                }
+                self.completed_frames.push_back(CompletedFrame {
+                    rtp_timestamp: ts,
+                    seq_range: (active.first_seq, active.last_seq),
+                    completed_at: now,
+                    priority: active.priority,
+                });
+                false
+            } else {
+                true
+            }
+        });
+    }
+
+    pub(super) fn is_packet_stale(&self, ts: u32, seq: u16, is_primary: bool) -> bool {
+        if is_primary {
+            return false;
+        }
+
+        let Some(highest_ts) = self.highest_timestamp_seen else {
+            return false;
+        };
+
+        let ts_gap = highest_ts.wrapping_sub(ts);
+
+        if ts_gap == 0 || ts_gap >= UINT32SIZE_HALF {
+            return false;
+        }
+
+        if self.active_frames.contains_key(&ts) {
+            return false;
+        }
+
+        for completed in self
+            .completed_frames
+            .iter()
+            .rev()
+            .take(FRAME_BOUNDARY_STALE_FRAME_COUNT as usize)
+        {
+            if completed.rtp_timestamp == ts {
+                let in_range = seq.wrapping_sub(completed.seq_range.0)
+                    <= completed.seq_range.1.wrapping_sub(completed.seq_range.0);
+                return in_range;
+            }
+        }
+
+        ts_gap > FRAME_BOUNDARY_STALE_TS_GAP
+    }
+
+    pub(super) fn get_frame_priority(&self, ts: u32) -> Option<FramePriority> {
+        self.active_frames.get(&ts).map(|active| active.priority)
+    }
+}
+
 pub(super) const UINT16SIZE_HALF: u16 = 1 << 15;
 
 pub(crate) fn build_rtc_video_frame_source(
@@ -619,7 +779,12 @@ pub(crate) fn build_rtc_video_frame_source(
         nack_config,
     );
     source.jitter_early_emit_enabled = jitter_early_emit_enabled;
-    let sink = sink::RtcVideoSourceSink::new(tx, RuntimeStatsSink::new(runtime_stats.clone()));
+    let frame_boundary = source.frame_boundary.clone();
+    let sink = sink::RtcVideoSourceSink::new(
+        tx,
+        RuntimeStatsSink::new(runtime_stats.clone()),
+        frame_boundary,
+    );
     let observation_source = RtcVideoTransportObservationSource {
         rx: transport_observation_rx,
     };
@@ -647,5 +812,3 @@ impl RtcVideoFrameSource {
         self.jitter_early_emit_enabled = enabled;
     }
 }
-
-

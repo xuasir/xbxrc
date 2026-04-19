@@ -157,11 +157,15 @@ pub struct NackScheduler {
     config: NackSchedulerConfig,
     pending: BTreeMap<u16, PendingNack>,
     skipped_low_value: BTreeMap<u16, SkippedAdmissionRecord>,
+    /// 最近的RTT（毫秒），用于动态预算调整
+    latest_rtt_ms: Option<f64>,
+    /// 最近的丢包率（0.0-1.0），用于动态预算调整
+    latest_loss_rate: Option<f64>,
 }
 
 fn should_bypass_low_value_skip(policy: NackObservePolicy) -> bool {
     policy.frame_is_keyframe.unwrap_or(false)
-        || matches!(policy.frame_importance, "keyframe" | "reference")
+        || matches!(policy.frame_importance, "anchor" | "supply")
 }
 
 type PendingMeta = (
@@ -182,7 +186,15 @@ impl NackScheduler {
             config,
             pending: BTreeMap::new(),
             skipped_low_value: BTreeMap::new(),
+            latest_rtt_ms: None,
+            latest_loss_rate: None,
         }
+    }
+
+    /// 更新网络状态（用于动态预算调整）
+    pub fn update_network_stats(&mut self, rtt_ms: Option<f64>, loss_rate: Option<f64>) {
+        self.latest_rtt_ms = rtt_ms;
+        self.latest_loss_rate = loss_rate;
     }
 
     pub fn observe_missing_sequences_with_policy(
@@ -367,21 +379,24 @@ impl NackScheduler {
                 pending.retry_interval_ms = pending.retry_interval_ms.min(retry_interval_ms);
                 pending.max_retry_count = pending.max_retry_count.max(max_retry_count);
                 pending.priority = pending.priority.max(policy.priority);
-                pending.frame_is_keyframe =
-                    Some(pending.frame_is_keyframe.unwrap_or(false) || policy.frame_is_keyframe.unwrap_or(false));
+                pending.frame_is_keyframe = Some(
+                    pending.frame_is_keyframe.unwrap_or(false)
+                        || policy.frame_is_keyframe.unwrap_or(false),
+                );
                 if pending.source != "rtpGap" && policy.source == "rtpGap" {
                     pending.source = "rtpGap";
                 }
                 pending.frame_importance = if pending.frame_is_keyframe.unwrap_or(false) {
-                    "keyframe"
-                } else if matches!(pending.frame_importance, "reference")
-                    || matches!(policy.frame_importance, "reference")
+                    "anchor"
+                } else if matches!(pending.frame_importance, "supply")
+                    || matches!(policy.frame_importance, "supply")
                 {
-                    "reference"
+                    "supply"
                 } else {
-                    "delta"
+                    "disposable"
                 };
-                pending.frame_rtp_timestamp = pending.frame_rtp_timestamp.or(policy.frame_rtp_timestamp);
+                pending.frame_rtp_timestamp =
+                    pending.frame_rtp_timestamp.or(policy.frame_rtp_timestamp);
                 pending.estimated_recovery_arrival_ms = match (
                     pending.estimated_recovery_arrival_ms,
                     estimated_recovery_arrival_ms,
@@ -500,6 +515,7 @@ impl NackScheduler {
         });
 
         // deadline/maxAge 先于预算耗尽处理，避免覆盖更高优先级过期原因。
+        // 检查预算耗尽：直接使用主预算
         let exhausted_sequences: Vec<u16> = self
             .pending
             .iter()
@@ -524,12 +540,16 @@ impl NackScheduler {
             }
         }
 
+        // 筛选重试候选：直接使用主预算（pending.max_retry_count）
         let mut retry_candidates = Vec::new();
         for (sequence, pending) in &mut self.pending {
             let since_last_sent_ms = (now_ms - pending.last_sent_at_ms).max(0.0);
+
+            // 预算检查：直接使用主预算，不做二次判死
             if pending.retry_count >= pending.max_retry_count {
                 continue;
             }
+
             if since_last_sent_ms < pending.retry_interval_ms as f64 {
                 continue;
             }
@@ -723,11 +743,14 @@ impl NackScheduler {
     pub fn resolve_sequence(&mut self, sequence: u16, now_ms: f64) -> Option<ResolvedNack> {
         self.pending.remove(&sequence).map(|mut pending| {
             pending.gap_state = GapState::Resolved;
+            // 如果resolve_sequence被调用，说明包已经成功到达并被sample builder接受
+            // 即使晚到，也应该标记为成功恢复，而不是SkippedTooLate
+            let was_late = now_ms >= pending.deadline_at_ms;
             ResolvedNack {
                 sequence,
                 recovery_time_ms: (now_ms - pending.first_seen_at_ms).max(0.0),
                 retry_count: pending.retry_count,
-                was_late: now_ms >= pending.deadline_at_ms,
+                was_late,
                 source: pending.source,
                 frame_rtp_timestamp: pending.frame_rtp_timestamp,
                 frame_is_keyframe: pending.frame_is_keyframe,
@@ -737,16 +760,10 @@ impl NackScheduler {
                 frame_playout_deadline_at_ms: pending
                     .frame_playout_deadline_at_ms
                     .or(Some(pending.deadline_at_ms)),
-                nack_disposition: if now_ms >= pending.deadline_at_ms {
-                    PacketRecoveryDisposition::SkippedTooLate
-                } else {
-                    PacketRecoveryDisposition::Attempted
-                },
-                frame_unrecoverable_reason: if now_ms >= pending.deadline_at_ms {
-                    Some("deadlineExceededBeforeRecovery")
-                } else {
-                    pending.frame_unrecoverable_reason
-                },
+                // 包已经到达并被接受，标记为成功恢复（可能晚到但仍有效）
+                nack_disposition: PacketRecoveryDisposition::Attempted,
+                // 包已经成功恢复，不设置unrecoverable_reason
+                frame_unrecoverable_reason: None,
                 budget_context: pending.budget_context,
             }
         })
@@ -847,18 +864,19 @@ fn sequence_in_wrapping_range(sequence: u16, start: u16, end_exclusive: u16) -> 
 
 fn frame_importance_retry_budget(policy: NackObservePolicy, default_max_retry_count: u8) -> u8 {
     let value = frame_value_for_importance(policy.frame_importance);
-    let effective_context = if policy.budget_context.frame_importance() == policy.frame_importance {
-        policy.budget_context
-    } else {
-        FrameBudgetContext::steady_for_value(value)
-    };
+    let effective_context =
+        if policy.budget_context.recovery_value_tier() == policy.frame_importance {
+            policy.budget_context
+        } else {
+            FrameBudgetContext::steady_for_value(value)
+        };
     effective_context.retry_budget(value, default_max_retry_count)
 }
 
 fn frame_value_for_importance(frame_importance: &'static str) -> FrameValue {
     match frame_importance {
-        "keyframe" => FrameValue::new(true, false, 128 * 1024),
-        "reference" => FrameValue::new(false, true, 48 * 1024),
+        "anchor" => FrameValue::new(true, false, 128 * 1024),
+        "supply" => FrameValue::new(false, true, 48 * 1024),
         _ => FrameValue::new(false, false, 12 * 1024),
     }
 }

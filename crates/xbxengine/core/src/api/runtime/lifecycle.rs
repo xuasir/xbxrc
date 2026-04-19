@@ -261,7 +261,21 @@ where
         &mut self,
         runtime_stats: &crate::XbxEngineMediaRuntimeStats,
     ) {
-        if runtime_stats.video_owner_reason.as_deref() != Some("hostPresentStalled") {
+        // RFC: decode 后显示域异常不得驱动媒体恢复动作，但允许在 runtime 侧触发本地显示自愈闭环。
+        let owner_reason = runtime_stats.video_owner_reason.as_deref();
+        if !matches!(
+            owner_reason,
+            Some("hostPresentStalled" | "displaySupplyCritical" | "displaySupplyDegraded")
+        ) {
+            return;
+        }
+        if matches!(self.state, XbxEngineRuntimeState::Reconnecting) {
+            return;
+        }
+        // 只有在显式显示压力/停滞证据成立时才触发本地 reset，避免在纯统计抖动下误触发。
+        if owner_reason != Some("hostPresentStalled")
+            && !matches!(runtime_stats.video_renderer_stalled, Some(true))
+        {
             return;
         }
         let now = now_ms_f64();
@@ -273,15 +287,36 @@ where
         {
             return;
         }
+        // 去重：按 display tick 前进判定是否允许重试。
+        // hostPresentStalled 的定义是“tick 前进但 present 不前进”，因此不能用 present_epoch 去重（会把后续重试全部挡掉）。
+        let tick_epoch = runtime_stats.host_display_tick_epoch;
+        if tick_epoch > 0 {
+            if self
+                .health
+                .last_native_presenter_reset_display_tick_epoch
+                .is_some_and(|last| tick_epoch <= last + 1)
+            {
+                return;
+            }
+        }
         let Some(vp) = self.snapshot.viewport.as_ref() else {
             return;
         };
-        if self
-            .host_bridge
-            .reset_native_video_presenter_for_host_stall(&vp.viewport_id)
-            .is_ok()
-        {
+        let reset_ok = match owner_reason {
+            Some("hostPresentStalled") => self
+                .host_bridge
+                .reset_native_video_presenter_for_host_stall(&vp.viewport_id)
+                .is_ok(),
+            Some(reason @ ("displaySupplyCritical" | "displaySupplyDegraded")) => self
+                .host_bridge
+                .reset_native_video_presenter_for_display_recovery(&vp.viewport_id, reason)
+                .is_ok(),
+            _ => false,
+        };
+        if reset_ok {
             self.health.last_native_presenter_reset_at_ms = Some(now);
+            self.health.last_native_presenter_reset_display_tick_epoch =
+                Some(runtime_stats.host_display_tick_epoch);
         }
     }
 
@@ -433,16 +468,24 @@ where
                 latest_nack_sent_at_ms: runtime_stats
                     .latest_video_nack_observation
                     .as_ref()
+                    .filter(|observation| observation.action == "sent")
                     .map(|observation| observation.observed_at_ms),
                 latest_nack_recovered_at_ms: runtime_stats
                     .latest_video_nack_observation
                     .as_ref()
-                    .filter(|observation| observation.action == "recovered")
+                    .filter(|observation| {
+                        matches!(observation.action.as_str(), "recovered" | "recoveredLate")
+                    })
                     .map(|observation| observation.observed_at_ms),
                 latest_nack_expired_at_ms: runtime_stats
                     .latest_video_nack_observation
                     .as_ref()
-                    .filter(|observation| observation.action == "expiredDeadline")
+                    .filter(|observation| {
+                        matches!(
+                            observation.action.as_str(),
+                            "expiredDeadline" | "expiredMaxAge"
+                        )
+                    })
                     .map(|observation| observation.observed_at_ms),
                 latest_nack_expired_frame_is_keyframe: runtime_stats
                     .latest_video_nack_observation

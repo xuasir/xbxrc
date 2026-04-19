@@ -98,6 +98,9 @@ mod tests {
                     reconnect_budget_used: 1,
                     reconnect_budget_limit: 1,
                 },
+                coalescing_mode: None,
+                unlock_reason: None,
+                preempt_reason: None,
             }),
             bwe: None,
         });
@@ -150,6 +153,9 @@ mod tests {
                     reconnect_budget_used: 1,
                     reconnect_budget_limit: 1,
                 },
+                coalescing_mode: None,
+                unlock_reason: None,
+                preempt_reason: None,
             }),
             bwe: None,
         });

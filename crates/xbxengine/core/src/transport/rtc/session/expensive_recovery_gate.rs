@@ -11,9 +11,7 @@ use crate::transport::rtc::projection::TransportSnapshot;
 use crate::transport::rtc::recovery::contract::{
     has_current_clean_anchor_from_stats, has_current_transport_await_issue_from_stats,
 };
-use crate::transport::rtc::recovery::coordinator::{
-    RecoveryCoordinator, RecoveryCoordinatorProposal,
-};
+use crate::transport::rtc::recovery::coordinator::{CoordinatorProposal, RecoveryCoordinator};
 use crate::transport::rtc::recovery::escalation::{RecoveryAction, VideoEscalationReason};
 use crate::transport::rtc::recovery::runtime_state::has_fresh_media_output;
 use crate::transport::rtc::session::control_model::{
@@ -72,7 +70,8 @@ impl<'a> ExpensiveRecoveryGate<'a> {
         &self,
         snapshot: &TransportSnapshot,
         owner_state: VideoSchedulingOwnerState,
-        proposal: &mut RecoveryCoordinatorProposal,
+        proposal: &mut CoordinatorProposal,
+        owner_signal: &crate::transport::rtc::recovery::coordinator::RecoveryOwnerSignal,
         observed_at_ms: f64,
         twcc_warmup_state: TwccWarmupState,
         block_lifecycle_reconnect_candidate: bool,
@@ -87,7 +86,7 @@ impl<'a> ExpensiveRecoveryGate<'a> {
             };
         }
         if self.should_hold_media_reconnect_during_twcc_warmup(
-            proposal.signal.reason,
+            owner_signal.reason,
             twcc_warmup_state,
             proposal.decision.action,
         ) {
@@ -99,16 +98,20 @@ impl<'a> ExpensiveRecoveryGate<'a> {
                 )),
             };
         }
-        if let Some(block_reason) =
-            self.media_reconnect_block_reason(snapshot, owner_state, proposal, observed_at_ms)
-        {
+        if let Some(block_reason) = self.media_reconnect_block_reason(
+            snapshot,
+            owner_state,
+            proposal,
+            owner_signal,
+            observed_at_ms,
+        ) {
             proposal.decision.action = RecoveryAction::CooldownSuppressed;
             return ReconnectGateResolution {
                 detail: Some(format!("reconnectBlocked:{block_reason}")),
             };
         }
         ReconnectGateResolution {
-            detail: Some(resolve_reconnect_grant_detail(proposal)),
+            detail: Some(resolve_reconnect_grant_detail(proposal, owner_signal)),
         }
     }
 
@@ -122,12 +125,13 @@ impl<'a> ExpensiveRecoveryGate<'a> {
         local_self_healing_attempted: bool,
         media_progress_stalled: bool,
         has_connected_connectivity_failure_evidence: bool,
-        proposal: &mut RecoveryCoordinatorProposal,
+        proposal: &mut CoordinatorProposal,
+        owner_signal: &crate::transport::rtc::recovery::coordinator::RecoveryOwnerSignal,
     ) {
         if proposal.decision.action != RecoveryAction::RequestReconnectCandidate {
             return;
         }
-        let domain = resolve_session_fault_domain(proposal.signal.reason);
+        let domain = resolve_session_fault_domain(owner_signal.reason);
         if !decode_or_display_fault_requires_transport_evidence(
             domain,
             SessionCostCeiling::TransportRecover,
@@ -161,14 +165,15 @@ impl<'a> ExpensiveRecoveryGate<'a> {
         &self,
         snapshot: &TransportSnapshot,
         owner_state: VideoSchedulingOwnerState,
-        proposal: &RecoveryCoordinatorProposal,
+        proposal: &CoordinatorProposal,
+        owner_signal: &crate::transport::rtc::recovery::coordinator::RecoveryOwnerSignal,
         observed_at_ms: f64,
     ) -> Option<&'static str> {
         if proposal.decision.action != RecoveryAction::RequestReconnectCandidate {
             return None;
         }
         if matches!(
-            proposal.signal.reason,
+            owner_signal.reason,
             VideoEscalationReason::LifecycleRecovering
                 | VideoEscalationReason::TransportExpiredDeadline
                 | VideoEscalationReason::TransportSevereDeadline
@@ -177,7 +182,7 @@ impl<'a> ExpensiveRecoveryGate<'a> {
         ) {
             return None;
         }
-        if proposal.signal.reason != VideoEscalationReason::TransportAwaitRecoveryKeyframe {
+        if owner_signal.reason != VideoEscalationReason::TransportAwaitRecoveryKeyframe {
             return Some("mediaGate:nonTransportAwait");
         }
         if snapshot.connection.lifecycle_state != ConnectionLifecycleStateFact::Connected {
@@ -240,9 +245,12 @@ fn stats_has_unresolved_transport_await_issue(stats: &XbxEngineMediaRuntimeStats
     has_current_transport_await_issue_from_stats(stats)
 }
 
-pub(crate) fn resolve_reconnect_grant_detail(proposal: &RecoveryCoordinatorProposal) -> String {
+pub(crate) fn resolve_reconnect_grant_detail(
+    _proposal: &CoordinatorProposal,
+    owner_signal: &crate::transport::rtc::recovery::coordinator::RecoveryOwnerSignal,
+) -> String {
     let detail = if matches!(
-        proposal.signal.reason,
+        owner_signal.reason,
         VideoEscalationReason::LifecycleRecovering
             | VideoEscalationReason::TransportExpiredDeadline
             | VideoEscalationReason::TransportSevereDeadline
@@ -250,7 +258,7 @@ pub(crate) fn resolve_reconnect_grant_detail(proposal: &RecoveryCoordinatorPropo
             | VideoEscalationReason::TransportSampleLoss
     ) {
         "connectivityEvidence"
-    } else if proposal.signal.reason == VideoEscalationReason::TransportAwaitRecoveryKeyframe {
+    } else if owner_signal.reason == VideoEscalationReason::TransportAwaitRecoveryKeyframe {
         "localRecoveryExhausted"
     } else {
         "policyPass"

@@ -113,7 +113,7 @@
 
 1. 决定当前处于 `SeekingAnchor / Priming / RebuildingSupply / ...`
 2. 首帧前保护窗
-3. `transportAwaitRecoveryKeyframe` 是否继续只留在本地恢复域
+3. `transportAwaitRecoveryAnchor` 是否继续只留在本地恢复域
 4. 何时允许从本地 keyframe 恢复升级到 decoder reset / reconnect
 
 约束：
@@ -185,7 +185,7 @@
 当前事实不是“先解码试试看”，而是：
 
 1. `source.rs` inspection 返回 `AwaitRecoveryKeyframe`
-2. 时间线写入 `frame-inspection-rejected-await-keyframe` 或相关恢复事件
+2. 时间线写入 `frame-inspection-rejected-await-anchor` 或相关恢复事件
 3. `waiting_for_recovery_keyframe` 置真
 4. 首帧获取窗口内最多两次首帧专用 keyframe 请求继续推进
 5. 该 AU 不进入 decoder 主线

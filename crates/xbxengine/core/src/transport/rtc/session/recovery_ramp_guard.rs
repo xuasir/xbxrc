@@ -3,7 +3,7 @@ use std::sync::Mutex;
 use crate::runtime_stats_sink::RuntimeStatsSink;
 use crate::transport::rtc::policy::video_scheduling_owner::VideoSchedulingOwnerState;
 use crate::transport::rtc::recovery::contract::has_current_clean_anchor_from_stats;
-use crate::transport::rtc::recovery::coordinator::RecoveryCoordinatorProposal;
+use crate::transport::rtc::recovery::coordinator::CoordinatorProposal;
 use crate::transport::rtc::recovery::escalation::{RecoveryAction, VideoEscalationReason};
 use crate::transport::rtc::recovery::runtime_state::has_fresh_media_output;
 use crate::XbxEngineMediaRuntimeStats;
@@ -25,7 +25,8 @@ pub(crate) fn ramp_up_active(runtime_stats: &Mutex<XbxEngineMediaRuntimeStats>) 
 pub(crate) fn should_absorb_light_recovery_signal_during_ramp_up(
     runtime_stats: &Mutex<XbxEngineMediaRuntimeStats>,
     owner_state: VideoSchedulingOwnerState,
-    proposal: &RecoveryCoordinatorProposal,
+    proposal: &CoordinatorProposal,
+    owner_signal: &crate::transport::rtc::recovery::coordinator::RecoveryOwnerSignal,
     observed_at_ms: f64,
     adapter_idle_render_slack_window_ms: f64,
     transport_await_diagnosis_is_short: bool,
@@ -39,7 +40,7 @@ pub(crate) fn should_absorb_light_recovery_signal_during_ramp_up(
         return false;
     }
     if !matches!(
-        proposal.signal.reason,
+        owner_signal.reason,
         VideoEscalationReason::AdapterIdleTimeout
             | VideoEscalationReason::AdapterThinStream
             | VideoEscalationReason::TransportAwaitRecoveryKeyframe
@@ -66,7 +67,7 @@ pub(crate) fn should_absorb_light_recovery_signal_during_ramp_up(
         if !pipeline_not_stalled {
             return false;
         }
-        match proposal.signal.reason {
+        match owner_signal.reason {
             VideoEscalationReason::AdapterIdleTimeout
             | VideoEscalationReason::AdapterThinStream => {
                 stats

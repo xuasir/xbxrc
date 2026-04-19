@@ -1,9 +1,9 @@
+use super::nack_policy::RECOVERY_KEYFRAME_RETRY_MAX_COUNT;
+use super::nack_window::{NackWindowAddOutcome, SequenceRange};
 use super::{
     build_sample_builder, nack::gap_transport_evidence, now_ms_f64, timeline::ChainState,
     UINT16SIZE_HALF,
 };
-use super::nack_policy::RECOVERY_KEYFRAME_RETRY_MAX_COUNT;
-use super::nack_window::{NackWindowAddOutcome, SequenceRange};
 use crate::media::video::h264::inspection::{H264AccessUnitInspection, H264BootstrapRejectReason};
 use base64::Engine as _;
 use bytes::Bytes;
@@ -140,7 +140,7 @@ fn keyframe_episode_response_detail(
 
 pub(super) fn resolve_recovery_keyframe_action(
     first_frame_acquired: bool,
-    waiting_for_recovery_keyframe: bool,
+    is_blocking_non_keyframe_admission: bool,
     sustaining_recovery_active: bool,
     hard_recovery_gap_risk: bool,
     _sample_loss_burst_count: u8,
@@ -163,7 +163,7 @@ pub(super) fn resolve_recovery_keyframe_action(
         return (false, RecoveryKeyframeAction::DropAndRequestKeyframe);
     }
 
-    if waiting_for_recovery_keyframe {
+    if is_blocking_non_keyframe_admission {
         if !first_frame_acquired {
             return (true, RecoveryKeyframeAction::WaitKeyframe);
         }
@@ -211,14 +211,14 @@ impl RtcVideoFrameSource {
         sample_rtp_timestamp: u32,
         media_dropped_packets: u16,
         is_keyframe: bool,
-        frame_importance: &'static str,
+        media_type_label: &'static str,
     ) {
         let nack_started = self
             .observe_sample_loss_and_nack(
                 sample_rtp_timestamp,
                 media_dropped_packets,
                 is_keyframe,
-                frame_importance,
+                media_type_label,
             )
             .await;
         if nack_started {
@@ -231,14 +231,7 @@ impl RtcVideoFrameSource {
         let should_soft_request = self
             .runtime_stats
             .read(|stats| {
-                Self::should_soft_request_recovery_keyframe(
-                    stats,
-                    now_ms,
-                    None,
-                    false,
-                    true,
-                    false,
-                )
+                Self::should_soft_request_recovery_keyframe(stats, now_ms, None, false, true, false)
             })
             .unwrap_or(false);
         if should_soft_request {
@@ -248,7 +241,7 @@ impl RtcVideoFrameSource {
                 now_ms,
             );
         } else {
-            self.set_waiting_for_recovery_keyframe(true);
+            self.set_is_blocking_non_keyframe_admission(true);
             self.timeline_state
                 .on_admission_await_recovery_keyframe(Some("sampleLossNoMissingSequence"));
             self.record_video_timeline_observation(
@@ -287,8 +280,9 @@ impl RtcVideoFrameSource {
                 {
                     return false;
                 }
-                stats.latest_video_decode_ok_time_ms
-                    .is_some_and(|at_ms| (now_ms - at_ms).max(0.0) <= SUSTAINING_EXIT_DECODE_OK_MAX_AGE_MS)
+                stats.latest_video_decode_ok_time_ms.is_some_and(|at_ms| {
+                    (now_ms - at_ms).max(0.0) <= SUSTAINING_EXIT_DECODE_OK_MAX_AGE_MS
+                })
             })
             .unwrap_or(true)
     }
@@ -344,10 +338,13 @@ impl RtcVideoFrameSource {
             if self.frame_head_missing_flags.len() >= FRAME_OOS_TRACK_CAPACITY {
                 self.frame_head_missing_flags.pop_front();
             }
-            self.frame_head_missing_flags.push_back((rtp_timestamp, true));
+            self.frame_head_missing_flags
+                .push_back((rtp_timestamp, true));
         }
-        self.recent_head_missing_active_until_ms = Some(now_ms_f64() + HEAD_MISSING_ACTIVITY_COOLDOWN_MS);
-        self.jitter_head_missing_signal_count = self.jitter_head_missing_signal_count.saturating_add(1);
+        self.recent_head_missing_active_until_ms =
+            Some(now_ms_f64() + HEAD_MISSING_ACTIVITY_COOLDOWN_MS);
+        self.jitter_head_missing_signal_count =
+            self.jitter_head_missing_signal_count.saturating_add(1);
         if self.jitter_head_missing_signal_count == 1
             || self.jitter_head_missing_signal_count.is_power_of_two()
         {
@@ -389,11 +386,7 @@ impl RtcVideoFrameSource {
         self.frame_drop_buckets.push_back((rtp_timestamp, dropped));
     }
 
-    pub(super) fn attributed_drop_count_for_frame(
-        &self,
-        rtp_timestamp: u32,
-        fallback: u16,
-    ) -> u16 {
+    pub(super) fn attributed_drop_count_for_frame(&self, rtp_timestamp: u32, fallback: u16) -> u16 {
         self.frame_drop_buckets
             .iter()
             .find(|(timestamp, _)| *timestamp == rtp_timestamp)
@@ -420,7 +413,10 @@ impl RtcVideoFrameSource {
             .push_back((rtp_timestamp, observed_at));
     }
 
-    fn take_frame_playout_base_at(&mut self, rtp_timestamp: u32) -> Option<std::time::Instant> {
+    fn take_frame_first_packet_arrived_at(
+        &mut self,
+        rtp_timestamp: u32,
+    ) -> Option<std::time::Instant> {
         let index = self
             .frame_playout_base_times
             .iter()
@@ -450,7 +446,7 @@ impl RtcVideoFrameSource {
         };
         let fallback = FrameBudgetContext::for_transport(
             frame_value,
-            self.waiting_for_recovery_keyframe(),
+            self.is_blocking_non_keyframe_admission(),
             Some(cloud_rtt_ms),
             estimated_recovery_arrival_ms,
             frame_playout_deadline_at_ms,
@@ -487,7 +483,7 @@ impl RtcVideoFrameSource {
     }
 
     pub(super) fn maybe_retry_waiting_recovery_keyframe(&mut self, now_ms: f64) {
-        if !self.waiting_for_recovery_keyframe() {
+        if !self.is_blocking_non_keyframe_admission() {
             return;
         }
         let should_retry = self
@@ -535,7 +531,7 @@ impl RtcVideoFrameSource {
             || !inspection.delta_continuation_ready()
             || !inspection.committed_sps_present()
             || !inspection.committed_pps_present()
-            || !self.waiting_for_recovery_keyframe()
+            || !self.is_blocking_non_keyframe_admission()
         {
             return false;
         }
@@ -754,7 +750,7 @@ impl RtcVideoFrameSource {
             );
             return;
         }
-        self.set_waiting_for_recovery_keyframe(true);
+        self.set_is_blocking_non_keyframe_admission(true);
         self.timeline_state
             .on_admission_await_recovery_keyframe(Some(timeline_reason));
         self.record_video_timeline_observation(source_event, None, frame_rtp_timestamp, now_ms);
@@ -823,9 +819,9 @@ impl RtcVideoFrameSource {
         }
     }
 
-    fn record_clean_keyframe_anchor(&self, observed_at_ms: f64) {
+    fn record_clean_anchor(&self, observed_at_ms: f64) {
         self.runtime_stats
-            .record_transport_clean_anchor(observed_at_ms, "chain-clean-keyframe-submitted");
+            .record_transport_clean_anchor(observed_at_ms, "chain-clean-anchor-submitted");
     }
 
     fn should_trigger_thin_stream_stall(&self, now: std::time::Instant) -> bool {
@@ -1001,7 +997,7 @@ fn should_absorb_idle_timeout_for_steady_gap(
     }
     let has_current_clean_anchor = clean_anchor_epoch.is_some_and(|epoch| {
         epoch == current_recovery_epoch
-            && clean_anchor_source_event == Some("chain-clean-keyframe-submitted")
+            && clean_anchor_source_event == Some("chain-clean-anchor-submitted")
     });
     if !has_current_clean_anchor {
         return false;
@@ -1065,7 +1061,7 @@ impl RtcVideoFrameSource {
     }
 
     fn should_absorb_idle_timeout(&self, idle_timeout: std::time::Duration) -> bool {
-        if self.timeline_state.waiting_for_recovery_keyframe() {
+        if self.timeline_state.chain_requires_recovery_anchor() {
             return false;
         }
         let now_ms = now_ms_f64();
@@ -1161,7 +1157,12 @@ impl RtcVideoFrameSource {
             self.nack_window_overflow_count
         );
         if let Some(first) = removed.first().copied() {
-            self.record_video_timeline_observation("gap-overflow-pruned", Some(first), None, now_ms);
+            self.record_video_timeline_observation(
+                "gap-overflow-pruned",
+                Some(first),
+                None,
+                now_ms,
+            );
         }
     }
 
@@ -1226,21 +1227,22 @@ impl RtcVideoFrameSource {
                         crate::xbx_log_error!(
                             "[RtcVideoFrameSource] h264 inspection failed: {error}"
                         );
+                        // 检查错误：保守处理为 disposable
                         self.timeline_state.observe_frame(
                             sample.packet_timestamp,
                             now_ms,
                             None,
-                            "unknown",
+                            "disposable",
                         );
                         self.timeline_state.mark_frame_closed(
                             sample.packet_timestamp,
                             now_ms,
                             None,
-                            "unknown",
+                            "disposable",
                             Some("inspectionError"),
                         );
                         self.enter_recovery_wait_from_source(
-                            "frame-inspection-error-await-keyframe",
+                            "frame-inspection-error-await-anchor",
                             Some(sample.packet_timestamp),
                             XbxEngineAnchorCandidateState::Rejected,
                             Some(XbxEngineAnchorCandidateFailureReason::Unknown),
@@ -1353,11 +1355,11 @@ impl RtcVideoFrameSource {
                         let sustaining_recovery_failed =
                             self.timeline_state.in_sustaining_recovery();
                         if sustaining_recovery_failed {
-                            self.set_waiting_for_recovery_keyframe(true);
+                            self.set_is_blocking_non_keyframe_admission(true);
                             self.timeline_state
                                 .on_sustaining_recovery_failed(reject_reason);
                         } else {
-                            self.set_waiting_for_recovery_keyframe(true);
+                            self.set_is_blocking_non_keyframe_admission(true);
                             self.timeline_state
                                 .on_admission_await_recovery_keyframe(Some(reject_reason));
                         }
@@ -1375,9 +1377,9 @@ impl RtcVideoFrameSource {
                             Some(reject_reason),
                         );
                         let rejection_source_event = if sustaining_recovery_failed {
-                            "frame-inspection-rejected-trigger-recovery-keyframe"
+                            "frame-inspection-rejected-trigger-recovery-anchor"
                         } else {
-                            "frame-inspection-rejected-await-keyframe"
+                            "frame-inspection-rejected-await-anchor"
                         };
                         let failure_reason = match reject_reason {
                             "bootstrapMissingSps" => {
@@ -1430,13 +1432,13 @@ impl RtcVideoFrameSource {
                                 .unwrap_or(false);
                             if should_soft_request {
                                 self.request_recovery_keyframe_soft_from_source(
-                                    "chain-recovery-keyframe-requested",
+                                    "chain-recovery-anchor-requested",
                                     Some(sample.packet_timestamp),
                                     now_ms,
                                 );
                             } else {
                                 self.request_recovery_keyframe_from_source(
-                                    "chain-recovery-keyframe-requested",
+                                    "chain-recovery-anchor-requested",
                                     Some(sample.packet_timestamp),
                                     now_ms,
                                 );
@@ -1461,7 +1463,10 @@ impl RtcVideoFrameSource {
                 let is_keyframe = inspection.is_idr;
                 let config_changed = inspection.config_changed;
                 if media_dropped_packets > 0 {
-                    self.record_frame_drop_attribution(sample.packet_timestamp, media_dropped_packets);
+                    self.record_frame_drop_attribution(
+                        sample.packet_timestamp,
+                        media_dropped_packets,
+                    );
                     self.sample_loss_burst_count = self.sample_loss_burst_count.saturating_add(1);
                     self.clean_samples_since_loss = 0;
                 } else if is_keyframe {
@@ -1475,7 +1480,9 @@ impl RtcVideoFrameSource {
                     }
                 }
                 let frame_now_ms = now_ms_f64();
-                let frame_importance = if is_keyframe {
+                // media_type_label: 基于 H.264 inspection 的媒体类型标签，用于 timeline 追踪和 NACK 策略
+                // 注意：这与 FrameBudgetContext.link_value_label() 不同，后者是恢复价值分档
+                let media_type_label = if is_keyframe {
                     "keyframe"
                 } else if config_changed {
                     "reference"
@@ -1483,19 +1490,19 @@ impl RtcVideoFrameSource {
                     "delta"
                 };
                 let healthy_delta_continuation = !is_keyframe
-                    && frame_importance == "delta"
+                    && media_type_label == "delta"
                     && is_recovery_delta_continuation_ready(&inspection);
                 if healthy_delta_continuation {
                     let _ = self
                         .timeline_state
                         .reopen_delta_continuation_after_clean_anchor(frame_now_ms);
                 }
-                let waiting_for_recovery_keyframe = self.waiting_for_recovery_keyframe();
+                let is_blocking_non_keyframe_admission = self.is_blocking_non_keyframe_admission();
                 let hard_recovery_gap_risk = self.timeline_state.has_hard_recovery_gap_risk();
-                let (next_waiting_for_recovery_keyframe, recovery_action) =
+                let (next_is_blocking_non_keyframe_admission, recovery_action) =
                     resolve_recovery_keyframe_action(
                         first_frame_acquired,
-                        waiting_for_recovery_keyframe,
+                        is_blocking_non_keyframe_admission,
                         self.timeline_state.in_sustaining_recovery() && healthy_delta_continuation,
                         hard_recovery_gap_risk,
                         self.sample_loss_burst_count,
@@ -1516,29 +1523,35 @@ impl RtcVideoFrameSource {
 
                 match recovery_action {
                     RecoveryKeyframeAction::Submit => {
-                        self.set_waiting_for_recovery_keyframe(next_waiting_for_recovery_keyframe);
+                        self.set_is_blocking_non_keyframe_admission(
+                            next_is_blocking_non_keyframe_admission,
+                        );
                     }
                     RecoveryKeyframeAction::DropAndRequestKeyframe => {
-                        self.set_waiting_for_recovery_keyframe(next_waiting_for_recovery_keyframe);
+                        self.set_is_blocking_non_keyframe_admission(
+                            next_is_blocking_non_keyframe_admission,
+                        );
                         self.handle_drop_and_request_keyframe_action(
                             sample.packet_timestamp,
                             media_dropped_packets,
                             is_keyframe,
-                            frame_importance,
+                            media_type_label,
                         )
                         .await;
                         continue;
                     }
                     RecoveryKeyframeAction::WaitKeyframe => {
-                        self.set_waiting_for_recovery_keyframe(next_waiting_for_recovery_keyframe);
+                        self.set_is_blocking_non_keyframe_admission(
+                            next_is_blocking_non_keyframe_admission,
+                        );
                         let now_ms = now_ms_f64();
                         self.enter_recovery_wait_from_source(
-                            "frame-await-recovery-keyframe",
+                            "frame-await-recovery-anchor",
                             Some(sample.packet_timestamp),
                             XbxEngineAnchorCandidateState::AwaitingRecovery,
                             Some(XbxEngineAnchorCandidateFailureReason::AwaitingRecoveryKeyframe),
-                            "awaitingRecoveryKeyframe",
-                            if frame_importance == "reference" {
+                            "awaitingRecoveryAnchor",
+                            if media_type_label == "reference" {
                                 RecoveryFrameValue::Reference
                             } else {
                                 RecoveryFrameValue::Continuity
@@ -1559,11 +1572,18 @@ impl RtcVideoFrameSource {
 
                 let frame_value = FrameValue::new(is_keyframe, config_changed, payload.len());
                 self.last_submitted_frame_value = frame_value;
+                // 将媒体语义标签转换为恢复语义标签
+                let recovery_importance = match media_type_label {
+                    "keyframe" => "anchor",
+                    "reference" => "supply",
+                    "delta" => "disposable",
+                    _ => "disposable",
+                };
                 self.timeline_state.observe_frame(
                     sample.packet_timestamp,
                     frame_now_ms,
                     Some(is_keyframe),
-                    frame_importance,
+                    recovery_importance,
                 );
                 self.record_video_timeline_observation(
                     "frame-observed",
@@ -1572,20 +1592,23 @@ impl RtcVideoFrameSource {
                     frame_now_ms,
                 );
                 if is_keyframe && media_dropped_packets == 0 {
-                    let needs_recovery_anchor = self.timeline_state.waiting_for_recovery_keyframe()
-                        || matches!(
-                            self.timeline_state.chain_state(),
-                            ChainState::Broken | ChainState::Recovering
-                        );
+                    let needs_recovery_anchor =
+                        self.timeline_state.chain_requires_recovery_anchor()
+                            || matches!(
+                                self.timeline_state.chain_state(),
+                                ChainState::Broken | ChainState::Recovering
+                            );
                     if needs_recovery_anchor {
                         self.timeline_state
-                            .on_clean_keyframe_ingress(sample.packet_timestamp, frame_now_ms);
+                            .on_clean_anchor_ingress(sample.packet_timestamp, frame_now_ms);
                     }
                 }
+
                 let assembled_at = std::time::Instant::now();
                 // 优先取首包到达时刻作为 playout 基准，减少 SampleBuilder 等待引入的固有延迟。
                 // 找不到记录时保持 None，物化层会 fallback 到 assembled_at，语义上有区别。
-                let playout_base_at = self.take_frame_playout_base_at(sample.packet_timestamp);
+                let first_packet_arrived_at =
+                    self.take_frame_first_packet_arrived_at(sample.packet_timestamp);
                 self.transport_deadline_tracker
                     .record_frame_arrival(now_ms_f64());
                 let (
@@ -1625,7 +1648,7 @@ impl RtcVideoFrameSource {
                             self.ingress_budget_unknown_rtt_count,
                             unknown_ratio,
                             frame_budget.rtt_slack,
-                            if playout_base_at.is_none() {
+                            if first_packet_arrived_at.is_none() {
                                 "assembledAt"
                             } else {
                                 "firstPacketAt"
@@ -1656,11 +1679,18 @@ impl RtcVideoFrameSource {
                 let can_exit_sustaining_recovery = !self.timeline_state.in_sustaining_recovery()
                     || self.decoder_feedback_allows_sustaining_exit(complete_candidate_now_ms);
                 if can_exit_sustaining_recovery {
+                    // 将媒体语义标签转换为恢复语义标签
+                    let recovery_importance = match media_type_label {
+                        "keyframe" => "anchor",
+                        "reference" => "supply",
+                        "delta" => "disposable",
+                        _ => "disposable",
+                    };
                     self.timeline_state.mark_frame_complete_candidate(
                         sample.packet_timestamp,
                         complete_candidate_now_ms,
                         Some(is_keyframe),
-                        frame_importance,
+                        recovery_importance,
                     );
                     self.record_video_timeline_observation(
                         "frame-complete-candidate",
@@ -1691,21 +1721,21 @@ impl RtcVideoFrameSource {
                         complete_candidate_now_ms,
                     )
                 {
-                    self.record_clean_keyframe_anchor(complete_candidate_now_ms);
+                    self.record_clean_anchor(complete_candidate_now_ms);
                     self.record_video_timeline_observation(
-                        "chain-clean-keyframe-submitted",
+                        "chain-clean-anchor-submitted",
                         None,
                         Some(committed_ts),
                         complete_candidate_now_ms,
                     );
                     self.record_anchor_candidate_ledger(
                         Some(committed_ts),
-                        "chain-clean-keyframe-submitted",
+                        "chain-clean-anchor-submitted",
                         XbxEngineAnchorCandidateState::SubmittedCleanAnchor,
                         None,
                         complete_candidate_now_ms,
                     );
-                    self.timeline_state.on_clean_keyframe_submitted();
+                    self.timeline_state.on_clean_anchor_submitted();
                 }
 
                 return Some(AssembledVideoFrame {
@@ -1721,7 +1751,7 @@ impl RtcVideoFrameSource {
                     frame_recovery_disposition,
                     frame_unrecoverable_reason,
                     assembled_at,
-                    playout_base_at,
+                    first_packet_arrived_at,
                     h264: inspection,
                     payload: Bytes::from(payload),
                 });
@@ -1799,13 +1829,13 @@ impl RtcVideoFrameSource {
                             .unwrap_or(false);
                         if should_soft_request {
                             self.request_recovery_keyframe_soft_from_source(
-                                "chain-recovery-keyframe-requested",
+                                "chain-recovery-anchor-requested",
                                 None,
                                 timeout_now_ms,
                             );
                         } else {
                             self.request_recovery_keyframe_from_source(
-                                "chain-recovery-keyframe-requested",
+                                "chain-recovery-anchor-requested",
                                 None,
                                 timeout_now_ms,
                             );
@@ -1872,6 +1902,18 @@ impl RtcVideoFrameSource {
                     let now_ms = now_ms_f64();
                     let add_outcome = self.nack_window.add(seq);
                     self.on_nack_window_add_outcome(add_outcome, rtp.header.timestamp, now_ms);
+
+                    // 更新帧边界追踪状态
+                    let is_priority = super::sink::is_likely_h264_recovery_priority(&rtp.payload);
+                    if let Ok(mut tracker) = self.frame_boundary.lock() {
+                        tracker.on_packet_arrived(
+                            seq,
+                            rtp.header.timestamp,
+                            rtp.header.marker,
+                            is_priority,
+                        );
+                    }
+
                     let reinject_observation = self.reinject_observation_for_ingress(
                         ingress_kind,
                         rtp.header.ssrc,
@@ -1933,11 +1975,12 @@ impl RtcVideoFrameSource {
                             expected_sequence,
                             received_sequence,
                         );
+                        // 前向 gap：匿名缺洞保守处理为 disposable
                         self.timeline_state.observe_gap(
                             &missing_sequences,
                             now_ms,
                             Some(rtp.header.timestamp),
-                            "unknown",
+                            "disposable",
                             "unknown",
                         );
                         if let Some(sequence) = missing_sequences.first().copied() {
@@ -1973,7 +2016,8 @@ impl RtcVideoFrameSource {
                         self.current_media_ssrc = Some(rtp.header.ssrc);
                     }
                     if rtp.header.marker {
-                        self.jitter_marker_seen_count = self.jitter_marker_seen_count.saturating_add(1);
+                        self.jitter_marker_seen_count =
+                            self.jitter_marker_seen_count.saturating_add(1);
                         self.pending_marker_boundary = Some(super::PendingMarkerBoundary {
                             sequence: rtp.header.sequence_number,
                             rtp_timestamp: rtp.header.timestamp,

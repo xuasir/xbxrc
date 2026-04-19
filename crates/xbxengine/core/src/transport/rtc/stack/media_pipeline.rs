@@ -73,14 +73,15 @@ impl ConnectionRtcpPort {
 }
 
 impl RtcRtcpSendPort for ConnectionRtcpPort {
-    fn send_rtcp(&self, buf: &[u8]) {
-        let Ok(mut connection) = self.connection.lock() else {
+    fn send_rtcp(&self, buf: &[u8]) -> Result<(), String> {
+        let mut connection = self.connection.lock().map_err(|_| {
             crate::xbx_log_warn!(
                 "[xbxengine][rtc][rtcp] drop rtcp payload because connection lock failed"
             );
-            return;
-        };
-        if let Err(error) = connection.send_video_rtcp_payload(buf) {
+            "connection lock failed".to_string()
+        })?;
+
+        connection.send_video_rtcp_payload(buf).map_err(|error| {
             crate::xbx_log_warn!(
                 "[xbxengine][rtc][rtcp] failed to send video rtcp payload: {error}"
             );
@@ -88,7 +89,8 @@ impl RtcRtcpSendPort for ConnectionRtcpPort {
                 crate::transport::rtc::recovery::runtime_state::unix_now_ms(),
                 &error.to_string(),
             );
-        }
+            error.to_string()
+        })
     }
 }
 

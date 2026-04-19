@@ -1,6 +1,7 @@
 use super::{
-    resolve_host_timing_record_policy, should_emit_sampled_host_timing, should_reattach_viewport,
-    should_update_scale, HostTimingRecordPolicy, MacOsWgpuTelemetry,
+    reset_viewport_present_runtime_state, resolve_host_timing_record_policy,
+    should_emit_sampled_host_timing, should_reattach_viewport, should_update_scale,
+    HostTimingRecordPolicy, MacOsWgpuTelemetry, NativeVideoViewportState,
 };
 
 #[test]
@@ -98,4 +99,41 @@ fn sampled_host_timing_requires_min_interval() {
     assert!(should_emit_sampled_host_timing(None, 1_000.0));
     assert!(!should_emit_sampled_host_timing(Some(1_000.0), 1_500.0));
     assert!(should_emit_sampled_host_timing(Some(1_000.0), 2_000.0));
+}
+
+#[test]
+fn reset_viewport_present_runtime_state_clears_display_runtime_metrics() {
+    let mut viewport = NativeVideoViewportState {
+        latest_frame_seq: Some(7),
+        latest_frame_width: Some(1920),
+        latest_frame_height: Some(1080),
+        latest_renderer_frame_time_ms: Some(1_200.0),
+        present_count_total: 10,
+        last_present_kind: Some("rgba".to_string()),
+        latest_host_present_time_ms: Some(1_210.0),
+        host_present_fps: 60.0,
+        host_present_enqueue_count_total: 20,
+        host_present_drop_count_total: 3,
+        host_present_overwrite_count_total: 2,
+        host_no_pending_take_count_total: 8,
+        host_no_pending_streak: 4,
+        host_no_pending_max_streak: 9,
+        host_display_tick_epoch: 123,
+        host_present_epoch: 88,
+        host_cadence_phase: Some("steady".to_string()),
+        host_display_interval_ms: Some(16.6),
+        host_frame_age_budget_ms: Some(32.0),
+        ..Default::default()
+    };
+
+    reset_viewport_present_runtime_state(&mut viewport);
+
+    assert_eq!(viewport.latest_frame_seq, None);
+    assert_eq!(viewport.latest_renderer_frame_time_ms, None);
+    assert_eq!(viewport.present_count_total, 0);
+    assert_eq!(viewport.latest_host_present_time_ms, None);
+    assert_eq!(viewport.host_present_enqueue_count_total, 0);
+    assert_eq!(viewport.host_display_tick_epoch, 0);
+    assert_eq!(viewport.host_present_epoch, 0);
+    assert_eq!(viewport.host_cadence_phase, None);
 }

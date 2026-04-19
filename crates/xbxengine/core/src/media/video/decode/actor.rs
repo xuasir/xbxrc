@@ -251,9 +251,14 @@ fn run_decode_loop(
             if !pending_output_backpressure_active {
                 runtime_stats.update(|stats| {
                     stats.latest_observation_label = Some("decodePacerBackpressure".to_string());
-                    stats.latest_observation_summary = Some(format!(
-                        "pendingOutputQueueDepth={}",
-                        decode_state.decoded_frame_queue_len()
+                    stats.latest_observation_summary = Some(format_decode_backpressure_summary(
+                        decode_state.decoded_frame_queue_len(),
+                        decode_state
+                            .latest_decode_candidate_decision()
+                            .map(|decision| decision.detail),
+                        decode_state
+                            .latest_recovery_transition()
+                            .map(|transition| transition.to_state.as_str()),
                     ));
                 });
                 pending_output_backpressure_active = true;
@@ -296,6 +301,7 @@ fn run_decode_loop(
                     release_decode_slot(&available_slots, &demand_epoch, &demand_notify);
                     let now_ms = crate::media::video::decode::video_decode::now_ms_f64();
                     if let Some(dropped_frame) = decode_state.process_encoded_frame(frame, now_ms) {
+                        let output_queue_depth = decode_state.decoded_frame_queue_len();
                         record_pipeline_frame_drop(
                             &runtime_stats,
                             &mut frame_drop_observation_id,
@@ -312,6 +318,20 @@ fn run_decode_loop(
                             Some(dropped_frame.frame_recovery_disposition),
                             dropped_frame.frame_unrecoverable_reason.as_deref(),
                         );
+                        runtime_stats.update(|stats| {
+                            stats.latest_observation_label = Some("decodeOutputQueueOverflow".to_string());
+                            stats.latest_observation_summary = Some(format!(
+                                "outputQueueDepth={} droppedFrameSeq={} droppedRtpTimestamp={} recoveryState={} candidateDetail={}",
+                                output_queue_depth,
+                                dropped_frame.surface.frame_seq,
+                                dropped_frame.rtp_timestamp,
+                                decode_state.recovery_state().as_str(),
+                                decode_state
+                                    .latest_decode_candidate_decision()
+                                    .map(|decision| decision.detail)
+                                    .unwrap_or("none"),
+                            ));
+                        });
                     }
                     if decode_state.last_decode_ok_time_ms() == Some(now_ms) {
                         recent_decode_times_ms.push_back(now_ms);
@@ -534,6 +554,19 @@ fn recent_window_fps(times: &std::collections::VecDeque<f64>) -> f64 {
     ((len.saturating_sub(1)) as f64 * 1_000.0 / window_ms).max(0.0)
 }
 
+fn format_decode_backpressure_summary(
+    pending_output_queue_depth: usize,
+    candidate_detail: Option<&str>,
+    recovery_state: Option<&str>,
+) -> String {
+    format!(
+        "pendingOutputQueueDepth={} candidateDetail={} recoveryState={}",
+        pending_output_queue_depth,
+        candidate_detail.unwrap_or("none"),
+        recovery_state.unwrap_or("none")
+    )
+}
+
 fn sync_decode_runtime_stats(
     runtime_stats: &RuntimeStatsSink,
     decode_state: &XbxVideoDecodeState,
@@ -665,7 +698,10 @@ fn derive_decoder_stalled(runtime_stats: &RuntimeStatsSink, now_ms: f64) -> bool
 mod tests {
     use std::sync::Arc;
 
-    use super::{drain_pending_decoded_output_with_submit, PendingDecodedSubmitResult};
+    use super::{
+        drain_pending_decoded_output_with_submit, format_decode_backpressure_summary,
+        PendingDecodedSubmitResult,
+    };
     use crate::media::video::decode::video_decode::XbxVideoDecodeState;
     use crate::media::video::render::renderer::XbxRenderFrame;
     use crate::runtime_stats_sink::RuntimeStatsSink;
@@ -777,5 +813,15 @@ mod tests {
             Some(1)
         );
         assert_eq!(state.decoded_frame_queue_len(), 2);
+    }
+
+    #[test]
+    fn decode_backpressure_summary_includes_candidate_and_recovery_state() {
+        let summary =
+            format_decode_backpressure_summary(3, Some("outputQueueOverflow"), Some("recovering"));
+
+        assert!(summary.contains("pendingOutputQueueDepth=3"));
+        assert!(summary.contains("candidateDetail=outputQueueOverflow"));
+        assert!(summary.contains("recoveryState=recovering"));
     }
 }

@@ -72,52 +72,6 @@ pub(crate) fn resolve_recovery_profile(
     })
 }
 
-#[cfg(test)]
-pub(crate) fn current_profile_name(
-    runtime_stats: &Mutex<XbxEngineMediaRuntimeStats>,
-) -> &'static str {
-    resolve_recovery_profile(runtime_stats).kind.as_str()
-}
-
-#[cfg(test)]
-pub(crate) fn current_input_profile(
-    runtime_stats: &Mutex<XbxEngineMediaRuntimeStats>,
-) -> RecoveryInputProfile {
-    RuntimeStatsSink::read_shared(runtime_stats, |stats| {
-        resolve_input_profile_from_stats(stats, unix_now_ms())
-    })
-    .unwrap_or_else(|| {
-        let baseline = current_profile_name(runtime_stats).to_string();
-        RecoveryInputProfile {
-            effective_label: baseline.clone(),
-            baseline,
-        }
-    })
-}
-
-#[cfg(test)]
-pub(crate) fn runtime_state_for_diagnosis(
-    runtime_stats: &Mutex<XbxEngineMediaRuntimeStats>,
-    diagnosis_label: &str,
-    stream_started_at: Instant,
-    startup_grace: Duration,
-) -> RecoveryRuntimeState {
-    let phase = resolve_session_phase(runtime_stats, stream_started_at, startup_grace);
-    let diagnosis_label = resolve_effective_diagnosis_label(runtime_stats, diagnosis_label);
-    RecoveryRuntimeState {
-        phase,
-        input_profile: current_input_profile(runtime_stats),
-        primary_view: current_primary_view(
-            runtime_stats,
-            phase,
-            &diagnosis_label,
-            stream_started_at,
-            startup_grace,
-        ),
-        diagnosis_label,
-    }
-}
-
 pub(crate) fn project_runtime_state_from_stats(
     stats: &XbxEngineMediaRuntimeStats,
 ) -> RecoveryRuntimeState {
@@ -148,19 +102,57 @@ pub(crate) fn project_recovery_escalation_context(
     }
 }
 
-pub(crate) fn recovery_stage_label_from_stats(stats: &XbxEngineMediaRuntimeStats) -> &'static str {
-    recovery_stage_label(stats)
+#[cfg(test)]
+#[allow(dead_code)]
+pub(crate) mod test_support {
+    use super::*;
+
+    pub(crate) fn runtime_state_for_diagnosis(
+        runtime_stats: &Mutex<XbxEngineMediaRuntimeStats>,
+        diagnosis_label: &str,
+        stream_started_at: Instant,
+        startup_grace: Duration,
+    ) -> RecoveryRuntimeState {
+        let phase = resolve_session_phase(runtime_stats, stream_started_at, startup_grace);
+        let diagnosis_label =
+            resolve_effective_diagnosis_label_for_test(runtime_stats, diagnosis_label);
+        let input_profile = RuntimeStatsSink::read_shared(runtime_stats, |stats| {
+            resolve_input_profile_from_stats(stats, unix_now_ms())
+        })
+        .unwrap_or_else(|| {
+            let baseline = resolve_recovery_profile(runtime_stats)
+                .kind
+                .as_str()
+                .to_string();
+            RecoveryInputProfile {
+                effective_label: baseline.clone(),
+                baseline,
+            }
+        });
+        RecoveryRuntimeState {
+            phase,
+            input_profile,
+            primary_view: current_primary_view_for_test(
+                runtime_stats,
+                phase,
+                &diagnosis_label,
+                stream_started_at,
+                startup_grace,
+            ),
+            diagnosis_label,
+        }
+    }
 }
 
 #[cfg(test)]
-fn current_primary_view(
+fn current_primary_view_for_test(
     runtime_stats: &Mutex<XbxEngineMediaRuntimeStats>,
     phase: SessionPhase,
     diagnosis_label: &str,
     stream_started_at: Instant,
     startup_grace: Duration,
 ) -> RecoveryPrimaryView {
-    let owner_mode = current_owner_mode(runtime_stats, stream_started_at, startup_grace);
+    let owner_mode = current_owner_mode_for_test(runtime_stats, stream_started_at, startup_grace);
     RuntimeStatsSink::read_shared(runtime_stats, |stats| {
         Some(primary_view_from_stats_with_fallback(
             stats,
@@ -180,17 +172,63 @@ fn current_primary_view(
 }
 
 #[cfg(test)]
-fn current_owner_mode(
+fn current_owner_mode_for_test(
     runtime_stats: &Mutex<XbxEngineMediaRuntimeStats>,
     stream_started_at: Instant,
     startup_grace: Duration,
 ) -> RecoveryOwnerMode {
     let phase = resolve_session_phase(runtime_stats, stream_started_at, startup_grace);
-    resolve_recovery_owner_mode(runtime_stats, phase)
+    // recovery 只向 BWE 暴露当前恢复耦合状态，不直接决定目标码率。
+    let Some((
+        diagnosis,
+        _effective_bitrate_kbps,
+        _recovery_profile,
+        stable_output,
+        fresh_output,
+        startup_low,
+        decoder_stalled,
+        renderer_stalled,
+    )) = RuntimeStatsSink::read_shared(runtime_stats, |stats| {
+        let diagnosis = escalation_structured_label(stats).map(str::to_string);
+        let effective_bitrate_kbps = extract_startup_recovery_bitrate_kbps(stats).unwrap_or(0.0);
+        let baseline_profile = resolve_runtime_baseline_profile_kind(stats);
+        let recovery_profile =
+            ScenarioPolicyResolver::resolve_recovery_profile_by_kind(baseline_profile);
+        let fresh_output = has_fresh_media_output(stats, unix_now_ms());
+        let stable_output = effective_bitrate_kbps
+            >= recovery_profile.startup_low_quality_recovered_kbps
+            && fresh_output
+            && stats.video_present_fps >= 50.0;
+        let startup_low = phase == SessionPhase::Startup
+            && stats.direct_gaming_bitrate_band.as_deref() == Some("startupLow");
+        Some((
+            diagnosis,
+            effective_bitrate_kbps,
+            recovery_profile,
+            stable_output,
+            fresh_output,
+            startup_low,
+            stats.video_decoder_stalled.unwrap_or(false),
+            stats.video_renderer_stalled.unwrap_or(false),
+        ))
+    })
+    .flatten()
+    else {
+        return RecoveryOwnerMode::Healthy;
+    };
+    resolve_recovery_owner_mode_by_signals(
+        diagnosis.as_deref(),
+        phase,
+        stable_output,
+        fresh_output,
+        startup_low,
+        decoder_stalled,
+        renderer_stalled,
+    )
 }
 
 #[cfg(test)]
-fn resolve_effective_diagnosis_label(
+fn resolve_effective_diagnosis_label_for_test(
     runtime_stats: &Mutex<XbxEngineMediaRuntimeStats>,
     diagnosis_label: &str,
 ) -> String {
@@ -218,7 +256,7 @@ fn resolve_effective_diagnosis_label(
             | "transportSevereDeadline"
             | "transportSampleLoss"
             | "adapterIdleTimeout"
-            | "transportAwaitRecoveryKeyframe"
+            | "transportAwaitRecoveryAnchor"
             | "ingressWaitKeyframe"
             | "ingressFrameAbandoned"
     ) {
@@ -372,7 +410,7 @@ fn recovery_stage_label(stats: &XbxEngineMediaRuntimeStats) -> &'static str {
         escalation_structured_label(stats),
         Some(
             "waitKeyframe"
-                | "transportAwaitRecoveryKeyframe"
+                | "transportAwaitRecoveryAnchor"
                 | "ingressWaitKeyframe"
                 | "ingressFrameAbandoned"
                 | "transportExpiredDeadline"
@@ -391,14 +429,14 @@ fn recovery_stage_label(stats: &XbxEngineMediaRuntimeStats) -> &'static str {
 fn recovery_chain_value_label(reason: &str) -> &'static str {
     match reason {
         "waitKeyframe"
-        | "transportAwaitRecoveryKeyframe"
+        | "transportAwaitRecoveryAnchor"
         | "ingressWaitKeyframe"
         | "ingressFrameAbandoned" => "anchor",
         "reconfigure"
         | "decoderBackendFailure"
         | "transportSampleLoss"
-        | "transportRecoveredLate" => "reference",
-        "adapterThinStream" | "thinStream" => "delta",
+        | "transportRecoveredLate" => "supply",
+        "adapterThinStream" | "thinStream" => "disposable",
         "adapterIdleTimeout" | "transportExpiredDeadline" | "transportSevereDeadline" => "health",
         "lifecycleRecovering" => "connectivity",
         _ => "health",
@@ -430,7 +468,7 @@ fn recovery_window_source_label(stats: &XbxEngineMediaRuntimeStats, reason: &str
     if matches!(
         reason,
         "waitKeyframe"
-            | "transportAwaitRecoveryKeyframe"
+            | "transportAwaitRecoveryAnchor"
             | "ingressWaitKeyframe"
             | "ingressFrameAbandoned"
     ) {
@@ -493,7 +531,7 @@ fn resolve_effective_diagnosis_label_from_stats(
             | "transportSevereDeadline"
             | "transportSampleLoss"
             | "adapterIdleTimeout"
-            | "transportAwaitRecoveryKeyframe"
+            | "transportAwaitRecoveryAnchor"
             | "ingressWaitKeyframe"
             | "ingressFrameAbandoned"
     ) {
@@ -516,10 +554,11 @@ fn current_owner_mode_from_stats(
     let baseline_profile = resolve_runtime_baseline_profile_kind(stats);
     let recovery_profile =
         ScenarioPolicyResolver::resolve_recovery_profile_by_kind(baseline_profile);
+    let fresh_output = has_fresh_media_output(stats, unix_now_ms());
     let stable_output = effective_bitrate_kbps
         >= recovery_profile.startup_low_quality_recovered_kbps
+        && fresh_output
         && stats.video_present_fps >= 50.0;
-    let fresh_output = has_fresh_media_output(stats, unix_now_ms());
     let startup_low = phase == SessionPhase::Startup
         && stats.direct_gaming_bitrate_band.as_deref() == Some("startupLow");
     let decoder_stalled = stats.video_decoder_stalled.unwrap_or(false);
@@ -564,7 +603,7 @@ fn resolve_recovery_owner_mode_by_signals(
     match diagnosis {
         Some(
             "waitKeyframe"
-            | "transportAwaitRecoveryKeyframe"
+            | "transportAwaitRecoveryAnchor"
             | "ingressWaitKeyframe"
             | "ingressFrameAbandoned",
         ) => RecoveryOwnerMode::WaitingKeyframe,
@@ -584,59 +623,6 @@ fn resolve_recovery_owner_mode_by_signals(
     }
 }
 
-#[cfg(test)]
-fn resolve_recovery_owner_mode(
-    runtime_stats: &Mutex<XbxEngineMediaRuntimeStats>,
-    phase: SessionPhase,
-) -> RecoveryOwnerMode {
-    // recovery 只向 BWE 暴露当前恢复耦合状态，不直接决定目标码率。
-    let Some((
-        diagnosis,
-        _effective_bitrate_kbps,
-        _recovery_profile,
-        stable_output,
-        fresh_output,
-        startup_low,
-        decoder_stalled,
-        renderer_stalled,
-    )) = RuntimeStatsSink::read_shared(runtime_stats, |stats| {
-        let diagnosis = escalation_structured_label(stats).map(str::to_string);
-        let effective_bitrate_kbps = extract_startup_recovery_bitrate_kbps(stats).unwrap_or(0.0);
-        let baseline_profile = resolve_runtime_baseline_profile_kind(stats);
-        let recovery_profile =
-            ScenarioPolicyResolver::resolve_recovery_profile_by_kind(baseline_profile);
-        let stable_output = effective_bitrate_kbps
-            >= recovery_profile.startup_low_quality_recovered_kbps
-            && stats.video_present_fps >= 50.0;
-        let fresh_output = has_fresh_media_output(stats, unix_now_ms());
-        let startup_low = phase == SessionPhase::Startup
-            && stats.direct_gaming_bitrate_band.as_deref() == Some("startupLow");
-        Some((
-            diagnosis,
-            effective_bitrate_kbps,
-            recovery_profile,
-            stable_output,
-            fresh_output,
-            startup_low,
-            stats.video_decoder_stalled.unwrap_or(false),
-            stats.video_renderer_stalled.unwrap_or(false),
-        ))
-    })
-    .flatten()
-    else {
-        return RecoveryOwnerMode::Healthy;
-    };
-    resolve_recovery_owner_mode_by_signals(
-        diagnosis.as_deref(),
-        phase,
-        stable_output,
-        fresh_output,
-        startup_low,
-        decoder_stalled,
-        renderer_stalled,
-    )
-}
-
 pub(crate) fn unix_now_ms() -> f64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -646,15 +632,28 @@ pub(crate) fn unix_now_ms() -> f64 {
 
 pub(crate) fn has_fresh_media_output(stats: &XbxEngineMediaRuntimeStats, now_ms: f64) -> bool {
     const FRESH_MEDIA_OUTPUT_WINDOW_MS: f64 = 500.0;
+    const FUTURE_TIMESTAMP_CLOCK_SKEW_GUARD_MS: f64 = 10_000.0;
+    let runtime_now_ms = unix_now_ms();
+    let effective_now_ms = [
+        stats.latest_video_host_present_time_ms,
+        stats.latest_video_decode_ok_time_ms,
+    ]
+    .into_iter()
+    .flatten()
+    .max_by(|left, right| left.partial_cmp(right).unwrap_or(std::cmp::Ordering::Equal))
+    .filter(|latest_at_ms| *latest_at_ms > now_ms + FUTURE_TIMESTAMP_CLOCK_SKEW_GUARD_MS)
+    .map(|_| runtime_now_ms)
+    .unwrap_or(now_ms);
     let present_fresh = stats
         .latest_video_host_present_time_ms
-        .map(|at_ms| now_ms - at_ms < FRESH_MEDIA_OUTPUT_WINDOW_MS)
+        .map(|at_ms| (effective_now_ms - at_ms).max(0.0) < FRESH_MEDIA_OUTPUT_WINDOW_MS)
         .unwrap_or(false);
     let decode_fresh = stats
         .latest_video_decode_ok_time_ms
-        .map(|at_ms| now_ms - at_ms < FRESH_MEDIA_OUTPUT_WINDOW_MS)
+        .map(|at_ms| (effective_now_ms - at_ms).max(0.0) < FRESH_MEDIA_OUTPUT_WINDOW_MS)
         .unwrap_or(false);
-    present_fresh || decode_fresh || stats.video_present_fps >= 10.0
+    // 只检查真实事件时间戳，不使用平滑 FPS 指标避免误判
+    present_fresh || decode_fresh
 }
 
 fn owner_state_has_steady_output_semantics(stats: &XbxEngineMediaRuntimeStats) -> bool {
@@ -671,7 +670,7 @@ fn should_absorb_stale_recovery_diagnosis(
 ) -> bool {
     if !matches!(
         diagnosis_label,
-        "transportAwaitRecoveryKeyframe"
+        "transportAwaitRecoveryAnchor"
             | "transportExpiredDeadline"
             | "transportSevereDeadline"
             | "transportSampleLoss"
@@ -786,7 +785,11 @@ fn resolve_runtime_recovery_profile_at(
 
 #[cfg(test)]
 mod tests {
-    use super::{recovery_stage_label, resolve_effective_diagnosis_label_from_stats, unix_now_ms};
+    use super::{
+        current_owner_mode_from_stats, recovery_stage_label,
+        resolve_effective_diagnosis_label_from_stats, unix_now_ms, RecoveryOwnerMode,
+    };
+    use crate::transport::rtc::recovery::startup::SessionPhase;
     use crate::XbxEngineMediaRuntimeStats;
 
     #[test]
@@ -820,7 +823,7 @@ mod tests {
         let now_ms = unix_now_ms();
         let stats = XbxEngineMediaRuntimeStats {
             session_phase: Some("recovering".to_string()),
-            recovery_active_escalation_reason: Some("transportAwaitRecoveryKeyframe".to_string()),
+            recovery_active_escalation_reason: Some("transportAwaitRecoveryAnchor".to_string()),
             video_owner_state: Some("degraded-serving".to_string()),
             latest_video_host_present_time_ms: Some(now_ms - 18.0),
             latest_video_decode_ok_time_ms: Some(now_ms - 12.0),
@@ -833,11 +836,31 @@ mod tests {
         assert_eq!(
             resolve_effective_diagnosis_label_from_stats(
                 &stats,
-                "transportAwaitRecoveryKeyframe",
+                "transportAwaitRecoveryAnchor",
                 now_ms
             ),
-            "transportAwaitRecoveryKeyframe"
+            "transportAwaitRecoveryAnchor"
         );
         assert_eq!(recovery_stage_label(&stats), "rebuilding-supply");
+    }
+
+    #[test]
+    fn recovering_phase_without_fresh_output_does_not_return_healthy_from_stale_fps() {
+        let now_ms = unix_now_ms();
+        let stats = XbxEngineMediaRuntimeStats {
+            session_phase: Some("recovering".to_string()),
+            inbound_video_bitrate_kbps: Some(20_000.0),
+            video_present_fps: 60.0,
+            latest_video_host_present_time_ms: Some(now_ms - 1_200.0),
+            latest_video_decode_ok_time_ms: Some(now_ms - 1_100.0),
+            video_decoder_stalled: Some(false),
+            video_renderer_stalled: Some(false),
+            ..XbxEngineMediaRuntimeStats::default()
+        };
+
+        assert_eq!(
+            current_owner_mode_from_stats(&stats, SessionPhase::Recovering),
+            RecoveryOwnerMode::RecoveringReferenceChain
+        );
     }
 }

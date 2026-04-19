@@ -74,7 +74,7 @@ fn playback_phase_int02_decode_overflow_with_fresh_present_must_not_emit_reconne
     let cmds = harness.apply(
         t,
         ConnectionLifecycleStateFact::Connected,
-        "transportAwaitRecoveryKeyframe",
+        "transportAwaitRecoveryAnchor",
         120,
         |stats| {
             stats.session_phase = Some("recovering".to_string());
@@ -119,12 +119,12 @@ fn playback_phase_int02_decode_overflow_with_fresh_present_must_not_emit_reconne
             stats.latest_video_timeline_observation =
                 Some(crate::XbxEngineVideoTimelineObservation {
                     observation_id: 902,
-                    source_event: "frame-await-recovery-keyframe".to_string(),
+                    source_event: "frame-await-recovery-anchor".to_string(),
                     gap: None,
                     frame: None,
                     chain: crate::XbxEngineVideoTimelineChainSnapshot {
                         state: "recovering".to_string(),
-                        reason: Some("transportAwaitRecoveryKeyframe".to_string()),
+                        reason: Some("transportAwaitRecoveryAnchor".to_string()),
                         chain_break_evidence: None,
 
                         observed_at_ms: t - 3.0,
@@ -206,7 +206,7 @@ fn playback_phase_int04_transport_await_family_hold_must_not_stick_forever_on_sa
     let first = harness.apply(
         t0,
         ConnectionLifecycleStateFact::Connected,
-        "transportAwaitRecoveryKeyframe",
+        "transportAwaitRecoveryAnchor",
         260,
         |stats| {
             let t = t0;
@@ -234,12 +234,12 @@ fn playback_phase_int04_transport_await_family_hold_must_not_stick_forever_on_sa
             stats.latest_video_timeline_observation =
                 Some(crate::XbxEngineVideoTimelineObservation {
                     observation_id: 51,
-                    source_event: "frame-await-recovery-keyframe".to_string(),
+                    source_event: "frame-await-recovery-anchor".to_string(),
                     gap: None,
                     frame: None,
                     chain: crate::XbxEngineVideoTimelineChainSnapshot {
                         state: "recovering".to_string(),
-                        reason: Some("transportAwaitRecoveryKeyframe".to_string()),
+                        reason: Some("transportAwaitRecoveryAnchor".to_string()),
                         chain_break_evidence: None,
 
                         observed_at_ms: t - 2.0,
@@ -259,7 +259,7 @@ fn playback_phase_int04_transport_await_family_hold_must_not_stick_forever_on_sa
     let second = harness.apply(
         t1,
         ConnectionLifecycleStateFact::Connected,
-        "transportAwaitRecoveryKeyframe",
+        "transportAwaitRecoveryAnchor",
         260,
         |stats| {
             let t = t1;
@@ -276,7 +276,7 @@ fn playback_phase_int04_transport_await_family_hold_must_not_stick_forever_on_sa
             stats.latest_video_escalation_observation =
                 Some(crate::XbxEngineVideoEscalationObservation {
                     observation_id: 52,
-                    reason: "transportAwaitRecoveryKeyframe".to_string(),
+                    reason: "transportAwaitRecoveryAnchor".to_string(),
                     action: "requestKeyframe".to_string(),
                     recovery_stage: "rebuilding-supply".to_string(),
                     recovery_chain_value: "anchor".to_string(),
@@ -291,9 +291,9 @@ fn playback_phase_int04_transport_await_family_hold_must_not_stick_forever_on_sa
             }
             if let Some(timeline) = stats.latest_video_timeline_observation.as_mut() {
                 timeline.observation_id = 52;
-                timeline.source_event = "frame-await-recovery-keyframe".to_string();
+                timeline.source_event = "frame-await-recovery-anchor".to_string();
                 timeline.chain.state = "recovering".to_string();
-                timeline.chain.reason = Some("transportAwaitRecoveryKeyframe".to_string());
+                timeline.chain.reason = Some("transportAwaitRecoveryAnchor".to_string());
                 timeline.chain.observed_at_ms = t - 2.0;
                 timeline.observed_at_ms = t - 2.0;
             }
@@ -336,7 +336,7 @@ fn playback_phase_int04_transport_await_family_hold_must_not_stick_forever_on_sa
             stats.video_anchor_clean_epoch = Some(75);
             stats.video_anchor_clean_observed_at_ms = Some(t - 70.0);
             stats.video_anchor_clean_source_event =
-                Some("chain-clean-keyframe-submitted".to_string());
+                Some("chain-clean-anchor-submitted".to_string());
             if let Some(timeline) = stats.latest_video_timeline_observation.as_mut() {
                 timeline.observation_id = 53;
                 timeline.source_event = "frame-observed".to_string();
@@ -416,7 +416,7 @@ fn playback_phase_int06_clean_anchor_progress_must_exit_toward_serving_not_starv
     let _ = harness.apply(
         t0,
         ConnectionLifecycleStateFact::Connected,
-        "transportAwaitRecoveryKeyframe",
+        "transportAwaitRecoveryAnchor",
         280,
         |stats| {
             let t = t0;
@@ -442,12 +442,12 @@ fn playback_phase_int06_clean_anchor_progress_must_exit_toward_serving_not_starv
             stats.latest_video_timeline_observation =
                 Some(crate::XbxEngineVideoTimelineObservation {
                     observation_id: 1,
-                    source_event: "frame-await-recovery-keyframe".to_string(),
+                    source_event: "frame-await-recovery-anchor".to_string(),
                     gap: None,
                     frame: None,
                     chain: crate::XbxEngineVideoTimelineChainSnapshot {
                         state: "recovering".to_string(),
-                        reason: Some("transportAwaitRecoveryKeyframe".to_string()),
+                        reason: Some("transportAwaitRecoveryAnchor".to_string()),
                         chain_break_evidence: None,
 
                         observed_at_ms: t,
@@ -472,7 +472,7 @@ fn playback_phase_int06_clean_anchor_progress_must_exit_toward_serving_not_starv
             stats.video_anchor_clean_epoch = Some(stats.transport_recovery_epoch);
             stats.video_anchor_clean_observed_at_ms = Some(t - 15.0);
             stats.video_anchor_clean_source_event =
-                Some("chain-clean-keyframe-submitted".to_string());
+                Some("chain-clean-anchor-submitted".to_string());
             if let Some(timeline) = stats.latest_video_timeline_observation.as_mut() {
                 timeline.source_event = "frame-observed".to_string();
                 timeline.chain.state = "healthy".to_string();

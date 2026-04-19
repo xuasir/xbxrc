@@ -1076,11 +1076,3 @@ fn epoch_advance_rule_is_reason_aware_for_local_decoder_reset_paths() {
         )
     );
 }
-
-#[test]
-fn rollback_decoder_reset_burst_after_transport_family_defer_saturates_at_zero() {
-    let mut controller = VideoEscalationController::new(VideoEscalationConfig::default());
-    assert_eq!(controller.test_pending_decoder_reset_burst_signals(), 0);
-    controller.rollback_decoder_reset_burst_after_transport_family_defer();
-    assert_eq!(controller.test_pending_decoder_reset_burst_signals(), 0);
-}

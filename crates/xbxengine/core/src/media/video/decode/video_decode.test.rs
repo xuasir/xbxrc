@@ -1225,7 +1225,7 @@ fn make_encoded_frame(is_keyframe: bool) -> EncodedFrame {
         frame_playout_deadline_at_ms: None,
         frame_recovery_disposition: crate::media::video::types::FrameRecoveryDisposition::Repairing,
         frame_unrecoverable_reason: None,
-        target_playout_time: now + Duration::from_millis(16),
+        target_playout_instant: now + Duration::from_millis(16),
         h264: make_h264_inspection(is_keyframe),
         payload: Bytes::from_static(b"\x00\x00\x00\x01\x65"),
     }

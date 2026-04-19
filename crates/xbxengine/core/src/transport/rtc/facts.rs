@@ -118,13 +118,6 @@ pub enum TimerFact {
     MetricsSampleTick { observed_at_ms: f64 },
 }
 
-/// 恢复 escalation 侧可消费的事实（由 transport bridge 注入，经 SessionActor 投影进 snapshot）。
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum RecoveryEscalationFact {
-    /// 本地 decoder reset 因 `sameFamilyCoalesced:decoderResetInFlight` 等被 Deferred，未真正执行。
-    DecoderResetFamilyCoalesceDeferred,
-}
-
 #[derive(Clone, Debug, PartialEq)]
 pub enum TransportCommand {
     RequestKeyframe {
@@ -174,5 +167,4 @@ pub enum TransportFact {
     Media(MediaFact),
     Timer(TimerFact),
     CommandResult(CommandResultFact),
-    Recovery(RecoveryEscalationFact),
 }

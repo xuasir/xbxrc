@@ -390,15 +390,10 @@ async fn runtime_home_render_deadline_jitter_replay_stays_local_and_never_reache
         96,
         "displaySupplyCritical",
     )));
-    assert!(commands.iter().any(|command| {
-        matches!(
-            command,
-            TransportCommand::RequestKeyframe { reason, .. } if reason == "displaySupplyCritical"
-        )
-    }));
-    assert!(commands
-        .iter()
-        .all(|command| !matches!(command, TransportCommand::RequestReconnectCandidate { .. })));
+    assert!(
+        commands.is_empty(),
+        "display domain critical should not emit media commands: {commands:?}"
+    );
     for command in commands.iter().cloned() {
         bridge.apply_transport_session_command(SessionCommand::Transport(command));
     }
@@ -409,12 +404,9 @@ async fn runtime_home_render_deadline_jitter_replay_stays_local_and_never_reache
             .latest_recovery_decision_ledger
             .as_ref()
             .expect("home render jitter decision ledger");
-        assert_eq!(
-            ledger.input_signal,
-            "displaySupplyCritical:displaySupplyCritical"
-        );
-        assert_eq!(ledger.gate_result, "pass:localProbe");
-        assert_ne!(ledger.action_selected, "requestReconnectCandidate");
+        assert_eq!(ledger.input_signal, "none");
+        assert_eq!(ledger.gate_result, "no-signal");
+        assert_eq!(ledger.action_selected, "none");
     }
 
     runtime.tick();
@@ -522,4 +514,203 @@ async fn runtime_cloud_startup_transport_progress_replay_does_not_reconnect_befo
         .lock()
         .expect("lock pending runtime recovery action")
         .is_none());
+}
+
+#[test]
+fn runtime_local_host_stall_reset_retries_after_cooldown_when_display_tick_advances() {
+    let requests = Rc::new(RefCell::new(Vec::new()));
+    let events = Rc::new(RefCell::new(Vec::new()));
+    let call_order = Arc::new(Mutex::new(Vec::new()));
+    let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
+    {
+        let mut stats = runtime_stats.lock().expect("runtime stats lock");
+        stats.video_owner_reason = Some("hostPresentStalled".to_string());
+        stats.video_renderer_stalled = Some(true);
+        stats.host_display_tick_epoch = 10;
+        stats.video_present_epoch = 3;
+    }
+    let pending_runtime_recovery_action = Arc::new(Mutex::new(None));
+    let mut backend = ScriptedMediaBackend::new(
+        XbxEngineMediaNegotiation {
+            local_offer_sdp: "offer".to_string(),
+            local_candidates: Vec::new(),
+            surface_id: "surface:viewport-1".to_string(),
+            video_width: 1280,
+            video_height: 720,
+            first_frame_packet_arrival_time_ms: None,
+            frame_decoded_time_ms: None,
+            frame_rendered_time_ms: None,
+            input_status: XbxEngineInputStatus::default(),
+        },
+        XbxEngineMediaRuntimeStats::default(),
+    );
+    backend.runtime_stats = runtime_stats.clone();
+    backend.pending_runtime_recovery_action = pending_runtime_recovery_action;
+    let mut runtime = XbxEngineRuntime::with_media_backend(
+        XbxEngineRuntimeConfig::default(),
+        TestHostBridge::new(requests.clone()).with_call_order(call_order.clone()),
+        TestEventSink::new(events),
+        backend,
+    );
+    runtime
+        .start(session(), viewport(), 1.0, None, None)
+        .expect("runtime start should succeed");
+    requests.borrow_mut().clear();
+
+    runtime.tick();
+    {
+        let mut stats = runtime_stats.lock().expect("runtime stats lock");
+        // cooldown 内即使 tick 前进，也不应重复 reset
+        stats.host_display_tick_epoch = 11;
+    }
+    runtime.tick();
+    std::thread::sleep(Duration::from_millis(2_600));
+    {
+        let mut stats = runtime_stats.lock().expect("runtime stats lock");
+        // cooldown 后且 display tick 再次前进，应允许重试 reset（present epoch 保持不变）
+        stats.host_display_tick_epoch = 12;
+        stats.video_present_epoch = 3;
+    }
+    runtime.tick();
+
+    let order = call_order.lock().expect("call order lock");
+    let reset_count = order
+        .iter()
+        .filter(|entry| **entry == "resetNativePresenterHostStall")
+        .count();
+    assert_eq!(reset_count, 2, "expected two host-stall resets: {order:?}");
+}
+
+#[test]
+fn runtime_display_supply_degraded_triggers_local_reset_only_with_renderer_stall_gate() {
+    let requests = Rc::new(RefCell::new(Vec::new()));
+    let events = Rc::new(RefCell::new(Vec::new()));
+    let call_order = Arc::new(Mutex::new(Vec::new()));
+    let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
+    {
+        let mut stats = runtime_stats.lock().expect("runtime stats lock");
+        stats.video_owner_reason = Some("displaySupplyDegraded".to_string());
+        stats.video_renderer_stalled = Some(false);
+        stats.host_display_tick_epoch = 20;
+        stats.video_present_epoch = 9;
+    }
+    let pending_runtime_recovery_action = Arc::new(Mutex::new(None));
+    let mut backend = ScriptedMediaBackend::new(
+        XbxEngineMediaNegotiation {
+            local_offer_sdp: "offer".to_string(),
+            local_candidates: Vec::new(),
+            surface_id: "surface:viewport-1".to_string(),
+            video_width: 1280,
+            video_height: 720,
+            first_frame_packet_arrival_time_ms: None,
+            frame_decoded_time_ms: None,
+            frame_rendered_time_ms: None,
+            input_status: XbxEngineInputStatus::default(),
+        },
+        XbxEngineMediaRuntimeStats::default(),
+    );
+    backend.runtime_stats = runtime_stats.clone();
+    backend.pending_runtime_recovery_action = pending_runtime_recovery_action;
+    let mut runtime = XbxEngineRuntime::with_media_backend(
+        XbxEngineRuntimeConfig::default(),
+        TestHostBridge::new(requests.clone()).with_call_order(call_order.clone()),
+        TestEventSink::new(events),
+        backend,
+    );
+    runtime
+        .start(session(), viewport(), 1.0, None, None)
+        .expect("runtime start should succeed");
+    requests.borrow_mut().clear();
+
+    runtime.tick();
+    {
+        let order = call_order.lock().expect("call order lock");
+        assert!(
+            !order
+                .iter()
+                .any(|entry| *entry == "resetNativePresenterDisplayRecovery"),
+            "display recovery reset should be gated by renderer stall: {order:?}"
+        );
+    }
+
+    {
+        let mut stats = runtime_stats.lock().expect("runtime stats lock");
+        stats.video_renderer_stalled = Some(true);
+        stats.host_display_tick_epoch = 23;
+    }
+    runtime.tick();
+    let order = call_order.lock().expect("call order lock");
+    assert!(
+        order
+            .iter()
+            .any(|entry| *entry == "resetNativePresenterDisplayRecovery"),
+        "display recovery reset should fire when renderer stall gate is active: {order:?}"
+    );
+}
+
+#[test]
+fn runtime_display_supply_critical_triggers_local_reset_only_with_renderer_stall_gate() {
+    let requests = Rc::new(RefCell::new(Vec::new()));
+    let events = Rc::new(RefCell::new(Vec::new()));
+    let call_order = Arc::new(Mutex::new(Vec::new()));
+    let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
+    {
+        let mut stats = runtime_stats.lock().expect("runtime stats lock");
+        stats.video_owner_reason = Some("displaySupplyCritical".to_string());
+        stats.video_renderer_stalled = Some(false);
+        stats.host_display_tick_epoch = 30;
+        stats.video_present_epoch = 10;
+    }
+    let pending_runtime_recovery_action = Arc::new(Mutex::new(None));
+    let mut backend = ScriptedMediaBackend::new(
+        XbxEngineMediaNegotiation {
+            local_offer_sdp: "offer".to_string(),
+            local_candidates: Vec::new(),
+            surface_id: "surface:viewport-1".to_string(),
+            video_width: 1280,
+            video_height: 720,
+            first_frame_packet_arrival_time_ms: None,
+            frame_decoded_time_ms: None,
+            frame_rendered_time_ms: None,
+            input_status: XbxEngineInputStatus::default(),
+        },
+        XbxEngineMediaRuntimeStats::default(),
+    );
+    backend.runtime_stats = runtime_stats.clone();
+    backend.pending_runtime_recovery_action = pending_runtime_recovery_action;
+    let mut runtime = XbxEngineRuntime::with_media_backend(
+        XbxEngineRuntimeConfig::default(),
+        TestHostBridge::new(requests.clone()).with_call_order(call_order.clone()),
+        TestEventSink::new(events),
+        backend,
+    );
+    runtime
+        .start(session(), viewport(), 1.0, None, None)
+        .expect("runtime start should succeed");
+    requests.borrow_mut().clear();
+
+    runtime.tick();
+    {
+        let order = call_order.lock().expect("call order lock");
+        assert!(
+            !order
+                .iter()
+                .any(|entry| *entry == "resetNativePresenterDisplayRecovery"),
+            "display recovery reset should be gated by renderer stall: {order:?}"
+        );
+    }
+
+    {
+        let mut stats = runtime_stats.lock().expect("runtime stats lock");
+        stats.video_renderer_stalled = Some(true);
+        stats.host_display_tick_epoch = 33;
+    }
+    runtime.tick();
+    let order = call_order.lock().expect("call order lock");
+    assert!(
+        order
+            .iter()
+            .any(|entry| *entry == "resetNativePresenterDisplayRecovery"),
+        "display recovery reset should fire when renderer stall gate is active: {order:?}"
+    );
 }

@@ -149,6 +149,17 @@ impl XbxEngineHostBridge for TestHostBridge {
         Ok(())
     }
 
+    fn reset_native_video_presenter_for_display_recovery(
+        &mut self,
+        _viewport_id: &str,
+        _reason: &str,
+    ) -> Result<(), XbxEngineRuntimeError> {
+        if let Ok(mut order) = self.call_order.lock() {
+            order.push("resetNativePresenterDisplayRecovery");
+        }
+        Ok(())
+    }
+
     fn request(
         &mut self,
         request: XbxEngineHostRequestDto,
@@ -312,7 +323,7 @@ pub(crate) fn create_runtime(
     )
 }
 
-pub(crate) fn legacy_runtime_config() -> XbxEngineRuntimeConfig {
+pub(crate) fn browser_runtime_config() -> XbxEngineRuntimeConfig {
     let mut config = XbxEngineRuntimeConfig::default();
     config.runtime_name = "browser".to_string();
     config

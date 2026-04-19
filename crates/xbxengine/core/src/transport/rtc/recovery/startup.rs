@@ -79,7 +79,7 @@ impl StartupRecoveryProbe {
                     Some(
                         "ingressWaitKeyframe"
                             | "ingressFrameAbandoned"
-                            | "transportAwaitRecoveryKeyframe"
+                            | "transportAwaitRecoveryAnchor"
                     )
                 ) || stats.direct_gaming_bitrate_band.as_deref()
                     == Some("startupLow");
@@ -156,7 +156,7 @@ fn resolve_session_phase_from_stats(
             "waitKeyframe"
                 | "ingressWaitKeyframe"
                 | "ingressFrameAbandoned"
-                | "transportAwaitRecoveryKeyframe"
+                | "transportAwaitRecoveryAnchor"
                 | "transportExpiredDeadline"
                 | "transportSevereDeadline"
                 | "transportSampleLoss"

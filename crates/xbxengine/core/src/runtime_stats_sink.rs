@@ -109,6 +109,7 @@ impl RuntimeStatsSink {
         stats.video_anchor_clean_source_event = None;
     }
 
+
     pub(crate) fn new(runtime_stats: Arc<Mutex<XbxEngineMediaRuntimeStats>>) -> Self {
         Self {
             observation_bus: ObservationBus::new(runtime_stats),
@@ -492,6 +493,30 @@ impl RuntimeStatsSink {
             let mut updated_episode = None;
             let mut should_probe = false;
             if let Some(episode) = stats.latest_keyframe_request_episode.as_mut() {
+                // 验证1: 检查响应时间是否在合理范围内
+                if let Some(sent_at_ms) = episode.sent_at_ms {
+                    // 响应不能早于请求
+                    if observed_at_ms < sent_at_ms {
+                        return;
+                    }
+                    // 响应超过10秒视为旧包，不接受
+                    if observed_at_ms - sent_at_ms > 10000.0 {
+                        return;
+                    }
+                }
+
+                // 验证2: 如果已有响应RTP时间戳，检查是否匹配
+                if is_keyframe {
+                    if let Some(response_ts) = episode.response_rtp_timestamp {
+                        if let Some(current_ts) = rtp_timestamp {
+                            // 如果RTP时间戳不匹配，说明不是对这个请求的响应
+                            if current_ts != response_ts {
+                                return;
+                            }
+                        }
+                    }
+                }
+
                 if episode.first_video_packet_at_ms.is_none() {
                     episode.first_video_packet_at_ms = Some(observed_at_ms);
                 }
@@ -593,13 +618,12 @@ impl RuntimeStatsSink {
 
                 stats.latest_observation_label =
                     Some("keyframeRequestEpisodeResponseObserved".to_string());
-                stats.latest_observation_summary = Some(format!(
-                    "episodeId={} rtpTimestamp={} isKeyframe={} detail={detail}",
-                    episode.episode_id,
-                    rtp_timestamp
-                        .map(|value| value.to_string())
-                        .unwrap_or_else(|| "none".to_string()),
-                    is_keyframe
+                stats.latest_observation_summary = Some(format_keyframe_response_observed_summary(
+                    episode,
+                    observed_at_ms,
+                    rtp_timestamp,
+                    is_keyframe,
+                    detail,
                 ));
                 updated_episode = Some(episode.clone());
                 should_probe = true;
@@ -681,14 +705,12 @@ impl RuntimeStatsSink {
                     .latest_keyframe_request_episode
                     .as_ref()
                     .and_then(|episode| {
-                        if episode.request_reason.as_deref()
-                            == Some("transportAwaitRecoveryKeyframe")
+                        if episode.request_reason.as_deref() == Some("transportAwaitRecoveryAnchor")
                             && episode.sent_at_ms.is_some()
                             && matches!(
                                 observation.bootstrap_reject_reason.as_deref(),
                                 Some(
-                                    "NonIdrVcl"
-                                        | "bootstrapMissingSps"
+                                    "bootstrapMissingSps"
                                         | "bootstrapMissingPps"
                                         | "inspectionRejectInvalidSliceHeader"
                                 )
@@ -718,7 +740,10 @@ impl RuntimeStatsSink {
                 observation.bound_response_rtp_timestamp = None;
                 observation.bound_as_recovery_response = Some(false);
             }
+            let summary = format_h264_inspection_summary(&observation);
             stats.latest_h264_inspection_observation = Some(observation);
+            stats.latest_observation_label = Some("h264InspectionObserved".to_string());
+            stats.latest_observation_summary = Some(summary);
         });
     }
 
@@ -1091,6 +1116,63 @@ fn sync_recent_keyframe_request_episode(
     }
 }
 
+fn format_keyframe_response_observed_summary(
+    episode: &XbxEngineKeyframeRequestEpisodeObservation,
+    observed_at_ms: f64,
+    rtp_timestamp: Option<u32>,
+    is_keyframe: bool,
+    detail: &str,
+) -> String {
+    let sent_to_first_packet_ms = episode
+        .sent_at_ms
+        .map(|sent_at_ms| (observed_at_ms - sent_at_ms).max(0.0));
+    format!(
+        "episodeId={} rtpTimestamp={} isKeyframe={} detail={} sentToFirstPacketMs={} firstVideoPacketAtMs={} firstVideoPacketIsKeyframe={}",
+        episode.episode_id,
+        rtp_timestamp
+            .map(|value| value.to_string())
+            .unwrap_or_else(|| "none".to_string()),
+        is_keyframe,
+        detail,
+        sent_to_first_packet_ms
+            .map(|value| format!("{value:.1}"))
+            .unwrap_or_else(|| "none".to_string()),
+        episode
+            .first_video_packet_at_ms
+            .map(|value| format!("{value:.1}"))
+            .unwrap_or_else(|| "none".to_string()),
+        episode
+            .first_video_packet_is_keyframe
+            .map(|value| value.to_string())
+            .unwrap_or_else(|| "none".to_string()),
+    )
+}
+
+fn format_h264_inspection_summary(observation: &XbxEngineH264InspectionObservation) -> String {
+    format!(
+        "rtpTimestamp={} isIdr={} bootstrapReady={} bootstrapRejectReason={} admissionAccepted={} boundEpisodeId={} boundAsRecoveryResponse={}",
+        observation
+            .frame_rtp_timestamp
+            .map(|value| value.to_string())
+            .unwrap_or_else(|| "none".to_string()),
+        observation.is_idr,
+        observation.bootstrap_ready,
+        observation
+            .bootstrap_reject_reason
+            .as_deref()
+            .unwrap_or("none"),
+        observation.admission_accepted,
+        observation
+            .bound_episode_id
+            .map(|value| value.to_string())
+            .unwrap_or_else(|| "none".to_string()),
+        observation
+            .bound_as_recovery_response
+            .map(|value| value.to_string())
+            .unwrap_or_else(|| "none".to_string()),
+    )
+}
+
 fn apply_keyframe_request_episode_sent(
     episode: &mut XbxEngineKeyframeRequestEpisodeObservation,
     request_kind: &str,
@@ -1155,12 +1237,14 @@ fn select_episode_snapshot_for_h264_inspection(
 ) -> Option<XbxEngineKeyframeRequestEpisodeObservation> {
     let candidates = collect_keyframe_episode_candidates(stats);
     if let Some(rtp) = inspection.frame_rtp_timestamp {
+        // 精确匹配：如果帧RTP与episode的response_rtp_timestamp匹配，绑定
         if let Some(episode) = candidates
             .iter()
             .find(|episode| episode.response_rtp_timestamp == Some(rtp))
         {
             return Some(episode.clone());
         }
+        // 精确匹配：如果帧RTP与episode的first_video_packet_rtp_timestamp匹配，绑定
         if let Some(episode) = candidates
             .iter()
             .find(|episode| episode.first_video_packet_rtp_timestamp == Some(rtp))
@@ -1173,8 +1257,15 @@ fn select_episode_snapshot_for_h264_inspection(
     let mut best_delta = f64::INFINITY;
     for episode in candidates.iter().filter(|episode| {
         keyframe_episode_observability_active(episode)
-            && episode.request_reason.as_deref() == Some("transportAwaitRecoveryKeyframe")
+            && episode.request_reason.as_deref() == Some("transportAwaitRecoveryAnchor")
     }) {
+        // 修复：只允许等待响应的episode进行fallback绑定
+        // 已经收到响应的episode（response-observed及之后）不应该再通过fallback绑定
+        match episode.status.as_str() {
+            "requested" | "sent" => {} // 允许fallback绑定
+            _ => continue,             // 其他状态跳过（已收到响应或已结束）
+        }
+
         let anchor_ms = episode.sent_at_ms.unwrap_or(episode.requested_at_ms);
         let delta = (inspection.observed_at_ms - anchor_ms).abs();
         if delta < WINDOW_MS && delta < best_delta {
@@ -1189,7 +1280,7 @@ fn inspection_matches_recovery_keyframe_response(
     episode: &XbxEngineKeyframeRequestEpisodeObservation,
     frame_rtp_timestamp: Option<u32>,
 ) -> bool {
-    if episode.request_reason.as_deref() != Some("transportAwaitRecoveryKeyframe") {
+    if episode.request_reason.as_deref() != Some("transportAwaitRecoveryAnchor") {
         return false;
     }
     if !matches!(
@@ -1229,7 +1320,7 @@ fn select_episode_snapshot_for_anchor_ledger(
             .iter()
             .filter(|episode| {
                 keyframe_episode_observability_active(episode)
-                    && episode.request_reason.as_deref() == Some("transportAwaitRecoveryKeyframe")
+                    && episode.request_reason.as_deref() == Some("transportAwaitRecoveryAnchor")
                     && episode.sent_at_ms.is_some()
             })
             .collect();
@@ -1246,7 +1337,7 @@ fn select_episode_snapshot_for_anchor_ledger(
     let mut best_delta = f64::INFINITY;
     for episode in candidates.iter().filter(|episode| {
         keyframe_episode_observability_active(episode)
-            && episode.request_reason.as_deref() == Some("transportAwaitRecoveryKeyframe")
+            && episode.request_reason.as_deref() == Some("transportAwaitRecoveryAnchor")
     }) {
         let anchor_ms = episode.sent_at_ms.unwrap_or(episode.requested_at_ms);
         let delta = (ledger.observed_at_ms - anchor_ms).abs();
@@ -1396,14 +1487,14 @@ mod tests {
         let sink = RuntimeStatsSink::new(runtime_stats.clone());
 
         sink.begin_transport_recovery_episode(10.0);
-        sink.record_transport_clean_anchor(20.0, "chain-clean-keyframe-submitted");
+        sink.record_transport_clean_anchor(20.0, "chain-clean-anchor-submitted");
 
         let stats = runtime_stats.lock().expect("runtime stats lock");
         assert_eq!(stats.video_anchor_clean_epoch, Some(1));
         assert_eq!(stats.video_anchor_clean_observed_at_ms, Some(20.0));
         assert_eq!(
             stats.video_anchor_clean_source_event.as_deref(),
-            Some("chain-clean-keyframe-submitted")
+            Some("chain-clean-anchor-submitted")
         );
         assert!(stats.transport_recovery_episode_active);
         assert_eq!(stats.transport_recovery_episode_closed_at_ms, None);
@@ -1418,12 +1509,12 @@ mod tests {
         sink.begin_transport_recovery_episode(10.0);
         sink.record_keyframe_request_episode_requested(
             7,
-            Some("transportAwaitRecoveryKeyframe".to_string()),
+            Some("transportAwaitRecoveryAnchor".to_string()),
             15.0,
             None,
         );
         sink.record_keyframe_request_episode_sent("pli", 16.0, None);
-        sink.record_transport_clean_anchor(20.0, "chain-clean-keyframe-submitted");
+        sink.record_transport_clean_anchor(20.0, "chain-clean-anchor-submitted");
 
         let stats = runtime_stats.lock().expect("runtime stats lock");
         let episode = stats
@@ -1440,7 +1531,7 @@ mod tests {
         let sink = RuntimeStatsSink::new(runtime_stats.clone());
 
         sink.begin_transport_recovery_episode(10.0);
-        sink.record_transport_clean_anchor(20.0, "chain-clean-keyframe-submitted");
+        sink.record_transport_clean_anchor(20.0, "chain-clean-anchor-submitted");
         assert_eq!(sink.advance_transport_recovery_episode(30.0), 2);
 
         let stats = runtime_stats.lock().expect("runtime stats lock");
@@ -1478,7 +1569,7 @@ mod tests {
         let sink = RuntimeStatsSink::new(runtime_stats.clone());
 
         sink.begin_transport_recovery_episode(10.0);
-        sink.record_transport_clean_anchor(20.0, "chain-clean-keyframe-submitted");
+        sink.record_transport_clean_anchor(20.0, "chain-clean-anchor-submitted");
         sink.complete_transport_recovery_after_stable_settle(40.0);
 
         let stats = runtime_stats.lock().expect("runtime stats lock");
@@ -1498,7 +1589,7 @@ mod tests {
 
         sink.record_keyframe_request_episode_requested(
             77,
-            Some("transportAwaitRecoveryKeyframe".to_string()),
+            Some("transportAwaitRecoveryAnchor".to_string()),
             100.0,
             None,
         );
@@ -1533,7 +1624,7 @@ mod tests {
 
         sink.record_keyframe_request_episode_requested(
             90,
-            Some("transportAwaitRecoveryKeyframe".to_string()),
+            Some("transportAwaitRecoveryAnchor".to_string()),
             100.0,
             None,
         );
@@ -1571,6 +1662,13 @@ mod tests {
             stats.latest_observation_label.as_deref(),
             Some("keyframeRequestEpisodeResponseObserved")
         );
+        let summary = stats
+            .latest_observation_summary
+            .as_deref()
+            .expect("response-observed summary");
+        assert!(summary.contains("detail=bootstrapMissingSps"));
+        assert!(summary.contains("sentToFirstPacketMs=50.0"));
+        assert!(summary.contains("firstVideoPacketIsKeyframe=false"));
     }
 
     #[test]
@@ -1580,7 +1678,7 @@ mod tests {
 
         sink.record_keyframe_request_episode_requested(
             88,
-            Some("transportAwaitRecoveryKeyframe".to_string()),
+            Some("transportAwaitRecoveryAnchor".to_string()),
             100.0,
             None,
         );
@@ -1673,7 +1771,7 @@ mod tests {
         let sink = RuntimeStatsSink::new(runtime_stats.clone());
         sink.record_keyframe_request_episode_requested(
             1,
-            Some("transportAwaitRecoveryKeyframe".to_string()),
+            Some("transportAwaitRecoveryAnchor".to_string()),
             100.0,
             None,
         );
@@ -1706,7 +1804,7 @@ mod tests {
         let sink = RuntimeStatsSink::new(runtime_stats.clone());
         sink.record_keyframe_request_episode_requested(
             42,
-            Some("transportAwaitRecoveryKeyframe".to_string()),
+            Some("transportAwaitRecoveryAnchor".to_string()),
             100.0,
             None,
         );
@@ -1742,5 +1840,17 @@ mod tests {
             .expect("h264 observation");
         assert_eq!(h264.bound_episode_id, Some(42));
         assert!(h264.bound_as_recovery_response.unwrap_or(false));
+        assert_eq!(
+            stats.latest_observation_label.as_deref(),
+            Some("h264InspectionObserved")
+        );
+        let summary = stats
+            .latest_observation_summary
+            .as_deref()
+            .expect("h264 summary");
+        assert!(summary.contains("rtpTimestamp=777"));
+        assert!(summary.contains("isIdr=true"));
+        assert!(summary.contains("boundEpisodeId=42"));
+        assert!(summary.contains("boundAsRecoveryResponse=true"));
     }
 }

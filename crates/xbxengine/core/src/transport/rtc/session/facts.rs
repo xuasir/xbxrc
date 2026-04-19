@@ -8,8 +8,11 @@ use crate::transport::rtc::policy::display_supply::SchedulingDemandSignal;
 use crate::transport::rtc::policy::video_scheduling_owner::VideoSchedulingOwnerInput;
 use crate::transport::rtc::projection::TransportSnapshot;
 use crate::transport::rtc::recovery::contract::{
-    current_clean_anchor_observed_at_ms, has_current_transport_await_issue_from_observation,
-    is_transport_await_probe_source_event,
+    current_clean_anchor_observed_at_ms, current_clean_anchor_observed_at_ms_from_stats,
+    derive_gap_severity_from_timeline_observation, derive_gap_severity_with_episode_stall,
+    frame_value_from_gap_severity, has_current_transport_await_issue_from_observation,
+    is_transport_await_probe_source_event, recovery_episode_stage_from_status,
+    recovery_progress_level_from_episode,
 };
 use crate::transport::rtc::recovery::escalation::VideoEscalationReason;
 use crate::transport::rtc::recovery::policy::{DisplaySupplyThresholds, ScenarioPolicyProfileKind};
@@ -95,6 +98,8 @@ pub(crate) struct OwnerRuntimeFacts {
     pub(crate) latest_h264_inspection_observation: Option<XbxEngineH264InspectionObservation>,
     pub(crate) latest_decode_candidate_detail: Option<String>,
     pub(crate) latest_decode_candidate_observed_at_ms: Option<f64>,
+    pub(crate) latest_renderer_candidate_detail: Option<String>,
+    pub(crate) latest_renderer_candidate_observed_at_ms: Option<f64>,
 }
 
 pub(crate) fn build_scheduling_demand_signal(
@@ -165,25 +170,53 @@ pub(crate) fn build_scheduling_demand_signal(
 pub(crate) fn read_owner_runtime_facts(
     runtime_stats: &Mutex<XbxEngineMediaRuntimeStats>,
 ) -> OwnerRuntimeFacts {
-    RuntimeStatsSink::read_shared(runtime_stats, |stats| OwnerRuntimeFacts {
-        recovery_epoch: stats.transport_recovery_epoch,
-        latest_video_timeline_observation: stats.latest_video_timeline_observation.clone(),
-        clean_anchor_epoch: stats.video_anchor_clean_epoch,
-        clean_anchor_observed_at_ms: stats.video_anchor_clean_observed_at_ms,
-        clean_anchor_source_event: stats.video_anchor_clean_source_event.clone(),
-        latest_anchor_candidate_ledger: stats.latest_anchor_candidate_ledger.clone(),
-        latest_video_track_status: stats.latest_video_track_status.clone(),
-        latest_h264_inspection_observation: stats.latest_h264_inspection_observation.clone(),
-        latest_decode_candidate_detail: stats
-            .latest_decode_candidate_decision
-            .as_ref()
-            .map(|d| d.detail.clone()),
-        latest_decode_candidate_observed_at_ms: stats
-            .latest_decode_candidate_decision
-            .as_ref()
-            .map(|d| d.observed_at_ms),
+    RuntimeStatsSink::read_shared(runtime_stats, |stats| {
+        let latest_renderer_queue_pressure = latest_renderer_queue_pressure_from_stats(stats);
+        OwnerRuntimeFacts {
+            recovery_epoch: stats.transport_recovery_epoch,
+            latest_video_timeline_observation: stats.latest_video_timeline_observation.clone(),
+            clean_anchor_epoch: stats.video_anchor_clean_epoch,
+            clean_anchor_observed_at_ms: stats.video_anchor_clean_observed_at_ms,
+            clean_anchor_source_event: stats.video_anchor_clean_source_event.clone(),
+            latest_anchor_candidate_ledger: stats.latest_anchor_candidate_ledger.clone(),
+            latest_video_track_status: stats.latest_video_track_status.clone(),
+            latest_h264_inspection_observation: stats.latest_h264_inspection_observation.clone(),
+            latest_decode_candidate_detail: stats
+                .latest_decode_candidate_decision
+                .as_ref()
+                .map(|d| d.detail.clone()),
+            latest_decode_candidate_observed_at_ms: stats
+                .latest_decode_candidate_decision
+                .as_ref()
+                .map(|d| d.observed_at_ms),
+            latest_renderer_candidate_detail: latest_renderer_queue_pressure
+                .as_ref()
+                .map(|(detail, _)| detail.clone()),
+            latest_renderer_candidate_observed_at_ms: latest_renderer_queue_pressure
+                .as_ref()
+                .map(|(_, observed_at_ms)| *observed_at_ms),
+        }
     })
     .unwrap_or_default()
+}
+
+fn latest_renderer_queue_pressure_from_stats(
+    stats: &XbxEngineMediaRuntimeStats,
+) -> Option<(String, f64)> {
+    const RENDERER_QUEUE_PRESSURE_DETAILS: &[&str] =
+        &["rendererQueueOverflow", "rendererQueueRejectLowerValue"];
+    stats
+        .latest_video_frame_drop
+        .as_ref()
+        .and_then(|observation| {
+            let detail = observation.detail.as_deref()?;
+            if observation.stage.as_deref() != Some("pacer")
+                || !RENDERER_QUEUE_PRESSURE_DETAILS.contains(&detail)
+            {
+                return None;
+            }
+            Some((detail.to_string(), observation.observed_at_ms))
+        })
 }
 
 pub(crate) fn build_owner_input(
@@ -256,6 +289,9 @@ pub(crate) fn build_owner_input(
         observed_at_ms,
         latest_decode_candidate_detail: owner_facts.latest_decode_candidate_detail.clone(),
         latest_decode_candidate_observed_at_ms: owner_facts.latest_decode_candidate_observed_at_ms,
+        latest_renderer_candidate_detail: owner_facts.latest_renderer_candidate_detail.clone(),
+        latest_renderer_candidate_observed_at_ms: owner_facts
+            .latest_renderer_candidate_observed_at_ms,
     }
 }
 
@@ -287,10 +323,8 @@ fn resolve_anchor_reason_label_from_timeline(
         timeline.source_event.as_str(),
     ) {
         (true, _, "broken", Some(reason), _) | (true, _, "recovering", Some(reason), _) => reason,
-        (_, true, _, _, "frame-await-recovery-keyframe") => "transportAwaitRecoveryKeyframe",
-        (_, true, _, _, "frame-inspection-rejected-await-keyframe") => {
-            "transportAwaitRecoveryKeyframe"
-        }
+        (_, true, _, _, "frame-await-recovery-anchor") => "transportAwaitRecoveryAnchor",
+        (_, true, _, _, "frame-inspection-rejected-await-anchor") => "transportAwaitRecoveryAnchor",
         _ => return None,
     };
     // 时间线分支已给出结构化上下文；此处仅校验 `reason` 字符串是否为已知 wire 标签（与 `escalation` 单点映射一致），
@@ -329,6 +363,7 @@ fn is_current_transport_await_probe(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Mutex;
 
     #[test]
     fn stale_transport_await_timeline_after_clean_anchor_does_not_raise_anchor_reason() {
@@ -336,15 +371,15 @@ mod tests {
             recovery_epoch: 7,
             clean_anchor_epoch: Some(7),
             clean_anchor_observed_at_ms: Some(120.0),
-            clean_anchor_source_event: Some("chain-clean-keyframe-submitted".to_string()),
+            clean_anchor_source_event: Some("chain-clean-anchor-submitted".to_string()),
             latest_video_timeline_observation: Some(crate::XbxEngineVideoTimelineObservation {
                 observation_id: 1,
-                source_event: "frame-await-recovery-keyframe".to_string(),
+                source_event: "frame-await-recovery-anchor".to_string(),
                 gap: None,
                 frame: None,
                 chain: crate::XbxEngineVideoTimelineChainSnapshot {
                     state: "recovering".to_string(),
-                    reason: Some("transportAwaitRecoveryKeyframe".to_string()),
+                    reason: Some("transportAwaitRecoveryAnchor".to_string()),
                     chain_break_evidence: None,
 
                     observed_at_ms: 110.0,
@@ -363,15 +398,15 @@ mod tests {
             recovery_epoch: 7,
             clean_anchor_epoch: Some(7),
             clean_anchor_observed_at_ms: Some(120.0),
-            clean_anchor_source_event: Some("chain-clean-keyframe-submitted".to_string()),
+            clean_anchor_source_event: Some("chain-clean-anchor-submitted".to_string()),
             latest_video_timeline_observation: Some(crate::XbxEngineVideoTimelineObservation {
                 observation_id: 2,
-                source_event: "frame-await-recovery-keyframe".to_string(),
+                source_event: "frame-await-recovery-anchor".to_string(),
                 gap: None,
                 frame: None,
                 chain: crate::XbxEngineVideoTimelineChainSnapshot {
                     state: "recovering".to_string(),
-                    reason: Some("transportAwaitRecoveryKeyframe".to_string()),
+                    reason: Some("transportAwaitRecoveryAnchor".to_string()),
                     chain_break_evidence: None,
 
                     observed_at_ms: 130.0,
@@ -383,7 +418,227 @@ mod tests {
 
         assert_eq!(
             resolve_anchor_reason_label(&facts, false),
-            Some("transportAwaitRecoveryKeyframe".to_string())
+            Some("transportAwaitRecoveryAnchor".to_string())
         );
     }
+
+    #[test]
+    fn read_owner_runtime_facts_prefers_render_stage_frame_drop_for_renderer_pressure() {
+        let runtime_stats = Mutex::new(crate::XbxEngineMediaRuntimeStats {
+            latest_render_candidate_decision: Some(
+                crate::XbxEnginePipelineCandidateDecisionObservation {
+                    decision_id: 1,
+                    state: "latest-overwrite".to_string(),
+                    action: "replace".to_string(),
+                    detail: "latestSlotOverwrite".to_string(),
+                    frame_seq: Some(42),
+                    observed_at_ms: 100.0,
+                },
+            ),
+            latest_video_frame_drop: Some(crate::XbxEngineVideoFrameDropObservation {
+                observation_id: 9,
+                reason: "pacer:drop:rendererQueueOverflow".to_string(),
+                stage: Some("pacer".to_string()),
+                action: Some("drop".to_string()),
+                detail: Some("rendererQueueOverflow".to_string()),
+                frame_rtp_timestamp: Some(7),
+                frame_seq: Some(41),
+                frame_recovery_disposition: None,
+                frame_unrecoverable_reason: None,
+                frame_budget: None,
+                observed_at_ms: 123.0,
+                width: 1920,
+                height: 1080,
+                is_keyframe: false,
+                queue_depth: 1,
+            }),
+            ..crate::XbxEngineMediaRuntimeStats::default()
+        });
+
+        let facts = read_owner_runtime_facts(&runtime_stats);
+
+        assert_eq!(
+            facts.latest_renderer_candidate_detail.as_deref(),
+            Some("rendererQueueOverflow")
+        );
+        assert_eq!(facts.latest_renderer_candidate_observed_at_ms, Some(123.0));
+    }
 }
+
+// ============================================================================
+// 统一恢复模型：事实计算层
+// ============================================================================
+
+use crate::transport::rtc::recovery::contract::{
+    FrameValue, GapSeverity, RecoveryEpisodeStage, RecoveryProgressLevel,
+};
+
+/// 统一恢复事实快照（原始事实归一）
+#[derive(Clone, Debug)]
+pub(crate) struct RecoveryFactsSnapshot {
+    pub frame_value: Option<FrameValue>,
+    pub gap_severity: Option<GapSeverity>,
+    pub repairability: Option<f64>,
+    pub recovery_episode_stage: Option<RecoveryEpisodeStage>,
+    pub recovery_progress_level: Option<RecoveryProgressLevel>,
+    pub recovery_episode_progress_at_ms: Option<f64>,
+    #[cfg(test)]
+    pub episode_stalled: bool,
+    #[cfg(test)]
+    pub has_current_clean_anchor: bool,
+}
+
+/// 检查 episode 是否 stalled（无推进边沿）
+fn check_episode_stalled(
+    timeline: &XbxEngineVideoTimelineObservation,
+    stats: &XbxEngineMediaRuntimeStats,
+) -> bool {
+    match timeline.chain.reason.as_deref() {
+        Some("transportAwaitRecoveryAnchor") => {
+            let clean_anchor_at_ms = current_clean_anchor_observed_at_ms_from_stats(stats);
+            let has_recent_progress = clean_anchor_at_ms
+                .map(|t| timeline.observed_at_ms - t < 2000.0)
+                .unwrap_or(false);
+            !has_recent_progress
+        }
+        _ => false,
+    }
+}
+
+/// 计算恢复事实快照（纯函数，无状态）
+pub(crate) fn compute_recovery_facts(
+    timeline: &XbxEngineVideoTimelineObservation,
+    stats: &XbxEngineMediaRuntimeStats,
+) -> RecoveryFactsSnapshot {
+    // 1. 计算基础语义
+    let base_severity = derive_gap_severity_from_timeline_observation(timeline);
+    let episode_stalled = check_episode_stalled(timeline, stats);
+    let gap_severity = Some(if episode_stalled {
+        derive_gap_severity_with_episode_stall(timeline, true)
+    } else {
+        base_severity
+    });
+
+    let frame_value = gap_severity.and_then(frame_value_from_gap_severity);
+
+    // 计算 repairability 评分
+    let repairability = compute_repairability_score(timeline, stats);
+
+    let recovery_episode_stage = stats
+        .latest_keyframe_request_episode
+        .as_ref()
+        .and_then(|ep| recovery_episode_stage_from_status(ep.status.as_str()));
+    let has_current_clean_anchor = current_clean_anchor_observed_at_ms_from_stats(stats).is_some();
+    let has_display_stable = matches!(stats.video_owner_state.as_deref(), Some("stable-serving"));
+    let recovery_progress_level = stats
+        .latest_keyframe_request_episode
+        .as_ref()
+        .and_then(|ep| {
+            recovery_progress_level_from_episode(
+                ep.status.as_str(),
+                ep.response_verdict.as_deref(),
+                ep.first_video_packet_is_keyframe,
+                ep.first_keyframe_packet_at_ms,
+                ep.first_keyframe_decoded_at_ms,
+                has_current_clean_anchor,
+                has_display_stable,
+            )
+        })
+        .or_else(|| {
+            if has_display_stable {
+                Some(RecoveryProgressLevel::DisplayStable)
+            } else if has_current_clean_anchor {
+                Some(RecoveryProgressLevel::CleanAnchorCommitted)
+            } else {
+                None
+            }
+        });
+
+    let recovery_episode_progress_at_ms = stats.video_anchor_clean_observed_at_ms.or_else(|| {
+        stats
+            .latest_keyframe_request_episode
+            .as_ref()
+            .and_then(|ep| ep.first_keyframe_decoded_at_ms)
+    });
+
+    #[cfg(test)]
+    let clean_anchor_observed_at_ms = current_clean_anchor_observed_at_ms_from_stats(stats);
+    #[cfg(test)]
+    let has_current_clean_anchor = clean_anchor_observed_at_ms.is_some();
+
+    RecoveryFactsSnapshot {
+        frame_value,
+        gap_severity,
+        repairability,
+        recovery_episode_stage,
+        recovery_progress_level,
+        recovery_episode_progress_at_ms,
+        #[cfg(test)]
+        episode_stalled,
+        #[cfg(test)]
+        has_current_clean_anchor,
+    }
+}
+
+/// 计算可修复性评分（0.0-1.0）
+/// 基于当前网络状况和待修复gap数量评估包级恢复的可行性
+fn compute_repairability_score(
+    timeline: &XbxEngineVideoTimelineObservation,
+    stats: &XbxEngineMediaRuntimeStats,
+) -> Option<f64> {
+    // 如果没有gap，返回高评分
+    let gap = timeline.gap.as_ref()?;
+    if matches!(gap.state.as_str(), "resolved" | "expired") {
+        return Some(1.0);
+    }
+
+    // 基础评分从1.0开始，根据各种因素降低
+    let mut score: f64 = 1.0;
+
+    // 因素1: RTT影响（RTT越高，可修复性越低）
+    if let Some(rtt_ms) = stats.video_rtt_ms {
+        if rtt_ms > 500.0 {
+            score *= 0.3; // 高RTT严重降低可修复性
+        } else if rtt_ms > 200.0 {
+            score *= 0.6;
+        } else if rtt_ms > 100.0 {
+            score *= 0.8;
+        }
+    }
+
+    // 因素2: 丢包率影响（使用累计丢包估算）
+    let loss_estimate = stats.inbound_video_packet_loss_estimate_total;
+    let received = stats.inbound_video_packet_count_total;
+    if received > 0 {
+        let loss_rate = loss_estimate as f64 / (received + loss_estimate) as f64;
+        if loss_rate > 0.1 {
+            score *= 0.4; // 高丢包率严重降低可修复性
+        } else if loss_rate > 0.05 {
+            score *= 0.7;
+        } else if loss_rate > 0.02 {
+            score *= 0.9;
+        }
+    }
+
+    // 因素3: 待修复gap数量
+    let pending_count = stats.video_pending_missing_packets;
+    if pending_count > 50 {
+        score *= 0.3; // 大量待修复包降低可修复性
+    } else if pending_count > 20 {
+        score *= 0.6;
+    } else if pending_count > 10 {
+        score *= 0.8;
+    }
+
+    // 因素4: 链状态影响
+    if matches!(timeline.chain.state.as_str(), "broken" | "repairing") {
+        score *= 0.7; // 链断裂时降低可修复性
+    }
+
+    // 确保评分在合理范围内
+    Some(score.max(0.0).min(1.0))
+}
+
+#[cfg(test)]
+#[path = "facts.test.rs"]
+mod facts_test;

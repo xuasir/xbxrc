@@ -57,7 +57,7 @@ pub(super) fn make_test_nack_observation(
         packet_count: 2,
         retry_count,
         frame_rtp_timestamp: Some(1),
-        frame_is_keyframe: Some(frame_importance == "keyframe"),
+        frame_is_keyframe: Some(frame_importance == "anchor"),
         frame_importance: Some(frame_importance.to_string()),
         deadline_at_ms: None,
         estimated_recovery_arrival_ms: None,

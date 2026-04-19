@@ -613,7 +613,10 @@ def analyze_recovery_audit(rows: list[dict[str, Any]], silence_threshold_ms: int
         if reject_reason:
             episode["linkedH264BootstrapRejectReason"] = reject_reason
 
+    # 修复建链成功率计算：按episode计数，避免重复计数同一链恢复事件
     chain_rows = chain_transition_rows(sorted_rows)
+    chain_recovered_episodes = set()  # 使用set记录已恢复的episode ID
+
     for episode in keyframe_episodes.values():
         success_ts = episode["firstKeyframeDecodedAtMs"] or episode["firstKeyframePacketAtMs"] or episode["firstVideoPacketAtMs"]
         if success_ts is None:
@@ -621,6 +624,8 @@ def analyze_recovery_audit(rows: list[dict[str, Any]], silence_threshold_ms: int
         window_end = episode["retiredAtMs"] or episode["deadlineAtMs"]
         if window_end is None:
             window_end = success_ts + 5000
+
+        # 在窗口内搜索链恢复事件，找到第一个就停止
         for row in chain_rows:
             payload = event_payload(row, "videoChainTransition")
             ts = row_ts(row)
@@ -637,7 +642,8 @@ def analyze_recovery_audit(rows: list[dict[str, Any]], silence_threshold_ms: int
                 episode["chainRecoveredAtMs"] = ts
                 episode["chainRecoveryReason"] = chain_reason
                 episode["effective"] = episode["firstKeyframeDecodedAtMs"] is not None
-                break
+                chain_recovered_episodes.add(episode["episodeId"])  # 记录episode ID
+                break  # 找到第一个就停止，避免重复计数
             if episode["firstKeyframeDecodedAtMs"] is not None and chain_state in {"broken", "recovering", "repairing", "stalled", "waiting-keyframe"}:
                 episode["chainFailureAfterSuccess"] = True
                 episode["chainFailureAtMs"] = ts
@@ -656,7 +662,8 @@ def analyze_recovery_audit(rows: list[dict[str, Any]], silence_threshold_ms: int
     keyframe_decoded_count = 0
     keyframe_missed_count = 0
     keyframe_invalid_response_count = 0
-    keyframe_chain_recovered_count = 0
+    # 使用set的大小作为链恢复计数，避免重复计数
+    keyframe_chain_recovered_count = len(chain_recovered_episodes)
     keyframe_chain_failed_after_success_count = 0
     for episode in sorted(keyframe_episodes.values(), key=lambda item: (item["requestedAtMs"] or 0, item["episodeId"])):
         final_status = episode["finalStatus"] or "unknown"
@@ -690,9 +697,8 @@ def analyze_recovery_audit(rows: list[dict[str, Any]], silence_threshold_ms: int
             keyframe_failure_reasons["missed-or-timeout"] += 1
         elif episode["responseVerdict"] and str(episode["responseVerdict"]).lower() not in {"decoded", "accepted", "packet-seen", "response-observed"}:
             keyframe_failure_reasons[str(episode["responseVerdict"])] += 1
-        if episode["chainRecovered"]:
-            keyframe_chain_recovered_count += 1
-        elif episode["firstKeyframeDecodedAtMs"] is not None:
+        # 链恢复计数已在上面通过set统计，这里不再累加
+        if not episode["chainRecovered"] and episode["firstKeyframeDecodedAtMs"] is not None:
             keyframe_effective_failures["decoded-without-healthy-chain"] += 1
         if episode["chainFailureAfterSuccess"]:
             keyframe_chain_failed_after_success_count += 1

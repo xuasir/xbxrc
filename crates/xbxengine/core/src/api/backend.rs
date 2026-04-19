@@ -460,6 +460,7 @@ pub struct XbxEngineRecoveryDecisionLedgerObservation {
     pub action_selected: String,
     pub frame_value: Option<String>,
     pub gap_severity: Option<String>,
+    pub repairability: Option<f64>,
     pub recovery_episode_stage: Option<String>,
     pub recovery_episode_progress_at_ms: Option<f64>,
     pub coalescing_mode: Option<String>,
@@ -562,7 +563,7 @@ pub enum XbxEngineAnchorCandidateFailureReason {
 impl XbxEngineAnchorCandidateFailureReason {
     pub fn as_str(self) -> &'static str {
         match self {
-            Self::AwaitingRecoveryKeyframe => "awaitingRecoveryKeyframe",
+            Self::AwaitingRecoveryKeyframe => "awaitingRecoveryAnchor",
             Self::InspectionRejectedMissingSps => "bootstrapMissingSps",
             Self::InspectionRejectedMissingPps => "bootstrapMissingPps",
             Self::InspectionRejectedInvalidSliceHeader => "inspectionRejectInvalidSliceHeader",

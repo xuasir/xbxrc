@@ -178,6 +178,9 @@ impl XbxActiveMediaStack {
         let runtime_config = Arc::new(Mutex::new(runtime_config));
         let media_runtime = Arc::new(
             tokio::runtime::Builder::new_multi_thread()
+                // tokio worker 默认栈较小；当链路进入异常自旋/深层 Future 链时容易触发 stack overflow 直接 abort。
+                // 先提升栈上限以保证可观测性与稳定性，根因仍需要通过 trace/采样进一步定位。
+                .thread_stack_size(8 * 1024 * 1024)
                 .enable_all()
                 .build()
                 .expect("build rtc media runtime"),

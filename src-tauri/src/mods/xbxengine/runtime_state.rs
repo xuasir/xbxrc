@@ -740,6 +740,26 @@ impl XbxEngineHostBridge for TauriXbxEngineHostBridge {
         self.reset_native_presenter_for_host_stall(viewport_id)
     }
 
+    fn reset_native_video_presenter_for_display_recovery(
+        &mut self,
+        viewport_id: &str,
+        reason: &str,
+    ) -> Result<(), XbxEngineRuntimeError> {
+        let Ok(mut registry) = self.native_video.lock() else {
+            return Err(XbxEngineRuntimeError::new(
+                "xbxEngineNativeVideoRegistryLockFailed",
+            ));
+        };
+        registry.reset_presenter_for_display_recovery(viewport_id, reason);
+        self.runtime_trace.record_state(
+            "xbxengine-host",
+            "nativePresenterResetDisplayRecovery",
+            None,
+            serde_json::json!({ "viewportId": viewport_id, "reason": reason }),
+        );
+        Ok(())
+    }
+
     fn submit_gamepad_rumble_request(
         &mut self,
         request: OhMyGamepadRumbleRequestDto,

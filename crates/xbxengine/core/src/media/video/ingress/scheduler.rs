@@ -29,7 +29,7 @@ pub struct VideoIngress {
     queue: VecDeque<EncodedFrame>,
     max_size: usize,
     late_frame_drop_threshold: Duration,
-    waiting_keyframe: bool,
+    ingress_awaiting_bootstrap: bool,
     observed_width: u32,
     observed_height: u32,
     observed_codec: Option<VideoCodec>,
@@ -44,7 +44,7 @@ impl VideoIngress {
             queue: VecDeque::with_capacity(max_size),
             max_size,
             late_frame_drop_threshold,
-            waiting_keyframe: true,
+            ingress_awaiting_bootstrap: true,
             observed_width: 0,
             observed_height: 0,
             observed_codec: None,
@@ -57,7 +57,7 @@ impl VideoIngress {
     /// 主动清除队列，进入重配状态直到收到 Keyframe
     pub fn start_reconfigure(&mut self) {
         self.queue.clear();
-        self.waiting_keyframe = true;
+        self.ingress_awaiting_bootstrap = true;
     }
 
     pub fn drain_expired_for_decode(&mut self, now: Instant) -> usize {
@@ -165,7 +165,7 @@ impl VideoIngress {
             frame.budget.late_budget_ratio_per_mille(frame.value),
             Duration::from_millis(33),
         );
-        now > frame.target_playout_time + frame_late_threshold
+        now > frame.target_playout_instant + frame_late_threshold
     }
 
     fn can_exit_waiting_keyframe_with_recovery_continuation(
@@ -177,7 +177,7 @@ impl VideoIngress {
         // 只有 bootstrap_ready IDR 建立 committed 参数集后，后续 delta 才能走这条路。
         // 注意：原来还允许 `bootstrap_ready=false` 的 IDR 走此路径，现已删除——
         // 这类帧会在上游 `is_keyframe` 分支（步骤 7）处理，返回 WaitKeyframe，行为不变。
-        if !self.waiting_keyframe || config_mismatch || frame.config_changed {
+        if !self.ingress_awaiting_bootstrap || config_mismatch || frame.config_changed {
             return false;
         }
         if self.committed_codec.as_ref() != Some(&frame.codec)
@@ -207,7 +207,7 @@ impl FrameScheduler for VideoIngress {
             FrameRecoveryDisposition::UnrecoverableReferenceChain
         ) {
             context = FrameBudgetContext::for_ingress_admission(&frame, true, config_mismatch);
-        } else if self.waiting_keyframe {
+        } else if self.ingress_awaiting_bootstrap {
             context = FrameBudgetContext::for_ingress_admission(&frame, true, config_mismatch);
         } else if config_mismatch || frame.config_changed || frame.h264.parameter_sets_changed {
             context = FrameBudgetContext::for_ingress_admission(&frame, false, true);
@@ -220,18 +220,18 @@ impl FrameScheduler for VideoIngress {
         {
             // 参考链已污染时，直接前置放弃并等待后续 keyframe 重建。
             self.queue.clear();
-            self.waiting_keyframe = true;
+            self.ingress_awaiting_bootstrap = true;
             return IngressDecision::DropUnrecoverable;
         }
         if matches!(disposition, FrameRecoveryDisposition::UnrecoverableLate) {
             return IngressDecision::DropUnrecoverable;
         }
 
-        // 冷启动仍坚持 clean bootstrap；恢复期则允许在“已有 committed 参数集 +
-        // continuation 可承接”的前提下先退出硬等待，优先保活恢复链。
+        // 冷启动仍坚持 clean bootstrap；恢复期则允许在"已有 committed 参数集 +
+        // continuation 可承接"的前提下先退出硬等待，优先保活恢复链。
         if frame.h264.bootstrap_ready {
             self.commit_stream_params(&frame);
-            self.waiting_keyframe = false;
+            self.ingress_awaiting_bootstrap = false;
             frame.h264.commit();
 
             // 永远优先: 清空 backlog
@@ -242,10 +242,10 @@ impl FrameScheduler for VideoIngress {
 
         if self.can_exit_waiting_keyframe_with_recovery_continuation(&frame, config_mismatch) {
             self.commit_stream_params(&frame);
-            // continuation 放行即承认当前流参数可用，commit 后 waiting_keyframe 退出。
+            // continuation 放行即承认当前流参数可用，commit 后 ingress_awaiting_bootstrap 退出。
             // 冷启动下 committed_* 为空导致 config_mismatch=true，此分支不可能触发，
             // 因此 commit_stream_params 不会在没有 committed 基准的情况下被调用。
-            self.waiting_keyframe = false;
+            self.ingress_awaiting_bootstrap = false;
             frame.h264.commit();
             self.queue.clear();
             self.queue.push_back(frame);
@@ -255,7 +255,7 @@ impl FrameScheduler for VideoIngress {
         if frame.is_keyframe {
             self.observe_stream_params(&frame);
 
-            if self.waiting_keyframe {
+            if self.ingress_awaiting_bootstrap {
                 return IngressDecision::WaitKeyframe;
             }
 
@@ -296,7 +296,7 @@ impl FrameScheduler for VideoIngress {
             crate::xbx_log_warn!(
                 "[VideoIngress] frame too late, dropping. now={:?}, target={:?}",
                 now,
-                frame.target_playout_time
+                frame.target_playout_instant
             );
             return IngressDecision::DropLate;
         }
@@ -455,7 +455,7 @@ mod tests {
             frame_playout_deadline_at_ms: None,
             frame_recovery_disposition: FrameRecoveryDisposition::Repairing,
             frame_unrecoverable_reason: None,
-            target_playout_time: if target_offset_ms >= 0 {
+            target_playout_instant: if target_offset_ms >= 0 {
                 now + Duration::from_millis(target_offset_ms as u64)
             } else {
                 now - Duration::from_millis(target_offset_ms.unsigned_abs())
@@ -587,7 +587,7 @@ mod tests {
         assert_eq!(ingress.queue_depth(), 1);
         let queued = ingress.pop().expect("fresh frame should remain queued");
         assert_eq!(
-            queued.target_playout_time,
+            queued.target_playout_instant,
             much_later + Duration::from_millis(20)
         );
     }

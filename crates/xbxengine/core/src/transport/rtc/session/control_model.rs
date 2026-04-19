@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 //! Session 层控制面最小词汇（RFC：`Stage` / `FaultDomain` / `CostCeiling`）的映射表。
 //! 不引入新阈值；`coordinator` 内 `RecoverySignalDomain` 由本模块 `SessionFaultDomain` 映射得到。
 //!
@@ -67,38 +65,32 @@ impl SessionFaultDomain {
             Self::DisplaySupply => "DisplaySupply",
         }
     }
-
-    /// 与 [`SessionFaultDomain::as_rfc_str`] 互逆，供诊断层从权威字符串还原枚举。
-    pub(crate) fn from_rfc_str(s: &str) -> Option<Self> {
-        match s {
-            "Transport" => Some(Self::Transport),
-            "ReferenceChain" => Some(Self::ReferenceChain),
-            "DecodePipeline" => Some(Self::DecodePipeline),
-            "DisplaySupply" => Some(Self::DisplaySupply),
-            _ => None,
-        }
-    }
 }
 
 /// owner 侧恢复意图 → coordinator 同源 `VideoEscalationReason`（与 `session::policy` 构造 `RecoveryOwnerSignal` 一致）。
-pub(crate) fn owner_recovery_reason_to_escalation_reason(
+pub(crate) fn owner_recovery_reason_to_media_escalation_reason(
     reason: OwnerRecoveryReason,
-) -> VideoEscalationReason {
+) -> Option<VideoEscalationReason> {
     match reason {
         OwnerRecoveryReason::TransportAwaitRecoveryKeyframe => {
-            VideoEscalationReason::TransportAwaitRecoveryKeyframe
+            Some(VideoEscalationReason::TransportAwaitRecoveryKeyframe)
         }
-        OwnerRecoveryReason::DisplaySupplyCritical | OwnerRecoveryReason::HostPresentStalled => {
-            VideoEscalationReason::DisplaySupplyCritical
-        }
-        OwnerRecoveryReason::DisplaySupplyDegraded => VideoEscalationReason::AdapterThinStream,
+        // RFC: decode 后显示域信号不得直接驱动媒体恢复动作。
+        OwnerRecoveryReason::DisplaySupplyCritical
+        | OwnerRecoveryReason::DisplaySupplyDegraded
+        | OwnerRecoveryReason::HostPresentStalled => None,
     }
 }
 
 pub(crate) fn resolve_session_fault_domain_from_owner_recovery_reason(
     reason: OwnerRecoveryReason,
 ) -> SessionFaultDomain {
-    resolve_session_fault_domain(owner_recovery_reason_to_escalation_reason(reason))
+    match reason {
+        OwnerRecoveryReason::TransportAwaitRecoveryKeyframe => SessionFaultDomain::ReferenceChain,
+        OwnerRecoveryReason::DisplaySupplyCritical
+        | OwnerRecoveryReason::DisplaySupplyDegraded
+        | OwnerRecoveryReason::HostPresentStalled => SessionFaultDomain::DisplaySupply,
+    }
 }
 
 pub(crate) fn resolve_session_fault_domain(reason: VideoEscalationReason) -> SessionFaultDomain {
@@ -135,19 +127,6 @@ pub(crate) fn resolve_session_recovery_stage(
     }
 }
 
-/// 故障域在 RFC 动作梯子上的**理论上限**（DTO `recovery_rfc_fault_domain` + 派生 max tier），
-/// 不等于当前拍经 gate 后已选动作的层级；后者见 `session_cost_ceiling_for_recovery_action` 与 DTO `recovery_rfc_ceiling`。
-pub(crate) fn session_cost_ceiling_for_fault_domain(
-    domain: SessionFaultDomain,
-) -> SessionCostCeiling {
-    match domain {
-        SessionFaultDomain::Transport => SessionCostCeiling::TransportRecover,
-        SessionFaultDomain::ReferenceChain
-        | SessionFaultDomain::DecodePipeline
-        | SessionFaultDomain::DisplaySupply => SessionCostCeiling::LocalRecover,
-    }
-}
-
 pub(crate) fn session_cost_ceiling_for_recovery_action(
     action: RecoveryAction,
 ) -> SessionCostCeiling {
@@ -163,18 +142,6 @@ pub(crate) fn session_cost_ceiling_for_recovery_action(
         | RecoveryAction::CoalescedDecoderResetInFlight
         | RecoveryAction::StartupGraceSuppressed => SessionCostCeiling::Absorb,
     }
-}
-
-pub(crate) fn cost_ceiling_monotonic_allows(
-    from: SessionCostCeiling,
-    to: SessionCostCeiling,
-) -> bool {
-    let rank = |c: SessionCostCeiling| match c {
-        SessionCostCeiling::Absorb => 0,
-        SessionCostCeiling::LocalRecover => 1,
-        SessionCostCeiling::TransportRecover => 2,
-    };
-    rank(to) >= rank(from)
 }
 
 pub(crate) fn decode_or_display_fault_requires_transport_evidence(

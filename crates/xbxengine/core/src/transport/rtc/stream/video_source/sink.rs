@@ -7,7 +7,10 @@ use crate::transport::rtc::stream::packet_types::{
 use crate::transport::rtc::stream::sink::RtcMediaSink;
 use crate::{XbxEngineVideoFrameDropObservation, XbxEngineVideoRtxReinjectObservation};
 use std::collections::VecDeque;
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
+
+use super::FrameBoundaryTracker;
 
 const DEFAULT_PRIORITY_BACKLOG_LIMIT: usize = 32;
 const MAX_BEST_EFFORT_BACKLOG_LIMIT: usize = 8;
@@ -36,12 +39,14 @@ pub(crate) struct RtcVideoSourceSink {
     next_drop_observation_id: u64,
     flush_tick: Duration,
     next_flush_due_at: Option<Instant>,
+    frame_boundary: Arc<Mutex<FrameBoundaryTracker>>,
 }
 
 impl RtcVideoSourceSink {
-    pub(crate) fn new(
+    pub(super) fn new(
         tx: tokio::sync::mpsc::Sender<RtcVideoRtpPacket>,
         runtime_stats: RuntimeStatsSink,
+        frame_boundary: Arc<Mutex<FrameBoundaryTracker>>,
     ) -> Self {
         let priority_backlog_limit = tx.max_capacity().clamp(4, DEFAULT_PRIORITY_BACKLOG_LIMIT);
         let repair_backlog_limit = (priority_backlog_limit / 2)
@@ -62,6 +67,7 @@ impl RtcVideoSourceSink {
             next_drop_observation_id: 0,
             flush_tick: Duration::from_millis(SCHEDULED_FLUSH_TICK_MS),
             next_flush_due_at: None,
+            frame_boundary,
         }
     }
 
@@ -138,35 +144,82 @@ impl RtcVideoSourceSink {
         match class {
             IngressBackpressureClass::PriorityPrimary => {
                 if self.pending_priority_primary.len() >= self.priority_backlog_limit {
-                    self.record_local_backpressure_drop(
-                        &packet,
-                        "localBackpressurePriorityOverflow",
-                        "priorityQueueFull",
-                    );
-                    return;
+                    // 统一策略：基于 timestamp 判断新旧，优先保留当前帧
+                    if let Some(oldest) = self.pending_priority_primary.front() {
+                        if is_packet_newer(&packet, oldest) {
+                            // 新包的 timestamp 更新，丢弃最旧的包
+                            if let Some(evicted) = self.pending_priority_primary.pop_front() {
+                                self.record_local_backpressure_drop(
+                                    &evicted,
+                                    "localBackpressurePriorityOverflow",
+                                    "priorityQueueDropOldest",
+                                );
+                            }
+                        } else {
+                            // 新包的 timestamp 更旧，丢弃新包
+                            self.record_local_backpressure_drop(
+                                &packet,
+                                "localBackpressurePriorityOverflow",
+                                "priorityQueueDropStale",
+                            );
+                            return;
+                        }
+                    } else {
+                        // 队列为空但长度达到限制（不应该发生）
+                        self.record_local_backpressure_drop(
+                            &packet,
+                            "localBackpressurePriorityOverflow",
+                            "priorityQueueFull",
+                        );
+                        return;
+                    }
                 }
                 self.pending_priority_primary.push_back(packet);
             }
             IngressBackpressureClass::PriorityRepair => {
                 if self.pending_repair.len() >= self.repair_backlog_limit {
-                    if let Some(evicted) = self.pending_repair.pop_front() {
-                        self.record_local_backpressure_drop(
-                            &evicted,
-                            "localBackpressureRepairOverflow",
-                            "repairQueueDropOldest",
-                        );
+                    // 统一策略：基于 timestamp 判断新旧
+                    if let Some(oldest) = self.pending_repair.front() {
+                        if is_packet_newer(&packet, oldest) {
+                            if let Some(evicted) = self.pending_repair.pop_front() {
+                                self.record_local_backpressure_drop(
+                                    &evicted,
+                                    "localBackpressureRepairOverflow",
+                                    "repairQueueDropOldest",
+                                );
+                            }
+                        } else {
+                            self.record_local_backpressure_drop(
+                                &packet,
+                                "localBackpressureRepairOverflow",
+                                "repairQueueDropStale",
+                            );
+                            return;
+                        }
                     }
                 }
                 self.pending_repair.push_back(packet);
             }
             IngressBackpressureClass::BestEffort => {
                 if self.pending_best_effort.len() >= self.best_effort_backlog_limit {
-                    if let Some(replaced) = self.pending_best_effort.pop_front() {
-                        self.record_local_backpressure_drop(
-                            &replaced,
-                            "localBackpressureBestEffortOverflow",
-                            "bestEffortQueueDropOldest",
-                        );
+                    // 统一策略：基于 timestamp 判断新旧
+                    if let Some(oldest) = self.pending_best_effort.front() {
+                        if is_packet_newer(&packet, oldest) {
+                            if let Some(replaced) = self.pending_best_effort.pop_front() {
+                                self.record_local_backpressure_drop(
+                                    &replaced,
+                                    "localBackpressureBestEffortOverflow",
+                                    "bestEffortQueueDropOldest",
+                                );
+                            }
+                        } else {
+                            self.record_local_backpressure_drop(
+                                &packet,
+                                "localBackpressureBestEffortOverflow",
+                                "bestEffortQueueDropStale",
+                            );
+                            return;
+                        }
                     }
                 }
                 self.pending_best_effort.push_back(packet);
@@ -181,7 +234,7 @@ impl RtcVideoSourceSink {
         detail: &str,
     ) {
         self.next_drop_observation_id = self.next_drop_observation_id.saturating_add(1);
-        let class = classify_backpressure_class(packet).label();
+        let class = classify_backpressure_class(packet, &self.frame_boundary).label();
         self.runtime_stats
             .record_video_frame_drop(XbxEngineVideoFrameDropObservation {
                 observation_id: self.next_drop_observation_id,
@@ -279,10 +332,31 @@ impl RtcMediaSink for RtcVideoSourceSink {
             return;
         };
 
+        // 时效性过滤：检查包是否属于已完成的旧帧
+        let is_primary = matches!(normalized.ingress_kind, RtcVideoIngressKind::Primary);
+        let is_stale = if let Ok(tracker) = self.frame_boundary.lock() {
+            tracker.is_packet_stale(
+                normalized.meta.timestamp,
+                normalized.meta.sequence_number,
+                is_primary,
+            )
+        } else {
+            false
+        };
+
+        if is_stale {
+            self.record_local_backpressure_drop(
+                &normalized,
+                "localBackpressureStaleRtx",
+                "staleFrameRtxFiltered",
+            );
+            return;
+        }
+
         if self.try_send_packet(normalized.clone()) {
             return;
         }
-        let class = classify_backpressure_class(&normalized);
+        let class = classify_backpressure_class(&normalized, &self.frame_boundary);
         crate::xbx_log_warn!(
             "[xbxengine][rtc] video source sink backpressure class={} seq={} ts={}",
             class.label(),
@@ -433,17 +507,47 @@ fn repair_metadata(meta: &RtcRtpPacketMeta) -> RtcVideoRepairMetadata {
     }
 }
 
-fn classify_backpressure_class(packet: &RtcVideoRtpPacket) -> IngressBackpressureClass {
+fn classify_backpressure_class(
+    packet: &RtcVideoRtpPacket,
+    frame_boundary: &Arc<Mutex<FrameBoundaryTracker>>,
+) -> IngressBackpressureClass {
     match packet.ingress_kind {
         RtcVideoIngressKind::Primary => {
+            // 首包是高优先级 → PriorityPrimary
             if is_priority_primary_packet(packet) {
-                IngressBackpressureClass::PriorityPrimary
-            } else {
-                IngressBackpressureClass::BestEffort
+                return IngressBackpressureClass::PriorityPrimary;
             }
+
+            // 检查是否属于高优先级帧（继承优先级）
+            if let Ok(tracker) = frame_boundary.lock() {
+                if let Some(super::FramePriority::High) =
+                    tracker.get_frame_priority(packet.meta.timestamp)
+                {
+                    return IngressBackpressureClass::PriorityPrimary;
+                }
+            }
+
+            IngressBackpressureClass::BestEffort
         }
-        RtcVideoIngressKind::RepairPrimaryPassThrough { .. }
-        | RtcVideoIngressKind::RtxReinject { .. } => IngressBackpressureClass::PriorityRepair,
+        RtcVideoIngressKind::RepairPrimaryPassThrough { .. } => {
+            // repair 路由上的 primary payload 也需要检查 NAL type
+            // IDR/SPS/PPS 应进 PriorityPrimary，其余进 PriorityRepair
+            if is_priority_primary_packet(packet) {
+                return IngressBackpressureClass::PriorityPrimary;
+            }
+
+            // 检查是否属于高优先级帧（继承优先级）
+            if let Ok(tracker) = frame_boundary.lock() {
+                if let Some(super::FramePriority::High) =
+                    tracker.get_frame_priority(packet.meta.timestamp)
+                {
+                    return IngressBackpressureClass::PriorityPrimary;
+                }
+            }
+
+            IngressBackpressureClass::PriorityRepair
+        }
+        RtcVideoIngressKind::RtxReinject { .. } => IngressBackpressureClass::PriorityRepair,
     }
 }
 
@@ -457,11 +561,18 @@ impl IngressBackpressureClass {
     }
 }
 
+fn is_packet_newer(packet: &RtcVideoRtpPacket, oldest: &RtcVideoRtpPacket) -> bool {
+    // 使用 RTP timestamp 的回绕安全比较
+    // 如果 packet.timestamp - oldest.timestamp < 2^31，则认为 packet 更新
+    const UINT32SIZE_HALF: u32 = 0x8000_0000;
+    packet.meta.timestamp.wrapping_sub(oldest.meta.timestamp) < UINT32SIZE_HALF
+}
+
 fn is_priority_primary_packet(packet: &RtcVideoRtpPacket) -> bool {
     is_likely_h264_recovery_priority(&packet.payload)
 }
 
-fn is_likely_h264_recovery_priority(payload: &[u8]) -> bool {
+pub(super) fn is_likely_h264_recovery_priority(payload: &[u8]) -> bool {
     let Some(&first) = payload.first() else {
         return false;
     };

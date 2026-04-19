@@ -56,9 +56,9 @@ impl TransportFrameDeadlineTracker {
             .unwrap_or(now_ms);
         let raw_deadline_ms = (self.fallback_deadline_ms as f64)
             * (context.deadline_budget_ratio_per_mille(value) as f64 / 1_000.0);
-        let value_deadline_ms = match context.frame_importance() {
-            "keyframe" => raw_deadline_ms.max(self.estimated_frame_interval_ms),
-            "reference" => raw_deadline_ms
+        let value_deadline_ms = match context.recovery_value_tier() {
+            "anchor" => raw_deadline_ms.max(self.estimated_frame_interval_ms),
+            "supply" => raw_deadline_ms
                 .min((self.estimated_frame_interval_ms * 3.0).max(36.0))
                 .max(36.0),
             _ => raw_deadline_ms

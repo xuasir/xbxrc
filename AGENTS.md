@@ -155,3 +155,71 @@ Before closing a task, confirm all applicable items below:
 - `docs/rfcs/` has been updated for complex work when required
 - `docs/reports/` has been added for completed complex work when required
 - `docs/project-task.md` has been updated immediately
+
+
+<claude-mem-context>
+# Memory Context
+
+# [xbxrc] recent context, 2026-04-19 1:23am GMT+8
+
+Legend: 🎯session 🔴bugfix 🟣feature 🔄refactor ✅change 🔵discovery ⚖️decision
+Format: ID TIME TYPE TITLE
+Fetch details: get_observations([IDs]) | Search: mem-search skill
+
+Stats: 50 obs (26,099t read) | 2,675,376t work | 99% savings
+
+### Apr 18, 2026
+1450 11:25p 🔵 Video chain recovered once then stalled indefinitely waiting for keyframe
+1451 11:42p ⚖️ Prioritize diagnostic implementation over remote IDR frame handling
+1452 " 🔵 Brainstorming skill workflow requires design approval before implementation
+1453 11:43p 🔵 Video recovery diagnostic terms extensively used across codebase
+1454 11:46p 🔵 Recovery system links keyframe episodes with H.264 inspection observations
+1455 " 🔵 XbxEngineMediaRuntimeStats tracks video anchor clean state and keyframe episodes
+1456 11:47p 🔵 Runtime stats tracks decode pipeline candidate decisions and bootstrap gate rejections
+1457 " 🔵 Trace projection records keyframe episode state changes and lifecycle events
+1458 " 🔵 Protocol DTO exposes decode pipeline observations for external diagnostics
+1459 11:48p 🔵 Protocol DTOs provide complete diagnostic observation structures for frontend consumption
+1460 " 🟣 Added comprehensive diagnostic payload test for keyframe episode recovery tracking
+1461 " 🔵 Project uses xbxrc as main Tauri application package name
+1462 11:49p 🔴 Test failure reveals missing diagnostic payload enrichment implementation
+1463 " 🟣 Implemented diagnostic payload enrichment for keyframe episode trace events
+1464 11:50p 🟣 Diagnostic payload enrichment test passes successfully
+1465 " 🟣 All 43 trace projection tests pass including new diagnostic enrichment test
+1466 11:51p 🟣 Completed diagnostic payload enrichment implementation for keyframe episode recovery tracking
+### Apr 19, 2026
+1467 12:00a 🔵 Runtime trace analysis script executed on session logs
+1468 " 🔵 Video streaming recovery failures traced to non-IDR frame rejections
+1469 12:01a 🔵 Video timeline chain exhausted retry budget and entered broken state
+1470 " 🔵 Custom analyze-runtime-logs skill provides structured recovery effectiveness metrics
+1471 " 🔵 Host presentation remained stuck in priming phase with critical pressure for 4+ seconds
+1472 12:02a 🔵 Comprehensive recovery audit reveals 0% keyframe and NACK effectiveness with 1568 expired retries
+1473 " 🔵 Keyframe episode analysis confirms 1421 transport-suppressed requests with 1000 NonIdrVcl anchor rejections
+1474 " 🔵 Presentation layer experienced maximum frame age of 22.7 seconds with 84 frames exceeding 1 second latency
+1475 12:09a 🔵 Complete video streaming recovery failure chain traced to encoder IDR frame delivery failure
+1476 " ⚖️ Recovery state machine enhancement approach for NonIdrVcl escalation handling
+1477 " 🔵 Code path analysis reveals recovery state machine structure for NonIdrVcl handling
+1478 12:10a 🔵 Keyframe episode lifecycle and family coalescing gate mechanisms identified
+1479 " 🔵 Transport session bridge family coalescing mechanism and suppression flow identified
+1480 " 🔵 Session policy layer transport await handling and NonIdrVcl absorption logic identified
+1481 12:38a 🔵 User continued session in Chinese
+1482 " 🔵 Cargo test execution blocked on file locks
+1483 " 🔵 Multiple parallel cargo tests blocked by file lock contention
+1484 " 🔵 All four video recovery tests passed successfully
+1485 12:39a 🔵 Final test record_runtime_trace_observations_projects_keyframe_episode_recovery_diagnostics passed
+1486 " 🟣 Implemented transport await non-IDR grace window tracking system
+1487 12:44a 🔵 Runtime trace analysis reveals transport await recovery anchor behavior with output queue overflow
+1488 " 🔵 Runtime trace summary reveals severe recovery ineffectiveness with 0% keyframe and NACK success rates
+1489 12:45a 🔵 Grace window diagnostic fields not present in production runtime trace
+1490 12:55a ⚖️ RFC Design Approach - Simplicity Requirement
+1491 " 🔵 RFC Template Structure Located
+1492 12:56a 🔵 WebRTC Recovery System Architecture Analysis
+1493 " ✅ RFC Planning Progress Updated
+1494 " 🔵 Project Task Tracker and RFC History Examined
+1495 12:57a 🟣 Phase-Aware Recovery and Dynamic Repair Policy RFC Created
+1496 " 🟣 Phase-Aware Recovery RFC Completed and Registered
+1497 1:21a ⚖️ 日志补充与解码/宿主/渲染问题解决计划
+1498 1:22a 🔵 Brainstorming技能工作流程探索
+1499 " 🔵 视频渲染Pacer和Host调度机制代码结构
+
+Access 2675k tokens of past work via get_observations([IDs]) or mem-search skill.
+</claude-mem-context>

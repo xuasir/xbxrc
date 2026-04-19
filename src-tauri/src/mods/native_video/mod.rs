@@ -307,9 +307,27 @@ impl NativeVideoRegistry {
         if let Some(mut presenter) = self.presenters.remove(viewport_id) {
             presenter.detach();
         }
+        if let Some(viewport) = self.viewports.get_mut(viewport_id) {
+            reset_viewport_present_runtime_state(viewport);
+        }
         record_native_video_trace(
             "presenterResetForHostStall",
             serde_json::json!({ "viewportId": viewport_id }),
+        );
+    }
+
+    /// 显示域本地自愈：重置 presenter + effect pipeline + viewport 呈现态，下一帧 `present_frame` 会重建。
+    pub fn reset_presenter_for_display_recovery(&mut self, viewport_id: &str, reason: &str) {
+        if let Some(mut presenter) = self.presenters.remove(viewport_id) {
+            presenter.detach();
+        }
+        self.effect_pipelines.remove(viewport_id);
+        if let Some(viewport) = self.viewports.get_mut(viewport_id) {
+            reset_viewport_present_runtime_state(viewport);
+        }
+        record_native_video_trace(
+            "presenterResetForDisplayRecovery",
+            serde_json::json!({ "viewportId": viewport_id, "reason": reason }),
         );
     }
 
@@ -514,6 +532,28 @@ fn should_reattach_viewport(
     surface_changed: bool,
 ) -> bool {
     presenter_missing || presenter_kind_changed || surface_changed
+}
+
+fn reset_viewport_present_runtime_state(viewport: &mut NativeVideoViewportState) {
+    viewport.latest_frame_seq = None;
+    viewport.latest_frame_width = None;
+    viewport.latest_frame_height = None;
+    viewport.latest_renderer_frame_time_ms = None;
+    viewport.present_count_total = 0;
+    viewport.last_present_kind = None;
+    viewport.latest_host_present_time_ms = None;
+    viewport.host_present_fps = 0.0;
+    viewport.host_present_enqueue_count_total = 0;
+    viewport.host_present_drop_count_total = 0;
+    viewport.host_present_overwrite_count_total = 0;
+    viewport.host_no_pending_take_count_total = 0;
+    viewport.host_no_pending_streak = 0;
+    viewport.host_no_pending_max_streak = 0;
+    viewport.host_display_tick_epoch = 0;
+    viewport.host_present_epoch = 0;
+    viewport.host_cadence_phase = None;
+    viewport.host_display_interval_ms = None;
+    viewport.host_frame_age_budget_ms = None;
 }
 
 pub fn configure_main_window_video_host(app_handle: &AppHandle) {
@@ -1790,7 +1830,8 @@ pub(super) fn prepare_layer_sample_for_present(
         }
     };
     telemetry_state.record_display_tick(now_ms);
-    let frame_take_outcome = {
+    let telemetry_diag = telemetry_state.diagnostics_snapshot();
+    let (frame_take_outcome, frame_slot_diag) = {
         let Ok(mut frame_slot_state) = frame_slot.lock() else {
             record_native_video_timing_event_lazy(
                 runtime_trace,
@@ -1806,11 +1847,33 @@ pub(super) fn prepare_layer_sample_for_present(
             );
             return LayerSamplePrepareOutcome::Failed;
         };
-        frame_slot_state.take_ready_frame(now_ms, &mut telemetry_state)
+        let outcome = frame_slot_state.take_ready_frame(now_ms, &mut telemetry_state);
+        let diagnostics = frame_slot_state.diagnostics_snapshot();
+        (outcome, diagnostics)
     };
     let frame = match frame_take_outcome {
         ScheduledFrameTakeOutcome::Ready(frame) => frame,
         ScheduledFrameTakeOutcome::RetainedDisplayedFrame => {
+            record_native_video_timing_event_lazy(
+                runtime_trace,
+                "layer",
+                "frame_slot_take_retained",
+                viewport_id,
+                window_label,
+                || {
+                    json!({
+                        "displayedFrameSeq": frame_slot_diag.displayed_frame_seq,
+                        "pendingFrameSeqs": frame_slot_diag.pending_frame_seqs,
+                        "lastPresentedFrameSeq": frame_slot_diag.last_presented_frame_seq,
+                        "queueDepth": frame_slot_diag.queue_depth,
+                        "pendingQueueDepth": frame_slot_diag.pending_queue_depth,
+                        "hostDisplayTickEpoch": telemetry_diag.display_tick_epoch,
+                        "hostPresentEpoch": telemetry_diag.present_epoch,
+                        "hostCadencePhase": telemetry_diag.cadence_phase.as_str(),
+                        "noPendingStreak": telemetry_diag.no_pending_streak,
+                    })
+                },
+            );
             return LayerSamplePrepareOutcome::RetainedDisplayedFrame;
         }
         ScheduledFrameTakeOutcome::NoPendingFrame => {
@@ -1823,6 +1886,16 @@ pub(super) fn prepare_layer_sample_for_present(
                 || {
                     json!({
                         "reason": "noPendingFrame",
+                        "displayedFrameSeq": frame_slot_diag.displayed_frame_seq,
+                        "pendingFrameSeqs": frame_slot_diag.pending_frame_seqs,
+                        "lastPresentedFrameSeq": frame_slot_diag.last_presented_frame_seq,
+                        "queueDepth": frame_slot_diag.queue_depth,
+                        "pendingQueueDepth": frame_slot_diag.pending_queue_depth,
+                        "hostDisplayTickEpoch": telemetry_diag.display_tick_epoch,
+                        "hostPresentEpoch": telemetry_diag.present_epoch,
+                        "hostCadencePhase": telemetry_diag.cadence_phase.as_str(),
+                        "noPendingStreak": telemetry_diag.no_pending_streak,
+                        "noPendingTakeCountTotal": telemetry_diag.no_pending_take_count_total,
                     })
                 },
             );
@@ -1845,6 +1918,15 @@ pub(super) fn prepare_layer_sample_for_present(
                         "frameSeq": frame.frame_seq,
                         "frameAgeMs": frame_age_ms,
                         "frameAgeBudgetMs": frame_age_budget_ms,
+                        "displayedFrameSeq": frame_slot_diag.displayed_frame_seq,
+                        "pendingFrameSeqs": frame_slot_diag.pending_frame_seqs,
+                        "lastPresentedFrameSeq": frame_slot_diag.last_presented_frame_seq,
+                        "queueDepth": frame_slot_diag.queue_depth,
+                        "pendingQueueDepth": frame_slot_diag.pending_queue_depth,
+                        "hostDisplayTickEpoch": telemetry_diag.display_tick_epoch,
+                        "hostPresentEpoch": telemetry_diag.present_epoch,
+                        "hostCadencePhase": telemetry_diag.cadence_phase.as_str(),
+                        "noPendingStreak": telemetry_diag.no_pending_streak,
                     })
                 },
             );
@@ -1961,6 +2043,15 @@ pub(super) fn prepare_layer_sample_for_present(
                 "frameAgeMs": frame_age_ms,
                 "frameAgeBudgetMs": frame_age_budget_ms,
                 "usedCachedFormatDescription": used_cached_format_description,
+                "displayedFrameSeq": frame_slot_diag.displayed_frame_seq,
+                "pendingFrameSeqs": frame_slot_diag.pending_frame_seqs,
+                "lastPresentedFrameSeq": frame_slot_diag.last_presented_frame_seq,
+                "queueDepth": frame_slot_diag.queue_depth,
+                "pendingQueueDepth": frame_slot_diag.pending_queue_depth,
+                "hostDisplayTickEpoch": telemetry_diag.display_tick_epoch,
+                "hostPresentEpoch": telemetry_diag.present_epoch,
+                "hostCadencePhase": telemetry_diag.cadence_phase.as_str(),
+                "noPendingStreak": telemetry_diag.no_pending_streak,
             })
         },
     );

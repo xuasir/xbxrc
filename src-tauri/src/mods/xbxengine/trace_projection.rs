@@ -371,16 +371,28 @@ fn latest_frame_budget_snapshot(stats: &XbxEngineStatsDto) -> Option<serde_json:
     }
 
     latest.map(|(source, observed_at_ms, budget)| {
+        let value_tier_v2 =
+            derive_dynamic_value_tier_v2(budget.chain_value.as_str(), budget.recovery_stage.as_str());
         json!({
             "source": source,
             "observedAtMs": observed_at_ms,
             "recoveryStage": budget.recovery_stage,
             "chainValue": budget.chain_value,
+            "valueTierV2": value_tier_v2,
             "rttSlack": budget.rtt_slack,
             "failureCost": budget.failure_cost,
             "windowSource": budget.window_source,
         })
     })
+}
+
+fn derive_dynamic_value_tier_v2(chain_value: &str, recovery_stage: &str) -> &'static str {
+    match (chain_value, recovery_stage) {
+        ("anchor", _) => "anchor",
+        ("supply", "awaiting-keyframe" | "repairing") => "continuation",
+        ("supply", _) => "supply",
+        _ => "disposable",
+    }
 }
 
 pub(super) fn record_runtime_trace_observations(
@@ -863,6 +875,8 @@ pub(super) fn record_runtime_trace_observations(
                     "actionSelected": ledger.action_selected,
                     "frameValue": ledger.frame_value,
                     "gapSeverity": ledger.gap_severity,
+                    "triggerObservationLabel": ledger.trigger_observation_label,
+                    "triggerObservationSummary": ledger.trigger_observation_summary,
                     "recoveryEpisodeStage": ledger.recovery_episode_stage,
                     "recoveryEpisodeProgressAtMs": ledger.recovery_episode_progress_at_ms,
                     "coalescingMode": ledger.coalescing_mode,
@@ -1099,6 +1113,7 @@ pub(super) fn record_runtime_trace_observations(
             stats.latest_keyframe_request_episode.as_ref(),
             stats.latest_h264_inspection_observation.as_ref(),
             latest_rtcp_send_failure.as_ref(),
+            stats,
         );
         runtime_trace.record_state(
             "xbxengine",
@@ -1566,6 +1581,7 @@ fn keyframe_request_episode_payload(
     episode: Option<&xbxengine_protocol::XbxEngineKeyframeRequestEpisodeObservationDto>,
     h264_inspection: Option<&xbxengine_protocol::XbxEngineH264InspectionObservationDto>,
     latest_rtcp_send_failure: Option<&(f64, String)>,
+    stats: &XbxEngineStatsDto,
 ) -> serde_json::Value {
     match episode {
         Some(episode) => json!({
@@ -1597,9 +1613,82 @@ fn keyframe_request_episode_payload(
             "linkedH264BootstrapRejectReason": h264_inspection.and_then(|inspection| inspection.bootstrap_reject_reason.clone()),
             "linkedH264AdmissionAccepted": h264_inspection.map(|inspection| inspection.admission_accepted),
             "linkedH264ObservedAtMs": h264_inspection.map(|inspection| inspection.observed_at_ms),
+            "diagnosticRecoveryEpoch": diagnostic_recovery_epoch(stats),
+            "diagnosticTimelineSourceEvent": stats.latest_video_timeline_observation.as_ref().map(|timeline| timeline.source_event.clone()),
+            "diagnosticTimelineChainState": stats.latest_video_timeline_observation.as_ref().map(|timeline| timeline.chain.state.clone()),
+            "diagnosticTimelineChainReason": stats.latest_video_timeline_observation.as_ref().and_then(|timeline| timeline.chain.reason.clone()),
+            "diagnosticAnchorState": stats.latest_anchor_candidate_ledger.as_ref().map(|anchor| anchor.state.clone()),
+            "diagnosticAnchorFailureReason": stats.latest_anchor_candidate_ledger.as_ref().and_then(|anchor| anchor.failure_reason.clone()),
+            "diagnosticAnchorSourceEvent": stats.latest_anchor_candidate_ledger.as_ref().map(|anchor| anchor.source_event.clone()),
+            "diagnosticDecodeCandidateAction": stats.latest_decode_candidate_decision.as_ref().map(|candidate| candidate.action.clone()),
+            "diagnosticDecodeCandidateDetail": stats.latest_decode_candidate_decision.as_ref().map(|candidate| candidate.detail.clone()),
+            "diagnosticDecodeOutputDetail": stats.latest_decode_output_path_observation.as_ref().map(|output| output.detail.clone()),
+            "diagnosticFrameDropDetail": stats.latest_video_frame_drop.as_ref().and_then(|drop| drop.detail.clone()),
+            "diagnosticFrameDropQueueDepth": stats.latest_video_frame_drop.as_ref().map(|drop| drop.queue_depth),
+            "diagnosticPendingReason": diagnostic_pending_reason(stats, h264_inspection),
         }),
         None => json!(null),
     }
+}
+
+fn diagnostic_recovery_epoch(stats: &XbxEngineStatsDto) -> Option<u64> {
+    stats
+        .latest_recovery_decision_ledger
+        .as_ref()
+        .and_then(|ledger| {
+            ledger
+                .budget_after
+                .as_ref()
+                .or(ledger.budget_before.as_ref())
+        })
+        .map(|budget| budget.recovery_epoch)
+}
+
+fn diagnostic_pending_reason(
+    stats: &XbxEngineStatsDto,
+    h264_inspection: Option<&xbxengine_protocol::XbxEngineH264InspectionObservationDto>,
+) -> Option<String> {
+    let anchor_rejected = stats
+        .latest_anchor_candidate_ledger
+        .as_ref()
+        .is_some_and(|anchor| matches!(anchor.state.as_str(), "rejected" | "awaiting-recovery"));
+    let h264_reason =
+        h264_inspection.and_then(|inspection| inspection.bootstrap_reject_reason.as_deref());
+    if anchor_rejected {
+        if let Some(reason) = h264_reason {
+            return Some(format!("anchorRejected:h264Reject:{reason}"));
+        }
+        if let Some(reason) = stats
+            .latest_anchor_candidate_ledger
+            .as_ref()
+            .and_then(|anchor| anchor.failure_reason.as_deref())
+        {
+            return Some(format!("anchorRejected:{reason}"));
+        }
+        return Some("anchorRejected".to_string());
+    }
+    if let Some(reason) = h264_reason {
+        return Some(format!("h264Reject:{reason}"));
+    }
+    if let Some(candidate) = stats.latest_decode_candidate_decision.as_ref() {
+        return Some(format!(
+            "decodeCandidate:{}:{}",
+            candidate.action, candidate.detail
+        ));
+    }
+    if let Some(frame_drop) = stats.latest_video_frame_drop.as_ref() {
+        if let Some(detail) = frame_drop.detail.as_deref() {
+            return Some(format!("frameDrop:{detail}"));
+        }
+        return Some(format!("frameDrop:{}", frame_drop.reason));
+    }
+    if let Some(timeline) = stats.latest_video_timeline_observation.as_ref() {
+        if let Some(reason) = timeline.chain.reason.as_deref() {
+            return Some(format!("timeline:{reason}"));
+        }
+        return Some(format!("timeline:{}", timeline.source_event));
+    }
+    None
 }
 
 fn find_keyframe_episode_dto(
@@ -1669,7 +1758,7 @@ fn select_keyframe_episode_dto_for_h264(
     let mut best_delta = f64::INFINITY;
     for episode in candidates.iter().filter(|episode| {
         keyframe_episode_dto_observability_active(episode)
-            && episode.request_reason.as_deref() == Some("transportAwaitRecoveryKeyframe")
+            && episode.request_reason.as_deref() == Some("transportAwaitRecoveryAnchor")
     }) {
         let anchor_ms = episode.sent_at_ms.unwrap_or(episode.requested_at_ms);
         let delta = (inspection.observed_at_ms - anchor_ms).abs();
@@ -1784,7 +1873,7 @@ fn keyframe_episode_response_context(
     let Some(keyframe_episode) = keyframe_episode else {
         return false;
     };
-    if keyframe_episode.request_reason.as_deref() != Some("transportAwaitRecoveryKeyframe") {
+    if keyframe_episode.request_reason.as_deref() != Some("transportAwaitRecoveryAnchor") {
         return false;
     }
     if !matches!(
@@ -1840,7 +1929,7 @@ fn is_timeout_source_event(source_event: &str) -> bool {
 fn is_chain_transition_source_event(source_event: &str) -> bool {
     matches!(
         source_event,
-        "chain-broken" | "chain-recovery-keyframe-requested" | "chain-clean-keyframe-submitted"
+        "chain-broken" | "chain-recovery-anchor-requested" | "chain-clean-anchor-submitted"
     )
 }
 

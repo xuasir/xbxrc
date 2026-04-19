@@ -27,6 +27,10 @@ use crate::mods::xbxengine::XbxEngineProvider;
 
 const XBXENGINE_TICK_INTERVAL_MS: u64 = 16;
 
+fn runtime_tick_missed_behavior() -> tokio::time::MissedTickBehavior {
+    tokio::time::MissedTickBehavior::Delay
+}
+
 pub struct XbxEngineService {
     runtime_state: Arc<XbxEngineRuntimeState>,
     last_runtime_event: Arc<StdMutex<Option<Value>>>,
@@ -114,7 +118,7 @@ impl XbxEngineProvider for XbxEngineService {
         tauri::async_runtime::spawn(async move {
             let mut interval =
                 tokio::time::interval(Duration::from_millis(XBXENGINE_TICK_INTERVAL_MS));
-            interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+            interval.set_missed_tick_behavior(runtime_tick_missed_behavior());
             while !is_quitting.load(Ordering::Relaxed) {
                 interval.tick().await;
                 let state = runtime_state.clone();
@@ -135,6 +139,17 @@ impl XbxEngineProvider for XbxEngineService {
     async fn shutdown(&self) {
         let _ = self.dispatch_control("StopRuntime", None).await;
         self.runtime_state.shutdown();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn runtime_tick_does_not_skip_missed_intervals() {
+        assert_eq!(
+            super::runtime_tick_missed_behavior(),
+            tokio::time::MissedTickBehavior::Delay
+        );
     }
 }
 

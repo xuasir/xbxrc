@@ -28,7 +28,7 @@ fn stale_adapter_idle_timeout_does_not_replay_during_steady_progress() {
         stats.video_renderer_stalled = Some(false);
         stats.video_anchor_clean_epoch = Some(7);
         stats.video_anchor_clean_observed_at_ms = Some(994.0);
-        stats.video_anchor_clean_source_event = Some("chain-clean-keyframe-submitted".to_string());
+        stats.video_anchor_clean_source_event = Some("chain-clean-anchor-submitted".to_string());
         stats.latest_video_track_status = Some(crate::XbxEngineVideoTrackStatus {
             state: "remoteTrackAttached".to_string(),
             video_width: Some(1920),
@@ -136,7 +136,7 @@ fn stale_transport_await_does_not_replay_during_steady_progress() {
         stats.video_renderer_stalled = Some(false);
         stats.video_anchor_clean_epoch = Some(8);
         stats.video_anchor_clean_observed_at_ms = Some(998.0);
-        stats.video_anchor_clean_source_event = Some("chain-clean-keyframe-submitted".to_string());
+        stats.video_anchor_clean_source_event = Some("chain-clean-anchor-submitted".to_string());
         stats.latest_video_track_status = Some(crate::XbxEngineVideoTrackStatus {
             state: "remoteTrackAttached".to_string(),
             video_width: Some(1920),
@@ -211,7 +211,7 @@ fn stale_transport_await_does_not_replay_during_steady_progress() {
             ..MediaProjection::default()
         },
         RecoveryProjection {
-            latest_diagnosis_label: Some("transportAwaitRecoveryKeyframe".to_string()),
+            latest_diagnosis_label: Some("transportAwaitRecoveryAnchor".to_string()),
             pending_action: false,
             successful_action_count: 0,
             failed_action_count: 0,
@@ -248,7 +248,7 @@ fn stale_transport_await_replay_is_absorbed_after_terminal_deferred_invalid_resp
         stats.video_renderer_stalled = Some(false);
         stats.video_anchor_clean_epoch = Some(18);
         stats.video_anchor_clean_observed_at_ms = Some(998.0);
-        stats.video_anchor_clean_source_event = Some("chain-clean-keyframe-submitted".to_string());
+        stats.video_anchor_clean_source_event = Some("chain-clean-anchor-submitted".to_string());
         stats.latest_video_track_status = Some(crate::XbxEngineVideoTrackStatus {
             state: "remoteTrackAttached".to_string(),
             video_width: Some(1920),
@@ -262,12 +262,12 @@ fn stale_transport_await_replay_is_absorbed_after_terminal_deferred_invalid_resp
         });
         stats.latest_video_timeline_observation = Some(crate::XbxEngineVideoTimelineObservation {
             observation_id: 2,
-            source_event: "frame-await-recovery-keyframe".to_string(),
+            source_event: "frame-await-recovery-anchor".to_string(),
             gap: None,
             frame: None,
             chain: crate::XbxEngineVideoTimelineChainSnapshot {
                 state: "recovering".to_string(),
-                reason: Some("transportAwaitRecoveryKeyframe".to_string()),
+                reason: Some("transportAwaitRecoveryAnchor".to_string()),
                 chain_break_evidence: None,
 
                 observed_at_ms: 1_000.0,
@@ -277,7 +277,7 @@ fn stale_transport_await_replay_is_absorbed_after_terminal_deferred_invalid_resp
         stats.latest_keyframe_request_episode =
             Some(crate::XbxEngineKeyframeRequestEpisodeObservation {
                 episode_id: 88,
-                request_reason: Some("transportAwaitRecoveryKeyframe".to_string()),
+                request_reason: Some("transportAwaitRecoveryAnchor".to_string()),
                 request_kind: None,
                 status: "deferred".to_string(),
                 status_detail: None,
@@ -368,7 +368,7 @@ fn stale_transport_await_replay_is_absorbed_after_terminal_deferred_invalid_resp
             ..MediaProjection::default()
         },
         RecoveryProjection {
-            latest_diagnosis_label: Some("transportAwaitRecoveryKeyframe".to_string()),
+            latest_diagnosis_label: Some("transportAwaitRecoveryAnchor".to_string()),
             pending_action: false,
             successful_action_count: 0,
             failed_action_count: 0,

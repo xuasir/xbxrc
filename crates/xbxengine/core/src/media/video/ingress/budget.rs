@@ -23,6 +23,26 @@ pub(crate) enum FrameBudgetLinkValue {
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) enum DynamicRepairValueTier {
+    Anchor,
+    Continuation,
+    Supply,
+    #[default]
+    Disposable,
+}
+
+impl DynamicRepairValueTier {
+    pub(crate) fn as_str(self) -> &'static str {
+        match self {
+            Self::Anchor => "anchor",
+            Self::Continuation => "continuation",
+            Self::Supply => "supply",
+            Self::Disposable => "disposable",
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub(crate) enum FrameBudgetRttSlack {
     #[default]
     Unknown,
@@ -76,7 +96,7 @@ impl FrameBudgetContext {
         frame_unrecoverable_reason: Option<&str>,
     ) -> Self {
         let failure_cost = match frame_unrecoverable_reason {
-            Some("referenceChainUnrecoverable" | "awaitingRecoveryKeyframe") => {
+            Some("referenceChainUnrecoverable" | "awaitingRecoveryAnchor") => {
                 FrameBudgetFailureCost::ChainBroken
             }
             Some(
@@ -113,7 +133,7 @@ impl FrameBudgetContext {
     ) -> Self {
         let failure_cost = if matches!(
             frame.frame_unrecoverable_reason.as_deref(),
-            Some("referenceChainUnrecoverable" | "awaitingRecoveryKeyframe")
+            Some("referenceChainUnrecoverable" | "awaitingRecoveryAnchor")
         ) {
             FrameBudgetFailureCost::ChainBroken
         } else if waiting_keyframe {
@@ -223,11 +243,35 @@ impl FrameBudgetContext {
         score.max(0) as u32
     }
 
-    pub(crate) fn frame_importance(&self) -> &'static str {
+    /// 返回 link_value 对应的恢复价值分档标签，用于日志和观测。
+    /// 注意：这是恢复价值分档，不是 H.264 媒体类型（媒体类型由 NAL inspection 决定）。
+    ///
+    /// 返回值：
+    /// - "anchor": 锚点帧，恢复链路的关键节点
+    /// - "supply": 供给帧，提供参考但非关键
+    /// - "disposable": 可丢弃帧，丢失不影响恢复
+    pub(crate) fn recovery_value_tier(&self) -> &'static str {
         match self.link_value {
-            FrameBudgetLinkValue::Anchor => "keyframe",
-            FrameBudgetLinkValue::Supply => "reference",
-            FrameBudgetLinkValue::Disposable => "delta",
+            FrameBudgetLinkValue::Anchor => "anchor",
+            FrameBudgetLinkValue::Supply => "supply",
+            FrameBudgetLinkValue::Disposable => "disposable",
+        }
+    }
+
+    pub(crate) fn dynamic_repair_value_tier(&self) -> DynamicRepairValueTier {
+        match self.link_value {
+            FrameBudgetLinkValue::Anchor => DynamicRepairValueTier::Anchor,
+            FrameBudgetLinkValue::Supply => {
+                if matches!(
+                    self.recovery_phase,
+                    FrameBudgetRecoveryPhase::AwaitingKeyframe | FrameBudgetRecoveryPhase::Repairing
+                ) {
+                    DynamicRepairValueTier::Continuation
+                } else {
+                    DynamicRepairValueTier::Supply
+                }
+            }
+            FrameBudgetLinkValue::Disposable => DynamicRepairValueTier::Disposable,
         }
     }
 
@@ -249,30 +293,12 @@ impl FrameBudgetContext {
             .min(4)
     }
 
-    pub(crate) fn retry_budget(&self, value: FrameValue, default_max_retry_count: u8) -> u8 {
+    pub(crate) fn retry_budget(&self, _value: FrameValue, _default_max_retry_count: u8) -> u8 {
         match (self.link_value, self.failure_cost, self.rtt_slack) {
             (_, FrameBudgetFailureCost::ChainBroken, FrameBudgetRttSlack::Exhausted) => 0,
-            // Anchor 洞 previously capped at 1 extra poll retry → initial NACK + 1 retry 就 budget 耗尽，
-            // 云/高 RTT 下易过早 expiredRetryBudget，迫使时间线 broken 与 decoder reset 风暴。
-            (FrameBudgetLinkValue::Anchor, _, _) => default_max_retry_count.min(3),
-            (FrameBudgetLinkValue::Supply, FrameBudgetFailureCost::ChainBroken, _) => {
-                default_max_retry_count.min(2)
-            }
-            (FrameBudgetLinkValue::Supply, _, FrameBudgetRttSlack::Exhausted) => 0,
-            (FrameBudgetLinkValue::Supply, _, _) if value.refresh_boost => {
-                default_max_retry_count.min(2)
-            }
-            (
-                FrameBudgetLinkValue::Supply,
-                _,
-                FrameBudgetRttSlack::Unknown | FrameBudgetRttSlack::Ample,
-            ) if matches!(
-                self.recovery_phase,
-                FrameBudgetRecoveryPhase::Repairing | FrameBudgetRecoveryPhase::AwaitingKeyframe
-            ) || matches!(self.window_source, FrameBudgetWindowSource::Recovery) =>
-            {
-                default_max_retry_count.min(1)
-            }
+            // NACK 统一采用单发策略。
+            // deadline/maxAge 负责控制“还等不等它回来”，poll 不再触发二次发送。
+            (FrameBudgetLinkValue::Anchor, _, _) => 0,
             (FrameBudgetLinkValue::Supply, _, _) => 0,
             (FrameBudgetLinkValue::Disposable, _, _) => 0,
         }
@@ -320,8 +346,9 @@ pub(crate) fn materialize_ingress_frame_with_context(
     context: FrameBudgetContext,
 ) -> EncodedFrame {
     let playout_delay = resolve_playout_delay(frame.value, min_delay, max_delay, context);
-    let target_playout_time = frame.playout_base_at.unwrap_or(frame.assembled_at) + playout_delay;
-    frame.into_encoded_frame(target_playout_time)
+    let target_playout_instant =
+        frame.first_packet_arrived_at.unwrap_or(frame.assembled_at) + playout_delay;
+    frame.into_encoded_frame(target_playout_instant)
 }
 
 fn resolve_playout_delay(
@@ -534,7 +561,7 @@ mod tests {
                 frame_recovery_disposition: FrameRecoveryDisposition::Repairing,
                 frame_unrecoverable_reason: None,
                 assembled_at,
-                playout_base_at: None,
+                first_packet_arrived_at: None,
                 h264: make_h264_inspection(true),
                 payload: Bytes::from_static(b"k"),
             },
@@ -559,7 +586,7 @@ mod tests {
                 frame_recovery_disposition: FrameRecoveryDisposition::Repairing,
                 frame_unrecoverable_reason: None,
                 assembled_at,
-                playout_base_at: None,
+                first_packet_arrived_at: None,
                 h264: make_h264_inspection(false),
                 payload: Bytes::from_static(b"d"),
             },
@@ -567,7 +594,7 @@ mod tests {
             Duration::from_millis(30),
         );
 
-        assert!(delta.target_playout_time < keyframe.target_playout_time);
+        assert!(delta.target_playout_instant < keyframe.target_playout_instant);
     }
 
     #[test]
@@ -592,7 +619,7 @@ mod tests {
     }
 
     #[test]
-    fn recovery_window_reference_gets_two_retry_budget() {
+    fn recovery_window_reference_uses_single_shot_budget() {
         let context = FrameBudgetContext::for_transport(
             FrameValue::new(false, true, 48 * 1024),
             false,
@@ -607,12 +634,12 @@ mod tests {
         assert_eq!(context.failure_cost, FrameBudgetFailureCost::LocalDrop);
         assert_eq!(
             context.retry_budget(FrameValue::new(false, true, 48 * 1024), 3),
-            2
+            0
         );
     }
 
     #[test]
-    fn refresh_boost_supply_gets_two_retry_budget() {
+    fn refresh_boost_supply_still_uses_single_shot_budget() {
         let context = FrameBudgetContext::for_transport(
             FrameValue::new(false, true, 48 * 1024),
             false,
@@ -627,14 +654,14 @@ mod tests {
         assert_eq!(context.failure_cost, FrameBudgetFailureCost::LocalDrop);
         assert_eq!(
             context.retry_budget(FrameValue::new(false, true, 48 * 1024), 3),
-            2
+            0
         );
     }
 
     #[test]
-    fn materialization_prefers_playout_base_at_when_present() {
+    fn materialization_prefers_first_packet_arrived_at_when_present() {
         let assembled_at = Instant::now();
-        let playout_base_at = assembled_at - Duration::from_millis(15);
+        let first_packet_arrived_at = assembled_at - Duration::from_millis(15);
         let encoded = materialize_ingress_frame(
             AssembledVideoFrame {
                 codec: VideoCodec::H264,
@@ -657,14 +684,14 @@ mod tests {
                 frame_recovery_disposition: FrameRecoveryDisposition::Repairing,
                 frame_unrecoverable_reason: None,
                 assembled_at,
-                playout_base_at: Some(playout_base_at),
+                first_packet_arrived_at: Some(first_packet_arrived_at),
                 h264: make_h264_inspection(false),
                 payload: Bytes::from_static(b"d"),
             },
             Duration::from_millis(8),
             Duration::from_millis(30),
         );
-        assert!(encoded.target_playout_time < assembled_at + Duration::from_millis(25));
+        assert!(encoded.target_playout_instant < assembled_at + Duration::from_millis(25));
     }
 
     #[test]

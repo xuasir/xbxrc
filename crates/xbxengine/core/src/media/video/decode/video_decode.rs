@@ -387,7 +387,7 @@ impl XbxVideoDecodeState {
         }
         self.input_frames_since_last_decoded =
             self.input_frames_since_last_decoded.saturating_add(1);
-        let target_time = encoded_frame.target_playout_time;
+        let target_time = encoded_frame.target_playout_instant;
         let rtp_timestamp = encoded_frame.rtp_timestamp;
         let is_keyframe = encoded_frame.is_keyframe;
         let budget = encoded_frame.budget;
@@ -853,6 +853,13 @@ impl XbxVideoDecodeState {
         self.decoded_frame_queue.len()
     }
 
+    /// 根据host cadence phase动态调整解码输出队列容量
+    ///
+    /// 策略：
+    /// - Starved: 1帧（激进收紧，host消费过快）
+    /// - Priming: 2帧（适度收紧，正在建立节奏）
+    /// - Steady: 3帧（正常容量）
+    /// - Idle/Unknown: 4帧（放宽，允许更多缓冲）
     #[cfg(test)]
     pub(crate) fn decoded_frame_queue_is_full(&self) -> bool {
         self.decoded_frame_queue.len() >= MAX_DECODED_FRAME_QUEUE_LEN
@@ -913,9 +920,9 @@ impl XbxVideoDecodeState {
     }
 
     fn decoded_frame_stale_slack(frame: &DecodedFrame) -> Duration {
-        let millis = match frame.budget.frame_importance() {
-            "keyframe" => DECODE_QUEUE_STALE_SLACK_ANCHOR_MS,
-            "reference" => DECODE_QUEUE_STALE_SLACK_SUPPLY_MS,
+        let millis = match frame.budget.recovery_value_tier() {
+            "anchor" => DECODE_QUEUE_STALE_SLACK_ANCHOR_MS,
+            "supply" => DECODE_QUEUE_STALE_SLACK_SUPPLY_MS,
             _ => DECODE_QUEUE_STALE_SLACK_DISPOSABLE_MS,
         };
         Duration::from_millis(millis)

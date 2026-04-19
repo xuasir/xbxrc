@@ -15,7 +15,7 @@ pub(crate) fn map_label_to_escalation_reason(label: &str) -> Option<VideoEscalat
         "ingressFrameAbandoned" => Some(VideoEscalationReason::WaitKeyframe),
         "waitKeyframeEntered" => Some(VideoEscalationReason::WaitKeyframe),
         "frameAbandoned" => Some(VideoEscalationReason::WaitKeyframe),
-        "transportAwaitRecoveryKeyframe" => {
+        "transportAwaitRecoveryAnchor" => {
             Some(VideoEscalationReason::TransportAwaitRecoveryKeyframe)
         }
         "bootstrapMissingSps" | "bootstrapMissingPps" | "inspectionRejectInvalidSliceHeader" => {

@@ -50,6 +50,11 @@ impl RtcControlChannelService {
         self.refresh_pending_replay_since();
     }
 
+    pub(crate) fn clear_pending_decoder_reset_request(&mut self) {
+        self.state.pending_decoder_reset = false;
+        self.refresh_pending_replay_since();
+    }
+
     pub(crate) fn open_message_channel(&mut self) {
         self.state.message_channel_open = true;
         self.state.message_handshake_pending = true;
@@ -126,7 +131,6 @@ impl RtcControlChannelService {
         ))
     }
 
-    #[allow(dead_code)]
     pub(crate) fn request_decoder_reset(&mut self) -> Result<(), XbxEngineRuntimeError> {
         if self.is_control_ready() {
             self.state.pending_decoder_reset = false;
@@ -144,16 +148,6 @@ impl RtcControlChannelService {
         self.state.control_channel_open
             && self.state.message_handshake_acked
             && self.state.control_bootstrapped_after_handshake
-    }
-
-    #[allow(dead_code)]
-    pub(crate) fn is_control_actionable(&self) -> bool {
-        if self.is_control_ready() {
-            return true;
-        }
-        !self.state.message_handshake_acked
-            && self.state.control_started
-            && self.state.control_channel_open
     }
 
     pub(crate) fn has_pending_replay_actions(&self) -> bool {
@@ -184,7 +178,7 @@ impl RtcControlChannelService {
         Some(actions)
     }
 
-    #[allow(dead_code)]
+    #[cfg(test)]
     pub(crate) fn take_replay_actions_if_ready(&mut self) -> Option<RtcControlReplayActions> {
         let actions = self.peek_replay_actions_if_ready()?;
         // 控制面可执行后，待回放请求只消费一次，避免重复下发。
@@ -238,11 +232,11 @@ mod tests {
 
         service.open_message_channel();
         service.open_control_channel();
-        assert!(service.take_replay_actions_if_ready().is_none());
+        assert!(service.peek_replay_actions_if_ready().is_none());
 
         service.ack_handshake();
         service.mark_control_bootstrapped();
-        let actions = service.take_replay_actions_if_ready();
+        let actions = service.peek_replay_actions_if_ready();
         assert_eq!(
             actions,
             Some(RtcControlReplayActions {
@@ -250,7 +244,7 @@ mod tests {
                 request_decoder_reset: true,
             })
         );
-        assert!(!service.has_pending_replay_actions());
+        assert!(service.has_pending_replay_actions());
     }
 
     #[test]
@@ -270,7 +264,7 @@ mod tests {
                 request_decoder_reset: false,
             })
         );
-        assert_eq!(service.take_replay_actions_if_ready(), None);
+        assert_eq!(service.peek_replay_actions_if_ready(), None);
     }
 
     #[test]
@@ -284,7 +278,7 @@ mod tests {
         assert!(service.request_video_keyframe().is_ok());
         assert!(service.request_decoder_reset().is_ok());
         assert!(!service.has_pending_replay_actions());
-        assert_eq!(service.take_replay_actions_if_ready(), None);
+        assert_eq!(service.peek_replay_actions_if_ready(), None);
     }
 
     #[test]
@@ -306,7 +300,6 @@ mod tests {
         let mut service = RtcControlChannelService::default();
         service.open_control_channel();
         service.mark_control_bootstrapped();
-        assert!(service.is_control_actionable());
         assert!(!service.is_control_ready());
         assert!(service.request_video_keyframe().is_err());
         assert!(service.request_decoder_reset().is_err());
