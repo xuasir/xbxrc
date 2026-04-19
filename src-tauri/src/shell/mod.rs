@@ -77,16 +77,19 @@ async fn build_services(
     let config_service = Arc::new(mods::config::ConfigService::new(app_handle.clone()));
     let config_provider: mods::config::ConfigProviderRef = config_service.clone();
 
-    let runtime_trace_mode = config_service
-        .get_by_keys(&["runtime_trace_mode".to_string()])
-        .ok()
-        .and_then(|value| {
-            value
-                .get("runtime_trace_mode")
-                .and_then(|v| v.as_str())
-                .map(std::string::ToString::to_string)
-        })
-        .unwrap_or_else(|| "minimal".to_string());
+    let runtime_trace_mode = {
+        let stored = config_service
+            .get_by_keys(&["runtime_trace_mode".to_string()])
+            .ok()
+            .and_then(|value| {
+                value
+                    .get("runtime_trace_mode")
+                    .and_then(|v| v.as_str())
+                    .map(std::string::ToString::to_string)
+            })
+            .unwrap_or_else(|| mods::runtime_trace::default_stored_trace_mode());
+        mods::runtime_trace::effective_runtime_trace_mode(&stored)
+    };
 
     let runtime_trace = Arc::new(
         mods::runtime_trace::RuntimeTraceRecorder::new_with_mode(&runtime_trace_mode).map_err(

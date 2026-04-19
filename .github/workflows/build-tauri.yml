@@ -56,9 +56,10 @@ jobs:
         run: choco install openssl --no-progress -y
         shell: pwsh
 
-      # Chocolatey 的 OpenSSL 预编译包以动态库为主；设置 OPENSSL_STATIC=1 会让 openssl-sys
-      # 去找静态库而失败。链接到导入库即可，运行时 DLL 在 OpenSSL 安装目录的 bin 下。
-      - name: Set OPENSSL_DIR (Windows)
+      # openssl-sys 在 Windows/MSVC 上不能只设 OPENSSL_DIR：默认只搜 <dir>/lib，而 slproweb/Chocolatey
+      # 布局把 libssl.lib 放在 lib/VC/x64/MD（或 MT）。不显式设 OPENSSL_LIB_DIR 时会在 expando 之后
+      # 因找不到 .lib 而 panic（exit 101）。
+      - name: Set OpenSSL paths for MSVC (Windows)
         if: runner.os == 'Windows'
         run: |
           $candidates = @(
@@ -70,7 +71,25 @@ jobs:
           if (-not $opensslDir) {
             throw "OpenSSL install directory not found after choco install; expected one of: $($candidates -join ', ')"
           }
+          $includeDir = Join-Path $opensslDir "include"
+          $libCandidates = @(
+            (Join-Path $opensslDir "lib\VC\x64\MD"),
+            (Join-Path $opensslDir "lib\VC\x64\MT"),
+            (Join-Path $opensslDir "lib")
+          )
+          $libDir = $null
+          foreach ($c in $libCandidates) {
+            if (-not (Test-Path $c)) { continue }
+            $hasSsl = Test-Path (Join-Path $c "libssl.lib")
+            $hasCrypto = Test-Path (Join-Path $c "libcrypto.lib")
+            if ($hasSsl -or $hasCrypto) { $libDir = $c; break }
+          }
+          if (-not $libDir) {
+            throw "Could not find libssl.lib/libcrypto.lib under: $($libCandidates -join ', ')"
+          }
           echo "OPENSSL_DIR=$opensslDir" >> $env:GITHUB_ENV
+          echo "OPENSSL_LIB_DIR=$libDir" >> $env:GITHUB_ENV
+          echo "OPENSSL_INCLUDE_DIR=$includeDir" >> $env:GITHUB_ENV
           echo "$opensslDir\bin" >> $env:GITHUB_PATH
         shell: pwsh
 
@@ -100,6 +119,13 @@ jobs:
 
       - name: Install JS dependencies
         run: pnpm install --frozen-lockfile
+
+      # 让 cc/cl 在 PATH 中，否则 openssl-sys 编译 expando.c 可能找不到 cl.exe
+      - name: Setup MSVC environment (Windows)
+        if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
 
       - name: Build Tauri bundles
         run: pnpm tauri build

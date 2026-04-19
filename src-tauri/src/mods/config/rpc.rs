@@ -4,6 +4,26 @@ use serde::Deserialize;
 use serde_json::Value;
 use tauri::Manager;
 
+fn apply_release_runtime_trace_patch_clamp(
+    patch: serde_json::Map<String, Value>,
+) -> serde_json::Map<String, Value> {
+    #[cfg(not(debug_assertions))]
+    {
+        let mut patch = patch;
+        if patch.contains_key("runtime_trace_mode") {
+            patch.insert(
+                "runtime_trace_mode".to_string(),
+                Value::String("off".to_string()),
+            );
+        }
+        patch
+    }
+    #[cfg(debug_assertions)]
+    {
+        patch
+    }
+}
+
 fn apply_runtime_trace_mode_live(app_handle: &tauri::AppHandle, mode: &str) -> AppResult<()> {
     let state = app_handle.state::<AppState>();
     state
@@ -52,6 +72,7 @@ pub async fn handle_rpc(
     match command {
         ConfigCommand::Get { keys } => service.get_by_keys(&keys).map_err(Into::into),
         ConfigCommand::Set { patch } => {
+            let patch = apply_release_runtime_trace_patch_clamp(patch);
             let touch_runtime_trace = patch.contains_key("runtime_trace_mode");
             let result = service
                 .set_by_patch(&patch)

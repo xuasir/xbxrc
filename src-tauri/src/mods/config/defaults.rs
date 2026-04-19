@@ -39,6 +39,12 @@ pub const APP_CONFIG_KEYS: [&str; 35] = [
 ];
 
 pub fn default_config_map() -> Map<String, Value> {
+    let runtime_trace_mode_default = if cfg!(debug_assertions) {
+        json!("minimal")
+    } else {
+        json!("off")
+    };
+
     let value = json!({
         "locale": "en",
         "theme": "dark",
@@ -79,10 +85,12 @@ pub fn default_config_map() -> Map<String, Value> {
         "ui_haptics": true,
         "ui_audio": true,
         "debug": false,
-        "runtime_trace_mode": "minimal"
+        "runtime_trace_mode": null
     });
 
-    value.as_object().cloned().unwrap_or_default()
+    let mut map = value.as_object().cloned().unwrap_or_default();
+    map.insert("runtime_trace_mode".to_string(), runtime_trace_mode_default);
+    map
 }
 
 pub fn allowed_key(key: &str) -> bool {
