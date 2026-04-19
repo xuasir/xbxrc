@@ -161,6 +161,7 @@ fn build_observability_snapshot_includes_latest_keyframe_episode() {
             "request_reason": "transportAwaitRecoveryAnchor",
             "request_kind": "pli",
             "status": "decoded",
+            "lifecycle_phase": "decoded",
             "requested_at_ms": 1200.0,
             "sent_at_ms": 1210.0,
             "deadline_at_ms": 2160.0,
@@ -169,7 +170,20 @@ fn build_observability_snapshot_includes_latest_keyframe_episode() {
             "response_rtp_timestamp": 123456789,
             "response_frame_seq": 77,
             "response_verdict": "on-time"
-        }
+        },
+        "recent_keyframe_request_episodes": [
+            {
+                "episode_id": 90,
+                "request_reason": "ingressWaitKeyframe",
+                "request_kind": "pli",
+                "status": "missed",
+                "lifecycle_phase": "failure",
+                "requested_at_ms": 500.0,
+                "sent_at_ms": 520.0,
+                "deadline_at_ms": 800.0,
+                "response_verdict": "missed"
+            }
+        ]
     }));
 
     let snapshot = build_observability_snapshot(&stats);
@@ -184,6 +198,18 @@ fn build_observability_snapshot_includes_latest_keyframe_episode() {
     assert_eq!(
         snapshot["latest"]["keyframeRequestEpisode"]["response_verdict"],
         "on-time"
+    );
+    assert_eq!(
+        snapshot["latest"]["keyframeRequestEpisode"]["lifecycle_phase"],
+        "decoded"
+    );
+    assert_eq!(
+        snapshot["latest"]["recentKeyframeRequestEpisodes"][0]["episode_id"],
+        90
+    );
+    assert_eq!(
+        snapshot["latest"]["recentKeyframeRequestEpisodes"][0]["lifecycle_phase"],
+        "failure"
     );
 }
 
@@ -602,6 +628,44 @@ fn record_runtime_trace_observations_projects_keyframe_episode_lifecycle() {
     assert!(contents.contains("\"requestToFirstPacketMs\":200.0"));
     assert!(contents.contains("\"requestToFirstDecodeMs\":220.0"));
     assert!(contents.contains("\"timedOut\":true"));
+}
+
+#[test]
+fn record_runtime_trace_observations_emits_keyframe_succeeded_with_lifecycle_phase_in_payload() {
+    let recorder = std::sync::Arc::new(
+        RuntimeTraceRecorder::new_with_mode("verbose").expect("trace recorder"),
+    );
+    let mut state = RuntimeTraceObservationState::default();
+    let stats = test_stats(json!({
+        "resolution": "",
+        "rtt": "",
+        "fps": 0.0,
+        "pl": "0.00%",
+        "fl": "",
+        "jit": "",
+        "br": "",
+        "decode": "",
+        "latest_keyframe_request_episode": {
+            "episode_id": 100,
+            "request_reason": "transportAwaitRecoveryAnchor",
+            "request_kind": "pli",
+            "status": "succeeded",
+            "lifecycle_phase": "success",
+            "requested_at_ms": 1200.0,
+            "sent_at_ms": 1210.0,
+            "deadline_at_ms": 2160.0,
+            "response_verdict": "cleanAnchorCommitted",
+            "retired_at_ms": 1800.0
+        }
+    }));
+
+    record_runtime_trace_observations(&recorder, &mut state, Some("session-1"), &stats);
+
+    let entries = read_trace_lines(recorder.as_ref());
+    let payload = find_event_payload(&entries, "keyframeRequestEpisodeSucceeded");
+    assert_eq!(payload["episodeId"], 100);
+    assert_eq!(payload["lifecyclePhase"], "success");
+    assert_eq!(payload["responseVerdict"], "cleanAnchorCommitted");
 }
 
 #[test]

@@ -25,6 +25,7 @@ fn base_policy() -> NackObservePolicy {
         frame_playout_deadline_at_ms: Some(1_050.0),
         nack_disposition: PacketRecoveryDisposition::Attempted,
         frame_unrecoverable_reason: None,
+        max_retry_count_override: None,
     }
 }
 
@@ -35,7 +36,7 @@ fn retry_or_budget_exhausted_sequences(polled: &NackPollResult) -> Vec<u16> {
     polled
         .expired_batches
         .iter()
-        .find(|batch| batch.reason == "retryBudget")
+        .find(|batch| batch.reason == "singleShotPollComplete")
         .map(|batch| batch.sequences.clone())
         .unwrap_or_default()
 }
@@ -223,6 +224,7 @@ fn existing_pending_merges_with_stricter_and_more_aggressive_policy() {
     first_policy.frame_importance = "anchor";
     first_policy.priority = 3;
     first_policy.max_tracked_sequences = Some(1);
+    first_policy.max_retry_count_override = Some(1);
     let (first_batch, skipped) =
         scheduler.observe_missing_sequences_with_policy(&[33], 1_000.0, first_policy);
     assert!(skipped.is_none());
@@ -237,34 +239,29 @@ fn existing_pending_merges_with_stricter_and_more_aggressive_policy() {
     second_policy.frame_importance = "anchor";
     second_policy.max_tracked_sequences = Some(1);
     second_policy.priority = 3;
+    second_policy.max_retry_count_override = Some(1);
     let (second_batch, second_skipped) =
         scheduler.observe_missing_sequences_with_policy(&[33], 1_001.0, second_policy);
     assert!(second_batch.is_none());
     assert!(second_skipped.is_none());
 
     let retry = scheduler.poll(1_011.0);
-    assert_eq!(retry_or_budget_exhausted_sequences(&retry), vec![33]);
+    let retry_batch = retry.retry_batch.as_ref().expect("poll retry");
+    assert_eq!(retry_batch.sequences, vec![33]);
 
     let expired = scheduler.poll(1_510.0);
     assert!(expired.retry_batch.is_none());
-    if let Some(deadline) = expired
+    let deadline = expired
         .expired_batches
         .iter()
         .find(|batch| batch.reason == "deadline")
-    {
-        assert_eq!(deadline.source, "rtpGap");
-        assert_eq!(deadline.sequences, vec![33]);
-    } else {
-        assert!(
-            expired.expired_batches.is_empty()
-                || expired.expired_batches.iter().any(|batch| batch.reason == "retryBudget")
-        );
-    }
+        .expect("deadline expiry");
+    assert_eq!(deadline.source, "rtpGap");
+    assert_eq!(deadline.sequences, vec![33]);
 }
 
 #[test]
 fn retry_budget_exhausted_is_finalized_and_dequeued() {
-    // Anchor retry_budget = default_max_retry_count.min(3); 用 1 保持「首轮 poll 即耗尽」的断言粒度。
     let mut scheduler = NackScheduler::new(NackSchedulerConfig {
         max_age_ms: 200,
         frame_deadline_ms: 500,
@@ -276,6 +273,7 @@ fn retry_budget_exhausted_is_finalized_and_dequeued() {
     policy.frame_is_keyframe = Some(true);
     policy.frame_importance = "anchor";
     policy.priority = 3;
+    policy.max_retry_count_override = Some(1);
     let expected_budget_context = policy.budget_context;
 
     let (initial_batch, skipped) =
@@ -287,34 +285,22 @@ fn retry_budget_exhausted_is_finalized_and_dequeued() {
     assert_eq!(scheduler.pending_count(), 1);
 
     let first_retry = scheduler.poll(1_010.0);
-    if let Some(retry_batch) = first_retry.retry_batch {
-        assert_eq!(retry_batch.sequences, vec![20]);
-        assert_eq!(retry_batch.budget_context, expected_budget_context);
-        assert!(first_retry.expired_batches.is_empty());
-        assert_eq!(scheduler.pending_count(), 1);
-    } else {
-        let exhausted = first_retry
-            .expired_batches
-            .iter()
-            .find(|batch| batch.reason == "retryBudget")
-            .expect("retry budget exhausted");
-        assert_eq!(exhausted.sequences, vec![20]);
-        assert_eq!(scheduler.pending_count(), 0);
-    }
+    let retry_batch = first_retry.retry_batch.as_ref().expect("poll retry");
+    assert_eq!(retry_batch.sequences, vec![20]);
+    assert_eq!(retry_batch.budget_context, expected_budget_context);
+    assert!(first_retry.expired_batches.is_empty());
+    assert_eq!(scheduler.pending_count(), 1);
 
     let exhausted = scheduler.poll(1_020.0);
     assert!(exhausted.retry_batch.is_none());
     assert_eq!(scheduler.pending_count(), 0);
-    if let Some(retry_budget) = exhausted
+    let retry_budget = exhausted
         .expired_batches
         .iter()
-        .find(|batch| batch.reason == "retryBudget")
-    {
-        assert_eq!(retry_budget.sequences, vec![20]);
-        assert_eq!(retry_budget.budget_context, expected_budget_context);
-    } else {
-        assert!(exhausted.expired_batches.is_empty());
-    }
+        .find(|batch| batch.reason == "singleShotPollComplete")
+        .expect("retry budget exhausted");
+    assert_eq!(retry_budget.sequences, vec![20]);
+    assert_eq!(retry_budget.budget_context, expected_budget_context);
 }
 
 #[test]
@@ -330,6 +316,7 @@ fn supply_packet_with_supply_priority_gets_up_to_two_poll_retries() {
     policy.frame_is_keyframe = Some(false);
     policy.frame_importance = "supply";
     policy.priority = 2;
+    policy.max_retry_count_override = Some(3);
 
     let (initial_batch, skipped) =
         scheduler.observe_missing_sequences_with_policy(&[60], 1_000.0, policy);
@@ -345,9 +332,18 @@ fn supply_packet_with_supply_priority_gets_up_to_two_poll_retries() {
         assert_eq!(retry_or_budget_exhausted_sequences(&second_retry), vec![60]);
     }
 
-    let exhausted = scheduler.poll(1_030.0);
+    let third_retry = scheduler.poll(1_030.0);
+    assert_eq!(retry_or_budget_exhausted_sequences(&third_retry), vec![60]);
+
+    let exhausted = scheduler.poll(1_040.0);
     assert!(exhausted.retry_batch.is_none());
-    assert!(exhausted.expired_batches.is_empty() || scheduler.pending_count() == 0);
+    assert_eq!(scheduler.pending_count(), 0);
+    assert!(
+        exhausted
+            .expired_batches
+            .iter()
+            .any(|batch| batch.reason == "singleShotPollComplete")
+    );
 }
 
 #[test]
@@ -415,7 +411,7 @@ fn resolved_nack_preserves_budget_context() {
 }
 
 #[test]
-fn disposable_packet_has_no_retry_budget_and_finalizes_on_first_poll() {
+fn disposable_packet_has_no_retry_budget_and_clears_at_deadline_poll() {
     let mut scheduler = NackScheduler::new(NackSchedulerConfig {
         max_age_ms: 200,
         frame_deadline_ms: 500,
@@ -436,12 +432,17 @@ fn disposable_packet_has_no_retry_budget_and_finalizes_on_first_poll() {
 
     let polled = scheduler.poll(1_010.0);
     assert!(polled.retry_batch.is_none());
+    assert!(polled.expired_batches.is_empty());
+    assert_eq!(scheduler.pending_count(), 1);
+
+    let cleared = scheduler.poll(1_050.0);
+    assert!(cleared.retry_batch.is_none());
     assert_eq!(scheduler.pending_count(), 0);
-    assert_eq!(polled.expired_batches.len(), 1);
-    assert_eq!(polled.expired_batches[0].reason, "retryBudget");
+    assert_eq!(cleared.expired_batches.len(), 1);
+    assert_eq!(cleared.expired_batches[0].reason, "deadline");
     assert_eq!(
-        polled.expired_batches[0].frame_unrecoverable_reason,
-        Some("retryBudgetExhausted")
+        cleared.expired_batches[0].frame_unrecoverable_reason,
+        Some("deadlineExceeded")
     );
 }
 
@@ -487,6 +488,7 @@ fn poll_prioritizes_high_value_batches_under_burst_limit() {
     supply_policy.priority = 2;
     supply_policy.frame_rtp_timestamp = Some(90_100);
     supply_policy.deadline_at_ms = Some(1_200.0);
+    supply_policy.max_retry_count_override = Some(2);
     let (supply_batch, supply_skipped) =
         scheduler.observe_missing_sequences_with_policy(&[10, 11], 1_000.0, supply_policy);
     assert!(supply_skipped.is_none());
@@ -501,6 +503,7 @@ fn poll_prioritizes_high_value_batches_under_burst_limit() {
     anchor_policy.priority = 3;
     anchor_policy.frame_rtp_timestamp = Some(90_200);
     anchor_policy.deadline_at_ms = Some(1_200.0);
+    anchor_policy.max_retry_count_override = Some(2);
     let (anchor_batch, anchor_skipped) =
         scheduler.observe_missing_sequences_with_policy(&[20, 21], 1_001.0, anchor_policy);
     assert!(anchor_skipped.is_none());
@@ -510,21 +513,12 @@ fn poll_prioritizes_high_value_batches_under_burst_limit() {
     );
 
     let polled = scheduler.poll(1_011.0);
-    if let Some(retry_batch) = polled.retry_batch {
-        assert!(retry_batch.sequences.contains(&20));
-        assert!(retry_batch.sequences.contains(&21));
-        assert_eq!(retry_batch.frame_importance, "anchor");
-        assert_eq!(retry_batch.frame_rtp_timestamp, Some(90_200));
-        assert!(scheduler.pending_count() >= 2);
-    } else {
-        let exhausted = polled
-            .expired_batches
-            .iter()
-            .find(|batch| batch.reason == "retryBudget")
-            .expect("retry budget exhausted");
-        assert!(exhausted.sequences.contains(&20));
-        assert!(exhausted.sequences.contains(&21));
-    }
+    let retry_batch = polled.retry_batch.as_ref().expect("poll retry");
+    assert!(retry_batch.sequences.contains(&20));
+    assert!(retry_batch.sequences.contains(&21));
+    assert_eq!(retry_batch.frame_importance, "anchor");
+    assert_eq!(retry_batch.frame_rtp_timestamp, Some(90_200));
+    assert!(scheduler.pending_count() >= 2);
 }
 
 #[test]
@@ -557,20 +551,13 @@ fn poll_reports_deadline_and_max_age_expiry_in_same_tick() {
     retry_policy.frame_importance = "anchor";
     retry_policy.priority = 3;
     retry_policy.frame_rtp_timestamp = Some(90_500);
+    retry_policy.max_retry_count_override = Some(1);
     let _ = scheduler.observe_missing_sequences_with_policy(&[50], 1_000.0, retry_policy);
 
     let polled = scheduler.poll(1_010.0);
-    if let Some(retry_batch) = polled.retry_batch {
-        assert_eq!(retry_batch.sequences, vec![50]);
-        assert_eq!(retry_batch.frame_rtp_timestamp, Some(90_500));
-    } else {
-        let exhausted = polled
-            .expired_batches
-            .iter()
-            .find(|batch| batch.reason == "retryBudget")
-            .expect("retry budget exhausted");
-        assert_eq!(exhausted.sequences, vec![50]);
-    }
+    let retry_batch = polled.retry_batch.as_ref().expect("poll retry");
+    assert_eq!(retry_batch.sequences, vec![50]);
+    assert_eq!(retry_batch.frame_rtp_timestamp, Some(90_500));
 
     let deadline = polled
         .expired_batches
@@ -637,6 +624,7 @@ fn flush_non_anchor_pending_keeps_anchor_retryable() {
     anchor_policy.frame_importance = "anchor";
     anchor_policy.priority = 3;
     anchor_policy.deadline_at_ms = Some(1_200.0);
+    anchor_policy.max_retry_count_override = Some(1);
     let _ = scheduler.observe_missing_sequences_with_policy(&[91], 1_000.0, anchor_policy);
 
     let flushed = scheduler
@@ -664,6 +652,7 @@ fn poll_prioritizes_unsent_overlap_candidates_before_earlier_retries() {
     policy.frame_is_keyframe = Some(true);
     policy.frame_importance = "anchor";
     policy.priority = 3;
+    policy.max_retry_count_override = Some(3);
 
     let (first_batch, first_skipped) =
         scheduler.observe_missing_sequences_with_policy(&[10, 11, 12, 13], 1_000.0, policy);
@@ -719,7 +708,7 @@ fn low_value_skip_cache_does_not_block_later_attempted_admission() {
 
 #[test]
 fn poll_separates_deadline_max_age_and_retry_budget_expirations() {
-    // 同上：单次 tick 内要同时出现 deadline / maxAge / retryBudget 三种过期，需限制 default_max_retry_count。
+    // 单次 tick 内同时出现 deadline / maxAge / poll 重试预算耗尽（singleShotPollComplete）。
     let mut scheduler = NackScheduler::new(NackSchedulerConfig {
         max_age_ms: 200,
         frame_deadline_ms: 500,
@@ -733,13 +722,15 @@ fn poll_separates_deadline_max_age_and_retry_budget_expirations() {
     retry_budget_policy.frame_is_keyframe = Some(true);
     retry_budget_policy.frame_importance = "anchor";
     retry_budget_policy.priority = 3;
+    retry_budget_policy.max_retry_count_override = Some(1);
     let (retry_initial, retry_skipped) =
         scheduler.observe_missing_sequences_with_policy(&[30], 1_000.0, retry_budget_policy);
     assert!(retry_skipped.is_none());
     assert_eq!(retry_initial.expect("retry initial").sequences, vec![30]);
 
     let first_retry = scheduler.poll(1_010.0);
-    assert_eq!(retry_or_budget_exhausted_sequences(&first_retry), vec![30]);
+    let first_retry_batch = first_retry.retry_batch.as_ref().expect("poll retry");
+    assert_eq!(first_retry_batch.sequences, vec![30]);
 
     let mut deadline_policy = base_policy();
     deadline_policy.deadline_at_ms = Some(1_014.0);
@@ -757,7 +748,7 @@ fn poll_separates_deadline_max_age_and_retry_budget_expirations() {
 
     let polled = scheduler.poll(1_015.0);
     assert!(polled.retry_batch.is_none());
-    assert_eq!(scheduler.pending_count(), 0);
+    assert_eq!(scheduler.pending_count(), 0, "seq 30 exhausted, 10/20 deadline or maxAge");
     assert!(polled.expired_batches.len() >= 2);
 
     let deadline_batch = polled
@@ -785,12 +776,12 @@ fn poll_separates_deadline_max_age_and_retry_budget_expirations() {
     if let Some(retry_budget_batch) = polled
         .expired_batches
         .iter()
-        .find(|batch| batch.reason == "retryBudget")
+        .find(|batch| batch.reason == "singleShotPollComplete")
     {
         assert_eq!(retry_budget_batch.sequences, vec![30]);
         assert_eq!(
             retry_budget_batch.frame_unrecoverable_reason,
-            Some("retryBudgetExhausted")
+            Some("singleShotPollFinalized")
         );
     }
 }
@@ -851,13 +842,15 @@ fn flush_reobserve_and_resolve_interleaving_keeps_state_consistent() {
     assert_eq!(resolved.sequence, 40);
     assert_eq!(scheduler.pending_count(), 1);
 
-    let polled = scheduler.poll(1_015.0);
-    assert!(polled
+    let polled = scheduler.poll(1_100.0);
+    assert!(polled.retry_batch.is_none());
+    let deadline_batch = polled
         .expired_batches
         .iter()
-        .all(|batch| batch.reason == "retryBudget"));
-    let selected = retry_or_budget_exhausted_sequences(&polled);
-    assert!(selected.contains(&31));
+        .find(|batch| batch.reason == "deadline")
+        .expect("deadline expiry");
+    assert!(deadline_batch.sequences.contains(&31));
+    assert_eq!(scheduler.pending_count(), 0);
 }
 
 #[test]
@@ -1012,6 +1005,7 @@ fn pending_merge_with_unified_labels_respects_priority() {
     anchor_policy.frame_is_keyframe = Some(true);
     anchor_policy.priority = 3;
     anchor_policy.retry_interval_ms = Some(10);
+    anchor_policy.max_retry_count_override = Some(1);
     let (third_batch, third_skipped) =
         scheduler.observe_missing_sequences_with_policy(&[50], 1_002.0, anchor_policy);
     assert!(third_batch.is_none());
@@ -1020,22 +1014,14 @@ fn pending_merge_with_unified_labels_respects_priority() {
 
     // Poll should use the most aggressive (anchor) policy
     let polled = scheduler.poll(1_012.0);
-    if let Some(retry_batch) = polled.retry_batch {
-        assert_eq!(retry_batch.sequences, vec![50]);
-        assert_eq!(retry_batch.frame_importance, "anchor");
-        assert!(polled.expired_batches.is_empty());
-    } else {
-        let exhausted = polled
-            .expired_batches
-            .iter()
-            .find(|batch| batch.reason == "retryBudget")
-            .expect("retry budget exhausted");
-        assert_eq!(exhausted.sequences, vec![50]);
-    }
+    let retry_batch = polled.retry_batch.as_ref().expect("poll retry");
+    assert_eq!(retry_batch.sequences, vec![50]);
+    assert_eq!(retry_batch.frame_importance, "anchor");
+    assert!(polled.expired_batches.is_empty());
 }
 
 #[test]
-fn single_shot_budget_expires_all_labels_on_first_poll() {
+fn single_shot_pending_cleared_when_deadline_expires() {
     let mut scheduler = NackScheduler::new(NackSchedulerConfig {
         max_age_ms: 500,
         frame_deadline_ms: 2_000,
@@ -1073,27 +1059,18 @@ fn single_shot_budget_expires_all_labels_on_first_poll() {
 
     let poll1 = scheduler.poll(1_010.0);
     assert!(poll1.retry_batch.is_none());
+    assert!(poll1.expired_batches.is_empty());
+    assert_eq!(scheduler.pending_count(), 3);
 
-    let anchor_expired = poll1
-        .expired_batches
-        .iter()
-        .find(|b| b.sequences.contains(&10));
-    assert!(anchor_expired.is_some());
-    assert_eq!(anchor_expired.unwrap().reason, "retryBudget");
-
-    let supply_expired = poll1
-        .expired_batches
-        .iter()
-        .find(|b| b.sequences.contains(&20));
-    assert!(supply_expired.is_some());
-    assert_eq!(supply_expired.unwrap().reason, "retryBudget");
-
-    let disposable_expired = poll1
-        .expired_batches
-        .iter()
-        .find(|b| b.sequences.contains(&30));
-    assert!(disposable_expired.is_some());
-    assert_eq!(disposable_expired.unwrap().reason, "retryBudget");
-
+    let poll2 = scheduler.poll(2_000.0);
+    assert!(poll2.retry_batch.is_none());
     assert_eq!(scheduler.pending_count(), 0);
+    for seq in [10u16, 20, 30] {
+        let batch = poll2
+            .expired_batches
+            .iter()
+            .find(|b| b.sequences.contains(&seq))
+            .unwrap_or_else(|| panic!("missing deadline expiry for {seq}"));
+        assert_eq!(batch.reason, "deadline");
+    }
 }

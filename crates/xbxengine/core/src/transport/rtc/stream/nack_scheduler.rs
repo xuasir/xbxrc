@@ -151,6 +151,9 @@ pub struct NackObservePolicy {
     pub frame_playout_deadline_at_ms: Option<f64>,
     pub nack_disposition: PacketRecoveryDisposition,
     pub frame_unrecoverable_reason: Option<&'static str>,
+    /// 覆盖 [`FrameBudgetContext::retry_budget`] 的 poll 重试上限（上限仍受 [`NackSchedulerConfig::max_retry_count`] 约束）。
+    /// 生产路径应为 `None`，仅测试或调试需要非单发 poll 语义时设置。
+    pub max_retry_count_override: Option<u8>,
 }
 
 pub struct NackScheduler {
@@ -222,7 +225,10 @@ impl NackScheduler {
             .deadline_at_ms
             .unwrap_or(now_ms + self.config.frame_deadline_ms as f64);
         let estimated_recovery_arrival_ms = policy.estimated_recovery_arrival_ms;
-        let max_retry_count = frame_importance_retry_budget(policy, self.config.max_retry_count);
+        let max_retry_count = policy
+            .max_retry_count_override
+            .map(|value| value.min(self.config.max_retry_count))
+            .unwrap_or_else(|| frame_importance_retry_budget(policy, self.config.max_retry_count));
 
         if now_ms >= deadline_at_ms {
             let skipped = SkippedNackBatch {
@@ -514,13 +520,14 @@ impl NackScheduler {
             true
         });
 
-        // deadline/maxAge 先于预算耗尽处理，避免覆盖更高优先级过期原因。
-        // 检查预算耗尽：直接使用主预算
+        // deadline/maxAge 先于「poll 重试预算耗尽」处理，避免覆盖更高优先级过期原因。
+        // max_retry_count==0 时为纯单发：pending 仅由 deadline/maxAge/resolve 移除，不在此路径 dequeue。
         let exhausted_sequences: Vec<u16> = self
             .pending
             .iter()
             .filter_map(|(sequence, pending)| {
-                (pending.retry_count >= pending.max_retry_count).then_some(*sequence)
+                (pending.max_retry_count > 0 && pending.retry_count >= pending.max_retry_count)
+                    .then_some(*sequence)
             })
             .collect();
         for sequence in exhausted_sequences {
@@ -706,7 +713,7 @@ impl NackScheduler {
                 },
                 ExpiredNackBatch {
                     sequences: expired_retry_budget_sequences,
-                    reason: "retryBudget".to_string(),
+                    reason: "singleShotPollComplete".to_string(),
                     source: expired_retry_budget_meta
                         .map(|meta| meta.0)
                         .unwrap_or("rtpWindow"),
@@ -724,7 +731,7 @@ impl NackScheduler {
                     nack_disposition: PacketRecoveryDisposition::SkippedTooLate,
                     frame_unrecoverable_reason: expired_retry_budget_meta
                         .and_then(|meta| meta.7)
-                        .or(Some("retryBudgetExhausted")),
+                        .or(Some("singleShotPollFinalized")),
                     budget_context: expired_retry_budget_meta.map(|meta| meta.8).unwrap_or_else(
                         || {
                             FrameBudgetContext::steady_for_value(frame_value_for_importance(

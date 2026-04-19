@@ -76,6 +76,8 @@ pub struct XbxEngineVideoPipelineRuntimeConfig {
     pub nack_burst_count: u16,
     pub nack_max_age_ms: u64,
     pub nack_retry_interval_ms: u64,
+    /// NACK scheduler 配置上限；与 `FrameBudgetContext::retry_budget` 取小后作为 pending 的
+    /// `max_retry_count`。当前帧级预算为单发（retry_budget 恒 0），生产路径不依赖多次 poll 重发。
     pub nack_max_retry_count: u8,
     pub jitter_buffer_min_delay_ms: u64,
     pub jitter_buffer_max_delay_ms: u64,

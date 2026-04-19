@@ -981,6 +981,9 @@ impl RtcVideoFrameSource {
         Some(FrameRecoveryDisposition::UnrecoverableReferenceChain)
     }
 
+    /// Cloud 路径下在 deadline / RTT slack 内尽量尝试 NACK（预算充裕指时间窗与优先级足够）。
+    /// 若 `blocking_non_keyframe_admission` 或 `prefers_chain_broken()` 为真，会故意对非锚点缺口标
+    /// `SkippedChainBroken` / `awaitingRecoveryAnchor`——这是**策略上**等 IDR 而非「NACK 排队链条过长」。
     fn with_cloud_latency_admission_policy(
         &self,
         mut policy: NackObservePolicy,

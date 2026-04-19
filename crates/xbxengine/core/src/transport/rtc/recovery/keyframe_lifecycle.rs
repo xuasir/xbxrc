@@ -39,15 +39,7 @@ pub(crate) fn derive_keyframe_lifecycle_phase(
         return KeyframeRequestLifecyclePhase::Success;
     }
 
-    if matches!(status, "deferred" | "failed" | "missed" | "expired-unsent")
-        || matches!(
-            verdict,
-            Some("transportDeferred" | "transportFailed" | "missed" | "unsentExpired")
-        )
-    {
-        return KeyframeRequestLifecyclePhase::Failure;
-    }
-
+    // `decoded` 必须早于对 `verdict == missed` 的失败判定，否则 timeout 与 decode 竞态会永久判 Failure。
     if status == "decoded" {
         let anchor_ok = video_anchor_clean_epoch == Some(transport_recovery_epoch)
             && video_anchor_clean_observed_at_ms.is_some();
@@ -55,6 +47,15 @@ pub(crate) fn derive_keyframe_lifecycle_phase(
             return KeyframeRequestLifecyclePhase::Success;
         }
         return KeyframeRequestLifecyclePhase::Decoded;
+    }
+
+    if matches!(status, "deferred" | "failed" | "missed" | "expired-unsent")
+        || matches!(
+            verdict,
+            Some("transportDeferred" | "transportFailed" | "missed" | "unsentExpired")
+        )
+    {
+        return KeyframeRequestLifecyclePhase::Failure;
     }
 
     if matches!(status, "packet-seen" | "response-observed") {
@@ -89,4 +90,32 @@ pub(crate) fn apply_keyframe_episode_lifecycle_field(
         episode,
     );
     episode.lifecycle_phase = Some(phase.as_str().to_string());
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::XbxEngineKeyframeRequestEpisodeObservation;
+
+    #[test]
+    fn derive_prefers_decoded_over_missed_verdict_when_anchor_clean() {
+        let episode = XbxEngineKeyframeRequestEpisodeObservation {
+            status: "decoded".to_string(),
+            response_verdict: Some("missed".to_string()),
+            ..Default::default()
+        };
+        let phase = derive_keyframe_lifecycle_phase(7, Some(7), Some(50.0), &episode);
+        assert_eq!(phase, KeyframeRequestLifecyclePhase::Success);
+    }
+
+    #[test]
+    fn derive_decoded_without_anchor_match_stays_decoded_despite_missed_verdict() {
+        let episode = XbxEngineKeyframeRequestEpisodeObservation {
+            status: "decoded".to_string(),
+            response_verdict: Some("missed".to_string()),
+            ..Default::default()
+        };
+        let phase = derive_keyframe_lifecycle_phase(7, None, None, &episode);
+        assert_eq!(phase, KeyframeRequestLifecyclePhase::Decoded);
+    }
 }

@@ -146,6 +146,7 @@ pub(super) fn sample_loss_nack_policy(
         frame_playout_deadline_at_ms: Some(deadline_at_ms),
         nack_disposition: PacketRecoveryDisposition::Attempted,
         frame_unrecoverable_reason: None,
+        max_retry_count_override: None,
     }
 }
 
@@ -194,6 +195,7 @@ pub(super) fn rtp_window_nack_policy(
         frame_playout_deadline_at_ms: Some(deadline_at_ms),
         nack_disposition: PacketRecoveryDisposition::Attempted,
         frame_unrecoverable_reason: None,
+        max_retry_count_override: None,
     }
 }
 
@@ -246,6 +248,7 @@ pub(super) fn rtp_gap_nack_policy(
         frame_playout_deadline_at_ms: Some(deadline_at_ms),
         nack_disposition: PacketRecoveryDisposition::Attempted,
         frame_unrecoverable_reason: None,
+        max_retry_count_override: None,
     }
 }
 

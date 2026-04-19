@@ -317,6 +317,14 @@ impl RuntimeStatsSink {
                 let Some(deadline_at_ms) = episode.deadline_at_ms else {
                     return;
                 };
+                if episode.first_keyframe_decoded_at_ms.is_some() {
+                    return;
+                }
+                if video_anchor_clean_epoch == Some(transport_recovery_epoch)
+                    && video_anchor_clean_observed_at_ms.is_some()
+                {
+                    return;
+                }
                 if episode.sent_at_ms.is_none()
                     || observed_at_ms < deadline_at_ms
                     || matches!(
@@ -586,9 +594,12 @@ impl RuntimeStatsSink {
                 if episode.sent_at_ms.is_none()
                     || matches!(
                         episode.response_verdict.as_deref(),
-                        Some("transportDeferred" | "transportFailed" | "missed")
+                        Some("transportDeferred" | "transportFailed")
                     )
                 {
+                    return;
+                }
+                if matches!(episode.response_verdict.as_deref(), Some("missed")) && !is_keyframe {
                     return;
                 }
 
@@ -608,6 +619,18 @@ impl RuntimeStatsSink {
                         episode.response_rtp_timestamp = rtp_timestamp;
                     }
                     episode.status = "response-observed".to_string();
+                    episode.status_detail = Some(detail.to_string());
+                    changed = true;
+                }
+
+                if is_keyframe && matches!(episode.response_verdict.as_deref(), Some("missed")) {
+                    episode.response_verdict = Some(match episode.deadline_at_ms {
+                        Some(deadline_at_ms) if observed_at_ms > deadline_at_ms => {
+                            "late".to_string()
+                        }
+                        Some(_) => "on-time".to_string(),
+                        None => "unknown".to_string(),
+                    });
                     episode.status_detail = Some(detail.to_string());
                     changed = true;
                 }
@@ -663,7 +686,10 @@ impl RuntimeStatsSink {
                     Some(episode.response_rtp_timestamp.unwrap_or(rtp_timestamp));
                 episode.response_frame_seq = Some(frame_seq);
                 episode.status = "decoded".to_string();
-                if episode.response_verdict.as_deref() == Some("pending") {
+                if matches!(
+                    episode.response_verdict.as_deref(),
+                    Some("pending") | Some("missed")
+                ) {
                     episode.response_verdict = Some(match episode.deadline_at_ms {
                         Some(deadline_at_ms) if observed_at_ms > deadline_at_ms => {
                             "late".to_string()
@@ -671,6 +697,9 @@ impl RuntimeStatsSink {
                         Some(_) => "on-time".to_string(),
                         None => "unknown".to_string(),
                     });
+                }
+                if episode.status_detail.as_deref() == Some("deadlineExpired") {
+                    episode.status_detail = None;
                 }
                 stats.latest_observation_label = Some("keyframeRequestEpisodeDecoded".to_string());
                 stats.latest_observation_summary = Some(format!(
@@ -1669,6 +1698,70 @@ mod tests {
         assert!(summary.contains("detail=bootstrapMissingSps"));
         assert!(summary.contains("sentToFirstPacketMs=50.0"));
         assert!(summary.contains("firstVideoPacketIsKeyframe=false"));
+    }
+
+    #[test]
+    fn keyframe_request_episode_decoded_after_timeout_clears_missed_verdict() {
+        let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
+        let sink = RuntimeStatsSink::new(runtime_stats.clone());
+
+        sink.record_keyframe_request_episode_requested(
+            901,
+            Some("transportAwaitRecoveryAnchor".to_string()),
+            100.0,
+            None,
+        );
+        sink.record_keyframe_request_episode_sent("pli", 120.0, Some(200.0));
+        sink.record_keyframe_request_episode_timeout(200.0);
+
+        {
+            let stats = runtime_stats.lock().expect("runtime stats lock");
+            let episode = stats
+                .latest_keyframe_request_episode
+                .as_ref()
+                .expect("episode");
+            assert_eq!(episode.response_verdict.as_deref(), Some("missed"));
+        }
+
+        sink.record_keyframe_request_episode_decoded(210.0, 999_001, 1001);
+
+        let stats = runtime_stats.lock().expect("runtime stats lock");
+        let episode = stats
+            .latest_keyframe_request_episode
+            .as_ref()
+            .expect("episode");
+        assert_eq!(episode.status, "decoded");
+        assert_eq!(episode.response_verdict.as_deref(), Some("late"));
+        assert_eq!(episode.lifecycle_phase.as_deref(), Some("decoded"));
+    }
+
+    #[test]
+    fn keyframe_request_episode_timeout_skipped_when_transport_clean_anchor_already_observed() {
+        let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
+        let sink = RuntimeStatsSink::new(runtime_stats.clone());
+
+        sink.begin_transport_recovery_episode(10.0);
+        sink.record_keyframe_request_episode_requested(
+            902,
+            Some("transportAwaitRecoveryAnchor".to_string()),
+            100.0,
+            None,
+        );
+        sink.record_keyframe_request_episode_sent("pli", 120.0, Some(500.0));
+        sink.record_transport_clean_anchor(180.0, "test-clean-anchor");
+
+        sink.record_keyframe_request_episode_timeout(600.0);
+
+        let stats = runtime_stats.lock().expect("runtime stats lock");
+        let episode = stats
+            .latest_keyframe_request_episode
+            .as_ref()
+            .expect("episode");
+        assert_eq!(episode.status, "succeeded");
+        assert_eq!(
+            episode.response_verdict.as_deref(),
+            Some("cleanAnchorCommitted")
+        );
     }
 
     #[test]

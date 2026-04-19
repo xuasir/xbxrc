@@ -289,6 +289,7 @@ pub(super) fn build_observability_snapshot(stats: &XbxEngineStatsDto) -> serde_j
             "nack": stats.latest_video_nack_observation,
             "rtcpSendFailure": latest_rtcp_send_failure_snapshot(stats),
             "keyframeRequestEpisode": stats.latest_keyframe_request_episode,
+            "recentKeyframeRequestEpisodes": stats.recent_keyframe_request_episodes,
             "h264Inspection": h264_inspection_payload(
                 stats.latest_h264_inspection_observation.as_ref(),
                 stats,
@@ -695,6 +696,7 @@ pub(super) fn record_runtime_trace_observations(
             observation_state.nack_observation_id = Some(nack.observation_id);
             let event_name = match nack.action.as_str() {
                 "expiredDeadline" | "expiredMaxAge" | "expiredRetryBudget"
+                    | "expiredSingleShotPollComplete"
                 | "expiredChainBroken" => "nackExpired",
                 "recovered" | "recoveredLate" => "nackRecovered",
                 "skipped" => "nackSkipped",
@@ -1573,6 +1575,10 @@ fn keyframe_request_episode_event_name(status: &str) -> Option<&'static str> {
         "packet-seen" => Some("keyframeRequestEpisodePacketSeen"),
         "decoded" => Some("keyframeRequestEpisodeDecoded"),
         "missed" => Some("keyframeRequestEpisodeMissed"),
+        "succeeded" => Some("keyframeRequestEpisodeSucceeded"),
+        "deferred" => Some("keyframeRequestEpisodeDeferred"),
+        "failed" => Some("keyframeRequestEpisodeFailed"),
+        "expired-unsent" => Some("keyframeRequestEpisodeUnsentExpired"),
         _ => None,
     }
 }
@@ -1590,6 +1596,7 @@ fn keyframe_request_episode_payload(
             "requestKind": episode.request_kind.clone(),
             "status": episode.status.clone(),
             "statusDetail": episode.status_detail.clone(),
+            "lifecyclePhase": episode.lifecycle_phase.clone(),
             "requestedAtMs": episode.requested_at_ms,
             "sentAtMs": episode.sent_at_ms,
             "deadlineAtMs": episode.deadline_at_ms,

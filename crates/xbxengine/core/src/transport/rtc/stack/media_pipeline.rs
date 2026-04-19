@@ -157,12 +157,15 @@ impl<'a> RtcStackMediaPipelineBridge<'a> {
             Duration::from_millis(video_pipeline.jitter_buffer_min_delay_ms),
             Duration::from_millis(video_pipeline.jitter_buffer_max_delay_ms),
             Duration::from_millis(video_pipeline.idle_timeout_ms.max(120)),
+            // `max_retry_count` 与 `FrameBudgetContext::retry_budget` 取小后生效；生产路径下帧级
+            // retry_budget 恒为 0（NACK 单发，见 ingress/budget）。此处仍传入 runtime 上限供单测与
+            // 未来策略扩展；设为 0 与「单发」字面一致。
             crate::transport::rtc::stream::nack_scheduler::NackSchedulerConfig {
                 max_age_ms: video_pipeline.nack_max_age_ms,
                 frame_deadline_ms: video_pipeline.late_frame_drop_threshold_ms.max(40),
                 burst_count: video_pipeline.nack_burst_count.max(1),
                 retry_interval_ms: video_pipeline.nack_retry_interval_ms.max(10),
-                max_retry_count: video_pipeline.nack_max_retry_count.max(1),
+                max_retry_count: video_pipeline.nack_max_retry_count,
             },
             video_pipeline.jitter_early_emit_enabled,
         );
