@@ -197,7 +197,7 @@ mod platform {
 
     fn resolve_winrt_gamepad(index: u32) -> WinResult<Option<Gamepad>> {
         // WinRT 调用前确保当前线程进入 MTA；重复调用时返回值可安全忽略。
-        let _ = unsafe { CoInitializeEx(std::ptr::null(), COINIT_MULTITHREADED) };
+        let _ = unsafe { CoInitializeEx(Some(std::ptr::null()), COINIT_MULTITHREADED) };
 
         let raw_controllers = RawGameController::RawGameControllers()?;
         if index < raw_controllers.Size()? {
