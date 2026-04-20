@@ -317,7 +317,7 @@ impl FfmpegWindowsD3d11vaDecoder {
                 width as i32,
                 height as i32,
                 ffi::AVPixelFormat::AV_PIX_FMT_BGRA,
-                ffi::SwsFlags::SWS_BILINEAR as i32,
+                2i32,
                 std::ptr::null_mut(),
                 std::ptr::null_mut(),
                 std::ptr::null(),
