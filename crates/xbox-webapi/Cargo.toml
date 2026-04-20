@@ -8,7 +8,9 @@ license = "MIT"
 reqwest = { version = "0.13.2", features = [ "json" ] }
 serde = { version = "1", features = [ "derive" ] }
 serde_json = "1"
+
 thiserror.workspace = true
+
 chrono = { version = "0.4", features = [ "serde" ] }
 base64 = "0.22"
 p256 = { version = "0.13", features = [ "ecdsa" ] }
@@ -16,7 +18,11 @@ uuid = { version = "1.0", features = [
   "v4",
   "serde"
 ] }
+
 rand.workspace = true
+
 sha2 = "0.10"
-openssl = "0.10"
+
+openssl.workspace = true
+
 tokio = { version = "1", features = [ "time" ] }

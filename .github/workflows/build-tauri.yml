@@ -65,48 +65,6 @@ jobs:
         with:
           version: "18.1"
 
-      - name: Install OpenSSL (Windows)
-        if: runner.os == 'Windows'
-        run: choco install openssl --no-progress -y
-        shell: pwsh
-
-      # openssl-sys 在 Windows/MSVC 上不能只设 OPENSSL_DIR：默认只搜 <dir>/lib，而 slproweb/Chocolatey
-      # 布局把 libssl.lib 放在 lib/VC/x64/MD（或 MT）。不显式设 OPENSSL_LIB_DIR 时会在 expando 之后
-      # 因找不到 .lib 而 panic（exit 101）。
-      - name: Set OpenSSL paths for MSVC (Windows)
-        if: runner.os == 'Windows'
-        run: |
-          $candidates = @(
-            "C:\Program Files\OpenSSL-Win64",
-            "C:\Program Files\OpenSSL",
-            "C:\OpenSSL-Win64"
-          )
-          $opensslDir = $candidates | Where-Object { Test-Path $_ } | Select-Object -First 1
-          if (-not $opensslDir) {
-            throw "OpenSSL install directory not found after choco install; expected one of: $($candidates -join ', ')"
-          }
-          $includeDir = Join-Path $opensslDir "include"
-          $libCandidates = @(
-            (Join-Path $opensslDir "lib\VC\x64\MD"),
-            (Join-Path $opensslDir "lib\VC\x64\MT"),
-            (Join-Path $opensslDir "lib")
-          )
-          $libDir = $null
-          foreach ($c in $libCandidates) {
-            if (-not (Test-Path $c)) { continue }
-            $hasSsl = Test-Path (Join-Path $c "libssl.lib")
-            $hasCrypto = Test-Path (Join-Path $c "libcrypto.lib")
-            if ($hasSsl -or $hasCrypto) { $libDir = $c; break }
-          }
-          if (-not $libDir) {
-            throw "Could not find libssl.lib/libcrypto.lib under: $($libCandidates -join ', ')"
-          }
-          echo "OPENSSL_DIR=$opensslDir" >> $env:GITHUB_ENV
-          echo "OPENSSL_LIB_DIR=$libDir" >> $env:GITHUB_ENV
-          echo "OPENSSL_INCLUDE_DIR=$includeDir" >> $env:GITHUB_ENV
-          echo "$opensslDir\bin" >> $env:GITHUB_PATH
-        shell: pwsh
-
       - name: pnpm
         uses: pnpm/action-setup@v4
         with:
@@ -145,6 +103,8 @@ jobs:
         run: pnpm tauri build
         env:
           CI: true
+          # vendored OpenSSL 在 Windows 上可自动降级为 no-asm；显式固定后可避免 runner 镜像差异影响构建路径。
+          OPENSSL_RUST_USE_NASM: 0
 
       - name: Upload bundle artifacts
         uses: actions/upload-artifact@v4
