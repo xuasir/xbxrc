@@ -585,6 +585,7 @@ fn start_runtime_control_consumes_execution_spec() {
                     brightness: 1.4,
                 },
             }),
+            ice_candidate_policy: None,
         })
         .expect("start runtime control should succeed");
 

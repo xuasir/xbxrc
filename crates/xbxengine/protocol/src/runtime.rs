@@ -541,6 +541,14 @@ pub struct XbxEngineKeyframeRequestEpisodeObservationDto {
     pub lifecycle_phase: Option<String>,
     #[serde(default)]
     pub retired_at_ms: Option<f64>,
+    #[serde(default)]
+    pub family_id: Option<String>,
+    #[serde(default)]
+    pub owner_episode_id: Option<u64>,
+    #[serde(default)]
+    pub suppress_duration_ms: Option<f64>,
+    #[serde(default)]
+    pub release_reason: Option<String>,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
@@ -615,6 +623,10 @@ pub struct XbxEngineStatsDto {
     pub video_owner_source: Option<String>,
     pub video_owner_observed_at_ms: Option<f64>,
     pub video_health: Option<String>,
+    #[serde(default)]
+    pub chain_health: Option<String>,
+    #[serde(default)]
+    pub presentation_health: Option<String>,
     pub stall_kind: Option<String>,
     pub inbound_video_fps: Option<f64>,
     pub decode_fps: Option<f64>,
@@ -691,6 +703,12 @@ pub struct XbxEngineStatsDto {
     pub host_display_tick_epoch: Option<u64>,
     pub video_present_epoch: Option<u64>,
     pub host_cadence_phase: Option<String>,
+    #[serde(default)]
+    pub last_displayed_frame_seq: Option<u64>,
+    #[serde(default)]
+    pub last_displayed_frame_rtp_timestamp: Option<u32>,
+    #[serde(default)]
+    pub last_displayed_at_ms: Option<f64>,
     pub video_present_descriptor_upload_mode: Option<String>,
     pub video_present_descriptor_metal_import_count_total: Option<u64>,
     pub video_present_descriptor_cpu_upload_count_total: Option<u64>,
@@ -721,6 +739,19 @@ pub struct XbxEngineStatsDto {
     /// 最近一次成功从 render slot 取到帧的时间（ms）。
     #[serde(default)]
     pub host_present_latest_render_slot_at_ms: Option<f64>,
+    /// ICE candidate policy 观测（与 webrtc_direct 对齐）
+    #[serde(default)]
+    pub ice_policy_mode: Option<String>,
+    #[serde(default)]
+    pub ice_policy_digest: Option<String>,
+    #[serde(default)]
+    pub ice_policy_source: Option<String>,
+    #[serde(default)]
+    pub ice_policy_filtered_count: Option<u32>,
+    #[serde(default)]
+    pub ice_policy_derived_count: Option<u32>,
+    #[serde(default)]
+    pub ice_policy_skipped_by_family_mismatch_count: Option<u32>,
     pub latest_decode_candidate_decision: Option<XbxEnginePipelineCandidateDecisionObservationDto>,
     pub latest_render_candidate_decision: Option<XbxEnginePipelineCandidateDecisionObservationDto>,
     pub latest_video_packet_gap: Option<XbxEnginePacketGapObservationDto>,

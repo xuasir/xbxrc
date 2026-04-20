@@ -392,6 +392,9 @@ pub struct XbxEngineHostVideoPresentMetrics {
     pub descriptor_upload_mode: Option<String>,
     pub descriptor_metal_import_count_total: u64,
     pub descriptor_cpu_upload_count_total: u64,
+    pub last_displayed_frame_seq: Option<u64>,
+    pub last_displayed_frame_rtp_timestamp: Option<u32>,
+    pub last_displayed_at_ms: Option<f64>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -1060,6 +1063,9 @@ pub struct XbxEngineMediaRuntimeStats {
     pub host_display_interval_ms: Option<f64>,
     pub host_frame_age_budget_ms: Option<f64>,
     pub latest_video_host_present_time_ms: Option<f64>,
+    pub last_displayed_frame_seq: Option<u64>,
+    pub last_displayed_frame_rtp_timestamp: Option<u32>,
+    pub last_displayed_at_ms: Option<f64>,
     pub video_present_fps: f64,
     pub video_renderer_stalled: Option<bool>,
     pub latest_decode_candidate_decision: Option<XbxEnginePipelineCandidateDecisionObservation>,
@@ -1231,6 +1237,9 @@ impl Default for XbxEngineMediaRuntimeStats {
             host_display_interval_ms: None,
             host_frame_age_budget_ms: None,
             latest_video_host_present_time_ms: None,
+            last_displayed_frame_seq: None,
+            last_displayed_frame_rtp_timestamp: None,
+            last_displayed_at_ms: None,
             video_present_fps: 0.0,
             video_renderer_stalled: None,
             latest_decode_candidate_decision: None,

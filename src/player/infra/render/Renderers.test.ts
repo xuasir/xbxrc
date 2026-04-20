@@ -140,6 +140,8 @@ describe('Renderers', () => {
       style: { position: '', inset: '', width: '', height: '', pointerEvents: '' },
       isConnected: true,
       remove: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
       getContext: vi.fn(() => gl),
     }
     globalThis.document = {
@@ -181,5 +183,95 @@ describe('Renderers', () => {
     expect((video as unknown as LocalVideoElement).insertAdjacentElement).toHaveBeenCalled()
     expect(gl.uniform1f).toHaveBeenCalled()
     expect(canvasNode.remove).toHaveBeenCalled()
+    expect(canvasNode.addEventListener).toHaveBeenCalled()
+    expect(canvasNode.removeEventListener).toHaveBeenCalled()
+  })
+
+  it('throws when webgl2 shader compilation fails', async () => {
+    const gl = {
+      drawingBufferWidth: 1280,
+      drawingBufferHeight: 720,
+      viewport: vi.fn(),
+      createShader: vi.fn(() => ({})),
+      shaderSource: vi.fn(),
+      compileShader: vi.fn(),
+      getShaderParameter: vi.fn(() => false),
+      getShaderInfoLog: vi.fn(() => 'compile-error'),
+      createProgram: vi.fn(() => ({})),
+      attachShader: vi.fn(),
+      linkProgram: vi.fn(),
+      getProgramParameter: vi.fn(() => true),
+      getProgramInfoLog: vi.fn(() => ''),
+      useProgram: vi.fn(),
+      createBuffer: vi.fn(() => ({})),
+      bindBuffer: vi.fn(),
+      bufferData: vi.fn(),
+      enableVertexAttribArray: vi.fn(),
+      vertexAttribPointer: vi.fn(),
+      createTexture: vi.fn(() => ({})),
+      bindTexture: vi.fn(),
+      pixelStorei: vi.fn(),
+      texParameteri: vi.fn(),
+      uniform1i: vi.fn(),
+      getUniformLocation: vi.fn(() => ({})),
+      uniform2f: vi.fn(),
+      uniform1f: vi.fn(),
+      texImage2D: vi.fn(),
+      drawArrays: vi.fn(),
+      VERTEX_SHADER: 1,
+      FRAGMENT_SHADER: 2,
+      ARRAY_BUFFER: 3,
+      STATIC_DRAW: 4,
+      FLOAT: 5,
+      TEXTURE_2D: 6,
+      UNPACK_FLIP_Y_WEBGL: 7,
+      TEXTURE_WRAP_S: 8,
+      TEXTURE_WRAP_T: 9,
+      CLAMP_TO_EDGE: 10,
+      TEXTURE_MIN_FILTER: 11,
+      TEXTURE_MAG_FILTER: 12,
+      LINEAR: 13,
+      RGB: 14,
+      UNSIGNED_BYTE: 15,
+      TRIANGLES: 16,
+      COMPILE_STATUS: 17,
+      LINK_STATUS: 18,
+    }
+    const canvasNode = {
+      width: 1280,
+      height: 720,
+      style: { position: '', inset: '', width: '', height: '', pointerEvents: '' },
+      isConnected: true,
+      remove: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      getContext: vi.fn(() => gl),
+    }
+    globalThis.document = {
+      createElement: (tag: string) => {
+        if (tag === 'canvas') {
+          return canvasNode
+        }
+        return { style: {} }
+      },
+    } as unknown as Document
+
+    class LocalVideoElement {
+      dataset: Record<string, string> = {}
+      videoWidth = 1280
+      videoHeight = 720
+      insertAdjacentElement = vi.fn()
+      requestVideoFrameCallback(callback: () => void): number {
+        void callback
+        return 1
+      }
+
+      cancelVideoFrameCallback(_id: number): void {}
+    }
+    globalThis.HTMLVideoElement = LocalVideoElement as unknown as typeof HTMLVideoElement
+    const video = new LocalVideoElement() as unknown as HTMLVideoElement
+
+    const renderer = new WebGL2VideoRenderer(createRendererConfig())
+    await expect(renderer.attach(video)).rejects.toThrow(/CompileFailed/)
   })
 })

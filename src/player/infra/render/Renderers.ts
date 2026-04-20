@@ -128,6 +128,21 @@ class WebGL2Processor extends BaseCanvasVideoProcessor {
   private currentWidth = 0
   private currentHeight = 0
   private hasDrawnFrame = false
+  private contextListenersBound = false
+  private readonly onContextLost = (event: Event): void => {
+    event.preventDefault()
+    this.gl = null
+    this.program = null
+    this.hasDrawnFrame = false
+    this.canvas.style.opacity = '0'
+  }
+
+  private readonly onContextRestored = (): void => {
+    if (this.isStopped) {
+      return
+    }
+    this.setup()
+  }
 
   protected setup(): void {
     const gl = this.canvas.getContext('webgl2', {
@@ -146,6 +161,11 @@ class WebGL2Processor extends BaseCanvasVideoProcessor {
     this.canvas.style.opacity = '0'
     this.currentWidth = Math.max(1, this.canvas.width)
     this.currentHeight = Math.max(1, this.canvas.height)
+    if (!this.contextListenersBound) {
+      this.canvas.addEventListener('webglcontextlost', this.onContextLost as EventListener)
+      this.canvas.addEventListener('webglcontextrestored', this.onContextRestored as EventListener)
+      this.contextListenersBound = true
+    }
     gl.viewport(0, 0, this.currentWidth, this.currentHeight)
     const vShader = gl.createShader(gl.VERTEX_SHADER)!
     gl.shaderSource(vShader, `#version 300 es
@@ -251,7 +271,10 @@ void main() {
   }
 
   protected renderFrame(): void {
-    const gl = this.gl!
+    const gl = this.gl
+    if (gl === null || this.program === null) {
+      return
+    }
     if (this.video.videoWidth > 0 && this.video.videoHeight > 0
       && (this.video.videoWidth !== this.currentWidth || this.video.videoHeight !== this.currentHeight)) {
       this.currentWidth = this.video.videoWidth
@@ -267,6 +290,15 @@ void main() {
       this.hasDrawnFrame = true
       this.canvas.style.opacity = '1'
     }
+  }
+
+  override destroy(): void {
+    if (this.contextListenersBound) {
+      this.canvas.removeEventListener('webglcontextlost', this.onContextLost as EventListener)
+      this.canvas.removeEventListener('webglcontextrestored', this.onContextRestored as EventListener)
+      this.contextListenersBound = false
+    }
+    super.destroy()
   }
 }
 

@@ -97,6 +97,18 @@ pub struct XbxEngineNegotiationRuntimeConfig {
     pub force_mono_audio: bool,
     pub prefer_ipv6: bool,
     pub offer_profile: String,
+    pub ice_policy: XbxEngineIceCandidatePolicyRuntimeConfig,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct XbxEngineIceCandidatePolicyRuntimeConfig {
+    pub enabled: bool,
+    pub prefer_udp: bool,
+    pub allow_tcp_fallback: bool,
+    pub relay_bias: String,
+    pub enable_teredo_derivation: bool,
+    pub enable_family_mismatch_gate: bool,
+    pub source: String,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -163,6 +175,21 @@ impl Default for XbxEngineNegotiationRuntimeConfig {
             force_mono_audio: false,
             prefer_ipv6: false,
             offer_profile: "macos".to_string(),
+            ice_policy: XbxEngineIceCandidatePolicyRuntimeConfig::default(),
+        }
+    }
+}
+
+impl Default for XbxEngineIceCandidatePolicyRuntimeConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            prefer_udp: true,
+            allow_tcp_fallback: true,
+            relay_bias: "neutral".to_string(),
+            enable_teredo_derivation: false,
+            enable_family_mismatch_gate: true,
+            source: "settings".to_string(),
         }
     }
 }
@@ -214,6 +241,12 @@ pub struct XbxEngineRuntimeSnapshot {
     pub host_present_take_empty_streak: u32,
     /// 最近一次成功从 render slot 取到帧的时间（ms）。
     pub host_present_latest_render_slot_at_ms: Option<f64>,
+    pub ice_policy_mode: Option<String>,
+    pub ice_policy_digest: Option<String>,
+    pub ice_policy_source: Option<String>,
+    pub ice_policy_filtered_count: Option<u32>,
+    pub ice_policy_derived_count: Option<u32>,
+    pub ice_policy_skipped_by_family_mismatch_count: Option<u32>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

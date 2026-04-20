@@ -215,6 +215,9 @@ impl<'a> RtcStackRuntimePort<'a> {
             stats.host_display_tick_epoch = metrics.display_tick_epoch;
             stats.video_present_epoch = metrics.present_epoch;
             stats.host_cadence_phase = metrics.cadence_phase;
+            stats.last_displayed_frame_seq = metrics.last_displayed_frame_seq;
+            stats.last_displayed_frame_rtp_timestamp = metrics.last_displayed_frame_rtp_timestamp;
+            stats.last_displayed_at_ms = metrics.last_displayed_at_ms;
             stats.video_present_fps = metrics.present_fps;
             stats.video_present_submit_count_total = metrics.present_submit_count_total;
             stats.video_present_drop_count_total = metrics.present_drop_count_total;

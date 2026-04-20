@@ -48,6 +48,13 @@ describe('buildStreamDiagnosticsSnapshot', () => {
       renderDecisionDigest: 'rf:renderStable|dl:displayL1|bp:0|dr:2|iv:50',
       renderPipelineType: 'webgl2',
       renderPolicySource: 'auto',
+      renderProcessing: 'cas',
+      renderProcessingMode: 'quality',
+      renderShaderPath: 'cas',
+      renderFpsBudget: 60,
+      rendererCapabilityReason: 'webgl2ContextAvailable',
+      icePolicyMode: 'policy',
+      icePolicyDigest: 'f[ipv4:1]|t[udp:1]|k[srflx:1]',
       lastRecoveryActionEffect: 'improved',
       lastRecoveryActionEffectScore: 1.8,
       lastRecoveryActionEffectReason: 'fpsOrLatencyImproved',
@@ -82,6 +89,13 @@ describe('buildStreamDiagnosticsSnapshot', () => {
     expect(diagnostics.renderDecisionDigest).toContain('rf:renderStable')
     expect(diagnostics.renderPipelineType).toBe('webgl2')
     expect(diagnostics.renderPolicySource).toBe('auto')
+    expect(diagnostics.renderProcessing).toBe('cas')
+    expect(diagnostics.renderProcessingMode).toBe('quality')
+    expect(diagnostics.renderShaderPath).toBe('cas')
+    expect(diagnostics.renderFpsBudget).toBe(60)
+    expect(diagnostics.rendererCapabilityReason).toBe('webgl2ContextAvailable')
+    expect(diagnostics.icePolicyMode).toBe('policy')
+    expect(diagnostics.icePolicyDigest).toContain('ipv4')
     expect(diagnostics.lastRecoveryActionEffect).toBe('improved')
     expect(diagnostics.lastRecoveryActionEffectReason).toBe('fpsOrLatencyImproved')
     expect(diagnostics.connectedMilestoneElapsedText).toBe('1800ms')

@@ -36,6 +36,17 @@ export interface XbxEngineDisplayStateDto {
   display_options: XbxEngineDisplayOptionsDto
 }
 
+export interface XbxEngineIceCandidatePolicyDto {
+  enabled: boolean
+  preferIpv6: boolean
+  preferUdp: boolean
+  allowTcpFallback: boolean
+  relayBias: 'prefer' | 'neutral'
+  enableTeredoDerivation: boolean
+  enableFamilyMismatchGate: boolean
+  source: 'settings' | 'debugOverride'
+}
+
 export type XbxEngineInputEventDto
   = | {
     kind: 'pointer'
@@ -103,6 +114,8 @@ export interface XbxEngineStatsDto {
   video_owner_source?: string
   video_owner_observed_at_ms?: number
   video_health?: string
+  chain_health?: string
+  presentation_health?: string
   stall_kind?: string
   inbound_video_fps?: number
   decode_fps?: number
@@ -117,6 +130,12 @@ export interface XbxEngineStatsDto {
   transport_protocol?: string
   transport_address_family?: 'ipv4' | 'ipv6' | 'mixed' | 'unknown'
   transport_state?: string
+  ice_policy_mode?: string
+  ice_policy_digest?: string
+  ice_policy_source?: string
+  ice_policy_filtered_count?: number
+  ice_policy_derived_count?: number
+  ice_policy_skipped_by_family_mismatch_count?: number
   video_rtt_source?: string
   video_remb_bps?: number
   inbound_bitrate_kbps?: number
@@ -182,6 +201,9 @@ export interface XbxEngineStatsDto {
   host_no_pending_streak?: number
   host_no_pending_max_streak?: number
   host_no_pending_pressure_level?: string
+  last_displayed_frame_seq?: number
+  last_displayed_frame_rtp_timestamp?: number
+  last_displayed_at_ms?: number
   video_present_descriptor_upload_mode?: string
   video_present_descriptor_metal_import_count_total?: number
   video_present_descriptor_cpu_upload_count_total?: number
@@ -207,6 +229,31 @@ export interface XbxEngineStatsDto {
     bound_as_recovery_response?: boolean | null
     bound_response_rtp_timestamp?: number | null
   }
+  latest_keyframe_request_episode?: {
+    episode_id: number
+    request_reason?: string | null
+    request_kind?: string | null
+    status: string
+    status_detail?: string | null
+    requested_at_ms: number
+    sent_at_ms?: number | null
+    deadline_at_ms?: number | null
+    transport_detail?: string | null
+    first_video_packet_at_ms?: number | null
+    first_video_packet_rtp_timestamp?: number | null
+    first_video_packet_is_keyframe?: boolean | null
+    first_keyframe_packet_at_ms?: number | null
+    first_keyframe_decoded_at_ms?: number | null
+    response_rtp_timestamp?: number | null
+    response_frame_seq?: number | null
+    response_verdict?: string | null
+    lifecycle_phase?: string | null
+    retired_at_ms?: number | null
+    family_id?: string | null
+    owner_episode_id?: number | null
+    suppress_duration_ms?: number | null
+    release_reason?: string | null
+  } | null
   recovery_keyframe_request_count?: number
   recovery_decoder_reset_count?: number
   recovery_reconnect_count?: number
@@ -519,6 +566,7 @@ export interface XbxEngineStartRuntimeParams {
   mode?: XbxEngineStreamingMode | null
   runtime: StreamingRuntimeProjection
   render: StreamingRenderProjection
+  iceCandidatePolicy?: XbxEngineIceCandidatePolicyDto | null
   audioVolume: number
 }
 

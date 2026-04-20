@@ -45,6 +45,8 @@ export interface StreamStats {
   videoOwnerObservedAtMs?: number
   directGamingBitrateBand?: string
   videoHealth?: string
+  chainHealth?: string
+  presentationHealth?: string
   /** 与 videoHealth 并列的主诊断链（如 steady:healthy / display:supplyStarved） */
   primaryIssueChain?: string
   latestDecisionSummary?: string
@@ -123,6 +125,9 @@ export interface StreamStats {
   videoPresentDescriptorUploadMode?: string
   videoPresentDescriptorMetalImportCountTotal?: number
   videoPresentDescriptorCpuUploadCountTotal?: number
+  lastDisplayedFrameSeq?: number
+  lastDisplayedFrameRtpTimestamp?: number
+  lastDisplayedAtMs?: number
   recoveryKeyframeRequestCount?: number
   recoveryDecoderResetCount?: number
   recoveryReconnectCount?: number

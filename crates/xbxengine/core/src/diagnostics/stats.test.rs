@@ -39,6 +39,12 @@ fn test_snapshot() -> XbxEngineRuntimeSnapshot {
         reconnect_trigger_source: None,
         host_present_take_empty_streak: 0,
         host_present_latest_render_slot_at_ms: None,
+        ice_policy_mode: None,
+        ice_policy_digest: None,
+        ice_policy_source: None,
+        ice_policy_filtered_count: None,
+        ice_policy_derived_count: None,
+        ice_policy_skipped_by_family_mismatch_count: None,
     }
 }
 
@@ -736,6 +742,9 @@ fn build_stats_reports_recovering_after_first_present_when_output_turns_stale() 
         video_owner_reason: Some("adapterIdleTimeout".to_string()),
         video_owner_source: Some("anchor".to_string()),
         video_owner_observed_at_ms: Some(now_ms - 10.0),
+        host_no_pending_pressure_level: None,
+        host_no_pending_streak: 0,
+        host_no_pending_max_streak: 0,
         ..XbxEngineMediaRuntimeStats::default()
     };
 
@@ -743,7 +752,7 @@ fn build_stats_reports_recovering_after_first_present_when_output_turns_stale() 
 
     assert_eq!(dto.session_phase.as_deref(), Some("recovering"));
     assert_eq!(dto.stream_lifecycle_phase.as_deref(), Some("recovering"));
-    assert_eq!(dto.video_health.as_deref(), Some("recovering"));
+    assert_eq!(dto.video_health.as_deref(), Some("displaySupplyStarved"));
     assert_eq!(
         dto.primary_issue_chain.as_deref(),
         Some("active-recovery:adapterIdleTimeout")
@@ -801,6 +810,48 @@ fn build_stats_projects_host_cadence_epoch_fields() {
     assert_eq!(dto.host_display_tick_epoch, Some(128));
     assert_eq!(dto.video_present_epoch, Some(96));
     assert_eq!(dto.host_cadence_phase.as_deref(), Some("starved"));
+}
+
+#[test]
+fn build_stats_projects_chain_presentation_health_and_last_displayed_frame() {
+    let now_ms = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as f64;
+    let stats = XbxEngineMediaRuntimeStats {
+        transport_state: XbxEngineTransportStateDto::Connected,
+        transport_policy_profile: Some("cloud".to_string()),
+        session_phase: Some("steady".to_string()),
+        direct_gaming_bitrate_band: Some("steady".to_string()),
+        message_handshake_acked_at_ms: Some(now_ms - 4_000.0),
+        control_ready_at_ms: Some(now_ms - 3_900.0),
+        latest_video_host_present_time_ms: Some(now_ms - 2_200.0),
+        latest_video_decode_ok_time_ms: Some(now_ms - 24.0),
+        video_present_submit_count_total: 120,
+        video_present_fps: 1.0,
+        host_no_pending_pressure_level: Some("critical".to_string()),
+        host_no_pending_streak: 1_280,
+        host_no_pending_max_streak: 1_500,
+        video_owner_state: Some("stable-serving".to_string()),
+        video_owner_reason: Some("steady".to_string()),
+        video_owner_source: Some("anchor".to_string()),
+        video_owner_observed_at_ms: Some(now_ms - 10.0),
+        last_displayed_frame_seq: Some(77),
+        last_displayed_frame_rtp_timestamp: Some(22334455),
+        last_displayed_at_ms: Some(now_ms - 2_200.0),
+        ..XbxEngineMediaRuntimeStats::default()
+    };
+
+    let dto = build_xbxengine_stats(&test_snapshot(), Some(&stats));
+    assert_eq!(dto.video_health.as_deref(), Some("displaySupplyStarved"));
+    assert_eq!(dto.chain_health.as_deref(), Some("healthy"));
+    assert_eq!(
+        dto.presentation_health.as_deref(),
+        Some("displaySupplyStarved")
+    );
+    assert_eq!(dto.last_displayed_frame_seq, Some(77));
+    assert_eq!(dto.last_displayed_frame_rtp_timestamp, Some(22334455));
+    assert_eq!(dto.last_displayed_at_ms, Some(now_ms - 2_200.0));
 }
 
 #[test]
@@ -1037,7 +1088,7 @@ fn build_stats_owner_contract_prefers_canonical_owner_over_coupling_signals() {
     };
 
     let dto = build_xbxengine_stats(&test_snapshot(), Some(&stats));
-    assert_eq!(dto.video_health.as_deref(), Some("recovering"));
+    assert_eq!(dto.video_health.as_deref(), Some("displaySupplyStarved"));
     assert_eq!(
         dto.recovery_owner_state.as_deref(),
         Some("rebuilding-supply")
@@ -1104,13 +1155,16 @@ fn runtime_summary_profile_slot_prefers_runtime_profile_over_transport_policy() 
         video_present_submit_count_total: 1,
         video_owner_state: Some("stable-serving".to_string()),
         video_owner_reason: Some("steady".to_string()),
+        host_no_pending_pressure_level: None,
+        host_no_pending_streak: 0,
+        host_no_pending_max_streak: 0,
         ..XbxEngineMediaRuntimeStats::default()
     };
 
     let dto = build_xbxengine_stats(&test_snapshot(), Some(&stats));
     assert_eq!(
         dto.runtime_summary.as_deref(),
-        Some("relayGaming+steady/steady/steady/stable-serving/healthy")
+        Some("relayGaming+steady/steady/steady/stable-serving/displaySupplyStarved")
     );
 }
 
@@ -1124,13 +1178,16 @@ fn runtime_summary_profile_slot_does_not_fallback_to_transport_policy_only() {
         latest_video_host_present_time_ms: Some(30.0),
         video_present_submit_count_total: 1,
         direct_gaming_bitrate_band: Some("steady".to_string()),
+        host_no_pending_pressure_level: None,
+        host_no_pending_streak: 0,
+        host_no_pending_max_streak: 0,
         ..XbxEngineMediaRuntimeStats::default()
     };
 
     let dto = build_xbxengine_stats(&test_snapshot(), Some(&stats));
     assert_eq!(
         dto.runtime_summary.as_deref(),
-        Some("homeLanGaming+steady/steady/steady/stable-serving/healthy")
+        Some("homeLanGaming+steady/steady/steady/stable-serving/displaySupplyStarved")
     );
 }
 

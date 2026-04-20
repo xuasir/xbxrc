@@ -312,6 +312,9 @@ impl XbxEngineRuntimeState {
                 display_tick_epoch: viewport.host_display_tick_epoch,
                 present_epoch: viewport.host_present_epoch,
                 cadence_phase: viewport.host_cadence_phase.clone(),
+                last_displayed_frame_seq: viewport.last_displayed_frame_seq,
+                last_displayed_frame_rtp_timestamp: viewport.last_displayed_frame_rtp_timestamp,
+                last_displayed_at_ms: viewport.last_displayed_at_ms,
                 present_fps: viewport.host_present_fps,
                 // core 里该字段历史命名为 submit，本质是宿主侧 enqueue 次数。
                 present_submit_count_total: viewport.host_present_enqueue_count_total,

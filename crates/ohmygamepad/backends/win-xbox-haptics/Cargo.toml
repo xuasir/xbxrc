@@ -17,8 +17,11 @@ ohmygamepad-core = { path = "../../core" }
 ohmygamepad-protocol = { path = "../../protocol" }
 
 [target.'cfg(target_os = "windows")'.dependencies]
-windows-sys = { version = "0.61.2", features = ["Win32_Gaming"] }
-windows = { version = "0.61.3", features = ["Gaming_Input"] }
+windows-sys = { version = "0.61.2", features = [ "Win32_UI_Input_XboxController" ] }
+windows = { version = "0.61.3", features = [
+  "Gaming_Input",
+  "Win32_System_Com"
+] }
 
 [lib]
 path = "src/lib.rs"

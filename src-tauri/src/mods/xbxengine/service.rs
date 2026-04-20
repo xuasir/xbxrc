@@ -10,10 +10,10 @@ use serde_json::Value;
 use tauri::AppHandle;
 use xbxengine_protocol::{
     XbxEngineControlCommandDto, XbxEngineDisplayOptionsDto, XbxEngineDisplayStateDto,
-    XbxEngineInputEventDto, XbxEngineReconnectReasonDto, XbxEngineRenderProjectionDto,
-    XbxEngineRuntimeCodecPreferenceDto, XbxEngineRuntimeProjectionDto, XbxEngineRuntimeRecoveryDto,
-    XbxEngineRuntimeVideoPipelineDto, XbxEngineSessionDto, XbxEngineTargetTypeDto,
-    XbxEngineTurnServerDto, XbxEngineViewportDto,
+    XbxEngineIceCandidatePolicyDto, XbxEngineInputEventDto, XbxEngineReconnectReasonDto,
+    XbxEngineRenderProjectionDto, XbxEngineRuntimeCodecPreferenceDto, XbxEngineRuntimeProjectionDto,
+    XbxEngineRuntimeRecoveryDto, XbxEngineRuntimeVideoPipelineDto, XbxEngineSessionDto,
+    XbxEngineTargetTypeDto, XbxEngineTurnServerDto, XbxEngineViewportDto,
 };
 
 use crate::error::{AppError, AppResult};
@@ -160,7 +160,22 @@ struct StartRuntimeParams {
     viewport: AttachViewportParams,
     runtime: StreamingRuntimeProjection,
     render: StreamingRenderProjection,
+    #[serde(default)]
+    ice_candidate_policy: Option<IceCandidatePolicyParams>,
     audio_volume: f32,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct IceCandidatePolicyParams {
+    enabled: bool,
+    prefer_ipv6: bool,
+    prefer_udp: bool,
+    allow_tcp_fallback: bool,
+    relay_bias: String,
+    enable_teredo_derivation: bool,
+    enable_family_mismatch_gate: bool,
+    source: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -288,6 +303,18 @@ fn parse_control_command(
                 audio_volume: params.audio_volume,
                 runtime: Some(to_runtime_projection(params.runtime)),
                 render: Some(to_render_projection(params.render)),
+                ice_candidate_policy: params.ice_candidate_policy.map(|policy| {
+                    XbxEngineIceCandidatePolicyDto {
+                        enabled: policy.enabled,
+                        prefer_ipv6: policy.prefer_ipv6,
+                        prefer_udp: policy.prefer_udp,
+                        allow_tcp_fallback: policy.allow_tcp_fallback,
+                        relay_bias: policy.relay_bias,
+                        enable_teredo_derivation: policy.enable_teredo_derivation,
+                        enable_family_mismatch_gate: policy.enable_family_mismatch_gate,
+                        source: policy.source,
+                    }
+                }),
             })
         }
         "RequestReconnect" => {

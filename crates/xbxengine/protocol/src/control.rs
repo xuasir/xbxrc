@@ -85,6 +85,18 @@ pub struct XbxEngineRenderProjectionDto {
     pub display_options: XbxEngineDisplayOptionsDto,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct XbxEngineIceCandidatePolicyDto {
+    pub enabled: bool,
+    pub prefer_ipv6: bool,
+    pub prefer_udp: bool,
+    pub allow_tcp_fallback: bool,
+    pub relay_bias: String,
+    pub enable_teredo_derivation: bool,
+    pub enable_family_mismatch_gate: bool,
+    pub source: String,
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum XbxEngineInputEventDto {
     Pointer {
@@ -118,6 +130,7 @@ pub enum XbxEngineControlCommandDto {
         audio_volume: f32,
         runtime: Option<XbxEngineRuntimeProjectionDto>,
         render: Option<XbxEngineRenderProjectionDto>,
+        ice_candidate_policy: Option<XbxEngineIceCandidatePolicyDto>,
     },
     StopRuntime {
         reason: Option<String>,

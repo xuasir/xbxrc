@@ -37,10 +37,11 @@ mod platform {
     use ohmygamepad_core::HapticsProviderError;
     use ohmygamepad_protocol::OhMyGamepadRumbleEffectDto;
     use windows::{
-        core::{initialize_mta, Result as WinResult},
+        core::Result as WinResult,
         Gaming::Input::{Gamepad, GamepadVibration, RawGameController},
+        Win32::System::Com::{CoInitializeEx, COINIT_MULTITHREADED},
     };
-    use windows_sys::Win32::Gaming::XInput::{XInputSetState, XINPUT_VIBRATION};
+    use windows_sys::Win32::UI::Input::XboxController::{XInputSetState, XINPUT_VIBRATION};
 
     static STOP_TOKENS: OnceLock<Mutex<HashMap<String, u64>>> = OnceLock::new();
     static NEXT_STOP_TOKEN: AtomicU64 = AtomicU64::new(1);
@@ -195,7 +196,8 @@ mod platform {
     }
 
     fn resolve_winrt_gamepad(index: u32) -> WinResult<Option<Gamepad>> {
-        let _ = initialize_mta();
+        // WinRT 调用前确保当前线程进入 MTA；重复调用时返回值可安全忽略。
+        let _ = unsafe { CoInitializeEx(std::ptr::null(), COINIT_MULTITHREADED) };
 
         let raw_controllers = RawGameController::RawGameControllers()?;
         if index < raw_controllers.Size()? {

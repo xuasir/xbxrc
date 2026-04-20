@@ -205,6 +205,9 @@ pub struct NativeVideoViewportState {
     pub host_display_tick_epoch: u64,
     pub host_present_epoch: u64,
     pub host_cadence_phase: Option<String>,
+    pub last_displayed_frame_seq: Option<u64>,
+    pub last_displayed_frame_rtp_timestamp: Option<u32>,
+    pub last_displayed_at_ms: Option<f64>,
     pub host_display_interval_ms: Option<f64>,
     pub host_frame_age_budget_ms: Option<f64>,
     pub host_descriptor_upload_mode: Option<String>,
@@ -549,6 +552,9 @@ fn reset_viewport_present_runtime_state(viewport: &mut NativeVideoViewportState)
     viewport.host_display_tick_epoch = 0;
     viewport.host_present_epoch = 0;
     viewport.host_cadence_phase = None;
+    viewport.last_displayed_frame_seq = None;
+    viewport.last_displayed_frame_rtp_timestamp = None;
+    viewport.last_displayed_at_ms = None;
     viewport.host_display_interval_ms = None;
     viewport.host_frame_age_budget_ms = None;
 }

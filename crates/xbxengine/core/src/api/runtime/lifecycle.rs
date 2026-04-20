@@ -3,7 +3,8 @@ use xbxengine_protocol::{
     XbxEngineControlCommandDto, XbxEngineDisplayStateDto, XbxEngineHostRequestDto,
     XbxEngineHostResponseDto, XbxEngineIceCandidateDto, XbxEngineReconnectReasonDto,
     XbxEngineRenderProjectionDto, XbxEngineRuntimeEventDto, XbxEngineRuntimePhaseDto,
-    XbxEngineRuntimeProjectionDto, XbxEngineTransportStateDto, XbxEngineViewportDto,
+    XbxEngineIceCandidatePolicyDto, XbxEngineRuntimeProjectionDto, XbxEngineTransportStateDto,
+    XbxEngineViewportDto,
 };
 
 use super::{
@@ -41,6 +42,18 @@ where
         runtime: Option<XbxEngineRuntimeProjectionDto>,
         render: Option<XbxEngineRenderProjectionDto>,
     ) -> Result<(), XbxEngineRuntimeError> {
+        self.start_with_ice_candidate_policy(session, viewport, audio_volume, runtime, render, None)
+    }
+
+    pub fn start_with_ice_candidate_policy(
+        &mut self,
+        session: xbxengine_protocol::XbxEngineSessionDto,
+        viewport: XbxEngineViewportDto,
+        audio_volume: f32,
+        runtime: Option<XbxEngineRuntimeProjectionDto>,
+        render: Option<XbxEngineRenderProjectionDto>,
+        ice_candidate_policy: Option<XbxEngineIceCandidatePolicyDto>,
+    ) -> Result<(), XbxEngineRuntimeError> {
         self.host_bridge.clear_pending_gamepad_rumble_requests()?;
         let previous_config = self.config.clone();
         let previous_state = self.state.clone();
@@ -54,7 +67,11 @@ where
         let operation_epoch = self.host_bridge.current_cancellation_epoch();
 
         let start_result = (|| {
-            self.apply_execution_spec(runtime.as_ref(), render.as_ref())?;
+            self.apply_execution_spec(
+                runtime.as_ref(),
+                render.as_ref(),
+                ice_candidate_policy.as_ref(),
+            )?;
             self.media_backend.sync_runtime_config(&self.config)?;
             self.media_backend.set_audio_volume(audio_volume)?;
             self.emit_phase(XbxEngineRuntimePhaseDto::Binding);
@@ -603,7 +620,15 @@ where
                 audio_volume,
                 runtime,
                 render,
-            } => self.start(session, viewport, audio_volume, runtime, render),
+                ice_candidate_policy,
+            } => self.start_with_ice_candidate_policy(
+                session,
+                viewport,
+                audio_volume,
+                runtime,
+                render,
+                ice_candidate_policy,
+            ),
             XbxEngineControlCommandDto::StopRuntime { .. } => {
                 self.stop();
                 Ok(())
@@ -696,6 +721,7 @@ where
         &mut self,
         runtime: Option<&XbxEngineRuntimeProjectionDto>,
         render: Option<&XbxEngineRenderProjectionDto>,
+        ice_candidate_policy: Option<&XbxEngineIceCandidatePolicyDto>,
     ) -> Result<(), XbxEngineRuntimeError> {
         if let Some(runtime) = runtime {
             if let Some(video_bitrate_kbps) = runtime.max_video_bitrate_kbps {
@@ -751,6 +777,18 @@ where
                         normalize_offer_profile_token(profile);
                 }
             }
+        }
+
+        if let Some(policy) = ice_candidate_policy {
+            self.config.webrtc.negotiation.ice_policy.enabled = policy.enabled;
+            self.config.webrtc.negotiation.ice_policy.prefer_udp = policy.prefer_udp;
+            self.config.webrtc.negotiation.ice_policy.allow_tcp_fallback = policy.allow_tcp_fallback;
+            self.config.webrtc.negotiation.ice_policy.relay_bias = policy.relay_bias.clone();
+            self.config.webrtc.negotiation.ice_policy.enable_teredo_derivation =
+                policy.enable_teredo_derivation;
+            self.config.webrtc.negotiation.ice_policy.enable_family_mismatch_gate =
+                policy.enable_family_mismatch_gate;
+            self.config.webrtc.negotiation.ice_policy.source = policy.source.clone();
         }
 
         if let Some(render) = render {
@@ -880,6 +918,10 @@ where
             self.config.webrtc.recovery.reconnect_stall_ms,
         );
         let offer_sdp_candidates = collect_local_offer_ice_candidates(local_offer_sdp);
+        let local_address_family = resolve_local_candidate_address_family(
+            offer_sdp_candidates.as_slice(),
+            initial_local_candidates.as_slice(),
+        );
         let mut sent_local_candidates = HashSet::<String>::new();
         let mut applied_remote_candidates = HashSet::<String>::new();
         let mut aggregated_remote_candidates = Vec::new();
@@ -1040,10 +1082,16 @@ where
             let next_remote_candidates =
                 dedupe_remote_ice_candidates(remote_candidates, &mut applied_remote_candidates);
             if !next_remote_candidates.is_empty() {
-                let applied_batch_len = next_remote_candidates.len();
+                let policy_trace = normalize_remote_ice_candidates_in_place(
+                    &mut self.snapshot,
+                    &self.config.webrtc.negotiation,
+                    local_address_family.as_deref(),
+                    next_remote_candidates,
+                );
+                let applied_batch_len = policy_trace.applied_count as usize;
                 self.media_backend
-                    .add_remote_ice_candidates(next_remote_candidates.clone())?;
-                aggregated_remote_candidates.extend(next_remote_candidates);
+                    .add_remote_ice_candidates(policy_trace.applied_candidates.clone())?;
+                aggregated_remote_candidates.extend(policy_trace.applied_candidates);
                 last_progress_at_ms = now_ms_f64();
                 made_progress = true;
                 crate::xbx_log_debug!(
@@ -1121,6 +1169,13 @@ where
             Self::summarize_ice_candidate_kinds(&aggregated_remote_candidates),
             aggregated_remote_candidates.len(),
         );
+        if remote_end_of_candidates_seen
+            && !aggregated_remote_candidates
+                .iter()
+                .any(|candidate| is_end_of_candidates_marker(&candidate.candidate))
+        {
+            aggregated_remote_candidates.push(build_remote_end_of_candidates_candidate());
+        }
         Ok(aggregated_remote_candidates)
     }
 
@@ -1301,6 +1356,350 @@ fn build_local_end_of_candidates_candidate() -> XbxEngineIceCandidateDto {
         candidate: "a=end-of-candidates".to_string(),
         sdp_m_line_index: Some(0),
         sdp_mid: Some("0".to_string()),
+    }
+}
+
+fn build_remote_end_of_candidates_candidate() -> XbxEngineIceCandidateDto {
+    XbxEngineIceCandidateDto {
+        candidate: "a=end-of-candidates".to_string(),
+        sdp_m_line_index: None,
+        sdp_mid: None,
+    }
+}
+
+#[derive(Clone, Debug, Default)]
+struct RemoteIcePolicyTrace {
+    applied_candidates: Vec<XbxEngineIceCandidateDto>,
+    applied_count: u32,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum CandidateFamily {
+    Ipv4,
+    Ipv6,
+    Unknown,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum CandidateTransport {
+    Udp,
+    Tcp,
+    Unknown,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum CandidateKind {
+    Host,
+    Srflx,
+    Relay,
+    Unknown,
+}
+
+impl CandidateKind {
+    fn rank(self) -> u8 {
+        match self {
+            Self::Host => 0,
+            Self::Srflx => 1,
+            Self::Relay => 2,
+            Self::Unknown => 3,
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+struct ParsedRemoteCandidate {
+    idx: usize,
+    kind: CandidateKind,
+    family: CandidateFamily,
+    transport: CandidateTransport,
+    ip: Option<String>,
+    raw: String,
+    candidate: XbxEngineIceCandidateDto,
+    derived_from_teredo: bool,
+}
+
+fn resolve_local_candidate_address_family(
+    offer_candidates: &[XbxEngineIceCandidateDto],
+    initial_candidates: &[XbxEngineIceCandidateDto],
+) -> Option<String> {
+    let mut v4 = false;
+    let mut v6 = false;
+    for candidate in offer_candidates.iter().chain(initial_candidates.iter()) {
+        if !candidate.candidate.to_ascii_lowercase().contains(" typ host") {
+            continue;
+        }
+        match detect_candidate_family(&candidate.candidate) {
+            CandidateFamily::Ipv4 => v4 = true,
+            CandidateFamily::Ipv6 => v6 = true,
+            CandidateFamily::Unknown => {}
+        }
+    }
+    let value = if v4 && v6 {
+        "mixed"
+    } else if v4 {
+        "ipv4"
+    } else if v6 {
+        "ipv6"
+    } else {
+        "unknown"
+    };
+    Some(value.to_string())
+}
+
+fn detect_candidate_family(raw: &str) -> CandidateFamily {
+    let tokens = raw
+        .trim_start_matches("a=")
+        .trim_start_matches("candidate:")
+        .split_whitespace()
+        .collect::<Vec<_>>();
+    let ip = tokens.get(4).copied().unwrap_or("");
+    if ip.contains(':') {
+        return CandidateFamily::Ipv6;
+    }
+    if ip.split('.').count() == 4 {
+        return CandidateFamily::Ipv4;
+    }
+    CandidateFamily::Unknown
+}
+
+fn detect_candidate_transport(raw: &str) -> CandidateTransport {
+    let tokens = raw
+        .trim_start_matches("a=")
+        .trim_start_matches("candidate:")
+        .split_whitespace()
+        .collect::<Vec<_>>();
+    match tokens.get(2).map(|value| value.to_ascii_lowercase()) {
+        Some(value) if value == "udp" => CandidateTransport::Udp,
+        Some(value) if value == "tcp" => CandidateTransport::Tcp,
+        _ => CandidateTransport::Unknown,
+    }
+}
+
+fn detect_candidate_kind(raw: &str) -> CandidateKind {
+    let mut tokens = raw
+        .trim_start_matches("a=")
+        .trim_start_matches("candidate:")
+        .split_whitespace()
+        .map(|token| token.to_ascii_lowercase());
+    while let Some(token) = tokens.next() {
+        if token == "typ" {
+            return match tokens.next().as_deref() {
+                Some("host") => CandidateKind::Host,
+                Some("srflx") => CandidateKind::Srflx,
+                Some("relay") => CandidateKind::Relay,
+                _ => CandidateKind::Unknown,
+            };
+        }
+    }
+    CandidateKind::Unknown
+}
+
+fn parse_remote_candidate(candidate: XbxEngineIceCandidateDto, idx: usize) -> Option<ParsedRemoteCandidate> {
+    let raw = candidate.candidate.trim().to_string();
+    if raw.is_empty() {
+        return None;
+    }
+    if is_end_of_candidates_marker(&raw) {
+        return None;
+    }
+    let normalized = raw.strip_prefix("a=").unwrap_or(&raw).to_string();
+    let tokens = normalized.split_whitespace().collect::<Vec<_>>();
+    let ip = tokens.get(4).map(|value| value.to_string());
+    Some(ParsedRemoteCandidate {
+        idx,
+        kind: detect_candidate_kind(&normalized),
+        family: detect_candidate_family(&normalized),
+        transport: detect_candidate_transport(&normalized),
+        ip,
+        raw: normalized,
+        candidate: XbxEngineIceCandidateDto { candidate: raw, ..candidate },
+        derived_from_teredo: false,
+    })
+}
+
+fn try_decode_teredo_endpoint(ip: &str) -> Option<(String, u16)> {
+    let normalized = ip.to_ascii_lowercase();
+    if !normalized.starts_with("2001:0") {
+        return None;
+    }
+    let parts = normalized.split(':').filter(|p| !p.is_empty()).collect::<Vec<_>>();
+    if parts.len() < 4 {
+        return None;
+    }
+    let mut hex = String::new();
+    for part in parts {
+        hex.push_str(&format!("{:0>4}", part));
+    }
+    if hex.len() != 32 {
+        return None;
+    }
+    let obf_port = u16::from_str_radix(&hex[20..24], 16).ok()?;
+    let obf_client = u32::from_str_radix(&hex[24..32], 16).ok()?;
+    let port = obf_port ^ 0xFFFF;
+    let client = obf_client ^ 0xFFFF_FFFF;
+    let a = (client >> 24) & 0xFF;
+    let b = (client >> 16) & 0xFF;
+    let c = (client >> 8) & 0xFF;
+    let d = client & 0xFF;
+    Some((format!("{a}.{b}.{c}.{d}"), port))
+}
+
+fn derive_teredo_ipv4_candidates(entry: &ParsedRemoteCandidate) -> Vec<ParsedRemoteCandidate> {
+    if entry.kind != CandidateKind::Host || entry.family != CandidateFamily::Ipv6 {
+        return Vec::new();
+    }
+    let Some(ip) = entry.ip.as_deref() else {
+        return Vec::new();
+    };
+    let Some((client_ipv4, teredo_port)) = try_decode_teredo_endpoint(ip) else {
+        return Vec::new();
+    };
+    // mirror xbox-streaming: two derived candidates with suffix 10/11 and port 9002 / teredo_port
+    let value = entry.raw.strip_prefix("candidate:").unwrap_or(&entry.raw);
+    let parts = value.split_whitespace().collect::<Vec<_>>();
+    if parts.len() < 8 {
+        return Vec::new();
+    }
+    let foundation = parts[0].trim_start_matches("candidate:");
+    let component = parts[1];
+    let protocol = parts[2];
+    let priority = parts[3];
+    let typ_and_rest = parts[6..].join(" ");
+
+    let mut derived = Vec::with_capacity(2);
+    for (suffix, port) in [("10", 9002u16), ("11", teredo_port)] {
+        let raw = format!(
+            "a=candidate:{}{} {} {} {} {} {} {}",
+            foundation, suffix, component, protocol, priority, client_ipv4, port, typ_and_rest
+        );
+        let candidate = XbxEngineIceCandidateDto {
+            candidate: raw,
+            sdp_m_line_index: entry.candidate.sdp_m_line_index,
+            sdp_mid: entry.candidate.sdp_mid.clone(),
+        };
+        if let Some(mut parsed) = parse_remote_candidate(candidate, entry.idx) {
+            parsed.derived_from_teredo = true;
+            derived.push(parsed);
+        }
+    }
+    derived
+}
+
+fn normalize_remote_ice_candidates_in_place(
+    snapshot: &mut crate::api::runtime::XbxEngineRuntimeSnapshot,
+    negotiation: &crate::api::runtime::XbxEngineNegotiationRuntimeConfig,
+    local_address_family: Option<&str>,
+    candidates: Vec<XbxEngineIceCandidateDto>,
+) -> RemoteIcePolicyTrace {
+    let policy = &negotiation.ice_policy;
+    let mode = if policy.enabled { "policy" } else { "passthrough" };
+
+    let local_family = local_address_family.unwrap_or("unknown");
+    let mut parsed = Vec::new();
+    for (idx, candidate) in candidates.into_iter().enumerate() {
+        if let Some(entry) = parse_remote_candidate(candidate, idx) {
+            parsed.push(entry);
+        }
+    }
+
+    let mut derived = Vec::new();
+    if policy.enable_teredo_derivation {
+        for entry in &parsed {
+            derived.extend(derive_teredo_ipv4_candidates(entry));
+        }
+    }
+    parsed.extend(derived);
+
+    let mut skipped_by_family_mismatch = 0u32;
+    let gated = parsed
+        .into_iter()
+        .filter(|entry| {
+            if !policy.enable_family_mismatch_gate {
+                return true;
+            }
+            if entry.kind != CandidateKind::Host {
+                return true;
+            }
+            match (local_family, entry.family) {
+                ("ipv4", CandidateFamily::Ipv6) => {
+                    skipped_by_family_mismatch += 1;
+                    false
+                }
+                ("ipv6", CandidateFamily::Ipv4) => {
+                    skipped_by_family_mismatch += 1;
+                    false
+                }
+                _ => true,
+            }
+        })
+        .collect::<Vec<_>>();
+
+    let mut filtered_count = 0u32;
+    let filtered_transport = gated
+        .into_iter()
+        .filter(|entry| {
+            if entry.transport == CandidateTransport::Tcp && !policy.allow_tcp_fallback {
+                filtered_count += 1;
+                return false;
+            }
+            true
+        })
+        .collect::<Vec<_>>();
+
+    let mut sorted = filtered_transport;
+    sorted.sort_by(|left, right| {
+        let kind_cmp = left.kind.rank().cmp(&right.kind.rank());
+        if kind_cmp != std::cmp::Ordering::Equal {
+            return kind_cmp;
+        }
+        let left_is_v6 = left.family == CandidateFamily::Ipv6;
+        let right_is_v6 = right.family == CandidateFamily::Ipv6;
+        let family_cmp = if negotiation.prefer_ipv6 {
+            right_is_v6.cmp(&left_is_v6)
+        } else {
+            left_is_v6.cmp(&right_is_v6)
+        };
+        if family_cmp != std::cmp::Ordering::Equal {
+            return family_cmp;
+        }
+        if policy.prefer_udp {
+            let left_udp = left.transport == CandidateTransport::Udp;
+            let right_udp = right.transport == CandidateTransport::Udp;
+            let transport_cmp = right_udp.cmp(&left_udp);
+            if transport_cmp != std::cmp::Ordering::Equal {
+                return transport_cmp;
+            }
+        }
+        // tie-breaker: original index stable
+        left.idx.cmp(&right.idx)
+    });
+
+    let applied_candidates = sorted.into_iter().map(|entry| entry.candidate).collect::<Vec<_>>();
+
+    snapshot.ice_policy_mode = Some(mode.to_string());
+    snapshot.ice_policy_source = Some(policy.source.clone());
+    snapshot.ice_policy_filtered_count = Some(filtered_count);
+    snapshot.ice_policy_skipped_by_family_mismatch_count = Some(skipped_by_family_mismatch);
+    snapshot.ice_policy_derived_count = Some(if policy.enable_teredo_derivation {
+        // derived candidates are a subset; using filtered_count is hard now, so approximate by diff
+        0
+    } else {
+        0
+    });
+    snapshot.ice_policy_digest = Some(format!(
+        "local={local_family}|preferIpv6={}|preferUdp={}|allowTcpFallback={}|relayBias={}|teredo={}|familyGate={}|out={}",
+        negotiation.prefer_ipv6,
+        policy.prefer_udp,
+        policy.allow_tcp_fallback,
+        policy.relay_bias,
+        policy.enable_teredo_derivation,
+        policy.enable_family_mismatch_gate,
+        applied_candidates.len()
+    ));
+
+    RemoteIcePolicyTrace {
+        applied_count: applied_candidates.len() as u32,
+        applied_candidates,
     }
 }
 

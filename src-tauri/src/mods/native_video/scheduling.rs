@@ -417,6 +417,7 @@ pub struct ScheduledFrameSlot {
 #[derive(Clone, Debug, PartialEq)]
 pub struct ScheduledFrameSlotDiagnostics {
     pub displayed_frame_seq: Option<u64>,
+    pub displayed_frame_rtp_timestamp: Option<u32>,
     pub pending_frame_seqs: Vec<u64>,
     pub last_presented_frame_seq: Option<u64>,
     pub queue_depth: usize,
@@ -674,6 +675,10 @@ impl ScheduledFrameSlot {
     pub fn diagnostics_snapshot(&self) -> ScheduledFrameSlotDiagnostics {
         ScheduledFrameSlotDiagnostics {
             displayed_frame_seq: self.displayed_frame.as_ref().map(|frame| frame.frame_seq),
+            displayed_frame_rtp_timestamp: self
+                .displayed_frame
+                .as_ref()
+                .and_then(|frame| frame.rtp_timestamp),
             pending_frame_seqs: self
                 .pending_frames
                 .iter()

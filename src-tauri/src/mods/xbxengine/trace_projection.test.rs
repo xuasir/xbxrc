@@ -214,6 +214,62 @@ fn build_observability_snapshot_includes_latest_keyframe_episode() {
 }
 
 #[test]
+fn build_observability_snapshot_includes_suppression_family_and_health_split() {
+    let stats = test_stats(json!({
+        "resolution": "",
+        "rtt": "",
+        "fps": 0.0,
+        "pl": "0.00%",
+        "fl": "",
+        "jit": "",
+        "br": "",
+        "decode": "",
+        "video_health": "displaySupplyStarved",
+        "chain_health": "healthy",
+        "presentation_health": "displaySupplyStarved",
+        "latest_keyframe_request_episode": {
+            "episode_id": 91,
+            "request_reason": "transportAwaitRecoveryAnchor",
+            "request_kind": "pli",
+            "status": "deferred",
+            "status_detail": "transport-suppressed",
+            "requested_at_ms": 1200.0,
+            "deadline_at_ms": 2160.0,
+            "transport_detail": "coalesced:keyframeInFlight",
+            "response_verdict": "pending",
+            "family_id": "transportAwaitRecoveryAnchor:pli",
+            "owner_episode_id": 88,
+            "suppress_duration_ms": 240.0,
+            "release_reason": "ownerEpisodeSucceeded"
+        }
+    }));
+
+    let snapshot = build_observability_snapshot(&stats);
+    assert_eq!(snapshot["recovery"]["videoHealth"], "displaySupplyStarved");
+    assert_eq!(snapshot["recovery"]["chainHealth"], "healthy");
+    assert_eq!(
+        snapshot["recovery"]["presentationHealth"],
+        "displaySupplyStarved"
+    );
+    assert_eq!(
+        snapshot["latest"]["keyframeRequestEpisode"]["family_id"],
+        "transportAwaitRecoveryAnchor:pli"
+    );
+    assert_eq!(
+        snapshot["latest"]["keyframeRequestEpisode"]["owner_episode_id"],
+        88
+    );
+    assert_eq!(
+        snapshot["latest"]["keyframeRequestEpisode"]["suppress_duration_ms"],
+        240.0
+    );
+    assert_eq!(
+        snapshot["latest"]["keyframeRequestEpisode"]["release_reason"],
+        "ownerEpisodeSucceeded"
+    );
+}
+
+#[test]
 fn build_observability_snapshot_includes_latest_h264_inspection() {
     let stats = test_stats(json!({
         "resolution": "",
@@ -753,7 +809,11 @@ fn record_runtime_trace_observations_projects_keyframe_transport_suppression_eve
             "requested_at_ms": 1200.0,
             "deadline_at_ms": 2160.0,
             "transport_detail": "coalesced:keyframeInFlight",
-            "response_verdict": "pending"
+            "response_verdict": "pending",
+            "family_id": "transportAwaitRecoveryAnchor:pli",
+            "owner_episode_id": 90,
+            "suppress_duration_ms": 180.0,
+            "release_reason": "ownerEpisodeSucceeded"
         }
     }));
 
@@ -765,6 +825,10 @@ fn record_runtime_trace_observations_projects_keyframe_transport_suppression_eve
     assert_eq!(payload["status"], "deferred");
     assert_eq!(payload["statusDetail"], "transport-suppressed");
     assert_eq!(payload["transportDetail"], "coalesced:keyframeInFlight");
+    assert_eq!(payload["familyId"], "transportAwaitRecoveryAnchor:pli");
+    assert_eq!(payload["ownerEpisodeId"], 90);
+    assert_eq!(payload["suppressDurationMs"], 180.0);
+    assert_eq!(payload["releaseReason"], "ownerEpisodeSucceeded");
     assert_eq!(
         payload["diagnosticTimelineSourceEvent"],
         "frame-inspection-rejected-await-anchor"
@@ -889,6 +953,129 @@ fn record_runtime_trace_observations_projects_bootstrap_reject_event() {
     assert_eq!(payload["admissionAccepted"], false);
     assert_eq!(payload["linkedEpisodeId"], 95);
     assert_eq!(payload["isRecoveryKeyframeResponseContext"], true);
+    assert_eq!(payload["usableIdrOutcome"], "missingUsableIdr");
+}
+
+#[test]
+fn bootstrap_reject_observed_classifies_non_idr_before_usable_idr() {
+    let recorder = std::sync::Arc::new(
+        RuntimeTraceRecorder::new_with_mode("verbose").expect("trace recorder"),
+    );
+    let mut state = RuntimeTraceObservationState::default();
+    let stats = test_stats(json!({
+        "resolution": "",
+        "rtt": "",
+        "fps": 0.0,
+        "pl": "0.00%",
+        "fl": "",
+        "jit": "",
+        "br": "",
+        "decode": "",
+        "latest_keyframe_request_episode": {
+            "episode_id": 96,
+            "request_reason": "transportAwaitRecoveryAnchor",
+            "request_kind": "pli",
+            "status": "decoded",
+            "requested_at_ms": 1200.0,
+            "sent_at_ms": 1210.0,
+            "deadline_at_ms": 2160.0,
+            "first_video_packet_at_ms": 1300.0,
+            "first_video_packet_rtp_timestamp": 22334455,
+            "first_video_packet_is_keyframe": false,
+            "first_keyframe_decoded_at_ms": 1450.0,
+            "response_rtp_timestamp": 22334455,
+            "response_verdict": "on-time"
+        },
+        "latest_h264_inspection_observation": {
+            "observation_id": 22334455u64,
+            "frame_rtp_timestamp": 22334455u32,
+            "nal_types": ["SliceLayerWithoutPartitioningNonIdr"],
+            "nal_count": 1,
+            "vcl_nal_count": 1,
+            "has_inband_sps": false,
+            "has_inband_pps": false,
+            "committed_sps_present": true,
+            "committed_pps_present": true,
+            "slice_headers_valid": true,
+            "delta_continuation_ready": true,
+            "parameter_sets_changed": false,
+            "config_changed": false,
+            "is_idr": false,
+            "bootstrap_ready": false,
+            "bootstrap_reject_reason": "NonIdrVcl",
+            "admission_accepted": false,
+            "observed_at_ms": 1300.0,
+            "bound_episode_id": 96,
+            "bound_as_recovery_response": true
+        }
+    }));
+
+    record_runtime_trace_observations(&recorder, &mut state, Some("session-1"), &stats);
+
+    let entries = read_trace_lines(recorder.as_ref());
+    let payload = find_event_payload(&entries, "bootstrapRejectObserved");
+    assert_eq!(payload["usableIdrOutcome"], "beforeUsableIdr");
+}
+
+#[test]
+fn bootstrap_reject_observed_classifies_non_idr_without_usable_idr() {
+    let recorder = std::sync::Arc::new(
+        RuntimeTraceRecorder::new_with_mode("verbose").expect("trace recorder"),
+    );
+    let mut state = RuntimeTraceObservationState::default();
+    let stats = test_stats(json!({
+        "resolution": "",
+        "rtt": "",
+        "fps": 0.0,
+        "pl": "0.00%",
+        "fl": "",
+        "jit": "",
+        "br": "",
+        "decode": "",
+        "latest_keyframe_request_episode": {
+            "episode_id": 97,
+            "request_reason": "transportAwaitRecoveryAnchor",
+            "request_kind": "pli",
+            "status": "missed",
+            "requested_at_ms": 1200.0,
+            "sent_at_ms": 1210.0,
+            "deadline_at_ms": 2160.0,
+            "first_video_packet_at_ms": 1300.0,
+            "first_video_packet_rtp_timestamp": 22334456,
+            "first_video_packet_is_keyframe": false,
+            "response_rtp_timestamp": 22334456,
+            "response_verdict": "missed",
+            "retired_at_ms": 2160.0
+        },
+        "latest_h264_inspection_observation": {
+            "observation_id": 22334456u64,
+            "frame_rtp_timestamp": 22334456u32,
+            "nal_types": ["SliceLayerWithoutPartitioningNonIdr"],
+            "nal_count": 1,
+            "vcl_nal_count": 1,
+            "has_inband_sps": false,
+            "has_inband_pps": false,
+            "committed_sps_present": true,
+            "committed_pps_present": true,
+            "slice_headers_valid": true,
+            "delta_continuation_ready": true,
+            "parameter_sets_changed": false,
+            "config_changed": false,
+            "is_idr": false,
+            "bootstrap_ready": false,
+            "bootstrap_reject_reason": "NonIdrVcl",
+            "admission_accepted": false,
+            "observed_at_ms": 1300.0,
+            "bound_episode_id": 97,
+            "bound_as_recovery_response": true
+        }
+    }));
+
+    record_runtime_trace_observations(&recorder, &mut state, Some("session-1"), &stats);
+
+    let entries = read_trace_lines(recorder.as_ref());
+    let payload = find_event_payload(&entries, "bootstrapRejectObserved");
+    assert_eq!(payload["usableIdrOutcome"], "missingUsableIdr");
 }
 
 #[test]
@@ -2251,7 +2438,10 @@ fn host_present_state_projects_cadence_epoch_signals() {
         "video_present_submit_count_total": 301,
         "host_display_tick_epoch": 4096,
         "video_present_epoch": 3901,
-        "host_cadence_phase": "steady"
+        "host_cadence_phase": "steady",
+        "last_displayed_frame_seq": 77,
+        "last_displayed_frame_rtp_timestamp": 22334455u32,
+        "last_displayed_at_ms": 1440.0
     }));
 
     record_runtime_trace_observations(&recorder, &mut state, Some("session-1"), &stats);
@@ -2260,6 +2450,9 @@ fn host_present_state_projects_cadence_epoch_signals() {
     assert_eq!(payload["displayTickEpoch"], 4096);
     assert_eq!(payload["presentEpoch"], 3901);
     assert_eq!(payload["cadencePhase"], "steady");
+    assert_eq!(payload["lastDisplayedFrameSeq"], 77);
+    assert_eq!(payload["lastDisplayedFrameRtpTimestamp"], 22334455u32);
+    assert_eq!(payload["lastDisplayedAtMs"], 1440.0);
 }
 
 #[test]
@@ -2348,6 +2541,8 @@ fn direct_gaming_state_projects_display_supply_health_and_issue_chain() {
         "video_owner_source": "supply",
         "video_owner_observed_at_ms": 3200.0,
         "video_health": "displaySupplyStarved",
+        "chain_health": "healthy",
+        "presentation_health": "displaySupplyStarved",
         "stall_kind": "pipelineStall",
         "host_no_pending_take_count_total": 8062,
         "host_no_pending_streak": 1291,
@@ -2369,6 +2564,8 @@ fn direct_gaming_state_projects_display_supply_health_and_issue_chain() {
     assert_eq!(payload["videoOwnerSource"], "supply");
     assert_eq!(payload["videoOwnerObservedAtMs"], 3200.0);
     assert_eq!(payload["primaryIssueChain"], "display:supplyStarved");
+    assert_eq!(payload["chainHealth"], "healthy");
+    assert_eq!(payload["presentationHealth"], "displaySupplyStarved");
     let host_payload = find_event_payload(&entries, "hostPresentState");
     assert_eq!(host_payload["noPendingPressureLevel"], "critical");
     assert_eq!(host_payload["presentAgeMs"], 1624.0);

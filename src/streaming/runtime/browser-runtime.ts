@@ -25,6 +25,7 @@ import {
   applyBrowserVideoDisplay,
   bindBrowserVideoFrameTracking,
 } from './browser-video-display'
+import { applyIceCandidatePolicy } from './ice-candidate-policy'
 
 const MEDIA_STALL_CHECK_INTERVAL_MS = 2_000
 const MEDIA_STALL_RECOVERY_BACKOFF_MIN_MS = 10_000
@@ -102,7 +103,8 @@ type QualityLadderLevel = 'L0' | 'L1' | 'L2'
 type FirstFrameStage = 'idle' | 'connecting' | 'firstDecoded' | 'firstPresented'
 type RenderCause = 'decodeBackpressure' | 'renderStarvation' | 'renderStable'
 type DisplayDegradeLevel = 'displayL0' | 'displayL1' | 'displayL2'
-type RenderPolicySource = 'auto' | 'userOverride'
+type RenderPolicySource = 'auto' | 'userOverride' | 'capabilityFallback'
+type IcePolicyMode = 'passthrough' | 'policy'
 
 function createUnavailableError(): Error {
   return new Error('streamRuntimeNotStarted')
@@ -143,6 +145,92 @@ function resolveRendererPipelineOverride(): 'video' | 'webgl2' | 'auto' {
   catch {
   }
   return 'auto'
+}
+
+function resolveIceCandidatePolicyConfig(spec: RuntimeLaunchSpec): {
+  enabled: boolean
+  preferIpv6: boolean
+  preferUdp: boolean
+  allowTcpFallback: boolean
+  relayBias: 'prefer' | 'neutral'
+  enableTeredoDerivation: boolean
+  enableFamilyMismatchGate: boolean
+  source: 'settings' | 'debugOverride'
+} {
+  if (spec.runtime.iceCandidatePolicy !== undefined) {
+    return spec.runtime.iceCandidatePolicy
+  }
+
+  // 兼容旧版本：如果上游没下发策略，才回退到 localStorage。
+  try {
+    const store = globalThis.localStorage
+    return {
+      enabled: store?.getItem('streaming.icePolicyEnabled') !== '0',
+      preferIpv6: store?.getItem('streaming.icePreferIpv6') === '1',
+      preferUdp: store?.getItem('streaming.icePreferUdp') !== '0',
+      allowTcpFallback: store?.getItem('streaming.iceAllowTcpFallback') !== '0',
+      relayBias: store?.getItem('streaming.iceRelayBias') === 'prefer' ? 'prefer' : 'neutral',
+      enableTeredoDerivation: store?.getItem('streaming.iceEnableTeredoDerivation') === '1',
+      enableFamilyMismatchGate: store?.getItem('streaming.iceEnableFamilyMismatchGate') !== '0',
+      source: 'debugOverride',
+    }
+  }
+  catch {
+    return {
+      enabled: true,
+      preferIpv6: false,
+      preferUdp: true,
+      allowTcpFallback: true,
+      relayBias: 'neutral',
+      enableTeredoDerivation: spec.targetType === 'home',
+      enableFamilyMismatchGate: true,
+      source: 'settings',
+    }
+  }
+}
+
+function detectWebgl2Capability(): { supported: boolean, reason: string } {
+  try {
+    const canvas = document.createElement('canvas')
+    const context = canvas.getContext('webgl2')
+    return context === null
+      ? { supported: false, reason: 'webgl2ContextUnavailable' }
+      : { supported: true, reason: 'webgl2ContextAvailable' }
+  }
+  catch {
+    return { supported: false, reason: 'webgl2ContextException' }
+  }
+}
+
+function detectCandidateFamily(raw: string): 'ipv4' | 'ipv6' | 'unknown' {
+  const tokens = raw.replace(/^candidate:/i, '').trim().split(/\s+/)
+  const ip = tokens[4] ?? ''
+  if (ip.includes(':')) {
+    return 'ipv6'
+  }
+  if (/^\d{1,3}(?:\.\d{1,3}){3}$/.test(ip)) {
+    return 'ipv4'
+  }
+  return 'unknown'
+}
+
+function isHostCandidate(raw: string): boolean {
+  return /\btyp\s+host\b/i.test(raw)
+}
+
+function resolveLocalAddressFamily(families: Set<'ipv4' | 'ipv6'>): 'ipv4' | 'ipv6' | 'mixed' | 'unknown' {
+  const hasV4 = families.has('ipv4')
+  const hasV6 = families.has('ipv6')
+  if (hasV4 && hasV6) {
+    return 'mixed'
+  }
+  if (hasV4) {
+    return 'ipv4'
+  }
+  if (hasV6) {
+    return 'ipv6'
+  }
+  return 'unknown'
 }
 
 function toRendererFormat(videoFormat: string | undefined): RendererRuntimeConfig['format'] {
@@ -292,6 +380,16 @@ export function createBrowserRuntime(options: {
   let renderDecisionDigest: string | undefined
   let renderPipelineType: 'video' | 'webgl2' = 'webgl2'
   let renderPolicySource: RenderPolicySource = 'auto'
+  let renderProcessing: 'usm' | 'cas' | undefined
+  let renderProcessingMode: 'quality' | 'performance' | undefined
+  let renderShaderPath: 'usm' | 'cas' | 'none' | undefined
+  let renderFpsBudget: number | undefined
+  let rendererCapabilityReason: string | undefined
+  let webgl2Supported = true
+  let visibilityGovernorCleanup: (() => void) | null = null
+  let visibilityBudgetActive = false
+  let icePolicyMode: IcePolicyMode = 'passthrough'
+  let icePolicyDigest: string | undefined
 
   function emit(event: RuntimeEvent): void {
     for (const listener of listeners) {
@@ -378,9 +476,15 @@ export function createBrowserRuntime(options: {
     const render = currentDisplayState.render
     const displayOptions = currentDisplayState.displayOptions
     const pipelineOverride = resolveRendererPipelineOverride()
-    const policySource: RenderPolicySource = pipelineOverride === 'auto' ? 'auto' : 'userOverride'
     const autoPipeline: 'video' | 'webgl2' = next === 'displayL2' ? 'video' : 'webgl2'
-    const pipelineType = pipelineOverride === 'auto' ? autoPipeline : pipelineOverride
+    const autoResolvedPipeline = webgl2Supported ? autoPipeline : 'video'
+    const pipelineType = pipelineOverride === 'auto' ? autoResolvedPipeline : pipelineOverride
+    const policySource: RenderPolicySource
+      = pipelineOverride !== 'auto'
+        ? 'userOverride'
+        : webgl2Supported
+          ? 'auto'
+          : 'capabilityFallback'
     const nextConfig: Record<DisplayDegradeLevel, Partial<RendererRuntimeConfig>> = {
       displayL0: {
         pipelineType,
@@ -416,9 +520,22 @@ export function createBrowserRuntime(options: {
         saturation: displayOptions.saturation,
       },
     }
+    if (visibilityBudgetActive) {
+      nextConfig[next] = {
+        ...nextConfig[next],
+        targetFps: 0,
+      }
+    }
     const previousPipelineType = renderPipelineType
+    const previousFpsBudget = renderFpsBudget
     renderPipelineType = pipelineType
     renderPolicySource = policySource
+    renderProcessing = nextConfig[next].processing
+    renderProcessingMode = nextConfig[next].processingMode
+    renderShaderPath = pipelineType === 'webgl2'
+      ? (nextConfig[next].processing ?? 'none')
+      : 'none'
+    renderFpsBudget = nextConfig[next].targetFps
     assertClient().updateRenderer(nextConfig[next])
     const previous = displayDegradeLevel
     displayDegradeLevel = next
@@ -436,6 +553,21 @@ export function createBrowserRuntime(options: {
         source: renderPolicySource,
       })
     }
+    if (renderPolicySource === 'capabilityFallback') {
+      recordRuntimeTraceEvent('renderPipelineFallback', {
+        previous: previousPipelineType,
+        next: renderPipelineType,
+        reason,
+        capabilityReason: rendererCapabilityReason ?? null,
+      })
+    }
+    if (previousFpsBudget !== renderFpsBudget) {
+      recordRuntimeTraceEvent('renderFpsBudgetChanged', {
+        previous: previousFpsBudget ?? null,
+        next: renderFpsBudget ?? null,
+        reason,
+      })
+    }
     recordRuntimeTraceEvent('renderPolicyApplied', {
       source: renderPolicySource,
       pipelineType: renderPipelineType,
@@ -444,6 +576,7 @@ export function createBrowserRuntime(options: {
       targetFps: nextConfig[next].targetFps ?? null,
       processing: nextConfig[next].processing ?? null,
       processingMode: nextConfig[next].processingMode ?? null,
+      shaderPath: renderShaderPath ?? null,
     })
   }
 
@@ -474,11 +607,49 @@ export function createBrowserRuntime(options: {
     }
   }
 
+  function clearVisibilityGovernor(): void {
+    if (visibilityGovernorCleanup !== null) {
+      visibilityGovernorCleanup()
+      visibilityGovernorCleanup = null
+    }
+  }
+
+  function bindVisibilityGovernor(): void {
+    clearVisibilityGovernor()
+    const onVisibilityChanged = (): void => {
+      if (client === null) {
+        return
+      }
+      if (document.visibilityState === 'hidden') {
+        const previousFpsBudget = renderFpsBudget
+        visibilityBudgetActive = true
+        renderFpsBudget = 0
+        assertClient().updateRenderer({ targetFps: 0 })
+        recordRuntimeTraceEvent('renderFpsBudgetChanged', {
+          previous: previousFpsBudget ?? null,
+          next: 0,
+          reason: 'documentHidden',
+        })
+        return
+      }
+      if (!visibilityBudgetActive) {
+        return
+      }
+      visibilityBudgetActive = false
+      void applyDisplayDegradeLevel(displayDegradeLevel, 'documentVisibleResume')
+    }
+    document.addEventListener('visibilitychange', onVisibilityChanged, { passive: true })
+    visibilityGovernorCleanup = () => {
+      document.removeEventListener('visibilitychange', onVisibilityChanged)
+    }
+  }
+
   function destroyClient(): void {
     const currentClient = client
     client = null
     clearClientSubscriptions()
     clearFrameTracking()
+    clearVisibilityGovernor()
     connectedMilestoneAt = null
     mediaReadyMilestoneAt = null
     pendingConnectedMilestone = false
@@ -646,6 +817,12 @@ export function createBrowserRuntime(options: {
       displayWarmupUntilMs = now + WARMUP_PROFILE_DURATION_MS
       renderPipelineType = resolveRendererPipelineOverride() === 'video' ? 'video' : 'webgl2'
       renderPolicySource = resolveRendererPipelineOverride() === 'auto' ? 'auto' : 'userOverride'
+      renderProcessing = undefined
+      renderProcessingMode = undefined
+      renderShaderPath = undefined
+      renderFpsBudget = undefined
+      icePolicyMode = 'passthrough'
+      icePolicyDigest = undefined
       updateFirstFrameStage('connecting', now, 'transportConnected')
       qualityLadderLevel = 'L1'
       qualityLevelChangedAtMs = now
@@ -1650,6 +1827,7 @@ export function createBrowserRuntime(options: {
     let finalPollSent = false
     const pendingLocalCandidates: Array<Parameters<PlayerClient['addIceCandidates']>[0][number]> = []
     const appliedRemoteCandidates = new Set<string>()
+    const localHostFamilies = new Set<'ipv4' | 'ipv6'>()
 
     const clearFlushTimer = (): void => {
       if (flushTimer !== null) {
@@ -1672,7 +1850,42 @@ export function createBrowserRuntime(options: {
       if (nextCandidates.length === 0 || !isAttemptActive(input.negotiation.attempt)) {
         return
       }
-      await input.negotiation.client.addIceCandidates(nextCandidates)
+      const policyConfigBase = resolveIceCandidatePolicyConfig(assertSpec())
+      const policyConfig = {
+        ...policyConfigBase,
+        localAddressFamily: resolveLocalAddressFamily(localHostFamilies),
+      }
+      const policyResult = applyIceCandidatePolicy({
+        candidates: nextCandidates,
+        config: policyConfig,
+      })
+      icePolicyMode = policyResult.trace.mode
+      icePolicyDigest = policyResult.trace.digest
+      recordRuntimeTraceEvent('icePolicyEvaluated', {
+        mode: policyResult.trace.mode,
+        source: policyConfig.source,
+        inputCount: policyResult.trace.inputCount,
+        outputCount: policyResult.trace.outputCount,
+        filteredCount: policyResult.trace.filteredCount,
+        derivedCount: policyResult.trace.derivedCount,
+        skippedByFamilyMismatchCount: policyResult.trace.skippedByFamilyMismatchCount,
+        endOfCandidatesSeen: policyResult.trace.endOfCandidatesSeen,
+        digest: policyResult.trace.digest,
+        orderPreview: policyResult.trace.orderPreview,
+        preferIpv6: policyConfig.preferIpv6,
+        preferUdp: policyConfig.preferUdp,
+        allowTcpFallback: policyConfig.allowTcpFallback,
+        relayBias: policyConfig.relayBias,
+        enableTeredoDerivation: policyConfig.enableTeredoDerivation,
+        enableFamilyMismatchGate: policyConfig.enableFamilyMismatchGate,
+        localAddressFamily: policyConfig.localAddressFamily,
+      })
+      await input.negotiation.client.addIceCandidates(policyResult.candidates)
+      recordRuntimeTraceEvent('icePolicyApplied', {
+        mode: policyResult.trace.mode,
+        outputCount: policyResult.trace.outputCount,
+        digest: policyResult.trace.digest,
+      })
     }
 
     const finishIfIdle = (resolve: () => void): void => {
@@ -1748,6 +1961,12 @@ export function createBrowserRuntime(options: {
         scheduleFlush(resolvePromise)
         return
       }
+      if (isHostCandidate(event.candidate.candidate)) {
+        const family = detectCandidateFamily(event.candidate.candidate)
+        if (family === 'ipv4' || family === 'ipv6') {
+          localHostFamilies.add(family)
+        }
+      }
       pendingLocalCandidates.push({
         candidate: event.candidate.candidate,
         sdpMid: event.candidate.sdpMid,
@@ -1770,6 +1989,12 @@ export function createBrowserRuntime(options: {
       peer.addEventListener('icegatheringstatechange', handleGatheringStateChange)
 
       for (const candidate of input.negotiation.client.getIceCandidates()) {
+        if (isHostCandidate(candidate.candidate)) {
+          const family = detectCandidateFamily(candidate.candidate)
+          if (family === 'ipv4' || family === 'ipv6') {
+            localHostFamilies.add(family)
+          }
+        }
         pendingLocalCandidates.push(candidate)
       }
       if (pendingLocalCandidates.length > 0 || gatheringComplete) {
@@ -1911,10 +2136,24 @@ export function createBrowserRuntime(options: {
       renderDecisionDigest = undefined
       renderPipelineType = 'webgl2'
       renderPolicySource = 'auto'
+      renderProcessing = undefined
+      renderProcessingMode = undefined
+      renderShaderPath = undefined
+      renderFpsBudget = undefined
+      const capability = detectWebgl2Capability()
+      rendererCapabilityReason = capability.reason
+      webgl2Supported = capability.supported
+      recordRuntimeTraceEvent('rendererCapabilityDetected', {
+        webgl2Supported,
+        reason: rendererCapabilityReason,
+      })
+      icePolicyMode = 'passthrough'
+      icePolicyDigest = undefined
       presentationMilestone = 'idle'
       presentationStage = null
       await attachGamepadSession(spec.sessionId)
       prepareFreshClient(spec)
+      bindVisibilityGovernor()
       startMediaStallMonitoring()
       bindProtocolSession(spec)
       await connectMediaProtocol(spec, { restart: false })
@@ -1983,6 +2222,14 @@ export function createBrowserRuntime(options: {
       renderDecisionDigest = undefined
       renderPipelineType = 'webgl2'
       renderPolicySource = 'auto'
+      renderProcessing = undefined
+      renderProcessingMode = undefined
+      renderShaderPath = undefined
+      renderFpsBudget = undefined
+      rendererCapabilityReason = undefined
+      webgl2Supported = true
+      icePolicyMode = 'passthrough'
+      icePolicyDigest = undefined
       presentationMilestone = 'idle'
       presentationStage = null
       destroyClient()
@@ -2120,6 +2367,13 @@ export function createBrowserRuntime(options: {
         renderDecisionDigest,
         renderPipelineType,
         renderPolicySource,
+        renderProcessing,
+        renderProcessingMode,
+        renderShaderPath,
+        renderFpsBudget,
+        rendererCapabilityReason,
+        icePolicyMode,
+        icePolicyDigest,
         presentationMilestone,
         presentationFailedStage: presentationStage ?? stats.presentationFailedStage,
         connectedMilestoneElapsedMs: connectedMilestoneAt === null

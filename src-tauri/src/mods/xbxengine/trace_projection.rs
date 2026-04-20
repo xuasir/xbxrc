@@ -74,6 +74,8 @@ pub(super) struct RuntimeTraceObservationState {
     video_owner_observed_at_bucket: Option<u64>,
     unified_lifecycle: Option<String>,
     video_health: Option<String>,
+    chain_health: Option<String>,
+    presentation_health: Option<String>,
     stall_kind: Option<String>,
     host_present_enqueue_count_total: Option<u64>,
     host_present_drop_count_total: Option<u64>,
@@ -85,6 +87,9 @@ pub(super) struct RuntimeTraceObservationState {
     host_display_tick_epoch: Option<u64>,
     host_present_epoch: Option<u64>,
     host_cadence_phase: Option<String>,
+    last_displayed_frame_seq: Option<u64>,
+    last_displayed_frame_rtp_timestamp: Option<u32>,
+    last_displayed_at_bucket: Option<u64>,
     host_descriptor_upload_mode: Option<String>,
     host_descriptor_metal_import_count_total: Option<u64>,
     host_descriptor_cpu_upload_count_total: Option<u64>,
@@ -155,6 +160,8 @@ pub(super) fn build_observability_snapshot(stats: &XbxEngineStatsDto) -> serde_j
             "rfcStage": stats.recovery_rfc_stage,
             "rfcCeiling": stats.recovery_rfc_ceiling,
             "videoHealth": stats.video_health,
+            "chainHealth": stats.chain_health,
+            "presentationHealth": stats.presentation_health,
             "videoOwnerState": stats.recovery_owner_state,
             "videoOwnerReason": stats.recovery_owner_reason,
             "videoOwnerSource": stats.video_owner_source,
@@ -255,6 +262,9 @@ pub(super) fn build_observability_snapshot(stats: &XbxEngineStatsDto) -> serde_j
             "packetAgeMs": stats.packet_age_ms,
             "decodeAgeMs": stats.decode_age_ms,
             "presentAgeMs": stats.present_age_ms,
+            "lastDisplayedFrameSeq": stats.last_displayed_frame_seq,
+            "lastDisplayedFrameRtpTimestamp": stats.last_displayed_frame_rtp_timestamp,
+            "lastDisplayedAtMs": stats.last_displayed_at_ms,
             "packetToDecodeMs": stats.packet_to_decode_ms,
             "decodeToPresentMs": stats.decode_to_present_ms,
             "packetToPresentMs": stats.packet_to_present_ms,
@@ -1205,6 +1215,8 @@ pub(super) fn record_runtime_trace_observations(
             != current_video_owner_observed_at_bucket
         || observation_state.unified_lifecycle.as_deref() != Some(resolve_unified_lifecycle(stats))
         || observation_state.video_health != stats.video_health
+        || observation_state.chain_health != stats.chain_health
+        || observation_state.presentation_health != stats.presentation_health
         || observation_state.stall_kind != stats.stall_kind
     {
         observation_state.session_phase = stats.session_phase.clone();
@@ -1229,6 +1241,8 @@ pub(super) fn record_runtime_trace_observations(
         observation_state.video_owner_observed_at_bucket = current_video_owner_observed_at_bucket;
         observation_state.unified_lifecycle = Some(resolve_unified_lifecycle(stats).to_string());
         observation_state.video_health = stats.video_health.clone();
+        observation_state.chain_health = stats.chain_health.clone();
+        observation_state.presentation_health = stats.presentation_health.clone();
         observation_state.stall_kind = stats.stall_kind.clone();
         runtime_trace.record_state(
             "xbxengine",
@@ -1256,14 +1270,24 @@ pub(super) fn record_runtime_trace_observations(
                 "videoOwnerSource": stats.video_owner_source,
                 "videoOwnerObservedAtMs": stats.video_owner_observed_at_ms,
                 "videoHealth": stats.video_health,
+                "chainHealth": stats.chain_health,
+                "presentationHealth": stats.presentation_health,
                 "stallKind": stats.stall_kind,
             }),
         );
     }
 
+    let current_last_displayed_at_bucket = sample_bucket_ms(
+        stats.last_displayed_at_ms,
+        DIRECT_GAMING_STATE_SAMPLE_INTERVAL_MS,
+    );
     let host_present_semantic_changed = observation_state.host_no_pending_pressure_level
         != stats.host_no_pending_pressure_level
         || observation_state.host_cadence_phase != stats.host_cadence_phase
+        || observation_state.last_displayed_frame_seq != stats.last_displayed_frame_seq
+        || observation_state.last_displayed_frame_rtp_timestamp
+            != stats.last_displayed_frame_rtp_timestamp
+        || observation_state.last_displayed_at_bucket != current_last_displayed_at_bucket
         || observation_state.host_descriptor_upload_mode
             != stats.video_present_descriptor_upload_mode;
     let host_present_counter_regressed = observation_state
@@ -1306,6 +1330,10 @@ pub(super) fn record_runtime_trace_observations(
         observation_state.host_display_tick_epoch = stats.host_display_tick_epoch;
         observation_state.host_present_epoch = stats.video_present_epoch;
         observation_state.host_cadence_phase = stats.host_cadence_phase.clone();
+        observation_state.last_displayed_frame_seq = stats.last_displayed_frame_seq;
+        observation_state.last_displayed_frame_rtp_timestamp =
+            stats.last_displayed_frame_rtp_timestamp;
+        observation_state.last_displayed_at_bucket = current_last_displayed_at_bucket;
         observation_state.host_descriptor_upload_mode =
             stats.video_present_descriptor_upload_mode.clone();
         observation_state.host_descriptor_metal_import_count_total =
@@ -1329,6 +1357,9 @@ pub(super) fn record_runtime_trace_observations(
                 "presentEpoch": stats.video_present_epoch,
                 "cadencePhase": stats.host_cadence_phase,
                 "presentAgeMs": stats.present_age_ms,
+                "lastDisplayedFrameSeq": stats.last_displayed_frame_seq,
+                "lastDisplayedFrameRtpTimestamp": stats.last_displayed_frame_rtp_timestamp,
+                "lastDisplayedAtMs": stats.last_displayed_at_ms,
                 "descriptorUploadMode": stats.video_present_descriptor_upload_mode,
                 "descriptorMetalImportCountTotal": stats.video_present_descriptor_metal_import_count_total,
                 "descriptorCpuUploadCountTotal": stats.video_present_descriptor_cpu_upload_count_total,
@@ -1721,6 +1752,10 @@ fn keyframe_request_episode_payload(
             "responseFrameSeq": episode.response_frame_seq,
             "responseVerdict": episode.response_verdict.clone(),
             "retiredAtMs": episode.retired_at_ms,
+            "familyId": episode.family_id.clone(),
+            "ownerEpisodeId": episode.owner_episode_id,
+            "suppressDurationMs": episode.suppress_duration_ms,
+            "releaseReason": episode.release_reason.clone(),
             "requestToFirstPacketMs": duration_ms(episode.requested_at_ms, episode.first_keyframe_packet_at_ms),
             "requestToFirstDecodeMs": duration_ms(episode.requested_at_ms, episode.first_keyframe_decoded_at_ms),
             "sentToFirstPacketMs": episode.sent_at_ms.and_then(|sent_at_ms| duration_ms(sent_at_ms, episode.first_keyframe_packet_at_ms)),
@@ -1968,6 +2003,7 @@ fn h264_inspection_payload(
                 "linkedEpisodeRequestReason": linked_reason,
                 "linkedEpisodeResponseVerdict": linked_verdict,
                 "isRecoveryKeyframeResponseContext": is_recovery,
+                "usableIdrOutcome": resolve_usable_idr_outcome(linked_full.as_ref(), observation),
             })
         }
         None => json!(null),
@@ -1976,6 +2012,30 @@ fn h264_inspection_payload(
 
 fn duration_ms(start_ms: f64, end_ms: Option<f64>) -> Option<f64> {
     end_ms.map(|end_ms| (end_ms - start_ms).max(0.0))
+}
+
+fn resolve_usable_idr_outcome(
+    episode: Option<&xbxengine_protocol::XbxEngineKeyframeRequestEpisodeObservationDto>,
+    observation: &xbxengine_protocol::XbxEngineH264InspectionObservationDto,
+) -> Option<&'static str> {
+    if observation.bootstrap_reject_reason.as_deref() != Some("NonIdrVcl") {
+        return None;
+    }
+    let episode = episode?;
+    if episode
+        .first_keyframe_decoded_at_ms
+        .is_some_and(|decoded_at_ms| decoded_at_ms >= observation.observed_at_ms)
+    {
+        return Some("beforeUsableIdr");
+    }
+    if matches!(
+        episode.status.as_str(),
+        "missed" | "failed" | "succeeded" | "decoded"
+    ) || episode.retired_at_ms.is_some()
+    {
+        return Some("missingUsableIdr");
+    }
+    None
 }
 
 fn keyframe_episode_timed_out(

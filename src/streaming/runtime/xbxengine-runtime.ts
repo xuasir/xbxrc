@@ -154,8 +154,12 @@ export function createXbxEngineRuntime(options: {
         viewport: {
           viewportId: viewportElementId,
         },
-        runtime: spec.runtime,
+        runtime: ((runtime) => {
+          const { iceCandidatePolicy: _iceCandidatePolicy, ...rest } = (runtime as unknown as Record<string, unknown>)
+          return rest as unknown as typeof spec.runtime
+        })(spec.runtime),
         render: spec.render,
+        iceCandidatePolicy: spec.runtime.iceCandidatePolicy ?? null,
         audioVolume,
       })
       recordLaunchTraceEvent('runtimeStartCompleted', {
@@ -241,6 +245,8 @@ export function createXbxEngineRuntime(options: {
         videoOwnerObservedAtMs: snapshot.video_owner_observed_at_ms,
         directGamingBitrateBand: snapshot.direct_gaming_bitrate_band,
         videoHealth: snapshot.video_health,
+        chainHealth: snapshot.chain_health,
+        presentationHealth: snapshot.presentation_health,
         primaryIssueChain: snapshot.primary_issue_chain,
         latestDecisionSummary: snapshot.latest_decision_summary,
         stallKind: snapshot.stall_kind,
@@ -257,6 +263,12 @@ export function createXbxEngineRuntime(options: {
         transportProtocol: snapshot.transport_protocol,
         transportAddressFamily: snapshot.transport_address_family ?? undefined,
         transportState: snapshot.transport_state,
+        icePolicyMode: snapshot.ice_policy_mode === 'policy'
+          ? 'policy'
+          : snapshot.ice_policy_mode === 'passthrough'
+            ? 'passthrough'
+            : undefined,
+        icePolicyDigest: snapshot.ice_policy_digest ?? undefined,
         videoRttSource: snapshot.video_rtt_source,
         videoRembBps: snapshot.video_remb_bps,
         inboundBitrateKbps: snapshot.inbound_bitrate_kbps,
@@ -320,6 +332,9 @@ export function createXbxEngineRuntime(options: {
         lastRecoveryAction: snapshot.last_recovery_action,
         lastRecoveryActionAtMs: snapshot.last_recovery_action_at_ms,
         lastRecoveryReason: snapshot.last_recovery_reason,
+        lastDisplayedFrameSeq: snapshot.last_displayed_frame_seq,
+        lastDisplayedFrameRtpTimestamp: snapshot.last_displayed_frame_rtp_timestamp,
+        lastDisplayedAtMs: snapshot.last_displayed_at_ms,
       }
     },
     subscribe(listener) {

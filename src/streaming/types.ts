@@ -44,11 +44,24 @@ export interface RuntimeLaunchSpec {
   sessionId: string
   targetType: StreamingTargetType
   turnSource: StreamSessionMetadataProjection['turnSource']
-  runtime: StreamRuntimeProjection
+  runtime: StreamRuntimeProjection & {
+    iceCandidatePolicy?: IceCandidatePolicySpec
+  }
   render: StreamRenderProjection
 }
 
 export type DisplayOptionsValue = StreamingDisplayOptionsValue
+
+export interface IceCandidatePolicySpec {
+  enabled: boolean
+  preferIpv6: boolean
+  preferUdp: boolean
+  allowTcpFallback: boolean
+  relayBias: 'prefer' | 'neutral'
+  enableTeredoDerivation: boolean
+  enableFamilyMismatchGate: boolean
+  source: 'settings' | 'debugOverride'
+}
 
 export interface StreamPerformanceSnapshot {
   resolution?: string
@@ -80,6 +93,8 @@ export interface StreamPerformanceSnapshot {
   videoOwnerObservedAtMs?: number
   directGamingBitrateBand?: string
   videoHealth?: string
+  chainHealth?: string
+  presentationHealth?: string
   primaryIssueChain?: string
   latestDecisionSummary?: string
   stallKind?: string
@@ -183,9 +198,19 @@ export interface StreamPerformanceSnapshot {
   displayDegradeLevel?: 'displayL0' | 'displayL1' | 'displayL2'
   renderDecisionDigest?: string
   renderPipelineType?: 'video' | 'webgl2'
-  renderPolicySource?: 'auto' | 'userOverride'
+  renderPolicySource?: 'auto' | 'userOverride' | 'capabilityFallback'
+  renderProcessing?: 'usm' | 'cas'
+  renderProcessingMode?: 'quality' | 'performance'
+  renderShaderPath?: 'usm' | 'cas' | 'none'
+  renderFpsBudget?: number
+  rendererCapabilityReason?: string
+  icePolicyMode?: 'passthrough' | 'policy'
+  icePolicyDigest?: string
   hostPresentTakeEmptyStreak?: number
   hostPresentLatestRenderSlotAtMs?: number
+  lastDisplayedFrameSeq?: number
+  lastDisplayedFrameRtpTimestamp?: number
+  lastDisplayedAtMs?: number
 }
 
 export interface StreamSessionDiagnosticsSnapshot {
@@ -262,7 +287,14 @@ export interface StreamSessionDiagnosticsSnapshot {
   displayDegradeLevel?: 'displayL0' | 'displayL1' | 'displayL2'
   renderDecisionDigest?: string
   renderPipelineType?: 'video' | 'webgl2'
-  renderPolicySource?: 'auto' | 'userOverride'
+  renderPolicySource?: 'auto' | 'userOverride' | 'capabilityFallback'
+  renderProcessing?: 'usm' | 'cas'
+  renderProcessingMode?: 'quality' | 'performance'
+  renderShaderPath?: 'usm' | 'cas' | 'none'
+  renderFpsBudget?: number
+  rendererCapabilityReason?: string
+  icePolicyMode?: 'passthrough' | 'policy'
+  icePolicyDigest?: string
   isRelayPath: boolean
   isRecovering: boolean
   /** 显示供给受限（非传输/解码主恢复链），单独提示避免与「连接恢复中」混淆 */
@@ -349,6 +381,13 @@ export interface StreamConfigSnapshot {
   display_options?: DisplayOptionsValue
   performance_style?: boolean
   stream_runtime_mode?: 'webrtc-direct' | 'rust-owned'
+  ice_policy_enabled?: boolean
+  ice_policy_prefer_ipv6?: boolean
+  ice_policy_prefer_udp?: boolean
+  ice_policy_allow_tcp_fallback?: boolean
+  ice_policy_relay_bias?: 'prefer' | 'neutral'
+  ice_policy_enable_teredo_derivation?: boolean
+  ice_policy_enable_family_mismatch_gate?: boolean
   server_url?: string
   server_username?: string
   server_credential?: string

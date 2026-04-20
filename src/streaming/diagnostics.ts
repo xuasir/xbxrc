@@ -81,6 +81,13 @@ export function buildStreamDiagnosticsSnapshot(input: {
   const renderDecisionDigest = input.runtimeSnapshot?.renderDecisionDigest?.trim() || undefined
   const renderPipelineType = input.runtimeSnapshot?.renderPipelineType
   const renderPolicySource = input.runtimeSnapshot?.renderPolicySource
+  const renderProcessing = input.runtimeSnapshot?.renderProcessing
+  const renderProcessingMode = input.runtimeSnapshot?.renderProcessingMode
+  const renderShaderPath = input.runtimeSnapshot?.renderShaderPath
+  const renderFpsBudget = input.runtimeSnapshot?.renderFpsBudget
+  const rendererCapabilityReason = input.runtimeSnapshot?.rendererCapabilityReason?.trim() || undefined
+  const icePolicyMode = input.runtimeSnapshot?.icePolicyMode
+  const icePolicyDigest = input.runtimeSnapshot?.icePolicyDigest?.trim() || undefined
   const transportSummary = resolveTransportSummary({
     transportPath,
     transportCandidatePair,
@@ -196,6 +203,13 @@ export function buildStreamDiagnosticsSnapshot(input: {
     renderDecisionDigest,
     renderPipelineType,
     renderPolicySource,
+    renderProcessing,
+    renderProcessingMode,
+    renderShaderPath,
+    renderFpsBudget,
+    rendererCapabilityReason,
+    icePolicyMode,
+    icePolicyDigest,
     isRelayPath: transportPath?.toLowerCase().startsWith('relay') === true,
     isRecovering,
     isDisplaySupplyLimited,

@@ -471,6 +471,7 @@ mod tests {
                 force_mono_audio: false,
                 prefer_ipv6: false,
                 offer_profile: "64".to_string(),
+                ice_policy: Default::default(),
             },
             Some(&XbxEngineTargetTypeDto::Cloud),
         );

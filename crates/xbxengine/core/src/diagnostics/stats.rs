@@ -14,6 +14,11 @@ use crate::{
 fn keyframe_request_episode_to_protocol_dto(
     episode: &XbxEngineKeyframeRequestEpisodeObservation,
 ) -> xbxengine_protocol::XbxEngineKeyframeRequestEpisodeObservationDto {
+    let family_id = episode.request_reason.as_ref().map(|reason| {
+        let kind = episode.request_kind.as_deref().unwrap_or("unknown");
+        format!("{reason}:{kind}")
+    });
+    let suppressed = matches!(episode.status.as_str(), "deferred" | "failed");
     xbxengine_protocol::XbxEngineKeyframeRequestEpisodeObservationDto {
         episode_id: episode.episode_id,
         request_reason: episode.request_reason.clone(),
@@ -34,6 +39,21 @@ fn keyframe_request_episode_to_protocol_dto(
         response_verdict: episode.response_verdict.clone(),
         lifecycle_phase: episode.lifecycle_phase.clone(),
         retired_at_ms: episode.retired_at_ms,
+        family_id: suppressed.then_some(family_id).flatten(),
+        owner_episode_id: suppressed.then_some(episode.episode_id),
+        suppress_duration_ms: suppressed.then_some(
+            episode
+                .sent_at_ms
+                .map(|sent_at_ms| (sent_at_ms - episode.requested_at_ms).max(0.0))
+                .unwrap_or(0.0),
+        ),
+        release_reason: suppressed.then(|| {
+            episode
+                .transport_detail
+                .clone()
+                .or_else(|| episode.status_detail.clone())
+                .unwrap_or_else(|| "suppressed".to_string())
+        }),
     }
 }
 
@@ -175,6 +195,46 @@ fn map_owner_state_to_video_health(owner_state: &str, owner_reason: Option<&str>
         "supply-starved" => "displaySupplyStarved".to_string(),
         other => other.to_string(),
     }
+}
+
+fn resolve_presentation_health(
+    runtime_stats: Option<&XbxEngineMediaRuntimeStats>,
+    chain_health: Option<&str>,
+    present_age_ms: Option<f64>,
+) -> Option<String> {
+    let stats = runtime_stats?;
+    if stats.video_owner_reason.as_deref() == Some("hostPresentStalled") {
+        return Some("hostPresentStalled".to_string());
+    }
+    let has_present_history = stats.latest_video_host_present_time_ms.is_some()
+        || stats.video_present_submit_count_total > 0;
+    let supply_pressure = matches!(
+        stats.host_no_pending_pressure_level.as_deref(),
+        Some("high" | "critical")
+    );
+    let present_stale = present_age_ms.is_some_and(|age| age >= 600.0);
+    if has_present_history && (supply_pressure || present_stale) {
+        return Some("displaySupplyStarved".to_string());
+    }
+    if stats.latest_video_host_present_time_ms.is_some() {
+        return Some("healthy".to_string());
+    }
+    chain_health.map(str::to_string)
+}
+
+fn merge_video_health(
+    chain_health: Option<&str>,
+    presentation_health: Option<&str>,
+) -> Option<String> {
+    if matches!(
+        presentation_health,
+        Some("displaySupplyStarved" | "hostPresentStalled")
+    ) {
+        return presentation_health.map(str::to_string);
+    }
+    chain_health
+        .map(str::to_string)
+        .or_else(|| presentation_health.map(str::to_string))
 }
 
 fn frame_budget_dto_from_observation(
@@ -551,9 +611,12 @@ pub fn build_xbxengine_stats(
     let recovery_rfc_stage = runtime_stats.and_then(|s| s.recovery_rfc_authoritative_stage.clone());
     let recovery_rfc_ceiling =
         runtime_stats.and_then(|s| s.recovery_rfc_authoritative_ceiling.clone());
-    let video_health = video_owner.as_ref().map(|owner| {
+    let chain_health = video_owner.as_ref().map(|owner| {
         map_owner_state_to_video_health(owner.state.as_str(), owner.reason.as_deref())
     });
+    let presentation_health =
+        resolve_presentation_health(runtime_stats, chain_health.as_deref(), present_age_ms);
+    let video_health = merge_video_health(chain_health.as_deref(), presentation_health.as_deref());
     let observation_note = build_observation_note(runtime_stats);
     let transport_recovery_note = build_transport_recovery_note(runtime_stats);
     let repair_probe_note = build_repair_probe_note(runtime_stats);
@@ -622,6 +685,8 @@ pub fn build_xbxengine_stats(
         video_owner_source: video_owner.and_then(|owner| owner.source.clone()),
         video_owner_observed_at_ms: video_owner.and_then(|owner| owner.observed_at_ms),
         video_health,
+        chain_health,
+        presentation_health,
         stall_kind,
         inbound_video_fps: runtime_stats.map(|stats| stats.inbound_video_frame_rate_fps),
         decode_fps: runtime_stats.map(|stats| stats.video_decode_fps),
@@ -832,6 +897,10 @@ pub fn build_xbxengine_stats(
         host_display_tick_epoch: runtime_stats.map(|stats| stats.host_display_tick_epoch),
         video_present_epoch: runtime_stats.map(|stats| stats.video_present_epoch),
         host_cadence_phase: runtime_stats.and_then(|stats| stats.host_cadence_phase.clone()),
+        last_displayed_frame_seq: runtime_stats.and_then(|stats| stats.last_displayed_frame_seq),
+        last_displayed_frame_rtp_timestamp: runtime_stats
+            .and_then(|stats| stats.last_displayed_frame_rtp_timestamp),
+        last_displayed_at_ms: runtime_stats.and_then(|stats| stats.last_displayed_at_ms),
         video_present_descriptor_upload_mode: runtime_stats
             .and_then(|stats| stats.video_present_descriptor_upload_mode.clone()),
         video_present_descriptor_metal_import_count_total: runtime_stats
@@ -875,6 +944,13 @@ pub fn build_xbxengine_stats(
         reconnect_trigger_source: snapshot.reconnect_trigger_source.clone(),
         host_present_take_empty_streak: Some(snapshot.host_present_take_empty_streak),
         host_present_latest_render_slot_at_ms: snapshot.host_present_latest_render_slot_at_ms,
+        ice_policy_mode: snapshot.ice_policy_mode.clone(),
+        ice_policy_digest: snapshot.ice_policy_digest.clone(),
+        ice_policy_source: snapshot.ice_policy_source.clone(),
+        ice_policy_filtered_count: snapshot.ice_policy_filtered_count,
+        ice_policy_derived_count: snapshot.ice_policy_derived_count,
+        ice_policy_skipped_by_family_mismatch_count: snapshot
+            .ice_policy_skipped_by_family_mismatch_count,
         latest_decode_candidate_decision: runtime_stats.and_then(|stats| {
             stats
                 .latest_decode_candidate_decision

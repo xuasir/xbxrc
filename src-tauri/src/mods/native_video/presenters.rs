@@ -440,6 +440,7 @@ impl NativeVideoPresenter for WindowsWgpuPresenter {
         let Ok(telemetry) = self.telemetry.lock() else {
             return;
         };
+        let renderer_state = self.renderer_state.lock().ok();
         viewport.latest_host_present_time_ms = telemetry.latest_present_time_ms;
         viewport.host_present_fps = telemetry.present_fps();
         viewport.host_present_enqueue_count_total = telemetry.present_enqueue_count_total;
@@ -451,6 +452,12 @@ impl NativeVideoPresenter for WindowsWgpuPresenter {
         viewport.host_display_tick_epoch = telemetry.display_tick_epoch;
         viewport.host_present_epoch = telemetry.present_epoch;
         viewport.host_cadence_phase = Some(telemetry.cadence_phase.as_str().to_string());
+        viewport.last_displayed_frame_seq =
+            slot_diag.as_ref().and_then(|diag| diag.displayed_frame_seq);
+        viewport.last_displayed_frame_rtp_timestamp = slot_diag
+            .as_ref()
+            .and_then(|diag| diag.displayed_frame_rtp_timestamp);
+        viewport.last_displayed_at_ms = telemetry.latest_present_time_ms;
         viewport.host_display_interval_ms = telemetry.display_interval_ms();
         viewport.host_frame_age_budget_ms = Some(telemetry.frame_age_budget_ms());
         viewport.host_descriptor_upload_mode = telemetry.descriptor_upload_mode.clone();
@@ -879,6 +886,7 @@ impl NativeVideoPresenter for MacOsWgpuPresenter {
         let Ok(telemetry) = self.telemetry.lock() else {
             return;
         };
+        let renderer_state = self.renderer_state.lock().ok();
         viewport.latest_host_present_time_ms = telemetry.latest_present_time_ms;
         viewport.host_present_fps = telemetry.present_fps();
         viewport.host_present_enqueue_count_total = telemetry.present_enqueue_count_total;
@@ -890,6 +898,17 @@ impl NativeVideoPresenter for MacOsWgpuPresenter {
         viewport.host_display_tick_epoch = telemetry.display_tick_epoch();
         viewport.host_present_epoch = telemetry.present_epoch();
         viewport.host_cadence_phase = Some(telemetry.cadence_phase().as_str().to_string());
+        viewport.last_displayed_frame_seq = renderer_state
+            .as_ref()
+            .and_then(|state| state.last_presented_frame_seq);
+        viewport.last_displayed_frame_rtp_timestamp = renderer_state.as_ref().and_then(|state| {
+            state.latest_frame.as_ref().and_then(|frame| {
+                (Some(frame.frame_seq) == state.last_presented_frame_seq)
+                    .then_some(frame.rtp_timestamp)
+                    .flatten()
+            })
+        });
+        viewport.last_displayed_at_ms = telemetry.latest_present_time_ms;
         viewport.host_display_interval_ms = telemetry.display_interval_ms();
         viewport.host_frame_age_budget_ms = Some(telemetry.frame_age_budget_ms());
         viewport.host_descriptor_upload_mode = telemetry.descriptor_upload_mode.clone();
@@ -1319,6 +1338,11 @@ impl NativeVideoPresenter for MacOsVideoPresenter {
         let Ok(telemetry) = self.telemetry.lock() else {
             return;
         };
+        let slot_diag = self
+            .frame_slot
+            .lock()
+            .ok()
+            .map(|frame_slot| frame_slot.diagnostics_snapshot());
         viewport.latest_host_present_time_ms = telemetry.latest_present_time_ms;
         viewport.host_present_fps = telemetry.present_fps();
         viewport.host_present_enqueue_count_total = telemetry.present_enqueue_count_total;
@@ -1330,6 +1354,12 @@ impl NativeVideoPresenter for MacOsVideoPresenter {
         viewport.host_display_tick_epoch = telemetry.display_tick_epoch();
         viewport.host_present_epoch = telemetry.present_epoch();
         viewport.host_cadence_phase = Some(telemetry.cadence_phase().as_str().to_string());
+        viewport.last_displayed_frame_seq =
+            slot_diag.as_ref().and_then(|diag| diag.displayed_frame_seq);
+        viewport.last_displayed_frame_rtp_timestamp = slot_diag
+            .as_ref()
+            .and_then(|diag| diag.displayed_frame_rtp_timestamp);
+        viewport.last_displayed_at_ms = telemetry.latest_present_time_ms;
         viewport.host_display_interval_ms = telemetry.display_interval_ms();
         viewport.host_frame_age_budget_ms = Some(telemetry.frame_age_budget_ms());
         viewport.host_descriptor_upload_mode = None;
