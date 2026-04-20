@@ -99,8 +99,17 @@ jobs:
         with:
           arch: x64
 
-      - name: Build Tauri bundles
-        run: pnpm tauri build
+      - name: Build Tauri bundles (macOS dmg)
+        if: runner.os == 'macOS'
+        run: pnpm tauri build --bundles dmg
+        env:
+          CI: true
+          # vendored OpenSSL 在 Windows 上可自动降级为 no-asm；显式固定后可避免 runner 镜像差异影响构建路径。
+          OPENSSL_RUST_USE_NASM: 0
+
+      - name: Build Tauri bundles (Windows exe)
+        if: runner.os == 'Windows'
+        run: pnpm tauri build --bundles nsis
         env:
           CI: true
           # vendored OpenSSL 在 Windows 上可自动降级为 no-asm；显式固定后可避免 runner 镜像差异影响构建路径。
@@ -109,6 +118,8 @@ jobs:
       - name: Upload bundle artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: xbxrc-bundles-${{ matrix.label }}
+          name: xbxrc-${{ matrix.label }}-${{ runner.arch }}
           if-no-files-found: error
-          path: target/release/bundle/
+          path: |
+            target/release/bundle/**/*.dmg
+            target/release/bundle/**/*.exe
