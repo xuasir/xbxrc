@@ -517,17 +517,20 @@ impl RecoveryCoordinator {
         if has_current_clean_anchor_from_stats(stats) {
             return false;
         }
-        let progress = stats.latest_keyframe_request_episode.as_ref().and_then(|episode| {
-            recovery_progress_level_from_episode(
-                episode.status.as_str(),
-                episode.response_verdict.as_deref(),
-                episode.first_video_packet_is_keyframe,
-                episode.first_keyframe_packet_at_ms,
-                episode.first_keyframe_decoded_at_ms,
-                false,
-                false,
-            )
-        });
+        let progress = stats
+            .latest_keyframe_request_episode
+            .as_ref()
+            .and_then(|episode| {
+                recovery_progress_level_from_episode(
+                    episode.status.as_str(),
+                    episode.response_verdict.as_deref(),
+                    episode.first_video_packet_is_keyframe,
+                    episode.first_keyframe_packet_at_ms,
+                    episode.first_keyframe_decoded_at_ms,
+                    false,
+                    false,
+                )
+            });
         if !recovery_progress_missing_anchor(progress) {
             return false;
         }

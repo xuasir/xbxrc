@@ -372,8 +372,10 @@ fn latest_frame_budget_snapshot(stats: &XbxEngineStatsDto) -> Option<serde_json:
     }
 
     latest.map(|(source, observed_at_ms, budget)| {
-        let value_tier_v2 =
-            derive_dynamic_value_tier_v2(budget.chain_value.as_str(), budget.recovery_stage.as_str());
+        let value_tier_v2 = derive_dynamic_value_tier_v2(
+            budget.chain_value.as_str(),
+            budget.recovery_stage.as_str(),
+        );
         json!({
             "source": source,
             "observedAtMs": observed_at_ms,
@@ -695,8 +697,10 @@ pub(super) fn record_runtime_trace_observations(
         if observation_state.nack_observation_id != Some(nack.observation_id) {
             observation_state.nack_observation_id = Some(nack.observation_id);
             let event_name = match nack.action.as_str() {
-                "expiredDeadline" | "expiredMaxAge" | "expiredRetryBudget"
-                    | "expiredSingleShotPollComplete"
+                "expiredDeadline"
+                | "expiredMaxAge"
+                | "expiredRetryBudget"
+                | "expiredSingleShotPollComplete"
                 | "expiredChainBroken" => "nackExpired",
                 "recovered" | "recoveredLate" => "nackRecovered",
                 "skipped" => "nackSkipped",

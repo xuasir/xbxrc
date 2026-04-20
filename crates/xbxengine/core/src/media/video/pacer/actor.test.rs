@@ -394,7 +394,7 @@ fn drive_ready_frames_holds_due_frame_until_host_release_window_opens() {
         &mut render_backpressure_active,
         |_render_queue| {
             submit_calls += 1;
-            PendingRenderSubmitResult::Submitted(make_decoded_frame(1))
+            PendingRenderSubmitResult::Idle
         },
     );
 
@@ -456,7 +456,7 @@ fn drive_ready_frames_retries_pending_render_output_after_backpressure_clears() 
         |render_queue| {
             flush_calls += 1;
             if render_queue.is_empty() {
-                return PendingRenderSubmitResult::Submitted(make_decoded_frame(0));
+                return PendingRenderSubmitResult::Idle;
             }
             let frame = render_queue
                 .pop_front()

@@ -109,7 +109,6 @@ impl RuntimeStatsSink {
         stats.video_anchor_clean_source_event = None;
     }
 
-
     pub(crate) fn new(runtime_stats: Arc<Mutex<XbxEngineMediaRuntimeStats>>) -> Self {
         Self {
             observation_bus: ObservationBus::new(runtime_stats),

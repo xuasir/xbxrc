@@ -88,7 +88,14 @@ fn run_renderer_loop(
 
                 match state.present_frame(render_frame) {
                     Ok((_frame_stats, outcome)) => {
-                        log_renderer_flow("submit", &flow_frame, &flow_context, None, None);
+                        log_renderer_flow(
+                            "submit",
+                            &flow_frame,
+                            &flow_context,
+                            None,
+                            None,
+                            outcome.overwritten_previous_latest,
+                        );
                         runtime_stats.update(|stats| {
                             stats.latest_observation_label =
                                 Some("rendererFrameAccepted".to_string());
@@ -109,6 +116,7 @@ fn run_renderer_loop(
                                 &flow_context,
                                 Some("latestSlotOverwrite"),
                                 outcome.overwritten_frame_seq,
+                                true,
                             );
                             record_pipeline_frame_drop(
                                 &runtime_stats,
@@ -137,11 +145,20 @@ fn run_renderer_loop(
                                     &flow_context,
                                     Some("latestSlotRecovered"),
                                     None,
+                                    false,
                                 );
                             }
                         }
                     }
                     Err(e) => {
+                        log_renderer_flow(
+                            "presentFailed",
+                            &flow_frame,
+                            &flow_context,
+                            Some("presentError"),
+                            None,
+                            false,
+                        );
                         runtime_stats.update(|stats| {
                             stats.video_renderer_drop_count_total =
                                 stats.video_renderer_drop_count_total.saturating_add(1);
@@ -223,9 +240,10 @@ fn log_renderer_flow(
     flow_context: &RendererFlowContext,
     reason: Option<&str>,
     related_frame_seq: Option<u64>,
+    overwritten_previous_latest: bool,
 ) {
     crate::xbx_log_warn!(
-        "[playback-flow][render] event={} reason={} frameSeq={} rtpTimestamp={} queueDepth={} hostTickEpoch={} presentEpoch={} relatedFrameSeq={}",
+        "[playback-flow][renderer] event={} reason={} frameSeq={} rtpTimestamp={} isKeyframe={} observedAtMs={} overwrittenPreviousLatest={} overwrittenFrameSeq={} hostTickEpoch={} presentEpoch={}",
         event,
         reason.unwrap_or("-"),
         frame.surface.frame_seq,
@@ -233,12 +251,14 @@ fn log_renderer_flow(
             .rtp_timestamp
             .map(|value| value.to_string())
             .unwrap_or_else(|| "-".to_string()),
-        1,
-        flow_context.host_tick_epoch,
-        flow_context.present_epoch,
+        frame.surface.is_keyframe,
+        frame.surface.rendered_at_ms,
+        overwritten_previous_latest,
         related_frame_seq
             .map(|value| value.to_string())
             .unwrap_or_else(|| "-".to_string()),
+        flow_context.host_tick_epoch,
+        flow_context.present_epoch,
     );
 }
 

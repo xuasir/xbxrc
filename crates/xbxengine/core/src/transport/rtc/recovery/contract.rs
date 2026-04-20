@@ -224,11 +224,7 @@ pub(crate) fn is_transport_await_probe_source_event(source_event: Option<&str>) 
 pub(crate) fn is_invalid_recovery_bootstrap_reject_reason(reason: Option<&str>) -> bool {
     matches!(
         reason,
-        Some(
-            "bootstrapMissingSps"
-                | "bootstrapMissingPps"
-                | "inspectionRejectInvalidSliceHeader"
-        )
+        Some("bootstrapMissingSps" | "bootstrapMissingPps" | "inspectionRejectInvalidSliceHeader")
     )
 }
 

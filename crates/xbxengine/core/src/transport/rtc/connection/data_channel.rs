@@ -1089,6 +1089,8 @@ impl RtcConnectionService {
                 self.record_chat_text_observation(observation_id, &payload_text, runtime_stats);
             }
         }
+        // 同一轮 read 内可能刚完成握手 / bootstrap / 首包 RTP，补一次 pending 控制面重放。
+        self.observe_control_replay_if_ready(runtime_stats)?;
         Ok(())
     }
 

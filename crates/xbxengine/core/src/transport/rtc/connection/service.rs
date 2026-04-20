@@ -30,6 +30,15 @@ const VIDEO_RECOVERY_PLI_TO_FIR_MIN_DELAY_MS: f64 = 180.0;
 const VIDEO_RECOVERY_FIR_TO_CONTROL_MIN_DELAY_MS: f64 = 360.0;
 // 与恢复侧的 escalation window 对齐，作为首个 keyframe 响应的统一观测窗口。
 const KEYFRAME_REQUEST_RESPONSE_WINDOW_MS: f64 = 960.0;
+
+/// PLI/FIR 依赖 TWCC 反馈目标；重连或轨未绑定时无目标，应直接走控制通道兜底而非先记 episode 失败。
+fn video_rtcp_keyframe_feedback_media_ssrc_ready(
+    twcc: &mut ControlledTwccFeedbackController,
+) -> bool {
+    twcc.preferred_video_feedback_target()
+        .and_then(|(_, media_ssrc)| media_ssrc)
+        .is_some()
+}
 const GAMEPAD_RUMBLE_PENDING_TARGET_LIMIT: usize = 4;
 const GAMEPAD_RUMBLE_DRAIN_PER_TICK_LIMIT: usize = 2;
 
@@ -208,8 +217,9 @@ impl RtcConnectionService {
                 Ok(VideoKeyframeRequestOutcome::Suppressed)
             }
             VideoRecoveryTransportStage::PictureLossIndication => {
-                match self.send_video_picture_loss_indication(runtime_stats) {
-                    Ok(_) => {
+                if video_rtcp_keyframe_feedback_media_ssrc_ready(&mut self.controlled_twcc_feedback)
+                {
+                    if let Ok(()) = self.send_video_picture_loss_indication(runtime_stats) {
                         self.control_service.clear_pending_keyframe_request();
                         self.sync_control_replay_runtime_stats(runtime_stats);
                         self.video_recovery_transport_state.stage =
@@ -218,19 +228,14 @@ impl RtcConnectionService {
                             Some(crate::transport::rtc::stats::now_ms_f64());
                         return Ok(VideoKeyframeRequestOutcome::RequestedPli);
                     }
-                    Err(e) => {
-                        RuntimeStatsSink::new(runtime_stats.clone())
-                            .record_keyframe_request_episode_failed(
-                                crate::transport::rtc::stats::now_ms_f64(),
-                                &format!("pliSendFailed: {}", e),
-                            );
-                    }
+                    // PLI 硬失败也不在此处记 episode_failed：由控制兜底；仅当整次请求最终失败再由会话层记一次。
                 }
                 self.send_control_keyframe_request(runtime_stats, "rtcVideoPliFallbackControl")
             }
             VideoRecoveryTransportStage::FullIntraRequest => {
-                match self.send_video_full_intra_request(runtime_stats) {
-                    Ok(_) => {
+                if video_rtcp_keyframe_feedback_media_ssrc_ready(&mut self.controlled_twcc_feedback)
+                {
+                    if let Ok(()) = self.send_video_full_intra_request(runtime_stats) {
                         self.control_service.clear_pending_keyframe_request();
                         self.sync_control_replay_runtime_stats(runtime_stats);
                         self.video_recovery_transport_state.stage =
@@ -238,13 +243,6 @@ impl RtcConnectionService {
                         self.video_recovery_transport_state.last_sent_at_ms =
                             Some(crate::transport::rtc::stats::now_ms_f64());
                         return Ok(VideoKeyframeRequestOutcome::RequestedFir);
-                    }
-                    Err(e) => {
-                        RuntimeStatsSink::new(runtime_stats.clone())
-                            .record_keyframe_request_episode_failed(
-                                crate::transport::rtc::stats::now_ms_f64(),
-                                &format!("firSendFailed: {}", e),
-                            );
                     }
                 }
                 self.send_control_keyframe_request(runtime_stats, "rtcVideoFirFallbackControl")
@@ -294,6 +292,7 @@ impl RtcConnectionService {
         })
         .unwrap_or((0, false, false, false, false));
 
+        // transport_recovery_epoch 前进后清阶段，避免旧回合的 RTCP 升级节奏污染新连接。
         if self.video_recovery_transport_state.recovery_epoch != current_epoch {
             self.video_recovery_transport_state.stage = VideoRecoveryTransportStage::None;
             self.video_recovery_transport_state.last_sent_at_ms = None;
@@ -311,11 +310,13 @@ impl RtcConnectionService {
             .last_sent_at_ms
             .map(|last| (now_ms - last).max(0.0))
             .unwrap_or(f64::INFINITY);
+        let rtcp_feedback_ready =
+            video_rtcp_keyframe_feedback_media_ssrc_ready(&mut self.controlled_twcc_feedback);
         match self.video_recovery_transport_state.stage {
             VideoRecoveryTransportStage::None => {
-                if supports_pli {
+                if supports_pli && rtcp_feedback_ready {
                     VideoRecoveryTransportStage::PictureLossIndication
-                } else if supports_fir {
+                } else if supports_fir && rtcp_feedback_ready {
                     VideoRecoveryTransportStage::FullIntraRequest
                 } else {
                     VideoRecoveryTransportStage::ControlKeyframe
@@ -325,7 +326,7 @@ impl RtcConnectionService {
                 if elapsed_ms < VIDEO_RECOVERY_PLI_TO_FIR_MIN_DELAY_MS {
                     return VideoRecoveryTransportStage::None;
                 }
-                if supports_fir {
+                if supports_fir && rtcp_feedback_ready {
                     VideoRecoveryTransportStage::FullIntraRequest
                 } else {
                     VideoRecoveryTransportStage::ControlKeyframe
@@ -693,6 +694,8 @@ impl RtcConnectionService {
         crate::xbx_log_warn!("[xbxengine][rtc-connection] pump after drain peer events/reads");
         self.try_send_message_handshake(runtime_stats)?;
         self.run_delayed_control_actions(runtime_stats)?;
+        // delayed keyframe prime 等可能刚把 pending 记入控制层，此处再尝试 flush。
+        self.observe_control_replay_if_ready(runtime_stats)?;
         RuntimeStatsSink::new(runtime_stats.clone())
             .record_keyframe_request_episode_timeout(crate::transport::rtc::stats::now_ms_f64());
         self.refresh_transport_metrics(runtime_stats);

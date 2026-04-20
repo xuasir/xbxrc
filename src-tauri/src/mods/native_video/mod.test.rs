@@ -63,18 +63,18 @@ fn viewport_reattach_only_happens_when_attach_inputs_change() {
 }
 
 #[test]
-fn host_timing_record_policy_marks_hot_stages_as_sampled() {
+fn host_timing_record_policy_keeps_submit_and_present_path_always_on() {
     assert_eq!(
         resolve_host_timing_record_policy("frame_submit"),
-        HostTimingRecordPolicy::Sampled
+        HostTimingRecordPolicy::Always
     );
     assert_eq!(
         resolve_host_timing_record_policy("prepare_sample_ready"),
-        HostTimingRecordPolicy::Sampled
+        HostTimingRecordPolicy::Always
     );
     assert_eq!(
         resolve_host_timing_record_policy("sample_presented"),
-        HostTimingRecordPolicy::Sampled
+        HostTimingRecordPolicy::Always
     );
     assert_eq!(
         resolve_host_timing_record_policy("tick_total"),

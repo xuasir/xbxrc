@@ -133,10 +133,7 @@ enum HostTimingRecordPolicy {
 fn resolve_host_timing_record_policy(stage: &str) -> HostTimingRecordPolicy {
     match stage {
         // 高频阶段在 present/pre-present 主链上会逐帧触发，按窗口采样降级。
-        "frame_submit"
-        | "frame_slot_take_skipped"
-        | "prepare_sample_ready"
-        | "sample_presented"
+        "frame_slot_take_skipped"
         | "run_on_main_thread_delay"
         | "tick_total"
         | "frame_submit_gap"
@@ -1643,6 +1640,14 @@ pub(super) fn run_layer_present_tick(
     if let Ok(mut telemetry_state) = telemetry.lock() {
         telemetry_state.record_present(now_ms);
     }
+    let telemetry_diag = telemetry
+        .lock()
+        .ok()
+        .map(|telemetry_state| telemetry_state.diagnostics_snapshot());
+    let frame_slot_diag = frame_slot
+        .lock()
+        .ok()
+        .map(|frame_slot_state| frame_slot_state.diagnostics_snapshot());
     record_native_video_timing_event_lazy(
         runtime_trace.as_ref(),
         "layer",
@@ -1650,6 +1655,30 @@ pub(super) fn run_layer_present_tick(
         viewport_id,
         window_label,
         || {
+            let host_display_tick_epoch =
+                telemetry_diag.as_ref().map(|diag| diag.display_tick_epoch);
+            let host_present_epoch = telemetry_diag.as_ref().map(|diag| diag.present_epoch);
+            let host_cadence_phase = telemetry_diag
+                .as_ref()
+                .map(|diag| diag.cadence_phase.as_str().to_string());
+            let displayed_frame_seq = frame_slot_diag
+                .as_ref()
+                .and_then(|diag| diag.displayed_frame_seq);
+            let pending_frame_seqs = frame_slot_diag
+                .as_ref()
+                .map(|diag| diag.pending_frame_seqs.clone())
+                .unwrap_or_default();
+            let last_presented_frame_seq = frame_slot_diag
+                .as_ref()
+                .and_then(|diag| diag.last_presented_frame_seq);
+            let queue_depth = frame_slot_diag
+                .as_ref()
+                .map(|diag| diag.queue_depth)
+                .unwrap_or(0);
+            let pending_queue_depth = frame_slot_diag
+                .as_ref()
+                .map(|diag| diag.pending_queue_depth)
+                .unwrap_or(0);
             serde_json::json!({
                 "frameSeq": sample_frame_seq,
                 "width": sample_width,
@@ -1657,6 +1686,14 @@ pub(super) fn run_layer_present_tick(
                 "frameAgeMs": (now_ms - sample_rendered_at_ms).max(0.0),
                 "frameRecoveryDisposition": sample_frame_recovery_disposition,
                 "frameUnrecoverableReason": sample_frame_unrecoverable_reason,
+                "displayedFrameSeq": displayed_frame_seq,
+                "pendingFrameSeqs": pending_frame_seqs,
+                "lastPresentedFrameSeq": last_presented_frame_seq,
+                "queueDepth": queue_depth,
+                "pendingQueueDepth": pending_queue_depth,
+                "hostDisplayTickEpoch": host_display_tick_epoch,
+                "hostPresentEpoch": host_present_epoch,
+                "hostCadencePhase": host_cadence_phase,
             })
         },
     );

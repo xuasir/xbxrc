@@ -638,8 +638,9 @@ impl RtcSessionPolicy {
             let recovery_episode_stage = facts
                 .as_ref()
                 .and_then(|f| f.recovery_progress_level.map(|v| v.as_str().to_string()));
-            let recovery_episode_progress_at_ms =
-                facts.as_ref().and_then(|f| f.recovery_episode_progress_at_ms);
+            let recovery_episode_progress_at_ms = facts
+                .as_ref()
+                .and_then(|f| f.recovery_episode_progress_at_ms);
             (
                 frame_value,
                 gap_severity,
@@ -670,8 +671,7 @@ impl RtcSessionPolicy {
             owner_signal_repairability,
             owner_signal_recovery_episode_stage,
             _owner_signal_recovery_episode_progress_at_ms,
-        ) =
-            self.read_owner_signal_evidence(observed_at_ms);
+        ) = self.read_owner_signal_evidence(observed_at_ms);
         let owner_signal_missing_anchor = recovery_progress_missing_anchor(
             owner_signal_recovery_episode_stage
                 .as_deref()
@@ -844,7 +844,8 @@ impl RtcSessionPolicy {
                 }
             }
         };
-        if owner_signal.reason_label == "transportAwaitRecoveryAnchor" && !owner_signal_missing_anchor
+        if owner_signal.reason_label == "transportAwaitRecoveryAnchor"
+            && !owner_signal_missing_anchor
         {
             return None;
         }

@@ -307,6 +307,7 @@ where
 {
     loop {
         match flush_render_output(render_queue) {
+            PendingRenderSubmitResult::Idle => {}
             PendingRenderSubmitResult::Submitted(frame) => {
                 log_pacer_flow(
                     "flushSubmitted",
@@ -433,6 +434,7 @@ where
                 *last_consumed_host_tick_epoch =
                     next_consumed_host_tick_epoch(host_context, *last_consumed_host_tick_epoch);
                 match flush_render_output(render_queue) {
+                    PendingRenderSubmitResult::Idle => {}
                     PendingRenderSubmitResult::Submitted(frame) => {
                         log_pacer_flow(
                             "flushSubmitted",
@@ -596,6 +598,7 @@ fn render_frame_stale_slack(frame: &DecodedFrame) -> Duration {
 
 #[derive(Debug)]
 enum PendingRenderSubmitResult {
+    Idle,
     Submitted(DecodedFrame),
     Backpressure(DecodedFrame),
     Disconnected(DecodedFrame),
@@ -605,17 +608,21 @@ fn flush_pending_render_output(
     render_queue: &mut VecDeque<DecodedFrame>,
     renderer: &Arc<RendererActorHandle>,
 ) -> PendingRenderSubmitResult {
-    flush_pending_render_output_with_submit(render_queue, |frame| match renderer.submit(frame.clone()) {
-        Ok(_) => PendingRenderSubmitResultWithFrame::Submitted(frame),
-        Err(TrySendError::Full(crate::media::video::render::actor::RendererMsg::Frame(frame))) => {
-            PendingRenderSubmitResultWithFrame::BackpressureWithFrame(frame)
-        }
-        Err(TrySendError::Disconnected(
-            crate::media::video::render::actor::RendererMsg::Frame(frame),
-        )) => PendingRenderSubmitResultWithFrame::Disconnected(frame),
-        Err(TrySendError::Full(crate::media::video::render::actor::RendererMsg::Stop))
-        | Err(TrySendError::Disconnected(crate::media::video::render::actor::RendererMsg::Stop)) => {
-            unreachable!()
+    flush_pending_render_output_with_submit(render_queue, |frame| {
+        match renderer.submit(frame.clone()) {
+            Ok(_) => PendingRenderSubmitResultWithFrame::Submitted(frame),
+            Err(TrySendError::Full(crate::media::video::render::actor::RendererMsg::Frame(
+                frame,
+            ))) => PendingRenderSubmitResultWithFrame::BackpressureWithFrame(frame),
+            Err(TrySendError::Disconnected(
+                crate::media::video::render::actor::RendererMsg::Frame(frame),
+            )) => PendingRenderSubmitResultWithFrame::Disconnected(frame),
+            Err(TrySendError::Full(crate::media::video::render::actor::RendererMsg::Stop))
+            | Err(TrySendError::Disconnected(
+                crate::media::video::render::actor::RendererMsg::Stop,
+            )) => {
+                unreachable!()
+            }
         }
     })
 }
@@ -635,28 +642,7 @@ where
     F: FnMut(DecodedFrame) -> PendingRenderSubmitResultWithFrame,
 {
     let Some(frame) = render_queue.pop_front() else {
-        return PendingRenderSubmitResult::Submitted(DecodedFrame {
-            pts: Instant::now(),
-            rtp_timestamp: 0,
-            is_keyframe: false,
-            budget: crate::media::video::ingress::budget::FrameBudgetContext::default(),
-            frame_recovery_disposition:
-                crate::media::video::types::FrameRecoveryDisposition::Repairing,
-            frame_unrecoverable_reason: None,
-            surface: crate::media::video::render::renderer::XbxRenderFrame {
-                width: 0,
-                height: 0,
-                frame_seq: 0,
-                rendered_at_ms: crate::media::video::decode::video_decode::now_ms_f64(),
-                rtp_timestamp: Some(0),
-                is_keyframe: false,
-                frame_recovery_disposition: Some("repairing".to_string()),
-                frame_unrecoverable_reason: None,
-                pixel_data: crate::XbxEngineRenderPixelData::Rgba {
-                    bytes: Arc::<[u8]>::from([]),
-                },
-            },
-        });
+        return PendingRenderSubmitResult::Idle;
     };
     match submit(frame) {
         PendingRenderSubmitResultWithFrame::Submitted(frame) => {

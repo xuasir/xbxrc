@@ -264,7 +264,8 @@ impl FrameBudgetContext {
             FrameBudgetLinkValue::Supply => {
                 if matches!(
                     self.recovery_phase,
-                    FrameBudgetRecoveryPhase::AwaitingKeyframe | FrameBudgetRecoveryPhase::Repairing
+                    FrameBudgetRecoveryPhase::AwaitingKeyframe
+                        | FrameBudgetRecoveryPhase::Repairing
                 ) {
                     DynamicRepairValueTier::Continuation
                 } else {

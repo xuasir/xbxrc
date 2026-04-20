@@ -26,6 +26,9 @@ const RECOVERY_COMMAND_REASON_FAMILY_IN_FLIGHT_CONTROL_PENDING: &str =
     "familyInFlight:controlChannelPending";
 const RECOVERY_COMMAND_REASON_SAME_FAMILY_TRANSPORT_STAGE_COALESCED: &str =
     "sameFamilyCoalesced:transportStageSuppressed";
+/// 视频 RTCP 反馈目标（TWCC/SSRC）尚未就绪，与「控制通道未就绪」同属可重试窗口，避免记 transportFailed。
+const RECOVERY_COMMAND_REASON_VIDEO_RTCP_FEEDBACK_TARGET_PENDING: &str =
+    "familyDeferred:videoRtcpFeedbackTargetPending";
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum RecoveryCommandKind {
     RequestKeyframe,
@@ -839,6 +842,15 @@ impl<'a> RtcTransportSessionBridge<'a> {
                         None,
                     );
                 }
+                if Self::is_keyframe_video_rtcp_feedback_target_pending_error(&error_text) {
+                    return (
+                        CommandResultStatus::Deferred {
+                            reason: RECOVERY_COMMAND_REASON_VIDEO_RTCP_FEEDBACK_TARGET_PENDING
+                                .to_string(),
+                        },
+                        None,
+                    );
+                }
                 (CommandResultStatus::Failed { error: error_text }, None)
             }
         }
@@ -857,6 +869,13 @@ impl<'a> RtcTransportSessionBridge<'a> {
                 error.contains("xbxEngineRtcControlChannelNotReadyForDecoderReset")
             }
         }
+    }
+
+    fn is_keyframe_video_rtcp_feedback_target_pending_error(error: &str) -> bool {
+        error.contains("xbxEngineRtcVideoPliFeedbackTargetUnavailable")
+            || error.contains("xbxEngineRtcVideoPliMediaSsrcUnavailable")
+            || error.contains("xbxEngineRtcVideoFirFeedbackTargetUnavailable")
+            || error.contains("xbxEngineRtcVideoFirMediaSsrcUnavailable")
     }
 
     fn resolve_recovery_command_family_decision(
@@ -948,11 +967,13 @@ mod tests {
     use crate::transport::rtc::stream::RtcMediaService;
     use crate::{
         XbxEngineMediaRuntimeStats, XbxEnginePendingRuntimeRecoveryAction,
-        XbxEngineRecoveryDecisionLedgerObservation, XbxEngineVideoEscalationObservation,
+        XbxEngineRecoveryDecisionLedgerObservation, XbxEngineRuntimeError,
+        XbxEngineVideoEscalationObservation,
     };
 
     use super::RtcTransportSessionBridge;
     use super::RECOVERY_COMMAND_REASON_SAME_FAMILY_TRANSPORT_STAGE_COALESCED;
+    use super::RECOVERY_COMMAND_REASON_VIDEO_RTCP_FEEDBACK_TARGET_PENDING;
 
     /// 从 coordinator proposal 生成 ledger（测试辅助函数）
     fn ledger_from_proposal(
@@ -2274,7 +2295,10 @@ mod tests {
             .latest_recovery_decision_ledger
             .as_ref()
             .expect("ledger");
-        assert_eq!(ledger.recovery_episode_stage.as_deref(), Some("WaitingResponse"));
+        assert_eq!(
+            ledger.recovery_episode_stage.as_deref(),
+            Some("WaitingResponse")
+        );
         assert_eq!(ledger.gap_severity.as_deref(), Some("AnchorGap"));
         assert_eq!(ledger.frame_value.as_deref(), Some("RecoveryAnchor"));
     }
@@ -2968,6 +2992,25 @@ mod tests {
             status,
             CommandResultStatus::Deferred {
                 reason: RECOVERY_COMMAND_REASON_SAME_FAMILY_TRANSPORT_STAGE_COALESCED.to_string(),
+            }
+        );
+        assert_eq!(detail, None);
+    }
+
+    #[test]
+    fn keyframe_pli_feedback_target_unavailable_is_deferred_not_failed() {
+        let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
+        let pending_runtime_recovery_action = Arc::new(Mutex::new(None));
+        let bridge = build_bridge(runtime_stats, pending_runtime_recovery_action);
+
+        let (status, detail) = bridge.resolve_keyframe_command_status_from_result(&Err(
+            XbxEngineRuntimeError::new("xbxEngineRtcVideoPliFeedbackTargetUnavailable"),
+        ));
+
+        assert_eq!(
+            status,
+            CommandResultStatus::Deferred {
+                reason: RECOVERY_COMMAND_REASON_VIDEO_RTCP_FEEDBACK_TARGET_PENDING.to_string(),
             }
         );
         assert_eq!(detail, None);

@@ -1,6 +1,8 @@
 #[cfg(test)]
 mod tests {
-    use crate::transport::rtc::recovery::contract::{FrameValue, GapSeverity, RecoveryProgressLevel};
+    use crate::transport::rtc::recovery::contract::{
+        FrameValue, GapSeverity, RecoveryProgressLevel,
+    };
     use crate::transport::rtc::session::facts::compute_recovery_facts;
     use crate::{
         XbxEngineMediaRuntimeStats, XbxEngineVideoTimelineChainSnapshot,
@@ -94,27 +96,28 @@ mod tests {
             transport_recovery_epoch: 9,
             ..Default::default()
         };
-        stats.latest_keyframe_request_episode = Some(crate::XbxEngineKeyframeRequestEpisodeObservation {
-            episode_id: 9,
-            request_reason: Some("transportAwaitRecoveryAnchor".to_string()),
-            request_kind: Some("pli".to_string()),
-            status: "response-observed".to_string(),
-            status_detail: Some("firstResponseNonKeyframe".to_string()),
-            requested_at_ms: 1000.0,
-            sent_at_ms: Some(1010.0),
-            deadline_at_ms: Some(1500.0),
-            transport_detail: None,
-            first_video_packet_at_ms: Some(1200.0),
-            first_video_packet_rtp_timestamp: Some(111),
-            first_video_packet_is_keyframe: Some(false),
-            first_keyframe_packet_at_ms: None,
-            first_keyframe_decoded_at_ms: None,
-            response_rtp_timestamp: Some(111),
-            response_frame_seq: None,
-            response_verdict: Some("on-time".to_string()),
-            lifecycle_phase: None,
-            retired_at_ms: None,
-        });
+        stats.latest_keyframe_request_episode =
+            Some(crate::XbxEngineKeyframeRequestEpisodeObservation {
+                episode_id: 9,
+                request_reason: Some("transportAwaitRecoveryAnchor".to_string()),
+                request_kind: Some("pli".to_string()),
+                status: "response-observed".to_string(),
+                status_detail: Some("firstResponseNonKeyframe".to_string()),
+                requested_at_ms: 1000.0,
+                sent_at_ms: Some(1010.0),
+                deadline_at_ms: Some(1500.0),
+                transport_detail: None,
+                first_video_packet_at_ms: Some(1200.0),
+                first_video_packet_rtp_timestamp: Some(111),
+                first_video_packet_is_keyframe: Some(false),
+                first_keyframe_packet_at_ms: None,
+                first_keyframe_decoded_at_ms: None,
+                response_rtp_timestamp: Some(111),
+                response_frame_seq: None,
+                response_verdict: Some("on-time".to_string()),
+                lifecycle_phase: None,
+                retired_at_ms: None,
+            });
 
         let facts = compute_recovery_facts(&timeline, &stats);
         assert_eq!(

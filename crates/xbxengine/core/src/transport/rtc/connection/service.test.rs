@@ -2522,6 +2522,42 @@ fn prime_video_recovery_feedback_target(
 }
 
 #[test]
+fn request_video_keyframe_skips_pli_without_twcc_feedback_target() {
+    let mut service = RtcConnectionService::default();
+    let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
+    let session = XbxEngineSessionDto {
+        session_id: "test-session".to_string(),
+        target_type: XbxEngineTargetTypeDto::Cloud,
+        turn_server: None,
+    };
+
+    service.rebuild(&session, &runtime_stats).unwrap();
+    let (_answer_pc, _answer_io, _, _, _, _, _, _) =
+        connect_service_to_answer_peer(&mut service, &runtime_stats);
+    RuntimeStatsSink::new(runtime_stats.clone()).update(|stats| {
+        if let Some(remote_answer) = stats.latest_remote_answer_observation.as_mut() {
+            remote_answer.accepted_video_rtcp_feedback =
+                vec!["nack:pli".to_string(), "ccm:fir".to_string()];
+        }
+    });
+    assert!(
+        !super::video_rtcp_keyframe_feedback_media_ssrc_ready(
+            &mut service.controlled_twcc_feedback
+        ),
+        "未 prime TWCC 时不应有可用于 PLI 的 media ssrc"
+    );
+
+    let _ = service.request_video_keyframe(&runtime_stats);
+
+    let stats = runtime_stats.lock().unwrap();
+    assert_ne!(
+        stats.latest_observation_label.as_deref(),
+        Some("rtcVideoPliRequested"),
+        "缺少反馈目标时不应发送 PLI（应走控制兜底或待控制就绪）"
+    );
+}
+
+#[test]
 fn request_video_keyframe_prefers_pli_when_video_feedback_is_bound() {
     let mut service = RtcConnectionService::default();
     let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));

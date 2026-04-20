@@ -1,5 +1,6 @@
 use super::{
-    NackObservePolicy, NackPollResult, NackScheduler, NackSchedulerConfig, PacketRecoveryDisposition,
+    NackObservePolicy, NackPollResult, NackScheduler, NackSchedulerConfig,
+    PacketRecoveryDisposition,
 };
 use crate::media::video::ingress::budget::FrameBudgetContext;
 use crate::media::video::types::FrameValue;
@@ -338,12 +339,10 @@ fn supply_packet_with_supply_priority_gets_up_to_two_poll_retries() {
     let exhausted = scheduler.poll(1_040.0);
     assert!(exhausted.retry_batch.is_none());
     assert_eq!(scheduler.pending_count(), 0);
-    assert!(
-        exhausted
-            .expired_batches
-            .iter()
-            .any(|batch| batch.reason == "singleShotPollComplete")
-    );
+    assert!(exhausted
+        .expired_batches
+        .iter()
+        .any(|batch| batch.reason == "singleShotPollComplete"));
 }
 
 #[test]
@@ -748,7 +747,11 @@ fn poll_separates_deadline_max_age_and_retry_budget_expirations() {
 
     let polled = scheduler.poll(1_015.0);
     assert!(polled.retry_batch.is_none());
-    assert_eq!(scheduler.pending_count(), 0, "seq 30 exhausted, 10/20 deadline or maxAge");
+    assert_eq!(
+        scheduler.pending_count(),
+        0,
+        "seq 30 exhausted, 10/20 deadline or maxAge"
+    );
     assert!(polled.expired_batches.len() >= 2);
 
     let deadline_batch = polled
