@@ -711,6 +711,71 @@ fn record_runtime_trace_observations_projects_keyframe_response_observed_event()
 }
 
 #[test]
+fn record_runtime_trace_observations_projects_keyframe_transport_suppression_event() {
+    let recorder = std::sync::Arc::new(
+        RuntimeTraceRecorder::new_with_mode("verbose").expect("trace recorder"),
+    );
+    let mut state = RuntimeTraceObservationState::default();
+    let stats = test_stats(json!({
+        "resolution": "",
+        "rtt": "",
+        "fps": 0.0,
+        "pl": "0.00%",
+        "fl": "",
+        "jit": "",
+        "br": "",
+        "decode": "",
+        "latest_video_timeline_observation": {
+            "observation_id": 301,
+            "source_event": "frame-inspection-rejected-await-anchor",
+            "gap": null,
+            "frame": {
+                "state": "waiting-keyframe",
+                "frame_rtp_timestamp": 123456001,
+                "is_keyframe": false,
+                "frame_importance": "reference",
+                "close_reason": "bootstrapMissingSps",
+                "observed_at_ms": 1290.0
+            },
+            "chain": {
+                "state": "waiting-keyframe",
+                "reason": "transportAwaitRecoveryAnchor",
+                "observed_at_ms": 1290.0
+            },
+            "observed_at_ms": 1290.0
+        },
+        "latest_keyframe_request_episode": {
+            "episode_id": 94,
+            "request_reason": "transportAwaitRecoveryAnchor",
+            "request_kind": "pli",
+            "status": "deferred",
+            "status_detail": "transport-suppressed",
+            "requested_at_ms": 1200.0,
+            "deadline_at_ms": 2160.0,
+            "transport_detail": "coalesced:keyframeInFlight",
+            "response_verdict": "pending"
+        }
+    }));
+
+    record_runtime_trace_observations(&recorder, &mut state, Some("session-1"), &stats);
+
+    let entries = read_trace_lines(recorder.as_ref());
+    let payload = find_event_payload(&entries, "keyframeRequestSuppressedObserved");
+    assert_eq!(payload["episodeId"], 94);
+    assert_eq!(payload["status"], "deferred");
+    assert_eq!(payload["statusDetail"], "transport-suppressed");
+    assert_eq!(payload["transportDetail"], "coalesced:keyframeInFlight");
+    assert_eq!(
+        payload["diagnosticTimelineSourceEvent"],
+        "frame-inspection-rejected-await-anchor"
+    );
+    assert_eq!(
+        payload["diagnosticSuppressionReason"],
+        "coalesced:keyframeInFlight"
+    );
+}
+
+#[test]
 fn record_runtime_trace_observations_projects_h264_inspection_rejection() {
     let recorder = std::sync::Arc::new(
         RuntimeTraceRecorder::new_with_mode("verbose").expect("trace recorder"),
@@ -763,6 +828,67 @@ fn record_runtime_trace_observations_projects_h264_inspection_rejection() {
     assert_eq!(payload["bootstrapRejectReason"], "bootstrapMissingSps");
     assert_eq!(payload["committedSpsPresent"], false);
     assert_eq!(payload["committedPpsPresent"], false);
+}
+
+#[test]
+fn record_runtime_trace_observations_projects_bootstrap_reject_event() {
+    let recorder = std::sync::Arc::new(
+        RuntimeTraceRecorder::new_with_mode("verbose").expect("trace recorder"),
+    );
+    let mut state = RuntimeTraceObservationState::default();
+    let stats = test_stats(json!({
+        "resolution": "",
+        "rtt": "",
+        "fps": 0.0,
+        "pl": "0.00%",
+        "fl": "",
+        "jit": "",
+        "br": "",
+        "decode": "",
+        "latest_keyframe_request_episode": {
+            "episode_id": 95,
+            "request_reason": "transportAwaitRecoveryAnchor",
+            "request_kind": "pli",
+            "status": "packet-seen",
+            "requested_at_ms": 1200.0,
+            "sent_at_ms": 1210.0,
+            "deadline_at_ms": 2160.0,
+            "first_keyframe_packet_at_ms": 1399.0,
+            "response_rtp_timestamp": 2194672445u32,
+            "response_verdict": "pending"
+        },
+        "latest_h264_inspection_observation": {
+            "observation_id": 2194672445u64,
+            "frame_rtp_timestamp": 2194672445u32,
+            "nal_types": ["SliceLayerWithoutPartitioningNonIdr"],
+            "nal_count": 1,
+            "vcl_nal_count": 1,
+            "has_inband_sps": false,
+            "has_inband_pps": false,
+            "committed_sps_present": true,
+            "committed_pps_present": true,
+            "slice_headers_valid": true,
+            "delta_continuation_ready": false,
+            "parameter_sets_changed": false,
+            "config_changed": false,
+            "is_idr": false,
+            "bootstrap_ready": false,
+            "bootstrap_reject_reason": "NonIdrVcl",
+            "admission_accepted": false,
+            "observed_at_ms": 1400.0
+        }
+    }));
+
+    record_runtime_trace_observations(&recorder, &mut state, Some("session-1"), &stats);
+
+    let entries = read_trace_lines(recorder.as_ref());
+    let payload = find_event_payload(&entries, "bootstrapRejectObserved");
+    assert_eq!(payload["frameRtpTimestamp"], 2194672445u32);
+    assert_eq!(payload["bootstrapRejectReason"], "NonIdrVcl");
+    assert_eq!(payload["isIdr"], false);
+    assert_eq!(payload["admissionAccepted"], false);
+    assert_eq!(payload["linkedEpisodeId"], 95);
+    assert_eq!(payload["isRecoveryKeyframeResponseContext"], true);
 }
 
 #[test]
@@ -1342,6 +1468,151 @@ fn chain_broken_timeline_projects_chain_transition_event() {
     assert_eq!(payload["reason"], "referenceChainBroken");
     assert_eq!(payload["chain"]["state"], "broken");
     assert_eq!(payload["chain"]["reason"], "referenceChainBroken");
+}
+
+#[test]
+fn clean_anchor_funnel_projects_ingress_blocked_and_submitted_events() {
+    let recorder = std::sync::Arc::new(
+        RuntimeTraceRecorder::new_with_mode("verbose").expect("trace recorder"),
+    );
+    let mut state = RuntimeTraceObservationState::default();
+
+    let ingress_stats = test_stats(json!({
+        "resolution": "",
+        "rtt": "",
+        "fps": 0.0,
+        "pl": "0.00%",
+        "fl": "",
+        "jit": "",
+        "br": "",
+        "decode": "",
+        "latest_anchor_candidate_ledger": {
+            "recovery_epoch": 12,
+            "frame_rtp_timestamp": 4001,
+            "state": "observed",
+            "source_event": "frame-complete-candidate",
+            "failure_reason": null,
+            "observed_at_ms": 1500.0
+        },
+        "latest_video_timeline_observation": {
+            "observation_id": 401,
+            "source_event": "frame-complete-candidate",
+            "gap": null,
+            "frame": {
+                "state": "complete-candidate",
+                "frame_rtp_timestamp": 4001,
+                "is_keyframe": true,
+                "frame_importance": "anchor",
+                "close_reason": null,
+                "observed_at_ms": 1500.0
+            },
+            "chain": {
+                "state": "recovering",
+                "reason": "awaitingCleanAnchor",
+                "observed_at_ms": 1500.0
+            },
+            "observed_at_ms": 1500.0
+        }
+    }));
+    record_runtime_trace_observations(&recorder, &mut state, Some("session-1"), &ingress_stats);
+
+    let blocked_stats = test_stats(json!({
+        "resolution": "",
+        "rtt": "",
+        "fps": 0.0,
+        "pl": "0.00%",
+        "fl": "",
+        "jit": "",
+        "br": "",
+        "decode": "",
+        "latest_anchor_candidate_ledger": {
+            "recovery_epoch": 12,
+            "frame_rtp_timestamp": 4002,
+            "state": "observed",
+            "source_event": "frame-complete-candidate-decode-feedback-blocked",
+            "failure_reason": null,
+            "observed_at_ms": 1510.0
+        },
+        "latest_video_timeline_observation": {
+            "observation_id": 402,
+            "source_event": "frame-complete-candidate-decode-feedback-blocked",
+            "gap": null,
+            "frame": {
+                "state": "complete-candidate",
+                "frame_rtp_timestamp": 4002,
+                "is_keyframe": true,
+                "frame_importance": "anchor",
+                "close_reason": null,
+                "observed_at_ms": 1510.0
+            },
+            "chain": {
+                "state": "recovering",
+                "reason": "decodeFeedbackBlocked",
+                "observed_at_ms": 1510.0
+            },
+            "observed_at_ms": 1510.0
+        }
+    }));
+    record_runtime_trace_observations(&recorder, &mut state, Some("session-1"), &blocked_stats);
+
+    let submitted_stats = test_stats(json!({
+        "resolution": "",
+        "rtt": "",
+        "fps": 0.0,
+        "pl": "0.00%",
+        "fl": "",
+        "jit": "",
+        "br": "",
+        "decode": "",
+        "latest_anchor_candidate_ledger": {
+            "recovery_epoch": 12,
+            "frame_rtp_timestamp": 4001,
+            "state": "submitted-clean-anchor",
+            "source_event": "chain-clean-anchor-submitted",
+            "failure_reason": null,
+            "observed_at_ms": 1520.0
+        },
+        "latest_video_timeline_observation": {
+            "observation_id": 403,
+            "source_event": "chain-clean-anchor-submitted",
+            "gap": null,
+            "frame": {
+                "state": "complete-candidate",
+                "frame_rtp_timestamp": 4001,
+                "is_keyframe": true,
+                "frame_importance": "anchor",
+                "close_reason": null,
+                "observed_at_ms": 1520.0
+            },
+            "chain": {
+                "state": "steady",
+                "reason": "cleanAnchorCommitted",
+                "observed_at_ms": 1520.0
+            },
+            "observed_at_ms": 1520.0
+        }
+    }));
+    record_runtime_trace_observations(&recorder, &mut state, Some("session-1"), &submitted_stats);
+
+    let entries = read_trace_lines(recorder.as_ref());
+
+    let ingress_payload = find_event_payload(&entries, "cleanAnchorIngressObserved");
+    assert_eq!(ingress_payload["frameRtpTimestamp"], 4001);
+    assert_eq!(ingress_payload["chainState"], "recovering");
+    assert_eq!(ingress_payload["recoveryEpoch"], 12);
+
+    let blocked_payload = find_event_payload(&entries, "cleanAnchorCompleteCandidateBlocked");
+    assert_eq!(blocked_payload["frameRtpTimestamp"], 4002);
+    assert_eq!(blocked_payload["chainReason"], "decodeFeedbackBlocked");
+    assert_eq!(
+        blocked_payload["sourceEvent"],
+        "frame-complete-candidate-decode-feedback-blocked"
+    );
+
+    let submitted_payload = find_event_payload(&entries, "cleanAnchorSubmitted");
+    assert_eq!(submitted_payload["frameRtpTimestamp"], 4001);
+    assert_eq!(submitted_payload["chainState"], "steady");
+    assert_eq!(submitted_payload["anchorState"], "submitted-clean-anchor");
 }
 
 #[test]

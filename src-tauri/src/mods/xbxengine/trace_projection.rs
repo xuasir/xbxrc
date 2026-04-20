@@ -751,6 +751,14 @@ pub(super) fn record_runtime_trace_observations(
                     "observedAtMs": timeline.observed_at_ms,
                 }),
             );
+            if let Some(event_name) = clean_anchor_funnel_event_name(&timeline.source_event) {
+                runtime_trace.record_event(
+                    "xbxengine",
+                    event_name,
+                    session_id,
+                    clean_anchor_funnel_payload(stats, timeline),
+                );
+            }
             let chain_state_changed =
                 previous_chain_state.as_deref() != Some(timeline.chain.state.as_str());
             if chain_state_changed || is_chain_transition_source_event(&timeline.source_event) {
@@ -1129,7 +1137,22 @@ pub(super) fn record_runtime_trace_observations(
         );
         if let Some(episode) = stats.latest_keyframe_request_episode.as_ref() {
             if let Some(event_name) = keyframe_request_episode_event_name(&episode.status) {
-                runtime_trace.record_event("xbxengine", event_name, session_id, payload);
+                runtime_trace.record_event("xbxengine", event_name, session_id, payload.clone());
+            }
+            if let Some(suppression_reason) = diagnostic_keyframe_suppression_reason(episode) {
+                let mut suppression_payload = payload.clone();
+                if let Some(object) = suppression_payload.as_object_mut() {
+                    object.insert(
+                        "diagnosticSuppressionReason".to_string(),
+                        json!(suppression_reason),
+                    );
+                }
+                runtime_trace.record_event(
+                    "xbxengine",
+                    "keyframeRequestSuppressedObserved",
+                    session_id,
+                    suppression_payload,
+                );
             }
         }
     }
@@ -1145,7 +1168,15 @@ pub(super) fn record_runtime_trace_observations(
             } else {
                 "h264InspectionRejected"
             };
-            runtime_trace.record_event("xbxengine", event_name, session_id, payload);
+            runtime_trace.record_event("xbxengine", event_name, session_id, payload.clone());
+            if inspection.bootstrap_reject_reason.is_some() {
+                runtime_trace.record_event(
+                    "xbxengine",
+                    "bootstrapRejectObserved",
+                    session_id,
+                    payload,
+                );
+            }
         }
     }
 
@@ -1585,6 +1616,82 @@ fn keyframe_request_episode_event_name(status: &str) -> Option<&'static str> {
         "expired-unsent" => Some("keyframeRequestEpisodeUnsentExpired"),
         _ => None,
     }
+}
+
+fn diagnostic_keyframe_suppression_reason(
+    episode: &xbxengine_protocol::XbxEngineKeyframeRequestEpisodeObservationDto,
+) -> Option<String> {
+    if let Some(detail) = episode
+        .transport_detail
+        .as_deref()
+        .filter(|detail| is_transport_suppression_detail(detail))
+    {
+        return Some(detail.to_string());
+    }
+    if let Some(detail) = episode
+        .status_detail
+        .as_deref()
+        .filter(|detail| is_transport_suppression_detail(detail))
+    {
+        return Some(detail.to_string());
+    }
+    match episode.status.as_str() {
+        "deferred" => episode
+            .transport_detail
+            .clone()
+            .or_else(|| episode.status_detail.clone())
+            .or_else(|| Some("deferred".to_string())),
+        "expired-unsent" => episode
+            .transport_detail
+            .clone()
+            .or_else(|| episode.status_detail.clone())
+            .or_else(|| Some("expired-unsent".to_string())),
+        _ => None,
+    }
+}
+
+fn is_transport_suppression_detail(detail: &str) -> bool {
+    detail.contains("coalesced:")
+        || detail.contains("familyInFlight:")
+        || detail.contains("videoRtcpFeedbackTargetPending")
+        || detail.contains("controlPending")
+        || detail.contains("transport-await")
+        || detail.contains("transport-suppressed")
+}
+
+fn clean_anchor_funnel_event_name(source_event: &str) -> Option<&'static str> {
+    match source_event {
+        "frame-complete-candidate" => Some("cleanAnchorIngressObserved"),
+        "frame-complete-candidate-decode-feedback-blocked" => {
+            Some("cleanAnchorCompleteCandidateBlocked")
+        }
+        "chain-clean-anchor-submitted" => Some("cleanAnchorSubmitted"),
+        _ => None,
+    }
+}
+
+fn clean_anchor_funnel_payload(
+    stats: &XbxEngineStatsDto,
+    timeline: &xbxengine_protocol::XbxEngineVideoTimelineObservationDto,
+) -> serde_json::Value {
+    let anchor = stats.latest_anchor_candidate_ledger.as_ref();
+    json!({
+        "observationId": timeline.observation_id,
+        "sourceEvent": timeline.source_event,
+        "frameRtpTimestamp": timeline.frame.as_ref().and_then(|frame| frame.frame_rtp_timestamp),
+        "frameState": timeline.frame.as_ref().map(|frame| frame.state.clone()),
+        "frameIsKeyframe": timeline.frame.as_ref().and_then(|frame| frame.is_keyframe),
+        "frameImportance": timeline.frame.as_ref().map(|frame| frame.frame_importance.clone()),
+        "chainState": timeline.chain.state,
+        "chainReason": timeline.chain.reason,
+        "recoveryEpoch": anchor
+            .map(|candidate| candidate.recovery_epoch)
+            .or_else(|| diagnostic_recovery_epoch(stats)),
+        "anchorState": anchor.map(|candidate| candidate.state.clone()),
+        "anchorFailureReason": anchor.and_then(|candidate| candidate.failure_reason.clone()),
+        "anchorSourceEvent": anchor.map(|candidate| candidate.source_event.clone()),
+        "observedAtMs": timeline.observed_at_ms,
+    })
 }
 
 fn keyframe_request_episode_payload(
