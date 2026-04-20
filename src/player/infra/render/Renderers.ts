@@ -120,6 +120,20 @@ abstract class BaseCanvasVideoProcessor {
   protected abstract setup(): Promise<void> | void
   protected abstract refresh(): void
   protected abstract renderFrame(): void
+
+  setDisplayFormat(format: RendererRuntimeConfig['format']): void {
+    this.canvas.style.objectFit = resolveCanvasObjectFit(format)
+  }
+}
+
+function resolveCanvasObjectFit(format: RendererRuntimeConfig['format']): 'contain' | 'cover' | 'fill' {
+  if (format === 'Stretch') {
+    return 'fill'
+  }
+  if (format === 'Zoom') {
+    return 'cover'
+  }
+  return 'contain'
 }
 
 class WebGL2Processor extends BaseCanvasVideoProcessor {
@@ -393,6 +407,7 @@ export class WebGL2VideoRenderer implements VideoRenderer {
   async attach(video: HTMLVideoElement): Promise<void> {
     this.destroy()
     this.player = new WebGL2Processor(video)
+    this.player.setDisplayFormat(this.config.format)
     this.player.updateOptions({
       targetFps: this.config.targetFps,
       sharpness: this.config.sharpness,
@@ -408,6 +423,7 @@ export class WebGL2VideoRenderer implements VideoRenderer {
 
   update(config: Partial<RendererRuntimeConfig>): void {
     this.config = { ...this.config, ...config }
+    this.player?.setDisplayFormat(this.config.format)
     this.player?.updateOptions({
       targetFps: this.config.targetFps,
       sharpness: this.config.sharpness,

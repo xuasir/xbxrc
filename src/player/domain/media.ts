@@ -64,6 +64,8 @@ export interface StreamStats {
   transportProtocol?: string
   transportAddressFamily?: 'ipv4' | 'ipv6' | 'mixed' | 'unknown'
   transportState?: string
+  icePolicyMode?: 'passthrough' | 'policy'
+  icePolicyDigest?: string
   videoRttSource?: string
   videoRembBps?: number
   inboundBitrateKbps?: number
