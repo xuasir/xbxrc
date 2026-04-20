@@ -4,11 +4,15 @@ import type { PlayerClientOptions } from '../domain/config'
 import type { GamepadFrame, InputRuntimeConfig } from '../domain/input'
 import type { AudioRuntimeConfig, RendererRuntimeConfig, StreamStats } from '../domain/media'
 import type {
+  ControlChannelHealthSnapshot,
   ConnectParams,
   CreateOfferOptions,
   IceCandidateLike,
+  KeyframeRequestResult,
   SessionState,
   TransportRuntimeConfig,
+  VideoSenderPolicyInput,
+  VideoSenderPolicyResult,
 } from '../domain/session'
 import type { PlayerEvents } from './events'
 import { InputService } from '../app/input/InputService'
@@ -204,6 +208,22 @@ export class PlayerClient {
 
   updateTransportConfig(config: Partial<TransportRuntimeConfig>): void {
     this.options.transport = { ...this.options.transport, ...config }
+  }
+
+  async applyVideoBitrateSoftCapKbps(maxBitrateKbps: number): Promise<VideoSenderPolicyResult> {
+    return await this.sessionService.applyVideoBitrateSoftCapKbps(maxBitrateKbps)
+  }
+
+  async applyVideoSenderPolicy(input: VideoSenderPolicyInput): Promise<VideoSenderPolicyResult> {
+    return await this.sessionService.applyVideoSenderPolicy(input)
+  }
+
+  requestVideoKeyframe(): KeyframeRequestResult {
+    return this.sessionService.requestVideoKeyframe()
+  }
+
+  getControlChannelHealthSnapshot(): ControlChannelHealthSnapshot {
+    return this.sessionService.getControlChannelHealthSnapshot()
   }
 
   updateRenderer(config: Partial<RendererRuntimeConfig>): void {

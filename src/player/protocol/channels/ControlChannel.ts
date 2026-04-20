@@ -9,6 +9,10 @@ export interface ControlChannelDelegate {
 export class ControlChannel extends BaseChannel {
   private started = false
   private pendingStart = false
+  private keyframeRequestTotal = 0
+  private keyframeRequestSuccess = 0
+  private lastError: string | undefined
+  private sendFailBurst = 0
 
   constructor(context: ChannelContext, private readonly delegate: ControlChannelDelegate) {
     super(context)
@@ -34,7 +38,12 @@ export class ControlChannel extends BaseChannel {
   onClose(): void {
     this.started = false
     this.pendingStart = false
+    this.lastError = 'channelClosed'
     this.delegate.onClose()
+  }
+
+  override onError(): void {
+    this.lastError = 'channelError'
   }
 
   sendGamepadAdded(gamepadIndex: number): void {
@@ -45,8 +54,43 @@ export class ControlChannel extends BaseChannel {
     this.send(JSON.stringify({ message: 'gamepadChanged', gamepadIndex, wasAdded: false }))
   }
 
-  requestKeyframe(): void {
-    this.send(JSON.stringify({ message: 'videoKeyframeRequested', ifrRequested: true }))
+  requestKeyframe(): boolean {
+    this.keyframeRequestTotal += 1
+    const sent = this.send(JSON.stringify({ message: 'videoKeyframeRequested', ifrRequested: true }))
+    if (sent) {
+      this.keyframeRequestSuccess += 1
+      this.sendFailBurst = 0
+      this.lastError = undefined
+    }
+    else {
+      this.sendFailBurst += 1
+      this.lastError = `sendFailed:${this.context.readyState()}`
+    }
+    return sent
+  }
+
+  getHealthSnapshot(): {
+    state: RTCDataChannelState
+    lastError?: string
+    keyframeRequestTotal: number
+    keyframeRequestSuccess: number
+    keyframeRequestSuccessRate?: number
+    sendFailBurst: number
+    bufferedAmount: number
+  } {
+    const state = this.context.readyState()
+    const keyframeRequestSuccessRate = this.keyframeRequestTotal > 0
+      ? this.keyframeRequestSuccess / this.keyframeRequestTotal
+      : undefined
+    return {
+      state,
+      lastError: this.lastError,
+      keyframeRequestTotal: this.keyframeRequestTotal,
+      keyframeRequestSuccess: this.keyframeRequestSuccess,
+      keyframeRequestSuccessRate,
+      sendFailBurst: this.sendFailBurst,
+      bufferedAmount: this.context.bufferedAmount(),
+    }
   }
 
   start(): void {

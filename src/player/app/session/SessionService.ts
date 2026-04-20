@@ -1,6 +1,14 @@
 import type { PlayerEvents, TypedEventEmitter } from '../../api/events'
 import type { PlayerClientOptions } from '../../domain/config'
-import type { CreateOfferOptions, IceCandidateLike, SessionState } from '../../domain/session'
+import type {
+  ControlChannelHealthSnapshot,
+  CreateOfferOptions,
+  IceCandidateLike,
+  KeyframeRequestResult,
+  SessionState,
+  VideoSenderPolicyInput,
+  VideoSenderPolicyResult,
+} from '../../domain/session'
 import type { InputService } from '../input/InputService'
 import type { MediaService } from '../media/MediaService'
 import { DataChannelHub } from '../../infra/webrtc/DataChannelHub'
@@ -139,31 +147,33 @@ export class SessionService {
     }
     if (initialSdp) {
       let nextSdp = initialSdp
-      const transportProfile = resolveTransportVideoProfile(this.options.transport)
-      // 分辨率档位必须同时驱动 device/UA 与浏览器 SDP，避免浏览器 offer 继续固定在 1080 档。
-      nextSdp = this.sdpManipulator.setH264VideoConstraints(nextSdp, {
-        maxFrameSize: transportProfile.maxFrameSize,
-        maxFrameRate: H264_MAX_FRAME_RATE,
-        minBitrateKbps: transportProfile.minBitrateKbps,
-        startBitrateKbps: transportProfile.startBitrateKbps,
-        maxBitrateKbps: transportProfile.maxBitrateKbps,
-      })
-      if (this.options.transport.codecPreference) {
-        nextSdp = this.sdpManipulator.setCodec(nextSdp, this.options.transport.codecPreference)
-      }
-      if (this.options.transport.maxVideoBitrateKbps > 0) {
-        nextSdp = this.sdpManipulator.setBitrate(
-          nextSdp,
-          'video',
-          this.options.transport.maxVideoBitrateKbps,
-        )
-      }
-      if (this.options.transport.maxAudioBitrateKbps > 0) {
-        nextSdp = this.sdpManipulator.setBitrate(
-          nextSdp,
-          'audio',
-          this.options.transport.maxAudioBitrateKbps,
-        )
+      if (this.options.transport.enableSdpPatch !== false) {
+        const transportProfile = resolveTransportVideoProfile(this.options.transport)
+        // 分辨率档位必须同时驱动 device/UA 与浏览器 SDP，避免浏览器 offer 继续固定在 1080 档。
+        nextSdp = this.sdpManipulator.setH264VideoConstraints(nextSdp, {
+          maxFrameSize: transportProfile.maxFrameSize,
+          maxFrameRate: H264_MAX_FRAME_RATE,
+          minBitrateKbps: transportProfile.minBitrateKbps,
+          startBitrateKbps: transportProfile.startBitrateKbps,
+          maxBitrateKbps: transportProfile.maxBitrateKbps,
+        })
+        if (this.options.transport.codecPreference) {
+          nextSdp = this.sdpManipulator.setCodec(nextSdp, this.options.transport.codecPreference)
+        }
+        if (this.options.transport.maxVideoBitrateKbps > 0) {
+          nextSdp = this.sdpManipulator.setBitrate(
+            nextSdp,
+            'video',
+            this.options.transport.maxVideoBitrateKbps,
+          )
+        }
+        if (this.options.transport.maxAudioBitrateKbps > 0) {
+          nextSdp = this.sdpManipulator.setBitrate(
+            nextSdp,
+            'audio',
+            this.options.transport.maxAudioBitrateKbps,
+          )
+        }
       }
       if (!this.options.transport.forceMonoAudio) {
         nextSdp = nextSdp.replace('useinbandfec=1', 'useinbandfec=1; stereo=1')
@@ -210,6 +220,52 @@ export class SessionService {
     return this.channelHub?.get<ControlChannel>('control')
   }
 
+  requestVideoKeyframe(): KeyframeRequestResult {
+    const control = this.getControlChannel()
+    if (!control) {
+      return {
+        sent: false,
+        state: 'unavailable',
+        error: 'controlChannelMissing',
+      }
+    }
+    const sent = control.requestKeyframe()
+    const health = control.getHealthSnapshot()
+    return {
+      sent,
+      state: health.state,
+      error: sent ? undefined : (health.lastError ?? 'controlChannelSendFailed'),
+    }
+  }
+
+  getControlChannelHealthSnapshot(): ControlChannelHealthSnapshot {
+    const control = this.getControlChannel()
+    if (!control) {
+      return {
+        state: 'unavailable',
+        keyframeRequestTotal: 0,
+        keyframeRequestSuccess: 0,
+        sendFailBurst: 0,
+        bufferedAmount: 0,
+      }
+    }
+    return control.getHealthSnapshot()
+  }
+
+  async applyVideoSenderPolicy(input: VideoSenderPolicyInput): Promise<VideoSenderPolicyResult> {
+    return await this.transport.applyVideoSenderPolicy(input)
+  }
+
+  async applyVideoBitrateSoftCapKbps(maxBitrateKbps: number): Promise<VideoSenderPolicyResult> {
+    if (maxBitrateKbps <= 0) {
+      return { status: 'unsupported', detail: 'invalidBitrate' }
+    }
+    return await this.applyVideoSenderPolicy({
+      maxBitrateBps: Math.round(maxBitrateKbps * 1000),
+      degradationPreference: 'maintain-framerate',
+    })
+  }
+
   getState(): SessionState {
     return this.state
   }
@@ -245,30 +301,64 @@ function resolveTransportVideoProfile(transport: PlayerClientOptions['transport'
   const height = Math.max(16, transport.targetVideoHeight)
   const maxFrameSize = Math.ceil(width / 16) * Math.ceil(height / 16)
   const configuredMaxBitrateKbps = Math.max(0, transport.maxVideoBitrateKbps)
+  const patchProfile = transport.sdpPatchProfile ?? 'conservative'
 
   if (height <= 720) {
-    return {
+    return applySdpPatchProfile({
       maxFrameSize,
       minBitrateKbps: 3_000,
       startBitrateKbps: configuredMaxBitrateKbps > 0 ? Math.min(configuredMaxBitrateKbps, 10_000) : 8_000,
       maxBitrateKbps: configuredMaxBitrateKbps > 0 ? configuredMaxBitrateKbps : 20_000,
-    }
+    }, patchProfile)
   }
 
   if (height > 1080 || width > 1920) {
-    return {
+    return applySdpPatchProfile({
       maxFrameSize,
       minBitrateKbps: 8_000,
       startBitrateKbps: configuredMaxBitrateKbps > 0 ? Math.min(configuredMaxBitrateKbps, 35_000) : 35_000,
       maxBitrateKbps: configuredMaxBitrateKbps > 0 ? configuredMaxBitrateKbps : 75_000,
-    }
+    }, patchProfile)
   }
 
-  return {
+  return applySdpPatchProfile({
     maxFrameSize,
     minBitrateKbps: 5_000,
     startBitrateKbps: configuredMaxBitrateKbps > 0 ? Math.min(configuredMaxBitrateKbps, 20_000) : 20_000,
     maxBitrateKbps: configuredMaxBitrateKbps > 0 ? configuredMaxBitrateKbps : 50_000,
+  }, patchProfile)
+}
+
+function applySdpPatchProfile(
+  profile: {
+    maxFrameSize: number
+    minBitrateKbps: number
+    startBitrateKbps: number
+    maxBitrateKbps: number
+  },
+  mode: 'conservative' | 'balanced' | 'aggressive',
+): {
+  maxFrameSize: number
+  minBitrateKbps: number
+  startBitrateKbps: number
+  maxBitrateKbps: number
+} {
+  if (mode === 'balanced') {
+    return profile
+  }
+  if (mode === 'aggressive') {
+    return {
+      ...profile,
+      minBitrateKbps: Math.round(profile.minBitrateKbps * 1.1),
+      startBitrateKbps: Math.round(profile.startBitrateKbps * 1.1),
+      maxBitrateKbps: Math.round(profile.maxBitrateKbps * 1.15),
+    }
+  }
+  return {
+    ...profile,
+    minBitrateKbps: Math.max(1_000, Math.round(profile.minBitrateKbps * 0.75)),
+    startBitrateKbps: Math.max(2_000, Math.round(profile.startBitrateKbps * 0.8)),
+    maxBitrateKbps: Math.max(4_000, Math.round(profile.maxBitrateKbps * 0.85)),
   }
 }
 

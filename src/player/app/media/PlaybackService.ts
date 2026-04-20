@@ -16,7 +16,7 @@ type ResolutionGlobal = typeof globalThis & {
 export class PlaybackService {
   private videoElement: HTMLVideoElement | null = null
   private audioElement: HTMLAudioElement | null = null
-  private renderer: VideoRenderer = new NativeVideoRenderer()
+  private renderer: VideoRenderer
   private frameTrackingStarted = false
 
   constructor(
@@ -24,10 +24,20 @@ export class PlaybackService {
     private readonly inputService: InputService,
     private readonly emitter: TypedEventEmitter<PlayerEvents>,
     private rendererConfig: RendererRuntimeConfig,
-  ) {}
+  ) {
+    this.renderer = this.createRenderer(this.rendererConfig)
+  }
 
   updateRendererConfig(config: Partial<RendererRuntimeConfig>): void {
     this.rendererConfig = { ...this.rendererConfig, ...config }
+    const nextKind = this.resolveRendererKind(this.rendererConfig)
+    if (this.renderer.kind !== nextKind && this.videoElement) {
+      const currentVideo = this.videoElement
+      this.renderer.destroy()
+      this.renderer = this.createRenderer(this.rendererConfig)
+      void this.attachRendererWithFallback(currentVideo)
+      return
+    }
     this.renderer.update(this.rendererConfig)
   }
 
@@ -48,9 +58,8 @@ export class PlaybackService {
     })
     container.appendChild(video)
     this.videoElement = video
-    Promise.resolve(this.selectRenderer().attach(video)).catch(error =>
-      this.emitter.emit('error', { error }),
-    )
+    this.renderer = this.createRenderer(this.rendererConfig)
+    void this.attachRendererWithFallback(video)
     video.play().catch(error => this.emitter.emit('error', { error }))
     this.startVideoFrameTracking(video)
   }
@@ -77,13 +86,47 @@ export class PlaybackService {
     this.frameTrackingStarted = false
   }
 
-  private selectRenderer(): VideoRenderer {
-    this.renderer.destroy()
-    this.renderer
-      = this.rendererConfig.enabled && this.rendererConfig.mode === 'webgl2'
-        ? new WebGL2VideoRenderer(this.rendererConfig)
-        : new NativeVideoRenderer()
-    return this.renderer
+  private createRenderer(config: RendererRuntimeConfig): VideoRenderer {
+    const kind = this.resolveRendererKind(config)
+    return kind === 'webgl2'
+      ? new WebGL2VideoRenderer(config)
+      : new NativeVideoRenderer(config)
+  }
+
+  private async attachRendererWithFallback(video: HTMLVideoElement): Promise<void> {
+    try {
+      await this.renderer.attach(video)
+    }
+    catch (error) {
+      if (this.renderer.kind === 'webgl2') {
+        this.renderer.destroy()
+        this.rendererConfig = {
+          ...this.rendererConfig,
+          pipelineType: 'video',
+          mode: 'native',
+        }
+        this.renderer = this.createRenderer(this.rendererConfig)
+        try {
+          await this.renderer.attach(video)
+          return
+        }
+        catch (fallbackError) {
+          this.emitter.emit('error', { error: fallbackError })
+          return
+        }
+      }
+      this.emitter.emit('error', { error })
+    }
+  }
+
+  private resolveRendererKind(config: RendererRuntimeConfig): 'video' | 'webgl2' {
+    if (!config.enabled) {
+      return 'video'
+    }
+    if (config.pipelineType === 'video' || config.pipelineType === 'webgl2') {
+      return config.pipelineType
+    }
+    return config.mode === 'webgl2' ? 'webgl2' : 'video'
   }
 
   private startVideoFrameTracking(video: HTMLVideoElement): void {

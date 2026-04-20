@@ -31,6 +31,29 @@ interface StreamDiagnosticsRowViewModel {
     | 'path'
     | 'inputPortrait'
     | 'phase'
+    | 'transportState'
+    | 'presentationMilestone'
+    | 'connectedElapsed'
+    | 'mediaReadyElapsed'
+    | 'bandwidthState'
+    | 'bandwidthAction'
+    | 'recoveryEpoch'
+    | 'recoveryLevel'
+    | 'recoveryResult'
+    | 'recoverySuppressedBy'
+    | 'recoveryBudget'
+    | 'controlChannelState'
+    | 'controlChannelError'
+    | 'keyframeSuccessRate'
+    | 'networkConfidence'
+    | 'decodeConfidence'
+    | 'recoveryCause'
+    | 'qualityLadderLevel'
+    | 'decisionDigest'
+    | 'actionEffect'
+    | 'actionEffectScore'
+    | 'actionEffectReason'
+    | 'lastRecoveryReason'
     | 'videoHealth'
     | 'primaryIssueChain'
     | 'latestDecision'
@@ -97,6 +120,41 @@ const rows = computed<StreamDiagnosticsRowViewModel[]>(() => {
     ? undefined
     : translateDiagnosticsSessionPhase(te, t, props.diagnostics.sessionPhase)
   pushIf('phase', phaseValue, !browserMode)
+  if (browserMode) {
+    pushIf('transportState', props.diagnostics.transportState ?? t('streamPage.diagnostics.values.unknown'), true)
+    pushIf('presentationMilestone', props.diagnostics.presentationMilestone ?? t('streamPage.diagnostics.values.unknown'), true)
+    pushIf('connectedElapsed', props.diagnostics.connectedMilestoneElapsedText)
+    pushIf('mediaReadyElapsed', props.diagnostics.mediaReadyMilestoneElapsedText)
+    pushIf('bandwidthState', props.diagnostics.bandwidthState ?? t('streamPage.diagnostics.values.unknown'))
+    pushIf('bandwidthAction', props.diagnostics.bandwidthAction ?? t('streamPage.diagnostics.values.none'))
+    pushIf('recoveryEpoch', props.diagnostics.recoveryEpochId)
+    pushIf('recoveryLevel', props.diagnostics.lastRecoveryActionLevel)
+    pushIf('recoveryResult', props.diagnostics.lastRecoveryActionResult)
+    pushIf('recoverySuppressedBy', props.diagnostics.recoverySuppressedBy)
+    pushIf('recoveryBudget', props.diagnostics.recoveryBudgetRemaining)
+    pushIf('controlChannelState', props.diagnostics.controlChannelState)
+    pushIf('controlChannelError', props.diagnostics.lastControlChannelError)
+    pushIf(
+      'keyframeSuccessRate',
+      props.diagnostics.keyframeRequestSuccessRate === undefined
+        ? undefined
+        : `${Math.round(props.diagnostics.keyframeRequestSuccessRate * 100)}%`,
+    )
+    pushIf('networkConfidence', props.diagnostics.networkConfidence)
+    pushIf('decodeConfidence', props.diagnostics.decodeConfidence)
+    pushIf('recoveryCause', props.diagnostics.recoveryCause)
+    pushIf('qualityLadderLevel', props.diagnostics.qualityLadderLevel)
+    pushIf('decisionDigest', props.diagnostics.decisionDigest)
+    pushIf('actionEffect', props.diagnostics.lastRecoveryActionEffect)
+    pushIf(
+      'actionEffectScore',
+      props.diagnostics.lastRecoveryActionEffectScore === undefined
+        ? undefined
+        : props.diagnostics.lastRecoveryActionEffectScore.toFixed(2),
+    )
+    pushIf('actionEffectReason', props.diagnostics.lastRecoveryActionEffectReason)
+    pushIf('lastRecoveryReason', props.diagnostics.lastRecoveryReason ?? t('streamPage.diagnostics.values.none'))
+  }
   if (!browserMode) {
     pushIf('videoHealth', translateDiagnosticsVideoHealth(te, t, props.diagnostics.videoHealth), true)
     pushIf('primaryIssueChain', translateDiagnosticsPrimaryIssueChain(te, t, props.diagnostics.primaryIssueChain), true)

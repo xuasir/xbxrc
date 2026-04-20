@@ -8,6 +8,13 @@ export interface AudioRuntimeConfig {
 export interface RendererRuntimeConfig {
   enabled: boolean
   sharpness: number
+  pipelineType: 'video' | 'webgl2' | 'auto'
+  processing: 'usm' | 'cas'
+  processingMode: 'quality' | 'performance'
+  brightness: number
+  contrast: number
+  saturation: number
+  targetFps: number
   mode: 'native' | 'webgl2'
   format: VideoFit
 }

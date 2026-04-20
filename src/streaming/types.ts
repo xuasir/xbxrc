@@ -150,6 +150,40 @@ export interface StreamPerformanceSnapshot {
   lastRecoveryAction?: string
   lastRecoveryActionAtMs?: number
   lastRecoveryReason?: string
+  bandwidthState?: 'stable' | 'warning' | 'congested' | 'recovering'
+  bandwidthAction?: 'none' | 'observe' | 'downshift' | 'keyframeRequest' | 'decoderReset' | 'reconnect'
+  recoveryEpochId?: string
+  lastRecoveryActionLevel?: 'L0' | 'L1' | 'L2' | 'L3'
+  lastRecoveryActionResult?: 'planned' | 'executed' | 'suppressed' | 'notSupported' | 'failed'
+  recoverySuppressedBy?: 'factWindow' | 'reasonWindow' | 'cooldown' | 'budget' | 'channelUnhealthy' | 'unknown'
+  recoveryBudgetRemaining?: string
+  controlChannelState?: string
+  lastControlChannelError?: string
+  keyframeRequestSuccessRate?: number
+  controlChannelOpenRatio?: number
+  controlChannelBufferedTrend?: 'rising' | 'stable' | 'falling'
+  controlChannelSendFailBurst?: number
+  lastRecoveryActionEffect?: 'improved' | 'neutral' | 'degraded' | 'unknown'
+  lastRecoveryActionEffectScore?: number
+  lastRecoveryActionEffectReason?: string
+  networkConfidence?: 'high' | 'low'
+  decodeConfidence?: 'high' | 'low'
+  recoveryCause?: 'networkCongestion' | 'decodeBackpressure' | 'renderStarvation' | 'controlChannelUnhealthy' | 'unknown'
+  qualityLadderLevel?: 'L0' | 'L1' | 'L2'
+  decisionDigest?: string
+  firstFrameStage?: 'idle' | 'connecting' | 'firstDecoded' | 'firstPresented'
+  firstFrameStageChangedAtMs?: number
+  firstDecodedAtMs?: number
+  firstPresentedAtMs?: number
+  firstFrameGuardTriggered?: boolean
+  renderBackpressure?: boolean
+  renderDroppedFrames?: number
+  renderFrameCallbackIntervalMs?: number
+  renderCause?: 'decodeBackpressure' | 'renderStarvation' | 'renderStable'
+  displayDegradeLevel?: 'displayL0' | 'displayL1' | 'displayL2'
+  renderDecisionDigest?: string
+  renderPipelineType?: 'video' | 'webgl2'
+  renderPolicySource?: 'auto' | 'userOverride'
   hostPresentTakeEmptyStreak?: number
   hostPresentLatestRenderSlotAtMs?: number
 }
@@ -168,6 +202,7 @@ export interface StreamSessionDiagnosticsSnapshot {
   transportCandidatePair?: string
   transportProtocol?: string
   transportAddressFamily?: 'ipv4' | 'ipv6' | 'mixed' | 'unknown'
+  transportState?: string
   transportStrategyProfile?: string
   recoveryStrategyProfile?: string
   recoveryInputProfile?: string
@@ -193,11 +228,48 @@ export interface StreamSessionDiagnosticsSnapshot {
   primaryIssueChain?: string
   latestDecisionSummary?: string
   stallKind?: string
+  lastRecoveryReason?: string
+  bandwidthState?: 'stable' | 'warning' | 'congested' | 'recovering'
+  bandwidthAction?: 'none' | 'observe' | 'downshift' | 'keyframeRequest' | 'decoderReset' | 'reconnect'
+  recoveryEpochId?: string
+  lastRecoveryActionLevel?: 'L0' | 'L1' | 'L2' | 'L3'
+  lastRecoveryActionResult?: 'planned' | 'executed' | 'suppressed' | 'notSupported' | 'failed'
+  recoverySuppressedBy?: 'factWindow' | 'reasonWindow' | 'cooldown' | 'budget' | 'channelUnhealthy' | 'unknown'
+  recoveryBudgetRemaining?: string
+  controlChannelState?: string
+  lastControlChannelError?: string
+  keyframeRequestSuccessRate?: number
+  controlChannelOpenRatio?: number
+  controlChannelBufferedTrend?: 'rising' | 'stable' | 'falling'
+  controlChannelSendFailBurst?: number
+  lastRecoveryActionEffect?: 'improved' | 'neutral' | 'degraded' | 'unknown'
+  lastRecoveryActionEffectScore?: number
+  lastRecoveryActionEffectReason?: string
+  networkConfidence?: 'high' | 'low'
+  decodeConfidence?: 'high' | 'low'
+  recoveryCause?: 'networkCongestion' | 'decodeBackpressure' | 'renderStarvation' | 'controlChannelUnhealthy' | 'unknown'
+  qualityLadderLevel?: 'L0' | 'L1' | 'L2'
+  decisionDigest?: string
+  firstFrameStage?: 'idle' | 'connecting' | 'firstDecoded' | 'firstPresented'
+  firstFrameStageChangedAtMs?: number
+  firstDecodedAtMs?: number
+  firstPresentedAtMs?: number
+  firstFrameGuardTriggered?: boolean
+  renderBackpressure?: boolean
+  renderDroppedFrames?: number
+  renderFrameCallbackIntervalMs?: number
+  renderCause?: 'decodeBackpressure' | 'renderStarvation' | 'renderStable'
+  displayDegradeLevel?: 'displayL0' | 'displayL1' | 'displayL2'
+  renderDecisionDigest?: string
+  renderPipelineType?: 'video' | 'webgl2'
+  renderPolicySource?: 'auto' | 'userOverride'
   isRelayPath: boolean
   isRecovering: boolean
   /** 显示供给受限（非传输/解码主恢复链），单独提示避免与「连接恢复中」混淆 */
   isDisplaySupplyLimited: boolean
   hasNoVideoWarning: boolean
+  connectedMilestoneElapsedText?: string
+  mediaReadyMilestoneElapsedText?: string
   transportSummary?: string
   statusCode:
     | 'noVideo'

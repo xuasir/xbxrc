@@ -14,8 +14,12 @@ import { DEFAULT_DISPLAY_OPTIONS, normalizeDisplayOptions, sleep } from '../util
 import { createBrowserRuntime } from './browser-runtime'
 import { createXbxEngineRuntime } from './xbxengine-runtime'
 import {
+  DEFAULT_RECOVERY_ARBITER_WINDOW_MS,
   buildRuntimeAttemptSpec,
   canRetryFallbackTurn,
+  decideRecoveryArbiter,
+  resolveLaunchDelayMs,
+  type RecoveryGateState,
   shouldAttemptRecovery,
   shouldUseDirectFirstFallback,
 } from './runtime-host-policy'
@@ -58,6 +62,7 @@ export function useStreamRuntimeHost(options: UseStreamRuntimeHostOptions) {
   let activeLaunchSpec: RuntimeLaunchSpec | null = null
   let activeConnected = false
   let fallbackRetryConsumed = false
+  let recoveryGate: RecoveryGateState = {}
 
   async function recordRuntimeTraceEvent(
     event: string,
@@ -211,6 +216,21 @@ export function useStreamRuntimeHost(options: UseStreamRuntimeHostOptions) {
     if (currentRuntime === null || sessionId === null || !isRuntimeTokenActive(token)) {
       return false
     }
+    const observedAtMs = Date.now()
+    const gateDecision = decideRecoveryArbiter({
+      factKey: `transportConnectionState:${state}`,
+      observedAtMs,
+      gate: recoveryGate,
+      windowMs: DEFAULT_RECOVERY_ARBITER_WINDOW_MS,
+    })
+    if (!gateDecision.allowed) {
+      void recordRuntimeTraceEvent('recoveryArbiterSuppressed', {
+        source: 'runtime-host',
+        factKey: `transportConnectionState:${state}`,
+        suppressedBy: gateDecision.suppressedBy ?? 'unknown',
+      }, sessionId)
+      return false
+    }
 
     try {
       const decision = await rpc.streaming.decideRecovery({
@@ -224,13 +244,54 @@ export function useStreamRuntimeHost(options: UseStreamRuntimeHostOptions) {
       if (!isRuntimeTokenActive(token) || !decision.shouldReconnect || decision.reason === undefined) {
         return false
       }
+      const reasonGateDecision = decideRecoveryArbiter({
+        factKey: `transportConnectionState:${state}`,
+        reason: decision.reason,
+        observedAtMs: Date.now(),
+        gate: gateDecision.nextGate,
+        windowMs: DEFAULT_RECOVERY_ARBITER_WINDOW_MS,
+      })
+      if (!reasonGateDecision.allowed) {
+        recoveryGate = reasonGateDecision.nextGate
+        void recordRuntimeTraceEvent('recoveryArbiterSuppressed', {
+          source: 'runtime-host',
+          factKey: `transportConnectionState:${state}`,
+          reason: decision.reason,
+          suppressedBy: reasonGateDecision.suppressedBy ?? 'unknown',
+        }, sessionId)
+        return false
+      }
+      recoveryGate = reasonGateDecision.nextGate
       console.info('[streaming][runtime-host] requesting runtime reconnect', {
         sessionId,
         state,
         reason: decision.reason,
       })
-      await currentRuntime.requestReconnect(decision.reason)
-      return true
+      void recordRuntimeTraceEvent('recoveryArbiterAllowed', {
+        source: 'runtime-host',
+        factKey: `transportConnectionState:${state}`,
+        reason: decision.reason,
+      }, sessionId)
+      try {
+        await currentRuntime.requestReconnect(decision.reason)
+        void recordRuntimeTraceEvent('reconnectResult', {
+          source: 'runtime-host',
+          result: 'success',
+          factKey: `transportConnectionState:${state}`,
+          reason: decision.reason,
+        }, sessionId)
+        return true
+      }
+      catch (error) {
+        void recordRuntimeTraceEvent('reconnectResult', {
+          source: 'runtime-host',
+          result: 'failed',
+          factKey: `transportConnectionState:${state}`,
+          reason: decision.reason,
+          error: error instanceof Error ? error.message : String(error),
+        }, sessionId)
+        throw error
+      }
     }
     catch {
       return false
@@ -260,8 +321,29 @@ export function useStreamRuntimeHost(options: UseStreamRuntimeHostOptions) {
       activeConnected,
       fallbackRetryConsumed,
     })
-    await launchRuntimeAttempt(launchSpec, { useFallbackTurn: true })
-    return true
+    try {
+      await launchRuntimeAttempt(launchSpec, { useFallbackTurn: true })
+      void recordRuntimeTraceEvent('fallbackTurnRetryResult', {
+        targetType: launchSpec.targetType,
+        mode: launchSpec.runtime.mode,
+        result: 'success',
+      })
+      return true
+    }
+    catch (error) {
+      void recordRuntimeTraceEvent('fallbackTurnRetryResult', {
+        targetType: launchSpec.targetType,
+        mode: launchSpec.runtime.mode,
+        result: 'failed',
+        error: error instanceof Error
+          ? {
+              name: error.name,
+              message: error.message,
+            }
+          : String(error),
+      })
+      throw error
+    }
   }
 
   function ensureRuntime(mode: RuntimeLaunchSpec['runtime']['mode']): RuntimePort {
@@ -296,6 +378,7 @@ export function useStreamRuntimeHost(options: UseStreamRuntimeHostOptions) {
       activeConnected = false
       fallbackRetryConsumed = false
     }
+    recoveryGate = {}
     console.info('[streaming][runtime-host] stopping runtime', {
       sessionId: activeSessionId,
       preserveLaunchContext: input?.preserveLaunchContext ?? false,
@@ -328,13 +411,18 @@ export function useStreamRuntimeHost(options: UseStreamRuntimeHostOptions) {
       useFallbackTurn: attempt.useFallbackTurn,
     }, input.sessionId)
     runtimeStarted.value = true
+    const launchDelayMs = resolveLaunchDelayMs({
+      spec: input,
+      useFallbackTurn: attempt.useFallbackTurn,
+    })
     await nextTick()
-    await sleep(500)
+    await sleep(launchDelayMs)
     void recordRuntimeTraceEvent('runtimeLaunchReadyToInvoke', {
       targetType: input.targetType,
       mode: input.runtime.mode,
       turnMode: launchSpec.runtime.turnServer === null ? 'direct' : 'fallback',
       useFallbackTurn: attempt.useFallbackTurn,
+      launchDelayMs,
     }, input.sessionId)
 
     runtimeToken += 1
@@ -346,6 +434,7 @@ export function useStreamRuntimeHost(options: UseStreamRuntimeHostOptions) {
     microphoneState.value = createIdleMicrophoneState(input.runtime.microphone)
     microphoneState.value.startWithSession = input.runtime.microphoneStartWithSession
     activeConnected = false
+    recoveryGate = {}
     const nextRuntime = ensureRuntime(input.runtime.mode)
     bindRuntimeEvents(nextRuntime, token)
     void recordRuntimeTraceEvent('runtimeLaunchPortBound', {

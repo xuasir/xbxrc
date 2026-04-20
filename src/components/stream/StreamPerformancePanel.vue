@@ -60,8 +60,33 @@ function formatFps(value?: string | number): string {
   return numericValue.toFixed(1)
 }
 
+function formatRenderPipeline(value?: 'video' | 'webgl2'): string {
+  if (value === 'video') {
+    return 'Video'
+  }
+  if (value === 'webgl2') {
+    return 'WebGL2'
+  }
+  return '--'
+}
+
 const metrics = computed(() => [
   { key: 'State', value: resolveStatusText() },
+  { key: 'Transport', value: props.snapshot?.transportState ?? '--' },
+  { key: 'Render', value: formatRenderPipeline(props.snapshot?.renderPipelineType) },
+  { key: 'BwState', value: props.snapshot?.bandwidthState ?? '--' },
+  { key: 'BwAct', value: props.snapshot?.bandwidthAction ?? '--' },
+  { key: 'CtrlCh', value: props.snapshot?.controlChannelState ?? '--' },
+  { key: 'KfSucc', value: props.snapshot?.keyframeRequestSuccessRate === undefined ? '--' : `${Math.round(props.snapshot.keyframeRequestSuccessRate * 100)}%` },
+  { key: 'Cause', value: props.snapshot?.recoveryCause ?? '--' },
+  { key: 'QLevel', value: props.snapshot?.qualityLadderLevel ?? '--' },
+  { key: 'NetConf', value: props.snapshot?.networkConfidence ?? '--' },
+  { key: 'DecConf', value: props.snapshot?.decodeConfidence ?? '--' },
+  { key: 'RecoLv', value: props.snapshot?.lastRecoveryActionLevel ?? '--' },
+  { key: 'RecoRs', value: props.snapshot?.lastRecoveryActionResult ?? '--' },
+  { key: 'RecoEff', value: props.snapshot?.lastRecoveryActionEffect ?? '--' },
+  { key: 'RecoScr', value: props.snapshot?.lastRecoveryActionEffectScore === undefined ? '--' : props.snapshot.lastRecoveryActionEffectScore.toFixed(2) },
+  { key: 'RecoWhy', value: props.snapshot?.lastRecoveryReason ?? '--' },
   { key: 'RTT', value: props.snapshot?.rtt ?? '--' },
   { key: 'JIT', value: props.snapshot?.jit ?? '--' },
   { key: 'RecvFPS', value: formatFps(props.snapshot?.inboundVideoFps) },
@@ -91,6 +116,21 @@ const metrics = computed(() => [
   }
   return (
     item.key === 'State'
+    || item.key === 'Transport'
+    || item.key === 'Render'
+    || item.key === 'BwState'
+    || item.key === 'BwAct'
+    || item.key === 'CtrlCh'
+    || item.key === 'KfSucc'
+    || item.key === 'Cause'
+    || item.key === 'QLevel'
+    || item.key === 'NetConf'
+    || item.key === 'DecConf'
+    || item.key === 'RecoLv'
+    || item.key === 'RecoRs'
+    || item.key === 'RecoEff'
+    || item.key === 'RecoScr'
+    || item.key === 'RecoWhy'
     || item.key === 'RTT'
     || item.key === 'JIT'
     || item.key === 'PL'

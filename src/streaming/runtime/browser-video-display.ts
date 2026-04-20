@@ -28,48 +28,11 @@ function withVideoElement(
   }
 }
 
-function buildVideoFilterStyle(options: DisplayOptionsValue): string {
-  const filters: string[] = []
-  const sharpnessMatrix = buildSharpnessMatrix(options.sharpness)
-  if (sharpnessMatrix !== '') {
-    updateSharpnessMatrix(sharpnessMatrix)
-    filters.push('url(#stream-video-filter-usm)')
-  }
-
-  if (options.saturation !== 100) {
-    filters.push(`saturate(${options.saturation}%)`)
-  }
-  if (options.contrast !== 100) {
-    filters.push(`contrast(${options.contrast}%)`)
-  }
-  if (options.brightness !== 100) {
-    filters.push(`brightness(${options.brightness}%)`)
-  }
-
-  return filters.join(' ')
-}
-
-function buildSharpnessMatrix(sharpness: number): string {
-  if (sharpness === 0) {
-    return ''
-  }
-
-  const level = (7 - (sharpness / 2 - 1) * 0.5).toFixed(1)
-  return `0 -1 0 -1 ${level} -1 0 -1 0`
-}
-
-function updateSharpnessMatrix(matrix: string): void {
-  const target = document.getElementById('stream-video-filter-usm-matrix')
-  target?.setAttributeNS(null, 'kernelMatrix', matrix)
-}
-
 export function applyBrowserVideoDisplay(input: ApplyBrowserVideoDisplayInput): void {
-  const filters = buildVideoFilterStyle(input.displayOptions)
   const videoFormat = input.render.videoFormat ?? undefined
+  const container = document.getElementById(input.playerElementId)
 
   withVideoElement(input.playerElementId, (video) => {
-    video.style.filter = filters
-
     if (isAspectRatioFormat(videoFormat)) {
       const [widthRatio, heightRatio] = videoFormat.split(':').map(Number)
       if (!Number.isFinite(widthRatio) || !Number.isFinite(heightRatio) || heightRatio === 0) {
@@ -77,8 +40,11 @@ export function applyBrowserVideoDisplay(input: ApplyBrowserVideoDisplayInput): 
       }
 
       const videoRatio = widthRatio / heightRatio
-      const winWidth = document.documentElement.clientWidth
-      const winHeight = document.documentElement.clientHeight
+      const { width: boundedWidth, height: boundedHeight } = container instanceof HTMLElement
+        ? container.getBoundingClientRect()
+        : { width: 0, height: 0 }
+      const winWidth = boundedWidth > 0 ? boundedWidth : document.documentElement.clientWidth
+      const winHeight = boundedHeight > 0 ? boundedHeight : document.documentElement.clientHeight
       const parentRatio = winWidth / winHeight
 
       let width = 0
@@ -109,16 +75,73 @@ export function applyBrowserVideoDisplay(input: ApplyBrowserVideoDisplayInput): 
 
 /**
  * 浏览器 runtime 内部直接监听 DOM 帧呈现，外层只接收 frameReady 事件。
+ *
+ * 注意：当浏览器支持 `requestVideoFrameCallback` 时，Player 会通过 `stats.videoFrameProcessed`
+ * 提供更贴近解码/呈现节拍的帧信号；此时不再使用 `timeupdate` 作为主链，以避免重复与错位。
  */
 export function bindBrowserVideoFrameTracking(input: {
   playerElementId: string
-  onFrame: () => void
+  onFrame: (meta?: {
+    callbackIntervalMs?: number
+    presentedFramesDelta?: number
+    droppedLike: boolean
+  }) => void
 }): () => void {
   const cleanups: Array<() => void> = []
   let boundVideo: HTMLVideoElement | null = null
+  const supportsVideoFrameCallback = 'requestVideoFrameCallback' in HTMLVideoElement.prototype
+  let lastCallbackAt = 0
+  let lastPresentedFrames = 0
+  let frameCallbackHandle: number | null = null
 
   const handleTimeUpdate = (): void => {
-    input.onFrame()
+    const now = Date.now()
+    const interval = lastCallbackAt > 0 ? now - lastCallbackAt : undefined
+    lastCallbackAt = now
+    input.onFrame({
+      callbackIntervalMs: interval,
+      presentedFramesDelta: undefined,
+      droppedLike: (interval ?? 0) > 90,
+    })
+  }
+
+  const cancelVideoFrameCallback = (): void => {
+    if (boundVideo === null || frameCallbackHandle === null) {
+      return
+    }
+    ;(boundVideo as HTMLVideoElement & {
+      cancelVideoFrameCallback?: (id: number) => void
+    }).cancelVideoFrameCallback?.(frameCallbackHandle)
+    frameCallbackHandle = null
+  }
+
+  const scheduleVideoFrameCallback = (): void => {
+    if (boundVideo === null || !supportsVideoFrameCallback) {
+      return
+    }
+    const video = boundVideo as HTMLVideoElement & {
+      requestVideoFrameCallback: (
+        callback: (now: number, metadata: {
+          presentedFrames?: number
+        }) => void,
+      ) => number
+    }
+    frameCallbackHandle = video.requestVideoFrameCallback((now, metadata) => {
+      const callbackIntervalMs = lastCallbackAt > 0 ? now - lastCallbackAt : undefined
+      lastCallbackAt = now
+      const nextPresentedFrames = metadata.presentedFrames ?? 0
+      const presentedFramesDelta = lastPresentedFrames > 0
+        ? Math.max(0, nextPresentedFrames - lastPresentedFrames)
+        : undefined
+      lastPresentedFrames = nextPresentedFrames
+      const droppedLike = (callbackIntervalMs ?? 0) > 90 || ((presentedFramesDelta ?? 1) > 1)
+      input.onFrame({
+        callbackIntervalMs,
+        presentedFramesDelta,
+        droppedLike,
+      })
+      scheduleVideoFrameCallback()
+    })
   }
 
   const bindVideoElement = (): void => {
@@ -128,11 +151,21 @@ export function bindBrowserVideoFrameTracking(input: {
       }
 
       if (boundVideo !== null) {
-        boundVideo.removeEventListener('timeupdate', handleTimeUpdate)
+        cancelVideoFrameCallback()
+        if (!supportsVideoFrameCallback) {
+          boundVideo.removeEventListener('timeupdate', handleTimeUpdate)
+        }
       }
 
       boundVideo = video
-      boundVideo.addEventListener('timeupdate', handleTimeUpdate, { passive: true })
+      lastCallbackAt = 0
+      lastPresentedFrames = 0
+      if (!supportsVideoFrameCallback) {
+        boundVideo.addEventListener('timeupdate', handleTimeUpdate, { passive: true })
+      }
+      else {
+        scheduleVideoFrameCallback()
+      }
     })
   }
 
@@ -154,7 +187,10 @@ export function bindBrowserVideoFrameTracking(input: {
 
   cleanups.push(() => {
     if (boundVideo !== null) {
-      boundVideo.removeEventListener('timeupdate', handleTimeUpdate)
+      cancelVideoFrameCallback()
+      if (!supportsVideoFrameCallback) {
+        boundVideo.removeEventListener('timeupdate', handleTimeUpdate)
+      }
       boundVideo = null
     }
   })

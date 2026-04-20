@@ -1,4 +1,9 @@
-import type { CreateOfferOptions, IceCandidateLike } from '../../domain/session'
+import type {
+  CreateOfferOptions,
+  IceCandidateLike,
+  VideoSenderPolicyInput,
+  VideoSenderPolicyResult,
+} from '../../domain/session'
 import { TypedEventEmitter } from '../../api/events'
 
 export interface WebRtcTransportEvents {
@@ -163,6 +168,35 @@ export class WebRtcTransport {
 
   addTrack(track: MediaStreamTrack, stream: MediaStream): void {
     this.ensurePeer().addTrack(track, stream)
+  }
+
+  async applyVideoSenderPolicy(input: VideoSenderPolicyInput): Promise<VideoSenderPolicyResult> {
+    const peer = this.ensurePeer()
+    const sender = peer.getSenders().find(current => current.track?.kind === 'video')
+    if (!sender) {
+      return { status: 'unsupported', detail: 'missingVideoSender' }
+    }
+    try {
+      const parameters = sender.getParameters()
+      parameters.encodings = parameters.encodings ?? [{}]
+      if (input.maxBitrateBps !== undefined) {
+        parameters.encodings[0].maxBitrate = input.maxBitrateBps
+      }
+      if (input.maxFramerate !== undefined) {
+        parameters.encodings[0].maxFramerate = input.maxFramerate
+      }
+      if (input.degradationPreference !== undefined) {
+        parameters.degradationPreference = input.degradationPreference
+      }
+      await sender.setParameters(parameters)
+      return { status: 'applied' }
+    }
+    catch (error) {
+      return {
+        status: 'failed',
+        detail: error instanceof Error ? error.message : String(error),
+      }
+    }
   }
 
   getPeer(): RTCPeerConnection {

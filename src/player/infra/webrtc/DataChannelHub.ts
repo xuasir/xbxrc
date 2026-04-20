@@ -31,6 +31,7 @@ export class DataChannelHub {
         }
       },
       readyState: () => channel.readyState,
+      bufferedAmount: () => channel.bufferedAmount,
     }
     const handler = create(context)
     this.handlers.set(name, handler)

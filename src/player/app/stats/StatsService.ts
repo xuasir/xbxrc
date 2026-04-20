@@ -128,6 +128,7 @@ export class StatsService {
       br: '',
       decode: '',
       transportPath: '',
+      transportState: 'new',
     }
     if (!peer) {
       return performanceState
@@ -207,6 +208,7 @@ export class StatsService {
     performanceState.transportCandidatePair = transportDetails.transportCandidatePair
     performanceState.transportProtocol = transportDetails.transportProtocol
     performanceState.transportAddressFamily = transportDetails.transportAddressFamily
+    performanceState.transportState = peer.connectionState
     networkStats.packetLoss = performanceState.pl
     networkStats.frameLoss = performanceState.fl
     void networkStats

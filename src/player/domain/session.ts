@@ -33,8 +33,37 @@ export interface CodecPreferenceOptions {
   profiles: Array<string>
 }
 
+export interface VideoSenderPolicyInput {
+  maxBitrateBps?: number
+  degradationPreference?: RTCDegradationPreference
+  maxFramerate?: number
+}
+
+export interface VideoSenderPolicyResult {
+  status: 'applied' | 'unsupported' | 'failed'
+  detail?: string
+}
+
+export interface ControlChannelHealthSnapshot {
+  state: RTCDataChannelState | 'unavailable'
+  lastError?: string
+  keyframeRequestTotal: number
+  keyframeRequestSuccess: number
+  keyframeRequestSuccessRate?: number
+  sendFailBurst?: number
+  bufferedAmount?: number
+}
+
+export interface KeyframeRequestResult {
+  sent: boolean
+  state: RTCDataChannelState | 'unavailable'
+  error?: string
+}
+
 export interface TransportRuntimeConfig {
   codecPreference?: CodecPreferenceOptions
+  enableSdpPatch?: boolean
+  sdpPatchProfile?: 'conservative' | 'balanced' | 'aggressive'
   maxVideoBitrateKbps: number
   maxAudioBitrateKbps: number
   forceMonoAudio: boolean

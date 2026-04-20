@@ -30,6 +30,7 @@ export function buildStreamDiagnosticsSnapshot(input: {
   const transportCandidatePair = input.runtimeSnapshot?.transportCandidatePair?.trim() || undefined
   const transportProtocol = input.runtimeSnapshot?.transportProtocol?.trim() || undefined
   const transportAddressFamily = input.runtimeSnapshot?.transportAddressFamily
+  const transportState = input.runtimeSnapshot?.transportState?.trim() || undefined
   const sessionPhase = input.runtimeSnapshot?.sessionPhase
   const unifiedLifecyclePhase = resolveUnifiedLifecyclePhase(input.runtimeSnapshot)
   const recoveryOwnerState = input.runtimeSnapshot?.recoveryOwnerState
@@ -45,6 +46,41 @@ export function buildStreamDiagnosticsSnapshot(input: {
   const primaryIssueChain = input.runtimeSnapshot?.primaryIssueChain
   const latestDecisionSummary = input.runtimeSnapshot?.latestDecisionSummary
   const stallKind = input.runtimeSnapshot?.stallKind
+  const lastRecoveryReason = input.runtimeSnapshot?.lastRecoveryReason?.trim() || undefined
+  const bandwidthState = input.runtimeSnapshot?.bandwidthState
+  const bandwidthAction = input.runtimeSnapshot?.bandwidthAction
+  const recoveryEpochId = input.runtimeSnapshot?.recoveryEpochId?.trim() || undefined
+  const lastRecoveryActionLevel = input.runtimeSnapshot?.lastRecoveryActionLevel
+  const lastRecoveryActionResult = input.runtimeSnapshot?.lastRecoveryActionResult
+  const recoverySuppressedBy = input.runtimeSnapshot?.recoverySuppressedBy
+  const recoveryBudgetRemaining = input.runtimeSnapshot?.recoveryBudgetRemaining?.trim() || undefined
+  const controlChannelState = input.runtimeSnapshot?.controlChannelState?.trim() || undefined
+  const lastControlChannelError = input.runtimeSnapshot?.lastControlChannelError?.trim() || undefined
+  const keyframeRequestSuccessRate = input.runtimeSnapshot?.keyframeRequestSuccessRate
+  const controlChannelOpenRatio = input.runtimeSnapshot?.controlChannelOpenRatio
+  const controlChannelBufferedTrend = input.runtimeSnapshot?.controlChannelBufferedTrend
+  const controlChannelSendFailBurst = input.runtimeSnapshot?.controlChannelSendFailBurst
+  const lastRecoveryActionEffect = input.runtimeSnapshot?.lastRecoveryActionEffect
+  const lastRecoveryActionEffectScore = input.runtimeSnapshot?.lastRecoveryActionEffectScore
+  const lastRecoveryActionEffectReason = input.runtimeSnapshot?.lastRecoveryActionEffectReason?.trim() || undefined
+  const networkConfidence = input.runtimeSnapshot?.networkConfidence
+  const decodeConfidence = input.runtimeSnapshot?.decodeConfidence
+  const recoveryCause = input.runtimeSnapshot?.recoveryCause
+  const qualityLadderLevel = input.runtimeSnapshot?.qualityLadderLevel
+  const decisionDigest = input.runtimeSnapshot?.decisionDigest?.trim() || undefined
+  const firstFrameStage = input.runtimeSnapshot?.firstFrameStage
+  const firstFrameStageChangedAtMs = input.runtimeSnapshot?.firstFrameStageChangedAtMs
+  const firstDecodedAtMs = input.runtimeSnapshot?.firstDecodedAtMs
+  const firstPresentedAtMs = input.runtimeSnapshot?.firstPresentedAtMs
+  const firstFrameGuardTriggered = input.runtimeSnapshot?.firstFrameGuardTriggered
+  const renderBackpressure = input.runtimeSnapshot?.renderBackpressure
+  const renderDroppedFrames = input.runtimeSnapshot?.renderDroppedFrames
+  const renderFrameCallbackIntervalMs = input.runtimeSnapshot?.renderFrameCallbackIntervalMs
+  const renderCause = input.runtimeSnapshot?.renderCause
+  const displayDegradeLevel = input.runtimeSnapshot?.displayDegradeLevel
+  const renderDecisionDigest = input.runtimeSnapshot?.renderDecisionDigest?.trim() || undefined
+  const renderPipelineType = input.runtimeSnapshot?.renderPipelineType
+  const renderPolicySource = input.runtimeSnapshot?.renderPolicySource
   const transportSummary = resolveTransportSummary({
     transportPath,
     transportCandidatePair,
@@ -102,6 +138,7 @@ export function buildStreamDiagnosticsSnapshot(input: {
     transportCandidatePair,
     transportProtocol,
     transportAddressFamily,
+    transportState,
     transportStrategyProfile: input.runtimeSnapshot?.transportStrategyProfile,
     recoveryStrategyProfile: input.runtimeSnapshot?.recoveryStrategyProfile,
     recoveryInputProfile,
@@ -124,20 +161,65 @@ export function buildStreamDiagnosticsSnapshot(input: {
     primaryIssueChain,
     latestDecisionSummary,
     stallKind,
+    lastRecoveryReason,
+    bandwidthState,
+    bandwidthAction,
+    recoveryEpochId,
+    lastRecoveryActionLevel,
+    lastRecoveryActionResult,
+    recoverySuppressedBy,
+    recoveryBudgetRemaining,
+    controlChannelState,
+    lastControlChannelError,
+    keyframeRequestSuccessRate,
+    controlChannelOpenRatio,
+    controlChannelBufferedTrend,
+    controlChannelSendFailBurst,
+    lastRecoveryActionEffect,
+    lastRecoveryActionEffectScore,
+    lastRecoveryActionEffectReason,
+    networkConfidence,
+    decodeConfidence,
+    recoveryCause,
+    qualityLadderLevel,
+    decisionDigest,
+    firstFrameStage,
+    firstFrameStageChangedAtMs,
+    firstDecodedAtMs,
+    firstPresentedAtMs,
+    firstFrameGuardTriggered,
+    renderBackpressure,
+    renderDroppedFrames,
+    renderFrameCallbackIntervalMs,
+    renderCause,
+    displayDegradeLevel,
+    renderDecisionDigest,
+    renderPipelineType,
+    renderPolicySource,
     isRelayPath: transportPath?.toLowerCase().startsWith('relay') === true,
     isRecovering,
     isDisplaySupplyLimited,
     hasNoVideoWarning,
+    connectedMilestoneElapsedText: formatElapsedMs(input.runtimeSnapshot?.connectedMilestoneElapsedMs),
+    mediaReadyMilestoneElapsedText: formatElapsedMs(input.runtimeSnapshot?.mediaReadyMilestoneElapsedMs),
     transportSummary,
     statusCode: resolveStatusCode({
       hasNoVideoWarning,
       unifiedLifecyclePhase,
+      presentationMilestone: input.runtimeSnapshot?.presentationMilestone,
       sessionPhase,
       isRecovering,
       isActive,
       recoveryOwnerState,
     }),
   }
+}
+
+function formatElapsedMs(value?: number): string | undefined {
+  if (value === undefined || Number.isNaN(value) || value < 0) {
+    return undefined
+  }
+  return `${Math.round(value)}ms`
 }
 
 function resolveTransportSummary(input: {
@@ -182,6 +264,7 @@ function formatAddressFamily(family?: 'ipv4' | 'ipv6' | 'mixed' | 'unknown'): st
 function resolveStatusCode(input: {
   hasNoVideoWarning: boolean
   unifiedLifecyclePhase?: CanonicalLifecyclePhase
+  presentationMilestone?: string
   sessionPhase?: string
   isRecovering: boolean
   isActive: boolean
@@ -199,6 +282,9 @@ function resolveStatusCode(input: {
   }
   if (input.isRecovering) {
     return 'recovering'
+  }
+  if (input.presentationMilestone === 'connected' || input.presentationMilestone === 'mediaReady') {
+    return 'stable'
   }
   if (input.recoveryOwnerState !== undefined && input.recoveryOwnerState.trim() !== '') {
     return 'owner'
