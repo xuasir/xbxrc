@@ -455,6 +455,63 @@ fn runtime_emits_connected_presentation_milestone_after_control_and_ingress_read
 }
 
 #[test]
+fn runtime_emits_media_ready_from_host_present_even_when_renderer_shadow_stalled() {
+    let requests = Rc::new(RefCell::new(Vec::new()));
+    let events = Rc::new(RefCell::new(Vec::new()));
+    let now_ms = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_millis() as f64)
+        .unwrap_or(0.0);
+    let backend = ScriptedMediaBackend::new(
+        XbxEngineMediaNegotiation {
+            local_offer_sdp: "offer".to_string(),
+            local_candidates: Vec::new(),
+            surface_id: "surface:viewport-1".to_string(),
+            video_width: 1920,
+            video_height: 1080,
+            first_frame_packet_arrival_time_ms: None,
+            frame_decoded_time_ms: None,
+            frame_rendered_time_ms: None,
+            input_status: XbxEngineInputStatus::default(),
+        },
+        XbxEngineMediaRuntimeStats {
+            transport_state: XbxEngineTransportStateDto::Connected,
+            message_handshake_acked_at_ms: Some(now_ms - 100.0),
+            control_ready_at_ms: Some(now_ms - 80.0),
+            latest_video_packet_arrival_time_ms: Some(now_ms - 30.0),
+            latest_video_host_present_time_ms: Some(now_ms - 16.0),
+            video_present_fps: 60.0,
+            video_decoder_stalled: Some(false),
+            video_renderer_stalled: Some(true),
+            host_no_pending_pressure_level: Some("normal".to_string()),
+            ..Default::default()
+        },
+    );
+    let mut runtime = XbxEngineRuntime::with_media_backend(
+        XbxEngineRuntimeConfig::default(),
+        TestHostBridge::new(requests),
+        TestEventSink::new(events.clone()),
+        backend,
+    );
+
+    runtime
+        .start(session(), viewport(), 1.0, None, None)
+        .expect("runtime start should succeed");
+
+    assert_eq!(
+        runtime.snapshot().presentation_milestone,
+        Some(XbxEnginePresentationMilestoneDto::MediaReady)
+    );
+    assert!(events.borrow().iter().any(|event| matches!(
+        event,
+        XbxEngineRuntimeEventDto::PresentationMilestoneChanged {
+            milestone: XbxEnginePresentationMilestoneDto::MediaReady,
+            ..
+        }
+    )));
+}
+
+#[test]
 fn runtime_syncs_keyframe_request_count_from_media_stats() {
     let requests = Rc::new(RefCell::new(Vec::new()));
     let events = Rc::new(RefCell::new(Vec::new()));

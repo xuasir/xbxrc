@@ -342,7 +342,7 @@ pub(crate) fn overwrite_runtime_stats(
 pub(crate) struct ScriptedMediaBackend {
     pub(crate) negotiation: XbxEngineMediaNegotiation,
     pub(crate) runtime_stats: Arc<Mutex<XbxEngineMediaRuntimeStats>>,
-    pub(crate) latest_render_frame: Arc<Mutex<Option<XbxEngineRenderFrame>>>,
+    pub(crate) pending_render_frames: Arc<Mutex<VecDeque<XbxEngineRenderFrame>>>,
     pub(crate) pending_runtime_recovery_action:
         Arc<Mutex<Option<crate::XbxEnginePendingRuntimeRecoveryAction>>>,
     pub(crate) microphone_capturing_calls: Arc<Mutex<Vec<bool>>>,
@@ -365,7 +365,7 @@ impl ScriptedMediaBackend {
         Self {
             negotiation,
             runtime_stats: Arc::new(Mutex::new(runtime_stats)),
-            latest_render_frame: Arc::new(Mutex::new(None)),
+            pending_render_frames: Arc::new(Mutex::new(VecDeque::new())),
             pending_runtime_recovery_action: Arc::new(Mutex::new(None)),
             microphone_capturing_calls: Arc::new(Mutex::new(Vec::new())),
             local_ice_gathering_complete_calls: Arc::new(Mutex::new(0)),
@@ -387,9 +387,9 @@ impl ScriptedMediaBackend {
 
     pub(crate) fn with_latest_render_frame(self, frame: XbxEngineRenderFrame) -> Self {
         *self
-            .latest_render_frame
+            .pending_render_frames
             .lock()
-            .expect("lock latest render frame") = Some(frame);
+            .expect("lock pending render frames") = VecDeque::from([frame]);
         self
     }
 
@@ -592,43 +592,18 @@ impl XbxEngineMediaBackend for ScriptedMediaBackend {
             .collect())
     }
 
-    fn take_latest_render_frame(
+    fn drain_pending_render_frames(
         &mut self,
-    ) -> Result<Option<crate::XbxEngineRenderFrame>, XbxEngineRuntimeError> {
+    ) -> Result<Vec<crate::XbxEngineRenderFrame>, XbxEngineRuntimeError> {
         if let Ok(mut order) = self.call_order.lock() {
-            order.push("take_frame");
+            order.push("drain_frames");
         }
         Ok(self
-            .latest_render_frame
+            .pending_render_frames
             .lock()
-            .expect("lock latest render frame")
-            .clone())
-    }
-
-    fn acknowledge_latest_render_frame(
-        &mut self,
-        frame_seq: u64,
-    ) -> Result<bool, XbxEngineRuntimeError> {
-        if let Ok(mut order) = self.call_order.lock() {
-            order.push("ack");
-        }
-        let mut latest_render_frame = self
-            .latest_render_frame
-            .lock()
-            .expect("lock latest render frame");
-        let Some(frame) = latest_render_frame.as_ref() else {
-            return Ok(false);
-        };
-        if frame.frame_seq != frame_seq {
-            return Ok(false);
-        }
-        let frame_rendered_at_ms = frame.rendered_at_ms;
-        latest_render_frame.take();
-        self.runtime_stats
-            .lock()
-            .expect("lock runtime stats")
-            .latest_video_host_present_time_ms = Some(frame_rendered_at_ms);
-        Ok(true)
+            .expect("lock pending render frames")
+            .drain(..)
+            .collect())
     }
 
     fn request_video_keyframe(&mut self) -> Result<(), XbxEngineRuntimeError> {

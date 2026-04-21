@@ -1,6 +1,7 @@
 use crate::{
     XbxEngineRenderFrame, XbxEngineRenderPixelData, XbxEngineRuntimeError, XbxEngineVideoFrameStats,
 };
+use std::collections::VecDeque;
 use xbxengine_protocol::XbxEngineDisplayStateDto;
 #[allow(dead_code)]
 const RENDER_STALL_THRESHOLD_MS: f64 = 1_500.0;
@@ -40,7 +41,7 @@ pub(crate) struct XbxRenderSignalSnapshot {
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub(crate) struct XbxPresentFrameOutcome {
-    pub(crate) overwritten_previous_latest: bool,
+    pub(crate) overwritten_pending_frame: bool,
     pub(crate) overwritten_frame_seq: Option<u64>,
     pub(crate) overwritten_frame_width: Option<u32>,
     pub(crate) overwritten_frame_height: Option<u32>,
@@ -89,14 +90,14 @@ impl From<XbxRenderFrame> for XbxEngineRenderFrame {
 }
 
 /**
- * `core` 只负责“最新帧缓存”和显示状态同步，不在这里做 GPU 上传。
+ * `core` 只负责“render 影子态 + host handoff staging queue”和显示状态同步。
  * 真实上传/present 由宿主侧渲染器负责，避免同一帧在 Rust 内重复上传。
  */
 #[derive(Default)]
 pub(crate) struct XbxRenderState {
     latest_display_state: Option<XbxEngineDisplayStateDto>,
+    pending_frames: VecDeque<XbxEngineRenderFrame>,
     latest_frame: Option<XbxEngineRenderFrame>,
-    last_acknowledged_present_time_ms: Option<f64>,
     render_candidate_state: XbxRenderCandidateState,
     latest_render_candidate_decision: Option<XbxRenderCandidateDecisionSnapshot>,
     render_candidate_decision_id: u64,
@@ -105,8 +106,8 @@ pub(crate) struct XbxRenderState {
 impl XbxRenderState {
     pub(crate) fn reset(&mut self) -> Result<(), XbxEngineRuntimeError> {
         self.latest_display_state = None;
+        self.pending_frames.clear();
         self.latest_frame = None;
-        self.last_acknowledged_present_time_ms = None;
         self.render_candidate_state = XbxRenderCandidateState::Nominal;
         self.latest_render_candidate_decision = None;
         self.render_candidate_decision_id = 0;
@@ -161,13 +162,15 @@ impl XbxRenderState {
         let frame_stats = frame.video_stats();
         let presented_frame_seq = frame.frame_seq;
         let observed_at_ms = frame.rendered_at_ms;
-        let overwritten_previous_latest = self.latest_frame.is_some();
+        let overwritten_pending_frame = !self.pending_frames.is_empty();
         let overwritten_frame = self
-            .latest_frame
-            .as_ref()
+            .pending_frames
+            .back()
             .map(|frame| (frame.frame_seq, frame.width, frame.height));
-        self.latest_frame = Some(frame.into());
-        if overwritten_previous_latest {
+        let engine_frame: XbxEngineRenderFrame = frame.into();
+        self.latest_frame = Some(engine_frame.clone());
+        self.pending_frames.push_back(engine_frame);
+        if overwritten_pending_frame {
             self.record_render_candidate_decision(
                 XbxRenderCandidateState::LatestOverwrite,
                 "replace",
@@ -193,7 +196,7 @@ impl XbxRenderState {
                 ..frame_stats
             },
             XbxPresentFrameOutcome {
-                overwritten_previous_latest,
+                overwritten_pending_frame,
                 overwritten_frame_seq: overwritten_frame.map(|frame| frame.0),
                 overwritten_frame_width: overwritten_frame.map(|frame| frame.1),
                 overwritten_frame_height: overwritten_frame.map(|frame| frame.2),
@@ -203,16 +206,15 @@ impl XbxRenderState {
 
     pub(crate) fn stop(&mut self) {
         self.latest_display_state = None;
+        self.pending_frames.clear();
         self.latest_frame = None;
-        self.last_acknowledged_present_time_ms = None;
         self.render_candidate_state = XbxRenderCandidateState::Nominal;
         self.latest_render_candidate_decision = None;
         self.render_candidate_decision_id = 0;
     }
 
-    pub(crate) fn take_latest_frame(&mut self) -> Option<XbxEngineRenderFrame> {
-        // latest-slot 语义：读取最新帧不应清空槽位，避免上层消费时把渲染状态误判为“无帧”。
-        self.latest_frame.clone()
+    pub(crate) fn drain_pending_frames(&mut self) -> Vec<XbxEngineRenderFrame> {
+        self.pending_frames.drain(..).collect()
     }
 
     // 非消费读取：供上层在不丢帧的情况下查看当前 latest-slot。
@@ -221,27 +223,9 @@ impl XbxRenderState {
         self.latest_frame.as_ref()
     }
 
-    // 可选 ACK 语义：只有序号匹配当前 latest-slot 时才清空，避免误删新帧。
-    #[allow(dead_code)]
-    pub(crate) fn acknowledge_latest_frame(&mut self, frame_seq: u64) -> bool {
-        if self
-            .latest_frame
-            .as_ref()
-            .is_some_and(|frame| frame.frame_seq == frame_seq)
-        {
-            self.last_acknowledged_present_time_ms =
-                self.latest_frame.as_ref().map(|frame| frame.rendered_at_ms);
-            self.latest_frame = None;
-            return true;
-        }
-        false
-    }
-
     #[allow(dead_code)]
     pub(crate) fn render_signal_snapshot(&self, now_ms: f64) -> XbxRenderSignalSnapshot {
-        let latest_present_time_ms = self
-            .last_acknowledged_present_time_ms
-            .or_else(|| self.latest_frame.as_ref().map(|frame| frame.rendered_at_ms));
+        let latest_present_time_ms = self.latest_frame.as_ref().map(|frame| frame.rendered_at_ms);
         let renderer_stalled = latest_present_time_ms.map(|presented_at_ms| {
             (now_ms - presented_at_ms).max(0.0) >= RENDER_STALL_THRESHOLD_MS
         });

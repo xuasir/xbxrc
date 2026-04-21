@@ -94,22 +94,22 @@ fn run_renderer_loop(
                             &flow_context,
                             None,
                             None,
-                            outcome.overwritten_previous_latest,
+                            outcome.overwritten_pending_frame,
                         );
                         runtime_stats.update(|stats| {
                             stats.latest_observation_label =
                                 Some("rendererFrameAccepted".to_string());
                             stats.latest_observation_summary = Some(format!(
-                                "frameSeq={} rtpTimestamp={} isKeyframe={} overwrittenPreviousLatest={}",
+                                "frameSeq={} rtpTimestamp={} isKeyframe={} overwrittenPendingFrame={}",
                                 present_frame_seq,
                                 frame_rtp_timestamp
                                     .map(|value| value.to_string())
                                     .unwrap_or_else(|| "none".to_string()),
                                 frame_is_keyframe,
-                                outcome.overwritten_previous_latest,
+                                outcome.overwritten_pending_frame,
                             ));
                         });
-                        if outcome.overwritten_previous_latest {
+                        if outcome.overwritten_pending_frame {
                             log_renderer_flow(
                                 "latestSlotOverwrite",
                                 &flow_frame,
@@ -240,10 +240,10 @@ fn log_renderer_flow(
     flow_context: &RendererFlowContext,
     reason: Option<&str>,
     related_frame_seq: Option<u64>,
-    overwritten_previous_latest: bool,
+    overwritten_pending_frame: bool,
 ) {
     crate::xbx_log_warn!(
-        "[playback-flow][renderer] event={} reason={} frameSeq={} rtpTimestamp={} isKeyframe={} observedAtMs={} overwrittenPreviousLatest={} overwrittenFrameSeq={} hostTickEpoch={} presentEpoch={}",
+        "[playback-flow][renderer] event={} reason={} frameSeq={} rtpTimestamp={} isKeyframe={} observedAtMs={} overwrittenPendingFrame={} overwrittenFrameSeq={} hostTickEpoch={} presentEpoch={}",
         event,
         reason.unwrap_or("-"),
         frame.surface.frame_seq,
@@ -253,7 +253,7 @@ fn log_renderer_flow(
             .unwrap_or_else(|| "-".to_string()),
         frame.surface.is_keyframe,
         frame.surface.rendered_at_ms,
-        overwritten_previous_latest,
+        overwritten_pending_frame,
         related_frame_seq
             .map(|value| value.to_string())
             .unwrap_or_else(|| "-".to_string()),

@@ -6,6 +6,8 @@ use super::backend::{
     create_software_video_decoder_backend_with_probe, create_video_decoder_backend_with_probe,
     XbxVideoDecoderBackend, XbxVideoDecoderProbeSummary,
 };
+use crate::media::video::ingress::budget::FrameBudgetWindowSource;
+use crate::media::video::h264::inspection::H264BootstrapRejectReason;
 #[cfg(test)]
 use crate::media::video::render::renderer::XbxRenderFrame;
 #[cfg(test)]
@@ -18,6 +20,7 @@ use crate::{
 const MAX_DECODED_FRAME_QUEUE_LEN: usize = 3;
 const HARDWARE_DECODE_FAILURE_BURST_GAP_MS: f64 = 400.0;
 const HARDWARE_NO_OUTPUT_SOFT_FALLBACK_THRESHOLD: u32 = 4;
+const NOMINAL_CONTINUATION_NO_OUTPUT_RECOVERY_THRESHOLD: u32 = 4;
 // 首帧阶段硬解不出帧：不要死等（以毫秒窗作为上限）。
 const HARDWARE_NO_OUTPUT_SOFT_FALLBACK_WINDOW_MS: f64 = 80.0;
 const LOCAL_DECODER_RESET_REPLAY_BARRIER_MS: f64 = 900.0;
@@ -26,6 +29,8 @@ const WAITING_KEYFRAME_CONTINUATION_MAX_FRAMES: u32 = 3;
 const DECODE_QUEUE_STALE_SLACK_DISPOSABLE_MS: u64 = 12;
 const DECODE_QUEUE_STALE_SLACK_SUPPLY_MS: u64 = 24;
 const DECODE_QUEUE_STALE_SLACK_ANCHOR_MS: u64 = 36;
+const RECOVERY_DECODED_FRAME_QUEUE_LEN: usize = 5;
+const DECODE_QUEUE_STALE_SLACK_RECOVERY_BONUS_MS: u64 = 24;
 type XbxVideoDecoderFactory =
     Box<dyn FnMut() -> (Box<dyn XbxVideoDecoderBackend>, XbxVideoDecoderProbeSummary) + Send>;
 
@@ -395,6 +400,7 @@ impl XbxVideoDecodeState {
         let frame_unrecoverable_reason = encoded_frame.frame_unrecoverable_reason.clone();
         let recovery_state_before_decode = self.recovery_state;
         let frame_nal_labels = encoded_frame.h264.nal_type_labels().join("|");
+        let frame_bootstrap_reject_reason_kind = encoded_frame.h264.bootstrap_reject_reason;
         let frame_bootstrap_reject_reason = encoded_frame
             .h264
             .bootstrap_reject_reason
@@ -514,17 +520,16 @@ impl XbxVideoDecodeState {
             if self.decoder_backend_is_hardware() && self.latest_decoded_seq == 0 {
                 self.first_hardware_no_output_at_ms.get_or_insert(now_ms);
             }
+            let no_output_detail = self.classify_backend_no_output_detail(
+                recovery_state_before_decode,
+                continuation_gate_bypassed,
+                frame_is_keyframe,
+                frame_parameter_sets_changed,
+                frame_bootstrap_reject_reason_kind,
+            );
             self.record_decode_output_path_observation(
                 XbxDecodeOutputPathVerdict::BackendNoOutput,
-                if continuation_gate_bypassed {
-                    "backendNoOutputAfterContinuationBypass"
-                } else if waiting_keyframe_bootstrap_no_output {
-                    "backendNoOutputAfterBootstrapKeyframe"
-                } else if frame_is_keyframe && frame_parameter_sets_changed {
-                    "backendNoOutputAfterConfigChangeKeyframe"
-                } else {
-                    "backendNoOutput"
-                },
+                no_output_detail,
                 frame_rtp_timestamp,
                 frame_is_keyframe,
                 None,
@@ -569,13 +574,7 @@ impl XbxVideoDecodeState {
                     frame_rtp_timestamp,
                     frame_is_keyframe,
                     recovery_state_before_decode.as_str(),
-                    if continuation_gate_bypassed {
-                        "backendNoOutputAfterContinuationBypass"
-                    } else if waiting_keyframe_bootstrap_no_output {
-                        "backendNoOutputAfterBootstrapKeyframe"
-                    } else {
-                        "backendNoOutput"
-                    },
+                    no_output_detail,
                     self.backend_no_output_streak,
                     self.input_frames_since_last_decoded,
                     decode_outcome.send_packet_status,
@@ -606,6 +605,26 @@ impl XbxVideoDecodeState {
                     decode_outcome.receive_frame_status
                 );
                 let _ = self.reset_decoder_with_failure(None, now_ms);
+                return None;
+            }
+            if self.should_recover_nominal_continuation_no_output(
+                recovery_state_before_decode,
+                frame_bootstrap_reject_reason_kind,
+            ) {
+                if self.decoder_backend_is_hardware() {
+                    let _ = self.fallback_hardware_backend_to_software(
+                        now_ms,
+                        "nominal-continuation-no-output",
+                        "nominalContinuationNoOutputSoftFallback",
+                        None,
+                    );
+                } else {
+                    let _ = self.reset_decoder_with_failure_detail(
+                        None,
+                        now_ms,
+                        "nominalContinuationNoOutputReset",
+                    );
+                }
                 return None;
             }
             if self.should_fallback_hardware_backend_after_no_output(
@@ -825,7 +844,8 @@ impl XbxVideoDecodeState {
 
     pub(crate) fn workload_snapshot(&self) -> XbxDecodeWorkloadSnapshot {
         let pending_output_queue_depth = self.decoded_frame_queue.len();
-        let state = if pending_output_queue_depth > 0 {
+        // 只有输出队列接近打满时才优先 drain，给 decode/pacer 留出更平滑的局部缓冲节奏。
+        let state = if pending_output_queue_depth >= self.decoded_frame_queue_capacity() {
             XbxDecodeWorkloadState::DrainOutput
         } else {
             XbxDecodeWorkloadState::AwaitingInput
@@ -862,7 +882,7 @@ impl XbxVideoDecodeState {
     /// - Idle/Unknown: 4帧（放宽，允许更多缓冲）
     #[cfg(test)]
     pub(crate) fn decoded_frame_queue_is_full(&self) -> bool {
-        self.decoded_frame_queue.len() >= MAX_DECODED_FRAME_QUEUE_LEN
+        self.decoded_frame_queue.len() >= self.decoded_frame_queue_capacity()
     }
 
     pub(crate) fn requeue_decoded_frame_front(&mut self, frame: DecodedFrame) {
@@ -872,6 +892,7 @@ impl XbxVideoDecodeState {
     fn enqueue_decoded_frame(&mut self, frame: DecodedFrame) -> Option<DecodedFrame> {
         let incoming_frame_seq = frame.surface.frame_seq;
         let observed_at_ms = frame.surface.rendered_at_ms;
+        let queue_capacity = self.decoded_frame_queue_capacity_for_incoming(&frame);
         if Self::decoded_frame_is_stale(&frame, Instant::now()) {
             self.decoded_frame_drop_count = self.decoded_frame_drop_count.saturating_add(1);
             self.record_decode_candidate_decision(
@@ -884,7 +905,7 @@ impl XbxVideoDecodeState {
             return Some(frame);
         }
         let mut dropped_frame = None;
-        while self.decoded_frame_queue.len() >= MAX_DECODED_FRAME_QUEUE_LEN {
+        while self.decoded_frame_queue.len() >= queue_capacity {
             let dropped = self.decoded_frame_queue.pop_front();
             if let Some(d) = dropped {
                 dropped_frame = Some(d);
@@ -920,12 +941,41 @@ impl XbxVideoDecodeState {
     }
 
     fn decoded_frame_stale_slack(frame: &DecodedFrame) -> Duration {
-        let millis = match frame.budget.recovery_value_tier() {
+        let base_millis = match frame.budget.recovery_value_tier() {
             "anchor" => DECODE_QUEUE_STALE_SLACK_ANCHOR_MS,
             "supply" => DECODE_QUEUE_STALE_SLACK_SUPPLY_MS,
             _ => DECODE_QUEUE_STALE_SLACK_DISPOSABLE_MS,
         };
-        Duration::from_millis(millis)
+        let recovery_bonus_millis = if Self::decoded_frame_uses_recovery_window(frame) {
+            DECODE_QUEUE_STALE_SLACK_RECOVERY_BONUS_MS
+        } else {
+            0
+        };
+        Duration::from_millis(base_millis + recovery_bonus_millis)
+    }
+
+    fn decoded_frame_queue_capacity(&self) -> usize {
+        if self
+            .decoded_frame_queue
+            .iter()
+            .any(Self::decoded_frame_uses_recovery_window)
+        {
+            RECOVERY_DECODED_FRAME_QUEUE_LEN
+        } else {
+            MAX_DECODED_FRAME_QUEUE_LEN
+        }
+    }
+
+    fn decoded_frame_queue_capacity_for_incoming(&self, incoming_frame: &DecodedFrame) -> usize {
+        if Self::decoded_frame_uses_recovery_window(incoming_frame) {
+            RECOVERY_DECODED_FRAME_QUEUE_LEN
+        } else {
+            self.decoded_frame_queue_capacity()
+        }
+    }
+
+    fn decoded_frame_uses_recovery_window(frame: &DecodedFrame) -> bool {
+        matches!(frame.budget.window_source, FrameBudgetWindowSource::Recovery)
     }
 
     // 连续硬解失败用于 recovery 诊断：只在短窗口内累加，避免偶发错误误触发。
@@ -967,10 +1017,35 @@ impl XbxVideoDecodeState {
                 }))
     }
 
+    fn should_recover_nominal_continuation_no_output(
+        &self,
+        recovery_state_before_decode: XbxVideoRecoveryState,
+        frame_bootstrap_reject_reason: Option<H264BootstrapRejectReason>,
+    ) -> bool {
+        matches!(recovery_state_before_decode, XbxVideoRecoveryState::Nominal)
+            && self.latest_decoded_seq > 0
+            && matches!(
+                frame_bootstrap_reject_reason,
+                Some(H264BootstrapRejectReason::NonIdrVcl)
+            )
+            && self.backend_no_output_streak >= NOMINAL_CONTINUATION_NO_OUTPUT_RECOVERY_THRESHOLD
+            && self.input_frames_since_last_decoded
+                >= NOMINAL_CONTINUATION_NO_OUTPUT_RECOVERY_THRESHOLD
+    }
+
     fn reset_decoder_with_failure(
         &mut self,
         status: Option<i32>,
         now_ms: f64,
+    ) -> Result<(), XbxEngineRuntimeError> {
+        self.reset_decoder_with_failure_detail(status, now_ms, "backendFailureReset")
+    }
+
+    fn reset_decoder_with_failure_detail(
+        &mut self,
+        status: Option<i32>,
+        now_ms: f64,
+        transition_detail: &'static str,
     ) -> Result<(), XbxEngineRuntimeError> {
         self.decoded_frame_queue.clear();
         self.last_decode_ok_time_ms = None;
@@ -985,7 +1060,7 @@ impl XbxVideoDecodeState {
         self.transition_recovery_state(
             XbxVideoRecoveryState::WaitingKeyframe,
             XbxVideoRecoveryEvent::BackendFailureEscalated,
-            "backendFailureReset",
+            transition_detail,
             None,
             status,
             now_ms,
@@ -1193,6 +1268,37 @@ impl XbxVideoDecodeState {
             bootstrap_reject_reason,
             observed_at_ms,
         });
+    }
+
+    fn classify_backend_no_output_detail(
+        &self,
+        recovery_state_before_decode: XbxVideoRecoveryState,
+        continuation_gate_bypassed: bool,
+        frame_is_keyframe: bool,
+        frame_parameter_sets_changed: bool,
+        frame_bootstrap_reject_reason: Option<H264BootstrapRejectReason>,
+    ) -> &'static str {
+        if continuation_gate_bypassed {
+            "backendNoOutputAfterContinuationBypass"
+        } else if matches!(
+            recovery_state_before_decode,
+            XbxVideoRecoveryState::WaitingKeyframe
+        ) && frame_is_keyframe
+        {
+            "backendNoOutputAfterBootstrapKeyframe"
+        } else if matches!(recovery_state_before_decode, XbxVideoRecoveryState::Nominal)
+            && self.latest_decoded_seq > 0
+            && matches!(
+                frame_bootstrap_reject_reason,
+                Some(H264BootstrapRejectReason::NonIdrVcl)
+            )
+        {
+            "backendNoOutputAfterNominalContinuation"
+        } else if frame_is_keyframe && frame_parameter_sets_changed {
+            "backendNoOutputAfterConfigChangeKeyframe"
+        } else {
+            "backendNoOutput"
+        }
     }
 
     #[allow(clippy::too_many_arguments)]

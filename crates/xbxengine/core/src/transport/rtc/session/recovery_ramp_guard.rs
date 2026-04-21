@@ -5,7 +5,9 @@ use crate::transport::rtc::policy::video_scheduling_owner::VideoSchedulingOwnerS
 use crate::transport::rtc::recovery::contract::has_current_clean_anchor_from_stats;
 use crate::transport::rtc::recovery::coordinator::CoordinatorProposal;
 use crate::transport::rtc::recovery::escalation::{RecoveryAction, VideoEscalationReason};
-use crate::transport::rtc::recovery::runtime_state::has_fresh_media_output;
+use crate::transport::rtc::recovery::runtime_state::{
+    has_fresh_media_output, renderer_shadow_blocks_serviceability,
+};
 use crate::XbxEngineMediaRuntimeStats;
 
 pub(crate) const RECOVERY_RAMP_UP_LIGHT_SIGNAL_HOLD_MS: f64 = 1_500.0;
@@ -63,7 +65,7 @@ pub(crate) fn should_absorb_light_recovery_signal_during_ramp_up(
             return false;
         }
         let pipeline_not_stalled = !stats.video_decoder_stalled.unwrap_or(false)
-            && !stats.video_renderer_stalled.unwrap_or(false);
+            && !renderer_shadow_blocks_serviceability(stats, observed_at_ms);
         if !pipeline_not_stalled {
             return false;
         }
@@ -129,7 +131,7 @@ pub(crate) fn resolve_stable_recovery_settle(
             .map(|anchor_at_ms| (observed_at_ms - anchor_at_ms).max(0.0))
             .unwrap_or(f64::INFINITY);
         let pipeline_not_stalled = !stats.video_decoder_stalled.unwrap_or(false)
-            && !stats.video_renderer_stalled.unwrap_or(false);
+            && !renderer_shadow_blocks_serviceability(stats, observed_at_ms);
         pipeline_not_stalled
             && !has_unresolved_transport_await_issue
             && has_fresh_media_output(stats, observed_at_ms)

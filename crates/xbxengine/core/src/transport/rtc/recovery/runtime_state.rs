@@ -209,7 +209,7 @@ fn current_owner_mode_for_test(
             fresh_output,
             startup_low,
             stats.video_decoder_stalled.unwrap_or(false),
-            stats.video_renderer_stalled.unwrap_or(false),
+            renderer_shadow_blocks_serviceability(stats, unix_now_ms()),
         ))
     })
     .flatten()
@@ -244,7 +244,7 @@ fn resolve_effective_diagnosis_label_for_test(
         && RuntimeStatsSink::read_shared(runtime_stats, |stats| {
             has_fresh_media_output(stats, unix_now_ms())
                 && !stats.video_decoder_stalled.unwrap_or(false)
-                && !stats.video_renderer_stalled.unwrap_or(false)
+                && !renderer_shadow_blocks_serviceability(stats, unix_now_ms())
         })
         .unwrap_or(false)
     {
@@ -399,7 +399,7 @@ fn recovery_stage_label(stats: &XbxEngineMediaRuntimeStats) -> &'static str {
     if owner_state_has_steady_output_semantics(stats)
         && has_fresh_media_output(stats, unix_now_ms())
         && !stats.video_decoder_stalled.unwrap_or(false)
-        && !stats.video_renderer_stalled.unwrap_or(false)
+        && !renderer_shadow_blocks_serviceability(stats, unix_now_ms())
     {
         return "steady";
     }
@@ -521,7 +521,7 @@ fn resolve_effective_diagnosis_label_from_stats(
     if diagnosis_label == "adapterIdleTimeout"
         && has_fresh_media_output(stats, now_ms)
         && !stats.video_decoder_stalled.unwrap_or(false)
-        && !stats.video_renderer_stalled.unwrap_or(false)
+        && !renderer_shadow_blocks_serviceability(stats, now_ms)
     {
         return "healthy".to_string();
     }
@@ -562,7 +562,7 @@ fn current_owner_mode_from_stats(
     let startup_low = phase == SessionPhase::Startup
         && stats.direct_gaming_bitrate_band.as_deref() == Some("startupLow");
     let decoder_stalled = stats.video_decoder_stalled.unwrap_or(false);
-    let renderer_stalled = stats.video_renderer_stalled.unwrap_or(false);
+    let renderer_stalled = renderer_shadow_blocks_serviceability(stats, unix_now_ms());
     resolve_recovery_owner_mode_by_signals(
         diagnosis.as_deref(),
         phase,
@@ -656,6 +656,29 @@ pub(crate) fn has_fresh_media_output(stats: &XbxEngineMediaRuntimeStats, now_ms:
     present_fresh || decode_fresh
 }
 
+pub(crate) fn host_presentation_serviceable(
+    stats: &XbxEngineMediaRuntimeStats,
+    now_ms: f64,
+) -> bool {
+    let pressure_hot = matches!(
+        stats.host_no_pending_pressure_level.as_deref(),
+        Some("high" | "critical")
+    );
+    if pressure_hot {
+        return false;
+    }
+    stats
+        .latest_video_host_present_time_ms
+        .is_some_and(|at_ms| (now_ms - at_ms).max(0.0) < 500.0)
+}
+
+pub(crate) fn renderer_shadow_blocks_serviceability(
+    stats: &XbxEngineMediaRuntimeStats,
+    now_ms: f64,
+) -> bool {
+    stats.video_renderer_stalled.unwrap_or(false) && !host_presentation_serviceable(stats, now_ms)
+}
+
 fn owner_state_has_steady_output_semantics(stats: &XbxEngineMediaRuntimeStats) -> bool {
     matches!(
         stats.video_owner_state.as_deref(),
@@ -680,7 +703,7 @@ fn should_absorb_stale_recovery_diagnosis(
     owner_state_has_steady_output_semantics(stats)
         && has_fresh_media_output(stats, now_ms)
         && !stats.video_decoder_stalled.unwrap_or(false)
-        && !stats.video_renderer_stalled.unwrap_or(false)
+        && !renderer_shadow_blocks_serviceability(stats, now_ms)
 }
 
 pub(crate) fn decoder_backend_failure_signal_is_active(
@@ -718,7 +741,7 @@ pub(crate) fn decoder_backend_failure_signal_is_active(
         .latest_video_host_present_time_ms
         .map(|at_ms| (now_ms - at_ms).max(0.0))
         .unwrap_or(f64::INFINITY);
-    let pipeline_not_advancing = stats.video_renderer_stalled.unwrap_or(false)
+    let pipeline_not_advancing = renderer_shadow_blocks_serviceability(stats, now_ms)
         || decode_age_ms >= HARD_STALL_DECODER_RESET_MS
         || present_age_ms >= HARD_STALL_DECODER_RESET_MS;
     if !pipeline_not_advancing {
@@ -819,7 +842,7 @@ mod tests {
     }
 
     #[test]
-    fn degraded_owner_does_not_absorb_transport_await_when_renderer_is_stalled() {
+    fn degraded_owner_does_not_absorb_transport_await_when_shadow_stall_blocks_host_service() {
         let now_ms = unix_now_ms();
         let stats = XbxEngineMediaRuntimeStats {
             session_phase: Some("recovering".to_string()),
@@ -827,6 +850,7 @@ mod tests {
             video_owner_state: Some("degraded-serving".to_string()),
             latest_video_host_present_time_ms: Some(now_ms - 18.0),
             latest_video_decode_ok_time_ms: Some(now_ms - 12.0),
+            host_no_pending_pressure_level: Some("critical".to_string()),
             video_present_fps: 60.0,
             video_decoder_stalled: Some(false),
             video_renderer_stalled: Some(true),
@@ -842,6 +866,33 @@ mod tests {
             "transportAwaitRecoveryAnchor"
         );
         assert_eq!(recovery_stage_label(&stats), "rebuilding-supply");
+    }
+
+    #[test]
+    fn degraded_owner_absorbs_transport_await_when_renderer_stall_is_only_shadow_signal() {
+        let now_ms = unix_now_ms();
+        let stats = XbxEngineMediaRuntimeStats {
+            session_phase: Some("recovering".to_string()),
+            recovery_active_escalation_reason: Some("transportAwaitRecoveryAnchor".to_string()),
+            video_owner_state: Some("degraded-serving".to_string()),
+            latest_video_host_present_time_ms: Some(now_ms - 18.0),
+            latest_video_decode_ok_time_ms: Some(now_ms - 12.0),
+            host_no_pending_pressure_level: Some("normal".to_string()),
+            video_present_fps: 60.0,
+            video_decoder_stalled: Some(false),
+            video_renderer_stalled: Some(true),
+            ..XbxEngineMediaRuntimeStats::default()
+        };
+
+        assert_eq!(
+            resolve_effective_diagnosis_label_from_stats(
+                &stats,
+                "transportAwaitRecoveryAnchor",
+                now_ms
+            ),
+            "healthy"
+        );
+        assert_eq!(recovery_stage_label(&stats), "steady");
     }
 
     #[test]

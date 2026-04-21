@@ -83,8 +83,6 @@ pub(crate) struct RtcStackRuntimePort<'a> {
     runtime_stats: &'a Arc<Mutex<XbxEngineMediaRuntimeStats>>,
     render_state: &'a Arc<Mutex<XbxRenderState>>,
     media: &'a Arc<Mutex<RtcMediaService>>,
-    local_decoder_reset_handle:
-        &'a Arc<Mutex<Option<Arc<crate::media::video::decode::actor::DecodeActorHandle>>>>,
     local_decoder_reset_policy: &'a Arc<Mutex<LocalDecoderResetPolicyState>>,
 }
 
@@ -93,7 +91,7 @@ impl<'a> RtcStackRuntimePort<'a> {
         runtime_stats: &'a Arc<Mutex<XbxEngineMediaRuntimeStats>>,
         render_state: &'a Arc<Mutex<XbxRenderState>>,
         media: &'a Arc<Mutex<RtcMediaService>>,
-        local_decoder_reset_handle: &'a Arc<
+        _local_decoder_reset_handle: &'a Arc<
             Mutex<Option<Arc<crate::media::video::decode::actor::DecodeActorHandle>>>,
         >,
         local_decoder_reset_policy: &'a Arc<Mutex<LocalDecoderResetPolicyState>>,
@@ -102,7 +100,6 @@ impl<'a> RtcStackRuntimePort<'a> {
             runtime_stats,
             render_state,
             media,
-            local_decoder_reset_handle,
             local_decoder_reset_policy,
         }
     }
@@ -145,18 +142,12 @@ impl<'a> RtcStackRuntimePort<'a> {
         stats
     }
 
-    pub(crate) fn take_latest_render_frame(&self) -> Option<XbxEngineRenderFrame> {
+    pub(crate) fn drain_pending_render_frames(&self) -> Vec<XbxEngineRenderFrame> {
         self.render_state
             .lock()
             .ok()
-            .and_then(|mut render_state| render_state.take_latest_frame())
-    }
-
-    pub(crate) fn acknowledge_latest_render_frame(&self, frame_seq: u64) -> bool {
-        self.render_state
-            .lock()
-            .ok()
-            .is_some_and(|mut render_state| render_state.acknowledge_latest_frame(frame_seq))
+            .map(|mut render_state| render_state.drain_pending_frames())
+            .unwrap_or_default()
     }
 
     pub(crate) fn record_video_frame_drop(&self, observation: XbxEngineVideoFrameDropObservation) {
@@ -171,39 +162,24 @@ impl<'a> RtcStackRuntimePort<'a> {
         let runtime_stats = RuntimeStatsSink::new(self.runtime_stats.clone());
         runtime_stats.record_host_video_timing(host_display_interval_ms, host_frame_age_budget_ms);
         let now_ms = crate::transport::rtc::stats::now_ms_f64();
-        let reset_reason = self
-            .local_decoder_reset_policy
-            .lock()
-            .ok()
-            .and_then(|mut policy| {
-                policy.observe_host_timing_change(
-                    host_display_interval_ms,
-                    host_frame_age_budget_ms,
-                    now_ms,
-                )
-            });
-        let Some(reason) = reset_reason else {
+        let timing_shift_reason =
+            self.local_decoder_reset_policy
+                .lock()
+                .ok()
+                .and_then(|mut policy| {
+                    policy.observe_host_timing_change(
+                        host_display_interval_ms,
+                        host_frame_age_budget_ms,
+                        now_ms,
+                    )
+                });
+        let Some(reason) = timing_shift_reason else {
             return;
         };
-        let local_decoder_handle = self
-            .local_decoder_reset_handle
-            .lock()
-            .ok()
-            .and_then(|handle| handle.clone());
         runtime_stats.update(|stats| {
-            stats.latest_observation_label = Some(
-                if local_decoder_handle.is_some() {
-                    "videoDecoderLocalResetQueued"
-                } else {
-                    "videoDecoderLocalResetSkipped"
-                }
-                .to_string(),
-            );
+            stats.latest_observation_label = Some("videoHostTimingShiftObserved".to_string());
             stats.latest_observation_summary = Some(reason.clone());
         });
-        if let Some(handle) = local_decoder_handle {
-            handle.request_local_decoder_reset(reason, now_ms);
-        }
     }
 
     pub(crate) fn update_host_video_present_metrics(
@@ -301,7 +277,15 @@ fn resolve_no_pending_pressure_level(streak: u32) -> &'static str {
 
 #[cfg(test)]
 mod tests {
-    use super::LocalDecoderResetPolicyState;
+    use std::sync::mpsc;
+    use std::sync::{Arc, Mutex};
+
+    use crate::api::backend::XbxEngineMediaRuntimeStats;
+    use crate::media::video::decode::actor::DecodeActorHandle;
+    use crate::media::video::render::renderer::XbxRenderState;
+    use crate::transport::rtc::stream::RtcMediaService;
+
+    use super::{LocalDecoderResetPolicyState, RtcStackRuntimePort};
 
     #[test]
     fn small_host_timing_change_does_not_trigger_local_decoder_reset() {
@@ -355,5 +339,40 @@ mod tests {
         assert!(state
             .observe_host_timing_change(Some(16.67), Some(25.0), 3_400.0)
             .is_none());
+    }
+
+    #[test]
+    fn host_timing_shift_only_records_observation_without_requesting_decoder_reset() {
+        let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
+        let render_state = Arc::new(Mutex::new(XbxRenderState::default()));
+        let media = Arc::new(Mutex::new(RtcMediaService::default()));
+        let (tx, rx) = mpsc::sync_channel(1);
+        let local_decoder_reset_handle = Arc::new(Mutex::new(Some(Arc::new(
+            DecodeActorHandle::from_test_sender(tx),
+        ))));
+        let local_decoder_reset_policy =
+            Arc::new(Mutex::new(LocalDecoderResetPolicyState::default()));
+        let runtime_port = RtcStackRuntimePort::new(
+            &runtime_stats,
+            &render_state,
+            &media,
+            &local_decoder_reset_handle,
+            &local_decoder_reset_policy,
+        );
+
+        runtime_port.update_host_video_timing(Some(16.67), Some(25.0));
+        runtime_port.update_host_video_timing(Some(33.33), Some(40.0));
+
+        let snapshot = runtime_stats.lock().expect("runtime stats lock").clone();
+        assert_eq!(
+            snapshot.latest_observation_label.as_deref(),
+            Some("videoHostTimingShiftObserved")
+        );
+        let summary = snapshot
+            .latest_observation_summary
+            .as_deref()
+            .expect("timing shift summary");
+        assert!(summary.contains("hostTimingShift"));
+        assert!(rx.try_recv().is_err());
     }
 }

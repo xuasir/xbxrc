@@ -65,14 +65,14 @@ where
         let Some(viewport) = self.snapshot.viewport.clone() else {
             return;
         };
-        let frame = match self.media_backend.take_latest_render_frame() {
-            Ok(frame) => frame,
+        let frames = match self.media_backend.drain_pending_render_frames() {
+            Ok(frames) => frames,
             Err(error) => {
-                self.emit_error("takeLatestRenderFrameFailed", error.to_string());
+                self.emit_error("drainPendingRenderFramesFailed", error.to_string());
                 return;
             }
         };
-        let Some(frame) = frame else {
+        if frames.is_empty() {
             if matches!(
                 self.state,
                 XbxEngineRuntimeState::Running | XbxEngineRuntimeState::Reconnecting
@@ -83,24 +83,24 @@ where
                     .saturating_add(1);
             }
             return;
-        };
+        }
         self.snapshot.host_present_take_empty_streak = 0;
         self.snapshot.host_present_latest_render_slot_at_ms = Some(now_ms_f64());
-        if let Err(error) =
-            self.host_bridge
-                .present_frame(&viewport, self.snapshot.surface_id.as_deref(), &frame)
-        {
-            self.emit_error("presentFrameFailed", error.to_string());
-            return;
+        let mut latest_presented_frame = None;
+        for frame in frames {
+            if let Err(error) =
+                self.host_bridge
+                    .present_frame(&viewport, self.snapshot.surface_id.as_deref(), &frame)
+            {
+                self.emit_error("presentFrameFailed", error.to_string());
+                return;
+            }
+            latest_presented_frame = Some(frame);
         }
-        if let Err(error) = self
-            .media_backend
-            .acknowledge_latest_render_frame(frame.frame_seq)
-        {
-            self.emit_error("acknowledgeLatestRenderFrameFailed", error.to_string());
+        if let Some(frame) = latest_presented_frame {
+            self.snapshot.video_size = Some((frame.width, frame.height));
+            self.snapshot.frame_rendered_time_ms = Some(frame.rendered_at_ms);
         }
-        self.snapshot.video_size = Some((frame.width, frame.height));
-        self.snapshot.frame_rendered_time_ms = Some(frame.rendered_at_ms);
     }
 
     pub(super) fn record_input_status(&mut self, status: &XbxEngineInputStatus) {
@@ -401,8 +401,7 @@ where
             .is_some_and(|age_ms| age_ms <= MEDIA_READY_PRESENT_FRESHNESS_WINDOW_MS);
         let has_display_output =
             stats.video_present_fps >= 1.0 || stats.latest_video_frame.is_some();
-        let stable_output = stats.video_renderer_stalled != Some(true)
-            && stats.video_decoder_stalled != Some(true)
+        let stable_output = stats.video_decoder_stalled != Some(true)
             && stats.host_no_pending_pressure_level.as_deref() != Some("critical");
         has_recent_present && has_display_output && stable_output
     }

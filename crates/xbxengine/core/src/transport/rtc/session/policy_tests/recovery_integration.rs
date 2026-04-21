@@ -6070,11 +6070,10 @@ fn recovery_integration_home_burst_input_rumble_submit_gap_and_latest_slot_overw
             .as_ref()
             .expect("latest input observation");
         assert_eq!(latest_input.channel, "input");
-        let render = stats
-            .latest_render_candidate_decision
-            .as_ref()
-            .expect("latest render candidate");
-        assert_eq!(render.detail, "latestSlotOverwrite");
+        assert!(matches!(
+            stats.video_owner_reason.as_deref(),
+            Some("displaySupplyCritical" | "displaySupplyDegraded" | "hostPresentStalled")
+        ));
     });
 }
 

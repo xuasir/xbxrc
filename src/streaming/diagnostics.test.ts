@@ -58,6 +58,8 @@ describe('buildStreamDiagnosticsSnapshot', () => {
       rendererCapabilityReason: 'webgl2ContextAvailable',
       icePolicyMode: 'policy',
       icePolicyDigest: 'f[ipv4:1]|t[udp:1]|k[srflx:1]',
+      videoRendererStalled: true,
+      videoRendererStallBlocksPresentation: false,
       lastRecoveryActionEffect: 'improved',
       lastRecoveryActionEffectScore: 1.8,
       lastRecoveryActionEffectReason: 'fpsOrLatencyImproved',
@@ -102,6 +104,8 @@ describe('buildStreamDiagnosticsSnapshot', () => {
     expect(diagnostics.rendererCapabilityReason).toBe('webgl2ContextAvailable')
     expect(diagnostics.icePolicyMode).toBe('policy')
     expect(diagnostics.icePolicyDigest).toContain('ipv4')
+    expect(diagnostics.videoRendererStalled).toBe(true)
+    expect(diagnostics.videoRendererStallBlocksPresentation).toBe(false)
     expect(diagnostics.lastRecoveryActionEffect).toBe('improved')
     expect(diagnostics.lastRecoveryActionEffectReason).toBe('fpsOrLatencyImproved')
     expect(diagnostics.connectedMilestoneElapsedText).toBe('1800ms')
@@ -169,6 +173,8 @@ describe('buildStreamDiagnosticsSnapshot', () => {
       jit: '1ms',
       decode: '2ms',
       transportState: 'connected',
+      videoRendererStalled: true,
+      videoRendererStallBlocksPresentation: true,
       decisionDigest: '   ',
       renderDecisionDigest: '   ',
       renderAdaptiveProfileDigest: '   ',
@@ -190,5 +196,7 @@ describe('buildStreamDiagnosticsSnapshot', () => {
     expect(diagnostics.renderUpshiftBlockedReason).toBeUndefined()
     expect(diagnostics.lastRecoveryActionEffectReason).toBeUndefined()
     expect(diagnostics.lastControlChannelError).toBeUndefined()
+    expect(diagnostics.videoRendererStalled).toBe(true)
+    expect(diagnostics.videoRendererStallBlocksPresentation).toBe(true)
   })
 })

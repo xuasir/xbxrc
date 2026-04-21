@@ -18,6 +18,7 @@ use crate::media::video::h264::inspection::{
 };
 use crate::{
     api::backend::XbxEngineMediaRuntimeStats,
+    media::video::ingress::budget::FrameBudgetWindowSource,
     media::video::render::renderer::XbxRenderFrame,
     media::video::render::renderer::XbxRenderState,
     media::video::test_fixtures::{
@@ -633,6 +634,181 @@ fn hardware_backend_no_output_before_first_frame_falls_back_to_software_decoder(
 }
 
 #[test]
+fn hardware_nominal_continuation_no_output_falls_back_to_software_decoder() {
+    let hardware_decode_calls = Arc::new(AtomicUsize::new(0));
+    let software_decode_calls = Arc::new(AtomicUsize::new(0));
+    let decoder = ScriptedHardwareDecoder {
+        backend_name: "ffmpeg-videotoolbox",
+        decode_calls: hardware_decode_calls.clone(),
+        scripted_results: VecDeque::from([
+            Ok(Some(XbxRenderFrame {
+                width: 2,
+                height: 2,
+                frame_seq: 1,
+                rendered_at_ms: 1.0,
+                rtp_timestamp: Some(1),
+                is_keyframe: true,
+                frame_recovery_disposition: Some("repairing".to_string()),
+                frame_unrecoverable_reason: None,
+                pixel_data: XbxEngineRenderPixelData::Rgba {
+                    bytes: Arc::<[u8]>::from([4u8; 16]),
+                },
+            })),
+            Ok(None),
+            Ok(None),
+            Ok(None),
+            Ok(None),
+        ]),
+    };
+    let decoder_factory = Box::new(|| {
+        panic!("decoder reset factory should not be used in nominal continuation fallback test");
+    });
+    let software_decode_calls_for_factory = software_decode_calls.clone();
+    let software_decoder_factory = Box::new(move || {
+        (
+            Box::new(ScriptedHardwareDecoder {
+                backend_name: "ffmpeg-software",
+                decode_calls: software_decode_calls_for_factory.clone(),
+                scripted_results: VecDeque::new(),
+            }) as Box<dyn XbxVideoDecoderBackend>,
+            XbxVideoDecoderProbeSummary {
+                selected_backend_name: "ffmpeg-software".to_string(),
+                selected_backend_kind: "software".to_string(),
+                fallback_count: 0,
+                fallback_summary: None,
+            },
+        )
+    });
+    let mut state = XbxVideoDecodeState::new_for_test_with_factories(
+        20,
+        30,
+        Box::new(decoder),
+        decoder_factory,
+        software_decoder_factory,
+    );
+
+    assert!(state
+        .process_encoded_frame(make_encoded_frame(true), 5_000.0)
+        .is_none());
+    assert_eq!(state.decoded_frame_queue_len(), 1);
+    assert_eq!(state.recovery_state(), XbxVideoRecoveryState::Nominal);
+
+    for step in 0..4 {
+        assert!(state
+            .process_encoded_frame(
+                make_non_idr_continuation_frame(5_100 + step),
+                5_016.0 + f64::from(step),
+            )
+            .is_none());
+    }
+
+    assert_eq!(hardware_decode_calls.load(Ordering::Relaxed), 5);
+    assert_eq!(state.decoder_backend_name(), "ffmpeg-software");
+    assert_eq!(state.decoder_reset_count(), 1);
+    assert_eq!(
+        state.recovery_state(),
+        XbxVideoRecoveryState::WaitingKeyframe
+    );
+    let transition = state
+        .latest_recovery_transition()
+        .expect("recovery transition should exist");
+    assert_eq!(transition.detail, "nominalContinuationNoOutputSoftFallback");
+    let observation = state
+        .latest_decode_output_path_observation()
+        .expect("decode output path observation should exist");
+    assert_eq!(observation.detail, "backendNoOutputAfterNominalContinuation");
+    let probe = state
+        .latest_decoder_probe()
+        .expect("software fallback probe should exist");
+    assert_eq!(probe.selected_backend_name, "ffmpeg-software");
+    assert!(probe
+        .fallback_summary
+        .as_deref()
+        .is_some_and(|summary| summary.contains("nominal-continuation-no-output")));
+    assert_eq!(software_decode_calls.load(Ordering::Relaxed), 0);
+}
+
+#[test]
+fn software_nominal_continuation_no_output_resets_decoder() {
+    let decode_calls = Arc::new(AtomicUsize::new(0));
+    let reset_calls = Arc::new(AtomicUsize::new(0));
+    let decoder = ScriptedHardwareDecoder {
+        backend_name: "ffmpeg-software",
+        decode_calls: decode_calls.clone(),
+        scripted_results: VecDeque::from([
+            Ok(Some(XbxRenderFrame {
+                width: 2,
+                height: 2,
+                frame_seq: 1,
+                rendered_at_ms: 1.0,
+                rtp_timestamp: Some(1),
+                is_keyframe: true,
+                frame_recovery_disposition: Some("repairing".to_string()),
+                frame_unrecoverable_reason: None,
+                pixel_data: XbxEngineRenderPixelData::Rgba {
+                    bytes: Arc::<[u8]>::from([5u8; 16]),
+                },
+            })),
+            Ok(None),
+            Ok(None),
+            Ok(None),
+            Ok(None),
+        ]),
+    };
+    let reset_calls_for_factory = reset_calls.clone();
+    let decoder_factory = Box::new(move || {
+        reset_calls_for_factory.fetch_add(1, Ordering::Relaxed);
+        (
+            Box::new(ScriptedHardwareDecoder {
+                backend_name: "replacement",
+                decode_calls: Arc::new(AtomicUsize::new(0)),
+                scripted_results: VecDeque::new(),
+            }) as Box<dyn XbxVideoDecoderBackend>,
+            XbxVideoDecoderProbeSummary {
+                selected_backend_name: "replacement".to_string(),
+                selected_backend_kind: "software".to_string(),
+                fallback_count: 1,
+                fallback_summary: Some("reset-recreate".to_string()),
+            },
+        )
+    });
+    let mut state =
+        XbxVideoDecodeState::new_for_test_with_factory(20, 30, Box::new(decoder), decoder_factory);
+
+    assert!(state
+        .process_encoded_frame(make_encoded_frame(true), 6_000.0)
+        .is_none());
+    assert_eq!(state.decoded_frame_queue_len(), 1);
+    assert_eq!(state.recovery_state(), XbxVideoRecoveryState::Nominal);
+
+    for step in 0..4 {
+        assert!(state
+            .process_encoded_frame(
+                make_non_idr_continuation_frame(6_100 + step),
+                6_016.0 + f64::from(step),
+            )
+            .is_none());
+    }
+
+    assert_eq!(decode_calls.load(Ordering::Relaxed), 5);
+    assert_eq!(reset_calls.load(Ordering::Relaxed), 1);
+    assert_eq!(state.decoder_backend_name(), "replacement");
+    assert_eq!(state.decoder_reset_count(), 1);
+    assert_eq!(
+        state.recovery_state(),
+        XbxVideoRecoveryState::WaitingKeyframe
+    );
+    let transition = state
+        .latest_recovery_transition()
+        .expect("recovery transition should exist");
+    assert_eq!(transition.detail, "nominalContinuationNoOutputReset");
+    let observation = state
+        .latest_decode_output_path_observation()
+        .expect("decode output path observation should exist");
+    assert_eq!(observation.detail, "backendNoOutputAfterNominalContinuation");
+}
+
+#[test]
 fn duplicate_local_decoder_reset_without_success_edge_is_coalesced() {
     let decoder = SpyHardwareDecoder;
     let reset_calls = Arc::new(AtomicUsize::new(0));
@@ -1060,6 +1236,50 @@ fn enqueue_decoded_frame_returns_dropped_oldest_frame() {
 }
 
 #[test]
+fn enqueue_decoded_frame_allows_recovery_window_burst_up_to_five_frames() {
+    let decoder = SpyHardwareDecoder;
+    let mut state = XbxVideoDecodeState::new_for_test(20, 30, Box::new(decoder));
+
+    for seq in 1..=5 {
+        let mut frame = DecodedFrame {
+            pts: Instant::now(),
+            rtp_timestamp: seq,
+            is_keyframe: seq == 1,
+            budget: crate::media::video::ingress::budget::FrameBudgetContext::for_transport(
+                crate::media::video::types::FrameValue::new(seq == 1, false, 1024),
+                false,
+                Some(30.0),
+                Some(1_000.0),
+                Some(1_016.0),
+                false,
+                FrameBudgetWindowSource::Recovery,
+            ),
+            frame_recovery_disposition: FrameRecoveryDisposition::Repairing,
+            frame_unrecoverable_reason: None,
+            surface: XbxRenderFrame {
+                width: 2,
+                height: 2,
+                frame_seq: seq as u64,
+                rendered_at_ms: seq as f64,
+                rtp_timestamp: Some(seq),
+                is_keyframe: seq == 1,
+                frame_recovery_disposition: Some("repairing".to_string()),
+                frame_unrecoverable_reason: None,
+                pixel_data: XbxEngineRenderPixelData::Rgba {
+                    bytes: Arc::<[u8]>::from([seq as u8; 16]),
+                },
+            },
+        };
+        frame.pts = Instant::now();
+        let dropped = state.enqueue_decoded_frame(frame);
+        assert!(dropped.is_none(), "recovery burst frame {seq} should be retained");
+    }
+
+    assert_eq!(state.decoded_frame_queue_len(), 5);
+    assert_eq!(state.decoded_frame_drop_count(), 0);
+}
+
+#[test]
 fn enqueue_decoded_frame_drops_stale_frame_before_queueing() {
     let decoder = SpyHardwareDecoder;
     let mut state = XbxVideoDecodeState::new_for_test(20, 30, Box::new(decoder));
@@ -1095,6 +1315,46 @@ fn enqueue_decoded_frame_drops_stale_frame_before_queueing() {
     assert_eq!(decision.action, "drop");
     assert_eq!(decision.detail, "staleAfterDecode");
     assert_eq!(decision.frame_seq, Some(7));
+}
+
+#[test]
+fn enqueue_decoded_frame_recovery_window_gets_extra_stale_slack() {
+    let decoder = SpyHardwareDecoder;
+    let mut state = XbxVideoDecodeState::new_for_test(20, 30, Box::new(decoder));
+
+    let dropped = state.enqueue_decoded_frame(DecodedFrame {
+        pts: Instant::now() - Duration::from_millis(20),
+        rtp_timestamp: 9,
+        is_keyframe: false,
+        budget: crate::media::video::ingress::budget::FrameBudgetContext::for_transport(
+            crate::media::video::types::FrameValue::new(false, false, 1024),
+            false,
+            Some(30.0),
+            Some(1_000.0),
+            Some(1_016.0),
+            false,
+            FrameBudgetWindowSource::Recovery,
+        ),
+        frame_recovery_disposition: FrameRecoveryDisposition::Repairing,
+        frame_unrecoverable_reason: None,
+        surface: XbxRenderFrame {
+            width: 2,
+            height: 2,
+            frame_seq: 9,
+            rendered_at_ms: 9.0,
+            rtp_timestamp: Some(9),
+            is_keyframe: false,
+            frame_recovery_disposition: Some("repairing".to_string()),
+            frame_unrecoverable_reason: None,
+            pixel_data: XbxEngineRenderPixelData::Rgba {
+                bytes: Arc::<[u8]>::from([9u8; 16]),
+            },
+        },
+    });
+
+    assert!(dropped.is_none());
+    assert_eq!(state.decoded_frame_queue_len(), 1);
+    assert_eq!(state.decoded_frame_drop_count(), 0);
 }
 
 #[test]
@@ -1146,7 +1406,7 @@ fn decode_candidate_state_recovers_to_nominal_after_pressure_is_relieved() {
 }
 
 #[test]
-fn workload_snapshot_switches_to_drain_output_when_queue_is_non_empty() {
+fn workload_snapshot_keeps_accepting_input_until_output_queue_is_full() {
     let decoder = SpyHardwareDecoder;
     let mut state = XbxVideoDecodeState::new_for_test(20, 30, Box::new(decoder));
 
@@ -1170,14 +1430,46 @@ fn workload_snapshot_switches_to_drain_output_when_queue_is_non_empty() {
     });
 
     let queued = state.workload_snapshot();
-    assert_eq!(queued.state, XbxDecodeWorkloadState::DrainOutput);
+    assert_eq!(queued.state, XbxDecodeWorkloadState::AwaitingInput);
     assert_eq!(queued.pending_output_queue_depth, 1);
-    assert!(queued.should_drain_output_first());
+    assert!(!queued.should_drain_output_first());
+
+    state.enqueue_decoded_frame_for_test(XbxRenderFrame {
+        width: 2,
+        height: 2,
+        frame_seq: 2,
+        rendered_at_ms: 2.0,
+        rtp_timestamp: Some(2),
+        is_keyframe: false,
+        frame_recovery_disposition: Some("repairing".to_string()),
+        frame_unrecoverable_reason: None,
+        pixel_data: XbxEngineRenderPixelData::Rgba {
+            bytes: Arc::<[u8]>::from([0u8; 16]),
+        },
+    });
+    state.enqueue_decoded_frame_for_test(XbxRenderFrame {
+        width: 2,
+        height: 2,
+        frame_seq: 3,
+        rendered_at_ms: 3.0,
+        rtp_timestamp: Some(3),
+        is_keyframe: false,
+        frame_recovery_disposition: Some("repairing".to_string()),
+        frame_unrecoverable_reason: None,
+        pixel_data: XbxEngineRenderPixelData::Rgba {
+            bytes: Arc::<[u8]>::from([0u8; 16]),
+        },
+    });
+
+    let full = state.workload_snapshot();
+    assert_eq!(full.state, XbxDecodeWorkloadState::DrainOutput);
+    assert_eq!(full.pending_output_queue_depth, 3);
+    assert!(full.should_drain_output_first());
 
     let _ = state.pop_decoded_frame(2.0);
     let drained = state.workload_snapshot();
     assert_eq!(drained.state, XbxDecodeWorkloadState::AwaitingInput);
-    assert_eq!(drained.pending_output_queue_depth, 0);
+    assert_eq!(drained.pending_output_queue_depth, 2);
     assert!(!drained.should_drain_output_first());
 }
 
@@ -1229,6 +1521,30 @@ fn make_encoded_frame(is_keyframe: bool) -> EncodedFrame {
         h264: make_h264_inspection(is_keyframe),
         payload: Bytes::from_static(b"\x00\x00\x00\x01\x65"),
     }
+}
+
+fn make_non_idr_continuation_frame(rtp_timestamp: u32) -> EncodedFrame {
+    let mut frame = make_encoded_frame(false);
+    frame.rtp_timestamp = rtp_timestamp;
+    frame.h264 = H264AccessUnitInspection {
+        nals: vec![H264NalUnit {
+            range: 0..1,
+            unit_type: UnitType::SliceLayerWithoutPartitioningNonIdr,
+        }],
+        parameter_sets: None,
+        width: Some(2560),
+        height: Some(1440),
+        is_idr: false,
+        has_inband_sps: false,
+        has_inband_pps: false,
+        slice_headers_valid: true,
+        parameter_sets_changed: false,
+        config_changed: false,
+        bootstrap_ready: false,
+        bootstrap_reject_reason: Some(H264BootstrapRejectReason::NonIdrVcl),
+        commit_state: H264AccessUnitInspector::test_commit_state(),
+    };
+    frame
 }
 
 fn make_h264_inspection(bootstrap_ready: bool) -> H264AccessUnitInspection {
@@ -1417,7 +1733,7 @@ fn assembled_bootstrap_frame_decodes_and_renders_end_to_end() {
     let (_stats, outcome) = render_state
         .present_frame(decoded.surface)
         .expect("render should accept decoded frame");
-    assert!(!outcome.overwritten_previous_latest);
+    assert!(!outcome.overwritten_pending_frame);
     assert_eq!(
         render_state
             .peek_latest_frame()
@@ -1528,7 +1844,7 @@ fn backend_failure_then_clean_bootstrap_frames_recover_pipeline_to_nominal() {
 }
 
 #[tokio::test]
-async fn rtp_to_decode_to_pacer_to_renderer_pipeline_reaches_latest_frame_and_overwrite_signal() {
+async fn rtp_to_decode_to_pacer_to_renderer_pipeline_reaches_shadow_frame_and_overwrite_signal() {
     let (tx, _transport_observation_rx, mut source) = make_video_source_for_test();
     let runtime_stats = Arc::new(std::sync::Mutex::new(XbxEngineMediaRuntimeStats::default()));
 
@@ -1635,7 +1951,8 @@ async fn rtp_to_decode_to_pacer_to_renderer_pipeline_reaches_latest_frame_and_ov
         let frame = render_state
             .lock()
             .expect("render state lock")
-            .take_latest_frame();
+            .peek_latest_frame()
+            .cloned();
         if let Some(frame) = frame {
             latest_seq = Some(frame.frame_seq);
             if frame.frame_seq >= 3 {

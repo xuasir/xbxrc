@@ -2334,6 +2334,60 @@ fn clean_anchor_recovery_can_exit_supply_starved_to_degraded_serving_before_full
 }
 
 #[test]
+fn clean_anchor_recovery_ignores_shadow_renderer_stall_when_host_present_is_fresh() {
+    let mut owner = VideoSchedulingOwner::new();
+    let _ = owner.evaluate(&input(
+        ConnectionLifecycleStateFact::Connected,
+        None,
+        SchedulingDemandSignal {
+            no_pending_pressure_level: Some("critical".to_string()),
+            no_pending_streak: Some(160),
+            present_age_ms: Some(1_100.0),
+            decode_age_ms: Some(620.0),
+            video_renderer_stalled: true,
+            ..SchedulingDemandSignal::default()
+        },
+        Some("healthy"),
+        Some("frame-complete-candidate"),
+        Some("remoteTrackAttached"),
+        Some(20_000),
+        1_500.0,
+        8,
+    ));
+
+    let mut recovering = input(
+        ConnectionLifecycleStateFact::Connected,
+        None,
+        SchedulingDemandSignal {
+            no_pending_pressure_level: Some("normal".to_string()),
+            no_pending_streak: Some(0),
+            present_age_ms: Some(18.0),
+            decode_age_ms: Some(12.0),
+            video_renderer_stalled: true,
+            present_submit_count_total: Some(10),
+            present_drop_count_total: Some(0),
+            host_display_tick_epoch: Some(24),
+            host_present_epoch: Some(18),
+            ..SchedulingDemandSignal::default()
+        },
+        Some("healthy"),
+        Some("frame-observed"),
+        Some("remoteTrackAttached"),
+        Some(96_000),
+        1_540.0,
+        8,
+    );
+    recovering.clean_anchor_epoch = Some(8);
+    recovering.clean_anchor_observed_at_ms = Some(1_538.0);
+    recovering.clean_anchor_source_event = Some("chain-clean-anchor-submitted".to_string());
+
+    let output = owner.evaluate(&recovering);
+    assert_eq!(output.state, VideoSchedulingOwnerState::StableServing);
+    assert_eq!(output.health, VideoHealthContract::Stable);
+    assert!(output.recovery_intent.is_none());
+}
+
+#[test]
 fn clean_anchor_recovery_stays_rebuilding_when_present_feedback_gap_is_not_settled() {
     let mut owner = VideoSchedulingOwner::new();
     let _ = owner.evaluate(&input(

@@ -4,7 +4,7 @@ use super::{XbxPresentFrameOutcome, XbxRenderFrame, XbxRenderState};
 use crate::XbxEngineRenderPixelData;
 
 #[test]
-fn latest_slot_supports_peek_take_and_ack() {
+fn latest_slot_is_shadow_state_and_pending_queue_is_handoff_source() {
     let mut state = XbxRenderState::default();
     let frame = XbxRenderFrame {
         width: 2,
@@ -27,9 +27,13 @@ fn latest_slot_supports_peek_take_and_ack() {
         state.peek_latest_frame().map(|frame| frame.frame_seq),
         Some(1)
     );
-    assert!(!state.acknowledge_latest_frame(2));
-    assert!(state.acknowledge_latest_frame(1));
-    assert!(state.peek_latest_frame().is_none());
+    let drained = state.drain_pending_frames();
+    assert_eq!(drained.len(), 1);
+    assert_eq!(drained[0].frame_seq, 1);
+    assert_eq!(
+        state.peek_latest_frame().map(|frame| frame.frame_seq),
+        Some(1)
+    );
 
     let frame = XbxRenderFrame {
         width: 2,
@@ -48,20 +52,16 @@ fn latest_slot_supports_peek_take_and_ack() {
         .present_frame(frame)
         .expect("present frame should work");
     assert_eq!(
-        state.take_latest_frame().map(|frame| frame.frame_seq),
-        Some(3)
-    );
-    // take 不消费槽位，后续仍可 peek/ack。
-    assert_eq!(
         state.peek_latest_frame().map(|frame| frame.frame_seq),
         Some(3)
     );
-    assert!(state.acknowledge_latest_frame(3));
-    assert!(state.peek_latest_frame().is_none());
+    let drained = state.drain_pending_frames();
+    assert_eq!(drained.len(), 1);
+    assert_eq!(drained[0].frame_seq, 3);
 }
 
 #[test]
-fn present_frame_reports_overwritten_latest_metadata() {
+fn present_frame_reports_overwritten_pending_metadata() {
     let mut state = XbxRenderState::default();
     let first_frame = XbxRenderFrame {
         width: 2,
@@ -100,7 +100,7 @@ fn present_frame_reports_overwritten_latest_metadata() {
     assert_eq!(
         first_outcome,
         XbxPresentFrameOutcome {
-            overwritten_previous_latest: false,
+            overwritten_pending_frame: false,
             overwritten_frame_seq: None,
             overwritten_frame_width: None,
             overwritten_frame_height: None,
@@ -109,7 +109,7 @@ fn present_frame_reports_overwritten_latest_metadata() {
     assert_eq!(
         second_outcome,
         XbxPresentFrameOutcome {
-            overwritten_previous_latest: true,
+            overwritten_pending_frame: true,
             overwritten_frame_seq: Some(1),
             overwritten_frame_width: Some(2),
             overwritten_frame_height: Some(2),
@@ -118,7 +118,7 @@ fn present_frame_reports_overwritten_latest_metadata() {
 }
 
 #[test]
-fn acknowledge_keeps_last_present_time_for_snapshot() {
+fn render_signal_snapshot_uses_latest_shadow_frame_time() {
     let mut state = XbxRenderState::default();
     state
         .present_frame(XbxRenderFrame {
@@ -136,12 +136,10 @@ fn acknowledge_keeps_last_present_time_for_snapshot() {
         })
         .expect("present frame should work");
 
-    assert!(state.acknowledge_latest_frame(1));
     let snapshot = state.render_signal_snapshot(1_200.0);
 
     assert_eq!(snapshot.latest_present_time_ms, Some(1_000.0));
     assert_eq!(snapshot.renderer_stalled, Some(false));
-    assert!(state.peek_latest_frame().is_none());
 }
 
 #[test]
@@ -259,7 +257,9 @@ fn render_candidate_state_recovers_after_latest_slot_overwrite_is_cleared() {
     assert_eq!(pressured.detail, "latestSlotOverwrite");
     assert_eq!(pressured.frame_seq, Some(1));
 
-    assert!(state.acknowledge_latest_frame(2));
+    let drained = state.drain_pending_frames();
+    assert_eq!(drained.len(), 2);
+    assert_eq!(drained[1].frame_seq, 2);
     state
         .present_frame(mk_frame(3, 1_032.0))
         .expect("third present should recover");
@@ -273,7 +273,7 @@ fn render_candidate_state_recovers_after_latest_slot_overwrite_is_cleared() {
 }
 
 #[test]
-fn render_candidate_state_stays_latest_overwrite_until_latest_slot_is_acknowledged() {
+fn render_candidate_state_stays_latest_overwrite_while_pending_backlog_exists() {
     let mut state = XbxRenderState::default();
     let mk_frame = |frame_seq: u64, rendered_at_ms: f64| XbxRenderFrame {
         width: 2,

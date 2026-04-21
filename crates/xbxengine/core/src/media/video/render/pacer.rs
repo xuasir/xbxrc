@@ -108,9 +108,9 @@ impl FramePacingPolicy {
         now: Instant,
         deadline: Instant,
         catch_up_mode: bool,
-        host_release_wait: Option<Duration>,
+        _host_release_wait: Option<Duration>,
     ) -> FramePacingDecision {
-        let decision = if catch_up_mode {
+        if catch_up_mode {
             if now > deadline + self.catch_up_threshold {
                 return FramePacingDecision::drop(true);
             }
@@ -127,29 +127,6 @@ impl FramePacingPolicy {
                 // target playout 异常偏大时，优先快速追帧，不长时间阻塞线程。
                 FramePacingDecision::submit_now(false)
             }
-        };
-
-        self.apply_host_release_gate(decision, host_release_wait)
-    }
-
-    fn apply_host_release_gate(
-        &self,
-        decision: FramePacingDecision,
-        host_release_wait: Option<Duration>,
-    ) -> FramePacingDecision {
-        let Some(host_release_wait) = host_release_wait.filter(|duration| !duration.is_zero())
-        else {
-            return decision;
-        };
-        match decision.action {
-            FramePacingAction::Drop => decision,
-            FramePacingAction::SubmitNow => {
-                FramePacingDecision::sleep(host_release_wait, decision.exit_catch_up_mode)
-            }
-            FramePacingAction::Sleep(duration) => FramePacingDecision::sleep(
-                duration.min(host_release_wait),
-                decision.exit_catch_up_mode,
-            ),
         }
     }
 }
@@ -195,10 +172,6 @@ impl HostCadencePhaseHint {
             Some(_) => Self::Unknown,
             None => Self::Unknown,
         }
-    }
-
-    pub(crate) fn cadence_signal_active(self) -> bool {
-        matches!(self, Self::Priming | Self::Steady | Self::Starved)
     }
 }
 
@@ -380,26 +353,23 @@ mod tests {
     }
 
     #[test]
-    fn pacing_waits_for_host_release_gate_before_submitting_due_frame() {
+    fn pacing_submits_due_frame_without_host_release_gate() {
         let policy = FramePacingPolicy::new(16);
         let now = Instant::now();
         let deadline = now - Duration::from_millis(1);
         let decision = policy.decide(now, deadline, false, Some(Duration::from_millis(5)));
-        assert_eq!(
-            decision.action,
-            FramePacingAction::Sleep(Duration::from_millis(5))
-        );
+        assert_eq!(decision.action, FramePacingAction::SubmitNow);
     }
 
     #[test]
-    fn pacing_uses_earlier_host_release_gate_when_both_sides_want_sleep() {
+    fn pacing_keeps_deadline_sleep_without_host_release_gate_override() {
         let policy = FramePacingPolicy::new(16);
         let now = Instant::now();
         let deadline = now + Duration::from_millis(10);
         let decision = policy.decide(now, deadline, false, Some(Duration::from_millis(4)));
         assert_eq!(
             decision.action,
-            FramePacingAction::Sleep(Duration::from_millis(4))
+            FramePacingAction::Sleep(Duration::from_millis(10))
         );
     }
 

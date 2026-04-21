@@ -1327,15 +1327,9 @@ pub trait XbxEngineMediaBackend: Send {
     ) -> Result<(), XbxEngineRuntimeError> {
         Ok(())
     }
-    fn take_latest_render_frame(
+    fn drain_pending_render_frames(
         &mut self,
-    ) -> Result<Option<XbxEngineRenderFrame>, XbxEngineRuntimeError>;
-    fn acknowledge_latest_render_frame(
-        &mut self,
-        _frame_seq: u64,
-    ) -> Result<bool, XbxEngineRuntimeError> {
-        Ok(false)
-    }
+    ) -> Result<Vec<XbxEngineRenderFrame>, XbxEngineRuntimeError>;
     fn record_video_frame_drop(
         &mut self,
         _observation: XbxEngineVideoFrameDropObservation,
@@ -1472,17 +1466,10 @@ where
         self.as_mut().record_host_video_frame_drop(event)
     }
 
-    fn take_latest_render_frame(
+    fn drain_pending_render_frames(
         &mut self,
-    ) -> Result<Option<XbxEngineRenderFrame>, XbxEngineRuntimeError> {
-        self.as_mut().take_latest_render_frame()
-    }
-
-    fn acknowledge_latest_render_frame(
-        &mut self,
-        frame_seq: u64,
-    ) -> Result<bool, XbxEngineRuntimeError> {
-        self.as_mut().acknowledge_latest_render_frame(frame_seq)
+    ) -> Result<Vec<XbxEngineRenderFrame>, XbxEngineRuntimeError> {
+        self.as_mut().drain_pending_render_frames()
     }
 
     fn record_video_frame_drop(
@@ -1728,10 +1715,10 @@ impl XbxEngineMediaBackend for PlaceholderXbxEngineMediaBackend {
         Ok(self.pending_runtime_recovery_action.take())
     }
 
-    fn take_latest_render_frame(
+    fn drain_pending_render_frames(
         &mut self,
-    ) -> Result<Option<XbxEngineRenderFrame>, XbxEngineRuntimeError> {
-        Ok(None)
+    ) -> Result<Vec<XbxEngineRenderFrame>, XbxEngineRuntimeError> {
+        Ok(Vec::new())
     }
 
     fn record_video_frame_drop(

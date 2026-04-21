@@ -215,17 +215,10 @@ impl XbxEngineMediaBackend for XbxNegotiationBackend {
         Ok(())
     }
 
-    fn take_latest_render_frame(
+    fn drain_pending_render_frames(
         &mut self,
-    ) -> Result<Option<XbxEngineRenderFrame>, XbxEngineRuntimeError> {
-        Ok(self.stack.take_latest_render_frame())
-    }
-
-    fn acknowledge_latest_render_frame(
-        &mut self,
-        frame_seq: u64,
-    ) -> Result<bool, XbxEngineRuntimeError> {
-        Ok(self.stack.acknowledge_latest_render_frame(frame_seq))
+    ) -> Result<Vec<XbxEngineRenderFrame>, XbxEngineRuntimeError> {
+        Ok(self.stack.drain_pending_render_frames())
     }
 
     fn record_video_frame_drop(

@@ -3,7 +3,8 @@ use xbxengine_protocol::{XbxEnginePresentationMilestoneDto, XbxEngineStatsDto};
 use crate::transport::rtc::recovery::escalation_label::escalation_structured_label;
 use crate::transport::rtc::recovery::remote_profile_runtime::classify_runtime_remote_profile;
 use crate::transport::rtc::recovery::runtime_state::{
-    project_runtime_state_from_stats, resolve_runtime_recovery_profile, RecoveryRuntimeState,
+    project_runtime_state_from_stats, renderer_shadow_blocks_serviceability,
+    resolve_runtime_recovery_profile, RecoveryRuntimeState,
 };
 use crate::transport::rtc::recovery::startup::SessionPhase;
 use crate::{
@@ -203,6 +204,10 @@ fn resolve_presentation_health(
     present_age_ms: Option<f64>,
 ) -> Option<String> {
     let stats = runtime_stats?;
+    let now_ms = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|duration| duration.as_millis() as f64)
+        .unwrap_or(0.0);
     if stats.video_owner_reason.as_deref() == Some("hostPresentStalled") {
         return Some("hostPresentStalled".to_string());
     }
@@ -214,6 +219,9 @@ fn resolve_presentation_health(
     );
     let present_stale = present_age_ms.is_some_and(|age| age >= 600.0);
     if has_present_history && (supply_pressure || present_stale) {
+        return Some("displaySupplyStarved".to_string());
+    }
+    if renderer_shadow_blocks_serviceability(stats, now_ms) {
         return Some("displaySupplyStarved".to_string());
     }
     if stats.latest_video_host_present_time_ms.is_some() {
@@ -611,6 +619,13 @@ pub fn build_xbxengine_stats(
     let recovery_rfc_stage = runtime_stats.and_then(|s| s.recovery_rfc_authoritative_stage.clone());
     let recovery_rfc_ceiling =
         runtime_stats.and_then(|s| s.recovery_rfc_authoritative_ceiling.clone());
+    let renderer_stall_blocks_presentation = runtime_stats.map(|stats| {
+        let now_ms = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|duration| duration.as_millis() as f64)
+            .unwrap_or(0.0);
+        renderer_shadow_blocks_serviceability(stats, now_ms)
+    });
     let chain_health = video_owner.as_ref().map(|owner| {
         map_owner_state_to_video_health(owner.state.as_str(), owner.reason.as_deref())
     });
@@ -865,6 +880,7 @@ pub fn build_xbxengine_stats(
         video_decoder_recovery_state_changed_at_ms: runtime_stats
             .and_then(|stats| stats.video_decoder_recovery_state_changed_at_ms),
         video_renderer_stalled: runtime_stats.and_then(|stats| stats.video_renderer_stalled),
+        video_renderer_stall_blocks_presentation: renderer_stall_blocks_presentation,
         packet_age_ms,
         decode_age_ms,
         present_age_ms,
@@ -2011,7 +2027,7 @@ fn classify_stall_kind(
             "rebuildingSupply" => "transportRecovering".to_string(),
             _ => {
                 if stats.video_decoder_stalled == Some(true)
-                    || stats.video_renderer_stalled == Some(true)
+                    || renderer_shadow_blocks_serviceability(stats, now_ms)
                 {
                     "pipelineStall".to_string()
                 } else {
@@ -2021,7 +2037,9 @@ fn classify_stall_kind(
         });
     }
     let fresh_output = has_recent_video_output(stats, now_ms);
-    if stats.video_decoder_stalled == Some(true) || stats.video_renderer_stalled == Some(true) {
+    if stats.video_decoder_stalled == Some(true)
+        || renderer_shadow_blocks_serviceability(stats, now_ms)
+    {
         return Some("pipelineStall".to_string());
     }
     if stats.direct_gaming_bitrate_band.as_deref() == Some("paused")

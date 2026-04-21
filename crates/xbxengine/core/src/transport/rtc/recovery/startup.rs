@@ -5,7 +5,9 @@ use crate::runtime_stats_sink::RuntimeStatsSink;
 use crate::transport::rtc::recovery::escalation::VideoEscalationReason;
 use crate::transport::rtc::recovery::escalation_label::escalation_structured_label;
 use crate::transport::rtc::recovery::policy::RecoveryScenarioProfile;
-use crate::transport::rtc::recovery::runtime_state::resolve_runtime_recovery_profile;
+use crate::transport::rtc::recovery::runtime_state::{
+    renderer_shadow_blocks_serviceability, resolve_runtime_recovery_profile,
+};
 use crate::XbxEngineMediaRuntimeStats;
 
 pub const STARTUP_LOW_QUALITY_RETRY_DELAY_MS: u64 = 320;
@@ -166,7 +168,7 @@ fn resolve_session_phase_from_stats(
         )
     );
     let stalled_output = stats.video_decoder_stalled.unwrap_or(false)
-        || stats.video_renderer_stalled.unwrap_or(false)
+        || renderer_shadow_blocks_serviceability(stats, now_ms_f64())
         || (render_age_ms >= RECOVERING_PHASE_WINDOW_MS
             && stats.video_present_fps < RECOVERING_PRESENT_FPS);
     let degraded_output = effective_bitrate > 0.0
@@ -508,6 +510,27 @@ mod tests {
         stats.inbound_video_bitrate_kbps = Some(14_000.0);
         stats.video_present_fps = 59.0;
         stats.recovery_active_escalation_reason = Some("adapterIdleTimeout".to_string());
+        assert_eq!(
+            resolve_session_phase_from_stats(
+                Some(&stats),
+                stream_started_at,
+                Duration::from_secs(2),
+            ),
+            SessionPhase::Steady
+        );
+    }
+
+    #[test]
+    fn session_phase_ignores_shadow_renderer_stall_when_host_present_is_fresh() {
+        let stream_started_at = Instant::now() - Duration::from_secs(5);
+        let now_ms = crate::transport::rtc::stats::now_ms_f64();
+        let mut stats = XbxEngineMediaRuntimeStats::default();
+        stats.inbound_video_bitrate_kbps = Some(14_000.0);
+        stats.video_present_fps = 59.0;
+        stats.video_renderer_stalled = Some(true);
+        stats.host_no_pending_pressure_level = Some("normal".to_string());
+        stats.latest_video_host_present_time_ms = Some(now_ms);
+        stats.latest_video_decode_ok_time_ms = Some(now_ms);
         assert_eq!(
             resolve_session_phase_from_stats(
                 Some(&stats),

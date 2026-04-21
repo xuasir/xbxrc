@@ -481,14 +481,10 @@ where
         self.media_backend.record_host_video_frame_drop(event)
     }
 
-    /**
-     * Rust 原生窗口宿主需要直接消费最新渲染帧，
-     * 这里显式暴露一个“只取最新、不做排队”的只读出口。
-     */
-    pub fn take_latest_render_frame(
+    pub fn drain_pending_render_frames(
         &mut self,
-    ) -> Result<Option<XbxEngineRenderFrame>, XbxEngineRuntimeError> {
-        self.media_backend.take_latest_render_frame()
+    ) -> Result<Vec<XbxEngineRenderFrame>, XbxEngineRuntimeError> {
+        self.media_backend.drain_pending_render_frames()
     }
 
     pub fn record_video_frame_drop(

@@ -680,7 +680,10 @@ pub struct XbxEngineStatsDto {
     pub video_decoder_recovery_detail: Option<String>,
     pub video_decoder_recovery_status: Option<i32>,
     pub video_decoder_recovery_state_changed_at_ms: Option<f64>,
+    #[serde(default)]
     pub video_renderer_stalled: Option<bool>,
+    #[serde(default)]
+    pub video_renderer_stall_blocks_presentation: Option<bool>,
     pub packet_age_ms: Option<f64>,
     pub decode_age_ms: Option<f64>,
     pub present_age_ms: Option<f64>,

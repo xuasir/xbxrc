@@ -886,6 +886,80 @@ fn build_stats_steady_healthy_when_output_fresh_and_owner_stable() {
 }
 
 #[test]
+fn build_stats_shadow_renderer_stall_keeps_stall_kind_none_when_host_is_fresh() {
+    let now_ms = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as f64;
+    let stats = XbxEngineMediaRuntimeStats {
+        transport_state: XbxEngineTransportStateDto::Connected,
+        transport_policy_profile: Some("cloud".to_string()),
+        session_phase: Some("steady".to_string()),
+        direct_gaming_bitrate_band: Some("steady".to_string()),
+        message_handshake_acked_at_ms: Some(now_ms - 80.0),
+        control_ready_at_ms: Some(now_ms - 70.0),
+        latest_video_host_present_time_ms: Some(now_ms - 35.0),
+        latest_video_decode_ok_time_ms: Some(now_ms - 35.0),
+        video_present_submit_count_total: 2,
+        video_present_fps: 58.0,
+        host_no_pending_pressure_level: Some("normal".to_string()),
+        host_no_pending_streak: 1,
+        video_renderer_stalled: Some(true),
+        video_owner_state: Some("stable-serving".to_string()),
+        video_owner_reason: Some("steady".to_string()),
+        video_owner_source: Some("anchor".to_string()),
+        video_owner_observed_at_ms: Some(now_ms - 10.0),
+        ..XbxEngineMediaRuntimeStats::default()
+    };
+
+    let dto = build_xbxengine_stats(&test_snapshot(), Some(&stats));
+    assert_eq!(dto.video_health.as_deref(), Some("healthy"));
+    assert_eq!(dto.presentation_health.as_deref(), Some("healthy"));
+    assert_eq!(dto.stall_kind.as_deref(), Some("none"));
+    assert_eq!(dto.video_renderer_stalled, Some(true));
+    assert_eq!(dto.video_renderer_stall_blocks_presentation, Some(false));
+}
+
+#[test]
+fn build_stats_renderer_stall_blocks_serviceability_when_host_is_stale() {
+    let now_ms = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as f64;
+    let stats = XbxEngineMediaRuntimeStats {
+        transport_state: XbxEngineTransportStateDto::Connected,
+        transport_policy_profile: Some("cloud".to_string()),
+        session_phase: Some("steady".to_string()),
+        direct_gaming_bitrate_band: Some("steady".to_string()),
+        message_handshake_acked_at_ms: Some(now_ms - 4_000.0),
+        control_ready_at_ms: Some(now_ms - 3_900.0),
+        latest_video_host_present_time_ms: Some(now_ms - 2_200.0),
+        latest_video_decode_ok_time_ms: Some(now_ms - 35.0),
+        video_present_submit_count_total: 120,
+        video_present_fps: 1.0,
+        host_no_pending_pressure_level: Some("critical".to_string()),
+        host_no_pending_streak: 1_280,
+        host_no_pending_max_streak: 1_500,
+        video_renderer_stalled: Some(true),
+        video_owner_state: Some("stable-serving".to_string()),
+        video_owner_reason: Some("steady".to_string()),
+        video_owner_source: Some("anchor".to_string()),
+        video_owner_observed_at_ms: Some(now_ms - 10.0),
+        ..XbxEngineMediaRuntimeStats::default()
+    };
+
+    let dto = build_xbxengine_stats(&test_snapshot(), Some(&stats));
+    assert_eq!(dto.video_health.as_deref(), Some("displaySupplyStarved"));
+    assert_eq!(
+        dto.presentation_health.as_deref(),
+        Some("displaySupplyStarved")
+    );
+    assert_eq!(dto.stall_kind.as_deref(), Some("none"));
+    assert_eq!(dto.video_renderer_stalled, Some(true));
+    assert_eq!(dto.video_renderer_stall_blocks_presentation, Some(true));
+}
+
+#[test]
 fn build_stats_prioritizes_recent_timeline_recovering_over_healthy_summary() {
     let now_ms = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)

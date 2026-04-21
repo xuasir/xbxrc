@@ -357,22 +357,22 @@ impl HostCadenceTelemetry {
         let submit_gap_ms = submit_gap_ms
             .map(|gap| format!("{gap:.2}"))
             .unwrap_or_else(|| "-".to_string());
-        log::info!(
-            "[playback-flow][host] event={} frame_seq={} displayed_frame_seq={} last_presented_frame_seq={} pending_frame_seqs={} queue_depth={} pending_queue_depth={} display_tick_epoch={} present_epoch={} submit_gap_ms={} replaced_frame_seq={} no_pending_streak={} cadence_phase={}",
-            event,
-            format_optional_seq(frame_seq),
-            format_optional_seq(displayed_frame_seq),
-            format_optional_seq(last_presented_frame_seq),
-            pending_frame_seqs,
-            queue_depth,
-            pending_queue_depth,
-            self.display_tick_epoch,
-            self.present_epoch,
-            submit_gap_ms,
-            replaced_frame_seq,
-            self.no_pending_streak,
-            self.cadence_phase.as_str(),
-        );
+        // log::info!(
+        //     "[playback-flow][host] event={} frame_seq={} displayed_frame_seq={} last_presented_frame_seq={} pending_frame_seqs={} queue_depth={} pending_queue_depth={} display_tick_epoch={} present_epoch={} submit_gap_ms={} replaced_frame_seq={} no_pending_streak={} cadence_phase={}",
+        //     event,
+        //     format_optional_seq(frame_seq),
+        //     format_optional_seq(displayed_frame_seq),
+        //     format_optional_seq(last_presented_frame_seq),
+        //     pending_frame_seqs,
+        //     queue_depth,
+        //     pending_queue_depth,
+        //     self.display_tick_epoch,
+        //     self.present_epoch,
+        //     submit_gap_ms,
+        //     replaced_frame_seq,
+        //     self.no_pending_streak,
+        //     self.cadence_phase.as_str(),
+        // );
     }
 
     fn trim_recent(&mut self, now_ms: f64) {
@@ -459,12 +459,26 @@ pub enum ScheduledFrameTakeOutcome {
 }
 
 impl ScheduledFrameSlot {
+    fn should_begin_new_media_epoch(&self, frame: &XbxEngineRenderFrame) -> bool {
+        self.displayed_frame.is_some()
+            && self.pending_frames.is_empty()
+            && frame.is_keyframe
+            && self
+                .last_presented_frame_seq
+                .is_some_and(|last_presented| frame.frame_seq < last_presented)
+    }
+
     pub fn submit_frame(
         &mut self,
         frame: &XbxEngineRenderFrame,
         now_ms: f64,
         telemetry: &mut HostCadenceTelemetry,
     ) -> ScheduledFrameSubmitOutcome {
+        if self.should_begin_new_media_epoch(frame) {
+            // 解码侧恢复后 frame_seq 会以较小序号重新进入；宿主仍保留旧 epoch 的 displayed frame 时，
+            // 恢复关键帧需要先切 media epoch，再进入新的调度窗口。
+            self.begin_media_epoch();
+        }
         let frame_seq = frame.frame_seq;
         let frame_age_budget_ms = telemetry.stale_frame_age_budget_for_frame(frame);
         let frame_age_ms = (now_ms - frame.rendered_at_ms).max(0.0);
@@ -708,25 +722,25 @@ impl ScheduledFrameSlot {
         telemetry: &HostCadenceTelemetry,
     ) {
         let diagnostics = self.diagnostics_snapshot();
-        log::info!(
-            "[playback-flow][host] event={} slot_outcome={} frame_seq={} displayed_frame_seq={} last_presented_frame_seq={} pending_frame_seqs={} queue_depth={} pending_queue_depth={} display_tick_epoch={} present_epoch={} overwrote_pending={} replaced_frame_seq={} frame_age_ms={:.2} frame_age_budget_ms={:.2} no_pending_streak={} cadence_phase={}",
-            event,
-            slot_outcome,
-            format_optional_seq(frame_seq),
-            format_optional_seq(diagnostics.displayed_frame_seq),
-            format_optional_seq(diagnostics.last_presented_frame_seq),
-            format_frame_seq_list(&diagnostics.pending_frame_seqs),
-            diagnostics.queue_depth,
-            diagnostics.pending_queue_depth,
-            telemetry.display_tick_epoch(),
-            telemetry.present_epoch(),
-            overwrote_pending,
-            format_optional_seq(replaced_frame_seq),
-            frame_age_ms,
-            frame_age_budget_ms,
-            telemetry.no_pending_streak,
-            telemetry.cadence_phase().as_str(),
-        );
+        // log::info!(
+        //     "[playback-flow][host] event={} slot_outcome={} frame_seq={} displayed_frame_seq={} last_presented_frame_seq={} pending_frame_seqs={} queue_depth={} pending_queue_depth={} display_tick_epoch={} present_epoch={} overwrote_pending={} replaced_frame_seq={} frame_age_ms={:.2} frame_age_budget_ms={:.2} no_pending_streak={} cadence_phase={}",
+        //     event,
+        //     slot_outcome,
+        //     format_optional_seq(frame_seq),
+        //     format_optional_seq(diagnostics.displayed_frame_seq),
+        //     format_optional_seq(diagnostics.last_presented_frame_seq),
+        //     format_frame_seq_list(&diagnostics.pending_frame_seqs),
+        //     diagnostics.queue_depth,
+        //     diagnostics.pending_queue_depth,
+        //     telemetry.display_tick_epoch(),
+        //     telemetry.present_epoch(),
+        //     overwrote_pending,
+        //     format_optional_seq(replaced_frame_seq),
+        //     frame_age_ms,
+        //     frame_age_budget_ms,
+        //     telemetry.no_pending_streak,
+        //     telemetry.cadence_phase().as_str(),
+        // );
     }
 }
 

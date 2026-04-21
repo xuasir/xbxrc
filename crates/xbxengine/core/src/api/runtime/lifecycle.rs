@@ -1,9 +1,9 @@
 use ohmygamepad_protocol::OhMyGamepadRumbleEffectDto;
 use xbxengine_protocol::{
     XbxEngineControlCommandDto, XbxEngineDisplayStateDto, XbxEngineHostRequestDto,
-    XbxEngineHostResponseDto, XbxEngineIceCandidateDto, XbxEngineReconnectReasonDto,
-    XbxEngineRenderProjectionDto, XbxEngineRuntimeEventDto, XbxEngineRuntimePhaseDto,
-    XbxEngineIceCandidatePolicyDto, XbxEngineRuntimeProjectionDto, XbxEngineTransportStateDto,
+    XbxEngineHostResponseDto, XbxEngineIceCandidateDto, XbxEngineIceCandidatePolicyDto,
+    XbxEngineReconnectReasonDto, XbxEngineRenderProjectionDto, XbxEngineRuntimeEventDto,
+    XbxEngineRuntimePhaseDto, XbxEngineRuntimeProjectionDto, XbxEngineTransportStateDto,
     XbxEngineViewportDto,
 };
 
@@ -14,6 +14,7 @@ use super::{
     XbxEngineVideoPipelineRuntimeConfig,
 };
 use crate::session::recovery::STALL_SIGNAL_STABILITY_MS;
+use crate::transport::rtc::recovery::runtime_state::renderer_shadow_blocks_serviceability;
 use crate::{
     XbxEngineDecodeRenderSignal, XbxEngineMediaBackend, XbxEngineMediaNegotiationRequest,
     XbxEngineMediaSignal, XbxEngineRecoveryAction, XbxEngineRecoveryRuntimeConfig,
@@ -289,12 +290,6 @@ where
         if matches!(self.state, XbxEngineRuntimeState::Reconnecting) {
             return;
         }
-        // 只有在显式显示压力/停滞证据成立时才触发本地 reset，避免在纯统计抖动下误触发。
-        if owner_reason != Some("hostPresentStalled")
-            && !matches!(runtime_stats.video_renderer_stalled, Some(true))
-        {
-            return;
-        }
         let now = now_ms_f64();
         const COOLDOWN_MS: f64 = 2_500.0;
         if self
@@ -460,8 +455,10 @@ where
         }
 
         let now_ms = now_ms_f64();
+        let renderer_stall_blocks_runtime_recovery =
+            renderer_shadow_blocks_serviceability(runtime_stats, now_ms);
         let decoder_stall_is_recent_and_aligned = runtime_stats.video_decoder_stalled == Some(true)
-            && runtime_stats.video_renderer_stalled != Some(true)
+            && !renderer_stall_blocks_runtime_recovery
             && runtime_stats
                 .latest_video_host_present_time_ms
                 .zip(runtime_stats.latest_video_decode_ok_time_ms)
@@ -530,7 +527,7 @@ where
             },
             decode_render: XbxEngineDecodeRenderSignal {
                 decoder_stalled: runtime_stats.video_decoder_stalled,
-                render_stalled: runtime_stats.video_renderer_stalled,
+                render_stalled: Some(renderer_stall_blocks_runtime_recovery),
                 allow_decoder_reset: true,
             },
         };
@@ -782,12 +779,19 @@ where
         if let Some(policy) = ice_candidate_policy {
             self.config.webrtc.negotiation.ice_policy.enabled = policy.enabled;
             self.config.webrtc.negotiation.ice_policy.prefer_udp = policy.prefer_udp;
-            self.config.webrtc.negotiation.ice_policy.allow_tcp_fallback = policy.allow_tcp_fallback;
+            self.config.webrtc.negotiation.ice_policy.allow_tcp_fallback =
+                policy.allow_tcp_fallback;
             self.config.webrtc.negotiation.ice_policy.relay_bias = policy.relay_bias.clone();
-            self.config.webrtc.negotiation.ice_policy.enable_teredo_derivation =
-                policy.enable_teredo_derivation;
-            self.config.webrtc.negotiation.ice_policy.enable_family_mismatch_gate =
-                policy.enable_family_mismatch_gate;
+            self.config
+                .webrtc
+                .negotiation
+                .ice_policy
+                .enable_teredo_derivation = policy.enable_teredo_derivation;
+            self.config
+                .webrtc
+                .negotiation
+                .ice_policy
+                .enable_family_mismatch_gate = policy.enable_family_mismatch_gate;
             self.config.webrtc.negotiation.ice_policy.source = policy.source.clone();
         }
 
@@ -1425,7 +1429,11 @@ fn resolve_local_candidate_address_family(
     let mut v4 = false;
     let mut v6 = false;
     for candidate in offer_candidates.iter().chain(initial_candidates.iter()) {
-        if !candidate.candidate.to_ascii_lowercase().contains(" typ host") {
+        if !candidate
+            .candidate
+            .to_ascii_lowercase()
+            .contains(" typ host")
+        {
             continue;
         }
         match detect_candidate_family(&candidate.candidate) {
@@ -1494,7 +1502,10 @@ fn detect_candidate_kind(raw: &str) -> CandidateKind {
     CandidateKind::Unknown
 }
 
-fn parse_remote_candidate(candidate: XbxEngineIceCandidateDto, idx: usize) -> Option<ParsedRemoteCandidate> {
+fn parse_remote_candidate(
+    candidate: XbxEngineIceCandidateDto,
+    idx: usize,
+) -> Option<ParsedRemoteCandidate> {
     let raw = candidate.candidate.trim().to_string();
     if raw.is_empty() {
         return None;
@@ -1512,7 +1523,10 @@ fn parse_remote_candidate(candidate: XbxEngineIceCandidateDto, idx: usize) -> Op
         transport: detect_candidate_transport(&normalized),
         ip,
         raw: normalized,
-        candidate: XbxEngineIceCandidateDto { candidate: raw, ..candidate },
+        candidate: XbxEngineIceCandidateDto {
+            candidate: raw,
+            ..candidate
+        },
         derived_from_teredo: false,
     })
 }
@@ -1522,7 +1536,10 @@ fn try_decode_teredo_endpoint(ip: &str) -> Option<(String, u16)> {
     if !normalized.starts_with("2001:0") {
         return None;
     }
-    let parts = normalized.split(':').filter(|p| !p.is_empty()).collect::<Vec<_>>();
+    let parts = normalized
+        .split(':')
+        .filter(|p| !p.is_empty())
+        .collect::<Vec<_>>();
     if parts.len() < 4 {
         return None;
     }
@@ -1592,7 +1609,11 @@ fn normalize_remote_ice_candidates_in_place(
     candidates: Vec<XbxEngineIceCandidateDto>,
 ) -> RemoteIcePolicyTrace {
     let policy = &negotiation.ice_policy;
-    let mode = if policy.enabled { "policy" } else { "passthrough" };
+    let mode = if policy.enabled {
+        "policy"
+    } else {
+        "passthrough"
+    };
 
     let local_family = local_address_family.unwrap_or("unknown");
     let mut parsed = Vec::new();
@@ -1674,7 +1695,10 @@ fn normalize_remote_ice_candidates_in_place(
         left.idx.cmp(&right.idx)
     });
 
-    let applied_candidates = sorted.into_iter().map(|entry| entry.candidate).collect::<Vec<_>>();
+    let applied_candidates = sorted
+        .into_iter()
+        .map(|entry| entry.candidate)
+        .collect::<Vec<_>>();
 
     snapshot.ice_policy_mode = Some(mode.to_string());
     snapshot.ice_policy_source = Some(policy.source.clone());

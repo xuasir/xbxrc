@@ -5,6 +5,7 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use crate::api::backend::XbxEngineMediaRuntimeStats;
+use crate::media::video::ingress::budget::FrameBudgetWindowSource;
 use crate::media::video::render::actor::RendererActorHandle;
 use crate::media::video::render::pacer::{
     FramePacingAction, FramePacingPolicy, HostCadencePhaseHint, HostPacingPressure,
@@ -24,12 +25,10 @@ pub struct PacerActorHandle {
 }
 
 const PACING_QUEUE_MAX_FRAMES: usize = 3;
+const RECOVERY_PACING_QUEUE_MAX_FRAMES: usize = 5;
 const RENDER_QUEUE_MAX_FRAMES: usize = 1;
 const RENDER_QUEUE_RETRY_TIMEOUT_MS: u64 = 4;
-const HOST_RELEASE_GATE_ALIGNMENT_SLACK_MS: f64 = 1.5;
-const HOST_RELEASE_GATE_STALE_GRACE_MULTIPLIER: f64 = 2.5;
 const HOST_PRIMING_REUSE_WAIT_RATIO: u64 = 2;
-const HOST_SAME_TICK_HIGH_REFRESH_LAG_RATIO_MIN: f64 = 0.55;
 const RENDER_QUEUE_STALE_SLACK_DELTA_MS: u64 = 4;
 const RENDER_QUEUE_STALE_SLACK_REFERENCE_MS: u64 = 8;
 const RENDER_QUEUE_STALE_SLACK_KEYFRAME_MS: u64 = 12;
@@ -105,19 +104,9 @@ fn run_pacer_loop(
                 Err(_) => None,
             }
         } else {
-            let host_release_wait = resolve_host_release_wait_duration(
-                &host_context,
-                crate::media::video::decode::video_decode::now_ms_f64(),
-                last_consumed_host_tick_epoch,
-            );
             match rx.recv_timeout(
-                next_wait_duration(
-                    pacing_queue.front(),
-                    &pacing_policy,
-                    catch_up_mode,
-                    host_release_wait,
-                )
-                .min(Duration::from_millis(RENDER_QUEUE_RETRY_TIMEOUT_MS)),
+                next_wait_duration(pacing_queue.front(), &pacing_policy, catch_up_mode, None)
+                    .min(Duration::from_millis(RENDER_QUEUE_RETRY_TIMEOUT_MS)),
             ) {
                 Ok(msg) => Some(msg),
                 Err(RecvTimeoutError::Timeout) => None,
@@ -214,11 +203,16 @@ fn enforce_queue_budget(
     frame_drop_observation_id: &mut u64,
     host_context: &HostPacingContext,
 ) {
+    let recovery_window_active = pacing_queue.iter().any(decoded_frame_uses_recovery_window);
     // 动态调整队列容量：根据 cadence phase 决定上限
-    let dynamic_queue_cap = match host_context.cadence_phase {
-        HostCadencePhaseHint::Starved => 1, // host 饥饿时激进收紧
-        HostCadencePhaseHint::Priming => 2, // priming 阶段适度收紧
-        _ => PACING_QUEUE_MAX_FRAMES,       // 其他阶段使用默认值 3
+    let dynamic_queue_cap = if recovery_window_active {
+        RECOVERY_PACING_QUEUE_MAX_FRAMES
+    } else {
+        match host_context.cadence_phase {
+            HostCadencePhaseHint::Starved => 1, // host 饥饿时激进收紧
+            HostCadencePhaseHint::Priming => 2, // priming 阶段适度收紧
+            _ => PACING_QUEUE_MAX_FRAMES,       // 其他阶段使用默认值 3
+        }
     };
 
     while pacing_queue.len() > dynamic_queue_cap {
@@ -240,7 +234,14 @@ fn enforce_queue_budget(
         }
     }
     let pressure_decision = queue_history.decide_drop_target(&host_context.pressure);
-    while pacing_queue.len() > pressure_decision.drop_target {
+    // recovery burst 已经被标记为本地保供给窗口，普通 pressure 先让更深缓冲吸收抖动；
+    // aggressive pressure 仍然保留快速收紧，避免 host 真正失稳时继续堆积。
+    let pressure_drop_target = if recovery_window_active && !pressure_decision.aggressive {
+        dynamic_queue_cap
+    } else {
+        pressure_decision.drop_target
+    };
+    while pacing_queue.len() > pressure_drop_target {
         if let Some(dropped_frame) = pacing_queue.pop_front() {
             let detail = if pressure_decision.aggressive {
                 "queuePressureAggressive"
@@ -362,13 +363,7 @@ where
         let Some(frame) = pacing_queue.front() else {
             return None;
         };
-        let host_release_wait = resolve_host_release_wait_duration(
-            host_context,
-            crate::media::video::decode::video_decode::now_ms_f64(),
-            *last_consumed_host_tick_epoch,
-        );
-        let decision =
-            pacing_policy.decide(Instant::now(), frame.pts, *catch_up_mode, host_release_wait);
+        let decision = pacing_policy.decide(Instant::now(), frame.pts, *catch_up_mode, None);
         if decision.enter_catch_up_mode {
             *catch_up_mode = true;
         }
@@ -384,11 +379,7 @@ where
                     render_queue.len(),
                     Some(host_context),
                     Some("retain"),
-                    Some(if host_release_wait.is_some() {
-                        "hostReleaseGate"
-                    } else {
-                        "pacingDelay"
-                    }),
+                    Some("pacingDelay"),
                     None,
                 );
                 return None;
@@ -831,93 +822,11 @@ fn detect_video_frame_interval(
 }
 
 fn resolve_host_release_wait_duration(
-    host_context: &HostPacingContext,
-    now_ms: f64,
-    last_consumed_host_tick_epoch: Option<u64>,
+    _host_context: &HostPacingContext,
+    _now_ms: f64,
+    _last_consumed_host_tick_epoch: Option<u64>,
 ) -> Option<Duration> {
-    let cadence_signal_active = host_context.display_tick_epoch > 0
-        && (host_context.present_epoch > 0 || host_context.cadence_phase.cadence_signal_active());
-    if cadence_signal_active {
-        let epoch_open = last_consumed_host_tick_epoch
-            .map(|last| host_context.display_tick_epoch > last)
-            .unwrap_or(true);
-        if epoch_open {
-            return None;
-        }
-        match host_context.cadence_phase {
-            HostCadencePhaseHint::Starved => {
-                // host 已显式进入 no-pending/starved，相同 tick 内也允许尽快补帧。
-                return None;
-            }
-            HostCadencePhaseHint::Priming if host_context.latest_host_present_time_ms.is_none() => {
-                // 首轮 priming 还没有 present 节拍时，禁止同一 tick 连续推进多个 release。
-                return Some(Duration::from_millis(
-                    host_context
-                        .release_interval_ms // 使用release限速间隔
-                        .saturating_div(HOST_PRIMING_REUSE_WAIT_RATIO)
-                        .max(1),
-                ));
-            }
-            HostCadencePhaseHint::Idle
-            | HostCadencePhaseHint::Priming
-            | HostCadencePhaseHint::Steady
-            | HostCadencePhaseHint::Unknown => {}
-        }
-        let latest_host_present_time_ms = host_context.latest_host_present_time_ms?;
-        let host_present_age_ms = (now_ms - latest_host_present_time_ms).max(0.0);
-        if allow_high_refresh_same_tick_reuse(host_context, host_present_age_ms) {
-            return None;
-        }
-    }
-    let latest_host_present_time_ms = host_context.latest_host_present_time_ms?;
-    let release_interval_ms = host_context.release_interval_ms.max(1) as f64; // 使用release限速间隔
-    let host_present_age_ms = (now_ms - latest_host_present_time_ms).max(0.0);
-    if host_present_age_ms > release_interval_ms * HOST_RELEASE_GATE_STALE_GRACE_MULTIPLIER {
-        return None;
-    }
-    let next_release_due_ms =
-        latest_host_present_time_ms + release_interval_ms - HOST_RELEASE_GATE_ALIGNMENT_SLACK_MS;
-    if now_ms >= next_release_due_ms {
-        return None;
-    }
-    Some(Duration::from_secs_f64(
-        ((next_release_due_ms - now_ms) / 1_000.0).max(0.0),
-    ))
-}
-
-fn allow_high_refresh_same_tick_reuse(
-    host_context: &HostPacingContext,
-    host_present_age_ms: f64,
-) -> bool {
-    if matches!(
-        host_context.cadence_phase,
-        HostCadencePhaseHint::Priming | HostCadencePhaseHint::Starved
-    ) {
-        return false;
-    }
-    if host_context.present_epoch == 0 {
-        return false;
-    }
-    let host_refresh_interval_ms = host_context.host_refresh_interval_ms.max(1) as f64;
-    let release_interval_ms = host_context.release_interval_ms.max(1) as f64;
-    if release_interval_ms <= host_refresh_interval_ms + HOST_RELEASE_GATE_ALIGNMENT_SLACK_MS {
-        return false;
-    }
-    let cadence_lag_ratio = host_context
-        .pressure
-        .display_fps
-        .zip(host_context.pressure.present_fps)
-        .and_then(|(display_fps, present_fps)| {
-            if display_fps <= 0.0 {
-                return None;
-            }
-            Some(((display_fps - present_fps).max(0.0) / display_fps).clamp(0.0, 1.0))
-        })
-        .unwrap_or(0.0);
-    if cadence_lag_ratio < HOST_SAME_TICK_HIGH_REFRESH_LAG_RATIO_MIN {
-        return false;
-    }
-    host_present_age_ms + HOST_RELEASE_GATE_ALIGNMENT_SLACK_MS >= host_refresh_interval_ms
+    None
 }
 
 fn resolve_cadence_sleep_guard_override_ms(host_context: &HostPacingContext) -> Option<u64> {
@@ -1017,6 +926,10 @@ fn record_pacer_frame_drop(
         Some(dropped_frame.frame_recovery_disposition),
         dropped_frame.frame_unrecoverable_reason.as_deref(),
     );
+}
+
+fn decoded_frame_uses_recovery_window(frame: &DecodedFrame) -> bool {
+    matches!(frame.budget.window_source, FrameBudgetWindowSource::Recovery)
 }
 
 #[cfg(test)]

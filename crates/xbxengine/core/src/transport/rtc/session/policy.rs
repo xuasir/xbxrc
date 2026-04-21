@@ -979,7 +979,7 @@ impl RtcSessionPolicy {
         {
             let display_thresholds =
                 resolve_recovery_profile(self.runtime_stats.as_ref()).display_supply_thresholds;
-            let (has_fresh_output, has_fresh_present_output, renderer_stalled) =
+            let (has_fresh_output, has_fresh_present_output) =
                 RuntimeStatsSink::read_shared(self.runtime_stats.as_ref(), |stats| {
                     let has_fresh_output =
                         crate::transport::rtc::recovery::runtime_state::has_fresh_media_output(
@@ -995,15 +995,14 @@ impl RtcSessionPolicy {
                     (
                         has_fresh_output,
                         has_fresh_present_output,
-                        stats.video_renderer_stalled.unwrap_or(false),
                     )
                 })
-                .unwrap_or((false, false, false));
+                .unwrap_or((false, false));
 
             let should_suppress_for_fresh_output = match owner_signal.reason {
                 VideoEscalationReason::WaitKeyframe => has_fresh_output,
                 VideoEscalationReason::DisplaySupplyCritical => {
-                    has_fresh_output && has_fresh_present_output && !renderer_stalled
+                    has_fresh_output && has_fresh_present_output
                 }
                 _ => false,
             };
@@ -1110,8 +1109,7 @@ impl RtcSessionPolicy {
         }
         RuntimeStatsSink::read_shared(self.runtime_stats.as_ref(), |stats| {
             let current_clean_anchor = has_current_clean_anchor_from_stats(stats);
-            let pipeline_not_stalled = !stats.video_decoder_stalled.unwrap_or(false)
-                && !stats.video_renderer_stalled.unwrap_or(false);
+            let pipeline_not_stalled = !stats.video_decoder_stalled.unwrap_or(false);
             let render_has_headroom = !matches!(
                 stats.host_no_pending_pressure_level.as_deref(),
                 Some("high" | "critical")
@@ -1294,7 +1292,7 @@ impl RtcSessionPolicy {
                 500.0,
                 500.0,
                 stats.video_decoder_stalled.unwrap_or(false),
-                stats.video_renderer_stalled.unwrap_or(false),
+                false,
             ) && has_fresh_media_output(stats, observed_at_ms);
             let track_attached_with_video =
                 stats
@@ -1303,8 +1301,7 @@ impl RtcSessionPolicy {
                     .is_some_and(|track| {
                         track.state == "remoteTrackAttached" && track.video_bytes_total > 0
                     });
-            let pipeline_not_stalled = !stats.video_decoder_stalled.unwrap_or(false)
-                && !stats.video_renderer_stalled.unwrap_or(false);
+            let pipeline_not_stalled = !stats.video_decoder_stalled.unwrap_or(false);
             let diagnosis_is_stale = snapshot.recovery.last_observed_at_ms.is_some_and(|last| {
                 (observed_at_ms - last).max(0.0) > STALE_TRANSPORT_AWAIT_REPLAY_MAX_AGE_MS
             });
@@ -1485,8 +1482,7 @@ impl RtcSessionPolicy {
                 && stats.latest_video_decode_ok_time_ms.is_some_and(|at_ms| {
                     (observed_at_ms - at_ms).max(0.0) <= FRESH_INGRESS_MAX_AGE_MS
                 });
-            let pipeline_not_stalled = !stats.video_decoder_stalled.unwrap_or(false)
-                && !stats.video_renderer_stalled.unwrap_or(false);
+            let pipeline_not_stalled = !stats.video_decoder_stalled.unwrap_or(false);
             chain_healthy && track_attached_with_video && ingress_is_fresh && pipeline_not_stalled
         })
         .unwrap_or(false)
@@ -1514,8 +1510,7 @@ impl RtcSessionPolicy {
         RuntimeStatsSink::read_shared(self.runtime_stats.as_ref(), |stats| {
             has_current_clean_anchor_from_stats(stats)
                 && Self::has_unresolved_transport_await_issue(stats)
-                && (stats.video_decoder_stalled.unwrap_or(false)
-                    || stats.video_renderer_stalled.unwrap_or(false))
+                && stats.video_decoder_stalled.unwrap_or(false)
                 && !RecoveryCoordinator::transport_await_has_hard_recovery_evidence_from_stats(
                     stats,
                     observed_at_ms,
@@ -1538,8 +1533,7 @@ impl RtcSessionPolicy {
                 return false;
             }
             let current_clean_anchor = has_current_clean_anchor_from_stats(stats);
-            let pipeline_not_stalled = !stats.video_decoder_stalled.unwrap_or(false)
-                && !stats.video_renderer_stalled.unwrap_or(false);
+            let pipeline_not_stalled = !stats.video_decoder_stalled.unwrap_or(false);
             let present_fresh = stats
                 .latest_video_host_present_time_ms
                 .is_some_and(|at_ms| (observed_at_ms - at_ms).max(0.0) <= slack_window_ms);

@@ -3,6 +3,7 @@ use xbxengine_protocol::{
     XbxEngineRemoteSubprofileKindDto, XbxEngineTargetTypeDto,
 };
 
+use crate::transport::rtc::recovery::runtime_state::renderer_shadow_blocks_serviceability;
 use crate::XbxEngineMediaRuntimeStats;
 
 const CLOUD_HIGH_RTT_MS: f64 = 95.0;
@@ -106,7 +107,7 @@ fn is_cloud_startup(stats: &XbxEngineMediaRuntimeStats) -> bool {
 }
 
 fn is_display_constrained(stats: &XbxEngineMediaRuntimeStats, now_ms: f64) -> bool {
-    if stats.video_renderer_stalled.unwrap_or(false) {
+    if renderer_shadow_blocks_serviceability(stats, now_ms) {
         return true;
     }
 
@@ -194,5 +195,18 @@ mod tests {
         };
         let profile = classify_runtime_remote_profile(Some(&stats), 2_000.0).expect("profile");
         assert_eq!(profile.dynamic.as_str(), "displayConstrained");
+    }
+
+    #[test]
+    fn renderer_shadow_stall_with_fresh_host_present_keeps_steady_profile() {
+        let stats = XbxEngineMediaRuntimeStats {
+            video_renderer_stalled: Some(true),
+            host_no_pending_pressure_level: Some("normal".to_string()),
+            latest_video_decode_ok_time_ms: Some(1_000.0),
+            latest_video_host_present_time_ms: Some(1_020.0),
+            ..XbxEngineMediaRuntimeStats::default()
+        };
+        let profile = classify_runtime_remote_profile(Some(&stats), 1_060.0).expect("profile");
+        assert_eq!(profile.dynamic.as_str(), "steady");
     }
 }

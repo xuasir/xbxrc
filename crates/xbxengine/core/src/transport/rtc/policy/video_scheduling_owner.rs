@@ -684,7 +684,7 @@ impl VideoSchedulingOwner {
             input.display_supply_thresholds.degraded_decode_age_ms,
             input.display_supply_thresholds.degraded_present_age_ms,
             false,
-            input.demand.video_renderer_stalled,
+            Self::renderer_shadow_blocks_recovery_release(input),
         );
         let transport_await_waiting_released = ingress_waiting_keyframe
             && Self::transport_await_waiting_released_by_facts(input, effective_supply_state);
@@ -848,7 +848,7 @@ impl VideoSchedulingOwner {
         {
             return false;
         }
-        if input.demand.video_renderer_stalled {
+        if Self::renderer_shadow_blocks_recovery_release(input) {
             return false;
         }
         let Some(timeline) = input.latest_video_timeline_observation.as_ref() else {
@@ -969,6 +969,26 @@ impl VideoSchedulingOwner {
             && input.demand.present_submit_count_total.unwrap_or_default() == 0
     }
 
+    fn host_presentation_serviceable(input: &VideoSchedulingOwnerInput) -> bool {
+        let pressure_high = matches!(
+            input.demand.no_pending_pressure_level.as_deref(),
+            Some("high" | "critical")
+        ) && input.demand.no_pending_streak.unwrap_or_default()
+            >= input.display_supply_thresholds.degraded_no_pending_streak;
+        if pressure_high {
+            return false;
+        }
+        input
+            .demand
+            .present_age_ms
+            .is_some_and(|age| age <= input.display_supply_thresholds.degraded_present_age_ms)
+            || Self::first_present_feedback_gap_active(input)
+    }
+
+    fn renderer_shadow_blocks_recovery_release(input: &VideoSchedulingOwnerInput) -> bool {
+        input.demand.video_renderer_stalled && !Self::host_presentation_serviceable(input)
+    }
+
     fn can_release_rebuild_after_terminal_invalid_bootstrap(
         input: &VideoSchedulingOwnerInput,
         supply_state: DisplaySupplyState,
@@ -980,7 +1000,7 @@ impl VideoSchedulingOwner {
         if matches!(supply_state, DisplaySupplyState::Critical) {
             return false;
         }
-        if input.demand.video_renderer_stalled {
+        if Self::renderer_shadow_blocks_recovery_release(input) {
             return false;
         }
         if Self::has_rejected_transport_await_anchor_candidate(input) {
@@ -1087,7 +1107,7 @@ impl VideoSchedulingOwner {
         if input.connection_state != ConnectionLifecycleStateFact::Connected {
             return false;
         }
-        if input.demand.video_renderer_stalled {
+        if Self::renderer_shadow_blocks_recovery_release(input) {
             return false;
         }
         let stable_timeline_source = matches!(
@@ -1131,7 +1151,7 @@ impl VideoSchedulingOwner {
         if !has_clean_anchor_evidence || !chain_healthy {
             return false;
         }
-        if input.demand.video_renderer_stalled || input.demand.present_age_ms.is_some() {
+        if Self::renderer_shadow_blocks_recovery_release(input) || input.demand.present_age_ms.is_some() {
             return false;
         }
         let first_present_feedback_gap_active = Self::first_present_feedback_gap_active(input);
@@ -1194,7 +1214,7 @@ impl VideoSchedulingOwner {
         }
         // RFC: 解码后队列溢出/本地丢帧属于显示域调度问题，不应阻断 recovery-to-serving；
         // 允许尽快回到 serving，让 release-clock + local drop 吸收局部积压。
-        if input.demand.video_renderer_stalled {
+        if Self::renderer_shadow_blocks_recovery_release(input) {
             return false;
         }
         if Self::has_unresolved_invalid_bootstrap_blocker(input) {
@@ -1247,7 +1267,10 @@ impl VideoSchedulingOwner {
         if input.connection_state != ConnectionLifecycleStateFact::Connected {
             return false;
         }
-        if !has_clean_anchor_evidence || !chain_healthy || input.demand.video_renderer_stalled {
+        if !has_clean_anchor_evidence
+            || !chain_healthy
+            || Self::renderer_shadow_blocks_recovery_release(input)
+        {
             return false;
         }
         let track_attached = matches!(
@@ -1461,7 +1484,7 @@ impl VideoSchedulingOwner {
         input: &VideoSchedulingOwnerInput,
         has_clean_anchor_evidence: bool,
     ) -> bool {
-        if !has_clean_anchor_evidence || input.demand.video_renderer_stalled {
+        if !has_clean_anchor_evidence || Self::renderer_shadow_blocks_recovery_release(input) {
             return false;
         }
         if !matches!(
@@ -1544,7 +1567,7 @@ impl VideoSchedulingOwner {
         if !has_clean_anchor_evidence || !chain_healthy {
             return false;
         }
-        if input.demand.video_renderer_stalled {
+        if Self::renderer_shadow_blocks_recovery_release(input) {
             return false;
         }
         let present_fresh = input
@@ -1720,7 +1743,7 @@ impl VideoSchedulingOwner {
         if !has_clean_anchor_evidence {
             return false;
         }
-        if input.demand.video_renderer_stalled {
+        if Self::renderer_shadow_blocks_recovery_release(input) {
             return false;
         }
         if matches!(supply_state, DisplaySupplyState::Critical) {
@@ -1772,7 +1795,7 @@ impl VideoSchedulingOwner {
         ) {
             return false;
         }
-        if input.demand.video_renderer_stalled {
+        if Self::renderer_shadow_blocks_recovery_release(input) {
             return false;
         }
         let track_attached = matches!(
@@ -1821,7 +1844,7 @@ impl VideoSchedulingOwner {
             }
         };
         if input.connection_state != ConnectionLifecycleStateFact::Connected
-            || input.demand.video_renderer_stalled
+            || Self::renderer_shadow_blocks_recovery_release(input)
         {
             self.display_supply_recovery_gate
                 .pending_supply_starved_since_ms = None;
@@ -1969,7 +1992,7 @@ impl VideoSchedulingOwner {
         let track_has_video_bytes = input
             .latest_track_video_bytes_total
             .is_some_and(|bytes| bytes > 0);
-        if !track_has_video_bytes || input.demand.video_renderer_stalled {
+        if !track_has_video_bytes || Self::renderer_shadow_blocks_recovery_release(input) {
             return false;
         }
         if !Self::has_recovery_sustaining_progress_signal(input) {

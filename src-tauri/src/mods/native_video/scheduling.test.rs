@@ -23,6 +23,13 @@ fn mk_frame(frame_seq: u64) -> XbxEngineRenderFrame {
     }
 }
 
+fn mk_keyframe(frame_seq: u64) -> XbxEngineRenderFrame {
+    XbxEngineRenderFrame {
+        is_keyframe: true,
+        ..mk_frame(frame_seq)
+    }
+}
+
 #[test]
 fn begin_media_epoch_clears_presented_history_without_stopping_render_loop() {
     let mut slot = ScheduledFrameSlot::default();
@@ -46,6 +53,61 @@ fn begin_media_epoch_clears_presented_history_without_stopping_render_loop() {
             assert_eq!(frame_seq, 26)
         }
         other => panic!("expected new epoch frame to be accepted, got {other:?}"),
+    }
+}
+
+#[test]
+fn recovery_keyframe_with_restarted_frame_seq_opens_new_media_epoch() {
+    let mut slot = ScheduledFrameSlot::default();
+    let mut telemetry = HostCadenceTelemetry::default();
+
+    match slot.submit_frame(&mk_frame(25), 1_010.0, &mut telemetry) {
+        ScheduledFrameSubmitOutcome::Accepted { .. } => {}
+        other => panic!("expected accepted frame, got {other:?}"),
+    }
+    match slot.take_ready_frame(1_020.0, &mut telemetry) {
+        ScheduledFrameTakeOutcome::Ready(frame) => assert_eq!(frame.frame_seq, 25),
+        other => panic!("expected ready frame, got {other:?}"),
+    }
+
+    match slot.submit_frame(&mk_frame(1), 1_030.0, &mut telemetry) {
+        ScheduledFrameSubmitOutcome::Accepted { frame_seq, .. } => assert_eq!(frame_seq, 1),
+        other => panic!("expected restarted epoch keyframe to be accepted, got {other:?}"),
+    }
+    match slot.take_ready_frame(1_040.0, &mut telemetry) {
+        ScheduledFrameTakeOutcome::Ready(frame) => assert_eq!(frame.frame_seq, 1),
+        other => panic!("expected restarted epoch keyframe to present, got {other:?}"),
+    }
+
+    match slot.submit_frame(&mk_frame(2), 1_050.0, &mut telemetry) {
+        ScheduledFrameSubmitOutcome::Accepted { frame_seq, .. } => assert_eq!(frame_seq, 2),
+        other => {
+            panic!("expected restarted epoch continuation frame to be accepted, got {other:?}")
+        }
+    }
+}
+
+#[test]
+fn recovery_keyframe_with_rewound_frame_seq_opens_new_media_epoch() {
+    let mut slot = ScheduledFrameSlot::default();
+    let mut telemetry = HostCadenceTelemetry::default();
+
+    match slot.submit_frame(&mk_frame(161), 1_010.0, &mut telemetry) {
+        ScheduledFrameSubmitOutcome::Accepted { .. } => {}
+        other => panic!("expected accepted frame, got {other:?}"),
+    }
+    match slot.take_ready_frame(1_020.0, &mut telemetry) {
+        ScheduledFrameTakeOutcome::Ready(frame) => assert_eq!(frame.frame_seq, 161),
+        other => panic!("expected ready frame, got {other:?}"),
+    }
+
+    match slot.submit_frame(&mk_keyframe(13), 1_030.0, &mut telemetry) {
+        ScheduledFrameSubmitOutcome::Accepted { frame_seq, .. } => assert_eq!(frame_seq, 13),
+        other => panic!("expected rewound epoch keyframe to be accepted, got {other:?}"),
+    }
+    match slot.take_ready_frame(1_040.0, &mut telemetry) {
+        ScheduledFrameTakeOutcome::Ready(frame) => assert_eq!(frame.frame_seq, 13),
+        other => panic!("expected rewound epoch keyframe to present, got {other:?}"),
     }
 }
 

@@ -582,7 +582,7 @@ fn runtime_local_host_stall_reset_retries_after_cooldown_when_display_tick_advan
 }
 
 #[test]
-fn runtime_display_supply_degraded_triggers_local_reset_only_with_renderer_stall_gate() {
+fn runtime_display_supply_degraded_triggers_local_reset_from_owner_reason() {
     let requests = Rc::new(RefCell::new(Vec::new()));
     let events = Rc::new(RefCell::new(Vec::new()));
     let call_order = Arc::new(Mutex::new(Vec::new()));
@@ -623,33 +623,17 @@ fn runtime_display_supply_degraded_triggers_local_reset_only_with_renderer_stall
     requests.borrow_mut().clear();
 
     runtime.tick();
-    {
-        let order = call_order.lock().expect("call order lock");
-        assert!(
-            !order
-                .iter()
-                .any(|entry| *entry == "resetNativePresenterDisplayRecovery"),
-            "display recovery reset should be gated by renderer stall: {order:?}"
-        );
-    }
-
-    {
-        let mut stats = runtime_stats.lock().expect("runtime stats lock");
-        stats.video_renderer_stalled = Some(true);
-        stats.host_display_tick_epoch = 23;
-    }
-    runtime.tick();
     let order = call_order.lock().expect("call order lock");
     assert!(
         order
             .iter()
             .any(|entry| *entry == "resetNativePresenterDisplayRecovery"),
-        "display recovery reset should fire when renderer stall gate is active: {order:?}"
+        "display recovery reset should follow owner reason: {order:?}"
     );
 }
 
 #[test]
-fn runtime_display_supply_critical_triggers_local_reset_only_with_renderer_stall_gate() {
+fn runtime_display_supply_critical_triggers_local_reset_from_owner_reason() {
     let requests = Rc::new(RefCell::new(Vec::new()));
     let events = Rc::new(RefCell::new(Vec::new()));
     let call_order = Arc::new(Mutex::new(Vec::new()));
@@ -690,27 +674,11 @@ fn runtime_display_supply_critical_triggers_local_reset_only_with_renderer_stall
     requests.borrow_mut().clear();
 
     runtime.tick();
-    {
-        let order = call_order.lock().expect("call order lock");
-        assert!(
-            !order
-                .iter()
-                .any(|entry| *entry == "resetNativePresenterDisplayRecovery"),
-            "display recovery reset should be gated by renderer stall: {order:?}"
-        );
-    }
-
-    {
-        let mut stats = runtime_stats.lock().expect("runtime stats lock");
-        stats.video_renderer_stalled = Some(true);
-        stats.host_display_tick_epoch = 33;
-    }
-    runtime.tick();
     let order = call_order.lock().expect("call order lock");
     assert!(
         order
             .iter()
             .any(|entry| *entry == "resetNativePresenterDisplayRecovery"),
-        "display recovery reset should fire when renderer stall gate is active: {order:?}"
+        "display recovery reset should follow owner reason: {order:?}"
     );
 }

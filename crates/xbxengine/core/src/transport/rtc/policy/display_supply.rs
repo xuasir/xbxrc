@@ -47,9 +47,6 @@ impl SchedulingDemandSignal {
         &self,
         thresholds: &DisplaySupplyThresholds,
     ) -> DisplaySupplyCriticalSignal {
-        if self.video_renderer_stalled {
-            return DisplaySupplyCriticalSignal::HardRendererStall;
-        }
         if self.host_is_priming_without_present() {
             return DisplaySupplyCriticalSignal::None;
         }
@@ -62,6 +59,12 @@ impl SchedulingDemandSignal {
         let decode_age_critical = self
             .decode_age_ms
             .is_some_and(|age| age >= thresholds.critical_decode_age_ms);
+        let host_pressure_critical =
+            (pressure_critical && no_pending_streak >= thresholds.critical_no_pending_streak)
+                && (present_age_critical || decode_age_critical);
+        if self.video_renderer_stalled && host_pressure_critical {
+            return DisplaySupplyCriticalSignal::HardRendererStall;
+        }
         let present_drop_ratio = ratio(
             self.present_drop_count_total,
             self.present_submit_count_total,
@@ -85,9 +88,7 @@ impl SchedulingDemandSignal {
         if critical_supply_drop {
             return DisplaySupplyCriticalSignal::HardSupplyDrop;
         }
-        if (pressure_critical && no_pending_streak >= thresholds.critical_no_pending_streak)
-            && (present_age_critical || decode_age_critical)
-        {
+        if host_pressure_critical {
             return DisplaySupplyCriticalSignal::SoftNoPendingAge;
         }
         DisplaySupplyCriticalSignal::None
@@ -367,6 +368,35 @@ mod tests {
         assert_eq!(
             demand.critical_signal(&cloud_thresholds()),
             DisplaySupplyCriticalSignal::HardRendererStall
+        );
+    }
+
+    #[test]
+    fn renderer_stall_without_host_pressure_stays_shadow_signal() {
+        let demand = SchedulingDemandSignal {
+            no_pending_pressure_level: Some("normal".to_string()),
+            no_pending_streak: Some(2),
+            present_age_ms: Some(42.0),
+            decode_age_ms: Some(32.0),
+            video_renderer_stalled: true,
+            host_display_tick_epoch: Some(12),
+            host_present_epoch: Some(12),
+            host_cadence_phase: Some("steady".to_string()),
+            present_submit_count_total: Some(1200),
+            present_drop_count_total: Some(1),
+            present_overwrite_count_total: Some(2),
+            pacer_submit_count_total: Some(1200),
+            pacer_drop_count_total: Some(0),
+            renderer_submit_count_total: Some(1200),
+            renderer_drop_count_total: Some(0),
+        };
+        assert_eq!(
+            demand.critical_signal(&cloud_thresholds()),
+            DisplaySupplyCriticalSignal::None
+        );
+        assert_eq!(
+            demand.classify_display_supply_state(&cloud_thresholds()),
+            DisplaySupplyState::Healthy
         );
     }
 }

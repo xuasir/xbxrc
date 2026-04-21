@@ -181,7 +181,7 @@ fn runtime_tick_presents_frame_before_snapshotting_runtime_stats() {
 
     assert_eq!(
         call_order.lock().expect("lock call order").as_slice(),
-        &["take_frame", "present", "ack", "snapshot"]
+        &["drain_frames", "present", "snapshot"]
     );
     assert_eq!(
         runtime.snapshot().frame_rendered_time_ms,
@@ -252,9 +252,8 @@ fn runtime_tick_prioritizes_present_before_budgeted_rumble_work() {
     assert_eq!(
         call_order.lock().expect("lock call order").as_slice(),
         &[
-            "take_frame",
+            "drain_frames",
             "present",
-            "ack",
             "snapshot",
             "rumble_submit",
             "rumble_submit",
@@ -1457,6 +1456,83 @@ fn runtime_prefers_explicit_decoder_stall_signal_from_stats() {
             latest_video_decode_ok_time_ms: Some(now_ms - 100.0),
             video_decoder_stalled: Some(true),
             video_renderer_stalled: Some(false),
+            inbound_video_packet_count_total: 300,
+            ..Default::default()
+        },
+    );
+
+    runtime.tick();
+
+    assert_eq!(*keyframe_calls.lock().expect("lock keyframe calls"), 1);
+    assert_eq!(
+        *decoder_reset_calls
+            .lock()
+            .expect("lock decoder reset calls"),
+        0
+    );
+}
+
+#[test]
+fn runtime_allows_decoder_stall_bypass_when_renderer_stall_is_only_shadow_signal() {
+    let requests = Rc::new(RefCell::new(Vec::new()));
+    let events = Rc::new(RefCell::new(Vec::new()));
+    let now_ms = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_millis() as f64)
+        .unwrap_or(0.0);
+    let backend = ScriptedMediaBackend::new(
+        XbxEngineMediaNegotiation {
+            local_offer_sdp: "offer".to_string(),
+            local_candidates: Vec::new(),
+            surface_id: "surface:viewport-1".to_string(),
+            video_width: 1280,
+            video_height: 720,
+            first_frame_packet_arrival_time_ms: None,
+            frame_decoded_time_ms: None,
+            frame_rendered_time_ms: None,
+            input_status: XbxEngineInputStatus::default(),
+        },
+        XbxEngineMediaRuntimeStats {
+            transport_state: XbxEngineTransportStateDto::Connected,
+            latest_video_packet_arrival_time_ms: Some(now_ms - 20.0),
+            latest_video_host_present_time_ms: Some(now_ms - 100.0),
+            latest_video_decode_ok_time_ms: Some(now_ms - 100.0),
+            host_no_pending_pressure_level: Some("normal".to_string()),
+            video_decoder_stalled: Some(true),
+            video_renderer_stalled: Some(true),
+            inbound_video_packet_count_total: 300,
+            ..Default::default()
+        },
+    );
+    let runtime_stats = backend.runtime_stats.clone();
+    let keyframe_calls = backend.keyframe_request_calls.clone();
+    let decoder_reset_calls = backend.decoder_reset_calls.clone();
+    let mut runtime = XbxEngineRuntime::with_media_backend(
+        browser_runtime_config(),
+        TestHostBridge::new(requests),
+        TestEventSink::new(events),
+        backend,
+    );
+
+    runtime
+        .start(session(), viewport(), 1.0, None, None)
+        .expect("runtime start should succeed");
+    runtime.health.connected_at_ms = Some(now_ms - 10_000.0);
+    runtime.health.last_frame_seq = 20;
+    runtime.health.last_frame_rendered_at_ms = Some(now_ms - 100.0);
+    runtime.health.inbound_video_packet_count_total = 300;
+    runtime.health.last_video_packet_arrival_at_ms = Some(now_ms - 20.0);
+
+    overwrite_runtime_stats(
+        &runtime_stats,
+        XbxEngineMediaRuntimeStats {
+            transport_state: XbxEngineTransportStateDto::Connected,
+            latest_video_packet_arrival_time_ms: Some(now_ms - 20.0),
+            latest_video_host_present_time_ms: Some(now_ms - 100.0),
+            latest_video_decode_ok_time_ms: Some(now_ms - 100.0),
+            host_no_pending_pressure_level: Some("normal".to_string()),
+            video_decoder_stalled: Some(true),
+            video_renderer_stalled: Some(true),
             inbound_video_packet_count_total: 300,
             ..Default::default()
         },
