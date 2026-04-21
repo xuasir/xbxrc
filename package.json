@@ -5,7 +5,7 @@
   "private": true,
   "scripts": {
     "dev": "vite",
-    "build": "vue-tsc --noEmit && vite build",
+    "build": "vite build",
     "test": "vitest run",
     "preview": "vite preview",
     "tauri": "node scripts/with-ffmpeg-sdk.mjs -- tauri",

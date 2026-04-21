@@ -146,20 +146,6 @@ export class GamepadDriver {
     snapshot.pads.push(padSnapshot)
   }
 
-  private requestNativeStates(): Array<GamepadFrame> {
-    const snapshot = this.nativeRuntimeSnapshot
-    if (!snapshot) {
-      return [DEFAULT_GAMEPAD_FRAME()]
-    }
-
-    const pads = this.getNativePadSnapshots(snapshot)
-    if (pads.length === 0) {
-      return [DEFAULT_GAMEPAD_FRAME()]
-    }
-
-    return pads.map((pad, index) => this.mapNativePadState(pad, index))
-  }
-
   private getNativePadSnapshots(snapshot: GamepadRuntimeSnapshotDto): LogicalPadSnapshotDto[] {
     return snapshot.pads.filter((pad) => {
       return (
