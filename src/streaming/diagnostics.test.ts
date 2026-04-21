@@ -46,6 +46,9 @@ describe('buildStreamDiagnosticsSnapshot', () => {
       renderCause: 'renderStable',
       displayDegradeLevel: 'displayL1',
       renderDecisionDigest: 'rf:renderStable|dl:displayL1|bp:0|dr:2|iv:50',
+      renderAdaptiveProfileDigest: 'lv:displayL1|bw:stable|sp:clarityL2',
+      renderHysteresisState: 'steady',
+      renderUpshiftBlockedReason: '',
       renderPipelineType: 'webgl2',
       renderPolicySource: 'auto',
       renderProcessing: 'cas',
@@ -87,6 +90,9 @@ describe('buildStreamDiagnosticsSnapshot', () => {
     expect(diagnostics.renderCause).toBe('renderStable')
     expect(diagnostics.displayDegradeLevel).toBe('displayL1')
     expect(diagnostics.renderDecisionDigest).toContain('rf:renderStable')
+    expect(diagnostics.renderAdaptiveProfileDigest).toContain('lv:displayL1')
+    expect(diagnostics.renderHysteresisState).toBe('steady')
+    expect(diagnostics.renderUpshiftBlockedReason).toBeUndefined()
     expect(diagnostics.renderPipelineType).toBe('webgl2')
     expect(diagnostics.renderPolicySource).toBe('auto')
     expect(diagnostics.renderProcessing).toBe('cas')
@@ -125,6 +131,9 @@ describe('buildStreamDiagnosticsSnapshot', () => {
       renderCause: 'renderStarvation',
       displayDegradeLevel: 'displayL2',
       renderDecisionDigest: 'rf:renderStarvation|dl:displayL2|bp:1|dr:3|iv:88',
+      renderAdaptiveProfileDigest: 'lv:displayL2|bw:congested|sp:clarityL0',
+      renderHysteresisState: 'holdUp',
+      renderUpshiftBlockedReason: 'stableWindow:3000/8000',
     }
     const diagnostics = buildStreamDiagnosticsSnapshot({
       metadata: null,
@@ -145,6 +154,9 @@ describe('buildStreamDiagnosticsSnapshot', () => {
     expect(diagnostics.renderCause).toBe('renderStarvation')
     expect(diagnostics.displayDegradeLevel).toBe('displayL2')
     expect(diagnostics.renderDecisionDigest).toContain('rf:renderStarvation')
+    expect(diagnostics.renderAdaptiveProfileDigest).toContain('lv:displayL2')
+    expect(diagnostics.renderHysteresisState).toBe('holdUp')
+    expect(diagnostics.renderUpshiftBlockedReason).toContain('stableWindow')
   })
 
   it('normalizes empty digest-like strings to undefined', () => {
@@ -159,6 +171,8 @@ describe('buildStreamDiagnosticsSnapshot', () => {
       transportState: 'connected',
       decisionDigest: '   ',
       renderDecisionDigest: '   ',
+      renderAdaptiveProfileDigest: '   ',
+      renderUpshiftBlockedReason: '   ',
       lastRecoveryActionEffectReason: '   ',
       lastControlChannelError: '   ',
     }
@@ -172,6 +186,8 @@ describe('buildStreamDiagnosticsSnapshot', () => {
 
     expect(diagnostics.decisionDigest).toBeUndefined()
     expect(diagnostics.renderDecisionDigest).toBeUndefined()
+    expect(diagnostics.renderAdaptiveProfileDigest).toBeUndefined()
+    expect(diagnostics.renderUpshiftBlockedReason).toBeUndefined()
     expect(diagnostics.lastRecoveryActionEffectReason).toBeUndefined()
     expect(diagnostics.lastControlChannelError).toBeUndefined()
   })

@@ -6,6 +6,8 @@ function createRendererConfig(partial?: Partial<RendererRuntimeConfig>): Rendere
   return {
     enabled: true,
     sharpness: 4,
+    sharpenStrength: 60,
+    shaderPreset: 'clarityL2',
     pipelineType: 'auto',
     processing: 'usm',
     processingMode: 'quality',
@@ -273,5 +275,96 @@ describe('Renderers', () => {
 
     const renderer = new WebGL2VideoRenderer(createRendererConfig())
     await expect(renderer.attach(video)).rejects.toThrow(/CompileFailed/)
+  })
+
+  it('maps shader preset and sharpen strength to shader params', async () => {
+    const gl = {
+      drawingBufferWidth: 1920,
+      drawingBufferHeight: 1080,
+      viewport: vi.fn(),
+      createShader: vi.fn(() => ({})),
+      shaderSource: vi.fn(),
+      compileShader: vi.fn(),
+      getShaderParameter: vi.fn(() => true),
+      getShaderInfoLog: vi.fn(() => ''),
+      createProgram: vi.fn(() => ({})),
+      attachShader: vi.fn(),
+      linkProgram: vi.fn(),
+      getProgramParameter: vi.fn(() => true),
+      getProgramInfoLog: vi.fn(() => ''),
+      useProgram: vi.fn(),
+      createBuffer: vi.fn(() => ({})),
+      bindBuffer: vi.fn(),
+      bufferData: vi.fn(),
+      enableVertexAttribArray: vi.fn(),
+      vertexAttribPointer: vi.fn(),
+      createTexture: vi.fn(() => ({})),
+      bindTexture: vi.fn(),
+      pixelStorei: vi.fn(),
+      texParameteri: vi.fn(),
+      uniform1i: vi.fn(),
+      getUniformLocation: vi.fn(() => ({})),
+      uniform2f: vi.fn(),
+      uniform1f: vi.fn(),
+      texImage2D: vi.fn(),
+      drawArrays: vi.fn(),
+      VERTEX_SHADER: 1,
+      FRAGMENT_SHADER: 2,
+      ARRAY_BUFFER: 3,
+      STATIC_DRAW: 4,
+      FLOAT: 5,
+      TEXTURE_2D: 6,
+      UNPACK_FLIP_Y_WEBGL: 7,
+      TEXTURE_WRAP_S: 8,
+      TEXTURE_WRAP_T: 9,
+      CLAMP_TO_EDGE: 10,
+      TEXTURE_MIN_FILTER: 11,
+      TEXTURE_MAG_FILTER: 12,
+      LINEAR: 13,
+      RGB: 14,
+      UNSIGNED_BYTE: 15,
+      TRIANGLES: 16,
+      COMPILE_STATUS: 17,
+      LINK_STATUS: 18,
+    }
+    const canvasNode = {
+      width: 1920,
+      height: 1080,
+      style: { position: '', inset: '', width: '', height: '', pointerEvents: '' },
+      isConnected: true,
+      remove: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      getContext: vi.fn(() => gl),
+    }
+    globalThis.document = {
+      createElement: (tag: string) => {
+        if (tag === 'canvas') {
+          return canvasNode
+        }
+        return { style: {} }
+      },
+    } as unknown as Document
+
+    class LocalVideoElement {
+      dataset: Record<string, string> = {}
+      videoWidth = 1920
+      videoHeight = 1080
+      insertAdjacentElement = vi.fn()
+      requestVideoFrameCallback(callback: () => void): number {
+        void callback
+        return 1
+      }
+      cancelVideoFrameCallback(_id: number): void {}
+    }
+    globalThis.HTMLVideoElement = LocalVideoElement as unknown as typeof HTMLVideoElement
+    const video = new LocalVideoElement() as unknown as HTMLVideoElement
+
+    const renderer = new WebGL2VideoRenderer(createRendererConfig({
+      shaderPreset: 'clarityL3',
+      sharpenStrength: 80,
+    }))
+    await renderer.attach(video)
+    expect(gl.uniform1f).toHaveBeenCalledWith(expect.anything(), 3.84)
   })
 })

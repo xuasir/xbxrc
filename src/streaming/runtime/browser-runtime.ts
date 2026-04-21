@@ -39,6 +39,8 @@ const QUALITY_LEVEL_MIN_DWELL_MS = 8_000
 const WARMUP_PROFILE_DURATION_MS = 8_000
 const FIRST_FRAME_GUARD_TIMEOUT_MS = 4_000
 const DISPLAY_LEVEL_MIN_DWELL_MS = 6_000
+const DISPLAY_UPSHIFT_MIN_STABLE_MS = 8_000
+const DISPLAY_DOWNSHIFT_FAST_WINDOW_MS = 1_200
 
 type ProtocolChannel = 'media' | 'chat'
 
@@ -105,6 +107,8 @@ type RenderCause = 'decodeBackpressure' | 'renderStarvation' | 'renderStable'
 type DisplayDegradeLevel = 'displayL0' | 'displayL1' | 'displayL2'
 type RenderPolicySource = 'auto' | 'userOverride' | 'capabilityFallback'
 type IcePolicyMode = 'passthrough' | 'policy'
+type ShaderPreset = 'clarityL0' | 'clarityL1' | 'clarityL2' | 'clarityL3'
+type RenderHysteresisState = 'steady' | 'holdDown' | 'holdUp'
 
 function createUnavailableError(): Error {
   return new Error('streamRuntimeNotStarted')
@@ -376,8 +380,13 @@ export function createBrowserRuntime(options: {
   let renderCause: RenderCause | undefined
   let displayDegradeLevel: DisplayDegradeLevel = 'displayL0'
   let displayDegradeLevelChangedAtMs = 0
+  let displayRecoveryStableSinceMs: number | undefined
+  let displayLastDownshiftAtMs = 0
+  let renderHysteresisState: RenderHysteresisState = 'steady'
+  let renderUpshiftBlockedReason: string | undefined
   let displayWarmupUntilMs = 0
   let renderDecisionDigest: string | undefined
+  let renderAdaptiveProfileDigest: string | undefined
   let renderPipelineType: 'video' | 'webgl2' = 'webgl2'
   let renderPolicySource: RenderPolicySource = 'auto'
   let renderProcessing: 'usm' | 'cas' | undefined
@@ -465,6 +474,147 @@ export function createBrowserRuntime(options: {
     ].join('|')
   }
 
+  function resolveAdaptiveRenderProfile(input: {
+    level: DisplayDegradeLevel
+    now: number
+    stats: StreamStats
+  }): {
+      sharpnessScale: number
+      targetFpsBias: number
+      preferredFormat: RendererRuntimeConfig['format']
+      processingMode: 'quality' | 'performance'
+      shaderPreset: ShaderPreset
+      sharpenStrength: number
+      digest: string
+    } {
+    const inboundVideoBitrateKbps = input.stats.inboundVideoBitrateKbps ?? 0
+    const decodeFps = input.stats.decodeFps ?? 0
+    const presentFps = input.stats.presentFps ?? input.stats.fps ?? 0
+    const baseBitrate = Math.max(8_000, baseVideoBitrateKbps)
+    const bitrateRatio = inboundVideoBitrateKbps > 0 ? inboundVideoBitrateKbps / baseBitrate : 1
+    let sharpnessScale = 1
+    let targetFpsBias = 0
+    let processingMode: 'quality' | 'performance' = 'quality'
+    let preferredFormat: RendererRuntimeConfig['format'] = toRendererFormat(currentDisplayState?.render.videoFormat ?? undefined)
+    let shaderPreset: ShaderPreset = 'clarityL2'
+
+    if (input.level === 'displayL2') {
+      sharpnessScale = 0
+      processingMode = 'performance'
+      targetFpsBias = -5
+      preferredFormat = 'Contain'
+      shaderPreset = 'clarityL0'
+    }
+    else if (input.level === 'displayL1') {
+      sharpnessScale = 0.7
+      processingMode = 'performance'
+      targetFpsBias = -3
+      preferredFormat = 'Contain'
+      shaderPreset = 'clarityL1'
+    }
+    else if (renderCause === 'decodeBackpressure' || bandwidthState === 'warning') {
+      sharpnessScale = 0.85
+      processingMode = 'performance'
+      targetFpsBias = -2
+      shaderPreset = 'clarityL1'
+    }
+
+    if (bandwidthState === 'congested' || bitrateRatio < 0.45 || presentFps < 24 || decodeFps < 20) {
+      sharpnessScale = Math.min(sharpnessScale, 0.6)
+      processingMode = 'performance'
+      shaderPreset = input.level === 'displayL2' ? 'clarityL0' : 'clarityL1'
+      targetFpsBias = Math.min(targetFpsBias, -4)
+    }
+    else if (bandwidthState === 'stable' && bitrateRatio > 0.75 && decodeFps >= 30 && presentFps >= 30) {
+      sharpnessScale = Math.max(sharpnessScale, 1)
+      shaderPreset = input.level === 'displayL0' ? 'clarityL3' : shaderPreset
+      targetFpsBias = Math.max(targetFpsBias, 0)
+    }
+
+    const sharpenStrength = Math.round(Math.max(0, Math.min(100, (currentDisplayState?.displayOptions.sharpness ?? 0) * 25 * sharpnessScale)))
+    const digest = [
+      `lv:${input.level}`,
+      `bw:${bandwidthState}`,
+      `rc:${renderCause ?? 'renderStable'}`,
+      `br:${Math.round(bitrateRatio * 100)}`,
+      `df:${Math.round(decodeFps)}`,
+      `pf:${Math.round(presentFps)}`,
+      `ss:${Math.round(sharpnessScale * 100)}`,
+      `sp:${shaderPreset}`,
+    ].join('|')
+
+    return {
+      sharpnessScale,
+      targetFpsBias,
+      preferredFormat,
+      processingMode,
+      shaderPreset,
+      sharpenStrength,
+      digest,
+    }
+  }
+
+  function levelRank(level: DisplayDegradeLevel): number {
+    if (level === 'displayL0')
+      return 0
+    if (level === 'displayL1')
+      return 1
+    return 2
+  }
+
+  function shouldTransitionDisplayLevel(input: {
+    previous: DisplayDegradeLevel
+    next: DisplayDegradeLevel
+    now: number
+    reason: string
+  }): { allowed: boolean, blockedReason?: string } {
+    const prevRank = levelRank(input.previous)
+    const nextRank = levelRank(input.next)
+    if (prevRank === nextRank) {
+      renderHysteresisState = 'steady'
+      renderUpshiftBlockedReason = undefined
+      return { allowed: true }
+    }
+    const elapsed = input.now - displayDegradeLevelChangedAtMs
+    if (nextRank > prevRank) {
+      // 降档快：满足风险直接允许，低于最小 dwell 时允许短窗快速降档。
+      if (elapsed < DISPLAY_DOWNSHIFT_FAST_WINDOW_MS) {
+        renderHysteresisState = 'holdDown'
+      }
+      else {
+        renderHysteresisState = 'steady'
+      }
+      renderUpshiftBlockedReason = undefined
+      return { allowed: true }
+    }
+    // 升档慢：必须稳定窗口达标
+    if (displayRecoveryStableSinceMs === undefined) {
+      displayRecoveryStableSinceMs = input.now
+    }
+    const sinceLastDownshift = displayLastDownshiftAtMs > 0
+      ? input.now - displayLastDownshiftAtMs
+      : Number.POSITIVE_INFINITY
+    if (sinceLastDownshift < DISPLAY_UPSHIFT_MIN_STABLE_MS) {
+      renderHysteresisState = 'holdUp'
+      renderUpshiftBlockedReason = `downshiftCooldown:${sinceLastDownshift}/${DISPLAY_UPSHIFT_MIN_STABLE_MS}`
+      return { allowed: false, blockedReason: renderUpshiftBlockedReason }
+    }
+    const stableElapsed = input.now - displayRecoveryStableSinceMs
+    if (stableElapsed < DISPLAY_UPSHIFT_MIN_STABLE_MS) {
+      renderHysteresisState = 'holdUp'
+      renderUpshiftBlockedReason = `stableWindow:${stableElapsed}/${DISPLAY_UPSHIFT_MIN_STABLE_MS}`
+      return { allowed: false, blockedReason: renderUpshiftBlockedReason }
+    }
+    if (elapsed < DISPLAY_LEVEL_MIN_DWELL_MS) {
+      renderHysteresisState = 'holdUp'
+      renderUpshiftBlockedReason = `minDwell:${elapsed}/${DISPLAY_LEVEL_MIN_DWELL_MS}`
+      return { allowed: false, blockedReason: renderUpshiftBlockedReason }
+    }
+    renderHysteresisState = 'steady'
+    renderUpshiftBlockedReason = undefined
+    return { allowed: true }
+  }
+
   async function applyDisplayDegradeLevel(next: DisplayDegradeLevel, reason: string): Promise<void> {
     if (client === null || currentSpec === null || currentDisplayState === null) {
       return
@@ -473,8 +623,43 @@ export function createBrowserRuntime(options: {
     if (next === displayDegradeLevel && now - displayDegradeLevelChangedAtMs < DISPLAY_LEVEL_MIN_DWELL_MS) {
       return
     }
-    const render = currentDisplayState.render
+    const transitionDecision = shouldTransitionDisplayLevel({
+      previous: displayDegradeLevel,
+      next,
+      now,
+      reason,
+    })
+    recordRuntimeTraceEvent('displayHysteresisEvaluated', {
+      previous: displayDegradeLevel,
+      next,
+      reason,
+      allowed: transitionDecision.allowed,
+      state: renderHysteresisState,
+      blockedReason: transitionDecision.blockedReason ?? null,
+    })
+    if (!transitionDecision.allowed) {
+      recordRuntimeTraceEvent('displayHysteresisTransitionBlocked', {
+        previous: displayDegradeLevel,
+        next,
+        reason,
+        blockedReason: transitionDecision.blockedReason ?? null,
+      })
+      return
+    }
     const displayOptions = currentDisplayState.displayOptions
+    const stats = await assertClient().stats().snapshot()
+    const adaptive = resolveAdaptiveRenderProfile({ level: next, now, stats })
+    renderAdaptiveProfileDigest = adaptive.digest
+    recordRuntimeTraceEvent('renderAdaptiveProfileResolved', {
+      level: next,
+      reason,
+      digest: adaptive.digest,
+      sharpnessScale: adaptive.sharpnessScale,
+      targetFpsBias: adaptive.targetFpsBias,
+      processingMode: adaptive.processingMode,
+      preferredFormat: adaptive.preferredFormat,
+      shaderPreset: adaptive.shaderPreset,
+    })
     const pipelineOverride = resolveRendererPipelineOverride()
     const autoPipeline: 'video' | 'webgl2' = next === 'displayL2' ? 'video' : 'webgl2'
     const autoResolvedPipeline = webgl2Supported ? autoPipeline : 'video'
@@ -489,10 +674,12 @@ export function createBrowserRuntime(options: {
       displayL0: {
         pipelineType,
         processing: 'cas',
-        processingMode: 'quality',
-        targetFps: 60,
-        format: toRendererFormat(render.videoFormat ?? undefined),
-        sharpness: displayOptions.sharpness,
+        processingMode: adaptive.processingMode,
+        targetFps: Math.max(0, 60 + adaptive.targetFpsBias),
+        format: adaptive.preferredFormat,
+        sharpness: Math.max(0, Math.round(displayOptions.sharpness * adaptive.sharpnessScale)),
+        shaderPreset: adaptive.shaderPreset,
+        sharpenStrength: adaptive.sharpenStrength,
         brightness: displayOptions.brightness,
         contrast: displayOptions.contrast,
         saturation: displayOptions.saturation,
@@ -500,10 +687,12 @@ export function createBrowserRuntime(options: {
       displayL1: {
         pipelineType,
         processing: 'usm',
-        processingMode: 'performance',
-        targetFps: 45,
-        format: 'Contain',
-        sharpness: Math.max(0, Math.round(displayOptions.sharpness * 0.7)),
+        processingMode: adaptive.processingMode,
+        targetFps: Math.max(0, 45 + adaptive.targetFpsBias),
+        format: adaptive.preferredFormat,
+        sharpness: Math.max(0, Math.round(displayOptions.sharpness * adaptive.sharpnessScale)),
+        shaderPreset: adaptive.shaderPreset,
+        sharpenStrength: adaptive.sharpenStrength,
         brightness: displayOptions.brightness,
         contrast: displayOptions.contrast,
         saturation: displayOptions.saturation,
@@ -511,10 +700,12 @@ export function createBrowserRuntime(options: {
       displayL2: {
         pipelineType,
         processing: 'usm',
-        processingMode: 'performance',
-        targetFps: 30,
-        format: 'Contain',
-        sharpness: 0,
+        processingMode: adaptive.processingMode,
+        targetFps: Math.max(0, 30 + adaptive.targetFpsBias),
+        format: adaptive.preferredFormat,
+        sharpness: Math.max(0, Math.round(displayOptions.sharpness * adaptive.sharpnessScale)),
+        shaderPreset: adaptive.shaderPreset,
+        sharpenStrength: adaptive.sharpenStrength,
         brightness: displayOptions.brightness,
         contrast: displayOptions.contrast,
         saturation: displayOptions.saturation,
@@ -540,6 +731,13 @@ export function createBrowserRuntime(options: {
     const previous = displayDegradeLevel
     displayDegradeLevel = next
     displayDegradeLevelChangedAtMs = now
+    if (levelRank(next) > levelRank(previous)) {
+      displayLastDownshiftAtMs = now
+      displayRecoveryStableSinceMs = undefined
+    }
+    else if (levelRank(next) < levelRank(previous)) {
+      displayRecoveryStableSinceMs = now
+    }
     recordRuntimeTraceEvent('displayDegradeLevelChanged', {
       previous,
       next,
@@ -577,6 +775,7 @@ export function createBrowserRuntime(options: {
       processing: nextConfig[next].processing ?? null,
       processingMode: nextConfig[next].processingMode ?? null,
       shaderPath: renderShaderPath ?? null,
+      adaptiveProfileDigest: renderAdaptiveProfileDigest ?? null,
     })
   }
 
@@ -812,8 +1011,13 @@ export function createBrowserRuntime(options: {
       renderFrameCallbackIntervalMs = undefined
       renderCause = undefined
       renderDecisionDigest = undefined
+      renderAdaptiveProfileDigest = undefined
       displayDegradeLevel = 'displayL1'
       displayDegradeLevelChangedAtMs = now
+      displayRecoveryStableSinceMs = undefined
+      displayLastDownshiftAtMs = 0
+      renderHysteresisState = 'steady'
+      renderUpshiftBlockedReason = undefined
       displayWarmupUntilMs = now + WARMUP_PROFILE_DURATION_MS
       renderPipelineType = resolveRendererPipelineOverride() === 'video' ? 'video' : 'webgl2'
       renderPolicySource = resolveRendererPipelineOverride() === 'auto' ? 'auto' : 'userOverride'
@@ -2132,8 +2336,13 @@ export function createBrowserRuntime(options: {
       renderCause = undefined
       displayDegradeLevel = 'displayL0'
       displayDegradeLevelChangedAtMs = 0
+      displayRecoveryStableSinceMs = undefined
+      displayLastDownshiftAtMs = 0
+      renderHysteresisState = 'steady'
+      renderUpshiftBlockedReason = undefined
       displayWarmupUntilMs = 0
       renderDecisionDigest = undefined
+      renderAdaptiveProfileDigest = undefined
       renderPipelineType = 'webgl2'
       renderPolicySource = 'auto'
       renderProcessing = undefined
@@ -2218,8 +2427,13 @@ export function createBrowserRuntime(options: {
       renderCause = undefined
       displayDegradeLevel = 'displayL0'
       displayDegradeLevelChangedAtMs = 0
+      displayRecoveryStableSinceMs = undefined
+      displayLastDownshiftAtMs = 0
+      renderHysteresisState = 'steady'
+      renderUpshiftBlockedReason = undefined
       displayWarmupUntilMs = 0
       renderDecisionDigest = undefined
+      renderAdaptiveProfileDigest = undefined
       renderPipelineType = 'webgl2'
       renderPolicySource = 'auto'
       renderProcessing = undefined
@@ -2365,6 +2579,9 @@ export function createBrowserRuntime(options: {
         renderCause,
         displayDegradeLevel,
         renderDecisionDigest,
+        renderAdaptiveProfileDigest,
+        renderHysteresisState,
+        renderUpshiftBlockedReason,
         renderPipelineType,
         renderPolicySource,
         renderProcessing,

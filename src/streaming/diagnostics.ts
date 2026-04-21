@@ -79,6 +79,9 @@ export function buildStreamDiagnosticsSnapshot(input: {
   const renderCause = input.runtimeSnapshot?.renderCause
   const displayDegradeLevel = input.runtimeSnapshot?.displayDegradeLevel
   const renderDecisionDigest = input.runtimeSnapshot?.renderDecisionDigest?.trim() || undefined
+  const renderAdaptiveProfileDigest = input.runtimeSnapshot?.renderAdaptiveProfileDigest?.trim() || undefined
+  const renderHysteresisState = input.runtimeSnapshot?.renderHysteresisState
+  const renderUpshiftBlockedReason = input.runtimeSnapshot?.renderUpshiftBlockedReason?.trim() || undefined
   const renderPipelineType = input.runtimeSnapshot?.renderPipelineType
   const renderPolicySource = input.runtimeSnapshot?.renderPolicySource
   const renderProcessing = input.runtimeSnapshot?.renderProcessing
@@ -201,6 +204,9 @@ export function buildStreamDiagnosticsSnapshot(input: {
     renderCause,
     displayDegradeLevel,
     renderDecisionDigest,
+    renderAdaptiveProfileDigest,
+    renderHysteresisState,
+    renderUpshiftBlockedReason,
     renderPipelineType,
     renderPolicySource,
     renderProcessing,

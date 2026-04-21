@@ -8,6 +8,8 @@ export interface AudioRuntimeConfig {
 export interface RendererRuntimeConfig {
   enabled: boolean
   sharpness: number
+  sharpenStrength?: number
+  shaderPreset?: 'clarityL0' | 'clarityL1' | 'clarityL2' | 'clarityL3'
   pipelineType: 'video' | 'webgl2' | 'auto'
   processing: 'usm' | 'cas'
   processingMode: 'quality' | 'performance'
@@ -139,4 +141,7 @@ export interface StreamStats {
   lastRecoveryAction?: string
   lastRecoveryActionAtMs?: number
   lastRecoveryReason?: string
+  renderAdaptiveProfileDigest?: string
+  renderHysteresisState?: 'steady' | 'holdDown' | 'holdUp'
+  renderUpshiftBlockedReason?: string
 }

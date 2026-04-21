@@ -197,6 +197,9 @@ export interface StreamPerformanceSnapshot {
   renderCause?: 'decodeBackpressure' | 'renderStarvation' | 'renderStable'
   displayDegradeLevel?: 'displayL0' | 'displayL1' | 'displayL2'
   renderDecisionDigest?: string
+  renderAdaptiveProfileDigest?: string
+  renderHysteresisState?: 'steady' | 'holdDown' | 'holdUp'
+  renderUpshiftBlockedReason?: string
   renderPipelineType?: 'video' | 'webgl2'
   renderPolicySource?: 'auto' | 'userOverride' | 'capabilityFallback'
   renderProcessing?: 'usm' | 'cas'
@@ -286,6 +289,9 @@ export interface StreamSessionDiagnosticsSnapshot {
   renderCause?: 'decodeBackpressure' | 'renderStarvation' | 'renderStable'
   displayDegradeLevel?: 'displayL0' | 'displayL1' | 'displayL2'
   renderDecisionDigest?: string
+  renderAdaptiveProfileDigest?: string
+  renderHysteresisState?: 'steady' | 'holdDown' | 'holdUp'
+  renderUpshiftBlockedReason?: string
   renderPipelineType?: 'video' | 'webgl2'
   renderPolicySource?: 'auto' | 'userOverride' | 'capabilityFallback'
   renderProcessing?: 'usm' | 'cas'

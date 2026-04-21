@@ -10,6 +10,12 @@ interface StreamPlayerOptions {
   brightness: number
 }
 
+interface ShaderPresetResolved {
+  processing: 'usm' | 'cas'
+  processingMode: 'quality' | 'performance'
+  sharpenFactor: number
+}
+
 type FrameCallbackScheduler = (callback: () => void) => number
 
 abstract class BaseCanvasVideoProcessor {
@@ -134,6 +140,48 @@ function resolveCanvasObjectFit(format: RendererRuntimeConfig['format']): 'conta
     return 'cover'
   }
   return 'contain'
+}
+
+function resolveShaderPreset(
+  config: RendererRuntimeConfig,
+): ShaderPresetResolved {
+  const strength = config.sharpenStrength === undefined
+    ? config.sharpness
+    : Math.max(0, Math.min(100, config.sharpenStrength)) / 25
+
+  if (config.shaderPreset === 'clarityL0') {
+    return {
+      processing: 'usm',
+      processingMode: 'performance',
+      sharpenFactor: 0,
+    }
+  }
+  if (config.shaderPreset === 'clarityL1') {
+    return {
+      processing: 'usm',
+      processingMode: 'performance',
+      sharpenFactor: Math.max(0.5, strength * 0.8),
+    }
+  }
+  if (config.shaderPreset === 'clarityL2') {
+    return {
+      processing: 'usm',
+      processingMode: 'quality',
+      sharpenFactor: Math.max(1, strength),
+    }
+  }
+  if (config.shaderPreset === 'clarityL3') {
+    return {
+      processing: 'cas',
+      processingMode: 'quality',
+      sharpenFactor: Math.max(1.5, strength * 1.2),
+    }
+  }
+  return {
+    processing: config.processing,
+    processingMode: config.processingMode,
+    sharpenFactor: config.sharpness,
+  }
 }
 
 class WebGL2Processor extends BaseCanvasVideoProcessor {
@@ -408,14 +456,15 @@ export class WebGL2VideoRenderer implements VideoRenderer {
     this.destroy()
     this.player = new WebGL2Processor(video)
     this.player.setDisplayFormat(this.config.format)
+    const preset = resolveShaderPreset(this.config)
     this.player.updateOptions({
       targetFps: this.config.targetFps,
-      sharpness: this.config.sharpness,
+      sharpness: preset.sharpenFactor,
       brightness: this.config.brightness,
       contrast: this.config.contrast,
       saturation: this.config.saturation,
-      processingMode: this.config.processingMode,
-      processing: this.config.processing,
+      processingMode: preset.processingMode,
+      processing: preset.processing,
     })
     await this.player.init()
     video.dataset.renderPipeline = 'webgl2'
@@ -424,14 +473,15 @@ export class WebGL2VideoRenderer implements VideoRenderer {
   update(config: Partial<RendererRuntimeConfig>): void {
     this.config = { ...this.config, ...config }
     this.player?.setDisplayFormat(this.config.format)
+    const preset = resolveShaderPreset(this.config)
     this.player?.updateOptions({
       targetFps: this.config.targetFps,
-      sharpness: this.config.sharpness,
+      sharpness: preset.sharpenFactor,
       brightness: this.config.brightness,
       contrast: this.config.contrast,
       saturation: this.config.saturation,
-      processing: this.config.processing,
-      processingMode: this.config.processingMode,
+      processing: preset.processing,
+      processingMode: preset.processingMode,
     }, true)
   }
 
