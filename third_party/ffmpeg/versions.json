@@ -1,0 +1,20 @@
+{
+  "windows-x64": {
+    "version": "8.1.x",
+    "source": "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-n8.1-latest-win64-lgpl-shared-8.1.zip",
+    "sha256": "4dedbed98483d1fc322715cd0fd135a2d21459e1e4960c2c479985bc04e690e7",
+    "license": "LGPL-2.1-or-later"
+  },
+  "macos-arm64": {
+    "version": "8.1.x",
+    "source": "https://ffmpeg.org/releases/ffmpeg-8.1.tar.xz (locally built with --disable-gpl --disable-nonfree --enable-shared)",
+    "sha256": "b072aed6871998cce9b36e7774033105ca29e33632be5b6347f3206898e0756a",
+    "license": "LGPL-2.1-or-later"
+  },
+  "macos-x64": {
+    "version": "8.1.x",
+    "source": "https://ffmpeg.org/releases/ffmpeg-8.1.tar.xz (locally built with --disable-gpl --disable-nonfree --enable-shared --disable-x86asm)",
+    "sha256": "b072aed6871998cce9b36e7774033105ca29e33632be5b6347f3206898e0756a",
+    "license": "LGPL-2.1-or-later"
+  }
+}
