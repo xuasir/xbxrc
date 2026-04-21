@@ -561,6 +561,7 @@ def analyze_recovery_audit(rows: list[dict[str, Any]], silence_threshold_ms: int
                 "rowTsMs": row_ts(row),
                 "requestReason": get_text(payload, "requestReason", "request_reason"),
                 "requestKind": get_text(payload, "requestKind", "request_kind"),
+                "lifecyclePhase": None,
                 "statuses": [],
                 "finalStatus": None,
                 "statusDetail": None,
@@ -577,6 +578,8 @@ def analyze_recovery_audit(rows: list[dict[str, Any]], silence_threshold_ms: int
                 "requestToFirstDecodeMs": None,
                 "linkedH264AdmissionAccepted": None,
                 "linkedH264BootstrapRejectReason": None,
+                "diagnosticTimelineChainState": None,
+                "diagnosticTimelineChainReason": None,
                 "chainRecovered": False,
                 "chainRecoveredAtMs": None,
                 "chainRecoveryReason": None,
@@ -590,6 +593,9 @@ def analyze_recovery_audit(rows: list[dict[str, Any]], silence_threshold_ms: int
         if status:
             episode["statuses"].append(status)
             episode["finalStatus"] = status
+        lifecycle_phase = get_text(payload, "lifecyclePhase", "lifecycle_phase")
+        if lifecycle_phase:
+            episode["lifecyclePhase"] = lifecycle_phase
         episode["statusDetail"] = get_text(payload, "statusDetail", "status_detail")
         episode["responseVerdict"] = get_text(payload, "responseVerdict", "response_verdict")
         episode["timedOut"] = bool(payload_get(payload, "timedOut", "timed_out")) or episode["timedOut"]
@@ -612,6 +618,24 @@ def analyze_recovery_audit(rows: list[dict[str, Any]], silence_threshold_ms: int
         reject_reason = get_text(payload, "linkedH264BootstrapRejectReason")
         if reject_reason:
             episode["linkedH264BootstrapRejectReason"] = reject_reason
+        timeline_chain_state = get_text(payload, "diagnosticTimelineChainState", "diagnostic_timeline_chain_state")
+        if timeline_chain_state:
+            episode["diagnosticTimelineChainState"] = timeline_chain_state
+        timeline_chain_reason = get_text(payload, "diagnosticTimelineChainReason", "diagnostic_timeline_chain_reason")
+        if timeline_chain_reason:
+            episode["diagnosticTimelineChainReason"] = timeline_chain_reason
+
+    def keyframe_episode_has_success_signal(episode: dict[str, Any]) -> bool:
+        final_status = normalize_state(episode.get("finalStatus"))
+        lifecycle_phase = normalize_state(episode.get("lifecyclePhase"))
+        response_verdict = normalize_state(episode.get("responseVerdict"))
+        timeline_chain_state = normalize_state(episode.get("diagnosticTimelineChainState"))
+        return (
+            final_status == "succeeded"
+            or lifecycle_phase == "success"
+            or response_verdict == "cleananchorcommitted"
+            or timeline_chain_state in HEALTHY_CHAIN_STATES
+        )
 
     # 修复建链成功率计算：按episode计数，避免重复计数同一链恢复事件
     chain_rows = chain_transition_rows(sorted_rows)
@@ -619,17 +643,23 @@ def analyze_recovery_audit(rows: list[dict[str, Any]], silence_threshold_ms: int
 
     for episode in keyframe_episodes.values():
         success_ts = episode["firstKeyframeDecodedAtMs"] or episode["firstKeyframePacketAtMs"] or episode["firstVideoPacketAtMs"]
-        if success_ts is None:
+        success_signal = keyframe_episode_has_success_signal(episode)
+        if success_ts is None and not success_signal:
             continue
         window_end = episode["retiredAtMs"] or episode["deadlineAtMs"]
         if window_end is None:
-            window_end = success_ts + 5000
+            base_ts = success_ts or episode["rowTsMs"] or 0
+            window_end = base_ts + 5000
 
         # 在窗口内搜索链恢复事件，找到第一个就停止
         for row in chain_rows:
             payload = event_payload(row, "videoChainTransition")
             ts = row_ts(row)
-            if payload is None or ts is None or ts < success_ts or ts > window_end:
+            if payload is None or ts is None:
+                continue
+            if success_ts is not None and ts < success_ts:
+                continue
+            if ts > window_end:
                 continue
             chain = payload.get("chain")
             chain_state = None
@@ -649,6 +679,19 @@ def analyze_recovery_audit(rows: list[dict[str, Any]], silence_threshold_ms: int
                 episode["chainFailureAtMs"] = ts
                 episode["chainFailureReason"] = chain_reason or chain_state
 
+        if not episode["chainRecovered"] and success_signal:
+            episode["chainRecovered"] = True
+            episode["chainRecoveredAtMs"] = episode["retiredAtMs"] or success_ts or episode["rowTsMs"]
+            episode["chainRecoveryReason"] = (
+                episode["responseVerdict"]
+                or episode["diagnosticTimelineChainReason"]
+                or episode["diagnosticTimelineChainState"]
+            )
+            chain_recovered_episodes.add(episode["episodeId"])
+
+        if success_signal:
+            episode["effective"] = True
+
     keyframe_status_counts = Counter()
     keyframe_reason_counts = Counter()
     keyframe_request_kind_counts = Counter()
@@ -667,6 +710,7 @@ def analyze_recovery_audit(rows: list[dict[str, Any]], silence_threshold_ms: int
     keyframe_chain_failed_after_success_count = 0
     for episode in sorted(keyframe_episodes.values(), key=lambda item: (item["requestedAtMs"] or 0, item["episodeId"])):
         final_status = episode["finalStatus"] or "unknown"
+        success_signal = keyframe_episode_has_success_signal(episode)
         keyframe_status_counts[final_status] += 1
         keyframe_reason_counts[episode["requestReason"] or "unknown"] += 1
         keyframe_request_kind_counts[episode["requestKind"] or "unknown"] += 1
@@ -682,12 +726,14 @@ def analyze_recovery_audit(rows: list[dict[str, Any]], silence_threshold_ms: int
             keyframe_response_observed_count += 1
         if episode["firstKeyframePacketAtMs"] is not None or final_status in {"packet-seen", "decoded"}:
             keyframe_packet_seen_count += 1
-        if episode["firstKeyframeDecodedAtMs"] is not None or final_status == "decoded":
+        if episode["firstKeyframeDecodedAtMs"] is not None or final_status in {"decoded", "succeeded"} or success_signal:
             keyframe_decoded_count += 1
         if final_status == "missed" or episode["timedOut"]:
             keyframe_missed_count += 1
         invalid_reason = episode["linkedH264BootstrapRejectReason"]
-        if invalid_reason:
+        if success_signal:
+            pass
+        elif invalid_reason:
             keyframe_invalid_response_count += 1
             keyframe_failure_reasons[invalid_reason] += 1
         elif episode["linkedH264AdmissionAccepted"] is False:
@@ -709,6 +755,7 @@ def analyze_recovery_audit(rows: list[dict[str, Any]], silence_threshold_ms: int
                 "requestReason": episode["requestReason"],
                 "requestKind": episode["requestKind"],
                 "finalStatus": final_status,
+                "lifecyclePhase": episode["lifecyclePhase"],
                 "responseVerdict": episode["responseVerdict"],
                 "timedOut": episode["timedOut"],
                 "firstKeyframeDecodedAtMs": episode["firstKeyframeDecodedAtMs"],
@@ -716,6 +763,7 @@ def analyze_recovery_audit(rows: list[dict[str, Any]], silence_threshold_ms: int
                 "chainRecoveredAtMs": episode["chainRecoveredAtMs"],
                 "linkedH264AdmissionAccepted": episode["linkedH264AdmissionAccepted"],
                 "linkedH264BootstrapRejectReason": episode["linkedH264BootstrapRejectReason"],
+                "diagnosticTimelineChainState": episode["diagnosticTimelineChainState"],
                 "effective": episode["effective"],
             }
         )
