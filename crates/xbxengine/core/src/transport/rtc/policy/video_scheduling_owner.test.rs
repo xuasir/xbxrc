@@ -78,10 +78,6 @@ fn input(
         display_supply_thresholds: thresholds(),
         observed_at_ms,
         latest_anchor_candidate_ledger: None,
-        latest_decode_candidate_detail: None,
-        latest_decode_candidate_observed_at_ms: None,
-        latest_renderer_candidate_detail: None,
-        latest_renderer_candidate_observed_at_ms: None,
     }
 }
 

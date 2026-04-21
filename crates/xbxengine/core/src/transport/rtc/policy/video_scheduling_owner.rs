@@ -103,12 +103,6 @@ pub(crate) struct VideoSchedulingOwnerInput {
     pub(crate) latest_h264_observed_at_ms: Option<f64>,
     pub(crate) display_supply_thresholds: DisplaySupplyThresholds,
     pub(crate) observed_at_ms: f64,
-    /// 解码输出候选最近一次 detail（如 `outputQueueOverflow`），用于恢复完成门控。
-    pub(crate) latest_decode_candidate_detail: Option<String>,
-    pub(crate) latest_decode_candidate_observed_at_ms: Option<f64>,
-    /// 渲染输出候选最近一次 detail（如 `rendererQueueOverflow`），用于恢复完成门控。
-    pub(crate) latest_renderer_candidate_detail: Option<String>,
-    pub(crate) latest_renderer_candidate_observed_at_ms: Option<f64>,
 }
 
 impl VideoSchedulingOwnerInput {
@@ -1151,7 +1145,9 @@ impl VideoSchedulingOwner {
         if !has_clean_anchor_evidence || !chain_healthy {
             return false;
         }
-        if Self::renderer_shadow_blocks_recovery_release(input) || input.demand.present_age_ms.is_some() {
+        if Self::renderer_shadow_blocks_recovery_release(input)
+            || input.demand.present_age_ms.is_some()
+        {
             return false;
         }
         let first_present_feedback_gap_active = Self::first_present_feedback_gap_active(input);
@@ -1182,22 +1178,6 @@ impl VideoSchedulingOwner {
             .latest_track_video_bytes_total
             .is_some_and(|bytes| bytes > 0);
         stable_timeline_source && decode_fresh && track_attached && track_has_video_bytes
-    }
-
-    fn decode_output_queue_overflow_recent(input: &VideoSchedulingOwnerInput) -> bool {
-        input.latest_decode_candidate_detail.as_deref() == Some("outputQueueOverflow")
-            && input
-                .latest_decode_candidate_observed_at_ms
-                .is_some_and(|t| (input.observed_at_ms - t).max(0.0) <= 800.0)
-    }
-
-    fn renderer_queue_overflow_recent(input: &VideoSchedulingOwnerInput) -> bool {
-        matches!(
-            input.latest_renderer_candidate_detail.as_deref(),
-            Some("rendererQueueOverflow" | "rendererQueueRejectLowerValue")
-        ) && input
-            .latest_renderer_candidate_observed_at_ms
-            .is_some_and(|t| (input.observed_at_ms - t).max(0.0) <= 800.0)
     }
 
     fn can_restore_serving_after_clean_anchor(

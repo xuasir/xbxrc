@@ -88,10 +88,11 @@ where
         self.snapshot.host_present_latest_render_slot_at_ms = Some(now_ms_f64());
         let mut latest_presented_frame = None;
         for frame in frames {
-            if let Err(error) =
-                self.host_bridge
-                    .present_frame(&viewport, self.snapshot.surface_id.as_deref(), &frame)
-            {
+            if let Err(error) = self.host_bridge.present_frame(
+                &viewport,
+                self.snapshot.surface_id.as_deref(),
+                &frame,
+            ) {
                 self.emit_error("presentFrameFailed", error.to_string());
                 return;
             }

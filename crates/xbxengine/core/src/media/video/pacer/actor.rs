@@ -25,7 +25,7 @@ pub struct PacerActorHandle {
 }
 
 const PACING_QUEUE_MAX_FRAMES: usize = 3;
-const RECOVERY_PACING_QUEUE_MAX_FRAMES: usize = 5;
+const PACING_QUEUE_HARD_CAP_FRAMES: usize = 6;
 const RENDER_QUEUE_MAX_FRAMES: usize = 1;
 const RENDER_QUEUE_RETRY_TIMEOUT_MS: u64 = 4;
 const HOST_PRIMING_REUSE_WAIT_RATIO: u64 = 2;
@@ -203,34 +203,44 @@ fn enforce_queue_budget(
     frame_drop_observation_id: &mut u64,
     host_context: &HostPacingContext,
 ) {
-    let recovery_window_active = pacing_queue.iter().any(decoded_frame_uses_recovery_window);
-    // 动态调整队列容量：根据 cadence phase 决定上限
+    let recovery_window_active = recovery_budget_active(pacing_queue, Instant::now());
+    // queue depth 只保留极端保护：常态浅队列 + 硬上限兜底。
     let dynamic_queue_cap = if recovery_window_active {
-        RECOVERY_PACING_QUEUE_MAX_FRAMES
+        PACING_QUEUE_MAX_FRAMES
     } else {
         match host_context.cadence_phase {
-            HostCadencePhaseHint::Starved => 1, // host 饥饿时激进收紧
-            HostCadencePhaseHint::Priming => 2, // priming 阶段适度收紧
-            _ => PACING_QUEUE_MAX_FRAMES,       // 其他阶段使用默认值 3
+            HostCadencePhaseHint::Starved => 1,
+            HostCadencePhaseHint::Priming => 2,
+            _ => PACING_QUEUE_MAX_FRAMES,
         }
     };
 
-    while pacing_queue.len() > dynamic_queue_cap {
+    while pacing_queue.len() > PACING_QUEUE_HARD_CAP_FRAMES {
         if let Some(dropped_frame) = pacing_queue.pop_front() {
-            let detail = if dynamic_queue_cap < PACING_QUEUE_MAX_FRAMES {
-                "queueCapDynamic" // 动态容量触发的丢帧
-            } else {
-                "queueCap"
-            };
             record_pacer_frame_drop(
                 runtime_stats,
                 frame_drop_observation_id,
-                detail,
+                "queueCapHard",
                 dropped_frame,
                 pacing_queue.len(),
                 render_queue_depth,
                 Some(host_context),
             );
+        }
+    }
+    if !recovery_window_active {
+        while pacing_queue.len() > dynamic_queue_cap {
+            if let Some(dropped_frame) = pacing_queue.pop_front() {
+                record_pacer_frame_drop(
+                    runtime_stats,
+                    frame_drop_observation_id,
+                    "queueCapDynamic",
+                    dropped_frame,
+                    pacing_queue.len(),
+                    render_queue_depth,
+                    Some(host_context),
+                );
+            }
         }
     }
     let pressure_decision = queue_history.decide_drop_target(&host_context.pressure);
@@ -929,7 +939,21 @@ fn record_pacer_frame_drop(
 }
 
 fn decoded_frame_uses_recovery_window(frame: &DecodedFrame) -> bool {
-    matches!(frame.budget.window_source, FrameBudgetWindowSource::Recovery)
+    matches!(
+        frame.budget.window_source,
+        FrameBudgetWindowSource::Recovery
+    )
+}
+
+fn recovery_budget_active(pacing_queue: &VecDeque<DecodedFrame>, now: Instant) -> bool {
+    pacing_queue
+        .iter()
+        .rev()
+        .find(|frame| decoded_frame_uses_recovery_window(frame))
+        .is_some_and(|frame| {
+            now.saturating_duration_since(frame.pts)
+                <= Duration::from_millis(frame.budget.decode_local_budget_ms())
+        })
 }
 
 #[cfg(test)]

@@ -59,6 +59,12 @@ fn make_recovery_window_decoded_frame(frame_seq: u64) -> DecodedFrame {
     frame
 }
 
+fn make_expired_recovery_window_decoded_frame(frame_seq: u64) -> DecodedFrame {
+    let mut frame = make_recovery_window_decoded_frame(frame_seq);
+    frame.pts = Instant::now() - Duration::from_millis(140);
+    frame
+}
+
 fn make_keyframe_decoded_frame(frame_seq: u64) -> DecodedFrame {
     let mut frame = make_decoded_frame(frame_seq);
     frame.budget = crate::media::video::ingress::budget::FrameBudgetContext::for_transport(
@@ -196,13 +202,13 @@ fn recovery_window_frames_allow_deeper_local_buffer_before_release() {
         &host_context,
     );
 
-    assert_eq!(pacing_queue.len(), 5);
+    assert_eq!(pacing_queue.len(), 3);
     assert_eq!(
         pacing_queue
             .iter()
             .map(|frame| frame.surface.frame_seq)
             .collect::<Vec<_>>(),
-        vec![1, 2, 3, 4, 5]
+        vec![3, 4, 5]
     );
 }
 
@@ -245,13 +251,54 @@ fn recovery_window_frames_bypass_non_aggressive_queue_pressure_tightening() {
         &host_context,
     );
 
-    assert_eq!(pacing_queue.len(), 5);
+    assert_eq!(pacing_queue.len(), 3);
     assert_eq!(
         pacing_queue
             .iter()
             .map(|frame| frame.surface.frame_seq)
             .collect::<Vec<_>>(),
-        vec![1, 2, 3, 4, 5]
+        vec![3, 4, 5]
+    );
+}
+
+#[test]
+fn expired_recovery_window_frame_does_not_hold_starved_mode_open() {
+    let runtime_stats = RuntimeStatsSink::new(Arc::new(std::sync::Mutex::new(
+        XbxEngineMediaRuntimeStats::default(),
+    )));
+    let mut pacing_queue = VecDeque::from([
+        make_expired_recovery_window_decoded_frame(1),
+        make_decoded_frame(2),
+        make_decoded_frame(3),
+    ]);
+    let mut queue_history = QueueHistoryController::new(QueueHistoryConfig::default());
+    let mut frame_drop_observation_id = 0;
+    let host_context = HostPacingContext {
+        host_refresh_interval_ms: 16,
+        release_interval_ms: 16,
+        host_frame_age_budget_ms: Some(36.0),
+        latest_host_present_time_ms: Some(1_000.0),
+        display_tick_epoch: 0,
+        present_epoch: 0,
+        cadence_phase: HostCadencePhaseHint::Starved,
+        pressure: HostPacingPressure::default(),
+        video_rtt_ms: None,
+        video_nack_recovery_rtt_ms: None,
+    };
+
+    super::enforce_queue_budget(
+        &mut pacing_queue,
+        0,
+        &mut queue_history,
+        &runtime_stats,
+        &mut frame_drop_observation_id,
+        &host_context,
+    );
+
+    assert_eq!(pacing_queue.len(), 1);
+    assert_eq!(
+        pacing_queue.front().map(|frame| frame.surface.frame_seq),
+        Some(3)
     );
 }
 

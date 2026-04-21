@@ -992,10 +992,7 @@ impl RtcSessionPolicy {
                             (observed_at_ms - present_at_ms).max(0.0)
                                 <= display_thresholds.degraded_present_age_ms
                         });
-                    (
-                        has_fresh_output,
-                        has_fresh_present_output,
-                    )
+                    (has_fresh_output, has_fresh_present_output)
                 })
                 .unwrap_or((false, false));
 

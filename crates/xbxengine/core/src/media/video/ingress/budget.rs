@@ -79,6 +79,15 @@ pub(crate) struct FrameBudgetContext {
 }
 
 impl FrameBudgetContext {
+    pub(crate) fn decode_local_budget_ms(&self) -> u64 {
+        match self.window_source {
+            // recovery burst 只放宽时间预算，不授予长期队列特权。
+            FrameBudgetWindowSource::Recovery => 96,
+            FrameBudgetWindowSource::Reconfigure => 120,
+            FrameBudgetWindowSource::Transport | FrameBudgetWindowSource::Playout => 48,
+        }
+    }
+
     pub(crate) fn steady_for_value(value: FrameValue) -> Self {
         Self {
             link_value: resolve_link_value(

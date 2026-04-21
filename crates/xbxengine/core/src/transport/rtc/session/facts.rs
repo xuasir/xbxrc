@@ -96,10 +96,6 @@ pub(crate) struct OwnerRuntimeFacts {
     pub(crate) latest_anchor_candidate_ledger: Option<XbxEngineAnchorCandidateLedger>,
     pub(crate) latest_video_track_status: Option<XbxEngineVideoTrackStatus>,
     pub(crate) latest_h264_inspection_observation: Option<XbxEngineH264InspectionObservation>,
-    pub(crate) latest_decode_candidate_detail: Option<String>,
-    pub(crate) latest_decode_candidate_observed_at_ms: Option<f64>,
-    pub(crate) latest_renderer_candidate_detail: Option<String>,
-    pub(crate) latest_renderer_candidate_observed_at_ms: Option<f64>,
 }
 
 pub(crate) fn build_scheduling_demand_signal(
@@ -170,53 +166,17 @@ pub(crate) fn build_scheduling_demand_signal(
 pub(crate) fn read_owner_runtime_facts(
     runtime_stats: &Mutex<XbxEngineMediaRuntimeStats>,
 ) -> OwnerRuntimeFacts {
-    RuntimeStatsSink::read_shared(runtime_stats, |stats| {
-        let latest_renderer_queue_pressure = latest_renderer_queue_pressure_from_stats(stats);
-        OwnerRuntimeFacts {
-            recovery_epoch: stats.transport_recovery_epoch,
-            latest_video_timeline_observation: stats.latest_video_timeline_observation.clone(),
-            clean_anchor_epoch: stats.video_anchor_clean_epoch,
-            clean_anchor_observed_at_ms: stats.video_anchor_clean_observed_at_ms,
-            clean_anchor_source_event: stats.video_anchor_clean_source_event.clone(),
-            latest_anchor_candidate_ledger: stats.latest_anchor_candidate_ledger.clone(),
-            latest_video_track_status: stats.latest_video_track_status.clone(),
-            latest_h264_inspection_observation: stats.latest_h264_inspection_observation.clone(),
-            latest_decode_candidate_detail: stats
-                .latest_decode_candidate_decision
-                .as_ref()
-                .map(|d| d.detail.clone()),
-            latest_decode_candidate_observed_at_ms: stats
-                .latest_decode_candidate_decision
-                .as_ref()
-                .map(|d| d.observed_at_ms),
-            latest_renderer_candidate_detail: latest_renderer_queue_pressure
-                .as_ref()
-                .map(|(detail, _)| detail.clone()),
-            latest_renderer_candidate_observed_at_ms: latest_renderer_queue_pressure
-                .as_ref()
-                .map(|(_, observed_at_ms)| *observed_at_ms),
-        }
+    RuntimeStatsSink::read_shared(runtime_stats, |stats| OwnerRuntimeFacts {
+        recovery_epoch: stats.transport_recovery_epoch,
+        latest_video_timeline_observation: stats.latest_video_timeline_observation.clone(),
+        clean_anchor_epoch: stats.video_anchor_clean_epoch,
+        clean_anchor_observed_at_ms: stats.video_anchor_clean_observed_at_ms,
+        clean_anchor_source_event: stats.video_anchor_clean_source_event.clone(),
+        latest_anchor_candidate_ledger: stats.latest_anchor_candidate_ledger.clone(),
+        latest_video_track_status: stats.latest_video_track_status.clone(),
+        latest_h264_inspection_observation: stats.latest_h264_inspection_observation.clone(),
     })
     .unwrap_or_default()
-}
-
-fn latest_renderer_queue_pressure_from_stats(
-    stats: &XbxEngineMediaRuntimeStats,
-) -> Option<(String, f64)> {
-    const RENDERER_QUEUE_PRESSURE_DETAILS: &[&str] =
-        &["rendererQueueOverflow", "rendererQueueRejectLowerValue"];
-    stats
-        .latest_video_frame_drop
-        .as_ref()
-        .and_then(|observation| {
-            let detail = observation.detail.as_deref()?;
-            if observation.stage.as_deref() != Some("pacer")
-                || !RENDERER_QUEUE_PRESSURE_DETAILS.contains(&detail)
-            {
-                return None;
-            }
-            Some((detail.to_string(), observation.observed_at_ms))
-        })
 }
 
 pub(crate) fn build_owner_input(
@@ -287,11 +247,6 @@ pub(crate) fn build_owner_input(
             .map(|inspection| inspection.observed_at_ms),
         display_supply_thresholds,
         observed_at_ms,
-        latest_decode_candidate_detail: owner_facts.latest_decode_candidate_detail.clone(),
-        latest_decode_candidate_observed_at_ms: owner_facts.latest_decode_candidate_observed_at_ms,
-        latest_renderer_candidate_detail: owner_facts.latest_renderer_candidate_detail.clone(),
-        latest_renderer_candidate_observed_at_ms: owner_facts
-            .latest_renderer_candidate_observed_at_ms,
     }
 }
 
@@ -363,7 +318,6 @@ fn is_current_transport_await_probe(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::Mutex;
 
     #[test]
     fn stale_transport_await_timeline_after_clean_anchor_does_not_raise_anchor_reason() {
@@ -420,48 +374,6 @@ mod tests {
             resolve_anchor_reason_label(&facts, false),
             Some("transportAwaitRecoveryAnchor".to_string())
         );
-    }
-
-    #[test]
-    fn read_owner_runtime_facts_prefers_render_stage_frame_drop_for_renderer_pressure() {
-        let runtime_stats = Mutex::new(crate::XbxEngineMediaRuntimeStats {
-            latest_render_candidate_decision: Some(
-                crate::XbxEnginePipelineCandidateDecisionObservation {
-                    decision_id: 1,
-                    state: "latest-overwrite".to_string(),
-                    action: "replace".to_string(),
-                    detail: "latestSlotOverwrite".to_string(),
-                    frame_seq: Some(42),
-                    observed_at_ms: 100.0,
-                },
-            ),
-            latest_video_frame_drop: Some(crate::XbxEngineVideoFrameDropObservation {
-                observation_id: 9,
-                reason: "pacer:drop:rendererQueueOverflow".to_string(),
-                stage: Some("pacer".to_string()),
-                action: Some("drop".to_string()),
-                detail: Some("rendererQueueOverflow".to_string()),
-                frame_rtp_timestamp: Some(7),
-                frame_seq: Some(41),
-                frame_recovery_disposition: None,
-                frame_unrecoverable_reason: None,
-                frame_budget: None,
-                observed_at_ms: 123.0,
-                width: 1920,
-                height: 1080,
-                is_keyframe: false,
-                queue_depth: 1,
-            }),
-            ..crate::XbxEngineMediaRuntimeStats::default()
-        });
-
-        let facts = read_owner_runtime_facts(&runtime_stats);
-
-        assert_eq!(
-            facts.latest_renderer_candidate_detail.as_deref(),
-            Some("rendererQueueOverflow")
-        );
-        assert_eq!(facts.latest_renderer_candidate_observed_at_ms, Some(123.0));
     }
 }
 

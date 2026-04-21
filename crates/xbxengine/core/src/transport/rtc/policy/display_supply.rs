@@ -59,9 +59,9 @@ impl SchedulingDemandSignal {
         let decode_age_critical = self
             .decode_age_ms
             .is_some_and(|age| age >= thresholds.critical_decode_age_ms);
-        let host_pressure_critical =
-            (pressure_critical && no_pending_streak >= thresholds.critical_no_pending_streak)
-                && (present_age_critical || decode_age_critical);
+        let host_pressure_critical = (pressure_critical
+            && no_pending_streak >= thresholds.critical_no_pending_streak)
+            && (present_age_critical || decode_age_critical);
         if self.video_renderer_stalled && host_pressure_critical {
             return DisplaySupplyCriticalSignal::HardRendererStall;
         }

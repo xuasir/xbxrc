@@ -6,8 +6,8 @@ use super::backend::{
     create_software_video_decoder_backend_with_probe, create_video_decoder_backend_with_probe,
     XbxVideoDecoderBackend, XbxVideoDecoderProbeSummary,
 };
-use crate::media::video::ingress::budget::FrameBudgetWindowSource;
 use crate::media::video::h264::inspection::H264BootstrapRejectReason;
+use crate::media::video::ingress::budget::FrameBudgetWindowSource;
 #[cfg(test)]
 use crate::media::video::render::renderer::XbxRenderFrame;
 #[cfg(test)]
@@ -18,6 +18,7 @@ use crate::{
 };
 
 const MAX_DECODED_FRAME_QUEUE_LEN: usize = 3;
+const DECODE_HARD_BACKPRESSURE_QUEUE_LEN: usize = 6;
 const HARDWARE_DECODE_FAILURE_BURST_GAP_MS: f64 = 400.0;
 const HARDWARE_NO_OUTPUT_SOFT_FALLBACK_THRESHOLD: u32 = 4;
 const NOMINAL_CONTINUATION_NO_OUTPUT_RECOVERY_THRESHOLD: u32 = 4;
@@ -29,7 +30,6 @@ const WAITING_KEYFRAME_CONTINUATION_MAX_FRAMES: u32 = 3;
 const DECODE_QUEUE_STALE_SLACK_DISPOSABLE_MS: u64 = 12;
 const DECODE_QUEUE_STALE_SLACK_SUPPLY_MS: u64 = 24;
 const DECODE_QUEUE_STALE_SLACK_ANCHOR_MS: u64 = 36;
-const RECOVERY_DECODED_FRAME_QUEUE_LEN: usize = 5;
 const DECODE_QUEUE_STALE_SLACK_RECOVERY_BONUS_MS: u64 = 24;
 type XbxVideoDecoderFactory =
     Box<dyn FnMut() -> (Box<dyn XbxVideoDecoderBackend>, XbxVideoDecoderProbeSummary) + Send>;
@@ -857,11 +857,27 @@ impl XbxVideoDecodeState {
     }
 
     pub(crate) fn ingress_demand(&self) -> XbxDecodeIngressDemand {
-        if self.workload_snapshot().should_drain_output_first() {
+        if self.should_enable_hard_backpressure() {
             XbxDecodeIngressDemand::PullOutputFirst
         } else {
             XbxDecodeIngressDemand::AcceptInput
         }
+    }
+
+    fn should_enable_hard_backpressure(&self) -> bool {
+        if self.decoded_frame_queue.len() >= DECODE_HARD_BACKPRESSURE_QUEUE_LEN {
+            return true;
+        }
+        let Some(oldest) = self.decoded_frame_queue.front() else {
+            return false;
+        };
+        if self.decoded_frame_queue.len() < self.decoded_frame_queue_capacity() {
+            return false;
+        }
+        let oldest_age_ms = Instant::now()
+            .saturating_duration_since(oldest.pts)
+            .as_millis() as u64;
+        oldest_age_ms <= oldest.budget.decode_local_budget_ms()
     }
 
     #[cfg(test)]
@@ -955,27 +971,18 @@ impl XbxVideoDecodeState {
     }
 
     fn decoded_frame_queue_capacity(&self) -> usize {
-        if self
-            .decoded_frame_queue
-            .iter()
-            .any(Self::decoded_frame_uses_recovery_window)
-        {
-            RECOVERY_DECODED_FRAME_QUEUE_LEN
-        } else {
-            MAX_DECODED_FRAME_QUEUE_LEN
-        }
+        MAX_DECODED_FRAME_QUEUE_LEN
     }
 
-    fn decoded_frame_queue_capacity_for_incoming(&self, incoming_frame: &DecodedFrame) -> usize {
-        if Self::decoded_frame_uses_recovery_window(incoming_frame) {
-            RECOVERY_DECODED_FRAME_QUEUE_LEN
-        } else {
-            self.decoded_frame_queue_capacity()
-        }
+    fn decoded_frame_queue_capacity_for_incoming(&self, _incoming_frame: &DecodedFrame) -> usize {
+        self.decoded_frame_queue_capacity()
     }
 
     fn decoded_frame_uses_recovery_window(frame: &DecodedFrame) -> bool {
-        matches!(frame.budget.window_source, FrameBudgetWindowSource::Recovery)
+        matches!(
+            frame.budget.window_source,
+            FrameBudgetWindowSource::Recovery
+        )
     }
 
     // 连续硬解失败用于 recovery 诊断：只在短窗口内累加，避免偶发错误误触发。
@@ -1492,11 +1499,22 @@ impl XbxVideoDecodeState {
     }
 
     pub(crate) fn enqueue_decoded_frame_for_test(&mut self, frame: XbxRenderFrame) {
+        self.enqueue_decoded_frame_with_budget_for_test(
+            frame,
+            crate::media::video::ingress::budget::FrameBudgetContext::default(),
+        );
+    }
+
+    pub(crate) fn enqueue_decoded_frame_with_budget_for_test(
+        &mut self,
+        frame: XbxRenderFrame,
+        budget: crate::media::video::ingress::budget::FrameBudgetContext,
+    ) {
         let _ = self.enqueue_decoded_frame(DecodedFrame {
             pts: std::time::Instant::now(),
             rtp_timestamp: frame.frame_seq as u32,
             is_keyframe: frame.is_keyframe,
-            budget: crate::media::video::ingress::budget::FrameBudgetContext::default(),
+            budget,
             frame_recovery_disposition: FrameRecoveryDisposition::Repairing,
             frame_unrecoverable_reason: None,
             surface: frame,
