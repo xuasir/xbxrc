@@ -45,8 +45,12 @@ function run() {
   const { sdkRoot, includeDir, libDir, binDir } = resolveSdkRoot();
   const currentPath = process.env.PATH ?? "";
   const pathDelimiter = process.platform === "win32" ? ";" : ":";
+  const spawnCommand
+    = process.platform === "win32" && command === "tauri"
+      ? "tauri.cmd"
+      : command;
 
-  const child = spawn(command, args, {
+  const child = spawn(spawnCommand, args, {
     stdio: "inherit",
     shell: false,
     env: {
