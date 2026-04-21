@@ -13,6 +13,14 @@ use gilrs::{
 use ohmygamepad_protocol::{
     OhMyGamepadCapabilityFlagsDto, OhMyGamepadConnectionKindDto, OhMyGamepadRumbleEffectDto,
 };
+#[cfg(windows)]
+use windows_sys::Win32::UI::Input::XboxController::{
+    XInputGetState, XINPUT_GAMEPAD_A, XINPUT_GAMEPAD_B, XINPUT_GAMEPAD_BACK,
+    XINPUT_GAMEPAD_DPAD_DOWN, XINPUT_GAMEPAD_DPAD_LEFT, XINPUT_GAMEPAD_DPAD_RIGHT,
+    XINPUT_GAMEPAD_DPAD_UP, XINPUT_GAMEPAD_LEFT_SHOULDER, XINPUT_GAMEPAD_LEFT_THUMB,
+    XINPUT_GAMEPAD_RIGHT_SHOULDER, XINPUT_GAMEPAD_RIGHT_THUMB, XINPUT_GAMEPAD_START,
+    XINPUT_GAMEPAD_X, XINPUT_GAMEPAD_Y, XINPUT_STATE,
+};
 
 use crate::{GilrsDeviceDescriptor, GilrsInputEvent, GilrsInputEventKind};
 
@@ -104,6 +112,8 @@ pub struct RealGilrsSource {
     pending_events: VecDeque<GilrsInputEvent>,
     rumble_command_rx: Receiver<GilrsRumbleCommand>,
     active_rumble_effects: HashMap<String, Effect>,
+    #[cfg(windows)]
+    xinput_state: WindowsXInputState,
 }
 
 impl RealGilrsSource {
@@ -142,6 +152,8 @@ impl RealGilrsSource {
                 pending_events,
                 rumble_command_rx,
                 active_rumble_effects: HashMap::new(),
+                #[cfg(windows)]
+                xinput_state: WindowsXInputState::default(),
             },
             rumble_handle,
         )
@@ -239,12 +251,30 @@ impl GilrsSource for RealGilrsSource {
             return Some(event);
         }
 
-        loop {
-            let event = self.gilrs.next_event()?;
+        #[cfg(windows)]
+        {
+            // Windows 下输入状态统一走 XInput 采样，先产出状态事件，避免与 gilrs/wgi 状态漂移。
+            self.poll_xinput_fallback();
+            if let Some(event) = self.pending_events.pop_front() {
+                return Some(event);
+            }
+        }
+
+        while let Some(event) = self.gilrs.next_event() {
             if matches!(event.event, EventType::Disconnected) {
                 self.stop_rumble_on_devices(&[event.id.to_string()]);
             }
-            let translated = translate_event(&self.gilrs, event);
+            let mut translated = translate_event(&self.gilrs, event);
+            #[cfg(windows)]
+            {
+                // Windows 下保留 gilrs 的设备生命周期信号；按键/轴状态已由 XInput 主通道输出。
+                translated.retain(|item| {
+                    matches!(
+                        item.kind,
+                        GilrsInputEventKind::Connected | GilrsInputEventKind::Disconnected
+                    )
+                });
+            }
             if translated.is_empty() {
                 continue;
             }
@@ -254,7 +284,168 @@ impl GilrsSource for RealGilrsSource {
             self.pending_events.extend(translated);
             return first;
         }
+
+        None
     }
+}
+
+#[cfg(windows)]
+#[derive(Default)]
+struct WindowsXInputState {
+    packets: [Option<u32>; 4],
+    descriptors: [Option<GilrsDeviceDescriptor>; 4],
+}
+
+#[cfg(windows)]
+impl RealGilrsSource {
+    fn poll_xinput_fallback(&mut self) {
+        let observed_at_ms = now_ms();
+        for user_idx in 0..=3u32 {
+            let mut state = XINPUT_STATE {
+                dwPacketNumber: 0,
+                Gamepad: Default::default(),
+            };
+            // SAFETY: user index range and out pointer are valid for XInputGetState.
+            let result = unsafe { XInputGetState(user_idx, &mut state as *mut XINPUT_STATE) };
+            if result == 0 {
+                let slot = user_idx as usize;
+                let descriptor = self
+                    .resolve_xinput_descriptor(user_idx)
+                    .or_else(|| self.xinput_state.descriptors[slot].clone())
+                    .unwrap_or_else(|| xinput_descriptor(user_idx));
+                let previous_packet = self.users_last_packet(slot);
+                if previous_packet.is_none() {
+                    self.pending_events.push_back(GilrsInputEvent {
+                        device: descriptor.clone(),
+                        observed_at_ms,
+                        kind: GilrsInputEventKind::Connected,
+                    });
+                }
+
+                if previous_packet != Some(state.dwPacketNumber) {
+                    self.emit_xinput_state_events(descriptor.clone(), observed_at_ms, &state);
+                }
+                self.xinput_state.packets[slot] = Some(state.dwPacketNumber);
+                self.xinput_state.descriptors[slot] = Some(descriptor);
+            } else {
+                let slot = user_idx as usize;
+                if self.xinput_state.packets[slot].take().is_some() {
+                    let descriptor = self.xinput_state.descriptors[slot]
+                        .take()
+                        .unwrap_or_else(|| xinput_descriptor(user_idx));
+                    self.pending_events.push_back(GilrsInputEvent {
+                        device: descriptor,
+                        observed_at_ms,
+                        kind: GilrsInputEventKind::Disconnected,
+                    });
+                }
+            }
+        }
+    }
+
+    fn users_last_packet(&self, slot: usize) -> Option<u32> {
+        self.xinput_state.packets[slot]
+    }
+
+    fn emit_xinput_state_events(
+        &mut self,
+        descriptor: GilrsDeviceDescriptor,
+        observed_at_ms: u64,
+        state: &XINPUT_STATE,
+    ) {
+        let gamepad = state.Gamepad;
+        let button_value = |flag: u16| {
+            if gamepad.wButtons & flag != 0 {
+                1.0
+            } else {
+                0.0
+            }
+        };
+        let lt = (gamepad.bLeftTrigger as f32 / 255.0).clamp(0.0, 1.0);
+        let rt = (gamepad.bRightTrigger as f32 / 255.0).clamp(0.0, 1.0);
+
+        for (index, value) in [
+            (0, button_value(XINPUT_GAMEPAD_A)),
+            (1, button_value(XINPUT_GAMEPAD_B)),
+            (2, button_value(XINPUT_GAMEPAD_X)),
+            (3, button_value(XINPUT_GAMEPAD_Y)),
+            (4, button_value(XINPUT_GAMEPAD_LEFT_SHOULDER)),
+            (5, button_value(XINPUT_GAMEPAD_RIGHT_SHOULDER)),
+            (6, lt),
+            (7, rt),
+            (8, button_value(XINPUT_GAMEPAD_BACK)),
+            (9, button_value(XINPUT_GAMEPAD_START)),
+            (10, button_value(XINPUT_GAMEPAD_LEFT_THUMB)),
+            (11, button_value(XINPUT_GAMEPAD_RIGHT_THUMB)),
+            (12, button_value(XINPUT_GAMEPAD_DPAD_UP)),
+            (13, button_value(XINPUT_GAMEPAD_DPAD_DOWN)),
+            (14, button_value(XINPUT_GAMEPAD_DPAD_LEFT)),
+            (15, button_value(XINPUT_GAMEPAD_DPAD_RIGHT)),
+            (16, 0.0),
+        ] {
+            self.pending_events.push_back(GilrsInputEvent {
+                device: descriptor.clone(),
+                observed_at_ms,
+                kind: GilrsInputEventKind::ButtonChanged { index, value },
+            });
+        }
+
+        for (index, value) in [
+            (0, normalize_thumb_axis(gamepad.sThumbLX)),
+            (1, normalize_thumb_axis(gamepad.sThumbLY)),
+            (2, normalize_thumb_axis(gamepad.sThumbRX)),
+            (3, normalize_thumb_axis(gamepad.sThumbRY)),
+            (4, normalize_trigger_axis(lt)),
+            (5, normalize_trigger_axis(rt)),
+        ] {
+            self.pending_events.push_back(GilrsInputEvent {
+                device: descriptor.clone(),
+                observed_at_ms,
+                kind: GilrsInputEventKind::AxisChanged { index, value },
+            });
+        }
+    }
+
+    fn resolve_xinput_descriptor(&self, user_idx: u32) -> Option<GilrsDeviceDescriptor> {
+        let connected = self
+            .gilrs
+            .gamepads()
+            .filter(|(_, gamepad)| gamepad.is_connected())
+            .collect::<Vec<_>>();
+        connected
+            .get(user_idx as usize)
+            .map(|(id, gamepad)| descriptor_from_gamepad(id.to_string(), gamepad))
+    }
+}
+
+#[cfg(windows)]
+fn xinput_descriptor(user_idx: u32) -> GilrsDeviceDescriptor {
+    GilrsDeviceDescriptor {
+        device_id: format!("xinput:{user_idx}"),
+        name: "Xbox Controller (XInput Fallback)".to_owned(),
+        connection: Some(OhMyGamepadConnectionKindDto::Unknown),
+        vendor_id: Some(0x045e),
+        product_id: None,
+        capabilities: OhMyGamepadCapabilityFlagsDto {
+            basic_rumble: false,
+            advanced_haptics: false,
+            battery: false,
+        },
+    }
+}
+
+#[cfg(windows)]
+fn normalize_thumb_axis(value: i16) -> f32 {
+    if value == i16::MIN {
+        -1.0
+    } else {
+        (value as f32 / i16::MAX as f32).clamp(-1.0, 1.0)
+    }
+}
+
+#[cfg(windows)]
+fn normalize_trigger_axis(value: f32) -> f32 {
+    (value.clamp(0.0, 1.0) * 2.0) - 1.0
 }
 
 fn translate_event(gilrs: &Gilrs, event: Event) -> Vec<GilrsInputEvent> {

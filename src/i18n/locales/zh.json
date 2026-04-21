@@ -617,6 +617,19 @@
       "primaryDeviceSet": "设为主手柄",
       "toggleSampling": "切换采样",
       "pauseConfirm": "暂停该手柄的采样？暂停后输入将不会再发送，直到手动恢复。",
+      "mapping": {
+        "title": "自定义映射",
+        "hint": "通过 JSON 自定义手柄设备 profile 与键盘回退映射。",
+        "deviceProfilesLabel": "设备 Profiles JSON",
+        "keyboardMappingLabel": "键盘映射 JSON",
+        "save": "保存映射",
+        "reset": "重置映射",
+        "feedback": {
+          "saved": "映射已保存并生效。",
+          "reset": "映射已重置为默认值。",
+          "invalid": "映射 JSON 无效：{error}"
+        }
+      },
       "debug": {
         "enable": "开启输入调试视图",
         "disable": "关闭输入调试视图",

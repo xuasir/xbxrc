@@ -188,6 +188,85 @@ export interface GamepadRuntimeSnapshotDto {
   }
 }
 
+export type GamepadKeyboardKeyDto =
+  | 'keyA' | 'keyB' | 'keyC' | 'keyD' | 'keyE' | 'keyF' | 'keyG' | 'keyH' | 'keyI' | 'keyJ'
+  | 'keyK' | 'keyL' | 'keyM' | 'keyN' | 'keyO' | 'keyP' | 'keyQ' | 'keyR' | 'keyS' | 'keyT'
+  | 'keyU' | 'keyV' | 'keyW' | 'keyX' | 'keyY' | 'keyZ'
+  | 'digit0' | 'digit1' | 'digit2' | 'digit3' | 'digit4' | 'digit5' | 'digit6' | 'digit7' | 'digit8' | 'digit9'
+  | 'enter' | 'tab' | 'escape' | 'space'
+  | 'arrowUp' | 'arrowDown' | 'arrowLeft' | 'arrowRight'
+
+export type GamepadKeyboardControlDto =
+  | 'leftStickUp' | 'leftStickDown' | 'leftStickLeft' | 'leftStickRight'
+  | 'rightStickUp' | 'rightStickDown' | 'rightStickLeft' | 'rightStickRight'
+  | 'south' | 'east' | 'west' | 'north'
+  | 'l1' | 'r1' | 'l2' | 'r2' | 'l3' | 'r3'
+  | 'view' | 'menu' | 'home'
+  | 'dpadUp' | 'dpadDown' | 'dpadLeft' | 'dpadRight'
+
+export interface GamepadKeyboardBindingDto {
+  key: GamepadKeyboardKeyDto
+  control: GamepadKeyboardControlDto
+}
+
+export interface GamepadKeyboardMappingDto {
+  bindings: GamepadKeyboardBindingDto[]
+}
+
+export interface GamepadDeviceProfileMatcherDto {
+  deviceId: string | null
+  vendorId: number | null
+  productId: number | null
+  backend: GamepadBackendKindDto | null
+  nameContains: string | null
+}
+
+export interface GamepadButtonMappingDto {
+  south: number
+  east: number
+  west: number
+  north: number
+  l1: number
+  r1: number
+  l2: number
+  r2: number
+  view: number
+  menu: number
+  l3: number
+  r3: number
+  dpadUp: number
+  dpadDown: number
+  dpadLeft: number
+  dpadRight: number
+  home: number
+}
+
+export interface GamepadAxisMappingDto {
+  leftStickX: number
+  leftStickY: number
+  rightStickX: number
+  rightStickY: number
+  leftTriggerButton: number
+  rightTriggerButton: number
+  leftTriggerAxis: number | null
+  rightTriggerAxis: number | null
+}
+
+export interface GamepadFilterConfigDto {
+  stickDeadzone: number
+  stickEpsilon: number
+  triggerDeadzone: number
+  triggerEpsilon: number
+  buttonEpsilon: number
+}
+
+export interface GamepadDeviceProfileDto {
+  matcher: GamepadDeviceProfileMatcherDto
+  buttons: GamepadButtonMappingDto
+  axes: GamepadAxisMappingDto
+  filter: GamepadFilterConfigDto
+}
+
 export type GamepadBridgeCommandDto
   = | { type: 'refresh-runtime-snapshot' }
     | { type: 'set-route-target', target: GamepadRouteTargetDto }
@@ -199,6 +278,8 @@ export type GamepadBridgeCommandDto
     | { type: 'resume-sampling-device', deviceId: string }
     | { type: 'play-rumble', request: GamepadRumbleRequestDto }
     | { type: 'stop-rumble', target: GamepadRumbleTargetDto }
+    | { type: 'replace-device-profiles', profiles: GamepadDeviceProfileDto[] }
+    | { type: 'replace-keyboard-mapping', mapping: GamepadKeyboardMappingDto }
 
 export type GamepadBridgeEventDto
   = | { type: 'runtime-snapshot', snapshot: GamepadRuntimeSnapshotDto }

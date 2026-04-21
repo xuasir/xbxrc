@@ -75,6 +75,7 @@ xbox-auth-flow = { path = "../crates/xbox-auth-flow" }
 xbox-streaming = { path = "../crates/xbox-streaming" }
 xbox-webapi = { path = "../crates/xbox-webapi" }
 ohmygamepad-host = { path = "../crates/ohmygamepad/bridge/host" }
+ohmygamepad-core = { path = "../crates/ohmygamepad/core" }
 ohmygamepad-protocol = { path = "../crates/ohmygamepad/protocol" }
 
 thiserror.workspace = true

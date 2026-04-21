@@ -1,5 +1,6 @@
 #![cfg(target_os = "windows")]
 
+use std::ffi::CString;
 use std::sync::Arc;
 
 use ffmpeg_sys_next as ffi;
@@ -9,9 +10,7 @@ use windows::Win32::Graphics::Direct3D11::{
     ID3D11Texture2D, D3D11_BIND_DECODER, D3D11_BIND_SHADER_RESOURCE, D3D11_RESOURCE_MISC_SHARED,
     D3D11_RESOURCE_MISC_SHARED_NTHANDLE,
 };
-use windows::Win32::Graphics::Dxgi::{
-    Common::DXGI_FORMAT, IDXGIResource1, DXGI_SHARED_RESOURCE_READ, DXGI_SHARED_RESOURCE_WRITE,
-};
+use windows::Win32::Graphics::Dxgi::{IDXGIResource1, DXGI_SHARED_RESOURCE_READ, DXGI_SHARED_RESOURCE_WRITE};
 
 use crate::media::video::render::renderer::XbxRenderFrame;
 use crate::media::video::types::EncodedFrame;
@@ -54,7 +53,7 @@ struct AVD3D11VAFramesContextCompat {
 impl FfmpegWindowsD3d11vaDecoder {
     fn new() -> Result<Self, XbxEngineRuntimeError> {
         ffmpeg_init_once();
-        let codec = unsafe { ffi::avcodec_find_decoder(ffi::AVCodecID::AV_CODEC_ID_H264) };
+        let codec = find_preferred_h264_decoder();
         if codec.is_null() {
             return Err(error_from_message(
                 "xbxEngineFfmpegFindH264DecoderFailed",
@@ -62,10 +61,12 @@ impl FfmpegWindowsD3d11vaDecoder {
             ));
         }
         if !codec_supports_d3d11va(codec) {
-            return Err(error_from_message(
-                "xbxEngineFfmpegD3d11vaConfigMissing",
-                "codecDoesNotAdvertiseD3d11va",
-            ));
+            // 某些 FFmpeg 构建不会完整暴露 hw_config 元数据，但实际仍可通过 D3D11VA 解码。
+            // 这里不提前失败，交由 get_format + receive 阶段做“硬解强约束”校验。
+            log::warn!(
+                "[video][decode][ffmpeg-d3d11va] codec hw_config does not explicitly advertise d3d11va, continue with runtime validation codec={}",
+                codec_name(codec)
+            );
         }
 
         let codec_ctx = unsafe { ffi::avcodec_alloc_context3(codec) };
@@ -244,33 +245,39 @@ impl FfmpegWindowsD3d11vaDecoder {
 
         let hw_format =
             unsafe { std::mem::transmute::<i32, ffi::AVPixelFormat>((*self.hw_frame).format) };
-        let frame = if hw_format == ffi::AVPixelFormat::AV_PIX_FMT_D3D11VA_VLD {
-            match self.wrap_d3d11va_frame_as_descriptor(self.hw_frame) {
-                Ok(frame) => frame,
-                Err(descriptor_error) => {
-                    log::warn!(
-                        "[video][decode][ffmpeg-d3d11va] descriptor export failed, fallback to copyback: {}",
-                        descriptor_error
-                    );
-                    unsafe {
-                        ffi::av_frame_unref(self.sw_frame);
-                    }
-                    let transfer_status =
-                        unsafe { ffi::av_hwframe_transfer_data(self.sw_frame, self.hw_frame, 0) };
-                    if transfer_status < 0 {
-                        unsafe {
-                            ffi::av_frame_unref(self.hw_frame);
-                        }
-                        return Err(ffmpeg_error(
-                            "xbxEngineFfmpegTransferD3d11vaFrameFailed",
-                            transfer_status,
-                        ));
-                    }
-                    self.convert_frame_to_bgra(self.sw_frame)?
-                }
+        if hw_format != ffi::AVPixelFormat::AV_PIX_FMT_D3D11VA_VLD {
+            unsafe {
+                ffi::av_frame_unref(self.hw_frame);
             }
-        } else {
-            self.convert_frame_to_bgra(self.hw_frame)?
+            return Err(error_from_message(
+                "xbxEngineFfmpegD3d11vaUnexpectedFrameFormat",
+                format!("decodedFormat={hw_format:?}:expected=AV_PIX_FMT_D3D11VA_VLD"),
+            ));
+        }
+
+        let frame = match self.wrap_d3d11va_frame_as_descriptor(self.hw_frame) {
+            Ok(frame) => frame,
+            Err(descriptor_error) => {
+                log::warn!(
+                    "[video][decode][ffmpeg-d3d11va] descriptor export failed, fallback to copyback: {}",
+                    descriptor_error
+                );
+                unsafe {
+                    ffi::av_frame_unref(self.sw_frame);
+                }
+                let transfer_status =
+                    unsafe { ffi::av_hwframe_transfer_data(self.sw_frame, self.hw_frame, 0) };
+                if transfer_status < 0 {
+                    unsafe {
+                        ffi::av_frame_unref(self.hw_frame);
+                    }
+                    return Err(ffmpeg_error(
+                        "xbxEngineFfmpegTransferD3d11vaFrameFailed",
+                        transfer_status,
+                    ));
+                }
+                self.convert_frame_to_bgra(self.sw_frame)?
+            }
         };
 
         unsafe {
@@ -458,6 +465,28 @@ impl FfmpegWindowsD3d11vaDecoder {
     }
 }
 
+fn find_preferred_h264_decoder() -> *const ffi::AVCodec {
+    let preferred_name = CString::new("h264_d3d11va").expect("static decoder name");
+    let by_name = unsafe { ffi::avcodec_find_decoder_by_name(preferred_name.as_ptr()) };
+    if !by_name.is_null() {
+        return by_name;
+    }
+    unsafe { ffi::avcodec_find_decoder(ffi::AVCodecID::AV_CODEC_ID_H264) }
+}
+
+fn codec_name(codec: *const ffi::AVCodec) -> String {
+    if codec.is_null() {
+        return "null".to_string();
+    }
+    let name_ptr = unsafe { (*codec).name };
+    if name_ptr.is_null() {
+        return "unknown".to_string();
+    }
+    unsafe { std::ffi::CStr::from_ptr(name_ptr) }
+        .to_string_lossy()
+        .to_string()
+}
+
 impl super::backend::XbxVideoDecoderBackend for FfmpegWindowsD3d11vaDecoder {
     fn backend_name(&self) -> &'static str {
         "ffmpeg-d3d11va"
@@ -573,10 +602,8 @@ fn codec_supports_d3d11va(codec: *const ffi::AVCodec) -> bool {
         let supports_device_ctx = unsafe {
             ((*config).methods & ffi::AV_CODEC_HW_CONFIG_METHOD_HW_DEVICE_CTX as i32) != 0
         };
-        let matches_d3d11 = unsafe {
-            (*config).device_type == ffi::AVHWDeviceType::AV_HWDEVICE_TYPE_D3D11VA
-                && (*config).pix_fmt == ffi::AVPixelFormat::AV_PIX_FMT_D3D11VA_VLD
-        };
+        let matches_d3d11 =
+            unsafe { (*config).device_type == ffi::AVHWDeviceType::AV_HWDEVICE_TYPE_D3D11VA };
         if supports_device_ctx && matches_d3d11 {
             return true;
         }

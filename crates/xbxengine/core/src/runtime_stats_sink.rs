@@ -769,6 +769,11 @@ impl RuntimeStatsSink {
                 observation.bound_as_recovery_response = Some(false);
             }
             let summary = format_h264_inspection_summary(&observation);
+            emit_keyframe_response_diagnosis_probe(
+                &*stats,
+                selected.as_ref(),
+                &observation,
+            );
             stats.latest_h264_inspection_observation = Some(observation);
             stats.latest_observation_label = Some("h264InspectionObserved".to_string());
             stats.latest_observation_summary = Some(summary);
@@ -1199,6 +1204,54 @@ fn format_h264_inspection_summary(observation: &XbxEngineH264InspectionObservati
             .map(|value| value.to_string())
             .unwrap_or_else(|| "none".to_string()),
     )
+}
+
+fn emit_keyframe_response_diagnosis_probe(
+    stats: &XbxEngineMediaRuntimeStats,
+    episode: Option<&XbxEngineKeyframeRequestEpisodeObservation>,
+    observation: &XbxEngineH264InspectionObservation,
+) {
+    let Some(episode) = episode else {
+        return;
+    };
+    if episode.request_reason.as_deref() != Some("transportAwaitRecoveryAnchor") {
+        return;
+    }
+    let bound_as_recovery_response = observation.bound_as_recovery_response.unwrap_or(false);
+    if !bound_as_recovery_response {
+        return;
+    }
+    let reject_reason = observation.bootstrap_reject_reason.as_deref().unwrap_or("none");
+    let unusable_response = !observation.admission_accepted
+        || matches!(
+            reject_reason,
+            "bootstrapMissingSps"
+                | "bootstrapMissingPps"
+                | "NonIdrVcl"
+                | "inspectionRejectInvalidSliceHeader"
+        );
+    if !unusable_response {
+        return;
+    }
+    crate::xbx_log_warn!(
+        "[keyframe-diagnosis] unusable-recovery-response episodeId={} lifecycle={} status={} verdict={} rejectReason={} admissionAccepted={} bootstrapReady={} isIdr={} rtpTs={} nalCount={} inbandSps={} inbandPps={} sentFailureStreak={}",
+        episode.episode_id,
+        episode.lifecycle_phase.as_deref().unwrap_or("none"),
+        episode.status.as_str(),
+        episode.response_verdict.as_deref().unwrap_or("none"),
+        reject_reason,
+        observation.admission_accepted,
+        observation.bootstrap_ready,
+        observation.is_idr,
+        observation
+            .frame_rtp_timestamp
+            .map(|value| value.to_string())
+            .unwrap_or_else(|| "none".to_string()),
+        observation.nal_count,
+        observation.has_inband_sps,
+        observation.has_inband_pps,
+        stats.keyframe_consecutive_sent_failures,
+    );
 }
 
 fn apply_keyframe_request_episode_sent(

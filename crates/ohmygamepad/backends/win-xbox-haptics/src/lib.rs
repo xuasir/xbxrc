@@ -148,7 +148,6 @@ mod platform {
                             index,
                         });
                     }
-                    continue;
                 }
             }
 

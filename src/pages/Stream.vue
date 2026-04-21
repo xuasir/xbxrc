@@ -133,10 +133,12 @@ function applyStreamUiWindowClass(active: boolean): void {
 
 onMounted(() => {
   applyStreamUiWindowClass(true)
+  window.addEventListener('stream-menu-toggle-requested', handleStreamMenuToggleRequested)
 })
 
 onBeforeUnmount(() => {
   applyStreamUiWindowClass(false)
+  window.removeEventListener('stream-menu-toggle-requested', handleStreamMenuToggleRequested)
 })
 
 // 串流页是 plain layout，需要自己提供独立焦点域和默认焦点。
@@ -349,6 +351,14 @@ function openActionSheet(): void {
 
 function closeActionSheet(): void {
   closeSheet('menu')
+}
+
+function handleStreamMenuToggleRequested(): void {
+  if (isMenuSheetOpen.value) {
+    closeActionSheet()
+    return
+  }
+  openActionSheet()
 }
 
 function openDisplaySheet(): void {

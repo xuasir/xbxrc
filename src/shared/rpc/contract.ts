@@ -1,4 +1,6 @@
 import type {
+  GamepadDeviceProfileDto,
+  GamepadKeyboardMappingDto,
   GamepadRouteTargetDto,
   GamepadRumbleRequestDto,
   GamepadRumbleResultDto,
@@ -127,6 +129,10 @@ export interface XBoxRpcSchema {
     resumeSamplingDevice: RpcMethod<{ deviceId: string }, GamepadRuntimeSnapshotDto>
     playRumble: RpcMethod<{ request: GamepadRumbleRequestDto }, GamepadRumbleResultDto>
     stopRumble: RpcMethod<{ target: GamepadRumbleTargetDto }, GamepadRumbleResultDto>
+    replaceDeviceProfiles: RpcMethod<{ profiles: GamepadDeviceProfileDto[] }, GamepadRuntimeSnapshotDto>
+    replaceKeyboardMapping: RpcMethod<{ mapping: GamepadKeyboardMappingDto }, GamepadRuntimeSnapshotDto>
+    resetDeviceProfiles: RpcMethod<void, GamepadRuntimeSnapshotDto>
+    resetKeyboardMapping: RpcMethod<void, GamepadRuntimeSnapshotDto>
   }
   data: {
     getUserProfile: RpcMethod<

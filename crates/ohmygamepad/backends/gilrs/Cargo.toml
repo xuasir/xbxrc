@@ -19,5 +19,8 @@ log = "0.4"
 ohmygamepad-core = { path = "../../core" }
 ohmygamepad-protocol = { path = "../../protocol" }
 
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61.2", features = ["Win32_UI_Input_XboxController"] }
+
 [lib]
 path = "src/lib.rs"

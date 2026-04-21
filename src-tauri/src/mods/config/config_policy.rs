@@ -144,6 +144,20 @@ fn normalize_value(key: &str, value: &Value, fallback: &Value) -> Value {
             &["off", "minimal", "standard", "verbose", "trace"],
         ),
         "display_options" => normalize_display_options(key, value, fallback),
+        "gamepad_device_profiles" => {
+            if value.is_array() {
+                value.clone()
+            } else {
+                fallback.clone()
+            }
+        }
+        "gamepad_keyboard_mapping" => {
+            if value.is_object() {
+                value.clone()
+            } else {
+                fallback.clone()
+            }
+        }
         _ => fallback.clone(),
     }
 }

@@ -23,10 +23,10 @@ const REVEAL_EVENTS: Array<keyof WindowEventMap> = [
   'keydown',
 ]
 
-function syncStreamUiInputMode(enabled: boolean): void {
+function syncStreamUiInputMode(enabled: boolean, overlayOpen: boolean): void {
   window.dispatchEvent(
     new CustomEvent('stream-ui-input-mode', {
-      detail: { enabled },
+      detail: { enabled, overlayOpen },
     }),
   )
 }
@@ -126,7 +126,7 @@ export function useXStreamPageUi(options: UseXStreamPageUiOptions) {
   watch(
     () => shouldEnableSpatialInput.value,
     (enabled) => {
-      syncStreamUiInputMode(enabled)
+      syncStreamUiInputMode(enabled, hasOverlay.value)
     },
     { immediate: true },
   )
@@ -139,7 +139,7 @@ export function useXStreamPageUi(options: UseXStreamPageUiOptions) {
 
   onBeforeUnmount(() => {
     clearChromeTimer()
-    syncStreamUiInputMode(true)
+    syncStreamUiInputMode(true, false)
     for (const eventName of REVEAL_EVENTS) {
       window.removeEventListener(eventName, revealChrome)
     }

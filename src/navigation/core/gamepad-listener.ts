@@ -9,6 +9,7 @@ const BUTTON_REPEAT_RATE = 100
 interface GamepadState {
   lastPressed: Record<string, number>
   repeating: Record<string, boolean>
+  comboPressed: Record<string, boolean>
 }
 
 class GamepadUIListener {
@@ -31,12 +32,19 @@ class GamepadUIListener {
         this.state[padId] = {
           lastPressed: {},
           repeating: {},
+          comboPressed: {},
         }
       }
 
       const state = this.state[padId]
       const buttons = snapshot.state.buttons
       const now = Date.now()
+      this.checkCombo(state, 'menu-view-toggle', buttons.menu > 0.5 && buttons.view > 0.5)
+
+      // 仅在 shell-ui 路由下处理导航意图；组合键在任意路由都要生效。
+      if (snapshot.routeTarget.kind !== 'shell-ui') {
+        return
+      }
 
       // Map LogicalButtonsStateDto to NavigationIntent
       this.checkButton(now, state, 'south', buttons.south > 0.5, NavigationIntent.Action)
@@ -100,6 +108,25 @@ class GamepadUIListener {
         delete state.lastPressed[key]
         delete state.repeating[key]
       }
+    }
+  }
+
+  private checkCombo(state: GamepadState, key: string, active: boolean): void {
+    if (active) {
+      if (state.comboPressed[key] === true) {
+        return
+      }
+      state.comboPressed[key] = true
+      window.dispatchEvent(
+        new CustomEvent('stream-menu-toggle-requested', {
+          detail: { source: 'gamepad', combo: 'menu+view' },
+        }),
+      )
+      return
+    }
+
+    if (state.comboPressed[key] === true) {
+      delete state.comboPressed[key]
     }
   }
 }

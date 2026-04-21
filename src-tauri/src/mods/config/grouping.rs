@@ -43,6 +43,12 @@ pub fn split_config_groups(config: &Map<String, Value>) -> Value {
         ]),
         // xcloud 组当前不承载策略字段，避免与 streaming policy 分组重复返回。
         "xcloud": pick_group_values(config, &[]),
-        "input": pick_group_values(config, &["polling_rate", "vibration", "vibration_strength"])
+        "input": pick_group_values(config, &[
+            "polling_rate",
+            "vibration",
+            "vibration_strength",
+            "gamepad_device_profiles",
+            "gamepad_keyboard_mapping"
+        ])
     })
 }

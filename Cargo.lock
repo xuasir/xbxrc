@@ -3995,6 +3995,7 @@ dependencies = [
  "log",
  "ohmygamepad-core",
  "ohmygamepad-protocol",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -8649,6 +8650,7 @@ dependencies = [
  "objc2",
  "objc2-app-kit",
  "objc2-foundation",
+ "ohmygamepad-core",
  "ohmygamepad-host",
  "ohmygamepad-protocol",
  "p256",

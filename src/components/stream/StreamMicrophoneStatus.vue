@@ -12,7 +12,9 @@ const props = defineProps<StreamMicrophoneStatusProps>()
 
 const { t } = useI18n()
 
-const visible = computed(() => props.mount.phase === 'mounted')
+const visible = computed(
+  () => props.mount.phase === 'mounted' && props.microphone.phase !== 'closed',
+)
 const label = computed(() =>
   props.microphone.phase === 'live'
     ? t('streamPage.microphone.open')

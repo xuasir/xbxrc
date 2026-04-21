@@ -1,6 +1,6 @@
 use serde_json::{json, Map, Value};
 
-pub const APP_CONFIG_KEYS: [&str; 35] = [
+pub const APP_CONFIG_KEYS: [&str; 37] = [
     "locale",
     "theme",
     "use_msal",
@@ -36,6 +36,8 @@ pub const APP_CONFIG_KEYS: [&str; 35] = [
     "ui_audio",
     "debug",
     "runtime_trace_mode",
+    "gamepad_device_profiles",
+    "gamepad_keyboard_mapping",
 ];
 
 pub fn default_config_map() -> Map<String, Value> {
@@ -86,6 +88,11 @@ pub fn default_config_map() -> Map<String, Value> {
         "ui_audio": true,
         "debug": false,
         "runtime_trace_mode": null
+        ,
+        "gamepad_device_profiles": [],
+        "gamepad_keyboard_mapping": {
+            "bindings": []
+        }
     });
 
     let mut map = value.as_object().cloned().unwrap_or_default();

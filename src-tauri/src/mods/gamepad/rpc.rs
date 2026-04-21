@@ -1,8 +1,10 @@
 use crate::error::AppResult;
+use crate::mods::gamepad::GamepadDeviceProfileDto;
 use crate::AppState;
 use ohmygamepad_protocol::{
-    LogicalPadBindingDto, MultiControllerSamplingStrategyDto, OhMyGamepadRouteTargetDto,
-    OhMyGamepadRumbleRequestDto, OhMyGamepadRumbleTargetDto, OhMyGamepadSamplingConfigDto,
+    LogicalPadBindingDto, MultiControllerSamplingStrategyDto, OhMyGamepadKeyboardMappingDto,
+    OhMyGamepadRouteTargetDto, OhMyGamepadRumbleRequestDto, OhMyGamepadRumbleTargetDto,
+    OhMyGamepadSamplingConfigDto,
 };
 use serde::Deserialize;
 use serde_json::{json, Value};
@@ -39,6 +41,14 @@ pub enum GamepadCommand {
     StopRumble {
         target: OhMyGamepadRumbleTargetDto,
     },
+    ReplaceDeviceProfiles {
+        profiles: Vec<GamepadDeviceProfileDto>,
+    },
+    ReplaceKeyboardMapping {
+        mapping: OhMyGamepadKeyboardMappingDto,
+    },
+    ResetDeviceProfiles,
+    ResetKeyboardMapping,
 }
 
 pub async fn handle_rpc(
@@ -88,6 +98,18 @@ pub async fn handle_rpc(
         }
         GamepadCommand::StopRumble { target } => {
             Ok(serde_json::to_value(service.stop_rumble(target)?)?)
+        }
+        GamepadCommand::ReplaceDeviceProfiles { profiles } => {
+            Ok(serde_json::to_value(service.replace_device_profiles(profiles)?)?)
+        }
+        GamepadCommand::ReplaceKeyboardMapping { mapping } => {
+            Ok(serde_json::to_value(service.replace_keyboard_mapping(mapping)?)?)
+        }
+        GamepadCommand::ResetDeviceProfiles => {
+            Ok(serde_json::to_value(service.reset_device_profiles()?)?)
+        }
+        GamepadCommand::ResetKeyboardMapping => {
+            Ok(serde_json::to_value(service.reset_keyboard_mapping()?)?)
         }
     }
 }

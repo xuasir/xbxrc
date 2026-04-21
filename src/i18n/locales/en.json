@@ -617,6 +617,19 @@
       "primaryDeviceSet": "Set as primary",
       "toggleSampling": "Toggle sampling",
       "pauseConfirm": "Pause sampling for this controller? It will no longer send input until resumed.",
+      "mapping": {
+        "title": "Custom mapping",
+        "hint": "Edit JSON to customize device profile and keyboard fallback mapping.",
+        "deviceProfilesLabel": "Device profiles JSON",
+        "keyboardMappingLabel": "Keyboard mapping JSON",
+        "save": "Save mapping",
+        "reset": "Reset mapping",
+        "feedback": {
+          "saved": "Mappings saved and applied.",
+          "reset": "Mappings reset to defaults.",
+          "invalid": "Invalid mapping JSON: {error}"
+        }
+      },
       "debug": {
         "enable": "Enable input debug overlay",
         "disable": "Disable input debug overlay",

@@ -33,6 +33,13 @@ export class InputService {
   private frameMetadataQueue: Array<ProcessedVideoFrameMetadata> = []
   private currentInputTransport?: InputTransport
   private readonly rumbleService: RumbleService
+  private streamMenuComboActive = false
+  private suspendRtcGamepadTransport = false
+  private readonly onStreamUiInputModeChanged = (event: Event): void => {
+    const detail = (event as CustomEvent<{ enabled?: boolean, overlayOpen?: boolean }>).detail
+    // 仅在 overlay/menu 真正打开时暂停 RTC 输入；chrome 显示不应阻断游戏输入。
+    this.suspendRtcGamepadTransport = detail?.overlayOpen === true
+  }
 
   readonly gamepadDriver: InputDriverLike
 
@@ -54,6 +61,7 @@ export class InputService {
     this.currentInputTransport = inputTransport
     void controlTransport
     this.stop()
+    window.addEventListener('stream-ui-input-mode', this.onStreamUiInputModeChanged)
 
     this.gamepadDriver.start()
 
@@ -63,6 +71,8 @@ export class InputService {
   }
 
   stop(): void {
+    window.removeEventListener('stream-ui-input-mode', this.onStreamUiInputModeChanged)
+    this.suspendRtcGamepadTransport = false
     this.gamepadDriver.stop()
     this.rumbleService.destroy()
   }
@@ -79,10 +89,13 @@ export class InputService {
     if (!this.currentInputTransport || this.currentInputTransport.getReadyState() !== 'open') {
       return
     }
+    if (this.suspendRtcGamepadTransport) {
+      return
+    }
 
     // 每次收到手柄帧时，立即打包发送（包含当前的 metadata 队列）
     const metadataQueue = this.frameMetadataQueue.splice(0, 29)
-    const gamepadQueue = [frame]
+    const gamepadQueue = [this.applyReservedCombos(frame)]
 
     this.inputSequenceNum++
     const packet = new InputPacketEncoder(this.inputSequenceNum)
@@ -99,6 +112,36 @@ export class InputService {
       mouseFrames: 0,
       keyboardFrames: 0,
     })
+  }
+
+  private applyReservedCombos(frame: GamepadFrame): GamepadFrame {
+    const buttons = frame.state.buttons
+    const active = buttons.menu > 0.5 && buttons.view > 0.5
+    if (!active) {
+      this.streamMenuComboActive = false
+      return frame
+    }
+
+    if (!this.streamMenuComboActive) {
+      this.streamMenuComboActive = true
+      window.dispatchEvent(
+        new CustomEvent('stream-menu-toggle-requested', {
+          detail: { source: 'stream-session', combo: 'menu+view' },
+        }),
+      )
+    }
+
+    return {
+      ...frame,
+      state: {
+        ...frame.state,
+        buttons: {
+          ...buttons,
+          menu: 0,
+          view: 0,
+        },
+      },
+    }
   }
 
   setGamepadState(frame: GamepadFrame): void {

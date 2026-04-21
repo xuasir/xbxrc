@@ -11,9 +11,9 @@ use ohmygamepad_macos_gccontroller_haptics::MacosGcControllerHapticsProvider;
 use ohmygamepad_protocol::{
     LogicalPadBindingDto, LogicalPadStateDto, MultiControllerSamplingStrategyDto,
     OhMyGamepadBackendKindDto, OhMyGamepadCapabilityFlagsDto, OhMyGamepadHapticsProviderKindDto,
-    OhMyGamepadRouteTargetDto, OhMyGamepadRumbleRequestDto, OhMyGamepadRumbleResultDto,
-    OhMyGamepadRumbleTargetDto, OhMyGamepadRuntimeHapticsDto, OhMyGamepadRuntimeSnapshotDto,
-    OhMyGamepadSamplingConfigDto,
+    OhMyGamepadKeyboardMappingDto, OhMyGamepadRouteTargetDto, OhMyGamepadRumbleRequestDto,
+    OhMyGamepadRumbleResultDto, OhMyGamepadRumbleTargetDto, OhMyGamepadRuntimeHapticsDto,
+    OhMyGamepadRuntimeSnapshotDto, OhMyGamepadSamplingConfigDto,
 };
 use ohmygamepad_win_xbox_haptics::WindowsXboxHapticsProvider;
 
@@ -171,6 +171,15 @@ impl GamepadRuntimeHost {
     ) -> Result<(), InputRuntimeError> {
         self.runtime.replace_device_profiles(profiles)
     }
+
+    pub fn replace_keyboard_mapping(
+        &self,
+        mapping: OhMyGamepadKeyboardMappingDto,
+    ) -> Result<(), InputRuntimeError> {
+        self.runtime
+            .replace_keyboard_mapping(mapping)
+            .map_err(|_| InputRuntimeError::CommandChannelClosed)
+    }
 }
 
 fn bootstrap_gamepad_runtime() -> Result<SharedGamepadRuntime, String> {
@@ -208,6 +217,7 @@ fn enrich_runtime_snapshot(
     let default_device_id = resolve_default_device_id(&snapshot);
 
     for device in &mut snapshot.devices {
+        device.name = normalize_device_name(device, haptics_provider);
         device.effective_capabilities = infer_effective_capabilities(device, haptics_provider);
         device.is_default_target = default_device_id.as_deref() == Some(device.device_id.as_str());
     }
@@ -269,6 +279,43 @@ fn infer_effective_capabilities(
 fn is_physical_gamepad_candidate(device: &ohmygamepad_protocol::OhMyGamepadDeviceDto) -> bool {
     device.backend == Some(OhMyGamepadBackendKindDto::Gilrs)
         && device.device_id != "virtual:keyboard"
+}
+
+fn normalize_device_name(
+    device: &ohmygamepad_protocol::OhMyGamepadDeviceDto,
+    haptics_provider: DesktopHapticsProviderKind,
+) -> String {
+    let trimmed = device.name.trim();
+    if trimmed.is_empty() {
+        return "Controller".to_owned();
+    }
+
+    if should_force_xbox_label(device, haptics_provider) {
+        return "Xbox Controller".to_owned();
+    }
+
+    trimmed.to_owned()
+}
+
+fn should_force_xbox_label(
+    device: &ohmygamepad_protocol::OhMyGamepadDeviceDto,
+    haptics_provider: DesktopHapticsProviderKind,
+) -> bool {
+    if haptics_provider != DesktopHapticsProviderKind::WindowsXbox {
+        return false;
+    }
+    if !is_physical_gamepad_candidate(device) {
+        return false;
+    }
+
+    let name = device.name.to_ascii_lowercase();
+    let is_microsoft_vendor = device.vendor_id == Some(0x045e);
+    let is_generic_windows_label = matches!(
+        name.as_str(),
+        "controller" | "wireless controller" | "xinput controller"
+    );
+
+    is_microsoft_vendor && is_generic_windows_label
 }
 
 fn map_haptics_provider_kind(

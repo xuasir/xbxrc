@@ -21,6 +21,8 @@ const MAX_DECODED_FRAME_QUEUE_LEN: usize = 3;
 const DECODE_HARD_BACKPRESSURE_QUEUE_LEN: usize = 6;
 const HARDWARE_DECODE_FAILURE_BURST_GAP_MS: f64 = 400.0;
 const HARDWARE_NO_OUTPUT_SOFT_FALLBACK_THRESHOLD: u32 = 4;
+const D3D11VA_NO_OUTPUT_REBUILD_THRESHOLD: u32 = 2;
+const D3D11VA_NO_OUTPUT_MAX_REBUILD_ATTEMPTS: u32 = 1;
 const NOMINAL_CONTINUATION_NO_OUTPUT_RECOVERY_THRESHOLD: u32 = 4;
 // 首帧阶段硬解不出帧：不要死等（以毫秒窗作为上限）。
 const HARDWARE_NO_OUTPUT_SOFT_FALLBACK_WINDOW_MS: f64 = 80.0;
@@ -261,6 +263,7 @@ pub(crate) struct XbxVideoDecodeState {
     decode_candidate_state: XbxDecodeCandidateState,
     latest_decode_candidate_decision: Option<XbxDecodeCandidateDecisionSnapshot>,
     decode_candidate_decision_id: u64,
+    d3d11va_no_output_rebuild_attempts: u32,
 }
 
 impl XbxVideoDecodeState {
@@ -311,6 +314,7 @@ impl XbxVideoDecodeState {
             decode_candidate_state: XbxDecodeCandidateState::Nominal,
             latest_decode_candidate_decision: None,
             decode_candidate_decision_id: 0,
+            d3d11va_no_output_rebuild_attempts: 0,
         })
     }
 
@@ -356,6 +360,9 @@ impl XbxVideoDecodeState {
         encoded_frame: EncodedFrame,
         now_ms: f64,
     ) -> Option<DecodedFrame> {
+        if !self.decoder_backend_is_d3d11va() {
+            self.d3d11va_no_output_rebuild_attempts = 0;
+        }
         self.last_encoded_frame_time_ms = Some(now_ms);
         let frame_rtp_timestamp = encoded_frame.rtp_timestamp;
         let frame_is_keyframe = encoded_frame.is_keyframe;
@@ -627,6 +634,26 @@ impl XbxVideoDecodeState {
                 }
                 return None;
             }
+            if self.should_rebuild_d3d11va_backend_after_no_output(
+                recovery_state_before_decode,
+                frame_is_keyframe,
+            ) {
+                crate::xbx_log_warn!(
+                    "[xbxengine][rtc] d3d11va backend-no-output reached rebuild threshold, force local rebuild backend={} rtpTs={} noOutputStreak={} rebuildAttempt={}",
+                    self.decoder.backend_name(),
+                    frame_rtp_timestamp,
+                    self.backend_no_output_streak,
+                    self.d3d11va_no_output_rebuild_attempts.saturating_add(1)
+                );
+                self.d3d11va_no_output_rebuild_attempts =
+                    self.d3d11va_no_output_rebuild_attempts.saturating_add(1);
+                let _ = self.reset_decoder_with_failure_detail(
+                    None,
+                    now_ms,
+                    "d3d11vaBackendNoOutputRebuild",
+                );
+                return None;
+            }
             if self.should_fallback_hardware_backend_after_no_output(
                 recovery_state_before_decode,
                 frame_is_keyframe,
@@ -676,6 +703,7 @@ impl XbxVideoDecodeState {
         self.reset_hardware_failure_streak();
         self.backend_no_output_streak = 0;
         self.first_hardware_no_output_at_ms = None;
+        self.d3d11va_no_output_rebuild_attempts = 0;
         self.latest_decoded_seq = self.latest_decoded_seq.saturating_add(1);
         self.last_decode_ok_time_ms = Some(now_ms);
         self.record_decode_output_path_observation(
@@ -1024,6 +1052,21 @@ impl XbxVideoDecodeState {
                 }))
     }
 
+    fn should_rebuild_d3d11va_backend_after_no_output(
+        &self,
+        recovery_state_before_decode: XbxVideoRecoveryState,
+        frame_is_keyframe: bool,
+    ) -> bool {
+        self.decoder_backend_is_d3d11va()
+            && self.d3d11va_no_output_rebuild_attempts < D3D11VA_NO_OUTPUT_MAX_REBUILD_ATTEMPTS
+            && self.backend_no_output_streak >= D3D11VA_NO_OUTPUT_REBUILD_THRESHOLD
+            && (frame_is_keyframe
+                || matches!(
+                    recovery_state_before_decode,
+                    XbxVideoRecoveryState::WaitingKeyframe
+                ))
+    }
+
     fn should_recover_nominal_continuation_no_output(
         &self,
         recovery_state_before_decode: XbxVideoRecoveryState,
@@ -1063,6 +1106,7 @@ impl XbxVideoDecodeState {
         self.backend_no_output_streak = 0;
         self.input_frames_since_last_decoded = 0;
         self.first_hardware_no_output_at_ms = None;
+        self.d3d11va_no_output_rebuild_attempts = 0;
         self.clear_waiting_keyframe_continuation();
         self.transition_recovery_state(
             XbxVideoRecoveryState::WaitingKeyframe,
@@ -1120,6 +1164,7 @@ impl XbxVideoDecodeState {
         self.backend_no_output_streak = 0;
         self.input_frames_since_last_decoded = 0;
         self.first_hardware_no_output_at_ms = None;
+        self.d3d11va_no_output_rebuild_attempts = 0;
         self.clear_waiting_keyframe_continuation();
         self.transition_recovery_state(
             XbxVideoRecoveryState::WaitingKeyframe,
@@ -1158,6 +1203,10 @@ impl XbxVideoDecodeState {
             self.decoder.backend_name(),
             "ffmpeg-videotoolbox" | "ffmpeg-d3d11va"
         )
+    }
+
+    fn decoder_backend_is_d3d11va(&self) -> bool {
+        self.decoder.backend_name() == "ffmpeg-d3d11va"
     }
 
     fn transition_recovery_state(
@@ -1495,6 +1544,7 @@ impl XbxVideoDecodeState {
             decode_candidate_state: XbxDecodeCandidateState::Nominal,
             latest_decode_candidate_decision: None,
             decode_candidate_decision_id: 0,
+            d3d11va_no_output_rebuild_attempts: 0,
         }
     }
 

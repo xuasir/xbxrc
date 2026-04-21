@@ -27,7 +27,8 @@ export class GamepadDriver {
   private shadowGamepad: GamepadFrame = DEFAULT_GAMEPAD_FRAME()
   private nativeRuntimeSnapshot?: GamepadRuntimeSnapshotDto
   private nativeControllerConnected = false
-  private nativeUnsubscribe?: () => void
+  private nativeRuntimeUnsubscribe?: () => void
+  private nativePadUnsubscribe?: () => void
   private isVirtualButtonPressing = false
 
   constructor(private readonly delegate: GamepadDriverDelegate) {}
@@ -38,9 +39,13 @@ export class GamepadDriver {
   }
 
   stop(): void {
-    if (this.nativeUnsubscribe) {
-      this.nativeUnsubscribe()
-      this.nativeUnsubscribe = undefined
+    if (this.nativeRuntimeUnsubscribe) {
+      this.nativeRuntimeUnsubscribe()
+      this.nativeRuntimeUnsubscribe = undefined
+    }
+    if (this.nativePadUnsubscribe) {
+      this.nativePadUnsubscribe()
+      this.nativePadUnsubscribe = undefined
     }
     this.nativeRuntimeSnapshot = undefined
     this.nativeControllerConnected = false
@@ -92,16 +97,15 @@ export class GamepadDriver {
   }
 
   private startNativeSnapshotBridge(): void {
-    this.nativeUnsubscribe = events.on('gamepad.runtimeSnapshot', (snapshot) => {
+    this.nativeRuntimeUnsubscribe = events.on('gamepad.runtimeSnapshot', (snapshot) => {
       this.applyNativeRuntimeSnapshot(snapshot)
-
-      // 当非虚拟按键操作时，直接透传原生手柄事件
-      if (!this.isVirtualButtonPressing) {
-        const frames = this.requestNativeStates()
-        for (const frame of frames) {
-          this.delegate.onFrame(frame)
-        }
+    })
+    this.nativePadUnsubscribe = events.on('gamepad.padSnapshot', (padSnapshot) => {
+      this.applyNativePadSnapshot(padSnapshot)
+      if (this.isVirtualButtonPressing) {
+        return
       }
+      this.delegate.onFrame(this.mapNativePadState(padSnapshot, 0))
     })
 
     void rpc.gamepad
@@ -126,6 +130,20 @@ export class GamepadDriver {
     else {
       this.delegate.onGamepadRemoved(0)
     }
+  }
+
+  private applyNativePadSnapshot(padSnapshot: LogicalPadSnapshotDto): void {
+    const snapshot = this.nativeRuntimeSnapshot
+    if (!snapshot) {
+      return
+    }
+
+    const idx = snapshot.pads.findIndex(pad => pad.padId === padSnapshot.padId)
+    if (idx >= 0) {
+      snapshot.pads[idx] = padSnapshot
+      return
+    }
+    snapshot.pads.push(padSnapshot)
   }
 
   private requestNativeStates(): Array<GamepadFrame> {
