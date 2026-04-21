@@ -64,29 +64,33 @@ function run() {
   const mergedCmakeArgs = currentCmakeArgs.includes(cmakePolicyArg)
     ? currentCmakeArgs
     : `${currentCmakeArgs} ${cmakePolicyArg}`.trim();
-  const spawnCommand
-    = process.platform === "win32" && command === "tauri"
-      ? "tauri.cmd"
-      : command;
-
-  const child = spawn(spawnCommand, args, {
-    stdio: "inherit",
-    shell: false,
-    env: {
-      ...process.env,
-      FFMPEG_DIR: sdkRoot,
-      FFMPEG_INCLUDE_DIR: includeDir,
-      FFMPEG_LIB_DIR: libDir,
-      // 强制仅使用 vendored FFmpeg 的 pkg-config 元数据，避免误命中系统/Homebrew。
-      PKG_CONFIG_PATH: localPkgConfigDir,
-      PKG_CONFIG_LIBDIR: localPkgConfigDir,
-      PKG_CONFIG_DIR: "",
-      // 兼容新版 CMake（4.x）与部分旧依赖（如 audiopus_sys 内 vendored opus）的最低策略版本冲突。
-      CMAKE_ARGS: mergedCmakeArgs,
-      CMAKE_POLICY_VERSION_MINIMUM: "3.5",
-      PATH: `${binDir}${pathDelimiter}${currentPath}`,
-    },
-  });
+  const childEnv = {
+    ...process.env,
+    FFMPEG_DIR: sdkRoot,
+    FFMPEG_INCLUDE_DIR: includeDir,
+    FFMPEG_LIB_DIR: libDir,
+    // 强制仅使用 vendored FFmpeg 的 pkg-config 元数据，避免误命中系统/Homebrew。
+    PKG_CONFIG_PATH: localPkgConfigDir,
+    PKG_CONFIG_LIBDIR: localPkgConfigDir,
+    PKG_CONFIG_DIR: "",
+    // 兼容新版 CMake（4.x）与部分旧依赖（如 audiopus_sys 内 vendored opus）的最低策略版本冲突。
+    CMAKE_ARGS: mergedCmakeArgs,
+    CMAKE_POLICY_VERSION_MINIMUM: "3.5",
+    PATH: `${binDir}${pathDelimiter}${currentPath}`,
+  };
+  const isWindows = process.platform === "win32";
+  const normalizedCommand = isWindows && command === "tauri" ? "tauri.cmd" : command;
+  const child = isWindows
+    ? spawn("cmd.exe", ["/d", "/s", "/c", normalizedCommand, ...args], {
+      stdio: "inherit",
+      shell: false,
+      env: childEnv,
+    })
+    : spawn(normalizedCommand, args, {
+      stdio: "inherit",
+      shell: false,
+      env: childEnv,
+    });
 
   child.on("exit", (code, signal) => {
     if (signal) {
