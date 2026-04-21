@@ -344,7 +344,7 @@ function unregisterTabSwitch(): void {
 
     <section
       v-else-if="!hasFullAccess"
-      class="xcloud-page__state ui-page-panel ui-page-panel--spacious"
+      class="xcloud-page__state xcloud-page__state--logged-out ui-page-panel ui-page-panel--spacious"
     >
       <p class="ui-page-title">
         {{ t('xcloudPage.limitedTitle') }}
@@ -357,7 +357,7 @@ function unregisterTabSwitch(): void {
         :id="SPATIAL_NAV_NODE_IDS.pagePrimary.xcloud"
         as="button"
         type="button"
-        class="xcloud-page__action-button"
+        class="xcloud-page__action-button ui-action-button ui-action-button--brand"
         :scope-id="SPATIAL_NAV_SCOPE_IDS.appShell"
         :aria-label="t('xcloudPage.action.ariaLabel')"
         @click="handlePrimaryAction"
@@ -428,7 +428,7 @@ function unregisterTabSwitch(): void {
           :id="SPATIAL_NAV_NODE_IDS.pagePrimary.xcloud"
           as="button"
           type="button"
-          class="xcloud-page__action-button"
+          class="xcloud-page__action-button ui-action-button ui-action-button--brand"
           :scope-id="SPATIAL_NAV_SCOPE_IDS.appShell"
           :aria-label="
             isSearching
@@ -729,31 +729,65 @@ function unregisterTabSwitch(): void {
   min-height: var(--ui-xcloud-state-min-height);
 }
 
-.xcloud-page__action-button {
-  min-width: var(--ui-xcloud-action-min-width);
-  min-height: var(--ui-xcloud-action-min-height);
-  padding: 0 18px;
-  border: 1px solid var(--btn-border);
-  border-radius: var(--btn-radius);
-  background: var(--btn-primary-bg);
-  color: var(--btn-primary-text);
-  font-size: 15px;
-  line-height: 1;
-  font-weight: var(--ui-font-weight-bold);
-  cursor: pointer;
-  transition:
-    border-color var(--ui-motion-fast),
-    box-shadow var(--ui-motion-fast),
-    filter var(--ui-motion-fast);
+.xcloud-page__state--logged-out {
+  width: min(100%, var(--ui-login-content-width));
+  margin: var(--ui-space-4xl) auto 0;
+  align-items: center;
+  text-align: center;
 }
 
-.xcloud-page__action-button:hover {
+.xcloud-page__state--logged-out .ui-page-title,
+.xcloud-page__state--logged-out .ui-page-body {
+  width: min(100%, var(--ui-login-desc-width));
+}
+
+.xcloud-page__action-button {
+  min-width: min(100%, var(--ui-login-signin-width));
+  min-height: var(--ui-xcloud-action-min-height);
+  margin: 0 auto;
+  cursor: pointer;
+}
+
+.xcloud-page__state:not(.xcloud-page__state--logged-out) .xcloud-page__action-button {
+  min-width: var(--ui-xcloud-action-min-width);
+  margin: 0;
+}
+
+.xcloud-page__state:not(.xcloud-page__state--logged-out) .xcloud-page__action-button.ui-action-button {
+  background: var(--btn-primary-bg);
+  color: var(--btn-primary-text);
+}
+
+.xcloud-page__state:not(.xcloud-page__state--logged-out) .xcloud-page__action-button.ui-action-button--brand {
+  border-color: var(--btn-border);
+}
+
+.xcloud-page__state:not(.xcloud-page__state--logged-out) .xcloud-page__action-button:hover {
   background: var(--btn-primary-bg-hover);
   filter: brightness(1.01);
 }
 
-.xcloud-page__action-button[data-focused='true'] {
+.xcloud-page__state:not(.xcloud-page__state--logged-out) .xcloud-page__action-button[data-focused='true'] {
   box-shadow: var(--shadow-xbox-focus);
+}
+
+.xcloud-page__state--logged-out .xcloud-page__action-button {
+  transition:
+    border-color var(--ui-motion-fast),
+    background-color var(--ui-motion-fast),
+    box-shadow var(--ui-motion-fast),
+    transform var(--ui-motion-fast);
+}
+
+.xcloud-page__state--logged-out .xcloud-page__action-button[data-focused='true'] {
+  transform: none;
+  box-shadow: var(--shadow-xbox-focus);
+}
+
+.xcloud-page__state--logged-out .xcloud-page__action-button:disabled {
+  opacity: 0.62;
+  cursor: not-allowed;
+  transform: none;
 }
 
 :global(html[data-ui-density='compact']) .xcloud-page__toolbar,
