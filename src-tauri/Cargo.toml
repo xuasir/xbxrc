@@ -42,8 +42,6 @@ p256.workspace = true
 
 ring.workspace = true
 
-openssl.workspace = true
-
 base64.workspace = true
 
 hmac.workspace = true

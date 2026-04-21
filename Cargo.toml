@@ -62,10 +62,6 @@ p256 = { version = "0.13.2", features = [
   "sha256"
 ] }
 ring = "0.17.14"
-openssl = { version = "0.10.75", features = [
-  "v110",
-  "vendored"
-] }
 hmac = "0.12.1"
 sha2 = "0.10.9"
 hex-literal = "1.1.0"

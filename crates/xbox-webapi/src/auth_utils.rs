@@ -1,7 +1,6 @@
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
-use openssl::ec::{EcGroup, EcKey};
-use openssl::nid::Nid;
-use openssl::pkey::PKey;
+use p256::ecdsa::SigningKey;
+use p256::elliptic_curve::rand_core::OsRng;
 use rand::RngExt;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -26,25 +25,10 @@ pub struct XalRedirectFlow {
 }
 
 pub fn generate_ecdsa_keypair() -> Result<JwtKeysPayload, String> {
-    let group = EcGroup::from_curve_name(Nid::X9_62_PRIME256V1)
-        .map_err(|e: openssl::error::ErrorStack| e.to_string())?;
-    let key = EcKey::generate(&group).map_err(|e: openssl::error::ErrorStack| e.to_string())?;
-    let pkey = PKey::from_ec_key(key).map_err(|e: openssl::error::ErrorStack| e.to_string())?;
-
-    let ec_key = pkey
-        .ec_key()
-        .map_err(|e: openssl::error::ErrorStack| e.to_string())?;
-    let public_key = ec_key.public_key();
-
-    let mut ctx =
-        openssl::bn::BigNumContext::new().map_err(|e: openssl::error::ErrorStack| e.to_string())?;
-    let pub_bytes = public_key
-        .to_bytes(
-            &group,
-            openssl::ec::PointConversionForm::UNCOMPRESSED,
-            &mut ctx,
-        )
-        .map_err(|e: openssl::error::ErrorStack| e.to_string())?;
+    let signing_key = SigningKey::random(&mut OsRng);
+    let verifying_key = signing_key.verifying_key();
+    let pub_bytes = verifying_key.to_encoded_point(false);
+    let pub_bytes = pub_bytes.as_bytes();
 
     if pub_bytes.len() != 65 || pub_bytes[0] != 0x04 {
         return Err("Invalid public key format".to_string());
@@ -52,7 +36,7 @@ pub fn generate_ecdsa_keypair() -> Result<JwtKeysPayload, String> {
 
     let x = URL_SAFE_NO_PAD.encode(&pub_bytes[1..33]);
     let y = URL_SAFE_NO_PAD.encode(&pub_bytes[33..65]);
-    let d = URL_SAFE_NO_PAD.encode(ec_key.private_key().to_vec());
+    let d = URL_SAFE_NO_PAD.encode(signing_key.to_bytes());
 
     let mut jwk = serde_json::Map::new();
     jwk.insert(
@@ -100,4 +84,23 @@ pub fn get_random_state() -> String {
     let mut state_bytes = [0u8; 32];
     rand::rng().fill(&mut state_bytes);
     URL_SAFE_NO_PAD.encode(state_bytes)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn generate_ecdsa_keypair_produces_valid_p256_jwk_shape() {
+        let payload = generate_ecdsa_keypair().expect("generate keypair");
+        let jwk = payload.private_jwk.expect("private_jwk");
+        let obj = jwk.as_object().expect("jwk object");
+        assert_eq!(obj.get("kty").and_then(|v| v.as_str()), Some("EC"));
+        assert_eq!(obj.get("crv").and_then(|v| v.as_str()), Some("P-256"));
+        assert_eq!(obj.get("alg").and_then(|v| v.as_str()), Some("ES256"));
+        assert_eq!(obj.get("use").and_then(|v| v.as_str()), Some("sig"));
+        assert!(obj.get("x").and_then(|v| v.as_str()).is_some());
+        assert!(obj.get("y").and_then(|v| v.as_str()).is_some());
+        assert!(obj.get("d").and_then(|v| v.as_str()).is_some());
+    }
 }

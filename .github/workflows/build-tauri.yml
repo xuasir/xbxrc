@@ -32,32 +32,24 @@ jobs:
 
       - name: Install system dependencies (macOS)
         if: runner.os == 'macOS'
-        run: brew install opus pkg-config ffmpeg
+        run: brew install opus pkg-config
 
-      - name: Install FFmpeg (Windows, prebuilt)
-        if: runner.os == 'Windows'
-        shell: pwsh
+      - name: Verify vendored FFmpeg SDK
+        shell: bash
         run: |
-          # 使用 BtbN 预编译包，避免从源码编译 FFmpeg（耗时 40-60 分钟）
-          # latest tag 下文件名固定，不含 commit hash
-          $url  = "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-n7.1-latest-win64-gpl-shared-7.1.zip"
-          $dest = "${{ runner.temp }}\ffmpeg"
-          $zip  = "${{ runner.temp }}\ffmpeg.zip"
-
-          Write-Host "Downloading FFmpeg prebuilt..."
-          Invoke-WebRequest -Uri $url -OutFile $zip -UseBasicParsing
-
-          Expand-Archive -Path $zip -DestinationPath $dest -Force
-
-          # 解压后目录名形如 ffmpeg-n7.1-latest-win64-gpl-shared-7.1
-          $inner = Get-ChildItem -Path $dest -Directory | Select-Object -First 1
-          $ffmpegDir = $inner.FullName
-          Write-Host "FFmpeg dir: $ffmpegDir"
-
-          echo "FFMPEG_DIR=$ffmpegDir"                      >> $env:GITHUB_ENV
-          echo "FFMPEG_INCLUDE_DIR=$ffmpegDir\include"      >> $env:GITHUB_ENV
-          echo "FFMPEG_LIB_DIR=$ffmpegDir\lib"              >> $env:GITHUB_ENV
-          echo "$ffmpegDir\bin"                             >> $env:GITHUB_PATH
+          if [[ "${{ runner.os }}" == "Windows" ]]; then
+            test -d "third_party/ffmpeg/windows-x64/include"
+            test -d "third_party/ffmpeg/windows-x64/lib"
+            test -d "third_party/ffmpeg/windows-x64/bin"
+          else
+            if [[ "$(uname -m)" == "arm64" ]]; then
+              test -d "third_party/ffmpeg/macos-arm64/include"
+              test -d "third_party/ffmpeg/macos-arm64/lib"
+            else
+              test -d "third_party/ffmpeg/macos-x64/include"
+              test -d "third_party/ffmpeg/macos-x64/lib"
+            fi
+          fi
 
       - name: Install LLVM (Windows, bindgen)
         if: runner.os == 'Windows'
@@ -92,7 +84,6 @@ jobs:
       - name: Install JS dependencies
         run: pnpm install --frozen-lockfile
 
-      # 让 cc/cl 在 PATH 中，否则 openssl-sys 编译 expando.c 可能找不到 cl.exe
       - name: Setup MSVC environment (Windows)
         if: runner.os == 'Windows'
         uses: ilammy/msvc-dev-cmd@v1
@@ -101,19 +92,15 @@ jobs:
 
       - name: Build Tauri bundles (macOS dmg)
         if: runner.os == 'macOS'
-        run: pnpm tauri build --bundles dmg
+        run: pnpm tauri:build:dmg
         env:
           CI: true
-          # vendored OpenSSL 在 Windows 上可自动降级为 no-asm；显式固定后可避免 runner 镜像差异影响构建路径。
-          OPENSSL_RUST_USE_NASM: 0
 
       - name: Build Tauri bundles (Windows exe)
         if: runner.os == 'Windows'
-        run: pnpm tauri build --bundles nsis
+        run: pnpm tauri:build:nsis
         env:
           CI: true
-          # vendored OpenSSL 在 Windows 上可自动降级为 no-asm；显式固定后可避免 runner 镜像差异影响构建路径。
-          OPENSSL_RUST_USE_NASM: 0
 
       - name: Upload bundle artifacts
         uses: actions/upload-artifact@v4

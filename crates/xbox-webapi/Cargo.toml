@@ -13,7 +13,10 @@ thiserror.workspace = true
 
 chrono = { version = "0.4", features = [ "serde" ] }
 base64 = "0.22"
-p256 = { version = "0.13", features = [ "ecdsa" ] }
+p256 = { version = "0.13", features = [
+  "ecdsa",
+  "std"
+] }
 uuid = { version = "1.0", features = [
   "v4",
   "serde"
@@ -22,7 +25,4 @@ uuid = { version = "1.0", features = [
 rand.workspace = true
 
 sha2 = "0.10"
-
-openssl.workspace = true
-
 tokio = { version = "1", features = [ "time" ] }
