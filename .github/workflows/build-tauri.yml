@@ -25,6 +25,9 @@ jobs:
             label: windows
 
     runs-on: ${{ matrix.os }}
+    env:
+      CMAKE_ARGS: -DCMAKE_POLICY_VERSION_MINIMUM=3.5
+      CMAKE_POLICY_VERSION_MINIMUM: "3.5"
 
     steps:
       - name: Checkout
