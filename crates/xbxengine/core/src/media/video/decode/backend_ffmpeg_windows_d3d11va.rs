@@ -427,7 +427,7 @@ impl FfmpegWindowsD3d11vaDecoder {
         let descriptor = WindowsD3d11TextureDescriptor {
             texture_ptr,
             shared_handle: shared_handle.0,
-            dxgi_format: DXGI_FORMAT(desc.Format.0).0,
+            dxgi_format: desc.Format.0 as u32,
             array_slice,
             color_matrix: map_color_matrix(unsafe { (*frame).colorspace }),
             color_primaries: map_color_primaries(unsafe { (*frame).color_primaries }),

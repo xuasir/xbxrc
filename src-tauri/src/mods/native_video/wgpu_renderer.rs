@@ -16,8 +16,8 @@ use raw_window_handle::{
 };
 #[cfg(target_os = "windows")]
 use raw_window_handle::{
-    DisplayHandle, HandleError, HasDisplayHandle, HasWindowHandle, Win32WindowHandle, WindowHandle,
-    WindowsDisplayHandle,
+    DisplayHandle, HandleError, HasDisplayHandle, HasWindowHandle, RawWindowHandle,
+    Win32WindowHandle, WindowHandle, WindowsDisplayHandle,
 };
 #[cfg(target_os = "windows")]
 use std::num::NonZeroIsize;

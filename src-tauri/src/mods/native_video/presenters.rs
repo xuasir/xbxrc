@@ -20,11 +20,12 @@ use super::{
     HOST_RENDER_FPS_WINDOW_MS, HOST_RENDER_FRAME_AGE_MULTIPLIER, HOST_RENDER_MAX_FRAME_AGE_MS,
     HOST_RENDER_MIN_FRAME_AGE_MS, HOST_TIMING_QUEUE_WARN_MS, HOST_TIMING_TICK_WARN_MS,
 };
+use super::{now_ms_f64, record_native_video_timing_event_lazy, record_native_video_trace, NativeVideoViewportState};
+#[cfg(target_os = "macos")]
 use super::{
-    drop_display_layer, drop_wgpu_host_view, ensure_display_layer, now_ms_f64,
-    record_native_video_timing_event_lazy, record_native_video_trace, run_layer_present_tick,
+    drop_display_layer, drop_wgpu_host_view, ensure_display_layer, run_layer_present_tick,
     run_wgpu_render_tick, MacOsDisplayLinkHandle, MacOsLayerDisplayLinkHandle, MacOsLayerState,
-    MacOsWgpuState, MacOsWgpuTelemetry, NativeVideoViewportState,
+    MacOsWgpuState, MacOsWgpuTelemetry,
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -441,6 +442,9 @@ impl NativeVideoPresenter for WindowsWgpuPresenter {
             return;
         };
         let renderer_state = self.renderer_state.lock().ok();
+        let last_presented_frame_seq = renderer_state
+            .as_ref()
+            .and_then(|state| state.last_presented_frame_seq);
         viewport.latest_host_present_time_ms = telemetry.latest_present_time_ms;
         viewport.host_present_fps = telemetry.present_fps();
         viewport.host_present_enqueue_count_total = telemetry.present_enqueue_count_total;
@@ -452,11 +456,8 @@ impl NativeVideoPresenter for WindowsWgpuPresenter {
         viewport.host_display_tick_epoch = telemetry.display_tick_epoch;
         viewport.host_present_epoch = telemetry.present_epoch;
         viewport.host_cadence_phase = Some(telemetry.cadence_phase.as_str().to_string());
-        viewport.last_displayed_frame_seq =
-            slot_diag.as_ref().and_then(|diag| diag.displayed_frame_seq);
-        viewport.last_displayed_frame_rtp_timestamp = slot_diag
-            .as_ref()
-            .and_then(|diag| diag.displayed_frame_rtp_timestamp);
+        viewport.last_displayed_frame_seq = last_presented_frame_seq;
+        viewport.last_displayed_frame_rtp_timestamp = None;
         viewport.last_displayed_at_ms = telemetry.latest_present_time_ms;
         viewport.host_display_interval_ms = telemetry.display_interval_ms();
         viewport.host_frame_age_budget_ms = Some(telemetry.frame_age_budget_ms());
