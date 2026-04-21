@@ -110,6 +110,7 @@ export interface StreamStats {
   videoDecoderRecoveryStatus?: number
   videoDecoderRecoveryStateChangedAtMs?: number
   videoRendererStalled?: boolean
+  videoRendererStallBlocksPresentation?: boolean
   packetAgeMs?: number
   decodeAgeMs?: number
   presentAgeMs?: number

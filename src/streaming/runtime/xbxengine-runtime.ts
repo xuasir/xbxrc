@@ -301,6 +301,8 @@ export function createXbxEngineRuntime(options: {
         videoDecoderRecoveryStateChangedAtMs:
           snapshot.video_decoder_recovery_state_changed_at_ms,
         videoRendererStalled: snapshot.video_renderer_stalled,
+        videoRendererStallBlocksPresentation:
+          snapshot.video_renderer_stall_blocks_presentation,
         packetAgeMs: snapshot.packet_age_ms,
         decodeAgeMs: snapshot.decode_age_ms,
         presentAgeMs: snapshot.present_age_ms,

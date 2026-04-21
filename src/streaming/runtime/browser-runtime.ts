@@ -115,12 +115,7 @@ function createUnavailableError(): Error {
 }
 
 function shouldLogRawSdp(): boolean {
-  try {
-    return globalThis.localStorage?.getItem('streaming.debugRawSdp') === '1'
-  }
-  catch {
-    return false
-  }
+  return false
 }
 
 function buildSdpSummary(sdp: string): string {
@@ -131,23 +126,10 @@ function buildSdpSummary(sdp: string): string {
 }
 
 function shouldEnableSdpPatch(): boolean {
-  try {
-    return globalThis.localStorage?.getItem('streaming.disableSdpPatch') !== '1'
-  }
-  catch {
-    return true
-  }
+  return true
 }
 
 function resolveRendererPipelineOverride(): 'video' | 'webgl2' | 'auto' {
-  try {
-    const raw = globalThis.localStorage?.getItem('streaming.renderPipelineOverride')
-    if (raw === 'video' || raw === 'webgl2') {
-      return raw
-    }
-  }
-  catch {
-  }
   return 'auto'
 }
 
@@ -164,32 +146,15 @@ function resolveIceCandidatePolicyConfig(spec: RuntimeLaunchSpec): {
   if (spec.runtime.iceCandidatePolicy !== undefined) {
     return spec.runtime.iceCandidatePolicy
   }
-
-  // 兼容旧版本：如果上游没下发策略，才回退到 localStorage。
-  try {
-    const store = globalThis.localStorage
-    return {
-      enabled: store?.getItem('streaming.icePolicyEnabled') !== '0',
-      preferIpv6: store?.getItem('streaming.icePreferIpv6') === '1',
-      preferUdp: store?.getItem('streaming.icePreferUdp') !== '0',
-      allowTcpFallback: store?.getItem('streaming.iceAllowTcpFallback') !== '0',
-      relayBias: store?.getItem('streaming.iceRelayBias') === 'prefer' ? 'prefer' : 'neutral',
-      enableTeredoDerivation: store?.getItem('streaming.iceEnableTeredoDerivation') === '1',
-      enableFamilyMismatchGate: store?.getItem('streaming.iceEnableFamilyMismatchGate') !== '0',
-      source: 'debugOverride',
-    }
-  }
-  catch {
-    return {
-      enabled: true,
-      preferIpv6: false,
-      preferUdp: true,
-      allowTcpFallback: true,
-      relayBias: 'neutral',
-      enableTeredoDerivation: spec.targetType === 'home',
-      enableFamilyMismatchGate: true,
-      source: 'settings',
-    }
+  return {
+    enabled: true,
+    preferIpv6: false,
+    preferUdp: true,
+    allowTcpFallback: true,
+    relayBias: 'neutral',
+    enableTeredoDerivation: spec.targetType === 'home',
+    enableFamilyMismatchGate: true,
+    source: 'settings',
   }
 }
 

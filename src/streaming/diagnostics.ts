@@ -91,6 +91,9 @@ export function buildStreamDiagnosticsSnapshot(input: {
   const rendererCapabilityReason = input.runtimeSnapshot?.rendererCapabilityReason?.trim() || undefined
   const icePolicyMode = input.runtimeSnapshot?.icePolicyMode
   const icePolicyDigest = input.runtimeSnapshot?.icePolicyDigest?.trim() || undefined
+  const videoRendererStalled = input.runtimeSnapshot?.videoRendererStalled
+  const videoRendererStallBlocksPresentation =
+    input.runtimeSnapshot?.videoRendererStallBlocksPresentation
   const transportSummary = resolveTransportSummary({
     transportPath,
     transportCandidatePair,
@@ -216,6 +219,8 @@ export function buildStreamDiagnosticsSnapshot(input: {
     rendererCapabilityReason,
     icePolicyMode,
     icePolicyDigest,
+    videoRendererStalled,
+    videoRendererStallBlocksPresentation,
     isRelayPath: transportPath?.toLowerCase().startsWith('relay') === true,
     isRecovering,
     isDisplaySupplyLimited,

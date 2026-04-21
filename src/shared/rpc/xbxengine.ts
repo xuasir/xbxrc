@@ -181,6 +181,7 @@ export interface XbxEngineStatsDto {
   video_decoder_recovery_status?: number
   video_decoder_recovery_state_changed_at_ms?: number
   video_renderer_stalled?: boolean
+  video_renderer_stall_blocks_presentation?: boolean
   packet_age_ms?: number
   decode_age_ms?: number
   present_age_ms?: number

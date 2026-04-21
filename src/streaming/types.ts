@@ -140,6 +140,7 @@ export interface StreamPerformanceSnapshot {
   videoDecoderRecoveryStatus?: number
   videoDecoderRecoveryStateChangedAtMs?: number
   videoRendererStalled?: boolean
+  videoRendererStallBlocksPresentation?: boolean
   packetAgeMs?: number
   decodeAgeMs?: number
   presentAgeMs?: number
@@ -301,6 +302,8 @@ export interface StreamSessionDiagnosticsSnapshot {
   rendererCapabilityReason?: string
   icePolicyMode?: 'passthrough' | 'policy'
   icePolicyDigest?: string
+  videoRendererStalled?: boolean
+  videoRendererStallBlocksPresentation?: boolean
   isRelayPath: boolean
   isRecovering: boolean
   /** 显示供给受限（非传输/解码主恢复链），单独提示避免与「连接恢复中」混淆 */

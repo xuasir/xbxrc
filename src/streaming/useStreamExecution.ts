@@ -66,7 +66,7 @@ function resolveIceCandidatePolicySpec(input: {
   streamConfig: StreamConfigSnapshot
   targetType: RuntimeLaunchSpec['targetType']
 }): IceCandidatePolicySpec {
-  const defaults: IceCandidatePolicySpec = {
+  return {
     enabled: input.streamConfig.ice_policy_enabled ?? true,
     preferIpv6: input.streamConfig.ice_policy_prefer_ipv6 ?? false,
     preferUdp: input.streamConfig.ice_policy_prefer_udp ?? true,
@@ -77,48 +77,6 @@ function resolveIceCandidatePolicySpec(input: {
       ?? (input.targetType === 'home'),
     enableFamilyMismatchGate: input.streamConfig.ice_policy_enable_family_mismatch_gate ?? true,
     source: 'settings',
-  }
-
-  try {
-    const store = globalThis.localStorage
-    const debugEnabled = store?.getItem('streaming.icePolicyDebugOverride') === '1'
-      || store?.getItem('streaming.icePolicyEnabled') !== null
-      || store?.getItem('streaming.icePreferIpv6') !== null
-      || store?.getItem('streaming.icePreferUdp') !== null
-      || store?.getItem('streaming.iceAllowTcpFallback') !== null
-      || store?.getItem('streaming.iceRelayBias') !== null
-      || store?.getItem('streaming.iceEnableTeredoDerivation') !== null
-      || store?.getItem('streaming.iceEnableFamilyMismatchGate') !== null
-
-    if (!debugEnabled) {
-      return defaults
-    }
-
-    return {
-      enabled: store?.getItem('streaming.icePolicyEnabled') !== null
-        ? store?.getItem('streaming.icePolicyEnabled') !== '0'
-        : defaults.enabled,
-      preferIpv6: store?.getItem('streaming.icePreferIpv6') !== null
-        ? store?.getItem('streaming.icePreferIpv6') === '1'
-        : defaults.preferIpv6,
-      preferUdp: store?.getItem('streaming.icePreferUdp') !== null
-        ? store?.getItem('streaming.icePreferUdp') !== '0'
-        : defaults.preferUdp,
-      allowTcpFallback: store?.getItem('streaming.iceAllowTcpFallback') !== null
-        ? store?.getItem('streaming.iceAllowTcpFallback') !== '0'
-        : defaults.allowTcpFallback,
-      relayBias: store?.getItem('streaming.iceRelayBias') === 'prefer' ? 'prefer' : defaults.relayBias,
-      enableTeredoDerivation: store?.getItem('streaming.iceEnableTeredoDerivation') !== null
-        ? store?.getItem('streaming.iceEnableTeredoDerivation') === '1'
-        : defaults.enableTeredoDerivation,
-      enableFamilyMismatchGate: store?.getItem('streaming.iceEnableFamilyMismatchGate') !== null
-        ? store?.getItem('streaming.iceEnableFamilyMismatchGate') !== '0'
-        : defaults.enableFamilyMismatchGate,
-      source: 'debugOverride',
-    }
-  }
-  catch {
-    return defaults
   }
 }
 
