@@ -1,10 +1,10 @@
 use std::collections::{HashMap, HashSet};
 
 use ohmygamepad_protocol::{
-    GamepadSlotBindingDto, GamepadSlotSnapshotDto, LogicalPadBindingDto,
-    LogicalPadId, LogicalPadSnapshotDto, OhMyGamepadBindingModeDto, OhMyGamepadDeviceDto,
-    OhMyGamepadInputPolicyDto, OhMyGamepadRuntimeHapticsDto,
-    OhMyGamepadRuntimeSnapshotDto, OhMyGamepadSamplingConfigDto,
+    GamepadSlotBindingDto, GamepadSlotSnapshotDto, LogicalPadBindingDto, LogicalPadId,
+    LogicalPadSnapshotDto, OhMyGamepadBindingModeDto, OhMyGamepadDeviceDto,
+    OhMyGamepadInputPolicyDto, OhMyGamepadRuntimeHapticsDto, OhMyGamepadRuntimeSnapshotDto,
+    OhMyGamepadSamplingConfigDto,
 };
 
 use crate::{
@@ -466,8 +466,7 @@ fn pad_order(pad_id: LogicalPadId) -> u8 {
 }
 
 fn pad_payload_changed(left: &LogicalPadSnapshotDto, right: &LogicalPadSnapshotDto) -> bool {
-    left.device_ids != right.device_ids
-        || left.state != right.state
+    left.device_ids != right.device_ids || left.state != right.state
 }
 
 #[cfg(test)]

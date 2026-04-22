@@ -247,10 +247,7 @@ impl ActionCoordinator {
 
         // IDR未在飞行中，发送新的IDR
         self.state_machine.mark_idr_requested();
-        RecoveryDecision::new(
-            RecoveryAction::RequestPli,
-            "request new IDR".to_string(),
-        )
+        RecoveryDecision::new(RecoveryAction::RequestPli, "request new IDR".to_string())
     }
 
     /// 从DecoderRecovery状态决策

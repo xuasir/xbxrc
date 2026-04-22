@@ -159,7 +159,9 @@ impl GamepadProvider for GamepadService {
     }
 
     fn shutdown(&self) {
-        let _ = self.host.set_input_policy(OhMyGamepadInputPolicyDto::Shared);
+        let _ = self
+            .host
+            .set_input_policy(OhMyGamepadInputPolicyDto::Shared);
     }
 }
 

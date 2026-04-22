@@ -123,7 +123,10 @@ impl RecoveryDecision {
     /// 是否是keyframe请求
     #[cfg(test)]
     pub(crate) fn is_keyframe_request(&self) -> bool {
-        matches!(self.action, RecoveryAction::RequestPli | RecoveryAction::RequestFir)
+        matches!(
+            self.action,
+            RecoveryAction::RequestPli | RecoveryAction::RequestFir
+        )
     }
 }
 

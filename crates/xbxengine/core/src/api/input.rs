@@ -97,9 +97,9 @@ impl XbxEngineInputBackend for OhMyGamepadXbxEngineInputBackend {
         let host = self.ensure_host()?;
         Self::ensure_stream_sampling(host)?;
         host.set_input_policy(OhMyGamepadInputPolicyDto::StreamOnly)
-        .map_err(|error| {
-            XbxEngineRuntimeError::new(format!("setOhMyGamepadInputPolicy:{error:?}"))
-        })?;
+            .map_err(|error| {
+                XbxEngineRuntimeError::new(format!("setOhMyGamepadInputPolicy:{error:?}"))
+            })?;
         let _ = session_id;
         self.snapshot_status()
     }

@@ -8,9 +8,7 @@ use ohmygamepad_protocol::LogicalPadStateDto;
 #[cfg(target_os = "macos")]
 use crate::macos_keyboard_hid;
 use crate::{
-    keyboard::{
-        OhMyGamepadKeyboardKey, OhMyGamepadKeyboardMapper, OhMyGamepadKeyboardMapping,
-    },
+    keyboard::{OhMyGamepadKeyboardKey, OhMyGamepadKeyboardMapper, OhMyGamepadKeyboardMapping},
     OhMyGamepadService, OhMyGamepadServiceError,
 };
 

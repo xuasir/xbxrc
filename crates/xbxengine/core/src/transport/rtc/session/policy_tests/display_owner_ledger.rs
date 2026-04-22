@@ -23,9 +23,10 @@ fn recovery_decision_ledger_is_written_with_budget_snapshot() {
         320.0,
     );
     let commands = transport_commands(policy.on_snapshot(&snapshot));
-    assert!(commands
-        .iter()
-        .any(|command| matches!(command, TransportCommand::RequestPli { .. } | TransportCommand::RequestFir { .. })));
+    assert!(commands.iter().any(|command| matches!(
+        command,
+        TransportCommand::RequestPli { .. } | TransportCommand::RequestFir { .. }
+    )));
 
     let stats = runtime_stats.lock().expect("runtime stats lock");
     let ledger = stats
@@ -55,9 +56,10 @@ fn recovery_decision_ledger_keeps_pending_action_latest_while_recent_history_rec
         320.0,
     );
     let first_commands = transport_commands(policy.on_snapshot(&first));
-    assert!(first_commands
-        .iter()
-        .any(|command| matches!(command, TransportCommand::RequestPli { .. } | TransportCommand::RequestFir { .. })));
+    assert!(first_commands.iter().any(|command| matches!(
+        command,
+        TransportCommand::RequestPli { .. } | TransportCommand::RequestFir { .. }
+    )));
     let first_decision_id = runtime_stats
         .lock()
         .expect("runtime stats lock")
@@ -99,9 +101,10 @@ fn recovery_decision_ledger_allows_no_signal_to_be_latest_after_pending_command_
         320.0,
     );
     let first_commands = transport_commands(policy.on_snapshot(&first));
-    assert!(first_commands
-        .iter()
-        .any(|command| matches!(command, TransportCommand::RequestPli { .. } | TransportCommand::RequestFir { .. })));
+    assert!(first_commands.iter().any(|command| matches!(
+        command,
+        TransportCommand::RequestPli { .. } | TransportCommand::RequestFir { .. }
+    )));
     RuntimeStatsSink::update_shared(runtime_stats.as_ref(), |stats| {
         if let Some(ledger) = stats.latest_recovery_decision_ledger.as_mut() {
             ledger.command_result = Some("deferred".to_string());
@@ -142,9 +145,10 @@ fn high_no_pending_but_fresh_present_does_not_force_keyframe() {
         220.0,
     );
     let commands = transport_commands(policy.on_snapshot(&snapshot));
-    assert!(commands
-        .iter()
-        .all(|command| !matches!(command, TransportCommand::RequestPli { .. } | TransportCommand::RequestFir { .. })));
+    assert!(commands.iter().all(|command| !matches!(
+        command,
+        TransportCommand::RequestPli { .. } | TransportCommand::RequestFir { .. }
+    )));
 }
 
 #[test]
@@ -179,9 +183,10 @@ fn critical_display_supply_uses_recovery_controller_budget() {
     snapshot.recovery.last_observed_at_ms = Some(361.0);
     let second = transport_commands(policy.on_snapshot(&snapshot));
     assert!(
-        second
-            .iter()
-            .all(|command| !matches!(command, TransportCommand::RequestPli { .. } | TransportCommand::RequestFir { .. })),
+        second.iter().all(|command| !matches!(
+            command,
+            TransportCommand::RequestPli { .. } | TransportCommand::RequestFir { .. }
+        )),
         "display supply signal should not emit keyframe commands"
     );
 }
@@ -475,9 +480,10 @@ fn soft_display_supply_critical_is_absorbed_before_recovery_command() {
     let _ = transport_commands(policy.on_snapshot(&first));
     let second = build_snapshot(ConnectionLifecycleStateFact::Connected, "none", 420.0);
     let second_cmds = transport_commands(policy.on_snapshot(&second));
-    assert!(second_cmds
-        .iter()
-        .all(|command| !matches!(command, TransportCommand::RequestPli { .. } | TransportCommand::RequestFir { .. })));
+    assert!(second_cmds.iter().all(|command| !matches!(
+        command,
+        TransportCommand::RequestPli { .. } | TransportCommand::RequestFir { .. }
+    )));
 
     if let Ok(mut stats) = runtime_stats.lock() {
         let now_ms = crate::transport::rtc::stats::now_ms_f64();
@@ -489,9 +495,10 @@ fn soft_display_supply_critical_is_absorbed_before_recovery_command() {
 
     let third = build_snapshot(ConnectionLifecycleStateFact::Connected, "none", 500.0);
     let third_cmds = transport_commands(policy.on_snapshot(&third));
-    assert!(third_cmds
-        .iter()
-        .all(|command| !matches!(command, TransportCommand::RequestPli { .. } | TransportCommand::RequestFir { .. })));
+    assert!(third_cmds.iter().all(|command| !matches!(
+        command,
+        TransportCommand::RequestPli { .. } | TransportCommand::RequestFir { .. }
+    )));
     {
         let stats = runtime_stats.lock().expect("runtime stats lock");
         assert_eq!(stats.video_owner_state.as_deref(), Some("degraded-serving"));
@@ -719,21 +726,20 @@ fn transport_await_request_pli_keeps_rebuilding_supply_in_local_self_healing() {
             audio_bytes_total: 40_000,
             observed_at_ms: 940.0,
         });
-        stats.latest_video_timeline_observation =
-            Some(crate::XbxEngineVideoTimelineObservation {
-                observation_id: 12,
-                source_event: "frame-await-recovery-anchor".to_string(),
-                gap: None,
-                frame: None,
-                chain: crate::XbxEngineVideoTimelineChainSnapshot {
-                    state: "recovering".to_string(),
-                    reason: Some("transportAwaitRecoveryAnchor".to_string()),
-                    chain_break_evidence: None,
+        stats.latest_video_timeline_observation = Some(crate::XbxEngineVideoTimelineObservation {
+            observation_id: 12,
+            source_event: "frame-await-recovery-anchor".to_string(),
+            gap: None,
+            frame: None,
+            chain: crate::XbxEngineVideoTimelineChainSnapshot {
+                state: "recovering".to_string(),
+                reason: Some("transportAwaitRecoveryAnchor".to_string()),
+                chain_break_evidence: None,
 
-                    observed_at_ms: 940.0,
-                },
                 observed_at_ms: 940.0,
-            });
+            },
+            observed_at_ms: 940.0,
+        });
     }
     let mut policy = RtcSessionPolicy::new(runtime_config, runtime_stats.clone());
     let snapshot = build_snapshot(

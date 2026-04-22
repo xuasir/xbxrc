@@ -23,8 +23,8 @@ use crate::{
 };
 
 use super::backend_ffmpeg::{
-    av_err_eagain, av_err_eof, av_err_invaliddata, error_from_message, ffmpeg_error,
-    ffmpeg_init_once, receive_decoded_frames_until_eagain, runtime_error_status_code,
+    av_err_eagain, av_err_eof, error_from_message, ffmpeg_error, ffmpeg_init_once,
+    receive_decoded_frames_until_eagain,
 };
 
 pub(crate) fn try_create_ffmpeg_windows_d3d11va_backend(
@@ -79,7 +79,7 @@ impl FfmpegWindowsD3d11vaDecoder {
             ));
         }
         unsafe {
-            (*codec_ctx).flags2 |= ffi::AV_CODEC_FLAG2_CHUNKS as i32;
+            // 上游传入的是完整 access unit；这里不打开 CHUNKS，避免硬解把帧边界语义放松。
             (*codec_ctx).thread_count = 1;
             (*codec_ctx).thread_type = 0;
         }
@@ -181,7 +181,11 @@ impl FfmpegWindowsD3d11vaDecoder {
         })
     }
 
-    fn queue_packet(&mut self, payload: &[u8]) -> Result<(), XbxEngineRuntimeError> {
+    fn queue_packet(
+        &mut self,
+        payload: &[u8],
+        is_keyframe: bool,
+    ) -> Result<(), XbxEngineRuntimeError> {
         if payload.is_empty() {
             return Ok(());
         }
@@ -202,6 +206,11 @@ impl FfmpegWindowsD3d11vaDecoder {
                 ));
             }
             std::ptr::copy_nonoverlapping(payload.as_ptr(), (*self.packet).data, payload.len());
+            (*self.packet).flags = if is_keyframe {
+                ffi::AV_PKT_FLAG_KEY as i32
+            } else {
+                0
+            };
             (*self.packet).pts = ffi::AV_NOPTS_VALUE;
             (*self.packet).dts = ffi::AV_NOPTS_VALUE;
         }
@@ -507,47 +516,10 @@ impl super::backend::XbxVideoDecoderBackend for FfmpegWindowsD3d11vaDecoder {
             });
         }
 
-        let decoder_payload = encoded_frame.h264.build_decoder_avcc_payload(
-            encoded_frame.payload.as_ref(),
-            encoded_frame.is_keyframe
-                || encoded_frame.config_changed
-                || encoded_frame.h264.parameter_sets_changed,
-        );
-        if decoder_payload.is_empty() {
-            return Ok(super::backend::XbxVideoDecoderBackendDecodeOutcome {
-                frames: Vec::new(),
-                send_packet_status: None,
-                receive_frame_status: None,
-            });
-        }
-        let nal_labels = encoded_frame.h264.nal_type_labels().join("|");
-        let bootstrap_reject_reason = encoded_frame
-            .h264
-            .bootstrap_reject_reason
-            .map(|reason| reason.as_str())
-            .unwrap_or("none");
-
-        match self.decode_with_payload(decoder_payload.as_ref()) {
-            Ok(outcome) => Ok(outcome),
-            Err(error)
-                if runtime_error_status_code(&error) == Some(av_err_invaliddata())
-                    && decoder_payload.as_slice() != encoded_frame.payload.as_ref() =>
-            {
-                log::warn!(
-                    "[video][decode][ffmpeg-d3d11va] invalid AVCC payload, retry with Annex-B packet rtpTs={} keyframe={} bootstrapReady={} bootstrapReject={} nalCount={} nalTypes={} avccBytes={} annexbBytes={}",
-                    encoded_frame.rtp_timestamp,
-                    encoded_frame.is_keyframe,
-                    encoded_frame.h264.bootstrap_ready,
-                    bootstrap_reject_reason,
-                    encoded_frame.h264.nals.len(),
-                    nal_labels,
-                    decoder_payload.len(),
-                    encoded_frame.payload.len()
-                );
-                self.decode_with_payload(encoded_frame.payload.as_ref())
-            }
-            Err(error) => Err(error),
-        }
+        // 和软件路径保持一致，直接喂完整 Annex-B access unit。
+        // 之前这里把输入重打成 AVCC，但没有同步设置 avcC/extradata 上下文，
+        // 会让 D3D11VA 进入“send 成功但长期不出帧”的灰区。
+        self.decode_with_payload(encoded_frame.payload.as_ref(), encoded_frame.is_keyframe)
     }
 }
 
@@ -555,8 +527,9 @@ impl FfmpegWindowsD3d11vaDecoder {
     fn decode_with_payload(
         &mut self,
         payload: &[u8],
+        is_keyframe: bool,
     ) -> Result<super::backend::XbxVideoDecoderBackendDecodeOutcome, XbxEngineRuntimeError> {
-        self.queue_packet(payload)?;
+        self.queue_packet(payload, is_keyframe)?;
         let send_packet_status = self.send_packet()?;
         let (frames, receive_frame_status) =
             receive_decoded_frames_until_eagain(|| self.receive_decoded_frame())?;

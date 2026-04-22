@@ -8,10 +8,9 @@ use ohmygamepad_core::{
 };
 use ohmygamepad_protocol::{
     LogicalPadBindingDto, LogicalPadStateDto, MultiControllerSamplingStrategyDto,
-    OhMyGamepadHapticsProviderKindDto, OhMyGamepadInputPolicyDto,
-    OhMyGamepadKeyboardMappingDto, OhMyGamepadRumbleRequestDto, OhMyGamepadRumbleResultDto,
-    OhMyGamepadRumbleTargetDto, OhMyGamepadRuntimeHapticsDto, OhMyGamepadRuntimeSnapshotDto,
-    OhMyGamepadSamplingConfigDto,
+    OhMyGamepadHapticsProviderKindDto, OhMyGamepadInputPolicyDto, OhMyGamepadKeyboardMappingDto,
+    OhMyGamepadRumbleRequestDto, OhMyGamepadRumbleResultDto, OhMyGamepadRumbleTargetDto,
+    OhMyGamepadRuntimeHapticsDto, OhMyGamepadRuntimeSnapshotDto, OhMyGamepadSamplingConfigDto,
 };
 use ohmygamepad_sdl3::{OhMyGamepadService, OhMyGamepadServiceConfig};
 
@@ -78,7 +77,10 @@ impl GamepadRuntimeHost {
 
         std::thread::spawn(move || {
             while let Ok(snapshot) = source_rx.recv() {
-                if tx.send(enrich_runtime_snapshot(snapshot, haptics_provider)).is_err() {
+                if tx
+                    .send(enrich_runtime_snapshot(snapshot, haptics_provider))
+                    .is_err()
+                {
                     break;
                 }
             }

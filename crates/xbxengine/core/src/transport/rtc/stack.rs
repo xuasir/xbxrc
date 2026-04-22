@@ -243,7 +243,11 @@ impl XbxActiveMediaStack {
         self.transport_bridge().pump_connection_and_media_ingress();
     }
 
-    fn record_transport_command_status(&self, command: TransportCommand, status: CommandResultStatus) {
+    fn record_transport_command_status(
+        &self,
+        command: TransportCommand,
+        status: CommandResultStatus,
+    ) {
         self.transport_bridge()
             .record_transport_command_status(command, status);
     }
@@ -366,9 +370,10 @@ impl XbxMediaStackPort for XbxActiveMediaStack {
             .map_err(|_| XbxEngineRuntimeError::new("xbxEngineRtcConnectionLockFailed"))?
             .request_video_pli_with_outcome(&self.runtime_stats);
         let status = match &result {
-            Ok(VideoKeyframeRequestOutcome::RequestedPli | VideoKeyframeRequestOutcome::RequestedFir) => {
-                CommandResultStatus::Succeeded
-            }
+            Ok(
+                VideoKeyframeRequestOutcome::RequestedPli
+                | VideoKeyframeRequestOutcome::RequestedFir,
+            ) => CommandResultStatus::Succeeded,
             Ok(VideoKeyframeRequestOutcome::Suppressed) => CommandResultStatus::Deferred {
                 reason: "sameFamilyTransportStageCoalesced".to_string(),
             },

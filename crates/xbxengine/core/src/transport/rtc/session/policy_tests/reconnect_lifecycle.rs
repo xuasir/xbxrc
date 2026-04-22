@@ -185,9 +185,10 @@ fn fallback_transport_await_recovery_keyframe_is_not_blocked_before_coordinator(
         100.0,
     );
     let commands = transport_commands(policy.on_snapshot(&snapshot));
-    assert!(commands
-        .iter()
-        .any(|command| matches!(command, TransportCommand::RequestPli { .. } | TransportCommand::RequestFir { .. })));
+    assert!(commands.iter().any(|command| matches!(
+        command,
+        TransportCommand::RequestPli { .. } | TransportCommand::RequestFir { .. }
+    )));
 }
 
 #[test]
@@ -285,9 +286,10 @@ fn pre_first_frame_bootstrap_missing_sps_with_recent_episode_coalesces_probe() {
     );
     let commands = transport_commands(policy.on_snapshot(&snapshot));
     assert!(
-        commands
-            .iter()
-            .all(|command| !matches!(command, TransportCommand::RequestPli { .. } | TransportCommand::RequestFir { .. })),
+        commands.iter().all(|command| !matches!(
+            command,
+            TransportCommand::RequestPli { .. } | TransportCommand::RequestFir { .. }
+        )),
         "recent first-frame keyframe episode should stay coalesced locally: {commands:?}"
     );
 

@@ -1500,7 +1500,10 @@ fn video_recovery_reports_feedback_target_unavailable_when_feedback_not_supporte
         .expect_err("缺少反馈能力时应返回 unavailable");
 
     let stats = runtime_stats.lock().expect("runtime stats lock");
-    assert!(control_dc_id.is_some(), "control channel id should still exist");
+    assert!(
+        control_dc_id.is_some(),
+        "control channel id should still exist"
+    );
     assert!(
         error
             .to_string()
@@ -2517,7 +2520,10 @@ fn request_video_pli_reports_feedback_target_unavailable_without_twcc_feedback_t
         "unexpected error: {error}"
     );
     let stats = runtime_stats.lock().unwrap();
-    assert_ne!(stats.latest_observation_label.as_deref(), Some("rtcVideoPliRequested"));
+    assert_ne!(
+        stats.latest_observation_label.as_deref(),
+        Some("rtcVideoPliRequested")
+    );
     assert_eq!(stats.video_pli_request_count_total, 0);
 }
 
@@ -2770,7 +2776,10 @@ fn request_video_keyframe_does_not_suppress_sustaining_recovery_when_fresh_non_i
     answer_io.pump(&mut answer_pc).unwrap();
 
     let stats = runtime_stats.lock().unwrap().clone();
-    assert_eq!(stats.latest_observation_label.as_deref(), Some("rtcVideoPliRequested"));
+    assert_eq!(
+        stats.latest_observation_label.as_deref(),
+        Some("rtcVideoPliRequested")
+    );
     assert_eq!(
         service.video_recovery_transport_state.stage,
         super::VideoRecoveryTransportStage::PictureLossIndication
@@ -2861,7 +2870,13 @@ fn keyframe_suppressed_outcome_is_recorded_as_deferred() {
     answer_io.pump(&mut answer_pc).unwrap();
 
     assert_eq!(outcome, VideoKeyframeRequestOutcome::RequestedPli);
-    assert_eq!(outcome.escalation_action_label().as_deref(), Some("requestPli"));
+    assert_eq!(
+        outcome.escalation_action_label().as_deref(),
+        Some("requestPli")
+    );
     let stats = runtime_stats.lock().unwrap();
-    assert_eq!(stats.latest_observation_label.as_deref(), Some("rtcVideoPliRequested"));
+    assert_eq!(
+        stats.latest_observation_label.as_deref(),
+        Some("rtcVideoPliRequested")
+    );
 }

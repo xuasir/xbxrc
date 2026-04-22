@@ -2,9 +2,8 @@ use crate::error::AppResult;
 use crate::mods::gamepad::GamepadDeviceProfileDto;
 use crate::AppState;
 use ohmygamepad_protocol::{
-    MultiControllerSamplingStrategyDto, OhMyGamepadInputPolicyDto,
-    OhMyGamepadKeyboardMappingDto, OhMyGamepadRumbleRequestDto, OhMyGamepadRumbleTargetDto,
-    OhMyGamepadSamplingConfigDto,
+    MultiControllerSamplingStrategyDto, OhMyGamepadInputPolicyDto, OhMyGamepadKeyboardMappingDto,
+    OhMyGamepadRumbleRequestDto, OhMyGamepadRumbleTargetDto, OhMyGamepadSamplingConfigDto,
 };
 use serde::Deserialize;
 use serde_json::{json, Value};

@@ -352,8 +352,8 @@ function closeActionSheet(): void {
 }
 
 function handleStreamMenuToggleRequested(): void {
+  // 组合键语义固定为“打开菜单”，关闭由 Back/B 键走各弹窗自身 close 流程处理。
   if (isMenuSheetOpen.value) {
-    closeActionSheet()
     return
   }
   openActionSheet()

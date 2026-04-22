@@ -303,10 +303,7 @@ fn recovery_wait_does_not_override_loss_semantics() {
         resolve_recovery_keyframe_action(true, true, false, false, 0, 1, false);
 
     assert!(!next_is_blocking_non_keyframe_admission);
-    assert_eq!(
-        recovery_action,
-        RecoveryKeyframeAction::DropAndRequestPli
-    );
+    assert_eq!(recovery_action, RecoveryKeyframeAction::DropAndRequestPli);
 }
 
 #[test]
@@ -315,10 +312,7 @@ fn lossy_keyframe_defers_to_nack_recovery_admission() {
         resolve_recovery_keyframe_action(true, false, false, true, 0, 2, true);
 
     assert!(!next_is_blocking_non_keyframe_admission);
-    assert_eq!(
-        recovery_action,
-        RecoveryKeyframeAction::DropAndRequestPli
-    );
+    assert_eq!(recovery_action, RecoveryKeyframeAction::DropAndRequestPli);
 }
 
 #[test]
@@ -327,10 +321,7 @@ fn short_sample_loss_burst_stays_in_drop_and_request_keyframe() {
         resolve_recovery_keyframe_action(true, false, false, false, 2, 1, false);
 
     assert!(!next_is_blocking_non_keyframe_admission);
-    assert_eq!(
-        recovery_action,
-        RecoveryKeyframeAction::DropAndRequestPli
-    );
+    assert_eq!(recovery_action, RecoveryKeyframeAction::DropAndRequestPli);
 }
 
 #[test]
@@ -339,10 +330,7 @@ fn longer_sample_loss_burst_still_defers_to_nack_recovery_admission() {
         resolve_recovery_keyframe_action(true, false, false, false, 3, 1, false);
 
     assert!(!next_is_blocking_non_keyframe_admission);
-    assert_eq!(
-        recovery_action,
-        RecoveryKeyframeAction::DropAndRequestPli
-    );
+    assert_eq!(recovery_action, RecoveryKeyframeAction::DropAndRequestPli);
 }
 
 #[test]
@@ -386,10 +374,7 @@ fn drop_and_request_action_contract_keeps_resolver_stateless() {
     let (next_is_blocking_non_keyframe_admission, recovery_action) =
         resolve_recovery_keyframe_action(true, true, false, true, 3, 2, false);
 
-    assert_eq!(
-        recovery_action,
-        RecoveryKeyframeAction::DropAndRequestPli
-    );
+    assert_eq!(recovery_action, RecoveryKeyframeAction::DropAndRequestPli);
     // resolve 层只给出动作，等待态由 action 分支显式处理，避免隐式耦合。
     assert!(!next_is_blocking_non_keyframe_admission);
 }
@@ -1385,6 +1370,51 @@ async fn bootstrap_packets_without_followup_boundary_can_emit_when_early_emit_en
     assert!(frame.is_keyframe);
     assert_eq!(frame.rtp_timestamp, 9000);
     assert!(transport_observation_rx.try_recv().is_err());
+}
+
+#[tokio::test]
+async fn materialized_keyframe_response_preserves_first_packet_sequence_in_diagnostics() {
+    let (tx, _transport_observation_rx, mut source) = make_video_source_for_test();
+    source.set_jitter_early_emit_enabled(true);
+    source
+        .runtime_stats
+        .record_keyframe_request_episode_requested(
+            901,
+            Some("transportAwaitRecoveryAnchor".to_string()),
+            100.0,
+            None,
+        );
+    source
+        .runtime_stats
+        .record_keyframe_request_episode_sent("pli", 120.0, Some(240.0));
+
+    send_bootstrap_access_unit(&tx, 100, 9_000).await;
+
+    let frame = tokio::time::timeout(Duration::from_millis(200), source.recv_frame_inner())
+        .await
+        .expect("reader should finish");
+    drop(tx);
+
+    let frame = frame.expect("early emit should materialize a frame");
+    assert_eq!(frame.first_packet_sequence, Some(100));
+
+    let (summary, episode) = source
+        .runtime_stats
+        .read(|stats| {
+            (
+                stats.latest_observation_summary.clone(),
+                stats.latest_keyframe_request_episode.clone(),
+            )
+        })
+        .expect("runtime stats");
+    let summary = summary.expect("response-observed summary");
+    assert!(summary.contains("firstVideoPacketSeq=100"));
+    assert!(summary.contains("firstKeyframePacketSeq=100"));
+
+    let episode = episode.expect("keyframe request episode");
+    assert_eq!(episode.first_video_packet_rtp_timestamp, Some(9_000));
+    assert_eq!(episode.first_video_packet_is_keyframe, Some(true));
+    assert_eq!(episode.response_rtp_timestamp, Some(9_000));
 }
 
 #[tokio::test]

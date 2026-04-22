@@ -13,9 +13,8 @@ use ohmygamepad_core::{
     NoopStreamSink, NoopUiSink,
 };
 use ohmygamepad_protocol::{
-    LogicalPadBindingDto, LogicalPadId, LogicalPadStateDto, OhMyGamepadBindingModeDto,
-    OhMyGamepadDeviceDto,
-    MultiControllerSamplingModeDto, MultiControllerSamplingStrategyDto,
+    LogicalPadBindingDto, LogicalPadId, LogicalPadStateDto, MultiControllerSamplingModeDto,
+    MultiControllerSamplingStrategyDto, OhMyGamepadBindingModeDto, OhMyGamepadDeviceDto,
     OhMyGamepadInputPolicyDto, OhMyGamepadKeyboardMappingDto, OhMyGamepadRumbleRequestDto,
     OhMyGamepadRumbleResultDto, OhMyGamepadRumbleTargetDto, OhMyGamepadRuntimeSnapshotDto,
     OhMyGamepadSamplingConfigDto, OhMyGamepadSamplingPresetDto, OhMyGamepadServiceCommandDto,
@@ -32,9 +31,9 @@ use crate::service_rumble::{
 };
 use crate::service_source::OhMyGamepadServiceSource;
 use crate::{
-    spawn_sdl3_input_runtime_with_source, OhMyGamepadDesktopKeyboardListenerConfig,
-    RealSdl3Source, Sdl3BackendConfig, Sdl3DeviceDescriptor, Sdl3InputEvent,
-    Sdl3InputEventKind, Sdl3Source, Sdl3SourceInitError,
+    spawn_sdl3_input_runtime_with_source, OhMyGamepadDesktopKeyboardListenerConfig, RealSdl3Source,
+    Sdl3BackendConfig, Sdl3DeviceDescriptor, Sdl3InputEvent, Sdl3InputEventKind, Sdl3Source,
+    Sdl3SourceInitError,
 };
 
 const EMPTY_SAMPLING_DEVICE_ID: &str = "__service:none__";

@@ -116,13 +116,12 @@ impl RealSdl3Source {
         thread::Builder::new()
             .name("ohmygamepad-sdl3-source".to_owned())
             .spawn(move || run_sdl3_source_thread(event_tx, command_rx, ready_tx))
-            .map_err(|error| Sdl3SourceInitError::new(format!("spawn sdl3 source thread: {error}")))?;
+            .map_err(|error| {
+                Sdl3SourceInitError::new(format!("spawn sdl3 source thread: {error}"))
+            })?;
 
         match ready_rx.recv() {
-            Ok(Ok(())) => Ok((
-                Self { event_rx },
-                Some(Sdl3RumbleHandle { command_tx }),
-            )),
+            Ok(Ok(())) => Ok((Self { event_rx }, Some(Sdl3RumbleHandle { command_tx }))),
             Ok(Err(error)) => Err(error),
             Err(_) => Err(Sdl3SourceInitError::new(
                 "sdl3 source thread exited before initialization completed",
@@ -257,12 +256,8 @@ fn handle_sdl_event(
         }
         Event::ControllerDeviceRemapped { which, .. } => {
             let device_id = joystick_instance_id_to_device_id(which);
-            let Some(opened) = refresh_opened_gamepad(
-                gamepad_subsystem,
-                opened_gamepads,
-                which,
-                &device_id,
-            )
+            let Some(opened) =
+                refresh_opened_gamepad(gamepad_subsystem, opened_gamepads, which, &device_id)
             else {
                 return true;
             };
@@ -282,12 +277,8 @@ fn handle_sdl_event(
             timestamp,
         } => {
             let device_id = joystick_instance_id_to_device_id(which);
-            let Some(opened) = refresh_opened_gamepad(
-                gamepad_subsystem,
-                opened_gamepads,
-                which,
-                &device_id,
-            )
+            let Some(opened) =
+                refresh_opened_gamepad(gamepad_subsystem, opened_gamepads, which, &device_id)
             else {
                 return true;
             };
@@ -307,12 +298,8 @@ fn handle_sdl_event(
             timestamp,
         } => {
             let device_id = joystick_instance_id_to_device_id(which);
-            let Some(opened) = refresh_opened_gamepad(
-                gamepad_subsystem,
-                opened_gamepads,
-                which,
-                &device_id,
-            )
+            let Some(opened) =
+                refresh_opened_gamepad(gamepad_subsystem, opened_gamepads, which, &device_id)
             else {
                 return true;
             };
@@ -326,12 +313,8 @@ fn handle_sdl_event(
             timestamp,
         } => {
             let device_id = joystick_instance_id_to_device_id(which);
-            let Some(opened) = refresh_opened_gamepad(
-                gamepad_subsystem,
-                opened_gamepads,
-                which,
-                &device_id,
-            )
+            let Some(opened) =
+                refresh_opened_gamepad(gamepad_subsystem, opened_gamepads, which, &device_id)
             else {
                 return true;
             };
@@ -477,10 +460,30 @@ fn translate_axis_event(
     value: i16,
 ) -> Vec<Sdl3InputEvent> {
     match axis {
-        Axis::LeftX => vec![axis_event(descriptor, observed_at_ms, 0, normalize_stick_axis(value))],
-        Axis::LeftY => vec![axis_event(descriptor, observed_at_ms, 1, normalize_stick_axis(value))],
-        Axis::RightX => vec![axis_event(descriptor, observed_at_ms, 2, normalize_stick_axis(value))],
-        Axis::RightY => vec![axis_event(descriptor, observed_at_ms, 3, normalize_stick_axis(value))],
+        Axis::LeftX => vec![axis_event(
+            descriptor,
+            observed_at_ms,
+            0,
+            normalize_stick_axis(value),
+        )],
+        Axis::LeftY => vec![axis_event(
+            descriptor,
+            observed_at_ms,
+            1,
+            normalize_stick_axis(value),
+        )],
+        Axis::RightX => vec![axis_event(
+            descriptor,
+            observed_at_ms,
+            2,
+            normalize_stick_axis(value),
+        )],
+        Axis::RightY => vec![axis_event(
+            descriptor,
+            observed_at_ms,
+            3,
+            normalize_stick_axis(value),
+        )],
         Axis::TriggerLeft => {
             let axis_value = normalize_trigger_axis(value);
             let button_value = axis_to_trigger_button_value(axis_value);
@@ -617,9 +620,7 @@ fn device_type_from_sdl(value: GamepadType) -> OhMyGamepadDeviceTypeDto {
         GamepadType::NintendoSwitchJoyconRight => {
             OhMyGamepadDeviceTypeDto::NintendoSwitchJoyconRight
         }
-        GamepadType::NintendoSwitchJoyconPair => {
-            OhMyGamepadDeviceTypeDto::NintendoSwitchJoyconPair
-        }
+        GamepadType::NintendoSwitchJoyconPair => OhMyGamepadDeviceTypeDto::NintendoSwitchJoyconPair,
     }
 }
 

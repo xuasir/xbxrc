@@ -360,10 +360,7 @@ where
         }
         RuntimeCommand::RebindLogicalPad { binding } => {
             let mut bindings = core.config().bindings.clone();
-            if let Some(index) = bindings
-                .iter()
-                .position(|item| item.slot == binding.slot)
-            {
+            if let Some(index) = bindings.iter().position(|item| item.slot == binding.slot) {
                 bindings[index] = binding;
             } else {
                 bindings.push(binding);

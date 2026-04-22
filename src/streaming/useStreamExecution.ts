@@ -567,12 +567,6 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
     void active
   }
 
-  function handleKeydown(event: KeyboardEvent): void {
-    if (event.key === 'Escape') {
-      void closeExecution({ navigateBack: true })
-    }
-  }
-
   watch(
     () => runtimeLaunchSpec.value?.sessionId ?? null,
     (launchSessionId) => {
@@ -637,12 +631,10 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
   )
 
   onMounted(() => {
-    window.addEventListener('keydown', handleKeydown)
     void startStream()
   })
 
   onBeforeUnmount(() => {
-    window.removeEventListener('keydown', handleKeydown)
     resetExecutionWarning()
     runtimeHost.setPerformanceEnabled(false)
     runtimeHost.setDiagnosticsEnabled(false)

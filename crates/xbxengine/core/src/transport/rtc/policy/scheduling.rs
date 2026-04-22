@@ -136,18 +136,18 @@ fn map_recovery_action_to_session_commands(
     observation_id: u64,
 ) -> Vec<SessionCommand> {
     match action {
-        RecoveryAction::RequestPli => vec![SessionCommand::Transport(
-            TransportCommand::RequestPli {
+        RecoveryAction::RequestPli => {
+            vec![SessionCommand::Transport(TransportCommand::RequestPli {
                 reason,
                 observation_id,
-            },
-        )],
-        RecoveryAction::RequestFir => vec![SessionCommand::Transport(
-            TransportCommand::RequestFir {
+            })]
+        }
+        RecoveryAction::RequestFir => {
+            vec![SessionCommand::Transport(TransportCommand::RequestFir {
                 reason,
                 observation_id,
-            },
-        )],
+            })]
+        }
         RecoveryAction::RequestDecoderReset => vec![SessionCommand::LocalDecoderReset {
             reason,
             observation_id,

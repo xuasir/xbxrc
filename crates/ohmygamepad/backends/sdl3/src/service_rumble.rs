@@ -206,8 +206,7 @@ pub(crate) fn prepare_rumble_dispatch(
 }
 
 fn supports_service_rumble(device: &OhMyGamepadDeviceDto, has_rumble_backend: bool) -> bool {
-    if device.sdl3_capabilities.supports_rumble
-        || device.sdl3_capabilities.supports_trigger_rumble
+    if device.sdl3_capabilities.supports_rumble || device.sdl3_capabilities.supports_trigger_rumble
     {
         return true;
     }

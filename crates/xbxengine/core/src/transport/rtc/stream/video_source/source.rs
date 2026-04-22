@@ -1674,7 +1674,7 @@ impl RtcVideoFrameSource {
                         Some(sample.packet_timestamp),
                         inspection.is_idr,
                         response_detail,
-                        self.frame_first_packet_sequence(sample.packet_timestamp),
+                        first_packet_sequence,
                         self.response_oos_depth_p75(),
                         self.frame_seen_head_missing(sample.packet_timestamp)
                             || self.head_missing_recently_active(inspection_now_ms),

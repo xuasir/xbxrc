@@ -5,6 +5,7 @@ use std::sync::{Arc, Mutex};
 
 use crate::api::runtime::XbxEngineWebRtcRuntimeConfig;
 use crate::runtime_stats_sink::RuntimeStatsSink;
+use crate::transport::rtc::connection::build_control_decoder_reset_payload;
 #[allow(unused_imports)]
 pub(super) use crate::transport::rtc::connection::builder::{
     build_owned_h264_codec_preferences, register_owned_h264_codecs, ControlledPeerConnection,
@@ -14,7 +15,6 @@ use crate::transport::rtc::connection::io_runtime::RtcIoRuntime;
 use crate::transport::rtc::connection::runtime_state::RtcConnectionRuntimeState;
 use crate::transport::rtc::connection::transport_metrics::describe_selected_candidate_pair;
 use crate::transport::rtc::connection::twcc_feedback::ControlledTwccFeedbackController;
-use crate::transport::rtc::connection::build_control_decoder_reset_payload;
 use crate::transport::rtc::events::RtcConnectionLifecycleState;
 use crate::transport::rtc::facts::TransportFact;
 use crate::transport::rtc::recovery::contract::{
@@ -224,8 +224,10 @@ impl RtcConnectionService {
         self.send_video_picture_loss_indication(runtime_stats)?;
         self.control_service.clear_pending_keyframe_request();
         self.sync_control_replay_runtime_stats(runtime_stats);
-        self.video_recovery_transport_state.stage = VideoRecoveryTransportStage::PictureLossIndication;
-        self.video_recovery_transport_state.last_sent_at_ms = Some(crate::transport::rtc::stats::now_ms_f64());
+        self.video_recovery_transport_state.stage =
+            VideoRecoveryTransportStage::PictureLossIndication;
+        self.video_recovery_transport_state.last_sent_at_ms =
+            Some(crate::transport::rtc::stats::now_ms_f64());
         Ok(VideoKeyframeRequestOutcome::RequestedPli)
     }
 
@@ -326,7 +328,8 @@ impl RtcConnectionService {
         self.control_service.clear_pending_keyframe_request();
         self.sync_control_replay_runtime_stats(runtime_stats);
         self.video_recovery_transport_state.stage = VideoRecoveryTransportStage::FullIntraRequest;
-        self.video_recovery_transport_state.last_sent_at_ms = Some(crate::transport::rtc::stats::now_ms_f64());
+        self.video_recovery_transport_state.last_sent_at_ms =
+            Some(crate::transport::rtc::stats::now_ms_f64());
         Ok(VideoKeyframeRequestOutcome::RequestedFir)
     }
 

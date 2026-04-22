@@ -267,7 +267,10 @@ fn runtime_thread_rebinds_logical_pad() {
         .get_runtime_snapshot()
         .expect("runtime snapshot should be available");
     assert_eq!(snapshot.slot_bindings.len(), 1);
-    assert_eq!(snapshot.slot_bindings[0].device_ids, vec!["pad-b".to_owned()]);
+    assert_eq!(
+        snapshot.slot_bindings[0].device_ids,
+        vec!["pad-b".to_owned()]
+    );
 
     runtime.shutdown().expect("runtime should shutdown cleanly");
 }
