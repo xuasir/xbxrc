@@ -1,16 +1,13 @@
 // 这一层定义 Rust <-> TypeScript 的稳定 DTO，避免输入语义再次散落到业务代码里。
 
-export const GAMEPAD_BACKEND_KINDS = ['gilrs', 'mock'] as const
+export const GAMEPAD_BACKEND_KINDS = ['sdl3', 'mock'] as const
 export type GamepadBackendKindDto = (typeof GAMEPAD_BACKEND_KINDS)[number]
 
 export const GAMEPAD_CONNECTION_KINDS = ['usb', 'bluetooth', 'wireless-dongle', 'unknown'] as const
 export type GamepadConnectionKindDto = (typeof GAMEPAD_CONNECTION_KINDS)[number]
 
 export const GAMEPAD_HAPTICS_PROVIDER_KINDS = [
-  'gilrs-basic',
-  'macos-gccontroller',
-  'windows-xbox',
-  'none',
+  'sdl3-gamepad',
 ] as const
 export type GamepadHapticsProviderKindDto = (typeof GAMEPAD_HAPTICS_PROVIDER_KINDS)[number]
 

@@ -405,13 +405,13 @@ fn hardware_profile_survives_runtime_device_id_reconnect() {
 
     let mut first_device = device("pad-a");
     first_device.name = "Xbox Wireless Controller".to_owned();
-    first_device.backend = Some(OhMyGamepadBackendKindDto::Gilrs);
+    first_device.backend = Some(OhMyGamepadBackendKindDto::Sdl3);
     first_device.vendor_id = Some(0x045e);
     first_device.product_id = Some(0x0b13);
 
     let mut second_device = device("pad-a-reconnected");
     second_device.name = "Xbox Wireless Controller".to_owned();
-    second_device.backend = Some(OhMyGamepadBackendKindDto::Gilrs);
+    second_device.backend = Some(OhMyGamepadBackendKindDto::Sdl3);
     second_device.vendor_id = Some(0x045e);
     second_device.product_id = Some(0x0b13);
 
@@ -447,7 +447,7 @@ fn hardware_profile_survives_runtime_device_id_reconnect() {
         matcher: DeviceProfileMatcher {
             vendor_id: Some(0x045e),
             product_id: Some(0x0b13),
-            backend: Some(OhMyGamepadBackendKindDto::Gilrs),
+            backend: Some(OhMyGamepadBackendKindDto::Sdl3),
             name_contains: Some("wireless".to_owned()),
             ..DeviceProfileMatcher::default()
         },
@@ -475,7 +475,7 @@ fn more_specific_device_id_profile_overrides_hardware_profile() {
 
     let mut matched_device = device("pad-a");
     matched_device.name = "Xbox Wireless Controller".to_owned();
-    matched_device.backend = Some(OhMyGamepadBackendKindDto::Gilrs);
+    matched_device.backend = Some(OhMyGamepadBackendKindDto::Sdl3);
     matched_device.vendor_id = Some(0x045e);
     matched_device.product_id = Some(0x0b13);
 
@@ -495,7 +495,7 @@ fn more_specific_device_id_profile_overrides_hardware_profile() {
             matcher: DeviceProfileMatcher {
                 vendor_id: Some(0x045e),
                 product_id: Some(0x0b13),
-                backend: Some(OhMyGamepadBackendKindDto::Gilrs),
+                backend: Some(OhMyGamepadBackendKindDto::Sdl3),
                 ..DeviceProfileMatcher::default()
             },
             buttons: ButtonMapping {

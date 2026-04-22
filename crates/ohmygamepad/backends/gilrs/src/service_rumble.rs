@@ -213,9 +213,7 @@ fn supports_service_rumble(device: &OhMyGamepadDeviceDto, has_rumble_backend: bo
         return true;
     }
 
-    // `gilrs` 在部分桌面平台上会保守地报告 FF 能力。
-    // 只要当前确实有 rumble backend，就允许真实 gilrs 设备继续尝试下发。
-    has_rumble_backend && device.backend == Some(OhMyGamepadBackendKindDto::Gilrs)
+    has_rumble_backend && device.backend == Some(OhMyGamepadBackendKindDto::Sdl3)
 }
 
 #[cfg(test)]
@@ -232,7 +230,7 @@ mod tests {
         ohmygamepad_protocol::OhMyGamepadDeviceDto {
             device_id: device_id.to_owned(),
             name: device_id.to_owned(),
-            backend: Some(OhMyGamepadBackendKindDto::Gilrs),
+            backend: Some(OhMyGamepadBackendKindDto::Sdl3),
             connection: None,
             vendor_id: None,
             product_id: None,
@@ -292,11 +290,11 @@ mod tests {
     }
 
     #[test]
-    fn prepare_rumble_dispatch_allows_gilrs_fallback_with_backend() {
+    fn prepare_rumble_dispatch_allows_sdl3_fallback_with_backend() {
         let prepared = prepare_rumble_dispatch(vec![device("pad-a")], true);
 
         let PreparedRumbleRequest::Dispatch(dispatch) = prepared else {
-            panic!("gilrs device should dispatch when backend exists");
+            panic!("sdl3 device should dispatch when backend exists");
         };
         assert_eq!(dispatch.device_ids(), ["pad-a".to_owned()]);
     }

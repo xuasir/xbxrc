@@ -2,15 +2,12 @@ use crate::InputCoreConfig;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum DesktopInputProviderKind {
-    Gilrs,
+    Sdl3,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum DesktopHapticsProviderKind {
-    GilrsBasic,
-    MacosGcController,
-    WindowsXbox,
-    None,
+    Sdl3Gamepad,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -27,16 +24,9 @@ pub struct DesktopDriverSelector;
 
 impl DesktopDriverSelector {
     pub fn select(_config: &InputCoreConfig) -> SelectedDesktopRuntimeProviders {
-        #[cfg(target_os = "macos")]
-        let haptics_provider = DesktopHapticsProviderKind::MacosGcController;
-        #[cfg(target_os = "windows")]
-        let haptics_provider = DesktopHapticsProviderKind::WindowsXbox;
-        #[cfg(not(any(target_os = "macos", target_os = "windows")))]
-        let haptics_provider = DesktopHapticsProviderKind::GilrsBasic;
-
         SelectedDesktopRuntimeProviders {
-            input_provider: DesktopInputProviderKind::Gilrs,
-            haptics_provider,
+            input_provider: DesktopInputProviderKind::Sdl3,
+            haptics_provider: DesktopHapticsProviderKind::Sdl3Gamepad,
         }
     }
 }
@@ -52,21 +42,10 @@ mod tests {
     fn selector_chooses_expected_default_haptics_provider() {
         let selection = DesktopDriverSelector::select(&InputCoreConfig::default());
 
-        assert_eq!(selection.input_provider, DesktopInputProviderKind::Gilrs);
-        #[cfg(target_os = "macos")]
+        assert_eq!(selection.input_provider, DesktopInputProviderKind::Sdl3);
         assert_eq!(
             selection.haptics_provider,
-            DesktopHapticsProviderKind::MacosGcController
-        );
-        #[cfg(target_os = "windows")]
-        assert_eq!(
-            selection.haptics_provider,
-            DesktopHapticsProviderKind::WindowsXbox
-        );
-        #[cfg(not(any(target_os = "macos", target_os = "windows")))]
-        assert_eq!(
-            selection.haptics_provider,
-            DesktopHapticsProviderKind::GilrsBasic
+            DesktopHapticsProviderKind::Sdl3Gamepad
         );
     }
 }

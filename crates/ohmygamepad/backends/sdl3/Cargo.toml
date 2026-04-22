@@ -1,23 +1,15 @@
 [package]
-name = "ohmygamepad-gilrs"
+name = "ohmygamepad-sdl3"
 version = "0.1.0"
 
 edition.workspace = true
-
 rust-version.workspace = true
-
 license.workspace = true
-
 authors.workspace = true
-
 publish = false
 
 [dependencies]
-device_query = "4.0.1"
-gilrs = "0.11.1"
-log = "0.4"
-ohmygamepad-core = { path = "../../core" }
-ohmygamepad-protocol = { path = "../../protocol" }
+ohmygamepad-gilrs = { path = "../gilrs" }
 
 [lib]
 path = "src/lib.rs"

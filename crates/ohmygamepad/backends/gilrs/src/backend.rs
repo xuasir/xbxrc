@@ -113,6 +113,8 @@ pub struct GilrsBackend<TSource = NoopGilrsSource> {
     devices: HashMap<String, TrackedDevice>,
 }
 
+pub type InputBackendAggregator<TSource = NoopGilrsSource> = GilrsBackend<TSource>;
+
 impl GilrsBackend<RealGilrsSource> {
     pub fn new(config: GilrsBackendConfig) -> Result<Self, GilrsSourceInitError> {
         let (source, _) = RealGilrsSource::new()?;
@@ -329,7 +331,7 @@ mod tests {
             other => panic!("unexpected device event: {other:?}"),
         };
         assert_eq!(device.device_id, "pad-a");
-        assert_eq!(device.backend, Some(OhMyGamepadBackendKindDto::Gilrs));
+        assert_eq!(device.backend, Some(OhMyGamepadBackendKindDto::Sdl3));
         assert_eq!(
             device.connection,
             Some(OhMyGamepadConnectionKindDto::Bluetooth)

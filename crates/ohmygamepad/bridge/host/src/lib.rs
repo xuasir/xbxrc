@@ -6,8 +6,7 @@ use std::sync::{
 use ohmygamepad_core::{
     DesktopDriverSelector, DesktopHapticsProviderKind, DeviceProfile, InputRuntimeError,
 };
-use ohmygamepad_gilrs::{OhMyGamepadService, OhMyGamepadServiceConfig};
-use ohmygamepad_macos_gccontroller_haptics::MacosGcControllerHapticsProvider;
+use ohmygamepad_sdl3::{OhMyGamepadService, OhMyGamepadServiceConfig};
 use ohmygamepad_protocol::{
     LogicalPadBindingDto, LogicalPadStateDto, MultiControllerSamplingStrategyDto,
     OhMyGamepadBackendKindDto, OhMyGamepadCapabilityFlagsDto, OhMyGamepadHapticsProviderKindDto,
@@ -15,7 +14,6 @@ use ohmygamepad_protocol::{
     OhMyGamepadRumbleResultDto, OhMyGamepadRumbleTargetDto, OhMyGamepadRuntimeHapticsDto,
     OhMyGamepadRuntimeSnapshotDto, OhMyGamepadSamplingConfigDto,
 };
-use ohmygamepad_win_xbox_haptics::WindowsXboxHapticsProvider;
 
 static SHARED_GAMEPAD_RUNTIME: OnceLock<Result<SharedGamepadRuntime, String>> = OnceLock::new();
 
@@ -186,23 +184,7 @@ fn bootstrap_gamepad_runtime() -> Result<SharedGamepadRuntime, String> {
     let config = OhMyGamepadServiceConfig::default();
     let selected_providers = DesktopDriverSelector::select(&config.core);
 
-    let runtime = match selected_providers.haptics_provider {
-        DesktopHapticsProviderKind::MacosGcController => {
-            OhMyGamepadService::spawn_with_haptics_provider(
-                config,
-                Box::new(MacosGcControllerHapticsProvider::default()),
-            )
-            .map_err(|error| error.to_string())
-        }
-        DesktopHapticsProviderKind::WindowsXbox => OhMyGamepadService::spawn_with_haptics_provider(
-            config,
-            Box::new(WindowsXboxHapticsProvider::default()),
-        )
-        .map_err(|error| error.to_string()),
-        DesktopHapticsProviderKind::GilrsBasic | DesktopHapticsProviderKind::None => {
-            OhMyGamepadService::spawn(config).map_err(|error| error.to_string())
-        }
-    }?;
+    let runtime = OhMyGamepadService::spawn(config).map_err(|error| error.to_string())?;
 
     Ok(SharedGamepadRuntime {
         runtime: Arc::new(runtime),
@@ -262,23 +244,17 @@ fn infer_effective_capabilities(
     }
 
     match haptics_provider {
-        DesktopHapticsProviderKind::MacosGcController | DesktopHapticsProviderKind::WindowsXbox => {
-            effective.basic_rumble = true;
-            effective.advanced_haptics = true;
-        }
-        DesktopHapticsProviderKind::GilrsBasic => {
+        DesktopHapticsProviderKind::Sdl3Gamepad => {
             effective.basic_rumble = true;
             effective.advanced_haptics = false;
         }
-        DesktopHapticsProviderKind::None => {}
     }
 
     effective
 }
 
 fn is_physical_gamepad_candidate(device: &ohmygamepad_protocol::OhMyGamepadDeviceDto) -> bool {
-    device.backend == Some(OhMyGamepadBackendKindDto::Gilrs)
-        && device.device_id != "virtual:keyboard"
+    device.backend == Some(OhMyGamepadBackendKindDto::Sdl3) && device.device_id != "virtual:keyboard"
 }
 
 fn normalize_device_name(
@@ -301,32 +277,14 @@ fn should_force_xbox_label(
     device: &ohmygamepad_protocol::OhMyGamepadDeviceDto,
     haptics_provider: DesktopHapticsProviderKind,
 ) -> bool {
-    if haptics_provider != DesktopHapticsProviderKind::WindowsXbox {
-        return false;
-    }
-    if !is_physical_gamepad_candidate(device) {
-        return false;
-    }
-
-    let name = device.name.to_ascii_lowercase();
-    let is_microsoft_vendor = device.vendor_id == Some(0x045e);
-    let is_generic_windows_label = matches!(
-        name.as_str(),
-        "controller" | "wireless controller" | "xinput controller"
-    );
-
-    is_microsoft_vendor && is_generic_windows_label
+    let _ = (device, haptics_provider);
+    false
 }
 
 fn map_haptics_provider_kind(
     provider: DesktopHapticsProviderKind,
 ) -> OhMyGamepadHapticsProviderKindDto {
     match provider {
-        DesktopHapticsProviderKind::GilrsBasic => OhMyGamepadHapticsProviderKindDto::GilrsBasic,
-        DesktopHapticsProviderKind::MacosGcController => {
-            OhMyGamepadHapticsProviderKindDto::MacosGcController
-        }
-        DesktopHapticsProviderKind::WindowsXbox => OhMyGamepadHapticsProviderKindDto::WindowsXbox,
-        DesktopHapticsProviderKind::None => OhMyGamepadHapticsProviderKindDto::None,
+        DesktopHapticsProviderKind::Sdl3Gamepad => OhMyGamepadHapticsProviderKindDto::Sdl3Gamepad,
     }
 }

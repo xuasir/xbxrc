@@ -179,7 +179,8 @@ fn parse_backend_kind(raw: Option<String>) -> Result<Option<OhMyGamepadBackendKi
         return Ok(None);
     };
     match value.as_str() {
-        "gilrs" => Ok(Some(OhMyGamepadBackendKindDto::Gilrs)),
+        // 兼容旧持久化配置里的 gilrs 值，统一迁移到 SDL3 主语义。
+        "gilrs" | "sdl3" => Ok(Some(OhMyGamepadBackendKindDto::Sdl3)),
         "mock" => Ok(Some(OhMyGamepadBackendKindDto::Mock)),
         other => Err(format!("Unsupported backend kind: {other}")),
     }

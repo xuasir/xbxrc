@@ -162,7 +162,7 @@ mod tests {
         OhMyGamepadDeviceDto {
             device_id: "device-a".to_owned(),
             name: "Xbox Wireless Controller".to_owned(),
-            backend: Some(OhMyGamepadBackendKindDto::Gilrs),
+            backend: Some(OhMyGamepadBackendKindDto::Sdl3),
             connection: None,
             vendor_id: Some(0x045e),
             product_id: Some(0x0b13),

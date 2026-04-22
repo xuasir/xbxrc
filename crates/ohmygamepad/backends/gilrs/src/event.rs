@@ -13,12 +13,15 @@ pub struct GilrsDeviceDescriptor {
     pub capabilities: OhMyGamepadCapabilityFlagsDto,
 }
 
+// 为 SDL3 迁移预留中立命名，避免上层继续绑定具体驱动名。
+pub type InputDeviceDescriptor = GilrsDeviceDescriptor;
+
 impl GilrsDeviceDescriptor {
     pub fn to_connected_device(&self, observed_at_ms: u64) -> OhMyGamepadDeviceDto {
         OhMyGamepadDeviceDto {
             device_id: self.device_id.clone(),
             name: self.name.clone(),
-            backend: Some(OhMyGamepadBackendKindDto::Gilrs),
+            backend: Some(OhMyGamepadBackendKindDto::Sdl3),
             connection: self.connection,
             vendor_id: self.vendor_id,
             product_id: self.product_id,
@@ -40,9 +43,13 @@ pub enum GilrsInputEventKind {
     Dropped,
 }
 
+pub type InputEventKind = GilrsInputEventKind;
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct GilrsInputEvent {
     pub device: GilrsDeviceDescriptor,
     pub observed_at_ms: u64,
     pub kind: GilrsInputEventKind,
 }
+
+pub type InputEvent = GilrsInputEvent;

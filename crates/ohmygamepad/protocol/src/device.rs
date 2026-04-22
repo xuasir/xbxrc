@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 #[serde(rename_all = "kebab-case")]
 pub enum OhMyGamepadBackendKindDto {
     Gilrs,
+    Sdl3,
     Mock,
 }
 
@@ -20,10 +21,7 @@ pub enum OhMyGamepadConnectionKindDto {
 #[serde(rename_all = "kebab-case")]
 pub enum OhMyGamepadHapticsProviderKindDto {
     #[default]
-    GilrsBasic,
-    MacosGcController,
-    WindowsXbox,
-    None,
+    Sdl3Gamepad,
 }
 
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
