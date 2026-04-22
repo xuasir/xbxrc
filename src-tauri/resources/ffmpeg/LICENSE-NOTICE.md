@@ -1,11 +1,11 @@
 # FFmpeg Third-Party License Notice
 
-This project vendors FFmpeg SDK artifacts under `third_party/ffmpeg`.
+This project vendors FFmpeg SDK artifacts under `src-tauri/resources/ffmpeg`.
 
 ## Effective license policy
 
 - Current vendored FFmpeg artifacts are intended to be **LGPL-2.1-or-later**.
-- Build and source metadata are tracked in `third_party/ffmpeg/versions.json`.
+- Build and source metadata are tracked in `src-tauri/resources/ffmpeg/versions.json`.
 
 ## Artifact sources
 

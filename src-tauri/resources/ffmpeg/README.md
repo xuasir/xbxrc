@@ -24,4 +24,4 @@ Each target folder must contain:
 
 ## Version pinning
 
-Record version/source/checksum/license details in `third_party/ffmpeg/versions.json` when replacing SDK assets.
+Record version/source/checksum/license details in `src-tauri/resources/ffmpeg/versions.json` when replacing SDK assets.

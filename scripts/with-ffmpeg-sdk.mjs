@@ -26,7 +26,7 @@ function resolveSdkRoot() {
     }
   }
 
-  const sdkRoot = resolve(workspaceRoot, "third_party", "ffmpeg", sdkTarget);
+  const sdkRoot = resolve(workspaceRoot, "src-tauri", "resources", "ffmpeg", sdkTarget);
   const includeDir = resolve(sdkRoot, "include");
   const libDir = resolve(sdkRoot, "lib");
   const binDir = resolve(sdkRoot, platform === "win32" ? "bin" : "lib");

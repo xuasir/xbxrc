@@ -41,16 +41,16 @@ jobs:
         shell: bash
         run: |
           if [[ "${{ runner.os }}" == "Windows" ]]; then
-            test -d "third_party/ffmpeg/windows-x64/include"
-            test -d "third_party/ffmpeg/windows-x64/lib"
-            test -d "third_party/ffmpeg/windows-x64/bin"
+            test -d "src-tauri/resources/ffmpeg/windows-x64/include"
+            test -d "src-tauri/resources/ffmpeg/windows-x64/lib"
+            test -d "src-tauri/resources/ffmpeg/windows-x64/bin"
           else
             if [[ "$(uname -m)" == "arm64" ]]; then
-              test -d "third_party/ffmpeg/macos-arm64/include"
-              test -d "third_party/ffmpeg/macos-arm64/lib"
+              test -d "src-tauri/resources/ffmpeg/macos-arm64/include"
+              test -d "src-tauri/resources/ffmpeg/macos-arm64/lib"
             else
-              test -d "third_party/ffmpeg/macos-x64/include"
-              test -d "third_party/ffmpeg/macos-x64/lib"
+              test -d "src-tauri/resources/ffmpeg/macos-x64/include"
+              test -d "src-tauri/resources/ffmpeg/macos-x64/lib"
             fi
           fi
 

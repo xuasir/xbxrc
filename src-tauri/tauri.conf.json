@@ -26,11 +26,11 @@
     "active": true,
     "targets": "all",
     "resources": [
-      "../third_party/ffmpeg/windows-x64/bin/*",
-      "../third_party/ffmpeg/macos-arm64/lib/*",
-      "../third_party/ffmpeg/macos-x64/lib/*",
-      "../third_party/ffmpeg/LICENSE-NOTICE.md",
-      "../third_party/ffmpeg/COPYING.LGPLv2.1"
+      "resources/ffmpeg/windows-x64/bin/*",
+      "resources/ffmpeg/macos-arm64/lib/*",
+      "resources/ffmpeg/macos-x64/lib/*",
+      "resources/ffmpeg/LICENSE-NOTICE.md",
+      "resources/ffmpeg/COPYING.LGPLv2.1"
     ],
     "icon": [
       "icons/32x32.png",
