@@ -1,6 +1,7 @@
 //! 媒体 `XbxEngineMediaRuntimeStats` 的统一写入入口（sink）。
 //! RFC：采集面只承载事实；诊断映射在 `diagnostics` / `trace_projection`，不得反向驱动控制决策。
 
+use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
 
 use crate::diagnostics::observation_bus::{ObservationBus, ObservationEvent};
@@ -22,6 +23,14 @@ use crate::{
 pub(crate) struct RuntimeStatsSink {
     // 统一承接 runtime stats 的发布入口，避免热路径散落字段写逻辑。
     observation_bus: ObservationBus,
+    keyframe_response_trace_cache: Arc<Mutex<VecDeque<KeyframeResponseTraceCacheEntry>>>,
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+struct KeyframeResponseTraceCacheEntry {
+    episode_id: u64,
+    first_video_packet_sequence: Option<u16>,
+    first_keyframe_packet_sequence: Option<u16>,
 }
 
 impl RuntimeStatsSink {
@@ -112,7 +121,51 @@ impl RuntimeStatsSink {
     pub(crate) fn new(runtime_stats: Arc<Mutex<XbxEngineMediaRuntimeStats>>) -> Self {
         Self {
             observation_bus: ObservationBus::new(runtime_stats),
+            keyframe_response_trace_cache: Arc::new(Mutex::new(VecDeque::with_capacity(
+                Self::RECENT_KEYFRAME_REQUEST_EPISODE_LIMIT,
+            ))),
         }
+    }
+
+    fn update_keyframe_response_trace_cache(
+        &self,
+        episode_id: u64,
+        is_keyframe: bool,
+        packet_sequence: Option<u16>,
+    ) -> (Option<u16>, Option<u16>) {
+        let Ok(mut cache) = self.keyframe_response_trace_cache.lock() else {
+            return (
+                packet_sequence,
+                if is_keyframe { packet_sequence } else { None },
+            );
+        };
+        if let Some(index) = cache.iter().position(|entry| entry.episode_id == episode_id) {
+            let entry = cache
+                .get_mut(index)
+                .expect("cache entry index should remain valid");
+            if entry.first_video_packet_sequence.is_none() {
+                entry.first_video_packet_sequence = packet_sequence;
+            }
+            if is_keyframe && entry.first_keyframe_packet_sequence.is_none() {
+                entry.first_keyframe_packet_sequence = packet_sequence;
+            }
+            return (
+                entry.first_video_packet_sequence,
+                entry.first_keyframe_packet_sequence,
+            );
+        }
+        if cache.len() >= Self::RECENT_KEYFRAME_REQUEST_EPISODE_LIMIT {
+            cache.pop_front();
+        }
+        let entry = KeyframeResponseTraceCacheEntry {
+            episode_id,
+            first_video_packet_sequence: packet_sequence,
+            first_keyframe_packet_sequence: if is_keyframe { packet_sequence } else { None },
+        };
+        let first_video_packet_sequence = entry.first_video_packet_sequence;
+        let first_keyframe_packet_sequence = entry.first_keyframe_packet_sequence;
+        cache.push_back(entry);
+        (first_video_packet_sequence, first_keyframe_packet_sequence)
     }
 
     pub(crate) fn read_shared<T>(
@@ -166,6 +219,28 @@ impl RuntimeStatsSink {
         observation: XbxEngineVideoRtxReinjectObservation,
     ) {
         self.publish(ObservationEvent::VideoRtxReinject { observation });
+    }
+
+    pub(crate) fn record_video_ingress_close_intent(&self, observed_at_ms: f64, cause: &str) {
+        self.update(|stats| {
+            stats.latest_observation_label = Some("rtcVideoIngressCloseIntent".to_string());
+            stats.latest_observation_summary =
+                Some(format!("cause={cause} observedAtMs={observed_at_ms:.1}"));
+        });
+    }
+
+    pub(crate) fn current_video_ingress_close_cause(&self) -> Option<String> {
+        self.read(latest_video_ingress_close_cause).flatten()
+    }
+
+    pub(crate) fn record_video_ingress_rx_closed(&self, observed_at_ms: f64, cause: Option<&str>) {
+        self.update(|stats| {
+            let resolved_cause = cause.unwrap_or("upstreamSenderDropped");
+            stats.latest_observation_label = Some("rtcVideoIngressRxClosed".to_string());
+            stats.latest_observation_summary = Some(format!(
+                "cause={resolved_cause} observedAtMs={observed_at_ms:.1}"
+            ));
+        });
     }
 
     pub(crate) fn record_keyframe_request_episode_requested(
@@ -495,6 +570,7 @@ impl RuntimeStatsSink {
         observed_at_ms: f64,
         rtp_timestamp: Option<u32>,
         is_keyframe: bool,
+        _packet_sequence: Option<u16>,
     ) {
         self.update(|stats| {
             let mut updated_episode = None;
@@ -585,7 +661,13 @@ impl RuntimeStatsSink {
         rtp_timestamp: Option<u32>,
         is_keyframe: bool,
         detail: &str,
+        packet_sequence: Option<u16>,
+        response_oos_depth_p75: Option<u16>,
+        response_head_missing_active: bool,
+        gap_expired_before_keyframe: bool,
     ) {
+        let mut summary_first_video_packet_sequence = packet_sequence;
+        let mut summary_first_keyframe_packet_sequence = if is_keyframe { packet_sequence } else { None };
         self.update(|stats| {
             let mut updated_episode = None;
             let mut should_probe = false;
@@ -638,6 +720,15 @@ impl RuntimeStatsSink {
                     return;
                 }
 
+                (
+                    summary_first_video_packet_sequence,
+                    summary_first_keyframe_packet_sequence,
+                ) = self.update_keyframe_response_trace_cache(
+                    episode.episode_id,
+                    is_keyframe,
+                    packet_sequence,
+                );
+
                 stats.latest_observation_label =
                     Some("keyframeRequestEpisodeResponseObserved".to_string());
                 stats.latest_observation_summary = Some(format_keyframe_response_observed_summary(
@@ -646,6 +737,11 @@ impl RuntimeStatsSink {
                     rtp_timestamp,
                     is_keyframe,
                     detail,
+                    summary_first_video_packet_sequence,
+                    summary_first_keyframe_packet_sequence,
+                    response_oos_depth_p75,
+                    response_head_missing_active,
+                    gap_expired_before_keyframe,
                 ));
                 updated_episode = Some(episode.clone());
                 should_probe = true;
@@ -1155,12 +1251,17 @@ fn format_keyframe_response_observed_summary(
     rtp_timestamp: Option<u32>,
     is_keyframe: bool,
     detail: &str,
+    first_video_packet_sequence: Option<u16>,
+    first_keyframe_packet_sequence: Option<u16>,
+    response_oos_depth_p75: Option<u16>,
+    response_head_missing_active: bool,
+    gap_expired_before_keyframe: bool,
 ) -> String {
     let sent_to_first_packet_ms = episode
         .sent_at_ms
         .map(|sent_at_ms| (observed_at_ms - sent_at_ms).max(0.0));
     format!(
-        "episodeId={} rtpTimestamp={} isKeyframe={} detail={} sentToFirstPacketMs={} firstVideoPacketAtMs={} firstVideoPacketIsKeyframe={}",
+        "episodeId={} rtpTimestamp={} isKeyframe={} detail={} sentToFirstPacketMs={} firstVideoPacketAtMs={} firstVideoPacketSeq={} firstVideoPacketIsKeyframe={} firstKeyframePacketSeq={} firstKeyframeArrivalLagMs={} oosDepthP75={} headMissingActive={} gapExpiredBeforeKeyframe={}",
         episode.episode_id,
         rtp_timestamp
             .map(|value| value.to_string())
@@ -1174,10 +1275,34 @@ fn format_keyframe_response_observed_summary(
             .first_video_packet_at_ms
             .map(|value| format!("{value:.1}"))
             .unwrap_or_else(|| "none".to_string()),
+        first_video_packet_sequence
+            .map(|value| value.to_string())
+            .unwrap_or_else(|| "none".to_string()),
         episode
             .first_video_packet_is_keyframe
             .map(|value| value.to_string())
             .unwrap_or_else(|| "none".to_string()),
+        first_keyframe_packet_sequence
+            .map(|value| value.to_string())
+            .unwrap_or_else(|| "none".to_string()),
+        if is_keyframe {
+            episode
+                .first_keyframe_packet_at_ms
+                .or(Some(observed_at_ms))
+                .zip(episode.sent_at_ms)
+                .map(|(first_keyframe_at_ms, sent_at_ms)| {
+                    (first_keyframe_at_ms - sent_at_ms).max(0.0)
+                })
+        } else {
+            None
+        }
+        .map(|value| format!("{value:.1}"))
+        .unwrap_or_else(|| "none".to_string()),
+        response_oos_depth_p75
+            .map(|value| value.to_string())
+            .unwrap_or_else(|| "none".to_string()),
+        response_head_missing_active,
+        gap_expired_before_keyframe,
     )
 }
 
@@ -1280,6 +1405,17 @@ fn apply_keyframe_request_episode_sent(
     if episode.response_verdict.is_none() {
         episode.response_verdict = Some("pending".to_string());
     }
+}
+
+fn latest_video_ingress_close_cause(stats: &XbxEngineMediaRuntimeStats) -> Option<String> {
+    if stats.latest_observation_label.as_deref() != Some("rtcVideoIngressCloseIntent") {
+        return None;
+    }
+    stats
+        .latest_observation_summary
+        .as_deref()
+        .and_then(|summary| summary.strip_prefix("cause="))
+        .map(ToString::to_string)
 }
 
 /// 当前 recovery epoch 下是否已观测到与本 epoch 对齐的 clean anchor（控制态，非单次 probe 语义）。
@@ -1675,7 +1811,7 @@ mod tests {
             None,
         );
         sink.record_keyframe_request_episode_sent("pli", 120.0, Some(200.0));
-        sink.record_keyframe_request_episode_packet_seen(150.0, Some(123456789), true);
+        sink.record_keyframe_request_episode_packet_seen(150.0, Some(123456789), true, Some(321));
         sink.record_keyframe_request_episode_decoded(160.0, 123456789, 42);
 
         let stats = runtime_stats.lock().expect("runtime stats lock");
@@ -1715,12 +1851,20 @@ mod tests {
             Some(123),
             false,
             "firstResponseNonKeyframe",
+            Some(111),
+            Some(5),
+            true,
+            false,
         );
         sink.record_keyframe_request_episode_response_observed(
             170.0,
             Some(456),
             true,
             "bootstrapMissingSps",
+            Some(222),
+            Some(7),
+            true,
+            true,
         );
 
         let stats = runtime_stats.lock().expect("runtime stats lock");
@@ -1750,6 +1894,12 @@ mod tests {
         assert!(summary.contains("detail=bootstrapMissingSps"));
         assert!(summary.contains("sentToFirstPacketMs=50.0"));
         assert!(summary.contains("firstVideoPacketIsKeyframe=false"));
+        assert!(summary.contains("firstVideoPacketSeq=111"));
+        assert!(summary.contains("firstKeyframePacketSeq=222"));
+        assert!(summary.contains("oosDepthP75=7"));
+        assert!(summary.contains("firstKeyframeArrivalLagMs=50.0"));
+        assert!(summary.contains("headMissingActive=true"));
+        assert!(summary.contains("gapExpiredBeforeKeyframe=true"));
     }
 
     #[test]
@@ -1926,6 +2076,10 @@ mod tests {
             Some(999),
             false,
             "firstResponseNonKeyframe",
+            Some(44),
+            Some(3),
+            false,
+            false,
         );
         let stats = runtime_stats.lock().expect("runtime stats lock");
         let latest = stats
@@ -1954,7 +2108,7 @@ mod tests {
             None,
         );
         sink.record_keyframe_request_episode_sent("pli", 110.0, None);
-        sink.record_keyframe_request_episode_packet_seen(120.0, Some(777), true);
+        sink.record_keyframe_request_episode_packet_seen(120.0, Some(777), true, Some(88));
         sink.record_h264_inspection_observation(XbxEngineH264InspectionObservation {
             observation_id: 1,
             frame_rtp_timestamp: Some(777),

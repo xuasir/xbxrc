@@ -82,6 +82,7 @@ pub struct AssembledVideoFrame {
     pub height: u32,
 
     pub rtp_timestamp: u32,
+    pub first_packet_sequence: Option<u16>,
     pub frame_playout_deadline_at_ms: Option<f64>,
     pub frame_recovery_disposition: FrameRecoveryDisposition,
     pub frame_unrecoverable_reason: Option<String>,
@@ -105,6 +106,7 @@ impl AssembledVideoFrame {
             width: self.width,
             height: self.height,
             rtp_timestamp: self.rtp_timestamp,
+            first_packet_sequence: self.first_packet_sequence,
             frame_playout_deadline_at_ms: self.frame_playout_deadline_at_ms,
             frame_recovery_disposition: self.frame_recovery_disposition,
             frame_unrecoverable_reason: self.frame_unrecoverable_reason,
@@ -128,6 +130,7 @@ pub struct EncodedFrame {
     pub height: u32,
 
     pub rtp_timestamp: u32,
+    pub first_packet_sequence: Option<u16>,
     pub frame_playout_deadline_at_ms: Option<f64>,
     pub frame_recovery_disposition: FrameRecoveryDisposition,
     pub frame_unrecoverable_reason: Option<String>,

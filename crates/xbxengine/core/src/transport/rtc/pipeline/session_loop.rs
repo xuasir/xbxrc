@@ -169,6 +169,7 @@ impl MediaSessionLoop {
                 now_ms,
                 Some(assembled_frame.rtp_timestamp),
                 assembled_frame.is_keyframe,
+                assembled_frame.first_packet_sequence,
             );
         if self.frame_event_count == 1 || self.frame_event_count.is_power_of_two() {
             crate::xbx_log_info!(

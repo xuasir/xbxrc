@@ -452,6 +452,7 @@ mod tests {
             width: 1920,
             height: 1080,
             rtp_timestamp: 1,
+            first_packet_sequence: None,
             frame_playout_deadline_at_ms: None,
             frame_recovery_disposition: FrameRecoveryDisposition::Repairing,
             frame_unrecoverable_reason: None,

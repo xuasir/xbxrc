@@ -601,6 +601,35 @@ fn clean_anchor_records_current_transport_recovery_epoch() {
     assert_eq!(stats.transport_recovery_episode_close_reason, None);
 }
 
+#[tokio::test]
+async fn rx_closed_records_close_cause_label() {
+    let (tx, _transport_observation_rx, mut source) = make_video_source_for_test();
+    source
+        .runtime_stats
+        .record_video_ingress_close_intent(now_ms_f64(), "rebuildPeerConnection");
+    drop(tx);
+
+    let frame = tokio::time::timeout(Duration::from_millis(200), source.recv_frame_inner())
+        .await
+        .expect("reader should finish after rx closes");
+    assert!(frame.is_none());
+
+    let stats = source
+        .runtime_stats
+        .read(|stats| {
+            (
+                stats.latest_observation_label.clone(),
+                stats.latest_observation_summary.clone(),
+            )
+        })
+        .expect("runtime stats");
+    assert_eq!(stats.0.as_deref(), Some("rtcVideoIngressRxClosed"));
+    assert!(stats
+        .1
+        .as_deref()
+        .is_some_and(|summary| summary.contains("cause=rebuildPeerConnection")));
+}
+
 #[test]
 fn packet_loss_detected_does_not_reopen_episode_but_keyframe_request_does() {
     let (_tx, rx) = tokio::sync::mpsc::channel(1);

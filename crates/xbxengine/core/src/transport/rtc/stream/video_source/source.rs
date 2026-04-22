@@ -426,6 +426,48 @@ impl RtcVideoFrameSource {
             .map(|(_, observed_at)| observed_at)
     }
 
+    fn record_frame_first_packet_sequence(&mut self, rtp_timestamp: u32, sequence: u16) {
+        if self
+            .frame_first_packet_sequences
+            .iter()
+            .any(|(timestamp, _)| *timestamp == rtp_timestamp)
+        {
+            return;
+        }
+        if self.frame_first_packet_sequences.len() >= FRAME_PLAYOUT_BASE_TRACK_CAPACITY {
+            self.frame_first_packet_sequences.pop_front();
+        }
+        self.frame_first_packet_sequences
+            .push_back((rtp_timestamp, sequence));
+    }
+
+    fn take_frame_first_packet_sequence(&mut self, rtp_timestamp: u32) -> Option<u16> {
+        let index = self
+            .frame_first_packet_sequences
+            .iter()
+            .position(|(timestamp, _)| *timestamp == rtp_timestamp)?;
+        self.frame_first_packet_sequences
+            .remove(index)
+            .map(|(_, sequence)| sequence)
+    }
+
+    fn frame_first_packet_sequence(&self, rtp_timestamp: u32) -> Option<u16> {
+        self.frame_first_packet_sequences
+            .iter()
+            .find(|(timestamp, _)| *timestamp == rtp_timestamp)
+            .map(|(_, sequence)| *sequence)
+    }
+
+    fn response_oos_depth_p75(&self) -> Option<u16> {
+        if self.recent_oos_depths.is_empty() {
+            return None;
+        }
+        let mut samples: Vec<u16> = self.recent_oos_depths.iter().copied().collect();
+        samples.sort_unstable();
+        let p75_index = ((samples.len().saturating_sub(1) * 3) / 4).min(samples.len() - 1);
+        Some(samples[p75_index])
+    }
+
     fn build_ingress_materialization_fallback_budget(
         &self,
         frame_value: FrameValue,
@@ -1281,6 +1323,8 @@ impl RtcVideoFrameSource {
                 );
                 let admission_accepted =
                     matches!(inspection_admission, InspectionAdmission::Accept);
+                let response_detail =
+                    keyframe_episode_response_detail(&inspection, inspection_admission);
                 // bootstrap_reject_reason 只描述当前 AU 是否具备自举条件，不代表 delta slice 不能继续承接。
                 self.runtime_stats.record_h264_inspection_observation(
                     XbxEngineH264InspectionObservation {
@@ -1317,13 +1361,6 @@ impl RtcVideoFrameSource {
                         ..Default::default()
                     },
                 );
-                self.runtime_stats
-                    .record_keyframe_request_episode_response_observed(
-                        inspection_now_ms,
-                        Some(sample.packet_timestamp),
-                        inspection.is_idr,
-                        keyframe_episode_response_detail(&inspection, inspection_admission),
-                    );
                 if self.should_request_first_frame_acquisition_followup_keyframe(&inspection) {
                     self.maybe_request_first_frame_acquisition_keyframe(
                         Some(sample.packet_timestamp),
@@ -1609,6 +1646,8 @@ impl RtcVideoFrameSource {
                 // 找不到记录时保持 None，物化层会 fallback 到 assembled_at，语义上有区别。
                 let first_packet_arrived_at =
                     self.take_frame_first_packet_arrived_at(sample.packet_timestamp);
+                let first_packet_sequence =
+                    self.take_frame_first_packet_sequence(sample.packet_timestamp);
                 self.transport_deadline_tracker
                     .record_frame_arrival(now_ms_f64());
                 let (
@@ -1624,6 +1663,21 @@ impl RtcVideoFrameSource {
                         frame_unrecoverable_reason.as_deref(),
                     )
                 });
+                self.runtime_stats
+                    .record_keyframe_request_episode_response_observed(
+                        inspection_now_ms,
+                        Some(sample.packet_timestamp),
+                        inspection.is_idr,
+                        response_detail,
+                        self.frame_first_packet_sequence(sample.packet_timestamp),
+                        self.response_oos_depth_p75(),
+                        self.frame_seen_head_missing(sample.packet_timestamp)
+                            || self.head_missing_recently_active(inspection_now_ms),
+                        matches!(
+                            frame_unrecoverable_reason.as_deref(),
+                            Some("deadlineExceeded" | "deadlineExceededBeforeAdmission")
+                        ),
+                    );
                 self.ingress_budget_materialized_count =
                     self.ingress_budget_materialized_count.saturating_add(1);
                 if ledger_budget_context.is_none() {
@@ -1747,6 +1801,7 @@ impl RtcVideoFrameSource {
                     width: self.current_width,
                     height: self.current_height,
                     rtp_timestamp: sample.packet_timestamp,
+                    first_packet_sequence,
                     frame_playout_deadline_at_ms,
                     frame_recovery_disposition,
                     frame_unrecoverable_reason,
@@ -2015,6 +2070,10 @@ impl RtcVideoFrameSource {
                     if !matches!(ingress_kind, RtcVideoIngressKind::RtxReinject { .. }) {
                         self.current_media_ssrc = Some(rtp.header.ssrc);
                     }
+                    self.record_frame_first_packet_sequence(
+                        rtp.header.timestamp,
+                        rtp.header.sequence_number,
+                    );
                     if rtp.header.marker {
                         self.jitter_marker_seen_count =
                             self.jitter_marker_seen_count.saturating_add(1);
@@ -2039,7 +2098,14 @@ impl RtcVideoFrameSource {
                     self.sample_builder.push(rtp);
                 }
                 Ok(None) => {
-                    crate::xbx_log_error!("[RtcVideoFrameSource] rx closed");
+                    let cause = self.runtime_stats.current_video_ingress_close_cause();
+                    let now_ms = now_ms_f64();
+                    self.runtime_stats
+                        .record_video_ingress_rx_closed(now_ms, cause.as_deref());
+                    crate::xbx_log_error!(
+                        "[RtcVideoFrameSource] rx closed cause={}",
+                        cause.as_deref().unwrap_or("upstreamSenderDropped")
+                    );
                     return None;
                 }
                 Err(_) => {

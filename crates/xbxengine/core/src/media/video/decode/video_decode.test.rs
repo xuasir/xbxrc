@@ -1729,6 +1729,7 @@ fn make_encoded_frame(is_keyframe: bool) -> EncodedFrame {
         width: 2560,
         height: 1440,
         rtp_timestamp: if is_keyframe { 1 } else { 2 },
+        first_packet_sequence: None,
         frame_playout_deadline_at_ms: None,
         frame_recovery_disposition: crate::media::video::types::FrameRecoveryDisposition::Repairing,
         frame_unrecoverable_reason: None,

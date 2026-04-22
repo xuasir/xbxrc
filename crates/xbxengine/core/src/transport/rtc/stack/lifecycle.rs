@@ -110,11 +110,16 @@ impl<'a> RtcStackLifecycleBridge<'a> {
                 state: ConnectionLifecycleStateFact::Connecting,
                 observed_at_ms: crate::transport::rtc::stats::now_ms_f64(),
             }));
-        self.reset_runtime_state(request.session.target_type.clone())?;
+        crate::runtime_stats_sink::RuntimeStatsSink::new(self.runtime_stats.clone())
+            .record_video_ingress_close_intent(
+                crate::transport::rtc::stats::now_ms_f64(),
+                "rebuildPeerConnection",
+            );
         self.media_pipeline_bridge().stop_audio_playback_session();
         if let Ok(mut media) = self.media.lock() {
             media.reset();
         }
+        self.reset_runtime_state(request.session.target_type.clone())?;
         self.input_stream.reset_state();
         self.input_stream.ensure_running();
         self.media_pipeline_bridge().mount_primary_frame_pipeline();
@@ -131,6 +136,11 @@ impl<'a> RtcStackLifecycleBridge<'a> {
 
     pub(crate) fn stop(&mut self) {
         self.input_stream.stop();
+        crate::runtime_stats_sink::RuntimeStatsSink::new(self.runtime_stats.clone())
+            .record_video_ingress_close_intent(
+                crate::transport::rtc::stats::now_ms_f64(),
+                "stackStop",
+            );
         self.media_pipeline_bridge().stop_audio_playback_session();
         if let Ok(mut connection) = self.connection.lock() {
             connection.stop(self.runtime_stats);
