@@ -336,25 +336,25 @@ impl HostCadenceTelemetry {
 
     fn log_host_flow(
         &self,
-        event: &str,
-        frame_seq: Option<u64>,
+        _event: &str,
+        _frame_seq: Option<u64>,
         slot_diag: Option<&ScheduledFrameSlotDiagnostics>,
         replaced_frame_seq: Option<u64>,
         submit_gap_ms: Option<f64>,
     ) {
-        let displayed_frame_seq = slot_diag.and_then(|diag| diag.displayed_frame_seq);
-        let pending_frame_seqs = slot_diag
+        let _displayed_frame_seq = slot_diag.and_then(|diag| diag.displayed_frame_seq);
+        let _pending_frame_seqs = slot_diag
             .map(|diag| format_frame_seq_list(&diag.pending_frame_seqs))
             .unwrap_or_else(|| "-".to_string());
-        let queue_depth = slot_diag
+        let _queue_depth = slot_diag
             .map(|diag| diag.queue_depth.to_string())
             .unwrap_or_else(|| "-".to_string());
-        let pending_queue_depth = slot_diag
+        let _pending_queue_depth = slot_diag
             .map(|diag| diag.pending_queue_depth.to_string())
             .unwrap_or_else(|| "-".to_string());
-        let last_presented_frame_seq = slot_diag.and_then(|diag| diag.last_presented_frame_seq);
-        let replaced_frame_seq = format_optional_seq(replaced_frame_seq);
-        let submit_gap_ms = submit_gap_ms
+        let _last_presented_frame_seq = slot_diag.and_then(|diag| diag.last_presented_frame_seq);
+        let _replaced_frame_seq = format_optional_seq(replaced_frame_seq);
+        let _submit_gap_ms = submit_gap_ms
             .map(|gap| format!("{gap:.2}"))
             .unwrap_or_else(|| "-".to_string());
         // log::info!(
@@ -712,16 +712,16 @@ impl ScheduledFrameSlot {
 
     fn log_host_flow(
         &self,
-        event: &str,
-        frame_seq: Option<u64>,
-        slot_outcome: &str,
-        replaced_frame_seq: Option<u64>,
-        overwrote_pending: bool,
-        frame_age_ms: f64,
-        frame_age_budget_ms: f64,
-        telemetry: &HostCadenceTelemetry,
+        _event: &str,
+        _frame_seq: Option<u64>,
+        _slot_outcome: &str,
+        _replaced_frame_seq: Option<u64>,
+        _overwrote_pending: bool,
+        _frame_age_ms: f64,
+        _frame_age_budget_ms: f64,
+        _telemetry: &HostCadenceTelemetry,
     ) {
-        let diagnostics = self.diagnostics_snapshot();
+        let _diagnostics = self.diagnostics_snapshot();
         // log::info!(
         //     "[playback-flow][host] event={} slot_outcome={} frame_seq={} displayed_frame_seq={} last_presented_frame_seq={} pending_frame_seqs={} queue_depth={} pending_queue_depth={} display_tick_epoch={} present_epoch={} overwrote_pending={} replaced_frame_seq={} frame_age_ms={:.2} frame_age_budget_ms={:.2} no_pending_streak={} cadence_phase={}",
         //     event,

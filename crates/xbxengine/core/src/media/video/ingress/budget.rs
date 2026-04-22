@@ -32,6 +32,7 @@ pub(crate) enum DynamicRepairValueTier {
 }
 
 impl DynamicRepairValueTier {
+    #[allow(dead_code)]
     pub(crate) fn as_str(self) -> &'static str {
         match self {
             Self::Anchor => "anchor",

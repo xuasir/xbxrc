@@ -82,6 +82,7 @@ pub struct AssembledVideoFrame {
     pub height: u32,
 
     pub rtp_timestamp: u32,
+    #[allow(dead_code)]
     pub first_packet_sequence: Option<u16>,
     pub frame_playout_deadline_at_ms: Option<f64>,
     pub frame_recovery_disposition: FrameRecoveryDisposition,
@@ -130,6 +131,7 @@ pub struct EncodedFrame {
     pub height: u32,
 
     pub rtp_timestamp: u32,
+    #[allow(dead_code)]
     pub first_packet_sequence: Option<u16>,
     pub frame_playout_deadline_at_ms: Option<f64>,
     pub frame_recovery_disposition: FrameRecoveryDisposition,

@@ -735,9 +735,11 @@ fn next_consumed_host_tick_epoch(
 
 #[derive(Clone, Debug)]
 struct HostPacingContext {
+    #[allow(dead_code)]
     host_refresh_interval_ms: u64, // 真实host刷新间隔（路况）
     release_interval_ms: u64,      // release限速间隔（油门上限）
     host_frame_age_budget_ms: Option<f64>,
+    #[allow(dead_code)]
     latest_host_present_time_ms: Option<f64>,
     display_tick_epoch: u64,
     present_epoch: u64,
@@ -831,6 +833,7 @@ fn detect_video_frame_interval(
     }
 }
 
+#[allow(dead_code)]
 fn resolve_host_release_wait_duration(
     _host_context: &HostPacingContext,
     _now_ms: f64,

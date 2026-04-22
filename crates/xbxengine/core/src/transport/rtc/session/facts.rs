@@ -391,6 +391,7 @@ pub(crate) struct RecoveryFactsSnapshot {
     pub frame_value: Option<FrameValue>,
     pub gap_severity: Option<GapSeverity>,
     pub repairability: Option<f64>,
+    #[allow(dead_code)]
     pub recovery_episode_stage: Option<RecoveryEpisodeStage>,
     pub recovery_progress_level: Option<RecoveryProgressLevel>,
     pub recovery_episode_progress_at_ms: Option<f64>,

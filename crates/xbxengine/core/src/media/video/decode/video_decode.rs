@@ -37,18 +37,21 @@ type XbxVideoDecoderFactory =
     Box<dyn FnMut() -> (Box<dyn XbxVideoDecoderBackend>, XbxVideoDecoderProbeSummary) + Send>;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[allow(dead_code)]
 pub(crate) enum XbxDecodeWorkloadState {
     AwaitingInput,
     DrainOutput,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[allow(dead_code)]
 pub(crate) struct XbxDecodeWorkloadSnapshot {
     pub(crate) state: XbxDecodeWorkloadState,
     pub(crate) pending_output_queue_depth: usize,
 }
 
 impl XbxDecodeWorkloadSnapshot {
+    #[allow(dead_code)]
     pub(crate) fn should_drain_output_first(self) -> bool {
         matches!(self.state, XbxDecodeWorkloadState::DrainOutput)
     }
@@ -870,6 +873,7 @@ impl XbxVideoDecodeState {
         !self.decoded_frame_queue.is_empty()
     }
 
+    #[allow(dead_code)]
     pub(crate) fn workload_snapshot(&self) -> XbxDecodeWorkloadSnapshot {
         let pending_output_queue_depth = self.decoded_frame_queue.len();
         // 只有输出队列接近打满时才优先 drain，给 decode/pacer 留出更平滑的局部缓冲节奏。

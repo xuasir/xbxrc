@@ -100,6 +100,7 @@ pub(crate) fn recovery_progress_level_from_str(value: &str) -> Option<RecoveryPr
 }
 
 impl RecoveryEpisodeStage {
+    #[allow(dead_code)]
     pub(crate) fn as_str(self) -> &'static str {
         match self {
             Self::Requested => "Requested",
@@ -170,6 +171,7 @@ pub(crate) fn recovery_progress_missing_anchor(progress: Option<RecoveryProgress
     )
 }
 
+#[allow(dead_code)]
 pub(crate) fn recovery_progress_allows_decoder_reset(
     progress: Option<RecoveryProgressLevel>,
 ) -> bool {

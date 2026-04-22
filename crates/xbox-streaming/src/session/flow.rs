@@ -1286,6 +1286,7 @@ fn filter_stale_offer_response(
     answer
 }
 
+#[allow(dead_code)]
 fn filter_stale_ice_response(
     candidates: Option<Vec<IceCandidate>>,
     previous_candidates: Option<&[IceCandidate]>,
