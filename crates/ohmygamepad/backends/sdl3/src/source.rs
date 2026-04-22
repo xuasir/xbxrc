@@ -335,7 +335,10 @@ fn refresh_opened_gamepad<'a>(
     if !opened_gamepads.contains_key(device_id) {
         let (resolved_device_id, opened) =
             open_gamepad_from_event(gamepad_subsystem, joystick_instance_id)?;
-        opened_gamepads.insert(resolved_device_id, opened);
+        opened_gamepads.insert(resolved_device_id.clone(), opened);
+        let opened = opened_gamepads.get_mut(&resolved_device_id)?;
+        opened.descriptor = descriptor_from_gamepad(resolved_device_id, &opened.gamepad);
+        return Some(opened);
     }
 
     let opened = opened_gamepads.get_mut(device_id)?;
@@ -348,7 +351,7 @@ fn open_gamepad(
     joystick_id: JoystickId,
 ) -> Option<(String, OpenedSdl3Gamepad)> {
     let gamepad = gamepad_subsystem.open(joystick_id).ok()?;
-    let device_id = joystick_id_to_device_id(joystick_id);
+    let device_id = gamepad_instance_id_to_device_id(&gamepad)?;
     let descriptor = descriptor_from_gamepad(device_id.clone(), &gamepad);
     Some((
         device_id,
@@ -641,8 +644,8 @@ fn axis_to_trigger_button_value(axis_value: f32) -> f32 {
     ((axis_value + 1.0) * 0.5).clamp(0.0, 1.0)
 }
 
-fn joystick_id_to_device_id(joystick_id: JoystickId) -> String {
-    joystick_id.0.to_string()
+fn gamepad_instance_id_to_device_id(gamepad: &Gamepad) -> Option<String> {
+    Some(gamepad.id().ok()?.0.to_string())
 }
 
 fn joystick_instance_id_to_device_id(joystick_instance_id: u32) -> String {
