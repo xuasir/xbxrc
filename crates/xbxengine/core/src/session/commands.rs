@@ -1,6 +1,6 @@
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum SessionCommand {
-    RequestKeyframe,
+    RequestPli,
     FlushVideoPipeline,
     ReconfigureVideo,
     RestartTransport,

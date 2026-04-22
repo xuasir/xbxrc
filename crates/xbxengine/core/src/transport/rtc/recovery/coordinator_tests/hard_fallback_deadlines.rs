@@ -416,7 +416,7 @@ fn transport_await_hard_fallback_does_not_treat_ingress_without_output_as_local_
     assert!(
         matches!(
             timeout.decision.action,
-            RecoveryAction::RequestKeyframe | RecoveryAction::RequestDecoderReset
+            RecoveryAction::RequestPli | RecoveryAction::RequestDecoderReset
         ),
         "unexpected action {:?}",
         timeout.decision.action
@@ -754,7 +754,7 @@ fn transport_await_hard_fallback_does_not_treat_nonidr_packet_seen_as_local_deco
         },
         &shared_stats,
     );
-    assert_eq!(timeout.decision.action, RecoveryAction::RequestKeyframe);
+    assert_eq!(timeout.decision.action, RecoveryAction::RequestPli);
 }
 
 #[test]
@@ -1117,7 +1117,7 @@ fn cooldown_suppressed_cannot_linger_when_connected_track_attached_but_no_presen
         },
         &shared_stats,
     );
-    assert_eq!(first.decision.action, RecoveryAction::RequestKeyframe);
+    assert_eq!(first.decision.action, RecoveryAction::RequestPli);
 
     let second = coordinator.propose_from_owner_signal(
         RecoveryOwnerSignal {
@@ -1487,22 +1487,22 @@ fn transport_recovered_late_does_not_inherit_severe_deadline_reconnect_counter()
     );
     assert!(matches!(
         recovered_late.decision.action,
-        RecoveryAction::RequestKeyframe | RecoveryAction::CooldownSuppressed
+        RecoveryAction::RequestPli | RecoveryAction::CooldownSuppressed
     ));
 }
 
 #[test]
 fn coordinator_burst_rollback_warranted_covers_transport_await_suppress_pairs() {
     assert!(RecoveryCoordinator::coordinator_burst_rollback_warranted(
-        RecoveryAction::RequestKeyframe,
+        RecoveryAction::RequestPli,
         RecoveryAction::WaitForBurst,
     ));
     assert!(!RecoveryCoordinator::coordinator_burst_rollback_warranted(
-        RecoveryAction::RequestKeyframe,
+        RecoveryAction::RequestPli,
         RecoveryAction::CooldownSuppressed,
     ));
     assert!(RecoveryCoordinator::coordinator_burst_rollback_warranted(
-        RecoveryAction::RequestKeyframe,
+        RecoveryAction::RequestPli,
         RecoveryAction::CoalescedDecoderResetInFlight,
     ));
     assert!(RecoveryCoordinator::coordinator_burst_rollback_warranted(
@@ -1614,7 +1614,7 @@ fn transport_await_non_idr_with_present_stall_forces_keyframe_after_elapsed_epoc
     assert!(
         matches!(
             second.decision.action,
-            RecoveryAction::RequestKeyframe | RecoveryAction::CoalescedKeyframeInFlight
+            RecoveryAction::RequestPli | RecoveryAction::CoalescedKeyframeInFlight
         ),
         "unexpected decision {:?}",
         second.decision.action

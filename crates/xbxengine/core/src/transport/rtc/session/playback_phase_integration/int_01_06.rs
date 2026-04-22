@@ -251,7 +251,7 @@ fn playback_phase_int04_transport_await_family_hold_must_not_stick_forever_on_sa
     assert!(
         first
             .iter()
-            .any(|c| matches!(c, TransportCommand::RequestKeyframe { .. })),
+            .any(|c| matches!(c, TransportCommand::RequestPli { .. })),
         "PLY-INT-04: 首轮应能发出本地 keyframe 探测"
     );
 
@@ -277,7 +277,7 @@ fn playback_phase_int04_transport_await_family_hold_must_not_stick_forever_on_sa
                 Some(crate::XbxEngineVideoEscalationObservation {
                     observation_id: 52,
                     reason: "transportAwaitRecoveryAnchor".to_string(),
-                    action: "requestKeyframe".to_string(),
+                    action: "requestPli".to_string(),
                     recovery_stage: "rebuilding-supply".to_string(),
                     recovery_chain_value: "anchor".to_string(),
                     recovery_failure_cost: "high".to_string(),
@@ -313,7 +313,7 @@ fn playback_phase_int04_transport_await_family_hold_must_not_stick_forever_on_sa
         second.is_empty()
             || second
                 .iter()
-                .any(|c| matches!(c, TransportCommand::RequestKeyframe { .. })),
+                .any(|c| matches!(c, TransportCommand::RequestPli { .. })),
         "PLY-INT-04: 第二拍应吸收重复或继续可解释动作: {second:?}"
     );
 

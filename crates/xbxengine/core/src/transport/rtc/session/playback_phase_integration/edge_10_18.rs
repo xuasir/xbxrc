@@ -234,7 +234,7 @@ fn playback_phase_edge12_deadline_expired_episode_must_not_stay_no_signal() {
             .as_ref()
             .expect("PLY-EDGE-12 ledger");
         assert!(
-            ledger.action_selected == "requestKeyframe"
+            ledger.action_selected == "requestPli"
                 || ledger.action_selected == "requestDecoderReset"
                 || ledger.action_selected == "requestReconnectCandidate"
                 || ledger.gate_result.contains("pass")

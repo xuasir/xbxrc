@@ -910,9 +910,12 @@ impl RtcSessionPolicy {
             &owner_signal,
             observed_at_ms,
         ) {
-            proposal.decision.action = RecoveryAction::RequestKeyframe;
+            proposal.decision.action = RecoveryAction::RequestPli;
         }
-        if proposal.decision.action == RecoveryAction::RequestKeyframe
+        if Self::should_suppress_display_picture_recovery_action(&proposal, &owner_signal) {
+            proposal.decision.action = RecoveryAction::CooldownSuppressed;
+        }
+        if proposal.decision.action == RecoveryAction::RequestPli
             && first_frame_acquisition_priority_active(
                 snapshot,
                 observed_at_ms,
@@ -954,15 +957,7 @@ impl RtcSessionPolicy {
             &mut proposal,
             &owner_signal,
         );
-        if self.should_absorb_supply_degraded_overlap_with_stale_transport_await(
-            snapshot,
-            owner_state,
-            &proposal,
-            &owner_signal,
-            observed_at_ms,
-        ) {
-            // 旧 transport-await 恢复窗尚未退干净时，新的 displaySupplyDegraded 容易只是本地显示断流表象。
-            // 这时继续发 PLI 只会放大恢复链，先收敛在本地吸收路径。
+        if Self::should_suppress_display_picture_recovery_action(&proposal, &owner_signal) {
             proposal.decision.action = RecoveryAction::CooldownSuppressed;
         }
         let transport_await_diagnosis_is_short = snapshot
@@ -1401,88 +1396,6 @@ impl RtcSessionPolicy {
             self.runtime_stats.as_ref(),
             self.pre_first_frame_reconnect_fallback_ms(),
         )
-    }
-
-    fn should_absorb_supply_degraded_overlap_with_stale_transport_await(
-        &self,
-        snapshot: &TransportSnapshot,
-        owner_state: VideoSchedulingOwnerState,
-        proposal: &CoordinatorProposal,
-        owner_signal: &RecoveryOwnerSignal,
-        observed_at_ms: f64,
-    ) -> bool {
-        const STALE_TRANSPORT_AWAIT_OVERLAP_MAX_AGE_MS: f64 = 1_800.0;
-        const FRESH_INGRESS_MAX_AGE_MS: f64 = 220.0;
-        if self.is_cloud_gaming_profile()
-            || snapshot.connection.lifecycle_state != ConnectionLifecycleStateFact::Connected
-            || !matches!(
-                owner_state,
-                VideoSchedulingOwnerState::SupplyStarved
-                    | VideoSchedulingOwnerState::DegradedServing
-                    | VideoSchedulingOwnerState::RebuildingSupply,
-            )
-            || owner_signal.reason != VideoEscalationReason::AdapterThinStream
-            || owner_signal.reason_label != "displaySupplyDegraded"
-            || proposal.decision.action != RecoveryAction::RequestKeyframe
-        {
-            return false;
-        }
-        RuntimeStatsSink::read_shared(self.runtime_stats.as_ref(), |stats| {
-            let current_clean_anchor = has_current_clean_anchor_from_stats(stats);
-            let terminal_deferred_transport_await =
-                Self::has_terminal_deferred_transport_await_issue(
-                    stats,
-                    current_clean_anchor,
-                    observed_at_ms,
-                );
-            let current_transport_await_issue = Self::has_unresolved_transport_await_issue(stats);
-            let recent_transport_await_episode_window = stats
-                .latest_keyframe_request_episode
-                .as_ref()
-                .is_some_and(|episode| {
-                    episode.request_reason.as_deref() == Some("transportAwaitRecoveryAnchor")
-                        && episode.status != "decoded"
-                        && (observed_at_ms - episode.requested_at_ms).max(0.0)
-                            <= STALE_TRANSPORT_AWAIT_OVERLAP_MAX_AGE_MS
-                });
-            let overlapping_transport_await = stats
-                .latest_keyframe_request_episode
-                .as_ref()
-                .is_some_and(|episode| {
-                    current_transport_await_issue
-                        && episode.request_reason.as_deref() == Some("transportAwaitRecoveryAnchor")
-                        && !terminal_deferred_transport_await
-                        && episode.status != "decoded"
-                        && (observed_at_ms - episode.requested_at_ms).max(0.0)
-                            <= STALE_TRANSPORT_AWAIT_OVERLAP_MAX_AGE_MS
-                })
-                || current_transport_await_issue
-                || terminal_deferred_transport_await
-                || recent_transport_await_episode_window;
-            if !overlapping_transport_await {
-                return false;
-            }
-            let chain_healthy = stats
-                .latest_video_timeline_observation
-                .as_ref()
-                .is_some_and(|timeline| timeline.chain.state == "healthy");
-            let track_attached_with_video =
-                stats
-                    .latest_video_track_status
-                    .as_ref()
-                    .is_some_and(|track| {
-                        track.state == "remoteTrackAttached" && track.video_bytes_total > 0
-                    });
-            let ingress_is_fresh = stats
-                .latest_video_packet_arrival_time_ms
-                .is_some_and(|at_ms| (observed_at_ms - at_ms).max(0.0) <= FRESH_INGRESS_MAX_AGE_MS)
-                && stats.latest_video_decode_ok_time_ms.is_some_and(|at_ms| {
-                    (observed_at_ms - at_ms).max(0.0) <= FRESH_INGRESS_MAX_AGE_MS
-                });
-            let pipeline_not_stalled = !stats.video_decoder_stalled.unwrap_or(false);
-            chain_healthy && track_attached_with_video && ingress_is_fresh && pipeline_not_stalled
-        })
-        .unwrap_or(false)
     }
 
     fn should_reenter_transport_await_local_probe(
@@ -2279,7 +2192,8 @@ impl RtcSessionPolicy {
             recovery_primary_action: proposal.map(|p| {
                 {
                     match p.decision.action {
-                        RecoveryAction::RequestKeyframe => "requestKeyframe",
+                        RecoveryAction::RequestPli => "requestPli",
+                        RecoveryAction::RequestFir => "requestFir",
                         RecoveryAction::RequestDecoderReset => "requestDecoderReset",
                         RecoveryAction::RequestReconnectCandidate => "requestReconnect",
                         RecoveryAction::WaitForBurst
@@ -2437,7 +2351,7 @@ impl RtcSessionPolicy {
         observed_at_ms: f64,
     ) -> bool {
         proposal.reason == VideoEscalationReason::TransportAwaitRecoveryKeyframe
-            && proposal.decision.action == RecoveryAction::RequestKeyframe
+            && proposal.decision.action == RecoveryAction::RequestPli
             && !RecoveryCoordinator::transport_await_has_hard_recovery_evidence(
                 self.runtime_stats.as_ref(),
                 proposal.budget_before.recovery_epoch,
@@ -2450,17 +2364,25 @@ impl RtcSessionPolicy {
         proposal: &RecoveryPolicyProposal,
         observed_at_ms: f64,
     ) -> bool {
-        if proposal.decision.action != RecoveryAction::RequestKeyframe {
+        if proposal.decision.action != RecoveryAction::RequestPli {
             return false;
         }
         self.is_pre_first_frame_acquisition_probe(proposal)
             || self.is_exploratory_transport_await_keyframe(proposal, observed_at_ms)
             || matches!(
                 resolve_session_fault_domain(proposal.reason),
-                SessionFaultDomain::ReferenceChain
-                    | SessionFaultDomain::DecodePipeline
-                    | SessionFaultDomain::DisplaySupply
+                SessionFaultDomain::ReferenceChain | SessionFaultDomain::DecodePipeline
             )
+    }
+
+    fn should_suppress_display_picture_recovery_action(
+        proposal: &CoordinatorProposal,
+        owner_signal: &RecoveryOwnerSignal,
+    ) -> bool {
+        matches!(
+            proposal.decision.action,
+            RecoveryAction::RequestPli | RecoveryAction::RequestFir
+        ) && resolve_session_fault_domain(owner_signal.reason) == SessionFaultDomain::DisplaySupply
     }
 
     fn should_force_first_frame_acquisition_local_action(
@@ -2504,7 +2426,7 @@ impl RtcSessionPolicy {
         match proposal.decision.action {
             RecoveryAction::CoalescedDecoderResetInFlight
             | RecoveryAction::WaitForDecoderResetBurst => RecoveryAction::WaitForBurst,
-            _ => RecoveryAction::RequestKeyframe,
+            _ => RecoveryAction::RequestPli,
         }
     }
 
@@ -2530,7 +2452,10 @@ impl RtcSessionPolicy {
     fn is_active_recovery_action(action: RecoveryAction) -> bool {
         matches!(
             action,
-            RecoveryAction::RequestDecoderReset | RecoveryAction::RequestReconnectCandidate
+            RecoveryAction::RequestPli
+                | RecoveryAction::RequestFir
+                | RecoveryAction::RequestDecoderReset
+                | RecoveryAction::RequestReconnectCandidate
         )
     }
 

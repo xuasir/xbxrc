@@ -14,7 +14,8 @@ pub enum RecoveryAction {
     CoalescedKeyframeInFlight,
     CoalescedDecoderResetInFlight,
     StartupGraceSuppressed,
-    RequestKeyframe,
+    RequestPli,
+    RequestFir,
     RequestDecoderReset,
     RequestReconnectCandidate,
 }
@@ -28,7 +29,8 @@ impl RecoveryAction {
             Self::CoalescedKeyframeInFlight => "coalesced:keyframeInFlight",
             Self::CoalescedDecoderResetInFlight => "coalesced:decoderResetInFlight",
             Self::StartupGraceSuppressed => "startupGraceSuppressed",
-            Self::RequestKeyframe => "requestKeyframe",
+            Self::RequestPli => "requestPli",
+            Self::RequestFir => "requestFir",
             Self::RequestDecoderReset => "requestDecoderReset",
             Self::RequestReconnectCandidate => "requestReconnectCandidate",
         }
@@ -133,7 +135,8 @@ impl VideoEscalationReason {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum RecoveryActionOwner {
     Nack,
-    Keyframe,
+    Pli,
+    Fir,
     DecoderReset,
     Reconnect,
 }
@@ -387,7 +390,7 @@ impl VideoEscalationController {
         self.keyframe_budget_reservation_active = false;
         let action = if self.can_allocate_keyframe_attempt() {
             self.last_keyframe_request_at = Some(now);
-            RecoveryAction::RequestKeyframe
+            RecoveryAction::RequestPli
         } else {
             RecoveryAction::CooldownSuppressed
         };
@@ -415,8 +418,13 @@ impl VideoEscalationController {
 
     pub fn action_contract(action: RecoveryAction) -> RecoveryActionContract {
         match action {
-            RecoveryAction::RequestKeyframe => RecoveryActionContract {
-                owner: Some(RecoveryActionOwner::Keyframe),
+            RecoveryAction::RequestPli => RecoveryActionContract {
+                owner: Some(RecoveryActionOwner::Pli),
+                budget_kind: Some(RecoveryBudgetKind::Keyframe),
+                budget_recorded_on_execution: true,
+            },
+            RecoveryAction::RequestFir => RecoveryActionContract {
+                owner: Some(RecoveryActionOwner::Fir),
                 budget_kind: Some(RecoveryBudgetKind::Keyframe),
                 budget_recorded_on_execution: true,
             },
@@ -450,7 +458,8 @@ impl VideoEscalationController {
         match action {
             RecoveryAction::RequestReconnectCandidate => true,
             RecoveryAction::RequestDecoderReset => false,
-            RecoveryAction::RequestKeyframe
+            RecoveryAction::RequestPli
+            | RecoveryAction::RequestFir
             | RecoveryAction::WaitForBurst
             | RecoveryAction::WaitForDecoderResetBurst
             | RecoveryAction::CooldownSuppressed
@@ -462,7 +471,7 @@ impl VideoEscalationController {
 
     pub fn register_action_applied(&mut self, action: RecoveryAction) {
         match action {
-            RecoveryAction::RequestKeyframe => {
+            RecoveryAction::RequestPli | RecoveryAction::RequestFir => {
                 self.keyframe_budget_reservation_active = true;
             }
             RecoveryAction::RequestDecoderReset => {}
@@ -716,7 +725,7 @@ impl VideoEscalationController {
                             self.pending_keyframe_signals = 0;
                             self.reconnect_candidate_signals = 0;
                             if self.can_allocate_keyframe_attempt() {
-                                RecoveryAction::RequestKeyframe
+                                RecoveryAction::RequestPli
                             } else {
                                 self.coalesced_keyframe_in_flight()
                             }
@@ -789,7 +798,7 @@ impl VideoEscalationController {
                         self.pending_keyframe_signals = 0;
                         self.reconnect_candidate_signals = 0;
                         if self.can_allocate_keyframe_attempt() {
-                            RecoveryAction::RequestKeyframe
+                            RecoveryAction::RequestFir
                         } else {
                             RecoveryAction::CooldownSuppressed
                         }
@@ -802,7 +811,7 @@ impl VideoEscalationController {
                         self.pending_keyframe_signals = 0;
                         self.reconnect_candidate_signals = 0;
                         if self.can_allocate_keyframe_attempt() {
-                            RecoveryAction::RequestKeyframe
+                            RecoveryAction::RequestPli
                         } else {
                             RecoveryAction::CooldownSuppressed
                         }

@@ -31,7 +31,8 @@ const RECOVERY_COMMAND_REASON_VIDEO_RTCP_FEEDBACK_TARGET_PENDING: &str =
     "familyDeferred:videoRtcpFeedbackTargetPending";
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum RecoveryCommandKind {
-    RequestKeyframe,
+    RequestPli,
+    RequestFir,
     RequestDecoderReset,
 }
 
@@ -418,14 +419,14 @@ impl<'a> RtcTransportSessionBridge<'a> {
                     };
                     self.record_transport_command_status(command.clone(), command_result);
                 }
-                TransportCommand::RequestKeyframe {
+                TransportCommand::RequestPli {
                     observation_id,
                     reason,
                 } => {
                     let requested_at_ms = crate::transport::rtc::stats::now_ms_f64();
                     let (family_decision, family_semantics, family_semantic_detail) = self
                         .resolve_recovery_command_family_decision(
-                            RecoveryCommandKind::RequestKeyframe,
+                            RecoveryCommandKind::RequestPli,
                             Some(reason.as_str()),
                             *observation_id, // 传入 observation_id 作为 decision_id
                             requested_at_ms,
@@ -456,7 +457,7 @@ impl<'a> RtcTransportSessionBridge<'a> {
                         .lock()
                         .map_err(|_| XbxEngineRuntimeError::new("xbxEngineRtcConnectionLockFailed"))
                         .and_then(|mut connection| {
-                            connection.request_video_keyframe_with_outcome(self.runtime_stats)
+                            connection.request_video_pli_with_outcome(self.runtime_stats)
                         });
                     let (command_status, semantic_detail) =
                         self.resolve_keyframe_command_status_from_result(&result);
@@ -467,7 +468,93 @@ impl<'a> RtcTransportSessionBridge<'a> {
                                     *observation_id,
                                     reason.clone(),
                                     action,
-                                    RecoveryAction::RequestKeyframe,
+                                    RecoveryAction::RequestPli,
+                                );
+                            }
+                        }
+                    }
+                    match &command_status {
+                        CommandResultStatus::Deferred { reason } => {
+                            RuntimeStatsSink::new(self.runtime_stats.clone())
+                                .record_keyframe_request_episode_deferred(requested_at_ms, reason);
+                        }
+                        CommandResultStatus::Failed { error } => {
+                            RuntimeStatsSink::new(self.runtime_stats.clone())
+                                .record_keyframe_request_episode_failed(requested_at_ms, error);
+                        }
+                        CommandResultStatus::Succeeded => {}
+                    }
+                    if let Some(fields) = family_semantics.as_ref() {
+                        self.update_recovery_decision_semantic_fields(
+                            *observation_id,
+                            fields,
+                            requested_at_ms,
+                        );
+                    }
+                    self.record_transport_command_status_with_semantic(
+                        command.clone(),
+                        command_status,
+                        match (family_semantic_detail.as_deref(), semantic_detail) {
+                            (Some(family), Some(mut tail)) => {
+                                tail.push_str(" | family=");
+                                tail.push_str(family);
+                                Some(tail)
+                            }
+                            (Some(family), None) => Some(format!("family={family}")),
+                            (None, some) => some,
+                        },
+                    );
+                }
+                TransportCommand::RequestFir {
+                    observation_id,
+                    reason,
+                } => {
+                    let requested_at_ms = crate::transport::rtc::stats::now_ms_f64();
+                    let (family_decision, family_semantics, family_semantic_detail) = self
+                        .resolve_recovery_command_family_decision(
+                            RecoveryCommandKind::RequestFir,
+                            Some(reason.as_str()),
+                            *observation_id,
+                            requested_at_ms,
+                        );
+                    if let Some(reason) = family_decision {
+                        if let Some(fields) = family_semantics.as_ref() {
+                            self.update_recovery_decision_semantic_fields(
+                                *observation_id,
+                                fields,
+                                requested_at_ms,
+                            );
+                        }
+                        self.record_transport_command_status(
+                            command.clone(),
+                            CommandResultStatus::Deferred { reason },
+                        );
+                        return;
+                    }
+                    RuntimeStatsSink::new(self.runtime_stats.clone())
+                        .record_keyframe_request_episode_requested(
+                            *observation_id,
+                            Some(reason.clone()),
+                            requested_at_ms,
+                            None,
+                        );
+                    let result = self
+                        .connection
+                        .lock()
+                        .map_err(|_| XbxEngineRuntimeError::new("xbxEngineRtcConnectionLockFailed"))
+                        .and_then(|mut connection| {
+                            connection.request_video_fir_with_outcome(self.runtime_stats)
+                        });
+                    let (command_status, semantic_detail) =
+                        self.resolve_keyframe_command_status_from_result(&result);
+                    if matches!(command_status, CommandResultStatus::Succeeded) {
+                        if let Ok(outcome) = &result {
+                            if let Some(action) = outcome.escalation_action_label() {
+                                self.record_recovery_escalation_observation(
+                                    *observation_id,
+                                    reason.clone(),
+                                    action,
+                                    RecoveryAction::RequestFir,
                                 );
                             }
                         }
@@ -685,13 +772,15 @@ impl<'a> RtcTransportSessionBridge<'a> {
         semantic_detail: Option<&str>,
     ) {
         let decision_id = match command {
-            TransportCommand::RequestKeyframe { observation_id, .. }
+            TransportCommand::RequestPli { observation_id, .. }
+            | TransportCommand::RequestFir { observation_id, .. }
             | TransportCommand::RequestDecoderReset { observation_id, .. }
             | TransportCommand::RequestReconnectCandidate { observation_id, .. }
             | TransportCommand::SetTargetRembKbps { observation_id, .. } => *observation_id,
         };
         let command_name = match command {
-            TransportCommand::RequestKeyframe { .. } => "requestKeyframe",
+            TransportCommand::RequestPli { .. } => "requestPli",
+            TransportCommand::RequestFir { .. } => "requestFir",
             TransportCommand::RequestDecoderReset { .. } => "requestDecoderReset",
             TransportCommand::RequestReconnectCandidate { .. } => "requestReconnectCandidate",
             TransportCommand::SetTargetRembKbps { .. } => "setTargetRembKbps",
@@ -772,7 +861,8 @@ impl<'a> RtcTransportSessionBridge<'a> {
         observed_at_ms: f64,
     ) {
         let command_name = match command {
-            TransportCommand::RequestKeyframe { .. } => "requestKeyframe",
+            TransportCommand::RequestPli { .. } => "requestPli",
+            TransportCommand::RequestFir { .. } => "requestFir",
             TransportCommand::RequestDecoderReset { .. } => "requestDecoderReset",
             TransportCommand::RequestReconnectCandidate { .. } => "requestReconnectCandidate",
             TransportCommand::SetTargetRembKbps { .. } => "setTargetRembKbps",
@@ -823,15 +913,20 @@ impl<'a> RtcTransportSessionBridge<'a> {
                 },
                 None,
             ),
+            Ok(VideoKeyframeRequestOutcome::FeedbackTargetPending) => (
+                CommandResultStatus::Deferred {
+                    reason: RECOVERY_COMMAND_REASON_VIDEO_RTCP_FEEDBACK_TARGET_PENDING.to_string(),
+                },
+                None,
+            ),
             Ok(
                 VideoKeyframeRequestOutcome::RequestedPli
-                | VideoKeyframeRequestOutcome::RequestedFir
-                | VideoKeyframeRequestOutcome::RequestedControl,
+                | VideoKeyframeRequestOutcome::RequestedFir,
             ) => (CommandResultStatus::Succeeded, None),
             Err(error) => {
                 let error_text = error.to_string();
                 if self.is_control_channel_not_ready_error(
-                    RecoveryCommandKind::RequestKeyframe,
+                    RecoveryCommandKind::RequestPli,
                     &error_text,
                 ) {
                     return (
@@ -862,7 +957,10 @@ impl<'a> RtcTransportSessionBridge<'a> {
         error: &str,
     ) -> bool {
         match command_kind {
-            RecoveryCommandKind::RequestKeyframe => {
+            RecoveryCommandKind::RequestPli => {
+                error.contains("xbxEngineRtcControlChannelNotReadyForKeyframe")
+            }
+            RecoveryCommandKind::RequestFir => {
                 error.contains("xbxEngineRtcControlChannelNotReadyForKeyframe")
             }
             RecoveryCommandKind::RequestDecoderReset => {
@@ -918,7 +1016,8 @@ impl<'a> RtcTransportSessionBridge<'a> {
 
                 let recovery_primary_action = ledger.and_then(|l| {
                     l.recovery_primary_action.as_deref().and_then(|s| match s {
-                        "requestKeyframe" => Some("requestKeyframe"),
+                        "requestPli" => Some("requestPli"),
+                        "requestFir" => Some("requestFir"),
                         "requestDecoderReset" => Some("requestDecoderReset"),
                         "requestReconnect" => Some("requestReconnect"),
                         "suppress" => Some("suppress"),
@@ -982,7 +1081,8 @@ mod tests {
         observed_at_ms: f64,
     ) -> XbxEngineRecoveryDecisionLedgerObservation {
         let action_selected = match proposal.decision.action {
-            RecoveryAction::RequestKeyframe => "requestKeyframe",
+            RecoveryAction::RequestPli => "requestPli",
+            RecoveryAction::RequestFir => "requestFir",
             RecoveryAction::RequestDecoderReset => "requestDecoderReset",
             RecoveryAction::RequestReconnectCandidate => "requestReconnectCandidate",
             RecoveryAction::CoalescedKeyframeInFlight => "coalesced:keyframeInFlight",
@@ -994,7 +1094,8 @@ mod tests {
         };
 
         let recovery_primary_action = match proposal.decision.action {
-            RecoveryAction::RequestKeyframe => "requestKeyframe",
+            RecoveryAction::RequestPli => "requestPli",
+            RecoveryAction::RequestFir => "requestFir",
             RecoveryAction::RequestDecoderReset => "requestDecoderReset",
             RecoveryAction::RequestReconnectCandidate => "requestReconnect",
             RecoveryAction::WaitForBurst
@@ -1624,7 +1725,7 @@ mod tests {
         let bridge = build_bridge(runtime_stats.clone(), pending_runtime_recovery_action);
 
         bridge.apply_transport_session_command(SessionCommand::Transport(
-            TransportCommand::RequestKeyframe {
+            TransportCommand::RequestPli {
                 observation_id: 22,
                 reason: "ingressWaitKeyframe".to_string(),
             },
@@ -1684,7 +1785,7 @@ mod tests {
                 state_after: "detecting".to_string(),
                 input_signal: "none".to_string(),
                 gate_result: "pass".to_string(),
-                action_selected: "requestKeyframe".to_string(),
+                action_selected: "requestPli".to_string(),
                 frame_value: None,
                 gap_severity: None,
                 repairability: None,
@@ -1710,7 +1811,7 @@ mod tests {
         let bridge = build_bridge(runtime_stats.clone(), pending_runtime_recovery_action);
 
         bridge.apply_transport_session_command(SessionCommand::Transport(
-            TransportCommand::RequestKeyframe {
+            TransportCommand::RequestPli {
                 observation_id: 22,
                 reason: "ingressWaitKeyframe".to_string(),
             },
@@ -1801,7 +1902,7 @@ mod tests {
                 input_signal: "transportAwaitRecoveryAnchor:transportAwaitRecoveryAnchor"
                     .to_string(),
                 gate_result: "pass".to_string(),
-                action_selected: "requestKeyframe".to_string(),
+                action_selected: "requestPli".to_string(),
                 frame_value: None,
                 gap_severity: None,
                 repairability: None,
@@ -1827,7 +1928,7 @@ mod tests {
         let bridge = build_bridge(runtime_stats.clone(), pending_runtime_recovery_action);
 
         bridge.apply_transport_session_command(SessionCommand::Transport(
-            TransportCommand::RequestKeyframe {
+            TransportCommand::RequestPli {
                 observation_id: 22,
                 reason: "transportAwaitRecoveryAnchor".to_string(),
             },
@@ -1892,7 +1993,7 @@ mod tests {
                 state_after: "detecting".to_string(),
                 input_signal: "none".to_string(),
                 gate_result: "pass".to_string(),
-                action_selected: "requestKeyframe".to_string(),
+                action_selected: "requestPli".to_string(),
                 frame_value: None,
                 gap_severity: None,
                 repairability: None,
@@ -1901,7 +2002,7 @@ mod tests {
                 coalescing_mode: Some("Merge".to_string()),
                 unlock_reason: None,
                 preempt_reason: None,
-                recovery_primary_action: Some("requestKeyframe".to_string()),
+                recovery_primary_action: Some("requestPli".to_string()),
                 budget_before: None,
                 budget_after: None,
                 trigger_observation_label: None,
@@ -1918,7 +2019,7 @@ mod tests {
         let bridge = build_bridge(runtime_stats.clone(), pending_runtime_recovery_action);
 
         bridge.apply_transport_session_command(SessionCommand::Transport(
-            TransportCommand::RequestKeyframe {
+            TransportCommand::RequestPli {
                 observation_id: 22,
                 reason: "ingressWaitKeyframe".to_string(),
             },
@@ -1933,7 +2034,7 @@ mod tests {
         assert_eq!(ledger.coalescing_mode.as_deref(), Some("Merge"));
         assert_eq!(
             ledger.recovery_primary_action.as_deref(),
-            Some("requestKeyframe")
+            Some("requestPli")
         );
     }
 
@@ -1994,7 +2095,7 @@ mod tests {
         let bridge = build_bridge(runtime_stats.clone(), pending_runtime_recovery_action);
 
         bridge.apply_transport_session_command(SessionCommand::Transport(
-            TransportCommand::RequestKeyframe {
+            TransportCommand::RequestPli {
                 observation_id: 22,
                 reason: "transportAwaitRecoveryAnchor".to_string(),
             },
@@ -2258,7 +2359,7 @@ mod tests {
                 state_after: "detecting".to_string(),
                 input_signal: "none".to_string(),
                 gate_result: "pass".to_string(),
-                action_selected: "requestKeyframe".to_string(),
+                action_selected: "requestPli".to_string(),
                 frame_value: None,
                 gap_severity: None,
                 repairability: None,
@@ -2284,7 +2385,7 @@ mod tests {
         let bridge = build_bridge(runtime_stats.clone(), pending_runtime_recovery_action);
 
         bridge.apply_transport_session_command(SessionCommand::Transport(
-            TransportCommand::RequestKeyframe {
+            TransportCommand::RequestPli {
                 observation_id: 22,
                 reason: "ingressWaitKeyframe".to_string(),
             },
@@ -2366,7 +2467,7 @@ mod tests {
                 state_after: "detecting".to_string(),
                 input_signal: "none".to_string(),
                 gate_result: "pass".to_string(),
-                action_selected: "requestKeyframe".to_string(),
+                action_selected: "requestPli".to_string(),
                 frame_value: None,
                 gap_severity: None,
                 repairability: None,
@@ -2392,7 +2493,7 @@ mod tests {
         let bridge = build_bridge(runtime_stats.clone(), pending_runtime_recovery_action);
 
         bridge.apply_transport_session_command(SessionCommand::Transport(
-            TransportCommand::RequestKeyframe {
+            TransportCommand::RequestPli {
                 observation_id: 22,
                 reason: "transportAwaitRecoveryAnchor".to_string(),
             },
@@ -2496,7 +2597,7 @@ mod tests {
         let bridge = build_bridge(runtime_stats.clone(), pending_runtime_recovery_action);
 
         bridge.apply_transport_session_command(SessionCommand::Transport(
-            TransportCommand::RequestKeyframe {
+            TransportCommand::RequestPli {
                 observation_id: 24573,
                 reason: "ingressWaitKeyframe".to_string(),
             },
@@ -2596,7 +2697,7 @@ mod tests {
         let bridge = build_bridge(runtime_stats.clone(), pending_runtime_recovery_action);
 
         bridge.apply_transport_session_command(SessionCommand::Transport(
-            TransportCommand::RequestKeyframe {
+            TransportCommand::RequestPli {
                 observation_id: 30191,
                 reason: "transportAwaitRecoveryAnchor".to_string(),
             },
@@ -2699,7 +2800,7 @@ mod tests {
         let bridge = build_bridge(runtime_stats.clone(), pending_runtime_recovery_action);
 
         bridge.apply_transport_session_command(SessionCommand::Transport(
-            TransportCommand::RequestKeyframe {
+            TransportCommand::RequestPli {
                 observation_id: 35010,
                 reason: "transportAwaitRecoveryAnchor".to_string(),
             },
@@ -2805,7 +2906,7 @@ mod tests {
         let bridge = build_bridge(runtime_stats.clone(), pending_runtime_recovery_action);
 
         bridge.apply_transport_session_command(SessionCommand::Transport(
-            TransportCommand::RequestKeyframe {
+            TransportCommand::RequestPli {
                 observation_id: 41446,
                 reason: "ingressWaitKeyframe".to_string(),
             },

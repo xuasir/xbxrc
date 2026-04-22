@@ -923,7 +923,15 @@ fn service_pump_observes_data_channel_message_from_poll_read() {
     }
     assert!(saw_input_closed, "service should observe input close");
 
-    assert!(service.request_video_pli(&runtime_stats).is_ok());
+    let error = service
+        .request_video_pli(&runtime_stats)
+        .expect_err("未 prime feedback target 前应返回 unavailable");
+    assert!(
+        error
+            .to_string()
+            .contains("xbxEngineRtcVideoPliFeedbackTargetUnavailable"),
+        "unexpected error: {error}"
+    );
 }
 
 #[test]
@@ -991,7 +999,6 @@ fn service_bootstraps_message_and_control_payloads_after_handshake_ack() {
     let mut saw_post_handshake = false;
     let mut saw_control_authorization = false;
     let mut saw_control_removed = false;
-    let mut saw_keyframe_request = false;
     let mut saw_input_metadata = false;
     let mut saw_chat_catalog = false;
     let mut observed_message_payloads = Vec::new();
@@ -1062,11 +1069,6 @@ fn service_bootstraps_message_and_control_payloads_after_handshake_ack() {
                 if label == CHAT_CHANNEL_LABEL && payload.is_string {
                     saw_chat_catalog = body.contains("hello from rtc chat");
                 }
-                if label == CONTROL_CHANNEL_LABEL
-                    && body.contains("\"message\":\"videoKeyframeRequested\"")
-                {
-                    saw_keyframe_request = true;
-                }
                 if body.contains("/streaming/systemUi/configuration")
                     || body.contains("/streaming/properties/clientappinstallidchanged")
                 {
@@ -1083,10 +1085,6 @@ fn service_bootstraps_message_and_control_payloads_after_handshake_ack() {
             }
         }
 
-        if service.control_service.is_control_ready() && !saw_keyframe_request {
-            service.request_video_pli(&runtime_stats).unwrap();
-        }
-
         if answer_connected
             && service.control_service.is_control_ready()
             && answer_message_dc_id.is_some()
@@ -1096,7 +1094,6 @@ fn service_bootstraps_message_and_control_payloads_after_handshake_ack() {
             && saw_post_handshake
             && saw_control_authorization
             && saw_control_removed
-            && saw_keyframe_request
         {
             break;
         }
@@ -1126,11 +1123,6 @@ fn service_bootstraps_message_and_control_payloads_after_handshake_ack() {
         saw_control_removed,
         "service should send control gamepad removed payload"
     );
-    assert!(
-        saw_keyframe_request,
-        "service should send keyframe request after control becomes ready"
-    );
-
     let chat_payload = "hello from rtc chat";
     {
         let mut answer_chat_dc = answer_pc
@@ -1452,7 +1444,7 @@ fn video_recovery_prefers_pli_on_first_request() {
 }
 
 #[test]
-fn video_recovery_escalates_to_fir_within_same_epoch() {
+fn video_recovery_requests_fir_explicitly_within_same_epoch() {
     let mut service = RtcConnectionService::default();
     let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
     let session = XbxEngineSessionDto {
@@ -1471,7 +1463,7 @@ fn video_recovery_escalates_to_fir_within_same_epoch() {
         }
     }
 
-    assert!(service.request_video_pli(&runtime_stats).is_ok());
+    assert!(service.request_video_fir(&runtime_stats).is_ok());
     thread::sleep(Duration::from_millis(220));
     assert!(service.request_video_pli(&runtime_stats).is_ok());
     let stats = runtime_stats.lock().expect("runtime stats lock").clone();
@@ -1487,7 +1479,7 @@ fn video_recovery_escalates_to_fir_within_same_epoch() {
 }
 
 #[test]
-fn video_recovery_suppresses_when_feedback_not_supported() {
+fn video_recovery_reports_feedback_target_unavailable_when_feedback_not_supported() {
     let mut service = RtcConnectionService::default();
     let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
     let session = XbxEngineSessionDto {
@@ -1496,53 +1488,26 @@ fn video_recovery_suppresses_when_feedback_not_supported() {
         turn_server: None,
     };
     service.rebuild(&session, &runtime_stats).unwrap();
-    let (mut answer_pc, mut answer_io, _, control_dc_id, _, _, _, _) =
+    let (_answer_pc, _answer_io, _, control_dc_id, _, _, _, _) =
         connect_service_to_answer_peer(&mut service, &runtime_stats);
     if let Ok(mut stats) = runtime_stats.lock() {
         if let Some(remote_answer) = stats.latest_remote_answer_observation.as_mut() {
             remote_answer.accepted_video_rtcp_feedback.clear();
         }
     }
-    assert!(service.request_video_pli(&runtime_stats).is_ok());
-    let fallback_label = runtime_stats
-        .lock()
-        .ok()
-        .and_then(|stats| stats.latest_observation_label.clone());
-    assert_eq!(fallback_label.as_deref(), Some("rtcVideoRecoverySuppressed"));
-
-    let control_dc_id = control_dc_id.expect("control channel id");
-    let deadline = Instant::now() + Duration::from_secs(3);
-    let mut saw_control_keyframe = false;
-    while Instant::now() < deadline {
-        service.pump(&runtime_stats).unwrap();
-        answer_io.pump(&mut answer_pc).unwrap();
-        while let Some(message) = answer_pc.poll_read() {
-            let rtc::peer_connection::message::RTCMessage::DataChannelMessage(channel_id, payload) =
-                message
-            else {
-                continue;
-            };
-            if channel_id != control_dc_id || !payload.is_string {
-                continue;
-            }
-            let body = String::from_utf8_lossy(payload.data.as_ref());
-            if body.contains("\"message\":\"videoKeyframeRequested\"") {
-                saw_control_keyframe = true;
-                break;
-            }
-        }
-        if saw_control_keyframe {
-            break;
-        }
-        thread::sleep(Duration::from_millis(10));
-    }
+    let error = service
+        .request_video_pli(&runtime_stats)
+        .expect_err("缺少反馈能力时应返回 unavailable");
 
     let stats = runtime_stats.lock().expect("runtime stats lock");
-    assert_eq!(stats.video_pli_request_count_total, 1);
+    assert!(control_dc_id.is_some(), "control channel id should still exist");
     assert!(
-        !saw_control_keyframe,
-        "when remote answer does not advertise pli/fir, primary path should stay suppressed"
+        error
+            .to_string()
+            .contains("xbxEngineRtcVideoPliFeedbackTargetUnavailable"),
+        "unexpected error: {error}"
     );
+    assert_eq!(stats.video_pli_request_count_total, 0);
 }
 
 #[test]
@@ -1565,7 +1530,7 @@ fn video_recovery_clean_anchor_clears_stage_token_and_new_epoch_restarts_from_pl
         }
     }
 
-    assert!(service.request_video_pli(&runtime_stats).is_ok());
+    assert!(service.request_video_fir(&runtime_stats).is_ok());
     thread::sleep(Duration::from_millis(220));
     assert!(service.request_video_pli(&runtime_stats).is_ok());
     for _ in 0..8 {
@@ -1582,14 +1547,11 @@ fn video_recovery_clean_anchor_clears_stage_token_and_new_epoch_restarts_from_pl
         stats.video_anchor_clean_epoch = Some(current_epoch);
     }
     assert!(service.request_video_pli(&runtime_stats).is_ok());
-    let suppressed_label = runtime_stats
+    let continued_label = runtime_stats
         .lock()
         .ok()
         .and_then(|stats| stats.latest_observation_label.clone());
-    assert_eq!(
-        suppressed_label.as_deref(),
-        Some("rtcVideoRecoverySuppressed")
-    );
+    assert_eq!(continued_label.as_deref(), Some("rtcVideoPliRequested"));
 
     if let Ok(mut stats) = runtime_stats.lock() {
         stats.transport_recovery_epoch = stats.transport_recovery_epoch.saturating_add(1);
@@ -2519,7 +2481,7 @@ fn prime_video_recovery_feedback_target(
 }
 
 #[test]
-fn request_video_keyframe_skips_pli_without_twcc_feedback_target() {
+fn request_video_pli_reports_feedback_target_unavailable_without_twcc_feedback_target() {
     let mut service = RtcConnectionService::default();
     let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
     let session = XbxEngineSessionDto {
@@ -2544,14 +2506,19 @@ fn request_video_keyframe_skips_pli_without_twcc_feedback_target() {
         "未 prime TWCC 时不应有可用于 PLI 的 media ssrc"
     );
 
-    let _ = service.request_video_pli(&runtime_stats);
+    let error = service
+        .request_video_pli(&runtime_stats)
+        .expect_err("缺少反馈目标时应保留 unavailable 原因");
 
-    let stats = runtime_stats.lock().unwrap();
-    assert_ne!(
-        stats.latest_observation_label.as_deref(),
-        Some("rtcVideoPliRequested"),
-        "缺少反馈目标时不应发送 PLI（应走控制兜底或待控制就绪）"
+    assert!(
+        error
+            .to_string()
+            .contains("xbxEngineRtcVideoPliFeedbackTargetUnavailable"),
+        "unexpected error: {error}"
     );
+    let stats = runtime_stats.lock().unwrap();
+    assert_ne!(stats.latest_observation_label.as_deref(), Some("rtcVideoPliRequested"));
+    assert_eq!(stats.video_pli_request_count_total, 0);
 }
 
 #[test]
@@ -2624,16 +2591,15 @@ fn request_video_keyframe_upgrades_from_pli_to_fir_without_control_fallback() {
     service.request_video_pli(&runtime_stats).unwrap();
 
     let stats = runtime_stats.lock().unwrap().clone();
-    assert!(matches!(
+    assert_eq!(
         stats.latest_observation_label.as_deref(),
-        Some("rtcVideoRecoverySuppressed" | "rtcVideoFirRequested")
-    ));
+        Some("rtcVideoPliRequested")
+    );
     assert_eq!(stats.video_pli_request_count_total, 2);
-    assert!(matches!(
+    assert_eq!(
         service.video_recovery_transport_state.stage,
-        super::VideoRecoveryTransportStage::FullIntraRequest
-            | super::VideoRecoveryTransportStage::None
-    ));
+        super::VideoRecoveryTransportStage::PictureLossIndication
+    );
 }
 
 #[test]
@@ -2663,15 +2629,14 @@ fn request_video_keyframe_clears_stage_after_clean_anchor() {
     answer_io.pump(&mut answer_pc).unwrap();
 
     let stats = runtime_stats.lock().unwrap().clone();
-    assert!(matches!(
+    assert_eq!(
         stats.latest_observation_label.as_deref(),
-        Some("rtcVideoPliRequested" | "rtcVideoRecoverySuppressed")
-    ));
-    assert!(matches!(
+        Some("rtcVideoPliRequested")
+    );
+    assert_eq!(
         service.video_recovery_transport_state.stage,
         super::VideoRecoveryTransportStage::PictureLossIndication
-            | super::VideoRecoveryTransportStage::None
-    ));
+    );
 }
 
 #[test]
@@ -2722,15 +2687,14 @@ fn request_video_keyframe_does_not_suppress_stale_clean_anchor_when_transport_aw
     answer_io.pump(&mut answer_pc).unwrap();
 
     let stats = runtime_stats.lock().unwrap().clone();
-    assert!(matches!(
+    assert_eq!(
         stats.latest_observation_label.as_deref(),
-        Some("rtcVideoPliRequested" | "rtcVideoRecoverySuppressed")
-    ));
-    assert!(matches!(
+        Some("rtcVideoPliRequested")
+    );
+    assert_eq!(
         service.video_recovery_transport_state.stage,
         super::VideoRecoveryTransportStage::PictureLossIndication
-            | super::VideoRecoveryTransportStage::None
-    ));
+    );
 }
 
 #[test]
@@ -2806,13 +2770,10 @@ fn request_video_keyframe_does_not_suppress_sustaining_recovery_when_fresh_non_i
     answer_io.pump(&mut answer_pc).unwrap();
 
     let stats = runtime_stats.lock().unwrap().clone();
-    assert_eq!(
-        stats.latest_observation_label.as_deref(),
-        Some("rtcVideoRecoverySuppressed")
-    );
+    assert_eq!(stats.latest_observation_label.as_deref(), Some("rtcVideoPliRequested"));
     assert_eq!(
         service.video_recovery_transport_state.stage,
-        super::VideoRecoveryTransportStage::None
+        super::VideoRecoveryTransportStage::PictureLossIndication
     );
 }
 
@@ -2865,7 +2826,7 @@ fn recovery_command_semantics_bind_to_decision_id_not_latest_ledger() {
 
 #[test]
 fn keyframe_suppressed_outcome_is_recorded_as_deferred() {
-    // 测试 keyframe 被抑制时，outcome 应记录为 Suppressed，而非依赖 latest label
+    // service 层始终执行显式 PLI/FIR，抑制语义由上层策略负责。
     use super::VideoKeyframeRequestOutcome;
 
     let mut service = RtcConnectionService::default();
@@ -2884,7 +2845,7 @@ fn keyframe_suppressed_outcome_is_recorded_as_deferred() {
     // 先发起一次 keyframe 请求，建立 recovery epoch
     service.request_video_pli(&runtime_stats).unwrap();
 
-    // 设置 clean anchor 状态，触发 keyframe 抑制
+    // 设置 clean anchor 状态，验证 service 仍返回显式 PLI outcome
     let current_epoch = runtime_stats.lock().unwrap().transport_recovery_epoch;
     RuntimeStatsSink::new(runtime_stats.clone()).update(|stats| {
         stats.video_anchor_clean_epoch = Some(current_epoch);
@@ -2892,23 +2853,15 @@ fn keyframe_suppressed_outcome_is_recorded_as_deferred() {
         stats.video_anchor_clean_source_event = Some("chain-clean-anchor-submitted".to_string());
     });
 
-    // 请求 keyframe，应该被抑制
+    // 再次请求 keyframe，service 按显式 PLI 执行
     let outcome = service
         .request_video_pli_with_outcome(&runtime_stats)
         .unwrap();
 
     answer_io.pump(&mut answer_pc).unwrap();
 
-    // 验证 outcome 显式为 Suppressed
-    assert_eq!(outcome, VideoKeyframeRequestOutcome::Suppressed);
-
-    // 验证 escalation_action_label 为 None（抑制状态无动作）
-    assert_eq!(outcome.escalation_action_label(), None);
-
-    // 验证 observation label 也记录了抑制状态
+    assert_eq!(outcome, VideoKeyframeRequestOutcome::RequestedPli);
+    assert_eq!(outcome.escalation_action_label().as_deref(), Some("requestPli"));
     let stats = runtime_stats.lock().unwrap();
-    assert_eq!(
-        stats.latest_observation_label.as_deref(),
-        Some("rtcVideoRecoverySuppressed")
-    );
+    assert_eq!(stats.latest_observation_label.as_deref(), Some("rtcVideoPliRequested"));
 }

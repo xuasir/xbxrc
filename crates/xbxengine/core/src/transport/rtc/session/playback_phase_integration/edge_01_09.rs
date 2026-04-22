@@ -482,7 +482,7 @@ fn playback_phase_edge07_audio_twcc_ignored_must_not_block_video_recovery_gate()
     );
     let has_keyframe_cmd = cmds
         .iter()
-        .any(|c| matches!(c, TransportCommand::RequestKeyframe { .. }));
+        .any(|c| matches!(c, TransportCommand::RequestPli { .. }));
     let ledger_has_signal = harness.with_stats(|stats| {
         stats
             .latest_recovery_decision_ledger

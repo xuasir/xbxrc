@@ -462,6 +462,19 @@ impl RtcVideoFrameSource {
         )
     }
 
+    pub(super) fn should_rearm_clean_anchor_for_transport_await(
+        stats: &XbxEngineMediaRuntimeStats,
+    ) -> bool {
+        current_clean_anchor_observed_at_ms(
+            stats.video_anchor_clean_epoch,
+            stats.video_anchor_clean_observed_at_ms,
+            stats.video_anchor_clean_source_event.as_deref(),
+            stats.transport_recovery_epoch,
+        )
+        .is_none()
+            && Self::has_current_transport_await_issue_in_source(stats)
+    }
+
     pub(super) fn should_soft_request_recovery_keyframe(
         stats: &XbxEngineMediaRuntimeStats,
         now_ms: f64,

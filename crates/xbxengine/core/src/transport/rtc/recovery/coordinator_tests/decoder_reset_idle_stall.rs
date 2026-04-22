@@ -213,7 +213,7 @@ fn transport_expired_deadline_hard_pause_does_not_bypass_to_decoder_reset() {
         &Mutex::new(stats),
     );
     // 连接域 deadline 不走 hard_stall 的本地 decoder reset 旁路，交给 escalation 连接域链。
-    assert_eq!(decision.action, RecoveryAction::RequestKeyframe);
+    assert_eq!(decision.action, RecoveryAction::RequestPli);
 }
 
 #[test]
@@ -340,7 +340,7 @@ fn wait_keyframe_escalation_budget_is_released_after_new_epoch() {
 
     let first = coordinator
         .on_reason_with_runtime_stats(VideoEscalationReason::WaitKeyframe, &shared_stats);
-    assert_eq!(first.action, RecoveryAction::RequestKeyframe);
+    assert_eq!(first.action, RecoveryAction::RequestPli);
 
     let second = coordinator
         .on_reason_with_runtime_stats(VideoEscalationReason::WaitKeyframe, &shared_stats);
@@ -353,7 +353,7 @@ fn wait_keyframe_escalation_budget_is_released_after_new_epoch() {
             Some(crate::XbxEngineVideoEscalationObservation {
                 observation_id: 200,
                 reason: "waitKeyframe".to_string(),
-                action: "requestKeyframe".to_string(),
+                action: "requestPli".to_string(),
                 recovery_stage: "rebuilding-supply".to_string(),
                 recovery_chain_value: "anchor".to_string(),
                 recovery_failure_cost: "medium".to_string(),
@@ -388,7 +388,7 @@ fn coordinator_staged_recovery_reissues_keyframe_before_transport_await_reset() 
         },
         &shared_stats,
     );
-    assert_eq!(first.decision.action, RecoveryAction::RequestKeyframe);
+    assert_eq!(first.decision.action, RecoveryAction::RequestPli);
 
     let second = coordinator.propose_from_owner_signal(
         RecoveryOwnerSignal {
@@ -412,7 +412,7 @@ fn coordinator_staged_recovery_reissues_keyframe_before_transport_await_reset() 
         },
         &shared_stats,
     );
-    assert_eq!(third.decision.action, RecoveryAction::RequestKeyframe);
+    assert_eq!(third.decision.action, RecoveryAction::RequestPli);
 }
 
 #[test]
@@ -458,7 +458,7 @@ fn packet_seen_transport_await_episode_upgrades_to_decoder_reset_after_decode_gr
         },
         &shared_stats,
     );
-    assert_eq!(first.decision.action, RecoveryAction::RequestKeyframe);
+    assert_eq!(first.decision.action, RecoveryAction::RequestPli);
 
     RuntimeStatsSink::update_shared(&shared_stats, |stats| {
         stats.latest_keyframe_request_episode =
@@ -547,7 +547,7 @@ fn deferred_transport_await_episode_does_not_keep_keyframe_family_in_flight() {
         },
         &shared_stats,
     );
-    assert_eq!(first.decision.action, RecoveryAction::RequestKeyframe);
+    assert_eq!(first.decision.action, RecoveryAction::RequestPli);
 
     RuntimeStatsSink::update_shared(&shared_stats, |stats| {
         stats.latest_keyframe_request_episode =
@@ -615,7 +615,7 @@ fn deferred_transport_await_episode_does_not_keep_keyframe_family_in_flight() {
         },
         &shared_stats,
     );
-    assert_eq!(second.decision.action, RecoveryAction::RequestKeyframe);
+    assert_eq!(second.decision.action, RecoveryAction::RequestPli);
     assert_ne!(second.decision.action, RecoveryAction::WaitForBurst);
     assert_ne!(
         second.decision.action,
@@ -1146,7 +1146,7 @@ fn transport_await_with_connected_stall_evidence_escalates_on_second_post_cooldo
         },
         &shared_stats,
     );
-    assert_eq!(first.decision.action, RecoveryAction::RequestKeyframe);
+    assert_eq!(first.decision.action, RecoveryAction::RequestPli);
 
     std::thread::sleep(Duration::from_millis(220));
     let second = coordinator.propose_from_owner_signal(
@@ -1157,7 +1157,7 @@ fn transport_await_with_connected_stall_evidence_escalates_on_second_post_cooldo
         },
         &shared_stats,
     );
-    assert_eq!(second.decision.action, RecoveryAction::RequestKeyframe);
+    assert_eq!(second.decision.action, RecoveryAction::RequestPli);
 }
 
 #[test]
@@ -1180,7 +1180,7 @@ fn coordinator_staged_recovery_handles_sparse_transport_await_signals() {
         },
         &shared_stats,
     );
-    assert_eq!(first.decision.action, RecoveryAction::RequestKeyframe);
+    assert_eq!(first.decision.action, RecoveryAction::RequestPli);
 
     let second = coordinator.propose_from_owner_signal(
         RecoveryOwnerSignal {

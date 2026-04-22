@@ -388,7 +388,7 @@ impl RecoveryCoordinator {
 
     fn sync_connectivity_escalation_state(&mut self, decision: &VideoEscalationDecision) {
         match decision.action {
-            RecoveryAction::RequestKeyframe => {
+            RecoveryAction::RequestPli | RecoveryAction::RequestFir => {
                 let state_machine = self.state_machine_mut();
                 state_machine.transition_to_frame_recovery();
                 state_machine.mark_idr_requested();
@@ -691,7 +691,7 @@ mod tests {
             },
             &shared_stats,
         );
-        assert_eq!(first.decision.action, RecoveryAction::RequestKeyframe);
+        assert_eq!(first.decision.action, RecoveryAction::RequestPli);
 
         let second = coordinator.propose_from_owner_signal(
             RecoveryOwnerSignal {
@@ -753,7 +753,7 @@ mod tests {
             &shared_stats,
         );
 
-        assert_eq!(proposal.decision.action, RecoveryAction::RequestKeyframe);
+        assert_eq!(proposal.decision.action, RecoveryAction::RequestPli);
     }
 
     #[test]

@@ -139,7 +139,10 @@ impl RuntimeStatsSink {
                 if is_keyframe { packet_sequence } else { None },
             );
         };
-        if let Some(index) = cache.iter().position(|entry| entry.episode_id == episode_id) {
+        if let Some(index) = cache
+            .iter()
+            .position(|entry| entry.episode_id == episode_id)
+        {
             let entry = cache
                 .get_mut(index)
                 .expect("cache entry index should remain valid");
@@ -667,7 +670,8 @@ impl RuntimeStatsSink {
         gap_expired_before_keyframe: bool,
     ) {
         let mut summary_first_video_packet_sequence = packet_sequence;
-        let mut summary_first_keyframe_packet_sequence = if is_keyframe { packet_sequence } else { None };
+        let mut summary_first_keyframe_packet_sequence =
+            if is_keyframe { packet_sequence } else { None };
         self.update(|stats| {
             let mut updated_episode = None;
             let mut should_probe = false;
@@ -865,11 +869,7 @@ impl RuntimeStatsSink {
                 observation.bound_as_recovery_response = Some(false);
             }
             let summary = format_h264_inspection_summary(&observation);
-            emit_keyframe_response_diagnosis_probe(
-                &*stats,
-                selected.as_ref(),
-                &observation,
-            );
+            emit_keyframe_response_diagnosis_probe(&*stats, selected.as_ref(), &observation);
             stats.latest_h264_inspection_observation = Some(observation);
             stats.latest_observation_label = Some("h264InspectionObserved".to_string());
             stats.latest_observation_summary = Some(summary);
@@ -1346,7 +1346,10 @@ fn emit_keyframe_response_diagnosis_probe(
     if !bound_as_recovery_response {
         return;
     }
-    let reject_reason = observation.bootstrap_reject_reason.as_deref().unwrap_or("none");
+    let reject_reason = observation
+        .bootstrap_reject_reason
+        .as_deref()
+        .unwrap_or("none");
     let unusable_response = !observation.admission_accepted
         || matches!(
             reject_reason,

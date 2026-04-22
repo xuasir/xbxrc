@@ -187,7 +187,7 @@ fn fallback_transport_await_recovery_keyframe_is_not_blocked_before_coordinator(
     let commands = transport_commands(policy.on_snapshot(&snapshot));
     assert!(commands
         .iter()
-        .any(|command| matches!(command, TransportCommand::RequestKeyframe { .. })));
+        .any(|command| matches!(command, TransportCommand::RequestPli { .. } | TransportCommand::RequestFir { .. })));
 }
 
 #[test]
@@ -220,7 +220,7 @@ fn pre_first_frame_bootstrap_missing_sps_emits_local_keyframe_probe() {
     );
     let commands = transport_commands(policy.on_snapshot(&snapshot));
     assert!(commands.iter().any(
-        |command| matches!(command, TransportCommand::RequestKeyframe { reason, .. } if reason == "bootstrapMissingSps")
+        |command| matches!(command, TransportCommand::RequestPli { reason, .. } | TransportCommand::RequestFir { reason, .. } if reason == "bootstrapMissingSps")
     ));
 
     let stats = runtime_stats.lock().expect("runtime stats lock");
@@ -232,7 +232,7 @@ fn pre_first_frame_bootstrap_missing_sps_emits_local_keyframe_probe() {
         ledger.input_signal,
         "transportAwaitRecoveryAnchor:bootstrapMissingSps"
     );
-    assert_eq!(ledger.action_selected, "requestKeyframe");
+    assert_eq!(ledger.action_selected, "requestPli");
 }
 
 #[test]
@@ -287,7 +287,7 @@ fn pre_first_frame_bootstrap_missing_sps_with_recent_episode_coalesces_probe() {
     assert!(
         commands
             .iter()
-            .all(|command| !matches!(command, TransportCommand::RequestKeyframe { .. })),
+            .all(|command| !matches!(command, TransportCommand::RequestPli { .. } | TransportCommand::RequestFir { .. })),
         "recent first-frame keyframe episode should stay coalesced locally: {commands:?}"
     );
 

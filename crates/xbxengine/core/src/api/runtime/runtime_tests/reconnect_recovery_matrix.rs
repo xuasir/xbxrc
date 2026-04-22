@@ -1231,7 +1231,7 @@ async fn runtime_cloud_recovery_replay_accepts_transport_reconnect_after_local_n
     assert!(local_recover.iter().any(|command| {
         matches!(
             command,
-            TransportCommand::RequestKeyframe { reason, .. }
+            TransportCommand::RequestPli { reason, .. } | TransportCommand::RequestFir { reason, .. }
                 if reason == "transportAwaitRecoveryAnchor"
         )
     }));
@@ -1252,7 +1252,7 @@ async fn runtime_cloud_recovery_replay_accepts_transport_reconnect_after_local_n
             "transportAwaitRecoveryAnchor:transportAwaitRecoveryAnchor"
         );
         assert_eq!(ledger.gate_result, "pass:localProbe");
-        assert_eq!(ledger.action_selected, "requestKeyframe");
+        assert_eq!(ledger.action_selected, "requestPli");
         assert_ne!(ledger.state_after, "reconnecting");
     }
 

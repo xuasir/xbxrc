@@ -136,8 +136,14 @@ fn map_recovery_action_to_session_commands(
     observation_id: u64,
 ) -> Vec<SessionCommand> {
     match action {
-        RecoveryAction::RequestKeyframe => vec![SessionCommand::Transport(
-            TransportCommand::RequestKeyframe {
+        RecoveryAction::RequestPli => vec![SessionCommand::Transport(
+            TransportCommand::RequestPli {
+                reason,
+                observation_id,
+            },
+        )],
+        RecoveryAction::RequestFir => vec![SessionCommand::Transport(
+            TransportCommand::RequestFir {
                 reason,
                 observation_id,
             },
@@ -376,7 +382,7 @@ mod tests {
             recovery: Some(RecoveryPolicyProposal {
                 decision: VideoEscalationDecision {
                     observation_id: 7,
-                    action: RecoveryAction::RequestKeyframe,
+                    action: RecoveryAction::RequestPli,
                 },
                 reason: VideoEscalationReason::TransportAwaitRecoveryKeyframe,
                 reason_label: "transportAwaitRecoveryAnchor".to_string(),
@@ -420,7 +426,7 @@ mod tests {
                     decision,
                     ..
                 },
-            ) => assert_eq!(decision.action, RecoveryAction::RequestKeyframe),
+            ) => assert_eq!(decision.action, RecoveryAction::RequestPli),
             _ => panic!("unexpected command kind"),
         }
     }
@@ -464,7 +470,7 @@ mod tests {
             owner_state: VideoSchedulingOwnerState::StableServing,
             owner_health: VideoHealthContract::Stable,
             twcc_warmup_state: TwccWarmupState::BuilderConfigured,
-            recovery: Some(build_recovery_proposal(RecoveryAction::RequestKeyframe, 11)),
+            recovery: Some(build_recovery_proposal(RecoveryAction::RequestPli, 11)),
             bwe: Some(BwePolicyProposal {
                 evaluation: RtcBweEvaluation {
                     target_remb_kbps: 24_000,
@@ -481,7 +487,7 @@ mod tests {
                     decision,
                     ..
                 },
-            ) => assert_eq!(decision.action, RecoveryAction::RequestKeyframe),
+            ) => assert_eq!(decision.action, RecoveryAction::RequestPli),
             _ => panic!("unexpected command kind"),
         }
     }

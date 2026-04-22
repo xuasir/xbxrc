@@ -68,7 +68,7 @@ impl Session {
      */
     pub fn command(&mut self, cmd: SessionCommand) {
         match cmd {
-            SessionCommand::RequestKeyframe => {
+            SessionCommand::RequestPli => {
                 self.control_flags.request_keyframe = true;
                 if self.state == SessionState::Stopped {
                     self.state = SessionState::Recovering;

@@ -25,7 +25,7 @@ fn recovery_decision_ledger_is_written_with_budget_snapshot() {
     let commands = transport_commands(policy.on_snapshot(&snapshot));
     assert!(commands
         .iter()
-        .any(|command| matches!(command, TransportCommand::RequestKeyframe { .. })));
+        .any(|command| matches!(command, TransportCommand::RequestPli { .. } | TransportCommand::RequestFir { .. })));
 
     let stats = runtime_stats.lock().expect("runtime stats lock");
     let ledger = stats
@@ -36,7 +36,7 @@ fn recovery_decision_ledger_is_written_with_budget_snapshot() {
         ledger.input_signal,
         "transportAwaitRecoveryAnchor:transportAwaitRecoveryAnchor"
     );
-    assert_eq!(ledger.action_selected, "requestKeyframe");
+    assert_eq!(ledger.action_selected, "requestPli");
     assert_eq!(ledger.gate_result, "pass:localProbe");
     assert!(ledger.budget_before.is_some());
     assert!(ledger.budget_after.is_some());
@@ -57,7 +57,7 @@ fn recovery_decision_ledger_keeps_pending_action_latest_while_recent_history_rec
     let first_commands = transport_commands(policy.on_snapshot(&first));
     assert!(first_commands
         .iter()
-        .any(|command| matches!(command, TransportCommand::RequestKeyframe { .. })));
+        .any(|command| matches!(command, TransportCommand::RequestPli { .. } | TransportCommand::RequestFir { .. })));
     let first_decision_id = runtime_stats
         .lock()
         .expect("runtime stats lock")
@@ -75,7 +75,7 @@ fn recovery_decision_ledger_keeps_pending_action_latest_while_recent_history_rec
         .as_ref()
         .expect("recovery decision ledger");
     assert_eq!(latest.decision_id, first_decision_id);
-    assert_eq!(latest.action_selected, "requestKeyframe");
+    assert_eq!(latest.action_selected, "requestPli");
     assert_eq!(latest.command_result, None);
     let recent = stats
         .recent_recovery_decision_ledgers
@@ -101,7 +101,7 @@ fn recovery_decision_ledger_allows_no_signal_to_be_latest_after_pending_command_
     let first_commands = transport_commands(policy.on_snapshot(&first));
     assert!(first_commands
         .iter()
-        .any(|command| matches!(command, TransportCommand::RequestKeyframe { .. })));
+        .any(|command| matches!(command, TransportCommand::RequestPli { .. } | TransportCommand::RequestFir { .. })));
     RuntimeStatsSink::update_shared(runtime_stats.as_ref(), |stats| {
         if let Some(ledger) = stats.latest_recovery_decision_ledger.as_mut() {
             ledger.command_result = Some("deferred".to_string());
@@ -144,7 +144,7 @@ fn high_no_pending_but_fresh_present_does_not_force_keyframe() {
     let commands = transport_commands(policy.on_snapshot(&snapshot));
     assert!(commands
         .iter()
-        .all(|command| !matches!(command, TransportCommand::RequestKeyframe { .. })));
+        .all(|command| !matches!(command, TransportCommand::RequestPli { .. } | TransportCommand::RequestFir { .. })));
 }
 
 #[test]
@@ -166,7 +166,7 @@ fn critical_display_supply_uses_recovery_controller_budget() {
         first.iter().all(|command| {
             !matches!(
                 command,
-                TransportCommand::RequestKeyframe { .. }
+                TransportCommand::RequestPli { .. }
                     | TransportCommand::RequestDecoderReset { .. }
                     | TransportCommand::RequestReconnectCandidate { .. }
             )
@@ -181,7 +181,7 @@ fn critical_display_supply_uses_recovery_controller_budget() {
     assert!(
         second
             .iter()
-            .all(|command| !matches!(command, TransportCommand::RequestKeyframe { .. })),
+            .all(|command| !matches!(command, TransportCommand::RequestPli { .. } | TransportCommand::RequestFir { .. })),
         "display supply signal should not emit keyframe commands"
     );
 }
@@ -206,7 +206,7 @@ fn display_supply_critical_does_not_trigger_reconnect_candidate() {
     assert!(commands.iter().all(|command| {
         !matches!(
             command,
-            TransportCommand::RequestKeyframe { .. }
+            TransportCommand::RequestPli { .. }
                 | TransportCommand::RequestDecoderReset { .. }
                 | TransportCommand::RequestReconnectCandidate { .. }
         )
@@ -276,7 +276,7 @@ fn recovery_intent_is_suppressed_within_same_epoch_via_coordinator_chain() {
         first_cmds.iter().all(|command| {
             !matches!(
                 command,
-                TransportCommand::RequestKeyframe { .. }
+                TransportCommand::RequestPli { .. }
                     | TransportCommand::RequestDecoderReset { .. }
                     | TransportCommand::RequestReconnectCandidate { .. }
             )
@@ -290,7 +290,7 @@ fn recovery_intent_is_suppressed_within_same_epoch_via_coordinator_chain() {
     assert!(second_cmds.iter().all(|command| {
         !matches!(
             command,
-            TransportCommand::RequestKeyframe { .. }
+            TransportCommand::RequestPli { .. }
                 | TransportCommand::RequestDecoderReset { .. }
                 | TransportCommand::RequestReconnectCandidate { .. }
         )
@@ -316,7 +316,7 @@ fn suppressed_owner_intent_is_not_forwarded_back_into_recovery_analysis() {
     assert!(first_cmds.iter().all(|command| {
         !matches!(
             command,
-            TransportCommand::RequestKeyframe { .. }
+            TransportCommand::RequestPli { .. }
                 | TransportCommand::RequestDecoderReset { .. }
                 | TransportCommand::RequestReconnectCandidate { .. }
         )
@@ -331,7 +331,7 @@ fn suppressed_owner_intent_is_not_forwarded_back_into_recovery_analysis() {
     assert!(second_cmds.iter().all(|command| {
         !matches!(
             command,
-            TransportCommand::RequestKeyframe { .. }
+            TransportCommand::RequestPli { .. }
                 | TransportCommand::RequestDecoderReset { .. }
                 | TransportCommand::RequestReconnectCandidate { .. }
         )
@@ -369,7 +369,7 @@ fn new_recovery_epoch_does_not_bypass_existing_recovery_suppression_chain() {
     assert!(first_cmds.iter().all(|command| {
         !matches!(
             command,
-            TransportCommand::RequestKeyframe { .. }
+            TransportCommand::RequestPli { .. }
                 | TransportCommand::RequestDecoderReset { .. }
                 | TransportCommand::RequestReconnectCandidate { .. }
         )
@@ -381,7 +381,7 @@ fn new_recovery_epoch_does_not_bypass_existing_recovery_suppression_chain() {
     assert!(second_cmds.iter().all(|command| {
         !matches!(
             command,
-            TransportCommand::RequestKeyframe { .. }
+            TransportCommand::RequestPli { .. }
                 | TransportCommand::RequestDecoderReset { .. }
                 | TransportCommand::RequestReconnectCandidate { .. }
         )
@@ -397,7 +397,7 @@ fn new_recovery_epoch_does_not_bypass_existing_recovery_suppression_chain() {
     assert!(third_cmds.iter().all(|command| {
         !matches!(
             command,
-            TransportCommand::RequestKeyframe { .. }
+            TransportCommand::RequestPli { .. }
                 | TransportCommand::RequestDecoderReset { .. }
                 | TransportCommand::RequestReconnectCandidate { .. }
         )
@@ -477,7 +477,7 @@ fn soft_display_supply_critical_is_absorbed_before_recovery_command() {
     let second_cmds = transport_commands(policy.on_snapshot(&second));
     assert!(second_cmds
         .iter()
-        .all(|command| !matches!(command, TransportCommand::RequestKeyframe { .. })));
+        .all(|command| !matches!(command, TransportCommand::RequestPli { .. } | TransportCommand::RequestFir { .. })));
 
     if let Ok(mut stats) = runtime_stats.lock() {
         let now_ms = crate::transport::rtc::stats::now_ms_f64();
@@ -491,7 +491,7 @@ fn soft_display_supply_critical_is_absorbed_before_recovery_command() {
     let third_cmds = transport_commands(policy.on_snapshot(&third));
     assert!(third_cmds
         .iter()
-        .all(|command| !matches!(command, TransportCommand::RequestKeyframe { .. })));
+        .all(|command| !matches!(command, TransportCommand::RequestPli { .. } | TransportCommand::RequestFir { .. })));
     {
         let stats = runtime_stats.lock().expect("runtime stats lock");
         assert_eq!(stats.video_owner_state.as_deref(), Some("degraded-serving"));
@@ -512,7 +512,7 @@ fn soft_display_supply_critical_is_absorbed_before_recovery_command() {
         fourth_cmds.iter().all(|command| {
             !matches!(
                 command,
-                TransportCommand::RequestKeyframe { .. }
+                TransportCommand::RequestPli { .. }
                     | TransportCommand::RequestDecoderReset { .. }
                     | TransportCommand::RequestReconnectCandidate { .. }
             )
@@ -539,7 +539,7 @@ fn display_supply_critical_does_not_stage_reconnect_candidate() {
     assert!(first_commands.iter().all(|command| {
         !matches!(
             command,
-            TransportCommand::RequestKeyframe { .. }
+            TransportCommand::RequestPli { .. }
                 | TransportCommand::RequestDecoderReset { .. }
                 | TransportCommand::RequestReconnectCandidate { .. }
         )
@@ -552,7 +552,7 @@ fn display_supply_critical_does_not_stage_reconnect_candidate() {
     assert!(second_commands.iter().all(|command| {
         !matches!(
             command,
-            TransportCommand::RequestKeyframe { .. }
+            TransportCommand::RequestPli { .. }
                 | TransportCommand::RequestDecoderReset { .. }
                 | TransportCommand::RequestReconnectCandidate { .. }
         )
@@ -695,6 +695,77 @@ fn owner_anchor_reason_is_derived_from_timeline_chain_reason_not_recovery_diagno
         stats.video_owner_reason.as_deref(),
         Some("transportAwaitRecoveryAnchor")
     );
+}
+
+#[test]
+fn transport_await_request_pli_keeps_rebuilding_supply_in_local_self_healing() {
+    let runtime_config = Arc::new(Mutex::new(XbxEngineRuntimeConfig::default()));
+    let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
+    if let Ok(mut stats) = runtime_stats.lock() {
+        let now_ms = crate::transport::rtc::stats::now_ms_f64();
+        stats.host_no_pending_pressure_level = Some("normal".to_string());
+        stats.host_no_pending_streak = 18;
+        stats.latest_video_host_present_time_ms = Some(now_ms - 220.0);
+        stats.latest_video_decode_ok_time_ms = Some(now_ms - 160.0);
+        stats.video_renderer_stalled = Some(false);
+        stats.latest_video_track_status = Some(crate::XbxEngineVideoTrackStatus {
+            state: "remoteTrackAttached".to_string(),
+            video_width: Some(1920),
+            video_height: Some(1080),
+            mime_type: Some("video/H264".to_string()),
+            transport_state: xbxengine_protocol::XbxEngineTransportStateDto::Connected,
+            video_bytes_total: 180_000,
+            video_packet_count_total: 1280,
+            audio_bytes_total: 40_000,
+            observed_at_ms: 940.0,
+        });
+        stats.latest_video_timeline_observation =
+            Some(crate::XbxEngineVideoTimelineObservation {
+                observation_id: 12,
+                source_event: "frame-await-recovery-anchor".to_string(),
+                gap: None,
+                frame: None,
+                chain: crate::XbxEngineVideoTimelineChainSnapshot {
+                    state: "recovering".to_string(),
+                    reason: Some("transportAwaitRecoveryAnchor".to_string()),
+                    chain_break_evidence: None,
+
+                    observed_at_ms: 940.0,
+                },
+                observed_at_ms: 940.0,
+            });
+    }
+    let mut policy = RtcSessionPolicy::new(runtime_config, runtime_stats.clone());
+    let snapshot = build_snapshot(
+        ConnectionLifecycleStateFact::Connected,
+        "transportAwaitRecoveryAnchor",
+        960.0,
+    );
+    let commands = transport_commands(policy.on_snapshot(&snapshot));
+
+    assert!(commands.iter().any(|command| {
+        matches!(
+            command,
+            TransportCommand::RequestPli { reason, .. } if reason == "transportAwaitRecoveryAnchor"
+        )
+    }));
+
+    let stats = runtime_stats.lock().expect("runtime stats lock");
+    assert_eq!(
+        stats.video_owner_state.as_deref(),
+        Some("rebuilding-supply")
+    );
+    let ledger = stats
+        .latest_recovery_decision_ledger
+        .as_ref()
+        .expect("recovery decision ledger");
+    assert_eq!(
+        ledger.input_signal,
+        "transportAwaitRecoveryAnchor:transportAwaitRecoveryAnchor"
+    );
+    assert_eq!(ledger.action_selected, "requestPli");
+    assert_eq!(ledger.gate_result, "pass:localProbe");
+    assert_eq!(ledger.state_after, "local-self-healing");
 }
 
 #[test]
@@ -1253,7 +1324,7 @@ fn decoder_backend_failure_no_longer_maps_to_transport_decoder_reset_command() {
     assert!(
         matches!(
             ledger.action_selected.as_str(),
-            "requestDecoderReset" | "requestKeyframe"
+            "requestDecoderReset" | "requestPli"
         ),
         "active adapter idle timeout should stay in local recovery family: {}",
         ledger.action_selected

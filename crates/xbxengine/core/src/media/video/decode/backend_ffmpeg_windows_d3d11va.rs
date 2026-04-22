@@ -10,7 +10,9 @@ use windows::Win32::Graphics::Direct3D11::{
     ID3D11Texture2D, D3D11_BIND_DECODER, D3D11_BIND_SHADER_RESOURCE, D3D11_RESOURCE_MISC_SHARED,
     D3D11_RESOURCE_MISC_SHARED_NTHANDLE,
 };
-use windows::Win32::Graphics::Dxgi::{IDXGIResource1, DXGI_SHARED_RESOURCE_READ, DXGI_SHARED_RESOURCE_WRITE};
+use windows::Win32::Graphics::Dxgi::{
+    IDXGIResource1, DXGI_SHARED_RESOURCE_READ, DXGI_SHARED_RESOURCE_WRITE,
+};
 
 use crate::media::video::render::renderer::XbxRenderFrame;
 use crate::media::video::types::EncodedFrame;

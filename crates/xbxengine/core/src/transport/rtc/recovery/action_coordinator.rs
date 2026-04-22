@@ -130,7 +130,7 @@ impl ActionCoordinator {
             self.state_machine.transition_to_frame_recovery();
             self.state_machine.mark_idr_requested();
             return RecoveryDecision::new(
-                RecoveryAction::RequestKeyframe,
+                RecoveryAction::RequestPli,
                 format!("chain broken: {}", observation.reason_label),
             )
             .with_state_transition(RecoveryState::FrameRecovery);
@@ -142,7 +142,7 @@ impl ActionCoordinator {
                 self.state_machine.transition_to_frame_recovery();
                 self.state_machine.mark_idr_requested();
                 return RecoveryDecision::new(
-                    RecoveryAction::RequestKeyframe,
+                    RecoveryAction::RequestPli,
                     format!("low repairability: {}", observation.reason_label),
                 )
                 .with_state_transition(RecoveryState::FrameRecovery);
@@ -182,7 +182,7 @@ impl ActionCoordinator {
             self.state_machine.transition_to_frame_recovery();
             self.state_machine.mark_idr_requested();
             return RecoveryDecision::new(
-                RecoveryAction::RequestKeyframe,
+                RecoveryAction::RequestPli,
                 format!("NACK failed, escalate to IDR: {}", observation.reason_label),
             )
             .with_state_transition(RecoveryState::FrameRecovery)
@@ -224,7 +224,7 @@ impl ActionCoordinator {
                 if self.state_machine.can_retry_idr() {
                     self.state_machine.mark_idr_requested();
                     return RecoveryDecision::new(
-                        RecoveryAction::RequestKeyframe,
+                        RecoveryAction::RequestPli,
                         "IDR timeout, retry immediately".to_string(),
                     )
                     .with_coalescing(CoalescingMode::Refresh)
@@ -248,7 +248,7 @@ impl ActionCoordinator {
         // IDR未在飞行中，发送新的IDR
         self.state_machine.mark_idr_requested();
         RecoveryDecision::new(
-            RecoveryAction::RequestKeyframe,
+            RecoveryAction::RequestPli,
             "request new IDR".to_string(),
         )
     }
@@ -387,7 +387,7 @@ mod tests {
         );
 
         let decision = coordinator.decide(obs);
-        assert_eq!(decision.action, RecoveryAction::RequestKeyframe);
+        assert_eq!(decision.action, RecoveryAction::RequestPli);
         assert_eq!(coordinator.current_state(), RecoveryState::FrameRecovery);
     }
 
@@ -402,7 +402,7 @@ mod tests {
             1000.0,
         );
         let decision = coordinator.decide(obs.clone());
-        assert_eq!(decision.action, RecoveryAction::RequestKeyframe);
+        assert_eq!(decision.action, RecoveryAction::RequestPli);
 
         // 第二次请求应该被coalesce
         let decision = coordinator.decide(obs);

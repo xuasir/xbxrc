@@ -134,4 +134,51 @@ mod tests {
             Some(RecoveryProgressLevel::CleanAnchorCommitted)
         );
     }
+
+    #[test]
+    fn retired_success_episode_does_not_mask_new_transport_await_progress() {
+        let timeline = XbxEngineVideoTimelineObservation {
+            observation_id: 4,
+            source_event: "frame-await-recovery-anchor".to_string(),
+            chain: XbxEngineVideoTimelineChainSnapshot {
+                state: "recovering".to_string(),
+                reason: Some("transportAwaitRecoveryAnchor".to_string()),
+                chain_break_evidence: None,
+                observed_at_ms: 2_000.0,
+            },
+            gap: None,
+            frame: None,
+            observed_at_ms: 2_000.0,
+        };
+        let mut stats = XbxEngineMediaRuntimeStats {
+            transport_recovery_epoch: 10,
+            ..Default::default()
+        };
+        stats.latest_keyframe_request_episode =
+            Some(crate::XbxEngineKeyframeRequestEpisodeObservation {
+                episode_id: 10,
+                request_reason: Some("transportAwaitRecoveryAnchor".to_string()),
+                request_kind: Some("pli".to_string()),
+                status: "decoded".to_string(),
+                status_detail: None,
+                requested_at_ms: 1_000.0,
+                sent_at_ms: Some(1_010.0),
+                deadline_at_ms: Some(1_500.0),
+                transport_detail: None,
+                first_video_packet_at_ms: Some(1_200.0),
+                first_video_packet_rtp_timestamp: Some(111),
+                first_video_packet_is_keyframe: Some(true),
+                first_keyframe_packet_at_ms: Some(1_200.0),
+                first_keyframe_decoded_at_ms: Some(1_220.0),
+                response_rtp_timestamp: Some(111),
+                response_frame_seq: Some(5),
+                response_verdict: Some("cleanAnchorCommitted".to_string()),
+                lifecycle_phase: Some("success".to_string()),
+                retired_at_ms: Some(1_300.0),
+            });
+
+        let facts = compute_recovery_facts(&timeline, &stats);
+        assert_eq!(facts.recovery_progress_level, None);
+        assert_eq!(facts.recovery_episode_stage, None);
+    }
 }

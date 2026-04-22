@@ -447,9 +447,9 @@ fn recovery_failure_cost_label(action: &str) -> &'static str {
     match action {
         "requestReconnectCandidate" => "high",
         "requestDecoderReset"
-        | "requestKeyframe+decoderReset"
-        | "requestKeyframe+decoderReset(startupLowQualityRetry)" => "medium",
-        "requestKeyframe"
+        | "requestPli+decoderReset"
+        | "requestPli+decoderReset(startupLowQualityRetry)" => "medium",
+        "requestPli"
         | "startupLowQualityRetry"
         | "coalesced:keyframeInFlight"
         | "coalesced:decoderResetInFlight" => "medium",

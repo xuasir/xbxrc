@@ -76,7 +76,7 @@ impl RecoveryPolicyProposal {
 pub(crate) fn ledger_action_selected_expects_command_result(action_selected: &str) -> bool {
     matches!(
         action_selected,
-        "requestKeyframe" | "requestDecoderReset" | "requestReconnectCandidate"
+        "requestPli" | "requestFir" | "requestDecoderReset" | "requestReconnectCandidate"
     )
 }
 
@@ -136,7 +136,7 @@ mod tests {
         assert_eq!(
             resolve_runtime_reconnect_reason_domain(
                 VideoEscalationReason::TransportSevereDeadline,
-                RecoveryAction::RequestKeyframe,
+                RecoveryAction::RequestPli,
             ),
             crate::XbxEngineRecoveryReasonDomain::Local
         );
@@ -156,7 +156,10 @@ mod tests {
     #[test]
     fn ledger_expects_command_result_only_for_transport_owner_actions() {
         assert!(ledger_action_selected_expects_command_result(
-            RecoveryAction::RequestKeyframe.label()
+            RecoveryAction::RequestPli.label()
+        ));
+        assert!(ledger_action_selected_expects_command_result(
+            RecoveryAction::RequestFir.label()
         ));
         assert!(ledger_action_selected_expects_command_result(
             RecoveryAction::RequestDecoderReset.label()
@@ -204,7 +207,7 @@ mod tests {
         );
 
         let mut issued = suppressed.clone();
-        issued.action_selected = RecoveryAction::RequestKeyframe.label().to_string();
+        issued.action_selected = RecoveryAction::RequestPli.label().to_string();
         assert!(recovery_decision_ledger_has_pending_transport_command(
             &issued
         ));

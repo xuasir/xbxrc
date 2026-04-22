@@ -37,7 +37,7 @@ fn transport_await_mild_lag_in_steady_stage_stays_suppressed_without_stall_evide
         },
         &shared_stats,
     );
-    assert_eq!(first.decision.action, RecoveryAction::RequestKeyframe);
+    assert_eq!(first.decision.action, RecoveryAction::RequestPli);
 
     let second = coordinator.propose_from_owner_signal(
         RecoveryOwnerSignal {
@@ -89,7 +89,7 @@ fn unsent_requested_keyframe_is_rolled_back_before_transport_await_stage_upgrade
         },
         &shared_stats,
     );
-    assert_eq!(first.decision.action, RecoveryAction::RequestKeyframe);
+    assert_eq!(first.decision.action, RecoveryAction::RequestPli);
     assert_eq!(first.budget_after.keyframe_budget_used, 0);
 
     RuntimeStatsSink::update_shared(&shared_stats, |stats| {
@@ -370,7 +370,7 @@ fn first_frame_acquisition_transport_await_probe_stays_local() {
         },
         &shared_stats,
     );
-    assert_eq!(first.decision.action, RecoveryAction::RequestKeyframe);
+    assert_eq!(first.decision.action, RecoveryAction::RequestPli);
 
     RuntimeStatsSink::update_shared(&shared_stats, |stats| {
         stats.latest_keyframe_request_episode =
@@ -473,7 +473,7 @@ fn first_frame_acquisition_transport_await_stall_still_stays_in_keyframe_domain(
         },
         &shared_stats,
     );
-    assert_eq!(first.decision.action, RecoveryAction::RequestKeyframe);
+    assert_eq!(first.decision.action, RecoveryAction::RequestPli);
 
     RuntimeStatsSink::update_shared(&shared_stats, |stats| {
         stats.latest_keyframe_request_episode =
@@ -513,7 +513,7 @@ fn first_frame_acquisition_transport_await_stall_still_stays_in_keyframe_domain(
         RecoveryAction::WaitForBurst
             | RecoveryAction::CooldownSuppressed
             | RecoveryAction::CoalescedKeyframeInFlight
-            | RecoveryAction::RequestKeyframe
+            | RecoveryAction::RequestPli
     ));
     assert_ne!(second.decision.action, RecoveryAction::RequestDecoderReset);
     assert_ne!(
@@ -607,7 +607,7 @@ fn startup_non_idr_transport_await_probe_stays_local_before_first_frame() {
         },
         &shared_stats,
     );
-    assert_eq!(first.decision.action, RecoveryAction::RequestKeyframe);
+    assert_eq!(first.decision.action, RecoveryAction::RequestPli);
 
     RuntimeStatsSink::update_shared(&shared_stats, |stats| {
         stats.latest_keyframe_request_episode =
@@ -648,7 +648,7 @@ fn startup_non_idr_transport_await_probe_stays_local_before_first_frame() {
             RecoveryAction::WaitForBurst
                 | RecoveryAction::CooldownSuppressed
                 | RecoveryAction::CoalescedKeyframeInFlight
-                | RecoveryAction::RequestKeyframe
+                | RecoveryAction::RequestPli
         ),
         "actual action: {:?}",
         second.decision.action
@@ -872,7 +872,7 @@ fn post_first_frame_bootstrap_missing_pps_can_upgrade_to_decoder_reset() {
         },
         &shared_stats,
     );
-    assert_eq!(first.decision.action, RecoveryAction::RequestKeyframe);
+    assert_eq!(first.decision.action, RecoveryAction::RequestPli);
 
     RuntimeStatsSink::update_shared(&shared_stats, |stats| {
         stats.latest_keyframe_request_episode =
@@ -979,7 +979,7 @@ fn weak_transport_await_streak_does_not_preload_decoder_reset_upgrade() {
         },
         &shared_stats,
     );
-    assert_eq!(first.decision.action, RecoveryAction::RequestKeyframe);
+    assert_eq!(first.decision.action, RecoveryAction::RequestPli);
 
     RuntimeStatsSink::update_shared(&shared_stats, |stats| {
         stats.latest_keyframe_request_episode =
@@ -1048,7 +1048,7 @@ fn weak_transport_await_streak_does_not_preload_decoder_reset_upgrade() {
     assert!(
         matches!(
             third.decision.action,
-            RecoveryAction::RequestKeyframe
+            RecoveryAction::RequestPli
                 | RecoveryAction::CoalescedKeyframeInFlight
                 | RecoveryAction::RequestDecoderReset
         ),
@@ -1120,7 +1120,7 @@ fn thin_stall_timeout_alone_does_not_keep_transport_await_repeat_suppressed() {
     stats.latest_video_escalation_observation = Some(crate::XbxEngineVideoEscalationObservation {
         observation_id: 901,
         reason: "transportAwaitRecoveryAnchor".to_string(),
-        action: "requestKeyframe".to_string(),
+        action: "requestPli".to_string(),
         recovery_stage: "rebuilding-supply".to_string(),
         recovery_chain_value: "transportAwaitRecoveryAnchor".to_string(),
         recovery_failure_cost: "medium".to_string(),
@@ -1190,7 +1190,7 @@ fn sent_pending_keyframe_with_thin_stall_pressure_upgrades_to_decoder_reset() {
         },
         &shared_stats,
     );
-    assert_eq!(first.decision.action, RecoveryAction::RequestKeyframe);
+    assert_eq!(first.decision.action, RecoveryAction::RequestPli);
 
     RuntimeStatsSink::update_shared(&shared_stats, |stats| {
         stats.latest_keyframe_request_episode =
@@ -1282,7 +1282,7 @@ fn sent_pending_keyframe_with_recent_rtcp_unavailable_does_not_upgrade_to_decode
         },
         &shared_stats,
     );
-    assert_eq!(first.decision.action, RecoveryAction::RequestKeyframe);
+    assert_eq!(first.decision.action, RecoveryAction::RequestPli);
 
     RuntimeStatsSink::update_shared(&shared_stats, |stats| {
         stats.latest_keyframe_request_episode =
@@ -1360,7 +1360,7 @@ fn decoded_transport_await_keyframe_without_clean_anchor_upgrades_to_decoder_res
         },
         &shared_stats,
     );
-    assert_eq!(first.decision.action, RecoveryAction::RequestKeyframe);
+    assert_eq!(first.decision.action, RecoveryAction::RequestPli);
 
     RuntimeStatsSink::update_shared(&shared_stats, |stats| {
         stats.latest_keyframe_request_episode =
@@ -1450,7 +1450,7 @@ fn missed_transport_await_keyframe_episode_upgrades_to_decoder_reset() {
         },
         &shared_stats,
     );
-    assert_eq!(first.decision.action, RecoveryAction::RequestKeyframe);
+    assert_eq!(first.decision.action, RecoveryAction::RequestPli);
 
     RuntimeStatsSink::update_shared(&shared_stats, |stats| {
         stats.latest_keyframe_request_episode =
@@ -1554,7 +1554,7 @@ fn rejected_transport_await_anchor_candidate_upgrades_to_decoder_reset() {
         },
         &shared_stats,
     );
-    assert_eq!(first.decision.action, RecoveryAction::RequestKeyframe);
+    assert_eq!(first.decision.action, RecoveryAction::RequestPli);
 
     RuntimeStatsSink::update_shared(&shared_stats, |stats| {
         stats.latest_anchor_candidate_ledger = Some(crate::XbxEngineAnchorCandidateLedger {

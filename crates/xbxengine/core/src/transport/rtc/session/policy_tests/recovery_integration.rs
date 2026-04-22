@@ -63,7 +63,7 @@ fn recovery_integration_transport_await_exits_after_completion_evidence() {
         },
     );
     assert!(first.iter().any(
-        |command| matches!(command, TransportCommand::RequestKeyframe { reason, .. } if reason == "transportAwaitRecoveryAnchor")
+        |command| matches!(command, TransportCommand::RequestPli { reason, .. } | TransportCommand::RequestFir { reason, .. } if reason == "transportAwaitRecoveryAnchor")
     ));
 
     let second = harness.apply(
@@ -241,7 +241,7 @@ fn recovery_integration_recent_transport_await_exits_when_non_idr_has_committed_
         },
     );
     assert!(first.iter().any(
-        |command| matches!(command, TransportCommand::RequestKeyframe { reason, .. } if reason == "transportAwaitRecoveryAnchor")
+        |command| matches!(command, TransportCommand::RequestPli { reason, .. } | TransportCommand::RequestFir { reason, .. } if reason == "transportAwaitRecoveryAnchor")
     ));
 
     let second = harness.apply(
@@ -369,7 +369,7 @@ fn recovery_integration_same_unresolved_gap_transport_await_reuses_in_flight_fam
     assert!(first.iter().any(|command| {
         matches!(
             command,
-            TransportCommand::RequestKeyframe { reason, .. }
+            TransportCommand::RequestPli { reason, .. } | TransportCommand::RequestFir { reason, .. }
                 if reason == "transportAwaitRecoveryAnchor"
         )
     }));
@@ -513,7 +513,7 @@ fn recovery_integration_passive_anchor_surface_still_feeds_transport_await_famil
     assert!(first.iter().any(|command| {
         matches!(
             command,
-            TransportCommand::RequestKeyframe { reason, .. }
+            TransportCommand::RequestPli { reason, .. } | TransportCommand::RequestFir { reason, .. }
                 if reason == "transportAwaitRecoveryAnchor"
         )
     }));
@@ -539,7 +539,7 @@ fn recovery_integration_passive_anchor_surface_still_feeds_transport_await_famil
                 Some(crate::XbxEngineVideoEscalationObservation {
                     observation_id: 52,
                     reason: "transportAwaitRecoveryAnchor".to_string(),
-                    action: "requestKeyframe".to_string(),
+                    action: "requestPli".to_string(),
                     recovery_stage: "rebuilding-supply".to_string(),
                     recovery_chain_value: "anchor".to_string(),
                     recovery_failure_cost: "high".to_string(),
@@ -841,7 +841,7 @@ fn recovery_integration_home_local_display_recovery_then_stale_transport_await_r
         burst.iter().all(|command| {
             !matches!(
                 command,
-                TransportCommand::RequestKeyframe { .. }
+                TransportCommand::RequestPli { .. }
                     | TransportCommand::RequestDecoderReset { .. }
                     | TransportCommand::RequestReconnectCandidate { .. }
             )
@@ -992,7 +992,7 @@ fn recovery_integration_ramp_up_absorbs_display_idle_and_short_transport_await_b
     assert!(recovering.iter().any(|command| {
         matches!(
             command,
-            TransportCommand::RequestKeyframe { reason, .. }
+            TransportCommand::RequestPli { reason, .. } | TransportCommand::RequestFir { reason, .. }
                 if reason == "transportAwaitRecoveryAnchor"
         )
     }));
@@ -1260,7 +1260,7 @@ fn recovery_integration_ramp_up_still_reescalates_on_severe_transport_await() {
     assert!(severe.iter().any(|command| {
         matches!(
             command,
-            TransportCommand::RequestKeyframe { reason, .. }
+            TransportCommand::RequestPli { reason, .. } | TransportCommand::RequestFir { reason, .. }
                 if reason == "transportAwaitRecoveryAnchor"
         )
     }));
@@ -1710,7 +1710,7 @@ fn recovery_integration_local_display_stays_local_recovery() {
         commands.iter().all(|command| {
             !matches!(
                 command,
-                TransportCommand::RequestKeyframe { .. }
+                TransportCommand::RequestPli { .. }
                     | TransportCommand::RequestDecoderReset { .. }
                     | TransportCommand::RequestReconnectCandidate { .. }
             )
@@ -1922,7 +1922,7 @@ fn recovery_integration_fresh_transport_await_absorption_does_not_block_followin
         absorbed.iter().any(|command| {
             matches!(
                 command,
-                TransportCommand::RequestKeyframe { reason, .. }
+                TransportCommand::RequestPli { reason, .. } | TransportCommand::RequestFir { reason, .. }
                     if reason == "transportAwaitRecoveryAnchor"
             )
         }) || absorbed.is_empty()
@@ -2102,7 +2102,7 @@ fn recovery_integration_transport_deadline_overrides_same_tick_local_display_rec
     assert!(commands.iter().all(|command| {
         !matches!(
             command,
-            TransportCommand::RequestKeyframe { reason, .. }
+            TransportCommand::RequestPli { reason, .. } | TransportCommand::RequestFir { reason, .. }
                 if reason == "displaySupplyCritical"
         )
     }));
@@ -2175,7 +2175,7 @@ fn recovery_integration_transport_severe_deadline_overrides_same_tick_local_disp
     assert!(commands.iter().all(|command| {
         !matches!(
             command,
-            TransportCommand::RequestKeyframe { reason, .. }
+            TransportCommand::RequestPli { reason, .. } | TransportCommand::RequestFir { reason, .. }
                 if reason == "displaySupplyCritical"
         )
     }));
@@ -2251,7 +2251,7 @@ fn recovery_integration_transport_deadline_overrides_same_tick_local_transport_a
     assert!(commands.iter().all(|command| {
         !matches!(
             command,
-            TransportCommand::RequestKeyframe { reason, .. }
+            TransportCommand::RequestPli { reason, .. } | TransportCommand::RequestFir { reason, .. }
                 if reason == "transportAwaitRecoveryAnchor"
         )
     }));
@@ -2324,7 +2324,7 @@ fn recovery_integration_transport_severe_deadline_overrides_same_tick_local_tran
     assert!(commands.iter().all(|command| {
         !matches!(
             command,
-            TransportCommand::RequestKeyframe { reason, .. }
+            TransportCommand::RequestPli { reason, .. } | TransportCommand::RequestFir { reason, .. }
                 if reason == "transportAwaitRecoveryAnchor"
         )
     }));
@@ -2600,7 +2600,7 @@ fn recovery_integration_transport_sample_loss_overrides_same_tick_local_display_
     assert!(commands.iter().all(|command| {
         !matches!(
             command,
-            TransportCommand::RequestKeyframe { reason, .. } if reason == "displaySupplyCritical"
+            TransportCommand::RequestPli { reason, .. } | TransportCommand::RequestFir { reason, .. } if reason == "displaySupplyCritical"
         )
     }));
     harness.with_stats(|stats| {
@@ -2671,7 +2671,7 @@ fn recovery_integration_transport_sample_loss_overrides_same_tick_local_transpor
     assert!(commands.iter().all(|command| {
         !matches!(
             command,
-            TransportCommand::RequestKeyframe { reason, .. }
+            TransportCommand::RequestPli { reason, .. } | TransportCommand::RequestFir { reason, .. }
                 if reason == "transportAwaitRecoveryAnchor"
         )
     }));
@@ -2743,7 +2743,7 @@ fn recovery_integration_transport_recovered_late_overrides_same_tick_local_displ
     assert!(commands.iter().all(|command| {
         !matches!(
             command,
-            TransportCommand::RequestKeyframe { reason, .. } if reason == "displaySupplyCritical"
+            TransportCommand::RequestPli { reason, .. } | TransportCommand::RequestFir { reason, .. } if reason == "displaySupplyCritical"
         )
     }));
     harness.with_stats(|stats| {
@@ -2814,7 +2814,7 @@ fn recovery_integration_transport_recovered_late_overrides_same_tick_local_trans
     assert!(commands.iter().all(|command| {
         !matches!(
             command,
-            TransportCommand::RequestKeyframe { reason, .. }
+            TransportCommand::RequestPli { reason, .. } | TransportCommand::RequestFir { reason, .. }
                 if reason == "transportAwaitRecoveryAnchor"
         )
     }));
@@ -4764,7 +4764,7 @@ fn recovery_integration_home_render_deadline_jitter_stays_local_display_path() {
         commands.iter().all(|command| {
             !matches!(
                 command,
-                TransportCommand::RequestKeyframe { .. }
+                TransportCommand::RequestPli { .. }
                     | TransportCommand::RequestDecoderReset { .. }
                     | TransportCommand::RequestReconnectCandidate { .. }
             )
@@ -5240,7 +5240,7 @@ fn recovery_integration_home_connected_ingress_without_output_progress_reenters_
             ledger.input_signal
         );
         assert_eq!(ledger.gate_result, "pass:localProbe");
-        assert_eq!(ledger.action_selected, "requestKeyframe");
+        assert_eq!(ledger.action_selected, "requestPli");
     });
 }
 
@@ -5349,7 +5349,7 @@ fn recovery_integration_cloud_stale_transport_await_replay_reenters_local_recove
         replay.iter().any(|command| {
             matches!(
                 command,
-                TransportCommand::RequestKeyframe { reason, .. }
+                TransportCommand::RequestPli { reason, .. } | TransportCommand::RequestFir { reason, .. }
                     if reason == "transportAwaitRecoveryAnchor"
             )
         }) || replay.is_empty()
@@ -5379,7 +5379,7 @@ fn recovery_integration_cloud_stale_transport_await_replay_reenters_local_recove
             ));
             if ledger.input_signal == "transportAwaitRecoveryAnchor:transportAwaitRecoveryAnchor" {
                 assert_eq!(ledger.gate_result, "pass:localProbe");
-                assert_eq!(ledger.action_selected, "requestKeyframe");
+                assert_eq!(ledger.action_selected, "requestPli");
             }
         }
     });
@@ -5556,7 +5556,7 @@ fn recovery_integration_fresh_transport_await_absorption_expires_once_output_sta
         } else {
             assert_ne!(ledger.state_after, "active-recovery");
             assert_ne!(ledger.state_after, "recovery-eligible");
-            if ledger.action_selected == "requestKeyframe" {
+            if ledger.action_selected == "requestPli" {
                 assert_eq!(ledger.gate_result, "pass:localProbe");
                 assert_eq!(ledger.state_after, "local-self-healing");
             }
@@ -5703,7 +5703,7 @@ fn recovery_integration_home_stale_transport_await_absorption_expires_once_outpu
     assert!(replay.iter().any(|command| {
         matches!(
             command,
-            TransportCommand::RequestKeyframe { reason, .. }
+            TransportCommand::RequestPli { reason, .. } | TransportCommand::RequestFir { reason, .. }
                 if reason == "transportAwaitRecoveryAnchor"
         )
     }));
@@ -5720,7 +5720,7 @@ fn recovery_integration_home_stale_transport_await_absorption_expires_once_outpu
             "transportAwaitRecoveryAnchor:transportAwaitRecoveryAnchor"
         );
         assert_eq!(ledger.gate_result, "pass:localProbe");
-        assert_eq!(ledger.action_selected, "requestKeyframe");
+        assert_eq!(ledger.action_selected, "requestPli");
     });
 }
 
@@ -6251,7 +6251,7 @@ fn recovery_integration_cloud_media_loss_prefers_transport_await_before_reconnec
         },
     );
     assert!(local_recover.iter().any(|command| {
-        matches!(command, TransportCommand::RequestKeyframe { reason, .. } if reason == "transportAwaitRecoveryAnchor")
+        matches!(command, TransportCommand::RequestPli { reason, .. } | TransportCommand::RequestFir { reason, .. } if reason == "transportAwaitRecoveryAnchor")
     }));
     assert!(local_recover
         .iter()
@@ -6266,7 +6266,7 @@ fn recovery_integration_cloud_media_loss_prefers_transport_await_before_reconnec
             "transportAwaitRecoveryAnchor:transportAwaitRecoveryAnchor"
         );
         assert_eq!(ledger.gate_result, "pass:localProbe");
-        assert_eq!(ledger.action_selected, "requestKeyframe");
+        assert_eq!(ledger.action_selected, "requestPli");
         assert_eq!(ledger.state_after, "local-self-healing");
     });
 

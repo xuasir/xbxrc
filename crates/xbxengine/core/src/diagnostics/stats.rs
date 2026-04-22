@@ -1613,7 +1613,7 @@ fn is_local_decoder_maintenance_decision(action_selected: &str) -> bool {
     matches!(
         action_selected,
         "requestDecoderReset"
-            | "requestKeyframe"
+            | "requestPli"
             | "coalesced:keyframeInFlight"
             | "coalesced:decoderResetInFlight"
             | "waitForBurst"

@@ -48,7 +48,7 @@ const FRAME_PLAYOUT_BASE_TRACK_CAPACITY: usize = 96;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum RecoveryKeyframeAction {
     Submit,
-    DropAndRequestKeyframe,
+    DropAndRequestPli,
     WaitKeyframe,
 }
 
@@ -151,7 +151,7 @@ pub(super) fn resolve_recovery_keyframe_action(
     // 在 macOS 上会直接放大成 VideoToolbox 连续 bad-data 回调。
     if is_keyframe && media_dropped_packets > 0 {
         // 这里仍只保留 decoder safety：丢弃坏 keyframe，但恢复升级交给统一 NACK/recovery admission。
-        return (false, RecoveryKeyframeAction::DropAndRequestKeyframe);
+        return (false, RecoveryKeyframeAction::DropAndRequestPli);
     }
 
     if is_keyframe {
@@ -160,7 +160,7 @@ pub(super) fn resolve_recovery_keyframe_action(
 
     if media_dropped_packets > 0 {
         // sample loss 的升级门交给统一 NACK/recovery admission；source 这里只保留解码安全职责。
-        return (false, RecoveryKeyframeAction::DropAndRequestKeyframe);
+        return (false, RecoveryKeyframeAction::DropAndRequestPli);
     }
 
     if is_blocking_non_keyframe_admission {
@@ -1564,7 +1564,7 @@ impl RtcVideoFrameSource {
                             next_is_blocking_non_keyframe_admission,
                         );
                     }
-                    RecoveryKeyframeAction::DropAndRequestKeyframe => {
+                    RecoveryKeyframeAction::DropAndRequestPli => {
                         self.set_is_blocking_non_keyframe_admission(
                             next_is_blocking_non_keyframe_admission,
                         );
@@ -1629,12 +1629,17 @@ impl RtcVideoFrameSource {
                     frame_now_ms,
                 );
                 if is_keyframe && media_dropped_packets == 0 {
+                    let should_rearm_clean_anchor = self
+                        .runtime_stats
+                        .read(Self::should_rearm_clean_anchor_for_transport_await)
+                        .unwrap_or(false);
                     let needs_recovery_anchor =
                         self.timeline_state.chain_requires_recovery_anchor()
                             || matches!(
                                 self.timeline_state.chain_state(),
                                 ChainState::Broken | ChainState::Recovering
-                            );
+                            )
+                            || should_rearm_clean_anchor;
                     if needs_recovery_anchor {
                         self.timeline_state
                             .on_clean_anchor_ingress(sample.packet_timestamp, frame_now_ms);

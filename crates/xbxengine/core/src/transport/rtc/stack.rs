@@ -13,8 +13,8 @@ use crate::api::backend::{
     XbxEngineVideoFrameDropObservation,
 };
 use crate::media::video::render::renderer::XbxRenderState;
-use crate::transport::rtc::connection::RtcConnectionService;
-use crate::transport::rtc::facts::{TransportCommand, TransportFact};
+use crate::transport::rtc::connection::{RtcConnectionService, VideoKeyframeRequestOutcome};
+use crate::transport::rtc::facts::{CommandResultStatus, TransportCommand, TransportFact};
 use crate::transport::rtc::pipeline::supervisor::{spawn_media_supervisor, MediaSupervisorContext};
 use crate::transport::rtc::protocol::data_channel_state::{
     queue_keyboard_pointer_input, set_keyboard_pointer_enabled, XbxDataChannelState,
@@ -77,7 +77,7 @@ pub(crate) trait XbxMediaStackPort: Send {
         &mut self,
         event: XbxEngineInputEventDto,
     ) -> Result<(), XbxEngineRuntimeError>;
-    fn request_video_keyframe(&mut self) -> Result<(), XbxEngineRuntimeError>;
+    fn request_video_pli(&mut self) -> Result<(), XbxEngineRuntimeError>;
     fn request_decoder_reset(&mut self) -> Result<(), XbxEngineRuntimeError>;
     fn update_host_video_timing(
         &mut self,
@@ -243,13 +243,9 @@ impl XbxActiveMediaStack {
         self.transport_bridge().pump_connection_and_media_ingress();
     }
 
-    fn record_transport_command_result(
-        &self,
-        command: TransportCommand,
-        result: &Result<(), XbxEngineRuntimeError>,
-    ) {
+    fn record_transport_command_status(&self, command: TransportCommand, status: CommandResultStatus) {
         self.transport_bridge()
-            .record_transport_command_result(command, result);
+            .record_transport_command_status(command, status);
     }
 }
 
@@ -363,20 +359,36 @@ impl XbxMediaStackPort for XbxActiveMediaStack {
         Ok(())
     }
 
-    fn request_video_keyframe(&mut self) -> Result<(), XbxEngineRuntimeError> {
+    fn request_video_pli(&mut self) -> Result<(), XbxEngineRuntimeError> {
         let result = self
             .connection
             .lock()
             .map_err(|_| XbxEngineRuntimeError::new("xbxEngineRtcConnectionLockFailed"))?
-            .request_video_keyframe(&self.runtime_stats);
-        self.record_transport_command_result(
-            TransportCommand::RequestKeyframe {
+            .request_video_pli_with_outcome(&self.runtime_stats);
+        let status = match &result {
+            Ok(VideoKeyframeRequestOutcome::RequestedPli | VideoKeyframeRequestOutcome::RequestedFir) => {
+                CommandResultStatus::Succeeded
+            }
+            Ok(VideoKeyframeRequestOutcome::Suppressed) => CommandResultStatus::Deferred {
+                reason: "sameFamilyTransportStageCoalesced".to_string(),
+            },
+            Ok(VideoKeyframeRequestOutcome::FeedbackTargetPending) => {
+                CommandResultStatus::Deferred {
+                    reason: "familyDeferred:videoRtcpFeedbackTargetPending".to_string(),
+                }
+            }
+            Err(error) => CommandResultStatus::Failed {
+                error: error.to_string(),
+            },
+        };
+        self.record_transport_command_status(
+            TransportCommand::RequestPli {
                 reason: "stack.manualRequest".to_string(),
                 observation_id: 0,
             },
-            &result,
+            status,
         );
-        result
+        result.map(|_| ())
     }
 
     fn request_decoder_reset(&mut self) -> Result<(), XbxEngineRuntimeError> {

@@ -382,13 +382,13 @@ fn playback_phase_int11_terminal_invalid_bootstrap_must_request_keyframe_or_stro
     let has_keyframe_or_reset = cmds.iter().any(|c| {
         matches!(
             c,
-            TransportCommand::RequestKeyframe { .. } | TransportCommand::RequestDecoderReset { .. }
+            TransportCommand::RequestPli { .. } | TransportCommand::RequestDecoderReset { .. }
         )
     });
     harness.with_stats(|stats| {
         let ledger = stats.latest_recovery_decision_ledger.as_ref();
         let action_ok = ledger.is_some_and(|l| {
-            l.action_selected == "requestKeyframe"
+            l.action_selected == "requestPli"
                 || l.action_selected == "requestDecoderReset"
                 || l.action_selected == "requestReconnectCandidate"
         });

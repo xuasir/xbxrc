@@ -266,7 +266,7 @@ fn expired_delta_nack_in_cloud_requires_continuous_budget_before_keyframe() {
         VideoEscalationReason::TransportExpiredDeadline,
         &shared_stats,
     );
-    assert_eq!(decision.action, RecoveryAction::RequestKeyframe);
+    assert_eq!(decision.action, RecoveryAction::RequestPli);
 }
 
 #[test]
@@ -291,7 +291,7 @@ fn expired_delta_nack_requests_keyframe_when_pipeline_is_stalled() {
         VideoEscalationReason::TransportExpiredDeadline,
         &Mutex::new(stats),
     );
-    assert_eq!(decision.action, RecoveryAction::RequestKeyframe);
+    assert_eq!(decision.action, RecoveryAction::RequestPli);
 }
 
 #[test]
@@ -455,7 +455,7 @@ fn expired_reference_nack_pushes_idle_timeout_into_recovery_chain() {
         VideoEscalationReason::AdapterIdleTimeout,
         &Mutex::new(stats),
     );
-    assert_eq!(decision.action, RecoveryAction::RequestKeyframe);
+    assert_eq!(decision.action, RecoveryAction::RequestPli);
 }
 
 #[test]
@@ -467,7 +467,7 @@ fn recent_wait_keyframe_recovery_suppresses_repeat_wait_keyframe() {
     stats.latest_video_escalation_observation = Some(crate::XbxEngineVideoEscalationObservation {
         observation_id: 7,
         reason: "ingressWaitKeyframe".to_string(),
-        action: "requestKeyframe".to_string(),
+        action: "requestPli".to_string(),
         recovery_stage: "rebuilding-supply".to_string(),
         recovery_chain_value: "anchor".to_string(),
         recovery_failure_cost: "medium".to_string(),
@@ -545,7 +545,7 @@ fn recent_wait_keyframe_without_sent_episode_does_not_coalesce_keyframe_inflight
     stats.latest_video_escalation_observation = Some(crate::XbxEngineVideoEscalationObservation {
         observation_id: 70,
         reason: "transportAwaitRecoveryAnchor".to_string(),
-        action: "requestKeyframe".to_string(),
+        action: "requestPli".to_string(),
         recovery_stage: "rebuilding-supply".to_string(),
         recovery_chain_value: "anchor".to_string(),
         recovery_failure_cost: "medium".to_string(),
@@ -615,12 +615,12 @@ fn wait_keyframe_without_failure_evidence_does_not_upgrade_to_decoder_reset() {
 
     let first = coordinator
         .on_reason_with_runtime_stats(VideoEscalationReason::WaitKeyframe, &shared_stats);
-    assert_eq!(first.action, RecoveryAction::RequestKeyframe);
+    assert_eq!(first.action, RecoveryAction::RequestPli);
 
     std::thread::sleep(Duration::from_millis(130));
     let second = coordinator
         .on_reason_with_runtime_stats(VideoEscalationReason::WaitKeyframe, &shared_stats);
-    assert_eq!(second.action, RecoveryAction::RequestKeyframe);
+    assert_eq!(second.action, RecoveryAction::RequestPli);
 
     std::thread::sleep(Duration::from_millis(130));
     let third = coordinator
@@ -653,12 +653,12 @@ fn rejected_wait_keyframe_anchor_candidate_upgrades_to_decoder_reset() {
 
     let first = coordinator
         .on_reason_with_runtime_stats(VideoEscalationReason::WaitKeyframe, &shared_stats);
-    assert_eq!(first.action, RecoveryAction::RequestKeyframe);
+    assert_eq!(first.action, RecoveryAction::RequestPli);
 
     std::thread::sleep(Duration::from_millis(130));
     let second = coordinator
         .on_reason_with_runtime_stats(VideoEscalationReason::WaitKeyframe, &shared_stats);
-    assert_eq!(second.action, RecoveryAction::RequestKeyframe);
+    assert_eq!(second.action, RecoveryAction::RequestPli);
 
     RuntimeStatsSink::update_shared(&shared_stats, |stats| {
         if let Some(candidate) = stats.latest_anchor_candidate_ledger.as_mut() {
@@ -681,7 +681,7 @@ fn new_transport_recovery_epoch_breaks_wait_keyframe_suppression() {
     stats.latest_video_escalation_observation = Some(crate::XbxEngineVideoEscalationObservation {
         observation_id: 17,
         reason: "ingressWaitKeyframe".to_string(),
-        action: "requestKeyframe".to_string(),
+        action: "requestPli".to_string(),
         recovery_stage: "rebuilding-supply".to_string(),
         recovery_chain_value: "anchor".to_string(),
         recovery_failure_cost: "medium".to_string(),

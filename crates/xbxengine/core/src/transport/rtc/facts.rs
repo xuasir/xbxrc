@@ -120,7 +120,11 @@ pub enum TimerFact {
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum TransportCommand {
-    RequestKeyframe {
+    RequestPli {
+        reason: String,
+        observation_id: u64,
+    },
+    RequestFir {
         reason: String,
         observation_id: u64,
     },

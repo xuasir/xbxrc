@@ -132,7 +132,7 @@ pub(crate) fn session_cost_ceiling_for_recovery_action(
 ) -> SessionCostCeiling {
     match action {
         RecoveryAction::RequestReconnectCandidate => SessionCostCeiling::TransportRecover,
-        RecoveryAction::RequestKeyframe | RecoveryAction::RequestDecoderReset => {
+        RecoveryAction::RequestPli | RecoveryAction::RequestFir | RecoveryAction::RequestDecoderReset => {
             SessionCostCeiling::LocalRecover
         }
         RecoveryAction::WaitForBurst

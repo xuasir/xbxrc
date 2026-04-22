@@ -171,6 +171,12 @@ pub(crate) fn recovery_progress_missing_anchor(progress: Option<RecoveryProgress
     )
 }
 
+pub(crate) fn recovery_progress_allows_picture_recovery(
+    progress: Option<RecoveryProgressLevel>,
+) -> bool {
+    recovery_progress_missing_anchor(progress)
+}
+
 #[allow(dead_code)]
 pub(crate) fn recovery_progress_allows_decoder_reset(
     progress: Option<RecoveryProgressLevel>,

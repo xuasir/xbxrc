@@ -268,6 +268,36 @@ fn unresolved_current_transport_issue_blocks_soft_recovery_keyframe_request() {
 }
 
 #[test]
+fn unresolved_transport_await_without_current_clean_anchor_rearms_clean_anchor() {
+    let now_ms = 1_000.0;
+    let mut stats = serviceable_runtime_stats(now_ms);
+    stats.video_anchor_clean_epoch = None;
+    stats.video_anchor_clean_observed_at_ms = None;
+    stats.video_anchor_clean_source_event = None;
+    stats.latest_video_timeline_observation = Some(crate::XbxEngineVideoTimelineObservation {
+        observation_id: 22,
+        source_event: "frame-await-recovery-anchor".to_string(),
+        gap: None,
+        frame: None,
+        chain: crate::XbxEngineVideoTimelineChainSnapshot {
+            state: "recovering".to_string(),
+            reason: Some("transportAwaitRecoveryAnchor".to_string()),
+            chain_break_evidence: None,
+            observed_at_ms: now_ms - 5.0,
+        },
+        observed_at_ms: now_ms - 5.0,
+    });
+
+    assert!(RtcVideoFrameSource::should_rearm_clean_anchor_for_transport_await(&stats));
+
+    stats.video_anchor_clean_epoch = Some(stats.transport_recovery_epoch);
+    stats.video_anchor_clean_observed_at_ms = Some(now_ms - 1.0);
+    stats.video_anchor_clean_source_event = Some("chain-clean-anchor-submitted".to_string());
+
+    assert!(!RtcVideoFrameSource::should_rearm_clean_anchor_for_transport_await(&stats));
+}
+
+#[test]
 fn recovery_wait_does_not_override_loss_semantics() {
     let (next_is_blocking_non_keyframe_admission, recovery_action) =
         resolve_recovery_keyframe_action(true, true, false, false, 0, 1, false);
@@ -275,7 +305,7 @@ fn recovery_wait_does_not_override_loss_semantics() {
     assert!(!next_is_blocking_non_keyframe_admission);
     assert_eq!(
         recovery_action,
-        RecoveryKeyframeAction::DropAndRequestKeyframe
+        RecoveryKeyframeAction::DropAndRequestPli
     );
 }
 
@@ -287,7 +317,7 @@ fn lossy_keyframe_defers_to_nack_recovery_admission() {
     assert!(!next_is_blocking_non_keyframe_admission);
     assert_eq!(
         recovery_action,
-        RecoveryKeyframeAction::DropAndRequestKeyframe
+        RecoveryKeyframeAction::DropAndRequestPli
     );
 }
 
@@ -299,7 +329,7 @@ fn short_sample_loss_burst_stays_in_drop_and_request_keyframe() {
     assert!(!next_is_blocking_non_keyframe_admission);
     assert_eq!(
         recovery_action,
-        RecoveryKeyframeAction::DropAndRequestKeyframe
+        RecoveryKeyframeAction::DropAndRequestPli
     );
 }
 
@@ -311,7 +341,7 @@ fn longer_sample_loss_burst_still_defers_to_nack_recovery_admission() {
     assert!(!next_is_blocking_non_keyframe_admission);
     assert_eq!(
         recovery_action,
-        RecoveryKeyframeAction::DropAndRequestKeyframe
+        RecoveryKeyframeAction::DropAndRequestPli
     );
 }
 
@@ -358,7 +388,7 @@ fn drop_and_request_action_contract_keeps_resolver_stateless() {
 
     assert_eq!(
         recovery_action,
-        RecoveryKeyframeAction::DropAndRequestKeyframe
+        RecoveryKeyframeAction::DropAndRequestPli
     );
     // resolve 层只给出动作，等待态由 action 分支显式处理，避免隐式耦合。
     assert!(!next_is_blocking_non_keyframe_admission);

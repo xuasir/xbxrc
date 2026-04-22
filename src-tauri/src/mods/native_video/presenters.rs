@@ -20,12 +20,15 @@ use super::{
     HOST_RENDER_FPS_WINDOW_MS, HOST_RENDER_FRAME_AGE_MULTIPLIER, HOST_RENDER_MAX_FRAME_AGE_MS,
     HOST_RENDER_MIN_FRAME_AGE_MS, HOST_TIMING_QUEUE_WARN_MS, HOST_TIMING_TICK_WARN_MS,
 };
-use super::{now_ms_f64, record_native_video_timing_event_lazy, record_native_video_trace, NativeVideoViewportState};
 #[cfg(target_os = "macos")]
 use super::{
     drop_display_layer, drop_wgpu_host_view, ensure_display_layer, run_layer_present_tick,
     run_wgpu_render_tick, MacOsDisplayLinkHandle, MacOsLayerDisplayLinkHandle, MacOsLayerState,
     MacOsWgpuState, MacOsWgpuTelemetry,
+};
+use super::{
+    now_ms_f64, record_native_video_timing_event_lazy, record_native_video_trace,
+    NativeVideoViewportState,
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

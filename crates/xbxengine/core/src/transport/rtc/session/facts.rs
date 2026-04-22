@@ -20,6 +20,7 @@ use crate::transport::rtc::recovery::remote_profile_runtime::persist_runtime_rem
 use crate::transport::rtc::recovery::runtime_state::resolve_recovery_profile;
 use crate::XbxEngineAnchorCandidateLedger;
 use crate::XbxEngineH264InspectionObservation;
+use crate::XbxEngineKeyframeRequestEpisodeObservation;
 use crate::XbxEngineMediaRuntimeStats;
 use crate::XbxEngineVideoTimelineObservation;
 use crate::XbxEngineVideoTrackStatus;
@@ -437,15 +438,12 @@ pub(crate) fn compute_recovery_facts(
     // 计算 repairability 评分
     let repairability = compute_repairability_score(timeline, stats);
 
-    let recovery_episode_stage = stats
-        .latest_keyframe_request_episode
-        .as_ref()
-        .and_then(|ep| recovery_episode_stage_from_status(ep.status.as_str()));
+    let recovery_episode = select_relevant_keyframe_episode_for_progress(stats);
+    let recovery_episode_stage =
+        recovery_episode.and_then(|ep| recovery_episode_stage_from_status(ep.status.as_str()));
     let has_current_clean_anchor = current_clean_anchor_observed_at_ms_from_stats(stats).is_some();
     let has_display_stable = matches!(stats.video_owner_state.as_deref(), Some("stable-serving"));
-    let recovery_progress_level = stats
-        .latest_keyframe_request_episode
-        .as_ref()
+    let recovery_progress_level = recovery_episode
         .and_then(|ep| {
             recovery_progress_level_from_episode(
                 ep.status.as_str(),
@@ -467,12 +465,9 @@ pub(crate) fn compute_recovery_facts(
             }
         });
 
-    let recovery_episode_progress_at_ms = stats.video_anchor_clean_observed_at_ms.or_else(|| {
-        stats
-            .latest_keyframe_request_episode
-            .as_ref()
-            .and_then(|ep| ep.first_keyframe_decoded_at_ms)
-    });
+    let recovery_episode_progress_at_ms = stats
+        .video_anchor_clean_observed_at_ms
+        .or_else(|| recovery_episode.and_then(|ep| ep.first_keyframe_decoded_at_ms));
 
     #[cfg(test)]
     let clean_anchor_observed_at_ms = current_clean_anchor_observed_at_ms_from_stats(stats);
@@ -490,6 +485,36 @@ pub(crate) fn compute_recovery_facts(
         episode_stalled,
         #[cfg(test)]
         has_current_clean_anchor,
+    }
+}
+
+fn select_relevant_keyframe_episode_for_progress(
+    stats: &XbxEngineMediaRuntimeStats,
+) -> Option<&XbxEngineKeyframeRequestEpisodeObservation> {
+    let latest_active = stats
+        .latest_keyframe_request_episode
+        .as_ref()
+        .filter(|episode| episode.retired_at_ms.is_none());
+    let recent_active = stats
+        .recent_keyframe_request_episodes
+        .iter()
+        .filter(|episode| episode.retired_at_ms.is_none())
+        .max_by(|left, right| {
+            left.requested_at_ms
+                .total_cmp(&right.requested_at_ms)
+                .then_with(|| left.episode_id.cmp(&right.episode_id))
+        });
+    match (latest_active, recent_active) {
+        (Some(latest), Some(recent))
+            if recent.requested_at_ms > latest.requested_at_ms
+                || (recent.requested_at_ms == latest.requested_at_ms
+                    && recent.episode_id > latest.episode_id) =>
+        {
+            Some(recent)
+        }
+        (Some(latest), _) => Some(latest),
+        (None, Some(recent)) => Some(recent),
+        (None, None) => None,
     }
 }
 

@@ -149,7 +149,7 @@ where
                 let settled_at_ms = now_ms_f64();
                 let reconnect_settled_keyframe_in_flight = pre_reconnect_last_recovery_action
                     .as_deref()
-                    == Some("requestKeyframe")
+                    == Some("requestPli")
                     && pre_reconnect_last_recovery_action_at_ms.is_some_and(|last| {
                         (settled_at_ms - last).max(0.0) < RECONNECT_SETTLED_KEYFRAME_MIN_INTERVAL_MS
                     });
@@ -555,7 +555,7 @@ where
                     .snapshot
                     .recovery_keyframe_request_count
                     .saturating_add(1);
-                self.snapshot.last_recovery_action = Some("requestKeyframe".to_string());
+                self.snapshot.last_recovery_action = Some("requestPli".to_string());
                 self.snapshot.last_recovery_action_at_ms = Some(now_ms);
                 self.sync_runtime_activity_snapshot();
                 true
