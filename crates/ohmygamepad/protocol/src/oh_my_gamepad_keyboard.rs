@@ -1,7 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-#[derive(Deserialize, Serialize)]
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum OhMyGamepadKeyboardKeyDto {
     KeyA,
@@ -95,8 +94,7 @@ impl OhMyGamepadKeyboardKeyDto {
     }
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-#[derive(Deserialize, Serialize)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum OhMyGamepadKeyboardControlDto {
     LeftStickUp,
@@ -126,16 +124,14 @@ pub enum OhMyGamepadKeyboardControlDto {
     DpadRight,
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-#[derive(Deserialize, Serialize)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct OhMyGamepadKeyboardBindingDto {
     pub key: OhMyGamepadKeyboardKeyDto,
     pub control: OhMyGamepadKeyboardControlDto,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
-#[derive(Deserialize, Serialize)]
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct OhMyGamepadKeyboardMappingDto {
     pub bindings: Vec<OhMyGamepadKeyboardBindingDto>,

@@ -6,14 +6,14 @@ use std::sync::{
 use ohmygamepad_core::{
     DesktopDriverSelector, DesktopHapticsProviderKind, DeviceProfile, InputRuntimeError,
 };
-use ohmygamepad_sdl3::{OhMyGamepadService, OhMyGamepadServiceConfig};
 use ohmygamepad_protocol::{
     LogicalPadBindingDto, LogicalPadStateDto, MultiControllerSamplingStrategyDto,
-    OhMyGamepadBackendKindDto, OhMyGamepadCapabilityFlagsDto, OhMyGamepadHapticsProviderKindDto,
-    OhMyGamepadKeyboardMappingDto, OhMyGamepadRouteTargetDto, OhMyGamepadRumbleRequestDto,
-    OhMyGamepadRumbleResultDto, OhMyGamepadRumbleTargetDto, OhMyGamepadRuntimeHapticsDto,
-    OhMyGamepadRuntimeSnapshotDto, OhMyGamepadSamplingConfigDto,
+    OhMyGamepadHapticsProviderKindDto, OhMyGamepadInputPolicyDto,
+    OhMyGamepadKeyboardMappingDto, OhMyGamepadRumbleRequestDto, OhMyGamepadRumbleResultDto,
+    OhMyGamepadRumbleTargetDto, OhMyGamepadRuntimeHapticsDto, OhMyGamepadRuntimeSnapshotDto,
+    OhMyGamepadSamplingConfigDto,
 };
+use ohmygamepad_sdl3::{OhMyGamepadService, OhMyGamepadServiceConfig};
 
 static SHARED_GAMEPAD_RUNTIME: OnceLock<Result<SharedGamepadRuntime, String>> = OnceLock::new();
 
@@ -78,10 +78,7 @@ impl GamepadRuntimeHost {
 
         std::thread::spawn(move || {
             while let Ok(snapshot) = source_rx.recv() {
-                if tx
-                    .send(enrich_runtime_snapshot(snapshot, haptics_provider))
-                    .is_err()
-                {
+                if tx.send(enrich_runtime_snapshot(snapshot, haptics_provider)).is_err() {
                     break;
                 }
             }
@@ -90,11 +87,11 @@ impl GamepadRuntimeHost {
         rx
     }
 
-    pub fn set_route_target(
+    pub fn set_input_policy(
         &self,
-        target: OhMyGamepadRouteTargetDto,
+        policy: OhMyGamepadInputPolicyDto,
     ) -> Result<(), InputRuntimeError> {
-        self.runtime.set_route_target(target)
+        self.runtime.set_input_policy(policy)
     }
 
     pub fn set_sampling(
@@ -184,7 +181,7 @@ fn bootstrap_gamepad_runtime() -> Result<SharedGamepadRuntime, String> {
     let config = OhMyGamepadServiceConfig::default();
     let selected_providers = DesktopDriverSelector::select(&config.core);
 
-    let runtime = OhMyGamepadService::spawn(config).map_err(|error| error.to_string())?;
+    let runtime = spawn_host_service(config)?;
 
     Ok(SharedGamepadRuntime {
         runtime: Arc::new(runtime),
@@ -200,21 +197,18 @@ fn enrich_runtime_snapshot(
 
     for device in &mut snapshot.devices {
         device.name = normalize_device_name(device, haptics_provider);
-        device.effective_capabilities = infer_effective_capabilities(device, haptics_provider);
-        device.is_default_target = default_device_id.as_deref() == Some(device.device_id.as_str());
     }
 
     snapshot.haptics = OhMyGamepadRuntimeHapticsDto {
         provider: map_haptics_provider_kind(haptics_provider),
-        supports_auto_target: true,
         supports_basic_rumble: snapshot
             .devices
             .iter()
-            .any(|device| device.effective_capabilities.basic_rumble),
-        supports_advanced_haptics: snapshot
+            .any(|device| device.sdl3_capabilities.supports_rumble),
+        supports_trigger_rumble: snapshot
             .devices
             .iter()
-            .any(|device| device.effective_capabilities.advanced_haptics),
+            .any(|device| device.sdl3_capabilities.supports_trigger_rumble),
         default_device_id,
     };
     snapshot
@@ -222,7 +216,7 @@ fn enrich_runtime_snapshot(
 
 fn resolve_default_device_id(snapshot: &OhMyGamepadRuntimeSnapshotDto) -> Option<String> {
     snapshot
-        .pads
+        .slots
         .iter()
         .find_map(|pad| pad.device_ids.first().cloned())
         .or_else(|| {
@@ -232,29 +226,6 @@ fn resolve_default_device_id(snapshot: &OhMyGamepadRuntimeSnapshotDto) -> Option
                 .find(|device| device.connected)
                 .map(|device| device.device_id.clone())
         })
-}
-
-fn infer_effective_capabilities(
-    device: &ohmygamepad_protocol::OhMyGamepadDeviceDto,
-    haptics_provider: DesktopHapticsProviderKind,
-) -> OhMyGamepadCapabilityFlagsDto {
-    let mut effective = device.capabilities;
-    if !device.connected || !is_physical_gamepad_candidate(device) {
-        return effective;
-    }
-
-    match haptics_provider {
-        DesktopHapticsProviderKind::Sdl3Gamepad => {
-            effective.basic_rumble = true;
-            effective.advanced_haptics = false;
-        }
-    }
-
-    effective
-}
-
-fn is_physical_gamepad_candidate(device: &ohmygamepad_protocol::OhMyGamepadDeviceDto) -> bool {
-    device.backend == Some(OhMyGamepadBackendKindDto::Sdl3) && device.device_id != "virtual:keyboard"
 }
 
 fn normalize_device_name(
@@ -287,4 +258,8 @@ fn map_haptics_provider_kind(
     match provider {
         DesktopHapticsProviderKind::Sdl3Gamepad => OhMyGamepadHapticsProviderKindDto::Sdl3Gamepad,
     }
+}
+
+fn spawn_host_service(config: OhMyGamepadServiceConfig) -> Result<OhMyGamepadService, String> {
+    OhMyGamepadService::spawn(config).map_err(|error| error.to_string())
 }

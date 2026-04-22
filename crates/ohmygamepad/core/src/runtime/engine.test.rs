@@ -65,19 +65,29 @@ fn device(device_id: &str) -> OhMyGamepadDeviceDto {
         connection: None,
         vendor_id: None,
         product_id: None,
+        product_version: None,
+        firmware_version: None,
+        serial_number: None,
+        path: None,
+        mapping: None,
+        player_index: None,
+        gamepad_type: None,
+        power_state: None,
+        battery_percent: None,
+        touchpad_count: None,
+        touchpad_finger_count: None,
         connected: true,
         last_seen_at_ms: 0,
-        capabilities: OhMyGamepadCapabilityFlagsDto {
-            basic_rumble: false,
-            advanced_haptics: false,
-            battery: false,
+        sdl3_capabilities: OhMyGamepadCapabilityFlagsDto {
+            supports_rumble: false,
+            supports_trigger_rumble: false,
+            reports_battery: false,
+            supports_player_index: false,
+            reports_mapping: false,
+            supports_touchpad: false,
+            supports_led: false,
+            reports_serial: false,
         },
-        effective_capabilities: OhMyGamepadCapabilityFlagsDto {
-            basic_rumble: false,
-            advanced_haptics: false,
-            battery: false,
-        },
-        is_default_target: false,
     }
 }
 
@@ -125,7 +135,7 @@ fn default_single_active_binding_selects_latest_active_device() {
 
     let pads = ui_pads.borrow();
     let latest = pads.last().expect("expected pad snapshot");
-    assert_eq!(latest.pad_id, ohmygamepad_protocol::LogicalPadId::Pad0);
+    assert_eq!(latest.slot, ohmygamepad_protocol::LogicalPadId::Pad0);
     assert_eq!(latest.device_ids, vec!["pad-b".to_owned()]);
     assert_eq!(latest.state.buttons.north, 1.0);
 }
@@ -146,7 +156,7 @@ fn fixed_device_binding_ignores_other_devices() {
     }]);
     let mut config = InputCoreConfig::default();
     config.bindings = vec![ohmygamepad_protocol::LogicalPadBindingDto {
-        pad_id: ohmygamepad_protocol::LogicalPadId::Pad0,
+        slot: ohmygamepad_protocol::LogicalPadId::Pad0,
         mode: OhMyGamepadBindingModeDto::FixedDevice,
         device_ids: vec!["pad-a".to_owned()],
     }];
@@ -182,7 +192,7 @@ fn merged_binding_combines_buttons_and_axes() {
     }]);
     let mut config = InputCoreConfig::default();
     config.bindings = vec![ohmygamepad_protocol::LogicalPadBindingDto {
-        pad_id: ohmygamepad_protocol::LogicalPadId::Pad0,
+        slot: ohmygamepad_protocol::LogicalPadId::Pad0,
         mode: OhMyGamepadBindingModeDto::Merged,
         device_ids: vec!["pad-a".to_owned(), "pad-b".to_owned()],
     }];
@@ -215,12 +225,12 @@ fn split_binding_assigns_unique_devices_per_pad() {
     let mut config = InputCoreConfig::default();
     config.bindings = vec![
         ohmygamepad_protocol::LogicalPadBindingDto {
-            pad_id: ohmygamepad_protocol::LogicalPadId::Pad0,
+            slot: ohmygamepad_protocol::LogicalPadId::Pad0,
             mode: OhMyGamepadBindingModeDto::Split,
             device_ids: Vec::new(),
         },
         ohmygamepad_protocol::LogicalPadBindingDto {
-            pad_id: ohmygamepad_protocol::LogicalPadId::Pad1,
+            slot: ohmygamepad_protocol::LogicalPadId::Pad1,
             mode: OhMyGamepadBindingModeDto::Split,
             device_ids: Vec::new(),
         },
@@ -308,7 +318,7 @@ fn last_active_failover_keeps_current_device_until_disconnect() {
     ]);
     let mut config = InputCoreConfig::default();
     config.bindings = vec![ohmygamepad_protocol::LogicalPadBindingDto {
-        pad_id: ohmygamepad_protocol::LogicalPadId::Pad0,
+        slot: ohmygamepad_protocol::LogicalPadId::Pad0,
         mode: OhMyGamepadBindingModeDto::LastActiveFailover,
         device_ids: Vec::new(),
     }];
@@ -324,7 +334,7 @@ fn last_active_failover_keeps_current_device_until_disconnect() {
 }
 
 #[test]
-fn route_target_change_emits_new_snapshot() {
+fn input_policy_change_emits_new_snapshot() {
     let ui_sink = SharedUiSink::default();
     let ui_pads = ui_sink.pads.clone();
     let backend = ScriptedBackend::new(vec![BackendPollResult {
@@ -339,19 +349,15 @@ fn route_target_change_emits_new_snapshot() {
     );
 
     core.tick();
-    core.replace_route_target(
-        ohmygamepad_protocol::OhMyGamepadRouteTargetDto::StreamSession {
-            session_id: "session-1".to_owned(),
-        },
-    );
+    core.replace_input_policy(ohmygamepad_protocol::OhMyGamepadInputPolicyDto::StreamOnly);
 
     let pads = ui_pads.borrow();
-    assert_eq!(pads.len(), 2);
+    assert_eq!(pads.len(), 1);
+    assert_eq!(pads[0].slot, ohmygamepad_protocol::LogicalPadId::Pad0);
+    drop(pads);
     assert_eq!(
-        pads[1].route_target,
-        ohmygamepad_protocol::OhMyGamepadRouteTargetDto::StreamSession {
-            session_id: "session-1".to_owned()
-        }
+        core.runtime_snapshot().input_policy,
+        ohmygamepad_protocol::OhMyGamepadInputPolicyDto::StreamOnly
     );
 }
 

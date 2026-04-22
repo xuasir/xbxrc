@@ -8,8 +8,8 @@
   - 手柄输入内核骨架，承接发现、采样、映射、过滤、路由；当前目录已继续收敛为 `api / model / mapping / filter / runtime`，并显式补出 `api::{InputProvider,HapticsProvider}` 与 `runtime::DesktopDriverSelector`
 - `bridge/ohmygamepad-host`
   - `ohmygamepad` 域内的单实例 owner 层，负责在当前进程中懒初始化并共享唯一 `OhMyGamepadService`
-- `backends/ohmygamepad-gilrs`
-  - 桌面手柄后端、`OhMyGamepadService` 门面与 runtime 入口，当前已接入真实 `gilrs`，并支持多手柄采样策略、键盘 fallback 与外部模拟输入；服务内的键盘监听与 rumble 判定逻辑也已拆到独立内部模块
+- `backends/ohmygamepad-sdl3`
+  - 桌面手柄后端、`OhMyGamepadService` 门面与 runtime 入口，当前已接入真实 `SDL3::gamepad`，并支持多手柄采样策略、键盘 fallback 与外部模拟输入；服务内的键盘监听与 rumble 判定逻辑也已拆到独立内部模块
 - `backends/ohmygamepad-macos-gccontroller-haptics`
   - macOS Xbox 手柄震动主线的占位 crate，明确后续走 `GameController + Core Haptics`，当前先固定装配边界与默认策略
 - `backends/ohmygamepad-hid-dualsense`
@@ -21,7 +21,7 @@
 - `xbxengine`
   - `rust-owned` 实时 runtime 骨架，承接连接状态机、媒体链路、输入与恢复逻辑
 
-当前阶段已经打通 Rust 内部的 DTO、输入内核、桌面 `gilrs` 后端、单实例 `ohmygamepad-host`、采样预设、多手柄采样策略、键盘 fallback、默认键盘映射与外部模拟输入。
+当前阶段已经打通 Rust 内部的 DTO、输入内核、桌面 `SDL3` 后端、单实例 `ohmygamepad-host`、采样预设、多手柄采样策略、键盘 fallback、默认键盘映射与外部模拟输入。
 
 同时 RFC 里提到但尚未正式实现的几块当前仍保留为占位工程：
 
@@ -47,7 +47,7 @@
   - 对外表达"震动/高级触觉输出"的稳定 trait 边界
 - `runtime::DesktopDriverSelector`
   - 统一决定桌面端应该选择哪类 input/haptics provider
-  - 当前默认选择 `gilrs + basic haptics`
+  - 当前默认选择 `SDL3 + basic haptics`
 
 `ohmygamepad-core` 当前内部目录已收敛为：
 
@@ -101,7 +101,7 @@ Rumble 当前也已经有了稳定 API：
 
 - `OhMyGamepadService::play_rumble`
 - `OhMyGamepadService::stop_rumble`
-现阶段它们会先做 target 解析和能力判定，返回结构化 `accepted/reason/resolved_device_ids` 结果；真实桌面硬件 rumble 输出后续再接到 `gilrs` / 平台特化 backend。
+现阶段它们会先做 target 解析和能力判定，返回结构化 `accepted/reason/resolved_device_ids` 结果；真实桌面硬件 rumble 当前接到 `SDL3` 主线，平台特化 backend 作为可选扩展保留。
 
 ## Archived Crates
 

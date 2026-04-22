@@ -3,13 +3,24 @@ name = "ohmygamepad-sdl3"
 version = "0.1.0"
 
 edition.workspace = true
+
 rust-version.workspace = true
+
 license.workspace = true
+
 authors.workspace = true
+
 publish = false
 
 [dependencies]
-ohmygamepad-gilrs = { path = "../gilrs" }
+device_query = "4.0.1"
+log = "0.4"
+ohmygamepad-core = { path = "../../core" }
+ohmygamepad-protocol = { path = "../../protocol" }
+sdl3 = { version = "0.18.0", features = [
+  "build-from-source",
+  "hidapi"
+] }
 
 [lib]
 path = "src/lib.rs"

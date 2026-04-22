@@ -1,15 +1,10 @@
-//! macOS：`device_query` → `readkey` 使用 `CGEventSourceKeyState(Combined, …)`。
-//! 在部分系统/场景下 Combined 会话态会对虚拟键码 0（ANSI A）误报为按下。
-//! 键盘 fallback 仅关心物理按键，因此改用 HID 系统态轮询。
-
 use std::collections::BTreeSet;
 
-use crate::OhMyGamepadKeyboardKey;
+use crate::keyboard::OhMyGamepadKeyboardKey;
 
 #[derive(Clone, Copy)]
 #[repr(i32)]
 enum CGEventSourceStateId {
-    /// kCGEventSourceStateHIDSystemState
     HidSystem = 1,
 }
 
@@ -23,7 +18,6 @@ fn key_down_hid(keycode: u16) -> bool {
     unsafe { CGEventSourceKeyState(CGEventSourceStateId::HidSystem, keycode) }
 }
 
-/// Carbon / macOS 虚拟键码，与 `readkey`（`device_query` macOS）一致。
 fn cg_keycode(key: OhMyGamepadKeyboardKey) -> u16 {
     match key {
         OhMyGamepadKeyboardKey::KeyA => 0x00,
@@ -120,7 +114,6 @@ const KEYS: &[OhMyGamepadKeyboardKey] = &[
     OhMyGamepadKeyboardKey::ArrowRight,
 ];
 
-/// 使用 HID 系统态，避免 Combined 会话态对键码 0（A）的误报。
 pub fn read_pressed_keys_hid() -> BTreeSet<OhMyGamepadKeyboardKey> {
     let mut out = BTreeSet::new();
     for &key in KEYS {

@@ -2,7 +2,7 @@ import type {
   GamepadRumbleEffectDto,
   GamepadRumbleTargetDto,
 } from '@shared/gamepad/contract'
-import { LOGICAL_PAD_IDS } from '@shared/gamepad/contract'
+import { GAMEPAD_SLOT_IDS } from '@shared/gamepad/contract'
 import type { InputRuntimeConfig, VibrationStrengthPreset } from '../../domain/input'
 import { rpc } from '../../../services/rpc'
 
@@ -53,8 +53,8 @@ interface TargetRumbleState {
 }
 
 function targetKey(target: GamepadRumbleTargetDto): string {
-  if (target.kind === 'logical-pad') {
-    return `${target.kind}:${target.padId}`
+  if (target.kind === 'slot') {
+    return `${target.kind}:${target.slot}`
   }
   if (target.kind === 'device') {
     return `${target.kind}:${target.deviceId}`
@@ -63,13 +63,13 @@ function targetKey(target: GamepadRumbleTargetDto): string {
 }
 
 function logicalPadTargetFromIndex(gamepadIndex: number): GamepadRumbleTargetDto | null {
-  const padId = LOGICAL_PAD_IDS[gamepadIndex]
-  if (padId === undefined) {
+  const slot = GAMEPAD_SLOT_IDS[gamepadIndex]
+  if (slot === undefined) {
     return { kind: 'auto' }
   }
   return {
-    kind: 'logical-pad',
-    padId,
+    kind: 'slot',
+    slot,
   }
 }
 

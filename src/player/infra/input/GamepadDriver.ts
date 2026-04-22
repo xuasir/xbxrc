@@ -100,12 +100,12 @@ export class GamepadDriver {
     this.nativeRuntimeUnsubscribe = events.on('gamepad.runtimeSnapshot', (snapshot) => {
       this.applyNativeRuntimeSnapshot(snapshot)
     })
-    this.nativePadUnsubscribe = events.on('gamepad.padSnapshot', (padSnapshot) => {
-      this.applyNativePadSnapshot(padSnapshot)
+    this.nativePadUnsubscribe = events.on('gamepad.slotSnapshot', (slotSnapshot) => {
+      this.applyNativePadSnapshot(slotSnapshot)
       if (this.isVirtualButtonPressing) {
         return
       }
-      this.delegate.onFrame(this.mapNativePadState(padSnapshot, 0))
+      this.delegate.onFrame(this.mapNativePadState(slotSnapshot, 0))
     })
 
     void rpc.gamepad
@@ -138,16 +138,16 @@ export class GamepadDriver {
       return
     }
 
-    const idx = snapshot.pads.findIndex(pad => pad.padId === padSnapshot.padId)
+    const idx = snapshot.slots.findIndex(pad => pad.slot === padSnapshot.slot)
     if (idx >= 0) {
-      snapshot.pads[idx] = padSnapshot
+      snapshot.slots[idx] = padSnapshot
       return
     }
-    snapshot.pads.push(padSnapshot)
+    snapshot.slots.push(padSnapshot)
   }
 
   private getNativePadSnapshots(snapshot: GamepadRuntimeSnapshotDto): LogicalPadSnapshotDto[] {
-    return snapshot.pads.filter((pad) => {
+    return snapshot.slots.filter((pad) => {
       return (
         pad.deviceIds.length > 0
         && pad.deviceIds.every(deviceId => deviceId !== '__service:none__')

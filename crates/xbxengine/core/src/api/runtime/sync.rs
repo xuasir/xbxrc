@@ -107,7 +107,7 @@ where
     pub(super) fn record_input_status(&mut self, status: &XbxEngineInputStatus) {
         self.snapshot.input_device_count = status.device_count;
         self.snapshot.input_pad_count = status.pad_count;
-        self.snapshot.input_route_attached = status.route_attached;
+        self.snapshot.input_route_attached = status.stream_input_active;
     }
 
     pub(super) fn emit_phase(&mut self, phase: XbxEngineRuntimePhaseDto) {

@@ -11,8 +11,27 @@ export const GAMEPAD_HAPTICS_PROVIDER_KINDS = [
 ] as const
 export type GamepadHapticsProviderKindDto = (typeof GAMEPAD_HAPTICS_PROVIDER_KINDS)[number]
 
-export const LOGICAL_PAD_IDS = ['pad-0', 'pad-1', 'pad-2', 'pad-3'] as const
-export type LogicalPadId = (typeof LOGICAL_PAD_IDS)[number]
+export const GAMEPAD_POWER_STATES = ['unknown', 'wired', 'on-battery', 'charging', 'charged'] as const
+export type GamepadPowerStateDto = (typeof GAMEPAD_POWER_STATES)[number]
+
+export const GAMEPAD_DEVICE_TYPES = [
+  'unknown',
+  'standard',
+  'xbox360',
+  'xbox-one',
+  'ps3',
+  'ps4',
+  'ps5',
+  'nintendo-switch-pro',
+  'nintendo-switch-joycon-left',
+  'nintendo-switch-joycon-right',
+  'nintendo-switch-joycon-pair',
+] as const
+export type GamepadDeviceTypeDto = (typeof GAMEPAD_DEVICE_TYPES)[number]
+
+export const GAMEPAD_SLOT_IDS = ['pad-0', 'pad-1', 'pad-2', 'pad-3'] as const
+export type GamepadSlotDto = (typeof GAMEPAD_SLOT_IDS)[number]
+export type LogicalPadId = GamepadSlotDto
 
 export const LOGICAL_BUTTONS = [
   'south',
@@ -58,9 +77,14 @@ export const GAMEPAD_RUMBLE_REJECTION_REASONS = [
 export type GamepadRumbleRejectionReasonDto = (typeof GAMEPAD_RUMBLE_REJECTION_REASONS)[number]
 
 export interface GamepadCapabilityFlagsDto {
-  basicRumble: boolean
-  advancedHaptics: boolean
-  battery: boolean
+  supportsRumble: boolean
+  supportsTriggerRumble: boolean
+  reportsBattery: boolean
+  supportsPlayerIndex: boolean
+  reportsMapping: boolean
+  supportsTouchpad: boolean
+  supportsLed: boolean
+  reportsSerial: boolean
 }
 
 export interface GamepadDeviceDto {
@@ -70,11 +94,20 @@ export interface GamepadDeviceDto {
   connection: GamepadConnectionKindDto | null
   vendorId: number | null
   productId: number | null
+  productVersion: number | null
+  firmwareVersion: number | null
+  serialNumber: string | null
+  path: string | null
+  mapping: string | null
+  playerIndex: number | null
+  gamepadType: GamepadDeviceTypeDto | null
+  powerState: GamepadPowerStateDto | null
+  batteryPercent: number | null
+  touchpadCount: number | null
+  touchpadFingerCount: number | null
   connected: boolean
   lastSeenAtMs: number
-  capabilities: GamepadCapabilityFlagsDto
-  effectiveCapabilities: GamepadCapabilityFlagsDto
-  isDefaultTarget: boolean
+  sdl3Capabilities: GamepadCapabilityFlagsDto
 }
 
 export interface LogicalStickDto {
@@ -110,24 +143,24 @@ export interface LogicalPadStateDto {
   rightTrigger: number
 }
 
-export type GamepadRouteTargetDto
-  = | { kind: 'shell-ui' }
-    | { kind: 'stream-session', sessionId: string }
+export const GAMEPAD_INPUT_POLICIES = ['shared', 'ui-only', 'stream-only'] as const
+export type GamepadInputPolicyDto = (typeof GAMEPAD_INPUT_POLICIES)[number]
 
-export interface LogicalPadSnapshotDto {
-  padId: LogicalPadId
+export interface GamepadSlotSnapshotDto {
+  slot: GamepadSlotDto
   deviceIds: string[]
   sampledAtMs: number
   sampleSeq: number
-  routeTarget: GamepadRouteTargetDto
   state: LogicalPadStateDto
 }
+export type LogicalPadSnapshotDto = GamepadSlotSnapshotDto
 
-export interface LogicalPadBindingDto {
-  padId: LogicalPadId
+export interface GamepadSlotBindingDto {
+  slot: GamepadSlotDto
   mode: GamepadBindingModeDto
   deviceIds: string[]
 }
+export type LogicalPadBindingDto = GamepadSlotBindingDto
 
 export interface GamepadSamplingConfigDto {
   backendPollRateHz: number
@@ -146,7 +179,7 @@ export interface GamepadSamplingStrategyDto {
 
 export type GamepadRumbleTargetDto
   = | { kind: 'auto' }
-    | { kind: 'logical-pad', padId: LogicalPadId }
+    | { kind: 'slot', slot: GamepadSlotDto }
     | { kind: 'device', deviceId: string }
 
 export interface GamepadRumbleEffectDto {
@@ -172,15 +205,14 @@ export interface GamepadRumbleResultDto {
 
 export interface GamepadRuntimeSnapshotDto {
   devices: GamepadDeviceDto[]
-  bindings: LogicalPadBindingDto[]
-  routeTarget: GamepadRouteTargetDto
+  slotBindings: GamepadSlotBindingDto[]
+  inputPolicy: GamepadInputPolicyDto
   sampling: GamepadSamplingConfigDto
-  pads: LogicalPadSnapshotDto[]
+  slots: GamepadSlotSnapshotDto[]
   haptics: {
     provider: GamepadHapticsProviderKindDto
-    supportsAutoTarget: boolean
     supportsBasicRumble: boolean
-    supportsAdvancedHaptics: boolean
+    supportsTriggerRumble: boolean
     defaultDeviceId: string | null
   }
 }
@@ -266,9 +298,8 @@ export interface GamepadDeviceProfileDto {
 
 export type GamepadBridgeCommandDto
   = | { type: 'refresh-runtime-snapshot' }
-    | { type: 'set-route-target', target: GamepadRouteTargetDto }
+    | { type: 'set-input-policy', policy: GamepadInputPolicyDto }
     | { type: 'update-sampling', sampling: GamepadSamplingConfigDto }
-    | { type: 'rebind-logical-pad', binding: LogicalPadBindingDto }
     | { type: 'set-sampling-strategy', strategy: GamepadSamplingStrategyDto }
     | { type: 'set-primary-sampling-device', deviceId: string | null }
     | { type: 'pause-sampling-device', deviceId: string }
@@ -281,8 +312,7 @@ export type GamepadBridgeCommandDto
 export type GamepadBridgeEventDto
   = | { type: 'runtime-snapshot', snapshot: GamepadRuntimeSnapshotDto }
     | { type: 'devices-changed', devices: GamepadDeviceDto[] }
-    | { type: 'pad-snapshot', snapshot: LogicalPadSnapshotDto }
-    | { type: 'route-changed', target: GamepadRouteTargetDto }
+    | { type: 'slot-snapshot', snapshot: GamepadSlotSnapshotDto }
 
 // 默认值先收敛到桌面串流场景，后续由设置页或主进程配置覆盖。
 export const DEFAULT_GAMEPAD_SAMPLING_CONFIG_DTO: GamepadSamplingConfigDto = {

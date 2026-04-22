@@ -335,7 +335,7 @@ mod platform {
         #[test]
         fn parses_numeric_xinput_suffixes() {
             assert_eq!(parse_xinput_user_index("0"), Some(0));
-            assert_eq!(parse_xinput_user_index("gilrs:1"), Some(1));
+            assert_eq!(parse_xinput_user_index("sdl3:1"), Some(1));
             assert_eq!(parse_xinput_user_index("xinput-user-3"), Some(3));
             assert_eq!(parse_xinput_user_index("4"), None);
             assert_eq!(parse_xinput_user_index("keyboard"), None);
@@ -344,7 +344,7 @@ mod platform {
         #[test]
         fn parses_numeric_device_suffixes_for_winrt_lookup() {
             assert_eq!(parse_device_index("0"), Some(0));
-            assert_eq!(parse_device_index("gilrs:2"), Some(2));
+            assert_eq!(parse_device_index("sdl3:2"), Some(2));
             assert_eq!(parse_device_index("raw-controller-11"), Some(11));
             assert_eq!(parse_device_index("keyboard"), None);
         }

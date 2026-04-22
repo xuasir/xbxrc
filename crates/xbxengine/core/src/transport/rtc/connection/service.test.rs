@@ -50,7 +50,7 @@ const HANDSHAKE_ACK_PAYLOAD: &str = r#"{"type":"HandshakeAck"}"#;
 
 fn rumble_request(pad_id: LogicalPadId, strong_magnitude: f32) -> OhMyGamepadRumbleRequestDto {
     OhMyGamepadRumbleRequestDto {
-        target: OhMyGamepadRumbleTargetDto::LogicalPad { pad_id },
+        target: OhMyGamepadRumbleTargetDto::Slot { slot: pad_id },
         effect: OhMyGamepadRumbleEffectDto {
             strong_magnitude,
             duration_ms: 120,
@@ -71,8 +71,8 @@ fn rumble_queue_coalesces_by_target_and_keeps_latest_effect() {
     assert_eq!(service.pending_gamepad_rumble_requests.len(), 2);
     assert_eq!(
         service.pending_gamepad_rumble_requests[0].target,
-        OhMyGamepadRumbleTargetDto::LogicalPad {
-            pad_id: LogicalPadId::Pad0,
+        OhMyGamepadRumbleTargetDto::Slot {
+            slot: LogicalPadId::Pad0,
         }
     );
     assert_eq!(
@@ -83,8 +83,8 @@ fn rumble_queue_coalesces_by_target_and_keeps_latest_effect() {
     );
     assert_eq!(
         service.pending_gamepad_rumble_requests[1].target,
-        OhMyGamepadRumbleTargetDto::LogicalPad {
-            pad_id: LogicalPadId::Pad1,
+        OhMyGamepadRumbleTargetDto::Slot {
+            slot: LogicalPadId::Pad1,
         }
     );
 }
@@ -102,14 +102,14 @@ fn rumble_queue_drains_in_small_batches_per_tick() {
     assert_eq!(first_batch.len(), 2);
     assert_eq!(
         first_batch[0].target,
-        OhMyGamepadRumbleTargetDto::LogicalPad {
-            pad_id: LogicalPadId::Pad0,
+        OhMyGamepadRumbleTargetDto::Slot {
+            slot: LogicalPadId::Pad0,
         }
     );
     assert_eq!(
         first_batch[1].target,
-        OhMyGamepadRumbleTargetDto::LogicalPad {
-            pad_id: LogicalPadId::Pad1,
+        OhMyGamepadRumbleTargetDto::Slot {
+            slot: LogicalPadId::Pad1,
         }
     );
 
@@ -117,8 +117,8 @@ fn rumble_queue_drains_in_small_batches_per_tick() {
     assert_eq!(second_batch.len(), 1);
     assert_eq!(
         second_batch[0].target,
-        OhMyGamepadRumbleTargetDto::LogicalPad {
-            pad_id: LogicalPadId::Pad2,
+        OhMyGamepadRumbleTargetDto::Slot {
+            slot: LogicalPadId::Pad2,
         }
     );
 }
@@ -923,7 +923,7 @@ fn service_pump_observes_data_channel_message_from_poll_read() {
     }
     assert!(saw_input_closed, "service should observe input close");
 
-    assert!(service.request_video_keyframe(&runtime_stats).is_ok());
+    assert!(service.request_video_pli(&runtime_stats).is_ok());
 }
 
 #[test]
@@ -1084,7 +1084,7 @@ fn service_bootstraps_message_and_control_payloads_after_handshake_ack() {
         }
 
         if service.control_service.is_control_ready() && !saw_keyframe_request {
-            service.request_video_keyframe(&runtime_stats).unwrap();
+            service.request_video_pli(&runtime_stats).unwrap();
         }
 
         if answer_connected
@@ -1182,7 +1182,7 @@ fn service_bootstraps_message_and_control_payloads_after_handshake_ack() {
     );
     assert!(saw_chat_catalog, "service should catalog inbound chat text");
 
-    assert!(service.request_video_keyframe(&runtime_stats).is_ok());
+    assert!(service.request_video_pli(&runtime_stats).is_ok());
 }
 
 #[test]
@@ -1440,7 +1440,7 @@ fn video_recovery_prefers_pli_on_first_request() {
         }
     }
 
-    assert!(service.request_video_keyframe(&runtime_stats).is_ok());
+    assert!(service.request_video_pli(&runtime_stats).is_ok());
     let first_label = runtime_stats
         .lock()
         .ok()
@@ -1471,9 +1471,9 @@ fn video_recovery_escalates_to_fir_within_same_epoch() {
         }
     }
 
-    assert!(service.request_video_keyframe(&runtime_stats).is_ok());
+    assert!(service.request_video_pli(&runtime_stats).is_ok());
     thread::sleep(Duration::from_millis(220));
-    assert!(service.request_video_keyframe(&runtime_stats).is_ok());
+    assert!(service.request_video_pli(&runtime_stats).is_ok());
     let stats = runtime_stats.lock().expect("runtime stats lock").clone();
     assert_eq!(
         stats.latest_observation_label.as_deref(),
@@ -1487,7 +1487,7 @@ fn video_recovery_escalates_to_fir_within_same_epoch() {
 }
 
 #[test]
-fn video_recovery_falls_back_to_control_when_feedback_not_supported() {
+fn video_recovery_suppresses_when_feedback_not_supported() {
     let mut service = RtcConnectionService::default();
     let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
     let session = XbxEngineSessionDto {
@@ -1503,15 +1503,12 @@ fn video_recovery_falls_back_to_control_when_feedback_not_supported() {
             remote_answer.accepted_video_rtcp_feedback.clear();
         }
     }
-    assert!(service.request_video_keyframe(&runtime_stats).is_ok());
+    assert!(service.request_video_pli(&runtime_stats).is_ok());
     let fallback_label = runtime_stats
         .lock()
         .ok()
         .and_then(|stats| stats.latest_observation_label.clone());
-    assert_eq!(
-        fallback_label.as_deref(),
-        Some("rtcControlKeyframeRequested")
-    );
+    assert_eq!(fallback_label.as_deref(), Some("rtcVideoRecoverySuppressed"));
 
     let control_dc_id = control_dc_id.expect("control channel id");
     let deadline = Instant::now() + Duration::from_secs(3);
@@ -1543,8 +1540,8 @@ fn video_recovery_falls_back_to_control_when_feedback_not_supported() {
     let stats = runtime_stats.lock().expect("runtime stats lock");
     assert_eq!(stats.video_pli_request_count_total, 1);
     assert!(
-        saw_control_keyframe,
-        "when remote answer does not advertise pli/fir, should fallback to control keyframe"
+        !saw_control_keyframe,
+        "when remote answer does not advertise pli/fir, primary path should stay suppressed"
     );
 }
 
@@ -1568,9 +1565,9 @@ fn video_recovery_clean_anchor_clears_stage_token_and_new_epoch_restarts_from_pl
         }
     }
 
-    assert!(service.request_video_keyframe(&runtime_stats).is_ok());
+    assert!(service.request_video_pli(&runtime_stats).is_ok());
     thread::sleep(Duration::from_millis(220));
-    assert!(service.request_video_keyframe(&runtime_stats).is_ok());
+    assert!(service.request_video_pli(&runtime_stats).is_ok());
     for _ in 0..8 {
         service.pump(&runtime_stats).unwrap();
         answer_io.pump(&mut answer_pc).unwrap();
@@ -1584,7 +1581,7 @@ fn video_recovery_clean_anchor_clears_stage_token_and_new_epoch_restarts_from_pl
     if let Ok(mut stats) = runtime_stats.lock() {
         stats.video_anchor_clean_epoch = Some(current_epoch);
     }
-    assert!(service.request_video_keyframe(&runtime_stats).is_ok());
+    assert!(service.request_video_pli(&runtime_stats).is_ok());
     let suppressed_label = runtime_stats
         .lock()
         .ok()
@@ -1598,7 +1595,7 @@ fn video_recovery_clean_anchor_clears_stage_token_and_new_epoch_restarts_from_pl
         stats.transport_recovery_epoch = stats.transport_recovery_epoch.saturating_add(1);
         stats.video_anchor_clean_epoch = None;
     }
-    assert!(service.request_video_keyframe(&runtime_stats).is_ok());
+    assert!(service.request_video_pli(&runtime_stats).is_ok());
     let restarted_label = runtime_stats
         .lock()
         .ok()
@@ -1898,7 +1895,7 @@ fn service_replays_pending_control_requests_after_control_close_and_rebuild() {
     }
     assert!(saw_control_closed, "service should observe control close");
 
-    assert!(service.request_video_keyframe(&runtime_stats).is_err());
+    assert!(service.request_video_pli(&runtime_stats).is_err());
     assert!(service.request_decoder_reset(&runtime_stats).is_err());
     assert!(
         service.control_service.has_pending_replay_actions(),
@@ -1987,7 +1984,7 @@ fn replay_send_failure_retains_pending_actions() {
     let mut service = RtcConnectionService::default();
     let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
 
-    assert!(service.request_video_keyframe(&runtime_stats).is_err());
+    assert!(service.request_video_pli(&runtime_stats).is_err());
     assert!(service.request_decoder_reset(&runtime_stats).is_err());
 
     service.control_service.open_message_channel();
@@ -2547,7 +2544,7 @@ fn request_video_keyframe_skips_pli_without_twcc_feedback_target() {
         "未 prime TWCC 时不应有可用于 PLI 的 media ssrc"
     );
 
-    let _ = service.request_video_keyframe(&runtime_stats);
+    let _ = service.request_video_pli(&runtime_stats);
 
     let stats = runtime_stats.lock().unwrap();
     assert_ne!(
@@ -2572,7 +2569,7 @@ fn request_video_keyframe_prefers_pli_when_video_feedback_is_bound() {
         connect_service_to_answer_peer(&mut service, &runtime_stats);
     prime_video_recovery_feedback_target(&mut service, &runtime_stats);
 
-    service.request_video_keyframe(&runtime_stats).unwrap();
+    service.request_video_pli(&runtime_stats).unwrap();
     answer_io.pump(&mut answer_pc).unwrap();
 
     let stats = runtime_stats.lock().unwrap().clone();
@@ -2588,7 +2585,7 @@ fn request_video_keyframe_prefers_pli_when_video_feedback_is_bound() {
 }
 
 #[test]
-fn request_video_keyframe_upgrades_from_pli_to_fir_then_control() {
+fn request_video_keyframe_upgrades_from_pli_to_fir_without_control_fallback() {
     let mut service = RtcConnectionService::default();
     let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
     let session = XbxEngineSessionDto {
@@ -2602,13 +2599,13 @@ fn request_video_keyframe_upgrades_from_pli_to_fir_then_control() {
         connect_service_to_answer_peer(&mut service, &runtime_stats);
     prime_video_recovery_feedback_target(&mut service, &runtime_stats);
 
-    service.request_video_keyframe(&runtime_stats).unwrap();
+    service.request_video_fir(&runtime_stats).unwrap();
 
     let now_ms = crate::transport::rtc::stats::now_ms_f64();
     service.video_recovery_transport_state.stage =
         super::VideoRecoveryTransportStage::PictureLossIndication;
     service.video_recovery_transport_state.last_sent_at_ms = Some(now_ms - 240.0);
-    service.request_video_keyframe(&runtime_stats).unwrap();
+    let _ = service.request_video_pli(&runtime_stats);
 
     let stats = runtime_stats.lock().unwrap().clone();
     assert_eq!(
@@ -2624,18 +2621,19 @@ fn request_video_keyframe_upgrades_from_pli_to_fir_then_control() {
     service.video_recovery_transport_state.stage =
         super::VideoRecoveryTransportStage::FullIntraRequest;
     service.video_recovery_transport_state.last_sent_at_ms = Some(now_ms - 420.0);
-    service.request_video_keyframe(&runtime_stats).unwrap();
+    service.request_video_pli(&runtime_stats).unwrap();
 
     let stats = runtime_stats.lock().unwrap().clone();
-    assert_eq!(
+    assert!(matches!(
         stats.latest_observation_label.as_deref(),
-        Some("rtcControlKeyframeRequested")
-    );
-    assert_eq!(stats.video_pli_request_count_total, 3);
-    assert_eq!(
+        Some("rtcVideoRecoverySuppressed" | "rtcVideoFirRequested")
+    ));
+    assert_eq!(stats.video_pli_request_count_total, 2);
+    assert!(matches!(
         service.video_recovery_transport_state.stage,
-        super::VideoRecoveryTransportStage::ControlKeyframe
-    );
+        super::VideoRecoveryTransportStage::FullIntraRequest
+            | super::VideoRecoveryTransportStage::None
+    ));
 }
 
 #[test]
@@ -2652,7 +2650,7 @@ fn request_video_keyframe_clears_stage_after_clean_anchor() {
     let (mut answer_pc, mut answer_io, _, _, _, _, _, _) =
         connect_service_to_answer_peer(&mut service, &runtime_stats);
     prime_video_recovery_feedback_target(&mut service, &runtime_stats);
-    service.request_video_keyframe(&runtime_stats).unwrap();
+    service.request_video_pli(&runtime_stats).unwrap();
 
     let current_epoch = runtime_stats.lock().unwrap().transport_recovery_epoch;
     RuntimeStatsSink::new(runtime_stats.clone()).update(|stats| {
@@ -2661,7 +2659,7 @@ fn request_video_keyframe_clears_stage_after_clean_anchor() {
         stats.video_anchor_clean_source_event = Some("chain-clean-anchor-submitted".to_string());
     });
 
-    service.request_video_keyframe(&runtime_stats).unwrap();
+    service.request_video_pli(&runtime_stats).unwrap();
     answer_io.pump(&mut answer_pc).unwrap();
 
     let stats = runtime_stats.lock().unwrap().clone();
@@ -2720,7 +2718,7 @@ fn request_video_keyframe_does_not_suppress_stale_clean_anchor_when_transport_aw
         });
     });
 
-    service.request_video_keyframe(&runtime_stats).unwrap();
+    service.request_video_pli(&runtime_stats).unwrap();
     answer_io.pump(&mut answer_pc).unwrap();
 
     let stats = runtime_stats.lock().unwrap().clone();
@@ -2804,7 +2802,7 @@ fn request_video_keyframe_does_not_suppress_sustaining_recovery_when_fresh_non_i
             });
     });
 
-    service.request_video_keyframe(&runtime_stats).unwrap();
+    service.request_video_pli(&runtime_stats).unwrap();
     answer_io.pump(&mut answer_pc).unwrap();
 
     let stats = runtime_stats.lock().unwrap().clone();
@@ -2884,7 +2882,7 @@ fn keyframe_suppressed_outcome_is_recorded_as_deferred() {
     prime_video_recovery_feedback_target(&mut service, &runtime_stats);
 
     // 先发起一次 keyframe 请求，建立 recovery epoch
-    service.request_video_keyframe(&runtime_stats).unwrap();
+    service.request_video_pli(&runtime_stats).unwrap();
 
     // 设置 clean anchor 状态，触发 keyframe 抑制
     let current_epoch = runtime_stats.lock().unwrap().transport_recovery_epoch;
@@ -2896,7 +2894,7 @@ fn keyframe_suppressed_outcome_is_recorded_as_deferred() {
 
     // 请求 keyframe，应该被抑制
     let outcome = service
-        .request_video_keyframe_with_outcome(&runtime_stats)
+        .request_video_pli_with_outcome(&runtime_stats)
         .unwrap();
 
     answer_io.pump(&mut answer_pc).unwrap();

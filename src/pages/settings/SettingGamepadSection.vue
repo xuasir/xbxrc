@@ -4,6 +4,7 @@ import type {
   GamepadDeviceProfileDto,
   GamepadDeviceProfileMatcherDto,
   GamepadFilterConfigDto,
+  GamepadInputPolicyDto,
   GamepadKeyboardBindingDto,
   GamepadKeyboardControlDto,
   GamepadKeyboardKeyDto,
@@ -113,15 +114,21 @@ const connectedGamepadCount = computed(() =>
   gamepadSnapshot.value?.devices.filter(device => device.connected).length ?? 0,
 )
 
+function inputPolicyLabel(policy: GamepadInputPolicyDto | undefined): string {
+  switch (policy) {
+    case 'stream-only':
+      return t('setting.gamepad.route.streamSession')
+    case 'ui-only':
+      return t('setting.gamepad.route.shellUi')
+    case 'shared':
+      return t('setting.gamepad.route.none')
+    default:
+      return t('setting.gamepad.route.none')
+  }
+}
+
 const gamepadRouteLabel = computed(() => {
-  const target = gamepadSnapshot.value?.routeTarget
-  if (target === undefined || target === null) {
-    return t('setting.gamepad.route.none')
-  }
-  if (target.kind === 'stream-session') {
-    return t('setting.gamepad.route.streamSession')
-  }
-  return t('setting.gamepad.route.shellUi')
+  return inputPolicyLabel(gamepadSnapshot.value?.inputPolicy)
 })
 
 const gamepadHapticsSummary = computed(() => {
@@ -134,11 +141,8 @@ const gamepadHapticsSummary = computed(() => {
   if (haptics.supportsBasicRumble) {
     parts.push(t('setting.gamepad.haptics.basic'))
   }
-  if (haptics.supportsAdvancedHaptics) {
+  if (haptics.supportsTriggerRumble) {
     parts.push(t('setting.gamepad.haptics.advanced'))
-  }
-  if (haptics.supportsAutoTarget) {
-    parts.push(t('setting.gamepad.haptics.autoTarget'))
   }
 
   if (parts.length === 0) {
@@ -156,7 +160,7 @@ const isGamepadTestRumbleDisabled = computed(() => {
   if (!snapshot) {
     return true
   }
-  if (!snapshot.haptics.supportsBasicRumble && !snapshot.haptics.supportsAdvancedHaptics) {
+  if (!snapshot.haptics.supportsBasicRumble && !snapshot.haptics.supportsTriggerRumble) {
     return true
   }
   return connectedGamepadCount.value === 0
@@ -190,7 +194,7 @@ const debugPadSummary = computed(() => {
   const pressedText = pressed.length > 0 ? pressed.join(', ') : t('setting.gamepad.debug.none')
 
   return t('setting.gamepad.debug.summary', {
-    padId: snapshot.padId,
+    slot: snapshot.slot,
     buttons: pressedText,
     sticks: stickInfo,
   })
@@ -481,7 +485,7 @@ onMounted(() => {
   disposeGamepadRuntimeSnapshot = events.on('gamepad.runtimeSnapshot', (snapshot) => {
     gamepadSnapshot.value = snapshot
   })
-  disposeGamepadPadSnapshot = events.on('gamepad.padSnapshot', (snapshot) => {
+  disposeGamepadPadSnapshot = events.on('gamepad.slotSnapshot', (snapshot) => {
     if (!gamepadDebugEnabled.value) {
       return
     }
@@ -606,7 +610,7 @@ function handleMappingCaptureKeydown(event: KeyboardEvent): void {
                     ? t('setting.gamepad.deviceStatus.connected')
                     : t('setting.gamepad.deviceStatus.disconnected') }}
                 </span>
-                <span v-if="device.isDefaultTarget" class="setting-gamepad__device-badge">
+                <span v-if="inputPrimaryDeviceId === device.deviceId" class="setting-gamepad__device-badge">
                   {{ t('gamepadCard.defaultBadge') }}
                 </span>
               </p>
@@ -1180,4 +1184,3 @@ function handleMappingCaptureKeydown(event: KeyboardEvent): void {
   grid-template-columns: 1fr;
 }
 </style>
-

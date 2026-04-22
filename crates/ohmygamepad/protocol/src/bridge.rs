@@ -1,7 +1,7 @@
 use crate::{
-    LogicalPadBindingDto, LogicalPadSnapshotDto, MultiControllerSamplingStrategyDto,
-    OhMyGamepadDeviceDto, OhMyGamepadKeyboardMappingDto, OhMyGamepadRouteTargetDto,
-    OhMyGamepadRuntimeHapticsDto, OhMyGamepadSamplingConfigDto, SimulatedGamepadDescriptorDto,
+    GamepadSlotSnapshotDto, MultiControllerSamplingStrategyDto, OhMyGamepadDeviceDto,
+    OhMyGamepadInputPolicyDto, OhMyGamepadKeyboardMappingDto, OhMyGamepadRuntimeHapticsDto,
+    OhMyGamepadSamplingConfigDto, SimulatedGamepadDescriptorDto,
 };
 use serde::{Deserialize, Serialize};
 
@@ -9,24 +9,21 @@ use serde::{Deserialize, Serialize};
 #[serde(rename_all = "camelCase")]
 pub struct OhMyGamepadRuntimeSnapshotDto {
     pub devices: Vec<OhMyGamepadDeviceDto>,
-    pub bindings: Vec<LogicalPadBindingDto>,
-    pub route_target: OhMyGamepadRouteTargetDto,
+    pub slot_bindings: Vec<crate::GamepadSlotBindingDto>,
+    pub input_policy: OhMyGamepadInputPolicyDto,
     pub sampling: OhMyGamepadSamplingConfigDto,
-    pub pads: Vec<LogicalPadSnapshotDto>,
+    pub slots: Vec<GamepadSlotSnapshotDto>,
     pub haptics: OhMyGamepadRuntimeHapticsDto,
 }
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum OhMyGamepadBridgeCommandDto {
     RefreshRuntimeSnapshot,
-    SetRouteTarget {
-        target: OhMyGamepadRouteTargetDto,
+    SetInputPolicy {
+        policy: OhMyGamepadInputPolicyDto,
     },
     UpdateSampling {
         sampling: OhMyGamepadSamplingConfigDto,
-    },
-    RebindLogicalPad {
-        binding: LogicalPadBindingDto,
     },
     SetSamplingStrategy {
         strategy: MultiControllerSamplingStrategyDto,
@@ -66,10 +63,10 @@ pub enum OhMyGamepadBridgeEventDto {
     DevicesChanged {
         devices: Vec<OhMyGamepadDeviceDto>,
     },
-    PadSnapshot {
-        snapshot: LogicalPadSnapshotDto,
+    SlotSnapshot {
+        snapshot: GamepadSlotSnapshotDto,
     },
-    RouteChanged {
-        target: OhMyGamepadRouteTargetDto,
+    InputPolicyChanged {
+        policy: OhMyGamepadInputPolicyDto,
     },
 }

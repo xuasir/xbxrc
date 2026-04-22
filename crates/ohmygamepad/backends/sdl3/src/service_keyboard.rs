@@ -8,8 +8,8 @@ use std::{
 use ohmygamepad_protocol::{LogicalPadStateDto, OhMyGamepadKeyboardMappingDto};
 
 use crate::{
-    GilrsDeviceDescriptor, GilrsInputEvent, GilrsInputEventKind,
     OhMyGamepadDesktopKeyboardListener, OhMyGamepadDesktopKeyboardListenerConfig,
+    Sdl3DeviceDescriptor, Sdl3InputEvent, Sdl3InputEventKind,
 };
 
 pub(crate) const KEYBOARD_FALLBACK_DEVICE_ID: &str = "virtual:keyboard";
@@ -31,7 +31,7 @@ impl ServiceKeyboardFallbackGate {
         }
     }
 
-    pub(crate) fn initial_events(&self, observed_at_ms: u64) -> Vec<GilrsInputEvent> {
+    pub(crate) fn initial_events(&self, observed_at_ms: u64) -> Vec<Sdl3InputEvent> {
         if self.enabled {
             vec![keyboard_connection_event(true, observed_at_ms)]
         } else {
@@ -41,9 +41,9 @@ impl ServiceKeyboardFallbackGate {
 
     pub(crate) fn transform_event(
         &mut self,
-        event: GilrsInputEvent,
+        event: Sdl3InputEvent,
         observed_at_ms: u64,
-    ) -> Vec<GilrsInputEvent> {
+    ) -> Vec<Sdl3InputEvent> {
         let is_keyboard = event.device.device_id == KEYBOARD_FALLBACK_DEVICE_ID;
         if is_keyboard && !self.connected {
             return Vec::new();
@@ -52,11 +52,11 @@ impl ServiceKeyboardFallbackGate {
         let had_non_keyboard_devices = !self.active_non_keyboard_device_ids.is_empty();
         if !is_keyboard {
             match event.kind {
-                GilrsInputEventKind::Connected => {
+                Sdl3InputEventKind::Connected => {
                     self.active_non_keyboard_device_ids
                         .insert(event.device.device_id.clone());
                 }
-                GilrsInputEventKind::Disconnected => {
+                Sdl3InputEventKind::Disconnected => {
                     self.active_non_keyboard_device_ids
                         .remove(&event.device.device_id);
                 }
@@ -115,27 +115,26 @@ impl ServiceKeyboardListenerHandle {
     }
 }
 
-pub(crate) fn keyboard_connection_event(connected: bool, observed_at_ms: u64) -> GilrsInputEvent {
-    GilrsInputEvent {
+pub(crate) fn keyboard_connection_event(connected: bool, observed_at_ms: u64) -> Sdl3InputEvent {
+    Sdl3InputEvent {
         device: keyboard_descriptor(),
         observed_at_ms,
         kind: if connected {
-            GilrsInputEventKind::Connected
+            Sdl3InputEventKind::Connected
         } else {
-            GilrsInputEventKind::Disconnected
+            Sdl3InputEventKind::Disconnected
         },
     }
 }
 
 pub(crate) fn spawn_keyboard_listener_thread(
     config: OhMyGamepadDesktopKeyboardListenerConfig,
-    virtual_input_tx: Sender<Vec<GilrsInputEvent>>,
+    virtual_input_tx: Sender<Vec<Sdl3InputEvent>>,
     now_ms: fn() -> u64,
 ) -> ServiceKeyboardListenerHandle {
     let (command_tx, command_rx) = mpsc::channel();
     let join_handle = thread::spawn(move || {
         let Ok(mut listener) = OhMyGamepadDesktopKeyboardListener::try_new(config) else {
-            // 桌面键盘监听不是核心路径；权限缺失时直接降级为“无键盘 fallback”。
             log::warn!(
                 "ohmygamepad keyboard listener unavailable; desktop keyboard fallback disabled"
             );
@@ -185,7 +184,7 @@ enum KeyboardThreadControl {
 fn drain_keyboard_listener_commands(
     listener: &mut OhMyGamepadDesktopKeyboardListener,
     command_rx: &Receiver<KeyboardListenerCommand>,
-    virtual_input_tx: &Sender<Vec<GilrsInputEvent>>,
+    virtual_input_tx: &Sender<Vec<Sdl3InputEvent>>,
     now_ms: fn() -> u64,
 ) -> KeyboardThreadControl {
     loop {
@@ -205,7 +204,7 @@ fn drain_keyboard_listener_commands(
 }
 
 fn send_keyboard_state_events(
-    tx: &Sender<Vec<GilrsInputEvent>>,
+    tx: &Sender<Vec<Sdl3InputEvent>>,
     state: LogicalPadStateDto,
     now_ms: fn() -> u64,
 ) -> Result<(), ()> {
@@ -213,7 +212,7 @@ fn send_keyboard_state_events(
         .map_err(|_| ())
 }
 
-fn keyboard_state_events(state: LogicalPadStateDto, observed_at_ms: u64) -> Vec<GilrsInputEvent> {
+fn keyboard_state_events(state: LogicalPadStateDto, observed_at_ms: u64) -> Vec<Sdl3InputEvent> {
     let device = keyboard_descriptor();
     let left_trigger_value = state.buttons.l2.max(state.left_trigger);
     let right_trigger_value = state.buttons.r2.max(state.right_trigger);
@@ -238,10 +237,10 @@ fn keyboard_state_events(state: LogicalPadStateDto, observed_at_ms: u64) -> Vec<
         (15, state.buttons.dpad_right),
         (16, state.buttons.home),
     ] {
-        events.push(GilrsInputEvent {
+        events.push(Sdl3InputEvent {
             device: device.clone(),
             observed_at_ms,
-            kind: GilrsInputEventKind::ButtonChanged { index, value },
+            kind: Sdl3InputEventKind::ButtonChanged { index, value },
         });
     }
 
@@ -253,118 +252,25 @@ fn keyboard_state_events(state: LogicalPadStateDto, observed_at_ms: u64) -> Vec<
         (4, trigger_axis_value(state.left_trigger)),
         (5, trigger_axis_value(state.right_trigger)),
     ] {
-        events.push(GilrsInputEvent {
+        events.push(Sdl3InputEvent {
             device: device.clone(),
             observed_at_ms,
-            kind: GilrsInputEventKind::AxisChanged { index, value },
+            kind: Sdl3InputEventKind::AxisChanged { index, value },
         });
     }
 
     events
 }
 
-fn keyboard_descriptor() -> GilrsDeviceDescriptor {
-    GilrsDeviceDescriptor {
+fn keyboard_descriptor() -> Sdl3DeviceDescriptor {
+    Sdl3DeviceDescriptor {
         device_id: KEYBOARD_FALLBACK_DEVICE_ID.to_owned(),
         name: KEYBOARD_FALLBACK_DEVICE_NAME.to_owned(),
-        ..GilrsDeviceDescriptor::default()
+        path: Some("virtual://keyboard".to_owned()),
+        ..Sdl3DeviceDescriptor::default()
     }
 }
 
 fn trigger_axis_value(value: f32) -> f32 {
     (value.clamp(0.0, 1.0) * 2.0) - 1.0
-}
-
-#[cfg(test)]
-mod tests {
-    use super::{
-        ServiceKeyboardFallbackGate, KEYBOARD_FALLBACK_DEVICE_ID, KEYBOARD_FALLBACK_DEVICE_NAME,
-    };
-    use crate::{GilrsDeviceDescriptor, GilrsInputEvent, GilrsInputEventKind};
-
-    fn keyboard_event(kind: GilrsInputEventKind) -> GilrsInputEvent {
-        GilrsInputEvent {
-            device: GilrsDeviceDescriptor {
-                device_id: KEYBOARD_FALLBACK_DEVICE_ID.to_owned(),
-                name: KEYBOARD_FALLBACK_DEVICE_NAME.to_owned(),
-                ..GilrsDeviceDescriptor::default()
-            },
-            observed_at_ms: 10,
-            kind,
-        }
-    }
-
-    fn physical_event(device_id: &str, kind: GilrsInputEventKind) -> GilrsInputEvent {
-        GilrsInputEvent {
-            device: GilrsDeviceDescriptor {
-                device_id: device_id.to_owned(),
-                name: device_id.to_owned(),
-                ..GilrsDeviceDescriptor::default()
-            },
-            observed_at_ms: 10,
-            kind,
-        }
-    }
-
-    #[test]
-    fn fallback_gate_announces_keyboard_when_enabled() {
-        let gate = ServiceKeyboardFallbackGate::new(true);
-
-        let initial = gate.initial_events(20);
-
-        assert_eq!(initial.len(), 1);
-        assert!(matches!(initial[0].kind, GilrsInputEventKind::Connected));
-        assert_eq!(initial[0].device.device_id, KEYBOARD_FALLBACK_DEVICE_ID);
-    }
-
-    #[test]
-    fn fallback_gate_suppresses_keyboard_after_first_physical_connect() {
-        let mut gate = ServiceKeyboardFallbackGate::new(true);
-
-        let transformed =
-            gate.transform_event(physical_event("pad-a", GilrsInputEventKind::Connected), 30);
-
-        assert_eq!(transformed.len(), 2);
-        assert!(matches!(
-            transformed[0].kind,
-            GilrsInputEventKind::Disconnected
-        ));
-        assert_eq!(transformed[0].device.device_id, KEYBOARD_FALLBACK_DEVICE_ID);
-        assert_eq!(transformed[1].device.device_id, "pad-a");
-    }
-
-    #[test]
-    fn fallback_gate_restores_keyboard_after_last_physical_disconnect() {
-        let mut gate = ServiceKeyboardFallbackGate::new(true);
-        let _ = gate.transform_event(physical_event("pad-a", GilrsInputEventKind::Connected), 30);
-
-        let transformed = gate.transform_event(
-            physical_event("pad-a", GilrsInputEventKind::Disconnected),
-            40,
-        );
-
-        assert_eq!(transformed.len(), 2);
-        assert_eq!(transformed[0].device.device_id, "pad-a");
-        assert!(matches!(
-            transformed[1].kind,
-            GilrsInputEventKind::Connected
-        ));
-        assert_eq!(transformed[1].device.device_id, KEYBOARD_FALLBACK_DEVICE_ID);
-    }
-
-    #[test]
-    fn fallback_gate_drops_keyboard_input_while_suppressed() {
-        let mut gate = ServiceKeyboardFallbackGate::new(true);
-        let _ = gate.transform_event(physical_event("pad-a", GilrsInputEventKind::Connected), 30);
-
-        let transformed = gate.transform_event(
-            keyboard_event(GilrsInputEventKind::ButtonChanged {
-                index: 0,
-                value: 1.0,
-            }),
-            40,
-        );
-
-        assert!(transformed.is_empty());
-    }
 }

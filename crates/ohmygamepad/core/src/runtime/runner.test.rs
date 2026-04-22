@@ -7,7 +7,6 @@ use std::{
 
 use ohmygamepad_protocol::{
     LogicalPadSnapshotDto, OhMyGamepadCapabilityFlagsDto, OhMyGamepadDeviceDto,
-    OhMyGamepadRouteTargetDto,
 };
 
 use super::{spawn_input_runtime, SamplingSchedule};
@@ -63,19 +62,29 @@ fn device(device_id: &str) -> OhMyGamepadDeviceDto {
         connection: None,
         vendor_id: None,
         product_id: None,
+        product_version: None,
+        firmware_version: None,
+        serial_number: None,
+        path: None,
+        mapping: None,
+        player_index: None,
+        gamepad_type: None,
+        power_state: None,
+        battery_percent: None,
+        touchpad_count: None,
+        touchpad_finger_count: None,
         connected: true,
         last_seen_at_ms: 0,
-        capabilities: OhMyGamepadCapabilityFlagsDto {
-            basic_rumble: false,
-            advanced_haptics: false,
-            battery: false,
+        sdl3_capabilities: OhMyGamepadCapabilityFlagsDto {
+            supports_rumble: false,
+            supports_trigger_rumble: false,
+            reports_battery: false,
+            supports_player_index: false,
+            reports_mapping: false,
+            supports_touchpad: false,
+            supports_led: false,
+            reports_serial: false,
         },
-        effective_capabilities: OhMyGamepadCapabilityFlagsDto {
-            basic_rumble: false,
-            advanced_haptics: false,
-            battery: false,
-        },
-        is_default_target: false,
     }
 }
 
@@ -153,7 +162,7 @@ fn sampling_schedule_reset_takes_effect_immediately() {
 }
 
 #[test]
-fn runtime_thread_emits_snapshot_and_accepts_route_update() {
+fn runtime_thread_emits_snapshot_and_accepts_input_policy_update() {
     let ui_sink = ThreadSafeUiSink::default();
     let pads = ui_sink.pads.clone();
     let backend = ScriptedBackend::new(vec![BackendPollResult {
@@ -174,22 +183,22 @@ fn runtime_thread_emits_snapshot_and_accepts_route_update() {
     let snapshot = runtime
         .get_runtime_snapshot()
         .expect("runtime snapshot should be available");
-    assert_eq!(snapshot.pads.len(), 1);
-    assert_eq!(snapshot.pads[0].state.buttons.south, 1.0);
+    assert_eq!(snapshot.slots.len(), 1);
+    assert_eq!(snapshot.slots[0].state.buttons.south, 1.0);
 
     runtime
-        .set_route_target(OhMyGamepadRouteTargetDto::StreamSession {
-            session_id: "session-1".to_owned(),
-        })
-        .expect("route target update should succeed");
+        .set_input_policy(ohmygamepad_protocol::OhMyGamepadInputPolicyDto::StreamOnly)
+        .expect("input policy update should succeed");
 
+    let updated_snapshot = runtime
+        .get_runtime_snapshot()
+        .expect("runtime snapshot should be available");
+    assert_eq!(
+        updated_snapshot.input_policy,
+        ohmygamepad_protocol::OhMyGamepadInputPolicyDto::StreamOnly
+    );
     assert!(wait_until(Duration::from_millis(80), || {
-        pads.lock().expect("lock pads").iter().any(|snapshot| {
-            snapshot.route_target
-                == OhMyGamepadRouteTargetDto::StreamSession {
-                    session_id: "session-1".to_owned(),
-                }
-        })
+        !pads.lock().expect("lock pads").is_empty()
     }));
 
     runtime.shutdown().expect("runtime should shutdown cleanly");
@@ -248,7 +257,7 @@ fn runtime_thread_rebinds_logical_pad() {
 
     runtime
         .rebind_logical_pad(ohmygamepad_protocol::LogicalPadBindingDto {
-            pad_id: ohmygamepad_protocol::LogicalPadId::Pad0,
+            slot: ohmygamepad_protocol::LogicalPadId::Pad0,
             mode: ohmygamepad_protocol::OhMyGamepadBindingModeDto::FixedDevice,
             device_ids: vec!["pad-b".to_owned()],
         })
@@ -257,8 +266,8 @@ fn runtime_thread_rebinds_logical_pad() {
     let snapshot = runtime
         .get_runtime_snapshot()
         .expect("runtime snapshot should be available");
-    assert_eq!(snapshot.bindings.len(), 1);
-    assert_eq!(snapshot.bindings[0].device_ids, vec!["pad-b".to_owned()]);
+    assert_eq!(snapshot.slot_bindings.len(), 1);
+    assert_eq!(snapshot.slot_bindings[0].device_ids, vec!["pad-b".to_owned()]);
 
     runtime.shutdown().expect("runtime should shutdown cleanly");
 }
@@ -295,9 +304,9 @@ fn runtime_thread_replaces_device_profiles() {
     let snapshot = runtime
         .get_runtime_snapshot()
         .expect("runtime snapshot should be available");
-    assert_eq!(snapshot.pads.len(), 1);
-    assert_eq!(snapshot.pads[0].state.buttons.south, 1.0);
-    assert_eq!(snapshot.pads[0].state.buttons.north, 0.0);
+    assert_eq!(snapshot.slots.len(), 1);
+    assert_eq!(snapshot.slots[0].state.buttons.south, 1.0);
+    assert_eq!(snapshot.slots[0].state.buttons.north, 0.0);
 
     runtime.shutdown().expect("runtime should shutdown cleanly");
 }
@@ -328,18 +337,14 @@ fn runtime_snapshot_subscription_receives_initial_and_updated_snapshots() {
     assert_eq!(discovered_snapshot.devices[0].device_id, "pad-a");
 
     runtime
-        .set_route_target(OhMyGamepadRouteTargetDto::StreamSession {
-            session_id: "session-1".to_owned(),
-        })
-        .expect("route update should succeed");
+        .set_input_policy(ohmygamepad_protocol::OhMyGamepadInputPolicyDto::StreamOnly)
+        .expect("input policy update should succeed");
     let routed_snapshot = snapshot_rx
         .recv_timeout(Duration::from_millis(100))
-        .expect("route target snapshot should be pushed");
+        .expect("input policy snapshot should be pushed");
     assert_eq!(
-        routed_snapshot.route_target,
-        OhMyGamepadRouteTargetDto::StreamSession {
-            session_id: "session-1".to_owned(),
-        }
+        routed_snapshot.input_policy,
+        ohmygamepad_protocol::OhMyGamepadInputPolicyDto::StreamOnly
     );
 
     runtime.shutdown().expect("runtime should shutdown cleanly");

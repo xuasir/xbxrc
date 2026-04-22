@@ -1,5 +1,5 @@
 use crate::{
-    LogicalPadStateDto, OhMyGamepadKeyboardMappingDto, OhMyGamepadRouteTargetDto,
+    LogicalPadStateDto, OhMyGamepadInputPolicyDto, OhMyGamepadKeyboardMappingDto,
     OhMyGamepadSamplingConfigDto, OhMyGamepadSamplingPresetDto,
 };
 use serde::{Deserialize, Serialize};
@@ -44,8 +44,8 @@ pub struct SimulatedGamepadDescriptorDto {
 #[derive(Clone, Debug, PartialEq)]
 pub enum OhMyGamepadServiceCommandDto {
     RefreshSnapshot,
-    SetRouteTarget {
-        target: OhMyGamepadRouteTargetDto,
+    SetInputPolicy {
+        policy: OhMyGamepadInputPolicyDto,
     },
     UpdateSampling {
         sampling: OhMyGamepadSamplingConfigDto,

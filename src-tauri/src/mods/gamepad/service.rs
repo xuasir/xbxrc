@@ -4,13 +4,15 @@ use crate::mods::gamepad::{
     GamepadDeviceProfileMatcherDto, GamepadFilterConfigDto, GamepadProvider,
 };
 use crate::settings_store::SettingsStoreResolver;
-use ohmygamepad_core::{AxisMapping, ButtonMapping, DeviceProfile, DeviceProfileMatcher, FilterConfig};
+use ohmygamepad_core::{
+    AxisMapping, ButtonMapping, DeviceProfile, DeviceProfileMatcher, FilterConfig,
+};
 use ohmygamepad_host::GamepadRuntimeHost;
 use ohmygamepad_protocol::{
-    LogicalPadBindingDto, MultiControllerSamplingStrategyDto, OhMyGamepadRouteTargetDto,
-    OhMyGamepadBackendKindDto, OhMyGamepadKeyboardMappingDto,
-    OhMyGamepadRumbleRejectionReasonDto, OhMyGamepadRumbleRequestDto, OhMyGamepadRumbleResultDto,
-    OhMyGamepadRumbleTargetDto, OhMyGamepadRuntimeSnapshotDto, OhMyGamepadSamplingConfigDto,
+    MultiControllerSamplingStrategyDto, OhMyGamepadBackendKindDto, OhMyGamepadInputPolicyDto,
+    OhMyGamepadKeyboardMappingDto, OhMyGamepadRumbleRejectionReasonDto,
+    OhMyGamepadRumbleRequestDto, OhMyGamepadRumbleResultDto, OhMyGamepadRumbleTargetDto,
+    OhMyGamepadRuntimeSnapshotDto, OhMyGamepadSamplingConfigDto,
 };
 use tauri::AppHandle;
 
@@ -24,12 +26,12 @@ impl GamepadProvider for GamepadService {
         self.host.snapshot().map_err(|error| format!("{:?}", error))
     }
 
-    fn set_route_target(
+    fn set_input_policy(
         &self,
-        target: OhMyGamepadRouteTargetDto,
+        policy: OhMyGamepadInputPolicyDto,
     ) -> Result<OhMyGamepadRuntimeSnapshotDto, String> {
         self.host
-            .set_route_target(target)
+            .set_input_policy(policy)
             .map_err(|error| format!("{:?}", error))?;
         let _ = self.emit_runtime_events();
         self.get_runtime_snapshot()
@@ -41,17 +43,6 @@ impl GamepadProvider for GamepadService {
     ) -> Result<OhMyGamepadRuntimeSnapshotDto, String> {
         self.host
             .set_sampling(sampling)
-            .map_err(|error| format!("{:?}", error))?;
-        let _ = self.emit_runtime_events();
-        self.get_runtime_snapshot()
-    }
-
-    fn rebind_logical_pad(
-        &self,
-        binding: LogicalPadBindingDto,
-    ) -> Result<OhMyGamepadRuntimeSnapshotDto, String> {
-        self.host
-            .rebind_logical_pad(binding)
             .map_err(|error| format!("{:?}", error))?;
         let _ = self.emit_runtime_events();
         self.get_runtime_snapshot()
@@ -168,9 +159,7 @@ impl GamepadProvider for GamepadService {
     }
 
     fn shutdown(&self) {
-        let _ = self
-            .host
-            .set_route_target(OhMyGamepadRouteTargetDto::ShellUi);
+        let _ = self.host.set_input_policy(OhMyGamepadInputPolicyDto::Shared);
     }
 }
 
@@ -179,7 +168,7 @@ fn parse_backend_kind(raw: Option<String>) -> Result<Option<OhMyGamepadBackendKi
         return Ok(None);
     };
     match value.as_str() {
-        // 兼容旧持久化配置里的 gilrs 值，统一迁移到 SDL3 主语义。
+        // 兼容历史持久化配置里的 gilrs 值，读取时统一映射到 SDL3 主语义。
         "gilrs" | "sdl3" => Ok(Some(OhMyGamepadBackendKindDto::Sdl3)),
         "mock" => Ok(Some(OhMyGamepadBackendKindDto::Mock)),
         other => Err(format!("Unsupported backend kind: {other}")),
@@ -195,7 +184,9 @@ fn to_core_profile(profile: GamepadDeviceProfileDto) -> Result<DeviceProfile, St
     })
 }
 
-fn to_core_matcher(matcher: GamepadDeviceProfileMatcherDto) -> Result<DeviceProfileMatcher, String> {
+fn to_core_matcher(
+    matcher: GamepadDeviceProfileMatcherDto,
+) -> Result<DeviceProfileMatcher, String> {
     Ok(DeviceProfileMatcher {
         device_id: matcher.device_id,
         vendor_id: matcher.vendor_id,
@@ -288,13 +279,9 @@ impl GamepadService {
             serde_json::to_value(&snapshot.devices).map_err(|error| error.to_string())?;
         events::emit_devices_changed(&self.app_handle, &devices_value)?;
 
-        let route_value =
-            serde_json::to_value(&snapshot.route_target).map_err(|error| error.to_string())?;
-        events::emit_route_changed(&self.app_handle, &route_value)?;
-
-        for pad in &snapshot.pads {
-            let pad_value = serde_json::to_value(pad).map_err(|error| error.to_string())?;
-            events::emit_pad_snapshot(&self.app_handle, &pad_value)?;
+        for slot in &snapshot.slots {
+            let slot_value = serde_json::to_value(slot).map_err(|error| error.to_string())?;
+            events::emit_slot_snapshot(&self.app_handle, &slot_value)?;
         }
 
         Ok(())
@@ -306,7 +293,9 @@ impl GamepadService {
         };
 
         if let Some(value) = store.store().get("gamepad_device_profiles") {
-            if let Ok(profiles) = serde_json::from_value::<Vec<GamepadDeviceProfileDto>>(value.clone()) {
+            if let Ok(profiles) =
+                serde_json::from_value::<Vec<GamepadDeviceProfileDto>>(value.clone())
+            {
                 // 保护性迁移：拒绝 matcher 全空的 profile，避免“全局误匹配”导致 Windows/Xbox 输入异常。
                 let sanitized_profiles = profiles
                     .into_iter()
@@ -317,7 +306,9 @@ impl GamepadService {
         }
 
         if let Some(value) = store.store().get("gamepad_keyboard_mapping") {
-            if let Ok(mapping) = serde_json::from_value::<OhMyGamepadKeyboardMappingDto>(value.clone()) {
+            if let Ok(mapping) =
+                serde_json::from_value::<OhMyGamepadKeyboardMappingDto>(value.clone())
+            {
                 let _ = self.replace_keyboard_mapping(mapping);
             }
         }
@@ -325,10 +316,20 @@ impl GamepadService {
 }
 
 fn matcher_is_empty(matcher: &GamepadDeviceProfileMatcherDto) -> bool {
-    matcher.device_id.as_deref().map(str::trim).map(str::is_empty).unwrap_or(true)
+    matcher
+        .device_id
+        .as_deref()
+        .map(str::trim)
+        .map(str::is_empty)
+        .unwrap_or(true)
         && matcher.vendor_id.is_none()
         && matcher.product_id.is_none()
-        && matcher.backend.as_deref().map(str::trim).map(str::is_empty).unwrap_or(true)
+        && matcher
+            .backend
+            .as_deref()
+            .map(str::trim)
+            .map(str::is_empty)
+            .unwrap_or(true)
         && matcher
             .name_contains
             .as_deref()

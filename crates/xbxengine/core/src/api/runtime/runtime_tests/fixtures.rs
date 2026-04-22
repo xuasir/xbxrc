@@ -281,7 +281,7 @@ impl XbxEngineInputBackend for TestInputBackend {
         Ok(XbxEngineInputStatus {
             device_count: 2,
             pad_count: 1,
-            route_attached: true,
+            stream_input_active: true,
         })
     }
 
@@ -294,7 +294,7 @@ impl XbxEngineInputBackend for TestInputBackend {
         Ok(XbxEngineInputStatus {
             device_count: 2,
             pad_count: 1,
-            route_attached: true,
+            stream_input_active: true,
         })
     }
 
@@ -302,7 +302,7 @@ impl XbxEngineInputBackend for TestInputBackend {
         Ok(XbxEngineInputStatus {
             device_count: 2,
             pad_count: 1,
-            route_attached: self.attached_session_id.is_some(),
+            stream_input_active: self.attached_session_id.is_some(),
         })
     }
 

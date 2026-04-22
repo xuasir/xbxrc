@@ -246,12 +246,12 @@ async fn bind_background_tasks(app_handle: &AppHandle, state: &AppState) -> AppR
                 });
                 let _ = gamepad_events::emit_runtime_snapshot(&app_handle_gamepad, &snapshot_value);
 
-                for pad in &snapshot.pads {
-                    let pad_value = serde_json::to_value(pad).unwrap_or_else(|e| {
-                        log::warn!("Failed to serialize gamepad pad snapshot: {}", e);
+                for slot in &snapshot.slots {
+                    let slot_value = serde_json::to_value(slot).unwrap_or_else(|e| {
+                        log::warn!("Failed to serialize gamepad slot snapshot: {}", e);
                         serde_json::json!({})
                     });
-                    let _ = gamepad_events::emit_pad_snapshot(&app_handle_gamepad, &pad_value);
+                    let _ = gamepad_events::emit_slot_snapshot(&app_handle_gamepad, &slot_value);
                 }
 
                 let devices_value = serde_json::to_value(&snapshot.devices).unwrap_or_else(|e| {
@@ -259,13 +259,6 @@ async fn bind_background_tasks(app_handle: &AppHandle, state: &AppState) -> AppR
                     serde_json::json!([])
                 });
                 let _ = gamepad_events::emit_devices_changed(&app_handle_gamepad, &devices_value);
-
-                let route_value =
-                    serde_json::to_value(&snapshot.route_target).unwrap_or_else(|e| {
-                        log::warn!("Failed to serialize gamepad route target: {}", e);
-                        serde_json::json!({})
-                    });
-                let _ = gamepad_events::emit_route_changed(&app_handle_gamepad, &route_value);
             } else {
                 break;
             }

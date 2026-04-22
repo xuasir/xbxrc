@@ -8,7 +8,7 @@ use std::{
 };
 
 use ohmygamepad_protocol::{
-    LogicalPadBindingDto, OhMyGamepadRouteTargetDto, OhMyGamepadRuntimeSnapshotDto,
+    LogicalPadBindingDto, OhMyGamepadInputPolicyDto, OhMyGamepadRuntimeSnapshotDto,
     OhMyGamepadSamplingConfigDto,
 };
 
@@ -81,8 +81,8 @@ enum RuntimeCommand {
     GetRuntimeSnapshot {
         reply_tx: Sender<OhMyGamepadRuntimeSnapshotDto>,
     },
-    SetRouteTarget {
-        target: OhMyGamepadRouteTargetDto,
+    SetInputPolicy {
+        policy: OhMyGamepadInputPolicyDto,
     },
     UpdateSampling {
         sampling: OhMyGamepadSamplingConfigDto,
@@ -125,12 +125,12 @@ impl InputRuntimeHandle {
             .map_err(|_| InputRuntimeError::ResponseChannelClosed)
     }
 
-    pub fn set_route_target(
+    pub fn set_input_policy(
         &self,
-        target: OhMyGamepadRouteTargetDto,
+        policy: OhMyGamepadInputPolicyDto,
     ) -> Result<(), InputRuntimeError> {
         self.command_tx
-            .send(RuntimeCommand::SetRouteTarget { target })
+            .send(RuntimeCommand::SetInputPolicy { policy })
             .map_err(|_| InputRuntimeError::CommandChannelClosed)
     }
 
@@ -347,8 +347,8 @@ where
             let _ = reply_tx.send(core.runtime_snapshot());
             false
         }
-        RuntimeCommand::SetRouteTarget { target } => {
-            core.replace_route_target(target);
+        RuntimeCommand::SetInputPolicy { policy } => {
+            core.replace_input_policy(policy);
             snapshot_broadcaster.publish(core.runtime_snapshot());
             false
         }
@@ -362,7 +362,7 @@ where
             let mut bindings = core.config().bindings.clone();
             if let Some(index) = bindings
                 .iter()
-                .position(|item| item.pad_id == binding.pad_id)
+                .position(|item| item.slot == binding.slot)
             {
                 bindings[index] = binding;
             } else {

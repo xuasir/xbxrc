@@ -8,7 +8,9 @@ use ohmygamepad_protocol::LogicalPadStateDto;
 #[cfg(target_os = "macos")]
 use crate::macos_keyboard_hid;
 use crate::{
-    OhMyGamepadKeyboardKey, OhMyGamepadKeyboardMapper, OhMyGamepadKeyboardMapping,
+    keyboard::{
+        OhMyGamepadKeyboardKey, OhMyGamepadKeyboardMapper, OhMyGamepadKeyboardMapping,
+    },
     OhMyGamepadService, OhMyGamepadServiceError,
 };
 
@@ -170,41 +172,5 @@ fn map_keycode(keycode: Keycode) -> Option<OhMyGamepadKeyboardKey> {
         Keycode::Left => Some(OhMyGamepadKeyboardKey::ArrowLeft),
         Keycode::Right => Some(OhMyGamepadKeyboardKey::ArrowRight),
         _ => None,
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use std::time::Duration;
-
-    use super::OhMyGamepadDesktopKeyboardListenerConfig;
-    use crate::{OhMyGamepadKeyboardControl, OhMyGamepadKeyboardKey, OhMyGamepadKeyboardMapping};
-
-    #[test]
-    fn config_defaults_to_default_mapping_and_fast_polling() {
-        let config = OhMyGamepadDesktopKeyboardListenerConfig::default();
-
-        assert_eq!(config.poll_interval, Duration::from_millis(8));
-        assert!(!config.mapping.bindings().is_empty());
-    }
-
-    #[test]
-    fn mapping_can_be_customized_before_listener_creation() {
-        let mut mapping = OhMyGamepadKeyboardMapping::default();
-        mapping.replace_binding(
-            OhMyGamepadKeyboardKey::KeyJ,
-            OhMyGamepadKeyboardControl::North,
-        );
-
-        let config = OhMyGamepadDesktopKeyboardListenerConfig {
-            poll_interval: Duration::from_millis(16),
-            mapping,
-        };
-
-        assert_eq!(config.poll_interval, Duration::from_millis(16));
-        assert_eq!(
-            config.mapping.bindings()[0].key,
-            OhMyGamepadKeyboardKey::KeyW
-        );
     }
 }

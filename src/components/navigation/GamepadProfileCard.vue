@@ -20,32 +20,33 @@ const emit = defineEmits<{
 const { t } = useI18n()
 
 const connectedDevices = computed(() => props.snapshot?.devices.filter(device => device.connected) ?? [])
+const defaultDeviceId = computed(() => props.snapshot?.haptics.defaultDeviceId ?? null)
 
 const showCapabilitySummary = computed(() => {
   return connectedDevices.value.some((device) => {
-    const caps = device.effectiveCapabilities
-    return caps.basicRumble || caps.advancedHaptics || caps.battery
+    const caps = device.sdl3Capabilities
+    return caps.supportsRumble || caps.supportsTriggerRumble || caps.reportsBattery
   })
 })
 
 const capabilitySummaryKey = computed(() => {
-  const hasBasic = connectedDevices.value.some(device => device.effectiveCapabilities.basicRumble)
-  const hasAdvanced = connectedDevices.value.some(device => device.effectiveCapabilities.advancedHaptics)
-  const hasBattery = connectedDevices.value.some(device => device.effectiveCapabilities.battery)
+  const hasBasic = connectedDevices.value.some(device => device.sdl3Capabilities.supportsRumble)
+  const hasTrigger = connectedDevices.value.some(device => device.sdl3Capabilities.supportsTriggerRumble)
+  const hasBattery = connectedDevices.value.some(device => device.sdl3Capabilities.reportsBattery)
 
-  if (hasBasic && hasAdvanced && hasBattery) {
+  if (hasBasic && hasTrigger && hasBattery) {
     return 'gamepadCard.capabilitySummary.basicAdvancedBattery'
   }
-  if (hasBasic && hasAdvanced) {
+  if (hasBasic && hasTrigger) {
     return 'gamepadCard.capabilitySummary.basicAdvanced'
   }
-  if (hasAdvanced && hasBattery) {
+  if (hasTrigger && hasBattery) {
     return 'gamepadCard.capabilitySummary.advancedBattery'
   }
   if (hasBasic && hasBattery) {
     return 'gamepadCard.capabilitySummary.basicBattery'
   }
-  if (hasAdvanced) {
+  if (hasTrigger) {
     return 'gamepadCard.capabilitySummary.advancedOnly'
   }
   if (hasBasic) {
@@ -160,7 +161,7 @@ function formatConnection(connection: string | null): string {
                     </p>
                   </div>
                   <span
-                    v-if="device.isDefaultTarget"
+                    v-if="defaultDeviceId === device.deviceId"
                     class="gamepad-card__device-badge"
                   >
                     {{ t('gamepadCard.defaultBadge') }}

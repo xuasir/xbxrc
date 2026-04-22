@@ -1,13 +1,12 @@
-use crate::LogicalPadId;
+use crate::GamepadSlotDto;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(tag = "kind", rename_all = "kebab-case")]
 pub enum OhMyGamepadRumbleTargetDto {
     Auto,
-    LogicalPad {
-        #[serde(rename = "padId")]
-        pad_id: LogicalPadId,
+    Slot {
+        slot: GamepadSlotDto,
     },
     Device {
         #[serde(rename = "deviceId")]

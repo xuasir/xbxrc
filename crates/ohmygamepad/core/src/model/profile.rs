@@ -166,11 +166,20 @@ mod tests {
             connection: None,
             vendor_id: Some(0x045e),
             product_id: Some(0x0b13),
+            product_version: None,
+            firmware_version: None,
+            serial_number: None,
+            path: None,
+            mapping: None,
+            player_index: None,
+            gamepad_type: None,
+            power_state: None,
+            battery_percent: None,
+            touchpad_count: None,
+            touchpad_finger_count: None,
             connected: true,
             last_seen_at_ms: 0,
-            capabilities: OhMyGamepadCapabilityFlagsDto::default(),
-            effective_capabilities: OhMyGamepadCapabilityFlagsDto::default(),
-            is_default_target: false,
+            sdl3_capabilities: OhMyGamepadCapabilityFlagsDto::default(),
         }
     }
 

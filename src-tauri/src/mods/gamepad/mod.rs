@@ -5,10 +5,9 @@ pub mod service;
 pub use service::GamepadService;
 
 use ohmygamepad_protocol::{
-    LogicalPadBindingDto, MultiControllerSamplingStrategyDto, OhMyGamepadRouteTargetDto,
-    OhMyGamepadKeyboardMappingDto,
-    OhMyGamepadRumbleRequestDto, OhMyGamepadRumbleResultDto, OhMyGamepadRumbleTargetDto,
-    OhMyGamepadRuntimeSnapshotDto, OhMyGamepadSamplingConfigDto,
+    MultiControllerSamplingStrategyDto, OhMyGamepadInputPolicyDto, OhMyGamepadKeyboardMappingDto,
+    OhMyGamepadRumbleRequestDto, OhMyGamepadRumbleResultDto,
+    OhMyGamepadRumbleTargetDto, OhMyGamepadRuntimeSnapshotDto, OhMyGamepadSamplingConfigDto,
 };
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -79,17 +78,13 @@ pub struct GamepadFilterConfigDto {
 
 pub trait GamepadProvider: Send + Sync {
     fn get_runtime_snapshot(&self) -> Result<OhMyGamepadRuntimeSnapshotDto, String>;
-    fn set_route_target(
+    fn set_input_policy(
         &self,
-        target: OhMyGamepadRouteTargetDto,
+        policy: OhMyGamepadInputPolicyDto,
     ) -> Result<OhMyGamepadRuntimeSnapshotDto, String>;
     fn update_sampling(
         &self,
         sampling: OhMyGamepadSamplingConfigDto,
-    ) -> Result<OhMyGamepadRuntimeSnapshotDto, String>;
-    fn rebind_logical_pad(
-        &self,
-        binding: LogicalPadBindingDto,
     ) -> Result<OhMyGamepadRuntimeSnapshotDto, String>;
     fn set_sampling_strategy(
         &self,

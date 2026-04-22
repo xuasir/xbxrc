@@ -1,4 +1,5 @@
 import { events } from '../../services/events'
+import { rpc } from '../../services/rpc'
 import { setLastActivePadId } from './haptics'
 import { inputDispatcher, NavigationIntent } from './input'
 
@@ -15,36 +16,39 @@ interface GamepadState {
 class GamepadUIListener {
   private dispose: (() => void) | null = null
   private state: Record<string, GamepadState> = {}
+  private inputPolicy: 'shared' | 'ui-only' | 'stream-only' = 'shared'
 
   start() {
     if (this.dispose)
       return
 
-    this.dispose = events.on('gamepad.padSnapshot', (snapshot) => {
-      // 只有路由目标为 shell-ui 时才处理导航
-      if (snapshot.routeTarget.kind !== 'shell-ui') {
+    void rpc.gamepad.getRuntimeSnapshot().then((snapshot) => {
+      this.inputPolicy = snapshot.inputPolicy
+    }).catch(() => {})
+
+    const disposeRuntime = events.on('gamepad.runtimeSnapshot', (snapshot) => {
+      this.inputPolicy = snapshot.inputPolicy
+    })
+
+    this.dispose = events.on('gamepad.slotSnapshot', (snapshot) => {
+      if (this.inputPolicy === 'stream-only') {
         return
       }
 
-      const padId = snapshot.padId
-      setLastActivePadId(padId)
-      if (!this.state[padId]) {
-        this.state[padId] = {
+      const slotId = snapshot.slot
+      setLastActivePadId(slotId)
+      if (!this.state[slotId]) {
+        this.state[slotId] = {
           lastPressed: {},
           repeating: {},
           comboPressed: {},
         }
       }
 
-      const state = this.state[padId]
+      const state = this.state[slotId]
       const buttons = snapshot.state.buttons
       const now = Date.now()
       this.checkCombo(state, 'menu-view-toggle', buttons.menu > 0.5 && buttons.view > 0.5)
-
-      // 仅在 shell-ui 路由下处理导航意图；组合键在任意路由都要生效。
-      if (snapshot.routeTarget.kind !== 'shell-ui') {
-        return
-      }
 
       // Map LogicalButtonsStateDto to NavigationIntent
       this.checkButton(now, state, 'south', buttons.south > 0.5, NavigationIntent.Action)
@@ -69,6 +73,12 @@ class GamepadUIListener {
       this.checkAxis(now, state, 'ls-up', leftStick.y < -STICK_DEADZONE, NavigationIntent.Up)
       this.checkAxis(now, state, 'ls-down', leftStick.y > STICK_DEADZONE, NavigationIntent.Down)
     })
+
+    const disposePad = this.dispose
+    this.dispose = () => {
+      disposeRuntime()
+      disposePad?.()
+    }
   }
 
   stop() {

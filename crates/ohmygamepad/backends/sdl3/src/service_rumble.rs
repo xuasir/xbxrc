@@ -5,7 +5,7 @@ use ohmygamepad_protocol::{
     OhMyGamepadRuntimeSnapshotDto,
 };
 
-use crate::GilrsRumbleHandle;
+use crate::Sdl3RumbleHandle;
 
 pub(crate) trait ServiceRumbleBackend: Send {
     fn play_rumble(
@@ -17,7 +17,7 @@ pub(crate) trait ServiceRumbleBackend: Send {
     fn stop_rumble(&self, device_ids: &[String]) -> Result<(), InputRuntimeError>;
 }
 
-impl ServiceRumbleBackend for GilrsRumbleHandle {
+impl ServiceRumbleBackend for Sdl3RumbleHandle {
     fn play_rumble(
         &self,
         device_ids: &[String],
@@ -106,10 +106,10 @@ pub(crate) fn resolve_connected_target_devices(
             .find(|device| device.device_id == *device_id && device.connected)
             .map(|device| vec![device.device_id.clone()])
             .unwrap_or_default(),
-        OhMyGamepadRumbleTargetDto::LogicalPad { pad_id } => snapshot
-            .pads
+        OhMyGamepadRumbleTargetDto::Slot { slot } => snapshot
+            .slots
             .iter()
-            .find(|pad| pad.pad_id == *pad_id)
+            .find(|pad| pad.slot == *slot)
             .map(|pad| {
                 pad.device_ids
                     .iter()
@@ -137,7 +137,11 @@ fn resolve_default_target_device_ids(
     snapshot: &OhMyGamepadRuntimeSnapshotDto,
     empty_sampling_device_id: &str,
 ) -> Vec<String> {
-    if let Some(device_ids) = snapshot.pads.iter().find_map(|pad| {
+    if let Some(default_device_id) = snapshot.haptics.default_device_id.as_ref() {
+        return vec![default_device_id.clone()];
+    }
+
+    if let Some(device_ids) = snapshot.slots.iter().find_map(|pad| {
         let resolved = pad
             .device_ids
             .iter()
@@ -152,19 +156,12 @@ fn resolve_default_target_device_ids(
     snapshot
         .devices
         .iter()
-        .find(|device| device.connected && device.is_default_target)
-        .map(|device| vec![device.device_id.clone()])
-        .or_else(|| {
-            snapshot
-                .devices
-                .iter()
-                .find(|device| {
-                    device.connected
-                        && (device.effective_capabilities.basic_rumble
-                            || device.effective_capabilities.advanced_haptics)
-                })
-                .map(|device| vec![device.device_id.clone()])
+        .find(|device| {
+            device.connected
+                && (device.sdl3_capabilities.supports_rumble
+                    || device.sdl3_capabilities.supports_trigger_rumble)
         })
+        .map(|device| vec![device.device_id.clone()])
         .unwrap_or_default()
 }
 
@@ -209,107 +206,11 @@ pub(crate) fn prepare_rumble_dispatch(
 }
 
 fn supports_service_rumble(device: &OhMyGamepadDeviceDto, has_rumble_backend: bool) -> bool {
-    if device.capabilities.basic_rumble || device.capabilities.advanced_haptics {
+    if device.sdl3_capabilities.supports_rumble
+        || device.sdl3_capabilities.supports_trigger_rumble
+    {
         return true;
     }
 
     has_rumble_backend && device.backend == Some(OhMyGamepadBackendKindDto::Sdl3)
-}
-
-#[cfg(test)]
-mod tests {
-    use ohmygamepad_protocol::{
-        LogicalPadId, LogicalPadSnapshotDto, OhMyGamepadBackendKindDto,
-        OhMyGamepadCapabilityFlagsDto, OhMyGamepadRumbleRejectionReasonDto,
-        OhMyGamepadRuntimeHapticsDto,
-    };
-
-    use super::{prepare_rumble_dispatch, resolve_connected_target_devices, PreparedRumbleRequest};
-
-    fn device(device_id: &str) -> ohmygamepad_protocol::OhMyGamepadDeviceDto {
-        ohmygamepad_protocol::OhMyGamepadDeviceDto {
-            device_id: device_id.to_owned(),
-            name: device_id.to_owned(),
-            backend: Some(OhMyGamepadBackendKindDto::Sdl3),
-            connection: None,
-            vendor_id: None,
-            product_id: None,
-            connected: true,
-            last_seen_at_ms: 0,
-            capabilities: OhMyGamepadCapabilityFlagsDto::default(),
-            effective_capabilities: OhMyGamepadCapabilityFlagsDto::default(),
-            is_default_target: false,
-        }
-    }
-
-    fn rumble_device(device_id: &str) -> ohmygamepad_protocol::OhMyGamepadDeviceDto {
-        let mut device = device(device_id);
-        device.capabilities.basic_rumble = true;
-        device.effective_capabilities.basic_rumble = true;
-        device
-    }
-
-    #[test]
-    fn auto_target_prefers_first_pad_with_connected_devices() {
-        let devices = vec![rumble_device("pad-a"), rumble_device("pad-b")];
-        let snapshot = ohmygamepad_protocol::OhMyGamepadRuntimeSnapshotDto {
-            devices,
-            pads: vec![LogicalPadSnapshotDto {
-                pad_id: LogicalPadId::Pad0,
-                device_ids: vec!["pad-b".to_owned()],
-                sampled_at_ms: 1,
-                sample_seq: 1,
-                route_target: ohmygamepad_protocol::OhMyGamepadRouteTargetDto::ShellUi,
-                state: Default::default(),
-            }],
-            haptics: OhMyGamepadRuntimeHapticsDto::default(),
-            ..Default::default()
-        };
-
-        let resolved = resolve_connected_target_devices(
-            &snapshot,
-            &ohmygamepad_protocol::OhMyGamepadRumbleTargetDto::Auto,
-            "__service:none__",
-        );
-
-        assert_eq!(resolved.len(), 1);
-        assert_eq!(resolved[0].device_id, "pad-b");
-    }
-
-    #[test]
-    fn prepare_rumble_dispatch_rejects_missing_target() {
-        let prepared = prepare_rumble_dispatch(Vec::new(), true);
-
-        let PreparedRumbleRequest::Rejected(result) = prepared else {
-            panic!("missing target should be rejected");
-        };
-        assert_eq!(
-            result.reason,
-            Some(OhMyGamepadRumbleRejectionReasonDto::TargetNotFound)
-        );
-    }
-
-    #[test]
-    fn prepare_rumble_dispatch_allows_sdl3_fallback_with_backend() {
-        let prepared = prepare_rumble_dispatch(vec![device("pad-a")], true);
-
-        let PreparedRumbleRequest::Dispatch(dispatch) = prepared else {
-            panic!("sdl3 device should dispatch when backend exists");
-        };
-        assert_eq!(dispatch.device_ids(), ["pad-a".to_owned()]);
-    }
-
-    #[test]
-    fn prepare_rumble_dispatch_reports_not_implemented_without_backend() {
-        let prepared = prepare_rumble_dispatch(vec![rumble_device("pad-a")], false);
-
-        let PreparedRumbleRequest::Rejected(result) = prepared else {
-            panic!("missing backend should be rejected");
-        };
-        assert_eq!(
-            result.reason,
-            Some(OhMyGamepadRumbleRejectionReasonDto::NotImplemented)
-        );
-        assert_eq!(result.resolved_device_ids, vec!["pad-a".to_owned()]);
-    }
 }

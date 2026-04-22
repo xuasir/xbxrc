@@ -1,6 +1,6 @@
 use ohmygamepad_host::{GamepadRuntimeHost, GamepadRuntimeHostError};
 use ohmygamepad_protocol::{
-    LogicalButtonsStateDto, LogicalPadStateDto, OhMyGamepadRouteTargetDto,
+    LogicalButtonsStateDto, LogicalPadStateDto, OhMyGamepadInputPolicyDto,
     OhMyGamepadSamplingConfigDto, OhMyGamepadStreamPushModeDto,
 };
 use std::time::Duration;
@@ -16,7 +16,7 @@ const XBXENGINE_INPUT_STREAM_PUSH_RATE_HZ: u16 = 120;
 pub struct XbxEngineInputStatus {
     pub device_count: usize,
     pub pad_count: usize,
-    pub route_attached: bool,
+    pub stream_input_active: bool,
 }
 
 pub trait XbxEngineInputBackend: Send {
@@ -96,12 +96,11 @@ impl XbxEngineInputBackend for OhMyGamepadXbxEngineInputBackend {
     ) -> Result<XbxEngineInputStatus, XbxEngineRuntimeError> {
         let host = self.ensure_host()?;
         Self::ensure_stream_sampling(host)?;
-        host.set_route_target(OhMyGamepadRouteTargetDto::StreamSession {
-            session_id: session_id.to_owned(),
-        })
+        host.set_input_policy(OhMyGamepadInputPolicyDto::StreamOnly)
         .map_err(|error| {
-            XbxEngineRuntimeError::new(format!("setOhMyGamepadRouteTarget:{error:?}"))
+            XbxEngineRuntimeError::new(format!("setOhMyGamepadInputPolicy:{error:?}"))
         })?;
+        let _ = session_id;
         self.snapshot_status()
     }
 
@@ -133,19 +132,16 @@ impl XbxEngineInputBackend for OhMyGamepadXbxEngineInputBackend {
         })?;
         Ok(XbxEngineInputStatus {
             device_count: snapshot.devices.len(),
-            pad_count: snapshot.pads.len(),
-            route_attached: matches!(
-                snapshot.route_target,
-                OhMyGamepadRouteTargetDto::StreamSession { .. }
-            ),
+            pad_count: snapshot.slots.len(),
+            stream_input_active: snapshot.input_policy == OhMyGamepadInputPolicyDto::StreamOnly,
         })
     }
 
     fn stop(&mut self) -> Result<(), XbxEngineRuntimeError> {
         if let Some(host) = self.host.take() {
-            host.set_route_target(OhMyGamepadRouteTargetDto::ShellUi)
+            host.set_input_policy(OhMyGamepadInputPolicyDto::Shared)
                 .map_err(|error| {
-                    XbxEngineRuntimeError::new(format!("resetOhMyGamepadRouteTarget:{error:?}"))
+                    XbxEngineRuntimeError::new(format!("resetOhMyGamepadInputPolicy:{error:?}"))
                 })?;
         }
         Ok(())

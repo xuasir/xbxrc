@@ -3,13 +3,13 @@ use std::{
     sync::mpsc::{Receiver, TryRecvError},
 };
 
-use crate::{service_keyboard::ServiceKeyboardFallbackGate, GilrsInputEvent, GilrsSource};
+use crate::{service_keyboard::ServiceKeyboardFallbackGate, Sdl3InputEvent, Sdl3Source};
 
 #[derive(Debug)]
 pub(crate) struct OhMyGamepadServiceSource<TPhysical> {
     physical_source: TPhysical,
-    command_rx: Receiver<Vec<GilrsInputEvent>>,
-    pending_events: VecDeque<GilrsInputEvent>,
+    command_rx: Receiver<Vec<Sdl3InputEvent>>,
+    pending_events: VecDeque<Sdl3InputEvent>,
     keyboard_fallback_gate: ServiceKeyboardFallbackGate,
     now_ms: fn() -> u64,
 }
@@ -17,7 +17,7 @@ pub(crate) struct OhMyGamepadServiceSource<TPhysical> {
 impl<TPhysical> OhMyGamepadServiceSource<TPhysical> {
     pub(crate) fn new(
         physical_source: TPhysical,
-        command_rx: Receiver<Vec<GilrsInputEvent>>,
+        command_rx: Receiver<Vec<Sdl3InputEvent>>,
         keyboard_fallback_enabled: bool,
         now_ms: fn() -> u64,
     ) -> Self {
@@ -53,11 +53,11 @@ impl<TPhysical> OhMyGamepadServiceSource<TPhysical> {
     }
 }
 
-impl<TPhysical> GilrsSource for OhMyGamepadServiceSource<TPhysical>
+impl<TPhysical> Sdl3Source for OhMyGamepadServiceSource<TPhysical>
 where
-    TPhysical: GilrsSource,
+    TPhysical: Sdl3Source,
 {
-    fn next_event(&mut self) -> Option<GilrsInputEvent> {
+    fn next_event(&mut self) -> Option<Sdl3InputEvent> {
         self.enqueue_command_events();
         if let Some(event) = self.pending_events.pop_front() {
             return Some(event);

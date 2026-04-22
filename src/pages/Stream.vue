@@ -102,7 +102,7 @@ const {
   closeSheet,
 } = pageActions
 
-// 精细化管理手柄输入路由：当 UI 覆盖层打开时路由至 shell-ui；关闭后切回 stream-session。
+// 精细化管理手柄输入策略：当 UI 覆盖层打开时切到 ui-only；关闭后切回 stream-only。
 useGamepadRouteForStreamOverlay({
   isAnyOverlayOpen: computed(() =>
     isMenuSheetOpen.value
@@ -115,12 +115,10 @@ useGamepadRouteForStreamOverlay({
   sessionId: execution.sessionId,
   applyRouteTarget: async (target) => {
     if (target.kind === 'shell-ui') {
-      await rpc.gamepad.setRouteTarget({ target: { kind: 'shell-ui' } })
+      await rpc.gamepad.setInputPolicy({ policy: 'ui-only' })
       return
     }
-    await rpc.gamepad.setRouteTarget({
-      target: { kind: 'stream-session', sessionId: target.sessionId },
-    })
+    await rpc.gamepad.setInputPolicy({ policy: 'stream-only' })
   },
 })
 

@@ -141,7 +141,7 @@ pub(crate) fn build_input_stream_packet(
     }
 
     for frame in frames {
-        packet.push(logical_pad_index(&frame.pad_id));
+        packet.push(logical_pad_index(&frame.slot));
         packet.extend_from_slice(&gamepad_button_mask(&frame.state).to_le_bytes());
         packet.extend_from_slice(&normalize_axis(frame.state.left_stick.x).to_le_bytes());
         packet.extend_from_slice(&normalize_axis(frame.state.left_stick.y).to_le_bytes());

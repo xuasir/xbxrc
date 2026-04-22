@@ -230,7 +230,7 @@ impl XbxEngineMediaBackend for XbxNegotiationBackend {
     }
 
     fn request_video_keyframe(&mut self) -> Result<(), XbxEngineRuntimeError> {
-        self.stack.request_video_keyframe()
+        self.stack.request_video_pli()
     }
 
     fn request_decoder_reset(&mut self) -> Result<(), XbxEngineRuntimeError> {

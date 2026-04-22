@@ -1,8 +1,9 @@
 use std::collections::{HashMap, HashSet};
 
 use ohmygamepad_protocol::{
-    LogicalPadBindingDto, LogicalPadId, LogicalPadSnapshotDto, OhMyGamepadBindingModeDto,
-    OhMyGamepadDeviceDto, OhMyGamepadRouteTargetDto, OhMyGamepadRuntimeHapticsDto,
+    GamepadSlotBindingDto, GamepadSlotSnapshotDto, LogicalPadBindingDto,
+    LogicalPadId, LogicalPadSnapshotDto, OhMyGamepadBindingModeDto, OhMyGamepadDeviceDto,
+    OhMyGamepadInputPolicyDto, OhMyGamepadRuntimeHapticsDto,
     OhMyGamepadRuntimeSnapshotDto, OhMyGamepadSamplingConfigDto,
 };
 
@@ -58,10 +59,20 @@ where
     pub fn runtime_snapshot(&self) -> OhMyGamepadRuntimeSnapshotDto {
         OhMyGamepadRuntimeSnapshotDto {
             devices: self.devices.clone(),
-            bindings: self.config.bindings.clone(),
-            route_target: self.config.route_target.clone(),
+            slot_bindings: self
+                .config
+                .bindings
+                .iter()
+                .cloned()
+                .map(|binding| GamepadSlotBindingDto {
+                    slot: binding.slot,
+                    mode: binding.mode,
+                    device_ids: binding.device_ids,
+                })
+                .collect(),
+            input_policy: self.config.input_policy,
             sampling: self.config.sampling.clone(),
-            pads: self.pads.clone(),
+            slots: self.pads.clone(),
             haptics: OhMyGamepadRuntimeHapticsDto::default(),
         }
     }
@@ -70,8 +81,8 @@ where
         self.config.sampling = sampling;
     }
 
-    pub fn replace_route_target(&mut self, route_target: OhMyGamepadRouteTargetDto) {
-        self.config.route_target = route_target;
+    pub fn replace_input_policy(&mut self, input_policy: OhMyGamepadInputPolicyDto) {
+        self.config.input_policy = input_policy;
         self.sample_once();
     }
 
@@ -104,7 +115,7 @@ where
         if let Some(existing) = self
             .pads
             .iter_mut()
-            .find(|current| current.pad_id == snapshot.pad_id)
+            .find(|current| current.slot == snapshot.slot)
         {
             *existing = snapshot.clone();
         } else {
@@ -115,7 +126,7 @@ where
     }
 
     pub fn pad_snapshot(&self, pad_id: LogicalPadId) -> Option<&LogicalPadSnapshotDto> {
-        self.pads.iter().find(|snapshot| snapshot.pad_id == pad_id)
+        self.pads.iter().find(|snapshot| snapshot.slot == pad_id)
     }
 
     pub fn reset_state(&mut self) {
@@ -195,17 +206,17 @@ where
         for binding in &bindings {
             let selected_device_ids =
                 self.resolve_binding_device_ids(binding, &mut reserved_split_devices);
-            let snapshot = self.build_pad_snapshot(binding.pad_id, selected_device_ids);
+            let snapshot = self.build_pad_snapshot(binding.slot, selected_device_ids);
             next_pads.push(snapshot);
         }
 
-        next_pads.sort_by_key(|snapshot| pad_order(snapshot.pad_id));
+        next_pads.sort_by_key(|snapshot| pad_order(snapshot.slot));
 
         for snapshot in &next_pads {
             let changed = self
                 .pads
                 .iter()
-                .find(|current| current.pad_id == snapshot.pad_id)
+                .find(|current| current.slot == snapshot.slot)
                 .map(|current| pad_payload_changed(current, snapshot))
                 .unwrap_or(true);
             if changed {
@@ -220,14 +231,14 @@ where
     fn effective_bindings(&self) -> Vec<LogicalPadBindingDto> {
         let mut bindings = if self.config.bindings.is_empty() {
             vec![LogicalPadBindingDto {
-                pad_id: LogicalPadId::Pad0,
+                slot: LogicalPadId::Pad0,
                 mode: OhMyGamepadBindingModeDto::SingleActive,
                 device_ids: Vec::new(),
             }]
         } else {
             self.config.bindings.clone()
         };
-        bindings.sort_by_key(|binding| pad_order(binding.pad_id));
+        bindings.sort_by_key(|binding| pad_order(binding.slot));
         bindings
     }
 
@@ -241,7 +252,7 @@ where
 
         match binding.mode {
             OhMyGamepadBindingModeDto::SingleActive => self
-                .resolve_single_active_device(binding.pad_id, &candidate_ids)
+                .resolve_single_active_device(binding.slot, &candidate_ids)
                 .into_iter()
                 .collect(),
             OhMyGamepadBindingModeDto::FixedDevice => candidate_ids.into_iter().take(1).collect(),
@@ -258,7 +269,7 @@ where
                 }
             }
             OhMyGamepadBindingModeDto::LastActiveFailover => self
-                .resolve_failover_device(binding.pad_id, &candidate_ids)
+                .resolve_failover_device(binding.slot, &candidate_ids)
                 .into_iter()
                 .collect(),
         }
@@ -316,12 +327,11 @@ where
             .max()
             .unwrap_or(0);
 
-        LogicalPadSnapshotDto {
-            pad_id,
+        GamepadSlotSnapshotDto {
+            slot: pad_id,
             device_ids,
             sampled_at_ms,
             sample_seq: self.sample_seq,
-            route_target: self.config.route_target.clone(),
             state: if states.is_empty() {
                 default_logical_pad_state()
             } else {
@@ -457,7 +467,6 @@ fn pad_order(pad_id: LogicalPadId) -> u8 {
 
 fn pad_payload_changed(left: &LogicalPadSnapshotDto, right: &LogicalPadSnapshotDto) -> bool {
     left.device_ids != right.device_ids
-        || left.route_target != right.route_target
         || left.state != right.state
 }
 

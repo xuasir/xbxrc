@@ -542,7 +542,7 @@
       "unknown": "Unknown"
     },
     "providers": {
-      "gilrsBasic": "gilrs basic",
+      "gilrsBasic": "SDL3 basic",
       "macosGcController": "macOS GameController",
       "windowsXbox": "Windows Xbox",
       "none": "None"
@@ -555,17 +555,17 @@
     },
     "capabilities": {
       "basicRumble": "Basic rumble",
-      "advancedHaptics": "Advanced haptics",
+      "advancedHaptics": "Trigger rumble",
       "battery": "Battery info"
     },
     "capabilitySummary": {
       "basicOnly": "Supports rumble",
-      "advancedOnly": "Supports advanced haptics",
+      "advancedOnly": "Supports trigger rumble",
       "batteryOnly": "Reports battery status",
-      "basicAdvanced": "Supports rumble and advanced haptics",
+      "basicAdvanced": "Supports rumble and trigger rumble",
       "basicBattery": "Supports rumble; reports battery status",
-      "advancedBattery": "Supports advanced haptics; reports battery status",
-      "basicAdvancedBattery": "Supports rumble, advanced haptics, and battery status"
+      "advancedBattery": "Supports trigger rumble; reports battery status",
+      "basicAdvancedBattery": "Supports rumble, trigger rumble, and battery status"
     }
   },
   "setting": {
@@ -604,7 +604,6 @@
         "none": "No haptics available",
         "basic": "Basic rumble",
         "advanced": "Advanced haptics",
-        "autoTarget": "Auto target routing",
         "providerOnly": "Provider available"
       },
       "testRumbleLabel": "Test rumble",
@@ -634,7 +633,7 @@
         "enable": "Enable input debug overlay",
         "disable": "Disable input debug overlay",
         "none": "No button pressed",
-        "summary": "Pad {padId}: {buttons} · {sticks}"
+        "summary": "Slot {slot}: {buttons} · {sticks}"
       }
     },
     "effects": {

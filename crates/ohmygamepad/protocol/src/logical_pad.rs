@@ -1,8 +1,7 @@
-use crate::OhMyGamepadRouteTargetDto;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
-pub enum LogicalPadId {
+pub enum GamepadSlotDto {
     #[default]
     #[serde(rename = "pad-0")]
     Pad0,
@@ -13,6 +12,8 @@ pub enum LogicalPadId {
     #[serde(rename = "pad-3")]
     Pad3,
 }
+
+pub type LogicalPadId = GamepadSlotDto;
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "kebab-case")]
@@ -77,11 +78,12 @@ pub struct LogicalPadStateDto {
 
 #[derive(Clone, Debug, Default, Deserialize, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct LogicalPadSnapshotDto {
-    pub pad_id: LogicalPadId,
+pub struct GamepadSlotSnapshotDto {
+    pub slot: GamepadSlotDto,
     pub device_ids: Vec<String>,
     pub sampled_at_ms: u64,
     pub sample_seq: u64,
-    pub route_target: OhMyGamepadRouteTargetDto,
     pub state: LogicalPadStateDto,
 }
+
+pub type LogicalPadSnapshotDto = GamepadSlotSnapshotDto;

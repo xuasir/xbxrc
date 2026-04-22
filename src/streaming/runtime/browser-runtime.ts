@@ -835,21 +835,15 @@ export function createBrowserRuntime(options: {
   }
 
   async function attachGamepadSession(sessionId: string): Promise<void> {
-    // 浏览器 runtime 只负责切换当前输入路由；
+    // 浏览器 runtime 只负责切换当前输入策略；
     // 键盘 fallback 是否可用由 gamepad 域自己负责。
-    await rpc.gamepad.setRouteTarget({
-      target: {
-        kind: 'stream-session',
-        sessionId,
-      },
-    })
+    void sessionId
+    await rpc.gamepad.setInputPolicy({ policy: 'stream-only' })
   }
 
   async function detachGamepadSession(sessionId: string | null): Promise<void> {
     try {
-      await rpc.gamepad.setRouteTarget({
-        target: { kind: 'shell-ui' },
-      })
+      await rpc.gamepad.setInputPolicy({ policy: 'shared' })
     }
     catch {
       void sessionId

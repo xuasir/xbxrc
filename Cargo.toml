@@ -3,7 +3,6 @@ members = [
   "crates/ohmygamepad/protocol",
   "crates/ohmygamepad/core",
   "crates/ohmygamepad/bridge/host",
-  "crates/ohmygamepad/backends/gilrs",
   "crates/ohmygamepad/backends/sdl3",
   "crates/xbxengine/protocol",
   "crates/xbxengine/core",

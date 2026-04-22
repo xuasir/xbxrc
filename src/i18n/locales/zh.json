@@ -542,7 +542,7 @@
       "unknown": "未知"
     },
     "providers": {
-      "gilrsBasic": "gilrs 基础模式",
+      "gilrsBasic": "SDL3 基础模式",
       "macosGcController": "macOS GameController",
       "windowsXbox": "Windows Xbox",
       "none": "无"
@@ -555,17 +555,17 @@
     },
     "capabilities": {
       "basicRumble": "基础震动",
-      "advancedHaptics": "高级震动",
+      "advancedHaptics": "扳机震动",
       "battery": "电池信息"
     },
     "capabilitySummary": {
       "basicOnly": "支持基础震动",
-      "advancedOnly": "支持高级震动",
+      "advancedOnly": "支持扳机震动",
       "batteryOnly": "提供电池状态",
-      "basicAdvanced": "支持基础震动和高级震动",
+      "basicAdvanced": "支持基础震动和扳机震动",
       "basicBattery": "支持基础震动，并提供电池状态",
-      "advancedBattery": "支持高级震动，并提供电池状态",
-      "basicAdvancedBattery": "支持基础震动、高级震动和电池状态"
+      "advancedBattery": "支持扳机震动，并提供电池状态",
+      "basicAdvancedBattery": "支持基础震动、扳机震动和电池状态"
     }
   },
   "setting": {
@@ -604,7 +604,6 @@
         "none": "当前不可用",
         "basic": "基础震动",
         "advanced": "高级震动",
-        "autoTarget": "自动选择目标手柄",
         "providerOnly": "已提供震动能力"
       },
       "testRumbleLabel": "测试震动",
@@ -634,7 +633,7 @@
         "enable": "开启输入调试视图",
         "disable": "关闭输入调试视图",
         "none": "当前无按键按下",
-        "summary": "逻辑手柄 {padId}：{buttons} · {sticks}"
+        "summary": "槽位 {slot}：{buttons} · {sticks}"
       }
     },
     "effects": {

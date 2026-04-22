@@ -221,14 +221,14 @@ fn runtime_tick_prioritizes_present_before_budgeted_rumble_work() {
     .with_latest_render_frame(render_frame(7, rendered_at_ms))
     .with_pending_gamepad_rumble_requests(vec![
         test_rumble_request(
-            OhMyGamepadRumbleTargetDto::LogicalPad {
-                pad_id: LogicalPadId::Pad0,
+            OhMyGamepadRumbleTargetDto::Slot {
+                slot: LogicalPadId::Pad0,
             },
             0.8,
         ),
         test_rumble_request(
-            OhMyGamepadRumbleTargetDto::LogicalPad {
-                pad_id: LogicalPadId::Pad1,
+            OhMyGamepadRumbleTargetDto::Slot {
+                slot: LogicalPadId::Pad1,
             },
             0.6,
         ),
@@ -288,20 +288,20 @@ fn runtime_tick_submits_backend_rumble_requests_without_runtime_backlog() {
     )
     .with_pending_gamepad_rumble_requests(vec![
         test_rumble_request(
-            OhMyGamepadRumbleTargetDto::LogicalPad {
-                pad_id: LogicalPadId::Pad0,
+            OhMyGamepadRumbleTargetDto::Slot {
+                slot: LogicalPadId::Pad0,
             },
             0.2,
         ),
         test_rumble_request(
-            OhMyGamepadRumbleTargetDto::LogicalPad {
-                pad_id: LogicalPadId::Pad0,
+            OhMyGamepadRumbleTargetDto::Slot {
+                slot: LogicalPadId::Pad0,
             },
             0.9,
         ),
         test_rumble_request(
-            OhMyGamepadRumbleTargetDto::LogicalPad {
-                pad_id: LogicalPadId::Pad1,
+            OhMyGamepadRumbleTargetDto::Slot {
+                slot: LogicalPadId::Pad1,
             },
             0.4,
         ),
@@ -325,22 +325,22 @@ fn runtime_tick_submits_backend_rumble_requests_without_runtime_backlog() {
     assert_eq!(rumble_requests.len(), 3);
     assert_eq!(
         rumble_requests[0].target,
-        OhMyGamepadRumbleTargetDto::LogicalPad {
-            pad_id: LogicalPadId::Pad0,
+        OhMyGamepadRumbleTargetDto::Slot {
+            slot: LogicalPadId::Pad0,
         }
     );
     assert_eq!(rumble_requests[0].effect.strong_magnitude, 0.2);
     assert_eq!(
         rumble_requests[1].target,
-        OhMyGamepadRumbleTargetDto::LogicalPad {
-            pad_id: LogicalPadId::Pad0,
+        OhMyGamepadRumbleTargetDto::Slot {
+            slot: LogicalPadId::Pad0,
         }
     );
     assert_eq!(rumble_requests[1].effect.strong_magnitude, 0.9);
     assert_eq!(
         rumble_requests[2].target,
-        OhMyGamepadRumbleTargetDto::LogicalPad {
-            pad_id: LogicalPadId::Pad1,
+        OhMyGamepadRumbleTargetDto::Slot {
+            slot: LogicalPadId::Pad1,
         }
     );
 }
@@ -791,7 +791,7 @@ fn reconnect_settled_keyframe_is_deferred_when_keyframe_is_already_in_flight() {
     runtime
         .start(session(), viewport(), 1.0, None, None)
         .expect("runtime start should succeed");
-    runtime.snapshot.last_recovery_action = Some("requestKeyframe".to_string());
+    runtime.snapshot.last_recovery_action = Some("requestPli".to_string());
     runtime.snapshot.last_recovery_action_at_ms = Some(
         SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -1058,7 +1058,7 @@ fn start_failure_rolls_back_to_previous_stable_state() {
             input_status: XbxEngineInputStatus {
                 device_count: 1,
                 pad_count: 1,
-                route_attached: true,
+                stream_input_active: true,
             },
         },
         XbxEngineMediaRuntimeStats::default(),

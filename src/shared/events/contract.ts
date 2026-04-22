@@ -1,14 +1,13 @@
 import type { DataXcloudCatalogUpdatedRendererEvent } from './data'
 import type { AuthSessionReadyRendererEvent, AuthStateRendererEvent } from './auth'
-import type { GamepadDevicesChangedRendererEvent, GamepadPadSnapshotRendererEvent, GamepadRouteChangedRendererEvent, GamepadRuntimeSnapshotRendererEvent } from './gamepad'
+import type { GamepadDevicesChangedRendererEvent, GamepadRuntimeSnapshotRendererEvent, GamepadSlotSnapshotRendererEvent } from './gamepad'
 import type { StreamingStartupEventRendererEvent } from './streaming'
 import type { XbxEngineRuntimeEventRendererEvent } from './xbxengine'
 import { DATA_XCLOUD_CATALOG_UPDATED_CHANNEL } from './data'
 import { AUTH_SESSION_READY_CHANNEL, AUTH_STATE_CHANGED_CHANNEL } from './auth'
 import {
   GAMEPAD_DEVICES_CHANGED_CHANNEL,
-  GAMEPAD_PAD_SNAPSHOT_CHANNEL,
-  GAMEPAD_ROUTE_CHANGED_CHANNEL,
+  GAMEPAD_SLOT_SNAPSHOT_CHANNEL,
   GAMEPAD_RUNTIME_SNAPSHOT_CHANNEL,
 
 } from './gamepad'
@@ -24,9 +23,8 @@ export type { DataXcloudCatalogUpdatedRendererEvent } from './data'
 export type { AuthSessionReadyRendererEvent, AuthStateRendererEvent } from './auth'
 export type {
   GamepadDevicesChangedRendererEvent,
-  GamepadPadSnapshotRendererEvent,
-  GamepadRouteChangedRendererEvent,
   GamepadRuntimeSnapshotRendererEvent,
+  GamepadSlotSnapshotRendererEvent,
 } from './gamepad'
 export type { StreamingStartupEventRendererEvent } from './streaming'
 export type { XbxEngineRuntimeEventRendererEvent } from './xbxengine'
@@ -41,8 +39,7 @@ export interface XBoxEventSchema {
   'auth.stateChanged': AuthStateRendererEvent
   'gamepad.runtimeSnapshot': GamepadRuntimeSnapshotRendererEvent
   'gamepad.devicesChanged': GamepadDevicesChangedRendererEvent
-  'gamepad.padSnapshot': GamepadPadSnapshotRendererEvent
-  'gamepad.routeChanged': GamepadRouteChangedRendererEvent
+  'gamepad.slotSnapshot': GamepadSlotSnapshotRendererEvent
   'streaming.startupEvent': StreamingStartupEventRendererEvent
   'streaming.xbxEngineRuntimeEvent': XbxEngineRuntimeEventRendererEvent
 }
@@ -59,8 +56,7 @@ export const EVENT_CHANNEL_MAP: Record<XBoxEventName, string> = {
   'auth.stateChanged': AUTH_STATE_CHANGED_CHANNEL,
   'gamepad.runtimeSnapshot': GAMEPAD_RUNTIME_SNAPSHOT_CHANNEL,
   'gamepad.devicesChanged': GAMEPAD_DEVICES_CHANGED_CHANNEL,
-  'gamepad.padSnapshot': GAMEPAD_PAD_SNAPSHOT_CHANNEL,
-  'gamepad.routeChanged': GAMEPAD_ROUTE_CHANGED_CHANNEL,
+  'gamepad.slotSnapshot': GAMEPAD_SLOT_SNAPSHOT_CHANNEL,
   'streaming.startupEvent': STREAMING_STARTUP_EVENT_CHANNEL,
   'streaming.xbxEngineRuntimeEvent': STREAMING_XBXENGINE_RUNTIME_EVENT_CHANNEL,
 }

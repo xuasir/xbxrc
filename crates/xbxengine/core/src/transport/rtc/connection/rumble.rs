@@ -113,17 +113,17 @@ fn parse_legacy_packet(payload: &[u8]) -> Option<Vec<OhMyGamepadRumbleRequestDto
 
 fn logical_pad_target_from_index(gamepad_index: u8) -> OhMyGamepadRumbleTargetDto {
     match gamepad_index {
-        0 => OhMyGamepadRumbleTargetDto::LogicalPad {
-            pad_id: LogicalPadId::Pad0,
+        0 => OhMyGamepadRumbleTargetDto::Slot {
+            slot: LogicalPadId::Pad0,
         },
-        1 => OhMyGamepadRumbleTargetDto::LogicalPad {
-            pad_id: LogicalPadId::Pad1,
+        1 => OhMyGamepadRumbleTargetDto::Slot {
+            slot: LogicalPadId::Pad1,
         },
-        2 => OhMyGamepadRumbleTargetDto::LogicalPad {
-            pad_id: LogicalPadId::Pad2,
+        2 => OhMyGamepadRumbleTargetDto::Slot {
+            slot: LogicalPadId::Pad2,
         },
-        3 => OhMyGamepadRumbleTargetDto::LogicalPad {
-            pad_id: LogicalPadId::Pad3,
+        3 => OhMyGamepadRumbleTargetDto::Slot {
+            slot: LogicalPadId::Pad3,
         },
         _ => OhMyGamepadRumbleTargetDto::Auto,
     }
@@ -150,8 +150,8 @@ mod tests {
         assert_eq!(requests.len(), 1);
         assert_eq!(
             requests[0].target,
-            OhMyGamepadRumbleTargetDto::LogicalPad {
-                pad_id: LogicalPadId::Pad0,
+            OhMyGamepadRumbleTargetDto::Slot {
+                slot: LogicalPadId::Pad0,
             }
         );
         assert_eq!(requests[0].effect.duration_ms, 64);
@@ -171,8 +171,8 @@ mod tests {
         assert_eq!(requests.len(), 1);
         assert_eq!(
             requests[0].target,
-            OhMyGamepadRumbleTargetDto::LogicalPad {
-                pad_id: LogicalPadId::Pad1,
+            OhMyGamepadRumbleTargetDto::Slot {
+                slot: LogicalPadId::Pad1,
             }
         );
         assert_eq!(requests[0].effect.duration_ms, 10);
