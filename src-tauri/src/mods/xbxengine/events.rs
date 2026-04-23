@@ -91,6 +91,24 @@ pub fn map_runtime_event(event: &XbxEngineRuntimeEventDto) -> Option<Value> {
             // `StatsVideoFrameRendered` 来自 renderer 处理时钟，不代表 host present 完成时间。
             "rendererFrameTimeMs": renderer_frame_time_ms
         })),
+        XbxEngineRuntimeEventDto::FirstFrameLatencyObserved {
+            connected_at_ms,
+            first_packet_at_ms,
+            first_decode_at_ms,
+            first_render_at_ms,
+            from_connected_to_first_render_ms,
+            from_first_packet_to_first_render_ms,
+            from_first_decode_to_first_render_ms,
+        } => Some(json!({
+            "type": "stats.firstFrameLatency",
+            "connectedAtMs": connected_at_ms,
+            "firstPacketAtMs": first_packet_at_ms,
+            "firstDecodeAtMs": first_decode_at_ms,
+            "firstRenderAtMs": first_render_at_ms,
+            "fromConnectedToFirstRenderMs": from_connected_to_first_render_ms,
+            "fromFirstPacketToFirstRenderMs": from_first_packet_to_first_render_ms,
+            "fromFirstDecodeToFirstRenderMs": from_first_decode_to_first_render_ms
+        })),
         XbxEngineRuntimeEventDto::ErrorReported { code, message } => Some(json!({
             "type": "error",
             "code": code,

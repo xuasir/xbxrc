@@ -705,7 +705,7 @@ fn owner_anchor_reason_is_derived_from_timeline_chain_reason_not_recovery_diagno
 }
 
 #[test]
-fn transport_await_request_pli_keeps_rebuilding_supply_in_local_self_healing() {
+fn transport_await_request_pli_keeps_rebuilding_supply_in_active_recovery() {
     let runtime_config = Arc::new(Mutex::new(XbxEngineRuntimeConfig::default()));
     let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
     if let Ok(mut stats) = runtime_stats.lock() {
@@ -771,7 +771,7 @@ fn transport_await_request_pli_keeps_rebuilding_supply_in_local_self_healing() {
     );
     assert_eq!(ledger.action_selected, "requestPli");
     assert_eq!(ledger.gate_result, "pass:localProbe");
-    assert_eq!(ledger.state_after, "local-self-healing");
+    assert_eq!(ledger.state_after, "active-recovery");
 }
 
 #[test]

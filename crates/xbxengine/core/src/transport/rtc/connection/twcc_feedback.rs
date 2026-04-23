@@ -164,6 +164,10 @@ impl ControlledTwccFeedbackController {
         self.twcc_packet_bytes_ledger.clear();
     }
 
+    pub(super) fn feedback_interval_ms(&self) -> u64 {
+        self.feedback_interval.as_millis().max(1) as u64
+    }
+
     pub(super) fn register_track_open(
         &mut self,
         track_id: &MediaStreamTrackId,

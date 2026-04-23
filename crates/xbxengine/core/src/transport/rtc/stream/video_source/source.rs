@@ -41,6 +41,7 @@ const WAITING_KEYFRAME_CONTINUATION_WINDOW_MS: f64 = 120.0;
 const WAITING_KEYFRAME_CONTINUATION_MAX_FRAMES: u32 = 3;
 const OOS_ACTIVITY_COOLDOWN_MS: f64 = 30_000.0;
 const OOS_DEPTH_WINDOW_CAPACITY: usize = 64;
+const OOS_SKIP_LAST_N_REFRESH_INTERVAL_MS: f64 = 200.0;
 const FRAME_OOS_TRACK_CAPACITY: usize = 64;
 const HEAD_MISSING_ACTIVITY_COOLDOWN_MS: f64 = 30_000.0;
 const FRAME_PLAYOUT_BASE_TRACK_CAPACITY: usize = 96;
@@ -449,13 +450,6 @@ impl RtcVideoFrameSource {
         self.frame_first_packet_sequences
             .remove(index)
             .map(|(_, sequence)| sequence)
-    }
-
-    fn frame_first_packet_sequence(&self, rtp_timestamp: u32) -> Option<u16> {
-        self.frame_first_packet_sequences
-            .iter()
-            .find(|(timestamp, _)| *timestamp == rtp_timestamp)
-            .map(|(_, sequence)| *sequence)
     }
 
     fn response_oos_depth_p75(&self) -> Option<u16> {
@@ -1142,7 +1136,7 @@ impl RtcVideoFrameSource {
                     self.recent_oos_depths.pop_front();
                 }
                 self.recent_oos_depths.push_back(distance);
-                self.update_dynamic_nack_skip_last_n();
+                self.update_dynamic_nack_skip_last_n(now_ms);
             }
             if self.oos_event_count == 1 || self.oos_event_count.is_power_of_two() {
                 crate::xbx_log_info!(
@@ -1168,20 +1162,33 @@ impl RtcVideoFrameSource {
         }
     }
 
-    fn update_dynamic_nack_skip_last_n(&mut self) {
+    fn update_dynamic_nack_skip_last_n(&mut self, now_ms: f64) {
+        if self
+            .last_nack_skip_last_n_updated_at_ms
+            .is_some_and(|last_ms| (now_ms - last_ms).max(0.0) < OOS_SKIP_LAST_N_REFRESH_INTERVAL_MS)
+        {
+            return;
+        }
+        self.last_nack_skip_last_n_updated_at_ms = Some(now_ms);
         if self.recent_oos_depths.is_empty() {
             self.nack_skip_last_n = 2;
             return;
         }
         let mut samples: Vec<u16> = self.recent_oos_depths.iter().copied().collect();
         samples.sort_unstable();
-        let p75_index = ((samples.len().saturating_sub(1) * 3) / 4).min(samples.len() - 1);
-        let target = samples[p75_index].clamp(1, 8);
-        if target > self.nack_skip_last_n {
-            self.nack_skip_last_n = (self.nack_skip_last_n + 1).min(8);
-        } else if target < self.nack_skip_last_n {
-            self.nack_skip_last_n = self.nack_skip_last_n.saturating_sub(1).max(1);
-        }
+        let last_index = samples.len() - 1;
+        let p50 = samples[(last_index / 2).min(last_index)];
+        let p75 = samples[((last_index * 3) / 4).min(last_index)];
+        let p90 = samples[((last_index * 9) / 10).min(last_index)];
+        self.nack_skip_last_n = if p90 >= 6 {
+            6
+        } else if p75 >= 4 {
+            4
+        } else if p50 <= 2 {
+            2
+        } else {
+            4
+        };
     }
 
     fn prune_pending_nack_for_window_range(&mut self, range: SequenceRange, now_ms: f64) {
@@ -1669,7 +1676,7 @@ impl RtcVideoFrameSource {
                     )
                 });
                 self.runtime_stats
-                    .record_keyframe_request_episode_response_observed(
+                    .record_picture_recovery_episode_response_observed(
                         inspection_now_ms,
                         Some(sample.packet_timestamp),
                         inspection.is_idr,

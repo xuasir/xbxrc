@@ -478,7 +478,7 @@ impl RtcConnectionService {
             *state = RtcConnectionRuntimeState::default();
         }
         self.delayed_gamepad_added_due_at_ms = None;
-        self.delayed_keyframe_prime_due_at_ms = None;
+        self.delayed_pli_prime_due_at_ms = None;
         self.pending_media_ingress_packets.clear();
         self.publish_event(runtime_stats, RtcTransportEvent::TransportStopped);
         self.last_transport_metrics_sample_at_ms = 0.0;

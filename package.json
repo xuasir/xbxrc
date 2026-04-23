@@ -8,6 +8,9 @@
     "build": "vite build",
     "test": "vitest run",
     "preview": "vite preview",
+    "skills:verify": "node scripts/sync-skills.mjs verify",
+    "skills:lock": "node scripts/sync-skills.mjs lock",
+    "skills:sync": "node scripts/sync-skills.mjs sync",
     "tauri": "node scripts/with-ffmpeg-sdk.mjs -- tauri",
     "tauri:build:dmg": "pnpm tauri build --bundles dmg",
     "tauri:build:nsis": "pnpm tauri build --bundles nsis"

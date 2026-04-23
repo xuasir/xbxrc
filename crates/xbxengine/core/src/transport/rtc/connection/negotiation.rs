@@ -73,7 +73,7 @@ impl RtcConnectionService {
         self.pending_gamepad_rumble_requests.clear();
         self.pending_transport_facts.clear();
         self.delayed_gamepad_added_due_at_ms = None;
-        self.delayed_keyframe_prime_due_at_ms = None;
+        self.delayed_pli_prime_due_at_ms = None;
         self.local_rtcp_sender_ssrc = super::service::generate_local_rtcp_sender_ssrc();
         self.last_selected_pair_diagnostic = None;
         self.selected_pair_snapshot_emitted = false;

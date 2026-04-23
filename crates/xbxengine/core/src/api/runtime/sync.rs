@@ -193,6 +193,7 @@ where
             return;
         };
         let had_advanced_frame = frame.frame_seq > self.health.last_frame_seq;
+        let first_render_observed = self.snapshot.frame_rendered_time_ms.is_none();
         let video_size_changed = self.health.record_video_frame(
             frame.width,
             frame.height,
@@ -210,6 +211,25 @@ where
         }
         if self.snapshot.frame_decoded_time_ms.is_none() {
             self.snapshot.frame_decoded_time_ms = Some(frame.rendered_at_ms);
+        }
+
+        if first_render_observed {
+            let connected_at_ms = self.snapshot.connected_milestone_at_ms;
+            let first_packet_at_ms = self.snapshot.first_frame_packet_arrival_time_ms;
+            let first_decode_at_ms = self.snapshot.frame_decoded_time_ms;
+            self.event_sink
+                .emit(XbxEngineRuntimeEventDto::FirstFrameLatencyObserved {
+                    connected_at_ms,
+                    first_packet_at_ms,
+                    first_decode_at_ms,
+                    first_render_at_ms: frame.rendered_at_ms,
+                    from_connected_to_first_render_ms: connected_at_ms
+                        .map(|value| (frame.rendered_at_ms - value).max(0.0)),
+                    from_first_packet_to_first_render_ms: first_packet_at_ms
+                        .map(|value| (frame.rendered_at_ms - value).max(0.0)),
+                    from_first_decode_to_first_render_ms: first_decode_at_ms
+                        .map(|value| (frame.rendered_at_ms - value).max(0.0)),
+                });
         }
 
         if video_size_changed.is_some() {

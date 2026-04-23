@@ -24,7 +24,7 @@ use crate::XbxEngineDataChannelMessageCatalogObservation;
 use crate::{XbxEngineMediaRuntimeStats, XbxEngineRuntimeError};
 
 const RTC_CONTROL_DELAYED_GAMEPAD_ADDED_MS: f64 = 500.0;
-const RTC_CONTROL_DELAYED_KEYFRAME_PRIME_MS: f64 = 300.0;
+const RTC_CONTROL_DELAYED_PLI_PRIME_MS: f64 = 0.0;
 const RTC_INPUT_BUFFERED_AMOUNT_HIGH_THRESHOLD_BYTES: u32 = 1024;
 const RTC_INPUT_BUFFERED_AMOUNT_LOW_THRESHOLD_BYTES: u32 = 512;
 pub(crate) const MESSAGE_CHANNEL_LABEL: &str = "message";
@@ -40,8 +40,6 @@ const DEFAULT_VIEWPORT_WIDTH: u32 = 1920;
 const DEFAULT_VIEWPORT_HEIGHT: u32 = 1080;
 const INPUT_METADATA_SEQ: u32 = 0;
 const INPUT_METADATA_MAX_TOUCHPOINTS: u8 = 64;
-// 与恢复侧的 keyframe 响应窗保持一致，方便 trace 统一判定 on-time / late / missed。
-const KEYFRAME_REQUEST_RESPONSE_WINDOW_MS: f64 = 960.0;
 
 // phase-1 先只把控制面 channel 拓扑建进 rtc，真正的 ready/handshake 由后续事件循环接管。
 pub(crate) fn bootstrap_default_channels(
@@ -144,14 +142,6 @@ pub(crate) fn is_handshake_ack_payload(payload: &str) -> bool {
         .is_some_and(|kind| kind == "HandshakeAck")
 }
 
-pub(crate) fn build_control_keyframe_request_payload() -> String {
-    serde_json::json!({
-        "message": "videoKeyframeRequested",
-        "ifrRequested": true,
-    })
-    .to_string()
-}
-
 pub(crate) fn build_control_decoder_reset_payload() -> String {
     serde_json::json!({
         "message": "decoderReset",
@@ -212,22 +202,6 @@ impl RtcConnectionService {
         let Some(actions) = self.control_service.peek_replay_actions_if_ready() else {
             return Ok(());
         };
-        if actions.request_keyframe {
-            self.send_control_payload(
-                build_control_keyframe_request_payload(),
-                "rtcControlReplayKeyframeSent",
-                "phase1 rtc control replay keyframe sent",
-                runtime_stats,
-            )?;
-            let sent_at_ms = now_ms_f64();
-            RuntimeStatsSink::new(runtime_stats.clone()).record_keyframe_request_episode_sent(
-                "control-replay",
-                sent_at_ms,
-                Some(sent_at_ms + KEYFRAME_REQUEST_RESPONSE_WINDOW_MS),
-            );
-            self.control_service.clear_pending_keyframe_request();
-            self.sync_control_replay_runtime_stats(runtime_stats);
-        }
         if actions.request_decoder_reset {
             self.send_control_payload(
                 build_control_decoder_reset_payload(),
@@ -241,8 +215,8 @@ impl RtcConnectionService {
         RuntimeStatsSink::new(runtime_stats.clone()).update(|stats| {
             stats.latest_observation_label = Some("rtcControlReplayConsumed".to_string());
             stats.latest_observation_summary = Some(format!(
-                "phase1 rtc control replay consumed keyframe={} decoderReset={}",
-                actions.request_keyframe, actions.request_decoder_reset
+                "phase1 rtc control replay consumed decoderReset={}",
+                actions.request_decoder_reset
             ));
         });
         Ok(())
@@ -348,8 +322,7 @@ impl RtcConnectionService {
         );
         let now_ms = now_ms_f64();
         self.delayed_gamepad_added_due_at_ms = Some(now_ms + RTC_CONTROL_DELAYED_GAMEPAD_ADDED_MS);
-        self.delayed_keyframe_prime_due_at_ms =
-            Some(now_ms + RTC_CONTROL_DELAYED_KEYFRAME_PRIME_MS);
+        self.delayed_pli_prime_due_at_ms = Some(now_ms + RTC_CONTROL_DELAYED_PLI_PRIME_MS);
         Ok(())
     }
 
@@ -610,25 +583,19 @@ impl RtcConnectionService {
             )?;
         }
         if self
-            .delayed_keyframe_prime_due_at_ms
+            .delayed_pli_prime_due_at_ms
             .is_some_and(|deadline| now_ms >= deadline)
         {
-            self.delayed_keyframe_prime_due_at_ms = None;
-            if self.control_service.is_control_ready() {
-                self.send_control_payload(
-                    build_control_keyframe_request_payload(),
-                    "rtcControlDelayedKeyframePrimeSent",
-                    "phase1 rtc delayed keyframe prime sent",
-                    runtime_stats,
-                )?;
-            } else {
-                let _ = self.control_service.request_video_keyframe();
-                self.sync_control_replay_runtime_stats(runtime_stats);
+            self.delayed_pli_prime_due_at_ms = None;
+            let outcome = self.request_video_pli_with_outcome(runtime_stats)?;
+            if outcome
+                == crate::transport::rtc::connection::VideoRecoveryRequestOutcome::FeedbackTargetPending
+            {
                 RuntimeStatsSink::new(runtime_stats.clone()).update(|stats| {
                     stats.latest_observation_label =
-                        Some("rtcControlDelayedKeyframePrimeDeferred".to_string());
+                        Some("rtcDelayedPliPrimeFeedbackTargetPending".to_string());
                     stats.latest_observation_summary = Some(
-                        "phase1 rtc delayed keyframe prime deferred until control ready"
+                        "phase1 rtc delayed pli prime deferred until feedback target ready"
                             .to_string(),
                     );
                 });
@@ -774,7 +741,7 @@ impl RtcConnectionService {
                     Some(CONTROL_CHANNEL_LABEL) => {
                         self.control_service.close_control_channel();
                         self.delayed_gamepad_added_due_at_ms = None;
-                        self.delayed_keyframe_prime_due_at_ms = None;
+                        self.delayed_pli_prime_due_at_ms = None;
                         self.raise_disconnect_signal(
                             runtime_stats,
                             "rtcControlChannelClosed",
@@ -792,7 +759,7 @@ impl RtcConnectionService {
                             state.chat_channel_open = false;
                         }
                         self.delayed_gamepad_added_due_at_ms = None;
-                        self.delayed_keyframe_prime_due_at_ms = None;
+                        self.delayed_pli_prime_due_at_ms = None;
                         self.raise_disconnect_signal(
                             runtime_stats,
                             "rtcMessageChannelClosed",

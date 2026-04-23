@@ -165,7 +165,7 @@ impl MediaSessionLoop {
             observed_at_ms: now_ms,
         }));
         self.runtime_stats
-            .record_keyframe_request_episode_packet_seen(
+            .record_picture_recovery_episode_packet_seen(
                 now_ms,
                 Some(assembled_frame.rtp_timestamp),
                 assembled_frame.is_keyframe,

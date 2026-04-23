@@ -1378,7 +1378,7 @@ async fn materialized_keyframe_response_preserves_first_packet_sequence_in_diagn
     source.set_jitter_early_emit_enabled(true);
     source
         .runtime_stats
-        .record_keyframe_request_episode_requested(
+        .record_picture_recovery_episode_requested(
             901,
             Some("transportAwaitRecoveryAnchor".to_string()),
             100.0,
@@ -1386,7 +1386,7 @@ async fn materialized_keyframe_response_preserves_first_packet_sequence_in_diagn
         );
     source
         .runtime_stats
-        .record_keyframe_request_episode_sent("pli", 120.0, Some(240.0));
+        .record_picture_recovery_episode_sent("pli", 120.0, Some(240.0));
 
     send_bootstrap_access_unit(&tx, 100, 9_000).await;
 
@@ -1398,23 +1398,47 @@ async fn materialized_keyframe_response_preserves_first_packet_sequence_in_diagn
     let frame = frame.expect("early emit should materialize a frame");
     assert_eq!(frame.first_packet_sequence, Some(100));
 
-    let (summary, episode) = source
+    let episode = source
         .runtime_stats
-        .read(|stats| {
-            (
-                stats.latest_observation_summary.clone(),
-                stats.latest_keyframe_request_episode.clone(),
-            )
-        })
+        .read(|stats| stats.latest_keyframe_request_episode.clone())
         .expect("runtime stats");
-    let summary = summary.expect("response-observed summary");
-    assert!(summary.contains("firstVideoPacketSeq=100"));
-    assert!(summary.contains("firstKeyframePacketSeq=100"));
-
     let episode = episode.expect("keyframe request episode");
     assert_eq!(episode.first_video_packet_rtp_timestamp, Some(9_000));
     assert_eq!(episode.first_video_packet_is_keyframe, Some(true));
     assert_eq!(episode.response_rtp_timestamp, Some(9_000));
+}
+
+#[test]
+fn dynamic_nack_skip_last_n_uses_oos_percentile_buckets() {
+    let (_tx, _transport_observation_rx, mut source) = make_video_source_for_test();
+
+    source.recent_oos_depths = [1, 1, 2, 2, 2, 3].into_iter().collect();
+    source.update_dynamic_nack_skip_last_n(1_000.0);
+    assert_eq!(source.nack_skip_last_n, 2);
+
+    source.recent_oos_depths = [2, 3, 4, 4, 4, 5].into_iter().collect();
+    source.update_dynamic_nack_skip_last_n(1_250.0);
+    assert_eq!(source.nack_skip_last_n, 4);
+
+    source.recent_oos_depths = [3, 4, 5, 6, 6, 7, 8].into_iter().collect();
+    source.update_dynamic_nack_skip_last_n(1_500.0);
+    assert_eq!(source.nack_skip_last_n, 6);
+}
+
+#[test]
+fn dynamic_nack_skip_last_n_is_rate_limited() {
+    let (_tx, _transport_observation_rx, mut source) = make_video_source_for_test();
+
+    source.recent_oos_depths = [6, 6, 6, 6].into_iter().collect();
+    source.update_dynamic_nack_skip_last_n(2_000.0);
+    assert_eq!(source.nack_skip_last_n, 6);
+
+    source.recent_oos_depths = [1, 1, 1, 1].into_iter().collect();
+    source.update_dynamic_nack_skip_last_n(2_100.0);
+    assert_eq!(source.nack_skip_last_n, 6);
+
+    source.update_dynamic_nack_skip_last_n(2_220.0);
+    assert_eq!(source.nack_skip_last_n, 2);
 }
 
 #[tokio::test]

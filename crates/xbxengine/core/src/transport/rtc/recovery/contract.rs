@@ -1,7 +1,8 @@
 use crate::media::video::h264::inspection::H264AccessUnitInspection;
 use crate::media::video::types::FrameValue as MediaFrameValue;
 use crate::{
-    XbxEngineH264InspectionObservation, XbxEngineKeyframeRequestEpisodeObservation,
+    XbxEngineH264InspectionObservation,
+    XbxEngineKeyframeRequestEpisodeObservation as XbxEnginePictureRecoveryEpisodeObservation,
     XbxEngineMediaRuntimeStats, XbxEngineVideoTimelineObservation,
 };
 
@@ -171,12 +172,6 @@ pub(crate) fn recovery_progress_missing_anchor(progress: Option<RecoveryProgress
     )
 }
 
-pub(crate) fn recovery_progress_allows_picture_recovery(
-    progress: Option<RecoveryProgressLevel>,
-) -> bool {
-    recovery_progress_missing_anchor(progress)
-}
-
 #[allow(dead_code)]
 pub(crate) fn recovery_progress_allows_decoder_reset(
     progress: Option<RecoveryProgressLevel>,
@@ -255,7 +250,7 @@ pub(crate) fn inspection_has_invalid_recovery_bootstrap(
 const CURRENT_TRANSPORT_AWAIT_INVALID_BOOTSTRAP_FRESH_MS: f64 = 220.0;
 
 pub(crate) fn is_terminal_transport_await_deferred_episode(
-    episode: &XbxEngineKeyframeRequestEpisodeObservation,
+    episode: &XbxEnginePictureRecoveryEpisodeObservation,
     inspection: Option<&XbxEngineH264InspectionObservation>,
     has_clean_anchor_evidence: bool,
     now_ms: f64,

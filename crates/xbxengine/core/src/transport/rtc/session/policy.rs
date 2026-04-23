@@ -6,8 +6,9 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use crate::api::backend::{
-    XbxEngineKeyframeRequestEpisodeObservation, XbxEngineMediaRuntimeStats,
-    XbxEngineRecoveryBudgetSnapshot, XbxEngineRecoveryDecisionLedgerObservation,
+    XbxEngineKeyframeRequestEpisodeObservation as XbxEnginePictureRecoveryEpisodeObservation,
+    XbxEngineMediaRuntimeStats, XbxEngineRecoveryBudgetSnapshot,
+    XbxEngineRecoveryDecisionLedgerObservation,
 };
 use crate::api::runtime::XbxEngineRuntimeConfig;
 use crate::runtime_stats_sink::RuntimeStatsSink;
@@ -110,7 +111,7 @@ fn recovery_observation_epoch_floor_ms(stats: &XbxEngineMediaRuntimeStats) -> f6
     stats.transport_recovery_episode_opened_at_ms.unwrap_or(0.0)
 }
 
-fn ledger_input_signals_transport_await_recovery_keyframe(
+fn ledger_input_signals_transport_await_recovery_picture(
     ledger: &XbxEngineRecoveryDecisionLedgerObservation,
 ) -> bool {
     ledger
@@ -118,24 +119,24 @@ fn ledger_input_signals_transport_await_recovery_keyframe(
         .contains(TRANSPORT_AWAIT_RECOVERY_KEYFRAME_DIAGNOSIS)
 }
 
-fn is_transport_await_keyframe_episode(
-    episode: &XbxEngineKeyframeRequestEpisodeObservation,
+fn is_transport_await_picture_recovery_episode(
+    episode: &XbxEnginePictureRecoveryEpisodeObservation,
 ) -> bool {
     episode.request_reason.as_deref() == Some(TRANSPORT_AWAIT_RECOVERY_KEYFRAME_DIAGNOSIS)
 }
 
 /// 取当前 stats 下最近一条 transport-await keyframe episode 的请求/解码时间（用于 reconnect fallback 门控）。
-fn transport_await_keyframe_episode_latest_times(
+fn transport_await_picture_recovery_episode_latest_times(
     stats: &XbxEngineMediaRuntimeStats,
 ) -> (Option<f64>, Option<f64>) {
     let mut best_requested_at_ms: Option<f64> = None;
     let mut best_first_keyframe_decoded_at_ms: Option<f64> = None;
 
-    let mut consider = |episode: &XbxEngineKeyframeRequestEpisodeObservation| {
+    let mut consider = |episode: &XbxEnginePictureRecoveryEpisodeObservation| {
         if episode.retired_at_ms.is_some() {
             return;
         }
-        if !is_transport_await_keyframe_episode(episode) {
+        if !is_transport_await_picture_recovery_episode(episode) {
             return;
         }
         if best_requested_at_ms.is_none_or(|prev| episode.requested_at_ms >= prev) {
@@ -1123,7 +1124,7 @@ impl RtcSessionPolicy {
     ) -> RecoveryObservationSnapshot {
         RuntimeStatsSink::read_shared(self.runtime_stats.as_ref(), |stats| {
             let (last_keyframe_requested_at, last_keyframe_decoded_at) =
-                transport_await_keyframe_episode_latest_times(stats);
+                transport_await_picture_recovery_episode_latest_times(stats);
             RecoveryObservationSnapshot {
                 ingress_active: stats.latest_video_packet_arrival_time_ms.is_some(),
                 reassembly_active: stats.latest_video_packet_sequence.is_some(),
@@ -1190,7 +1191,7 @@ impl RtcSessionPolicy {
             .iter()
             .filter(|ledger| {
                 ledger.action_selected == "requestDecoderReset"
-                    && ledger_input_signals_transport_await_recovery_keyframe(ledger)
+                    && ledger_input_signals_transport_await_recovery_picture(ledger)
                     && (observed_at_ms - ledger.observed_at_ms).max(0.0) <= window_ms
                     && recovery_decision_ledger_recovery_epoch(ledger) == Some(current_epoch)
             })
@@ -1213,7 +1214,7 @@ impl RtcSessionPolicy {
             if episode.retired_at_ms.is_some() {
                 continue;
             }
-            if !is_transport_await_keyframe_episode(episode) {
+            if !is_transport_await_picture_recovery_episode(episode) {
                 continue;
             }
             if episode.requested_at_ms < epoch_floor_ms {
@@ -2308,10 +2309,10 @@ impl RtcSessionPolicy {
                 VideoSchedulingOwnerState::RebuildingSupply
                 | VideoSchedulingOwnerState::SupplyStarved => {
                     if let Some(proposal) = proposal {
-                        if self.is_non_escalating_keyframe_probe(proposal, snapshot.now_ms) {
-                            RecoveryLedgerNarrativeState::LocalSelfHealing
-                        } else if Self::is_active_recovery_action(proposal.decision.action) {
+                        if Self::is_active_recovery_action(proposal.decision.action) {
                             RecoveryLedgerNarrativeState::ActiveRecovery
+                        } else if self.is_non_escalating_keyframe_probe(proposal, snapshot.now_ms) {
+                            RecoveryLedgerNarrativeState::LocalSelfHealing
                         } else if Self::is_blocked_recovery_action(proposal.decision.action) {
                             RecoveryLedgerNarrativeState::RecoveryBlocked
                         } else {

@@ -26,7 +26,6 @@
     "active": true,
     "targets": "all",
     "resources": {
-      "../target/release/SDL3.dll": "SDL3.dll",
       "resources/ffmpeg/windows-x64/bin/*.dll": "",
       "resources/ffmpeg/windows-x64/bin/ffmpeg.exe": "resources/ffmpeg/windows-x64/bin/ffmpeg.exe",
       "resources/ffmpeg/windows-x64/bin/ffplay.exe": "resources/ffmpeg/windows-x64/bin/ffplay.exe",

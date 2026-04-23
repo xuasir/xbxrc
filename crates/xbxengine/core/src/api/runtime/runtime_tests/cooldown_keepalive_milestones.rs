@@ -400,6 +400,22 @@ fn runtime_waits_for_real_frame_before_populating_first_frame_timestamps() {
                 && *frame_decoded_time_ms == frame_time_ms
                 && *renderer_frame_time_ms == frame_time_ms
     )));
+    assert!(events.borrow().iter().any(|event| matches!(
+        event,
+        XbxEngineRuntimeEventDto::FirstFrameLatencyObserved {
+            first_packet_at_ms,
+            first_decode_at_ms,
+            first_render_at_ms,
+            from_first_packet_to_first_render_ms,
+            from_first_decode_to_first_render_ms,
+            ..
+        }
+            if *first_packet_at_ms == Some(frame_time_ms)
+                && *first_decode_at_ms == Some(frame_time_ms)
+                && *first_render_at_ms == frame_time_ms
+                && *from_first_packet_to_first_render_ms == Some(0.0)
+                && *from_first_decode_to_first_render_ms == Some(0.0)
+    )));
 }
 
 #[test]

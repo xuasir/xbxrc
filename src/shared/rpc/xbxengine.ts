@@ -559,6 +559,16 @@ export type XbxEngineRuntimeEventDto
       frameDecodedTimeMs: number
       rendererFrameTimeMs: number
     }
+    | {
+      type: 'stats.firstFrameLatency'
+      connectedAtMs?: number | null
+      firstPacketAtMs?: number | null
+      firstDecodeAtMs?: number | null
+      firstRenderAtMs: number
+      fromConnectedToFirstRenderMs?: number | null
+      fromFirstPacketToFirstRenderMs?: number | null
+      fromFirstDecodeToFirstRenderMs?: number | null
+    }
     | { type: 'error', code: string, message: string }
 
 export interface XbxEngineStartRuntimeParams {

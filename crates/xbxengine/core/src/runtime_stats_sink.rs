@@ -23,18 +23,19 @@ use crate::{
 pub(crate) struct RuntimeStatsSink {
     // 统一承接 runtime stats 的发布入口，避免热路径散落字段写逻辑。
     observation_bus: ObservationBus,
-    keyframe_response_trace_cache: Arc<Mutex<VecDeque<KeyframeResponseTraceCacheEntry>>>,
+    picture_recovery_response_trace_cache:
+        Arc<Mutex<VecDeque<PictureRecoveryResponseTraceCacheEntry>>>,
 }
 
 #[derive(Clone, Copy, Debug, Default)]
-struct KeyframeResponseTraceCacheEntry {
+struct PictureRecoveryResponseTraceCacheEntry {
     episode_id: u64,
     first_video_packet_sequence: Option<u16>,
     first_keyframe_packet_sequence: Option<u16>,
 }
 
 impl RuntimeStatsSink {
-    const RECENT_KEYFRAME_REQUEST_EPISODE_LIMIT: usize = 32;
+    const RECENT_PICTURE_RECOVERY_EPISODE_LIMIT: usize = 32;
 
     pub(crate) fn apply_begin_transport_recovery_episode(
         stats: &mut XbxEngineMediaRuntimeStats,
@@ -108,7 +109,7 @@ impl RuntimeStatsSink {
                 episode,
             );
             let updated = episode.clone();
-            sync_recent_keyframe_request_episode(stats, updated);
+            sync_recent_picture_recovery_episode(stats, updated);
         }
     }
 
@@ -121,19 +122,19 @@ impl RuntimeStatsSink {
     pub(crate) fn new(runtime_stats: Arc<Mutex<XbxEngineMediaRuntimeStats>>) -> Self {
         Self {
             observation_bus: ObservationBus::new(runtime_stats),
-            keyframe_response_trace_cache: Arc::new(Mutex::new(VecDeque::with_capacity(
-                Self::RECENT_KEYFRAME_REQUEST_EPISODE_LIMIT,
+            picture_recovery_response_trace_cache: Arc::new(Mutex::new(VecDeque::with_capacity(
+                Self::RECENT_PICTURE_RECOVERY_EPISODE_LIMIT,
             ))),
         }
     }
 
-    fn update_keyframe_response_trace_cache(
+    fn update_picture_recovery_response_trace_cache(
         &self,
         episode_id: u64,
         is_keyframe: bool,
         packet_sequence: Option<u16>,
     ) -> (Option<u16>, Option<u16>) {
-        let Ok(mut cache) = self.keyframe_response_trace_cache.lock() else {
+        let Ok(mut cache) = self.picture_recovery_response_trace_cache.lock() else {
             return (
                 packet_sequence,
                 if is_keyframe { packet_sequence } else { None },
@@ -157,10 +158,10 @@ impl RuntimeStatsSink {
                 entry.first_keyframe_packet_sequence,
             );
         }
-        if cache.len() >= Self::RECENT_KEYFRAME_REQUEST_EPISODE_LIMIT {
+        if cache.len() >= Self::RECENT_PICTURE_RECOVERY_EPISODE_LIMIT {
             cache.pop_front();
         }
-        let entry = KeyframeResponseTraceCacheEntry {
+        let entry = PictureRecoveryResponseTraceCacheEntry {
             episode_id,
             first_video_packet_sequence: packet_sequence,
             first_keyframe_packet_sequence: if is_keyframe { packet_sequence } else { None },
@@ -246,7 +247,7 @@ impl RuntimeStatsSink {
         });
     }
 
-    pub(crate) fn record_keyframe_request_episode_requested(
+    pub(crate) fn record_picture_recovery_episode_requested(
         &self,
         episode_id: u64,
         request_reason: Option<String>,
@@ -254,7 +255,7 @@ impl RuntimeStatsSink {
         deadline_at_ms: Option<f64>,
     ) {
         self.update(|stats| {
-            let episode = upsert_keyframe_request_episode(
+            let episode = upsert_picture_recovery_episode(
                 stats,
                 episode_id,
                 |episode| {
@@ -306,7 +307,7 @@ impl RuntimeStatsSink {
                     .map(|value| format!("{value:.1}"))
                     .unwrap_or_else(|| "none".to_string())
             ));
-            emit_keyframe_closure_probe(
+            emit_picture_recovery_closure_probe(
                 &*stats,
                 "requested",
                 requested_at_ms,
@@ -316,7 +317,7 @@ impl RuntimeStatsSink {
         });
     }
 
-    pub(crate) fn record_keyframe_request_episode_sent(
+    pub(crate) fn record_picture_recovery_episode_sent(
         &self,
         request_kind: &str,
         sent_at_ms: f64,
@@ -330,11 +331,11 @@ impl RuntimeStatsSink {
             else {
                 return;
             };
-            let episode = upsert_keyframe_request_episode(
+            let episode = upsert_picture_recovery_episode(
                 stats,
                 episode_id,
                 |episode| {
-                    apply_keyframe_request_episode_sent(
+                    apply_picture_recovery_episode_sent(
                         episode,
                         request_kind,
                         sent_at_ms,
@@ -363,7 +364,7 @@ impl RuntimeStatsSink {
                         lifecycle_phase: None,
                         retired_at_ms: None,
                     };
-                    apply_keyframe_request_episode_sent(
+                    apply_picture_recovery_episode_sent(
                         &mut episode,
                         request_kind,
                         sent_at_ms,
@@ -378,11 +379,11 @@ impl RuntimeStatsSink {
                 "episodeId={} requestKind={} sentAtMs={:.1}",
                 episode.episode_id, request_kind, sent_at_ms
             ));
-            emit_keyframe_closure_probe(&*stats, "sent", sent_at_ms, Some(&episode), None);
+            emit_picture_recovery_closure_probe(&*stats, "sent", sent_at_ms, Some(&episode), None);
         });
     }
 
-    pub(crate) fn record_keyframe_request_episode_timeout(&self, observed_at_ms: f64) {
+    pub(crate) fn record_picture_recovery_episode_timeout(&self, observed_at_ms: f64) {
         self.update(|stats| {
             let transport_recovery_epoch = stats.transport_recovery_epoch;
             let video_anchor_clean_epoch = stats.video_anchor_clean_epoch;
@@ -433,10 +434,10 @@ impl RuntimeStatsSink {
                 maybe_count_keyframe_sent_terminal_failure(stats, episode_id);
             }
             if let Some(episode) = updated_episode {
-                sync_recent_keyframe_request_episode(stats, episode);
+                sync_recent_picture_recovery_episode(stats, episode);
             }
             if should_probe {
-                emit_keyframe_closure_probe(
+                emit_picture_recovery_closure_probe(
                     &*stats,
                     "timeout",
                     observed_at_ms,
@@ -447,7 +448,7 @@ impl RuntimeStatsSink {
         });
     }
 
-    pub(crate) fn record_keyframe_request_episode_deferred(
+    pub(crate) fn record_picture_recovery_episode_deferred(
         &self,
         observed_at_ms: f64,
         detail: &str,
@@ -486,10 +487,10 @@ impl RuntimeStatsSink {
                 should_probe = true;
             }
             if let Some(episode) = updated_episode {
-                sync_recent_keyframe_request_episode(stats, episode);
+                sync_recent_picture_recovery_episode(stats, episode);
             }
             if should_probe {
-                emit_keyframe_closure_probe(
+                emit_picture_recovery_closure_probe(
                     &*stats,
                     "deferred",
                     observed_at_ms,
@@ -500,7 +501,7 @@ impl RuntimeStatsSink {
         });
     }
 
-    pub(crate) fn record_keyframe_request_episode_failed(&self, observed_at_ms: f64, detail: &str) {
+    pub(crate) fn record_picture_recovery_episode_failed(&self, observed_at_ms: f64, detail: &str) {
         self.update(|stats| {
             let transport_recovery_epoch = stats.transport_recovery_epoch;
             let video_anchor_clean_epoch = stats.video_anchor_clean_epoch;
@@ -535,10 +536,10 @@ impl RuntimeStatsSink {
                 should_probe = true;
             }
             if let Some(episode) = updated_episode {
-                sync_recent_keyframe_request_episode(stats, episode);
+                sync_recent_picture_recovery_episode(stats, episode);
             }
             if should_probe {
-                emit_keyframe_closure_probe(
+                emit_picture_recovery_closure_probe(
                     &*stats,
                     "failed",
                     observed_at_ms,
@@ -550,9 +551,9 @@ impl RuntimeStatsSink {
     }
 
     #[allow(dead_code)]
-    pub(crate) fn record_keyframe_request_episode_unsent_expired(&self, observed_at_ms: f64) {
+    pub(crate) fn record_picture_recovery_episode_unsent_expired(&self, observed_at_ms: f64) {
         self.update(|stats| {
-            expire_latest_keyframe_request_episode_if_unsent(stats, observed_at_ms);
+            expire_latest_picture_recovery_episode_if_unsent(stats, observed_at_ms);
         });
     }
 
@@ -568,7 +569,7 @@ impl RuntimeStatsSink {
         });
     }
 
-    pub(crate) fn record_keyframe_request_episode_packet_seen(
+    pub(crate) fn record_picture_recovery_episode_packet_seen(
         &self,
         observed_at_ms: f64,
         rtp_timestamp: Option<u32>,
@@ -644,10 +645,10 @@ impl RuntimeStatsSink {
                 }
             }
             if let Some(episode) = updated_episode {
-                sync_recent_keyframe_request_episode(stats, episode);
+                sync_recent_picture_recovery_episode(stats, episode);
             }
             if should_probe {
-                emit_keyframe_closure_probe(
+                emit_picture_recovery_closure_probe(
                     &*stats,
                     "packet-seen",
                     observed_at_ms,
@@ -658,7 +659,7 @@ impl RuntimeStatsSink {
         });
     }
 
-    pub(crate) fn record_keyframe_request_episode_response_observed(
+    pub(crate) fn record_picture_recovery_episode_response_observed(
         &self,
         observed_at_ms: f64,
         rtp_timestamp: Option<u32>,
@@ -727,7 +728,7 @@ impl RuntimeStatsSink {
                 (
                     summary_first_video_packet_sequence,
                     summary_first_keyframe_packet_sequence,
-                ) = self.update_keyframe_response_trace_cache(
+                ) = self.update_picture_recovery_response_trace_cache(
                     episode.episode_id,
                     is_keyframe,
                     packet_sequence,
@@ -735,26 +736,27 @@ impl RuntimeStatsSink {
 
                 stats.latest_observation_label =
                     Some("keyframeRequestEpisodeResponseObserved".to_string());
-                stats.latest_observation_summary = Some(format_keyframe_response_observed_summary(
-                    episode,
-                    observed_at_ms,
-                    rtp_timestamp,
-                    is_keyframe,
-                    detail,
-                    summary_first_video_packet_sequence,
-                    summary_first_keyframe_packet_sequence,
-                    response_oos_depth_p75,
-                    response_head_missing_active,
-                    gap_expired_before_keyframe,
-                ));
+                stats.latest_observation_summary =
+                    Some(format_picture_recovery_response_observed_summary(
+                        episode,
+                        observed_at_ms,
+                        rtp_timestamp,
+                        is_keyframe,
+                        detail,
+                        summary_first_video_packet_sequence,
+                        summary_first_keyframe_packet_sequence,
+                        response_oos_depth_p75,
+                        response_head_missing_active,
+                        gap_expired_before_keyframe,
+                    ));
                 updated_episode = Some(episode.clone());
                 should_probe = true;
             }
             if let Some(episode) = updated_episode {
-                sync_recent_keyframe_request_episode(stats, episode);
+                sync_recent_picture_recovery_episode(stats, episode);
             }
             if should_probe {
-                emit_keyframe_closure_probe(
+                emit_picture_recovery_closure_probe(
                     &*stats,
                     "response-observed",
                     observed_at_ms,
@@ -765,7 +767,7 @@ impl RuntimeStatsSink {
         });
     }
 
-    pub(crate) fn record_keyframe_request_episode_decoded(
+    pub(crate) fn record_picture_recovery_episode_decoded(
         &self,
         observed_at_ms: f64,
         rtp_timestamp: u32,
@@ -809,10 +811,10 @@ impl RuntimeStatsSink {
                 should_probe = true;
             }
             if let Some(episode) = updated_episode {
-                sync_recent_keyframe_request_episode(stats, episode);
+                sync_recent_picture_recovery_episode(stats, episode);
             }
             if should_probe {
-                emit_keyframe_closure_probe(
+                emit_picture_recovery_closure_probe(
                     &*stats,
                     "decoded",
                     observed_at_ms,
@@ -852,13 +854,14 @@ impl RuntimeStatsSink {
             if let Some(episode_id) = bump_episode_id {
                 maybe_count_keyframe_sent_terminal_failure(stats, episode_id);
             }
-            let selected = select_episode_snapshot_for_h264_inspection(stats, &observation);
+            let selected =
+                select_picture_recovery_episode_snapshot_for_h264_inspection(stats, &observation);
             if let Some(ref episode) = selected {
                 observation.bound_episode_id = Some(episode.episode_id);
                 observation.bound_episode_status = Some(episode.status.clone());
                 observation.bound_response_rtp_timestamp = episode.response_rtp_timestamp;
                 observation.bound_as_recovery_response =
-                    Some(inspection_matches_recovery_keyframe_response(
+                    Some(inspection_matches_recovery_picture_recovery_response(
                         episode,
                         observation.frame_rtp_timestamp,
                     ));
@@ -869,7 +872,11 @@ impl RuntimeStatsSink {
                 observation.bound_as_recovery_response = Some(false);
             }
             let summary = format_h264_inspection_summary(&observation);
-            emit_keyframe_response_diagnosis_probe(&*stats, selected.as_ref(), &observation);
+            emit_picture_recovery_response_diagnosis_probe(
+                &*stats,
+                selected.as_ref(),
+                &observation,
+            );
             stats.latest_h264_inspection_observation = Some(observation);
             stats.latest_observation_label = Some("h264InspectionObserved".to_string());
             stats.latest_observation_summary = Some(summary);
@@ -1039,7 +1046,7 @@ impl RuntimeStatsSink {
             };
             stats.latest_anchor_candidate_ledger = Some(ledger.clone());
             let bound_episode = select_episode_snapshot_for_anchor_ledger(stats, &ledger);
-            emit_keyframe_closure_probe(
+            emit_picture_recovery_closure_probe(
                 &*stats,
                 "anchor-candidate",
                 observed_at_ms,
@@ -1078,7 +1085,7 @@ impl RuntimeStatsSink {
     pub(crate) fn record_transport_clean_anchor(&self, observed_at_ms: f64, source_event: &str) {
         self.update(|stats| {
             Self::apply_transport_clean_anchor(stats, observed_at_ms, source_event);
-            emit_keyframe_closure_probe(
+            emit_picture_recovery_closure_probe(
                 &*stats,
                 "clean-anchor",
                 observed_at_ms,
@@ -1152,7 +1159,7 @@ impl RuntimeStatsSink {
     }
 }
 
-fn upsert_keyframe_request_episode(
+fn upsert_picture_recovery_episode(
     stats: &mut XbxEngineMediaRuntimeStats,
     episode_id: u64,
     update: impl FnOnce(&mut XbxEngineKeyframeRequestEpisodeObservation),
@@ -1176,6 +1183,7 @@ fn upsert_keyframe_request_episode(
         update(&mut episode);
         episode
     };
+    enrich_picture_recovery_first_frame_latency_detail(stats, &mut episode);
     apply_keyframe_episode_lifecycle_field(
         transport_recovery_epoch,
         video_anchor_clean_epoch,
@@ -1183,7 +1191,7 @@ fn upsert_keyframe_request_episode(
         &mut episode,
     );
     stats.recent_keyframe_request_episodes.push(episode.clone());
-    trim_recent_keyframe_request_episodes(stats);
+    trim_recent_picture_recovery_episodes(stats);
     episode
 }
 
@@ -1200,28 +1208,30 @@ fn maybe_count_keyframe_sent_terminal_failure(
         stats.keyframe_consecutive_sent_failures.saturating_add(1);
 }
 
-fn trim_recent_keyframe_request_episodes(stats: &mut XbxEngineMediaRuntimeStats) {
+fn trim_recent_picture_recovery_episodes(stats: &mut XbxEngineMediaRuntimeStats) {
     if stats.recent_keyframe_request_episodes.len()
-        <= RuntimeStatsSink::RECENT_KEYFRAME_REQUEST_EPISODE_LIMIT
+        <= RuntimeStatsSink::RECENT_PICTURE_RECOVERY_EPISODE_LIMIT
     {
         return;
     }
     let overflow = stats.recent_keyframe_request_episodes.len()
-        - RuntimeStatsSink::RECENT_KEYFRAME_REQUEST_EPISODE_LIMIT;
+        - RuntimeStatsSink::RECENT_PICTURE_RECOVERY_EPISODE_LIMIT;
     stats.recent_keyframe_request_episodes.drain(0..overflow);
 }
 
-fn sync_recent_keyframe_request_episode(
+fn sync_recent_picture_recovery_episode(
     stats: &mut XbxEngineMediaRuntimeStats,
     mut episode: XbxEngineKeyframeRequestEpisodeObservation,
 ) {
     let episode_id = episode.episode_id;
+    enrich_picture_recovery_first_frame_latency_detail(stats, &mut episode);
     apply_keyframe_episode_lifecycle_field(
         stats.transport_recovery_epoch,
         stats.video_anchor_clean_epoch,
         stats.video_anchor_clean_observed_at_ms,
         &mut episode,
     );
+    let synced_episode = episode.clone();
     if let Some(index) = stats
         .recent_keyframe_request_episodes
         .iter()
@@ -1230,22 +1240,17 @@ fn sync_recent_keyframe_request_episode(
         stats.recent_keyframe_request_episodes[index] = episode;
     } else {
         stats.recent_keyframe_request_episodes.push(episode);
-        trim_recent_keyframe_request_episodes(stats);
+        trim_recent_picture_recovery_episodes(stats);
     }
-    // `latest` 与 `recent` 曾分叉：recent 在 sync 时刷新了 lifecycle，latest 需同步，probe 才一致。
+    // `latest` 与 `recent` 必须保持同一份 episode 事实，避免 transport_detail / lifecycle 等字段分叉。
     if let Some(latest) = stats.latest_keyframe_request_episode.as_mut() {
         if latest.episode_id == episode_id {
-            apply_keyframe_episode_lifecycle_field(
-                stats.transport_recovery_epoch,
-                stats.video_anchor_clean_epoch,
-                stats.video_anchor_clean_observed_at_ms,
-                latest,
-            );
+            *latest = synced_episode;
         }
     }
 }
 
-fn format_keyframe_response_observed_summary(
+fn format_picture_recovery_response_observed_summary(
     episode: &XbxEngineKeyframeRequestEpisodeObservation,
     observed_at_ms: f64,
     rtp_timestamp: Option<u32>,
@@ -1331,7 +1336,7 @@ fn format_h264_inspection_summary(observation: &XbxEngineH264InspectionObservati
     )
 }
 
-fn emit_keyframe_response_diagnosis_probe(
+fn emit_picture_recovery_response_diagnosis_probe(
     stats: &XbxEngineMediaRuntimeStats,
     episode: Option<&XbxEngineKeyframeRequestEpisodeObservation>,
     observation: &XbxEngineH264InspectionObservation,
@@ -1382,7 +1387,7 @@ fn emit_keyframe_response_diagnosis_probe(
     );
 }
 
-fn apply_keyframe_request_episode_sent(
+fn apply_picture_recovery_episode_sent(
     episode: &mut XbxEngineKeyframeRequestEpisodeObservation,
     request_kind: &str,
     sent_at_ms: f64,
@@ -1408,6 +1413,48 @@ fn apply_keyframe_request_episode_sent(
     if episode.response_verdict.is_none() {
         episode.response_verdict = Some("pending".to_string());
     }
+}
+
+fn format_optional_latency_ms(value: Option<f64>) -> String {
+    value
+        .map(|latency_ms| format!("{latency_ms:.1}"))
+        .unwrap_or_else(|| "none".to_string())
+}
+
+fn enrich_picture_recovery_first_frame_latency_detail(
+    stats: &XbxEngineMediaRuntimeStats,
+    episode: &mut XbxEngineKeyframeRequestEpisodeObservation,
+) {
+    if matches!(
+        episode.status.as_str(),
+        "deferred" | "failed" | "missed" | "expired-unsent" | "succeeded"
+    ) {
+        return;
+    }
+    let pli_sent_at_ms = episode.sent_at_ms;
+    let first_idr_packet_at_ms = episode.first_keyframe_packet_at_ms.or(episode.first_video_packet_at_ms);
+    let first_decode_at_ms = episode.first_keyframe_decoded_at_ms;
+    let control_ready_to_pli_sent_ms = stats.control_ready_at_ms.zip(pli_sent_at_ms).map(
+        |(control_ready_at_ms, sent_at_ms)| (sent_at_ms - control_ready_at_ms).max(0.0),
+    );
+    let pli_sent_to_first_idr_packet_ms = pli_sent_at_ms
+        .zip(first_idr_packet_at_ms)
+        .map(|(sent_at_ms, first_packet_at_ms)| (first_packet_at_ms - sent_at_ms).max(0.0));
+    let first_idr_packet_to_first_decode_ms = first_idr_packet_at_ms
+        .zip(first_decode_at_ms)
+        .map(|(first_packet_at_ms, decoded_at_ms)| (decoded_at_ms - first_packet_at_ms).max(0.0));
+    if control_ready_to_pli_sent_ms.is_none()
+        && pli_sent_to_first_idr_packet_ms.is_none()
+        && first_idr_packet_to_first_decode_ms.is_none()
+    {
+        return;
+    }
+    episode.transport_detail = Some(format!(
+        "firstFrameLatencyTrace controlReadyToPliSentMs={} pliSentToFirstIdrPacketMs={} firstIdrPacketToFirstDecodeMs={}",
+        format_optional_latency_ms(control_ready_to_pli_sent_ms),
+        format_optional_latency_ms(pli_sent_to_first_idr_packet_ms),
+        format_optional_latency_ms(first_idr_packet_to_first_decode_ms),
+    ));
 }
 
 fn latest_video_ingress_close_cause(stats: &XbxEngineMediaRuntimeStats) -> Option<String> {
@@ -1451,7 +1498,7 @@ fn collect_keyframe_episode_candidates(
     out
 }
 
-fn select_episode_snapshot_for_h264_inspection(
+fn select_picture_recovery_episode_snapshot_for_h264_inspection(
     stats: &XbxEngineMediaRuntimeStats,
     inspection: &XbxEngineH264InspectionObservation,
 ) -> Option<XbxEngineKeyframeRequestEpisodeObservation> {
@@ -1496,7 +1543,7 @@ fn select_episode_snapshot_for_h264_inspection(
     best
 }
 
-fn inspection_matches_recovery_keyframe_response(
+fn inspection_matches_recovery_picture_recovery_response(
     episode: &XbxEngineKeyframeRequestEpisodeObservation,
     frame_rtp_timestamp: Option<u32>,
 ) -> bool {
@@ -1569,7 +1616,7 @@ fn select_episode_snapshot_for_anchor_ledger(
     best
 }
 
-fn emit_keyframe_closure_probe(
+fn emit_picture_recovery_closure_probe(
     stats: &XbxEngineMediaRuntimeStats,
     stage: &str,
     observed_at_ms: f64,
@@ -1637,7 +1684,7 @@ fn emit_keyframe_closure_probe(
     );
 }
 
-pub(crate) fn expire_latest_keyframe_request_episode_if_unsent(
+pub(crate) fn expire_latest_picture_recovery_episode_if_unsent(
     stats: &mut XbxEngineMediaRuntimeStats,
     observed_at_ms: f64,
 ) -> bool {
@@ -1673,7 +1720,7 @@ pub(crate) fn expire_latest_keyframe_request_episode_if_unsent(
         stats.latest_observation_summary = latest_summary;
     }
     if let Some(episode) = updated_episode {
-        sync_recent_keyframe_request_episode(stats, episode);
+        sync_recent_picture_recovery_episode(stats, episode);
         return true;
     }
     false
@@ -1727,13 +1774,13 @@ mod tests {
         let sink = RuntimeStatsSink::new(runtime_stats.clone());
 
         sink.begin_transport_recovery_episode(10.0);
-        sink.record_keyframe_request_episode_requested(
+        sink.record_picture_recovery_episode_requested(
             7,
             Some("transportAwaitRecoveryAnchor".to_string()),
             15.0,
             None,
         );
-        sink.record_keyframe_request_episode_sent("pli", 16.0, None);
+        sink.record_picture_recovery_episode_sent("pli", 16.0, None);
         sink.record_transport_clean_anchor(20.0, "chain-clean-anchor-submitted");
 
         let stats = runtime_stats.lock().expect("runtime stats lock");
@@ -1807,15 +1854,15 @@ mod tests {
         let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
         let sink = RuntimeStatsSink::new(runtime_stats.clone());
 
-        sink.record_keyframe_request_episode_requested(
+        sink.record_picture_recovery_episode_requested(
             77,
             Some("transportAwaitRecoveryAnchor".to_string()),
             100.0,
             None,
         );
-        sink.record_keyframe_request_episode_sent("pli", 120.0, Some(200.0));
-        sink.record_keyframe_request_episode_packet_seen(150.0, Some(123456789), true, Some(321));
-        sink.record_keyframe_request_episode_decoded(160.0, 123456789, 42);
+        sink.record_picture_recovery_episode_sent("pli", 120.0, Some(200.0));
+        sink.record_picture_recovery_episode_packet_seen(150.0, Some(123456789), true, Some(321));
+        sink.record_picture_recovery_episode_decoded(160.0, 123456789, 42);
 
         let stats = runtime_stats.lock().expect("runtime stats lock");
         let episode = stats
@@ -1831,6 +1878,12 @@ mod tests {
         assert_eq!(episode.response_rtp_timestamp, Some(123456789));
         assert_eq!(episode.response_frame_seq, Some(42));
         assert_eq!(episode.response_verdict.as_deref(), Some("on-time"));
+        assert!(episode.transport_detail.as_deref().is_some_and(|detail| {
+            detail.contains("firstFrameLatencyTrace")
+                && detail.contains("controlReadyToPliSentMs=none")
+                && detail.contains("pliSentToFirstIdrPacketMs=30.0")
+                && detail.contains("firstIdrPacketToFirstDecodeMs=10.0")
+        }));
         assert_eq!(
             stats.latest_observation_label.as_deref(),
             Some("keyframeRequestEpisodeDecoded")
@@ -1842,14 +1895,14 @@ mod tests {
         let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
         let sink = RuntimeStatsSink::new(runtime_stats.clone());
 
-        sink.record_keyframe_request_episode_requested(
+        sink.record_picture_recovery_episode_requested(
             90,
             Some("transportAwaitRecoveryAnchor".to_string()),
             100.0,
             None,
         );
-        sink.record_keyframe_request_episode_sent("pli", 120.0, Some(200.0));
-        sink.record_keyframe_request_episode_response_observed(
+        sink.record_picture_recovery_episode_sent("pli", 120.0, Some(200.0));
+        sink.record_picture_recovery_episode_response_observed(
             140.0,
             Some(123),
             false,
@@ -1859,7 +1912,7 @@ mod tests {
             true,
             false,
         );
-        sink.record_keyframe_request_episode_response_observed(
+        sink.record_picture_recovery_episode_response_observed(
             170.0,
             Some(456),
             true,
@@ -1910,14 +1963,14 @@ mod tests {
         let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
         let sink = RuntimeStatsSink::new(runtime_stats.clone());
 
-        sink.record_keyframe_request_episode_requested(
+        sink.record_picture_recovery_episode_requested(
             901,
             Some("transportAwaitRecoveryAnchor".to_string()),
             100.0,
             None,
         );
-        sink.record_keyframe_request_episode_sent("pli", 120.0, Some(200.0));
-        sink.record_keyframe_request_episode_timeout(200.0);
+        sink.record_picture_recovery_episode_sent("pli", 120.0, Some(200.0));
+        sink.record_picture_recovery_episode_timeout(200.0);
 
         {
             let stats = runtime_stats.lock().expect("runtime stats lock");
@@ -1928,7 +1981,7 @@ mod tests {
             assert_eq!(episode.response_verdict.as_deref(), Some("missed"));
         }
 
-        sink.record_keyframe_request_episode_decoded(210.0, 999_001, 1001);
+        sink.record_picture_recovery_episode_decoded(210.0, 999_001, 1001);
 
         let stats = runtime_stats.lock().expect("runtime stats lock");
         let episode = stats
@@ -1946,16 +1999,16 @@ mod tests {
         let sink = RuntimeStatsSink::new(runtime_stats.clone());
 
         sink.begin_transport_recovery_episode(10.0);
-        sink.record_keyframe_request_episode_requested(
+        sink.record_picture_recovery_episode_requested(
             902,
             Some("transportAwaitRecoveryAnchor".to_string()),
             100.0,
             None,
         );
-        sink.record_keyframe_request_episode_sent("pli", 120.0, Some(500.0));
+        sink.record_picture_recovery_episode_sent("pli", 120.0, Some(500.0));
         sink.record_transport_clean_anchor(180.0, "test-clean-anchor");
 
-        sink.record_keyframe_request_episode_timeout(600.0);
+        sink.record_picture_recovery_episode_timeout(600.0);
 
         let stats = runtime_stats.lock().expect("runtime stats lock");
         let episode = stats
@@ -1974,14 +2027,14 @@ mod tests {
         let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
         let sink = RuntimeStatsSink::new(runtime_stats.clone());
 
-        sink.record_keyframe_request_episode_requested(
+        sink.record_picture_recovery_episode_requested(
             88,
             Some("transportAwaitRecoveryAnchor".to_string()),
             100.0,
             None,
         );
-        sink.record_keyframe_request_episode_sent("control", 120.0, Some(200.0));
-        sink.record_keyframe_request_episode_timeout(199.0);
+        sink.record_picture_recovery_episode_sent("control", 120.0, Some(200.0));
+        sink.record_picture_recovery_episode_timeout(199.0);
 
         {
             let stats = runtime_stats.lock().expect("runtime stats lock");
@@ -1993,7 +2046,7 @@ mod tests {
             assert_eq!(episode.response_verdict.as_deref(), Some("pending"));
         }
 
-        sink.record_keyframe_request_episode_timeout(200.0);
+        sink.record_picture_recovery_episode_timeout(200.0);
 
         let stats = runtime_stats.lock().expect("runtime stats lock");
         let episode = stats
@@ -2013,13 +2066,13 @@ mod tests {
         let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
         let sink = RuntimeStatsSink::new(runtime_stats.clone());
 
-        sink.record_keyframe_request_episode_requested(
+        sink.record_picture_recovery_episode_requested(
             89,
             Some("ingressWaitKeyframe".to_string()),
             100.0,
             None,
         );
-        sink.record_keyframe_request_episode_deferred(120.0, "familyInFlight:controlPending");
+        sink.record_picture_recovery_episode_deferred(120.0, "familyInFlight:controlPending");
 
         let stats = runtime_stats.lock().expect("runtime stats lock");
         let episode = stats
@@ -2042,13 +2095,13 @@ mod tests {
         let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
         let sink = RuntimeStatsSink::new(runtime_stats.clone());
 
-        sink.record_keyframe_request_episode_requested(
+        sink.record_picture_recovery_episode_requested(
             90,
             Some("ingressWaitKeyframe".to_string()),
             100.0,
             None,
         );
-        sink.record_keyframe_request_episode_unsent_expired(360.0);
+        sink.record_picture_recovery_episode_unsent_expired(360.0);
 
         let stats = runtime_stats.lock().expect("runtime stats lock");
         let episode = stats
@@ -2067,14 +2120,14 @@ mod tests {
     fn keyframe_response_observed_keeps_lifecycle_in_sync_between_latest_and_recent() {
         let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
         let sink = RuntimeStatsSink::new(runtime_stats.clone());
-        sink.record_keyframe_request_episode_requested(
+        sink.record_picture_recovery_episode_requested(
             1,
             Some("transportAwaitRecoveryAnchor".to_string()),
             100.0,
             None,
         );
-        sink.record_keyframe_request_episode_sent("pli", 110.0, Some(500.0));
-        sink.record_keyframe_request_episode_response_observed(
+        sink.record_picture_recovery_episode_sent("pli", 110.0, Some(500.0));
+        sink.record_picture_recovery_episode_response_observed(
             120.0,
             Some(999),
             false,
@@ -2104,14 +2157,14 @@ mod tests {
 
         let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
         let sink = RuntimeStatsSink::new(runtime_stats.clone());
-        sink.record_keyframe_request_episode_requested(
+        sink.record_picture_recovery_episode_requested(
             42,
             Some("transportAwaitRecoveryAnchor".to_string()),
             100.0,
             None,
         );
-        sink.record_keyframe_request_episode_sent("pli", 110.0, None);
-        sink.record_keyframe_request_episode_packet_seen(120.0, Some(777), true, Some(88));
+        sink.record_picture_recovery_episode_sent("pli", 110.0, None);
+        sink.record_picture_recovery_episode_packet_seen(120.0, Some(777), true, Some(88));
         sink.record_h264_inspection_observation(XbxEngineH264InspectionObservation {
             observation_id: 1,
             frame_rtp_timestamp: Some(777),

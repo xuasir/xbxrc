@@ -923,14 +923,12 @@ fn service_pump_observes_data_channel_message_from_poll_read() {
     }
     assert!(saw_input_closed, "service should observe input close");
 
-    let error = service
-        .request_video_pli(&runtime_stats)
-        .expect_err("未 prime feedback target 前应返回 unavailable");
-    assert!(
-        error
-            .to_string()
-            .contains("xbxEngineRtcVideoPliFeedbackTargetUnavailable"),
-        "unexpected error: {error}"
+    let outcome = service
+        .request_video_pli_with_outcome(&runtime_stats)
+        .expect("未 prime feedback target 前应返回 pending outcome");
+    assert_eq!(
+        outcome,
+        super::VideoRecoveryRequestOutcome::FeedbackTargetPending
     );
 }
 
@@ -1469,12 +1467,12 @@ fn video_recovery_requests_fir_explicitly_within_same_epoch() {
     let stats = runtime_stats.lock().expect("runtime stats lock").clone();
     assert_eq!(
         stats.latest_observation_label.as_deref(),
-        Some("rtcVideoFirRequested")
+        Some("rtcVideoPliRequested")
     );
     assert_eq!(stats.video_pli_request_count_total, 2);
     assert_eq!(
         service.video_recovery_transport_state.stage,
-        super::VideoRecoveryTransportStage::FullIntraRequest
+        super::VideoRecoveryTransportStage::PictureLossIndication
     );
 }
 
@@ -1495,20 +1493,18 @@ fn video_recovery_reports_feedback_target_unavailable_when_feedback_not_supporte
             remote_answer.accepted_video_rtcp_feedback.clear();
         }
     }
-    let error = service
-        .request_video_pli(&runtime_stats)
-        .expect_err("缺少反馈能力时应返回 unavailable");
+    let outcome = service
+        .request_video_pli_with_outcome(&runtime_stats)
+        .expect("缺少反馈能力时应返回 pending outcome");
 
     let stats = runtime_stats.lock().expect("runtime stats lock");
     assert!(
         control_dc_id.is_some(),
         "control channel id should still exist"
     );
-    assert!(
-        error
-            .to_string()
-            .contains("xbxEngineRtcVideoPliFeedbackTargetUnavailable"),
-        "unexpected error: {error}"
+    assert_eq!(
+        outcome,
+        super::VideoRecoveryRequestOutcome::FeedbackTargetPending
     );
     assert_eq!(stats.video_pli_request_count_total, 0);
 }
@@ -1860,7 +1856,12 @@ fn service_replays_pending_control_requests_after_control_close_and_rebuild() {
     }
     assert!(saw_control_closed, "service should observe control close");
 
-    assert!(service.request_video_pli(&runtime_stats).is_err());
+    assert_eq!(
+        service
+            .request_video_pli_with_outcome(&runtime_stats)
+            .unwrap(),
+        super::VideoRecoveryRequestOutcome::FeedbackTargetPending
+    );
     assert!(service.request_decoder_reset(&runtime_stats).is_err());
     assert!(
         service.control_service.has_pending_replay_actions(),
@@ -1900,16 +1901,9 @@ fn service_replays_pending_control_requests_after_control_close_and_rebuild() {
         "service should become control-ready again after reconnect"
     );
 
-    let replay_keyframe = reconnect_payloads.iter().any(|(label, body)| {
-        label == CONTROL_CHANNEL_LABEL && body.contains("\"message\":\"videoKeyframeRequested\"")
-    });
     let replay_decoder_reset = reconnect_payloads.iter().any(|(label, body)| {
         label == CONTROL_CHANNEL_LABEL && body.contains("\"message\":\"decoderReset\"")
     });
-    assert!(
-        replay_keyframe,
-        "reconnect should replay pending keyframe request"
-    );
     assert!(
         replay_decoder_reset,
         "reconnect should replay pending decoder reset request"
@@ -1917,31 +1911,23 @@ fn service_replays_pending_control_requests_after_control_close_and_rebuild() {
 }
 
 #[test]
-fn delayed_keyframe_prime_deferred_syncs_pending_replay_runtime_stats() {
+fn delayed_pli_prime_feedback_target_pending_records_deferred_observation() {
     let mut service = RtcConnectionService::default();
     let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
 
-    service.delayed_keyframe_prime_due_at_ms = Some(0.0);
+    service.delayed_pli_prime_due_at_ms = Some(0.0);
 
     service.run_delayed_control_actions(&runtime_stats).unwrap();
 
     let stats = runtime_stats.lock().expect("runtime stats").clone();
-    assert_eq!(service.delayed_keyframe_prime_due_at_ms, None);
-    assert!(service.control_service.state().pending_keyframe_request);
-    assert_eq!(stats.control_pending_replay_action_count, 1);
-    assert!(stats.control_pending_replay_since_ms.is_some());
+    assert_eq!(service.delayed_pli_prime_due_at_ms, None);
+    assert_eq!(stats.control_pending_replay_action_count, 0);
+    assert!(stats.control_pending_replay_since_ms.is_none());
     assert_eq!(
         stats.latest_observation_label.as_deref(),
-        Some("rtcControlDelayedKeyframePrimeDeferred")
+        Some("rtcDelayedPliPrimeFeedbackTargetPending")
     );
-    assert!(stats
-        .control_pending_replay_summary
-        .as_deref()
-        .is_some_and(|summary| {
-            summary.contains("keyframe=true")
-                && summary.contains("decoderReset=false")
-                && summary.contains("ready=false")
-        }));
+    assert!(stats.control_pending_replay_summary.is_none());
 }
 
 #[test]
@@ -1949,7 +1935,12 @@ fn replay_send_failure_retains_pending_actions() {
     let mut service = RtcConnectionService::default();
     let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
 
-    assert!(service.request_video_pli(&runtime_stats).is_err());
+    assert_eq!(
+        service
+            .request_video_pli_with_outcome(&runtime_stats)
+            .unwrap(),
+        super::VideoRecoveryRequestOutcome::FeedbackTargetPending
+    );
     assert!(service.request_decoder_reset(&runtime_stats).is_err());
 
     service.control_service.open_message_channel();
@@ -2369,14 +2360,13 @@ fn connect_service_to_answer_peer(
         .and_then(|stats| stats.latest_observation_label.clone());
     assert!(
         service.control_service.is_control_ready(),
-        "service control channel should become ready, observed payloads: {observed_payloads:?}, state: message_open={} message_acked={} post_handshake_sent={} control_open={} control_started={} control_bootstrapped_after_handshake={} pending_keyframe={} pending_decoder_reset={} lifecycle={:?} latest_observation={latest_observation_label:?}",
+        "service control channel should become ready, observed payloads: {observed_payloads:?}, state: message_open={} message_acked={} post_handshake_sent={} control_open={} control_started={} control_bootstrapped_after_handshake={} pending_decoder_reset={} lifecycle={:?} latest_observation={latest_observation_label:?}",
         control_state.message_channel_open,
         control_state.message_handshake_acked,
         control_state.post_handshake_messages_sent,
         control_state.control_channel_open,
         control_state.control_started,
         control_state.control_bootstrapped_after_handshake,
-        control_state.pending_keyframe_request,
         control_state.pending_decoder_reset,
         service.lifecycle_state
     );
@@ -2400,14 +2390,10 @@ fn connect_service_to_answer_peer(
                 observed_payloads.push((label, body));
             }
         }
-        let replay_keyframe = observed_payloads.iter().any(|(label, body)| {
-            label == CONTROL_CHANNEL_LABEL
-                && body.contains("\"message\":\"videoKeyframeRequested\"")
-        });
         let replay_decoder_reset = observed_payloads.iter().any(|(label, body)| {
             label == CONTROL_CHANNEL_LABEL && body.contains("\"message\":\"decoderReset\"")
         });
-        if replay_keyframe && replay_decoder_reset {
+        if replay_decoder_reset {
             break;
         }
         thread::sleep(Duration::from_millis(10));
@@ -2503,21 +2489,18 @@ fn request_video_pli_reports_feedback_target_unavailable_without_twcc_feedback_t
         }
     });
     assert!(
-        !super::video_rtcp_keyframe_feedback_media_ssrc_ready(
+        !super::video_rtcp_recovery_feedback_media_ssrc_ready(
             &mut service.controlled_twcc_feedback
         ),
         "未 prime TWCC 时不应有可用于 PLI 的 media ssrc"
     );
 
-    let error = service
-        .request_video_pli(&runtime_stats)
-        .expect_err("缺少反馈目标时应保留 unavailable 原因");
-
-    assert!(
-        error
-            .to_string()
-            .contains("xbxEngineRtcVideoPliFeedbackTargetUnavailable"),
-        "unexpected error: {error}"
+    let outcome = service
+        .request_video_pli_with_outcome(&runtime_stats)
+        .expect("缺少反馈目标时应返回 pending outcome");
+    assert_eq!(
+        outcome,
+        super::VideoRecoveryRequestOutcome::FeedbackTargetPending
     );
     let stats = runtime_stats.lock().unwrap();
     assert_ne!(
@@ -2528,7 +2511,52 @@ fn request_video_pli_reports_feedback_target_unavailable_without_twcc_feedback_t
 }
 
 #[test]
-fn request_video_keyframe_prefers_pli_when_video_feedback_is_bound() {
+fn twcc_feedback_interval_uses_warmup_and_stable_targets_for_cloud_video() {
+    let mut stats = XbxEngineMediaRuntimeStats::default();
+    stats.session_target_type = Some(XbxEngineTargetTypeDto::Cloud);
+
+    let warmup_interval = super::resolve_twcc_feedback_interval_target_ms(&stats, 100);
+    assert_eq!(warmup_interval, 100);
+
+    stats.latest_twcc_remote_stream_observation = Some(crate::XbxEngineTwccRemoteStreamObservation {
+        observation_id: 1,
+        ssrc: 9,
+        mime_type: "video/H264".to_string(),
+        twcc_ext_id: Some(5),
+        header_extensions: Vec::new(),
+        rtcp_feedback: vec!["transport-cc".to_string()],
+        observed_at_ms: 10.0,
+    });
+    let interval_with_binding = super::resolve_twcc_feedback_interval_target_ms(&stats, 100);
+    assert_eq!(interval_with_binding, 50);
+
+    stats.latest_video_twcc_observation = Some(crate::XbxEngineVideoTwccObservation {
+        observation_id: 2,
+        source: "local-feedback".to_string(),
+        feedback_packet_count: 1,
+        covered_sequence_start: 1,
+        covered_sequence_end: 8,
+        covered_sequence_span: 8,
+        observed_packet_count: 8,
+        observed_byte_count: 8_000,
+        coverage_ratio: Some(1.0),
+        ledger_hit_ratio: Some(1.0),
+        feedback_interval_ms: Some(50.0),
+        arrival_span_ms: Some(45.0),
+        receive_bitrate_kbps: Some(1_280.0),
+        twcc_sample_valid: true,
+        twcc_invalid_reason: None,
+        quality: crate::XbxEngineTwccObservationQuality::Stable,
+        delivery_ratio: 1.0,
+        packet_loss_ratio: 0.0,
+        observed_at_ms: 20.0,
+    });
+    let stable_interval = super::resolve_twcc_feedback_interval_target_ms(&stats, 100);
+    assert_eq!(stable_interval, 100);
+}
+
+#[test]
+fn request_video_pli_prefers_pli_when_video_feedback_is_bound() {
     let mut service = RtcConnectionService::default();
     let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
     let session = XbxEngineSessionDto {
@@ -2558,7 +2586,7 @@ fn request_video_keyframe_prefers_pli_when_video_feedback_is_bound() {
 }
 
 #[test]
-fn request_video_keyframe_upgrades_from_pli_to_fir_without_control_fallback() {
+fn request_video_pli_stays_on_pli_after_explicit_fir_marker() {
     let mut service = RtcConnectionService::default();
     let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
     let session = XbxEngineSessionDto {
@@ -2583,12 +2611,12 @@ fn request_video_keyframe_upgrades_from_pli_to_fir_without_control_fallback() {
     let stats = runtime_stats.lock().unwrap().clone();
     assert_eq!(
         stats.latest_observation_label.as_deref(),
-        Some("rtcVideoFirRequested")
+        Some("rtcVideoPliRequested")
     );
     assert_eq!(stats.video_pli_request_count_total, 2);
     assert_eq!(
         service.video_recovery_transport_state.stage,
-        super::VideoRecoveryTransportStage::FullIntraRequest
+        super::VideoRecoveryTransportStage::PictureLossIndication
     );
 
     service.video_recovery_transport_state.stage =
@@ -2601,7 +2629,7 @@ fn request_video_keyframe_upgrades_from_pli_to_fir_without_control_fallback() {
         stats.latest_observation_label.as_deref(),
         Some("rtcVideoPliRequested")
     );
-    assert_eq!(stats.video_pli_request_count_total, 2);
+    assert_eq!(stats.video_pli_request_count_total, 3);
     assert_eq!(
         service.video_recovery_transport_state.stage,
         super::VideoRecoveryTransportStage::PictureLossIndication
@@ -2609,7 +2637,7 @@ fn request_video_keyframe_upgrades_from_pli_to_fir_without_control_fallback() {
 }
 
 #[test]
-fn request_video_keyframe_clears_stage_after_clean_anchor() {
+fn request_video_pli_clears_stage_after_clean_anchor() {
     let mut service = RtcConnectionService::default();
     let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
     let session = XbxEngineSessionDto {
@@ -2646,7 +2674,7 @@ fn request_video_keyframe_clears_stage_after_clean_anchor() {
 }
 
 #[test]
-fn request_video_keyframe_does_not_suppress_stale_clean_anchor_when_transport_await_reappears() {
+fn request_video_pli_does_not_suppress_stale_clean_anchor_when_transport_await_reappears() {
     let mut service = RtcConnectionService::default();
     let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
     let session = XbxEngineSessionDto {
@@ -2704,8 +2732,7 @@ fn request_video_keyframe_does_not_suppress_stale_clean_anchor_when_transport_aw
 }
 
 #[test]
-fn request_video_keyframe_does_not_suppress_sustaining_recovery_when_fresh_non_idr_blocks_bootstrap(
-) {
+fn request_video_pli_does_not_suppress_sustaining_recovery_when_fresh_non_idr_blocks_bootstrap() {
     let mut service = RtcConnectionService::default();
     let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
     let session = XbxEngineSessionDto {
@@ -2836,7 +2863,7 @@ fn recovery_command_semantics_bind_to_decision_id_not_latest_ledger() {
 #[test]
 fn keyframe_suppressed_outcome_is_recorded_as_deferred() {
     // service 层始终执行显式 PLI/FIR，抑制语义由上层策略负责。
-    use super::VideoKeyframeRequestOutcome;
+    use super::VideoRecoveryRequestOutcome;
 
     let mut service = RtcConnectionService::default();
     let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
@@ -2869,7 +2896,7 @@ fn keyframe_suppressed_outcome_is_recorded_as_deferred() {
 
     answer_io.pump(&mut answer_pc).unwrap();
 
-    assert_eq!(outcome, VideoKeyframeRequestOutcome::RequestedPli);
+    assert_eq!(outcome, VideoRecoveryRequestOutcome::RequestedPli);
     assert_eq!(
         outcome.escalation_action_label().as_deref(),
         Some("requestPli")

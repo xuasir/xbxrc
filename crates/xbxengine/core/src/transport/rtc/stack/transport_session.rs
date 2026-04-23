@@ -5,7 +5,7 @@ use crate::api::backend::{
 };
 use crate::api::runtime::XbxEngineRuntimeConfig;
 use crate::runtime_stats_sink::RuntimeStatsSink;
-use crate::transport::rtc::connection::{RtcConnectionService, VideoKeyframeRequestOutcome};
+use crate::transport::rtc::connection::{RtcConnectionService, VideoRecoveryRequestOutcome};
 use crate::transport::rtc::executor::peer::{
     stage_reconnect_candidate, StageReconnectCandidateOutcome,
 };
@@ -446,7 +446,7 @@ impl<'a> RtcTransportSessionBridge<'a> {
                         return;
                     }
                     RuntimeStatsSink::new(self.runtime_stats.clone())
-                        .record_keyframe_request_episode_requested(
+                        .record_picture_recovery_episode_requested(
                             *observation_id,
                             Some(reason.clone()),
                             requested_at_ms,
@@ -476,11 +476,11 @@ impl<'a> RtcTransportSessionBridge<'a> {
                     match &command_status {
                         CommandResultStatus::Deferred { reason } => {
                             RuntimeStatsSink::new(self.runtime_stats.clone())
-                                .record_keyframe_request_episode_deferred(requested_at_ms, reason);
+                                .record_picture_recovery_episode_deferred(requested_at_ms, reason);
                         }
                         CommandResultStatus::Failed { error } => {
                             RuntimeStatsSink::new(self.runtime_stats.clone())
-                                .record_keyframe_request_episode_failed(requested_at_ms, error);
+                                .record_picture_recovery_episode_failed(requested_at_ms, error);
                         }
                         CommandResultStatus::Succeeded => {}
                     }
@@ -532,7 +532,7 @@ impl<'a> RtcTransportSessionBridge<'a> {
                         return;
                     }
                     RuntimeStatsSink::new(self.runtime_stats.clone())
-                        .record_keyframe_request_episode_requested(
+                        .record_picture_recovery_episode_requested(
                             *observation_id,
                             Some(reason.clone()),
                             requested_at_ms,
@@ -562,11 +562,11 @@ impl<'a> RtcTransportSessionBridge<'a> {
                     match &command_status {
                         CommandResultStatus::Deferred { reason } => {
                             RuntimeStatsSink::new(self.runtime_stats.clone())
-                                .record_keyframe_request_episode_deferred(requested_at_ms, reason);
+                                .record_picture_recovery_episode_deferred(requested_at_ms, reason);
                         }
                         CommandResultStatus::Failed { error } => {
                             RuntimeStatsSink::new(self.runtime_stats.clone())
-                                .record_keyframe_request_episode_failed(requested_at_ms, error);
+                                .record_picture_recovery_episode_failed(requested_at_ms, error);
                         }
                         CommandResultStatus::Succeeded => {}
                     }
@@ -903,25 +903,25 @@ impl<'a> RtcTransportSessionBridge<'a> {
 
     fn resolve_keyframe_command_status_from_result(
         &self,
-        result: &Result<VideoKeyframeRequestOutcome, XbxEngineRuntimeError>,
+        result: &Result<VideoRecoveryRequestOutcome, XbxEngineRuntimeError>,
     ) -> (CommandResultStatus, Option<String>) {
         match result {
-            Ok(VideoKeyframeRequestOutcome::Suppressed) => (
+            Ok(VideoRecoveryRequestOutcome::Suppressed) => (
                 CommandResultStatus::Deferred {
                     reason: RECOVERY_COMMAND_REASON_SAME_FAMILY_TRANSPORT_STAGE_COALESCED
                         .to_string(),
                 },
                 None,
             ),
-            Ok(VideoKeyframeRequestOutcome::FeedbackTargetPending) => (
+            Ok(VideoRecoveryRequestOutcome::FeedbackTargetPending) => (
                 CommandResultStatus::Deferred {
                     reason: RECOVERY_COMMAND_REASON_VIDEO_RTCP_FEEDBACK_TARGET_PENDING.to_string(),
                 },
                 None,
             ),
             Ok(
-                VideoKeyframeRequestOutcome::RequestedPli
-                | VideoKeyframeRequestOutcome::RequestedFir,
+                VideoRecoveryRequestOutcome::RequestedPli
+                | VideoRecoveryRequestOutcome::RequestedFir,
             ) => (CommandResultStatus::Succeeded, None),
             Err(error) => {
                 let error_text = error.to_string();
@@ -1052,7 +1052,7 @@ mod tests {
 
     use crate::api::runtime::XbxEngineRuntimeConfig;
     use crate::media::video::decode::actor::{DecodeActorHandle, DecodeMsg};
-    use crate::transport::rtc::connection::{RtcConnectionService, VideoKeyframeRequestOutcome};
+    use crate::transport::rtc::connection::{RtcConnectionService, VideoRecoveryRequestOutcome};
     use crate::transport::rtc::facts::{CommandResultStatus, SessionCommand, TransportCommand};
     use crate::transport::rtc::recovery::coordinator::{
         CoordinatorProposal, RecoveryCoordinator, RecoveryOwnerSignal,
@@ -3086,7 +3086,7 @@ mod tests {
         let bridge = build_bridge(runtime_stats, pending_runtime_recovery_action);
 
         let (status, detail) = bridge.resolve_keyframe_command_status_from_result(&Ok(
-            VideoKeyframeRequestOutcome::Suppressed,
+            VideoRecoveryRequestOutcome::Suppressed,
         ));
 
         assert_eq!(

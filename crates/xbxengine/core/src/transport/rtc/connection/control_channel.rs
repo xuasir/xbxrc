@@ -2,7 +2,6 @@ use crate::XbxEngineRuntimeError;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub(crate) struct RtcControlReplayActions {
-    pub(crate) request_keyframe: bool,
     pub(crate) request_decoder_reset: bool,
 }
 
@@ -15,7 +14,6 @@ pub(crate) struct RtcControlChannelState {
     pub(crate) control_channel_open: bool,
     pub(crate) control_started: bool,
     pub(crate) control_bootstrapped_after_handshake: bool,
-    pub(crate) pending_keyframe_request: bool,
     pub(crate) pending_decoder_reset: bool,
     pub(crate) pending_replay_since_ms: Option<f64>,
     pub(crate) keyboard_pointer_enabled: bool,
@@ -28,26 +26,18 @@ pub(crate) struct RtcControlChannelService {
 
 impl RtcControlChannelService {
     pub(crate) fn reset(&mut self) {
-        let pending_keyframe_request = self.state.pending_keyframe_request;
         let pending_decoder_reset = self.state.pending_decoder_reset;
         let pending_replay_since_ms = self.state.pending_replay_since_ms;
         let keyboard_pointer_enabled = self.state.keyboard_pointer_enabled;
         self.state = RtcControlChannelState::default();
-        self.state.pending_keyframe_request = pending_keyframe_request;
         self.state.pending_decoder_reset = pending_decoder_reset;
         self.state.pending_replay_since_ms = pending_replay_since_ms;
         self.state.keyboard_pointer_enabled = keyboard_pointer_enabled;
     }
 
     pub(crate) fn clear_pending_replay_actions(&mut self) {
-        self.state.pending_keyframe_request = false;
         self.state.pending_decoder_reset = false;
         self.state.pending_replay_since_ms = None;
-    }
-
-    pub(crate) fn clear_pending_keyframe_request(&mut self) {
-        self.state.pending_keyframe_request = false;
-        self.refresh_pending_replay_since();
     }
 
     pub(crate) fn clear_pending_decoder_reset_request(&mut self) {
@@ -118,19 +108,6 @@ impl RtcControlChannelService {
         self.state.keyboard_pointer_enabled = enabled;
     }
 
-    pub(crate) fn request_video_keyframe(&mut self) -> Result<(), XbxEngineRuntimeError> {
-        if self.is_control_ready() {
-            self.state.pending_keyframe_request = false;
-            self.refresh_pending_replay_since();
-            return Ok(());
-        }
-        self.state.pending_keyframe_request = true;
-        self.mark_pending_replay();
-        Err(XbxEngineRuntimeError::new(
-            "xbxEngineRtcControlChannelNotReadyForKeyframe",
-        ))
-    }
-
     pub(crate) fn request_decoder_reset(&mut self) -> Result<(), XbxEngineRuntimeError> {
         if self.is_control_ready() {
             self.state.pending_decoder_reset = false;
@@ -151,11 +128,11 @@ impl RtcControlChannelService {
     }
 
     pub(crate) fn has_pending_replay_actions(&self) -> bool {
-        self.state.pending_keyframe_request || self.state.pending_decoder_reset
+        self.state.pending_decoder_reset
     }
 
     pub(crate) fn pending_replay_action_count(&self) -> u8 {
-        self.state.pending_keyframe_request as u8 + self.state.pending_decoder_reset as u8
+        self.state.pending_decoder_reset as u8
     }
 
     pub(crate) fn pending_replay_since_ms(&self) -> Option<f64> {
@@ -168,7 +145,6 @@ impl RtcControlChannelService {
         }
 
         let actions = RtcControlReplayActions {
-            request_keyframe: self.state.pending_keyframe_request,
             request_decoder_reset: self.state.pending_decoder_reset,
         };
         if actions == RtcControlReplayActions::default() {
@@ -226,7 +202,6 @@ mod tests {
     fn request_before_ready_is_queued_for_replay() {
         let mut service = RtcControlChannelService::default();
 
-        assert!(service.request_video_keyframe().is_err());
         assert!(service.request_decoder_reset().is_err());
         assert!(service.has_pending_replay_actions());
 
@@ -240,7 +215,6 @@ mod tests {
         assert_eq!(
             actions,
             Some(RtcControlReplayActions {
-                request_keyframe: true,
                 request_decoder_reset: true,
             })
         );
@@ -250,7 +224,7 @@ mod tests {
     #[test]
     fn replay_actions_are_consumed_only_once() {
         let mut service = RtcControlChannelService::default();
-        service.request_video_keyframe().unwrap_err();
+        service.request_decoder_reset().unwrap_err();
         service.open_message_channel();
         service.open_control_channel();
         service.ack_handshake();
@@ -260,8 +234,7 @@ mod tests {
         assert_eq!(
             first,
             Some(RtcControlReplayActions {
-                request_keyframe: true,
-                request_decoder_reset: false,
+                request_decoder_reset: true,
             })
         );
         assert_eq!(service.peek_replay_actions_if_ready(), None);
@@ -275,7 +248,6 @@ mod tests {
         service.ack_handshake();
         service.mark_control_bootstrapped();
 
-        assert!(service.request_video_keyframe().is_ok());
         assert!(service.request_decoder_reset().is_ok());
         assert!(!service.has_pending_replay_actions());
         assert_eq!(service.peek_replay_actions_if_ready(), None);
@@ -301,7 +273,6 @@ mod tests {
         service.open_control_channel();
         service.mark_control_bootstrapped();
         assert!(!service.is_control_ready());
-        assert!(service.request_video_keyframe().is_err());
         assert!(service.request_decoder_reset().is_err());
     }
 
@@ -328,14 +299,12 @@ mod tests {
     fn reset_preserves_pending_replay_requests_for_reconnect() {
         let mut service = RtcControlChannelService::default();
 
-        assert!(service.request_video_keyframe().is_err());
         assert!(service.request_decoder_reset().is_err());
         assert!(service.has_pending_replay_actions());
 
         service.reset();
 
         assert!(service.has_pending_replay_actions());
-        assert!(service.state().pending_keyframe_request);
         assert!(service.state().pending_decoder_reset);
         assert!(!service.state().message_channel_open);
         assert!(!service.state().control_channel_open);

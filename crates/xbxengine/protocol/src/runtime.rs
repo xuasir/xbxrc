@@ -105,6 +105,16 @@ pub enum XbxEngineRuntimeEventDto {
         frame_decoded_time_ms: f64,
         renderer_frame_time_ms: f64,
     },
+    /// 首帧时长专用观测：首帧真实渲染落地时发出一次，用于启动/重连首帧慢诊断。
+    FirstFrameLatencyObserved {
+        connected_at_ms: Option<f64>,
+        first_packet_at_ms: Option<f64>,
+        first_decode_at_ms: Option<f64>,
+        first_render_at_ms: f64,
+        from_connected_to_first_render_ms: Option<f64>,
+        from_first_packet_to_first_render_ms: Option<f64>,
+        from_first_decode_to_first_render_ms: Option<f64>,
+    },
     DiagnosticsPulse {
         window_ms: f64,
         frames_in_window: u64,

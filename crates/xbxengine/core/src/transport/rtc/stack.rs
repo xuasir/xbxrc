@@ -13,7 +13,7 @@ use crate::api::backend::{
     XbxEngineVideoFrameDropObservation,
 };
 use crate::media::video::render::renderer::XbxRenderState;
-use crate::transport::rtc::connection::{RtcConnectionService, VideoKeyframeRequestOutcome};
+use crate::transport::rtc::connection::{RtcConnectionService, VideoRecoveryRequestOutcome};
 use crate::transport::rtc::facts::{CommandResultStatus, TransportCommand, TransportFact};
 use crate::transport::rtc::pipeline::supervisor::{spawn_media_supervisor, MediaSupervisorContext};
 use crate::transport::rtc::protocol::data_channel_state::{
@@ -40,6 +40,25 @@ use self::runtime_port::{LocalDecoderResetPolicyState, RtcStackRuntimePort};
 use self::transport_session::RtcTransportSessionBridge;
 #[cfg(test)]
 pub(crate) use self::transport_session::RtcTransportSessionBridge as TestRtcTransportSessionBridge;
+
+fn map_video_recovery_request_result_to_command_status(
+    result: &Result<VideoRecoveryRequestOutcome, XbxEngineRuntimeError>,
+) -> CommandResultStatus {
+    match result {
+        Ok(
+            VideoRecoveryRequestOutcome::RequestedPli | VideoRecoveryRequestOutcome::RequestedFir,
+        ) => CommandResultStatus::Succeeded,
+        Ok(VideoRecoveryRequestOutcome::Suppressed) => CommandResultStatus::Deferred {
+            reason: "sameFamilyTransportStageCoalesced".to_string(),
+        },
+        Ok(VideoRecoveryRequestOutcome::FeedbackTargetPending) => CommandResultStatus::Deferred {
+            reason: "familyDeferred:videoRtcpFeedbackTargetPending".to_string(),
+        },
+        Err(error) => CommandResultStatus::Failed {
+            error: error.to_string(),
+        },
+    }
+}
 
 pub(crate) trait XbxMediaStackPort: Send {
     fn sync_runtime_config(&mut self, runtime_config: XbxEngineRuntimeConfig);
@@ -369,23 +388,7 @@ impl XbxMediaStackPort for XbxActiveMediaStack {
             .lock()
             .map_err(|_| XbxEngineRuntimeError::new("xbxEngineRtcConnectionLockFailed"))?
             .request_video_pli_with_outcome(&self.runtime_stats);
-        let status = match &result {
-            Ok(
-                VideoKeyframeRequestOutcome::RequestedPli
-                | VideoKeyframeRequestOutcome::RequestedFir,
-            ) => CommandResultStatus::Succeeded,
-            Ok(VideoKeyframeRequestOutcome::Suppressed) => CommandResultStatus::Deferred {
-                reason: "sameFamilyTransportStageCoalesced".to_string(),
-            },
-            Ok(VideoKeyframeRequestOutcome::FeedbackTargetPending) => {
-                CommandResultStatus::Deferred {
-                    reason: "familyDeferred:videoRtcpFeedbackTargetPending".to_string(),
-                }
-            }
-            Err(error) => CommandResultStatus::Failed {
-                error: error.to_string(),
-            },
-        };
+        let status = map_video_recovery_request_result_to_command_status(&result);
         self.record_transport_command_status(
             TransportCommand::RequestPli {
                 reason: "stack.manualRequest".to_string(),
@@ -426,9 +429,13 @@ impl XbxMediaStackPort for XbxActiveMediaStack {
 
 #[cfg(test)]
 mod tests {
+    use super::map_video_recovery_request_result_to_command_status;
     use super::runtime_stats::merge_media_snapshot_into_runtime_stats;
     use crate::api::backend::XbxEngineMediaRuntimeStats;
+    use crate::transport::rtc::connection::VideoRecoveryRequestOutcome;
+    use crate::transport::rtc::facts::CommandResultStatus;
     use crate::transport::rtc::stream::runtime_state::RtcMediaIngressSnapshot;
+    use crate::XbxEngineRuntimeError;
     use xbxengine_protocol::XbxEngineTransportStateDto;
 
     #[test]
@@ -548,5 +555,39 @@ mod tests {
         assert_eq!(status.state, "remoteTrackAttached");
         assert_eq!(status.video_packet_count_total, 6);
         assert_eq!(status.video_bytes_total, 6_000);
+    }
+
+    #[test]
+    fn map_video_recovery_request_result_feedback_target_pending_is_deferred() {
+        let status = map_video_recovery_request_result_to_command_status(&Ok(
+            VideoRecoveryRequestOutcome::FeedbackTargetPending,
+        ));
+        assert_eq!(
+            status,
+            CommandResultStatus::Deferred {
+                reason: "familyDeferred:videoRtcpFeedbackTargetPending".to_string()
+            }
+        );
+    }
+
+    #[test]
+    fn map_video_recovery_request_result_requested_pli_is_succeeded() {
+        let status = map_video_recovery_request_result_to_command_status(&Ok(
+            VideoRecoveryRequestOutcome::RequestedPli,
+        ));
+        assert_eq!(status, CommandResultStatus::Succeeded);
+    }
+
+    #[test]
+    fn map_video_recovery_request_result_error_is_failed() {
+        let status = map_video_recovery_request_result_to_command_status(&Err(
+            XbxEngineRuntimeError::new("manualRequestFailed"),
+        ));
+        assert_eq!(
+            status,
+            CommandResultStatus::Failed {
+                error: "manualRequestFailed".to_string()
+            }
+        );
     }
 }

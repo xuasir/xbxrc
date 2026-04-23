@@ -476,7 +476,7 @@ where
             break;
         };
         if frame.is_keyframe {
-            runtime_stats.record_keyframe_request_episode_decoded(
+            runtime_stats.record_picture_recovery_episode_decoded(
                 now_ms,
                 frame.rtp_timestamp,
                 frame.surface.frame_seq,

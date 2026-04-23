@@ -20,7 +20,7 @@ use crate::transport::rtc::recovery::remote_profile_runtime::persist_runtime_rem
 use crate::transport::rtc::recovery::runtime_state::resolve_recovery_profile;
 use crate::XbxEngineAnchorCandidateLedger;
 use crate::XbxEngineH264InspectionObservation;
-use crate::XbxEngineKeyframeRequestEpisodeObservation;
+use crate::XbxEngineKeyframeRequestEpisodeObservation as XbxEnginePictureRecoveryEpisodeObservation;
 use crate::XbxEngineMediaRuntimeStats;
 use crate::XbxEngineVideoTimelineObservation;
 use crate::XbxEngineVideoTrackStatus;
@@ -438,7 +438,7 @@ pub(crate) fn compute_recovery_facts(
     // 计算 repairability 评分
     let repairability = compute_repairability_score(timeline, stats);
 
-    let recovery_episode = select_relevant_keyframe_episode_for_progress(stats);
+    let recovery_episode = select_relevant_picture_recovery_episode_for_progress(stats);
     let recovery_episode_stage =
         recovery_episode.and_then(|ep| recovery_episode_stage_from_status(ep.status.as_str()));
     let has_current_clean_anchor = current_clean_anchor_observed_at_ms_from_stats(stats).is_some();
@@ -488,9 +488,9 @@ pub(crate) fn compute_recovery_facts(
     }
 }
 
-fn select_relevant_keyframe_episode_for_progress(
+fn select_relevant_picture_recovery_episode_for_progress(
     stats: &XbxEngineMediaRuntimeStats,
-) -> Option<&XbxEngineKeyframeRequestEpisodeObservation> {
+) -> Option<&XbxEnginePictureRecoveryEpisodeObservation> {
     let latest_active = stats
         .latest_keyframe_request_episode
         .as_ref()
