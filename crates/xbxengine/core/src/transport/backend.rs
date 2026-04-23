@@ -215,10 +215,10 @@ impl XbxEngineMediaBackend for XbxNegotiationBackend {
         Ok(())
     }
 
-    fn drain_pending_render_frames(
+    fn take_latest_render_frame(
         &mut self,
-    ) -> Result<Vec<XbxEngineRenderFrame>, XbxEngineRuntimeError> {
-        Ok(self.stack.drain_pending_render_frames())
+    ) -> Result<Option<XbxEngineRenderFrame>, XbxEngineRuntimeError> {
+        Ok(self.stack.take_latest_render_frame())
     }
 
     fn record_video_frame_drop(

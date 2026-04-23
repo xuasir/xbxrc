@@ -104,6 +104,7 @@ struct WindowsWgpuState {
 #[derive(Default)]
 struct WindowsWgpuTelemetry {
     latest_present_time_ms: Option<f64>,
+    latest_submit_time_ms: Option<f64>,
     display_tick_epoch: u64,
     present_epoch: u64,
     cadence_phase: HostCadencePhase,
@@ -387,6 +388,7 @@ impl NativeVideoPresenter for WindowsWgpuPresenter {
         self.ensure_render_loop();
         let now_ms = now_ms_f64();
         if let Ok(mut telemetry) = self.telemetry.lock() {
+            telemetry.latest_submit_time_ms = Some(now_ms);
             telemetry.present_enqueue_count_total =
                 telemetry.present_enqueue_count_total.saturating_add(1);
         }
@@ -449,7 +451,9 @@ impl NativeVideoPresenter for WindowsWgpuPresenter {
             .as_ref()
             .and_then(|state| state.last_presented_frame_seq);
         viewport.latest_host_present_time_ms = telemetry.latest_present_time_ms;
+        viewport.latest_host_submit_time_ms = None;
         viewport.host_present_fps = telemetry.present_fps();
+        viewport.host_submit_epoch = telemetry.present_enqueue_count_total;
         viewport.host_present_enqueue_count_total = telemetry.present_enqueue_count_total;
         viewport.host_present_drop_count_total = telemetry.present_drop_count_total;
         viewport.host_present_overwrite_count_total = telemetry.present_overwrite_count_total;
@@ -772,6 +776,7 @@ impl NativeVideoPresenter for MacOsWgpuPresenter {
         self.ensure_render_loop();
         let now_ms = now_ms_f64();
         if let Ok(mut telemetry) = self.telemetry.lock() {
+            telemetry.latest_submit_time_ms = Some(now_ms);
             telemetry.present_enqueue_count_total =
                 telemetry.present_enqueue_count_total.saturating_add(1);
         }
@@ -892,7 +897,9 @@ impl NativeVideoPresenter for MacOsWgpuPresenter {
         };
         let renderer_state = self.renderer_state.lock().ok();
         viewport.latest_host_present_time_ms = telemetry.latest_present_time_ms;
+        viewport.latest_host_submit_time_ms = telemetry.latest_submit_time_ms;
         viewport.host_present_fps = telemetry.present_fps();
+        viewport.host_submit_epoch = telemetry.present_enqueue_count_total;
         viewport.host_present_enqueue_count_total = telemetry.present_enqueue_count_total;
         viewport.host_present_drop_count_total = telemetry.present_drop_count_total;
         viewport.host_present_overwrite_count_total = telemetry.present_overwrite_count_total;
@@ -1348,7 +1355,9 @@ impl NativeVideoPresenter for MacOsVideoPresenter {
             .ok()
             .map(|frame_slot| frame_slot.diagnostics_snapshot());
         viewport.latest_host_present_time_ms = telemetry.latest_present_time_ms;
+        viewport.latest_host_submit_time_ms = telemetry.latest_submit_time_ms;
         viewport.host_present_fps = telemetry.present_fps();
+        viewport.host_submit_epoch = telemetry.present_enqueue_count_total;
         viewport.host_present_enqueue_count_total = telemetry.present_enqueue_count_total;
         viewport.host_present_drop_count_total = telemetry.present_drop_count_total;
         viewport.host_present_overwrite_count_total = telemetry.present_overwrite_count_total;

@@ -381,35 +381,7 @@ where
             *catch_up_mode = false;
         }
         match decision.action {
-            FramePacingAction::Sleep(_) => {
-                log_pacer_flow(
-                    "retain",
-                    frame,
-                    pacing_queue.len(),
-                    render_queue.len(),
-                    Some(host_context),
-                    Some("retain"),
-                    Some("pacingDelay"),
-                    None,
-                );
-                return None;
-            }
-            FramePacingAction::Drop => {
-                let Some(frame) = pacing_queue.pop_front() else {
-                    return None;
-                };
-                record_pacer_frame_drop(
-                    runtime_stats,
-                    frame_drop_observation_id,
-                    "deadline",
-                    frame,
-                    pacing_queue.len(),
-                    render_queue.len(),
-                    Some(host_context),
-                );
-                queue_history.record_depth(pacing_queue.len());
-            }
-            FramePacingAction::SubmitNow => {
+            FramePacingAction::Ready => {
                 let Some(frame) = pacing_queue.pop_front() else {
                     return None;
                 };
@@ -478,6 +450,21 @@ where
                         return Some(dropped_frame);
                     }
                 }
+            }
+            FramePacingAction::Drop => {
+                let Some(frame) = pacing_queue.pop_front() else {
+                    return None;
+                };
+                record_pacer_frame_drop(
+                    runtime_stats,
+                    frame_drop_observation_id,
+                    "deadline",
+                    frame,
+                    pacing_queue.len(),
+                    render_queue.len(),
+                    Some(host_context),
+                );
+                queue_history.record_depth(pacing_queue.len());
             }
         }
     }
@@ -717,8 +704,7 @@ fn next_wait_duration(
         .decide(Instant::now(), frame.pts, catch_up_mode, host_release_wait)
         .action
     {
-        FramePacingAction::Sleep(duration) => duration,
-        FramePacingAction::Drop | FramePacingAction::SubmitNow => Duration::ZERO,
+        FramePacingAction::Drop | FramePacingAction::Ready => Duration::ZERO,
     }
 }
 

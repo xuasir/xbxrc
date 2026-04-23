@@ -142,12 +142,11 @@ impl<'a> RtcStackRuntimePort<'a> {
         stats
     }
 
-    pub(crate) fn drain_pending_render_frames(&self) -> Vec<XbxEngineRenderFrame> {
+    pub(crate) fn take_latest_render_frame(&self) -> Option<XbxEngineRenderFrame> {
         self.render_state
             .lock()
             .ok()
-            .map(|mut render_state| render_state.drain_pending_frames())
-            .unwrap_or_default()
+            .and_then(|mut render_state| render_state.take_latest_renderable_frame())
     }
 
     pub(crate) fn record_video_frame_drop(&self, observation: XbxEngineVideoFrameDropObservation) {
@@ -187,10 +186,20 @@ impl<'a> RtcStackRuntimePort<'a> {
         metrics: XbxEngineHostVideoPresentMetrics,
     ) {
         RuntimeStatsSink::new(self.runtime_stats.clone()).update(|stats| {
+            let now_ms = crate::transport::rtc::stats::now_ms_f64();
+            stats.latest_video_host_submit_time_ms = metrics.latest_host_submit_time_ms;
             stats.latest_video_host_present_time_ms = metrics.latest_host_present_time_ms;
+            stats.host_submit_epoch = metrics.host_submit_epoch;
             stats.host_display_tick_epoch = metrics.display_tick_epoch;
-            stats.video_present_epoch = metrics.present_epoch;
+            stats.display_present_epoch = metrics.display_present_epoch;
+            stats.video_present_epoch = metrics.display_present_epoch;
             stats.host_cadence_phase = metrics.cadence_phase;
+            stats.submit_age_ms = metrics
+                .latest_host_submit_time_ms
+                .map(|ts| (now_ms - ts).max(0.0));
+            stats.display_age_ms = metrics
+                .latest_host_present_time_ms
+                .map(|ts| (now_ms - ts).max(0.0));
             stats.last_displayed_frame_seq = metrics.last_displayed_frame_seq;
             stats.last_displayed_frame_rtp_timestamp = metrics.last_displayed_frame_rtp_timestamp;
             stats.last_displayed_at_ms = metrics.last_displayed_at_ms;

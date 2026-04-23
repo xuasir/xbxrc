@@ -543,9 +543,12 @@ impl XbxEngineMediaBackend for ScriptedMediaBackend {
         metrics: crate::XbxEngineHostVideoPresentMetrics,
     ) -> Result<(), XbxEngineRuntimeError> {
         let mut runtime_stats = self.runtime_stats.lock().expect("lock runtime stats");
+        runtime_stats.latest_video_host_submit_time_ms = metrics.latest_host_submit_time_ms;
         runtime_stats.latest_video_host_present_time_ms = metrics.latest_host_present_time_ms;
+        runtime_stats.host_submit_epoch = metrics.host_submit_epoch;
         runtime_stats.host_display_tick_epoch = metrics.display_tick_epoch;
-        runtime_stats.video_present_epoch = metrics.present_epoch;
+        runtime_stats.display_present_epoch = metrics.display_present_epoch;
+        runtime_stats.video_present_epoch = metrics.display_present_epoch;
         runtime_stats.host_cadence_phase = metrics.cadence_phase;
         runtime_stats.video_present_fps = metrics.present_fps;
         runtime_stats.video_present_submit_count_total = metrics.present_submit_count_total;
@@ -592,18 +595,17 @@ impl XbxEngineMediaBackend for ScriptedMediaBackend {
             .collect())
     }
 
-    fn drain_pending_render_frames(
+    fn take_latest_render_frame(
         &mut self,
-    ) -> Result<Vec<crate::XbxEngineRenderFrame>, XbxEngineRuntimeError> {
+    ) -> Result<Option<crate::XbxEngineRenderFrame>, XbxEngineRuntimeError> {
         if let Ok(mut order) = self.call_order.lock() {
-            order.push("drain_frames");
+            order.push("take_latest_frame");
         }
         Ok(self
             .pending_render_frames
             .lock()
             .expect("lock pending render frames")
-            .drain(..)
-            .collect())
+            .pop_back())
     }
 
     fn request_video_keyframe(&mut self) -> Result<(), XbxEngineRuntimeError> {

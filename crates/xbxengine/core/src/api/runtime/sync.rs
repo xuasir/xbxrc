@@ -65,14 +65,14 @@ where
         let Some(viewport) = self.snapshot.viewport.clone() else {
             return;
         };
-        let frames = match self.media_backend.drain_pending_render_frames() {
-            Ok(frames) => frames,
+        let frame = match self.media_backend.take_latest_render_frame() {
+            Ok(frame) => frame,
             Err(error) => {
-                self.emit_error("drainPendingRenderFramesFailed", error.to_string());
+                self.emit_error("takeLatestRenderFrameFailed", error.to_string());
                 return;
             }
         };
-        if frames.is_empty() {
+        let Some(frame) = frame else {
             if matches!(
                 self.state,
                 XbxEngineRuntimeState::Running | XbxEngineRuntimeState::Reconnecting
@@ -83,25 +83,18 @@ where
                     .saturating_add(1);
             }
             return;
-        }
+        };
         self.snapshot.host_present_take_empty_streak = 0;
         self.snapshot.host_present_latest_render_slot_at_ms = Some(now_ms_f64());
-        let mut latest_presented_frame = None;
-        for frame in frames {
-            if let Err(error) = self.host_bridge.present_frame(
-                &viewport,
-                self.snapshot.surface_id.as_deref(),
-                &frame,
-            ) {
-                self.emit_error("presentFrameFailed", error.to_string());
-                return;
-            }
-            latest_presented_frame = Some(frame);
+        if let Err(error) =
+            self.host_bridge
+                .present_frame(&viewport, self.snapshot.surface_id.as_deref(), &frame)
+        {
+            self.emit_error("presentFrameFailed", error.to_string());
+            return;
         }
-        if let Some(frame) = latest_presented_frame {
-            self.snapshot.video_size = Some((frame.width, frame.height));
-            self.snapshot.frame_rendered_time_ms = Some(frame.rendered_at_ms);
-        }
+        self.snapshot.video_size = Some((frame.width, frame.height));
+        self.snapshot.frame_rendered_time_ms = Some(frame.rendered_at_ms);
     }
 
     pub(super) fn record_input_status(&mut self, status: &XbxEngineInputStatus) {

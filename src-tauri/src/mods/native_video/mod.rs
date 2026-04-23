@@ -195,7 +195,9 @@ pub struct NativeVideoViewportState {
     pub present_count_total: u64,
     pub last_present_kind: Option<String>,
     pub latest_host_present_time_ms: Option<f64>,
+    pub latest_host_submit_time_ms: Option<f64>,
     pub host_present_fps: f64,
+    pub host_submit_epoch: u64,
     pub host_present_enqueue_count_total: u64,
     pub host_present_drop_count_total: u64,
     pub host_present_overwrite_count_total: u64,
@@ -543,6 +545,8 @@ fn reset_viewport_present_runtime_state(viewport: &mut NativeVideoViewportState)
     viewport.last_present_kind = None;
     viewport.latest_host_present_time_ms = None;
     viewport.host_present_fps = 0.0;
+    viewport.latest_host_submit_time_ms = None;
+    viewport.host_submit_epoch = 0;
     viewport.host_present_enqueue_count_total = 0;
     viewport.host_present_drop_count_total = 0;
     viewport.host_present_overwrite_count_total = 0;
@@ -680,6 +684,7 @@ pub(super) struct MacOsWgpuState {
 #[derive(Default)]
 pub(super) struct MacOsWgpuTelemetry {
     latest_present_time_ms: Option<f64>,
+    latest_submit_time_ms: Option<f64>,
     display_tick_epoch: u64,
     present_epoch: u64,
     cadence_phase: HostCadencePhase,
@@ -791,6 +796,7 @@ impl MacOsWgpuTelemetry {
 
     fn reset_frame_slot(&mut self) {
         self.latest_present_time_ms = None;
+        self.latest_submit_time_ms = None;
         self.display_tick_epoch = 0;
         self.present_epoch = 0;
         self.cadence_phase = HostCadencePhase::Idle;

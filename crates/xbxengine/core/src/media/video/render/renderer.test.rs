@@ -27,9 +27,9 @@ fn latest_slot_is_shadow_state_and_pending_queue_is_handoff_source() {
         state.peek_latest_frame().map(|frame| frame.frame_seq),
         Some(1)
     );
-    let drained = state.drain_pending_frames();
-    assert_eq!(drained.len(), 1);
-    assert_eq!(drained[0].frame_seq, 1);
+    let drained = state.take_latest_renderable_frame();
+    assert_eq!(drained.as_ref().map(|frame| frame.frame_seq), Some(1));
+    assert!(state.take_latest_renderable_frame().is_none());
     assert_eq!(
         state.peek_latest_frame().map(|frame| frame.frame_seq),
         Some(1)
@@ -55,9 +55,9 @@ fn latest_slot_is_shadow_state_and_pending_queue_is_handoff_source() {
         state.peek_latest_frame().map(|frame| frame.frame_seq),
         Some(3)
     );
-    let drained = state.drain_pending_frames();
-    assert_eq!(drained.len(), 1);
-    assert_eq!(drained[0].frame_seq, 3);
+    let drained = state.take_latest_renderable_frame();
+    assert_eq!(drained.as_ref().map(|frame| frame.frame_seq), Some(3));
+    assert!(state.take_latest_renderable_frame().is_none());
 }
 
 #[test]
@@ -257,9 +257,8 @@ fn render_candidate_state_recovers_after_latest_slot_overwrite_is_cleared() {
     assert_eq!(pressured.detail, "latestSlotOverwrite");
     assert_eq!(pressured.frame_seq, Some(1));
 
-    let drained = state.drain_pending_frames();
-    assert_eq!(drained.len(), 2);
-    assert_eq!(drained[1].frame_seq, 2);
+    let drained = state.take_latest_renderable_frame();
+    assert_eq!(drained.as_ref().map(|frame| frame.frame_seq), Some(2));
     state
         .present_frame(mk_frame(3, 1_032.0))
         .expect("third present should recover");

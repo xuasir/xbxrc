@@ -87,7 +87,7 @@ pub(crate) trait XbxMediaStackPort: Send {
     fn take_pending_runtime_recovery_action(
         &mut self,
     ) -> Option<XbxEnginePendingRuntimeRecoveryAction>;
-    fn drain_pending_render_frames(&mut self) -> Vec<XbxEngineRenderFrame>;
+    fn take_latest_render_frame(&mut self) -> Option<XbxEngineRenderFrame>;
     fn record_video_frame_drop(&mut self, observation: XbxEngineVideoFrameDropObservation);
     fn set_audio_volume(&mut self, value: f32);
     fn set_microphone_capturing(&mut self, capturing: bool) -> Result<(), XbxEngineRuntimeError>;
@@ -348,8 +348,8 @@ impl XbxMediaStackPort for XbxActiveMediaStack {
             .and_then(|mut action| action.take())
     }
 
-    fn drain_pending_render_frames(&mut self) -> Vec<XbxEngineRenderFrame> {
-        self.runtime_port().drain_pending_render_frames()
+    fn take_latest_render_frame(&mut self) -> Option<XbxEngineRenderFrame> {
+        self.runtime_port().take_latest_render_frame()
     }
 
     fn record_video_frame_drop(&mut self, observation: XbxEngineVideoFrameDropObservation) {

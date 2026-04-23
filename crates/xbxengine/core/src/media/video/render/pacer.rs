@@ -17,8 +17,7 @@ const HOST_PRESENT_OVERWRITE_CRITICAL_RATIO: f64 = 0.12;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum FramePacingAction {
     Drop,
-    SubmitNow,
-    Sleep(Duration),
+    Ready,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -37,17 +36,9 @@ impl FramePacingDecision {
         }
     }
 
-    fn submit_now(exit_catch_up_mode: bool) -> Self {
+    fn ready(exit_catch_up_mode: bool) -> Self {
         Self {
-            action: FramePacingAction::SubmitNow,
-            enter_catch_up_mode: false,
-            exit_catch_up_mode,
-        }
-    }
-
-    fn sleep(duration: Duration, exit_catch_up_mode: bool) -> Self {
-        Self {
-            action: FramePacingAction::Sleep(duration),
+            action: FramePacingAction::Ready,
             enter_catch_up_mode: false,
             exit_catch_up_mode,
         }
@@ -114,19 +105,12 @@ impl FramePacingPolicy {
             if now > deadline + self.catch_up_threshold {
                 return FramePacingDecision::drop(true);
             }
-            FramePacingDecision::submit_now(true)
+            FramePacingDecision::ready(true)
         } else if now > deadline + self.catch_up_threshold {
             FramePacingDecision::drop(true)
-        } else if now >= deadline {
-            FramePacingDecision::submit_now(false)
         } else {
-            let sleep_time = deadline.duration_since(now);
-            if sleep_time <= self.long_sleep_guard {
-                FramePacingDecision::sleep(sleep_time, false)
-            } else {
-                // target playout 异常偏大时，优先快速追帧，不长时间阻塞线程。
-                FramePacingDecision::submit_now(false)
-            }
+            let _ = self.long_sleep_guard;
+            FramePacingDecision::ready(false)
         }
     }
 }
@@ -322,15 +306,12 @@ mod tests {
     }
 
     #[test]
-    fn pacing_sleeps_for_short_early_gap() {
+    fn pacing_marks_short_early_gap_as_ready() {
         let policy = FramePacingPolicy::new(16);
         let now = Instant::now();
         let deadline = now + Duration::from_millis(10);
         let decision = policy.decide(now, deadline, false, None);
-        assert_eq!(
-            decision.action,
-            FramePacingAction::Sleep(Duration::from_millis(10))
-        );
+        assert_eq!(decision.action, FramePacingAction::Ready);
     }
 
     #[test]
@@ -339,7 +320,7 @@ mod tests {
         let now = Instant::now();
         let deadline = now - Duration::from_millis(100);
         let decision = policy.decide(now, deadline, true, None);
-        assert_eq!(decision.action, FramePacingAction::SubmitNow);
+        assert_eq!(decision.action, FramePacingAction::Ready);
         assert!(decision.exit_catch_up_mode);
     }
 
@@ -349,7 +330,7 @@ mod tests {
         let now = Instant::now();
         let deadline = now + Duration::from_millis(10);
         let decision = policy.decide(now, deadline, false, None);
-        assert_eq!(decision.action, FramePacingAction::SubmitNow);
+        assert_eq!(decision.action, FramePacingAction::Ready);
     }
 
     #[test]
@@ -358,7 +339,7 @@ mod tests {
         let now = Instant::now();
         let deadline = now - Duration::from_millis(1);
         let decision = policy.decide(now, deadline, false, Some(Duration::from_millis(5)));
-        assert_eq!(decision.action, FramePacingAction::SubmitNow);
+        assert_eq!(decision.action, FramePacingAction::Ready);
     }
 
     #[test]
@@ -367,10 +348,7 @@ mod tests {
         let now = Instant::now();
         let deadline = now + Duration::from_millis(10);
         let decision = policy.decide(now, deadline, false, Some(Duration::from_millis(4)));
-        assert_eq!(
-            decision.action,
-            FramePacingAction::Sleep(Duration::from_millis(10))
-        );
+        assert_eq!(decision.action, FramePacingAction::Ready);
     }
 
     #[test]

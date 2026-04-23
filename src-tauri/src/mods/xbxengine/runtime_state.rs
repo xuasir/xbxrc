@@ -307,10 +307,12 @@ impl XbxEngineRuntimeState {
             host_display_interval_ms: viewport.host_display_interval_ms,
             host_frame_age_budget_ms: viewport.host_frame_age_budget_ms,
             present_metrics: XbxEngineHostVideoPresentMetrics {
+                latest_host_submit_time_ms: viewport.latest_host_submit_time_ms,
                 // 使用 native_video telemetry 的真实 present 时间，统一 runtime/owner/snapshot 语义。
                 latest_host_present_time_ms: viewport.latest_host_present_time_ms,
+                host_submit_epoch: viewport.host_submit_epoch,
                 display_tick_epoch: viewport.host_display_tick_epoch,
-                present_epoch: viewport.host_present_epoch,
+                display_present_epoch: viewport.host_present_epoch,
                 cadence_phase: viewport.host_cadence_phase.clone(),
                 last_displayed_frame_seq: viewport.last_displayed_frame_seq,
                 last_displayed_frame_rtp_timestamp: viewport.last_displayed_frame_rtp_timestamp,

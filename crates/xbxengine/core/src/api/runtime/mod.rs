@@ -481,10 +481,10 @@ where
         self.media_backend.record_host_video_frame_drop(event)
     }
 
-    pub fn drain_pending_render_frames(
+    pub fn take_latest_render_frame(
         &mut self,
-    ) -> Result<Vec<XbxEngineRenderFrame>, XbxEngineRuntimeError> {
-        self.media_backend.drain_pending_render_frames()
+    ) -> Result<Option<XbxEngineRenderFrame>, XbxEngineRuntimeError> {
+        self.media_backend.take_latest_render_frame()
     }
 
     pub fn record_video_frame_drop(

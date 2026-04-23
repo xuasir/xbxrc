@@ -123,9 +123,11 @@ pub(crate) fn build_scheduling_demand_signal(
         (
             stats.host_no_pending_pressure_level.clone(),
             Some(stats.host_no_pending_streak),
-            stats
-                .latest_video_host_present_time_ms
-                .map(|ts| (now_ms - ts).max(0.0)),
+            stats.display_age_ms.or_else(|| {
+                stats
+                    .latest_video_host_present_time_ms
+                    .map(|ts| (now_ms - ts).max(0.0))
+            }),
             stats
                 .latest_video_decode_ok_time_ms
                 .map(|ts| (now_ms - ts).max(0.0)),

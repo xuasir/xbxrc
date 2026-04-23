@@ -376,11 +376,14 @@ pub struct XbxEngineHostVideoFrameDropEvent {
 
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct XbxEngineHostVideoPresentMetrics {
+    /// 宿主 submit/enqueue 最近发生时间（毫秒时间戳）。
+    pub latest_host_submit_time_ms: Option<f64>,
     /// 宿主真实 present 发生时间（毫秒时间戳）。
     /// 该字段是 runtime 中 present freshness 的唯一事实源。
     pub latest_host_present_time_ms: Option<f64>,
+    pub host_submit_epoch: u64,
     pub display_tick_epoch: u64,
-    pub present_epoch: u64,
+    pub display_present_epoch: u64,
     pub cadence_phase: Option<String>,
     pub present_fps: f64,
     pub present_submit_count_total: u64,
@@ -1052,7 +1055,9 @@ pub struct XbxEngineMediaRuntimeStats {
     pub host_no_pending_streak: u32,
     pub host_no_pending_max_streak: u32,
     pub host_no_pending_pressure_level: Option<String>,
+    pub host_submit_epoch: u64,
     pub host_display_tick_epoch: u64,
+    pub display_present_epoch: u64,
     pub video_present_epoch: u64,
     /// 由 session policy 写入：host present 停滞时仅允许关键帧进入解码。
     pub host_present_stall_decode_throttle: bool,
@@ -1062,7 +1067,10 @@ pub struct XbxEngineMediaRuntimeStats {
     pub video_present_descriptor_cpu_upload_count_total: u64,
     pub host_display_interval_ms: Option<f64>,
     pub host_frame_age_budget_ms: Option<f64>,
+    pub latest_video_host_submit_time_ms: Option<f64>,
     pub latest_video_host_present_time_ms: Option<f64>,
+    pub submit_age_ms: Option<f64>,
+    pub display_age_ms: Option<f64>,
     pub last_displayed_frame_seq: Option<u64>,
     pub last_displayed_frame_rtp_timestamp: Option<u32>,
     pub last_displayed_at_ms: Option<f64>,
@@ -1228,6 +1236,8 @@ impl Default for XbxEngineMediaRuntimeStats {
             host_no_pending_max_streak: 0,
             host_no_pending_pressure_level: None,
             host_display_tick_epoch: 0,
+            host_submit_epoch: 0,
+            display_present_epoch: 0,
             video_present_epoch: 0,
             host_present_stall_decode_throttle: false,
             host_cadence_phase: None,
@@ -1236,7 +1246,10 @@ impl Default for XbxEngineMediaRuntimeStats {
             video_present_descriptor_cpu_upload_count_total: 0,
             host_display_interval_ms: None,
             host_frame_age_budget_ms: None,
+            latest_video_host_submit_time_ms: None,
             latest_video_host_present_time_ms: None,
+            submit_age_ms: None,
+            display_age_ms: None,
             last_displayed_frame_seq: None,
             last_displayed_frame_rtp_timestamp: None,
             last_displayed_at_ms: None,
@@ -1327,9 +1340,9 @@ pub trait XbxEngineMediaBackend: Send {
     ) -> Result<(), XbxEngineRuntimeError> {
         Ok(())
     }
-    fn drain_pending_render_frames(
+    fn take_latest_render_frame(
         &mut self,
-    ) -> Result<Vec<XbxEngineRenderFrame>, XbxEngineRuntimeError>;
+    ) -> Result<Option<XbxEngineRenderFrame>, XbxEngineRuntimeError>;
     fn record_video_frame_drop(
         &mut self,
         _observation: XbxEngineVideoFrameDropObservation,
@@ -1466,10 +1479,10 @@ where
         self.as_mut().record_host_video_frame_drop(event)
     }
 
-    fn drain_pending_render_frames(
+    fn take_latest_render_frame(
         &mut self,
-    ) -> Result<Vec<XbxEngineRenderFrame>, XbxEngineRuntimeError> {
-        self.as_mut().drain_pending_render_frames()
+    ) -> Result<Option<XbxEngineRenderFrame>, XbxEngineRuntimeError> {
+        self.as_mut().take_latest_render_frame()
     }
 
     fn record_video_frame_drop(
@@ -1687,10 +1700,13 @@ impl XbxEngineMediaBackend for PlaceholderXbxEngineMediaBackend {
         &mut self,
         metrics: XbxEngineHostVideoPresentMetrics,
     ) -> Result<(), XbxEngineRuntimeError> {
+        self.last_runtime_stats.latest_video_host_submit_time_ms = metrics.latest_host_submit_time_ms;
         self.last_runtime_stats.latest_video_host_present_time_ms =
             metrics.latest_host_present_time_ms;
+        self.last_runtime_stats.host_submit_epoch = metrics.host_submit_epoch;
         self.last_runtime_stats.host_display_tick_epoch = metrics.display_tick_epoch;
-        self.last_runtime_stats.video_present_epoch = metrics.present_epoch;
+        self.last_runtime_stats.display_present_epoch = metrics.display_present_epoch;
+        self.last_runtime_stats.video_present_epoch = metrics.display_present_epoch;
         self.last_runtime_stats.host_cadence_phase = metrics.cadence_phase;
         self.last_runtime_stats.video_present_fps = metrics.present_fps;
         self.last_runtime_stats.video_present_submit_count_total =
@@ -1715,10 +1731,10 @@ impl XbxEngineMediaBackend for PlaceholderXbxEngineMediaBackend {
         Ok(self.pending_runtime_recovery_action.take())
     }
 
-    fn drain_pending_render_frames(
+    fn take_latest_render_frame(
         &mut self,
-    ) -> Result<Vec<XbxEngineRenderFrame>, XbxEngineRuntimeError> {
-        Ok(Vec::new())
+    ) -> Result<Option<XbxEngineRenderFrame>, XbxEngineRuntimeError> {
+        Ok(None)
     }
 
     fn record_video_frame_drop(
