@@ -317,19 +317,18 @@ impl VideoTimelineState {
         self.on_clean_anchor_stats_committed();
     }
 
-    /// 稳定窗口满足后提交 clean-anchor：返回待提交的 IDR RTP 时间戳。
+    /// clean-anchor 提交回归媒体事实：只要 anchor 对应帧已成为 complete-candidate 即可提交。
+    /// stable gate 继续用于 post-anchor 的抖动吸收与链路收敛，不再阻塞 clean-anchor 提交。
     pub(super) fn take_clean_anchor_stats_commit_if_stable(
         &mut self,
         complete_candidate_rtp_ts: u32,
         now_ms: f64,
     ) -> Option<u32> {
         let pending = self.pending_clean_anchor_rtp_ts?;
-        if complete_candidate_rtp_ts <= pending {
+        if complete_candidate_rtp_ts < pending {
             return None;
         }
-        if !self.passes_stable_recovery_gate(complete_candidate_rtp_ts, now_ms) {
-            return None;
-        }
+        let _ = now_ms;
         self.pending_clean_anchor_rtp_ts = None;
         Some(pending)
     }

@@ -24,6 +24,8 @@ pub struct InputCore<TBackend, TUiSink, TStreamSink> {
     last_active_at: HashMap<String, u64>,
     active_device_by_pad: [Option<String>; 4],
     sample_seq: u64,
+    clock_ms: u64,
+    last_stream_emit_at_ms: [u64; 4],
 }
 
 impl<TBackend, TUiSink, TStreamSink> InputCore<TBackend, TUiSink, TStreamSink>
@@ -49,6 +51,8 @@ where
             last_active_at: HashMap::new(),
             active_device_by_pad: [None, None, None, None],
             sample_seq: 0,
+            clock_ms: 0,
+            last_stream_emit_at_ms: [0; 4],
         }
     }
 
@@ -83,22 +87,23 @@ where
 
     pub fn replace_input_policy(&mut self, input_policy: OhMyGamepadInputPolicyDto) {
         self.config.input_policy = input_policy;
-        self.sample_once();
     }
 
     pub fn replace_bindings(&mut self, bindings: Vec<LogicalPadBindingDto>) {
         self.config.bindings = bindings;
-        self.sample_once();
     }
 
     pub fn replace_device_profiles(&mut self, device_profiles: Vec<crate::DeviceProfile>) {
         self.config.device_profiles = device_profiles;
-        self.sample_once();
     }
 
     pub fn tick(&mut self) {
         self.poll_backend();
         self.sample_once();
+    }
+
+    pub fn sync_clock_ms(&mut self, now_ms: u64) {
+        self.clock_ms = self.clock_ms.max(now_ms);
     }
 
     pub fn poll_backend(&mut self) {
@@ -133,10 +138,14 @@ where
         // 清理原始采样，防止恢复时使用过期的硬件状态
         self.raw_samples.clear();
         self.last_active_at.clear();
+        self.last_stream_emit_at_ms = [self.clock_ms; 4];
 
         // 将所有逻辑手柄重置为中性状态
         for snapshot in &mut self.pads {
             snapshot.state = default_logical_pad_state();
+            self.sample_seq = self.sample_seq.saturating_add(1);
+            snapshot.sample_seq = self.sample_seq;
+            snapshot.sampled_at_ms = self.clock_ms;
             // 立即向接收端同步“按键全部弹起”的状态，防止 UI 粘滞。
             self.ui_sink.emit_pad_snapshot(snapshot);
             self.stream_sink.emit_pad_snapshot(snapshot);
@@ -198,7 +207,6 @@ where
     }
 
     fn refresh_pad_snapshots(&mut self) {
-        self.sample_seq = self.sample_seq.saturating_add(1);
         let bindings = self.effective_bindings();
         let mut next_pads = Vec::with_capacity(bindings.len());
         let mut reserved_split_devices = HashSet::new();
@@ -310,10 +318,11 @@ where
     }
 
     fn build_pad_snapshot(
-        &self,
+        &mut self,
         pad_id: LogicalPadId,
         device_ids: Vec<String>,
     ) -> LogicalPadSnapshotDto {
+        let raw_buttons = collect_pressed_raw_buttons(&device_ids, &self.raw_samples);
         let states = device_ids
             .iter()
             .filter_map(|device_id| self.raw_samples.get(device_id))
@@ -327,17 +336,75 @@ where
             .max()
             .unwrap_or(0);
 
-        GamepadSlotSnapshotDto {
+        let candidate = GamepadSlotSnapshotDto {
             slot: pad_id,
             device_ids,
             sampled_at_ms,
-            sample_seq: self.sample_seq,
+            sample_seq: 0,
             state: if states.is_empty() {
                 default_logical_pad_state()
             } else {
                 merge_states(&states)
             },
+            raw_buttons,
+        };
+
+        self.resolve_stream_snapshot(candidate)
+    }
+
+    fn resolve_stream_snapshot(&mut self, candidate: LogicalPadSnapshotDto) -> LogicalPadSnapshotDto {
+        let slot_index = pad_slot(candidate.slot);
+        let Some(existing) = self
+            .pads
+            .iter()
+            .find(|snapshot| snapshot.slot == candidate.slot)
+        else {
+            let mut next = candidate;
+            next.sample_seq = self.next_sample_seq();
+            next.sampled_at_ms = next.sampled_at_ms.max(self.clock_ms);
+            self.last_stream_emit_at_ms[slot_index] = next.sampled_at_ms;
+            return next;
+        };
+
+        if pad_payload_changed(existing, &candidate) {
+            let mut next = candidate;
+            next.sample_seq = self.next_sample_seq();
+            next.sampled_at_ms = next.sampled_at_ms.max(self.clock_ms);
+            self.last_stream_emit_at_ms[slot_index] = next.sampled_at_ms;
+            return next;
         }
+
+        if self.should_emit_stream_keepalive(slot_index) {
+            let mut next = candidate;
+            next.sample_seq = self.next_sample_seq();
+            next.sampled_at_ms = self.clock_ms.max(next.sampled_at_ms);
+            self.last_stream_emit_at_ms[slot_index] = next.sampled_at_ms;
+            return next;
+        }
+
+        existing.clone()
+    }
+
+    fn should_emit_stream_keepalive(&self, slot_index: usize) -> bool {
+        if self.config.sampling.stream_push_mode
+            != ohmygamepad_protocol::OhMyGamepadStreamPushModeDto::FixedRate
+        {
+            return false;
+        }
+
+        let Some(rate_hz) = self.config.sampling.stream_push_rate_hz else {
+            return false;
+        };
+
+        let interval_ms = hz_to_interval_ms(rate_hz);
+        self.clock_ms
+            .saturating_sub(self.last_stream_emit_at_ms[slot_index])
+            >= interval_ms
+    }
+
+    fn next_sample_seq(&mut self) -> u64 {
+        self.sample_seq = self.sample_seq.saturating_add(1);
+        self.sample_seq
     }
 
     fn connected_device_ids(&self) -> Vec<String> {
@@ -467,6 +534,56 @@ fn pad_order(pad_id: LogicalPadId) -> u8 {
 
 fn pad_payload_changed(left: &LogicalPadSnapshotDto, right: &LogicalPadSnapshotDto) -> bool {
     left.device_ids != right.device_ids || left.state != right.state
+}
+
+fn collect_pressed_raw_buttons(
+    device_ids: &[String],
+    raw_samples: &std::collections::HashMap<String, RawDeviceSample>,
+) -> Option<Vec<ohmygamepad_protocol::GamepadRawButtonStateDto>> {
+    const PRESS_THRESHOLD: f32 = 0.5;
+    const MAX_BUTTONS: usize = 32;
+
+    let mut merged: std::collections::HashMap<usize, f32> = std::collections::HashMap::new();
+    for device_id in device_ids {
+        let Some(sample) = raw_samples.get(device_id) else {
+            continue;
+        };
+        for (index, value) in sample.buttons.iter().copied().enumerate() {
+            if value <= PRESS_THRESHOLD {
+                continue;
+            }
+            merged
+                .entry(index)
+                .and_modify(|existing| {
+                    if value > *existing {
+                        *existing = value;
+                    }
+                })
+                .or_insert(value);
+        }
+    }
+
+    if merged.is_empty() {
+        return None;
+    }
+
+    let mut raw_buttons = merged
+        .into_iter()
+        .map(|(index, value)| ohmygamepad_protocol::GamepadRawButtonStateDto { index, value })
+        .collect::<Vec<_>>();
+    raw_buttons.sort_by(|a, b| {
+        b.value
+            .partial_cmp(&a.value)
+            .unwrap_or(std::cmp::Ordering::Equal)
+            .then_with(|| a.index.cmp(&b.index))
+    });
+    raw_buttons.truncate(MAX_BUTTONS);
+    Some(raw_buttons)
+}
+
+fn hz_to_interval_ms(hz: u16) -> u64 {
+    let normalized_hz = hz.max(1) as u64;
+    (1_000 / normalized_hz).max(1)
 }
 
 #[cfg(test)]

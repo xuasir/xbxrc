@@ -144,7 +144,8 @@ pub(crate) fn build_input_stream_packet(
         packet.push(logical_pad_index(&frame.slot));
         packet.extend_from_slice(&gamepad_button_mask(&frame.state).to_le_bytes());
         packet.extend_from_slice(&normalize_axis(frame.state.left_stick.x).to_le_bytes());
-        packet.extend_from_slice(&normalize_axis(frame.state.left_stick.y).to_le_bytes());
+        // Xbox 输入协议里左摇杆 Y 轴向上为正值，这里在出包边界做方向对齐。
+        packet.extend_from_slice(&normalize_axis(-frame.state.left_stick.y).to_le_bytes());
         packet.extend_from_slice(&normalize_axis(frame.state.right_stick.x).to_le_bytes());
         packet.extend_from_slice(&normalize_axis(frame.state.right_stick.y).to_le_bytes());
         packet.extend_from_slice(

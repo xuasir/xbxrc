@@ -352,3 +352,38 @@ fn runtime_snapshot_subscription_receives_initial_and_updated_snapshots() {
 
     runtime.shutdown().expect("runtime should shutdown cleanly");
 }
+
+#[test]
+fn runtime_snapshot_subscription_respects_ui_push_rate() {
+    let backend = ScriptedBackend::new(
+        (0..8)
+            .map(|_| BackendPollResult {
+                device_events: vec![DeviceLifecycleEvent::Added(device("pad-a"))],
+                samples: vec![sample("pad-a", 10, vec![1.0])],
+            })
+            .collect(),
+    );
+    let mut config = InputCoreConfig::default();
+    config.sampling.backend_poll_rate_hz = 500;
+    config.sampling.logical_pad_sample_rate_hz = 500;
+    config.sampling.ui_push_rate_hz = 5;
+    let runtime = spawn_input_runtime(config, backend, ThreadSafeUiSink::default(), ThreadSafeStreamSink);
+    let snapshot_rx = runtime.subscribe_runtime_snapshot();
+
+    let started_at = Instant::now();
+    let mut snapshots = Vec::new();
+    while started_at.elapsed() < Duration::from_millis(180) {
+        match snapshot_rx.recv_timeout(Duration::from_millis(25)) {
+            Ok(snapshot) => snapshots.push(snapshot),
+            Err(_) => {}
+        }
+    }
+
+    runtime.shutdown().expect("runtime should shutdown cleanly");
+
+    assert!(
+        snapshots.len() <= 2,
+        "ui push rate should suppress high-frequency snapshot broadcasts, got {}",
+        snapshots.len()
+    );
+}

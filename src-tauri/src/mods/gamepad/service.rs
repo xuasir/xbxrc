@@ -1,4 +1,3 @@
-use crate::mods::gamepad::events;
 use crate::mods::gamepad::{
     GamepadAxisMappingDto, GamepadButtonMappingDto, GamepadDeviceProfileDto,
     GamepadDeviceProfileMatcherDto, GamepadFilterConfigDto, GamepadProvider,
@@ -33,7 +32,6 @@ impl GamepadProvider for GamepadService {
         self.host
             .set_input_policy(policy)
             .map_err(|error| format!("{:?}", error))?;
-        let _ = self.emit_runtime_events();
         self.get_runtime_snapshot()
     }
 
@@ -44,7 +42,6 @@ impl GamepadProvider for GamepadService {
         self.host
             .set_sampling(sampling)
             .map_err(|error| format!("{:?}", error))?;
-        let _ = self.emit_runtime_events();
         self.get_runtime_snapshot()
     }
 
@@ -55,7 +52,6 @@ impl GamepadProvider for GamepadService {
         self.host
             .set_sampling_strategy(strategy)
             .map_err(|error| format!("{:?}", error))?;
-        let _ = self.emit_runtime_events();
         self.get_runtime_snapshot()
     }
 
@@ -66,7 +62,6 @@ impl GamepadProvider for GamepadService {
         self.host
             .set_primary_sampling_device(device_id)
             .map_err(|error| format!("{:?}", error))?;
-        let _ = self.emit_runtime_events();
         self.get_runtime_snapshot()
     }
 
@@ -77,7 +72,6 @@ impl GamepadProvider for GamepadService {
         self.host
             .pause_sampling_device(device_id)
             .map_err(|error| format!("{:?}", error))?;
-        let _ = self.emit_runtime_events();
         self.get_runtime_snapshot()
     }
 
@@ -88,7 +82,6 @@ impl GamepadProvider for GamepadService {
         self.host
             .resume_sampling_device(device_id)
             .map_err(|error| format!("{:?}", error))?;
-        let _ = self.emit_runtime_events();
         self.get_runtime_snapshot()
     }
 
@@ -127,7 +120,6 @@ impl GamepadProvider for GamepadService {
         self.host
             .replace_device_profiles(mapped)
             .map_err(|error| format!("{:?}", error))?;
-        let _ = self.emit_runtime_events();
         self.get_runtime_snapshot()
     }
 
@@ -138,7 +130,6 @@ impl GamepadProvider for GamepadService {
         self.host
             .replace_keyboard_mapping(mapping)
             .map_err(|error| format!("{:?}", error))?;
-        let _ = self.emit_runtime_events();
         self.get_runtime_snapshot()
     }
 
@@ -146,7 +137,6 @@ impl GamepadProvider for GamepadService {
         self.host
             .replace_device_profiles(Vec::new())
             .map_err(|error| format!("{:?}", error))?;
-        let _ = self.emit_runtime_events();
         self.get_runtime_snapshot()
     }
 
@@ -154,7 +144,6 @@ impl GamepadProvider for GamepadService {
         self.host
             .replace_keyboard_mapping(OhMyGamepadKeyboardMappingDto::default())
             .map_err(|error| format!("{:?}", error))?;
-        let _ = self.emit_runtime_events();
         self.get_runtime_snapshot()
     }
 
@@ -269,24 +258,6 @@ impl GamepadService {
         let service = Self { app_handle, host };
         service.apply_persisted_mappings();
         service
-    }
-
-    fn emit_runtime_events(&self) -> Result<(), String> {
-        let snapshot = self.get_runtime_snapshot()?;
-        let snapshot_value = serde_json::to_value(&snapshot).map_err(|error| error.to_string())?;
-
-        events::emit_runtime_snapshot(&self.app_handle, &snapshot_value)?;
-
-        let devices_value =
-            serde_json::to_value(&snapshot.devices).map_err(|error| error.to_string())?;
-        events::emit_devices_changed(&self.app_handle, &devices_value)?;
-
-        for slot in &snapshot.slots {
-            let slot_value = serde_json::to_value(slot).map_err(|error| error.to_string())?;
-            events::emit_slot_snapshot(&self.app_handle, &slot_value)?;
-        }
-
-        Ok(())
     }
 
     fn apply_persisted_mappings(&self) {

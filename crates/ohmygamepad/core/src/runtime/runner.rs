@@ -20,6 +20,12 @@ pub(crate) struct SamplingActions {
     sample_pads: bool,
 }
 
+#[derive(Clone, Debug, Default)]
+struct RuntimePublishState {
+    last_ui_publish_at: Option<Duration>,
+    pending_snapshot: Option<OhMyGamepadRuntimeSnapshotDto>,
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SamplingSchedule {
     backend_poll_interval: Duration,
@@ -231,24 +237,32 @@ fn run_runtime_loop<TBackend, TUiSink, TStreamSink>(
     TStreamSink: StreamSink,
 {
     let mut suspended = false;
+    let mut publish_state = RuntimePublishState::default();
     loop {
         let now = origin.elapsed();
+        flush_pending_ui_publish(snapshot_broadcaster, &mut publish_state, now);
 
         if suspended {
             // 挂起状态下：
             // 1. 不执行逻辑采样 (sample_pads)
             // 2. 依然执行后端轮询 (poll_backend) 以排空系统事件队列，防止切回时产生指令积压（Backlog）。
             // 3. 但不更新 logical pads 或发布新快照。
+            core.sync_clock_ms(now.as_millis() as u64);
             core.poll_backend();
-        } else if apply_due_actions(core, schedule.take_due(now), snapshot_broadcaster) {
+        } else if apply_due_actions(
+            core,
+            schedule.take_due(now),
+            snapshot_broadcaster,
+            &mut publish_state,
+            now,
+        ) {
             continue;
         }
 
         let timeout = if suspended {
             Duration::from_millis(100) // 挂起时大幅降低检查频率
         } else {
-            schedule
-                .next_deadline()
+            next_runtime_deadline(schedule.next_deadline(), &publish_state)
                 .checked_sub(origin.elapsed())
                 .unwrap_or_default()
         };
@@ -262,6 +276,7 @@ fn run_runtime_loop<TBackend, TUiSink, TStreamSink>(
                     origin.elapsed(),
                     command,
                     snapshot_broadcaster,
+                    &mut publish_state,
                     &mut suspended,
                 ) {
                     break;
@@ -285,6 +300,7 @@ fn run_runtime_loop<TBackend, TUiSink, TStreamSink>(
                         origin.elapsed(),
                         command,
                         snapshot_broadcaster,
+                        &mut publish_state,
                         &mut suspended,
                     ) {
                         return;
@@ -308,6 +324,8 @@ fn apply_due_actions<TBackend, TUiSink, TStreamSink>(
     core: &mut InputCore<TBackend, TUiSink, TStreamSink>,
     actions: SamplingActions,
     snapshot_broadcaster: &RuntimeSnapshotBroadcaster,
+    publish_state: &mut RuntimePublishState,
+    now: Duration,
 ) -> bool
 where
     TBackend: InputBackend,
@@ -316,15 +334,17 @@ where
 {
     let mut applied = false;
     if actions.poll_backend {
+        core.sync_clock_ms(now.as_millis() as u64);
         core.poll_backend();
         applied = true;
     }
     if actions.sample_pads {
+        core.sync_clock_ms(now.as_millis() as u64);
         core.sample_once();
         applied = true;
     }
     if applied {
-        snapshot_broadcaster.publish(core.runtime_snapshot());
+        publish_runtime_snapshot(snapshot_broadcaster, publish_state, core.runtime_snapshot(), now);
     }
     applied
 }
@@ -335,6 +355,7 @@ fn handle_runtime_command<TBackend, TUiSink, TStreamSink>(
     now: Duration,
     command: RuntimeCommand,
     snapshot_broadcaster: &RuntimeSnapshotBroadcaster,
+    publish_state: &mut RuntimePublishState,
     suspended: &mut bool,
 ) -> bool
 where
@@ -348,14 +369,26 @@ where
             false
         }
         RuntimeCommand::SetInputPolicy { policy } => {
+            core.sync_clock_ms(now.as_millis() as u64);
             core.replace_input_policy(policy);
-            snapshot_broadcaster.publish(core.runtime_snapshot());
+            core.sample_once();
+            force_publish_runtime_snapshot(
+                snapshot_broadcaster,
+                publish_state,
+                core.runtime_snapshot(),
+                now,
+            );
             false
         }
         RuntimeCommand::UpdateSampling { sampling } => {
             core.replace_sampling_config(sampling);
             schedule.update_sampling(now, &core.config().sampling);
-            snapshot_broadcaster.publish(core.runtime_snapshot());
+            force_publish_runtime_snapshot(
+                snapshot_broadcaster,
+                publish_state,
+                core.runtime_snapshot(),
+                now,
+            );
             false
         }
         RuntimeCommand::RebindLogicalPad { binding } => {
@@ -365,13 +398,27 @@ where
             } else {
                 bindings.push(binding);
             }
+            core.sync_clock_ms(now.as_millis() as u64);
             core.replace_bindings(bindings);
-            snapshot_broadcaster.publish(core.runtime_snapshot());
+            core.sample_once();
+            force_publish_runtime_snapshot(
+                snapshot_broadcaster,
+                publish_state,
+                core.runtime_snapshot(),
+                now,
+            );
             false
         }
         RuntimeCommand::ReplaceDeviceProfiles { profiles } => {
+            core.sync_clock_ms(now.as_millis() as u64);
             core.replace_device_profiles(profiles);
-            snapshot_broadcaster.publish(core.runtime_snapshot());
+            core.sample_once();
+            force_publish_runtime_snapshot(
+                snapshot_broadcaster,
+                publish_state,
+                core.runtime_snapshot(),
+                now,
+            );
             false
         }
         RuntimeCommand::SetSuspended {
@@ -382,6 +429,82 @@ where
         }
         RuntimeCommand::Shutdown => true,
     }
+}
+
+fn next_runtime_deadline(
+    sampling_deadline: Duration,
+    publish_state: &RuntimePublishState,
+) -> Duration {
+    match pending_ui_publish_deadline(publish_state) {
+        Some(deadline) => sampling_deadline.min(deadline),
+        None => sampling_deadline,
+    }
+}
+
+fn publish_runtime_snapshot(
+    snapshot_broadcaster: &RuntimeSnapshotBroadcaster,
+    publish_state: &mut RuntimePublishState,
+    snapshot: OhMyGamepadRuntimeSnapshotDto,
+    now: Duration,
+) {
+    if should_publish_ui_snapshot(publish_state, &snapshot, now) {
+        snapshot_broadcaster.publish(snapshot);
+        publish_state.last_ui_publish_at = Some(now);
+        publish_state.pending_snapshot = None;
+        return;
+    }
+
+    publish_state.pending_snapshot = Some(snapshot);
+}
+
+fn force_publish_runtime_snapshot(
+    snapshot_broadcaster: &RuntimeSnapshotBroadcaster,
+    publish_state: &mut RuntimePublishState,
+    snapshot: OhMyGamepadRuntimeSnapshotDto,
+    now: Duration,
+) {
+    snapshot_broadcaster.publish(snapshot);
+    publish_state.last_ui_publish_at = Some(now);
+    publish_state.pending_snapshot = None;
+}
+
+fn flush_pending_ui_publish(
+    snapshot_broadcaster: &RuntimeSnapshotBroadcaster,
+    publish_state: &mut RuntimePublishState,
+    now: Duration,
+) {
+    let Some(deadline) = pending_ui_publish_deadline(publish_state) else {
+        return;
+    };
+    if now < deadline {
+        return;
+    }
+    let Some(snapshot) = publish_state.pending_snapshot.take() else {
+        return;
+    };
+    snapshot_broadcaster.publish(snapshot);
+    publish_state.last_ui_publish_at = Some(now);
+}
+
+fn should_publish_ui_snapshot(
+    publish_state: &RuntimePublishState,
+    snapshot: &OhMyGamepadRuntimeSnapshotDto,
+    now: Duration,
+) -> bool {
+    let interval = interval_from_hz(snapshot.sampling.ui_push_rate_hz);
+    match publish_state.last_ui_publish_at {
+        None => true,
+        Some(last_publish_at) => now >= last_publish_at + interval,
+    }
+}
+
+fn pending_ui_publish_deadline(publish_state: &RuntimePublishState) -> Option<Duration> {
+    let snapshot = publish_state.pending_snapshot.as_ref()?;
+    let interval = interval_from_hz(snapshot.sampling.ui_push_rate_hz);
+    publish_state
+        .last_ui_publish_at
+        .map(|last_publish_at| last_publish_at + interval)
+        .or(Some(Duration::ZERO))
 }
 
 #[derive(Default)]

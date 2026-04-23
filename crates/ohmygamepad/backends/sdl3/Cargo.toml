@@ -18,7 +18,7 @@ log = "0.4"
 ohmygamepad-core = { path = "../../core" }
 ohmygamepad-protocol = { path = "../../protocol" }
 sdl3 = { version = "0.18.0", features = [
-  "build-from-source",
+  "build-from-source-static",
   "hidapi"
 ] }
 

@@ -121,7 +121,11 @@ pub(crate) fn resolve_stable_recovery_settle(
             should_close_ramp_up: false,
         };
     }
-    let should_acknowledge_clean_anchor = !has_unresolved_transport_await_issue;
+    let should_acknowledge_clean_anchor = RuntimeStatsSink::read_shared(runtime_stats, |stats| {
+        has_current_clean_anchor_from_stats(stats)
+            && clean_anchor_epoch.is_some_and(|epoch| epoch == stats.transport_recovery_epoch)
+    })
+    .unwrap_or(false);
     let should_close_ramp_up = RuntimeStatsSink::read_shared(runtime_stats, |stats| {
         if !stats.transport_recovery_episode_active {
             return false;

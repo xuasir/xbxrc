@@ -1780,28 +1780,35 @@ impl RtcVideoFrameSource {
                     );
                 }
 
-                if let Some(committed_ts) = self
-                    .timeline_state
-                    .take_clean_anchor_stats_commit_if_stable(
-                        sample.packet_timestamp,
-                        complete_candidate_now_ms,
-                    )
-                {
-                    self.record_clean_anchor(complete_candidate_now_ms);
-                    self.record_video_timeline_observation(
-                        "chain-clean-anchor-submitted",
-                        None,
-                        Some(committed_ts),
-                        complete_candidate_now_ms,
-                    );
-                    self.record_anchor_candidate_ledger(
-                        Some(committed_ts),
-                        "chain-clean-anchor-submitted",
-                        XbxEngineAnchorCandidateState::SubmittedCleanAnchor,
-                        None,
-                        complete_candidate_now_ms,
-                    );
-                    self.timeline_state.on_clean_anchor_submitted();
+                let can_commit_clean_anchor_now = can_exit_sustaining_recovery
+                    && inspection.is_idr
+                    && admission_accepted
+                    && inspection.bootstrap_ready
+                    && media_dropped_packets == 0;
+                if can_commit_clean_anchor_now {
+                    if let Some(committed_ts) = self
+                        .timeline_state
+                        .take_clean_anchor_stats_commit_if_stable(
+                            sample.packet_timestamp,
+                            complete_candidate_now_ms,
+                        )
+                    {
+                        self.record_clean_anchor(complete_candidate_now_ms);
+                        self.record_video_timeline_observation(
+                            "chain-clean-anchor-submitted",
+                            None,
+                            Some(committed_ts),
+                            complete_candidate_now_ms,
+                        );
+                        self.record_anchor_candidate_ledger(
+                            Some(committed_ts),
+                            "chain-clean-anchor-submitted",
+                            XbxEngineAnchorCandidateState::SubmittedCleanAnchor,
+                            None,
+                            complete_candidate_now_ms,
+                        );
+                        self.timeline_state.on_clean_anchor_submitted();
+                    }
                 }
 
                 return Some(AssembledVideoFrame {

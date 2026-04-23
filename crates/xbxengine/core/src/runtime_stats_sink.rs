@@ -1427,13 +1427,22 @@ fn enrich_picture_recovery_first_frame_latency_detail(
 ) {
     if matches!(
         episode.status.as_str(),
-        "deferred" | "failed" | "missed" | "expired-unsent" | "succeeded"
+        "deferred" | "failed" | "missed" | "expired-unsent"
     ) {
         return;
     }
     let pli_sent_at_ms = episode.sent_at_ms;
     let first_idr_packet_at_ms = episode.first_keyframe_packet_at_ms.or(episode.first_video_packet_at_ms);
     let first_decode_at_ms = episode.first_keyframe_decoded_at_ms;
+    let clean_anchor_committed_at_ms = if stats.video_anchor_clean_epoch == Some(stats.transport_recovery_epoch)
+    {
+        stats.video_anchor_clean_observed_at_ms
+    } else {
+        None
+    };
+    let display_stable_at_ms = stats
+        .transport_recovery_episode_closed_at_ms
+        .filter(|_| stats.transport_recovery_episode_close_reason.as_deref() == Some("stableServingSettled"));
     let control_ready_to_pli_sent_ms = stats.control_ready_at_ms.zip(pli_sent_at_ms).map(
         |(control_ready_at_ms, sent_at_ms)| (sent_at_ms - control_ready_at_ms).max(0.0),
     );
@@ -1443,17 +1452,27 @@ fn enrich_picture_recovery_first_frame_latency_detail(
     let first_idr_packet_to_first_decode_ms = first_idr_packet_at_ms
         .zip(first_decode_at_ms)
         .map(|(first_packet_at_ms, decoded_at_ms)| (decoded_at_ms - first_packet_at_ms).max(0.0));
+    let first_decode_to_clean_anchor_committed_ms = first_decode_at_ms
+        .zip(clean_anchor_committed_at_ms)
+        .map(|(decoded_at_ms, committed_at_ms)| (committed_at_ms - decoded_at_ms).max(0.0));
+    let clean_anchor_committed_to_display_stable_ms = clean_anchor_committed_at_ms
+        .zip(display_stable_at_ms)
+        .map(|(committed_at_ms, stable_at_ms)| (stable_at_ms - committed_at_ms).max(0.0));
     if control_ready_to_pli_sent_ms.is_none()
         && pli_sent_to_first_idr_packet_ms.is_none()
         && first_idr_packet_to_first_decode_ms.is_none()
+        && first_decode_to_clean_anchor_committed_ms.is_none()
+        && clean_anchor_committed_to_display_stable_ms.is_none()
     {
         return;
     }
     episode.transport_detail = Some(format!(
-        "firstFrameLatencyTrace controlReadyToPliSentMs={} pliSentToFirstIdrPacketMs={} firstIdrPacketToFirstDecodeMs={}",
+        "firstFrameLatencyTrace controlReadyToPliSentMs={} pliSentToFirstIdrPacketMs={} firstIdrPacketToFirstDecodeMs={} firstDecodeToCleanAnchorCommittedMs={} cleanAnchorCommittedToDisplayStableMs={}",
         format_optional_latency_ms(control_ready_to_pli_sent_ms),
         format_optional_latency_ms(pli_sent_to_first_idr_packet_ms),
         format_optional_latency_ms(first_idr_packet_to_first_decode_ms),
+        format_optional_latency_ms(first_decode_to_clean_anchor_committed_ms),
+        format_optional_latency_ms(clean_anchor_committed_to_display_stable_ms),
     ));
 }
 

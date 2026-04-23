@@ -420,6 +420,19 @@ function detectPressedLogicalButton(snapshot: LogicalPadSnapshotDto): LogicalBut
   return maxButton
 }
 
+function detectPressedRawButtonIndex(snapshot: LogicalPadSnapshotDto): number | null {
+  const rawButtons = snapshot.rawButtons ?? []
+  let maxIndex: number | null = null
+  let maxValue = 0.5
+  for (const item of rawButtons) {
+    if (item.value > maxValue) {
+      maxValue = item.value
+      maxIndex = item.index
+    }
+  }
+  return maxIndex
+}
+
 function formatKeyboardBinding(button: LogicalButtonDto): string {
   const key = keyboardBindings.value[button]
   return key ?? '未绑定'
@@ -497,10 +510,19 @@ onMounted(() => {
     lastPadSnapshot.value = snapshot
 
     if (mappingEditorMode.value === 'gamepad' && captureTargetButton.value !== null) {
-      const sourceButton = detectPressedLogicalButton(snapshot)
-      if (sourceButton !== null) {
-        gamepadButtonIndices.value[captureTargetButton.value] = DEFAULT_GAMEPAD_BUTTON_INDEX[sourceButton]
+      const rawIndex = detectPressedRawButtonIndex(snapshot)
+      if (rawIndex !== null) {
+        gamepadButtonIndices.value[captureTargetButton.value] = rawIndex
         captureTargetButton.value = null
+      }
+      else {
+        // 兼容旧数据：如果后端还未上报 rawButtons，则退回逻辑按钮推断。
+        const sourceButton = detectPressedLogicalButton(snapshot)
+        if (sourceButton !== null) {
+          // 采集时应复制“当前实际映射索引”，而不是回退到默认索引。
+          gamepadButtonIndices.value[captureTargetButton.value] = gamepadButtonIndices.value[sourceButton]
+          captureTargetButton.value = null
+        }
       }
     }
   })

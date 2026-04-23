@@ -445,8 +445,10 @@ fn translate_button_event(
         Button::DPadDown => 13,
         Button::DPadLeft => 14,
         Button::DPadRight => 15,
-        Button::Guide => 16,
-        _ => return None,
+        // 某些驱动/手柄会把中间系统键上报为 Misc1，这里统一映射到 home。
+        Button::Guide | Button::Misc1 => 16,
+        // 标准布局之外的按钮走开放索引，避免采样层把按键直接丢掉。
+        _ => fallback_button_index(button)?,
     };
 
     Some(Sdl3InputEvent {
@@ -454,6 +456,15 @@ fn translate_button_event(
         observed_at_ms,
         kind: Sdl3InputEventKind::ButtonChanged { index, value },
     })
+}
+
+fn fallback_button_index(button: Button) -> Option<usize> {
+    let raw = button as i32;
+    if raw < 0 {
+        return None;
+    }
+    // 1000+ 预留给 SDL 扩展按钮，避免和标准逻辑布局索引冲突。
+    Some(1000 + raw as usize)
 }
 
 fn translate_axis_event(

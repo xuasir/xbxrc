@@ -35,6 +35,7 @@ export class InputService {
   private readonly rumbleService: RumbleService
   private streamMenuComboActive = false
   private suspendRtcGamepadTransport = false
+  private overlayBypassFrameBudget = 0
   private readonly onStreamUiInputModeChanged = (event: Event): void => {
     const detail = (event as CustomEvent<{ enabled?: boolean, overlayOpen?: boolean }>).detail
     // 仅在 overlay/menu 真正打开时暂停 RTC 输入；chrome 显示不应阻断游戏输入。
@@ -73,6 +74,7 @@ export class InputService {
   stop(): void {
     window.removeEventListener('stream-ui-input-mode', this.onStreamUiInputModeChanged)
     this.suspendRtcGamepadTransport = false
+    this.overlayBypassFrameBudget = 0
     this.gamepadDriver.stop()
     this.rumbleService.destroy()
   }
@@ -89,7 +91,11 @@ export class InputService {
     if (!this.currentInputTransport || this.currentInputTransport.getReadyState() !== 'open') {
       return
     }
-    if (this.suspendRtcGamepadTransport) {
+    const bypassOverlaySuspend = this.overlayBypassFrameBudget > 0
+    if (bypassOverlaySuspend) {
+      this.overlayBypassFrameBudget -= 1
+    }
+    if (this.suspendRtcGamepadTransport && !bypassOverlaySuspend) {
       return
     }
 
@@ -149,10 +155,12 @@ export class InputService {
   }
 
   pressButtonStart(button: LogicalButtonDto): void {
+    this.allowNextVirtualInputFrame()
     this.gamepadDriver.pressButtonStart?.(button)
   }
 
   pressButtonEnd(button: LogicalButtonDto): void {
+    this.allowNextVirtualInputFrame()
     this.gamepadDriver.pressButtonEnd?.(button)
   }
 
@@ -162,6 +170,11 @@ export class InputService {
 
   moveRightStick(x: number, y: number): void {
     this.gamepadDriver.moveRightStick?.(x, y)
+  }
+
+  private allowNextVirtualInputFrame(): void {
+    // 菜单 overlay 打开时会暂停常规手柄帧；这里为程序化注入（如 Nexus 动作）放行单帧。
+    this.overlayBypassFrameBudget = Math.min(this.overlayBypassFrameBudget + 1, 4)
   }
 
   addProcessedFrame(frame: ProcessedVideoFrameMetadata): void {

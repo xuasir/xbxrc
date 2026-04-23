@@ -152,6 +152,7 @@ export interface GamepadSlotSnapshotDto {
   sampledAtMs: number
   sampleSeq: number
   state: LogicalPadStateDto
+  rawButtons?: Array<{ index: number, value: number }>
 }
 export type LogicalPadSnapshotDto = GamepadSlotSnapshotDto
 

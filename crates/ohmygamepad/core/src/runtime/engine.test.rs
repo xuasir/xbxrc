@@ -350,6 +350,7 @@ fn input_policy_change_emits_new_snapshot() {
 
     core.tick();
     core.replace_input_policy(ohmygamepad_protocol::OhMyGamepadInputPolicyDto::StreamOnly);
+    core.sample_once();
 
     let pads = ui_pads.borrow();
     assert_eq!(pads.len(), 1);
@@ -359,6 +360,70 @@ fn input_policy_change_emits_new_snapshot() {
         core.runtime_snapshot().input_policy,
         ohmygamepad_protocol::OhMyGamepadInputPolicyDto::StreamOnly
     );
+}
+
+#[test]
+fn unchanged_snapshot_preserves_sample_seq_in_on_change_mode() {
+    let backend = ScriptedBackend::new(vec![
+        BackendPollResult {
+            device_events: vec![DeviceLifecycleEvent::Added(device("pad-a"))],
+            samples: vec![sample("pad-a", 10, vec![1.0], vec![0.0, 0.0, 0.0, 0.0])],
+        },
+        BackendPollResult {
+            device_events: vec![],
+            samples: vec![sample("pad-a", 11, vec![1.0], vec![0.0, 0.0, 0.0, 0.0])],
+        },
+    ]);
+    let mut core = InputCore::new(
+        InputCoreConfig::default(),
+        backend,
+        SharedUiSink::default(),
+        SharedStreamSink::default(),
+    );
+
+    core.sync_clock_ms(10);
+    core.tick();
+    let first_seq = core.runtime_snapshot().slots[0].sample_seq;
+
+    core.sync_clock_ms(20);
+    core.tick();
+    let second_seq = core.runtime_snapshot().slots[0].sample_seq;
+
+    assert_eq!(first_seq, second_seq);
+}
+
+#[test]
+fn fixed_rate_stream_mode_advances_sample_seq_without_payload_change() {
+    let backend = ScriptedBackend::new(vec![
+        BackendPollResult {
+            device_events: vec![DeviceLifecycleEvent::Added(device("pad-a"))],
+            samples: vec![sample("pad-a", 10, vec![1.0], vec![0.0, 0.0, 0.0, 0.0])],
+        },
+        BackendPollResult {
+            device_events: vec![],
+            samples: vec![sample("pad-a", 10, vec![1.0], vec![0.0, 0.0, 0.0, 0.0])],
+        },
+    ]);
+    let mut config = InputCoreConfig::default();
+    config.sampling.stream_push_mode =
+        ohmygamepad_protocol::OhMyGamepadStreamPushModeDto::FixedRate;
+    config.sampling.stream_push_rate_hz = Some(10);
+    let mut core = InputCore::new(config, backend, SharedUiSink::default(), SharedStreamSink::default());
+
+    core.sync_clock_ms(10);
+    core.tick();
+    let first_snapshot = core.runtime_snapshot().slots[0].clone();
+
+    core.sync_clock_ms(50);
+    core.tick();
+    let second_snapshot = core.runtime_snapshot().slots[0].clone();
+    assert_eq!(first_snapshot.sample_seq, second_snapshot.sample_seq);
+
+    core.sync_clock_ms(120);
+    core.sample_once();
+    let third_snapshot = core.runtime_snapshot().slots[0].clone();
+    assert!(third_snapshot.sample_seq > second_snapshot.sample_seq);
+    assert_eq!(third_snapshot.state, second_snapshot.state);
 }
 
 #[test]

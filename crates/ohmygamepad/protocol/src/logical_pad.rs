@@ -84,6 +84,15 @@ pub struct GamepadSlotSnapshotDto {
     pub sampled_at_ms: u64,
     pub sample_seq: u64,
     pub state: LogicalPadStateDto,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub raw_buttons: Option<Vec<GamepadRawButtonStateDto>>,
 }
 
 pub type LogicalPadSnapshotDto = GamepadSlotSnapshotDto;
+
+#[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GamepadRawButtonStateDto {
+    pub index: usize,
+    pub value: f32,
+}
