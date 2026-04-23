@@ -2028,6 +2028,12 @@ fn resolve_usable_idr_outcome(
     {
         return Some("beforeUsableIdr");
     }
+    if episode.first_keyframe_decoded_at_ms.is_none()
+        && (episode.first_keyframe_packet_at_ms.is_some()
+            || matches!(episode.status.as_str(), "packet-seen" | "response-observed"))
+    {
+        return Some("missingUsableIdr");
+    }
     if matches!(
         episode.status.as_str(),
         "missed" | "failed" | "succeeded" | "decoded"

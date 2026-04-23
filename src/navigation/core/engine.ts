@@ -335,6 +335,29 @@ export class NavigationEngine {
   }
 
   private scrollToFocus(el: HTMLElement, isRapid = false): void {
+    const scrollContainer = el.closest<HTMLElement>('.setting-panel')
+    if (scrollContainer) {
+      const containerRect = scrollContainer.getBoundingClientRect()
+      const rect = el.getBoundingClientRect()
+
+      const safePaddingY = Math.min(64, containerRect.height * 0.15)
+
+      const topLimit = containerRect.top + safePaddingY
+      const bottomLimit = containerRect.bottom - safePaddingY
+
+      if (rect.top < topLimit || rect.bottom > bottomLimit) {
+        const currentScrollTop = scrollContainer.scrollTop
+        const elOffsetTop = rect.top - containerRect.top + currentScrollTop
+        const targetScrollTop = Math.max(0, elOffsetTop - (containerRect.height / 2 - rect.height / 2))
+
+        scrollContainer.scrollTo({
+          top: targetScrollTop,
+          behavior: isRapid ? 'auto' : 'smooth',
+        })
+      }
+      return
+    }
+
     const rect = el.getBoundingClientRect()
     const viewportWidth = window.innerWidth
     const viewportHeight = window.innerHeight
@@ -353,8 +376,8 @@ export class NavigationEngine {
     if (needsScroll) {
       el.scrollIntoView({
         behavior: isRapid ? 'auto' : 'smooth',
-        block: 'center',
-        inline: 'center',
+        block: 'nearest',
+        inline: 'nearest',
       })
     }
   }

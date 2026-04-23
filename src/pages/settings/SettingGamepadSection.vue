@@ -14,16 +14,21 @@ import type {
   GamepadRuntimeSnapshotDto,
   LogicalPadSnapshotDto,
 } from '@shared/gamepad/contract'
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Focusable } from '@/navigation/core/vue'
+import type { MappingMode } from '../../components/settings/SettingGamepadMappingSheet.vue'
+import SettingGamepadMappingSheet from '../../components/settings/SettingGamepadMappingSheet.vue'
 import { events } from '../../services/events'
 import { rpc } from '../../services/rpc'
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   scopeId: string
   navNodeBaseId: string
-}>()
+  embedded?: boolean
+}>(), {
+  embedded: false,
+})
 
 const { t } = useI18n()
 
@@ -109,6 +114,11 @@ const mappingEditorMode = ref<MappingEditorMode>('none')
 const captureTargetButton = ref<LogicalButtonDto | null>(null)
 const mappingMessage = ref('')
 const mappingMessageTone = ref<'success' | 'error'>('success')
+const mappingSheetOpen = ref(false)
+const mappingSheetMode = ref<MappingMode>('keyboard')
+const deviceActionPending = ref<string | null>(null)
+const deviceActionMessage = ref('')
+const deviceActionMessageTone = ref<'success' | 'error'>('success')
 
 const connectedGamepadCount = computed(() =>
   gamepadSnapshot.value?.devices.filter(device => device.connected).length ?? 0,
@@ -383,16 +393,23 @@ function buildDefaultProfileWithButtonMapping(): GamepadDeviceProfileDto {
 function openMappingEditor(mode: MappingEditorMode): void {
   captureTargetButton.value = null
   mappingEditorMode.value = mode
+  mappingSheetMode.value = mode === 'keyboard' ? 'keyboard' : 'gamepad'
+  mappingSheetOpen.value = true
 }
 
 function closeMappingEditor(): void {
   captureTargetButton.value = null
   mappingEditorMode.value = 'none'
+  mappingSheetOpen.value = false
 }
 
 function startCapture(button: LogicalButtonDto): void {
   captureTargetButton.value = button
   mappingMessage.value = ''
+}
+
+function cancelCapture(): void {
+  captureTargetButton.value = null
 }
 
 function keyboardCodeToDtoKey(code: string): GamepadKeyboardKeyDto | null {
@@ -469,29 +486,56 @@ async function handleTestGamepadRumble(): Promise<void> {
 }
 
 async function handleSetPrimarySamplingDevice(deviceId: string | null): Promise<void> {
+  deviceActionPending.value = deviceId ?? '__auto__'
+  deviceActionMessage.value = ''
   try {
     await rpc.gamepad.setPrimarySamplingDevice({ deviceId })
     await loadGamepadRuntimeSnapshot()
+    deviceActionMessageTone.value = 'success'
+    deviceActionMessage.value = '已设置主采样设备。'
   }
   catch {
-    // 保持静默，避免设置页出现与宿主实现强耦合的错误提示
+    deviceActionMessageTone.value = 'error'
+    deviceActionMessage.value = '设置失败，请稍后重试。'
+  }
+  finally {
+    deviceActionPending.value = null
   }
 }
 
 async function handleResumeDeviceSampling(deviceId: string): Promise<void> {
+  deviceActionPending.value = deviceId
+  deviceActionMessage.value = ''
   try {
     // 仅做恢复兜底，避免 UI 状态判断错误导致误暂停输入。
     await rpc.gamepad.resumeSamplingDevice({ deviceId })
     await loadGamepadRuntimeSnapshot()
+    deviceActionMessageTone.value = 'success'
+    deviceActionMessage.value = '已发送恢复采样请求。'
   }
   catch {
-    // 同样静默失败
+    deviceActionMessageTone.value = 'error'
+    deviceActionMessage.value = '操作失败，请稍后重试。'
+  }
+  finally {
+    deviceActionPending.value = null
   }
 }
 
 function handleToggleGamepadDebug(): void {
   gamepadDebugEnabled.value = !gamepadDebugEnabled.value
 }
+
+watch(
+  () => [mappingSheetOpen.value, mappingSheetMode.value, captureTargetButton.value] as const,
+  ([open, mode, target]) => {
+    window.removeEventListener('keydown', handleMappingCaptureKeydown)
+    if (open && mode === 'keyboard' && target !== null) {
+      window.addEventListener('keydown', handleMappingCaptureKeydown)
+    }
+  },
+  { immediate: true },
+)
 
 onMounted(() => {
   void loadGamepadRuntimeSnapshot()
@@ -509,7 +553,7 @@ onMounted(() => {
     lastPadSnapshotAt = now
     lastPadSnapshot.value = snapshot
 
-    if (mappingEditorMode.value === 'gamepad' && captureTargetButton.value !== null) {
+    if (mappingSheetOpen.value && mappingSheetMode.value === 'gamepad' && captureTargetButton.value !== null) {
       const rawIndex = detectPressedRawButtonIndex(snapshot)
       if (rawIndex !== null) {
         gamepadButtonIndices.value[captureTargetButton.value] = rawIndex
@@ -526,7 +570,6 @@ onMounted(() => {
       }
     }
   })
-  window.addEventListener('keydown', handleMappingCaptureKeydown)
 })
 
 onUnmounted(() => {
@@ -542,7 +585,7 @@ onUnmounted(() => {
 })
 
 function handleMappingCaptureKeydown(event: KeyboardEvent): void {
-  if (mappingEditorMode.value !== 'keyboard' || captureTargetButton.value === null) {
+  if (!mappingSheetOpen.value || mappingSheetMode.value !== 'keyboard' || captureTargetButton.value === null) {
     return
   }
   event.preventDefault()
@@ -559,9 +602,12 @@ function handleMappingCaptureKeydown(event: KeyboardEvent): void {
 <template>
   <section
     class="setting-panel__section setting-panel__section--gamepad"
+    :class="{
+      'setting-panel__section--embedded': props.embedded,
+    }"
     :aria-label="t('setting.gamepad.sectionLabel')"
   >
-    <header class="setting-panel__section-header">
+    <header v-if="!props.embedded" class="setting-panel__section-header">
       <h2 class="setting-panel__section-title">
         {{ t('setting.gamepad.sectionLabel') }}
       </h2>
@@ -646,7 +692,7 @@ function handleMappingCaptureKeydown(event: KeyboardEvent): void {
               type="button"
               class="setting-gamepad__chip"
               :scope-id="props.scopeId"
-              :disabled="inputPrimaryDeviceId === device.deviceId"
+              :disabled="inputPrimaryDeviceId === device.deviceId || deviceActionPending !== null"
               @click="() => void handleSetPrimarySamplingDevice(device.deviceId)"
             >
               {{
@@ -662,6 +708,7 @@ function handleMappingCaptureKeydown(event: KeyboardEvent): void {
               type="button"
               class="setting-gamepad__chip"
               :scope-id="props.scopeId"
+              :disabled="deviceActionPending !== null"
               @click="
                 () =>
                   void handleResumeDeviceSampling(device.deviceId)
@@ -672,6 +719,16 @@ function handleMappingCaptureKeydown(event: KeyboardEvent): void {
           </div>
         </div>
       </div>
+
+      <p
+        v-if="deviceActionMessage"
+        class="setting-gamepad__feedback"
+        :class="{
+          'setting-gamepad__feedback--error': deviceActionMessageTone === 'error',
+        }"
+      >
+        {{ deviceActionMessage }}
+      </p>
 
       <Focusable
         :id="`${props.navNodeBaseId}.gamepad.testRumble`"
@@ -719,7 +776,7 @@ function handleMappingCaptureKeydown(event: KeyboardEvent): void {
           </p>
         </header>
 
-        <div v-if="mappingEditorMode === 'none'" class="setting-gamepad__mapping-actions">
+        <div class="setting-gamepad__mapping-actions">
           <Focusable
             :id="`${props.navNodeBaseId}.gamepad.mappingKeyboardEditor`"
             as="button"
@@ -742,87 +799,38 @@ function handleMappingCaptureKeydown(event: KeyboardEvent): void {
           </Focusable>
         </div>
 
-        <div v-else class="setting-gamepad__mapping-subpage">
-          <div class="setting-gamepad__mapping-subpage-header">
-            <p class="setting-gamepad__mapping-subtitle">
-              {{ mappingEditorMode === 'keyboard' ? '键盘按钮映射' : '手柄按钮映射' }}
-            </p>
-            <Focusable
-              :id="`${props.navNodeBaseId}.gamepad.mappingBack`"
-              as="button"
-              type="button"
-              class="setting-gamepad__chip"
-              :scope-id="props.scopeId"
-              @click="closeMappingEditor"
-            >
-              返回
-            </Focusable>
-          </div>
-
-          <div class="setting-gamepad__mapping-list">
-            <Focusable
-              v-for="button in LOGICAL_BUTTONS"
-              :id="`${props.navNodeBaseId}.gamepad.mapping.${mappingEditorMode}.${button}`"
-              :key="button"
-              as="button"
-              type="button"
-              class="setting-gamepad__mapping-row"
-              :scope-id="props.scopeId"
-              @click="startCapture(button)"
-            >
-              <span class="setting-gamepad__mapping-row-label">{{ LOGICAL_BUTTON_LABEL[button] }}</span>
-              <span class="setting-gamepad__mapping-row-value">
-                {{
-                  mappingEditorMode === 'keyboard'
-                    ? formatKeyboardBinding(button)
-                    : formatGamepadBinding(button)
-                }}
-              </span>
-            </Focusable>
-          </div>
-
-          <p v-if="captureTargetButton !== null" class="setting-gamepad__mapping-capture">
-            正在监听 {{ LOGICAL_BUTTON_LABEL[captureTargetButton] }} 的映射输入，请按下目标{{ mappingEditorMode === 'keyboard' ? '键盘按键' : '手柄按钮' }}...
-          </p>
-        </div>
-
-        <div class="setting-gamepad__mapping-actions">
-          <Focusable
-            :id="`${props.navNodeBaseId}.gamepad.mappingSave`"
-            as="button"
-            type="button"
-            class="setting-gamepad__mapping-action setting-gamepad__mapping-action--primary"
-            :scope-id="props.scopeId"
-            @click="() => void handleSaveMappings()"
-          >
-            保存映射
-          </Focusable>
-          <Focusable
-            :id="`${props.navNodeBaseId}.gamepad.mappingReset`"
-            as="button"
-            type="button"
-            class="setting-gamepad__mapping-action"
-            :scope-id="props.scopeId"
-            @click="() => void handleResetMappings()"
-          >
-            重置默认
-          </Focusable>
-        </div>
-        <p
-          v-if="mappingMessage"
-          class="setting-gamepad__mapping-feedback"
-          :class="{
-            'setting-gamepad__mapping-feedback--error': mappingMessageTone === 'error',
-          }"
-        >
-          {{ mappingMessage }}
-        </p>
+        <SettingGamepadMappingSheet
+          :open="mappingSheetOpen"
+          :scope-id="`${props.scopeId}.gamepadMapping`"
+          :mode="mappingSheetMode"
+          :logical-buttons="LOGICAL_BUTTONS"
+          :logical-button-label="LOGICAL_BUTTON_LABEL"
+          :keyboard-bindings="keyboardBindings"
+          :gamepad-button-indices="gamepadButtonIndices"
+          :capture-target-button="captureTargetButton"
+          :message="mappingMessage"
+          :message-tone="mappingMessageTone"
+          @close="closeMappingEditor"
+          @start-capture="startCapture"
+          @cancel-capture="cancelCapture"
+          @save="() => void handleSaveMappings()"
+          @reset="() => void handleResetMappings()"
+        />
       </div>
     </div>
   </section>
 </template>
 
 <style scoped>
+.setting-panel__section--embedded {
+  padding: 0;
+  border: 0;
+}
+
+.setting-panel__section--embedded .setting-panel__section-body--gamepad {
+  padding: 0;
+}
+
 .setting-panel__section-body--gamepad {
   gap: 16px;
 }
@@ -924,6 +932,23 @@ function handleMappingCaptureKeydown(event: KeyboardEvent): void {
   font-size: 12px;
   font-family: var(--ui-font-mono, monospace);
   color: var(--color-text-tertiary);
+}
+
+.setting-gamepad__feedback {
+  margin: 8px 0 0;
+  padding: 10px 12px;
+  border-radius: var(--ui-radius-md, 10px);
+  border: 1px solid var(--ui-border-subtle);
+  background: color-mix(in srgb, var(--brand-primary) 12%, transparent);
+  color: var(--color-text-secondary);
+  font-size: var(--ui-text-body-sm);
+  line-height: var(--ui-line-height-default);
+}
+
+.setting-gamepad__feedback--error {
+  background: color-mix(in srgb, var(--color-danger) 12%, transparent);
+  border-color: color-mix(in srgb, var(--color-danger) 35%, var(--ui-border-subtle));
+  color: var(--color-text-primary);
 }
 
 .setting-gamepad__device-list {

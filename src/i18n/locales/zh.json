@@ -999,7 +999,21 @@
       },
       "vibration_strength": {
         "label": "震动强度",
-        "description": "选择更接近你偏好体感的震动档位"
+        "description": "选择更接近你偏好体感的震动档位",
+        "options": {
+          "realistic": {
+            "label": "真实",
+            "description": "更接近 Xbox 原生马达平衡，反馈更细腻"
+          },
+          "enhanced": {
+            "label": "增强",
+            "description": "在保留细节的同时，整体力度略加强"
+          },
+          "full": {
+            "label": "满强度",
+            "description": "使用完整震动信号，输出最强"
+          }
+        }
       },
       "power_on": {
         "label": "自动开机",

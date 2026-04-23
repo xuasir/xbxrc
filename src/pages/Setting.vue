@@ -21,7 +21,7 @@ import {
   SPATIAL_NAV_SCOPE_IDS,
 } from '../navigation/spatial-nav.constants'
 import { rpc } from '../services/rpc'
-import SettingGamepadSection from './settings/SettingGamepadSection.vue'
+import SettingInputToolsSection from './settings/SettingInputToolsSection.vue'
 import SettingSectionList from './settings/SettingSectionList.vue'
 import SettingSidebar from './settings/SettingSidebar.vue'
 
@@ -606,7 +606,12 @@ onUnmounted(() => {
               {{ t('setting.states.emptyGroup') }}
             </div>
 
-            <div v-else>
+            <div
+              v-else
+              :class="{
+                'setting-panel__content--input-tools': activeTabKey === 'input',
+              }"
+            >
               <SettingSectionList
                 :active-tab-key="activeTabKey"
                 :sections="activeSectionRows"
@@ -620,7 +625,7 @@ onUnmounted(() => {
                 @inline-single-select="(value) => void handleInlineSingleSelect(value)"
                 @reset-streaming-expert="() => void handleResetStreamingExpert()"
               />
-              <SettingGamepadSection
+              <SettingInputToolsSection
                 v-if="activeTabKey === 'input'"
                 :scope-id="SPATIAL_NAV_SCOPE_IDS.appShell"
                 :nav-node-base-id="SPATIAL_NAV_NODE_IDS.settingTabs.input"
@@ -696,6 +701,7 @@ onUnmounted(() => {
       @close="activeSingleSelectRow = null"
       @select="(value) => void handleSingleSelectPopup(value)"
     />
+
   </section>
 </template>
 
@@ -761,6 +767,10 @@ onUnmounted(() => {
 .setting-content-fade-leave-to {
   opacity: 0;
   transform: translateY(-12px) scale(0.99);
+}
+
+.setting-panel__content--input-tools :deep(.setting-panel__list) {
+  padding-bottom: 24px;
 }
 
 :global(html[data-ui-density='compact']) .setting-page__layout {

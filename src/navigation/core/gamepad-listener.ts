@@ -4,8 +4,9 @@ import { setLastActivePadId } from './haptics'
 import { inputDispatcher, NavigationIntent } from './input'
 
 const STICK_DEADZONE = 0.5
-const BUTTON_REPEAT_DELAY = 400
-const BUTTON_REPEAT_RATE = 100
+// UI 导航长按：默认稍慢一点，减少长列表的“连跳失控感”
+const BUTTON_REPEAT_DELAY = 450
+const BUTTON_REPEAT_RATE = 140
 
 interface GamepadState {
   pressed: Record<string, boolean>

@@ -6,6 +6,8 @@ use super::grouping::split_config_groups;
 fn normalize_number(key: &str, value: &Value, fallback: i64, min: i64, max: i64) -> Value {
     let parsed = if let Some(val) = value.as_i64() {
         val.clamp(min, max)
+    } else if let Some(val) = value.as_f64() {
+        (val.round() as i64).clamp(min, max)
     } else {
         log::warn!(
             "Config key '{}' missing or invalid, using fallback: {}",

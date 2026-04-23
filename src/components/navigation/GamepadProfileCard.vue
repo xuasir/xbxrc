@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import type { GamepadRuntimeSnapshotDto } from '@shared/gamepad/contract'
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Focusable, FocusScope } from '@/navigation/core/vue'
 import seriesCtrlImageUrl from '../../assets/ctrl/series-ctrl.jpeg'
 import { SPATIAL_NAV_NODE_IDS, SPATIAL_NAV_SCOPE_IDS } from '../../navigation/spatial-nav.constants'
+import { rpc } from '../../services/rpc'
 
 interface GamepadProfileCardProps {
   open: boolean
@@ -21,6 +22,10 @@ const { t } = useI18n()
 
 const connectedDevices = computed(() => props.snapshot?.devices.filter(device => device.connected) ?? [])
 const defaultDeviceId = computed(() => props.snapshot?.haptics.defaultDeviceId ?? null)
+const inputPrimaryDeviceId = computed(() => props.snapshot?.haptics.defaultDeviceId ?? null)
+const deviceActionPending = ref<string | null>(null)
+const deviceActionMessage = ref('')
+const deviceActionMessageTone = ref<'success' | 'error'>('success')
 
 const showCapabilitySummary = computed(() => {
   return connectedDevices.value.some((device) => {
@@ -80,6 +85,80 @@ function formatConnection(connection: string | null): string {
       return t('gamepadCard.connections.unknown')
     default:
       return t('gamepadCard.connections.unknown')
+  }
+}
+
+
+const isGamepadTestRumbleDisabled = computed(() => {
+  const snapshot = props.snapshot
+  if (!snapshot) {
+    return true
+  }
+  if (!snapshot.haptics.supportsBasicRumble && !snapshot.haptics.supportsTriggerRumble) {
+    return true
+  }
+  return connectedDevices.value.length === 0
+})
+
+async function handleTestGamepadRumble(): Promise<void> {
+  if (isGamepadTestRumbleDisabled.value) {
+    return
+  }
+  try {
+    await rpc.gamepad.playRumble({
+      request: {
+        target: { kind: 'auto' },
+        effect: {
+          startDelayMs: 0,
+          durationMs: 120,
+          strongMagnitude: 0.4,
+          weakMagnitude: 0.2,
+          leftTrigger: 0.2,
+          rightTrigger: 0.4,
+          repeat: 0,
+        },
+      },
+    })
+    deviceActionMessageTone.value = 'success'
+    deviceActionMessage.value = '已发送震动测试。'
+  }
+  catch {
+    deviceActionMessageTone.value = 'error'
+    deviceActionMessage.value = '震动测试失败。'
+  }
+}
+
+async function handleSetPrimarySamplingDevice(deviceId: string | null): Promise<void> {
+  deviceActionPending.value = deviceId ?? '__auto__'
+  deviceActionMessage.value = ''
+  try {
+    await rpc.gamepad.setPrimarySamplingDevice({ deviceId })
+    deviceActionMessageTone.value = 'success'
+    deviceActionMessage.value = '已设置主采样设备。'
+  }
+  catch {
+    deviceActionMessageTone.value = 'error'
+    deviceActionMessage.value = '设置失败，请稍后重试。'
+  }
+  finally {
+    deviceActionPending.value = null
+  }
+}
+
+async function handleResumeDeviceSampling(deviceId: string): Promise<void> {
+  deviceActionPending.value = deviceId
+  deviceActionMessage.value = ''
+  try {
+    await rpc.gamepad.resumeSamplingDevice({ deviceId })
+    deviceActionMessageTone.value = 'success'
+    deviceActionMessage.value = '已发送恢复采样请求。'
+  }
+  catch {
+    deviceActionMessageTone.value = 'error'
+    deviceActionMessage.value = '操作失败，请稍后重试。'
+  }
+  finally {
+    deviceActionPending.value = null
   }
 }
 </script>
@@ -167,17 +246,62 @@ function formatConnection(connection: string | null): string {
                     {{ t('gamepadCard.defaultBadge') }}
                   </span>
                 </div>
+
+                <div class="gamepad-card__device-actions">
+                  <Focusable
+                    :id="`gamepad-card.device.${device.deviceId}.setPrimary`"
+                    as="button"
+                    type="button"
+                    class="gamepad-card__chip"
+                    :scope-id="SPATIAL_NAV_SCOPE_IDS.gamepadMenu"
+                    :disabled="inputPrimaryDeviceId === device.deviceId || deviceActionPending !== null"
+                    @click="() => void handleSetPrimarySamplingDevice(device.deviceId)"
+                  >
+                    {{ inputPrimaryDeviceId === device.deviceId ? '主采样设备' : '设为主手柄' }}
+                  </Focusable>
+                  <Focusable
+                    :id="`gamepad-card.device.${device.deviceId}.resumeSampling`"
+                    as="button"
+                    type="button"
+                    class="gamepad-card__chip"
+                    :scope-id="SPATIAL_NAV_SCOPE_IDS.gamepadMenu"
+                    :disabled="deviceActionPending !== null"
+                    @click="() => void handleResumeDeviceSampling(device.deviceId)"
+                  >
+                    切换采样
+                  </Focusable>
+                  <Focusable
+                    :id="`gamepad-card.device.${device.deviceId}.testRumble`"
+                    as="button"
+                    type="button"
+                    class="gamepad-card__chip gamepad-card__chip--danger"
+                    :scope-id="SPATIAL_NAV_SCOPE_IDS.gamepadMenu"
+                    :disabled="isGamepadTestRumbleDisabled || deviceActionPending !== null"
+                    @click="() => void handleTestGamepadRumble()"
+                  >
+                    震动测试
+                  </Focusable>
+                </div>
               </article>
             </div>
 
             <div v-else class="gamepad-card__empty">
               {{ t('gamepadCard.empty') }}
             </div>
+
+            <p
+              v-if="deviceActionMessage"
+              class="gamepad-card__feedback"
+              :class="{ 'gamepad-card__feedback--error': deviceActionMessageTone === 'error' }"
+            >
+              {{ deviceActionMessage }}
+            </p>
           </div>
         </FocusScope>
       </div>
     </div>
   </Transition>
+
 </template>
 
 <style scoped>
@@ -355,6 +479,37 @@ function formatConnection(connection: string | null): string {
   backdrop-filter: blur(10px);
 }
 
+.gamepad-card__device-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.gamepad-card__chip {
+  min-height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid var(--ui-border-subtle);
+  background: color-mix(in srgb, var(--ui-surface-overlay) 86%, transparent);
+  color: var(--ui-page-text);
+  font-size: 12px;
+  transition: all var(--ui-motion-fast);
+}
+
+.gamepad-card__chip[data-focused='true'] {
+  background: var(--color-focus-bg-strong);
+  color: var(--ui-focus-text);
+  box-shadow: var(--shadow-xbox-focus);
+}
+
+.gamepad-card__chip:disabled {
+  opacity: 0.65;
+}
+
+.gamepad-card__chip--danger {
+  border-color: color-mix(in srgb, var(--color-warning), var(--ui-border-subtle) 60%);
+}
+
 .gamepad-card__device::before {
   content: '';
   position: absolute;
@@ -435,6 +590,22 @@ function formatConnection(connection: string | null): string {
   border-radius: 12px;
   border: 1px solid var(--ui-border-subtle);
   backdrop-filter: blur(10px);
+}
+
+.gamepad-card__feedback {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--ui-border-subtle);
+  background: color-mix(in srgb, var(--brand-primary) 12%, transparent);
+  color: var(--ui-page-text-soft);
+  font-size: 13px;
+}
+
+.gamepad-card__feedback--error {
+  background: color-mix(in srgb, var(--color-danger) 12%, transparent);
+  border-color: color-mix(in srgb, var(--color-danger) 35%, var(--ui-border-subtle));
+  color: var(--ui-page-text);
 }
 
 /* Transition */
