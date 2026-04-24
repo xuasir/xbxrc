@@ -193,9 +193,9 @@ export class InputPacketEncoder {
       }
       packet.setUint16(offset, buttonMask, true)
       packet.setInt16(offset + 2, this.normalizeAxis(input.state.leftStick.x), true)
-      packet.setInt16(offset + 4, this.normalizeAxis(input.state.leftStick.y), true)
+      packet.setInt16(offset + 4, this.normalizeAxis(-input.state.leftStick.y), true)
       packet.setInt16(offset + 6, this.normalizeAxis(input.state.rightStick.x), true)
-      packet.setInt16(offset + 8, this.normalizeAxis(input.state.rightStick.y), true)
+      packet.setInt16(offset + 8, this.normalizeAxis(-input.state.rightStick.y), true)
       packet.setUint16(
         offset + 10,
         this.normalizeTrigger(Math.max(buttons.l2, input.state.leftTrigger)),
