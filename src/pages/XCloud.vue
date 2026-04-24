@@ -344,7 +344,7 @@ function unregisterTabSwitch(): void {
 
     <section
       v-else-if="!hasFullAccess"
-      class="xcloud-page__state xcloud-page__state--logged-out ui-page-panel ui-page-panel--spacious"
+      class="xcloud-page__state xcloud-page__state--logged-out"
     >
       <p class="ui-page-title">
         {{ t('xcloudPage.limitedTitle') }}
@@ -730,8 +730,9 @@ function unregisterTabSwitch(): void {
 }
 
 .xcloud-page__state--logged-out {
+  flex: 1 1 auto;
   width: min(100%, var(--ui-login-content-width));
-  margin: var(--ui-space-4xl) auto 0;
+  margin: auto;
   align-items: center;
   text-align: center;
 }
