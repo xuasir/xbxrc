@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { spawn } from "node:child_process";
-import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, readlinkSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import process from "node:process";
@@ -50,6 +50,9 @@ function run() {
   const command = process.argv[splitIdx + 1];
   const args = process.argv.slice(splitIdx + 2);
   const { sdkRoot, includeDir, libDir, binDir } = resolveSdkRoot();
+  const workspaceRoot = resolve(import.meta.dirname, "..");
+  ensureLegacyRuntimeAlias({ sdkRoot });
+  ensureRuntimeAssets({ workspaceRoot, libDir, binDir });
   const pkgConfigDir = resolve(libDir, "pkgconfig");
   const localPkgConfigDir = prepareLocalPkgConfig({
     sdkRoot,
@@ -77,6 +80,13 @@ function run() {
     CMAKE_ARGS: mergedCmakeArgs,
     CMAKE_POLICY_VERSION_MINIMUM: "3.5",
     PATH: `${binDir}${pathDelimiter}${currentPath}`,
+    // macOS dyld does not consult PATH for .dylib lookup.
+    DYLD_LIBRARY_PATH: process.platform === "darwin"
+      ? [libDir, process.env.DYLD_LIBRARY_PATH].filter(Boolean).join(":")
+      : process.env.DYLD_LIBRARY_PATH,
+    DYLD_FALLBACK_LIBRARY_PATH: process.platform === "darwin"
+      ? [libDir, process.env.DYLD_FALLBACK_LIBRARY_PATH].filter(Boolean).join(":")
+      : process.env.DYLD_FALLBACK_LIBRARY_PATH,
   };
   const isWindows = process.platform === "win32";
   const normalizedCommand = isWindows && command === "tauri" ? "tauri.cmd" : command;
@@ -99,6 +109,108 @@ function run() {
     }
     process.exit(code ?? 1);
   });
+}
+
+function ensureLegacyRuntimeAlias({ sdkRoot }) {
+  const platform = process.platform;
+  const arch = process.arch;
+  const ffmpegVersion = "ffmpeg-8.1";
+
+  let runtimeSuffix = null;
+  if (platform === "darwin" && arch === "arm64") {
+    runtimeSuffix = "out-arm64";
+  } else if (platform === "darwin" && arch === "x64") {
+    runtimeSuffix = "out-x64";
+  } else if (platform === "win32" && arch === "x64") {
+    runtimeSuffix = "out-x64";
+  } else {
+    return;
+  }
+
+  const aliasPath = resolve(tmpdir(), ffmpegVersion, runtimeSuffix);
+  const aliasParent = resolve(aliasPath, "..");
+  mkdirSync(aliasParent, { recursive: true });
+
+  if (existsSync(aliasPath)) {
+    try {
+      const stat = lstatSync(aliasPath);
+      if (stat.isSymbolicLink()) {
+        const linkedTo = resolve(aliasParent, readlinkSync(aliasPath));
+        if (linkedTo === sdkRoot) {
+          return;
+        }
+        rmSync(aliasPath, { recursive: true, force: true });
+      } else {
+        // Existing non-link path blocks alias creation. Replace it to keep runtime deterministic.
+        rmSync(aliasPath, { recursive: true, force: true });
+      }
+    } catch {
+      rmSync(aliasPath, { recursive: true, force: true });
+    }
+  }
+
+  const symlinkType = process.platform === "win32" ? "junction" : "dir";
+  symlinkSync(sdkRoot, aliasPath, symlinkType);
+}
+
+function ensureRuntimeAssets({ workspaceRoot, libDir, binDir }) {
+  const platform = process.platform;
+  if (platform !== "darwin" && platform !== "win32") {
+    return;
+  }
+
+  const targetDirs = [
+    resolve(workspaceRoot, "target", "debug"),
+    resolve(workspaceRoot, "target", "release"),
+  ];
+
+  for (const targetDir of targetDirs) {
+    if (!existsSync(targetDir)) {
+      continue;
+    }
+
+    if (platform === "darwin") {
+      const dylibEntries = readdirSync(libDir).filter(name => name.endsWith(".dylib"));
+      for (const name of dylibEntries) {
+        const src = resolve(libDir, name);
+        const dst = resolve(targetDir, name);
+        ensurePathLink({ src, dst });
+      }
+    } else if (platform === "win32") {
+      const dllEntries = readdirSync(binDir).filter(name => name.toLowerCase().endsWith(".dll"));
+      for (const name of dllEntries) {
+        const src = resolve(binDir, name);
+        const dst = resolve(targetDir, name);
+        ensurePathCopy({ src, dst });
+      }
+    }
+  }
+}
+
+function ensurePathLink({ src, dst }) {
+  if (existsSync(dst)) {
+    try {
+      const stat = lstatSync(dst);
+      if (stat.isSymbolicLink()) {
+        const linkedTo = resolve(dst, "..", readlinkSync(dst));
+        if (linkedTo === src) {
+          return;
+        }
+      }
+      rmSync(dst, { recursive: true, force: true });
+    } catch {
+      rmSync(dst, { recursive: true, force: true });
+    }
+  }
+  const symlinkType = process.platform === "win32" ? "file" : "file";
+  symlinkSync(src, dst, symlinkType);
+}
+
+function ensurePathCopy({ src, dst }) {
+  if (existsSync(dst)) {
+    rmSync(dst, { recursive: true, force: true });
+  }
+  copyFileSync(src, dst);
 }
 
 function prepareLocalPkgConfig({ sdkRoot, includeDir, libDir, pkgConfigDir }) {
