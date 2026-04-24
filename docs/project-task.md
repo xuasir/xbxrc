@@ -1,17 +1,31 @@
-# Project Tasks
+# Project Task Tracker
 
-## In Progress
+> 归档副本：`project-task.archived.2026-04-18.md`（本轮快照） · `project-task.archived.2026-04-11.md`（本轮快照） · `project-task.archived.2026-04-01.md`（更早）
 
-- 2026-04-22: 推进双窗口串流视频宿主改造，拆分主窗口透明 UI 与独立 native video 承载窗口。RFC: [docs/rfcs/2026-04-22-dual-window-stream-video-host.md](D:\Code\xbxrc\docs\rfcs\2026-04-22-dual-window-stream-video-host.md)
-- 2026-04-23: 规划视频中后段显示调度收敛改造，目标是完成 P1 latest-only render/runtime 交付与 P2 host 单点最终显示时钟收敛，消除 core/host 双重调度与显示进展语义错位。RFC: [docs/rfcs/2026-04-23-video-display-scheduling-convergence.md](D:\Code\xbxrc\docs\rfcs\2026-04-23-video-display-scheduling-convergence.md)
+## Current Task List
+
+以下表格仅保留进行中任务；已完成任务统一沉淀到下方 `Recent Completed` 或归档文件。
+
+| ID | Task | Status | Started On | Notes |
+| --- | --- | --- | --- | --- |
+| 2026-04-23-skills-sync-upgrade | 技能同步机制升级：统一 `skills:sync/skills:lock/skills:verify` 命令，增加本地哈希校验与锁文件回写 | In Progress | 2026-04-23 | 小任务。已新增 [`scripts/sync-skills.mjs`](/Users/guo.xu/Documents/code/games/xbxrc/scripts/sync-skills.mjs) 并接入 `package.json`；`skills:verify` 基线结果：`asir` hash 漂移、`use-spatial-navigation` 本地缺失。后续执行 `skills:sync -- --from-repo <repo-path>` 后再 `skills:verify` 闭环。 |
+| 2026-04-22-sdl3-gamepad-single-track-backend-unification | SDL3 Gamepad 单轨后端统一：以 `SDL3::gamepad` 收敛桌面物理手柄接入层，并移除 `gilrs/XInput/WinRT` 长期双轨主线 | In Progress | 2026-04-22 | 复杂任务。RFC：[`rfcs/2026-04-22-sdl3-gamepad-single-track-backend-unification.md`](rfcs/2026-04-22-sdl3-gamepad-single-track-backend-unification.md)。当前状态：真实 SDL3 `event/source/backend/runtime/service` 主链已落地，运行时/协议/前端契约已切到 `sdl3 + slot + input_policy` 语义，`ohmygamepad-core` 相关 runtime tests 与 `cargo check -p xbxrc` 已通过。剩余工作：1）Windows/macOS 实机输入与 rumble 验收；2）补最终 Report；3）完成归档出当前页。 |
+| 2026-04-22-recovery-action-single-track-cutover | 图片级恢复动作单轨切换：删除 `RequestKeyframe`，收口为 `PLI` 主路径与 `FIR` 重保底，并让 display 退出图片级恢复动作链 | In Progress | 2026-04-22 | 复杂任务。RFC：[`rfcs/2026-04-22-recovery-action-single-track-cutover.md`](rfcs/2026-04-22-recovery-action-single-track-cutover.md)。当前目标：1）删除 `RecoveryAction::RequestKeyframe`；2）固定控制动作链为 `NACK -> PLI`，`FIR` 只做重保底；3）固定恢复进度链为 `WaitingResponse -> ContinuationSeen -> AnchorSeen -> Decoded -> CleanAnchorCommitted -> DisplayStable`；4）删除常规 `control keyframe` 主链；5）删除 `display -> RequestKeyframe` 旧合同；6）将远端画像、`post-IDR climbing`、clean-anchor 宽容统一收成 phase policy 参数层；7）让 `session/owner/coordinator/trace` 全部改成显式 `RequestPli / RequestFir / RequestDecoderReset / RequestReconnectCandidate` 单轨动作语义。验证已通过：`cargo check -p xbxengine`、`cargo test -p xbxengine transport::rtc::connection::service -- --nocapture`、`cargo test -p xbxengine transport::rtc::stream::video_source::source -- --nocapture` 及新增定向单测。 |
+| 2026-04-19-phase-aware-recovery-and-dynamic-repair-policy | 阶段化恢复进度与动态修复价值策略：收敛 `NonIdrVcl`、NACK、clean anchor、display completion 的长期语义边界 | In Progress | 2026-04-19 | 复杂任务。RFC：[`rfcs/2026-04-19-phase-aware-recovery-and-dynamic-repair-policy.md`](rfcs/2026-04-19-phase-aware-recovery-and-dynamic-repair-policy.md)。当前目标：1）把 recovery 主链收敛为六级恢复进度；2）把修复价值收敛为四档并允许按阶段重映射；3）明确 media recovery complete 与 display recovery complete 的分层边界。 |
+| 2026-04-18-post-decode-display-scheduling-and-media-recovery-decoupling | 重新设计播放期调度边界：解码后显示链与媒体恢复解耦，采用 Moonlight 式 `release-clock + local drop` | In Progress | 2026-04-18 | 复杂任务。RFC：[`rfcs/2026-04-18-post-decode-display-scheduling-and-media-recovery-decoupling.md`](rfcs/2026-04-18-post-decode-display-scheduling-and-media-recovery-decoupling.md)。当前已把 `renderer` 收成 shadow + staging，并把 `display_supply` / runtime local reset / `MediaReady` / owner / session / `recovery/runtime_state` / `remote_profile_runtime` / `startup` / runtime `lifecycle` / `diagnostics+protocol+frontend snapshot` 全部收进 host-first telemetry 判据。 |
+| 2026-04-21-degrade-host-timing-driven-decoder-reset-and-release-gate | 退化 host timing 驱动的 decoder reset 与 host release gate，优先稳定恢复后的连续供给 | In Progress | 2026-04-21 | 复杂任务。RFC：[`rfcs/2026-04-21-degrade-host-timing-driven-decoder-reset-and-release-gate.md`](rfcs/2026-04-21-degrade-host-timing-driven-decoder-reset-and-release-gate.md)。当前按方案 2 收缩控制环，继续验证 decode/pacer 本地缓冲、recovery 本地窗口与 host telemetry 的稳定性。 |
+| 2026-04-21-decode-pacer-deadline-budget-decoupling | 解码与 Pacer 的 deadline/budget 解耦：从队列状态双向驱动收敛为 decode 产出、pacer 唯一调度 | In Progress | 2026-04-21 | 复杂任务。RFC：[`rfcs/2026-04-21-decode-pacer-deadline-budget-decoupling.md`](rfcs/2026-04-21-decode-pacer-deadline-budget-decoupling.md)。目标：1）decode 退出以“队列是否非空”为主的节奏控制；2）pacer 收敛为唯一 release governor；3）以 frame age / playout budget 取代 queue depth 作为主判据。 |
+| 2026-04-21-build-dependency-hermeticization-openssl-ffmpeg | 构建依赖封装化：移除 OpenSSL 外部构建依赖，并把 FFmpeg 收敛为仓库内固定 SDK 与随包分发 | In Progress | 2026-04-21 | 复杂任务。RFC：[`rfcs/2026-04-21-build-dependency-hermeticization-openssl-ffmpeg.md`](rfcs/2026-04-21-build-dependency-hermeticization-openssl-ffmpeg.md)。已完成 OpenSSL->`p256` 替换与依赖清理，剩余为真实 SDK 资产下的双平台打包验收。 |
 
 ## Recent Completed
 
+- 2026-04-24: 完成文档根目录标准化与 `docs1` cutover，统一为单一 `docs/` 根目录，迁入 archive、ISU、RFC、Report、references、test-assets，并新增 [`README.md`](README.md)。RFC: [`rfcs/2026-04-24-docs-standardization-and-docs1-cutover.md`](rfcs/2026-04-24-docs-standardization-and-docs1-cutover.md)；Report: [`reports/2026-04-24-docs-standardization-and-docs1-cutover.md`](reports/2026-04-24-docs-standardization-and-docs1-cutover.md)
+- 2026-04-23: 修复 `cargo check -p xbxrc` 构建脚本资源校验失败：移除失效的 `../target/release/SDL3.dll` Tauri 资源映射。验证：`cargo check -p xbxrc` 通过。
 - 2026-04-23: 修复前端 `gamepad-listener` 的重复触发与策略切换状态机，按键 repeat 改为独立定时器驱动，并在 `stream-only` 策略切换及 listener 停止时统一清理 pressed/combo/timer 状态，避免手柄输入卡键与重复触发残留。
-- 2026-04-23: 完成双阶段恢复链路改造（single media commit + display settle），clean anchor 提交改为首个可服务 IDR 完成即提交，ramp guard 拆分 acknowledge/close，并在 picture recovery episode 增加 `firstDecodeToCleanAnchorCommittedMs`、`cleanAnchorCommittedToDisplayStableMs` 两段尾延迟 trace。RFC: [docs/rfcs/2026-04-23-dual-phase-recovery-chain.md](D:\Code\xbxrc\docs\rfcs\2026-04-23-dual-phase-recovery-chain.md)
+- 2026-04-23: 完成双阶段恢复链路改造（single media commit + display settle），clean anchor 提交改为首个可服务 IDR 完成即提交，ramp guard 拆分 acknowledge/close，并在 picture recovery episode 增加 `firstDecodeToCleanAnchorCommittedMs`、`cleanAnchorCommittedToDisplayStableMs` 两段尾延迟 trace。RFC: [`rfcs/2026-04-23-dual-phase-recovery-chain.md`](rfcs/2026-04-23-dual-phase-recovery-chain.md)
 - 2026-04-23: 去除 gamepad 配置类 RPC 的重复事件转发，改为由 shell 后台订阅桥统一广播 `runtimeSnapshot/slotSnapshot/devicesChanged`，避免一次配置变更触发双份手柄事件。
 - 2026-04-23: 修复手柄采样节流语义错位，收敛 `sampleSeq` 为真正的流输入变化令牌，并在 `ohmygamepad` runtime 落地 `uiPushRateHz` 与 `streamPushMode/streamPushRateHz`，避免空闲状态持续推送与 UI 事件风暴。
 - 2026-04-23: 调整 Windows Tauri 窗口手柄暂停策略，不再因 `Focused(false)` 直接 suspend gamepad，改为在窗口最小化时再暂停，以避免 Xbox Full Screen Experience 下手柄输入被系统焦点切换误杀。
 - 2026-04-22: 修正 Windows 播放器策略对 `D3D11 texture` 的错误路由，避免 `GpuDirect presenter` 误绑定仅支持 CPU surface 的 `Wgpu effect pipeline`，导致 `present_frame` 在 `can_process(native_handle)=false` 处提前返回、宿主 render loop 空转且始终黑屏。
 - 2026-04-22: 修正 Windows `ffmpeg-d3d11va` 硬解输入路径，停止将 Annex-B access unit 重打为 AVCC，改为直接喂完整 Annex-B，并移除该后端上的 `AV_CODEC_FLAG2_CHUNKS`，避免首个 IDR 被硬解静默吞掉后长期无输出。
-- 2026-04-22: 新增 RFC [docs/rfcs/2026-04-22-rtc-recovery-boundary-convergence.md]，规划 RTC 恢复系统的收边界、减解释与高置信快速决策路径收敛方案。
+- 2026-04-22: 新增 RFC [`rfcs/2026-04-22-rtc-recovery-boundary-convergence.md`](rfcs/2026-04-22-rtc-recovery-boundary-convergence.md)，规划 RTC 恢复系统的收边界、减解释与高置信快速决策路径收敛方案。

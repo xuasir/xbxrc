@@ -1,0 +1,8 @@
+interface:
+  display_name: "Similar Work"
+  short_description: "检索相似历史任务并提炼可复用方案、坑点与验证方式"
+  default_prompt: "Use $similar-work to find the closest historical work to this task and extract reusable implementation and validation patterns."
+
+policy:
+  allow_implicit_invocation: true
+

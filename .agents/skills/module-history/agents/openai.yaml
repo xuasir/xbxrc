@@ -1,0 +1,8 @@
+interface:
+  display_name: "Module History"
+  short_description: "围绕指定模块提炼任务演进、现状约束与必读上下文"
+  default_prompt: "Use $module-history to reconstruct the tracked history, active work, and constraints for this module before implementation."
+
+policy:
+  allow_implicit_invocation: true
+

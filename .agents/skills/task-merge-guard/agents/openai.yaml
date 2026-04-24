@@ -1,0 +1,7 @@
+interface:
+  display_name: "Task Merge Guard"
+  short_description: "自动吸收 project-task 并发修改与常见合并文本冲突"
+  default_prompt: "Use $task-merge-guard to resolve common project-task merge conflicts while preserving task meaning and references."
+
+policy:
+  allow_implicit_invocation: true

@@ -1,0 +1,8 @@
+interface:
+  display_name: "Decision Trace"
+  short_description: "追溯当前方案、字段或约束背后的决策链与现行依据"
+  default_prompt: "Use $decision-trace to explain why this design or constraint exists and what documents define its current meaning."
+
+policy:
+  allow_implicit_invocation: true
+

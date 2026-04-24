@@ -1,0 +1,8 @@
+interface:
+  display_name: "Deep Brainstorm"
+  short_description: "围绕方向做深度脑暴并沉淀为可追溯的 ISU 输出"
+  default_prompt: "Use $deep-brainstorm to explore this direction deeply, connect it to project history, and distill an ISU-quality output."
+
+policy:
+  allow_implicit_invocation: true
+

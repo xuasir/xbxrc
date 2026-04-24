@@ -1,0 +1,8 @@
+interface:
+  display_name: "Task Run"
+  short_description: "自动分流简单开发任务与 RFC 复杂任务并隐式维护追踪"
+  default_prompt: "Use $task-run to take this development request, choose the fast path or RFC path, and keep task tracking in sync."
+
+policy:
+  allow_implicit_invocation: true
+

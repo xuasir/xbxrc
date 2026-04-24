@@ -1,0 +1,8 @@
+interface:
+  display_name: "History Search"
+  short_description: "跨任务、RFC、报告与 ISU 检索可追溯项目历史上下文"
+  default_prompt: "Use $history-search to reconstruct the tracked history for this topic across project-task, RFCs, reports, and ISU notes."
+
+policy:
+  allow_implicit_invocation: true
+

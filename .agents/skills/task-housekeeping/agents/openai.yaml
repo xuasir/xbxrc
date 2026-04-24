@@ -1,0 +1,8 @@
+interface:
+  display_name: "Task Housekeeping"
+  short_description: "自动维护 project-task 账本整洁并归档过期完成项"
+  default_prompt: "Use $task-housekeeping to tidy project-task, keep active work readable, and archive stale completed entries with low churn."
+
+policy:
+  allow_implicit_invocation: true
+
