@@ -15,6 +15,15 @@ Use this skill as the main task entrypoint for day-to-day development work in th
 - Push complex tasks into RFC refinement first.
 - Ask for explicit execution confirmation after the RFC is clear enough to implement.
 
+## Tracking Model
+
+- Treat `docs/project-task.md` as the lightweight current task ledger.
+- Keep small tasks inline in `docs/project-task.md`.
+- Keep complex tasks summarized in `docs/project-task.md` with RFC and report links.
+- Treat `docs/isu/` as exploration output owned by `deep-brainstorm`.
+- Treat `docs/rfcs/` as the execution document for complex tasks.
+- Treat `docs/reports/` as the final closure document for completed complex tasks.
+
 ## Classify Fast
 
 Choose the `simple` path when most of these are true:
@@ -58,6 +67,17 @@ Use the bundled templates:
 - [`references/rfc-template.md`](references/rfc-template.md)
 - [`references/report-template.md`](references/report-template.md)
 
+## Completion Rules
+
+Before closing any task, confirm:
+
+- the implementation still fits the fixed stack and repository boundaries
+- the task has appropriate validation evidence
+- simple tasks are reflected in `docs/project-task.md`
+- complex tasks have an updated RFC during execution
+- completed complex tasks also have a report
+- `docs/project-task.md` reflects the final visible state
+
 ## Keep Tracking Low-Friction
 
 - Treat `docs/project-task.md` as the light task ledger.
@@ -65,6 +85,25 @@ Use the bundled templates:
 - Keep complex tasks summarized there with RFC and report links.
 - Prefer append-or-local-line updates over broad reordering.
 - Let housekeeping and merge-guard style workflows absorb routine maintenance.
+
+## Classification Contract
+
+The purpose of classification is to keep simple work fast and complex work reviewable.
+
+Typical `simple` tasks:
+
+- local bugfixes
+- small UI, copy, or config fixes
+- narrow refactors that do not change module boundaries
+- single-session scoped work
+
+Typical `complex` tasks:
+
+- architecture or module-boundary changes
+- protocol, transport, or streaming changes
+- cross-layer refactors
+- multi-phase delivery
+- work that needs milestones, risk tracking, or explicit validation planning
 
 ## Use Existing History Before Acting
 

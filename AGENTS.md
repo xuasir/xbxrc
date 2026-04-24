@@ -73,42 +73,6 @@
   - [`task-housekeeping`](.agents/skills/task-housekeeping/SKILL.md)
   - [`task-merge-guard`](.agents/skills/task-merge-guard/SKILL.md)
 
-# Tracking Model
+# Task Policy
 
-- `docs/project-task.md` 是轻量任务账本与当前任务追踪入口
-- `docs/isu/` 用于探索期脑暴沉淀
-- `docs/rfcs/` 用于复杂任务方案、范围、进度与验证计划
-- `docs/reports/` 用于复杂任务完成后的结案总结
-
-默认规则：
-
-- 小任务在 `docs/project-task.md` 内联追踪
-- 复杂任务走 `RFC -> 执行 -> Report`
-- 所有已完成任务都应能从 `project-task` 追溯到结果
-
-# Task Classification
-
-以下任务通常视为简单任务：
-
-- 局部 bugfix
-- 小范围 UI / copy / config 修复
-- 不改变模块边界的本地重构
-- 单次执行窗口内可完成的窄改动
-
-以下任务通常视为复杂任务：
-
-- 架构或模块边界调整
-- 协议 / transport / streaming 改造
-- 跨层重构
-- 多阶段交付
-- 需要明确里程碑、风险和验证计划的工作
-
-# Completion Rules
-
-任务关闭前确认：
-
-- 代码改动符合固定技术边界
-- 已完成相称级别的验证
-- 复杂任务已更新 RFC
-- 复杂任务完成后已补 Report
-- `docs/project-task.md` 已同步更新
+任务追踪模型、简单/复杂任务识别、RFC/Report 闭环要求统一由 [`task-run`](.agents/skills/task-run/SKILL.md) 承载并执行。
