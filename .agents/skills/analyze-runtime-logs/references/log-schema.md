@@ -46,6 +46,27 @@ Primary writer: `src-tauri/src/mods/runtime_trace/service.rs`.
 
 When the question is about recovery effectiveness, prefer these structured events before reading raw logs:
 
+- `pictureRecoveryTransition`:
+  recovery phase progression mainline. Use `fromPhase`, `toPhase`, `phase`, `cause`, `detail`,
+  `episodeId`, and `recoveryEpoch` to reconstruct the canonical chain
+  `PliRequested -> PliSent -> ResponseObserved/PacketSeen -> Decoded -> CleanAnchorCommitted -> DisplayStable`.
+  `stableServingSettled` is the close reason for `DisplayStable`.
+- `pictureRecoveryBlockerObserved`:
+  recovery gate blocker event. Use `gate`, `blockerKind`, `severity`, `firstObservedAtMs`, and `count`
+  to identify whether the stall is at media gate (`cleanAnchorCommitted`) or display gate (`DisplayStable`),
+  and whether the blocker is recurring or one-shot.
+- `videoIngressTermination`:
+  ingress termination causal chain. Use `terminationId`, `derivedFromTerminationId`, `kind`, `cause`,
+  `upstreamCause`, `sourceSubsystem`, `linkedRecoveryEpoch`, and `linkedEpisodeId`
+  to analyze `RtcVideoFrameSource rx closed` and its upstream closure reason.
+- `firstFrameLatencyObserved`:
+  first-frame latency breakdown across five segments:
+  `controlReadyToPliSentMs`,
+  `pliSentToFirstIdrPacketMs`,
+  `firstIdrPacketToFirstDecodeMs`,
+  `firstDecodeToCleanAnchorCommittedMs`,
+  `cleanAnchorCommittedToDisplayStableMs`.
+  Read `terminalPhase` and `incompleteReason` together to see where the chain stopped.
 - `keyframeRequestEpisode`:
   canonical keyframe request lifecycle with `status`, `requestReason`, `requestKind`, `responseVerdict`,
   `firstKeyframePacketAtMs`, `firstKeyframeDecodedAtMs`, `timedOut`,
@@ -59,6 +80,16 @@ When the question is about recovery effectiveness, prefer these structured event
 - `recoveryDecisionLedger`:
   use `gateResult`, `actionSelected`, `recoveryPrimaryAction`, and `commandDetail`
   to identify suppression, coalescing, cooldown, failed-terminal, and unlock behavior.
+- `h264InspectionObserved` / `h264InspectionRejected`:
+  packet-level H264 bootstrap result. Prefer the newer fields
+  `rejectClassification`,
+  `boundRecoveryEpoch`,
+  `episodePhaseAtObservation`,
+  and `isPostRecoveryDegradation`
+  to separate:
+  - remote side never sent a usable IDR
+  - local window admitted the packet but bootstrap rejected a delta continuation
+  - recovery had already succeeded and the observation belongs to a later degradation
 - `repairabilityScore` (or `repairability_score` / `repairability` / `repairabilityIndex`):
   repairability 评分样本字段。分析时应检查连续性（coverage、max missing streak、longest gap），
   不要只看单个时间点。
@@ -77,7 +108,8 @@ Script-level recovery aggregates (from `scripts/summarize_runtime_trace.py`):
 ## Practical Read Order
 
 1. File open and session bootstrap rows.
-2. `state` rows for phase movement.
-3. `decision` rows for branch reasoning.
-4. `snapshot` rows for capability, transport, and performance context.
-5. `log` rows only around suspicious windows.
+2. `pictureRecoveryTransition` / `pictureRecoveryBlockerObserved` / `videoIngressTermination` / `firstFrameLatencyObserved`.
+3. `state` rows for phase movement.
+4. `decision` rows for branch reasoning.
+5. `snapshot` rows for capability, transport, and performance context.
+6. `log` rows only around suspicious windows.

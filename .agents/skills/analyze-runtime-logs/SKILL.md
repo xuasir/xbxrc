@@ -20,8 +20,19 @@ Use this skill for `runtime-logs/runtime-trace-*.jsonl` analysis in this reposit
 7. Read [`references/log-schema.md`](references/log-schema.md) when you need field semantics (including `traceMode` on schema v2+).
 8. Read [`references/analysis-playbook.md`](references/analysis-playbook.md) when you need the project-specific workflow, output contract, or heuristics.
 9. Re-open the raw trace around the key `seq` / `tsMs` window before making conclusions.
-10. For recovery regressions, always read the script's `recovery_audit.keyframeEffectiveness` and `recovery_audit.nackEffectiveness`, not only aggregate request counters.
-11. For recovery quality scoring, also read:
+10. For recovery regressions, always read these structured events first:
+   - `pictureRecoveryTransition`
+   - `pictureRecoveryBlockerObserved`
+   - `videoIngressTermination`
+   - `firstFrameLatencyObserved`
+11. Treat the recovery mainline as:
+   - `PliRequested -> PliSent -> ResponseObserved/PacketSeen -> Decoded -> CleanAnchorCommitted -> DisplayStable`
+12. Read the two recovery gates with fixed semantics:
+   - `cleanAnchorCommitted`: media gate，表示 decode 后的恢复锚点已经被下游真正接住
+   - `DisplayStable`: display gate，表示显示侧稳定闭环成立
+13. Read `stableServingSettled` as the `DisplayStable` close reason / event name.
+14. For recovery regressions, always read the script's `recovery_audit.keyframeEffectiveness` and `recovery_audit.nackEffectiveness`, not only aggregate request counters.
+15. For recovery quality scoring, also read:
    - `recovery_audit.keyframeEffectiveness.chainBuildSuccessRate`
    - `recovery_audit.nackEffectiveness.effectiveRate`
    - `recovery_audit.repairabilityPersistence`
@@ -41,14 +52,25 @@ Use this skill for `runtime-logs/runtime-trace-*.jsonl` analysis in this reposit
 10. When the question involves keyframe or NACK behavior, separate:
    - attempted vs suppressed/coalesced
    - sent vs response observed vs packet seen vs decoded
-   - decoded vs chain rebuilt vs merely saw ingress
+   - decoded vs `cleanAnchorCommitted` vs `DisplayStable`
    - recovered vs recovered late vs skipped vs expired
+11. When the question involves recovery, read the structured chain in this order:
+   - `pictureRecoveryTransition`: recovery phase progression mainline
+   - `pictureRecoveryBlockerObserved`: current gate blocker and accumulation
+   - `videoIngressTermination`: `RtcVideoFrameSource rx closed` and upstream-cause chain
+   - `firstFrameLatencyObserved`: first-frame five-stage latency breakdown
+   - `h264InspectionObserved` / `h264InspectionRejected`: packet-level H264 bootstrap verdict
 
 ## Use The Bundled Resources
 
 - Use [`scripts/summarize_runtime_trace.py`](scripts/summarize_runtime_trace.py) first for row counts, domains, sessions, log levels, and suspicious rows.
 - Read [`references/log-schema.md`](references/log-schema.md) for the JSONL envelope, row categories, and interpretation rules.
 - Read [`references/analysis-playbook.md`](references/analysis-playbook.md) for project-specific analysis steps, common focus areas, and reporting format.
+- The script now surfaces structured recovery timeline anchors:
+  - `pictureRecoveryTransition`: recovery phase progression samples and latest transitions.
+  - `pictureRecoveryBlockerObserved`: blocker gate / blocker kind / severity aggregation and samples.
+  - `videoIngressTermination`: ingress termination causal chain samples, including upstream cause linkage.
+  - `firstFrameLatencyObserved`: first-frame five-stage latency samples and terminal phase.
 - The script now surfaces structured recovery effectiveness:
   - `keyframeEffectiveness`: request suppression, sent/seen/decoded progression, invalid H264 response, decoded-after-success but chain not rebuilt, and effective recovery count.
   - `nackEffectiveness`: `nackSent` / `nackRecovered` / `nackSkipped` / `nackExpired`, plus disposition and unrecoverable-reason breakdown.
@@ -72,12 +94,19 @@ Return results in this shape unless the user asked for a different format:
    - whether the request was suppressed/coalesced
    - whether a usable response arrived
    - whether decode succeeded
-   - whether chain/播放链路真正恢复 healthy
+   - whether `cleanAnchorCommitted` happened
+   - whether `DisplayStable` happened
    - whether NACK was effective, late, skipped, or expired
    - chain build success rate 聚合值
    - NACK effective rate 聚合值
    - repairability 持久化统计是否连续
    - recovery effectiveness 综合评分及其主要分项
+9. If recovery is involved, list evidence in this order:
+   - `pictureRecoveryTransition`
+   - `pictureRecoveryBlockerObserved`
+   - `videoIngressTermination`
+   - `firstFrameLatencyObserved`
+   - `h264InspectionObserved` / `h264InspectionRejected` as packet-level supplement
 
 ## Guardrails
 

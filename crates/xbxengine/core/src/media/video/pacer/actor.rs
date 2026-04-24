@@ -25,8 +25,10 @@ pub struct PacerActorHandle {
 }
 
 const PACING_QUEUE_MAX_FRAMES: usize = 3;
-const PACING_QUEUE_HARD_CAP_FRAMES: usize = 6;
+const PACING_QUEUE_RECOVERY_MAX_FRAMES: usize = 5;
+const PACING_QUEUE_HARD_CAP_FRAMES: usize = 8;
 const RENDER_QUEUE_MAX_FRAMES: usize = 1;
+const RENDER_QUEUE_RECOVERY_MAX_FRAMES: usize = 2;
 const RENDER_QUEUE_RETRY_TIMEOUT_MS: u64 = 4;
 const HOST_PRIMING_REUSE_WAIT_RATIO: u64 = 2;
 const RENDER_QUEUE_STALE_SLACK_DELTA_MS: u64 = 4;
@@ -206,11 +208,11 @@ fn enforce_queue_budget(
     let recovery_window_active = recovery_budget_active(pacing_queue, Instant::now());
     // queue depth 只保留极端保护：常态浅队列 + 硬上限兜底。
     let dynamic_queue_cap = if recovery_window_active {
-        PACING_QUEUE_MAX_FRAMES
+        PACING_QUEUE_RECOVERY_MAX_FRAMES
     } else {
         match host_context.cadence_phase {
-            HostCadencePhaseHint::Starved => 1,
-            HostCadencePhaseHint::Priming => 2,
+            HostCadencePhaseHint::Starved => 2,
+            HostCadencePhaseHint::Priming => PACING_QUEUE_MAX_FRAMES,
             _ => PACING_QUEUE_MAX_FRAMES,
         }
     };
@@ -478,7 +480,16 @@ fn enqueue_render_frame(
     frame_drop_observation_id: &mut u64,
     host_context: Option<&HostPacingContext>,
 ) {
-    if render_queue.len() >= RENDER_QUEUE_MAX_FRAMES {
+    let render_queue_capacity = if decoded_frame_uses_recovery_window(&frame)
+        || matches!(
+            host_context.map(|ctx| ctx.cadence_phase),
+            Some(HostCadencePhaseHint::Priming)
+        ) {
+        RENDER_QUEUE_RECOVERY_MAX_FRAMES
+    } else {
+        RENDER_QUEUE_MAX_FRAMES
+    };
+    if render_queue.len() >= render_queue_capacity {
         let now = Instant::now();
         if let Some(existing_frame) = render_queue.front() {
             if !should_replace_render_queue_head(existing_frame, &frame, now) {

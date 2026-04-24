@@ -352,7 +352,10 @@ where
         self.resolve_stream_snapshot(candidate)
     }
 
-    fn resolve_stream_snapshot(&mut self, candidate: LogicalPadSnapshotDto) -> LogicalPadSnapshotDto {
+    fn resolve_stream_snapshot(
+        &mut self,
+        candidate: LogicalPadSnapshotDto,
+    ) -> LogicalPadSnapshotDto {
         let slot_index = pad_slot(candidate.slot);
         let Some(existing) = self
             .pads

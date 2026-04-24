@@ -191,7 +191,10 @@ impl RtcConnectionService {
         &mut self,
         runtime_stats: &Arc<Mutex<XbxEngineMediaRuntimeStats>>,
     ) {
-        let configured_interval_ms = self.webrtc_runtime_config.video_pipeline.feedback_interval_ms;
+        let configured_interval_ms = self
+            .webrtc_runtime_config
+            .video_pipeline
+            .feedback_interval_ms;
         let desired_interval_ms = RuntimeStatsSink::read_shared(runtime_stats, |stats| {
             resolve_twcc_feedback_interval_target_ms(stats, configured_interval_ms)
         })

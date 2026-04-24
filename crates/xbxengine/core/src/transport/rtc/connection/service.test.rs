@@ -2518,15 +2518,16 @@ fn twcc_feedback_interval_uses_warmup_and_stable_targets_for_cloud_video() {
     let warmup_interval = super::resolve_twcc_feedback_interval_target_ms(&stats, 100);
     assert_eq!(warmup_interval, 100);
 
-    stats.latest_twcc_remote_stream_observation = Some(crate::XbxEngineTwccRemoteStreamObservation {
-        observation_id: 1,
-        ssrc: 9,
-        mime_type: "video/H264".to_string(),
-        twcc_ext_id: Some(5),
-        header_extensions: Vec::new(),
-        rtcp_feedback: vec!["transport-cc".to_string()],
-        observed_at_ms: 10.0,
-    });
+    stats.latest_twcc_remote_stream_observation =
+        Some(crate::XbxEngineTwccRemoteStreamObservation {
+            observation_id: 1,
+            ssrc: 9,
+            mime_type: "video/H264".to_string(),
+            twcc_ext_id: Some(5),
+            header_extensions: Vec::new(),
+            rtcp_feedback: vec!["transport-cc".to_string()],
+            observed_at_ms: 10.0,
+        });
     let interval_with_binding = super::resolve_twcc_feedback_interval_target_ms(&stats, 100);
     assert_eq!(interval_with_binding, 50);
 

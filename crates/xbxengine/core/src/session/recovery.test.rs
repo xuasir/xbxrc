@@ -146,6 +146,7 @@ fn recovery_signals_request_decoder_reset_after_keyframe_on_decode_stall() {
                 decoder_stalled: Some(true),
                 render_stalled: Some(false),
                 allow_decoder_reset: true,
+                local_media_backpressure_active: false,
             },
         },
     );
@@ -179,6 +180,7 @@ fn recovery_signals_request_decoder_reset_after_keyframe_on_decode_stall() {
                 decoder_stalled: Some(true),
                 render_stalled: Some(false),
                 allow_decoder_reset: true,
+                local_media_backpressure_active: false,
             },
         },
     );
@@ -189,7 +191,7 @@ fn recovery_signals_request_decoder_reset_after_keyframe_on_decode_stall() {
 }
 
 #[test]
-fn recovery_signals_request_keyframe_on_pipeline_stall_even_with_fresh_packets() {
+fn recovery_signals_hold_keyframe_on_local_pipeline_stall_without_transport_evidence() {
     let now_ms = 10_000.0;
     let action = XbxEngineRuntimeHealth {
         connected_at_ms: Some(1_000.0),
@@ -214,14 +216,15 @@ fn recovery_signals_request_keyframe_on_pipeline_stall_even_with_fresh_packets()
                 decoder_stalled: Some(false),
                 render_stalled: Some(true),
                 allow_decoder_reset: true,
+                local_media_backpressure_active: true,
             },
         },
     );
-    assert_eq!(action, Some(XbxEngineRecoveryAction::RequestVideoKeyframe));
+    assert_eq!(action, None);
 }
 
 #[test]
-fn recovery_signals_request_reconnect_on_pipeline_stall_even_with_fresh_packets() {
+fn recovery_signals_hold_reconnect_on_local_pipeline_stall_without_transport_evidence() {
     let now_ms = 10_000.0;
     let action = XbxEngineRuntimeHealth {
         connected_at_ms: Some(1_000.0),
@@ -250,13 +253,79 @@ fn recovery_signals_request_reconnect_on_pipeline_stall_even_with_fresh_packets(
                 decoder_stalled: Some(false),
                 render_stalled: Some(true),
                 allow_decoder_reset: true,
+                local_media_backpressure_active: true,
             },
         },
     );
-    assert!(matches!(
-        action,
-        Some(XbxEngineRecoveryAction::RequestReconnect(_))
-    ));
+    assert_eq!(action, None);
+}
+
+#[test]
+fn recovery_signals_allow_keyframe_when_local_backpressure_coexists_with_transport_loss_evidence() {
+    let now_ms = 10_000.0;
+    let action = XbxEngineRuntimeHealth {
+        connected_at_ms: Some(1_000.0),
+        ..Default::default()
+    }
+    .next_recovery_action_with_signals(
+        now_ms,
+        true,
+        XbxEngineRecoverySignals {
+            transport: XbxEngineTransportSignal {
+                transport_connected: true,
+                connected_at_ms: Some(1_000.0),
+                latest_video_packet_arrival_at_ms: Some(now_ms - 2_000.0),
+                latest_twcc_feedback_at_ms: Some(now_ms - 2_000.0),
+                latest_nack_expired_at_ms: Some(now_ms - 20.0),
+                latest_nack_expired_frame_is_keyframe: true,
+                ..Default::default()
+            },
+            media: XbxEngineMediaSignal {
+                latest_frame_decoded_at_ms: Some(now_ms - 5_000.0),
+                latest_frame_presented_at_ms: Some(now_ms - 5_000.0),
+            },
+            decode_render: XbxEngineDecodeRenderSignal {
+                decoder_stalled: Some(false),
+                render_stalled: Some(true),
+                allow_decoder_reset: true,
+                local_media_backpressure_active: true,
+            },
+        },
+    );
+    assert_eq!(action, Some(XbxEngineRecoveryAction::RequestVideoKeyframe));
+}
+
+#[test]
+fn recovery_signals_allow_keyframe_when_local_backpressure_coexists_with_packet_gap_evidence() {
+    let now_ms = 10_000.0;
+    let action = XbxEngineRuntimeHealth {
+        connected_at_ms: Some(1_000.0),
+        ..Default::default()
+    }
+    .next_recovery_action_with_signals(
+        now_ms,
+        true,
+        XbxEngineRecoverySignals {
+            transport: XbxEngineTransportSignal {
+                transport_connected: true,
+                connected_at_ms: Some(1_000.0),
+                latest_video_packet_arrival_at_ms: Some(now_ms - KEYFRAME_REQUEST_STALL_MS - 20.0),
+                latest_twcc_feedback_at_ms: Some(now_ms - 20.0),
+                ..Default::default()
+            },
+            media: XbxEngineMediaSignal {
+                latest_frame_decoded_at_ms: Some(now_ms - 5_000.0),
+                latest_frame_presented_at_ms: Some(now_ms - 5_000.0),
+            },
+            decode_render: XbxEngineDecodeRenderSignal {
+                decoder_stalled: Some(false),
+                render_stalled: Some(true),
+                allow_decoder_reset: true,
+                local_media_backpressure_active: true,
+            },
+        },
+    );
+    assert_eq!(action, Some(XbxEngineRecoveryAction::RequestVideoKeyframe));
 }
 
 #[test]
@@ -375,6 +444,7 @@ fn recovery_requests_decoder_reset_earlier_for_audio_alive_video_only_stall() {
                 decoder_stalled: Some(false),
                 render_stalled: Some(false),
                 allow_decoder_reset: true,
+                local_media_backpressure_active: false,
             },
         },
     );

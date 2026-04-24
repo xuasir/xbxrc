@@ -76,11 +76,16 @@ For keyframe and NACK analysis, split outcomes further:
 - keyframe request was suppressed or coalesced before send
 - keyframe request was sent but no response was observed
 - response packet arrived but H264 bootstrap / admission rejected it
-- keyframe decoded but chain did not return to `healthy`
+- response packet arrived, local window admitted it, but bootstrap rejected `NonIdrVcl` / delta continuation
+- keyframe decoded but `cleanAnchorCommitted` did not happen
+- `cleanAnchorCommitted` happened but `DisplayStable` did not happen
+- `DisplayStable` happened and later degradation started a new recovery episode
 - NACK recovered in time
 - NACK recovered late
 - NACK was skipped by policy
 - NACK expired and should hand off to keyframe / stronger recovery
+- `rx closed` is the initiating cause for the episode
+- `rx closed` is a downstream result after prior recovery failure
 - chain build success rate (decoded -> healthy chain) aggregation
 - NACK effective rate aggregation
 - repairability score persistence continuity (sample coverage / missing streak / missing gap)
@@ -111,7 +116,13 @@ Use this template unless the user asks for something else:
 - earliest relevant anchors with `seq` / `tsMs`
 - first abnormal signal
 - terminal symptom or recovery point
-- if recovery is involved: request issued, response observed, decoded, chain rebuilt, or failed handoff point
+- if recovery is involved, list structured events in this order:
+  - `pictureRecoveryTransition`
+  - `pictureRecoveryBlockerObserved`
+  - `videoIngressTermination`
+  - `firstFrameLatencyObserved`
+- then place the stall on the canonical chain:
+  - `PliRequested -> PliSent -> ResponseObserved/PacketSeen -> Decoded -> CleanAnchorCommitted -> DisplayStable`
 
 ### Findings
 
@@ -119,6 +130,10 @@ Use this template unless the user asks for something else:
 - secondary observations
 - competing hypotheses if confidence is limited
 - if keyframe/NACK is involved, say whether it was effective, merely attempted, or explicitly invalid
+- if H264 inspection is involved, say whether `rejectClassification` points to:
+  - remote missing usable IDR
+  - local admission accepted but bootstrap rejected continuation delta
+  - post-recovery degradation
 - include aggregate rates/scores when available:
   - `keyframeEffectiveness.chainBuildSuccessRate`
   - `nackEffectiveness.effectiveRate`
@@ -147,6 +162,11 @@ Use this template unless the user asks for something else:
 - For `xbxengine` traces, watch for transport progress, ingress activity, recovery state, keyframe flow, and backlog or capacity warnings before blaming rendering.
 - When performance degrades without a hard failure, compare `snapshot` rows and recovery decisions before focusing on individual debug lines.
 - `keyframeRequestEpisode` is the canonical keyframe request lifecycle. Prefer it over `recovery_keyframe_request_count` when the question is about success/failure/effectiveness.
+- `pictureRecoveryTransition` is the canonical recovery phase chain. Prefer it over free-form `keyframe-closure` text logs.
+- `pictureRecoveryBlockerObserved` is the canonical gate blocker signal. Prefer it over inferring stalls from scattered owner / display debug rows.
+- `videoIngressTermination` carries the causal labels for `RtcVideoFrameSource rx closed`. Read `cause` together with `upstreamCause`.
+- `firstFrameLatencyObserved` is the canonical first-frame latency breakdown. Prefer it over parsing `firstFrameLatencyTrace ...` text.
 - `videoChainTransition` is the quickest structured check for “关键帧成功后是否真的建链恢复 healthy”.
 - `nackSent` / `nackRecovered` / `nackSkipped` / `nackExpired` already encode terminal NACK outcome classes; pair them with `nackDisposition` and `frameUnrecoverableReason`.
+- `cleanAnchorCommitted` is the media gate; `DisplayStable` is the display gate; `stableServingSettled` is the event name / close reason for `DisplayStable`.
 - repairability score may appear as `repairabilityScore` / `repairability_score` / `repairability` / `repairabilityIndex`; persistence should be judged from continuity, not single-point value.

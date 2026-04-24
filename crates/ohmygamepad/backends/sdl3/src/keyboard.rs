@@ -54,8 +54,8 @@ impl OhMyGamepadKeyboardMapper {
                 OhMyGamepadKeyboardControl::LeftStickDown => state.left_stick.y -= 1.0,
                 OhMyGamepadKeyboardControl::LeftStickLeft => state.left_stick.x -= 1.0,
                 OhMyGamepadKeyboardControl::LeftStickRight => state.left_stick.x += 1.0,
-                OhMyGamepadKeyboardControl::RightStickUp => state.right_stick.y -= 1.0,
-                OhMyGamepadKeyboardControl::RightStickDown => state.right_stick.y += 1.0,
+                OhMyGamepadKeyboardControl::RightStickUp => state.right_stick.y += 1.0,
+                OhMyGamepadKeyboardControl::RightStickDown => state.right_stick.y -= 1.0,
                 OhMyGamepadKeyboardControl::RightStickLeft => state.right_stick.x -= 1.0,
                 OhMyGamepadKeyboardControl::RightStickRight => state.right_stick.x += 1.0,
                 OhMyGamepadKeyboardControl::South => state.buttons.south = 1.0,
@@ -129,5 +129,44 @@ fn clamp_stick(stick: LogicalStickDto) -> LogicalStickDto {
     LogicalStickDto {
         x: stick.x.clamp(-1.0, 1.0),
         y: stick.y.clamp(-1.0, 1.0),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn right_stick_vertical_controls_follow_same_sign_as_left_stick() {
+        let mut mapper = OhMyGamepadKeyboardMapper::new(OhMyGamepadKeyboardMapping {
+            bindings: vec![
+                OhMyGamepadKeyboardBinding {
+                    key: OhMyGamepadKeyboardKey::KeyW,
+                    control: OhMyGamepadKeyboardControl::LeftStickUp,
+                },
+                OhMyGamepadKeyboardBinding {
+                    key: OhMyGamepadKeyboardKey::ArrowUp,
+                    control: OhMyGamepadKeyboardControl::RightStickUp,
+                },
+                OhMyGamepadKeyboardBinding {
+                    key: OhMyGamepadKeyboardKey::KeyS,
+                    control: OhMyGamepadKeyboardControl::LeftStickDown,
+                },
+                OhMyGamepadKeyboardBinding {
+                    key: OhMyGamepadKeyboardKey::ArrowDown,
+                    control: OhMyGamepadKeyboardControl::RightStickDown,
+                },
+            ],
+        });
+
+        let up_state =
+            mapper.sync_pressed_keys([OhMyGamepadKeyboardKey::KeyW, OhMyGamepadKeyboardKey::ArrowUp]);
+        assert_eq!(up_state.left_stick.y, 1.0);
+        assert_eq!(up_state.right_stick.y, 1.0);
+
+        let down_state = mapper
+            .sync_pressed_keys([OhMyGamepadKeyboardKey::KeyS, OhMyGamepadKeyboardKey::ArrowDown]);
+        assert_eq!(down_state.left_stick.y, -1.0);
+        assert_eq!(down_state.right_stick.y, -1.0);
     }
 }

@@ -9,14 +9,16 @@ use crate::transport::rtc::recovery::keyframe_lifecycle::apply_keyframe_episode_
 use crate::transport::rtc::recovery::runtime_state::project_recovery_escalation_context;
 use crate::{
     XbxEngineAnchorCandidateFailureReason, XbxEngineAnchorCandidateLedger,
-    XbxEngineAnchorCandidateState, XbxEngineFrameRecoveryObservation,
-    XbxEngineH264InspectionObservation, XbxEngineKeyframeRequestEpisodeObservation,
-    XbxEngineMediaRuntimeStats, XbxEngineRemoteAnswerObservation, XbxEngineRtcBuilderObservation,
+    XbxEngineAnchorCandidateState, XbxEngineFirstFrameLatencyObservation,
+    XbxEngineFrameRecoveryObservation, XbxEngineH264InspectionObservation,
+    XbxEngineKeyframeRequestEpisodeObservation, XbxEngineMediaRuntimeStats,
+    XbxEnginePictureRecoveryBlockerObservation, XbxEnginePictureRecoveryTransitionObservation,
+    XbxEngineRemoteAnswerObservation, XbxEngineRtcBuilderObservation,
     XbxEngineTwccExtensionObservation, XbxEngineTwccRemoteStreamObservation,
     XbxEngineVideoEscalationObservation, XbxEngineVideoFrameDropObservation,
-    XbxEngineVideoNackObservation, XbxEngineVideoPacketGapObservation,
-    XbxEngineVideoRtxReinjectObservation, XbxEngineVideoTimelineObservation,
-    XbxEngineVideoTwccObservation,
+    XbxEngineVideoIngressTerminationObservation, XbxEngineVideoNackObservation,
+    XbxEngineVideoPacketGapObservation, XbxEngineVideoRtxReinjectObservation,
+    XbxEngineVideoTimelineObservation, XbxEngineVideoTwccObservation,
 };
 
 #[derive(Clone)]
@@ -117,6 +119,38 @@ impl RuntimeStatsSink {
         stats.video_anchor_clean_epoch = None;
         stats.video_anchor_clean_observed_at_ms = None;
         stats.video_anchor_clean_source_event = None;
+    }
+
+    fn next_picture_recovery_transition_observation_id(
+        stats: &mut XbxEngineMediaRuntimeStats,
+    ) -> u64 {
+        stats.picture_recovery_transition_observation_count = stats
+            .picture_recovery_transition_observation_count
+            .saturating_add(1);
+        stats.picture_recovery_transition_observation_count
+    }
+
+    fn next_picture_recovery_blocker_observation_id(stats: &mut XbxEngineMediaRuntimeStats) -> u64 {
+        stats.picture_recovery_blocker_observation_count = stats
+            .picture_recovery_blocker_observation_count
+            .saturating_add(1);
+        stats.picture_recovery_blocker_observation_count
+    }
+
+    fn next_video_ingress_termination_observation_id(
+        stats: &mut XbxEngineMediaRuntimeStats,
+    ) -> u64 {
+        stats.video_ingress_termination_observation_count = stats
+            .video_ingress_termination_observation_count
+            .saturating_add(1);
+        stats.video_ingress_termination_observation_count
+    }
+
+    fn next_first_frame_latency_observation_id(stats: &mut XbxEngineMediaRuntimeStats) -> u64 {
+        stats.first_frame_latency_observation_count = stats
+            .first_frame_latency_observation_count
+            .saturating_add(1);
+        stats.first_frame_latency_observation_count
     }
 
     pub(crate) fn new(runtime_stats: Arc<Mutex<XbxEngineMediaRuntimeStats>>) -> Self {
@@ -230,11 +264,215 @@ impl RuntimeStatsSink {
             stats.latest_observation_label = Some("rtcVideoIngressCloseIntent".to_string());
             stats.latest_observation_summary =
                 Some(format!("cause={cause} observedAtMs={observed_at_ms:.1}"));
+            Self::record_video_ingress_termination_internal(
+                stats,
+                observed_at_ms,
+                "closeIntent",
+                cause,
+                None,
+                Some("video-ingress"),
+                None,
+            );
         });
     }
 
     pub(crate) fn current_video_ingress_close_cause(&self) -> Option<String> {
         self.read(latest_video_ingress_close_cause).flatten()
+    }
+
+    pub(crate) fn record_picture_recovery_blocker(
+        &self,
+        observed_at_ms: f64,
+        gate: &str,
+        blocker_kind: &str,
+        severity: &str,
+        frame_rtp_timestamp: Option<u32>,
+        frame_seq: Option<u64>,
+    ) {
+        self.update(|stats| {
+            let (first_observed_at_ms, count) = stats
+                .latest_picture_recovery_blocker_observation
+                .as_ref()
+                .filter(|observation| {
+                    observation.episode_id
+                        == stats
+                            .latest_keyframe_request_episode
+                            .as_ref()
+                            .map(|episode| episode.episode_id)
+                        && observation.recovery_epoch == Some(stats.transport_recovery_epoch)
+                        && observation.gate == gate
+                        && observation.blocker_kind == blocker_kind
+                })
+                .map(|observation| {
+                    (
+                        observation.first_observed_at_ms,
+                        observation.count.saturating_add(1),
+                    )
+                })
+                .unwrap_or((observed_at_ms, 1));
+            let observation = XbxEnginePictureRecoveryBlockerObservation {
+                observation_id: Self::next_picture_recovery_blocker_observation_id(stats),
+                episode_id: stats
+                    .latest_keyframe_request_episode
+                    .as_ref()
+                    .map(|episode| episode.episode_id),
+                recovery_epoch: Some(stats.transport_recovery_epoch),
+                gate: gate.to_string(),
+                blocker_kind: blocker_kind.to_string(),
+                severity: severity.to_string(),
+                first_observed_at_ms,
+                observed_at_ms,
+                count,
+                frame_rtp_timestamp,
+                frame_seq,
+                owner_state: stats.video_owner_state.clone(),
+                transport_state: Some(format!("{:?}", stats.transport_state)),
+            };
+            stats.latest_picture_recovery_blocker_observation = Some(observation);
+        });
+    }
+
+    fn record_video_ingress_termination_internal(
+        stats: &mut XbxEngineMediaRuntimeStats,
+        observed_at_ms: f64,
+        kind: &str,
+        cause: &str,
+        upstream_cause: Option<&str>,
+        source_subsystem: Option<&str>,
+        derived_from_termination_id: Option<u64>,
+    ) {
+        let termination_id = if kind == "closeIntent" {
+            stats.video_ingress_termination_id_seq =
+                stats.video_ingress_termination_id_seq.saturating_add(1);
+            let next = stats.video_ingress_termination_id_seq;
+            stats.latest_video_ingress_termination_id = Some(next);
+            next
+        } else {
+            stats
+                .latest_video_ingress_termination_id
+                .unwrap_or_else(|| {
+                    stats.video_ingress_termination_id_seq =
+                        stats.video_ingress_termination_id_seq.saturating_add(1);
+                    let next = stats.video_ingress_termination_id_seq;
+                    stats.latest_video_ingress_termination_id = Some(next);
+                    next
+                })
+        };
+        let observation = XbxEngineVideoIngressTerminationObservation {
+            observation_id: Self::next_video_ingress_termination_observation_id(stats),
+            termination_id,
+            derived_from_termination_id,
+            kind: kind.to_string(),
+            cause: cause.to_string(),
+            upstream_cause: upstream_cause.map(ToString::to_string),
+            source_subsystem: source_subsystem.map(ToString::to_string),
+            linked_recovery_epoch: Some(stats.transport_recovery_epoch),
+            linked_episode_id: stats
+                .latest_keyframe_request_episode
+                .as_ref()
+                .map(|episode| episode.episode_id),
+            transport_state: Some(format!("{:?}", stats.transport_state)),
+            owner_state: stats.video_owner_state.clone(),
+            video_track_state: stats
+                .latest_video_track_status
+                .as_ref()
+                .map(|status| status.state.clone()),
+            recent_command: stats.latest_observation_label.clone(),
+            observed_at_ms,
+        };
+        stats.latest_video_ingress_termination_observation = Some(observation);
+    }
+
+    fn refresh_first_frame_latency_observation(
+        stats: &mut XbxEngineMediaRuntimeStats,
+        observed_at_ms: f64,
+    ) {
+        let Some(episode) = stats.latest_keyframe_request_episode.clone() else {
+            return;
+        };
+        let control_ready_to_pli_sent_ms = stats
+            .control_ready_at_ms
+            .zip(episode.sent_at_ms)
+            .map(|(control_ready_at_ms, sent_at_ms)| (sent_at_ms - control_ready_at_ms).max(0.0));
+        let pli_sent_to_first_idr_packet_ms = episode
+            .sent_at_ms
+            .zip(episode.first_keyframe_packet_at_ms)
+            .map(|(sent_at_ms, first_packet_at_ms)| (first_packet_at_ms - sent_at_ms).max(0.0));
+        let first_idr_packet_to_first_decode_ms = episode
+            .first_keyframe_packet_at_ms
+            .zip(episode.first_keyframe_decoded_at_ms)
+            .map(|(first_packet_at_ms, decoded_at_ms)| {
+                (decoded_at_ms - first_packet_at_ms).max(0.0)
+            });
+        let first_decode_to_clean_anchor_committed_ms = episode
+            .first_keyframe_decoded_at_ms
+            .zip(stats.video_anchor_clean_observed_at_ms)
+            .map(|(decoded_at_ms, committed_at_ms)| (committed_at_ms - decoded_at_ms).max(0.0));
+        let clean_anchor_committed_to_display_stable_ms = stats
+            .video_anchor_clean_observed_at_ms
+            .zip(stats.transport_recovery_episode_closed_at_ms)
+            .filter(|_| {
+                stats.transport_recovery_episode_close_reason.as_deref()
+                    == Some("stableServingSettled")
+            })
+            .map(|(committed_at_ms, stable_at_ms)| (stable_at_ms - committed_at_ms).max(0.0));
+        let terminal_phase = if clean_anchor_committed_to_display_stable_ms.is_some() {
+            Some("DisplayStable".to_string())
+        } else if first_decode_to_clean_anchor_committed_ms.is_some() {
+            Some("CleanAnchorCommitted".to_string())
+        } else if episode.first_keyframe_decoded_at_ms.is_some() {
+            Some("Decoded".to_string())
+        } else {
+            None
+        };
+        let incomplete_reason = if episode.first_keyframe_decoded_at_ms.is_some()
+            && stats.video_anchor_clean_observed_at_ms.is_none()
+        {
+            Some("noCleanAnchorCommit".to_string())
+        } else if episode.first_keyframe_decoded_at_ms.is_some()
+            && stats.transport_recovery_episode_close_reason.as_deref()
+                != Some("stableServingSettled")
+            && stats.video_anchor_clean_observed_at_ms.is_some()
+        {
+            Some("noDisplayStable".to_string())
+        } else if episode.sent_at_ms.is_none()
+            && episode.first_keyframe_packet_at_ms.is_none()
+            && episode.first_keyframe_decoded_at_ms.is_none()
+        {
+            Some("missingPliSent".to_string())
+        } else if episode.first_keyframe_packet_at_ms.is_none() {
+            Some("noIdrPacket".to_string())
+        } else if episode.first_keyframe_decoded_at_ms.is_none() {
+            Some("noDecode".to_string())
+        } else if stats.transport_recovery_episode_close_reason.as_deref()
+            != Some("stableServingSettled")
+        {
+            Some("noDisplayStable".to_string())
+        } else {
+            None
+        };
+        if control_ready_to_pli_sent_ms.is_none()
+            && pli_sent_to_first_idr_packet_ms.is_none()
+            && first_idr_packet_to_first_decode_ms.is_none()
+            && first_decode_to_clean_anchor_committed_ms.is_none()
+            && clean_anchor_committed_to_display_stable_ms.is_none()
+        {
+            return;
+        }
+        stats.latest_first_frame_latency_observation =
+            Some(XbxEngineFirstFrameLatencyObservation {
+                observation_id: Self::next_first_frame_latency_observation_id(stats),
+                episode_id: Some(episode.episode_id),
+                recovery_epoch: Some(stats.transport_recovery_epoch),
+                control_ready_to_pli_sent_ms,
+                pli_sent_to_first_idr_packet_ms,
+                first_idr_packet_to_first_decode_ms,
+                first_decode_to_clean_anchor_committed_ms,
+                clean_anchor_committed_to_display_stable_ms,
+                terminal_phase,
+                incomplete_reason,
+                observed_at_ms,
+            });
     }
 
     pub(crate) fn record_video_ingress_rx_closed(&self, observed_at_ms: f64, cause: Option<&str>) {
@@ -244,6 +482,15 @@ impl RuntimeStatsSink {
             stats.latest_observation_summary = Some(format!(
                 "cause={resolved_cause} observedAtMs={observed_at_ms:.1}"
             ));
+            Self::record_video_ingress_termination_internal(
+                stats,
+                observed_at_ms,
+                "rxClosed",
+                resolved_cause,
+                latest_video_ingress_close_cause(stats).as_deref(),
+                Some("video-ingress"),
+                stats.latest_video_ingress_termination_id,
+            );
         });
     }
 
@@ -307,6 +554,23 @@ impl RuntimeStatsSink {
                     .map(|value| format!("{value:.1}"))
                     .unwrap_or_else(|| "none".to_string())
             ));
+            let observation = XbxEnginePictureRecoveryTransitionObservation {
+                observation_id: Self::next_picture_recovery_transition_observation_id(stats),
+                episode_id: Some(episode_id),
+                recovery_epoch: Some(stats.transport_recovery_epoch),
+                phase: "PliRequested".to_string(),
+                from_phase: None,
+                to_phase: "PliRequested".to_string(),
+                cause: request_reason.clone(),
+                detail: None,
+                rtp_timestamp: None,
+                frame_seq: None,
+                owner_state: stats.video_owner_state.clone(),
+                transport_state: Some(format!("{:?}", stats.transport_state)),
+                observed_at_ms: requested_at_ms,
+            };
+            stats.latest_picture_recovery_transition_observation = Some(observation);
+            Self::refresh_first_frame_latency_observation(stats, requested_at_ms);
             emit_picture_recovery_closure_probe(
                 &*stats,
                 "requested",
@@ -379,6 +643,23 @@ impl RuntimeStatsSink {
                 "episodeId={} requestKind={} sentAtMs={:.1}",
                 episode.episode_id, request_kind, sent_at_ms
             ));
+            let observation = XbxEnginePictureRecoveryTransitionObservation {
+                observation_id: Self::next_picture_recovery_transition_observation_id(stats),
+                episode_id: Some(episode.episode_id),
+                recovery_epoch: Some(stats.transport_recovery_epoch),
+                phase: "PliSent".to_string(),
+                from_phase: Some("PliRequested".to_string()),
+                to_phase: "PliSent".to_string(),
+                cause: episode.request_reason.clone(),
+                detail: Some(request_kind.to_string()),
+                rtp_timestamp: None,
+                frame_seq: None,
+                owner_state: stats.video_owner_state.clone(),
+                transport_state: Some(format!("{:?}", stats.transport_state)),
+                observed_at_ms: sent_at_ms,
+            };
+            stats.latest_picture_recovery_transition_observation = Some(observation);
+            Self::refresh_first_frame_latency_observation(stats, sent_at_ms);
             emit_picture_recovery_closure_probe(&*stats, "sent", sent_at_ms, Some(&episode), None);
         });
     }
@@ -436,6 +717,7 @@ impl RuntimeStatsSink {
             if let Some(episode) = updated_episode {
                 sync_recent_picture_recovery_episode(stats, episode);
             }
+            Self::refresh_first_frame_latency_observation(stats, observed_at_ms);
             if should_probe {
                 emit_picture_recovery_closure_probe(
                     &*stats,
@@ -489,6 +771,7 @@ impl RuntimeStatsSink {
             if let Some(episode) = updated_episode {
                 sync_recent_picture_recovery_episode(stats, episode);
             }
+            Self::refresh_first_frame_latency_observation(stats, observed_at_ms);
             if should_probe {
                 emit_picture_recovery_closure_probe(
                     &*stats,
@@ -538,6 +821,7 @@ impl RuntimeStatsSink {
             if let Some(episode) = updated_episode {
                 sync_recent_picture_recovery_episode(stats, episode);
             }
+            Self::refresh_first_frame_latency_observation(stats, observed_at_ms);
             if should_probe {
                 emit_picture_recovery_closure_probe(
                     &*stats,
@@ -579,6 +863,7 @@ impl RuntimeStatsSink {
         self.update(|stats| {
             let mut updated_episode = None;
             let mut should_probe = false;
+            let mut pending_transition: Option<(u64, Option<u32>)> = None;
             if let Some(episode) = stats.latest_keyframe_request_episode.as_mut() {
                 // 验证1: 检查响应时间是否在合理范围内
                 if let Some(sent_at_ms) = episode.sent_at_ms {
@@ -640,6 +925,7 @@ impl RuntimeStatsSink {
                             .unwrap_or_else(|| "none".to_string()),
                         observed_at_ms
                     ));
+                    pending_transition = Some((episode.episode_id, rtp_timestamp));
                     updated_episode = Some(episode.clone());
                     should_probe = true;
                 }
@@ -647,6 +933,25 @@ impl RuntimeStatsSink {
             if let Some(episode) = updated_episode {
                 sync_recent_picture_recovery_episode(stats, episode);
             }
+            if let Some((episode_id, rtp_timestamp)) = pending_transition {
+                let observation = XbxEnginePictureRecoveryTransitionObservation {
+                    observation_id: Self::next_picture_recovery_transition_observation_id(stats),
+                    episode_id: Some(episode_id),
+                    recovery_epoch: Some(stats.transport_recovery_epoch),
+                    phase: "PacketSeen".to_string(),
+                    from_phase: Some("PliSent".to_string()),
+                    to_phase: "PacketSeen".to_string(),
+                    cause: Some("firstKeyframeAccepted".to_string()),
+                    detail: Some("packetSeen".to_string()),
+                    rtp_timestamp,
+                    frame_seq: None,
+                    owner_state: stats.video_owner_state.clone(),
+                    transport_state: Some(format!("{:?}", stats.transport_state)),
+                    observed_at_ms,
+                };
+                stats.latest_picture_recovery_transition_observation = Some(observation);
+            }
+            Self::refresh_first_frame_latency_observation(stats, observed_at_ms);
             if should_probe {
                 emit_picture_recovery_closure_probe(
                     &*stats,
@@ -676,6 +981,7 @@ impl RuntimeStatsSink {
         self.update(|stats| {
             let mut updated_episode = None;
             let mut should_probe = false;
+            let mut pending_transition: Option<(u64, Option<u32>, bool, String)> = None;
             if let Some(episode) = stats.latest_keyframe_request_episode.as_mut() {
                 if episode.sent_at_ms.is_none()
                     || matches!(
@@ -749,12 +1055,41 @@ impl RuntimeStatsSink {
                         response_head_missing_active,
                         gap_expired_before_keyframe,
                     ));
+                pending_transition = Some((
+                    episode.episode_id,
+                    rtp_timestamp,
+                    is_keyframe,
+                    detail.to_string(),
+                ));
                 updated_episode = Some(episode.clone());
                 should_probe = true;
             }
             if let Some(episode) = updated_episode {
                 sync_recent_picture_recovery_episode(stats, episode);
             }
+            if let Some((episode_id, rtp_timestamp, is_keyframe, detail)) = pending_transition {
+                let observation = XbxEnginePictureRecoveryTransitionObservation {
+                    observation_id: Self::next_picture_recovery_transition_observation_id(stats),
+                    episode_id: Some(episode_id),
+                    recovery_epoch: Some(stats.transport_recovery_epoch),
+                    phase: "ResponseObserved".to_string(),
+                    from_phase: Some("PliSent".to_string()),
+                    to_phase: "ResponseObserved".to_string(),
+                    cause: Some(detail),
+                    detail: Some(if is_keyframe {
+                        "idr".to_string()
+                    } else {
+                        "continuation".to_string()
+                    }),
+                    rtp_timestamp,
+                    frame_seq: None,
+                    owner_state: stats.video_owner_state.clone(),
+                    transport_state: Some(format!("{:?}", stats.transport_state)),
+                    observed_at_ms,
+                };
+                stats.latest_picture_recovery_transition_observation = Some(observation);
+            }
+            Self::refresh_first_frame_latency_observation(stats, observed_at_ms);
             if should_probe {
                 emit_picture_recovery_closure_probe(
                     &*stats,
@@ -776,6 +1111,7 @@ impl RuntimeStatsSink {
         self.update(|stats| {
             let mut updated_episode = None;
             let mut should_probe = false;
+            let mut pending_transition: Option<(u64, u32, u64)> = None;
             if let Some(episode) = stats.latest_keyframe_request_episode.as_mut() {
                 if episode.first_keyframe_packet_at_ms.is_none() {
                     episode.first_keyframe_packet_at_ms = Some(observed_at_ms);
@@ -807,12 +1143,32 @@ impl RuntimeStatsSink {
                     "episodeId={} rtpTimestamp={} frameSeq={} observedAtMs={:.1}",
                     episode.episode_id, rtp_timestamp, frame_seq, observed_at_ms
                 ));
+                pending_transition = Some((episode.episode_id, rtp_timestamp, frame_seq));
                 updated_episode = Some(episode.clone());
                 should_probe = true;
             }
             if let Some(episode) = updated_episode {
                 sync_recent_picture_recovery_episode(stats, episode);
             }
+            if let Some((episode_id, rtp_timestamp, frame_seq)) = pending_transition {
+                let observation = XbxEnginePictureRecoveryTransitionObservation {
+                    observation_id: Self::next_picture_recovery_transition_observation_id(stats),
+                    episode_id: Some(episode_id),
+                    recovery_epoch: Some(stats.transport_recovery_epoch),
+                    phase: "Decoded".to_string(),
+                    from_phase: Some("PacketSeen".to_string()),
+                    to_phase: "Decoded".to_string(),
+                    cause: Some("firstKeyframeAccepted".to_string()),
+                    detail: Some("decoded".to_string()),
+                    rtp_timestamp: Some(rtp_timestamp),
+                    frame_seq: Some(frame_seq),
+                    owner_state: stats.video_owner_state.clone(),
+                    transport_state: Some(format!("{:?}", stats.transport_state)),
+                    observed_at_ms,
+                };
+                stats.latest_picture_recovery_transition_observation = Some(observation);
+            }
+            Self::refresh_first_frame_latency_observation(stats, observed_at_ms);
             if should_probe {
                 emit_picture_recovery_closure_probe(
                     &*stats,
@@ -860,6 +1216,13 @@ impl RuntimeStatsSink {
                 observation.bound_episode_id = Some(episode.episode_id);
                 observation.bound_episode_status = Some(episode.status.clone());
                 observation.bound_response_rtp_timestamp = episode.response_rtp_timestamp;
+                observation.bound_recovery_epoch = Some(stats.transport_recovery_epoch);
+                observation.episode_phase_at_observation = episode.lifecycle_phase.clone();
+                observation.is_post_recovery_degradation = Some(
+                    episode.first_keyframe_decoded_at_ms.is_some()
+                        && stats.transport_recovery_episode_close_reason.as_deref()
+                            == Some("stableServingSettled"),
+                );
                 observation.bound_as_recovery_response =
                     Some(inspection_matches_recovery_picture_recovery_response(
                         episode,
@@ -869,14 +1232,53 @@ impl RuntimeStatsSink {
                 observation.bound_episode_id = None;
                 observation.bound_episode_status = None;
                 observation.bound_response_rtp_timestamp = None;
+                observation.bound_recovery_epoch = None;
+                observation.episode_phase_at_observation = None;
+                observation.is_post_recovery_degradation = None;
                 observation.bound_as_recovery_response = Some(false);
             }
+            observation.reject_classification = classify_h264_reject(&observation);
             let summary = format_h264_inspection_summary(&observation);
             emit_picture_recovery_response_diagnosis_probe(
                 &*stats,
                 selected.as_ref(),
                 &observation,
             );
+            if let Some(classification) = observation.reject_classification.clone() {
+                let (first_observed_at_ms, count) = stats
+                    .latest_picture_recovery_blocker_observation
+                    .as_ref()
+                    .filter(|blocker| {
+                        blocker.gate == "media"
+                            && blocker.blocker_kind == classification
+                            && blocker.episode_id
+                                == selected.as_ref().map(|episode| episode.episode_id)
+                            && blocker.recovery_epoch == Some(stats.transport_recovery_epoch)
+                    })
+                    .map(|blocker| {
+                        (
+                            blocker.first_observed_at_ms,
+                            blocker.count.saturating_add(1),
+                        )
+                    })
+                    .unwrap_or((observation.observed_at_ms, 1));
+                stats.latest_picture_recovery_blocker_observation =
+                    Some(XbxEnginePictureRecoveryBlockerObservation {
+                        observation_id: Self::next_picture_recovery_blocker_observation_id(stats),
+                        episode_id: selected.as_ref().map(|episode| episode.episode_id),
+                        recovery_epoch: Some(stats.transport_recovery_epoch),
+                        gate: "media".to_string(),
+                        blocker_kind: classification,
+                        severity: "warning".to_string(),
+                        first_observed_at_ms,
+                        observed_at_ms: observation.observed_at_ms,
+                        count,
+                        frame_rtp_timestamp: observation.frame_rtp_timestamp,
+                        frame_seq: None,
+                        owner_state: stats.video_owner_state.clone(),
+                        transport_state: Some(format!("{:?}", stats.transport_state)),
+                    });
+            }
             stats.latest_h264_inspection_observation = Some(observation);
             stats.latest_observation_label = Some("h264InspectionObserved".to_string());
             stats.latest_observation_summary = Some(summary);
@@ -1079,12 +1481,55 @@ impl RuntimeStatsSink {
                 observed_at_ms,
                 "lifecycleRecovering",
             );
+            let observation = XbxEnginePictureRecoveryTransitionObservation {
+                observation_id: Self::next_picture_recovery_transition_observation_id(stats),
+                episode_id: stats
+                    .latest_keyframe_request_episode
+                    .as_ref()
+                    .map(|episode| episode.episode_id),
+                recovery_epoch: Some(stats.transport_recovery_epoch),
+                phase: "EpisodeClosed".to_string(),
+                from_phase: Some("Decoded".to_string()),
+                to_phase: "EpisodeClosed".to_string(),
+                cause: Some("lifecycleRecovering".to_string()),
+                detail: None,
+                rtp_timestamp: None,
+                frame_seq: None,
+                owner_state: stats.video_owner_state.clone(),
+                transport_state: Some(format!("{:?}", stats.transport_state)),
+                observed_at_ms,
+            };
+            stats.latest_picture_recovery_transition_observation = Some(observation);
+            Self::refresh_first_frame_latency_observation(stats, observed_at_ms);
         });
     }
 
     pub(crate) fn record_transport_clean_anchor(&self, observed_at_ms: f64, source_event: &str) {
         self.update(|stats| {
             Self::apply_transport_clean_anchor(stats, observed_at_ms, source_event);
+            let observation = XbxEnginePictureRecoveryTransitionObservation {
+                observation_id: Self::next_picture_recovery_transition_observation_id(stats),
+                episode_id: stats
+                    .latest_keyframe_request_episode
+                    .as_ref()
+                    .map(|episode| episode.episode_id),
+                recovery_epoch: Some(stats.transport_recovery_epoch),
+                phase: "CleanAnchorCommitted".to_string(),
+                from_phase: Some("Decoded".to_string()),
+                to_phase: "CleanAnchorCommitted".to_string(),
+                cause: Some(source_event.to_string()),
+                detail: Some("mediaGate".to_string()),
+                rtp_timestamp: stats
+                    .latest_anchor_candidate_ledger
+                    .as_ref()
+                    .and_then(|ledger| ledger.frame_rtp_timestamp),
+                frame_seq: None,
+                owner_state: stats.video_owner_state.clone(),
+                transport_state: Some(format!("{:?}", stats.transport_state)),
+                observed_at_ms,
+            };
+            stats.latest_picture_recovery_transition_observation = Some(observation);
+            Self::refresh_first_frame_latency_observation(stats, observed_at_ms);
             emit_picture_recovery_closure_probe(
                 &*stats,
                 "clean-anchor",
@@ -1102,6 +1547,26 @@ impl RuntimeStatsSink {
                 observed_at_ms,
                 "stableServingSettled",
             );
+            let display_stable = XbxEnginePictureRecoveryTransitionObservation {
+                observation_id: Self::next_picture_recovery_transition_observation_id(stats),
+                episode_id: stats
+                    .latest_keyframe_request_episode
+                    .as_ref()
+                    .map(|episode| episode.episode_id),
+                recovery_epoch: Some(stats.transport_recovery_epoch),
+                phase: "DisplayStable".to_string(),
+                from_phase: Some("CleanAnchorCommitted".to_string()),
+                to_phase: "DisplayStable".to_string(),
+                cause: Some("stableServingSettled".to_string()),
+                detail: Some("displayGate".to_string()),
+                rtp_timestamp: None,
+                frame_seq: None,
+                owner_state: stats.video_owner_state.clone(),
+                transport_state: Some(format!("{:?}", stats.transport_state)),
+                observed_at_ms,
+            };
+            stats.latest_picture_recovery_transition_observation = Some(display_stable);
+            Self::refresh_first_frame_latency_observation(stats, observed_at_ms);
         });
     }
 
@@ -1432,20 +1897,23 @@ fn enrich_picture_recovery_first_frame_latency_detail(
         return;
     }
     let pli_sent_at_ms = episode.sent_at_ms;
-    let first_idr_packet_at_ms = episode.first_keyframe_packet_at_ms.or(episode.first_video_packet_at_ms);
+    let first_idr_packet_at_ms = episode
+        .first_keyframe_packet_at_ms
+        .or(episode.first_video_packet_at_ms);
     let first_decode_at_ms = episode.first_keyframe_decoded_at_ms;
-    let clean_anchor_committed_at_ms = if stats.video_anchor_clean_epoch == Some(stats.transport_recovery_epoch)
-    {
-        stats.video_anchor_clean_observed_at_ms
-    } else {
-        None
-    };
-    let display_stable_at_ms = stats
-        .transport_recovery_episode_closed_at_ms
-        .filter(|_| stats.transport_recovery_episode_close_reason.as_deref() == Some("stableServingSettled"));
-    let control_ready_to_pli_sent_ms = stats.control_ready_at_ms.zip(pli_sent_at_ms).map(
-        |(control_ready_at_ms, sent_at_ms)| (sent_at_ms - control_ready_at_ms).max(0.0),
-    );
+    let clean_anchor_committed_at_ms =
+        if stats.video_anchor_clean_epoch == Some(stats.transport_recovery_epoch) {
+            stats.video_anchor_clean_observed_at_ms
+        } else {
+            None
+        };
+    let display_stable_at_ms = stats.transport_recovery_episode_closed_at_ms.filter(|_| {
+        stats.transport_recovery_episode_close_reason.as_deref() == Some("stableServingSettled")
+    });
+    let control_ready_to_pli_sent_ms = stats
+        .control_ready_at_ms
+        .zip(pli_sent_at_ms)
+        .map(|(control_ready_at_ms, sent_at_ms)| (sent_at_ms - control_ready_at_ms).max(0.0));
     let pli_sent_to_first_idr_packet_ms = pli_sent_at_ms
         .zip(first_idr_packet_at_ms)
         .map(|(sent_at_ms, first_packet_at_ms)| (first_packet_at_ms - sent_at_ms).max(0.0));
@@ -1484,7 +1952,13 @@ fn latest_video_ingress_close_cause(stats: &XbxEngineMediaRuntimeStats) -> Optio
         .latest_observation_summary
         .as_deref()
         .and_then(|summary| summary.strip_prefix("cause="))
-        .map(ToString::to_string)
+        .map(|summary| {
+            summary
+                .split(" observedAtMs=")
+                .next()
+                .unwrap_or(summary)
+                .to_string()
+        })
 }
 
 /// 当前 recovery epoch 下是否已观测到与本 epoch 对齐的 clean anchor（控制态，非单次 probe 语义）。
@@ -1579,6 +2053,25 @@ fn inspection_matches_recovery_picture_recovery_response(
         (Some(a), Some(b)) => a == b,
         _ => false,
     }
+}
+
+fn classify_h264_reject(observation: &XbxEngineH264InspectionObservation) -> Option<String> {
+    if observation.bootstrap_reject_reason.as_deref() != Some("NonIdrVcl") {
+        return observation
+            .bootstrap_reject_reason
+            .as_ref()
+            .map(|reason| format!("h264Reject:{reason}"));
+    }
+    if observation.admission_accepted
+        && observation.delta_continuation_ready
+        && observation.bound_episode_id.is_some()
+    {
+        return Some("localWindowAcceptedButBootstrapRejected".to_string());
+    }
+    if observation.bound_episode_id.is_some() {
+        return Some("remoteNoIdrYet".to_string());
+    }
+    Some("outOfRecoveryContextContinuation".to_string())
 }
 
 /// 将 anchor ledger 与同帧/同 recovery 上下文的 episode 绑定，避免 probe 硬拼全局 latest。
@@ -2039,6 +2532,36 @@ mod tests {
             episode.response_verdict.as_deref(),
             Some("cleanAnchorCommitted")
         );
+    }
+
+    #[test]
+    fn first_frame_latency_prefers_clean_anchor_gap_over_missing_pli_when_decode_exists() {
+        let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
+        let sink = RuntimeStatsSink::new(runtime_stats.clone());
+
+        sink.begin_transport_recovery_episode(10.0);
+        sink.record_picture_recovery_episode_requested(
+            903,
+            Some("transportAwaitRecoveryAnchor".to_string()),
+            100.0,
+            None,
+        );
+        sink.record_picture_recovery_episode_packet_seen(150.0, Some(123456789), true, Some(321));
+        sink.record_picture_recovery_episode_decoded(160.0, 123456789, 42);
+
+        let stats = runtime_stats.lock().expect("runtime stats lock");
+        let observation = stats
+            .latest_first_frame_latency_observation
+            .as_ref()
+            .expect("first frame latency observation");
+        assert_eq!(observation.terminal_phase.as_deref(), Some("Decoded"));
+        assert_eq!(
+            observation.incomplete_reason.as_deref(),
+            Some("noCleanAnchorCommit")
+        );
+        assert_eq!(observation.control_ready_to_pli_sent_ms, None);
+        assert_eq!(observation.pli_sent_to_first_idr_packet_ms, None);
+        assert_eq!(observation.first_idr_packet_to_first_decode_ms, Some(10.0));
     }
 
     #[test]

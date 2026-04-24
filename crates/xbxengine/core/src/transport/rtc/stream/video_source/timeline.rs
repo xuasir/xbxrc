@@ -317,20 +317,37 @@ impl VideoTimelineState {
         self.on_clean_anchor_stats_committed();
     }
 
-    /// clean-anchor 提交回归媒体事实：只要 anchor 对应帧已成为 complete-candidate 即可提交。
-    /// stable gate 继续用于 post-anchor 的抖动吸收与链路收敛，不再阻塞 clean-anchor 提交。
-    pub(super) fn take_clean_anchor_stats_commit_if_stable(
+    /// clean-anchor 提交候选回归媒体事实：只要 anchor 对应帧已成为 complete-candidate 即可进入待提交态。
+    /// 该方法只做候选匹配，不消费 pending；真正消费由 decode->pacer 成功后的 ack 驱动。
+    pub(super) fn peek_clean_anchor_stats_commit_candidate_if_stable(
         &mut self,
         complete_candidate_rtp_ts: u32,
         now_ms: f64,
     ) -> Option<u32> {
         let pending = self.pending_clean_anchor_rtp_ts?;
-        if complete_candidate_rtp_ts < pending {
+        if complete_candidate_rtp_ts != pending {
             return None;
         }
         let _ = now_ms;
-        self.pending_clean_anchor_rtp_ts = None;
         Some(pending)
+    }
+
+    /// decode->pacer 成功后确认 clean-anchor 提交，消费 pending 并 arm building phase。
+    pub(super) fn ack_clean_anchor_stats_committed(&mut self, committed_rtp_ts: u32) -> bool {
+        if self.pending_clean_anchor_rtp_ts != Some(committed_rtp_ts) {
+            return false;
+        }
+        self.pending_clean_anchor_rtp_ts = None;
+        self.on_clean_anchor_submitted();
+        true
+    }
+
+    /// 当前 epoch 的 clean-anchor 已在媒体路径提交时，直接消费仍挂起的 pending。
+    pub(super) fn ack_pending_clean_anchor_stats_committed(&mut self) -> bool {
+        let Some(committed_rtp_ts) = self.pending_clean_anchor_rtp_ts else {
+            return false;
+        };
+        self.ack_clean_anchor_stats_committed(committed_rtp_ts)
     }
 
     /// 媒体路径在帧级确认后，把证据写回已绑定到该 RTP 时间戳的 gap。

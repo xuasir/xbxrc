@@ -1129,6 +1129,102 @@ fn record_runtime_trace_observations_keeps_bootstrap_gap_delta_slice_as_observed
 }
 
 #[test]
+fn record_runtime_trace_observations_emits_recovery_collection_events() {
+    let recorder = std::sync::Arc::new(
+        RuntimeTraceRecorder::new_with_mode("verbose").expect("trace recorder"),
+    );
+    let mut state = RuntimeTraceObservationState::default();
+    let stats = test_stats(json!({
+        "resolution": "",
+        "rtt": "",
+        "fps": 0.0,
+        "pl": "0.00%",
+        "fl": "",
+        "jit": "",
+        "br": "",
+        "decode": "",
+        "latest_picture_recovery_transition_observation": {
+            "observation_id": 11,
+            "episode_id": 7,
+            "recovery_epoch": 3,
+            "phase": "CleanAnchorCommitted",
+            "from_phase": "Decoded",
+            "to_phase": "CleanAnchorCommitted",
+            "cause": "chain-clean-anchor-submitted",
+            "detail": "mediaGate",
+            "rtp_timestamp": 123456,
+            "frame_seq": 42,
+            "owner_state": "stable-serving",
+            "transport_state": "Connected",
+            "observed_at_ms": 180.0
+        },
+        "latest_picture_recovery_blocker_observation": {
+            "observation_id": 12,
+            "episode_id": 7,
+            "recovery_epoch": 3,
+            "gate": "media",
+            "blocker_kind": "localWindowAcceptedButBootstrapRejected",
+            "severity": "warning",
+            "first_observed_at_ms": 181.0,
+            "observed_at_ms": 182.0,
+            "count": 2,
+            "frame_rtp_timestamp": 123460,
+            "frame_seq": 43,
+            "owner_state": "supply-starved",
+            "transport_state": "Connected"
+        },
+        "latest_video_ingress_termination_observation": {
+            "observation_id": 13,
+            "termination_id": 5,
+            "derived_from_termination_id": 5,
+            "kind": "rxClosed",
+            "cause": "upstreamSenderDropped",
+            "upstream_cause": "trackEnded",
+            "source_subsystem": "video-ingress",
+            "linked_recovery_epoch": 3,
+            "linked_episode_id": 7,
+            "transport_state": "Connected",
+            "owner_state": "supply-starved",
+            "video_track_state": "remoteTrackAttached",
+            "recent_command": "rtcVideoIngressRxClosed",
+            "observed_at_ms": 183.0
+        },
+        "latest_first_frame_latency_observation": {
+            "observation_id": 14,
+            "episode_id": 7,
+            "recovery_epoch": 3,
+            "control_ready_to_pli_sent_ms": 20.0,
+            "pli_sent_to_first_idr_packet_ms": 100.0,
+            "first_idr_packet_to_first_decode_ms": 260.0,
+            "first_decode_to_clean_anchor_committed_ms": 12.0,
+            "clean_anchor_committed_to_display_stable_ms": 28.0,
+            "terminal_phase": "DisplayStable",
+            "incomplete_reason": null,
+            "observed_at_ms": 184.0
+        }
+    }));
+
+    record_runtime_trace_observations(&recorder, &mut state, Some("session-1"), &stats);
+    let entries = read_trace_lines(recorder.as_ref());
+    assert_eq!(
+        find_event_payload(&entries, "pictureRecoveryTransition")["toPhase"],
+        "CleanAnchorCommitted"
+    );
+    assert_eq!(
+        find_event_payload(&entries, "pictureRecoveryBlockerObserved")["blockerKind"],
+        "localWindowAcceptedButBootstrapRejected"
+    );
+    assert_eq!(
+        find_event_payload(&entries, "videoIngressTermination")["kind"],
+        "rxClosed"
+    );
+    assert_eq!(
+        find_event_payload(&entries, "firstFrameLatencyObserved")["terminalPhase"],
+        "DisplayStable"
+    );
+}
+
+#[test]
 fn record_runtime_trace_observations_correlates_keyframe_and_h264_context() {
     let recorder = std::sync::Arc::new(
         RuntimeTraceRecorder::new_with_mode("verbose").expect("trace recorder"),
@@ -2511,6 +2607,59 @@ fn host_present_state_records_present_age_transition_from_none_to_fresh() {
     assert_eq!(host_rows.len(), 2);
     assert!(host_rows[0]["payload"]["presentAgeMs"].is_null());
     assert_eq!(host_rows[1]["payload"]["presentAgeMs"], 12.0);
+}
+
+#[test]
+fn host_present_loop_resumed_emits_transition_event_when_present_epoch_recovers() {
+    let recorder = std::sync::Arc::new(
+        RuntimeTraceRecorder::new_with_mode("verbose").expect("trace recorder"),
+    );
+    let mut state = RuntimeTraceObservationState::default();
+    let first = test_stats(json!({
+        "resolution": "",
+        "rtt": "",
+        "fps": 0.0,
+        "pl": "0.00%",
+        "fl": "",
+        "jit": "",
+        "br": "",
+        "decode": "",
+        "host_display_tick_epoch": 12,
+        "video_present_epoch": 0,
+        "host_cadence_phase": "waiting",
+        "last_displayed_frame_seq": null,
+        "last_displayed_frame_rtp_timestamp": null,
+        "last_displayed_at_ms": null
+    }));
+    let second = test_stats(json!({
+        "resolution": "",
+        "rtt": "",
+        "fps": 0.0,
+        "pl": "0.00%",
+        "fl": "",
+        "jit": "",
+        "br": "",
+        "decode": "",
+        "host_display_tick_epoch": 15,
+        "video_present_epoch": 2,
+        "host_cadence_phase": "steady",
+        "last_displayed_frame_seq": 88,
+        "last_displayed_frame_rtp_timestamp": 998877u32,
+        "last_displayed_at_ms": 1810.0
+    }));
+
+    record_runtime_trace_observations(&recorder, &mut state, Some("session-1"), &first);
+    record_runtime_trace_observations(&recorder, &mut state, Some("session-1"), &second);
+
+    let entries = read_trace_lines(recorder.as_ref());
+    let payload = find_event_payload(&entries, "hostPresentLoopResumed");
+    assert_eq!(payload["previousDisplayTickEpoch"], 12);
+    assert_eq!(payload["previousPresentEpoch"], 0);
+    assert_eq!(payload["displayTickEpoch"], 15);
+    assert_eq!(payload["presentEpoch"], 2);
+    assert_eq!(payload["lastDisplayedFrameSeq"], 88);
+    assert_eq!(payload["lastDisplayedFrameRtpTimestamp"], 998877u32);
+    assert_eq!(payload["lastDisplayedAtMs"], 1810.0);
 }
 
 #[test]

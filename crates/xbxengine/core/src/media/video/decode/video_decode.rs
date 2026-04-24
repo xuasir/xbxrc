@@ -18,7 +18,8 @@ use crate::{
 };
 
 const MAX_DECODED_FRAME_QUEUE_LEN: usize = 3;
-const DECODE_HARD_BACKPRESSURE_QUEUE_LEN: usize = 6;
+const RECOVERY_DECODED_FRAME_QUEUE_LEN: usize = 5;
+const DECODE_HARD_BACKPRESSURE_QUEUE_LEN: usize = 8;
 const HARDWARE_DECODE_FAILURE_BURST_GAP_MS: f64 = 400.0;
 const HARDWARE_NO_OUTPUT_SOFT_FALLBACK_THRESHOLD: u32 = 4;
 const D3D11VA_NO_OUTPUT_REBUILD_THRESHOLD: u32 = 2;
@@ -29,10 +30,10 @@ const HARDWARE_NO_OUTPUT_SOFT_FALLBACK_WINDOW_MS: f64 = 80.0;
 const LOCAL_DECODER_RESET_REPLAY_BARRIER_MS: f64 = 900.0;
 const WAITING_KEYFRAME_CONTINUATION_WINDOW_MS: f64 = 120.0;
 const WAITING_KEYFRAME_CONTINUATION_MAX_FRAMES: u32 = 3;
-const DECODE_QUEUE_STALE_SLACK_DISPOSABLE_MS: u64 = 12;
-const DECODE_QUEUE_STALE_SLACK_SUPPLY_MS: u64 = 24;
-const DECODE_QUEUE_STALE_SLACK_ANCHOR_MS: u64 = 36;
-const DECODE_QUEUE_STALE_SLACK_RECOVERY_BONUS_MS: u64 = 24;
+const DECODE_QUEUE_STALE_SLACK_DISPOSABLE_MS: u64 = 24;
+const DECODE_QUEUE_STALE_SLACK_SUPPLY_MS: u64 = 48;
+const DECODE_QUEUE_STALE_SLACK_ANCHOR_MS: u64 = 72;
+const DECODE_QUEUE_STALE_SLACK_RECOVERY_BONUS_MS: u64 = 48;
 type XbxVideoDecoderFactory =
     Box<dyn FnMut() -> (Box<dyn XbxVideoDecoderBackend>, XbxVideoDecoderProbeSummary) + Send>;
 
@@ -408,6 +409,7 @@ impl XbxVideoDecodeState {
         let budget = encoded_frame.budget;
         let frame_recovery_disposition = encoded_frame.frame_recovery_disposition;
         let frame_unrecoverable_reason = encoded_frame.frame_unrecoverable_reason.clone();
+        let clean_anchor_commit_recovery_epoch = encoded_frame.clean_anchor_commit_recovery_epoch;
         let recovery_state_before_decode = self.recovery_state;
         let frame_nal_labels = encoded_frame.h264.nal_type_labels().join("|");
         let frame_bootstrap_reject_reason_kind = encoded_frame.h264.bootstrap_reject_reason;
@@ -765,6 +767,7 @@ impl XbxVideoDecodeState {
             pts: target_time,
             rtp_timestamp,
             is_keyframe,
+            clean_anchor_commit_recovery_epoch,
             budget,
             frame_recovery_disposition,
             frame_unrecoverable_reason: frame_unrecoverable_reason.clone(),
@@ -783,6 +786,7 @@ impl XbxVideoDecodeState {
                 pts: target_time,
                 rtp_timestamp,
                 is_keyframe: false,
+                clean_anchor_commit_recovery_epoch: None,
                 budget,
                 frame_recovery_disposition,
                 frame_unrecoverable_reason: frame_unrecoverable_reason.clone(),
@@ -1006,8 +1010,15 @@ impl XbxVideoDecodeState {
         MAX_DECODED_FRAME_QUEUE_LEN
     }
 
-    fn decoded_frame_queue_capacity_for_incoming(&self, _incoming_frame: &DecodedFrame) -> usize {
-        self.decoded_frame_queue_capacity()
+    fn decoded_frame_queue_capacity_for_incoming(&self, incoming_frame: &DecodedFrame) -> usize {
+        if Self::decoded_frame_uses_recovery_window(incoming_frame)
+            || matches!(self.recovery_state, XbxVideoRecoveryState::WaitingKeyframe)
+            || matches!(self.recovery_state, XbxVideoRecoveryState::Recovering)
+        {
+            RECOVERY_DECODED_FRAME_QUEUE_LEN
+        } else {
+            self.decoded_frame_queue_capacity()
+        }
     }
 
     fn decoded_frame_uses_recovery_window(frame: &DecodedFrame) -> bool {
@@ -1061,7 +1072,8 @@ impl XbxVideoDecodeState {
         recovery_state_before_decode: XbxVideoRecoveryState,
         frame_is_keyframe: bool,
     ) -> bool {
-        self.decoder_backend_is_d3d11va()
+        cfg!(target_os = "windows")
+            && self.decoder_backend_is_d3d11va()
             && self.d3d11va_no_output_rebuild_attempts < D3D11VA_NO_OUTPUT_MAX_REBUILD_ATTEMPTS
             && self.backend_no_output_streak >= D3D11VA_NO_OUTPUT_REBUILD_THRESHOLD
             && (frame_is_keyframe
@@ -1568,7 +1580,45 @@ impl XbxVideoDecodeState {
             pts: std::time::Instant::now(),
             rtp_timestamp: frame.frame_seq as u32,
             is_keyframe: frame.is_keyframe,
+            clean_anchor_commit_recovery_epoch: None,
             budget,
+            frame_recovery_disposition: FrameRecoveryDisposition::Repairing,
+            frame_unrecoverable_reason: None,
+            surface: frame,
+        });
+    }
+
+    #[cfg(test)]
+    pub(crate) fn enqueue_decoded_frame_with_clean_anchor_epoch_for_test(
+        &mut self,
+        frame: XbxRenderFrame,
+        clean_anchor_commit_recovery_epoch: Option<u64>,
+    ) {
+        let _ = self.enqueue_decoded_frame(DecodedFrame {
+            pts: std::time::Instant::now(),
+            rtp_timestamp: frame.frame_seq as u32,
+            is_keyframe: frame.is_keyframe,
+            clean_anchor_commit_recovery_epoch,
+            budget: crate::media::video::ingress::budget::FrameBudgetContext::default(),
+            frame_recovery_disposition: FrameRecoveryDisposition::Repairing,
+            frame_unrecoverable_reason: None,
+            surface: frame,
+        });
+    }
+
+    #[cfg(test)]
+    pub(crate) fn enqueue_decoded_frame_with_clean_anchor_epoch_and_pts_for_test(
+        &mut self,
+        frame: XbxRenderFrame,
+        clean_anchor_commit_recovery_epoch: Option<u64>,
+        pts: std::time::Instant,
+    ) {
+        let _ = self.enqueue_decoded_frame(DecodedFrame {
+            pts,
+            rtp_timestamp: frame.frame_seq as u32,
+            is_keyframe: frame.is_keyframe,
+            clean_anchor_commit_recovery_epoch,
+            budget: crate::media::video::ingress::budget::FrameBudgetContext::default(),
             frame_recovery_disposition: FrameRecoveryDisposition::Repairing,
             frame_unrecoverable_reason: None,
             surface: frame,

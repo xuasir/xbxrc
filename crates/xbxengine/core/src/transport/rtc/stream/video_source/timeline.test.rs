@@ -762,6 +762,28 @@ fn stable_continuation_does_not_retire_newer_reorder_debt() {
 }
 
 #[test]
+fn clean_anchor_candidate_peek_does_not_consume_pending_until_ack() {
+    let mut state = VideoTimelineState::new();
+    state.on_clean_anchor_ingress(150_001, 10.0);
+
+    assert_eq!(
+        state.peek_clean_anchor_stats_commit_candidate_if_stable(150_001, 12.0),
+        Some(150_001)
+    );
+    // 第二次 peek 仍能命中，说明 source 阶段不会提前消费 pending。
+    assert_eq!(
+        state.peek_clean_anchor_stats_commit_candidate_if_stable(150_001, 13.0),
+        Some(150_001)
+    );
+
+    assert!(state.ack_clean_anchor_stats_committed(150_001));
+    assert_eq!(
+        state.peek_clean_anchor_stats_commit_candidate_if_stable(150_001, 14.0),
+        None
+    );
+}
+
+#[test]
 fn local_backpressure_disposable_gap_does_not_break_chain_or_mark_hard_risk() {
     let mut state = VideoTimelineState::new();
 

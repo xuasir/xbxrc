@@ -114,6 +114,7 @@ pub(crate) fn make_bootstrap_assembled_frame(rtp_timestamp: u32) -> AssembledVid
         width: inspection.width.unwrap_or(2560),
         height: inspection.height.unwrap_or(1440),
         rtp_timestamp,
+        clean_anchor_commit_recovery_epoch: None,
         first_packet_sequence: None,
         frame_playout_deadline_at_ms: None,
         frame_recovery_disposition: FrameRecoveryDisposition::Repairing,

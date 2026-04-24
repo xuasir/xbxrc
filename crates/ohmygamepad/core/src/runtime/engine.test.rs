@@ -408,7 +408,12 @@ fn fixed_rate_stream_mode_advances_sample_seq_without_payload_change() {
     config.sampling.stream_push_mode =
         ohmygamepad_protocol::OhMyGamepadStreamPushModeDto::FixedRate;
     config.sampling.stream_push_rate_hz = Some(10);
-    let mut core = InputCore::new(config, backend, SharedUiSink::default(), SharedStreamSink::default());
+    let mut core = InputCore::new(
+        config,
+        backend,
+        SharedUiSink::default(),
+        SharedStreamSink::default(),
+    );
 
     core.sync_clock_ms(10);
     core.tick();

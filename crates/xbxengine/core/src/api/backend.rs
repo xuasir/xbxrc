@@ -897,6 +897,77 @@ pub struct XbxEngineH264InspectionObservation {
     pub bound_episode_status: Option<String>,
     pub bound_as_recovery_response: Option<bool>,
     pub bound_response_rtp_timestamp: Option<u32>,
+    pub bound_recovery_epoch: Option<u64>,
+    pub episode_phase_at_observation: Option<String>,
+    pub is_post_recovery_degradation: Option<bool>,
+    pub reject_classification: Option<String>,
+}
+
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct XbxEnginePictureRecoveryTransitionObservation {
+    pub observation_id: u64,
+    pub episode_id: Option<u64>,
+    pub recovery_epoch: Option<u64>,
+    pub phase: String,
+    pub from_phase: Option<String>,
+    pub to_phase: String,
+    pub cause: Option<String>,
+    pub detail: Option<String>,
+    pub rtp_timestamp: Option<u32>,
+    pub frame_seq: Option<u64>,
+    pub owner_state: Option<String>,
+    pub transport_state: Option<String>,
+    pub observed_at_ms: f64,
+}
+
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct XbxEnginePictureRecoveryBlockerObservation {
+    pub observation_id: u64,
+    pub episode_id: Option<u64>,
+    pub recovery_epoch: Option<u64>,
+    pub gate: String,
+    pub blocker_kind: String,
+    pub severity: String,
+    pub first_observed_at_ms: f64,
+    pub observed_at_ms: f64,
+    pub count: u32,
+    pub frame_rtp_timestamp: Option<u32>,
+    pub frame_seq: Option<u64>,
+    pub owner_state: Option<String>,
+    pub transport_state: Option<String>,
+}
+
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct XbxEngineVideoIngressTerminationObservation {
+    pub observation_id: u64,
+    pub termination_id: u64,
+    pub derived_from_termination_id: Option<u64>,
+    pub kind: String,
+    pub cause: String,
+    pub upstream_cause: Option<String>,
+    pub source_subsystem: Option<String>,
+    pub linked_recovery_epoch: Option<u64>,
+    pub linked_episode_id: Option<u64>,
+    pub transport_state: Option<String>,
+    pub owner_state: Option<String>,
+    pub video_track_state: Option<String>,
+    pub recent_command: Option<String>,
+    pub observed_at_ms: f64,
+}
+
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct XbxEngineFirstFrameLatencyObservation {
+    pub observation_id: u64,
+    pub episode_id: Option<u64>,
+    pub recovery_epoch: Option<u64>,
+    pub control_ready_to_pli_sent_ms: Option<f64>,
+    pub pli_sent_to_first_idr_packet_ms: Option<f64>,
+    pub first_idr_packet_to_first_decode_ms: Option<f64>,
+    pub first_decode_to_clean_anchor_committed_ms: Option<f64>,
+    pub clean_anchor_committed_to_display_stable_ms: Option<f64>,
+    pub terminal_phase: Option<String>,
+    pub incomplete_reason: Option<String>,
+    pub observed_at_ms: f64,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -949,6 +1020,13 @@ pub struct XbxEngineMediaRuntimeStats {
     pub latest_video_rtcp_send_failure_reason: Option<String>,
     pub latest_keyframe_request_episode: Option<XbxEngineKeyframeRequestEpisodeObservation>,
     pub latest_h264_inspection_observation: Option<XbxEngineH264InspectionObservation>,
+    pub latest_picture_recovery_transition_observation:
+        Option<XbxEnginePictureRecoveryTransitionObservation>,
+    pub latest_picture_recovery_blocker_observation:
+        Option<XbxEnginePictureRecoveryBlockerObservation>,
+    pub latest_video_ingress_termination_observation:
+        Option<XbxEngineVideoIngressTerminationObservation>,
+    pub latest_first_frame_latency_observation: Option<XbxEngineFirstFrameLatencyObservation>,
     pub latest_target_remb_action: Option<String>,
     pub latest_target_remb_summary: Option<String>,
     pub latest_video_stream_width: Option<u32>,
@@ -994,6 +1072,12 @@ pub struct XbxEngineMediaRuntimeStats {
     pub keyframe_sent_failure_last_counted_episode_id: Option<u64>,
     pub transport_recovery_epoch: u64,
     pub transport_recovery_epoch_at_last_escalation: u64,
+    pub picture_recovery_transition_observation_count: u64,
+    pub picture_recovery_blocker_observation_count: u64,
+    pub video_ingress_termination_observation_count: u64,
+    pub first_frame_latency_observation_count: u64,
+    pub video_ingress_termination_id_seq: u64,
+    pub latest_video_ingress_termination_id: Option<u64>,
     pub video_repair_probe_stream_bind_count_total: u64,
     pub video_repair_probe_packet_count_total: u64,
     pub video_repair_probe_active_since_ms: Option<f64>,
@@ -1133,6 +1217,10 @@ impl Default for XbxEngineMediaRuntimeStats {
             latest_video_rtcp_send_failure_reason: None,
             latest_keyframe_request_episode: None,
             latest_h264_inspection_observation: None,
+            latest_picture_recovery_transition_observation: None,
+            latest_picture_recovery_blocker_observation: None,
+            latest_video_ingress_termination_observation: None,
+            latest_first_frame_latency_observation: None,
             latest_target_remb_action: None,
             latest_target_remb_summary: None,
             latest_video_stream_width: None,
@@ -1175,6 +1263,12 @@ impl Default for XbxEngineMediaRuntimeStats {
             keyframe_sent_failure_last_counted_episode_id: None,
             transport_recovery_epoch: 0,
             transport_recovery_epoch_at_last_escalation: 0,
+            picture_recovery_transition_observation_count: 0,
+            picture_recovery_blocker_observation_count: 0,
+            video_ingress_termination_observation_count: 0,
+            first_frame_latency_observation_count: 0,
+            video_ingress_termination_id_seq: 0,
+            latest_video_ingress_termination_id: None,
             video_repair_probe_stream_bind_count_total: 0,
             video_repair_probe_packet_count_total: 0,
             video_repair_probe_active_since_ms: None,
@@ -1700,7 +1794,8 @@ impl XbxEngineMediaBackend for PlaceholderXbxEngineMediaBackend {
         &mut self,
         metrics: XbxEngineHostVideoPresentMetrics,
     ) -> Result<(), XbxEngineRuntimeError> {
-        self.last_runtime_stats.latest_video_host_submit_time_ms = metrics.latest_host_submit_time_ms;
+        self.last_runtime_stats.latest_video_host_submit_time_ms =
+            metrics.latest_host_submit_time_ms;
         self.last_runtime_stats.latest_video_host_present_time_ms =
             metrics.latest_host_present_time_ms;
         self.last_runtime_stats.host_submit_epoch = metrics.host_submit_epoch;

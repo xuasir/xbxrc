@@ -82,6 +82,7 @@ pub struct AssembledVideoFrame {
     pub height: u32,
 
     pub rtp_timestamp: u32,
+    pub clean_anchor_commit_recovery_epoch: Option<u64>,
     #[allow(dead_code)]
     pub first_packet_sequence: Option<u16>,
     pub frame_playout_deadline_at_ms: Option<f64>,
@@ -107,6 +108,7 @@ impl AssembledVideoFrame {
             width: self.width,
             height: self.height,
             rtp_timestamp: self.rtp_timestamp,
+            clean_anchor_commit_recovery_epoch: self.clean_anchor_commit_recovery_epoch,
             first_packet_sequence: self.first_packet_sequence,
             frame_playout_deadline_at_ms: self.frame_playout_deadline_at_ms,
             frame_recovery_disposition: self.frame_recovery_disposition,
@@ -131,6 +133,7 @@ pub struct EncodedFrame {
     pub height: u32,
 
     pub rtp_timestamp: u32,
+    pub clean_anchor_commit_recovery_epoch: Option<u64>,
     #[allow(dead_code)]
     pub first_packet_sequence: Option<u16>,
     pub frame_playout_deadline_at_ms: Option<f64>,
@@ -148,6 +151,7 @@ pub struct DecodedFrame {
     pub pts: Instant,
     pub rtp_timestamp: u32,
     pub is_keyframe: bool,
+    pub clean_anchor_commit_recovery_epoch: Option<u64>,
     pub(crate) budget: FrameBudgetContext,
     pub frame_recovery_disposition: FrameRecoveryDisposition,
     pub frame_unrecoverable_reason: Option<String>,

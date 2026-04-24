@@ -10,7 +10,7 @@ use crate::transport::rtc::recovery::runtime_state::{
 };
 use crate::XbxEngineMediaRuntimeStats;
 
-pub(crate) const RECOVERY_RAMP_UP_LIGHT_SIGNAL_HOLD_MS: f64 = 1_500.0;
+pub(crate) const RECOVERY_RAMP_UP_LIGHT_SIGNAL_HOLD_MS: f64 = 300.0;
 
 pub(crate) struct RecoveryRampResolution {
     pub(crate) should_acknowledge_clean_anchor: bool,
@@ -108,7 +108,7 @@ pub(crate) fn resolve_stable_recovery_settle(
     owner_state: VideoSchedulingOwnerState,
     clean_anchor_epoch: Option<u64>,
     recovery_epoch: u64,
-    observed_at_ms: f64,
+    _observed_at_ms: f64,
     has_unresolved_transport_await_issue: bool,
 ) -> RecoveryRampResolution {
     if !matches!(
@@ -127,23 +127,95 @@ pub(crate) fn resolve_stable_recovery_settle(
     })
     .unwrap_or(false);
     let should_close_ramp_up = RuntimeStatsSink::read_shared(runtime_stats, |stats| {
-        if !stats.transport_recovery_episode_active {
-            return false;
-        }
-        let anchor_age_ms = stats
-            .video_anchor_clean_observed_at_ms
-            .map(|anchor_at_ms| (observed_at_ms - anchor_at_ms).max(0.0))
-            .unwrap_or(f64::INFINITY);
-        let pipeline_not_stalled = !stats.video_decoder_stalled.unwrap_or(false)
-            && !renderer_shadow_blocks_serviceability(stats, observed_at_ms);
-        pipeline_not_stalled
+        stats.transport_recovery_episode_active
+            && has_current_clean_anchor_from_stats(stats)
+            && clean_anchor_epoch.is_some_and(|epoch| epoch == stats.transport_recovery_epoch)
             && !has_unresolved_transport_await_issue
-            && has_fresh_media_output(stats, observed_at_ms)
-            && anchor_age_ms >= RECOVERY_RAMP_UP_LIGHT_SIGNAL_HOLD_MS
     })
     .unwrap_or(false);
     RecoveryRampResolution {
         should_acknowledge_clean_anchor,
         should_close_ramp_up,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Mutex;
+
+    use super::resolve_stable_recovery_settle;
+    use crate::transport::rtc::policy::video_scheduling_owner::VideoSchedulingOwnerState;
+    use crate::XbxEngineMediaRuntimeStats;
+
+    #[test]
+    fn stable_settle_closes_immediately_after_display_stable() {
+        let runtime_stats = Mutex::new(XbxEngineMediaRuntimeStats {
+            transport_recovery_episode_active: true,
+            transport_recovery_epoch: 3,
+            video_anchor_clean_epoch: Some(3),
+            video_anchor_clean_observed_at_ms: Some(2_590.0),
+            video_anchor_clean_source_event: Some("chain-clean-anchor-submitted".to_string()),
+            ..Default::default()
+        });
+
+        let resolution = resolve_stable_recovery_settle(
+            &runtime_stats,
+            VideoSchedulingOwnerState::StableServing,
+            Some(3),
+            3,
+            2_600.0,
+            false,
+        );
+
+        assert!(resolution.should_acknowledge_clean_anchor);
+        assert!(resolution.should_close_ramp_up);
+    }
+
+    #[test]
+    fn stable_settle_accepts_serving_state_without_extra_hold() {
+        let runtime_stats = Mutex::new(XbxEngineMediaRuntimeStats {
+            transport_recovery_episode_active: true,
+            transport_recovery_epoch: 3,
+            video_anchor_clean_epoch: Some(3),
+            video_anchor_clean_observed_at_ms: Some(1_000.0),
+            video_anchor_clean_source_event: Some("chain-clean-anchor-submitted".to_string()),
+            ..Default::default()
+        });
+
+        let resolution = resolve_stable_recovery_settle(
+            &runtime_stats,
+            VideoSchedulingOwnerState::StableServing,
+            Some(3),
+            3,
+            2_600.0,
+            false,
+        );
+
+        assert!(resolution.should_acknowledge_clean_anchor);
+        assert!(resolution.should_close_ramp_up);
+    }
+
+    #[test]
+    fn stable_settle_rejects_unresolved_transport_await() {
+        let runtime_stats = Mutex::new(XbxEngineMediaRuntimeStats {
+            transport_recovery_episode_active: true,
+            transport_recovery_epoch: 3,
+            video_anchor_clean_epoch: Some(3),
+            video_anchor_clean_observed_at_ms: Some(1_000.0),
+            video_anchor_clean_source_event: Some("chain-clean-anchor-submitted".to_string()),
+            ..Default::default()
+        });
+
+        let resolution = resolve_stable_recovery_settle(
+            &runtime_stats,
+            VideoSchedulingOwnerState::StableServing,
+            Some(3),
+            3,
+            2_600.0,
+            true,
+        );
+
+        assert!(resolution.should_acknowledge_clean_anchor);
+        assert!(!resolution.should_close_ramp_up);
     }
 }

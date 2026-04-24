@@ -567,6 +567,31 @@ fn display_supply_critical_does_not_stage_reconnect_candidate() {
 }
 
 #[test]
+fn host_present_stalled_with_fresh_transport_still_stays_out_of_reconnect() {
+    let runtime_config = Arc::new(Mutex::new(XbxEngineRuntimeConfig::default()));
+    let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
+    if let Ok(mut stats) = runtime_stats.lock() {
+        let now_ms = crate::transport::rtc::stats::now_ms_f64();
+        stats.host_no_pending_pressure_level = Some("critical".to_string());
+        stats.host_no_pending_streak = 320;
+        stats.latest_video_host_present_time_ms = Some(now_ms - 1_500.0);
+        stats.latest_video_decode_ok_time_ms = Some(now_ms - 900.0);
+        stats.latest_video_packet_arrival_time_ms = Some(now_ms - 10.0);
+        stats.video_rtt_ms = Some(55.0);
+        stats.video_renderer_stalled = Some(true);
+        stats.video_owner_reason = Some("hostPresentStalled".to_string());
+    }
+    let mut policy = RtcSessionPolicy::new(runtime_config, runtime_stats);
+    let mut snapshot = build_snapshot(ConnectionLifecycleStateFact::Connected, "none", 820.0);
+    snapshot.version = 2;
+    snapshot.recovery.last_observed_at_ms = Some(820.0);
+    let commands = transport_commands(policy.on_snapshot(&snapshot));
+    assert!(commands
+        .iter()
+        .all(|command| { !matches!(command, TransportCommand::RequestReconnectCandidate { .. }) }));
+}
+
+#[test]
 fn owner_does_not_enter_stable_serving_when_audio_only_and_no_pending_critical() {
     let runtime_config = Arc::new(Mutex::new(XbxEngineRuntimeConfig::default()));
     let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));

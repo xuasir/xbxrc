@@ -8,8 +8,10 @@ use crate::transport::rtc::recovery::runtime_state::{
 };
 use crate::transport::rtc::recovery::startup::SessionPhase;
 use crate::{
-    XbxEngineH264InspectionObservation, XbxEngineKeyframeRequestEpisodeObservation,
-    XbxEngineMediaRuntimeStats, XbxEngineRuntimeSnapshot,
+    XbxEngineFirstFrameLatencyObservation, XbxEngineH264InspectionObservation,
+    XbxEngineKeyframeRequestEpisodeObservation, XbxEngineMediaRuntimeStats,
+    XbxEnginePictureRecoveryBlockerObservation, XbxEnginePictureRecoveryTransitionObservation,
+    XbxEngineRuntimeSnapshot, XbxEngineVideoIngressTerminationObservation,
 };
 
 fn keyframe_request_episode_to_protocol_dto(
@@ -286,6 +288,99 @@ fn h264_inspection_dto_from_observation(
             bound_episode_status: observation.bound_episode_status.clone(),
             bound_as_recovery_response: observation.bound_as_recovery_response,
             bound_response_rtp_timestamp: observation.bound_response_rtp_timestamp,
+            bound_recovery_epoch: observation.bound_recovery_epoch,
+            episode_phase_at_observation: observation.episode_phase_at_observation.clone(),
+            is_post_recovery_degradation: observation.is_post_recovery_degradation,
+            reject_classification: observation.reject_classification.clone(),
+        },
+    )
+}
+
+fn picture_recovery_transition_dto_from_observation(
+    observation: Option<&XbxEnginePictureRecoveryTransitionObservation>,
+) -> Option<xbxengine_protocol::XbxEnginePictureRecoveryTransitionObservationDto> {
+    observation.map(|observation| {
+        xbxengine_protocol::XbxEnginePictureRecoveryTransitionObservationDto {
+            observation_id: observation.observation_id,
+            episode_id: observation.episode_id,
+            recovery_epoch: observation.recovery_epoch,
+            phase: observation.phase.clone(),
+            from_phase: observation.from_phase.clone(),
+            to_phase: observation.to_phase.clone(),
+            cause: observation.cause.clone(),
+            detail: observation.detail.clone(),
+            rtp_timestamp: observation.rtp_timestamp,
+            frame_seq: observation.frame_seq,
+            owner_state: observation.owner_state.clone(),
+            transport_state: observation.transport_state.clone(),
+            observed_at_ms: observation.observed_at_ms,
+        }
+    })
+}
+
+fn picture_recovery_blocker_dto_from_observation(
+    observation: Option<&XbxEnginePictureRecoveryBlockerObservation>,
+) -> Option<xbxengine_protocol::XbxEnginePictureRecoveryBlockerObservationDto> {
+    observation.map(|observation| {
+        xbxengine_protocol::XbxEnginePictureRecoveryBlockerObservationDto {
+            observation_id: observation.observation_id,
+            episode_id: observation.episode_id,
+            recovery_epoch: observation.recovery_epoch,
+            gate: observation.gate.clone(),
+            blocker_kind: observation.blocker_kind.clone(),
+            severity: observation.severity.clone(),
+            first_observed_at_ms: observation.first_observed_at_ms,
+            observed_at_ms: observation.observed_at_ms,
+            count: observation.count,
+            frame_rtp_timestamp: observation.frame_rtp_timestamp,
+            frame_seq: observation.frame_seq,
+            owner_state: observation.owner_state.clone(),
+            transport_state: observation.transport_state.clone(),
+        }
+    })
+}
+
+fn video_ingress_termination_dto_from_observation(
+    observation: Option<&XbxEngineVideoIngressTerminationObservation>,
+) -> Option<xbxengine_protocol::XbxEngineVideoIngressTerminationObservationDto> {
+    observation.map(|observation| {
+        xbxengine_protocol::XbxEngineVideoIngressTerminationObservationDto {
+            observation_id: observation.observation_id,
+            termination_id: observation.termination_id,
+            derived_from_termination_id: observation.derived_from_termination_id,
+            kind: observation.kind.clone(),
+            cause: observation.cause.clone(),
+            upstream_cause: observation.upstream_cause.clone(),
+            source_subsystem: observation.source_subsystem.clone(),
+            linked_recovery_epoch: observation.linked_recovery_epoch,
+            linked_episode_id: observation.linked_episode_id,
+            transport_state: observation.transport_state.clone(),
+            owner_state: observation.owner_state.clone(),
+            video_track_state: observation.video_track_state.clone(),
+            recent_command: observation.recent_command.clone(),
+            observed_at_ms: observation.observed_at_ms,
+        }
+    })
+}
+
+fn first_frame_latency_dto_from_observation(
+    observation: Option<&XbxEngineFirstFrameLatencyObservation>,
+) -> Option<xbxengine_protocol::XbxEngineFirstFrameLatencyObservationDto> {
+    observation.map(
+        |observation| xbxengine_protocol::XbxEngineFirstFrameLatencyObservationDto {
+            observation_id: observation.observation_id,
+            episode_id: observation.episode_id,
+            recovery_epoch: observation.recovery_epoch,
+            control_ready_to_pli_sent_ms: observation.control_ready_to_pli_sent_ms,
+            pli_sent_to_first_idr_packet_ms: observation.pli_sent_to_first_idr_packet_ms,
+            first_idr_packet_to_first_decode_ms: observation.first_idr_packet_to_first_decode_ms,
+            first_decode_to_clean_anchor_committed_ms: observation
+                .first_decode_to_clean_anchor_committed_ms,
+            clean_anchor_committed_to_display_stable_ms: observation
+                .clean_anchor_committed_to_display_stable_ms,
+            terminal_phase: observation.terminal_phase.clone(),
+            incomplete_reason: observation.incomplete_reason.clone(),
+            observed_at_ms: observation.observed_at_ms,
         },
     )
 }
@@ -944,6 +1039,28 @@ pub fn build_xbxengine_stats(
             .unwrap_or_default(),
         latest_h264_inspection_observation: runtime_stats.and_then(|stats| {
             h264_inspection_dto_from_observation(stats.latest_h264_inspection_observation.as_ref())
+        }),
+        latest_picture_recovery_transition_observation: runtime_stats.and_then(|stats| {
+            picture_recovery_transition_dto_from_observation(
+                stats
+                    .latest_picture_recovery_transition_observation
+                    .as_ref(),
+            )
+        }),
+        latest_picture_recovery_blocker_observation: runtime_stats.and_then(|stats| {
+            picture_recovery_blocker_dto_from_observation(
+                stats.latest_picture_recovery_blocker_observation.as_ref(),
+            )
+        }),
+        latest_video_ingress_termination_observation: runtime_stats.and_then(|stats| {
+            video_ingress_termination_dto_from_observation(
+                stats.latest_video_ingress_termination_observation.as_ref(),
+            )
+        }),
+        latest_first_frame_latency_observation: runtime_stats.and_then(|stats| {
+            first_frame_latency_dto_from_observation(
+                stats.latest_first_frame_latency_observation.as_ref(),
+            )
         }),
         recovery_keyframe_request_count: Some(snapshot.recovery_keyframe_request_count),
         recovery_decoder_reset_count: Some(snapshot.recovery_decoder_reset_count),

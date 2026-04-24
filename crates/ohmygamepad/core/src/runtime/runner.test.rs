@@ -367,7 +367,12 @@ fn runtime_snapshot_subscription_respects_ui_push_rate() {
     config.sampling.backend_poll_rate_hz = 500;
     config.sampling.logical_pad_sample_rate_hz = 500;
     config.sampling.ui_push_rate_hz = 5;
-    let runtime = spawn_input_runtime(config, backend, ThreadSafeUiSink::default(), ThreadSafeStreamSink);
+    let runtime = spawn_input_runtime(
+        config,
+        backend,
+        ThreadSafeUiSink::default(),
+        ThreadSafeStreamSink,
+    );
     let snapshot_rx = runtime.subscribe_runtime_snapshot();
 
     let started_at = Instant::now();

@@ -118,6 +118,7 @@ pub struct RtcVideoFrameSource {
     ingress_budget_fallback_count: u64,
     ingress_budget_unknown_rtt_count: u64,
     frame_boundary: Arc<Mutex<FrameBoundaryTracker>>,
+    last_consumed_clean_anchor_epoch: u64,
 }
 
 const SOURCE_SERVICEABLE_DECODE_MAX_AGE_MS: f64 = 180.0;
@@ -219,6 +220,7 @@ impl RtcVideoFrameSource {
             ingress_budget_fallback_count: 0,
             ingress_budget_unknown_rtt_count: 0,
             frame_boundary: Arc::new(Mutex::new(FrameBoundaryTracker::new())),
+            last_consumed_clean_anchor_epoch: 0,
         }
     }
 

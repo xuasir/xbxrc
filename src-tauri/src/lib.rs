@@ -54,17 +54,17 @@ pub fn run() {
                         // 这里不能再把失焦直接等同于手柄采样应暂停，否则会把 UI / 串流输入一起挂掉。
                         if *focused {
                             if let Err(e) = app_state.gamepad.set_suspended(false) {
-                                log::warn!(
-                                    "Failed to resume gamepad after focus regained: {}",
-                                    e
-                                );
+                                log::warn!("Failed to resume gamepad after focus regained: {}", e);
                             }
                         }
                     }
                     #[cfg(not(target_os = "windows"))]
                     {
                         if let Err(e) = app_state.gamepad.set_suspended(!focused) {
-                            log::warn!("Failed to toggle gamepad suspension on focus change: {}", e);
+                            log::warn!(
+                                "Failed to toggle gamepad suspension on focus change: {}",
+                                e
+                            );
                         }
                     }
                 }

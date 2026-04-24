@@ -596,6 +596,81 @@ pub struct XbxEngineH264InspectionObservationDto {
     pub bound_as_recovery_response: Option<bool>,
     #[serde(default)]
     pub bound_response_rtp_timestamp: Option<u32>,
+    #[serde(default)]
+    pub bound_recovery_epoch: Option<u64>,
+    #[serde(default)]
+    pub episode_phase_at_observation: Option<String>,
+    #[serde(default)]
+    pub is_post_recovery_degradation: Option<bool>,
+    #[serde(default)]
+    pub reject_classification: Option<String>,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct XbxEnginePictureRecoveryTransitionObservationDto {
+    pub observation_id: u64,
+    pub episode_id: Option<u64>,
+    pub recovery_epoch: Option<u64>,
+    pub phase: String,
+    pub from_phase: Option<String>,
+    pub to_phase: String,
+    pub cause: Option<String>,
+    pub detail: Option<String>,
+    pub rtp_timestamp: Option<u32>,
+    pub frame_seq: Option<u64>,
+    pub owner_state: Option<String>,
+    pub transport_state: Option<String>,
+    pub observed_at_ms: f64,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct XbxEnginePictureRecoveryBlockerObservationDto {
+    pub observation_id: u64,
+    pub episode_id: Option<u64>,
+    pub recovery_epoch: Option<u64>,
+    pub gate: String,
+    pub blocker_kind: String,
+    pub severity: String,
+    pub first_observed_at_ms: f64,
+    pub observed_at_ms: f64,
+    pub count: u32,
+    pub frame_rtp_timestamp: Option<u32>,
+    pub frame_seq: Option<u64>,
+    pub owner_state: Option<String>,
+    pub transport_state: Option<String>,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct XbxEngineVideoIngressTerminationObservationDto {
+    pub observation_id: u64,
+    pub termination_id: u64,
+    pub derived_from_termination_id: Option<u64>,
+    pub kind: String,
+    pub cause: String,
+    pub upstream_cause: Option<String>,
+    pub source_subsystem: Option<String>,
+    pub linked_recovery_epoch: Option<u64>,
+    pub linked_episode_id: Option<u64>,
+    pub transport_state: Option<String>,
+    pub owner_state: Option<String>,
+    pub video_track_state: Option<String>,
+    pub recent_command: Option<String>,
+    pub observed_at_ms: f64,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct XbxEngineFirstFrameLatencyObservationDto {
+    pub observation_id: u64,
+    pub episode_id: Option<u64>,
+    pub recovery_epoch: Option<u64>,
+    pub control_ready_to_pli_sent_ms: Option<f64>,
+    pub pli_sent_to_first_idr_packet_ms: Option<f64>,
+    pub first_idr_packet_to_first_decode_ms: Option<f64>,
+    pub first_decode_to_clean_anchor_committed_ms: Option<f64>,
+    pub clean_anchor_committed_to_display_stable_ms: Option<f64>,
+    pub terminal_phase: Option<String>,
+    pub incomplete_reason: Option<String>,
+    pub observed_at_ms: f64,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -734,6 +809,17 @@ pub struct XbxEngineStatsDto {
     #[serde(default)]
     pub recent_keyframe_request_episodes: Vec<XbxEngineKeyframeRequestEpisodeObservationDto>,
     pub latest_h264_inspection_observation: Option<XbxEngineH264InspectionObservationDto>,
+    #[serde(default)]
+    pub latest_picture_recovery_transition_observation:
+        Option<XbxEnginePictureRecoveryTransitionObservationDto>,
+    #[serde(default)]
+    pub latest_picture_recovery_blocker_observation:
+        Option<XbxEnginePictureRecoveryBlockerObservationDto>,
+    #[serde(default)]
+    pub latest_video_ingress_termination_observation:
+        Option<XbxEngineVideoIngressTerminationObservationDto>,
+    #[serde(default)]
+    pub latest_first_frame_latency_observation: Option<XbxEngineFirstFrameLatencyObservationDto>,
     pub recovery_keyframe_request_count: Option<u64>,
     pub recovery_decoder_reset_count: Option<u64>,
     pub recovery_reconnect_count: Option<u64>,

@@ -348,6 +348,10 @@ def chain_transition_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return [row for row in rows if event_payload(row, "videoChainTransition") is not None]
 
 
+def rows_for_event(rows: list[dict[str, Any]], event_name: str) -> list[dict[str, Any]]:
+    return [row for row in rows if event_payload(row, event_name) is not None]
+
+
 def is_keyframe_related_ledger(payload: dict[str, Any]) -> bool:
     haystacks = [
         get_text(payload, "inputSignal", "input_signal"),
@@ -414,6 +418,15 @@ def collect_connecting_windows(rows: list[dict[str, Any]]) -> list[tuple[int, in
 
 def analyze_recovery_audit(rows: list[dict[str, Any]], silence_threshold_ms: int) -> dict[str, Any]:
     sorted_rows = sorted(rows, key=lambda item: (row_ts(item) or 0, row_seq(item) or 0))
+    picture_recovery_transitions = rows_for_event(sorted_rows, "pictureRecoveryTransition")
+    picture_recovery_blockers = rows_for_event(sorted_rows, "pictureRecoveryBlockerObserved")
+    video_ingress_terminations = rows_for_event(sorted_rows, "videoIngressTermination")
+    first_frame_latencies = rows_for_event(sorted_rows, "firstFrameLatencyObserved")
+    h264_inspection_rows = [
+        row
+        for row in sorted_rows
+        if str(row.get("event", "")) in {"h264InspectionObserved", "h264InspectionRejected"}
+    ]
     ledger_rows: list[dict[str, Any]] = []
     ledger_times: list[int] = []
     failed_terminal_entries: list[dict[str, Any]] = []
@@ -542,6 +555,175 @@ def analyze_recovery_audit(rows: list[dict[str, Any]], silence_threshold_ms: int
                 "unlockTsMs": unlock_ts_ms,
                 "unlockKind": unlock_kind,
                 "detail": detail,
+            }
+        )
+
+    transition_phase_counts: Counter[str] = Counter()
+    transition_to_phase_counts: Counter[str] = Counter()
+    transition_cause_counts: Counter[str] = Counter()
+    transition_samples: list[dict[str, Any]] = []
+    for row in picture_recovery_transitions:
+        payload = event_payload(row, "pictureRecoveryTransition")
+        if payload is None:
+            continue
+        phase = get_text(payload, "phase") or "unknown"
+        to_phase = get_text(payload, "toPhase", "to_phase") or "unknown"
+        cause = get_text(payload, "cause") or "unknown"
+        transition_phase_counts[phase] += 1
+        transition_to_phase_counts[to_phase] += 1
+        transition_cause_counts[cause] += 1
+        transition_samples.append(
+            {
+                "seq": row_seq(row),
+                "tsMs": row_ts(row),
+                "episodeId": get_int(payload, "episodeId", "episode_id"),
+                "recoveryEpoch": get_int(payload, "recoveryEpoch", "recovery_epoch"),
+                "phase": phase,
+                "fromPhase": get_text(payload, "fromPhase", "from_phase"),
+                "toPhase": to_phase,
+                "cause": cause,
+                "detail": get_text(payload, "detail"),
+                "ownerState": get_text(payload, "ownerState", "owner_state"),
+                "transportState": get_text(payload, "transportState", "transport_state"),
+            }
+        )
+
+    blocker_gate_counts: Counter[str] = Counter()
+    blocker_kind_counts: Counter[str] = Counter()
+    blocker_severity_counts: Counter[str] = Counter()
+    blocker_samples: list[dict[str, Any]] = []
+    for row in picture_recovery_blockers:
+        payload = event_payload(row, "pictureRecoveryBlockerObserved")
+        if payload is None:
+            continue
+        gate = get_text(payload, "gate") or "unknown"
+        blocker_kind = get_text(payload, "blockerKind", "blocker_kind") or "unknown"
+        severity = get_text(payload, "severity") or "unknown"
+        blocker_gate_counts[gate] += 1
+        blocker_kind_counts[blocker_kind] += 1
+        blocker_severity_counts[severity] += 1
+        blocker_samples.append(
+            {
+                "seq": row_seq(row),
+                "tsMs": row_ts(row),
+                "episodeId": get_int(payload, "episodeId", "episode_id"),
+                "recoveryEpoch": get_int(payload, "recoveryEpoch", "recovery_epoch"),
+                "gate": gate,
+                "blockerKind": blocker_kind,
+                "severity": severity,
+                "firstObservedAtMs": get_int(payload, "firstObservedAtMs", "first_observed_at_ms"),
+                "count": get_int(payload, "count"),
+                "ownerState": get_text(payload, "ownerState", "owner_state"),
+                "transportState": get_text(payload, "transportState", "transport_state"),
+            }
+        )
+
+    ingress_kind_counts: Counter[str] = Counter()
+    ingress_cause_counts: Counter[str] = Counter()
+    ingress_upstream_cause_counts: Counter[str] = Counter()
+    ingress_samples: list[dict[str, Any]] = []
+    for row in video_ingress_terminations:
+        payload = event_payload(row, "videoIngressTermination")
+        if payload is None:
+            continue
+        kind = get_text(payload, "kind") or "unknown"
+        cause = get_text(payload, "cause") or "unknown"
+        upstream_cause = get_text(payload, "upstreamCause", "upstream_cause") or "unknown"
+        ingress_kind_counts[kind] += 1
+        ingress_cause_counts[cause] += 1
+        ingress_upstream_cause_counts[upstream_cause] += 1
+        ingress_samples.append(
+            {
+                "seq": row_seq(row),
+                "tsMs": row_ts(row),
+                "terminationId": get_int(payload, "terminationId", "termination_id"),
+                "derivedFromTerminationId": get_int(
+                    payload, "derivedFromTerminationId", "derived_from_termination_id"
+                ),
+                "kind": kind,
+                "cause": cause,
+                "upstreamCause": upstream_cause,
+                "sourceSubsystem": get_text(payload, "sourceSubsystem", "source_subsystem"),
+                "linkedRecoveryEpoch": get_int(payload, "linkedRecoveryEpoch", "linked_recovery_epoch"),
+                "linkedEpisodeId": get_int(payload, "linkedEpisodeId", "linked_episode_id"),
+                "ownerState": get_text(payload, "ownerState", "owner_state"),
+                "transportState": get_text(payload, "transportState", "transport_state"),
+            }
+        )
+
+    first_frame_terminal_phase_counts: Counter[str] = Counter()
+    first_frame_incomplete_reason_counts: Counter[str] = Counter()
+    first_frame_samples: list[dict[str, Any]] = []
+    for row in first_frame_latencies:
+        payload = event_payload(row, "firstFrameLatencyObserved")
+        if payload is None:
+            continue
+        terminal_phase = get_text(payload, "terminalPhase", "terminal_phase") or "unknown"
+        incomplete_reason = get_text(payload, "incompleteReason", "incomplete_reason")
+        first_frame_terminal_phase_counts[terminal_phase] += 1
+        if incomplete_reason:
+            first_frame_incomplete_reason_counts[incomplete_reason] += 1
+        first_frame_samples.append(
+            {
+                "seq": row_seq(row),
+                "tsMs": row_ts(row),
+                "episodeId": get_int(payload, "episodeId", "episode_id"),
+                "recoveryEpoch": get_int(payload, "recoveryEpoch", "recovery_epoch"),
+                "controlReadyToPliSentMs": get_number(
+                    payload, "controlReadyToPliSentMs", "control_ready_to_pli_sent_ms"
+                ),
+                "pliSentToFirstIdrPacketMs": get_number(
+                    payload, "pliSentToFirstIdrPacketMs", "pli_sent_to_first_idr_packet_ms"
+                ),
+                "firstIdrPacketToFirstDecodeMs": get_number(
+                    payload, "firstIdrPacketToFirstDecodeMs", "first_idr_packet_to_first_decode_ms"
+                ),
+                "firstDecodeToCleanAnchorCommittedMs": get_number(
+                    payload,
+                    "firstDecodeToCleanAnchorCommittedMs",
+                    "first_decode_to_clean_anchor_committed_ms",
+                ),
+                "cleanAnchorCommittedToDisplayStableMs": get_number(
+                    payload,
+                    "cleanAnchorCommittedToDisplayStableMs",
+                    "clean_anchor_committed_to_display_stable_ms",
+                ),
+                "terminalPhase": terminal_phase,
+                "incompleteReason": incomplete_reason,
+            }
+        )
+
+    h264_reject_classification_counts: Counter[str] = Counter()
+    h264_post_recovery_degradation_count = 0
+    h264_samples: list[dict[str, Any]] = []
+    for row in h264_inspection_rows:
+        payload = row.get("payload")
+        if not isinstance(payload, dict):
+            continue
+        reject_classification = get_text(payload, "rejectClassification", "reject_classification")
+        if reject_classification:
+            h264_reject_classification_counts[reject_classification] += 1
+        if payload_get(payload, "isPostRecoveryDegradation", "is_post_recovery_degradation") is True:
+            h264_post_recovery_degradation_count += 1
+        h264_samples.append(
+            {
+                "seq": row_seq(row),
+                "tsMs": row_ts(row),
+                "event": row.get("event"),
+                "boundEpisodeId": get_int(payload, "boundEpisodeId", "bound_episode_id"),
+                "boundRecoveryEpoch": get_int(payload, "boundRecoveryEpoch", "bound_recovery_epoch"),
+                "episodePhaseAtObservation": get_text(
+                    payload, "episodePhaseAtObservation", "episode_phase_at_observation"
+                ),
+                "admissionAccepted": payload_get(payload, "admissionAccepted", "admission_accepted"),
+                "isIdr": payload_get(payload, "isIdr", "is_idr"),
+                "bootstrapRejectReason": get_text(
+                    payload, "bootstrapRejectReason", "bootstrap_reject_reason"
+                ),
+                "rejectClassification": reject_classification,
+                "isPostRecoveryDegradation": payload_get(
+                    payload, "isPostRecoveryDegradation", "is_post_recovery_degradation"
+                ),
             }
         )
 
@@ -907,6 +1089,41 @@ def analyze_recovery_audit(rows: list[dict[str, Any]], silence_threshold_ms: int
     )
 
     return {
+        "structuredRecoveryTrace": {
+            "pictureRecoveryTransition": {
+                "count": len(transition_samples),
+                "phaseCounts": dict(transition_phase_counts),
+                "toPhaseCounts": dict(transition_to_phase_counts),
+                "causeCounts": dict(transition_cause_counts),
+                "events": transition_samples,
+            },
+            "pictureRecoveryBlockerObserved": {
+                "count": len(blocker_samples),
+                "gateCounts": dict(blocker_gate_counts),
+                "blockerKindCounts": dict(blocker_kind_counts),
+                "severityCounts": dict(blocker_severity_counts),
+                "events": blocker_samples,
+            },
+            "videoIngressTermination": {
+                "count": len(ingress_samples),
+                "kindCounts": dict(ingress_kind_counts),
+                "causeCounts": dict(ingress_cause_counts),
+                "upstreamCauseCounts": dict(ingress_upstream_cause_counts),
+                "events": ingress_samples,
+            },
+            "firstFrameLatencyObserved": {
+                "count": len(first_frame_samples),
+                "terminalPhaseCounts": dict(first_frame_terminal_phase_counts),
+                "incompleteReasonCounts": dict(first_frame_incomplete_reason_counts),
+                "events": first_frame_samples,
+            },
+            "h264InspectionObserved": {
+                "count": len(h264_samples),
+                "rejectClassificationCounts": dict(h264_reject_classification_counts),
+                "postRecoveryDegradationCount": h264_post_recovery_degradation_count,
+                "events": h264_samples,
+            },
+        },
         "recoveryLedgerRows": len(ledger_rows),
         "connectingWindows": len(connecting_windows),
         "silenceThresholdMs": silence_threshold_ms,
@@ -1462,6 +1679,109 @@ def print_clusters(clusters: list[ClusterWindow], limit: int, sample_limit: int)
 def print_recovery_audit(profile: TraceProfile, sample_limit: int) -> None:
     audit = profile.recovery_audit
     print("\nrecovery_audit:")
+    structured = audit["structuredRecoveryTrace"]
+    transitions = structured["pictureRecoveryTransition"]
+    transition_to_phase_text = ", ".join(
+        f"{name}={count}" for name, count in sorted(transitions["toPhaseCounts"].items())
+    ) or "none"
+    transition_cause_text = ", ".join(
+        f"{name}={count}" for name, count in sorted(transitions["causeCounts"].items())
+    ) or "none"
+    print("  - picture_recovery_transition:")
+    print(
+        "    - "
+        f"events={transitions['count']} to_phases={transition_to_phase_text} "
+        f"causes={transition_cause_text}"
+    )
+    for item in transitions["events"][:sample_limit]:
+        print(
+            "    - "
+            f"seq={item['seq']} tsMs={item['tsMs']} episode={item['episodeId']} "
+            f"epoch={item['recoveryEpoch']} phase={item['fromPhase']}->{item['toPhase']} "
+            f"cause={item['cause']} detail={item['detail']}"
+        )
+    blockers = structured["pictureRecoveryBlockerObserved"]
+    blocker_gate_text = ", ".join(
+        f"{name}={count}" for name, count in sorted(blockers["gateCounts"].items())
+    ) or "none"
+    blocker_kind_text = ", ".join(
+        f"{name}={count}" for name, count in sorted(blockers["blockerKindCounts"].items())
+    ) or "none"
+    print("  - picture_recovery_blocker_observed:")
+    print(
+        "    - "
+        f"events={blockers['count']} gates={blocker_gate_text} blocker_kinds={blocker_kind_text}"
+    )
+    for item in blockers["events"][:sample_limit]:
+        print(
+            "    - "
+            f"seq={item['seq']} tsMs={item['tsMs']} episode={item['episodeId']} "
+            f"epoch={item['recoveryEpoch']} gate={item['gate']} blocker={item['blockerKind']} "
+            f"severity={item['severity']} first_seen={item['firstObservedAtMs']} count={item['count']}"
+        )
+    ingress = structured["videoIngressTermination"]
+    ingress_cause_text = ", ".join(
+        f"{name}={count}" for name, count in sorted(ingress["causeCounts"].items())
+    ) or "none"
+    ingress_upstream_text = ", ".join(
+        f"{name}={count}" for name, count in sorted(ingress["upstreamCauseCounts"].items())
+    ) or "none"
+    print("  - video_ingress_termination:")
+    print(
+        "    - "
+        f"events={ingress['count']} causes={ingress_cause_text} upstream_causes={ingress_upstream_text}"
+    )
+    for item in ingress["events"][:sample_limit]:
+        print(
+            "    - "
+            f"seq={item['seq']} tsMs={item['tsMs']} termination={item['terminationId']} "
+            f"derived_from={item['derivedFromTerminationId']} kind={item['kind']} "
+            f"cause={item['cause']} upstream={item['upstreamCause']} "
+            f"epoch={item['linkedRecoveryEpoch']} episode={item['linkedEpisodeId']}"
+        )
+    first_frame = structured["firstFrameLatencyObserved"]
+    first_frame_terminal_text = ", ".join(
+        f"{name}={count}" for name, count in sorted(first_frame["terminalPhaseCounts"].items())
+    ) or "none"
+    first_frame_incomplete_text = ", ".join(
+        f"{name}={count}" for name, count in sorted(first_frame["incompleteReasonCounts"].items())
+    ) or "none"
+    print("  - first_frame_latency_observed:")
+    print(
+        "    - "
+        f"events={first_frame['count']} terminal_phases={first_frame_terminal_text} "
+        f"incomplete_reasons={first_frame_incomplete_text}"
+    )
+    for item in first_frame["events"][:sample_limit]:
+        print(
+            "    - "
+            f"seq={item['seq']} tsMs={item['tsMs']} episode={item['episodeId']} "
+            f"epoch={item['recoveryEpoch']} control_to_pli={item['controlReadyToPliSentMs']} "
+            f"pli_to_idr={item['pliSentToFirstIdrPacketMs']} "
+            f"idr_to_decode={item['firstIdrPacketToFirstDecodeMs']} "
+            f"decode_to_clean_anchor={item['firstDecodeToCleanAnchorCommittedMs']} "
+            f"clean_anchor_to_display={item['cleanAnchorCommittedToDisplayStableMs']} "
+            f"terminal={item['terminalPhase']} incomplete={item['incompleteReason']}"
+        )
+    h264 = structured["h264InspectionObserved"]
+    h264_reject_text = ", ".join(
+        f"{name}={count}" for name, count in sorted(h264["rejectClassificationCounts"].items())
+    ) or "none"
+    print("  - h264_inspection_observed:")
+    print(
+        "    - "
+        f"events={h264['count']} reject_classification={h264_reject_text} "
+        f"post_recovery_degradation={h264['postRecoveryDegradationCount']}"
+    )
+    for item in h264["events"][:sample_limit]:
+        print(
+            "    - "
+            f"seq={item['seq']} tsMs={item['tsMs']} event={item['event']} "
+            f"episode={item['boundEpisodeId']} epoch={item['boundRecoveryEpoch']} "
+            f"phase={item['episodePhaseAtObservation']} admission={item['admissionAccepted']} "
+            f"is_idr={item['isIdr']} reject={item['rejectClassification']} "
+            f"bootstrap={item['bootstrapRejectReason']} post_recovery_degradation={item['isPostRecoveryDegradation']}"
+        )
     print(
         "  - "
         f"ledger_rows={audit['recoveryLedgerRows']} "

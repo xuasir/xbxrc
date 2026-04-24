@@ -344,7 +344,12 @@ where
         applied = true;
     }
     if applied {
-        publish_runtime_snapshot(snapshot_broadcaster, publish_state, core.runtime_snapshot(), now);
+        publish_runtime_snapshot(
+            snapshot_broadcaster,
+            publish_state,
+            core.runtime_snapshot(),
+            now,
+        );
     }
     applied
 }

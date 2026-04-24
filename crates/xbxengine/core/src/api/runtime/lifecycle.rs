@@ -27,6 +27,7 @@ const ICE_EXCHANGE_STABLE_SETTLE_WINDOW_MS: f64 = 1_500.0;
 const ICE_EXCHANGE_IDLE_BACKOFF_MS: u64 = 60;
 const TRANSPORT_RECONNECT_CANDIDATE_MIN_INTERVAL_MS: f64 = 6_000.0;
 const RECONNECT_SETTLED_KEYFRAME_MIN_INTERVAL_MS: f64 = 800.0;
+const HOST_STALL_RESET_FRESH_OUTPUT_GUARD_MS: f64 = 300.0;
 
 impl<THostBridge, TEventSink, TMediaBackend>
     XbxEngineRuntime<THostBridge, TEventSink, TMediaBackend>
@@ -287,10 +288,59 @@ where
         ) {
             return;
         }
+        // 仅在 host present 已经进入运行态后才允许 host-stall 自愈重置。
+        // presenter reset 会把 epoch 清零，因此在 `displayTickEpoch/presentEpoch` 已归零后继续 reset
+        // 只会把窗口反复打回未启动状态。
+        if owner_reason == Some("hostPresentStalled")
+            && (runtime_stats.host_display_tick_epoch == 0
+                || runtime_stats.video_present_epoch == 0)
+        {
+            self.snapshot.last_recovery_reason =
+                Some("hostPresentStalled:presentLoopNotRunning".to_string());
+            return;
+        }
         if matches!(self.state, XbxEngineRuntimeState::Reconnecting) {
             return;
         }
         let now = now_ms_f64();
+        self.update_host_stall_renderer_submit_guard(runtime_stats, now);
+        if owner_reason == Some("hostPresentStalled") {
+            if self
+                .health
+                .last_renderer_submit_advanced_at_ms
+                .is_some_and(|last| (now - last).max(0.0) < HOST_STALL_RESET_FRESH_OUTPUT_GUARD_MS)
+            {
+                self.snapshot.last_recovery_reason =
+                    Some("hostPresentStalled:resetDeferred:freshRendererSubmit".to_string());
+                return;
+            }
+            if self
+                .snapshot
+                .host_present_latest_render_slot_at_ms
+                .is_some_and(|last| (now - last).max(0.0) < HOST_STALL_RESET_FRESH_OUTPUT_GUARD_MS)
+            {
+                self.snapshot.last_recovery_reason =
+                    Some("hostPresentStalled:resetDeferred:freshHostRenderSlot".to_string());
+                return;
+            }
+            if self
+                .snapshot
+                .frame_decoded_time_ms
+                .is_some_and(|last| (now - last).max(0.0) < HOST_STALL_RESET_FRESH_OUTPUT_GUARD_MS)
+            {
+                self.snapshot.last_recovery_reason =
+                    Some("hostPresentStalled:resetDeferred:freshDecode".to_string());
+                return;
+            }
+            if runtime_stats
+                .video_anchor_clean_observed_at_ms
+                .is_some_and(|last| (now - last).max(0.0) < HOST_STALL_RESET_FRESH_OUTPUT_GUARD_MS)
+            {
+                self.snapshot.last_recovery_reason =
+                    Some("hostPresentStalled:resetDeferred:freshCleanAnchor".to_string());
+                return;
+            }
+        }
         const COOLDOWN_MS: f64 = 2_500.0;
         if self
             .health
@@ -330,6 +380,20 @@ where
             self.health.last_native_presenter_reset_display_tick_epoch =
                 Some(runtime_stats.host_display_tick_epoch);
         }
+    }
+
+    fn update_host_stall_renderer_submit_guard(
+        &mut self,
+        runtime_stats: &crate::XbxEngineMediaRuntimeStats,
+        now_ms: f64,
+    ) {
+        if runtime_stats.video_renderer_submit_count_total
+            > self.health.last_renderer_submit_count_total
+        {
+            self.health.last_renderer_submit_advanced_at_ms = Some(now_ms);
+        }
+        self.health.last_renderer_submit_count_total =
+            runtime_stats.video_renderer_submit_count_total;
     }
 
     fn maybe_consume_pending_runtime_recovery_action(
@@ -467,6 +531,27 @@ where
                     let alignment_gap_ms = (present_at_ms - decode_ok_at_ms).abs();
                     stall_age_ms <= STALL_SIGNAL_STABILITY_MS && alignment_gap_ms <= 20.0
                 });
+        let local_media_backpressure_active = runtime_stats
+            .latest_decode_candidate_decision
+            .as_ref()
+            .is_some_and(|decision| {
+                matches!(
+                    decision.detail.as_str(),
+                    "staleAfterDecode" | "outputQueueOverflow"
+                )
+            })
+            || runtime_stats
+                .latest_video_frame_drop
+                .as_ref()
+                .is_some_and(|drop| {
+                    drop.detail.as_deref().is_some_and(|detail| {
+                        matches!(detail, "staleAfterDecode" | "outputQueueOverflow")
+                    })
+                })
+            || matches!(
+                runtime_stats.video_owner_reason.as_deref(),
+                Some("hostPresentStalled" | "displaySupplyCritical" | "displaySupplyDegraded")
+            );
         let signals = XbxEngineRecoverySignals {
             transport: XbxEngineTransportSignal {
                 transport_connected: runtime_stats.transport_state
@@ -529,6 +614,7 @@ where
                 decoder_stalled: runtime_stats.video_decoder_stalled,
                 render_stalled: Some(renderer_stall_blocks_runtime_recovery),
                 allow_decoder_reset: true,
+                local_media_backpressure_active,
             },
         };
 

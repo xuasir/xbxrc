@@ -207,6 +207,31 @@ pub(super) fn detect_forward_gap(
 }
 
 impl RtcVideoFrameSource {
+    fn maybe_ack_clean_anchor_commit_from_runtime_stats(&mut self) {
+        let committed_current_epoch = self.runtime_stats.read(|stats| {
+            let current_epoch = stats.transport_recovery_epoch;
+            let clean_anchor_epoch = stats.video_anchor_clean_epoch;
+            let clean_anchor_source_event = stats.video_anchor_clean_source_event.as_deref();
+            (
+                current_epoch,
+                clean_anchor_epoch == Some(current_epoch)
+                    && clean_anchor_source_event == Some("chain-clean-anchor-submitted"),
+            )
+        });
+        let Some((current_epoch, committed_current_epoch)) = committed_current_epoch else {
+            return;
+        };
+        if !committed_current_epoch || current_epoch == self.last_consumed_clean_anchor_epoch {
+            return;
+        }
+        if self
+            .timeline_state
+            .ack_pending_clean_anchor_stats_committed()
+        {
+            self.last_consumed_clean_anchor_epoch = current_epoch;
+        }
+    }
+
     async fn handle_drop_and_request_keyframe_action(
         &mut self,
         sample_rtp_timestamp: u32,
@@ -855,6 +880,7 @@ impl RtcVideoFrameSource {
         }
     }
 
+    #[cfg(test)]
     fn record_clean_anchor(&self, observed_at_ms: f64) {
         self.runtime_stats
             .record_transport_clean_anchor(observed_at_ms, "chain-clean-anchor-submitted");
@@ -1165,7 +1191,9 @@ impl RtcVideoFrameSource {
     fn update_dynamic_nack_skip_last_n(&mut self, now_ms: f64) {
         if self
             .last_nack_skip_last_n_updated_at_ms
-            .is_some_and(|last_ms| (now_ms - last_ms).max(0.0) < OOS_SKIP_LAST_N_REFRESH_INTERVAL_MS)
+            .is_some_and(|last_ms| {
+                (now_ms - last_ms).max(0.0) < OOS_SKIP_LAST_N_REFRESH_INTERVAL_MS
+            })
         {
             return;
         }
@@ -1244,6 +1272,7 @@ impl RtcVideoFrameSource {
 
     pub(super) async fn recv_frame_inner(&mut self) -> Option<AssembledVideoFrame> {
         loop {
+            self.maybe_ack_clean_anchor_commit_from_runtime_stats();
             if self.should_run_nack_maintenance_tick() {
                 self.maybe_run_nack_maintenance().await;
             }
@@ -1635,24 +1664,6 @@ impl RtcVideoFrameSource {
                     Some(sample.packet_timestamp),
                     frame_now_ms,
                 );
-                if is_keyframe && media_dropped_packets == 0 {
-                    let should_rearm_clean_anchor = self
-                        .runtime_stats
-                        .read(Self::should_rearm_clean_anchor_for_transport_await)
-                        .unwrap_or(false);
-                    let needs_recovery_anchor =
-                        self.timeline_state.chain_requires_recovery_anchor()
-                            || matches!(
-                                self.timeline_state.chain_state(),
-                                ChainState::Broken | ChainState::Recovering
-                            )
-                            || should_rearm_clean_anchor;
-                    if needs_recovery_anchor {
-                        self.timeline_state
-                            .on_clean_anchor_ingress(sample.packet_timestamp, frame_now_ms);
-                    }
-                }
-
                 let assembled_at = std::time::Instant::now();
                 // 优先取首包到达时刻作为 playout 基准，减少 SampleBuilder 等待引入的固有延迟。
                 // 找不到记录时保持 None，物化层会 fallback 到 assembled_at，语义上有区别。
@@ -1742,8 +1753,32 @@ impl RtcVideoFrameSource {
                     inspection.bootstrap_ready
                 );
                 let complete_candidate_now_ms = now_ms_f64();
+                // 恢复期首个干净 IDR 自身就是新的 decoder success edge，
+                // 允许它直接带着 clean-anchor 提交资格穿过 sustaining exit gate。
+                let current_frame_allows_sustaining_exit = inspection.is_idr
+                    && admission_accepted
+                    && inspection.bootstrap_ready
+                    && media_dropped_packets == 0;
+                if current_frame_allows_sustaining_exit {
+                    let should_rearm_clean_anchor = self
+                        .runtime_stats
+                        .read(Self::should_rearm_clean_anchor_for_transport_await)
+                        .unwrap_or(false);
+                    let needs_recovery_anchor =
+                        self.timeline_state.chain_requires_recovery_anchor()
+                            || matches!(
+                                self.timeline_state.chain_state(),
+                                ChainState::Broken | ChainState::Recovering
+                            )
+                            || should_rearm_clean_anchor;
+                    if needs_recovery_anchor {
+                        self.timeline_state
+                            .on_clean_anchor_ingress(sample.packet_timestamp, frame_now_ms);
+                    }
+                }
                 let can_exit_sustaining_recovery = !self.timeline_state.in_sustaining_recovery()
-                    || self.decoder_feedback_allows_sustaining_exit(complete_candidate_now_ms);
+                    || self.decoder_feedback_allows_sustaining_exit(complete_candidate_now_ms)
+                    || current_frame_allows_sustaining_exit;
                 if can_exit_sustaining_recovery {
                     // 将媒体语义标签转换为恢复语义标签
                     let recovery_importance = match media_type_label {
@@ -1780,36 +1815,24 @@ impl RtcVideoFrameSource {
                     );
                 }
 
-                let can_commit_clean_anchor_now = can_exit_sustaining_recovery
-                    && inspection.is_idr
-                    && admission_accepted
-                    && inspection.bootstrap_ready
-                    && media_dropped_packets == 0;
-                if can_commit_clean_anchor_now {
-                    if let Some(committed_ts) = self
-                        .timeline_state
-                        .take_clean_anchor_stats_commit_if_stable(
+                let can_commit_clean_anchor_now =
+                    can_exit_sustaining_recovery && current_frame_allows_sustaining_exit;
+                let clean_anchor_commit_recovery_epoch = if can_commit_clean_anchor_now {
+                    self.timeline_state
+                        .peek_clean_anchor_stats_commit_candidate_if_stable(
                             sample.packet_timestamp,
                             complete_candidate_now_ms,
                         )
-                    {
-                        self.record_clean_anchor(complete_candidate_now_ms);
-                        self.record_video_timeline_observation(
-                            "chain-clean-anchor-submitted",
-                            None,
-                            Some(committed_ts),
-                            complete_candidate_now_ms,
-                        );
-                        self.record_anchor_candidate_ledger(
-                            Some(committed_ts),
-                            "chain-clean-anchor-submitted",
-                            XbxEngineAnchorCandidateState::SubmittedCleanAnchor,
-                            None,
-                            complete_candidate_now_ms,
-                        );
-                        self.timeline_state.on_clean_anchor_submitted();
-                    }
-                }
+                        .and_then(|committed_ts| {
+                            if committed_ts != sample.packet_timestamp {
+                                return None;
+                            }
+                            self.runtime_stats
+                                .read(|stats| stats.transport_recovery_epoch)
+                        })
+                } else {
+                    None
+                };
 
                 return Some(AssembledVideoFrame {
                     codec: VideoCodec::H264,
@@ -1820,6 +1843,7 @@ impl RtcVideoFrameSource {
                     width: self.current_width,
                     height: self.current_height,
                     rtp_timestamp: sample.packet_timestamp,
+                    clean_anchor_commit_recovery_epoch,
                     first_packet_sequence,
                     frame_playout_deadline_at_ms,
                     frame_recovery_disposition,

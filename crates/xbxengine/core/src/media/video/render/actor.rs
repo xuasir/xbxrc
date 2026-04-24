@@ -280,6 +280,7 @@ mod tests {
             pts: Instant::now(),
             rtp_timestamp: frame_seq as u32,
             is_keyframe: frame_seq == 1,
+            clean_anchor_commit_recovery_epoch: None,
             budget: crate::media::video::ingress::budget::FrameBudgetContext::default(),
             frame_recovery_disposition: FrameRecoveryDisposition::Repairing,
             frame_unrecoverable_reason: None,

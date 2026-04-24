@@ -25,6 +25,7 @@ pub const AUDIO_ALIVE_VIDEO_ONLY_DECODER_RESET_WAIT_MS: f64 = 300.0;
 pub const TWCC_ALIVE_RECONNECT_STALL_MS: f64 = 8_000.0;
 pub const TWCC_RECENT_FEEDBACK_GRACE_MS: f64 = 500.0;
 pub const NACK_RECENT_GRACE_MS: f64 = 120.0;
+pub const VIDEO_PACKET_RECENT_GRACE_MS: f64 = 250.0;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct XbxEngineRecoveryRuntimeConfig {
@@ -107,6 +108,8 @@ pub struct XbxEngineRuntimeHealth {
     pub decoder_reset_requested_for_current_stall: bool,
     pub last_native_presenter_reset_at_ms: Option<f64>,
     pub last_native_presenter_reset_display_tick_epoch: Option<u64>,
+    pub last_renderer_submit_count_total: u64,
+    pub last_renderer_submit_advanced_at_ms: Option<f64>,
 }
 
 impl Default for XbxEngineRuntimeHealth {
@@ -127,6 +130,8 @@ impl Default for XbxEngineRuntimeHealth {
             decoder_reset_requested_for_current_stall: false,
             last_native_presenter_reset_at_ms: None,
             last_native_presenter_reset_display_tick_epoch: None,
+            last_renderer_submit_count_total: 0,
+            last_renderer_submit_advanced_at_ms: None,
         }
     }
 }
@@ -163,6 +168,7 @@ pub struct XbxEngineDecodeRenderSignal {
     pub decoder_stalled: Option<bool>,
     pub render_stalled: Option<bool>,
     pub allow_decoder_reset: bool,
+    pub local_media_backpressure_active: bool,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -396,6 +402,11 @@ impl XbxEngineRuntimeHealth {
             .latest_nack_expired_at_ms
             .map(|at_ms| now_ms - at_ms < NACK_RECENT_GRACE_MS)
             .unwrap_or(false);
+        let recent_video_packets = signals
+            .transport
+            .latest_video_packet_arrival_at_ms
+            .map(|at_ms| now_ms - at_ms < VIDEO_PACKET_RECENT_GRACE_MS)
+            .unwrap_or(false);
         // TWCC 仍然活跃时，允许视频链稍微晚一点才升级到整路重连。
         // 音频存活时只做视频侧恢复，不把它当成重连兜底的延长条件。
         let effective_reconnect_stall_ms = if recent_twcc_feedback {
@@ -452,6 +463,18 @@ impl XbxEngineRuntimeHealth {
         if recent_nack_recovered {
             return None;
         }
+        let transport_hard_recovery_evidence = Self::has_transport_hard_recovery_evidence(
+            now_ms,
+            &signals.transport,
+            effective_keyframe_request_stall_ms,
+            recent_twcc_feedback,
+            recent_nack_expired,
+        );
+        let local_media_backpressure =
+            signals.decode_render.local_media_backpressure_active && recent_video_packets;
+        if local_media_backpressure && !transport_hard_recovery_evidence {
+            return None;
+        }
 
         // 进入游戏时常见“音频先恢复、视频短暂断流”的单路 stall，
         // 这里允许更早进入 keyframe/decoder reset，而不是被动等到 reconnect。
@@ -477,7 +500,9 @@ impl XbxEngineRuntimeHealth {
         if recent_nack_sent && !recent_nack_expired {
             return None;
         }
-        let should_request_keyframe = (media_stalled_for_ms >= effective_keyframe_request_stall_ms
+        let should_request_keyframe = ((media_stalled_for_ms
+            >= effective_keyframe_request_stall_ms
+            && transport_hard_recovery_evidence)
             || can_try_decoder_reset
             || (recent_nack_expired && signals.transport.latest_nack_expired_frame_is_keyframe))
             && !self.keyframe_requested_for_current_stall
@@ -506,7 +531,7 @@ impl XbxEngineRuntimeHealth {
             return Some(XbxEngineRecoveryAction::RequestDecoderReset);
         }
 
-        if signals.transport.audio_stream_alive {
+        if signals.transport.audio_stream_alive || !transport_hard_recovery_evidence {
             return None;
         }
         if media_stalled_for_ms < effective_reconnect_stall_ms {
@@ -523,6 +548,26 @@ impl XbxEngineRuntimeHealth {
         Some(XbxEngineRecoveryAction::RequestReconnect(
             XbxEngineReconnectReasonDto::MediaStalled,
         ))
+    }
+
+    fn has_transport_hard_recovery_evidence(
+        now_ms: f64,
+        transport: &XbxEngineTransportSignal,
+        keyframe_request_stall_ms: f64,
+        recent_twcc_feedback: bool,
+        recent_nack_expired: bool,
+    ) -> bool {
+        if recent_nack_expired {
+            return true;
+        }
+        if transport
+            .latest_video_packet_arrival_at_ms
+            .map(|at_ms| now_ms - at_ms >= keyframe_request_stall_ms)
+            .unwrap_or(true)
+        {
+            return true;
+        }
+        !recent_twcc_feedback
     }
 }
 

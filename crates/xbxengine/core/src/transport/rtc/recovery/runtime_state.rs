@@ -631,7 +631,7 @@ pub(crate) fn unix_now_ms() -> f64 {
 }
 
 pub(crate) fn has_fresh_media_output(stats: &XbxEngineMediaRuntimeStats, now_ms: f64) -> bool {
-    const FRESH_MEDIA_OUTPUT_WINDOW_MS: f64 = 500.0;
+    const FRESH_MEDIA_OUTPUT_WINDOW_MS: f64 = 300.0;
     const FUTURE_TIMESTAMP_CLOCK_SKEW_GUARD_MS: f64 = 10_000.0;
     let runtime_now_ms = unix_now_ms();
     let effective_now_ms = [
@@ -660,6 +660,7 @@ pub(crate) fn host_presentation_serviceable(
     stats: &XbxEngineMediaRuntimeStats,
     now_ms: f64,
 ) -> bool {
+    const HOST_PRESENT_SERVICEABLE_WINDOW_MS: f64 = 300.0;
     let pressure_hot = matches!(
         stats.host_no_pending_pressure_level.as_deref(),
         Some("high" | "critical")
@@ -669,7 +670,7 @@ pub(crate) fn host_presentation_serviceable(
     }
     stats
         .latest_video_host_present_time_ms
-        .is_some_and(|at_ms| (now_ms - at_ms).max(0.0) < 500.0)
+        .is_some_and(|at_ms| (now_ms - at_ms).max(0.0) < HOST_PRESENT_SERVICEABLE_WINDOW_MS)
 }
 
 pub(crate) fn renderer_shadow_blocks_serviceability(

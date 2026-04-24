@@ -14,7 +14,9 @@ use crate::transport::rtc::stream::adapter_types::{
 use crate::transport::rtc::stream::packet_types::{RtcVideoIngressKind, RtcVideoRepairMetadata};
 use crate::transport::rtc::stream::sink::RtcRtcpSendPort;
 use crate::transport::rtc::stream::video_source::NackSchedulerConfig;
-use crate::{XbxEngineRemoteAnswerObservation, XbxEngineVideoTrackStatus};
+use crate::{
+    XbxEngineAnchorCandidateState, XbxEngineRemoteAnswerObservation, XbxEngineVideoTrackStatus,
+};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use xbxengine_protocol::{XbxEngineTargetTypeDto, XbxEngineTransportStateDto};
@@ -427,6 +429,41 @@ fn sustaining_recovery_exit_gate_requires_recent_decoder_feedback() {
     assert!(!source.decoder_feedback_allows_sustaining_exit(now_ms));
 }
 
+#[tokio::test]
+async fn clean_anchor_allows_first_recovery_idr_to_bypass_stale_decoder_feedback_gate() {
+    let (tx, _transport_observation_rx, mut source) = make_video_source_for_test();
+    source.runtime_stats.begin_transport_recovery_episode(100.0);
+    source.runtime_stats.update(|stats| {
+        let now_ms = now_ms_f64();
+        stats.latest_video_decode_ok_time_ms = Some(now_ms - 450.0);
+        stats.video_decoder_stalled = Some(false);
+        stats.video_renderer_stalled = Some(false);
+    });
+    source
+        .timeline_state
+        .on_admission_await_recovery_keyframe(Some("awaitingRecoveryAnchor"));
+
+    send_bootstrap_access_unit(&tx, 100, 9_000).await;
+    tx.send(make_video_rtp_packet(
+        103,
+        9_016,
+        true,
+        bootstrap_idr_nalu(),
+    ))
+    .await
+    .expect("next frame packet should flush previous sample");
+    drop(tx);
+
+    let frame = tokio::time::timeout(Duration::from_millis(200), source.recv_frame_inner())
+        .await
+        .expect("reader should produce frame")
+        .expect("frame should exist");
+
+    assert!(frame.is_keyframe);
+    assert_eq!(frame.rtp_timestamp, 9_000);
+    assert_eq!(frame.clean_anchor_commit_recovery_epoch, Some(1));
+}
+
 #[test]
 fn inspection_admission_rejects_frames_without_bootstrap_or_continuation() {
     assert_eq!(
@@ -726,6 +763,121 @@ async fn bootstrap_keyframe_packets_are_assembled_into_frame() {
     assert!(frame.width > 0);
     assert!(frame.height > 0);
     assert!(transport_observation_rx.try_recv().is_err());
+}
+
+#[tokio::test]
+async fn invalid_keyframe_does_not_arm_clean_anchor_ingress() {
+    let (tx, _transport_observation_rx, mut source) = make_video_source_for_test();
+    source.runtime_stats.begin_transport_recovery_episode(100.0);
+    source
+        .timeline_state
+        .on_admission_await_recovery_keyframe(Some("awaitingRecoveryAnchor"));
+
+    tx.send(make_video_rtp_packet(
+        100,
+        9_000,
+        true,
+        bootstrap_idr_nalu(),
+    ))
+    .await
+    .expect("invalid keyframe packet should be queued");
+    tx.send(make_video_rtp_packet(
+        101,
+        9_016,
+        true,
+        bootstrap_idr_nalu(),
+    ))
+    .await
+    .expect("tail packet should flush invalid keyframe sample");
+    drop(tx);
+
+    let frame = tokio::time::timeout(Duration::from_millis(200), source.recv_frame_inner())
+        .await
+        .expect("reader should finish after invalid keyframe and rx close");
+
+    assert!(frame.is_none());
+    assert!(!source.timeline_state.in_sustaining_recovery());
+    assert_eq!(
+        source
+            .timeline_state
+            .peek_clean_anchor_stats_commit_candidate_if_stable(9_000, now_ms_f64()),
+        None
+    );
+}
+
+#[tokio::test]
+async fn clean_anchor_waits_for_decode_before_committing_stats() {
+    let (tx, _transport_observation_rx, mut source) = make_video_source_for_test();
+    source.runtime_stats.begin_transport_recovery_episode(100.0);
+    source.runtime_stats.update(|stats| {
+        let now_ms = now_ms_f64();
+        stats.latest_video_decode_ok_time_ms = Some(now_ms - 16.0);
+        stats.video_decoder_stalled = Some(false);
+        stats.video_renderer_stalled = Some(false);
+    });
+    source
+        .timeline_state
+        .on_admission_await_recovery_keyframe(Some("awaitingRecoveryAnchor"));
+
+    send_bootstrap_access_unit(&tx, 100, 9_000).await;
+    tx.send(make_video_rtp_packet(
+        103,
+        9_016,
+        true,
+        bootstrap_idr_nalu(),
+    ))
+    .await
+    .expect("next frame packet should flush previous sample");
+    drop(tx);
+
+    let frame = tokio::time::timeout(Duration::from_millis(200), source.recv_frame_inner())
+        .await
+        .expect("reader should produce frame")
+        .expect("frame should exist");
+
+    assert_eq!(frame.clean_anchor_commit_recovery_epoch, Some(1));
+    let stats = source.runtime_stats.read(|stats| {
+        (
+            stats.video_anchor_clean_epoch,
+            stats.video_anchor_clean_source_event.clone(),
+            stats.latest_anchor_candidate_ledger.clone(),
+        )
+    });
+    let (clean_epoch, clean_source_event, latest_anchor_candidate_ledger) =
+        stats.expect("runtime stats");
+    assert_eq!(clean_epoch, None);
+    assert_eq!(clean_source_event, None);
+    let ledger = latest_anchor_candidate_ledger.expect("observed anchor candidate");
+    assert_eq!(ledger.state, XbxEngineAnchorCandidateState::Observed);
+    assert_eq!(ledger.frame_rtp_timestamp, Some(frame.rtp_timestamp));
+}
+
+#[test]
+fn clean_anchor_ack_survives_latest_anchor_ledger_overwrite() {
+    let (_tx, _transport_observation_rx, mut source) = make_video_source_for_test();
+    source.runtime_stats.begin_transport_recovery_episode(100.0);
+    source.timeline_state.on_clean_anchor_ingress(9_000, 110.0);
+
+    source
+        .runtime_stats
+        .record_transport_clean_anchor(120.0, "chain-clean-anchor-submitted");
+    source.runtime_stats.record_anchor_candidate_ledger(
+        1,
+        Some(9_016),
+        XbxEngineAnchorCandidateState::Observed,
+        "frame-complete-candidate",
+        None,
+        121.0,
+    );
+
+    source.maybe_ack_clean_anchor_commit_from_runtime_stats();
+
+    assert_eq!(
+        source
+            .timeline_state
+            .peek_clean_anchor_stats_commit_candidate_if_stable(9_000, 122.0),
+        None
+    );
 }
 
 #[tokio::test]
