@@ -377,6 +377,7 @@ impl FfmpegWindowsD3d11vaDecoder {
             is_keyframe: false,
             frame_recovery_disposition: None,
             frame_unrecoverable_reason: None,
+            presentation_value_role: None,
             pixel_data: XbxEngineRenderPixelData::Bgra {
                 bytes: Arc::<[u8]>::from(self.bgra_buffer.clone()),
             },
@@ -473,6 +474,7 @@ impl FfmpegWindowsD3d11vaDecoder {
             is_keyframe: false,
             frame_recovery_disposition: None,
             frame_unrecoverable_reason: None,
+            presentation_value_role: None,
             pixel_data: XbxEngineRenderPixelData::Descriptor {
                 handle: Arc::new(descriptor),
             },
