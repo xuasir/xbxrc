@@ -14,7 +14,8 @@ use xbxengine::{
 };
 
 use super::scheduling::{
-    HostCadenceTelemetry, ScheduledFrameSlot, ScheduledFrameSlotDiagnostics, ScheduledFrameTakeOutcome,
+    HostCadenceTelemetry, ScheduledFrameSlot, ScheduledFrameSlotDiagnostics,
+    ScheduledFrameTakeOutcome,
 };
 #[cfg(target_os = "macos")]
 use super::{

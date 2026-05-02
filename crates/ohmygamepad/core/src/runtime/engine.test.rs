@@ -2,7 +2,7 @@ use std::{cell::RefCell, collections::VecDeque, rc::Rc};
 
 use ohmygamepad_protocol::{
     LogicalButtonsStateDto, OhMyGamepadBackendKindDto, OhMyGamepadBindingModeDto,
-    OhMyGamepadCapabilityFlagsDto, OhMyGamepadDeviceDto,
+    OhMyGamepadCapabilityFlagsDto, OhMyGamepadDeviceClassificationDto, OhMyGamepadDeviceDto,
 };
 
 use super::InputCore;
@@ -78,6 +78,7 @@ fn device(device_id: &str) -> OhMyGamepadDeviceDto {
         touchpad_finger_count: None,
         connected: true,
         last_seen_at_ms: 0,
+        classification: OhMyGamepadDeviceClassificationDto::default(),
         sdl3_capabilities: OhMyGamepadCapabilityFlagsDto {
             supports_rumble: false,
             supports_trigger_rumble: false,

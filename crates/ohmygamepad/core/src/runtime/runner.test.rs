@@ -6,7 +6,8 @@ use std::{
 };
 
 use ohmygamepad_protocol::{
-    LogicalPadSnapshotDto, OhMyGamepadCapabilityFlagsDto, OhMyGamepadDeviceDto,
+    LogicalPadSnapshotDto, OhMyGamepadCapabilityFlagsDto, OhMyGamepadDeviceClassificationDto,
+    OhMyGamepadDeviceDto,
 };
 
 use super::{spawn_input_runtime, SamplingSchedule};
@@ -75,6 +76,7 @@ fn device(device_id: &str) -> OhMyGamepadDeviceDto {
         touchpad_finger_count: None,
         connected: true,
         last_seen_at_ms: 0,
+        classification: OhMyGamepadDeviceClassificationDto::default(),
         sdl3_capabilities: OhMyGamepadCapabilityFlagsDto {
             supports_rumble: false,
             supports_trigger_rumble: false,

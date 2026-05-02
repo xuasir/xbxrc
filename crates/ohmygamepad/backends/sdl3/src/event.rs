@@ -1,6 +1,7 @@
 use ohmygamepad_protocol::{
     OhMyGamepadBackendKindDto, OhMyGamepadCapabilityFlagsDto, OhMyGamepadConnectionKindDto,
-    OhMyGamepadDeviceDto, OhMyGamepadDeviceTypeDto, OhMyGamepadPowerStateDto,
+    OhMyGamepadDeviceClassificationDto, OhMyGamepadDeviceDto, OhMyGamepadDeviceTypeDto,
+    OhMyGamepadPowerStateDto,
 };
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
@@ -21,6 +22,7 @@ pub struct Sdl3DeviceDescriptor {
     pub battery_percent: Option<u8>,
     pub touchpad_count: Option<u16>,
     pub touchpad_finger_count: Option<u16>,
+    pub classification: OhMyGamepadDeviceClassificationDto,
     pub capabilities: OhMyGamepadCapabilityFlagsDto,
 }
 
@@ -46,6 +48,7 @@ impl Sdl3DeviceDescriptor {
             touchpad_finger_count: self.touchpad_finger_count,
             connected: true,
             last_seen_at_ms: observed_at_ms,
+            classification: self.classification.clone(),
             sdl3_capabilities: self.capabilities,
         }
     }

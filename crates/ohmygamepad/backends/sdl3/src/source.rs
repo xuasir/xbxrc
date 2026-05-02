@@ -8,7 +8,8 @@ use std::{
 };
 
 use ohmygamepad_protocol::{
-    OhMyGamepadCapabilityFlagsDto, OhMyGamepadConnectionKindDto, OhMyGamepadDeviceTypeDto,
+    OhMyGamepadCapabilityFlagsDto, OhMyGamepadConnectionKindDto,
+    OhMyGamepadDeviceClassificationDto, OhMyGamepadDeviceTypeDto, OhMyGamepadIdentityConfidenceDto,
     OhMyGamepadPowerStateDto, OhMyGamepadRumbleEffectDto,
 };
 use sdl3::{
@@ -20,6 +21,17 @@ use sdl3::{
 };
 
 use crate::{Sdl3BackendConfig, Sdl3DeviceDescriptor, Sdl3InputEvent, Sdl3InputEventKind};
+
+const KNOWN_HANDHELD_CONTROLLER_IDS: &[(u16, u16)] = &[
+    (0x28de, 0x1205), // Steam Deck
+    (0x0b05, 0x1abe), // ROG Ally
+    (0x17ef, 0x6182), // Legion Go
+    (0x0db0, 0x1901), // MSI Claw
+];
+
+const KNOWN_STEAM_VIRTUAL_CONTROLLER_IDS: &[(u16, u16)] = &[
+    (0x28de, 0x11ff), // Steam Virtual Gamepad
+];
 
 pub trait Sdl3Source {
     fn next_event(&mut self) -> Option<Sdl3InputEvent>;
@@ -208,6 +220,7 @@ fn run_sdl3_source_thread(
             if let Some((device_id, opened)) = open_gamepad(&gamepad_subsystem, gamepad_id, &config)
             {
                 if dedupe_or_insert_opened_gamepad(
+                    &event_tx,
                     &mut opened_gamepads,
                     &opened,
                     DuplicatePolicy::InitialEnumerate,
@@ -275,6 +288,7 @@ fn handle_sdl_event(
                 open_gamepad_from_event(gamepad_subsystem, which, config)
             {
                 if dedupe_or_insert_opened_gamepad(
+                    event_tx,
                     opened_gamepads,
                     &opened,
                     DuplicatePolicy::HotplugAdd,
@@ -320,6 +334,7 @@ fn handle_sdl_event(
         Event::ControllerDeviceRemapped { which, .. } => {
             let device_id = joystick_instance_id_to_device_id(which);
             let Some(opened) = refresh_opened_gamepad(
+                event_tx,
                 gamepad_subsystem,
                 opened_gamepads,
                 which,
@@ -339,6 +354,7 @@ fn handle_sdl_event(
         } => {
             let device_id = joystick_instance_id_to_device_id(which);
             let Some(opened) = refresh_opened_gamepad(
+                event_tx,
                 gamepad_subsystem,
                 opened_gamepads,
                 which,
@@ -364,6 +380,7 @@ fn handle_sdl_event(
         } => {
             let device_id = joystick_instance_id_to_device_id(which);
             let Some(opened) = refresh_opened_gamepad(
+                event_tx,
                 gamepad_subsystem,
                 opened_gamepads,
                 which,
@@ -383,6 +400,7 @@ fn handle_sdl_event(
         } => {
             let device_id = joystick_instance_id_to_device_id(which);
             let Some(opened) = refresh_opened_gamepad(
+                event_tx,
                 gamepad_subsystem,
                 opened_gamepads,
                 which,
@@ -400,6 +418,7 @@ fn handle_sdl_event(
 }
 
 fn refresh_opened_gamepad<'a>(
+    event_tx: &Sender<Sdl3InputEvent>,
     gamepad_subsystem: &sdl3::GamepadSubsystem,
     opened_gamepads: &'a mut HashMap<String, OpenedSdl3Gamepad>,
     joystick_instance_id: u32,
@@ -414,8 +433,12 @@ fn refresh_opened_gamepad<'a>(
         );
         let (resolved_device_id, opened) =
             open_gamepad_from_event(gamepad_subsystem, joystick_instance_id, config)?;
-        if dedupe_or_insert_opened_gamepad(opened_gamepads, &opened, DuplicatePolicy::RemapRefresh)
-        {
+        if dedupe_or_insert_opened_gamepad(
+            event_tx,
+            opened_gamepads,
+            &opened,
+            DuplicatePolicy::RemapRefresh,
+        ) {
             return None;
         }
         opened_gamepads.insert(resolved_device_id.clone(), opened);
@@ -579,6 +602,7 @@ fn should_ignore_gamepad(gamepad: &Gamepad, config: &Sdl3BackendConfig) -> bool 
 }
 
 fn dedupe_or_insert_opened_gamepad(
+    event_tx: &Sender<Sdl3InputEvent>,
     opened_gamepads: &mut HashMap<String, OpenedSdl3Gamepad>,
     candidate: &OpenedSdl3Gamepad,
     policy: DuplicatePolicy,
@@ -592,32 +616,43 @@ fn dedupe_or_insert_opened_gamepad(
 
     let duplicate = opened_gamepads
         .iter()
-        .find(|(_, opened)| duplicate_fingerprint(&opened.descriptor) == candidate_key);
+        .find(|(_, opened)| duplicate_fingerprint(&opened.descriptor) == candidate_key)
+        .map(|(existing_id, opened)| (existing_id.clone(), opened.descriptor.clone()));
 
-    let Some((existing_id, existing)) = duplicate else {
+    let Some((existing_id, existing_descriptor)) = duplicate else {
         return false;
     };
 
-    log::warn!(
-        "sdl3_duplicate_gamepad policy={:?} incoming={} existing={} key={} incoming_path={} existing_path={} incoming_serial={} existing_serial={}",
-        policy,
-        candidate.descriptor.device_id,
-        existing_id,
-        duplicate_fingerprint(&existing.descriptor),
-        candidate.descriptor.path.as_deref().unwrap_or_default(),
-        existing.descriptor.path.as_deref().unwrap_or_default(),
-        candidate
-            .descriptor
-            .serial_number
-            .as_deref()
-            .unwrap_or_default(),
-        existing
-            .descriptor
-            .serial_number
-            .as_deref()
-            .unwrap_or_default()
-    );
-    true
+    let existing_priority = duplicate_priority(&existing_descriptor);
+    let candidate_priority = duplicate_priority(&candidate.descriptor);
+    if candidate_priority < existing_priority {
+        let removed = opened_gamepads
+            .remove(&existing_id)
+            .expect("duplicate entry should exist before replacement");
+        log_device_identity_conflict(
+            policy,
+            "prefer-incoming",
+            &candidate.descriptor,
+            &removed.descriptor,
+        );
+        let _ = send_event(
+            event_tx,
+            Sdl3InputEvent {
+                device: removed.descriptor,
+                observed_at_ms: now_ms(),
+                kind: Sdl3InputEventKind::Disconnected,
+            },
+        );
+        false
+    } else {
+        log_device_identity_conflict(
+            policy,
+            "keep-existing",
+            &candidate.descriptor,
+            &existing_descriptor,
+        );
+        true
+    }
 }
 
 fn emit_connected_baseline_event(
@@ -672,6 +707,51 @@ fn duplicate_fingerprint(descriptor: &Sdl3DeviceDescriptor) -> String {
     )
 }
 
+fn duplicate_priority(descriptor: &Sdl3DeviceDescriptor) -> u8 {
+    let classification = &descriptor.classification;
+    if classification.is_handheld_builtin && !classification.is_virtual_controller {
+        0
+    } else if classification.is_handheld_builtin {
+        1
+    } else if classification.is_motion_native_candidate && !classification.is_virtual_controller {
+        2
+    } else if !classification.is_virtual_controller {
+        3
+    } else if classification.is_steam_virtual {
+        4
+    } else {
+        5
+    }
+}
+
+fn resume_priority(descriptor: &Sdl3DeviceDescriptor) -> u8 {
+    duplicate_priority(descriptor)
+}
+
+fn log_device_identity_conflict(
+    policy: DuplicatePolicy,
+    resolution: &str,
+    incoming: &Sdl3DeviceDescriptor,
+    existing: &Sdl3DeviceDescriptor,
+) {
+    log::warn!(
+        "sdl3_device_identity_conflict policy={:?} resolution={} incoming={} existing={} key={} incoming_classification=[{}] existing_classification=[{}] incoming_reasons={} existing_reasons={} incoming_path={} existing_path={} incoming_serial={} existing_serial={}",
+        policy,
+        resolution,
+        incoming.device_id,
+        existing.device_id,
+        duplicate_fingerprint(existing),
+        classification_labels(&incoming.classification),
+        classification_labels(&existing.classification),
+        incoming.classification.reasons.join("|"),
+        existing.classification.reasons.join("|"),
+        incoming.path.as_deref().unwrap_or_default(),
+        existing.path.as_deref().unwrap_or_default(),
+        incoming.serial_number.as_deref().unwrap_or_default(),
+        existing.serial_number.as_deref().unwrap_or_default(),
+    );
+}
+
 fn guid_for_gamepad(gamepad: &Gamepad) -> Option<String> {
     let joystick_id = gamepad.id().ok()?;
     let guid = gamepad.subsystem().guid_for_id(joystick_id);
@@ -719,7 +799,7 @@ fn log_ignored_gamepad(reason: &str, gamepad: &Gamepad, match_value: Option<&str
 
 fn log_gamepad_diagnostics(stage: &str, descriptor: &Sdl3DeviceDescriptor) {
     log::info!(
-        "sdl3_gamepad_diagnostics stage={} device_id={} name=\"{}\" type={:?} connection={:?} guid_hint={} vid={:04x} pid={:04x} product_ver={:04x} firmware_ver={:04x} path={} serial={} mapped={} player_index={} power={:?} battery_percent={} touchpads={} fingers={} duplicate_key={} caps=rumble:{} trigger_rumble:{} battery:{} mapping:{} touchpad:{} accel:{} gyro:{} led:{} serial:{}",
+        "sdl3_gamepad_diagnostics stage={} device_id={} name=\"{}\" type={:?} connection={:?} guid_hint={} vid={:04x} pid={:04x} product_ver={:04x} firmware_ver={:04x} path={} serial={} mapped={} player_index={} power={:?} battery_percent={} touchpads={} fingers={} duplicate_key={} classification=[{}] confidence={:?} reasons={} caps=rumble:{} trigger_rumble:{} battery:{} mapping:{} touchpad:{} accel:{} gyro:{} led:{} serial:{}",
         stage,
         descriptor.device_id,
         descriptor.name,
@@ -752,6 +832,9 @@ fn log_gamepad_diagnostics(stage: &str, descriptor: &Sdl3DeviceDescriptor) {
             .map(|value| value.to_string())
             .unwrap_or_default(),
         duplicate_fingerprint(descriptor),
+        classification_labels(&descriptor.classification),
+        descriptor.classification.confidence,
+        descriptor.classification.reasons.join("|"),
         descriptor.capabilities.supports_rumble,
         descriptor.capabilities.supports_trigger_rumble,
         descriptor.capabilities.reports_battery,
@@ -762,6 +845,26 @@ fn log_gamepad_diagnostics(stage: &str, descriptor: &Sdl3DeviceDescriptor) {
         descriptor.capabilities.supports_led,
         descriptor.capabilities.reports_serial,
     );
+}
+
+fn classification_labels(classification: &OhMyGamepadDeviceClassificationDto) -> String {
+    let mut labels = Vec::new();
+    if classification.is_handheld_builtin {
+        labels.push("handheld_builtin");
+    }
+    if classification.is_virtual_controller {
+        labels.push("virtual_controller");
+    }
+    if classification.is_steam_virtual {
+        labels.push("steam_virtual");
+    }
+    if classification.is_motion_native_candidate {
+        labels.push("motion_native_candidate");
+    }
+    if labels.is_empty() {
+        labels.push("standard");
+    }
+    labels.join("|")
 }
 
 fn mapping_guid_hint(mapping: &str) -> &str {
@@ -831,7 +934,19 @@ fn prime_sampling_on_devices(
 ) {
     let observed_at_ms = now_ms();
     let mut device_ids = opened_gamepads.keys().cloned().collect::<Vec<_>>();
-    device_ids.sort();
+    device_ids.sort_by(|left, right| {
+        let left_priority = opened_gamepads
+            .get(left)
+            .map(|opened| resume_priority(&opened.descriptor))
+            .unwrap_or(u8::MAX);
+        let right_priority = opened_gamepads
+            .get(right)
+            .map(|opened| resume_priority(&opened.descriptor))
+            .unwrap_or(u8::MAX);
+        left_priority
+            .cmp(&right_priority)
+            .then_with(|| left.cmp(right))
+    });
     for device_id in device_ids {
         let Some(opened) = opened_gamepads.get_mut(&device_id) else {
             continue;
@@ -1028,7 +1143,7 @@ fn descriptor_from_gamepad(device_id: String, gamepad: &Gamepad) -> Sdl3DeviceDe
     let serial_number = gamepad.serial_number();
     let serial_supported = serial_number.is_some();
 
-    Sdl3DeviceDescriptor {
+    let mut descriptor = Sdl3DeviceDescriptor {
         device_id,
         name: gamepad.name().unwrap_or_else(|| "Controller".to_owned()),
         connection: connection_from_state(gamepad.connection_state().ok()),
@@ -1045,6 +1160,7 @@ fn descriptor_from_gamepad(device_id: String, gamepad: &Gamepad) -> Sdl3DeviceDe
         battery_percent: battery_percent(&power_info),
         touchpad_count: (touchpad_count > 0).then_some(touchpad_count),
         touchpad_finger_count,
+        classification: OhMyGamepadDeviceClassificationDto::default(),
         capabilities: OhMyGamepadCapabilityFlagsDto {
             supports_rumble: basic_rumble,
             supports_trigger_rumble: trigger_rumble,
@@ -1057,6 +1173,129 @@ fn descriptor_from_gamepad(device_id: String, gamepad: &Gamepad) -> Sdl3DeviceDe
             supports_led: has_led,
             reports_serial: serial_supported,
         },
+    };
+    descriptor.classification = classify_device_descriptor(&descriptor);
+    descriptor
+}
+
+fn classify_device_descriptor(
+    descriptor: &Sdl3DeviceDescriptor,
+) -> OhMyGamepadDeviceClassificationDto {
+    let mut reasons = Vec::new();
+    let mut confidence = OhMyGamepadIdentityConfidenceDto::Low;
+    let lower_name = descriptor.name.to_ascii_lowercase();
+    let lower_path = descriptor
+        .path
+        .as_deref()
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+    let lower_mapping = descriptor
+        .mapping
+        .as_deref()
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+
+    let known_handheld = descriptor
+        .vendor_id
+        .zip(descriptor.product_id)
+        .map(|value| KNOWN_HANDHELD_CONTROLLER_IDS.contains(&value))
+        .unwrap_or(false);
+    let handheld_name_match = ["rog ally", "steam deck", "legion go", "msi claw"]
+        .iter()
+        .any(|pattern| lower_name.contains(pattern));
+    let is_handheld_builtin = known_handheld || handheld_name_match;
+    if known_handheld {
+        confidence = OhMyGamepadIdentityConfidenceDto::High;
+        reasons.push(format!(
+            "vidpid:{:04x}:{:04x}",
+            descriptor.vendor_id.unwrap_or_default(),
+            descriptor.product_id.unwrap_or_default()
+        ));
+    } else if handheld_name_match {
+        confidence = OhMyGamepadIdentityConfidenceDto::Medium;
+        reasons.push("name:handheld-builtin".to_owned());
+    }
+
+    let known_steam_virtual = descriptor
+        .vendor_id
+        .zip(descriptor.product_id)
+        .map(|value| KNOWN_STEAM_VIRTUAL_CONTROLLER_IDS.contains(&value))
+        .unwrap_or(false);
+    let steam_virtual_name_match =
+        lower_name.contains("steam virtual") || lower_name.contains("steam input");
+    let steam_virtual_path_match = lower_path.contains("steam");
+    let is_steam_virtual =
+        known_steam_virtual || steam_virtual_name_match || steam_virtual_path_match;
+    if known_steam_virtual {
+        confidence = OhMyGamepadIdentityConfidenceDto::High;
+        reasons.push(format!(
+            "vidpid:{:04x}:{:04x}:steam-virtual",
+            descriptor.vendor_id.unwrap_or_default(),
+            descriptor.product_id.unwrap_or_default()
+        ));
+    } else if steam_virtual_name_match {
+        confidence = confidence.max(OhMyGamepadIdentityConfidenceDto::Medium);
+        reasons.push("name:steam-virtual".to_owned());
+    } else if steam_virtual_path_match {
+        confidence = confidence.max(OhMyGamepadIdentityConfidenceDto::Medium);
+        reasons.push("path:steam".to_owned());
+    }
+
+    let generic_xinput_name = lower_name == "xinput controller"
+        || lower_name == "xbox game input"
+        || lower_name.starts_with("xinput ");
+    let generic_xinput_path = lower_path.contains("xinput");
+    let mapping_xinput_hint = lower_mapping.starts_with("xinput")
+        || lower_mapping.contains(",xinput controller,")
+        || lower_mapping.contains(",xbox game input,");
+    let weak_virtual_shape = descriptor.serial_number.is_none()
+        && descriptor.path.as_deref().unwrap_or_default().is_empty()
+        && generic_xinput_name;
+    let is_virtual_controller = is_steam_virtual
+        || generic_xinput_name
+        || generic_xinput_path
+        || mapping_xinput_hint
+        || weak_virtual_shape;
+    if generic_xinput_name {
+        reasons.push("name:xinput-controller".to_owned());
+    }
+    if generic_xinput_path {
+        reasons.push("path:xinput".to_owned());
+    }
+    if mapping_xinput_hint {
+        reasons.push("mapping:xinput".to_owned());
+    }
+    if weak_virtual_shape {
+        reasons.push("shape:missing-serial-and-path".to_owned());
+    }
+    if (generic_xinput_name || generic_xinput_path || mapping_xinput_hint || weak_virtual_shape)
+        && confidence == OhMyGamepadIdentityConfidenceDto::Low
+    {
+        confidence = OhMyGamepadIdentityConfidenceDto::Medium;
+    }
+
+    let is_motion_native_candidate = descriptor.capabilities.supports_accel
+        || descriptor.capabilities.supports_gyro
+        || is_handheld_builtin;
+    if descriptor.capabilities.supports_accel {
+        confidence = confidence.max(OhMyGamepadIdentityConfidenceDto::Medium);
+        reasons.push("capability:accel".to_owned());
+    }
+    if descriptor.capabilities.supports_gyro {
+        confidence = confidence.max(OhMyGamepadIdentityConfidenceDto::Medium);
+        reasons.push("capability:gyro".to_owned());
+    }
+
+    reasons.sort();
+    reasons.dedup();
+
+    OhMyGamepadDeviceClassificationDto {
+        is_handheld_builtin,
+        is_virtual_controller,
+        is_steam_virtual,
+        is_motion_native_candidate,
+        confidence,
+        reasons,
     }
 }
 

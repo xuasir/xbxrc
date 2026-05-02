@@ -67,6 +67,26 @@ pub struct OhMyGamepadCapabilityFlagsDto {
     pub reports_serial: bool,
 }
 
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum OhMyGamepadIdentityConfidenceDto {
+    Low,
+    Medium,
+    #[default]
+    High,
+}
+
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct OhMyGamepadDeviceClassificationDto {
+    pub is_handheld_builtin: bool,
+    pub is_virtual_controller: bool,
+    pub is_steam_virtual: bool,
+    pub is_motion_native_candidate: bool,
+    pub confidence: OhMyGamepadIdentityConfidenceDto,
+    pub reasons: Vec<String>,
+}
+
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct OhMyGamepadDeviceDto {
@@ -89,6 +109,7 @@ pub struct OhMyGamepadDeviceDto {
     pub touchpad_finger_count: Option<u16>,
     pub connected: bool,
     pub last_seen_at_ms: u64,
+    pub classification: OhMyGamepadDeviceClassificationDto,
     pub sdl3_capabilities: OhMyGamepadCapabilityFlagsDto,
 }
 

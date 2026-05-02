@@ -23,6 +23,7 @@
 
 ## Recent Completed
 
+- 2026-05-02: 手柄卡片补齐 SDL 设备判定信息展示：`GamepadProfileCard` 现在直接展示分类标签、置信度、VID/PID、SDL 设备类型、mapping、能力摘要、判定 reasons 与 device path，便于在无实机条件下直接分辨掌机内建手柄、虚拟 XInput 与 Steam Virtual 恢复路径。验证：`pnpm lint:fix`。
 - 2026-04-28: 为播放期停播根因分析补齐 `StopRuntime/closeRuntime/closeExecution/closeSession/app terminate` 诊断埋点：前端 `runtime-host`、`stream execution` 与 Rust `xbxengine/shell` 现在统一记录 stop reason 与关闭阶段事件，`app` 退出链额外写入 `terminateRequested/terminateCompleted`，`xbxengine.shutdown()` 也会显式带上 `appTerminate` reason，便于区分页面卸载、用户退出、重试、关机与宿主收口。验证：`cargo check -p xbxrc`；`pnpm exec vue-tsc --noEmit` 当前仅剩设置页既有错误 `SettingGamepadSection.vue(176/535/540)`。
 - 2026-04-27: 修复 `native_video` 的 host-stall presenter reset 误清空 viewport 呈现态：`reset_presenter_for_host_stall_recovery()` 现在只拆 presenter，保留 `latest_video_host_present_time_ms / host_frame_present_epoch / displayedFrame* / noPending* / cadencePhase` 等 host 指标，避免旧帧仍在屏上保活时 stats 被打回“从未 present”，进而把恢复策略误推向更激进的 reconnect。验证：`cargo test host_stall_presenter_reset_preserves_viewport_present_metrics`、`cargo test reset_viewport_present_runtime_state_clears_display_runtime_metrics`。
 - 2026-04-25: 修复 `video_source::timeline` 的 `Repairing` ledger 退役缺口，链路跨过 stable recovery gate 并回到 `Healthy` 时会同步清理 lingering `Repairing` frame ledger，避免 owner 已回稳后后续帧仍继续带 `repairing` 标签；新增 `healthy_recovery_retires_lingering_repairing_frame_ledgers` 回归测试，并复验 `frame_without_recovery_ledger_defaults_to_steady_disposition`。

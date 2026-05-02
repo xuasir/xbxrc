@@ -153,7 +153,8 @@ pub struct DeviceProfile {
 #[cfg(test)]
 mod tests {
     use ohmygamepad_protocol::{
-        OhMyGamepadBackendKindDto, OhMyGamepadCapabilityFlagsDto, OhMyGamepadDeviceDto,
+        OhMyGamepadBackendKindDto, OhMyGamepadCapabilityFlagsDto,
+        OhMyGamepadDeviceClassificationDto, OhMyGamepadDeviceDto,
     };
 
     use super::DeviceProfileMatcher;
@@ -179,6 +180,7 @@ mod tests {
             touchpad_finger_count: None,
             connected: true,
             last_seen_at_ms: 0,
+            classification: OhMyGamepadDeviceClassificationDto::default(),
             sdl3_capabilities: OhMyGamepadCapabilityFlagsDto::default(),
         }
     }

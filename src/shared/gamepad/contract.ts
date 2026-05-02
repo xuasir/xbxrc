@@ -89,6 +89,18 @@ export interface GamepadCapabilityFlagsDto {
   reportsSerial: boolean
 }
 
+export const GAMEPAD_IDENTITY_CONFIDENCE = ['low', 'medium', 'high'] as const
+export type GamepadIdentityConfidenceDto = (typeof GAMEPAD_IDENTITY_CONFIDENCE)[number]
+
+export interface GamepadDeviceClassificationDto {
+  isHandheldBuiltin: boolean
+  isVirtualController: boolean
+  isSteamVirtual: boolean
+  isMotionNativeCandidate: boolean
+  confidence: GamepadIdentityConfidenceDto
+  reasons: string[]
+}
+
 export interface GamepadDeviceDto {
   deviceId: string
   name: string
@@ -109,6 +121,7 @@ export interface GamepadDeviceDto {
   touchpadFingerCount: number | null
   connected: boolean
   lastSeenAtMs: number
+  classification: GamepadDeviceClassificationDto
   sdl3Capabilities: GamepadCapabilityFlagsDto
 }
 

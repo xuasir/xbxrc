@@ -1,5 +1,10 @@
 <script setup lang="ts">
-import type { GamepadRuntimeSnapshotDto } from '@shared/gamepad/contract'
+import type {
+  GamepadDeviceClassificationDto,
+  GamepadDeviceDto,
+  GamepadDeviceTypeDto,
+  GamepadRuntimeSnapshotDto,
+} from '@shared/gamepad/contract'
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Focusable, FocusScope } from '@/navigation/core/vue'
@@ -160,6 +165,128 @@ async function handleResumeDeviceSampling(deviceId: string): Promise<void> {
     deviceActionPending.value = null
   }
 }
+
+function formatDeviceType(type: GamepadDeviceTypeDto | null): string {
+  switch (type) {
+    case 'standard':
+      return 'Standard'
+    case 'xbox360':
+      return 'Xbox 360'
+    case 'xbox-one':
+      return 'Xbox One'
+    case 'ps3':
+      return 'PS3'
+    case 'ps4':
+      return 'PS4'
+    case 'ps5':
+      return 'PS5'
+    case 'nintendo-switch-pro':
+      return 'Switch Pro'
+    case 'nintendo-switch-joycon-left':
+      return 'Joy-Con L'
+    case 'nintendo-switch-joycon-right':
+      return 'Joy-Con R'
+    case 'nintendo-switch-joycon-pair':
+      return 'Joy-Con Pair'
+    case 'unknown':
+      return 'Unknown'
+    default:
+      return 'Unknown'
+  }
+}
+
+function formatHex(value: number | null): string {
+  if (value === null) {
+    return '--'
+  }
+  return `0x${value.toString(16).padStart(4, '0').toUpperCase()}`
+}
+
+function formatVidPid(device: GamepadDeviceDto): string {
+  return `${formatHex(device.vendorId)}:${formatHex(device.productId)}`
+}
+
+function formatMapping(mapping: string | null): string {
+  if (!mapping) {
+    return '未知'
+  }
+  return mapping
+}
+
+function formatPath(path: string | null): string {
+  if (!path) {
+    return '未上报'
+  }
+  return path
+}
+
+function formatConfidence(confidence: GamepadDeviceClassificationDto['confidence']): string {
+  switch (confidence) {
+    case 'high':
+      return '高'
+    case 'medium':
+      return '中'
+    case 'low':
+      return '低'
+    default:
+      return '低'
+  }
+}
+
+function classificationTags(classification: GamepadDeviceClassificationDto): string[] {
+  const tags: string[] = []
+  if (classification.isHandheldBuiltin) {
+    tags.push('掌机内建')
+  }
+  if (classification.isVirtualController) {
+    tags.push('虚拟手柄')
+  }
+  if (classification.isSteamVirtual) {
+    tags.push('Steam Virtual')
+  }
+  if (classification.isMotionNativeCandidate) {
+    tags.push('原生 Motion 候选')
+  }
+  tags.push(`置信度 ${formatConfidence(classification.confidence)}`)
+  return tags
+}
+
+function capabilitySummary(device: GamepadDeviceDto): string[] {
+  const caps = device.sdl3Capabilities
+  const items: string[] = []
+  if (caps.supportsRumble) {
+    items.push('机身震动')
+  }
+  if (caps.supportsTriggerRumble) {
+    items.push('扳机震动')
+  }
+  if (caps.reportsBattery) {
+    items.push('电量')
+  }
+  if (caps.supportsGyro) {
+    items.push('Gyro')
+  }
+  if (caps.supportsAccel) {
+    items.push('Accel')
+  }
+  if (caps.supportsTouchpad) {
+    items.push('触控板')
+  }
+  if (caps.supportsLed) {
+    items.push('LED')
+  }
+  if (items.length === 0) {
+    items.push('基础输入')
+  }
+  return items
+}
+
+function classificationReasons(device: GamepadDeviceDto): string {
+  if (device.classification.reasons.length === 0) {
+    return '无'
+  }
+  return device.classification.reasons.join(' / ')
+}
 </script>
 
 <template>
@@ -245,6 +372,67 @@ async function handleResumeDeviceSampling(deviceId: string): Promise<void> {
                     {{ t('gamepadCard.defaultBadge') }}
                   </span>
                 </div>
+
+                <div class="gamepad-card__device-tags">
+                  <span
+                    v-for="tag in classificationTags(device.classification)"
+                    :key="`${device.deviceId}-${tag}`"
+                    class="gamepad-card__device-tag"
+                  >
+                    {{ tag }}
+                  </span>
+                </div>
+
+                <dl class="gamepad-card__device-details">
+                  <div class="gamepad-card__device-detail-row">
+                    <dt class="gamepad-card__device-detail-label">
+                      类型
+                    </dt>
+                    <dd class="gamepad-card__device-detail-value">
+                      {{ formatDeviceType(device.gamepadType) }}
+                    </dd>
+                  </div>
+                  <div class="gamepad-card__device-detail-row">
+                    <dt class="gamepad-card__device-detail-label">
+                      VID/PID
+                    </dt>
+                    <dd class="gamepad-card__device-detail-value">
+                      {{ formatVidPid(device) }}
+                    </dd>
+                  </div>
+                  <div class="gamepad-card__device-detail-row">
+                    <dt class="gamepad-card__device-detail-label">
+                      映射
+                    </dt>
+                    <dd class="gamepad-card__device-detail-value">
+                      {{ formatMapping(device.mapping) }}
+                    </dd>
+                  </div>
+                  <div class="gamepad-card__device-detail-row">
+                    <dt class="gamepad-card__device-detail-label">
+                      能力
+                    </dt>
+                    <dd class="gamepad-card__device-detail-value">
+                      {{ capabilitySummary(device).join(' / ') }}
+                    </dd>
+                  </div>
+                  <div class="gamepad-card__device-detail-row">
+                    <dt class="gamepad-card__device-detail-label">
+                      判定
+                    </dt>
+                    <dd class="gamepad-card__device-detail-value">
+                      {{ classificationReasons(device) }}
+                    </dd>
+                  </div>
+                  <div class="gamepad-card__device-detail-row">
+                    <dt class="gamepad-card__device-detail-label">
+                      路径
+                    </dt>
+                    <dd class="gamepad-card__device-detail-value gamepad-card__device-detail-value--path" :title="device.path ?? undefined">
+                      {{ formatPath(device.path) }}
+                    </dd>
+                  </div>
+                </dl>
 
                 <div class="gamepad-card__device-actions">
                   <Focusable
@@ -481,6 +669,62 @@ async function handleResumeDeviceSampling(deviceId: string): Promise<void> {
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
+}
+
+.gamepad-card__device-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.gamepad-card__device-tag {
+  display: inline-flex;
+  align-items: center;
+  min-height: 20px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--brand-accent) 16%, transparent);
+  border: 1px solid color-mix(in srgb, var(--brand-accent) 28%, var(--ui-border-subtle));
+  color: var(--ui-page-text);
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.gamepad-card__device-details {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+}
+
+.gamepad-card__device-detail-row {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr);
+  gap: 8px;
+  align-items: start;
+}
+
+.gamepad-card__device-detail-label {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--ui-page-text-soft);
+}
+
+.gamepad-card__device-detail-value {
+  margin: 0;
+  min-width: 0;
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--ui-page-text);
+  word-break: break-word;
+}
+
+.gamepad-card__device-detail-value--path {
+  color: var(--ui-page-text-soft);
+  font-family: var(--font-family-mono, monospace);
+  font-size: 11px;
 }
 
 .gamepad-card__chip {
