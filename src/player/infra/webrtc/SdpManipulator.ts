@@ -63,15 +63,34 @@ export class SdpManipulator {
     if (!preference.mimeType.includes('H264')) {
       return sdp
     }
-    const h264Pattern = /a=fmtp:(\d+).*profile-level-id=([0-9a-f]{6})/gi
-    const preferredCodecIds = Array.from(sdp.matchAll(h264Pattern))
-      .map((match, index) => ({
-        id: match[1],
-        rank: rankH264Profile(match[2]),
+    const preferredCodecIds = sdp
+      .split('\r\n')
+      .map((line, index) => {
+        const idMatch = /^a=fmtp:(\d+)\b/i.exec(line)
+        const profileMatch = /\bprofile-level-id=([0-9a-f]{6})\b/i.exec(line)
+        if (!idMatch || !profileMatch) {
+          return null
+        }
+        return {
+          id: idMatch[1],
+          rank: rankH264Profile(profileMatch[1]),
+          profileLevelId: profileMatch[1],
+          index,
+        }
+      })
+      .filter((entry): entry is {
+        id: string
+        rank: number
+        profileLevelId: string
+        index: number
+      } => entry !== null)
+      .map(entry => ({
+        id: entry.id,
+        rank: entry.rank,
         matchesPreference: normalizedProfiles.length > 0
-          ? normalizedProfiles.some(profile => matchesH264ProfileFamily(match[2], profile))
+          ? normalizedProfiles.some(profile => matchesH264ProfileFamily(entry.profileLevelId, profile))
           : false,
-        index,
+        index: entry.index,
       }))
       .sort((left, right) => {
         if (left.matchesPreference !== right.matchesPreference) {
@@ -143,12 +162,23 @@ export class SdpManipulator {
 
     return lines
       .map((line) => {
-        const match = /^a=fmtp:(\d+)\s+(.+)$/.exec(line)
-        if (!match || !h264PayloadTypes.has(match[1])) {
+        if (!line.startsWith('a=fmtp:')) {
+          return line
+        }
+        const firstSpaceIndex = line.indexOf(' ')
+        if (firstSpaceIndex === -1) {
+          return line
+        }
+        const payloadType = line.slice('a=fmtp:'.length, firstSpaceIndex)
+        if (!h264PayloadTypes.has(payloadType)) {
+          return line
+        }
+        const rawParams = line.slice(firstSpaceIndex + 1).trim()
+        if (rawParams === '') {
           return line
         }
 
-        const params = match[2]
+        const params = rawParams
           .split(';')
           .map(part => part.trim())
           .filter(Boolean)
@@ -175,7 +205,7 @@ export class SdpManipulator {
           normalized.set('x-google-max-bitrate', `x-google-max-bitrate=${options.maxBitrateKbps}`)
         }
 
-        return `a=fmtp:${match[1]} ${Array.from(normalized.values()).join(';')}`
+        return `a=fmtp:${payloadType} ${Array.from(normalized.values()).join(';')}`
       })
       .join('\r\n')
   }

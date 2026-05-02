@@ -25,6 +25,7 @@ pub(super) fn apply_ingress_observation(
                 stats.first_video_packet_arrival_time_ms = Some(now_ms);
             }
             stats.latest_video_packet_arrival_time_ms = Some(now_ms);
+            stats.latest_video_packet_arrival_rtp_timestamp = rtp_meta.map(|meta| meta.timestamp);
         } else if route.label == RtcMediaRouteLabel::Audio {
             if stats.first_audio_packet_arrival_time_ms.is_none() {
                 stats.first_audio_packet_arrival_time_ms = Some(now_ms);

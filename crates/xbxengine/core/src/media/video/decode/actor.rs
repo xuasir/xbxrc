@@ -15,8 +15,10 @@ use crate::transport::rtc::pipeline::observation::record_pipeline_frame_drop;
 const DECODER_STALL_PACKET_FRESH_MAX_AGE_MS: f64 = 400.0;
 const DECODER_STALL_DECODE_AGE_MS: f64 = 1_000.0;
 const DECODE_MAILBOX_CAPACITY: usize = 2;
-const DECODE_OUTPUT_QUEUE_CAPACITY: usize = 5;
+const DECODE_OUTPUT_MAILBOX_CAPACITY: usize = 2;
 const PENDING_PACER_RETRY_TIMEOUT_MS: u64 = 4;
+const STALE_RECOVERY_CONTINUATION_WINDOW_MS: f64 = 80.0;
+const STALE_RECOVERY_CONTINUATION_MAX_FRAMES: u32 = 3;
 
 pub enum DecodeMsg {
     Frame(EncodedFrame),
@@ -165,6 +167,139 @@ impl DecodeActorHandle {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct EncodedFrameRecoveryClass {
+    recovery_epoch_tag: Option<u64>,
+    recovery_owner_rtp_timestamp: Option<u32>,
+    is_recovery_anchor: bool,
+    is_delta_continuation: bool,
+    width: u32,
+    height: u32,
+    rtp_timestamp: u32,
+    is_keyframe: bool,
+    frame_recovery_disposition: crate::media::video::types::FrameRecoveryDisposition,
+}
+
+impl EncodedFrameRecoveryClass {
+    fn from_frame(frame: &EncodedFrame) -> Self {
+        Self {
+            recovery_epoch_tag: frame.recovery_epoch_tag,
+            recovery_owner_rtp_timestamp: frame.recovery_owner_rtp_timestamp,
+            is_recovery_anchor: frame.is_keyframe || frame.value.is_sync_point(),
+            is_delta_continuation: frame.h264.delta_continuation_ready(),
+            width: frame.width,
+            height: frame.height,
+            rtp_timestamp: frame.rtp_timestamp,
+            is_keyframe: frame.is_keyframe,
+            frame_recovery_disposition: frame.frame_recovery_disposition,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+struct StaleRecoveryBridge {
+    epoch: Option<u64>,
+    deadline_at_ms: Option<f64>,
+    frames_left: u32,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum PreDecodeRecoveryFenceVerdict {
+    AllowCurrentOrFuture,
+    AllowStaleAnchor,
+    AllowStaleContinuation,
+    DropStaleFrame { detail: &'static str },
+}
+
+impl StaleRecoveryBridge {
+    fn evaluate(
+        &mut self,
+        frame: EncodedFrameRecoveryClass,
+        current_epoch: u64,
+        now_ms: f64,
+    ) -> PreDecodeRecoveryFenceVerdict {
+        let Some(frame_epoch) = frame.recovery_epoch_tag else {
+            return PreDecodeRecoveryFenceVerdict::AllowCurrentOrFuture;
+        };
+        if frame_epoch >= current_epoch {
+            if frame_epoch > current_epoch {
+                self.clear();
+            }
+            return PreDecodeRecoveryFenceVerdict::AllowCurrentOrFuture;
+        }
+        if frame.is_recovery_anchor {
+            return PreDecodeRecoveryFenceVerdict::AllowStaleAnchor;
+        }
+        if self.try_consume_continuation(frame_epoch, frame.is_delta_continuation, now_ms) {
+            return PreDecodeRecoveryFenceVerdict::AllowStaleContinuation;
+        }
+        PreDecodeRecoveryFenceVerdict::DropStaleFrame {
+            detail: if frame.is_delta_continuation {
+                "staleRecoveryContinuationExpired"
+            } else {
+                "staleRecoveryEpochFrame"
+            },
+        }
+    }
+
+    fn on_decode_success(
+        &mut self,
+        verdict: PreDecodeRecoveryFenceVerdict,
+        frame_epoch: Option<u64>,
+        current_epoch: u64,
+        now_ms: f64,
+    ) {
+        match verdict {
+            PreDecodeRecoveryFenceVerdict::AllowStaleAnchor => {
+                if let Some(epoch) = frame_epoch {
+                    self.epoch = Some(epoch);
+                    self.deadline_at_ms = Some(now_ms + STALE_RECOVERY_CONTINUATION_WINDOW_MS);
+                    self.frames_left = STALE_RECOVERY_CONTINUATION_MAX_FRAMES;
+                }
+            }
+            PreDecodeRecoveryFenceVerdict::AllowCurrentOrFuture => {
+                if frame_epoch.is_some_and(|epoch| epoch >= current_epoch) {
+                    self.clear();
+                }
+            }
+            PreDecodeRecoveryFenceVerdict::AllowStaleContinuation
+            | PreDecodeRecoveryFenceVerdict::DropStaleFrame { .. } => {}
+        }
+    }
+
+    fn try_consume_continuation(
+        &mut self,
+        frame_epoch: u64,
+        is_delta_continuation: bool,
+        now_ms: f64,
+    ) -> bool {
+        let within_window = self
+            .deadline_at_ms
+            .is_some_and(|deadline_at_ms| now_ms <= deadline_at_ms);
+        if self.epoch != Some(frame_epoch)
+            || !is_delta_continuation
+            || !within_window
+            || self.frames_left == 0
+        {
+            if self.epoch == Some(frame_epoch) && (!within_window || self.frames_left == 0) {
+                self.clear();
+            }
+            return false;
+        }
+        self.frames_left = self.frames_left.saturating_sub(1);
+        if self.frames_left == 0 {
+            self.clear();
+        }
+        true
+    }
+
+    fn clear(&mut self) {
+        self.epoch = None;
+        self.deadline_at_ms = None;
+        self.frames_left = 0;
+    }
+}
+
 fn run_decode_loop(
     rx: Receiver<DecodeMsg>,
     pacer: Arc<PacerActorHandle>,
@@ -205,6 +340,7 @@ fn run_decode_loop(
     let mut decode_recovery_transition_id = 0u64;
     let mut input_closed = false;
     let mut pending_output_backpressure_active = false;
+    let mut stale_recovery_bridge = StaleRecoveryBridge::default();
     sync_decode_runtime_stats(&runtime_stats, &decode_state, 0.0);
 
     loop {
@@ -226,6 +362,7 @@ fn run_decode_loop(
                 Some(dropped_frame.surface.frame_seq),
                 Some(dropped_frame.frame_recovery_disposition),
                 dropped_frame.frame_unrecoverable_reason.as_deref(),
+                None,
             );
             continue;
         }
@@ -300,6 +437,50 @@ fn run_decode_loop(
                 DecodeMsg::Frame(frame) => {
                     release_decode_slot(&available_slots, &demand_epoch, &demand_notify);
                     let now_ms = crate::media::video::decode::video_decode::now_ms_f64();
+                    let frame_rtp_timestamp = frame.rtp_timestamp;
+                    let frame_class = EncodedFrameRecoveryClass::from_frame(&frame);
+                    let current_recovery_epoch = runtime_stats
+                        .read(|stats| stats.transport_recovery_epoch)
+                        .unwrap_or(0);
+                    let fence_verdict =
+                        stale_recovery_bridge.evaluate(frame_class, current_recovery_epoch, now_ms);
+                    if let PreDecodeRecoveryFenceVerdict::DropStaleFrame { detail } = fence_verdict
+                    {
+                        record_pipeline_frame_drop(
+                            &runtime_stats,
+                            &mut frame_drop_observation_id,
+                            "decode",
+                            "drop",
+                            Some(detail),
+                            now_ms,
+                            frame_class.width,
+                            frame_class.height,
+                            frame_class.is_keyframe,
+                            decode_state.decoded_frame_queue_len(),
+                            Some(frame_class.rtp_timestamp),
+                            None,
+                            Some(frame_class.frame_recovery_disposition),
+                            None,
+                            None,
+                        );
+                        runtime_stats.update(|stats| {
+                            stats.latest_observation_label =
+                                Some("decodeStaleRecoveryFenceDrop".to_string());
+                            stats.latest_observation_summary = Some(format!(
+                                "detail={} frameEpoch={} currentEpoch={} rtpTimestamp={}",
+                                detail,
+                                frame_class
+                                    .recovery_epoch_tag
+                                    .map(|epoch| epoch.to_string())
+                                    .unwrap_or_else(|| "-".to_string()),
+                                current_recovery_epoch,
+                                frame_class.rtp_timestamp,
+                            ));
+                        });
+                        sync_decode_runtime_stats(&runtime_stats, &decode_state, now_ms);
+                        continue;
+                    }
+
                     if let Some(dropped_frame) = decode_state.process_encoded_frame(frame, now_ms) {
                         let output_queue_depth = decode_state.decoded_frame_queue_len();
                         record_pipeline_frame_drop(
@@ -307,21 +488,25 @@ fn run_decode_loop(
                             &mut frame_drop_observation_id,
                             "decode",
                             "drop",
-                            Some("outputQueueOverflow"),
+                            Some("supersededAfterDecode"),
                             now_ms,
                             dropped_frame.surface.width,
                             dropped_frame.surface.height,
                             false,
-                            DECODE_OUTPUT_QUEUE_CAPACITY,
+                            DECODE_OUTPUT_MAILBOX_CAPACITY,
                             Some(dropped_frame.rtp_timestamp),
                             Some(dropped_frame.surface.frame_seq),
                             Some(dropped_frame.frame_recovery_disposition),
                             dropped_frame.frame_unrecoverable_reason.as_deref(),
+                            decode_state
+                                .latest_decode_candidate_decision()
+                                .and_then(|decision| decision.replacement_decision.clone()),
                         );
                         runtime_stats.update(|stats| {
-                            stats.latest_observation_label = Some("decodeOutputQueueOverflow".to_string());
+                            stats.latest_observation_label =
+                                Some("decodeOutputSupersededAfterDecode".to_string());
                             stats.latest_observation_summary = Some(format!(
-                                "outputQueueDepth={} droppedFrameSeq={} droppedRtpTimestamp={} recoveryState={} candidateDetail={}",
+                                "outputMailboxDepth={} droppedFrameSeq={} droppedRtpTimestamp={} recoveryState={} candidateDetail={}",
                                 output_queue_depth,
                                 dropped_frame.surface.frame_seq,
                                 dropped_frame.rtp_timestamp,
@@ -334,6 +519,14 @@ fn run_decode_loop(
                         });
                     }
                     if decode_state.last_decode_ok_time_ms() == Some(now_ms) {
+                        stale_recovery_bridge.on_decode_success(
+                            fence_verdict,
+                            frame_class.recovery_epoch_tag,
+                            current_recovery_epoch,
+                            now_ms,
+                        );
+                    }
+                    if decode_state.last_decode_ok_time_ms() == Some(now_ms) {
                         recent_decode_times_ms.push_back(now_ms);
                         while let Some(front) = recent_decode_times_ms.front().copied() {
                             if now_ms - front <= 1_000.0 {
@@ -343,6 +536,7 @@ fn run_decode_loop(
                         }
                         runtime_stats.update(|stats| {
                             stats.latest_video_decode_ok_time_ms = Some(now_ms);
+                            stats.latest_video_decode_ok_rtp_timestamp = Some(frame_rtp_timestamp);
                             stats.video_decode_fps = recent_window_fps(&recent_decode_times_ms);
                         });
                     }
@@ -357,6 +551,7 @@ fn run_decode_loop(
                                         action: decision.action.to_string(),
                                         detail: decision.detail.to_string(),
                                         frame_seq: decision.frame_seq,
+                                        replacement_decision: decision.replacement_decision.clone(),
                                         observed_at_ms: decision.observed_at_ms,
                                     },
                                 );
@@ -452,6 +647,16 @@ enum PendingDecodedSubmitResult {
     Disconnected(crate::media::video::types::DecodedFrame),
 }
 
+impl PendingDecodedSubmitResult {
+    fn label(&self) -> &'static str {
+        match self {
+            Self::Submitted => "submitted",
+            Self::Backpressure(_) => "backpressure",
+            Self::Disconnected(_) => "disconnected",
+        }
+    }
+}
+
 fn drain_pending_decoded_output(
     decode_state: &mut XbxVideoDecodeState,
     runtime_stats: &RuntimeStatsSink,
@@ -475,7 +680,25 @@ where
         let Some(frame) = decode_state.pop_decoded_frame(now_ms) else {
             break;
         };
-        if frame.is_keyframe {
+        let decoded_owner_matches_latest_episode = if frame.is_keyframe {
+            runtime_stats
+                .read(|stats| {
+                    stats
+                        .latest_keyframe_request_episode
+                        .as_ref()
+                        .filter(|episode| {
+                            episode.request_reason.as_deref()
+                                == Some("transportAwaitRecoveryAnchor")
+                        })
+                        .is_none_or(|episode| {
+                            episode.response_rtp_timestamp == Some(frame.rtp_timestamp)
+                        })
+                })
+                .unwrap_or(true)
+        } else {
+            true
+        };
+        if frame.is_keyframe && decoded_owner_matches_latest_episode {
             runtime_stats.record_picture_recovery_episode_decoded(
                 now_ms,
                 frame.rtp_timestamp,
@@ -484,20 +707,123 @@ where
         }
         let clean_anchor_commit_recovery_epoch = frame.clean_anchor_commit_recovery_epoch;
         let frame_rtp_timestamp = frame.rtp_timestamp;
+        let recovery_owner_rtp_timestamp = frame.recovery_owner_rtp_timestamp;
         let frame_seq = frame.surface.frame_seq;
-        match submit(frame) {
+        let submit_result = submit(frame);
+        runtime_stats.update(|stats| {
+            stats.latest_observation_label = Some("decodePacerSubmit".to_string());
+            stats.latest_observation_summary = Some(format!(
+                "result={} frameSeq={} rtpTimestamp={} cleanAnchorEpoch={} recoveryOwnerRtp={} pendingOutputQueueDepth={} candidateDetail={}",
+                submit_result.label(),
+                frame_seq,
+                frame_rtp_timestamp,
+                clean_anchor_commit_recovery_epoch
+                    .map(|epoch| epoch.to_string())
+                    .unwrap_or_else(|| "-".to_string()),
+                recovery_owner_rtp_timestamp
+                    .map(|rtp| rtp.to_string())
+                    .unwrap_or_else(|| "-".to_string()),
+                decode_state.decoded_frame_queue_len(),
+                decode_state
+                    .latest_decode_candidate_decision()
+                    .map(|decision| decision.detail)
+                    .unwrap_or("none"),
+            ));
+        });
+        crate::xbx_log_warn!(
+            "[playback-flow][decode] event=pacerSubmit result={} frameSeq={} rtpTimestamp={} cleanAnchorEpoch={} recoveryOwnerRtp={} pendingOutputQueueDepth={}",
+            submit_result.label(),
+            frame_seq,
+            frame_rtp_timestamp,
+            clean_anchor_commit_recovery_epoch
+                .map(|epoch| epoch.to_string())
+                .unwrap_or_else(|| "-".to_string()),
+            recovery_owner_rtp_timestamp
+                .map(|rtp| rtp.to_string())
+                .unwrap_or_else(|| "-".to_string()),
+            decode_state.decoded_frame_queue_len(),
+        );
+        match submit_result {
             PendingDecodedSubmitResult::Submitted => {
                 if let Some(recovery_epoch) = clean_anchor_commit_recovery_epoch {
-                    let (transport_recovery_epoch, clean_anchor_epoch) = runtime_stats
+                    let (
+                        transport_recovery_epoch,
+                        clean_anchor_epoch,
+                        submission_episode_id,
+                        owner_accepts_submission,
+                    ) = runtime_stats
                         .read(|stats| {
+                            let owner_rtp_timestamp =
+                                recovery_owner_rtp_timestamp.or(Some(frame_rtp_timestamp));
+                            let current_owner_episode = stats
+                                .latest_keyframe_request_episode
+                                .as_ref()
+                                .filter(|episode| {
+                                    episode.request_reason.as_deref()
+                                        == Some("transportAwaitRecoveryAnchor")
+                                });
+                            let inspection_bound_episode_id = stats
+                                .latest_h264_inspection_observation
+                                .as_ref()
+                                .and_then(|inspection| {
+                                    (inspection.frame_rtp_timestamp == Some(frame_rtp_timestamp)
+                                        && inspection.admission_accepted
+                                        && inspection.bound_recovery_epoch
+                                            == Some(stats.transport_recovery_epoch))
+                                    .then_some(inspection.bound_episode_id)
+                                    .flatten()
+                                });
+                            let bound_episode_id = current_owner_episode
+                                .filter(|episode| {
+                                    owner_rtp_timestamp.is_some_and(|owner_rtp_timestamp| {
+                                        episode.response_rtp_timestamp == Some(owner_rtp_timestamp)
+                                            || episode.first_video_packet_rtp_timestamp
+                                                == Some(owner_rtp_timestamp)
+                                    }) || episode.response_rtp_timestamp
+                                        == Some(frame_rtp_timestamp)
+                                        || episode.first_video_packet_rtp_timestamp
+                                            == Some(frame_rtp_timestamp)
+                                })
+                                .map(|episode| episode.episode_id)
+                                .or_else(|| {
+                                    stats.recent_keyframe_request_episodes.iter().find_map(
+                                        |episode| {
+                                            (episode.request_reason.as_deref()
+                                                == Some("transportAwaitRecoveryAnchor")
+                                                && (owner_rtp_timestamp.is_some_and(
+                                                    |owner_rtp_timestamp| {
+                                                        episode.response_rtp_timestamp
+                                                            == Some(owner_rtp_timestamp)
+                                                            || episode
+                                                                .first_video_packet_rtp_timestamp
+                                                                == Some(owner_rtp_timestamp)
+                                                    },
+                                                ) || episode.response_rtp_timestamp
+                                                    == Some(frame_rtp_timestamp)
+                                                    || episode.first_video_packet_rtp_timestamp
+                                                        == Some(frame_rtp_timestamp)))
+                                            .then_some(episode.episode_id)
+                                        },
+                                    )
+                                });
+                            let current_owner_episode_id =
+                                current_owner_episode.map(|episode| episode.episode_id);
                             (
                                 stats.transport_recovery_epoch,
                                 stats.video_anchor_clean_epoch,
+                                bound_episode_id
+                                    .or(inspection_bound_episode_id)
+                                    .or(current_owner_episode_id),
+                                current_owner_episode_id.is_none()
+                                    || current_owner_episode_id
+                                        == bound_episode_id.or(inspection_bound_episode_id),
                             )
                         })
-                        .unwrap_or((0, None));
+                        .unwrap_or((0, None, None, false));
                     let should_commit_clean_anchor = transport_recovery_epoch == recovery_epoch
-                        && clean_anchor_epoch != Some(recovery_epoch);
+                        && clean_anchor_epoch != Some(recovery_epoch)
+                        && submission_episode_id.is_some()
+                        && owner_accepts_submission;
                     if should_commit_clean_anchor {
                         runtime_stats.record_anchor_candidate_ledger(
                             recovery_epoch,
@@ -507,8 +833,37 @@ where
                             None,
                             now_ms,
                         );
-                        runtime_stats
-                            .record_transport_clean_anchor(now_ms, "chain-clean-anchor-submitted");
+                        runtime_stats.record_transport_clean_anchor_submission(
+                            recovery_epoch,
+                            submission_episode_id.unwrap_or_default(),
+                            frame_rtp_timestamp,
+                            now_ms,
+                            "chain-clean-anchor-submitted",
+                        );
+                    } else if transport_recovery_epoch == recovery_epoch
+                        && clean_anchor_epoch != Some(recovery_epoch)
+                        && submission_episode_id.is_none()
+                    {
+                        runtime_stats.record_picture_recovery_blocker(
+                            now_ms,
+                            "media",
+                            "cleanAnchorEpisodeUnbound",
+                            "warning",
+                            Some(frame_rtp_timestamp),
+                            Some(frame_seq),
+                        );
+                    } else if transport_recovery_epoch == recovery_epoch
+                        && clean_anchor_epoch != Some(recovery_epoch)
+                        && !owner_accepts_submission
+                    {
+                        runtime_stats.record_picture_recovery_blocker(
+                            now_ms,
+                            "media",
+                            "cleanAnchorOwnerAdvanced",
+                            "warning",
+                            Some(frame_rtp_timestamp),
+                            Some(frame_seq),
+                        );
                     } else if transport_recovery_epoch != recovery_epoch
                         && clean_anchor_epoch != Some(recovery_epoch)
                     {
@@ -756,13 +1111,16 @@ fn derive_decoder_stalled(runtime_stats: &RuntimeStatsSink, now_ms: f64) -> bool
 #[cfg(test)]
 mod tests {
     use std::sync::Arc;
+    use std::time::Instant;
 
     use super::{
         drain_pending_decoded_output_with_submit, format_decode_backpressure_summary,
-        PendingDecodedSubmitResult,
+        EncodedFrameRecoveryClass, PendingDecodedSubmitResult, PreDecodeRecoveryFenceVerdict,
+        StaleRecoveryBridge,
     };
     use crate::media::video::decode::video_decode::XbxVideoDecodeState;
     use crate::media::video::render::renderer::XbxRenderFrame;
+    use crate::media::video::types::{EncodedFrame, FrameValue, VideoCodec};
     use crate::runtime_stats_sink::RuntimeStatsSink;
     use crate::{XbxEngineAnchorCandidateState, XbxEngineRenderPixelData};
 
@@ -773,19 +1131,133 @@ mod tests {
             frame_seq,
             rendered_at_ms: frame_seq as f64,
             rtp_timestamp: Some(frame_seq as u32),
+            recovery_epoch_tag: None,
+            recovery_owner_rtp_timestamp: None,
             is_keyframe: frame_seq == 1,
             frame_recovery_disposition: Some("repairing".to_string()),
             frame_unrecoverable_reason: None,
+            presentation_value_role: None,
             pixel_data: XbxEngineRenderPixelData::Rgba {
                 bytes: Arc::<[u8]>::from([frame_seq as u8; 16]),
             },
         }
     }
 
+    fn make_encoded_frame(
+        recovery_epoch_tag: Option<u64>,
+        is_keyframe: bool,
+        continuation_ready: bool,
+    ) -> EncodedFrame {
+        let mut h264 = crate::media::video::test_fixtures::make_bootstrap_assembled_frame(7)
+            .into_encoded_frame(Instant::now());
+        if continuation_ready {
+            h264.h264.commit();
+        }
+        h264.is_keyframe = is_keyframe;
+        h264.value = FrameValue::new(is_keyframe, false, 128);
+        h264.rtp_timestamp = 7;
+        h264.recovery_epoch_tag = recovery_epoch_tag;
+        h264.h264.is_idr = is_keyframe;
+        h264.h264.bootstrap_ready = is_keyframe;
+        h264.h264.bootstrap_reject_reason = if is_keyframe {
+            None
+        } else {
+            Some(crate::media::video::h264::inspection::H264BootstrapRejectReason::NonIdrVcl)
+        };
+        h264.codec = VideoCodec::H264;
+        h264
+    }
+
+    #[test]
+    fn stale_recovery_bridge_drops_old_delta_without_anchor() {
+        let mut bridge = StaleRecoveryBridge::default();
+        let frame =
+            EncodedFrameRecoveryClass::from_frame(&make_encoded_frame(Some(2), false, true));
+
+        let verdict = bridge.evaluate(frame, 3, 100.0);
+
+        assert_eq!(
+            verdict,
+            PreDecodeRecoveryFenceVerdict::DropStaleFrame {
+                detail: "staleRecoveryContinuationExpired",
+            }
+        );
+    }
+
+    #[test]
+    fn stale_recovery_bridge_allows_short_continuation_after_stale_anchor_decode() {
+        let mut bridge = StaleRecoveryBridge::default();
+        let stale_anchor =
+            EncodedFrameRecoveryClass::from_frame(&make_encoded_frame(Some(2), true, false));
+        let stale_delta =
+            EncodedFrameRecoveryClass::from_frame(&make_encoded_frame(Some(2), false, true));
+
+        let anchor_verdict = bridge.evaluate(stale_anchor, 3, 100.0);
+        assert_eq!(
+            anchor_verdict,
+            PreDecodeRecoveryFenceVerdict::AllowStaleAnchor
+        );
+        bridge.on_decode_success(anchor_verdict, Some(2), 3, 100.0);
+
+        assert_eq!(
+            bridge.evaluate(stale_delta, 3, 120.0),
+            PreDecodeRecoveryFenceVerdict::AllowStaleContinuation
+        );
+        assert_eq!(
+            bridge.evaluate(stale_delta, 3, 130.0),
+            PreDecodeRecoveryFenceVerdict::AllowStaleContinuation
+        );
+        assert_eq!(
+            bridge.evaluate(stale_delta, 3, 140.0),
+            PreDecodeRecoveryFenceVerdict::AllowStaleContinuation
+        );
+        assert_eq!(
+            bridge.evaluate(stale_delta, 3, 150.0),
+            PreDecodeRecoveryFenceVerdict::DropStaleFrame {
+                detail: "staleRecoveryContinuationExpired",
+            }
+        );
+    }
+
+    #[test]
+    fn current_epoch_decode_success_clears_stale_recovery_bridge() {
+        let mut bridge = StaleRecoveryBridge::default();
+        let stale_anchor =
+            EncodedFrameRecoveryClass::from_frame(&make_encoded_frame(Some(2), true, false));
+        let current_anchor =
+            EncodedFrameRecoveryClass::from_frame(&make_encoded_frame(Some(3), true, false));
+        let stale_delta =
+            EncodedFrameRecoveryClass::from_frame(&make_encoded_frame(Some(2), false, true));
+
+        let stale_verdict = bridge.evaluate(stale_anchor, 3, 100.0);
+        bridge.on_decode_success(stale_verdict, Some(2), 3, 100.0);
+        assert_eq!(
+            bridge.evaluate(stale_delta, 3, 110.0),
+            PreDecodeRecoveryFenceVerdict::AllowStaleContinuation
+        );
+
+        let current_verdict = bridge.evaluate(current_anchor, 3, 120.0);
+        assert_eq!(
+            current_verdict,
+            PreDecodeRecoveryFenceVerdict::AllowCurrentOrFuture
+        );
+        bridge.on_decode_success(current_verdict, Some(3), 3, 120.0);
+
+        assert_eq!(
+            bridge.evaluate(stale_delta, 3, 130.0),
+            PreDecodeRecoveryFenceVerdict::DropStaleFrame {
+                detail: "staleRecoveryContinuationExpired",
+            }
+        );
+    }
+
     #[test]
     fn pending_decoded_output_keeps_frame_on_backpressure_until_retry_succeeds() {
         let mut state = XbxVideoDecodeState::new(20, 30).expect("decode state should initialize");
+        // mailbox: 先让 frame=1 进入 inflight，然后再放入 latest candidate=2
         state.enqueue_decoded_frame_for_test(make_render_frame(1));
+        let inflight = state.pop_decoded_frame(0.0).expect("inflight should exist");
+        state.requeue_decoded_frame_front(inflight);
         state.enqueue_decoded_frame_for_test(make_render_frame(2));
 
         let mut submit_calls = 0usize;
@@ -795,7 +1267,10 @@ mod tests {
         let first_pass =
             drain_pending_decoded_output_with_submit(&mut state, &runtime_stats, |frame| {
                 submit_calls += 1;
-                assert_eq!(frame.surface.frame_seq, submit_calls as u64);
+                // 第一次必须先尝试提交 inflight=1
+                if submit_calls == 1 {
+                    assert_eq!(frame.surface.frame_seq, 1);
+                }
                 if submit_calls == 1 {
                     PendingDecodedSubmitResult::Backpressure(frame)
                 } else {
@@ -832,7 +1307,10 @@ mod tests {
     #[test]
     fn pending_decoded_output_reports_disconnect_without_silently_requeueing() {
         let mut state = XbxVideoDecodeState::new(20, 30).expect("decode state should initialize");
+        // mailbox: 先让 2 进入 inflight，然后再放入 latest=3
         state.enqueue_decoded_frame_for_test(make_render_frame(2));
+        let inflight = state.pop_decoded_frame(0.0).expect("inflight should exist");
+        state.requeue_decoded_frame_front(inflight);
         state.enqueue_decoded_frame_for_test(make_render_frame(3));
 
         let runtime_stats = RuntimeStatsSink::new(Arc::new(std::sync::Mutex::new(
@@ -857,13 +1335,13 @@ mod tests {
     #[test]
     fn decoded_output_queue_remains_bounded_when_front_frame_is_requeued() {
         let mut state = XbxVideoDecodeState::new(20, 30).expect("decode state should initialize");
+        // mailbox: 先让 frame=1 占用 inflight，再放一个 latest=2
         state.enqueue_decoded_frame_for_test(make_render_frame(1));
-        state.enqueue_decoded_frame_for_test(make_render_frame(2));
-
-        let frame = state
+        let inflight = state
             .pop_decoded_frame(0.0)
             .expect("front frame should exist");
-        state.requeue_decoded_frame_front(frame);
+        state.requeue_decoded_frame_front(inflight);
+        state.enqueue_decoded_frame_for_test(make_render_frame(2));
 
         assert_eq!(
             state
@@ -884,6 +1362,24 @@ mod tests {
         ));
         let sink = RuntimeStatsSink::new(runtime_stats.clone());
         sink.begin_transport_recovery_episode(10.0);
+        sink.record_picture_recovery_episode_requested(
+            1001,
+            Some("transportAwaitRecoveryAnchor".to_string()),
+            100.0,
+            None,
+        );
+        sink.record_picture_recovery_episode_sent("pli", 120.0, Some(300.0));
+        sink.record_picture_recovery_episode_response_observed(
+            150.0,
+            Some(1),
+            true,
+            "firstAcceptedIdr",
+            Some(11),
+            None,
+            false,
+            false,
+        );
+        sink.record_picture_recovery_episode_decoded(180.0, 1, 55);
 
         let drained = drain_pending_decoded_output_with_submit(&mut state, &sink, |_frame| {
             PendingDecodedSubmitResult::Submitted
@@ -891,11 +1387,9 @@ mod tests {
 
         assert!(drained.is_none());
         let stats = runtime_stats.lock().expect("runtime stats lock");
-        assert_eq!(stats.video_anchor_clean_epoch, Some(1));
-        assert_eq!(
-            stats.video_anchor_clean_source_event.as_deref(),
-            Some("chain-clean-anchor-submitted")
-        );
+        assert_eq!(stats.video_anchor_clean_epoch, None);
+        assert_eq!(stats.latest_clean_anchor_submission_epoch, Some(1));
+        assert_eq!(stats.latest_clean_anchor_submission_rtp_timestamp, Some(1));
         let ledger = stats
             .latest_anchor_candidate_ledger
             .as_ref()
@@ -910,12 +1404,60 @@ mod tests {
 
     #[test]
     fn decode_backpressure_summary_includes_candidate_and_recovery_state() {
-        let summary =
-            format_decode_backpressure_summary(3, Some("outputQueueOverflow"), Some("recovering"));
+        let summary = format_decode_backpressure_summary(
+            2,
+            Some("supersededAfterDecode"),
+            Some("recovering"),
+        );
 
-        assert!(summary.contains("pendingOutputQueueDepth=3"));
-        assert!(summary.contains("candidateDetail=outputQueueOverflow"));
+        assert!(summary.contains("pendingOutputQueueDepth=2"));
+        assert!(summary.contains("candidateDetail=supersededAfterDecode"));
         assert!(summary.contains("recoveryState=recovering"));
+    }
+
+    #[test]
+    fn decode_pacer_submit_observation_records_backpressure_and_submit() {
+        let mut state = XbxVideoDecodeState::new(20, 30).expect("decode state should initialize");
+        state.enqueue_decoded_frame_for_test(make_render_frame(7));
+
+        let runtime_stats = Arc::new(std::sync::Mutex::new(
+            crate::XbxEngineMediaRuntimeStats::default(),
+        ));
+        let sink = RuntimeStatsSink::new(runtime_stats.clone());
+
+        let first = drain_pending_decoded_output_with_submit(&mut state, &sink, |frame| {
+            PendingDecodedSubmitResult::Backpressure(frame)
+        });
+        assert!(first.is_none());
+        {
+            let stats = runtime_stats.lock().expect("runtime stats lock");
+            assert_eq!(
+                stats.latest_observation_label.as_deref(),
+                Some("decodePacerSubmit")
+            );
+            let summary = stats
+                .latest_observation_summary
+                .as_deref()
+                .expect("backpressure summary");
+            assert!(summary.contains("result=backpressure"));
+            assert!(summary.contains("frameSeq=7"));
+        }
+
+        let second = drain_pending_decoded_output_with_submit(&mut state, &sink, |_frame| {
+            PendingDecodedSubmitResult::Submitted
+        });
+        assert!(second.is_none());
+        let stats = runtime_stats.lock().expect("runtime stats lock");
+        assert_eq!(
+            stats.latest_observation_label.as_deref(),
+            Some("decodePacerSubmit")
+        );
+        let summary = stats
+            .latest_observation_summary
+            .as_deref()
+            .expect("submit summary");
+        assert!(summary.contains("result=submitted"));
+        assert!(summary.contains("frameSeq=7"));
     }
 
     #[test]
@@ -928,6 +1470,24 @@ mod tests {
         ));
         let sink = RuntimeStatsSink::new(runtime_stats.clone());
         sink.begin_transport_recovery_episode(10.0);
+        sink.record_picture_recovery_episode_requested(
+            1001,
+            Some("transportAwaitRecoveryAnchor".to_string()),
+            100.0,
+            None,
+        );
+        sink.record_picture_recovery_episode_sent("pli", 120.0, Some(300.0));
+        sink.record_picture_recovery_episode_response_observed(
+            150.0,
+            Some(1),
+            true,
+            "firstAcceptedIdr",
+            Some(11),
+            None,
+            false,
+            false,
+        );
+        sink.record_picture_recovery_episode_decoded(180.0, 1, 55);
 
         let first = drain_pending_decoded_output_with_submit(&mut state, &sink, |frame| {
             PendingDecodedSubmitResult::Backpressure(frame)
@@ -943,11 +1503,38 @@ mod tests {
         });
         assert!(second.is_none());
         let stats = runtime_stats.lock().expect("runtime stats lock");
-        assert_eq!(stats.video_anchor_clean_epoch, Some(1));
-        assert_eq!(
-            stats.video_anchor_clean_source_event.as_deref(),
-            Some("chain-clean-anchor-submitted")
-        );
+        assert_eq!(stats.video_anchor_clean_epoch, None);
+        assert_eq!(stats.latest_clean_anchor_submission_epoch, Some(1));
+        assert_eq!(stats.latest_clean_anchor_submission_rtp_timestamp, Some(1));
+    }
+
+    #[test]
+    fn clean_anchor_commit_does_not_satisfy_new_epoch_after_epoch_advances() {
+        let mut state = XbxVideoDecodeState::new(20, 30).expect("decode state should initialize");
+        state.enqueue_decoded_frame_with_clean_anchor_epoch_for_test(make_render_frame(1), Some(1));
+
+        let runtime_stats = Arc::new(std::sync::Mutex::new(
+            crate::XbxEngineMediaRuntimeStats::default(),
+        ));
+        let sink = RuntimeStatsSink::new(runtime_stats.clone());
+        sink.begin_transport_recovery_episode(10.0);
+        sink.advance_transport_recovery_episode(20.0);
+
+        let drained = drain_pending_decoded_output_with_submit(&mut state, &sink, |_frame| {
+            PendingDecodedSubmitResult::Submitted
+        });
+
+        assert!(drained.is_none());
+        let stats = runtime_stats.lock().expect("runtime stats lock");
+        assert_eq!(stats.transport_recovery_epoch, 2);
+        assert_eq!(stats.video_anchor_clean_epoch, None);
+        assert_eq!(stats.latest_clean_anchor_submission_epoch, None);
+        let blocker = stats
+            .latest_picture_recovery_blocker_observation
+            .as_ref()
+            .expect("epoch advanced blocker");
+        assert_eq!(blocker.blocker_kind, "cleanAnchorCommitEpochAdvanced");
+        assert_eq!(blocker.gate, "media");
     }
 
     #[test]
@@ -976,7 +1563,8 @@ mod tests {
         state.enqueue_decoded_frame_with_clean_anchor_epoch_and_pts_for_test(
             make_render_frame(1),
             Some(1),
-            std::time::Instant::now() - std::time::Duration::from_millis(20),
+            // 确保 stale：让 clean-anchor 候选在 decode stage 被丢弃，不应触发提交。
+            std::time::Instant::now() - std::time::Duration::from_millis(200),
         );
 
         let runtime_stats = Arc::new(std::sync::Mutex::new(
@@ -984,6 +1572,24 @@ mod tests {
         ));
         let sink = RuntimeStatsSink::new(runtime_stats.clone());
         sink.begin_transport_recovery_episode(10.0);
+        sink.record_picture_recovery_episode_requested(
+            1001,
+            Some("transportAwaitRecoveryAnchor".to_string()),
+            100.0,
+            None,
+        );
+        sink.record_picture_recovery_episode_sent("pli", 120.0, Some(300.0));
+        sink.record_picture_recovery_episode_response_observed(
+            150.0,
+            Some(1),
+            true,
+            "firstAcceptedIdr",
+            Some(11),
+            None,
+            false,
+            false,
+        );
+        sink.record_picture_recovery_episode_decoded(180.0, 1, 55);
 
         let first = drain_pending_decoded_output_with_submit(&mut state, &sink, |_frame| {
             PendingDecodedSubmitResult::Submitted
@@ -995,16 +1601,20 @@ mod tests {
             assert!(stats.latest_anchor_candidate_ledger.is_none());
         }
 
-        state.enqueue_decoded_frame_with_clean_anchor_epoch_for_test(make_render_frame(2), Some(1));
+        let mut continuation = make_render_frame(2);
+        continuation.recovery_owner_rtp_timestamp = Some(1);
+        state.enqueue_decoded_frame_with_clean_anchor_epoch_for_test(continuation, Some(1));
         let second = drain_pending_decoded_output_with_submit(&mut state, &sink, |_frame| {
             PendingDecodedSubmitResult::Submitted
         });
         assert!(second.is_none());
 
         let stats = runtime_stats.lock().expect("runtime stats lock");
-        assert_eq!(stats.video_anchor_clean_epoch, Some(1));
+        assert_eq!(stats.video_anchor_clean_epoch, None);
+        assert_eq!(stats.latest_clean_anchor_submission_epoch, Some(1));
+        assert_eq!(stats.latest_clean_anchor_submission_rtp_timestamp, Some(2));
         assert_eq!(
-            stats.video_anchor_clean_source_event.as_deref(),
+            stats.latest_clean_anchor_submission_source_event.as_deref(),
             Some("chain-clean-anchor-submitted")
         );
         let ledger = stats
@@ -1039,6 +1649,7 @@ mod tests {
 
         assert!(drained.is_none());
         let stats = runtime_stats.lock().expect("runtime stats lock");
+        assert_eq!(stats.transport_recovery_epoch, 2);
         assert_eq!(stats.video_anchor_clean_epoch, None);
         let blocker = stats
             .latest_picture_recovery_blocker_observation
@@ -1046,5 +1657,266 @@ mod tests {
             .expect("epoch advanced blocker");
         assert_eq!(blocker.blocker_kind, "cleanAnchorCommitEpochAdvanced");
         assert_eq!(blocker.gate, "media");
+    }
+
+    #[test]
+    fn stale_owner_frame_does_not_submit_clean_anchor_before_new_episode_binds_response() {
+        let mut state = XbxVideoDecodeState::new(20, 30).expect("decode state should initialize");
+        state.enqueue_decoded_frame_with_clean_anchor_epoch_for_test(make_render_frame(1), Some(1));
+
+        let runtime_stats = Arc::new(std::sync::Mutex::new(
+            crate::XbxEngineMediaRuntimeStats::default(),
+        ));
+        let sink = RuntimeStatsSink::new(runtime_stats.clone());
+        sink.begin_transport_recovery_episode(10.0);
+        sink.record_picture_recovery_episode_requested(
+            1001,
+            Some("transportAwaitRecoveryAnchor".to_string()),
+            100.0,
+            None,
+        );
+        sink.record_picture_recovery_episode_sent("pli", 120.0, Some(300.0));
+        sink.record_picture_recovery_episode_response_observed(
+            150.0,
+            Some(1),
+            true,
+            "firstAcceptedIdr",
+            Some(11),
+            None,
+            false,
+            false,
+        );
+        sink.update(|stats| {
+            stats.latest_keyframe_request_episode =
+                Some(crate::XbxEngineKeyframeRequestEpisodeObservation {
+                    episode_id: 1002,
+                    request_reason: Some("transportAwaitRecoveryAnchor".to_string()),
+                    status: "waiting-response".to_string(),
+                    requested_at_ms: 160.0,
+                    ..Default::default()
+                });
+        });
+
+        let drained = drain_pending_decoded_output_with_submit(&mut state, &sink, |_frame| {
+            PendingDecodedSubmitResult::Submitted
+        });
+
+        assert!(drained.is_none());
+        let stats = runtime_stats.lock().expect("runtime stats lock");
+        assert_eq!(stats.video_anchor_clean_epoch, None);
+        assert_eq!(stats.latest_clean_anchor_submission_epoch, None);
+        let blocker = stats
+            .latest_picture_recovery_blocker_observation
+            .as_ref()
+            .expect("owner advanced blocker");
+        assert_eq!(blocker.blocker_kind, "cleanAnchorOwnerAdvanced");
+        assert_eq!(blocker.frame_rtp_timestamp, Some(1));
+    }
+
+    #[test]
+    fn same_episode_owner_advance_keeps_clean_anchor_submission_pending() {
+        let mut state = XbxVideoDecodeState::new(20, 30).expect("decode state should initialize");
+        state.enqueue_decoded_frame_with_clean_anchor_epoch_for_test(make_render_frame(1), Some(1));
+
+        let runtime_stats = Arc::new(std::sync::Mutex::new(
+            crate::XbxEngineMediaRuntimeStats::default(),
+        ));
+        let sink = RuntimeStatsSink::new(runtime_stats.clone());
+        sink.begin_transport_recovery_episode(10.0);
+        sink.record_picture_recovery_episode_requested(
+            1001,
+            Some("transportAwaitRecoveryAnchor".to_string()),
+            100.0,
+            None,
+        );
+        sink.record_picture_recovery_episode_sent("pli", 120.0, Some(300.0));
+        sink.record_picture_recovery_episode_response_observed(
+            150.0,
+            Some(1),
+            true,
+            "firstAcceptedIdr",
+            Some(11),
+            None,
+            false,
+            false,
+        );
+        sink.record_picture_recovery_episode_response_observed(
+            180.0,
+            Some(101),
+            true,
+            "ownerFrameAdvanced",
+            Some(12),
+            None,
+            false,
+            false,
+        );
+
+        let drained = drain_pending_decoded_output_with_submit(&mut state, &sink, |_frame| {
+            PendingDecodedSubmitResult::Submitted
+        });
+
+        assert!(drained.is_none());
+        let stats = runtime_stats.lock().expect("runtime stats lock");
+        assert_eq!(stats.video_anchor_clean_epoch, None);
+        assert_eq!(stats.latest_clean_anchor_submission_epoch, Some(1));
+        assert_eq!(stats.latest_clean_anchor_submission_episode_id, Some(1001));
+        assert_eq!(stats.latest_clean_anchor_submission_rtp_timestamp, Some(1));
+        let transition = stats
+            .latest_picture_recovery_transition_observation
+            .as_ref()
+            .expect("clean anchor submission transition");
+        assert_eq!(transition.phase, "CleanAnchorSubmitted");
+        assert_eq!(transition.rtp_timestamp, Some(1));
+    }
+
+    #[test]
+    fn continuation_submission_reuses_h264_bound_episode_when_latest_owner_slot_is_unavailable() {
+        let mut state = XbxVideoDecodeState::new(20, 30).expect("decode state should initialize");
+        state.enqueue_decoded_frame_with_clean_anchor_epoch_for_test(make_render_frame(2), Some(1));
+
+        let runtime_stats = Arc::new(std::sync::Mutex::new(
+            crate::XbxEngineMediaRuntimeStats::default(),
+        ));
+        let sink = RuntimeStatsSink::new(runtime_stats.clone());
+        sink.begin_transport_recovery_episode(10.0);
+        sink.record_picture_recovery_episode_requested(
+            1001,
+            Some("transportAwaitRecoveryAnchor".to_string()),
+            100.0,
+            None,
+        );
+        sink.record_picture_recovery_episode_sent("pli", 120.0, Some(300.0));
+        sink.record_picture_recovery_episode_response_observed(
+            150.0,
+            Some(1),
+            true,
+            "firstAcceptedIdr",
+            Some(11),
+            None,
+            false,
+            false,
+        );
+        sink.record_picture_recovery_episode_decoded(180.0, 1, 55);
+        sink.update(|stats| {
+            stats.latest_keyframe_request_episode =
+                Some(crate::XbxEngineKeyframeRequestEpisodeObservation {
+                    episode_id: 2001,
+                    request_reason: Some("displaySupplyCritical".to_string()),
+                    status: "recovering".to_string(),
+                    requested_at_ms: 190.0,
+                    ..Default::default()
+                });
+            stats.latest_h264_inspection_observation =
+                Some(crate::XbxEngineH264InspectionObservation {
+                    observation_id: 41,
+                    frame_rtp_timestamp: Some(2),
+                    committed_sps_present: true,
+                    committed_pps_present: true,
+                    delta_continuation_ready: true,
+                    bootstrap_ready: false,
+                    bootstrap_reject_reason: Some("bootstrapMissingIdr".to_string()),
+                    continuation_verdict: Some("continuationAcceptedWhileAwaitingIdr".to_string()),
+                    admission_accepted: true,
+                    observed_at_ms: 195.0,
+                    bound_episode_id: Some(1001),
+                    bound_recovery_epoch: Some(1),
+                    ..Default::default()
+                });
+        });
+
+        let drained = drain_pending_decoded_output_with_submit(&mut state, &sink, |_frame| {
+            PendingDecodedSubmitResult::Submitted
+        });
+
+        assert!(drained.is_none());
+        let stats = runtime_stats.lock().expect("runtime stats lock");
+        assert_eq!(stats.video_anchor_clean_epoch, None);
+        assert_eq!(stats.latest_clean_anchor_submission_epoch, Some(1));
+        assert_eq!(stats.latest_clean_anchor_submission_episode_id, Some(1001));
+        assert_eq!(stats.latest_clean_anchor_submission_rtp_timestamp, Some(2));
+    }
+
+    #[test]
+    fn continuation_submission_uses_recovery_owner_rtp_timestamp_when_frame_rtp_drifts() {
+        let mut state = XbxVideoDecodeState::new(20, 30).expect("decode state should initialize");
+        let mut frame = make_render_frame(2);
+        frame.rtp_timestamp = Some(2);
+        frame.recovery_owner_rtp_timestamp = Some(1);
+        state.enqueue_decoded_frame_with_clean_anchor_epoch_for_test(frame, Some(1));
+
+        let runtime_stats = Arc::new(std::sync::Mutex::new(
+            crate::XbxEngineMediaRuntimeStats::default(),
+        ));
+        let sink = RuntimeStatsSink::new(runtime_stats.clone());
+        sink.begin_transport_recovery_episode(10.0);
+        sink.record_picture_recovery_episode_requested(
+            1001,
+            Some("transportAwaitRecoveryAnchor".to_string()),
+            100.0,
+            None,
+        );
+        sink.record_picture_recovery_episode_sent("pli", 120.0, Some(300.0));
+        sink.record_picture_recovery_episode_response_observed(
+            150.0,
+            Some(1),
+            true,
+            "firstAcceptedIdr",
+            Some(11),
+            None,
+            false,
+            false,
+        );
+        sink.record_picture_recovery_episode_decoded(180.0, 1, 55);
+        sink.update(|stats| {
+            stats.latest_keyframe_request_episode =
+                Some(crate::XbxEngineKeyframeRequestEpisodeObservation {
+                    episode_id: 2001,
+                    request_reason: Some("displaySupplyCritical".to_string()),
+                    status: "recovering".to_string(),
+                    requested_at_ms: 190.0,
+                    ..Default::default()
+                });
+            stats.latest_h264_inspection_observation = None;
+        });
+
+        let drained = drain_pending_decoded_output_with_submit(&mut state, &sink, |_frame| {
+            PendingDecodedSubmitResult::Submitted
+        });
+
+        assert!(drained.is_none());
+        let stats = runtime_stats.lock().expect("runtime stats lock");
+        assert_eq!(stats.video_anchor_clean_epoch, None);
+        assert_eq!(stats.latest_clean_anchor_submission_epoch, Some(1));
+        assert_eq!(stats.latest_clean_anchor_submission_episode_id, Some(1001));
+        assert_eq!(stats.latest_clean_anchor_submission_rtp_timestamp, Some(2));
+    }
+
+    #[test]
+    fn clean_anchor_submission_without_bound_episode_records_blocker_instead_of_episode_zero() {
+        let mut state = XbxVideoDecodeState::new(20, 30).expect("decode state should initialize");
+        let mut frame = make_render_frame(2);
+        frame.rtp_timestamp = Some(2);
+        state.enqueue_decoded_frame_with_clean_anchor_epoch_for_test(frame, Some(1));
+
+        let runtime_stats = Arc::new(std::sync::Mutex::new(
+            crate::XbxEngineMediaRuntimeStats::default(),
+        ));
+        let sink = RuntimeStatsSink::new(runtime_stats.clone());
+        sink.begin_transport_recovery_episode(10.0);
+
+        let drained = drain_pending_decoded_output_with_submit(&mut state, &sink, |_frame| {
+            PendingDecodedSubmitResult::Submitted
+        });
+
+        assert!(drained.is_none());
+        let stats = runtime_stats.lock().expect("runtime stats lock");
+        assert_eq!(stats.latest_clean_anchor_submission_epoch, None);
+        assert_eq!(stats.latest_clean_anchor_submission_episode_id, None);
+        let blocker = stats
+            .latest_picture_recovery_blocker_observation
+            .as_ref()
+            .expect("clean anchor unbound blocker");
+        assert_eq!(blocker.blocker_kind, "cleanAnchorEpisodeUnbound");
+        assert_eq!(blocker.frame_rtp_timestamp, Some(2));
     }
 }

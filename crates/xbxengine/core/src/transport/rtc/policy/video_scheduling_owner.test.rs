@@ -64,6 +64,9 @@ fn input(
         clean_anchor_epoch: None,
         clean_anchor_observed_at_ms: None,
         clean_anchor_source_event: None,
+        clean_anchor_bridge_epoch: None,
+        clean_anchor_bridge_observed_at_ms: None,
+        clean_anchor_bridge_source_event: None,
         latest_video_timeline_observation: None,
         latest_timeline_chain_state: timeline_chain_state.map(str::to_string),
         latest_timeline_source_event: timeline_source_event.map(str::to_string),
@@ -379,6 +382,67 @@ fn non_idr_with_committed_sets_and_delta_ready_does_not_block_recovery_exit() {
 }
 
 #[test]
+fn rebuilding_supply_with_clean_anchor_and_host_present_stall_switches_to_host_stall_supply_reason()
+{
+    let mut owner = VideoSchedulingOwner::new();
+    let _ = owner.evaluate(&input(
+        ConnectionLifecycleStateFact::Connected,
+        Some("transportAwaitRecoveryAnchor"),
+        SchedulingDemandSignal {
+            host_display_tick_epoch: Some(10),
+            host_frame_present_epoch: Some(3),
+            ..SchedulingDemandSignal::default()
+        },
+        Some("recovering"),
+        Some("frame-await-recovery-anchor"),
+        Some("remoteTrackAttached"),
+        Some(10_000),
+        300.0,
+        1,
+    ));
+
+    let mut final_output = None;
+    for step in 0..7 {
+        let mut stalled = input(
+            ConnectionLifecycleStateFact::Connected,
+            None,
+            SchedulingDemandSignal {
+                no_pending_pressure_level: Some("normal".to_string()),
+                no_pending_streak: Some(0),
+                present_age_ms: Some(2_400.0),
+                decode_age_ms: Some(18.0),
+                video_renderer_stalled: false,
+                host_display_tick_epoch: Some(11 + step),
+                host_frame_present_epoch: Some(3),
+                host_cadence_phase: Some("steady".to_string()),
+                ..SchedulingDemandSignal::default()
+            },
+            Some("healthy"),
+            Some("frame-complete-candidate"),
+            Some("remoteTrackAttached"),
+            Some(64_000),
+            3_520.0 + step as f64,
+            1,
+        );
+        stalled.clean_anchor_epoch = Some(1);
+        stalled.clean_anchor_observed_at_ms = Some(600.0);
+        stalled.clean_anchor_source_event = Some("chain-clean-anchor-submitted".to_string());
+
+        let output = owner.evaluate(&stalled);
+        if output.state == VideoSchedulingOwnerState::SupplyStarved {
+            final_output = Some(output);
+            break;
+        }
+    }
+    let output = final_output.expect("owner should surface host present stall");
+    assert_eq!(output.state, VideoSchedulingOwnerState::SupplyStarved);
+    assert_eq!(output.health, VideoHealthContract::Starved);
+    let intent = output.recovery_intent.expect("host stall intent");
+    assert_eq!(intent.source, RecoveryIntentSource::Supply);
+    assert_eq!(intent.reason_label, "hostPresentStalled");
+}
+
+#[test]
 fn transient_anchor_noise_with_clean_anchor_and_delta_ready_does_not_stick_recovery() {
     let mut owner = VideoSchedulingOwner::new();
     let _ = owner.evaluate(&input(
@@ -432,6 +496,57 @@ fn transient_anchor_noise_with_clean_anchor_and_delta_ready_does_not_stick_recov
     let output = owner.evaluate(&recoverable);
     assert_eq!(output.state, VideoSchedulingOwnerState::StableServing);
     assert_eq!(output.health, VideoHealthContract::Stable);
+}
+
+#[test]
+fn continuation_only_after_clean_anchor_grace_reenters_rebuilding_supply() {
+    let mut owner = VideoSchedulingOwner::new();
+    let mut stable = input(
+        ConnectionLifecycleStateFact::Connected,
+        None,
+        SchedulingDemandSignal {
+            no_pending_pressure_level: Some("normal".to_string()),
+            no_pending_streak: Some(0),
+            present_age_ms: Some(12.0),
+            decode_age_ms: Some(9.0),
+            video_renderer_stalled: false,
+            ..SchedulingDemandSignal::default()
+        },
+        Some("healthy"),
+        Some("frame-complete-candidate"),
+        Some("remoteTrackAttached"),
+        Some(96_000),
+        340.0,
+        1,
+    );
+    stable.clean_anchor_epoch = Some(1);
+    stable.clean_anchor_observed_at_ms = Some(338.0);
+    stable.clean_anchor_source_event = Some("chain-clean-anchor-submitted".to_string());
+    let initial = owner.evaluate(&stable);
+    assert_eq!(initial.state, VideoSchedulingOwnerState::Priming);
+    let settled = owner.evaluate(&stable);
+    assert_eq!(settled.state, VideoSchedulingOwnerState::StableServing);
+
+    let mut degraded = stable.clone();
+    degraded.observed_at_ms = 720.0;
+    degraded.clean_anchor_observed_at_ms = Some(338.0);
+    degraded.latest_h264_bootstrap_ready = Some(false);
+    degraded.latest_h264_bootstrap_reject_reason = Some("NonIdrVcl".to_string());
+    degraded.latest_h264_committed_sps_present = Some(true);
+    degraded.latest_h264_committed_pps_present = Some(true);
+    degraded.latest_h264_delta_continuation_ready = Some(true);
+    degraded.latest_h264_observed_at_ms = Some(719.0);
+
+    let output = owner.evaluate(&degraded);
+    assert_eq!(output.state, VideoSchedulingOwnerState::RebuildingSupply);
+    assert_eq!(output.health, VideoHealthContract::Recovering);
+    assert_eq!(
+        output
+            .recovery_intent
+            .as_ref()
+            .map(|intent| intent.reason_label.as_str()),
+        Some("transportAwaitRecoveryAnchor")
+    );
 }
 
 #[test]
@@ -540,8 +655,8 @@ fn first_present_feedback_lag_with_clean_anchor_exits_rebuilding_supply() {
             decode_age_ms: Some(10.0),
             host_cadence_phase: Some("priming".to_string()),
             host_display_tick_epoch: Some(720),
-            host_present_epoch: Some(0),
-            present_submit_count_total: Some(0),
+            host_frame_present_epoch: Some(0),
+            host_mailbox_enqueue_count_total: Some(0),
             video_renderer_stalled: false,
             ..SchedulingDemandSignal::default()
         },
@@ -1194,9 +1309,9 @@ fn priming_without_first_present_stays_in_priming_during_host_grace_window() {
             decode_age_ms: None,
             video_renderer_stalled: false,
             host_display_tick_epoch: Some(6),
-            host_present_epoch: Some(0),
+            host_frame_present_epoch: Some(0),
             host_cadence_phase: Some("priming".to_string()),
-            present_submit_count_total: Some(0),
+            host_mailbox_enqueue_count_total: Some(0),
             ..SchedulingDemandSignal::default()
         },
         Some("healthy"),
@@ -1223,9 +1338,9 @@ fn priming_without_first_present_stays_in_priming_until_first_present_arrives() 
             decode_age_ms: None,
             video_renderer_stalled: false,
             host_display_tick_epoch: Some(6),
-            host_present_epoch: Some(0),
+            host_frame_present_epoch: Some(0),
             host_cadence_phase: Some("priming".to_string()),
-            present_submit_count_total: Some(0),
+            host_mailbox_enqueue_count_total: Some(0),
             ..SchedulingDemandSignal::default()
         },
         Some("healthy"),
@@ -1245,9 +1360,9 @@ fn priming_without_first_present_stays_in_priming_until_first_present_arrives() 
             decode_age_ms: None,
             video_renderer_stalled: false,
             host_display_tick_epoch: Some(220),
-            host_present_epoch: Some(0),
+            host_frame_present_epoch: Some(0),
             host_cadence_phase: Some("priming".to_string()),
-            present_submit_count_total: Some(0),
+            host_mailbox_enqueue_count_total: Some(0),
             ..SchedulingDemandSignal::default()
         },
         Some("healthy"),
@@ -1274,9 +1389,9 @@ fn startup_bootstrap_missing_sps_stays_priming_and_does_not_emit_recovery_intent
             decode_age_ms: None,
             video_renderer_stalled: false,
             host_display_tick_epoch: Some(120),
-            host_present_epoch: Some(0),
+            host_frame_present_epoch: Some(0),
             host_cadence_phase: Some("priming".to_string()),
-            present_submit_count_total: Some(0),
+            host_mailbox_enqueue_count_total: Some(0),
             ..SchedulingDemandSignal::default()
         },
         Some("recovering"),
@@ -1309,9 +1424,9 @@ fn startup_bootstrap_non_idr_stays_priming_and_does_not_emit_recovery_intent() {
             decode_age_ms: None,
             video_renderer_stalled: false,
             host_display_tick_epoch: Some(120),
-            host_present_epoch: Some(0),
+            host_frame_present_epoch: Some(0),
             host_cadence_phase: Some("priming".to_string()),
-            present_submit_count_total: Some(0),
+            host_mailbox_enqueue_count_total: Some(0),
             ..SchedulingDemandSignal::default()
         },
         Some("recovering"),
@@ -1347,9 +1462,9 @@ fn startup_bootstrap_pending_with_gap_repair_in_flight_stays_priming_without_rec
             decode_age_ms: None,
             video_renderer_stalled: false,
             host_display_tick_epoch: Some(120),
-            host_present_epoch: Some(0),
+            host_frame_present_epoch: Some(0),
             host_cadence_phase: Some("priming".to_string()),
-            present_submit_count_total: Some(0),
+            host_mailbox_enqueue_count_total: Some(0),
             ..SchedulingDemandSignal::default()
         },
         Some("recovering"),
@@ -1485,9 +1600,9 @@ fn startup_bootstrap_reject_source_without_persisted_h264_state_stays_priming() 
             decode_age_ms: None,
             video_renderer_stalled: false,
             host_display_tick_epoch: Some(120),
-            host_present_epoch: Some(0),
+            host_frame_present_epoch: Some(0),
             host_cadence_phase: Some("priming".to_string()),
-            present_submit_count_total: Some(0),
+            host_mailbox_enqueue_count_total: Some(0),
             ..SchedulingDemandSignal::default()
         },
         Some("recovering"),
@@ -1517,9 +1632,9 @@ fn post_first_present_bootstrap_missing_sps_still_enters_rebuilding_supply() {
             decode_age_ms: Some(380.0),
             video_renderer_stalled: false,
             host_display_tick_epoch: Some(360),
-            host_present_epoch: Some(8),
+            host_frame_present_epoch: Some(8),
             host_cadence_phase: Some("steady".to_string()),
-            present_submit_count_total: Some(64),
+            host_mailbox_enqueue_count_total: Some(64),
             ..SchedulingDemandSignal::default()
         },
         Some("recovering"),
@@ -2189,7 +2304,7 @@ fn rebuilding_supply_cannot_close_by_clean_anchor_candidate_without_explicit_hea
 }
 
 #[test]
-fn rebuilding_supply_allows_current_clean_anchor_candidate() {
+fn rebuilding_supply_keeps_waiting_on_submitted_clean_anchor_candidate() {
     let mut owner = VideoSchedulingOwner::new();
     let _ = owner.evaluate(&input(
         ConnectionLifecycleStateFact::Connected,
@@ -2230,10 +2345,59 @@ fn rebuilding_supply_allows_current_clean_anchor_candidate() {
         observed_at_ms: 2_000.0,
     });
 
+    let waiting = owner.evaluate(&ready);
+    assert_eq!(waiting.state, VideoSchedulingOwnerState::RebuildingSupply);
+    assert_eq!(waiting.health, VideoHealthContract::Recovering);
+}
+
+#[test]
+fn rebuilding_supply_allows_host_visible_anchor_bridge() {
+    let mut owner = VideoSchedulingOwner::new();
+    let _ = owner.evaluate(&input(
+        ConnectionLifecycleStateFact::Connected,
+        Some("transportAwaitRecoveryAnchor"),
+        SchedulingDemandSignal::default(),
+        Some("recovering"),
+        Some("frame-await-recovery-anchor"),
+        Some("remoteTrackAttached"),
+        Some(40_000),
+        2_000.0,
+        10,
+    ));
+
+    let mut ready = input(
+        ConnectionLifecycleStateFact::Connected,
+        None,
+        SchedulingDemandSignal {
+            no_pending_pressure_level: Some("normal".to_string()),
+            no_pending_streak: Some(0),
+            present_age_ms: Some(14.0),
+            decode_age_ms: Some(11.0),
+            video_renderer_stalled: false,
+            ..SchedulingDemandSignal::default()
+        },
+        Some("healthy"),
+        Some("frame-observed"),
+        Some("remoteTrackAttached"),
+        Some(150_000),
+        2_700.0,
+        10,
+    );
+    ready.clean_anchor_bridge_epoch = Some(10);
+    ready.clean_anchor_bridge_observed_at_ms = Some(2_680.0);
+    ready.clean_anchor_bridge_source_event = Some("hostVisibleAnchorPending".to_string());
+    ready.latest_anchor_candidate_ledger = Some(crate::XbxEngineAnchorCandidateLedger {
+        recovery_epoch: 10,
+        frame_rtp_timestamp: Some(149_900),
+        state: crate::XbxEngineAnchorCandidateState::SubmittedCleanAnchor,
+        source_event: "chain-clean-anchor-submitted".to_string(),
+        failure_reason: None,
+        observed_at_ms: 2_000.0,
+    });
+
     let stable = owner.evaluate(&ready);
     assert_eq!(stable.state, VideoSchedulingOwnerState::StableServing);
     assert_eq!(stable.health, VideoHealthContract::Stable);
-    assert!(stable.diagnostics.temporary_diagnostic_summary.is_none());
 }
 
 #[test]
@@ -2308,8 +2472,8 @@ fn clean_anchor_recovery_can_exit_supply_starved_to_degraded_serving_before_full
             present_age_ms: Some(18.0),
             decode_age_ms: Some(12.0),
             video_renderer_stalled: false,
-            present_submit_count_total: Some(10),
-            present_drop_count_total: Some(2),
+            host_mailbox_enqueue_count_total: Some(10),
+            host_mailbox_drop_count_total: Some(2),
             ..SchedulingDemandSignal::default()
         },
         Some("healthy"),
@@ -2360,10 +2524,10 @@ fn clean_anchor_recovery_ignores_shadow_renderer_stall_when_host_present_is_fres
             present_age_ms: Some(18.0),
             decode_age_ms: Some(12.0),
             video_renderer_stalled: true,
-            present_submit_count_total: Some(10),
-            present_drop_count_total: Some(0),
+            host_mailbox_enqueue_count_total: Some(10),
+            host_mailbox_drop_count_total: Some(0),
             host_display_tick_epoch: Some(24),
-            host_present_epoch: Some(18),
+            host_frame_present_epoch: Some(18),
             ..SchedulingDemandSignal::default()
         },
         Some("healthy"),

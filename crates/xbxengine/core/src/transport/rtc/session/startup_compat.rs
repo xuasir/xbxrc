@@ -173,7 +173,8 @@ fn is_first_frame_acquisition_reason_label(value: &str) -> bool {
             | "bootstrapMissingPps"
             | "recoverySustaining"
             | "inspectionRejectInvalidSliceHeader"
-            | "NonIdrVcl"
+            | "bootstrapMissingIdr"
+            | "mixedIdrWithTrailingDelta"
             | "transportAwaitRecoveryAnchor"
             | "ingressWaitKeyframe"
     )

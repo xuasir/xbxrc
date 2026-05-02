@@ -247,6 +247,7 @@ impl RtcVideoSourceSink {
                 frame_recovery_disposition: None,
                 frame_unrecoverable_reason: Some("localBackpressure".to_string()),
                 frame_budget: None,
+                replacement_decision: None,
                 observed_at_ms: crate::transport::rtc::stream::video_source::now_ms_f64(),
                 width: 0,
                 height: 0,

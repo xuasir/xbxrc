@@ -2,6 +2,8 @@ import type { ChannelContext } from './BaseChannel'
 import { STREAM_CONTROL_PROFILE } from '../networkProfile'
 import { BaseChannel } from './BaseChannel'
 
+function debugLog(..._args: Array<unknown>): void {}
+
 export interface ControlChannelDelegate {
   onClose: () => void
 }
@@ -19,7 +21,7 @@ export class ControlChannel extends BaseChannel {
   }
 
   onOpen(): void {
-    console.info('[player][control] open')
+    debugLog('[player][control] open')
     if (this.pendingStart) {
       this.pendingStart = false
       this.start()
@@ -98,11 +100,11 @@ export class ControlChannel extends BaseChannel {
       return
     }
     if (this.context.readyState() !== 'open') {
-      console.info('[player][control] start deferred until open')
+      debugLog('[player][control] start deferred until open')
       this.pendingStart = true
       return
     }
-    console.info('[player][control] start authorization flow')
+    debugLog('[player][control] start authorization flow')
     this.started = true
     this.send(JSON.stringify({
       message: 'authorizationRequest',

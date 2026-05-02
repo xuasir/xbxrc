@@ -295,8 +295,8 @@ fn first_frame_acquisition_transport_await_probe_stays_local() {
     stats.transport_recovery_epoch = 61;
     stats.transport_state = XbxEngineTransportStateDto::Connected;
     stats.host_display_tick_epoch = 120;
-    stats.video_present_epoch = 0;
-    stats.video_present_submit_count_total = 0;
+    stats.host_frame_present_epoch = 0;
+    stats.host_mailbox_enqueue_count_total = 0;
     stats.latest_video_packet_arrival_time_ms = Some(now_ms - 8.0);
     stats.first_video_packet_arrival_time_ms = Some(now_ms - 100.0);
     stats.latest_video_track_status = Some(XbxEngineVideoTrackStatus {
@@ -421,8 +421,8 @@ fn first_frame_acquisition_transport_await_stall_still_stays_in_keyframe_domain(
     stats.transport_recovery_epoch = 63;
     stats.transport_state = XbxEngineTransportStateDto::Connected;
     stats.host_display_tick_epoch = 120;
-    stats.video_present_epoch = 0;
-    stats.video_present_submit_count_total = 0;
+    stats.host_frame_present_epoch = 0;
+    stats.host_mailbox_enqueue_count_total = 0;
     stats.video_decoder_stalled = Some(true);
     stats.video_renderer_stalled = Some(true);
     stats.first_video_packet_arrival_time_ms = Some(now_ms - 4_000.0);
@@ -530,8 +530,8 @@ fn startup_non_idr_transport_await_probe_stays_local_before_first_frame() {
     stats.transport_recovery_epoch = 62;
     stats.transport_state = XbxEngineTransportStateDto::Connected;
     stats.host_display_tick_epoch = 120;
-    stats.video_present_epoch = 0;
-    stats.video_present_submit_count_total = 0;
+    stats.host_frame_present_epoch = 0;
+    stats.host_mailbox_enqueue_count_total = 0;
     stats.latest_video_packet_arrival_time_ms = Some(now_ms - 8.0);
     stats.first_video_packet_arrival_time_ms = Some(now_ms - 100.0);
     stats.video_decoder_stalled = Some(false);
@@ -663,8 +663,8 @@ fn first_frame_acquisition_missing_pps_packet_seen_stays_local_before_first_fram
     stats.transport_recovery_epoch = 63;
     stats.transport_state = XbxEngineTransportStateDto::Connected;
     stats.host_display_tick_epoch = 120;
-    stats.video_present_epoch = 0;
-    stats.video_present_submit_count_total = 0;
+    stats.host_frame_present_epoch = 0;
+    stats.host_mailbox_enqueue_count_total = 0;
     stats.latest_video_packet_arrival_time_ms = Some(now_ms - 8.0);
     stats.first_video_packet_arrival_time_ms = Some(now_ms - 100.0);
     stats.video_decoder_stalled = Some(false);
@@ -794,8 +794,8 @@ fn post_first_frame_bootstrap_missing_pps_can_upgrade_to_decoder_reset() {
     stats.transport_recovery_epoch = 64;
     stats.transport_state = XbxEngineTransportStateDto::Connected;
     stats.host_display_tick_epoch = 120;
-    stats.video_present_epoch = 1;
-    stats.video_present_submit_count_total = 1;
+    stats.host_frame_present_epoch = 1;
+    stats.host_mailbox_enqueue_count_total = 1;
     stats.latest_video_host_present_time_ms = Some(now_ms - 20.0);
     stats.latest_video_decode_ok_time_ms = Some(now_ms - 20.0);
     stats.latest_video_packet_arrival_time_ms = Some(now_ms - 8.0);

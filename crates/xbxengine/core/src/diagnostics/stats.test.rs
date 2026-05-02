@@ -38,7 +38,7 @@ fn test_snapshot() -> XbxEngineRuntimeSnapshot {
         last_recovery_reason: None,
         reconnect_trigger_source: None,
         host_present_take_empty_streak: 0,
-        host_present_latest_render_slot_at_ms: None,
+        host_mailbox_latest_submit_at_ms: None,
         ice_policy_mode: None,
         ice_policy_digest: None,
         ice_policy_source: None,
@@ -86,7 +86,7 @@ fn runtime_summary_includes_transport_recovery_epoch_note() {
         message_handshake_acked_at_ms: Some(10.0),
         control_ready_at_ms: Some(20.0),
         latest_video_host_present_time_ms: Some(30.0),
-        video_present_submit_count_total: 1,
+        host_mailbox_enqueue_count_total: 1,
         direct_gaming_bitrate_band: Some("steady".to_string()),
         video_owner_state: Some("rebuilding-supply".to_string()),
         video_owner_reason: Some("transportAwaitRecoveryAnchor".to_string()),
@@ -424,7 +424,7 @@ fn runtime_summary_includes_repair_probe_note_when_active() {
         message_handshake_acked_at_ms: Some(10.0),
         control_ready_at_ms: Some(20.0),
         latest_video_host_present_time_ms: Some(30.0),
-        video_present_submit_count_total: 1,
+        host_mailbox_enqueue_count_total: 1,
         direct_gaming_bitrate_band: Some("steady".to_string()),
         latest_video_repair_probe_observation: Some(crate::XbxEngineVideoRepairProbeObservation {
             observation_id: 1,
@@ -465,7 +465,7 @@ fn runtime_summary_includes_rtx_reinject_note_when_present() {
         message_handshake_acked_at_ms: Some(10.0),
         control_ready_at_ms: Some(20.0),
         latest_video_host_present_time_ms: Some(30.0),
-        video_present_submit_count_total: 1,
+        host_mailbox_enqueue_count_total: 1,
         latest_video_rtx_reinject_observation: Some(crate::XbxEngineVideoRtxReinjectObservation {
             stage: "adapterResolved".to_string(),
             primary_ssrc: 10,
@@ -509,7 +509,7 @@ fn owner_contract_projection_reads_canonical_runtime_owner_fields() {
         control_ready_at_ms: Some(now_ms - 110.0),
         latest_video_host_present_time_ms: Some(now_ms - 30.0),
         latest_video_decode_ok_time_ms: Some(now_ms - 30.0),
-        video_present_submit_count_total: 2,
+        host_mailbox_enqueue_count_total: 2,
         video_owner_state: Some("rebuilding-supply".to_string()),
         video_owner_reason: Some("timelineReferenceBroken".to_string()),
         video_owner_source: Some("anchor".to_string()),
@@ -616,7 +616,7 @@ fn build_stats_keeps_priming_when_only_submit_count_exists_without_host_present(
         control_ready_at_ms: Some(20.0),
         latest_video_packet_arrival_time_ms: Some(30.0),
         latest_video_decode_ok_time_ms: Some(35.0),
-        video_present_submit_count_total: 120,
+        host_mailbox_enqueue_count_total: 120,
         video_present_fps: 0.0,
         ..XbxEngineMediaRuntimeStats::default()
     };
@@ -642,7 +642,7 @@ fn build_stats_only_turns_healthy_after_first_present() {
         control_ready_at_ms: Some(now_ms - 90.0),
         latest_video_host_present_time_ms: Some(now_ms - 20.0),
         latest_video_decode_ok_time_ms: Some(now_ms - 20.0),
-        video_present_submit_count_total: 1,
+        host_mailbox_enqueue_count_total: 1,
         video_present_fps: 60.0,
         video_owner_state: Some("stable-serving".to_string()),
         video_owner_reason: Some("steady".to_string()),
@@ -677,7 +677,7 @@ fn build_stats_projects_ramp_up_without_overwriting_legacy_session_phase() {
         control_ready_at_ms: Some(now_ms - 90.0),
         latest_video_host_present_time_ms: Some(now_ms - 20.0),
         latest_video_decode_ok_time_ms: Some(now_ms - 20.0),
-        video_present_submit_count_total: 1,
+        host_mailbox_enqueue_count_total: 1,
         video_present_fps: 60.0,
         video_owner_state: Some("stable-serving".to_string()),
         video_owner_reason: Some("steady".to_string()),
@@ -707,7 +707,7 @@ fn build_stats_projects_degraded_without_overwriting_legacy_session_phase() {
         control_ready_at_ms: Some(now_ms - 90.0),
         latest_video_host_present_time_ms: Some(now_ms - 20.0),
         latest_video_decode_ok_time_ms: Some(now_ms - 20.0),
-        video_present_submit_count_total: 1,
+        host_mailbox_enqueue_count_total: 1,
         video_present_fps: 60.0,
         video_owner_state: Some("degraded-serving".to_string()),
         video_owner_reason: Some("degradedSteady".to_string()),
@@ -737,7 +737,7 @@ fn build_stats_reports_recovering_after_first_present_when_output_turns_stale() 
         control_ready_at_ms: Some(now_ms - 990.0),
         latest_video_host_present_time_ms: Some(now_ms - 800.0),
         latest_video_decode_ok_time_ms: Some(now_ms - 800.0),
-        video_present_submit_count_total: 1,
+        host_mailbox_enqueue_count_total: 1,
         video_owner_state: Some("rebuilding-supply".to_string()),
         video_owner_reason: Some("adapterIdleTimeout".to_string()),
         video_owner_source: Some("anchor".to_string()),
@@ -760,6 +760,54 @@ fn build_stats_reports_recovering_after_first_present_when_output_turns_stale() 
 }
 
 #[test]
+fn build_stats_only_reports_decode_to_present_for_same_frame() {
+    let now_ms = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as f64;
+    let stats = XbxEngineMediaRuntimeStats {
+        latest_video_packet_arrival_time_ms: Some(now_ms - 20.0),
+        latest_video_packet_arrival_rtp_timestamp: Some(1001),
+        latest_video_decode_ok_time_ms: Some(now_ms - 12.0),
+        latest_video_decode_ok_rtp_timestamp: Some(1001),
+        last_displayed_at_ms: Some(now_ms - 4.0),
+        last_displayed_frame_rtp_timestamp: Some(1001),
+        latest_video_host_present_time_ms: Some(now_ms - 4.0),
+        ..XbxEngineMediaRuntimeStats::default()
+    };
+
+    let dto = build_xbxengine_stats(&test_snapshot(), Some(&stats));
+
+    assert_eq!(dto.packet_to_decode_ms, Some(8.0));
+    assert_eq!(dto.decode_to_present_ms, Some(8.0));
+    assert_eq!(dto.packet_to_present_ms, Some(16.0));
+}
+
+#[test]
+fn build_stats_drops_cross_frame_decode_latency_projection() {
+    let now_ms = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as f64;
+    let stats = XbxEngineMediaRuntimeStats {
+        latest_video_packet_arrival_time_ms: Some(now_ms - 20.0),
+        latest_video_packet_arrival_rtp_timestamp: Some(1001),
+        latest_video_decode_ok_time_ms: Some(now_ms - 12.0),
+        latest_video_decode_ok_rtp_timestamp: Some(1002),
+        last_displayed_at_ms: Some(now_ms - 4.0),
+        last_displayed_frame_rtp_timestamp: Some(1003),
+        latest_video_host_present_time_ms: Some(now_ms - 4.0),
+        ..XbxEngineMediaRuntimeStats::default()
+    };
+
+    let dto = build_xbxengine_stats(&test_snapshot(), Some(&stats));
+
+    assert_eq!(dto.packet_to_decode_ms, None);
+    assert_eq!(dto.decode_to_present_ms, None);
+    assert_eq!(dto.packet_to_present_ms, None);
+}
+
+#[test]
 fn build_stats_prioritizes_display_supply_starved_when_no_pending_and_present_age_is_stale() {
     let now_ms = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -774,7 +822,7 @@ fn build_stats_prioritizes_display_supply_starved_when_no_pending_and_present_ag
         control_ready_at_ms: Some(now_ms - 3_900.0),
         latest_video_host_present_time_ms: Some(now_ms - 2_200.0),
         latest_video_decode_ok_time_ms: Some(now_ms - 1_600.0),
-        video_present_submit_count_total: 120,
+        host_mailbox_enqueue_count_total: 120,
         video_present_fps: 1.0,
         host_no_pending_pressure_level: Some("critical".to_string()),
         host_no_pending_streak: 1_280,
@@ -801,14 +849,14 @@ fn build_stats_prioritizes_display_supply_starved_when_no_pending_and_present_ag
 fn build_stats_projects_host_cadence_epoch_fields() {
     let stats = XbxEngineMediaRuntimeStats {
         host_display_tick_epoch: 128,
-        video_present_epoch: 96,
+        host_frame_present_epoch: 96,
         host_cadence_phase: Some("starved".to_string()),
         ..XbxEngineMediaRuntimeStats::default()
     };
 
     let dto = build_xbxengine_stats(&test_snapshot(), Some(&stats));
     assert_eq!(dto.host_display_tick_epoch, Some(128));
-    assert_eq!(dto.video_present_epoch, Some(96));
+    assert_eq!(dto.host_frame_present_epoch, Some(96));
     assert_eq!(dto.host_cadence_phase.as_deref(), Some("starved"));
 }
 
@@ -827,7 +875,7 @@ fn build_stats_projects_chain_presentation_health_and_last_displayed_frame() {
         control_ready_at_ms: Some(now_ms - 3_900.0),
         latest_video_host_present_time_ms: Some(now_ms - 2_200.0),
         latest_video_decode_ok_time_ms: Some(now_ms - 24.0),
-        video_present_submit_count_total: 120,
+        host_mailbox_enqueue_count_total: 120,
         video_present_fps: 1.0,
         host_no_pending_pressure_level: Some("critical".to_string()),
         host_no_pending_streak: 1_280,
@@ -869,7 +917,7 @@ fn build_stats_steady_healthy_when_output_fresh_and_owner_stable() {
         control_ready_at_ms: Some(now_ms - 70.0),
         latest_video_host_present_time_ms: Some(now_ms - 35.0),
         latest_video_decode_ok_time_ms: Some(now_ms - 35.0),
-        video_present_submit_count_total: 2,
+        host_mailbox_enqueue_count_total: 2,
         video_present_fps: 58.0,
         host_no_pending_pressure_level: Some("normal".to_string()),
         host_no_pending_streak: 1,
@@ -900,7 +948,7 @@ fn build_stats_shadow_renderer_stall_keeps_stall_kind_none_when_host_is_fresh() 
         control_ready_at_ms: Some(now_ms - 70.0),
         latest_video_host_present_time_ms: Some(now_ms - 35.0),
         latest_video_decode_ok_time_ms: Some(now_ms - 35.0),
-        video_present_submit_count_total: 2,
+        host_mailbox_enqueue_count_total: 2,
         video_present_fps: 58.0,
         host_no_pending_pressure_level: Some("normal".to_string()),
         host_no_pending_streak: 1,
@@ -935,7 +983,7 @@ fn build_stats_renderer_stall_blocks_serviceability_when_host_is_stale() {
         control_ready_at_ms: Some(now_ms - 3_900.0),
         latest_video_host_present_time_ms: Some(now_ms - 2_200.0),
         latest_video_decode_ok_time_ms: Some(now_ms - 35.0),
-        video_present_submit_count_total: 120,
+        host_mailbox_enqueue_count_total: 120,
         video_present_fps: 1.0,
         host_no_pending_pressure_level: Some("critical".to_string()),
         host_no_pending_streak: 1_280,
@@ -974,7 +1022,7 @@ fn build_stats_prioritizes_recent_timeline_recovering_over_healthy_summary() {
         control_ready_at_ms: Some(now_ms - 70.0),
         latest_video_host_present_time_ms: Some(now_ms - 35.0),
         latest_video_decode_ok_time_ms: Some(now_ms - 35.0),
-        video_present_submit_count_total: 2,
+        host_mailbox_enqueue_count_total: 2,
         video_present_fps: 58.0,
         video_owner_state: Some("rebuilding-supply".to_string()),
         video_owner_reason: Some("inspectionRejectInvalidSliceHeader".to_string()),
@@ -1054,7 +1102,7 @@ fn build_stats_prioritizes_recent_timeline_broken_over_steady_healthy() {
         control_ready_at_ms: Some(now_ms - 70.0),
         latest_video_host_present_time_ms: Some(now_ms - 40.0),
         latest_video_decode_ok_time_ms: Some(now_ms - 35.0),
-        video_present_submit_count_total: 3,
+        host_mailbox_enqueue_count_total: 3,
         video_present_fps: 60.0,
         video_owner_state: Some("rebuilding-supply".to_string()),
         video_owner_reason: Some("cloudHighRttLowValueAdmission".to_string()),
@@ -1136,7 +1184,7 @@ fn build_stats_owner_contract_prefers_canonical_owner_over_coupling_signals() {
         control_ready_at_ms: Some(now_ms - 1900.0),
         latest_video_host_present_time_ms: Some(now_ms - 1700.0),
         latest_video_decode_ok_time_ms: Some(now_ms - 1700.0),
-        video_present_submit_count_total: 64,
+        host_mailbox_enqueue_count_total: 64,
         host_no_pending_pressure_level: Some("critical".to_string()),
         host_no_pending_streak: 2048,
         video_renderer_stalled: Some(true),
@@ -1226,7 +1274,7 @@ fn runtime_summary_profile_slot_prefers_runtime_profile_over_transport_policy() 
         message_handshake_acked_at_ms: Some(10.0),
         control_ready_at_ms: Some(20.0),
         latest_video_host_present_time_ms: Some(30.0),
-        video_present_submit_count_total: 1,
+        host_mailbox_enqueue_count_total: 1,
         video_owner_state: Some("stable-serving".to_string()),
         video_owner_reason: Some("steady".to_string()),
         host_no_pending_pressure_level: None,
@@ -1250,7 +1298,7 @@ fn runtime_summary_profile_slot_does_not_fallback_to_transport_policy_only() {
         message_handshake_acked_at_ms: Some(10.0),
         control_ready_at_ms: Some(20.0),
         latest_video_host_present_time_ms: Some(30.0),
-        video_present_submit_count_total: 1,
+        host_mailbox_enqueue_count_total: 1,
         direct_gaming_bitrate_band: Some("steady".to_string()),
         host_no_pending_pressure_level: None,
         host_no_pending_streak: 0,

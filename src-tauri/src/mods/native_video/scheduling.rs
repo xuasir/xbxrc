@@ -12,7 +12,7 @@ const HOST_RENDER_RECOVERY_STREAK_THRESHOLD: u32 = 8;
 const HOST_RENDER_RECOVERY_KEYFRAME_MIN_FRAME_AGE_MS: f64 = 48.0;
 const HOST_FRAME_DROP_BACKLOG_LIMIT: usize = 32;
 const HOST_SUBMIT_GAP_WARN_MS: f64 = 100.0;
-const SCHEDULED_FRAME_QUEUE_CAPACITY: usize = 3;
+const SCHEDULED_FRAME_MAILBOX_CAPACITY: usize = 1;
 
 fn format_optional_seq(value: Option<u64>) -> String {
     value
@@ -271,12 +271,7 @@ impl HostCadenceTelemetry {
         let base_budget_ms = self.stale_frame_age_budget_ms();
         // 恢复期关键帧经常发生在 host stall 之后的首个可恢复窗口。
         // 这类帧只要已经进入 pending，不应再被 24ms 的稳态阈值立刻打掉。
-        if frame.is_keyframe
-            && matches!(
-                frame.frame_recovery_disposition.as_deref(),
-                Some("repairing") | Some("rebuilding-supply")
-            )
-        {
+        if frame.is_keyframe && frame_has_anchor_protection(frame) {
             return base_budget_ms.max(HOST_RENDER_RECOVERY_KEYFRAME_MIN_FRAME_AGE_MS);
         }
         base_budget_ms
@@ -409,8 +404,10 @@ impl HostCadenceTelemetry {
 #[derive(Default)]
 pub struct ScheduledFrameSlot {
     displayed_frame: Option<XbxEngineRenderFrame>,
-    pending_frames: VecDeque<XbxEngineRenderFrame>,
+    pending_frame: Option<XbxEngineRenderFrame>,
     last_presented_frame_seq: Option<u64>,
+    view_epoch: u64,
+    displayed_view_epoch: u64,
     pub render_loop_started: bool,
 }
 
@@ -418,11 +415,16 @@ pub struct ScheduledFrameSlot {
 pub struct ScheduledFrameSlotDiagnostics {
     pub displayed_frame_seq: Option<u64>,
     pub displayed_frame_rtp_timestamp: Option<u32>,
+    pub displayed_frame_recovery_disposition: Option<String>,
+    pub displayed_frame_rendered_at_ms: Option<f64>,
     pub pending_frame_seqs: Vec<u64>,
+    pub pending_frame_rtp_timestamp: Option<u32>,
     pub last_presented_frame_seq: Option<u64>,
     pub queue_depth: usize,
     pub pending_queue_depth: usize,
     pub has_displayed_frame: bool,
+    pub view_epoch: u64,
+    pub displayed_view_epoch: u64,
     pub render_loop_started: bool,
 }
 
@@ -459,13 +461,60 @@ pub enum ScheduledFrameTakeOutcome {
 }
 
 impl ScheduledFrameSlot {
+    fn current_media_epoch_tag(&self) -> Option<u64> {
+        self.pending_frame
+            .as_ref()
+            .and_then(|frame| frame.recovery_epoch_tag)
+            .or_else(|| {
+                self.displayed_frame
+                    .as_ref()
+                    .and_then(|frame| frame.recovery_epoch_tag)
+            })
+    }
+
+    fn current_media_owner_rtp_timestamp(&self) -> Option<u32> {
+        self.pending_frame
+            .as_ref()
+            .and_then(|frame| frame.recovery_owner_rtp_timestamp)
+            .or_else(|| {
+                self.displayed_frame
+                    .as_ref()
+                    .and_then(|frame| frame.recovery_owner_rtp_timestamp)
+            })
+    }
+
+    fn frame_is_recovery_valued(frame: &XbxEngineRenderFrame) -> bool {
+        frame.is_keyframe
+            || matches!(
+                frame.frame_recovery_disposition.as_deref(),
+                Some("repairing") | Some("rebuilding") | Some("rebuilding-supply")
+            )
+    }
+
+    fn frame_opens_recovery_media_epoch(&self, frame: &XbxEngineRenderFrame) -> bool {
+        let Some(last_presented) = self.last_presented_frame_seq else {
+            return false;
+        };
+        if frame
+            .recovery_epoch_tag
+            .zip(self.current_media_epoch_tag())
+            .is_some_and(|(incoming_epoch, current_epoch)| incoming_epoch > current_epoch)
+        {
+            return true;
+        }
+        if frame
+            .recovery_owner_rtp_timestamp
+            .zip(self.current_media_owner_rtp_timestamp())
+            .is_some_and(|(incoming_owner, current_owner)| incoming_owner != current_owner)
+            && frame_confirms_recovery_owner(frame)
+        {
+            return true;
+        }
+        Self::frame_is_recovery_valued(frame) && frame.frame_seq < last_presented
+    }
+
     fn should_begin_new_media_epoch(&self, frame: &XbxEngineRenderFrame) -> bool {
-        self.displayed_frame.is_some()
-            && self.pending_frames.is_empty()
-            && frame.is_keyframe
-            && self
-                .last_presented_frame_seq
-                .is_some_and(|last_presented| frame.frame_seq < last_presented)
+        self.displayed_frame.is_some() && self.frame_opens_recovery_media_epoch(frame)
     }
 
     pub fn submit_frame(
@@ -519,33 +568,33 @@ impl ScheduledFrameSlot {
                 last_presented_frame_seq: self.last_presented_frame_seq.unwrap_or_default(),
             };
         }
-        let pending_back_seq = self.pending_frames.back().map(|pending| pending.frame_seq);
-        if pending_back_seq.is_some_and(|frame_seq| frame.frame_seq <= frame_seq) {
-            self.log_host_flow(
-                "submit",
-                Some(frame_seq),
-                "RejectedAlreadyPresented",
-                None,
-                false,
-                frame_age_ms,
-                frame_age_budget_ms,
-                telemetry,
-            );
-            return ScheduledFrameSubmitOutcome::RejectedAlreadyPresented {
-                frame_seq: frame.frame_seq,
-                last_presented_frame_seq: pending_back_seq.unwrap_or_default(),
-            };
+        if let Some(pending) = self.pending_frame.as_ref() {
+            if !should_replace_pending_frame(pending, frame) {
+                self.log_host_flow(
+                    "submit",
+                    Some(frame_seq),
+                    "RejectedAlreadyPresented",
+                    None,
+                    false,
+                    frame_age_ms,
+                    frame_age_budget_ms,
+                    telemetry,
+                );
+                return ScheduledFrameSubmitOutcome::RejectedAlreadyPresented {
+                    frame_seq: frame.frame_seq,
+                    last_presented_frame_seq: pending.frame_seq,
+                };
+            }
         }
         let mut replaced_frame_seq = None;
         let mut overwrote_pending = false;
-        if self.pending_frames.len() >= SCHEDULED_FRAME_QUEUE_CAPACITY {
-            if let Some(replaced) = self.pending_frames.pop_front() {
-                replaced_frame_seq = Some(replaced.frame_seq);
-                overwrote_pending = true;
-                telemetry.record_overwrite();
-            }
+        if self.pending_frame.is_some() {
+            replaced_frame_seq = self.pending_frame.as_ref().map(|frame| frame.frame_seq);
+            overwrote_pending = true;
+            telemetry.record_overwrite();
         }
-        self.pending_frames.push_back(frame.clone());
+        let _ = SCHEDULED_FRAME_MAILBOX_CAPACITY;
+        self.pending_frame = Some(frame.clone());
         self.log_host_flow(
             "submit",
             Some(frame_seq),
@@ -571,7 +620,7 @@ impl ScheduledFrameSlot {
         telemetry: &mut HostCadenceTelemetry,
     ) -> ScheduledFrameTakeOutcome {
         loop {
-            let Some(frame) = self.pending_frames.pop_front() else {
+            let Some(frame) = self.pending_frame.take() else {
                 break;
             };
             if self
@@ -593,13 +642,30 @@ impl ScheduledFrameSlot {
             let frame_age_budget_ms = telemetry.stale_frame_age_budget_for_frame(&frame);
             let frame_age_ms = (now_ms - frame.rendered_at_ms).max(0.0);
             if frame_age_ms > frame_age_budget_ms {
+                if is_recovery_anchor_frame(&frame) && self.displayed_frame.is_some() {
+                    self.last_presented_frame_seq = Some(frame.frame_seq);
+                    self.displayed_frame = Some(frame.clone());
+                    self.displayed_view_epoch = self.view_epoch;
+                    telemetry.clear_no_pending_streak();
+                    self.log_host_flow(
+                        "take",
+                        Some(frame.frame_seq),
+                        "ReadyRecoveryAnchor",
+                        None,
+                        false,
+                        frame_age_ms,
+                        frame_age_budget_ms,
+                        telemetry,
+                    );
+                    return ScheduledFrameTakeOutcome::Ready(frame);
+                }
                 telemetry.record_stale_frame_drop(
                     &frame,
                     now_ms,
                     "scheduledFrameStale",
                     self.queue_depth(),
                 );
-                if self.pending_frames.is_empty() && self.displayed_frame.is_none() {
+                if self.pending_frame.is_none() && self.displayed_frame.is_none() {
                     self.log_host_flow(
                         "take",
                         Some(frame.frame_seq),
@@ -630,6 +696,7 @@ impl ScheduledFrameSlot {
             }
             self.last_presented_frame_seq = Some(frame.frame_seq);
             self.displayed_frame = Some(frame.clone());
+            self.displayed_view_epoch = self.view_epoch;
             telemetry.clear_no_pending_streak();
             self.log_host_flow(
                 "take",
@@ -643,8 +710,29 @@ impl ScheduledFrameSlot {
             );
             return ScheduledFrameTakeOutcome::Ready(frame);
         }
-        if self.displayed_frame.is_some() {
+        if self.displayed_frame.is_some() && self.displayed_view_epoch != self.view_epoch {
+            let frame = self
+                .displayed_frame
+                .as_ref()
+                .expect("displayed frame should exist when replaying view epoch")
+                .clone();
+            self.last_presented_frame_seq = Some(frame.frame_seq);
+            self.displayed_view_epoch = self.view_epoch;
             telemetry.clear_no_pending_streak();
+            self.log_host_flow(
+                "take",
+                Some(frame.frame_seq),
+                "ReadyDisplayedReplay",
+                None,
+                false,
+                0.0,
+                0.0,
+                telemetry,
+            );
+            return ScheduledFrameTakeOutcome::Ready(frame);
+        }
+        if self.displayed_frame.is_some() {
+            telemetry.record_no_pending_take();
             self.log_host_flow(
                 "take",
                 self.displayed_frame.as_ref().map(|frame| frame.frame_seq),
@@ -673,17 +761,24 @@ impl ScheduledFrameSlot {
 
     pub fn reset(&mut self) {
         self.displayed_frame = None;
-        self.pending_frames.clear();
+        self.pending_frame = None;
         self.last_presented_frame_seq = None;
+        self.view_epoch = 0;
+        self.displayed_view_epoch = 0;
         self.render_loop_started = false;
     }
 
     pub fn begin_media_epoch(&mut self) {
-        self.displayed_frame = None;
-        self.pending_frames.clear();
+        self.pending_frame = None;
         self.last_presented_frame_seq = None;
-        // 媒体 epoch 刷新时只清去重态，不动 render_loop_started，
-        // 否则会把仍在运行的 display link / fallback loop 误判成需要重启。
+        // 媒体 epoch 刷新时保留已显示帧，直到新 epoch 的恢复锚点或最新帧真正接管。
+        // 这样 host 末端仍有替换基准，stale recovery anchor 不会因为 displayed 被提前清空而落成 drop。
+        // 同时只清去重态，不动 render_loop_started，否则会把仍在运行的 display link / fallback loop 误判成需要重启。
+    }
+
+    pub fn begin_view_epoch(&mut self) -> u64 {
+        self.view_epoch = self.view_epoch.saturating_add(1);
+        self.view_epoch
     }
 
     pub fn diagnostics_snapshot(&self) -> ScheduledFrameSlotDiagnostics {
@@ -693,21 +788,35 @@ impl ScheduledFrameSlot {
                 .displayed_frame
                 .as_ref()
                 .and_then(|frame| frame.rtp_timestamp),
+            displayed_frame_recovery_disposition: self
+                .displayed_frame
+                .as_ref()
+                .and_then(|frame| frame.frame_recovery_disposition.clone()),
+            displayed_frame_rendered_at_ms: self
+                .displayed_frame
+                .as_ref()
+                .map(|frame| frame.rendered_at_ms),
             pending_frame_seqs: self
-                .pending_frames
-                .iter()
-                .map(|frame| frame.frame_seq)
-                .collect(),
+                .pending_frame
+                .as_ref()
+                .map(|frame| vec![frame.frame_seq])
+                .unwrap_or_default(),
+            pending_frame_rtp_timestamp: self
+                .pending_frame
+                .as_ref()
+                .and_then(|frame| frame.rtp_timestamp),
             last_presented_frame_seq: self.last_presented_frame_seq,
             queue_depth: self.queue_depth(),
-            pending_queue_depth: self.pending_frames.len(),
+            pending_queue_depth: usize::from(self.pending_frame.is_some()),
             has_displayed_frame: self.displayed_frame.is_some(),
+            view_epoch: self.view_epoch,
+            displayed_view_epoch: self.displayed_view_epoch,
             render_loop_started: self.render_loop_started,
         }
     }
 
     fn queue_depth(&self) -> usize {
-        self.pending_frames.len() + usize::from(self.displayed_frame.is_some())
+        usize::from(self.pending_frame.is_some()) + usize::from(self.displayed_frame.is_some())
     }
 
     fn log_host_flow(
@@ -741,6 +850,72 @@ impl ScheduledFrameSlot {
         //     telemetry.no_pending_streak,
         //     telemetry.cadence_phase().as_str(),
         // );
+    }
+}
+
+fn is_recovery_anchor_frame(frame: &XbxEngineRenderFrame) -> bool {
+    frame.is_keyframe || frame_has_anchor_protection(frame)
+}
+
+fn frame_has_anchor_protection(frame: &XbxEngineRenderFrame) -> bool {
+    matches!(
+        frame.frame_recovery_disposition.as_deref(),
+        Some("rebuilding") | Some("rebuilding-supply")
+    )
+}
+
+fn frame_confirms_recovery_owner(frame: &XbxEngineRenderFrame) -> bool {
+    frame.frame_unrecoverable_reason.is_none()
+        && frame
+            .recovery_owner_rtp_timestamp
+            .zip(frame.rtp_timestamp)
+            .is_some_and(|(owner_rtp, frame_rtp)| owner_rtp == frame_rtp)
+}
+
+fn frame_pending_anchor_protected(frame: &XbxEngineRenderFrame) -> bool {
+    is_recovery_anchor_frame(frame)
+        && (frame.frame_recovery_disposition.is_some()
+            || frame.recovery_epoch_tag.is_some()
+            || frame.recovery_owner_rtp_timestamp.is_some())
+}
+
+fn should_replace_pending_frame(
+    existing_frame: &XbxEngineRenderFrame,
+    incoming_frame: &XbxEngineRenderFrame,
+) -> bool {
+    match (
+        existing_frame.recovery_epoch_tag,
+        incoming_frame.recovery_epoch_tag,
+    ) {
+        (Some(existing), Some(incoming)) if existing != incoming => return incoming > existing,
+        (Some(_), None) => return false,
+        (None, Some(_)) => return true,
+        _ => {}
+    }
+
+    let existing_owner_confirmed = frame_confirms_recovery_owner(existing_frame);
+    let incoming_owner_confirmed = frame_confirms_recovery_owner(incoming_frame);
+    if existing_owner_confirmed != incoming_owner_confirmed {
+        return incoming_owner_confirmed;
+    }
+
+    let existing_anchor_protected = frame_pending_anchor_protected(existing_frame);
+    let incoming_anchor_protected = frame_pending_anchor_protected(incoming_frame);
+    if existing_anchor_protected != incoming_anchor_protected {
+        return incoming_anchor_protected;
+    }
+
+    if existing_frame.frame_unrecoverable_reason.is_some()
+        != incoming_frame.frame_unrecoverable_reason.is_some()
+    {
+        return existing_frame.frame_unrecoverable_reason.is_some();
+    }
+    if incoming_frame.frame_seq != existing_frame.frame_seq {
+        return incoming_frame.frame_seq > existing_frame.frame_seq;
+    }
+    match (incoming_frame.rtp_timestamp, existing_frame.rtp_timestamp) {
+        (Some(incoming), Some(existing)) if incoming != existing => incoming > existing,
+        _ => incoming_frame.rendered_at_ms >= existing_frame.rendered_at_ms,
     }
 }
 

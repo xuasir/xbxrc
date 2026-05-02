@@ -46,6 +46,13 @@ impl StateRecoveryCoordinator {
             .check_healthy_transition(true, has_stable_output);
     }
 
+    /// 通知已经观察到IDR/owner响应
+    pub(crate) fn on_idr_response_observed(&mut self) {
+        self.coordinator
+            .state_machine_mut()
+            .mark_idr_response_observed();
+    }
+
     /// 通知IDR已解码
     pub(crate) fn on_idr_decoded(&mut self) {
         self.coordinator.state_machine_mut().mark_idr_decoded();
@@ -63,6 +70,15 @@ impl StateRecoveryCoordinator {
         self.coordinator
             .state_machine_mut()
             .mark_reconnect_completed();
+    }
+
+    /// 通知reconnect候选已经被执行层正式接收
+    pub(crate) fn on_reconnect_requested(&mut self) {
+        let state_machine = self.coordinator.state_machine_mut();
+        if !state_machine.is_reconnect_in_flight() {
+            state_machine.transition_to_transport_recovery();
+            state_machine.mark_reconnect_requested();
+        }
     }
 
     /// 更新恢复epoch

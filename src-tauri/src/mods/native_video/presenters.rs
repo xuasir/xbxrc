@@ -13,23 +13,66 @@ use xbxengine::{
     XbxEngineRenderPixelData,
 };
 
-use super::scheduling::{HostCadenceTelemetry, ScheduledFrameSlot};
-#[cfg(target_os = "windows")]
-use super::{
-    calculate_recent_fps, calculate_recent_interval_ms, HostCadencePhase, HostFrameDropBacklog,
-    HOST_RENDER_FPS_WINDOW_MS, HOST_RENDER_FRAME_AGE_MULTIPLIER, HOST_RENDER_MAX_FRAME_AGE_MS,
-    HOST_RENDER_MIN_FRAME_AGE_MS, HOST_TIMING_QUEUE_WARN_MS, HOST_TIMING_TICK_WARN_MS,
-};
+use super::scheduling::{HostCadenceTelemetry, ScheduledFrameSlot, ScheduledFrameSlotDiagnostics};
 #[cfg(target_os = "macos")]
 use super::{
-    drop_display_layer, drop_wgpu_host_view, ensure_display_layer, run_layer_present_tick,
-    run_wgpu_render_tick, MacOsDisplayLinkHandle, MacOsLayerDisplayLinkHandle, MacOsLayerState,
-    MacOsWgpuState, MacOsWgpuTelemetry,
+    clear_host_present_tick_dispatch, dispatch_wgpu_render_tick_on_main_thread, drop_display_layer,
+    drop_wgpu_host_view, ensure_display_layer, request_host_present_tick_dispatch,
+    run_layer_present_tick, MacOsDisplayLinkHandle, MacOsLayerDisplayLinkHandle, MacOsLayerState,
+    MacOsWgpuState,
 };
 use super::{
     now_ms_f64, record_native_video_timing_event_lazy, record_native_video_trace,
     NativeVideoViewportState,
 };
+#[cfg(target_os = "windows")]
+use super::{HOST_TIMING_QUEUE_WARN_MS, HOST_TIMING_TICK_WARN_MS};
+
+fn apply_host_mailbox_viewport_diagnostics(
+    viewport: &mut NativeVideoViewportState,
+    telemetry: &HostCadenceTelemetry,
+    slot_diag: Option<&ScheduledFrameSlotDiagnostics>,
+    latest_host_view_created_at_ms: Option<f64>,
+    host_descriptor_upload_mode: Option<String>,
+    host_descriptor_metal_import_count_total: u64,
+    host_descriptor_cpu_upload_count_total: u64,
+) {
+    viewport.latest_host_present_time_ms = telemetry.latest_present_time_ms;
+    viewport.latest_host_submit_time_ms = telemetry.latest_submit_time_ms;
+    viewport.latest_host_submit_rtp_timestamp = slot_diag
+        .and_then(|diag| diag.pending_frame_rtp_timestamp)
+        .or_else(|| slot_diag.and_then(|diag| diag.displayed_frame_rtp_timestamp));
+    viewport.host_present_fps = telemetry.present_fps();
+    viewport.host_mailbox_submit_epoch = telemetry.present_enqueue_count_total;
+    viewport.host_mailbox_enqueue_count_total = telemetry.present_enqueue_count_total;
+    viewport.host_mailbox_drop_count_total = telemetry.present_drop_count_total;
+    viewport.host_mailbox_overwrite_count_total = telemetry.present_overwrite_count_total;
+    viewport.host_no_pending_take_count_total = telemetry.no_pending_take_count_total;
+    viewport.host_no_pending_streak = telemetry.no_pending_streak;
+    viewport.host_no_pending_max_streak = telemetry.no_pending_max_streak;
+    viewport.host_display_tick_epoch = telemetry.display_tick_epoch();
+    viewport.host_frame_present_epoch = telemetry.present_epoch();
+    viewport.host_cadence_phase = Some(telemetry.cadence_phase().as_str().to_string());
+    viewport.last_displayed_frame_seq = slot_diag.and_then(|diag| diag.displayed_frame_seq);
+    viewport.last_displayed_frame_rtp_timestamp =
+        slot_diag.and_then(|diag| diag.displayed_frame_rtp_timestamp);
+    viewport.last_displayed_at_ms = telemetry.latest_present_time_ms;
+    viewport.host_view_generation = slot_diag.map(|diag| diag.view_epoch).unwrap_or_default();
+    viewport.latest_host_view_created_at_ms = latest_host_view_created_at_ms;
+    viewport.host_display_interval_ms = telemetry.display_interval_ms();
+    viewport.host_frame_age_budget_ms = Some(telemetry.frame_age_budget_ms());
+    viewport.host_descriptor_upload_mode = host_descriptor_upload_mode;
+    viewport.host_descriptor_metal_import_count_total = host_descriptor_metal_import_count_total;
+    viewport.host_descriptor_cpu_upload_count_total = host_descriptor_cpu_upload_count_total;
+}
+
+fn host_mailbox_reject_stage(slot_diag: &ScheduledFrameSlotDiagnostics) -> &'static str {
+    if slot_diag.pending_queue_depth > 0 {
+        "hostMailboxPendingProtected"
+    } else {
+        "hostMailboxRejected"
+    }
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum NativeVideoPresenterKind {
@@ -94,152 +137,14 @@ impl NativeVideoPresenter for NoopVideoPresenter {
 struct WindowsWgpuState {
     renderer: Option<super::wgpu_renderer::WgpuFrameRenderer>,
     latest_frame: Option<XbxEngineRenderFrame>,
-    last_presented_frame_seq: Option<u64>,
+    view_generation: u64,
+    latest_view_created_at_ms: Option<f64>,
     last_surface_size: Option<(u32, u32)>,
+    descriptor_upload_mode: Option<String>,
+    descriptor_metal_import_count_total: u64,
+    descriptor_cpu_upload_count_total: u64,
     render_loop_started: bool,
     init_failed_logged: bool,
-}
-
-#[cfg(target_os = "windows")]
-#[derive(Default)]
-struct WindowsWgpuTelemetry {
-    latest_present_time_ms: Option<f64>,
-    latest_submit_time_ms: Option<f64>,
-    display_tick_epoch: u64,
-    present_epoch: u64,
-    cadence_phase: HostCadencePhase,
-    recent_present_times_ms: std::collections::VecDeque<f64>,
-    recent_display_tick_times_ms: std::collections::VecDeque<f64>,
-    present_enqueue_count_total: u64,
-    present_drop_count_total: u64,
-    present_overwrite_count_total: u64,
-    no_pending_take_count_total: u64,
-    no_pending_streak: u32,
-    no_pending_max_streak: u32,
-    pending_frame_drops: HostFrameDropBacklog,
-    descriptor_upload_mode: Option<String>,
-    descriptor_import_count_total: u64,
-    descriptor_cpu_upload_count_total: u64,
-}
-
-#[cfg(target_os = "windows")]
-impl WindowsWgpuTelemetry {
-    fn record_display_tick(&mut self, now_ms: f64) {
-        self.recent_display_tick_times_ms.push_back(now_ms);
-        self.trim_display_ticks(now_ms);
-        self.display_tick_epoch = self.display_tick_epoch.saturating_add(1);
-        if matches!(self.cadence_phase, HostCadencePhase::Idle) {
-            self.cadence_phase = HostCadencePhase::Priming;
-        }
-    }
-
-    fn record_present(&mut self, now_ms: f64) {
-        self.latest_present_time_ms = Some(now_ms);
-        self.recent_present_times_ms.push_back(now_ms);
-        self.trim_recent(now_ms);
-        self.present_epoch = self.present_epoch.saturating_add(1);
-        self.cadence_phase = HostCadencePhase::Steady;
-    }
-
-    fn record_drop(&mut self) {
-        self.present_drop_count_total = self.present_drop_count_total.saturating_add(1);
-    }
-
-    fn record_no_pending_take(&mut self) {
-        self.no_pending_take_count_total = self.no_pending_take_count_total.saturating_add(1);
-        self.no_pending_streak = self.no_pending_streak.saturating_add(1);
-        self.no_pending_max_streak = self.no_pending_max_streak.max(self.no_pending_streak);
-        if self.present_epoch > 0 {
-            self.cadence_phase = HostCadencePhase::Starved;
-        }
-    }
-
-    fn clear_no_pending_streak(&mut self) {
-        self.no_pending_streak = 0;
-        self.cadence_phase = if self.present_epoch > 0 {
-            HostCadencePhase::Steady
-        } else if self.display_tick_epoch > 0 {
-            HostCadencePhase::Priming
-        } else {
-            HostCadencePhase::Idle
-        };
-    }
-
-    fn record_stale_frame_drop(
-        &mut self,
-        frame: &XbxEngineRenderFrame,
-        observed_at_ms: f64,
-        detail: &str,
-        queue_depth: usize,
-    ) {
-        self.record_drop();
-        self.pending_frame_drops.record_stale_frame_drop(
-            frame,
-            observed_at_ms,
-            detail,
-            queue_depth,
-        );
-    }
-
-    fn take_pending_frame_drops(&mut self) -> Vec<xbxengine::XbxEngineHostVideoFrameDropEvent> {
-        self.pending_frame_drops.take_all()
-    }
-
-    fn present_fps(&self) -> f64 {
-        calculate_recent_fps(&self.recent_present_times_ms)
-    }
-
-    fn display_interval_ms(&self) -> Option<f64> {
-        calculate_recent_interval_ms(&self.recent_display_tick_times_ms)
-    }
-
-    fn frame_age_budget_ms(&self) -> f64 {
-        self.display_interval_ms()
-            .map(|interval_ms| {
-                (interval_ms * HOST_RENDER_FRAME_AGE_MULTIPLIER)
-                    .clamp(HOST_RENDER_MIN_FRAME_AGE_MS, HOST_RENDER_MAX_FRAME_AGE_MS)
-            })
-            .unwrap_or(HOST_RENDER_MAX_FRAME_AGE_MS)
-    }
-
-    fn reset_frame_slot(&mut self) {
-        self.latest_present_time_ms = None;
-        self.display_tick_epoch = 0;
-        self.present_epoch = 0;
-        self.cadence_phase = HostCadencePhase::Idle;
-        self.recent_present_times_ms.clear();
-        self.recent_display_tick_times_ms.clear();
-        self.present_enqueue_count_total = 0;
-        self.present_drop_count_total = 0;
-        self.present_overwrite_count_total = 0;
-        self.no_pending_take_count_total = 0;
-        self.no_pending_streak = 0;
-        self.no_pending_max_streak = 0;
-        self.pending_frame_drops.reset();
-        self.descriptor_upload_mode = None;
-        self.descriptor_import_count_total = 0;
-        self.descriptor_cpu_upload_count_total = 0;
-    }
-
-    fn trim_recent(&mut self, now_ms: f64) {
-        while self
-            .recent_present_times_ms
-            .front()
-            .is_some_and(|ts_ms| now_ms - *ts_ms > HOST_RENDER_FPS_WINDOW_MS)
-        {
-            self.recent_present_times_ms.pop_front();
-        }
-    }
-
-    fn trim_display_ticks(&mut self, now_ms: f64) {
-        while self
-            .recent_display_tick_times_ms
-            .front()
-            .is_some_and(|ts_ms| now_ms - *ts_ms > HOST_RENDER_FPS_WINDOW_MS)
-        {
-            self.recent_display_tick_times_ms.pop_front();
-        }
-    }
 }
 
 #[cfg(target_os = "windows")]
@@ -268,7 +173,8 @@ pub(super) struct WindowsWgpuPresenter {
     surface_id: Option<String>,
     app_handle: AppHandle,
     renderer_state: Arc<Mutex<WindowsWgpuState>>,
-    telemetry: Arc<Mutex<WindowsWgpuTelemetry>>,
+    frame_slot: Arc<Mutex<ScheduledFrameSlot>>,
+    telemetry: Arc<Mutex<HostCadenceTelemetry>>,
     render_loop_stop: Arc<std::sync::atomic::AtomicBool>,
     render_loop_pending: Arc<std::sync::atomic::AtomicBool>,
     runtime_trace: Option<RuntimeTraceRecorderRef>,
@@ -288,7 +194,8 @@ impl WindowsWgpuPresenter {
             surface_id: None,
             app_handle,
             renderer_state: Arc::new(Mutex::new(WindowsWgpuState::default())),
-            telemetry: Arc::new(Mutex::new(WindowsWgpuTelemetry::default())),
+            frame_slot: Arc::new(Mutex::new(ScheduledFrameSlot::default())),
+            telemetry: Arc::new(Mutex::new(HostCadenceTelemetry::default())),
             render_loop_stop: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             render_loop_pending: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             runtime_trace,
@@ -309,6 +216,7 @@ impl WindowsWgpuPresenter {
         let window_label = self.window_label.clone();
         let app_handle = self.app_handle.clone();
         let renderer_state = self.renderer_state.clone();
+        let frame_slot = self.frame_slot.clone();
         let telemetry = self.telemetry.clone();
         let render_loop_stop = self.render_loop_stop.clone();
         let render_loop_pending = self.render_loop_pending.clone();
@@ -327,6 +235,7 @@ impl WindowsWgpuPresenter {
                         continue;
                     };
                     let renderer_state = renderer_state.clone();
+                    let frame_slot = frame_slot.clone();
                     let telemetry = telemetry.clone();
                     let render_loop_pending = render_loop_pending.clone();
                     let viewport_id = viewport_id.clone();
@@ -338,6 +247,7 @@ impl WindowsWgpuPresenter {
                             &window_for_task,
                             &viewport_id,
                             &renderer_state,
+                            &frame_slot,
                             &telemetry,
                             &render_loop_pending,
                             Some(dispatch_requested_at_ms),
@@ -347,6 +257,36 @@ impl WindowsWgpuPresenter {
                 }
             })
             .expect("Failed to spawn Windows wgpu render loop");
+    }
+
+    fn request_immediate_render_tick(&self) {
+        if self.render_loop_pending.swap(true, Ordering::Relaxed) {
+            return;
+        }
+        let Some(window) = self.app_handle.get_window(&self.window_label) else {
+            self.render_loop_pending.store(false, Ordering::Relaxed);
+            return;
+        };
+        let renderer_state = self.renderer_state.clone();
+        let frame_slot = self.frame_slot.clone();
+        let telemetry = self.telemetry.clone();
+        let render_loop_pending = self.render_loop_pending.clone();
+        let viewport_id = self.viewport_id.clone();
+        let runtime_trace = self.runtime_trace.clone();
+        let window_for_task = window.clone();
+        let dispatch_requested_at_ms = now_ms_f64();
+        let _ = window.run_on_main_thread(move || {
+            run_windows_wgpu_render_tick(
+                &window_for_task,
+                &viewport_id,
+                &renderer_state,
+                &frame_slot,
+                &telemetry,
+                &render_loop_pending,
+                Some(dispatch_requested_at_ms),
+                runtime_trace,
+            );
+        });
     }
 
     fn should_drop_submitted_frame(&self, frame: &XbxEngineRenderFrame, now_ms: f64) -> bool {
@@ -372,8 +312,13 @@ impl NativeVideoPresenter for WindowsWgpuPresenter {
     fn begin_media_epoch(&mut self) {
         if let Ok(mut state) = self.renderer_state.lock() {
             state.latest_frame = None;
-            state.last_presented_frame_seq = None;
             state.last_surface_size = None;
+            state.descriptor_upload_mode = None;
+            state.descriptor_metal_import_count_total = 0;
+            state.descriptor_cpu_upload_count_total = 0;
+        }
+        if let Ok(mut frame_slot) = self.frame_slot.lock() {
+            frame_slot.begin_media_epoch();
         }
         if let Ok(mut telemetry) = self.telemetry.lock() {
             telemetry.reset_frame_slot();
@@ -389,50 +334,220 @@ impl NativeVideoPresenter for WindowsWgpuPresenter {
         let now_ms = now_ms_f64();
         if let Ok(mut telemetry) = self.telemetry.lock() {
             telemetry.latest_submit_time_ms = Some(now_ms);
-            telemetry.present_enqueue_count_total =
-                telemetry.present_enqueue_count_total.saturating_add(1);
         }
         if self.should_drop_submitted_frame(frame, now_ms) {
             if let Ok(mut telemetry) = self.telemetry.lock() {
+                telemetry.present_enqueue_count_total =
+                    telemetry.present_enqueue_count_total.saturating_add(1);
                 telemetry.record_stale_frame_drop(frame, now_ms, "submittedFrameStale", 0);
             }
+            record_native_video_timing_event_lazy(
+                self.runtime_trace.as_ref(),
+                "wgpu",
+                "hostMailboxRejected",
+                &self.viewport_id,
+                &self.window_label,
+                || {
+                    serde_json::json!({
+                        "outcome": "stale",
+                        "frameSeq": frame.frame_seq,
+                        "frameAgeMs": (now_ms - frame.rendered_at_ms).max(0.0),
+                    })
+                },
+            );
             return;
         }
-        if let Ok(mut state) = self.renderer_state.lock() {
-            if state
-                .last_presented_frame_seq
-                .is_some_and(|presented_seq| frame.frame_seq <= presented_seq)
-            {
-                return;
-            }
-            let overwrote_pending = state.latest_frame.as_ref().is_some_and(|latest| {
-                Some(latest.frame_seq) != state.last_presented_frame_seq
-                    && latest.frame_seq != frame.frame_seq
-            });
-            if overwrote_pending {
-                if let Ok(mut telemetry) = self.telemetry.lock() {
-                    telemetry.present_overwrite_count_total =
-                        telemetry.present_overwrite_count_total.saturating_add(1);
+        let Ok(mut telemetry) = self.telemetry.lock() else {
+            record_native_video_timing_event_lazy(
+                self.runtime_trace.as_ref(),
+                "wgpu",
+                "hostMailboxUpdateFailed",
+                &self.viewport_id,
+                &self.window_label,
+                || serde_json::json!({ "reason": "telemetryLockFailed", "frameSeq": frame.frame_seq }),
+            );
+            return;
+        };
+        let submit_gap_ms = telemetry.record_submit(now_ms);
+        let no_pending_streak_before_submit = telemetry.no_pending_streak;
+        let should_warn_submit_gap =
+            submit_gap_ms.is_some_and(|gap_ms| telemetry.should_warn_submit_gap(gap_ms));
+        telemetry.present_enqueue_count_total =
+            telemetry.present_enqueue_count_total.saturating_add(1);
+        let telemetry_diag = telemetry.diagnostics_snapshot();
+        let Ok(mut frame_slot) = self.frame_slot.lock() else {
+            record_native_video_timing_event_lazy(
+                self.runtime_trace.as_ref(),
+                "wgpu",
+                "hostMailboxUpdateFailed",
+                &self.viewport_id,
+                &self.window_label,
+                || serde_json::json!({ "reason": "frameSlotLockFailed", "frameSeq": frame.frame_seq }),
+            );
+            return;
+        };
+        match frame_slot.submit_frame(frame, now_ms, &mut telemetry) {
+            super::scheduling::ScheduledFrameSubmitOutcome::Accepted {
+                frame_seq,
+                overwrote_pending,
+                replaced_frame_seq,
+                frame_age_ms,
+                frame_age_budget_ms,
+            } => {
+                let slot_diag = frame_slot.diagnostics_snapshot();
+                record_native_video_timing_event_lazy(
+                    self.runtime_trace.as_ref(),
+                    "wgpu",
+                    "hostMailboxAccepted",
+                    &self.viewport_id,
+                    &self.window_label,
+                    || {
+                        serde_json::json!({
+                            "outcome": "accepted",
+                            "frameSeq": frame_seq,
+                            "frameRtpTimestamp": frame.rtp_timestamp,
+                            "frameRecoveryEpoch": frame.recovery_epoch_tag,
+                            "frameRecoveryOwnerRtpTimestamp": frame.recovery_owner_rtp_timestamp,
+                            "frameRecoveryDisposition": frame.frame_recovery_disposition,
+                            "frameIsKeyframe": frame.is_keyframe,
+                            "frameAgeMs": frame_age_ms,
+                            "frameAgeBudgetMs": frame_age_budget_ms,
+                            "submitGapMs": submit_gap_ms,
+                            "noPendingStreakBeforeSubmit": no_pending_streak_before_submit,
+                            "overwrotePending": overwrote_pending,
+                            "replacedFrameSeq": replaced_frame_seq,
+                            "displayedFrameSeq": slot_diag.displayed_frame_seq,
+                            "pendingFrameSeqs": slot_diag.pending_frame_seqs,
+                            "lastPresentedFrameSeq": slot_diag.last_presented_frame_seq,
+                            "queueDepth": slot_diag.queue_depth,
+                            "pendingQueueDepth": slot_diag.pending_queue_depth,
+                            "hostDisplayTickEpoch": telemetry_diag.display_tick_epoch,
+                            "hostFramePresentEpoch": telemetry_diag.present_epoch,
+                            "hostCadencePhase": telemetry_diag.cadence_phase.as_str(),
+                        })
+                    },
+                );
+                if let Some(gap_ms) = submit_gap_ms.filter(|_| should_warn_submit_gap) {
+                    record_native_video_timing_event_lazy(
+                        self.runtime_trace.as_ref(),
+                        "wgpu",
+                        "hostMailboxSubmitGap",
+                        &self.viewport_id,
+                        &self.window_label,
+                        || {
+                            serde_json::json!({
+                                "frameSeq": frame_seq,
+                                "submitGapMs": gap_ms,
+                                "frameAgeMs": frame_age_ms,
+                                "frameAgeBudgetMs": frame_age_budget_ms,
+                                "noPendingStreakBeforeSubmit": no_pending_streak_before_submit,
+                                "overwrotePending": overwrote_pending,
+                                "replacedFrameSeq": replaced_frame_seq,
+                                "displayedFrameSeq": slot_diag.displayed_frame_seq,
+                                "pendingFrameSeqs": slot_diag.pending_frame_seqs,
+                                "queueDepth": slot_diag.queue_depth,
+                                "pendingQueueDepth": slot_diag.pending_queue_depth,
+                                "hostDisplayTickEpoch": telemetry_diag.display_tick_epoch,
+                                "hostFramePresentEpoch": telemetry_diag.present_epoch,
+                            })
+                        },
+                    );
                 }
             }
-            state.latest_frame = Some(frame.clone());
+            super::scheduling::ScheduledFrameSubmitOutcome::DroppedStale {
+                frame_seq,
+                frame_age_ms,
+                frame_age_budget_ms,
+            } => {
+                let slot_diag = frame_slot.diagnostics_snapshot();
+                record_native_video_timing_event_lazy(
+                    self.runtime_trace.as_ref(),
+                    "wgpu",
+                    "hostMailboxRejected",
+                    &self.viewport_id,
+                    &self.window_label,
+                    || {
+                        serde_json::json!({
+                            "outcome": "stale",
+                            "frameSeq": frame_seq,
+                            "frameRtpTimestamp": frame.rtp_timestamp,
+                            "frameRecoveryEpoch": frame.recovery_epoch_tag,
+                            "frameRecoveryOwnerRtpTimestamp": frame.recovery_owner_rtp_timestamp,
+                            "frameRecoveryDisposition": frame.frame_recovery_disposition,
+                            "frameIsKeyframe": frame.is_keyframe,
+                            "frameAgeMs": frame_age_ms,
+                            "frameAgeBudgetMs": frame_age_budget_ms,
+                            "submitGapMs": submit_gap_ms,
+                            "noPendingStreakBeforeSubmit": no_pending_streak_before_submit,
+                            "displayedFrameSeq": slot_diag.displayed_frame_seq,
+                            "pendingFrameSeqs": slot_diag.pending_frame_seqs,
+                            "queueDepth": slot_diag.queue_depth,
+                            "pendingQueueDepth": slot_diag.pending_queue_depth,
+                            "hostDisplayTickEpoch": telemetry_diag.display_tick_epoch,
+                            "hostFramePresentEpoch": telemetry_diag.present_epoch,
+                            "hostCadencePhase": telemetry_diag.cadence_phase.as_str(),
+                        })
+                    },
+                );
+            }
+            super::scheduling::ScheduledFrameSubmitOutcome::RejectedAlreadyPresented {
+                frame_seq,
+                last_presented_frame_seq,
+            } => {
+                let slot_diag = frame_slot.diagnostics_snapshot();
+                record_native_video_timing_event_lazy(
+                    self.runtime_trace.as_ref(),
+                    "wgpu",
+                    host_mailbox_reject_stage(&slot_diag),
+                    &self.viewport_id,
+                    &self.window_label,
+                    || {
+                        serde_json::json!({
+                            "outcome": "already_presented",
+                            "frameSeq": frame_seq,
+                            "frameRtpTimestamp": frame.rtp_timestamp,
+                            "frameRecoveryEpoch": frame.recovery_epoch_tag,
+                            "frameRecoveryOwnerRtpTimestamp": frame.recovery_owner_rtp_timestamp,
+                            "frameRecoveryDisposition": frame.frame_recovery_disposition,
+                            "frameIsKeyframe": frame.is_keyframe,
+                            "lastPresentedFrameSeq": last_presented_frame_seq,
+                            "submitGapMs": submit_gap_ms,
+                            "noPendingStreakBeforeSubmit": no_pending_streak_before_submit,
+                            "displayedFrameSeq": slot_diag.displayed_frame_seq,
+                            "pendingFrameSeqs": slot_diag.pending_frame_seqs,
+                            "queueDepth": slot_diag.queue_depth,
+                            "pendingQueueDepth": slot_diag.pending_queue_depth,
+                            "hostDisplayTickEpoch": telemetry_diag.display_tick_epoch,
+                            "hostFramePresentEpoch": telemetry_diag.present_epoch,
+                            "hostCadencePhase": telemetry_diag.cadence_phase.as_str(),
+                        })
+                    },
+                );
+            }
         }
+        self.request_immediate_render_tick();
     }
 
     fn detach(&mut self) {
         self.surface_id = None;
         self.render_loop_stop.store(true, Ordering::Relaxed);
         let renderer_state = self.renderer_state.clone();
+        let frame_slot = self.frame_slot.clone();
         let telemetry = self.telemetry.clone();
         let window_label = self.window_label.clone();
         let app_handle = self.app_handle.clone();
         if let Some(window) = app_handle.get_window(&window_label) {
             let _ = window.run_on_main_thread(move || {
+                if let Ok(mut frame_slot) = frame_slot.lock() {
+                    frame_slot.reset();
+                }
                 if let Ok(mut state) = renderer_state.lock() {
                     state.renderer = None;
                     state.latest_frame = None;
-                    state.last_presented_frame_seq = None;
                     state.last_surface_size = None;
+                    state.descriptor_upload_mode = None;
+                    state.descriptor_metal_import_count_total = 0;
+                    state.descriptor_cpu_upload_count_total = 0;
                     state.render_loop_started = false;
                 }
                 if let Ok(mut telemetry) = telemetry.lock() {
@@ -446,32 +561,31 @@ impl NativeVideoPresenter for WindowsWgpuPresenter {
         let Ok(telemetry) = self.telemetry.lock() else {
             return;
         };
+        let slot_diag = self
+            .frame_slot
+            .lock()
+            .ok()
+            .map(|frame_slot| frame_slot.diagnostics_snapshot());
         let renderer_state = self.renderer_state.lock().ok();
-        let last_presented_frame_seq = renderer_state
-            .as_ref()
-            .and_then(|state| state.last_presented_frame_seq);
-        viewport.latest_host_present_time_ms = telemetry.latest_present_time_ms;
-        viewport.latest_host_submit_time_ms = None;
-        viewport.host_present_fps = telemetry.present_fps();
-        viewport.host_submit_epoch = telemetry.present_enqueue_count_total;
-        viewport.host_present_enqueue_count_total = telemetry.present_enqueue_count_total;
-        viewport.host_present_drop_count_total = telemetry.present_drop_count_total;
-        viewport.host_present_overwrite_count_total = telemetry.present_overwrite_count_total;
-        viewport.host_no_pending_take_count_total = telemetry.no_pending_take_count_total;
-        viewport.host_no_pending_streak = telemetry.no_pending_streak;
-        viewport.host_no_pending_max_streak = telemetry.no_pending_max_streak;
-        viewport.host_display_tick_epoch = telemetry.display_tick_epoch;
-        viewport.host_present_epoch = telemetry.present_epoch;
-        viewport.host_cadence_phase = Some(telemetry.cadence_phase.as_str().to_string());
-        viewport.last_displayed_frame_seq = last_presented_frame_seq;
-        viewport.last_displayed_frame_rtp_timestamp = None;
-        viewport.last_displayed_at_ms = telemetry.latest_present_time_ms;
-        viewport.host_display_interval_ms = telemetry.display_interval_ms();
-        viewport.host_frame_age_budget_ms = Some(telemetry.frame_age_budget_ms());
-        viewport.host_descriptor_upload_mode = telemetry.descriptor_upload_mode.clone();
-        viewport.host_descriptor_metal_import_count_total = telemetry.descriptor_import_count_total;
-        viewport.host_descriptor_cpu_upload_count_total =
-            telemetry.descriptor_cpu_upload_count_total;
+        apply_host_mailbox_viewport_diagnostics(
+            viewport,
+            &telemetry,
+            slot_diag.as_ref(),
+            renderer_state
+                .as_ref()
+                .and_then(|state| state.latest_view_created_at_ms),
+            renderer_state
+                .as_ref()
+                .and_then(|state| state.descriptor_upload_mode.clone()),
+            renderer_state
+                .as_ref()
+                .map(|state| state.descriptor_metal_import_count_total)
+                .unwrap_or_default(),
+            renderer_state
+                .as_ref()
+                .map(|state| state.descriptor_cpu_upload_count_total)
+                .unwrap_or_default(),
+        );
     }
 
     fn take_pending_frame_drops(&mut self) -> Vec<xbxengine::XbxEngineHostVideoFrameDropEvent> {
@@ -487,7 +601,8 @@ fn run_windows_wgpu_render_tick(
     window: &tauri::Window,
     viewport_id: &str,
     renderer_state: &Arc<Mutex<WindowsWgpuState>>,
-    telemetry: &Arc<Mutex<WindowsWgpuTelemetry>>,
+    frame_slot: &Arc<Mutex<ScheduledFrameSlot>>,
+    telemetry: &Arc<Mutex<HostCadenceTelemetry>>,
     render_loop_pending: &Arc<std::sync::atomic::AtomicBool>,
     dispatch_requested_at_ms: Option<f64>,
     runtime_trace: Option<RuntimeTraceRecorderRef>,
@@ -511,6 +626,7 @@ fn run_windows_wgpu_render_tick(
     let Ok(mut state) = renderer_state.lock() else {
         return;
     };
+    let view_generation_before_tick = state.view_generation;
     let Ok(surface_size) = window.inner_size() else {
         return;
     };
@@ -527,7 +643,12 @@ fn run_windows_wgpu_render_tick(
         ) {
             Ok(renderer) => {
                 state.renderer = Some(renderer);
+                state.view_generation = state.view_generation.saturating_add(1);
+                state.latest_view_created_at_ms = Some(now_ms_f64());
                 state.last_surface_size = Some((surface_width, surface_height));
+                state.descriptor_upload_mode = None;
+                state.descriptor_metal_import_count_total = 0;
+                state.descriptor_cpu_upload_count_total = 0;
             }
             Err(error) => {
                 if !state.init_failed_logged {
@@ -543,47 +664,36 @@ fn run_windows_wgpu_render_tick(
             }
         }
     }
+    let view_generation_changed = state.view_generation != view_generation_before_tick;
 
     let now_ms = now_ms_f64();
-    let frame_age_budget_ms = if let Ok(mut telemetry) = telemetry.lock() {
+    let take_outcome = {
+        let Ok(mut telemetry) = telemetry.lock() else {
+            return;
+        };
         telemetry.record_display_tick(now_ms);
-        telemetry.frame_age_budget_ms()
-    } else {
-        HOST_RENDER_MAX_FRAME_AGE_MS
-    };
-    let should_render = size_changed
-        || state.latest_frame.as_ref().map(|frame| frame.frame_seq)
-            != state.last_presented_frame_seq;
-    let latest_frame = state.latest_frame.clone();
-    if latest_frame.is_none() {
-        if let Ok(mut telemetry) = telemetry.lock() {
-            telemetry.record_no_pending_take();
+        let Ok(mut frame_slot) = frame_slot.lock() else {
+            return;
+        };
+        if view_generation_changed {
+            frame_slot.begin_view_epoch();
         }
-    } else if let Ok(mut telemetry) = telemetry.lock() {
-        telemetry.clear_no_pending_streak();
-    }
-    let rendered_seq_before = state.last_presented_frame_seq;
+        frame_slot.take_ready_frame(now_ms, &mut telemetry)
+    };
     if size_changed {
         state.last_surface_size = Some((surface_width, surface_height));
     }
+    let cached_frame_for_repaint = state.latest_frame.clone();
+    let has_cached_frame = cached_frame_for_repaint.is_some();
     let Some(renderer) = state.renderer.as_mut() else {
         return;
     };
     if size_changed {
         renderer.update_surface_size(surface_width, surface_height);
     }
-    if let Some(frame) = latest_frame {
-        if should_render {
-            if now_ms - frame.rendered_at_ms > frame_age_budget_ms {
-                state.last_presented_frame_seq = Some(frame.frame_seq);
-                state.latest_frame = None;
-                if let Ok(mut telemetry) = telemetry.lock() {
-                    telemetry.record_stale_frame_drop(&frame, now_ms, "scheduledFrameStale", 1);
-                }
-                return;
-            }
-            let rendered_seq = frame.frame_seq;
-            renderer.update_frame(frame);
+    match take_outcome {
+        ScheduledFrameTakeOutcome::Ready(frame) => {
+            renderer.update_frame(frame.clone());
             if let Err(error) = renderer.render() {
                 log::warn!(
                     "[native_video][windows][wgpu] render failed for viewport={} window={} error={}",
@@ -593,19 +703,30 @@ fn run_windows_wgpu_render_tick(
                 );
             } else {
                 let descriptor_upload = renderer.descriptor_upload_telemetry();
-                state.last_presented_frame_seq = Some(rendered_seq);
+                state.latest_frame = Some(frame);
+                state.descriptor_upload_mode = descriptor_upload.last_mode;
+                state.descriptor_metal_import_count_total =
+                    descriptor_upload.metal_import_count_total;
+                state.descriptor_cpu_upload_count_total = descriptor_upload.cpu_upload_count_total;
                 if let Ok(mut telemetry) = telemetry.lock() {
                     telemetry.record_present(now_ms);
-                    telemetry.descriptor_upload_mode = descriptor_upload.last_mode;
-                    telemetry.descriptor_import_count_total =
-                        descriptor_upload.metal_import_count_total;
-                    telemetry.descriptor_cpu_upload_count_total =
-                        descriptor_upload.cpu_upload_count_total;
                 }
             }
         }
-    } else if rendered_seq_before.is_none() && size_changed {
-        let _ = renderer.render();
+        ScheduledFrameTakeOutcome::RetainedDisplayedFrame => {
+            if size_changed {
+                if let Some(frame) = cached_frame_for_repaint {
+                    renderer.update_frame(frame);
+                    let _ = renderer.render();
+                }
+            }
+        }
+        ScheduledFrameTakeOutcome::NoPendingFrame => {
+            if !has_cached_frame && size_changed {
+                let _ = renderer.render();
+            }
+        }
+        ScheduledFrameTakeOutcome::DroppedStale { .. } => {}
     }
     let tick_total_ms = (now_ms_f64() - tick_started_at_ms).max(0.0);
     if tick_total_ms >= HOST_TIMING_TICK_WARN_MS {
@@ -627,9 +748,11 @@ pub(super) struct MacOsWgpuPresenter {
     surface_id: Option<String>,
     app_handle: AppHandle,
     renderer_state: Arc<Mutex<MacOsWgpuState>>,
-    telemetry: Arc<Mutex<MacOsWgpuTelemetry>>,
+    frame_slot: Arc<Mutex<ScheduledFrameSlot>>,
+    telemetry: Arc<Mutex<HostCadenceTelemetry>>,
     render_loop_stop: Arc<std::sync::atomic::AtomicBool>,
     render_loop_pending: Arc<std::sync::atomic::AtomicBool>,
+    render_loop_rerun_requested: Arc<std::sync::atomic::AtomicBool>,
     display_link: Option<MacOsDisplayLinkHandle>,
     runtime_trace: Option<RuntimeTraceRecorderRef>,
 }
@@ -648,9 +771,11 @@ impl MacOsWgpuPresenter {
             surface_id: None,
             app_handle,
             renderer_state: Arc::new(Mutex::new(MacOsWgpuState::default())),
-            telemetry: Arc::new(Mutex::new(MacOsWgpuTelemetry::default())),
+            frame_slot: Arc::new(Mutex::new(ScheduledFrameSlot::default())),
+            telemetry: Arc::new(Mutex::new(HostCadenceTelemetry::default())),
             render_loop_stop: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             render_loop_pending: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+            render_loop_rerun_requested: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             display_link: None,
             runtime_trace,
         }
@@ -671,8 +796,10 @@ impl MacOsWgpuPresenter {
                 self.window_label.clone(),
                 self.app_handle.clone(),
                 self.renderer_state.clone(),
+                self.frame_slot.clone(),
                 self.telemetry.clone(),
                 self.render_loop_pending.clone(),
+                self.render_loop_rerun_requested.clone(),
                 self.runtime_trace.clone(),
             ) {
                 self.display_link = Some(display_link);
@@ -695,9 +822,11 @@ impl MacOsWgpuPresenter {
         let window_label = self.window_label.clone();
         let app_handle = self.app_handle.clone();
         let renderer_state = self.renderer_state.clone();
+        let frame_slot = self.frame_slot.clone();
         let telemetry = self.telemetry.clone();
         let render_loop_stop = self.render_loop_stop.clone();
         let render_loop_pending = self.render_loop_pending.clone();
+        let render_loop_rerun_requested = self.render_loop_rerun_requested.clone();
         let runtime_trace = self.runtime_trace.clone();
         thread::Builder::new()
             .name(format!("XbxWgpuRenderLoop-{viewport_id}"))
@@ -705,33 +834,37 @@ impl MacOsWgpuPresenter {
                 let tick = Duration::from_millis(16);
                 while !render_loop_stop.load(Ordering::Relaxed) {
                     thread::sleep(tick);
-                    if render_loop_pending.swap(true, Ordering::Relaxed) {
+                    if !request_host_present_tick_dispatch(
+                        &render_loop_pending,
+                        &render_loop_rerun_requested,
+                    ) {
                         continue;
                     }
                     let Some(window) = app_handle.get_window(&window_label) else {
-                        render_loop_pending.store(false, Ordering::Relaxed);
+                        clear_host_present_tick_dispatch(
+                            &render_loop_pending,
+                            &render_loop_rerun_requested,
+                        );
                         continue;
                     };
-                    let renderer_state = renderer_state.clone();
-                    let telemetry = telemetry.clone();
-                    let render_loop_pending = render_loop_pending.clone();
-                    let viewport_id = viewport_id.clone();
-                    let app_handle_for_task = app_handle.clone();
-                    let window_for_task = window.clone();
-                    let runtime_trace_for_task = runtime_trace.clone();
-                    let dispatch_requested_at_ms = now_ms_f64();
-                    let _ = window.run_on_main_thread(move || {
-                        run_wgpu_render_tick(
-                            &window_for_task,
-                            &app_handle_for_task,
-                            &viewport_id,
-                            &renderer_state,
-                            &telemetry,
+                    if dispatch_wgpu_render_tick_on_main_thread(
+                        &window,
+                        &app_handle,
+                        &viewport_id,
+                        &renderer_state,
+                        &frame_slot,
+                        &telemetry,
+                        &render_loop_pending,
+                        &render_loop_rerun_requested,
+                        runtime_trace.clone(),
+                    )
+                    .is_err()
+                    {
+                        clear_host_present_tick_dispatch(
                             &render_loop_pending,
-                            Some(dispatch_requested_at_ms),
-                            runtime_trace_for_task,
+                            &render_loop_rerun_requested,
                         );
-                    });
+                    }
                 }
             })
             .expect("Failed to spawn macOS wgpu render loop");
@@ -742,6 +875,40 @@ impl MacOsWgpuPresenter {
             return false;
         };
         now_ms - frame.rendered_at_ms > telemetry.frame_age_budget_ms()
+    }
+
+    fn request_immediate_render_tick(&self) {
+        if !request_host_present_tick_dispatch(
+            &self.render_loop_pending,
+            &self.render_loop_rerun_requested,
+        ) {
+            return;
+        }
+        let Some(window) = self.app_handle.get_window(&self.window_label) else {
+            clear_host_present_tick_dispatch(
+                &self.render_loop_pending,
+                &self.render_loop_rerun_requested,
+            );
+            return;
+        };
+        if dispatch_wgpu_render_tick_on_main_thread(
+            &window,
+            &self.app_handle,
+            &self.viewport_id,
+            &self.renderer_state,
+            &self.frame_slot,
+            &self.telemetry,
+            &self.render_loop_pending,
+            &self.render_loop_rerun_requested,
+            self.runtime_trace.clone(),
+        )
+        .is_err()
+        {
+            clear_host_present_tick_dispatch(
+                &self.render_loop_pending,
+                &self.render_loop_rerun_requested,
+            );
+        }
     }
 }
 
@@ -762,11 +929,20 @@ impl NativeVideoPresenter for MacOsWgpuPresenter {
             state.latest_frame = None;
             state.last_presented_frame_seq = None;
             state.last_surface_size = None;
+            state.descriptor_upload_mode = None;
+            state.descriptor_metal_import_count_total = 0;
+            state.descriptor_cpu_upload_count_total = 0;
+        }
+        if let Ok(mut frame_slot) = self.frame_slot.lock() {
+            frame_slot.begin_media_epoch();
         }
         if let Ok(mut telemetry) = self.telemetry.lock() {
             telemetry.reset_frame_slot();
         }
-        self.render_loop_pending.store(false, Ordering::Relaxed);
+        clear_host_present_tick_dispatch(
+            &self.render_loop_pending,
+            &self.render_loop_rerun_requested,
+        );
     }
 
     fn present(&mut self, surface_id: Option<&str>, frame: &XbxEngineRenderFrame) {
@@ -777,17 +953,17 @@ impl NativeVideoPresenter for MacOsWgpuPresenter {
         let now_ms = now_ms_f64();
         if let Ok(mut telemetry) = self.telemetry.lock() {
             telemetry.latest_submit_time_ms = Some(now_ms);
-            telemetry.present_enqueue_count_total =
-                telemetry.present_enqueue_count_total.saturating_add(1);
         }
         if self.should_drop_submitted_frame(frame, now_ms) {
             if let Ok(mut telemetry) = self.telemetry.lock() {
+                telemetry.present_enqueue_count_total =
+                    telemetry.present_enqueue_count_total.saturating_add(1);
                 telemetry.record_stale_frame_drop(frame, now_ms, "submittedFrameStale", 0);
             }
             record_native_video_timing_event_lazy(
                 self.runtime_trace.as_ref(),
                 "wgpu",
-                "frame_submit",
+                "hostMailboxRejected",
                 &self.viewport_id,
                 &self.window_label,
                 || {
@@ -807,56 +983,175 @@ impl NativeVideoPresenter for MacOsWgpuPresenter {
             );
             return;
         }
-        if let Ok(mut state) = self.renderer_state.lock() {
-            if state
-                .last_presented_frame_seq
-                .is_some_and(|presented_seq| frame.frame_seq <= presented_seq)
-            {
+        let Ok(mut telemetry) = self.telemetry.lock() else {
+            record_native_video_timing_event_lazy(
+                self.runtime_trace.as_ref(),
+                "wgpu",
+                "hostMailboxUpdateFailed",
+                &self.viewport_id,
+                &self.window_label,
+                || serde_json::json!({ "reason": "telemetryLockFailed", "frameSeq": frame.frame_seq }),
+            );
+            return;
+        };
+        let submit_gap_ms = telemetry.record_submit(now_ms);
+        let no_pending_streak_before_submit = telemetry.no_pending_streak;
+        let should_warn_submit_gap =
+            submit_gap_ms.is_some_and(|gap_ms| telemetry.should_warn_submit_gap(gap_ms));
+        telemetry.present_enqueue_count_total =
+            telemetry.present_enqueue_count_total.saturating_add(1);
+        let telemetry_diag = telemetry.diagnostics_snapshot();
+        let Ok(mut frame_slot) = self.frame_slot.lock() else {
+            record_native_video_timing_event_lazy(
+                self.runtime_trace.as_ref(),
+                "wgpu",
+                "hostMailboxUpdateFailed",
+                &self.viewport_id,
+                &self.window_label,
+                || serde_json::json!({ "reason": "frameSlotLockFailed", "frameSeq": frame.frame_seq }),
+            );
+            return;
+        };
+        match frame_slot.submit_frame(frame, now_ms, &mut telemetry) {
+            super::scheduling::ScheduledFrameSubmitOutcome::Accepted {
+                frame_seq,
+                overwrote_pending,
+                replaced_frame_seq,
+                frame_age_ms,
+                frame_age_budget_ms,
+            } => {
+                let slot_diag = frame_slot.diagnostics_snapshot();
                 record_native_video_timing_event_lazy(
                     self.runtime_trace.as_ref(),
                     "wgpu",
-                    "frame_submit",
+                    "hostMailboxAccepted",
+                    &self.viewport_id,
+                    &self.window_label,
+                    || {
+                        serde_json::json!({
+                            "outcome": "accepted",
+                            "frameSeq": frame_seq,
+                            "frameRtpTimestamp": frame.rtp_timestamp,
+                            "frameRecoveryEpoch": frame.recovery_epoch_tag,
+                            "frameRecoveryOwnerRtpTimestamp": frame.recovery_owner_rtp_timestamp,
+                            "frameRecoveryDisposition": frame.frame_recovery_disposition,
+                            "frameIsKeyframe": frame.is_keyframe,
+                            "frameAgeMs": frame_age_ms,
+                            "frameAgeBudgetMs": frame_age_budget_ms,
+                            "submitGapMs": submit_gap_ms,
+                            "noPendingStreakBeforeSubmit": no_pending_streak_before_submit,
+                            "overwrotePending": overwrote_pending,
+                            "replacedFrameSeq": replaced_frame_seq,
+                            "displayedFrameSeq": slot_diag.displayed_frame_seq,
+                            "pendingFrameSeqs": slot_diag.pending_frame_seqs,
+                            "lastPresentedFrameSeq": slot_diag.last_presented_frame_seq,
+                            "queueDepth": slot_diag.queue_depth,
+                            "pendingQueueDepth": slot_diag.pending_queue_depth,
+                            "hostDisplayTickEpoch": telemetry_diag.display_tick_epoch,
+                            "hostFramePresentEpoch": telemetry_diag.present_epoch,
+                            "hostCadencePhase": telemetry_diag.cadence_phase.as_str(),
+                        })
+                    },
+                );
+                if let Some(gap_ms) = submit_gap_ms.filter(|_| should_warn_submit_gap) {
+                    record_native_video_timing_event_lazy(
+                        self.runtime_trace.as_ref(),
+                        "wgpu",
+                        "hostMailboxSubmitGap",
+                        &self.viewport_id,
+                        &self.window_label,
+                        || {
+                            serde_json::json!({
+                                "frameSeq": frame_seq,
+                                "submitGapMs": gap_ms,
+                                "frameAgeMs": frame_age_ms,
+                                "frameAgeBudgetMs": frame_age_budget_ms,
+                                "noPendingStreakBeforeSubmit": no_pending_streak_before_submit,
+                                "overwrotePending": overwrote_pending,
+                                "replacedFrameSeq": replaced_frame_seq,
+                                "displayedFrameSeq": slot_diag.displayed_frame_seq,
+                                "pendingFrameSeqs": slot_diag.pending_frame_seqs,
+                                "queueDepth": slot_diag.queue_depth,
+                                "pendingQueueDepth": slot_diag.pending_queue_depth,
+                                "hostDisplayTickEpoch": telemetry_diag.display_tick_epoch,
+                                "hostFramePresentEpoch": telemetry_diag.present_epoch,
+                            })
+                        },
+                    );
+                }
+            }
+            super::scheduling::ScheduledFrameSubmitOutcome::DroppedStale {
+                frame_seq,
+                frame_age_ms,
+                frame_age_budget_ms,
+            } => {
+                let slot_diag = frame_slot.diagnostics_snapshot();
+                record_native_video_timing_event_lazy(
+                    self.runtime_trace.as_ref(),
+                    "wgpu",
+                    "hostMailboxRejected",
+                    &self.viewport_id,
+                    &self.window_label,
+                    || {
+                        serde_json::json!({
+                            "outcome": "stale",
+                            "frameSeq": frame_seq,
+                            "frameRtpTimestamp": frame.rtp_timestamp,
+                            "frameRecoveryEpoch": frame.recovery_epoch_tag,
+                            "frameRecoveryOwnerRtpTimestamp": frame.recovery_owner_rtp_timestamp,
+                            "frameRecoveryDisposition": frame.frame_recovery_disposition,
+                            "frameIsKeyframe": frame.is_keyframe,
+                            "frameAgeMs": frame_age_ms,
+                            "frameAgeBudgetMs": frame_age_budget_ms,
+                            "submitGapMs": submit_gap_ms,
+                            "noPendingStreakBeforeSubmit": no_pending_streak_before_submit,
+                            "displayedFrameSeq": slot_diag.displayed_frame_seq,
+                            "pendingFrameSeqs": slot_diag.pending_frame_seqs,
+                            "queueDepth": slot_diag.queue_depth,
+                            "pendingQueueDepth": slot_diag.pending_queue_depth,
+                            "hostDisplayTickEpoch": telemetry_diag.display_tick_epoch,
+                            "hostFramePresentEpoch": telemetry_diag.present_epoch,
+                            "hostCadencePhase": telemetry_diag.cadence_phase.as_str(),
+                        })
+                    },
+                );
+            }
+            super::scheduling::ScheduledFrameSubmitOutcome::RejectedAlreadyPresented {
+                frame_seq,
+                last_presented_frame_seq,
+            } => {
+                let slot_diag = frame_slot.diagnostics_snapshot();
+                record_native_video_timing_event_lazy(
+                    self.runtime_trace.as_ref(),
+                    "wgpu",
+                    host_mailbox_reject_stage(&slot_diag),
                     &self.viewport_id,
                     &self.window_label,
                     || {
                         serde_json::json!({
                             "outcome": "already_presented",
-                            "frameSeq": frame.frame_seq,
-                            "lastPresentedFrameSeq": state.last_presented_frame_seq,
+                            "frameSeq": frame_seq,
+                            "frameRtpTimestamp": frame.rtp_timestamp,
+                            "frameRecoveryEpoch": frame.recovery_epoch_tag,
+                            "frameRecoveryOwnerRtpTimestamp": frame.recovery_owner_rtp_timestamp,
+                            "frameRecoveryDisposition": frame.frame_recovery_disposition,
+                            "frameIsKeyframe": frame.is_keyframe,
+                            "lastPresentedFrameSeq": last_presented_frame_seq,
+                            "submitGapMs": submit_gap_ms,
+                            "noPendingStreakBeforeSubmit": no_pending_streak_before_submit,
+                            "displayedFrameSeq": slot_diag.displayed_frame_seq,
+                            "pendingFrameSeqs": slot_diag.pending_frame_seqs,
+                            "queueDepth": slot_diag.queue_depth,
+                            "pendingQueueDepth": slot_diag.pending_queue_depth,
+                            "hostDisplayTickEpoch": telemetry_diag.display_tick_epoch,
+                            "hostFramePresentEpoch": telemetry_diag.present_epoch,
+                            "hostCadencePhase": telemetry_diag.cadence_phase.as_str(),
                         })
                     },
                 );
-                return;
             }
-            let replaced_frame_seq = state.latest_frame.as_ref().map(|latest| latest.frame_seq);
-            let overwrote_pending = state.latest_frame.as_ref().is_some_and(|latest| {
-                Some(latest.frame_seq) != state.last_presented_frame_seq
-                    && latest.frame_seq != frame.frame_seq
-            });
-            if overwrote_pending {
-                if let Ok(mut telemetry) = self.telemetry.lock() {
-                    telemetry.present_overwrite_count_total =
-                        telemetry.present_overwrite_count_total.saturating_add(1);
-                }
-            }
-            state.latest_frame = Some(frame.clone());
-            record_native_video_timing_event_lazy(
-                self.runtime_trace.as_ref(),
-                "wgpu",
-                "frame_submit",
-                &self.viewport_id,
-                &self.window_label,
-                || {
-                    serde_json::json!({
-                        "outcome": "accepted",
-                        "frameSeq": frame.frame_seq,
-                        "frameAgeMs": (now_ms - frame.rendered_at_ms).max(0.0),
-                        "overwrotePending": overwrote_pending,
-                        "replacedFrameSeq": replaced_frame_seq,
-                    })
-                },
-            );
         }
+        self.request_immediate_render_tick();
     }
 
     fn detach(&mut self) {
@@ -866,16 +1161,23 @@ impl NativeVideoPresenter for MacOsWgpuPresenter {
             display_link.stop();
         }
         let renderer_state = self.renderer_state.clone();
+        let frame_slot = self.frame_slot.clone();
         let telemetry = self.telemetry.clone();
         let window_label = self.window_label.clone();
         let app_handle = self.app_handle.clone();
         if let Some(window) = app_handle.get_window(&window_label) {
             let _ = window.run_on_main_thread(move || {
+                if let Ok(mut frame_slot) = frame_slot.lock() {
+                    frame_slot.reset();
+                }
                 if let Ok(mut state) = renderer_state.lock() {
                     state.renderer = None;
                     state.latest_frame = None;
                     state.last_presented_frame_seq = None;
                     state.last_surface_size = None;
+                    state.descriptor_upload_mode = None;
+                    state.descriptor_metal_import_count_total = 0;
+                    state.descriptor_cpu_upload_count_total = 0;
                     if let Some(host_view_ptr) = state.host_view_ptr.take() {
                         if state.host_view_managed {
                             drop_wgpu_host_view(host_view_ptr);
@@ -895,38 +1197,31 @@ impl NativeVideoPresenter for MacOsWgpuPresenter {
         let Ok(telemetry) = self.telemetry.lock() else {
             return;
         };
+        let slot_diag = self
+            .frame_slot
+            .lock()
+            .ok()
+            .map(|frame_slot| frame_slot.diagnostics_snapshot());
         let renderer_state = self.renderer_state.lock().ok();
-        viewport.latest_host_present_time_ms = telemetry.latest_present_time_ms;
-        viewport.latest_host_submit_time_ms = telemetry.latest_submit_time_ms;
-        viewport.host_present_fps = telemetry.present_fps();
-        viewport.host_submit_epoch = telemetry.present_enqueue_count_total;
-        viewport.host_present_enqueue_count_total = telemetry.present_enqueue_count_total;
-        viewport.host_present_drop_count_total = telemetry.present_drop_count_total;
-        viewport.host_present_overwrite_count_total = telemetry.present_overwrite_count_total;
-        viewport.host_no_pending_take_count_total = telemetry.no_pending_take_count_total;
-        viewport.host_no_pending_streak = telemetry.no_pending_streak;
-        viewport.host_no_pending_max_streak = telemetry.no_pending_max_streak;
-        viewport.host_display_tick_epoch = telemetry.display_tick_epoch();
-        viewport.host_present_epoch = telemetry.present_epoch();
-        viewport.host_cadence_phase = Some(telemetry.cadence_phase().as_str().to_string());
-        viewport.last_displayed_frame_seq = renderer_state
-            .as_ref()
-            .and_then(|state| state.last_presented_frame_seq);
-        viewport.last_displayed_frame_rtp_timestamp = renderer_state.as_ref().and_then(|state| {
-            state.latest_frame.as_ref().and_then(|frame| {
-                (Some(frame.frame_seq) == state.last_presented_frame_seq)
-                    .then_some(frame.rtp_timestamp)
-                    .flatten()
-            })
-        });
-        viewport.last_displayed_at_ms = telemetry.latest_present_time_ms;
-        viewport.host_display_interval_ms = telemetry.display_interval_ms();
-        viewport.host_frame_age_budget_ms = Some(telemetry.frame_age_budget_ms());
-        viewport.host_descriptor_upload_mode = telemetry.descriptor_upload_mode.clone();
-        viewport.host_descriptor_metal_import_count_total =
-            telemetry.descriptor_metal_import_count_total;
-        viewport.host_descriptor_cpu_upload_count_total =
-            telemetry.descriptor_cpu_upload_count_total;
+        apply_host_mailbox_viewport_diagnostics(
+            viewport,
+            &telemetry,
+            slot_diag.as_ref(),
+            renderer_state
+                .as_ref()
+                .and_then(|state| state.latest_host_view_created_at_ms),
+            renderer_state
+                .as_ref()
+                .and_then(|state| state.descriptor_upload_mode.clone()),
+            renderer_state
+                .as_ref()
+                .map(|state| state.descriptor_metal_import_count_total)
+                .unwrap_or_default(),
+            renderer_state
+                .as_ref()
+                .map(|state| state.descriptor_cpu_upload_count_total)
+                .unwrap_or_default(),
+        );
     }
 
     fn take_pending_frame_drops(&mut self) -> Vec<xbxengine::XbxEngineHostVideoFrameDropEvent> {
@@ -980,6 +1275,7 @@ impl MacOsVideoPresenter {
             return;
         };
         let layer_state = self.layer_state.clone();
+        let frame_slot = self.frame_slot.clone();
         let viewport_id = self.viewport_id.clone();
         let window_label = self.window_label.clone();
         let runtime_trace = self.runtime_trace.clone();
@@ -996,6 +1292,7 @@ impl MacOsVideoPresenter {
                 );
                 return;
             };
+            let previous_generation = state.display_layer_generation;
             if ensure_display_layer(&window_for_task, &mut state).is_none() {
                 record_native_video_timing_event_lazy(
                     runtime_trace.as_ref(),
@@ -1005,6 +1302,10 @@ impl MacOsVideoPresenter {
                     &window_label,
                     || serde_json::json!({ "reason": "displayLayerUnavailable" }),
                 );
+            } else if state.display_layer_generation != previous_generation {
+                if let Ok(mut slot) = frame_slot.lock() {
+                    slot.begin_view_epoch();
+                }
             }
         });
     }
@@ -1082,6 +1383,34 @@ impl MacOsVideoPresenter {
         };
         now_ms - frame.rendered_at_ms > telemetry.frame_age_budget_ms()
     }
+
+    fn request_immediate_present_tick(&self) {
+        if self.render_loop_pending.swap(true, Ordering::Relaxed) {
+            return;
+        }
+        let Some(window) = self.app_handle.get_window(&self.window_label) else {
+            self.render_loop_pending.store(false, Ordering::Relaxed);
+            return;
+        };
+        let viewport_id = self.viewport_id.clone();
+        let window_label = self.window_label.clone();
+        let layer_state = self.layer_state.clone();
+        let frame_slot = self.frame_slot.clone();
+        let telemetry = self.telemetry.clone();
+        let render_loop_pending = self.render_loop_pending.clone();
+        let runtime_trace = self.runtime_trace.clone();
+        let _ = window.run_on_main_thread(move || {
+            run_layer_present_tick(
+                &viewport_id,
+                &window_label,
+                &layer_state,
+                &frame_slot,
+                &telemetry,
+                &render_loop_pending,
+                runtime_trace,
+            );
+        });
+    }
 }
 
 #[cfg(target_os = "macos")]
@@ -1115,7 +1444,7 @@ impl NativeVideoPresenter for MacOsVideoPresenter {
             record_native_video_timing_event_lazy(
                 self.runtime_trace.as_ref(),
                 "layer",
-                "frame_submit",
+                "hostMailboxRejected",
                 &self.viewport_id,
                 &self.window_label,
                 || {
@@ -1128,6 +1457,9 @@ impl NativeVideoPresenter for MacOsVideoPresenter {
             return;
         }
         let now_ms = now_ms_f64();
+        if let Ok(mut telemetry) = self.telemetry.lock() {
+            telemetry.latest_submit_time_ms = Some(now_ms);
+        }
         if self.should_drop_submitted_frame(frame, now_ms) {
             if let Ok(mut telemetry) = self.telemetry.lock() {
                 telemetry.present_enqueue_count_total =
@@ -1137,7 +1469,7 @@ impl NativeVideoPresenter for MacOsVideoPresenter {
             record_native_video_timing_event_lazy(
                 self.runtime_trace.as_ref(),
                 "layer",
-                "frame_submit",
+                "hostMailboxRejected",
                 &self.viewport_id,
                 &self.window_label,
                 || {
@@ -1154,7 +1486,7 @@ impl NativeVideoPresenter for MacOsVideoPresenter {
             record_native_video_timing_event_lazy(
                 self.runtime_trace.as_ref(),
                 "layer",
-                "frame_submit_failed",
+                "hostMailboxUpdateFailed",
                 &self.viewport_id,
                 &self.window_label,
                 || {
@@ -1177,7 +1509,7 @@ impl NativeVideoPresenter for MacOsVideoPresenter {
             record_native_video_timing_event_lazy(
                 self.runtime_trace.as_ref(),
                 "layer",
-                "frame_submit_failed",
+                "hostMailboxUpdateFailed",
                 &self.viewport_id,
                 &self.window_label,
                 || {
@@ -1201,13 +1533,18 @@ impl NativeVideoPresenter for MacOsVideoPresenter {
                 record_native_video_timing_event_lazy(
                     self.runtime_trace.as_ref(),
                     "layer",
-                    "frame_submit",
+                    "hostMailboxAccepted",
                     &self.viewport_id,
                     &self.window_label,
                     || {
                         serde_json::json!({
                             "outcome": "accepted",
                             "frameSeq": frame_seq,
+                            "frameRtpTimestamp": frame.rtp_timestamp,
+                            "frameRecoveryEpoch": frame.recovery_epoch_tag,
+                            "frameRecoveryOwnerRtpTimestamp": frame.recovery_owner_rtp_timestamp,
+                            "frameRecoveryDisposition": frame.frame_recovery_disposition,
+                            "frameIsKeyframe": frame.is_keyframe,
                             "frameAgeMs": frame_age_ms,
                             "frameAgeBudgetMs": frame_age_budget_ms,
                             "submitGapMs": submit_gap_ms,
@@ -1220,7 +1557,7 @@ impl NativeVideoPresenter for MacOsVideoPresenter {
                             "queueDepth": slot_diag.queue_depth,
                             "pendingQueueDepth": slot_diag.pending_queue_depth,
                             "hostDisplayTickEpoch": telemetry_diag.display_tick_epoch,
-                            "hostPresentEpoch": telemetry_diag.present_epoch,
+                            "hostFramePresentEpoch": telemetry_diag.present_epoch,
                             "hostCadencePhase": telemetry_diag.cadence_phase.as_str(),
                         })
                     },
@@ -1230,7 +1567,7 @@ impl NativeVideoPresenter for MacOsVideoPresenter {
                     record_native_video_timing_event_lazy(
                         self.runtime_trace.as_ref(),
                         "layer",
-                        "frame_submit_gap",
+                        "hostMailboxSubmitGap",
                         &self.viewport_id,
                         &self.window_label,
                         || {
@@ -1247,7 +1584,7 @@ impl NativeVideoPresenter for MacOsVideoPresenter {
                                 "queueDepth": slot_diag.queue_depth,
                                 "pendingQueueDepth": slot_diag.pending_queue_depth,
                                 "hostDisplayTickEpoch": telemetry_diag.display_tick_epoch,
-                                "hostPresentEpoch": telemetry_diag.present_epoch,
+                                "hostFramePresentEpoch": telemetry_diag.present_epoch,
                             })
                         },
                     );
@@ -1262,13 +1599,18 @@ impl NativeVideoPresenter for MacOsVideoPresenter {
                 record_native_video_timing_event_lazy(
                     self.runtime_trace.as_ref(),
                     "layer",
-                    "frame_submit",
+                    "hostMailboxRejected",
                     &self.viewport_id,
                     &self.window_label,
                     || {
                         serde_json::json!({
                             "outcome": "stale",
                             "frameSeq": frame_seq,
+                            "frameRtpTimestamp": frame.rtp_timestamp,
+                            "frameRecoveryEpoch": frame.recovery_epoch_tag,
+                            "frameRecoveryOwnerRtpTimestamp": frame.recovery_owner_rtp_timestamp,
+                            "frameRecoveryDisposition": frame.frame_recovery_disposition,
+                            "frameIsKeyframe": frame.is_keyframe,
                             "frameAgeMs": frame_age_ms,
                             "frameAgeBudgetMs": frame_age_budget_ms,
                             "submitGapMs": submit_gap_ms,
@@ -1278,7 +1620,7 @@ impl NativeVideoPresenter for MacOsVideoPresenter {
                             "queueDepth": slot_diag.queue_depth,
                             "pendingQueueDepth": slot_diag.pending_queue_depth,
                             "hostDisplayTickEpoch": telemetry_diag.display_tick_epoch,
-                            "hostPresentEpoch": telemetry_diag.present_epoch,
+                            "hostFramePresentEpoch": telemetry_diag.present_epoch,
                             "hostCadencePhase": telemetry_diag.cadence_phase.as_str(),
                         })
                     },
@@ -1292,13 +1634,18 @@ impl NativeVideoPresenter for MacOsVideoPresenter {
                 record_native_video_timing_event_lazy(
                     self.runtime_trace.as_ref(),
                     "layer",
-                    "frame_submit",
+                    host_mailbox_reject_stage(&slot_diag),
                     &self.viewport_id,
                     &self.window_label,
                     || {
                         serde_json::json!({
                             "outcome": "already_presented",
                             "frameSeq": frame_seq,
+                            "frameRtpTimestamp": frame.rtp_timestamp,
+                            "frameRecoveryEpoch": frame.recovery_epoch_tag,
+                            "frameRecoveryOwnerRtpTimestamp": frame.recovery_owner_rtp_timestamp,
+                            "frameRecoveryDisposition": frame.frame_recovery_disposition,
+                            "frameIsKeyframe": frame.is_keyframe,
                             "lastPresentedFrameSeq": last_presented_frame_seq,
                             "submitGapMs": submit_gap_ms,
                             "noPendingStreakBeforeSubmit": no_pending_streak_before_submit,
@@ -1307,13 +1654,14 @@ impl NativeVideoPresenter for MacOsVideoPresenter {
                             "queueDepth": slot_diag.queue_depth,
                             "pendingQueueDepth": slot_diag.pending_queue_depth,
                             "hostDisplayTickEpoch": telemetry_diag.display_tick_epoch,
-                            "hostPresentEpoch": telemetry_diag.present_epoch,
+                            "hostFramePresentEpoch": telemetry_diag.present_epoch,
                             "hostCadencePhase": telemetry_diag.cadence_phase.as_str(),
                         })
                     },
                 );
             }
         }
+        self.request_immediate_present_tick();
     }
 
     fn detach(&mut self) {
@@ -1354,30 +1702,18 @@ impl NativeVideoPresenter for MacOsVideoPresenter {
             .lock()
             .ok()
             .map(|frame_slot| frame_slot.diagnostics_snapshot());
-        viewport.latest_host_present_time_ms = telemetry.latest_present_time_ms;
-        viewport.latest_host_submit_time_ms = telemetry.latest_submit_time_ms;
-        viewport.host_present_fps = telemetry.present_fps();
-        viewport.host_submit_epoch = telemetry.present_enqueue_count_total;
-        viewport.host_present_enqueue_count_total = telemetry.present_enqueue_count_total;
-        viewport.host_present_drop_count_total = telemetry.present_drop_count_total;
-        viewport.host_present_overwrite_count_total = telemetry.present_overwrite_count_total;
-        viewport.host_no_pending_take_count_total = telemetry.no_pending_take_count_total;
-        viewport.host_no_pending_streak = telemetry.no_pending_streak;
-        viewport.host_no_pending_max_streak = telemetry.no_pending_max_streak;
-        viewport.host_display_tick_epoch = telemetry.display_tick_epoch();
-        viewport.host_present_epoch = telemetry.present_epoch();
-        viewport.host_cadence_phase = Some(telemetry.cadence_phase().as_str().to_string());
-        viewport.last_displayed_frame_seq =
-            slot_diag.as_ref().and_then(|diag| diag.displayed_frame_seq);
-        viewport.last_displayed_frame_rtp_timestamp = slot_diag
-            .as_ref()
-            .and_then(|diag| diag.displayed_frame_rtp_timestamp);
-        viewport.last_displayed_at_ms = telemetry.latest_present_time_ms;
-        viewport.host_display_interval_ms = telemetry.display_interval_ms();
-        viewport.host_frame_age_budget_ms = Some(telemetry.frame_age_budget_ms());
-        viewport.host_descriptor_upload_mode = None;
-        viewport.host_descriptor_metal_import_count_total = 0;
-        viewport.host_descriptor_cpu_upload_count_total = 0;
+        apply_host_mailbox_viewport_diagnostics(
+            viewport,
+            &telemetry,
+            slot_diag.as_ref(),
+            self.layer_state
+                .lock()
+                .ok()
+                .and_then(|state| state.latest_display_layer_created_at_ms),
+            None,
+            0,
+            0,
+        );
     }
 
     fn take_pending_frame_drops(&mut self) -> Vec<xbxengine::XbxEngineHostVideoFrameDropEvent> {
@@ -1419,4 +1755,118 @@ pub(super) fn frame_has_windows_d3d11_texture(frame: &XbxEngineRenderFrame) -> b
     };
     let any_ref = handle.as_ref() as &dyn Any;
     any_ref.is::<WindowsD3d11TextureDescriptor>()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::apply_host_mailbox_viewport_diagnostics;
+    use crate::mods::native_video::{
+        scheduling::{HostCadenceTelemetry, ScheduledFrameSlot},
+        NativeVideoViewportState,
+    };
+    use std::sync::Arc;
+    use xbxengine::{XbxEngineRenderFrame, XbxEngineRenderPixelData};
+
+    fn mk_frame(frame_seq: u64) -> XbxEngineRenderFrame {
+        XbxEngineRenderFrame {
+            width: 1920,
+            height: 1080,
+            frame_seq,
+            rendered_at_ms: 1_000.0 + frame_seq as f64,
+            rtp_timestamp: Some(10_000 + frame_seq as u32),
+            recovery_epoch_tag: None,
+            recovery_owner_rtp_timestamp: None,
+            is_keyframe: false,
+            frame_recovery_disposition: None,
+            frame_unrecoverable_reason: None,
+            presentation_value_role: None,
+            pixel_data: XbxEngineRenderPixelData::Rgba {
+                bytes: Arc::from(vec![0_u8; 4].into_boxed_slice()),
+            },
+        }
+    }
+
+    #[test]
+    fn mailbox_viewport_diagnostics_prioritize_pending_and_displayed_slot_facts() {
+        let mut telemetry = HostCadenceTelemetry::default();
+        let mut frame_slot = ScheduledFrameSlot::default();
+        let submitted_frame = mk_frame(7);
+        let older_frame = mk_frame(6);
+
+        let _ = telemetry.record_submit(1_010.0);
+        telemetry.present_enqueue_count_total = 1;
+        let _ = frame_slot.submit_frame(&submitted_frame, 1_010.0, &mut telemetry);
+        let _ = frame_slot.submit_frame(&older_frame, 1_005.0, &mut telemetry);
+        let _ = frame_slot.take_ready_frame(1_006.0, &mut telemetry);
+        frame_slot.begin_view_epoch();
+        let slot_diag = frame_slot.diagnostics_snapshot();
+
+        let mut viewport = NativeVideoViewportState::default();
+        apply_host_mailbox_viewport_diagnostics(
+            &mut viewport,
+            &telemetry,
+            Some(&slot_diag),
+            Some(2_000.0),
+            Some("metal-import".to_string()),
+            3,
+            1,
+        );
+
+        assert_eq!(
+            viewport.latest_host_submit_rtp_timestamp,
+            submitted_frame.rtp_timestamp
+        );
+        assert_eq!(
+            viewport.last_displayed_frame_seq,
+            Some(submitted_frame.frame_seq)
+        );
+        assert_eq!(
+            viewport.last_displayed_frame_rtp_timestamp,
+            submitted_frame.rtp_timestamp
+        );
+        assert_eq!(viewport.host_view_generation, slot_diag.view_epoch);
+        assert_eq!(
+            viewport.host_descriptor_upload_mode.as_deref(),
+            Some("metal-import")
+        );
+        assert_eq!(viewport.host_descriptor_metal_import_count_total, 3);
+        assert_eq!(viewport.host_descriptor_cpu_upload_count_total, 1);
+    }
+
+    #[test]
+    fn mailbox_viewport_diagnostics_falls_back_to_displayed_rtp_when_pending_is_empty() {
+        let mut telemetry = HostCadenceTelemetry::default();
+        let mut frame_slot = ScheduledFrameSlot::default();
+        let displayed_frame = mk_frame(9);
+
+        let _ = telemetry.record_submit(1_020.0);
+        telemetry.present_enqueue_count_total = 1;
+        let _ = frame_slot.submit_frame(&displayed_frame, 1_020.0, &mut telemetry);
+        let _ = frame_slot.take_ready_frame(1_021.0, &mut telemetry);
+        let slot_diag = frame_slot.diagnostics_snapshot();
+
+        let mut viewport = NativeVideoViewportState::default();
+        apply_host_mailbox_viewport_diagnostics(
+            &mut viewport,
+            &telemetry,
+            Some(&slot_diag),
+            Some(3_000.0),
+            None,
+            0,
+            0,
+        );
+
+        assert_eq!(
+            viewport.latest_host_submit_rtp_timestamp,
+            displayed_frame.rtp_timestamp
+        );
+        assert_eq!(
+            viewport.last_displayed_frame_seq,
+            Some(displayed_frame.frame_seq)
+        );
+        assert_eq!(
+            viewport.last_displayed_frame_rtp_timestamp,
+            displayed_frame.rtp_timestamp
+        );
+    }
 }

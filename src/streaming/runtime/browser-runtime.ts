@@ -13,19 +13,20 @@ import type {
   StreamRuntimePhase,
   StreamRuntimeReconnectReason,
 } from './runtime-contract'
+import type { RecoveryGateState } from './runtime-host-policy'
 import { PlayerClient as BrowserPlayerClient } from '../../player'
 import { rpc } from '../../services/rpc'
 import { normalizeDisplayOptions } from '../utils'
-import {
-  DEFAULT_RECOVERY_ARBITER_WINDOW_MS,
-  decideRecoveryArbiter,
-  type RecoveryGateState,
-} from './runtime-host-policy'
 import {
   applyBrowserVideoDisplay,
   bindBrowserVideoFrameTracking,
 } from './browser-video-display'
 import { applyIceCandidatePolicy } from './ice-candidate-policy'
+import {
+  decideRecoveryArbiter,
+  DEFAULT_RECOVERY_ARBITER_WINDOW_MS,
+
+} from './runtime-host-policy'
 
 const MEDIA_STALL_CHECK_INTERVAL_MS = 2_000
 const MEDIA_STALL_RECOVERY_BACKOFF_MIN_MS = 10_000
@@ -170,6 +171,8 @@ function detectWebgl2Capability(): { supported: boolean, reason: string } {
     return { supported: false, reason: 'webgl2ContextException' }
   }
 }
+
+function debugLog(..._args: Array<unknown>): void {}
 
 function detectCandidateFamily(raw: string): 'ipv4' | 'ipv6' | 'unknown' {
   const tokens = raw.replace(/^candidate:/i, '').trim().split(/\s+/)
@@ -444,14 +447,14 @@ export function createBrowserRuntime(options: {
     now: number
     stats: StreamStats
   }): {
-      sharpnessScale: number
-      targetFpsBias: number
-      preferredFormat: RendererRuntimeConfig['format']
-      processingMode: 'quality' | 'performance'
-      shaderPreset: ShaderPreset
-      sharpenStrength: number
-      digest: string
-    } {
+    sharpnessScale: number
+    targetFpsBias: number
+    preferredFormat: RendererRuntimeConfig['format']
+    processingMode: 'quality' | 'performance'
+    shaderPreset: ShaderPreset
+    sharpenStrength: number
+    digest: string
+  } {
     const inboundVideoBitrateKbps = input.stats.inboundVideoBitrateKbps ?? 0
     const decodeFps = input.stats.decodeFps ?? 0
     const presentFps = input.stats.presentFps ?? input.stats.fps ?? 0
@@ -1804,10 +1807,10 @@ export function createBrowserRuntime(options: {
     const actionHandled = recoveryCause === 'controlChannelUnhealthy'
       ? false
       : await executeRecoveryAction('keyframeRequest', now, {
-      inactivityElapsedMs,
-      stallThresholdMs,
-      stats,
-    })
+          inactivityElapsedMs,
+          stallThresholdMs,
+          stats,
+        })
     if (actionHandled) {
       return
     }
@@ -1950,9 +1953,9 @@ export function createBrowserRuntime(options: {
       restart: input.restart,
     })
     const summary = buildSdpSummary(answer.answer.sdp)
-    console.info(`[streaming][browser-runtime] remote ${input.channel} answer ${summary}`)
+    debugLog(`[streaming][browser-runtime] remote ${input.channel} answer ${summary}`)
     if (shouldLogRawSdp()) {
-      console.info(`[streaming][browser-runtime] remote ${input.channel} answer raw\n${answer.answer.sdp}`)
+      debugLog(`[streaming][browser-runtime] remote ${input.channel} answer raw\n${answer.answer.sdp}`)
     }
     if (!isAttemptActive(input.negotiation.attempt)) {
       return
@@ -1988,6 +1991,7 @@ export function createBrowserRuntime(options: {
     let flushInFlight = false
     let gatheringComplete = peer.iceGatheringState === 'complete'
     let finalPollSent = false
+    let resolvePromise: () => void = () => {}
     const pendingLocalCandidates: Array<Parameters<PlayerClient['addIceCandidates']>[0][number]> = []
     const appliedRemoteCandidates = new Set<string>()
     const localHostFamilies = new Set<'ipv4' | 'ipv6'>()
@@ -2078,6 +2082,7 @@ export function createBrowserRuntime(options: {
       }
 
       flushInFlight = true
+      let shouldFlushAgain = false
       publishPhase('exchangingIce')
       try {
         await rpc.streaming.submitIce({
@@ -2097,14 +2102,17 @@ export function createBrowserRuntime(options: {
       finally {
         flushInFlight = false
         if (pendingLocalCandidates.length > 0) {
-          void flushPendingCandidates(resolve)
-          return
+          shouldFlushAgain = true
         }
-        finishIfIdle(resolve)
       }
+      if (shouldFlushAgain) {
+        void flushPendingCandidates(resolve)
+        return
+      }
+      finishIfIdle(resolve)
     }
 
-    const scheduleFlush = (resolve: () => void): void => {
+    function scheduleFlush(resolve: () => void): void {
       if (settled || flushInFlight) {
         return
       }
@@ -2115,7 +2123,7 @@ export function createBrowserRuntime(options: {
       }, 60)
     }
 
-    const handleIceCandidate = (event: RTCPeerConnectionIceEvent): void => {
+    function handleIceCandidate(event: RTCPeerConnectionIceEvent): void {
       if (!isAttemptActive(input.negotiation.attempt)) {
         return
       }
@@ -2138,14 +2146,13 @@ export function createBrowserRuntime(options: {
       scheduleFlush(resolvePromise)
     }
 
-    const handleGatheringStateChange = (): void => {
+    function handleGatheringStateChange(): void {
       if (peer.iceGatheringState === 'complete') {
         gatheringComplete = true
         scheduleFlush(resolvePromise)
       }
     }
 
-    let resolvePromise = () => {}
     await new Promise<void>((resolve) => {
       resolvePromise = resolve
       peer.addEventListener('icecandidate', handleIceCandidate)

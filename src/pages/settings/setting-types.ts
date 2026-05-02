@@ -42,4 +42,3 @@ export interface SettingIndexedSection {
   label: string
   rows: SettingIndexedRow[]
 }
-

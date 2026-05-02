@@ -26,7 +26,7 @@ export class NavigationEngine {
   private pageSwitchHandlers: Set<SwitchHandler> = new Set()
   // LT/RT 二级 Tab/区域切换回调
   private tabSwitchHandlers: Set<SwitchHandler> = new Set()
-  
+
   // 性能优化：缓存可聚焦元素
   private focusableCache: HTMLElement[] = []
   private isCacheDirty = true

@@ -314,6 +314,22 @@ def round_score(value: float) -> float:
     return round(value, 4)
 
 
+def average_number(values: list[float | int]) -> float | None:
+    if not values:
+        return None
+    return round_score(sum(float(value) for value in values) / len(values))
+
+
+def format_boolish(value: Any) -> str:
+    if value is True:
+        return "true"
+    if value is False:
+        return "false"
+    if value is None:
+        return "null"
+    return str(value)
+
+
 def extract_repairability_value(payload: Any) -> float | int | None:
     if not isinstance(payload, dict):
         return None
@@ -654,46 +670,67 @@ def analyze_recovery_audit(rows: list[dict[str, Any]], silence_threshold_ms: int
     first_frame_terminal_phase_counts: Counter[str] = Counter()
     first_frame_incomplete_reason_counts: Counter[str] = Counter()
     first_frame_samples: list[dict[str, Any]] = []
+    first_frame_control_ready_to_pli: list[float | int] = []
+    first_frame_pli_to_idr: list[float | int] = []
+    first_frame_idr_to_decode: list[float | int] = []
+    first_frame_decode_to_clean_anchor: list[float | int] = []
+    first_frame_clean_anchor_to_display: list[float | int] = []
     for row in first_frame_latencies:
         payload = event_payload(row, "firstFrameLatencyObserved")
         if payload is None:
             continue
         terminal_phase = get_text(payload, "terminalPhase", "terminal_phase") or "unknown"
         incomplete_reason = get_text(payload, "incompleteReason", "incomplete_reason")
+        control_ready_to_pli = get_number(
+            payload, "controlReadyToPliSentMs", "control_ready_to_pli_sent_ms"
+        )
+        pli_to_idr = get_number(payload, "pliSentToFirstIdrPacketMs", "pli_sent_to_first_idr_packet_ms")
+        idr_to_decode = get_number(
+            payload, "firstIdrPacketToFirstDecodeMs", "first_idr_packet_to_first_decode_ms"
+        )
+        decode_to_clean_anchor = get_number(
+            payload,
+            "firstDecodeToCleanAnchorCommittedMs",
+            "first_decode_to_clean_anchor_committed_ms",
+        )
+        clean_anchor_to_display = get_number(
+            payload,
+            "cleanAnchorCommittedToDisplayStableMs",
+            "clean_anchor_committed_to_display_stable_ms",
+        )
         first_frame_terminal_phase_counts[terminal_phase] += 1
         if incomplete_reason:
             first_frame_incomplete_reason_counts[incomplete_reason] += 1
+        if control_ready_to_pli is not None:
+            first_frame_control_ready_to_pli.append(control_ready_to_pli)
+        if pli_to_idr is not None:
+            first_frame_pli_to_idr.append(pli_to_idr)
+        if idr_to_decode is not None:
+            first_frame_idr_to_decode.append(idr_to_decode)
+        if decode_to_clean_anchor is not None:
+            first_frame_decode_to_clean_anchor.append(decode_to_clean_anchor)
+        if clean_anchor_to_display is not None:
+            first_frame_clean_anchor_to_display.append(clean_anchor_to_display)
         first_frame_samples.append(
             {
                 "seq": row_seq(row),
                 "tsMs": row_ts(row),
                 "episodeId": get_int(payload, "episodeId", "episode_id"),
                 "recoveryEpoch": get_int(payload, "recoveryEpoch", "recovery_epoch"),
-                "controlReadyToPliSentMs": get_number(
-                    payload, "controlReadyToPliSentMs", "control_ready_to_pli_sent_ms"
-                ),
-                "pliSentToFirstIdrPacketMs": get_number(
-                    payload, "pliSentToFirstIdrPacketMs", "pli_sent_to_first_idr_packet_ms"
-                ),
-                "firstIdrPacketToFirstDecodeMs": get_number(
-                    payload, "firstIdrPacketToFirstDecodeMs", "first_idr_packet_to_first_decode_ms"
-                ),
-                "firstDecodeToCleanAnchorCommittedMs": get_number(
-                    payload,
-                    "firstDecodeToCleanAnchorCommittedMs",
-                    "first_decode_to_clean_anchor_committed_ms",
-                ),
-                "cleanAnchorCommittedToDisplayStableMs": get_number(
-                    payload,
-                    "cleanAnchorCommittedToDisplayStableMs",
-                    "clean_anchor_committed_to_display_stable_ms",
-                ),
+                "controlReadyToPliSentMs": control_ready_to_pli,
+                "pliSentToFirstIdrPacketMs": pli_to_idr,
+                "firstIdrPacketToFirstDecodeMs": idr_to_decode,
+                "firstDecodeToCleanAnchorCommittedMs": decode_to_clean_anchor,
+                "cleanAnchorCommittedToDisplayStableMs": clean_anchor_to_display,
                 "terminalPhase": terminal_phase,
                 "incompleteReason": incomplete_reason,
             }
         )
 
     h264_reject_classification_counts: Counter[str] = Counter()
+    h264_bootstrap_reject_reason_counts: Counter[str] = Counter()
+    h264_continuation_profile_counts: Counter[str] = Counter()
+    h264_accepted_count = 0
     h264_post_recovery_degradation_count = 0
     h264_samples: list[dict[str, Any]] = []
     for row in h264_inspection_rows:
@@ -701,8 +738,25 @@ def analyze_recovery_audit(rows: list[dict[str, Any]], silence_threshold_ms: int
         if not isinstance(payload, dict):
             continue
         reject_classification = get_text(payload, "rejectClassification", "reject_classification")
+        bootstrap_reject_reason = get_text(payload, "bootstrapRejectReason", "bootstrap_reject_reason")
         if reject_classification:
             h264_reject_classification_counts[reject_classification] += 1
+        if bootstrap_reject_reason:
+            h264_bootstrap_reject_reason_counts[bootstrap_reject_reason] += 1
+        else:
+            h264_accepted_count += 1
+            h264_bootstrap_reject_reason_counts["accepted"] += 1
+        if reject_classification and "continuation" in reject_classification.lower():
+            continuation_profile = ",".join(
+                [
+                    f"admissionAccepted={format_boolish(payload_get(payload, 'admissionAccepted', 'admission_accepted'))}",
+                    f"isIdr={format_boolish(payload_get(payload, 'isIdr', 'is_idr'))}",
+                    f"deltaContinuationReady={format_boolish(payload_get(payload, 'deltaContinuationReady', 'delta_continuation_ready'))}",
+                    f"committedSpsPresent={format_boolish(payload_get(payload, 'committedSpsPresent', 'committed_sps_present'))}",
+                    f"committedPpsPresent={format_boolish(payload_get(payload, 'committedPpsPresent', 'committed_pps_present'))}",
+                ]
+            )
+            h264_continuation_profile_counts[continuation_profile] += 1
         if payload_get(payload, "isPostRecoveryDegradation", "is_post_recovery_degradation") is True:
             h264_post_recovery_degradation_count += 1
         h264_samples.append(
@@ -717,13 +771,107 @@ def analyze_recovery_audit(rows: list[dict[str, Any]], silence_threshold_ms: int
                 ),
                 "admissionAccepted": payload_get(payload, "admissionAccepted", "admission_accepted"),
                 "isIdr": payload_get(payload, "isIdr", "is_idr"),
-                "bootstrapRejectReason": get_text(
-                    payload, "bootstrapRejectReason", "bootstrap_reject_reason"
-                ),
+                "bootstrapRejectReason": bootstrap_reject_reason,
                 "rejectClassification": reject_classification,
                 "isPostRecoveryDegradation": payload_get(
                     payload, "isPostRecoveryDegradation", "is_post_recovery_degradation"
                 ),
+            }
+        )
+
+    twcc_mapping_missing_rows = rows_for_event(sorted_rows, "twccReceiverMappingMissing")
+    twcc_inbound_seen_rows = rows_for_event(sorted_rows, "twccInboundExtensionSeen")
+    feedback_target_availability_rows = rows_for_event(sorted_rows, "feedbackTargetAvailabilityChanged")
+    host_mailbox_state_rows = rows_for_event(sorted_rows, "hostMailboxState")
+    frame_drop_event_rows = rows_for_event(sorted_rows, "frameDropped") + rows_for_event(
+        sorted_rows, "frameDeadlineMissed"
+    )
+    feedback_target_state_counts: Counter[str] = Counter()
+    feedback_target_reason_counts: Counter[str] = Counter()
+    for row in feedback_target_availability_rows:
+        payload = event_payload(row, "feedbackTargetAvailabilityChanged")
+        if payload is None:
+            continue
+        state = get_text(payload, "state") or "unknown"
+        reason = get_text(payload, "reason") or "unknown"
+        feedback_target_state_counts[state] += 1
+        feedback_target_reason_counts[reason] += 1
+
+    host_present_cadence_phase_counts: Counter[str] = Counter()
+    host_present_no_pending_pressure_level_counts: Counter[str] = Counter()
+    displayed_frame_stale_count = 0
+    retained_old_frame_risk_count = 0
+    host_present_samples: list[dict[str, Any]] = []
+    for row in host_mailbox_state_rows:
+        payload = event_payload(row, "hostMailboxState")
+        if payload is None:
+            continue
+        cadence_phase = get_text(payload, "cadencePhase", "cadence_phase") or "unknown"
+        no_pending_pressure_level = (
+            get_text(payload, "noPendingPressureLevel", "no_pending_pressure_level") or "unknown"
+        )
+        displayed_frame_stale = payload_get(payload, "displayedFrameStale", "displayed_frame_stale") is True
+        retained_old_frame_risk = payload_get(payload, "retainedOldFrameRisk", "retained_old_frame_risk") is True
+        host_present_cadence_phase_counts[cadence_phase] += 1
+        host_present_no_pending_pressure_level_counts[no_pending_pressure_level] += 1
+        if displayed_frame_stale:
+            displayed_frame_stale_count += 1
+        if retained_old_frame_risk:
+            retained_old_frame_risk_count += 1
+        host_present_samples.append(
+            {
+                "seq": row_seq(row),
+                "tsMs": row_ts(row),
+                "cadencePhase": cadence_phase,
+                "noPendingPressureLevel": no_pending_pressure_level,
+                "displayedFrameStale": displayed_frame_stale,
+                "retainedOldFrameRisk": retained_old_frame_risk,
+                "presentAgeMs": get_number(payload, "presentAgeMs", "present_age_ms"),
+                "lastDisplayedFrameSeq": get_int(
+                    payload, "lastDisplayedFrameSeq", "last_displayed_frame_seq"
+                ),
+            }
+        )
+
+    frame_drop_reason_counts: Counter[str] = Counter()
+    frame_drop_stage_counts: Counter[str] = Counter()
+    frame_drop_detail_counts: Counter[str] = Counter()
+    scheduled_frame_stale_count = 0
+    submitted_frame_stale_count = 0
+    recovery_valued_frame_drop_count = 0
+    frame_drop_samples: list[dict[str, Any]] = []
+    for row in frame_drop_event_rows:
+        payload = row.get("payload")
+        if not isinstance(payload, dict):
+            continue
+        reason = get_text(payload, "reason") or "unknown"
+        stage = get_text(payload, "stage") or "unknown"
+        detail = get_text(payload, "detail") or "unknown"
+        recovery_disposition = get_text(
+            payload, "frameRecoveryDisposition", "frame_recovery_disposition"
+        )
+        is_keyframe = payload_get(payload, "isKeyframe", "is_keyframe") is True
+        frame_drop_reason_counts[reason] += 1
+        frame_drop_stage_counts[stage] += 1
+        frame_drop_detail_counts[detail] += 1
+        if detail == "scheduledFrameStale":
+            scheduled_frame_stale_count += 1
+        if detail == "submittedFrameStale":
+            submitted_frame_stale_count += 1
+        if is_keyframe or recovery_disposition in {"repairing", "rebuilding", "rebuilding-supply"}:
+            recovery_valued_frame_drop_count += 1
+        frame_drop_samples.append(
+            {
+                "seq": row_seq(row),
+                "tsMs": row_ts(row),
+                "event": row.get("event"),
+                "reason": reason,
+                "stage": stage,
+                "detail": detail,
+                "frameRecoveryDisposition": recovery_disposition,
+                "frameSeq": get_int(payload, "frameSeq", "frame_seq"),
+                "frameRtpTimestamp": get_int(payload, "frameRtpTimestamp", "frame_rtp_timestamp"),
+                "isKeyframe": is_keyframe,
             }
         )
 
@@ -821,7 +969,7 @@ def analyze_recovery_audit(rows: list[dict[str, Any]], silence_threshold_ms: int
 
     # 修复建链成功率计算：按episode计数，避免重复计数同一链恢复事件
     chain_rows = chain_transition_rows(sorted_rows)
-    chain_recovered_episodes = set()  # 使用set记录已恢复的episode ID
+    chain_recovered_episodes = set()  # 使用set记录已恢复且已完成 decode 的 episode ID
 
     for episode in keyframe_episodes.values():
         success_ts = episode["firstKeyframeDecodedAtMs"] or episode["firstKeyframePacketAtMs"] or episode["firstVideoPacketAtMs"]
@@ -854,7 +1002,8 @@ def analyze_recovery_audit(rows: list[dict[str, Any]], silence_threshold_ms: int
                 episode["chainRecoveredAtMs"] = ts
                 episode["chainRecoveryReason"] = chain_reason
                 episode["effective"] = episode["firstKeyframeDecodedAtMs"] is not None
-                chain_recovered_episodes.add(episode["episodeId"])  # 记录episode ID
+                if episode["firstKeyframeDecodedAtMs"] is not None:
+                    chain_recovered_episodes.add(episode["episodeId"])
                 break  # 找到第一个就停止，避免重复计数
             if episode["firstKeyframeDecodedAtMs"] is not None and chain_state in {"broken", "recovering", "repairing", "stalled", "waiting-keyframe"}:
                 episode["chainFailureAfterSuccess"] = True
@@ -869,7 +1018,8 @@ def analyze_recovery_audit(rows: list[dict[str, Any]], silence_threshold_ms: int
                 or episode["diagnosticTimelineChainReason"]
                 or episode["diagnosticTimelineChainState"]
             )
-            chain_recovered_episodes.add(episode["episodeId"])
+            if episode["firstKeyframeDecodedAtMs"] is not None:
+                chain_recovered_episodes.add(episode["episodeId"])
 
         if success_signal:
             episode["effective"] = True
@@ -1069,7 +1219,12 @@ def analyze_recovery_audit(rows: list[dict[str, Any]], silence_threshold_ms: int
         keyframe_chain_recovered_count,
         keyframe_decoded_count,
     )
-    nack_effectiveness_rate = safe_ratio(nack_effective_count, nack_sent_count)
+    nack_effective_denominator = nack_sent_count
+    if nack_effective_denominator <= 0:
+        nack_effective_denominator = (
+            nack_recovered_count + nack_recovered_late_count + nack_skipped_count + nack_expired_count
+        )
+    nack_effectiveness_rate = safe_ratio(nack_effective_count, nack_effective_denominator)
     keyframe_effective_rate = safe_ratio(
         sum(1 for episode in keyframe_episodes.values() if episode["effective"]),
         len(keyframe_episodes),
@@ -1087,6 +1242,12 @@ def analyze_recovery_audit(rows: list[dict[str, Any]], silence_threshold_ms: int
         + recovery_score_components["nackEffectiveRate"] * 0.25
         + recovery_score_components["repairabilityPersistenceRate"] * 0.1
     )
+    twcc_observation_total = len(twcc_mapping_missing_rows) + len(twcc_inbound_seen_rows)
+    twcc_mapping_missing_rate = safe_ratio(len(twcc_mapping_missing_rows), twcc_observation_total)
+    keyframe_deferred_count = keyframe_status_counts["deferred"]
+    keyframe_sent_rate = safe_ratio(keyframe_sent_count, len(keyframe_episodes))
+    ingress_unknown_upstream_count = ingress_upstream_cause_counts["unknown"]
+    ingress_unknown_upstream_rate = safe_ratio(ingress_unknown_upstream_count, len(ingress_samples))
 
     return {
         "structuredRecoveryTrace": {
@@ -1135,6 +1296,69 @@ def analyze_recovery_audit(rows: list[dict[str, Any]], silence_threshold_ms: int
         "unlockEvidence": unlock_evidence,
         "successfulActionSamples": len(successful_samples),
         "successfulActionIncrements": successful_action_increments,
+        "controlPlaneHealth": {
+            "keyframeEpisodeCount": len(keyframe_episodes),
+            "keyframeSentCount": keyframe_sent_count,
+            "keyframeDeferredCount": keyframe_deferred_count,
+            "keyframeSentRate": round_score(keyframe_sent_rate or 0.0),
+            "twccReceiverMappingMissingCount": len(twcc_mapping_missing_rows),
+            "twccInboundExtensionSeenCount": len(twcc_inbound_seen_rows),
+            "twccReceiverMappingMissingRate": round_score(twcc_mapping_missing_rate or 0.0),
+            "feedbackTargetAvailabilityChangedCount": len(feedback_target_availability_rows),
+            "feedbackTargetStateCounts": dict(feedback_target_state_counts),
+            "feedbackTargetReasonCounts": dict(feedback_target_reason_counts),
+        },
+        "ingressHealth": {
+            "terminationCount": len(ingress_samples),
+            "rxClosedCount": ingress_kind_counts["rxClosed"],
+            "upstreamSenderDroppedCount": ingress_cause_counts["upstreamSenderDropped"],
+            "unknownUpstreamCauseCount": ingress_unknown_upstream_count,
+            "unknownUpstreamCauseRate": round_score(ingress_unknown_upstream_rate or 0.0),
+            "causeCounts": dict(ingress_cause_counts),
+            "upstreamCauseCounts": dict(ingress_upstream_cause_counts),
+        },
+        "firstFrameHealth": {
+            "observationCount": len(first_frame_samples),
+            "controlReadyToPliSentMsCount": len(first_frame_control_ready_to_pli),
+            "pliSentToFirstIdrPacketMsCount": len(first_frame_pli_to_idr),
+            "firstIdrPacketToFirstDecodeMsCount": len(first_frame_idr_to_decode),
+            "firstDecodeToCleanAnchorCommittedMsCount": len(first_frame_decode_to_clean_anchor),
+            "cleanAnchorCommittedToDisplayStableMsCount": len(first_frame_clean_anchor_to_display),
+            "avgControlReadyToPliSentMs": average_number(first_frame_control_ready_to_pli),
+            "avgPliSentToFirstIdrPacketMs": average_number(first_frame_pli_to_idr),
+            "avgFirstIdrPacketToFirstDecodeMs": average_number(first_frame_idr_to_decode),
+            "avgFirstDecodeToCleanAnchorCommittedMs": average_number(first_frame_decode_to_clean_anchor),
+            "avgCleanAnchorCommittedToDisplayStableMs": average_number(first_frame_clean_anchor_to_display),
+            "terminalPhaseCounts": dict(first_frame_terminal_phase_counts),
+            "incompleteReasonCounts": dict(first_frame_incomplete_reason_counts),
+        },
+        "bootstrapHealth": {
+            "observationCount": len(h264_samples),
+            "acceptedCount": h264_accepted_count,
+            "bootstrapMissingIdrCount": h264_bootstrap_reject_reason_counts["bootstrapMissingIdr"],
+            "bootstrapRejectReasonCounts": dict(h264_bootstrap_reject_reason_counts),
+            "rejectClassificationCounts": dict(h264_reject_classification_counts),
+            "continuationProfileCounts": dict(h264_continuation_profile_counts),
+            "postRecoveryDegradationCount": h264_post_recovery_degradation_count,
+        },
+        "presentationHealth": {
+            "hostMailboxStateCount": len(host_mailbox_state_rows),
+            "displayedFrameStaleCount": displayed_frame_stale_count,
+            "retainedOldFrameRiskCount": retained_old_frame_risk_count,
+            "cadencePhaseCounts": dict(host_present_cadence_phase_counts),
+            "noPendingPressureLevelCounts": dict(
+                host_present_no_pending_pressure_level_counts
+            ),
+            "frameDropEventCount": len(frame_drop_samples),
+            "frameDropReasonCounts": dict(frame_drop_reason_counts),
+            "frameDropStageCounts": dict(frame_drop_stage_counts),
+            "frameDropDetailCounts": dict(frame_drop_detail_counts),
+            "scheduledFrameStaleCount": scheduled_frame_stale_count,
+            "submittedFrameStaleCount": submitted_frame_stale_count,
+            "recoveryValuedFrameDropCount": recovery_valued_frame_drop_count,
+            "hostPresentSamples": host_present_samples,
+            "frameDropSamples": frame_drop_samples,
+        },
         "keyframeEffectiveness": {
             "episodeCount": len(keyframe_episodes),
             "statusCounts": dict(keyframe_status_counts),
@@ -1825,6 +2049,49 @@ def print_recovery_audit(profile: TraceProfile, sample_limit: int) -> None:
         f"successful_action_samples={audit['successfulActionSamples']} "
         f"increments={audit['successfulActionIncrements']}"
     )
+    presentation = audit["presentationHealth"]
+    cadence_text = ", ".join(
+        f"{name}={count}" for name, count in sorted(presentation["cadencePhaseCounts"].items())
+    ) or "none"
+    pressure_text = ", ".join(
+        f"{name}={count}"
+        for name, count in sorted(presentation["noPendingPressureLevelCounts"].items())
+    ) or "none"
+    drop_reason_text = ", ".join(
+        f"{name}={count}" for name, count in sorted(presentation["frameDropReasonCounts"].items())
+    ) or "none"
+    drop_detail_text = ", ".join(
+        f"{name}={count}" for name, count in sorted(presentation["frameDropDetailCounts"].items())
+    ) or "none"
+    print("  - presentation_health:")
+    print(
+        "    - "
+        f"host_mailbox_states={presentation['hostMailboxStateCount']} "
+        f"displayed_frame_stale={presentation['displayedFrameStaleCount']} "
+        f"retained_old_frame_risk={presentation['retainedOldFrameRiskCount']} "
+        f"frame_drop_events={presentation['frameDropEventCount']} "
+        f"recovery_valued_frame_drops={presentation['recoveryValuedFrameDropCount']}"
+    )
+    print(f"    - cadence={cadence_text}")
+    print(f"    - no_pending_pressure={pressure_text}")
+    print(f"    - frame_drop_reasons={drop_reason_text}")
+    print(f"    - frame_drop_details={drop_detail_text}")
+    for item in presentation["hostPresentSamples"][:sample_limit]:
+        print(
+            "    - "
+            f"host seq={item['seq']} tsMs={item['tsMs']} cadence={item['cadencePhase']} "
+            f"pressure={item['noPendingPressureLevel']} displayed_stale={item['displayedFrameStale']} "
+            f"retained_old_frame_risk={item['retainedOldFrameRisk']} present_age_ms={item['presentAgeMs']} "
+            f"last_displayed_seq={item['lastDisplayedFrameSeq']}"
+        )
+    for item in presentation["frameDropSamples"][:sample_limit]:
+        print(
+            "    - "
+            f"drop seq={item['seq']} tsMs={item['tsMs']} event={item['event']} "
+            f"reason={item['reason']} stage={item['stage']} detail={item['detail']} "
+            f"recovery_disposition={item['frameRecoveryDisposition']} "
+            f"frame_seq={item['frameSeq']} rtp={item['frameRtpTimestamp']} keyframe={item['isKeyframe']}"
+        )
     keyframe = audit["keyframeEffectiveness"]
     suppression_text = ", ".join(
         f"{name}={count}" for name, count in sorted(keyframe["suppressionCounts"].items())

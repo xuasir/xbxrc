@@ -3,6 +3,8 @@ import type {
   StreamEnhancementMountState,
   StreamSessionDiagnosticsSnapshot,
 } from '../../streaming/types'
+import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import {
   translateDiagnosticsDecoderRecovery,
   translateDiagnosticsLatestDecision,
@@ -13,8 +15,6 @@ import {
   translateDiagnosticsStallKind,
   translateDiagnosticsVideoHealth,
 } from '../../streaming/diagnostics-i18n'
-import { computed } from 'vue'
-import { useI18n } from 'vue-i18n'
 
 interface StreamDiagnosticsPanelProps {
   visible: boolean

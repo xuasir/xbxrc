@@ -52,7 +52,7 @@ impl RecoveryBudget {
 
     /// 消耗reconnect预算
     pub(crate) fn consume_reconnect(&mut self) {
-        self.reconnect_used += 1;
+        self.reconnect_used = self.reconnect_used.saturating_add(1);
     }
 
     /// 重置预算（新epoch）
@@ -67,35 +67,34 @@ impl RecoveryBudget {
 pub(crate) struct StateTimeouts {
     /// NACK超时（LocalRepair状态）
     pub(crate) nack_timeout_ms: f64,
-    /// IDR超时（FrameRecovery状态）
-    pub(crate) idr_timeout_ms: f64,
+    /// PLI refresh 最小间隔（FrameRecovery 状态的动作窗）
+    pub(crate) idr_refresh_interval_ms: f64,
+    /// IDR响应超时（FrameRecovery 状态的响应/升级等待窗）
+    pub(crate) idr_response_timeout_ms: f64,
     /// Decoder reset超时（DecoderRecovery状态）
     pub(crate) decoder_reset_timeout_ms: f64,
     /// Reconnect超时（TransportRecovery状态）
     pub(crate) reconnect_timeout_ms: f64,
-    /// IDR最小重试间隔（防死锁）
-    pub(crate) idr_min_retry_interval_ms: f64,
 }
 
 impl StateTimeouts {
     /// 从场景化profile创建超时配置
     pub(crate) fn from_profile(profile: RecoveryScenarioProfile) -> Self {
         // 根据场景调整超时参数
-        let (nack_timeout_ms, idr_timeout_ms) = match profile.kind {
+        let (nack_timeout_ms, idr_refresh_interval_ms, idr_response_timeout_ms) = match profile.kind
+        {
             crate::transport::rtc::recovery::policy::ScenarioPolicyProfileKind::CloudGaming => {
-                (300.0, 900.0) // Cloud: 更长的超时
+                (300.0, 140.0, 900.0)
             }
-            _ => {
-                (180.0, 900.0) // Home/Relay: 较短的NACK超时
-            }
+            _ => (180.0, 100.0, 900.0),
         };
 
         Self {
             nack_timeout_ms,
-            idr_timeout_ms,
+            idr_refresh_interval_ms,
+            idr_response_timeout_ms,
             decoder_reset_timeout_ms: 1200.0,
             reconnect_timeout_ms: 5000.0,
-            idr_min_retry_interval_ms: 50.0,
         }
     }
 
@@ -104,7 +103,7 @@ impl StateTimeouts {
         match state {
             RecoveryState::Healthy => None,
             RecoveryState::LocalRepair => Some(self.nack_timeout_ms),
-            RecoveryState::FrameRecovery => Some(self.idr_timeout_ms),
+            RecoveryState::FrameRecovery => Some(self.idr_response_timeout_ms),
             RecoveryState::DecoderRecovery => Some(self.decoder_reset_timeout_ms),
             RecoveryState::TransportRecovery => Some(self.reconnect_timeout_ms),
         }
@@ -123,8 +122,10 @@ pub(crate) struct RecoveryStateMachine {
     timeouts: StateTimeouts,
     /// 最后一次IDR请求时间（用于最小间隔检查）
     last_idr_request_at: Option<Instant>,
-    /// IDR in-flight标志
-    idr_in_flight: bool,
+    /// 关键帧请求仍在等待远端响应
+    keyframe_request_in_flight: bool,
+    /// 已观察到关键帧/owner 响应，正在等待 decode 落地
+    keyframe_decode_pending: bool,
     /// Decoder reset in-flight标志
     decoder_reset_in_flight: bool,
     /// Reconnect in-flight标志
@@ -140,7 +141,8 @@ impl RecoveryStateMachine {
             budget: RecoveryBudget::new(recovery_epoch),
             timeouts: StateTimeouts::from_profile(profile),
             last_idr_request_at: None,
-            idr_in_flight: false,
+            keyframe_request_in_flight: false,
+            keyframe_decode_pending: false,
             decoder_reset_in_flight: false,
             reconnect_in_flight: false,
         }
@@ -174,10 +176,14 @@ impl RecoveryStateMachine {
     pub(crate) fn can_retry_idr(&self) -> bool {
         if let Some(last_request) = self.last_idr_request_at {
             let elapsed_ms = last_request.elapsed().as_secs_f64() * 1000.0;
-            elapsed_ms >= self.timeouts.idr_min_retry_interval_ms
+            elapsed_ms >= self.timeouts.idr_refresh_interval_ms
         } else {
             true
         }
+    }
+
+    pub(crate) fn idr_response_timeout_elapsed(&self) -> bool {
+        self.state == RecoveryState::FrameRecovery && self.is_state_timeout()
     }
 
     /// 转换到新状态
@@ -192,7 +198,8 @@ impl RecoveryStateMachine {
     pub(crate) fn transition_to_healthy(&mut self) {
         self.transition_to(RecoveryState::Healthy);
         // 清除in-flight标志
-        self.idr_in_flight = false;
+        self.keyframe_request_in_flight = false;
+        self.keyframe_decode_pending = false;
         self.decoder_reset_in_flight = false;
         self.reconnect_in_flight = false;
     }
@@ -220,17 +227,35 @@ impl RecoveryStateMachine {
     /// 标记IDR请求已发送
     pub(crate) fn mark_idr_requested(&mut self) {
         self.last_idr_request_at = Some(Instant::now());
-        self.idr_in_flight = true;
+        self.keyframe_request_in_flight = true;
+        self.keyframe_decode_pending = false;
+    }
+
+    /// 标记已经观察到关键帧响应，等待 decode 完成
+    pub(crate) fn mark_idr_response_observed(&mut self) {
+        self.keyframe_request_in_flight = false;
+        self.keyframe_decode_pending = true;
     }
 
     /// 标记IDR已解码完成
     pub(crate) fn mark_idr_decoded(&mut self) {
-        self.idr_in_flight = false;
+        self.keyframe_request_in_flight = false;
+        self.keyframe_decode_pending = false;
     }
 
-    /// 检查IDR是否in-flight
+    /// 检查关键帧请求是否仍在等待远端响应
+    pub(crate) fn is_keyframe_request_in_flight(&self) -> bool {
+        self.keyframe_request_in_flight
+    }
+
+    /// 检查是否已经看到 owner/anchor 响应但仍等待 decode 完成
+    pub(crate) fn is_keyframe_decode_pending(&self) -> bool {
+        self.keyframe_decode_pending
+    }
+
+    /// 兼容旧调用口径：只表示“关键帧恢复链仍未完成”
     pub(crate) fn is_idr_in_flight(&self) -> bool {
-        self.idr_in_flight
+        self.keyframe_request_in_flight || self.keyframe_decode_pending
     }
 
     /// 标记decoder reset已发送
@@ -273,7 +298,8 @@ impl RecoveryStateMachine {
             self.state = RecoveryState::Healthy;
             self.state_entered_at = Instant::now();
             self.last_idr_request_at = None;
-            self.idr_in_flight = false;
+            self.keyframe_request_in_flight = false;
+            self.keyframe_decode_pending = false;
             self.decoder_reset_in_flight = false;
             self.reconnect_in_flight = false;
         }
@@ -327,6 +353,16 @@ mod tests {
     }
 
     #[test]
+    fn test_reconnect_budget_consumption_is_saturating() {
+        let mut sm = RecoveryStateMachine::new(test_profile(), 1);
+        sm.budget.reconnect_used = u8::MAX;
+
+        sm.mark_reconnect_requested();
+
+        assert_eq!(sm.current_budget().reconnect_used, u8::MAX);
+    }
+
+    #[test]
     fn test_epoch_rotation_clears_previous_recovery_chain() {
         let mut sm = RecoveryStateMachine::new(test_profile(), 1);
         sm.transition_to_frame_recovery();
@@ -350,7 +386,11 @@ mod tests {
 
         assert!(!sm.is_idr_in_flight());
         sm.mark_idr_requested();
-        assert!(sm.is_idr_in_flight());
+        assert!(sm.is_keyframe_request_in_flight());
+        assert!(!sm.is_keyframe_decode_pending());
+        sm.mark_idr_response_observed();
+        assert!(!sm.is_keyframe_request_in_flight());
+        assert!(sm.is_keyframe_decode_pending());
         sm.mark_idr_decoded();
         assert!(!sm.is_idr_in_flight());
 
@@ -368,11 +408,22 @@ mod tests {
         assert!(sm.can_retry_idr());
         sm.mark_idr_requested();
 
-        // 立即重试应该被阻止（需要等待50ms）
+        // 立即重试应该被阻止（需要等待短 refresh 窗）
         assert!(!sm.can_retry_idr());
 
         // 等待后应该可以重试
-        std::thread::sleep(std::time::Duration::from_millis(60));
+        std::thread::sleep(std::time::Duration::from_millis(120));
         assert!(sm.can_retry_idr());
+    }
+
+    #[test]
+    fn test_idr_response_timeout_is_longer_than_refresh_interval() {
+        let mut sm = RecoveryStateMachine::new(test_profile(), 1);
+        sm.transition_to_frame_recovery();
+        sm.mark_idr_requested();
+
+        std::thread::sleep(std::time::Duration::from_millis(120));
+        assert!(sm.can_retry_idr());
+        assert!(!sm.idr_response_timeout_elapsed());
     }
 }

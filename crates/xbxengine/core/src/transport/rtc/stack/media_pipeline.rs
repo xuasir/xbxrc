@@ -81,16 +81,27 @@ impl RtcRtcpSendPort for ConnectionRtcpPort {
             "connection lock failed".to_string()
         })?;
 
-        connection.send_video_rtcp_payload(buf).map_err(|error| {
-            crate::xbx_log_warn!(
-                "[xbxengine][rtc][rtcp] failed to send video rtcp payload: {error}"
-            );
-            RuntimeStatsSink::new(self.runtime_stats.clone()).record_video_rtcp_send_failure(
-                crate::transport::rtc::recovery::runtime_state::unix_now_ms(),
-                &error.to_string(),
-            );
-            error.to_string()
-        })
+        connection
+            .send_video_rtcp_payload(buf)
+            .map_err(|error| {
+                crate::xbx_log_warn!(
+                    "[xbxengine][rtc][rtcp] failed to send video rtcp payload: {error}"
+                );
+                RuntimeStatsSink::new(self.runtime_stats.clone()).record_video_rtcp_send_failure(
+                    crate::transport::rtc::recovery::runtime_state::unix_now_ms(),
+                    &error.to_string(),
+                );
+                error.to_string()
+            })
+            .map(|_| {
+                RuntimeStatsSink::new(self.runtime_stats.clone())
+                    .record_feedback_target_availability(
+                        crate::transport::rtc::recovery::runtime_state::unix_now_ms(),
+                        "videoRtcpFeedback",
+                        "ready",
+                        "rtcpSendSucceeded",
+                    );
+            })
     }
 }
 

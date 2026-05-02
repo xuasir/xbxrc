@@ -64,13 +64,14 @@ pub(crate) enum RecoveryEpisodeStage {
     Expired,
 }
 
-/// RFC: 恢复进度统一六级语义，作为跨层事实口径。
+/// RFC: 恢复进度统一七级语义，作为跨层事实口径。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum RecoveryProgressLevel {
     WaitingResponse,
     ContinuationSeen,
     AnchorSeen,
     Decoded,
+    PlaybackRecovered,
     CleanAnchorCommitted,
     DisplayStable,
 }
@@ -82,6 +83,7 @@ impl RecoveryProgressLevel {
             Self::ContinuationSeen => "ContinuationSeen",
             Self::AnchorSeen => "AnchorSeen",
             Self::Decoded => "Decoded",
+            Self::PlaybackRecovered => "PlaybackRecovered",
             Self::CleanAnchorCommitted => "CleanAnchorCommitted",
             Self::DisplayStable => "DisplayStable",
         }
@@ -94,6 +96,7 @@ pub(crate) fn recovery_progress_level_from_str(value: &str) -> Option<RecoveryPr
         "ContinuationSeen" => Some(RecoveryProgressLevel::ContinuationSeen),
         "AnchorSeen" => Some(RecoveryProgressLevel::AnchorSeen),
         "Decoded" => Some(RecoveryProgressLevel::Decoded),
+        "PlaybackRecovered" => Some(RecoveryProgressLevel::PlaybackRecovered),
         "CleanAnchorCommitted" => Some(RecoveryProgressLevel::CleanAnchorCommitted),
         "DisplayStable" => Some(RecoveryProgressLevel::DisplayStable),
         _ => None,
@@ -181,6 +184,7 @@ pub(crate) fn recovery_progress_allows_decoder_reset(
         Some(
             RecoveryProgressLevel::AnchorSeen
                 | RecoveryProgressLevel::Decoded
+                | RecoveryProgressLevel::PlaybackRecovered
                 | RecoveryProgressLevel::CleanAnchorCommitted
                 | RecoveryProgressLevel::DisplayStable
         )
@@ -365,6 +369,21 @@ pub(crate) fn current_clean_anchor_observed_at_ms(
         && clean_anchor_source_event == Some("chain-clean-anchor-submitted")
     {
         clean_anchor_observed_at_ms
+    } else {
+        None
+    }
+}
+
+pub(crate) fn current_clean_anchor_bridge_observed_at_ms(
+    bridge_epoch: Option<u64>,
+    bridge_observed_at_ms: Option<f64>,
+    bridge_source_event: Option<&str>,
+    recovery_epoch: u64,
+) -> Option<f64> {
+    if bridge_epoch == Some(recovery_epoch)
+        && bridge_source_event == Some("hostVisibleAnchorPending")
+    {
+        bridge_observed_at_ms
     } else {
         None
     }

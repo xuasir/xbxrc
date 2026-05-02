@@ -338,6 +338,7 @@ impl VideoTimelineState {
             return false;
         }
         self.pending_clean_anchor_rtp_ts = None;
+        self.retire_repairing_frame_recovery_ledger();
         self.on_clean_anchor_submitted();
         true
     }
@@ -776,8 +777,9 @@ impl VideoTimelineState {
             self.latest_anchor_candidate
                 .as_ref()
                 .and_then(|candidate| {
-                    (candidate.recovery_epoch == recovery_epoch)
-                        .then_some(candidate.frame_rtp_timestamp)
+                    (candidate.recovery_epoch == recovery_epoch
+                        && should_inherit_anonymous_anchor_frame(source_event, candidate))
+                    .then_some(candidate.frame_rtp_timestamp)
                 })
                 .flatten()
         });
@@ -858,6 +860,7 @@ impl VideoTimelineState {
                 && !self.has_pending_gap_risk()
                 && !self.has_unrecoverable_frame_or_chain_debt()
             {
+                self.retire_repairing_frame_recovery_ledger();
                 self.chain_state = ChainState::Healthy;
             }
         }
@@ -1212,6 +1215,15 @@ impl VideoTimelineState {
         });
     }
 
+    fn retire_repairing_frame_recovery_ledger(&mut self) {
+        self.frame_recovery_ledger.retain(|_, entry| {
+            !matches!(
+                entry.frame_recovery_disposition,
+                FrameRecoveryDisposition::Repairing
+            )
+        });
+    }
+
     fn reset_stable_recovery_gate(&mut self) {
         self.stable_recovery_started_at_ms = None;
         self.stable_recovery_clean_frame_streak = 0;
@@ -1321,7 +1333,7 @@ impl VideoTimelineState {
         let waiting_like_debt = self.chain_debt_reason.as_deref().is_none_or(|reason| {
             matches!(
                 reason,
-                "awaitRecoveryAnchor" | "awaitingRecoveryAnchor" | "inspectionRejectNonIdrVcl"
+                "awaitRecoveryAnchor" | "awaitingRecoveryAnchor" | "bootstrapMissingIdr"
             )
         });
         if !waiting_like_debt {
@@ -1578,9 +1590,25 @@ fn is_hard_recovery_reason(reason: &str) -> bool {
                 | "inspectionRejectNoVcl"
                 | "bootstrapMissingSps"
                 | "bootstrapMissingPps"
-                | "inspectionRejectNonIdrVcl"
+                | "bootstrapMissingIdr"
+                | "mixedIdrWithTrailingDelta"
                 | "inspectionRejectInvalidSliceHeader"
         )
+}
+
+fn should_inherit_anonymous_anchor_frame(
+    source_event: &str,
+    candidate: &AnchorCandidateEntry,
+) -> bool {
+    if !matches!(source_event, "gap-repair-in-flight" | "gap-resolved") {
+        return true;
+    }
+    matches!(
+        candidate.state,
+        XbxEngineAnchorCandidateState::AwaitingRecovery
+            | XbxEngineAnchorCandidateState::Repaired
+            | XbxEngineAnchorCandidateState::Rejected
+    )
 }
 
 #[cfg(test)]

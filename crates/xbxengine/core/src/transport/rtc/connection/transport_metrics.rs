@@ -58,14 +58,8 @@ pub(crate) fn describe_selected_candidate_pair(
     let local = candidate_summary(&report, &pair.local_candidate_id);
     let remote = candidate_summary(&report, &pair.remote_candidate_id);
     Some(format!(
-        "state={:?} nominated={} rtt_ms={:.1} requests_sent={} responses_received={} local={} remote={}",
-        pair.state,
-        pair.nominated,
-        pair.current_round_trip_time * 1_000.0,
-        pair.requests_sent,
-        pair.responses_received,
-        local,
-        remote,
+        "state={:?} nominated={} local={} remote={}",
+        pair.state, pair.nominated, local, remote,
     ))
 }
 

@@ -296,11 +296,29 @@ pub async fn terminate(app_handle: &AppHandle) {
         return;
     }
 
+    state.runtime_trace.record_event(
+        "app",
+        "terminateRequested",
+        None,
+        serde_json::json!({
+            "source": "shell",
+        }),
+    );
+
     state.gamepad.shutdown();
     state.xbxengine.shutdown().await;
     state.streaming.shutdown().await;
 
     let _ = app_handle.tauri_plugin_keepawake().stop(app_handle);
+
+    state.runtime_trace.record_event(
+        "app",
+        "terminateCompleted",
+        None,
+        serde_json::json!({
+            "source": "shell",
+        }),
+    );
 
     log::info!("Application termination completed.");
 }

@@ -496,7 +496,7 @@ fn translate_axis_event(
             descriptor,
             observed_at_ms,
             3,
-            normalize_stick_axis(value),
+            -normalize_stick_axis(value),
         )],
         Axis::TriggerLeft => {
             let axis_value = normalize_trigger_axis(value);

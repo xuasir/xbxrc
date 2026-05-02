@@ -543,17 +543,17 @@ impl XbxEngineMediaBackend for ScriptedMediaBackend {
         metrics: crate::XbxEngineHostVideoPresentMetrics,
     ) -> Result<(), XbxEngineRuntimeError> {
         let mut runtime_stats = self.runtime_stats.lock().expect("lock runtime stats");
-        runtime_stats.latest_video_host_submit_time_ms = metrics.latest_host_submit_time_ms;
+        runtime_stats.latest_host_mailbox_submit_time_ms = metrics.latest_host_submit_time_ms;
         runtime_stats.latest_video_host_present_time_ms = metrics.latest_host_present_time_ms;
-        runtime_stats.host_submit_epoch = metrics.host_submit_epoch;
-        runtime_stats.host_display_tick_epoch = metrics.display_tick_epoch;
-        runtime_stats.display_present_epoch = metrics.display_present_epoch;
-        runtime_stats.video_present_epoch = metrics.display_present_epoch;
+        runtime_stats.host_mailbox_submit_epoch = metrics.host_mailbox_submit_epoch;
+        runtime_stats.host_display_tick_epoch = metrics.host_display_tick_epoch;
+        runtime_stats.host_frame_present_epoch = metrics.host_frame_present_epoch;
         runtime_stats.host_cadence_phase = metrics.cadence_phase;
         runtime_stats.video_present_fps = metrics.present_fps;
-        runtime_stats.video_present_submit_count_total = metrics.present_submit_count_total;
-        runtime_stats.video_present_drop_count_total = metrics.present_drop_count_total;
-        runtime_stats.video_present_overwrite_count_total = metrics.present_overwrite_count_total;
+        runtime_stats.host_mailbox_enqueue_count_total = metrics.host_mailbox_enqueue_count_total;
+        runtime_stats.host_mailbox_drop_count_total = metrics.host_mailbox_drop_count_total;
+        runtime_stats.host_mailbox_overwrite_count_total =
+            metrics.host_mailbox_overwrite_count_total;
         runtime_stats.host_no_pending_take_count_total = metrics.no_pending_take_count_total;
         runtime_stats.host_no_pending_streak = metrics.no_pending_streak;
         runtime_stats.host_no_pending_max_streak = metrics.no_pending_max_streak;
@@ -683,9 +683,12 @@ pub(crate) fn render_frame(frame_seq: u64, rendered_at_ms: f64) -> XbxEngineRend
         frame_seq,
         rendered_at_ms,
         rtp_timestamp: Some(1_234_567),
+        recovery_epoch_tag: None,
+        recovery_owner_rtp_timestamp: None,
         is_keyframe: true,
         frame_recovery_disposition: Some("frame-complete-candidate".to_string()),
         frame_unrecoverable_reason: None,
+        presentation_value_role: None,
         pixel_data: XbxEngineRenderPixelData::Rgba {
             bytes: vec![0, 0, 0, 255].into(),
         },

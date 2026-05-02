@@ -1,10 +1,10 @@
-import { describe, expect, it } from 'vitest'
 import type { RuntimeLaunchSpec } from '../types'
+import { describe, expect, it } from 'vitest'
 import {
-  DEFAULT_RECOVERY_ARBITER_WINDOW_MS,
   buildRuntimeAttemptSpec,
   canRetryFallbackTurn,
   decideRecoveryArbiter,
+  DEFAULT_RECOVERY_ARBITER_WINDOW_MS,
   resolveLaunchDelayMs,
   shouldUseDirectFirstFallback,
 } from './runtime-host-policy'

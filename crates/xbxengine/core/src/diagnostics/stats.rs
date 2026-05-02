@@ -214,7 +214,7 @@ fn resolve_presentation_health(
         return Some("hostPresentStalled".to_string());
     }
     let has_present_history = stats.latest_video_host_present_time_ms.is_some()
-        || stats.video_present_submit_count_total > 0;
+        || stats.host_mailbox_enqueue_count_total > 0;
     let supply_pressure = matches!(
         stats.host_no_pending_pressure_level.as_deref(),
         Some("high" | "critical")
@@ -282,6 +282,7 @@ fn h264_inspection_dto_from_observation(
             sample_height: observation.sample_height,
             bootstrap_ready: observation.bootstrap_ready,
             bootstrap_reject_reason: observation.bootstrap_reject_reason.clone(),
+            continuation_verdict: observation.continuation_verdict.clone(),
             admission_accepted: observation.admission_accepted,
             observed_at_ms: observation.observed_at_ms,
             bound_episode_id: observation.bound_episode_id,
@@ -467,12 +468,11 @@ fn normalize_budget_rtt_slack(
 fn infer_budget_from_drop(
     drop: &crate::XbxEngineVideoFrameDropObservation,
 ) -> xbxengine_protocol::XbxEngineFrameBudgetDto {
-    let window_source = if drop.detail.as_deref().is_some_and(|detail| {
-        matches!(
-            detail,
-            "queuePressure" | "queuePressureAggressive" | "outputQueueOverflow"
-        )
-    }) {
+    let window_source = if drop
+        .detail
+        .as_deref()
+        .is_some_and(|detail| matches!(detail, "outputQueueOverflow"))
+    {
         "recovery".to_string()
     } else {
         "playout".to_string()
@@ -500,7 +500,7 @@ fn infer_budget_from_frame_recovery(
         "playout".to_string()
     };
     let failure_cost = normalize_budget_failure_cost(
-        Some(observation.frame_recovery_disposition.as_str()),
+        observation.frame_recovery_disposition.as_deref(),
         observation.frame_unrecoverable_reason.as_deref(),
         None,
     );
@@ -595,26 +595,55 @@ pub fn build_xbxengine_stats(
     let present_age_ms = runtime_stats
         .and_then(|stats| stats.latest_video_host_present_time_ms)
         .map(|at| (now_ms - at).max(0.0));
+    let submit_age_ms = runtime_stats
+        .and_then(|stats| stats.latest_host_mailbox_submit_time_ms)
+        .map(|at| (now_ms - at).max(0.0));
     let audio_playout_latency_ms = runtime_stats.and_then(resolve_audio_playout_latency_ms);
     let audio_video_playout_delta_ms =
         runtime_stats.and_then(|stats| resolve_audio_video_playout_delta_ms(stats, present_age_ms));
     let packet_to_decode_ms = runtime_stats.and_then(|stats| {
         stats
-            .latest_video_packet_arrival_time_ms
-            .zip(stats.latest_video_decode_ok_time_ms)
-            .map(|(packet_at_ms, decode_at_ms)| (decode_at_ms - packet_at_ms).max(0.0))
+            .latest_video_packet_arrival_rtp_timestamp
+            .zip(stats.latest_video_decode_ok_rtp_timestamp)
+            .filter(|(packet_rtp, decode_rtp)| packet_rtp == decode_rtp)
+            .and_then(|_| {
+                stats
+                    .latest_video_packet_arrival_time_ms
+                    .zip(stats.latest_video_decode_ok_time_ms)
+                    .map(|(packet_at_ms, decode_at_ms)| (decode_at_ms - packet_at_ms).max(0.0))
+            })
     });
     let decode_to_present_ms = runtime_stats.and_then(|stats| {
         stats
-            .latest_video_decode_ok_time_ms
-            .zip(stats.latest_video_host_present_time_ms)
-            .map(|(decode_at_ms, present_at_ms)| (present_at_ms - decode_at_ms).max(0.0))
+            .latest_video_decode_ok_rtp_timestamp
+            .zip(stats.last_displayed_frame_rtp_timestamp)
+            .filter(|(decode_rtp, displayed_rtp)| decode_rtp == displayed_rtp)
+            .and_then(|_| {
+                stats
+                    .latest_video_decode_ok_time_ms
+                    .zip(
+                        stats
+                            .last_displayed_at_ms
+                            .or(stats.latest_video_host_present_time_ms),
+                    )
+                    .map(|(decode_at_ms, present_at_ms)| (present_at_ms - decode_at_ms).max(0.0))
+            })
     });
     let packet_to_present_ms = runtime_stats.and_then(|stats| {
         stats
-            .latest_video_packet_arrival_time_ms
-            .zip(stats.latest_video_host_present_time_ms)
-            .map(|(packet_at_ms, present_at_ms)| (present_at_ms - packet_at_ms).max(0.0))
+            .latest_video_packet_arrival_rtp_timestamp
+            .zip(stats.last_displayed_frame_rtp_timestamp)
+            .filter(|(packet_rtp, displayed_rtp)| packet_rtp == displayed_rtp)
+            .and_then(|_| {
+                stats
+                    .latest_video_packet_arrival_time_ms
+                    .zip(
+                        stats
+                            .last_displayed_at_ms
+                            .or(stats.latest_video_host_present_time_ms),
+                    )
+                    .map(|(packet_at_ms, present_at_ms)| (present_at_ms - packet_at_ms).max(0.0))
+            })
     });
     let resolution = runtime_stats
         .and_then(|stats| stats.latest_video_frame.as_ref())
@@ -788,6 +817,12 @@ pub fn build_xbxengine_stats(
         recovery_rfc_fault_domain,
         recovery_rfc_stage,
         recovery_rfc_ceiling,
+        recovery_playback_recovered_at_ms: runtime_stats
+            .and_then(|stats| stats.recovery_playback_recovered_at_ms),
+        recovery_playback_recovered_phase: runtime_stats
+            .and_then(|stats| stats.recovery_playback_recovered_phase.clone()),
+        recovery_fresh_anchor_recovered_at_ms: runtime_stats
+            .and_then(|stats| stats.recovery_fresh_anchor_recovered_at_ms),
         direct_gaming_bitrate_band: runtime_stats
             .and_then(|stats| stats.direct_gaming_bitrate_band.clone()),
         recovery_owner_state,
@@ -849,6 +884,8 @@ pub fn build_xbxengine_stats(
         inbound_audio_bytes_total: runtime_stats.map(|stats| stats.inbound_audio_bytes_total),
         inbound_video_packet_count_total: runtime_stats
             .map(|stats| stats.inbound_video_packet_count_total),
+        latest_video_packet_arrival_rtp_timestamp: runtime_stats
+            .and_then(|stats| stats.latest_video_packet_arrival_rtp_timestamp),
         latest_video_track_status: runtime_stats.and_then(|stats| {
             stats.latest_video_track_status.as_ref().map(|status| {
                 xbxengine_protocol::XbxEngineVideoTrackStatusDto {
@@ -974,6 +1011,8 @@ pub fn build_xbxengine_stats(
             .and_then(|stats| stats.video_decoder_recovery_status),
         video_decoder_recovery_state_changed_at_ms: runtime_stats
             .and_then(|stats| stats.video_decoder_recovery_state_changed_at_ms),
+        latest_video_decode_ok_rtp_timestamp: runtime_stats
+            .and_then(|stats| stats.latest_video_decode_ok_rtp_timestamp),
         video_renderer_stalled: runtime_stats.and_then(|stats| stats.video_renderer_stalled),
         video_renderer_stall_blocks_presentation: renderer_stall_blocks_presentation,
         packet_age_ms,
@@ -993,21 +1032,33 @@ pub fn build_xbxengine_stats(
             .map(|stats| stats.video_renderer_submit_count_total),
         video_renderer_drop_count_total: runtime_stats
             .map(|stats| stats.video_renderer_drop_count_total),
-        video_present_drop_count_total: runtime_stats
-            .map(|stats| stats.video_present_drop_count_total),
-        video_present_overwrite_count_total: runtime_stats
-            .map(|stats| stats.video_present_overwrite_count_total),
-        video_present_submit_count_total: runtime_stats
-            .map(|stats| stats.video_present_submit_count_total),
+        host_mailbox_drop_count_total: runtime_stats
+            .map(|stats| stats.host_mailbox_drop_count_total),
+        host_mailbox_overwrite_count_total: runtime_stats
+            .map(|stats| stats.host_mailbox_overwrite_count_total),
+        host_mailbox_enqueue_count_total: runtime_stats
+            .map(|stats| stats.host_mailbox_enqueue_count_total),
         host_no_pending_take_count_total: runtime_stats
             .map(|stats| stats.host_no_pending_take_count_total),
         host_no_pending_streak: runtime_stats.map(|stats| stats.host_no_pending_streak),
         host_no_pending_max_streak: runtime_stats.map(|stats| stats.host_no_pending_max_streak),
         host_no_pending_pressure_level: runtime_stats
             .and_then(|stats| stats.host_no_pending_pressure_level.clone()),
+        host_mailbox_submit_epoch: runtime_stats.map(|stats| stats.host_mailbox_submit_epoch),
         host_display_tick_epoch: runtime_stats.map(|stats| stats.host_display_tick_epoch),
-        video_present_epoch: runtime_stats.map(|stats| stats.video_present_epoch),
+        host_frame_present_epoch: runtime_stats.map(|stats| stats.host_frame_present_epoch),
         host_cadence_phase: runtime_stats.and_then(|stats| stats.host_cadence_phase.clone()),
+        latest_host_mailbox_submit_time_ms: runtime_stats
+            .and_then(|stats| stats.latest_host_mailbox_submit_time_ms),
+        latest_video_host_submit_rtp_timestamp: runtime_stats
+            .and_then(|stats| stats.latest_video_host_submit_rtp_timestamp),
+        latest_video_host_present_time_ms: runtime_stats
+            .and_then(|stats| stats.latest_video_host_present_time_ms),
+        submit_age_ms,
+        display_age_ms: runtime_stats.and_then(|stats| stats.display_age_ms),
+        host_view_generation: runtime_stats.map(|stats| stats.host_view_generation),
+        latest_host_view_created_at_ms: runtime_stats
+            .and_then(|stats| stats.latest_host_view_created_at_ms),
         last_displayed_frame_seq: runtime_stats.and_then(|stats| stats.last_displayed_frame_seq),
         last_displayed_frame_rtp_timestamp: runtime_stats
             .and_then(|stats| stats.last_displayed_frame_rtp_timestamp),
@@ -1018,6 +1069,14 @@ pub fn build_xbxengine_stats(
             .map(|stats| stats.video_present_descriptor_metal_import_count_total),
         video_present_descriptor_cpu_upload_count_total: runtime_stats
             .map(|stats| stats.video_present_descriptor_cpu_upload_count_total),
+        latest_feedback_target_availability_state: runtime_stats
+            .and_then(|stats| stats.latest_feedback_target_availability_state.clone()),
+        latest_feedback_target_availability_reason: runtime_stats
+            .and_then(|stats| stats.latest_feedback_target_availability_reason.clone()),
+        latest_feedback_target_availability_target: runtime_stats
+            .and_then(|stats| stats.latest_feedback_target_availability_target.clone()),
+        latest_feedback_target_availability_observed_at_ms: runtime_stats
+            .and_then(|stats| stats.latest_feedback_target_availability_observed_at_ms),
         latest_video_rtcp_send_failure_time_ms: runtime_stats
             .and_then(|stats| stats.latest_video_rtcp_send_failure_time_ms),
         latest_video_rtcp_send_failure_reason: runtime_stats
@@ -1076,7 +1135,7 @@ pub fn build_xbxengine_stats(
         last_recovery_reason: snapshot.last_recovery_reason.clone(),
         reconnect_trigger_source: snapshot.reconnect_trigger_source.clone(),
         host_present_take_empty_streak: Some(snapshot.host_present_take_empty_streak),
-        host_present_latest_render_slot_at_ms: snapshot.host_present_latest_render_slot_at_ms,
+        host_mailbox_latest_submit_at_ms: snapshot.host_mailbox_latest_submit_at_ms,
         ice_policy_mode: snapshot.ice_policy_mode.clone(),
         ice_policy_digest: snapshot.ice_policy_digest.clone(),
         ice_policy_source: snapshot.ice_policy_source.clone(),
@@ -1095,13 +1154,33 @@ pub fn build_xbxengine_stats(
                         action: decision.action.clone(),
                         detail: decision.detail.clone(),
                         frame_seq: decision.frame_seq,
+                        replacement_decision: decision.replacement_decision.as_ref().map(
+                            |replacement| {
+                                xbxengine_protocol::XbxEngineReplacementDecisionObservationDto {
+                                    dropped_frame_seq: replacement.dropped_frame_seq,
+                                    dropped_rtp_timestamp: replacement.dropped_rtp_timestamp,
+                                    dropped_presentation_value_role: replacement
+                                        .dropped_presentation_value_role
+                                        .clone(),
+                                    kept_frame_seq: replacement.kept_frame_seq,
+                                    kept_rtp_timestamp: replacement.kept_rtp_timestamp,
+                                    kept_presentation_value_role: replacement
+                                        .kept_presentation_value_role
+                                        .clone(),
+                                    same_recovery_epoch: replacement.same_recovery_epoch,
+                                    same_recovery_owner_chain: replacement
+                                        .same_recovery_owner_chain,
+                                    supersede_reason: replacement.supersede_reason.clone(),
+                                }
+                            },
+                        ),
                         observed_at_ms: decision.observed_at_ms,
                     }
                 })
         }),
-        latest_render_candidate_decision: runtime_stats.and_then(|stats| {
+        latest_render_mailbox_decision: runtime_stats.and_then(|stats| {
             stats
-                .latest_render_candidate_decision
+                .latest_render_mailbox_decision
                 .as_ref()
                 .map(|decision| {
                     xbxengine_protocol::XbxEnginePipelineCandidateDecisionObservationDto {
@@ -1110,6 +1189,26 @@ pub fn build_xbxengine_stats(
                         action: decision.action.clone(),
                         detail: decision.detail.clone(),
                         frame_seq: decision.frame_seq,
+                        replacement_decision: decision.replacement_decision.as_ref().map(
+                            |replacement| {
+                                xbxengine_protocol::XbxEngineReplacementDecisionObservationDto {
+                                    dropped_frame_seq: replacement.dropped_frame_seq,
+                                    dropped_rtp_timestamp: replacement.dropped_rtp_timestamp,
+                                    dropped_presentation_value_role: replacement
+                                        .dropped_presentation_value_role
+                                        .clone(),
+                                    kept_frame_seq: replacement.kept_frame_seq,
+                                    kept_rtp_timestamp: replacement.kept_rtp_timestamp,
+                                    kept_presentation_value_role: replacement
+                                        .kept_presentation_value_role
+                                        .clone(),
+                                    same_recovery_epoch: replacement.same_recovery_epoch,
+                                    same_recovery_owner_chain: replacement
+                                        .same_recovery_owner_chain,
+                                    supersede_reason: replacement.supersede_reason.clone(),
+                                }
+                            },
+                        ),
                         observed_at_ms: decision.observed_at_ms,
                     }
                 })
@@ -1145,6 +1244,23 @@ pub fn build_xbxengine_stats(
                     frame_unrecoverable_reason: drop.frame_unrecoverable_reason.clone(),
                     frame_budget: frame_budget_dto_from_observation(drop.frame_budget.as_ref())
                         .or_else(|| Some(infer_budget_from_drop(drop))),
+                    replacement_decision: drop.replacement_decision.as_ref().map(|replacement| {
+                        xbxengine_protocol::XbxEngineReplacementDecisionObservationDto {
+                            dropped_frame_seq: replacement.dropped_frame_seq,
+                            dropped_rtp_timestamp: replacement.dropped_rtp_timestamp,
+                            dropped_presentation_value_role: replacement
+                                .dropped_presentation_value_role
+                                .clone(),
+                            kept_frame_seq: replacement.kept_frame_seq,
+                            kept_rtp_timestamp: replacement.kept_rtp_timestamp,
+                            kept_presentation_value_role: replacement
+                                .kept_presentation_value_role
+                                .clone(),
+                            same_recovery_epoch: replacement.same_recovery_epoch,
+                            same_recovery_owner_chain: replacement.same_recovery_owner_chain,
+                            supersede_reason: replacement.supersede_reason.clone(),
+                        }
+                    }),
                     observed_at_ms: drop.observed_at_ms,
                     width: drop.width,
                     height: drop.height,

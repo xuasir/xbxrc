@@ -1,5 +1,7 @@
 use super::super::RtcSessionPolicy;
-use crate::api::backend::XbxEngineMediaRuntimeStats;
+use crate::api::backend::{
+    XbxEngineMediaRuntimeStats, XbxEngineRemoteAnswerObservation, XbxEngineRtcBuilderObservation,
+};
 use crate::api::runtime::XbxEngineRuntimeConfig;
 use crate::transport::rtc::facts::{ConnectionLifecycleStateFact, TransportCommand};
 use crate::transport::rtc::projection::{
@@ -133,6 +135,84 @@ fn cloud_lifecycle_reconnect_interval_is_more_relaxed_than_non_cloud() {
     assert!(cloud_commands[1]
         .iter()
         .all(|command| { !matches!(command, TransportCommand::RequestReconnectCandidate { .. }) }));
+}
+
+#[test]
+fn pre_first_frame_connecting_remote_answer_progress_resets_liveness_timeout() {
+    let runtime_config = Arc::new(Mutex::new(XbxEngineRuntimeConfig::default()));
+    let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
+    if let Ok(mut stats) = runtime_stats.lock() {
+        stats.session_target_type = Some(xbxengine_protocol::XbxEngineTargetTypeDto::Cloud);
+        stats.latest_rtc_builder_observation = Some(XbxEngineRtcBuilderObservation {
+            observation_id: 1,
+            controlled_twcc_registry: true,
+            feedback_interval_ms: 100.0,
+            registered_header_extensions: vec![],
+            registered_rtcp_feedback: vec![],
+            observed_at_ms: 100.0,
+        });
+    }
+    let mut policy = RtcSessionPolicy::new(runtime_config, runtime_stats.clone());
+    let mut connection = ConnectionProjection::default();
+    connection.lifecycle_state = ConnectionLifecycleStateFact::Connecting;
+    let media = MediaProjection::default();
+    let recovery = RecoveryProjection::default();
+
+    let first = TransportSnapshot::new(
+        1,
+        100.0,
+        connection.clone(),
+        media.clone(),
+        recovery.clone(),
+        BweProjection::default(),
+        DiagnosticsProjection::default(),
+    );
+    assert!(
+        transport_commands(policy.on_snapshot(&first)).is_empty(),
+        "初始 connecting 采样只应建立 no-progress 基线"
+    );
+
+    if let Ok(mut stats) = runtime_stats.lock() {
+        stats.latest_remote_answer_observation = Some(XbxEngineRemoteAnswerObservation {
+            observation_id: 9,
+            video_payload_order: vec![124],
+            selected_video_payload_type: Some(124),
+            selected_video_mime_type: Some("video/h264".to_string()),
+            selected_video_profile_level_id: Some("4d002a".to_string()),
+            selected_video_h264_sprop_parameter_sets: None,
+            accepted_video_rtcp_feedback: vec!["transport-cc".to_string(), "nack:pli".to_string()],
+            accepted_audio_rtcp_feedback: vec![],
+            accepted_video_header_extensions: vec![],
+            accepted_audio_header_extensions: vec![],
+            observed_at_ms: 4_700.0,
+        });
+    }
+    let second = TransportSnapshot::new(
+        2,
+        4_700.0,
+        connection.clone(),
+        media.clone(),
+        recovery.clone(),
+        BweProjection::default(),
+        DiagnosticsProjection::default(),
+    );
+    assert!(
+        transport_commands(policy.on_snapshot(&second)).is_empty(),
+        "远端 answer 刚接受时应视为协商进展，继续等待当前 rebuild 完成"
+    );
+
+    let third = TransportSnapshot::new(
+        3,
+        40_000.0,
+        connection,
+        media,
+        recovery,
+        BweProjection::default(),
+        DiagnosticsProjection::default(),
+    );
+    assert!(transport_commands(policy.on_snapshot(&third))
+        .iter()
+        .any(|command| matches!(command, TransportCommand::RequestReconnectCandidate { .. })));
 }
 
 #[test]
@@ -1098,6 +1178,121 @@ fn pre_first_frame_transport_progress_uses_relaxed_liveness_timeout() {
     );
     let third_commands = transport_commands(policy.on_snapshot(&third));
     assert!(third_commands
+        .iter()
+        .any(|command| { matches!(command, TransportCommand::RequestReconnectCandidate { .. }) }));
+}
+
+#[test]
+fn pre_first_frame_ingress_progress_resets_liveness_timer() {
+    let runtime_config = Arc::new(Mutex::new(XbxEngineRuntimeConfig::default()));
+    let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
+    if let Ok(mut stats) = runtime_stats.lock() {
+        stats.session_target_type = Some(xbxengine_protocol::XbxEngineTargetTypeDto::Home);
+        stats.transport_state = xbxengine_protocol::XbxEngineTransportStateDto::Connected;
+        stats.inbound_primary_video_bytes_total = 1_000;
+        stats.latest_video_track_status = Some(crate::XbxEngineVideoTrackStatus {
+            state: "remoteTrackAttached".to_string(),
+            video_width: None,
+            video_height: None,
+            mime_type: Some("video/H264".to_string()),
+            transport_state: xbxengine_protocol::XbxEngineTransportStateDto::Connected,
+            video_bytes_total: 1_000,
+            video_packet_count_total: 8,
+            audio_bytes_total: 0,
+            observed_at_ms: 100.0,
+        });
+    }
+    let mut policy = RtcSessionPolicy::new(runtime_config, runtime_stats.clone());
+    let mut connection = ConnectionProjection::default();
+    connection.lifecycle_state = ConnectionLifecycleStateFact::Recovering;
+    connection.latest_transport_path = Some("relay/udp".to_string());
+    connection.latest_rtt_ms = Some(18.0);
+    let media = MediaProjection {
+        frame_count: 0,
+        ..MediaProjection::default()
+    };
+    let recovery = RecoveryProjection {
+        latest_diagnosis_label: Some("none".to_string()),
+        pending_action: false,
+        successful_action_count: 0,
+        failed_action_count: 0,
+        last_observed_at_ms: Some(100.0),
+        ..Default::default()
+    };
+
+    let first = TransportSnapshot::new(
+        1,
+        100.0,
+        connection.clone(),
+        media.clone(),
+        recovery.clone(),
+        BweProjection::default(),
+        DiagnosticsProjection::default(),
+    );
+    let _ = transport_commands(policy.on_snapshot(&first));
+
+    if let Ok(mut stats) = runtime_stats.lock() {
+        stats.inbound_primary_video_bytes_total = 2_000;
+        if let Some(track) = stats.latest_video_track_status.as_mut() {
+            track.video_bytes_total = 2_000;
+            track.video_packet_count_total = 16;
+            track.observed_at_ms = 10_000.0;
+        }
+    }
+    let second = TransportSnapshot::new(
+        2,
+        10_000.0,
+        connection.clone(),
+        media.clone(),
+        RecoveryProjection {
+            last_observed_at_ms: Some(10_000.0),
+            ..recovery.clone()
+        },
+        BweProjection::default(),
+        DiagnosticsProjection::default(),
+    );
+    let second_commands = transport_commands(policy.on_snapshot(&second));
+    assert!(
+        second_commands.iter().all(|command| {
+            !matches!(command, TransportCommand::RequestReconnectCandidate { .. })
+        }),
+        "首帧前 RTP/track 仍在推进时，liveness 计时应被重置"
+    );
+
+    let third = TransportSnapshot::new(
+        3,
+        24_000.0,
+        connection.clone(),
+        media.clone(),
+        RecoveryProjection {
+            last_observed_at_ms: Some(24_000.0),
+            ..recovery.clone()
+        },
+        BweProjection::default(),
+        DiagnosticsProjection::default(),
+    );
+    let third_commands = transport_commands(policy.on_snapshot(&third));
+    assert!(
+        third_commands.iter().all(|command| {
+            !matches!(command, TransportCommand::RequestReconnectCandidate { .. })
+        }),
+        "距最近 ingress 进展未超过首帧前 fallback 窗口时，不应触发 reconnect"
+    );
+
+    let fourth = TransportSnapshot::new(
+        4,
+        25_100.0,
+        connection,
+        media,
+        RecoveryProjection {
+            last_observed_at_ms: Some(25_100.0),
+            ..recovery
+        },
+        BweProjection::default(),
+        DiagnosticsProjection::default(),
+    );
+    let fourth_commands = transport_commands(policy.on_snapshot(&fourth));
+    assert!(fourth_commands
         .iter()
         .any(|command| { matches!(command, TransportCommand::RequestReconnectCandidate { .. }) }));
 }

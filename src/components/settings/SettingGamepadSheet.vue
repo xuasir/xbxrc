@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import SettingModalShell from './SettingModalShell.vue'
 import SettingGamepadSection from '../../pages/settings/SettingGamepadSection.vue'
+import SettingModalShell from './SettingModalShell.vue'
 
 interface Props {
   open: boolean
@@ -47,4 +47,3 @@ function handleClose(): void {
   margin-right: -6px;
 }
 </style>
-

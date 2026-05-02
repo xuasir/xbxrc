@@ -701,7 +701,6 @@ onUnmounted(() => {
       @close="activeSingleSelectRow = null"
       @select="(value) => void handleSingleSelectPopup(value)"
     />
-
   </section>
 </template>
 

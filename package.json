@@ -8,6 +8,7 @@
     "build": "vite build",
     "test": "vitest run",
     "preview": "vite preview",
+    "lint:fix": "eslint src --fix",
     "skills:verify": "node scripts/sync-skills.mjs verify",
     "skills:lock": "node scripts/sync-skills.mjs lock",
     "skills:sync": "node scripts/sync-skills.mjs sync",

@@ -23,8 +23,8 @@ fn playback_phase_int01_no_first_present_must_not_promote_stable_serving() {
             stats.host_no_pending_pressure_level = Some("critical".to_string());
             stats.host_no_pending_streak = 6;
             stats.host_display_tick_epoch = 6;
-            stats.video_present_epoch = 0;
-            stats.video_present_submit_count_total = 0;
+            stats.host_frame_present_epoch = 0;
+            stats.host_mailbox_enqueue_count_total = 0;
             stats.host_cadence_phase = Some("priming".to_string());
             stats.latest_video_host_present_time_ms = None;
             stats.latest_video_decode_ok_time_ms = None;
@@ -99,6 +99,7 @@ fn playback_phase_int02_decode_overflow_with_fresh_present_must_not_emit_reconne
                 frame_recovery_disposition: None,
                 frame_unrecoverable_reason: None,
                 frame_budget: None,
+                replacement_decision: None,
                 observed_at_ms: t - 6.0,
                 width: 1920,
                 height: 1080,

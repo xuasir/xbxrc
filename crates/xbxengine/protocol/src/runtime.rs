@@ -170,6 +170,28 @@ pub struct XbxEngineFrameBudgetDto {
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct XbxEngineReplacementDecisionObservationDto {
+    #[serde(default)]
+    pub dropped_frame_seq: Option<u64>,
+    #[serde(default)]
+    pub dropped_rtp_timestamp: Option<u32>,
+    #[serde(default)]
+    pub dropped_presentation_value_role: Option<String>,
+    #[serde(default)]
+    pub kept_frame_seq: Option<u64>,
+    #[serde(default)]
+    pub kept_rtp_timestamp: Option<u32>,
+    #[serde(default)]
+    pub kept_presentation_value_role: Option<String>,
+    #[serde(default)]
+    pub same_recovery_epoch: Option<bool>,
+    #[serde(default)]
+    pub same_recovery_owner_chain: Option<bool>,
+    #[serde(default)]
+    pub supersede_reason: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct XbxEngineFrameDropObservationDto {
     pub observation_id: u64,
     pub reason: String,
@@ -181,6 +203,8 @@ pub struct XbxEngineFrameDropObservationDto {
     pub frame_recovery_disposition: Option<String>,
     pub frame_unrecoverable_reason: Option<String>,
     pub frame_budget: Option<XbxEngineFrameBudgetDto>,
+    #[serde(default)]
+    pub replacement_decision: Option<XbxEngineReplacementDecisionObservationDto>,
     pub observed_at_ms: f64,
     pub width: u32,
     pub height: u32,
@@ -195,6 +219,8 @@ pub struct XbxEnginePipelineCandidateDecisionObservationDto {
     pub action: String,
     pub detail: String,
     pub frame_seq: Option<u64>,
+    #[serde(default)]
+    pub replacement_decision: Option<XbxEngineReplacementDecisionObservationDto>,
     pub observed_at_ms: f64,
 }
 
@@ -274,7 +300,7 @@ pub struct XbxEngineFrameRecoveryObservationDto {
     pub action: String,
     pub frame_rtp_timestamp: u32,
     pub frame_playout_deadline_at_ms: Option<f64>,
-    pub frame_recovery_disposition: String,
+    pub frame_recovery_disposition: Option<String>,
     pub frame_unrecoverable_reason: Option<String>,
     pub frame_budget: Option<XbxEngineFrameBudgetDto>,
     pub observed_at_ms: f64,
@@ -585,6 +611,8 @@ pub struct XbxEngineH264InspectionObservationDto {
     pub sample_height: Option<u32>,
     pub bootstrap_ready: bool,
     pub bootstrap_reject_reason: Option<String>,
+    #[serde(default)]
+    pub continuation_verdict: Option<String>,
     pub admission_accepted: bool,
     pub observed_at_ms: f64,
     /// 生成观测时绑定的 keyframe episode（避免 trace 层二次推断失真）。
@@ -702,6 +730,12 @@ pub struct XbxEngineStatsDto {
     /// 与 `recovery_rfc_authoritative_ceiling` 同源。
     #[serde(default)]
     pub recovery_rfc_ceiling: Option<String>,
+    #[serde(default)]
+    pub recovery_playback_recovered_at_ms: Option<f64>,
+    #[serde(default)]
+    pub recovery_playback_recovered_phase: Option<String>,
+    #[serde(default)]
+    pub recovery_fresh_anchor_recovered_at_ms: Option<f64>,
     pub direct_gaming_bitrate_band: Option<String>,
     pub recovery_owner_state: Option<String>,
     pub recovery_owner_reason: Option<String>,
@@ -749,6 +783,8 @@ pub struct XbxEngineStatsDto {
     pub inbound_video_bytes_total: Option<u64>,
     pub inbound_audio_bytes_total: Option<u64>,
     pub inbound_video_packet_count_total: Option<u64>,
+    #[serde(default)]
+    pub latest_video_packet_arrival_rtp_timestamp: Option<u32>,
     pub latest_video_track_status: Option<XbxEngineVideoTrackStatusDto>,
     pub video_decoder_reset_count: Option<u64>,
     pub video_decoder_stalled: Option<bool>,
@@ -766,6 +802,8 @@ pub struct XbxEngineStatsDto {
     pub video_decoder_recovery_status: Option<i32>,
     pub video_decoder_recovery_state_changed_at_ms: Option<f64>,
     #[serde(default)]
+    pub latest_video_decode_ok_rtp_timestamp: Option<u32>,
+    #[serde(default)]
     pub video_renderer_stalled: Option<bool>,
     #[serde(default)]
     pub video_renderer_stall_blocks_presentation: Option<bool>,
@@ -781,16 +819,33 @@ pub struct XbxEngineStatsDto {
     pub video_pacer_drop_count_total: Option<u64>,
     pub video_renderer_submit_count_total: Option<u64>,
     pub video_renderer_drop_count_total: Option<u64>,
-    pub video_present_drop_count_total: Option<u64>,
-    pub video_present_overwrite_count_total: Option<u64>,
-    pub video_present_submit_count_total: Option<u64>,
+    pub host_mailbox_drop_count_total: Option<u64>,
+    pub host_mailbox_overwrite_count_total: Option<u64>,
+    pub host_mailbox_enqueue_count_total: Option<u64>,
     pub host_no_pending_take_count_total: Option<u64>,
     pub host_no_pending_streak: Option<u32>,
     pub host_no_pending_max_streak: Option<u32>,
     pub host_no_pending_pressure_level: Option<String>,
+    #[serde(default)]
+    pub host_mailbox_submit_epoch: Option<u64>,
     pub host_display_tick_epoch: Option<u64>,
-    pub video_present_epoch: Option<u64>,
+    #[serde(default)]
+    pub host_frame_present_epoch: Option<u64>,
     pub host_cadence_phase: Option<String>,
+    #[serde(default)]
+    pub latest_host_mailbox_submit_time_ms: Option<f64>,
+    #[serde(default)]
+    pub latest_video_host_submit_rtp_timestamp: Option<u32>,
+    #[serde(default)]
+    pub latest_video_host_present_time_ms: Option<f64>,
+    #[serde(default)]
+    pub submit_age_ms: Option<f64>,
+    #[serde(default)]
+    pub display_age_ms: Option<f64>,
+    #[serde(default)]
+    pub host_view_generation: Option<u64>,
+    #[serde(default)]
+    pub latest_host_view_created_at_ms: Option<f64>,
     #[serde(default)]
     pub last_displayed_frame_seq: Option<u64>,
     #[serde(default)]
@@ -800,6 +855,14 @@ pub struct XbxEngineStatsDto {
     pub video_present_descriptor_upload_mode: Option<String>,
     pub video_present_descriptor_metal_import_count_total: Option<u64>,
     pub video_present_descriptor_cpu_upload_count_total: Option<u64>,
+    #[serde(default)]
+    pub latest_feedback_target_availability_state: Option<String>,
+    #[serde(default)]
+    pub latest_feedback_target_availability_reason: Option<String>,
+    #[serde(default)]
+    pub latest_feedback_target_availability_target: Option<String>,
+    #[serde(default)]
+    pub latest_feedback_target_availability_observed_at_ms: Option<f64>,
     #[serde(default)]
     pub latest_video_rtcp_send_failure_time_ms: Option<f64>,
     #[serde(default)]
@@ -835,9 +898,9 @@ pub struct XbxEngineStatsDto {
     /// runtime 侧连续未取到 render 帧的 tick 计数。
     #[serde(default)]
     pub host_present_take_empty_streak: Option<u32>,
-    /// 最近一次成功从 render slot 取到帧的时间（ms）。
+    /// 最近一次成功从 render mailbox 取到帧并提交给 host 的时间（ms）。
     #[serde(default)]
-    pub host_present_latest_render_slot_at_ms: Option<f64>,
+    pub host_mailbox_latest_submit_at_ms: Option<f64>,
     /// ICE candidate policy 观测（与 webrtc_direct 对齐）
     #[serde(default)]
     pub ice_policy_mode: Option<String>,
@@ -852,7 +915,7 @@ pub struct XbxEngineStatsDto {
     #[serde(default)]
     pub ice_policy_skipped_by_family_mismatch_count: Option<u32>,
     pub latest_decode_candidate_decision: Option<XbxEnginePipelineCandidateDecisionObservationDto>,
-    pub latest_render_candidate_decision: Option<XbxEnginePipelineCandidateDecisionObservationDto>,
+    pub latest_render_mailbox_decision: Option<XbxEnginePipelineCandidateDecisionObservationDto>,
     pub latest_video_packet_gap: Option<XbxEnginePacketGapObservationDto>,
     pub latest_video_frame_drop: Option<XbxEngineFrameDropObservationDto>,
     pub latest_video_frame_recovery_observation: Option<XbxEngineFrameRecoveryObservationDto>,

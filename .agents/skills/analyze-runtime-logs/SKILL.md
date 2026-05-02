@@ -37,6 +37,12 @@ Use this skill for `runtime-logs/runtime-trace-*.jsonl` analysis in this reposit
    - `recovery_audit.nackEffectiveness.effectiveRate`
    - `recovery_audit.repairabilityPersistence`
    - `recovery_audit.recoveryEffectiveness`
+16. Read post-decode scheduling with fixed ownership:
+   - `pacer*`: decode 后唯一主决策层
+   - `renderMailbox*`: render latest-slot 的单槽交接 / overwrite 执行态
+   - `hostMailbox*`: host pending/displayed mailbox 与上屏执行态
+17. Do not read `renderMailboxStateTransition` or `renderMailboxDecision` as a second value-comparator.
+    They report mailbox overwrite / recovery telemetry after `pacer` has already chosen the frame.
 
 ## Follow This Workflow
 

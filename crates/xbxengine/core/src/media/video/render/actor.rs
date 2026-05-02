@@ -50,7 +50,7 @@ fn run_renderer_loop(
     runtime_stats: RuntimeStatsSink,
 ) {
     let mut frame_drop_observation_id = 0u64;
-    let mut render_candidate_decision_id = 0u64;
+    let mut render_mailbox_decision_id = 0u64;
 
     while let Ok(msg) = rx.recv() {
         match msg {
@@ -111,10 +111,10 @@ fn run_renderer_loop(
                         });
                         if outcome.overwritten_pending_frame {
                             log_renderer_flow(
-                                "latestSlotOverwrite",
+                                "mailboxOverwrite",
                                 &flow_frame,
                                 &flow_context,
-                                Some("latestSlotOverwrite"),
+                                Some("mailboxOverwrite"),
                                 outcome.overwritten_frame_seq,
                                 true,
                             );
@@ -123,7 +123,7 @@ fn run_renderer_loop(
                                 &mut frame_drop_observation_id,
                                 "render",
                                 "replace",
-                                Some("latestSlotOverwrite"),
+                                Some("mailboxOverwrite"),
                                 present_observed_at_ms,
                                 outcome.overwritten_frame_width.unwrap_or(present_width),
                                 outcome.overwritten_frame_height.unwrap_or(present_height),
@@ -133,17 +133,20 @@ fn run_renderer_loop(
                                 outcome.overwritten_frame_seq,
                                 None,
                                 None,
+                                state
+                                    .latest_render_mailbox_decision()
+                                    .and_then(|decision| decision.replacement_decision.clone()),
                             );
                         }
-                        if let Some(decision) = state.latest_render_candidate_decision() {
-                            if decision.detail == "latestSlotRecovered"
+                        if let Some(decision) = state.latest_render_mailbox_decision() {
+                            if decision.detail == "mailboxRecovered"
                                 && decision.frame_seq == Some(present_frame_seq)
                             {
                                 log_renderer_flow(
-                                    "latestSlotRecovered",
+                                    "mailboxRecovered",
                                     &flow_frame,
                                     &flow_context,
-                                    Some("latestSlotRecovered"),
+                                    Some("mailboxRecovered"),
                                     None,
                                     false,
                                 );
@@ -178,26 +181,27 @@ fn run_renderer_loop(
                             Some(present_frame_seq),
                             None,
                             None,
+                            None,
                         );
                         crate::xbx_log_error!("[XbxRendererActor] present_frame error: {:?}", e);
                     }
                 }
-                if let Some(decision) = state.latest_render_candidate_decision() {
-                    if decision.decision_id != render_candidate_decision_id {
-                        render_candidate_decision_id = decision.decision_id;
+                if let Some(decision) = state.latest_render_mailbox_decision() {
+                    if decision.decision_id != render_mailbox_decision_id {
+                        render_mailbox_decision_id = decision.decision_id;
                         runtime_stats.update(|stats| {
-                            stats.latest_render_candidate_decision = Some(
+                            stats.latest_render_mailbox_decision = Some(
                                 crate::api::backend::XbxEnginePipelineCandidateDecisionObservation {
                                     decision_id: decision.decision_id,
                                     state: decision.state.as_str().to_string(),
                                     action: decision.action.to_string(),
-                                    detail: decision.detail.to_string(),
-                                    frame_seq: decision.frame_seq,
-                                    observed_at_ms: decision.observed_at_ms,
-                                },
-                            );
-                            stats.latest_observation_label =
-                                Some("renderCandidateState".to_string());
+                                detail: decision.detail.to_string(),
+                                frame_seq: decision.frame_seq,
+                                replacement_decision: decision.replacement_decision.clone(),
+                                observed_at_ms: decision.observed_at_ms,
+                            },
+                        );
+                            stats.latest_observation_label = Some("renderMailboxState".to_string());
                             stats.latest_observation_summary = Some(format!(
                                 "{}:{}:{}:seq={}",
                                 decision.state.as_str(),
@@ -229,7 +233,7 @@ fn read_renderer_flow_context(runtime_stats: &RuntimeStatsSink) -> RendererFlowC
     runtime_stats
         .read(|stats| RendererFlowContext {
             host_tick_epoch: stats.host_display_tick_epoch,
-            present_epoch: stats.video_present_epoch,
+            present_epoch: stats.host_frame_present_epoch,
         })
         .unwrap_or_default()
 }
@@ -243,7 +247,7 @@ fn log_renderer_flow(
     overwritten_pending_frame: bool,
 ) {
     crate::xbx_log_warn!(
-        "[playback-flow][renderer] event={} reason={} frameSeq={} rtpTimestamp={} isKeyframe={} observedAtMs={} overwrittenPendingFrame={} overwrittenFrameSeq={} hostTickEpoch={} presentEpoch={}",
+        "[playback-flow][renderer] event={} reason={} frameSeq={} rtpTimestamp={} isKeyframe={} observedAtMs={} overwrittenPendingFrame={} overwrittenFrameSeq={} hostTickEpoch={} hostFramePresentEpoch={}",
         event,
         reason.unwrap_or("-"),
         frame.surface.frame_seq,
@@ -279,8 +283,11 @@ mod tests {
         DecodedFrame {
             pts: Instant::now(),
             rtp_timestamp: frame_seq as u32,
+            recovery_epoch_tag: None,
+            recovery_owner_rtp_timestamp: None,
             is_keyframe: frame_seq == 1,
             clean_anchor_commit_recovery_epoch: None,
+            presentation_value_role: None,
             budget: crate::media::video::ingress::budget::FrameBudgetContext::default(),
             frame_recovery_disposition: FrameRecoveryDisposition::Repairing,
             frame_unrecoverable_reason: None,
@@ -290,14 +297,29 @@ mod tests {
                 frame_seq,
                 rendered_at_ms: frame_seq as f64,
                 rtp_timestamp: Some(frame_seq as u32),
+                recovery_epoch_tag: None,
+                recovery_owner_rtp_timestamp: None,
                 is_keyframe: frame_seq == 1,
                 frame_recovery_disposition: Some("repairing".to_string()),
                 frame_unrecoverable_reason: None,
+                presentation_value_role: None,
                 pixel_data: XbxEngineRenderPixelData::Rgba {
                     bytes: Arc::<[u8]>::from(bytes),
                 },
             },
         }
+    }
+
+    fn make_decoded_frame_with_epoch(
+        frame_seq: u64,
+        width: u32,
+        height: u32,
+        recovery_epoch_tag: Option<u64>,
+    ) -> DecodedFrame {
+        let mut frame = make_decoded_frame(frame_seq, width, height);
+        frame.recovery_epoch_tag = recovery_epoch_tag;
+        frame.surface.recovery_epoch_tag = recovery_epoch_tag;
+        frame
     }
 
     #[test]
@@ -307,9 +329,9 @@ mod tests {
         let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
         let runtime_stats_sink = RuntimeStatsSink::new(runtime_stats.clone());
 
-        tx.send(RendererMsg::Frame(make_decoded_frame(1, 2, 2)))
-            .expect("first frame");
         tx.send(RendererMsg::Frame(make_decoded_frame(2, 2, 2)))
+            .expect("first frame");
+        tx.send(RendererMsg::Frame(make_decoded_frame(3, 2, 2)))
             .expect("second frame");
         tx.send(RendererMsg::Stop).expect("stop");
 
@@ -320,7 +342,7 @@ mod tests {
         assert!(
             matches!(
                 stats.latest_observation_label.as_deref(),
-                Some("renderCandidateState" | "rendererFrameAccepted")
+                Some("renderMailboxState" | "rendererFrameAccepted")
             ),
             "unexpected latest observation label: {:?}",
             stats.latest_observation_label
@@ -330,18 +352,20 @@ mod tests {
             .clone()
             .expect("render summary");
         assert!(
-            summary.contains("latest-overwrite:replace:latestSlotOverwrite:seq=1")
-                || summary.contains("frameSeq=2"),
+            summary.contains("latest-overwrite:replace:mailboxOverwrite:seq=1")
+                || summary.contains("frameSeq=2")
+                || summary.contains("latest-overwrite:replace:mailboxOverwrite:seq=2")
+                || summary.contains("frameSeq=3"),
             "unexpected render summary: {summary}"
         );
         let decision = stats
-            .latest_render_candidate_decision
+            .latest_render_mailbox_decision
             .clone()
             .expect("latest render decision");
         assert_eq!(decision.state, "latest-overwrite");
         assert_eq!(decision.action, "replace");
-        assert_eq!(decision.detail, "latestSlotOverwrite");
-        assert_eq!(decision.frame_seq, Some(1));
+        assert_eq!(decision.detail, "mailboxOverwrite");
+        assert_eq!(decision.frame_seq, Some(2));
     }
 
     #[test]
@@ -363,5 +387,43 @@ mod tests {
         let stats = runtime_stats.lock().expect("runtime stats lock");
         assert_eq!(stats.video_renderer_submit_count_total, 1);
         assert_eq!(stats.video_renderer_drop_count_total, 1);
+    }
+
+    #[test]
+    fn renderer_actor_overwrites_pending_frame_without_rejecting_lower_epoch_submit() {
+        let (tx, rx) = mpsc::sync_channel(3);
+        let render_state = Arc::new(Mutex::new(XbxRenderState::default()));
+        let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
+        let runtime_stats_sink = RuntimeStatsSink::new(runtime_stats.clone());
+
+        tx.send(RendererMsg::Frame(make_decoded_frame_with_epoch(
+            200,
+            2,
+            2,
+            Some(4),
+        )))
+        .expect("higher epoch frame");
+        tx.send(RendererMsg::Frame(make_decoded_frame_with_epoch(
+            150,
+            2,
+            2,
+            Some(3),
+        )))
+        .expect("lower epoch frame");
+        tx.send(RendererMsg::Stop).expect("stop");
+
+        run_renderer_loop(rx, render_state.clone(), runtime_stats_sink);
+
+        let stats = runtime_stats.lock().expect("runtime stats lock");
+        assert_eq!(stats.video_renderer_submit_count_total, 2);
+        assert_eq!(stats.video_renderer_drop_count_total, 0);
+        let decision = stats
+            .latest_render_mailbox_decision
+            .as_ref()
+            .expect("latest render decision");
+        assert_eq!(decision.state, "latest-overwrite");
+        assert_eq!(decision.action, "replace");
+        assert_eq!(decision.detail, "mailboxOverwrite");
+        assert_eq!(decision.frame_seq, Some(200));
     }
 }

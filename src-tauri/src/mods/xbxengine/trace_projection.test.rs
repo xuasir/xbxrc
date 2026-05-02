@@ -505,8 +505,11 @@ fn record_runtime_trace_observations_uses_twcc_event_name_by_source() {
         })),
     );
 
-    let contents =
-        fs::read_to_string(recorder.path().expect("trace path")).expect("trace contents");
+    let contents = read_trace_lines(recorder.as_ref())
+        .into_iter()
+        .map(|entry| entry.to_string())
+        .collect::<Vec<_>>()
+        .join("\n");
     assert!(contents.contains("\"event\":\"twccFeedbackSent\""));
     assert!(contents.contains("\"event\":\"twccFeedbackObserved\""));
 }
@@ -541,8 +544,11 @@ fn record_runtime_trace_observations_projects_remote_answer_acceptance() {
     }));
     record_runtime_trace_observations(&recorder, &mut state, Some("session-1"), &stats);
 
-    let contents =
-        fs::read_to_string(recorder.path().expect("trace path")).expect("trace contents");
+    let contents = read_trace_lines(recorder.as_ref())
+        .into_iter()
+        .map(|entry| entry.to_string())
+        .collect::<Vec<_>>()
+        .join("\n");
     assert!(contents.contains("\"event\":\"remoteAnswerAccepted\""));
     assert!(contents.contains("\"selectedVideoProfileLevelId\":\"4d002a\""));
     assert!(contents.contains("\"googRembAccepted\":true"));
@@ -671,8 +677,11 @@ fn record_runtime_trace_observations_projects_keyframe_episode_lifecycle() {
         ),
     );
 
-    let contents =
-        fs::read_to_string(recorder.path().expect("trace path")).expect("trace contents");
+    let contents = read_trace_lines(recorder.as_ref())
+        .into_iter()
+        .map(|entry| entry.to_string())
+        .collect::<Vec<_>>()
+        .join("\n");
     assert!(contents.contains("\"event\":\"keyframeRequestEpisode\""));
     assert!(contents.contains("\"status\":\"requested\""));
     assert!(contents.contains("\"event\":\"keyframeRequestEpisodeRequested\""));
@@ -1129,6 +1138,62 @@ fn record_runtime_trace_observations_keeps_bootstrap_gap_delta_slice_as_observed
 }
 
 #[test]
+fn h264_inspection_observed_projects_post_recovery_degradation_flag() {
+    let recorder = std::sync::Arc::new(
+        RuntimeTraceRecorder::new_with_mode("verbose").expect("trace recorder"),
+    );
+    let mut state = RuntimeTraceObservationState::default();
+    let stats = test_stats(json!({
+        "resolution": "",
+        "rtt": "",
+        "fps": 0.0,
+        "pl": "0.00%",
+        "fl": "",
+        "jit": "",
+        "br": "",
+        "decode": "",
+        "latest_h264_inspection_observation": {
+            "observation_id": 7,
+            "frame_rtp_timestamp": 888,
+            "nal_types": [],
+            "nal_count": 0,
+            "vcl_nal_count": 0,
+            "has_inband_sps": false,
+            "has_inband_pps": false,
+            "committed_sps_present": true,
+            "committed_pps_present": true,
+            "slice_headers_valid": true,
+            "delta_continuation_ready": true,
+            "parameter_sets_changed": false,
+            "config_changed": false,
+            "is_idr": false,
+            "bootstrap_ready": false,
+            "bootstrap_reject_reason": "bootstrapMissingIdr",
+            "continuation_verdict": "continuationAcceptedWhileAwaitingIdr",
+            "admission_accepted": true,
+            "observed_at_ms": 200.0,
+            "bound_episode_id": 43,
+            "bound_episode_status": "decoded",
+            "bound_as_recovery_response": true,
+            "bound_response_rtp_timestamp": 888,
+            "bound_recovery_epoch": 1,
+            "episode_phase_at_observation": "decoded",
+            "is_post_recovery_degradation": true,
+            "reject_classification": "continuationAcceptedWhileAwaitingIdr"
+        }
+    }));
+
+    record_runtime_trace_observations(&recorder, &mut state, Some("session-1"), &stats);
+    let entries = read_trace_lines(recorder.as_ref());
+    let payload = find_event_payload(&entries, "h264InspectionObserved");
+    assert_eq!(payload["isPostRecoveryDegradation"], true);
+    assert_eq!(
+        payload["rejectClassification"],
+        "continuationAcceptedWhileAwaitingIdr"
+    );
+}
+
+#[test]
 fn record_runtime_trace_observations_emits_recovery_collection_events() {
     let recorder = std::sync::Arc::new(
         RuntimeTraceRecorder::new_with_mode("verbose").expect("trace recorder"),
@@ -1525,8 +1590,11 @@ fn bwe_updated_event_uses_top_level_actual_video_bitrate() {
 
     record_runtime_trace_observations(&recorder, &mut state, Some("session-1"), &stats);
 
-    let contents =
-        fs::read_to_string(recorder.path().expect("trace path")).expect("trace contents");
+    let contents = read_trace_lines(recorder.as_ref())
+        .into_iter()
+        .map(|entry| entry.to_string())
+        .collect::<Vec<_>>()
+        .join("\n");
     assert!(contents.contains("\"event\":\"bweUpdated\""));
     assert!(contents.contains("\"actualVideoBitrateKbps\":1019.4"));
     assert!(!contents.contains("\"actualVideoBitrateKbps\":0.0"));
@@ -1560,13 +1628,53 @@ fn frame_recovery_observation_projects_ledger_events() {
 
     record_runtime_trace_observations(&recorder, &mut state, Some("session-1"), &stats);
 
-    let contents =
-        fs::read_to_string(recorder.path().expect("trace path")).expect("trace contents");
+    let contents = read_trace_lines(recorder.as_ref())
+        .into_iter()
+        .map(|entry| entry.to_string())
+        .collect::<Vec<_>>()
+        .join("\n");
     assert!(contents.contains("\"event\":\"frameRecoveryObserved\""));
     assert!(contents.contains("\"action\":\"ledgerWrite\""));
     assert!(contents.contains("\"frameRtpTimestamp\":123456789"));
     assert!(contents.contains("\"frameRecoveryDisposition\":\"unrecoverable-reference-chain\""));
     assert!(contents.contains("\"frameUnrecoverableReason\":\"referenceChainUnrecoverable\""));
+}
+
+#[test]
+fn steady_frame_recovery_observation_projects_null_disposition() {
+    let recorder = std::sync::Arc::new(
+        RuntimeTraceRecorder::new_with_mode("verbose").expect("trace recorder"),
+    );
+    let mut state = RuntimeTraceObservationState::default();
+    let stats = test_stats(json!({
+        "resolution": "",
+        "rtt": "",
+        "fps": 0.0,
+        "pl": "0.00%",
+        "fl": "",
+        "jit": "",
+        "br": "",
+        "decode": "",
+        "latest_video_frame_recovery_observation": {
+            "observation_id": 78,
+            "action": "ledgerWrite",
+            "frame_rtp_timestamp": 123456790,
+            "frame_playout_deadline_at_ms": null,
+            "frame_recovery_disposition": null,
+            "frame_unrecoverable_reason": null,
+            "observed_at_ms": 1235.0
+        }
+    }));
+
+    record_runtime_trace_observations(&recorder, &mut state, Some("session-1"), &stats);
+
+    let contents = read_trace_lines(recorder.as_ref())
+        .into_iter()
+        .map(|entry| entry.to_string())
+        .collect::<Vec<_>>()
+        .join("\n");
+    assert!(contents.contains("\"event\":\"frameRecoveryObserved\""));
+    assert!(contents.contains("\"frameRecoveryDisposition\":null"));
 }
 
 #[test]
@@ -1879,10 +1987,10 @@ fn clean_anchor_funnel_projects_ingress_blocked_and_submitted_events() {
 
     let entries = read_trace_lines(recorder.as_ref());
 
-    let ingress_payload = find_event_payload(&entries, "cleanAnchorIngressObserved");
-    assert_eq!(ingress_payload["frameRtpTimestamp"], 4001);
-    assert_eq!(ingress_payload["chainState"], "recovering");
-    assert_eq!(ingress_payload["recoveryEpoch"], 12);
+    let candidate_payload = find_event_payload(&entries, "cleanAnchorCompleteCandidateObserved");
+    assert_eq!(candidate_payload["frameRtpTimestamp"], 4001);
+    assert_eq!(candidate_payload["chainState"], "recovering");
+    assert_eq!(candidate_payload["recoveryEpoch"], 12);
 
     let blocked_payload = find_event_payload(&entries, "cleanAnchorCompleteCandidateBlocked");
     assert_eq!(blocked_payload["frameRtpTimestamp"], 4002);
@@ -2240,7 +2348,7 @@ fn frame_drop_render_stage_projects_render_candidate_decision() {
             "observation_id": 502,
             "stage": "render",
             "action": "replace",
-            "detail": "latestSlotOverwrite",
+            "detail": "mailboxOverwrite",
             "reason": "dropBackpressure",
             "observed_at_ms": 1002.0,
             "width": 1280,
@@ -2257,9 +2365,9 @@ fn frame_drop_render_stage_projects_render_candidate_decision() {
     record_runtime_trace_observations(&recorder, &mut state, Some("session-1"), &stats);
     let entries = read_trace_lines(recorder.as_ref());
     assert!(entries.iter().any(|entry| entry["event"] == "frameDropped"));
-    let payload = find_event_payload(&entries, "renderCandidateDecision");
+    let payload = find_event_payload(&entries, "renderMailboxDecision");
     assert_eq!(payload["stage"], "render");
-    assert_eq!(payload["detail"], "latestSlotOverwrite");
+    assert_eq!(payload["detail"], "mailboxOverwrite");
     assert_eq!(payload["reason"], "dropBackpressure");
 }
 
@@ -2304,7 +2412,7 @@ fn frame_drop_unknown_stage_does_not_project_candidate_decision() {
         .all(|entry| entry["event"] != "decodeCandidateDecision"));
     assert!(entries
         .iter()
-        .all(|entry| entry["event"] != "renderCandidateDecision"));
+        .all(|entry| entry["event"] != "renderMailboxDecision"));
 }
 
 #[test]
@@ -2360,6 +2468,252 @@ fn decoder_local_reset_failed_projects_runtime_trace_event() {
     let entries = read_trace_lines(recorder.as_ref());
     let payload = find_event_payload(&entries, "videoDecoderLocalResetFailed");
     assert_eq!(payload["summary"], "reason=stall err=backend unavailable");
+}
+
+#[test]
+fn feedback_target_availability_changed_projects_runtime_trace_event() {
+    let recorder = std::sync::Arc::new(
+        RuntimeTraceRecorder::new_with_mode("verbose").expect("trace recorder"),
+    );
+    let mut state = RuntimeTraceObservationState::default();
+    let stats = test_stats(json!({
+        "resolution": "",
+        "rtt": "",
+        "fps": 0.0,
+        "pl": "0.00%",
+        "fl": "",
+        "jit": "",
+        "br": "",
+        "decode": "",
+        "latest_observation_label": "rtcReadIngressObserved",
+        "latest_observation_summary": "phase1 rtc read ingress rtp=0 rtcp=0 dc=0 lastDc=none",
+        "latest_feedback_target_availability_target": "videoRtcpFeedback",
+        "latest_feedback_target_availability_state": "unbound",
+        "latest_feedback_target_availability_reason": "videoRtcpFeedbackTargetPending",
+        "latest_feedback_target_availability_observed_at_ms": 12.5
+    }));
+
+    record_runtime_trace_observations(&recorder, &mut state, Some("session-1"), &stats);
+    let entries = read_trace_lines(recorder.as_ref());
+    let payload = find_event_payload(&entries, "feedbackTargetAvailabilityChanged");
+    assert_eq!(payload["target"], "videoRtcpFeedback");
+    assert_eq!(payload["state"], "unbound");
+    assert_eq!(payload["reason"], "videoRtcpFeedbackTargetPending");
+    assert_eq!(payload["observedAtMs"], 12.5);
+    assert_eq!(
+        payload["summary"],
+        "target=videoRtcpFeedback state=unbound reason=videoRtcpFeedbackTargetPending"
+    );
+}
+
+#[test]
+fn feedback_transport_not_ready_projects_runtime_trace_event() {
+    let recorder = std::sync::Arc::new(
+        RuntimeTraceRecorder::new_with_mode("verbose").expect("trace recorder"),
+    );
+    let mut state = RuntimeTraceObservationState::default();
+    let stats = test_stats(json!({
+        "resolution": "",
+        "rtt": "",
+        "fps": 0.0,
+        "pl": "0.00%",
+        "fl": "",
+        "jit": "",
+        "br": "",
+        "decode": "",
+        "latest_observation_label": "rtcReadIngressObserved",
+        "latest_observation_summary": "phase1 rtc read ingress rtp=0 rtcp=0 dc=0 lastDc=none",
+        "latest_feedback_target_availability_target": "videoRtcpFeedback",
+        "latest_feedback_target_availability_state": "unbound",
+        "latest_feedback_target_availability_reason": "videoRtcpFeedbackTransportNotReady",
+        "latest_feedback_target_availability_observed_at_ms": 12.5
+    }));
+
+    record_runtime_trace_observations(&recorder, &mut state, Some("session-1"), &stats);
+    let entries = read_trace_lines(recorder.as_ref());
+    let payload = find_event_payload(&entries, "feedbackTargetAvailabilityChanged");
+    assert_eq!(payload["target"], "videoRtcpFeedback");
+    assert_eq!(payload["state"], "unbound");
+    assert_eq!(payload["reason"], "videoRtcpFeedbackTransportNotReady");
+    assert_eq!(payload["observedAtMs"], 12.5);
+    assert_eq!(
+        payload["summary"],
+        "target=videoRtcpFeedback state=unbound reason=videoRtcpFeedbackTransportNotReady"
+    );
+}
+
+#[test]
+fn first_frame_latency_continuation_seen_projects_runtime_trace_event() {
+    let recorder = std::sync::Arc::new(
+        RuntimeTraceRecorder::new_with_mode("verbose").expect("trace recorder"),
+    );
+    let mut state = RuntimeTraceObservationState::default();
+    let stats = test_stats(json!({
+        "resolution": "",
+        "rtt": "",
+        "fps": 0.0,
+        "pl": "0.00%",
+        "fl": "",
+        "jit": "",
+        "br": "",
+        "decode": "",
+        "latest_first_frame_latency_observation": {
+            "observation_id": 7,
+            "episode_id": 906,
+            "recovery_epoch": 12,
+            "control_ready_to_pli_sent_ms": 20.0,
+            "pli_sent_to_first_idr_packet_ms": null,
+            "first_idr_packet_to_first_decode_ms": null,
+            "first_decode_to_clean_anchor_committed_ms": null,
+            "clean_anchor_committed_to_display_stable_ms": null,
+            "terminal_phase": "ContinuationSeen",
+            "incomplete_reason": "continuationOnlyAwaitingIdr",
+            "observed_at_ms": 155.0
+        }
+    }));
+
+    record_runtime_trace_observations(&recorder, &mut state, Some("session-1"), &stats);
+    let entries = read_trace_lines(recorder.as_ref());
+    let payload = find_event_payload(&entries, "firstFrameLatencyObserved");
+    assert_eq!(payload["terminalPhase"], "ContinuationSeen");
+    assert_eq!(payload["incompleteReason"], "continuationOnlyAwaitingIdr");
+    assert_eq!(payload["controlReadyToPliSentMs"], 20.0);
+}
+
+#[test]
+fn feedback_target_availability_same_semantics_do_not_repeat_trace_event() {
+    let recorder = std::sync::Arc::new(
+        RuntimeTraceRecorder::new_with_mode("verbose").expect("trace recorder"),
+    );
+    let mut state = RuntimeTraceObservationState::default();
+    let stats_first = test_stats(json!({
+        "resolution": "",
+        "rtt": "",
+        "fps": 0.0,
+        "pl": "0.00%",
+        "fl": "",
+        "jit": "",
+        "br": "",
+        "decode": "",
+        "latest_feedback_target_availability_target": "videoRtcpFeedback",
+        "latest_feedback_target_availability_state": "ready",
+        "latest_feedback_target_availability_reason": "twccSent",
+        "latest_feedback_target_availability_observed_at_ms": 10.0
+    }));
+    let stats_second = test_stats(json!({
+        "resolution": "",
+        "rtt": "",
+        "fps": 0.0,
+        "pl": "0.00%",
+        "fl": "",
+        "jit": "",
+        "br": "",
+        "decode": "",
+        "latest_feedback_target_availability_target": "videoRtcpFeedback",
+        "latest_feedback_target_availability_state": "ready",
+        "latest_feedback_target_availability_reason": "twccSent",
+        "latest_feedback_target_availability_observed_at_ms": 25.0
+    }));
+
+    record_runtime_trace_observations(&recorder, &mut state, Some("session-1"), &stats_first);
+    record_runtime_trace_observations(&recorder, &mut state, Some("session-1"), &stats_second);
+
+    let entries = read_trace_lines(recorder.as_ref());
+    let payloads = event_payloads(&entries, "feedbackTargetAvailabilityChanged");
+    assert_eq!(payloads.len(), 1);
+    assert_eq!(payloads[0]["observedAtMs"], 10.0);
+}
+
+#[test]
+fn feedback_target_availability_semantic_transition_projects_each_change_once() {
+    let recorder = std::sync::Arc::new(
+        RuntimeTraceRecorder::new_with_mode("verbose").expect("trace recorder"),
+    );
+    let mut state = RuntimeTraceObservationState::default();
+    let stats_ready = test_stats(json!({
+        "resolution": "",
+        "rtt": "",
+        "fps": 0.0,
+        "pl": "0.00%",
+        "fl": "",
+        "jit": "",
+        "br": "",
+        "decode": "",
+        "latest_feedback_target_availability_target": "videoRtcpFeedback",
+        "latest_feedback_target_availability_state": "ready",
+        "latest_feedback_target_availability_reason": "feedbackTargetBound",
+        "latest_feedback_target_availability_observed_at_ms": 10.0
+    }));
+    let stats_unbound = test_stats(json!({
+        "resolution": "",
+        "rtt": "",
+        "fps": 0.0,
+        "pl": "0.00%",
+        "fl": "",
+        "jit": "",
+        "br": "",
+        "decode": "",
+        "latest_feedback_target_availability_target": "videoRtcpFeedback",
+        "latest_feedback_target_availability_state": "unbound",
+        "latest_feedback_target_availability_reason": "feedbackTargetUnbound",
+        "latest_feedback_target_availability_observed_at_ms": 15.0
+    }));
+    let stats_ready_again = test_stats(json!({
+        "resolution": "",
+        "rtt": "",
+        "fps": 0.0,
+        "pl": "0.00%",
+        "fl": "",
+        "jit": "",
+        "br": "",
+        "decode": "",
+        "latest_feedback_target_availability_target": "videoRtcpFeedback",
+        "latest_feedback_target_availability_state": "ready",
+        "latest_feedback_target_availability_reason": "feedbackTargetBound",
+        "latest_feedback_target_availability_observed_at_ms": 21.0
+    }));
+
+    record_runtime_trace_observations(&recorder, &mut state, Some("session-1"), &stats_ready);
+    record_runtime_trace_observations(&recorder, &mut state, Some("session-1"), &stats_unbound);
+    record_runtime_trace_observations(&recorder, &mut state, Some("session-1"), &stats_ready_again);
+
+    let entries = read_trace_lines(recorder.as_ref());
+    let payloads = event_payloads(&entries, "feedbackTargetAvailabilityChanged");
+    assert_eq!(payloads.len(), 3);
+    assert_eq!(payloads[0]["state"], "ready");
+    assert_eq!(payloads[0]["reason"], "feedbackTargetBound");
+    assert_eq!(payloads[1]["state"], "unbound");
+    assert_eq!(payloads[1]["reason"], "feedbackTargetUnbound");
+    assert_eq!(payloads[2]["state"], "ready");
+    assert_eq!(payloads[2]["reason"], "feedbackTargetBound");
+}
+
+#[test]
+fn twcc_receiver_mapping_missing_projects_runtime_trace_event() {
+    let recorder = std::sync::Arc::new(
+        RuntimeTraceRecorder::new_with_mode("verbose").expect("trace recorder"),
+    );
+    let mut state = RuntimeTraceObservationState::default();
+    let stats = test_stats(json!({
+        "resolution": "",
+        "rtt": "",
+        "fps": 0.0,
+        "pl": "0.00%",
+        "fl": "",
+        "jit": "",
+        "br": "",
+        "decode": "",
+        "latest_observation_label": "twccReceiverMappingMissing",
+        "latest_observation_summary": "mediaSsrc=Some(17493) pendingFeedbackPackets=1 droppedPendingFeedbackTotal=0"
+    }));
+
+    record_runtime_trace_observations(&recorder, &mut state, Some("session-1"), &stats);
+    let entries = read_trace_lines(recorder.as_ref());
+    let payload = find_event_payload(&entries, "twccReceiverMappingMissing");
+    assert_eq!(
+        payload["summary"],
+        "mediaSsrc=Some(17493) pendingFeedbackPackets=1 droppedPendingFeedbackTotal=0"
+    );
 }
 
 #[test]
@@ -2447,7 +2801,7 @@ fn decode_output_path_observation_projects_runtime_trace_event() {
 }
 
 #[test]
-fn render_candidate_state_projects_transition_event() {
+fn render_mailbox_state_projects_transition_event() {
     let recorder = std::sync::Arc::new(
         RuntimeTraceRecorder::new_with_mode("verbose").expect("trace recorder"),
     );
@@ -2461,11 +2815,11 @@ fn render_candidate_state_projects_transition_event() {
         "jit": "",
         "br": "",
         "decode": "",
-        "latest_render_candidate_decision": {
+        "latest_render_mailbox_decision": {
             "decision_id": 702,
             "state": "latest-overwrite",
             "action": "replace",
-            "detail": "latestSlotOverwrite",
+            "detail": "mailboxOverwrite",
             "frame_seq": 77,
             "observed_at_ms": 1801.0
         }
@@ -2473,15 +2827,15 @@ fn render_candidate_state_projects_transition_event() {
 
     record_runtime_trace_observations(&recorder, &mut state, Some("session-1"), &stats);
     let entries = read_trace_lines(recorder.as_ref());
-    let payload = find_event_payload(&entries, "renderCandidateStateTransition");
+    let payload = find_event_payload(&entries, "renderMailboxStateTransition");
     assert_eq!(payload["decisionId"], 702);
     assert_eq!(payload["state"], "latest-overwrite");
-    assert_eq!(payload["detail"], "latestSlotOverwrite");
+    assert_eq!(payload["detail"], "mailboxOverwrite");
     assert_eq!(payload["frameSeq"], 77);
 }
 
 #[test]
-fn host_present_state_projects_no_pending_supply_signals() {
+fn host_mailbox_state_projects_no_pending_supply_signals() {
     let recorder = std::sync::Arc::new(
         RuntimeTraceRecorder::new_with_mode("verbose").expect("trace recorder"),
     );
@@ -2496,9 +2850,9 @@ fn host_present_state_projects_no_pending_supply_signals() {
         "br": "",
         "decode": "",
         "present_fps": 59.8,
-        "video_present_submit_count_total": 301,
-        "video_present_drop_count_total": 11,
-        "video_present_overwrite_count_total": 9,
+        "host_mailbox_enqueue_count_total": 301,
+        "host_mailbox_drop_count_total": 11,
+        "host_mailbox_overwrite_count_total": 9,
         "host_no_pending_take_count_total": 1200,
         "host_no_pending_streak": 66,
         "host_no_pending_max_streak": 132,
@@ -2508,15 +2862,17 @@ fn host_present_state_projects_no_pending_supply_signals() {
 
     record_runtime_trace_observations(&recorder, &mut state, Some("session-1"), &stats);
     let entries = read_trace_lines(recorder.as_ref());
-    let payload = find_event_payload(&entries, "hostPresentState");
+    let payload = find_event_payload(&entries, "hostMailboxState");
     assert_eq!(payload["noPendingTakeCountTotal"], 1200);
     assert_eq!(payload["noPendingStreak"], 66);
     assert_eq!(payload["noPendingMaxStreak"], 132);
     assert_eq!(payload["noPendingPressureLevel"], "high");
+    assert_eq!(payload["hostMailboxEnqueueCountTotal"], 301);
+    assert_eq!(payload.get("presentEnqueueCountTotal"), None);
 }
 
 #[test]
-fn host_present_state_projects_cadence_epoch_signals() {
+fn host_mailbox_state_projects_cadence_epoch_signals() {
     let recorder = std::sync::Arc::new(
         RuntimeTraceRecorder::new_with_mode("verbose").expect("trace recorder"),
     );
@@ -2531,9 +2887,9 @@ fn host_present_state_projects_cadence_epoch_signals() {
         "br": "",
         "decode": "",
         "present_fps": 59.8,
-        "video_present_submit_count_total": 301,
+        "host_mailbox_enqueue_count_total": 301,
         "host_display_tick_epoch": 4096,
-        "video_present_epoch": 3901,
+        "host_frame_present_epoch": 3901,
         "host_cadence_phase": "steady",
         "last_displayed_frame_seq": 77,
         "last_displayed_frame_rtp_timestamp": 22334455u32,
@@ -2542,17 +2898,61 @@ fn host_present_state_projects_cadence_epoch_signals() {
 
     record_runtime_trace_observations(&recorder, &mut state, Some("session-1"), &stats);
     let entries = read_trace_lines(recorder.as_ref());
-    let payload = find_event_payload(&entries, "hostPresentState");
-    assert_eq!(payload["displayTickEpoch"], 4096);
-    assert_eq!(payload["presentEpoch"], 3901);
+    let payload = find_event_payload(&entries, "hostMailboxState");
+    assert_eq!(payload["hostDisplayTickEpoch"], 4096);
+    assert_eq!(payload["hostFramePresentEpoch"], 3901);
     assert_eq!(payload["cadencePhase"], "steady");
+    assert_eq!(payload["displayedAgeMs"], serde_json::Value::Null);
+    assert_eq!(payload["displayedFrameStale"], false);
+    assert_eq!(payload["retainedOldFrameRisk"], false);
     assert_eq!(payload["lastDisplayedFrameSeq"], 77);
     assert_eq!(payload["lastDisplayedFrameRtpTimestamp"], 22334455u32);
     assert_eq!(payload["lastDisplayedAtMs"], 1440.0);
 }
 
 #[test]
-fn host_present_state_records_present_age_transition_from_none_to_fresh() {
+fn host_mailbox_state_projects_retained_old_frame_risk() {
+    let recorder = std::sync::Arc::new(
+        RuntimeTraceRecorder::new_with_mode("verbose").expect("trace recorder"),
+    );
+    let mut state = RuntimeTraceObservationState::default();
+    let stats = test_stats(json!({
+        "resolution": "",
+        "rtt": "",
+        "fps": 0.0,
+        "pl": "0.00%",
+        "fl": "",
+        "jit": "",
+        "br": "",
+        "decode": "",
+        "present_fps": 1.0,
+        "host_mailbox_enqueue_count_total": 12,
+        "host_mailbox_drop_count_total": 0,
+        "host_mailbox_overwrite_count_total": 0,
+        "host_no_pending_take_count_total": 9,
+        "host_no_pending_streak": 4,
+        "host_no_pending_max_streak": 4,
+        "host_no_pending_pressure_level": "critical",
+        "host_display_tick_epoch": 512,
+        "host_frame_present_epoch": 33,
+        "host_cadence_phase": "starved",
+        "present_age_ms": 486.0,
+        "last_displayed_frame_seq": 91,
+        "last_displayed_frame_rtp_timestamp": 9988u32,
+        "last_displayed_at_ms": 1514.0
+    }));
+
+    record_runtime_trace_observations(&recorder, &mut state, Some("session-1"), &stats);
+    let entries = read_trace_lines(recorder.as_ref());
+    let payload = find_event_payload(&entries, "hostMailboxState");
+    assert_eq!(payload["displayedAgeMs"], 486.0);
+    assert_eq!(payload["displayedFrameStale"], true);
+    assert_eq!(payload["retainedOldFrameRisk"], true);
+    assert_eq!(payload["lastDisplayedFrameSeq"], 91);
+}
+
+#[test]
+fn host_mailbox_state_records_present_age_transition_from_none_to_fresh() {
     let recorder = std::sync::Arc::new(
         RuntimeTraceRecorder::new_with_mode("verbose").expect("trace recorder"),
     );
@@ -2567,9 +2967,9 @@ fn host_present_state_records_present_age_transition_from_none_to_fresh() {
         "br": "",
         "decode": "",
         "present_fps": 0.0,
-        "video_present_submit_count_total": 0,
-        "video_present_drop_count_total": 0,
-        "video_present_overwrite_count_total": 0,
+        "host_mailbox_enqueue_count_total": 0,
+        "host_mailbox_drop_count_total": 0,
+        "host_mailbox_overwrite_count_total": 0,
         "host_no_pending_take_count_total": 0,
         "host_no_pending_streak": 0,
         "host_no_pending_max_streak": 0,
@@ -2586,9 +2986,9 @@ fn host_present_state_records_present_age_transition_from_none_to_fresh() {
         "br": "",
         "decode": "",
         "present_fps": 59.0,
-        "video_present_submit_count_total": 1,
-        "video_present_drop_count_total": 0,
-        "video_present_overwrite_count_total": 0,
+        "host_mailbox_enqueue_count_total": 1,
+        "host_mailbox_drop_count_total": 0,
+        "host_mailbox_overwrite_count_total": 0,
         "host_no_pending_take_count_total": 1,
         "host_no_pending_streak": 0,
         "host_no_pending_max_streak": 1,
@@ -2602,7 +3002,7 @@ fn host_present_state_records_present_age_transition_from_none_to_fresh() {
     let entries = read_trace_lines(recorder.as_ref());
     let host_rows: Vec<_> = entries
         .iter()
-        .filter(|entry| entry["event"] == "hostPresentState")
+        .filter(|entry| entry["event"] == "hostMailboxState")
         .collect();
     assert_eq!(host_rows.len(), 2);
     assert!(host_rows[0]["payload"]["presentAgeMs"].is_null());
@@ -2610,7 +3010,7 @@ fn host_present_state_records_present_age_transition_from_none_to_fresh() {
 }
 
 #[test]
-fn host_present_loop_resumed_emits_transition_event_when_present_epoch_recovers() {
+fn host_frame_present_resumed_emits_transition_event_when_present_epoch_recovers() {
     let recorder = std::sync::Arc::new(
         RuntimeTraceRecorder::new_with_mode("verbose").expect("trace recorder"),
     );
@@ -2625,7 +3025,7 @@ fn host_present_loop_resumed_emits_transition_event_when_present_epoch_recovers(
         "br": "",
         "decode": "",
         "host_display_tick_epoch": 12,
-        "video_present_epoch": 0,
+        "host_frame_present_epoch": 0,
         "host_cadence_phase": "waiting",
         "last_displayed_frame_seq": null,
         "last_displayed_frame_rtp_timestamp": null,
@@ -2641,7 +3041,7 @@ fn host_present_loop_resumed_emits_transition_event_when_present_epoch_recovers(
         "br": "",
         "decode": "",
         "host_display_tick_epoch": 15,
-        "video_present_epoch": 2,
+        "host_frame_present_epoch": 2,
         "host_cadence_phase": "steady",
         "last_displayed_frame_seq": 88,
         "last_displayed_frame_rtp_timestamp": 998877u32,
@@ -2652,11 +3052,11 @@ fn host_present_loop_resumed_emits_transition_event_when_present_epoch_recovers(
     record_runtime_trace_observations(&recorder, &mut state, Some("session-1"), &second);
 
     let entries = read_trace_lines(recorder.as_ref());
-    let payload = find_event_payload(&entries, "hostPresentLoopResumed");
-    assert_eq!(payload["previousDisplayTickEpoch"], 12);
-    assert_eq!(payload["previousPresentEpoch"], 0);
-    assert_eq!(payload["displayTickEpoch"], 15);
-    assert_eq!(payload["presentEpoch"], 2);
+    let payload = find_event_payload(&entries, "hostFramePresentResumed");
+    assert_eq!(payload["previousHostDisplayTickEpoch"], 12);
+    assert_eq!(payload["previousHostFramePresentEpoch"], 0);
+    assert_eq!(payload["hostDisplayTickEpoch"], 15);
+    assert_eq!(payload["hostFramePresentEpoch"], 2);
     assert_eq!(payload["lastDisplayedFrameSeq"], 88);
     assert_eq!(payload["lastDisplayedFrameRtpTimestamp"], 998877u32);
     assert_eq!(payload["lastDisplayedAtMs"], 1810.0);
@@ -2715,7 +3115,7 @@ fn direct_gaming_state_projects_display_supply_health_and_issue_chain() {
     assert_eq!(payload["primaryIssueChain"], "display:supplyStarved");
     assert_eq!(payload["chainHealth"], "healthy");
     assert_eq!(payload["presentationHealth"], "displaySupplyStarved");
-    let host_payload = find_event_payload(&entries, "hostPresentState");
+    let host_payload = find_event_payload(&entries, "hostMailboxState");
     assert_eq!(host_payload["noPendingPressureLevel"], "critical");
     assert_eq!(host_payload["presentAgeMs"], 1624.0);
 }

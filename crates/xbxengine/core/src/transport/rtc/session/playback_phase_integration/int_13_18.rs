@@ -197,7 +197,7 @@ fn playback_phase_int16_post_first_present_noise_must_resolve_or_enter_controlle
             stats.latest_video_host_present_time_ms = Some(t - 20.0);
             stats.latest_video_decode_ok_time_ms = Some(t - 18.0);
             stats.video_renderer_stalled = Some(false);
-            stats.video_present_submit_count_total = 3;
+            stats.host_mailbox_enqueue_count_total = 3;
             stats.latest_video_frame_drop = Some(XbxEngineVideoFrameDropObservation {
                 observation_id: 1,
                 reason: "dropped".to_string(),
@@ -209,6 +209,7 @@ fn playback_phase_int16_post_first_present_noise_must_resolve_or_enter_controlle
                 frame_recovery_disposition: None,
                 frame_unrecoverable_reason: None,
                 frame_budget: None,
+                replacement_decision: None,
                 observed_at_ms: t - 8.0,
                 width: 1920,
                 height: 1080,

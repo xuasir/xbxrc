@@ -199,4 +199,58 @@ describe('buildStreamDiagnosticsSnapshot', () => {
     expect(diagnostics.videoRendererStalled).toBe(true)
     expect(diagnostics.videoRendererStallBlocksPresentation).toBe(true)
   })
+
+  it('keeps stable panel status when recovery-eligible still has healthy presentation', () => {
+    vi.spyOn(Date, 'now').mockReturnValue(120_000)
+    const snapshot: StreamPerformanceSnapshot = {
+      streamLifecyclePhase: 'recovery-eligible',
+      sessionPhase: 'recovery-eligible',
+      presentationMilestone: 'mediaReady',
+      videoHealth: 'recovering',
+      presentationHealth: 'healthy',
+      recoveryOwnerState: 'rebuilding-supply',
+      stallKind: 'none',
+      inboundVideoFps: 60,
+      decodeFps: 60,
+      presentFps: 60,
+    }
+
+    const diagnostics = buildStreamDiagnosticsSnapshot({
+      metadata: null,
+      runtimeSnapshot: snapshot,
+      lifecyclePhase: 'recovering',
+      warningVisible: false,
+      lastHostFrameAtMs: 119_950,
+    })
+
+    expect(diagnostics.isRecovering).toBe(false)
+    expect(diagnostics.statusCode).toBe('stable')
+  })
+
+  it('keeps active recovery visible when presentation is still unhealthy', () => {
+    vi.spyOn(Date, 'now').mockReturnValue(140_000)
+    const snapshot: StreamPerformanceSnapshot = {
+      streamLifecyclePhase: 'active-recovery',
+      sessionPhase: 'active-recovery',
+      presentationMilestone: 'mediaReady',
+      videoHealth: 'recovering',
+      presentationHealth: 'displaySupplyStarved',
+      recoveryOwnerState: 'rebuilding-supply',
+      stallKind: 'hostPresentStalled',
+      inboundVideoFps: 60,
+      decodeFps: 60,
+      presentFps: 0,
+    }
+
+    const diagnostics = buildStreamDiagnosticsSnapshot({
+      metadata: null,
+      runtimeSnapshot: snapshot,
+      lifecyclePhase: 'recovering',
+      warningVisible: false,
+      lastHostFrameAtMs: null,
+    })
+
+    expect(diagnostics.isRecovering).toBe(true)
+    expect(diagnostics.statusCode).toBe('recovering')
+  })
 })

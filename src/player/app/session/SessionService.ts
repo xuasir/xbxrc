@@ -22,6 +22,8 @@ import { STREAM_DATA_CHANNEL_PROFILES } from '../../protocol/networkProfile'
 
 const H264_MAX_FRAME_RATE = 60
 
+function debugLog(..._args: Array<unknown>): void {}
+
 export class SessionService {
   private state: SessionState = 'idle'
   private readonly transport = new WebRtcTransport()
@@ -59,7 +61,7 @@ export class SessionService {
   bind(turnServer?: { url: string, username?: string, credential?: string }): void {
     this.assertState('bind', ['idle', 'closed', 'failed'])
     this.transition('binding')
-    console.info('[player][session] bind start', {
+    debugLog('[player][session] bind start', {
       turnServer: turnServer?.url ?? null,
     })
     this.transport.configureTurnServer(turnServer)
@@ -142,8 +144,8 @@ export class SessionService {
     let offer = await this.transport.createOffer(options)
     const initialSdp = offer.sdp
     if (initialSdp) {
-      console.info('[player][session] local offer before sdp manipulation', summarizeSdp(initialSdp))
-      console.info(`[player][session] local offer before sdp manipulation raw\n${initialSdp}`)
+      debugLog('[player][session] local offer before sdp manipulation', summarizeSdp(initialSdp))
+      debugLog(`[player][session] local offer before sdp manipulation raw\n${initialSdp}`)
     }
     if (initialSdp) {
       let nextSdp = initialSdp
@@ -179,8 +181,8 @@ export class SessionService {
         nextSdp = nextSdp.replace('useinbandfec=1', 'useinbandfec=1; stereo=1')
       }
       offer = { ...offer, sdp: nextSdp }
-      console.info('[player][session] local offer after sdp manipulation', summarizeSdp(nextSdp))
-      console.info(`[player][session] local offer after sdp manipulation raw\n${nextSdp}`)
+      debugLog('[player][session] local offer after sdp manipulation', summarizeSdp(nextSdp))
+      debugLog(`[player][session] local offer after sdp manipulation raw\n${nextSdp}`)
     }
     await this.transport.setLocalDescription(offer)
     this.transition('connecting')

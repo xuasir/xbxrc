@@ -13,7 +13,8 @@ const configState: HapticsConfig = {
 let isInitialized = false
 
 async function initConfig() {
-  if (isInitialized) return
+  if (isInitialized)
+    return
   try {
     const groups = await rpc.config.getGroups()
     const appConfig = groups.app as Record<string, unknown>
@@ -21,7 +22,7 @@ async function initConfig() {
     configState.audioEnabled = appConfig.ui_audio !== false
     isInitialized = true
   }
-  catch (error) {
+  catch {
     // 忽略加载配置失败，使用默认值
   }
 }
@@ -38,13 +39,15 @@ export function setLastActivePadId(_padId: string) {
 
 export function playNavSound(_type: 'move' | 'action' | 'back' | 'boundary') {
   void initConfig()
-  if (!configState.audioEnabled) return
-  // TODO: Implement actual audio playback
+  if (configState.audioEnabled) {
+    // TODO: Implement actual audio playback
+  }
 }
 
 export function triggerNavHaptic(type: 'move' | 'action' | 'back' | 'boundary') {
   void initConfig()
-  if (!configState.hapticsEnabled) return
+  if (!configState.hapticsEnabled)
+    return
 
   // 映射不同意图到震动效果
   let strongMagnitude = 0

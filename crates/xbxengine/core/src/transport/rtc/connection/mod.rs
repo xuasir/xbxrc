@@ -24,10 +24,13 @@ pub(crate) use candidate_helpers::{
     classify_candidate_kind, collect_candidate_ip_families, is_end_of_candidates_candidate,
     should_skip_remote_candidate_for_family_mismatch,
 };
+#[cfg(test)]
 pub(crate) use data_channel::build_control_decoder_reset_payload;
 pub(crate) use fact_mapping::{map_connection_lifecycle_state_fact, map_data_channel_label_fact};
 pub(crate) use sdp_candidate::{
     extract_local_candidates_from_offer_sdp, is_end_of_candidates_marker,
 };
-pub(crate) use service::{RtcConnectionService, VideoRecoveryRequestOutcome};
+pub(crate) use service::{
+    RtcConnectionService, VideoRecoveryRequestOutcome, VIDEO_RTCP_FEEDBACK_TARGET_PENDING_REASON,
+};
 pub(crate) use text_preview::short_text_preview;

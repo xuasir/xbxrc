@@ -25,11 +25,13 @@ export function findNextFocusable(
   let bestScore = Infinity
 
   for (const candidate of candidates) {
-    if (candidate === currentElement) continue
+    if (candidate === currentElement)
+      continue
 
     const candidateRect = getElementRect(candidate)
-    
-    if (!isInDirection(currentRect, candidateRect, direction)) continue
+
+    if (!isInDirection(currentRect, candidateRect, direction))
+      continue
 
     const score = calculateScore(currentRect, candidateRect, direction)
     if (score < bestScore) {

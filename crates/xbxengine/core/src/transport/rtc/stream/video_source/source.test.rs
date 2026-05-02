@@ -1,13 +1,16 @@
 use super::{
-    now_ms_f64, resolve_effective_idle_controls, resolve_inspection_admission,
-    resolve_recovery_keyframe_action, should_absorb_idle_timeout_for_steady_gap,
-    should_trigger_idle_timeout, RecoveryKeyframeAction, RtcVideoFrameSource,
+    now_ms_f64, prior_output_continuation_allowed, resolve_effective_idle_controls,
+    resolve_inspection_admission, resolve_recovery_keyframe_action,
+    should_absorb_idle_timeout_for_steady_gap, should_trigger_idle_timeout, RecoveryKeyframeAction,
+    RtcVideoFrameSource,
 };
 use crate::media::video::h264::inspection::{H264AccessUnitInspection, H264AccessUnitInspector};
+use crate::media::video::ingress::budget::FrameBudgetWindowSource;
 use crate::media::video::test_fixtures::{
     bootstrap_idr_nalu, bootstrap_pps_nalu, bootstrap_sps_nalu, make_video_rtp_packet,
     make_video_source_for_test, send_bootstrap_access_unit, NoopRtcpPort,
 };
+use crate::media::video::types::FrameRecoveryDisposition;
 use crate::transport::rtc::stream::adapter_types::{
     TransportAdmissionObservation, TransportLossObservation, TransportObservation,
 };
@@ -65,6 +68,22 @@ fn bootstrap_non_idr_nalu() -> Vec<u8> {
     let mut nalu = bootstrap_idr_nalu().to_vec();
     nalu[0] = 0x41;
     nalu
+}
+
+#[test]
+fn frame_without_recovery_ledger_defaults_to_steady_disposition() {
+    let (_, _, mut source) = make_video_source_for_test();
+
+    let (deadline_at_ms, disposition, unrecoverable_reason, budget) =
+        source.take_frame_recovery_ledger(123_456);
+
+    assert_eq!(deadline_at_ms, None);
+    assert_eq!(
+        disposition,
+        crate::media::video::types::FrameRecoveryDisposition::Steady
+    );
+    assert_eq!(unrecoverable_reason, None);
+    assert_eq!(budget, None);
 }
 
 #[test]
@@ -193,7 +212,7 @@ fn no_render_slack_or_no_fresh_output_still_emits_idle_timeout_observation() {
 #[test]
 fn recovery_wait_without_hard_risk_allows_healthy_delta_to_submit() {
     let (next_is_blocking_non_keyframe_admission, recovery_action) =
-        resolve_recovery_keyframe_action(true, true, false, false, 0, 0, false);
+        resolve_recovery_keyframe_action(true, true, false, false, false, 0, 0, false);
 
     assert!(!next_is_blocking_non_keyframe_admission);
     assert_eq!(recovery_action, RecoveryKeyframeAction::Submit);
@@ -302,7 +321,7 @@ fn unresolved_transport_await_without_current_clean_anchor_rearms_clean_anchor()
 #[test]
 fn recovery_wait_does_not_override_loss_semantics() {
     let (next_is_blocking_non_keyframe_admission, recovery_action) =
-        resolve_recovery_keyframe_action(true, true, false, false, 0, 1, false);
+        resolve_recovery_keyframe_action(true, true, false, false, false, 0, 1, false);
 
     assert!(!next_is_blocking_non_keyframe_admission);
     assert_eq!(recovery_action, RecoveryKeyframeAction::DropAndRequestPli);
@@ -311,7 +330,7 @@ fn recovery_wait_does_not_override_loss_semantics() {
 #[test]
 fn lossy_keyframe_defers_to_nack_recovery_admission() {
     let (next_is_blocking_non_keyframe_admission, recovery_action) =
-        resolve_recovery_keyframe_action(true, false, false, true, 0, 2, true);
+        resolve_recovery_keyframe_action(true, false, false, true, false, 0, 2, true);
 
     assert!(!next_is_blocking_non_keyframe_admission);
     assert_eq!(recovery_action, RecoveryKeyframeAction::DropAndRequestPli);
@@ -320,7 +339,7 @@ fn lossy_keyframe_defers_to_nack_recovery_admission() {
 #[test]
 fn short_sample_loss_burst_stays_in_drop_and_request_keyframe() {
     let (next_is_blocking_non_keyframe_admission, recovery_action) =
-        resolve_recovery_keyframe_action(true, false, false, false, 2, 1, false);
+        resolve_recovery_keyframe_action(true, false, false, false, false, 2, 1, false);
 
     assert!(!next_is_blocking_non_keyframe_admission);
     assert_eq!(recovery_action, RecoveryKeyframeAction::DropAndRequestPli);
@@ -329,7 +348,7 @@ fn short_sample_loss_burst_stays_in_drop_and_request_keyframe() {
 #[test]
 fn longer_sample_loss_burst_still_defers_to_nack_recovery_admission() {
     let (next_is_blocking_non_keyframe_admission, recovery_action) =
-        resolve_recovery_keyframe_action(true, false, false, false, 3, 1, false);
+        resolve_recovery_keyframe_action(true, false, false, false, false, 3, 1, false);
 
     assert!(!next_is_blocking_non_keyframe_admission);
     assert_eq!(recovery_action, RecoveryKeyframeAction::DropAndRequestPli);
@@ -338,7 +357,7 @@ fn longer_sample_loss_burst_still_defers_to_nack_recovery_admission() {
 #[test]
 fn low_value_local_gap_wait_is_absorbed_without_transport_wait_upgrade() {
     let (next_is_blocking_non_keyframe_admission, recovery_action) =
-        resolve_recovery_keyframe_action(true, true, false, false, 0, 0, false);
+        resolve_recovery_keyframe_action(true, true, false, false, false, 0, 0, false);
 
     assert!(!next_is_blocking_non_keyframe_admission);
     assert_eq!(recovery_action, RecoveryKeyframeAction::Submit);
@@ -347,16 +366,46 @@ fn low_value_local_gap_wait_is_absorbed_without_transport_wait_upgrade() {
 #[test]
 fn pre_first_frame_wait_does_not_absorb_non_keyframe_delta() {
     let (next_is_blocking_non_keyframe_admission, recovery_action) =
-        resolve_recovery_keyframe_action(false, true, false, false, 0, 0, false);
+        resolve_recovery_keyframe_action(false, true, false, false, false, 0, 0, false);
 
     assert!(next_is_blocking_non_keyframe_admission);
     assert_eq!(recovery_action, RecoveryKeyframeAction::WaitKeyframe);
 }
 
 #[test]
+fn active_recovery_epoch_ignores_stale_prior_output_when_judging_first_frame_acquired() {
+    let mut stats = crate::XbxEngineMediaRuntimeStats::default();
+    stats.transport_recovery_epoch = 9;
+    stats.transport_recovery_episode_active = true;
+    stats.transport_recovery_episode_opened_at_ms = Some(1_000.0);
+    stats.latest_video_decode_ok_time_ms = Some(900.0);
+    stats.latest_host_mailbox_submit_time_ms = Some(910.0);
+    stats.latest_video_host_present_time_ms = Some(920.0);
+    stats.host_mailbox_enqueue_count_total = 12;
+    stats.host_frame_present_epoch = 6;
+
+    assert!(!RtcVideoFrameSource::first_frame_acquired(&stats));
+
+    stats.latest_video_decode_ok_time_ms = Some(1_020.0);
+    assert!(RtcVideoFrameSource::first_frame_acquired(&stats));
+}
+
+#[test]
+fn current_epoch_clean_anchor_counts_as_first_frame_acquired() {
+    let mut stats = crate::XbxEngineMediaRuntimeStats::default();
+    stats.transport_recovery_epoch = 4;
+    stats.transport_recovery_episode_active = true;
+    stats.transport_recovery_episode_opened_at_ms = Some(2_000.0);
+    stats.video_anchor_clean_epoch = Some(4);
+    stats.video_anchor_clean_source_event = Some("chain-clean-anchor-submitted".to_string());
+
+    assert!(RtcVideoFrameSource::first_frame_acquired(&stats));
+}
+
+#[test]
 fn sustaining_recovery_prefers_keepalive_over_reenter_wait_keyframe() {
     let (next_is_blocking_non_keyframe_admission, recovery_action) =
-        resolve_recovery_keyframe_action(true, true, true, true, 0, 0, false);
+        resolve_recovery_keyframe_action(true, true, true, true, false, 0, 0, false);
 
     assert!(!next_is_blocking_non_keyframe_admission);
     assert_eq!(recovery_action, RecoveryKeyframeAction::Submit);
@@ -365,16 +414,25 @@ fn sustaining_recovery_prefers_keepalive_over_reenter_wait_keyframe() {
 #[test]
 fn hard_recovery_wait_without_building_phase_still_reenters_wait_keyframe() {
     let (next_is_blocking_non_keyframe_admission, recovery_action) =
-        resolve_recovery_keyframe_action(true, true, false, true, 0, 0, false);
+        resolve_recovery_keyframe_action(true, true, false, true, false, 0, 0, false);
 
     assert!(next_is_blocking_non_keyframe_admission);
     assert_eq!(recovery_action, RecoveryKeyframeAction::WaitKeyframe);
 }
 
 #[test]
+fn clean_anchor_building_phase_allows_stale_wait_continuation_to_submit() {
+    let (next_is_blocking_non_keyframe_admission, recovery_action) =
+        resolve_recovery_keyframe_action(true, true, false, true, true, 0, 0, false);
+
+    assert!(!next_is_blocking_non_keyframe_admission);
+    assert_eq!(recovery_action, RecoveryKeyframeAction::Submit);
+}
+
+#[test]
 fn drop_and_request_action_contract_keeps_resolver_stateless() {
     let (next_is_blocking_non_keyframe_admission, recovery_action) =
-        resolve_recovery_keyframe_action(true, true, false, true, 3, 2, false);
+        resolve_recovery_keyframe_action(true, true, false, true, false, 3, 2, false);
 
     assert_eq!(recovery_action, RecoveryKeyframeAction::DropAndRequestPli);
     // resolve 层只给出动作，等待态由 action 分支显式处理，避免隐式耦合。
@@ -462,6 +520,21 @@ async fn clean_anchor_allows_first_recovery_idr_to_bypass_stale_decoder_feedback
     assert!(frame.is_keyframe);
     assert_eq!(frame.rtp_timestamp, 9_000);
     assert_eq!(frame.clean_anchor_commit_recovery_epoch, Some(1));
+    assert_eq!(
+        frame.frame_recovery_disposition,
+        FrameRecoveryDisposition::Repairing
+    );
+    assert_eq!(
+        frame.budget.window_source,
+        FrameBudgetWindowSource::Recovery
+    );
+    assert!(matches!(
+        frame.budget.rtt_slack,
+        crate::media::video::ingress::budget::FrameBudgetRttSlack::Unknown
+            | crate::media::video::ingress::budget::FrameBudgetRttSlack::Ample
+            | crate::media::video::ingress::budget::FrameBudgetRttSlack::Tight
+            | crate::media::video::ingress::budget::FrameBudgetRttSlack::Exhausted
+    ));
 }
 
 #[test]
@@ -555,6 +628,16 @@ fn pre_first_frame_non_idr_continuation_is_rejected_until_first_frame_exists() {
 }
 
 #[test]
+fn prior_output_continuation_is_disabled_while_waiting_recovery_anchor() {
+    assert!(!prior_output_continuation_allowed(true, true, true, false));
+    assert!(!prior_output_continuation_allowed(true, true, false, false));
+    assert!(!prior_output_continuation_allowed(true, false, true, false));
+    assert!(prior_output_continuation_allowed(true, false, false, false));
+    assert!(prior_output_continuation_allowed(true, true, false, true));
+    assert!(prior_output_continuation_allowed(true, true, true, true));
+}
+
+#[test]
 fn sustaining_recovery_continuation_is_accepted_before_first_frame_output() {
     let inspector = H264AccessUnitInspector::new();
     inspector
@@ -639,7 +722,12 @@ fn clean_anchor_records_current_transport_recovery_epoch() {
     drop(tx);
 
     source.runtime_stats.begin_transport_recovery_episode(100.0);
-    source.record_clean_anchor(180.0);
+    source.runtime_stats.record_transport_clean_anchor_with_rtp(
+        180.0,
+        "chain-clean-anchor-submitted",
+        None,
+        None,
+    );
 
     let stats = runtime_stats.lock().expect("runtime stats lock");
     assert_eq!(stats.video_anchor_clean_epoch, Some(1));
@@ -708,7 +796,12 @@ fn packet_loss_detected_does_not_reopen_episode_but_keyframe_request_does() {
     );
 
     source.runtime_stats.begin_transport_recovery_episode(100.0);
-    source.record_clean_anchor(140.0);
+    source.runtime_stats.record_transport_clean_anchor_with_rtp(
+        140.0,
+        "chain-clean-anchor-submitted",
+        None,
+        None,
+    );
     source
         .runtime_stats
         .complete_transport_recovery_after_stable_settle(180.0);
@@ -763,6 +856,25 @@ async fn bootstrap_keyframe_packets_are_assembled_into_frame() {
     assert!(frame.width > 0);
     assert!(frame.height > 0);
     assert!(transport_observation_rx.try_recv().is_err());
+}
+
+#[tokio::test]
+async fn assembled_frame_carries_current_transport_recovery_epoch_tag() {
+    let (tx, _transport_observation_rx, mut source) = make_video_source_for_test();
+    source.runtime_stats.begin_transport_recovery_episode(100.0);
+
+    send_bootstrap_access_unit(&tx, 100, 9000).await;
+    tx.send(make_video_rtp_packet(103, 9016, true, bootstrap_idr_nalu()))
+        .await
+        .expect("next frame packet should flush previous sample");
+    drop(tx);
+
+    let frame = tokio::time::timeout(Duration::from_millis(200), source.recv_frame_inner())
+        .await
+        .expect("frame assembly should finish")
+        .expect("bootstrap frame should be emitted");
+    assert_eq!(frame.rtp_timestamp, 9000);
+    assert_eq!(frame.recovery_epoch_tag, Some(1));
 }
 
 #[tokio::test]
@@ -860,7 +972,13 @@ fn clean_anchor_ack_survives_latest_anchor_ledger_overwrite() {
 
     source
         .runtime_stats
-        .record_transport_clean_anchor(120.0, "chain-clean-anchor-submitted");
+        .record_transport_clean_anchor_submission(
+            1,
+            1,
+            9_000,
+            120.0,
+            "chain-clean-anchor-submitted",
+        );
     source.runtime_stats.record_anchor_candidate_ledger(
         1,
         Some(9_016),
@@ -876,6 +994,35 @@ fn clean_anchor_ack_survives_latest_anchor_ledger_overwrite() {
         source
             .timeline_state
             .peek_clean_anchor_stats_commit_candidate_if_stable(9_000, 122.0),
+        None
+    );
+}
+
+#[test]
+fn clean_anchor_ack_survives_recovery_epoch_advance_after_submission() {
+    let (_tx, _transport_observation_rx, mut source) = make_video_source_for_test();
+    source.runtime_stats.begin_transport_recovery_episode(100.0);
+    source.timeline_state.on_clean_anchor_ingress(9_000, 110.0);
+
+    source
+        .runtime_stats
+        .record_transport_clean_anchor_submission(
+            1,
+            1,
+            9_000,
+            120.0,
+            "chain-clean-anchor-submitted",
+        );
+    source
+        .runtime_stats
+        .advance_transport_recovery_episode(130.0);
+
+    source.maybe_ack_clean_anchor_commit_from_runtime_stats();
+
+    assert_eq!(
+        source
+            .timeline_state
+            .peek_clean_anchor_stats_commit_candidate_if_stable(9_000, 132.0),
         None
     );
 }
@@ -970,6 +1117,24 @@ async fn stale_wait_after_clean_anchor_still_submits_delta_continuation() {
         .expect("continuation frame should assemble")
         .expect("continuation frame should still be emitted");
     assert!(!frame.is_keyframe);
+    assert_eq!(
+        frame.frame_recovery_disposition,
+        crate::media::video::types::FrameRecoveryDisposition::Steady
+    );
+    assert_eq!(
+        frame.budget.recovery_phase,
+        crate::media::video::ingress::budget::FrameBudgetRecoveryPhase::Steady
+    );
+    let latest_frame_recovery_disposition = source
+        .runtime_stats
+        .read(|stats| {
+            stats
+                .latest_video_frame_recovery_observation
+                .as_ref()
+                .and_then(|observation| observation.frame_recovery_disposition.clone())
+        })
+        .expect("runtime stats");
+    assert_eq!(latest_frame_recovery_disposition.as_deref(), None);
     assert!(!source.is_blocking_non_keyframe_admission());
     assert!(transport_observation_rx.try_recv().is_err());
 }
@@ -1369,7 +1534,7 @@ async fn first_frame_acquisition_followup_request_is_disabled_after_first_frame_
         stats.latest_audio_playout_time_ms = Some(16.0);
         stats.latest_video_decode_ok_time_ms = Some(14.0);
         stats.latest_video_host_present_time_ms = Some(15.0);
-        stats.video_present_epoch = 1;
+        stats.host_frame_present_epoch = 1;
         stats.latest_video_track_status = Some(XbxEngineVideoTrackStatus {
             state: "audioOnly".to_string(),
             video_width: None,

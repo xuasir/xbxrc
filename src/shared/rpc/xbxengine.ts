@@ -159,6 +159,7 @@ export interface XbxEngineStatsDto {
   inbound_video_bytes_total?: number
   inbound_audio_bytes_total?: number
   inbound_video_packet_count_total?: number
+  latest_video_packet_arrival_rtp_timestamp?: number
   latest_video_track_status?: {
     state: string
     video_width?: number | null
@@ -180,6 +181,7 @@ export interface XbxEngineStatsDto {
   video_decoder_recovery_detail?: string
   video_decoder_recovery_status?: number
   video_decoder_recovery_state_changed_at_ms?: number
+  latest_video_decode_ok_rtp_timestamp?: number
   video_renderer_stalled?: boolean
   video_renderer_stall_blocks_presentation?: boolean
   packet_age_ms?: number
@@ -194,14 +196,23 @@ export interface XbxEngineStatsDto {
   video_pacer_drop_count_total?: number
   video_renderer_submit_count_total?: number
   video_renderer_drop_count_total?: number
-  video_present_drop_count_total?: number
-  video_present_overwrite_count_total?: number
-  /** 历史命名为 submit，实际语义是宿主 present 队列 enqueue 次数。 */
-  video_present_submit_count_total?: number
+  host_mailbox_drop_count_total?: number
+  host_mailbox_overwrite_count_total?: number
+  host_mailbox_enqueue_count_total?: number
   host_no_pending_take_count_total?: number
   host_no_pending_streak?: number
   host_no_pending_max_streak?: number
   host_no_pending_pressure_level?: string
+  host_mailbox_submit_epoch?: number
+  host_display_tick_epoch?: number
+  host_frame_present_epoch?: number
+  latest_host_mailbox_submit_time_ms?: number
+  latest_video_host_submit_rtp_timestamp?: number
+  latest_video_host_present_time_ms?: number
+  submit_age_ms?: number
+  display_age_ms?: number
+  host_view_generation?: number
+  latest_host_view_created_at_ms?: number
   last_displayed_frame_seq?: number
   last_displayed_frame_rtp_timestamp?: number
   last_displayed_at_ms?: number

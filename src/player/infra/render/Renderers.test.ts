@@ -1,5 +1,5 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { RendererRuntimeConfig } from '../../domain/media'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { NativeVideoRenderer, WebGL2VideoRenderer } from './Renderers'
 
 function createRendererConfig(partial?: Partial<RendererRuntimeConfig>): RendererRuntimeConfig {
@@ -21,7 +21,7 @@ function createRendererConfig(partial?: Partial<RendererRuntimeConfig>): Rendere
   }
 }
 
-describe('Renderers', () => {
+describe('renderers', () => {
   const originalDocument = globalThis.document
   const originalHTMLVideoElement = globalThis.HTMLVideoElement
   const originalRAF = globalThis.requestAnimationFrame
@@ -355,6 +355,7 @@ describe('Renderers', () => {
         void callback
         return 1
       }
+
       cancelVideoFrameCallback(_id: number): void {}
     }
     globalThis.HTMLVideoElement = LocalVideoElement as unknown as typeof HTMLVideoElement

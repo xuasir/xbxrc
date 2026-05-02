@@ -8566,6 +8566,7 @@ dependencies = [
  "rtc-shared",
  "rtc-stun",
  "rtc-turn",
+ "rustls",
  "serde_json",
  "tokio",
  "url",

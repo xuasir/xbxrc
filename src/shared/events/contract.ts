@@ -1,14 +1,14 @@
-import type { DataXcloudCatalogUpdatedRendererEvent } from './data'
 import type { AuthSessionReadyRendererEvent, AuthStateRendererEvent } from './auth'
+import type { DataXcloudCatalogUpdatedRendererEvent } from './data'
 import type { GamepadDevicesChangedRendererEvent, GamepadRuntimeSnapshotRendererEvent, GamepadSlotSnapshotRendererEvent } from './gamepad'
 import type { StreamingStartupEventRendererEvent } from './streaming'
 import type { XbxEngineRuntimeEventRendererEvent } from './xbxengine'
-import { DATA_XCLOUD_CATALOG_UPDATED_CHANNEL } from './data'
 import { AUTH_SESSION_READY_CHANNEL, AUTH_STATE_CHANGED_CHANNEL } from './auth'
+import { DATA_XCLOUD_CATALOG_UPDATED_CHANNEL } from './data'
 import {
   GAMEPAD_DEVICES_CHANGED_CHANNEL,
-  GAMEPAD_SLOT_SNAPSHOT_CHANNEL,
   GAMEPAD_RUNTIME_SNAPSHOT_CHANNEL,
+  GAMEPAD_SLOT_SNAPSHOT_CHANNEL,
 
 } from './gamepad'
 import {
@@ -19,8 +19,8 @@ import {
 
 } from './xbxengine'
 
-export type { DataXcloudCatalogUpdatedRendererEvent } from './data'
 export type { AuthSessionReadyRendererEvent, AuthStateRendererEvent } from './auth'
+export type { DataXcloudCatalogUpdatedRendererEvent } from './data'
 export type {
   GamepadDevicesChangedRendererEvent,
   GamepadRuntimeSnapshotRendererEvent,

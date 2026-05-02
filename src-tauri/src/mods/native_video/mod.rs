@@ -1,4 +1,4 @@
-use std::collections::{HashMap, VecDeque};
+use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -29,20 +29,13 @@ use self::presenters::{
 };
 #[cfg(target_os = "macos")]
 use self::presenters::{MacOsVideoPresenter, MacOsWgpuPresenter};
-use self::scheduling::{
-    HostCadencePhase, HostCadenceTelemetry, HostFrameDropBacklog, ScheduledFrameSlot,
-    ScheduledFrameTakeOutcome,
-};
+use self::scheduling::{HostCadenceTelemetry, ScheduledFrameSlot, ScheduledFrameTakeOutcome};
 use self::types::{
     DecodedVideoSurface, VideoEffectPipelineKind, VideoPlatformCapabilities, VideoPresenterMode,
 };
 
 const MAIN_WINDOW_LABEL: &str = "main";
 const STREAM_VIEWPORT_ID: &str = "stream-page-video";
-const HOST_RENDER_FPS_WINDOW_MS: f64 = 1_000.0;
-const HOST_RENDER_MIN_FRAME_AGE_MS: f64 = 24.0;
-const HOST_RENDER_MAX_FRAME_AGE_MS: f64 = 75.0;
-const HOST_RENDER_FRAME_AGE_MULTIPLIER: f64 = 2.25;
 const HOST_TIMING_QUEUE_WARN_MS: f64 = 24.0;
 const HOST_TIMING_TICK_WARN_MS: f64 = 24.0;
 const HOST_TIMING_SAMPLED_STAGE_INTERVAL_MS: f64 = 1_000.0;
@@ -133,11 +126,11 @@ enum HostTimingRecordPolicy {
 fn resolve_host_timing_record_policy(stage: &str) -> HostTimingRecordPolicy {
     match stage {
         // 高频阶段在 present/pre-present 主链上会逐帧触发，按窗口采样降级。
-        "frame_slot_take_skipped"
+        "hostMailboxIdle"
         | "run_on_main_thread_delay"
         | "tick_total"
-        | "frame_submit_gap"
-        | "frame_submit_failed"
+        | "hostMailboxSubmitGap"
+        | "hostMailboxUpdateFailed"
         | "present_tick_failed"
         | "present_tick_blocked" => HostTimingRecordPolicy::Sampled,
         _ => HostTimingRecordPolicy::Always,
@@ -196,20 +189,23 @@ pub struct NativeVideoViewportState {
     pub last_present_kind: Option<String>,
     pub latest_host_present_time_ms: Option<f64>,
     pub latest_host_submit_time_ms: Option<f64>,
+    pub latest_host_submit_rtp_timestamp: Option<u32>,
     pub host_present_fps: f64,
-    pub host_submit_epoch: u64,
-    pub host_present_enqueue_count_total: u64,
-    pub host_present_drop_count_total: u64,
-    pub host_present_overwrite_count_total: u64,
+    pub host_mailbox_submit_epoch: u64,
+    pub host_mailbox_enqueue_count_total: u64,
+    pub host_mailbox_drop_count_total: u64,
+    pub host_mailbox_overwrite_count_total: u64,
     pub host_no_pending_take_count_total: u64,
     pub host_no_pending_streak: u32,
     pub host_no_pending_max_streak: u32,
     pub host_display_tick_epoch: u64,
-    pub host_present_epoch: u64,
+    pub host_frame_present_epoch: u64,
     pub host_cadence_phase: Option<String>,
     pub last_displayed_frame_seq: Option<u64>,
     pub last_displayed_frame_rtp_timestamp: Option<u32>,
     pub last_displayed_at_ms: Option<f64>,
+    pub host_view_generation: u64,
+    pub latest_host_view_created_at_ms: Option<f64>,
     pub host_display_interval_ms: Option<f64>,
     pub host_frame_age_budget_ms: Option<f64>,
     pub host_descriptor_upload_mode: Option<String>,
@@ -308,9 +304,6 @@ impl NativeVideoRegistry {
     pub fn reset_presenter_for_host_stall_recovery(&mut self, viewport_id: &str) {
         if let Some(mut presenter) = self.presenters.remove(viewport_id) {
             presenter.detach();
-        }
-        if let Some(viewport) = self.viewports.get_mut(viewport_id) {
-            reset_viewport_present_runtime_state(viewport);
         }
         record_native_video_trace(
             "presenterResetForHostStall",
@@ -546,19 +539,22 @@ fn reset_viewport_present_runtime_state(viewport: &mut NativeVideoViewportState)
     viewport.latest_host_present_time_ms = None;
     viewport.host_present_fps = 0.0;
     viewport.latest_host_submit_time_ms = None;
-    viewport.host_submit_epoch = 0;
-    viewport.host_present_enqueue_count_total = 0;
-    viewport.host_present_drop_count_total = 0;
-    viewport.host_present_overwrite_count_total = 0;
+    viewport.latest_host_submit_rtp_timestamp = None;
+    viewport.host_mailbox_submit_epoch = 0;
+    viewport.host_mailbox_enqueue_count_total = 0;
+    viewport.host_mailbox_drop_count_total = 0;
+    viewport.host_mailbox_overwrite_count_total = 0;
     viewport.host_no_pending_take_count_total = 0;
     viewport.host_no_pending_streak = 0;
     viewport.host_no_pending_max_streak = 0;
     viewport.host_display_tick_epoch = 0;
-    viewport.host_present_epoch = 0;
+    viewport.host_frame_present_epoch = 0;
     viewport.host_cadence_phase = None;
     viewport.last_displayed_frame_seq = None;
     viewport.last_displayed_frame_rtp_timestamp = None;
     viewport.last_displayed_at_ms = None;
+    viewport.host_view_generation = 0;
+    viewport.latest_host_view_created_at_ms = None;
     viewport.host_display_interval_ms = None;
     viewport.host_frame_age_budget_ms = None;
 }
@@ -673,180 +669,54 @@ pub(super) struct MacOsWgpuState {
     renderer: Option<wgpu_renderer::WgpuFrameRenderer>,
     latest_frame: Option<XbxEngineRenderFrame>,
     last_presented_frame_seq: Option<u64>,
+    last_presented_view_generation: u64,
     last_surface_size: Option<(u32, u32)>,
     host_view_ptr: Option<*mut objc2::runtime::AnyObject>,
     host_view_managed: bool,
+    host_view_generation: u64,
+    latest_host_view_created_at_ms: Option<f64>,
+    descriptor_upload_mode: Option<String>,
+    descriptor_metal_import_count_total: u64,
+    descriptor_cpu_upload_count_total: u64,
     render_loop_started: bool,
     init_failed_logged: bool,
 }
 
+#[cfg(test)]
+pub(super) type MacOsWgpuTelemetry = HostCadenceTelemetry;
+
 #[cfg(target_os = "macos")]
-#[derive(Default)]
-pub(super) struct MacOsWgpuTelemetry {
-    latest_present_time_ms: Option<f64>,
-    latest_submit_time_ms: Option<f64>,
-    display_tick_epoch: u64,
-    present_epoch: u64,
-    cadence_phase: HostCadencePhase,
-    recent_present_times_ms: VecDeque<f64>,
-    recent_display_tick_times_ms: VecDeque<f64>,
-    present_enqueue_count_total: u64,
-    present_drop_count_total: u64,
-    present_overwrite_count_total: u64,
-    no_pending_take_count_total: u64,
-    no_pending_streak: u32,
-    no_pending_max_streak: u32,
-    pending_frame_drops: HostFrameDropBacklog,
-    descriptor_upload_mode: Option<String>,
-    descriptor_metal_import_count_total: u64,
-    descriptor_cpu_upload_count_total: u64,
+fn request_host_present_tick_dispatch(
+    render_loop_pending: &Arc<AtomicBool>,
+    rerun_requested: &Arc<AtomicBool>,
+) -> bool {
+    if render_loop_pending.swap(true, Ordering::Relaxed) {
+        rerun_requested.store(true, Ordering::Relaxed);
+        return false;
+    }
+    true
 }
 
 #[cfg(target_os = "macos")]
-impl MacOsWgpuTelemetry {
-    fn record_display_tick(&mut self, now_ms: f64) {
-        self.recent_display_tick_times_ms.push_back(now_ms);
-        self.trim_display_ticks(now_ms);
-        self.display_tick_epoch = self.display_tick_epoch.saturating_add(1);
-        if matches!(self.cadence_phase, HostCadencePhase::Idle) {
-            self.cadence_phase = HostCadencePhase::Priming;
-        }
+fn finish_host_present_tick_dispatch(
+    render_loop_pending: &Arc<AtomicBool>,
+    rerun_requested: &Arc<AtomicBool>,
+) -> bool {
+    if rerun_requested.swap(false, Ordering::Relaxed) {
+        return true;
     }
-
-    fn record_present(&mut self, now_ms: f64) {
-        self.latest_present_time_ms = Some(now_ms);
-        self.recent_present_times_ms.push_back(now_ms);
-        self.trim_recent(now_ms);
-        self.present_epoch = self.present_epoch.saturating_add(1);
-        self.cadence_phase = HostCadencePhase::Steady;
-    }
-
-    fn record_drop(&mut self) {
-        self.present_drop_count_total = self.present_drop_count_total.saturating_add(1);
-    }
-
-    fn record_no_pending_take(&mut self) {
-        self.no_pending_take_count_total = self.no_pending_take_count_total.saturating_add(1);
-        self.no_pending_streak = self.no_pending_streak.saturating_add(1);
-        self.no_pending_max_streak = self.no_pending_max_streak.max(self.no_pending_streak);
-        if self.present_epoch > 0 {
-            self.cadence_phase = HostCadencePhase::Starved;
-        }
-    }
-
-    fn clear_no_pending_streak(&mut self) {
-        self.no_pending_streak = 0;
-        self.cadence_phase = if self.present_epoch > 0 {
-            HostCadencePhase::Steady
-        } else if self.display_tick_epoch > 0 {
-            HostCadencePhase::Priming
-        } else {
-            HostCadencePhase::Idle
-        };
-    }
-
-    fn record_stale_frame_drop(
-        &mut self,
-        frame: &XbxEngineRenderFrame,
-        observed_at_ms: f64,
-        detail: &str,
-        queue_depth: usize,
-    ) {
-        self.record_drop();
-        self.pending_frame_drops.record_stale_frame_drop(
-            frame,
-            observed_at_ms,
-            detail,
-            queue_depth,
-        );
-    }
-
-    fn take_pending_frame_drops(&mut self) -> Vec<xbxengine::XbxEngineHostVideoFrameDropEvent> {
-        self.pending_frame_drops.take_all()
-    }
-
-    fn present_fps(&self) -> f64 {
-        calculate_recent_fps(&self.recent_present_times_ms)
-    }
-
-    fn display_interval_ms(&self) -> Option<f64> {
-        calculate_recent_interval_ms(&self.recent_display_tick_times_ms)
-    }
-
-    fn frame_age_budget_ms(&self) -> f64 {
-        self.display_interval_ms()
-            .map(|interval_ms| {
-                (interval_ms * HOST_RENDER_FRAME_AGE_MULTIPLIER)
-                    .clamp(HOST_RENDER_MIN_FRAME_AGE_MS, HOST_RENDER_MAX_FRAME_AGE_MS)
-            })
-            .unwrap_or(HOST_RENDER_MAX_FRAME_AGE_MS)
-    }
-
-    fn display_tick_epoch(&self) -> u64 {
-        self.display_tick_epoch
-    }
-
-    fn present_epoch(&self) -> u64 {
-        self.present_epoch
-    }
-
-    fn cadence_phase(&self) -> HostCadencePhase {
-        self.cadence_phase
-    }
-
-    fn reset_frame_slot(&mut self) {
-        self.latest_present_time_ms = None;
-        self.latest_submit_time_ms = None;
-        self.display_tick_epoch = 0;
-        self.present_epoch = 0;
-        self.cadence_phase = HostCadencePhase::Idle;
-        self.recent_present_times_ms.clear();
-        self.recent_display_tick_times_ms.clear();
-        self.present_enqueue_count_total = 0;
-        self.present_drop_count_total = 0;
-        self.present_overwrite_count_total = 0;
-        self.no_pending_take_count_total = 0;
-        self.no_pending_streak = 0;
-        self.no_pending_max_streak = 0;
-        self.pending_frame_drops.reset();
-        self.descriptor_upload_mode = None;
-        self.descriptor_metal_import_count_total = 0;
-        self.descriptor_cpu_upload_count_total = 0;
-    }
-
-    fn trim_recent(&mut self, now_ms: f64) {
-        while self
-            .recent_present_times_ms
-            .front()
-            .is_some_and(|ts_ms| now_ms - *ts_ms > HOST_RENDER_FPS_WINDOW_MS)
-        {
-            self.recent_present_times_ms.pop_front();
-        }
-    }
-
-    fn trim_display_ticks(&mut self, now_ms: f64) {
-        while self
-            .recent_display_tick_times_ms
-            .front()
-            .is_some_and(|ts_ms| now_ms - *ts_ms > HOST_RENDER_FPS_WINDOW_MS)
-        {
-            self.recent_display_tick_times_ms.pop_front();
-        }
-    }
+    render_loop_pending.store(false, Ordering::Relaxed);
+    false
 }
 
 #[cfg(target_os = "macos")]
-#[derive(Default)]
-pub(super) struct MacOsLayerState {
-    display_layer_ptr: Option<*mut objc2::runtime::AnyObject>,
-    first_present_logged: bool,
-    cached_format_desc: Option<CachedFormatDescription>,
-    last_layer_bounds: Option<[f64; 4]>,
-    last_layer_scale: Option<f64>,
+fn clear_host_present_tick_dispatch(
+    render_loop_pending: &Arc<AtomicBool>,
+    rerun_requested: &Arc<AtomicBool>,
+) {
+    rerun_requested.store(false, Ordering::Relaxed);
+    render_loop_pending.store(false, Ordering::Relaxed);
 }
-
-#[cfg(target_os = "macos")]
-unsafe impl Send for MacOsWgpuState {}
 
 #[cfg(target_os = "macos")]
 struct PendingFlagGuard {
@@ -868,146 +738,234 @@ impl Drop for PendingFlagGuard {
 }
 
 #[cfg(target_os = "macos")]
+#[derive(Default)]
+pub(super) struct MacOsLayerState {
+    display_layer_ptr: Option<*mut objc2::runtime::AnyObject>,
+    first_present_logged: bool,
+    cached_format_desc: Option<CachedFormatDescription>,
+    last_layer_bounds: Option<[f64; 4]>,
+    last_layer_scale: Option<f64>,
+    display_layer_generation: u64,
+    latest_display_layer_created_at_ms: Option<f64>,
+}
+
+#[cfg(target_os = "macos")]
+unsafe impl Send for MacOsWgpuState {}
+
+#[cfg(target_os = "macos")]
 pub(super) fn run_wgpu_render_tick(
     window: &Window,
     app_handle: &AppHandle,
     viewport_id: &str,
     renderer_state: &Arc<Mutex<MacOsWgpuState>>,
-    telemetry: &Arc<Mutex<MacOsWgpuTelemetry>>,
+    frame_slot: &Arc<Mutex<ScheduledFrameSlot>>,
+    telemetry: &Arc<Mutex<HostCadenceTelemetry>>,
     render_loop_pending: &Arc<AtomicBool>,
+    rerun_requested: &Arc<AtomicBool>,
     dispatch_requested_at_ms: Option<f64>,
     runtime_trace: Option<RuntimeTraceRecorderRef>,
 ) {
     let tick_started_at_ms = now_ms_f64();
-    let _pending_guard = PendingFlagGuard::new(render_loop_pending.clone());
-    if let Some(dispatch_ms) = dispatch_requested_at_ms {
-        let queue_delay_ms = (tick_started_at_ms - dispatch_ms).max(0.0);
-        if queue_delay_ms >= HOST_TIMING_QUEUE_WARN_MS {
-            record_native_video_timing_event(
-                runtime_trace.as_ref(),
-                "wgpu",
-                "run_on_main_thread_delay",
-                viewport_id,
-                window.label(),
-                serde_json::json!({
-                    "queueDelayMs": queue_delay_ms,
-                }),
-            );
-        }
-    }
-    let Ok(mut state) = renderer_state.lock() else {
-        return;
-    };
-    let Some(host_view_ptr) = ensure_wgpu_host_view(app_handle, window, &mut state) else {
-        return;
-    };
-    let Some((surface_width, surface_height)) =
-        current_wgpu_surface_size_pixels(window, host_view_ptr)
-    else {
-        return;
-    };
-    let size_changed = state.last_surface_size != Some((surface_width, surface_height));
-    if state.renderer.is_none() {
-        match pollster::block_on(wgpu_renderer::WgpuFrameRenderer::new(
-            host_view_ptr.cast::<std::ffi::c_void>(),
-            surface_width,
-            surface_height,
-        )) {
-            Ok(renderer) => {
-                state.renderer = Some(renderer);
-                state.last_surface_size = Some((surface_width, surface_height));
+    let run_tick = || {
+        if let Some(dispatch_ms) = dispatch_requested_at_ms {
+            let queue_delay_ms = (tick_started_at_ms - dispatch_ms).max(0.0);
+            if queue_delay_ms >= HOST_TIMING_QUEUE_WARN_MS {
+                record_native_video_timing_event(
+                    runtime_trace.as_ref(),
+                    "wgpu",
+                    "run_on_main_thread_delay",
+                    viewport_id,
+                    window.label(),
+                    serde_json::json!({
+                        "queueDelayMs": queue_delay_ms,
+                    }),
+                );
             }
-            Err(error) => {
-                if !state.init_failed_logged {
-                    state.init_failed_logged = true;
+        }
+        let Ok(mut state) = renderer_state.lock() else {
+            return;
+        };
+        let host_view_generation_before_tick = state.host_view_generation;
+        let Some(host_view_ptr) = ensure_wgpu_host_view(app_handle, window, &mut state) else {
+            return;
+        };
+        let host_view_generation_changed =
+            state.host_view_generation != host_view_generation_before_tick;
+        let Some((surface_width, surface_height)) =
+            current_wgpu_surface_size_pixels(window, host_view_ptr)
+        else {
+            return;
+        };
+        let size_changed = state.last_surface_size != Some((surface_width, surface_height));
+        if state.renderer.is_none() {
+            match pollster::block_on(wgpu_renderer::WgpuFrameRenderer::new(
+                host_view_ptr.cast::<std::ffi::c_void>(),
+                surface_width,
+                surface_height,
+            )) {
+                Ok(renderer) => {
+                    state.renderer = Some(renderer);
+                    state.last_surface_size = Some((surface_width, surface_height));
+                }
+                Err(error) => {
+                    if !state.init_failed_logged {
+                        state.init_failed_logged = true;
+                        log::warn!(
+                            "[native_video][wgpu] failed to create renderer for viewport={} window={} error={}",
+                            viewport_id,
+                            window.label(),
+                            error
+                        );
+                    }
+                    return;
+                }
+            }
+        }
+
+        let now_ms = now_ms_f64();
+        let take_outcome = {
+            let Ok(mut telemetry) = telemetry.lock() else {
+                return;
+            };
+            telemetry.record_display_tick(now_ms);
+            let Ok(mut frame_slot) = frame_slot.lock() else {
+                return;
+            };
+            if host_view_generation_changed {
+                frame_slot.begin_view_epoch();
+            }
+            frame_slot.take_ready_frame(now_ms, &mut telemetry)
+        };
+        if size_changed {
+            state.last_surface_size = Some((surface_width, surface_height));
+        }
+        let cached_frame_for_repaint = state.latest_frame.clone();
+        let has_cached_frame = cached_frame_for_repaint.is_some();
+        let Some(renderer) = state.renderer.as_mut() else {
+            return;
+        };
+        if size_changed {
+            renderer.update_surface_size(surface_width, surface_height);
+        }
+        match take_outcome {
+            ScheduledFrameTakeOutcome::Ready(frame) => {
+                renderer.update_frame(frame.clone());
+                if let Err(error) = renderer.render() {
                     log::warn!(
-                        "[native_video][wgpu] failed to create renderer for viewport={} window={} error={}",
+                        "[native_video][wgpu] render failed for viewport={} window={} error={}",
                         viewport_id,
                         window.label(),
                         error
                     );
-                }
-                return;
-            }
-        }
-    }
-
-    let now_ms = now_ms_f64();
-    let frame_age_budget_ms = if let Ok(mut telemetry) = telemetry.lock() {
-        telemetry.record_display_tick(now_ms);
-        telemetry.frame_age_budget_ms()
-    } else {
-        HOST_RENDER_MAX_FRAME_AGE_MS
-    };
-    let should_render = size_changed
-        || state.latest_frame.as_ref().map(|frame| frame.frame_seq)
-            != state.last_presented_frame_seq;
-    let latest_frame = state.latest_frame.clone();
-    if latest_frame.is_none() {
-        if let Ok(mut telemetry) = telemetry.lock() {
-            telemetry.record_no_pending_take();
-        }
-    } else if let Ok(mut telemetry) = telemetry.lock() {
-        telemetry.clear_no_pending_streak();
-    }
-    let rendered_seq_before = state.last_presented_frame_seq;
-    if size_changed {
-        state.last_surface_size = Some((surface_width, surface_height));
-    }
-    let Some(renderer) = state.renderer.as_mut() else {
-        return;
-    };
-    if size_changed {
-        renderer.update_surface_size(surface_width, surface_height);
-    }
-    if let Some(frame) = latest_frame {
-        if should_render {
-            if now_ms - frame.rendered_at_ms > frame_age_budget_ms {
-                state.last_presented_frame_seq = Some(frame.frame_seq);
-                state.latest_frame = None;
-                if let Ok(mut telemetry) = telemetry.lock() {
-                    telemetry.record_stale_frame_drop(&frame, now_ms, "scheduledFrameStale", 1);
-                }
-                return;
-            }
-            let rendered_seq = frame.frame_seq;
-            renderer.update_frame(frame);
-            if let Err(error) = renderer.render() {
-                log::warn!(
-                    "[native_video][wgpu] render failed for viewport={} window={} error={}",
-                    viewport_id,
-                    window.label(),
-                    error
-                );
-            } else {
-                let descriptor_upload = renderer.descriptor_upload_telemetry();
-                state.last_presented_frame_seq = Some(rendered_seq);
-                if let Ok(mut telemetry) = telemetry.lock() {
-                    telemetry.record_present(now_ms);
-                    telemetry.descriptor_upload_mode = descriptor_upload.last_mode;
-                    telemetry.descriptor_metal_import_count_total =
+                } else {
+                    let descriptor_upload = renderer.descriptor_upload_telemetry();
+                    state.latest_frame = Some(frame);
+                    state.last_presented_view_generation = state.host_view_generation;
+                    state.descriptor_upload_mode = descriptor_upload.last_mode;
+                    state.descriptor_metal_import_count_total =
                         descriptor_upload.metal_import_count_total;
-                    telemetry.descriptor_cpu_upload_count_total =
+                    state.descriptor_cpu_upload_count_total =
                         descriptor_upload.cpu_upload_count_total;
+                    if let Ok(mut telemetry) = telemetry.lock() {
+                        telemetry.record_present(now_ms);
+                    }
                 }
             }
+            ScheduledFrameTakeOutcome::RetainedDisplayedFrame => {
+                if size_changed {
+                    if let Some(frame) = cached_frame_for_repaint {
+                        renderer.update_frame(frame);
+                        let _ = renderer.render();
+                    }
+                }
+            }
+            ScheduledFrameTakeOutcome::NoPendingFrame => {
+                if !has_cached_frame && size_changed {
+                    let _ = renderer.render();
+                }
+            }
+            ScheduledFrameTakeOutcome::DroppedStale { .. } => {}
         }
-    } else if rendered_seq_before.is_none() && size_changed {
-        let _ = renderer.render();
-    }
-    let tick_total_ms = (now_ms_f64() - tick_started_at_ms).max(0.0);
-    if tick_total_ms >= HOST_TIMING_TICK_WARN_MS {
-        record_native_video_timing_event(
-            runtime_trace.as_ref(),
-            "wgpu",
-            "tick_total",
+        let tick_total_ms = (now_ms_f64() - tick_started_at_ms).max(0.0);
+        if tick_total_ms >= HOST_TIMING_TICK_WARN_MS {
+            record_native_video_timing_event(
+                runtime_trace.as_ref(),
+                "wgpu",
+                "tick_total",
+                viewport_id,
+                window.label(),
+                serde_json::json!({
+                    "totalMs": tick_total_ms,
+                }),
+            );
+        }
+    };
+
+    run_tick();
+
+    if finish_host_present_tick_dispatch(render_loop_pending, rerun_requested) {
+        if let Err(error) = dispatch_wgpu_render_tick_on_main_thread(
+            window,
+            app_handle,
             viewport_id,
-            window.label(),
-            serde_json::json!({
-                "totalMs": tick_total_ms,
-            }),
-        );
+            renderer_state,
+            frame_slot,
+            telemetry,
+            render_loop_pending,
+            rerun_requested,
+            runtime_trace.clone(),
+        ) {
+            record_native_video_timing_event(
+                runtime_trace.as_ref(),
+                "wgpu",
+                "run_on_main_thread_enqueue_failed",
+                viewport_id,
+                window.label(),
+                serde_json::json!({
+                    "error": error.to_string(),
+                    "source": "followupTick",
+                }),
+            );
+            clear_host_present_tick_dispatch(render_loop_pending, rerun_requested);
+        }
     }
+}
+
+#[cfg(target_os = "macos")]
+pub(super) fn dispatch_wgpu_render_tick_on_main_thread(
+    window: &Window,
+    app_handle: &AppHandle,
+    viewport_id: &str,
+    renderer_state: &Arc<Mutex<MacOsWgpuState>>,
+    frame_slot: &Arc<Mutex<ScheduledFrameSlot>>,
+    telemetry: &Arc<Mutex<HostCadenceTelemetry>>,
+    render_loop_pending: &Arc<AtomicBool>,
+    rerun_requested: &Arc<AtomicBool>,
+    runtime_trace: Option<RuntimeTraceRecorderRef>,
+) -> tauri::Result<()> {
+    let renderer_state = renderer_state.clone();
+    let frame_slot = frame_slot.clone();
+    let telemetry = telemetry.clone();
+    let render_loop_pending = render_loop_pending.clone();
+    let rerun_requested = rerun_requested.clone();
+    let viewport_id = viewport_id.to_string();
+    let app_handle = app_handle.clone();
+    let window_for_task = window.clone();
+    let dispatch_requested_at_ms = now_ms_f64();
+    window.run_on_main_thread(move || {
+        run_wgpu_render_tick(
+            &window_for_task,
+            &app_handle,
+            &viewport_id,
+            &renderer_state,
+            &frame_slot,
+            &telemetry,
+            &render_loop_pending,
+            &rerun_requested,
+            Some(dispatch_requested_at_ms),
+            runtime_trace,
+        );
+    })
 }
 
 #[cfg(target_os = "macos")]
@@ -1116,6 +1074,8 @@ fn ensure_wgpu_host_view(
         }
         state.host_view_ptr = Some(created_view_ptr);
         state.host_view_managed = true;
+        state.host_view_generation = state.host_view_generation.saturating_add(1);
+        state.latest_host_view_created_at_ms = Some(now_ms_f64());
         return state.host_view_ptr;
     }
 
@@ -1196,10 +1156,13 @@ fn ensure_wgpu_host_view(
     if !created_view_ptr.is_null() {
         state.host_view_ptr = Some(created_view_ptr);
         state.host_view_managed = true;
+        state.host_view_generation = state.host_view_generation.saturating_add(1);
+        state.latest_host_view_created_at_ms = Some(now_ms_f64());
         record_native_video_trace(
             "host_view_created",
             json!({
                 "windowLabel": window_label,
+                "hostViewGeneration": state.host_view_generation,
             }),
         );
         log::info!(
@@ -1256,8 +1219,10 @@ struct MacOsDisplayLinkContext {
     window_label: String,
     app_handle: AppHandle,
     renderer_state: Arc<Mutex<MacOsWgpuState>>,
-    telemetry: Arc<Mutex<MacOsWgpuTelemetry>>,
+    frame_slot: Arc<Mutex<ScheduledFrameSlot>>,
+    telemetry: Arc<Mutex<HostCadenceTelemetry>>,
     render_loop_pending: Arc<AtomicBool>,
+    rerun_requested: Arc<AtomicBool>,
     runtime_trace: Option<RuntimeTraceRecorderRef>,
 }
 
@@ -1277,8 +1242,10 @@ impl MacOsDisplayLinkHandle {
         window_label: String,
         app_handle: AppHandle,
         renderer_state: Arc<Mutex<MacOsWgpuState>>,
-        telemetry: Arc<Mutex<MacOsWgpuTelemetry>>,
+        frame_slot: Arc<Mutex<ScheduledFrameSlot>>,
+        telemetry: Arc<Mutex<HostCadenceTelemetry>>,
         render_loop_pending: Arc<AtomicBool>,
+        rerun_requested: Arc<AtomicBool>,
         runtime_trace: Option<RuntimeTraceRecorderRef>,
     ) -> Result<Self, String> {
         let context = Box::new(MacOsDisplayLinkContext {
@@ -1286,8 +1253,10 @@ impl MacOsDisplayLinkHandle {
             window_label,
             app_handle,
             renderer_state,
+            frame_slot,
             telemetry,
             render_loop_pending,
+            rerun_requested,
             runtime_trace,
         });
         let context_ptr = Box::into_raw(context);
@@ -1436,33 +1405,24 @@ unsafe extern "C" fn macos_display_link_callback(
     let Some(context) = (display_link_context as *mut MacOsDisplayLinkContext).as_ref() else {
         return 0;
     };
-    if context.render_loop_pending.swap(true, Ordering::Relaxed) {
+    if !request_host_present_tick_dispatch(&context.render_loop_pending, &context.rerun_requested) {
         return 0;
     }
     let Some(window) = context.app_handle.get_window(&context.window_label) else {
-        context.render_loop_pending.store(false, Ordering::Relaxed);
+        clear_host_present_tick_dispatch(&context.render_loop_pending, &context.rerun_requested);
         return 0;
     };
-    let renderer_state = context.renderer_state.clone();
-    let telemetry = context.telemetry.clone();
-    let render_loop_pending = context.render_loop_pending.clone();
-    let viewport_id = context.viewport_id.clone();
-    let app_handle = context.app_handle.clone();
-    let runtime_trace = context.runtime_trace.clone();
-    let window_for_task = window.clone();
-    let dispatch_requested_at_ms = now_ms_f64();
-    if let Err(error) = window.run_on_main_thread(move || {
-        run_wgpu_render_tick(
-            &window_for_task,
-            &app_handle,
-            &viewport_id,
-            &renderer_state,
-            &telemetry,
-            &render_loop_pending,
-            Some(dispatch_requested_at_ms),
-            runtime_trace,
-        );
-    }) {
+    if let Err(error) = dispatch_wgpu_render_tick_on_main_thread(
+        &window,
+        &context.app_handle,
+        &context.viewport_id,
+        &context.renderer_state,
+        &context.frame_slot,
+        &context.telemetry,
+        &context.render_loop_pending,
+        &context.rerun_requested,
+        context.runtime_trace.clone(),
+    ) {
         record_native_video_timing_event(
             context.runtime_trace.as_ref(),
             "wgpu",
@@ -1471,9 +1431,10 @@ unsafe extern "C" fn macos_display_link_callback(
             &context.window_label,
             serde_json::json!({
                 "error": error.to_string(),
+                "source": "displayLink",
             }),
         );
-        context.render_loop_pending.store(false, Ordering::Relaxed);
+        clear_host_present_tick_dispatch(&context.render_loop_pending, &context.rerun_requested);
     }
     0
 }
@@ -1540,30 +1501,6 @@ pub(super) fn now_ms_f64() -> f64 {
         .duration_since(UNIX_EPOCH)
         .map(|duration| duration.as_millis() as f64)
         .unwrap_or(0.0)
-}
-
-fn calculate_recent_fps(recent_times_ms: &VecDeque<f64>) -> f64 {
-    if recent_times_ms.len() < 2 {
-        return recent_times_ms.len() as f64;
-    }
-    let Some(first) = recent_times_ms.front() else {
-        return 0.0;
-    };
-    let Some(last) = recent_times_ms.back() else {
-        return 0.0;
-    };
-    let elapsed_ms = (last - first).max(1.0);
-    ((recent_times_ms.len() - 1) as f64) * 1000.0 / elapsed_ms
-}
-
-fn calculate_recent_interval_ms(recent_times_ms: &VecDeque<f64>) -> Option<f64> {
-    if recent_times_ms.len() < 2 {
-        return None;
-    }
-    let first = *recent_times_ms.front()?;
-    let last = *recent_times_ms.back()?;
-    let elapsed_ms = (last - first).max(1.0);
-    Some(elapsed_ms / (recent_times_ms.len() - 1) as f64)
 }
 
 #[cfg(target_os = "macos")]
@@ -1663,13 +1600,13 @@ pub(super) fn run_layer_present_tick(
     record_native_video_timing_event_lazy(
         runtime_trace.as_ref(),
         "layer",
-        "sample_presented",
+        "hostFramePresented",
         viewport_id,
         window_label,
         || {
             let host_display_tick_epoch =
                 telemetry_diag.as_ref().map(|diag| diag.display_tick_epoch);
-            let host_present_epoch = telemetry_diag.as_ref().map(|diag| diag.present_epoch);
+            let host_frame_present_epoch = telemetry_diag.as_ref().map(|diag| diag.present_epoch);
             let host_cadence_phase = telemetry_diag
                 .as_ref()
                 .map(|diag| diag.cadence_phase.as_str().to_string());
@@ -1704,7 +1641,7 @@ pub(super) fn run_layer_present_tick(
                 "queueDepth": queue_depth,
                 "pendingQueueDepth": pending_queue_depth,
                 "hostDisplayTickEpoch": host_display_tick_epoch,
-                "hostPresentEpoch": host_present_epoch,
+                "hostFramePresentEpoch": host_frame_present_epoch,
                 "hostCadencePhase": host_cadence_phase,
             })
         },
@@ -1814,10 +1751,13 @@ pub(super) fn ensure_display_layer(
 
         state.display_layer_ptr = Some(layer);
         state.last_layer_bounds = Some(ns_rect_to_key(bounds));
+        state.display_layer_generation = state.display_layer_generation.saturating_add(1);
+        state.latest_display_layer_created_at_ms = Some(now_ms_f64());
         record_native_video_trace(
             "display_layer_created",
             json!({
                 "windowLabel": window.label(),
+                "displayLayerGeneration": state.display_layer_generation,
             }),
         );
     });
@@ -1906,18 +1846,24 @@ pub(super) fn prepare_layer_sample_for_present(
             record_native_video_timing_event_lazy(
                 runtime_trace,
                 "layer",
-                "frame_slot_take_retained",
+                "hostMailboxPendingProtected",
                 viewport_id,
                 window_label,
                 || {
+                    let displayed_frame_age_ms = frame_slot_diag
+                        .displayed_frame_rendered_at_ms
+                        .map(|rendered_at_ms| (now_ms - rendered_at_ms).max(0.0));
                     json!({
                         "displayedFrameSeq": frame_slot_diag.displayed_frame_seq,
+                        "displayedFrameRtpTimestamp": frame_slot_diag.displayed_frame_rtp_timestamp,
+                        "displayedFrameRecoveryDisposition": frame_slot_diag.displayed_frame_recovery_disposition,
+                        "displayedFrameAgeMs": displayed_frame_age_ms,
                         "pendingFrameSeqs": frame_slot_diag.pending_frame_seqs,
                         "lastPresentedFrameSeq": frame_slot_diag.last_presented_frame_seq,
                         "queueDepth": frame_slot_diag.queue_depth,
                         "pendingQueueDepth": frame_slot_diag.pending_queue_depth,
                         "hostDisplayTickEpoch": telemetry_diag.display_tick_epoch,
-                        "hostPresentEpoch": telemetry_diag.present_epoch,
+                        "hostFramePresentEpoch": telemetry_diag.present_epoch,
                         "hostCadencePhase": telemetry_diag.cadence_phase.as_str(),
                         "noPendingStreak": telemetry_diag.no_pending_streak,
                     })
@@ -1929,19 +1875,25 @@ pub(super) fn prepare_layer_sample_for_present(
             record_native_video_timing_event_lazy(
                 runtime_trace,
                 "layer",
-                "frame_slot_take_skipped",
+                "hostMailboxIdle",
                 viewport_id,
                 window_label,
                 || {
+                    let displayed_frame_age_ms = frame_slot_diag
+                        .displayed_frame_rendered_at_ms
+                        .map(|rendered_at_ms| (now_ms - rendered_at_ms).max(0.0));
                     json!({
                         "reason": "noPendingFrame",
                         "displayedFrameSeq": frame_slot_diag.displayed_frame_seq,
+                        "displayedFrameRtpTimestamp": frame_slot_diag.displayed_frame_rtp_timestamp,
+                        "displayedFrameRecoveryDisposition": frame_slot_diag.displayed_frame_recovery_disposition,
+                        "displayedFrameAgeMs": displayed_frame_age_ms,
                         "pendingFrameSeqs": frame_slot_diag.pending_frame_seqs,
                         "lastPresentedFrameSeq": frame_slot_diag.last_presented_frame_seq,
                         "queueDepth": frame_slot_diag.queue_depth,
                         "pendingQueueDepth": frame_slot_diag.pending_queue_depth,
                         "hostDisplayTickEpoch": telemetry_diag.display_tick_epoch,
-                        "hostPresentEpoch": telemetry_diag.present_epoch,
+                        "hostFramePresentEpoch": telemetry_diag.present_epoch,
                         "hostCadencePhase": telemetry_diag.cadence_phase.as_str(),
                         "noPendingStreak": telemetry_diag.no_pending_streak,
                         "noPendingTakeCountTotal": telemetry_diag.no_pending_take_count_total,
@@ -1958,7 +1910,7 @@ pub(super) fn prepare_layer_sample_for_present(
             record_native_video_timing_event_lazy(
                 runtime_trace,
                 "layer",
-                "frame_slot_take_dropped",
+                "hostMailboxRejected",
                 viewport_id,
                 window_label,
                 || {
@@ -1973,7 +1925,7 @@ pub(super) fn prepare_layer_sample_for_present(
                         "queueDepth": frame_slot_diag.queue_depth,
                         "pendingQueueDepth": frame_slot_diag.pending_queue_depth,
                         "hostDisplayTickEpoch": telemetry_diag.display_tick_epoch,
-                        "hostPresentEpoch": telemetry_diag.present_epoch,
+                        "hostFramePresentEpoch": telemetry_diag.present_epoch,
                         "hostCadencePhase": telemetry_diag.cadence_phase.as_str(),
                         "noPendingStreak": telemetry_diag.no_pending_streak,
                     })
@@ -2098,7 +2050,7 @@ pub(super) fn prepare_layer_sample_for_present(
                 "queueDepth": frame_slot_diag.queue_depth,
                 "pendingQueueDepth": frame_slot_diag.pending_queue_depth,
                 "hostDisplayTickEpoch": telemetry_diag.display_tick_epoch,
-                "hostPresentEpoch": telemetry_diag.present_epoch,
+                "hostFramePresentEpoch": telemetry_diag.present_epoch,
                 "hostCadencePhase": telemetry_diag.cadence_phase.as_str(),
                 "noPendingStreak": telemetry_diag.no_pending_streak,
             })

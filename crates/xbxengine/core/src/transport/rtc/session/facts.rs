@@ -8,16 +8,18 @@ use crate::transport::rtc::policy::display_supply::SchedulingDemandSignal;
 use crate::transport::rtc::policy::video_scheduling_owner::VideoSchedulingOwnerInput;
 use crate::transport::rtc::projection::TransportSnapshot;
 use crate::transport::rtc::recovery::contract::{
-    current_clean_anchor_observed_at_ms, current_clean_anchor_observed_at_ms_from_stats,
-    derive_gap_severity_from_timeline_observation, derive_gap_severity_with_episode_stall,
-    frame_value_from_gap_severity, has_current_transport_await_issue_from_observation,
-    is_transport_await_probe_source_event, recovery_episode_stage_from_status,
-    recovery_progress_level_from_episode,
+    current_clean_anchor_bridge_observed_at_ms, current_clean_anchor_observed_at_ms,
+    current_clean_anchor_observed_at_ms_from_stats, derive_gap_severity_from_timeline_observation,
+    derive_gap_severity_with_episode_stall, frame_value_from_gap_severity,
+    has_current_transport_await_issue_from_observation, is_transport_await_probe_source_event,
+    recovery_episode_stage_from_status, recovery_progress_level_from_episode,
 };
 use crate::transport::rtc::recovery::escalation::VideoEscalationReason;
 use crate::transport::rtc::recovery::policy::{DisplaySupplyThresholds, ScenarioPolicyProfileKind};
 use crate::transport::rtc::recovery::remote_profile_runtime::persist_runtime_remote_profile_facts;
-use crate::transport::rtc::recovery::runtime_state::resolve_recovery_profile;
+use crate::transport::rtc::recovery::runtime_state::{
+    resolve_recovery_profile, resolve_runtime_recovery_profile,
+};
 use crate::XbxEngineAnchorCandidateLedger;
 use crate::XbxEngineH264InspectionObservation;
 use crate::XbxEngineKeyframeRequestEpisodeObservation as XbxEnginePictureRecoveryEpisodeObservation;
@@ -94,6 +96,9 @@ pub(crate) struct OwnerRuntimeFacts {
     pub(crate) clean_anchor_epoch: Option<u64>,
     pub(crate) clean_anchor_observed_at_ms: Option<f64>,
     pub(crate) clean_anchor_source_event: Option<String>,
+    pub(crate) clean_anchor_bridge_epoch: Option<u64>,
+    pub(crate) clean_anchor_bridge_observed_at_ms: Option<f64>,
+    pub(crate) clean_anchor_bridge_source_event: Option<String>,
     pub(crate) latest_anchor_candidate_ledger: Option<XbxEngineAnchorCandidateLedger>,
     pub(crate) latest_video_track_status: Option<XbxEngineVideoTrackStatus>,
     pub(crate) latest_h264_inspection_observation: Option<XbxEngineH264InspectionObservation>,
@@ -109,11 +114,11 @@ pub(crate) fn build_scheduling_demand_signal(
         decode_age_ms,
         video_renderer_stalled,
         host_display_tick_epoch,
-        host_present_epoch,
+        host_frame_present_epoch,
         host_cadence_phase,
-        present_submit_count_total,
-        present_drop_count_total,
-        present_overwrite_count_total,
+        host_mailbox_enqueue_count_total,
+        host_mailbox_drop_count_total,
+        host_mailbox_overwrite_count_total,
         pacer_submit_count_total,
         pacer_drop_count_total,
         renderer_submit_count_total,
@@ -133,11 +138,11 @@ pub(crate) fn build_scheduling_demand_signal(
                 .map(|ts| (now_ms - ts).max(0.0)),
             stats.video_renderer_stalled.unwrap_or(false),
             Some(stats.host_display_tick_epoch),
-            Some(stats.video_present_epoch),
+            Some(stats.host_frame_present_epoch),
             stats.host_cadence_phase.clone(),
-            Some(stats.video_present_submit_count_total),
-            Some(stats.video_present_drop_count_total),
-            Some(stats.video_present_overwrite_count_total),
+            Some(stats.host_mailbox_enqueue_count_total),
+            Some(stats.host_mailbox_drop_count_total),
+            Some(stats.host_mailbox_overwrite_count_total),
             Some(stats.video_pacer_submit_count_total),
             Some(stats.video_pacer_drop_count_total),
             Some(stats.video_renderer_submit_count_total),
@@ -154,11 +159,11 @@ pub(crate) fn build_scheduling_demand_signal(
         decode_age_ms,
         video_renderer_stalled,
         host_display_tick_epoch,
-        host_present_epoch,
+        host_frame_present_epoch,
         host_cadence_phase,
-        present_submit_count_total,
-        present_drop_count_total,
-        present_overwrite_count_total,
+        host_mailbox_enqueue_count_total,
+        host_mailbox_drop_count_total,
+        host_mailbox_overwrite_count_total,
         pacer_submit_count_total,
         pacer_drop_count_total,
         renderer_submit_count_total,
@@ -175,6 +180,9 @@ pub(crate) fn read_owner_runtime_facts(
         clean_anchor_epoch: stats.video_anchor_clean_epoch,
         clean_anchor_observed_at_ms: stats.video_anchor_clean_observed_at_ms,
         clean_anchor_source_event: stats.video_anchor_clean_source_event.clone(),
+        clean_anchor_bridge_epoch: stats.video_anchor_bridge_epoch,
+        clean_anchor_bridge_observed_at_ms: stats.video_anchor_bridge_observed_at_ms,
+        clean_anchor_bridge_source_event: stats.video_anchor_bridge_source_event.clone(),
         latest_anchor_candidate_ledger: stats.latest_anchor_candidate_ledger.clone(),
         latest_video_track_status: stats.latest_video_track_status.clone(),
         latest_h264_inspection_observation: stats.latest_h264_inspection_observation.clone(),
@@ -218,6 +226,9 @@ pub(crate) fn build_owner_input(
         clean_anchor_epoch: owner_facts.clean_anchor_epoch,
         clean_anchor_observed_at_ms: owner_facts.clean_anchor_observed_at_ms,
         clean_anchor_source_event: owner_facts.clean_anchor_source_event.clone(),
+        clean_anchor_bridge_epoch: owner_facts.clean_anchor_bridge_epoch,
+        clean_anchor_bridge_observed_at_ms: owner_facts.clean_anchor_bridge_observed_at_ms,
+        clean_anchor_bridge_source_event: owner_facts.clean_anchor_bridge_source_event.clone(),
         latest_anchor_candidate_ledger: owner_facts.latest_anchor_candidate_ledger.clone(),
         latest_video_timeline_observation: owner_facts.latest_video_timeline_observation.clone(),
         latest_timeline_chain_state,
@@ -299,6 +310,15 @@ fn current_clean_anchor_at_ms(owner_facts: &OwnerRuntimeFacts) -> Option<f64> {
     )
 }
 
+fn current_clean_anchor_bridge_at_ms(owner_facts: &OwnerRuntimeFacts) -> Option<f64> {
+    current_clean_anchor_bridge_observed_at_ms(
+        owner_facts.clean_anchor_bridge_epoch,
+        owner_facts.clean_anchor_bridge_observed_at_ms,
+        owner_facts.clean_anchor_bridge_source_event.as_deref(),
+        owner_facts.recovery_epoch,
+    )
+}
+
 fn has_current_transport_await_issue(
     owner_facts: &OwnerRuntimeFacts,
     timeline: &XbxEngineVideoTimelineObservation,
@@ -315,6 +335,7 @@ fn is_current_transport_await_probe(
 ) -> bool {
     is_transport_await_probe_source_event(Some(timeline.source_event.as_str()))
         && current_clean_anchor_at_ms(owner_facts)
+            .or_else(|| current_clean_anchor_bridge_at_ms(owner_facts))
             .is_none_or(|clean_anchor_at_ms| timeline.observed_at_ms > clean_anchor_at_ms)
 }
 
@@ -426,6 +447,7 @@ pub(crate) fn compute_recovery_facts(
     timeline: &XbxEngineVideoTimelineObservation,
     stats: &XbxEngineMediaRuntimeStats,
 ) -> RecoveryFactsSnapshot {
+    let recovery_profile = resolve_runtime_recovery_profile(stats);
     // 1. 计算基础语义
     let base_severity = derive_gap_severity_from_timeline_observation(timeline);
     let episode_stalled = check_episode_stalled(timeline, stats);
@@ -445,7 +467,7 @@ pub(crate) fn compute_recovery_facts(
         recovery_episode.and_then(|ep| recovery_episode_stage_from_status(ep.status.as_str()));
     let has_current_clean_anchor = current_clean_anchor_observed_at_ms_from_stats(stats).is_some();
     let has_display_stable = matches!(stats.video_owner_state.as_deref(), Some("stable-serving"));
-    let recovery_progress_level = recovery_episode
+    let base_recovery_progress_level = recovery_episode
         .and_then(|ep| {
             recovery_progress_level_from_episode(
                 ep.status.as_str(),
@@ -466,10 +488,22 @@ pub(crate) fn compute_recovery_facts(
                 None
             }
         });
+    let (recovery_progress_level, recovery_progress_override_at_ms) =
+        reconcile_recovery_progress_from_current_bootstrap(
+            base_recovery_progress_level,
+            recovery_episode,
+            stats.latest_h264_inspection_observation.as_ref(),
+            has_current_clean_anchor,
+            timeline.observed_at_ms,
+            stats,
+            &recovery_profile,
+        );
 
-    let recovery_episode_progress_at_ms = stats
+    let base_recovery_episode_progress_at_ms = stats
         .video_anchor_clean_observed_at_ms
         .or_else(|| recovery_episode.and_then(|ep| ep.first_keyframe_decoded_at_ms));
+    let recovery_episode_progress_at_ms =
+        recovery_progress_override_at_ms.or(base_recovery_episode_progress_at_ms);
 
     #[cfg(test)]
     let clean_anchor_observed_at_ms = current_clean_anchor_observed_at_ms_from_stats(stats);
@@ -488,6 +522,191 @@ pub(crate) fn compute_recovery_facts(
         #[cfg(test)]
         has_current_clean_anchor,
     }
+}
+
+fn current_clean_anchor_bridge_observed_at_ms_from_stats(
+    stats: &XbxEngineMediaRuntimeStats,
+) -> Option<f64> {
+    current_clean_anchor_bridge_observed_at_ms(
+        stats.video_anchor_bridge_epoch,
+        stats.video_anchor_bridge_observed_at_ms,
+        stats.video_anchor_bridge_source_event.as_deref(),
+        stats.transport_recovery_epoch,
+    )
+}
+
+fn event_is_fresh(
+    observed_at_ms: Option<f64>,
+    now_ms: f64,
+    fresh_window_ms: f64,
+    floor_at_ms: f64,
+) -> Option<f64> {
+    observed_at_ms.filter(|observed_at| {
+        *observed_at >= floor_at_ms && (now_ms - *observed_at).max(0.0) <= fresh_window_ms
+    })
+}
+
+fn continuation_only_observed_at_ms(
+    recovery_episode: &XbxEnginePictureRecoveryEpisodeObservation,
+    inspection: Option<&XbxEngineH264InspectionObservation>,
+) -> Option<f64> {
+    let inspection = inspection?;
+    if inspection.bound_episode_id != Some(recovery_episode.episode_id)
+        || inspection.observed_at_ms <= recovery_episode.requested_at_ms
+        || inspection.bootstrap_ready
+        || !inspection.admission_accepted
+        || !matches!(
+            inspection.bootstrap_reject_reason.as_deref(),
+            Some("bootstrapMissingIdr" | "NonIdrVcl")
+        )
+    {
+        return None;
+    }
+    if inspection.continuation_verdict.as_deref() == Some("continuationAcceptedWhileAwaitingIdr")
+        && inspection.committed_sps_present
+        && inspection.committed_pps_present
+        && inspection.delta_continuation_ready
+    {
+        return Some(inspection.observed_at_ms);
+    }
+    None
+}
+
+fn playback_recovered_observed_at_ms(
+    recovery_episode: &XbxEnginePictureRecoveryEpisodeObservation,
+    now_ms: f64,
+    stats: &XbxEngineMediaRuntimeStats,
+    profile: &crate::transport::rtc::recovery::policy::RecoveryScenarioProfile,
+    continuation_only_observed_at_ms: Option<f64>,
+) -> Option<f64> {
+    let floor_at_ms = recovery_episode.requested_at_ms;
+    let bridge_at_ms = event_is_fresh(
+        current_clean_anchor_bridge_observed_at_ms_from_stats(stats),
+        now_ms,
+        profile.playback_recovered_host_present_fresh_ms,
+        floor_at_ms,
+    );
+    let host_present_at_ms = event_is_fresh(
+        stats.latest_video_host_present_time_ms,
+        now_ms,
+        profile.playback_recovered_host_present_fresh_ms,
+        floor_at_ms,
+    );
+    let render_submit_at_ms = event_is_fresh(
+        stats.latest_host_mailbox_submit_time_ms,
+        now_ms,
+        profile.playback_recovered_render_submit_fresh_ms,
+        floor_at_ms,
+    );
+    let track_progress_at_ms = stats.latest_video_track_status.as_ref().and_then(|status| {
+        (status.video_bytes_total > 0)
+            .then_some(status.observed_at_ms)
+            .and_then(|observed_at_ms| {
+                event_is_fresh(
+                    Some(observed_at_ms),
+                    now_ms,
+                    profile.playback_recovered_track_progress_fresh_ms,
+                    floor_at_ms,
+                )
+            })
+    });
+    let decode_progress_at_ms = event_is_fresh(
+        stats.latest_video_decode_ok_time_ms,
+        now_ms,
+        profile.playback_recovered_decode_progress_fresh_ms,
+        floor_at_ms,
+    );
+    let decode_and_track_progress_at_ms = decode_progress_at_ms
+        .zip(track_progress_at_ms)
+        .map(|(decode_at_ms, track_at_ms)| decode_at_ms.max(track_at_ms));
+    [
+        bridge_at_ms,
+        host_present_at_ms,
+        render_submit_at_ms,
+        decode_and_track_progress_at_ms,
+        continuation_only_observed_at_ms
+            .filter(|_| decode_progress_at_ms.is_some() || track_progress_at_ms.is_some()),
+    ]
+    .into_iter()
+    .flatten()
+    .max_by(|left, right| left.total_cmp(right))
+}
+
+fn decoded_stage_is_current(
+    recovery_episode: &XbxEnginePictureRecoveryEpisodeObservation,
+    stats: &XbxEngineMediaRuntimeStats,
+    profile: &crate::transport::rtc::recovery::policy::RecoveryScenarioProfile,
+) -> bool {
+    let Some(decoded_at_ms) = recovery_episode.first_keyframe_decoded_at_ms else {
+        return false;
+    };
+    let now_ms = stats
+        .latest_video_decode_ok_time_ms
+        .unwrap_or(decoded_at_ms.max(recovery_episode.requested_at_ms));
+    if (now_ms - decoded_at_ms).max(0.0) <= profile.decoded_pending_commit_hold_ms {
+        return true;
+    }
+    stats
+        .latest_video_decode_ok_time_ms
+        .is_some_and(|decode_ok_at_ms| {
+            decode_ok_at_ms >= decoded_at_ms
+                && (now_ms - decode_ok_at_ms).max(0.0) <= profile.decoded_progress_fresh_ms
+        })
+}
+
+fn reconcile_recovery_progress_from_current_bootstrap(
+    progress: Option<RecoveryProgressLevel>,
+    recovery_episode: Option<&XbxEnginePictureRecoveryEpisodeObservation>,
+    inspection: Option<&XbxEngineH264InspectionObservation>,
+    has_current_clean_anchor: bool,
+    now_ms: f64,
+    stats: &XbxEngineMediaRuntimeStats,
+    profile: &crate::transport::rtc::recovery::policy::RecoveryScenarioProfile,
+) -> (Option<RecoveryProgressLevel>, Option<f64>) {
+    if has_current_clean_anchor {
+        return (progress, None);
+    }
+    let Some(episode) = recovery_episode else {
+        return (progress, None);
+    };
+    let continuation_only_at_ms = continuation_only_observed_at_ms(episode, inspection);
+    let playback_recovered_at_ms =
+        playback_recovered_observed_at_ms(episode, now_ms, stats, profile, continuation_only_at_ms);
+    if matches!(
+        progress,
+        Some(
+            RecoveryProgressLevel::ContinuationSeen
+                | RecoveryProgressLevel::AnchorSeen
+                | RecoveryProgressLevel::Decoded
+                | RecoveryProgressLevel::PlaybackRecovered
+        )
+    ) {
+        if let Some(playback_recovered_at_ms) = playback_recovered_at_ms {
+            return (
+                Some(RecoveryProgressLevel::PlaybackRecovered),
+                Some(playback_recovered_at_ms),
+            );
+        }
+    }
+    if !matches!(
+        progress,
+        Some(RecoveryProgressLevel::Decoded | RecoveryProgressLevel::PlaybackRecovered)
+    ) {
+        return (progress, None);
+    };
+    if decoded_stage_is_current(episode, stats, profile) {
+        return (Some(RecoveryProgressLevel::Decoded), None);
+    }
+    if let Some(continuation_only_at_ms) = continuation_only_at_ms {
+        return (
+            Some(RecoveryProgressLevel::ContinuationSeen),
+            Some(continuation_only_at_ms),
+        );
+    }
+    (
+        Some(RecoveryProgressLevel::WaitingResponse),
+        inspection.map(|inspection| inspection.observed_at_ms),
+    )
 }
 
 fn select_relevant_picture_recovery_episode_for_progress(

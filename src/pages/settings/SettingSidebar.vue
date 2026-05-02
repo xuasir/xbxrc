@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import type { SettingTabKey } from '../../navigation/spatial-nav.constants'
 import type { SettingTabNavItem } from './setting-types'
-import { Focusable } from '@/navigation/core/vue'
 import { useI18n } from 'vue-i18n'
+import { Focusable } from '@/navigation/core/vue'
 
 defineProps<{
   tabs: SettingTabNavItem[]
@@ -146,4 +146,3 @@ const { t } = useI18n()
   border-bottom: 1px solid var(--ui-border-subtle);
 }
 </style>
-

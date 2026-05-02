@@ -92,8 +92,8 @@ export function buildStreamDiagnosticsSnapshot(input: {
   const icePolicyMode = input.runtimeSnapshot?.icePolicyMode
   const icePolicyDigest = input.runtimeSnapshot?.icePolicyDigest?.trim() || undefined
   const videoRendererStalled = input.runtimeSnapshot?.videoRendererStalled
-  const videoRendererStallBlocksPresentation =
-    input.runtimeSnapshot?.videoRendererStallBlocksPresentation
+  const videoRendererStallBlocksPresentation
+    = input.runtimeSnapshot?.videoRendererStallBlocksPresentation
   const transportSummary = resolveTransportSummary({
     transportPath,
     transportCandidatePair,
@@ -103,23 +103,28 @@ export function buildStreamDiagnosticsSnapshot(input: {
   const recoveryInputPortrait = resolveRecoveryInputPortrait(input.runtimeSnapshot)
   const recoveryInputProfile = resolveRecoveryInputProfile(input.runtimeSnapshot)
   const hasRecentFrame = hasRecentHostPresentFrame(input.lastHostFrameAtMs)
-  const hasStatsVideoActivity =
-    (input.runtimeSnapshot?.presentFps ?? 0) >= 1
-    || (input.runtimeSnapshot?.decodeFps ?? 0) >= 1
-    || (input.runtimeSnapshot?.inboundVideoFps ?? 0) >= 1
+  const hasStatsVideoActivity
+    = (input.runtimeSnapshot?.presentFps ?? 0) >= 1
+      || (input.runtimeSnapshot?.decodeFps ?? 0) >= 1
+      || (input.runtimeSnapshot?.inboundVideoFps ?? 0) >= 1
   const hasVideoOutputEvidence = hasRecentFrame || hasStatsVideoActivity
+  const presentationHealth = input.runtimeSnapshot?.presentationHealth
+  const hasServiceablePresentation
+    = hasVideoOutputEvidence
+      && presentationHealth === 'healthy'
+      && !input.warningVisible
 
-  const hasNoVideoWarning =
-    !hasVideoOutputEvidence
-    && (input.warningVisible
-      || videoHealth === 'waitingKeyframe'
-      || videoHealth === 'stalled'
-      || stallKind === 'idleTimeout')
+  const hasNoVideoWarning
+    = !hasVideoOutputEvidence
+      && (input.warningVisible
+        || videoHealth === 'waitingKeyframe'
+        || videoHealth === 'stalled'
+        || stallKind === 'idleTimeout')
   const isDisplaySupplyLimited
     = videoHealth === 'displaySupplyStarved'
       || recoveryOwnerState === 'supply-starved'
 
-  const isRecovering = unifiedLifecyclePhase !== undefined
+  const canonicalRecovering = unifiedLifecyclePhase !== undefined
     ? isCanonicalRecoveryLifecycle(unifiedLifecyclePhase)
     : (
         input.lifecyclePhase === 'recovering'
@@ -133,6 +138,28 @@ export function buildStreamDiagnosticsSnapshot(input: {
         || isDecoderRecovering(videoDecoderRecoveryState)
         || isOwnerTransportRecovering(recoveryOwnerState)
       )
+  const displaySupplyDominates
+    = isDisplaySupplyLimited
+      && hasVideoOutputEvidence
+      && (
+        videoRendererStalled === true
+        || stallKind === 'hostPresentStalled'
+        || stallKind === 'displaySupplyStarved'
+        || stallKind === 'displaySupplyCritical'
+        || stallKind === 'displaySupplyDegraded'
+      )
+  const stablePresentationSuppressesRecovery
+    = hasServiceablePresentation
+      && (
+        unifiedLifecyclePhase === 'steady'
+        || sessionPhase === 'steady'
+        || unifiedLifecyclePhase === 'recovery-eligible'
+        || sessionPhase === 'recovery-eligible'
+      )
+  const isRecovering
+    = canonicalRecovering
+      && !displaySupplyDominates
+      && !stablePresentationSuppressesRecovery
   const isActive = unifiedLifecyclePhase !== undefined
     ? isCanonicalActiveLifecycle(unifiedLifecyclePhase)
     : (input.lifecyclePhase === 'playing' || input.lifecyclePhase === 'recovering')

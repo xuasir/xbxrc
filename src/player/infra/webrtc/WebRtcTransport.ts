@@ -6,6 +6,8 @@ import type {
 } from '../../domain/session'
 import { TypedEventEmitter } from '../../api/events'
 
+function debugLog(..._args: Array<unknown>): void {}
+
 export interface WebRtcTransportEvents {
   iceCandidate: IceCandidateLike
   connectionState: { state: RTCPeerConnectionState }
@@ -48,7 +50,7 @@ export class WebRtcTransport {
 
   bind(): RTCPeerConnection {
     this.peer = new RTCPeerConnection(this.configuration)
-    console.info('[player][webrtc] bind peer', {
+    debugLog('[player][webrtc] bind peer', {
       iceServerCount: this.configuration.iceServers?.length ?? 0,
     })
     this.peer.ontrack = (event) => {
@@ -56,7 +58,7 @@ export class WebRtcTransport {
       if (!stream) {
         return
       }
-      console.info('[player][webrtc] remote track', {
+      debugLog('[player][webrtc] remote track', {
         kind: event.track.kind,
         trackId: event.track.id,
         streamId: stream.id,
@@ -73,7 +75,7 @@ export class WebRtcTransport {
         sdpMLineIndex: event.candidate.sdpMLineIndex,
       }
       this.iceCandidates.push(candidate)
-      console.info('[player][webrtc] local ice candidate gathered', {
+      debugLog('[player][webrtc] local ice candidate gathered', {
         mline: candidate.sdpMLineIndex ?? null,
         total: this.iceCandidates.length,
       })
@@ -83,20 +85,20 @@ export class WebRtcTransport {
       if (!this.peer) {
         return
       }
-      console.info('[player][webrtc] connection state', {
+      debugLog('[player][webrtc] connection state', {
         state: this.peer.connectionState,
       })
       this.emitter.emit('connectionState', { state: this.peer.connectionState })
     })
     this.peer.addTransceiver('audio', { direction: 'sendrecv' })
     this.peer.addTransceiver('video', { direction: 'recvonly' })
-    console.info('[player][webrtc] transceivers ready', summarizeTransceivers(this.peer))
+    debugLog('[player][webrtc] transceivers ready', summarizeTransceivers(this.peer))
     return this.peer
   }
 
   createDataChannel(name: string, init: RTCDataChannelInit): RTCDataChannel {
     const channel = this.ensurePeer().createDataChannel(name, init)
-    console.info('[player][webrtc] local data channel created', {
+    debugLog('[player][webrtc] local data channel created', {
       label: name,
       ordered: init.ordered ?? true,
       protocol: init.protocol ?? '',
@@ -116,14 +118,14 @@ export class WebRtcTransport {
       offerToReceiveVideo: true,
       iceRestart: options?.iceRestart === true,
     }
-    console.info('[player][webrtc] create offer request', {
+    debugLog('[player][webrtc] create offer request', {
       options: normalizedOptions,
       transceivers: summarizeTransceivers(peer),
     })
     return peer.createOffer(normalizedOptions).then((offer) => {
-      console.info('[player][webrtc] local offer created', summarizeSdp(offer.sdp))
+      debugLog('[player][webrtc] local offer created', summarizeSdp(offer.sdp))
       if (offer.sdp) {
-        console.info(`[player][webrtc] local offer raw\n${offer.sdp}`)
+        debugLog(`[player][webrtc] local offer raw\n${offer.sdp}`)
       }
       return offer
     })
@@ -131,16 +133,16 @@ export class WebRtcTransport {
 
   async setLocalDescription(offer: RTCSessionDescriptionInit): Promise<void> {
     await this.ensurePeer().setLocalDescription(offer)
-    console.info('[player][webrtc] local description applied', summarizeSdp(offer.sdp))
+    debugLog('[player][webrtc] local description applied', summarizeSdp(offer.sdp))
     if (offer.sdp) {
-      console.info(`[player][webrtc] local description raw\n${offer.sdp}`)
+      debugLog(`[player][webrtc] local description raw\n${offer.sdp}`)
     }
   }
 
   async setRemoteAnswer(sdp: string): Promise<void> {
     await this.ensurePeer().setRemoteDescription({ type: 'answer', sdp })
-    console.info('[player][webrtc] remote answer applied', summarizeSdp(sdp))
-    console.info(`[player][webrtc] remote answer raw\n${sdp}`)
+    debugLog('[player][webrtc] remote answer applied', summarizeSdp(sdp))
+    debugLog(`[player][webrtc] remote answer raw\n${sdp}`)
   }
 
   async addIceCandidate(candidate: IceCandidateLike): Promise<void> {
@@ -152,7 +154,7 @@ export class WebRtcTransport {
       return
     }
     await this.ensurePeer().addIceCandidate(candidate)
-    console.info('[player][webrtc] remote ice candidate applied', {
+    debugLog('[player][webrtc] remote ice candidate applied', {
       mline: candidate.sdpMLineIndex ?? null,
       mid: candidate.sdpMid ?? null,
     })

@@ -42,6 +42,8 @@ rtc-stun.workspace = true
 
 rtc-turn.workspace = true
 
+rustls.workspace = true
+
 log.workspace = true
 
 url.workspace = true

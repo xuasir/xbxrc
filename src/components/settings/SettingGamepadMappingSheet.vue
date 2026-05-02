@@ -36,11 +36,11 @@ const title = computed(() => (props.mode === 'keyboard' ? '键盘按钮映射' :
 const hint = computed(() =>
   props.mode === 'keyboard'
     ? '选择一个按钮后按下键盘按键完成绑定。按 B 返回可取消监听/关闭。'
-    : '选择一个按钮后按下手柄按钮完成绑定。按 B 返回可取消监听/关闭。'
+    : '选择一个按钮后按下手柄按钮完成绑定。按 B 返回可取消监听/关闭。',
 )
 
 const firstRowId = computed(() =>
-  props.logicalButtons.length > 0 ? `${props.scopeId}.row.${props.logicalButtons[0]}` : undefined
+  props.logicalButtons.length > 0 ? `${props.scopeId}.row.${props.logicalButtons[0]}` : undefined,
 )
 
 function handleClose(): void {
@@ -273,4 +273,3 @@ function formatGamepadBinding(button: LogicalButtonDto): string {
   grid-template-columns: 1fr;
 }
 </style>
-

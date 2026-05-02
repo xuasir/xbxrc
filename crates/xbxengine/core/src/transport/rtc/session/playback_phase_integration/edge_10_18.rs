@@ -593,8 +593,8 @@ fn playback_phase_edge18_null_surface_equivalent_must_not_promote_stable_without
             stats.host_no_pending_pressure_level = Some("critical".to_string());
             stats.host_no_pending_streak = 8;
             stats.host_cadence_phase = Some("priming".to_string());
-            stats.video_present_submit_count_total = 0;
-            stats.video_present_epoch = 0;
+            stats.host_mailbox_enqueue_count_total = 0;
+            stats.host_frame_present_epoch = 0;
             stats.latest_video_host_present_time_ms = None;
             stats.latest_video_decode_ok_time_ms = None;
             stats.latest_video_track_status = Some(crate::XbxEngineVideoTrackStatus {

@@ -5,7 +5,7 @@ use super::{
 use std::time::Duration;
 
 #[test]
-fn waits_for_burst_before_requesting_keyframe() {
+fn wait_keyframe_requests_pli_immediately() {
     let mut controller = VideoEscalationController::new(VideoEscalationConfig {
         cooldown_ms: 250,
         keyframe_burst_threshold: 2,
@@ -16,12 +16,6 @@ fn waits_for_burst_before_requesting_keyframe() {
     assert_eq!(
         controller
             .on_reason(VideoEscalationReason::WaitKeyframe)
-            .action,
-        RecoveryAction::WaitForBurst
-    );
-    assert_eq!(
-        controller
-            .on_reason(VideoEscalationReason::AdapterIdleTimeout)
             .action,
         RecoveryAction::RequestPli
     );
@@ -289,7 +283,7 @@ fn persistent_wait_keyframe_without_failure_evidence_does_not_escalate_to_decode
 }
 
 #[test]
-fn persistent_wait_keyframe_with_failure_evidence_can_escalate_to_decoder_reset() {
+fn persistent_wait_keyframe_with_failure_evidence_escalates_to_fir() {
     let mut controller = VideoEscalationController::new(VideoEscalationConfig {
         cooldown_ms: 200,
         keyframe_burst_threshold: 1,
@@ -316,7 +310,7 @@ fn persistent_wait_keyframe_with_failure_evidence_can_escalate_to_decoder_reset(
         controller
             .on_reason(VideoEscalationReason::WaitKeyframe)
             .action,
-        RecoveryAction::RequestDecoderReset
+        RecoveryAction::RequestFir
     );
 }
 
@@ -457,7 +451,7 @@ fn await_recovery_keyframe_is_throttled_within_same_epoch() {
 }
 
 #[test]
-fn persistent_await_recovery_keyframe_stays_in_decoder_reset_chain() {
+fn persistent_await_recovery_keyframe_stays_in_keyframe_chain() {
     let mut controller = VideoEscalationController::new(VideoEscalationConfig {
         cooldown_ms: 120,
         keyframe_burst_threshold: 1,
@@ -478,15 +472,14 @@ fn persistent_await_recovery_keyframe_stays_in_decoder_reset_chain() {
         controller
             .on_reason(VideoEscalationReason::TransportAwaitRecoveryKeyframe)
             .action,
-        RecoveryAction::RequestDecoderReset
+        RecoveryAction::RequestFir
     );
-    controller.register_decoder_reset_started();
     std::thread::sleep(Duration::from_millis(480));
     assert_eq!(
         controller
             .on_reason(VideoEscalationReason::TransportAwaitRecoveryKeyframe)
             .action,
-        RecoveryAction::RequestDecoderReset
+        RecoveryAction::RequestFir
     );
 }
 
@@ -641,7 +634,7 @@ fn await_recovery_keyframe_is_throttled_within_window_and_releases_after_window(
         controller
             .on_reason(VideoEscalationReason::TransportAwaitRecoveryKeyframe)
             .action,
-        RecoveryAction::RequestDecoderReset
+        RecoveryAction::RequestFir
     );
 }
 

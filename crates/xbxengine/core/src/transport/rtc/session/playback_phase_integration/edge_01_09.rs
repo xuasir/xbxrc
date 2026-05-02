@@ -551,8 +551,8 @@ fn playback_phase_edge09_high_present_overwrite_must_not_force_stable_serving_wh
             stats.host_no_pending_streak = 0;
             stats.latest_video_host_present_time_ms = Some(t - 30.0);
             stats.latest_video_decode_ok_time_ms = Some(t - 28.0);
-            stats.video_present_overwrite_count_total = 400;
-            stats.video_present_submit_count_total = 500;
+            stats.host_mailbox_overwrite_count_total = 400;
+            stats.host_mailbox_enqueue_count_total = 500;
             stats.video_renderer_stalled = Some(false);
             stats.latest_video_track_status = Some(crate::XbxEngineVideoTrackStatus {
                 state: "remoteTrackAttached".to_string(),

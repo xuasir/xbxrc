@@ -159,13 +159,17 @@ mod tests {
             ],
         });
 
-        let up_state =
-            mapper.sync_pressed_keys([OhMyGamepadKeyboardKey::KeyW, OhMyGamepadKeyboardKey::ArrowUp]);
+        let up_state = mapper.sync_pressed_keys([
+            OhMyGamepadKeyboardKey::KeyW,
+            OhMyGamepadKeyboardKey::ArrowUp,
+        ]);
         assert_eq!(up_state.left_stick.y, 1.0);
         assert_eq!(up_state.right_stick.y, 1.0);
 
-        let down_state = mapper
-            .sync_pressed_keys([OhMyGamepadKeyboardKey::KeyS, OhMyGamepadKeyboardKey::ArrowDown]);
+        let down_state = mapper.sync_pressed_keys([
+            OhMyGamepadKeyboardKey::KeyS,
+            OhMyGamepadKeyboardKey::ArrowDown,
+        ]);
         assert_eq!(down_state.left_stick.y, -1.0);
         assert_eq!(down_state.right_stick.y, -1.0);
     }

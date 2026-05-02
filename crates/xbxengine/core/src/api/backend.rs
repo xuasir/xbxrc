@@ -229,10 +229,249 @@ pub struct XbxEngineRenderFrame {
     pub frame_seq: u64,
     pub rendered_at_ms: f64,
     pub rtp_timestamp: Option<u32>,
+    pub recovery_epoch_tag: Option<u64>,
+    pub recovery_owner_rtp_timestamp: Option<u32>,
     pub is_keyframe: bool,
     pub frame_recovery_disposition: Option<String>,
     pub frame_unrecoverable_reason: Option<String>,
+    pub presentation_value_role: Option<String>,
     pub pixel_data: XbxEngineRenderPixelData,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum XbxEnginePresentationValueRole {
+    FreshAnchor,
+    RecoveryContinuation,
+    SteadyContinuation,
+    Disposable,
+}
+
+impl XbxEnginePresentationValueRole {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::FreshAnchor => "fresh_anchor",
+            Self::RecoveryContinuation => "recovery_continuation",
+            Self::SteadyContinuation => "steady_continuation",
+            Self::Disposable => "disposable",
+        }
+    }
+
+    pub fn rank(self) -> u8 {
+        match self {
+            Self::FreshAnchor => 3,
+            Self::RecoveryContinuation => 2,
+            Self::SteadyContinuation => 1,
+            Self::Disposable => 0,
+        }
+    }
+
+    pub fn protects_anchor(self) -> bool {
+        matches!(self, Self::FreshAnchor | Self::RecoveryContinuation)
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct XbxEngineLatestOnlyFrameMeta {
+    pub presentation_value_role: XbxEnginePresentationValueRole,
+    pub recovery_epoch_tag: Option<u64>,
+    pub recovery_owner_rtp_timestamp: Option<u32>,
+    pub rtp_timestamp: Option<u32>,
+    pub frame_seq: Option<u64>,
+    pub rendered_at_ms: f64,
+    pub owner_preference_active: bool,
+    pub value_rank: u8,
+}
+
+impl XbxEngineLatestOnlyFrameMeta {
+    pub fn owner_matches_frame(self) -> Option<bool> {
+        self.recovery_owner_rtp_timestamp
+            .zip(self.rtp_timestamp)
+            .map(|(owner_rtp, frame_rtp)| owner_rtp == frame_rtp)
+    }
+}
+
+fn latest_only_frame_value_rank(
+    recovery_disposition: Option<&str>,
+    unrecoverable_reason: Option<&str>,
+) -> u8 {
+    if unrecoverable_reason.is_some() {
+        0
+    } else if matches!(
+        recovery_disposition,
+        Some("rebuilding" | "rebuilding-supply")
+    ) {
+        3
+    } else if matches!(recovery_disposition, Some("repairing")) {
+        1
+    } else {
+        2
+    }
+}
+
+fn infer_presentation_value_role(
+    recovery_disposition: Option<&str>,
+    unrecoverable_reason: Option<&str>,
+) -> XbxEnginePresentationValueRole {
+    if unrecoverable_reason.is_some() {
+        XbxEnginePresentationValueRole::Disposable
+    } else if matches!(
+        recovery_disposition,
+        Some("rebuilding" | "rebuilding-supply")
+    ) {
+        XbxEnginePresentationValueRole::FreshAnchor
+    } else if matches!(recovery_disposition, Some("repairing")) {
+        XbxEnginePresentationValueRole::RecoveryContinuation
+    } else {
+        XbxEnginePresentationValueRole::SteadyContinuation
+    }
+}
+
+pub fn compare_latest_only_frame_meta(
+    existing: &XbxEngineLatestOnlyFrameMeta,
+    incoming: &XbxEngineLatestOnlyFrameMeta,
+) -> i32 {
+    match existing
+        .presentation_value_role
+        .rank()
+        .cmp(&incoming.presentation_value_role.rank())
+    {
+        std::cmp::Ordering::Greater => return 1,
+        std::cmp::Ordering::Less => return -1,
+        std::cmp::Ordering::Equal => {}
+    }
+
+    match (existing.recovery_epoch_tag, incoming.recovery_epoch_tag) {
+        (Some(existing_epoch), Some(incoming_epoch)) => match existing_epoch.cmp(&incoming_epoch) {
+            std::cmp::Ordering::Greater => return 1,
+            std::cmp::Ordering::Less => return -1,
+            std::cmp::Ordering::Equal => {}
+        },
+        (Some(_), None) => return 1,
+        (None, Some(_)) => return -1,
+        (None, None) => {}
+    }
+
+    if existing.recovery_epoch_tag == incoming.recovery_epoch_tag {
+        match (
+            existing.recovery_owner_rtp_timestamp,
+            incoming.recovery_owner_rtp_timestamp,
+        ) {
+            (Some(existing_owner), Some(incoming_owner)) => {
+                match existing_owner.cmp(&incoming_owner) {
+                    std::cmp::Ordering::Greater => return 1,
+                    std::cmp::Ordering::Less => return -1,
+                    std::cmp::Ordering::Equal => {}
+                }
+            }
+            (Some(_), None) => {
+                if existing.presentation_value_role.protects_anchor() {
+                    return 1;
+                }
+            }
+            (None, Some(_)) => {
+                if incoming.presentation_value_role.protects_anchor() {
+                    return -1;
+                }
+            }
+            (None, None) => {}
+        }
+    }
+
+    if existing.owner_preference_active || incoming.owner_preference_active {
+        let existing_matches_owner = existing.owner_matches_frame() == Some(true);
+        let incoming_matches_owner = incoming.owner_matches_frame() == Some(true);
+        match existing_matches_owner.cmp(&incoming_matches_owner) {
+            std::cmp::Ordering::Greater => return 1,
+            std::cmp::Ordering::Less => return -1,
+            std::cmp::Ordering::Equal => {}
+        }
+    }
+
+    match existing.value_rank.cmp(&incoming.value_rank) {
+        std::cmp::Ordering::Greater => return 1,
+        std::cmp::Ordering::Less => return -1,
+        std::cmp::Ordering::Equal => {}
+    }
+
+    match (existing.rtp_timestamp, incoming.rtp_timestamp) {
+        (Some(existing_rtp), Some(incoming_rtp)) => match existing_rtp.cmp(&incoming_rtp) {
+            std::cmp::Ordering::Greater => return 1,
+            std::cmp::Ordering::Less => return -1,
+            std::cmp::Ordering::Equal => {}
+        },
+        (Some(_), None) => return 1,
+        (None, Some(_)) => return -1,
+        (None, None) => {}
+    }
+
+    match (existing.frame_seq, incoming.frame_seq) {
+        (Some(existing_seq), Some(incoming_seq)) => match existing_seq.cmp(&incoming_seq) {
+            std::cmp::Ordering::Greater => return 1,
+            std::cmp::Ordering::Less => return -1,
+            std::cmp::Ordering::Equal => {}
+        },
+        (Some(_), None) => return 1,
+        (None, Some(_)) => return -1,
+        (None, None) => {}
+    }
+
+    if existing.rendered_at_ms > incoming.rendered_at_ms {
+        1
+    } else if existing.rendered_at_ms < incoming.rendered_at_ms {
+        -1
+    } else {
+        0
+    }
+}
+
+impl XbxEngineRenderFrame {
+    pub fn latest_only_frame_meta(&self) -> XbxEngineLatestOnlyFrameMeta {
+        let value_rank = latest_only_frame_value_rank(
+            self.frame_recovery_disposition.as_deref(),
+            self.frame_unrecoverable_reason.as_deref(),
+        );
+        XbxEngineLatestOnlyFrameMeta {
+            presentation_value_role: self
+                .presentation_value_role
+                .as_deref()
+                .map(presentation_value_role_from_label)
+                .unwrap_or_else(|| {
+                    infer_presentation_value_role(
+                        self.frame_recovery_disposition.as_deref(),
+                        self.frame_unrecoverable_reason.as_deref(),
+                    )
+                }),
+            recovery_epoch_tag: self.recovery_epoch_tag,
+            recovery_owner_rtp_timestamp: self.recovery_owner_rtp_timestamp,
+            rtp_timestamp: self.rtp_timestamp,
+            frame_seq: Some(self.frame_seq),
+            rendered_at_ms: self.rendered_at_ms,
+            owner_preference_active: value_rank == 1 || value_rank == 3,
+            value_rank,
+        }
+    }
+}
+
+pub fn presentation_value_role_from_label(label: &str) -> XbxEnginePresentationValueRole {
+    match label {
+        "fresh_anchor" => XbxEnginePresentationValueRole::FreshAnchor,
+        "recovery_continuation" => XbxEnginePresentationValueRole::RecoveryContinuation,
+        "steady_continuation" => XbxEnginePresentationValueRole::SteadyContinuation,
+        _ => XbxEnginePresentationValueRole::Disposable,
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct XbxEngineReplacementDecisionObservation {
+    pub dropped_frame_seq: Option<u64>,
+    pub dropped_rtp_timestamp: Option<u32>,
+    pub dropped_presentation_value_role: Option<String>,
+    pub kept_frame_seq: Option<u64>,
+    pub kept_rtp_timestamp: Option<u32>,
+    pub kept_presentation_value_role: Option<String>,
+    pub same_recovery_epoch: Option<bool>,
+    pub same_recovery_owner_chain: Option<bool>,
+    pub supersede_reason: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -271,6 +510,7 @@ pub struct XbxEngineVideoFrameDropObservation {
     pub frame_recovery_disposition: Option<String>,
     pub frame_unrecoverable_reason: Option<String>,
     pub frame_budget: Option<XbxEngineFrameBudgetObservation>,
+    pub replacement_decision: Option<XbxEngineReplacementDecisionObservation>,
     pub observed_at_ms: f64,
     pub width: u32,
     pub height: u32,
@@ -285,6 +525,7 @@ pub struct XbxEnginePipelineCandidateDecisionObservation {
     pub action: String,
     pub detail: String,
     pub frame_seq: Option<u64>,
+    pub replacement_decision: Option<XbxEngineReplacementDecisionObservation>,
     pub observed_at_ms: f64,
 }
 
@@ -378,17 +619,22 @@ pub struct XbxEngineHostVideoFrameDropEvent {
 pub struct XbxEngineHostVideoPresentMetrics {
     /// 宿主 submit/enqueue 最近发生时间（毫秒时间戳）。
     pub latest_host_submit_time_ms: Option<f64>,
+    /// 最近一次 submit 对应的帧 RTP 时间戳；用于配对 submit/present 时序。
+    pub latest_host_submit_rtp_timestamp: Option<u32>,
     /// 宿主真实 present 发生时间（毫秒时间戳）。
     /// 该字段是 runtime 中 present freshness 的唯一事实源。
     pub latest_host_present_time_ms: Option<f64>,
-    pub host_submit_epoch: u64,
-    pub display_tick_epoch: u64,
-    pub display_present_epoch: u64,
+    /// 宿主 view / layer 重建代次；present 断档时用于区分“旧 view 卡住”和“新 view 待补帧”。
+    pub host_view_generation: u64,
+    pub latest_host_view_created_at_ms: Option<f64>,
+    pub host_mailbox_submit_epoch: u64,
+    pub host_display_tick_epoch: u64,
+    pub host_frame_present_epoch: u64,
     pub cadence_phase: Option<String>,
     pub present_fps: f64,
-    pub present_submit_count_total: u64,
-    pub present_drop_count_total: u64,
-    pub present_overwrite_count_total: u64,
+    pub host_mailbox_enqueue_count_total: u64,
+    pub host_mailbox_drop_count_total: u64,
+    pub host_mailbox_overwrite_count_total: u64,
     pub no_pending_take_count_total: u64,
     pub no_pending_streak: u32,
     pub no_pending_max_streak: u32,
@@ -406,7 +652,7 @@ pub struct XbxEngineFrameRecoveryObservation {
     pub action: String,
     pub frame_rtp_timestamp: u32,
     pub frame_playout_deadline_at_ms: Option<f64>,
-    pub frame_recovery_disposition: String,
+    pub frame_recovery_disposition: Option<String>,
     pub frame_unrecoverable_reason: Option<String>,
     pub frame_budget: Option<XbxEngineFrameBudgetObservation>,
     pub observed_at_ms: f64,
@@ -891,6 +1137,7 @@ pub struct XbxEngineH264InspectionObservation {
     pub sample_height: Option<u32>,
     pub bootstrap_ready: bool,
     pub bootstrap_reject_reason: Option<String>,
+    pub continuation_verdict: Option<String>,
     pub admission_accepted: bool,
     pub observed_at_ms: f64,
     pub bound_episode_id: Option<u64>,
@@ -995,6 +1242,9 @@ pub struct XbxEngineMediaRuntimeStats {
     pub recovery_exit_gate: Option<String>,
     pub recovery_ingress_waiting: Option<bool>,
     pub recovery_transport_await_unresolved: Option<bool>,
+    pub recovery_playback_recovered_at_ms: Option<f64>,
+    pub recovery_playback_recovered_phase: Option<String>,
+    pub recovery_fresh_anchor_recovered_at_ms: Option<f64>,
     pub recovery_hard_fallback_timer_ms: Option<f64>,
     pub recovery_hard_fallback_trigger_reason: Option<String>,
     pub recovery_hard_fallback_timer_reset_reason: Option<String>,
@@ -1012,10 +1262,23 @@ pub struct XbxEngineMediaRuntimeStats {
     pub video_anchor_clean_epoch: Option<u64>,
     pub video_anchor_clean_observed_at_ms: Option<f64>,
     pub video_anchor_clean_source_event: Option<String>,
+    pub video_anchor_bridge_epoch: Option<u64>,
+    pub video_anchor_bridge_observed_at_ms: Option<f64>,
+    pub video_anchor_bridge_source_event: Option<String>,
+    pub video_anchor_bridge_rtp_timestamp: Option<u32>,
+    pub latest_clean_anchor_submission_epoch: Option<u64>,
+    pub latest_clean_anchor_submission_episode_id: Option<u64>,
+    pub latest_clean_anchor_submission_rtp_timestamp: Option<u32>,
+    pub latest_clean_anchor_submission_observed_at_ms: Option<f64>,
+    pub latest_clean_anchor_submission_source_event: Option<String>,
     pub direct_gaming_bitrate_band: Option<String>,
     pub latest_video_frame: Option<XbxEngineVideoFrameStats>,
     pub latest_observation_label: Option<String>,
     pub latest_observation_summary: Option<String>,
+    pub latest_feedback_target_availability_state: Option<String>,
+    pub latest_feedback_target_availability_reason: Option<String>,
+    pub latest_feedback_target_availability_target: Option<String>,
+    pub latest_feedback_target_availability_observed_at_ms: Option<f64>,
     pub latest_video_rtcp_send_failure_time_ms: Option<f64>,
     pub latest_video_rtcp_send_failure_reason: Option<String>,
     pub latest_keyframe_request_episode: Option<XbxEngineKeyframeRequestEpisodeObservation>,
@@ -1033,6 +1296,7 @@ pub struct XbxEngineMediaRuntimeStats {
     pub latest_video_stream_height: Option<u32>,
     pub first_video_packet_arrival_time_ms: Option<f64>,
     pub latest_video_packet_arrival_time_ms: Option<f64>,
+    pub latest_video_packet_arrival_rtp_timestamp: Option<u32>,
     pub first_audio_packet_arrival_time_ms: Option<f64>,
     pub latest_audio_packet_arrival_time_ms: Option<f64>,
     pub latest_audio_playout_time_ms: Option<f64>,
@@ -1078,6 +1342,8 @@ pub struct XbxEngineMediaRuntimeStats {
     pub first_frame_latency_observation_count: u64,
     pub video_ingress_termination_id_seq: u64,
     pub latest_video_ingress_termination_id: Option<u64>,
+    pub latest_video_ingress_close_intent_cause: Option<String>,
+    pub latest_video_ingress_close_intent_observed_at_ms: Option<f64>,
     pub video_repair_probe_stream_bind_count_total: u64,
     pub video_repair_probe_packet_count_total: u64,
     pub video_repair_probe_active_since_ms: Option<f64>,
@@ -1108,6 +1374,7 @@ pub struct XbxEngineMediaRuntimeStats {
     pub transport_protocol: Option<String>,
     pub transport_address_family: Option<String>,
     pub latest_video_decode_ok_time_ms: Option<f64>,
+    pub latest_video_decode_ok_rtp_timestamp: Option<u32>,
     pub video_decode_fps: f64,
     pub video_decoder_stalled: Option<bool>,
     pub video_decoder_backend_name: Option<String>,
@@ -1132,17 +1399,16 @@ pub struct XbxEngineMediaRuntimeStats {
     pub video_pacer_drop_count_total: u64,
     pub video_renderer_submit_count_total: u64,
     pub video_renderer_drop_count_total: u64,
-    pub video_present_drop_count_total: u64,
-    pub video_present_overwrite_count_total: u64,
-    pub video_present_submit_count_total: u64,
+    pub host_mailbox_drop_count_total: u64,
+    pub host_mailbox_overwrite_count_total: u64,
+    pub host_mailbox_enqueue_count_total: u64,
     pub host_no_pending_take_count_total: u64,
     pub host_no_pending_streak: u32,
     pub host_no_pending_max_streak: u32,
     pub host_no_pending_pressure_level: Option<String>,
-    pub host_submit_epoch: u64,
+    pub host_mailbox_submit_epoch: u64,
     pub host_display_tick_epoch: u64,
-    pub display_present_epoch: u64,
-    pub video_present_epoch: u64,
+    pub host_frame_present_epoch: u64,
     /// 由 session policy 写入：host present 停滞时仅允许关键帧进入解码。
     pub host_present_stall_decode_throttle: bool,
     pub host_cadence_phase: Option<String>,
@@ -1151,8 +1417,11 @@ pub struct XbxEngineMediaRuntimeStats {
     pub video_present_descriptor_cpu_upload_count_total: u64,
     pub host_display_interval_ms: Option<f64>,
     pub host_frame_age_budget_ms: Option<f64>,
-    pub latest_video_host_submit_time_ms: Option<f64>,
+    pub latest_host_mailbox_submit_time_ms: Option<f64>,
+    pub latest_video_host_submit_rtp_timestamp: Option<u32>,
     pub latest_video_host_present_time_ms: Option<f64>,
+    pub host_view_generation: u64,
+    pub latest_host_view_created_at_ms: Option<f64>,
     pub submit_age_ms: Option<f64>,
     pub display_age_ms: Option<f64>,
     pub last_displayed_frame_seq: Option<u64>,
@@ -1161,7 +1430,7 @@ pub struct XbxEngineMediaRuntimeStats {
     pub video_present_fps: f64,
     pub video_renderer_stalled: Option<bool>,
     pub latest_decode_candidate_decision: Option<XbxEnginePipelineCandidateDecisionObservation>,
-    pub latest_render_candidate_decision: Option<XbxEnginePipelineCandidateDecisionObservation>,
+    pub latest_render_mailbox_decision: Option<XbxEnginePipelineCandidateDecisionObservation>,
     pub latest_video_frame_drop: Option<XbxEngineVideoFrameDropObservation>,
     pub latest_video_frame_recovery_observation: Option<XbxEngineFrameRecoveryObservation>,
     pub inbound_bytes_total: u64,
@@ -1192,6 +1461,9 @@ impl Default for XbxEngineMediaRuntimeStats {
             recovery_exit_gate: None,
             recovery_ingress_waiting: None,
             recovery_transport_await_unresolved: None,
+            recovery_playback_recovered_at_ms: None,
+            recovery_playback_recovered_phase: None,
+            recovery_fresh_anchor_recovered_at_ms: None,
             recovery_hard_fallback_timer_ms: None,
             recovery_hard_fallback_trigger_reason: None,
             recovery_hard_fallback_timer_reset_reason: None,
@@ -1209,10 +1481,23 @@ impl Default for XbxEngineMediaRuntimeStats {
             video_anchor_clean_epoch: None,
             video_anchor_clean_observed_at_ms: None,
             video_anchor_clean_source_event: None,
+            video_anchor_bridge_epoch: None,
+            video_anchor_bridge_observed_at_ms: None,
+            video_anchor_bridge_source_event: None,
+            video_anchor_bridge_rtp_timestamp: None,
+            latest_clean_anchor_submission_epoch: None,
+            latest_clean_anchor_submission_episode_id: None,
+            latest_clean_anchor_submission_rtp_timestamp: None,
+            latest_clean_anchor_submission_observed_at_ms: None,
+            latest_clean_anchor_submission_source_event: None,
             direct_gaming_bitrate_band: None,
             latest_video_frame: None,
             latest_observation_label: None,
             latest_observation_summary: None,
+            latest_feedback_target_availability_state: None,
+            latest_feedback_target_availability_reason: None,
+            latest_feedback_target_availability_target: None,
+            latest_feedback_target_availability_observed_at_ms: None,
             latest_video_rtcp_send_failure_time_ms: None,
             latest_video_rtcp_send_failure_reason: None,
             latest_keyframe_request_episode: None,
@@ -1227,6 +1512,7 @@ impl Default for XbxEngineMediaRuntimeStats {
             latest_video_stream_height: None,
             first_video_packet_arrival_time_ms: None,
             latest_video_packet_arrival_time_ms: None,
+            latest_video_packet_arrival_rtp_timestamp: None,
             first_audio_packet_arrival_time_ms: None,
             latest_audio_packet_arrival_time_ms: None,
             latest_audio_playout_time_ms: None,
@@ -1269,6 +1555,8 @@ impl Default for XbxEngineMediaRuntimeStats {
             first_frame_latency_observation_count: 0,
             video_ingress_termination_id_seq: 0,
             latest_video_ingress_termination_id: None,
+            latest_video_ingress_close_intent_cause: None,
+            latest_video_ingress_close_intent_observed_at_ms: None,
             video_repair_probe_stream_bind_count_total: 0,
             video_repair_probe_packet_count_total: 0,
             video_repair_probe_active_since_ms: None,
@@ -1299,6 +1587,7 @@ impl Default for XbxEngineMediaRuntimeStats {
             transport_protocol: None,
             transport_address_family: None,
             latest_video_decode_ok_time_ms: None,
+            latest_video_decode_ok_rtp_timestamp: None,
             video_decode_fps: 0.0,
             video_decoder_stalled: None,
             video_decoder_backend_name: None,
@@ -1322,17 +1611,16 @@ impl Default for XbxEngineMediaRuntimeStats {
             video_pacer_drop_count_total: 0,
             video_renderer_submit_count_total: 0,
             video_renderer_drop_count_total: 0,
-            video_present_drop_count_total: 0,
-            video_present_overwrite_count_total: 0,
-            video_present_submit_count_total: 0,
+            host_mailbox_drop_count_total: 0,
+            host_mailbox_overwrite_count_total: 0,
+            host_mailbox_enqueue_count_total: 0,
             host_no_pending_take_count_total: 0,
             host_no_pending_streak: 0,
             host_no_pending_max_streak: 0,
             host_no_pending_pressure_level: None,
             host_display_tick_epoch: 0,
-            host_submit_epoch: 0,
-            display_present_epoch: 0,
-            video_present_epoch: 0,
+            host_mailbox_submit_epoch: 0,
+            host_frame_present_epoch: 0,
             host_present_stall_decode_throttle: false,
             host_cadence_phase: None,
             video_present_descriptor_upload_mode: None,
@@ -1340,8 +1628,11 @@ impl Default for XbxEngineMediaRuntimeStats {
             video_present_descriptor_cpu_upload_count_total: 0,
             host_display_interval_ms: None,
             host_frame_age_budget_ms: None,
-            latest_video_host_submit_time_ms: None,
+            latest_host_mailbox_submit_time_ms: None,
+            latest_video_host_submit_rtp_timestamp: None,
             latest_video_host_present_time_ms: None,
+            host_view_generation: 0,
+            latest_host_view_created_at_ms: None,
             submit_age_ms: None,
             display_age_ms: None,
             last_displayed_frame_seq: None,
@@ -1350,7 +1641,7 @@ impl Default for XbxEngineMediaRuntimeStats {
             video_present_fps: 0.0,
             video_renderer_stalled: None,
             latest_decode_candidate_decision: None,
-            latest_render_candidate_decision: None,
+            latest_render_mailbox_decision: None,
             latest_video_frame_drop: None,
             latest_video_frame_recovery_observation: None,
             inbound_bytes_total: 0,
@@ -1794,21 +2085,21 @@ impl XbxEngineMediaBackend for PlaceholderXbxEngineMediaBackend {
         &mut self,
         metrics: XbxEngineHostVideoPresentMetrics,
     ) -> Result<(), XbxEngineRuntimeError> {
-        self.last_runtime_stats.latest_video_host_submit_time_ms =
+        self.last_runtime_stats.latest_host_mailbox_submit_time_ms =
             metrics.latest_host_submit_time_ms;
         self.last_runtime_stats.latest_video_host_present_time_ms =
             metrics.latest_host_present_time_ms;
-        self.last_runtime_stats.host_submit_epoch = metrics.host_submit_epoch;
-        self.last_runtime_stats.host_display_tick_epoch = metrics.display_tick_epoch;
-        self.last_runtime_stats.display_present_epoch = metrics.display_present_epoch;
-        self.last_runtime_stats.video_present_epoch = metrics.display_present_epoch;
+        self.last_runtime_stats.host_mailbox_submit_epoch = metrics.host_mailbox_submit_epoch;
+        self.last_runtime_stats.host_display_tick_epoch = metrics.host_display_tick_epoch;
+        self.last_runtime_stats.host_frame_present_epoch = metrics.host_frame_present_epoch;
         self.last_runtime_stats.host_cadence_phase = metrics.cadence_phase;
         self.last_runtime_stats.video_present_fps = metrics.present_fps;
-        self.last_runtime_stats.video_present_submit_count_total =
-            metrics.present_submit_count_total;
-        self.last_runtime_stats.video_present_drop_count_total = metrics.present_drop_count_total;
-        self.last_runtime_stats.video_present_overwrite_count_total =
-            metrics.present_overwrite_count_total;
+        self.last_runtime_stats.host_mailbox_enqueue_count_total =
+            metrics.host_mailbox_enqueue_count_total;
+        self.last_runtime_stats.host_mailbox_drop_count_total =
+            metrics.host_mailbox_drop_count_total;
+        self.last_runtime_stats.host_mailbox_overwrite_count_total =
+            metrics.host_mailbox_overwrite_count_total;
         self.last_runtime_stats.video_present_descriptor_upload_mode =
             metrics.descriptor_upload_mode;
         self.last_runtime_stats

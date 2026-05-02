@@ -284,9 +284,12 @@ impl FfmpegMacOsVideoToolboxDecoder {
             frame_seq: 0,
             rendered_at_ms: 0.0,
             rtp_timestamp: None,
+            recovery_epoch_tag: None,
+            recovery_owner_rtp_timestamp: None,
             is_keyframe: false,
             frame_recovery_disposition: None,
             frame_unrecoverable_reason: None,
+            presentation_value_role: None,
             pixel_data: XbxEngineRenderPixelData::Descriptor {
                 handle: Arc::new(descriptor),
             },

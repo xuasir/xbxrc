@@ -1,4 +1,6 @@
 use std::collections::HashSet;
+#[cfg(test)]
+use std::sync::Once;
 use std::sync::{Arc, Mutex};
 
 use xbxengine_protocol::XbxEngineIceCandidateDto;
@@ -24,12 +26,22 @@ use xbxengine_protocol::XbxEngineSessionDto;
 use super::service::RtcReadIngressCounters;
 use super::RtcConnectionService;
 
+#[cfg(test)]
+fn ensure_test_rustls_crypto_provider() {
+    static INIT: Once = Once::new();
+    INIT.call_once(|| {
+        let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
+    });
+}
+
 impl RtcConnectionService {
     pub(crate) fn rebuild(
         &mut self,
         session: &XbxEngineSessionDto,
         runtime_stats: &Arc<Mutex<XbxEngineMediaRuntimeStats>>,
     ) -> Result<(), XbxEngineRuntimeError> {
+        #[cfg(test)]
+        ensure_test_rustls_crypto_provider();
         if let Ok(mut stats) = runtime_stats.lock() {
             stats.message_handshake_acked_at_ms = None;
             stats.control_ready_at_ms = None;
@@ -213,6 +225,8 @@ impl RtcConnectionService {
         let remote_answer_observation = build_remote_answer_observation(answer_sdp);
         RuntimeStatsSink::new(runtime_stats.clone())
             .record_remote_answer_observation(remote_answer_observation);
+        self.controlled_twcc_feedback
+            .apply_remote_answer_bootstrap(answer_sdp, runtime_stats);
         if skipped_incompatible_count > 0 {
             crate::xbx_log_warn!(
                 "[xbxengine][rtc-connection] skipped incompatible remote candidates count={}",
@@ -333,7 +347,7 @@ impl RtcConnectionService {
                 state.local_candidates.clone()
             })
             .unwrap_or_default();
-        crate::xbx_log_warn!(
+        crate::xbx_log_debug!(
             "[xbxengine][rtc-connection] local_candidates_snapshot count={}",
             candidates.len()
         );

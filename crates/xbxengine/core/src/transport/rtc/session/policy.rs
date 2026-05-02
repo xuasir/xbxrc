@@ -31,7 +31,8 @@ use crate::transport::rtc::recovery::contract::{
     has_current_transport_await_issue_from_observation,
     has_current_transport_await_issue_from_stats, is_ingress_waiting_keyframe,
     is_media_healthy_baseline, is_terminal_transport_await_deferred_episode,
-    recovery_progress_level_from_str, recovery_progress_missing_anchor, GapSeverity,
+    recovery_progress_level_from_str, recovery_progress_missing_anchor, CoalescingMode,
+    GapSeverity, RecoveryProgressLevel,
 };
 use crate::transport::rtc::recovery::coordinator::{
     CoordinatorProposal, RecoveryCoordinator, RecoveryOwnerSignal,
@@ -90,6 +91,7 @@ const RECOVERY_OBSERVATION_NO_PROGRESS_FALLBACK_MS: f64 = 1_200.0;
 const RECOVERY_OBSERVATION_KEYFRAME_WINDOW_MS: f64 = 900.0;
 /// `transportAwaitRecoveryAnchor` 门控用的观测仅统计该诊断链，避免同 epoch 内其它 keyframe/decoder 自愈污染。
 const TRANSPORT_AWAIT_RECOVERY_KEYFRAME_DIAGNOSIS: &str = "transportAwaitRecoveryAnchor";
+const TRANSPORT_AWAIT_CONTINUATION_REFRESH_PACKET_AGE_MS: f64 = 220.0;
 
 fn recovery_decision_ledger_recovery_epoch(
     ledger: &XbxEngineRecoveryDecisionLedgerObservation,
@@ -123,6 +125,65 @@ fn is_transport_await_picture_recovery_episode(
     episode: &XbxEnginePictureRecoveryEpisodeObservation,
 ) -> bool {
     episode.request_reason.as_deref() == Some(TRANSPORT_AWAIT_RECOVERY_KEYFRAME_DIAGNOSIS)
+}
+
+fn current_transport_await_keyframe_episode(
+    stats: &XbxEngineMediaRuntimeStats,
+) -> Option<XbxEnginePictureRecoveryEpisodeObservation> {
+    stats
+        .recent_keyframe_request_episodes
+        .iter()
+        .chain(stats.latest_keyframe_request_episode.iter())
+        .filter(|episode| {
+            episode.retired_at_ms.is_none() && is_transport_await_picture_recovery_episode(episode)
+        })
+        .max_by(|left, right| {
+            left.first_keyframe_decoded_at_ms
+                .is_some()
+                .cmp(&right.first_keyframe_decoded_at_ms.is_some())
+                .then_with(|| {
+                    left.first_keyframe_packet_at_ms
+                        .is_some()
+                        .cmp(&right.first_keyframe_packet_at_ms.is_some())
+                })
+                .then_with(|| {
+                    left.first_video_packet_at_ms
+                        .is_some()
+                        .cmp(&right.first_video_packet_at_ms.is_some())
+                })
+                .then_with(|| left.sent_at_ms.is_some().cmp(&right.sent_at_ms.is_some()))
+                .then_with(|| left.requested_at_ms.total_cmp(&right.requested_at_ms))
+                .then_with(|| left.episode_id.cmp(&right.episode_id))
+        })
+        .cloned()
+}
+
+fn transport_await_anchor_candidate_stalled(
+    stats: &XbxEngineMediaRuntimeStats,
+    episode: &XbxEnginePictureRecoveryEpisodeObservation,
+    observed_at_ms: f64,
+    freshness_window_ms: f64,
+) -> bool {
+    let Some(candidate) = stats.latest_anchor_candidate_ledger.as_ref() else {
+        return false;
+    };
+    if candidate.recovery_epoch != stats.transport_recovery_epoch {
+        return false;
+    }
+    if (observed_at_ms - candidate.observed_at_ms).max(0.0) > freshness_window_ms {
+        return false;
+    }
+    if candidate.observed_at_ms < episode.requested_at_ms {
+        return false;
+    }
+    matches!(
+        candidate.source_event.as_str(),
+        "frame-await-recovery-anchor" | "gap-repair-in-flight" | "gap-resolved"
+    ) && matches!(
+        candidate.state,
+        crate::XbxEngineAnchorCandidateState::AwaitingRecovery
+            | crate::XbxEngineAnchorCandidateState::Repaired
+    )
 }
 
 /// 取当前 stats 下最近一条 transport-await keyframe episode 的请求/解码时间（用于 reconnect fallback 门控）。
@@ -236,6 +297,14 @@ impl RecoveryObservationSnapshot {
     }
 }
 
+fn recovery_observation_stage_signal_recent(
+    signal_at_ms: Option<f64>,
+    observed_at_ms: f64,
+) -> bool {
+    signal_at_ms
+        .is_some_and(|at_ms| (observed_at_ms - at_ms).max(0.0) <= RECOVERY_OBSERVATION_WINDOW_MS)
+}
+
 impl RecoveryLedgerNarrativeState {
     fn as_str(self) -> &'static str {
         match self {
@@ -261,7 +330,8 @@ fn is_first_frame_acquisition_reason_label(value: &str) -> bool {
             | "bootstrapMissingPps"
             | "recoverySustaining"
             | "inspectionRejectInvalidSliceHeader"
-            | "NonIdrVcl"
+            | "bootstrapMissingIdr"
+            | "mixedIdrWithTrailingDelta"
             | "transportAwaitRecoveryAnchor"
             | "ingressWaitKeyframe"
     )
@@ -868,18 +938,6 @@ impl RtcSessionPolicy {
             .recovery_coordinator
             .propose_from_owner_signal(owner_signal.clone(), self.runtime_stats.as_ref());
 
-        // Transport deadline 信号应该优先于 local recovery，在所有门控之前保存原始决策
-        let is_transport_deadline = matches!(
-            owner_signal.reason,
-            VideoEscalationReason::TransportExpiredDeadline
-                | VideoEscalationReason::TransportSevereDeadline
-        );
-        let transport_deadline_original_action = if is_transport_deadline {
-            Some(proposal.decision.action.clone())
-        } else {
-            None
-        };
-
         let expensive_recovery_gate = ExpensiveRecoveryGate::new(
             self.runtime_stats.as_ref(),
             self.is_cloud_gaming_profile(),
@@ -913,6 +971,26 @@ impl RtcSessionPolicy {
         ) {
             proposal.decision.action = RecoveryAction::RequestPli;
         }
+        if self.should_refresh_transport_await_continuation_only_pli(
+            owner_state,
+            &proposal,
+            &owner_signal,
+            observed_at_ms,
+        ) {
+            proposal.decision.action = RecoveryAction::RequestPli;
+            proposal.coalescing_mode = Some(CoalescingMode::Refresh);
+            proposal.unlock_reason = Some("continuationOnlyRefreshIntervalElapsed".to_string());
+        }
+        if let Some(unlock_reason) = self.should_upgrade_transport_await_refresh_to_fir(
+            owner_state,
+            &proposal,
+            &owner_signal,
+            observed_at_ms,
+        ) {
+            proposal.decision.action = RecoveryAction::RequestFir;
+            proposal.coalescing_mode = Some(CoalescingMode::Refresh);
+            proposal.unlock_reason = Some(unlock_reason.to_string());
+        }
         if Self::should_suppress_display_picture_recovery_action(&proposal, &owner_signal) {
             proposal.decision.action = RecoveryAction::CooldownSuppressed;
         }
@@ -935,7 +1013,7 @@ impl RtcSessionPolicy {
             }
             proposal.decision.action = RecoveryAction::CoalescedKeyframeInFlight;
         }
-        let mut reconnect_gate_detail = expensive_recovery_gate
+        let reconnect_gate_detail = expensive_recovery_gate
             .apply_to_proposal(
                 snapshot,
                 owner_state,
@@ -1007,16 +1085,6 @@ impl RtcSessionPolicy {
             }
         }
 
-        // Transport deadline 优先级恢复：如果是 transport deadline 信号，恢复原始决策
-        // 这确保 transport deadline 不会被 local recovery 的门控抑制
-        if let Some(original_action) = transport_deadline_original_action {
-            if proposal.decision.action != original_action {
-                // Transport deadline 被门控修改了，恢复原始决策并清除门控 detail
-                proposal.decision.action = original_action;
-                reconnect_gate_detail = None;
-            }
-        }
-
         if snapshot.connection.lifecycle_state == ConnectionLifecycleStateFact::Connected
             && should_absorb_light_recovery_signal_during_ramp_up(
                 self.runtime_stats.as_ref(),
@@ -1060,21 +1128,24 @@ impl RtcSessionPolicy {
             // 否则 ledger 会记成 terminal，但执行层仍收到 reconnect，造成合同分裂。
             return None;
         }
-        Some(
-            RecoveryPolicyProposal {
-                decision: proposal.decision,
-                reason: owner_signal.reason,
-                reason_label: owner_signal.reason_label,
-                reason_domain: crate::XbxEngineRecoveryReasonDomain::ConnectivityTransport,
-                reconnect_gate_detail,
-                budget_before: proposal.budget_before,
-                budget_after: proposal.budget_after,
-                coalescing_mode: proposal.coalescing_mode,
-                unlock_reason: proposal.unlock_reason,
-                preempt_reason: proposal.preempt_reason,
-            }
-            .with_runtime_reason_domain(),
-        )
+        let mut proposal = RecoveryPolicyProposal {
+            decision: proposal.decision,
+            reason: owner_signal.reason,
+            reason_label: owner_signal.reason_label,
+            reason_domain: crate::XbxEngineRecoveryReasonDomain::ConnectivityTransport,
+            reconnect_gate_detail,
+            budget_before: proposal.budget_before,
+            budget_after: proposal.budget_after,
+            coalescing_mode: proposal.coalescing_mode,
+            unlock_reason: proposal.unlock_reason,
+            preempt_reason: proposal.preempt_reason,
+        }
+        .with_runtime_reason_domain();
+        if proposal.decision.action == RecoveryAction::RequestReconnectCandidate {
+            self.recovery_coordinator.on_reconnect_candidate_accepted();
+            proposal.budget_after = self.recovery_coordinator.current_budget_state();
+        }
+        Some(proposal)
     }
 
     fn should_absorb_render_aware_realtime_adapter_idle_timeout(
@@ -1125,11 +1196,23 @@ impl RtcSessionPolicy {
         RuntimeStatsSink::read_shared(self.runtime_stats.as_ref(), |stats| {
             let (last_keyframe_requested_at, last_keyframe_decoded_at) =
                 transport_await_picture_recovery_episode_latest_times(stats);
+            let ingress_active = recovery_observation_stage_signal_recent(
+                stats.latest_video_packet_arrival_time_ms,
+                observed_at_ms,
+            );
+            let decode_active = recovery_observation_stage_signal_recent(
+                stats.latest_video_decode_ok_time_ms,
+                observed_at_ms,
+            );
+            let render_active = recovery_observation_stage_signal_recent(
+                stats.latest_video_host_present_time_ms,
+                observed_at_ms,
+            );
             RecoveryObservationSnapshot {
-                ingress_active: stats.latest_video_packet_arrival_time_ms.is_some(),
-                reassembly_active: stats.latest_video_packet_sequence.is_some(),
-                decode_active: stats.latest_video_decode_ok_time_ms.is_some(),
-                render_active: stats.latest_video_host_present_time_ms.is_some(),
+                ingress_active,
+                reassembly_active: ingress_active && stats.latest_video_packet_sequence.is_some(),
+                decode_active,
+                render_active,
                 rtc_connectivity_connected: snapshot.connection.lifecycle_state
                     == ConnectionLifecycleStateFact::Connected,
                 reconnect_in_flight: matches!(
@@ -1428,6 +1511,216 @@ impl RtcSessionPolicy {
                 )
         })
         .unwrap_or(false)
+    }
+
+    fn should_refresh_transport_await_continuation_only_pli(
+        &self,
+        owner_state: VideoSchedulingOwnerState,
+        proposal: &CoordinatorProposal,
+        owner_signal: &RecoveryOwnerSignal,
+        observed_at_ms: f64,
+    ) -> bool {
+        if !matches!(
+            owner_state,
+            VideoSchedulingOwnerState::RebuildingSupply | VideoSchedulingOwnerState::SupplyStarved
+        ) {
+            return false;
+        }
+        if owner_signal.reason != VideoEscalationReason::TransportAwaitRecoveryKeyframe {
+            return false;
+        }
+        if !matches!(
+            proposal.decision.action,
+            RecoveryAction::CooldownSuppressed
+                | RecoveryAction::CoalescedKeyframeInFlight
+                | RecoveryAction::WaitForBurst
+        ) {
+            return false;
+        }
+        let refresh_interval_ms = if self.is_cloud_gaming_profile() {
+            140.0
+        } else {
+            100.0
+        };
+        RuntimeStatsSink::read_shared(self.runtime_stats.as_ref(), |stats| {
+            if has_current_clean_anchor_from_stats(stats) {
+                return false;
+            }
+            let Some(episode) = current_transport_await_keyframe_episode(stats) else {
+                return false;
+            };
+            if (observed_at_ms - episode.requested_at_ms).max(0.0) < refresh_interval_ms {
+                return false;
+            }
+            let packets_recent = stats
+                .latest_video_packet_arrival_time_ms
+                .is_some_and(|at_ms| {
+                    (observed_at_ms - at_ms).max(0.0)
+                        <= TRANSPORT_AWAIT_CONTINUATION_REFRESH_PACKET_AGE_MS
+                });
+            if !packets_recent {
+                return false;
+            }
+            let decode_still_old = stats
+                .latest_video_decode_ok_time_ms
+                .is_none_or(|at_ms| at_ms <= episode.requested_at_ms);
+            let present_still_old = stats
+                .latest_video_host_present_time_ms
+                .is_none_or(|at_ms| at_ms <= episode.requested_at_ms);
+            if !decode_still_old || !present_still_old {
+                return false;
+            }
+            stats
+                .latest_h264_inspection_observation
+                .as_ref()
+                .is_some_and(|inspection| {
+                    (observed_at_ms - inspection.observed_at_ms).max(0.0) <= refresh_interval_ms
+                        && inspection.bound_episode_id == Some(episode.episode_id)
+                        && !inspection.bootstrap_ready
+                        && matches!(
+                            inspection.bootstrap_reject_reason.as_deref(),
+                            Some("bootstrapMissingIdr" | "NonIdrVcl")
+                        )
+                        && inspection.committed_sps_present
+                        && inspection.committed_pps_present
+                        && inspection.delta_continuation_ready
+                        && inspection.admission_accepted
+                })
+        })
+        .unwrap_or(false)
+    }
+
+    fn should_upgrade_transport_await_refresh_to_fir(
+        &self,
+        owner_state: VideoSchedulingOwnerState,
+        proposal: &CoordinatorProposal,
+        owner_signal: &RecoveryOwnerSignal,
+        observed_at_ms: f64,
+    ) -> Option<&'static str> {
+        if !matches!(
+            owner_state,
+            VideoSchedulingOwnerState::RebuildingSupply | VideoSchedulingOwnerState::SupplyStarved
+        ) {
+            return None;
+        }
+        if owner_signal.reason != VideoEscalationReason::TransportAwaitRecoveryKeyframe {
+            return None;
+        }
+        if !matches!(
+            proposal.decision.action,
+            RecoveryAction::RequestPli
+                | RecoveryAction::RequestDecoderReset
+                | RecoveryAction::RequestReconnectCandidate
+                | RecoveryAction::CooldownSuppressed
+                | RecoveryAction::CoalescedKeyframeInFlight
+                | RecoveryAction::CoalescedDecoderResetInFlight
+                | RecoveryAction::WaitForBurst
+                | RecoveryAction::WaitForDecoderResetBurst
+        ) {
+            return None;
+        }
+        let profile = resolve_recovery_profile(self.runtime_stats.as_ref());
+        RuntimeStatsSink::read_shared(self.runtime_stats.as_ref(), |stats| {
+            if has_current_clean_anchor_from_stats(stats) {
+                return None;
+            }
+            let episode = current_transport_await_keyframe_episode(stats)?;
+            let request_age_ms = (observed_at_ms - episode.requested_at_ms).max(0.0);
+            if request_age_ms < profile.pli_refresh_interval_ms {
+                return None;
+            }
+            let last_fir_at_ms = stats
+                .recent_keyframe_request_episodes
+                .iter()
+                .chain(stats.latest_keyframe_request_episode.iter())
+                .filter(|candidate| {
+                    candidate.request_reason.as_deref()
+                        == Some(TRANSPORT_AWAIT_RECOVERY_KEYFRAME_DIAGNOSIS)
+                        && candidate.request_kind.as_deref() == Some("fir")
+                })
+                .filter_map(|candidate| candidate.sent_at_ms.or(Some(candidate.requested_at_ms)))
+                .max_by(|left, right| left.total_cmp(right));
+            if last_fir_at_ms.is_some_and(|last_fir_at_ms| {
+                (observed_at_ms - last_fir_at_ms).max(0.0) < profile.fir_retry_interval_ms
+            }) {
+                return None;
+            }
+            let continuation_only_sustained = stats
+                .latest_h264_inspection_observation
+                .as_ref()
+                .is_some_and(|inspection| {
+                    (observed_at_ms - inspection.observed_at_ms).max(0.0)
+                        <= profile.playback_recovered_track_progress_fresh_ms
+                        && inspection.bound_episode_id == Some(episode.episode_id)
+                        && !inspection.bootstrap_ready
+                        && inspection.admission_accepted
+                        && matches!(
+                            inspection.bootstrap_reject_reason.as_deref(),
+                            Some("bootstrapMissingIdr" | "NonIdrVcl")
+                        )
+                        && inspection.continuation_verdict.as_deref()
+                            == Some("continuationAcceptedWhileAwaitingIdr")
+                        && inspection.committed_sps_present
+                        && inspection.committed_pps_present
+                        && inspection.delta_continuation_ready
+                });
+            if continuation_only_sustained {
+                return Some("continuationOnlyAwaitingIdr");
+            }
+            let awaiting_recovery_anchor_stalled = matches!(
+                episode.status.as_str(),
+                "response-observed" | "packet-seen" | "decoded"
+            ) && transport_await_anchor_candidate_stalled(
+                stats,
+                &episode,
+                observed_at_ms,
+                profile.playback_recovered_track_progress_fresh_ms,
+            );
+            if awaiting_recovery_anchor_stalled {
+                return Some("awaitingRecoveryAnchor");
+            }
+            let decoded_pending_commit_expired =
+                episode
+                    .first_keyframe_decoded_at_ms
+                    .is_some_and(|decoded_at_ms| {
+                        (observed_at_ms - decoded_at_ms).max(0.0)
+                            >= profile.decoded_pending_commit_hold_ms
+                            && stats.video_anchor_clean_observed_at_ms.is_none()
+                    });
+            if decoded_pending_commit_expired {
+                return Some("decodedPendingCommitExpired");
+            }
+            let decoder_no_output_after_continuation =
+                stats.video_decoder_recovery_event.as_deref() == Some("backend-failure-escalated")
+                    && matches!(
+                        stats.video_decoder_recovery_detail.as_deref(),
+                        Some(
+                            "nominalContinuationNoOutputSoftFallback"
+                                | "recoveringContinuationNoOutputSoftFallback"
+                        )
+                    )
+                    && stats.video_decoder_recovery_state.as_deref() == Some("waiting-keyframe")
+                    && stats
+                        .video_decoder_recovery_state_changed_at_ms
+                        .is_some_and(|changed_at_ms| {
+                            (observed_at_ms - changed_at_ms).max(0.0)
+                                <= profile.playback_recovered_track_progress_fresh_ms
+                        });
+            if decoder_no_output_after_continuation {
+                return Some("decoderNoOutputAfterContinuation");
+            }
+            let response_seen_without_fresh_anchor = matches!(
+                episode.status.as_str(),
+                "response-observed" | "packet-seen" | "decoded"
+            ) && episode
+                .first_video_packet_at_ms
+                .or(episode.first_keyframe_packet_at_ms)
+                .is_some_and(|response_at_ms| {
+                    (observed_at_ms - response_at_ms).max(0.0) >= profile.pli_refresh_interval_ms
+                });
+            response_seen_without_fresh_anchor.then_some("responseSeenNoFreshAnchor")
+        })
+        .flatten()
     }
 
     fn should_suppress_adapter_idle_timeout_with_render_slack(
@@ -1751,7 +2044,7 @@ impl RtcSessionPolicy {
         // 目的：避免 ICE/通道/RTT 等已经在推进，但 frame_count 仍为 0 时被误判为“无进展”，
         // 从而触发重连风暴。里程碑一旦稳定（token 不再变化），仍会在阈值后进入重连。
         if current_frame_count == 0 {
-            let token = Self::build_transport_progress_token(snapshot);
+            let token = self.build_pre_first_frame_progress_token(snapshot);
             match self.recovery_no_progress_last_transport_progress_token {
                 None => {
                     self.recovery_no_progress_last_transport_progress_token = Some(token);
@@ -1864,6 +2157,56 @@ impl RtcSessionPolicy {
         self.connected_render_last_present_time_ms = None;
         self.connected_render_last_inbound_video_bytes_total = None;
         self.connected_render_stall_has_ingress_progress = false;
+    }
+
+    fn build_pre_first_frame_progress_token(&self, snapshot: &TransportSnapshot) -> u64 {
+        let mut token = Self::build_transport_progress_token(snapshot);
+        let ingress_token = RuntimeStatsSink::read_shared(self.runtime_stats.as_ref(), |stats| {
+            let mut ingress_token = 0u64;
+            ingress_token ^= stats.inbound_primary_video_bytes_total;
+            if let Some(track) = stats.latest_video_track_status.as_ref() {
+                ingress_token ^= (track.video_packet_count_total as u64) << 1;
+                ingress_token ^= (track.video_bytes_total as u64) << 2;
+                if track.state == "primaryVideoRtpStarted" {
+                    ingress_token |= 1 << 62;
+                }
+                if track.state == "remoteTrackAttached" {
+                    ingress_token |= 1 << 63;
+                }
+            }
+
+            // 首帧前把协商里程碑也视为 transport 进展。
+            // 远端 answer 接受、feedback target 绑定状态变化都代表新一轮 rebuild 正在推进，
+            // 这些信号到来时应重置 no-progress 计时，给当前协商窗口继续完成的机会。
+            if let Some(answer) = stats.latest_remote_answer_observation.as_ref() {
+                ingress_token ^= answer.observation_id.rotate_left(7);
+            }
+            if let Some(builder) = stats.latest_rtc_builder_observation.as_ref() {
+                ingress_token ^= builder.observation_id.rotate_left(11);
+            }
+            if let Some(target) = stats.latest_feedback_target_availability_target.as_deref() {
+                let target_tag = match target {
+                    "videoRtcpFeedback" => 1u64,
+                    "videoTwccFeedback" => 2u64,
+                    _ => 3u64,
+                };
+                let state_tag = match stats.latest_feedback_target_availability_state.as_deref() {
+                    Some("ready") => 1u64,
+                    Some("unbound") => 2u64,
+                    Some(_) => 3u64,
+                    None => 0u64,
+                };
+                ingress_token ^= target_tag << 40;
+                ingress_token ^= state_tag << 44;
+                if let Some(at_ms) = stats.latest_feedback_target_availability_observed_at_ms {
+                    ingress_token ^= (at_ms as u64).rotate_left(19);
+                }
+            }
+            ingress_token
+        })
+        .unwrap_or(0);
+        token ^= ingress_token;
+        token
     }
 
     fn has_connected_connectivity_failure_evidence(
@@ -2071,6 +2414,29 @@ impl RtcSessionPolicy {
         // canonical owner contract 由 owner state machine 直接写入 runtime stats，
         // 不再维护 recovery coupling 的并行语义轴。
         sink.update(|stats| {
+            if let Some(timeline) = stats.latest_video_timeline_observation.as_ref() {
+                let facts = compute_recovery_facts(timeline, stats);
+                match facts.recovery_progress_level {
+                    Some(RecoveryProgressLevel::PlaybackRecovered) => {
+                        stats.recovery_playback_recovered_at_ms =
+                            facts.recovery_episode_progress_at_ms;
+                        stats.recovery_playback_recovered_phase = Some(
+                            RecoveryProgressLevel::PlaybackRecovered
+                                .as_str()
+                                .to_string(),
+                        );
+                    }
+                    Some(
+                        RecoveryProgressLevel::CleanAnchorCommitted
+                        | RecoveryProgressLevel::DisplayStable,
+                    ) => {
+                        stats.recovery_fresh_anchor_recovered_at_ms = facts
+                            .recovery_episode_progress_at_ms
+                            .or(stats.video_anchor_clean_observed_at_ms);
+                    }
+                    _ => {}
+                }
+            }
             stats.recovery_policy_profile =
                 Some(orchestration.recovery_profile_kind.as_str().to_string());
             stats.video_owner_state = Some(owner_output.state.as_str().to_string());

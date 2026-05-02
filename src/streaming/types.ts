@@ -3,8 +3,8 @@ import type {
   StreamingRenderProjection,
   StreamingRuntimeProjection,
   StreamingSessionCapabilitiesProjection,
-  StreamingSessionMetadataProjection,
   StreamingSessionExecutionSnapshot,
+  StreamingSessionMetadataProjection,
   StreamingSessionProgressSnapshot,
   StreamingSessionSnapshot,
   StreamingTargetType,
@@ -132,6 +132,7 @@ export interface StreamPerformanceSnapshot {
   inboundVideoBytesTotal?: number
   inboundAudioBytesTotal?: number
   inboundVideoPacketCountTotal?: number
+  latestVideoPacketArrivalRtpTimestamp?: number
   videoDecoderResetCount?: number
   videoDecoderStalled?: boolean
   videoDecoderRecoveryState?: string
@@ -139,6 +140,7 @@ export interface StreamPerformanceSnapshot {
   videoDecoderRecoveryDetail?: string
   videoDecoderRecoveryStatus?: number
   videoDecoderRecoveryStateChangedAtMs?: number
+  latestVideoDecodeOkRtpTimestamp?: number
   videoRendererStalled?: boolean
   videoRendererStallBlocksPresentation?: boolean
   packetAgeMs?: number
@@ -153,10 +155,9 @@ export interface StreamPerformanceSnapshot {
   videoPacerDropCountTotal?: number
   videoRendererSubmitCountTotal?: number
   videoRendererDropCountTotal?: number
-  videoPresentDropCountTotal?: number
-  videoPresentOverwriteCountTotal?: number
-  videoPresentEnqueueCountTotal?: number
-  videoPresentSubmitCountTotal?: number
+  hostMailboxDropCountTotal?: number
+  hostMailboxOverwriteCountTotal?: number
+  hostMailboxEnqueueCountTotal?: number
   recoveryKeyframeRequestCount?: number
   recoveryDecoderResetCount?: number
   recoveryReconnectCount?: number
@@ -210,8 +211,16 @@ export interface StreamPerformanceSnapshot {
   rendererCapabilityReason?: string
   icePolicyMode?: 'passthrough' | 'policy'
   icePolicyDigest?: string
+  hostMailboxSubmitEpoch?: number
+  hostDisplayTickEpoch?: number
+  hostFramePresentEpoch?: number
+  latestVideoHostSubmitRtpTimestamp?: number
+  submitAgeMs?: number
+  displayAgeMs?: number
+  hostViewGeneration?: number
+  latestHostViewCreatedAtMs?: number
   hostPresentTakeEmptyStreak?: number
-  hostPresentLatestRenderSlotAtMs?: number
+  hostMailboxLatestSubmitAtMs?: number
   lastDisplayedFrameSeq?: number
   lastDisplayedFrameRtpTimestamp?: number
   lastDisplayedAtMs?: number

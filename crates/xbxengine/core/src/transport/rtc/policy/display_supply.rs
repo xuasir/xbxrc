@@ -24,11 +24,11 @@ pub(crate) struct SchedulingDemandSignal {
     pub(crate) decode_age_ms: Option<f64>,
     pub(crate) video_renderer_stalled: bool,
     pub(crate) host_display_tick_epoch: Option<u64>,
-    pub(crate) host_present_epoch: Option<u64>,
+    pub(crate) host_frame_present_epoch: Option<u64>,
     pub(crate) host_cadence_phase: Option<String>,
-    pub(crate) present_submit_count_total: Option<u64>,
-    pub(crate) present_drop_count_total: Option<u64>,
-    pub(crate) present_overwrite_count_total: Option<u64>,
+    pub(crate) host_mailbox_enqueue_count_total: Option<u64>,
+    pub(crate) host_mailbox_drop_count_total: Option<u64>,
+    pub(crate) host_mailbox_overwrite_count_total: Option<u64>,
     pub(crate) pacer_submit_count_total: Option<u64>,
     pub(crate) pacer_drop_count_total: Option<u64>,
     pub(crate) renderer_submit_count_total: Option<u64>,
@@ -39,8 +39,8 @@ impl SchedulingDemandSignal {
     pub(crate) fn host_is_priming_without_present(&self) -> bool {
         matches!(self.host_cadence_phase.as_deref(), Some("priming"))
             && self.host_display_tick_epoch.unwrap_or_default() > 0
-            && self.host_present_epoch.unwrap_or_default() == 0
-            && self.present_submit_count_total.unwrap_or_default() == 0
+            && self.host_frame_present_epoch.unwrap_or_default() == 0
+            && self.host_mailbox_enqueue_count_total.unwrap_or_default() == 0
     }
 
     pub(crate) fn critical_signal(
@@ -66,12 +66,12 @@ impl SchedulingDemandSignal {
             return DisplaySupplyCriticalSignal::HardRendererStall;
         }
         let present_drop_ratio = ratio(
-            self.present_drop_count_total,
-            self.present_submit_count_total,
+            self.host_mailbox_drop_count_total,
+            self.host_mailbox_enqueue_count_total,
         );
         let present_overwrite_ratio = ratio(
-            self.present_overwrite_count_total,
-            self.present_submit_count_total,
+            self.host_mailbox_overwrite_count_total,
+            self.host_mailbox_enqueue_count_total,
         );
         let pacer_drop_ratio = ratio(self.pacer_drop_count_total, self.pacer_submit_count_total);
         let renderer_drop_ratio = ratio(
@@ -113,12 +113,12 @@ impl SchedulingDemandSignal {
             .decode_age_ms
             .is_some_and(|age| age >= thresholds.degraded_decode_age_ms);
         let present_drop_ratio = ratio(
-            self.present_drop_count_total,
-            self.present_submit_count_total,
+            self.host_mailbox_drop_count_total,
+            self.host_mailbox_enqueue_count_total,
         );
         let present_overwrite_ratio = ratio(
-            self.present_overwrite_count_total,
-            self.present_submit_count_total,
+            self.host_mailbox_overwrite_count_total,
+            self.host_mailbox_enqueue_count_total,
         );
         let pacer_drop_ratio = ratio(self.pacer_drop_count_total, self.pacer_submit_count_total);
         let renderer_drop_ratio = ratio(
@@ -221,11 +221,11 @@ mod tests {
             decode_age_ms: Some(18.0),
             video_renderer_stalled: false,
             host_display_tick_epoch: None,
-            host_present_epoch: None,
+            host_frame_present_epoch: None,
             host_cadence_phase: None,
-            present_submit_count_total: Some(1200),
-            present_drop_count_total: Some(1),
-            present_overwrite_count_total: Some(2),
+            host_mailbox_enqueue_count_total: Some(1200),
+            host_mailbox_drop_count_total: Some(1),
+            host_mailbox_overwrite_count_total: Some(2),
             pacer_submit_count_total: Some(1200),
             pacer_drop_count_total: Some(0),
             renderer_submit_count_total: Some(1200),
@@ -246,11 +246,11 @@ mod tests {
             decode_age_ms: Some(420.0),
             video_renderer_stalled: true,
             host_display_tick_epoch: None,
-            host_present_epoch: None,
+            host_frame_present_epoch: None,
             host_cadence_phase: None,
-            present_submit_count_total: Some(1200),
-            present_drop_count_total: Some(1),
-            present_overwrite_count_total: Some(2),
+            host_mailbox_enqueue_count_total: Some(1200),
+            host_mailbox_drop_count_total: Some(1),
+            host_mailbox_overwrite_count_total: Some(2),
             pacer_submit_count_total: Some(1200),
             pacer_drop_count_total: Some(0),
             renderer_submit_count_total: Some(1200),
@@ -271,11 +271,11 @@ mod tests {
             decode_age_ms: Some(340.0),
             video_renderer_stalled: false,
             host_display_tick_epoch: None,
-            host_present_epoch: None,
+            host_frame_present_epoch: None,
             host_cadence_phase: None,
-            present_submit_count_total: Some(1200),
-            present_drop_count_total: Some(1),
-            present_overwrite_count_total: Some(2),
+            host_mailbox_enqueue_count_total: Some(1200),
+            host_mailbox_drop_count_total: Some(1),
+            host_mailbox_overwrite_count_total: Some(2),
             pacer_submit_count_total: Some(1200),
             pacer_drop_count_total: Some(0),
             renderer_submit_count_total: Some(1200),
@@ -301,11 +301,11 @@ mod tests {
             decode_age_ms: Some(12.0),
             video_renderer_stalled: false,
             host_display_tick_epoch: None,
-            host_present_epoch: None,
+            host_frame_present_epoch: None,
             host_cadence_phase: None,
-            present_submit_count_total: Some(1000),
-            present_drop_count_total: Some(6),
-            present_overwrite_count_total: Some(190),
+            host_mailbox_enqueue_count_total: Some(1000),
+            host_mailbox_drop_count_total: Some(6),
+            host_mailbox_overwrite_count_total: Some(190),
             pacer_submit_count_total: Some(1000),
             pacer_drop_count_total: Some(3),
             renderer_submit_count_total: Some(1000),
@@ -330,11 +330,11 @@ mod tests {
             decode_age_ms: Some(360.0),
             video_renderer_stalled: false,
             host_display_tick_epoch: None,
-            host_present_epoch: None,
+            host_frame_present_epoch: None,
             host_cadence_phase: None,
-            present_submit_count_total: Some(1200),
-            present_drop_count_total: Some(1),
-            present_overwrite_count_total: Some(2),
+            host_mailbox_enqueue_count_total: Some(1200),
+            host_mailbox_drop_count_total: Some(1),
+            host_mailbox_overwrite_count_total: Some(2),
             pacer_submit_count_total: Some(1200),
             pacer_drop_count_total: Some(0),
             renderer_submit_count_total: Some(1200),
@@ -355,11 +355,11 @@ mod tests {
             decode_age_ms: Some(360.0),
             video_renderer_stalled: true,
             host_display_tick_epoch: None,
-            host_present_epoch: None,
+            host_frame_present_epoch: None,
             host_cadence_phase: None,
-            present_submit_count_total: Some(1200),
-            present_drop_count_total: Some(1),
-            present_overwrite_count_total: Some(2),
+            host_mailbox_enqueue_count_total: Some(1200),
+            host_mailbox_drop_count_total: Some(1),
+            host_mailbox_overwrite_count_total: Some(2),
             pacer_submit_count_total: Some(1200),
             pacer_drop_count_total: Some(0),
             renderer_submit_count_total: Some(1200),
@@ -380,11 +380,11 @@ mod tests {
             decode_age_ms: Some(32.0),
             video_renderer_stalled: true,
             host_display_tick_epoch: Some(12),
-            host_present_epoch: Some(12),
+            host_frame_present_epoch: Some(12),
             host_cadence_phase: Some("steady".to_string()),
-            present_submit_count_total: Some(1200),
-            present_drop_count_total: Some(1),
-            present_overwrite_count_total: Some(2),
+            host_mailbox_enqueue_count_total: Some(1200),
+            host_mailbox_drop_count_total: Some(1),
+            host_mailbox_overwrite_count_total: Some(2),
             pacer_submit_count_total: Some(1200),
             pacer_drop_count_total: Some(0),
             renderer_submit_count_total: Some(1200),

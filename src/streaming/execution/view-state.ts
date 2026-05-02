@@ -3,13 +3,13 @@ import type {
   StreamingStartupEvent,
 } from '@shared/rpc/streaming'
 import type { StreamRuntimePhase } from '../runtime/runtime-contract'
-import type { SessionUiPhase } from '../session'
+import type { resolveProgressError, resolveStreamError, SessionUiPhase } from '../session'
 import type {
   StreamErrorKind,
   StreamingSessionProgress,
   StreamSessionLifecyclePhase,
 } from '../types'
-import { mapProgressToSessionUiPhase, resolveProgressError, resolveStreamError } from '../session'
+import { mapProgressToSessionUiPhase } from '../session'
 
 export const RUNTIME_PHASE_STATUS_KEYS: Record<StreamRuntimePhase, string> = {
   binding: 'streamPage.status.startingPlayer',

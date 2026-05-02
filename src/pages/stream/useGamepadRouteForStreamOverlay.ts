@@ -1,9 +1,9 @@
 import type { Ref } from 'vue'
 import { watch } from 'vue'
 
-export type GamepadRouteTargetSnapshot =
-  | { kind: 'shell-ui' }
-  | { kind: 'stream-session', sessionId: string }
+export type GamepadRouteTargetSnapshot
+  = | { kind: 'shell-ui' }
+    | { kind: 'stream-session', sessionId: string }
 
 export function useGamepadRouteForStreamOverlay(options: {
   isAnyOverlayOpen: Ref<boolean>
@@ -14,9 +14,12 @@ export function useGamepadRouteForStreamOverlay(options: {
   let pending: GamepadRouteTargetSnapshot | null = null
 
   function equals(a: GamepadRouteTargetSnapshot | null, b: GamepadRouteTargetSnapshot | null): boolean {
-    if (a === b) return true
-    if (a === null || b === null) return false
-    if (a.kind !== b.kind) return false
+    if (a === b)
+      return true
+    if (a === null || b === null)
+      return false
+    if (a.kind !== b.kind)
+      return false
     if (a.kind === 'shell-ui') {
       return true
     }
@@ -62,4 +65,3 @@ export function useGamepadRouteForStreamOverlay(options: {
     },
   )
 }
-

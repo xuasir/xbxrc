@@ -3,28 +3,31 @@ import type {
   DisplayOptionsValue,
   RuntimeLaunchSpec,
   StreamMicrophoneActivationSource,
-  StreamPresentationMilestone,
   StreamMicrophoneSnapshot,
+  StreamPresentationMilestone,
   StreamRenderProjection,
 } from '../types'
 import type { RuntimePort, StreamRuntimePhase } from './runtime-contract'
+import type { RecoveryGateState } from './runtime-host-policy'
 import { computed, nextTick, ref, shallowRef } from 'vue'
 import { rpc } from '../../services/rpc'
 import { DEFAULT_DISPLAY_OPTIONS, normalizeDisplayOptions, sleep } from '../utils'
 import { createBrowserRuntime } from './browser-runtime'
-import { createXbxEngineRuntime } from './xbxengine-runtime'
 import {
-  DEFAULT_RECOVERY_ARBITER_WINDOW_MS,
   buildRuntimeAttemptSpec,
   canRetryFallbackTurn,
   decideRecoveryArbiter,
+  DEFAULT_RECOVERY_ARBITER_WINDOW_MS,
+
   resolveLaunchDelayMs,
-  type RecoveryGateState,
   shouldAttemptRecovery,
   shouldUseDirectFirstFallback,
 } from './runtime-host-policy'
+import { createXbxEngineRuntime } from './xbxengine-runtime'
 
 type BrowserInterval = number
+
+function debugLog(..._args: Array<unknown>): void {}
 
 interface UseStreamRuntimeHostOptions {
   playerElementId: string
@@ -262,7 +265,7 @@ export function useStreamRuntimeHost(options: UseStreamRuntimeHostOptions) {
         return false
       }
       recoveryGate = reasonGateDecision.nextGate
-      console.info('[streaming][runtime-host] requesting runtime reconnect', {
+      debugLog('[streaming][runtime-host] requesting runtime reconnect', {
         sessionId,
         state,
         reason: decision.reason,
@@ -314,7 +317,7 @@ export function useStreamRuntimeHost(options: UseStreamRuntimeHostOptions) {
 
     // 仅在首轮直连失败时切一次 fallback TURN，避免和既有 recovery 重试叠加。
     fallbackRetryConsumed = true
-    console.info('[streaming][runtime-host] home direct-first failed before connected, retrying with fallback TURN')
+    debugLog('[streaming][runtime-host] home direct-first failed before connected, retrying with fallback TURN')
     void recordRuntimeTraceEvent('fallbackTurnRetry', {
       targetType: launchSpec.targetType,
       mode: launchSpec.runtime.mode,
@@ -379,12 +382,24 @@ export function useStreamRuntimeHost(options: UseStreamRuntimeHostOptions) {
       fallbackRetryConsumed = false
     }
     recoveryGate = {}
-    console.info('[streaming][runtime-host] stopping runtime', {
+    debugLog('[streaming][runtime-host] stopping runtime', {
       sessionId: activeSessionId,
       preserveLaunchContext: input?.preserveLaunchContext ?? false,
       reason: input?.reason ?? 'unspecified',
     })
+    await recordRuntimeTraceEvent('runtimeStopRequested', {
+      source: 'runtime-host',
+      preserveLaunchContext: input?.preserveLaunchContext ?? false,
+      reason: input?.reason ?? 'unspecified',
+      runtimeAvailable: currentRuntime !== null,
+    })
     await currentRuntime?.stop(input?.reason)
+    await recordRuntimeTraceEvent('runtimeStopCompleted', {
+      source: 'runtime-host',
+      preserveLaunchContext: input?.preserveLaunchContext ?? false,
+      reason: input?.reason ?? 'unspecified',
+      runtimeAvailable: currentRuntime !== null,
+    })
   }
 
   async function closeRuntime(reason?: string): Promise<void> {
@@ -400,7 +415,7 @@ export function useStreamRuntimeHost(options: UseStreamRuntimeHostOptions) {
     }
 
     const launchSpec = buildRuntimeAttemptSpec(input, attempt.useFallbackTurn)
-    console.info(
+    debugLog(
       `[streaming][runtime-host] launching runtime target=${input.targetType} mode=${input.runtime.mode} turn=${launchSpec.runtime.turnServer === null ? 'direct' : 'fallback'}`,
     )
     void recordRuntimeTraceEvent('launchRuntimeAttempt', {
@@ -497,11 +512,13 @@ export function useStreamRuntimeHost(options: UseStreamRuntimeHostOptions) {
         targetType: input.targetType,
         activeConnected,
         fallbackRetryConsumed,
-        error: error instanceof Error ? {
-          name: error.name,
-          message: error.message,
-          stack: error.stack,
-        } : error,
+        error: error instanceof Error
+          ? {
+              name: error.name,
+              message: error.message,
+              stack: error.stack,
+            }
+          : error,
       })
       const retriedWithFallbackTurn = await tryFallbackTurnRetry(runtimeToken).catch(() => false)
       if (retriedWithFallbackTurn) {

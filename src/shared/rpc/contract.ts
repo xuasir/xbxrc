@@ -8,8 +8,11 @@ import type {
   GamepadRuntimeSnapshotDto,
   GamepadSamplingConfigDto,
   GamepadSamplingStrategyDto,
-  LogicalPadBindingDto,
 } from '../gamepad/contract'
+import type {
+  RuntimeTraceAckResult,
+  RuntimeTraceRecordEventParams,
+} from './runtimeTrace'
 import type {
   StreamingCloseSessionParams,
   StreamingCloseSessionResult,
@@ -17,16 +20,16 @@ import type {
   StreamingDecideRecoveryResult,
   StreamingExchangeOfferParams,
   StreamingExchangeOfferResult,
-  StreamingPollIceParams,
-  StreamingPollIceResult,
-  StreamingSubmitIceParams,
-  StreamingSubmitIceResult,
   StreamingGetSessionProgressParams,
   StreamingListActiveSessionsParams,
   StreamingListActiveSessionsResult,
+  StreamingPollIceParams,
+  StreamingPollIceResult,
   StreamingSessionProgressSnapshot,
   StreamingStartSessionParams,
   StreamingStartSessionResult,
+  StreamingSubmitIceParams,
+  StreamingSubmitIceResult,
 } from './streaming'
 import type { RpcMethod } from './types'
 import type {
@@ -40,13 +43,9 @@ import type {
   XbxEngineRuntimeEventDto,
   XbxEngineSetAudioVolumeParams,
   XbxEngineStartRuntimeParams,
-  XbxEngineStopRuntimeParams,
   XbxEngineStatsDto,
+  XbxEngineStopRuntimeParams,
 } from './xbxengine'
-import type {
-  RuntimeTraceAckResult,
-  RuntimeTraceRecordEventParams,
-} from './runtimeTrace'
 
 type RpcConfigGroup = Record<string, unknown>
 

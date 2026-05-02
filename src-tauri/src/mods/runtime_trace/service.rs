@@ -10,6 +10,9 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use serde::Serialize;
 use serde_json::{json, Value};
 
+#[cfg(test)]
+use std::sync::OnceLock;
+
 pub type RuntimeTraceRecorderRef = Arc<RuntimeTraceRecorder>;
 
 const TRACE_SCHEMA_VERSION: u32 = 2;
@@ -82,7 +85,7 @@ impl RuntimeTraceRecorder {
     }
 
     fn apply_trace_mode_open_file(&self, trace_mode: &str) -> std::io::Result<()> {
-        let root = project_root().join("runtime-logs");
+        let root = trace_root_dir();
         create_dir_all(&root)?;
         let path = next_trace_path(&root);
         let path_open_payload = path.display().to_string();
@@ -130,7 +133,7 @@ impl RuntimeTraceRecorder {
             return Ok(());
         }
 
-        let root = project_root().join("runtime-logs");
+        let root = trace_root_dir();
         create_dir_all(&root)?;
         let path = next_trace_path(&root);
         let path_open_payload = path.display().to_string();
@@ -460,6 +463,35 @@ fn project_root() -> PathBuf {
         .to_path_buf()
 }
 
+fn trace_root_dir() -> PathBuf {
+    #[cfg(test)]
+    {
+        current_test_trace_run_dir()
+    }
+    #[cfg(not(test))]
+    {
+        project_root().join("runtime-logs")
+    }
+}
+
+#[cfg(test)]
+fn current_test_trace_run_dir() -> PathBuf {
+    static TEST_TRACE_RUN_DIR: OnceLock<PathBuf> = OnceLock::new();
+    TEST_TRACE_RUN_DIR
+        .get_or_init(|| {
+            initialize_test_trace_run_dir(&project_root().join("target/runtime-logs-tests"))
+        })
+        .clone()
+}
+
+#[cfg(test)]
+fn initialize_test_trace_run_dir(root: &Path) -> PathBuf {
+    let _ = std::fs::remove_dir_all(root);
+    let run_dir = root.join(format!("run-{}-pid{}", now_ms(), std::process::id()));
+    let _ = create_dir_all(&run_dir);
+    run_dir
+}
+
 fn next_trace_path(root: &Path) -> PathBuf {
     let file_id = TRACE_FILE_ID.fetch_add(1, Ordering::Relaxed) + 1;
     root.join(format!("runtime-trace-{}-{}.jsonl", now_ms(), file_id))
@@ -527,5 +559,19 @@ mod tests {
 
         assert!(!recorder.disk_enabled());
         assert!(recorder.path().is_none());
+    }
+
+    #[test]
+    fn initializes_new_test_run_by_clearing_previous_output() {
+        let root = project_root().join("target/runtime-logs-tests-reset-check");
+        fs::create_dir_all(root.join("old-run")).expect("create old run dir");
+        fs::write(root.join("old-run/stale.jsonl"), "{}\n").expect("seed stale trace");
+
+        let run_dir = initialize_test_trace_run_dir(&root);
+
+        let stale_path = root.join("old-run/stale.jsonl");
+        assert!(!stale_path.exists());
+        assert!(run_dir.exists());
+        assert_eq!(run_dir.parent(), Some(root.as_path()));
     }
 }

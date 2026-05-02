@@ -452,9 +452,10 @@ mod tests {
             width: 1920,
             height: 1080,
             rtp_timestamp: 1,
+            recovery_epoch_tag: None,
+            recovery_owner_rtp_timestamp: None,
             clean_anchor_commit_recovery_epoch: None,
             first_packet_sequence: None,
-            frame_playout_deadline_at_ms: None,
             frame_recovery_disposition: FrameRecoveryDisposition::Repairing,
             frame_unrecoverable_reason: None,
             target_playout_instant: if target_offset_ms >= 0 {

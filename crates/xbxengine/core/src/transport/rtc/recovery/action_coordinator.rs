@@ -109,7 +109,6 @@ impl ActionCoordinator {
         // 检查是否需要立即升级到更高层级
         if observation.requires_reconnect() {
             self.state_machine.transition_to_transport_recovery();
-            self.state_machine.mark_reconnect_requested();
             return RecoveryDecision::new(
                 RecoveryAction::RequestReconnectCandidate,
                 format!("reconnect required: {}", observation.reason_label),
@@ -195,10 +194,10 @@ impl ActionCoordinator {
 
     /// 从FrameRecovery状态决策
     fn decide_from_frame_recovery(&mut self, observation: RecoveryObservation) -> RecoveryDecision {
-        // 检查是否需要升级到decoder reset或reconnect
+        // FrameRecovery 只承担 owner 缺失域与 transport 坏窗域；
+        // decoder reset 只在 owner 已到但 decode 迟迟不出时开放。
         if observation.requires_reconnect() {
             self.state_machine.transition_to_transport_recovery();
-            self.state_machine.mark_reconnect_requested();
             return RecoveryDecision::new(
                 RecoveryAction::RequestReconnectCandidate,
                 format!("reconnect required: {}", observation.reason_label),
@@ -206,7 +205,7 @@ impl ActionCoordinator {
             .with_state_transition(RecoveryState::TransportRecovery);
         }
 
-        if observation.requires_decoder_reset() {
+        if self.state_machine.is_keyframe_decode_pending() && observation.requires_decoder_reset() {
             self.state_machine.transition_to_decoder_recovery();
             self.state_machine.mark_decoder_reset_requested();
             return RecoveryDecision::new(
@@ -217,32 +216,36 @@ impl ActionCoordinator {
         }
 
         // In-flight门控
-        if self.state_machine.is_idr_in_flight() {
-            // 检查IDR是否超时
-            if self.state_machine.is_state_timeout() {
-                // 检查最小重试间隔
-                if self.state_machine.can_retry_idr() {
-                    self.state_machine.mark_idr_requested();
-                    return RecoveryDecision::new(
-                        RecoveryAction::RequestPli,
-                        "IDR timeout, retry immediately".to_string(),
-                    )
-                    .with_coalescing(CoalescingMode::Refresh)
-                    .with_unlock_reason("timeout".to_string());
+        if self.state_machine.is_keyframe_request_in_flight() {
+            if self.state_machine.can_retry_idr() {
+                self.state_machine.mark_idr_requested();
+                let unlock_reason = if self.state_machine.idr_response_timeout_elapsed() {
+                    "responseTimeout"
                 } else {
-                    return RecoveryDecision::new(
-                        RecoveryAction::WaitForBurst,
-                        "IDR timeout, waiting for min retry interval".to_string(),
-                    );
-                }
-            } else {
-                // IDR仍在飞行中，coalesce
+                    "refreshIntervalElapsed"
+                };
                 return RecoveryDecision::new(
-                    RecoveryAction::CoalescedKeyframeInFlight,
-                    "IDR in flight, coalescing".to_string(),
+                    RecoveryAction::RequestPli,
+                    "IDR still unresolved, refresh pli".to_string(),
                 )
-                .with_coalescing(CoalescingMode::Merge);
+                .with_coalescing(CoalescingMode::Refresh)
+                .with_unlock_reason(unlock_reason.to_string());
             }
+
+            // IDR仍在飞行中，coalesce
+            return RecoveryDecision::new(
+                RecoveryAction::CoalescedKeyframeInFlight,
+                "IDR in flight, coalescing".to_string(),
+            )
+            .with_coalescing(CoalescingMode::Merge);
+        }
+
+        if self.state_machine.is_keyframe_decode_pending() {
+            return RecoveryDecision::new(
+                RecoveryAction::CoalescedKeyframeInFlight,
+                "owner observed, waiting decode progress".to_string(),
+            )
+            .with_coalescing(CoalescingMode::Merge);
         }
 
         // IDR未在飞行中，发送新的IDR
@@ -258,7 +261,6 @@ impl ActionCoordinator {
         // 检查是否需要升级到reconnect
         if observation.requires_reconnect() {
             self.state_machine.transition_to_transport_recovery();
-            self.state_machine.mark_reconnect_requested();
             return RecoveryDecision::new(
                 RecoveryAction::RequestReconnectCandidate,
                 format!("reconnect required: {}", observation.reason_label),
@@ -272,7 +274,6 @@ impl ActionCoordinator {
             if self.state_machine.is_state_timeout() {
                 // 超时，升级到reconnect
                 self.state_machine.transition_to_transport_recovery();
-                self.state_machine.mark_reconnect_requested();
                 return RecoveryDecision::new(
                     RecoveryAction::RequestReconnectCandidate,
                     "decoder reset timeout, escalate to reconnect".to_string(),
@@ -319,7 +320,6 @@ impl ActionCoordinator {
         }
 
         // 发送reconnect
-        self.state_machine.mark_reconnect_requested();
         RecoveryDecision::new(
             RecoveryAction::RequestReconnectCandidate,
             "request reconnect".to_string(),
@@ -407,6 +407,29 @@ mod tests {
     }
 
     #[test]
+    fn test_frame_recovery_refreshes_pli_after_short_interval() {
+        let mut coordinator = ActionCoordinator::new(test_profile(), 1);
+
+        let obs = RecoveryObservation::from_reason(
+            VideoEscalationReason::WaitKeyframe,
+            "waitKeyframe".to_string(),
+            1000.0,
+        );
+        let first = coordinator.decide(obs.clone());
+        assert_eq!(first.action, RecoveryAction::RequestPli);
+
+        std::thread::sleep(std::time::Duration::from_millis(120));
+
+        let second = coordinator.decide(obs);
+        assert_eq!(second.action, RecoveryAction::RequestPli);
+        assert_eq!(second.coalescing_mode, Some(CoalescingMode::Refresh));
+        assert_eq!(
+            second.unlock_reason.as_deref(),
+            Some("refreshIntervalElapsed")
+        );
+    }
+
+    #[test]
     fn test_escalation_path() {
         let mut coordinator = ActionCoordinator::new(test_profile(), 1);
 
@@ -419,7 +442,9 @@ mod tests {
         coordinator.decide(obs);
         assert_eq!(coordinator.current_state(), RecoveryState::FrameRecovery);
 
-        // FrameRecovery → DecoderRecovery
+        coordinator.state_machine_mut().mark_idr_response_observed();
+
+        // FrameRecovery(owner observed) → DecoderRecovery
         let obs = RecoveryObservation::from_reason(
             VideoEscalationReason::DecoderBackendFailure,
             "decoderBackendFailure".to_string(),

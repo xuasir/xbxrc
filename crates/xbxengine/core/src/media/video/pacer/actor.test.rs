@@ -5,16 +5,14 @@ use std::time::{Duration, Instant};
 use super::{
     drive_ready_frames_with_submit, enqueue_render_frame, flush_pending_render_output_with_submit,
     format_render_backpressure_summary, next_wait_duration, render_frame_is_stale,
-    render_frame_priority, resolve_cadence_sleep_guard_override_ms,
-    resolve_host_release_wait_duration, should_replace_render_queue_head, HostCadencePhaseHint,
-    HostPacingContext, PendingRenderSubmitResult, PendingRenderSubmitResultWithFrame,
+    resolve_cadence_sleep_guard_override_ms, should_replace_render_queue_head,
+    HostCadencePhaseHint, HostPacingContext, PendingRenderSubmitResult,
+    PendingRenderSubmitResultWithFrame,
 };
 use crate::api::backend::XbxEngineMediaRuntimeStats;
 use crate::media::video::ingress::budget::FrameBudgetWindowSource;
 use crate::media::video::pacer::actor::PacerActorHandle;
-use crate::media::video::render::pacer::{
-    FramePacingPolicy, HostPacingPressure, QueueHistoryConfig, QueueHistoryController,
-};
+use crate::media::video::render::pacer::{FramePacingPolicy, HostPacingPressure};
 use crate::media::video::render::renderer::XbxRenderFrame;
 use crate::media::video::render::{actor::RendererActorHandle, renderer::XbxRenderState};
 use crate::media::video::types::{DecodedFrame, FrameRecoveryDisposition};
@@ -25,8 +23,11 @@ fn make_decoded_frame(frame_seq: u64) -> DecodedFrame {
     DecodedFrame {
         pts: Instant::now(),
         rtp_timestamp: frame_seq as u32,
+        recovery_epoch_tag: None,
+        recovery_owner_rtp_timestamp: None,
         is_keyframe: frame_seq == 1,
         clean_anchor_commit_recovery_epoch: None,
+        presentation_value_role: None,
         budget: crate::media::video::ingress::budget::FrameBudgetContext::default(),
         frame_recovery_disposition: FrameRecoveryDisposition::Repairing,
         frame_unrecoverable_reason: None,
@@ -36,9 +37,12 @@ fn make_decoded_frame(frame_seq: u64) -> DecodedFrame {
             frame_seq,
             rendered_at_ms: frame_seq as f64,
             rtp_timestamp: Some(frame_seq as u32),
+            recovery_epoch_tag: None,
+            recovery_owner_rtp_timestamp: None,
             is_keyframe: frame_seq == 1,
             frame_recovery_disposition: Some("repairing".to_string()),
             frame_unrecoverable_reason: None,
+            presentation_value_role: None,
             pixel_data: XbxEngineRenderPixelData::Rgba {
                 bytes: Arc::<[u8]>::from([frame_seq as u8; 16]),
             },
@@ -60,12 +64,6 @@ fn make_recovery_window_decoded_frame(frame_seq: u64) -> DecodedFrame {
     frame
 }
 
-fn make_expired_recovery_window_decoded_frame(frame_seq: u64) -> DecodedFrame {
-    let mut frame = make_recovery_window_decoded_frame(frame_seq);
-    frame.pts = Instant::now() - Duration::from_millis(140);
-    frame
-}
-
 fn make_keyframe_decoded_frame(frame_seq: u64) -> DecodedFrame {
     let mut frame = make_decoded_frame(frame_seq);
     frame.budget = crate::media::video::ingress::budget::FrameBudgetContext::for_transport(
@@ -82,231 +80,54 @@ fn make_keyframe_decoded_frame(frame_seq: u64) -> DecodedFrame {
     frame
 }
 
-#[test]
-fn starved_host_keeps_only_latest_frame_for_playout_window_queue() {
-    let runtime_stats = RuntimeStatsSink::new(Arc::new(std::sync::Mutex::new(
-        XbxEngineMediaRuntimeStats::default(),
-    )));
-    let mut pacing_queue = VecDeque::from([
-        make_decoded_frame(1),
-        make_decoded_frame(2),
-        make_decoded_frame(3),
-    ]);
-    let mut queue_history = QueueHistoryController::new(QueueHistoryConfig::default());
-    let mut frame_drop_observation_id = 0;
-    let host_context = HostPacingContext {
-        host_refresh_interval_ms: 16,
-        release_interval_ms: 16,
-        host_frame_age_budget_ms: Some(36.0),
-        latest_host_present_time_ms: Some(1_000.0),
-        display_tick_epoch: 0,
-        present_epoch: 0,
-        cadence_phase: HostCadencePhaseHint::Starved,
-        pressure: HostPacingPressure::default(),
-        video_rtt_ms: None,
-        video_nack_recovery_rtt_ms: None,
-    };
-
-    super::enforce_queue_budget(
-        &mut pacing_queue,
-        0,
-        &mut queue_history,
-        &runtime_stats,
-        &mut frame_drop_observation_id,
-        &host_context,
-    );
-
-    assert_eq!(pacing_queue.len(), 2);
-    assert_eq!(
-        pacing_queue
-            .iter()
-            .map(|frame| frame.surface.frame_seq)
-            .collect::<Vec<_>>(),
-        vec![2, 3]
-    );
+fn make_decoded_frame_with_epoch(frame_seq: u64, recovery_epoch_tag: Option<u64>) -> DecodedFrame {
+    let mut frame = make_decoded_frame(frame_seq);
+    frame.recovery_epoch_tag = recovery_epoch_tag;
+    frame.surface.recovery_epoch_tag = recovery_epoch_tag;
+    frame
 }
 
 #[test]
-fn recovery_window_frames_bypass_starved_dynamic_queue_shrink() {
-    let runtime_stats = RuntimeStatsSink::new(Arc::new(std::sync::Mutex::new(
-        XbxEngineMediaRuntimeStats::default(),
-    )));
-    let mut pacing_queue = VecDeque::from([
-        make_recovery_window_decoded_frame(1),
-        make_recovery_window_decoded_frame(2),
-        make_recovery_window_decoded_frame(3),
-    ]);
-    let mut queue_history = QueueHistoryController::new(QueueHistoryConfig::default());
-    let mut frame_drop_observation_id = 0;
-    let host_context = HostPacingContext {
-        host_refresh_interval_ms: 16,
-        release_interval_ms: 16,
-        host_frame_age_budget_ms: Some(36.0),
-        latest_host_present_time_ms: Some(1_000.0),
-        display_tick_epoch: 0,
-        present_epoch: 0,
-        cadence_phase: HostCadencePhaseHint::Starved,
-        pressure: HostPacingPressure::default(),
-        video_rtt_ms: None,
-        video_nack_recovery_rtt_ms: None,
-    };
+fn higher_recovery_epoch_replaces_render_queue_head_even_with_lower_seq() {
+    let existing = make_decoded_frame_with_epoch(200, Some(3));
+    let incoming = make_decoded_frame_with_epoch(150, Some(4));
 
-    super::enforce_queue_budget(
-        &mut pacing_queue,
-        0,
-        &mut queue_history,
-        &runtime_stats,
-        &mut frame_drop_observation_id,
-        &host_context,
-    );
-
-    assert_eq!(pacing_queue.len(), 3);
-    assert_eq!(
-        pacing_queue
-            .iter()
-            .map(|frame| frame.surface.frame_seq)
-            .collect::<Vec<_>>(),
-        vec![1, 2, 3]
-    );
+    assert!(should_replace_render_queue_head(
+        &existing,
+        &incoming,
+        Instant::now(),
+    ));
+    assert!(!should_replace_render_queue_head(
+        &incoming,
+        &existing,
+        Instant::now(),
+    ));
 }
 
 #[test]
-fn recovery_window_frames_allow_deeper_local_buffer_before_release() {
-    let runtime_stats = RuntimeStatsSink::new(Arc::new(std::sync::Mutex::new(
-        XbxEngineMediaRuntimeStats::default(),
-    )));
-    let mut pacing_queue = VecDeque::from([
-        make_recovery_window_decoded_frame(1),
-        make_recovery_window_decoded_frame(2),
-        make_recovery_window_decoded_frame(3),
-        make_recovery_window_decoded_frame(4),
-        make_recovery_window_decoded_frame(5),
-    ]);
-    let mut queue_history = QueueHistoryController::new(QueueHistoryConfig::default());
-    let mut frame_drop_observation_id = 0;
-    let host_context = HostPacingContext {
-        host_refresh_interval_ms: 16,
-        release_interval_ms: 16,
-        host_frame_age_budget_ms: Some(36.0),
-        latest_host_present_time_ms: Some(1_000.0),
-        display_tick_epoch: 0,
-        present_epoch: 0,
-        cadence_phase: HostCadencePhaseHint::Steady,
-        pressure: HostPacingPressure::default(),
-        video_rtt_ms: None,
-        video_nack_recovery_rtt_ms: None,
-    };
+fn owner_frame_in_same_epoch_replaces_non_owner_render_candidate() {
+    let mut existing = make_decoded_frame_with_epoch(21, Some(8));
+    existing.rtp_timestamp = 121;
+    existing.recovery_owner_rtp_timestamp = Some(120);
+    existing.surface.rtp_timestamp = Some(121);
+    existing.surface.recovery_owner_rtp_timestamp = Some(120);
 
-    super::enforce_queue_budget(
-        &mut pacing_queue,
-        0,
-        &mut queue_history,
-        &runtime_stats,
-        &mut frame_drop_observation_id,
-        &host_context,
-    );
+    let mut incoming = make_decoded_frame_with_epoch(20, Some(8));
+    incoming.rtp_timestamp = 120;
+    incoming.recovery_owner_rtp_timestamp = Some(120);
+    incoming.surface.rtp_timestamp = Some(120);
+    incoming.surface.recovery_owner_rtp_timestamp = Some(120);
 
-    assert_eq!(pacing_queue.len(), 5);
-    assert_eq!(
-        pacing_queue
-            .iter()
-            .map(|frame| frame.surface.frame_seq)
-            .collect::<Vec<_>>(),
-        vec![1, 2, 3, 4, 5]
-    );
-}
-
-#[test]
-fn recovery_window_frames_bypass_non_aggressive_queue_pressure_tightening() {
-    let runtime_stats = RuntimeStatsSink::new(Arc::new(std::sync::Mutex::new(
-        XbxEngineMediaRuntimeStats::default(),
-    )));
-    let mut pacing_queue = VecDeque::from([
-        make_recovery_window_decoded_frame(1),
-        make_recovery_window_decoded_frame(2),
-        make_recovery_window_decoded_frame(3),
-        make_recovery_window_decoded_frame(4),
-        make_recovery_window_decoded_frame(5),
-    ]);
-    let mut queue_history = QueueHistoryController::new(QueueHistoryConfig::default());
-    for _ in 0..5 {
-        queue_history.record_depth(5);
-    }
-    let mut frame_drop_observation_id = 0;
-    let host_context = HostPacingContext {
-        host_refresh_interval_ms: 16,
-        release_interval_ms: 16,
-        host_frame_age_budget_ms: Some(36.0),
-        latest_host_present_time_ms: Some(1_000.0),
-        display_tick_epoch: 0,
-        present_epoch: 0,
-        cadence_phase: HostCadencePhaseHint::Steady,
-        pressure: HostPacingPressure::default(),
-        video_rtt_ms: None,
-        video_nack_recovery_rtt_ms: None,
-    };
-
-    super::enforce_queue_budget(
-        &mut pacing_queue,
-        0,
-        &mut queue_history,
-        &runtime_stats,
-        &mut frame_drop_observation_id,
-        &host_context,
-    );
-
-    assert_eq!(pacing_queue.len(), 5);
-    assert_eq!(
-        pacing_queue
-            .iter()
-            .map(|frame| frame.surface.frame_seq)
-            .collect::<Vec<_>>(),
-        vec![1, 2, 3, 4, 5]
-    );
-}
-
-#[test]
-fn expired_recovery_window_frame_does_not_hold_starved_mode_open() {
-    let runtime_stats = RuntimeStatsSink::new(Arc::new(std::sync::Mutex::new(
-        XbxEngineMediaRuntimeStats::default(),
-    )));
-    let mut pacing_queue = VecDeque::from([
-        make_expired_recovery_window_decoded_frame(1),
-        make_decoded_frame(2),
-        make_decoded_frame(3),
-    ]);
-    let mut queue_history = QueueHistoryController::new(QueueHistoryConfig::default());
-    let mut frame_drop_observation_id = 0;
-    let host_context = HostPacingContext {
-        host_refresh_interval_ms: 16,
-        release_interval_ms: 16,
-        host_frame_age_budget_ms: Some(36.0),
-        latest_host_present_time_ms: Some(1_000.0),
-        display_tick_epoch: 0,
-        present_epoch: 0,
-        cadence_phase: HostCadencePhaseHint::Starved,
-        pressure: HostPacingPressure::default(),
-        video_rtt_ms: None,
-        video_nack_recovery_rtt_ms: None,
-    };
-
-    super::enforce_queue_budget(
-        &mut pacing_queue,
-        0,
-        &mut queue_history,
-        &runtime_stats,
-        &mut frame_drop_observation_id,
-        &host_context,
-    );
-
-    assert_eq!(pacing_queue.len(), 2);
-    assert_eq!(
-        pacing_queue
-            .iter()
-            .map(|frame| frame.surface.frame_seq)
-            .collect::<Vec<_>>(),
-        vec![2, 3]
-    );
+    assert!(should_replace_render_queue_head(
+        &existing,
+        &incoming,
+        Instant::now()
+    ));
+    assert!(!should_replace_render_queue_head(
+        &incoming,
+        &existing,
+        Instant::now()
+    ));
 }
 
 #[test]
@@ -359,10 +180,8 @@ fn pending_render_output_reports_disconnect_without_silently_requeueing() {
 #[test]
 fn render_backpressure_summary_includes_host_epochs_and_queue_depths() {
     let host_context = HostPacingContext {
-        host_refresh_interval_ms: 17,
         release_interval_ms: 17,
         host_frame_age_budget_ms: Some(75.0),
-        latest_host_present_time_ms: Some(1_000.0),
         display_tick_epoch: 11,
         present_epoch: 7,
         cadence_phase: HostCadencePhaseHint::Starved,
@@ -375,21 +194,83 @@ fn render_backpressure_summary_includes_host_epochs_and_queue_depths() {
     assert!(summary.contains("pacingQueueDepth=3"));
     assert!(summary.contains("pendingRenderQueueDepth=1"));
     assert!(summary.contains("hostTickEpoch=11"));
-    assert!(summary.contains("presentEpoch=7"));
+    assert!(summary.contains("hostFramePresentEpoch=7"));
     assert!(summary.contains("cadencePhase=starved"));
     assert!(summary.contains("hostFrameAgeBudgetMs=75.0"));
 }
 
 #[test]
-fn render_queue_keeps_existing_higher_priority_frame() {
-    let existing = make_keyframe_decoded_frame(101);
+fn render_queue_prefers_newer_plain_delta_over_old_keyframe_without_recovery_signal() {
+    let mut existing = make_decoded_frame(101);
+    existing.is_keyframe = true;
+    existing.surface.is_keyframe = true;
     let incoming = make_decoded_frame(102);
+    assert!(should_replace_render_queue_head(
+        &existing,
+        &incoming,
+        Instant::now()
+    ));
+    assert!(!should_replace_render_queue_head(
+        &incoming,
+        &existing,
+        Instant::now()
+    ));
+}
+
+#[test]
+fn steady_continuation_does_not_replace_recovery_window_continuation_in_same_epoch() {
+    let mut existing = make_recovery_window_decoded_frame(301);
+    existing.recovery_epoch_tag = Some(12);
+    existing.surface.recovery_epoch_tag = Some(12);
+    existing.frame_recovery_disposition = FrameRecoveryDisposition::Repairing;
+    existing.surface.frame_recovery_disposition = Some("repairing".to_string());
+
+    let mut incoming = make_decoded_frame_with_epoch(302, Some(12));
+    incoming.frame_recovery_disposition = FrameRecoveryDisposition::Steady;
+    incoming.surface.frame_recovery_disposition = None;
+
     assert!(!should_replace_render_queue_head(
         &existing,
         &incoming,
         Instant::now()
     ));
-    assert!(render_frame_priority(&existing) > render_frame_priority(&incoming));
+    assert!(should_replace_render_queue_head(
+        &incoming,
+        &existing,
+        Instant::now()
+    ));
+}
+
+#[test]
+fn owner_rebuilding_supply_beats_non_owner_candidate_in_same_epoch() {
+    let mut existing = make_recovery_window_decoded_frame(321);
+    existing.recovery_epoch_tag = Some(14);
+    existing.surface.recovery_epoch_tag = Some(14);
+    existing.rtp_timestamp = 321;
+    existing.recovery_owner_rtp_timestamp = Some(300);
+    existing.surface.rtp_timestamp = Some(321);
+    existing.surface.recovery_owner_rtp_timestamp = Some(300);
+    existing.surface.frame_recovery_disposition = Some("rebuilding-supply".to_string());
+
+    let mut incoming = make_recovery_window_decoded_frame(300);
+    incoming.recovery_epoch_tag = Some(14);
+    incoming.surface.recovery_epoch_tag = Some(14);
+    incoming.rtp_timestamp = 300;
+    incoming.recovery_owner_rtp_timestamp = Some(300);
+    incoming.surface.rtp_timestamp = Some(300);
+    incoming.surface.recovery_owner_rtp_timestamp = Some(300);
+    incoming.surface.frame_recovery_disposition = Some("rebuilding-supply".to_string());
+
+    assert!(should_replace_render_queue_head(
+        &existing,
+        &incoming,
+        Instant::now()
+    ));
+    assert!(!should_replace_render_queue_head(
+        &incoming,
+        &existing,
+        Instant::now()
+    ));
 }
 
 #[test]
@@ -413,10 +294,8 @@ fn priming_render_queue_accepts_two_pending_frames() {
     let mut render_queue = VecDeque::from([make_decoded_frame(1)]);
     let mut frame_drop_observation_id = 0;
     let host_context = HostPacingContext {
-        host_refresh_interval_ms: 16,
         release_interval_ms: 16,
         host_frame_age_budget_ms: Some(36.0),
-        latest_host_present_time_ms: None,
         display_tick_epoch: 9,
         present_epoch: 0,
         cadence_phase: HostCadencePhaseHint::Priming,
@@ -454,149 +333,10 @@ fn next_wait_duration_ignores_host_release_gate() {
 }
 
 #[test]
-fn host_release_gate_disables_itself_when_host_present_is_stale() {
-    let context = HostPacingContext {
-        host_refresh_interval_ms: 16,
-        release_interval_ms: 16,
-        host_frame_age_budget_ms: Some(36.0),
-        latest_host_present_time_ms: Some(1_000.0),
-        display_tick_epoch: 0,
-        present_epoch: 0,
-        cadence_phase: HostCadencePhaseHint::Unknown,
-        pressure: HostPacingPressure::default(),
-        video_rtt_ms: None,
-        video_nack_recovery_rtt_ms: None,
-    };
-    let wait = resolve_host_release_wait_duration(&context, 1_100.0, None);
-    assert!(wait.is_none());
-}
-
-#[test]
-fn host_release_gate_is_disabled_for_next_host_tick_window() {
-    let context = HostPacingContext {
-        host_refresh_interval_ms: 16,
-        release_interval_ms: 16,
-        host_frame_age_budget_ms: Some(36.0),
-        latest_host_present_time_ms: Some(1_000.0),
-        display_tick_epoch: 0,
-        present_epoch: 0,
-        cadence_phase: HostCadencePhaseHint::Unknown,
-        pressure: HostPacingPressure::default(),
-        video_rtt_ms: None,
-        video_nack_recovery_rtt_ms: None,
-    };
-    let wait = resolve_host_release_wait_duration(&context, 1_006.0, None);
-    assert!(wait.is_none());
-}
-
-#[test]
-fn host_release_gate_keeps_new_display_tick_epoch_open() {
-    let context = HostPacingContext {
-        host_refresh_interval_ms: 16,
-        release_interval_ms: 16,
-        host_frame_age_budget_ms: Some(36.0),
-        latest_host_present_time_ms: Some(1_000.0),
-        display_tick_epoch: 9,
-        present_epoch: 4,
-        cadence_phase: HostCadencePhaseHint::Steady,
-        pressure: HostPacingPressure::default(),
-        video_rtt_ms: None,
-        video_nack_recovery_rtt_ms: None,
-    };
-    let wait = resolve_host_release_wait_duration(&context, 1_006.0, Some(8));
-    assert!(wait.is_none());
-}
-
-#[test]
-fn host_release_gate_allows_same_display_tick_epoch_reuse() {
-    let context = HostPacingContext {
-        host_refresh_interval_ms: 16,
-        release_interval_ms: 16,
-        host_frame_age_budget_ms: Some(36.0),
-        latest_host_present_time_ms: Some(1_000.0),
-        display_tick_epoch: 9,
-        present_epoch: 4,
-        cadence_phase: HostCadencePhaseHint::Steady,
-        pressure: HostPacingPressure::default(),
-        video_rtt_ms: None,
-        video_nack_recovery_rtt_ms: None,
-    };
-    let wait = resolve_host_release_wait_duration(&context, 1_006.0, Some(9));
-    assert!(wait.is_none());
-}
-
-#[test]
-fn host_release_gate_allows_same_priming_tick_before_first_present() {
-    let context = HostPacingContext {
-        host_refresh_interval_ms: 16,
-        release_interval_ms: 16,
-        host_frame_age_budget_ms: Some(36.0),
-        latest_host_present_time_ms: None,
-        display_tick_epoch: 9,
-        present_epoch: 0,
-        cadence_phase: HostCadencePhaseHint::Priming,
-        pressure: HostPacingPressure::default(),
-        video_rtt_ms: None,
-        video_nack_recovery_rtt_ms: None,
-    };
-    let wait = resolve_host_release_wait_duration(&context, 1_006.0, Some(9));
-    assert!(wait.is_none());
-}
-
-#[test]
-fn host_release_gate_allows_same_tick_reuse_when_high_refresh_host_lags_present_feedback() {
-    let context = HostPacingContext {
-        host_refresh_interval_ms: 7,
-        release_interval_ms: 33,
-        host_frame_age_budget_ms: Some(36.0),
-        latest_host_present_time_ms: Some(1_000.0),
-        display_tick_epoch: 166,
-        present_epoch: 5,
-        cadence_phase: HostCadencePhaseHint::Steady,
-        pressure: HostPacingPressure {
-            cadence_phase: HostCadencePhaseHint::Steady,
-            no_pending_pressure_level: Some("normal".to_string()),
-            no_pending_streak: 0,
-            present_overwrite_count_total: 0,
-            present_submit_count_total: 5,
-            present_fps: Some(7.27),
-            display_fps: Some(144.0),
-        },
-        video_rtt_ms: None,
-        video_nack_recovery_rtt_ms: None,
-    };
-    let wait = resolve_host_release_wait_duration(&context, 1_008.0, Some(166));
-    assert!(
-        wait.is_none(),
-        "high-refresh host with lagging present feedback should allow same-tick reuse"
-    );
-}
-
-#[test]
-fn host_release_gate_releases_same_tick_immediately_when_host_is_starved() {
-    let context = HostPacingContext {
-        host_refresh_interval_ms: 16,
-        release_interval_ms: 16,
-        host_frame_age_budget_ms: Some(36.0),
-        latest_host_present_time_ms: Some(1_000.0),
-        display_tick_epoch: 9,
-        present_epoch: 4,
-        cadence_phase: HostCadencePhaseHint::Starved,
-        pressure: HostPacingPressure::default(),
-        video_rtt_ms: None,
-        video_nack_recovery_rtt_ms: None,
-    };
-    let wait = resolve_host_release_wait_duration(&context, 1_006.0, Some(9));
-    assert!(wait.is_none());
-}
-
-#[test]
 fn cadence_sleep_guard_override_shortens_sleep_during_priming() {
     let host_context = HostPacingContext {
-        host_refresh_interval_ms: 16,
         release_interval_ms: 16,
         host_frame_age_budget_ms: Some(36.0),
-        latest_host_present_time_ms: None,
         display_tick_epoch: 1,
         present_epoch: 0,
         cadence_phase: HostCadencePhaseHint::Priming,
@@ -613,10 +353,8 @@ fn cadence_sleep_guard_override_shortens_sleep_during_priming() {
 #[test]
 fn cadence_sleep_guard_override_disables_sleep_when_host_is_starved() {
     let host_context = HostPacingContext {
-        host_refresh_interval_ms: 16,
         release_interval_ms: 16,
         host_frame_age_budget_ms: Some(36.0),
-        latest_host_present_time_ms: Some(1_000.0),
         display_tick_epoch: 9,
         present_epoch: 4,
         cadence_phase: HostCadencePhaseHint::Starved,
@@ -637,16 +375,13 @@ fn drive_ready_frames_submits_due_frame_without_host_release_window() {
     )));
     let mut pacing_queue = VecDeque::from([make_decoded_frame(11)]);
     let mut render_queue = VecDeque::new();
-    let mut queue_history = QueueHistoryController::new(QueueHistoryConfig::default());
     let mut frame_drop_observation_id = 0;
     let mut catch_up_mode = false;
     let mut last_consumed_host_tick_epoch = None;
     let mut render_backpressure_active = false;
     let host_context = HostPacingContext {
-        host_refresh_interval_ms: 16,
         release_interval_ms: 16,
         host_frame_age_budget_ms: Some(36.0),
-        latest_host_present_time_ms: Some(crate::media::video::decode::video_decode::now_ms_f64()),
         display_tick_epoch: 0,
         present_epoch: 0,
         cadence_phase: HostCadencePhaseHint::Unknown,
@@ -668,7 +403,6 @@ fn drive_ready_frames_submits_due_frame_without_host_release_window() {
     let dropped = drive_ready_frames_with_submit(
         &mut pacing_queue,
         &mut render_queue,
-        &mut queue_history,
         &runtime_stats,
         &mut frame_drop_observation_id,
         &pacing_policy,
@@ -695,18 +429,13 @@ fn drive_ready_frames_retries_pending_render_output_after_backpressure_clears() 
     )));
     let mut pacing_queue = VecDeque::from([make_decoded_frame(21)]);
     let mut render_queue = VecDeque::new();
-    let mut queue_history = QueueHistoryController::new(QueueHistoryConfig::default());
     let mut frame_drop_observation_id = 0;
     let mut catch_up_mode = false;
     let mut last_consumed_host_tick_epoch = None;
     let mut render_backpressure_active = false;
     let host_context = HostPacingContext {
-        host_refresh_interval_ms: 16,
         release_interval_ms: 16,
         host_frame_age_budget_ms: Some(36.0),
-        latest_host_present_time_ms: Some(
-            crate::media::video::decode::video_decode::now_ms_f64() - 64.0,
-        ),
         display_tick_epoch: 0,
         present_epoch: 0,
         cadence_phase: HostCadencePhaseHint::Unknown,
@@ -729,7 +458,6 @@ fn drive_ready_frames_retries_pending_render_output_after_backpressure_clears() 
     let first = drive_ready_frames_with_submit(
         &mut pacing_queue,
         &mut render_queue,
-        &mut queue_history,
         &runtime_stats,
         &mut frame_drop_observation_id,
         &pacing_policy,
@@ -759,7 +487,6 @@ fn drive_ready_frames_retries_pending_render_output_after_backpressure_clears() 
     let second = drive_ready_frames_with_submit(
         &mut pacing_queue,
         &mut render_queue,
-        &mut queue_history,
         &runtime_stats,
         &mut frame_drop_observation_id,
         &pacing_policy,
@@ -780,6 +507,73 @@ fn drive_ready_frames_retries_pending_render_output_after_backpressure_clears() 
     assert!(render_queue.is_empty());
     assert_eq!(submitted_seqs, vec![21]);
     assert!(!render_backpressure_active);
+}
+
+#[test]
+fn recovery_keyframe_bypasses_deadline_drop_until_clean_anchor_can_continue() {
+    let runtime_stats = RuntimeStatsSink::new(Arc::new(std::sync::Mutex::new(
+        XbxEngineMediaRuntimeStats::default(),
+    )));
+    let mut frame = make_keyframe_decoded_frame(41);
+    frame.recovery_epoch_tag = Some(3);
+    frame.surface.recovery_epoch_tag = Some(3);
+    frame.recovery_owner_rtp_timestamp = Some(41);
+    frame.surface.recovery_owner_rtp_timestamp = Some(41);
+    frame.frame_recovery_disposition = FrameRecoveryDisposition::Repairing;
+    frame.surface.frame_recovery_disposition = Some("repairing".to_string());
+    frame.pts = Instant::now() - Duration::from_millis(120);
+
+    let mut pacing_queue = VecDeque::from([frame]);
+    let mut render_queue = VecDeque::new();
+    let mut frame_drop_observation_id = 0;
+    let mut catch_up_mode = false;
+    let mut last_consumed_host_tick_epoch = None;
+    let mut render_backpressure_active = false;
+    let host_context = HostPacingContext {
+        release_interval_ms: 16,
+        host_frame_age_budget_ms: Some(36.0),
+        display_tick_epoch: 0,
+        present_epoch: 0,
+        cadence_phase: HostCadencePhaseHint::Unknown,
+        pressure: HostPacingPressure::default(),
+        video_rtt_ms: None,
+        video_nack_recovery_rtt_ms: None,
+    };
+    let pacing_policy = FramePacingPolicy::with_dynamic_budget(
+        host_context.release_interval_ms,
+        host_context
+            .host_frame_age_budget_ms
+            .map(|budget_ms| budget_ms.round() as u64),
+        resolve_cadence_sleep_guard_override_ms(&host_context),
+        host_context.video_rtt_ms,
+        host_context.video_nack_recovery_rtt_ms,
+    );
+    let mut submitted_seqs = Vec::new();
+
+    let dropped = drive_ready_frames_with_submit(
+        &mut pacing_queue,
+        &mut render_queue,
+        &runtime_stats,
+        &mut frame_drop_observation_id,
+        &pacing_policy,
+        &host_context,
+        &mut last_consumed_host_tick_epoch,
+        &mut catch_up_mode,
+        &mut render_backpressure_active,
+        |render_queue| {
+            if let Some(frame) = render_queue.pop_front() {
+                submitted_seqs.push(frame.surface.frame_seq);
+                PendingRenderSubmitResult::Submitted(frame)
+            } else {
+                PendingRenderSubmitResult::Idle
+            }
+        },
+    );
+
+    assert!(dropped.is_none());
+    assert!(pacing_queue.is_empty());
+    assert!(render_queue.is_empty());
+    assert_eq!(submitted_seqs, vec![41]);
 }
 
 #[test]

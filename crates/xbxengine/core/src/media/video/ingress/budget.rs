@@ -80,15 +80,6 @@ pub(crate) struct FrameBudgetContext {
 }
 
 impl FrameBudgetContext {
-    pub(crate) fn decode_local_budget_ms(&self) -> u64 {
-        match self.window_source {
-            // recovery burst 只放宽时间预算，不授予长期队列特权。
-            FrameBudgetWindowSource::Recovery => 96,
-            FrameBudgetWindowSource::Reconfigure => 120,
-            FrameBudgetWindowSource::Transport | FrameBudgetWindowSource::Playout => 48,
-        }
-    }
-
     pub(crate) fn steady_for_value(value: FrameValue) -> Self {
         Self {
             link_value: resolve_link_value(
@@ -102,7 +93,7 @@ impl FrameBudgetContext {
 
     pub(crate) fn for_ingress_materialization_parts(
         value: FrameValue,
-        frame_playout_deadline_at_ms: Option<f64>,
+        _frame_playout_deadline_at_ms: Option<f64>,
         frame_unrecoverable_reason: Option<&str>,
     ) -> Self {
         let failure_cost = match frame_unrecoverable_reason {
@@ -117,14 +108,10 @@ impl FrameBudgetContext {
         let recovery_phase = match failure_cost {
             FrameBudgetFailureCost::ChainBroken => FrameBudgetRecoveryPhase::AwaitingKeyframe,
             FrameBudgetFailureCost::Reconfigure => FrameBudgetRecoveryPhase::Reconfiguring,
-            FrameBudgetFailureCost::LocalDrop if frame_playout_deadline_at_ms.is_some() => {
-                FrameBudgetRecoveryPhase::Repairing
-            }
             _ => FrameBudgetRecoveryPhase::Steady,
         };
         let window_source = match failure_cost {
             FrameBudgetFailureCost::Reconfigure => FrameBudgetWindowSource::Reconfigure,
-            _ if frame_playout_deadline_at_ms.is_some() => FrameBudgetWindowSource::Recovery,
             _ => FrameBudgetWindowSource::Playout,
         };
         Self {
@@ -158,14 +145,10 @@ impl FrameBudgetContext {
                 FrameBudgetRecoveryPhase::AwaitingKeyframe
             }
             FrameBudgetFailureCost::Reconfigure => FrameBudgetRecoveryPhase::Reconfiguring,
-            FrameBudgetFailureCost::LocalDrop if frame.frame_playout_deadline_at_ms.is_some() => {
-                FrameBudgetRecoveryPhase::Repairing
-            }
             _ => FrameBudgetRecoveryPhase::Steady,
         };
         let window_source = match failure_cost {
             FrameBudgetFailureCost::Reconfigure => FrameBudgetWindowSource::Reconfigure,
-            _ if frame.frame_playout_deadline_at_ms.is_some() => FrameBudgetWindowSource::Recovery,
             _ => FrameBudgetWindowSource::Playout,
         };
         Self {
@@ -313,6 +296,13 @@ impl FrameBudgetContext {
             (FrameBudgetLinkValue::Supply, _, _) => 0,
             (FrameBudgetLinkValue::Disposable, _, _) => 0,
         }
+    }
+
+    pub(crate) fn promote_to_recovery_window(mut self, value: FrameValue) -> Self {
+        self.window_source = FrameBudgetWindowSource::Recovery;
+        self.recovery_phase = FrameBudgetRecoveryPhase::Repairing;
+        self.link_value = resolve_link_value(value, self.recovery_phase, self.failure_cost);
+        self
     }
 
     pub(crate) fn prefers_low_value_skip(&self) -> bool {
@@ -523,7 +513,7 @@ mod tests {
         H264AccessUnitInspection, H264BootstrapRejectReason,
     };
     use crate::media::video::types::{
-        AssembledVideoFrame, FrameRecoveryDisposition, FrameValue, VideoCodec,
+        AssembledVideoFrame, EncodedFrame, FrameRecoveryDisposition, FrameValue, VideoCodec,
     };
     use bytes::Bytes;
     use std::time::{Duration, Instant};
@@ -568,9 +558,10 @@ mod tests {
                 width: 1920,
                 height: 1080,
                 rtp_timestamp: 1,
+                recovery_epoch_tag: None,
+                recovery_owner_rtp_timestamp: None,
                 clean_anchor_commit_recovery_epoch: None,
                 first_packet_sequence: None,
-                frame_playout_deadline_at_ms: None,
                 frame_recovery_disposition: FrameRecoveryDisposition::Repairing,
                 frame_unrecoverable_reason: None,
                 assembled_at,
@@ -595,9 +586,10 @@ mod tests {
                 width: 1920,
                 height: 1080,
                 rtp_timestamp: 2,
+                recovery_epoch_tag: None,
+                recovery_owner_rtp_timestamp: None,
                 clean_anchor_commit_recovery_epoch: None,
                 first_packet_sequence: None,
-                frame_playout_deadline_at_ms: None,
                 frame_recovery_disposition: FrameRecoveryDisposition::Repairing,
                 frame_unrecoverable_reason: None,
                 assembled_at,
@@ -674,6 +666,50 @@ mod tests {
     }
 
     #[test]
+    fn materialization_deadline_alone_does_not_mark_plain_delta_as_repairing() {
+        let context = FrameBudgetContext::for_ingress_materialization_parts(
+            FrameValue::new(false, false, 8 * 1024),
+            Some(1_050.0),
+            None,
+        );
+
+        assert_eq!(context.failure_cost, FrameBudgetFailureCost::LocalDrop);
+        assert_eq!(context.recovery_phase, FrameBudgetRecoveryPhase::Steady);
+        assert_eq!(context.window_source, FrameBudgetWindowSource::Playout);
+        assert_eq!(context.link_value, FrameBudgetLinkValue::Disposable);
+    }
+
+    #[test]
+    fn ingress_admission_deadline_alone_does_not_mark_plain_delta_as_repairing() {
+        let frame = EncodedFrame {
+            codec: VideoCodec::H264,
+            is_keyframe: false,
+            config_changed: false,
+            value: FrameValue::new(false, false, 8 * 1024),
+            budget: FrameBudgetContext::default(),
+            width: 1920,
+            height: 1080,
+            rtp_timestamp: 42,
+            recovery_epoch_tag: None,
+            recovery_owner_rtp_timestamp: None,
+            clean_anchor_commit_recovery_epoch: None,
+            first_packet_sequence: None,
+            frame_recovery_disposition: FrameRecoveryDisposition::Steady,
+            frame_unrecoverable_reason: None,
+            target_playout_instant: Instant::now(),
+            h264: make_h264_inspection(false),
+            payload: Bytes::from_static(b"d"),
+        };
+
+        let context = FrameBudgetContext::for_ingress_admission(&frame, false, false);
+
+        assert_eq!(context.failure_cost, FrameBudgetFailureCost::LocalDrop);
+        assert_eq!(context.recovery_phase, FrameBudgetRecoveryPhase::Steady);
+        assert_eq!(context.window_source, FrameBudgetWindowSource::Playout);
+        assert_eq!(context.link_value, FrameBudgetLinkValue::Disposable);
+    }
+
+    #[test]
     fn materialization_prefers_first_packet_arrived_at_when_present() {
         let assembled_at = Instant::now();
         let first_packet_arrived_at = assembled_at - Duration::from_millis(15);
@@ -695,9 +731,10 @@ mod tests {
                 width: 1920,
                 height: 1080,
                 rtp_timestamp: 3,
+                recovery_epoch_tag: None,
+                recovery_owner_rtp_timestamp: None,
                 clean_anchor_commit_recovery_epoch: None,
                 first_packet_sequence: None,
-                frame_playout_deadline_at_ms: None,
                 frame_recovery_disposition: FrameRecoveryDisposition::Repairing,
                 frame_unrecoverable_reason: None,
                 assembled_at,

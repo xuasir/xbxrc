@@ -91,6 +91,7 @@ impl MediaSupervisorObservationState {
             frame_seq,
             frame_recovery_disposition,
             frame_unrecoverable_reason,
+            None,
         );
     }
 
@@ -243,6 +244,7 @@ pub(crate) fn record_pipeline_frame_drop(
     frame_seq: Option<u64>,
     frame_recovery_disposition: Option<FrameRecoveryDisposition>,
     frame_unrecoverable_reason: Option<&str>,
+    replacement_decision: Option<crate::api::backend::XbxEngineReplacementDecisionObservation>,
 ) {
     *observation_id = observation_id.saturating_add(1);
     let reason = match (stage, detail) {
@@ -264,6 +266,7 @@ pub(crate) fn record_pipeline_frame_drop(
             .map(str::to_string),
         frame_unrecoverable_reason: frame_unrecoverable_reason.map(str::to_string),
         frame_budget: None,
+        replacement_decision,
         observed_at_ms,
         width,
         height,

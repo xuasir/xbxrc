@@ -26,8 +26,23 @@ const props = defineProps<{
 }>()
 
 const LOGICAL_BUTTONS: LogicalButtonDto[] = [
-  'south', 'east', 'west', 'north', 'l1', 'r1', 'l2', 'r2', 'l3', 'r3',
-  'view', 'menu', 'home', 'dpad-up', 'dpad-down', 'dpad-left', 'dpad-right',
+  'south',
+  'east',
+  'west',
+  'north',
+  'l1',
+  'r1',
+  'l2',
+  'r2',
+  'l3',
+  'r3',
+  'view',
+  'menu',
+  'home',
+  'dpad-up',
+  'dpad-down',
+  'dpad-left',
+  'dpad-right',
 ]
 
 const LOGICAL_BUTTON_LABEL: Record<LogicalButtonDto, string> = {
@@ -71,8 +86,23 @@ const BUTTON_KEY_TO_LOGICAL: Array<{ key: keyof LogicalButtonsStateDto, logical:
 ]
 
 const DEFAULT_GAMEPAD_BUTTON_INDEX: Record<LogicalButtonDto, number> = {
-  'south': 0, 'east': 1, 'west': 2, 'north': 3, 'l1': 4, 'r1': 5, 'l2': 6, 'r2': 7,
-  'view': 8, 'menu': 9, 'l3': 10, 'r3': 11, 'dpad-up': 12, 'dpad-down': 13, 'dpad-left': 14, 'dpad-right': 15, 'home': 16,
+  'south': 0,
+  'east': 1,
+  'west': 2,
+  'north': 3,
+  'l1': 4,
+  'r1': 5,
+  'l2': 6,
+  'r2': 7,
+  'view': 8,
+  'menu': 9,
+  'l3': 10,
+  'r3': 11,
+  'dpad-up': 12,
+  'dpad-down': 13,
+  'dpad-left': 14,
+  'dpad-right': 15,
+  'home': 16,
 }
 
 const DEFAULT_AXES = {
@@ -164,11 +194,23 @@ function keyboardControlToLogicalButton(control: GamepadKeyboardControlDto): Log
 
 function logicalButtonToKeyboardControl(button: LogicalButtonDto): GamepadKeyboardControlDto {
   const map: Record<LogicalButtonDto, GamepadKeyboardControlDto> = {
-    'south': 'south', 'east': 'east', 'west': 'west', 'north': 'north',
-    'l1': 'l1', 'r1': 'r1', 'l2': 'l2', 'r2': 'r2',
-    'l3': 'l3', 'r3': 'r3',
-    'view': 'view', 'menu': 'menu', 'home': 'home',
-    'dpad-up': 'dpadUp', 'dpad-down': 'dpadDown', 'dpad-left': 'dpadLeft', 'dpad-right': 'dpadRight',
+    'south': 'south',
+    'east': 'east',
+    'west': 'west',
+    'north': 'north',
+    'l1': 'l1',
+    'r1': 'r1',
+    'l2': 'l2',
+    'r2': 'r2',
+    'l3': 'l3',
+    'r3': 'r3',
+    'view': 'view',
+    'menu': 'menu',
+    'home': 'home',
+    'dpad-up': 'dpadUp',
+    'dpad-down': 'dpadDown',
+    'dpad-left': 'dpadLeft',
+    'dpad-right': 'dpadRight',
   }
   return map[button]
 }
@@ -176,10 +218,50 @@ function logicalButtonToKeyboardControl(button: LogicalButtonDto): GamepadKeyboa
 function keyboardCodeToDtoKey(code: string): GamepadKeyboardKeyDto | null {
   const normalized = code.charAt(0).toLowerCase() + code.slice(1)
   const allowed: GamepadKeyboardKeyDto[] = [
-    'keyA', 'keyB', 'keyC', 'keyD', 'keyE', 'keyF', 'keyG', 'keyH', 'keyI', 'keyJ', 'keyK', 'keyL', 'keyM', 'keyN',
-    'keyO', 'keyP', 'keyQ', 'keyR', 'keyS', 'keyT', 'keyU', 'keyV', 'keyW', 'keyX', 'keyY', 'keyZ',
-    'digit0', 'digit1', 'digit2', 'digit3', 'digit4', 'digit5', 'digit6', 'digit7', 'digit8', 'digit9',
-    'enter', 'tab', 'escape', 'space', 'arrowUp', 'arrowDown', 'arrowLeft', 'arrowRight',
+    'keyA',
+    'keyB',
+    'keyC',
+    'keyD',
+    'keyE',
+    'keyF',
+    'keyG',
+    'keyH',
+    'keyI',
+    'keyJ',
+    'keyK',
+    'keyL',
+    'keyM',
+    'keyN',
+    'keyO',
+    'keyP',
+    'keyQ',
+    'keyR',
+    'keyS',
+    'keyT',
+    'keyU',
+    'keyV',
+    'keyW',
+    'keyX',
+    'keyY',
+    'keyZ',
+    'digit0',
+    'digit1',
+    'digit2',
+    'digit3',
+    'digit4',
+    'digit5',
+    'digit6',
+    'digit7',
+    'digit8',
+    'digit9',
+    'enter',
+    'tab',
+    'escape',
+    'space',
+    'arrowUp',
+    'arrowDown',
+    'arrowLeft',
+    'arrowRight',
   ]
   return allowed.includes(normalized as GamepadKeyboardKeyDto) ? normalized as GamepadKeyboardKeyDto : null
 }
@@ -600,4 +682,3 @@ onUnmounted(() => {
   transition: transform var(--ui-motion-fast) var(--ease-standard);
 }
 </style>
-

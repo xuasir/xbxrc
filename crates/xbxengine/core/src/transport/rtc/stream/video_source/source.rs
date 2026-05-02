@@ -12,7 +12,9 @@ use rtc_rtp::packet::Packet;
 use crate::media::video::ingress::budget::{
     FrameBudgetContext, FrameBudgetRttSlack, FrameBudgetWindowSource,
 };
-use crate::media::video::types::{AssembledVideoFrame, FrameValue, VideoCodec};
+use crate::media::video::types::{
+    AssembledVideoFrame, FrameRecoveryDisposition, FrameValue, VideoCodec,
+};
 use crate::transport::rtc::recovery::contract::{
     is_recovery_delta_continuation_ready, FrameValue as RecoveryFrameValue,
 };
@@ -91,7 +93,7 @@ impl FirstFrameAcquisitionRuntimeContext {
 
 pub(super) fn resolve_inspection_admission(
     inspection: &H264AccessUnitInspection,
-    first_frame_acquired: bool,
+    prior_output_continuation_allowed: bool,
     decoder_bootstrap_no_output_continuation_allowed: bool,
     sustaining_recovery_continuation_allowed: bool,
 ) -> InspectionAdmission {
@@ -103,7 +105,7 @@ pub(super) fn resolve_inspection_admission(
         return InspectionAdmission::Accept;
     }
 
-    if (first_frame_acquired
+    if (prior_output_continuation_allowed
         || decoder_bootstrap_no_output_continuation_allowed
         || sustaining_recovery_continuation_allowed)
         && is_recovery_delta_continuation_ready(inspection)
@@ -114,12 +116,25 @@ pub(super) fn resolve_inspection_admission(
     InspectionAdmission::AwaitRecoveryKeyframe
 }
 
+fn prior_output_continuation_allowed(
+    first_frame_acquired: bool,
+    is_blocking_non_keyframe_admission: bool,
+    chain_requires_recovery_anchor: bool,
+    clean_anchor_building_phase_active: bool,
+) -> bool {
+    first_frame_acquired
+        && (clean_anchor_building_phase_active
+            || (!is_blocking_non_keyframe_admission && !chain_requires_recovery_anchor))
+}
+
 fn inspection_bootstrap_reason(inspection: &H264AccessUnitInspection) -> &'static str {
     match inspection.bootstrap_reject_reason {
         Some(H264BootstrapRejectReason::NoVcl) => "inspectionRejectNoVcl",
         Some(H264BootstrapRejectReason::MissingSps) => "bootstrapMissingSps",
         Some(H264BootstrapRejectReason::MissingPps) => "bootstrapMissingPps",
-        Some(H264BootstrapRejectReason::NonIdrVcl) => "inspectionRejectNonIdrVcl",
+        Some(H264BootstrapRejectReason::BootstrapMissingIdr)
+        | Some(H264BootstrapRejectReason::NonIdrVcl) => "bootstrapMissingIdr",
+        Some(H264BootstrapRejectReason::MixedIdrWithTrailingDelta) => "mixedIdrWithTrailingDelta",
         Some(H264BootstrapRejectReason::InvalidSliceHeader) => "inspectionRejectInvalidSliceHeader",
         None if !inspection.slice_headers_valid => "inspectionRejectInvalidSliceHeader",
         None => "inspectionRejectUnknown",
@@ -131,7 +146,14 @@ fn keyframe_episode_response_detail(
     admission: InspectionAdmission,
 ) -> &'static str {
     if !inspection.is_idr {
-        return "firstResponseNonKeyframe";
+        if matches!(admission, InspectionAdmission::Accept)
+            && inspection.delta_continuation_ready()
+            && inspection.committed_sps_present()
+            && inspection.committed_pps_present()
+        {
+            return "continuationAcceptedWhileAwaitingIdr";
+        }
+        return "bootstrapMissingIdr";
     }
     match admission {
         InspectionAdmission::Accept => "firstKeyframeAccepted",
@@ -144,6 +166,7 @@ pub(super) fn resolve_recovery_keyframe_action(
     is_blocking_non_keyframe_admission: bool,
     sustaining_recovery_active: bool,
     hard_recovery_gap_risk: bool,
+    clean_anchor_building_phase_active: bool,
     _sample_loss_burst_count: u8,
     media_dropped_packets: u16,
     is_keyframe: bool,
@@ -171,6 +194,11 @@ pub(super) fn resolve_recovery_keyframe_action(
         if sustaining_recovery_active {
             // 正式恢复保活阶段的目标是先维持连续输出，而不是再次掉回 wait-keyframe。
             // 只要当前帧仍是健康 continuation，就继续提交，真正的稳定退出交给 timeline gate。
+            return (false, RecoveryKeyframeAction::Submit);
+        }
+        if clean_anchor_building_phase_active {
+            // clean-anchor 已经提交并处在建链窗口时，允许 continuation 把链路重新带活；
+            // 真正的稳定退出仍由 clean-anchor / display gate 统一裁决。
             return (false, RecoveryKeyframeAction::Submit);
         }
         if !hard_recovery_gap_risk {
@@ -207,28 +235,54 @@ pub(super) fn detect_forward_gap(
 }
 
 impl RtcVideoFrameSource {
+    fn h264_continuation_verdict(
+        inspection: &H264AccessUnitInspection,
+        admission: InspectionAdmission,
+    ) -> Option<String> {
+        let continuation_ready = inspection.delta_continuation_ready()
+            && inspection.committed_sps_present()
+            && inspection.committed_pps_present();
+        if matches!(admission, InspectionAdmission::Accept)
+            && !inspection.bootstrap_ready
+            && continuation_ready
+        {
+            return Some("continuationAcceptedWhileAwaitingIdr".to_string());
+        }
+        if continuation_ready {
+            return Some("continuationReady".to_string());
+        }
+        None
+    }
+
     fn maybe_ack_clean_anchor_commit_from_runtime_stats(&mut self) {
-        let committed_current_epoch = self.runtime_stats.read(|stats| {
-            let current_epoch = stats.transport_recovery_epoch;
-            let clean_anchor_epoch = stats.video_anchor_clean_epoch;
-            let clean_anchor_source_event = stats.video_anchor_clean_source_event.as_deref();
+        let committed_submission = self.runtime_stats.read(|stats| {
+            let committed_epoch = stats.latest_clean_anchor_submission_epoch;
+            let committed_rtp_timestamp = stats.latest_clean_anchor_submission_rtp_timestamp;
+            let clean_anchor_source_event =
+                stats.latest_clean_anchor_submission_source_event.as_deref();
             (
-                current_epoch,
-                clean_anchor_epoch == Some(current_epoch)
-                    && clean_anchor_source_event == Some("chain-clean-anchor-submitted"),
+                committed_epoch,
+                committed_rtp_timestamp,
+                clean_anchor_source_event == Some("chain-clean-anchor-submitted"),
             )
         });
-        let Some((current_epoch, committed_current_epoch)) = committed_current_epoch else {
+        let Some((Some(committed_epoch), committed_rtp_timestamp, committed_submission)) =
+            committed_submission
+        else {
             return;
         };
-        if !committed_current_epoch || current_epoch == self.last_consumed_clean_anchor_epoch {
+        if !committed_submission || committed_epoch == self.last_consumed_clean_anchor_epoch {
             return;
         }
-        if self
-            .timeline_state
-            .ack_pending_clean_anchor_stats_committed()
-        {
-            self.last_consumed_clean_anchor_epoch = current_epoch;
+        let acked = if let Some(committed_rtp_timestamp) = committed_rtp_timestamp {
+            self.timeline_state
+                .ack_clean_anchor_stats_committed(committed_rtp_timestamp)
+        } else {
+            self.timeline_state
+                .ack_pending_clean_anchor_stats_committed()
+        };
+        if acked {
+            self.last_consumed_clean_anchor_epoch = committed_epoch;
         }
     }
 
@@ -627,10 +681,32 @@ impl RtcVideoFrameSource {
     }
 
     fn first_frame_acquired(stats: &crate::XbxEngineMediaRuntimeStats) -> bool {
-        stats.latest_video_decode_ok_time_ms.is_some()
+        let historical_output_seen = stats.latest_video_decode_ok_time_ms.is_some()
             || stats.latest_video_host_present_time_ms.is_some()
-            || stats.video_present_submit_count_total > 0
-            || stats.video_present_epoch > 0
+            || stats.host_mailbox_enqueue_count_total > 0
+            || stats.host_frame_present_epoch > 0;
+        if !stats.transport_recovery_episode_active {
+            return historical_output_seen;
+        }
+        let has_current_clean_anchor = stats.video_anchor_clean_epoch
+            == Some(stats.transport_recovery_epoch)
+            && stats.video_anchor_clean_source_event.as_deref()
+                == Some("chain-clean-anchor-submitted");
+        if has_current_clean_anchor {
+            return true;
+        }
+        let Some(recovery_opened_at_ms) = stats.transport_recovery_episode_opened_at_ms else {
+            return historical_output_seen;
+        };
+        stats
+            .latest_video_decode_ok_time_ms
+            .is_some_and(|at_ms| at_ms >= recovery_opened_at_ms)
+            || stats
+                .latest_host_mailbox_submit_time_ms
+                .is_some_and(|at_ms| at_ms >= recovery_opened_at_ms)
+            || stats
+                .latest_video_host_present_time_ms
+                .is_some_and(|at_ms| at_ms >= recovery_opened_at_ms)
     }
 
     fn first_frame_acquisition_runtime_context(
@@ -701,7 +777,9 @@ impl RtcVideoFrameSource {
             Some(
                 H264BootstrapRejectReason::MissingSps
                     | H264BootstrapRejectReason::MissingPps
+                    | H264BootstrapRejectReason::BootstrapMissingIdr
                     | H264BootstrapRejectReason::NonIdrVcl
+                    | H264BootstrapRejectReason::MixedIdrWithTrailingDelta
                     | H264BootstrapRejectReason::InvalidSliceHeader
             )
         ) || !inspection.slice_headers_valid;
@@ -780,7 +858,7 @@ impl RtcVideoFrameSource {
             .runtime_stats
             .read(|stats| {
                 let invalid_bootstrap_reason = match timeline_reason {
-                    "inspectionRejectNonIdrVcl" => Some("NonIdrVcl"),
+                    "bootstrapMissingIdr" | "mixedIdrWithTrailingDelta" => Some(timeline_reason),
                     "bootstrapMissingSps"
                     | "bootstrapMissingPps"
                     | "inspectionRejectInvalidSliceHeader" => Some(timeline_reason),
@@ -878,12 +956,6 @@ impl RtcVideoFrameSource {
                 );
             }
         }
-    }
-
-    #[cfg(test)]
-    fn record_clean_anchor(&self, observed_at_ms: f64) {
-        self.runtime_stats
-            .record_transport_clean_anchor(observed_at_ms, "chain-clean-anchor-submitted");
     }
 
     fn should_trigger_thin_stream_stall(&self, now: std::time::Instant) -> bool {
@@ -1337,6 +1409,16 @@ impl RtcVideoFrameSource {
                     .runtime_stats
                     .read(|stats| Self::first_frame_acquired(stats))
                     .unwrap_or(false);
+                let is_blocking_non_keyframe_admission = self.is_blocking_non_keyframe_admission();
+                let clean_anchor_building_phase_active = self
+                    .timeline_state
+                    .recovery_chain_building_phase_active(inspection_now_ms, "disposable");
+                let prior_output_continuation_allowed = prior_output_continuation_allowed(
+                    first_frame_acquired,
+                    is_blocking_non_keyframe_admission,
+                    self.timeline_state.chain_requires_recovery_anchor(),
+                    clean_anchor_building_phase_active,
+                );
                 let decoder_bootstrap_no_output_continuation_allowed = self
                     .decoder_bootstrap_no_output_continuation_allowed(
                         &inspection,
@@ -1353,7 +1435,7 @@ impl RtcVideoFrameSource {
                         && inspection.committed_pps_present();
                 let inspection_admission = resolve_inspection_admission(
                     &inspection,
-                    first_frame_acquired,
+                    prior_output_continuation_allowed,
                     decoder_bootstrap_no_output_continuation_allowed,
                     sustaining_recovery_continuation_allowed,
                 );
@@ -1361,6 +1443,8 @@ impl RtcVideoFrameSource {
                     matches!(inspection_admission, InspectionAdmission::Accept);
                 let response_detail =
                     keyframe_episode_response_detail(&inspection, inspection_admission);
+                let continuation_verdict =
+                    Self::h264_continuation_verdict(&inspection, inspection_admission);
                 // bootstrap_reject_reason 只描述当前 AU 是否具备自举条件，不代表 delta slice 不能继续承接。
                 self.runtime_stats.record_h264_inspection_observation(
                     XbxEngineH264InspectionObservation {
@@ -1392,6 +1476,7 @@ impl RtcVideoFrameSource {
                         bootstrap_reject_reason: inspection
                             .bootstrap_reject_reason
                             .map(|reason| reason.as_str().to_string()),
+                        continuation_verdict,
                         admission_accepted,
                         observed_at_ms: inspection_now_ms,
                         ..Default::default()
@@ -1487,7 +1572,9 @@ impl RtcVideoFrameSource {
                                         stats,
                                         now_ms,
                                         match reject_reason {
-                                            "inspectionRejectNonIdrVcl" => Some("NonIdrVcl"),
+                                            "bootstrapMissingIdr" | "mixedIdrWithTrailingDelta" => {
+                                                Some(reject_reason)
+                                            }
                                             "bootstrapMissingSps"
                                             | "bootstrapMissingPps"
                                             | "inspectionRejectInvalidSliceHeader" => {
@@ -1570,7 +1657,6 @@ impl RtcVideoFrameSource {
                         .timeline_state
                         .reopen_delta_continuation_after_clean_anchor(frame_now_ms);
                 }
-                let is_blocking_non_keyframe_admission = self.is_blocking_non_keyframe_admission();
                 let hard_recovery_gap_risk = self.timeline_state.has_hard_recovery_gap_risk();
                 let (next_is_blocking_non_keyframe_admission, recovery_action) =
                     resolve_recovery_keyframe_action(
@@ -1578,6 +1664,7 @@ impl RtcVideoFrameSource {
                         is_blocking_non_keyframe_admission,
                         self.timeline_state.in_sustaining_recovery() && healthy_delta_continuation,
                         hard_recovery_gap_risk,
+                        clean_anchor_building_phase_active && healthy_delta_continuation,
                         self.sample_loss_burst_count,
                         media_dropped_packets,
                         is_keyframe,
@@ -1675,11 +1762,11 @@ impl RtcVideoFrameSource {
                     .record_frame_arrival(now_ms_f64());
                 let (
                     frame_playout_deadline_at_ms,
-                    frame_recovery_disposition,
+                    mut frame_recovery_disposition,
                     frame_unrecoverable_reason,
                     ledger_budget_context,
                 ) = self.take_frame_recovery_ledger(sample.packet_timestamp);
-                let frame_budget = ledger_budget_context.unwrap_or_else(|| {
+                let mut frame_budget = ledger_budget_context.unwrap_or_else(|| {
                     self.build_ingress_materialization_fallback_budget(
                         frame_value,
                         frame_playout_deadline_at_ms,
@@ -1759,26 +1846,11 @@ impl RtcVideoFrameSource {
                     && admission_accepted
                     && inspection.bootstrap_ready
                     && media_dropped_packets == 0;
-                if current_frame_allows_sustaining_exit {
-                    let should_rearm_clean_anchor = self
-                        .runtime_stats
-                        .read(Self::should_rearm_clean_anchor_for_transport_await)
-                        .unwrap_or(false);
-                    let needs_recovery_anchor =
-                        self.timeline_state.chain_requires_recovery_anchor()
-                            || matches!(
-                                self.timeline_state.chain_state(),
-                                ChainState::Broken | ChainState::Recovering
-                            )
-                            || should_rearm_clean_anchor;
-                    if needs_recovery_anchor {
-                        self.timeline_state
-                            .on_clean_anchor_ingress(sample.packet_timestamp, frame_now_ms);
-                    }
-                }
                 let can_exit_sustaining_recovery = !self.timeline_state.in_sustaining_recovery()
                     || self.decoder_feedback_allows_sustaining_exit(complete_candidate_now_ms)
                     || current_frame_allows_sustaining_exit;
+                let clean_anchor_complete_candidate =
+                    can_exit_sustaining_recovery && current_frame_allows_sustaining_exit;
                 if can_exit_sustaining_recovery {
                     // 将媒体语义标签转换为恢复语义标签
                     let recovery_importance = match media_type_label {
@@ -1806,6 +1878,23 @@ impl RtcVideoFrameSource {
                         None,
                         complete_candidate_now_ms,
                     );
+                    if clean_anchor_complete_candidate {
+                        let should_rearm_clean_anchor = self
+                            .runtime_stats
+                            .read(Self::should_rearm_clean_anchor_for_transport_await)
+                            .unwrap_or(false);
+                        let needs_recovery_anchor =
+                            self.timeline_state.chain_requires_recovery_anchor()
+                                || matches!(
+                                    self.timeline_state.chain_state(),
+                                    ChainState::Broken | ChainState::Recovering
+                                )
+                                || should_rearm_clean_anchor;
+                        if needs_recovery_anchor {
+                            self.timeline_state
+                                .on_clean_anchor_ingress(sample.packet_timestamp, frame_now_ms);
+                        }
+                    }
                 } else {
                     self.record_video_timeline_observation(
                         "frame-complete-candidate-decode-feedback-blocked",
@@ -1815,8 +1904,19 @@ impl RtcVideoFrameSource {
                     );
                 }
 
-                let can_commit_clean_anchor_now =
-                    can_exit_sustaining_recovery && current_frame_allows_sustaining_exit;
+                let can_commit_clean_anchor_now = clean_anchor_complete_candidate;
+                let recovery_epoch_tag = self
+                    .runtime_stats
+                    .read(|stats| stats.transport_recovery_epoch);
+                let recovery_owner_rtp_timestamp = self
+                    .runtime_stats
+                    .read(|stats| {
+                        stats
+                            .latest_keyframe_request_episode
+                            .as_ref()
+                            .and_then(|episode| episode.response_rtp_timestamp)
+                    })
+                    .flatten();
                 let clean_anchor_commit_recovery_epoch = if can_commit_clean_anchor_now {
                     self.timeline_state
                         .peek_clean_anchor_stats_commit_candidate_if_stable(
@@ -1833,6 +1933,18 @@ impl RtcVideoFrameSource {
                 } else {
                     None
                 };
+                let is_recovery_owner_frame =
+                    recovery_owner_rtp_timestamp == Some(sample.packet_timestamp);
+                let eligible_recovery_owner_frame = frame_unrecoverable_reason.is_none()
+                    && (clean_anchor_commit_recovery_epoch.is_some()
+                        || (is_recovery_owner_frame && current_frame_allows_sustaining_exit))
+                    && inspection.is_idr;
+                if eligible_recovery_owner_frame {
+                    frame_budget = frame_budget.promote_to_recovery_window(frame_value);
+                    if matches!(frame_recovery_disposition, FrameRecoveryDisposition::Steady) {
+                        frame_recovery_disposition = FrameRecoveryDisposition::Repairing;
+                    }
+                }
 
                 return Some(AssembledVideoFrame {
                     codec: VideoCodec::H264,
@@ -1843,9 +1955,10 @@ impl RtcVideoFrameSource {
                     width: self.current_width,
                     height: self.current_height,
                     rtp_timestamp: sample.packet_timestamp,
+                    recovery_epoch_tag,
+                    recovery_owner_rtp_timestamp,
                     clean_anchor_commit_recovery_epoch,
                     first_packet_sequence,
-                    frame_playout_deadline_at_ms,
                     frame_recovery_disposition,
                     frame_unrecoverable_reason,
                     assembled_at,

@@ -1155,8 +1155,7 @@ async fn unmatched_repair_rtx_burst_through_real_ingress_stays_local_without_tra
 }
 
 #[tokio::test]
-async fn local_repair_noise_does_not_block_following_repeated_transport_severe_deadline_reconnect()
-{
+async fn local_repair_noise_keeps_repeated_transport_severe_deadline_in_local_recovery() {
     let repair_limit = LocalIngressReplayFixture::new(1).repair_backlog_limit();
     let profile = repair_overflow_replay_profile(repair_limit);
     let harness = run_local_ingress_replay_profile(&profile).await;
@@ -1248,7 +1247,7 @@ async fn local_repair_noise_does_not_block_following_repeated_transport_severe_d
         DiagnosticsProjection::default(),
     );
     let second_commands = transport_commands(policy.on_snapshot(&second_deadline));
-    assert_has_connectivity_reconnect_candidate(&second_commands, "transportSevereDeadline");
+    assert_no_reconnect_candidate(&second_commands);
 }
 
 #[tokio::test]

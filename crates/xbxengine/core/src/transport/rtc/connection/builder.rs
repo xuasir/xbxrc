@@ -109,7 +109,7 @@ pub(super) fn build_peer_connection(
         .iter()
         .flat_map(|server| server.urls.iter().cloned())
         .collect::<Vec<_>>();
-    crate::xbx_log_warn!(
+    crate::xbx_log_debug!(
         "[xbxengine][rtc-builder] build peer connection session={} target={:?} turn_configured={} ice_server_count={} ice_server_urls={:?}",
         session.session_id,
         session.target_type,

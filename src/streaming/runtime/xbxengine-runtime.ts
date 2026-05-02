@@ -1,4 +1,5 @@
 import type { StreamStats } from '../../player'
+import type { XbxEngineStatsDto } from '../../shared/rpc/xbxengine'
 import type {
   RuntimeDisplayState,
   RuntimeEvent,
@@ -7,7 +8,6 @@ import type {
 } from './runtime-contract'
 import { events } from '../../services/events'
 import { rpc } from '../../services/rpc'
-import type { XbxEngineStatsDto } from '../../shared/rpc/xbxengine'
 
 function toRuntimeReconnectReason(reason: StreamRuntimeReconnectReason) {
   if (reason === 'ice-failed') {
@@ -155,7 +155,7 @@ export function createXbxEngineRuntime(options: {
           viewportId: viewportElementId,
         },
         runtime: ((runtime) => {
-          const { iceCandidatePolicy: _iceCandidatePolicy, ...rest } = (runtime as unknown as Record<string, unknown>)
+          const { iceCandidatePolicy: _iceCandidatePolicy, ...rest } = runtime as unknown as Record<string, unknown>
           return rest as unknown as typeof spec.runtime
         })(spec.runtime),
         render: spec.render,
@@ -174,12 +174,16 @@ export function createXbxEngineRuntime(options: {
         capturing: false,
         paused: false,
       }
-      console.info('[streaming][xbxengine-runtime] stopRuntime', {
-        viewportElementId,
+      recordLaunchTraceEvent('runtimeStopRequested', {
+        viewportId: viewportElementId,
         reason: reason ?? 'unspecified',
       })
       await rpc.xbxEngine.stopRuntime({
         reason,
+      })
+      recordLaunchTraceEvent('runtimeStopCompleted', {
+        viewportId: viewportElementId,
+        reason: reason ?? 'unspecified',
       })
     },
     async requestReconnect(reason) {
@@ -292,6 +296,7 @@ export function createXbxEngineRuntime(options: {
         inboundVideoBytesTotal: snapshot.inbound_video_bytes_total,
         inboundAudioBytesTotal: snapshot.inbound_audio_bytes_total,
         inboundVideoPacketCountTotal: snapshot.inbound_video_packet_count_total,
+        latestVideoPacketArrivalRtpTimestamp: snapshot.latest_video_packet_arrival_rtp_timestamp,
         videoDecoderResetCount: snapshot.video_decoder_reset_count,
         videoDecoderStalled: snapshot.video_decoder_stalled,
         videoDecoderRecoveryState: snapshot.video_decoder_recovery_state,
@@ -300,6 +305,7 @@ export function createXbxEngineRuntime(options: {
         videoDecoderRecoveryStatus: snapshot.video_decoder_recovery_status,
         videoDecoderRecoveryStateChangedAtMs:
           snapshot.video_decoder_recovery_state_changed_at_ms,
+        latestVideoDecodeOkRtpTimestamp: snapshot.latest_video_decode_ok_rtp_timestamp,
         videoRendererStalled: snapshot.video_renderer_stalled,
         videoRendererStallBlocksPresentation:
           snapshot.video_renderer_stall_blocks_presentation,
@@ -315,10 +321,9 @@ export function createXbxEngineRuntime(options: {
         videoPacerDropCountTotal: snapshot.video_pacer_drop_count_total,
         videoRendererSubmitCountTotal: snapshot.video_renderer_submit_count_total,
         videoRendererDropCountTotal: snapshot.video_renderer_drop_count_total,
-        videoPresentDropCountTotal: snapshot.video_present_drop_count_total,
-        videoPresentOverwriteCountTotal: snapshot.video_present_overwrite_count_total,
-        videoPresentEnqueueCountTotal: snapshot.video_present_submit_count_total,
-        videoPresentSubmitCountTotal: snapshot.video_present_submit_count_total,
+        hostMailboxDropCountTotal: snapshot.host_mailbox_drop_count_total,
+        hostMailboxOverwriteCountTotal: snapshot.host_mailbox_overwrite_count_total,
+        hostMailboxEnqueueCountTotal: snapshot.host_mailbox_enqueue_count_total,
         videoPresentDescriptorUploadMode: snapshot.video_present_descriptor_upload_mode,
         videoPresentDescriptorMetalImportCountTotal:
           snapshot.video_present_descriptor_metal_import_count_total,
@@ -334,6 +339,15 @@ export function createXbxEngineRuntime(options: {
         lastRecoveryAction: snapshot.last_recovery_action,
         lastRecoveryActionAtMs: snapshot.last_recovery_action_at_ms,
         lastRecoveryReason: snapshot.last_recovery_reason,
+        hostMailboxSubmitEpoch: snapshot.host_mailbox_submit_epoch,
+        hostDisplayTickEpoch: snapshot.host_display_tick_epoch,
+        hostFramePresentEpoch: snapshot.host_frame_present_epoch,
+        hostMailboxLatestSubmitAtMs: snapshot.latest_host_mailbox_submit_time_ms,
+        latestVideoHostSubmitRtpTimestamp: snapshot.latest_video_host_submit_rtp_timestamp,
+        submitAgeMs: snapshot.submit_age_ms,
+        displayAgeMs: snapshot.display_age_ms,
+        hostViewGeneration: snapshot.host_view_generation,
+        latestHostViewCreatedAtMs: snapshot.latest_host_view_created_at_ms,
         lastDisplayedFrameSeq: snapshot.last_displayed_frame_seq,
         lastDisplayedFrameRtpTimestamp: snapshot.last_displayed_frame_rtp_timestamp,
         lastDisplayedAtMs: snapshot.last_displayed_at_ms,

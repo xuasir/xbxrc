@@ -1523,7 +1523,7 @@ fn transport_await_non_idr_with_present_stall_forces_keyframe_after_elapsed_epoc
     stats.session_target_type = Some(XbxEngineTargetTypeDto::Cloud);
     stats.transport_recovery_epoch = 77;
     stats.transport_state = XbxEngineTransportStateDto::Connected;
-    stats.video_present_epoch = 3;
+    stats.host_frame_present_epoch = 3;
     stats.video_present_fps = 0.0;
     stats.latest_video_host_present_time_ms = Some(now_ms - 3_000.0);
     stats.latest_video_decode_ok_time_ms = Some(now_ms - 3_000.0);

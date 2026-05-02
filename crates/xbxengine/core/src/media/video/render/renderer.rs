@@ -1,18 +1,19 @@
 use crate::{
-    XbxEngineRenderFrame, XbxEngineRenderPixelData, XbxEngineRuntimeError, XbxEngineVideoFrameStats,
+    XbxEngineRenderFrame, XbxEngineRenderPixelData, XbxEngineReplacementDecisionObservation,
+    XbxEngineRuntimeError, XbxEngineVideoFrameStats,
 };
 use xbxengine_protocol::XbxEngineDisplayStateDto;
 #[allow(dead_code)]
 const RENDER_STALL_THRESHOLD_MS: f64 = 1_500.0;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub(crate) enum XbxRenderCandidateState {
+pub(crate) enum XbxRenderMailboxState {
     #[default]
     Nominal,
     LatestOverwrite,
 }
 
-impl XbxRenderCandidateState {
+impl XbxRenderMailboxState {
     pub(crate) fn as_str(self) -> &'static str {
         match self {
             Self::Nominal => "nominal",
@@ -22,12 +23,13 @@ impl XbxRenderCandidateState {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub(crate) struct XbxRenderCandidateDecisionSnapshot {
+pub(crate) struct XbxRenderMailboxDecisionSnapshot {
     pub(crate) decision_id: u64,
-    pub(crate) state: XbxRenderCandidateState,
+    pub(crate) state: XbxRenderMailboxState,
     pub(crate) action: &'static str,
     pub(crate) detail: &'static str,
     pub(crate) frame_seq: Option<u64>,
+    pub(crate) replacement_decision: Option<XbxEngineReplacementDecisionObservation>,
     pub(crate) observed_at_ms: f64,
 }
 
@@ -53,9 +55,12 @@ pub(crate) struct XbxRenderFrame {
     pub frame_seq: u64,
     pub rendered_at_ms: f64,
     pub rtp_timestamp: Option<u32>,
+    pub recovery_epoch_tag: Option<u64>,
+    pub recovery_owner_rtp_timestamp: Option<u32>,
     pub is_keyframe: bool,
     pub frame_recovery_disposition: Option<String>,
     pub frame_unrecoverable_reason: Option<String>,
+    pub presentation_value_role: Option<String>,
     pub pixel_data: XbxEngineRenderPixelData,
 }
 
@@ -80,9 +85,12 @@ impl From<XbxRenderFrame> for XbxEngineRenderFrame {
             frame_seq: value.frame_seq,
             rendered_at_ms: value.rendered_at_ms,
             rtp_timestamp: value.rtp_timestamp,
+            recovery_epoch_tag: value.recovery_epoch_tag,
+            recovery_owner_rtp_timestamp: value.recovery_owner_rtp_timestamp,
             is_keyframe: value.is_keyframe,
             frame_recovery_disposition: value.frame_recovery_disposition,
             frame_unrecoverable_reason: value.frame_unrecoverable_reason,
+            presentation_value_role: value.presentation_value_role,
             pixel_data: value.pixel_data,
         }
     }
@@ -96,18 +104,18 @@ impl From<XbxRenderFrame> for XbxEngineRenderFrame {
 pub(crate) struct XbxRenderState {
     latest_display_state: Option<XbxEngineDisplayStateDto>,
     latest_renderable_frame: Option<XbxEngineRenderFrame>,
-    render_candidate_state: XbxRenderCandidateState,
-    latest_render_candidate_decision: Option<XbxRenderCandidateDecisionSnapshot>,
-    render_candidate_decision_id: u64,
+    render_mailbox_state: XbxRenderMailboxState,
+    latest_render_mailbox_decision: Option<XbxRenderMailboxDecisionSnapshot>,
+    render_mailbox_decision_id: u64,
 }
 
 impl XbxRenderState {
     pub(crate) fn reset(&mut self) -> Result<(), XbxEngineRuntimeError> {
         self.latest_display_state = None;
         self.latest_renderable_frame = None;
-        self.render_candidate_state = XbxRenderCandidateState::Nominal;
-        self.latest_render_candidate_decision = None;
-        self.render_candidate_decision_id = 0;
+        self.render_mailbox_state = XbxRenderMailboxState::Nominal;
+        self.latest_render_mailbox_decision = None;
+        self.render_mailbox_decision_id = 0;
         Ok(())
     }
 
@@ -159,30 +167,50 @@ impl XbxRenderState {
         let frame_stats = frame.video_stats();
         let presented_frame_seq = frame.frame_seq;
         let observed_at_ms = frame.rendered_at_ms;
+        // `pacer` 已完成候选价值排序；render latest-slot 只保留单槽交接语义。
         let overwritten_frame = self
             .latest_renderable_frame
             .as_ref()
             .map(|frame| (frame.frame_seq, frame.width, frame.height));
         let overwritten_pending_frame = overwritten_frame.is_some();
+        let overwritten_frame_contract = self.latest_renderable_frame.as_ref().map(|existing| {
+            XbxEngineReplacementDecisionObservation {
+                dropped_frame_seq: Some(existing.frame_seq),
+                dropped_rtp_timestamp: existing.rtp_timestamp,
+                dropped_presentation_value_role: existing.presentation_value_role.clone(),
+                kept_frame_seq: Some(frame.frame_seq),
+                kept_rtp_timestamp: frame.rtp_timestamp,
+                kept_presentation_value_role: frame.presentation_value_role.clone(),
+                same_recovery_epoch: Some(existing.recovery_epoch_tag == frame.recovery_epoch_tag),
+                same_recovery_owner_chain: Some(
+                    existing.recovery_epoch_tag == frame.recovery_epoch_tag
+                        && existing.recovery_owner_rtp_timestamp
+                            == frame.recovery_owner_rtp_timestamp,
+                ),
+                supersede_reason: Some("mailboxLatestExecution".to_string()),
+            }
+        });
         let engine_frame: XbxEngineRenderFrame = frame.into();
         self.latest_renderable_frame = Some(engine_frame);
         if overwritten_pending_frame {
-            self.record_render_candidate_decision(
-                XbxRenderCandidateState::LatestOverwrite,
+            self.record_render_mailbox_decision(
+                XbxRenderMailboxState::LatestOverwrite,
                 "replace",
-                "latestSlotOverwrite",
+                "mailboxOverwrite",
                 overwritten_frame.map(|frame| frame.0),
+                overwritten_frame_contract,
                 observed_at_ms,
             );
         } else if matches!(
-            self.render_candidate_state,
-            XbxRenderCandidateState::LatestOverwrite
+            self.render_mailbox_state,
+            XbxRenderMailboxState::LatestOverwrite
         ) {
-            self.record_render_candidate_decision(
-                XbxRenderCandidateState::Nominal,
+            self.record_render_mailbox_decision(
+                XbxRenderMailboxState::Nominal,
                 "accept",
-                "latestSlotRecovered",
+                "mailboxRecovered",
                 Some(presented_frame_seq),
+                None,
                 observed_at_ms,
             );
         }
@@ -203,9 +231,9 @@ impl XbxRenderState {
     pub(crate) fn stop(&mut self) {
         self.latest_display_state = None;
         self.latest_renderable_frame = None;
-        self.render_candidate_state = XbxRenderCandidateState::Nominal;
-        self.latest_render_candidate_decision = None;
-        self.render_candidate_decision_id = 0;
+        self.render_mailbox_state = XbxRenderMailboxState::Nominal;
+        self.latest_render_mailbox_decision = None;
+        self.render_mailbox_decision_id = 0;
     }
 
     pub(crate) fn take_latest_renderable_frame(&mut self) -> Option<XbxEngineRenderFrame> {
@@ -233,28 +261,30 @@ impl XbxRenderState {
         }
     }
 
-    pub(crate) fn latest_render_candidate_decision(
+    pub(crate) fn latest_render_mailbox_decision(
         &self,
-    ) -> Option<&XbxRenderCandidateDecisionSnapshot> {
-        self.latest_render_candidate_decision.as_ref()
+    ) -> Option<&XbxRenderMailboxDecisionSnapshot> {
+        self.latest_render_mailbox_decision.as_ref()
     }
 
-    fn record_render_candidate_decision(
+    fn record_render_mailbox_decision(
         &mut self,
-        state: XbxRenderCandidateState,
+        state: XbxRenderMailboxState,
         action: &'static str,
         detail: &'static str,
         frame_seq: Option<u64>,
+        replacement_decision: Option<XbxEngineReplacementDecisionObservation>,
         observed_at_ms: f64,
     ) {
-        self.render_candidate_state = state;
-        self.render_candidate_decision_id = self.render_candidate_decision_id.saturating_add(1);
-        self.latest_render_candidate_decision = Some(XbxRenderCandidateDecisionSnapshot {
-            decision_id: self.render_candidate_decision_id,
+        self.render_mailbox_state = state;
+        self.render_mailbox_decision_id = self.render_mailbox_decision_id.saturating_add(1);
+        self.latest_render_mailbox_decision = Some(XbxRenderMailboxDecisionSnapshot {
+            decision_id: self.render_mailbox_decision_id,
             state,
             action,
             detail,
             frame_seq,
+            replacement_decision,
             observed_at_ms,
         });
     }

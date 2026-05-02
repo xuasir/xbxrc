@@ -3,6 +3,7 @@ import type {
   StreamingStartupEvent,
 } from '@shared/rpc/streaming'
 import type { RouteLocationNormalizedLoaded, Router } from 'vue-router'
+import type { StreamExecutionViewAction, StreamExecutionViewState } from './execution/view-state'
 import type { SessionHealthSnapshot, SessionUiPhase } from './session'
 import type {
   DisplayOptionsValue,
@@ -24,15 +25,14 @@ import { rpc } from '../services/rpc'
 import { buildStreamDiagnosticsSnapshot } from './diagnostics'
 import { bindStreamEnhancements, resolveStreamEnhancementMounts } from './enhancements'
 import {
+  reduceViewState,
+  RUNTIME_PHASE_STATUS_KEYS,
+
+} from './execution/view-state'
+import {
   NO_FRAME_RECENT_ACTIVITY_MS,
   NO_FRAME_WARNING_DELAY_MS,
 } from './no-frame-warning'
-import {
-  type StreamExecutionViewAction,
-  type StreamExecutionViewState,
-  RUNTIME_PHASE_STATUS_KEYS,
-  reduceViewState,
-} from './execution/view-state'
 import { useStreamRuntimeHost } from './runtime/runtime-host'
 import {
   buildSessionHealthSnapshot,
@@ -107,6 +107,23 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
   const warningVisible = ref(false)
   let warningTimer: BrowserTimeout | null = null
   let disposeStartupEvents: (() => void) | null = null
+
+  async function recordExecutionTraceEvent(
+    event: string,
+    payload: Record<string, unknown>,
+    traceSessionId: string | null = sessionId.value !== '' ? sessionId.value : null,
+  ): Promise<void> {
+    try {
+      await rpc.runtimeTrace.recordEvent({
+        event,
+        sessionId: traceSessionId,
+        payload,
+      })
+    }
+    catch {
+      // trace 失败不能影响执行层关闭路径
+    }
+  }
 
   function readViewState(): StreamExecutionViewState {
     return {
@@ -360,7 +377,7 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
     }
   }
 
-  async function disconnectStream(optionsInput?: { navigateBack?: boolean }): Promise<void> {
+  async function disconnectStream(optionsInput?: { navigateBack?: boolean, reason?: string }): Promise<void> {
     if (closing.value) {
       return
     }
@@ -370,11 +387,34 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
     disableSessionHealthReporting()
     resetExecutionWarning()
 
+    await recordExecutionTraceEvent('closeExecutionRequested', {
+      source: 'stream-execution',
+      stage: 'disconnectStream',
+      navigateBack: optionsInput?.navigateBack ?? false,
+      reason: optionsInput?.reason ?? 'unspecified',
+      hasSessionId: sessionId.value !== '',
+    })
+
     if (sessionId.value !== '') {
       try {
+        await recordExecutionTraceEvent('closeSessionRequestedByClient', {
+          source: 'stream-execution',
+          reason: optionsInput?.reason ?? 'unspecified',
+          navigateBack: optionsInput?.navigateBack ?? false,
+        })
         await closeRemoteStreamSession(sessionId.value)
+        await recordExecutionTraceEvent('closeSessionCompletedByClient', {
+          source: 'stream-execution',
+          reason: optionsInput?.reason ?? 'unspecified',
+          navigateBack: optionsInput?.navigateBack ?? false,
+        })
       }
       catch {
+        await recordExecutionTraceEvent('closeSessionFailedByClient', {
+          source: 'stream-execution',
+          reason: optionsInput?.reason ?? 'unspecified',
+          navigateBack: optionsInput?.navigateBack ?? false,
+        })
         // 忽略关闭阶段错误，避免阻断页面退出。
       }
     }
@@ -447,7 +487,7 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
     sessionHealth.value = null
     closing.value = false
     dispatchViewAction({ type: 'retryRequested' })
-    await runtimeHost.closeRuntime()
+    await runtimeHost.closeRuntime('retry')
     await startStream()
   }
 
@@ -505,9 +545,15 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
     applyResolvedError(message)
   }
 
-  async function closeExecution(input?: { navigateBack?: boolean }): Promise<void> {
+  async function closeExecution(input?: { navigateBack?: boolean, reason?: string }): Promise<void> {
     resetExecutionWarning()
-    await runtimeHost.closeRuntime()
+    await recordExecutionTraceEvent('closeExecutionRequested', {
+      source: 'stream-execution',
+      stage: 'closeExecution',
+      navigateBack: input?.navigateBack ?? false,
+      reason: input?.reason ?? 'unspecified',
+    })
+    await runtimeHost.closeRuntime(input?.reason)
     await disconnectStream(input)
   }
 
@@ -517,8 +563,8 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
 
   async function powerOffAndDisconnect(): Promise<void> {
     resetExecutionWarning()
-    await runtimeHost.closeRuntime()
-    await disconnectStream()
+    await runtimeHost.closeRuntime('powerOff')
+    await disconnectStream({ reason: 'powerOff' })
     const accepted = await powerOffConsole()
     if (!accepted) {
       handlePlayerError(options.t('streamPage.errors.powerOffFailed'))
@@ -639,7 +685,7 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
     runtimeHost.setPerformanceEnabled(false)
     runtimeHost.setDiagnosticsEnabled(false)
     disposeStartupEventSubscription()
-    void closeExecution()
+    void closeExecution({ reason: 'pageUnmount' })
   })
 
   return {
@@ -691,7 +737,7 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
       runtimeMode: computed(() =>
         sessionExecution.value?.runtime.mode
         ?? streamConfig.value.stream_runtime_mode
-        ?? 'webrtc-direct'
+        ?? 'webrtc-direct',
       ),
       metadata: sessionMetadata,
       capabilities: sessionCapabilities,

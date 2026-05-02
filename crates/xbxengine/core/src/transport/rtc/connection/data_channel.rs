@@ -248,7 +248,7 @@ impl RtcConnectionService {
         runtime_stats: &Arc<Mutex<XbxEngineMediaRuntimeStats>>,
     ) -> Result<(), XbxEngineRuntimeError> {
         if !self.control_service.should_send_post_handshake_messages() {
-            crate::xbx_log_warn!(
+            crate::xbx_log_debug!(
                 "[xbxengine][rtc] post-handshake bootstrap skipped handshake_acked={} sent={}",
                 self.control_service.state().message_handshake_acked,
                 self.control_service.state().post_handshake_messages_sent
@@ -261,7 +261,7 @@ impl RtcConnectionService {
             ));
         };
         for payload in build_post_handshake_message_payloads() {
-            crate::xbx_log_warn!(
+            crate::xbx_log_debug!(
                 "[xbxengine][rtc] sending post-handshake payload channel_id={} len={}",
                 channel_id,
                 payload.len()
@@ -284,7 +284,7 @@ impl RtcConnectionService {
     ) -> Result<(), XbxEngineRuntimeError> {
         if !self.control_service.can_bootstrap_control() {
             let state = self.control_service.state();
-            crate::xbx_log_warn!(
+            crate::xbx_log_debug!(
                 "[xbxengine][rtc] control bootstrap skipped control_open={} control_started={} handshake_acked={} bootstrapped_after_handshake={}",
                 state.control_channel_open,
                 state.control_started,
@@ -293,7 +293,7 @@ impl RtcConnectionService {
             );
             return Ok(());
         }
-        crate::xbx_log_warn!(
+        crate::xbx_log_debug!(
             "[xbxengine][rtc] control bootstrap starting control_open={} control_started={} handshake_acked={} bootstrapped_after_handshake={}",
             self.control_service.state().control_channel_open,
             self.control_service.state().control_started,
@@ -313,7 +313,7 @@ impl RtcConnectionService {
             runtime_stats,
         )?;
         self.control_service.mark_control_bootstrapped();
-        crate::xbx_log_warn!(
+        crate::xbx_log_debug!(
             "[xbxengine][rtc] control bootstrap completed control_open={} control_started={} handshake_acked={} bootstrapped_after_handshake={}",
             self.control_service.state().control_channel_open,
             self.control_service.state().control_started,
@@ -456,7 +456,7 @@ impl RtcConnectionService {
                 return Ok(());
             };
             if !state.input_channel_open {
-                crate::xbx_log_warn!(
+                crate::xbx_log_debug!(
                     "[xbxengine][rtc] input bootstrap skipped because input channel is not open"
                 );
                 false
@@ -465,7 +465,7 @@ impl RtcConnectionService {
                 let should_send_post_handshake =
                     handshake_acked && !state.input_metadata_bootstrapped_after_handshake;
                 if should_send_pre_handshake || should_send_post_handshake {
-                    crate::xbx_log_warn!(
+                    crate::xbx_log_debug!(
                         "[xbxengine][rtc] input bootstrap starting channel_open={} handshake_acked={} bootstrapped={} bootstrapped_after_handshake={}",
                         state.input_channel_open,
                         handshake_acked,
@@ -478,7 +478,7 @@ impl RtcConnectionService {
                     }
                     true
                 } else {
-                    crate::xbx_log_warn!(
+                    crate::xbx_log_debug!(
                         "[xbxengine][rtc] input bootstrap skipped channel_open={} handshake_acked={} bootstrapped={} bootstrapped_after_handshake={}",
                         state.input_channel_open,
                         handshake_acked,
@@ -498,7 +498,7 @@ impl RtcConnectionService {
         let summary = format!(
             "phase1 rtc input metadata bootstrap sent seq=0 maxTouchpoints=64 bytes={packet_len}"
         );
-        crate::xbx_log_warn!(
+        crate::xbx_log_debug!(
             "[xbxengine][rtc] sending input metadata bootstrap channel_id={} bytes={}",
             channel_id,
             packet_len
@@ -588,9 +588,11 @@ impl RtcConnectionService {
         {
             self.delayed_pli_prime_due_at_ms = None;
             let outcome = self.request_video_pli_with_outcome(runtime_stats)?;
-            if outcome
-                == crate::transport::rtc::connection::VideoRecoveryRequestOutcome::FeedbackTargetPending
-            {
+            if matches!(
+                outcome,
+                crate::transport::rtc::connection::VideoRecoveryRequestOutcome::FeedbackTransportNotReady
+                    | crate::transport::rtc::connection::VideoRecoveryRequestOutcome::FeedbackTargetPending
+            ) {
                 RuntimeStatsSink::new(runtime_stats.clone()).update(|stats| {
                     stats.latest_observation_label =
                         Some("rtcDelayedPliPrimeFeedbackTargetPending".to_string());
@@ -644,19 +646,9 @@ impl RtcConnectionService {
                     .lock()
                     .ok()
                     .and_then(|state| state.data_channel_labels.get(&channel_id).cloned());
-                // 单独打出 OnOpen 观测，避免后续生命周期观测被状态摘要覆盖。
-                crate::xbx_log_warn!(
-                    "[xbxengine][rtc] data channel onopen observed channel_id={} label={}",
-                    channel_id,
-                    label.as_deref().unwrap_or("unknown")
-                );
                 match label.as_deref() {
                     Some(CONTROL_CHANNEL_LABEL) => {
                         self.control_service.open_control_channel();
-                        crate::xbx_log_warn!(
-                            "[xbxengine][rtc] rtcControlChannelOpened observed channel_id={}",
-                            channel_id
-                        );
                         self.publish_channel_lifecycle(
                             runtime_stats,
                             "rtcControlChannelOpened",
@@ -666,10 +658,6 @@ impl RtcConnectionService {
                     }
                     Some(MESSAGE_CHANNEL_LABEL) => {
                         self.control_service.open_message_channel();
-                        crate::xbx_log_warn!(
-                            "[xbxengine][rtc] rtcMessageChannelOpened observed channel_id={}",
-                            channel_id
-                        );
                         self.publish_channel_lifecycle(
                             runtime_stats,
                             "rtcMessageChannelOpened",
@@ -693,10 +681,6 @@ impl RtcConnectionService {
                                 );
                             }
                         }
-                        crate::xbx_log_warn!(
-                            "[xbxengine][rtc] rtcInputChannelOpened observed channel_id={}",
-                            channel_id
-                        );
                         self.publish_channel_lifecycle(
                             runtime_stats,
                             "rtcInputChannelOpened",
@@ -708,10 +692,6 @@ impl RtcConnectionService {
                         if let Ok(mut state) = self.state.lock() {
                             state.chat_channel_open = true;
                         }
-                        crate::xbx_log_warn!(
-                            "[xbxengine][rtc] rtcChatChannelOpened observed channel_id={}",
-                            channel_id
-                        );
                         self.publish_channel_lifecycle(
                             runtime_stats,
                             "rtcChatChannelOpened",
@@ -956,16 +936,15 @@ impl RtcConnectionService {
                     if last_label == MESSAGE_CHANNEL_LABEL && payload.is_string {
                         let payload_text = String::from_utf8_lossy(payload.data.as_ref());
                         let preview = short_text_preview(payload_text.as_ref(), 96);
-                        crate::xbx_log_warn!(
-                            "[xbxengine][rtc] inbound message payload observed observation_id={} len={} preview={preview:?}",
-                            self.read_counters.data_channel_messages,
-                            payload_text.len()
-                        );
-                        if is_handshake_ack_payload(payload_text.as_ref()) {
+                        let is_handshake_ack = is_handshake_ack_payload(payload_text.as_ref());
+                        if !is_handshake_ack {
                             crate::xbx_log_warn!(
-                                "[xbxengine][rtc] inbound message handshake ack observed observation_id={} preview={preview:?}",
-                                self.read_counters.data_channel_messages
+                                "[xbxengine][rtc] inbound message payload observed observation_id={} len={} preview={preview:?}",
+                                self.read_counters.data_channel_messages,
+                                payload_text.len()
                             );
+                        }
+                        if is_handshake_ack {
                             should_ack_message_handshake = true;
                         }
                         if payload_text.contains("KickForClosedGame") {
@@ -1003,13 +982,23 @@ impl RtcConnectionService {
                 .flush_due_feedback(peer_connection, runtime_stats)?;
         }
         if should_ack_message_handshake {
-            if self.control_service.ack_handshake() {
+            let first_ack = self.control_service.ack_handshake();
+            if first_ack {
+                crate::xbx_log_debug!(
+                    "[xbxengine][rtc] inbound message handshake ack observed observation_id={} firstAck=true",
+                    self.read_counters.data_channel_messages
+                );
                 RuntimeStatsSink::new(runtime_stats.clone()).update(|stats| {
                     if stats.message_handshake_acked_at_ms.is_none() {
                         stats.message_handshake_acked_at_ms = Some(now_ms_f64());
                     }
                 });
                 self.send_post_handshake_messages(runtime_stats)?;
+            } else {
+                crate::xbx_log_debug!(
+                    "[xbxengine][rtc] inbound message handshake ack observed observation_id={} firstAck=false",
+                    self.read_counters.data_channel_messages
+                );
             }
             self.try_bootstrap_control_channel(runtime_stats)?;
             self.try_bootstrap_input_channel(runtime_stats)?;

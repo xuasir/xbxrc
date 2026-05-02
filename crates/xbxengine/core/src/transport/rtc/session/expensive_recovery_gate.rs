@@ -98,7 +98,7 @@ impl<'a> ExpensiveRecoveryGate<'a> {
                 )),
             };
         }
-        if let Some(block_reason) = self.media_reconnect_block_reason(
+        if let Some(block_reason) = self.reconnect_block_reason(
             snapshot,
             owner_state,
             proposal,
@@ -112,6 +112,32 @@ impl<'a> ExpensiveRecoveryGate<'a> {
         }
         ReconnectGateResolution {
             detail: Some(resolve_reconnect_grant_detail(proposal, owner_signal)),
+        }
+    }
+
+    fn reconnect_block_reason(
+        &self,
+        snapshot: &TransportSnapshot,
+        owner_state: VideoSchedulingOwnerState,
+        proposal: &CoordinatorProposal,
+        owner_signal: &crate::transport::rtc::recovery::coordinator::RecoveryOwnerSignal,
+        observed_at_ms: f64,
+    ) -> Option<&'static str> {
+        match owner_signal.reason {
+            VideoEscalationReason::LifecycleRecovering => None,
+            VideoEscalationReason::TransportExpiredDeadline
+            | VideoEscalationReason::TransportSevereDeadline
+            | VideoEscalationReason::TransportRecoveredLate
+            | VideoEscalationReason::TransportSampleLoss => {
+                self.transport_deadline_reconnect_block_reason(snapshot, proposal, observed_at_ms)
+            }
+            _ => self.media_reconnect_block_reason(
+                snapshot,
+                owner_state,
+                proposal,
+                owner_signal,
+                observed_at_ms,
+            ),
         }
     }
 
@@ -172,14 +198,7 @@ impl<'a> ExpensiveRecoveryGate<'a> {
         if proposal.decision.action != RecoveryAction::RequestReconnectCandidate {
             return None;
         }
-        if matches!(
-            owner_signal.reason,
-            VideoEscalationReason::LifecycleRecovering
-                | VideoEscalationReason::TransportExpiredDeadline
-                | VideoEscalationReason::TransportSevereDeadline
-                | VideoEscalationReason::TransportRecoveredLate
-                | VideoEscalationReason::TransportSampleLoss
-        ) {
+        if owner_signal.reason == VideoEscalationReason::LifecycleRecovering {
             return None;
         }
         if owner_signal.reason != VideoEscalationReason::TransportAwaitRecoveryKeyframe {
@@ -239,10 +258,95 @@ impl<'a> ExpensiveRecoveryGate<'a> {
         }
         None
     }
+
+    fn transport_deadline_reconnect_block_reason(
+        &self,
+        snapshot: &TransportSnapshot,
+        proposal: &CoordinatorProposal,
+        observed_at_ms: f64,
+    ) -> Option<&'static str> {
+        if proposal.decision.action != RecoveryAction::RequestReconnectCandidate {
+            return None;
+        }
+        let recovery_epoch = proposal.budget_before.recovery_epoch;
+        let control_replay_backlog_active =
+            RuntimeStatsSink::read_shared(self.runtime_stats, |stats| {
+                stats.control_pending_replay_action_count > 0
+                    && stats.control_pending_replay_since_ms.is_some_and(|since| {
+                        (observed_at_ms - since).max(0.0) <= CONTROL_REPLAY_BACKLOG_HOLD_MS
+                    })
+            })
+            .unwrap_or(false);
+        if control_replay_backlog_active {
+            return Some("transportGate:controlReplayBacklog");
+        }
+        let awaiting_success_edge_after_grant = self
+            .reconnect_success_edge_at_last_grant
+            .zip(self.last_successful_media_edge_at_ms)
+            .is_some_and(|(granted_edge, latest_edge)| granted_edge >= latest_edge)
+            && self.reconnect_grants_without_success_edge > 0;
+        if awaiting_success_edge_after_grant {
+            return Some("transportGate:awaitSuccessEdge");
+        }
+        let current_clean_anchor =
+            RuntimeStatsSink::read_shared(self.runtime_stats, has_current_clean_anchor_from_stats)
+                .unwrap_or(false);
+        let local_progress_active = current_clean_anchor
+            || RuntimeStatsSink::read_shared(self.runtime_stats, |stats| {
+                has_fresh_media_output(stats, observed_at_ms)
+            })
+            .unwrap_or(false)
+            || RecoveryCoordinator::transport_await_local_recovery_active(
+                self.runtime_stats,
+                recovery_epoch,
+                observed_at_ms,
+            );
+        if local_progress_active {
+            return Some("transportGate:localRecoveryActive");
+        }
+        let unresolved_transport_await =
+            RuntimeStatsSink::read_shared(self.runtime_stats, |stats| {
+                stats.recovery_transport_await_unresolved == Some(true)
+                    || stats_has_unresolved_transport_await_issue(stats)
+            })
+            .unwrap_or(false);
+        let transport_await_hard_failure =
+            RecoveryCoordinator::transport_await_has_hard_recovery_evidence(
+                self.runtime_stats,
+                recovery_epoch,
+                observed_at_ms,
+            );
+        if unresolved_transport_await && !transport_await_hard_failure {
+            return Some("transportGate:awaitingRecoveryChain");
+        }
+        if snapshot.connection.lifecycle_state == ConnectionLifecycleStateFact::Connected
+            && !connected_connectivity_failure_evidence(snapshot, observed_at_ms)
+        {
+            return Some("transportGate:missingConnectivityEvidence");
+        }
+        None
+    }
 }
 
 fn stats_has_unresolved_transport_await_issue(stats: &XbxEngineMediaRuntimeStats) -> bool {
     has_current_transport_await_issue_from_stats(stats)
+}
+
+fn connected_connectivity_failure_evidence(
+    snapshot: &TransportSnapshot,
+    observed_at_ms: f64,
+) -> bool {
+    let has_data_channel = snapshot.connection.control_channel_open
+        || snapshot.connection.message_channel_open
+        || snapshot.connection.input_channel_open
+        || snapshot.connection.chat_channel_open;
+    let has_transport_signal = snapshot.connection.latest_transport_path.is_some()
+        || snapshot.connection.latest_rtt_ms.is_some();
+    let connection_signal_stale = snapshot
+        .connection
+        .last_observed_at_ms
+        .is_none_or(|last| (observed_at_ms - last).max(0.0) >= 2_000.0);
+    !has_data_channel && !has_transport_signal && connection_signal_stale
 }
 
 pub(crate) fn resolve_reconnect_grant_detail(

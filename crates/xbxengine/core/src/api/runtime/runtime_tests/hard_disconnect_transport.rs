@@ -326,8 +326,8 @@ async fn runtime_home_render_deadline_jitter_replay_stays_local_and_never_reache
         stats.latest_video_packet_arrival_time_ms = Some(profile.baseline.now_ms - 8.0);
         stats.video_decoder_stalled = Some(false);
         stats.video_renderer_stalled = Some(true);
-        stats.video_present_submit_count_total = 300;
-        stats.video_present_drop_count_total = 26;
+        stats.host_mailbox_enqueue_count_total = 300;
+        stats.host_mailbox_drop_count_total = 26;
         stats.video_pacer_submit_count_total = 320;
         stats.video_pacer_drop_count_total = 12;
         stats.video_renderer_submit_count_total = 300;
@@ -527,7 +527,7 @@ fn runtime_local_host_stall_reset_retries_after_cooldown_when_display_tick_advan
         stats.video_owner_reason = Some("hostPresentStalled".to_string());
         stats.video_renderer_stalled = Some(true);
         stats.host_display_tick_epoch = 10;
-        stats.video_present_epoch = 3;
+        stats.host_frame_present_epoch = 3;
     }
     let pending_runtime_recovery_action = Arc::new(Mutex::new(None));
     let mut backend = ScriptedMediaBackend::new(
@@ -569,7 +569,7 @@ fn runtime_local_host_stall_reset_retries_after_cooldown_when_display_tick_advan
         let mut stats = runtime_stats.lock().expect("runtime stats lock");
         // cooldown 后且 display tick 再次前进，应允许重试 reset（present epoch 保持不变）
         stats.host_display_tick_epoch = 12;
-        stats.video_present_epoch = 3;
+        stats.host_frame_present_epoch = 3;
     }
     runtime.tick();
 
@@ -592,7 +592,7 @@ fn runtime_local_host_stall_reset_skips_when_present_loop_not_running() {
         stats.video_owner_reason = Some("hostPresentStalled".to_string());
         stats.video_renderer_stalled = Some(true);
         stats.host_display_tick_epoch = 0;
-        stats.video_present_epoch = 0;
+        stats.host_frame_present_epoch = 0;
     }
     let pending_runtime_recovery_action = Arc::new(Mutex::new(None));
     let mut backend = ScriptedMediaBackend::new(
@@ -633,7 +633,7 @@ fn runtime_local_host_stall_reset_skips_when_present_loop_not_running() {
 }
 
 #[test]
-fn runtime_local_host_stall_reset_skips_when_renderer_submit_is_fresh() {
+fn runtime_local_host_stall_reset_still_runs_when_renderer_submit_is_fresh() {
     let requests = Rc::new(RefCell::new(Vec::new()));
     let events = Rc::new(RefCell::new(Vec::new()));
     let call_order = Arc::new(Mutex::new(Vec::new()));
@@ -643,7 +643,7 @@ fn runtime_local_host_stall_reset_skips_when_renderer_submit_is_fresh() {
         stats.video_owner_reason = Some("hostPresentStalled".to_string());
         stats.video_renderer_stalled = Some(true);
         stats.host_display_tick_epoch = 64;
-        stats.video_present_epoch = 10;
+        stats.host_frame_present_epoch = 10;
         stats.video_renderer_submit_count_total = 1;
     }
     let pending_runtime_recovery_action = Arc::new(Mutex::new(None));
@@ -681,12 +681,7 @@ fn runtime_local_host_stall_reset_skips_when_renderer_submit_is_fresh() {
         .iter()
         .filter(|entry| **entry == "resetNativePresenterHostStall")
         .count();
-    assert_eq!(reset_count, 0, "unexpected host-stall reset: {order:?}");
-    drop(order);
-    assert_eq!(
-        runtime.snapshot().last_recovery_reason.as_deref(),
-        Some("hostPresentStalled:resetDeferred:freshRendererSubmit")
-    );
+    assert_eq!(reset_count, 1, "expected host-stall reset: {order:?}");
 }
 
 #[test]
@@ -700,7 +695,8 @@ fn runtime_display_supply_degraded_triggers_local_reset_from_owner_reason() {
         stats.video_owner_reason = Some("displaySupplyDegraded".to_string());
         stats.video_renderer_stalled = Some(false);
         stats.host_display_tick_epoch = 20;
-        stats.video_present_epoch = 9;
+        stats.host_frame_present_epoch = 9;
+        stats.video_renderer_submit_count_total = 1;
     }
     let pending_runtime_recovery_action = Arc::new(Mutex::new(None));
     let mut backend = ScriptedMediaBackend::new(
@@ -751,7 +747,8 @@ fn runtime_display_supply_critical_triggers_local_reset_from_owner_reason() {
         stats.video_owner_reason = Some("displaySupplyCritical".to_string());
         stats.video_renderer_stalled = Some(false);
         stats.host_display_tick_epoch = 30;
-        stats.video_present_epoch = 10;
+        stats.host_frame_present_epoch = 10;
+        stats.video_renderer_submit_count_total = 1;
     }
     let pending_runtime_recovery_action = Arc::new(Mutex::new(None));
     let mut backend = ScriptedMediaBackend::new(
@@ -788,5 +785,62 @@ fn runtime_display_supply_critical_triggers_local_reset_from_owner_reason() {
             .iter()
             .any(|entry| *entry == "resetNativePresenterDisplayRecovery"),
         "display recovery reset should follow owner reason: {order:?}"
+    );
+}
+
+#[test]
+fn runtime_display_supply_critical_without_fresh_post_decode_evidence_skips_local_reset() {
+    let requests = Rc::new(RefCell::new(Vec::new()));
+    let events = Rc::new(RefCell::new(Vec::new()));
+    let call_order = Arc::new(Mutex::new(Vec::new()));
+    let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
+    {
+        let mut stats = runtime_stats.lock().expect("runtime stats lock");
+        stats.video_owner_reason = Some("displaySupplyCritical".to_string());
+        stats.video_renderer_stalled = Some(false);
+        stats.host_display_tick_epoch = 30;
+        stats.host_frame_present_epoch = 10;
+        stats.video_renderer_submit_count_total = 0;
+        stats.latest_host_mailbox_submit_time_ms = None;
+    }
+    let pending_runtime_recovery_action = Arc::new(Mutex::new(None));
+    let mut backend = ScriptedMediaBackend::new(
+        XbxEngineMediaNegotiation {
+            local_offer_sdp: "offer".to_string(),
+            local_candidates: Vec::new(),
+            surface_id: "surface:viewport-1".to_string(),
+            video_width: 1280,
+            video_height: 720,
+            first_frame_packet_arrival_time_ms: None,
+            frame_decoded_time_ms: None,
+            frame_rendered_time_ms: None,
+            input_status: XbxEngineInputStatus::default(),
+        },
+        XbxEngineMediaRuntimeStats::default(),
+    );
+    backend.runtime_stats = runtime_stats.clone();
+    backend.pending_runtime_recovery_action = pending_runtime_recovery_action;
+    let mut runtime = XbxEngineRuntime::with_media_backend(
+        XbxEngineRuntimeConfig::default(),
+        TestHostBridge::new(requests.clone()).with_call_order(call_order.clone()),
+        TestEventSink::new(events),
+        backend,
+    );
+    runtime
+        .start(session(), viewport(), 1.0, None, None)
+        .expect("runtime start should succeed");
+    requests.borrow_mut().clear();
+
+    runtime.tick();
+    let order = call_order.lock().expect("call order lock");
+    assert!(
+        order
+            .iter()
+            .all(|entry| *entry != "resetNativePresenterDisplayRecovery"),
+        "display recovery reset should require fresh post-decode evidence: {order:?}"
+    );
+    assert_eq!(
+        runtime.snapshot().last_recovery_reason.as_deref(),
+        Some("displayRecoverySkipped:stalePostDecodeEvidence")
     );
 }

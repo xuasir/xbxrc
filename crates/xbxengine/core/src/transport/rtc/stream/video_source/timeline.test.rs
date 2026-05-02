@@ -112,14 +112,14 @@ fn anchor_candidate_ledger_tracks_clean_anchor_submission() {
 }
 
 #[test]
-fn anonymous_repair_candidate_inherits_latest_frame_in_same_epoch() {
+fn anonymous_repair_candidate_inherits_latest_awaiting_frame_in_same_epoch() {
     let mut state = VideoTimelineState::new();
     state.observe_anchor_candidate(
         9,
         Some(96_001),
-        "frame-complete-candidate",
-        XbxEngineAnchorCandidateState::Observed,
-        None,
+        "frame-await-recovery-anchor",
+        XbxEngineAnchorCandidateState::AwaitingRecovery,
+        Some(XbxEngineAnchorCandidateFailureReason::AwaitingRecoveryKeyframe),
         20.0,
     );
     state.observe_anchor_candidate(
@@ -136,6 +136,37 @@ fn anonymous_repair_candidate_inherits_latest_frame_in_same_epoch() {
     assert_eq!(ledger.recovery_epoch, 9);
     assert_eq!(ledger.frame_rtp_timestamp, Some(96_001));
     assert_eq!(ledger.state, XbxEngineAnchorCandidateState::Repaired);
+    assert_eq!(ledger.source_event, "gap-repair-in-flight");
+}
+
+#[test]
+fn anonymous_repair_candidate_does_not_overwrite_observed_frame_binding() {
+    let mut state = VideoTimelineState::new();
+    state.observe_anchor_candidate(
+        9,
+        Some(96_001),
+        "frame-complete-candidate",
+        XbxEngineAnchorCandidateState::Observed,
+        None,
+        20.0,
+    );
+    state.observe_anchor_candidate(
+        9,
+        None,
+        "gap-repair-in-flight",
+        XbxEngineAnchorCandidateState::AwaitingRecovery,
+        Some(XbxEngineAnchorCandidateFailureReason::AwaitingRecoveryKeyframe),
+        21.0,
+    );
+    let ledger = state
+        .latest_anchor_candidate_ledger()
+        .expect("anchor candidate");
+    assert_eq!(ledger.recovery_epoch, 9);
+    assert_eq!(ledger.frame_rtp_timestamp, None);
+    assert_eq!(
+        ledger.state,
+        XbxEngineAnchorCandidateState::AwaitingRecovery
+    );
     assert_eq!(ledger.source_event, "gap-repair-in-flight");
 }
 
@@ -762,6 +793,29 @@ fn stable_continuation_does_not_retire_newer_reorder_debt() {
 }
 
 #[test]
+fn healthy_recovery_retires_lingering_repairing_frame_ledgers() {
+    let mut state = VideoTimelineState::new();
+    state.record_frame_recovery(
+        100_001,
+        None,
+        FrameRecoveryDisposition::Repairing,
+        None,
+        FrameBudgetContext::default(),
+    );
+    state.on_clean_anchor_ingress(100_100, 10.0);
+
+    state.observe_frame(100_100, 20.0, Some(false), "disposable");
+    state.mark_frame_complete_candidate(100_100, 30.0, Some(false), "disposable");
+    assert_eq!(state.chain_state(), ChainState::SustainingRecovery);
+
+    state.observe_frame(100_101, 160.0, Some(false), "disposable");
+    state.mark_frame_complete_candidate(100_101, 170.0, Some(false), "disposable");
+
+    assert_eq!(state.chain_state(), ChainState::Healthy);
+    assert!(state.take_frame_recovery(100_001).is_none());
+}
+
+#[test]
 fn clean_anchor_candidate_peek_does_not_consume_pending_until_ack() {
     let mut state = VideoTimelineState::new();
     state.on_clean_anchor_ingress(150_001, 10.0);
@@ -781,6 +835,67 @@ fn clean_anchor_candidate_peek_does_not_consume_pending_until_ack() {
         state.peek_clean_anchor_stats_commit_candidate_if_stable(150_001, 14.0),
         None
     );
+}
+
+#[test]
+fn clean_anchor_ack_retires_pre_anchor_repairing_ledgers_during_sustaining() {
+    let mut state = VideoTimelineState::new();
+    state.record_frame_recovery(
+        149_900,
+        None,
+        FrameRecoveryDisposition::Repairing,
+        None,
+        FrameBudgetContext::default(),
+    );
+    state.on_clean_anchor_ingress(150_001, 10.0);
+
+    assert_eq!(state.chain_state(), ChainState::SustainingRecovery);
+    assert!(state.take_frame_recovery(149_900).is_some());
+
+    state.record_frame_recovery(
+        149_900,
+        None,
+        FrameRecoveryDisposition::Repairing,
+        None,
+        FrameBudgetContext::default(),
+    );
+    assert!(state.ack_clean_anchor_stats_committed(150_001));
+
+    assert_eq!(state.chain_state(), ChainState::SustainingRecovery);
+    assert!(state.take_frame_recovery(149_900).is_none());
+}
+
+#[test]
+fn post_ack_stable_frames_retire_reintroduced_pre_anchor_repairing_ledger() {
+    let mut state = VideoTimelineState::new();
+    state.on_clean_anchor_ingress(150_001, 10.0);
+    assert!(state.ack_clean_anchor_stats_committed(150_001));
+
+    state.record_frame_recovery(
+        149_900,
+        None,
+        FrameRecoveryDisposition::Repairing,
+        None,
+        FrameBudgetContext::default(),
+    );
+    assert!(state.take_frame_recovery(149_900).is_some());
+
+    state.record_frame_recovery(
+        149_900,
+        None,
+        FrameRecoveryDisposition::Repairing,
+        None,
+        FrameBudgetContext::default(),
+    );
+    state.observe_frame(150_100, 160.0, Some(false), "disposable");
+    state.mark_frame_complete_candidate(150_100, 170.0, Some(false), "disposable");
+    assert_eq!(state.chain_state(), ChainState::SustainingRecovery);
+
+    state.observe_frame(150_101, 300.0, Some(false), "disposable");
+    state.mark_frame_complete_candidate(150_101, 320.0, Some(false), "disposable");
+
+    assert_eq!(state.chain_state(), ChainState::Healthy);
+    assert!(state.take_frame_recovery(149_900).is_none());
 }
 
 #[test]

@@ -391,7 +391,7 @@ function closeTextSheet(): void {
   actions.setTextInputActive(false)
 }
 
-async function disconnectStream(options?: { navigateBack?: boolean }): Promise<void> {
+async function disconnectStream(options?: { navigateBack?: boolean, reason?: string }): Promise<void> {
   await actions.disconnectStream(options)
 }
 
@@ -401,7 +401,7 @@ async function handleRetry(): Promise<void> {
 }
 
 async function handleFailedSheetAction(): Promise<void> {
-  await disconnectStream({ navigateBack: true })
+  await disconnectStream({ navigateBack: true, reason: 'failedSheetExit' })
 }
 
 async function handleWarningSheetAction(id: string): Promise<void> {
@@ -410,7 +410,7 @@ async function handleWarningSheetAction(id: string): Promise<void> {
     return
   }
 
-  await disconnectStream({ navigateBack: true })
+  await disconnectStream({ navigateBack: true, reason: 'warningSheetExit' })
 }
 
 async function handleSendText(text: string): Promise<void> {
@@ -480,7 +480,7 @@ async function handleStreamMenuAction(id: string): Promise<void> {
       await powerOffAndDisconnect()
     },
     exit: async () => {
-      await disconnectStream({ navigateBack: true })
+      await disconnectStream({ navigateBack: true, reason: 'menuActionExit' })
     },
   }
 
@@ -596,7 +596,7 @@ async function handleStreamMenuAction(id: string): Promise<void> {
                 as="button"
                 type="button"
                 class="stream-page__action"
-                @click="disconnectStream({ navigateBack: true })"
+                @click="disconnectStream({ navigateBack: true, reason: 'menuExit' })"
               >
                 {{ t('streamPage.actions.back') }}
               </Focusable>

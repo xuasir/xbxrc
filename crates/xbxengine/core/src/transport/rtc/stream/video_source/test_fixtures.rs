@@ -227,9 +227,9 @@ impl LocalIngressReplayFixture {
         stats.latest_video_packet_arrival_time_ms = Some(now_ms - 10.0);
         stats.host_no_pending_pressure_level = Some("normal".to_string());
         stats.host_no_pending_streak = 0;
-        stats.video_present_submit_count_total = 120;
-        stats.video_present_drop_count_total = 0;
-        stats.video_present_overwrite_count_total = 0;
+        stats.host_mailbox_enqueue_count_total = 120;
+        stats.host_mailbox_drop_count_total = 0;
+        stats.host_mailbox_overwrite_count_total = 0;
         stats.latest_video_track_status = Some(XbxEngineVideoTrackStatus {
             state: "remoteTrackAttached".to_string(),
             video_width: Some(1280),

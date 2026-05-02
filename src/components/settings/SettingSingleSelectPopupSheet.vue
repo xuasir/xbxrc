@@ -143,7 +143,6 @@ onBeforeUnmount(() => {
         </span>
       </Focusable>
     </div>
-
   </SettingModalShell>
 </template>
 
@@ -227,4 +226,3 @@ onBeforeUnmount(() => {
   border-color: var(--ui-focus-text);
 }
 </style>
-

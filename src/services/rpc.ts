@@ -6,6 +6,8 @@ import { invoke } from '@tauri-apps/api/core'
 
 let rpcRequestSeq = 0
 
+function debugLog(..._args: Array<unknown>): void {}
+
 interface RpcCallError extends Error {
   code?: string
   details?: unknown
@@ -14,7 +16,7 @@ interface RpcCallError extends Error {
 async function invokeByPreload(payload: RpcInvokePayload): Promise<unknown> {
   const requestId = ++rpcRequestSeq
   const startedAt = performance.now()
-  console.info(
+  debugLog(
     `[ui->rust][rpc][in][#${requestId}] ${payload.namespace}.${payload.method}`,
     payload.params ?? null,
   )
@@ -25,7 +27,7 @@ async function invokeByPreload(payload: RpcInvokePayload): Promise<unknown> {
     const duration = Math.round(performance.now() - startedAt)
 
     if (envelope.ok) {
-      console.info(
+      debugLog(
         `[ui->rust][rpc][out][#${requestId}] ${payload.namespace}.${payload.method} ok ${duration}ms`,
         envelope.data,
       )

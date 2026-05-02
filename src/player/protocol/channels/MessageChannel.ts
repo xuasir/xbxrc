@@ -6,6 +6,8 @@ import {
 } from '../networkProfile'
 import { BaseChannel } from './BaseChannel'
 
+function debugLog(..._args: Array<unknown>): void {}
+
 export interface MessageChannelOptions {
   uiVersion: Array<number>
   uiSystem: Array<number>
@@ -41,7 +43,7 @@ export class MessageChannel extends BaseChannel {
   }
 
   onOpen(): void {
-    console.info('[player][message] open')
+    debugLog('[player][message] open')
     this.send(
       JSON.stringify({
         type: 'Handshake',
@@ -58,7 +60,7 @@ export class MessageChannel extends BaseChannel {
     }
     const jsonMessage = parseJsonMessage(event.data)
     if (jsonMessage.type === 'HandshakeAck') {
-      console.info('[player][message] HandshakeAck received')
+      debugLog('[player][message] HandshakeAck received')
       this.delegate.onHandshakeAck()
       this.send(
         JSON.stringify(

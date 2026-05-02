@@ -261,7 +261,8 @@ onMounted(() => {
       playNavSound('move')
       triggerNavHaptic('move')
       void router.push({ name: PAGE_NAV_ORDER[nextIndex] })
-    } else {
+    }
+    else {
       // 已到边界
       playNavSound('boundary')
       triggerNavHaptic('boundary')
@@ -310,7 +311,6 @@ onUnmounted(() => {
         <slot />
       </main>
     </FocusScope>
-
 
     <GamepadProfileCard
       :open="isGamepadCardOpen"

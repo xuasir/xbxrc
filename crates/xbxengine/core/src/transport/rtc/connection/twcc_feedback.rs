@@ -31,6 +31,7 @@ const TRANSPORT_CC_URI: &str =
 const TWCC_PACKET_MISS_LOG_INTERVAL: u64 = 512;
 const TWCC_PENDING_FEEDBACK_MAX: usize = 128;
 const TWCC_PACKET_BYTES_LEDGER_WINDOW_MS: f64 = 4_000.0;
+pub(super) const VIDEO_TWCC_FEEDBACK_TARGET: &str = "videoTwccFeedback";
 static TWCC_REMOTE_STREAM_OBSERVATION_ID: AtomicU64 = AtomicU64::new(0);
 static TWCC_EXTENSION_OBSERVATION_ID: AtomicU64 = AtomicU64::new(0);
 
@@ -49,9 +50,21 @@ struct ControlledTwccStreamBinding {
     receiver_id: Option<RTCRtpReceiverId>,
     track_id: String,
     mime_type: String,
+    payload_type: u8,
+    rtcp_feedback: Vec<String>,
     twcc_ext_id: u8,
     packet_seen_count: u64,
     missing_extension_count: u64,
+}
+
+#[derive(Clone, Debug)]
+struct VideoFeedbackBootstrapBinding {
+    ssrc: u32,
+    track_id: String,
+    mime_type: String,
+    payload_type: u8,
+    rtcp_feedback: Vec<String>,
+    twcc_ext_id: u8,
 }
 
 struct PendingTwccFeedbackPacket {
@@ -122,6 +135,7 @@ pub(super) struct ControlledTwccFeedbackController {
     pending_feedback_packets: Vec<PendingTwccFeedbackPacket>,
     dropped_pending_feedback_count: u64,
     twcc_packet_bytes_ledger: VecDeque<TwccPacketBytesSample>,
+    video_feedback_bootstrap_binding: Option<VideoFeedbackBootstrapBinding>,
 }
 
 impl ControlledTwccFeedbackController {
@@ -139,6 +153,7 @@ impl ControlledTwccFeedbackController {
             pending_feedback_packets: Vec::new(),
             dropped_pending_feedback_count: 0,
             twcc_packet_bytes_ledger: VecDeque::new(),
+            video_feedback_bootstrap_binding: None,
         }
     }
 
@@ -148,7 +163,17 @@ impl ControlledTwccFeedbackController {
             return;
         }
         self.feedback_interval = interval;
-        self.reset();
+        let mut interceptor = build_local_twcc_interceptor(self.feedback_interval);
+        for (ssrc, binding) in &self.remote_twcc_streams {
+            interceptor.bind_remote_stream(&build_stream_info(
+                *ssrc,
+                binding.payload_type,
+                &binding.mime_type,
+                binding.twcc_ext_id,
+                &binding.rtcp_feedback,
+            ));
+        }
+        self.interceptor = interceptor;
     }
 
     pub(super) fn reset(&mut self) {
@@ -172,9 +197,12 @@ impl ControlledTwccFeedbackController {
         &mut self,
         track_id: &MediaStreamTrackId,
         receiver_id: RTCRtpReceiverId,
+        runtime_stats: &Arc<Mutex<XbxEngineMediaRuntimeStats>>,
     ) {
         let track_id = track_id.to_string();
+        self.restore_video_feedback_binding_from_bootstrap(&track_id);
         self.track_receivers.insert(track_id.clone(), receiver_id);
+        let mut restored_video_target = false;
         for (ssrc, binding) in self.remote_twcc_streams.iter_mut() {
             if binding.track_id != track_id {
                 continue;
@@ -183,22 +211,102 @@ impl ControlledTwccFeedbackController {
             if !is_audio_mime_type(binding.mime_type.as_str()) {
                 self.preferred_video_receiver_id = Some(receiver_id);
                 self.preferred_video_media_ssrc = Some(*ssrc);
+                restored_video_target = true;
             }
+        }
+        if restored_video_target {
+            RuntimeStatsSink::new(runtime_stats.clone()).record_feedback_target_availability(
+                now_ms_f64(),
+                VIDEO_TWCC_FEEDBACK_TARGET,
+                "ready",
+                "feedbackTargetBound",
+            );
         }
     }
 
-    pub(super) fn unregister_track(&mut self, track_id: &MediaStreamTrackId) {
+    pub(super) fn apply_remote_answer_bootstrap(
+        &mut self,
+        answer_sdp: &str,
+        runtime_stats: &Arc<Mutex<XbxEngineMediaRuntimeStats>>,
+    ) {
+        let Some(binding) = parse_video_feedback_bootstrap_binding_from_answer_sdp(answer_sdp)
+        else {
+            self.video_feedback_bootstrap_binding = None;
+            return;
+        };
+        self.video_feedback_bootstrap_binding = Some(binding.clone());
+        if self.remote_twcc_streams.contains_key(&binding.ssrc) {
+            return;
+        }
+        let receiver_id = self.track_receivers.get(&binding.track_id).copied();
+        self.interceptor.bind_remote_stream(&build_stream_info(
+            binding.ssrc,
+            binding.payload_type,
+            &binding.mime_type,
+            binding.twcc_ext_id,
+            &binding.rtcp_feedback,
+        ));
+        self.remote_twcc_streams.insert(
+            binding.ssrc,
+            ControlledTwccStreamBinding {
+                receiver_id,
+                track_id: binding.track_id.clone(),
+                mime_type: binding.mime_type.clone(),
+                payload_type: binding.payload_type,
+                rtcp_feedback: binding.rtcp_feedback.clone(),
+                twcc_ext_id: binding.twcc_ext_id,
+                packet_seen_count: 0,
+                missing_extension_count: 0,
+            },
+        );
+        if receiver_id.is_some() {
+            self.preferred_video_media_ssrc = Some(binding.ssrc);
+            self.preferred_video_receiver_id = receiver_id;
+            RuntimeStatsSink::new(runtime_stats.clone()).record_feedback_target_availability(
+                now_ms_f64(),
+                "videoRtcpFeedback",
+                "ready",
+                "feedbackTargetBound",
+            );
+        }
+    }
+
+    pub(super) fn prime_video_feedback_receiver_hint(
+        &mut self,
+        receiver_id: RTCRtpReceiverId,
+        runtime_stats: &Arc<Mutex<XbxEngineMediaRuntimeStats>>,
+    ) {
+        if self.preferred_video_receiver_id.is_some() {
+            return;
+        }
+        let Some(binding) = self.video_feedback_bootstrap_binding.clone() else {
+            return;
+        };
+        self.restore_video_feedback_binding_from_bootstrap(&binding.track_id);
+        if let Some(existing) = self.remote_twcc_streams.get_mut(&binding.ssrc) {
+            existing.receiver_id = Some(receiver_id);
+            self.preferred_video_receiver_id = Some(receiver_id);
+            self.preferred_video_media_ssrc = Some(binding.ssrc);
+            RuntimeStatsSink::new(runtime_stats.clone()).record_feedback_target_availability(
+                now_ms_f64(),
+                "videoRtcpFeedback",
+                "ready",
+                "feedbackTargetBound",
+            );
+        }
+    }
+
+    pub(super) fn unregister_track(
+        &mut self,
+        track_id: &MediaStreamTrackId,
+        runtime_stats: &Arc<Mutex<XbxEngineMediaRuntimeStats>>,
+    ) {
         let track_id = track_id.to_string();
         self.track_receivers.remove(&track_id);
         self.remote_twcc_streams
             .retain(|_, binding| binding.track_id != track_id);
-        if self
-            .remote_twcc_streams
-            .values()
-            .all(|binding| binding.track_id != track_id)
-        {
-            self.refresh_preferred_video_target();
-        }
+        self.refresh_preferred_video_target();
+        self.sync_feedback_target_availability(runtime_stats, "feedbackTargetUnbound");
     }
 
     pub(super) fn observe_inbound_rtp(
@@ -210,6 +318,7 @@ impl ControlledTwccFeedbackController {
         fallback_mime_type: Option<String>,
     ) -> Result<(), XbxEngineRuntimeError> {
         let track_key = track_id.to_string();
+        let mut video_rtcp_feedback_target_became_ready = false;
         if !self.remote_twcc_streams.contains_key(&packet.header.ssrc) {
             let binding_info = resolve_twcc_binding_info(
                 remote_answer_sdp,
@@ -249,14 +358,28 @@ impl ControlledTwccFeedbackController {
                             receiver_id,
                             track_id: track_key.clone(),
                             mime_type: mime_type.clone(),
+                            payload_type: packet.header.payload_type,
+                            rtcp_feedback: binding_info.rtcp_feedback.clone(),
                             twcc_ext_id: ext_id,
                             packet_seen_count: 0,
                             missing_extension_count: 0,
                         },
                     );
                     if !is_audio_mime_type(mime_type.as_str()) {
+                        self.video_feedback_bootstrap_binding =
+                            Some(VideoFeedbackBootstrapBinding {
+                                ssrc: packet.header.ssrc,
+                                track_id: track_key.clone(),
+                                mime_type: mime_type.clone(),
+                                payload_type: packet.header.payload_type,
+                                rtcp_feedback: binding_info.rtcp_feedback.clone(),
+                                twcc_ext_id: ext_id,
+                            });
+                    }
+                    if !is_audio_mime_type(mime_type.as_str()) {
                         self.preferred_video_media_ssrc = Some(packet.header.ssrc);
                         self.preferred_video_receiver_id = receiver_id;
+                        video_rtcp_feedback_target_became_ready |= receiver_id.is_some();
                     }
                 }
             }
@@ -275,6 +398,7 @@ impl ControlledTwccFeedbackController {
                 {
                     self.preferred_video_media_ssrc = Some(packet.header.ssrc);
                     self.preferred_video_receiver_id = binding.receiver_id;
+                    video_rtcp_feedback_target_became_ready = true;
                 }
             }
 
@@ -350,6 +474,15 @@ impl ControlledTwccFeedbackController {
             );
         }
 
+        if video_rtcp_feedback_target_became_ready {
+            RuntimeStatsSink::new(runtime_stats.clone()).record_feedback_target_availability(
+                now_ms_f64(),
+                "videoRtcpFeedback",
+                "ready",
+                "feedbackTargetBound",
+            );
+        }
+
         Ok(())
     }
 
@@ -372,7 +505,7 @@ impl ControlledTwccFeedbackController {
 
         let mut feedback_packets_by_receiver =
             HashMap::<RTCRtpReceiverId, Vec<Box<dyn rtc::rtcp::Packet>>>::new();
-        self.drain_pending_feedback_packets(&mut feedback_packets_by_receiver);
+        self.drain_pending_feedback_packets(runtime_stats, &mut feedback_packets_by_receiver);
         while let Some(tagged_packet) = self.interceptor.poll_write() {
             let Packet::Rtcp(rtcp_packets) = tagged_packet.message else {
                 continue;
@@ -388,6 +521,7 @@ impl ControlledTwccFeedbackController {
                 self.route_or_queue_feedback_packet(
                     media_ssrc,
                     packet,
+                    runtime_stats,
                     &mut feedback_packets_by_receiver,
                 );
             }
@@ -395,11 +529,24 @@ impl ControlledTwccFeedbackController {
 
         for (receiver_id, packets) in feedback_packets_by_receiver {
             let Some(mut receiver) = peer_connection.rtp_receiver(receiver_id) else {
+                RuntimeStatsSink::new(runtime_stats.clone()).record_twcc_feedback_send_failure(
+                    now_ms_f64(),
+                    "xbxEngineTwccControlledReceiverLookupMiss",
+                );
                 continue;
             };
             receiver.write_rtcp(packets).map_err(|err| {
-                XbxEngineRuntimeError::new(format!("xbxEngineTwccControlledWriteRtcpFailed: {err}"))
+                let error = format!("xbxEngineTwccControlledWriteRtcpFailed: {err}");
+                RuntimeStatsSink::new(runtime_stats.clone())
+                    .record_twcc_feedback_send_failure(now_ms_f64(), &error);
+                XbxEngineRuntimeError::new(error)
             })?;
+            RuntimeStatsSink::new(runtime_stats.clone()).record_feedback_target_availability(
+                now_ms_f64(),
+                VIDEO_TWCC_FEEDBACK_TARGET,
+                "ready",
+                "twccSent",
+            );
         }
 
         Ok(())
@@ -489,6 +636,7 @@ impl ControlledTwccFeedbackController {
         &mut self,
         media_ssrc: Option<u32>,
         packet: Box<dyn rtc::rtcp::Packet>,
+        runtime_stats: &Arc<Mutex<XbxEngineMediaRuntimeStats>>,
         feedback_packets_by_receiver: &mut HashMap<
             RTCRtpReceiverId,
             Vec<Box<dyn rtc::rtcp::Packet>>,
@@ -520,12 +668,19 @@ impl ControlledTwccFeedbackController {
             media_ssrc,
             self.pending_feedback_packets.len().saturating_add(1)
         );
+        RuntimeStatsSink::new(runtime_stats.clone()).record_twcc_receiver_mapping_missing(
+            now_ms_f64(),
+            media_ssrc,
+            self.pending_feedback_packets.len().saturating_add(1),
+            self.dropped_pending_feedback_count,
+        );
         self.pending_feedback_packets
             .push(PendingTwccFeedbackPacket { media_ssrc, packet });
     }
 
     fn drain_pending_feedback_packets(
         &mut self,
+        runtime_stats: &Arc<Mutex<XbxEngineMediaRuntimeStats>>,
         feedback_packets_by_receiver: &mut HashMap<
             RTCRtpReceiverId,
             Vec<Box<dyn rtc::rtcp::Packet>>,
@@ -539,6 +694,7 @@ impl ControlledTwccFeedbackController {
             self.route_or_queue_feedback_packet(
                 pending_packet.media_ssrc,
                 pending_packet.packet,
+                runtime_stats,
                 feedback_packets_by_receiver,
             );
         }
@@ -560,6 +716,58 @@ impl ControlledTwccFeedbackController {
                 break;
             }
         }
+    }
+
+    fn sync_feedback_target_availability(
+        &self,
+        runtime_stats: &Arc<Mutex<XbxEngineMediaRuntimeStats>>,
+        unbound_reason: &str,
+    ) {
+        let sink = RuntimeStatsSink::new(runtime_stats.clone());
+        if self.preferred_video_receiver_id.is_some() {
+            sink.record_feedback_target_availability(
+                now_ms_f64(),
+                VIDEO_TWCC_FEEDBACK_TARGET,
+                "ready",
+                "feedbackTargetBound",
+            );
+        } else {
+            sink.record_feedback_target_availability(
+                now_ms_f64(),
+                VIDEO_TWCC_FEEDBACK_TARGET,
+                "unbound",
+                unbound_reason,
+            );
+        }
+    }
+
+    fn restore_video_feedback_binding_from_bootstrap(&mut self, track_id: &str) {
+        let Some(binding) = self.video_feedback_bootstrap_binding.clone() else {
+            return;
+        };
+        if binding.track_id != track_id || self.remote_twcc_streams.contains_key(&binding.ssrc) {
+            return;
+        }
+        self.interceptor.bind_remote_stream(&build_stream_info(
+            binding.ssrc,
+            binding.payload_type,
+            &binding.mime_type,
+            binding.twcc_ext_id,
+            &binding.rtcp_feedback,
+        ));
+        self.remote_twcc_streams.insert(
+            binding.ssrc,
+            ControlledTwccStreamBinding {
+                receiver_id: self.track_receivers.get(track_id).copied(),
+                track_id: binding.track_id,
+                mime_type: binding.mime_type,
+                payload_type: binding.payload_type,
+                rtcp_feedback: binding.rtcp_feedback,
+                twcc_ext_id: binding.twcc_ext_id,
+                packet_seen_count: 0,
+                missing_extension_count: 0,
+            },
+        );
     }
 }
 
@@ -635,6 +843,72 @@ fn resolve_twcc_binding_info(
         binding.mime_type = fallback_mime_type;
     }
     binding
+}
+
+fn parse_video_feedback_bootstrap_binding_from_answer_sdp(
+    sdp: &str,
+) -> Option<VideoFeedbackBootstrapBinding> {
+    let mut in_video_section = false;
+    let mut current_payload_types = Vec::<u8>::new();
+    let mut selected_track_id: Option<String> = None;
+    let mut selected_ssrc: Option<u32> = None;
+    let mut selected_payload_type: Option<u8> = None;
+    for line in sdp.lines().map(str::trim) {
+        if let Some(rest) = line.strip_prefix("m=") {
+            in_video_section = rest.starts_with("video ");
+            current_payload_types.clear();
+            if in_video_section {
+                current_payload_types = rest
+                    .split_whitespace()
+                    .skip(3)
+                    .filter_map(|token| token.parse::<u8>().ok())
+                    .collect();
+                selected_payload_type = current_payload_types.first().copied();
+            }
+            continue;
+        }
+        if !in_video_section {
+            continue;
+        }
+        if selected_track_id.is_none() {
+            if let Some(msid) = line.strip_prefix("a=msid:") {
+                selected_track_id = msid.split_whitespace().nth(1).map(str::to_string);
+            }
+            continue;
+        }
+        if selected_ssrc.is_none() {
+            if let Some(group) = line.strip_prefix("a=ssrc-group:FID ") {
+                selected_ssrc = group
+                    .split_whitespace()
+                    .next()
+                    .and_then(|value| value.parse::<u32>().ok());
+            }
+            continue;
+        }
+        if selected_ssrc.is_none() {
+            if let Some(ssrc_line) = line.strip_prefix("a=ssrc:") {
+                selected_ssrc = ssrc_line
+                    .split_whitespace()
+                    .next()
+                    .and_then(|value| value.parse::<u32>().ok());
+            }
+        }
+    }
+    let selected_payload_type = selected_payload_type?;
+    let info = parse_twcc_binding_info_from_answer_sdp(sdp, selected_payload_type);
+    let twcc_ext_id = info.twcc_ext_id?;
+    let mime_type = info.mime_type?;
+    if is_audio_mime_type(mime_type.as_str()) {
+        return None;
+    }
+    Some(VideoFeedbackBootstrapBinding {
+        ssrc: selected_ssrc?,
+        track_id: selected_track_id?,
+        mime_type,
+        payload_type: selected_payload_type,
+        rtcp_feedback: info.rtcp_feedback,
+        twcc_ext_id,
+    })
 }
 
 pub(super) fn parse_twcc_binding_info_from_answer_sdp(

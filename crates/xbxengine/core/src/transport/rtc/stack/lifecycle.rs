@@ -168,10 +168,7 @@ impl<'a> RtcStackLifecycleBridge<'a> {
             *data_channel_state = XbxDataChannelState::default();
         }
         if let Ok(mut stats) = self.runtime_stats.lock() {
-            *stats = XbxEngineMediaRuntimeStats {
-                session_target_type: Some(session_target_type),
-                ..Default::default()
-            };
+            *stats = reset_runtime_stats_for_new_session(&stats, session_target_type);
         }
         Ok(())
     }
@@ -206,5 +203,54 @@ impl<'a> RtcStackLifecycleBridge<'a> {
             self.media,
             self.frame_source_tx,
         )
+    }
+}
+
+fn reset_runtime_stats_for_new_session(
+    previous: &XbxEngineMediaRuntimeStats,
+    session_target_type: XbxEngineTargetTypeDto,
+) -> XbxEngineMediaRuntimeStats {
+    let mut next = XbxEngineMediaRuntimeStats {
+        session_target_type: Some(session_target_type),
+        ..Default::default()
+    };
+    next.latest_video_ingress_close_intent_cause =
+        previous.latest_video_ingress_close_intent_cause.clone();
+    next.latest_video_ingress_close_intent_observed_at_ms =
+        previous.latest_video_ingress_close_intent_observed_at_ms;
+    next
+}
+
+#[cfg(test)]
+mod tests {
+    use super::reset_runtime_stats_for_new_session;
+    use crate::api::backend::XbxEngineMediaRuntimeStats;
+    use xbxengine_protocol::XbxEngineTargetTypeDto;
+
+    #[test]
+    fn reset_runtime_stats_preserves_video_ingress_close_intent() {
+        let mut previous = XbxEngineMediaRuntimeStats::default();
+        previous.latest_video_ingress_close_intent_cause =
+            Some("rebuildPeerConnection".to_string());
+        previous.latest_video_ingress_close_intent_observed_at_ms = Some(1234.0);
+        previous.latest_observation_label = Some("oldLabel".to_string());
+        previous.transport_recovery_epoch = 99;
+
+        let next = reset_runtime_stats_for_new_session(&previous, XbxEngineTargetTypeDto::Cloud);
+
+        assert_eq!(
+            next.latest_video_ingress_close_intent_cause.as_deref(),
+            Some("rebuildPeerConnection")
+        );
+        assert_eq!(
+            next.latest_video_ingress_close_intent_observed_at_ms,
+            Some(1234.0)
+        );
+        assert_eq!(next.latest_observation_label, None);
+        assert_eq!(next.transport_recovery_epoch, 0);
+        assert_eq!(
+            next.session_target_type,
+            Some(XbxEngineTargetTypeDto::Cloud)
+        );
     }
 }

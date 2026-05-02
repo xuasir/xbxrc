@@ -305,7 +305,9 @@ impl RtcVideoFrameSource {
                 action: "ledgerWrite".to_string(),
                 frame_rtp_timestamp,
                 frame_playout_deadline_at_ms,
-                frame_recovery_disposition: frame_recovery_disposition.as_str().to_string(),
+                frame_recovery_disposition: frame_recovery_disposition
+                    .render_label()
+                    .map(str::to_string),
                 frame_unrecoverable_reason: frame_unrecoverable_reason.map(str::to_string),
                 frame_budget: None,
                 observed_at_ms,
@@ -377,8 +379,8 @@ impl RtcVideoFrameSource {
                     frame_playout_deadline_at_ms: entry.frame_playout_deadline_at_ms,
                     frame_recovery_disposition: entry
                         .frame_recovery_disposition
-                        .as_str()
-                        .to_string(),
+                        .render_label()
+                        .map(str::to_string),
                     frame_unrecoverable_reason: entry.frame_unrecoverable_reason.clone(),
                     frame_budget: None,
                     observed_at_ms: now_ms_f64(),
@@ -397,7 +399,7 @@ impl RtcVideoFrameSource {
                 Some(entry.budget_context),
             );
         }
-        (None, FrameRecoveryDisposition::Repairing, None, None)
+        (None, FrameRecoveryDisposition::Steady, None, None)
     }
 
     pub(super) fn is_blocking_non_keyframe_admission(&self) -> bool {

@@ -27,7 +27,7 @@ const ICE_EXCHANGE_STABLE_SETTLE_WINDOW_MS: f64 = 1_500.0;
 const ICE_EXCHANGE_IDLE_BACKOFF_MS: u64 = 60;
 const TRANSPORT_RECONNECT_CANDIDATE_MIN_INTERVAL_MS: f64 = 6_000.0;
 const RECONNECT_SETTLED_KEYFRAME_MIN_INTERVAL_MS: f64 = 800.0;
-const HOST_STALL_RESET_FRESH_OUTPUT_GUARD_MS: f64 = 300.0;
+const LOCAL_DISPLAY_RECOVERY_POST_DECODE_FRESH_MS: f64 = 750.0;
 
 impl<THostBridge, TEventSink, TMediaBackend>
     XbxEngineRuntime<THostBridge, TEventSink, TMediaBackend>
@@ -209,6 +209,16 @@ where
                 Some("reconnectSettled:keyframeDeferred:keyframeInFlight".to_string());
             return;
         }
+        let transport_ready = self
+            .media_backend
+            .snapshot_runtime_stats()
+            .map(|stats| stats.transport_state == XbxEngineTransportStateDto::Connected)
+            .unwrap_or(false);
+        if !transport_ready {
+            self.snapshot.last_recovery_reason =
+                Some("reconnectSettled:keyframeDeferred:transportNotReady".to_string());
+            return;
+        }
         if last_keyframe_request_at_ms.is_some_and(|last| {
             (now_ms - last).max(0.0) < RECONNECT_SETTLED_KEYFRAME_MIN_INTERVAL_MS
         }) {
@@ -220,6 +230,11 @@ where
             if is_control_channel_not_ready_error(&error) {
                 self.snapshot.last_recovery_reason =
                     Some("reconnectSettled:keyframeDeferred:controlNotReady".to_string());
+                return;
+            }
+            if let Some(reason) = classify_keyframe_request_deferred_reason(&error) {
+                self.snapshot.last_recovery_reason =
+                    Some(format!("reconnectSettled:keyframeDeferred:{reason}"));
                 return;
             }
             self.emit_error("requestReconnectSettledKeyframeFailed", error.to_string());
@@ -289,14 +304,24 @@ where
             return;
         }
         // 仅在 host present 已经进入运行态后才允许 host-stall 自愈重置。
-        // presenter reset 会把 epoch 清零，因此在 `displayTickEpoch/presentEpoch` 已归零后继续 reset
+        // presenter reset 会把 epoch 清零，因此在 `displayTickEpoch/hostFramePresentEpoch` 已归零后继续 reset
         // 只会把窗口反复打回未启动状态。
         if owner_reason == Some("hostPresentStalled")
             && (runtime_stats.host_display_tick_epoch == 0
-                || runtime_stats.video_present_epoch == 0)
+                || runtime_stats.host_frame_present_epoch == 0)
         {
             self.snapshot.last_recovery_reason =
                 Some("hostPresentStalled:presentLoopNotRunning".to_string());
+            return;
+        }
+        if matches!(
+            owner_reason,
+            Some("displaySupplyCritical" | "displaySupplyDegraded")
+        ) && (runtime_stats.host_display_tick_epoch == 0
+            || runtime_stats.host_frame_present_epoch == 0)
+        {
+            self.snapshot.last_recovery_reason =
+                Some("displayRecoverySkipped:presentLoopNotRunning".to_string());
             return;
         }
         if matches!(self.state, XbxEngineRuntimeState::Reconnecting) {
@@ -304,42 +329,14 @@ where
         }
         let now = now_ms_f64();
         self.update_host_stall_renderer_submit_guard(runtime_stats, now);
-        if owner_reason == Some("hostPresentStalled") {
-            if self
-                .health
-                .last_renderer_submit_advanced_at_ms
-                .is_some_and(|last| (now - last).max(0.0) < HOST_STALL_RESET_FRESH_OUTPUT_GUARD_MS)
-            {
-                self.snapshot.last_recovery_reason =
-                    Some("hostPresentStalled:resetDeferred:freshRendererSubmit".to_string());
-                return;
-            }
-            if self
-                .snapshot
-                .host_present_latest_render_slot_at_ms
-                .is_some_and(|last| (now - last).max(0.0) < HOST_STALL_RESET_FRESH_OUTPUT_GUARD_MS)
-            {
-                self.snapshot.last_recovery_reason =
-                    Some("hostPresentStalled:resetDeferred:freshHostRenderSlot".to_string());
-                return;
-            }
-            if self
-                .snapshot
-                .frame_decoded_time_ms
-                .is_some_and(|last| (now - last).max(0.0) < HOST_STALL_RESET_FRESH_OUTPUT_GUARD_MS)
-            {
-                self.snapshot.last_recovery_reason =
-                    Some("hostPresentStalled:resetDeferred:freshDecode".to_string());
-                return;
-            }
-            if runtime_stats
-                .video_anchor_clean_observed_at_ms
-                .is_some_and(|last| (now - last).max(0.0) < HOST_STALL_RESET_FRESH_OUTPUT_GUARD_MS)
-            {
-                self.snapshot.last_recovery_reason =
-                    Some("hostPresentStalled:resetDeferred:freshCleanAnchor".to_string());
-                return;
-            }
+        if matches!(
+            owner_reason,
+            Some("displaySupplyCritical" | "displaySupplyDegraded")
+        ) && !self.has_fresh_post_decode_display_recovery_evidence(runtime_stats, now)
+        {
+            self.snapshot.last_recovery_reason =
+                Some("displayRecoverySkipped:stalePostDecodeEvidence".to_string());
+            return;
         }
         const COOLDOWN_MS: f64 = 2_500.0;
         if self
@@ -394,6 +391,25 @@ where
         }
         self.health.last_renderer_submit_count_total =
             runtime_stats.video_renderer_submit_count_total;
+    }
+
+    fn has_fresh_post_decode_display_recovery_evidence(
+        &self,
+        runtime_stats: &crate::XbxEngineMediaRuntimeStats,
+        now_ms: f64,
+    ) -> bool {
+        let renderer_submit_fresh =
+            self.health
+                .last_renderer_submit_advanced_at_ms
+                .is_some_and(|last_at_ms| {
+                    now_ms - last_at_ms <= LOCAL_DISPLAY_RECOVERY_POST_DECODE_FRESH_MS
+                });
+        let host_mailbox_submit_fresh = runtime_stats
+            .latest_host_mailbox_submit_time_ms
+            .is_some_and(|last_at_ms| {
+                now_ms - last_at_ms <= LOCAL_DISPLAY_RECOVERY_POST_DECODE_FRESH_MS
+            });
+        renderer_submit_fresh || host_mailbox_submit_fresh
     }
 
     fn maybe_consume_pending_runtime_recovery_action(
@@ -1921,6 +1937,19 @@ fn is_control_channel_not_ready_error(error: &XbxEngineRuntimeError) -> bool {
     let normalized = error.to_string().to_ascii_lowercase();
     normalized.contains("xbxenginertccontrolchannelnotreadyforkeyframe")
         || normalized.contains("xbxenginertccontrolchannelnotreadyfordecoderreset")
+}
+
+fn classify_keyframe_request_deferred_reason(
+    error: &XbxEngineRuntimeError,
+) -> Option<&'static str> {
+    let normalized = error.to_string().to_ascii_lowercase();
+    if normalized.contains("xbxenginertcvideokeyframedeferred:videortcpfeedbacktransportnotready") {
+        return Some("transportNotReady");
+    }
+    if normalized.contains("xbxenginertcvideokeyframedeferred:videortcpfeedbacktargetpending") {
+        return Some("feedbackTargetPending");
+    }
+    None
 }
 
 #[cfg(test)]

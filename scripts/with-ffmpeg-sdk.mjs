@@ -127,7 +127,8 @@ function ensureLegacyRuntimeAlias({ sdkRoot }) {
     return;
   }
 
-  const aliasPath = resolve(tmpdir(), ffmpegVersion, runtimeSuffix);
+  // Keep compatibility with historical install_name entries that hardcode /tmp.
+  const aliasPath = resolve("/tmp", ffmpegVersion, runtimeSuffix);
   const aliasParent = resolve(aliasPath, "..");
   mkdirSync(aliasParent, { recursive: true });
 
@@ -165,9 +166,7 @@ function ensureRuntimeAssets({ workspaceRoot, libDir, binDir }) {
   ];
 
   for (const targetDir of targetDirs) {
-    if (!existsSync(targetDir)) {
-      continue;
-    }
+    mkdirSync(targetDir, { recursive: true });
 
     if (platform === "darwin") {
       const dylibEntries = readdirSync(libDir).filter(name => name.endsWith(".dylib"));

@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { InputPacketEncoder } from './InputPacketEncoder'
 import { DEFAULT_GAMEPAD_FRAME } from '../../domain/input'
+import { InputPacketEncoder } from './InputPacketEncoder'
 
-describe('InputPacketEncoder', () => {
+describe('inputPacketEncoder', () => {
   it('inverts left and right stick Y when encoding packet', () => {
     const encoder = new InputPacketEncoder(1)
     const frame = DEFAULT_GAMEPAD_FRAME()

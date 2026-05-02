@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest'
 import type { IceCandidateLike } from '../../player'
+import { describe, expect, it } from 'vitest'
 import { applyIceCandidatePolicy } from './ice-candidate-policy'
 
 function buildCandidate(raw: string): IceCandidateLike {

@@ -43,3 +43,24 @@ fn recovery_observation_snapshot_blocks_transport_await_reconnect_when_keyframe_
 
     assert!(!snapshot.allows_transport_await_reconnect_fallback(2_200.0));
 }
+
+#[test]
+fn recovery_observation_snapshot_ignores_stale_decode_and_render_presence() {
+    let snapshot = RecoveryObservationSnapshot {
+        ingress_active: false,
+        reassembly_active: false,
+        decode_active: false,
+        render_active: false,
+        rtc_connectivity_connected: true,
+        reconnect_in_flight: false,
+        stable_serving: false,
+        last_media_progress_at: Some(1_000.0),
+        last_video_decode_ok_at: Some(1_000.0),
+        last_keyframe_requested_at: Some(1_100.0),
+        last_keyframe_decoded_at: None,
+        local_decoder_reset_count_in_window: 1,
+        keyframe_request_count_in_window: 1,
+    };
+
+    assert!(!snapshot.allows_transport_await_reconnect_fallback(2_200.0));
+}

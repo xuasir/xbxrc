@@ -13,7 +13,9 @@ use crate::api::backend::{
     XbxEngineVideoFrameDropObservation,
 };
 use crate::media::video::render::renderer::XbxRenderState;
-use crate::transport::rtc::connection::{RtcConnectionService, VideoRecoveryRequestOutcome};
+use crate::transport::rtc::connection::{
+    RtcConnectionService, VideoRecoveryRequestOutcome, VIDEO_RTCP_FEEDBACK_TARGET_PENDING_REASON,
+};
 use crate::transport::rtc::facts::{CommandResultStatus, TransportCommand, TransportFact};
 use crate::transport::rtc::pipeline::supervisor::{spawn_media_supervisor, MediaSupervisorContext};
 use crate::transport::rtc::protocol::data_channel_state::{
@@ -48,11 +50,13 @@ fn map_video_recovery_request_result_to_command_status(
         Ok(
             VideoRecoveryRequestOutcome::RequestedPli | VideoRecoveryRequestOutcome::RequestedFir,
         ) => CommandResultStatus::Succeeded,
-        Ok(VideoRecoveryRequestOutcome::Suppressed) => CommandResultStatus::Deferred {
-            reason: "sameFamilyTransportStageCoalesced".to_string(),
-        },
+        Ok(VideoRecoveryRequestOutcome::FeedbackTransportNotReady) => {
+            CommandResultStatus::Deferred {
+                reason: "familyDeferred:videoRtcpFeedbackTransportNotReady".to_string(),
+            }
+        }
         Ok(VideoRecoveryRequestOutcome::FeedbackTargetPending) => CommandResultStatus::Deferred {
-            reason: "familyDeferred:videoRtcpFeedbackTargetPending".to_string(),
+            reason: format!("familyDeferred:{VIDEO_RTCP_FEEDBACK_TARGET_PENDING_REASON}"),
         },
         Err(error) => CommandResultStatus::Failed {
             error: error.to_string(),
@@ -396,7 +400,21 @@ impl XbxMediaStackPort for XbxActiveMediaStack {
             },
             status,
         );
-        result.map(|_| ())
+        match result {
+            Ok(VideoRecoveryRequestOutcome::RequestedPli) => Ok(()),
+            Ok(VideoRecoveryRequestOutcome::RequestedFir) => Ok(()),
+            Ok(VideoRecoveryRequestOutcome::FeedbackTransportNotReady) => {
+                Err(XbxEngineRuntimeError::new(
+                    "xbxEngineRtcVideoKeyframeDeferred:videoRtcpFeedbackTransportNotReady",
+                ))
+            }
+            Ok(VideoRecoveryRequestOutcome::FeedbackTargetPending) => {
+                Err(XbxEngineRuntimeError::new(format!(
+                    "xbxEngineRtcVideoKeyframeDeferred:{VIDEO_RTCP_FEEDBACK_TARGET_PENDING_REASON}"
+                )))
+            }
+            Err(error) => Err(error),
+        }
     }
 
     fn request_decoder_reset(&mut self) -> Result<(), XbxEngineRuntimeError> {
@@ -433,6 +451,7 @@ mod tests {
     use super::runtime_stats::merge_media_snapshot_into_runtime_stats;
     use crate::api::backend::XbxEngineMediaRuntimeStats;
     use crate::transport::rtc::connection::VideoRecoveryRequestOutcome;
+    use crate::transport::rtc::connection::VIDEO_RTCP_FEEDBACK_TARGET_PENDING_REASON;
     use crate::transport::rtc::facts::CommandResultStatus;
     use crate::transport::rtc::stream::runtime_state::RtcMediaIngressSnapshot;
     use crate::XbxEngineRuntimeError;
@@ -558,6 +577,19 @@ mod tests {
     }
 
     #[test]
+    fn map_video_recovery_request_result_feedback_transport_not_ready_is_deferred() {
+        let status = map_video_recovery_request_result_to_command_status(&Ok(
+            VideoRecoveryRequestOutcome::FeedbackTransportNotReady,
+        ));
+        assert_eq!(
+            status,
+            CommandResultStatus::Deferred {
+                reason: "familyDeferred:videoRtcpFeedbackTransportNotReady".to_string()
+            }
+        );
+    }
+
+    #[test]
     fn map_video_recovery_request_result_feedback_target_pending_is_deferred() {
         let status = map_video_recovery_request_result_to_command_status(&Ok(
             VideoRecoveryRequestOutcome::FeedbackTargetPending,
@@ -565,7 +597,7 @@ mod tests {
         assert_eq!(
             status,
             CommandResultStatus::Deferred {
-                reason: "familyDeferred:videoRtcpFeedbackTargetPending".to_string()
+                reason: format!("familyDeferred:{VIDEO_RTCP_FEEDBACK_TARGET_PENDING_REASON}")
             }
         );
     }

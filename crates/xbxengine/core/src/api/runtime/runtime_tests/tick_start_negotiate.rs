@@ -159,7 +159,7 @@ fn runtime_tick_presents_frame_before_snapshotting_runtime_stats() {
             }),
             host_no_pending_pressure_level: Some("normal".to_string()),
             host_no_pending_streak: 0,
-            video_present_submit_count_total: 1,
+            host_mailbox_enqueue_count_total: 1,
             ..Default::default()
         },
     )
@@ -181,7 +181,7 @@ fn runtime_tick_presents_frame_before_snapshotting_runtime_stats() {
 
     assert_eq!(
         call_order.lock().expect("lock call order").as_slice(),
-        &["drain_frames", "present", "snapshot"]
+        &["take_latest_frame", "present", "snapshot"]
     );
     assert_eq!(
         runtime.snapshot().frame_rendered_time_ms,
@@ -213,7 +213,7 @@ fn runtime_tick_prioritizes_present_before_budgeted_rumble_work() {
             latest_video_decode_ok_time_ms: Some(rendered_at_ms - 12.0),
             host_no_pending_pressure_level: Some("normal".to_string()),
             host_no_pending_streak: 0,
-            video_present_submit_count_total: 1,
+            host_mailbox_enqueue_count_total: 1,
             ..Default::default()
         },
     )
@@ -252,7 +252,7 @@ fn runtime_tick_prioritizes_present_before_budgeted_rumble_work() {
     assert_eq!(
         call_order.lock().expect("lock call order").as_slice(),
         &[
-            "drain_frames",
+            "take_latest_frame",
             "present",
             "snapshot",
             "rumble_submit",
@@ -862,6 +862,103 @@ fn reconnect_settled_keyframe_is_deferred_during_cooldown_window() {
     assert_eq!(
         runtime.snapshot().last_recovery_reason.as_deref(),
         Some("reconnectSettled:keyframeDeferred:cooldown")
+    );
+}
+
+#[test]
+fn reconnect_settled_keyframe_is_deferred_when_transport_is_still_connecting() {
+    let requests = Rc::new(RefCell::new(Vec::new()));
+    let events = Rc::new(RefCell::new(Vec::new()));
+    let backend = ScriptedMediaBackend::new(
+        XbxEngineMediaNegotiation {
+            local_offer_sdp: "offer".to_string(),
+            local_candidates: Vec::new(),
+            surface_id: "surface:viewport-1".to_string(),
+            video_width: 1280,
+            video_height: 720,
+            first_frame_packet_arrival_time_ms: None,
+            frame_decoded_time_ms: None,
+            frame_rendered_time_ms: None,
+            input_status: XbxEngineInputStatus::default(),
+        },
+        XbxEngineMediaRuntimeStats {
+            transport_state: XbxEngineTransportStateDto::Connecting,
+            ..Default::default()
+        },
+    );
+    let keyframe_calls = backend.keyframe_request_calls.clone();
+    let mut runtime = XbxEngineRuntime::with_media_backend(
+        XbxEngineRuntimeConfig::default(),
+        TestHostBridge::new(requests).without_default_remote_end_of_candidates(),
+        TestEventSink::new(events),
+        backend,
+    );
+    runtime
+        .start(session(), viewport(), 1.0, None, None)
+        .expect("runtime start should succeed");
+
+    runtime
+        .request_reconnect(
+            XbxEngineReconnectReasonDto::MediaStalled,
+            XbxEngineReconnectTriggerSource::Policy,
+        )
+        .expect("runtime reconnect should succeed");
+
+    assert_eq!(*keyframe_calls.lock().expect("lock keyframe calls"), 0);
+    assert_eq!(
+        runtime.snapshot().last_recovery_reason.as_deref(),
+        Some("reconnectSettled:keyframeDeferred:transportNotReady")
+    );
+}
+
+#[test]
+fn reconnect_settled_keyframe_is_deferred_when_feedback_target_is_pending() {
+    let requests = Rc::new(RefCell::new(Vec::new()));
+    let events = Rc::new(RefCell::new(Vec::new()));
+    let backend = ScriptedMediaBackend::new(
+        XbxEngineMediaNegotiation {
+            local_offer_sdp: "offer".to_string(),
+            local_candidates: Vec::new(),
+            surface_id: "surface:viewport-1".to_string(),
+            video_width: 1280,
+            video_height: 720,
+            first_frame_packet_arrival_time_ms: None,
+            frame_decoded_time_ms: None,
+            frame_rendered_time_ms: None,
+            input_status: XbxEngineInputStatus::default(),
+        },
+        XbxEngineMediaRuntimeStats {
+            transport_state: XbxEngineTransportStateDto::Connected,
+            ..Default::default()
+        },
+    );
+    backend
+        .fail_video_keyframe
+        .lock()
+        .expect("lock keyframe failure message")
+        .replace("xbxEngineRtcVideoKeyframeDeferred:videoRtcpFeedbackTargetPending".to_string());
+    let keyframe_calls = backend.keyframe_request_calls.clone();
+    let mut runtime = XbxEngineRuntime::with_media_backend(
+        XbxEngineRuntimeConfig::default(),
+        TestHostBridge::new(requests).without_default_remote_end_of_candidates(),
+        TestEventSink::new(events),
+        backend,
+    );
+    runtime
+        .start(session(), viewport(), 1.0, None, None)
+        .expect("runtime start should succeed");
+
+    runtime
+        .request_reconnect(
+            XbxEngineReconnectReasonDto::MediaStalled,
+            XbxEngineReconnectTriggerSource::Policy,
+        )
+        .expect("runtime reconnect should succeed");
+
+    assert_eq!(*keyframe_calls.lock().expect("lock keyframe calls"), 0);
+    assert_eq!(
+        runtime.snapshot().last_recovery_reason.as_deref(),
+        Some("reconnectSettled:keyframeDeferred:feedbackTargetPending")
     );
 }
 

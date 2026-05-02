@@ -289,7 +289,8 @@ onBeforeUnmount(() => {
 
 // 注册 LT/RT 区域切换
 function registerTabSwitch(): void {
-  if (disposeTabSwitch !== undefined) return
+  if (disposeTabSwitch !== undefined)
+    return
 
   disposeTabSwitch = navigationEngine.onTabSwitch((direction) => {
     // 动态构建当前可见的 section 列表
@@ -297,7 +298,8 @@ function registerTabSwitch(): void {
       .map(id => document.querySelector(`[data-nav-section="${id}"]`) as HTMLElement | null)
       .filter((el): el is HTMLElement => el !== null)
 
-    if (visibleSections.length === 0) return
+    if (visibleSections.length === 0)
+      return
 
     // 查找当前焦点所在 section 的索引
     const focused = document.querySelector('[data-focused="true"]') as HTMLElement | null
@@ -361,7 +363,7 @@ function unregisterTabSwitch(): void {
         :scope-id="SPATIAL_NAV_SCOPE_IDS.appShell"
         :aria-label="t('xcloudPage.action.ariaLabel')"
         @click="handlePrimaryAction"
-        >
+      >
         {{ t('xcloudPage.actions.refresh') }}
       </Focusable>
     </section>

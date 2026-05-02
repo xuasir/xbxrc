@@ -2,6 +2,7 @@ use bytes::Bytes;
 use std::time::Instant;
 
 use super::h264::inspection::H264AccessUnitInspection;
+use crate::api::backend::XbxEnginePresentationValueRole;
 use crate::media::video::ingress::budget::FrameBudgetContext;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -82,10 +83,11 @@ pub struct AssembledVideoFrame {
     pub height: u32,
 
     pub rtp_timestamp: u32,
+    pub recovery_epoch_tag: Option<u64>,
+    pub recovery_owner_rtp_timestamp: Option<u32>,
     pub clean_anchor_commit_recovery_epoch: Option<u64>,
     #[allow(dead_code)]
     pub first_packet_sequence: Option<u16>,
-    pub frame_playout_deadline_at_ms: Option<f64>,
     pub frame_recovery_disposition: FrameRecoveryDisposition,
     pub frame_unrecoverable_reason: Option<String>,
 
@@ -108,9 +110,10 @@ impl AssembledVideoFrame {
             width: self.width,
             height: self.height,
             rtp_timestamp: self.rtp_timestamp,
+            recovery_epoch_tag: self.recovery_epoch_tag,
+            recovery_owner_rtp_timestamp: self.recovery_owner_rtp_timestamp,
             clean_anchor_commit_recovery_epoch: self.clean_anchor_commit_recovery_epoch,
             first_packet_sequence: self.first_packet_sequence,
-            frame_playout_deadline_at_ms: self.frame_playout_deadline_at_ms,
             frame_recovery_disposition: self.frame_recovery_disposition,
             frame_unrecoverable_reason: self.frame_unrecoverable_reason,
             target_playout_instant,
@@ -133,10 +136,11 @@ pub struct EncodedFrame {
     pub height: u32,
 
     pub rtp_timestamp: u32,
+    pub recovery_epoch_tag: Option<u64>,
+    pub recovery_owner_rtp_timestamp: Option<u32>,
     pub clean_anchor_commit_recovery_epoch: Option<u64>,
     #[allow(dead_code)]
     pub first_packet_sequence: Option<u16>,
-    pub frame_playout_deadline_at_ms: Option<f64>,
     pub frame_recovery_disposition: FrameRecoveryDisposition,
     pub frame_unrecoverable_reason: Option<String>,
 
@@ -151,7 +155,11 @@ pub struct DecodedFrame {
     pub pts: Instant,
     pub rtp_timestamp: u32,
     pub is_keyframe: bool,
+    #[allow(dead_code)]
+    pub recovery_epoch_tag: Option<u64>,
+    pub recovery_owner_rtp_timestamp: Option<u32>,
     pub clean_anchor_commit_recovery_epoch: Option<u64>,
+    pub presentation_value_role: Option<XbxEnginePresentationValueRole>,
     pub(crate) budget: FrameBudgetContext,
     pub frame_recovery_disposition: FrameRecoveryDisposition,
     pub frame_unrecoverable_reason: Option<String>,
@@ -161,6 +169,7 @@ pub struct DecodedFrame {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum FrameRecoveryDisposition {
+    Steady,
     Repairing,
     UnrecoverableLate,
     UnrecoverableReferenceChain,
@@ -169,19 +178,80 @@ pub enum FrameRecoveryDisposition {
 impl FrameRecoveryDisposition {
     pub fn as_str(self) -> &'static str {
         match self {
+            Self::Steady => "steady",
             Self::Repairing => "repairing",
             Self::UnrecoverableLate => "abandonedLate",
             Self::UnrecoverableReferenceChain => "abandonedReferenceChain",
         }
     }
 
+    pub fn render_label(self) -> Option<&'static str> {
+        match self {
+            Self::Steady => None,
+            _ => Some(self.as_str()),
+        }
+    }
+
     pub fn ingress_reason(self) -> Option<&'static str> {
         match self {
+            Self::Steady => None,
             Self::Repairing => None,
             Self::UnrecoverableLate => Some("late"),
             Self::UnrecoverableReferenceChain => Some("referenceChain"),
         }
     }
+}
+
+pub(crate) fn derive_presentation_value_role(
+    clean_anchor_commit_recovery_epoch: Option<u64>,
+    recovery_epoch_tag: Option<u64>,
+    recovery_owner_rtp_timestamp: Option<u32>,
+    frame_recovery_disposition: FrameRecoveryDisposition,
+    frame_unrecoverable_reason: Option<&str>,
+    budget: FrameBudgetContext,
+) -> XbxEnginePresentationValueRole {
+    if frame_unrecoverable_reason.is_some() {
+        return XbxEnginePresentationValueRole::Disposable;
+    }
+    if clean_anchor_commit_recovery_epoch.is_some() {
+        return XbxEnginePresentationValueRole::FreshAnchor;
+    }
+    if matches!(
+        budget.dynamic_repair_value_tier(),
+        crate::media::video::ingress::budget::DynamicRepairValueTier::Continuation
+    ) || (recovery_epoch_tag.is_some()
+        && (recovery_owner_rtp_timestamp.is_some()
+            || matches!(
+                frame_recovery_disposition,
+                FrameRecoveryDisposition::Repairing
+            )))
+    {
+        return XbxEnginePresentationValueRole::RecoveryContinuation;
+    }
+    if matches!(
+        budget.dynamic_repair_value_tier(),
+        crate::media::video::ingress::budget::DynamicRepairValueTier::Anchor
+            | crate::media::video::ingress::budget::DynamicRepairValueTier::Supply
+    ) || matches!(frame_recovery_disposition, FrameRecoveryDisposition::Steady)
+    {
+        return XbxEnginePresentationValueRole::SteadyContinuation;
+    }
+    XbxEnginePresentationValueRole::Disposable
+}
+
+pub(crate) fn decoded_presentation_value_role(
+    frame: &DecodedFrame,
+) -> XbxEnginePresentationValueRole {
+    frame.presentation_value_role.unwrap_or_else(|| {
+        derive_presentation_value_role(
+            frame.clean_anchor_commit_recovery_epoch,
+            frame.recovery_epoch_tag,
+            frame.recovery_owner_rtp_timestamp,
+            frame.frame_recovery_disposition,
+            frame.frame_unrecoverable_reason.as_deref(),
+            frame.budget,
+        )
+    })
 }
 
 #[cfg(test)]

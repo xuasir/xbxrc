@@ -88,7 +88,6 @@ function formatConnection(connection: string | null): string {
   }
 }
 
-
 const isGamepadTestRumbleDisabled = computed(() => {
   const snapshot = props.snapshot
   if (!snapshot) {
@@ -301,7 +300,6 @@ async function handleResumeDeviceSampling(deviceId: string): Promise<void> {
       </div>
     </div>
   </Transition>
-
 </template>
 
 <style scoped>

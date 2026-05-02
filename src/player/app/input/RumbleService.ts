@@ -2,8 +2,8 @@ import type {
   GamepadRumbleEffectDto,
   GamepadRumbleTargetDto,
 } from '@shared/gamepad/contract'
-import { GAMEPAD_SLOT_IDS } from '@shared/gamepad/contract'
 import type { InputRuntimeConfig, VibrationStrengthPreset } from '../../domain/input'
+import { GAMEPAD_SLOT_IDS } from '@shared/gamepad/contract'
 import { rpc } from '../../../services/rpc'
 
 const GAMEPAD_RUMBLE_REPORT_TYPE = 128

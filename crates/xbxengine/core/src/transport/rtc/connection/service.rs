@@ -5,6 +5,7 @@ use std::sync::{Arc, Mutex};
 
 use crate::api::runtime::XbxEngineWebRtcRuntimeConfig;
 use crate::runtime_stats_sink::RuntimeStatsSink;
+#[cfg(test)]
 use crate::transport::rtc::connection::build_control_decoder_reset_payload;
 #[allow(unused_imports)]
 pub(super) use crate::transport::rtc::connection::builder::{
@@ -25,6 +26,8 @@ use xbxengine_protocol::XbxEngineTargetTypeDto;
 const PICTURE_RECOVERY_RESPONSE_WINDOW_MS: f64 = 960.0;
 const TWCC_WARMUP_FEEDBACK_INTERVAL_MS: u64 = 50;
 const TWCC_STABLE_FEEDBACK_INTERVAL_MS: u64 = 100;
+pub(crate) const VIDEO_RTCP_FEEDBACK_TARGET_PENDING_REASON: &str = "videoRtcpFeedbackTargetPending";
+const VIDEO_RTCP_FEEDBACK_TRANSPORT_NOT_READY_REASON: &str = "videoRtcpFeedbackTransportNotReady";
 
 /// PLI/FIR 依赖 TWCC 反馈目标；重连或轨未绑定时无目标，返回 pending 让上层按 deferred 语义处理。
 fn video_rtcp_recovery_feedback_media_ssrc_ready(
@@ -33,6 +36,11 @@ fn video_rtcp_recovery_feedback_media_ssrc_ready(
     twcc.preferred_video_feedback_target()
         .and_then(|(_, media_ssrc)| media_ssrc)
         .is_some()
+}
+
+fn video_rtcp_transport_ready(service: &RtcConnectionService) -> bool {
+    service.lifecycle_state == RtcConnectionLifecycleState::Connected
+        && service.last_selected_pair_diagnostic.is_some()
 }
 
 pub(super) fn resolve_twcc_feedback_interval_target_ms(
@@ -83,7 +91,7 @@ enum VideoRecoveryTransportStage {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum VideoRecoveryRequestOutcome {
-    Suppressed,
+    FeedbackTransportNotReady,
     FeedbackTargetPending,
     RequestedPli,
     RequestedFir,
@@ -92,7 +100,7 @@ pub(crate) enum VideoRecoveryRequestOutcome {
 impl VideoRecoveryRequestOutcome {
     pub(crate) fn escalation_action_label(self) -> Option<String> {
         match self {
-            Self::Suppressed => None,
+            Self::FeedbackTransportNotReady => None,
             Self::FeedbackTargetPending => None,
             Self::RequestedPli => Some("requestPli".to_string()),
             Self::RequestedFir => Some("requestFir".to_string()),
@@ -226,25 +234,11 @@ impl RtcConnectionService {
         self.control_service.set_keyboard_pointer_enabled(enabled);
     }
 
-    pub(crate) fn request_video_pli(
-        &mut self,
-        runtime_stats: &Arc<Mutex<XbxEngineMediaRuntimeStats>>,
-    ) -> Result<(), XbxEngineRuntimeError> {
-        self.request_video_recovery_pli(runtime_stats).map(|_| ())
-    }
-
     pub(crate) fn request_video_pli_with_outcome(
         &mut self,
         runtime_stats: &Arc<Mutex<XbxEngineMediaRuntimeStats>>,
     ) -> Result<VideoRecoveryRequestOutcome, XbxEngineRuntimeError> {
         self.request_video_recovery_pli(runtime_stats)
-    }
-
-    pub(crate) fn request_video_fir(
-        &mut self,
-        runtime_stats: &Arc<Mutex<XbxEngineMediaRuntimeStats>>,
-    ) -> Result<(), XbxEngineRuntimeError> {
-        self.request_video_recovery_fir(runtime_stats).map(|_| ())
     }
 
     pub(crate) fn request_video_fir_with_outcome(
@@ -254,7 +248,7 @@ impl RtcConnectionService {
         self.request_video_recovery_fir(runtime_stats)
     }
 
-    #[allow(dead_code)]
+    #[cfg(test)]
     pub(crate) fn request_decoder_reset(
         &mut self,
         runtime_stats: &Arc<Mutex<XbxEngineMediaRuntimeStats>>,
@@ -277,7 +271,33 @@ impl RtcConnectionService {
         runtime_stats: &Arc<Mutex<XbxEngineMediaRuntimeStats>>,
     ) -> Result<VideoRecoveryRequestOutcome, XbxEngineRuntimeError> {
         self.sync_video_recovery_transport_state(runtime_stats);
+        if !video_rtcp_transport_ready(self) {
+            RuntimeStatsSink::new(runtime_stats.clone()).record_feedback_target_availability(
+                crate::transport::rtc::stats::now_ms_f64(),
+                "videoRtcpFeedback",
+                "unbound",
+                VIDEO_RTCP_FEEDBACK_TRANSPORT_NOT_READY_REASON,
+            );
+            self.sync_control_replay_runtime_stats(runtime_stats);
+            return Ok(VideoRecoveryRequestOutcome::FeedbackTransportNotReady);
+        }
         if !video_rtcp_recovery_feedback_media_ssrc_ready(&mut self.controlled_twcc_feedback) {
+            if let Some(receiver_id) = self
+                .peer_connection
+                .as_mut()
+                .and_then(|peer_connection| peer_connection.get_receivers().next())
+            {
+                self.controlled_twcc_feedback
+                    .prime_video_feedback_receiver_hint(receiver_id, runtime_stats);
+            }
+        }
+        if !video_rtcp_recovery_feedback_media_ssrc_ready(&mut self.controlled_twcc_feedback) {
+            RuntimeStatsSink::new(runtime_stats.clone()).record_feedback_target_availability(
+                crate::transport::rtc::stats::now_ms_f64(),
+                "videoRtcpFeedback",
+                "unbound",
+                VIDEO_RTCP_FEEDBACK_TARGET_PENDING_REASON,
+            );
             self.sync_control_replay_runtime_stats(runtime_stats);
             return Ok(VideoRecoveryRequestOutcome::FeedbackTargetPending);
         }
@@ -295,6 +315,16 @@ impl RtcConnectionService {
         runtime_stats: &Arc<Mutex<XbxEngineMediaRuntimeStats>>,
     ) -> Result<VideoRecoveryRequestOutcome, XbxEngineRuntimeError> {
         self.sync_video_recovery_transport_state(runtime_stats);
+        if !video_rtcp_transport_ready(self) {
+            RuntimeStatsSink::new(runtime_stats.clone()).record_feedback_target_availability(
+                crate::transport::rtc::stats::now_ms_f64(),
+                "videoRtcpFeedback",
+                "unbound",
+                VIDEO_RTCP_FEEDBACK_TRANSPORT_NOT_READY_REASON,
+            );
+            self.sync_control_replay_runtime_stats(runtime_stats);
+            return Ok(VideoRecoveryRequestOutcome::FeedbackTransportNotReady);
+        }
         self.send_video_full_intra_request(runtime_stats)?;
         self.sync_control_replay_runtime_stats(runtime_stats);
         self.video_recovery_transport_state.stage = VideoRecoveryTransportStage::FullIntraRequest;
@@ -338,6 +368,12 @@ impl RtcConnectionService {
             XbxEngineRuntimeError::new(format!("xbxEngineRtcWriteVideoPliFailed: {err}"))
         })?;
         let sent_at_ms = crate::transport::rtc::stats::now_ms_f64();
+        RuntimeStatsSink::new(runtime_stats.clone()).record_feedback_target_availability(
+            sent_at_ms,
+            "videoRtcpFeedback",
+            "ready",
+            "pliSent",
+        );
         self.record_video_recovery_observation(
             runtime_stats,
             "rtcVideoPliRequested",
@@ -396,6 +432,12 @@ impl RtcConnectionService {
             XbxEngineRuntimeError::new(format!("xbxEngineRtcWriteVideoFirFailed: {err}"))
         })?;
         let sent_at_ms = crate::transport::rtc::stats::now_ms_f64();
+        RuntimeStatsSink::new(runtime_stats.clone()).record_feedback_target_availability(
+            sent_at_ms,
+            "videoRtcpFeedback",
+            "ready",
+            "firSent",
+        );
         self.record_video_recovery_observation(
             runtime_stats,
             "rtcVideoFirRequested",
@@ -560,7 +602,7 @@ impl RtcConnectionService {
         &mut self,
         runtime_stats: &Arc<Mutex<XbxEngineMediaRuntimeStats>>,
     ) -> Result<(), XbxEngineRuntimeError> {
-        crate::xbx_log_warn!("[xbxengine][rtc-connection] pump enter");
+        crate::xbx_log_debug!("[xbxengine][rtc-connection] pump enter");
         if self.pump_failure_injected {
             self.pump_failure_injected = false;
             let error = XbxEngineRuntimeError::new("xbxEngineRtcPumpInjectedFailure");
@@ -588,15 +630,23 @@ impl RtcConnectionService {
             if !self.selected_pair_snapshot_emitted
                 || pair_diagnostic != self.last_selected_pair_diagnostic
             {
-                crate::xbx_log_warn!(
-                    "[xbxengine][rtc-connection] selected_pair_snapshot {}",
-                    pair_diagnostic.as_deref().unwrap_or("none")
-                );
+                let pair_summary = pair_diagnostic.as_deref().unwrap_or("none");
+                if pair_summary.starts_with("state=Succeeded") {
+                    crate::xbx_log_warn!(
+                        "[xbxengine][rtc-connection] selected_pair_snapshot {}",
+                        pair_summary
+                    );
+                } else {
+                    crate::xbx_log_debug!(
+                        "[xbxengine][rtc-connection] selected_pair_snapshot {}",
+                        pair_summary
+                    );
+                }
                 self.last_selected_pair_diagnostic = pair_diagnostic;
                 self.selected_pair_snapshot_emitted = true;
             }
         }
-        crate::xbx_log_warn!("[xbxengine][rtc-connection] pump after io_runtime");
+        crate::xbx_log_debug!("[xbxengine][rtc-connection] pump after io_runtime");
         self.drain_peer_events(runtime_stats)?;
         self.drain_peer_reads_core(runtime_stats)?;
         if let Some(target_kbps) = self.pending_target_remb_kbps {
@@ -608,7 +658,7 @@ impl RtcConnectionService {
                 let _ = self.request_target_remb_kbps(target_kbps, runtime_stats);
             }
         }
-        crate::xbx_log_warn!("[xbxengine][rtc-connection] pump after drain peer events/reads");
+        crate::xbx_log_debug!("[xbxengine][rtc-connection] pump after drain peer events/reads");
         self.try_send_message_handshake(runtime_stats)?;
         self.maybe_adjust_twcc_feedback_interval(runtime_stats);
         self.run_delayed_control_actions(runtime_stats)?;
@@ -617,7 +667,7 @@ impl RtcConnectionService {
         RuntimeStatsSink::new(runtime_stats.clone())
             .record_picture_recovery_episode_timeout(crate::transport::rtc::stats::now_ms_f64());
         self.refresh_transport_metrics(runtime_stats);
-        crate::xbx_log_warn!("[xbxengine][rtc-connection] pump exit");
+        crate::xbx_log_debug!("[xbxengine][rtc-connection] pump exit");
         Ok(())
     }
 

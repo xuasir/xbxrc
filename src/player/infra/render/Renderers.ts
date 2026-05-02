@@ -30,6 +30,7 @@ abstract class BaseCanvasVideoProcessor {
     contrast: 100,
     saturation: 100,
   }
+
   protected isStopped = false
   protected animFrameId: number | null = null
   protected frameCallback: FrameCallbackScheduler

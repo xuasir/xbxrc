@@ -4,8 +4,8 @@ import type { PlayerClientOptions } from '../domain/config'
 import type { GamepadFrame, InputRuntimeConfig } from '../domain/input'
 import type { AudioRuntimeConfig, RendererRuntimeConfig, StreamStats } from '../domain/media'
 import type {
-  ControlChannelHealthSnapshot,
   ConnectParams,
+  ControlChannelHealthSnapshot,
   CreateOfferOptions,
   IceCandidateLike,
   KeyframeRequestResult,
@@ -146,6 +146,7 @@ export class PlayerClient {
     return await new Promise<Array<IceCandidateLike>>((resolve) => {
       let settled = false
       let quietTimerId: number | null = null
+      let timeoutId = 0
 
       const clearQuietTimer = (): void => {
         if (quietTimerId !== null) {
@@ -154,7 +155,7 @@ export class PlayerClient {
         }
       }
 
-      const finish = (): void => {
+      function finish(): void {
         if (settled) {
           return
         }
@@ -166,7 +167,7 @@ export class PlayerClient {
         resolve(this.getIceCandidates())
       }
 
-      const scheduleQuietFinish = (): void => {
+      function scheduleQuietFinish(): void {
         if (this.getIceCandidates().length === 0) {
           return
         }
@@ -175,7 +176,7 @@ export class PlayerClient {
         quietTimerId = window.setTimeout(finish, 150)
       }
 
-      const handleIceCandidate = (event: RTCPeerConnectionIceEvent): void => {
+      function handleIceCandidate(event: RTCPeerConnectionIceEvent): void {
         if (event.candidate === null) {
           finish()
           return
@@ -183,13 +184,13 @@ export class PlayerClient {
         scheduleQuietFinish()
       }
 
-      const handleGatheringStateChange = (): void => {
+      function handleGatheringStateChange(): void {
         if (peer.iceGatheringState === 'complete') {
           finish()
         }
       }
 
-      const timeoutId = window.setTimeout(finish, timeoutMs)
+      timeoutId = window.setTimeout(finish, timeoutMs)
       peer.addEventListener('icecandidate', handleIceCandidate)
       peer.addEventListener('icegatheringstatechange', handleGatheringStateChange)
       scheduleQuietFinish()

@@ -1,3 +1,4 @@
+#[cfg(test)]
 use crate::XbxEngineRuntimeError;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -108,6 +109,7 @@ impl RtcControlChannelService {
         self.state.keyboard_pointer_enabled = enabled;
     }
 
+    #[cfg(test)]
     pub(crate) fn request_decoder_reset(&mut self) -> Result<(), XbxEngineRuntimeError> {
         if self.is_control_ready() {
             self.state.pending_decoder_reset = false;
@@ -166,6 +168,7 @@ impl RtcControlChannelService {
         &self.state
     }
 
+    #[cfg(test)]
     fn mark_pending_replay(&mut self) {
         if self.state.pending_replay_since_ms.is_none() {
             self.state.pending_replay_since_ms = Some(crate::transport::rtc::stats::now_ms_f64());

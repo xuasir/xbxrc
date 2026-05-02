@@ -259,7 +259,10 @@ fn summarize_event(event: &ObservationEvent) -> ObservationPublication {
                 "action={} ts={} disposition={} reason={}",
                 observation.action,
                 observation.frame_rtp_timestamp,
-                observation.frame_recovery_disposition,
+                observation
+                    .frame_recovery_disposition
+                    .as_deref()
+                    .unwrap_or("none"),
                 observation
                     .frame_unrecoverable_reason
                     .as_deref()

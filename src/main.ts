@@ -1,7 +1,7 @@
 import { createApp } from 'vue'
 import App from './App.vue'
-import { i18n, setUiLocale } from './i18n'
 import { applyTheme } from './app/theme'
+import { i18n, setUiLocale } from './i18n'
 
 import { router } from './router'
 import { rpc } from './services/rpc'

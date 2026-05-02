@@ -91,6 +91,7 @@ export interface StreamStats {
   inboundVideoBytesTotal?: number
   inboundAudioBytesTotal?: number
   inboundVideoPacketCountTotal?: number
+  latestVideoPacketArrivalRtpTimestamp?: number
   videoTrackStatus?: {
     state: string
     videoWidth?: number | null
@@ -109,6 +110,7 @@ export interface StreamStats {
   videoDecoderRecoveryDetail?: string
   videoDecoderRecoveryStatus?: number
   videoDecoderRecoveryStateChangedAtMs?: number
+  latestVideoDecodeOkRtpTimestamp?: number
   videoRendererStalled?: boolean
   videoRendererStallBlocksPresentation?: boolean
   packetAgeMs?: number
@@ -123,13 +125,21 @@ export interface StreamStats {
   videoPacerDropCountTotal?: number
   videoRendererSubmitCountTotal?: number
   videoRendererDropCountTotal?: number
-  videoPresentDropCountTotal?: number
-  videoPresentOverwriteCountTotal?: number
-  videoPresentEnqueueCountTotal?: number
-  videoPresentSubmitCountTotal?: number
+  hostMailboxDropCountTotal?: number
+  hostMailboxOverwriteCountTotal?: number
+  hostMailboxEnqueueCountTotal?: number
   videoPresentDescriptorUploadMode?: string
   videoPresentDescriptorMetalImportCountTotal?: number
   videoPresentDescriptorCpuUploadCountTotal?: number
+  hostMailboxSubmitEpoch?: number
+  hostDisplayTickEpoch?: number
+  hostFramePresentEpoch?: number
+  hostMailboxLatestSubmitAtMs?: number
+  latestVideoHostSubmitRtpTimestamp?: number
+  submitAgeMs?: number
+  displayAgeMs?: number
+  hostViewGeneration?: number
+  latestHostViewCreatedAtMs?: number
   lastDisplayedFrameSeq?: number
   lastDisplayedFrameRtpTimestamp?: number
   lastDisplayedAtMs?: number

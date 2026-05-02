@@ -597,7 +597,8 @@ impl VideoEscalationController {
                 };
                 let immediate_keyframe_reason = matches!(
                     reason,
-                    VideoEscalationReason::TransportAwaitRecoveryKeyframe
+                    VideoEscalationReason::WaitKeyframe
+                        | VideoEscalationReason::TransportAwaitRecoveryKeyframe
                         | VideoEscalationReason::DisplaySupplyCritical
                         | VideoEscalationReason::TransportExpiredDeadline
                         | VideoEscalationReason::TransportSampleLoss
@@ -735,26 +736,25 @@ impl VideoEscalationController {
                     } else if persistent_wait_keyframe
                         && allow_wait_keyframe_stage_escalation
                         && self
-                            .last_decoder_reset_at
-                            .map_or(true, |last| last.elapsed() >= self.cooldown)
+                            .last_keyframe_request_at
+                            .map_or(true, |last| last.elapsed() >= self.keyframe_min_interval)
                     {
+                        self.clear_keyframe_epoch();
+                        self.try_enter_keyframe_epoch(reason_class, now);
+                        self.last_keyframe_request_at = Some(now);
                         self.pending_keyframe_signals = 0;
-                        self.pending_decoder_reset_signals = 0;
-                        self.reconnect_candidate_signals =
-                            self.reconnect_candidate_signals.saturating_add(1);
-                        if self.decoder_reset_budget_used < self.decoder_reset_budget_limit {
-                            RecoveryAction::RequestDecoderReset
+                        self.reconnect_candidate_signals = 0;
+                        if self.can_allocate_keyframe_attempt() {
+                            RecoveryAction::RequestFir
                         } else {
                             RecoveryAction::CooldownSuppressed
                         }
                     } else if persistent_wait_keyframe && allow_wait_keyframe_stage_escalation {
-                        self.coalesced_decoder_reset_in_flight()
+                        self.coalesced_keyframe_in_flight()
                     } else if hard_stuck_transport_await_recovery_keyframe
                         && allow_transport_await_stage_escalation
-                        && (self.decoder_reset_budget_used >= self.decoder_reset_budget_limit
-                            || self
-                                .last_decoder_reset_at
-                                .map_or(false, |last| last.elapsed() >= self.cooldown))
+                        && self.reconnect_candidate_signals
+                            >= CONNECTIVITY_DEADLINE_RECONNECT_HIT_THRESHOLD
                     {
                         self.pending_keyframe_signals = 0;
                         self.pending_decoder_reset_signals = 0;
@@ -769,22 +769,25 @@ impl VideoEscalationController {
                     } else if persistent_transport_await_recovery_keyframe
                         && allow_transport_await_stage_escalation
                         && self
-                            .last_decoder_reset_at
-                            .map_or(true, |last| last.elapsed() >= self.cooldown)
+                            .last_keyframe_request_at
+                            .map_or(true, |last| last.elapsed() >= self.keyframe_min_interval)
                     {
+                        self.clear_keyframe_epoch();
+                        self.try_enter_keyframe_epoch(reason_class, now);
+                        self.last_keyframe_request_at = Some(now);
                         self.pending_keyframe_signals = 0;
                         self.pending_decoder_reset_signals = 0;
                         self.reconnect_candidate_signals =
                             self.reconnect_candidate_signals.saturating_add(1);
-                        if self.decoder_reset_budget_used < self.decoder_reset_budget_limit {
-                            RecoveryAction::RequestDecoderReset
+                        if self.can_allocate_keyframe_attempt() {
+                            RecoveryAction::RequestFir
                         } else {
                             RecoveryAction::CooldownSuppressed
                         }
                     } else if persistent_transport_await_recovery_keyframe
                         && allow_transport_await_stage_escalation
                     {
-                        self.coalesced_decoder_reset_in_flight()
+                        self.coalesced_keyframe_in_flight()
                     } else if self.pending_keyframe_signals < self.keyframe_burst_threshold {
                         RecoveryAction::WaitForBurst
                     } else if self.try_release_keyframe_epoch_for_same_reason(reason_class, now) {
@@ -979,7 +982,8 @@ impl VideoEscalationController {
     ) -> bool {
         let can_auto_release = matches!(
             reason_class,
-            KeyframeReasonClass::DisplaySupplyCritical
+            KeyframeReasonClass::WaitKeyframe
+                | KeyframeReasonClass::DisplaySupplyCritical
                 | KeyframeReasonClass::AdapterIdleTimeout
                 | KeyframeReasonClass::TransportAwaitRecoveryKeyframe
         );

@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import type { EventUnsubscribe } from '@shared/events/client'
-import type { GamepadRuntimeSnapshotDto, LogicalPadSnapshotDto, LogicalButtonDto } from '@shared/gamepad/contract'
+import type { GamepadRuntimeSnapshotDto, LogicalButtonDto, LogicalPadSnapshotDto } from '@shared/gamepad/contract'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
-import SettingModalShell from './SettingModalShell.vue'
 import { events } from '../../services/events'
+import SettingModalShell from './SettingModalShell.vue'
 
 interface Props {
   open: boolean
@@ -289,4 +289,3 @@ onBeforeUnmount(() => {
   grid-template-columns: 1fr;
 }
 </style>
-

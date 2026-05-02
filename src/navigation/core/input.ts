@@ -42,7 +42,8 @@ export class InputDispatcher {
   }
 
   dispatch(intent: NavigationIntent, event?: Event): void {
-    if (!this.isEnabled) return
+    if (!this.isEnabled)
+      return
 
     for (const handler of this.handlers) {
       handler(intent, event)

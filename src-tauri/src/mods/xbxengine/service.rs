@@ -137,7 +137,14 @@ impl XbxEngineProvider for XbxEngineService {
     }
 
     async fn shutdown(&self) {
-        let _ = self.dispatch_control("StopRuntime", None).await;
+        let _ = self
+            .dispatch_control(
+                "StopRuntime",
+                Some(serde_json::json!({
+                    "reason": "appTerminate",
+                })),
+            )
+            .await;
         self.runtime_state.shutdown();
     }
 }

@@ -97,32 +97,43 @@ function parseCandidate(candidate: IceCandidateLike, idx: number): ParsedCandida
 
 function typeRank(type: ParsedCandidate['type']): number {
   // Rust 语义：host > srflx > relay > unknown（prflx 视作 unknown）
-  if (type === 'host') return 0
-  if (type === 'srflx') return 1
-  if (type === 'relay') return 2
+  if (type === 'host')
+    return 0
+  if (type === 'srflx')
+    return 1
+  if (type === 'relay')
+    return 2
   return 3
 }
 
 function familyRank(family: ParsedCandidate['family'], preferIpv6: boolean): number {
   if (preferIpv6) {
-    if (family === 'ipv6') return 0
-    if (family === 'ipv4') return 1
+    if (family === 'ipv6')
+      return 0
+    if (family === 'ipv4')
+      return 1
   }
   else {
-    if (family === 'ipv4') return 0
-    if (family === 'ipv6') return 1
+    if (family === 'ipv4')
+      return 0
+    if (family === 'ipv6')
+      return 1
   }
   return 2
 }
 
 function transportRank(transport: ParsedCandidate['transport'], preferUdp: boolean): number {
   if (preferUdp) {
-    if (transport === 'udp') return 0
-    if (transport === 'tcp') return 1
+    if (transport === 'udp')
+      return 0
+    if (transport === 'tcp')
+      return 1
   }
   else {
-    if (transport === 'tcp') return 0
-    if (transport === 'udp') return 1
+    if (transport === 'tcp')
+      return 0
+    if (transport === 'udp')
+      return 1
   }
   return 2
 }
@@ -130,20 +141,25 @@ function transportRank(transport: ParsedCandidate['transport'], preferUdp: boole
 function compareStable(a: ParsedCandidate, b: ParsedCandidate, config: IceCandidatePolicyConfig): number {
   const rankA = typeRank(a.type)
   const rankB = typeRank(b.type)
-  if (rankA !== rankB) return rankA - rankB
+  if (rankA !== rankB)
+    return rankA - rankB
 
   const famA = familyRank(a.family, config.preferIpv6)
   const famB = familyRank(b.family, config.preferIpv6)
-  if (famA !== famB) return famA - famB
+  if (famA !== famB)
+    return famA - famB
 
   const trA = transportRank(a.transport, config.preferUdp)
   const trB = transportRank(b.transport, config.preferUdp)
-  if (trA !== trB) return trA - trB
+  if (trA !== trB)
+    return trA - trB
 
   // relayBias：只在同 kind/family/transport 时对 relay/host 做微调，不破坏稳定排序主语义
   if (config.relayBias === 'prefer') {
-    if (a.type === 'relay' && b.type !== 'relay') return -1
-    if (b.type === 'relay' && a.type !== 'relay') return 1
+    if (a.type === 'relay' && b.type !== 'relay')
+      return -1
+    if (b.type === 'relay' && a.type !== 'relay')
+      return 1
   }
 
   return a.idx - b.idx

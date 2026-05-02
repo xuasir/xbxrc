@@ -928,7 +928,7 @@ fn service_pump_observes_data_channel_message_from_poll_read() {
         .expect("未 prime feedback target 前应返回 pending outcome");
     assert_eq!(
         outcome,
-        super::VideoRecoveryRequestOutcome::FeedbackTargetPending
+        super::VideoRecoveryRequestOutcome::FeedbackTransportNotReady
     );
 }
 
@@ -1172,7 +1172,9 @@ fn service_bootstraps_message_and_control_payloads_after_handshake_ack() {
     );
     assert!(saw_chat_catalog, "service should catalog inbound chat text");
 
-    assert!(service.request_video_pli(&runtime_stats).is_ok());
+    assert!(service
+        .request_video_pli_with_outcome(&runtime_stats)
+        .is_ok());
 }
 
 #[test]
@@ -1274,6 +1276,73 @@ fn send_video_rtcp_payload_routes_nack_with_target_ssrc() {
 }
 
 #[test]
+fn flush_due_feedback_updates_feedback_availability_on_success() {
+    let mut service = RtcConnectionService::default();
+    let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
+    let session = XbxEngineSessionDto {
+        session_id: "test-session".to_string(),
+        target_type: XbxEngineTargetTypeDto::Cloud,
+        turn_server: None,
+    };
+
+    service.rebuild(&session, &runtime_stats).unwrap();
+    let (_answer_pc, _answer_io, _, _, _, _, _, _) =
+        connect_service_to_answer_peer(&mut service, &runtime_stats);
+    service.controlled_twcc_feedback.set_feedback_interval(1);
+    prime_video_feedback_target(&mut service, &runtime_stats);
+
+    let track_id: MediaStreamTrackId = "video".to_string();
+    let mut packet = rtc_rtp::packet::Packet {
+        header: rtc_rtp::header::Header {
+            ssrc: 0x5566_7788,
+            sequence_number: 2,
+            payload_type: 124,
+            ..Default::default()
+        },
+        payload: vec![0u8; 64].into(),
+    };
+    let ext = TransportCcExtension {
+        transport_sequence: 10,
+    };
+    packet
+        .header
+        .set_extension(5, ext.marshal().unwrap().freeze())
+        .unwrap();
+    service
+        .controlled_twcc_feedback
+        .observe_inbound_rtp(
+            &track_id,
+            &packet,
+            &runtime_stats,
+            Some(concat!(
+                "m=video 9 UDP/TLS/RTP/SAVPF 124\r\n",
+                "a=extmap:5 http://www.ietf.org/id/draft-holmer-rmcat-transport-wide-cc-extensions-01\r\n",
+                "a=rtpmap:124 H264/90000\r\n",
+                "a=rtcp-fb:124 transport-cc\r\n",
+            )),
+            Some("video/H264".to_string()),
+        )
+        .unwrap();
+    thread::sleep(Duration::from_millis(2));
+
+    let peer_connection = service.peer_connection.as_mut().expect("peer connection");
+    service
+        .controlled_twcc_feedback
+        .flush_due_feedback(peer_connection, &runtime_stats)
+        .unwrap();
+
+    let stats = runtime_stats.lock().expect("runtime stats");
+    assert_eq!(
+        stats.latest_feedback_target_availability_state.as_deref(),
+        Some("ready")
+    );
+    assert_eq!(
+        stats.latest_feedback_target_availability_reason.as_deref(),
+        Some("twccSent")
+    );
+}
+
+#[test]
 fn target_remb_same_target_is_not_refreshed_periodically() {
     let mut service = RtcConnectionService::default();
     let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
@@ -1294,7 +1363,7 @@ fn target_remb_same_target_is_not_refreshed_periodically() {
     let track_id: MediaStreamTrackId = "video".to_string();
     service
         .controlled_twcc_feedback
-        .register_track_open(&track_id, receiver_id);
+        .register_track_open(&track_id, receiver_id, &runtime_stats);
     let mut packet = rtc_rtp::packet::Packet {
         header: rtc_rtp::header::Header {
             ssrc: 0x55667788,
@@ -1376,7 +1445,7 @@ fn prime_video_feedback_target(
     let track_id: MediaStreamTrackId = "video".to_string();
     service
         .controlled_twcc_feedback
-        .register_track_open(&track_id, receiver_id);
+        .register_track_open(&track_id, receiver_id, &runtime_stats);
     let mut packet = rtc_rtp::packet::Packet {
         header: rtc_rtp::header::Header {
             ssrc: 0x55667788,
@@ -1430,7 +1499,9 @@ fn video_recovery_prefers_pli_on_first_request() {
         }
     }
 
-    assert!(service.request_video_pli(&runtime_stats).is_ok());
+    assert!(service
+        .request_video_pli_with_outcome(&runtime_stats)
+        .is_ok());
     let first_label = runtime_stats
         .lock()
         .ok()
@@ -1461,9 +1532,13 @@ fn video_recovery_requests_fir_explicitly_within_same_epoch() {
         }
     }
 
-    assert!(service.request_video_fir(&runtime_stats).is_ok());
+    assert!(service
+        .request_video_fir_with_outcome(&runtime_stats)
+        .is_ok());
     thread::sleep(Duration::from_millis(220));
-    assert!(service.request_video_pli(&runtime_stats).is_ok());
+    assert!(service
+        .request_video_pli_with_outcome(&runtime_stats)
+        .is_ok());
     let stats = runtime_stats.lock().expect("runtime stats lock").clone();
     assert_eq!(
         stats.latest_observation_label.as_deref(),
@@ -1504,9 +1579,42 @@ fn video_recovery_reports_feedback_target_unavailable_when_feedback_not_supporte
     );
     assert_eq!(
         outcome,
-        super::VideoRecoveryRequestOutcome::FeedbackTargetPending
+        super::VideoRecoveryRequestOutcome::FeedbackTransportNotReady
     );
     assert_eq!(stats.video_pli_request_count_total, 0);
+}
+
+#[test]
+fn video_recovery_pli_survives_twcc_interval_adjustment_without_losing_feedback_target() {
+    let mut service = RtcConnectionService::default();
+    let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
+    let session = XbxEngineSessionDto {
+        session_id: "test-session".to_string(),
+        target_type: XbxEngineTargetTypeDto::Cloud,
+        turn_server: None,
+    };
+    service.rebuild(&session, &runtime_stats).unwrap();
+    let (_answer_pc, _answer_io, _, _, _, _, _, _) =
+        connect_service_to_answer_peer(&mut service, &runtime_stats);
+    prime_video_feedback_target(&mut service, &runtime_stats);
+
+    service.controlled_twcc_feedback.set_feedback_interval(50);
+
+    let outcome = service
+        .request_video_pli_with_outcome(&runtime_stats)
+        .expect("interval 调整后不应丢失已建立的 PLI target");
+
+    assert_eq!(outcome, super::VideoRecoveryRequestOutcome::RequestedPli);
+    let stats = runtime_stats.lock().expect("runtime stats lock");
+    assert_eq!(stats.video_pli_request_count_total, 1);
+    assert_eq!(
+        stats.latest_feedback_target_availability_target.as_deref(),
+        Some("videoRtcpFeedback")
+    );
+    assert_eq!(
+        stats.latest_feedback_target_availability_reason.as_deref(),
+        Some("pliSent")
+    );
 }
 
 #[test]
@@ -1529,9 +1637,13 @@ fn video_recovery_clean_anchor_clears_stage_token_and_new_epoch_restarts_from_pl
         }
     }
 
-    assert!(service.request_video_fir(&runtime_stats).is_ok());
+    assert!(service
+        .request_video_fir_with_outcome(&runtime_stats)
+        .is_ok());
     thread::sleep(Duration::from_millis(220));
-    assert!(service.request_video_pli(&runtime_stats).is_ok());
+    assert!(service
+        .request_video_pli_with_outcome(&runtime_stats)
+        .is_ok());
     for _ in 0..8 {
         service.pump(&runtime_stats).unwrap();
         answer_io.pump(&mut answer_pc).unwrap();
@@ -1545,7 +1657,9 @@ fn video_recovery_clean_anchor_clears_stage_token_and_new_epoch_restarts_from_pl
     if let Ok(mut stats) = runtime_stats.lock() {
         stats.video_anchor_clean_epoch = Some(current_epoch);
     }
-    assert!(service.request_video_pli(&runtime_stats).is_ok());
+    assert!(service
+        .request_video_pli_with_outcome(&runtime_stats)
+        .is_ok());
     let continued_label = runtime_stats
         .lock()
         .ok()
@@ -1556,7 +1670,9 @@ fn video_recovery_clean_anchor_clears_stage_token_and_new_epoch_restarts_from_pl
         stats.transport_recovery_epoch = stats.transport_recovery_epoch.saturating_add(1);
         stats.video_anchor_clean_epoch = None;
     }
-    assert!(service.request_video_pli(&runtime_stats).is_ok());
+    assert!(service
+        .request_video_pli_with_outcome(&runtime_stats)
+        .is_ok());
     let restarted_label = runtime_stats
         .lock()
         .ok()
@@ -1589,7 +1705,7 @@ fn target_remb_target_change_triggers_new_request() {
     let track_id: MediaStreamTrackId = "video".to_string();
     service
         .controlled_twcc_feedback
-        .register_track_open(&track_id, receiver_id);
+        .register_track_open(&track_id, receiver_id, &runtime_stats);
     let mut packet = rtc_rtp::packet::Packet {
         header: rtc_rtp::header::Header {
             ssrc: 0x55667788,
@@ -1860,7 +1976,7 @@ fn service_replays_pending_control_requests_after_control_close_and_rebuild() {
         service
             .request_video_pli_with_outcome(&runtime_stats)
             .unwrap(),
-        super::VideoRecoveryRequestOutcome::FeedbackTargetPending
+        super::VideoRecoveryRequestOutcome::FeedbackTransportNotReady
     );
     assert!(service.request_decoder_reset(&runtime_stats).is_err());
     assert!(
@@ -1911,6 +2027,26 @@ fn service_replays_pending_control_requests_after_control_close_and_rebuild() {
 }
 
 #[test]
+fn request_video_pli_defers_while_transport_is_not_ready() {
+    let mut service = RtcConnectionService::default();
+    let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
+
+    let outcome = service
+        .request_video_pli_with_outcome(&runtime_stats)
+        .expect("transport not ready should defer pli request");
+    assert_eq!(
+        outcome,
+        super::VideoRecoveryRequestOutcome::FeedbackTransportNotReady
+    );
+
+    let stats = runtime_stats.lock().expect("runtime stats").clone();
+    assert_eq!(
+        stats.latest_feedback_target_availability_reason.as_deref(),
+        Some("videoRtcpFeedbackTransportNotReady")
+    );
+}
+
+#[test]
 fn delayed_pli_prime_feedback_target_pending_records_deferred_observation() {
     let mut service = RtcConnectionService::default();
     let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
@@ -1927,6 +2063,10 @@ fn delayed_pli_prime_feedback_target_pending_records_deferred_observation() {
         stats.latest_observation_label.as_deref(),
         Some("rtcDelayedPliPrimeFeedbackTargetPending")
     );
+    assert_eq!(
+        stats.latest_feedback_target_availability_reason.as_deref(),
+        Some("videoRtcpFeedbackTransportNotReady")
+    );
     assert!(stats.control_pending_replay_summary.is_none());
 }
 
@@ -1939,7 +2079,7 @@ fn replay_send_failure_retains_pending_actions() {
         service
             .request_video_pli_with_outcome(&runtime_stats)
             .unwrap(),
-        super::VideoRecoveryRequestOutcome::FeedbackTargetPending
+        super::VideoRecoveryRequestOutcome::FeedbackTransportNotReady
     );
     assert!(service.request_decoder_reset(&runtime_stats).is_err());
 
@@ -2423,7 +2563,7 @@ fn prime_video_recovery_feedback_target(
     let track_id: MediaStreamTrackId = "video".to_string();
     service
         .controlled_twcc_feedback
-        .register_track_open(&track_id, receiver_id);
+        .register_track_open(&track_id, receiver_id, &runtime_stats);
     let mut packet = rtc_rtp::packet::Packet {
         header: rtc_rtp::header::Header {
             ssrc: 0x5566_7788,
@@ -2571,7 +2711,9 @@ fn request_video_pli_prefers_pli_when_video_feedback_is_bound() {
         connect_service_to_answer_peer(&mut service, &runtime_stats);
     prime_video_recovery_feedback_target(&mut service, &runtime_stats);
 
-    service.request_video_pli(&runtime_stats).unwrap();
+    service
+        .request_video_pli_with_outcome(&runtime_stats)
+        .unwrap();
     answer_io.pump(&mut answer_pc).unwrap();
 
     let stats = runtime_stats.lock().unwrap().clone();
@@ -2601,13 +2743,15 @@ fn request_video_pli_stays_on_pli_after_explicit_fir_marker() {
         connect_service_to_answer_peer(&mut service, &runtime_stats);
     prime_video_recovery_feedback_target(&mut service, &runtime_stats);
 
-    service.request_video_fir(&runtime_stats).unwrap();
+    service
+        .request_video_fir_with_outcome(&runtime_stats)
+        .unwrap();
 
     let now_ms = crate::transport::rtc::stats::now_ms_f64();
     service.video_recovery_transport_state.stage =
         super::VideoRecoveryTransportStage::PictureLossIndication;
     service.video_recovery_transport_state.last_sent_at_ms = Some(now_ms - 240.0);
-    let _ = service.request_video_pli(&runtime_stats);
+    let _ = service.request_video_pli_with_outcome(&runtime_stats);
 
     let stats = runtime_stats.lock().unwrap().clone();
     assert_eq!(
@@ -2623,7 +2767,9 @@ fn request_video_pli_stays_on_pli_after_explicit_fir_marker() {
     service.video_recovery_transport_state.stage =
         super::VideoRecoveryTransportStage::FullIntraRequest;
     service.video_recovery_transport_state.last_sent_at_ms = Some(now_ms - 420.0);
-    service.request_video_pli(&runtime_stats).unwrap();
+    service
+        .request_video_pli_with_outcome(&runtime_stats)
+        .unwrap();
 
     let stats = runtime_stats.lock().unwrap().clone();
     assert_eq!(
@@ -2651,7 +2797,9 @@ fn request_video_pli_clears_stage_after_clean_anchor() {
     let (mut answer_pc, mut answer_io, _, _, _, _, _, _) =
         connect_service_to_answer_peer(&mut service, &runtime_stats);
     prime_video_recovery_feedback_target(&mut service, &runtime_stats);
-    service.request_video_pli(&runtime_stats).unwrap();
+    service
+        .request_video_pli_with_outcome(&runtime_stats)
+        .unwrap();
 
     let current_epoch = runtime_stats.lock().unwrap().transport_recovery_epoch;
     RuntimeStatsSink::new(runtime_stats.clone()).update(|stats| {
@@ -2660,7 +2808,9 @@ fn request_video_pli_clears_stage_after_clean_anchor() {
         stats.video_anchor_clean_source_event = Some("chain-clean-anchor-submitted".to_string());
     });
 
-    service.request_video_pli(&runtime_stats).unwrap();
+    service
+        .request_video_pli_with_outcome(&runtime_stats)
+        .unwrap();
     answer_io.pump(&mut answer_pc).unwrap();
 
     let stats = runtime_stats.lock().unwrap().clone();
@@ -2718,7 +2868,9 @@ fn request_video_pli_does_not_suppress_stale_clean_anchor_when_transport_await_r
         });
     });
 
-    service.request_video_pli(&runtime_stats).unwrap();
+    service
+        .request_video_pli_with_outcome(&runtime_stats)
+        .unwrap();
     answer_io.pump(&mut answer_pc).unwrap();
 
     let stats = runtime_stats.lock().unwrap().clone();
@@ -2800,7 +2952,9 @@ fn request_video_pli_does_not_suppress_sustaining_recovery_when_fresh_non_idr_bl
             });
     });
 
-    service.request_video_pli(&runtime_stats).unwrap();
+    service
+        .request_video_pli_with_outcome(&runtime_stats)
+        .unwrap();
     answer_io.pump(&mut answer_pc).unwrap();
 
     let stats = runtime_stats.lock().unwrap().clone();
@@ -2880,7 +3034,9 @@ fn keyframe_suppressed_outcome_is_recorded_as_deferred() {
     prime_video_recovery_feedback_target(&mut service, &runtime_stats);
 
     // 先发起一次 keyframe 请求，建立 recovery epoch
-    service.request_video_pli(&runtime_stats).unwrap();
+    service
+        .request_video_pli_with_outcome(&runtime_stats)
+        .unwrap();
 
     // 设置 clean anchor 状态，验证 service 仍返回显式 PLI outcome
     let current_epoch = runtime_stats.lock().unwrap().transport_recovery_epoch;

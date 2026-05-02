@@ -23,6 +23,26 @@ export interface GamepadDriverDelegate {
   getRuntimeConfig: () => InputRuntimeConfig
 }
 
+const LOGICAL_BUTTON_STATE_KEYS: Record<LogicalButtonDto, keyof LogicalButtonsStateDto> = {
+  'south': 'south',
+  'east': 'east',
+  'west': 'west',
+  'north': 'north',
+  'l1': 'l1',
+  'r1': 'r1',
+  'l2': 'l2',
+  'r2': 'r2',
+  'l3': 'l3',
+  'r3': 'r3',
+  'view': 'view',
+  'menu': 'menu',
+  'home': 'home',
+  'dpad-up': 'dpadUp',
+  'dpad-down': 'dpadDown',
+  'dpad-left': 'dpadLeft',
+  'dpad-right': 'dpadRight',
+}
+
 export class GamepadDriver {
   private shadowGamepad: GamepadFrame = DEFAULT_GAMEPAD_FRAME()
   private nativeRuntimeSnapshot?: GamepadRuntimeSnapshotDto
@@ -166,26 +186,6 @@ export class GamepadDriver {
     const key = LOGICAL_BUTTON_STATE_KEYS[button]
     this.shadowGamepad.state.buttons[key] = value
   }
-}
-
-const LOGICAL_BUTTON_STATE_KEYS: Record<LogicalButtonDto, keyof LogicalButtonsStateDto> = {
-  'south': 'south',
-  'east': 'east',
-  'west': 'west',
-  'north': 'north',
-  'l1': 'l1',
-  'r1': 'r1',
-  'l2': 'l2',
-  'r2': 'r2',
-  'l3': 'l3',
-  'r3': 'r3',
-  'view': 'view',
-  'menu': 'menu',
-  'home': 'home',
-  'dpad-up': 'dpadUp',
-  'dpad-down': 'dpadDown',
-  'dpad-left': 'dpadLeft',
-  'dpad-right': 'dpadRight',
 }
 
 function cloneGamepadFrame(frame: GamepadFrame): GamepadFrame {

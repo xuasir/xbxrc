@@ -218,21 +218,21 @@ export interface GamepadRuntimeSnapshotDto {
   }
 }
 
-export type GamepadKeyboardKeyDto =
-  | 'keyA' | 'keyB' | 'keyC' | 'keyD' | 'keyE' | 'keyF' | 'keyG' | 'keyH' | 'keyI' | 'keyJ'
-  | 'keyK' | 'keyL' | 'keyM' | 'keyN' | 'keyO' | 'keyP' | 'keyQ' | 'keyR' | 'keyS' | 'keyT'
-  | 'keyU' | 'keyV' | 'keyW' | 'keyX' | 'keyY' | 'keyZ'
-  | 'digit0' | 'digit1' | 'digit2' | 'digit3' | 'digit4' | 'digit5' | 'digit6' | 'digit7' | 'digit8' | 'digit9'
-  | 'enter' | 'tab' | 'escape' | 'space'
-  | 'arrowUp' | 'arrowDown' | 'arrowLeft' | 'arrowRight'
+export type GamepadKeyboardKeyDto
+  = | 'keyA' | 'keyB' | 'keyC' | 'keyD' | 'keyE' | 'keyF' | 'keyG' | 'keyH' | 'keyI' | 'keyJ'
+    | 'keyK' | 'keyL' | 'keyM' | 'keyN' | 'keyO' | 'keyP' | 'keyQ' | 'keyR' | 'keyS' | 'keyT'
+    | 'keyU' | 'keyV' | 'keyW' | 'keyX' | 'keyY' | 'keyZ'
+    | 'digit0' | 'digit1' | 'digit2' | 'digit3' | 'digit4' | 'digit5' | 'digit6' | 'digit7' | 'digit8' | 'digit9'
+    | 'enter' | 'tab' | 'escape' | 'space'
+    | 'arrowUp' | 'arrowDown' | 'arrowLeft' | 'arrowRight'
 
-export type GamepadKeyboardControlDto =
-  | 'leftStickUp' | 'leftStickDown' | 'leftStickLeft' | 'leftStickRight'
-  | 'rightStickUp' | 'rightStickDown' | 'rightStickLeft' | 'rightStickRight'
-  | 'south' | 'east' | 'west' | 'north'
-  | 'l1' | 'r1' | 'l2' | 'r2' | 'l3' | 'r3'
-  | 'view' | 'menu' | 'home'
-  | 'dpadUp' | 'dpadDown' | 'dpadLeft' | 'dpadRight'
+export type GamepadKeyboardControlDto
+  = | 'leftStickUp' | 'leftStickDown' | 'leftStickLeft' | 'leftStickRight'
+    | 'rightStickUp' | 'rightStickDown' | 'rightStickLeft' | 'rightStickRight'
+    | 'south' | 'east' | 'west' | 'north'
+    | 'l1' | 'r1' | 'l2' | 'r2' | 'l3' | 'r3'
+    | 'view' | 'menu' | 'home'
+    | 'dpadUp' | 'dpadDown' | 'dpadLeft' | 'dpadRight'
 
 export interface GamepadKeyboardBindingDto {
   key: GamepadKeyboardKeyDto

@@ -342,13 +342,17 @@ impl RtcConnectionService {
             for event in pending_track_events.drain(..) {
                 match event {
                     RTCTrackEvent::OnOpen(init) => {
-                        self.controlled_twcc_feedback
-                            .register_track_open(&init.track_id, init.receiver_id);
+                        self.controlled_twcc_feedback.register_track_open(
+                            &init.track_id,
+                            init.receiver_id,
+                            runtime_stats,
+                        );
                     }
                     RTCTrackEvent::OnClosing(track_id)
                     | RTCTrackEvent::OnClose(track_id)
                     | RTCTrackEvent::OnError(track_id) => {
-                        self.controlled_twcc_feedback.unregister_track(&track_id);
+                        self.controlled_twcc_feedback
+                            .unregister_track(&track_id, runtime_stats);
                     }
                 }
             }
@@ -436,7 +440,7 @@ impl RtcConnectionService {
         let kind = classify_candidate_kind(&dto.candidate);
         if let Ok(mut state) = self.state.lock() {
             state.record_local_candidate(dto, kind);
-            crate::xbx_log_warn!(
+            crate::xbx_log_debug!(
                 "[xbxengine][rtc-connection] local candidate observed kind={} summary={}",
                 kind.as_str(),
                 state.candidate_snapshot_summary(),

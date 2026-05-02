@@ -15,10 +15,10 @@ withDefaults(defineProps<Props>(), {
     <div class="branded-loading__visual" aria-hidden="true">
       <!-- 外圈发光环 -->
       <div class="branded-loading__aura" />
-      
+
       <!-- 旋转进度环 -->
       <div class="branded-loading__ring" />
-      
+
       <!-- 核心 Logo: 呼吸灯效果 -->
       <div class="branded-loading__logo-shell">
         <div class="branded-loading__logo" />
@@ -76,7 +76,7 @@ withDefaults(defineProps<Props>(), {
   position: absolute;
   inset: 0;
   border-radius: 50%;
-  padding: var(--ring-width); 
+  padding: var(--ring-width);
   background: conic-gradient(
     from 0deg,
     var(--brand-primary) 0deg,

@@ -85,7 +85,7 @@ where
             return;
         };
         self.snapshot.host_present_take_empty_streak = 0;
-        self.snapshot.host_present_latest_render_slot_at_ms = Some(now_ms_f64());
+        self.snapshot.host_mailbox_latest_submit_at_ms = Some(now_ms_f64());
         if let Err(error) =
             self.host_bridge
                 .present_frame(&viewport, self.snapshot.surface_id.as_deref(), &frame)
@@ -200,10 +200,14 @@ where
         self.snapshot.frame_rendered_time_ms = Some(frame.rendered_at_ms);
 
         if self.snapshot.first_frame_packet_arrival_time_ms.is_none() {
-            self.snapshot.first_frame_packet_arrival_time_ms = Some(frame.rendered_at_ms);
+            self.snapshot.first_frame_packet_arrival_time_ms = stats
+                .latest_video_packet_arrival_time_ms
+                .or(Some(frame.rendered_at_ms));
         }
         if self.snapshot.frame_decoded_time_ms.is_none() {
-            self.snapshot.frame_decoded_time_ms = Some(frame.rendered_at_ms);
+            self.snapshot.frame_decoded_time_ms = stats
+                .latest_video_decode_ok_time_ms
+                .or(Some(frame.rendered_at_ms));
         }
 
         if first_render_observed {

@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
-import { setupUiDensity } from './app/ui-density'
 import { setupTheme } from './app/theme'
+import { setupUiDensity } from './app/ui-density'
 import AppShellLayout from './components/layout/AppShellLayout.vue'
 import SpatialNavGlobalHotkeys from './components/navigation/SpatialNavGlobalHotkeys.vue'
 import { useGamepadNavigation } from './navigation/core'
@@ -105,7 +105,7 @@ onUnmounted(() => {
     <SpatialNavGlobalHotkeys v-if="!isStreamRoute || streamUiInputEnabled" />
 
     <RouterView v-slot="{ Component, route: currentRoute }">
-      <!-- 
+      <!--
         为了保持头部导航稳定，不再将 AppShellLayout 置于 Transition 内部。
         只有内容区域进行切换动画。
       -->
@@ -126,8 +126,8 @@ onUnmounted(() => {
         :class="{ 'app-view-plain--stream': isStreamRoute }"
       >
         <component
-          v-if="isStreamRoute"
           :is="Component"
+          v-if="isStreamRoute"
           :key="resolveRouteViewKey(currentRoute)"
         />
 

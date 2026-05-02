@@ -281,6 +281,9 @@ pub enum H264BootstrapRejectReason {
     NoVcl,
     MissingSps,
     MissingPps,
+    BootstrapMissingIdr,
+    MixedIdrWithTrailingDelta,
+    #[allow(dead_code)] // 兼容旧测试夹具；inspector 不再产出该语义。
     NonIdrVcl,
     InvalidSliceHeader,
 }
@@ -291,6 +294,8 @@ impl H264BootstrapRejectReason {
             Self::NoVcl => "NoVcl",
             Self::MissingSps => "bootstrapMissingSps",
             Self::MissingPps => "bootstrapMissingPps",
+            Self::BootstrapMissingIdr => "bootstrapMissingIdr",
+            Self::MixedIdrWithTrailingDelta => "mixedIdrWithTrailingDelta",
             Self::NonIdrVcl => "NonIdrVcl",
             Self::InvalidSliceHeader => "InvalidSliceHeader",
         }
@@ -495,12 +500,12 @@ impl H264AccessUnitInspector {
             Some(H264BootstrapRejectReason::MissingSps)
         } else if !effective_pps_present {
             Some(H264BootstrapRejectReason::MissingPps)
-        } else if !is_idr {
-            Some(H264BootstrapRejectReason::NonIdrVcl)
         } else if !slice_headers_valid {
             Some(H264BootstrapRejectReason::InvalidSliceHeader)
+        } else if !is_idr {
+            Some(H264BootstrapRejectReason::BootstrapMissingIdr)
         } else if has_non_idr_vcl {
-            Some(H264BootstrapRejectReason::NonIdrVcl)
+            Some(H264BootstrapRejectReason::MixedIdrWithTrailingDelta)
         } else {
             None
         };

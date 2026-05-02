@@ -4,14 +4,16 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 
-use crate::api::backend::XbxEngineMediaRuntimeStats;
+use crate::api::backend::{
+    compare_latest_only_frame_meta, XbxEngineLatestOnlyFrameMeta, XbxEngineMediaRuntimeStats,
+    XbxEnginePresentationValueRole, XbxEngineReplacementDecisionObservation,
+};
 use crate::media::video::ingress::budget::FrameBudgetWindowSource;
 use crate::media::video::render::actor::RendererActorHandle;
 use crate::media::video::render::pacer::{
     FramePacingAction, FramePacingPolicy, HostCadencePhaseHint, HostPacingPressure,
-    QueueHistoryConfig, QueueHistoryController,
 };
-use crate::media::video::types::DecodedFrame;
+use crate::media::video::types::{decoded_presentation_value_role, DecodedFrame};
 use crate::runtime_stats_sink::RuntimeStatsSink;
 use crate::transport::rtc::pipeline::observation::record_pipeline_frame_drop;
 
@@ -24,9 +26,7 @@ pub struct PacerActorHandle {
     tx: SyncSender<PacerMsg>,
 }
 
-const PACING_QUEUE_MAX_FRAMES: usize = 3;
-const PACING_QUEUE_RECOVERY_MAX_FRAMES: usize = 5;
-const PACING_QUEUE_HARD_CAP_FRAMES: usize = 8;
+const PACING_MAILBOX_CAPACITY: usize = 2;
 const RENDER_QUEUE_MAX_FRAMES: usize = 1;
 const RENDER_QUEUE_RECOVERY_MAX_FRAMES: usize = 2;
 const RENDER_QUEUE_RETRY_TIMEOUT_MS: u64 = 4;
@@ -73,23 +73,15 @@ fn run_pacer_loop(
     let mut catch_up_mode = false;
     let mut last_consumed_host_tick_epoch = None::<u64>;
     let mut frame_drop_observation_id = 0u64;
-    let mut pacing_queue: VecDeque<DecodedFrame> = VecDeque::with_capacity(PACING_QUEUE_MAX_FRAMES);
+    // mailbox: current_release(front) + latest_release_candidate(back)
+    let mut pacing_queue: VecDeque<DecodedFrame> = VecDeque::with_capacity(PACING_MAILBOX_CAPACITY);
     let mut render_queue: VecDeque<DecodedFrame> = VecDeque::with_capacity(RENDER_QUEUE_MAX_FRAMES);
-    let mut queue_history = QueueHistoryController::new(QueueHistoryConfig::default());
     let mut render_backpressure_active = false;
 
     loop {
         let host_context =
             resolve_host_pacing_context(&runtime_stats, fallback_refresh_interval_ms);
         let sleep_guard_override_ms = resolve_cadence_sleep_guard_override_ms(&host_context);
-        enforce_queue_budget(
-            &mut pacing_queue,
-            render_queue.len(),
-            &mut queue_history,
-            &runtime_stats,
-            &mut frame_drop_observation_id,
-            &host_context,
-        );
         let pacing_policy = FramePacingPolicy::with_dynamic_budget(
             host_context.release_interval_ms, // 使用release限速间隔（油门上限）
             host_context
@@ -123,7 +115,14 @@ fn run_pacer_loop(
                         stats.video_pacer_submit_count_total =
                             stats.video_pacer_submit_count_total.saturating_add(1);
                     });
-                    pacing_queue.push_back(frame);
+                    apply_pacing_mailbox_on_submit(
+                        &mut pacing_queue,
+                        frame,
+                        &runtime_stats,
+                        &mut frame_drop_observation_id,
+                        &host_context,
+                        render_queue.len(),
+                    );
                     if let Some(frame) = pacing_queue.back() {
                         log_pacer_flow(
                             "decodedFrameReady",
@@ -136,15 +135,6 @@ fn run_pacer_loop(
                             None,
                         );
                     }
-                    queue_history.record_depth(pacing_queue.len());
-                    enforce_queue_budget(
-                        &mut pacing_queue,
-                        render_queue.len(),
-                        &mut queue_history,
-                        &runtime_stats,
-                        &mut frame_drop_observation_id,
-                        &host_context,
-                    );
                 }
                 PacerMsg::Stop => break,
             }
@@ -153,7 +143,6 @@ fn run_pacer_loop(
         if let Some(dropped_frame) = drive_ready_frames(
             &mut pacing_queue,
             &mut render_queue,
-            &mut queue_history,
             &renderer,
             &runtime_stats,
             &mut frame_drop_observation_id,
@@ -188,6 +177,7 @@ fn run_pacer_loop(
                 Some(dropped_frame.surface.frame_seq),
                 Some(dropped_frame.frame_recovery_disposition),
                 dropped_frame.frame_unrecoverable_reason.as_deref(),
+                None,
             );
             crate::xbx_log_warn!(
                 "[XbxPacerActor] renderer unavailable detail=rendererDisconnected, drop frame"
@@ -197,87 +187,61 @@ fn run_pacer_loop(
     }
 }
 
-fn enforce_queue_budget(
+fn apply_pacing_mailbox_on_submit(
     pacing_queue: &mut VecDeque<DecodedFrame>,
-    render_queue_depth: usize,
-    queue_history: &mut QueueHistoryController,
+    incoming: DecodedFrame,
     runtime_stats: &RuntimeStatsSink,
     frame_drop_observation_id: &mut u64,
     host_context: &HostPacingContext,
+    render_queue_depth: usize,
 ) {
-    let recovery_window_active = recovery_budget_active(pacing_queue, Instant::now());
-    // queue depth 只保留极端保护：常态浅队列 + 硬上限兜底。
-    let dynamic_queue_cap = if recovery_window_active {
-        PACING_QUEUE_RECOVERY_MAX_FRAMES
-    } else {
-        match host_context.cadence_phase {
-            HostCadencePhaseHint::Starved => 2,
-            HostCadencePhaseHint::Priming => PACING_QUEUE_MAX_FRAMES,
-            _ => PACING_QUEUE_MAX_FRAMES,
+    let now = Instant::now();
+    match pacing_queue.len() {
+        0 => {
+            pacing_queue.push_back(incoming);
         }
-    };
-
-    while pacing_queue.len() > PACING_QUEUE_HARD_CAP_FRAMES {
-        if let Some(dropped_frame) = pacing_queue.pop_front() {
-            record_pacer_frame_drop(
-                runtime_stats,
-                frame_drop_observation_id,
-                "queueCapHard",
-                dropped_frame,
-                pacing_queue.len(),
-                render_queue_depth,
-                Some(host_context),
-            );
+        1 => {
+            // current_release 不可覆盖，写入 latest_release_candidate
+            pacing_queue.push_back(incoming);
         }
-    }
-    if !recovery_window_active {
-        while pacing_queue.len() > dynamic_queue_cap {
-            if let Some(dropped_frame) = pacing_queue.pop_front() {
+        _ => {
+            // 保持 current + latest；新帧只与 latest candidate 比较，价值更高则覆盖。
+            let Some(existing_candidate) = pacing_queue.pop_back() else {
+                pacing_queue.push_back(incoming);
+                return;
+            };
+            if should_replace_render_queue_head(&existing_candidate, &incoming, now) {
                 record_pacer_frame_drop(
                     runtime_stats,
                     frame_drop_observation_id,
-                    "queueCapDynamic",
-                    dropped_frame,
+                    "supersededAfterPacer",
+                    existing_candidate,
+                    Some(&incoming),
                     pacing_queue.len(),
                     render_queue_depth,
                     Some(host_context),
                 );
+                pacing_queue.push_back(incoming);
+            } else {
+                record_pacer_frame_drop(
+                    runtime_stats,
+                    frame_drop_observation_id,
+                    "supersededAfterPacer",
+                    incoming,
+                    Some(&existing_candidate),
+                    pacing_queue.len(),
+                    render_queue_depth,
+                    Some(host_context),
+                );
+                pacing_queue.push_back(existing_candidate);
             }
         }
     }
-    let pressure_decision = queue_history.decide_drop_target(&host_context.pressure);
-    // recovery burst 已经被标记为本地保供给窗口，普通 pressure 先让更深缓冲吸收抖动；
-    // aggressive pressure 仍然保留快速收紧，避免 host 真正失稳时继续堆积。
-    let pressure_drop_target = if recovery_window_active && !pressure_decision.aggressive {
-        dynamic_queue_cap
-    } else {
-        pressure_decision.drop_target
-    };
-    while pacing_queue.len() > pressure_drop_target {
-        if let Some(dropped_frame) = pacing_queue.pop_front() {
-            let detail = if pressure_decision.aggressive {
-                "queuePressureAggressive"
-            } else {
-                "queuePressure"
-            };
-            record_pacer_frame_drop(
-                runtime_stats,
-                frame_drop_observation_id,
-                detail,
-                dropped_frame,
-                pacing_queue.len(),
-                render_queue_depth,
-                Some(host_context),
-            );
-        }
-    }
-    queue_history.record_depth(pacing_queue.len());
 }
 
 fn drive_ready_frames(
     pacing_queue: &mut VecDeque<DecodedFrame>,
     render_queue: &mut VecDeque<DecodedFrame>,
-    queue_history: &mut QueueHistoryController,
     renderer: &Arc<RendererActorHandle>,
     runtime_stats: &RuntimeStatsSink,
     frame_drop_observation_id: &mut u64,
@@ -290,7 +254,6 @@ fn drive_ready_frames(
     drive_ready_frames_with_submit(
         pacing_queue,
         render_queue,
-        queue_history,
         runtime_stats,
         frame_drop_observation_id,
         pacing_policy,
@@ -305,7 +268,6 @@ fn drive_ready_frames(
 fn drive_ready_frames_with_submit<F>(
     pacing_queue: &mut VecDeque<DecodedFrame>,
     render_queue: &mut VecDeque<DecodedFrame>,
-    queue_history: &mut QueueHistoryController,
     runtime_stats: &RuntimeStatsSink,
     frame_drop_observation_id: &mut u64,
     pacing_policy: &FramePacingPolicy,
@@ -387,7 +349,6 @@ where
                 let Some(frame) = pacing_queue.pop_front() else {
                     return None;
                 };
-                queue_history.record_depth(pacing_queue.len());
                 log_pacer_flow(
                     "submitNow",
                     &frame,
@@ -454,6 +415,35 @@ where
                 }
             }
             FramePacingAction::Drop => {
+                if pacing_queue
+                    .front()
+                    .is_some_and(should_force_recovery_keyframe_delivery)
+                {
+                    let Some(frame) = pacing_queue.pop_front() else {
+                        return None;
+                    };
+                    log_pacer_flow(
+                        "submitNow",
+                        &frame,
+                        pacing_queue.len(),
+                        render_queue.len(),
+                        Some(host_context),
+                        Some("submit"),
+                        Some("forceRecoveryKeyframeDelivery"),
+                        None,
+                    );
+                    enqueue_render_frame(
+                        render_queue,
+                        frame,
+                        pacing_queue.len(),
+                        runtime_stats,
+                        frame_drop_observation_id,
+                        Some(host_context),
+                    );
+                    *last_consumed_host_tick_epoch =
+                        next_consumed_host_tick_epoch(host_context, *last_consumed_host_tick_epoch);
+                    continue;
+                }
                 let Some(frame) = pacing_queue.pop_front() else {
                     return None;
                 };
@@ -462,11 +452,11 @@ where
                     frame_drop_observation_id,
                     "deadline",
                     frame,
+                    None,
                     pacing_queue.len(),
                     render_queue.len(),
                     Some(host_context),
                 );
-                queue_history.record_depth(pacing_queue.len());
             }
         }
     }
@@ -508,6 +498,7 @@ fn enqueue_render_frame(
                     frame_drop_observation_id,
                     "rendererQueueRejectLowerValue",
                     frame.clone(),
+                    Some(existing_frame),
                     pacing_queue_depth,
                     render_queue.len(),
                     host_context,
@@ -536,6 +527,7 @@ fn enqueue_render_frame(
                 frame_drop_observation_id,
                 detail,
                 replaced_frame,
+                Some(&frame),
                 pacing_queue_depth,
                 render_queue.len(),
                 host_context,
@@ -563,22 +555,45 @@ fn should_replace_render_queue_head(
     if render_frame_is_stale(existing_frame, now) {
         return true;
     }
-    let existing_priority = render_frame_priority(existing_frame);
-    let incoming_priority = render_frame_priority(incoming_frame);
-    if incoming_priority > existing_priority {
-        return true;
+    match (
+        incoming_frame.clean_anchor_commit_recovery_epoch,
+        existing_frame.clean_anchor_commit_recovery_epoch,
+    ) {
+        (Some(incoming_epoch), Some(existing_epoch)) => match incoming_epoch.cmp(&existing_epoch) {
+            std::cmp::Ordering::Greater => return true,
+            std::cmp::Ordering::Less => return false,
+            std::cmp::Ordering::Equal => {}
+        },
+        (Some(_), None) => return true,
+        (None, Some(_)) => return false,
+        (None, None) => {}
     }
-    if incoming_priority < existing_priority {
-        return false;
+    let compare_result = compare_latest_only_frame_meta(
+        &decoded_frame_latest_only_meta(existing_frame),
+        &decoded_frame_latest_only_meta(incoming_frame),
+    );
+    if compare_result != 0 {
+        return compare_result < 0;
     }
     incoming_frame.pts >= existing_frame.pts
 }
 
-fn render_frame_priority(frame: &DecodedFrame) -> u8 {
-    match frame.budget.recovery_value_tier() {
-        "anchor" => 3,
-        "supply" => 2,
-        _ => 1,
+fn decoded_frame_latest_only_meta(frame: &DecodedFrame) -> XbxEngineLatestOnlyFrameMeta {
+    XbxEngineLatestOnlyFrameMeta {
+        presentation_value_role: decoded_presentation_value_role(frame),
+        recovery_epoch_tag: frame
+            .recovery_epoch_tag
+            .or(frame.clean_anchor_commit_recovery_epoch),
+        recovery_owner_rtp_timestamp: frame.recovery_owner_rtp_timestamp,
+        rtp_timestamp: Some(frame.rtp_timestamp),
+        frame_seq: Some(frame.surface.frame_seq),
+        rendered_at_ms: frame.surface.rendered_at_ms,
+        owner_preference_active: matches!(
+            decoded_presentation_value_role(frame),
+            XbxEnginePresentationValueRole::FreshAnchor
+                | XbxEnginePresentationValueRole::RecoveryContinuation
+        ),
+        value_rank: decoded_presentation_value_role(frame).rank(),
     }
 }
 
@@ -593,6 +608,16 @@ fn render_frame_stale_slack(frame: &DecodedFrame) -> Duration {
         _ => RENDER_QUEUE_STALE_SLACK_DELTA_MS,
     };
     Duration::from_millis(millis)
+}
+
+fn should_force_recovery_keyframe_delivery(frame: &DecodedFrame) -> bool {
+    frame.is_keyframe
+        && frame.recovery_epoch_tag.is_some()
+        && matches!(
+            frame.frame_recovery_disposition,
+            crate::media::video::types::FrameRecoveryDisposition::Repairing
+        )
+        && frame.frame_unrecoverable_reason.is_none()
 }
 
 #[derive(Debug)]
@@ -682,7 +707,7 @@ fn log_pacer_flow(
         .map(|seq| seq.to_string())
         .unwrap_or_else(|| "-".to_string());
     crate::xbx_log_warn!(
-        "[playback-flow][pacer] event={} reason={} detail={} frameSeq={} rtpTimestamp={} isKeyframe={} observedAtMs={} pacingQueueDepth={} renderQueueDepth={} hostTickEpoch={} hostPresentEpoch={} hostCadencePhase={} relatedFrameSeq={}",
+        "[playback-flow][pacer] event={} reason={} detail={} frameSeq={} rtpTimestamp={} isKeyframe={} observedAtMs={} pacingQueueDepth={} renderQueueDepth={} hostTickEpoch={} hostFramePresentEpoch={} hostCadencePhase={} relatedFrameSeq={}",
         event,
         reason,
         detail,
@@ -732,12 +757,8 @@ fn next_consumed_host_tick_epoch(
 
 #[derive(Clone, Debug)]
 struct HostPacingContext {
-    #[allow(dead_code)]
-    host_refresh_interval_ms: u64, // 真实host刷新间隔（路况）
     release_interval_ms: u64, // release限速间隔（油门上限）
     host_frame_age_budget_ms: Option<f64>,
-    #[allow(dead_code)]
-    latest_host_present_time_ms: Option<f64>,
     display_tick_epoch: u64,
     present_epoch: u64,
     cadence_phase: HostCadencePhaseHint,
@@ -767,12 +788,10 @@ fn resolve_host_pacing_context(
             let release_interval_ms = video_frame_interval_ms.unwrap_or(host_refresh_interval_ms);
 
             HostPacingContext {
-                host_refresh_interval_ms,
                 release_interval_ms,
                 host_frame_age_budget_ms: stats.host_frame_age_budget_ms,
-                latest_host_present_time_ms: stats.latest_video_host_present_time_ms,
                 display_tick_epoch: stats.host_display_tick_epoch,
-                present_epoch: stats.video_present_epoch,
+                present_epoch: stats.host_frame_present_epoch,
                 cadence_phase: HostCadencePhaseHint::from_stats(
                     stats.host_cadence_phase.as_deref(),
                 ),
@@ -782,8 +801,8 @@ fn resolve_host_pacing_context(
                     ),
                     no_pending_pressure_level: stats.host_no_pending_pressure_level.clone(),
                     no_pending_streak: stats.host_no_pending_streak,
-                    present_overwrite_count_total: stats.video_present_overwrite_count_total,
-                    present_submit_count_total: stats.video_present_submit_count_total,
+                    host_mailbox_overwrite_count_total: stats.host_mailbox_overwrite_count_total,
+                    host_mailbox_enqueue_count_total: stats.host_mailbox_enqueue_count_total,
                     present_fps: Some(stats.video_present_fps.max(0.0)),
                     display_fps: Some(1_000.0 / host_refresh_interval_ms as f64), // 基于真实host刷新率
                 },
@@ -792,10 +811,8 @@ fn resolve_host_pacing_context(
             }
         })
         .unwrap_or(HostPacingContext {
-            host_refresh_interval_ms: fallback_refresh_interval_ms,
             release_interval_ms: fallback_refresh_interval_ms,
             host_frame_age_budget_ms: None,
-            latest_host_present_time_ms: None,
             display_tick_epoch: 0,
             present_epoch: 0,
             cadence_phase: HostCadencePhaseHint::Unknown,
@@ -828,15 +845,6 @@ fn detect_video_frame_interval(
     } else {
         None
     }
-}
-
-#[allow(dead_code)]
-fn resolve_host_release_wait_duration(
-    _host_context: &HostPacingContext,
-    _now_ms: f64,
-    _last_consumed_host_tick_epoch: Option<u64>,
-) -> Option<Duration> {
-    None
 }
 
 fn resolve_cadence_sleep_guard_override_ms(host_context: &HostPacingContext) -> Option<u64> {
@@ -884,7 +892,7 @@ fn format_render_backpressure_summary(
     host_context: &HostPacingContext,
 ) -> String {
     format!(
-        "pacingQueueDepth={} pendingRenderQueueDepth={} hostTickEpoch={} presentEpoch={} cadencePhase={} releaseIntervalMs={} hostFrameAgeBudgetMs={}",
+        "pacingQueueDepth={} pendingRenderQueueDepth={} hostTickEpoch={} hostFramePresentEpoch={} cadencePhase={} releaseIntervalMs={} hostFrameAgeBudgetMs={}",
         pacing_queue_depth,
         pending_render_queue_depth,
         host_context.display_tick_epoch,
@@ -903,6 +911,7 @@ fn record_pacer_frame_drop(
     frame_drop_observation_id: &mut u64,
     detail: &'static str,
     dropped_frame: DecodedFrame,
+    kept_frame: Option<&DecodedFrame>,
     pacing_queue_depth: usize,
     render_queue_depth: usize,
     host_context: Option<&HostPacingContext>,
@@ -935,7 +944,52 @@ fn record_pacer_frame_drop(
         Some(dropped_frame.surface.frame_seq),
         Some(dropped_frame.frame_recovery_disposition),
         dropped_frame.frame_unrecoverable_reason.as_deref(),
+        kept_frame.map(|keep| XbxEngineReplacementDecisionObservation {
+            dropped_frame_seq: Some(dropped_frame.surface.frame_seq),
+            dropped_rtp_timestamp: Some(dropped_frame.rtp_timestamp),
+            dropped_presentation_value_role: Some(
+                decoded_presentation_value_role(&dropped_frame)
+                    .as_str()
+                    .to_string(),
+            ),
+            kept_frame_seq: Some(keep.surface.frame_seq),
+            kept_rtp_timestamp: Some(keep.rtp_timestamp),
+            kept_presentation_value_role: Some(
+                decoded_presentation_value_role(keep).as_str().to_string(),
+            ),
+            same_recovery_epoch: Some(dropped_frame.recovery_epoch_tag == keep.recovery_epoch_tag),
+            same_recovery_owner_chain: Some(
+                dropped_frame.recovery_epoch_tag == keep.recovery_epoch_tag
+                    && dropped_frame.recovery_owner_rtp_timestamp
+                        == keep.recovery_owner_rtp_timestamp,
+            ),
+            supersede_reason: Some(pacer_supersede_reason(keep, &dropped_frame).to_string()),
+        }),
     );
+}
+
+fn pacer_supersede_reason(keep: &DecodedFrame, dropped: &DecodedFrame) -> &'static str {
+    if decoded_presentation_value_role(keep).rank()
+        > decoded_presentation_value_role(dropped).rank()
+    {
+        return "higherRole";
+    }
+    if matches!(
+        decoded_presentation_value_role(dropped),
+        XbxEnginePresentationValueRole::FreshAnchor
+    ) {
+        return "anchorProtection";
+    }
+    if keep.recovery_epoch_tag == dropped.recovery_epoch_tag
+        && keep.recovery_owner_rtp_timestamp == dropped.recovery_owner_rtp_timestamp
+        && keep.surface.frame_seq > dropped.surface.frame_seq
+    {
+        return "newerWithinSameRecoveryChain";
+    }
+    if render_frame_is_stale(dropped, Instant::now()) {
+        return "displayDeadlineExpired";
+    }
+    "newerWithinSameRole"
 }
 
 fn decoded_frame_uses_recovery_window(frame: &DecodedFrame) -> bool {
@@ -943,17 +997,6 @@ fn decoded_frame_uses_recovery_window(frame: &DecodedFrame) -> bool {
         frame.budget.window_source,
         FrameBudgetWindowSource::Recovery
     )
-}
-
-fn recovery_budget_active(pacing_queue: &VecDeque<DecodedFrame>, now: Instant) -> bool {
-    pacing_queue
-        .iter()
-        .rev()
-        .find(|frame| decoded_frame_uses_recovery_window(frame))
-        .is_some_and(|frame| {
-            now.saturating_duration_since(frame.pts)
-                <= Duration::from_millis(frame.budget.decode_local_budget_ms())
-        })
 }
 
 #[cfg(test)]
