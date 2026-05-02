@@ -13,6 +13,8 @@ use ohmygamepad_protocol::{
     OhMyGamepadRuntimeHapticsDto, OhMyGamepadRuntimeSnapshotDto, OhMyGamepadSamplingConfigDto,
 };
 use ohmygamepad_sdl3::{OhMyGamepadService, OhMyGamepadServiceConfig};
+#[cfg(target_os = "windows")]
+use ohmygamepad_win_xbox_haptics::WindowsXboxHapticsProvider;
 
 static SHARED_GAMEPAD_RUNTIME: OnceLock<Result<SharedGamepadRuntime, String>> = OnceLock::new();
 
@@ -190,7 +192,7 @@ fn bootstrap_gamepad_runtime() -> Result<SharedGamepadRuntime, String> {
     let config = OhMyGamepadServiceConfig::default();
     let selected_providers = DesktopDriverSelector::select(&config.core);
 
-    let runtime = spawn_host_service(config)?;
+    let runtime = spawn_host_service(config, selected_providers.haptics_provider)?;
 
     Ok(SharedGamepadRuntime {
         runtime: Arc::new(runtime),
@@ -206,18 +208,13 @@ fn enrich_runtime_snapshot(
 
     for device in &mut snapshot.devices {
         device.name = normalize_device_name(device, haptics_provider);
+        apply_host_haptics_compat(device, haptics_provider);
     }
 
     snapshot.haptics = OhMyGamepadRuntimeHapticsDto {
         provider: map_haptics_provider_kind(haptics_provider),
-        supports_basic_rumble: snapshot
-            .devices
-            .iter()
-            .any(|device| device.sdl3_capabilities.supports_rumble),
-        supports_trigger_rumble: snapshot
-            .devices
-            .iter()
-            .any(|device| device.sdl3_capabilities.supports_trigger_rumble),
+        supports_basic_rumble: snapshot.devices.iter().any(supports_host_basic_rumble),
+        supports_trigger_rumble: snapshot.devices.iter().any(supports_host_trigger_rumble),
         default_device_id,
     };
     snapshot
@@ -257,8 +254,8 @@ fn should_force_xbox_label(
     device: &ohmygamepad_protocol::OhMyGamepadDeviceDto,
     haptics_provider: DesktopHapticsProviderKind,
 ) -> bool {
-    let _ = (device, haptics_provider);
-    false
+    haptics_provider == DesktopHapticsProviderKind::WinXboxHaptics
+        && is_rog_xbox_ally_x_xinput_view(device)
 }
 
 fn map_haptics_provider_kind(
@@ -266,9 +263,76 @@ fn map_haptics_provider_kind(
 ) -> OhMyGamepadHapticsProviderKindDto {
     match provider {
         DesktopHapticsProviderKind::Sdl3Gamepad => OhMyGamepadHapticsProviderKindDto::Sdl3Gamepad,
+        DesktopHapticsProviderKind::WinXboxHaptics => {
+            OhMyGamepadHapticsProviderKindDto::WinXboxHaptics
+        }
     }
 }
 
-fn spawn_host_service(config: OhMyGamepadServiceConfig) -> Result<OhMyGamepadService, String> {
+fn spawn_host_service(
+    config: OhMyGamepadServiceConfig,
+    haptics_provider: DesktopHapticsProviderKind,
+) -> Result<OhMyGamepadService, String> {
+    match haptics_provider {
+        DesktopHapticsProviderKind::Sdl3Gamepad => {
+            OhMyGamepadService::spawn(config).map_err(|error| error.to_string())
+        }
+        DesktopHapticsProviderKind::WinXboxHaptics => spawn_windows_xbox_haptics_service(config),
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn spawn_windows_xbox_haptics_service(
+    config: OhMyGamepadServiceConfig,
+) -> Result<OhMyGamepadService, String> {
+    OhMyGamepadService::spawn_with_haptics_provider(config, Box::new(WindowsXboxHapticsProvider))
+        .map_err(|error| error.to_string())
+}
+
+#[cfg(not(target_os = "windows"))]
+fn spawn_windows_xbox_haptics_service(
+    config: OhMyGamepadServiceConfig,
+) -> Result<OhMyGamepadService, String> {
     OhMyGamepadService::spawn(config).map_err(|error| error.to_string())
+}
+
+fn apply_host_haptics_compat(
+    device: &mut ohmygamepad_protocol::OhMyGamepadDeviceDto,
+    haptics_provider: DesktopHapticsProviderKind,
+) {
+    if haptics_provider == DesktopHapticsProviderKind::WinXboxHaptics
+        && is_rog_xbox_ally_x_xinput_view(device)
+    {
+        device.sdl3_capabilities.supports_trigger_rumble = true;
+    }
+}
+
+fn supports_host_basic_rumble(device: &ohmygamepad_protocol::OhMyGamepadDeviceDto) -> bool {
+    device.sdl3_capabilities.supports_rumble || supports_host_trigger_rumble(device)
+}
+
+fn supports_host_trigger_rumble(device: &ohmygamepad_protocol::OhMyGamepadDeviceDto) -> bool {
+    device.sdl3_capabilities.supports_trigger_rumble
+}
+
+fn is_rog_xbox_ally_x_xinput_view(device: &ohmygamepad_protocol::OhMyGamepadDeviceDto) -> bool {
+    let vendor_match = device.vendor_id == Some(0x0b05);
+    let product_match = device.product_id == Some(0x1b4c);
+    let lower_name = device.name.to_ascii_lowercase();
+    let lower_path = device
+        .path
+        .as_deref()
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+    let lower_mapping = device
+        .mapping
+        .as_deref()
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+
+    vendor_match
+        && product_match
+        && (lower_name.contains("xinput")
+            || lower_path.contains("xinput")
+            || lower_mapping.starts_with("xinput"))
 }

@@ -8,6 +8,7 @@ pub enum DesktopInputProviderKind {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum DesktopHapticsProviderKind {
     Sdl3Gamepad,
+    WinXboxHaptics,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -24,9 +25,14 @@ pub struct DesktopDriverSelector;
 
 impl DesktopDriverSelector {
     pub fn select(_config: &InputCoreConfig) -> SelectedDesktopRuntimeProviders {
+        #[cfg(target_os = "windows")]
+        let haptics_provider = DesktopHapticsProviderKind::WinXboxHaptics;
+        #[cfg(not(target_os = "windows"))]
+        let haptics_provider = DesktopHapticsProviderKind::Sdl3Gamepad;
+
         SelectedDesktopRuntimeProviders {
             input_provider: DesktopInputProviderKind::Sdl3,
-            haptics_provider: DesktopHapticsProviderKind::Sdl3Gamepad,
+            haptics_provider,
         }
     }
 }
@@ -43,6 +49,12 @@ mod tests {
         let selection = DesktopDriverSelector::select(&InputCoreConfig::default());
 
         assert_eq!(selection.input_provider, DesktopInputProviderKind::Sdl3);
+        #[cfg(target_os = "windows")]
+        assert_eq!(
+            selection.haptics_provider,
+            DesktopHapticsProviderKind::WinXboxHaptics
+        );
+        #[cfg(not(target_os = "windows"))]
         assert_eq!(
             selection.haptics_provider,
             DesktopHapticsProviderKind::Sdl3Gamepad

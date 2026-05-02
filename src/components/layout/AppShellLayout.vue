@@ -48,6 +48,9 @@ const isLoggingOut = ref(false)
 let disposeAuthSessionReady: EventUnsubscribe | undefined
 let disposeGamepadRuntimeSnapshot: EventUnsubscribe | undefined
 const gamepadSnapshot = ref<GamepadRuntimeSnapshotDto | null>(null)
+let restoringGamepadSampling = false
+let recoveryAttemptToken = 0
+let recoveryRetryTimers: number[] = []
 
 // LB/RB 一级页面切换顺序
 const PAGE_NAV_ORDER: AppPageRouteName[] = ['xhome', 'xcloud', 'setting']
@@ -115,6 +118,122 @@ async function loadGamepadSnapshot(): Promise<void> {
   catch (error) {
     console.warn('[AppShell] load gamepad snapshot failed:', error)
   }
+}
+
+function recordGamepadRecoveryTrace(event: string, payload: Record<string, unknown>): void {
+  void rpc.runtimeTrace.recordEvent({
+    event,
+    payload,
+  }).catch(() => {})
+}
+
+function clearRecoveryRetryTimers(): void {
+  for (const timer of recoveryRetryTimers) {
+    window.clearTimeout(timer)
+  }
+  recoveryRetryTimers = []
+}
+
+function gamepadSamplingProgressToken(snapshot: GamepadRuntimeSnapshotDto | null): string {
+  if (!snapshot) {
+    return 'none'
+  }
+
+  let maxSampleSeq = -1
+  let maxSampledAtMs = -1
+  for (const slot of snapshot.slots) {
+    maxSampleSeq = Math.max(maxSampleSeq, slot.sampleSeq)
+    maxSampledAtMs = Math.max(maxSampledAtMs, slot.sampledAtMs)
+  }
+
+  return [
+    snapshot.inputPolicy,
+    snapshot.devices.filter(device => device.connected).length,
+    maxSampleSeq,
+    maxSampledAtMs,
+  ].join(':')
+}
+
+async function restoreGamepadSampling(reason: string, expectedAdvanceFrom?: string): Promise<void> {
+  if (restoringGamepadSampling) {
+    recordGamepadRecoveryTrace('gamepadRecoverySkipped', {
+      reason,
+      cause: 'alreadyRestoring',
+      expectedAdvanceFrom: expectedAdvanceFrom ?? null,
+    })
+    return
+  }
+
+  restoringGamepadSampling = true
+  recordGamepadRecoveryTrace('gamepadRecoveryAttemptStarted', {
+    reason,
+    expectedAdvanceFrom: expectedAdvanceFrom ?? null,
+  })
+  try {
+    gamepadSnapshot.value = await rpc.gamepad.activateSampling()
+    const nextProgress = gamepadSamplingProgressToken(gamepadSnapshot.value)
+    const progressed = expectedAdvanceFrom ? nextProgress !== expectedAdvanceFrom : true
+    recordGamepadRecoveryTrace('gamepadRecoveryAttemptCompleted', {
+      reason,
+      expectedAdvanceFrom: expectedAdvanceFrom ?? null,
+      nextProgress,
+      progressed,
+      connectedDevices: gamepadSnapshot.value.devices.filter(device => device.connected).length,
+    })
+    if (expectedAdvanceFrom && nextProgress === expectedAdvanceFrom) {
+      throw new Error(`sampling-progress-stalled:${reason}`)
+    }
+  }
+  catch (error) {
+    recordGamepadRecoveryTrace('gamepadRecoveryAttemptFailed', {
+      reason,
+      expectedAdvanceFrom: expectedAdvanceFrom ?? null,
+      error: error instanceof Error ? error.message : String(error),
+    })
+    console.warn(`[AppShell] restore gamepad sampling failed reason=${reason}:`, error)
+  }
+  finally {
+    restoringGamepadSampling = false
+  }
+}
+
+function handleDocumentVisibilityChange(): void {
+  if (document.visibilityState !== 'visible') {
+    return
+  }
+  scheduleGamepadSamplingRecovery('document-visible')
+}
+
+function scheduleGamepadSamplingRecovery(reason: string): void {
+  recoveryAttemptToken += 1
+  const attemptToken = recoveryAttemptToken
+  const baselineProgress = gamepadSamplingProgressToken(gamepadSnapshot.value)
+  const retryDelays = [0, 150, 500]
+
+  clearRecoveryRetryTimers()
+  recordGamepadRecoveryTrace('gamepadRecoveryTriggered', {
+    reason,
+    attemptToken,
+    baselineProgress,
+    retryDelaysMs: retryDelays,
+  })
+
+  retryDelays.forEach((delayMs, index) => {
+    const timer = window.setTimeout(() => {
+      if (attemptToken !== recoveryAttemptToken) {
+        recordGamepadRecoveryTrace('gamepadRecoveryAttemptCanceled', {
+          reason,
+          attemptToken,
+          attemptIndex: index + 1,
+          delayMs,
+          latestAttemptToken: recoveryAttemptToken,
+        })
+        return
+      }
+      void restoreGamepadSampling(`${reason}:attempt-${index + 1}`, baselineProgress)
+    }, delayMs)
+    recoveryRetryTimers.push(timer)
+  })
 }
 
 function closeProfileMenu(): void {
@@ -251,6 +370,7 @@ onMounted(() => {
     gamepadSnapshot.value = snapshot
   })
   window.addEventListener('keydown', handleEscapeKeydown)
+  document.addEventListener('visibilitychange', handleDocumentVisibilityChange)
 
   // 注册 LB/RB 一级页面切换
   disposePageSwitch = navigationEngine.onPageSwitch((direction) => {
@@ -280,6 +400,8 @@ onUnmounted(() => {
     disposeGamepadRuntimeSnapshot = undefined
   }
   window.removeEventListener('keydown', handleEscapeKeydown)
+  document.removeEventListener('visibilitychange', handleDocumentVisibilityChange)
+  clearRecoveryRetryTimers()
   if (disposePageSwitch !== undefined) {
     disposePageSwitch()
     disposePageSwitch = undefined

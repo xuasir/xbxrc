@@ -17,5 +17,8 @@ ohmygamepad-sdl3 = { path = "../../backends/sdl3" }
 ohmygamepad-core = { path = "../../core" }
 ohmygamepad-protocol = { path = "../../protocol" }
 
+[target.'cfg(target_os = "windows")'.dependencies]
+ohmygamepad-win-xbox-haptics = { path = "../../backends/win-xbox-haptics" }
+
 [lib]
 path = "src/lib.rs"

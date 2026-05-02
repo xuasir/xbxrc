@@ -22,6 +22,7 @@ pub enum OhMyGamepadConnectionKindDto {
 pub enum OhMyGamepadHapticsProviderKindDto {
     #[default]
     Sdl3Gamepad,
+    WinXboxHaptics,
 }
 
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]

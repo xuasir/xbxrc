@@ -3,6 +3,7 @@ import type {
   GamepadDeviceClassificationDto,
   GamepadDeviceDto,
   GamepadDeviceTypeDto,
+  GamepadHapticsProviderKindDto,
   GamepadRuntimeSnapshotDto,
 } from '@shared/gamepad/contract'
 import { computed, ref } from 'vue'
@@ -220,6 +221,34 @@ function formatPath(path: string | null): string {
   return path
 }
 
+function formatHapticsProvider(provider: GamepadHapticsProviderKindDto | null | undefined): string {
+  switch (provider) {
+    case 'win-xbox-haptics':
+      return 'Windows Xbox Haptics'
+    case 'sdl3-gamepad':
+      return 'SDL3 Gamepad'
+    default:
+      return '未知'
+  }
+}
+
+function detectInputView(device: GamepadDeviceDto): string {
+  const lowerPath = device.path?.toLowerCase() ?? ''
+  const lowerName = device.name.toLowerCase()
+  const lowerMapping = device.mapping?.toLowerCase() ?? ''
+
+  if (lowerPath.includes('xinput') || lowerName.includes('xinput') || lowerMapping.startsWith('xinput')) {
+    return 'XInput 兼容视图'
+  }
+  if (device.classification.isSteamVirtual) {
+    return 'Steam Virtual 视图'
+  }
+  if (device.classification.isVirtualController) {
+    return '虚拟控制器视图'
+  }
+  return 'SDL 原生视图'
+}
+
 function formatConfidence(confidence: GamepadDeviceClassificationDto['confidence']): string {
   switch (confidence) {
     case 'high':
@@ -344,6 +373,13 @@ function classificationReasons(device: GamepadDeviceDto): string {
               {{ t(capabilitySummaryKey) }}
             </p>
 
+            <div v-if="props.snapshot" class="gamepad-card__runtime-meta">
+              <span class="gamepad-card__runtime-meta-label">震动提供者</span>
+              <span class="gamepad-card__runtime-meta-value">
+                {{ formatHapticsProvider(props.snapshot.haptics.provider) }}
+              </span>
+            </div>
+
             <div v-if="connectedDevices.length > 0" class="gamepad-card__device-list">
               <article
                 v-for="device in connectedDevices"
@@ -398,6 +434,14 @@ function classificationReasons(device: GamepadDeviceDto): string {
                     </dt>
                     <dd class="gamepad-card__device-detail-value">
                       {{ formatVidPid(device) }}
+                    </dd>
+                  </div>
+                  <div class="gamepad-card__device-detail-row">
+                    <dt class="gamepad-card__device-detail-label">
+                      输入视图
+                    </dt>
+                    <dd class="gamepad-card__device-detail-value">
+                      {{ detectInputView(device) }}
                     </dd>
                   </div>
                   <div class="gamepad-card__device-detail-row">
@@ -650,6 +694,27 @@ function classificationReasons(device: GamepadDeviceDto): string {
 .gamepad-card__device-list {
   display: grid;
   gap: 12px;
+}
+
+.gamepad-card__runtime-meta {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
+  padding: 0 8px 4px;
+}
+
+.gamepad-card__runtime-meta-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--ui-page-text-soft);
+}
+
+.gamepad-card__runtime-meta-value {
+  min-width: 0;
+  font-size: 12px;
+  color: var(--ui-page-text);
+  word-break: break-word;
 }
 
 .gamepad-card__device {

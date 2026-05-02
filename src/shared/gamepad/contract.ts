@@ -8,6 +8,7 @@ export type GamepadConnectionKindDto = (typeof GAMEPAD_CONNECTION_KINDS)[number]
 
 export const GAMEPAD_HAPTICS_PROVIDER_KINDS = [
   'sdl3-gamepad',
+  'win-xbox-haptics',
 ] as const
 export type GamepadHapticsProviderKindDto = (typeof GAMEPAD_HAPTICS_PROVIDER_KINDS)[number]
 

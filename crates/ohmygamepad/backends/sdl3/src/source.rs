@@ -25,6 +25,7 @@ use crate::{Sdl3BackendConfig, Sdl3DeviceDescriptor, Sdl3InputEvent, Sdl3InputEv
 const KNOWN_HANDHELD_CONTROLLER_IDS: &[(u16, u16)] = &[
     (0x28de, 0x1205), // Steam Deck
     (0x0b05, 0x1abe), // ROG Ally
+    (0x0b05, 0x1b4c), // ROG Xbox Ally X (built-in XInput view)
     (0x17ef, 0x6182), // Legion Go
     (0x0db0, 0x1901), // MSI Claw
 ];

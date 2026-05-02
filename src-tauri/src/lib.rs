@@ -22,6 +22,17 @@ fn install_rustls_crypto_provider() {
     let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
 }
 
+fn activate_gamepad_sampling_for_window(window: &tauri::Window, reason: &str) {
+    let app_state = window.state::<shell::state::AppState>();
+    if let Err(error) = app_state.gamepad.activate_sampling(None) {
+        log::warn!(
+            "Failed to activate gamepad sampling reason={} error={}",
+            reason,
+            error
+        );
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     install_rustls_crypto_provider();
@@ -47,13 +58,10 @@ pub fn run() {
         .on_window_event(|window, event| {
             match event {
                 tauri::WindowEvent::Focused(focused) => {
-                    let app_state = window.state::<shell::state::AppState>();
                     // 失焦不再直接等同于手柄采样应暂停。
                     // app 仍然需要依赖同一条采样链支持 UI 导航，Windows FSE 也会出现壳层接管焦点的情况。
                     if *focused {
-                        if let Err(e) = app_state.gamepad.activate_sampling(None) {
-                            log::warn!("Failed to activate gamepad after focus regained: {}", e);
-                        }
+                        activate_gamepad_sampling_for_window(window, "window-focused");
                     }
                 }
                 tauri::WindowEvent::Resized(_) => {
@@ -67,7 +75,12 @@ pub fn run() {
                                 );
                             }
                         }
-                        Ok(false) => {}
+                        Ok(false) => {
+                            activate_gamepad_sampling_for_window(
+                                window,
+                                "window-restored-from-minimized",
+                            );
+                        }
                         Err(e) => {
                             log::warn!("Failed to inspect window minimized state: {}", e);
                         }
@@ -110,6 +123,15 @@ pub fn run() {
         }
 
         match event {
+            tauri::RunEvent::Resumed => {
+                let app_state = app_handle.state::<shell::state::AppState>();
+                if let Err(error) = app_state.gamepad.activate_sampling(None) {
+                    log::warn!(
+                        "Failed to activate gamepad sampling reason=app-resumed error={}",
+                        error
+                    );
+                }
+            }
             tauri::RunEvent::ExitRequested { .. } | tauri::RunEvent::Exit => {
                 tauri::async_runtime::block_on(shell::terminate(app_handle));
             }

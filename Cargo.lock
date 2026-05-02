@@ -3886,6 +3886,7 @@ dependencies = [
  "ohmygamepad-core",
  "ohmygamepad-protocol",
  "ohmygamepad-sdl3",
+ "ohmygamepad-win-xbox-haptics",
 ]
 
 [[package]]
@@ -3904,6 +3905,16 @@ dependencies = [
  "ohmygamepad-core",
  "ohmygamepad-protocol",
  "sdl3",
+]
+
+[[package]]
+name = "ohmygamepad-win-xbox-haptics"
+version = "0.1.0"
+dependencies = [
+ "ohmygamepad-core",
+ "ohmygamepad-protocol",
+ "windows 0.61.3",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
