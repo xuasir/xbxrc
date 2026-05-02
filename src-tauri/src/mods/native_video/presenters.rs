@@ -13,7 +13,9 @@ use xbxengine::{
     XbxEngineRenderPixelData,
 };
 
-use super::scheduling::{HostCadenceTelemetry, ScheduledFrameSlot, ScheduledFrameSlotDiagnostics};
+use super::scheduling::{
+    HostCadenceTelemetry, ScheduledFrameSlot, ScheduledFrameSlotDiagnostics, ScheduledFrameTakeOutcome,
+};
 #[cfg(target_os = "macos")]
 use super::{
     clear_host_present_tick_dispatch, dispatch_wgpu_render_tick_on_main_thread, drop_display_layer,
