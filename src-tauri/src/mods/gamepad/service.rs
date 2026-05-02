@@ -35,6 +35,15 @@ impl GamepadProvider for GamepadService {
         self.get_runtime_snapshot()
     }
 
+    fn activate_sampling(
+        &self,
+        policy: Option<OhMyGamepadInputPolicyDto>,
+    ) -> Result<OhMyGamepadRuntimeSnapshotDto, String> {
+        self.host
+            .activate_sampling(policy)
+            .map_err(|error| format!("{:?}", error))
+    }
+
     fn update_sampling(
         &self,
         sampling: OhMyGamepadSamplingConfigDto,

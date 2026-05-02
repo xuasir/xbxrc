@@ -841,7 +841,7 @@ export function createBrowserRuntime(options: {
     // 浏览器 runtime 只负责切换当前输入策略；
     // 键盘 fallback 是否可用由 gamepad 域自己负责。
     void sessionId
-    await rpc.gamepad.setInputPolicy({ policy: 'stream-only' })
+    await rpc.gamepad.activateSampling({ policy: 'stream-only' })
   }
 
   async function detachGamepadSession(sessionId: string | null): Promise<void> {

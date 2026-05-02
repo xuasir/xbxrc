@@ -80,6 +80,7 @@ struct OhMyGamepadServiceState {
     virtual_input_tx: Sender<Vec<Sdl3InputEvent>>,
     virtual_descriptors: HashMap<String, SimulatedGamepadDescriptor>,
     keyboard_listener: Option<ServiceKeyboardListenerHandle>,
+    source_handle: Option<crate::Sdl3RumbleHandle>,
     rumble_backend: Option<Box<dyn ServiceRumbleBackend>>,
 }
 
@@ -94,6 +95,7 @@ impl OhMyGamepadService {
         Ok(Self::spawn_with_source_and_rumble(
             config,
             physical_source,
+            rumble_handle.clone(),
             rumble_handle.map(|handle| Box::new(handle) as Box<dyn ServiceRumbleBackend>),
         ))
     }
@@ -105,7 +107,7 @@ impl OhMyGamepadService {
     where
         TSource: Sdl3Source + Send + 'static,
     {
-        Self::spawn_with_source_and_rumble(config, physical_source, None)
+        Self::spawn_with_source_and_rumble(config, physical_source, None, None)
     }
 
     pub fn spawn_with_haptics_provider(
@@ -116,6 +118,7 @@ impl OhMyGamepadService {
         Ok(Self::spawn_with_source_and_rumble(
             config,
             physical_source,
+            None,
             Some(rumble_backend_from_haptics_provider(haptics_provider)),
         ))
     }
@@ -123,6 +126,7 @@ impl OhMyGamepadService {
     fn spawn_with_source_and_rumble<TSource>(
         config: OhMyGamepadServiceConfig,
         physical_source: TSource,
+        source_handle: Option<crate::Sdl3RumbleHandle>,
         rumble_backend: Option<Box<dyn ServiceRumbleBackend>>,
     ) -> Self
     where
@@ -158,6 +162,7 @@ impl OhMyGamepadService {
                 virtual_input_tx,
                 virtual_descriptors: HashMap::new(),
                 keyboard_listener,
+                source_handle,
                 rumble_backend,
             }),
         }
@@ -261,6 +266,29 @@ impl OhMyGamepadService {
         policy: OhMyGamepadInputPolicyDto,
     ) -> Result<(), InputRuntimeError> {
         self.runtime.set_input_policy(policy)
+    }
+
+    pub fn activate_sampling(
+        &self,
+        policy: Option<OhMyGamepadInputPolicyDto>,
+    ) -> Result<OhMyGamepadRuntimeSnapshotDto, InputRuntimeError> {
+        self.runtime.set_suspended(false)?;
+        if let Some(source_handle) = self
+            .state
+            .lock()
+            .expect("lock service state")
+            .source_handle
+            .clone()
+        {
+            let _ = source_handle.prime_sampling();
+        }
+
+        let target_policy = match policy {
+            Some(policy) => policy,
+            None => self.snapshot_with_strategy_sync()?.input_policy,
+        };
+        self.runtime.set_input_policy(target_policy)?;
+        self.snapshot_with_strategy_sync()
     }
 
     pub fn rebind_logical_pad(

@@ -53,8 +53,11 @@ pub fn run() {
                         // Windows FSE 下会出现“窗口看似仍在前台、但焦点被系统壳层接管”的场景。
                         // 这里不能再把失焦直接等同于手柄采样应暂停，否则会把 UI / 串流输入一起挂掉。
                         if *focused {
-                            if let Err(e) = app_state.gamepad.set_suspended(false) {
-                                log::warn!("Failed to resume gamepad after focus regained: {}", e);
+                            if let Err(e) = app_state.gamepad.activate_sampling(None) {
+                                log::warn!(
+                                    "Failed to activate gamepad after focus regained: {}",
+                                    e
+                                );
                             }
                         }
                     }

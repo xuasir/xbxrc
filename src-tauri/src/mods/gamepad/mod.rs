@@ -82,6 +82,10 @@ pub trait GamepadProvider: Send + Sync {
         &self,
         policy: OhMyGamepadInputPolicyDto,
     ) -> Result<OhMyGamepadRuntimeSnapshotDto, String>;
+    fn activate_sampling(
+        &self,
+        policy: Option<OhMyGamepadInputPolicyDto>,
+    ) -> Result<OhMyGamepadRuntimeSnapshotDto, String>;
     fn update_sampling(
         &self,
         sampling: OhMyGamepadSamplingConfigDto,

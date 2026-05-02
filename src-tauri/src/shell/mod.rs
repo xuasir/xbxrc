@@ -30,6 +30,7 @@ pub async fn init_services(app: &mut tauri::App) -> AppResult<()> {
     let state = build_services(app, startup_flags.clone()).await?;
 
     bind_background_tasks(app.handle(), &state).await?;
+    let _ = state.gamepad.activate_sampling(None);
     log::info!("Application initialization completed.");
 
     Ok(())

@@ -44,6 +44,16 @@ impl Sdl3RumbleHandle {
             .send(Sdl3RumbleCommand::Stop { device_ids })
             .map_err(|_| Sdl3RumbleError::CommandChannelClosed)
     }
+
+    pub fn prime_sampling(&self) -> Result<(), Sdl3RumbleError> {
+        let (ack_tx, ack_rx) = mpsc::channel();
+        self.command_tx
+            .send(Sdl3RumbleCommand::PrimeSampling { ack_tx })
+            .map_err(|_| Sdl3RumbleError::CommandChannelClosed)?;
+        ack_rx
+            .recv_timeout(Duration::from_millis(100))
+            .map_err(|_| Sdl3RumbleError::CommandChannelClosed)
+    }
 }
 
 #[derive(Debug, Eq, PartialEq)]
@@ -69,6 +79,9 @@ enum Sdl3RumbleCommand {
     },
     Stop {
         device_ids: Vec<String>,
+    },
+    PrimeSampling {
+        ack_tx: Sender<()>,
     },
 }
 
@@ -195,7 +208,7 @@ fn run_sdl3_source_thread(
     }
 
     loop {
-        drain_rumble_commands(&command_rx, &mut opened_gamepads);
+        drain_rumble_commands(&event_tx, &command_rx, &mut opened_gamepads);
         gamepad_subsystem.update();
 
         let mut received_event = false;
@@ -373,6 +386,7 @@ fn open_gamepad_from_event(
 }
 
 fn drain_rumble_commands(
+    event_tx: &Sender<Sdl3InputEvent>,
     command_rx: &Receiver<Sdl3RumbleCommand>,
     opened_gamepads: &mut HashMap<String, OpenedSdl3Gamepad>,
 ) {
@@ -383,6 +397,10 @@ fn drain_rumble_commands(
             }
             Ok(Sdl3RumbleCommand::Stop { device_ids }) => {
                 stop_rumble_on_devices(opened_gamepads, &device_ids);
+            }
+            Ok(Sdl3RumbleCommand::PrimeSampling { ack_tx }) => {
+                prime_sampling_on_devices(event_tx, opened_gamepads);
+                let _ = ack_tx.send(());
             }
             Err(TryRecvError::Empty | TryRecvError::Disconnected) => break,
         }
@@ -421,6 +439,90 @@ fn stop_rumble_on_devices(
         };
         let _ = opened.gamepad.set_rumble(0, 0, 0);
         let _ = opened.gamepad.set_rumble_triggers(0, 0, 0);
+    }
+}
+
+fn prime_sampling_on_devices(
+    event_tx: &Sender<Sdl3InputEvent>,
+    opened_gamepads: &mut HashMap<String, OpenedSdl3Gamepad>,
+) {
+    let observed_at_ms = now_ms();
+    let mut device_ids = opened_gamepads.keys().cloned().collect::<Vec<_>>();
+    device_ids.sort();
+    for device_id in device_ids {
+        let Some(opened) = opened_gamepads.get_mut(&device_id) else {
+            continue;
+        };
+        opened.descriptor = descriptor_from_gamepad(device_id, &opened.gamepad);
+        emit_gamepad_baseline_events(
+            event_tx,
+            &opened.descriptor,
+            &opened.gamepad,
+            observed_at_ms,
+        );
+    }
+}
+
+fn emit_gamepad_baseline_events(
+    event_tx: &Sender<Sdl3InputEvent>,
+    descriptor: &Sdl3DeviceDescriptor,
+    gamepad: &Gamepad,
+    observed_at_ms: u64,
+) {
+    for (button, value) in [
+        (Button::South, gamepad.button(Button::South)),
+        (Button::East, gamepad.button(Button::East)),
+        (Button::West, gamepad.button(Button::West)),
+        (Button::North, gamepad.button(Button::North)),
+        (Button::LeftShoulder, gamepad.button(Button::LeftShoulder)),
+        (Button::RightShoulder, gamepad.button(Button::RightShoulder)),
+        (Button::Back, gamepad.button(Button::Back)),
+        (Button::Start, gamepad.button(Button::Start)),
+        (Button::LeftStick, gamepad.button(Button::LeftStick)),
+        (Button::RightStick, gamepad.button(Button::RightStick)),
+        (Button::DPadUp, gamepad.button(Button::DPadUp)),
+        (Button::DPadDown, gamepad.button(Button::DPadDown)),
+        (Button::DPadLeft, gamepad.button(Button::DPadLeft)),
+        (Button::DPadRight, gamepad.button(Button::DPadRight)),
+    ] {
+        if value {
+            if let Some(event) =
+                translate_button_event(descriptor.clone(), observed_at_ms, button, 1.0)
+            {
+                let _ = send_event(event_tx, event);
+            }
+        }
+    }
+
+    let home_pressed = gamepad.button(Button::Guide) || gamepad.button(Button::Misc1);
+    if home_pressed {
+        if let Some(event) =
+            translate_button_event(descriptor.clone(), observed_at_ms, Button::Guide, 1.0)
+        {
+            let _ = send_event(event_tx, event);
+        }
+    }
+
+    for (axis, value) in [
+        (Axis::LeftX, gamepad.axis(Axis::LeftX)),
+        (Axis::LeftY, gamepad.axis(Axis::LeftY)),
+        (Axis::RightX, gamepad.axis(Axis::RightX)),
+        (Axis::RightY, gamepad.axis(Axis::RightY)),
+        (Axis::TriggerLeft, gamepad.axis(Axis::TriggerLeft)),
+        (Axis::TriggerRight, gamepad.axis(Axis::TriggerRight)),
+    ] {
+        if axis_has_signal(axis, value) {
+            for event in translate_axis_event(descriptor.clone(), observed_at_ms, axis, value) {
+                let _ = send_event(event_tx, event);
+            }
+        }
+    }
+}
+
+fn axis_has_signal(axis: Axis, value: i16) -> bool {
+    match axis {
+        Axis::LeftX | Axis::LeftY | Axis::RightX | Axis::RightY => value != 0,
+        Axis::TriggerLeft | Axis::TriggerRight => value > 0,
     }
 }
 
