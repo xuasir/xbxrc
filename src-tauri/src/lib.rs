@@ -48,30 +48,14 @@ pub fn run() {
             match event {
                 tauri::WindowEvent::Focused(focused) => {
                     let app_state = window.state::<shell::state::AppState>();
-                    #[cfg(target_os = "windows")]
-                    {
-                        // Windows FSE 下会出现“窗口看似仍在前台、但焦点被系统壳层接管”的场景。
-                        // 这里不能再把失焦直接等同于手柄采样应暂停，否则会把 UI / 串流输入一起挂掉。
-                        if *focused {
-                            if let Err(e) = app_state.gamepad.activate_sampling(None) {
-                                log::warn!(
-                                    "Failed to activate gamepad after focus regained: {}",
-                                    e
-                                );
-                            }
-                        }
-                    }
-                    #[cfg(not(target_os = "windows"))]
-                    {
-                        if let Err(e) = app_state.gamepad.set_suspended(!focused) {
-                            log::warn!(
-                                "Failed to toggle gamepad suspension on focus change: {}",
-                                e
-                            );
+                    // 失焦不再直接等同于手柄采样应暂停。
+                    // app 仍然需要依赖同一条采样链支持 UI 导航，Windows FSE 也会出现壳层接管焦点的情况。
+                    if *focused {
+                        if let Err(e) = app_state.gamepad.activate_sampling(None) {
+                            log::warn!("Failed to activate gamepad after focus regained: {}", e);
                         }
                     }
                 }
-                #[cfg(target_os = "windows")]
                 tauri::WindowEvent::Resized(_) => {
                     let app_state = window.state::<shell::state::AppState>();
                     match window.is_minimized() {

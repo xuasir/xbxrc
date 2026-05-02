@@ -7,6 +7,7 @@ const STICK_DEADZONE = 0.5
 // UI 导航长按：默认稍慢一点，减少长列表的“连跳失控感”
 const BUTTON_REPEAT_DELAY = 450
 const BUTTON_REPEAT_RATE = 140
+const GAMEPAD_UI_RESET_EVENT = 'xbxrc:gamepad:ui-listener-reset-requested'
 
 interface GamepadState {
   pressed: Record<string, boolean>
@@ -18,6 +19,9 @@ class GamepadUIListener {
   private dispose: (() => void) | null = null
   private state: Record<string, GamepadState> = {}
   private inputPolicy: 'shared' | 'ui-only' | 'stream-only' = 'shared'
+  private handleResetRequested = () => {
+    this.resetAllInputState()
+  }
 
   start() {
     if (this.dispose)
@@ -30,6 +34,7 @@ class GamepadUIListener {
     const disposeRuntime = events.on('gamepad.runtimeSnapshot', (snapshot) => {
       this.updateInputPolicy(snapshot.inputPolicy)
     })
+    window.addEventListener(GAMEPAD_UI_RESET_EVENT, this.handleResetRequested)
 
     this.dispose = events.on('gamepad.slotSnapshot', (snapshot) => {
       if (this.inputPolicy === 'stream-only') {
@@ -77,6 +82,7 @@ class GamepadUIListener {
     const disposePad = this.dispose
     this.dispose = () => {
       disposeRuntime()
+      window.removeEventListener(GAMEPAD_UI_RESET_EVENT, this.handleResetRequested)
       disposePad?.()
     }
   }
@@ -194,3 +200,9 @@ class GamepadUIListener {
 }
 
 export const gamepadUIListener = new GamepadUIListener()
+
+export function requestGamepadUiListenerReset(reason: string): void {
+  window.dispatchEvent(new CustomEvent(GAMEPAD_UI_RESET_EVENT, {
+    detail: { reason },
+  }))
+}

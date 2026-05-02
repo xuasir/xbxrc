@@ -39,9 +39,16 @@ impl GamepadProvider for GamepadService {
         &self,
         policy: Option<OhMyGamepadInputPolicyDto>,
     ) -> Result<OhMyGamepadRuntimeSnapshotDto, String> {
-        self.host
+        log::info!(
+            "tauri_gamepad_activate_sampling source=provider policy={:?}",
+            policy
+        );
+        let snapshot = self
+            .host
             .activate_sampling(policy)
-            .map_err(|error| format!("{:?}", error))
+            .map_err(|error| format!("{:?}", error))?;
+        log_runtime_snapshot("activate_sampling", &snapshot);
+        Ok(snapshot)
     }
 
     fn update_sampling(
@@ -95,6 +102,10 @@ impl GamepadProvider for GamepadService {
     }
 
     fn set_suspended(&self, suspended: bool) -> Result<(), String> {
+        log::info!(
+            "tauri_gamepad_suspend_transition source=provider suspended={}",
+            suspended
+        );
         self.host
             .set_suspended(suspended)
             .map_err(|error| format!("{:?}", error))
@@ -318,4 +329,45 @@ fn matcher_is_empty(matcher: &GamepadDeviceProfileMatcherDto) -> bool {
             .map(str::trim)
             .map(str::is_empty)
             .unwrap_or(true)
+}
+
+fn log_runtime_snapshot(stage: &str, snapshot: &OhMyGamepadRuntimeSnapshotDto) {
+    let devices = snapshot
+        .devices
+        .iter()
+        .map(|device| {
+            format!(
+                "{}|{}|connected:{}|{:04x}:{:04x}|{}|{}|{}|{}",
+                device.device_id,
+                device.name,
+                device.connected,
+                device.vendor_id.unwrap_or_default(),
+                device.product_id.unwrap_or_default(),
+                device.path.as_deref().unwrap_or_default(),
+                device
+                    .mapping
+                    .as_deref()
+                    .map(mapping_guid_hint)
+                    .unwrap_or_default(),
+                device.serial_number.as_deref().unwrap_or_default(),
+                device
+                    .player_index
+                    .map(|value| value.to_string())
+                    .unwrap_or_default(),
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(";");
+    log::info!(
+        "tauri_gamepad_runtime_snapshot stage={} devices={} slots={} input_policy={:?} payload=[{}]",
+        stage,
+        snapshot.devices.len(),
+        snapshot.slots.len(),
+        snapshot.input_policy,
+        devices,
+    );
+}
+
+fn mapping_guid_hint(mapping: &str) -> &str {
+    mapping.split(',').next().unwrap_or_default()
 }

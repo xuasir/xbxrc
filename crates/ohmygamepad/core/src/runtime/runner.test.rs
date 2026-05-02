@@ -82,6 +82,8 @@ fn device(device_id: &str) -> OhMyGamepadDeviceDto {
             supports_player_index: false,
             reports_mapping: false,
             supports_touchpad: false,
+            supports_accel: false,
+            supports_gyro: false,
             supports_led: false,
             reports_serial: false,
         },

@@ -61,6 +61,8 @@ pub struct OhMyGamepadCapabilityFlagsDto {
     pub supports_player_index: bool,
     pub reports_mapping: bool,
     pub supports_touchpad: bool,
+    pub supports_accel: bool,
+    pub supports_gyro: bool,
     pub supports_led: bool,
     pub reports_serial: bool,
 }

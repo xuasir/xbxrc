@@ -1,5 +1,6 @@
 import type { Ref } from 'vue'
 import { watch } from 'vue'
+import { requestGamepadUiListenerReset } from '../../navigation/core/gamepad-listener'
 
 export type GamepadRouteTargetSnapshot
   = | { kind: 'shell-ui' }
@@ -31,6 +32,7 @@ export function useGamepadRouteForStreamOverlay(options: {
       return
     }
     pending = target
+    requestGamepadUiListenerReset(`route:${target.kind}`)
     try {
       await options.applyRouteTarget(target)
       // 如果在请求过程中状态又变了，不要覆盖后续请求的结果
@@ -50,6 +52,7 @@ export function useGamepadRouteForStreamOverlay(options: {
     }),
     (next, prev) => {
       if (next.sessionId === '') {
+        requestGamepadUiListenerReset('route:session-cleared')
         lastApplied = null
         return
       }

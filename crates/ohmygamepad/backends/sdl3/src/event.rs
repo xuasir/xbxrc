@@ -55,6 +55,7 @@ impl Sdl3DeviceDescriptor {
 pub enum Sdl3InputEventKind {
     Connected,
     Disconnected,
+    Snapshot { buttons: Vec<f32>, axes: Vec<f32> },
     ButtonChanged { index: usize, value: f32 },
     AxisChanged { index: usize, value: f32 },
     Dropped,

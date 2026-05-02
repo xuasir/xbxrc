@@ -1,0 +1,8 @@
+# Project-local SDL gamepad mapping overlays.
+# Format follows SDL gamecontrollerdb.txt.
+
+030000008a3500000102000000000000,Backbone One,a:b4,b:b5,back:b14,dpdown:h0.4,dpleft:h0.8,dpright:h0.2,dpup:h0.1,guide:b16,leftshoulder:b10,leftstick:b17,lefttrigger:b12,leftx:a0,lefty:a1,rightshoulder:b11,rightstick:b18,righttrigger:b13,rightx:a3,righty:a4,start:b15,x:b7,y:b8,platform:Windows,
+030000008a3500000201000000000000,Backbone One,a:b4,b:b5,back:b14,dpdown:h0.4,dpleft:h0.8,dpright:h0.2,dpup:h0.1,guide:b16,leftshoulder:b10,leftstick:b17,lefttrigger:b12,leftx:a0,lefty:a1,rightshoulder:b11,rightstick:b18,righttrigger:b13,rightx:a3,righty:a4,start:b15,x:b7,y:b8,platform:Windows,
+030000008a3500000302000000000000,Backbone One,a:b4,b:b5,back:b14,dpdown:h0.4,dpleft:h0.8,dpright:h0.2,dpup:h0.1,guide:b16,leftshoulder:b10,leftstick:b17,lefttrigger:b12,leftx:a0,lefty:a1,rightshoulder:b11,rightstick:b18,righttrigger:b13,rightx:a3,righty:a4,start:b15,x:b7,y:b8,platform:Windows,
+030000008a3500000402000000000000,Backbone One,a:b4,b:b5,back:b14,dpdown:h0.4,dpleft:h0.8,dpright:h0.2,dpup:h0.1,guide:b16,leftshoulder:b10,leftstick:b17,lefttrigger:b12,leftx:a0,lefty:a1,rightshoulder:b11,rightstick:b18,righttrigger:b13,rightx:a3,righty:a4,start:b15,x:b7,y:b8,platform:Windows,
+03000000550900001072000000000000,NVIDIA Shield,a:b9,b:b8,back:b11,dpdown:h0.4,dpleft:h0.8,dpright:h0.2,dpup:h0.1,leftshoulder:b5,leftstick:b3,lefttrigger:a3,leftx:a0,lefty:a1,rightshoulder:b4,rightstick:b2,righttrigger:a4,rightx:a2,righty:a5,start:b0,x:b7,y:b6,platform:Windows,

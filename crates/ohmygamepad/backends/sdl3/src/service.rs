@@ -91,7 +91,7 @@ pub struct OhMyGamepadService {
 
 impl OhMyGamepadService {
     pub fn spawn(config: OhMyGamepadServiceConfig) -> Result<Self, Sdl3SourceInitError> {
-        let (physical_source, rumble_handle) = RealSdl3Source::new()?;
+        let (physical_source, rumble_handle) = RealSdl3Source::new(config.backend.clone())?;
         Ok(Self::spawn_with_source_and_rumble(
             config,
             physical_source,
@@ -114,7 +114,7 @@ impl OhMyGamepadService {
         config: OhMyGamepadServiceConfig,
         haptics_provider: Box<dyn HapticsProvider>,
     ) -> Result<Self, Sdl3SourceInitError> {
-        let (physical_source, _sdl3_rumble_handle) = RealSdl3Source::new()?;
+        let (physical_source, _sdl3_rumble_handle) = RealSdl3Source::new(config.backend.clone())?;
         Ok(Self::spawn_with_source_and_rumble(
             config,
             physical_source,
@@ -229,7 +229,14 @@ impl OhMyGamepadService {
     }
 
     pub fn set_suspended(&self, suspended: bool) -> Result<(), InputRuntimeError> {
-        self.runtime.set_suspended(suspended)
+        if suspended {
+            log::info!("ohmygamepad_suspend_transition action=suspend");
+            self.runtime.set_suspended(true)
+        } else {
+            let policy = self.snapshot_with_strategy_sync()?.input_policy;
+            let _ = self.perform_resume_recovery(policy, "set_suspended(false)")?;
+            Ok(())
+        }
     }
 
     pub fn set_primary_sampling_device(
@@ -272,23 +279,11 @@ impl OhMyGamepadService {
         &self,
         policy: Option<OhMyGamepadInputPolicyDto>,
     ) -> Result<OhMyGamepadRuntimeSnapshotDto, InputRuntimeError> {
-        self.runtime.set_suspended(false)?;
-        if let Some(source_handle) = self
-            .state
-            .lock()
-            .expect("lock service state")
-            .source_handle
-            .clone()
-        {
-            let _ = source_handle.prime_sampling();
-        }
-
         let target_policy = match policy {
             Some(policy) => policy,
             None => self.snapshot_with_strategy_sync()?.input_policy,
         };
-        self.runtime.set_input_policy(target_policy)?;
-        self.snapshot_with_strategy_sync()
+        self.perform_resume_recovery(target_policy, "activate_sampling")
     }
 
     pub fn rebind_logical_pad(
@@ -521,6 +516,39 @@ impl OhMyGamepadService {
             let _ = self.wait_for_device_state(&descriptor.device_id, &state)?;
         }
         Ok(())
+    }
+
+    fn perform_resume_recovery(
+        &self,
+        policy: OhMyGamepadInputPolicyDto,
+        reason: &str,
+    ) -> Result<OhMyGamepadRuntimeSnapshotDto, InputRuntimeError> {
+        log::info!(
+            "ohmygamepad_resume_recovery_start reason={} policy={:?}",
+            reason,
+            policy
+        );
+        self.runtime.set_suspended(false)?;
+        self.runtime.set_input_policy(policy)?;
+        if let Some(source_handle) = self
+            .state
+            .lock()
+            .expect("lock service state")
+            .source_handle
+            .clone()
+        {
+            if let Err(error) = source_handle.prime_sampling() {
+                log::warn!(
+                    "ohmygamepad_resume_recovery_prime_failed reason={} error={}",
+                    reason,
+                    error
+                );
+            }
+        }
+        self.runtime.refresh_snapshot()?;
+        let snapshot = self.snapshot_with_strategy_sync()?;
+        log_resume_snapshot(reason, &snapshot);
+        Ok(snapshot)
     }
 
     fn snapshot_with_strategy_sync(
@@ -793,6 +821,47 @@ fn logical_state_to_events(
 
 fn trigger_axis_value(value: f32) -> f32 {
     (value.clamp(0.0, 1.0) * 2.0) - 1.0
+}
+
+fn log_resume_snapshot(reason: &str, snapshot: &OhMyGamepadRuntimeSnapshotDto) {
+    let connected_devices = snapshot
+        .devices
+        .iter()
+        .filter(|device| device.connected)
+        .map(|device| {
+            format!(
+                "{}|{}|{:04x}:{:04x}|{}|{}|{}|{}",
+                device.device_id,
+                device.name,
+                device.vendor_id.unwrap_or_default(),
+                device.product_id.unwrap_or_default(),
+                device.path.as_deref().unwrap_or_default(),
+                device
+                    .mapping
+                    .as_deref()
+                    .map(mapping_guid_hint)
+                    .unwrap_or_default(),
+                device.serial_number.as_deref().unwrap_or_default(),
+                device
+                    .player_index
+                    .map(|value| value.to_string())
+                    .unwrap_or_default(),
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(";");
+    log::info!(
+        "ohmygamepad_resume_recovery_done reason={} devices={} slots={} input_policy={:?} connected=[{}]",
+        reason,
+        snapshot.devices.len(),
+        snapshot.slots.len(),
+        snapshot.input_policy,
+        connected_devices,
+    );
+}
+
+fn mapping_guid_hint(mapping: &str) -> &str {
+    mapping.split(',').next().unwrap_or_default()
 }
 
 fn logical_state_contains(actual: &LogicalPadStateDto, expected: &LogicalPadStateDto) -> bool {

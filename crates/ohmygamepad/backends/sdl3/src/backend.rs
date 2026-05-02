@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use std::collections::{hash_map::Entry, HashMap};
 
 use ohmygamepad_core::{BackendPollResult, DeviceLifecycleEvent, InputBackend, RawDeviceSample};
@@ -12,6 +14,11 @@ use crate::{
 pub struct Sdl3BackendConfig {
     pub enabled: bool,
     pub max_events_per_poll: usize,
+    pub mapping_paths: Vec<PathBuf>,
+    pub extra_mappings: Vec<String>,
+    pub ignored_device_guids: Vec<String>,
+    pub ignored_vid_pids: Vec<(u16, u16)>,
+    pub ignored_name_contains: Vec<String>,
 }
 
 impl Default for Sdl3BackendConfig {
@@ -19,8 +26,64 @@ impl Default for Sdl3BackendConfig {
         Self {
             enabled: true,
             max_events_per_poll: 256,
+            mapping_paths: default_mapping_paths(),
+            extra_mappings: parse_multiline_env("OHMYGAMEPAD_SDL3_EXTRA_MAPPINGS"),
+            ignored_device_guids: parse_csv_env("OHMYGAMEPAD_SDL3_IGNORE_GUIDS"),
+            ignored_vid_pids: parse_vid_pid_env("OHMYGAMEPAD_SDL3_IGNORE_VID_PIDS"),
+            ignored_name_contains: parse_csv_env("OHMYGAMEPAD_SDL3_IGNORE_NAME_CONTAINS"),
         }
     }
+}
+
+fn default_mapping_paths() -> Vec<PathBuf> {
+    [
+        PathBuf::from("src-tauri/resources/gamecontrollerdb.txt"),
+        PathBuf::from("resources/gamecontrollerdb.txt"),
+        PathBuf::from("gamecontrollerdb.txt"),
+    ]
+    .into_iter()
+    .filter(|path| path.is_file())
+    .collect()
+}
+
+fn parse_csv_env(key: &str) -> Vec<String> {
+    std::env::var(key)
+        .ok()
+        .map(|value| {
+            value
+                .split(',')
+                .map(str::trim)
+                .filter(|item| !item.is_empty())
+                .map(ToOwned::to_owned)
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+fn parse_multiline_env(key: &str) -> Vec<String> {
+    std::env::var(key)
+        .ok()
+        .map(|value| {
+            value
+                .lines()
+                .map(str::trim)
+                .filter(|item| !item.is_empty())
+                .map(ToOwned::to_owned)
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+fn parse_vid_pid_env(key: &str) -> Vec<(u16, u16)> {
+    parse_csv_env(key)
+        .into_iter()
+        .filter_map(|item| {
+            let (vendor, product) = item.split_once(':')?;
+            let vendor = u16::from_str_radix(vendor.trim(), 16).ok()?;
+            let product = u16::from_str_radix(product.trim(), 16).ok()?;
+            Some((vendor, product))
+        })
+        .collect()
 }
 
 #[derive(Debug)]
@@ -83,6 +146,15 @@ impl TrackedDevice {
         self.dirty_sample = true;
     }
 
+    fn sync_snapshot(&mut self, buttons: Vec<f32>, axes: Vec<f32>, observed_at_ms: u64) {
+        let first_snapshot = self.buttons.is_empty() && self.axes.is_empty();
+        let changed = first_snapshot || self.buttons != buttons || self.axes != axes;
+        self.buttons = buttons;
+        self.axes = axes;
+        self.sample_observed_at_ms = observed_at_ms;
+        self.dirty_sample = changed;
+    }
+
     fn take_sample(&mut self) -> Option<RawDeviceSample> {
         if !self.dirty_sample {
             return None;
@@ -107,7 +179,7 @@ pub struct Sdl3Backend<TSource = NoopSdl3Source> {
 
 impl Sdl3Backend<RealSdl3Source> {
     pub fn new(config: Sdl3BackendConfig) -> Result<Self, Sdl3SourceInitError> {
-        let (source, _) = RealSdl3Source::new()?;
+        let (source, _) = RealSdl3Source::new(config.clone())?;
         Ok(Self::with_source(config, source))
     }
 }
@@ -182,6 +254,10 @@ where
                         observed_at_ms: event.observed_at_ms,
                     });
                 }
+            }
+            Sdl3InputEventKind::Snapshot { buttons, axes } => {
+                let device = self.ensure_device(event.device, event.observed_at_ms, device_events);
+                device.sync_snapshot(buttons, axes, event.observed_at_ms);
             }
             Sdl3InputEventKind::ButtonChanged { index, value } => {
                 let device = self.ensure_device(event.device, event.observed_at_ms, device_events);

@@ -83,6 +83,8 @@ export interface GamepadCapabilityFlagsDto {
   supportsPlayerIndex: boolean
   reportsMapping: boolean
   supportsTouchpad: boolean
+  supportsAccel: boolean
+  supportsGyro: boolean
   supportsLed: boolean
   reportsSerial: boolean
 }

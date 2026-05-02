@@ -87,6 +87,7 @@ enum RuntimeCommand {
     GetRuntimeSnapshot {
         reply_tx: Sender<OhMyGamepadRuntimeSnapshotDto>,
     },
+    RefreshSnapshot,
     SetInputPolicy {
         policy: OhMyGamepadInputPolicyDto,
     },
@@ -137,6 +138,12 @@ impl InputRuntimeHandle {
     ) -> Result<(), InputRuntimeError> {
         self.command_tx
             .send(RuntimeCommand::SetInputPolicy { policy })
+            .map_err(|_| InputRuntimeError::CommandChannelClosed)
+    }
+
+    pub fn refresh_snapshot(&self) -> Result<(), InputRuntimeError> {
+        self.command_tx
+            .send(RuntimeCommand::RefreshSnapshot)
             .map_err(|_| InputRuntimeError::CommandChannelClosed)
     }
 
@@ -371,6 +378,18 @@ where
     match command {
         RuntimeCommand::GetRuntimeSnapshot { reply_tx } => {
             let _ = reply_tx.send(core.runtime_snapshot());
+            false
+        }
+        RuntimeCommand::RefreshSnapshot => {
+            core.sync_clock_ms(now.as_millis() as u64);
+            core.poll_backend();
+            core.sample_once();
+            force_publish_runtime_snapshot(
+                snapshot_broadcaster,
+                publish_state,
+                core.runtime_snapshot(),
+                now,
+            );
             false
         }
         RuntimeCommand::SetInputPolicy { policy } => {
