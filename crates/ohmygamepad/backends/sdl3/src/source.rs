@@ -996,7 +996,7 @@ fn capture_gamepad_baseline_state(gamepad: &Gamepad) -> (Vec<f32>, Vec<f32>) {
     axes[0] = normalize_stick_axis(gamepad.axis(Axis::LeftX));
     axes[1] = normalize_stick_axis(gamepad.axis(Axis::LeftY));
     axes[2] = normalize_stick_axis(gamepad.axis(Axis::RightX));
-    axes[3] = -normalize_stick_axis(gamepad.axis(Axis::RightY));
+    axes[3] = normalize_stick_axis(gamepad.axis(Axis::RightY));
 
     let left_trigger = normalize_trigger_axis(gamepad.axis(Axis::TriggerLeft));
     let right_trigger = normalize_trigger_axis(gamepad.axis(Axis::TriggerRight));
