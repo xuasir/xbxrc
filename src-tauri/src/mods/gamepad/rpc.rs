@@ -19,6 +19,9 @@ pub enum GamepadCommand {
     ActivateSampling {
         policy: Option<OhMyGamepadInputPolicyDto>,
     },
+    ResumeShellSampling {
+        policy: OhMyGamepadInputPolicyDto,
+    },
     UpdateSampling {
         sampling: OhMyGamepadSamplingConfigDto,
     },
@@ -77,6 +80,9 @@ pub async fn handle_rpc(
         GamepadCommand::ActivateSampling { policy } => {
             Ok(serde_json::to_value(service.activate_sampling(policy)?)?)
         }
+        GamepadCommand::ResumeShellSampling { policy } => Ok(serde_json::to_value(
+            service.resume_shell_sampling(policy)?,
+        )?),
         GamepadCommand::UpdateSampling { sampling } => {
             Ok(serde_json::to_value(service.update_sampling(sampling)?)?)
         }

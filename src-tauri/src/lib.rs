@@ -64,28 +64,18 @@ pub fn run() {
                         activate_gamepad_sampling_for_window(window, "window-focused");
                     }
                 }
-                tauri::WindowEvent::Resized(_) => {
-                    let app_state = window.state::<shell::state::AppState>();
-                    match window.is_minimized() {
-                        Ok(true) => {
-                            if let Err(e) = app_state.gamepad.set_suspended(true) {
-                                log::warn!(
-                                    "Failed to suspend gamepad while window minimized: {}",
-                                    e
-                                );
-                            }
-                        }
-                        Ok(false) => {
-                            activate_gamepad_sampling_for_window(
-                                window,
-                                "window-restored-from-minimized",
-                            );
-                        }
-                        Err(e) => {
-                            log::warn!("Failed to inspect window minimized state: {}", e);
-                        }
+                tauri::WindowEvent::Resized(_) => match window.is_minimized() {
+                    Ok(false) => {
+                        activate_gamepad_sampling_for_window(
+                            window,
+                            "window-restored-from-minimized",
+                        );
                     }
-                }
+                    Ok(true) => {}
+                    Err(e) => {
+                        log::warn!("Failed to inspect window minimized state: {}", e);
+                    }
+                },
                 _ => {}
             }
 

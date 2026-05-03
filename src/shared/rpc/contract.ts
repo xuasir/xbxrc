@@ -121,6 +121,10 @@ export interface XBoxRpcSchema {
       { policy?: GamepadInputPolicyDto | null } | void,
       GamepadRuntimeSnapshotDto
     >
+    resumeShellSampling: RpcMethod<
+      { policy: GamepadInputPolicyDto },
+      GamepadRuntimeSnapshotDto
+    >
     updateSampling: RpcMethod<{ sampling: GamepadSamplingConfigDto }, GamepadRuntimeSnapshotDto>
     setSamplingStrategy: RpcMethod<
       { strategy: GamepadSamplingStrategyDto },

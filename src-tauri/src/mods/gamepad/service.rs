@@ -51,6 +51,22 @@ impl GamepadProvider for GamepadService {
         Ok(snapshot)
     }
 
+    fn resume_shell_sampling(
+        &self,
+        policy: OhMyGamepadInputPolicyDto,
+    ) -> Result<OhMyGamepadRuntimeSnapshotDto, String> {
+        log::info!(
+            "tauri_gamepad_resume_shell_sampling source=provider policy={:?}",
+            policy
+        );
+        let snapshot = self
+            .host
+            .resume_shell_sampling(policy)
+            .map_err(|error| format!("{:?}", error))?;
+        log_runtime_snapshot("resume_shell_sampling", &snapshot);
+        Ok(snapshot)
+    }
+
     fn update_sampling(
         &self,
         sampling: OhMyGamepadSamplingConfigDto,

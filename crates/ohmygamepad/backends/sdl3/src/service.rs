@@ -286,6 +286,29 @@ impl OhMyGamepadService {
         self.perform_resume_recovery(target_policy, "activate_sampling")
     }
 
+    pub fn resume_shell_sampling(
+        &self,
+        policy: OhMyGamepadInputPolicyDto,
+    ) -> Result<OhMyGamepadRuntimeSnapshotDto, InputRuntimeError> {
+        log::info!("ohmygamepad_shell_recovery_start policy={:?}", policy);
+        self.runtime.set_input_policy(policy)?;
+        if let Some(source_handle) = self
+            .state
+            .lock()
+            .expect("lock service state")
+            .source_handle
+            .clone()
+        {
+            if let Err(error) = source_handle.prime_sampling() {
+                log::warn!("ohmygamepad_shell_recovery_prime_failed error={}", error);
+            }
+        }
+        self.runtime.refresh_snapshot()?;
+        let snapshot = self.snapshot_with_strategy_sync()?;
+        log_resume_snapshot("resume_shell_sampling", &snapshot);
+        Ok(snapshot)
+    }
+
     pub fn rebind_logical_pad(
         &self,
         binding: LogicalPadBindingDto,
@@ -396,7 +419,7 @@ impl OhMyGamepadService {
         let state = self.state.lock().expect("lock service state");
         let prepared = prepare_rumble_dispatch(
             resolve_connected_target_devices(&snapshot, &request.target, EMPTY_SAMPLING_DEVICE_ID),
-            state.rumble_backend.is_some(),
+            state.rumble_backend.as_deref(),
         );
 
         match prepared {
@@ -420,7 +443,7 @@ impl OhMyGamepadService {
         let state = self.state.lock().expect("lock service state");
         let prepared = prepare_rumble_dispatch(
             resolve_connected_target_devices(&snapshot, &target, EMPTY_SAMPLING_DEVICE_ID),
-            state.rumble_backend.is_some(),
+            state.rumble_backend.as_deref(),
         );
 
         match prepared {

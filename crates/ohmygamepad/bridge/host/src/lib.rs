@@ -105,6 +105,13 @@ impl GamepadRuntimeHost {
         self.runtime.activate_sampling(policy)
     }
 
+    pub fn resume_shell_sampling(
+        &self,
+        policy: OhMyGamepadInputPolicyDto,
+    ) -> Result<OhMyGamepadRuntimeSnapshotDto, InputRuntimeError> {
+        self.runtime.resume_shell_sampling(policy)
+    }
+
     pub fn set_sampling(
         &self,
         sampling: OhMyGamepadSamplingConfigDto,

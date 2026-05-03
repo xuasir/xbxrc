@@ -8,6 +8,10 @@ use ohmygamepad_protocol::{
 use crate::Sdl3RumbleHandle;
 
 pub(crate) trait ServiceRumbleBackend: Send {
+    fn resolve_backend_device_ids(&self, device: &OhMyGamepadDeviceDto) -> Vec<String> {
+        vec![device.device_id.clone()]
+    }
+
     fn play_rumble(
         &self,
         device_ids: &[String],
@@ -44,6 +48,23 @@ struct HapticsProviderRumbleBackend {
 }
 
 impl ServiceRumbleBackend for HapticsProviderRumbleBackend {
+    fn resolve_backend_device_ids(&self, device: &OhMyGamepadDeviceDto) -> Vec<String> {
+        let mut ids = vec![device.device_id.clone()];
+
+        if let Some(path) = device.path.as_ref().filter(|value| !value.is_empty()) {
+            ids.push(path.clone());
+        }
+
+        if let Some(player_index) = device.player_index {
+            ids.push(player_index.to_string());
+            ids.push(format!("xinput-user-{player_index}"));
+        }
+
+        ids.sort();
+        ids.dedup();
+        ids
+    }
+
     fn play_rumble(
         &self,
         device_ids: &[String],
@@ -69,19 +90,20 @@ fn map_haptics_provider_error(error: HapticsProviderError) -> InputRuntimeError 
 }
 
 pub(crate) struct PreparedRumbleDispatch {
-    device_ids: Vec<String>,
+    resolved_device_ids: Vec<String>,
+    backend_device_ids: Vec<String>,
 }
 
 impl PreparedRumbleDispatch {
     pub(crate) fn device_ids(&self) -> &[String] {
-        &self.device_ids
+        &self.backend_device_ids
     }
 
     pub(crate) fn into_result(self) -> OhMyGamepadRumbleResultDto {
         OhMyGamepadRumbleResultDto {
             accepted: true,
             reason: None,
-            resolved_device_ids: self.device_ids,
+            resolved_device_ids: self.resolved_device_ids,
         }
     }
 }
@@ -167,7 +189,7 @@ fn resolve_default_target_device_ids(
 
 pub(crate) fn prepare_rumble_dispatch(
     devices: Vec<OhMyGamepadDeviceDto>,
-    has_rumble_backend: bool,
+    rumble_backend: Option<&dyn ServiceRumbleBackend>,
 ) -> PreparedRumbleRequest {
     if devices.is_empty() {
         return PreparedRumbleRequest::Rejected(OhMyGamepadRumbleResultDto::rejected(
@@ -180,6 +202,7 @@ pub(crate) fn prepare_rumble_dispatch(
         .iter()
         .map(|device| device.device_id.clone())
         .collect::<Vec<_>>();
+    let has_rumble_backend = rumble_backend.is_some();
     let supported_device_ids = devices
         .iter()
         .filter(|device| supports_service_rumble(device, has_rumble_backend))
@@ -200,8 +223,22 @@ pub(crate) fn prepare_rumble_dispatch(
         ));
     }
 
+    let backend = rumble_backend.expect("has_rumble_backend implies backend present");
+    let mut backend_device_ids = devices
+        .iter()
+        .filter(|device| {
+            supported_device_ids
+                .iter()
+                .any(|id| id == &device.device_id)
+        })
+        .flat_map(|device| backend.resolve_backend_device_ids(device))
+        .collect::<Vec<_>>();
+    backend_device_ids.sort();
+    backend_device_ids.dedup();
+
     PreparedRumbleRequest::Dispatch(PreparedRumbleDispatch {
-        device_ids: supported_device_ids,
+        resolved_device_ids: supported_device_ids,
+        backend_device_ids,
     })
 }
 

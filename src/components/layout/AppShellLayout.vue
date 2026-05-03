@@ -51,6 +51,7 @@ const gamepadSnapshot = ref<GamepadRuntimeSnapshotDto | null>(null)
 let restoringGamepadSampling = false
 let recoveryAttemptToken = 0
 let recoveryRetryTimers: number[] = []
+let correctingShellPolicy = false
 
 // LB/RB 一级页面切换顺序
 const PAGE_NAV_ORDER: AppPageRouteName[] = ['xhome', 'xcloud', 'setting']
@@ -168,9 +169,11 @@ async function restoreGamepadSampling(reason: string, expectedAdvanceFrom?: stri
   recordGamepadRecoveryTrace('gamepadRecoveryAttemptStarted', {
     reason,
     expectedAdvanceFrom: expectedAdvanceFrom ?? null,
+    targetPolicy: 'shared',
+    recoveryKind: 'shell-resume',
   })
   try {
-    gamepadSnapshot.value = await rpc.gamepad.activateSampling()
+    gamepadSnapshot.value = await rpc.gamepad.resumeShellSampling({ policy: 'shared' })
     const nextProgress = gamepadSamplingProgressToken(gamepadSnapshot.value)
     const progressed = expectedAdvanceFrom ? nextProgress !== expectedAdvanceFrom : true
     recordGamepadRecoveryTrace('gamepadRecoveryAttemptCompleted', {
@@ -178,6 +181,8 @@ async function restoreGamepadSampling(reason: string, expectedAdvanceFrom?: stri
       expectedAdvanceFrom: expectedAdvanceFrom ?? null,
       nextProgress,
       progressed,
+      recoveryKind: 'shell-resume',
+      inputPolicy: gamepadSnapshot.value.inputPolicy,
       connectedDevices: gamepadSnapshot.value.devices.filter(device => device.connected).length,
     })
     if (expectedAdvanceFrom && nextProgress === expectedAdvanceFrom) {
@@ -202,6 +207,38 @@ function handleDocumentVisibilityChange(): void {
     return
   }
   scheduleGamepadSamplingRecovery('document-visible')
+}
+
+async function ensureShellInputPolicy(snapshot: GamepadRuntimeSnapshotDto): Promise<void> {
+  if (snapshot.inputPolicy === 'shared' || correctingShellPolicy) {
+    return
+  }
+
+  correctingShellPolicy = true
+  recordGamepadRecoveryTrace('gamepadShellPolicyCorrectionStarted', {
+    observedPolicy: snapshot.inputPolicy,
+    targetPolicy: 'shared',
+    recoveryKind: 'shell-resume',
+  })
+
+  try {
+    gamepadSnapshot.value = await rpc.gamepad.resumeShellSampling({ policy: 'shared' })
+    recordGamepadRecoveryTrace('gamepadShellPolicyCorrectionCompleted', {
+      observedPolicy: snapshot.inputPolicy,
+      correctedPolicy: gamepadSnapshot.value.inputPolicy,
+      recoveryKind: 'shell-resume',
+    })
+  }
+  catch (error) {
+    recordGamepadRecoveryTrace('gamepadShellPolicyCorrectionFailed', {
+      observedPolicy: snapshot.inputPolicy,
+      error: error instanceof Error ? error.message : String(error),
+    })
+    console.warn('[AppShell] ensure shell input policy failed:', error)
+  }
+  finally {
+    correctingShellPolicy = false
+  }
 }
 
 function scheduleGamepadSamplingRecovery(reason: string): void {
@@ -368,9 +405,13 @@ onMounted(() => {
   })
   disposeGamepadRuntimeSnapshot = events.on('gamepad.runtimeSnapshot', (snapshot) => {
     gamepadSnapshot.value = snapshot
+    if (document.visibilityState === 'visible' && snapshot.inputPolicy !== 'shared') {
+      void ensureShellInputPolicy(snapshot)
+    }
   })
   window.addEventListener('keydown', handleEscapeKeydown)
   document.addEventListener('visibilitychange', handleDocumentVisibilityChange)
+  scheduleGamepadSamplingRecovery('app-shell-mounted')
 
   // 注册 LB/RB 一级页面切换
   disposePageSwitch = navigationEngine.onPageSwitch((direction) => {
