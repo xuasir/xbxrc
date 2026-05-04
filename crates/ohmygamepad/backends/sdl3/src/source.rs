@@ -993,6 +993,8 @@ fn capture_gamepad_baseline_state(gamepad: &Gamepad) -> (Vec<f32>, Vec<f32>) {
         buttons[index] = bool_to_button_value(pressed);
     }
 
+    // 右摇杆 Y 必须与 `translate_axis_event` 中 `Axis::RightY` 分支使用同一套符号；
+    // 若只在事件路径取反、快照路径不取反，会在 prime/刷新基线后与轴事件更新互相打架，表现为方向反复颠倒。
     axes[0] = normalize_stick_axis(gamepad.axis(Axis::LeftX));
     axes[1] = normalize_stick_axis(gamepad.axis(Axis::LeftY));
     axes[2] = normalize_stick_axis(gamepad.axis(Axis::RightX));
@@ -1080,7 +1082,7 @@ fn translate_axis_event(
             descriptor,
             observed_at_ms,
             3,
-            -normalize_stick_axis(value),
+            normalize_stick_axis(value),
         )],
         Axis::TriggerLeft => {
             let axis_value = normalize_trigger_axis(value);

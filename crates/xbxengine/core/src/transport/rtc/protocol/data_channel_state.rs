@@ -147,7 +147,8 @@ pub(crate) fn build_input_stream_packet(
         // Xbox 输入协议里左摇杆 Y 轴向上为正值，这里在出包边界做方向对齐。
         packet.extend_from_slice(&normalize_axis(-frame.state.left_stick.y).to_le_bytes());
         packet.extend_from_slice(&normalize_axis(frame.state.right_stick.x).to_le_bytes());
-        packet.extend_from_slice(&normalize_axis(frame.state.right_stick.y).to_le_bytes());
+        // 右摇杆 Y 与左摇杆 Y 使用同一套流端竖轴符号约定。
+        packet.extend_from_slice(&normalize_axis(-frame.state.right_stick.y).to_le_bytes());
         packet.extend_from_slice(
             &normalize_trigger(frame.state.buttons.l2.max(frame.state.left_trigger)).to_le_bytes(),
         );

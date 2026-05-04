@@ -27,7 +27,10 @@ fn activate_gamepad_sampling_for_window(window: &tauri::Window, reason: &str) {
 
     let app_state = window.state::<shell::state::AppState>();
     // 从大屏模式或其他场景返回app时，应该使用Shared策略恢复采样
-    if let Err(error) = app_state.gamepad.resume_shell_sampling(OhMyGamepadInputPolicyDto::Shared) {
+    if let Err(error) = app_state
+        .gamepad
+        .resume_shell_sampling(OhMyGamepadInputPolicyDto::Shared)
+    {
         log::warn!(
             "Failed to resume shell sampling reason={} error={}",
             reason,

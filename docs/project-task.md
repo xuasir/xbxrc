@@ -23,6 +23,7 @@
 
 ## Recent Completed
 
+- 2026-05-04: 修复右摇杆 `Y` 方向问题：1）SDL3 源里 `Axis::RightY` 的 `AxisChanged` 与 `capture_gamepad_baseline_state` 快照路径符号已对齐，避免 prime/恢复后间歇跳变。2）串流出包按 Xbox 流端竖轴约定对 **左右摇杆 `Y` 均在边界取反**（`InputPacketEncoder` 与 `xbxengine` `data_channel_state` 一致），逻辑坐标仍保持「上为正」的 `LogicalPadState`，仅线包符号对齐远端。验证：`cargo fmt`、`cargo check -p xbxengine`、`cargo check -p ohmygamepad-sdl3`、`pnpm vitest run src/player/protocol/input/InputPacketEncoder.test.ts`。
 - 2026-05-02: 手柄卡片补齐 SDL 设备判定信息展示：`GamepadProfileCard` 现在直接展示分类标签、置信度、VID/PID、SDL 设备类型、mapping、能力摘要、判定 reasons 与 device path，便于在无实机条件下直接分辨掌机内建手柄、虚拟 XInput 与 Steam Virtual 恢复路径。验证：`pnpm lint:fix`。
 - 2026-05-02: 将 `0x0B05:0x1B4C` 加入 SDL3 已知掌机内建手柄白名单，覆盖 `ROG Xbox Ally X` 的内建 `XInput` 视图；现有分类会稳定打出 `掌机内建 + 虚拟手柄`，便于把“掌机内建兼容视图”与普通外接 `XInput Controller` 区分开。验证：`cargo fmt`、`cargo check -p xbxrc`。
 - 2026-05-02: 将 Windows 桌面 haptics 主线切到 `win-xbox-haptics`，并对 `0x0B05:0x1B4C + XInput` 视图补 host 侧能力兼容：Windows 下默认 rumble provider 现在优先走 `Windows.Gaming.Input` 四路震动，`ROG Xbox Ally X` 内建 `XInput` 视图在前端快照中会显式呈现 `扳机震动` 能力，并统一显示为 `Xbox Controller`。验证：`cargo fmt`、`cargo check -p xbxrc`、`pnpm lint:fix`。

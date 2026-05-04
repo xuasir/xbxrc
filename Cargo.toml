@@ -76,6 +76,7 @@ opt-level = 0
 
 [profile.release]
 opt-level = 3
-lto = true
-codegen-units = 1
+# 真发版的编译-性能平衡：比 fat LTO + 单单元明显更快。
+lto = "thin"
+codegen-units = 8
 strip = true

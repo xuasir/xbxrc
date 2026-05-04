@@ -195,6 +195,7 @@ export class InputPacketEncoder {
       packet.setInt16(offset + 2, this.normalizeAxis(input.state.leftStick.x), true)
       packet.setInt16(offset + 4, this.normalizeAxis(-input.state.leftStick.y), true)
       packet.setInt16(offset + 6, this.normalizeAxis(input.state.rightStick.x), true)
+      // 与左摇杆 Y 相同：在出包边界对流端 Xbox 输入协议的竖轴符号做一次对齐（见 `data_channel_state` 组包）。
       packet.setInt16(offset + 8, this.normalizeAxis(-input.state.rightStick.y), true)
       packet.setUint16(
         offset + 10,
