@@ -6,6 +6,7 @@ import type {
   TransportRuntimeConfig,
 } from '../../player'
 import type { RuntimeLaunchSpec } from '../types'
+import type { EffectiveFrontEndPolicy, RuntimeProfileClassification } from './browser-runtime-profile'
 import type {
   RuntimeDisplayState,
   RuntimeEvent,
@@ -17,6 +18,21 @@ import type { RecoveryGateState } from './runtime-host-policy'
 import { PlayerClient as BrowserPlayerClient } from '../../player'
 import { rpc } from '../../services/rpc'
 import { normalizeDisplayOptions } from '../utils'
+import {
+  buildRuntimeProfileClassification,
+  classifyFrontEndBaseline,
+  createFpsObservationState,
+  defaultEffectiveFrontEndPolicy,
+
+  estimatedCeilingFps,
+  evaluateProfileBandwidthState,
+  explainFrontEndQualityUpshiftBlock,
+  parseMsText as parseMsTextFromProfile,
+  recordInboundFpsSample,
+  resolveEffectiveFrontEndPolicy,
+  resolveExpectedContentFps,
+
+} from './browser-runtime-profile'
 import {
   applyBrowserVideoDisplay,
   bindBrowserVideoFrameTracking,
@@ -33,15 +49,9 @@ const MEDIA_STALL_RECOVERY_BACKOFF_MIN_MS = 10_000
 const MEDIA_STALL_RECOVERY_BACKOFF_MAX_MS = 60_000
 const MEDIA_STALL_RECOVERY_RESET_WINDOW_MS = 120_000
 const MEDIA_STALL_EVIDENCE_GRACE_MS = 8_000
-const BANDWIDTH_MIN_DWELL_MS = 4_000
 const SHORT_STATS_WINDOW_MS = 3_000
 const LONG_STATS_WINDOW_MS = 15_000
-const QUALITY_LEVEL_MIN_DWELL_MS = 8_000
-const WARMUP_PROFILE_DURATION_MS = 8_000
 const FIRST_FRAME_GUARD_TIMEOUT_MS = 4_000
-const DISPLAY_LEVEL_MIN_DWELL_MS = 6_000
-const DISPLAY_UPSHIFT_MIN_STABLE_MS = 8_000
-const DISPLAY_DOWNSHIFT_FAST_WINDOW_MS = 1_200
 
 type ProtocolChannel = 'media' | 'chat'
 
@@ -367,6 +377,16 @@ export function createBrowserRuntime(options: {
   let visibilityBudgetActive = false
   let icePolicyMode: IcePolicyMode = 'passthrough'
   let icePolicyDigest: string | undefined
+  let fpsObservationState = createFpsObservationState()
+  let effectiveFrontEndPolicy: EffectiveFrontEndPolicy = defaultEffectiveFrontEndPolicy()
+  let runtimeProfileClassification: RuntimeProfileClassification = {
+    baseline: 'cloud',
+    dynamic: 'steady',
+    contentFpsClass: 'contentUnknown',
+  }
+  let expectedContentFpsResolved = 60
+  let frontEndUpshiftBlockedReason: string | undefined
+  let latestTransportPath: string | undefined
 
   function emit(event: RuntimeEvent): void {
     for (const listener of listeners) {
@@ -419,11 +439,12 @@ export function createBrowserRuntime(options: {
     })
   }
 
-  function resolveRenderCause(stats: StreamStats): RenderCause {
+  function resolveRenderCause(stats: StreamStats, expectedContentFps: number): RenderCause {
     const decodeFps = stats.decodeFps ?? 0
     const presentAgeMs = stats.presentAgeMs ?? 0
     const inboundVideoFps = stats.inboundVideoFps ?? 0
-    if (decodeFps < 20 && inboundVideoFps >= 30) {
+    const exp = Math.max(24, expectedContentFps)
+    if (decodeFps < exp * 0.66 && inboundVideoFps >= exp * 0.88) {
       return 'decodeBackpressure'
     }
     if (presentAgeMs > 180 || renderBackpressure) {
@@ -460,6 +481,10 @@ export function createBrowserRuntime(options: {
     const presentFps = input.stats.presentFps ?? input.stats.fps ?? 0
     const baseBitrate = Math.max(8_000, baseVideoBitrateKbps)
     const bitrateRatio = inboundVideoBitrateKbps > 0 ? inboundVideoBitrateKbps / baseBitrate : 1
+    const p = effectiveFrontEndPolicy
+    const exp = Math.max(24, expectedContentFpsResolved)
+    const decodeRatio = decodeFps / exp
+    const presentRatio = presentFps / exp
     let sharpnessScale = 1
     let targetFpsBias = 0
     let processingMode: 'quality' | 'performance' = 'quality'
@@ -487,13 +512,23 @@ export function createBrowserRuntime(options: {
       shaderPreset = 'clarityL1'
     }
 
-    if (bandwidthState === 'congested' || bitrateRatio < 0.45 || presentFps < 24 || decodeFps < 20) {
+    if (
+      bandwidthState === 'congested'
+      || bitrateRatio < p.adaptiveCongestedBitrateRatio
+      || presentRatio < p.adaptiveSeverePresentRatio
+      || decodeRatio < p.adaptiveSevereDecodeRatio
+    ) {
       sharpnessScale = Math.min(sharpnessScale, 0.6)
       processingMode = 'performance'
       shaderPreset = input.level === 'displayL2' ? 'clarityL0' : 'clarityL1'
       targetFpsBias = Math.min(targetFpsBias, -4)
     }
-    else if (bandwidthState === 'stable' && bitrateRatio > 0.75 && decodeFps >= 30 && presentFps >= 30) {
+    else if (
+      bandwidthState === 'stable'
+      && bitrateRatio > p.adaptiveStableBitrateRatio
+      && decodeRatio >= p.adaptiveStableDecodeRatio
+      && presentRatio >= p.adaptiveStablePresentRatio
+    ) {
       sharpnessScale = Math.max(sharpnessScale, 1)
       shaderPreset = input.level === 'displayL0' ? 'clarityL3' : shaderPreset
       targetFpsBias = Math.max(targetFpsBias, 0)
@@ -544,9 +579,10 @@ export function createBrowserRuntime(options: {
       return { allowed: true }
     }
     const elapsed = input.now - displayDegradeLevelChangedAtMs
+    const p = effectiveFrontEndPolicy
     if (nextRank > prevRank) {
       // 降档快：满足风险直接允许，低于最小 dwell 时允许短窗快速降档。
-      if (elapsed < DISPLAY_DOWNSHIFT_FAST_WINDOW_MS) {
+      if (elapsed < p.displayDownshiftFastWindowMs) {
         renderHysteresisState = 'holdDown'
       }
       else {
@@ -562,20 +598,20 @@ export function createBrowserRuntime(options: {
     const sinceLastDownshift = displayLastDownshiftAtMs > 0
       ? input.now - displayLastDownshiftAtMs
       : Number.POSITIVE_INFINITY
-    if (sinceLastDownshift < DISPLAY_UPSHIFT_MIN_STABLE_MS) {
+    if (sinceLastDownshift < p.displayUpshiftMinStableMs) {
       renderHysteresisState = 'holdUp'
-      renderUpshiftBlockedReason = `downshiftCooldown:${sinceLastDownshift}/${DISPLAY_UPSHIFT_MIN_STABLE_MS}`
+      renderUpshiftBlockedReason = `downshiftCooldown:${sinceLastDownshift}/${p.displayUpshiftMinStableMs}`
       return { allowed: false, blockedReason: renderUpshiftBlockedReason }
     }
     const stableElapsed = input.now - displayRecoveryStableSinceMs
-    if (stableElapsed < DISPLAY_UPSHIFT_MIN_STABLE_MS) {
+    if (stableElapsed < p.displayUpshiftMinStableMs) {
       renderHysteresisState = 'holdUp'
-      renderUpshiftBlockedReason = `stableWindow:${stableElapsed}/${DISPLAY_UPSHIFT_MIN_STABLE_MS}`
+      renderUpshiftBlockedReason = `stableWindow:${stableElapsed}/${p.displayUpshiftMinStableMs}`
       return { allowed: false, blockedReason: renderUpshiftBlockedReason }
     }
-    if (elapsed < DISPLAY_LEVEL_MIN_DWELL_MS) {
+    if (elapsed < p.displayLevelMinDwellMs) {
       renderHysteresisState = 'holdUp'
-      renderUpshiftBlockedReason = `minDwell:${elapsed}/${DISPLAY_LEVEL_MIN_DWELL_MS}`
+      renderUpshiftBlockedReason = `minDwell:${elapsed}/${p.displayLevelMinDwellMs}`
       return { allowed: false, blockedReason: renderUpshiftBlockedReason }
     }
     renderHysteresisState = 'steady'
@@ -588,7 +624,7 @@ export function createBrowserRuntime(options: {
       return
     }
     const now = Date.now()
-    if (next === displayDegradeLevel && now - displayDegradeLevelChangedAtMs < DISPLAY_LEVEL_MIN_DWELL_MS) {
+    if (next === displayDegradeLevel && now - displayDegradeLevelChangedAtMs < effectiveFrontEndPolicy.displayLevelMinDwellMs) {
       return
     }
     const transitionDecision = shouldTransitionDisplayLevel({
@@ -974,13 +1010,23 @@ export function createBrowserRuntime(options: {
       renderCause = undefined
       renderDecisionDigest = undefined
       renderAdaptiveProfileDigest = undefined
-      displayDegradeLevel = 'displayL1'
-      displayDegradeLevelChangedAtMs = now
-      displayRecoveryStableSinceMs = undefined
-      displayLastDownshiftAtMs = 0
-      renderHysteresisState = 'steady'
-      renderUpshiftBlockedReason = undefined
-      displayWarmupUntilMs = now + WARMUP_PROFILE_DURATION_MS
+      fpsObservationState = createFpsObservationState()
+      latestTransportPath = undefined
+      const specConnected = currentSpec
+      if (specConnected !== null) {
+        applyFrontEndWarmupProfile({
+          now,
+          baseline: classifyFrontEndBaseline({
+            targetType: specConnected.targetType,
+            transportPath: undefined,
+          }),
+          reason: 'transportConnectedWarmup',
+          path: 'transportConnected',
+        })
+      }
+      else {
+        effectiveFrontEndPolicy = defaultEffectiveFrontEndPolicy()
+      }
       renderPipelineType = resolveRendererPipelineOverride() === 'video' ? 'video' : 'webgl2'
       renderPolicySource = resolveRendererPipelineOverride() === 'auto' ? 'auto' : 'userOverride'
       renderProcessing = undefined
@@ -990,20 +1036,6 @@ export function createBrowserRuntime(options: {
       icePolicyMode = 'passthrough'
       icePolicyDigest = undefined
       updateFirstFrameStage('connecting', now, 'transportConnected')
-      qualityLadderLevel = 'L1'
-      qualityLevelChangedAtMs = now
-      warmupUntilMs = now + WARMUP_PROFILE_DURATION_MS
-      recordRuntimeTraceEvent('warmupProfileApplied', {
-        level: 'L1',
-        durationMs: WARMUP_PROFILE_DURATION_MS,
-      })
-      recordRuntimeTraceEvent('displayWarmupApplied', {
-        level: 'displayL1',
-        durationMs: WARMUP_PROFILE_DURATION_MS,
-        reason: 'transportConnectedWarmup',
-      })
-      void applyQualityLadderLevel('L1', 'transportConnectedWarmup')
-      void applyDisplayDegradeLevel('displayL1', 'transportConnectedWarmup')
       window.setTimeout(() => {
         if (connectedAt === null || firstPresentedAtMs !== undefined || firstFrameGuardTriggered) {
           return
@@ -1245,20 +1277,12 @@ export function createBrowserRuntime(options: {
     pendingActionEffectProbe = undefined
   }
 
-  function parseMsText(input: string | undefined): number {
-    if (!input) {
-      return 0
-    }
-    const parsed = Number.parseFloat(input.replace('ms', '').trim())
-    return Number.isFinite(parsed) ? parsed : 0
-  }
-
   function pushStatsWindowSample(now: number, stats: StreamStats): void {
     statsWindowSamples.push({
       atMs: now,
       loss: stats.videoTwccLossRatio ?? 0,
-      jitterMs: parseMsText(stats.jit),
-      rttMs: parseMsText(stats.rtt),
+      jitterMs: parseMsTextFromProfile(stats.jit),
+      rttMs: parseMsTextFromProfile(stats.rtt),
       decodeFps: stats.decodeFps ?? 0,
       presentAgeMs: stats.presentAgeMs ?? 0,
     })
@@ -1309,20 +1333,22 @@ export function createBrowserRuntime(options: {
     stats: StreamStats
     channelState: string
     sendFailBurst: number
+    expectedContentFps: number
   }): RecoveryCause {
     if (input.channelState !== 'open' || input.sendFailBurst >= 2) {
       return 'controlChannelUnhealthy'
     }
     const loss = shortWindowSummary?.lossAvg ?? input.stats.videoTwccLossRatio ?? 0
-    const jitter = shortWindowSummary?.jitterMsAvg ?? parseMsText(input.stats.jit)
-    const rtt = shortWindowSummary?.rttMsAvg ?? parseMsText(input.stats.rtt)
+    const jitter = shortWindowSummary?.jitterMsAvg ?? parseMsTextFromProfile(input.stats.jit)
+    const rtt = shortWindowSummary?.rttMsAvg ?? parseMsTextFromProfile(input.stats.rtt)
     if (loss >= 0.05 || jitter >= 25 || rtt >= 120) {
       return 'networkCongestion'
     }
-    if ((input.stats.decodeFps ?? 0) < 20 && (input.stats.inboundVideoFps ?? 0) >= 30) {
+    const exp = Math.max(24, input.expectedContentFps)
+    if ((input.stats.decodeFps ?? 0) < exp * 0.66 && (input.stats.inboundVideoFps ?? 0) >= exp * 0.88) {
       return 'decodeBackpressure'
     }
-    if ((input.stats.presentAgeMs ?? 0) > 220 && (input.stats.decodeFps ?? 0) >= 24) {
+    if ((input.stats.presentAgeMs ?? 0) > 220 && (input.stats.decodeFps ?? 0) >= exp * 0.8) {
       return 'renderStarvation'
     }
     return 'unknown'
@@ -1345,7 +1371,7 @@ export function createBrowserRuntime(options: {
       return
     }
     const now = Date.now()
-    if (next === qualityLadderLevel && now - qualityLevelChangedAtMs < QUALITY_LEVEL_MIN_DWELL_MS) {
+    if (next === qualityLadderLevel && now - qualityLevelChangedAtMs < effectiveFrontEndPolicy.qualityLevelMinDwellMs) {
       return
     }
     const levelConfig: Record<QualityLadderLevel, { bitrateFactor: number, maxFramerate: number }> = {
@@ -1370,54 +1396,17 @@ export function createBrowserRuntime(options: {
         reason,
         maxBitrateBps: bitrateBps,
         maxFramerate: config.maxFramerate,
+        frontEndPolicyPreset: effectiveFrontEndPolicy.presetId,
+        frontEndExpectedContentFps: expectedContentFpsResolved,
       })
     }
-  }
-
-  function evaluateBandwidthState(now: number, stats: StreamStats): BandwidthState {
-    const loss = stats.videoTwccLossRatio ?? 0
-    const feedbackIntervalMs = stats.videoTwccFeedbackIntervalMs ?? 0
-    const inboundKbps = stats.inboundVideoBitrateKbps ?? 0
-    const decodeFps = stats.decodeFps ?? 0
-    const presentFps = stats.presentFps ?? stats.fps ?? 0
-    const packetAgeMs = stats.packetAgeMs ?? 0
-    const presentAgeMs = stats.presentAgeMs ?? 0
-    const baseBitrate = Math.max(4_000, baseVideoBitrateKbps)
-
-    const severeCongested = loss >= 0.08
-      || feedbackIntervalMs >= 500
-      || (inboundKbps > 0 && inboundKbps < baseBitrate * 0.35 && presentFps < 24)
-      || packetAgeMs > 450
-      || presentAgeMs > 450
-    if (severeCongested) {
-      return 'congested'
-    }
-
-    const mildWarning = loss >= 0.03
-      || feedbackIntervalMs >= 300
-      || (inboundKbps > 0 && inboundKbps < baseBitrate * 0.6)
-      || packetAgeMs > 220
-      || presentAgeMs > 220
-      || decodeFps < 30
-      || presentFps < 30
-    if (mildWarning) {
-      return 'warning'
-    }
-
-    if (bandwidthState === 'congested' || bandwidthState === 'warning') {
-      return 'recovering'
-    }
-    if (bandwidthState === 'recovering' && now - bandwidthStateChangedAtMs < BANDWIDTH_MIN_DWELL_MS) {
-      return 'recovering'
-    }
-    return 'stable'
   }
 
   function maybeTransitionBandwidthState(now: number, nextState: BandwidthState): void {
     if (nextState === bandwidthState) {
       return
     }
-    if (now - bandwidthStateChangedAtMs < BANDWIDTH_MIN_DWELL_MS) {
+    if (now - bandwidthStateChangedAtMs < effectiveFrontEndPolicy.bandwidthMinDwellMs) {
       return
     }
     const previous = bandwidthState
@@ -1426,6 +1415,8 @@ export function createBrowserRuntime(options: {
     recordRuntimeTraceEvent('bandwidthStateChanged', {
       previous,
       next: nextState,
+      frontEndPolicyPreset: effectiveFrontEndPolicy.presetId,
+      frontEndExpectedContentFps: expectedContentFpsResolved,
     })
   }
 
@@ -1648,6 +1639,197 @@ export function createBrowserRuntime(options: {
     }, MEDIA_STALL_CHECK_INTERVAL_MS)
   }
 
+  function applyFrontEndWarmupProfile(input: {
+    now: number
+    baseline: RuntimeProfileClassification['baseline']
+    reason: string
+    path: string
+  }): void {
+    runtimeProfileClassification = {
+      baseline: input.baseline,
+      dynamic: 'startup',
+      contentFpsClass: 'contentUnknown',
+    }
+    effectiveFrontEndPolicy = resolveEffectiveFrontEndPolicy(runtimeProfileClassification)
+    const warmupMs = effectiveFrontEndPolicy.warmupDurationMs
+    const initQuality = effectiveFrontEndPolicy.qualityLadderInitLevel
+    const initDisplay = effectiveFrontEndPolicy.displayInitLevel
+    bandwidthState = 'stable'
+    bandwidthAction = 'none'
+    bandwidthStateChangedAtMs = input.now
+    qualityLadderLevel = initQuality
+    qualityLevelChangedAtMs = input.now
+    displayDegradeLevel = initDisplay
+    displayDegradeLevelChangedAtMs = input.now
+    displayRecoveryStableSinceMs = undefined
+    displayLastDownshiftAtMs = 0
+    renderHysteresisState = 'steady'
+    renderUpshiftBlockedReason = undefined
+    displayWarmupUntilMs = input.now + warmupMs
+    warmupUntilMs = input.now + warmupMs
+    expectedContentFpsResolved = 60
+    frontEndUpshiftBlockedReason = explainFrontEndQualityUpshiftBlock({
+      nowMs: input.now,
+      warmupUntilMs,
+      bandwidthState,
+      recoveryCause: undefined,
+      qualityLadderLevel: initQuality,
+    })
+    recordRuntimeTraceEvent('warmupProfileApplied', {
+      level: initQuality,
+      durationMs: warmupMs,
+      reason: input.reason,
+      path: input.path,
+      presetId: effectiveFrontEndPolicy.presetId,
+      frontEndProfileBaseline: runtimeProfileClassification.baseline,
+      frontEndProfileDynamic: runtimeProfileClassification.dynamic,
+      frontEndContentFpsClass: runtimeProfileClassification.contentFpsClass,
+      frontEndPolicyPreset: effectiveFrontEndPolicy.presetId,
+    })
+    recordRuntimeTraceEvent('displayWarmupApplied', {
+      level: initDisplay,
+      durationMs: warmupMs,
+      reason: input.reason,
+      path: input.path,
+      presetId: effectiveFrontEndPolicy.presetId,
+      frontEndProfileBaseline: runtimeProfileClassification.baseline,
+      frontEndProfileDynamic: runtimeProfileClassification.dynamic,
+      frontEndContentFpsClass: runtimeProfileClassification.contentFpsClass,
+      frontEndPolicyPreset: effectiveFrontEndPolicy.presetId,
+    })
+    void applyQualityLadderLevel(initQuality, input.reason)
+    void applyDisplayDegradeLevel(initDisplay, input.reason)
+  }
+
+  function applyProfileWarmupAfterReconnect(reason: string, icePath: string): void {
+    const specNow = currentSpec
+    const ts = Date.now()
+    if (specNow === null) {
+      return
+    }
+    fpsObservationState = createFpsObservationState()
+    applyFrontEndWarmupProfile({
+      now: ts,
+      baseline: classifyFrontEndBaseline({
+        targetType: specNow.targetType,
+        transportPath: latestTransportPath,
+      }),
+      reason,
+      path: icePath,
+    })
+  }
+
+  function refreshFrontEndPolicyState(
+    now: number,
+    spec: RuntimeLaunchSpec,
+    stats: StreamStats,
+    channelHealth: ReturnType<PlayerClient['getControlChannelHealthSnapshot']>,
+  ): void {
+    pushStatsWindowSample(now, stats)
+    updateWindowSummaries(now)
+    const nextOpenRatio = channelHealth.state === 'open' ? 1 : 0
+    const nextBufferedTrend: 'rising' | 'stable' | 'falling'
+      = (channelHealth.bufferedAmount ?? 0) > 65_536 ? 'rising' : 'stable'
+    if (controlChannelOpenRatio !== nextOpenRatio || controlChannelBufferedTrend !== nextBufferedTrend) {
+      recordRuntimeTraceEvent('dataChannelTrendChanged', {
+        openRatio: nextOpenRatio,
+        bufferedTrend: nextBufferedTrend,
+        sendFailBurst: channelHealth.sendFailBurst ?? 0,
+      })
+    }
+    controlChannelOpenRatio = nextOpenRatio
+    controlChannelBufferedTrend = nextBufferedTrend
+    recordInboundFpsSample(fpsObservationState, stats.inboundVideoFps)
+    const ceiling = estimatedCeilingFps(fpsObservationState)
+    const { expected, contentFpsClass } = resolveExpectedContentFps({ stats, estimatedCeiling: ceiling })
+    expectedContentFpsResolved = expected
+    if (stats.transportPath !== undefined && stats.transportPath.trim() !== '') {
+      latestTransportPath = stats.transportPath.trim()
+    }
+    renderCause = resolveRenderCause(stats, expected)
+    runtimeProfileClassification = buildRuntimeProfileClassification({
+      targetType: spec.targetType,
+      transportPath: latestTransportPath,
+      stats,
+      nowMs: now,
+      connectedAtMs: connectedAt,
+      warmupUntilMs,
+      renderCause,
+      contentFpsClass,
+    })
+    effectiveFrontEndPolicy = resolveEffectiveFrontEndPolicy(runtimeProfileClassification)
+    renderDecisionDigest = buildRenderDecisionDigest(now)
+    recordRuntimeTraceEvent('renderCauseClassified', {
+      cause: renderCause,
+      renderDecisionDigest,
+      callbackIntervalMs: renderFrameCallbackIntervalMs ?? null,
+      droppedFrames: renderDroppedFrames,
+      renderBackpressure,
+      frontEndProfileBaseline: runtimeProfileClassification.baseline,
+      frontEndProfileDynamic: runtimeProfileClassification.dynamic,
+      frontEndContentFpsClass: runtimeProfileClassification.contentFpsClass,
+      frontEndExpectedContentFps: expectedContentFpsResolved,
+      frontEndPolicyPreset: effectiveFrontEndPolicy.presetId,
+    })
+    recoveryCause = classifyRecoveryCause({
+      stats,
+      channelState: channelHealth.state,
+      sendFailBurst: channelHealth.sendFailBurst ?? 0,
+      expectedContentFps: expectedContentFpsResolved,
+    })
+    decisionDigest = buildDecisionDigest(now)
+    recordRuntimeTraceEvent('recoveryCauseClassified', {
+      cause: recoveryCause,
+      decisionDigest,
+      networkConfidence: networkConfidence ?? 'low',
+      decodeConfidence: decodeConfidence ?? 'low',
+      shortWindow: shortWindowSummary ?? null,
+      longWindow: longWindowSummary ?? null,
+      controlChannelState: channelHealth.state,
+      sendFailBurst: channelHealth.sendFailBurst ?? 0,
+    })
+    maybeTransitionBandwidthState(now, evaluateProfileBandwidthState({
+      now,
+      stats,
+      previous: bandwidthState,
+      previousChangedAtMs: bandwidthStateChangedAtMs,
+      expectedContentFps: expectedContentFpsResolved,
+      policy: effectiveFrontEndPolicy,
+      baseVideoBitrateKbps,
+    }))
+    if (recoveryCause === 'networkCongestion') {
+      void applyQualityLadderLevel('L2', 'networkCongestion')
+    }
+    else if (recoveryCause === 'decodeBackpressure' || recoveryCause === 'renderStarvation') {
+      void applyQualityLadderLevel('L1', recoveryCause)
+    }
+    else if (warmupUntilMs > now) {
+      void applyQualityLadderLevel('L1', 'warmupProfile')
+    }
+    else if (bandwidthState === 'stable' || bandwidthState === 'recovering') {
+      void applyQualityLadderLevel('L0', 'stabilized')
+    }
+    frontEndUpshiftBlockedReason = explainFrontEndQualityUpshiftBlock({
+      nowMs: now,
+      warmupUntilMs,
+      bandwidthState,
+      recoveryCause,
+      qualityLadderLevel,
+    })
+    if (renderCause === 'renderStarvation') {
+      void applyDisplayDegradeLevel('displayL2', 'renderStarvation')
+    }
+    else if (renderCause === 'decodeBackpressure' || renderBackpressure) {
+      void applyDisplayDegradeLevel('displayL1', 'decodeBackpressureOrBackpressure')
+    }
+    else if (displayWarmupUntilMs > now) {
+      void applyDisplayDegradeLevel('displayL1', 'displayWarmup')
+    }
+    else {
+      void applyDisplayDegradeLevel('displayL0', 'renderStable')
+    }
+  }
+
   async function checkMediaStalled(): Promise<void> {
     const spec = currentSpec
     if (spec === null || transportState !== 'connected' || reconnectPromise !== null || connectedAt === null) {
@@ -1655,6 +1837,9 @@ export function createBrowserRuntime(options: {
     }
 
     const now = Date.now()
+    const stats = await assertClient().stats().snapshot()
+    const channelHealth = assertClient().getControlChannelHealthSnapshot()
+    refreshFrontEndPolicyState(now, spec, stats, channelHealth)
     if (now < nextAllowedStallRecoveryAt) {
       return
     }
@@ -1680,76 +1865,10 @@ export function createBrowserRuntime(options: {
       })
       return
     }
-    const stats = await assertClient().stats().snapshot()
-    const channelHealth = assertClient().getControlChannelHealthSnapshot()
-    pushStatsWindowSample(now, stats)
-    updateWindowSummaries(now)
-    const nextOpenRatio = channelHealth.state === 'open' ? 1 : 0
-    const nextBufferedTrend: 'rising' | 'stable' | 'falling'
-      = (channelHealth.bufferedAmount ?? 0) > 65_536 ? 'rising' : 'stable'
-    if (controlChannelOpenRatio !== nextOpenRatio || controlChannelBufferedTrend !== nextBufferedTrend) {
-      recordRuntimeTraceEvent('dataChannelTrendChanged', {
-        openRatio: nextOpenRatio,
-        bufferedTrend: nextBufferedTrend,
-        sendFailBurst: channelHealth.sendFailBurst ?? 0,
-      })
-    }
-    controlChannelOpenRatio = nextOpenRatio
-    controlChannelBufferedTrend = nextBufferedTrend
-    renderCause = resolveRenderCause(stats)
-    renderDecisionDigest = buildRenderDecisionDigest(now)
-    recordRuntimeTraceEvent('renderCauseClassified', {
-      cause: renderCause,
-      renderDecisionDigest,
-      callbackIntervalMs: renderFrameCallbackIntervalMs ?? null,
-      droppedFrames: renderDroppedFrames,
-      renderBackpressure,
-    })
-    recoveryCause = classifyRecoveryCause({
-      stats,
-      channelState: channelHealth.state,
-      sendFailBurst: channelHealth.sendFailBurst ?? 0,
-    })
-    decisionDigest = buildDecisionDigest(now)
-    recordRuntimeTraceEvent('recoveryCauseClassified', {
-      cause: recoveryCause,
-      decisionDigest,
-      networkConfidence: networkConfidence ?? 'low',
-      decodeConfidence: decodeConfidence ?? 'low',
-      shortWindow: shortWindowSummary ?? null,
-      longWindow: longWindowSummary ?? null,
-      controlChannelState: channelHealth.state,
-      sendFailBurst: channelHealth.sendFailBurst ?? 0,
-    })
     evaluateRecoveryActionEffect(now, stats)
     const evidenceSnapshot = createStallEvidenceSnapshot(stats)
     const hasInboundProgress = hasInboundProgressSinceLastProbe(evidenceSnapshot)
     lastStallEvidenceSnapshot = evidenceSnapshot
-    maybeTransitionBandwidthState(now, evaluateBandwidthState(now, stats))
-    if (recoveryCause === 'networkCongestion') {
-      await applyQualityLadderLevel('L2', 'networkCongestion')
-    }
-    else if (recoveryCause === 'decodeBackpressure' || recoveryCause === 'renderStarvation') {
-      await applyQualityLadderLevel('L1', recoveryCause)
-    }
-    else if (warmupUntilMs > now) {
-      await applyQualityLadderLevel('L1', 'warmupProfile')
-    }
-    else if (bandwidthState === 'stable' || bandwidthState === 'recovering') {
-      await applyQualityLadderLevel('L0', 'stabilized')
-    }
-    if (renderCause === 'renderStarvation') {
-      await applyDisplayDegradeLevel('displayL2', 'renderStarvation')
-    }
-    else if (renderCause === 'decodeBackpressure' || renderBackpressure) {
-      await applyDisplayDegradeLevel('displayL1', 'decodeBackpressureOrBackpressure')
-    }
-    else if (displayWarmupUntilMs > now) {
-      await applyDisplayDegradeLevel('displayL1', 'displayWarmup')
-    }
-    else {
-      await applyDisplayDegradeLevel('displayL0', 'renderStable')
-    }
     if (bandwidthState === 'warning') {
       await executeRecoveryAction('observe', now, {
         inactivityElapsedMs,
@@ -2324,6 +2443,16 @@ export function createBrowserRuntime(options: {
       })
       icePolicyMode = 'passthrough'
       icePolicyDigest = undefined
+      fpsObservationState = createFpsObservationState()
+      effectiveFrontEndPolicy = defaultEffectiveFrontEndPolicy()
+      runtimeProfileClassification = {
+        baseline: 'cloud',
+        dynamic: 'steady',
+        contentFpsClass: 'contentUnknown',
+      }
+      expectedContentFpsResolved = 60
+      frontEndUpshiftBlockedReason = undefined
+      latestTransportPath = undefined
       presentationMilestone = 'idle'
       presentationStage = null
       await attachGamepadSession(spec.sessionId)
@@ -2410,6 +2539,16 @@ export function createBrowserRuntime(options: {
       webgl2Supported = true
       icePolicyMode = 'passthrough'
       icePolicyDigest = undefined
+      fpsObservationState = createFpsObservationState()
+      effectiveFrontEndPolicy = defaultEffectiveFrontEndPolicy()
+      runtimeProfileClassification = {
+        baseline: 'cloud',
+        dynamic: 'steady',
+        contentFpsClass: 'contentUnknown',
+      }
+      expectedContentFpsResolved = 60
+      frontEndUpshiftBlockedReason = undefined
+      latestTransportPath = undefined
       presentationMilestone = 'idle'
       presentationStage = null
       destroyClient()
@@ -2427,12 +2566,7 @@ export function createBrowserRuntime(options: {
         publishPhase('reconnecting')
         try {
           await connectMediaProtocol(spec, { restart: true })
-          displayWarmupUntilMs = Date.now() + WARMUP_PROFILE_DURATION_MS
-          recordRuntimeTraceEvent('displayWarmupApplied', {
-            reason,
-            durationMs: WARMUP_PROFILE_DURATION_MS,
-            path: 'iceRestart',
-          })
+          applyProfileWarmupAfterReconnect(reason, 'iceRestart')
           recordRuntimeTraceEvent('reconnectResult', {
             result: 'success',
             path: 'iceRestart',
@@ -2442,12 +2576,7 @@ export function createBrowserRuntime(options: {
         catch (error) {
           try {
             await rebuildBrowserRuntime(spec, { restoreMicrophone })
-            displayWarmupUntilMs = Date.now() + WARMUP_PROFILE_DURATION_MS
-            recordRuntimeTraceEvent('displayWarmupApplied', {
-              reason,
-              durationMs: WARMUP_PROFILE_DURATION_MS,
-              path: 'rebuildRuntime',
-            })
+            applyProfileWarmupAfterReconnect(reason, 'rebuildRuntime')
             recordRuntimeTraceEvent('reconnectResult', {
               result: 'success',
               path: 'rebuildRuntime',
@@ -2557,6 +2686,13 @@ export function createBrowserRuntime(options: {
         rendererCapabilityReason,
         icePolicyMode,
         icePolicyDigest,
+        frontEndProfileBaseline: runtimeProfileClassification.baseline,
+        frontEndProfileDynamic: runtimeProfileClassification.dynamic,
+        frontEndContentFpsClass: runtimeProfileClassification.contentFpsClass,
+        frontEndExpectedContentFps: expectedContentFpsResolved,
+        frontEndPolicyPreset: effectiveFrontEndPolicy.presetId,
+        frontEndWarmupUntilMs: warmupUntilMs,
+        frontEndUpshiftBlockedReason,
         presentationMilestone,
         presentationFailedStage: presentationStage ?? stats.presentationFailedStage,
         connectedMilestoneElapsedMs: connectedMilestoneAt === null

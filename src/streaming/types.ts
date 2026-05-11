@@ -211,6 +211,19 @@ export interface StreamPerformanceSnapshot {
   rendererCapabilityReason?: string
   icePolicyMode?: 'passthrough' | 'policy'
   icePolicyDigest?: string
+  /** webrtc-direct 浏览器画像观测（xbxengine 路径通常为空） */
+  frontEndProfileBaseline?: 'homeLan' | 'homeRelay' | 'cloud'
+  frontEndProfileDynamic?:
+    | 'startup'
+    | 'steady'
+    | 'highRtt'
+    | 'decoderConstrained'
+    | 'displayConstrained'
+  frontEndContentFpsClass?: 'content30' | 'content60' | 'contentUnknown'
+  frontEndExpectedContentFps?: number
+  frontEndPolicyPreset?: string
+  frontEndWarmupUntilMs?: number
+  frontEndUpshiftBlockedReason?: string
   hostMailboxSubmitEpoch?: number
   hostDisplayTickEpoch?: number
   hostFramePresentEpoch?: number
@@ -311,6 +324,18 @@ export interface StreamSessionDiagnosticsSnapshot {
   rendererCapabilityReason?: string
   icePolicyMode?: 'passthrough' | 'policy'
   icePolicyDigest?: string
+  frontEndProfileBaseline?: 'homeLan' | 'homeRelay' | 'cloud'
+  frontEndProfileDynamic?:
+    | 'startup'
+    | 'steady'
+    | 'highRtt'
+    | 'decoderConstrained'
+    | 'displayConstrained'
+  frontEndContentFpsClass?: 'content30' | 'content60' | 'contentUnknown'
+  frontEndExpectedContentFps?: number
+  frontEndPolicyPreset?: string
+  frontEndWarmupUntilMs?: number
+  frontEndUpshiftBlockedReason?: string
   videoRendererStalled?: boolean
   videoRendererStallBlocksPresentation?: boolean
   isRelayPath: boolean

@@ -58,6 +58,13 @@ describe('buildStreamDiagnosticsSnapshot', () => {
       rendererCapabilityReason: 'webgl2ContextAvailable',
       icePolicyMode: 'policy',
       icePolicyDigest: 'f[ipv4:1]|t[udp:1]|k[srflx:1]',
+      frontEndProfileBaseline: 'homeLan',
+      frontEndProfileDynamic: 'steady',
+      frontEndContentFpsClass: 'content60',
+      frontEndExpectedContentFps: 60,
+      frontEndPolicyPreset: 'homeLan+steady',
+      frontEndWarmupUntilMs: 52_200,
+      frontEndUpshiftBlockedReason: 'bandwidthState:warning',
       videoRendererStalled: true,
       videoRendererStallBlocksPresentation: false,
       lastRecoveryActionEffect: 'improved',
@@ -104,6 +111,13 @@ describe('buildStreamDiagnosticsSnapshot', () => {
     expect(diagnostics.rendererCapabilityReason).toBe('webgl2ContextAvailable')
     expect(diagnostics.icePolicyMode).toBe('policy')
     expect(diagnostics.icePolicyDigest).toContain('ipv4')
+    expect(diagnostics.frontEndProfileBaseline).toBe('homeLan')
+    expect(diagnostics.frontEndProfileDynamic).toBe('steady')
+    expect(diagnostics.frontEndContentFpsClass).toBe('content60')
+    expect(diagnostics.frontEndExpectedContentFps).toBe(60)
+    expect(diagnostics.frontEndPolicyPreset).toBe('homeLan+steady')
+    expect(diagnostics.frontEndWarmupUntilMs).toBe(52_200)
+    expect(diagnostics.frontEndUpshiftBlockedReason).toBe('bandwidthState:warning')
     expect(diagnostics.videoRendererStalled).toBe(true)
     expect(diagnostics.videoRendererStallBlocksPresentation).toBe(false)
     expect(diagnostics.lastRecoveryActionEffect).toBe('improved')

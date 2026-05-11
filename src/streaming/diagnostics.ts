@@ -91,6 +91,13 @@ export function buildStreamDiagnosticsSnapshot(input: {
   const rendererCapabilityReason = input.runtimeSnapshot?.rendererCapabilityReason?.trim() || undefined
   const icePolicyMode = input.runtimeSnapshot?.icePolicyMode
   const icePolicyDigest = input.runtimeSnapshot?.icePolicyDigest?.trim() || undefined
+  const frontEndProfileBaseline = input.runtimeSnapshot?.frontEndProfileBaseline
+  const frontEndProfileDynamic = input.runtimeSnapshot?.frontEndProfileDynamic
+  const frontEndContentFpsClass = input.runtimeSnapshot?.frontEndContentFpsClass
+  const frontEndExpectedContentFps = input.runtimeSnapshot?.frontEndExpectedContentFps
+  const frontEndPolicyPreset = input.runtimeSnapshot?.frontEndPolicyPreset?.trim() || undefined
+  const frontEndWarmupUntilMs = input.runtimeSnapshot?.frontEndWarmupUntilMs
+  const frontEndUpshiftBlockedReason = input.runtimeSnapshot?.frontEndUpshiftBlockedReason?.trim() || undefined
   const videoRendererStalled = input.runtimeSnapshot?.videoRendererStalled
   const videoRendererStallBlocksPresentation
     = input.runtimeSnapshot?.videoRendererStallBlocksPresentation
@@ -246,6 +253,13 @@ export function buildStreamDiagnosticsSnapshot(input: {
     rendererCapabilityReason,
     icePolicyMode,
     icePolicyDigest,
+    frontEndProfileBaseline,
+    frontEndProfileDynamic,
+    frontEndContentFpsClass,
+    frontEndExpectedContentFps,
+    frontEndPolicyPreset,
+    frontEndWarmupUntilMs,
+    frontEndUpshiftBlockedReason,
     videoRendererStalled,
     videoRendererStallBlocksPresentation,
     isRelayPath: transportPath?.toLowerCase().startsWith('relay') === true,
