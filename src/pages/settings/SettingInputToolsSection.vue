@@ -20,10 +20,17 @@ import SettingInputDebugSheet from '../../components/settings/SettingInputDebugS
 import { events } from '../../services/events'
 import { rpc } from '../../services/rpc'
 
-const props = defineProps<{
-  scopeId: string
-  navNodeBaseId: string
-}>()
+const props = withDefaults(
+  defineProps<{
+    scopeId: string
+    navNodeBaseId: string
+    /** 为 true 时仅挂载调试/映射 Sheet，不渲染工具入口按钮（由设置 schema 列表渲染） */
+    suppressToolButtons?: boolean
+  }>(),
+  {
+    suppressToolButtons: false,
+  },
+)
 
 const LOGICAL_BUTTONS: LogicalButtonDto[] = [
   'south',
@@ -146,6 +153,11 @@ function openMappingSheet(): void {
   captureTargetButton.value = null
   isMappingSheetOpen.value = true
 }
+
+defineExpose({
+  openInputDebug: openInputDebugSheet,
+  openMapping: openMappingSheet,
+})
 
 function closeMappingSheet(): void {
   captureTargetButton.value = null
@@ -503,7 +515,11 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <section class="setting-panel__section setting-panel__section--input-tools" aria-label="输入工具">
+  <section
+    v-if="!props.suppressToolButtons"
+    class="setting-panel__section setting-panel__section--input-tools"
+    aria-label="输入工具"
+  >
     <header class="setting-panel__section-header">
       <h2 class="setting-panel__section-title">
         输入工具
@@ -641,6 +657,7 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   gap: 4px;
+  justify-content: center;
   min-width: 0;
 }
 
@@ -660,6 +677,8 @@ onUnmounted(() => {
 
 .setting-row__value {
   flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
   font-size: 16px;
   font-weight: var(--ui-font-weight-black);
   letter-spacing: var(--letter-spacing-loose);
@@ -673,12 +692,12 @@ onUnmounted(() => {
 
 .setting-row--select .setting-row__value::after {
   content: '›';
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
   margin-left: 12px;
   font-size: 22px;
   line-height: 1;
   color: var(--color-text-tertiary);
-  vertical-align: middle;
   transition: transform var(--ui-motion-fast) var(--ease-standard);
 }
 </style>

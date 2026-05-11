@@ -137,9 +137,6 @@ onBeforeUnmount(() => {
           <span v-if="option.description" class="setting-single-select-popup-sheet__option-desc">
             {{ option.description }}
           </span>
-          <span v-if="option.meta" class="setting-single-select-popup-sheet__option-desc">
-            {{ option.meta }}
-          </span>
         </span>
       </Focusable>
     </div>

@@ -26,16 +26,16 @@ export const SPATIAL_NAV_NODE_IDS = {
     close: 'gamepad-menu.close',
   },
   settingTabs: {
-    app: 'setting.tabs.app',
-    streaming: 'setting.tabs.streaming',
-    host: 'setting.tabs.host',
-    xcloud: 'setting.tabs.xcloud',
-    input: 'setting.tabs.input',
+    general: 'setting.tabs.general',
+    streamingExperience: 'setting.tabs.streamingExperience',
+    connectionHost: 'setting.tabs.connectionHost',
+    inputDevices: 'setting.tabs.inputDevices',
+    advancedDiagnostics: 'setting.tabs.advancedDiagnostics',
   },
   pagePrimary: {
     xhome: 'xhome.primary',
     xcloud: 'xcloud.primary',
-    setting: 'setting.tabs.app',
+    setting: 'setting.tabs.general',
   },
   login: {
     signIn: 'login.sign-in',

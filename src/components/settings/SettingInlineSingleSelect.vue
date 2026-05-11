@@ -56,9 +56,6 @@ function handleClose(): void {
         <span v-if="option.description" class="setting-inline-select__segment-desc">
           {{ option.description }}
         </span>
-        <span v-if="option.meta" class="setting-inline-select__segment-desc">
-          {{ option.meta }}
-        </span>
       </Focusable>
     </div>
   </div>

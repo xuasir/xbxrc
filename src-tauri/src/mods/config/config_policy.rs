@@ -92,8 +92,7 @@ fn normalize_value(key: &str, value: &Value, fallback: &Value) -> Value {
                 Value::from(fallback.as_str().unwrap_or(""))
             }
         }
-        "use_msal"
-        | "fullscreen"
+        "fullscreen"
         | "xhome_turn_fallback"
         | "enable_audio_control"
         | "vibration"

@@ -25,6 +25,19 @@
 
 ## Recent Completed
 
+- 2026-05-11: 将 `display_options` 的设置入口改成更易用的“画面风格”预设：设置页主入口现显示 `标准 / 清晰 / 柔和` 三档预设，参数滑杆下沉为 `手动微调`；列表摘要会在命中预设时直接显示预设名，手动值显示为 `手动微调`；同时将默认 `display_options.sharpness` 从 `2` 调整为 `0`，让 `标准` 真正对应“不额外锐化”。验证：`node` 解析 `src/i18n/locales/zh.json` 与 `src/i18n/locales/en.json` 通过；`cargo check -p xbxrc` 通过；`pnpm exec vue-tsc --noEmit` 仍受仓库既有错误 `SettingGamepadSection.vue`、`PlayerClient.ts`、`browser-runtime.ts` 阻塞。
+- 2026-05-11: 校准设置页字段文案：统一修正中英文 `setting.fields.*` 的标题、描述与关键选项说明，补齐此前缺失的 `xhome_auto_connect_server_id`、`debug`、`runtime_trace_mode` 文案项，并将串流、连接、输入、诊断相关设置的描述收口为“实际控制什么、改动后会怎样”的表达。验证：`node` 解析 `src/i18n/locales/zh.json` 与 `src/i18n/locales/en.json` 通过。
+- 2026-05-11: 继续清理设置有效性与暴露面：移除设置系统中的 `xhome_auto_connect_server_id` 展示定义与分组返回；复核当前状态确认 `performance_style`、`video_format`、`enable_audio_control` 仍在真实链路生效，`power_on` 仍进入 session policy，但当前 home 启动链路已自带 ready/wake 重试，用户侧影响显著收窄。验证待本轮 `json parse` 与 `cargo check -p xbxrc`。
+- 2026-05-11: 继续收紧设置页暴露面：将 `power_on` 从设置定义与中英文文案中移除，保留底层 `session policy` 与 home 启动链路的自动唤醒/ready 重试能力，确保用户可见配置与真实行为一致。验证待本轮 `json parse` 与 `cargo check -p xbxrc`。
+- 2026-05-11: 调整串流体验页 section 结构：将原单一“画质与传输”拆成 `通用 / 主机串流 / 云游戏` 三段，主机与云配置分别归位，保留字段 key、RPC 分组与底层配置语义不变。验证待本轮 `json parse` 与 `vue-tsc`。
+- 2026-05-11: 调整“连接与主机”页 section 结构：拆成 `通用连接 / 主机串流` 两段，将 `xhome_turn_fallback` 归到主机串流，其余连接项保留在通用连接，字段 key 与底层行为不变。验证待本轮 `json parse`。
+- 2026-05-11: 继续收紧串流设置分层：将 `codec` 从“串流体验 -> 通用”移到“高级与诊断 -> 高级”，让串流体验页优先保留直接体感相关项，字段 key 与配置语义不变。验证待本轮 `vue-tsc`。
+- 2026-05-11: 统一设置行的无描述对齐规则：`SettingSectionList` 与 `SettingInputToolsSection` 都改为固定两行文案轨道，描述缺失时保留隐藏占位，确保右侧值列在不同 section 内保持一致的垂直锚点。验证待本轮 `vue-tsc`。
+- 2026-05-11: 收紧“画面风格”弹窗默认复杂度：预设仍直接展示，手动参数区改为折叠在 `更多调整` 次级入口后面，避免弹窗打开就暴露“手动微调”大块参数面板，保留底层参数能力不变。验证待本轮 `json parse` 与 `vue-tsc`。
+- 2026-05-11: 修正“画面风格”弹窗折叠后的默认焦点：首焦点从隐藏的参数输入框改到 `标准` 预设按钮，避免弹窗打开后焦点落到不可见节点。验证待本轮 `vue-tsc`。
+- 2026-05-11: 将“画面风格”收成纯三选一弹窗：移除弹窗内手动参数区与相关文案，仅保留 `标准 / 清晰 / 柔和` 预设选择；设置列表摘要不再显示“手动微调”，遗留非预设值按 `标准` 展示，保证交互与文案一致。验证待本轮 `json parse` 与 `vue-tsc`。
+- 2026-05-11: 将设置页里的 `画面风格` 改为复用通用单选弹窗：`display_options` 在设置页改走 `singleSelect + SettingSingleSelectPopupSheet`，选择值在前端映射回既有 display preset 参数对象，移除设置页专用 `SettingDisplayOptionsSheet` 链路；串流页内实时画面调整能力保留。验证待本轮 `vue-tsc`。
+- 2026-05-11: 修复 `画面风格` 复用单选弹窗后的国际化回退：补齐 `setting.fields.display_options.options.{standard,clear,soft}` 中英文键，确保通用单选弹窗显示本地化预设名。验证待本轮 `json parse`。
 - 2026-05-11: `webrtc-direct` 前端画像驱动调度落地：新增 [`src/streaming/runtime/browser-runtime-profile.ts`](src/streaming/runtime/browser-runtime-profile.ts)（画像分类、expected fps 上沿、`ProfilePolicyPreset`、相对帧率带宽判定）；[`browser-runtime.ts`](src/streaming/runtime/browser-runtime.ts) 接入 warmup/带宽/质量与显示 dwell 与自适应渲染阈值；snapshot / diagnostics 增加 `frontEnd*` 观测字段；单测 `browser-runtime-profile.test.ts` + diagnostics 用例。Report：[`reports/2026-05-11-webrtc-direct-frontend-profile-driven-scheduling.md`](reports/2026-05-11-webrtc-direct-frontend-profile-driven-scheduling.md)。验证：`pnpm vitest run src/streaming/runtime/browser-runtime-profile.test.ts src/streaming/diagnostics.test.ts`、`pnpm lint:fix`。
 - 2026-05-04: 修复右摇杆 `Y` 方向问题：1）SDL3 源里 `Axis::RightY` 的 `AxisChanged` 与 `capture_gamepad_baseline_state` 快照路径符号已对齐，避免 prime/恢复后间歇跳变。2）串流出包按 Xbox 流端竖轴约定对 **左右摇杆 `Y` 均在边界取反**（`InputPacketEncoder` 与 `xbxengine` `data_channel_state` 一致），逻辑坐标仍保持「上为正」的 `LogicalPadState`，仅线包符号对齐远端。验证：`cargo fmt`、`cargo check -p xbxengine`、`cargo check -p ohmygamepad-sdl3`、`pnpm vitest run src/player/protocol/input/InputPacketEncoder.test.ts`。
 - 2026-05-02: 手柄卡片补齐 SDL 设备判定信息展示：`GamepadProfileCard` 现在直接展示分类标签、置信度、VID/PID、SDL 设备类型、mapping、能力摘要、判定 reasons 与 device path，便于在无实机条件下直接分辨掌机内建手柄、虚拟 XInput 与 Steam Virtual 恢复路径。验证：`pnpm lint:fix`。

@@ -11,12 +11,7 @@ interface DisplayOptionsValue {
   brightness: number
 }
 
-interface DisplayFieldDefinition {
-  key: keyof DisplayOptionsValue
-  min: number
-  max: number
-  step: number
-}
+type DisplayPresetKey = 'standard' | 'clear' | 'soft'
 
 interface SettingDisplayOptionsSheetProps {
   open: boolean
@@ -36,12 +31,26 @@ const emit = defineEmits<{
   (event: 'submit', value: DisplayOptionsValue): void
 }>()
 
-const DISPLAY_FIELDS: readonly DisplayFieldDefinition[] = [
-  { key: 'sharpness', min: 0, max: 10, step: 1 },
-  { key: 'saturation', min: 0, max: 200, step: 1 },
-  { key: 'contrast', min: 0, max: 200, step: 1 },
-  { key: 'brightness', min: 0, max: 200, step: 1 },
-]
+const DISPLAY_PRESETS: Record<DisplayPresetKey, DisplayOptionsValue> = {
+  standard: {
+    sharpness: 0,
+    saturation: 100,
+    contrast: 100,
+    brightness: 100,
+  },
+  clear: {
+    sharpness: 3,
+    saturation: 105,
+    contrast: 105,
+    brightness: 100,
+  },
+  soft: {
+    sharpness: 0,
+    saturation: 96,
+    contrast: 96,
+    brightness: 102,
+  },
+}
 
 const { t } = useI18n()
 const draft = reactive<DisplayOptionsValue>({
@@ -53,7 +62,23 @@ const draft = reactive<DisplayOptionsValue>({
 
 const cancelNodeId = computed(() => `${props.scopeId}.cancel`)
 const submitNodeId = computed(() => `${props.scopeId}.submit`)
-const defaultFocusId = computed(() => `${props.scopeId}.field.0`)
+const defaultFocusId = computed(() => createPresetNodeId('standard'))
+const presetKeys: DisplayPresetKey[] = ['standard', 'clear', 'soft']
+
+const activePresetKey = computed<DisplayPresetKey | null>(() => {
+  for (const key of presetKeys) {
+    const preset = DISPLAY_PRESETS[key]
+    if (
+      draft.sharpness === preset.sharpness
+      && draft.saturation === preset.saturation
+      && draft.contrast === preset.contrast
+      && draft.brightness === preset.brightness
+    ) {
+      return key
+    }
+  }
+  return null
+})
 
 function syncDraft(): void {
   draft.sharpness = props.currentValue?.sharpness ?? 0
@@ -66,34 +91,17 @@ function handleClose(): void {
   emit('close')
 }
 
-function clampValue(value: number, field: DisplayFieldDefinition): number {
-  return Math.min(field.max, Math.max(field.min, value))
-}
-
-function stepField(field: DisplayFieldDefinition, direction: -1 | 1): void {
-  draft[field.key] = clampValue(draft[field.key] + direction * field.step, field)
+function applyPreset(key: DisplayPresetKey): void {
+  const preset = DISPLAY_PRESETS[key]
+  draft.sharpness = preset.sharpness
+  draft.saturation = preset.saturation
+  draft.contrast = preset.contrast
+  draft.brightness = preset.brightness
   emit('change', { ...draft })
 }
 
-function updateField(field: DisplayFieldDefinition, rawValue: string): void {
-  const parsed = Number(rawValue)
-  if (!Number.isFinite(parsed)) {
-    return
-  }
-  draft[field.key] = clampValue(parsed, field)
-  emit('change', { ...draft })
-}
-
-function createFieldNodeId(index: number): string {
-  return `${props.scopeId}.field.${index}`
-}
-
-function createDecreaseNodeId(index: number): string {
-  return `${props.scopeId}.decrease.${index}`
-}
-
-function createIncreaseNodeId(index: number): string {
-  return `${props.scopeId}.increase.${index}`
+function createPresetNodeId(key: DisplayPresetKey): string {
+  return `${props.scopeId}.preset.${key}`
 }
 
 function handleSubmit(): void {
@@ -119,66 +127,33 @@ watch(
     :default-focus-id="defaultFocusId"
     @close="handleClose"
   >
-    <div class="setting-display-options-sheet__list">
-      <div
-        v-for="(field, index) in DISPLAY_FIELDS"
-        :key="field.key"
-        class="setting-display-options-sheet__row"
-      >
-        <span class="setting-display-options-sheet__label">
-          {{ t(`setting.displayOptions.fields.${field.key}`) }}
-        </span>
-
-        <div class="setting-display-options-sheet__controls">
-          <Focusable
-            :id="createDecreaseNodeId(index)"
-            as="button"
-            type="button"
-            class="setting-display-options-sheet__step"
-            :scope-id="props.scopeId"
-            :on-back="handleClose"
-            :aria-label="t('setting.editor.decrease')"
-            @click="stepField(field, -1)"
-          >
-            -
-          </Focusable>
-
-          <Focusable
-            :id="createFieldNodeId(index)"
-            as="label"
-            class="setting-display-options-sheet__value"
-            :scope-id="props.scopeId"
-            :on-back="handleClose"
-          >
-            <input
-              class="setting-display-options-sheet__input"
-              type="number"
-              inputmode="numeric"
-              :min="field.min"
-              :max="field.max"
-              :step="field.step"
-              :value="draft[field.key]"
-              :aria-label="t(`setting.displayOptions.fields.${field.key}`)"
-              @click.stop
-              @input="(event) => updateField(field, (event.target as HTMLInputElement).value)"
-            >
-          </Focusable>
-
-          <Focusable
-            :id="createIncreaseNodeId(index)"
-            as="button"
-            type="button"
-            class="setting-display-options-sheet__step"
-            :scope-id="props.scopeId"
-            :on-back="handleClose"
-            :aria-label="t('setting.editor.increase')"
-            @click="stepField(field, 1)"
-          >
-            +
-          </Focusable>
-        </div>
+    <section class="setting-display-options-sheet__section">
+      <p class="setting-display-options-sheet__section-title">
+        {{ t('setting.displayOptions.presetTitle') }}
+      </p>
+      <div class="setting-display-options-sheet__preset-list">
+        <Focusable
+          v-for="presetKey in presetKeys"
+          :id="createPresetNodeId(presetKey)"
+          :key="presetKey"
+          as="button"
+          type="button"
+          class="setting-display-options-sheet__preset"
+          :class="{ 'setting-display-options-sheet__preset--active': activePresetKey === presetKey }"
+          :scope-id="props.scopeId"
+          :on-back="handleClose"
+          @click="applyPreset(presetKey)"
+        >
+          {{ t(`setting.displayOptions.presets.${presetKey}`) }}
+        </Focusable>
       </div>
-    </div>
+    </section>
+
+    <section class="setting-display-options-sheet__section">
+      <p class="setting-display-options-sheet__preset-help">
+        {{ t('setting.displayOptions.presetHelp') }}
+      </p>
+    </section>
 
     <template #footer>
       <div class="setting-display-options-sheet__actions">
@@ -211,77 +186,58 @@ watch(
 </template>
 
 <style scoped>
-.setting-display-options-sheet__list {
+.setting-display-options-sheet__section {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 12px;
 }
 
-.setting-display-options-sheet__row {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+.setting-display-options-sheet__section + .setting-display-options-sheet__section {
+  margin-top: 20px;
 }
 
-.setting-display-options-sheet__label {
+.setting-display-options-sheet__section-title {
+  margin: 0;
   font-size: 13px;
   font-weight: 700;
   color: var(--color-text-secondary);
   text-transform: uppercase;
 }
 
-.setting-display-options-sheet__controls {
+.setting-display-options-sheet__preset-list {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
 }
 
-.setting-display-options-sheet__step,
-.setting-display-options-sheet__value {
+.setting-display-options-sheet__preset {
   min-height: 48px;
   border: 2px solid transparent;
   border-radius: var(--ui-radius-sm);
   background: var(--color-state-hover);
   color: var(--ui-page-text);
+  font-size: 15px;
+  font-weight: 700;
   transition: all var(--ui-motion-fast);
 }
 
-.setting-display-options-sheet__step {
-  min-width: 48px;
-  font-size: 20px;
-  font-weight: 700;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
+.setting-display-options-sheet__preset--active {
+  background: color-mix(in srgb, var(--brand-primary), transparent 82%);
+  color: var(--brand-primary);
+  border-color: color-mix(in srgb, var(--brand-primary), transparent 65%);
 }
 
-.setting-display-options-sheet__value {
-  display: flex;
-  align-items: stretch;
-}
-
-.setting-display-options-sheet__value[data-focused='true'],
-.setting-display-options-sheet__step[data-focused='true'] {
+.setting-display-options-sheet__preset[data-focused='true'] {
   background: var(--color-focus-bg-strong);
   color: var(--ui-focus-text);
   box-shadow: var(--shadow-xbox-focus);
 }
 
-.setting-display-options-sheet__input {
-  width: 100%;
-  min-height: 48px;
-  padding: 0 16px;
-  border: 0;
-  background: transparent;
-  color: inherit;
-  font-size: 18px;
-  font-weight: 600;
-  text-align: center;
-}
-
-.setting-display-options-sheet__input:focus {
-  outline: none;
+.setting-display-options-sheet__preset-help {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--color-text-tertiary);
 }
 
 .setting-display-options-sheet__actions {
@@ -328,6 +284,10 @@ watch(
 }
 
 :global(html[data-ui-density='narrow']) .setting-display-options-sheet__list {
+  grid-template-columns: 1fr;
+}
+
+:global(html[data-ui-density='narrow']) .setting-display-options-sheet__preset-list {
   grid-template-columns: 1fr;
 }
 

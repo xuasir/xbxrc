@@ -637,14 +637,57 @@
       }
     },
     "effects": {
-      "restartConfirm": "This setting requires an app restart to take effect. Restart now?"
+      "restartConfirm": "This setting requires an app restart to take effect. Restart now?",
+      "restartBadge": "Restart"
+    },
+    "pages": {
+      "general": {
+        "title": "General",
+        "sectionAppearance": "Appearance & interface"
+      },
+      "streamingExperience": {
+        "title": "Streaming",
+        "sectionShared": "General",
+        "sectionConsole": "Console streaming",
+        "sectionCloud": "Cloud gaming"
+      },
+      "connectionHost": {
+        "title": "Connection & console",
+        "sectionGeneral": "General connection",
+        "sectionConsole": "Console streaming"
+      },
+      "inputDevices": {
+        "title": "Input",
+        "sectionOverview": "Overview",
+        "sectionController": "Controller",
+        "sectionTools": "Tools",
+        "tools": {
+          "open": "Open",
+          "inputDebug": {
+            "label": "Input test",
+            "description": "Live view of buttons, sticks, and triggers"
+          },
+          "gamepadMapping": {
+            "label": "Gamepad mapping",
+            "description": "Customize mapping and apply immediately"
+          }
+        }
+      },
+      "advancedDiagnostics": {
+        "title": "Advanced & diagnostics",
+        "sectionAdvanced": "Advanced",
+        "sectionDanger": "Danger zone",
+        "dangerIntro": "Relay and expert server credentials are high-risk. Reveal these settings only when you understand the impact.",
+        "unlockDanger": "Show sensitive settings"
+      }
     },
     "displayOptions": {
-      "fields": {
-        "sharpness": "Sharpness",
-        "saturation": "Saturation",
-        "contrast": "Contrast",
-        "brightness": "Brightness"
+      "presetTitle": "Picture style",
+      "presetHelp": "Choose the default picture look you prefer.",
+      "presets": {
+        "standard": "Standard",
+        "clear": "Clear",
+        "soft": "Soft"
       }
     },
     "states": {
@@ -661,7 +704,7 @@
     "summaries": {
       "entries": "{count} entries",
       "items": "{count} items",
-      "displayOptions": "S {sharpness} / Sat {saturation} / C {contrast} / B {brightness}"
+      "displayOptions": "Standard"
     },
     "groups": {
       "app": "APP",
@@ -723,152 +766,117 @@
       },
       "theme": {
         "label": "Theme",
-        "description": "Appearance of the application interface",
         "options": {
-          "dark": {
-            "label": "Dark",
-            "description": "Xbox traditional deep mode"
-          },
-          "light": {
-            "label": "Light",
-            "description": "Clean and bright mode"
-          }
+          "dark": { "label": "Dark" },
+          "light": { "label": "Light" }
         }
       },
-      "use_msal": {
-        "label": "Use MSAL",
-        "description": "Switch between MSAL and XAL authentication"
-      },
       "fullscreen": {
-        "label": "Fullscreen",
-        "description": "Launch and display in fullscreen mode"
+        "label": "Launch in fullscreen"
       },
       "background_keepalive": {
-        "label": "Background Keepalive",
-        "description": "Keep the app session alive in the background"
+        "label": "Background keepalive",
+        "description": "Keep the app session alive when the window moves to the background for faster return."
       },
       "use_vulkan": {
-        "label": "Use Vulkan",
-        "description": "Enable the Vulkan rendering path"
+        "label": "Use Vulkan rendering",
+        "description": "Prefer the Vulkan rendering path. Turn this off if your driver or platform is unstable with Vulkan."
       },
       "ui_haptics": {
-        "label": "UI Haptics",
-        "description": "Enable controller vibration feedback for UI navigation"
+        "label": "UI haptic feedback",
+        "description": "Use controller vibration feedback during UI navigation and confirm actions."
       },
       "ui_audio": {
-        "label": "UI Audio",
-        "description": "Enable sound feedback for UI navigation"
+        "label": "UI sound feedback",
+        "description": "Play sound feedback during UI navigation and confirm actions."
       },
       "resolution": {
-        "label": "Resolution",
-        "description": "Each option shows the maximum streaming resolution available for that mode.",
+        "label": "Cloud gaming max resolution",
         "options": {
-          "1440": {
-            "label": "1440p",
-            "description": "Use the Tizen HQ device profile to request up to 1440p when supported",
-            "meta": "Higher bandwidth"
-          },
-          "1081": {
-            "label": "Auto (1080p HQ)",
-            "description": "Use the highest quality 1080p profile supported by the current path"
-          },
+          "1440": { "label": "1440p" },
+          "1081": { "label": "Auto · 1080p HQ" },
           "1080": {
-            "label": "1080p",
-            "meta": "7 GB/hr"
+            "label": "1080p"
           },
           "720": {
-            "label": "720p",
-            "meta": "3 GB/hr"
+            "label": "720p"
           }
         }
       },
       "xhome_resolution": {
-        "label": "Host Resolution",
-        "description": "Maximum resolution to request specifically for xHome local streaming.",
+        "label": "Console streaming max resolution",
         "options": {
-          "1081": {
-            "label": "Auto (1080p HQ)",
-            "description": "Use the highest quality xHome profile supported by the current host path"
-          },
+          "1081": { "label": "Auto · 1080p HQ" },
           "1080": {
-            "label": "1080p",
-            "meta": "Recommended"
+            "label": "1080p"
           },
           "720": {
-            "label": "720p",
-            "meta": "Lower bandwidth"
+            "label": "720p"
           }
         }
       },
       "xhome_bitrate_mode": {
-        "label": "xHome Bitrate Mode",
-        "description": "Select automatic or manual bitrate for xHome",
+        "label": "Console video bitrate",
         "options": {
           "auto": {
             "label": "Auto",
-            "description": "Use automatic bitrate selection"
+            "description": "Automatic"
           },
           "custom": {
-            "label": "Custom",
-            "description": "Use a custom bitrate value below"
+            "label": "Manual",
+            "description": "Use limit below"
           }
         }
       },
       "xhome_bitrate": {
-        "label": "xHome Bitrate",
-        "description": "Target bitrate for xHome streaming in Mb/s"
+        "label": "Console bitrate limit",
+        "description": "Mb/s"
       },
       "xhome_turn_fallback": {
-        "label": "xHome TURN Fallback",
-        "description": "Enable TURN fallback for xHome connectivity"
+        "label": "Allow TURN relay for console streaming",
+        "description": "Allow relay when direct connection fails."
       },
       "xcloud_bitrate_mode": {
-        "label": "xCloud Bitrate Mode",
-        "description": "Select automatic or manual bitrate for xCloud",
+        "label": "Cloud video bitrate",
         "options": {
           "auto": {
             "label": "Auto",
-            "description": "Use automatic bitrate selection"
+            "description": "Automatic"
           },
           "custom": {
-            "label": "Custom",
-            "description": "Use a custom bitrate value below"
+            "label": "Manual",
+            "description": "Use limit below"
           }
         }
       },
       "xcloud_bitrate": {
-        "label": "xCloud Bitrate",
-        "description": "Target bitrate for xCloud streaming in Mb/s"
+        "label": "Cloud bitrate limit",
+        "description": "Mb/s"
       },
       "audio_bitrate_mode": {
-        "label": "Audio Bitrate Mode",
-        "description": "Select automatic or manual audio bitrate",
+        "label": "Audio bitrate",
         "options": {
           "auto": {
             "label": "Auto",
-            "description": "Use automatic bitrate selection"
+            "description": "Automatic"
           },
           "custom": {
-            "label": "Custom",
-            "description": "Use a custom bitrate value below"
+            "label": "Manual",
+            "description": "Use limit below"
           }
         }
       },
       "audio_bitrate": {
-        "label": "Audio Bitrate",
-        "description": "Target audio bitrate in kb/s"
+        "label": "Audio bitrate limit",
+        "description": "kb/s"
       },
-      "enable_audio_control": {
-        "label": "Audio Control",
-        "description": "Enable in-stream audio volume control"
-      },
+      "enable_audio_control": { "label": "In-stream volume control" },
       "preferred_game_language": {
-        "label": "Preferred Game Language",
-        "description": "Language preference passed into the game session",
+        "label": "Preferred game language",
         "options": {
           "empty": {
             "label": "Default",
-            "description": "Follow the platform default language"
+            "description": "Follow the account or platform default language."
           },
           "ar_sa": { "label": "Arabic (Saudi Arabia)" },
           "cs_cz": { "label": "Czech" },
@@ -900,12 +908,11 @@
         }
       },
       "force_region_ip": {
-        "label": "Force Region IP",
-        "description": "Override automatic region selection with a specific IP",
+        "label": "Region routing override",
         "options": {
           "empty": {
             "label": "Default",
-            "description": "Use the default regional routing strategy"
+            "description": "Use the default regional routing strategy."
           },
           "203_41_44_20": { "label": "Australia" },
           "200_221_11_101": { "label": "Brazil" },
@@ -918,22 +925,32 @@
         }
       },
       "codec": {
-        "label": "Codec",
-        "description": "Preferred video codec",
+        "label": "Preferred video codec tier",
         "options": {
           "empty": {
             "label": "Auto",
-            "description": "Automatically select the most suitable codec"
+            "description": "Automatic"
           },
-          "video_h264_64": { "label": "H264-High" },
-          "video_h264_4d": { "label": "H264-Main" },
-          "video_h264_42e": { "label": "H264-Constrained Baseline" },
-          "video_h264_420": { "label": "H264-Baseline" }
+          "video_h264_64": {
+            "label": "H.264 · High",
+            "description": "Sharper"
+          },
+          "video_h264_4d": {
+            "label": "H.264 · Main",
+            "description": "Balanced"
+          },
+          "video_h264_42e": {
+            "label": "H.264 · Constrained Baseline",
+            "description": "More compatible"
+          },
+          "video_h264_420": {
+            "label": "H.264 · Baseline",
+            "description": "Most compatible"
+          }
         }
       },
       "polling_rate": {
         "label": "Polling Rate",
-        "description": "Controller polling rate in Hz",
         "options": {
           "250": { "label": "250 HZ" },
           "83_33": { "label": "83.33 HZ" },
@@ -952,70 +969,89 @@
         }
       },
       "video_format": {
-        "label": "Video Format",
-        "description": "Preferred video display format",
+        "label": "Picture fit mode",
         "options": {
           "empty": {
-            "label": "Aspect Ratio",
-            "description": "Keep the original stream aspect ratio"
+            "label": "Original aspect",
+            "description": "Keep ratio"
           },
-          "stretch": { "label": "Stretch" },
-          "zoom": { "label": "Zoom" },
-          "16_10": { "label": "16:10" },
-          "18_9": { "label": "18:9" },
-          "21_9": { "label": "21:9" },
-          "4_3": { "label": "4:3" }
+          "stretch": {
+            "label": "Stretch to fill",
+            "description": "Fill screen"
+          },
+          "zoom": {
+            "label": "Crop & zoom",
+            "description": "Crop edges"
+          },
+          "16_10": { "label": "Fixed 16:10", "description": "16:10" },
+          "18_9": { "label": "Fixed 18:9", "description": "18:9" },
+          "21_9": { "label": "Fixed 21:9", "description": "21:9" },
+          "4_3": { "label": "Fixed 4:3", "description": "4:3" }
         }
       },
-      "ipv6": {
-        "label": "Prefer IPv6",
-        "description": "Prefer IPv6 candidates during streaming"
-      },
-      "performance_style": {
-        "label": "Performance Style",
-        "description": "Switch the performance overlay presentation style"
-      },
+      "ipv6": { "label": "Prefer IPv6" },
+      "performance_style": { "label": "Compact performance overlay" },
       "stream_runtime_mode": {
-        "label": "Runtime Mode",
-        "description": "Select whether streaming uses the browser runtime or the Rust sidecar",
+        "label": "Streaming runtime",
         "options": {
-          "webrtc_direct": {
-            "label": "WebRTC Direct",
-            "description": "Use the browser WebRTC, decode, and render path"
-          },
-          "rust_owned": {
-            "label": "Rust Owned",
-            "description": "Use the Rust sidecar for transport, decode, render, and input"
-          }
+          "webrtc_direct": { "label": "WebRTC Direct" },
+          "rust_owned": { "label": "Rust Owned" }
         }
       },
       "display_options": {
-        "label": "Display Options",
-        "description": "Sharpness, saturation, contrast and brightness"
+        "label": "Picture style",
+        "options": {
+          "standard": { "label": "Standard" },
+          "clear": { "label": "Clear" },
+          "soft": { "label": "Soft" }
+        }
       },
-      "vibration": {
-        "label": "Vibration",
-        "description": "Enable controller vibration output"
-      },
+      "vibration": { "label": "Vibration" },
       "vibration_strength": {
         "label": "Vibration Strength",
-        "description": "Choose the vibration profile closest to your preferred controller feel"
+        "options": {
+          "realistic": {
+            "label": "Realistic",
+            "description": "Lighter"
+          },
+          "enhanced": {
+            "label": "Enhanced",
+            "description": "Balanced"
+          },
+          "full": {
+            "label": "Full",
+            "description": "Strongest"
+          }
+        }
       },
-      "power_on": {
-        "label": "Power On",
-        "description": "Wake the host automatically before streaming"
-      },
-      "server_url": {
-        "label": "Server URL",
-        "description": "Custom relay or self-hosted server URL"
-      },
-      "server_username": {
-        "label": "Server Username",
-        "description": "Username for the custom server"
-      },
-      "server_credential": {
-        "label": "Server Credential",
-        "description": "Credential for the custom server"
+      "server_url": { "label": "Custom server URL" },
+      "server_username": { "label": "Custom server username" },
+      "server_credential": { "label": "Custom server credential" },
+      "debug": { "label": "Debug mode" },
+      "runtime_trace_mode": {
+        "label": "Runtime trace logging",
+        "options": {
+          "off": {
+            "label": "Off",
+            "description": "No logs"
+          },
+          "minimal": {
+            "label": "Minimal",
+            "description": "Low"
+          },
+          "standard": {
+            "label": "Standard",
+            "description": "Normal"
+          },
+          "verbose": {
+            "label": "Verbose",
+            "description": "More"
+          },
+          "trace": {
+            "label": "Trace",
+            "description": "Most"
+          }
+        }
       }
     }
   }

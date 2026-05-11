@@ -637,14 +637,57 @@
       }
     },
     "effects": {
-      "restartConfirm": "该设置需要重启应用后生效，是否现在重启？"
+      "restartConfirm": "该设置需要重启应用后生效，是否现在重启？",
+      "restartBadge": "需重启"
+    },
+    "pages": {
+      "general": {
+        "title": "通用",
+        "sectionAppearance": "外观与界面"
+      },
+      "streamingExperience": {
+        "title": "串流体验",
+        "sectionShared": "通用",
+        "sectionConsole": "主机串流",
+        "sectionCloud": "云游戏"
+      },
+      "connectionHost": {
+        "title": "连接与主机",
+        "sectionGeneral": "通用连接",
+        "sectionConsole": "主机串流"
+      },
+      "inputDevices": {
+        "title": "输入设备",
+        "sectionOverview": "概览",
+        "sectionController": "手柄",
+        "sectionTools": "工具",
+        "tools": {
+          "open": "打开",
+          "inputDebug": {
+            "label": "输入测试",
+            "description": "实时查看按键、摇杆与扳机输入"
+          },
+          "gamepadMapping": {
+            "label": "手柄映射",
+            "description": "自定义按钮映射并立即生效"
+          }
+        }
+      },
+      "advancedDiagnostics": {
+        "title": "高级与诊断",
+        "sectionAdvanced": "高级",
+        "sectionDanger": "危险区",
+        "dangerIntro": "中继与专家服务器凭据风险较高，仅在理解影响时再展开。",
+        "unlockDanger": "显示敏感设置"
+      }
     },
     "displayOptions": {
-      "fields": {
-        "sharpness": "锐化",
-        "saturation": "饱和度",
-        "contrast": "对比度",
-        "brightness": "亮度"
+      "presetTitle": "画面风格",
+      "presetHelp": "选择你更喜欢的默认画面观感。",
+      "presets": {
+        "standard": "标准",
+        "clear": "清晰",
+        "soft": "柔和"
       }
     },
     "states": {
@@ -661,7 +704,7 @@
     "summaries": {
       "entries": "{count} 项",
       "items": "{count} 个",
-      "displayOptions": "锐化 {sharpness} / 饱和度 {saturation} / 对比度 {contrast} / 亮度 {brightness}"
+      "displayOptions": "标准"
     },
     "groups": {
       "app": "应用",
@@ -723,152 +766,117 @@
       },
       "theme": {
         "label": "界面主题",
-        "description": "应用界面的视觉主题样式",
         "options": {
-          "dark": {
-            "label": "深色",
-            "description": "Xbox 传统的深色模式"
-          },
-          "light": {
-            "label": "浅色",
-            "description": "清爽明亮的浅色模式"
-          }
+          "dark": { "label": "深色" },
+          "light": { "label": "浅色" }
         }
       },
-      "use_msal": {
-        "label": "使用 MSAL",
-        "description": "在 MSAL 和 XAL 认证方案之间切换"
-      },
       "fullscreen": {
-        "label": "全屏",
-        "description": "以全屏模式启动并显示应用"
+        "label": "启动时全屏"
       },
       "background_keepalive": {
         "label": "后台保活",
-        "description": "在后台保持应用会话存活"
+        "description": "窗口切到后台后继续保留应用会话，方便快速返回。"
       },
       "use_vulkan": {
-        "label": "使用 Vulkan",
-        "description": "启用 Vulkan 渲染路径"
+        "label": "使用 Vulkan 渲染",
+        "description": "优先使用 Vulkan 渲染路径；兼容性或驱动异常时建议关闭。"
       },
       "ui_haptics": {
-        "label": "手柄震动",
-        "description": "为界面导航提供手柄震动反馈"
+        "label": "界面震动反馈",
+        "description": "在界面导航和确认操作时提供手柄震动反馈。"
       },
       "ui_audio": {
-        "label": "界面音效",
-        "description": "为界面导航提供音效反馈"
+        "label": "界面音效反馈",
+        "description": "在界面导航和确认操作时播放提示音。"
       },
       "resolution": {
-        "label": "分辨率",
-        "description": "每个选项展示的是该模式下可用的最高串流分辨率。",
+        "label": "云游戏最高分辨率",
         "options": {
-          "1440": {
-            "label": "1440p",
-            "description": "使用 Tizen HQ 设备画像，在服务端支持时请求最高 1440p",
-            "meta": "更高带宽"
-          },
-          "1081": {
-            "label": "自动（1080p HQ）",
-            "description": "使用当前链路可支持的最高质量 1080p 档位"
-          },
+          "1440": { "label": "1440p" },
+          "1081": { "label": "自动 · 1080p 高画质" },
           "1080": {
-            "label": "1080p",
-            "meta": "7 GB/小时"
+            "label": "1080p"
           },
           "720": {
-            "label": "720p",
-            "meta": "3 GB/小时"
+            "label": "720p"
           }
         }
       },
       "xhome_resolution": {
-        "label": "主机分辨率",
-        "description": "单独指定 xHome 本地主机串流请求的最高分辨率。",
+        "label": "主机串流最高分辨率",
         "options": {
-          "1081": {
-            "label": "自动（1080p HQ）",
-            "description": "使用当前主机链路可支持的最高质量 xHome 档位"
-          },
+          "1081": { "label": "自动 · 1080p 高画质" },
           "1080": {
-            "label": "1080p",
-            "meta": "推荐"
+            "label": "1080p"
           },
           "720": {
-            "label": "720p",
-            "meta": "更低带宽"
+            "label": "720p"
           }
         }
       },
       "xhome_bitrate_mode": {
-        "label": "xHome 码率模式",
-        "description": "为 xHome 选择自动或手动码率",
+        "label": "主机视频码率",
         "options": {
           "auto": {
             "label": "自动",
-            "description": "自动选择码率"
+            "description": "自动"
           },
           "custom": {
-            "label": "自定义",
-            "description": "使用下方的自定义码率值"
+            "label": "手动",
+            "description": "使用下方上限"
           }
         }
       },
       "xhome_bitrate": {
-        "label": "xHome 码率",
-        "description": "xHome 串流目标码率（Mb/s）"
+        "label": "主机视频码率上限",
+        "description": "Mb/s"
       },
       "xhome_turn_fallback": {
-        "label": "xHome TURN 回退",
-        "description": "为 xHome 连接启用 TURN 回退"
+        "label": "主机串流允许 TURN 中继",
+        "description": "直连失败时允许改走中继。"
       },
       "xcloud_bitrate_mode": {
-        "label": "xCloud 码率模式",
-        "description": "为 xCloud 选择自动或手动码率",
+        "label": "云游戏视频码率",
         "options": {
           "auto": {
             "label": "自动",
-            "description": "自动选择码率"
+            "description": "自动"
           },
           "custom": {
-            "label": "自定义",
-            "description": "使用下方的自定义码率值"
+            "label": "手动",
+            "description": "使用下方上限"
           }
         }
       },
       "xcloud_bitrate": {
-        "label": "xCloud 码率",
-        "description": "xCloud 串流目标码率（Mb/s）"
+        "label": "云游戏视频码率上限",
+        "description": "Mb/s"
       },
       "audio_bitrate_mode": {
-        "label": "音频码率模式",
-        "description": "选择自动或手动音频码率",
+        "label": "音频码率",
         "options": {
           "auto": {
             "label": "自动",
-            "description": "自动选择码率"
+            "description": "自动"
           },
           "custom": {
-            "label": "自定义",
-            "description": "使用下方的自定义码率值"
+            "label": "手动",
+            "description": "使用下方上限"
           }
         }
       },
       "audio_bitrate": {
-        "label": "音频码率",
-        "description": "目标音频码率（kb/s）"
+        "label": "音频码率上限",
+        "description": "kb/s"
       },
-      "enable_audio_control": {
-        "label": "音量控制",
-        "description": "在串流过程中启用音量控制"
-      },
+      "enable_audio_control": { "label": "串流内音量调节" },
       "preferred_game_language": {
-        "label": "游戏偏好语言",
-        "description": "传递给游戏会话的语言偏好",
+        "label": "游戏语言偏好",
         "options": {
           "empty": {
             "label": "默认",
-            "description": "跟随平台默认语言"
+            "description": "跟随账号或平台默认语言。"
           },
           "ar_sa": { "label": "阿拉伯语（沙特）" },
           "cs_cz": { "label": "捷克语" },
@@ -900,12 +908,11 @@
         }
       },
       "force_region_ip": {
-        "label": "强制区域 IP",
-        "description": "用指定 IP 覆盖自动区域选择",
+        "label": "区域路由覆盖",
         "options": {
           "empty": {
             "label": "默认",
-            "description": "使用系统默认的区域路由策略"
+            "description": "使用系统默认的区域路由策略。"
           },
           "203_41_44_20": { "label": "澳大利亚" },
           "200_221_11_101": { "label": "巴西" },
@@ -918,22 +925,32 @@
         }
       },
       "codec": {
-        "label": "编码格式",
-        "description": "首选视频编码格式",
+        "label": "视频编码档位偏好",
         "options": {
           "empty": {
             "label": "自动",
-            "description": "自动选择最合适的编码"
+            "description": "自动"
           },
-          "video_h264_64": { "label": "H264-高" },
-          "video_h264_4d": { "label": "H264-主" },
-          "video_h264_42e": { "label": "H264-受限基线" },
-          "video_h264_420": { "label": "H264-基线" }
+          "video_h264_64": {
+            "label": "H.264 · High",
+            "description": "更清晰"
+          },
+          "video_h264_4d": {
+            "label": "H.264 · Main",
+            "description": "均衡"
+          },
+          "video_h264_42e": {
+            "label": "H.264 · Constrained Baseline",
+            "description": "更兼容"
+          },
+          "video_h264_420": {
+            "label": "H.264 · Baseline",
+            "description": "兼容性最高"
+          }
         }
       },
       "polling_rate": {
         "label": "轮询率",
-        "description": "手柄轮询频率（Hz）",
         "options": {
           "250": { "label": "250 HZ" },
           "83_33": { "label": "83.33 HZ" },
@@ -952,84 +969,89 @@
         }
       },
       "video_format": {
-        "label": "视频格式",
-        "description": "首选视频显示格式",
+        "label": "画面适配方式",
         "options": {
           "empty": {
-            "label": "保持比例",
-            "description": "保持原始串流画面比例"
+            "label": "原始比例",
+            "description": "保持比例"
           },
-          "stretch": { "label": "拉伸" },
-          "zoom": { "label": "缩放" },
-          "16_10": { "label": "16:10" },
-          "18_9": { "label": "18:9" },
-          "21_9": { "label": "21:9" },
-          "4_3": { "label": "4:3" }
+          "stretch": {
+            "label": "拉伸铺满",
+            "description": "铺满屏幕"
+          },
+          "zoom": {
+            "label": "裁切放大",
+            "description": "裁掉边缘"
+          },
+          "16_10": { "label": "固定 16:10", "description": "16:10" },
+          "18_9": { "label": "固定 18:9", "description": "18:9" },
+          "21_9": { "label": "固定 21:9", "description": "21:9" },
+          "4_3": { "label": "固定 4:3", "description": "4:3" }
         }
       },
-      "ipv6": {
-        "label": "优先 IPv6",
-        "description": "串流时优先使用 IPv6 候选地址"
-      },
-      "performance_style": {
-        "label": "性能面板样式",
-        "description": "切换性能浮层的展示样式"
-      },
+      "ipv6": { "label": "优先使用 IPv6" },
+      "performance_style": { "label": "紧凑性能浮层" },
       "stream_runtime_mode": {
-        "label": "运行时模式",
-        "description": "选择使用浏览器直出还是 Rust sidecar 串流内核",
+        "label": "串流运行时",
         "options": {
-          "webrtc_direct": {
-            "label": "WebRTC 直出",
-            "description": "由浏览器负责 WebRTC、解码与渲染"
-          },
-          "rust_owned": {
-            "label": "Rust 接管",
-            "description": "由 Rust sidecar 接管传输、解码、渲染与输入"
-          }
+          "webrtc_direct": { "label": "WebRTC 直出" },
+          "rust_owned": { "label": "Rust 接管" }
         }
       },
       "display_options": {
-        "label": "画面参数",
-        "description": "锐化、饱和度、对比度和亮度"
+        "label": "画面风格",
+        "options": {
+          "standard": { "label": "标准" },
+          "clear": { "label": "清晰" },
+          "soft": { "label": "柔和" }
+        }
       },
-      "vibration": {
-        "label": "震动",
-        "description": "启用手柄震动输出"
-      },
+      "vibration": { "label": "手柄震动" },
       "vibration_strength": {
         "label": "震动强度",
-        "description": "选择更接近你偏好体感的震动档位",
         "options": {
           "realistic": {
             "label": "真实",
-            "description": "更接近 Xbox 原生马达平衡，反馈更细腻"
+            "description": "较轻"
           },
           "enhanced": {
             "label": "增强",
-            "description": "在保留细节的同时，整体力度略加强"
+            "description": "均衡"
           },
           "full": {
             "label": "满强度",
-            "description": "使用完整震动信号，输出最强"
+            "description": "最强"
           }
         }
       },
-      "power_on": {
-        "label": "自动开机",
-        "description": "串流前自动唤醒主机"
-      },
-      "server_url": {
-        "label": "服务器地址",
-        "description": "自定义中继或自建服务器地址"
-      },
-      "server_username": {
-        "label": "服务器用户名",
-        "description": "自定义服务器使用的用户名"
-      },
-      "server_credential": {
-        "label": "服务器凭证",
-        "description": "自定义服务器使用的凭证"
+      "server_url": { "label": "自定义服务器地址" },
+      "server_username": { "label": "自定义服务器用户名" },
+      "server_credential": { "label": "自定义服务器凭证" },
+      "debug": { "label": "调试模式" },
+      "runtime_trace_mode": {
+        "label": "运行时追踪日志",
+        "options": {
+          "off": {
+            "label": "关闭",
+            "description": "不记录"
+          },
+          "minimal": {
+            "label": "最少",
+            "description": "低"
+          },
+          "standard": {
+            "label": "标准",
+            "description": "普通"
+          },
+          "verbose": {
+            "label": "详细",
+            "description": "更多"
+          },
+          "trace": {
+            "label": "追踪",
+            "description": "最多"
+          }
+        }
       }
     }
   }

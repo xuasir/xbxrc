@@ -3,13 +3,11 @@ export type SettingFieldControl
     | 'singleSelect'
     | 'textInput'
     | 'numberInput'
-    | 'displayOptions'
 
 export interface SettingSelectOptionDefinition {
   value: string | number
   label: string
   description?: string
-  meta?: string
 }
 
 export interface SettingFieldDefinition {
@@ -27,8 +25,8 @@ export interface SettingFieldInputDefinition {
 }
 
 const BITRATE_MODE_OPTIONS = [
-  { value: 'Auto', label: 'Auto', description: 'Use automatic bitrate selection' },
-  { value: 'Custom', label: 'Custom', description: 'Use a custom bitrate value below' },
+  { value: 'Auto', label: 'Auto', description: 'Automatic' },
+  { value: 'Custom', label: 'Manual', description: 'Use limit below' },
 ] as const satisfies readonly SettingSelectOptionDefinition[]
 
 const PREFERRED_GAME_LANGUAGE_OPTIONS = [
@@ -75,11 +73,11 @@ const FORCE_REGION_IP_OPTIONS = [
 ] as const satisfies readonly SettingSelectOptionDefinition[]
 
 const CODEC_OPTIONS = [
-  { value: '', label: 'Auto', description: 'Automatically select the most suitable codec' },
-  { value: 'video/H264-64', label: 'H264-High' },
-  { value: 'video/H264-4d', label: 'H264-Main' },
-  { value: 'video/H264-42e', label: 'H264-Constrained Baseline' },
-  { value: 'video/H264-420', label: 'H264-Baseline' },
+  { value: '', label: 'Auto', description: 'Automatic' },
+  { value: 'video/H264-64', label: 'H.264 High', description: 'Sharper' },
+  { value: 'video/H264-4d', label: 'H.264 Main', description: 'Balanced' },
+  { value: 'video/H264-42e', label: 'H.264 Constrained Baseline', description: 'More compatible' },
+  { value: 'video/H264-420', label: 'H.264 Baseline', description: 'Most compatible' },
 ] as const satisfies readonly SettingSelectOptionDefinition[]
 
 const POLLING_RATE_OPTIONS = [
@@ -103,38 +101,44 @@ const RUNTIME_TRACE_MODE_OPTIONS = [
   {
     value: 'off',
     label: 'Off',
-    description: 'Do not write runtime trace JSONL files (structured engine snapshots disabled on disk)',
+    description: 'No logs',
   },
   {
     value: 'minimal',
     label: 'Minimal',
-    description: 'Low noise: engine WARN+ to file; snapshots every ~3s (recommended for long sessions)',
+    description: 'Low',
   },
   {
     value: 'standard',
     label: 'Standard',
-    description: 'Engine INFO+ to file; snapshots every ~2s',
+    description: 'Normal',
   },
   {
     value: 'verbose',
     label: 'Verbose',
-    description: 'Engine DEBUG+ to file; snapshots every ~1s (large files)',
+    description: 'More',
   },
   {
     value: 'trace',
     label: 'Trace',
-    description: 'Engine TRACE to file; maximum detail',
+    description: 'Most',
   },
 ] as const satisfies readonly SettingSelectOptionDefinition[]
 
 const VIDEO_FORMAT_OPTIONS = [
-  { value: '', label: 'Aspect Ratio', description: 'Keep the original stream aspect ratio' },
-  { value: 'Stretch', label: 'Stretch' },
-  { value: 'Zoom', label: 'Zoom' },
-  { value: '16:10', label: '16:10' },
-  { value: '18:9', label: '18:9' },
-  { value: '21:9', label: '21:9' },
-  { value: '4:3', label: '4:3' },
+  { value: '', label: 'Original aspect', description: 'Keep ratio' },
+  { value: 'Stretch', label: 'Stretch to fill', description: 'Fill screen' },
+  { value: 'Zoom', label: 'Crop and zoom', description: 'Crop edges' },
+  { value: '16:10', label: 'Fixed 16:10', description: '16:10' },
+  { value: '18:9', label: 'Fixed 18:9', description: '18:9' },
+  { value: '21:9', label: 'Fixed 21:9', description: '21:9' },
+  { value: '4:3', label: 'Fixed 4:3', description: '4:3' },
+] as const satisfies readonly SettingSelectOptionDefinition[]
+
+const DISPLAY_PRESET_OPTIONS = [
+  { value: 'standard', label: 'Standard' },
+  { value: 'clear', label: 'Clear' },
+  { value: 'soft', label: 'Soft' },
 ] as const satisfies readonly SettingSelectOptionDefinition[]
 
 export interface SettingSectionDefinition {
@@ -148,7 +152,7 @@ export interface SettingGroupDefinition {
   sections: readonly SettingSectionDefinition[]
 }
 
-// 配置页严格复用 config domain 的 tab/section/字段顺序，避免前端自行发明结构
+/** 历史分组定义；设置页展示顺序见 `src/pages/settings/setting-page-schema.ts`。保留以供后端分桶文档对齐或其它调用方参考。 */
 export const CONFIG_GROUP_DEFINITIONS: Record<string, SettingGroupDefinition> = {
   app: {
     label: 'APP',
@@ -179,11 +183,6 @@ export const CONFIG_GROUP_DEFINITIONS: Record<string, SettingGroupDefinition> = 
     label: 'AUTH',
     sections: [
       {
-        key: 'provider',
-        label: 'Provider',
-        keys: ['use_msal'],
-      },
-      {
         key: 'region',
         label: 'Region',
         keys: ['force_region_ip'],
@@ -200,7 +199,6 @@ export const CONFIG_GROUP_DEFINITIONS: Record<string, SettingGroupDefinition> = 
           'resolution',
           'xhome_resolution',
           'preferred_game_language',
-          'power_on',
           'enable_audio_control',
           'video_format',
           'performance_style',
@@ -257,7 +255,7 @@ export const CONFIG_GROUP_DEFINITIONS: Record<string, SettingGroupDefinition> = 
       {
         key: 'connection',
         label: 'Connection',
-        keys: ['xhome_auto_connect_server_id'],
+        keys: [],
       },
     ],
   },
@@ -283,80 +281,49 @@ export const CONFIG_FIELD_DEFINITIONS: Record<string, SettingFieldDefinition> = 
   },
   theme: {
     label: 'Theme',
-    description: 'Appearance of the application interface',
     control: 'singleSelect',
     options: [
       {
         value: 'dark',
         label: 'Dark',
-        description: 'Xbox traditional deep mode',
       },
       {
         value: 'light',
         label: 'Light',
-        description: 'Clean and bright mode',
       },
     ],
   },
-  use_msal: {
-    label: 'Use MSAL',
-    description: 'Switch between MSAL and XAL authentication',
-    control: 'toggle',
-  },
   fullscreen: {
-    label: 'Fullscreen',
-    description: 'Launch and display in fullscreen mode',
+    label: 'Launch in fullscreen',
     control: 'toggle',
   },
   resolution: {
-    label: 'Resolution',
-    description:
-      'All resolutions listed in this section represent maximum values as specified for each option.',
+    label: 'Cloud gaming max resolution',
     control: 'singleSelect',
     options: [
-      {
-        value: 1440,
-        label: '1440p',
-        description: 'Use the Tizen HQ device profile to request up to 1440p when supported',
-        meta: 'Higher bandwidth',
-      },
-      {
-        value: 1081,
-        label: 'Auto (1080p HQ)',
-        description: 'Use the highest quality 1080p profile supported by the current path',
-      },
-      { value: 1080, label: '1080p', meta: '7 GB/hr' },
-      { value: 720, label: '720p', meta: '3 GB/hr' },
+      { value: 1440, label: '1440p' },
+      { value: 1081, label: 'Auto (1080p HQ)' },
+      { value: 1080, label: '1080p' },
+      { value: 720, label: '720p' },
     ],
   },
   xhome_resolution: {
-    label: 'Host Resolution',
-    description: 'Maximum resolution to request specifically for xHome local streaming.',
+    label: 'Console streaming max resolution',
     control: 'singleSelect',
     options: [
-      {
-        value: 1081,
-        label: 'Auto (1080p HQ)',
-        description: 'Use the highest quality xHome profile supported by the current host path',
-      },
-      { value: 1080, label: '1080p', meta: 'Recommended' },
-      { value: 720, label: '720p', meta: 'Lower bandwidth' },
+      { value: 1081, label: 'Auto (1080p HQ)' },
+      { value: 1080, label: '1080p' },
+      { value: 720, label: '720p' },
     ],
   },
-  xhome_auto_connect_server_id: {
-    label: 'Auto Connect Host',
-    description: 'xHome host ID for automatic connection',
-    control: 'textInput',
-  },
   xhome_bitrate_mode: {
-    label: 'xHome Bitrate Mode',
-    description: 'Select automatic or manual bitrate for xHome',
+    label: 'Console video bitrate',
     control: 'singleSelect',
     options: BITRATE_MODE_OPTIONS,
   },
   xhome_bitrate: {
-    label: 'xHome Bitrate',
-    description: 'Target bitrate for xHome streaming in Mb/s',
+    label: 'Console bitrate limit',
+    description: 'Mb/s',
     control: 'numberInput',
     input: {
       min: 0,
@@ -365,19 +332,18 @@ export const CONFIG_FIELD_DEFINITIONS: Record<string, SettingFieldDefinition> = 
     },
   },
   xhome_turn_fallback: {
-    label: 'xHome TURN Fallback',
-    description: 'Enable TURN fallback for xHome connectivity',
+    label: 'Allow TURN relay for console streaming',
+    description: 'Allow relay when direct connection fails.',
     control: 'toggle',
   },
   xcloud_bitrate_mode: {
-    label: 'xCloud Bitrate Mode',
-    description: 'Select automatic or manual bitrate for xCloud',
+    label: 'Cloud video bitrate',
     control: 'singleSelect',
     options: BITRATE_MODE_OPTIONS,
   },
   xcloud_bitrate: {
-    label: 'xCloud Bitrate',
-    description: 'Target bitrate for xCloud streaming in Mb/s',
+    label: 'Cloud bitrate limit',
+    description: 'Mb/s',
     control: 'numberInput',
     input: {
       min: 0,
@@ -386,14 +352,13 @@ export const CONFIG_FIELD_DEFINITIONS: Record<string, SettingFieldDefinition> = 
     },
   },
   audio_bitrate_mode: {
-    label: 'Audio Bitrate Mode',
-    description: 'Select automatic or manual audio bitrate',
+    label: 'Audio bitrate',
     control: 'singleSelect',
     options: BITRATE_MODE_OPTIONS,
   },
   audio_bitrate: {
-    label: 'Audio Bitrate',
-    description: 'Target audio bitrate in kb/s',
+    label: 'Audio bitrate limit',
+    description: 'kb/s',
     control: 'numberInput',
     input: {
       min: 0,
@@ -402,147 +367,122 @@ export const CONFIG_FIELD_DEFINITIONS: Record<string, SettingFieldDefinition> = 
     },
   },
   enable_audio_control: {
-    label: 'Audio Control',
-    description: 'Enable in-stream audio volume control',
+    label: 'In-stream volume control',
     control: 'toggle',
   },
   preferred_game_language: {
-    label: 'Preferred Game Language',
-    description: 'Language preference passed to the game session',
+    label: 'Preferred game language',
     control: 'singleSelect',
     options: PREFERRED_GAME_LANGUAGE_OPTIONS,
   },
   force_region_ip: {
-    label: 'Force Region IP',
-    description: 'Override network region selection with a specific IP',
+    label: 'Region routing override',
     control: 'singleSelect',
     options: FORCE_REGION_IP_OPTIONS,
   },
   codec: {
-    label: 'Codec',
-    description: 'Preferred video codec',
+    label: 'Preferred video codec tier',
     control: 'singleSelect',
     options: CODEC_OPTIONS,
   },
   polling_rate: {
     label: 'Polling Rate',
-    description: 'Controller polling rate in Hz',
     control: 'singleSelect',
     options: POLLING_RATE_OPTIONS,
   },
   vibration: {
     label: 'Vibration',
-    description: 'Enable controller vibration output',
     control: 'toggle',
   },
   vibration_strength: {
     label: 'Vibration Strength',
-    description: 'Choose the vibration strength profile closest to your preferred controller feel',
     control: 'singleSelect',
     options: [
       {
         value: 'realistic',
         label: 'Realistic',
-        description: 'Closer to native Xbox motor balance with lighter and finer feedback',
+        description: 'Lighter',
       },
       {
         value: 'enhanced',
         label: 'Enhanced',
-        description: 'Slightly stronger while still preserving most of the detail',
+        description: 'Balanced',
       },
       {
         value: 'full',
         label: 'Full',
-        description: 'Use the full decoded rumble signal for the strongest output',
+        description: 'Strongest',
       },
     ],
   },
-  power_on: {
-    label: 'Power On',
-    description: 'Wake the host automatically before streaming',
-    control: 'toggle',
-  },
   video_format: {
-    label: 'Video Format',
-    description: 'Preferred video display format',
+    label: 'Picture fit mode',
     control: 'singleSelect',
     options: VIDEO_FORMAT_OPTIONS,
   },
   ipv6: {
     label: 'Prefer IPv6',
-    description: 'Prefer IPv6 candidates during streaming',
     control: 'toggle',
   },
   performance_style: {
-    label: 'Performance Style',
-    description: 'Switch performance overlay presentation style',
+    label: 'Compact performance overlay',
     control: 'toggle',
   },
   stream_runtime_mode: {
-    label: 'Runtime Mode',
-    description: 'Select whether streaming runs in the browser runtime or the Rust xbxEngine',
+    label: 'Streaming runtime',
     control: 'singleSelect',
     options: [
       {
         value: 'webrtc-direct',
         label: 'WebRTC Direct',
-        description: 'Use the browser WebRTC / decode / render path',
       },
       {
         value: 'rust-owned',
         label: 'Rust Owned',
-        description: 'Use the Rust xbxEngine for transport, decode, render and input',
       },
     ],
   },
   server_url: {
-    label: 'Server URL',
-    description: 'Custom relay or self-hosted server URL',
+    label: 'Custom server URL',
     control: 'textInput',
   },
   server_username: {
-    label: 'Server Username',
-    description: 'Username for the custom server',
+    label: 'Custom server username',
     control: 'textInput',
   },
   server_credential: {
-    label: 'Server Credential',
-    description: 'Credential for the custom server',
+    label: 'Custom server credential',
     control: 'textInput',
   },
   background_keepalive: {
-    label: 'Background Keepalive',
-    description: 'Keep the application session alive in background',
+    label: 'Background keepalive',
+    description: 'Keep the app session alive when the window moves to the background for faster return',
     control: 'toggle',
   },
   display_options: {
-    label: 'Display Options',
-    description: 'Sharpness, saturation, contrast and brightness',
-    control: 'displayOptions',
+    label: 'Picture style',
+    control: 'singleSelect',
+    options: DISPLAY_PRESET_OPTIONS,
   },
   use_vulkan: {
-    label: 'Use Vulkan',
-    description: 'Enable the Vulkan rendering path',
+    label: 'Use Vulkan rendering',
+    description: 'Prefer the Vulkan rendering path; turn this off if your driver or platform is unstable with Vulkan',
     control: 'toggle',
   },
   ui_haptics: {
-    label: 'UI Haptics',
-    description: 'Enable controller vibration feedback for UI navigation',
+    label: 'UI haptic feedback',
     control: 'toggle',
   },
   ui_audio: {
-    label: 'UI Audio',
-    description: 'Enable sound feedback for UI navigation',
+    label: 'UI sound feedback',
     control: 'toggle',
   },
   debug: {
-    label: 'Debug',
-    description: 'Enable debug mode',
+    label: 'Debug mode',
     control: 'toggle',
   },
   runtime_trace_mode: {
-    label: 'Runtime trace',
-    description: 'How much data is written to runtime-logs JSONL (restart to apply)',
+    label: 'Runtime trace logging',
     control: 'singleSelect',
     options: [...RUNTIME_TRACE_MODE_OPTIONS],
   },

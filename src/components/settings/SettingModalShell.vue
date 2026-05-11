@@ -122,10 +122,13 @@ function handleClose(): void {
 .setting-modal-shell__panel {
   padding: var(--ui-settings-modal-panel-padding);
   gap: var(--ui-space-lg);
+  /* 圆角裁切交给子层；主体滚动在 __body，避免 footer 固定时上方内容被裁切 */
   overflow: hidden;
+  min-height: 0;
 }
 
 .setting-modal-shell__header {
+  flex-shrink: 0;
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
@@ -192,10 +195,13 @@ function handleClose(): void {
 .setting-modal-shell__body {
   flex: 1 1 auto;
   min-height: 0;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .setting-modal-shell__footer {
+  flex-shrink: 0;
   padding-top: var(--ui-space-md);
   border-top: 1px solid var(--ui-border-subtle);
 }

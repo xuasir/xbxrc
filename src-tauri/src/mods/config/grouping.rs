@@ -38,9 +38,7 @@ pub fn split_config_groups(config: &Map<String, Value>) -> Value {
             "performance_style",
             "display_options"
         ]),
-        "host": pick_group_values(config, &[
-            "xhome_auto_connect_server_id"
-        ]),
+        "host": pick_group_values(config, &[]),
         // xcloud 组当前不承载策略字段，避免与 streaming policy 分组重复返回。
         "xcloud": pick_group_values(config, &[]),
         "input": pick_group_values(config, &[

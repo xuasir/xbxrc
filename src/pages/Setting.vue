@@ -1,18 +1,22 @@
 <script setup lang="ts">
-import type { SettingFieldDefinition, SettingSectionDefinition, SettingSelectOptionDefinition } from '@shared/config/domain-definition'
+import type { SettingFieldDefinition, SettingSelectOptionDefinition } from '@shared/config/domain-definition'
 import type { SettingTabKey } from '../navigation/spatial-nav.constants'
-import type { SettingIndexedSection, SettingRow, SettingSection, SettingTabNavItem } from './settings/setting-types'
+import type { SettingPageKey } from './settings/setting-page-schema'
+import type {
+  SettingIndexedRow,
+  SettingIndexedSection,
+  SettingSectionEntry,
+  SettingTabNavItem,
+} from './settings/setting-types'
 import {
   CONFIG_FIELD_DEFINITIONS,
-  CONFIG_GROUP_DEFINITIONS,
 } from '@shared/config/domain-definition'
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { navigationEngine, syncHapticsConfig } from '@/navigation/core'
 import { playNavSound, triggerNavHaptic } from '@/navigation/core/haptics'
 import { applyTheme } from '../app/theme'
 import BrandedLoading from '../components/common/BrandedLoading.vue'
-import SettingDisplayOptionsSheet from '../components/settings/SettingDisplayOptionsSheet.vue'
 import SettingSingleSelectPopupSheet from '../components/settings/SettingSingleSelectPopupSheet.vue'
 import SettingValueSheet from '../components/settings/SettingValueSheet.vue'
 import { resolveUiLocale, setUiLocale } from '../i18n'
@@ -21,13 +25,17 @@ import {
   SPATIAL_NAV_SCOPE_IDS,
 } from '../navigation/spatial-nav.constants'
 import { rpc } from '../services/rpc'
+import {
+  getConfigFieldValue,
+  getSectionsForPage,
+  SETTING_PAGE_LABEL_KEYS,
+  SETTING_PAGE_ORDER,
+} from './settings/setting-page-schema'
 import SettingInputToolsSection from './settings/SettingInputToolsSection.vue'
 import SettingSectionList from './settings/SettingSectionList.vue'
 import SettingSidebar from './settings/SettingSidebar.vue'
 
 type SettingGroupMap = Awaited<ReturnType<typeof rpc.config.getGroups>>
-
-type SettingGroupEntry = keyof SettingGroupMap
 
 interface SettingTabItem {
   key: SettingTabKey
@@ -42,8 +50,35 @@ interface DisplayOptionsValue {
   brightness: number
 }
 
+function resolveDisplayPresetKey(value: DisplayOptionsValue): 'standard' | 'clear' | 'soft' | null {
+  if (
+    value.sharpness === 0
+    && value.saturation === 100
+    && value.contrast === 100
+    && value.brightness === 100
+  ) {
+    return 'standard'
+  }
+  if (
+    value.sharpness === 3
+    && value.saturation === 105
+    && value.contrast === 105
+    && value.brightness === 100
+  ) {
+    return 'clear'
+  }
+  if (
+    value.sharpness === 0
+    && value.saturation === 96
+    && value.contrast === 96
+    && value.brightness === 102
+  ) {
+    return 'soft'
+  }
+  return null
+}
+
 const RESTART_REQUIRED_KEYS = new Set([
-  'use_msal',
   'locale',
   'background_keepalive',
   'use_vulkan',
@@ -51,7 +86,6 @@ const RESTART_REQUIRED_KEYS = new Set([
 ])
 
 const STREAMING_EXPERT_RESET_ACTION_KEY = 'streaming.__expert_reset__'
-const STREAMING_EXPERT_RESET_NODE_ID = 'setting.actions.streaming.expert.reset'
 
 const STREAMING_EXPERT_RESET_PATCH = {
   server_url: '',
@@ -59,22 +93,50 @@ const STREAMING_EXPERT_RESET_PATCH = {
   server_credential: '',
 } as const satisfies Record<string, string>
 
+const DISPLAY_PRESET_VALUES = {
+  standard: {
+    sharpness: 0,
+    saturation: 100,
+    contrast: 100,
+    brightness: 100,
+  },
+  clear: {
+    sharpness: 3,
+    saturation: 105,
+    contrast: 105,
+    brightness: 100,
+  },
+  soft: {
+    sharpness: 0,
+    saturation: 96,
+    contrast: 96,
+    brightness: 102,
+  },
+} as const satisfies Record<'standard' | 'clear' | 'soft', DisplayOptionsValue>
+
 const CLEAR_AUTH_CACHE_KEYS = new Map<string, 'ephemeral' | 'all'>([
-  ['use_msal', 'all'],
   ['preferred_game_language', 'ephemeral'],
   ['force_region_ip', 'ephemeral'],
 ])
 
-const activeTabKey = ref<SettingTabKey>('app')
+const activeTabKey = ref<SettingTabKey>('general')
+const dangerZoneUnlocked = ref(false)
 const groupState = ref<SettingGroupMap | null>(null)
-const isLoading = ref(false)
+/** 首屏为 true，避免在 getGroups 返回前短暂出现「空分组」与侧栏已展示的错位 */
+const isLoading = ref(true)
 const pendingActionKey = ref<string | null>(null)
-const activeInlineSingleSelectRow = ref<SettingRow | null>(null)
-const activeSingleSelectRow = ref<SettingRow | null>(null)
-const activeValueEditorRow = ref<SettingRow | null>(null)
-const activeDisplayOptionsRow = ref<SettingRow | null>(null)
+const activeSingleSelectRow = ref<SettingIndexedRow | null>(null)
+const activeValueEditorRow = ref<SettingIndexedRow | null>(null)
+const inputToolsRef = ref<InstanceType<typeof SettingInputToolsSection> | null>(null)
+
 const { t, te } = useI18n()
 let disposeTabSwitch: (() => void) | undefined
+
+watch(activeTabKey, (next) => {
+  if (next !== 'advancedDiagnostics') {
+    dangerZoneUnlocked.value = false
+  }
+})
 
 function translateOrFallback(key: string, fallback: string): string {
   return te(key) ? t(key) : fallback
@@ -86,17 +148,6 @@ function normalizeOptionValueForKey(value: string | number): string {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '_')
   return normalizedValue.length > 0 ? normalizedValue : 'empty'
-}
-
-function getTranslatedGroupLabel(groupKey: SettingTabKey): string {
-  return translateOrFallback(`setting.groups.${groupKey}`, CONFIG_GROUP_DEFINITIONS[groupKey].label)
-}
-
-function getTranslatedSectionLabel(
-  groupKey: SettingTabKey,
-  section: SettingSectionDefinition,
-): string {
-  return translateOrFallback(`setting.sections.${groupKey}.${section.key}`, section.label)
 }
 
 function getTranslatedFieldDefinition(configKey: string): SettingFieldDefinition {
@@ -127,47 +178,23 @@ function getTranslatedFieldDefinition(configKey: string): SettingFieldDefinition
                 `setting.fields.${configKey}.options.${optionValueKey}.description`,
                 option.description,
               ),
-        meta:
-          option.meta === undefined
-            ? undefined
-            : translateOrFallback(
-                `setting.fields.${configKey}.options.${optionValueKey}.meta`,
-                option.meta,
-              ),
       }
     }),
   }
 }
 
-const tabs = computed<SettingTabItem[]>(() => [
-  {
-    key: 'app',
-    label: getTranslatedGroupLabel('app'),
-    nodeId: SPATIAL_NAV_NODE_IDS.settingTabs.app,
-  },
-  {
-    key: 'streaming',
-    label: getTranslatedGroupLabel('streaming'),
-    nodeId: SPATIAL_NAV_NODE_IDS.settingTabs.streaming,
-  },
-  {
-    key: 'host',
-    label: getTranslatedGroupLabel('host'),
-    nodeId: SPATIAL_NAV_NODE_IDS.settingTabs.host,
-  },
-  {
-    key: 'xcloud',
-    label: getTranslatedGroupLabel('xcloud'),
-    nodeId: SPATIAL_NAV_NODE_IDS.settingTabs.xcloud,
-  },
-  {
-    key: 'input',
-    label: getTranslatedGroupLabel('input'),
-    nodeId: SPATIAL_NAV_NODE_IDS.settingTabs.input,
-  },
-])
+const tabs = computed<SettingTabItem[]>(() =>
+  SETTING_PAGE_ORDER.map(pageKey => ({
+    key: pageKey as SettingTabKey,
+    label: translateOrFallback(
+      SETTING_PAGE_LABEL_KEYS[pageKey],
+      pageKey,
+    ),
+    nodeId: SPATIAL_NAV_NODE_IDS.settingTabs[pageKey as keyof typeof SPATIAL_NAV_NODE_IDS.settingTabs],
+  })),
+)
 
-function buildSettingRow(groupKey: SettingTabKey, key: string, value: unknown): SettingRow {
+function buildSettingRow(pageKey: SettingPageKey, key: string, value: unknown): Omit<SettingIndexedRow, 'index'> {
   const fieldDefinition = getTranslatedFieldDefinition(key)
   return {
     key,
@@ -178,55 +205,118 @@ function buildSettingRow(groupKey: SettingTabKey, key: string, value: unknown): 
     control: fieldDefinition.control,
     options: fieldDefinition.options,
     input: fieldDefinition.input,
-    nodeId: createSettingItemNodeId(groupKey, key),
+    nodeId: createSettingItemNodeId(pageKey, key),
+    needsRestart: RESTART_REQUIRED_KEYS.has(key),
   }
 }
 
-const activeSections = computed<SettingSection[]>(() => {
-  const groups = groupState.value
+function buildPanelSections(): SettingIndexedSection[] {
+  const groups = groupState.value as Record<string, unknown> | null
   if (groups === null) {
     return []
   }
 
-  const groupKey = activeTabKey.value as SettingGroupEntry
-  const groupDefinition = CONFIG_GROUP_DEFINITIONS[groupKey]
-  const group = groups[groupKey] as Record<string, unknown>
+  const pageKey = activeTabKey.value as SettingPageKey
+  const sectionDefs = getSectionsForPage(pageKey, dangerZoneUnlocked.value)
+  let navOrder = 0
 
-  return groupDefinition.sections
-    .map((section) => {
-      const rows = section.keys.map(key => buildSettingRow(activeTabKey.value, key, group[key]))
+  return sectionDefs
+    .map((secDef) => {
+      const label = translateOrFallback(secDef.labelKey, secDef.key)
+      const entries: SettingSectionEntry[] = []
+
+      for (const item of secDef.items) {
+        if (item.kind === 'field') {
+          const value = getConfigFieldValue(groups, item.fieldKey)
+          const row = buildSettingRow(pageKey, item.fieldKey, value)
+          entries.push({
+            kind: 'field',
+            row: {
+              ...row,
+              index: navOrder,
+            },
+          })
+          navOrder += 1
+        }
+        else if (item.kind === 'tool') {
+          entries.push({
+            kind: 'tool',
+            toolId: item.toolId,
+            nodeId: createToolNodeId(pageKey, item.toolId),
+            label: translateOrFallback(
+              `setting.pages.inputDevices.tools.${item.toolId}.label`,
+              item.toolId,
+            ),
+            description:
+              te(`setting.pages.inputDevices.tools.${item.toolId}.description`)
+                ? t(`setting.pages.inputDevices.tools.${item.toolId}.description`)
+                : undefined,
+            valueText: translateOrFallback('setting.pages.inputDevices.tools.open', 'Open'),
+            index: navOrder,
+          })
+          navOrder += 1
+        }
+        else if (item.kind === 'action') {
+          entries.push({
+            kind: 'action',
+            actionId: item.actionId,
+            nodeId: createActionNodeId(pageKey, item.actionId),
+            label:
+              item.actionId === 'expertReset'
+                ? translateOrFallback('setting.streaming.expert.reset', 'Reset')
+                : translateOrFallback(
+                    'setting.pages.advancedDiagnostics.unlockDanger',
+                    'Unlock',
+                  ),
+            variant: item.actionId === 'unlockDangerZone' ? 'default' : 'danger',
+            index: navOrder,
+          })
+          navOrder += 1
+        }
+        else if (item.kind === 'notice') {
+          entries.push({
+            kind: 'notice',
+            body: translateOrFallback(item.noticeKey, item.noticeKey),
+            index: navOrder,
+          })
+        }
+        else if (item.kind === 'groupSummary') {
+          entries.push({
+            kind: 'groupSummary',
+            summaryId: item.summaryId,
+            index: navOrder,
+          })
+        }
+      }
 
       return {
-        key: section.key,
-        label: getTranslatedSectionLabel(activeTabKey.value, section),
-        rows,
+        key: secDef.key,
+        label,
+        entries,
       }
     })
-    .filter(section => section.rows.length > 0)
-})
+    .filter(section => section.entries.length > 0)
+}
 
-const activeRows = computed<SettingRow[]>(() =>
-  activeSections.value.flatMap(section => section.rows),
-)
+const activeSections = computed(() => buildPanelSections())
 
-const activeSectionRows = computed<SettingIndexedSection[]>(() =>
-  // 保持 section 视觉分组的同时，继续复用一条连续的空间导航顺序
-  activeSections.value.map(section => ({
-    ...section,
-    rows: section.rows.map((row) => {
-      const rowIndex = activeRows.value.findIndex(activeRow => activeRow.nodeId === row.nodeId)
-      return {
-        ...row,
-        index: rowIndex,
+const focusableNodeIds = computed(() => {
+  const out: string[] = []
+  for (const section of activeSections.value) {
+    for (const entry of section.entries) {
+      if (entry.kind === 'field') {
+        out.push(entry.row.nodeId)
       }
-    }),
-  })),
-)
-
-const activeGroupLabel = computed(() => getTranslatedGroupLabel(activeTabKey.value))
-const firstFocusableNodeId = computed(() => {
-  return activeRows.value[0]?.nodeId
+      else if (entry.kind === 'tool' || entry.kind === 'action') {
+        out.push(entry.nodeId)
+      }
+    }
+  }
+  return out
 })
+
+const firstFocusableNodeId = computed(() => focusableNodeIds.value[0])
+
 const tabNavItems = computed<SettingTabNavItem[]>(() => {
   return tabs.value.map((tab, index, tabList) => ({
     ...tab,
@@ -239,18 +329,25 @@ const tabNavItems = computed<SettingTabNavItem[]>(() => {
     rightNeighborId: firstFocusableNodeId.value,
   }))
 })
+
+const activeGroupLabel = computed(() =>
+  translateOrFallback(
+    SETTING_PAGE_LABEL_KEYS[activeTabKey.value as SettingPageKey],
+    activeTabKey.value,
+  ),
+)
+
 const activeValueEditorScopeId = computed(() =>
   activeValueEditorRow.value === null
     ? 'setting.value-editor.idle'
     : `setting.value-editor.${activeValueEditorRow.value.key}`,
 )
-const activeDisplayOptionsScopeId = computed(() =>
-  activeDisplayOptionsRow.value === null
-    ? 'setting.display-options.idle'
-    : `setting.display-options.${activeDisplayOptionsRow.value.key}`,
-)
-const isStreamingExpertResetPending = computed(
+const isExpertResetPending = computed(
   () => pendingActionKey.value === STREAMING_EXPERT_RESET_ACTION_KEY,
+)
+
+const hasPanelContent = computed(
+  () => activeSections.value.some(section => section.entries.length > 0),
 )
 
 async function syncConfigGroups(): Promise<void> {
@@ -275,15 +372,21 @@ async function loadConfigGroups(): Promise<void> {
 function handleTabChange(tabKey: string): void {
   if (tabKey in SPATIAL_NAV_NODE_IDS.settingTabs) {
     activeTabKey.value = tabKey as SettingTabKey
-    activeInlineSingleSelectRow.value = null
     activeSingleSelectRow.value = null
     activeValueEditorRow.value = null
-    activeDisplayOptionsRow.value = null
   }
 }
 
-function createSettingItemNodeId(groupKey: SettingTabKey, configKey: string): string {
-  return `setting.items.${groupKey}.${configKey}`
+function createSettingItemNodeId(pageKey: SettingPageKey, configKey: string): string {
+  return `setting.items.${pageKey}.${configKey}`
+}
+
+function createToolNodeId(pageKey: SettingPageKey, toolId: string): string {
+  return `setting.tools.${pageKey}.${toolId}`
+}
+
+function createActionNodeId(pageKey: SettingPageKey, actionId: string): string {
+  return `setting.actions.${pageKey}.${actionId}`
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -291,18 +394,20 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 async function persistRowValue(
-  row: SettingRow,
+  row: SettingIndexedRow,
   nextValue: string | number | boolean,
 ): Promise<void> {
   pendingActionKey.value = row.key
   try {
+    const patchValue = row.key === 'display_options' && typeof nextValue === 'string'
+      ? DISPLAY_PRESET_VALUES[nextValue as keyof typeof DISPLAY_PRESET_VALUES]
+      : nextValue
     await rpc.config.set({
       patch: {
-        [row.key]: nextValue,
+        [row.key]: patchValue,
       },
     })
 
-    // 配置值以主进程 schema 归一化结果为准，保存后统一回读一次
     if (row.key === 'fullscreen' && typeof nextValue === 'boolean') {
       if (nextValue) {
         await rpc.app.enterFullscreen()
@@ -365,12 +470,13 @@ function formatConfigValue(
     return t('setting.values.notSet')
   }
   if (key === 'display_options' && isRecord(value)) {
-    return t('setting.summaries.displayOptions', {
-      sharpness: value.sharpness ?? '-',
-      saturation: value.saturation ?? '-',
-      contrast: value.contrast ?? '-',
-      brightness: value.brightness ?? '-',
+    const presetKey = resolveDisplayPresetKey({
+      sharpness: Number(value.sharpness ?? 0),
+      saturation: Number(value.saturation ?? 100),
+      contrast: Number(value.contrast ?? 100),
+      brightness: Number(value.brightness ?? 100),
     })
+    return t(`setting.displayOptions.presets.${presetKey ?? 'standard'}`)
   }
   if (isRecord(value)) {
     return t('setting.summaries.entries', { count: Object.keys(value).length })
@@ -381,7 +487,7 @@ function formatConfigValue(
   return t('setting.values.unknown')
 }
 
-async function handleRowConfirm(row: SettingRow): Promise<void> {
+async function handleRowConfirm(row: SettingIndexedRow): Promise<void> {
   if (pendingActionKey.value !== null) {
     return
   }
@@ -393,48 +499,46 @@ async function handleRowConfirm(row: SettingRow): Promise<void> {
   }
 
   if (row.control === 'singleSelect') {
-    const optionCount = row.options?.length ?? 0
-
-    if (optionCount <= 3) {
-      activeSingleSelectRow.value = null
-      activeInlineSingleSelectRow.value
-        = activeInlineSingleSelectRow.value?.nodeId === row.nodeId ? null : row
-      return
-    }
-
-    activeInlineSingleSelectRow.value = null
     activeSingleSelectRow.value
       = activeSingleSelectRow.value?.nodeId === row.nodeId ? null : row
     return
   }
 
-  // 打开其它编辑器前，先收起行内单选，避免界面同时展开两种二级交互
-  activeInlineSingleSelectRow.value = null
   activeSingleSelectRow.value = null
 
   if (row.control === 'textInput' || row.control === 'numberInput') {
     activeValueEditorRow.value = row
     return
   }
+}
 
-  if (row.control === 'displayOptions') {
-    activeDisplayOptionsRow.value = row
+function handleToolClick(toolId: string): void {
+  if (pendingActionKey.value !== null) {
+    return
+  }
+  if (toolId === 'inputDebug') {
+    inputToolsRef.value?.openInputDebug()
+  }
+  else if (toolId === 'gamepadMapping') {
+    inputToolsRef.value?.openMapping()
   }
 }
 
-async function handleInlineSingleSelect(nextValue: string | number): Promise<void> {
-  const row = activeInlineSingleSelectRow.value
-  if (row === null || pendingActionKey.value !== null) {
+async function handleActionClick(actionId: string): Promise<void> {
+  if (pendingActionKey.value !== null) {
     return
   }
-
-  if (row.value === nextValue) {
-    activeInlineSingleSelectRow.value = null
+  if (actionId === 'unlockDangerZone') {
+    // eslint-disable-next-line no-alert
+    const accepted = window.confirm(t('setting.streaming.expert.enterConfirm'))
+    if (accepted) {
+      dangerZoneUnlocked.value = true
+    }
     return
   }
-
-  await persistRowValue(row, nextValue)
-  activeInlineSingleSelectRow.value = null
+  if (actionId === 'expertReset') {
+    await handleResetStreamingExpert()
+  }
 }
 
 async function handleSingleSelectPopup(nextValue: string | number): Promise<void> {
@@ -473,28 +577,6 @@ async function handleValueEditorSubmit(rawValue: string): Promise<void> {
   activeValueEditorRow.value = null
 }
 
-async function handleDisplayOptionsSubmit(nextValue: DisplayOptionsValue): Promise<void> {
-  const row = activeDisplayOptionsRow.value
-  if (row === null || pendingActionKey.value !== null) {
-    return
-  }
-
-  pendingActionKey.value = row.key
-  try {
-    await rpc.config.set({
-      patch: {
-        [row.key]: nextValue,
-      },
-    })
-
-    await syncConfigGroups()
-    activeDisplayOptionsRow.value = null
-  }
-  finally {
-    pendingActionKey.value = null
-  }
-}
-
 async function handleResetStreamingExpert(): Promise<void> {
   if (pendingActionKey.value !== null) {
     return
@@ -524,10 +606,6 @@ function handleWindowKeydown(event: KeyboardEvent): void {
     return
   }
 
-  if (activeInlineSingleSelectRow.value !== null) {
-    activeInlineSingleSelectRow.value = null
-  }
-
   if (activeSingleSelectRow.value !== null) {
     activeSingleSelectRow.value = null
   }
@@ -535,17 +613,12 @@ function handleWindowKeydown(event: KeyboardEvent): void {
   if (activeValueEditorRow.value !== null) {
     activeValueEditorRow.value = null
   }
-
-  if (activeDisplayOptionsRow.value !== null) {
-    activeDisplayOptionsRow.value = null
-  }
 }
 
 onMounted(() => {
   void loadConfigGroups()
   window.addEventListener('keydown', handleWindowKeydown)
 
-  // 注册 LT/RT 二级 Tab 切换
   disposeTabSwitch = navigationEngine.onTabSwitch((direction) => {
     const tabKeys = tabs.value.map(tab => tab.key)
     const currentIndex = tabKeys.indexOf(activeTabKey.value)
@@ -564,10 +637,8 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
-  activeInlineSingleSelectRow.value = null
   activeSingleSelectRow.value = null
   activeValueEditorRow.value = null
-  activeDisplayOptionsRow.value = null
   window.removeEventListener('keydown', handleWindowKeydown)
   if (disposeTabSwitch !== undefined) {
     disposeTabSwitch()
@@ -578,7 +649,10 @@ onUnmounted(() => {
 
 <template>
   <section class="setting-page ui-page-shell">
-    <div class="setting-page__layout">
+    <div
+      class="setting-page__layout"
+      :aria-busy="isLoading"
+    >
       <SettingSidebar
         :tabs="tabNavItems"
         :active-tab-key="activeTabKey"
@@ -598,42 +672,46 @@ onUnmounted(() => {
               </h1>
             </header>
 
-            <div v-if="isLoading" class="setting-panel__state">
-              <BrandedLoading :label="t('setting.states.loading')" size="lg" />
-            </div>
-
-            <div v-else-if="activeRows.length === 0" class="setting-panel__state">
+            <div v-if="!isLoading && !hasPanelContent" class="setting-panel__state">
               {{ t('setting.states.emptyGroup') }}
             </div>
 
             <div
-              v-else
+              v-else-if="!isLoading"
               :class="{
-                'setting-panel__content--input-tools': activeTabKey === 'input',
+                'setting-panel__content--input-tools': activeTabKey === 'inputDevices',
               }"
             >
               <SettingSectionList
-                :active-tab-key="activeTabKey"
-                :sections="activeSectionRows"
+                :sections="activeSections"
                 :scope-id="SPATIAL_NAV_SCOPE_IDS.appShell"
                 :pending-action-key="pendingActionKey"
-                :active-inline-single-select-row-node-id="activeInlineSingleSelectRow?.nodeId ?? null"
-                :streaming-expert-reset-node-id="STREAMING_EXPERT_RESET_NODE_ID"
-                :is-streaming-expert-reset-pending="isStreamingExpertResetPending"
+                :expert-reset-pending="isExpertResetPending"
                 @row-confirm="(row) => void handleRowConfirm(row)"
-                @close-inline-single-select="activeInlineSingleSelectRow = null"
-                @inline-single-select="(value) => void handleInlineSingleSelect(value)"
-                @reset-streaming-expert="() => void handleResetStreamingExpert()"
+                @tool-click="handleToolClick"
+                @action-click="(id) => void handleActionClick(id)"
               />
+
               <SettingInputToolsSection
-                v-if="activeTabKey === 'input'"
+                v-if="activeTabKey === 'inputDevices'"
+                ref="inputToolsRef"
                 :scope-id="SPATIAL_NAV_SCOPE_IDS.appShell"
-                :nav-node-base-id="SPATIAL_NAV_NODE_IDS.settingTabs.input"
+                :nav-node-base-id="SPATIAL_NAV_NODE_IDS.settingTabs.inputDevices"
+                :suppress-tool-buttons="true"
               />
             </div>
           </div>
         </Transition>
       </section>
+
+      <div
+        v-if="isLoading"
+        class="setting-page__loading-overlay"
+        role="status"
+        :aria-label="t('setting.states.loading')"
+      >
+        <BrandedLoading :label="t('setting.states.loading')" size="lg" />
+      </div>
     </div>
 
     <SettingValueSheet
@@ -657,31 +735,6 @@ onUnmounted(() => {
       @submit="(value) => void handleValueEditorSubmit(value)"
     />
 
-    <SettingDisplayOptionsSheet
-      :key="activeDisplayOptionsScopeId"
-      :open="activeDisplayOptionsRow !== null"
-      :scope-id="activeDisplayOptionsScopeId"
-      :title="activeDisplayOptionsRow?.label ?? ''"
-      :hint="activeDisplayOptionsRow?.description ?? ''"
-      :current-value="
-        activeDisplayOptionsRow !== null
-          && isRecord(activeDisplayOptionsRow.value)
-          && typeof activeDisplayOptionsRow.value.sharpness === 'number'
-          && typeof activeDisplayOptionsRow.value.saturation === 'number'
-          && typeof activeDisplayOptionsRow.value.contrast === 'number'
-          && typeof activeDisplayOptionsRow.value.brightness === 'number'
-          ? {
-            sharpness: activeDisplayOptionsRow.value.sharpness,
-            saturation: activeDisplayOptionsRow.value.saturation,
-            contrast: activeDisplayOptionsRow.value.contrast,
-            brightness: activeDisplayOptionsRow.value.brightness,
-          }
-          : null
-      "
-      @close="activeDisplayOptionsRow = null"
-      @submit="(value) => void handleDisplayOptionsSubmit(value)"
-    />
-
     <SettingSingleSelectPopupSheet
       :key="activeSingleSelectRow?.nodeId"
       :open="activeSingleSelectRow !== null"
@@ -691,11 +744,20 @@ onUnmounted(() => {
       :options="activeSingleSelectRow?.options ?? []"
       :current-value="
         activeSingleSelectRow !== null
-          && (typeof activeSingleSelectRow.value === 'string'
-            || typeof activeSingleSelectRow.value === 'number')
-          ? activeSingleSelectRow.key === 'locale'
-            ? resolveUiLocale(activeSingleSelectRow.value)
-            : activeSingleSelectRow.value
+          ? activeSingleSelectRow.key === 'display_options'
+            && isRecord(activeSingleSelectRow.value)
+            ? resolveDisplayPresetKey({
+              sharpness: Number(activeSingleSelectRow.value.sharpness ?? 0),
+              saturation: Number(activeSingleSelectRow.value.saturation ?? 100),
+              contrast: Number(activeSingleSelectRow.value.contrast ?? 100),
+              brightness: Number(activeSingleSelectRow.value.brightness ?? 100),
+            }) ?? 'standard'
+            : (typeof activeSingleSelectRow.value === 'string'
+              || typeof activeSingleSelectRow.value === 'number')
+                ? activeSingleSelectRow.key === 'locale'
+                  ? resolveUiLocale(activeSingleSelectRow.value)
+                  : activeSingleSelectRow.value
+                : null
           : null
       "
       @close="activeSingleSelectRow = null"
@@ -714,12 +776,35 @@ onUnmounted(() => {
 }
 
 .setting-page__layout {
+  position: relative;
   display: grid;
   grid-template-columns: clamp(280px, 30vw, 360px) minmax(0, 1fr);
   gap: 4px;
   min-height: 0;
   height: 100%;
   padding: 0;
+}
+
+.setting-page__loading-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in srgb, var(--ui-page-bg), transparent 8%);
+  backdrop-filter: blur(10px);
+}
+
+.setting-panel__state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40vh;
+  padding: 48px 64px 80px;
+  font-size: 15px;
+  color: var(--color-text-secondary);
+  text-align: center;
 }
 
 .setting-panel {

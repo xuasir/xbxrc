@@ -107,10 +107,10 @@ export interface XBoxRpcSchema {
       void,
       {
         app: RpcConfigGroup
-        auth: RpcConfigGroup
         streaming: RpcConfigGroup
+        host: RpcConfigGroup
+        xcloud: RpcConfigGroup
         input: RpcConfigGroup
-        xhome: RpcConfigGroup
       }
     >
   }
