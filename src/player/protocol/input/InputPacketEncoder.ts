@@ -193,10 +193,9 @@ export class InputPacketEncoder {
       }
       packet.setUint16(offset, buttonMask, true)
       packet.setInt16(offset + 2, this.normalizeAxis(input.state.leftStick.x), true)
-      packet.setInt16(offset + 4, this.normalizeAxis(-input.state.leftStick.y), true)
+      packet.setInt16(offset + 4, this.normalizeAxis(this.toStreamProtocolStickY(input.state.leftStick.y)), true)
       packet.setInt16(offset + 6, this.normalizeAxis(input.state.rightStick.x), true)
-      // 与左摇杆 Y 相同：在出包边界对流端 Xbox 输入协议的竖轴符号做一次对齐（见 `data_channel_state` 组包）。
-      packet.setInt16(offset + 8, this.normalizeAxis(-input.state.rightStick.y), true)
+      packet.setInt16(offset + 8, this.normalizeAxis(this.toStreamProtocolStickY(input.state.rightStick.y)), true)
       packet.setUint16(
         offset + 10,
         this.normalizeTrigger(Math.max(buttons.l2, input.state.leftTrigger)),
@@ -212,6 +211,12 @@ export class InputPacketEncoder {
       offset += 22
     }
     return offset
+  }
+
+  private toStreamProtocolStickY(value: number): number {
+    // 逻辑态保持 SDL/Web Gamepad 常规语义：up 为负，down 为正。
+    // 发送到流端时按 better-xcloud 同源做法转换成 ThumbYAxis：up 为正，down 为负。
+    return -value
   }
 
   private writePointers(packet: DataView, offset: number, frames: Array<PointerFrame>): number {

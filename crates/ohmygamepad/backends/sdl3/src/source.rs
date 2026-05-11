@@ -1365,6 +1365,8 @@ fn bool_to_button_value(pressed: bool) -> f32 {
 }
 
 fn normalize_stick_axis(value: i16) -> f32 {
+    // SDL3 Gamepad 语义：up/left 为负，down/right 为正。采样层保留 SDL 原始符号，
+    // 后续仅允许在“发往流端协议”的边界做一次坐标系转换。
     (value as f32 / i16::MAX as f32).clamp(-1.0, 1.0)
 }
 
@@ -1394,4 +1396,34 @@ fn now_ms() -> u64 {
         .duration_since(UNIX_EPOCH)
         .map(|duration| duration.as_millis() as u64)
         .unwrap_or(0)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn translate_right_y_axis_keeps_normalized_sign() {
+        let descriptor = Sdl3DeviceDescriptor {
+            device_id: "pad-0".to_owned(),
+            name: "Test Pad".to_owned(),
+            ..Sdl3DeviceDescriptor::default()
+        };
+        let value = i16::MAX / 2;
+        let expected = normalize_stick_axis(value);
+
+        let events = translate_axis_event(descriptor.clone(), 42, Axis::RightY, value);
+
+        assert_eq!(
+            events,
+            vec![Sdl3InputEvent {
+                device: descriptor,
+                observed_at_ms: 42,
+                kind: Sdl3InputEventKind::AxisChanged {
+                    index: 3,
+                    value: expected,
+                },
+            }]
+        );
+    }
 }

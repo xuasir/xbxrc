@@ -144,11 +144,13 @@ pub(crate) fn build_input_stream_packet(
         packet.push(logical_pad_index(&frame.slot));
         packet.extend_from_slice(&gamepad_button_mask(&frame.state).to_le_bytes());
         packet.extend_from_slice(&normalize_axis(frame.state.left_stick.x).to_le_bytes());
-        // Xbox 输入协议里左摇杆 Y 轴向上为正值，这里在出包边界做方向对齐。
-        packet.extend_from_slice(&normalize_axis(-frame.state.left_stick.y).to_le_bytes());
+        packet.extend_from_slice(
+            &normalize_axis(stream_protocol_stick_y(frame.state.left_stick.y)).to_le_bytes(),
+        );
         packet.extend_from_slice(&normalize_axis(frame.state.right_stick.x).to_le_bytes());
-        // 右摇杆 Y 与左摇杆 Y 使用同一套流端竖轴符号约定。
-        packet.extend_from_slice(&normalize_axis(-frame.state.right_stick.y).to_le_bytes());
+        packet.extend_from_slice(
+            &normalize_axis(stream_protocol_stick_y(frame.state.right_stick.y)).to_le_bytes(),
+        );
         packet.extend_from_slice(
             &normalize_trigger(frame.state.buttons.l2.max(frame.state.left_trigger)).to_le_bytes(),
         );
@@ -492,6 +494,12 @@ fn normalize_axis(value: f32) -> i16 {
     normalized.clamp(-32767.0, 32767.0) as i16
 }
 
+fn stream_protocol_stick_y(value: f32) -> f32 {
+    // 逻辑态保持 SDL/Web Gamepad 常规语义：up 为负，down 为正。
+    // 流端 ThumbYAxis 与 better-xcloud 发送侧保持一致：up 为正，down 为负。
+    -value
+}
+
 fn normalize_trigger(value: f32) -> u16 {
     if value <= 0.0 {
         return 0;
@@ -501,4 +509,36 @@ fn normalize_trigger(value: f32) -> u16 {
 
 fn clamp_u32_ms(value: f64) -> u32 {
     value.max(0.0).round().clamp(0.0, u32::MAX as f64) as u32
+}
+
+#[cfg(test)]
+mod tests {
+    use super::build_input_stream_packet;
+    use ohmygamepad_protocol::{
+        LogicalButtonsStateDto, LogicalPadId, LogicalPadSnapshotDto, LogicalPadStateDto,
+        LogicalStickDto,
+    };
+
+    #[test]
+    fn gamepad_packet_converts_sdl_style_y_only_at_stream_boundary() {
+        let frame = LogicalPadSnapshotDto {
+            slot: LogicalPadId::Pad0,
+            device_ids: vec!["pad-0".to_owned()],
+            sampled_at_ms: 1,
+            sample_seq: 1,
+            state: LogicalPadStateDto {
+                buttons: LogicalButtonsStateDto::default(),
+                left_stick: LogicalStickDto { x: 0.0, y: -0.5 },
+                right_stick: LogicalStickDto { x: 0.0, y: 0.75 },
+                left_trigger: 0.0,
+                right_trigger: 0.0,
+            },
+            raw_buttons: None,
+        };
+
+        let packet = build_input_stream_packet(1, 1.0, None, &[frame], &[], &[], &[]);
+
+        assert_eq!(i16::from_le_bytes([packet[20], packet[21]]), 16384);
+        assert_eq!(i16::from_le_bytes([packet[24], packet[25]]), -24575);
+    }
 }

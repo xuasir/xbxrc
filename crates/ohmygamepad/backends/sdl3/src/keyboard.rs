@@ -50,12 +50,13 @@ impl OhMyGamepadKeyboardMapper {
             }
 
             match binding.control {
-                OhMyGamepadKeyboardControl::LeftStickUp => state.left_stick.y += 1.0,
-                OhMyGamepadKeyboardControl::LeftStickDown => state.left_stick.y -= 1.0,
+                // 键盘模拟与 SDL 原始摇杆语义保持一致：up 为负，down 为正。
+                OhMyGamepadKeyboardControl::LeftStickUp => state.left_stick.y -= 1.0,
+                OhMyGamepadKeyboardControl::LeftStickDown => state.left_stick.y += 1.0,
                 OhMyGamepadKeyboardControl::LeftStickLeft => state.left_stick.x -= 1.0,
                 OhMyGamepadKeyboardControl::LeftStickRight => state.left_stick.x += 1.0,
-                OhMyGamepadKeyboardControl::RightStickUp => state.right_stick.y += 1.0,
-                OhMyGamepadKeyboardControl::RightStickDown => state.right_stick.y -= 1.0,
+                OhMyGamepadKeyboardControl::RightStickUp => state.right_stick.y -= 1.0,
+                OhMyGamepadKeyboardControl::RightStickDown => state.right_stick.y += 1.0,
                 OhMyGamepadKeyboardControl::RightStickLeft => state.right_stick.x -= 1.0,
                 OhMyGamepadKeyboardControl::RightStickRight => state.right_stick.x += 1.0,
                 OhMyGamepadKeyboardControl::South => state.buttons.south = 1.0,
@@ -137,7 +138,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn right_stick_vertical_controls_follow_same_sign_as_left_stick() {
+    fn vertical_controls_follow_sdl_y_axis_sign() {
         let mut mapper = OhMyGamepadKeyboardMapper::new(OhMyGamepadKeyboardMapping {
             bindings: vec![
                 OhMyGamepadKeyboardBinding {
@@ -163,14 +164,14 @@ mod tests {
             OhMyGamepadKeyboardKey::KeyW,
             OhMyGamepadKeyboardKey::ArrowUp,
         ]);
-        assert_eq!(up_state.left_stick.y, 1.0);
-        assert_eq!(up_state.right_stick.y, 1.0);
+        assert_eq!(up_state.left_stick.y, -1.0);
+        assert_eq!(up_state.right_stick.y, -1.0);
 
         let down_state = mapper.sync_pressed_keys([
             OhMyGamepadKeyboardKey::KeyS,
             OhMyGamepadKeyboardKey::ArrowDown,
         ]);
-        assert_eq!(down_state.left_stick.y, -1.0);
-        assert_eq!(down_state.right_stick.y, -1.0);
+        assert_eq!(down_state.left_stick.y, 1.0);
+        assert_eq!(down_state.right_stick.y, 1.0);
     }
 }
