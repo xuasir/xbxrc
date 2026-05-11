@@ -482,9 +482,6 @@ export function createBrowserRuntime(options: {
     const baseBitrate = Math.max(8_000, baseVideoBitrateKbps)
     const bitrateRatio = inboundVideoBitrateKbps > 0 ? inboundVideoBitrateKbps / baseBitrate : 1
     const p = effectiveFrontEndPolicy
-    const exp = Math.max(24, expectedContentFpsResolved)
-    const decodeRatio = decodeFps / exp
-    const presentRatio = presentFps / exp
     let sharpnessScale = 1
     let targetFpsBias = 0
     let processingMode: 'quality' | 'performance' = 'quality'
@@ -515,8 +512,6 @@ export function createBrowserRuntime(options: {
     if (
       bandwidthState === 'congested'
       || bitrateRatio < p.adaptiveCongestedBitrateRatio
-      || presentRatio < p.adaptiveSeverePresentRatio
-      || decodeRatio < p.adaptiveSevereDecodeRatio
     ) {
       sharpnessScale = Math.min(sharpnessScale, 0.6)
       processingMode = 'performance'
@@ -526,8 +521,6 @@ export function createBrowserRuntime(options: {
     else if (
       bandwidthState === 'stable'
       && bitrateRatio > p.adaptiveStableBitrateRatio
-      && decodeRatio >= p.adaptiveStableDecodeRatio
-      && presentRatio >= p.adaptiveStablePresentRatio
     ) {
       sharpnessScale = Math.max(sharpnessScale, 1)
       shaderPreset = input.level === 'displayL0' ? 'clarityL3' : shaderPreset

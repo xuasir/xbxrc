@@ -508,7 +508,6 @@ async function handleRowConfirm(row: SettingIndexedRow): Promise<void> {
 
   if (row.control === 'textInput' || row.control === 'numberInput') {
     activeValueEditorRow.value = row
-    return
   }
 }
 
@@ -754,10 +753,10 @@ onUnmounted(() => {
             }) ?? 'standard'
             : (typeof activeSingleSelectRow.value === 'string'
               || typeof activeSingleSelectRow.value === 'number')
-                ? activeSingleSelectRow.key === 'locale'
-                  ? resolveUiLocale(activeSingleSelectRow.value)
-                  : activeSingleSelectRow.value
-                : null
+              ? activeSingleSelectRow.key === 'locale'
+                ? resolveUiLocale(activeSingleSelectRow.value)
+                : activeSingleSelectRow.value
+              : null
           : null
       "
       @close="activeSingleSelectRow = null"

@@ -161,7 +161,7 @@ describe('resolveEffectiveFrontEndPolicy', () => {
 })
 
 describe('evaluateProfileBandwidthState', () => {
-  it('does not warn on 30fps-stable stream when expected is 30', () => {
+  it('does not warn on 30fps-stable stream when network and age signals are healthy', () => {
     const policy = resolveEffectiveFrontEndPolicy({
       baseline: 'homeLan',
       dynamic: 'steady',
@@ -187,12 +187,12 @@ describe('evaluateProfileBandwidthState', () => {
     })
     expect(next).toBe('stable')
   })
-  it('warns when ratios drop for 60fps expectation', () => {
+  it('warns when bitrate ratio drops even if fps is still acceptable', () => {
     const policy = defaultEffectiveFrontEndPolicy()
     const stats = baseStats({
-      decodeFps: 35,
-      presentFps: 35,
-      inboundVideoBitrateKbps: 12_000,
+      decodeFps: 58,
+      presentFps: 58,
+      inboundVideoBitrateKbps: 8_000,
       videoTwccLossRatio: 0,
       videoTwccFeedbackIntervalMs: 50,
       packetAgeMs: 40,
@@ -208,6 +208,28 @@ describe('evaluateProfileBandwidthState', () => {
       baseVideoBitrateKbps: 15_000,
     })
     expect(next).toBe('warning')
+  })
+  it('does not warn only because fps is low when network and age remain healthy', () => {
+    const policy = defaultEffectiveFrontEndPolicy()
+    const stats = baseStats({
+      decodeFps: 24,
+      presentFps: 24,
+      inboundVideoBitrateKbps: 20_000,
+      videoTwccLossRatio: 0,
+      videoTwccFeedbackIntervalMs: 50,
+      packetAgeMs: 30,
+      presentAgeMs: 30,
+    })
+    const next = evaluateProfileBandwidthState({
+      now: 10_000,
+      stats,
+      previous: 'stable',
+      previousChangedAtMs: 0,
+      expectedContentFps: 60,
+      policy,
+      baseVideoBitrateKbps: 15_000,
+    })
+    expect(next).toBe('stable')
   })
 })
 

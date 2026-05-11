@@ -44,7 +44,6 @@ export interface ProfilePolicyPreset {
   severeLoss: number
   severeFeedbackIntervalMs: number
   severeInboundBitrateRatio: number
-  severePresentFpsRatio: number
   severePacketAgeMs: number
   severePresentAgeMs: number
   /** mild：任一满足则 warning（在 non-severe 前提下） */
@@ -53,21 +52,9 @@ export interface ProfilePolicyPreset {
   mildInboundBitrateRatio: number
   mildPacketAgeMs: number
   mildPresentAgeMs: number
-  /** 相对内容帧率：低于 mildPresentDecodeRatio / mildPresentPresentRatio 触发 warning */
-  mildPresentDecodeRatio: number
-  mildPresentPresentRatio: number
-  /** 相对内容帧率：低于则并入 severe 路径（与 loss/age 并列） */
-  severePresentDecodeRatio: number
-  severePresentPresentRatio: number
-  /** 自适应渲染：码率与 fps 比率门槛 */
+  /** 自适应渲染：码率门槛；fps 只作为 renderCause 的辅助证据，不再直接进入主决策 */
   adaptiveStableBitrateRatio: number
   adaptiveCongestedBitrateRatio: number
-  adaptiveStableDecodeRatio: number
-  adaptiveStablePresentRatio: number
-  adaptiveMildDecodeRatio: number
-  adaptiveMildPresentRatio: number
-  adaptiveSevereDecodeRatio: number
-  adaptiveSeverePresentRatio: number
 }
 
 export interface EffectiveFrontEndPolicy extends ProfilePolicyPreset {
@@ -252,7 +239,6 @@ const BASELINE_PRESETS: Record<FrontEndProfileBaseline, ProfilePolicyPreset> = {
     severeLoss: 0.08,
     severeFeedbackIntervalMs: 500,
     severeInboundBitrateRatio: 0.35,
-    severePresentFpsRatio: 0.55,
     severePacketAgeMs: 450,
     severePresentAgeMs: 450,
     mildLoss: 0.03,
@@ -260,18 +246,8 @@ const BASELINE_PRESETS: Record<FrontEndProfileBaseline, ProfilePolicyPreset> = {
     mildInboundBitrateRatio: 0.62,
     mildPacketAgeMs: 240,
     mildPresentAgeMs: 240,
-    mildPresentDecodeRatio: 0.78,
-    mildPresentPresentRatio: 0.78,
-    severePresentDecodeRatio: 0.55,
-    severePresentPresentRatio: 0.55,
     adaptiveStableBitrateRatio: 0.72,
     adaptiveCongestedBitrateRatio: 0.45,
-    adaptiveStableDecodeRatio: 0.82,
-    adaptiveStablePresentRatio: 0.82,
-    adaptiveMildDecodeRatio: 0.78,
-    adaptiveMildPresentRatio: 0.78,
-    adaptiveSevereDecodeRatio: 0.55,
-    adaptiveSeverePresentRatio: 0.55,
   },
   homeRelay: {
     warmupDurationMs: 4_000,
@@ -285,7 +261,6 @@ const BASELINE_PRESETS: Record<FrontEndProfileBaseline, ProfilePolicyPreset> = {
     severeLoss: 0.08,
     severeFeedbackIntervalMs: 500,
     severeInboundBitrateRatio: 0.35,
-    severePresentFpsRatio: 0.55,
     severePacketAgeMs: 450,
     severePresentAgeMs: 450,
     mildLoss: 0.03,
@@ -293,18 +268,8 @@ const BASELINE_PRESETS: Record<FrontEndProfileBaseline, ProfilePolicyPreset> = {
     mildInboundBitrateRatio: 0.6,
     mildPacketAgeMs: 220,
     mildPresentAgeMs: 220,
-    mildPresentDecodeRatio: 0.8,
-    mildPresentPresentRatio: 0.8,
-    severePresentDecodeRatio: 0.58,
-    severePresentPresentRatio: 0.58,
     adaptiveStableBitrateRatio: 0.75,
     adaptiveCongestedBitrateRatio: 0.45,
-    adaptiveStableDecodeRatio: 0.85,
-    adaptiveStablePresentRatio: 0.85,
-    adaptiveMildDecodeRatio: 0.8,
-    adaptiveMildPresentRatio: 0.8,
-    adaptiveSevereDecodeRatio: 0.58,
-    adaptiveSeverePresentRatio: 0.58,
   },
   cloud: {
     warmupDurationMs: 7_000,
@@ -318,7 +283,6 @@ const BASELINE_PRESETS: Record<FrontEndProfileBaseline, ProfilePolicyPreset> = {
     severeLoss: 0.08,
     severeFeedbackIntervalMs: 500,
     severeInboundBitrateRatio: 0.35,
-    severePresentFpsRatio: 0.55,
     severePacketAgeMs: 450,
     severePresentAgeMs: 450,
     mildLoss: 0.03,
@@ -326,18 +290,8 @@ const BASELINE_PRESETS: Record<FrontEndProfileBaseline, ProfilePolicyPreset> = {
     mildInboundBitrateRatio: 0.6,
     mildPacketAgeMs: 220,
     mildPresentAgeMs: 220,
-    mildPresentDecodeRatio: 0.8,
-    mildPresentPresentRatio: 0.8,
-    severePresentDecodeRatio: 0.58,
-    severePresentPresentRatio: 0.58,
     adaptiveStableBitrateRatio: 0.75,
     adaptiveCongestedBitrateRatio: 0.45,
-    adaptiveStableDecodeRatio: 0.85,
-    adaptiveStablePresentRatio: 0.85,
-    adaptiveMildDecodeRatio: 0.8,
-    adaptiveMildPresentRatio: 0.8,
-    adaptiveSevereDecodeRatio: 0.58,
-    adaptiveSeverePresentRatio: 0.58,
   },
 }
 
@@ -350,24 +304,15 @@ const DYNAMIC_OVERLAYS: Record<FrontEndProfileDynamic, PresetPatch> = {
     mildInboundBitrateRatio: 0.55,
     mildPacketAgeMs: 200,
     mildPresentAgeMs: 200,
-    mildPresentDecodeRatio: 0.85,
-    mildPresentPresentRatio: 0.85,
     qualityLevelMinDwellMs: 9_000,
   },
   highRtt: {
     mildFeedbackIntervalMs: 280,
     mildPacketAgeMs: 200,
     mildPresentAgeMs: 200,
-    mildPresentDecodeRatio: 0.82,
-    mildPresentPresentRatio: 0.82,
   },
-  decoderConstrained: {
-    mildPresentDecodeRatio: 0.72,
-    severePresentDecodeRatio: 0.5,
-  },
+  decoderConstrained: {},
   displayConstrained: {
-    mildPresentPresentRatio: 0.72,
-    severePresentPresentRatio: 0.5,
     mildPresentAgeMs: 200,
   },
 }
@@ -408,26 +353,15 @@ export function evaluateProfileBandwidthState(input: {
   const loss = input.stats.videoTwccLossRatio ?? 0
   const feedbackIntervalMs = input.stats.videoTwccFeedbackIntervalMs ?? 0
   const inboundKbps = input.stats.inboundVideoBitrateKbps ?? 0
-  const decodeFps = input.stats.decodeFps ?? 0
-  const presentFps = input.stats.presentFps ?? input.stats.fps ?? 0
   const packetAgeMs = input.stats.packetAgeMs ?? 0
   const presentAgeMs = input.stats.presentAgeMs ?? 0
   const baseBitrate = Math.max(4_000, input.baseVideoBitrateKbps)
-  const exp = Math.max(24, input.expectedContentFps)
-  const decodeRatio = decodeFps / exp
-  const presentRatio = presentFps / exp
 
   const severeCongested = loss >= p.severeLoss
     || feedbackIntervalMs >= p.severeFeedbackIntervalMs
-    || (
-      inboundKbps > 0
-      && inboundKbps < baseBitrate * p.severeInboundBitrateRatio
-      && presentRatio < p.severePresentFpsRatio
-    )
+    || (inboundKbps > 0 && inboundKbps < baseBitrate * p.severeInboundBitrateRatio)
     || packetAgeMs > p.severePacketAgeMs
     || presentAgeMs > p.severePresentAgeMs
-    || decodeRatio < p.severePresentDecodeRatio
-    || presentRatio < p.severePresentPresentRatio
   if (severeCongested) {
     return 'congested'
   }
@@ -437,8 +371,6 @@ export function evaluateProfileBandwidthState(input: {
     || (inboundKbps > 0 && inboundKbps < baseBitrate * p.mildInboundBitrateRatio)
     || packetAgeMs > p.mildPacketAgeMs
     || presentAgeMs > p.mildPresentAgeMs
-    || decodeRatio < p.mildPresentDecodeRatio
-    || presentRatio < p.mildPresentPresentRatio
   if (mildWarning) {
     return 'warning'
   }
