@@ -7,7 +7,7 @@ use std::{
 
 use ohmygamepad_protocol::{
     LogicalPadSnapshotDto, OhMyGamepadCapabilityFlagsDto, OhMyGamepadDeviceClassificationDto,
-    OhMyGamepadDeviceDto,
+    OhMyGamepadDeviceDto, OhMyGamepadSamplingLifecycleDto,
 };
 
 use super::{spawn_input_runtime, SamplingSchedule};
@@ -53,6 +53,20 @@ struct ThreadSafeStreamSink;
 
 impl StreamSink for ThreadSafeStreamSink {
     fn emit_pad_snapshot(&mut self, _snapshot: &LogicalPadSnapshotDto) {}
+}
+
+#[derive(Default, Clone)]
+struct CollectingStreamSink {
+    pads: Arc<Mutex<Vec<LogicalPadSnapshotDto>>>,
+}
+
+impl StreamSink for CollectingStreamSink {
+    fn emit_pad_snapshot(&mut self, snapshot: &LogicalPadSnapshotDto) {
+        self.pads
+            .lock()
+            .expect("lock stream pads")
+            .push(snapshot.clone());
+    }
 }
 
 fn device(device_id: &str) -> OhMyGamepadDeviceDto {
@@ -395,4 +409,224 @@ fn runtime_snapshot_subscription_respects_ui_push_rate() {
         "ui push rate should suppress high-frequency snapshot broadcasts, got {}",
         snapshots.len()
     );
+}
+
+#[test]
+fn background_warm_keeps_logical_sampling_and_marks_lifecycle() {
+    let backend = ScriptedBackend::new(
+        (0..32)
+            .map(|i| BackendPollResult {
+                device_events: if i == 0 {
+                    vec![DeviceLifecycleEvent::Added(device("pad-a"))]
+                } else {
+                    vec![]
+                },
+                samples: vec![sample(
+                    "pad-a",
+                    i as u64,
+                    vec![if i % 2 == 0 { 0.0 } else { 1.0 }],
+                )],
+            })
+            .collect(),
+    );
+    let runtime = spawn_input_runtime(
+        InputCoreConfig::default(),
+        backend,
+        ThreadSafeUiSink::default(),
+        ThreadSafeStreamSink,
+    );
+
+    assert!(wait_until(Duration::from_millis(120), || {
+        runtime
+            .get_runtime_snapshot()
+            .map(|s| !s.slots.is_empty() && s.slots[0].sample_seq > 0)
+            .unwrap_or(false)
+    }));
+
+    runtime
+        .set_sampling_lifecycle(OhMyGamepadSamplingLifecycleDto::BackgroundWarm)
+        .expect("lifecycle");
+
+    let seq_before = runtime
+        .get_runtime_snapshot()
+        .expect("snapshot")
+        .slots
+        .get(0)
+        .map(|p| p.sample_seq)
+        .unwrap_or(0);
+
+    assert!(wait_until(Duration::from_millis(120), || {
+        runtime
+            .get_runtime_snapshot()
+            .map(|s| {
+                s.sampling_lifecycle == OhMyGamepadSamplingLifecycleDto::BackgroundWarm
+                    && s.slots
+                        .get(0)
+                        .map(|p| p.sample_seq > seq_before)
+                        .unwrap_or(false)
+            })
+            .unwrap_or(false)
+    }));
+
+    runtime.shutdown().expect("shutdown");
+}
+
+#[test]
+fn background_warm_suppresses_ui_and_stream_action_emits() {
+    let ui_sink = ThreadSafeUiSink::default();
+    let ui_pads = ui_sink.pads.clone();
+    let stream_sink = CollectingStreamSink::default();
+    let stream_pads = stream_sink.pads.clone();
+    let backend = ScriptedBackend::new(
+        (0..32)
+            .map(|i| BackendPollResult {
+                device_events: if i == 0 {
+                    vec![DeviceLifecycleEvent::Added(device("pad-a"))]
+                } else {
+                    vec![]
+                },
+                samples: vec![sample(
+                    "pad-a",
+                    i as u64,
+                    vec![if i % 2 == 0 { 0.0 } else { 1.0 }],
+                )],
+            })
+            .collect(),
+    );
+    let runtime = spawn_input_runtime(InputCoreConfig::default(), backend, ui_sink, stream_sink);
+
+    assert!(wait_until(Duration::from_millis(120), || {
+        runtime
+            .get_runtime_snapshot()
+            .map(|s| !s.slots.is_empty() && s.slots[0].sample_seq > 0)
+            .unwrap_or(false)
+    }));
+
+    runtime
+        .set_sampling_lifecycle(OhMyGamepadSamplingLifecycleDto::BackgroundWarm)
+        .expect("background warm");
+    let ui_count_before = ui_pads.lock().expect("lock ui pads").len();
+    let stream_count_before = stream_pads.lock().expect("lock stream pads").len();
+
+    thread::sleep(Duration::from_millis(120));
+
+    let ui_count_after = ui_pads.lock().expect("lock ui pads").len();
+    let stream_count_after = stream_pads.lock().expect("lock stream pads").len();
+    let snapshot = runtime.get_runtime_snapshot().expect("snapshot");
+
+    assert_eq!(ui_count_before, ui_count_after);
+    assert_eq!(stream_count_before, stream_count_after);
+    assert_eq!(
+        snapshot.sampling_lifecycle,
+        OhMyGamepadSamplingLifecycleDto::BackgroundWarm
+    );
+    assert!(
+        snapshot
+            .slots
+            .first()
+            .map(|slot| slot.sample_seq)
+            .unwrap_or(0)
+            > 0,
+        "logical sample state should still advance internally"
+    );
+
+    runtime.shutdown().expect("shutdown");
+}
+
+#[test]
+fn background_warm_stalled_health_is_detected() {
+    let backend = ScriptedBackend::new(
+        (0..4000)
+            .map(|i| BackendPollResult {
+                device_events: if i == 0 {
+                    vec![DeviceLifecycleEvent::Added(device("pad-a"))]
+                } else {
+                    vec![]
+                },
+                samples: vec![sample("pad-a", i as u64, vec![0.0])],
+            })
+            .collect(),
+    );
+    let mut config = InputCoreConfig::default();
+    config.sampling.backend_poll_rate_hz = 1000;
+    config.sampling.logical_pad_sample_rate_hz = 1000;
+    let runtime = spawn_input_runtime(
+        config,
+        backend,
+        ThreadSafeUiSink::default(),
+        ThreadSafeStreamSink,
+    );
+
+    runtime
+        .set_sampling_lifecycle(OhMyGamepadSamplingLifecycleDto::BackgroundWarm)
+        .expect("background warm");
+
+    assert!(wait_until(Duration::from_millis(3800), || {
+        runtime
+            .get_runtime_snapshot()
+            .map(|s| {
+                s.sampling_health == ohmygamepad_protocol::OhMyGamepadSamplingHealthDto::Stalled
+            })
+            .unwrap_or(false)
+    }));
+
+    runtime.shutdown().expect("shutdown");
+}
+
+#[test]
+fn suspended_freezes_logical_sampling() {
+    let backend = ScriptedBackend::new(
+        (0..40)
+            .map(|i| BackendPollResult {
+                device_events: if i == 0 {
+                    vec![DeviceLifecycleEvent::Added(device("pad-a"))]
+                } else {
+                    vec![]
+                },
+                samples: vec![sample("pad-a", i as u64, vec![1.0])],
+            })
+            .collect(),
+    );
+    let runtime = spawn_input_runtime(
+        InputCoreConfig::default(),
+        backend,
+        ThreadSafeUiSink::default(),
+        ThreadSafeStreamSink,
+    );
+
+    assert!(wait_until(Duration::from_millis(120), || {
+        runtime
+            .get_runtime_snapshot()
+            .map(|s| !s.slots.is_empty())
+            .unwrap_or(false)
+    }));
+
+    runtime
+        .set_sampling_lifecycle(OhMyGamepadSamplingLifecycleDto::Suspended)
+        .expect("suspend");
+
+    let seq_at_suspend = runtime
+        .get_runtime_snapshot()
+        .expect("snap")
+        .slots
+        .get(0)
+        .map(|p| p.sample_seq)
+        .unwrap_or(0);
+
+    thread::sleep(Duration::from_millis(120));
+
+    let seq_after = runtime
+        .get_runtime_snapshot()
+        .expect("snap")
+        .slots
+        .get(0)
+        .map(|p| p.sample_seq)
+        .unwrap_or(0);
+
+    assert_eq!(
+        seq_at_suspend, seq_after,
+        "suspended runtime must not advance logical sample_seq"
+    );
+
+    runtime.shutdown().expect("shutdown");
 }

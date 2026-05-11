@@ -22,17 +22,39 @@ fn install_rustls_crypto_provider() {
     let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
 }
 
-fn activate_gamepad_sampling_for_window(window: &tauri::Window, reason: &str) {
-    use ohmygamepad_protocol::OhMyGamepadInputPolicyDto;
+fn hint_gamepad_shell_interactive(window: &tauri::Window, reason: &str) {
+    use ohmygamepad_protocol::OhMyGamepadSamplingLifecycleDto;
 
     let app_state = window.state::<shell::state::AppState>();
-    // 从大屏模式或其他场景返回app时，应该使用Shared策略恢复采样
     if let Err(error) = app_state
         .gamepad
-        .resume_shell_sampling(OhMyGamepadInputPolicyDto::Shared)
+        .set_sampling_lifecycle(OhMyGamepadSamplingLifecycleDto::Active)
     {
         log::warn!(
-            "Failed to resume shell sampling reason={} error={}",
+            "Failed to set gamepad sampling lifecycle Active reason={} error={}",
+            reason,
+            error
+        );
+    }
+    if let Err(error) = app_state.gamepad.try_stalled_sampling_self_heal() {
+        log::warn!(
+            "Failed to try stalled gamepad self-heal reason={} error={}",
+            reason,
+            error
+        );
+    }
+}
+
+fn hint_gamepad_shell_background(window: &tauri::Window, reason: &str) {
+    use ohmygamepad_protocol::OhMyGamepadSamplingLifecycleDto;
+
+    let app_state = window.state::<shell::state::AppState>();
+    if let Err(error) = app_state
+        .gamepad
+        .set_sampling_lifecycle(OhMyGamepadSamplingLifecycleDto::BackgroundWarm)
+    {
+        log::warn!(
+            "Failed to set gamepad sampling lifecycle BackgroundWarm reason={} error={}",
             reason,
             error
         );
@@ -64,18 +86,15 @@ pub fn run() {
         .on_window_event(|window, event| {
             match event {
                 tauri::WindowEvent::Focused(focused) => {
-                    // 失焦不再直接等同于手柄采样应暂停。
-                    // app 仍然需要依赖同一条采样链支持 UI 导航，Windows FSE 也会出现壳层接管焦点的情况。
                     if *focused {
-                        activate_gamepad_sampling_for_window(window, "window-focused");
+                        hint_gamepad_shell_interactive(window, "window-focused");
+                    } else {
+                        hint_gamepad_shell_background(window, "window-unfocused");
                     }
                 }
                 tauri::WindowEvent::Resized(_) => match window.is_minimized() {
                     Ok(false) => {
-                        activate_gamepad_sampling_for_window(
-                            window,
-                            "window-restored-from-minimized",
-                        );
+                        hint_gamepad_shell_interactive(window, "window-restored-from-minimized");
                     }
                     Ok(true) => {}
                     Err(e) => {
@@ -121,9 +140,19 @@ pub fn run() {
         match event {
             tauri::RunEvent::Resumed => {
                 let app_state = app_handle.state::<shell::state::AppState>();
-                if let Err(error) = app_state.gamepad.activate_sampling(None) {
+                use ohmygamepad_protocol::OhMyGamepadSamplingLifecycleDto;
+                if let Err(error) = app_state
+                    .gamepad
+                    .set_sampling_lifecycle(OhMyGamepadSamplingLifecycleDto::Active)
+                {
                     log::warn!(
-                        "Failed to activate gamepad sampling reason=app-resumed error={}",
+                        "Failed to set gamepad lifecycle on app resume error={}",
+                        error
+                    );
+                }
+                if let Err(error) = app_state.gamepad.try_stalled_sampling_self_heal() {
+                    log::warn!(
+                        "Failed to try stalled gamepad self-heal on app resume error={}",
                         error
                     );
                 }

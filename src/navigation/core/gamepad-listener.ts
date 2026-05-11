@@ -34,9 +34,12 @@ class GamepadUIListener {
     const disposeRuntime = events.on('gamepad.runtimeSnapshot', (snapshot) => {
       this.updateInputPolicy(snapshot.inputPolicy)
     })
+    const disposeBaseline = events.on('gamepad.inputBaselineAbsorbed', () => {
+      this.resetAllInputState()
+    })
     window.addEventListener(GAMEPAD_UI_RESET_EVENT, this.handleResetRequested)
 
-    this.dispose = events.on('gamepad.slotSnapshot', (snapshot) => {
+    const disposeSlot = events.on('gamepad.slotSnapshot', (snapshot) => {
       if (this.inputPolicy === 'stream-only') {
         return
       }
@@ -79,11 +82,11 @@ class GamepadUIListener {
       this.checkAxis(state, 'ls-down', leftStick.y > STICK_DEADZONE, NavigationIntent.Down)
     })
 
-    const disposePad = this.dispose
     this.dispose = () => {
       disposeRuntime()
+      disposeBaseline()
       window.removeEventListener(GAMEPAD_UI_RESET_EVENT, this.handleResetRequested)
-      disposePad?.()
+      disposeSlot()
     }
   }
 

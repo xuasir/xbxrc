@@ -11,7 +11,7 @@ use ohmygamepad_protocol::{
     MultiControllerSamplingStrategyDto, OhMyGamepadBackendKindDto, OhMyGamepadInputPolicyDto,
     OhMyGamepadKeyboardMappingDto, OhMyGamepadRumbleRejectionReasonDto,
     OhMyGamepadRumbleRequestDto, OhMyGamepadRumbleResultDto, OhMyGamepadRumbleTargetDto,
-    OhMyGamepadRuntimeSnapshotDto, OhMyGamepadSamplingConfigDto,
+    OhMyGamepadRuntimeSnapshotDto, OhMyGamepadSamplingConfigDto, OhMyGamepadSamplingLifecycleDto,
 };
 use tauri::AppHandle;
 
@@ -124,6 +124,25 @@ impl GamepadProvider for GamepadService {
         );
         self.host
             .set_suspended(suspended)
+            .map_err(|error| format!("{:?}", error))
+    }
+
+    fn set_sampling_lifecycle(
+        &self,
+        lifecycle: OhMyGamepadSamplingLifecycleDto,
+    ) -> Result<(), String> {
+        log::info!(
+            "tauri_gamepad_sampling_lifecycle source=provider lifecycle={:?}",
+            lifecycle
+        );
+        self.host
+            .set_sampling_lifecycle(lifecycle)
+            .map_err(|error| format!("{:?}", error))
+    }
+
+    fn try_stalled_sampling_self_heal(&self) -> Result<bool, String> {
+        self.host
+            .try_stalled_sampling_self_heal()
             .map_err(|error| format!("{:?}", error))
     }
 

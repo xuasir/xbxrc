@@ -11,6 +11,7 @@ use ohmygamepad_protocol::{
     OhMyGamepadHapticsProviderKindDto, OhMyGamepadInputPolicyDto, OhMyGamepadKeyboardMappingDto,
     OhMyGamepadRumbleRequestDto, OhMyGamepadRumbleResultDto, OhMyGamepadRumbleTargetDto,
     OhMyGamepadRuntimeHapticsDto, OhMyGamepadRuntimeSnapshotDto, OhMyGamepadSamplingConfigDto,
+    OhMyGamepadSamplingLifecycleDto,
 };
 use ohmygamepad_sdl3::{OhMyGamepadService, OhMyGamepadServiceConfig};
 #[cfg(target_os = "windows")]
@@ -135,6 +136,17 @@ impl GamepadRuntimeHost {
 
     pub fn set_suspended(&self, suspended: bool) -> Result<(), InputRuntimeError> {
         self.runtime.set_suspended(suspended)
+    }
+
+    pub fn set_sampling_lifecycle(
+        &self,
+        lifecycle: OhMyGamepadSamplingLifecycleDto,
+    ) -> Result<(), InputRuntimeError> {
+        self.runtime.set_sampling_lifecycle(lifecycle)
+    }
+
+    pub fn try_stalled_sampling_self_heal(&self) -> Result<bool, InputRuntimeError> {
+        self.runtime.try_stalled_sampling_self_heal()
     }
 
     pub fn set_primary_sampling_device(

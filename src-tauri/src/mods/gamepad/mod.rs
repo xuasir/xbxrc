@@ -7,7 +7,7 @@ pub use service::GamepadService;
 use ohmygamepad_protocol::{
     MultiControllerSamplingStrategyDto, OhMyGamepadInputPolicyDto, OhMyGamepadKeyboardMappingDto,
     OhMyGamepadRumbleRequestDto, OhMyGamepadRumbleResultDto, OhMyGamepadRumbleTargetDto,
-    OhMyGamepadRuntimeSnapshotDto, OhMyGamepadSamplingConfigDto,
+    OhMyGamepadRuntimeSnapshotDto, OhMyGamepadSamplingConfigDto, OhMyGamepadSamplingLifecycleDto,
 };
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -111,6 +111,11 @@ pub trait GamepadProvider: Send + Sync {
         device_id: &str,
     ) -> Result<OhMyGamepadRuntimeSnapshotDto, String>;
     fn set_suspended(&self, suspended: bool) -> Result<(), String>;
+    fn set_sampling_lifecycle(
+        &self,
+        lifecycle: OhMyGamepadSamplingLifecycleDto,
+    ) -> Result<(), String>;
+    fn try_stalled_sampling_self_heal(&self) -> Result<bool, String>;
     fn play_rumble(
         &self,
         request: OhMyGamepadRumbleRequestDto,

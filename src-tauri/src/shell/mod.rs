@@ -234,10 +234,14 @@ async fn bind_background_tasks(app_handle: &AppHandle, state: &AppState) -> AppR
 
     let gamepad_host = ohmygamepad_host::GamepadRuntimeHost::shared()
         .map_err(|e| AppError::Internal(format!("Failed to get gamepad host: {}", e)))?;
+    let gamepad_provider = state.gamepad.clone();
     let app_handle_gamepad = app_handle.clone();
     let is_quitting_gamepad = state.is_quitting.clone();
     tauri::async_runtime::spawn(async move {
+        use ohmygamepad_protocol::{OhMyGamepadSamplingHealthDto, OhMyGamepadSamplingLifecycleDto};
+
         let rx = gamepad_host.subscribe_runtime_snapshot();
+        let mut prev_sampling_lifecycle = OhMyGamepadSamplingLifecycleDto::Active;
 
         while !is_quitting_gamepad.load(Ordering::Relaxed) {
             if let Ok(snapshot) = rx.recv() {
@@ -247,12 +251,29 @@ async fn bind_background_tasks(app_handle: &AppHandle, state: &AppState) -> AppR
                 });
                 let _ = gamepad_events::emit_runtime_snapshot(&app_handle_gamepad, &snapshot_value);
 
-                for slot in &snapshot.slots {
-                    let slot_value = serde_json::to_value(slot).unwrap_or_else(|e| {
-                        log::warn!("Failed to serialize gamepad slot snapshot: {}", e);
-                        serde_json::json!({})
+                let lifecycle = snapshot.sampling_lifecycle;
+                let baseline_absorbed = prev_sampling_lifecycle
+                    == OhMyGamepadSamplingLifecycleDto::BackgroundWarm
+                    && lifecycle == OhMyGamepadSamplingLifecycleDto::Active;
+                if baseline_absorbed {
+                    let payload = serde_json::json!({
+                        "previousLifecycle": "backgroundWarm",
+                        "lifecycle": "active",
                     });
-                    let _ = gamepad_events::emit_slot_snapshot(&app_handle_gamepad, &slot_value);
+                    let _ =
+                        gamepad_events::emit_input_baseline_absorbed(&app_handle_gamepad, &payload);
+                }
+                prev_sampling_lifecycle = lifecycle;
+
+                if lifecycle == OhMyGamepadSamplingLifecycleDto::Active && !baseline_absorbed {
+                    for slot in &snapshot.slots {
+                        let slot_value = serde_json::to_value(slot).unwrap_or_else(|e| {
+                            log::warn!("Failed to serialize gamepad slot snapshot: {}", e);
+                            serde_json::json!({})
+                        });
+                        let _ =
+                            gamepad_events::emit_slot_snapshot(&app_handle_gamepad, &slot_value);
+                    }
                 }
 
                 let devices_value = serde_json::to_value(&snapshot.devices).unwrap_or_else(|e| {
@@ -260,6 +281,10 @@ async fn bind_background_tasks(app_handle: &AppHandle, state: &AppState) -> AppR
                     serde_json::json!([])
                 });
                 let _ = gamepad_events::emit_devices_changed(&app_handle_gamepad, &devices_value);
+
+                if snapshot.sampling_health == OhMyGamepadSamplingHealthDto::Stalled {
+                    let _ = gamepad_provider.try_stalled_sampling_self_heal();
+                }
             } else {
                 break;
             }

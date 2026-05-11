@@ -162,6 +162,12 @@ export interface LogicalPadStateDto {
 export const GAMEPAD_INPUT_POLICIES = ['shared', 'ui-only', 'stream-only'] as const
 export type GamepadInputPolicyDto = (typeof GAMEPAD_INPUT_POLICIES)[number]
 
+export const GAMEPAD_SAMPLING_LIFECYCLES = ['active', 'backgroundWarm', 'suspended'] as const
+export type GamepadSamplingLifecycleDto = (typeof GAMEPAD_SAMPLING_LIFECYCLES)[number]
+
+export const GAMEPAD_SAMPLING_HEALTH = ['healthy', 'awaitingBaseline', 'stalled'] as const
+export type GamepadSamplingHealthDto = (typeof GAMEPAD_SAMPLING_HEALTH)[number]
+
 export interface GamepadSlotSnapshotDto {
   slot: GamepadSlotDto
   deviceIds: string[]
@@ -232,6 +238,11 @@ export interface GamepadRuntimeSnapshotDto {
     supportsTriggerRumble: boolean
     defaultDeviceId: string | null
   }
+  samplingLifecycle?: GamepadSamplingLifecycleDto
+  samplingHealth?: GamepadSamplingHealthDto
+  lastSampleProgressAtMs?: number
+  lastBackendSampleActivityAtMs?: number
+  samplingSelfHealCount?: number
 }
 
 export type GamepadKeyboardKeyDto

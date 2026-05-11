@@ -4,7 +4,7 @@ use ohmygamepad_protocol::{
     GamepadSlotBindingDto, GamepadSlotSnapshotDto, LogicalPadBindingDto, LogicalPadId,
     LogicalPadSnapshotDto, OhMyGamepadBindingModeDto, OhMyGamepadDeviceDto,
     OhMyGamepadInputPolicyDto, OhMyGamepadRuntimeHapticsDto, OhMyGamepadRuntimeSnapshotDto,
-    OhMyGamepadSamplingConfigDto,
+    OhMyGamepadSamplingConfigDto, OhMyGamepadSamplingHealthDto, OhMyGamepadSamplingLifecycleDto,
 };
 
 use crate::{
@@ -26,6 +26,10 @@ pub struct InputCore<TBackend, TUiSink, TStreamSink> {
     sample_seq: u64,
     clock_ms: u64,
     last_stream_emit_at_ms: [u64; 4],
+    /// Updated when `sample_seq` advances (logical sampling progress).
+    last_sample_progress_at_ms: u64,
+    /// Updated when backend poll ingests raw device samples.
+    last_backend_sample_activity_at_ms: u64,
 }
 
 impl<TBackend, TUiSink, TStreamSink> InputCore<TBackend, TUiSink, TStreamSink>
@@ -53,11 +57,17 @@ where
             sample_seq: 0,
             clock_ms: 0,
             last_stream_emit_at_ms: [0; 4],
+            last_sample_progress_at_ms: 0,
+            last_backend_sample_activity_at_ms: 0,
         }
     }
 
     pub fn config(&self) -> &InputCoreConfig {
         &self.config
+    }
+
+    pub fn clock_ms(&self) -> u64 {
+        self.clock_ms
     }
 
     pub fn runtime_snapshot(&self) -> OhMyGamepadRuntimeSnapshotDto {
@@ -78,6 +88,11 @@ where
             sampling: self.config.sampling.clone(),
             slots: self.pads.clone(),
             haptics: OhMyGamepadRuntimeHapticsDto::default(),
+            sampling_lifecycle: OhMyGamepadSamplingLifecycleDto::Active,
+            sampling_health: OhMyGamepadSamplingHealthDto::Healthy,
+            last_sample_progress_at_ms: self.last_sample_progress_at_ms,
+            last_backend_sample_activity_at_ms: self.last_backend_sample_activity_at_ms,
+            sampling_self_heal_count: 0,
         }
     }
 
@@ -102,6 +117,11 @@ where
         self.sample_once();
     }
 
+    pub fn tick_for_lifecycle(&mut self, lifecycle: OhMyGamepadSamplingLifecycleDto) {
+        self.poll_backend();
+        self.sample_once_for_lifecycle(lifecycle);
+    }
+
     pub fn sync_clock_ms(&mut self, now_ms: u64) {
         self.clock_ms = self.clock_ms.max(now_ms);
     }
@@ -112,10 +132,22 @@ where
     }
 
     pub fn sample_once(&mut self) {
-        self.refresh_pad_snapshots();
+        self.sample_once_for_lifecycle(OhMyGamepadSamplingLifecycleDto::Active);
+    }
+
+    pub fn sample_once_for_lifecycle(&mut self, lifecycle: OhMyGamepadSamplingLifecycleDto) {
+        self.refresh_pad_snapshots(lifecycle);
     }
 
     pub fn push_pad_snapshot(&mut self, snapshot: LogicalPadSnapshotDto) {
+        self.push_pad_snapshot_for_lifecycle(snapshot, OhMyGamepadSamplingLifecycleDto::Active);
+    }
+
+    pub fn push_pad_snapshot_for_lifecycle(
+        &mut self,
+        snapshot: LogicalPadSnapshotDto,
+        lifecycle: OhMyGamepadSamplingLifecycleDto,
+    ) {
         // 这里先固定按逻辑 pad 覆盖快照，后续再补采样/过滤流水线。
         if let Some(existing) = self
             .pads
@@ -126,8 +158,10 @@ where
         } else {
             self.pads.push(snapshot.clone());
         }
-        self.ui_sink.emit_pad_snapshot(&snapshot);
-        self.stream_sink.emit_pad_snapshot(&snapshot);
+        if lifecycle == OhMyGamepadSamplingLifecycleDto::Active {
+            self.ui_sink.emit_pad_snapshot(&snapshot);
+            self.stream_sink.emit_pad_snapshot(&snapshot);
+        }
     }
 
     pub fn pad_snapshot(&self, pad_id: LogicalPadId) -> Option<&LogicalPadSnapshotDto> {
@@ -139,6 +173,7 @@ where
         self.raw_samples.clear();
         self.last_active_at.clear();
         self.last_stream_emit_at_ms = [self.clock_ms; 4];
+        self.last_backend_sample_activity_at_ms = 0;
 
         // 将所有逻辑手柄重置为中性状态
         for snapshot in &mut self.pads {
@@ -146,9 +181,17 @@ where
             self.sample_seq = self.sample_seq.saturating_add(1);
             snapshot.sample_seq = self.sample_seq;
             snapshot.sampled_at_ms = self.clock_ms;
+            self.last_sample_progress_at_ms = self.clock_ms;
             // 立即向接收端同步“按键全部弹起”的状态，防止 UI 粘滞。
             self.ui_sink.emit_pad_snapshot(snapshot);
             self.stream_sink.emit_pad_snapshot(snapshot);
+        }
+    }
+
+    pub fn absorb_current_state_as_baseline(&mut self) {
+        for snapshot in &self.pads {
+            let slot_index = pad_slot(snapshot.slot);
+            self.last_stream_emit_at_ms[slot_index] = self.clock_ms.max(snapshot.sampled_at_ms);
         }
     }
 
@@ -164,6 +207,9 @@ where
         }
 
         for sample in samples {
+            let observed = sample.observed_at_ms.max(self.clock_ms);
+            self.last_backend_sample_activity_at_ms =
+                self.last_backend_sample_activity_at_ms.max(observed);
             self.track_activity(&sample);
             self.raw_samples.insert(sample.device_id.clone(), sample);
         }
@@ -206,7 +252,7 @@ where
         true
     }
 
-    fn refresh_pad_snapshots(&mut self) {
+    fn refresh_pad_snapshots(&mut self, lifecycle: OhMyGamepadSamplingLifecycleDto) {
         let bindings = self.effective_bindings();
         let mut next_pads = Vec::with_capacity(bindings.len());
         let mut reserved_split_devices = HashSet::new();
@@ -227,7 +273,7 @@ where
                 .find(|current| current.slot == snapshot.slot)
                 .map(|current| pad_payload_changed(current, snapshot))
                 .unwrap_or(true);
-            if changed {
+            if changed && lifecycle == OhMyGamepadSamplingLifecycleDto::Active {
                 self.ui_sink.emit_pad_snapshot(snapshot);
                 self.stream_sink.emit_pad_snapshot(snapshot);
             }
@@ -407,6 +453,7 @@ where
 
     fn next_sample_seq(&mut self) -> u64 {
         self.sample_seq = self.sample_seq.saturating_add(1);
+        self.last_sample_progress_at_ms = self.clock_ms;
         self.sample_seq
     }
 

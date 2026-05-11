@@ -27,6 +27,18 @@ const emit = defineEmits<{
 const { t } = useI18n()
 
 const connectedDevices = computed(() => props.snapshot?.devices.filter(device => device.connected) ?? [])
+const samplingDiagnosticsLine = computed(() => {
+  const s = props.snapshot
+  if (!s) {
+    return ''
+  }
+  const lc = s.samplingLifecycle ?? 'active'
+  const h = s.samplingHealth ?? 'healthy'
+  const policy = s.inputPolicy
+  const heals = s.samplingSelfHealCount ?? 0
+  const tail = heals > 0 ? ` · 自愈 ${heals}` : ''
+  return `lifecycle ${lc} · health ${h} · policy ${policy}${tail}`
+})
 const defaultDeviceId = computed(() => props.snapshot?.haptics.defaultDeviceId ?? null)
 const inputPrimaryDeviceId = computed(() => props.snapshot?.haptics.defaultDeviceId ?? null)
 const deviceActionPending = ref<string | null>(null)
@@ -378,6 +390,10 @@ function classificationReasons(device: GamepadDeviceDto): string {
               <span class="gamepad-card__runtime-meta-value">
                 {{ formatHapticsProvider(props.snapshot.haptics.provider) }}
               </span>
+            </div>
+            <div v-if="props.snapshot && samplingDiagnosticsLine" class="gamepad-card__runtime-meta">
+              <span class="gamepad-card__runtime-meta-label">采样诊断</span>
+              <span class="gamepad-card__runtime-meta-value">{{ samplingDiagnosticsLine }}</span>
             </div>
 
             <div v-if="connectedDevices.length > 0" class="gamepad-card__device-list">

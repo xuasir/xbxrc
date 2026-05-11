@@ -5,7 +5,7 @@ use std::{
         Mutex,
     },
     thread,
-    time::{SystemTime, UNIX_EPOCH},
+    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 
 use ohmygamepad_core::{
@@ -17,8 +17,8 @@ use ohmygamepad_protocol::{
     MultiControllerSamplingStrategyDto, OhMyGamepadBindingModeDto, OhMyGamepadDeviceDto,
     OhMyGamepadInputPolicyDto, OhMyGamepadKeyboardMappingDto, OhMyGamepadRumbleRequestDto,
     OhMyGamepadRumbleResultDto, OhMyGamepadRumbleTargetDto, OhMyGamepadRuntimeSnapshotDto,
-    OhMyGamepadSamplingConfigDto, OhMyGamepadSamplingPresetDto, OhMyGamepadServiceCommandDto,
-    SimulatedGamepadDescriptorDto,
+    OhMyGamepadSamplingConfigDto, OhMyGamepadSamplingHealthDto, OhMyGamepadSamplingLifecycleDto,
+    OhMyGamepadSamplingPresetDto, OhMyGamepadServiceCommandDto, SimulatedGamepadDescriptorDto,
 };
 
 use crate::service_keyboard::{
@@ -87,6 +87,7 @@ struct OhMyGamepadServiceState {
 pub struct OhMyGamepadService {
     runtime: InputRuntimeHandle,
     state: Mutex<OhMyGamepadServiceState>,
+    last_stalled_self_heal_at: Mutex<Option<Instant>>,
 }
 
 impl OhMyGamepadService {
@@ -165,7 +166,24 @@ impl OhMyGamepadService {
                 source_handle,
                 rumble_backend,
             }),
+            last_stalled_self_heal_at: Mutex::new(None),
         }
+    }
+
+    fn prime_and_refresh_runtime_sampling(&self) -> Result<(), InputRuntimeError> {
+        if let Some(source_handle) = self
+            .state
+            .lock()
+            .expect("lock service state")
+            .source_handle
+            .as_ref()
+            .cloned()
+        {
+            if let Err(error) = source_handle.prime_sampling() {
+                log::warn!("ohmygamepad_prime_sampling_failed error={}", error);
+            }
+        }
+        self.runtime.refresh_snapshot()
     }
 
     pub fn snapshot(&self) -> Result<OhMyGamepadRuntimeSnapshotDto, InputRuntimeError> {
@@ -239,6 +257,41 @@ impl OhMyGamepadService {
         }
     }
 
+    pub fn set_sampling_lifecycle(
+        &self,
+        lifecycle: OhMyGamepadSamplingLifecycleDto,
+    ) -> Result<(), InputRuntimeError> {
+        self.runtime.set_sampling_lifecycle(lifecycle)
+    }
+
+    /// 当快照报告 `stalled` 时尝试 prime + refresh，带冷却；成功执行链后置 `bump_sampling_self_heal_count`。
+    pub fn try_stalled_sampling_self_heal(&self) -> Result<bool, InputRuntimeError> {
+        let snapshot = self.snapshot_with_strategy_sync()?;
+        if snapshot.sampling_health != OhMyGamepadSamplingHealthDto::Stalled {
+            return Ok(false);
+        }
+
+        const COOLDOWN: Duration = Duration::from_secs(2);
+        let now = Instant::now();
+        {
+            let mut last = self
+                .last_stalled_self_heal_at
+                .lock()
+                .expect("lock stalled self heal");
+            if let Some(prev) = *last {
+                if now.duration_since(prev) < COOLDOWN {
+                    return Ok(false);
+                }
+            }
+            *last = Some(now);
+        }
+
+        log::info!("ohmygamepad_stalled_self_heal_attempt");
+        self.prime_and_refresh_runtime_sampling()?;
+        self.runtime.bump_sampling_self_heal_count()?;
+        Ok(true)
+    }
+
     pub fn set_primary_sampling_device(
         &self,
         device_id: Option<String>,
@@ -292,18 +345,7 @@ impl OhMyGamepadService {
     ) -> Result<OhMyGamepadRuntimeSnapshotDto, InputRuntimeError> {
         log::info!("ohmygamepad_shell_recovery_start policy={:?}", policy);
         self.runtime.set_input_policy(policy)?;
-        if let Some(source_handle) = self
-            .state
-            .lock()
-            .expect("lock service state")
-            .source_handle
-            .clone()
-        {
-            if let Err(error) = source_handle.prime_sampling() {
-                log::warn!("ohmygamepad_shell_recovery_prime_failed error={}", error);
-            }
-        }
-        self.runtime.refresh_snapshot()?;
+        self.prime_and_refresh_runtime_sampling()?;
         let snapshot = self.snapshot_with_strategy_sync()?;
         log_resume_snapshot("resume_shell_sampling", &snapshot);
         Ok(snapshot)
@@ -553,22 +595,7 @@ impl OhMyGamepadService {
         );
         self.runtime.set_suspended(false)?;
         self.runtime.set_input_policy(policy)?;
-        if let Some(source_handle) = self
-            .state
-            .lock()
-            .expect("lock service state")
-            .source_handle
-            .clone()
-        {
-            if let Err(error) = source_handle.prime_sampling() {
-                log::warn!(
-                    "ohmygamepad_resume_recovery_prime_failed reason={} error={}",
-                    reason,
-                    error
-                );
-            }
-        }
-        self.runtime.refresh_snapshot()?;
+        self.prime_and_refresh_runtime_sampling()?;
         let snapshot = self.snapshot_with_strategy_sync()?;
         log_resume_snapshot(reason, &snapshot);
         Ok(snapshot)

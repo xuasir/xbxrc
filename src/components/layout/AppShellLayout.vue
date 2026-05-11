@@ -52,6 +52,8 @@ let restoringGamepadSampling = false
 let recoveryAttemptToken = 0
 let recoveryRetryTimers: number[] = []
 let correctingShellPolicy = false
+let pendingRecoveryBaselineProgress: string | null = null
+let pendingRecoveryReason: string | null = null
 
 // LB/RB 一级页面切换顺序
 const PAGE_NAV_ORDER: AppPageRouteName[] = ['xhome', 'xcloud', 'setting']
@@ -133,6 +135,21 @@ function clearRecoveryRetryTimers(): void {
     window.clearTimeout(timer)
   }
   recoveryRetryTimers = []
+}
+
+function finishPendingRecovery(reason: string, payload: Record<string, unknown> = {}): void {
+  if (pendingRecoveryBaselineProgress === null) {
+    return
+  }
+
+  clearRecoveryRetryTimers()
+  pendingRecoveryBaselineProgress = null
+  pendingRecoveryReason = null
+  recoveryAttemptToken += 1
+  recordGamepadRecoveryTrace('gamepadRecoverySettled', {
+    reason,
+    ...payload,
+  })
 }
 
 function gamepadSamplingProgressToken(snapshot: GamepadRuntimeSnapshotDto | null): string {
@@ -245,32 +262,18 @@ function scheduleGamepadSamplingRecovery(reason: string): void {
   recoveryAttemptToken += 1
   const attemptToken = recoveryAttemptToken
   const baselineProgress = gamepadSamplingProgressToken(gamepadSnapshot.value)
-  const retryDelays = [0, 150, 500]
 
   clearRecoveryRetryTimers()
+  pendingRecoveryBaselineProgress = baselineProgress
+  pendingRecoveryReason = reason
   recordGamepadRecoveryTrace('gamepadRecoveryTriggered', {
     reason,
     attemptToken,
     baselineProgress,
-    retryDelaysMs: retryDelays,
+    recoveryKind: 'shell-resume-once',
   })
 
-  retryDelays.forEach((delayMs, index) => {
-    const timer = window.setTimeout(() => {
-      if (attemptToken !== recoveryAttemptToken) {
-        recordGamepadRecoveryTrace('gamepadRecoveryAttemptCanceled', {
-          reason,
-          attemptToken,
-          attemptIndex: index + 1,
-          delayMs,
-          latestAttemptToken: recoveryAttemptToken,
-        })
-        return
-      }
-      void restoreGamepadSampling(`${reason}:attempt-${index + 1}`, baselineProgress)
-    }, delayMs)
-    recoveryRetryTimers.push(timer)
-  })
+  void restoreGamepadSampling(`${reason}:attempt-1`, baselineProgress)
 }
 
 function closeProfileMenu(): void {
@@ -405,6 +408,18 @@ onMounted(() => {
   })
   disposeGamepadRuntimeSnapshot = events.on('gamepad.runtimeSnapshot', (snapshot) => {
     gamepadSnapshot.value = snapshot
+    const currentProgress = gamepadSamplingProgressToken(snapshot)
+    if (
+      document.visibilityState === 'visible'
+      && pendingRecoveryBaselineProgress !== null
+      && currentProgress !== pendingRecoveryBaselineProgress
+    ) {
+      finishPendingRecovery('sampling-progress-advanced', {
+        scheduledReason: pendingRecoveryReason,
+        baselineProgress: pendingRecoveryBaselineProgress,
+        currentProgress,
+      })
+    }
     if (document.visibilityState === 'visible' && snapshot.inputPolicy !== 'shared') {
       void ensureShellInputPolicy(snapshot)
     }
@@ -443,6 +458,8 @@ onUnmounted(() => {
   window.removeEventListener('keydown', handleEscapeKeydown)
   document.removeEventListener('visibilitychange', handleDocumentVisibilityChange)
   clearRecoveryRetryTimers()
+  pendingRecoveryBaselineProgress = null
+  pendingRecoveryReason = null
   if (disposePageSwitch !== undefined) {
     disposePageSwitch()
     disposePageSwitch = undefined
