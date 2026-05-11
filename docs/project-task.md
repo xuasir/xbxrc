@@ -25,6 +25,7 @@
 
 ## Recent Completed
 
+- 2026-05-11: 修复 APP 首开时“手柄能震动但没有输入采样”的恢复回归：`ohmygamepad-sdl3` 的 `resume_shell_sampling / activate_sampling / set_suspended(false)` 共用恢复路径现在会先显式把 runtime lifecycle 提升回 `Active`，避免停留在 `BackgroundWarm` 时只有设备事实与 haptics、却不再向上发布 `slotSnapshot`/输入边沿；并新增 `resume_shell_sampling_promotes_background_warm_to_active` 回归测试锁住该语义。验证：`cargo fmt`、`cargo test -p ohmygamepad-sdl3 resume_shell_sampling_promotes_background_warm_to_active`、`cargo check -p xbxrc`。
 - 2026-05-11: 将 `display_options` 的设置入口改成更易用的“画面风格”预设：设置页主入口现显示 `标准 / 清晰 / 柔和` 三档预设，参数滑杆下沉为 `手动微调`；列表摘要会在命中预设时直接显示预设名，手动值显示为 `手动微调`；同时将默认 `display_options.sharpness` 从 `2` 调整为 `0`，让 `标准` 真正对应“不额外锐化”。验证：`node` 解析 `src/i18n/locales/zh.json` 与 `src/i18n/locales/en.json` 通过；`cargo check -p xbxrc` 通过；`pnpm exec vue-tsc --noEmit` 仍受仓库既有错误 `SettingGamepadSection.vue`、`PlayerClient.ts`、`browser-runtime.ts` 阻塞。
 - 2026-05-11: 校准设置页字段文案：统一修正中英文 `setting.fields.*` 的标题、描述与关键选项说明，补齐此前缺失的 `xhome_auto_connect_server_id`、`debug`、`runtime_trace_mode` 文案项，并将串流、连接、输入、诊断相关设置的描述收口为“实际控制什么、改动后会怎样”的表达。验证：`node` 解析 `src/i18n/locales/zh.json` 与 `src/i18n/locales/en.json` 通过。
 - 2026-05-11: 继续清理设置有效性与暴露面：移除设置系统中的 `xhome_auto_connect_server_id` 展示定义与分组返回；复核当前状态确认 `performance_style`、`video_format`、`enable_audio_control` 仍在真实链路生效，`power_on` 仍进入 session policy，但当前 home 启动链路已自带 ready/wake 重试，用户侧影响显著收窄。验证待本轮 `json parse` 与 `cargo check -p xbxrc`。

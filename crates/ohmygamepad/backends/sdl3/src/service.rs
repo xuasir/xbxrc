@@ -344,6 +344,8 @@ impl OhMyGamepadService {
         policy: OhMyGamepadInputPolicyDto,
     ) -> Result<OhMyGamepadRuntimeSnapshotDto, InputRuntimeError> {
         log::info!("ohmygamepad_shell_recovery_start policy={:?}", policy);
+        self.runtime
+            .set_sampling_lifecycle(OhMyGamepadSamplingLifecycleDto::Active)?;
         self.runtime.set_input_policy(policy)?;
         self.prime_and_refresh_runtime_sampling()?;
         let snapshot = self.snapshot_with_strategy_sync()?;
@@ -593,6 +595,10 @@ impl OhMyGamepadService {
             reason,
             policy
         );
+        // 恢复 API 的语义是重新进入可操作采样态；仅 prime/refresh 不足以让
+        // BackgroundWarm 下的 slotSnapshot/input action 重新对外发布。
+        self.runtime
+            .set_sampling_lifecycle(OhMyGamepadSamplingLifecycleDto::Active)?;
         self.runtime.set_suspended(false)?;
         self.runtime.set_input_policy(policy)?;
         self.prime_and_refresh_runtime_sampling()?;
@@ -963,4 +969,32 @@ fn now_ms() -> u64 {
         .duration_since(UNIX_EPOCH)
         .map(|duration| duration.as_millis() as u64)
         .unwrap_or(0)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::NoopSdl3Source;
+    use ohmygamepad_protocol::{OhMyGamepadInputPolicyDto, OhMyGamepadSamplingLifecycleDto};
+
+    #[test]
+    fn resume_shell_sampling_promotes_background_warm_to_active() {
+        let service = OhMyGamepadService::spawn_with_source(
+            OhMyGamepadServiceConfig::default(),
+            NoopSdl3Source,
+        );
+
+        service
+            .set_sampling_lifecycle(OhMyGamepadSamplingLifecycleDto::BackgroundWarm)
+            .expect("set background warm");
+
+        let snapshot = service
+            .resume_shell_sampling(OhMyGamepadInputPolicyDto::Shared)
+            .expect("resume shell sampling");
+
+        assert_eq!(
+            snapshot.sampling_lifecycle,
+            OhMyGamepadSamplingLifecycleDto::Active
+        );
+    }
 }
