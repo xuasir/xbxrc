@@ -42,6 +42,7 @@ export const SPATIAL_NAV_NODE_IDS = {
   },
   streamPage: {
     menu: 'stream.action.menu',
+    diagnostics: 'stream.action.diagnostics',
     fullscreen: 'stream.action.fullscreen',
     sendText: 'stream.action.send-text',
     powerOff: 'stream.action.power-off',

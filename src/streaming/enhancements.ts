@@ -7,46 +7,55 @@ import type {
 } from './types'
 
 export const STREAM_ENHANCEMENT_CONTRACTS: StreamEnhancementContract[] = [
-  { id: 'diagnostics' },
-  { id: 'performance' },
+  { id: 'experience' },
+  { id: 'browserDiagnostics' },
+  { id: 'rustDiagnostics' },
   { id: 'microphone' },
 ]
 
 interface ResolveStreamEnhancementsInput {
   lifecyclePhase: 'idle' | 'loading' | 'starting' | 'playing' | 'recovering' | 'stopped' | 'failed'
   connected: boolean
-  performanceRequested: boolean
-  diagnosticsRequested: boolean
+  experienceRequested: boolean
+  browserDiagnosticsRequested: boolean
+  rustDiagnosticsRequested: boolean
 }
 
 /**
  * 增强模块统一挂载协议：新模块只需注册 id，并在这里定义 mounted/suspended 规则。
+ *
+ * experience / browserDiagnostics / rustDiagnostics 沿用原 diagnostics 规则：
+ * 已连接或处于 recovering 时允许 mounted，便于恢复过程中仍查看遥测。
  */
 export function resolveStreamEnhancementMounts(
   input: ResolveStreamEnhancementsInput,
 ): StreamEnhancementMountSnapshot {
-  // 面板类增强不应硬依赖首帧事件；只要传输已经 connected，就允许进入 mounted。
   const playingReady = input.connected || input.lifecyclePhase === 'playing'
   const recovering = input.lifecyclePhase === 'recovering'
 
   return {
     playingReady,
     order: STREAM_ENHANCEMENT_CONTRACTS.map(item => item.id),
-    diagnostics: resolveDiagnosticsMountState(
+    experience: resolveDiagnosticsStyleMountState(
       playingReady,
       recovering,
-      input.diagnosticsRequested,
+      input.experienceRequested,
     ),
-    performance: resolvePerformanceMountState(
+    browserDiagnostics: resolveDiagnosticsStyleMountState(
       playingReady,
       recovering,
-      input.performanceRequested,
+      input.browserDiagnosticsRequested,
+    ),
+    rustDiagnostics: resolveDiagnosticsStyleMountState(
+      playingReady,
+      recovering,
+      input.rustDiagnosticsRequested,
     ),
     microphone: resolveMicrophoneMountState(playingReady, recovering),
   }
 }
 
-function resolveDiagnosticsMountState(
+function resolveDiagnosticsStyleMountState(
   playingReady: boolean,
   recovering: boolean,
   requested: boolean,
@@ -62,37 +71,6 @@ function resolveDiagnosticsMountState(
     return {
       phase: 'mounted',
       reason: recovering ? 'recovering' : undefined,
-    }
-  }
-
-  return {
-    phase: 'inactive',
-    reason: 'lifecycle',
-  }
-}
-
-function resolvePerformanceMountState(
-  playingReady: boolean,
-  recovering: boolean,
-  requested: boolean,
-): StreamEnhancementMountState {
-  if (!requested) {
-    return {
-      phase: 'inactive',
-      reason: 'hidden',
-    }
-  }
-
-  if (playingReady) {
-    return {
-      phase: 'mounted',
-    }
-  }
-
-  if (recovering) {
-    return {
-      phase: 'suspended',
-      reason: 'recovering',
     }
   }
 

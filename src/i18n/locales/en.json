@@ -143,6 +143,85 @@
     "actionSheet": {
       "title": "Stream Actions"
     },
+    "diagnosticsMenu": {
+      "title": "Diagnostics & experiments",
+      "iconButtonLabel": "Diagnostics & experiments",
+      "showExperience": "Show streaming quality",
+      "hideExperience": "Hide streaming quality",
+      "showBrowserDiagnostics": "Show browser diagnostics",
+      "hideBrowserDiagnostics": "Hide browser diagnostics",
+      "showRustDiagnostics": "Show engine diagnostics",
+      "hideRustDiagnostics": "Hide engine diagnostics"
+    },
+    "experience": {
+      "title": "Streaming quality",
+      "statusOwner": "Optimizing connection",
+      "notices": {
+        "relay": "Using a relay connection",
+        "recovering": "Recovering stream",
+        "noVideo": "No video signal"
+      },
+      "metrics": {
+        "status": "Status",
+        "resolution": "Resolution",
+        "rtt": "RTT",
+        "jit": "Jitter",
+        "recvFps": "Receive FPS",
+        "decodeFps": "Decode FPS",
+        "presentFps": "Present FPS",
+        "packetLoss": "Packet loss",
+        "videoBitrate": "Video download",
+        "totalBitrate": "Total download",
+        "connectedElapsed": "Connect time",
+        "mediaReadyElapsed": "First stable frame"
+      }
+    },
+    "diagnosticsPanel": {
+      "browser": {
+        "title": "Browser diagnostics",
+        "fields": {
+          "transportState": "Transport",
+          "presentationMilestone": "Presentation",
+          "renderPipelineType": "Render pipeline",
+          "renderProcessing": "Sharpening",
+          "renderShaderPath": "Shader path",
+          "frontEndProfileBaseline": "Profile baseline",
+          "frontEndProfileDynamic": "Profile dynamic",
+          "frontEndPolicyPreset": "Policy preset",
+          "srSetting": "Super resolution (setting)",
+          "srRuntime": "Super resolution (runtime)",
+          "bandwidthState": "Bandwidth state",
+          "bandwidthAction": "Bandwidth action",
+          "controlChannelState": "Control channel",
+          "controlChannelError": "Control channel error",
+          "controlChannelOpenRatio": "Control channel open ratio",
+          "controlChannelBufferedTrend": "Control channel buffer trend",
+          "keyframeSuccessRate": "Keyframe success",
+          "recoveryCause": "Recovery cause",
+          "qualityLadderLevel": "Quality ladder",
+          "decisionDigest": "Decision digest"
+        }
+      },
+      "rust": {
+        "title": "Engine diagnostics",
+        "fields": {
+          "transportState": "Transport",
+          "videoHealth": "Video health",
+          "primaryIssueChain": "Primary issue",
+          "latestDecision": "Latest decision",
+          "ownerState": "Owner state",
+          "ownerReason": "Owner reason",
+          "decoderState": "Decoder state",
+          "decoderEvent": "Decoder event",
+          "stallKind": "Stall kind",
+          "recoveryDiagnosis": "Recovery diagnosis",
+          "recoveryRfcFaultDomain": "RFC fault domain",
+          "recoveryRfcStage": "RFC stage",
+          "recoveryRfcCeiling": "RFC ceiling",
+          "hostPresentTelemetry": "Host present telemetry"
+        }
+      }
+    },
     "display": {
       "title": "Display Settings",
       "hint": "Adjust sharpness, saturation, contrast, and brightness for the current stream in real time."

@@ -3,7 +3,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
 type BrowserTimeout = number
 
-export type StreamPageActiveSheet = 'none' | 'menu' | 'display' | 'audio' | 'text'
+export type StreamPageActiveSheet = 'none' | 'menu' | 'diagnosticsMenu' | 'display' | 'audio' | 'text'
 export type StreamPageOverlayState = 'none' | 'loading' | 'error' | 'connecting'
 
 interface UseXStreamPageUiOptions {
@@ -152,6 +152,7 @@ export function useXStreamPageUi(options: UseXStreamPageUiOptions) {
       showWarningSheet,
       shouldShowChrome,
       isMenuSheetOpen: computed(() => activeSheet.value === 'menu'),
+      isDiagnosticsMenuSheetOpen: computed(() => activeSheet.value === 'diagnosticsMenu'),
       isDisplaySheetOpen: computed(() => activeSheet.value === 'display'),
       isAudioSheetOpen: computed(() => activeSheet.value === 'audio'),
       isTextSheetOpen: computed(() => activeSheet.value === 'text'),

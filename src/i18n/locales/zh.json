@@ -143,6 +143,85 @@
     "actionSheet": {
       "title": "串流操作"
     },
+    "diagnosticsMenu": {
+      "title": "诊断与实验",
+      "iconButtonLabel": "诊断与实验",
+      "showExperience": "显示体验指标",
+      "hideExperience": "隐藏体验指标",
+      "showBrowserDiagnostics": "显示浏览器内部诊断",
+      "hideBrowserDiagnostics": "隐藏浏览器内部诊断",
+      "showRustDiagnostics": "显示引擎内部诊断",
+      "hideRustDiagnostics": "隐藏引擎内部诊断"
+    },
+    "experience": {
+      "title": "体验指标",
+      "statusOwner": "正在优化连接",
+      "notices": {
+        "relay": "当前使用中继",
+        "recovering": "当前处于恢复中",
+        "noVideo": "当前无画面"
+      },
+      "metrics": {
+        "status": "状态",
+        "resolution": "分辨率",
+        "rtt": "RTT",
+        "jit": "抖动",
+        "recvFps": "接收 FPS",
+        "decodeFps": "解码 FPS",
+        "presentFps": "呈现 FPS",
+        "packetLoss": "丢包",
+        "videoBitrate": "视频下行",
+        "totalBitrate": "总下行",
+        "connectedElapsed": "连接耗时",
+        "mediaReadyElapsed": "首帧耗时"
+      }
+    },
+    "diagnosticsPanel": {
+      "browser": {
+        "title": "浏览器内部诊断",
+        "fields": {
+          "transportState": "传输",
+          "presentationMilestone": "呈现阶段",
+          "renderPipelineType": "渲染管线",
+          "renderProcessing": "锐化后处理",
+          "renderShaderPath": "着色器路径",
+          "frontEndProfileBaseline": "画像基线",
+          "frontEndProfileDynamic": "画像动态",
+          "frontEndPolicyPreset": "策略预设",
+          "srSetting": "超分（设置）",
+          "srRuntime": "超分（运行态）",
+          "bandwidthState": "带宽状态",
+          "bandwidthAction": "带宽动作",
+          "controlChannelState": "控制通道",
+          "controlChannelError": "控制通道错误",
+          "controlChannelOpenRatio": "控制通道打开比例",
+          "controlChannelBufferedTrend": "控制通道缓冲趋势",
+          "keyframeSuccessRate": "关键帧成功率",
+          "recoveryCause": "恢复归因",
+          "qualityLadderLevel": "质量阶梯",
+          "decisionDigest": "决策摘要"
+        }
+      },
+      "rust": {
+        "title": "引擎内部诊断",
+        "fields": {
+          "transportState": "传输",
+          "videoHealth": "视频健康",
+          "primaryIssueChain": "主因链",
+          "latestDecision": "最近决策",
+          "ownerState": "Owner 状态",
+          "ownerReason": "Owner 原因",
+          "decoderState": "解码器状态",
+          "decoderEvent": "解码器事件",
+          "stallKind": "卡顿类型",
+          "recoveryDiagnosis": "恢复诊断",
+          "recoveryRfcFaultDomain": "RFC 故障域",
+          "recoveryRfcStage": "RFC 阶段",
+          "recoveryRfcCeiling": "RFC 上限",
+          "hostPresentTelemetry": "主机呈现遥测"
+        }
+      }
+    },
     "display": {
       "title": "显示设置",
       "hint": "实时调整当前串流画面的锐化、饱和度、对比度与亮度。"

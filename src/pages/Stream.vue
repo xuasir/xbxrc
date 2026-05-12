@@ -5,15 +5,17 @@ import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { Focusable, FocusScope } from '@/navigation/core/vue'
 import xboxLogoIcon from '../assets/nav/xbox-logo.svg'
+import streamDiagnosticsIcon from '../assets/stream/stream-diagnostics.svg'
 import BrandedLoading from '../components/common/BrandedLoading.vue'
 import SpatialNavIconButton from '../components/navigation/SpatialNavIconButton.vue'
 import SettingDisplayOptionsSheet from '../components/settings/SettingDisplayOptionsSheet.vue'
 import StreamActionSheet from '../components/stream/StreamActionSheet.vue'
 import StreamAlertSheet from '../components/stream/StreamAlertSheet.vue'
 import StreamAudioSheet from '../components/stream/StreamAudioSheet.vue'
-import StreamDiagnosticsPanel from '../components/stream/StreamDiagnosticsPanel.vue'
+import StreamBrowserDiagnosticsPanel from '../components/stream/StreamBrowserDiagnosticsPanel.vue'
+import StreamExperiencePanel from '../components/stream/StreamExperiencePanel.vue'
 import StreamMicrophoneStatus from '../components/stream/StreamMicrophoneStatus.vue'
-import StreamPerformancePanel from '../components/stream/StreamPerformancePanel.vue'
+import StreamRustDiagnosticsPanel from '../components/stream/StreamRustDiagnosticsPanel.vue'
 import StreamTextSheet from '../components/stream/StreamTextSheet.vue'
 import { SPATIAL_NAV_NODE_IDS, SPATIAL_NAV_SCOPE_IDS } from '../navigation/spatial-nav.constants'
 import { rpc } from '../services/rpc'
@@ -22,7 +24,7 @@ import { useStreamExecution } from '../streaming/useStreamExecution'
 import { useXStreamPageUi } from '../streaming/xstream-page-ui'
 import { useGamepadRouteForStreamOverlay } from './stream/useGamepadRouteForStreamOverlay'
 
-const { t } = useI18n()
+const { t, te } = useI18n()
 const router = useRouter()
 const route = useRoute()
 
@@ -30,6 +32,7 @@ const controller = useStreamExecution({
   route,
   router,
   t,
+  te,
 })
 const {
   route: streamRoute,
@@ -52,13 +55,14 @@ const {
   hasError,
   warningVisible,
   displayOptions,
-  resolutionMode,
   performanceStyle,
   runtimeMode,
-  performanceVisible,
-  diagnosticsVisible,
-  performanceSnapshot,
-  diagnostics,
+  experienceMetricsVisible,
+  browserDiagnosticsVisible,
+  rustDiagnosticsVisible,
+  experienceMetricsViewModel,
+  browserDiagnosticsViewModel,
+  rustDiagnosticsViewModel,
   enhancementBindings,
   sessionHealth,
   audioVolume,
@@ -94,6 +98,7 @@ const {
   showWarningSheet,
   shouldShowChrome,
   isMenuSheetOpen,
+  isDiagnosticsMenuSheetOpen,
   isDisplaySheetOpen,
   isAudioSheetOpen,
   isTextSheetOpen,
@@ -108,6 +113,7 @@ const {
 useGamepadRouteForStreamOverlay({
   isAnyOverlayOpen: computed(() =>
     isMenuSheetOpen.value
+    || isDiagnosticsMenuSheetOpen.value
     || isDisplaySheetOpen.value
     || isAudioSheetOpen.value
     || isTextSheetOpen.value
@@ -194,12 +200,16 @@ const showHostRegistrationRetryHelp = computed(() => {
   )
 })
 
-const diagnosticsBinding = computed(() =>
-  resolveEnhancementBinding(enhancementBindings.value, 'diagnostics'),
+const experienceBinding = computed(() =>
+  resolveEnhancementBinding(enhancementBindings.value, 'experience'),
 )
 
-const performanceBinding = computed(() =>
-  resolveEnhancementBinding(enhancementBindings.value, 'performance'),
+const browserDiagnosticsBinding = computed(() =>
+  resolveEnhancementBinding(enhancementBindings.value, 'browserDiagnostics'),
+)
+
+const rustDiagnosticsBinding = computed(() =>
+  resolveEnhancementBinding(enhancementBindings.value, 'rustDiagnostics'),
 )
 
 const microphoneBinding = computed(() =>
@@ -212,6 +222,14 @@ const exportSrComparisonErrorActions = computed(() => [
     label: t('streamPage.actions.back'),
   },
 ])
+
+const canUseDiagnosticsMenu = computed(
+  () =>
+    ability.canToggleExperienceMetrics.value
+    || ability.canToggleBrowserDiagnostics.value
+    || ability.canToggleRustDiagnostics.value
+    || ability.canToggleSuperResolution.value,
+)
 
 const streamMenuActions = computed<StreamMenuActionViewModel[]>(() => {
   if (!isConnected.value) {
@@ -226,21 +244,17 @@ const streamMenuActions = computed<StreamMenuActionViewModel[]>(() => {
 
   const items: StreamMenuActionViewModel[] = []
 
-  if (ability.canOpenDiagnostics.value) {
+  if (ability.canPressNexus.value) {
     items.push({
-      id: 'diagnostics',
-      label: execution.diagnosticsVisible.value
-        ? t('streamPage.actions.hideDiagnostics')
-        : t('streamPage.actions.showDiagnostics'),
+      id: 'pressNexus',
+      label: t('streamPage.actions.pressNexus'),
     })
   }
 
-  if (ability.canOpenPerformance.value) {
+  if (ability.canLongPressNexus.value) {
     items.push({
-      id: 'performance',
-      label: execution.performanceVisible.value
-        ? t('streamPage.actions.hidePerformance')
-        : t('streamPage.actions.showPerformance'),
+      id: 'longPressNexus',
+      label: t('streamPage.actions.longPressNexus'),
     })
   }
 
@@ -248,22 +262,6 @@ const streamMenuActions = computed<StreamMenuActionViewModel[]>(() => {
     items.push({
       id: 'display',
       label: t('streamPage.actions.display'),
-    })
-  }
-
-  if (ability.canToggleSuperResolution.value) {
-    items.push({
-      id: 'toggleSuperResolution',
-      label: execution.superResolutionExperimental.value
-        ? t('streamPage.actions.disableSuperResolution')
-        : t('streamPage.actions.enableSuperResolution'),
-    })
-    items.push({
-      id: 'exportSuperResolutionComparison',
-      label: exportingSrComparison.value
-        ? t('streamPage.actions.exportingSuperResolutionComparison')
-        : t('streamPage.actions.exportSuperResolutionComparison'),
-      disabled: exportingSrComparison.value,
     })
   }
 
@@ -290,20 +288,6 @@ const streamMenuActions = computed<StreamMenuActionViewModel[]>(() => {
     })
   }
 
-  if (ability.canPressNexus.value) {
-    items.push({
-      id: 'pressNexus',
-      label: t('streamPage.actions.pressNexus'),
-    })
-  }
-
-  if (ability.canLongPressNexus.value) {
-    items.push({
-      id: 'longPressNexus',
-      label: t('streamPage.actions.longPressNexus'),
-    })
-  }
-
   items.push({
     id: 'fullscreen',
     label: t('streamPage.actions.fullscreen'),
@@ -323,6 +307,50 @@ const streamMenuActions = computed<StreamMenuActionViewModel[]>(() => {
     danger: true,
   })
 
+  return items
+})
+
+const diagnosticsMenuActions = computed<StreamMenuActionViewModel[]>(() => {
+  const items: StreamMenuActionViewModel[] = []
+  if (ability.canToggleExperienceMetrics.value) {
+    items.push({
+      id: 'toggleExperience',
+      label: execution.experienceMetricsVisible.value
+        ? t('streamPage.diagnosticsMenu.hideExperience')
+        : t('streamPage.diagnosticsMenu.showExperience'),
+    })
+  }
+  if (ability.canToggleBrowserDiagnostics.value) {
+    items.push({
+      id: 'toggleBrowserDiagnostics',
+      label: execution.browserDiagnosticsVisible.value
+        ? t('streamPage.diagnosticsMenu.hideBrowserDiagnostics')
+        : t('streamPage.diagnosticsMenu.showBrowserDiagnostics'),
+    })
+  }
+  if (ability.canToggleRustDiagnostics.value) {
+    items.push({
+      id: 'toggleRustDiagnostics',
+      label: execution.rustDiagnosticsVisible.value
+        ? t('streamPage.diagnosticsMenu.hideRustDiagnostics')
+        : t('streamPage.diagnosticsMenu.showRustDiagnostics'),
+    })
+  }
+  if (ability.canToggleSuperResolution.value) {
+    items.push({
+      id: 'toggleSuperResolution',
+      label: execution.superResolutionExperimental.value
+        ? t('streamPage.actions.disableSuperResolution')
+        : t('streamPage.actions.enableSuperResolution'),
+    })
+    items.push({
+      id: 'exportSuperResolutionComparison',
+      label: exportingSrComparison.value
+        ? t('streamPage.actions.exportingSuperResolutionComparison')
+        : t('streamPage.actions.exportSuperResolutionComparison'),
+      disabled: exportingSrComparison.value,
+    })
+  }
   return items
 })
 
@@ -374,6 +402,14 @@ function openActionSheet(): void {
 
 function closeActionSheet(): void {
   closeSheet('menu')
+}
+
+function openDiagnosticsMenu(): void {
+  openSheet('diagnosticsMenu')
+}
+
+function closeDiagnosticsMenu(): void {
+  closeSheet('diagnosticsMenu')
 }
 
 function handleStreamMenuToggleRequested(): void {
@@ -646,24 +682,8 @@ function dismissExportSrComparisonError(): void {
 
 async function handleStreamMenuAction(id: string): Promise<void> {
   const handlers: Record<string, () => void | Promise<void>> = {
-    diagnostics: () => {
-      revealChrome()
-      actions.toggleDiagnostics()
-    },
-    performance: () => {
-      revealChrome()
-      actions.togglePerformance()
-    },
     display: () => {
       openDisplaySheet()
-    },
-    toggleSuperResolution: async () => {
-      revealChrome()
-      await actions.toggleSuperResolutionExperimental()
-    },
-    exportSuperResolutionComparison: async () => {
-      revealChrome()
-      await exportSuperResolutionComparison()
     },
     audio: () => {
       openAudioSheet()
@@ -701,6 +721,37 @@ async function handleStreamMenuAction(id: string): Promise<void> {
     await handlers[id]?.()
   }
 }
+
+async function handleDiagnosticsMenuAction(id: string): Promise<void> {
+  const handlers: Record<string, () => void | Promise<void>> = {
+    toggleExperience: () => {
+      revealChrome()
+      actions.toggleExperienceMetrics()
+    },
+    toggleBrowserDiagnostics: () => {
+      revealChrome()
+      actions.toggleBrowserDiagnostics()
+    },
+    toggleRustDiagnostics: () => {
+      revealChrome()
+      actions.toggleRustDiagnostics()
+    },
+    toggleSuperResolution: async () => {
+      revealChrome()
+      await actions.toggleSuperResolutionExperimental()
+    },
+    exportSuperResolutionComparison: async () => {
+      revealChrome()
+      await exportSuperResolutionComparison()
+    },
+  }
+
+  if (handlers[id]) {
+    closeDiagnosticsMenu()
+    await nextTick()
+    await handlers[id]?.()
+  }
+}
 </script>
 
 <template>
@@ -716,20 +767,23 @@ async function handleStreamMenuAction(id: string): Promise<void> {
       :aria-label="t('streamPage.ariaLabel', { name: displayName })"
     >
       <div id="stream-page-video" class="stream-page__video" />
-      <StreamDiagnosticsPanel
-        :visible="diagnosticsVisible"
-        :diagnostics="diagnostics"
-        :mount="diagnosticsBinding"
-        :runtime-mode="runtimeMode"
-        :super-resolution-experimental="execution.superResolutionExperimental.value"
-      />
-      <StreamPerformancePanel
-        :visible="performanceVisible && (isConnected || performanceBinding.phase === 'mounted')"
+      <StreamExperiencePanel
+        :visible="experienceMetricsVisible && (isConnected || experienceBinding.phase === 'mounted')"
         :compact="performanceStyle"
-        :snapshot="performanceSnapshot"
-        :diagnostics="diagnostics"
-        :resolution-mode="resolutionMode"
-        :runtime-mode="runtimeMode"
+        :mount="experienceBinding"
+        :model="experienceMetricsViewModel"
+      />
+      <StreamBrowserDiagnosticsPanel
+        v-if="runtimeMode === 'webrtc-direct'"
+        :visible="browserDiagnosticsVisible && (isConnected || browserDiagnosticsBinding.phase === 'mounted')"
+        :mount="browserDiagnosticsBinding"
+        :model="browserDiagnosticsViewModel"
+      />
+      <StreamRustDiagnosticsPanel
+        v-if="runtimeMode === 'rust-owned'"
+        :visible="rustDiagnosticsVisible && (isConnected || rustDiagnosticsBinding.phase === 'mounted')"
+        :mount="rustDiagnosticsBinding"
+        :model="rustDiagnosticsViewModel"
       />
       <StreamMicrophoneStatus
         :mount="microphoneBinding"
@@ -749,6 +803,22 @@ async function handleStreamMenuAction(id: string): Promise<void> {
           :round="true"
           :disabled="!shouldShowChrome"
           @click="openActionSheet"
+        />
+      </div>
+
+      <div
+        v-if="isConnected && canUseDiagnosticsMenu"
+        class="stream-page__diagnostics-container"
+        :class="{ 'stream-page__diagnostics-container--hidden': !shouldShowChrome }"
+      >
+        <SpatialNavIconButton
+          :id="SPATIAL_NAV_NODE_IDS.streamPage.diagnostics"
+          class="stream-page__chrome"
+          :label="t('streamPage.diagnosticsMenu.iconButtonLabel')"
+          :icon-src="streamDiagnosticsIcon"
+          :round="true"
+          :disabled="!shouldShowChrome"
+          @click="openDiagnosticsMenu"
         />
       </div>
 
@@ -843,6 +913,16 @@ async function handleStreamMenuAction(id: string): Promise<void> {
         @close="closeActionSheet"
         @select="handleStreamMenuAction"
       />
+      <StreamActionSheet
+        :open="isDiagnosticsMenuSheetOpen"
+        data-theme="dark"
+        scope-id="stream.diagnostics-menu-sheet"
+        :title="t('streamPage.diagnosticsMenu.title')"
+        :eyebrow="eyebrow"
+        :items="diagnosticsMenuActions"
+        @close="closeDiagnosticsMenu"
+        @select="handleDiagnosticsMenuAction"
+      />
       <SettingDisplayOptionsSheet
         :open="isDisplaySheetOpen"
         scope-id="stream.display-sheet"
@@ -914,12 +994,12 @@ async function handleStreamMenuAction(id: string): Promise<void> {
   z-index: 0;
 }
 
-/* 快捷功能按钮 Chrome */
+/* 快捷功能按钮：低于弹出层（--z-overlay），避免盖住菜单 / 诊断 ActionSheet */
 .stream-page__chrome-container {
   position: absolute;
   top: 24px;
   left: 24px;
-  z-index: 120;
+  z-index: var(--z-stream-chrome);
   pointer-events: none;
   transition: all 0.3s cubic-bezier(0.2, 0, 0, 1);
 }
@@ -929,12 +1009,26 @@ async function handleStreamMenuAction(id: string): Promise<void> {
   transform: translateX(-20px) scale(0.9);
 }
 
+.stream-page__diagnostics-container {
+  position: absolute;
+  bottom: 24px;
+  left: 24px;
+  z-index: var(--z-stream-chrome);
+  pointer-events: none;
+  transition: all 0.3s cubic-bezier(0.2, 0, 0, 1);
+}
+
+.stream-page__diagnostics-container--hidden {
+  opacity: 0;
+  transform: translateY(20px) scale(0.9);
+}
+
 .stream-page__chrome {
   pointer-events: auto;
-  /* 匹配 TopNavBar 的尺寸 */
+  /* 匹配 TopNavBar 的尺寸；与视频叠放时使用透明底，图标靠 --ui-nav-icon-filter 等保证可读 */
   width: var(--ui-size-control-xl) !important;
   height: var(--ui-size-control-xl) !important;
-  background: var(--ui-scrim-bg);
+  background: transparent;
   /* backdrop-filter: blur(20px); */
   border: 1px solid var(--ui-border-subtle);
 }
@@ -946,11 +1040,11 @@ async function handleStreamMenuAction(id: string): Promise<void> {
   height: var(--ui-size-icon-lg) !important;
 }
 
-/* 覆盖层 Overlays */
+/* 覆盖层 Overlays：与 ActionSheet 同级，盖住角标按钮 */
 .stream-page__overlay {
   position: absolute;
   inset: 0;
-  z-index: 100;
+  z-index: var(--z-overlay);
   display: flex;
   align-items: center;
   justify-content: center;

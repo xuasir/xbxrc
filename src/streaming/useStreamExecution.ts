@@ -51,11 +51,17 @@ import {
   sendTextToRemoteConsole,
   startRemoteStreamSessionWithAttempt,
 } from './session'
+import {
+  buildStreamBrowserDiagnosticsViewModel,
+  buildStreamExperienceMetricsViewModel,
+  buildStreamRustDiagnosticsViewModel,
+} from './stream-panel-view-models'
 
 interface UseStreamExecutionOptions {
   route: RouteLocationNormalizedLoaded
   router: Router
   t: (key: string, params?: Record<string, unknown>) => string
+  te?: (key: string) => boolean
 }
 
 const STREAM_UI_HOST_RESET_EVENT = 'stream-ui-host-reset'
@@ -86,6 +92,7 @@ function resolveIceCandidatePolicySpec(input: {
  */
 export function useStreamExecution(options: UseStreamExecutionOptions) {
   const routeState = createStreamRouteState(options.route)
+  const diagnosticsTe = options.te ?? (() => false)
 
   const sessionUiPhase = ref<SessionUiPhase>('idle')
   const isLoading = ref(true)
@@ -103,8 +110,9 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
   const sessionHealth = ref<SessionHealthSnapshot | null>(null)
   const sessionReportingEnabled = ref(false)
   const closing = ref(false)
-  const performanceVisible = ref(false)
-  const diagnosticsVisible = ref(false)
+  const experienceMetricsVisible = ref(false)
+  const browserDiagnosticsVisible = ref(false)
+  const rustDiagnosticsVisible = ref(false)
   const warningVisible = ref(false)
   let warningTimer: BrowserTimeout | null = null
   let disposeStartupEvents: (() => void) | null = null
@@ -223,12 +231,51 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
       lastHostFrameAtMs: runtimeHost.lastFrameAt.value,
     })
   })
+  const streamRuntimeMode = computed(
+    () =>
+      sessionExecution.value?.runtime.mode
+      ?? streamConfig.value.stream_runtime_mode
+      ?? 'webrtc-direct',
+  )
+  const streamResolutionMode = computed(() =>
+    routeState.targetType.value === 'home'
+      ? streamConfig.value.xhome_resolution
+      : streamConfig.value.resolution,
+  )
+  const streamPanelI18n = computed(() => ({
+    t: options.t,
+    te: diagnosticsTe,
+  }))
+  const experienceMetricsViewModel = computed(() =>
+    buildStreamExperienceMetricsViewModel({
+      snapshot: runtimeHost.performanceSnapshot.value,
+      diagnostics: diagnostics.value,
+      resolutionMode: streamResolutionMode.value,
+      runtimeMode: streamRuntimeMode.value,
+      i18n: streamPanelI18n.value,
+    }),
+  )
+  const browserDiagnosticsViewModel = computed(() =>
+    buildStreamBrowserDiagnosticsViewModel({
+      snapshot: runtimeHost.performanceSnapshot.value,
+      diagnostics: diagnostics.value,
+      i18n: streamPanelI18n.value,
+    }),
+  )
+  const rustDiagnosticsViewModel = computed(() =>
+    buildStreamRustDiagnosticsViewModel({
+      snapshot: runtimeHost.performanceSnapshot.value,
+      diagnostics: diagnostics.value,
+      i18n: streamPanelI18n.value,
+    }),
+  )
   const enhancements = computed<StreamEnhancementMountSnapshot>(() => {
     return resolveStreamEnhancementMounts({
       lifecyclePhase: lifecyclePhase.value,
       connected: isConnected.value,
-      performanceRequested: performanceVisible.value,
-      diagnosticsRequested: diagnosticsVisible.value,
+      experienceRequested: experienceMetricsVisible.value,
+      browserDiagnosticsRequested: browserDiagnosticsVisible.value,
+      rustDiagnosticsRequested: rustDiagnosticsVisible.value,
     })
   })
   const enhancementBindings = computed(() => bindStreamEnhancements(enhancements.value))
@@ -605,14 +652,16 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
     runtimeHost.pressNexus(1_000)
   }
 
-  function togglePerformance(): void {
-    performanceVisible.value = !performanceVisible.value
-    runtimeHost.setPerformanceEnabled(performanceVisible.value)
+  function toggleExperienceMetrics(): void {
+    experienceMetricsVisible.value = !experienceMetricsVisible.value
   }
 
-  function toggleDiagnostics(): void {
-    diagnosticsVisible.value = !diagnosticsVisible.value
-    runtimeHost.setDiagnosticsEnabled(diagnosticsVisible.value)
+  function toggleBrowserDiagnostics(): void {
+    browserDiagnosticsVisible.value = !browserDiagnosticsVisible.value
+  }
+
+  function toggleRustDiagnostics(): void {
+    rustDiagnosticsVisible.value = !rustDiagnosticsVisible.value
   }
 
   async function setSuperResolutionExperimental(enabled: boolean): Promise<boolean> {
@@ -680,25 +729,35 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
         return
       }
       resetExecutionWarning()
-      performanceVisible.value = false
-      diagnosticsVisible.value = false
-      runtimeHost.setPerformanceEnabled(false)
-      runtimeHost.setDiagnosticsEnabled(false)
+      experienceMetricsVisible.value = false
+      browserDiagnosticsVisible.value = false
+      rustDiagnosticsVisible.value = false
+      runtimeHost.setExperienceMetricsEnabled(false)
+      runtimeHost.setBrowserDiagnosticsEnabled(false)
+      runtimeHost.setRustDiagnosticsEnabled(false)
     },
   )
 
   watch(
-    () => enhancements.value.performance.phase,
+    () => enhancements.value.experience.phase,
     (phase) => {
-      runtimeHost.setPerformanceEnabled(phase === 'mounted')
+      runtimeHost.setExperienceMetricsEnabled(phase === 'mounted')
     },
     { immediate: true },
   )
 
   watch(
-    () => enhancements.value.diagnostics.phase,
+    () => enhancements.value.browserDiagnostics.phase,
     (phase) => {
-      runtimeHost.setDiagnosticsEnabled(phase === 'mounted')
+      runtimeHost.setBrowserDiagnosticsEnabled(phase === 'mounted')
+    },
+    { immediate: true },
+  )
+
+  watch(
+    () => enhancements.value.rustDiagnostics.phase,
+    (phase) => {
+      runtimeHost.setRustDiagnosticsEnabled(phase === 'mounted')
     },
     { immediate: true },
   )
@@ -718,8 +777,9 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
 
   onBeforeUnmount(() => {
     resetExecutionWarning()
-    runtimeHost.setPerformanceEnabled(false)
-    runtimeHost.setDiagnosticsEnabled(false)
+    runtimeHost.setExperienceMetricsEnabled(false)
+    runtimeHost.setBrowserDiagnosticsEnabled(false)
+    runtimeHost.setRustDiagnosticsEnabled(false)
     disposeStartupEventSubscription()
     void closeExecution({ reason: 'pageUnmount' })
   })
@@ -738,8 +798,13 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
     ability: {
       canPowerOffConsole,
       canSendText,
-      canOpenPerformance: computed(() => runtimeControlsReady.value),
-      canOpenDiagnostics: computed(() => runtimeControlsReady.value),
+      canToggleExperienceMetrics: computed(() => runtimeControlsReady.value),
+      canToggleBrowserDiagnostics: computed(
+        () => runtimeControlsReady.value && streamRuntimeMode.value === 'webrtc-direct',
+      ),
+      canToggleRustDiagnostics: computed(
+        () => runtimeControlsReady.value && streamRuntimeMode.value === 'rust-owned',
+      ),
       canOpenDisplaySettings: computed(() => runtimeControlsReady.value),
       canToggleSuperResolution: computed(() =>
         runtimeControlsReady.value && (
@@ -771,28 +836,24 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
       lifecyclePhase,
       warningVisible,
       displayOptions: computed(() => streamConfig.value.display_options ?? null),
-      resolutionMode: computed(() =>
-        routeState.targetType.value === 'home'
-          ? streamConfig.value.xhome_resolution
-          : streamConfig.value.resolution,
-      ),
+      resolutionMode: streamResolutionMode,
       performanceStyle: computed(() => streamConfig.value.performance_style === true),
-      runtimeMode: computed(() =>
-        sessionExecution.value?.runtime.mode
-        ?? streamConfig.value.stream_runtime_mode
-        ?? 'webrtc-direct',
-      ),
+      runtimeMode: streamRuntimeMode,
       metadata: sessionMetadata,
       capabilities: sessionCapabilities,
       diagnostics,
+      experienceMetricsViewModel,
+      browserDiagnosticsViewModel,
+      rustDiagnosticsViewModel,
       enhancements,
       enhancementBindings,
       sessionHealth,
       sessionReportingEnabled,
       sessionUiPhase,
       sessionId,
-      performanceVisible,
-      diagnosticsVisible,
+      experienceMetricsVisible,
+      browserDiagnosticsVisible,
+      rustDiagnosticsVisible,
       performanceSnapshot: runtimeHost.performanceSnapshot,
       audioVolume: runtimeHost.audioVolume,
       microphone: runtimeHost.microphoneState,
@@ -811,8 +872,9 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
       toggleMicrophone,
       pressNexus,
       longPressNexus,
-      togglePerformance,
-      toggleDiagnostics,
+      toggleExperienceMetrics,
+      toggleBrowserDiagnostics,
+      toggleRustDiagnostics,
       setSuperResolutionExperimental,
       toggleSuperResolutionExperimental,
       setTextInputActive,

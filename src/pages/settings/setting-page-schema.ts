@@ -118,7 +118,11 @@ const PAGE_STREAMING: SettingSchemaSectionDef[] = [
   {
     key: 'advanced',
     labelKey: 'setting.pages.streamingExperience.sectionAdvanced',
-    items: [{ kind: 'field', fieldKey: 'super_resolution_experimental' }],
+    items: [
+      { kind: 'field', fieldKey: 'super_resolution_experimental' },
+      { kind: 'field', fieldKey: 'stream_runtime_mode' },
+      { kind: 'field', fieldKey: 'use_vulkan' },
+    ],
   },
   {
     key: 'console',
@@ -185,10 +189,8 @@ export function getAdvancedDiagnosticsSections(dangerUnlocked: boolean): Setting
       key: 'advanced',
       labelKey: 'setting.pages.advancedDiagnostics.sectionAdvanced',
       items: [
-        { kind: 'field', fieldKey: 'stream_runtime_mode' },
         { kind: 'field', fieldKey: 'debug' },
         { kind: 'field', fieldKey: 'runtime_trace_mode' },
-        { kind: 'field', fieldKey: 'use_vulkan' },
       ],
     },
   ]

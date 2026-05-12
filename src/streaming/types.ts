@@ -376,6 +376,67 @@ export interface StreamSessionDiagnosticsSnapshot {
     | 'inactive'
 }
 
+/** 串流页共享体验指标（browser / rust 同版展示） */
+export interface StreamExperienceMetricsViewModel {
+  status: string
+  resolution: string
+  rtt: string
+  jit: string
+  recvFps: string
+  decodeFps: string
+  presentFps: string
+  packetLoss: string
+  videoBitrate: string
+  totalBitrate: string
+  connectedElapsed?: string
+  mediaReadyElapsed?: string
+  relayNotice: boolean
+  recoveringNotice: boolean
+  noVideoNotice: boolean
+}
+
+/** webrtc-direct 内部诊断面板 */
+export interface StreamBrowserDiagnosticsViewModel {
+  transportState: string
+  presentationMilestone: string
+  renderPipelineType: string
+  renderProcessing: string
+  renderShaderPath: string
+  frontEndProfileBaseline: string
+  frontEndProfileDynamic: string
+  frontEndPolicyPreset: string
+  srSetting: string
+  srRuntime: string
+  bandwidthState: string
+  bandwidthAction: string
+  controlChannelState: string
+  controlChannelError: string
+  controlChannelOpenRatio: string
+  controlChannelBufferedTrend: string
+  keyframeSuccessRate: string
+  recoveryCause: string
+  qualityLadderLevel: string
+  decisionDigest: string
+}
+
+/** rust-owned 内部诊断面板 */
+export interface StreamRustDiagnosticsViewModel {
+  transportState: string
+  videoHealth: string
+  primaryIssueChain: string
+  latestDecision: string
+  ownerState: string
+  ownerReason: string
+  decoderState: string
+  decoderEvent?: string
+  stallKind: string
+  recoveryDiagnosis: string
+  recoveryRfcFaultDomain: string
+  recoveryRfcStage: string
+  recoveryRfcCeiling: string
+  hostPresentTelemetry: string
+}
+
 export type StreamMicrophoneActivationSource = 'none' | 'policy' | 'user'
 export type StreamMicrophonePhase = 'closed' | 'starting' | 'live' | 'paused'
 
@@ -391,7 +452,7 @@ export interface StreamMicrophoneSnapshot {
 }
 
 export type StreamEnhancementMountPhase = 'inactive' | 'mounted' | 'suspended'
-export type StreamEnhancementId = 'diagnostics' | 'performance' | 'microphone'
+export type StreamEnhancementId = 'experience' | 'browserDiagnostics' | 'rustDiagnostics' | 'microphone'
 
 export interface StreamEnhancementMountState {
   phase: StreamEnhancementMountPhase
@@ -410,8 +471,9 @@ export interface StreamEnhancementBinding {
 export interface StreamEnhancementMountSnapshot {
   playingReady: boolean
   order: StreamEnhancementId[]
-  diagnostics: StreamEnhancementMountState
-  performance: StreamEnhancementMountState
+  experience: StreamEnhancementMountState
+  browserDiagnostics: StreamEnhancementMountState
+  rustDiagnostics: StreamEnhancementMountState
   microphone: StreamEnhancementMountState
 }
 

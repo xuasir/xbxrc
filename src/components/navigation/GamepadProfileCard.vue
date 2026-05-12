@@ -460,7 +460,7 @@ function deviceBatteryCaption(device: GamepadDeviceDto): string | null {
                         height="36"
                         decoding="async"
                         draggable="false"
-                      />
+                      >
                       <div class="gamepad-card__device-text-col">
                         <h3 class="gamepad-card__device-name">
                           {{ device.name }}

@@ -143,6 +143,8 @@
   --z-base: 0;
   --z-nav: 10;
   --z-sticky: 20;
+  /* 串流页角标按钮：高于画面内 HUD（~14），低于全屏遮罩与 ActionSheet（--z-overlay） */
+  --z-stream-chrome: 40;
   --z-overlay: 100;
   --z-drawer: 120;
   --z-modal: 140;

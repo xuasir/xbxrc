@@ -54,8 +54,9 @@ export function useStreamRuntimeHost(options: UseStreamRuntimeHostOptions) {
   const performanceTimer = ref<BrowserInterval | null>(null)
   const audioVolume = ref(1)
   const microphoneState = ref<StreamMicrophoneSnapshot>(createIdleMicrophoneState('browser'))
-  const performanceEnabled = ref(false)
-  const diagnosticsEnabled = ref(false)
+  const experienceMetricsEnabled = ref(false)
+  const browserDiagnosticsEnabled = ref(false)
+  const rustDiagnosticsEnabled = ref(false)
   const performanceSnapshot = ref<StreamStats | null>(null)
   const displayOptions = ref<DisplayOptionsValue>({ ...DEFAULT_DISPLAY_OPTIONS })
   const renderProjection = shallowRef<StreamRenderProjection | null>(null)
@@ -186,7 +187,10 @@ export function useStreamRuntimeHost(options: UseStreamRuntimeHostOptions) {
 
   function refreshStatsPolling(): void {
     clearPerformancePolling()
-    if ((!performanceEnabled.value && !diagnosticsEnabled.value) || runtime.value === null) {
+    if (
+      (!experienceMetricsEnabled.value && !browserDiagnosticsEnabled.value && !rustDiagnosticsEnabled.value)
+      || runtime.value === null
+    ) {
       performanceSnapshot.value = null
       return
     }
@@ -540,12 +544,16 @@ export function useStreamRuntimeHost(options: UseStreamRuntimeHostOptions) {
     lastFrameAt,
     closeRuntime,
     startRuntime,
-    setPerformanceEnabled(enabled: boolean) {
-      performanceEnabled.value = enabled
+    setExperienceMetricsEnabled(enabled: boolean) {
+      experienceMetricsEnabled.value = enabled
       refreshStatsPolling()
     },
-    setDiagnosticsEnabled(enabled: boolean) {
-      diagnosticsEnabled.value = enabled
+    setBrowserDiagnosticsEnabled(enabled: boolean) {
+      browserDiagnosticsEnabled.value = enabled
+      refreshStatsPolling()
+    },
+    setRustDiagnosticsEnabled(enabled: boolean) {
+      rustDiagnosticsEnabled.value = enabled
       refreshStatsPolling()
     },
     applyDisplayOptions(nextValue: DisplayOptionsValue) {
