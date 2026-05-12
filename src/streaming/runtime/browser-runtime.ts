@@ -49,6 +49,10 @@ import {
   DEFAULT_RECOVERY_ARBITER_WINDOW_MS,
 
 } from './runtime-host-policy'
+import {
+  resolveSuperResolutionRcasStops,
+  resolveSuperResolutionTierPlan,
+} from './super-resolution-ladder'
 
 const MEDIA_STALL_CHECK_INTERVAL_MS = 2_000
 const MEDIA_STALL_RECOVERY_BACKOFF_MIN_MS = 10_000
@@ -77,6 +81,51 @@ interface StallEvidenceSnapshot {
   inboundVideoFps?: number
   decodeFps?: number
   presentFps?: number
+}
+
+function normalizeObservedPresentationStats(stats: StreamStats): StreamStats {
+  const snapshot = stats as StreamStats & {
+    firstFrameStage?: string
+    renderCause?: string
+  }
+  const hasPresentationEvidence
+    = stats.presentationMilestone === 'mediaReady'
+      || snapshot.firstFrameStage === 'firstPresented'
+      || (stats.presentFps ?? 0) >= 1
+      || (stats.decodeFps ?? 0) >= 1
+      || (stats.inboundVideoFps ?? 0) >= 1
+  if (!hasPresentationEvidence) {
+    return stats
+  }
+
+  const staleOwner
+    = stats.recoveryOwnerState === 'seeking-anchor'
+      || stats.recoveryOwnerState === 'priming'
+      || stats.recoveryOwnerReason === 'seekingAnchor'
+      || stats.recoveryOwnerReason === 'priming'
+  const staleHealth = stats.presentationHealth === 'priming' || stats.videoHealth === 'priming'
+  const staleIssue
+    = stats.primaryIssueChain === 'startup:priming'
+      || stats.primaryIssueChain === 'recovery:transportAwaitRecoveryAnchor'
+      || stats.primaryIssueChain === 'local-self-healing:transportAwaitRecoveryAnchor'
+  const staleStall = stats.stallKind === 'startupPriming'
+  if (!staleOwner && !staleHealth && !staleIssue && !staleStall) {
+    return stats
+  }
+
+  const displaySupplyLimited = snapshot.renderCause === 'renderStarvation'
+  return {
+    ...stats,
+    recoveryOwnerState: displaySupplyLimited ? 'supply-starved' : 'stable-serving',
+    recoveryOwnerReason: displaySupplyLimited ? 'supplyStarved' : 'steady',
+    videoHealth: displaySupplyLimited ? 'displaySupplyStarved' : 'healthy',
+    presentationHealth: displaySupplyLimited ? 'displaySupplyStarved' : 'healthy',
+    primaryIssueChain: displaySupplyLimited ? 'display:supplyStarved' : 'steady:healthy',
+    latestDecisionSummary: displaySupplyLimited
+      ? 'owner:supply-starved:supplyStarved'
+      : 'owner:stable-serving:steady',
+    stallKind: displaySupplyLimited ? 'displaySupplyStarved' : 'none',
+  }
 }
 
 interface RecoveryActionEffectProbe {
@@ -249,6 +298,23 @@ function createPlayerClient(
   audioVolume: number,
 ): PlayerClient {
   const displayOptions = normalizeDisplayOptions(spec.render.displayOptions)
+  const tw = spec.runtime.targetVideoWidth
+  const th = spec.runtime.targetVideoHeight
+  const srUser = spec.clientExperimentalSuperResolution === true
+  const initialPlan = resolveSuperResolutionTierPlan(tw, th, tw, th)
+  const srRenderer: Partial<RendererRuntimeConfig> = srUser
+    ? {
+        superResolutionEnabled: true,
+        superResolutionAlgorithm: 'fsr1',
+        superResolutionOutputTier: initialPlan.outputTier,
+        superResolutionConfiguredTargetTier: `${initialPlan.configuredTier}`,
+        superResolutionOutputWidth: initialPlan.outputWidth,
+        superResolutionOutputHeight: initialPlan.outputHeight,
+        superResolutionRcasStops: resolveSuperResolutionRcasStops(initialPlan),
+        superResolutionFallbackProcessing: 'cas',
+        superResolutionInactiveAfterFailure: false,
+      }
+    : {}
 
   return new BrowserPlayerClient({
     container: playerElementId,
@@ -273,6 +339,7 @@ function createPlayerClient(
       saturation: displayOptions.saturation,
       targetFps: 60,
       format: toRendererFormat(spec.render.videoFormat ?? undefined),
+      ...srRenderer,
     },
     transport: {
       enableSdpPatch: shouldEnableSdpPatch(),
@@ -394,6 +461,12 @@ export function createBrowserRuntime(options: {
   let frontEndUpshiftBlockedReason: string | undefined
   let frontEndPolicyInputReason: FrontEndPolicyInputReason = 'healthy'
   let latestTransportPath: string | undefined
+  let srOutputFrozen: ReturnType<typeof resolveSuperResolutionTierPlan> | null = null
+  let srRcasStopsBase = 0.88
+  let srRcasStopsEffective = 0.88
+  let srAttachFailed = false
+  let srFallbackReason: string | null = null
+  let latestVideoDimensions: { width: number, height: number } | null = null
 
   function emit(event: RuntimeEvent): void {
     for (const listener of listeners) {
@@ -572,6 +645,51 @@ export function createBrowserRuntime(options: {
     }
   }
 
+  function resolveDynamicSuperResolutionRcasStops(input: {
+    baseStops: number
+    level: DisplayDegradeLevel
+    stats: StreamStats
+  }): number {
+    const inboundVideoBitrateKbps = input.stats.inboundVideoBitrateKbps ?? 0
+    const baseBitrate = Math.max(8_000, baseVideoBitrateKbps)
+    const bitrateRatio = inboundVideoBitrateKbps > 0 ? inboundVideoBitrateKbps / baseBitrate : 1
+    let stops = input.baseStops
+
+    if (input.level === 'displayL1') {
+      stops += 0.06
+    }
+    else if (input.level === 'displayL2') {
+      stops += 0.12
+    }
+
+    if (
+      bandwidthState === 'congested'
+      || networkConfidence === 'low'
+      || qualityLadderLevel === 'L2'
+      || bitrateRatio < effectiveFrontEndPolicy.adaptiveCongestedBitrateRatio
+    ) {
+      stops += 0.12
+    }
+    else if (
+      bandwidthState === 'warning'
+      || qualityLadderLevel === 'L1'
+      || renderCause === 'decodeBackpressure'
+      || bitrateRatio < effectiveFrontEndPolicy.adaptiveStableBitrateRatio
+    ) {
+      stops += 0.06
+    }
+    else if (
+      bandwidthState === 'stable'
+      && networkConfidence === 'high'
+      && qualityLadderLevel === 'L0'
+      && bitrateRatio > effectiveFrontEndPolicy.adaptiveStableBitrateRatio
+    ) {
+      stops -= 0.04
+    }
+
+    return Number(Math.max(0.6, Math.min(1.1, stops)).toFixed(2))
+  }
+
   function levelRank(level: DisplayDegradeLevel): number {
     if (level === 'displayL0')
       return 0
@@ -680,7 +798,8 @@ export function createBrowserRuntime(options: {
       shaderPreset: adaptive.shaderPreset,
     })
     const pipelineOverride = resolveRendererPipelineOverride()
-    const autoPipeline: 'video' | 'webgl2' = next === 'displayL2' ? 'video' : 'webgl2'
+    const srDegradeGuard = currentDisplayState.superResolutionExperimental === true && !srAttachFailed
+    const autoPipeline: 'video' | 'webgl2' = next === 'displayL2' && !srDegradeGuard ? 'video' : 'webgl2'
     const autoResolvedPipeline = webgl2Supported ? autoPipeline : 'video'
     const pipelineType = pipelineOverride === 'auto' ? autoResolvedPipeline : pipelineOverride
     const policySource: RenderPolicySource
@@ -729,6 +848,17 @@ export function createBrowserRuntime(options: {
         contrast: displayOptions.contrast,
         saturation: displayOptions.saturation,
       },
+    }
+    if (currentDisplayState.superResolutionExperimental === true && !srAttachFailed) {
+      srRcasStopsEffective = resolveDynamicSuperResolutionRcasStops({
+        baseStops: srRcasStopsBase,
+        level: next,
+        stats,
+      })
+      nextConfig[next] = {
+        ...nextConfig[next],
+        superResolutionRcasStops: srRcasStopsEffective,
+      }
     }
     if (visibilityBudgetActive) {
       nextConfig[next] = {
@@ -1088,6 +1218,66 @@ export function createBrowserRuntime(options: {
     }
   }
 
+  function freezeSuperResolutionOutputIfNeeded(videoWidth: number, videoHeight: number): void {
+    if (client === null || currentSpec === null || currentDisplayState === null) {
+      return
+    }
+    latestVideoDimensions = { width: videoWidth, height: videoHeight }
+    if (currentDisplayState.superResolutionExperimental !== true) {
+      return
+    }
+    if (srOutputFrozen !== null) {
+      return
+    }
+    if (videoWidth <= 0 || videoHeight <= 0) {
+      return
+    }
+    const tw = currentSpec.runtime.targetVideoWidth
+    const th = currentSpec.runtime.targetVideoHeight
+    const plan = resolveSuperResolutionTierPlan(tw, th, videoWidth, videoHeight)
+    srOutputFrozen = plan
+    srRcasStopsBase = resolveSuperResolutionRcasStops(plan)
+    srRcasStopsEffective = srRcasStopsBase
+    assertClient().updateRenderer({
+      superResolutionOutputTier: plan.outputTier,
+      superResolutionConfiguredTargetTier: `${plan.configuredTier}`,
+      superResolutionOutputWidth: plan.outputWidth,
+      superResolutionOutputHeight: plan.outputHeight,
+      superResolutionRcasStops: srRcasStopsBase,
+    })
+    void recordRuntimeTraceEvent('superResolutionTierFrozen', {
+      outputTier: plan.outputTier,
+      configuredTier: plan.configuredTier,
+      actualSourceTier: plan.actualSourceTier,
+      rcasStopsBase: srRcasStopsBase,
+    })
+  }
+
+  function updateSuperResolutionRuntimeState(options?: {
+    retryAfterExplicitEnable?: boolean
+    freezeFromLatestVideoIfAvailable?: boolean
+  }): void {
+    if (client === null || currentDisplayState === null) {
+      return
+    }
+    const srEnabled = currentDisplayState.superResolutionExperimental === true
+    if (srEnabled && options?.retryAfterExplicitEnable === true) {
+      srAttachFailed = false
+      srFallbackReason = null
+    }
+    if (srEnabled
+      && options?.freezeFromLatestVideoIfAvailable === true
+      && srOutputFrozen === null
+      && latestVideoDimensions !== null) {
+      freezeSuperResolutionOutputIfNeeded(latestVideoDimensions.width, latestVideoDimensions.height)
+    }
+    assertClient().updateRenderer({
+      superResolutionEnabled: srEnabled,
+      superResolutionInactiveAfterFailure: srAttachFailed,
+      superResolutionRcasStops: srEnabled ? srRcasStopsEffective : srRcasStopsBase,
+    })
+  }
+
   function bindClientEvents(nextClient: PlayerClient): void {
     const eventBus = nextClient.events()
     clientCleanups.push(
@@ -1098,11 +1288,17 @@ export function createBrowserRuntime(options: {
       eventBus.on('chat.stateChanged', ({ capturing, paused }) => {
         emit({ type: 'microphoneStateChanged', capturing, paused })
       }),
-      eventBus.on('media.videoReady', () => {
+      eventBus.on('media.videoReady', ({ width, height }) => {
         if (transportState === 'connected') {
           emitConnectedMilestoneIfPending(Date.now(), 'connected')
         }
+        freezeSuperResolutionOutputIfNeeded(width, height)
         applyCurrentDisplayState()
+      }),
+      eventBus.on('media.superResolutionFallback', ({ reason }) => {
+        srAttachFailed = true
+        srFallbackReason = reason
+        void recordRuntimeTraceEvent('superResolutionFallback', { reason })
       }),
       eventBus.on('stats.videoFrameProcessed', () => {
         markFrameReady()
@@ -2410,9 +2606,23 @@ export function createBrowserRuntime(options: {
   const runtime: RuntimePort = {
     async launch(spec) {
       currentSpec = spec
+      srOutputFrozen = null
+      srRcasStopsBase = resolveSuperResolutionRcasStops(
+        resolveSuperResolutionTierPlan(
+          spec.runtime.targetVideoWidth,
+          spec.runtime.targetVideoHeight,
+          spec.runtime.targetVideoWidth,
+          spec.runtime.targetVideoHeight,
+        ),
+      )
+      srRcasStopsEffective = srRcasStopsBase
+      srAttachFailed = false
+      srFallbackReason = null
+      latestVideoDimensions = null
       currentDisplayState = {
         displayOptions: normalizeDisplayOptions(spec.render.displayOptions),
         render: spec.render,
+        superResolutionExperimental: spec.clientExperimentalSuperResolution === true,
       }
       reconnectPromise = null
       transportState = 'new'
@@ -2647,11 +2857,21 @@ export function createBrowserRuntime(options: {
       return await reconnectPromise
     },
     applyDisplayState(state) {
+      const previousSuperResolutionEnabled = currentDisplayState?.superResolutionExperimental === true
       currentDisplayState = {
         displayOptions: normalizeDisplayOptions(state.displayOptions),
         render: state.render,
+        superResolutionExperimental: state.superResolutionExperimental === true,
       }
       applyCurrentDisplayState()
+      if (client !== null) {
+        updateSuperResolutionRuntimeState({
+          retryAfterExplicitEnable:
+            previousSuperResolutionEnabled !== true
+            && currentDisplayState.superResolutionExperimental === true,
+          freezeFromLatestVideoIfAvailable: currentDisplayState.superResolutionExperimental === true,
+        })
+      }
     },
     setAudioVolume(value) {
       audioVolume = value
@@ -2682,7 +2902,7 @@ export function createBrowserRuntime(options: {
       const stats = await assertClient().stats().snapshot()
       const now = Date.now()
       const controlChannelHealth = assertClient().getControlChannelHealthSnapshot()
-      return {
+      return normalizeObservedPresentationStats({
         ...stats,
         streamLifecyclePhase: runtimePhase,
         sessionPhase: runtimePhase,
@@ -2731,6 +2951,25 @@ export function createBrowserRuntime(options: {
         renderShaderPath,
         renderFpsBudget,
         rendererCapabilityReason,
+        renderSuperResolutionEnabled: currentDisplayState?.superResolutionExperimental === true,
+        renderSuperResolutionActive: currentDisplayState?.superResolutionExperimental === true
+          && !srAttachFailed
+          && srOutputFrozen !== null,
+        renderSuperResolutionAlgorithm: currentDisplayState?.superResolutionExperimental === true
+          ? 'fsr1'
+          : undefined,
+        renderSuperResolutionConfiguredTarget: srOutputFrozen?.configuredTier,
+        renderSuperResolutionOutputTarget: srOutputFrozen?.outputTier,
+        renderSuperResolutionRcasStops: currentDisplayState?.superResolutionExperimental === true
+          ? srRcasStopsEffective
+          : undefined,
+        renderSuperResolutionRcasBaseStops: currentDisplayState?.superResolutionExperimental === true
+          ? srRcasStopsBase
+          : undefined,
+        renderSuperResolutionFallbackReason: srFallbackReason,
+        renderSharpenMode: (currentDisplayState?.superResolutionExperimental === true && !srAttachFailed)
+          ? 'fsr1_rcas'
+          : (renderShaderPath ?? 'none'),
         icePolicyMode,
         icePolicyDigest,
         frontEndProfileBaseline: runtimeProfileClassification.baseline,
@@ -2749,7 +2988,7 @@ export function createBrowserRuntime(options: {
         mediaReadyMilestoneElapsedMs: mediaReadyMilestoneAt === null
           ? undefined
           : Math.max(0, now - mediaReadyMilestoneAt),
-      }
+      })
     },
     subscribe(listener) {
       listeners.add(listener)

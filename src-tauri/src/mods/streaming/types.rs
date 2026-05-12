@@ -140,9 +140,10 @@ pub struct StreamingTurnServerConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "kebab-case")]
 pub enum StreamingRuntimeMode {
+    #[serde(rename = "webrtc-direct")]
     WebRtcDirect,
+    #[serde(rename = "rust-owned")]
     RustOwned,
 }
 
@@ -798,6 +799,7 @@ pub struct StreamingConfigSnapshot {
     pub enable_audio_control: bool,
     pub video_format: String,
     pub display_options: StreamingDisplayOptionsValue,
+    pub super_resolution_experimental: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -913,5 +915,22 @@ impl From<DomainRenderDisplayOptionsProjection> for StreamingDisplayOptionsValue
             contrast: options.contrast,
             brightness: options.brightness,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::StreamingRuntimeMode;
+
+    #[test]
+    fn streaming_runtime_mode_serializes_with_contract_values() {
+        let serialized = serde_json::to_string(&StreamingRuntimeMode::WebRtcDirect).unwrap();
+        assert_eq!(serialized, "\"webrtc-direct\"");
+    }
+
+    #[test]
+    fn streaming_runtime_mode_deserializes_with_contract_values() {
+        let parsed: StreamingRuntimeMode = serde_json::from_str("\"webrtc-direct\"").unwrap();
+        assert_eq!(parsed, StreamingRuntimeMode::WebRtcDirect);
     }
 }

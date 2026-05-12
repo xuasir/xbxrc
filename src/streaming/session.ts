@@ -72,6 +72,7 @@ export const STREAM_POLICY_CONFIG_KEYS = [
   'codec',
   'video_format',
   'display_options',
+  'super_resolution_experimental',
   'ice_policy_enabled',
   'ice_policy_prefer_ipv6',
   'ice_policy_prefer_udp',
@@ -204,6 +205,14 @@ export async function sendTextToRemoteConsole(consoleId: string, text: string): 
     text,
   })
   return result.accepted
+}
+
+export async function persistStreamSuperResolutionExperimental(enabled: boolean): Promise<void> {
+  await rpc.config.set({
+    patch: {
+      super_resolution_experimental: enabled,
+    },
+  })
 }
 
 export async function persistStreamDisplayOptions(

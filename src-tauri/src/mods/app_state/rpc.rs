@@ -16,6 +16,11 @@ pub enum AppCommand {
     ResetAutoConnect,
     ClearUserData,
     ClearData,
+    #[serde(rename_all = "camelCase")]
+    SaveBinaryFile {
+        suggested_name: String,
+        data_base64: String,
+    },
     Restart,
     Quit,
 }
@@ -71,6 +76,12 @@ pub async fn handle_rpc(
                 "restarted": true
             }))
         }
+        AppCommand::SaveBinaryFile {
+            suggested_name,
+            data_base64,
+        } => Ok(serde_json::to_value(
+            service.save_binary_file(&suggested_name, &data_base64)?,
+        )?),
         AppCommand::Restart => {
             service.restart().await;
             Ok(json!({ "accepted": true }))

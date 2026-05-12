@@ -54,6 +54,7 @@ export const CONFIG_FIELD_RPC_GROUP: Record<string, RpcConfigGroupKey> = {
   audio_bitrate_mode: 'streaming',
   audio_bitrate: 'streaming',
   performance_style: 'streaming',
+  super_resolution_experimental: 'streaming',
   codec: 'streaming',
   force_region_ip: 'streaming',
   preferred_game_language: 'streaming',
@@ -113,6 +114,11 @@ const PAGE_STREAMING: SettingSchemaSectionDef[] = [
       { kind: 'field', fieldKey: 'audio_bitrate' },
       { kind: 'field', fieldKey: 'performance_style' },
     ],
+  },
+  {
+    key: 'advanced',
+    labelKey: 'setting.pages.streamingExperience.sectionAdvanced',
+    items: [{ kind: 'field', fieldKey: 'super_resolution_experimental' }],
   },
   {
     key: 'console',

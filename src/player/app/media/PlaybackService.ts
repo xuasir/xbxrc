@@ -6,6 +6,7 @@ import type {
 import type { InputService } from '../input/InputService'
 import {
   NativeVideoRenderer,
+  SuperResolutionWebGL2Renderer,
   WebGL2VideoRenderer,
 } from '../../infra/render/Renderers'
 
@@ -88,6 +89,9 @@ export class PlaybackService {
 
   private createRenderer(config: RendererRuntimeConfig): VideoRenderer {
     const kind = this.resolveRendererKind(config)
+    if (kind === 'webgl2_sr') {
+      return new SuperResolutionWebGL2Renderer(config)
+    }
     return kind === 'webgl2'
       ? new WebGL2VideoRenderer(config)
       : new NativeVideoRenderer(config)
@@ -98,6 +102,42 @@ export class PlaybackService {
       await this.renderer.attach(video)
     }
     catch (error) {
+      if (this.renderer.kind === 'webgl2_sr') {
+        this.renderer.destroy()
+        const fb = this.rendererConfig.superResolutionFallbackProcessing ?? 'cas'
+        this.rendererConfig = {
+          ...this.rendererConfig,
+          superResolutionInactiveAfterFailure: true,
+          pipelineType: 'webgl2',
+          mode: 'webgl2',
+          processing: fb,
+        }
+        this.renderer = this.createRenderer(this.rendererConfig)
+        try {
+          await this.renderer.attach(video)
+          this.emitter.emit('media.superResolutionFallback', {
+            reason: error instanceof Error ? error.message : 'attachFailed',
+          })
+          return
+        }
+        catch {
+          this.renderer.destroy()
+          this.rendererConfig = {
+            ...this.rendererConfig,
+            pipelineType: 'video',
+            mode: 'native',
+          }
+          this.renderer = this.createRenderer(this.rendererConfig)
+          try {
+            await this.renderer.attach(video)
+            return
+          }
+          catch (videoFallbackError) {
+            this.emitter.emit('error', { error: videoFallbackError })
+            return
+          }
+        }
+      }
       if (this.renderer.kind === 'webgl2') {
         this.renderer.destroy()
         this.rendererConfig = {
@@ -119,14 +159,26 @@ export class PlaybackService {
     }
   }
 
-  private resolveRendererKind(config: RendererRuntimeConfig): 'video' | 'webgl2' {
+  private resolveRendererKind(config: RendererRuntimeConfig): 'video' | 'webgl2' | 'webgl2_sr' {
     if (!config.enabled) {
       return 'video'
     }
-    if (config.pipelineType === 'video' || config.pipelineType === 'webgl2') {
-      return config.pipelineType
+    let base: 'video' | 'webgl2' = 'video'
+    if (config.pipelineType === 'video') {
+      base = 'video'
     }
-    return config.mode === 'webgl2' ? 'webgl2' : 'video'
+    else if (config.pipelineType === 'webgl2') {
+      base = 'webgl2'
+    }
+    else {
+      base = config.mode === 'webgl2' ? 'webgl2' : 'video'
+    }
+    if (base === 'webgl2'
+      && config.superResolutionEnabled === true
+      && config.superResolutionInactiveAfterFailure !== true) {
+      return 'webgl2_sr'
+    }
+    return base
   }
 
   private startVideoFrameTracking(video: HTMLVideoElement): void {

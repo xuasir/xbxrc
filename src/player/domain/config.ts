@@ -39,6 +39,10 @@ export function DEFAULT_PLAYER_OPTIONS(): PlayerClientOptions {
       targetFps: 60,
       mode: 'webgl2',
       format: 'Contain',
+      superResolutionEnabled: false,
+      superResolutionAlgorithm: 'fsr1',
+      superResolutionRcasStops: 0.88,
+      superResolutionFallbackProcessing: 'cas',
     },
     transport: {
       enableSdpPatch: true,

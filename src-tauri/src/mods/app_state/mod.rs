@@ -2,7 +2,8 @@ pub mod rpc;
 pub mod service;
 
 pub use service::{
-    AppStateService, ClearDataResult, ClearUserDataResult, PingPayload, StartupFlagsPayload,
+    AppStateService, ClearDataResult, ClearUserDataResult, PingPayload, SaveBinaryFileResult,
+    StartupFlagsPayload,
 };
 
 use async_trait::async_trait;
@@ -24,6 +25,11 @@ pub trait AppStateProvider: Send + Sync {
     async fn restart(&self);
     async fn restart_delayed(&self, delay_ms: u64);
     fn open_external(&self, url: &str) -> Result<(), String>;
+    fn save_binary_file(
+        &self,
+        suggested_name: &str,
+        data_base64: &str,
+    ) -> Result<SaveBinaryFileResult, String>;
 }
 
 pub type AppStateProviderRef = Arc<dyn AppStateProvider>;

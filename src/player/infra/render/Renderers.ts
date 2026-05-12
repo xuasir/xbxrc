@@ -368,7 +368,7 @@ void main() {
 }
 
 export interface VideoRenderer {
-  readonly kind: 'video' | 'webgl2'
+  readonly kind: 'video' | 'webgl2' | 'webgl2_sr'
   attach: (video: HTMLVideoElement) => Promise<void> | void
   update: (config: Partial<RendererRuntimeConfig>) => void
   destroy: () => void
@@ -493,3 +493,5 @@ export class WebGL2VideoRenderer implements VideoRenderer {
     this.player = null
   }
 }
+
+export { SuperResolutionWebGL2Renderer } from './SuperResolutionWebGL2Renderer'

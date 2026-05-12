@@ -121,6 +121,10 @@
       "menu": "Menu",
       "fullscreen": "Toggle Fullscreen",
       "display": "Display Settings",
+      "enableSuperResolution": "Enable Super Resolution (Experimental)",
+      "disableSuperResolution": "Disable Super Resolution (Experimental)",
+      "exportSuperResolutionComparison": "Export Super Resolution A/B Capture",
+      "exportingSuperResolutionComparison": "Exporting Super Resolution A/B Capture",
       "audio": "Audio Settings",
       "showPerformance": "Show Performance Panel",
       "hidePerformance": "Hide Performance Panel",
@@ -172,7 +176,8 @@
         "CtrlCh": "Control Channel",
         "KfSucc": "Keyframe Success",
         "Cause": "Recovery Cause",
-        "QLevel": "Quality Level",
+        "QLevelTx": "Quality Level Tx",
+        "QLevelRender": "Quality Level Render",
         "NetConf": "Network Confidence",
         "DecConf": "Decode Confidence",
         "RecoLv": "Recovery Level",
@@ -221,9 +226,19 @@
         "HardFallbackReset": "Hard Fallback Reset",
         "LastAct": "Last Act",
         "LastWhy": "Last Why",
-        "DT": "DT"
+        "DT": "DT",
+        "SRExp": "Super Resolution (experimental)",
+        "SRRun": "SR runtime state"
       },
-      "values": {}
+      "values": {
+        "srSettingOn": "On",
+        "srSettingOff": "Off",
+        "srRunOff": "Not enabled",
+        "srRunActive": "{alg} → {tier}",
+        "srRunFallback": "Fallback: {reason}",
+        "srRunPending": "Waiting for tier lock / video",
+        "srRunUnsupported": "This session did not expose SR runtime state"
+      }
     },
     "badges": {
       "title": "Stream Diagnostics",
@@ -289,7 +304,9 @@
         "latestDecision": "Latest Decision",
         "stall": "Stall Kind",
         "stallKind": "Stall Kind",
-        "status": "Status"
+        "status": "Status",
+        "srSetting": "Super Resolution (experimental)",
+        "srRuntime": "SR runtime state"
       },
       "values": {
         "unknown": "--",
@@ -491,7 +508,11 @@
       "wakeFailed": "Failed to wake the console. Verify it is online and remote features are enabled.",
       "remoteConsoleNotReady": "The console has not finished registering for remote streaming yet. Diagnostic details: {details}",
       "targetMissing": "Stream target id is missing",
-      "powerOffFailed": "The power-off command was not accepted. Verify remote features are enabled and try again."
+      "powerOffFailed": "The power-off command was not accepted. Verify remote features are enabled and try again.",
+      "streamCaptureSourceUnavailable": "No exportable video source is available yet. Wait for the picture to stabilize and try again.",
+      "streamComparisonSaveFailed": "The A/B comparison image could not be saved.",
+      "streamFrameCaptureFailed": "The current picture could not be captured.",
+      "streamComparisonExportFailed": "Failed to export the Super Resolution A/B comparison image."
     }
   },
   "login": {
@@ -648,6 +669,7 @@
       "streamingExperience": {
         "title": "Streaming",
         "sectionShared": "General",
+        "sectionAdvanced": "Advanced",
         "sectionConsole": "Console streaming",
         "sectionCloud": "Cloud gaming"
       },
@@ -991,6 +1013,10 @@
       },
       "ipv6": { "label": "Prefer IPv6" },
       "performance_style": { "label": "Compact performance overlay" },
+      "super_resolution_experimental": {
+        "label": "Super Resolution (Experimental)",
+        "description": "Browser FSR1 spatial upscale; may increase GPU load. Falls back to standard sharpening on failure."
+      },
       "stream_runtime_mode": {
         "label": "Streaming runtime",
         "options": {

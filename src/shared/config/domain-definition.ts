@@ -220,6 +220,7 @@ export const CONFIG_GROUP_DEFINITIONS: Record<string, SettingGroupDefinition> = 
           'stream_runtime_mode',
           'xhome_turn_fallback',
           'display_options',
+          'super_resolution_experimental',
         ],
       },
       {
@@ -463,6 +464,11 @@ export const CONFIG_FIELD_DEFINITIONS: Record<string, SettingFieldDefinition> = 
     label: 'Picture style',
     control: 'singleSelect',
     options: DISPLAY_PRESET_OPTIONS,
+  },
+  super_resolution_experimental: {
+    label: 'Super Resolution (Experimental)',
+    description: 'Browser FSR1 spatial upscale; may increase GPU load. Falls back to standard sharpening on failure.',
+    control: 'toggle',
   },
   use_vulkan: {
     label: 'Use Vulkan rendering',

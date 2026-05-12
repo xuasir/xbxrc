@@ -67,6 +67,8 @@ const {
 } = execution
 const dismissWarning = actions.dismissWarning
 const sendingText = ref(false)
+const exportingSrComparison = ref(false)
+const exportSrComparisonError = ref('')
 
 interface StreamMenuActionViewModel {
   id: string
@@ -204,6 +206,13 @@ const microphoneBinding = computed(() =>
   resolveEnhancementBinding(enhancementBindings.value, 'microphone'),
 )
 
+const exportSrComparisonErrorActions = computed(() => [
+  {
+    id: 'dismiss',
+    label: t('streamPage.actions.back'),
+  },
+])
+
 const streamMenuActions = computed<StreamMenuActionViewModel[]>(() => {
   if (!isConnected.value) {
     return [
@@ -239,6 +248,22 @@ const streamMenuActions = computed<StreamMenuActionViewModel[]>(() => {
     items.push({
       id: 'display',
       label: t('streamPage.actions.display'),
+    })
+  }
+
+  if (ability.canToggleSuperResolution.value) {
+    items.push({
+      id: 'toggleSuperResolution',
+      label: execution.superResolutionExperimental.value
+        ? t('streamPage.actions.disableSuperResolution')
+        : t('streamPage.actions.enableSuperResolution'),
+    })
+    items.push({
+      id: 'exportSuperResolutionComparison',
+      label: exportingSrComparison.value
+        ? t('streamPage.actions.exportingSuperResolutionComparison')
+        : t('streamPage.actions.exportSuperResolutionComparison'),
+      disabled: exportingSrComparison.value,
     })
   }
 
@@ -437,9 +462,186 @@ async function handleDisplaySubmit(value: DisplayOptionsValue): Promise<void> {
   closeSheet('display')
 }
 
+function resolveStreamCaptureSource(): HTMLCanvasElement | HTMLVideoElement | null {
+  const container = document.getElementById('stream-page-video')
+  if (container === null) {
+    return null
+  }
+  const canvases = Array.from(container.querySelectorAll('canvas'))
+    .filter((node): node is HTMLCanvasElement => node instanceof HTMLCanvasElement)
+    .filter(node => node.width > 1 && node.height > 1)
+  if (canvases.length > 0) {
+    return canvases[canvases.length - 1] ?? null
+  }
+  const video = container.querySelector('video')
+  if (video instanceof HTMLVideoElement && video.videoWidth > 1 && video.videoHeight > 1) {
+    return video
+  }
+  return null
+}
+
+async function waitForStreamCaptureSource(timeoutMs = 2_500): Promise<HTMLCanvasElement | HTMLVideoElement> {
+  const deadline = performance.now() + timeoutMs
+  while (performance.now() < deadline) {
+    const source = resolveStreamCaptureSource()
+    if (source !== null) {
+      return source
+    }
+    await waitForAnimationFrames(1)
+  }
+  throw new Error('streamCaptureSourceUnavailable')
+}
+
+function captureSourceFrame(source: HTMLCanvasElement | HTMLVideoElement): HTMLCanvasElement {
+  const width = source instanceof HTMLCanvasElement ? source.width : source.videoWidth
+  const height = source instanceof HTMLCanvasElement ? source.height : source.videoHeight
+  const frame = document.createElement('canvas')
+  frame.width = Math.max(1, width)
+  frame.height = Math.max(1, height)
+  const context = frame.getContext('2d')
+  if (context === null) {
+    throw new Error('streamFrameCaptureContextUnavailable')
+  }
+  context.drawImage(source, 0, 0, frame.width, frame.height)
+  return frame
+}
+
+function waitForAnimationFrames(count: number): Promise<void> {
+  return new Promise((resolve) => {
+    let remaining = Math.max(1, count)
+    const step = () => {
+      remaining -= 1
+      if (remaining <= 0) {
+        resolve()
+        return
+      }
+      window.requestAnimationFrame(step)
+    }
+    window.requestAnimationFrame(step)
+  })
+}
+
+function composeSrComparisonCanvas(input: {
+  before: HTMLCanvasElement
+  after: HTMLCanvasElement
+  beforeLabel: string
+  afterLabel: string
+}): HTMLCanvasElement {
+  const headerHeight = 56
+  const gutter = 12
+  const beforeWidth = Math.max(1, input.before.width)
+  const beforeHeight = Math.max(1, input.before.height)
+  const afterWidth = Math.max(1, input.after.width)
+  const afterHeight = Math.max(1, input.after.height)
+  const contentHeight = Math.max(beforeHeight, afterHeight)
+  const canvas = document.createElement('canvas')
+  canvas.width = beforeWidth + afterWidth + gutter * 3
+  canvas.height = contentHeight + headerHeight + gutter * 2
+  const context = canvas.getContext('2d')
+  if (context === null) {
+    throw new Error('streamComparisonComposeContextUnavailable')
+  }
+  context.fillStyle = '#0b1220'
+  context.fillRect(0, 0, canvas.width, canvas.height)
+  context.fillStyle = '#f8fafc'
+  context.font = '600 20px system-ui'
+  context.textBaseline = 'middle'
+  context.fillText(input.beforeLabel, gutter, headerHeight / 2)
+  context.fillText(input.afterLabel, gutter * 2 + beforeWidth, headerHeight / 2)
+  context.drawImage(input.before, gutter, headerHeight + gutter, beforeWidth, beforeHeight)
+  context.drawImage(
+    input.after,
+    gutter * 2 + beforeWidth,
+    headerHeight + gutter,
+    afterWidth,
+    afterHeight,
+  )
+  return canvas
+}
+
+async function saveCanvasAsPng(canvas: HTMLCanvasElement, filename: string): Promise<void> {
+  const dataUrl = canvas.toDataURL('image/png')
+  const payload = dataUrl.replace(/^data:image\/png;base64,/, '')
+  const result = await rpc.app.saveBinaryFile({
+    suggestedName: filename,
+    dataBase64: payload,
+  })
+  if (!result.saved && !result.canceled) {
+    throw new Error('streamComparisonSaveFailed')
+  }
+}
+
+function resolveSrComparisonExportErrorMessage(error: unknown): string {
+  const code = error instanceof Error ? error.message : String(error)
+  if (code === 'streamCaptureSourceUnavailable') {
+    return t('streamPage.errors.streamCaptureSourceUnavailable')
+  }
+  if (code === 'streamComparisonSaveFailed') {
+    return t('streamPage.errors.streamComparisonSaveFailed')
+  }
+  if (code === 'streamFrameCaptureContextUnavailable' || code === 'streamComparisonComposeContextUnavailable') {
+    return t('streamPage.errors.streamFrameCaptureFailed')
+  }
+  return t('streamPage.errors.streamComparisonExportFailed')
+}
+
+async function exportSuperResolutionComparison(): Promise<void> {
+  if (exportingSrComparison.value) {
+    return
+  }
+  exportingSrComparison.value = true
+  exportSrComparisonError.value = ''
+  const originalEnabled = execution.superResolutionExperimental.value
+  const alternateEnabled = !originalEnabled
+  try {
+    await waitForAnimationFrames(2)
+    const beforeSource = await waitForStreamCaptureSource()
+    const beforeFrame = captureSourceFrame(beforeSource)
+    await actions.setSuperResolutionExperimental(alternateEnabled)
+    await waitForAnimationFrames(2)
+    const afterSource = await waitForStreamCaptureSource()
+    await waitForAnimationFrames(2)
+    const afterFrame = captureSourceFrame(afterSource)
+    const comparison = composeSrComparisonCanvas({
+      before: beforeFrame,
+      after: afterFrame,
+      beforeLabel: `A: ${originalEnabled ? t('streamPage.performance.values.srSettingOn') : t('streamPage.performance.values.srSettingOff')}`,
+      afterLabel: `B: ${alternateEnabled ? t('streamPage.performance.values.srSettingOn') : t('streamPage.performance.values.srSettingOff')}`,
+    })
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-')
+    await saveCanvasAsPng(comparison, `stream-sr-ab-${stamp}.png`)
+  }
+  catch (error) {
+    exportSrComparisonError.value = resolveSrComparisonExportErrorMessage(error)
+    void rpc.runtimeTrace.recordEvent({
+      event: 'exportSuperResolutionComparisonFailed',
+      sessionId: execution.sessionId.value !== '' ? execution.sessionId.value : null,
+      payload: {
+        source: 'stream-page',
+        code: error instanceof Error ? error.message : String(error),
+      },
+    })
+  }
+  finally {
+    try {
+      if (execution.superResolutionExperimental.value !== originalEnabled) {
+        await actions.setSuperResolutionExperimental(originalEnabled)
+        await waitForAnimationFrames(2)
+      }
+    }
+    finally {
+      exportingSrComparison.value = false
+    }
+  }
+}
+
 function handleAudioChange(value: number): void {
   revealChrome()
   actions.setAudioVolume(value)
+}
+
+function dismissExportSrComparisonError(): void {
+  exportSrComparisonError.value = ''
 }
 
 async function handleStreamMenuAction(id: string): Promise<void> {
@@ -454,6 +656,14 @@ async function handleStreamMenuAction(id: string): Promise<void> {
     },
     display: () => {
       openDisplaySheet()
+    },
+    toggleSuperResolution: async () => {
+      revealChrome()
+      await actions.toggleSuperResolutionExperimental()
+    },
+    exportSuperResolutionComparison: async () => {
+      revealChrome()
+      await exportSuperResolutionComparison()
     },
     audio: () => {
       openAudioSheet()
@@ -511,6 +721,7 @@ async function handleStreamMenuAction(id: string): Promise<void> {
         :diagnostics="diagnostics"
         :mount="diagnosticsBinding"
         :runtime-mode="runtimeMode"
+        :super-resolution-experimental="execution.superResolutionExperimental.value"
       />
       <StreamPerformancePanel
         :visible="performanceVisible && (isConnected || performanceBinding.phase === 'mounted')"
@@ -666,6 +877,15 @@ async function handleStreamMenuAction(id: string): Promise<void> {
         :actions="warningSheetActions"
         @close="dismissWarning"
         @select="handleWarningSheetAction"
+      />
+      <StreamAlertSheet
+        :open="exportSrComparisonError !== ''"
+        scope-id="stream.export-sr-comparison-error-sheet"
+        :title="t('streamPage.actions.exportSuperResolutionComparison')"
+        :body="exportSrComparisonError"
+        :actions="exportSrComparisonErrorActions"
+        @close="dismissExportSrComparisonError"
+        @select="dismissExportSrComparisonError"
       />
 
       <svg id="stream-video-filters" class="stream-page__filters" aria-hidden="true">

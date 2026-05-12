@@ -89,6 +89,13 @@ export function buildStreamDiagnosticsSnapshot(input: {
   const renderShaderPath = input.runtimeSnapshot?.renderShaderPath
   const renderFpsBudget = input.runtimeSnapshot?.renderFpsBudget
   const rendererCapabilityReason = input.runtimeSnapshot?.rendererCapabilityReason?.trim() || undefined
+  const renderSuperResolutionEnabled = input.runtimeSnapshot?.renderSuperResolutionEnabled
+  const renderSuperResolutionActive = input.runtimeSnapshot?.renderSuperResolutionActive
+  const renderSuperResolutionAlgorithm = input.runtimeSnapshot?.renderSuperResolutionAlgorithm
+  const renderSuperResolutionConfiguredTarget = input.runtimeSnapshot?.renderSuperResolutionConfiguredTarget
+  const renderSuperResolutionOutputTarget = input.runtimeSnapshot?.renderSuperResolutionOutputTarget
+  const renderSuperResolutionFallbackReason = input.runtimeSnapshot?.renderSuperResolutionFallbackReason
+  const renderSharpenMode = input.runtimeSnapshot?.renderSharpenMode
   const icePolicyMode = input.runtimeSnapshot?.icePolicyMode
   const icePolicyDigest = input.runtimeSnapshot?.icePolicyDigest?.trim() || undefined
   const frontEndProfileBaseline = input.runtimeSnapshot?.frontEndProfileBaseline
@@ -252,6 +259,13 @@ export function buildStreamDiagnosticsSnapshot(input: {
     renderShaderPath,
     renderFpsBudget,
     rendererCapabilityReason,
+    renderSuperResolutionEnabled,
+    renderSuperResolutionActive,
+    renderSuperResolutionAlgorithm,
+    renderSuperResolutionConfiguredTarget,
+    renderSuperResolutionOutputTarget,
+    renderSuperResolutionFallbackReason,
+    renderSharpenMode,
     icePolicyMode,
     icePolicyDigest,
     frontEndProfileBaseline,

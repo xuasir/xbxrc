@@ -21,6 +21,7 @@ interface StreamDiagnosticsPanelProps {
   mount: StreamEnhancementMountState
   diagnostics: StreamSessionDiagnosticsSnapshot
   runtimeMode: 'webrtc-direct' | 'rust-owned'
+  superResolutionExperimental?: boolean
 }
 
 interface StreamDiagnosticsRowViewModel {
@@ -66,6 +67,8 @@ interface StreamDiagnosticsRowViewModel {
     | 'decoderState'
     | 'stallKind'
     | 'status'
+    | 'srSetting'
+    | 'srRuntime'
   value: string
 }
 
@@ -79,6 +82,26 @@ const props = defineProps<StreamDiagnosticsPanelProps>()
 
 const { t, te } = useI18n()
 const isBrowserMode = computed(() => props.runtimeMode === 'webrtc-direct')
+
+function formatSrRuntimeDiagnostics(d: StreamSessionDiagnosticsSnapshot): string {
+  if (d.renderSuperResolutionEnabled !== true) {
+    return t('streamPage.performance.values.srRunOff')
+  }
+  if (d.renderSuperResolutionActive === true) {
+    const tier = d.renderSuperResolutionOutputTarget ?? d.renderSuperResolutionConfiguredTarget ?? ''
+    const alg = (d.renderSuperResolutionAlgorithm ?? 'fsr1').toUpperCase()
+    return t('streamPage.performance.values.srRunActive', {
+      alg,
+      tier: tier !== '' ? String(tier) : '?',
+    })
+  }
+  const reason = d.renderSuperResolutionFallbackReason?.trim()
+  if (reason) {
+    const short = reason.length > 48 ? `${reason.slice(0, 45)}…` : reason
+    return t('streamPage.performance.values.srRunFallback', { reason: short })
+  }
+  return t('streamPage.performance.values.srRunPending')
+}
 
 const panelVisible = computed(() =>
   props.visible && props.mount.phase === 'mounted',
@@ -125,6 +148,14 @@ const rows = computed<StreamDiagnosticsRowViewModel[]>(() => {
     pushIf('presentationMilestone', props.diagnostics.presentationMilestone ?? t('streamPage.diagnostics.values.unknown'), true)
     pushIf('connectedElapsed', props.diagnostics.connectedMilestoneElapsedText)
     pushIf('mediaReadyElapsed', props.diagnostics.mediaReadyMilestoneElapsedText)
+    pushIf(
+      'srSetting',
+      props.diagnostics.renderSuperResolutionEnabled === true
+        ? t('streamPage.performance.values.srSettingOn')
+        : t('streamPage.performance.values.srSettingOff'),
+      true,
+    )
+    pushIf('srRuntime', formatSrRuntimeDiagnostics(props.diagnostics), true)
     pushIf('bandwidthState', props.diagnostics.bandwidthState ?? t('streamPage.diagnostics.values.unknown'))
     pushIf('bandwidthAction', props.diagnostics.bandwidthAction ?? t('streamPage.diagnostics.values.none'))
     pushIf('recoveryEpoch', props.diagnostics.recoveryEpochId)
@@ -156,6 +187,14 @@ const rows = computed<StreamDiagnosticsRowViewModel[]>(() => {
     pushIf('lastRecoveryReason', props.diagnostics.lastRecoveryReason ?? t('streamPage.diagnostics.values.none'))
   }
   if (!browserMode) {
+    pushIf(
+      'srSetting',
+      props.superResolutionExperimental === true
+        ? t('streamPage.performance.values.srSettingOn')
+        : t('streamPage.performance.values.srSettingOff'),
+      true,
+    )
+    pushIf('srRuntime', t('streamPage.performance.values.srRunUnsupported'), true)
     pushIf('videoHealth', translateDiagnosticsVideoHealth(te, t, props.diagnostics.videoHealth), true)
     pushIf('primaryIssueChain', translateDiagnosticsPrimaryIssueChain(te, t, props.diagnostics.primaryIssueChain), true)
     pushIf('latestDecision', translateDiagnosticsLatestDecision(te, t, props.diagnostics.latestDecisionSummary), true)

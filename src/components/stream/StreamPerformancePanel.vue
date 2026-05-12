@@ -70,75 +70,128 @@ function formatRenderPipeline(value?: 'video' | 'webgl2'): string {
   return '--'
 }
 
-const metrics = computed(() => [
-  { key: 'State', value: resolveStatusText() },
-  { key: 'Transport', value: props.snapshot?.transportState ?? '--' },
-  { key: 'Render', value: formatRenderPipeline(props.snapshot?.renderPipelineType) },
-  { key: 'BwState', value: props.snapshot?.bandwidthState ?? '--' },
-  { key: 'BwAct', value: props.snapshot?.bandwidthAction ?? '--' },
-  { key: 'CtrlCh', value: props.snapshot?.controlChannelState ?? '--' },
-  { key: 'KfSucc', value: props.snapshot?.keyframeRequestSuccessRate === undefined ? '--' : `${Math.round(props.snapshot.keyframeRequestSuccessRate * 100)}%` },
-  { key: 'Cause', value: props.snapshot?.recoveryCause ?? '--' },
-  { key: 'QLevel', value: props.snapshot?.qualityLadderLevel ?? '--' },
-  { key: 'NetConf', value: props.snapshot?.networkConfidence ?? '--' },
-  { key: 'DecConf', value: props.snapshot?.decodeConfidence ?? '--' },
-  { key: 'RecoLv', value: props.snapshot?.lastRecoveryActionLevel ?? '--' },
-  { key: 'RecoRs', value: props.snapshot?.lastRecoveryActionResult ?? '--' },
-  { key: 'RecoEff', value: props.snapshot?.lastRecoveryActionEffect ?? '--' },
-  { key: 'RecoScr', value: props.snapshot?.lastRecoveryActionEffectScore === undefined ? '--' : props.snapshot.lastRecoveryActionEffectScore.toFixed(2) },
-  { key: 'RecoWhy', value: props.snapshot?.lastRecoveryReason ?? '--' },
-  { key: 'RTT', value: props.snapshot?.rtt ?? '--' },
-  { key: 'JIT', value: props.snapshot?.jit ?? '--' },
-  { key: 'RecvFPS', value: formatFps(props.snapshot?.inboundVideoFps) },
-  { key: 'DecFPS', value: formatFps(props.snapshot?.decodeFps) },
-  { key: 'PreFPS', value: formatFps(props.snapshot?.presentFps ?? props.snapshot?.fps) },
-  { key: 'PL', value: props.snapshot?.pl ?? '--' },
-  { key: 'VideoDL', value: formatKbps(props.snapshot?.inboundVideoBitrateKbps) },
-  { key: 'TotalDL', value: formatKbps(props.snapshot?.inboundBitrateKbps) },
-  { key: 'AudioDL', value: formatKbps(props.snapshot?.inboundAudioBitrateKbps) },
-  { key: 'PktAge', value: formatMs(props.snapshot?.packetAgeMs) },
-  { key: 'DecAge', value: formatMs(props.snapshot?.decodeAgeMs) },
-  { key: 'PreAge', value: formatMs(props.snapshot?.presentAgeMs) },
-  { key: 'P2D', value: formatMs(props.snapshot?.packetToDecodeMs) },
-  { key: 'D2P', value: formatMs(props.snapshot?.decodeToPresentMs) },
-  { key: 'P2P', value: formatMs(props.snapshot?.packetToPresentMs) },
-  { key: 'KeyReq', value: props.snapshot?.recoveryKeyframeRequestCount ?? '--' },
-  { key: 'Reset', value: props.snapshot?.videoDecoderResetCount ?? '--' },
-  { key: 'DecRec', value: props.snapshot?.videoDecoderRecoveryState ?? '--' },
-  { key: 'DecEvt', value: props.snapshot?.videoDecoderRecoveryEvent ?? '--' },
-  { key: 'Reco', value: props.snapshot?.recoveryReconnectCount ?? '--' },
-].filter((item) => {
-  if (!isBrowserMode.value) {
-    return true
+function formatDisplayDegradeLevel(value?: 'displayL0' | 'displayL1' | 'displayL2'): string {
+  if (value === 'displayL0') {
+    return 'L0'
   }
-  if (item.value === '--') {
-    return false
+  if (value === 'displayL1') {
+    return 'L1'
   }
-  return (
-    item.key === 'State'
-    || item.key === 'Transport'
-    || item.key === 'Render'
-    || item.key === 'BwState'
-    || item.key === 'BwAct'
-    || item.key === 'CtrlCh'
-    || item.key === 'KfSucc'
-    || item.key === 'Cause'
-    || item.key === 'QLevel'
-    || item.key === 'NetConf'
-    || item.key === 'DecConf'
-    || item.key === 'RecoLv'
-    || item.key === 'RecoRs'
-    || item.key === 'RecoEff'
-    || item.key === 'RecoScr'
-    || item.key === 'RecoWhy'
-    || item.key === 'RTT'
-    || item.key === 'JIT'
-    || item.key === 'PL'
-    || item.key === 'RecvFPS'
-    || item.key === 'DecFPS'
-    || item.key === 'PreFPS'
-  )
-}))
+  if (value === 'displayL2') {
+    return 'L2'
+  }
+  return '--'
+}
+
+function formatSrRuntime(snapshot: StreamPerformanceSnapshot | null): string {
+  const s = snapshot
+  if (s?.renderSuperResolutionEnabled !== true) {
+    return t('streamPage.performance.values.srRunOff')
+  }
+  if (s.renderSuperResolutionActive === true) {
+    const tier = s.renderSuperResolutionOutputTarget ?? s.renderSuperResolutionConfiguredTarget ?? ''
+    const alg = (s.renderSuperResolutionAlgorithm ?? 'fsr1').toUpperCase()
+    return t('streamPage.performance.values.srRunActive', {
+      alg,
+      tier: tier !== '' ? String(tier) : '?',
+    })
+  }
+  const reason = s.renderSuperResolutionFallbackReason?.trim()
+  if (reason) {
+    const short = reason.length > 48 ? `${reason.slice(0, 45)}…` : reason
+    return t('streamPage.performance.values.srRunFallback', { reason: short })
+  }
+  return t('streamPage.performance.values.srRunPending')
+}
+
+const metrics = computed(() => {
+  const srRows = isBrowserMode.value
+    ? [
+        {
+          key: 'SRExp',
+          value: props.snapshot?.renderSuperResolutionEnabled === true
+            ? t('streamPage.performance.values.srSettingOn')
+            : t('streamPage.performance.values.srSettingOff'),
+        },
+        { key: 'SRRun', value: formatSrRuntime(props.snapshot) },
+      ]
+    : []
+
+  return [
+    { key: 'State', value: resolveStatusText() },
+    { key: 'Transport', value: props.snapshot?.transportState ?? '--' },
+    { key: 'Render', value: formatRenderPipeline(props.snapshot?.renderPipelineType) },
+    ...srRows,
+    { key: 'BwState', value: props.snapshot?.bandwidthState ?? '--' },
+    { key: 'BwAct', value: props.snapshot?.bandwidthAction ?? '--' },
+    { key: 'CtrlCh', value: props.snapshot?.controlChannelState ?? '--' },
+    { key: 'KfSucc', value: props.snapshot?.keyframeRequestSuccessRate === undefined ? '--' : `${Math.round(props.snapshot.keyframeRequestSuccessRate * 100)}%` },
+    { key: 'Cause', value: props.snapshot?.recoveryCause ?? '--' },
+    { key: 'QLevelTx', value: props.snapshot?.qualityLadderLevel ?? '--' },
+    { key: 'QLevelRender', value: formatDisplayDegradeLevel(props.snapshot?.displayDegradeLevel) },
+    { key: 'NetConf', value: props.snapshot?.networkConfidence ?? '--' },
+    { key: 'DecConf', value: props.snapshot?.decodeConfidence ?? '--' },
+    { key: 'RecoLv', value: props.snapshot?.lastRecoveryActionLevel ?? '--' },
+    { key: 'RecoRs', value: props.snapshot?.lastRecoveryActionResult ?? '--' },
+    { key: 'RecoEff', value: props.snapshot?.lastRecoveryActionEffect ?? '--' },
+    { key: 'RecoScr', value: props.snapshot?.lastRecoveryActionEffectScore === undefined ? '--' : props.snapshot.lastRecoveryActionEffectScore.toFixed(2) },
+    { key: 'RecoWhy', value: props.snapshot?.lastRecoveryReason ?? '--' },
+    { key: 'RTT', value: props.snapshot?.rtt ?? '--' },
+    { key: 'JIT', value: props.snapshot?.jit ?? '--' },
+    { key: 'RecvFPS', value: formatFps(props.snapshot?.inboundVideoFps) },
+    { key: 'DecFPS', value: formatFps(props.snapshot?.decodeFps) },
+    { key: 'PreFPS', value: formatFps(props.snapshot?.presentFps ?? props.snapshot?.fps) },
+    { key: 'PL', value: props.snapshot?.pl ?? '--' },
+    { key: 'VideoDL', value: formatKbps(props.snapshot?.inboundVideoBitrateKbps) },
+    { key: 'TotalDL', value: formatKbps(props.snapshot?.inboundBitrateKbps) },
+    { key: 'AudioDL', value: formatKbps(props.snapshot?.inboundAudioBitrateKbps) },
+    { key: 'PktAge', value: formatMs(props.snapshot?.packetAgeMs) },
+    { key: 'DecAge', value: formatMs(props.snapshot?.decodeAgeMs) },
+    { key: 'PreAge', value: formatMs(props.snapshot?.presentAgeMs) },
+    { key: 'P2D', value: formatMs(props.snapshot?.packetToDecodeMs) },
+    { key: 'D2P', value: formatMs(props.snapshot?.decodeToPresentMs) },
+    { key: 'P2P', value: formatMs(props.snapshot?.packetToPresentMs) },
+    { key: 'KeyReq', value: props.snapshot?.recoveryKeyframeRequestCount ?? '--' },
+    { key: 'Reset', value: props.snapshot?.videoDecoderResetCount ?? '--' },
+    { key: 'DecRec', value: props.snapshot?.videoDecoderRecoveryState ?? '--' },
+    { key: 'DecEvt', value: props.snapshot?.videoDecoderRecoveryEvent ?? '--' },
+    { key: 'Reco', value: props.snapshot?.recoveryReconnectCount ?? '--' },
+  ].filter((item) => {
+    if (!isBrowserMode.value) {
+      return true
+    }
+    if (item.value === '--') {
+      return false
+    }
+    return (
+      item.key === 'State'
+      || item.key === 'Transport'
+      || item.key === 'Render'
+      || item.key === 'SRExp'
+      || item.key === 'SRRun'
+      || item.key === 'BwState'
+      || item.key === 'BwAct'
+      || item.key === 'CtrlCh'
+      || item.key === 'KfSucc'
+      || item.key === 'Cause'
+      || item.key === 'QLevelTx'
+      || item.key === 'QLevelRender'
+      || item.key === 'NetConf'
+      || item.key === 'DecConf'
+      || item.key === 'RecoLv'
+      || item.key === 'RecoRs'
+      || item.key === 'RecoEff'
+      || item.key === 'RecoScr'
+      || item.key === 'RecoWhy'
+      || item.key === 'RTT'
+      || item.key === 'JIT'
+      || item.key === 'PL'
+      || item.key === 'RecvFPS'
+      || item.key === 'DecFPS'
+      || item.key === 'PreFPS'
+    )
+  })
+})
 
 function resolveStatusText(): string {
   if (props.diagnostics.statusCode === 'noVideo') {

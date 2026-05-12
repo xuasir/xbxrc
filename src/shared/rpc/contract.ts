@@ -64,6 +64,13 @@ export interface XBoxRpcSchema {
       void,
       { cleared: boolean, legacyStateCleared: boolean, restarted: boolean }
     >
+    saveBinaryFile: RpcMethod<
+      {
+        suggestedName: string
+        dataBase64: string
+      },
+      { saved: boolean, canceled: boolean, path: string | null }
+    >
     quit: RpcMethod<void, { accepted: boolean }>
     restart: RpcMethod<void, { accepted: boolean }>
   }

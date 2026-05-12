@@ -3,6 +3,7 @@ use crate::mods::auth::AuthProviderRef;
 use crate::mods::data::cache_repository::DataCacheRepository;
 use crate::settings_store::SettingsStoreResolver;
 use async_trait::async_trait;
+use base64::Engine;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tauri::{AppHandle, Manager};
@@ -46,6 +47,14 @@ pub struct StartupFlagsPayload {
 pub struct PingPayload {
     pub message: String,
     pub at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SaveBinaryFileResult {
+    pub saved: bool,
+    pub canceled: bool,
+    pub path: Option<String>,
 }
 
 pub struct AppStateService {
@@ -190,6 +199,36 @@ impl AppStateProvider for AppStateService {
             .opener()
             .open_url(url, None::<&str>)
             .map_err(|error| error.to_string())
+    }
+
+    fn save_binary_file(
+        &self,
+        suggested_name: &str,
+        data_base64: &str,
+    ) -> Result<SaveBinaryFileResult, String> {
+        let bytes = base64::engine::general_purpose::STANDARD
+            .decode(data_base64)
+            .map_err(|error| format!("Failed to decode file payload: {}", error))?;
+
+        let Some(path) = rfd::FileDialog::new()
+            .add_filter("PNG Image", &["png"])
+            .set_file_name(suggested_name)
+            .save_file()
+        else {
+            return Ok(SaveBinaryFileResult {
+                saved: false,
+                canceled: true,
+                path: None,
+            });
+        };
+
+        std::fs::write(&path, bytes).map_err(|error| error.to_string())?;
+
+        Ok(SaveBinaryFileResult {
+            saved: true,
+            canceled: false,
+            path: Some(path.display().to_string()),
+        })
     }
 }
 

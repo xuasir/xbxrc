@@ -1,6 +1,6 @@
 use serde_json::{json, Map, Value};
 
-pub const APP_CONFIG_KEYS: [&str; 36] = [
+pub const APP_CONFIG_KEYS: [&str; 37] = [
     "locale",
     "theme",
     "fullscreen",
@@ -30,6 +30,7 @@ pub const APP_CONFIG_KEYS: [&str; 36] = [
     "server_credential",
     "background_keepalive",
     "display_options",
+    "super_resolution_experimental",
     "use_vulkan",
     "ui_haptics",
     "ui_audio",
@@ -81,6 +82,7 @@ pub fn default_config_map() -> Map<String, Value> {
             "contrast": 100,
             "brightness": 100
         },
+        "super_resolution_experimental": false,
         "use_vulkan": false,
         "ui_haptics": true,
         "ui_audio": true,

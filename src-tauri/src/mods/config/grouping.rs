@@ -36,7 +36,8 @@ pub fn split_config_groups(config: &Map<String, Value>) -> Value {
             "server_credential",
             "xhome_turn_fallback",
             "performance_style",
-            "display_options"
+            "display_options",
+            "super_resolution_experimental"
         ]),
         "host": pick_group_values(config, &[]),
         // xcloud 组当前不承载策略字段，避免与 streaming policy 分组重复返回。

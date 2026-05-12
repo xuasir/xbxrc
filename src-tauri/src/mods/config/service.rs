@@ -198,6 +198,10 @@ impl ConfigProvider for ConfigService {
                     contrast: 100,
                     brightness: 100,
                 }),
+            super_resolution_experimental: normalized
+                .get("super_resolution_experimental")
+                .and_then(Value::as_bool)
+                .unwrap_or(false),
         }
     }
 

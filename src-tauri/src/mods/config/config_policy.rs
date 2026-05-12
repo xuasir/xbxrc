@@ -100,6 +100,7 @@ fn normalize_value(key: &str, value: &Value, fallback: &Value) -> Value {
         | "ipv6"
         | "performance_style"
         | "background_keepalive"
+        | "super_resolution_experimental"
         | "use_vulkan"
         | "ui_haptics"
         | "ui_audio"

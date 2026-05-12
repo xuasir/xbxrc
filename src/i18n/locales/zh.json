@@ -121,6 +121,10 @@
       "menu": "串流菜单",
       "fullscreen": "切换全屏",
       "display": "显示设置",
+      "enableSuperResolution": "开启超分辨率（实验）",
+      "disableSuperResolution": "关闭超分辨率（实验）",
+      "exportSuperResolutionComparison": "导出超分 A/B 对比截图",
+      "exportingSuperResolutionComparison": "正在导出超分 A/B 对比截图",
       "audio": "音频设置",
       "showPerformance": "显示性能面板",
       "hidePerformance": "隐藏性能面板",
@@ -172,7 +176,8 @@
         "CtrlCh": "控制通道",
         "KfSucc": "关键帧成功率",
         "Cause": "恢复归因",
-        "QLevel": "质量档位",
+        "QLevelTx": "质量档位 Tx",
+        "QLevelRender": "质量档位 Render",
         "NetConf": "网络置信度",
         "DecConf": "解码置信度",
         "RecoLv": "恢复级别",
@@ -221,9 +226,19 @@
         "HardFallbackReset": "硬兜底重置原因",
         "LastAct": "最近动作",
         "LastWhy": "最近原因",
-        "DT": "解码"
+        "DT": "解码",
+        "SRExp": "超分辨率（实验）",
+        "SRRun": "超分运行状态"
       },
-      "values": {}
+      "values": {
+        "srSettingOn": "开",
+        "srSettingOff": "关",
+        "srRunOff": "未启用",
+        "srRunActive": "{alg} → {tier}",
+        "srRunFallback": "已回退：{reason}",
+        "srRunPending": "等待档位锁定或视频就绪",
+        "srRunUnsupported": "当前会话未暴露超分运行状态"
+      }
     },
     "badges": {
       "title": "串流诊断信息",
@@ -289,7 +304,9 @@
         "latestDecision": "最新决策摘要",
         "stall": "卡顿类型",
         "stallKind": "卡顿类型",
-        "status": "状态"
+        "status": "状态",
+        "srSetting": "超分辨率（实验）",
+        "srRuntime": "超分运行状态"
       },
       "values": {
         "unknown": "--",
@@ -491,7 +508,11 @@
       "wakeFailed": "主机唤醒失败，请确认主机在线且远程功能已开启",
       "remoteConsoleNotReady": "主机尚未完成远程串流注册，请稍候再试。诊断信息：{details}",
       "targetMissing": "缺少串流目标 ID",
-      "powerOffFailed": "主机关机命令未被接受，请确认已启用远程功能后重试"
+      "powerOffFailed": "主机关机命令未被接受，请确认已启用远程功能后重试",
+      "streamCaptureSourceUnavailable": "当前没有可导出的画面源。请等待画面稳定后重试。",
+      "streamComparisonSaveFailed": "A/B 对比截图未能保存。",
+      "streamFrameCaptureFailed": "当前画面无法完成截图。",
+      "streamComparisonExportFailed": "导出超分 A/B 对比截图失败。"
     }
   },
   "login": {
@@ -648,6 +669,7 @@
       "streamingExperience": {
         "title": "串流体验",
         "sectionShared": "通用",
+        "sectionAdvanced": "高级",
         "sectionConsole": "主机串流",
         "sectionCloud": "云游戏"
       },
@@ -991,6 +1013,10 @@
       },
       "ipv6": { "label": "优先使用 IPv6" },
       "performance_style": { "label": "紧凑性能浮层" },
+      "super_resolution_experimental": {
+        "label": "超分辨率（实验）",
+        "description": "浏览器端 FSR1 空间放大；可能增加 GPU 占用，失败时回退到常规锐化。"
+      },
       "stream_runtime_mode": {
         "label": "串流运行时",
         "options": {

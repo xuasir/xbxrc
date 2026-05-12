@@ -1,6 +1,6 @@
 import type { RendererRuntimeConfig } from '../../domain/media'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { NativeVideoRenderer, WebGL2VideoRenderer } from './Renderers'
+import { NativeVideoRenderer, SuperResolutionWebGL2Renderer, WebGL2VideoRenderer } from './Renderers'
 
 function createRendererConfig(partial?: Partial<RendererRuntimeConfig>): RendererRuntimeConfig {
   return {
@@ -367,5 +367,99 @@ describe('renderers', () => {
     }))
     await renderer.attach(video)
     expect(gl.uniform1f).toHaveBeenCalledWith(expect.anything(), 3.84)
+  })
+
+  it('throws when sr intermediate framebuffer is incomplete', async () => {
+    const gl = {
+      viewport: vi.fn(),
+      createShader: vi.fn(() => ({})),
+      shaderSource: vi.fn(),
+      compileShader: vi.fn(),
+      getShaderParameter: vi.fn(() => true),
+      getShaderInfoLog: vi.fn(() => ''),
+      createProgram: vi.fn(() => ({})),
+      attachShader: vi.fn(),
+      linkProgram: vi.fn(),
+      deleteShader: vi.fn(),
+      deleteProgram: vi.fn(),
+      getProgramParameter: vi.fn(() => true),
+      getProgramInfoLog: vi.fn(() => ''),
+      useProgram: vi.fn(),
+      createBuffer: vi.fn(() => ({})),
+      bindBuffer: vi.fn(),
+      deleteBuffer: vi.fn(),
+      bufferData: vi.fn(),
+      enableVertexAttribArray: vi.fn(),
+      vertexAttribPointer: vi.fn(),
+      createTexture: vi.fn(() => ({})),
+      deleteTexture: vi.fn(),
+      bindTexture: vi.fn(),
+      pixelStorei: vi.fn(),
+      texParameteri: vi.fn(),
+      texImage2D: vi.fn(),
+      createFramebuffer: vi.fn(() => ({})),
+      deleteFramebuffer: vi.fn(),
+      bindFramebuffer: vi.fn(),
+      framebufferTexture2D: vi.fn(),
+      checkFramebufferStatus: vi.fn(() => 0),
+      getUniformLocation: vi.fn(() => ({})),
+      VERTEX_SHADER: 1,
+      FRAGMENT_SHADER: 2,
+      ARRAY_BUFFER: 3,
+      STATIC_DRAW: 4,
+      FLOAT: 5,
+      TEXTURE_2D: 6,
+      UNPACK_FLIP_Y_WEBGL: 7,
+      TEXTURE_WRAP_S: 8,
+      TEXTURE_WRAP_T: 9,
+      CLAMP_TO_EDGE: 10,
+      TEXTURE_MIN_FILTER: 11,
+      TEXTURE_MAG_FILTER: 12,
+      LINEAR: 13,
+      RGBA: 14,
+      UNSIGNED_BYTE: 15,
+      FRAMEBUFFER: 16,
+      COLOR_ATTACHMENT0: 17,
+      FRAMEBUFFER_COMPLETE: 18,
+      COMPILE_STATUS: 19,
+      LINK_STATUS: 20,
+    }
+    const canvasNode = {
+      width: 1920,
+      height: 1080,
+      style: { position: '', inset: '', width: '', height: '', pointerEvents: '', opacity: '', objectFit: '' },
+      isConnected: true,
+      remove: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      getContext: vi.fn(() => gl),
+    }
+    globalThis.document = {
+      createElement: (tag: string) => {
+        if (tag === 'canvas') {
+          return canvasNode
+        }
+        return { style: {} }
+      },
+    } as unknown as Document
+
+    class LocalVideoElement {
+      dataset: Record<string, string> = {}
+      insertAdjacentElement = vi.fn()
+      requestVideoFrameCallback(_callback: () => void): number {
+        return 1
+      }
+
+      cancelVideoFrameCallback(_id: number): void {}
+    }
+    globalThis.HTMLVideoElement = LocalVideoElement as unknown as typeof HTMLVideoElement
+    const video = new LocalVideoElement() as unknown as HTMLVideoElement
+
+    const renderer = new SuperResolutionWebGL2Renderer(createRendererConfig({
+      superResolutionEnabled: true,
+      superResolutionOutputWidth: 2560,
+      superResolutionOutputHeight: 1440,
+    }))
+    await expect(renderer.attach(video)).rejects.toThrow(/srFramebufferIncomplete/)
   })
 })

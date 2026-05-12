@@ -31,6 +31,8 @@ function debugLog(..._args: Array<unknown>): void {}
 
 interface UseStreamRuntimeHostOptions {
   playerElementId: string
+  /** 从 streamConfig 读取实验性超分开关。 */
+  getSuperResolutionExperimental: () => boolean
   onConnectionStateChange: (state: RTCPeerConnectionState) => void
   onPresentationMilestoneChange: (input: {
     milestone: StreamPresentationMilestone
@@ -462,6 +464,7 @@ export function useStreamRuntimeHost(options: UseStreamRuntimeHostOptions) {
     nextRuntime.applyDisplayState({
       displayOptions: displayOptions.value,
       render: input.render,
+      superResolutionExperimental: options.getSuperResolutionExperimental(),
     })
     nextRuntime.setAudioVolume(audioVolume.value)
     if (input.runtime.microphoneStartWithSession) {
@@ -553,6 +556,17 @@ export function useStreamRuntimeHost(options: UseStreamRuntimeHostOptions) {
       runtime.value?.applyDisplayState({
         displayOptions: displayOptions.value,
         render: renderProjection.value,
+        superResolutionExperimental: options.getSuperResolutionExperimental(),
+      })
+    },
+    syncSuperResolutionFromStreamConfig() {
+      if (runtime.value === null || renderProjection.value === null) {
+        return
+      }
+      runtime.value.applyDisplayState({
+        displayOptions: displayOptions.value,
+        render: renderProjection.value,
+        superResolutionExperimental: options.getSuperResolutionExperimental(),
       })
     },
     setAudioVolume(value: number) {

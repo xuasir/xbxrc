@@ -59,6 +59,7 @@ fn apply_streaming_preferences_maps_runtime_and_negotiation_fields() {
             contrast: 90,
             brightness: 105,
         },
+        super_resolution_experimental: true,
     };
 
     apply_streaming_preferences(&mut config, &snapshot);

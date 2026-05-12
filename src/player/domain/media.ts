@@ -21,6 +21,22 @@ export interface RendererRuntimeConfig {
   targetFps: number
   mode: 'native' | 'webgl2'
   format: VideoFit
+  /** 用户意图：开启后优先走独立 SR renderer，不因 display degrade 动态关闭。 */
+  superResolutionEnabled?: boolean
+  superResolutionAlgorithm?: 'fsr1'
+  superResolutionOutputTier?: '1080p' | '1440p' | '2160p'
+  superResolutionConfiguredTargetTier?: string
+  superResolutionOutputWidth?: number
+  superResolutionOutputHeight?: number
+  /**
+   * 直接传给 FSR1 `FsrRcasCon` 的 sharpness stops。
+   * 值越大越柔和；0.88 为当前串流实验默认档。
+   */
+  superResolutionRcasStops?: number
+  /** SR 技术性失败回退到标准 webgl2 时使用的锐化算法。 */
+  superResolutionFallbackProcessing?: 'usm' | 'cas'
+  /** 本会话内 SR attach 失败后置位，阻止再次选用 SR renderer。 */
+  superResolutionInactiveAfterFailure?: boolean
 }
 
 export interface StreamStats {
@@ -157,4 +173,13 @@ export interface StreamStats {
   renderAdaptiveProfileDigest?: string
   renderHysteresisState?: 'steady' | 'holdDown' | 'holdUp'
   renderUpshiftBlockedReason?: string
+  renderSuperResolutionEnabled?: boolean
+  renderSuperResolutionActive?: boolean
+  renderSuperResolutionAlgorithm?: string
+  renderSuperResolutionConfiguredTarget?: string
+  renderSuperResolutionOutputTarget?: string
+  renderSuperResolutionRcasStops?: number
+  renderSuperResolutionRcasBaseStops?: number
+  renderSuperResolutionFallbackReason?: string | null
+  renderSharpenMode?: string
 }

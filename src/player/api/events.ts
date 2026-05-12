@@ -15,6 +15,8 @@ export interface PlayerEvents {
   'stats.inputPacket': InputPacketStats
   'stats.videoFrameProcessed': ProcessedVideoFrameMetadata
   'media.videoReady': { width: number, height: number }
+  /** SR renderer 初始化失败并已回退到标准 webgl2。 */
+  'media.superResolutionFallback': { reason: string }
   'media.audioReady': Record<string, never>
   'chat.stateChanged': { capturing: boolean, paused: boolean }
   'error': { error: unknown }

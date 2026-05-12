@@ -43,6 +43,7 @@ import {
   getRemoteSessionProgress,
   loadStreamConfigSnapshot,
   persistStreamDisplayOptions,
+  persistStreamSuperResolutionExperimental,
   powerOffRemoteConsole,
   resolveProgressError,
   resolveStartupPhasePrimaryStatusTextKey,
@@ -158,6 +159,7 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
 
   const runtimeHost = useStreamRuntimeHost({
     playerElementId: 'stream-page-video',
+    getSuperResolutionExperimental: () => streamConfig.value.super_resolution_experimental === true,
     onConnectionStateChange: (state) => {
       if (state === 'failed' || state === 'closed') {
         resetExecutionWarning()
@@ -209,6 +211,9 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
   const sessionCapabilities = computed<StreamSessionCapabilitiesProjection | null>(
     () => sessionExecution.value?.capabilities ?? null,
   )
+  const runtimeControlsReady = computed(() =>
+    isConnected.value || sessionHealth.value?.runtimeLaunchState === 'ready',
+  )
   const diagnostics = computed<StreamSessionDiagnosticsSnapshot>(() => {
     return buildStreamDiagnosticsSnapshot({
       metadata: sessionMetadata.value,
@@ -250,6 +255,7 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
         iceCandidatePolicy,
       },
       render: execution.render,
+      clientExperimentalSuperResolution: streamConfig.value.super_resolution_experimental === true,
     }
   })
 
@@ -609,6 +615,26 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
     runtimeHost.setDiagnosticsEnabled(diagnosticsVisible.value)
   }
 
+  async function setSuperResolutionExperimental(enabled: boolean): Promise<boolean> {
+    const previousConfig = streamConfig.value
+    streamConfig.value = {
+      ...previousConfig,
+      super_resolution_experimental: enabled,
+    }
+    try {
+      await persistStreamSuperResolutionExperimental(enabled)
+      return enabled
+    }
+    catch (error) {
+      streamConfig.value = previousConfig
+      throw error
+    }
+  }
+
+  async function toggleSuperResolutionExperimental(): Promise<boolean> {
+    return await setSuperResolutionExperimental(streamConfig.value.super_resolution_experimental !== true)
+  }
+
   function setTextInputActive(active: boolean): void {
     void active
   }
@@ -632,6 +658,16 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
         handlePlayerError(error instanceof Error ? error.message : String(error))
         handlePlayerDisconnected()
       })
+    },
+  )
+
+  watch(
+    () => streamConfig.value.super_resolution_experimental,
+    () => {
+      if (!isConnected.value) {
+        return
+      }
+      runtimeHost.syncSuperResolutionFromStreamConfig()
     },
   )
 
@@ -702,9 +738,16 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
     ability: {
       canPowerOffConsole,
       canSendText,
-      canOpenPerformance: computed(() => isConnected.value),
-      canOpenDiagnostics: computed(() => isConnected.value),
-      canOpenDisplaySettings: computed(() => isConnected.value),
+      canOpenPerformance: computed(() => runtimeControlsReady.value),
+      canOpenDiagnostics: computed(() => runtimeControlsReady.value),
+      canOpenDisplaySettings: computed(() => runtimeControlsReady.value),
+      canToggleSuperResolution: computed(() =>
+        runtimeControlsReady.value && (
+          sessionExecution.value?.runtime.mode
+          ?? streamConfig.value.stream_runtime_mode
+          ?? 'webrtc-direct'
+        ) === 'webrtc-direct',
+      ),
       canOpenAudioSettings: computed(
         () => isConnected.value && renderProjection.value?.enableAudioControl === true,
       ),
@@ -754,6 +797,7 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
       audioVolume: runtimeHost.audioVolume,
       microphone: runtimeHost.microphoneState,
       microphoneOpen: runtimeHost.microphoneOpen,
+      superResolutionExperimental: computed(() => streamConfig.value.super_resolution_experimental === true),
     },
     actions: {
       disconnectStream: closeExecution,
@@ -769,6 +813,8 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
       longPressNexus,
       togglePerformance,
       toggleDiagnostics,
+      setSuperResolutionExperimental,
+      toggleSuperResolutionExperimental,
       setTextInputActive,
       dismissWarning: () => {
         warningVisible.value = false

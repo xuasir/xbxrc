@@ -48,6 +48,8 @@ export interface RuntimeLaunchSpec {
     iceCandidatePolicy?: IceCandidatePolicySpec
   }
   render: StreamRenderProjection
+  /** 浏览器侧注入：实验性超分开关，不随 execution.render 下发。 */
+  clientExperimentalSuperResolution?: boolean
 }
 
 export type DisplayOptionsValue = StreamingDisplayOptionsValue
@@ -210,6 +212,13 @@ export interface StreamPerformanceSnapshot {
   renderShaderPath?: 'usm' | 'cas' | 'none'
   renderFpsBudget?: number
   rendererCapabilityReason?: string
+  renderSuperResolutionEnabled?: boolean
+  renderSuperResolutionActive?: boolean
+  renderSuperResolutionAlgorithm?: string
+  renderSuperResolutionConfiguredTarget?: string
+  renderSuperResolutionOutputTarget?: string
+  renderSuperResolutionFallbackReason?: string | null
+  renderSharpenMode?: string
   icePolicyMode?: 'passthrough' | 'policy'
   icePolicyDigest?: string
   /** webrtc-direct 浏览器画像观测（xbxengine 路径通常为空） */
@@ -325,6 +334,13 @@ export interface StreamSessionDiagnosticsSnapshot {
   renderShaderPath?: 'usm' | 'cas' | 'none'
   renderFpsBudget?: number
   rendererCapabilityReason?: string
+  renderSuperResolutionEnabled?: boolean
+  renderSuperResolutionActive?: boolean
+  renderSuperResolutionAlgorithm?: string
+  renderSuperResolutionConfiguredTarget?: string
+  renderSuperResolutionOutputTarget?: string
+  renderSuperResolutionFallbackReason?: string | null
+  renderSharpenMode?: string
   icePolicyMode?: 'passthrough' | 'policy'
   icePolicyDigest?: string
   frontEndProfileBaseline?: 'homeLan' | 'homeRelay' | 'cloud'
@@ -426,6 +442,7 @@ export interface StreamConfigSnapshot {
   codec?: string
   video_format?: string
   display_options?: DisplayOptionsValue
+  super_resolution_experimental?: boolean
   performance_style?: boolean
   stream_runtime_mode?: 'webrtc-direct' | 'rust-owned'
   ice_policy_enabled?: boolean

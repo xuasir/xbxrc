@@ -26,6 +26,8 @@ export type StreamRuntimeReconnectReason = 'network-lost' | 'ice-failed' | 'medi
 export interface RuntimeDisplayState {
   displayOptions: DisplayOptionsValue
   render: StreamRenderProjection
+  /** 与 display_options 分离的实验性超分开关（来自 stream config）。 */
+  superResolutionExperimental?: boolean
 }
 
 export type RuntimeEvent
