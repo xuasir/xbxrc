@@ -108,6 +108,7 @@ const PAGE_STREAMING: SettingSchemaSectionDef[] = [
       { kind: 'field', fieldKey: 'video_format' },
       { kind: 'field', fieldKey: 'display_options' },
       { kind: 'field', fieldKey: 'enable_audio_control' },
+      { kind: 'field', fieldKey: 'codec' },
       { kind: 'field', fieldKey: 'audio_bitrate_mode' },
       { kind: 'field', fieldKey: 'audio_bitrate' },
       { kind: 'field', fieldKey: 'performance_style' },
@@ -179,7 +180,6 @@ export function getAdvancedDiagnosticsSections(dangerUnlocked: boolean): Setting
       labelKey: 'setting.pages.advancedDiagnostics.sectionAdvanced',
       items: [
         { kind: 'field', fieldKey: 'stream_runtime_mode' },
-        { kind: 'field', fieldKey: 'codec' },
         { kind: 'field', fieldKey: 'debug' },
         { kind: 'field', fieldKey: 'runtime_trace_mode' },
         { kind: 'field', fieldKey: 'use_vulkan' },
