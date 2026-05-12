@@ -12,6 +12,8 @@ import {
   remoteProfileSuggestsHighRtt,
   resolveEffectiveFrontEndPolicy,
   resolveExpectedContentFps,
+  resolveFrontEndPolicyInputReason,
+  shouldEndWarmupEarly,
 } from './browser-runtime-profile'
 
 function baseStats(over: Partial<StreamStats> = {}): StreamStats {
@@ -230,6 +232,101 @@ describe('evaluateProfileBandwidthState', () => {
       baseVideoBitrateKbps: 15_000,
     })
     expect(next).toBe('stable')
+  })
+})
+
+describe('resolveFrontEndPolicyInputReason', () => {
+  it('classifies network-limited input from bandwidth pressure', () => {
+    expect(resolveFrontEndPolicyInputReason({
+      bandwidthState: 'warning',
+      recoveryCause: 'unknown',
+      renderCause: 'renderStable',
+      renderBackpressure: false,
+    })).toBe('networkLimited')
+  })
+
+  it('classifies delivery-limited input from render pressure', () => {
+    expect(resolveFrontEndPolicyInputReason({
+      bandwidthState: 'stable',
+      recoveryCause: 'unknown',
+      renderCause: 'decodeBackpressure',
+      renderBackpressure: false,
+    })).toBe('deliveryLimited')
+  })
+
+  it('classifies healthy input when network and delivery stay clear', () => {
+    expect(resolveFrontEndPolicyInputReason({
+      bandwidthState: 'stable',
+      recoveryCause: 'unknown',
+      renderCause: 'renderStable',
+      renderBackpressure: false,
+    })).toBe('healthy')
+  })
+})
+
+describe('shouldEndWarmupEarly', () => {
+  it('allows homeLan warmup early exit on strong healthy evidence', () => {
+    const classification = buildRuntimeProfileClassification({
+      targetType: 'home',
+      transportPath: 'Direct',
+      stats: baseStats(),
+      nowMs: 1000,
+      connectedAtMs: 0,
+      warmupUntilMs: 5000,
+      renderCause: 'renderStable',
+      contentFpsClass: 'content60',
+    })
+    const policy = resolveEffectiveFrontEndPolicy(classification)
+    expect(shouldEndWarmupEarly({
+      nowMs: 1000,
+      warmupUntilMs: 5000,
+      classification,
+      bandwidthState: 'stable',
+      recoveryCause: 'unknown',
+      renderCause: 'renderStable',
+      renderBackpressure: false,
+      stats: baseStats({
+        inboundVideoBitrateKbps: 20_000,
+        videoTwccLossRatio: 0,
+        videoTwccFeedbackIntervalMs: 40,
+        packetAgeMs: 30,
+        presentAgeMs: 30,
+      }),
+      policy,
+      baseVideoBitrateKbps: 24_000,
+    })).toBe(true)
+  })
+
+  it('keeps warmup when healthy evidence is still weak', () => {
+    const classification = buildRuntimeProfileClassification({
+      targetType: 'home',
+      transportPath: 'Direct',
+      stats: baseStats(),
+      nowMs: 1000,
+      connectedAtMs: 0,
+      warmupUntilMs: 5000,
+      renderCause: 'renderStable',
+      contentFpsClass: 'content60',
+    })
+    const policy = resolveEffectiveFrontEndPolicy(classification)
+    expect(shouldEndWarmupEarly({
+      nowMs: 1000,
+      warmupUntilMs: 5000,
+      classification,
+      bandwidthState: 'stable',
+      recoveryCause: 'unknown',
+      renderCause: 'renderStable',
+      renderBackpressure: false,
+      stats: baseStats({
+        inboundVideoBitrateKbps: 10_000,
+        videoTwccLossRatio: 0,
+        videoTwccFeedbackIntervalMs: 40,
+        packetAgeMs: 30,
+        presentAgeMs: 30,
+      }),
+      policy,
+      baseVideoBitrateKbps: 24_000,
+    })).toBe(false)
   })
 })
 

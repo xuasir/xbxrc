@@ -6,7 +6,11 @@ import type {
   TransportRuntimeConfig,
 } from '../../player'
 import type { RuntimeLaunchSpec } from '../types'
-import type { EffectiveFrontEndPolicy, RuntimeProfileClassification } from './browser-runtime-profile'
+import type {
+  EffectiveFrontEndPolicy,
+  FrontEndPolicyInputReason,
+  RuntimeProfileClassification,
+} from './browser-runtime-profile'
 import type {
   RuntimeDisplayState,
   RuntimeEvent,
@@ -31,6 +35,8 @@ import {
   recordInboundFpsSample,
   resolveEffectiveFrontEndPolicy,
   resolveExpectedContentFps,
+  resolveFrontEndPolicyInputReason,
+  shouldEndWarmupEarly,
 
 } from './browser-runtime-profile'
 import {
@@ -386,6 +392,7 @@ export function createBrowserRuntime(options: {
   }
   let expectedContentFpsResolved = 60
   let frontEndUpshiftBlockedReason: string | undefined
+  let frontEndPolicyInputReason: FrontEndPolicyInputReason = 'healthy'
   let latestTransportPath: string | undefined
 
   function emit(event: RuntimeEvent): void {
@@ -1781,7 +1788,7 @@ export function createBrowserRuntime(options: {
       controlChannelState: channelHealth.state,
       sendFailBurst: channelHealth.sendFailBurst ?? 0,
     })
-    maybeTransitionBandwidthState(now, evaluateProfileBandwidthState({
+    const nextBandwidthState = evaluateProfileBandwidthState({
       now,
       stats,
       previous: bandwidthState,
@@ -1789,7 +1796,38 @@ export function createBrowserRuntime(options: {
       expectedContentFps: expectedContentFpsResolved,
       policy: effectiveFrontEndPolicy,
       baseVideoBitrateKbps,
-    }))
+    })
+    maybeTransitionBandwidthState(now, nextBandwidthState)
+    frontEndPolicyInputReason = resolveFrontEndPolicyInputReason({
+      bandwidthState,
+      recoveryCause,
+      renderCause,
+      renderBackpressure,
+    })
+    if (shouldEndWarmupEarly({
+      nowMs: now,
+      warmupUntilMs,
+      classification: runtimeProfileClassification,
+      bandwidthState,
+      recoveryCause,
+      renderCause,
+      renderBackpressure,
+      stats,
+      policy: effectiveFrontEndPolicy,
+      baseVideoBitrateKbps,
+    })) {
+      const remainingMs = Math.max(0, warmupUntilMs - now)
+      warmupUntilMs = now
+      displayWarmupUntilMs = now
+      recordRuntimeTraceEvent('frontEndWarmupEndedEarly', {
+        remainingMs,
+        frontEndProfileBaseline: runtimeProfileClassification.baseline,
+        frontEndProfileDynamic: runtimeProfileClassification.dynamic,
+        frontEndContentFpsClass: runtimeProfileClassification.contentFpsClass,
+        frontEndPolicyPreset: effectiveFrontEndPolicy.presetId,
+        frontEndPolicyInputReason,
+      })
+    }
     if (recoveryCause === 'networkCongestion') {
       void applyQualityLadderLevel('L2', 'networkCongestion')
     }
@@ -2096,12 +2134,13 @@ export function createBrowserRuntime(options: {
       })
       return
     }
+    const activePeer = peer
 
     publishPhase('gatheringIce')
     let flushTimer: number | null = null
     let settled = false
     let flushInFlight = false
-    let gatheringComplete = peer.iceGatheringState === 'complete'
+    let gatheringComplete = activePeer.iceGatheringState === 'complete'
     let finalPollSent = false
     let resolvePromise: () => void = () => {}
     const pendingLocalCandidates: Array<Parameters<PlayerClient['addIceCandidates']>[0][number]> = []
@@ -2173,8 +2212,8 @@ export function createBrowserRuntime(options: {
       }
       settled = true
       clearFlushTimer()
-      peer.removeEventListener('icecandidate', handleIceCandidate)
-      peer.removeEventListener('icegatheringstatechange', handleGatheringStateChange)
+      activePeer.removeEventListener('icecandidate', handleIceCandidate)
+      activePeer.removeEventListener('icegatheringstatechange', handleGatheringStateChange)
       resolve()
     }
 
@@ -2259,7 +2298,7 @@ export function createBrowserRuntime(options: {
     }
 
     function handleGatheringStateChange(): void {
-      if (peer.iceGatheringState === 'complete') {
+      if (activePeer.iceGatheringState === 'complete') {
         gatheringComplete = true
         scheduleFlush(resolvePromise)
       }
@@ -2267,8 +2306,8 @@ export function createBrowserRuntime(options: {
 
     await new Promise<void>((resolve) => {
       resolvePromise = resolve
-      peer.addEventListener('icecandidate', handleIceCandidate)
-      peer.addEventListener('icegatheringstatechange', handleGatheringStateChange)
+      activePeer.addEventListener('icecandidate', handleIceCandidate)
+      activePeer.addEventListener('icegatheringstatechange', handleGatheringStateChange)
 
       for (const candidate of input.negotiation.client.getIceCandidates()) {
         if (isHostCandidate(candidate.candidate)) {
@@ -2684,6 +2723,7 @@ export function createBrowserRuntime(options: {
         frontEndContentFpsClass: runtimeProfileClassification.contentFpsClass,
         frontEndExpectedContentFps: expectedContentFpsResolved,
         frontEndPolicyPreset: effectiveFrontEndPolicy.presetId,
+        frontEndPolicyInputReason,
         frontEndWarmupUntilMs: warmupUntilMs,
         frontEndUpshiftBlockedReason,
         presentationMilestone,

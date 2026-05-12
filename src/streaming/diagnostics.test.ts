@@ -63,6 +63,7 @@ describe('buildStreamDiagnosticsSnapshot', () => {
       frontEndContentFpsClass: 'content60',
       frontEndExpectedContentFps: 60,
       frontEndPolicyPreset: 'homeLan+steady',
+      frontEndPolicyInputReason: 'healthy',
       frontEndWarmupUntilMs: 52_200,
       frontEndUpshiftBlockedReason: 'bandwidthState:warning',
       videoRendererStalled: true,
@@ -116,6 +117,7 @@ describe('buildStreamDiagnosticsSnapshot', () => {
     expect(diagnostics.frontEndContentFpsClass).toBe('content60')
     expect(diagnostics.frontEndExpectedContentFps).toBe(60)
     expect(diagnostics.frontEndPolicyPreset).toBe('homeLan+steady')
+    expect(diagnostics.frontEndPolicyInputReason).toBe('healthy')
     expect(diagnostics.frontEndWarmupUntilMs).toBe(52_200)
     expect(diagnostics.frontEndUpshiftBlockedReason).toBe('bandwidthState:warning')
     expect(diagnostics.videoRendererStalled).toBe(true)

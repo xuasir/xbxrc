@@ -222,6 +222,7 @@ export interface StreamPerformanceSnapshot {
   frontEndContentFpsClass?: 'content30' | 'content60' | 'contentUnknown'
   frontEndExpectedContentFps?: number
   frontEndPolicyPreset?: string
+  frontEndPolicyInputReason?: 'healthy' | 'networkLimited' | 'deliveryLimited'
   frontEndWarmupUntilMs?: number
   frontEndUpshiftBlockedReason?: string
   hostMailboxSubmitEpoch?: number
@@ -334,6 +335,7 @@ export interface StreamSessionDiagnosticsSnapshot {
   frontEndContentFpsClass?: 'content30' | 'content60' | 'contentUnknown'
   frontEndExpectedContentFps?: number
   frontEndPolicyPreset?: string
+  frontEndPolicyInputReason?: 'healthy' | 'networkLimited' | 'deliveryLimited'
   frontEndWarmupUntilMs?: number
   frontEndUpshiftBlockedReason?: string
   videoRendererStalled?: boolean

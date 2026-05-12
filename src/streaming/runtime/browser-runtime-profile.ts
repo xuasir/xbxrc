@@ -24,6 +24,8 @@ export type DisplayDegradeLevel = 'displayL0' | 'displayL1' | 'displayL2'
 
 export type BandwidthState = 'stable' | 'warning' | 'congested' | 'recovering'
 
+export type FrontEndPolicyInputReason = 'healthy' | 'networkLimited' | 'deliveryLimited'
+
 export interface RuntimeProfileClassification {
   baseline: FrontEndProfileBaseline
   dynamic: FrontEndProfileDynamic
@@ -390,6 +392,87 @@ export type RecoveryCause
     | 'renderStarvation'
     | 'controlChannelUnhealthy'
     | 'unknown'
+
+export function resolveFrontEndPolicyInputReason(input: {
+  bandwidthState: BandwidthState
+  recoveryCause: RecoveryCause | undefined
+  renderCause: 'decodeBackpressure' | 'renderStarvation' | 'renderStable' | undefined
+  renderBackpressure: boolean
+}): FrontEndPolicyInputReason {
+  if (
+    input.bandwidthState === 'warning'
+    || input.bandwidthState === 'congested'
+    || input.bandwidthState === 'recovering'
+    || input.recoveryCause === 'networkCongestion'
+    || input.recoveryCause === 'controlChannelUnhealthy'
+  ) {
+    return 'networkLimited'
+  }
+  if (
+    input.renderCause === 'decodeBackpressure'
+    || input.renderCause === 'renderStarvation'
+    || input.renderBackpressure
+    || input.recoveryCause === 'decodeBackpressure'
+    || input.recoveryCause === 'renderStarvation'
+  ) {
+    return 'deliveryLimited'
+  }
+  return 'healthy'
+}
+
+export function shouldEndWarmupEarly(input: {
+  nowMs: number
+  warmupUntilMs: number
+  classification: RuntimeProfileClassification
+  bandwidthState: BandwidthState
+  recoveryCause: RecoveryCause | undefined
+  renderCause: 'decodeBackpressure' | 'renderStarvation' | 'renderStable' | undefined
+  renderBackpressure: boolean
+  stats: StreamStats
+  policy: EffectiveFrontEndPolicy
+  baseVideoBitrateKbps: number
+}): boolean {
+  if (input.nowMs >= input.warmupUntilMs) {
+    return false
+  }
+  if (input.classification.baseline !== 'homeLan') {
+    return false
+  }
+  if (input.bandwidthState !== 'stable') {
+    return false
+  }
+  if (input.recoveryCause !== undefined && input.recoveryCause !== 'unknown') {
+    return false
+  }
+  if (input.renderCause !== 'renderStable' || input.renderBackpressure) {
+    return false
+  }
+
+  const loss = input.stats.videoTwccLossRatio ?? 0
+  const feedbackIntervalMs = input.stats.videoTwccFeedbackIntervalMs ?? 0
+  const inboundKbps = input.stats.inboundVideoBitrateKbps ?? 0
+  const packetAgeMs = input.stats.packetAgeMs ?? 0
+  const presentAgeMs = input.stats.presentAgeMs ?? 0
+  const baseBitrate = Math.max(4_000, input.baseVideoBitrateKbps)
+
+  if (inboundKbps <= 0 || inboundKbps < baseBitrate * input.policy.adaptiveStableBitrateRatio) {
+    return false
+  }
+  if (loss > input.policy.mildLoss) {
+    return false
+  }
+  if (feedbackIntervalMs > input.policy.mildFeedbackIntervalMs) {
+    return false
+  }
+  if (packetAgeMs > input.policy.mildPacketAgeMs) {
+    return false
+  }
+  if (presentAgeMs > input.policy.mildPresentAgeMs) {
+    return false
+  }
+
+  return true
+}
 
 export function explainFrontEndQualityUpshiftBlock(input: {
   nowMs: number

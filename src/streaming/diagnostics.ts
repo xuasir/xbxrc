@@ -96,6 +96,7 @@ export function buildStreamDiagnosticsSnapshot(input: {
   const frontEndContentFpsClass = input.runtimeSnapshot?.frontEndContentFpsClass
   const frontEndExpectedContentFps = input.runtimeSnapshot?.frontEndExpectedContentFps
   const frontEndPolicyPreset = input.runtimeSnapshot?.frontEndPolicyPreset?.trim() || undefined
+  const frontEndPolicyInputReason = input.runtimeSnapshot?.frontEndPolicyInputReason
   const frontEndWarmupUntilMs = input.runtimeSnapshot?.frontEndWarmupUntilMs
   const frontEndUpshiftBlockedReason = input.runtimeSnapshot?.frontEndUpshiftBlockedReason?.trim() || undefined
   const videoRendererStalled = input.runtimeSnapshot?.videoRendererStalled
@@ -258,6 +259,7 @@ export function buildStreamDiagnosticsSnapshot(input: {
     frontEndContentFpsClass,
     frontEndExpectedContentFps,
     frontEndPolicyPreset,
+    frontEndPolicyInputReason,
     frontEndWarmupUntilMs,
     frontEndUpshiftBlockedReason,
     videoRendererStalled,
