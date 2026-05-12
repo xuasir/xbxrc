@@ -616,17 +616,13 @@ onMounted(() => {
     gamepadSnapshot.value = snapshot
   })
   disposeGamepadPadSnapshot = events.on('gamepad.slotSnapshot', (snapshot) => {
-    if (!gamepadDebugEnabled.value) {
-      return
-    }
-    const now = Date.now()
-    if (now - lastPadSnapshotAt < 100) {
-      return
-    }
-    lastPadSnapshotAt = now
-    lastPadSnapshot.value = snapshot
+    const mappingCaptureActive
+      = mappingSheetOpen.value
+        && mappingSheetMode.value === 'gamepad'
+        && captureTargetButton.value !== null
 
-    if (mappingSheetOpen.value && mappingSheetMode.value === 'gamepad' && captureTargetButton.value !== null) {
+    // 手柄物理键采集必须每帧处理，不能依赖调试开关，也不能被调试面板的节流丢掉。
+    if (mappingCaptureActive) {
       const rawIndex = detectPressedRawButtonIndex(snapshot)
       if (rawIndex !== null) {
         gamepadButtonIndices.value[captureTargetButton.value] = rawIndex
@@ -642,6 +638,16 @@ onMounted(() => {
         }
       }
     }
+
+    if (!gamepadDebugEnabled.value) {
+      return
+    }
+    const now = Date.now()
+    if (now - lastPadSnapshotAt < 100) {
+      return
+    }
+    lastPadSnapshotAt = now
+    lastPadSnapshot.value = snapshot
   })
 })
 

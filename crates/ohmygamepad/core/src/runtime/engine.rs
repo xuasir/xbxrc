@@ -583,7 +583,11 @@ fn pad_order(pad_id: LogicalPadId) -> u8 {
 }
 
 fn pad_payload_changed(left: &LogicalPadSnapshotDto, right: &LogicalPadSnapshotDto) -> bool {
-    left.device_ids != right.device_ids || left.state != right.state
+    left.device_ids != right.device_ids
+        || left.state != right.state
+        // 扩展键（背键等）可能只出现在 raw_buttons 中、不改变标准逻辑键位，必须参与去重判断，
+        // 否则映射采集阶段收不到 slotSnapshot。
+        || left.raw_buttons != right.raw_buttons
 }
 
 fn collect_pressed_raw_buttons(
