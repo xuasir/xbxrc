@@ -548,14 +548,102 @@
   },
   "gamepadCard": {
     "close": "Close gamepad card",
-    "eyebrow": "Detected Controllers",
-    "title": "Gamepad Profile",
+    "eyebrow": "Connected",
+    "title": "Controllers",
     "connectedSummary": "{count} connected",
     "provider": "Haptics Provider",
     "autoTarget": "Auto Target",
     "defaultTarget": "Default Target",
     "defaultBadge": "Default",
     "empty": "No connected controller detected.",
+    "technicalGlobal": "App & sampling (technical)",
+    "technicalDevice": "This controller (technical)",
+    "runtime": {
+      "hapticsProvider": "Haptics path",
+      "sampling": "Input sampling"
+    },
+    "detailLabels": {
+      "type": "Type",
+      "vidPid": "VID/PID",
+      "inputView": "Input view",
+      "mapping": "Mapping",
+      "capabilities": "Capabilities",
+      "classification": "Classification",
+      "path": "Path"
+    },
+    "samplingLifecycle": {
+      "active": "Active",
+      "backgroundWarm": "Background warm",
+      "suspended": "Suspended"
+    },
+    "samplingHealth": {
+      "healthy": "Healthy",
+      "awaitingBaseline": "Awaiting baseline",
+      "stalled": "Stalled"
+    },
+    "inputPolicy": {
+      "shared": "Shared",
+      "ui-only": "UI only",
+      "stream-only": "Stream only"
+    },
+    "samplingSelfHeal": "Self-heal ×{count}",
+    "feedback": {
+      "rumbleSent": "Rumble test sent.",
+      "rumbleFailed": "Rumble test failed.",
+      "primarySet": "Primary controller updated.",
+      "primaryFailed": "Could not update. Try again.",
+      "resumeSent": "Resume sampling requested for this device.",
+      "resumeFailed": "Action failed. Try again."
+    },
+    "confidence": {
+      "high": "High",
+      "medium": "Medium",
+      "low": "Low"
+    },
+    "classificationTags": {
+      "handheldBuiltin": "Handheld built-in",
+      "virtual": "Virtual gamepad",
+      "steamVirtual": "Steam Virtual",
+      "motionCandidate": "Motion candidate",
+      "confidence": "Confidence: {level}"
+    },
+    "inputViews": {
+      "xinput": "XInput compatible",
+      "steamVirtual": "Steam Virtual",
+      "virtual": "Virtual controller",
+      "sdlNative": "SDL native"
+    },
+    "deviceTypes": {
+      "standard": "Standard",
+      "xbox360": "Xbox 360",
+      "xbox-one": "Xbox One",
+      "ps3": "PS3",
+      "ps4": "PS4",
+      "ps5": "PS5",
+      "nintendo-switch-pro": "Switch Pro",
+      "nintendo-switch-joycon-left": "Joy-Con L",
+      "nintendo-switch-joycon-right": "Joy-Con R",
+      "nintendo-switch-joycon-pair": "Joy-Con pair",
+      "unknown": "Unknown"
+    },
+    "deviceCapabilities": {
+      "rumble": "Rumble",
+      "triggerRumble": "Trigger rumble",
+      "battery": "Battery",
+      "gyro": "Gyro",
+      "accel": "Accel",
+      "touchpad": "Touchpad",
+      "led": "LED",
+      "basicInput": "Basic input"
+    },
+    "batteryPercent": "About {percent}% battery",
+    "powerState": {
+      "unknown": "Power unknown",
+      "wired": "Wired power",
+      "on-battery": "On battery",
+      "charging": "Charging",
+      "charged": "Charged"
+    },
     "values": {
       "yes": "Yes",
       "no": "No",
@@ -566,6 +654,8 @@
       "gilrsBasic": "SDL3 basic",
       "macosGcController": "macOS GameController",
       "windowsXbox": "Windows Xbox",
+      "sdl3Gamepad": "SDL3 gamepad",
+      "winXboxHaptics": "Windows Xbox haptics",
       "none": "None"
     },
     "connections": {

@@ -4,7 +4,10 @@ import type {
   GamepadDeviceDto,
   GamepadDeviceTypeDto,
   GamepadHapticsProviderKindDto,
+  GamepadInputPolicyDto,
   GamepadRuntimeSnapshotDto,
+  GamepadSamplingHealthDto,
+  GamepadSamplingLifecycleDto,
 } from '@shared/gamepad/contract'
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -27,23 +30,24 @@ const emit = defineEmits<{
 const { t } = useI18n()
 
 const connectedDevices = computed(() => props.snapshot?.devices.filter(device => device.connected) ?? [])
-const samplingDiagnosticsLine = computed(() => {
-  const s = props.snapshot
-  if (!s) {
-    return ''
-  }
-  const lc = s.samplingLifecycle ?? 'active'
-  const h = s.samplingHealth ?? 'healthy'
-  const policy = s.inputPolicy
-  const heals = s.samplingSelfHealCount ?? 0
-  const tail = heals > 0 ? ` · 自愈 ${heals}` : ''
-  return `lifecycle ${lc} · health ${h} · policy ${policy}${tail}`
-})
 const defaultDeviceId = computed(() => props.snapshot?.haptics.defaultDeviceId ?? null)
 const inputPrimaryDeviceId = computed(() => props.snapshot?.haptics.defaultDeviceId ?? null)
 const deviceActionPending = ref<string | null>(null)
-const deviceActionMessage = ref('')
+const deviceActionMessageKey = ref<string | null>(null)
 const deviceActionMessageTone = ref<'success' | 'error'>('success')
+
+const technicalGlobalOpen = ref(false)
+const deviceTechnicalOpen = ref<Record<string, boolean>>({})
+
+const needsSamplingRecovery = computed(() => {
+  const s = props.snapshot
+  if (!s) {
+    return false
+  }
+  const health = s.samplingHealth ?? 'healthy'
+  const lifecycle = s.samplingLifecycle ?? 'active'
+  return health !== 'healthy' || lifecycle === 'suspended'
+})
 
 const showCapabilitySummary = computed(() => {
   return connectedDevices.value.some((device) => {
@@ -79,12 +83,6 @@ const capabilitySummaryKey = computed(() => {
     return 'gamepadCard.capabilitySummary.batteryOnly'
   }
   return ''
-})
-
-const panelStyle = computed(() => {
-  return {
-    '--gamepad-card-watermark': `url(${seriesCtrlImageUrl})`,
-  } as Record<string, string>
 })
 
 function emitClose(): void {
@@ -137,25 +135,25 @@ async function handleTestGamepadRumble(): Promise<void> {
       },
     })
     deviceActionMessageTone.value = 'success'
-    deviceActionMessage.value = '已发送震动测试。'
+    deviceActionMessageKey.value = 'gamepadCard.feedback.rumbleSent'
   }
   catch {
     deviceActionMessageTone.value = 'error'
-    deviceActionMessage.value = '震动测试失败。'
+    deviceActionMessageKey.value = 'gamepadCard.feedback.rumbleFailed'
   }
 }
 
 async function handleSetPrimarySamplingDevice(deviceId: string | null): Promise<void> {
   deviceActionPending.value = deviceId ?? '__auto__'
-  deviceActionMessage.value = ''
+  deviceActionMessageKey.value = null
   try {
     await rpc.gamepad.setPrimarySamplingDevice({ deviceId })
     deviceActionMessageTone.value = 'success'
-    deviceActionMessage.value = '已设置主采样设备。'
+    deviceActionMessageKey.value = 'gamepadCard.feedback.primarySet'
   }
   catch {
     deviceActionMessageTone.value = 'error'
-    deviceActionMessage.value = '设置失败，请稍后重试。'
+    deviceActionMessageKey.value = 'gamepadCard.feedback.primaryFailed'
   }
   finally {
     deviceActionPending.value = null
@@ -164,48 +162,43 @@ async function handleSetPrimarySamplingDevice(deviceId: string | null): Promise<
 
 async function handleResumeDeviceSampling(deviceId: string): Promise<void> {
   deviceActionPending.value = deviceId
-  deviceActionMessage.value = ''
+  deviceActionMessageKey.value = null
   try {
     await rpc.gamepad.resumeSamplingDevice({ deviceId })
     deviceActionMessageTone.value = 'success'
-    deviceActionMessage.value = '已发送恢复采样请求。'
+    deviceActionMessageKey.value = 'gamepadCard.feedback.resumeSent'
   }
   catch {
     deviceActionMessageTone.value = 'error'
-    deviceActionMessage.value = '操作失败，请稍后重试。'
+    deviceActionMessageKey.value = 'gamepadCard.feedback.resumeFailed'
   }
   finally {
     deviceActionPending.value = null
   }
 }
 
-function formatDeviceType(type: GamepadDeviceTypeDto | null): string {
-  switch (type) {
-    case 'standard':
-      return 'Standard'
-    case 'xbox360':
-      return 'Xbox 360'
-    case 'xbox-one':
-      return 'Xbox One'
-    case 'ps3':
-      return 'PS3'
-    case 'ps4':
-      return 'PS4'
-    case 'ps5':
-      return 'PS5'
-    case 'nintendo-switch-pro':
-      return 'Switch Pro'
-    case 'nintendo-switch-joycon-left':
-      return 'Joy-Con L'
-    case 'nintendo-switch-joycon-right':
-      return 'Joy-Con R'
-    case 'nintendo-switch-joycon-pair':
-      return 'Joy-Con Pair'
-    case 'unknown':
-      return 'Unknown'
-    default:
-      return 'Unknown'
+function toggleTechnicalGlobal(): void {
+  technicalGlobalOpen.value = !technicalGlobalOpen.value
+}
+
+function toggleDeviceTechnical(deviceId: string): void {
+  deviceTechnicalOpen.value = {
+    ...deviceTechnicalOpen.value,
+    [deviceId]: !deviceTechnicalOpen.value[deviceId],
   }
+}
+
+function isDeviceTechnicalOpen(deviceId: string): boolean {
+  return deviceTechnicalOpen.value[deviceId] === true
+}
+
+function formatDeviceType(type: GamepadDeviceTypeDto | null): string {
+  if (!type) {
+    return t('gamepadCard.deviceTypes.unknown')
+  }
+  const key = `gamepadCard.deviceTypes.${type}` as const
+  const translated = t(key)
+  return translated === key ? t('gamepadCard.deviceTypes.unknown') : translated
 }
 
 function formatHex(value: number | null): string {
@@ -221,14 +214,14 @@ function formatVidPid(device: GamepadDeviceDto): string {
 
 function formatMapping(mapping: string | null): string {
   if (!mapping) {
-    return '未知'
+    return t('gamepadCard.values.unknown')
   }
   return mapping
 }
 
 function formatPath(path: string | null): string {
   if (!path) {
-    return '未上报'
+    return t('gamepadCard.values.unknown')
   }
   return path
 }
@@ -236,59 +229,59 @@ function formatPath(path: string | null): string {
 function formatHapticsProvider(provider: GamepadHapticsProviderKindDto | null | undefined): string {
   switch (provider) {
     case 'win-xbox-haptics':
-      return 'Windows Xbox Haptics'
+      return t('gamepadCard.providers.winXboxHaptics')
     case 'sdl3-gamepad':
-      return 'SDL3 Gamepad'
+      return t('gamepadCard.providers.sdl3Gamepad')
     default:
-      return '未知'
+      return t('gamepadCard.values.unknown')
   }
 }
 
-function detectInputView(device: GamepadDeviceDto): string {
+function detectInputViewKey(device: GamepadDeviceDto): 'xinput' | 'steamVirtual' | 'virtual' | 'sdlNative' {
   const lowerPath = device.path?.toLowerCase() ?? ''
   const lowerName = device.name.toLowerCase()
   const lowerMapping = device.mapping?.toLowerCase() ?? ''
 
   if (lowerPath.includes('xinput') || lowerName.includes('xinput') || lowerMapping.startsWith('xinput')) {
-    return 'XInput 兼容视图'
+    return 'xinput'
   }
   if (device.classification.isSteamVirtual) {
-    return 'Steam Virtual 视图'
+    return 'steamVirtual'
   }
   if (device.classification.isVirtualController) {
-    return '虚拟控制器视图'
+    return 'virtual'
   }
-  return 'SDL 原生视图'
+  return 'sdlNative'
 }
 
 function formatConfidence(confidence: GamepadDeviceClassificationDto['confidence']): string {
   switch (confidence) {
     case 'high':
-      return '高'
+      return t('gamepadCard.confidence.high')
     case 'medium':
-      return '中'
+      return t('gamepadCard.confidence.medium')
     case 'low':
-      return '低'
+      return t('gamepadCard.confidence.low')
     default:
-      return '低'
+      return t('gamepadCard.confidence.low')
   }
 }
 
 function classificationTags(classification: GamepadDeviceClassificationDto): string[] {
   const tags: string[] = []
   if (classification.isHandheldBuiltin) {
-    tags.push('掌机内建')
+    tags.push(t('gamepadCard.classificationTags.handheldBuiltin'))
   }
   if (classification.isVirtualController) {
-    tags.push('虚拟手柄')
+    tags.push(t('gamepadCard.classificationTags.virtual'))
   }
   if (classification.isSteamVirtual) {
-    tags.push('Steam Virtual')
+    tags.push(t('gamepadCard.classificationTags.steamVirtual'))
   }
   if (classification.isMotionNativeCandidate) {
-    tags.push('原生 Motion 候选')
+    tags.push(t('gamepadCard.classificationTags.motionCandidate'))
   }
-  tags.push(`置信度 ${formatConfidence(classification.confidence)}`)
+  tags.push(t('gamepadCard.classificationTags.confidence', { level: formatConfidence(classification.confidence) }))
   return tags
 }
 
@@ -296,37 +289,60 @@ function capabilitySummary(device: GamepadDeviceDto): string[] {
   const caps = device.sdl3Capabilities
   const items: string[] = []
   if (caps.supportsRumble) {
-    items.push('机身震动')
+    items.push(t('gamepadCard.deviceCapabilities.rumble'))
   }
   if (caps.supportsTriggerRumble) {
-    items.push('扳机震动')
+    items.push(t('gamepadCard.deviceCapabilities.triggerRumble'))
   }
   if (caps.reportsBattery) {
-    items.push('电量')
+    items.push(t('gamepadCard.deviceCapabilities.battery'))
   }
   if (caps.supportsGyro) {
-    items.push('Gyro')
+    items.push(t('gamepadCard.deviceCapabilities.gyro'))
   }
   if (caps.supportsAccel) {
-    items.push('Accel')
+    items.push(t('gamepadCard.deviceCapabilities.accel'))
   }
   if (caps.supportsTouchpad) {
-    items.push('触控板')
+    items.push(t('gamepadCard.deviceCapabilities.touchpad'))
   }
   if (caps.supportsLed) {
-    items.push('LED')
+    items.push(t('gamepadCard.deviceCapabilities.led'))
   }
   if (items.length === 0) {
-    items.push('基础输入')
+    items.push(t('gamepadCard.deviceCapabilities.basicInput'))
   }
   return items
 }
 
 function classificationReasons(device: GamepadDeviceDto): string {
   if (device.classification.reasons.length === 0) {
-    return '无'
+    return t('gamepadCard.values.none')
   }
   return device.classification.reasons.join(' / ')
+}
+
+function samplingLifecycleLabel(lc: GamepadSamplingLifecycleDto): string {
+  return t(`gamepadCard.samplingLifecycle.${lc}`)
+}
+
+function samplingHealthLabel(h: GamepadSamplingHealthDto): string {
+  return t(`gamepadCard.samplingHealth.${h}`)
+}
+
+function inputPolicyLabel(policy: GamepadInputPolicyDto): string {
+  return t(`gamepadCard.inputPolicy.${policy}`)
+}
+
+function deviceBatteryCaption(device: GamepadDeviceDto): string | null {
+  if (typeof device.batteryPercent === 'number' && Number.isFinite(device.batteryPercent)) {
+    const clamped = Math.max(0, Math.min(100, Math.round(device.batteryPercent)))
+    return t('gamepadCard.batteryPercent', { percent: clamped })
+  }
+  if (device.powerState && device.sdl3Capabilities.reportsBattery) {
+    return t(`gamepadCard.powerState.${device.powerState}`)
+  }
+  return null
 }
 </script>
 
@@ -345,7 +361,6 @@ function classificationReasons(device: GamepadDeviceDto): string {
           :id="SPATIAL_NAV_SCOPE_IDS.gamepadMenu"
           as="section"
           class="gamepad-card-panel"
-          :style="panelStyle"
           :active="props.open"
           :default-focus-id="SPATIAL_NAV_NODE_IDS.gamepadMenu.close"
           :aria-label="t('gamepadCard.title')"
@@ -385,15 +400,47 @@ function classificationReasons(device: GamepadDeviceDto): string {
               {{ t(capabilitySummaryKey) }}
             </p>
 
-            <div v-if="props.snapshot" class="gamepad-card__runtime-meta">
-              <span class="gamepad-card__runtime-meta-label">震动提供者</span>
-              <span class="gamepad-card__runtime-meta-value">
-                {{ formatHapticsProvider(props.snapshot.haptics.provider) }}
-              </span>
-            </div>
-            <div v-if="props.snapshot && samplingDiagnosticsLine" class="gamepad-card__runtime-meta">
-              <span class="gamepad-card__runtime-meta-label">采样诊断</span>
-              <span class="gamepad-card__runtime-meta-value">{{ samplingDiagnosticsLine }}</span>
+            <div v-if="props.snapshot" class="gamepad-card__disclosure">
+              <Focusable
+                id="gamepad-card.technical-global-toggle"
+                as="button"
+                type="button"
+                class="gamepad-card__disclosure-toggle"
+                :scope-id="SPATIAL_NAV_SCOPE_IDS.gamepadMenu"
+                :aria-expanded="technicalGlobalOpen"
+                @click="toggleTechnicalGlobal"
+              >
+                {{ t('gamepadCard.technicalGlobal') }}
+                <span class="gamepad-card__disclosure-chevron" :class="{ 'gamepad-card__disclosure-chevron--open': technicalGlobalOpen }" aria-hidden="true" />
+              </Focusable>
+              <div v-if="technicalGlobalOpen" class="gamepad-card__disclosure-body">
+                <dl class="gamepad-card__device-details gamepad-card__device-details--global">
+                  <div class="gamepad-card__device-detail-row">
+                    <dt class="gamepad-card__device-detail-label">
+                      {{ t('gamepadCard.runtime.hapticsProvider') }}
+                    </dt>
+                    <dd class="gamepad-card__device-detail-value">
+                      {{ formatHapticsProvider(props.snapshot.haptics.provider) }}
+                    </dd>
+                  </div>
+                  <div class="gamepad-card__device-detail-row">
+                    <dt class="gamepad-card__device-detail-label">
+                      {{ t('gamepadCard.runtime.sampling') }}
+                    </dt>
+                    <dd class="gamepad-card__device-detail-value">
+                      <span>{{ samplingLifecycleLabel(props.snapshot.samplingLifecycle ?? 'active') }}</span>
+                      <span class="gamepad-card__detail-sep" aria-hidden="true"> · </span>
+                      <span>{{ samplingHealthLabel(props.snapshot.samplingHealth ?? 'healthy') }}</span>
+                      <span class="gamepad-card__detail-sep" aria-hidden="true"> · </span>
+                      <span>{{ inputPolicyLabel(props.snapshot.inputPolicy) }}</span>
+                      <template v-if="(props.snapshot.samplingSelfHealCount ?? 0) > 0">
+                        <span class="gamepad-card__detail-sep" aria-hidden="true"> · </span>
+                        <span>{{ t('gamepadCard.samplingSelfHeal', { count: props.snapshot.samplingSelfHealCount }) }}</span>
+                      </template>
+                    </dd>
+                  </div>
+                </dl>
+              </div>
             </div>
 
             <div v-if="connectedDevices.length > 0" class="gamepad-card__device-list">
@@ -403,19 +450,31 @@ function classificationReasons(device: GamepadDeviceDto): string {
                 class="gamepad-card__device"
               >
                 <div class="gamepad-card__device-head">
-                  <div>
-                    <h3 class="gamepad-card__device-name">
-                      {{ device.name }}
-                    </h3>
-                    <p class="gamepad-card__device-meta">
-                      <span class="gamepad-card__status-pill">
-                        {{ t('streamPage.status.connected') }}
-                      </span>
-                      <span class="gamepad-card__device-meta-sep" aria-hidden="true">·</span>
-                      <span class="gamepad-card__device-meta-connection">
-                        {{ formatConnection(device.connection) }}
-                      </span>
-                    </p>
+                  <div class="gamepad-card__device-head-main">
+                    <div class="gamepad-card__device-name-row">
+                      <img
+                        class="gamepad-card__device-icon"
+                        :src="seriesCtrlImageUrl"
+                        alt=""
+                        width="36"
+                        height="36"
+                        decoding="async"
+                        draggable="false"
+                      />
+                      <div class="gamepad-card__device-text-col">
+                        <h3 class="gamepad-card__device-name">
+                          {{ device.name }}
+                        </h3>
+                        <p class="gamepad-card__device-meta">
+                          <span class="gamepad-card__device-meta-connection">
+                            {{ formatConnection(device.connection) }}
+                          </span>
+                        </p>
+                        <p v-if="deviceBatteryCaption(device)" class="gamepad-card__device-battery">
+                          {{ deviceBatteryCaption(device) }}
+                        </p>
+                      </div>
+                    </div>
                   </div>
                   <span
                     v-if="defaultDeviceId === device.deviceId"
@@ -424,75 +483,6 @@ function classificationReasons(device: GamepadDeviceDto): string {
                     {{ t('gamepadCard.defaultBadge') }}
                   </span>
                 </div>
-
-                <div class="gamepad-card__device-tags">
-                  <span
-                    v-for="tag in classificationTags(device.classification)"
-                    :key="`${device.deviceId}-${tag}`"
-                    class="gamepad-card__device-tag"
-                  >
-                    {{ tag }}
-                  </span>
-                </div>
-
-                <dl class="gamepad-card__device-details">
-                  <div class="gamepad-card__device-detail-row">
-                    <dt class="gamepad-card__device-detail-label">
-                      类型
-                    </dt>
-                    <dd class="gamepad-card__device-detail-value">
-                      {{ formatDeviceType(device.gamepadType) }}
-                    </dd>
-                  </div>
-                  <div class="gamepad-card__device-detail-row">
-                    <dt class="gamepad-card__device-detail-label">
-                      VID/PID
-                    </dt>
-                    <dd class="gamepad-card__device-detail-value">
-                      {{ formatVidPid(device) }}
-                    </dd>
-                  </div>
-                  <div class="gamepad-card__device-detail-row">
-                    <dt class="gamepad-card__device-detail-label">
-                      输入视图
-                    </dt>
-                    <dd class="gamepad-card__device-detail-value">
-                      {{ detectInputView(device) }}
-                    </dd>
-                  </div>
-                  <div class="gamepad-card__device-detail-row">
-                    <dt class="gamepad-card__device-detail-label">
-                      映射
-                    </dt>
-                    <dd class="gamepad-card__device-detail-value">
-                      {{ formatMapping(device.mapping) }}
-                    </dd>
-                  </div>
-                  <div class="gamepad-card__device-detail-row">
-                    <dt class="gamepad-card__device-detail-label">
-                      能力
-                    </dt>
-                    <dd class="gamepad-card__device-detail-value">
-                      {{ capabilitySummary(device).join(' / ') }}
-                    </dd>
-                  </div>
-                  <div class="gamepad-card__device-detail-row">
-                    <dt class="gamepad-card__device-detail-label">
-                      判定
-                    </dt>
-                    <dd class="gamepad-card__device-detail-value">
-                      {{ classificationReasons(device) }}
-                    </dd>
-                  </div>
-                  <div class="gamepad-card__device-detail-row">
-                    <dt class="gamepad-card__device-detail-label">
-                      路径
-                    </dt>
-                    <dd class="gamepad-card__device-detail-value gamepad-card__device-detail-value--path" :title="device.path ?? undefined">
-                      {{ formatPath(device.path) }}
-                    </dd>
-                  </div>
-                </dl>
 
                 <div class="gamepad-card__device-actions">
                   <Focusable
@@ -504,9 +494,14 @@ function classificationReasons(device: GamepadDeviceDto): string {
                     :disabled="inputPrimaryDeviceId === device.deviceId || deviceActionPending !== null"
                     @click="() => void handleSetPrimarySamplingDevice(device.deviceId)"
                   >
-                    {{ inputPrimaryDeviceId === device.deviceId ? '主采样设备' : '设为主手柄' }}
+                    {{
+                      inputPrimaryDeviceId === device.deviceId
+                        ? t('setting.gamepad.primaryDeviceCurrent')
+                        : t('setting.gamepad.primaryDeviceSet')
+                    }}
                   </Focusable>
                   <Focusable
+                    v-if="needsSamplingRecovery"
                     :id="`gamepad-card.device.${device.deviceId}.resumeSampling`"
                     as="button"
                     type="button"
@@ -515,7 +510,7 @@ function classificationReasons(device: GamepadDeviceDto): string {
                     :disabled="deviceActionPending !== null"
                     @click="() => void handleResumeDeviceSampling(device.deviceId)"
                   >
-                    切换采样
+                    {{ t('setting.gamepad.toggleSampling') }}
                   </Focusable>
                   <Focusable
                     :id="`gamepad-card.device.${device.deviceId}.testRumble`"
@@ -526,8 +521,99 @@ function classificationReasons(device: GamepadDeviceDto): string {
                     :disabled="isGamepadTestRumbleDisabled || deviceActionPending !== null"
                     @click="() => void handleTestGamepadRumble()"
                   >
-                    震动测试
+                    {{ t('setting.gamepad.testRumbleLabel') }}
                   </Focusable>
+                </div>
+
+                <div class="gamepad-card__disclosure gamepad-card__disclosure--nested">
+                  <Focusable
+                    :id="`gamepad-card.device.${device.deviceId}.technicalToggle`"
+                    as="button"
+                    type="button"
+                    class="gamepad-card__disclosure-toggle gamepad-card__disclosure-toggle--small"
+                    :scope-id="SPATIAL_NAV_SCOPE_IDS.gamepadMenu"
+                    :aria-expanded="isDeviceTechnicalOpen(device.deviceId)"
+                    @click="toggleDeviceTechnical(device.deviceId)"
+                  >
+                    {{ t('gamepadCard.technicalDevice') }}
+                    <span
+                      class="gamepad-card__disclosure-chevron"
+                      :class="{ 'gamepad-card__disclosure-chevron--open': isDeviceTechnicalOpen(device.deviceId) }"
+                      aria-hidden="true"
+                    />
+                  </Focusable>
+                  <div v-if="isDeviceTechnicalOpen(device.deviceId)" class="gamepad-card__disclosure-body">
+                    <div class="gamepad-card__device-tags">
+                      <span
+                        v-for="tag in classificationTags(device.classification)"
+                        :key="`${device.deviceId}-${tag}`"
+                        class="gamepad-card__device-tag"
+                      >
+                        {{ tag }}
+                      </span>
+                    </div>
+                    <dl class="gamepad-card__device-details">
+                      <div class="gamepad-card__device-detail-row">
+                        <dt class="gamepad-card__device-detail-label">
+                          {{ t('gamepadCard.detailLabels.type') }}
+                        </dt>
+                        <dd class="gamepad-card__device-detail-value">
+                          {{ formatDeviceType(device.gamepadType) }}
+                        </dd>
+                      </div>
+                      <div class="gamepad-card__device-detail-row">
+                        <dt class="gamepad-card__device-detail-label">
+                          {{ t('gamepadCard.detailLabels.vidPid') }}
+                        </dt>
+                        <dd class="gamepad-card__device-detail-value">
+                          {{ formatVidPid(device) }}
+                        </dd>
+                      </div>
+                      <div class="gamepad-card__device-detail-row">
+                        <dt class="gamepad-card__device-detail-label">
+                          {{ t('gamepadCard.detailLabels.inputView') }}
+                        </dt>
+                        <dd class="gamepad-card__device-detail-value">
+                          {{ t(`gamepadCard.inputViews.${detectInputViewKey(device)}`) }}
+                        </dd>
+                      </div>
+                      <div class="gamepad-card__device-detail-row">
+                        <dt class="gamepad-card__device-detail-label">
+                          {{ t('gamepadCard.detailLabels.mapping') }}
+                        </dt>
+                        <dd class="gamepad-card__device-detail-value">
+                          {{ formatMapping(device.mapping) }}
+                        </dd>
+                      </div>
+                      <div class="gamepad-card__device-detail-row">
+                        <dt class="gamepad-card__device-detail-label">
+                          {{ t('gamepadCard.detailLabels.capabilities') }}
+                        </dt>
+                        <dd class="gamepad-card__device-detail-value">
+                          {{ capabilitySummary(device).join(' / ') }}
+                        </dd>
+                      </div>
+                      <div class="gamepad-card__device-detail-row">
+                        <dt class="gamepad-card__device-detail-label">
+                          {{ t('gamepadCard.detailLabels.classification') }}
+                        </dt>
+                        <dd class="gamepad-card__device-detail-value">
+                          {{ classificationReasons(device) }}
+                        </dd>
+                      </div>
+                      <div class="gamepad-card__device-detail-row">
+                        <dt class="gamepad-card__device-detail-label">
+                          {{ t('gamepadCard.detailLabels.path') }}
+                        </dt>
+                        <dd
+                          class="gamepad-card__device-detail-value gamepad-card__device-detail-value--path"
+                          :title="device.path ?? undefined"
+                        >
+                          {{ formatPath(device.path) }}
+                        </dd>
+                      </div>
+                    </dl>
+                  </div>
                 </div>
               </article>
             </div>
@@ -537,11 +623,11 @@ function classificationReasons(device: GamepadDeviceDto): string {
             </div>
 
             <p
-              v-if="deviceActionMessage"
+              v-if="deviceActionMessageKey"
               class="gamepad-card__feedback"
               :class="{ 'gamepad-card__feedback--error': deviceActionMessageTone === 'error' }"
             >
-              {{ deviceActionMessage }}
+              {{ t(deviceActionMessageKey) }}
             </p>
           </div>
         </FocusScope>
@@ -582,7 +668,6 @@ function classificationReasons(device: GamepadDeviceDto): string {
   position: relative;
   border: 1px solid var(--ui-border-subtle);
   border-radius: 16px;
-  /* 目标：更像 Xbox OS 的“玻璃卡片”，但保持克制、文字始终可读 */
   background: color-mix(in srgb, var(--ui-surface-overlay) 82%, transparent);
   box-shadow: var(--ui-shadow-overlay);
   color: var(--ui-page-text);
@@ -590,37 +675,6 @@ function classificationReasons(device: GamepadDeviceDto): string {
   flex-direction: column;
   overflow: hidden;
   padding: 24px 16px;
-}
-
-.gamepad-card-panel::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background-image:
-    radial-gradient(120% 80% at 100% 0%, color-mix(in srgb, var(--brand-accent) 18%, transparent), transparent 60%),
-    linear-gradient(180deg, color-mix(in srgb, var(--ui-surface-overlay) 82%, transparent), color-mix(in srgb, var(--ui-surface-overlay) 92%, transparent)),
-    var(--gamepad-card-watermark);
-  background-repeat: no-repeat, no-repeat, no-repeat;
-  background-size: auto, auto, 320px auto;
-  background-position: 0 0, 0 0, 120% 92%;
-  opacity: 0.14;
-  filter: saturate(0.9) contrast(0.95);
-}
-
-.gamepad-card-panel::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  /* 提升文字可读性：给 watermark 叠一层暗部渐变 */
-  background: linear-gradient(180deg, rgba(0, 0, 0, 0.04), rgba(0, 0, 0, 0.18));
-  mix-blend-mode: multiply;
-}
-
-.gamepad-card-panel > * {
-  position: relative;
-  z-index: 1;
 }
 
 .gamepad-card__close {
@@ -707,30 +761,74 @@ function classificationReasons(device: GamepadDeviceDto): string {
   padding: 0 8px 4px;
 }
 
+.gamepad-card__disclosure {
+  padding: 0 8px;
+}
+
+.gamepad-card__disclosure--nested {
+  padding: 0;
+  margin-top: 4px;
+}
+
+.gamepad-card__disclosure-toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 36px;
+  padding: 0 10px;
+  border-radius: 10px;
+  border: 1px solid var(--ui-border-subtle);
+  background: color-mix(in srgb, var(--ui-surface-overlay) 72%, transparent);
+  color: var(--ui-page-text);
+  font-size: 12px;
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+  transition: all var(--ui-motion-fast);
+}
+
+.gamepad-card__disclosure-toggle--small {
+  min-height: 32px;
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.gamepad-card__disclosure-toggle[data-focused='true'] {
+  background: var(--color-focus-bg-strong);
+  color: var(--ui-focus-text);
+  box-shadow: var(--shadow-xbox-focus);
+}
+
+.gamepad-card__disclosure-body {
+  margin-top: 8px;
+  padding-bottom: 4px;
+}
+
+.gamepad-card__disclosure-chevron {
+  flex-shrink: 0;
+  width: 8px;
+  height: 8px;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: rotate(45deg);
+  transition: transform var(--ui-motion-fast);
+  opacity: 0.75;
+}
+
+.gamepad-card__disclosure-chevron--open {
+  transform: rotate(225deg);
+  margin-top: 4px;
+}
+
+.gamepad-card__detail-sep {
+  opacity: 0.65;
+}
+
 .gamepad-card__device-list {
   display: grid;
   gap: 12px;
-}
-
-.gamepad-card__runtime-meta {
-  display: grid;
-  grid-template-columns: 72px minmax(0, 1fr);
-  gap: 8px;
-  align-items: center;
-  padding: 0 8px 4px;
-}
-
-.gamepad-card__runtime-meta-label {
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--ui-page-text-soft);
-}
-
-.gamepad-card__runtime-meta-value {
-  min-width: 0;
-  font-size: 12px;
-  color: var(--ui-page-text);
-  word-break: break-word;
 }
 
 .gamepad-card__device {
@@ -756,6 +854,7 @@ function classificationReasons(device: GamepadDeviceDto): string {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
+  margin-bottom: 4px;
 }
 
 .gamepad-card__device-tag {
@@ -779,9 +878,13 @@ function classificationReasons(device: GamepadDeviceDto): string {
   padding: 0;
 }
 
+.gamepad-card__device-details--global {
+  padding: 0 4px;
+}
+
 .gamepad-card__device-detail-row {
   display: grid;
-  grid-template-columns: 52px minmax(0, 1fr);
+  grid-template-columns: minmax(72px, 28%) minmax(0, 1fr);
   gap: 8px;
   align-items: start;
 }
@@ -833,65 +936,70 @@ function classificationReasons(device: GamepadDeviceDto): string {
   border-color: color-mix(in srgb, var(--color-warning), var(--ui-border-subtle) 60%);
 }
 
-.gamepad-card__device::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background-image: linear-gradient(90deg, rgba(0, 0, 0, 0.22), rgba(0, 0, 0, 0.08)), var(--gamepad-card-watermark);
-  background-repeat: no-repeat, no-repeat;
-  background-size: cover, 180px auto;
-  background-position: 0 0, 112% 50%;
-  opacity: 0.16;
-  filter: blur(0.2px);
-}
-
-.gamepad-card__device > * {
-  position: relative;
-  z-index: 1;
-}
-
 .gamepad-card__device-head {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
+  gap: 10px;
+}
+
+.gamepad-card__device-head-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.gamepad-card__device-name-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  min-width: 0;
+}
+
+.gamepad-card__device-icon {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  object-fit: cover;
+  object-position: center;
+  border: 1px solid var(--ui-border-subtle);
+  background: color-mix(in srgb, var(--ui-surface-overlay) 88%, transparent);
+}
+
+.gamepad-card__device-text-col {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 
 .gamepad-card__device-name {
+  margin: 0;
   font-size: 15px;
   font-weight: 700;
   line-height: 1.25;
-  max-width: 260px;
   text-wrap: balance;
+  min-width: 0;
 }
 
 .gamepad-card__device-meta {
+  margin: 0;
   font-size: 12px;
   color: var(--ui-page-text-soft);
-  margin-top: 2px;
   display: flex;
   align-items: center;
   gap: 8px;
 }
 
-.gamepad-card__status-pill {
-  display: inline-flex;
-  align-items: center;
-  height: 18px;
-  padding: 0 8px;
-  border-radius: var(--ui-radius-pill);
-  background: color-mix(in srgb, var(--brand-accent) 22%, transparent);
-  color: color-mix(in srgb, var(--ui-page-text) 92%, white);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.02em;
-}
-
-.gamepad-card__device-meta-sep {
-  opacity: 0.7;
-}
-
 .gamepad-card__device-meta-connection {
+  font-weight: 600;
+}
+
+.gamepad-card__device-battery {
+  margin: 0;
+  font-size: 12px;
+  color: var(--ui-page-text-soft);
   font-weight: 600;
 }
 

@@ -548,14 +548,102 @@
   },
   "gamepadCard": {
     "close": "关闭手柄卡片",
-    "eyebrow": "已发现手柄",
-    "title": "手柄档案",
+    "eyebrow": "已连接",
+    "title": "手柄",
     "connectedSummary": "已连接 {count} 个",
     "provider": "震动提供器",
     "autoTarget": "自动目标",
     "defaultTarget": "默认目标",
     "defaultBadge": "默认",
     "empty": "当前未发现已连接手柄。",
+    "technicalGlobal": "应用与采样（技术详情）",
+    "technicalDevice": "本手柄技术详情",
+    "runtime": {
+      "hapticsProvider": "震动通道",
+      "sampling": "输入采样"
+    },
+    "detailLabels": {
+      "type": "类型",
+      "vidPid": "VID/PID",
+      "inputView": "输入视图",
+      "mapping": "映射",
+      "capabilities": "能力",
+      "classification": "判定",
+      "path": "路径"
+    },
+    "samplingLifecycle": {
+      "active": "运行中",
+      "backgroundWarm": "后台预热",
+      "suspended": "已暂停"
+    },
+    "samplingHealth": {
+      "healthy": "正常",
+      "awaitingBaseline": "等待基线",
+      "stalled": "停滞"
+    },
+    "inputPolicy": {
+      "shared": "共享",
+      "ui-only": "仅界面",
+      "stream-only": "仅串流"
+    },
+    "samplingSelfHeal": "自愈 {count} 次",
+    "feedback": {
+      "rumbleSent": "已发送震动测试。",
+      "rumbleFailed": "震动测试失败。",
+      "primarySet": "已设为主手柄。",
+      "primaryFailed": "设置失败，请稍后重试。",
+      "resumeSent": "已请求恢复该手柄的采样。",
+      "resumeFailed": "操作失败，请稍后重试。"
+    },
+    "confidence": {
+      "high": "高",
+      "medium": "中",
+      "low": "低"
+    },
+    "classificationTags": {
+      "handheldBuiltin": "掌机内建",
+      "virtual": "虚拟手柄",
+      "steamVirtual": "Steam Virtual",
+      "motionCandidate": "原生 Motion 候选",
+      "confidence": "置信度 {level}"
+    },
+    "inputViews": {
+      "xinput": "XInput 兼容",
+      "steamVirtual": "Steam Virtual",
+      "virtual": "虚拟控制器",
+      "sdlNative": "SDL 原生"
+    },
+    "deviceTypes": {
+      "standard": "标准",
+      "xbox360": "Xbox 360",
+      "xbox-one": "Xbox One",
+      "ps3": "PS3",
+      "ps4": "PS4",
+      "ps5": "PS5",
+      "nintendo-switch-pro": "Switch Pro",
+      "nintendo-switch-joycon-left": "Joy-Con 左",
+      "nintendo-switch-joycon-right": "Joy-Con 右",
+      "nintendo-switch-joycon-pair": "Joy-Con 对",
+      "unknown": "未知"
+    },
+    "deviceCapabilities": {
+      "rumble": "机身震动",
+      "triggerRumble": "扳机震动",
+      "battery": "电量",
+      "gyro": "陀螺仪",
+      "accel": "加速度计",
+      "touchpad": "触控板",
+      "led": "灯效",
+      "basicInput": "基础输入"
+    },
+    "batteryPercent": "电量约 {percent}%",
+    "powerState": {
+      "unknown": "供电未知",
+      "wired": "有线供电",
+      "on-battery": "电池供电",
+      "charging": "充电中",
+      "charged": "已充满"
+    },
     "values": {
       "yes": "支持",
       "no": "不支持",
@@ -566,6 +654,8 @@
       "gilrsBasic": "SDL3 基础模式",
       "macosGcController": "macOS GameController",
       "windowsXbox": "Windows Xbox",
+      "sdl3Gamepad": "SDL3 手柄",
+      "winXboxHaptics": "Windows Xbox 震动",
       "none": "无"
     },
     "connections": {
