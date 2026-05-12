@@ -906,9 +906,17 @@ impl VideoTimelineState {
             FrameRecoveryDisposition::Repairing
         ) {
             self.has_chain_debt = true;
+            let default_reason: &'static str = match frame_recovery_disposition {
+                FrameRecoveryDisposition::UnrecoverableSupplyMiss => "unrecoverableSupplyMiss",
+                FrameRecoveryDisposition::UnrecoverableLate => "unrecoverableLate",
+                FrameRecoveryDisposition::UnrecoverableReferenceChain => {
+                    "referenceChainUnrecoverable"
+                }
+                _ => "referenceChainUnrecoverable",
+            };
             self.chain_debt_reason = Some(
                 frame_unrecoverable_reason
-                    .unwrap_or("referenceChainUnrecoverable")
+                    .unwrap_or(default_reason)
                     .to_string(),
             );
             if matches!(

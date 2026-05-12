@@ -65,6 +65,8 @@ pub enum VideoEscalationReason {
     DecoderBackendFailure,
     AdapterIdleTimeout,
     AdapterThinStream,
+    TransportLowValueDeadline,
+    TransportRepairableDeadline,
     TransportExpiredDeadline,
     TransportSevereDeadline,
     TransportRecoveredLate,
@@ -82,6 +84,8 @@ impl VideoEscalationReason {
             Self::DecoderBackendFailure => "decoderBackendFailure",
             Self::AdapterIdleTimeout => "adapterIdleTimeout",
             Self::AdapterThinStream => "adapterThinStream",
+            Self::TransportLowValueDeadline => "transportLowValueDeadline",
+            Self::TransportRepairableDeadline => "transportRepairableDeadline",
             Self::TransportExpiredDeadline => "transportExpiredDeadline",
             Self::TransportSevereDeadline => "transportSevereDeadline",
             Self::TransportRecoveredLate => "transportRecoveredLate",
@@ -98,7 +102,9 @@ impl VideoEscalationReason {
             | Self::Reconfigure
             | Self::DecoderBackendFailure
             | Self::AdapterIdleTimeout
-            | Self::AdapterThinStream => XbxEngineRecoveryReasonDomain::Local,
+            | Self::AdapterThinStream
+            | Self::TransportLowValueDeadline
+            | Self::TransportRepairableDeadline => XbxEngineRecoveryReasonDomain::Local,
             Self::TransportExpiredDeadline
             | Self::TransportSevereDeadline
             | Self::TransportRecoveredLate
@@ -123,6 +129,8 @@ impl VideoEscalationReason {
             "ingressReconfigure" | "reconfigure" => Some(Self::Reconfigure),
             "decoderBackendFailure" => Some(Self::DecoderBackendFailure),
             "adapterIdleTimeout" => Some(Self::AdapterIdleTimeout),
+            "transportLowValueDeadline" => Some(Self::TransportLowValueDeadline),
+            "transportRepairableDeadline" => Some(Self::TransportRepairableDeadline),
             "transportExpiredDeadline" => Some(Self::TransportExpiredDeadline),
             "transportSevereDeadline" => Some(Self::TransportSevereDeadline),
             "transportRecoveredLate" => Some(Self::TransportRecoveredLate),
@@ -562,6 +570,14 @@ impl VideoEscalationController {
                     VideoEscalationReason::LifecycleRecovering,
                 )
             }
+            VideoEscalationReason::TransportLowValueDeadline
+            | VideoEscalationReason::TransportRepairableDeadline => {
+                self.wait_keyframe_started_at = None;
+                self.transport_await_recovery_started_at = None;
+                self.pending_keyframe_signals = 0;
+                self.pending_decoder_reset_signals = 0;
+                RecoveryAction::CooldownSuppressed
+            }
             VideoEscalationReason::WaitKeyframe
             | VideoEscalationReason::TransportAwaitRecoveryKeyframe
             | VideoEscalationReason::DisplaySupplyCritical
@@ -584,11 +600,11 @@ impl VideoEscalationController {
                     VideoEscalationReason::AdapterThinStream => {
                         KeyframeReasonClass::AdapterThinStream
                     }
-                    VideoEscalationReason::TransportExpiredDeadline => {
-                        KeyframeReasonClass::TransportExpiredDeadline
-                    }
                     VideoEscalationReason::TransportRecoveredLate => {
                         KeyframeReasonClass::TransportRecoveredLate
+                    }
+                    VideoEscalationReason::TransportExpiredDeadline => {
+                        KeyframeReasonClass::TransportExpiredDeadline
                     }
                     VideoEscalationReason::TransportSampleLoss => {
                         KeyframeReasonClass::TransportSampleLoss

@@ -223,7 +223,12 @@ impl FrameScheduler for VideoIngress {
             self.ingress_awaiting_bootstrap = true;
             return IngressDecision::DropUnrecoverable;
         }
-        if matches!(disposition, FrameRecoveryDisposition::UnrecoverableLate) {
+        if matches!(disposition, FrameRecoveryDisposition::UnrecoverableLate)
+            || matches!(
+                disposition,
+                FrameRecoveryDisposition::UnrecoverableSupplyMiss
+            )
+        {
             return IngressDecision::DropUnrecoverable;
         }
 

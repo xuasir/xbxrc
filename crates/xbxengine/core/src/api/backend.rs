@@ -798,6 +798,8 @@ impl XbxEngineAnchorCandidateState {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum XbxEngineAnchorCandidateFailureReason {
+    /// 本地 NACK 修补在途；语义上属于 `nack_pending`，不是等关键帧。
+    LocalRepairPending,
     AwaitingRecoveryKeyframe,
     InspectionRejectedMissingSps,
     InspectionRejectedMissingPps,
@@ -815,6 +817,7 @@ pub enum XbxEngineAnchorCandidateFailureReason {
 impl XbxEngineAnchorCandidateFailureReason {
     pub fn as_str(self) -> &'static str {
         match self {
+            Self::LocalRepairPending => "localRepairPending",
             Self::AwaitingRecoveryKeyframe => "awaitingRecoveryAnchor",
             Self::InspectionRejectedMissingSps => "bootstrapMissingSps",
             Self::InspectionRejectedMissingPps => "bootstrapMissingPps",

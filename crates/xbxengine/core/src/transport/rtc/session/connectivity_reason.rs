@@ -26,6 +26,10 @@ pub(crate) fn map_label_to_escalation_reason(label: &str) -> Option<VideoEscalat
         "decoderBackendFailure" => Some(VideoEscalationReason::DecoderBackendFailure),
         "adapterIdleTimeout" => Some(VideoEscalationReason::AdapterIdleTimeout),
         "adapterThinStream" => Some(VideoEscalationReason::AdapterThinStream),
+        "transportLowValueDeadline" => Some(VideoEscalationReason::TransportLowValueDeadline),
+        "transportRepairableDeadline" => {
+            Some(VideoEscalationReason::TransportRepairableDeadline)
+        }
         "transportExpiredDeadline" => Some(VideoEscalationReason::TransportExpiredDeadline),
         "transportSevereDeadline" => Some(VideoEscalationReason::TransportSevereDeadline),
         "transportRecoveredLate" => Some(VideoEscalationReason::TransportRecoveredLate),

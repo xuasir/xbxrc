@@ -84,7 +84,9 @@ impl RecoveryObservation {
             // RFC: decode 后显示域问题只做本地吸收/自愈，不得直接驱动媒体恢复动作。
             VideoEscalationReason::DisplaySupplyCritical
             | VideoEscalationReason::AdapterIdleTimeout
-            | VideoEscalationReason::AdapterThinStream => RecoverySeverity::Minor,
+            | VideoEscalationReason::AdapterThinStream
+            | VideoEscalationReason::TransportLowValueDeadline
+            | VideoEscalationReason::TransportRepairableDeadline => RecoverySeverity::Minor,
 
             // 丢包 → 需要NACK或IDR（根据repairability决定）
             VideoEscalationReason::TransportExpiredDeadline
@@ -101,7 +103,7 @@ impl RecoveryObservation {
     /// 从gap严重性推导severity
     fn severity_from_gap(gap_severity: GapSeverity) -> RecoverySeverity {
         match gap_severity {
-            GapSeverity::MinorGap => RecoverySeverity::Minor,
+            GapSeverity::LowValueGap | GapSeverity::RepairableGap => RecoverySeverity::Minor,
             GapSeverity::ReferenceGap => RecoverySeverity::PacketLoss,
             GapSeverity::AnchorGap => RecoverySeverity::ChainBroken,
             GapSeverity::ChainBroken => RecoverySeverity::ChainBroken,

@@ -108,6 +108,8 @@ pub(crate) fn resolve_session_fault_domain(reason: VideoEscalationReason) -> Ses
             SessionFaultDomain::DecodePipeline
         }
         VideoEscalationReason::DisplaySupplyCritical
+        | VideoEscalationReason::TransportLowValueDeadline
+        | VideoEscalationReason::TransportRepairableDeadline
         | VideoEscalationReason::AdapterIdleTimeout
         | VideoEscalationReason::AdapterThinStream => SessionFaultDomain::DisplaySupply,
     }
@@ -152,4 +154,22 @@ pub(crate) fn decode_or_display_fault_requires_transport_evidence(
         domain,
         SessionFaultDomain::DecodePipeline | SessionFaultDomain::DisplaySupply
     ) && ceiling == SessionCostCeiling::TransportRecover
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{resolve_session_fault_domain, SessionFaultDomain};
+    use crate::transport::rtc::recovery::escalation::VideoEscalationReason;
+
+    #[test]
+    fn local_transport_deadlines_stay_in_display_supply_domain() {
+        assert_eq!(
+            resolve_session_fault_domain(VideoEscalationReason::TransportLowValueDeadline),
+            SessionFaultDomain::DisplaySupply
+        );
+        assert_eq!(
+            resolve_session_fault_domain(VideoEscalationReason::TransportRepairableDeadline),
+            SessionFaultDomain::DisplaySupply
+        );
+    }
 }

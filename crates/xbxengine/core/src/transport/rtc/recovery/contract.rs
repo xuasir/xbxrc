@@ -3,7 +3,8 @@ use crate::media::video::types::FrameValue as MediaFrameValue;
 use crate::{
     XbxEngineH264InspectionObservation,
     XbxEngineKeyframeRequestEpisodeObservation as XbxEnginePictureRecoveryEpisodeObservation,
-    XbxEngineMediaRuntimeStats, XbxEngineVideoTimelineObservation,
+    XbxEngineMediaRuntimeStats, XbxEngineVideoTimelineGapSnapshot,
+    XbxEngineVideoTimelineObservation,
 };
 
 /// 恢复系统的统一“事实模型”合同。
@@ -35,7 +36,10 @@ impl FrameValue {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum GapSeverity {
-    MinorGap,
+    /// 低价值 / 无活跃可修补缺口的基线。
+    LowValueGap,
+    /// 有缺口但尚无 reference 级证据，不得直接进入恢复主线当 ReferenceGap。
+    RepairableGap,
     ReferenceGap,
     AnchorGap,
     ChainBroken,
@@ -45,7 +49,8 @@ pub(crate) enum GapSeverity {
 impl GapSeverity {
     pub(crate) fn as_str(self) -> &'static str {
         match self {
-            Self::MinorGap => "MinorGap",
+            Self::LowValueGap => "LowValueGap",
+            Self::RepairableGap => "RepairableGap",
             Self::ReferenceGap => "ReferenceGap",
             Self::AnchorGap => "AnchorGap",
             Self::ChainBroken => "ChainBroken",
@@ -455,7 +460,7 @@ pub(crate) fn derive_gap_severity_from_timeline_observation(
         Some(timeline.chain.state.as_str()),
         timeline.chain.reason.as_deref(),
     ) {
-        return GapSeverity::MinorGap;
+        return GapSeverity::LowValueGap;
     }
     let reason = timeline.chain.reason.as_deref();
     if matches!(reason, Some("referenceChainUnrecoverable")) {
@@ -470,10 +475,13 @@ pub(crate) fn derive_gap_severity_from_timeline_observation(
     ) {
         return GapSeverity::AnchorGap;
     }
-    if timeline.gap.is_some() {
-        return GapSeverity::ReferenceGap;
+    if let Some(gap) = timeline.gap.as_ref() {
+        if timeline_gap_implies_reference_gap_evidence(gap) {
+            return GapSeverity::ReferenceGap;
+        }
+        return GapSeverity::RepairableGap;
     }
-    GapSeverity::MinorGap
+    GapSeverity::LowValueGap
 }
 
 /// 纯 transport 预算抬价 + 匿名缺洞时，不把 `chain.reason` 上的坏链语义升级成 `ChainBroken`。
@@ -494,6 +502,20 @@ fn chain_broken_observation_lacks_media_evidence(
         return false;
     }
     matches!(gap.budget_importance.as_deref(), Some("supply" | "anchor"))
+}
+
+/// 仅当 gap 快照携带 reference 级媒体/依赖证据时，才允许从「可修补缺口」升格为 `ReferenceGap`。
+fn timeline_gap_implies_reference_gap_evidence(gap: &XbxEngineVideoTimelineGapSnapshot) -> bool {
+    if gap.gap_dependency_confidence.as_deref() == Some("bound") {
+        return true;
+    }
+    matches!(
+        gap.evidence_importance.as_deref(),
+        Some("reference" | "supply" | "anchor")
+    ) || matches!(
+        gap.frame_importance.as_deref(),
+        Some("reference" | "supply" | "anchor" | "keyframe")
+    )
 }
 
 /// 与 keyframe episode stalled（无推进边沿）叠加时，将严重度提升为 `RecoveryBlocked`。
@@ -524,7 +546,7 @@ pub(crate) fn frame_value_from_gap_severity(gs: GapSeverity) -> Option<FrameValu
         GapSeverity::RecoveryBlocked => None,
         GapSeverity::ChainBroken | GapSeverity::AnchorGap => Some(FrameValue::RecoveryAnchor),
         GapSeverity::ReferenceGap => Some(FrameValue::Reference),
-        GapSeverity::MinorGap => Some(FrameValue::Continuity),
+        GapSeverity::LowValueGap | GapSeverity::RepairableGap => Some(FrameValue::Continuity),
     }
 }
 
@@ -544,9 +566,15 @@ pub(crate) fn media_frame_value_from_recovery_semantics(
     }
 }
 
-/// 非 Minor 的 gap 严重度视为需要 transport 恢复侧重点加压（coordinator 等）。
+/// `LowValueGap` / `RepairableGap` 不触发 transport 恢复主线加压；其余严重度会加压。
 pub(crate) fn gap_severity_indicates_transport_recovery_pressure(gs: GapSeverity) -> bool {
-    !matches!(gs, GapSeverity::MinorGap)
+    matches!(
+        gs,
+        GapSeverity::ReferenceGap
+            | GapSeverity::AnchorGap
+            | GapSeverity::ChainBroken
+            | GapSeverity::RecoveryBlocked
+    )
 }
 
 pub(crate) fn is_media_healthy_baseline(
@@ -579,6 +607,36 @@ mod derive_gap_observation_tests {
         XbxEngineVideoTimelineChainSnapshot, XbxEngineVideoTimelineGapSnapshot,
         XbxEngineVideoTimelineObservation,
     };
+
+    #[test]
+    fn timeline_gap_without_reference_evidence_maps_to_repairable_gap() {
+        let obs = XbxEngineVideoTimelineObservation {
+            observation_id: 99,
+            source_event: "gap-observed".into(),
+            gap: Some(XbxEngineVideoTimelineGapSnapshot {
+                state: "observed".into(),
+                sequence: Some(10),
+                frame_rtp_timestamp: Some(42),
+                frame_importance: Some("delta".into()),
+                budget_importance: Some("disposable".into()),
+                evidence_importance: Some("unknown".into()),
+                gap_dependency_confidence: Some("anonymous".into()),
+                observed_at_ms: 0.0,
+            }),
+            frame: None,
+            chain: XbxEngineVideoTimelineChainSnapshot {
+                state: "healthy".into(),
+                reason: None,
+                chain_break_evidence: None,
+                observed_at_ms: 0.0,
+            },
+            observed_at_ms: 0.0,
+        };
+        assert_eq!(
+            derive_gap_severity_from_timeline_observation(&obs),
+            GapSeverity::RepairableGap
+        );
+    }
 
     #[test]
     fn chain_broken_reason_with_anonymous_budget_only_gap_maps_to_reference_severity() {

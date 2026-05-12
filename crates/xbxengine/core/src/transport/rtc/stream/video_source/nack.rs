@@ -5,10 +5,14 @@ use rtc_rtcp::transport_feedbacks::transport_layer_nack::{
 };
 use rtc_shared::marshal::{Marshal, MarshalSize};
 
-use crate::media::video::ingress::budget::{FrameBudgetContext, FrameBudgetWindowSource};
+use crate::media::video::ingress::budget::{
+    DynamicRepairValueTier, FrameBudgetContext, FrameBudgetFailureCost, FrameBudgetLinkValue,
+    FrameBudgetWindowSource,
+};
 use crate::media::video::types::FrameRecoveryDisposition;
 use crate::transport::rtc::stream::nack_scheduler::{
-    NackBatch, NackObservePolicy, PacketRecoveryDisposition, ResolvedNack, SkippedNackBatch,
+    ExpiredNackBatch, NackBatch, NackObservePolicy, PacketRecoveryDisposition, ResolvedNack,
+    SkippedNackBatch,
 };
 use crate::{
     XbxEngineAnchorCandidateFailureReason, XbxEngineAnchorCandidateState,
@@ -19,7 +23,7 @@ use super::{
     capitalize_reason, nack_policy::*, now_ms_f64, FrameValue, RecentRtpPacket,
     RtcVideoFrameSource, TransportObservation,
 };
-use crate::media::video::ingress::budget::{DynamicRepairValueTier, FrameBudgetLinkValue};
+use crate::transport::rtc::stream::adapter_types::NackDeadlineExpiredContext;
 
 const DISPLAY_STARVED_LOW_VALUE_PRESENT_STALE_MS: f64 = 400.0;
 const DISPLAY_STARVED_LOW_VALUE_NO_PENDING_STREAK_MIN: u32 = 24;
@@ -27,6 +31,94 @@ const LOW_VALUE_NEAR_DEADLINE_GUARD_MS: f64 = 12.0;
 const SUPPLY_NEAR_DEADLINE_GUARD_MS: f64 = 6.0;
 const CLEAN_ANCHOR_TRANSPORT_SUPPLY_WINDOW_MS: f64 = 320.0;
 const CLEAN_ANCHOR_TRANSPORT_SUPPLY_FRESH_MEDIA_MS: f64 = 320.0;
+
+fn nack_deadline_value_tier(
+    frame_importance: &'static str,
+    ctx: FrameBudgetContext,
+) -> &'static str {
+    if matches!(ctx.failure_cost, FrameBudgetFailureCost::ChainBroken)
+        || matches!(frame_importance, "anchor" | "keyframe")
+        || matches!(ctx.link_value, FrameBudgetLinkValue::Anchor)
+    {
+        return "high";
+    }
+    if matches!(frame_importance, "reference" | "supply")
+        || matches!(ctx.link_value, FrameBudgetLinkValue::Supply)
+    {
+        return "medium";
+    }
+    "low"
+}
+
+fn nack_deadline_risk_tier(
+    frame_rtp_timestamp: Option<u32>,
+    frame_importance: &'static str,
+    frame_unrecoverable_reason: Option<&'static str>,
+    ctx: FrameBudgetContext,
+) -> &'static str {
+    if matches!(ctx.failure_cost, FrameBudgetFailureCost::ChainBroken)
+        || matches!(
+            frame_unrecoverable_reason,
+            Some("referenceChainUnrecoverable" | "awaitingRecoveryAnchor")
+        )
+    {
+        return "anchor";
+    }
+    if matches!(frame_importance, "reference" | "anchor" | "keyframe" | "supply")
+        || matches!(ctx.link_value, FrameBudgetLinkValue::Supply | FrameBudgetLinkValue::Anchor)
+    {
+        return "reference";
+    }
+    if frame_rtp_timestamp.is_some() {
+        return "repairable";
+    }
+    "none"
+}
+
+fn nack_deadline_evidence_scope(
+    frame_rtp_timestamp: Option<u32>,
+    frame_is_keyframe: Option<bool>,
+    frame_unrecoverable_reason: Option<&'static str>,
+) -> &'static str {
+    if matches!(
+        frame_unrecoverable_reason,
+        Some("referenceChainUnrecoverable" | "awaitingRecoveryAnchor")
+    ) {
+        return "chain_bound";
+    }
+    if frame_is_keyframe == Some(true) {
+        return "anchor_bound";
+    }
+    if frame_rtp_timestamp.is_some() {
+        return "frame_bound";
+    }
+    "anonymous"
+}
+
+fn nack_deadline_expired_context_from_batch(
+    batch: &ExpiredNackBatch,
+) -> NackDeadlineExpiredContext {
+    let missing_packets = batch.sequences.len().min(u16::MAX as usize) as u16;
+    NackDeadlineExpiredContext {
+        missing_packets,
+        frame_rtp_timestamp: batch.frame_rtp_timestamp,
+        frame_importance: batch.frame_importance,
+        budget_context: batch.budget_context,
+        frame_unrecoverable_reason: batch.frame_unrecoverable_reason,
+        value_tier: nack_deadline_value_tier(batch.frame_importance, batch.budget_context),
+        risk_tier: nack_deadline_risk_tier(
+            batch.frame_rtp_timestamp,
+            batch.frame_importance,
+            batch.frame_unrecoverable_reason,
+            batch.budget_context,
+        ),
+        evidence_scope: nack_deadline_evidence_scope(
+            batch.frame_rtp_timestamp,
+            batch.frame_is_keyframe,
+            batch.frame_unrecoverable_reason,
+        ),
+    }
+}
 
 fn gap_expired_skipped_anchor_failure_reason(
     frame_unrecoverable_reason: Option<&'static str>,
@@ -269,7 +361,7 @@ impl RtcVideoFrameSource {
                 initial_batch.frame_rtp_timestamp,
                 "gap-repair-in-flight",
                 XbxEngineAnchorCandidateState::AwaitingRecovery,
-                Some(XbxEngineAnchorCandidateFailureReason::AwaitingRecoveryKeyframe),
+                Some(XbxEngineAnchorCandidateFailureReason::LocalRepairPending),
                 now_ms,
             );
             let inserted_count = self
@@ -330,10 +422,9 @@ impl RtcVideoFrameSource {
                 now_ms,
             );
             if expired_batch.reason == "deadline" {
-                let missing_packets = expired_batch.sequences.len().min(u16::MAX as usize) as u16;
-                self.queue_transport_observation(TransportObservation::NackDeadlineExpired {
-                    missing_packets,
-                });
+                self.queue_transport_observation(TransportObservation::NackDeadlineExpired(
+                    nack_deadline_expired_context_from_batch(&expired_batch),
+                ));
             }
             self.runtime_stats
                 .add_video_loss_finalized(expired_batch.sequences.len());
@@ -513,7 +604,7 @@ impl RtcVideoFrameSource {
             initial_batch.frame_rtp_timestamp,
             "gap-repair-in-flight",
             XbxEngineAnchorCandidateState::AwaitingRecovery,
-            Some(XbxEngineAnchorCandidateFailureReason::AwaitingRecoveryKeyframe),
+            Some(XbxEngineAnchorCandidateFailureReason::LocalRepairPending),
             now_ms,
         );
         let inserted_count = self
@@ -875,7 +966,7 @@ impl RtcVideoFrameSource {
             batch.frame_rtp_timestamp,
             "gap-repair-in-flight",
             XbxEngineAnchorCandidateState::AwaitingRecovery,
-            Some(XbxEngineAnchorCandidateFailureReason::AwaitingRecoveryKeyframe),
+            Some(XbxEngineAnchorCandidateFailureReason::LocalRepairPending),
             now_ms,
         );
         let inserted_count = self
@@ -978,7 +1069,16 @@ impl RtcVideoFrameSource {
         if frame_importance == "disposable" {
             return Some(FrameRecoveryDisposition::UnrecoverableLate);
         }
-        Some(FrameRecoveryDisposition::UnrecoverableReferenceChain)
+        if matches!(
+            nack_disposition,
+            PacketRecoveryDisposition::SkippedChainBroken
+        ) {
+            return Some(FrameRecoveryDisposition::UnrecoverableReferenceChain);
+        }
+        if matches!(frame_importance, "reference" | "anchor" | "keyframe",) {
+            return Some(FrameRecoveryDisposition::UnrecoverableReferenceChain);
+        }
+        Some(FrameRecoveryDisposition::UnrecoverableSupplyMiss)
     }
 
     /// Cloud 路径下在 deadline / RTT slack 内尽量尝试 NACK（预算充裕指时间窗与优先级足够）。

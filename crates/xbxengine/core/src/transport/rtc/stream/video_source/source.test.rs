@@ -724,7 +724,7 @@ fn clean_anchor_records_current_transport_recovery_epoch() {
     source.runtime_stats.begin_transport_recovery_episode(100.0);
     source.runtime_stats.record_transport_clean_anchor_with_rtp(
         180.0,
-        "chain-clean-anchor-submitted",
+        "test-clean-anchor",
         None,
         None,
     );
@@ -734,7 +734,7 @@ fn clean_anchor_records_current_transport_recovery_epoch() {
     assert_eq!(stats.video_anchor_clean_observed_at_ms, Some(180.0));
     assert_eq!(
         stats.video_anchor_clean_source_event.as_deref(),
-        Some("chain-clean-anchor-submitted")
+        Some("test-clean-anchor")
     );
     assert!(stats.transport_recovery_episode_active);
     assert_eq!(stats.transport_recovery_episode_closed_at_ms, None);
@@ -798,7 +798,7 @@ fn packet_loss_detected_does_not_reopen_episode_but_keyframe_request_does() {
     source.runtime_stats.begin_transport_recovery_episode(100.0);
     source.runtime_stats.record_transport_clean_anchor_with_rtp(
         140.0,
-        "chain-clean-anchor-submitted",
+        "test-clean-anchor",
         None,
         None,
     );
@@ -817,7 +817,7 @@ fn packet_loss_detected_does_not_reopen_episode_but_keyframe_request_does() {
         assert_eq!(stats.video_anchor_clean_epoch, Some(1));
         assert_eq!(
             stats.video_anchor_clean_source_event.as_deref(),
-            Some("chain-clean-anchor-submitted")
+            Some("test-clean-anchor")
         );
     }
 

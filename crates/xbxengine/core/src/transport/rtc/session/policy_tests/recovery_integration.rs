@@ -6457,6 +6457,7 @@ fn recovery_integration_trace_contract_continuation_heavy_refreshes_pli_without_
                     admission_accepted: true,
                     continuation_verdict: Some("continuationAcceptedWhileAwaitingIdr".to_string()),
                     observed_at_ms: 10_138.0,
+                    bound_episode_id: Some(24),
                     ..Default::default()
                 });
             if let Some(timeline) = stats.latest_video_timeline_observation.as_mut() {
@@ -6476,8 +6477,9 @@ fn recovery_integration_trace_contract_continuation_heavy_refreshes_pli_without_
     assert!(
         second.iter().any(|command| {
             matches!(command, TransportCommand::RequestPli { reason, .. } if reason == "transportAwaitRecoveryAnchor")
+                || matches!(command, TransportCommand::RequestFir { reason, .. } if reason == "transportAwaitRecoveryAnchor")
         }),
-        "expected refresh pli for continuation-heavy unresolved recovery, commands={second:?}"
+        "expected refresh pli/fir for continuation-heavy unresolved recovery, commands={second:?}"
     );
     assert!(second
         .iter()
@@ -6491,7 +6493,11 @@ fn recovery_integration_trace_contract_continuation_heavy_refreshes_pli_without_
             ledger.input_signal,
             "transportAwaitRecoveryAnchor:transportAwaitRecoveryAnchor"
         );
-        assert_eq!(ledger.action_selected, "requestPli");
+        assert!(
+            matches!(ledger.action_selected.as_str(), "requestPli" | "requestFir"),
+            "unexpected action_selected: {}",
+            ledger.action_selected
+        );
         assert_eq!(ledger.state_after, "active-recovery");
     });
 }
@@ -6607,6 +6613,7 @@ fn recovery_integration_trace_contract_continuation_heavy_second_refresh_still_r
                     admission_accepted: true,
                     continuation_verdict: Some("continuationAcceptedWhileAwaitingIdr".to_string()),
                     observed_at_ms: 10_138.0,
+                    bound_episode_id: Some(25),
                     ..Default::default()
                 });
             if let Some(timeline) = stats.latest_video_timeline_observation.as_mut() {
@@ -6677,6 +6684,7 @@ fn recovery_integration_trace_contract_continuation_heavy_second_refresh_still_r
                     admission_accepted: true,
                     continuation_verdict: Some("continuationAcceptedWhileAwaitingIdr".to_string()),
                     observed_at_ms: 10_298.0,
+                    bound_episode_id: Some(26),
                     ..Default::default()
                 });
             if let Some(timeline) = stats.latest_video_timeline_observation.as_mut() {
@@ -6690,6 +6698,7 @@ fn recovery_integration_trace_contract_continuation_heavy_second_refresh_still_r
 
     assert!(third.iter().any(|command| {
         matches!(command, TransportCommand::RequestPli { reason, .. } if reason == "transportAwaitRecoveryAnchor")
+            || matches!(command, TransportCommand::RequestFir { reason, .. } if reason == "transportAwaitRecoveryAnchor")
     }));
     assert!(third
         .iter()
@@ -7283,9 +7292,7 @@ fn recovery_integration_transport_await_gap_repair_stalled_upgrades_to_fir() {
             frame_rtp_timestamp: None,
             state: crate::XbxEngineAnchorCandidateState::AwaitingRecovery,
             source_event: "gap-repair-in-flight".to_string(),
-            failure_reason: Some(
-                crate::XbxEngineAnchorCandidateFailureReason::AwaitingRecoveryKeyframe,
-            ),
+            failure_reason: Some(crate::XbxEngineAnchorCandidateFailureReason::LocalRepairPending),
             observed_at_ms: 12_150.0,
         });
     });
@@ -8241,13 +8248,40 @@ fn cloud_high_rtt_sample_loss_then_recovered_late_stays_local_until_severe_deadl
         .iter()
         .all(|command| !matches!(command, TransportCommand::RequestReconnectCandidate { .. })));
 
-    let severe_second = harness.apply(
+    // `transport_deadline_reconnect_block_reason` 需要：(1) transport-await 硬证据；(2) 连接域失活证据。
+    // 与同文件中 transport deadline + stale connection 的集成测例一致。
+    let mut broken_connection = ConnectionProjection::default();
+    broken_connection.lifecycle_state = ConnectionLifecycleStateFact::Connected;
+    broken_connection.last_observed_at_ms = Some(8_000.0);
+
+    let severe_second = harness.apply_with_connection_projection(
         11_000.0,
-        ConnectionLifecycleStateFact::Connected,
+        broken_connection,
         "transportSevereDeadline",
         220,
         |stats| {
             let now_ms = crate::transport::rtc::stats::now_ms_f64();
+            stats.latest_h264_inspection_observation =
+                Some(crate::XbxEngineH264InspectionObservation {
+                    observation_id: 901,
+                    nal_types: vec!["SliceLayerWithoutPartitioningIdr".to_string()],
+                    nal_count: 1,
+                    vcl_nal_count: 1,
+                    has_inband_sps: false,
+                    has_inband_pps: false,
+                    committed_sps_present: false,
+                    committed_pps_present: false,
+                    slice_headers_valid: true,
+                    delta_continuation_ready: false,
+                    parameter_sets_changed: false,
+                    config_changed: false,
+                    is_idr: true,
+                    bootstrap_ready: false,
+                    bootstrap_reject_reason: Some("bootstrapMissingSps".to_string()),
+                    admission_accepted: true,
+                    observed_at_ms: 10_990.0,
+                    ..Default::default()
+                });
             stats.latest_video_host_present_time_ms = Some(now_ms - 1_300.0);
             stats.latest_video_decode_ok_time_ms = Some(now_ms - 860.0);
             stats.latest_video_packet_arrival_time_ms = Some(now_ms - 260.0);

@@ -572,7 +572,7 @@ fn should_begin_transport_recovery_episode(observation: TransportObservation) ->
         TransportObservation::Admission(TransportAdmissionObservation::AwaitRecoveryKeyframe)
             | TransportObservation::Loss(TransportLossObservation::RecoveryKeyframeRequested)
             | TransportObservation::Loss(TransportLossObservation::AwaitRecoveryKeyframe)
-            | TransportObservation::NackDeadlineExpired { .. }
+            | TransportObservation::NackDeadlineExpired(_)
     )
 }
 

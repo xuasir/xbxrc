@@ -396,12 +396,15 @@ fn cloud_builder_configured_warmup_does_not_block_lifecycle_reconnect() {
         DiagnosticsProjection::default(),
     );
     let _ = transport_commands(policy.on_snapshot(&first));
+    let mut connection_second = connection;
+    connection_second.lifecycle_state = ConnectionLifecycleStateFact::Recovering;
     let second = TransportSnapshot::new(
         2,
         35_600.0,
-        connection,
+        connection_second,
         MediaProjection::default(),
         RecoveryProjection {
+            latest_diagnosis_label: Some("rtcConnectionRecovering".to_string()),
             last_observed_at_ms: Some(35_600.0),
             ..recovery
         },

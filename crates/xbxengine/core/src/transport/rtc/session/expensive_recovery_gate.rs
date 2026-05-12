@@ -125,6 +125,8 @@ impl<'a> ExpensiveRecoveryGate<'a> {
     ) -> Option<&'static str> {
         match owner_signal.reason {
             VideoEscalationReason::LifecycleRecovering => None,
+            VideoEscalationReason::TransportLowValueDeadline
+            | VideoEscalationReason::TransportRepairableDeadline => None,
             VideoEscalationReason::TransportExpiredDeadline
             | VideoEscalationReason::TransportSevereDeadline
             | VideoEscalationReason::TransportRecoveredLate
@@ -362,6 +364,12 @@ pub(crate) fn resolve_reconnect_grant_detail(
             | VideoEscalationReason::TransportSampleLoss
     ) {
         "connectivityEvidence"
+    } else if matches!(
+        owner_signal.reason,
+        VideoEscalationReason::TransportLowValueDeadline
+            | VideoEscalationReason::TransportRepairableDeadline
+    ) {
+        "localTransportRepair"
     } else if owner_signal.reason == VideoEscalationReason::TransportAwaitRecoveryKeyframe {
         "localRecoveryExhausted"
     } else {

@@ -108,6 +108,48 @@ impl RecoveryIntegrationHarness {
             .collect()
     }
 
+    /// 与 [`Self::apply`] 相同，但使用调用方提供的 `ConnectionProjection`（用于注入 stale / 无信令等连接快照）。
+    pub(super) fn apply_with_connection_projection(
+        &mut self,
+        observed_at_ms: f64,
+        connection: ConnectionProjection,
+        diagnosis: &str,
+        frame_count: u64,
+        update_stats: impl FnOnce(&mut XbxEngineMediaRuntimeStats),
+    ) -> Vec<TransportCommand> {
+        if let Ok(mut stats) = self.runtime_stats.lock() {
+            update_stats(&mut stats);
+        }
+        let snapshot = TransportSnapshot::new(
+            self.next_version,
+            observed_at_ms,
+            connection,
+            MediaProjection {
+                frame_count,
+                ..MediaProjection::default()
+            },
+            RecoveryProjection {
+                latest_diagnosis_label: Some(diagnosis.to_string()),
+                pending_action: false,
+                successful_action_count: 0,
+                failed_action_count: 0,
+                last_observed_at_ms: Some(observed_at_ms),
+                ..Default::default()
+            },
+            BweProjection::default(),
+            DiagnosticsProjection::default(),
+        );
+        self.next_version = self.next_version.saturating_add(1);
+        self.policy
+            .on_snapshot(&snapshot)
+            .into_iter()
+            .filter_map(|command| match command {
+                SessionCommand::Transport(command) => Some(command),
+                SessionCommand::LocalDecoderReset { .. } => None,
+            })
+            .collect()
+    }
+
     pub(super) fn with_stats<R>(&self, reader: impl FnOnce(&XbxEngineMediaRuntimeStats) -> R) -> R {
         let stats = self.runtime_stats.lock().expect("runtime stats lock");
         reader(&stats)

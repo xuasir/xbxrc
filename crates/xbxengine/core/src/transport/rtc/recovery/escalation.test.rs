@@ -120,6 +120,37 @@ fn repeated_transport_deadline_failures_are_throttled_within_epoch() {
 }
 
 #[test]
+fn local_transport_deadlines_do_not_accumulate_into_keyframe_pressure() {
+    let mut controller = VideoEscalationController::new(VideoEscalationConfig {
+        cooldown_ms: 40,
+        keyframe_burst_threshold: 2,
+        decoder_reset_burst_threshold: 1,
+        keyframe_min_interval_ms: 40,
+        escalation_window_ms: 180,
+        keyframe_upgrade_min_delay_ms: 10,
+    });
+
+    assert_eq!(
+        controller
+            .on_reason(VideoEscalationReason::TransportRepairableDeadline)
+            .action,
+        RecoveryAction::CooldownSuppressed
+    );
+    assert_eq!(
+        controller
+            .on_reason(VideoEscalationReason::TransportRepairableDeadline)
+            .action,
+        RecoveryAction::CooldownSuppressed
+    );
+    assert_eq!(
+        controller
+            .on_reason(VideoEscalationReason::TransportLowValueDeadline)
+            .action,
+        RecoveryAction::CooldownSuppressed
+    );
+}
+
+#[test]
 fn transport_deadline_storm_within_same_window_does_not_reconnect() {
     let mut controller = VideoEscalationController::new(VideoEscalationConfig {
         cooldown_ms: 60,

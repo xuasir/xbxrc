@@ -7,7 +7,7 @@ use crate::transport::rtc::recovery::contract::{
     derive_gap_severity_from_timeline_observation, frame_value_from_gap_severity,
     has_current_transport_await_issue_from_observation, is_ingress_waiting_keyframe,
     is_invalid_recovery_bootstrap_reject_reason, is_media_healthy_baseline,
-    is_transport_await_probe_source_event, FrameValue,
+    is_transport_await_probe_source_event, FrameValue, GapSeverity,
 };
 use crate::transport::rtc::recovery::policy::DisplaySupplyThresholds;
 use crate::transport::rtc::session::control_model::SessionFaultDomain;
@@ -2156,6 +2156,23 @@ impl VideoSchedulingOwner {
             .latest_track_video_bytes_total
             .is_some_and(|bytes| bytes > 0)
         {
+            return false;
+        }
+        let gap_escalates_recovery = match input.latest_video_timeline_observation.as_ref() {
+            None => true,
+            Some(timeline) => {
+                let gs = derive_gap_severity_from_timeline_observation(timeline);
+                matches!(
+                    gs,
+                    GapSeverity::ReferenceGap
+                        | GapSeverity::AnchorGap
+                        | GapSeverity::ChainBroken
+                        | GapSeverity::RecoveryBlocked
+                )
+            }
+        };
+        let has_transport_await_hard_evidence = Self::has_transport_await_hard_rebuild_evidence(input);
+        if !gap_escalates_recovery && !has_transport_await_hard_evidence {
             return false;
         }
         matches!(

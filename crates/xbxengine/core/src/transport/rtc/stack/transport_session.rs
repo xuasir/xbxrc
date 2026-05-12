@@ -2032,9 +2032,7 @@ mod tests {
             frame_rtp_timestamp: None,
             state: crate::XbxEngineAnchorCandidateState::AwaitingRecovery,
             source_event: "gap-repair-in-flight".to_string(),
-            failure_reason: Some(
-                crate::XbxEngineAnchorCandidateFailureReason::AwaitingRecoveryKeyframe,
-            ),
+            failure_reason: Some(crate::XbxEngineAnchorCandidateFailureReason::LocalRepairPending),
             observed_at_ms: now_ms - 40.0,
         });
         stats.latest_recovery_decision_ledger =
@@ -2447,7 +2445,7 @@ mod tests {
             .latest_recovery_decision_ledger
             .as_ref()
             .expect("ledger");
-        assert_eq!(ledger.gap_severity.as_deref(), Some("MinorGap"));
+        assert_eq!(ledger.gap_severity.as_deref(), Some("LowValueGap"));
         assert_eq!(ledger.frame_value.as_deref(), Some("Continuity"));
     }
 
@@ -2756,8 +2754,8 @@ mod tests {
             .latest_recovery_decision_ledger
             .as_ref()
             .expect("ledger");
-        assert_eq!(ledger.gap_severity.as_deref(), Some("ReferenceGap"));
-        assert_eq!(ledger.frame_value.as_deref(), Some("Reference"));
+        assert_eq!(ledger.gap_severity.as_deref(), Some("RepairableGap"));
+        assert_eq!(ledger.frame_value.as_deref(), Some("Continuity"));
     }
 
     #[test]

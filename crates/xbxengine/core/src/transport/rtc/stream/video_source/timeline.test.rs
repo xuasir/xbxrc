@@ -155,7 +155,7 @@ fn anonymous_repair_candidate_does_not_overwrite_observed_frame_binding() {
         None,
         "gap-repair-in-flight",
         XbxEngineAnchorCandidateState::AwaitingRecovery,
-        Some(XbxEngineAnchorCandidateFailureReason::AwaitingRecoveryKeyframe),
+        Some(XbxEngineAnchorCandidateFailureReason::LocalRepairPending),
         21.0,
     );
     let ledger = state
@@ -168,6 +168,10 @@ fn anonymous_repair_candidate_does_not_overwrite_observed_frame_binding() {
         XbxEngineAnchorCandidateState::AwaitingRecovery
     );
     assert_eq!(ledger.source_event, "gap-repair-in-flight");
+    assert_eq!(
+        ledger.failure_reason,
+        Some(XbxEngineAnchorCandidateFailureReason::LocalRepairPending)
+    );
 }
 
 #[test]

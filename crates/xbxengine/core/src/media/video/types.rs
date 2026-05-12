@@ -172,6 +172,8 @@ pub enum FrameRecoveryDisposition {
     Steady,
     Repairing,
     UnrecoverableLate,
+    /// Supply 类丢补失败；不等价于参考链断裂。
+    UnrecoverableSupplyMiss,
     UnrecoverableReferenceChain,
 }
 
@@ -181,6 +183,7 @@ impl FrameRecoveryDisposition {
             Self::Steady => "steady",
             Self::Repairing => "repairing",
             Self::UnrecoverableLate => "abandonedLate",
+            Self::UnrecoverableSupplyMiss => "abandonedSupplyMiss",
             Self::UnrecoverableReferenceChain => "abandonedReferenceChain",
         }
     }
@@ -197,6 +200,7 @@ impl FrameRecoveryDisposition {
             Self::Steady => None,
             Self::Repairing => None,
             Self::UnrecoverableLate => Some("late"),
+            Self::UnrecoverableSupplyMiss => Some("supplyMiss"),
             Self::UnrecoverableReferenceChain => Some("referenceChain"),
         }
     }

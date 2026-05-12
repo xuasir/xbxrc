@@ -928,7 +928,7 @@ fn service_pump_observes_data_channel_message_from_poll_read() {
         .expect("未 prime feedback target 前应返回 pending outcome");
     assert_eq!(
         outcome,
-        super::VideoRecoveryRequestOutcome::FeedbackTransportNotReady
+        super::VideoRecoveryRequestOutcome::FeedbackTargetPending
     );
 }
 
@@ -1579,7 +1579,7 @@ fn video_recovery_reports_feedback_target_unavailable_when_feedback_not_supporte
     );
     assert_eq!(
         outcome,
-        super::VideoRecoveryRequestOutcome::FeedbackTransportNotReady
+        super::VideoRecoveryRequestOutcome::FeedbackTargetPending
     );
     assert_eq!(stats.video_pli_request_count_total, 0);
 }

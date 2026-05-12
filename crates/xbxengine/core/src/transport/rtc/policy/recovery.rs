@@ -104,7 +104,9 @@ pub(crate) fn resolve_runtime_reconnect_reason_domain(
         | VideoEscalationReason::TransportSampleLoss => {
             XbxEngineRecoveryReasonDomain::ConnectivityTransport
         }
-        VideoEscalationReason::WaitKeyframe
+        VideoEscalationReason::TransportLowValueDeadline
+        | VideoEscalationReason::TransportRepairableDeadline
+        | VideoEscalationReason::WaitKeyframe
         | VideoEscalationReason::TransportAwaitRecoveryKeyframe
         | VideoEscalationReason::DisplaySupplyCritical
         | VideoEscalationReason::Reconfigure

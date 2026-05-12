@@ -318,6 +318,68 @@ impl LocalIngressReplayFixture {
         )
     }
 
+    /// 与 `recovery_integration` 中 transport deadline + stale connection 用例对齐：无 DC/RTT 且 `last_observed` 足够旧。
+    pub(crate) fn build_broken_connectivity_snapshot(
+        &self,
+        observation_id: u64,
+        now_ms: f64,
+        connection_last_observed_at_ms: f64,
+        frame_count: u64,
+        diagnosis_label: &str,
+    ) -> TransportSnapshot {
+        let mut connection = ConnectionProjection::default();
+        connection.lifecycle_state = ConnectionLifecycleStateFact::Connected;
+        connection.last_observed_at_ms = Some(connection_last_observed_at_ms);
+        TransportSnapshot::new(
+            observation_id,
+            now_ms,
+            connection,
+            MediaProjection {
+                frame_count,
+                ..MediaProjection::default()
+            },
+            RecoveryProjection {
+                latest_diagnosis_label: Some(diagnosis_label.to_string()),
+                pending_action: false,
+                successful_action_count: 0,
+                failed_action_count: 0,
+                last_observed_at_ms: Some(now_ms),
+                ..Default::default()
+            },
+            BweProjection::default(),
+            DiagnosticsProjection::default(),
+        )
+    }
+
+    /// 为 `transport_await_has_hard_recovery_evidence` 注入「无效 bootstrap」硬证据（与集成测例字段对齐）。
+    pub(crate) fn inject_transport_await_hard_recovery_bootstrap(
+        &self,
+        diagnosis_snapshot_ms: f64,
+    ) {
+        let mut stats = self.runtime_stats.lock().expect("runtime stats lock");
+        stats.latest_h264_inspection_observation =
+            Some(crate::XbxEngineH264InspectionObservation {
+                observation_id: 9_900,
+                nal_types: vec!["SliceLayerWithoutPartitioningIdr".to_string()],
+                nal_count: 1,
+                vcl_nal_count: 1,
+                has_inband_sps: false,
+                has_inband_pps: false,
+                committed_sps_present: false,
+                committed_pps_present: false,
+                slice_headers_valid: true,
+                delta_continuation_ready: false,
+                parameter_sets_changed: false,
+                config_changed: false,
+                is_idr: true,
+                bootstrap_ready: false,
+                bootstrap_reject_reason: Some("bootstrapMissingSps".to_string()),
+                admission_accepted: true,
+                observed_at_ms: (diagnosis_snapshot_ms - 15.0).max(0.0),
+                ..Default::default()
+            });
+    }
+
     pub(crate) fn mark_transport_connectivity_degraded(&self, observed_at_ms: f64) {
         let mut stats = self.runtime_stats.lock().expect("runtime stats lock");
         stats.transport_state = XbxEngineTransportStateDto::Disconnected;

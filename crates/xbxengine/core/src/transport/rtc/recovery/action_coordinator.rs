@@ -483,6 +483,7 @@ mod tests {
         );
         let decision = coordinator.decide(obs.clone());
         assert_eq!(decision.action, RecoveryAction::RequestReconnectCandidate);
+        coordinator.state_machine_mut().mark_reconnect_requested();
 
         // 第二次reconnect应该被预算限制
         let decision = coordinator.decide(obs);

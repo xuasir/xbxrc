@@ -205,8 +205,14 @@ pub(super) fn map_transport_observation_to_hint_label(
         TransportObservation::StreamIdleTimeout => "adapterIdleTimeout",
         TransportObservation::StreamThinStall => "adapterThinStream",
         TransportObservation::NackRecoveredLate => "transportRecoveredLate",
-        TransportObservation::NackDeadlineExpired { missing_packets } => {
-            if usize::from(*missing_packets) >= severe_deadline_packet_threshold {
+        TransportObservation::NackDeadlineExpired(ctx) => {
+            if ctx.risk_tier == "none" {
+                return "transportLowValueDeadline";
+            }
+            if ctx.risk_tier == "repairable" {
+                return "transportRepairableDeadline";
+            }
+            if usize::from(ctx.missing_packets) >= severe_deadline_packet_threshold {
                 "transportSevereDeadline"
             } else {
                 "transportExpiredDeadline"
@@ -217,12 +223,15 @@ pub(super) fn map_transport_observation_to_hint_label(
 
 pub(super) fn transport_observation_severity(observation: &TransportObservation) -> u8 {
     match observation {
-        TransportObservation::NackDeadlineExpired { missing_packets } if *missing_packets >= 64 => {
-            2
+        TransportObservation::NackDeadlineExpired(ctx)
+            if matches!(ctx.risk_tier, "none" | "repairable") =>
+        {
+            0
         }
+        TransportObservation::NackDeadlineExpired(ctx) if ctx.missing_packets >= 64 => 2,
         TransportObservation::StreamIdleTimeout
         | TransportObservation::StreamThinStall
-        | TransportObservation::NackDeadlineExpired { .. } => 1,
+        | TransportObservation::NackDeadlineExpired(_) => 1,
         TransportObservation::Admission(_)
         | TransportObservation::Loss(_)
         | TransportObservation::NackRecoveredLate => 0,
@@ -277,9 +286,10 @@ pub(crate) fn record_pipeline_frame_drop(
 
 #[cfg(test)]
 mod tests {
-    use super::map_transport_observation_to_hint_label;
+    use super::{map_transport_observation_to_hint_label, transport_observation_severity};
+    use crate::media::video::ingress::budget::FrameBudgetContext;
     use crate::transport::rtc::stream::adapter_types::{
-        TransportLossObservation, TransportObservation,
+        NackDeadlineExpiredContext, TransportLossObservation, TransportObservation,
     };
 
     #[test]
@@ -289,5 +299,43 @@ mod tests {
             64,
         );
         assert_eq!(label, "transportRecoveryKeyframeRequested");
+    }
+
+    #[test]
+    fn repairable_deadline_maps_to_local_repair_label() {
+        let observation = TransportObservation::NackDeadlineExpired(NackDeadlineExpiredContext {
+            missing_packets: 12,
+            frame_rtp_timestamp: Some(42),
+            frame_importance: "delta",
+            budget_context: FrameBudgetContext::default(),
+            frame_unrecoverable_reason: Some("estimatedArrivalPastDeadline"),
+            value_tier: "medium",
+            risk_tier: "repairable",
+            evidence_scope: "frame_bound",
+        });
+        assert_eq!(
+            map_transport_observation_to_hint_label(&observation, 64),
+            "transportRepairableDeadline"
+        );
+        assert_eq!(transport_observation_severity(&observation), 0);
+    }
+
+    #[test]
+    fn low_value_deadline_maps_to_low_value_label() {
+        let observation = TransportObservation::NackDeadlineExpired(NackDeadlineExpiredContext {
+            missing_packets: 4,
+            frame_rtp_timestamp: None,
+            frame_importance: "disposable",
+            budget_context: FrameBudgetContext::default(),
+            frame_unrecoverable_reason: Some("cloudHighRttLowValueAdmission"),
+            value_tier: "low",
+            risk_tier: "none",
+            evidence_scope: "anonymous",
+        });
+        assert_eq!(
+            map_transport_observation_to_hint_label(&observation, 64),
+            "transportLowValueDeadline"
+        );
+        assert_eq!(transport_observation_severity(&observation), 0);
     }
 }

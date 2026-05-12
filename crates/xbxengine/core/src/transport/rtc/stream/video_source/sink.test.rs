@@ -1299,9 +1299,12 @@ async fn multi_stage_replay_steady_local_noise_severe_then_recover_stays_stable(
     let severe_first_commands = transport_commands(policy.on_snapshot(&severe_first));
     assert_no_reconnect_candidate(&severe_first_commands);
 
-    let severe_second = harness.build_connected_snapshot(
+    harness.inject_transport_await_hard_recovery_bootstrap(profile.baseline.now_ms + 60.0);
+    let severe_second_now = profile.baseline.now_ms + 60.0;
+    let severe_second = harness.build_broken_connectivity_snapshot(
         4,
-        profile.baseline.now_ms + 60.0,
+        severe_second_now,
+        severe_second_now - 3_000.0,
         241,
         "transportSevereDeadline",
     );
@@ -1361,18 +1364,24 @@ async fn multi_stage_replay_steady_local_noise_expired_then_recover_stays_stable
     assert_no_reconnect_candidate(&expired_first_commands);
 
     tokio::time::sleep(Duration::from_millis(450)).await;
-    let expired_second = harness.build_connected_snapshot(
+    let expired_second_now = profile.baseline.now_ms + 450.0;
+    harness.inject_transport_await_hard_recovery_bootstrap(expired_second_now);
+    let expired_second = harness.build_broken_connectivity_snapshot(
         4,
-        profile.baseline.now_ms + 450.0,
+        expired_second_now,
+        expired_second_now - 3_000.0,
         241,
         "transportExpiredDeadline",
     );
     let expired_second_commands = transport_commands(policy.on_snapshot(&expired_second));
 
     tokio::time::sleep(Duration::from_millis(450)).await;
-    let expired_third = harness.build_connected_snapshot(
+    let expired_third_now = profile.baseline.now_ms + 900.0;
+    harness.inject_transport_await_hard_recovery_bootstrap(expired_third_now);
+    let expired_third = harness.build_broken_connectivity_snapshot(
         5,
-        profile.baseline.now_ms + 900.0,
+        expired_third_now,
+        expired_third_now - 3_000.0,
         241,
         "transportExpiredDeadline",
     );

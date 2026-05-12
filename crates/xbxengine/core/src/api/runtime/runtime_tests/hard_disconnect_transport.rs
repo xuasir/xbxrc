@@ -231,12 +231,17 @@ async fn runtime_cloud_replay_promotes_expired_deadline_to_transport_reconnect_a
         .all(|command| !matches!(command, TransportCommand::RequestReconnectCandidate { .. })));
 
     tokio::time::sleep(Duration::from_millis(450)).await;
-    let expired_second = transport_commands(policy.on_snapshot(&fixture.build_connected_snapshot(
-        4,
-        profile.baseline.now_ms + 450.0,
-        241,
-        "transportExpiredDeadline",
-    )));
+    let expired_second_now = profile.baseline.now_ms + 450.0;
+    fixture.inject_transport_await_hard_recovery_bootstrap(expired_second_now);
+    let expired_second = transport_commands(policy.on_snapshot(
+        &fixture.build_broken_connectivity_snapshot(
+            4,
+            expired_second_now,
+            expired_second_now - 3_000.0,
+            241,
+            "transportExpiredDeadline",
+        ),
+    ));
     let reconnect_candidate = expired_second
         .iter()
         .find(|command| {
