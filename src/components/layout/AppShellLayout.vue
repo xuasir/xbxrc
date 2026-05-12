@@ -2,7 +2,7 @@
 import type { EventUnsubscribe } from '@shared/events/client'
 import type { GamepadRuntimeSnapshotDto } from '@shared/gamepad/contract'
 import type { AppPageRouteName, TopNavNodeKey } from '../../navigation/spatial-nav.constants'
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { navigationEngine } from '@/navigation/core'
@@ -52,8 +52,11 @@ let restoringGamepadSampling = false
 let recoveryAttemptToken = 0
 let recoveryRetryTimers: number[] = []
 let correctingShellPolicy = false
+let correctingShellLifecycle = false
 let pendingRecoveryBaselineProgress: string | null = null
 let pendingRecoveryReason: string | null = null
+let lastSnapshotTraceSignature: string | null = null
+let shellFocusRepairFrame: number | null = null
 
 // LB/RB 一级页面切换顺序
 const PAGE_NAV_ORDER: AppPageRouteName[] = ['xhome', 'xcloud', 'setting']
@@ -117,8 +120,15 @@ async function loadShellUserState(): Promise<void> {
 async function loadGamepadSnapshot(): Promise<void> {
   try {
     gamepadSnapshot.value = await rpc.gamepad.getRuntimeSnapshot()
+    traceSnapshotTransition('loadGamepadSnapshot', gamepadSnapshot.value)
   }
   catch (error) {
+    recordGamepadRecoveryTrace('gamepadRuntimeSnapshotLoadFailed', {
+      source: 'loadGamepadSnapshot',
+      error: error instanceof Error ? error.message : String(error),
+      documentVisibility: document.visibilityState,
+      hasFocus: document.hasFocus(),
+    })
     console.warn('[AppShell] load gamepad snapshot failed:', error)
   }
 }
@@ -128,6 +138,70 @@ function recordGamepadRecoveryTrace(event: string, payload: Record<string, unkno
     event,
     payload,
   }).catch(() => {})
+}
+
+function connectedDeviceCount(snapshot: GamepadRuntimeSnapshotDto | null): number {
+  return snapshot?.devices.filter(device => device.connected).length ?? 0
+}
+
+function resolveSnapshotTracePayload(snapshot: GamepadRuntimeSnapshotDto | null): Record<string, unknown> {
+  if (!snapshot) {
+    return {
+      hasSnapshot: false,
+      documentVisibility: document.visibilityState,
+      hasFocus: document.hasFocus(),
+    }
+  }
+
+  let maxSampleSeq = -1
+  let maxSampledAtMs = -1
+  for (const slot of snapshot.slots) {
+    maxSampleSeq = Math.max(maxSampleSeq, slot.sampleSeq)
+    maxSampledAtMs = Math.max(maxSampledAtMs, slot.sampledAtMs)
+  }
+
+  return {
+    hasSnapshot: true,
+    inputPolicy: snapshot.inputPolicy,
+    samplingLifecycle: snapshot.samplingLifecycle ?? 'active',
+    samplingHealth: snapshot.samplingHealth ?? 'healthy',
+    connectedDevices: connectedDeviceCount(snapshot),
+    slotCount: snapshot.slots.length,
+    maxSampleSeq,
+    maxSampledAtMs,
+    lastSampleProgressAtMs: snapshot.lastSampleProgressAtMs ?? null,
+    lastBackendSampleActivityAtMs: snapshot.lastBackendSampleActivityAtMs ?? null,
+    samplingSelfHealCount: snapshot.samplingSelfHealCount ?? null,
+    documentVisibility: document.visibilityState,
+    hasFocus: document.hasFocus(),
+  }
+}
+
+function traceSnapshotTransition(source: string, snapshot: GamepadRuntimeSnapshotDto | null): void {
+  const payload = resolveSnapshotTracePayload(snapshot)
+  const signature = JSON.stringify([
+    source,
+    payload.inputPolicy ?? null,
+    payload.samplingLifecycle ?? null,
+    payload.samplingHealth ?? null,
+    payload.connectedDevices ?? 0,
+    payload.slotCount ?? 0,
+    payload.maxSampleSeq ?? null,
+    payload.maxSampledAtMs ?? null,
+    payload.lastSampleProgressAtMs ?? null,
+    payload.lastBackendSampleActivityAtMs ?? null,
+    payload.samplingSelfHealCount ?? null,
+    payload.documentVisibility,
+    payload.hasFocus,
+  ])
+  if (signature === lastSnapshotTraceSignature) {
+    return
+  }
+  lastSnapshotTraceSignature = signature
+  recordGamepadRecoveryTrace('gamepadRuntimeSnapshotObserved', {
+    source,
+    ...payload,
+  })
 }
 
 function clearRecoveryRetryTimers(): void {
@@ -172,6 +246,39 @@ function gamepadSamplingProgressToken(snapshot: GamepadRuntimeSnapshotDto | null
   ].join(':')
 }
 
+function hasMeaningfulSamplingProgress(snapshot: GamepadRuntimeSnapshotDto | null): boolean {
+  if (!snapshot) {
+    return false
+  }
+
+  let maxSampleSeq = -1
+  let maxSampledAtMs = -1
+  for (const slot of snapshot.slots) {
+    maxSampleSeq = Math.max(maxSampleSeq, slot.sampleSeq)
+    maxSampledAtMs = Math.max(maxSampledAtMs, slot.sampledAtMs)
+  }
+
+  return maxSampleSeq >= 2 || maxSampledAtMs > 0 || (snapshot.lastSampleProgressAtMs ?? 0) > 0
+}
+
+function hasEstablishedSamplingBaseline(snapshot: GamepadRuntimeSnapshotDto | null): boolean {
+  if (!snapshot) {
+    return false
+  }
+
+  let maxSampleSeq = -1
+  let maxSampledAtMs = -1
+  for (const slot of snapshot.slots) {
+    maxSampleSeq = Math.max(maxSampleSeq, slot.sampleSeq)
+    maxSampledAtMs = Math.max(maxSampledAtMs, slot.sampledAtMs)
+  }
+
+  return (
+    snapshot.devices.some(device => device.connected)
+    && (maxSampleSeq >= 1 || maxSampledAtMs > 0 || (snapshot.lastBackendSampleActivityAtMs ?? 0) > 0)
+  )
+}
+
 async function restoreGamepadSampling(reason: string, expectedAdvanceFrom?: string): Promise<void> {
   if (restoringGamepadSampling) {
     recordGamepadRecoveryTrace('gamepadRecoverySkipped', {
@@ -188,9 +295,13 @@ async function restoreGamepadSampling(reason: string, expectedAdvanceFrom?: stri
     expectedAdvanceFrom: expectedAdvanceFrom ?? null,
     targetPolicy: 'shared',
     recoveryKind: 'shell-resume',
+    documentVisibility: document.visibilityState,
+    hasFocus: document.hasFocus(),
+    baselineSnapshot: resolveSnapshotTracePayload(gamepadSnapshot.value),
   })
   try {
     gamepadSnapshot.value = await rpc.gamepad.resumeShellSampling({ policy: 'shared' })
+    traceSnapshotTransition('restoreGamepadSampling', gamepadSnapshot.value)
     const nextProgress = gamepadSamplingProgressToken(gamepadSnapshot.value)
     const progressed = expectedAdvanceFrom ? nextProgress !== expectedAdvanceFrom : true
     recordGamepadRecoveryTrace('gamepadRecoveryAttemptCompleted', {
@@ -202,7 +313,24 @@ async function restoreGamepadSampling(reason: string, expectedAdvanceFrom?: stri
       inputPolicy: gamepadSnapshot.value.inputPolicy,
       connectedDevices: gamepadSnapshot.value.devices.filter(device => device.connected).length,
     })
-    if (expectedAdvanceFrom && nextProgress === expectedAdvanceFrom) {
+
+    if (
+      hasEstablishedSamplingBaseline(gamepadSnapshot.value)
+      && pendingRecoveryBaselineProgress !== null
+    ) {
+      finishPendingRecovery('sampling-baseline-ready', {
+        scheduledReason: pendingRecoveryReason,
+        baselineProgress: pendingRecoveryBaselineProgress,
+        currentProgress: nextProgress,
+      })
+      return
+    }
+
+    if (
+      expectedAdvanceFrom
+      && nextProgress === expectedAdvanceFrom
+      && !hasMeaningfulSamplingProgress(gamepadSnapshot.value)
+    ) {
       throw new Error(`sampling-progress-stalled:${reason}`)
     }
   }
@@ -220,10 +348,18 @@ async function restoreGamepadSampling(reason: string, expectedAdvanceFrom?: stri
 }
 
 function handleDocumentVisibilityChange(): void {
+  recordGamepadRecoveryTrace('gamepadDocumentVisibilityChanged', {
+    visibilityState: document.visibilityState,
+    hasFocus: document.hasFocus(),
+    pendingRecoveryReason,
+    pendingRecoveryBaselineProgress,
+    snapshot: resolveSnapshotTracePayload(gamepadSnapshot.value),
+  })
   if (document.visibilityState !== 'visible') {
     return
   }
   scheduleGamepadSamplingRecovery('document-visible')
+  void ensureShellFocusReady('document-visible')
 }
 
 async function ensureShellInputPolicy(snapshot: GamepadRuntimeSnapshotDto): Promise<void> {
@@ -236,14 +372,17 @@ async function ensureShellInputPolicy(snapshot: GamepadRuntimeSnapshotDto): Prom
     observedPolicy: snapshot.inputPolicy,
     targetPolicy: 'shared',
     recoveryKind: 'shell-resume',
+    snapshot: resolveSnapshotTracePayload(snapshot),
   })
 
   try {
     gamepadSnapshot.value = await rpc.gamepad.resumeShellSampling({ policy: 'shared' })
+    traceSnapshotTransition('ensureShellInputPolicy', gamepadSnapshot.value)
     recordGamepadRecoveryTrace('gamepadShellPolicyCorrectionCompleted', {
       observedPolicy: snapshot.inputPolicy,
       correctedPolicy: gamepadSnapshot.value.inputPolicy,
       recoveryKind: 'shell-resume',
+      snapshot: resolveSnapshotTracePayload(gamepadSnapshot.value),
     })
   }
   catch (error) {
@@ -255,6 +394,44 @@ async function ensureShellInputPolicy(snapshot: GamepadRuntimeSnapshotDto): Prom
   }
   finally {
     correctingShellPolicy = false
+  }
+}
+
+async function ensureVisibleShellLifecycle(snapshot: GamepadRuntimeSnapshotDto): Promise<void> {
+  if (
+    snapshot.samplingLifecycle === 'active'
+    || document.visibilityState !== 'visible'
+    || correctingShellLifecycle
+  ) {
+    return
+  }
+
+  correctingShellLifecycle = true
+  recordGamepadRecoveryTrace('gamepadShellLifecycleCorrectionStarted', {
+    observedLifecycle: snapshot.samplingLifecycle ?? 'active',
+    hasFocus: document.hasFocus(),
+    visibilityState: document.visibilityState,
+    snapshot: resolveSnapshotTracePayload(snapshot),
+  })
+
+  try {
+    gamepadSnapshot.value = await rpc.gamepad.resumeShellSampling({ policy: 'shared' })
+    traceSnapshotTransition('ensureVisibleShellLifecycle', gamepadSnapshot.value)
+    recordGamepadRecoveryTrace('gamepadShellLifecycleCorrectionCompleted', {
+      observedLifecycle: snapshot.samplingLifecycle ?? 'active',
+      correctedLifecycle: gamepadSnapshot.value.samplingLifecycle ?? 'active',
+      snapshot: resolveSnapshotTracePayload(gamepadSnapshot.value),
+    })
+  }
+  catch (error) {
+    recordGamepadRecoveryTrace('gamepadShellLifecycleCorrectionFailed', {
+      observedLifecycle: snapshot.samplingLifecycle ?? 'active',
+      error: error instanceof Error ? error.message : String(error),
+    })
+    console.warn('[AppShell] ensure visible shell lifecycle failed:', error)
+  }
+  finally {
+    correctingShellLifecycle = false
   }
 }
 
@@ -271,9 +448,57 @@ function scheduleGamepadSamplingRecovery(reason: string): void {
     attemptToken,
     baselineProgress,
     recoveryKind: 'shell-resume-once',
+    documentVisibility: document.visibilityState,
+    hasFocus: document.hasFocus(),
+    snapshot: resolveSnapshotTracePayload(gamepadSnapshot.value),
   })
 
   void restoreGamepadSampling(`${reason}:attempt-1`, baselineProgress)
+}
+
+function clearShellFocusRepairFrame(): void {
+  if (shellFocusRepairFrame !== null) {
+    window.cancelAnimationFrame(shellFocusRepairFrame)
+    shellFocusRepairFrame = null
+  }
+}
+
+async function ensureShellFocusReady(reason: string): Promise<void> {
+  if (isProfileMenuOpen.value || isGamepadCardOpen.value) {
+    return
+  }
+  if (document.querySelector('[data-focused="true"]') instanceof HTMLElement) {
+    return
+  }
+
+  await nextTick()
+  clearShellFocusRepairFrame()
+  shellFocusRepairFrame = window.requestAnimationFrame(() => {
+    shellFocusRepairFrame = null
+    if (document.querySelector('[data-focused="true"]') instanceof HTMLElement) {
+      return
+    }
+    const defaultFocus = document.getElementById(SPATIAL_NAV_NODE_IDS.topNav.brand)
+    if (defaultFocus instanceof HTMLElement) {
+      navigationEngine.focusElement(defaultFocus, false)
+      recordGamepadRecoveryTrace('gamepadShellFocusRepaired', {
+        reason,
+        targetId: SPATIAL_NAV_NODE_IDS.topNav.brand,
+        visibilityState: document.visibilityState,
+        hasFocus: document.hasFocus(),
+      })
+    }
+  })
+}
+
+function handleWindowFocus(): void {
+  recordGamepadRecoveryTrace('gamepadWindowFocused', {
+    visibilityState: document.visibilityState,
+    hasFocus: document.hasFocus(),
+    snapshot: resolveSnapshotTracePayload(gamepadSnapshot.value),
+  })
+  scheduleGamepadSamplingRecovery('window-focus')
+  void ensureShellFocusReady('window-focus')
 }
 
 function closeProfileMenu(): void {
@@ -401,6 +626,12 @@ watch(
 )
 
 onMounted(() => {
+  recordGamepadRecoveryTrace('gamepadShellMounted', {
+    routeName: String(route.name ?? ''),
+    routePath: route.fullPath,
+    visibilityState: document.visibilityState,
+    hasFocus: document.hasFocus(),
+  })
   void loadShellUserState()
   void loadGamepadSnapshot()
   disposeAuthSessionReady = events.on('auth.sessionReady', () => {
@@ -408,11 +639,13 @@ onMounted(() => {
   })
   disposeGamepadRuntimeSnapshot = events.on('gamepad.runtimeSnapshot', (snapshot) => {
     gamepadSnapshot.value = snapshot
+    traceSnapshotTransition('runtimeSnapshotEvent', snapshot)
     const currentProgress = gamepadSamplingProgressToken(snapshot)
     if (
       document.visibilityState === 'visible'
       && pendingRecoveryBaselineProgress !== null
       && currentProgress !== pendingRecoveryBaselineProgress
+      && hasMeaningfulSamplingProgress(snapshot)
     ) {
       finishPendingRecovery('sampling-progress-advanced', {
         scheduledReason: pendingRecoveryReason,
@@ -423,10 +656,15 @@ onMounted(() => {
     if (document.visibilityState === 'visible' && snapshot.inputPolicy !== 'shared') {
       void ensureShellInputPolicy(snapshot)
     }
+    if (document.visibilityState === 'visible' && snapshot.samplingLifecycle !== 'active') {
+      void ensureVisibleShellLifecycle(snapshot)
+    }
   })
   window.addEventListener('keydown', handleEscapeKeydown)
   document.addEventListener('visibilitychange', handleDocumentVisibilityChange)
+  window.addEventListener('focus', handleWindowFocus)
   scheduleGamepadSamplingRecovery('app-shell-mounted')
+  void ensureShellFocusReady('app-shell-mounted')
 
   // 注册 LB/RB 一级页面切换
   disposePageSwitch = navigationEngine.onPageSwitch((direction) => {
@@ -447,6 +685,13 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  recordGamepadRecoveryTrace('gamepadShellUnmounted', {
+    routeName: String(route.name ?? ''),
+    routePath: route.fullPath,
+    visibilityState: document.visibilityState,
+    hasFocus: document.hasFocus(),
+    snapshot: resolveSnapshotTracePayload(gamepadSnapshot.value),
+  })
   if (disposeAuthSessionReady !== undefined) {
     disposeAuthSessionReady()
     disposeAuthSessionReady = undefined
@@ -457,6 +702,8 @@ onUnmounted(() => {
   }
   window.removeEventListener('keydown', handleEscapeKeydown)
   document.removeEventListener('visibilitychange', handleDocumentVisibilityChange)
+  window.removeEventListener('focus', handleWindowFocus)
+  clearShellFocusRepairFrame()
   clearRecoveryRetryTimers()
   pendingRecoveryBaselineProgress = null
   pendingRecoveryReason = null

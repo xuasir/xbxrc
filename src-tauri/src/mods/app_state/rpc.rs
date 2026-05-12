@@ -7,7 +7,9 @@ use tauri::{AppHandle, Manager};
 #[serde(tag = "method", content = "params", rename_all = "camelCase")]
 pub enum AppCommand {
     GetVersion,
-    Ping { message: String },
+    Ping {
+        message: String,
+    },
     IsFullscreen,
     ToggleFullscreen,
     EnterFullscreen,

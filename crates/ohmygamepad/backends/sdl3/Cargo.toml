@@ -17,6 +17,7 @@ device_query = "4.0.1"
 log = "0.4"
 ohmygamepad-core = { path = "../../core" }
 ohmygamepad-protocol = { path = "../../protocol" }
+serde_json = "1"
 sdl3 = { version = "0.18.0", features = [
   "build-from-source-static",
   "hidapi"

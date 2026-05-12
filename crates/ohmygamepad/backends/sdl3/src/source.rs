@@ -19,8 +19,15 @@ use sdl3::{
     joystick::{ConnectionState, JoystickId, PowerInfo, PowerLevel},
     sensor::SensorType,
 };
+use serde_json::json;
 
-use crate::{Sdl3BackendConfig, Sdl3DeviceDescriptor, Sdl3InputEvent, Sdl3InputEventKind};
+use crate::{
+    record_runtime_trace, Sdl3BackendConfig, Sdl3DeviceDescriptor, Sdl3InputEvent,
+    Sdl3InputEventKind,
+};
+
+const POLLED_SNAPSHOT_INTERVAL: Duration = Duration::from_millis(8);
+const POLLED_SNAPSHOT_TRACE_INTERVAL_MS: u64 = 1000;
 
 const KNOWN_HANDHELD_CONTROLLER_IDS: &[(u16, u16)] = &[
     (0x28de, 0x1205), // Steam Deck
@@ -36,6 +43,27 @@ const KNOWN_STEAM_VIRTUAL_CONTROLLER_IDS: &[(u16, u16)] = &[
 
 pub trait Sdl3Source {
     fn next_event(&mut self) -> Option<Sdl3InputEvent>;
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct SnapshotSummary {
+    pressed_button_count: usize,
+    non_zero_axis_count: usize,
+    max_abs_axis_milli: i32,
+    left_trigger_milli: i32,
+    right_trigger_milli: i32,
+}
+
+#[derive(Clone, Debug, Default)]
+struct SourceTraceState {
+    per_device: HashMap<String, DeviceTraceState>,
+}
+
+#[derive(Clone, Debug)]
+struct DeviceTraceState {
+    last_signature: String,
+    last_logged_at_ms: u64,
+    repeated_poll_count: u32,
 }
 
 #[derive(Clone, Debug)]
@@ -69,6 +97,16 @@ impl Sdl3RumbleHandle {
             .recv_timeout(Duration::from_millis(100))
             .map_err(|_| Sdl3RumbleError::CommandChannelClosed)
     }
+
+    pub fn reopen_devices_and_prime_sampling(&self) -> Result<(), Sdl3RumbleError> {
+        let (ack_tx, ack_rx) = mpsc::channel();
+        self.command_tx
+            .send(Sdl3RumbleCommand::ReopenDevicesAndPrimeSampling { ack_tx })
+            .map_err(|_| Sdl3RumbleError::CommandChannelClosed)?;
+        ack_rx
+            .recv_timeout(Duration::from_millis(150))
+            .map_err(|_| Sdl3RumbleError::CommandChannelClosed)
+    }
 }
 
 #[derive(Debug, Eq, PartialEq)]
@@ -96,6 +134,9 @@ enum Sdl3RumbleCommand {
         device_ids: Vec<String>,
     },
     PrimeSampling {
+        ack_tx: Sender<()>,
+    },
+    ReopenDevicesAndPrimeSampling {
         ack_tx: Sender<()>,
     },
 }
@@ -247,8 +288,19 @@ fn run_sdl3_source_thread(
         return;
     }
 
+    let mut last_polled_snapshot_at = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default();
+    let mut trace_state = SourceTraceState::default();
+
     loop {
-        drain_rumble_commands(&event_tx, &command_rx, &mut opened_gamepads);
+        drain_rumble_commands(
+            &event_tx,
+            &command_rx,
+            &mut opened_gamepads,
+            &gamepad_subsystem,
+            &config,
+        );
         gamepad_subsystem.update();
 
         let mut received_event = false;
@@ -263,6 +315,14 @@ fn run_sdl3_source_thread(
             ) {
                 return;
             }
+        }
+
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default();
+        if now.saturating_sub(last_polled_snapshot_at) >= POLLED_SNAPSHOT_INTERVAL {
+            emit_polled_snapshots(&event_tx, &mut opened_gamepads, now_ms(), &mut trace_state);
+            last_polled_snapshot_at = now;
         }
 
         if !received_event {
@@ -674,6 +734,15 @@ fn emit_connected_baseline_event(
     }
 
     let (buttons, axes) = capture_gamepad_baseline_state(gamepad);
+    record_snapshot_trace(
+        "sdl3ConnectedBaselineSnapshot",
+        "connected-baseline",
+        descriptor,
+        observed_at_ms,
+        &buttons,
+        &axes,
+        None,
+    );
     send_event(
         event_tx,
         Sdl3InputEvent {
@@ -876,6 +945,8 @@ fn drain_rumble_commands(
     event_tx: &Sender<Sdl3InputEvent>,
     command_rx: &Receiver<Sdl3RumbleCommand>,
     opened_gamepads: &mut HashMap<String, OpenedSdl3Gamepad>,
+    gamepad_subsystem: &sdl3::GamepadSubsystem,
+    config: &Sdl3BackendConfig,
 ) {
     loop {
         match command_rx.try_recv() {
@@ -887,6 +958,15 @@ fn drain_rumble_commands(
             }
             Ok(Sdl3RumbleCommand::PrimeSampling { ack_tx }) => {
                 prime_sampling_on_devices(event_tx, opened_gamepads);
+                let _ = ack_tx.send(());
+            }
+            Ok(Sdl3RumbleCommand::ReopenDevicesAndPrimeSampling { ack_tx }) => {
+                reopen_devices_and_prime_sampling(
+                    event_tx,
+                    opened_gamepads,
+                    gamepad_subsystem,
+                    config,
+                );
                 let _ = ack_tx.send(());
             }
             Err(TryRecvError::Empty | TryRecvError::Disconnected) => break,
@@ -955,6 +1035,112 @@ fn prime_sampling_on_devices(
         opened.descriptor = descriptor_from_gamepad(device_id, &opened.gamepad);
         log_gamepad_diagnostics("prime-snapshot", &opened.descriptor);
         let (buttons, axes) = capture_gamepad_baseline_state(&opened.gamepad);
+        record_snapshot_trace(
+            "sdl3PrimeSamplingSnapshot",
+            "prime-sampling",
+            &opened.descriptor,
+            observed_at_ms,
+            &buttons,
+            &axes,
+            None,
+        );
+        let _ = send_event(
+            event_tx,
+            Sdl3InputEvent {
+                device: opened.descriptor.clone(),
+                observed_at_ms,
+                kind: Sdl3InputEventKind::PrimeSnapshot { buttons, axes },
+            },
+        );
+    }
+}
+
+fn reopen_devices_and_prime_sampling(
+    event_tx: &Sender<Sdl3InputEvent>,
+    opened_gamepads: &mut HashMap<String, OpenedSdl3Gamepad>,
+    gamepad_subsystem: &sdl3::GamepadSubsystem,
+    config: &Sdl3BackendConfig,
+) {
+    let mut reopened_count = 0usize;
+    let mut reopened_ids = Vec::new();
+    let device_ids = opened_gamepads.keys().cloned().collect::<Vec<_>>();
+
+    for device_id in device_ids {
+        let Some(joystick_id) = opened_gamepads
+            .get(&device_id)
+            .and_then(|opened| opened.gamepad.id().ok())
+        else {
+            continue;
+        };
+
+        let Some((resolved_device_id, reopened)) =
+            open_gamepad(gamepad_subsystem, joystick_id, config)
+        else {
+            continue;
+        };
+
+        if resolved_device_id != device_id {
+            log::info!(
+                "sdl3_gamepad_reopen_device_id_changed previous_device_id={} reopened_device_id={}",
+                device_id,
+                resolved_device_id,
+            );
+        }
+
+        let Some(previous) = opened_gamepads.remove(&device_id) else {
+            continue;
+        };
+
+        if dedupe_or_insert_opened_gamepad(
+            event_tx,
+            opened_gamepads,
+            &reopened,
+            DuplicatePolicy::RemapRefresh,
+        ) {
+            opened_gamepads.insert(previous.descriptor.device_id.clone(), previous);
+            continue;
+        }
+
+        opened_gamepads.insert(resolved_device_id.clone(), reopened);
+        reopened_count = reopened_count.saturating_add(1);
+        reopened_ids.push(resolved_device_id);
+    }
+
+    log::info!(
+        "sdl3_gamepad_reopen_prime_completed reopened_count={} reopened_device_ids={}",
+        reopened_count,
+        reopened_ids.join("|"),
+    );
+    record_runtime_trace(
+        "sdl3ReopenPrimeCommandApplied",
+        json!({
+            "reopenedCount": reopened_count,
+            "reopenedDeviceIds": reopened_ids,
+        }),
+    );
+    prime_sampling_on_devices(event_tx, opened_gamepads);
+}
+
+fn emit_polled_snapshots(
+    event_tx: &Sender<Sdl3InputEvent>,
+    opened_gamepads: &mut HashMap<String, OpenedSdl3Gamepad>,
+    observed_at_ms: u64,
+    trace_state: &mut SourceTraceState,
+) {
+    let mut device_ids = opened_gamepads.keys().cloned().collect::<Vec<_>>();
+    device_ids.sort();
+    for device_id in device_ids {
+        let Some(opened) = opened_gamepads.get_mut(&device_id) else {
+            continue;
+        };
+        let (buttons, axes) = capture_gamepad_baseline_state(&opened.gamepad);
+        record_polled_snapshot_trace(
+            trace_state,
+            &opened.descriptor,
+            observed_at_ms,
+            &buttons,
+            &axes,
+        );
         let _ = send_event(
             event_tx,
             Sdl3InputEvent {
@@ -964,6 +1150,149 @@ fn prime_sampling_on_devices(
             },
         );
     }
+}
+
+fn record_snapshot_trace(
+    event: &str,
+    stage: &str,
+    descriptor: &Sdl3DeviceDescriptor,
+    observed_at_ms: u64,
+    buttons: &[f32],
+    axes: &[f32],
+    extra_payload: Option<serde_json::Value>,
+) {
+    let summary = summarize_snapshot(buttons, axes);
+    let mut payload = json!({
+        "stage": stage,
+        "deviceId": descriptor.device_id,
+        "observedAtMs": observed_at_ms,
+        "pressedButtonCount": summary.pressed_button_count,
+        "nonZeroAxisCount": summary.non_zero_axis_count,
+        "maxAbsAxisMilli": summary.max_abs_axis_milli,
+        "leftTriggerMilli": summary.left_trigger_milli,
+        "rightTriggerMilli": summary.right_trigger_milli,
+        "allZero": snapshot_is_all_zero(&summary),
+    });
+    if let Some(extra_payload) = extra_payload {
+        payload["extra"] = extra_payload;
+    }
+    record_runtime_trace(event, payload);
+}
+
+fn record_polled_snapshot_trace(
+    trace_state: &mut SourceTraceState,
+    descriptor: &Sdl3DeviceDescriptor,
+    observed_at_ms: u64,
+    buttons: &[f32],
+    axes: &[f32],
+) {
+    let summary = summarize_snapshot(buttons, axes);
+    let signature = snapshot_summary_signature(&summary);
+    let device_state = trace_state
+        .per_device
+        .entry(descriptor.device_id.clone())
+        .or_insert_with(|| DeviceTraceState {
+            last_signature: String::new(),
+            last_logged_at_ms: 0,
+            repeated_poll_count: 0,
+        });
+
+    if device_state.last_signature != signature {
+        let previous_signature = if device_state.last_signature.is_empty() {
+            None
+        } else {
+            Some(device_state.last_signature.clone())
+        };
+        device_state.last_signature = signature.clone();
+        device_state.last_logged_at_ms = observed_at_ms;
+        device_state.repeated_poll_count = 0;
+        record_snapshot_trace(
+            "sdl3PolledSnapshotChanged",
+            "poll",
+            descriptor,
+            observed_at_ms,
+            buttons,
+            axes,
+            Some(json!({
+                "previousSignature": previous_signature,
+                "signature": signature,
+            })),
+        );
+        return;
+    }
+
+    device_state.repeated_poll_count = device_state.repeated_poll_count.saturating_add(1);
+    if observed_at_ms.saturating_sub(device_state.last_logged_at_ms)
+        < POLLED_SNAPSHOT_TRACE_INTERVAL_MS
+    {
+        return;
+    }
+    device_state.last_logged_at_ms = observed_at_ms;
+    record_snapshot_trace(
+        "sdl3PolledSnapshotStable",
+        "poll",
+        descriptor,
+        observed_at_ms,
+        buttons,
+        axes,
+        Some(json!({
+            "signature": signature,
+            "repeatedPollCount": device_state.repeated_poll_count,
+        })),
+    );
+}
+
+fn summarize_snapshot(buttons: &[f32], axes: &[f32]) -> SnapshotSummary {
+    let pressed_button_count = buttons
+        .iter()
+        .filter(|value| value.abs() > f32::EPSILON)
+        .count();
+    let non_zero_axis_count = axes
+        .iter()
+        .filter(|value| value.abs() > f32::EPSILON)
+        .count();
+    let max_abs_axis_milli = axes
+        .iter()
+        .map(|value| (value.abs() * 1000.0).round() as i32)
+        .max()
+        .unwrap_or(0);
+    let left_trigger_milli = axes
+        .get(4)
+        .copied()
+        .map(|value| (value * 1000.0).round() as i32)
+        .unwrap_or(0);
+    let right_trigger_milli = axes
+        .get(5)
+        .copied()
+        .map(|value| (value * 1000.0).round() as i32)
+        .unwrap_or(0);
+
+    SnapshotSummary {
+        pressed_button_count,
+        non_zero_axis_count,
+        max_abs_axis_milli,
+        left_trigger_milli,
+        right_trigger_milli,
+    }
+}
+
+fn snapshot_is_all_zero(summary: &SnapshotSummary) -> bool {
+    summary.pressed_button_count == 0
+        && summary.non_zero_axis_count == 0
+        && summary.max_abs_axis_milli == 0
+        && summary.left_trigger_milli == 0
+        && summary.right_trigger_milli == 0
+}
+
+fn snapshot_summary_signature(summary: &SnapshotSummary) -> String {
+    format!(
+        "{}:{}:{}:{}:{}",
+        summary.pressed_button_count,
+        summary.non_zero_axis_count,
+        summary.max_abs_axis_milli,
+        summary.left_trigger_milli,
+        summary.right_trigger_milli
+    )
 }
 
 fn capture_gamepad_baseline_state(gamepad: &Gamepad) -> (Vec<f32>, Vec<f32>) {

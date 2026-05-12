@@ -43,6 +43,20 @@ const LOGICAL_BUTTON_STATE_KEYS: Record<LogicalButtonDto, keyof LogicalButtonsSt
   'dpad-right': 'dpadRight',
 }
 
+let lastDriverTraceSignature = ''
+
+function recordDriverTrace(event: string, payload: Record<string, unknown>): void {
+  const signature = `${event}:${JSON.stringify(payload)}`
+  if (signature === lastDriverTraceSignature) {
+    return
+  }
+  lastDriverTraceSignature = signature
+  void rpc.runtimeTrace.recordEvent({
+    event,
+    payload,
+  }).catch(() => {})
+}
+
 export class GamepadDriver {
   private shadowGamepad: GamepadFrame = DEFAULT_GAMEPAD_FRAME()
   private nativeRuntimeSnapshot?: GamepadRuntimeSnapshotDto
@@ -50,15 +64,30 @@ export class GamepadDriver {
   private nativeRuntimeUnsubscribe?: () => void
   private nativePadUnsubscribe?: () => void
   private isVirtualButtonPressing = false
+  private readonly handleWindowFocus = () => {
+    void this.refreshNativeRuntimeSnapshot('window-focus')
+  }
+
+  private readonly handleVisibilityChange = () => {
+    if (document.visibilityState !== 'visible') {
+      return
+    }
+    void this.refreshNativeRuntimeSnapshot('document-visible')
+  }
 
   constructor(private readonly delegate: GamepadDriverDelegate) {}
 
   start(): void {
     this.nativeControllerConnected = false
+    recordDriverTrace('gamepadDriverStarted', {})
     this.startNativeSnapshotBridge()
+    window.addEventListener('focus', this.handleWindowFocus)
+    document.addEventListener('visibilitychange', this.handleVisibilityChange)
   }
 
   stop(): void {
+    window.removeEventListener('focus', this.handleWindowFocus)
+    document.removeEventListener('visibilitychange', this.handleVisibilityChange)
     if (this.nativeRuntimeUnsubscribe) {
       this.nativeRuntimeUnsubscribe()
       this.nativeRuntimeUnsubscribe = undefined
@@ -121,31 +150,78 @@ export class GamepadDriver {
       this.applyNativeRuntimeSnapshot(snapshot)
     })
     this.nativePadUnsubscribe = events.on('gamepad.slotSnapshot', (slotSnapshot) => {
+      recordDriverTrace('gamepadDriverSlotSnapshotReceived', {
+        slot: slotSnapshot.slot,
+        sampleSeq: slotSnapshot.sampleSeq,
+        sampledAtMs: slotSnapshot.sampledAtMs,
+        south: slotSnapshot.state.buttons.south,
+        east: slotSnapshot.state.buttons.east,
+      })
       this.applyNativePadSnapshot(slotSnapshot)
       if (this.isVirtualButtonPressing) {
         return
       }
+      recordDriverTrace('gamepadDriverFrameEmitted', {
+        source: 'slot-snapshot',
+        slot: slotSnapshot.slot,
+        south: slotSnapshot.state.buttons.south,
+        east: slotSnapshot.state.buttons.east,
+      })
       this.delegate.onFrame(this.mapNativePadState(slotSnapshot, 0))
     })
 
-    void rpc.gamepad
-      .getRuntimeSnapshot()
-      .then((snapshot) => {
-        this.applyNativeRuntimeSnapshot(snapshot)
+    void this.refreshNativeRuntimeSnapshot('driver-start')
+  }
+
+  private async refreshNativeRuntimeSnapshot(reason: string): Promise<void> {
+    try {
+      const snapshot = await rpc.gamepad.getRuntimeSnapshot()
+      this.applyNativeRuntimeSnapshot(snapshot)
+      recordDriverTrace('gamepadDriverRuntimeSnapshotRefreshed', {
+        reason,
+        slotCount: snapshot.slots.length,
+        inputPolicy: snapshot.inputPolicy,
       })
-      .catch(() => {})
+    }
+    catch {
+      // 主动补快照失败不影响既有事件桥。
+    }
   }
 
   private applyNativeRuntimeSnapshot(snapshot: GamepadRuntimeSnapshotDto): void {
     this.nativeRuntimeSnapshot = snapshot
-    const hasController = this.getNativePadSnapshots(snapshot).length > 0
+    const nativePads = this.getNativePadSnapshots(snapshot)
+    recordDriverTrace('gamepadDriverRuntimeSnapshotApplied', {
+      slotCount: nativePads.length,
+      inputPolicy: snapshot.inputPolicy,
+      maxSampleSeq: nativePads.reduce((max, pad) => Math.max(max, pad.sampleSeq), 0),
+    })
+    const hasController = nativePads.length > 0
     if (hasController === this.nativeControllerConnected) {
+      if (!this.isVirtualButtonPressing && nativePads.length > 0) {
+        recordDriverTrace('gamepadDriverFrameEmitted', {
+          source: 'runtime-snapshot-refresh',
+          slot: nativePads[0].slot,
+          south: nativePads[0].state.buttons.south,
+          east: nativePads[0].state.buttons.east,
+        })
+        this.delegate.onFrame(this.mapNativePadState(nativePads[0], 0))
+      }
       return
     }
 
     this.nativeControllerConnected = hasController
     if (hasController) {
       this.delegate.onGamepadAdded(0)
+      if (!this.isVirtualButtonPressing) {
+        recordDriverTrace('gamepadDriverFrameEmitted', {
+          source: 'runtime-snapshot-connect',
+          slot: nativePads[0].slot,
+          south: nativePads[0].state.buttons.south,
+          east: nativePads[0].state.buttons.east,
+        })
+        this.delegate.onFrame(this.mapNativePadState(nativePads[0], 0))
+      }
     }
     else {
       this.delegate.onGamepadRemoved(0)

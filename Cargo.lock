@@ -3946,6 +3946,7 @@ dependencies = [
  "ohmygamepad-protocol",
  "ohmygamepad-sdl3",
  "ohmygamepad-win-xbox-haptics",
+ "serde_json",
 ]
 
 [[package]]
@@ -3964,6 +3965,7 @@ dependencies = [
  "ohmygamepad-core",
  "ohmygamepad-protocol",
  "sdl3",
+ "serde_json",
 ]
 
 [[package]]

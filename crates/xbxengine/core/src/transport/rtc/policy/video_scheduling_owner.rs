@@ -2171,7 +2171,8 @@ impl VideoSchedulingOwner {
                 )
             }
         };
-        let has_transport_await_hard_evidence = Self::has_transport_await_hard_rebuild_evidence(input);
+        let has_transport_await_hard_evidence =
+            Self::has_transport_await_hard_rebuild_evidence(input);
         if !gap_escalates_recovery && !has_transport_await_hard_evidence {
             return false;
         }

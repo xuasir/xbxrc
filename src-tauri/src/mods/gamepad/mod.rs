@@ -116,6 +116,7 @@ pub trait GamepadProvider: Send + Sync {
         lifecycle: OhMyGamepadSamplingLifecycleDto,
     ) -> Result<(), String>;
     fn try_stalled_sampling_self_heal(&self) -> Result<bool, String>;
+    fn try_startup_sampling_self_heal(&self) -> Result<bool, String>;
     fn play_rumble(
         &self,
         request: OhMyGamepadRumbleRequestDto,

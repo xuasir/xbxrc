@@ -1,5 +1,5 @@
 import type { Ref } from 'vue'
-import { watch } from 'vue'
+import { onBeforeUnmount, onMounted, watch } from 'vue'
 import { requestGamepadUiListenerReset } from '../../navigation/core/gamepad-listener'
 
 export type GamepadRouteTargetSnapshot
@@ -13,6 +13,7 @@ export function useGamepadRouteForStreamOverlay(options: {
 }): void {
   let lastApplied: GamepadRouteTargetSnapshot | null = null
   let pending: GamepadRouteTargetSnapshot | null = null
+  let applying = false
 
   function equals(a: GamepadRouteTargetSnapshot | null, b: GamepadRouteTargetSnapshot | null): boolean {
     if (a === b)
@@ -25,6 +26,17 @@ export function useGamepadRouteForStreamOverlay(options: {
       return true
     }
     return b.kind === 'stream-session' && a.sessionId === b.sessionId
+  }
+
+  function resolveDesiredTarget(): GamepadRouteTargetSnapshot | null {
+    const sessionId = options.sessionId.value
+    if (sessionId === '') {
+      return null
+    }
+    if (options.isAnyOverlayOpen.value) {
+      return { kind: 'shell-ui' }
+    }
+    return { kind: 'stream-session', sessionId }
   }
 
   async function applyTarget(target: GamepadRouteTargetSnapshot): Promise<void> {
@@ -45,26 +57,68 @@ export function useGamepadRouteForStreamOverlay(options: {
     }
   }
 
+  async function syncTarget(): Promise<void> {
+    if (applying) {
+      return
+    }
+
+    applying = true
+    try {
+      while (true) {
+        const target = resolveDesiredTarget()
+        if (target === null) {
+          requestGamepadUiListenerReset('route:session-cleared')
+          lastApplied = null
+          pending = null
+          return
+        }
+
+        if (equals(lastApplied, target)) {
+          return
+        }
+
+        await applyTarget(target)
+
+        const latestDesiredTarget = resolveDesiredTarget()
+        if (equals(lastApplied, latestDesiredTarget)) {
+          return
+        }
+      }
+    }
+    finally {
+      applying = false
+    }
+  }
+
+  const handleWindowFocus = () => {
+    void syncTarget()
+  }
+
+  const handleVisibilityChange = () => {
+    if (document.visibilityState !== 'visible') {
+      return
+    }
+    void syncTarget()
+  }
+
   watch(
     () => ({
       open: options.isAnyOverlayOpen.value,
       sessionId: options.sessionId.value,
     }),
-    (next, prev) => {
-      if (next.sessionId === '') {
-        requestGamepadUiListenerReset('route:session-cleared')
-        lastApplied = null
-        return
-      }
-
-      if (next.open) {
-        void applyTarget({ kind: 'shell-ui' })
-        return
-      }
-
-      if (prev?.open === true && next.open === false) {
-        void applyTarget({ kind: 'stream-session', sessionId: next.sessionId })
-      }
+    () => {
+      void syncTarget()
     },
+    { immediate: true },
   )
+
+  onMounted(() => {
+    window.addEventListener('focus', handleWindowFocus)
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+  })
+
+  onBeforeUnmount(() => {
+    window.removeEventListener('focus', handleWindowFocus)
+    document.removeEventListener('visibilitychange', handleVisibilityChange)
+  })
 }

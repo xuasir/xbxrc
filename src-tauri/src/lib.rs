@@ -22,33 +22,25 @@ fn install_rustls_crypto_provider() {
     let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
 }
 
-fn hint_gamepad_shell_interactive(window: &tauri::Window, reason: &str) {
-    use ohmygamepad_protocol::OhMyGamepadSamplingLifecycleDto;
-
+fn record_gamepad_shell_trace(window: &tauri::Window, event: &str, payload: serde_json::Value) {
     let app_state = window.state::<shell::state::AppState>();
-    if let Err(error) = app_state
-        .gamepad
-        .set_sampling_lifecycle(OhMyGamepadSamplingLifecycleDto::Active)
-    {
-        log::warn!(
-            "Failed to set gamepad sampling lifecycle Active reason={} error={}",
-            reason,
-            error
-        );
-    }
-    if let Err(error) = app_state.gamepad.try_stalled_sampling_self_heal() {
-        log::warn!(
-            "Failed to try stalled gamepad self-heal reason={} error={}",
-            reason,
-            error
-        );
-    }
+    app_state
+        .runtime_trace
+        .record_event("gamepad-shell", event, None, payload);
 }
 
 fn hint_gamepad_shell_background(window: &tauri::Window, reason: &str) {
     use ohmygamepad_protocol::OhMyGamepadSamplingLifecycleDto;
 
     let app_state = window.state::<shell::state::AppState>();
+    record_gamepad_shell_trace(
+        window,
+        "shellBackgroundHint",
+        serde_json::json!({
+            "reason": reason,
+            "windowLabel": window.label(),
+        }),
+    );
     if let Err(error) = app_state
         .gamepad
         .set_sampling_lifecycle(OhMyGamepadSamplingLifecycleDto::BackgroundWarm)
@@ -81,22 +73,72 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_keepawake::init())
         .on_page_load(|webview, _payload| {
+            if let Some(app_state) = webview.window().try_state::<shell::state::AppState>() {
+                app_state.runtime_trace.record_event(
+                    "gamepad-shell",
+                    "pageLoad",
+                    None,
+                    serde_json::json!({
+                        "windowLabel": webview.window().label(),
+                        "url": webview.url().map(|value| value.to_string()).unwrap_or_default(),
+                    }),
+                );
+            }
+            let visible = webview.window().is_visible().unwrap_or(false);
+            let minimized = webview.window().is_minimized().unwrap_or(false);
+            if visible && !minimized {
+                shell::hint_gamepad_shell_interactive(
+                    &webview.window().app_handle(),
+                    "page-load-visible-window",
+                );
+            }
             let _ = webview.eval(shell::build_external_link_patch_script());
         })
         .on_window_event(|window, event| {
             match event {
                 tauri::WindowEvent::Focused(focused) => {
+                    record_gamepad_shell_trace(
+                        window,
+                        "windowFocused",
+                        serde_json::json!({
+                            "focused": focused,
+                            "windowLabel": window.label(),
+                        }),
+                    );
                     if *focused {
-                        hint_gamepad_shell_interactive(window, "window-focused");
+                        shell::hint_gamepad_shell_interactive(
+                            &window.app_handle(),
+                            "window-focused",
+                        );
                     } else {
                         hint_gamepad_shell_background(window, "window-unfocused");
                     }
                 }
                 tauri::WindowEvent::Resized(_) => match window.is_minimized() {
                     Ok(false) => {
-                        hint_gamepad_shell_interactive(window, "window-restored-from-minimized");
+                        record_gamepad_shell_trace(
+                            window,
+                            "windowResizedRestored",
+                            serde_json::json!({
+                                "windowLabel": window.label(),
+                                "minimized": false,
+                            }),
+                        );
+                        shell::hint_gamepad_shell_interactive(
+                            &window.app_handle(),
+                            "window-restored-from-minimized",
+                        );
                     }
-                    Ok(true) => {}
+                    Ok(true) => {
+                        record_gamepad_shell_trace(
+                            window,
+                            "windowResizedMinimized",
+                            serde_json::json!({
+                                "windowLabel": window.label(),
+                                "minimized": true,
+                            }),
+                        );
+                    }
                     Err(e) => {
                         log::warn!("Failed to inspect window minimized state: {}", e);
                     }
@@ -140,6 +182,14 @@ pub fn run() {
         match event {
             tauri::RunEvent::Resumed => {
                 let app_state = app_handle.state::<shell::state::AppState>();
+                app_state.runtime_trace.record_event(
+                    "gamepad-shell",
+                    "appResumed",
+                    None,
+                    serde_json::json!({
+                        "source": "runEvent",
+                    }),
+                );
                 use ohmygamepad_protocol::OhMyGamepadSamplingLifecycleDto;
                 if let Err(error) = app_state
                     .gamepad
@@ -153,6 +203,12 @@ pub fn run() {
                 if let Err(error) = app_state.gamepad.try_stalled_sampling_self_heal() {
                     log::warn!(
                         "Failed to try stalled gamepad self-heal on app resume error={}",
+                        error
+                    );
+                }
+                if let Err(error) = app_state.gamepad.try_startup_sampling_self_heal() {
+                    log::warn!(
+                        "Failed to try startup gamepad self-heal on app resume error={}",
                         error
                     );
                 }

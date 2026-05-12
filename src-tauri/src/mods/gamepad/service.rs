@@ -13,11 +13,22 @@ use ohmygamepad_protocol::{
     OhMyGamepadRumbleRequestDto, OhMyGamepadRumbleResultDto, OhMyGamepadRumbleTargetDto,
     OhMyGamepadRuntimeSnapshotDto, OhMyGamepadSamplingConfigDto, OhMyGamepadSamplingLifecycleDto,
 };
-use tauri::AppHandle;
+use tauri::{AppHandle, Manager};
 
 pub struct GamepadService {
     app_handle: AppHandle,
     host: GamepadRuntimeHost,
+}
+
+impl GamepadService {
+    fn record_trace(&self, event: &str, payload: serde_json::Value) {
+        let Some(app_state) = self.app_handle.try_state::<crate::AppState>() else {
+            return;
+        };
+        app_state
+            .runtime_trace
+            .record_event("gamepad-provider", event, None, payload);
+    }
 }
 
 impl GamepadProvider for GamepadService {
@@ -48,6 +59,15 @@ impl GamepadProvider for GamepadService {
             .activate_sampling(policy)
             .map_err(|error| format!("{:?}", error))?;
         log_runtime_snapshot("activate_sampling", &snapshot);
+        self.record_trace(
+            "activateSamplingCompleted",
+            serde_json::json!({
+                "policy": policy,
+                "samplingLifecycle": snapshot.sampling_lifecycle,
+                "samplingHealth": snapshot.sampling_health,
+                "inputPolicy": snapshot.input_policy,
+            }),
+        );
         Ok(snapshot)
     }
 
@@ -64,6 +84,15 @@ impl GamepadProvider for GamepadService {
             .resume_shell_sampling(policy)
             .map_err(|error| format!("{:?}", error))?;
         log_runtime_snapshot("resume_shell_sampling", &snapshot);
+        self.record_trace(
+            "resumeShellSamplingCompleted",
+            serde_json::json!({
+                "policy": policy,
+                "samplingLifecycle": snapshot.sampling_lifecycle,
+                "samplingHealth": snapshot.sampling_health,
+                "inputPolicy": snapshot.input_policy,
+            }),
+        );
         Ok(snapshot)
     }
 
@@ -135,15 +164,61 @@ impl GamepadProvider for GamepadService {
             "tauri_gamepad_sampling_lifecycle source=provider lifecycle={:?}",
             lifecycle
         );
+        self.record_trace(
+            "setSamplingLifecycleRequested",
+            serde_json::json!({
+                "lifecycle": lifecycle,
+            }),
+        );
         self.host
             .set_sampling_lifecycle(lifecycle)
             .map_err(|error| format!("{:?}", error))
     }
 
     fn try_stalled_sampling_self_heal(&self) -> Result<bool, String> {
-        self.host
+        let result = self
+            .host
             .try_stalled_sampling_self_heal()
-            .map_err(|error| format!("{:?}", error))
+            .map_err(|error| format!("{:?}", error));
+        self.record_trace(
+            "tryStalledSamplingSelfHealCompleted",
+            serde_json::json!({
+                "result": match &result {
+                    Ok(applied) => serde_json::json!({
+                        "ok": true,
+                        "applied": applied,
+                    }),
+                    Err(error) => serde_json::json!({
+                        "ok": false,
+                        "error": error,
+                    }),
+                },
+            }),
+        );
+        result
+    }
+
+    fn try_startup_sampling_self_heal(&self) -> Result<bool, String> {
+        let result = self
+            .host
+            .try_startup_sampling_self_heal()
+            .map_err(|error| format!("{:?}", error));
+        self.record_trace(
+            "tryStartupSamplingSelfHealCompleted",
+            serde_json::json!({
+                "result": match &result {
+                    Ok(applied) => serde_json::json!({
+                        "ok": true,
+                        "applied": applied,
+                    }),
+                    Err(error) => serde_json::json!({
+                        "ok": false,
+                        "error": error,
+                    }),
+                },
+            }),
+        );
+        result
     }
 
     fn play_rumble(

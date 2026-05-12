@@ -149,6 +149,10 @@ impl GamepadRuntimeHost {
         self.runtime.try_stalled_sampling_self_heal()
     }
 
+    pub fn try_startup_sampling_self_heal(&self) -> Result<bool, InputRuntimeError> {
+        self.runtime.try_startup_sampling_self_heal()
+    }
+
     pub fn set_primary_sampling_device(
         &self,
         device_id: Option<String>,
@@ -205,6 +209,10 @@ impl GamepadRuntimeHost {
             .replace_keyboard_mapping(mapping)
             .map_err(|_| InputRuntimeError::CommandChannelClosed)
     }
+}
+
+pub fn set_runtime_trace_sink(sink: Option<Arc<dyn Fn(&str, serde_json::Value) + Send + Sync>>) {
+    ohmygamepad_sdl3::set_runtime_trace_sink(sink);
 }
 
 fn bootstrap_gamepad_runtime() -> Result<SharedGamepadRuntime, String> {

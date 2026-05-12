@@ -20,6 +20,7 @@ export class NavigationEngine {
   private zoneMemory = new Map<string, HTMLElement>()
   private scopeStack: ScopeState[] = []
   private unsubscribeInput: (() => void) | null = null
+  private focusMutationObserver: MutationObserver | null = null
   private lastMoveTime = 0
 
   // LB/RB 一级页面切换回调
@@ -36,10 +37,13 @@ export class NavigationEngine {
   }
 
   start(): void {
+    if (this.unsubscribeInput !== null) {
+      return
+    }
     this.unsubscribeInput = inputDispatcher.subscribe(this.handleIntent)
 
     if (typeof window !== 'undefined') {
-      const observer = new MutationObserver(() => {
+      this.focusMutationObserver = new MutationObserver(() => {
         // 标记缓存过期
         this.isCacheDirty = true
 
@@ -48,7 +52,7 @@ export class NavigationEngine {
           this.handleFocusLoss()
         }
       })
-      observer.observe(document.body, {
+      this.focusMutationObserver.observe(document.body, {
         childList: true,
         subtree: true,
         attributes: true,
@@ -58,6 +62,10 @@ export class NavigationEngine {
   }
 
   stop(): void {
+    if (this.focusMutationObserver) {
+      this.focusMutationObserver.disconnect()
+      this.focusMutationObserver = null
+    }
     if (this.unsubscribeInput) {
       this.unsubscribeInput()
       this.unsubscribeInput = null

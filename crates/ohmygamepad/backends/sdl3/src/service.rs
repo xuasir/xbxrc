@@ -87,7 +87,7 @@ struct OhMyGamepadServiceState {
 pub struct OhMyGamepadService {
     runtime: InputRuntimeHandle,
     state: Mutex<OhMyGamepadServiceState>,
-    last_stalled_self_heal_at: Mutex<Option<Instant>>,
+    last_sampling_self_heal_at: Mutex<Option<Instant>>,
 }
 
 impl OhMyGamepadService {
@@ -166,7 +166,7 @@ impl OhMyGamepadService {
                 source_handle,
                 rumble_backend,
             }),
-            last_stalled_self_heal_at: Mutex::new(None),
+            last_sampling_self_heal_at: Mutex::new(None),
         }
     }
 
@@ -179,8 +179,14 @@ impl OhMyGamepadService {
             .as_ref()
             .cloned()
         {
-            if let Err(error) = source_handle.prime_sampling() {
-                log::warn!("ohmygamepad_prime_sampling_failed error={}", error);
+            if let Err(error) = source_handle.reopen_devices_and_prime_sampling() {
+                log::warn!(
+                    "ohmygamepad_reopen_prime_sampling_failed error={} fallback=prime_sampling",
+                    error
+                );
+                if let Err(error) = source_handle.prime_sampling() {
+                    log::warn!("ohmygamepad_prime_sampling_failed error={}", error);
+                }
             }
         }
         self.runtime.refresh_snapshot()
@@ -264,10 +270,16 @@ impl OhMyGamepadService {
         self.runtime.set_sampling_lifecycle(lifecycle)
     }
 
-    /// 当快照报告 `stalled` 时尝试 prime + refresh，带冷却；成功执行链后置 `bump_sampling_self_heal_count`。
-    pub fn try_stalled_sampling_self_heal(&self) -> Result<bool, InputRuntimeError> {
-        let snapshot = self.snapshot_with_strategy_sync()?;
-        if snapshot.sampling_health != OhMyGamepadSamplingHealthDto::Stalled {
+    fn try_sampling_self_heal_with_snapshot(
+        &self,
+        snapshot: &OhMyGamepadRuntimeSnapshotDto,
+    ) -> Result<bool, InputRuntimeError> {
+        let should_apply = matches!(
+            snapshot.sampling_health,
+            OhMyGamepadSamplingHealthDto::Stalled | OhMyGamepadSamplingHealthDto::AwaitingBaseline
+        ) && snapshot.last_sample_progress_at_ms == 0
+            && snapshot.devices.iter().any(|device| device.connected);
+        if !should_apply {
             return Ok(false);
         }
 
@@ -275,9 +287,9 @@ impl OhMyGamepadService {
         let now = Instant::now();
         {
             let mut last = self
-                .last_stalled_self_heal_at
+                .last_sampling_self_heal_at
                 .lock()
-                .expect("lock stalled self heal");
+                .expect("lock sampling self heal");
             if let Some(prev) = *last {
                 if now.duration_since(prev) < COOLDOWN {
                     return Ok(false);
@@ -286,10 +298,32 @@ impl OhMyGamepadService {
             *last = Some(now);
         }
 
-        log::info!("ohmygamepad_stalled_self_heal_attempt");
+        log::info!(
+            "ohmygamepad_sampling_self_heal_attempt health={:?} lifecycle={:?}",
+            snapshot.sampling_health,
+            snapshot.sampling_lifecycle
+        );
         self.prime_and_refresh_runtime_sampling()?;
         self.runtime.bump_sampling_self_heal_count()?;
         Ok(true)
+    }
+
+    /// 当快照报告 `stalled` 时尝试 prime + refresh，带冷却；成功执行链后置 `bump_sampling_self_heal_count`。
+    pub fn try_stalled_sampling_self_heal(&self) -> Result<bool, InputRuntimeError> {
+        let snapshot = self.snapshot_with_strategy_sync()?;
+        if snapshot.sampling_health != OhMyGamepadSamplingHealthDto::Stalled {
+            return Ok(false);
+        }
+        self.try_sampling_self_heal_with_snapshot(&snapshot)
+    }
+
+    /// 首开可见态长期停留 `awaitingBaseline` 时，也允许复用同一条 prime/reopen 自愈链。
+    pub fn try_startup_sampling_self_heal(&self) -> Result<bool, InputRuntimeError> {
+        let snapshot = self.snapshot_with_strategy_sync()?;
+        if snapshot.sampling_health != OhMyGamepadSamplingHealthDto::AwaitingBaseline {
+            return Ok(false);
+        }
+        self.try_sampling_self_heal_with_snapshot(&snapshot)
     }
 
     pub fn set_primary_sampling_device(
@@ -343,14 +377,7 @@ impl OhMyGamepadService {
         &self,
         policy: OhMyGamepadInputPolicyDto,
     ) -> Result<OhMyGamepadRuntimeSnapshotDto, InputRuntimeError> {
-        log::info!("ohmygamepad_shell_recovery_start policy={:?}", policy);
-        self.runtime
-            .set_sampling_lifecycle(OhMyGamepadSamplingLifecycleDto::Active)?;
-        self.runtime.set_input_policy(policy)?;
-        self.prime_and_refresh_runtime_sampling()?;
-        let snapshot = self.snapshot_with_strategy_sync()?;
-        log_resume_snapshot("resume_shell_sampling", &snapshot);
-        Ok(snapshot)
+        self.perform_resume_recovery(policy, "resume_shell_sampling")
     }
 
     pub fn rebind_logical_pad(
@@ -590,13 +617,27 @@ impl OhMyGamepadService {
         policy: OhMyGamepadInputPolicyDto,
         reason: &str,
     ) -> Result<OhMyGamepadRuntimeSnapshotDto, InputRuntimeError> {
+        let initial_snapshot = self.snapshot_with_strategy_sync()?;
+        let should_force_lifecycle_rearm = initial_snapshot.sampling_lifecycle
+            == OhMyGamepadSamplingLifecycleDto::Active
+            && initial_snapshot.last_sample_progress_at_ms == 0
+            && initial_snapshot.last_backend_sample_activity_at_ms > 0
+            && initial_snapshot
+                .devices
+                .iter()
+                .any(|device| device.connected);
         log::info!(
-            "ohmygamepad_resume_recovery_start reason={} policy={:?}",
+            "ohmygamepad_resume_recovery_start reason={} policy={:?} force_lifecycle_rearm={}",
             reason,
-            policy
+            policy,
+            should_force_lifecycle_rearm,
         );
         // 恢复 API 的语义是重新进入可操作采样态；仅 prime/refresh 不足以让
         // BackgroundWarm 下的 slotSnapshot/input action 重新对外发布。
+        if should_force_lifecycle_rearm {
+            self.runtime
+                .set_sampling_lifecycle(OhMyGamepadSamplingLifecycleDto::BackgroundWarm)?;
+        }
         self.runtime
             .set_sampling_lifecycle(OhMyGamepadSamplingLifecycleDto::Active)?;
         self.runtime.set_suspended(false)?;

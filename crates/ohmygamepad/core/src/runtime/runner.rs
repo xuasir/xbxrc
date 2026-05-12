@@ -21,6 +21,13 @@ const SAMPLING_BACKEND_FRESH_WITHIN_MS: u64 = 900;
 /// 已连接设备但从未产生 logical progress 时，超过该时钟阈值才判 stalled（毫秒）。
 const SAMPLING_FIRST_PROGRESS_GRACE_MS: u64 = 3500;
 
+fn snapshot_has_established_slot_baseline(snapshot: &OhMyGamepadRuntimeSnapshotDto) -> bool {
+    snapshot
+        .slots
+        .iter()
+        .any(|slot| slot.sampled_at_ms > 0 || slot.sample_seq > 0)
+}
+
 fn evaluate_sampling_health(
     lifecycle: OhMyGamepadSamplingLifecycleDto,
     clock_ms: u64,
@@ -41,21 +48,23 @@ fn evaluate_sampling_health(
 
     let lp = snapshot.last_sample_progress_at_ms;
     let lb = snapshot.last_backend_sample_activity_at_ms;
+    let backend_fresh = lb > 0 && clock_ms.saturating_sub(lb) < SAMPLING_BACKEND_FRESH_WITHIN_MS;
+    let has_slot_baseline = snapshot_has_established_slot_baseline(snapshot);
+
+    // 只要 backend 还在持续产出新鲜样本，且逻辑层至少已经建立过一份 slot baseline，
+    // 即使当前仍是“中性态未变化”，也不应被误判成 awaitingBaseline / stalled。
+    if backend_fresh && has_slot_baseline {
+        return OhMyGamepadSamplingHealthDto::Healthy;
+    }
 
     if lp == 0 {
-        if lb > 0
-            && clock_ms.saturating_sub(lb) < SAMPLING_BACKEND_FRESH_WITHIN_MS
-            && clock_ms >= SAMPLING_FIRST_PROGRESS_GRACE_MS
-        {
+        if lb > 0 && backend_fresh && clock_ms >= SAMPLING_FIRST_PROGRESS_GRACE_MS {
             return OhMyGamepadSamplingHealthDto::Stalled;
         }
         return OhMyGamepadSamplingHealthDto::AwaitingBaseline;
     }
 
-    if clock_ms.saturating_sub(lp) > SAMPLING_STALL_AFTER_MS
-        && lb > 0
-        && clock_ms.saturating_sub(lb) < SAMPLING_BACKEND_FRESH_WITHIN_MS
-    {
+    if clock_ms.saturating_sub(lp) > SAMPLING_STALL_AFTER_MS && backend_fresh {
         return OhMyGamepadSamplingHealthDto::Stalled;
     }
 

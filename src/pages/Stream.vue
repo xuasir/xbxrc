@@ -123,10 +123,10 @@ useGamepadRouteForStreamOverlay({
   sessionId: execution.sessionId,
   applyRouteTarget: async (target) => {
     if (target.kind === 'shell-ui') {
-      await rpc.gamepad.setInputPolicy({ policy: 'ui-only' })
+      await rpc.gamepad.resumeShellSampling({ policy: 'ui-only' })
       return
     }
-    await rpc.gamepad.setInputPolicy({ policy: 'stream-only' })
+    await rpc.gamepad.resumeShellSampling({ policy: 'stream-only' })
   },
 })
 

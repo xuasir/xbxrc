@@ -146,13 +146,22 @@ impl TrackedDevice {
         self.dirty_sample = true;
     }
 
-    fn sync_snapshot(&mut self, buttons: Vec<f32>, axes: Vec<f32>, observed_at_ms: u64) {
+    fn sync_snapshot(
+        &mut self,
+        buttons: Vec<f32>,
+        axes: Vec<f32>,
+        observed_at_ms: u64,
+        force_dirty: bool,
+    ) {
         let first_snapshot = self.buttons.is_empty() && self.axes.is_empty();
         let changed = first_snapshot || self.buttons != buttons || self.axes != axes;
         self.buttons = buttons;
         self.axes = axes;
         self.sample_observed_at_ms = observed_at_ms;
-        self.dirty_sample = changed;
+        // 同一轮 backend poll 里可能先收到“建立基线”的 Snapshot，
+        // 随后又收到多条内容完全相同的轮询 Snapshot。这里一旦本轮已标脏，
+        // 后续相同快照不能把 dirty 再冲掉，否则 runtime 会错过首条 raw sample。
+        self.dirty_sample |= changed || force_dirty;
     }
 
     fn take_sample(&mut self) -> Option<RawDeviceSample> {
@@ -257,7 +266,11 @@ where
             }
             Sdl3InputEventKind::Snapshot { buttons, axes } => {
                 let device = self.ensure_device(event.device, event.observed_at_ms, device_events);
-                device.sync_snapshot(buttons, axes, event.observed_at_ms);
+                device.sync_snapshot(buttons, axes, event.observed_at_ms, false);
+            }
+            Sdl3InputEventKind::PrimeSnapshot { buttons, axes } => {
+                let device = self.ensure_device(event.device, event.observed_at_ms, device_events);
+                device.sync_snapshot(buttons, axes, event.observed_at_ms, true);
             }
             Sdl3InputEventKind::ButtonChanged { index, value } => {
                 let device = self.ensure_device(event.device, event.observed_at_ms, device_events);
@@ -313,5 +326,130 @@ where
             device_events,
             samples,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::VecDeque;
+
+    use ohmygamepad_core::InputBackend;
+
+    use super::{Sdl3Backend, Sdl3BackendConfig};
+    use crate::{Sdl3DeviceDescriptor, Sdl3InputEvent, Sdl3InputEventKind, Sdl3Source};
+
+    struct QueueSource {
+        events: VecDeque<Sdl3InputEvent>,
+    }
+
+    impl QueueSource {
+        fn new(events: Vec<Sdl3InputEvent>) -> Self {
+            Self {
+                events: events.into(),
+            }
+        }
+    }
+
+    impl Sdl3Source for QueueSource {
+        fn next_event(&mut self) -> Option<Sdl3InputEvent> {
+            self.events.pop_front()
+        }
+    }
+
+    #[test]
+    fn stable_snapshots_do_not_clear_initial_dirty_sample() {
+        let device = Sdl3DeviceDescriptor {
+            device_id: "pad-1".to_owned(),
+            name: "Test Pad".to_owned(),
+            ..Sdl3DeviceDescriptor::default()
+        };
+        let snapshot_buttons = vec![0.0; 17];
+        let snapshot_axes = vec![0.0, 0.0, 0.0, 0.0, -1.0, -1.0];
+        let events = vec![
+            Sdl3InputEvent {
+                device: device.clone(),
+                observed_at_ms: 10,
+                kind: Sdl3InputEventKind::Connected,
+            },
+            Sdl3InputEvent {
+                device: device.clone(),
+                observed_at_ms: 11,
+                kind: Sdl3InputEventKind::Snapshot {
+                    buttons: snapshot_buttons.clone(),
+                    axes: snapshot_axes.clone(),
+                },
+            },
+            Sdl3InputEvent {
+                device: device.clone(),
+                observed_at_ms: 12,
+                kind: Sdl3InputEventKind::Snapshot {
+                    buttons: snapshot_buttons,
+                    axes: snapshot_axes,
+                },
+            },
+        ];
+
+        let mut backend =
+            Sdl3Backend::with_source(Sdl3BackendConfig::default(), QueueSource::new(events));
+        let poll = backend.poll();
+
+        assert_eq!(poll.device_events.len(), 1);
+        assert_eq!(poll.samples.len(), 1);
+        assert_eq!(poll.samples[0].device_id, "pad-1");
+        assert_eq!(poll.samples[0].observed_at_ms, 12);
+        assert_eq!(poll.samples[0].axes[4], -1.0);
+        assert_eq!(poll.samples[0].axes[5], -1.0);
+    }
+
+    #[test]
+    fn prime_snapshot_forces_backend_sample_when_vectors_unchanged() {
+        let device = Sdl3DeviceDescriptor {
+            device_id: "pad-prime".to_owned(),
+            name: "Test Pad Prime".to_owned(),
+            ..Sdl3DeviceDescriptor::default()
+        };
+        let snapshot_buttons = vec![0.0; 17];
+        let snapshot_axes = vec![0.0_f32; 6];
+        let events = vec![
+            Sdl3InputEvent {
+                device: device.clone(),
+                observed_at_ms: 10,
+                kind: Sdl3InputEventKind::Connected,
+            },
+            Sdl3InputEvent {
+                device: device.clone(),
+                observed_at_ms: 11,
+                kind: Sdl3InputEventKind::Snapshot {
+                    buttons: snapshot_buttons.clone(),
+                    axes: snapshot_axes.clone(),
+                },
+            },
+            Sdl3InputEvent {
+                device: device.clone(),
+                observed_at_ms: 12,
+                kind: Sdl3InputEventKind::Snapshot {
+                    buttons: snapshot_buttons.clone(),
+                    axes: snapshot_axes.clone(),
+                },
+            },
+            Sdl3InputEvent {
+                device: device.clone(),
+                observed_at_ms: 13,
+                kind: Sdl3InputEventKind::PrimeSnapshot {
+                    buttons: snapshot_buttons,
+                    axes: snapshot_axes,
+                },
+            },
+        ];
+
+        let mut config = Sdl3BackendConfig::default();
+        config.max_events_per_poll = 2;
+        let mut backend = Sdl3Backend::with_source(config, QueueSource::new(events));
+        let first = backend.poll();
+        assert_eq!(first.samples.len(), 1);
+        let second = backend.poll();
+        assert_eq!(second.samples.len(), 1);
+        assert_eq!(second.samples[0].observed_at_ms, 13);
+        assert_eq!(second.samples[0].device_id, "pad-prime");
     }
 }

@@ -58,9 +58,25 @@ impl Sdl3DeviceDescriptor {
 pub enum Sdl3InputEventKind {
     Connected,
     Disconnected,
-    Snapshot { buttons: Vec<f32>, axes: Vec<f32> },
-    ButtonChanged { index: usize, value: f32 },
-    AxisChanged { index: usize, value: f32 },
+    Snapshot {
+        buttons: Vec<f32>,
+        axes: Vec<f32>,
+    },
+    /// 与 [`Snapshot`] 数据相同，但强制在后端产生一条 `RawDeviceSample`（即使向量未变）。
+    /// 用于 prime / resume：否则 `TrackedDevice::sync_snapshot` 会因 `changed == false` 丢弃样本，
+    /// 逻辑层长期看不到采样推进（首开或多任务恢复后无输入）。
+    PrimeSnapshot {
+        buttons: Vec<f32>,
+        axes: Vec<f32>,
+    },
+    ButtonChanged {
+        index: usize,
+        value: f32,
+    },
+    AxisChanged {
+        index: usize,
+        value: f32,
+    },
     Dropped,
 }
 

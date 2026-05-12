@@ -1019,10 +1019,9 @@ export function createBrowserRuntime(options: {
   }
 
   async function attachGamepadSession(sessionId: string): Promise<void> {
-    // 浏览器 runtime 只负责切换当前输入策略；
-    // 键盘 fallback 是否可用由 gamepad 域自己负责。
+    // 串流页不经过 AppShell 的恢复链，首开时这里必须同时拉起 policy + lifecycle。
     void sessionId
-    await rpc.gamepad.activateSampling({ policy: 'stream-only' })
+    await rpc.gamepad.resumeShellSampling({ policy: 'stream-only' })
   }
 
   async function detachGamepadSession(sessionId: string | null): Promise<void> {

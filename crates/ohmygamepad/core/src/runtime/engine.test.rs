@@ -258,7 +258,7 @@ fn unchanged_snapshot_is_not_emitted_twice() {
         },
         BackendPollResult {
             device_events: vec![],
-            samples: vec![sample("pad-a", 11, vec![1.0], vec![0.0, 0.0, 0.0, 0.0])],
+            samples: vec![sample("pad-a", 10, vec![1.0], vec![0.0, 0.0, 0.0, 0.0])],
         },
     ]);
     let mut core = InputCore::new(
@@ -374,7 +374,7 @@ fn unchanged_snapshot_preserves_sample_seq_in_on_change_mode() {
         },
         BackendPollResult {
             device_events: vec![],
-            samples: vec![sample("pad-a", 11, vec![1.0], vec![0.0, 0.0, 0.0, 0.0])],
+            samples: vec![sample("pad-a", 10, vec![1.0], vec![0.0, 0.0, 0.0, 0.0])],
         },
     ]);
     let mut core = InputCore::new(

@@ -1,10 +1,24 @@
 import type { LogicalButtonDto } from '@shared/gamepad/contract'
 import type { PlayerEvents, TypedEventEmitter } from '../../api/events'
 import type { GamepadFrame, InputRuntimeConfig, ProcessedVideoFrameMetadata } from '../../domain/input'
+import { rpc } from '../../../services/rpc'
 import { InputPacketEncoder } from '../../protocol/input/InputPacketEncoder'
 import { RumbleService } from './RumbleService'
 
 const MAX_DECODE_TIME_MS = 10
+let lastInputTraceSignature = ''
+
+function recordInputTrace(event: string, payload: Record<string, unknown>): void {
+  const signature = `${event}:${JSON.stringify(payload)}`
+  if (signature === lastInputTraceSignature) {
+    return
+  }
+  lastInputTraceSignature = signature
+  void rpc.runtimeTrace.recordEvent({
+    event,
+    payload,
+  }).catch(() => {})
+}
 
 export interface InputDriverLike {
   start: () => void
@@ -89,6 +103,9 @@ export class InputService {
 
   queueGamepadState(frame: GamepadFrame): void {
     if (!this.currentInputTransport || this.currentInputTransport.getReadyState() !== 'open') {
+      recordInputTrace('gamepadFrameDropped', {
+        reason: 'transport-not-open',
+      })
       return
     }
     const bypassOverlaySuspend = this.overlayBypassFrameBudget > 0
@@ -96,6 +113,9 @@ export class InputService {
       this.overlayBypassFrameBudget -= 1
     }
     if (this.suspendRtcGamepadTransport && !bypassOverlaySuspend) {
+      recordInputTrace('gamepadFrameDropped', {
+        reason: 'overlay-suspended',
+      })
       return
     }
 
@@ -108,6 +128,15 @@ export class InputService {
     packet.setData(metadataQueue, gamepadQueue, [], [], [])
 
     const buffer = packet.toBuffer()
+    recordInputTrace('gamepadFrameSent', {
+      inputSequenceNum: this.inputSequenceNum,
+      south: frame.state.buttons.south,
+      east: frame.state.buttons.east,
+      menu: frame.state.buttons.menu,
+      view: frame.state.buttons.view,
+      leftStickX: frame.state.leftStick.x,
+      leftStickY: frame.state.leftStick.y,
+    })
     this.currentInputTransport.send(buffer)
 
     this.emitter.emit('stats.inputPacket', {

@@ -3,6 +3,7 @@ import App from './App.vue'
 import { applyTheme } from './app/theme'
 import { i18n, setUiLocale } from './i18n'
 
+import { ensureShellGamepadListening } from './navigation/core'
 import { router } from './router'
 import { rpc } from './services/rpc'
 import './styles/base.css'
@@ -14,8 +15,11 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 async function bootstrap(): Promise<void> {
+  ensureShellGamepadListening()
+  createApp(App).use(router).use(i18n).mount('#app')
+
   try {
-    // 首屏同步配置，避免 UI 状态与持久化配置不一致
+    // 不阻塞 Vue 挂载；启动优先保证首页与输入系统尽快可交互。
     const config = await rpc.config.get({ keys: ['locale', 'theme'] })
     if (isRecord(config)) {
       if (typeof config.locale === 'string') {
@@ -29,8 +33,6 @@ async function bootstrap(): Promise<void> {
   catch (error) {
     console.warn('[renderer] failed to sync config:', error)
   }
-
-  createApp(App).use(router).use(i18n).mount('#app')
 }
 
 void bootstrap()

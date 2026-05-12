@@ -534,7 +534,7 @@ fn background_warm_suppresses_ui_and_stream_action_emits() {
 }
 
 #[test]
-fn background_warm_stalled_health_is_detected() {
+fn background_warm_neutral_baseline_stays_healthy_when_backend_is_fresh() {
     let backend = ScriptedBackend::new(
         (0..4000)
             .map(|i| BackendPollResult {
@@ -561,11 +561,12 @@ fn background_warm_stalled_health_is_detected() {
         .set_sampling_lifecycle(OhMyGamepadSamplingLifecycleDto::BackgroundWarm)
         .expect("background warm");
 
-    assert!(wait_until(Duration::from_millis(3800), || {
+    assert!(wait_until(Duration::from_millis(800), || {
         runtime
             .get_runtime_snapshot()
             .map(|s| {
-                s.sampling_health == ohmygamepad_protocol::OhMyGamepadSamplingHealthDto::Stalled
+                s.sampling_health == ohmygamepad_protocol::OhMyGamepadSamplingHealthDto::Healthy
+                    && s.last_backend_sample_activity_at_ms > 0
             })
             .unwrap_or(false)
     }));

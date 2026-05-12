@@ -588,6 +588,9 @@ fn pad_payload_changed(left: &LogicalPadSnapshotDto, right: &LogicalPadSnapshotD
         // 扩展键（背键等）可能只出现在 raw_buttons 中、不改变标准逻辑键位，必须参与去重判断，
         // 否则映射采集阶段收不到 slotSnapshot。
         || left.raw_buttons != right.raw_buttons
+        // SDL prime 与轮询可能推送与上一帧完全相同的轴/键向量，但仍代表一次新的硬件观测；
+        // 若不把 sampled_at_ms 纳入比较，逻辑层会长期不推进 sample_seq（首开/恢复后 UI 无输入）。
+        || left.sampled_at_ms != right.sampled_at_ms
 }
 
 fn collect_pressed_raw_buttons(

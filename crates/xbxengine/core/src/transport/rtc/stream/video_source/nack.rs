@@ -64,9 +64,13 @@ fn nack_deadline_risk_tier(
     {
         return "anchor";
     }
-    if matches!(frame_importance, "reference" | "anchor" | "keyframe" | "supply")
-        || matches!(ctx.link_value, FrameBudgetLinkValue::Supply | FrameBudgetLinkValue::Anchor)
-    {
+    if matches!(
+        frame_importance,
+        "reference" | "anchor" | "keyframe" | "supply"
+    ) || matches!(
+        ctx.link_value,
+        FrameBudgetLinkValue::Supply | FrameBudgetLinkValue::Anchor
+    ) {
         return "reference";
     }
     if frame_rtp_timestamp.is_some() {
