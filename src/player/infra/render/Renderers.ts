@@ -146,6 +146,7 @@ function resolveCanvasObjectFit(format: RendererRuntimeConfig['format']): 'conta
 function resolveShaderPreset(
   config: RendererRuntimeConfig,
 ): ShaderPresetResolved {
+  // 当前 shader preset 只在 USM/CAS 锐化后处理之间切换，不承载 FSR upscaling 语义。
   const strength = config.sharpenStrength === undefined
     ? config.sharpness
     : Math.max(0, Math.min(100, config.sharpenStrength)) / 25
@@ -265,6 +266,7 @@ vec3 clarityBoost(vec2 uv, vec3 center) {
     blur /= 16.0;
     return center + (center - blur) * (sharpenFactor / 3.0);
   }
+  // filterId == 2 走 CAS 风格锐化；这里是单通道锐化后处理，不含 FSR 超分重建。
   vec3 minRgb = min(min(min(d, center), min(f, b)), h);
   vec3 maxRgb = max(max(max(d, center), max(f, b)), h);
   if (qualityMode) {

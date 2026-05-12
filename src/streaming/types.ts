@@ -204,6 +204,7 @@ export interface StreamPerformanceSnapshot {
   renderUpshiftBlockedReason?: string
   renderPipelineType?: 'video' | 'webgl2'
   renderPolicySource?: 'auto' | 'userOverride' | 'capabilityFallback'
+  /** 浏览器端锐化后处理类型；当前口径统一为 USM/CAS，不表示 FSR 超分。 */
   renderProcessing?: 'usm' | 'cas'
   renderProcessingMode?: 'quality' | 'performance'
   renderShaderPath?: 'usm' | 'cas' | 'none'
@@ -318,6 +319,7 @@ export interface StreamSessionDiagnosticsSnapshot {
   renderUpshiftBlockedReason?: string
   renderPipelineType?: 'video' | 'webgl2'
   renderPolicySource?: 'auto' | 'userOverride' | 'capabilityFallback'
+  /** 浏览器端锐化后处理类型；当前口径统一为 USM/CAS，不表示 FSR 超分。 */
   renderProcessing?: 'usm' | 'cas'
   renderProcessingMode?: 'quality' | 'performance'
   renderShaderPath?: 'usm' | 'cas' | 'none'

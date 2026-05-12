@@ -489,6 +489,11 @@ export function createBrowserRuntime(options: {
     const baseBitrate = Math.max(8_000, baseVideoBitrateKbps)
     const bitrateRatio = inboundVideoBitrateKbps > 0 ? inboundVideoBitrateKbps / baseBitrate : 1
     const p = effectiveFrontEndPolicy
+    const healthyRenderSupply = renderCause === 'renderStable' && !renderBackpressure
+    const casPreferred = bandwidthState === 'stable'
+      && bitrateRatio > p.adaptiveStableBitrateRatio
+      && healthyRenderSupply
+      && input.level !== 'displayL2'
     let sharpnessScale = 1
     let targetFpsBias = 0
     let processingMode: 'quality' | 'performance' = 'quality'
@@ -530,8 +535,18 @@ export function createBrowserRuntime(options: {
       && bitrateRatio > p.adaptiveStableBitrateRatio
     ) {
       sharpnessScale = Math.max(sharpnessScale, 1)
-      shaderPreset = input.level === 'displayL0' ? 'clarityL3' : shaderPreset
       targetFpsBias = Math.max(targetFpsBias, 0)
+    }
+
+    if (casPreferred) {
+      processingMode = 'quality'
+      shaderPreset = 'clarityL3'
+      if (input.level === 'displayL0') {
+        sharpnessScale = Math.max(sharpnessScale, 1)
+      }
+      else {
+        sharpnessScale = Math.max(sharpnessScale, 0.7)
+      }
     }
 
     const sharpenStrength = Math.round(Math.max(0, Math.min(100, (currentDisplayState?.displayOptions.sharpness ?? 0) * 25 * sharpnessScale)))

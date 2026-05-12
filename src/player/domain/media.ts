@@ -9,8 +9,10 @@ export interface RendererRuntimeConfig {
   enabled: boolean
   sharpness: number
   sharpenStrength?: number
+  /** clarity 预设仅映射本地锐化强度与算法，不代表 FSR 超分链路。 */
   shaderPreset?: 'clarityL0' | 'clarityL1' | 'clarityL2' | 'clarityL3'
   pipelineType: 'video' | 'webgl2' | 'auto'
+  /** 当前仅支持 USM/CAS 锐化后处理。 */
   processing: 'usm' | 'cas'
   processingMode: 'quality' | 'performance'
   brightness: number
