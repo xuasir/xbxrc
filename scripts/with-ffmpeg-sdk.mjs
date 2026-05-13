@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { spawn } from "node:child_process";
-import { copyFileSync, existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, readlinkSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, readlinkSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import process from "node:process";
@@ -207,7 +207,28 @@ function ensurePathLink({ src, dst }) {
 
 function ensurePathCopy({ src, dst }) {
   if (existsSync(dst)) {
-    rmSync(dst, { recursive: true, force: true });
+    const srcStat = statSync(src);
+    const dstStat = statSync(dst);
+    // Windows: DLLs under target/ are often still mapped by a previous dev run.
+    // Same size strongly indicates the vendored copy is already in place; skip rm/copy.
+    if (srcStat.size === dstStat.size) {
+      return;
+    }
+    try {
+      rmSync(dst, { recursive: true, force: true });
+    } catch (err) {
+      const code = err && typeof err === "object" ? err.code : undefined;
+      if (code === "EPERM" || code === "EBUSY") {
+        const dstStatAfter = statSync(dst);
+        if (srcStat.size === dstStatAfter.size) {
+          console.warn(
+            `[with-ffmpeg-sdk] Skip replacing locked runtime DLL (same size as SDK): ${dst}`,
+          );
+          return;
+        }
+      }
+      throw err;
+    }
   }
   copyFileSync(src, dst);
 }

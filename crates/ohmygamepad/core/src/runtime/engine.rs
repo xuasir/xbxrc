@@ -177,7 +177,8 @@ where
             self.sample_seq = self.sample_seq.saturating_add(1);
             snapshot.sample_seq = self.sample_seq;
             snapshot.sampled_at_ms = self.clock_ms;
-            self.last_sample_progress_at_ms = self.clock_ms;
+            // 与 `next_sample_seq` 一致：避免首帧 `clock_ms == 0` 时 progress 恒为 0，导致采样健康度永久卡在 awaitingBaseline。
+            self.last_sample_progress_at_ms = self.clock_ms.max(1);
             // 立即向接收端同步“按键全部弹起”的状态，防止 UI 粘滞。
             self.ui_sink.emit_pad_snapshot(snapshot);
             self.stream_sink.emit_pad_snapshot(snapshot);
@@ -195,6 +196,7 @@ where
         let BackendPollResult {
             device_events,
             samples,
+            activity_observed_at_ms,
         } = poll;
         let mut devices_changed = false;
 
@@ -208,6 +210,12 @@ where
                 self.last_backend_sample_activity_at_ms.max(observed);
             self.track_activity(&sample);
             self.raw_samples.insert(sample.device_id.clone(), sample);
+        }
+
+        if let Some(activity_ms) = activity_observed_at_ms {
+            self.last_backend_sample_activity_at_ms = self
+                .last_backend_sample_activity_at_ms
+                .max(activity_ms.max(self.clock_ms));
         }
 
         if devices_changed {
@@ -449,7 +457,10 @@ where
 
     fn next_sample_seq(&mut self) -> u64 {
         self.sample_seq = self.sample_seq.saturating_add(1);
-        self.last_sample_progress_at_ms = self.clock_ms;
+        // `evaluate_sampling_health` 用 `last_sample_progress_at_ms == 0` 表示「尚未产生逻辑进度」。
+        // 首轮 `tick` 时 runner 的 `elapsed` 可能仍为 0，若此处写入 0 会与已推进的 `sample_seq` 矛盾，
+        // 使会话长期停留在 `AwaitingBaseline`（首开输入门控/恢复条件误判）。
+        self.last_sample_progress_at_ms = self.clock_ms.max(1);
         self.sample_seq
     }
 

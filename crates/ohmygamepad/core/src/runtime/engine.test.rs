@@ -126,6 +126,7 @@ fn default_single_active_binding_selects_latest_active_device() {
                 vec![0.0, 0.0, 0.0, 0.0],
             ),
         ],
+        ..Default::default()
     }]);
     let mut core = InputCore::new(
         InputCoreConfig::default(),
@@ -156,6 +157,7 @@ fn fixed_device_binding_ignores_other_devices() {
             sample("pad-a", 10, vec![1.0], vec![0.0, 0.0, 0.0, 0.0]),
             sample("pad-b", 20, vec![0.0, 1.0], vec![0.0, 0.0, 0.0, 0.0]),
         ],
+        ..Default::default()
     }]);
     let mut config = InputCoreConfig::default();
     config.bindings = vec![ohmygamepad_protocol::LogicalPadBindingDto {
@@ -192,6 +194,7 @@ fn merged_binding_combines_buttons_and_axes() {
                 vec![-0.2, 0.0, 0.0, 0.7],
             ),
         ],
+        ..Default::default()
     }]);
     let mut config = InputCoreConfig::default();
     config.bindings = vec![ohmygamepad_protocol::LogicalPadBindingDto {
@@ -224,6 +227,7 @@ fn split_binding_assigns_unique_devices_per_pad() {
             sample("pad-a", 10, vec![1.0], vec![0.0, 0.0, 0.0, 0.0]),
             sample("pad-b", 20, vec![0.0, 1.0], vec![0.0, 0.0, 0.0, 0.0]),
         ],
+        ..Default::default()
     }]);
     let mut config = InputCoreConfig::default();
     config.bindings = vec![
@@ -255,10 +259,12 @@ fn unchanged_snapshot_is_not_emitted_twice() {
         BackendPollResult {
             device_events: vec![DeviceLifecycleEvent::Added(device("pad-a"))],
             samples: vec![sample("pad-a", 10, vec![1.0], vec![0.0, 0.0, 0.0, 0.0])],
+            ..Default::default()
         },
         BackendPollResult {
             device_events: vec![],
             samples: vec![sample("pad-a", 10, vec![1.0], vec![0.0, 0.0, 0.0, 0.0])],
+            ..Default::default()
         },
     ]);
     let mut core = InputCore::new(
@@ -296,6 +302,7 @@ fn last_active_failover_keeps_current_device_until_disconnect() {
                 sample("pad-a", 20, vec![1.0], vec![0.0, 0.0, 0.0, 0.0]),
                 sample("pad-b", 10, vec![0.0, 1.0], vec![0.0, 0.0, 0.0, 0.0]),
             ],
+            ..Default::default()
         },
         BackendPollResult {
             device_events: vec![],
@@ -305,6 +312,7 @@ fn last_active_failover_keeps_current_device_until_disconnect() {
                 vec![0.0, 1.0],
                 vec![0.0, 0.0, 0.0, 0.0],
             )],
+            ..Default::default()
         },
         BackendPollResult {
             device_events: vec![DeviceLifecycleEvent::Removed {
@@ -317,6 +325,7 @@ fn last_active_failover_keeps_current_device_until_disconnect() {
                 vec![0.0, 1.0],
                 vec![0.0, 0.0, 0.0, 0.0],
             )],
+            ..Default::default()
         },
     ]);
     let mut config = InputCoreConfig::default();
@@ -342,10 +351,12 @@ fn unchanged_snapshot_preserves_sample_seq_in_on_change_mode() {
         BackendPollResult {
             device_events: vec![DeviceLifecycleEvent::Added(device("pad-a"))],
             samples: vec![sample("pad-a", 10, vec![1.0], vec![0.0, 0.0, 0.0, 0.0])],
+            ..Default::default()
         },
         BackendPollResult {
             device_events: vec![],
             samples: vec![sample("pad-a", 10, vec![1.0], vec![0.0, 0.0, 0.0, 0.0])],
+            ..Default::default()
         },
     ]);
     let mut core = InputCore::new(
@@ -372,10 +383,12 @@ fn fixed_rate_stream_mode_advances_sample_seq_without_payload_change() {
         BackendPollResult {
             device_events: vec![DeviceLifecycleEvent::Added(device("pad-a"))],
             samples: vec![sample("pad-a", 10, vec![1.0], vec![0.0, 0.0, 0.0, 0.0])],
+            ..Default::default()
         },
         BackendPollResult {
             device_events: vec![],
             samples: vec![sample("pad-a", 10, vec![1.0], vec![0.0, 0.0, 0.0, 0.0])],
+            ..Default::default()
         },
     ]);
     let mut config = InputCoreConfig::default();
@@ -417,6 +430,7 @@ fn custom_device_profile_is_applied_during_snapshot_build() {
             vec![0.0, 0.0, 0.0, 1.0],
             vec![0.05, 0.0, 0.0, 0.0],
         )],
+        ..Default::default()
     }]);
     let mut config = InputCoreConfig::default();
     config.device_profiles = vec![DeviceProfile {
@@ -474,6 +488,7 @@ fn hardware_profile_survives_runtime_device_id_reconnect() {
                 vec![0.0, 0.0, 0.0, 1.0],
                 vec![0.0, 0.0, 0.0, 0.0],
             )],
+            ..Default::default()
         },
         BackendPollResult {
             device_events: vec![
@@ -489,6 +504,7 @@ fn hardware_profile_survives_runtime_device_id_reconnect() {
                 vec![0.0, 0.0, 0.0, 1.0],
                 vec![0.0, 0.0, 0.0, 0.0],
             )],
+            ..Default::default()
         },
     ]);
 
@@ -537,6 +553,7 @@ fn more_specific_device_id_profile_overrides_hardware_profile() {
             vec![0.0, 0.0, 1.0, 0.0],
             vec![0.0, 0.0, 0.0, 0.0],
         )],
+        ..Default::default()
     }]);
 
     let mut config = InputCoreConfig::default();

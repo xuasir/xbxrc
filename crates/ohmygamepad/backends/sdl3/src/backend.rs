@@ -312,11 +312,17 @@ where
 
         let mut device_events = Vec::new();
         let mut samples = Vec::new();
+        let mut activity_observed_at_ms: Option<u64> = None;
 
         for _ in 0..self.max_events_per_poll() {
             let Some(event) = self.source.next_event() else {
                 break;
             };
+            let observed = event.observed_at_ms;
+            activity_observed_at_ms = Some(match activity_observed_at_ms {
+                None => observed,
+                Some(prev) => prev.max(observed),
+            });
             self.handle_event(event, &mut device_events, &mut samples);
         }
 
@@ -325,6 +331,7 @@ where
         BackendPollResult {
             device_events,
             samples,
+            activity_observed_at_ms,
         }
     }
 }

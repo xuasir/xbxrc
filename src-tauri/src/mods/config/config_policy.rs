@@ -100,6 +100,7 @@ fn normalize_value(key: &str, value: &Value, fallback: &Value) -> Value {
         | "ipv6"
         | "performance_style"
         | "background_keepalive"
+        | "gamepad_cold_start_sdl_binding_nudge"
         | "super_resolution_experimental"
         | "use_vulkan"
         | "ui_haptics"

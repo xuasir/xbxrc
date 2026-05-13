@@ -1,6 +1,6 @@
 use serde_json::{json, Map, Value};
 
-pub const APP_CONFIG_KEYS: [&str; 37] = [
+pub const APP_CONFIG_KEYS: [&str; 38] = [
     "locale",
     "theme",
     "fullscreen",
@@ -38,6 +38,7 @@ pub const APP_CONFIG_KEYS: [&str; 37] = [
     "runtime_trace_mode",
     "gamepad_device_profiles",
     "gamepad_keyboard_mapping",
+    "gamepad_cold_start_sdl_binding_nudge",
 ];
 
 pub fn default_config_map() -> Map<String, Value> {
@@ -65,6 +66,7 @@ pub fn default_config_map() -> Map<String, Value> {
         "force_region_ip": "",
         "codec": "",
         "polling_rate": 250,
+        "gamepad_cold_start_sdl_binding_nudge": true,
         "vibration": true,
         "vibration_strength": "realistic",
         "power_on": false,

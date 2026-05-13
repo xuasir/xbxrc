@@ -4,6 +4,7 @@ import { setStreamGamepadShellUiPriority } from '@shared/gamepad/input-routing'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
+import { navigationEngine } from '@/navigation/core/engine'
 import { Focusable, FocusScope } from '@/navigation/core/vue'
 import xboxLogoIcon from '../assets/nav/xbox-logo.svg'
 import streamDiagnosticsIcon from '../assets/stream/stream-diagnostics.svg'
@@ -123,8 +124,19 @@ useGamepadRouteForStreamOverlay({
   ),
   sessionId: execution.sessionId,
   applyRouteTarget: async (target) => {
-    setStreamGamepadShellUiPriority(target.kind === 'shell-ui')
-    await rpc.gamepad.setStreamPadForwarding({ enabled: target.kind === 'stream-session' })
+    // 顺序敏感：关菜单恢复串流时须先打开 Rust 侧转发，再撤 TS 的 shell 优先，否则会出现
+    // `shouldStreamSessionConsumeGamepadSlots` 为 true 而 `streamPadForwarding` 仍为 false 的窗口；
+    // 开菜单则先让导航吃 slot，再关转发，避免菜单已开仍把样本送往串流。
+    if (target.kind === 'stream-session') {
+      await rpc.gamepad.setStreamPadForwarding({ enabled: true })
+      setStreamGamepadShellUiPriority(false)
+      // 清掉菜单/空间导航触发的马达，避免回到游戏后仍持续震动或与串流 rumble 叠在一起。
+      void rpc.gamepad.stopRumble({ target: { kind: 'auto' } }).catch(() => {})
+    }
+    else {
+      setStreamGamepadShellUiPriority(true)
+      await rpc.gamepad.setStreamPadForwarding({ enabled: false })
+    }
   },
 })
 
@@ -400,8 +412,17 @@ function openActionSheet(): void {
   openSheet('menu')
 }
 
+async function moveStreamSpatialNavFocusToPostOverlaySink(): Promise<void> {
+  await nextTick()
+  const sink = document.getElementById(SPATIAL_NAV_NODE_IDS.streamPage.focusSink)
+  if (sink instanceof HTMLElement) {
+    navigationEngine.focusElement(sink, false, false)
+  }
+}
+
 function closeActionSheet(): void {
   closeSheet('menu')
+  void moveStreamSpatialNavFocusToPostOverlaySink()
 }
 
 function openDiagnosticsMenu(): void {
@@ -410,6 +431,7 @@ function openDiagnosticsMenu(): void {
 
 function closeDiagnosticsMenu(): void {
   closeSheet('diagnosticsMenu')
+  void moveStreamSpatialNavFocusToPostOverlaySink()
 }
 
 function handleStreamMenuToggleRequested(): void {
@@ -766,6 +788,12 @@ async function handleDiagnosticsMenuAction(id: string): Promise<void> {
       data-theme="dark"
       :aria-label="t('streamPage.ariaLabel', { name: displayName })"
     >
+      <div
+        :id="SPATIAL_NAV_NODE_IDS.streamPage.focusSink"
+        class="stream-page__focus-sink"
+        tabindex="-1"
+        aria-hidden="true"
+      />
       <div id="stream-page-video" class="stream-page__video" />
       <StreamExperiencePanel
         :visible="experienceMetricsVisible && (isConnected || experienceBinding.phase === 'mounted')"
@@ -986,6 +1014,21 @@ async function handleDiagnosticsMenuAction(id: string): Promise<void> {
   height: 100vh;
   overflow: hidden;
   background: transparent;
+}
+
+.stream-page__focus-sink {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+  pointer-events: none;
+  opacity: 0;
+  z-index: 0;
 }
 
 .stream-page__video {

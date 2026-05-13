@@ -38,6 +38,11 @@ impl GamepadService {
             .runtime_trace
             .record_event("gamepad-provider", event, None, payload);
     }
+
+    /// 与 `prime_and_refresh_runtime_sampling`（SDL reopen）配套：先请求主窗口焦点，再跑宿主侧恢复。
+    fn request_main_focus_before_input_recovery(&self, reason: &'static str) {
+        crate::shell::request_main_window_focus_for_input_stack(&self.app_handle, reason);
+    }
 }
 
 impl GamepadProvider for GamepadService {
@@ -64,6 +69,7 @@ impl GamepadProvider for GamepadService {
 
     fn activate_sampling(&self) -> Result<OhMyGamepadRuntimeSnapshotDto, String> {
         log::info!("tauri_gamepad_activate_sampling source=provider");
+        self.request_main_focus_before_input_recovery("activateSampling");
         let snapshot = self
             .host
             .activate_sampling()
@@ -86,6 +92,7 @@ impl GamepadProvider for GamepadService {
 
     fn resume_shell_sampling(&self) -> Result<OhMyGamepadRuntimeSnapshotDto, String> {
         log::info!("tauri_gamepad_resume_shell_sampling source=provider");
+        self.request_main_focus_before_input_recovery("resumeShellSampling");
         let snapshot = self
             .host
             .resume_shell_sampling()
@@ -186,6 +193,7 @@ impl GamepadProvider for GamepadService {
     }
 
     fn try_stalled_sampling_self_heal(&self) -> Result<bool, String> {
+        self.request_main_focus_before_input_recovery("tryStalledSamplingSelfHeal");
         let result = self
             .host
             .try_stalled_sampling_self_heal()
@@ -209,6 +217,7 @@ impl GamepadProvider for GamepadService {
     }
 
     fn try_startup_sampling_self_heal(&self) -> Result<bool, String> {
+        self.request_main_focus_before_input_recovery("tryStartupSamplingSelfHeal");
         let result = self
             .host
             .try_startup_sampling_self_heal()

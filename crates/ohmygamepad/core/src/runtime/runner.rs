@@ -63,6 +63,22 @@ fn evaluate_sampling_health(
     }
 
     let has_slot_baseline = snapshot_has_established_slot_baseline(snapshot);
+    let max_sample_seq = snapshot
+        .slots
+        .iter()
+        .map(|pad| pad.sample_seq)
+        .max()
+        .unwrap_or(0);
+
+    // 首开：槽位长期停在首轮 seq（典型 SDL 轮询签名冻结），但后端轮询仍存活 ——
+    // 若仍走 `backend_fresh && baseline => Healthy` 短路，则永远不会判 stalled，自愈链不触发。
+    if max_sample_seq <= 1
+        && has_slot_baseline
+        && clock_ms.saturating_sub(lp) > SAMPLING_FIRST_PROGRESS_GRACE_MS
+        && backend_fresh
+    {
+        return OhMyGamepadSamplingHealthDto::Stalled;
+    }
 
     // logical progress 已经建立后，持续刷新的 backend + 已建立的 slot baseline
     // 表示当前只是停在中性态，没有必要误判成 awaitingBaseline / stalled。

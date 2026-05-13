@@ -16,13 +16,55 @@ pub mod rpc;
 pub mod state;
 pub mod window;
 
+#[cfg(target_os = "windows")]
+mod win_foreground;
+
 pub use bridge::{NoopTauriEngineWindowHost, TauriEngineEventBridge, TauriEngineWindowHost};
 pub use cli::parse_startup_flags;
 pub use state::{AppState, StartupFlagsState};
 pub use window::build_external_link_patch_script;
 
+#[cfg(target_os = "windows")]
+static GAMEPAD_COLD_START_SDL_NUDGE_TASK_SCHEDULED: AtomicBool = AtomicBool::new(false);
+
 #[cfg(target_os = "macos")]
 pub use window::handle_macos_window_event;
+
+/// 在跑 SDL `prime/reopen` 自愈链之前，先把主窗口拉到前台并请求焦点，
+/// 以贴近用户「切到后台再回来」后输入才恢复的系统行为（部分蓝牙/虚拟手柄）。
+pub fn request_main_window_focus_for_input_stack(app: &AppHandle, reason: &str) {
+    let Some(window) = app.get_webview_window("main") else {
+        log::warn!(
+            "request_main_window_focus_for_input_stack skipped reason={} (main window missing)",
+            reason
+        );
+        return;
+    };
+    let _ = window.show();
+    #[cfg(target_os = "windows")]
+    let used_win32_foreground = win_foreground::try_force_webview_foreground_win32(&window, reason);
+    #[cfg(not(target_os = "windows"))]
+    let used_win32_foreground = false;
+    if let Err(error) = window.set_focus() {
+        log::warn!(
+            "request_main_window_focus_for_input_stack set_focus failed reason={} error={}",
+            reason,
+            error
+        );
+    }
+    if let Some(app_state) = window.try_state::<AppState>() {
+        app_state.runtime_trace.record_event(
+            "gamepad-shell",
+            "mainWindowFocusRequestedForInputRecovery",
+            None,
+            serde_json::json!({
+                "reason": reason,
+                "windowLabel": window.label(),
+                "usedWin32Foreground": used_win32_foreground,
+            }),
+        );
+    }
+}
 
 /// 页面可见 / 窗口聚焦时拉回手柄采样并跑自愈链。
 /// 使用 `AppHandle` 解析主窗口，避免 `Window` / `WebviewWindow` 类型分裂；全屏冷启动的延迟补打见 `build_services`。
@@ -74,6 +116,106 @@ pub fn hint_gamepad_shell_interactive(app: &AppHandle, reason: &str) {
             error
         );
     }
+}
+
+/// Windows：主窗口首帧 `pageLoad` 且可见后，调度 **单条** 异步任务，在 **约 150ms / 3s / 8s** 三次执行
+/// `BackgroundWarm`→`Active` + `resume` + stalled/startup 自愈，促使部分蓝牙/虚拟手柄尽早向 SDL 上报完整轴/键。
+///
+/// 由配置 `gamepad_cold_start_sdl_binding_nudge` 控制，默认开启；全进程仅 **投递一次** 该异步任务。
+#[cfg(target_os = "windows")]
+pub fn schedule_gamepad_cold_start_sdl_binding_nudge(app: &AppHandle) {
+    if GAMEPAD_COLD_START_SDL_NUDGE_TASK_SCHEDULED.swap(true, Ordering::SeqCst) {
+        return;
+    }
+    let app = app.clone();
+    tauri::async_runtime::spawn(async move {
+        // 相对上一阶段的等待（毫秒），累计约 150ms / 3s / 8s 触发三次。
+        const PHASE_DELAYS_MS: [(u32, u64); 3] = [(0, 150), (1, 2850), (2, 5000)];
+        let mut config_checked = false;
+
+        for (phase_index, delay_ms) in PHASE_DELAYS_MS {
+            sleep(Duration::from_millis(delay_ms)).await;
+
+            let Some(state) = app.try_state::<AppState>() else {
+                log::warn!("gamepad_cold_start_sdl_binding_nudge skipped (AppState not ready)");
+                return;
+            };
+            if !config_checked {
+                let enabled = match state
+                    .config
+                    .get_by_keys(&[String::from("gamepad_cold_start_sdl_binding_nudge")])
+                {
+                    Ok(value) => value
+                        .get("gamepad_cold_start_sdl_binding_nudge")
+                        .and_then(|v| v.as_bool())
+                        .unwrap_or(true),
+                    Err(_) => true,
+                };
+                if !enabled {
+                    log::info!("gamepad_cold_start_sdl_binding_nudge disabled by config");
+                    return;
+                }
+                config_checked = true;
+            }
+
+            state.runtime_trace.record_event(
+                "gamepad-shell",
+                "gamepadColdStartSdlBindingNudgeRun",
+                None,
+                serde_json::json!({
+                    "phase": "begin",
+                    "phaseIndex": phase_index,
+                }),
+            );
+
+            if let Err(error) = state.gamepad.set_sampling_lifecycle(
+                ohmygamepad_protocol::OhMyGamepadSamplingLifecycleDto::BackgroundWarm,
+            ) {
+                log::warn!(
+                    "gamepad_cold_start_sdl_binding_nudge BackgroundWarm failed error={}",
+                    error
+                );
+            }
+
+            sleep(Duration::from_millis(80)).await;
+
+            let Some(state) = app.try_state::<AppState>() else {
+                log::warn!("gamepad_cold_start_sdl_binding_nudge mid-run lost AppState");
+                return;
+            };
+
+            if let Err(error) = state.gamepad.set_sampling_lifecycle(
+                ohmygamepad_protocol::OhMyGamepadSamplingLifecycleDto::Active,
+            ) {
+                log::warn!(
+                    "gamepad_cold_start_sdl_binding_nudge Active failed error={}",
+                    error
+                );
+            }
+
+            if let Err(error) = state.gamepad.resume_shell_sampling() {
+                log::warn!(
+                    "gamepad_cold_start_sdl_binding_nudge resume_shell_sampling failed error={}",
+                    error
+                );
+            }
+            let _ = state.gamepad.try_stalled_sampling_self_heal();
+            let _ = state.gamepad.try_startup_sampling_self_heal();
+
+            if let Ok(snapshot) = state.gamepad.get_runtime_snapshot() {
+                trace_gamepad_runtime_snapshot(
+                    &state.runtime_trace,
+                    "gamepadColdStartSdlBindingNudgeCompleted",
+                    &snapshot,
+                    state.gamepad.stream_pad_forwarding(),
+                    serde_json::json!({
+                        "phase": "done",
+                        "phaseIndex": phase_index,
+                    }),
+                );
+            }
+        }
+    });
 }
 
 fn trace_gamepad_runtime_snapshot(
@@ -438,12 +580,20 @@ async fn build_services(
         let _ = main_window.set_fullscreen(fullscreen);
         if fullscreen {
             // Xbox 大屏首开：全屏切换后 WebView 可见 / pageLoad 与 SDL 采样链时序常偏晚，
-            // 仅靠首次 activate_sampling 仍可能出现“已识别设备但逻辑样本不推进”；延迟补打一轮交互提示链。
-            let app_delayed = app_handle.clone();
-            tauri::async_runtime::spawn(async move {
-                sleep(Duration::from_millis(500)).await;
-                hint_gamepad_shell_interactive(&app_delayed, "fullscreen-cold-start");
-            });
+            // 仅靠首次 activate_sampling 仍可能出现“已识别设备但逻辑样本不推进”；延迟补打交互提示链。
+            // 部分环境（尤其虚拟手柄/手表）需多轮 resume+prime/reopen 后才有稳定的逻辑槽位增量；
+            // 否则用户只能依赖失焦再回前台触发同一套链。
+            for (delay_ms, reason) in [
+                (500u64, "fullscreen-cold-start"),
+                (2000u64, "fullscreen-cold-start-delay-2s"),
+                (4000u64, "fullscreen-cold-start-delay-4s"),
+            ] {
+                let app_delayed = app_handle.clone();
+                tauri::async_runtime::spawn(async move {
+                    sleep(Duration::from_millis(delay_ms)).await;
+                    hint_gamepad_shell_interactive(&app_delayed, reason);
+                });
+            }
         }
     }
     mods::native_video::configure_main_window_video_host(&app_handle);

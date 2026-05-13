@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, useAttrs, watch } from 'vue'
+import { nextTick, onMounted, onUnmounted, useAttrs, watch } from 'vue'
 import { navigationEngine } from '../engine'
 
 interface Props {
@@ -19,12 +19,19 @@ const attrs = useAttrs()
 // 确保每个 Scope 都有一个唯一的 ID，如果未提供则随机生成或通过逻辑确定
 const effectiveId = props.id || `nav-scope-${Math.random().toString(36).slice(2, 9)}`
 
-watch(() => props.active, (nextActive) => {
-  navigationEngine.updateActiveScope(effectiveId, nextActive)
+watch(() => props.active, async (nextActive) => {
+  if (nextActive) {
+    await nextTick()
+    navigationEngine.updateActiveScope(effectiveId, true)
+  }
+  else {
+    navigationEngine.updateActiveScope(effectiveId, false)
+  }
 }, { immediate: false })
 
-onMounted(() => {
+onMounted(async () => {
   if (props.active) {
+    await nextTick()
     navigationEngine.updateActiveScope(effectiveId, true)
   }
 })

@@ -18,6 +18,11 @@ export function setStreamGamepadSessionActive(active: boolean): void {
   }
 }
 
+/** 供串流 overlay 路由等读取；非响应式，仅表达当前会话是否处于「串流吃 slot」语义。 */
+export function isStreamGamepadSessionActive(): boolean {
+  return streamSessionActive
+}
+
 /** 空间导航是否处理 `gamepad.slotSnapshot`（等价于历史 `shared` / `ui-only`） */
 export function shouldNavigationConsumeGamepadSlots(): boolean {
   if (!streamSessionActive) {

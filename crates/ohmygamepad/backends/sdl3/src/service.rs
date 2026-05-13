@@ -299,11 +299,15 @@ impl OhMyGamepadService {
         &self,
         snapshot: &OhMyGamepadRuntimeSnapshotDto,
     ) -> Result<bool, InputRuntimeError> {
-        let should_apply = matches!(
-            snapshot.sampling_health,
-            OhMyGamepadSamplingHealthDto::Stalled | OhMyGamepadSamplingHealthDto::AwaitingBaseline
-        ) && snapshot.last_sample_progress_at_ms == 0
-            && snapshot.devices.iter().any(|device| device.connected);
+        let is_stalled = snapshot.sampling_health == OhMyGamepadSamplingHealthDto::Stalled;
+        let is_awaiting_baseline =
+            snapshot.sampling_health == OhMyGamepadSamplingHealthDto::AwaitingBaseline;
+        let has_connected = snapshot.devices.iter().any(|device| device.connected);
+        // `AwaitingBaseline`：仅在逻辑层仍未写入 progress 时触发（与 `evaluate_sampling_health` 的 lp==0 语义一致）。
+        // `Stalled`：逻辑 progress 长时间停顿；`last_sample_progress_at_ms` 可能已在首轮 seq bump 被置为非 0，
+        // 若仍要求 lp==0 则 prime/reopen 自愈链永远不会执行（蓝牙/虚拟手柄冷启动 SDL 签名冻结等 case）。
+        let should_apply = has_connected
+            && ((is_awaiting_baseline && snapshot.last_sample_progress_at_ms == 0) || is_stalled);
         if !should_apply {
             return Ok(false);
         }

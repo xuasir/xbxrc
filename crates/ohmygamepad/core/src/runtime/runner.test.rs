@@ -196,6 +196,7 @@ fn runtime_thread_updates_sampling_snapshot() {
     let backend = ScriptedBackend::new(vec![BackendPollResult {
         device_events: vec![DeviceLifecycleEvent::Added(device("pad-a"))],
         samples: vec![sample("pad-a", 10, vec![1.0])],
+        ..Default::default()
     }]);
     let runtime = spawn_input_runtime(
         InputCoreConfig::default(),
@@ -234,6 +235,7 @@ fn runtime_thread_rebinds_logical_pad() {
             sample("pad-a", 10, vec![1.0]),
             sample("pad-b", 20, vec![0.0, 1.0]),
         ],
+        ..Default::default()
     }]);
     let runtime = spawn_input_runtime(
         InputCoreConfig::default(),
@@ -267,6 +269,7 @@ fn runtime_thread_replaces_device_profiles() {
     let backend = ScriptedBackend::new(vec![BackendPollResult {
         device_events: vec![DeviceLifecycleEvent::Added(device("pad-a"))],
         samples: vec![sample("pad-a", 10, vec![0.0, 0.0, 0.0, 1.0])],
+        ..Default::default()
     }]);
     let runtime = spawn_input_runtime(
         InputCoreConfig::default(),
@@ -306,6 +309,7 @@ fn runtime_snapshot_subscription_receives_initial_and_updated_snapshots() {
     let backend = ScriptedBackend::new(vec![BackendPollResult {
         device_events: vec![DeviceLifecycleEvent::Added(device("pad-a"))],
         samples: vec![sample("pad-a", 10, vec![1.0])],
+        ..Default::default()
     }]);
     let runtime = spawn_input_runtime(
         InputCoreConfig::default(),
@@ -350,6 +354,7 @@ fn runtime_snapshot_subscription_respects_ui_push_rate() {
             .map(|_| BackendPollResult {
                 device_events: vec![DeviceLifecycleEvent::Added(device("pad-a"))],
                 samples: vec![sample("pad-a", 10, vec![1.0])],
+                ..Default::default()
             })
             .collect(),
     );
@@ -398,6 +403,7 @@ fn background_warm_keeps_logical_sampling_and_marks_lifecycle() {
                     i as u64,
                     vec![if i % 2 == 0 { 0.0 } else { 1.0 }],
                 )],
+                ..Default::default()
             })
             .collect(),
     );
@@ -462,6 +468,7 @@ fn background_warm_suppresses_ui_and_stream_action_emits() {
                     i as u64,
                     vec![if i % 2 == 0 { 0.0 } else { 1.0 }],
                 )],
+                ..Default::default()
             })
             .collect(),
     );
@@ -516,6 +523,7 @@ fn background_warm_neutral_baseline_stays_healthy_when_backend_is_fresh() {
                     vec![]
                 },
                 samples: vec![sample("pad-a", i as u64, vec![0.0])],
+                ..Default::default()
             })
             .collect(),
     );
@@ -575,6 +583,20 @@ fn active_runtime_without_logical_progress_becomes_stalled_after_grace_window() 
 }
 
 #[test]
+fn connected_slot_stuck_at_first_seq_becomes_stalled_when_backend_stays_polled() {
+    let snapshot = OhMyGamepadRuntimeSnapshotDto {
+        devices: vec![device("pad-a")],
+        slots: vec![slot_snapshot(1, 1000)],
+        last_backend_sample_activity_at_ms: 7500,
+        last_sample_progress_at_ms: 1,
+        ..Default::default()
+    };
+
+    let health = evaluate_sampling_health(false, 8000, &snapshot);
+    assert_eq!(health, OhMyGamepadSamplingHealthDto::Stalled);
+}
+
+#[test]
 fn suspended_freezes_logical_sampling() {
     let backend = ScriptedBackend::new(
         (0..40)
@@ -585,6 +607,7 @@ fn suspended_freezes_logical_sampling() {
                     vec![]
                 },
                 samples: vec![sample("pad-a", i as u64, vec![1.0])],
+                ..Default::default()
             })
             .collect(),
     );

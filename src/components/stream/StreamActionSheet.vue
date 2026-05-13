@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onBeforeUnmount, watch } from 'vue'
 import { Focusable, FocusScope } from '@/navigation/core/vue'
 
 interface StreamActionItem {
@@ -35,6 +35,31 @@ function handleClose(): void {
 function handleSelect(id: string): void {
   emit('select', id)
 }
+
+function handleEscapeKeydown(event: KeyboardEvent): void {
+  if (event.key !== 'Escape') {
+    return
+  }
+  // 与导航引擎 `Back` 语义对齐：引擎会派发 synthetic Escape，这里接住并关闭 sheet。
+  event.preventDefault()
+  event.stopPropagation()
+  handleClose()
+}
+
+watch(
+  () => props.open,
+  (open) => {
+    window.removeEventListener('keydown', handleEscapeKeydown, true)
+    if (open) {
+      window.addEventListener('keydown', handleEscapeKeydown, true)
+    }
+  },
+  { immediate: true },
+)
+
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', handleEscapeKeydown, true)
+})
 </script>
 
 <template>

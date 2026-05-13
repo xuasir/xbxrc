@@ -91,6 +91,10 @@ pub fn run() {
                     &webview.window().app_handle(),
                     "page-load-visible-window",
                 );
+                #[cfg(target_os = "windows")]
+                shell::schedule_gamepad_cold_start_sdl_binding_nudge(
+                    &webview.window().app_handle(),
+                );
             }
             let _ = webview.eval(shell::build_external_link_patch_script());
         })

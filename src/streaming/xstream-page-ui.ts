@@ -124,9 +124,12 @@ export function useXStreamPageUi(options: UseXStreamPageUiOptions) {
   )
 
   watch(
-    () => shouldEnableSpatialInput.value,
-    (enabled) => {
-      syncStreamUiInputMode(enabled, hasOverlay.value)
+    () => ({
+      spatial: shouldEnableSpatialInput.value,
+      overlay: hasOverlay.value,
+    }),
+    ({ spatial, overlay }) => {
+      syncStreamUiInputMode(spatial, overlay)
     },
     { immediate: true },
   )

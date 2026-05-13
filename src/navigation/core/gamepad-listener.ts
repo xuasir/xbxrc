@@ -10,6 +10,19 @@ const STICK_DEADZONE = 0.5
 const BUTTON_REPEAT_DELAY = 450
 const BUTTON_REPEAT_RATE = 140
 const GAMEPAD_UI_RESET_EVENT = 'xbxrc:gamepad:ui-listener-reset-requested'
+
+function shouldRepeatGamepadUiIntent(intent: NavigationIntent): boolean {
+  switch (intent) {
+    case NavigationIntent.Action:
+    case NavigationIntent.Back:
+    case NavigationIntent.View:
+    case NavigationIntent.Menu:
+      return false
+    default:
+      return true
+  }
+}
+
 let lastUiTraceSignature = ''
 
 function recordUiTrace(event: string, payload: Record<string, unknown>): void {
@@ -106,7 +119,11 @@ class GamepadUIListener {
           source: 'press',
         })
         inputDispatcher.dispatch(intent)
-        this.startRepeatTimer(state, key, intent)
+        // 确认/返回/系统键不应长按连发：否则会连续 `.click()` 或对已卸载的菜单重复派发，
+        // 表现为菜单不随 A 关闭、回到串流后马达/UI 震动停不下来的现象。
+        if (shouldRepeatGamepadUiIntent(intent)) {
+          this.startRepeatTimer(state, key, intent)
+        }
       }
     }
     else {

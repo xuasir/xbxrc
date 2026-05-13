@@ -1,4 +1,5 @@
 import type { Ref } from 'vue'
+import { isStreamGamepadSessionActive } from '@shared/gamepad/input-routing'
 import { onBeforeUnmount, onMounted, watch } from 'vue'
 import { requestGamepadUiListenerReset } from '../../navigation/core/gamepad-listener'
 
@@ -14,6 +15,8 @@ export function useGamepadRouteForStreamOverlay(options: {
   let lastApplied: GamepadRouteTargetSnapshot | null = null
   let pending: GamepadRouteTargetSnapshot | null = null
   let applying = false
+  /** 路由同步进行中又来了新的 overlay/session 变化时置位，结束后补跑一次，避免丢更新。 */
+  let pendingResync = false
 
   function equals(a: GamepadRouteTargetSnapshot | null, b: GamepadRouteTargetSnapshot | null): boolean {
     if (a === b)
@@ -30,10 +33,19 @@ export function useGamepadRouteForStreamOverlay(options: {
 
   function resolveDesiredTarget(): GamepadRouteTargetSnapshot | null {
     const sessionId = options.sessionId.value
+    const overlay = options.isAnyOverlayOpen.value
+
+    // `sessionId` 与 `setStreamGamepadSessionActive(true)` 理论上同拍写入，但断开或竞态下可能出现
+    // 「会话仍视为串流态而 id 已空」；此时若 overlay 打开仍须走 shell-ui，否则会卡在
+    // forwarding 已关而 shell 优先未升起的窗口，手柄样本谁都不消费。
     if (sessionId === '') {
-      return null
+      if (!isStreamGamepadSessionActive()) {
+        return null
+      }
+      return overlay ? { kind: 'shell-ui' } : { kind: 'stream-session', sessionId: '' }
     }
-    if (options.isAnyOverlayOpen.value) {
+
+    if (overlay) {
       return { kind: 'shell-ui' }
     }
     return { kind: 'stream-session', sessionId }
@@ -59,6 +71,7 @@ export function useGamepadRouteForStreamOverlay(options: {
 
   async function syncTarget(): Promise<void> {
     if (applying) {
+      pendingResync = true
       return
     }
 
@@ -87,6 +100,10 @@ export function useGamepadRouteForStreamOverlay(options: {
     }
     finally {
       applying = false
+      if (pendingResync) {
+        pendingResync = false
+        void syncTarget()
+      }
     }
   }
 

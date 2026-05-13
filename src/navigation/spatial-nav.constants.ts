@@ -41,6 +41,8 @@ export const SPATIAL_NAV_NODE_IDS = {
     signIn: 'login.sign-in',
   },
   streamPage: {
+    /** 关闭弹层后承接焦点，避免焦点回到「菜单」按钮时被仍按住的 A 再次点开菜单 */
+    focusSink: 'stream.page.focus-sink',
     menu: 'stream.action.menu',
     diagnostics: 'stream.action.diagnostics',
     fullscreen: 'stream.action.fullscreen',
