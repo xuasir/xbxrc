@@ -13,10 +13,7 @@ use xbxengine::{
     XbxEngineRenderPixelData,
 };
 
-use super::scheduling::{
-    HostCadenceTelemetry, ScheduledFrameSlot, ScheduledFrameSlotDiagnostics,
-    ScheduledFrameTakeOutcome,
-};
+use super::scheduling::{HostCadenceTelemetry, ScheduledFrameSlot, ScheduledFrameSlotDiagnostics};
 #[cfg(target_os = "macos")]
 use super::{
     clear_host_present_tick_dispatch, dispatch_wgpu_render_tick_on_main_thread, drop_display_layer,
@@ -69,12 +66,8 @@ fn apply_host_mailbox_viewport_diagnostics(
     viewport.host_descriptor_cpu_upload_count_total = host_descriptor_cpu_upload_count_total;
 }
 
-fn host_mailbox_reject_stage(slot_diag: &ScheduledFrameSlotDiagnostics) -> &'static str {
-    if slot_diag.pending_queue_depth > 0 {
-        "hostMailboxPendingProtected"
-    } else {
-        "hostMailboxRejected"
-    }
+fn pending_frame_seq(slot_diag: &ScheduledFrameSlotDiagnostics) -> Option<u64> {
+    slot_diag.pending_frame_seqs.first().copied()
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -420,6 +413,8 @@ impl NativeVideoPresenter for WindowsWgpuPresenter {
                             "overwrotePending": overwrote_pending,
                             "replacedFrameSeq": replaced_frame_seq,
                             "displayedFrameSeq": slot_diag.displayed_frame_seq,
+                            "pendingFrameSeq": pending_frame_seq(&slot_diag),
+                            "hasPendingFrame": slot_diag.pending_queue_depth > 0,
                             "pendingFrameSeqs": slot_diag.pending_frame_seqs,
                             "lastPresentedFrameSeq": slot_diag.last_presented_frame_seq,
                             "queueDepth": slot_diag.queue_depth,
@@ -447,6 +442,8 @@ impl NativeVideoPresenter for WindowsWgpuPresenter {
                                 "overwrotePending": overwrote_pending,
                                 "replacedFrameSeq": replaced_frame_seq,
                                 "displayedFrameSeq": slot_diag.displayed_frame_seq,
+                                "pendingFrameSeq": pending_frame_seq(&slot_diag),
+                                "hasPendingFrame": slot_diag.pending_queue_depth > 0,
                                 "pendingFrameSeqs": slot_diag.pending_frame_seqs,
                                 "queueDepth": slot_diag.queue_depth,
                                 "pendingQueueDepth": slot_diag.pending_queue_depth,
@@ -483,6 +480,8 @@ impl NativeVideoPresenter for WindowsWgpuPresenter {
                             "submitGapMs": submit_gap_ms,
                             "noPendingStreakBeforeSubmit": no_pending_streak_before_submit,
                             "displayedFrameSeq": slot_diag.displayed_frame_seq,
+                            "pendingFrameSeq": pending_frame_seq(&slot_diag),
+                            "hasPendingFrame": slot_diag.pending_queue_depth > 0,
                             "pendingFrameSeqs": slot_diag.pending_frame_seqs,
                             "queueDepth": slot_diag.queue_depth,
                             "pendingQueueDepth": slot_diag.pending_queue_depth,
@@ -501,7 +500,7 @@ impl NativeVideoPresenter for WindowsWgpuPresenter {
                 record_native_video_timing_event_lazy(
                     self.runtime_trace.as_ref(),
                     "wgpu",
-                    host_mailbox_reject_stage(&slot_diag),
+                    "hostMailboxRejected",
                     &self.viewport_id,
                     &self.window_label,
                     || {
@@ -517,6 +516,8 @@ impl NativeVideoPresenter for WindowsWgpuPresenter {
                             "submitGapMs": submit_gap_ms,
                             "noPendingStreakBeforeSubmit": no_pending_streak_before_submit,
                             "displayedFrameSeq": slot_diag.displayed_frame_seq,
+                            "pendingFrameSeq": pending_frame_seq(&slot_diag),
+                            "hasPendingFrame": slot_diag.pending_queue_depth > 0,
                             "pendingFrameSeqs": slot_diag.pending_frame_seqs,
                             "queueDepth": slot_diag.queue_depth,
                             "pendingQueueDepth": slot_diag.pending_queue_depth,
@@ -1046,6 +1047,8 @@ impl NativeVideoPresenter for MacOsWgpuPresenter {
                             "overwrotePending": overwrote_pending,
                             "replacedFrameSeq": replaced_frame_seq,
                             "displayedFrameSeq": slot_diag.displayed_frame_seq,
+                            "pendingFrameSeq": pending_frame_seq(&slot_diag),
+                            "hasPendingFrame": slot_diag.pending_queue_depth > 0,
                             "pendingFrameSeqs": slot_diag.pending_frame_seqs,
                             "lastPresentedFrameSeq": slot_diag.last_presented_frame_seq,
                             "queueDepth": slot_diag.queue_depth,
@@ -1073,6 +1076,8 @@ impl NativeVideoPresenter for MacOsWgpuPresenter {
                                 "overwrotePending": overwrote_pending,
                                 "replacedFrameSeq": replaced_frame_seq,
                                 "displayedFrameSeq": slot_diag.displayed_frame_seq,
+                                "pendingFrameSeq": pending_frame_seq(&slot_diag),
+                                "hasPendingFrame": slot_diag.pending_queue_depth > 0,
                                 "pendingFrameSeqs": slot_diag.pending_frame_seqs,
                                 "queueDepth": slot_diag.queue_depth,
                                 "pendingQueueDepth": slot_diag.pending_queue_depth,
@@ -1109,6 +1114,8 @@ impl NativeVideoPresenter for MacOsWgpuPresenter {
                             "submitGapMs": submit_gap_ms,
                             "noPendingStreakBeforeSubmit": no_pending_streak_before_submit,
                             "displayedFrameSeq": slot_diag.displayed_frame_seq,
+                            "pendingFrameSeq": pending_frame_seq(&slot_diag),
+                            "hasPendingFrame": slot_diag.pending_queue_depth > 0,
                             "pendingFrameSeqs": slot_diag.pending_frame_seqs,
                             "queueDepth": slot_diag.queue_depth,
                             "pendingQueueDepth": slot_diag.pending_queue_depth,
@@ -1127,7 +1134,7 @@ impl NativeVideoPresenter for MacOsWgpuPresenter {
                 record_native_video_timing_event_lazy(
                     self.runtime_trace.as_ref(),
                     "wgpu",
-                    host_mailbox_reject_stage(&slot_diag),
+                    "hostMailboxRejected",
                     &self.viewport_id,
                     &self.window_label,
                     || {
@@ -1143,6 +1150,8 @@ impl NativeVideoPresenter for MacOsWgpuPresenter {
                             "submitGapMs": submit_gap_ms,
                             "noPendingStreakBeforeSubmit": no_pending_streak_before_submit,
                             "displayedFrameSeq": slot_diag.displayed_frame_seq,
+                            "pendingFrameSeq": pending_frame_seq(&slot_diag),
+                            "hasPendingFrame": slot_diag.pending_queue_depth > 0,
                             "pendingFrameSeqs": slot_diag.pending_frame_seqs,
                             "queueDepth": slot_diag.queue_depth,
                             "pendingQueueDepth": slot_diag.pending_queue_depth,
@@ -1555,6 +1564,8 @@ impl NativeVideoPresenter for MacOsVideoPresenter {
                             "overwrotePending": overwrote_pending,
                             "replacedFrameSeq": replaced_frame_seq,
                             "displayedFrameSeq": slot_diag.displayed_frame_seq,
+                            "pendingFrameSeq": pending_frame_seq(&slot_diag),
+                            "hasPendingFrame": slot_diag.pending_queue_depth > 0,
                             "pendingFrameSeqs": slot_diag.pending_frame_seqs,
                             "lastPresentedFrameSeq": slot_diag.last_presented_frame_seq,
                             "queueDepth": slot_diag.queue_depth,
@@ -1583,6 +1594,8 @@ impl NativeVideoPresenter for MacOsVideoPresenter {
                                 "overwrotePending": overwrote_pending,
                                 "replacedFrameSeq": replaced_frame_seq,
                                 "displayedFrameSeq": slot_diag.displayed_frame_seq,
+                                "pendingFrameSeq": pending_frame_seq(&slot_diag),
+                                "hasPendingFrame": slot_diag.pending_queue_depth > 0,
                                 "pendingFrameSeqs": slot_diag.pending_frame_seqs,
                                 "queueDepth": slot_diag.queue_depth,
                                 "pendingQueueDepth": slot_diag.pending_queue_depth,
@@ -1619,6 +1632,8 @@ impl NativeVideoPresenter for MacOsVideoPresenter {
                             "submitGapMs": submit_gap_ms,
                             "noPendingStreakBeforeSubmit": no_pending_streak_before_submit,
                             "displayedFrameSeq": slot_diag.displayed_frame_seq,
+                            "pendingFrameSeq": pending_frame_seq(&slot_diag),
+                            "hasPendingFrame": slot_diag.pending_queue_depth > 0,
                             "pendingFrameSeqs": slot_diag.pending_frame_seqs,
                             "queueDepth": slot_diag.queue_depth,
                             "pendingQueueDepth": slot_diag.pending_queue_depth,
@@ -1637,7 +1652,7 @@ impl NativeVideoPresenter for MacOsVideoPresenter {
                 record_native_video_timing_event_lazy(
                     self.runtime_trace.as_ref(),
                     "layer",
-                    host_mailbox_reject_stage(&slot_diag),
+                    "hostMailboxRejected",
                     &self.viewport_id,
                     &self.window_label,
                     || {
@@ -1653,6 +1668,8 @@ impl NativeVideoPresenter for MacOsVideoPresenter {
                             "submitGapMs": submit_gap_ms,
                             "noPendingStreakBeforeSubmit": no_pending_streak_before_submit,
                             "displayedFrameSeq": slot_diag.displayed_frame_seq,
+                            "pendingFrameSeq": pending_frame_seq(&slot_diag),
+                            "hasPendingFrame": slot_diag.pending_queue_depth > 0,
                             "pendingFrameSeqs": slot_diag.pending_frame_seqs,
                             "queueDepth": slot_diag.queue_depth,
                             "pendingQueueDepth": slot_diag.pending_queue_depth,

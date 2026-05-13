@@ -3104,7 +3104,8 @@ fn backend_failure_then_clean_bootstrap_frames_recover_pipeline_to_nominal() {
 }
 
 #[tokio::test]
-async fn rtp_to_decode_to_pacer_to_renderer_pipeline_reaches_shadow_frame_and_overwrite_signal() {
+async fn rtp_to_decode_to_pacer_to_renderer_pipeline_reaches_shadow_frame_and_armed_protection_signal(
+) {
     let (tx, rx) = tokio::sync::mpsc::channel(64);
     let (transport_observation_tx, _transport_observation_rx) =
         tokio::sync::mpsc::unbounded_channel();
@@ -3247,18 +3248,20 @@ async fn rtp_to_decode_to_pacer_to_renderer_pipeline_reaches_shadow_frame_and_ov
     }
 
     let render_deadline = Instant::now() + Duration::from_millis(300);
-    let mut latest_seq = None;
+    let mut latest_rendered_at_ms = None;
+    let mut renderer_submit_count = 0u64;
     while Instant::now() < render_deadline {
-        let frame = render_state
+        let render_state_guard = render_state.lock().expect("render state lock");
+        let snapshot = render_state_guard.render_signal_snapshot(0.0);
+        if let Some(rendered_at_ms) = snapshot.latest_present_time_ms {
+            latest_rendered_at_ms = Some(rendered_at_ms);
+        }
+        renderer_submit_count = runtime_stats
             .lock()
-            .expect("render state lock")
-            .peek_latest_frame()
-            .cloned();
-        if let Some(frame) = frame {
-            latest_seq = Some(frame.frame_seq);
-            if frame.frame_seq >= 3 {
-                break;
-            }
+            .expect("runtime stats lock")
+            .video_renderer_submit_count_total;
+        if latest_rendered_at_ms.is_some() && renderer_submit_count >= 2 {
+            break;
         }
         tokio::time::sleep(Duration::from_millis(4)).await;
     }
@@ -3266,20 +3269,25 @@ async fn rtp_to_decode_to_pacer_to_renderer_pipeline_reaches_shadow_frame_and_ov
     pacer.stop();
     renderer.stop();
 
-    assert_eq!(latest_seq, Some(3));
-    let latest_frame = render_state
-        .lock()
-        .expect("render state lock")
-        .peek_latest_frame()
-        .cloned()
-        .expect("latest frame should exist");
-    assert_eq!(latest_frame.recovery_epoch_tag, Some(1));
+    assert!(latest_rendered_at_ms.is_some());
+    assert!(renderer_submit_count >= 2);
+    let mut render_state_guard = render_state.lock().expect("render state lock");
+    let armed_frame = render_state_guard
+        .take_latest_renderable_frame()
+        .expect("armed frame should exist");
+    assert_eq!(armed_frame.frame_seq, 1);
+    assert_eq!(armed_frame.recovery_epoch_tag, Some(1));
+    let deferred_frame = render_state_guard
+        .take_latest_renderable_frame()
+        .expect("deferred latest frame should exist");
+    assert!(deferred_frame.frame_seq >= 2);
+    assert_eq!(deferred_frame.recovery_epoch_tag, Some(1));
     let stats = runtime_stats.lock().expect("runtime stats lock");
     assert!(stats.video_renderer_submit_count_total >= 2);
     let decision = stats
         .latest_render_mailbox_decision
         .clone()
         .expect("render candidate decision should exist");
-    assert_eq!(decision.state, "latest-overwrite");
-    assert_eq!(decision.detail, "mailboxOverwrite");
+    assert_eq!(decision.state, "armed-protected");
+    assert_eq!(decision.detail, "armedPendingProtected");
 }

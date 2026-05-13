@@ -49,19 +49,19 @@ fn evaluate_sampling_health(
     let lp = snapshot.last_sample_progress_at_ms;
     let lb = snapshot.last_backend_sample_activity_at_ms;
     let backend_fresh = lb > 0 && clock_ms.saturating_sub(lb) < SAMPLING_BACKEND_FRESH_WITHIN_MS;
-    let has_slot_baseline = snapshot_has_established_slot_baseline(snapshot);
-
-    // 只要 backend 还在持续产出新鲜样本，且逻辑层至少已经建立过一份 slot baseline，
-    // 即使当前仍是“中性态未变化”，也不应被误判成 awaitingBaseline / stalled。
-    if backend_fresh && has_slot_baseline {
-        return OhMyGamepadSamplingHealthDto::Healthy;
-    }
-
     if lp == 0 {
         if lb > 0 && backend_fresh && clock_ms >= SAMPLING_FIRST_PROGRESS_GRACE_MS {
             return OhMyGamepadSamplingHealthDto::Stalled;
         }
         return OhMyGamepadSamplingHealthDto::AwaitingBaseline;
+    }
+
+    let has_slot_baseline = snapshot_has_established_slot_baseline(snapshot);
+
+    // logical progress 已经建立后，持续刷新的 backend + 已建立的 slot baseline
+    // 表示当前只是停在中性态，没有必要误判成 awaitingBaseline / stalled。
+    if backend_fresh && has_slot_baseline {
+        return OhMyGamepadSamplingHealthDto::Healthy;
     }
 
     if clock_ms.saturating_sub(lp) > SAMPLING_STALL_AFTER_MS && backend_fresh {

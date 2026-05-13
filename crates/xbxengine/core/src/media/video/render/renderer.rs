@@ -2,9 +2,11 @@ use crate::{
     XbxEngineRenderFrame, XbxEngineRenderPixelData, XbxEngineReplacementDecisionObservation,
     XbxEngineRuntimeError, XbxEngineVideoFrameStats,
 };
+use std::collections::VecDeque;
 use xbxengine_protocol::XbxEngineDisplayStateDto;
 #[allow(dead_code)]
 const RENDER_STALL_THRESHOLD_MS: f64 = 1_500.0;
+const RENDER_MAILBOX_CAPACITY: usize = 1;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub(crate) enum XbxRenderMailboxState {
@@ -103,7 +105,7 @@ impl From<XbxRenderFrame> for XbxEngineRenderFrame {
 #[derive(Default)]
 pub(crate) struct XbxRenderState {
     latest_display_state: Option<XbxEngineDisplayStateDto>,
-    latest_renderable_frame: Option<XbxEngineRenderFrame>,
+    renderable_frames: VecDeque<XbxEngineRenderFrame>,
     render_mailbox_state: XbxRenderMailboxState,
     latest_render_mailbox_decision: Option<XbxRenderMailboxDecisionSnapshot>,
     render_mailbox_decision_id: u64,
@@ -112,7 +114,7 @@ pub(crate) struct XbxRenderState {
 impl XbxRenderState {
     pub(crate) fn reset(&mut self) -> Result<(), XbxEngineRuntimeError> {
         self.latest_display_state = None;
-        self.latest_renderable_frame = None;
+        self.renderable_frames.clear();
         self.render_mailbox_state = XbxRenderMailboxState::Nominal;
         self.latest_render_mailbox_decision = None;
         self.render_mailbox_decision_id = 0;
@@ -167,31 +169,42 @@ impl XbxRenderState {
         let frame_stats = frame.video_stats();
         let presented_frame_seq = frame.frame_seq;
         let observed_at_ms = frame.rendered_at_ms;
-        // `pacer` 已完成候选价值排序；render latest-slot 只保留单槽交接语义。
-        let overwritten_frame = self
-            .latest_renderable_frame
-            .as_ref()
-            .map(|frame| (frame.frame_seq, frame.width, frame.height));
-        let overwritten_pending_frame = overwritten_frame.is_some();
-        let overwritten_frame_contract = self.latest_renderable_frame.as_ref().map(|existing| {
-            XbxEngineReplacementDecisionObservation {
+        // `pacer` 已完成候选价值排序；render 侧只保留 latest handoff。
+        let kept_frame_seq = frame.frame_seq;
+        let kept_rtp_timestamp = frame.rtp_timestamp;
+        let kept_presentation_value_role = frame.presentation_value_role.clone();
+        let kept_recovery_epoch_tag = frame.recovery_epoch_tag;
+        let kept_recovery_owner_rtp_timestamp = frame.recovery_owner_rtp_timestamp;
+        let make_replacement_contract =
+            |existing: &XbxEngineRenderFrame| XbxEngineReplacementDecisionObservation {
                 dropped_frame_seq: Some(existing.frame_seq),
                 dropped_rtp_timestamp: existing.rtp_timestamp,
                 dropped_presentation_value_role: existing.presentation_value_role.clone(),
-                kept_frame_seq: Some(frame.frame_seq),
-                kept_rtp_timestamp: frame.rtp_timestamp,
-                kept_presentation_value_role: frame.presentation_value_role.clone(),
-                same_recovery_epoch: Some(existing.recovery_epoch_tag == frame.recovery_epoch_tag),
+                kept_frame_seq: Some(kept_frame_seq),
+                kept_rtp_timestamp,
+                kept_presentation_value_role: kept_presentation_value_role.clone(),
+                same_recovery_epoch: Some(existing.recovery_epoch_tag == kept_recovery_epoch_tag),
                 same_recovery_owner_chain: Some(
-                    existing.recovery_epoch_tag == frame.recovery_epoch_tag
+                    existing.recovery_epoch_tag == kept_recovery_epoch_tag
                         && existing.recovery_owner_rtp_timestamp
-                            == frame.recovery_owner_rtp_timestamp,
+                            == kept_recovery_owner_rtp_timestamp,
                 ),
                 supersede_reason: Some("mailboxLatestExecution".to_string()),
-            }
-        });
+            };
         let engine_frame: XbxEngineRenderFrame = frame.into();
-        self.latest_renderable_frame = Some(engine_frame);
+        let mut overwritten_pending_frame = false;
+        self.renderable_frames.push_back(engine_frame);
+        let mut overwritten_frame = None;
+        let mut overwritten_frame_contract = None;
+        if self.renderable_frames.len() > RENDER_MAILBOX_CAPACITY {
+            let dropped = self.renderable_frames.pop_front();
+            if let Some(dropped) = dropped {
+                overwritten_frame = Some((dropped.frame_seq, dropped.width, dropped.height));
+                overwritten_frame_contract = Some(make_replacement_contract(&dropped));
+                overwritten_pending_frame = true;
+            }
+        }
+
         if overwritten_pending_frame {
             self.record_render_mailbox_decision(
                 XbxRenderMailboxState::LatestOverwrite,
@@ -201,10 +214,12 @@ impl XbxRenderState {
                 overwritten_frame_contract,
                 observed_at_ms,
             );
-        } else if matches!(
-            self.render_mailbox_state,
-            XbxRenderMailboxState::LatestOverwrite
-        ) {
+        } else if !self.renderable_frames.is_empty()
+            && matches!(
+                self.render_mailbox_state,
+                XbxRenderMailboxState::LatestOverwrite
+            )
+        {
             self.record_render_mailbox_decision(
                 XbxRenderMailboxState::Nominal,
                 "accept",
@@ -221,36 +236,42 @@ impl XbxRenderState {
             },
             XbxPresentFrameOutcome {
                 overwritten_pending_frame,
-                overwritten_frame_seq: overwritten_frame.map(|frame| frame.0),
-                overwritten_frame_width: overwritten_frame.map(|frame| frame.1),
-                overwritten_frame_height: overwritten_frame.map(|frame| frame.2),
+                overwritten_frame_seq: overwritten_pending_frame
+                    .then(|| overwritten_frame.map(|frame| frame.0))
+                    .flatten(),
+                overwritten_frame_width: overwritten_pending_frame
+                    .then(|| overwritten_frame.map(|frame| frame.1))
+                    .flatten(),
+                overwritten_frame_height: overwritten_pending_frame
+                    .then(|| overwritten_frame.map(|frame| frame.2))
+                    .flatten(),
             },
         ))
     }
 
     pub(crate) fn stop(&mut self) {
         self.latest_display_state = None;
-        self.latest_renderable_frame = None;
+        self.renderable_frames.clear();
         self.render_mailbox_state = XbxRenderMailboxState::Nominal;
         self.latest_render_mailbox_decision = None;
         self.render_mailbox_decision_id = 0;
     }
 
     pub(crate) fn take_latest_renderable_frame(&mut self) -> Option<XbxEngineRenderFrame> {
-        self.latest_renderable_frame.take()
+        self.renderable_frames.pop_front()
     }
 
     // 非消费读取：供上层在不丢帧的情况下查看当前 latest-slot。
     #[allow(dead_code)]
     pub(crate) fn peek_latest_frame(&self) -> Option<&XbxEngineRenderFrame> {
-        self.latest_renderable_frame.as_ref()
+        self.renderable_frames.back()
     }
 
     #[allow(dead_code)]
     pub(crate) fn render_signal_snapshot(&self, now_ms: f64) -> XbxRenderSignalSnapshot {
         let latest_present_time_ms = self
-            .latest_renderable_frame
-            .as_ref()
+            .renderable_frames
+            .back()
             .map(|frame| frame.rendered_at_ms);
         let renderer_stalled = latest_present_time_ms.map(|presented_at_ms| {
             (now_ms - presented_at_ms).max(0.0) >= RENDER_STALL_THRESHOLD_MS

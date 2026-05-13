@@ -266,17 +266,7 @@ function hasEstablishedSamplingBaseline(snapshot: GamepadRuntimeSnapshotDto | nu
     return false
   }
 
-  let maxSampleSeq = -1
-  let maxSampledAtMs = -1
-  for (const slot of snapshot.slots) {
-    maxSampleSeq = Math.max(maxSampleSeq, slot.sampleSeq)
-    maxSampledAtMs = Math.max(maxSampledAtMs, slot.sampledAtMs)
-  }
-
-  return (
-    snapshot.devices.some(device => device.connected)
-    && (maxSampleSeq >= 1 || maxSampledAtMs > 0 || (snapshot.lastBackendSampleActivityAtMs ?? 0) > 0)
-  )
+  return snapshot.devices.some(device => device.connected) && hasMeaningfulSamplingProgress(snapshot)
 }
 
 async function restoreGamepadSampling(reason: string, expectedAdvanceFrom?: string): Promise<void> {
@@ -318,7 +308,7 @@ async function restoreGamepadSampling(reason: string, expectedAdvanceFrom?: stri
       hasEstablishedSamplingBaseline(gamepadSnapshot.value)
       && pendingRecoveryBaselineProgress !== null
     ) {
-      finishPendingRecovery('sampling-baseline-ready', {
+      finishPendingRecovery('sampling-progress-ready', {
         scheduledReason: pendingRecoveryReason,
         baselineProgress: pendingRecoveryBaselineProgress,
         currentProgress: nextProgress,

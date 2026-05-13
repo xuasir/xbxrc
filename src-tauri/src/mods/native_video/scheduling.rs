@@ -12,8 +12,6 @@ const HOST_RENDER_RECOVERY_STREAK_THRESHOLD: u32 = 8;
 const HOST_RENDER_RECOVERY_KEYFRAME_MIN_FRAME_AGE_MS: f64 = 48.0;
 const HOST_FRAME_DROP_BACKLOG_LIMIT: usize = 32;
 const HOST_SUBMIT_GAP_WARN_MS: f64 = 100.0;
-const SCHEDULED_FRAME_MAILBOX_CAPACITY: usize = 1;
-
 fn format_optional_seq(value: Option<u64>) -> String {
     value
         .map(|seq| seq.to_string())
@@ -569,7 +567,7 @@ impl ScheduledFrameSlot {
             };
         }
         if let Some(pending) = self.pending_frame.as_ref() {
-            if !should_replace_pending_frame(pending, frame) {
+            if !incoming_frame_is_newer_than_pending(pending, frame) {
                 self.log_host_flow(
                     "submit",
                     Some(frame_seq),
@@ -586,15 +584,14 @@ impl ScheduledFrameSlot {
                 };
             }
         }
-        let mut replaced_frame_seq = None;
-        let mut overwrote_pending = false;
-        if self.pending_frame.is_some() {
-            replaced_frame_seq = self.pending_frame.as_ref().map(|frame| frame.frame_seq);
-            overwrote_pending = true;
+        let replaced_frame_seq = self
+            .pending_frame
+            .replace(frame.clone())
+            .map(|frame| frame.frame_seq);
+        let overwrote_pending = replaced_frame_seq.is_some();
+        if overwrote_pending {
             telemetry.record_overwrite();
         }
-        let _ = SCHEDULED_FRAME_MAILBOX_CAPACITY;
-        self.pending_frame = Some(frame.clone());
         self.log_host_flow(
             "submit",
             Some(frame_seq),
@@ -619,10 +616,7 @@ impl ScheduledFrameSlot {
         now_ms: f64,
         telemetry: &mut HostCadenceTelemetry,
     ) -> ScheduledFrameTakeOutcome {
-        loop {
-            let Some(frame) = self.pending_frame.take() else {
-                break;
-            };
+        if let Some(frame) = self.pending_frame.take() {
             if self
                 .last_presented_frame_seq
                 .is_some_and(|frame_seq| frame.frame_seq <= frame_seq)
@@ -637,35 +631,16 @@ impl ScheduledFrameSlot {
                     0.0,
                     telemetry,
                 );
-                continue;
-            }
-            let frame_age_budget_ms = telemetry.stale_frame_age_budget_for_frame(&frame);
-            let frame_age_ms = (now_ms - frame.rendered_at_ms).max(0.0);
-            if frame_age_ms > frame_age_budget_ms {
-                if is_recovery_anchor_frame(&frame) && self.displayed_frame.is_some() {
-                    self.last_presented_frame_seq = Some(frame.frame_seq);
-                    self.displayed_frame = Some(frame.clone());
-                    self.displayed_view_epoch = self.view_epoch;
-                    telemetry.clear_no_pending_streak();
-                    self.log_host_flow(
-                        "take",
-                        Some(frame.frame_seq),
-                        "ReadyRecoveryAnchor",
-                        None,
-                        false,
-                        frame_age_ms,
-                        frame_age_budget_ms,
-                        telemetry,
+            } else {
+                let frame_age_budget_ms = telemetry.stale_frame_age_budget_for_frame(&frame);
+                let frame_age_ms = (now_ms - frame.rendered_at_ms).max(0.0);
+                if frame_age_ms > frame_age_budget_ms {
+                    telemetry.record_stale_frame_drop(
+                        &frame,
+                        now_ms,
+                        "scheduledFrameStale",
+                        self.queue_depth(),
                     );
-                    return ScheduledFrameTakeOutcome::Ready(frame);
-                }
-                telemetry.record_stale_frame_drop(
-                    &frame,
-                    now_ms,
-                    "scheduledFrameStale",
-                    self.queue_depth(),
-                );
-                if self.pending_frame.is_none() && self.displayed_frame.is_none() {
                     self.log_host_flow(
                         "take",
                         Some(frame.frame_seq),
@@ -676,39 +651,31 @@ impl ScheduledFrameSlot {
                         frame_age_budget_ms,
                         telemetry,
                     );
-                    return ScheduledFrameTakeOutcome::DroppedStale {
-                        frame,
+                    if self.displayed_frame.is_none() {
+                        return ScheduledFrameTakeOutcome::DroppedStale {
+                            frame,
+                            frame_age_ms,
+                            frame_age_budget_ms,
+                        };
+                    }
+                } else {
+                    self.last_presented_frame_seq = Some(frame.frame_seq);
+                    self.displayed_frame = Some(frame.clone());
+                    self.displayed_view_epoch = self.view_epoch;
+                    telemetry.clear_no_pending_streak();
+                    self.log_host_flow(
+                        "take",
+                        Some(frame.frame_seq),
+                        "Ready",
+                        None,
+                        false,
                         frame_age_ms,
                         frame_age_budget_ms,
-                    };
+                        telemetry,
+                    );
+                    return ScheduledFrameTakeOutcome::Ready(frame);
                 }
-                self.log_host_flow(
-                    "take",
-                    Some(frame.frame_seq),
-                    "DroppedStale",
-                    None,
-                    false,
-                    frame_age_ms,
-                    frame_age_budget_ms,
-                    telemetry,
-                );
-                continue;
             }
-            self.last_presented_frame_seq = Some(frame.frame_seq);
-            self.displayed_frame = Some(frame.clone());
-            self.displayed_view_epoch = self.view_epoch;
-            telemetry.clear_no_pending_streak();
-            self.log_host_flow(
-                "take",
-                Some(frame.frame_seq),
-                "Ready",
-                None,
-                false,
-                frame_age_ms,
-                frame_age_budget_ms,
-                telemetry,
-            );
-            return ScheduledFrameTakeOutcome::Ready(frame);
         }
         if self.displayed_frame.is_some() && self.displayed_view_epoch != self.view_epoch {
             let frame = self
@@ -853,10 +820,6 @@ impl ScheduledFrameSlot {
     }
 }
 
-fn is_recovery_anchor_frame(frame: &XbxEngineRenderFrame) -> bool {
-    frame.is_keyframe || frame_has_anchor_protection(frame)
-}
-
 fn frame_has_anchor_protection(frame: &XbxEngineRenderFrame) -> bool {
     matches!(
         frame.frame_recovery_disposition.as_deref(),
@@ -872,51 +835,29 @@ fn frame_confirms_recovery_owner(frame: &XbxEngineRenderFrame) -> bool {
             .is_some_and(|(owner_rtp, frame_rtp)| owner_rtp == frame_rtp)
 }
 
-fn frame_pending_anchor_protected(frame: &XbxEngineRenderFrame) -> bool {
-    is_recovery_anchor_frame(frame)
-        && (frame.frame_recovery_disposition.is_some()
-            || frame.recovery_epoch_tag.is_some()
-            || frame.recovery_owner_rtp_timestamp.is_some())
-}
-
-fn should_replace_pending_frame(
-    existing_frame: &XbxEngineRenderFrame,
-    incoming_frame: &XbxEngineRenderFrame,
+fn incoming_frame_is_newer_than_pending(
+    pending: &XbxEngineRenderFrame,
+    incoming: &XbxEngineRenderFrame,
 ) -> bool {
-    match (
-        existing_frame.recovery_epoch_tag,
-        incoming_frame.recovery_epoch_tag,
-    ) {
-        (Some(existing), Some(incoming)) if existing != incoming => return incoming > existing,
-        (Some(_), None) => return false,
+    match (pending.recovery_epoch_tag, incoming.recovery_epoch_tag) {
+        (Some(existing), Some(candidate)) if candidate != existing => return candidate > existing,
         (None, Some(_)) => return true,
+        (Some(_), None) => return false,
         _ => {}
     }
 
-    let existing_owner_confirmed = frame_confirms_recovery_owner(existing_frame);
-    let incoming_owner_confirmed = frame_confirms_recovery_owner(incoming_frame);
-    if existing_owner_confirmed != incoming_owner_confirmed {
-        return incoming_owner_confirmed;
+    if incoming.frame_seq != pending.frame_seq {
+        return incoming.frame_seq > pending.frame_seq;
     }
 
-    let existing_anchor_protected = frame_pending_anchor_protected(existing_frame);
-    let incoming_anchor_protected = frame_pending_anchor_protected(incoming_frame);
-    if existing_anchor_protected != incoming_anchor_protected {
-        return incoming_anchor_protected;
+    match (pending.rtp_timestamp, incoming.rtp_timestamp) {
+        (Some(existing), Some(candidate)) if candidate != existing => return candidate > existing,
+        (None, Some(_)) => return true,
+        (Some(_), None) => return false,
+        _ => {}
     }
 
-    if existing_frame.frame_unrecoverable_reason.is_some()
-        != incoming_frame.frame_unrecoverable_reason.is_some()
-    {
-        return existing_frame.frame_unrecoverable_reason.is_some();
-    }
-    if incoming_frame.frame_seq != existing_frame.frame_seq {
-        return incoming_frame.frame_seq > existing_frame.frame_seq;
-    }
-    match (incoming_frame.rtp_timestamp, existing_frame.rtp_timestamp) {
-        (Some(incoming), Some(existing)) if incoming != existing => incoming > existing,
-        _ => incoming_frame.rendered_at_ms >= existing_frame.rendered_at_ms,
-    }
+    incoming.rendered_at_ms >= pending.rendered_at_ms
 }
 
 #[cfg(test)]

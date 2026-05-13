@@ -198,7 +198,7 @@ fn current_owner_mode_for_test(
         let stable_output = effective_bitrate_kbps
             >= recovery_profile.startup_low_quality_recovered_kbps
             && fresh_output
-            && stats.video_present_fps >= 50.0;
+            && has_serviceable_display_continuity(stats);
         let startup_low = phase == SessionPhase::Startup
             && stats.direct_gaming_bitrate_band.as_deref() == Some("startupLow");
         Some((
@@ -558,7 +558,7 @@ fn current_owner_mode_from_stats(
     let stable_output = effective_bitrate_kbps
         >= recovery_profile.startup_low_quality_recovered_kbps
         && fresh_output
-        && stats.video_present_fps >= 50.0;
+        && has_serviceable_display_continuity(stats);
     let startup_low = phase == SessionPhase::Startup
         && stats.direct_gaming_bitrate_band.as_deref() == Some("startupLow");
     let decoder_stalled = stats.video_decoder_stalled.unwrap_or(false);
@@ -915,4 +915,10 @@ mod tests {
             RecoveryOwnerMode::RecoveringReferenceChain
         );
     }
+}
+const SERVICEABLE_PRESENT_FPS: f64 = 35.0;
+
+fn has_serviceable_display_continuity(stats: &XbxEngineMediaRuntimeStats) -> bool {
+    stats.video_present_fps >= SERVICEABLE_PRESENT_FPS
+        || stats.recovery_playback_recovered_at_ms.is_some()
 }

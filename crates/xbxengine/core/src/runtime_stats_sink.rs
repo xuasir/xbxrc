@@ -622,7 +622,11 @@ impl RuntimeStatsSink {
         let incomplete_reason = if episode.first_keyframe_decoded_at_ms.is_some()
             && stats.video_anchor_clean_observed_at_ms.is_none()
         {
-            Some("noCleanAnchorCommit".to_string())
+            if stats.recovery_playback_recovered_at_ms.is_some() {
+                Some("playbackRecoveredAnchorPending".to_string())
+            } else {
+                Some("noCleanAnchorCommit".to_string())
+            }
         } else if episode.first_keyframe_decoded_at_ms.is_some()
             && stats.transport_recovery_episode_close_reason.as_deref()
                 != Some("stableServingSettled")

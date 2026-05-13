@@ -6,11 +6,12 @@ use std::{
 };
 
 use ohmygamepad_protocol::{
-    LogicalPadSnapshotDto, OhMyGamepadCapabilityFlagsDto, OhMyGamepadDeviceClassificationDto,
-    OhMyGamepadDeviceDto, OhMyGamepadSamplingLifecycleDto,
+    GamepadSlotDto, GamepadSlotSnapshotDto, LogicalPadSnapshotDto, OhMyGamepadCapabilityFlagsDto,
+    OhMyGamepadDeviceClassificationDto, OhMyGamepadDeviceDto, OhMyGamepadInputPolicyDto,
+    OhMyGamepadRuntimeSnapshotDto, OhMyGamepadSamplingHealthDto, OhMyGamepadSamplingLifecycleDto,
 };
 
-use super::{spawn_input_runtime, SamplingSchedule};
+use super::{evaluate_sampling_health, spawn_input_runtime, SamplingSchedule};
 use crate::{
     BackendPollResult, ButtonMapping, DeviceLifecycleEvent, DeviceProfileMatcher, FilterConfig,
     InputBackend, InputCoreConfig, RawDeviceSample, StreamSink, UiSink,
@@ -127,6 +128,17 @@ where
         thread::sleep(Duration::from_millis(2));
     }
     predicate()
+}
+
+fn slot_snapshot(sample_seq: u64, sampled_at_ms: u64) -> GamepadSlotSnapshotDto {
+    GamepadSlotSnapshotDto {
+        slot: GamepadSlotDto::default(),
+        device_ids: vec!["pad-a".to_owned()],
+        sampled_at_ms,
+        sample_seq,
+        state: Default::default(),
+        raw_buttons: None,
+    }
 }
 
 #[test]
@@ -572,6 +584,36 @@ fn background_warm_neutral_baseline_stays_healthy_when_backend_is_fresh() {
     }));
 
     runtime.shutdown().expect("shutdown");
+}
+
+#[test]
+fn active_runtime_without_logical_progress_stays_awaiting_baseline_despite_fresh_backend() {
+    let snapshot = OhMyGamepadRuntimeSnapshotDto {
+        devices: vec![device("pad-a")],
+        input_policy: OhMyGamepadInputPolicyDto::Shared,
+        slots: vec![slot_snapshot(1, 1000)],
+        last_backend_sample_activity_at_ms: 3200,
+        last_sample_progress_at_ms: 0,
+        ..Default::default()
+    };
+
+    let health = evaluate_sampling_health(OhMyGamepadSamplingLifecycleDto::Active, 3300, &snapshot);
+    assert_eq!(health, OhMyGamepadSamplingHealthDto::AwaitingBaseline);
+}
+
+#[test]
+fn active_runtime_without_logical_progress_becomes_stalled_after_grace_window() {
+    let snapshot = OhMyGamepadRuntimeSnapshotDto {
+        devices: vec![device("pad-a")],
+        input_policy: OhMyGamepadInputPolicyDto::Shared,
+        slots: vec![slot_snapshot(1, 1000)],
+        last_backend_sample_activity_at_ms: 3600,
+        last_sample_progress_at_ms: 0,
+        ..Default::default()
+    };
+
+    let health = evaluate_sampling_health(OhMyGamepadSamplingLifecycleDto::Active, 3600, &snapshot);
+    assert_eq!(health, OhMyGamepadSamplingHealthDto::Stalled);
 }
 
 #[test]

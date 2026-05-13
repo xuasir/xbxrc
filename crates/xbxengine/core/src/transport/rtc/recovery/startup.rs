@@ -15,8 +15,8 @@ pub const STARTUP_LOW_QUALITY_FLOOR_KBPS: f64 = 8_000.0;
 pub const STARTUP_LOW_QUALITY_RECOVERED_KBPS: f64 = 12_000.0;
 const STARTUP_LOW_QUALITY_MAX_RETRIES: u8 = 2;
 const RECOVERING_PHASE_WINDOW_MS: f64 = 1_500.0;
-const STEADY_PRESENT_FPS: f64 = 55.0;
-const RECOVERING_PRESENT_FPS: f64 = 50.0;
+const STEADY_PRESENT_FPS: f64 = 40.0;
+const RECOVERING_PRESENT_FPS: f64 = 35.0;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum SessionPhase {

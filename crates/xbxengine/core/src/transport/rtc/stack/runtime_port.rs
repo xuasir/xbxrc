@@ -190,7 +190,6 @@ impl<'a> RtcStackRuntimePort<'a> {
         metrics: XbxEngineHostVideoPresentMetrics,
     ) {
         let runtime_stats = RuntimeStatsSink::new(self.runtime_stats.clone());
-        let mut should_invalidate_clean_anchor = false;
         runtime_stats.update(|stats| {
             let now_ms = crate::transport::rtc::stats::now_ms_f64();
             let host_submit_gap_ms = metrics
@@ -214,22 +213,6 @@ impl<'a> RtcStackRuntimePort<'a> {
                         != metrics.last_displayed_frame_rtp_timestamp
                     || host_submit_gap_ms.is_some_and(|gap_ms| gap_ms >= 250.0)
                     || host_view_pending_present);
-            should_invalidate_clean_anchor = host_visibility_stalled
-                && stats.video_anchor_clean_epoch == Some(stats.transport_recovery_epoch)
-                && stats.video_anchor_clean_source_event.as_deref()
-                    == Some("chain-clean-anchor-submitted")
-                && stats
-                    .latest_h264_inspection_observation
-                    .as_ref()
-                    .is_some_and(|inspection| {
-                        inspection.admission_accepted
-                            && inspection.continuation_verdict.as_deref()
-                                == Some("continuationAcceptedWhileAwaitingIdr")
-                            && matches!(
-                                inspection.bootstrap_reject_reason.as_deref(),
-                                Some("bootstrapMissingIdr" | "NonIdrVcl")
-                            )
-                    });
             stats.latest_host_mailbox_submit_time_ms = metrics.latest_host_submit_time_ms;
             stats.latest_video_host_submit_rtp_timestamp = metrics.latest_host_submit_rtp_timestamp;
             stats.latest_video_host_present_time_ms = metrics.latest_host_present_time_ms;
@@ -265,21 +248,6 @@ impl<'a> RtcStackRuntimePort<'a> {
             stats.video_renderer_stalled =
                 Some(stats.video_renderer_stalled.unwrap_or(false) || host_visibility_stalled);
         });
-        if should_invalidate_clean_anchor
-            && runtime_stats.invalidate_current_transport_clean_anchor(
-                crate::transport::rtc::stats::now_ms_f64(),
-                "awaitingIdrHostVisibilityStall",
-            )
-        {
-            runtime_stats.record_picture_recovery_blocker(
-                crate::transport::rtc::stats::now_ms_f64(),
-                "media",
-                "cleanAnchorInvalidatedAwaitingIdrHostStall",
-                "warning",
-                metrics.last_displayed_frame_rtp_timestamp,
-                metrics.last_displayed_frame_seq,
-            );
-        }
         if let (Some(observed_at_ms), Some(displayed_rtp_timestamp)) = (
             metrics.last_displayed_at_ms,
             metrics.last_displayed_frame_rtp_timestamp,

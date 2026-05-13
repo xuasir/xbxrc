@@ -17,13 +17,15 @@ pub struct RendererActorHandle {
     tx: SyncSender<RendererMsg>,
 }
 
+const RENDERER_ACTOR_QUEUE_CAPACITY: usize = 4;
+
 impl RendererActorHandle {
     pub fn new(
         render_state: Arc<Mutex<XbxRenderState>>,
         runtime_stats: Arc<Mutex<XbxEngineMediaRuntimeStats>>,
     ) -> Self {
         let runtime_stats = RuntimeStatsSink::new(runtime_stats);
-        let (tx, rx) = mpsc::sync_channel(1);
+        let (tx, rx) = mpsc::sync_channel(RENDERER_ACTOR_QUEUE_CAPACITY);
 
         thread::Builder::new()
             .name("XbxRendererActor".into())
@@ -323,7 +325,7 @@ mod tests {
     }
 
     #[test]
-    fn renderer_actor_projects_latest_overwrite_decision_into_runtime_stats() {
+    fn renderer_actor_projects_armed_protection_decision_into_runtime_stats() {
         let (tx, rx) = mpsc::sync_channel(4);
         let render_state = Arc::new(Mutex::new(XbxRenderState::default()));
         let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
@@ -352,9 +354,9 @@ mod tests {
             .clone()
             .expect("render summary");
         assert!(
-            summary.contains("latest-overwrite:replace:mailboxOverwrite:seq=1")
+            summary.contains("armed-protected:hold:armedPendingProtected:seq=2")
+                || summary.contains("armed-protected:hold:armedPendingProtected:seq=3")
                 || summary.contains("frameSeq=2")
-                || summary.contains("latest-overwrite:replace:mailboxOverwrite:seq=2")
                 || summary.contains("frameSeq=3"),
             "unexpected render summary: {summary}"
         );
@@ -362,9 +364,9 @@ mod tests {
             .latest_render_mailbox_decision
             .clone()
             .expect("latest render decision");
-        assert_eq!(decision.state, "latest-overwrite");
-        assert_eq!(decision.action, "replace");
-        assert_eq!(decision.detail, "mailboxOverwrite");
+        assert_eq!(decision.state, "armed-protected");
+        assert_eq!(decision.action, "hold");
+        assert_eq!(decision.detail, "armedPendingProtected");
         assert_eq!(decision.frame_seq, Some(2));
     }
 
@@ -390,7 +392,7 @@ mod tests {
     }
 
     #[test]
-    fn renderer_actor_overwrites_pending_frame_without_rejecting_lower_epoch_submit() {
+    fn renderer_actor_holds_pending_frame_without_rejecting_lower_epoch_submit() {
         let (tx, rx) = mpsc::sync_channel(3);
         let render_state = Arc::new(Mutex::new(XbxRenderState::default()));
         let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
@@ -421,9 +423,9 @@ mod tests {
             .latest_render_mailbox_decision
             .as_ref()
             .expect("latest render decision");
-        assert_eq!(decision.state, "latest-overwrite");
-        assert_eq!(decision.action, "replace");
-        assert_eq!(decision.detail, "mailboxOverwrite");
+        assert_eq!(decision.state, "armed-protected");
+        assert_eq!(decision.action, "hold");
+        assert_eq!(decision.detail, "armedPendingProtected");
         assert_eq!(decision.frame_seq, Some(200));
     }
 }

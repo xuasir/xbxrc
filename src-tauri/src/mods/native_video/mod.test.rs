@@ -73,7 +73,7 @@ fn host_timing_record_policy_keeps_submit_and_present_path_always_on() {
         HostTimingRecordPolicy::Always
     );
     assert_eq!(
-        resolve_host_timing_record_policy("hostMailboxPendingProtected"),
+        resolve_host_timing_record_policy("hostMailboxRetainedDisplayed"),
         HostTimingRecordPolicy::Always
     );
     assert_eq!(
