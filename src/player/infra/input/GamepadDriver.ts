@@ -9,6 +9,7 @@ import type {
   GamepadFrame,
   InputRuntimeConfig,
 } from '../../domain/input'
+import { shouldStreamSessionConsumeGamepadSlots } from '@shared/gamepad/input-routing'
 import { events } from '../../../services/events'
 import { rpc } from '../../../services/rpc'
 import {
@@ -158,6 +159,9 @@ export class GamepadDriver {
         east: slotSnapshot.state.buttons.east,
       })
       this.applyNativePadSnapshot(slotSnapshot)
+      if (!shouldStreamSessionConsumeGamepadSlots()) {
+        return
+      }
       if (this.isVirtualButtonPressing) {
         return
       }
@@ -180,7 +184,7 @@ export class GamepadDriver {
       recordDriverTrace('gamepadDriverRuntimeSnapshotRefreshed', {
         reason,
         slotCount: snapshot.slots.length,
-        inputPolicy: snapshot.inputPolicy,
+        streamPadForwarding: snapshot.streamPadForwarding ?? false,
       })
     }
     catch {
@@ -193,12 +197,13 @@ export class GamepadDriver {
     const nativePads = this.getNativePadSnapshots(snapshot)
     recordDriverTrace('gamepadDriverRuntimeSnapshotApplied', {
       slotCount: nativePads.length,
-      inputPolicy: snapshot.inputPolicy,
+      streamPadForwarding: snapshot.streamPadForwarding ?? false,
       maxSampleSeq: nativePads.reduce((max, pad) => Math.max(max, pad.sampleSeq), 0),
     })
     const hasController = nativePads.length > 0
+    const allowNativeFrames = shouldStreamSessionConsumeGamepadSlots()
     if (hasController === this.nativeControllerConnected) {
-      if (!this.isVirtualButtonPressing && nativePads.length > 0) {
+      if (!this.isVirtualButtonPressing && nativePads.length > 0 && allowNativeFrames) {
         recordDriverTrace('gamepadDriverFrameEmitted', {
           source: 'runtime-snapshot-refresh',
           slot: nativePads[0].slot,
@@ -213,7 +218,7 @@ export class GamepadDriver {
     this.nativeControllerConnected = hasController
     if (hasController) {
       this.delegate.onGamepadAdded(0)
-      if (!this.isVirtualButtonPressing) {
+      if (!this.isVirtualButtonPressing && allowNativeFrames) {
         recordDriverTrace('gamepadDriverFrameEmitted', {
           source: 'runtime-snapshot-connect',
           slot: nativePads[0].slot,

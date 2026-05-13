@@ -48,13 +48,6 @@ const isLoggingOut = ref(false)
 let disposeAuthSessionReady: EventUnsubscribe | undefined
 let disposeGamepadRuntimeSnapshot: EventUnsubscribe | undefined
 const gamepadSnapshot = ref<GamepadRuntimeSnapshotDto | null>(null)
-let restoringGamepadSampling = false
-let recoveryAttemptToken = 0
-let recoveryRetryTimers: number[] = []
-let correctingShellPolicy = false
-let correctingShellLifecycle = false
-let pendingRecoveryBaselineProgress: string | null = null
-let pendingRecoveryReason: string | null = null
 let lastSnapshotTraceSignature: string | null = null
 let shellFocusRepairFrame: number | null = null
 
@@ -162,7 +155,7 @@ function resolveSnapshotTracePayload(snapshot: GamepadRuntimeSnapshotDto | null)
 
   return {
     hasSnapshot: true,
-    inputPolicy: snapshot.inputPolicy,
+    streamPadForwarding: snapshot.streamPadForwarding ?? false,
     samplingLifecycle: snapshot.samplingLifecycle ?? 'active',
     samplingHealth: snapshot.samplingHealth ?? 'healthy',
     connectedDevices: connectedDeviceCount(snapshot),
@@ -181,7 +174,7 @@ function traceSnapshotTransition(source: string, snapshot: GamepadRuntimeSnapsho
   const payload = resolveSnapshotTracePayload(snapshot)
   const signature = JSON.stringify([
     source,
-    payload.inputPolicy ?? null,
+    payload.streamPadForwarding ?? false,
     payload.samplingLifecycle ?? null,
     payload.samplingHealth ?? null,
     payload.connectedDevices ?? 0,
@@ -204,246 +197,16 @@ function traceSnapshotTransition(source: string, snapshot: GamepadRuntimeSnapsho
   })
 }
 
-function clearRecoveryRetryTimers(): void {
-  for (const timer of recoveryRetryTimers) {
-    window.clearTimeout(timer)
-  }
-  recoveryRetryTimers = []
-}
-
-function finishPendingRecovery(reason: string, payload: Record<string, unknown> = {}): void {
-  if (pendingRecoveryBaselineProgress === null) {
-    return
-  }
-
-  clearRecoveryRetryTimers()
-  pendingRecoveryBaselineProgress = null
-  pendingRecoveryReason = null
-  recoveryAttemptToken += 1
-  recordGamepadRecoveryTrace('gamepadRecoverySettled', {
-    reason,
-    ...payload,
-  })
-}
-
-function gamepadSamplingProgressToken(snapshot: GamepadRuntimeSnapshotDto | null): string {
-  if (!snapshot) {
-    return 'none'
-  }
-
-  let maxSampleSeq = -1
-  let maxSampledAtMs = -1
-  for (const slot of snapshot.slots) {
-    maxSampleSeq = Math.max(maxSampleSeq, slot.sampleSeq)
-    maxSampledAtMs = Math.max(maxSampledAtMs, slot.sampledAtMs)
-  }
-
-  return [
-    snapshot.inputPolicy,
-    snapshot.devices.filter(device => device.connected).length,
-    maxSampleSeq,
-    maxSampledAtMs,
-  ].join(':')
-}
-
-function hasMeaningfulSamplingProgress(snapshot: GamepadRuntimeSnapshotDto | null): boolean {
-  if (!snapshot) {
-    return false
-  }
-
-  let maxSampleSeq = -1
-  let maxSampledAtMs = -1
-  for (const slot of snapshot.slots) {
-    maxSampleSeq = Math.max(maxSampleSeq, slot.sampleSeq)
-    maxSampledAtMs = Math.max(maxSampledAtMs, slot.sampledAtMs)
-  }
-
-  return maxSampleSeq >= 2 || maxSampledAtMs > 0 || (snapshot.lastSampleProgressAtMs ?? 0) > 0
-}
-
-function hasEstablishedSamplingBaseline(snapshot: GamepadRuntimeSnapshotDto | null): boolean {
-  if (!snapshot) {
-    return false
-  }
-
-  return snapshot.devices.some(device => device.connected) && hasMeaningfulSamplingProgress(snapshot)
-}
-
-async function restoreGamepadSampling(reason: string, expectedAdvanceFrom?: string): Promise<void> {
-  if (restoringGamepadSampling) {
-    recordGamepadRecoveryTrace('gamepadRecoverySkipped', {
-      reason,
-      cause: 'alreadyRestoring',
-      expectedAdvanceFrom: expectedAdvanceFrom ?? null,
-    })
-    return
-  }
-
-  restoringGamepadSampling = true
-  recordGamepadRecoveryTrace('gamepadRecoveryAttemptStarted', {
-    reason,
-    expectedAdvanceFrom: expectedAdvanceFrom ?? null,
-    targetPolicy: 'shared',
-    recoveryKind: 'shell-resume',
-    documentVisibility: document.visibilityState,
-    hasFocus: document.hasFocus(),
-    baselineSnapshot: resolveSnapshotTracePayload(gamepadSnapshot.value),
-  })
-  try {
-    gamepadSnapshot.value = await rpc.gamepad.resumeShellSampling({ policy: 'shared' })
-    traceSnapshotTransition('restoreGamepadSampling', gamepadSnapshot.value)
-    const nextProgress = gamepadSamplingProgressToken(gamepadSnapshot.value)
-    const progressed = expectedAdvanceFrom ? nextProgress !== expectedAdvanceFrom : true
-    recordGamepadRecoveryTrace('gamepadRecoveryAttemptCompleted', {
-      reason,
-      expectedAdvanceFrom: expectedAdvanceFrom ?? null,
-      nextProgress,
-      progressed,
-      recoveryKind: 'shell-resume',
-      inputPolicy: gamepadSnapshot.value.inputPolicy,
-      connectedDevices: gamepadSnapshot.value.devices.filter(device => device.connected).length,
-    })
-
-    if (
-      hasEstablishedSamplingBaseline(gamepadSnapshot.value)
-      && pendingRecoveryBaselineProgress !== null
-    ) {
-      finishPendingRecovery('sampling-progress-ready', {
-        scheduledReason: pendingRecoveryReason,
-        baselineProgress: pendingRecoveryBaselineProgress,
-        currentProgress: nextProgress,
-      })
-      return
-    }
-
-    if (
-      expectedAdvanceFrom
-      && nextProgress === expectedAdvanceFrom
-      && !hasMeaningfulSamplingProgress(gamepadSnapshot.value)
-    ) {
-      throw new Error(`sampling-progress-stalled:${reason}`)
-    }
-  }
-  catch (error) {
-    recordGamepadRecoveryTrace('gamepadRecoveryAttemptFailed', {
-      reason,
-      expectedAdvanceFrom: expectedAdvanceFrom ?? null,
-      error: error instanceof Error ? error.message : String(error),
-    })
-    console.warn(`[AppShell] restore gamepad sampling failed reason=${reason}:`, error)
-  }
-  finally {
-    restoringGamepadSampling = false
-  }
-}
-
 function handleDocumentVisibilityChange(): void {
   recordGamepadRecoveryTrace('gamepadDocumentVisibilityChanged', {
     visibilityState: document.visibilityState,
     hasFocus: document.hasFocus(),
-    pendingRecoveryReason,
-    pendingRecoveryBaselineProgress,
     snapshot: resolveSnapshotTracePayload(gamepadSnapshot.value),
   })
   if (document.visibilityState !== 'visible') {
     return
   }
-  scheduleGamepadSamplingRecovery('document-visible')
   void ensureShellFocusReady('document-visible')
-}
-
-async function ensureShellInputPolicy(snapshot: GamepadRuntimeSnapshotDto): Promise<void> {
-  if (snapshot.inputPolicy === 'shared' || correctingShellPolicy) {
-    return
-  }
-
-  correctingShellPolicy = true
-  recordGamepadRecoveryTrace('gamepadShellPolicyCorrectionStarted', {
-    observedPolicy: snapshot.inputPolicy,
-    targetPolicy: 'shared',
-    recoveryKind: 'shell-resume',
-    snapshot: resolveSnapshotTracePayload(snapshot),
-  })
-
-  try {
-    gamepadSnapshot.value = await rpc.gamepad.resumeShellSampling({ policy: 'shared' })
-    traceSnapshotTransition('ensureShellInputPolicy', gamepadSnapshot.value)
-    recordGamepadRecoveryTrace('gamepadShellPolicyCorrectionCompleted', {
-      observedPolicy: snapshot.inputPolicy,
-      correctedPolicy: gamepadSnapshot.value.inputPolicy,
-      recoveryKind: 'shell-resume',
-      snapshot: resolveSnapshotTracePayload(gamepadSnapshot.value),
-    })
-  }
-  catch (error) {
-    recordGamepadRecoveryTrace('gamepadShellPolicyCorrectionFailed', {
-      observedPolicy: snapshot.inputPolicy,
-      error: error instanceof Error ? error.message : String(error),
-    })
-    console.warn('[AppShell] ensure shell input policy failed:', error)
-  }
-  finally {
-    correctingShellPolicy = false
-  }
-}
-
-async function ensureVisibleShellLifecycle(snapshot: GamepadRuntimeSnapshotDto): Promise<void> {
-  if (
-    snapshot.samplingLifecycle === 'active'
-    || document.visibilityState !== 'visible'
-    || correctingShellLifecycle
-  ) {
-    return
-  }
-
-  correctingShellLifecycle = true
-  recordGamepadRecoveryTrace('gamepadShellLifecycleCorrectionStarted', {
-    observedLifecycle: snapshot.samplingLifecycle ?? 'active',
-    hasFocus: document.hasFocus(),
-    visibilityState: document.visibilityState,
-    snapshot: resolveSnapshotTracePayload(snapshot),
-  })
-
-  try {
-    gamepadSnapshot.value = await rpc.gamepad.resumeShellSampling({ policy: 'shared' })
-    traceSnapshotTransition('ensureVisibleShellLifecycle', gamepadSnapshot.value)
-    recordGamepadRecoveryTrace('gamepadShellLifecycleCorrectionCompleted', {
-      observedLifecycle: snapshot.samplingLifecycle ?? 'active',
-      correctedLifecycle: gamepadSnapshot.value.samplingLifecycle ?? 'active',
-      snapshot: resolveSnapshotTracePayload(gamepadSnapshot.value),
-    })
-  }
-  catch (error) {
-    recordGamepadRecoveryTrace('gamepadShellLifecycleCorrectionFailed', {
-      observedLifecycle: snapshot.samplingLifecycle ?? 'active',
-      error: error instanceof Error ? error.message : String(error),
-    })
-    console.warn('[AppShell] ensure visible shell lifecycle failed:', error)
-  }
-  finally {
-    correctingShellLifecycle = false
-  }
-}
-
-function scheduleGamepadSamplingRecovery(reason: string): void {
-  recoveryAttemptToken += 1
-  const attemptToken = recoveryAttemptToken
-  const baselineProgress = gamepadSamplingProgressToken(gamepadSnapshot.value)
-
-  clearRecoveryRetryTimers()
-  pendingRecoveryBaselineProgress = baselineProgress
-  pendingRecoveryReason = reason
-  recordGamepadRecoveryTrace('gamepadRecoveryTriggered', {
-    reason,
-    attemptToken,
-    baselineProgress,
-    recoveryKind: 'shell-resume-once',
-    documentVisibility: document.visibilityState,
-    hasFocus: document.hasFocus(),
-    snapshot: resolveSnapshotTracePayload(gamepadSnapshot.value),
-  })
-
-  void restoreGamepadSampling(`${reason}:attempt-1`, baselineProgress)
 }
 
 function clearShellFocusRepairFrame(): void {
@@ -487,7 +250,6 @@ function handleWindowFocus(): void {
     hasFocus: document.hasFocus(),
     snapshot: resolveSnapshotTracePayload(gamepadSnapshot.value),
   })
-  scheduleGamepadSamplingRecovery('window-focus')
   void ensureShellFocusReady('window-focus')
 }
 
@@ -630,30 +392,10 @@ onMounted(() => {
   disposeGamepadRuntimeSnapshot = events.on('gamepad.runtimeSnapshot', (snapshot) => {
     gamepadSnapshot.value = snapshot
     traceSnapshotTransition('runtimeSnapshotEvent', snapshot)
-    const currentProgress = gamepadSamplingProgressToken(snapshot)
-    if (
-      document.visibilityState === 'visible'
-      && pendingRecoveryBaselineProgress !== null
-      && currentProgress !== pendingRecoveryBaselineProgress
-      && hasMeaningfulSamplingProgress(snapshot)
-    ) {
-      finishPendingRecovery('sampling-progress-advanced', {
-        scheduledReason: pendingRecoveryReason,
-        baselineProgress: pendingRecoveryBaselineProgress,
-        currentProgress,
-      })
-    }
-    if (document.visibilityState === 'visible' && snapshot.inputPolicy !== 'shared') {
-      void ensureShellInputPolicy(snapshot)
-    }
-    if (document.visibilityState === 'visible' && snapshot.samplingLifecycle !== 'active') {
-      void ensureVisibleShellLifecycle(snapshot)
-    }
   })
   window.addEventListener('keydown', handleEscapeKeydown)
   document.addEventListener('visibilitychange', handleDocumentVisibilityChange)
   window.addEventListener('focus', handleWindowFocus)
-  scheduleGamepadSamplingRecovery('app-shell-mounted')
   void ensureShellFocusReady('app-shell-mounted')
 
   // 注册 LB/RB 一级页面切换
@@ -694,9 +436,6 @@ onUnmounted(() => {
   document.removeEventListener('visibilitychange', handleDocumentVisibilityChange)
   window.removeEventListener('focus', handleWindowFocus)
   clearShellFocusRepairFrame()
-  clearRecoveryRetryTimers()
-  pendingRecoveryBaselineProgress = null
-  pendingRecoveryReason = null
   if (disposePageSwitch !== undefined) {
     disposePageSwitch()
     disposePageSwitch = undefined

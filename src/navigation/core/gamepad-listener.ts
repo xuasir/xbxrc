@@ -1,4 +1,5 @@
 import type { GamepadRuntimeSnapshotDto, LogicalPadSnapshotDto } from '@shared/gamepad/contract'
+import { shouldNavigationConsumeGamepadSlots } from '@shared/gamepad/input-routing'
 import { events } from '../../services/events'
 import { rpc } from '../../services/rpc'
 import { setLastActivePadId } from './haptics'
@@ -32,7 +33,6 @@ interface GamepadState {
 class GamepadUIListener {
   private dispose: (() => void) | null = null
   private state: Record<string, GamepadState> = {}
-  private inputPolicy: 'shared' | 'ui-only' | 'stream-only' = 'shared'
   private handleResetRequested = () => {
     this.resetAllInputState()
   }
@@ -57,7 +57,6 @@ class GamepadUIListener {
     void this.refreshRuntimeSnapshot('listener-start')
 
     const disposeRuntime = events.on('gamepad.runtimeSnapshot', (snapshot) => {
-      this.updateInputPolicy(snapshot.inputPolicy)
       this.applyRuntimeSnapshot(snapshot)
     })
     const disposeBaseline = events.on('gamepad.inputBaselineAbsorbed', () => {
@@ -134,14 +133,6 @@ class GamepadUIListener {
     }
   }
 
-  private updateInputPolicy(nextPolicy: 'shared' | 'ui-only' | 'stream-only') {
-    if (this.inputPolicy !== nextPolicy) {
-      // 策略切换时统一清理，避免残留重复触发或组合键卡住。
-      this.resetAllInputState()
-    }
-    this.inputPolicy = nextPolicy
-  }
-
   private startRepeatTimer(state: GamepadState, key: string, intent: NavigationIntent) {
     this.clearRepeatTimer(state, key)
 
@@ -191,11 +182,10 @@ class GamepadUIListener {
   private async refreshRuntimeSnapshot(reason: string): Promise<void> {
     try {
       const snapshot = await rpc.gamepad.getRuntimeSnapshot()
-      this.updateInputPolicy(snapshot.inputPolicy)
       this.applyRuntimeSnapshot(snapshot)
       recordUiTrace('gamepadUiRuntimeSnapshotRefreshed', {
         reason,
-        inputPolicy: snapshot.inputPolicy,
+        streamPadForwarding: snapshot.streamPadForwarding ?? false,
         slotCount: snapshot.slots.length,
       })
     }
@@ -206,7 +196,7 @@ class GamepadUIListener {
 
   private applyRuntimeSnapshot(snapshot: GamepadRuntimeSnapshotDto): void {
     recordUiTrace('gamepadUiRuntimeSnapshotApplied', {
-      inputPolicy: snapshot.inputPolicy,
+      streamPadForwarding: snapshot.streamPadForwarding ?? false,
       slotCount: snapshot.slots.length,
       maxSampleSeq: snapshot.slots.reduce((max, slot) => Math.max(max, slot.sampleSeq), 0),
     })
@@ -216,9 +206,9 @@ class GamepadUIListener {
   }
 
   private applySlotSnapshot(snapshot: LogicalPadSnapshotDto): void {
-    if (this.inputPolicy === 'stream-only') {
+    if (!shouldNavigationConsumeGamepadSlots()) {
       recordUiTrace('gamepadUiSlotIgnored', {
-        reason: 'stream-only',
+        reason: 'stream-session-active',
         slot: snapshot.slot,
         sampleSeq: snapshot.sampleSeq,
       })

@@ -4,7 +4,6 @@ import type {
   GamepadDeviceDto,
   GamepadDeviceTypeDto,
   GamepadHapticsProviderKindDto,
-  GamepadInputPolicyDto,
   GamepadRuntimeSnapshotDto,
   GamepadSamplingHealthDto,
   GamepadSamplingLifecycleDto,
@@ -45,8 +44,7 @@ const needsSamplingRecovery = computed(() => {
     return false
   }
   const health = s.samplingHealth ?? 'healthy'
-  const lifecycle = s.samplingLifecycle ?? 'active'
-  return health !== 'healthy' || lifecycle === 'suspended'
+  return health !== 'healthy'
 })
 
 const showCapabilitySummary = computed(() => {
@@ -330,8 +328,10 @@ function samplingHealthLabel(h: GamepadSamplingHealthDto): string {
   return t(`gamepadCard.samplingHealth.${h}`)
 }
 
-function inputPolicyLabel(policy: GamepadInputPolicyDto): string {
-  return t(`gamepadCard.inputPolicy.${policy}`)
+function streamPadForwardingLabel(enabled: boolean | undefined): string {
+  return enabled === true
+    ? t('gamepadCard.streamPadForwarding.on')
+    : t('gamepadCard.streamPadForwarding.off')
 }
 
 function deviceBatteryCaption(device: GamepadDeviceDto): string | null {
@@ -432,7 +432,7 @@ function deviceBatteryCaption(device: GamepadDeviceDto): string | null {
                       <span class="gamepad-card__detail-sep" aria-hidden="true"> · </span>
                       <span>{{ samplingHealthLabel(props.snapshot.samplingHealth ?? 'healthy') }}</span>
                       <span class="gamepad-card__detail-sep" aria-hidden="true"> · </span>
-                      <span>{{ inputPolicyLabel(props.snapshot.inputPolicy) }}</span>
+                      <span>{{ streamPadForwardingLabel(props.snapshot.streamPadForwarding) }}</span>
                       <template v-if="(props.snapshot.samplingSelfHealCount ?? 0) > 0">
                         <span class="gamepad-card__detail-sep" aria-hidden="true"> · </span>
                         <span>{{ t('gamepadCard.samplingSelfHeal', { count: props.snapshot.samplingSelfHealCount }) }}</span>

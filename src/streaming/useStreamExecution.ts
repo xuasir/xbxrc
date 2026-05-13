@@ -19,6 +19,7 @@ import type {
   StreamSessionLifecyclePhase,
   StreamSessionMetadataProjection,
 } from './types'
+import { setStreamGamepadSessionActive } from '@shared/gamepad/input-routing'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { events } from '../services/events'
 import { rpc } from '../services/rpc'
@@ -475,6 +476,8 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
     sessionId.value = ''
     sessionExecution.value = null
     sessionHealth.value = null
+    setStreamGamepadSessionActive(false)
+    void rpc.gamepad.setStreamPadForwarding({ enabled: false })
     dispatchViewAction({ type: 'disconnected' })
 
     if (optionsInput?.navigateBack === true) {
@@ -522,6 +525,7 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
 
       sessionExecution.value = started.execution
       sessionId.value = started.execution.session.id
+      setStreamGamepadSessionActive(true)
       disposeStartupEventSubscription()
       enableSessionHealthReporting()
       applySessionProgress(started.progress, 'start')
@@ -539,6 +543,8 @@ export function useStreamExecution(options: UseStreamExecutionOptions) {
     sessionExecution.value = null
     sessionHealth.value = null
     closing.value = false
+    setStreamGamepadSessionActive(false)
+    void rpc.gamepad.setStreamPadForwarding({ enabled: false })
     dispatchViewAction({ type: 'retryRequested' })
     await runtimeHost.closeRuntime('retry')
     await startStream()

@@ -159,10 +159,7 @@ export interface LogicalPadStateDto {
   rightTrigger: number
 }
 
-export const GAMEPAD_INPUT_POLICIES = ['shared', 'ui-only', 'stream-only'] as const
-export type GamepadInputPolicyDto = (typeof GAMEPAD_INPUT_POLICIES)[number]
-
-export const GAMEPAD_SAMPLING_LIFECYCLES = ['active', 'backgroundWarm', 'suspended'] as const
+export const GAMEPAD_SAMPLING_LIFECYCLES = ['active', 'backgroundWarm'] as const
 export type GamepadSamplingLifecycleDto = (typeof GAMEPAD_SAMPLING_LIFECYCLES)[number]
 
 export const GAMEPAD_SAMPLING_HEALTH = ['healthy', 'awaitingBaseline', 'stalled'] as const
@@ -229,7 +226,6 @@ export interface GamepadRumbleResultDto {
 export interface GamepadRuntimeSnapshotDto {
   devices: GamepadDeviceDto[]
   slotBindings: GamepadSlotBindingDto[]
-  inputPolicy: GamepadInputPolicyDto
   sampling: GamepadSamplingConfigDto
   slots: GamepadSlotSnapshotDto[]
   haptics: {
@@ -243,6 +239,8 @@ export interface GamepadRuntimeSnapshotDto {
   lastSampleProgressAtMs?: number
   lastBackendSampleActivityAtMs?: number
   samplingSelfHealCount?: number
+  /** When true, samples may be forwarded to the active streaming/RTC session. */
+  streamPadForwarding?: boolean
 }
 
 export type GamepadKeyboardKeyDto
@@ -326,7 +324,6 @@ export interface GamepadDeviceProfileDto {
 
 export type GamepadBridgeCommandDto
   = | { type: 'refresh-runtime-snapshot' }
-    | { type: 'set-input-policy', policy: GamepadInputPolicyDto }
     | { type: 'update-sampling', sampling: GamepadSamplingConfigDto }
     | { type: 'set-sampling-strategy', strategy: GamepadSamplingStrategyDto }
     | { type: 'set-primary-sampling-device', deviceId: string | null }

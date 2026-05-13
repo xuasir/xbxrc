@@ -5,9 +5,9 @@ pub mod service;
 pub use service::GamepadService;
 
 use ohmygamepad_protocol::{
-    MultiControllerSamplingStrategyDto, OhMyGamepadInputPolicyDto, OhMyGamepadKeyboardMappingDto,
-    OhMyGamepadRumbleRequestDto, OhMyGamepadRumbleResultDto, OhMyGamepadRumbleTargetDto,
-    OhMyGamepadRuntimeSnapshotDto, OhMyGamepadSamplingConfigDto, OhMyGamepadSamplingLifecycleDto,
+    MultiControllerSamplingStrategyDto, OhMyGamepadKeyboardMappingDto, OhMyGamepadRumbleRequestDto,
+    OhMyGamepadRumbleResultDto, OhMyGamepadRumbleTargetDto, OhMyGamepadRuntimeSnapshotDto,
+    OhMyGamepadSamplingConfigDto, OhMyGamepadSamplingLifecycleDto,
 };
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -78,18 +78,13 @@ pub struct GamepadFilterConfigDto {
 
 pub trait GamepadProvider: Send + Sync {
     fn get_runtime_snapshot(&self) -> Result<OhMyGamepadRuntimeSnapshotDto, String>;
-    fn set_input_policy(
+    fn stream_pad_forwarding(&self) -> bool;
+    fn set_stream_pad_forwarding(
         &self,
-        policy: OhMyGamepadInputPolicyDto,
+        enabled: bool,
     ) -> Result<OhMyGamepadRuntimeSnapshotDto, String>;
-    fn activate_sampling(
-        &self,
-        policy: Option<OhMyGamepadInputPolicyDto>,
-    ) -> Result<OhMyGamepadRuntimeSnapshotDto, String>;
-    fn resume_shell_sampling(
-        &self,
-        policy: OhMyGamepadInputPolicyDto,
-    ) -> Result<OhMyGamepadRuntimeSnapshotDto, String>;
+    fn activate_sampling(&self) -> Result<OhMyGamepadRuntimeSnapshotDto, String>;
+    fn resume_shell_sampling(&self) -> Result<OhMyGamepadRuntimeSnapshotDto, String>;
     fn update_sampling(
         &self,
         sampling: OhMyGamepadSamplingConfigDto,

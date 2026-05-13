@@ -8,10 +8,9 @@ use ohmygamepad_core::{
 };
 use ohmygamepad_protocol::{
     LogicalPadBindingDto, LogicalPadStateDto, MultiControllerSamplingStrategyDto,
-    OhMyGamepadHapticsProviderKindDto, OhMyGamepadInputPolicyDto, OhMyGamepadKeyboardMappingDto,
-    OhMyGamepadRumbleRequestDto, OhMyGamepadRumbleResultDto, OhMyGamepadRumbleTargetDto,
-    OhMyGamepadRuntimeHapticsDto, OhMyGamepadRuntimeSnapshotDto, OhMyGamepadSamplingConfigDto,
-    OhMyGamepadSamplingLifecycleDto,
+    OhMyGamepadHapticsProviderKindDto, OhMyGamepadKeyboardMappingDto, OhMyGamepadRumbleRequestDto,
+    OhMyGamepadRumbleResultDto, OhMyGamepadRumbleTargetDto, OhMyGamepadRuntimeHapticsDto,
+    OhMyGamepadRuntimeSnapshotDto, OhMyGamepadSamplingConfigDto, OhMyGamepadSamplingLifecycleDto,
 };
 use ohmygamepad_sdl3::{OhMyGamepadService, OhMyGamepadServiceConfig};
 #[cfg(target_os = "windows")]
@@ -68,20 +67,23 @@ impl GamepadRuntimeHost {
     }
 
     pub fn snapshot(&self) -> Result<OhMyGamepadRuntimeSnapshotDto, InputRuntimeError> {
+        let fwd = self.runtime.stream_pad_forwarding();
         self.runtime
             .snapshot()
-            .map(|snapshot| enrich_runtime_snapshot(snapshot, self.haptics_provider))
+            .map(|snapshot| enrich_runtime_snapshot(snapshot, self.haptics_provider, fwd))
     }
 
     pub fn subscribe_runtime_snapshot(&self) -> Receiver<OhMyGamepadRuntimeSnapshotDto> {
         let source_rx = self.runtime.subscribe_runtime_snapshot();
         let (tx, rx) = mpsc::channel();
         let haptics_provider = self.haptics_provider;
+        let runtime = Arc::clone(&self.runtime);
 
         std::thread::spawn(move || {
             while let Ok(snapshot) = source_rx.recv() {
+                let fwd = runtime.stream_pad_forwarding();
                 if tx
-                    .send(enrich_runtime_snapshot(snapshot, haptics_provider))
+                    .send(enrich_runtime_snapshot(snapshot, haptics_provider, fwd))
                     .is_err()
                 {
                     break;
@@ -92,25 +94,31 @@ impl GamepadRuntimeHost {
         rx
     }
 
-    pub fn set_input_policy(
-        &self,
-        policy: OhMyGamepadInputPolicyDto,
-    ) -> Result<(), InputRuntimeError> {
-        self.runtime.set_input_policy(policy)
+    pub fn set_stream_pad_forwarding(&self, enabled: bool) -> Result<(), InputRuntimeError> {
+        self.runtime.set_stream_pad_forwarding(enabled);
+        // Forwarding lives outside the runtime snapshot state machine; force a refresh so
+        // snapshot subscribers observe the new routing state immediately.
+        self.runtime.refresh_snapshot()
     }
 
-    pub fn activate_sampling(
-        &self,
-        policy: Option<OhMyGamepadInputPolicyDto>,
-    ) -> Result<OhMyGamepadRuntimeSnapshotDto, InputRuntimeError> {
-        self.runtime.activate_sampling(policy)
+    pub fn stream_pad_forwarding(&self) -> bool {
+        self.runtime.stream_pad_forwarding()
+    }
+
+    pub fn activate_sampling(&self) -> Result<OhMyGamepadRuntimeSnapshotDto, InputRuntimeError> {
+        let fwd = self.runtime.stream_pad_forwarding();
+        self.runtime
+            .activate_sampling()
+            .map(|snapshot| enrich_runtime_snapshot(snapshot, self.haptics_provider, fwd))
     }
 
     pub fn resume_shell_sampling(
         &self,
-        policy: OhMyGamepadInputPolicyDto,
     ) -> Result<OhMyGamepadRuntimeSnapshotDto, InputRuntimeError> {
-        self.runtime.resume_shell_sampling(policy)
+        let fwd = self.runtime.stream_pad_forwarding();
+        self.runtime
+            .resume_shell_sampling()
+            .map(|snapshot| enrich_runtime_snapshot(snapshot, self.haptics_provider, fwd))
     }
 
     pub fn set_sampling(
@@ -230,6 +238,7 @@ fn bootstrap_gamepad_runtime() -> Result<SharedGamepadRuntime, String> {
 fn enrich_runtime_snapshot(
     mut snapshot: OhMyGamepadRuntimeSnapshotDto,
     haptics_provider: DesktopHapticsProviderKind,
+    stream_pad_forwarding: bool,
 ) -> OhMyGamepadRuntimeSnapshotDto {
     let default_device_id = resolve_default_device_id(&snapshot);
 
@@ -244,6 +253,7 @@ fn enrich_runtime_snapshot(
         supports_trigger_rumble: snapshot.devices.iter().any(supports_host_trigger_rumble),
         default_device_id,
     };
+    snapshot.stream_pad_forwarding = stream_pad_forwarding;
     snapshot
 }
 

@@ -1019,18 +1019,13 @@ export function createBrowserRuntime(options: {
   }
 
   async function attachGamepadSession(sessionId: string): Promise<void> {
-    // 串流页不经过 AppShell 的恢复链，首开时这里必须同时拉起 policy + lifecycle。
     void sessionId
-    await rpc.gamepad.resumeShellSampling({ policy: 'stream-only' })
+    await rpc.gamepad.resumeShellSampling()
   }
 
   async function detachGamepadSession(sessionId: string | null): Promise<void> {
-    try {
-      await rpc.gamepad.setInputPolicy({ policy: 'shared' })
-    }
-    catch {
-      void sessionId
-    }
+    void sessionId
+    void rpc.gamepad.setStreamPadForwarding({ enabled: false })
   }
 
   function markFrameReady(meta?: {

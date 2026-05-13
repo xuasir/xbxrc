@@ -11,15 +11,6 @@ pub enum OhMyGamepadBindingModeDto {
     LastActiveFailover,
 }
 
-#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "kebab-case")]
-pub enum OhMyGamepadInputPolicyDto {
-    #[default]
-    Shared,
-    UiOnly,
-    StreamOnly,
-}
-
 #[derive(Clone, Debug, Default, Deserialize, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GamepadSlotBindingDto {

@@ -1,6 +1,5 @@
 import type {
   GamepadDeviceProfileDto,
-  GamepadInputPolicyDto,
   GamepadKeyboardMappingDto,
   GamepadRumbleRequestDto,
   GamepadRumbleResultDto,
@@ -123,15 +122,9 @@ export interface XBoxRpcSchema {
   }
   gamepad: {
     getRuntimeSnapshot: RpcMethod<void, GamepadRuntimeSnapshotDto>
-    setInputPolicy: RpcMethod<{ policy: GamepadInputPolicyDto }, GamepadRuntimeSnapshotDto>
-    activateSampling: RpcMethod<
-      { policy?: GamepadInputPolicyDto | null } | void,
-      GamepadRuntimeSnapshotDto
-    >
-    resumeShellSampling: RpcMethod<
-      { policy: GamepadInputPolicyDto },
-      GamepadRuntimeSnapshotDto
-    >
+    setStreamPadForwarding: RpcMethod<{ enabled: boolean }, GamepadRuntimeSnapshotDto>
+    activateSampling: RpcMethod<void, GamepadRuntimeSnapshotDto>
+    resumeShellSampling: RpcMethod<void, GamepadRuntimeSnapshotDto>
     updateSampling: RpcMethod<{ sampling: GamepadSamplingConfigDto }, GamepadRuntimeSnapshotDto>
     setSamplingStrategy: RpcMethod<
       { strategy: GamepadSamplingStrategyDto },

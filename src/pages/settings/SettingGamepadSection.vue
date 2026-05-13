@@ -4,7 +4,6 @@ import type {
   GamepadDeviceProfileDto,
   GamepadDeviceProfileMatcherDto,
   GamepadFilterConfigDto,
-  GamepadInputPolicyDto,
   GamepadKeyboardBindingDto,
   GamepadKeyboardControlDto,
   GamepadKeyboardKeyDto,
@@ -154,21 +153,11 @@ const connectedGamepadCount = computed(() =>
   gamepadSnapshot.value?.devices.filter(device => device.connected).length ?? 0,
 )
 
-function inputPolicyLabel(policy: GamepadInputPolicyDto | undefined): string {
-  switch (policy) {
-    case 'stream-only':
-      return t('setting.gamepad.route.streamSession')
-    case 'ui-only':
-      return t('setting.gamepad.route.shellUi')
-    case 'shared':
-      return t('setting.gamepad.route.none')
-    default:
-      return t('setting.gamepad.route.none')
-  }
-}
-
-const gamepadRouteLabel = computed(() => {
-  return inputPolicyLabel(gamepadSnapshot.value?.inputPolicy)
+const gamepadStreamForwardingLabel = computed(() => {
+  const fwd = gamepadSnapshot.value?.streamPadForwarding ?? false
+  return fwd
+    ? t('setting.gamepad.streamPadForwarding.on')
+    : t('setting.gamepad.streamPadForwarding.off')
 })
 
 const gamepadHapticsSummary = computed(() => {
@@ -723,7 +712,7 @@ function handleMappingCaptureKeydown(event: KeyboardEvent): void {
             {{ t('setting.gamepad.routeLabel') }}
           </p>
           <p class="setting-gamepad__item-value">
-            {{ gamepadRouteLabel }}
+            {{ gamepadStreamForwardingLabel }}
           </p>
         </div>
 

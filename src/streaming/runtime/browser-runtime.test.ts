@@ -104,7 +104,8 @@ const testState = vi.hoisted(() => {
       },
       gamepad: {
         activateSampling: vi.fn(async () => {}),
-        setInputPolicy: vi.fn(async () => {}),
+        resumeShellSampling: vi.fn(async () => {}),
+        setStreamPadForwarding: vi.fn(async () => {}),
       },
       runtimeTrace: {
         recordEvent: vi.fn(async () => {}),
@@ -360,5 +361,13 @@ describe('browser-runtime super resolution state', () => {
     expect(snapshot.stallKind).toBe('none')
 
     await runtime.stop()
+  })
+
+  it('resumes shell sampling when attaching a stream session', async () => {
+    const runtime = createBrowserRuntime({ playerElementId: 'player', initialAudioVolume: 1 })
+
+    await runtime.launch(createLaunchSpec())
+
+    expect(testState.rpc.gamepad.resumeShellSampling).toHaveBeenCalledTimes(1)
   })
 })

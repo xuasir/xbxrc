@@ -2,8 +2,8 @@ use crate::error::AppResult;
 use crate::mods::gamepad::GamepadDeviceProfileDto;
 use crate::AppState;
 use ohmygamepad_protocol::{
-    MultiControllerSamplingStrategyDto, OhMyGamepadInputPolicyDto, OhMyGamepadKeyboardMappingDto,
-    OhMyGamepadRumbleRequestDto, OhMyGamepadRumbleTargetDto, OhMyGamepadSamplingConfigDto,
+    MultiControllerSamplingStrategyDto, OhMyGamepadKeyboardMappingDto, OhMyGamepadRumbleRequestDto,
+    OhMyGamepadRumbleTargetDto, OhMyGamepadSamplingConfigDto,
 };
 use serde::Deserialize;
 use serde_json::{json, Value};
@@ -13,15 +13,11 @@ use tauri::{AppHandle, Manager};
 #[serde(tag = "method", content = "params", rename_all = "camelCase")]
 pub enum GamepadCommand {
     GetRuntimeSnapshot,
-    SetInputPolicy {
-        policy: OhMyGamepadInputPolicyDto,
+    SetStreamPadForwarding {
+        enabled: bool,
     },
-    ActivateSampling {
-        policy: Option<OhMyGamepadInputPolicyDto>,
-    },
-    ResumeShellSampling {
-        policy: OhMyGamepadInputPolicyDto,
-    },
+    ActivateSampling,
+    ResumeShellSampling,
     UpdateSampling {
         sampling: OhMyGamepadSamplingConfigDto,
     },
@@ -74,15 +70,13 @@ pub async fn handle_rpc(
         GamepadCommand::GetRuntimeSnapshot => {
             Ok(serde_json::to_value(service.get_runtime_snapshot()?)?)
         }
-        GamepadCommand::SetInputPolicy { policy } => {
-            Ok(serde_json::to_value(service.set_input_policy(policy)?)?)
-        }
-        GamepadCommand::ActivateSampling { policy } => {
-            Ok(serde_json::to_value(service.activate_sampling(policy)?)?)
-        }
-        GamepadCommand::ResumeShellSampling { policy } => Ok(serde_json::to_value(
-            service.resume_shell_sampling(policy)?,
+        GamepadCommand::SetStreamPadForwarding { enabled } => Ok(serde_json::to_value(
+            service.set_stream_pad_forwarding(enabled)?,
         )?),
+        GamepadCommand::ActivateSampling => Ok(serde_json::to_value(service.activate_sampling()?)?),
+        GamepadCommand::ResumeShellSampling => {
+            Ok(serde_json::to_value(service.resume_shell_sampling()?)?)
+        }
         GamepadCommand::UpdateSampling { sampling } => {
             Ok(serde_json::to_value(service.update_sampling(sampling)?)?)
         }

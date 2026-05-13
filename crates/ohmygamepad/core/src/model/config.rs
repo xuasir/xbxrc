@@ -1,6 +1,4 @@
-use ohmygamepad_protocol::{
-    LogicalPadBindingDto, OhMyGamepadInputPolicyDto, OhMyGamepadSamplingConfigDto,
-};
+use ohmygamepad_protocol::{LogicalPadBindingDto, OhMyGamepadSamplingConfigDto};
 
 use crate::DeviceProfile;
 
@@ -16,5 +14,4 @@ pub struct InputCoreConfig {
     pub sampling: OhMyGamepadSamplingConfigDto,
     pub bindings: Vec<LogicalPadBindingDto>,
     pub device_profiles: Vec<DeviceProfile>,
-    pub input_policy: OhMyGamepadInputPolicyDto,
 }

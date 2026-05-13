@@ -7,8 +7,8 @@ use std::{
 
 use ohmygamepad_protocol::{
     GamepadSlotDto, GamepadSlotSnapshotDto, LogicalPadSnapshotDto, OhMyGamepadCapabilityFlagsDto,
-    OhMyGamepadDeviceClassificationDto, OhMyGamepadDeviceDto, OhMyGamepadInputPolicyDto,
-    OhMyGamepadRuntimeSnapshotDto, OhMyGamepadSamplingHealthDto, OhMyGamepadSamplingLifecycleDto,
+    OhMyGamepadDeviceClassificationDto, OhMyGamepadDeviceDto, OhMyGamepadRuntimeSnapshotDto,
+    OhMyGamepadSamplingHealthDto, OhMyGamepadSamplingLifecycleDto,
 };
 
 use super::{evaluate_sampling_health, spawn_input_runtime, SamplingSchedule};
@@ -192,49 +192,6 @@ fn sampling_schedule_reset_takes_effect_immediately() {
 }
 
 #[test]
-fn runtime_thread_emits_snapshot_and_accepts_input_policy_update() {
-    let ui_sink = ThreadSafeUiSink::default();
-    let pads = ui_sink.pads.clone();
-    let backend = ScriptedBackend::new(vec![BackendPollResult {
-        device_events: vec![DeviceLifecycleEvent::Added(device("pad-a"))],
-        samples: vec![sample("pad-a", 10, vec![1.0])],
-    }]);
-    let runtime = spawn_input_runtime(
-        InputCoreConfig::default(),
-        backend,
-        ui_sink,
-        ThreadSafeStreamSink,
-    );
-
-    assert!(wait_until(Duration::from_millis(80), || {
-        !pads.lock().expect("lock pads").is_empty()
-    }));
-
-    let snapshot = runtime
-        .get_runtime_snapshot()
-        .expect("runtime snapshot should be available");
-    assert_eq!(snapshot.slots.len(), 1);
-    assert_eq!(snapshot.slots[0].state.buttons.south, 1.0);
-
-    runtime
-        .set_input_policy(ohmygamepad_protocol::OhMyGamepadInputPolicyDto::StreamOnly)
-        .expect("input policy update should succeed");
-
-    let updated_snapshot = runtime
-        .get_runtime_snapshot()
-        .expect("runtime snapshot should be available");
-    assert_eq!(
-        updated_snapshot.input_policy,
-        ohmygamepad_protocol::OhMyGamepadInputPolicyDto::StreamOnly
-    );
-    assert!(wait_until(Duration::from_millis(80), || {
-        !pads.lock().expect("lock pads").is_empty()
-    }));
-
-    runtime.shutdown().expect("runtime should shutdown cleanly");
-}
-
-#[test]
 fn runtime_thread_updates_sampling_snapshot() {
     let backend = ScriptedBackend::new(vec![BackendPollResult {
         device_events: vec![DeviceLifecycleEvent::Added(device("pad-a"))],
@@ -370,15 +327,18 @@ fn runtime_snapshot_subscription_receives_initial_and_updated_snapshots() {
     assert_eq!(discovered_snapshot.devices[0].device_id, "pad-a");
 
     runtime
-        .set_input_policy(ohmygamepad_protocol::OhMyGamepadInputPolicyDto::StreamOnly)
-        .expect("input policy update should succeed");
-    let routed_snapshot = snapshot_rx
+        .update_sampling(ohmygamepad_protocol::OhMyGamepadSamplingConfigDto {
+            backend_poll_rate_hz: 120,
+            logical_pad_sample_rate_hz: 120,
+            ui_push_rate_hz: 60,
+            stream_push_mode: ohmygamepad_protocol::OhMyGamepadStreamPushModeDto::OnChange,
+            stream_push_rate_hz: None,
+        })
+        .expect("sampling update should succeed");
+    let updated_snapshot = snapshot_rx
         .recv_timeout(Duration::from_millis(100))
-        .expect("input policy snapshot should be pushed");
-    assert_eq!(
-        routed_snapshot.input_policy,
-        ohmygamepad_protocol::OhMyGamepadInputPolicyDto::StreamOnly
-    );
+        .expect("sampling update snapshot should be pushed");
+    assert_eq!(updated_snapshot.sampling.backend_poll_rate_hz, 120);
 
     runtime.shutdown().expect("runtime should shutdown cleanly");
 }
@@ -590,14 +550,13 @@ fn background_warm_neutral_baseline_stays_healthy_when_backend_is_fresh() {
 fn active_runtime_without_logical_progress_stays_awaiting_baseline_despite_fresh_backend() {
     let snapshot = OhMyGamepadRuntimeSnapshotDto {
         devices: vec![device("pad-a")],
-        input_policy: OhMyGamepadInputPolicyDto::Shared,
         slots: vec![slot_snapshot(1, 1000)],
         last_backend_sample_activity_at_ms: 3200,
         last_sample_progress_at_ms: 0,
         ..Default::default()
     };
 
-    let health = evaluate_sampling_health(OhMyGamepadSamplingLifecycleDto::Active, 3300, &snapshot);
+    let health = evaluate_sampling_health(false, 3300, &snapshot);
     assert_eq!(health, OhMyGamepadSamplingHealthDto::AwaitingBaseline);
 }
 
@@ -605,14 +564,13 @@ fn active_runtime_without_logical_progress_stays_awaiting_baseline_despite_fresh
 fn active_runtime_without_logical_progress_becomes_stalled_after_grace_window() {
     let snapshot = OhMyGamepadRuntimeSnapshotDto {
         devices: vec![device("pad-a")],
-        input_policy: OhMyGamepadInputPolicyDto::Shared,
         slots: vec![slot_snapshot(1, 1000)],
         last_backend_sample_activity_at_ms: 3600,
         last_sample_progress_at_ms: 0,
         ..Default::default()
     };
 
-    let health = evaluate_sampling_health(OhMyGamepadSamplingLifecycleDto::Active, 3600, &snapshot);
+    let health = evaluate_sampling_health(false, 3600, &snapshot);
     assert_eq!(health, OhMyGamepadSamplingHealthDto::Stalled);
 }
 
@@ -644,9 +602,7 @@ fn suspended_freezes_logical_sampling() {
             .unwrap_or(false)
     }));
 
-    runtime
-        .set_sampling_lifecycle(OhMyGamepadSamplingLifecycleDto::Suspended)
-        .expect("suspend");
+    runtime.set_suspended(true).expect("suspend");
 
     let seq_at_suspend = runtime
         .get_runtime_snapshot()

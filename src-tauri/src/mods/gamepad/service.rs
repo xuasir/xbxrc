@@ -8,16 +8,25 @@ use ohmygamepad_core::{
 };
 use ohmygamepad_host::GamepadRuntimeHost;
 use ohmygamepad_protocol::{
-    MultiControllerSamplingStrategyDto, OhMyGamepadBackendKindDto, OhMyGamepadInputPolicyDto,
-    OhMyGamepadKeyboardMappingDto, OhMyGamepadRumbleRejectionReasonDto,
-    OhMyGamepadRumbleRequestDto, OhMyGamepadRumbleResultDto, OhMyGamepadRumbleTargetDto,
-    OhMyGamepadRuntimeSnapshotDto, OhMyGamepadSamplingConfigDto, OhMyGamepadSamplingLifecycleDto,
+    MultiControllerSamplingStrategyDto, OhMyGamepadBackendKindDto, OhMyGamepadKeyboardMappingDto,
+    OhMyGamepadRumbleRejectionReasonDto, OhMyGamepadRumbleRequestDto, OhMyGamepadRumbleResultDto,
+    OhMyGamepadRumbleTargetDto, OhMyGamepadRuntimeSnapshotDto, OhMyGamepadSamplingConfigDto,
+    OhMyGamepadSamplingLifecycleDto,
 };
 use tauri::{AppHandle, Manager};
 
 pub struct GamepadService {
     app_handle: AppHandle,
     host: GamepadRuntimeHost,
+}
+
+pub fn sanitize_runtime_snapshot_for_external_consumers(
+    mut snapshot: OhMyGamepadRuntimeSnapshotDto,
+) -> OhMyGamepadRuntimeSnapshotDto {
+    if snapshot.sampling_lifecycle == OhMyGamepadSamplingLifecycleDto::BackgroundWarm {
+        snapshot.slots.clear();
+    }
+    snapshot
 }
 
 impl GamepadService {
@@ -33,67 +42,68 @@ impl GamepadService {
 
 impl GamepadProvider for GamepadService {
     fn get_runtime_snapshot(&self) -> Result<OhMyGamepadRuntimeSnapshotDto, String> {
-        self.host.snapshot().map_err(|error| format!("{:?}", error))
+        self.host
+            .snapshot()
+            .map(sanitize_runtime_snapshot_for_external_consumers)
+            .map_err(|error| format!("{:?}", error))
     }
 
-    fn set_input_policy(
+    fn stream_pad_forwarding(&self) -> bool {
+        self.host.stream_pad_forwarding()
+    }
+
+    fn set_stream_pad_forwarding(
         &self,
-        policy: OhMyGamepadInputPolicyDto,
+        enabled: bool,
     ) -> Result<OhMyGamepadRuntimeSnapshotDto, String> {
         self.host
-            .set_input_policy(policy)
+            .set_stream_pad_forwarding(enabled)
             .map_err(|error| format!("{:?}", error))?;
         self.get_runtime_snapshot()
     }
 
-    fn activate_sampling(
-        &self,
-        policy: Option<OhMyGamepadInputPolicyDto>,
-    ) -> Result<OhMyGamepadRuntimeSnapshotDto, String> {
-        log::info!(
-            "tauri_gamepad_activate_sampling source=provider policy={:?}",
-            policy
-        );
+    fn activate_sampling(&self) -> Result<OhMyGamepadRuntimeSnapshotDto, String> {
+        log::info!("tauri_gamepad_activate_sampling source=provider");
         let snapshot = self
             .host
-            .activate_sampling(policy)
+            .activate_sampling()
             .map_err(|error| format!("{:?}", error))?;
-        log_runtime_snapshot("activate_sampling", &snapshot);
+        log_runtime_snapshot(
+            "activate_sampling",
+            &snapshot,
+            self.host.stream_pad_forwarding(),
+        );
         self.record_trace(
             "activateSamplingCompleted",
             serde_json::json!({
-                "policy": policy,
                 "samplingLifecycle": snapshot.sampling_lifecycle,
                 "samplingHealth": snapshot.sampling_health,
-                "inputPolicy": snapshot.input_policy,
+                "streamPadForwarding": self.host.stream_pad_forwarding(),
             }),
         );
-        Ok(snapshot)
+        Ok(sanitize_runtime_snapshot_for_external_consumers(snapshot))
     }
 
-    fn resume_shell_sampling(
-        &self,
-        policy: OhMyGamepadInputPolicyDto,
-    ) -> Result<OhMyGamepadRuntimeSnapshotDto, String> {
-        log::info!(
-            "tauri_gamepad_resume_shell_sampling source=provider policy={:?}",
-            policy
-        );
+    fn resume_shell_sampling(&self) -> Result<OhMyGamepadRuntimeSnapshotDto, String> {
+        log::info!("tauri_gamepad_resume_shell_sampling source=provider");
         let snapshot = self
             .host
-            .resume_shell_sampling(policy)
+            .resume_shell_sampling()
             .map_err(|error| format!("{:?}", error))?;
-        log_runtime_snapshot("resume_shell_sampling", &snapshot);
+        log_runtime_snapshot(
+            "resume_shell_sampling",
+            &snapshot,
+            self.host.stream_pad_forwarding(),
+        );
         self.record_trace(
             "resumeShellSamplingCompleted",
             serde_json::json!({
-                "policy": policy,
                 "samplingLifecycle": snapshot.sampling_lifecycle,
                 "samplingHealth": snapshot.sampling_health,
-                "inputPolicy": snapshot.input_policy,
+                "streamPadForwarding": self.host.stream_pad_forwarding(),
             }),
         );
-        Ok(snapshot)
+        Ok(sanitize_runtime_snapshot_for_external_consumers(snapshot))
     }
 
     fn update_sampling(
@@ -278,9 +288,45 @@ impl GamepadProvider for GamepadService {
     }
 
     fn shutdown(&self) {
-        let _ = self
-            .host
-            .set_input_policy(OhMyGamepadInputPolicyDto::Shared);
+        let _ = self.host.set_stream_pad_forwarding(false);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::sanitize_runtime_snapshot_for_external_consumers;
+    use ohmygamepad_protocol::{
+        GamepadSlotSnapshotDto, OhMyGamepadRuntimeSnapshotDto, OhMyGamepadSamplingHealthDto,
+        OhMyGamepadSamplingLifecycleDto,
+    };
+
+    #[test]
+    fn background_warm_snapshot_hides_slots_for_external_consumers() {
+        let snapshot = OhMyGamepadRuntimeSnapshotDto {
+            sampling_lifecycle: OhMyGamepadSamplingLifecycleDto::BackgroundWarm,
+            sampling_health: OhMyGamepadSamplingHealthDto::Healthy,
+            slots: vec![GamepadSlotSnapshotDto::default()],
+            last_sample_progress_at_ms: 1234,
+            last_backend_sample_activity_at_ms: 5678,
+            ..Default::default()
+        };
+
+        let sanitized = sanitize_runtime_snapshot_for_external_consumers(snapshot);
+        assert!(sanitized.slots.is_empty());
+        assert_eq!(sanitized.last_sample_progress_at_ms, 1234);
+        assert_eq!(sanitized.last_backend_sample_activity_at_ms, 5678);
+    }
+
+    #[test]
+    fn active_snapshot_keeps_slots_for_external_consumers() {
+        let snapshot = OhMyGamepadRuntimeSnapshotDto {
+            sampling_lifecycle: OhMyGamepadSamplingLifecycleDto::Active,
+            slots: vec![GamepadSlotSnapshotDto::default()],
+            ..Default::default()
+        };
+
+        let sanitized = sanitize_runtime_snapshot_for_external_consumers(snapshot);
+        assert_eq!(sanitized.slots.len(), 1);
     }
 }
 
@@ -441,7 +487,11 @@ fn matcher_is_empty(matcher: &GamepadDeviceProfileMatcherDto) -> bool {
             .unwrap_or(true)
 }
 
-fn log_runtime_snapshot(stage: &str, snapshot: &OhMyGamepadRuntimeSnapshotDto) {
+fn log_runtime_snapshot(
+    stage: &str,
+    snapshot: &OhMyGamepadRuntimeSnapshotDto,
+    stream_pad_forwarding: bool,
+) {
     let devices = snapshot
         .devices
         .iter()
@@ -469,11 +519,11 @@ fn log_runtime_snapshot(stage: &str, snapshot: &OhMyGamepadRuntimeSnapshotDto) {
         .collect::<Vec<_>>()
         .join(";");
     log::info!(
-        "tauri_gamepad_runtime_snapshot stage={} devices={} slots={} input_policy={:?} payload=[{}]",
+        "tauri_gamepad_runtime_snapshot stage={} devices={} slots={} stream_pad_forwarding={} payload=[{}]",
         stage,
         snapshot.devices.len(),
         snapshot.slots.len(),
-        snapshot.input_policy,
+        stream_pad_forwarding,
         devices,
     );
 }

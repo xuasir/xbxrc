@@ -7,6 +7,7 @@ use tokio::time::{sleep, Duration};
 
 use crate::error::{AppError, AppResult};
 use crate::mods;
+use crate::mods::gamepad::service::sanitize_runtime_snapshot_for_external_consumers;
 use crate::mods::{auth::events as auth_events, gamepad::events as gamepad_events};
 
 pub mod bridge;
@@ -25,9 +26,9 @@ pub use window::handle_macos_window_event;
 
 /// 页面可见 / 窗口聚焦时拉回手柄采样并跑自愈链。
 /// 使用 `AppHandle` 解析主窗口，避免 `Window` / `WebviewWindow` 类型分裂；全屏冷启动的延迟补打见 `build_services`。
+///
+/// UI/串流输入归属由前端消费层门控；RTC 是否转发样本由 `set_stream_pad_forwarding` 控制（见 RFC gamepad lifecycle simplification）。
 pub fn hint_gamepad_shell_interactive(app: &AppHandle, reason: &str) {
-    use ohmygamepad_protocol::OhMyGamepadInputPolicyDto;
-
     let Some(window) = app.get_webview_window("main") else {
         log::warn!(
             "hint_gamepad_shell_interactive skipped reason={} (main window missing)",
@@ -49,18 +50,13 @@ pub fn hint_gamepad_shell_interactive(app: &AppHandle, reason: &str) {
         serde_json::json!({
             "reason": reason,
             "windowLabel": window.label(),
+            "streamPadForwarding": app_state.gamepad.stream_pad_forwarding(),
         }),
     );
-    let policy = app_state
-        .gamepad
-        .get_runtime_snapshot()
-        .map(|snapshot| snapshot.input_policy)
-        .unwrap_or(OhMyGamepadInputPolicyDto::Shared);
-    if let Err(error) = app_state.gamepad.resume_shell_sampling(policy) {
+    if let Err(error) = app_state.gamepad.resume_shell_sampling() {
         log::warn!(
-            "Failed to resume shell gamepad sampling reason={} policy={:?} error={}",
+            "Failed to resume shell gamepad sampling reason={} error={}",
             reason,
-            policy,
             error
         );
     }
@@ -84,6 +80,7 @@ fn trace_gamepad_runtime_snapshot(
     runtime_trace: &mods::runtime_trace::RuntimeTraceRecorderRef,
     event: &str,
     snapshot: &ohmygamepad_protocol::OhMyGamepadRuntimeSnapshotDto,
+    stream_pad_forwarding: bool,
     payload: serde_json::Value,
 ) {
     let max_sample_seq = snapshot
@@ -105,7 +102,7 @@ fn trace_gamepad_runtime_snapshot(
         serde_json::json!({
             "samplingLifecycle": snapshot.sampling_lifecycle,
             "samplingHealth": snapshot.sampling_health,
-            "inputPolicy": snapshot.input_policy,
+            "streamPadForwarding": stream_pad_forwarding,
             "connectedDevices": snapshot.devices.iter().filter(|device| device.connected).count(),
             "slotCount": snapshot.slots.len(),
             "maxSampleSeq": max_sample_seq,
@@ -127,6 +124,22 @@ fn should_force_gamepad_startup_rearm(
         && snapshot.devices.iter().any(|device| device.connected)
 }
 
+fn should_auto_promote_background_warm(
+    snapshot: &ohmygamepad_protocol::OhMyGamepadRuntimeSnapshotDto,
+    visible: bool,
+    minimized: bool,
+    focused: bool,
+    last_background_warm_progress_promoted_at_ms: u64,
+) -> bool {
+    snapshot.sampling_lifecycle
+        == ohmygamepad_protocol::OhMyGamepadSamplingLifecycleDto::BackgroundWarm
+        && snapshot.last_sample_progress_at_ms > 0
+        && snapshot.last_sample_progress_at_ms > last_background_warm_progress_promoted_at_ms
+        && visible
+        && !minimized
+        && focused
+}
+
 pub async fn init_services(app: &mut tauri::App) -> AppResult<()> {
     log::info!("Starting application initialization...");
 
@@ -143,12 +156,13 @@ pub async fn init_services(app: &mut tauri::App) -> AppResult<()> {
     );
 
     bind_background_tasks(app.handle(), &state).await?;
-    match state.gamepad.activate_sampling(None) {
+    match state.gamepad.activate_sampling() {
         Ok(snapshot) => {
             trace_gamepad_runtime_snapshot(
                 &state.runtime_trace,
                 "initServicesActivateSamplingCompleted",
                 &snapshot,
+                state.gamepad.stream_pad_forwarding(),
                 serde_json::json!({
                     "reason": "shell-init",
                 }),
@@ -189,6 +203,7 @@ pub async fn init_services(app: &mut tauri::App) -> AppResult<()> {
                 &runtime_trace,
                 "startupActiveSamplingCheckObserved",
                 &snapshot,
+                gamepad.stream_pad_forwarding(),
                 serde_json::json!({
                     "delayMs": 900,
                     "shouldForceRearm": should_force_gamepad_startup_rearm(&snapshot),
@@ -204,7 +219,7 @@ pub async fn init_services(app: &mut tauri::App) -> AppResult<()> {
                 None,
                 serde_json::json!({
                     "delayMs": 900,
-                    "inputPolicy": snapshot.input_policy,
+                    "streamPadForwarding": gamepad.stream_pad_forwarding(),
                     "samplingLifecycle": snapshot.sampling_lifecycle,
                     "lastSampleProgressAtMs": snapshot.last_sample_progress_at_ms,
                     "lastBackendSampleActivityAtMs": snapshot.last_backend_sample_activity_at_ms,
@@ -212,12 +227,13 @@ pub async fn init_services(app: &mut tauri::App) -> AppResult<()> {
                 }),
             );
 
-            match gamepad.resume_shell_sampling(snapshot.input_policy) {
+            match gamepad.resume_shell_sampling() {
                 Ok(next_snapshot) => {
                     trace_gamepad_runtime_snapshot(
                         &runtime_trace,
                         "startupActiveSamplingRearmCompleted",
                         &next_snapshot,
+                        gamepad.stream_pad_forwarding(),
                         serde_json::json!({
                             "delayMs": 900,
                             "reason": "startup-active-without-progress",
@@ -472,10 +488,10 @@ async fn bind_background_tasks(app_handle: &AppHandle, state: &AppState) -> AppR
         while !is_quitting_gamepad.load(Ordering::Relaxed) {
             if let Ok(snapshot) = rx.recv() {
                 let signature = format!(
-                    "{:?}|{:?}|{:?}|{}|{}|{}|{}",
+                    "{:?}|{:?}|{}|{}|{}|{}|{}",
                     snapshot.sampling_lifecycle,
                     snapshot.sampling_health,
-                    snapshot.input_policy,
+                    gamepad_provider.stream_pad_forwarding(),
                     snapshot
                         .devices
                         .iter()
@@ -490,6 +506,7 @@ async fn bind_background_tasks(app_handle: &AppHandle, state: &AppState) -> AppR
                         &runtime_trace_gamepad,
                         "runtimeSnapshotTransitionObserved",
                         &snapshot,
+                        gamepad_provider.stream_pad_forwarding(),
                         serde_json::json!({
                             "previousSignature": prev_signature.clone(),
                             "signature": signature,
@@ -497,7 +514,9 @@ async fn bind_background_tasks(app_handle: &AppHandle, state: &AppState) -> AppR
                     );
                     prev_signature = Some(signature);
                 }
-                let snapshot_value = serde_json::to_value(&snapshot).unwrap_or_else(|e| {
+                let external_snapshot =
+                    sanitize_runtime_snapshot_for_external_consumers(snapshot.clone());
+                let snapshot_value = serde_json::to_value(&external_snapshot).unwrap_or_else(|e| {
                     log::warn!("Failed to serialize gamepad runtime snapshot: {}", e);
                     serde_json::json!({})
                 });
@@ -512,6 +531,7 @@ async fn bind_background_tasks(app_handle: &AppHandle, state: &AppState) -> AppR
                         &runtime_trace_gamepad,
                         "inputBaselineAbsorbed",
                         &snapshot,
+                        gamepad_provider.stream_pad_forwarding(),
                         serde_json::json!({
                             "previousLifecycle": "backgroundWarm",
                             "lifecycle": "active",
@@ -543,32 +563,32 @@ async fn bind_background_tasks(app_handle: &AppHandle, state: &AppState) -> AppR
                 });
                 let _ = gamepad_events::emit_devices_changed(&app_handle_gamepad, &devices_value);
 
-                if snapshot.sampling_lifecycle == OhMyGamepadSamplingLifecycleDto::BackgroundWarm
-                    && snapshot.last_sample_progress_at_ms > 0
-                    && snapshot.last_sample_progress_at_ms
-                        > last_background_warm_progress_promoted_at_ms
-                {
-                    if let Some(window) = app_handle_gamepad.get_webview_window("main") {
-                        let visible = window.is_visible().unwrap_or(false);
-                        let minimized = window.is_minimized().unwrap_or(false);
-                        let focused = window.is_focused().unwrap_or(false);
-                        if visible && !minimized {
-                            last_background_warm_progress_promoted_at_ms =
-                                snapshot.last_sample_progress_at_ms;
-                            runtime_trace_gamepad.record_event(
-                                "gamepad-shell",
-                                "backgroundWarmProgressAutoPromoteRequested",
-                                None,
-                                serde_json::json!({
-                                    "lastSampleProgressAtMs": snapshot.last_sample_progress_at_ms,
-                                    "visible": visible,
-                                    "minimized": minimized,
-                                    "focused": focused,
-                                }),
-                            );
-                            let _ = gamepad_provider
-                                .set_sampling_lifecycle(OhMyGamepadSamplingLifecycleDto::Active);
-                        }
+                if let Some(window) = app_handle_gamepad.get_webview_window("main") {
+                    let visible = window.is_visible().unwrap_or(false);
+                    let minimized = window.is_minimized().unwrap_or(false);
+                    let focused = window.is_focused().unwrap_or(false);
+                    if should_auto_promote_background_warm(
+                        &snapshot,
+                        visible,
+                        minimized,
+                        focused,
+                        last_background_warm_progress_promoted_at_ms,
+                    ) {
+                        last_background_warm_progress_promoted_at_ms =
+                            snapshot.last_sample_progress_at_ms;
+                        runtime_trace_gamepad.record_event(
+                            "gamepad-shell",
+                            "backgroundWarmProgressAutoPromoteRequested",
+                            None,
+                            serde_json::json!({
+                                "lastSampleProgressAtMs": snapshot.last_sample_progress_at_ms,
+                                "visible": visible,
+                                "minimized": minimized,
+                                "focused": focused,
+                            }),
+                        );
+                        let _ = gamepad_provider
+                            .set_sampling_lifecycle(OhMyGamepadSamplingLifecycleDto::Active);
                     }
                 }
 
@@ -681,4 +701,42 @@ pub async fn terminate(app_handle: &AppHandle) {
     );
 
     log::info!("Application termination completed.");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{should_auto_promote_background_warm, should_force_gamepad_startup_rearm};
+    use ohmygamepad_protocol::{OhMyGamepadRuntimeSnapshotDto, OhMyGamepadSamplingLifecycleDto};
+
+    #[test]
+    fn startup_rearm_stays_independent_from_focus_state() {
+        let snapshot = OhMyGamepadRuntimeSnapshotDto {
+            sampling_lifecycle: OhMyGamepadSamplingLifecycleDto::Active,
+            last_sample_progress_at_ms: 0,
+            last_backend_sample_activity_at_ms: 42,
+            devices: vec![ohmygamepad_protocol::OhMyGamepadDeviceDto {
+                connected: true,
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+
+        assert!(should_force_gamepad_startup_rearm(&snapshot));
+    }
+
+    #[test]
+    fn background_warm_auto_promote_requires_window_focus() {
+        let snapshot = OhMyGamepadRuntimeSnapshotDto {
+            sampling_lifecycle: OhMyGamepadSamplingLifecycleDto::BackgroundWarm,
+            last_sample_progress_at_ms: 1284,
+            ..Default::default()
+        };
+
+        assert!(!should_auto_promote_background_warm(
+            &snapshot, true, false, false, 0,
+        ));
+        assert!(should_auto_promote_background_warm(
+            &snapshot, true, false, true, 0,
+        ));
+    }
 }

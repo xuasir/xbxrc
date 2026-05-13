@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { DisplayOptionsValue } from '../streaming/types'
+import { setStreamGamepadShellUiPriority } from '@shared/gamepad/input-routing'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
@@ -109,7 +110,7 @@ const {
   closeSheet,
 } = pageActions
 
-// 精细化管理手柄输入策略：当 UI 覆盖层打开时切到 ui-only；关闭后切回 stream-only。
+// 串流会话期间由 `@shared/gamepad/input-routing` 决定导航层与 Player 谁消费 slot；覆盖层打开时壳层 UI 优先。
 useGamepadRouteForStreamOverlay({
   isAnyOverlayOpen: computed(() =>
     isMenuSheetOpen.value
@@ -122,11 +123,8 @@ useGamepadRouteForStreamOverlay({
   ),
   sessionId: execution.sessionId,
   applyRouteTarget: async (target) => {
-    if (target.kind === 'shell-ui') {
-      await rpc.gamepad.resumeShellSampling({ policy: 'ui-only' })
-      return
-    }
-    await rpc.gamepad.resumeShellSampling({ policy: 'stream-only' })
+    setStreamGamepadShellUiPriority(target.kind === 'shell-ui')
+    await rpc.gamepad.setStreamPadForwarding({ enabled: target.kind === 'stream-session' })
   },
 })
 
@@ -144,6 +142,8 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   applyStreamUiWindowClass(false)
+  setStreamGamepadShellUiPriority(false)
+  void rpc.gamepad.setStreamPadForwarding({ enabled: false })
   window.removeEventListener('stream-menu-toggle-requested', handleStreamMenuToggleRequested)
 })
 

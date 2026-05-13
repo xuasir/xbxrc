@@ -1,8 +1,9 @@
 use std::{
     collections::{HashMap, HashSet},
     sync::{
+        atomic::{AtomicBool, Ordering},
         mpsc::{self, Receiver, Sender},
-        Mutex,
+        Arc, Mutex,
     },
     thread,
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
@@ -15,10 +16,10 @@ use ohmygamepad_core::{
 use ohmygamepad_protocol::{
     LogicalPadBindingDto, LogicalPadId, LogicalPadStateDto, MultiControllerSamplingModeDto,
     MultiControllerSamplingStrategyDto, OhMyGamepadBindingModeDto, OhMyGamepadDeviceDto,
-    OhMyGamepadInputPolicyDto, OhMyGamepadKeyboardMappingDto, OhMyGamepadRumbleRequestDto,
-    OhMyGamepadRumbleResultDto, OhMyGamepadRumbleTargetDto, OhMyGamepadRuntimeSnapshotDto,
-    OhMyGamepadSamplingConfigDto, OhMyGamepadSamplingHealthDto, OhMyGamepadSamplingLifecycleDto,
-    OhMyGamepadSamplingPresetDto, OhMyGamepadServiceCommandDto, SimulatedGamepadDescriptorDto,
+    OhMyGamepadKeyboardMappingDto, OhMyGamepadRumbleRequestDto, OhMyGamepadRumbleResultDto,
+    OhMyGamepadRumbleTargetDto, OhMyGamepadRuntimeSnapshotDto, OhMyGamepadSamplingConfigDto,
+    OhMyGamepadSamplingHealthDto, OhMyGamepadSamplingLifecycleDto, OhMyGamepadSamplingPresetDto,
+    OhMyGamepadServiceCommandDto, SimulatedGamepadDescriptorDto,
 };
 
 use crate::service_keyboard::{
@@ -88,6 +89,8 @@ pub struct OhMyGamepadService {
     runtime: InputRuntimeHandle,
     state: Mutex<OhMyGamepadServiceState>,
     last_sampling_self_heal_at: Mutex<Option<Instant>>,
+    /// When true, RTC input loop may forward logical pad samples to the stream transport.
+    stream_pad_forwarding: Arc<AtomicBool>,
 }
 
 impl OhMyGamepadService {
@@ -167,6 +170,7 @@ impl OhMyGamepadService {
                 rumble_backend,
             }),
             last_sampling_self_heal_at: Mutex::new(None),
+            stream_pad_forwarding: Arc::new(AtomicBool::new(false)),
         }
     }
 
@@ -198,6 +202,28 @@ impl OhMyGamepadService {
 
     pub fn subscribe_runtime_snapshot(&self) -> Receiver<OhMyGamepadRuntimeSnapshotDto> {
         self.runtime.subscribe_runtime_snapshot()
+    }
+
+    pub fn refresh_snapshot(&self) -> Result<(), InputRuntimeError> {
+        self.runtime.refresh_snapshot()
+    }
+
+    pub fn set_stream_pad_forwarding(&self, enabled: bool) {
+        self.stream_pad_forwarding.store(enabled, Ordering::Relaxed);
+    }
+
+    pub fn stream_pad_forwarding(&self) -> bool {
+        self.stream_pad_forwarding.load(Ordering::Relaxed)
+    }
+
+    pub fn activate_sampling(&self) -> Result<OhMyGamepadRuntimeSnapshotDto, InputRuntimeError> {
+        self.perform_resume_recovery("activate_sampling")
+    }
+
+    pub fn resume_shell_sampling(
+        &self,
+    ) -> Result<OhMyGamepadRuntimeSnapshotDto, InputRuntimeError> {
+        self.perform_resume_recovery("resume_shell_sampling")
     }
 
     pub fn list_devices(&self) -> Result<Vec<OhMyGamepadDeviceDto>, InputRuntimeError> {
@@ -257,8 +283,7 @@ impl OhMyGamepadService {
             log::info!("ohmygamepad_suspend_transition action=suspend");
             self.runtime.set_suspended(true)
         } else {
-            let policy = self.snapshot_with_strategy_sync()?.input_policy;
-            let _ = self.perform_resume_recovery(policy, "set_suspended(false)")?;
+            let _ = self.perform_resume_recovery("set_suspended(false)")?;
             Ok(())
         }
     }
@@ -353,31 +378,6 @@ impl OhMyGamepadService {
         let mut strategy = self.sampling_strategy();
         strategy.paused_device_ids.retain(|id| id != device_id);
         self.set_sampling_strategy(strategy)
-    }
-
-    pub fn set_input_policy(
-        &self,
-        policy: OhMyGamepadInputPolicyDto,
-    ) -> Result<(), InputRuntimeError> {
-        self.runtime.set_input_policy(policy)
-    }
-
-    pub fn activate_sampling(
-        &self,
-        policy: Option<OhMyGamepadInputPolicyDto>,
-    ) -> Result<OhMyGamepadRuntimeSnapshotDto, InputRuntimeError> {
-        let target_policy = match policy {
-            Some(policy) => policy,
-            None => self.snapshot_with_strategy_sync()?.input_policy,
-        };
-        self.perform_resume_recovery(target_policy, "activate_sampling")
-    }
-
-    pub fn resume_shell_sampling(
-        &self,
-        policy: OhMyGamepadInputPolicyDto,
-    ) -> Result<OhMyGamepadRuntimeSnapshotDto, InputRuntimeError> {
-        self.perform_resume_recovery(policy, "resume_shell_sampling")
     }
 
     pub fn rebind_logical_pad(
@@ -536,8 +536,8 @@ impl OhMyGamepadService {
     ) -> Result<OhMyGamepadRuntimeSnapshotDto, OhMyGamepadServiceError> {
         match command {
             OhMyGamepadServiceCommandDto::RefreshSnapshot => {}
-            OhMyGamepadServiceCommandDto::SetInputPolicy { policy } => {
-                self.set_input_policy(policy)?;
+            OhMyGamepadServiceCommandDto::SetStreamPadForwarding { enabled } => {
+                self.set_stream_pad_forwarding(enabled);
             }
             OhMyGamepadServiceCommandDto::UpdateSampling { sampling } => {
                 self.set_sampling(sampling)?;
@@ -614,7 +614,6 @@ impl OhMyGamepadService {
 
     fn perform_resume_recovery(
         &self,
-        policy: OhMyGamepadInputPolicyDto,
         reason: &str,
     ) -> Result<OhMyGamepadRuntimeSnapshotDto, InputRuntimeError> {
         let initial_snapshot = self.snapshot_with_strategy_sync()?;
@@ -627,9 +626,8 @@ impl OhMyGamepadService {
                 .iter()
                 .any(|device| device.connected);
         log::info!(
-            "ohmygamepad_resume_recovery_start reason={} policy={:?} force_lifecycle_rearm={}",
+            "ohmygamepad_resume_recovery_start reason={} force_lifecycle_rearm={}",
             reason,
-            policy,
             should_force_lifecycle_rearm,
         );
         // 恢复 API 的语义是重新进入可操作采样态；仅 prime/refresh 不足以让
@@ -641,10 +639,9 @@ impl OhMyGamepadService {
         self.runtime
             .set_sampling_lifecycle(OhMyGamepadSamplingLifecycleDto::Active)?;
         self.runtime.set_suspended(false)?;
-        self.runtime.set_input_policy(policy)?;
         self.prime_and_refresh_runtime_sampling()?;
         let snapshot = self.snapshot_with_strategy_sync()?;
-        log_resume_snapshot(reason, &snapshot);
+        log_resume_snapshot(reason, &snapshot, self.stream_pad_forwarding());
         Ok(snapshot)
     }
 
@@ -920,7 +917,11 @@ fn trigger_axis_value(value: f32) -> f32 {
     (value.clamp(0.0, 1.0) * 2.0) - 1.0
 }
 
-fn log_resume_snapshot(reason: &str, snapshot: &OhMyGamepadRuntimeSnapshotDto) {
+fn log_resume_snapshot(
+    reason: &str,
+    snapshot: &OhMyGamepadRuntimeSnapshotDto,
+    stream_pad_forwarding: bool,
+) {
     let connected_devices = snapshot
         .devices
         .iter()
@@ -948,11 +949,11 @@ fn log_resume_snapshot(reason: &str, snapshot: &OhMyGamepadRuntimeSnapshotDto) {
         .collect::<Vec<_>>()
         .join(";");
     log::info!(
-        "ohmygamepad_resume_recovery_done reason={} devices={} slots={} input_policy={:?} connected=[{}]",
+        "ohmygamepad_resume_recovery_done reason={} devices={} slots={} stream_pad_forwarding={} connected=[{}]",
         reason,
         snapshot.devices.len(),
         snapshot.slots.len(),
-        snapshot.input_policy,
+        stream_pad_forwarding,
         connected_devices,
     );
 }
@@ -1016,7 +1017,7 @@ fn now_ms() -> u64 {
 mod tests {
     use super::*;
     use crate::NoopSdl3Source;
-    use ohmygamepad_protocol::{OhMyGamepadInputPolicyDto, OhMyGamepadSamplingLifecycleDto};
+    use ohmygamepad_protocol::OhMyGamepadSamplingLifecycleDto;
 
     #[test]
     fn resume_shell_sampling_promotes_background_warm_to_active() {
@@ -1030,7 +1031,7 @@ mod tests {
             .expect("set background warm");
 
         let snapshot = service
-            .resume_shell_sampling(OhMyGamepadInputPolicyDto::Shared)
+            .resume_shell_sampling()
             .expect("resume shell sampling");
 
         assert_eq!(

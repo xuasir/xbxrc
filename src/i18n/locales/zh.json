@@ -660,10 +660,9 @@
       "awaitingBaseline": "等待基线",
       "stalled": "停滞"
     },
-    "inputPolicy": {
-      "shared": "共享",
-      "ui-only": "仅界面",
-      "stream-only": "仅串流"
+    "streamPadForwarding": {
+      "on": "已向串流转发",
+      "off": "未转发"
     },
     "samplingSelfHeal": "自愈 {count} 次",
     "feedback": {
@@ -779,15 +778,19 @@
     "gamepad": {
       "sectionLabel": "手柄与输入",
       "summaryTitle": "已检测到的手柄",
-      "summaryDescription": "概览当前连接的手柄，以及输入路由的去向。",
+      "summaryDescription": "概览当前连接的手柄，以及手柄样本是否向活动串流转发。",
       "connectedLabel": "连接中的手柄",
       "connectedNone": "当前没有连接的手柄",
       "connectedCount": "已连接 {count} 个",
-      "routeLabel": "输入路由",
+      "routeLabel": "串流转发",
       "route": {
         "shellUi": "应用界面",
         "streamSession": "串流会话",
         "none": "暂无路由信息"
+      },
+      "streamPadForwarding": {
+        "on": "已向活动串流转发样本",
+        "off": "未向串流转发"
       },
       "hapticsLabel": "震动与触觉",
       "haptics": {

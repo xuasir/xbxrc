@@ -2,7 +2,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
 use ohmygamepad_host::GamepadRuntimeHost;
-use ohmygamepad_protocol::{LogicalPadSnapshotDto, OhMyGamepadInputPolicyDto};
+use ohmygamepad_protocol::LogicalPadSnapshotDto;
 use tokio::task::JoinHandle;
 use tokio::time::{interval, Duration};
 
@@ -117,12 +117,12 @@ impl RtcInputStreamController {
         let Ok(host) = GamepadRuntimeHost::shared() else {
             return Vec::new();
         };
+        if !host.stream_pad_forwarding() {
+            return Vec::new();
+        }
         let Ok(snapshot) = host.snapshot() else {
             return Vec::new();
         };
-        if snapshot.input_policy != OhMyGamepadInputPolicyDto::StreamOnly {
-            return Vec::new();
-        }
         let mut frames = Vec::with_capacity(4);
         let mut sample_count = 0usize;
         for frame in snapshot.slots.iter().take(4) {

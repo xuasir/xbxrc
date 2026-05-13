@@ -3,8 +3,8 @@ use std::collections::{HashMap, HashSet};
 use ohmygamepad_protocol::{
     GamepadSlotBindingDto, GamepadSlotSnapshotDto, LogicalPadBindingDto, LogicalPadId,
     LogicalPadSnapshotDto, OhMyGamepadBindingModeDto, OhMyGamepadDeviceDto,
-    OhMyGamepadInputPolicyDto, OhMyGamepadRuntimeHapticsDto, OhMyGamepadRuntimeSnapshotDto,
-    OhMyGamepadSamplingConfigDto, OhMyGamepadSamplingHealthDto, OhMyGamepadSamplingLifecycleDto,
+    OhMyGamepadRuntimeHapticsDto, OhMyGamepadRuntimeSnapshotDto, OhMyGamepadSamplingConfigDto,
+    OhMyGamepadSamplingHealthDto, OhMyGamepadSamplingLifecycleDto,
 };
 
 use crate::{
@@ -84,7 +84,6 @@ where
                     device_ids: binding.device_ids,
                 })
                 .collect(),
-            input_policy: self.config.input_policy,
             sampling: self.config.sampling.clone(),
             slots: self.pads.clone(),
             haptics: OhMyGamepadRuntimeHapticsDto::default(),
@@ -93,15 +92,12 @@ where
             last_sample_progress_at_ms: self.last_sample_progress_at_ms,
             last_backend_sample_activity_at_ms: self.last_backend_sample_activity_at_ms,
             sampling_self_heal_count: 0,
+            stream_pad_forwarding: false,
         }
     }
 
     pub fn replace_sampling_config(&mut self, sampling: OhMyGamepadSamplingConfigDto) {
         self.config.sampling = sampling;
-    }
-
-    pub fn replace_input_policy(&mut self, input_policy: OhMyGamepadInputPolicyDto) {
-        self.config.input_policy = input_policy;
     }
 
     pub fn replace_bindings(&mut self, bindings: Vec<LogicalPadBindingDto>) {

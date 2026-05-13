@@ -337,35 +337,6 @@ fn last_active_failover_keeps_current_device_until_disconnect() {
 }
 
 #[test]
-fn input_policy_change_emits_new_snapshot() {
-    let ui_sink = SharedUiSink::default();
-    let ui_pads = ui_sink.pads.clone();
-    let backend = ScriptedBackend::new(vec![BackendPollResult {
-        device_events: vec![DeviceLifecycleEvent::Added(device("pad-a"))],
-        samples: vec![sample("pad-a", 10, vec![1.0], vec![0.0, 0.0, 0.0, 0.0])],
-    }]);
-    let mut core = InputCore::new(
-        InputCoreConfig::default(),
-        backend,
-        ui_sink,
-        SharedStreamSink::default(),
-    );
-
-    core.tick();
-    core.replace_input_policy(ohmygamepad_protocol::OhMyGamepadInputPolicyDto::StreamOnly);
-    core.sample_once();
-
-    let pads = ui_pads.borrow();
-    assert_eq!(pads.len(), 1);
-    assert_eq!(pads[0].slot, ohmygamepad_protocol::LogicalPadId::Pad0);
-    drop(pads);
-    assert_eq!(
-        core.runtime_snapshot().input_policy,
-        ohmygamepad_protocol::OhMyGamepadInputPolicyDto::StreamOnly
-    );
-}
-
-#[test]
 fn unchanged_snapshot_preserves_sample_seq_in_on_change_mode() {
     let backend = ScriptedBackend::new(vec![
         BackendPollResult {

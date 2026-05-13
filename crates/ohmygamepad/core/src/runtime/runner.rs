@@ -8,8 +8,8 @@ use std::{
 };
 
 use ohmygamepad_protocol::{
-    LogicalPadBindingDto, OhMyGamepadInputPolicyDto, OhMyGamepadRuntimeSnapshotDto,
-    OhMyGamepadSamplingConfigDto, OhMyGamepadSamplingHealthDto, OhMyGamepadSamplingLifecycleDto,
+    LogicalPadBindingDto, OhMyGamepadRuntimeSnapshotDto, OhMyGamepadSamplingConfigDto,
+    OhMyGamepadSamplingHealthDto, OhMyGamepadSamplingLifecycleDto,
 };
 
 use crate::{DeviceProfile, InputBackend, InputCore, InputCoreConfig, StreamSink, UiSink};
@@ -28,17 +28,23 @@ fn snapshot_has_established_slot_baseline(snapshot: &OhMyGamepadRuntimeSnapshotD
         .any(|slot| slot.sampled_at_ms > 0 || slot.sample_seq > 0)
 }
 
+fn effective_pad_sample_lifecycle(
+    sampling_suspended: bool,
+    sampling_lifecycle: OhMyGamepadSamplingLifecycleDto,
+) -> OhMyGamepadSamplingLifecycleDto {
+    if sampling_suspended {
+        OhMyGamepadSamplingLifecycleDto::BackgroundWarm
+    } else {
+        sampling_lifecycle
+    }
+}
+
 fn evaluate_sampling_health(
-    lifecycle: OhMyGamepadSamplingLifecycleDto,
+    sampling_suspended: bool,
     clock_ms: u64,
     snapshot: &OhMyGamepadRuntimeSnapshotDto,
 ) -> OhMyGamepadSamplingHealthDto {
-    use ohmygamepad_protocol::OhMyGamepadInputPolicyDto;
-
-    if lifecycle == OhMyGamepadSamplingLifecycleDto::Suspended {
-        return OhMyGamepadSamplingHealthDto::Healthy;
-    }
-    if matches!(snapshot.input_policy, OhMyGamepadInputPolicyDto::StreamOnly) {
+    if sampling_suspended {
         return OhMyGamepadSamplingHealthDto::Healthy;
     }
     let connected = snapshot.devices.iter().any(|device| device.connected);
@@ -95,7 +101,8 @@ impl SamplingHealthEvalCache {
     fn refresh<TBackend, TUiSink, TStreamSink>(
         &mut self,
         core: &InputCore<TBackend, TUiSink, TStreamSink>,
-        lifecycle: OhMyGamepadSamplingLifecycleDto,
+        sampling_suspended: bool,
+        _lifecycle: OhMyGamepadSamplingLifecycleDto,
     ) -> OhMyGamepadSamplingHealthDto
     where
         TBackend: InputBackend,
@@ -120,7 +127,7 @@ impl SamplingHealthEvalCache {
         if mark != self.last_progress_mark
             || clock_ms.saturating_sub(self.last_eval_clock_ms) >= Self::REEVAL_INTERVAL_MS
         {
-            self.health = evaluate_sampling_health(lifecycle, clock_ms, &base);
+            self.health = evaluate_sampling_health(sampling_suspended, clock_ms, &base);
             self.last_progress_mark = mark;
             self.last_eval_clock_ms = clock_ms;
         }
@@ -130,7 +137,8 @@ impl SamplingHealthEvalCache {
 
 fn decorate_runtime_snapshot<TBackend, TUiSink, TStreamSink>(
     core: &InputCore<TBackend, TUiSink, TStreamSink>,
-    lifecycle: OhMyGamepadSamplingLifecycleDto,
+    sampling_lifecycle: OhMyGamepadSamplingLifecycleDto,
+    sampling_suspended: bool,
     self_heal_count: u32,
     health_cache: &mut SamplingHealthEvalCache,
 ) -> OhMyGamepadRuntimeSnapshotDto
@@ -141,14 +149,16 @@ where
 {
     let mut snapshot = core.runtime_snapshot();
     snapshot.sampling_self_heal_count = self_heal_count;
-    snapshot.sampling_lifecycle = lifecycle;
-    snapshot.sampling_health = health_cache.refresh(core, lifecycle);
+    snapshot.sampling_lifecycle =
+        effective_pad_sample_lifecycle(sampling_suspended, sampling_lifecycle);
+    snapshot.sampling_health = health_cache.refresh(core, sampling_suspended, sampling_lifecycle);
     snapshot
 }
 
 fn snapshot_for_query<TBackend, TUiSink, TStreamSink>(
     core: &InputCore<TBackend, TUiSink, TStreamSink>,
-    lifecycle: OhMyGamepadSamplingLifecycleDto,
+    sampling_lifecycle: OhMyGamepadSamplingLifecycleDto,
+    sampling_suspended: bool,
     self_heal_count: u32,
 ) -> OhMyGamepadRuntimeSnapshotDto
 where
@@ -158,8 +168,10 @@ where
 {
     let mut snapshot = core.runtime_snapshot();
     snapshot.sampling_self_heal_count = self_heal_count;
-    snapshot.sampling_lifecycle = lifecycle;
-    snapshot.sampling_health = evaluate_sampling_health(lifecycle, core.clock_ms(), &snapshot);
+    snapshot.sampling_lifecycle =
+        effective_pad_sample_lifecycle(sampling_suspended, sampling_lifecycle);
+    snapshot.sampling_health =
+        evaluate_sampling_health(sampling_suspended, core.clock_ms(), &snapshot);
     snapshot
 }
 
@@ -237,9 +249,6 @@ enum RuntimeCommand {
         reply_tx: Sender<OhMyGamepadRuntimeSnapshotDto>,
     },
     RefreshSnapshot,
-    SetInputPolicy {
-        policy: OhMyGamepadInputPolicyDto,
-    },
     UpdateSampling {
         sampling: OhMyGamepadSamplingConfigDto,
     },
@@ -283,15 +292,6 @@ impl InputRuntimeHandle {
         reply_rx
             .recv()
             .map_err(|_| InputRuntimeError::ResponseChannelClosed)
-    }
-
-    pub fn set_input_policy(
-        &self,
-        policy: OhMyGamepadInputPolicyDto,
-    ) -> Result<(), InputRuntimeError> {
-        self.command_tx
-            .send(RuntimeCommand::SetInputPolicy { policy })
-            .map_err(|_| InputRuntimeError::CommandChannelClosed)
     }
 
     pub fn refresh_snapshot(&self) -> Result<(), InputRuntimeError> {
@@ -387,6 +387,7 @@ where
         runtime_snapshot_broadcaster.publish(decorate_runtime_snapshot(
             &core,
             OhMyGamepadSamplingLifecycleDto::Active,
+            false,
             0,
             &mut health_cache,
         ));
@@ -420,14 +421,15 @@ fn run_runtime_loop<TBackend, TUiSink, TStreamSink>(
     TStreamSink: StreamSink,
 {
     let mut sampling_lifecycle = OhMyGamepadSamplingLifecycleDto::Active;
+    let mut sampling_suspended = false;
     let mut sampling_self_heal_count: u32 = 0;
     let mut publish_state = RuntimePublishState::default();
     loop {
         let now = origin.elapsed();
         flush_pending_ui_publish(snapshot_broadcaster, &mut publish_state, now);
 
-        if sampling_lifecycle == OhMyGamepadSamplingLifecycleDto::Suspended {
-            // Suspended：不执行逻辑采样，仅轮询后端排空事件队列。
+        if sampling_suspended {
+            // set_suspended(true)：不执行逻辑采样，仅轮询后端排空事件队列。
             core.sync_clock_ms(now.as_millis() as u64);
             core.poll_backend();
         } else if apply_due_actions(
@@ -437,13 +439,14 @@ fn run_runtime_loop<TBackend, TUiSink, TStreamSink>(
             &mut publish_state,
             now,
             sampling_lifecycle,
+            sampling_suspended,
             sampling_self_heal_count,
             health_cache,
         ) {
             continue;
         }
 
-        let timeout = if sampling_lifecycle == OhMyGamepadSamplingLifecycleDto::Suspended {
+        let timeout = if sampling_suspended {
             Duration::from_millis(100)
         } else {
             next_runtime_deadline(schedule.next_deadline(), &publish_state)
@@ -454,6 +457,7 @@ fn run_runtime_loop<TBackend, TUiSink, TStreamSink>(
         match command_rx.recv_timeout(timeout) {
             Ok(command) => {
                 let prev_lifecycle = sampling_lifecycle;
+                let prev_suspended = sampling_suspended;
                 if handle_runtime_command(
                     core,
                     schedule,
@@ -462,26 +466,30 @@ fn run_runtime_loop<TBackend, TUiSink, TStreamSink>(
                     snapshot_broadcaster,
                     &mut publish_state,
                     &mut sampling_lifecycle,
+                    &mut sampling_suspended,
                     &mut sampling_self_heal_count,
                     health_cache,
                 ) {
                     break;
                 }
 
-                apply_sampling_lifecycle_transition(
+                apply_sampling_suspended_transition(
                     core,
                     schedule,
                     origin.elapsed(),
                     snapshot_broadcaster,
                     &mut publish_state,
-                    prev_lifecycle,
+                    prev_suspended,
+                    sampling_suspended,
                     sampling_lifecycle,
                     sampling_self_heal_count,
                     health_cache,
                 );
+                apply_sampling_lifecycle_transition(core, prev_lifecycle, sampling_lifecycle);
 
                 while let Ok(command) = command_rx.try_recv() {
                     let prev_inner = sampling_lifecycle;
+                    let prev_susp_inner = sampling_suspended;
                     if handle_runtime_command(
                         core,
                         schedule,
@@ -490,23 +498,26 @@ fn run_runtime_loop<TBackend, TUiSink, TStreamSink>(
                         snapshot_broadcaster,
                         &mut publish_state,
                         &mut sampling_lifecycle,
+                        &mut sampling_suspended,
                         &mut sampling_self_heal_count,
                         health_cache,
                     ) {
                         return;
                     }
 
-                    apply_sampling_lifecycle_transition(
+                    apply_sampling_suspended_transition(
                         core,
                         schedule,
                         origin.elapsed(),
                         snapshot_broadcaster,
                         &mut publish_state,
-                        prev_inner,
+                        prev_susp_inner,
+                        sampling_suspended,
                         sampling_lifecycle,
                         sampling_self_heal_count,
                         health_cache,
                     );
+                    apply_sampling_lifecycle_transition(core, prev_inner, sampling_lifecycle);
                 }
             }
             Err(RecvTimeoutError::Timeout) => {}
@@ -515,14 +526,15 @@ fn run_runtime_loop<TBackend, TUiSink, TStreamSink>(
     }
 }
 
-fn apply_sampling_lifecycle_transition<TBackend, TUiSink, TStreamSink>(
+fn apply_sampling_suspended_transition<TBackend, TUiSink, TStreamSink>(
     core: &mut InputCore<TBackend, TUiSink, TStreamSink>,
     schedule: &mut SamplingSchedule,
     now: Duration,
     snapshot_broadcaster: &RuntimeSnapshotBroadcaster,
     publish_state: &mut RuntimePublishState,
-    prev: OhMyGamepadSamplingLifecycleDto,
-    next: OhMyGamepadSamplingLifecycleDto,
+    prev_suspended: bool,
+    next_suspended: bool,
+    sampling_lifecycle: OhMyGamepadSamplingLifecycleDto,
     sampling_self_heal_count: u32,
     health_cache: &mut SamplingHealthEvalCache,
 ) where
@@ -530,21 +542,35 @@ fn apply_sampling_lifecycle_transition<TBackend, TUiSink, TStreamSink>(
     TUiSink: UiSink,
     TStreamSink: StreamSink,
 {
-    if prev != OhMyGamepadSamplingLifecycleDto::Suspended
-        && next == OhMyGamepadSamplingLifecycleDto::Suspended
-    {
+    if !prev_suspended && next_suspended {
         core.reset_state();
         force_publish_runtime_snapshot(
             snapshot_broadcaster,
             publish_state,
-            decorate_runtime_snapshot(core, next, sampling_self_heal_count, health_cache),
+            decorate_runtime_snapshot(
+                core,
+                sampling_lifecycle,
+                next_suspended,
+                sampling_self_heal_count,
+                health_cache,
+            ),
             now,
         );
-    } else if prev == OhMyGamepadSamplingLifecycleDto::Suspended
-        && next != OhMyGamepadSamplingLifecycleDto::Suspended
-    {
+    } else if prev_suspended && !next_suspended {
         schedule.update_sampling(now, &core.config().sampling);
-    } else if prev == OhMyGamepadSamplingLifecycleDto::BackgroundWarm
+    }
+}
+
+fn apply_sampling_lifecycle_transition<TBackend, TUiSink, TStreamSink>(
+    core: &mut InputCore<TBackend, TUiSink, TStreamSink>,
+    prev: OhMyGamepadSamplingLifecycleDto,
+    next: OhMyGamepadSamplingLifecycleDto,
+) where
+    TBackend: InputBackend,
+    TUiSink: UiSink,
+    TStreamSink: StreamSink,
+{
+    if prev == OhMyGamepadSamplingLifecycleDto::BackgroundWarm
         && next == OhMyGamepadSamplingLifecycleDto::Active
     {
         core.absorb_current_state_as_baseline();
@@ -558,6 +584,7 @@ fn apply_due_actions<TBackend, TUiSink, TStreamSink>(
     publish_state: &mut RuntimePublishState,
     now: Duration,
     sampling_lifecycle: OhMyGamepadSamplingLifecycleDto,
+    sampling_suspended: bool,
     sampling_self_heal_count: u32,
     health_cache: &mut SamplingHealthEvalCache,
 ) -> bool
@@ -574,7 +601,8 @@ where
     }
     if actions.sample_pads {
         core.sync_clock_ms(now.as_millis() as u64);
-        core.sample_once_for_lifecycle(sampling_lifecycle);
+        let pad_lifecycle = effective_pad_sample_lifecycle(sampling_suspended, sampling_lifecycle);
+        core.sample_once_for_lifecycle(pad_lifecycle);
         applied = true;
     }
     if applied {
@@ -584,6 +612,7 @@ where
             decorate_runtime_snapshot(
                 core,
                 sampling_lifecycle,
+                sampling_suspended,
                 sampling_self_heal_count,
                 health_cache,
             ),
@@ -601,6 +630,7 @@ fn handle_runtime_command<TBackend, TUiSink, TStreamSink>(
     snapshot_broadcaster: &RuntimeSnapshotBroadcaster,
     publish_state: &mut RuntimePublishState,
     sampling_lifecycle: &mut OhMyGamepadSamplingLifecycleDto,
+    sampling_suspended: &mut bool,
     sampling_self_heal_count: &mut u32,
     health_cache: &mut SamplingHealthEvalCache,
 ) -> bool
@@ -614,6 +644,7 @@ where
             let _ = reply_tx.send(snapshot_for_query(
                 core,
                 *sampling_lifecycle,
+                *sampling_suspended,
                 *sampling_self_heal_count,
             ));
             false
@@ -621,30 +652,16 @@ where
         RuntimeCommand::RefreshSnapshot => {
             core.sync_clock_ms(now.as_millis() as u64);
             core.poll_backend();
-            core.sample_once_for_lifecycle(*sampling_lifecycle);
+            let pad_lifecycle =
+                effective_pad_sample_lifecycle(*sampling_suspended, *sampling_lifecycle);
+            core.sample_once_for_lifecycle(pad_lifecycle);
             force_publish_runtime_snapshot(
                 snapshot_broadcaster,
                 publish_state,
                 decorate_runtime_snapshot(
                     core,
                     *sampling_lifecycle,
-                    *sampling_self_heal_count,
-                    health_cache,
-                ),
-                now,
-            );
-            false
-        }
-        RuntimeCommand::SetInputPolicy { policy } => {
-            core.sync_clock_ms(now.as_millis() as u64);
-            core.replace_input_policy(policy);
-            core.sample_once_for_lifecycle(*sampling_lifecycle);
-            force_publish_runtime_snapshot(
-                snapshot_broadcaster,
-                publish_state,
-                decorate_runtime_snapshot(
-                    core,
-                    *sampling_lifecycle,
+                    *sampling_suspended,
                     *sampling_self_heal_count,
                     health_cache,
                 ),
@@ -661,6 +678,7 @@ where
                 decorate_runtime_snapshot(
                     core,
                     *sampling_lifecycle,
+                    *sampling_suspended,
                     *sampling_self_heal_count,
                     health_cache,
                 ),
@@ -677,13 +695,16 @@ where
             }
             core.sync_clock_ms(now.as_millis() as u64);
             core.replace_bindings(bindings);
-            core.sample_once_for_lifecycle(*sampling_lifecycle);
+            let pad_lifecycle =
+                effective_pad_sample_lifecycle(*sampling_suspended, *sampling_lifecycle);
+            core.sample_once_for_lifecycle(pad_lifecycle);
             force_publish_runtime_snapshot(
                 snapshot_broadcaster,
                 publish_state,
                 decorate_runtime_snapshot(
                     core,
                     *sampling_lifecycle,
+                    *sampling_suspended,
                     *sampling_self_heal_count,
                     health_cache,
                 ),
@@ -694,13 +715,16 @@ where
         RuntimeCommand::ReplaceDeviceProfiles { profiles } => {
             core.sync_clock_ms(now.as_millis() as u64);
             core.replace_device_profiles(profiles);
-            core.sample_once_for_lifecycle(*sampling_lifecycle);
+            let pad_lifecycle =
+                effective_pad_sample_lifecycle(*sampling_suspended, *sampling_lifecycle);
+            core.sample_once_for_lifecycle(pad_lifecycle);
             force_publish_runtime_snapshot(
                 snapshot_broadcaster,
                 publish_state,
                 decorate_runtime_snapshot(
                     core,
                     *sampling_lifecycle,
+                    *sampling_suspended,
                     *sampling_self_heal_count,
                     health_cache,
                 ),
@@ -711,11 +735,10 @@ where
         RuntimeCommand::SetSuspended {
             suspended: next_suspended,
         } => {
-            *sampling_lifecycle = if next_suspended {
-                OhMyGamepadSamplingLifecycleDto::Suspended
-            } else {
-                OhMyGamepadSamplingLifecycleDto::Active
-            };
+            *sampling_suspended = next_suspended;
+            if !next_suspended {
+                *sampling_lifecycle = OhMyGamepadSamplingLifecycleDto::Active;
+            }
             false
         }
         RuntimeCommand::SetSamplingLifecycle { lifecycle } => {
@@ -812,7 +835,6 @@ fn runtime_snapshot_broadcast_semantic_eq(
 ) -> bool {
     a.devices == b.devices
         && a.slot_bindings == b.slot_bindings
-        && a.input_policy == b.input_policy
         && a.sampling == b.sampling
         && a.slots == b.slots
         && a.haptics == b.haptics

@@ -660,10 +660,9 @@
       "awaitingBaseline": "Awaiting baseline",
       "stalled": "Stalled"
     },
-    "inputPolicy": {
-      "shared": "Shared",
-      "ui-only": "UI only",
-      "stream-only": "Stream only"
+    "streamPadForwarding": {
+      "on": "Forwarding to stream",
+      "off": "Not forwarding"
     },
     "samplingSelfHeal": "Self-heal ×{count}",
     "feedback": {
@@ -779,15 +778,19 @@
     "gamepad": {
       "sectionLabel": "Controllers & input",
       "summaryTitle": "Detected controllers",
-      "summaryDescription": "Overview of connected controllers and how input is currently routed.",
+      "summaryDescription": "Overview of connected controllers and whether samples are forwarded to the active stream.",
       "connectedLabel": "Connected controllers",
       "connectedNone": "No connected controller",
       "connectedCount": "{count} connected",
-      "routeLabel": "Input route",
+      "routeLabel": "Stream forwarding",
       "route": {
         "shellUi": "Shell UI",
         "streamSession": "Streaming session",
         "none": "Not available"
+      },
+      "streamPadForwarding": {
+        "on": "Samples forwarded to the active stream",
+        "off": "Samples not forwarded"
       },
       "hapticsLabel": "Haptics",
       "haptics": {

@@ -1,7 +1,7 @@
 use ohmygamepad_host::{GamepadRuntimeHost, GamepadRuntimeHostError};
 use ohmygamepad_protocol::{
-    LogicalButtonsStateDto, LogicalPadStateDto, OhMyGamepadInputPolicyDto,
-    OhMyGamepadSamplingConfigDto, OhMyGamepadStreamPushModeDto,
+    LogicalButtonsStateDto, LogicalPadStateDto, OhMyGamepadSamplingConfigDto,
+    OhMyGamepadStreamPushModeDto,
 };
 use std::time::Duration;
 
@@ -96,10 +96,9 @@ impl XbxEngineInputBackend for OhMyGamepadXbxEngineInputBackend {
     ) -> Result<XbxEngineInputStatus, XbxEngineRuntimeError> {
         let host = self.ensure_host()?;
         Self::ensure_stream_sampling(host)?;
-        host.set_input_policy(OhMyGamepadInputPolicyDto::StreamOnly)
-            .map_err(|error| {
-                XbxEngineRuntimeError::new(format!("setOhMyGamepadInputPolicy:{error:?}"))
-            })?;
+        host.set_stream_pad_forwarding(true).map_err(|error| {
+            XbxEngineRuntimeError::new(format!("setOhMyGamepadStreamPadForwarding:{error:?}"))
+        })?;
         let _ = session_id;
         self.snapshot_status()
     }
@@ -133,16 +132,15 @@ impl XbxEngineInputBackend for OhMyGamepadXbxEngineInputBackend {
         Ok(XbxEngineInputStatus {
             device_count: snapshot.devices.len(),
             pad_count: snapshot.slots.len(),
-            stream_input_active: snapshot.input_policy == OhMyGamepadInputPolicyDto::StreamOnly,
+            stream_input_active: host.stream_pad_forwarding(),
         })
     }
 
     fn stop(&mut self) -> Result<(), XbxEngineRuntimeError> {
         if let Some(host) = self.host.take() {
-            host.set_input_policy(OhMyGamepadInputPolicyDto::Shared)
-                .map_err(|error| {
-                    XbxEngineRuntimeError::new(format!("resetOhMyGamepadInputPolicy:{error:?}"))
-                })?;
+            host.set_stream_pad_forwarding(false).map_err(|error| {
+                XbxEngineRuntimeError::new(format!("resetOhMyGamepadStreamPadForwarding:{error:?}"))
+            })?;
         }
         Ok(())
     }

@@ -1,17 +1,19 @@
 use crate::{
     GamepadSlotSnapshotDto, MultiControllerSamplingStrategyDto, OhMyGamepadDeviceDto,
-    OhMyGamepadInputPolicyDto, OhMyGamepadKeyboardMappingDto, OhMyGamepadRuntimeHapticsDto,
-    OhMyGamepadSamplingConfigDto, SimulatedGamepadDescriptorDto,
+    OhMyGamepadKeyboardMappingDto, OhMyGamepadRuntimeHapticsDto, OhMyGamepadSamplingConfigDto,
+    SimulatedGamepadDescriptorDto,
 };
 use serde::{Deserialize, Serialize};
 
+/// 对外仅 `active` / `backgroundWarm` 两态；停机语义由 `set_suspended` 独立表达（runner 内单独布尔，不在此枚举）。
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum OhMyGamepadSamplingLifecycleDto {
     #[default]
     Active,
+    /// 历史 JSON 可能写为 `"suspended"`；并入 warm 一侧。
+    #[serde(alias = "suspended")]
     BackgroundWarm,
-    Suspended,
 }
 
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
@@ -28,11 +30,10 @@ pub enum OhMyGamepadSamplingHealthDto {
 pub struct OhMyGamepadRuntimeSnapshotDto {
     pub devices: Vec<OhMyGamepadDeviceDto>,
     pub slot_bindings: Vec<crate::GamepadSlotBindingDto>,
-    pub input_policy: OhMyGamepadInputPolicyDto,
     pub sampling: OhMyGamepadSamplingConfigDto,
     pub slots: Vec<GamepadSlotSnapshotDto>,
     pub haptics: OhMyGamepadRuntimeHapticsDto,
-    /// Runtime sampling lifecycle (Active / BackgroundWarm / Suspended).
+    /// Runtime sampling lifecycle（仅 Active / BackgroundWarm）。
     #[serde(default)]
     pub sampling_lifecycle: OhMyGamepadSamplingLifecycleDto,
     /// Sampling chain health for diagnostics and stalled self-heal.
@@ -47,14 +48,14 @@ pub struct OhMyGamepadRuntimeSnapshotDto {
     /// Monotonic count of backend-driven sampling self-heal attempts (for diagnostics).
     #[serde(default)]
     pub sampling_self_heal_count: u32,
+    /// When true, logical pad samples may be forwarded to the active streaming/RTC session.
+    #[serde(default)]
+    pub stream_pad_forwarding: bool,
 }
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum OhMyGamepadBridgeCommandDto {
     RefreshRuntimeSnapshot,
-    SetInputPolicy {
-        policy: OhMyGamepadInputPolicyDto,
-    },
     UpdateSampling {
         sampling: OhMyGamepadSamplingConfigDto,
     },
@@ -98,8 +99,5 @@ pub enum OhMyGamepadBridgeEventDto {
     },
     SlotSnapshot {
         snapshot: GamepadSlotSnapshotDto,
-    },
-    InputPolicyChanged {
-        policy: OhMyGamepadInputPolicyDto,
     },
 }
