@@ -26,3 +26,4 @@ src-tauri/gen/schemas/
 # 运行期日志与归档材料（非主线开发输入）
 runtime-logs/
 archived/
+target/
