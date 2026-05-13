@@ -169,7 +169,7 @@ impl XbxRenderState {
         let frame_stats = frame.video_stats();
         let presented_frame_seq = frame.frame_seq;
         let observed_at_ms = frame.rendered_at_ms;
-        // `pacer` 已完成候选价值排序；render 侧只保留 latest handoff。
+        // `pacer` 已完成候选价值排序；本层不再重算 owner/anchor 优先级，只做 latest-slot mailbox handoff。
         let kept_frame_seq = frame.frame_seq;
         let kept_rtp_timestamp = frame.rtp_timestamp;
         let kept_presentation_value_role = frame.presentation_value_role.clone();
@@ -259,6 +259,11 @@ impl XbxRenderState {
 
     pub(crate) fn take_latest_renderable_frame(&mut self) -> Option<XbxEngineRenderFrame> {
         self.renderable_frames.pop_front()
+    }
+
+    /// 当前 mailbox 中待交给 host 的最新帧（与 `take_latest_renderable_frame` 不消费同一语义）。
+    pub(crate) fn latest_engine_frame_for_host_push(&self) -> Option<XbxEngineRenderFrame> {
+        self.renderable_frames.back().cloned()
     }
 
     // 非消费读取：供上层在不丢帧的情况下查看当前 latest-slot。

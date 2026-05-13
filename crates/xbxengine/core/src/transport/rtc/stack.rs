@@ -10,7 +10,7 @@ use crate::api::backend::{
     XbxEngineHostVideoFrameDropEvent, XbxEngineHostVideoPresentMetrics,
     XbxEngineMediaNegotiationRequest, XbxEngineMediaRuntimeStats,
     XbxEnginePendingRuntimeRecoveryAction, XbxEngineRenderFrame,
-    XbxEngineVideoFrameDropObservation,
+    XbxEngineVideoFrameDropObservation, XbxHostRenderFramePush,
 };
 use crate::media::video::render::renderer::XbxRenderState;
 use crate::transport::rtc::connection::{
@@ -195,7 +195,10 @@ impl XbxActiveMediaStack {
         )
     }
 
-    pub(crate) fn new(runtime_config: XbxEngineRuntimeConfig) -> Self {
+    pub(crate) fn new(
+        runtime_config: XbxEngineRuntimeConfig,
+        host_render_frame_push: Option<Arc<dyn XbxHostRenderFramePush>>,
+    ) -> Self {
         let runtime_config_for_supervisor = runtime_config.clone();
         let runtime_config = Arc::new(Mutex::new(runtime_config));
         let media_runtime = Arc::new(
@@ -216,6 +219,7 @@ impl XbxActiveMediaStack {
         let render_state = Arc::new(Mutex::new(XbxRenderState::default()));
         let transport_fact_sink = Arc::new(Mutex::new(Vec::new()));
         let local_decoder_reset_handle = Arc::new(Mutex::new(None));
+        let host_render_frame_push = Arc::new(Mutex::new(host_render_frame_push));
         spawn_media_supervisor(
             media_runtime.handle().clone(),
             frame_source_rx,
@@ -225,6 +229,7 @@ impl XbxActiveMediaStack {
                 transport_fact_sink: transport_fact_sink.clone(),
                 runtime_config: runtime_config_for_supervisor,
                 local_decoder_reset_handle: local_decoder_reset_handle.clone(),
+                host_render_frame_push: host_render_frame_push.clone(),
             },
         );
         let connection = Arc::new(Mutex::new(RtcConnectionService::default()));

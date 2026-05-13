@@ -408,6 +408,7 @@ impl RecoveryCoordinator {
             reason,
             VideoEscalationReason::WaitKeyframe
                 | VideoEscalationReason::TransportAwaitRecoveryKeyframe
+                | VideoEscalationReason::LocalSupplySuspect
                 | VideoEscalationReason::DisplaySupplyCritical
                 | VideoEscalationReason::AdapterIdleTimeout
                 | VideoEscalationReason::AdapterThinStream

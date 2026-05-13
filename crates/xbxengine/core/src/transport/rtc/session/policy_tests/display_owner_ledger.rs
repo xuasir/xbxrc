@@ -45,6 +45,48 @@ fn recovery_decision_ledger_is_written_with_budget_snapshot() {
 }
 
 #[test]
+fn recovery_decision_ledger_carries_extended_observability_labels() {
+    let runtime_config = Arc::new(Mutex::new(XbxEngineRuntimeConfig::default()));
+    let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
+    let mut policy = RtcSessionPolicy::new(runtime_config, runtime_stats.clone());
+    let snapshot = build_snapshot(
+        ConnectionLifecycleStateFact::Connected,
+        "transportAwaitRecoveryAnchor",
+        320.0,
+    );
+
+    let commands = transport_commands(policy.on_snapshot(&snapshot));
+    assert!(commands.iter().any(|command| matches!(
+        command,
+        TransportCommand::RequestPli { .. } | TransportCommand::RequestFir { .. }
+    )));
+
+    let stats = runtime_stats.lock().expect("runtime stats lock");
+    let ledger = stats
+        .latest_recovery_decision_ledger
+        .as_ref()
+        .expect("recovery decision ledger");
+    assert_eq!(ledger.owner_surface_state.as_deref(), Some("await-anchor"));
+    assert_eq!(ledger.escalation_basis.as_deref(), Some("anchor_missing"));
+    assert_eq!(
+        ledger.keyframe_episode_health.as_deref(),
+        Some("waiting-response")
+    );
+    assert_eq!(
+        stats.recovery_owner_surface_state.as_deref(),
+        ledger.owner_surface_state.as_deref()
+    );
+    assert_eq!(
+        stats.recovery_escalation_basis.as_deref(),
+        ledger.escalation_basis.as_deref()
+    );
+    assert_eq!(
+        stats.recovery_keyframe_episode_health.as_deref(),
+        ledger.keyframe_episode_health.as_deref()
+    );
+}
+
+#[test]
 fn recovery_decision_ledger_keeps_pending_action_latest_while_recent_history_records_no_signal() {
     let runtime_config = Arc::new(Mutex::new(XbxEngineRuntimeConfig::default()));
     let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));

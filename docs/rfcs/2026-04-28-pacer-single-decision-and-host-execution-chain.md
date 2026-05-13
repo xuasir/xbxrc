@@ -95,6 +95,32 @@
 - recovery 新锚点一旦具备显示价值，应沿链路持续保持 owner 优先，直到真正上屏。
 - 一旦新锚点完成可见提交，系统进入 post-IDR climbing，再回到 steady latest-only。
 
+### 4. 当前 incident 已确认的供给断点
+
+- `renderer submit` 长期显著高于 `host mailbox enqueue`，同期 `host mailbox reject/overwrite` 接近零，缺口集中在 `renderer -> runtime -> host` 交接前段。
+- `runtime` 当前仍通过 `runtime.tick -> present_latest_render_frame() -> take_latest_render_frame()` 主动拉取 render latest-slot。
+- 这条拉取链受两个固定约束：
+  - `src-tauri/src/mods/xbxengine/service.rs` 将 runtime tick 固定在 `16ms`
+  - 每拍通过 `spawn_blocking(move || state.tick())` 串行执行，慢拍会把后续 tick 顺延
+- 这会形成稳定的供给洞：
+  - 30fps 流在 tick 抖动时也会间歇缺拍
+  - 60fps 流更容易被 runtime 周期性拉取压成更低的 host enqueue 频率
+  - host display tick 自己继续运行，但连续多拍只能看到 `NoPendingFrame / RetainedDisplayedFrame`
+- `runtime-trace-1778662012335-1.jsonl` 已直接证明这一点：
+  - `seq=34168` 已有 `renderer submit frameSeq=568`
+  - `seq=34169` host 仍是 `hostMailboxRetainedDisplayed`，`noPendingStreak=3`
+  - `seq=34170` 才出现 `hostMailboxAccepted frameSeq=568`
+  - 同窗口内 `hostDisplayTickEpoch` 继续增长，说明 display tick 在跑，缺的是新帧交接
+- 聚合计数同样一致：
+  - `seq=34152` 时 `rendererSubmitCountTotal=455`，`hostMailboxEnqueueCountTotal=38`
+  - 后续窗口继续扩大到 `565 vs 146`、`613 vs 194`、`653 vs 234`
+  - 同期 `host_mailbox_drop_count_total` 与 `host_mailbox_overwrite_count_total` 基本为 `0`
+- 当前 `displaySupplyStarved` 的主因已经明确：
+  - decode / pacer / renderer 在产出
+  - host present loop 在跑
+  - `runtime.tick` 拉取式 bridge 没有持续把 render latest-slot 推进到 host mailbox
+  - policy 将这种本地供给洞读成 `displaySupplyStarved / supply-starved`，再抬升恢复链
+
 ## Design
 
 ### 1. 方案选择
@@ -104,6 +130,7 @@
 - `pacer` 成为 decode 后唯一主选择器；
 - `render/present` 只保留 mailbox 执行职责；
 - `host` 只负责上屏执行与可见事实回写。
+- `runtime.tick` 退出上屏供给主路径，只保留 stats / policy / lifecycle 同步。
 
 ### 2. 职责划分
 
@@ -128,6 +155,7 @@
   - mailbox handoff；
   - 下游忙时只保留单个最新候选；
   - 极薄保护规则，允许更高 `recovery_epoch` 抢占。
+  - 候选写入 host mailbox 后立刻请求 host dispatch，不再等待 runtime 周期性拉取。
 
 #### `host`
 
@@ -142,7 +170,23 @@
   - 显示时钟
   - visible fact 回写
 
-### 3. 比较规则前移到 `pacer`
+### 3. 直接到位的链路调整
+
+- 现有链路：
+  - `decode -> pacer -> renderer queue`
+  - `runtime.tick -> take_latest_render_frame()`
+  - `host presenter.present(frame)`
+- 目标链路：
+  - `decode -> pacer -> host mailbox submit`
+  - `host display tick -> take_ready_frame() -> actual present`
+- 具体收口：
+  - 删除 `runtime.present_latest_render_frame()` 作为上屏供给主路径
+  - 删除 `take_latest_renderable_frame()` 这层周期性 pull bridge
+  - `pacer` 完成唯一价值决策后，直接提交单个候选到 host mailbox
+  - host presenter 依赖已有 immediate dispatch / rerun 机制尽快消费
+  - `renderer` 退成平台样本准备层，不再持有“等 runtime 来取”的 render queue 语义
+
+### 4. 比较规则前移到 `pacer`
 
 `pacer` 统一采用以下优先级：
 
@@ -160,14 +204,14 @@
 - 两层执行链只识别 pacer 已给出的候选身份；
 - trace 直接记录 pacer 判定结果与最终 host 可见结果。
 
-### 4. 旧帧保活与新帧切换
+### 5. 旧帧保活与新帧切换
 
 - recovery 新锚点尚未具备上屏条件时，`displayed_current` 继续服务旧帧。
 - recovery owner 帧一旦进入 `pending_next`，普通 continuation 不再在同一 epoch 内挤掉它。
 - 更高 `recovery_epoch` 的 owner 候选可以越级抢占旧 epoch owner。
 - `host` stall reset 继续保留旧 viewport 显示态，避免无画面硬切。
 
-### 5. `CleanAnchorCommitted` 合同
+### 6. `CleanAnchorCommitted` 合同
 
 - `CleanAnchorSubmitted`
   - decode / pipeline 事实；
@@ -184,7 +228,7 @@
 - recovery owner 帧是否真正可见；
 - 新链路是否已经持续稳定供给。
 
-### 6. 状态机收敛
+### 7. 状态机收敛
 
 - decode 后统一采用两槽模型：
   - `current`
@@ -306,4 +350,5 @@
 - Update: `native_video` host trace 事件已开始收口到 mailbox 语义：`hostMailboxAccepted / hostMailboxRejected / hostMailboxPendingProtected / hostMailboxIdle / hostMailboxSubmitGap / hostMailboxUpdateFailed / hostFramePresented`；旧 `frame_submit / frame_slot_take_* / sample_presented` 事件名已退出主链。
 - Update: `analyze-runtime-logs` skill 已同步切到 `hostMailboxState` / `hostFramePresentResumed` 新事件名；依赖仓库外旧 trace 样本的黑盒测试已退出，只保留仓库内可复现合同。
 - Update: `RuntimeTraceRecorder` 测试态停止并发 prune 活跃 trace 文件，`trace_projection` 历史读盘脆弱用例已改回统一 helper，避免测试互相删文件导致假红。
+- Update: `runtime-trace-1778662012335-1.jsonl` 已确认当前主瓶颈位于 `runtime.tick -> take_latest_render_frame()` 拉取桥，不在 host mailbox reject；本 RFC 的到位实现固定为“去 runtime pull、改 pacer 直推 host mailbox”。
 - Risk/Blocker: 需要先把 `CleanAnchorCommitted` 的 host 可见合同钉死，否则 recovery trace 仍会在 submitted/committed 之间漂移。

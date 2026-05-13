@@ -8,3 +8,4 @@ pub mod mailbox;
 pub mod policy;
 pub mod recovery_ramp_guard;
 pub mod startup_compat;
+pub(crate) mod suspect_anchor_gate;

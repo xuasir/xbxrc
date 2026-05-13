@@ -34,6 +34,7 @@ const DECODE_QUEUE_STALE_SLACK_DISPOSABLE_MS: u64 = 24;
 const DECODE_QUEUE_STALE_SLACK_SUPPLY_MS: u64 = 48;
 const DECODE_QUEUE_STALE_SLACK_ANCHOR_MS: u64 = 72;
 const DECODE_QUEUE_STALE_SLACK_RECOVERY_BONUS_MS: u64 = 48;
+const DECODE_QUEUE_STALE_SLACK_GUARD_MS: u64 = 2;
 type XbxVideoDecoderFactory =
     Box<dyn FnMut() -> (Box<dyn XbxVideoDecoderBackend>, XbxVideoDecoderProbeSummary) + Send>;
 
@@ -1021,7 +1022,7 @@ impl XbxVideoDecodeState {
         Self::normalize_decoded_surface_recovery_metadata(&mut frame);
         let incoming_frame_seq = frame.surface.frame_seq;
         let observed_at_ms = frame.surface.rendered_at_ms;
-        if Self::decoded_frame_is_stale(&frame, Instant::now()) {
+        if self.decoded_frame_is_stale(&frame, Instant::now()) {
             self.decoded_frame_drop_count = self.decoded_frame_drop_count.saturating_add(1);
             self.record_decode_candidate_decision(
                 XbxDecodeCandidateState::Backpressure,
@@ -1098,22 +1099,57 @@ impl XbxVideoDecodeState {
         frame.surface.frame_unrecoverable_reason = frame.frame_unrecoverable_reason.clone();
     }
 
-    fn decoded_frame_is_stale(frame: &DecodedFrame, now: Instant) -> bool {
-        now > frame.pts + Self::decoded_frame_stale_slack(frame)
+    fn decoded_frame_is_stale(&self, frame: &DecodedFrame, now: Instant) -> bool {
+        now > frame.pts + self.decoded_frame_stale_slack(frame)
     }
 
-    fn decoded_frame_stale_slack(frame: &DecodedFrame) -> Duration {
+    fn decoded_frame_stale_slack(&self, frame: &DecodedFrame) -> Duration {
         let base_millis = match frame.budget.recovery_value_tier() {
             "anchor" => DECODE_QUEUE_STALE_SLACK_ANCHOR_MS,
             "supply" => DECODE_QUEUE_STALE_SLACK_SUPPLY_MS,
             _ => DECODE_QUEUE_STALE_SLACK_DISPOSABLE_MS,
         };
+        let cadence_scaled_millis = self
+            .decoded_mailbox_frame_interval_hint_ms(frame)
+            .map(|interval_ms| match frame.budget.recovery_value_tier() {
+                "anchor" => interval_ms
+                    .saturating_mul(2)
+                    .saturating_add(DECODE_QUEUE_STALE_SLACK_GUARD_MS),
+                "supply" => interval_ms
+                    .saturating_mul(3)
+                    .saturating_div(2)
+                    .saturating_add(DECODE_QUEUE_STALE_SLACK_GUARD_MS),
+                _ => interval_ms.saturating_add(DECODE_QUEUE_STALE_SLACK_GUARD_MS),
+            })
+            .unwrap_or(base_millis);
         let recovery_bonus_millis = if Self::decoded_frame_uses_recovery_window(frame) {
             DECODE_QUEUE_STALE_SLACK_RECOVERY_BONUS_MS
         } else {
             0
         };
-        Duration::from_millis(base_millis + recovery_bonus_millis)
+        Duration::from_millis(base_millis.max(cadence_scaled_millis) + recovery_bonus_millis)
+    }
+
+    fn decoded_mailbox_frame_interval_hint_ms(&self, frame: &DecodedFrame) -> Option<u64> {
+        let mut hint_ms = None;
+        for existing in [
+            self.decoded_inflight_current.as_ref(),
+            self.decoded_latest_candidate.as_ref(),
+        ]
+        .into_iter()
+        .flatten()
+        {
+            let delta = if frame.pts >= existing.pts {
+                frame.pts.duration_since(existing.pts)
+            } else {
+                existing.pts.duration_since(frame.pts)
+            };
+            let delta_ms = delta.as_millis() as u64;
+            if (8..=100).contains(&delta_ms) {
+                hint_ms = Some(hint_ms.map_or(delta_ms, |current: u64| current.min(delta_ms)));
+            }
+        }
+        hint_ms
     }
 
     fn decoded_frame_uses_recovery_window(frame: &DecodedFrame) -> bool {

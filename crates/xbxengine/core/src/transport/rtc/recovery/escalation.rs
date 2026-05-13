@@ -60,6 +60,8 @@ pub enum VideoEscalationReason {
     LifecycleRecovering,
     WaitKeyframe,
     TransportAwaitRecoveryKeyframe,
+    /// 本地供给/入口怀疑态：不直接发 PLI/FIR；由 `session::suspect_anchor_gate` 在满足锚点证据后升级。
+    LocalSupplySuspect,
     DisplaySupplyCritical,
     Reconfigure,
     DecoderBackendFailure,
@@ -79,6 +81,7 @@ impl VideoEscalationReason {
             Self::LifecycleRecovering => "rtcConnectionRecovering",
             Self::WaitKeyframe => "waitKeyframe",
             Self::TransportAwaitRecoveryKeyframe => "transportAwaitRecoveryAnchor",
+            Self::LocalSupplySuspect => "localSupplySuspect",
             Self::DisplaySupplyCritical => "displaySupplyCritical",
             Self::Reconfigure => "reconfigure",
             Self::DecoderBackendFailure => "decoderBackendFailure",
@@ -98,6 +101,7 @@ impl VideoEscalationReason {
             Self::LifecycleRecovering => XbxEngineRecoveryReasonDomain::ConnectivityTransport,
             Self::WaitKeyframe
             | Self::TransportAwaitRecoveryKeyframe
+            | Self::LocalSupplySuspect
             | Self::DisplaySupplyCritical
             | Self::Reconfigure
             | Self::DecoderBackendFailure
@@ -113,17 +117,24 @@ impl VideoEscalationReason {
     }
 
     pub fn from_recovery_reason_label(label: &str) -> Option<Self> {
+        if label.contains("waitKeyframeEntered:config_changed")
+            || label.contains("waitKeyframeEntered:config_mismatch")
+        {
+            return Some(Self::LocalSupplySuspect);
+        }
         match label {
             "rtcConnectionRecovering" => Some(Self::LifecycleRecovering),
-            "waitKeyframe"
-            | "ingressWaitKeyframe"
-            | "ingressFrameAbandoned"
-            | "waitKeyframeEntered"
-            | "frameAbandoned" => Some(Self::WaitKeyframe),
-            "transportAwaitRecoveryAnchor"
+            "waitKeyframe" | "ingressWaitKeyframe" | "waitKeyframeEntered" => {
+                Some(Self::WaitKeyframe)
+            }
+            "frameAbandoned" | "ingressFrameAbandoned" => Some(Self::LocalSupplySuspect),
+            "transportAwaitRecoveryAnchor" => Some(Self::TransportAwaitRecoveryKeyframe),
+            "transportAwaitRecoverySuspect"
+            | "localSupplySuspect"
+            | "rebuildingSupplySuspect"
             | "bootstrapMissingSps"
             | "bootstrapMissingPps"
-            | "inspectionRejectInvalidSliceHeader" => Some(Self::TransportAwaitRecoveryKeyframe),
+            | "inspectionRejectInvalidSliceHeader" => Some(Self::LocalSupplySuspect),
             "displaySupplyCritical" | "hostPresentStalled" => Some(Self::DisplaySupplyCritical),
             "displaySupplyDegraded" | "adapterThinStream" => Some(Self::AdapterThinStream),
             "ingressReconfigure" | "reconfigure" => Some(Self::Reconfigure),
@@ -572,6 +583,13 @@ impl VideoEscalationController {
             }
             VideoEscalationReason::TransportLowValueDeadline
             | VideoEscalationReason::TransportRepairableDeadline => {
+                self.wait_keyframe_started_at = None;
+                self.transport_await_recovery_started_at = None;
+                self.pending_keyframe_signals = 0;
+                self.pending_decoder_reset_signals = 0;
+                RecoveryAction::CooldownSuppressed
+            }
+            VideoEscalationReason::LocalSupplySuspect => {
                 self.wait_keyframe_started_at = None;
                 self.transport_await_recovery_started_at = None;
                 self.pending_keyframe_signals = 0;

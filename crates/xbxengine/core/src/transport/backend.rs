@@ -1,9 +1,11 @@
+use std::sync::Arc;
+
 use crate::{
     api::backend::{
         PlaceholderXbxEngineMediaBackend, XbxEngineHostVideoFrameDropEvent,
         XbxEngineHostVideoPresentMetrics, XbxEngineMediaBackend, XbxEngineMediaNegotiation,
         XbxEngineMediaNegotiationRequest, XbxEngineMediaRuntimeStats,
-        XbxEnginePendingRuntimeRecoveryAction, XbxEngineRenderFrame,
+        XbxEnginePendingRuntimeRecoveryAction, XbxEngineRenderFrame, XbxHostRenderFramePush,
     },
     api::input::{XbxEngineInputBackend, XbxEngineInputStatus},
     api::runtime::XbxEngineNegotiationRuntimeConfig,
@@ -30,11 +32,15 @@ impl XbxNegotiationBackend {
     pub fn new(
         input_backend: Box<dyn XbxEngineInputBackend>,
         runtime_config: XbxEngineRuntimeConfig,
+        host_render_frame_push: Option<Arc<dyn XbxHostRenderFramePush>>,
     ) -> Self {
         let negotiation_config = runtime_config.webrtc.negotiation.clone();
         Self {
             inner: PlaceholderXbxEngineMediaBackend::with_input_backend(input_backend),
-            stack: Box::new(XbxActiveMediaStack::new(runtime_config)),
+            stack: Box::new(XbxActiveMediaStack::new(
+                runtime_config,
+                host_render_frame_push,
+            )),
             negotiation_config,
         }
     }

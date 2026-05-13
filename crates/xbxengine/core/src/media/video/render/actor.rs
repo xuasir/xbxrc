@@ -2,7 +2,10 @@ use std::sync::mpsc::{self, Receiver, SyncSender, TrySendError};
 use std::sync::{Arc, Mutex};
 use std::thread;
 
-use crate::api::backend::XbxEngineMediaRuntimeStats;
+use crate::api::backend::{
+    XbxEngineMediaRuntimeStats, XbxEngineRenderFrame, XbxHostRenderFramePush,
+    XbxHostRenderFramePushOutcome,
+};
 use crate::media::video::render::renderer::XbxRenderState;
 use crate::media::video::types::DecodedFrame;
 use crate::runtime_stats_sink::RuntimeStatsSink;
@@ -23,6 +26,7 @@ impl RendererActorHandle {
     pub fn new(
         render_state: Arc<Mutex<XbxRenderState>>,
         runtime_stats: Arc<Mutex<XbxEngineMediaRuntimeStats>>,
+        host_render_frame_push: Arc<Mutex<Option<Arc<dyn XbxHostRenderFramePush>>>>,
     ) -> Self {
         let runtime_stats = RuntimeStatsSink::new(runtime_stats);
         let (tx, rx) = mpsc::sync_channel(RENDERER_ACTOR_QUEUE_CAPACITY);
@@ -30,7 +34,7 @@ impl RendererActorHandle {
         thread::Builder::new()
             .name("XbxRendererActor".into())
             .spawn(move || {
-                run_renderer_loop(rx, render_state, runtime_stats);
+                run_renderer_loop(rx, render_state, runtime_stats, host_render_frame_push);
             })
             .expect("Failed to spawn renderer actor thread");
 
@@ -50,6 +54,7 @@ fn run_renderer_loop(
     rx: Receiver<RendererMsg>,
     render_state: Arc<Mutex<XbxRenderState>>,
     runtime_stats: RuntimeStatsSink,
+    host_render_frame_push: Arc<Mutex<Option<Arc<dyn XbxHostRenderFramePush>>>>,
 ) {
     let mut frame_drop_observation_id = 0u64;
     let mut render_mailbox_decision_id = 0u64;
@@ -88,6 +93,7 @@ fn run_renderer_loop(
                 let present_frame_seq = render_frame.frame_seq;
                 let present_observed_at_ms = render_frame.rendered_at_ms;
 
+                let mut host_push_frame: Option<XbxEngineRenderFrame> = None;
                 match state.present_frame(render_frame) {
                     Ok((_frame_stats, outcome)) => {
                         log_renderer_flow(
@@ -154,6 +160,7 @@ fn run_renderer_loop(
                                 );
                             }
                         }
+                        host_push_frame = state.latest_engine_frame_for_host_push();
                     }
                     Err(e) => {
                         log_renderer_flow(
@@ -217,6 +224,40 @@ fn run_renderer_loop(
                         });
                     }
                 }
+
+                if let Some(engine_frame) = host_push_frame {
+                    drop(state);
+                    if let Ok(guard) = host_render_frame_push.lock() {
+                        if let Some(push) = guard.as_ref() {
+                            let push_outcome =
+                                push.push_render_frame_for_host_present(engine_frame);
+                            let observed_at_ms = crate::transport::rtc::stats::now_ms_f64();
+                            runtime_stats.update(|stats| match push_outcome {
+                                XbxHostRenderFramePushOutcome::Accepted => {
+                                    stats.latest_host_mailbox_submit_time_ms = Some(observed_at_ms);
+                                }
+                                XbxHostRenderFramePushOutcome::RouteUnavailable => {
+                                    stats.latest_observation_label =
+                                        Some("hostPresentRouteUnavailable".to_string());
+                                    stats.latest_observation_summary =
+                                        Some("rendererPushDropped:routeUnavailable".to_string());
+                                }
+                                XbxHostRenderFramePushOutcome::RegistryUnavailable => {
+                                    stats.latest_observation_label =
+                                        Some("hostPresentRegistryUnavailable".to_string());
+                                    stats.latest_observation_summary =
+                                        Some("rendererPushDropped:registryUnavailable".to_string());
+                                }
+                                XbxHostRenderFramePushOutcome::Rejected => {
+                                    stats.latest_observation_label =
+                                        Some("hostPresentRejected".to_string());
+                                    stats.latest_observation_summary =
+                                        Some("rendererPushRejected".to_string());
+                                }
+                            });
+                        }
+                    }
+                }
             }
             RendererMsg::Stop => {
                 break;
@@ -271,7 +312,10 @@ fn log_renderer_flow(
 #[cfg(test)]
 mod tests {
     use super::{run_renderer_loop, RendererMsg};
-    use crate::api::backend::XbxEngineMediaRuntimeStats;
+    use crate::api::backend::{
+        XbxEngineMediaRuntimeStats, XbxEngineRenderFrame, XbxHostRenderFramePush,
+        XbxHostRenderFramePushOutcome,
+    };
     use crate::media::video::render::renderer::{XbxRenderFrame, XbxRenderState};
     use crate::media::video::types::{DecodedFrame, FrameRecoveryDisposition};
     use crate::runtime_stats_sink::RuntimeStatsSink;
@@ -337,7 +381,12 @@ mod tests {
             .expect("second frame");
         tx.send(RendererMsg::Stop).expect("stop");
 
-        run_renderer_loop(rx, render_state.clone(), runtime_stats_sink);
+        run_renderer_loop(
+            rx,
+            render_state.clone(),
+            runtime_stats_sink,
+            Arc::new(Mutex::new(None)),
+        );
 
         let stats = runtime_stats.lock().expect("runtime stats lock");
         assert_eq!(stats.video_renderer_submit_count_total, 2);
@@ -354,8 +403,7 @@ mod tests {
             .clone()
             .expect("render summary");
         assert!(
-            summary.contains("armed-protected:hold:armedPendingProtected:seq=2")
-                || summary.contains("armed-protected:hold:armedPendingProtected:seq=3")
+            summary.contains("latest-overwrite:replace:mailboxOverwrite:seq=2")
                 || summary.contains("frameSeq=2")
                 || summary.contains("frameSeq=3"),
             "unexpected render summary: {summary}"
@@ -364,9 +412,9 @@ mod tests {
             .latest_render_mailbox_decision
             .clone()
             .expect("latest render decision");
-        assert_eq!(decision.state, "armed-protected");
-        assert_eq!(decision.action, "hold");
-        assert_eq!(decision.detail, "armedPendingProtected");
+        assert_eq!(decision.state, "latest-overwrite");
+        assert_eq!(decision.action, "replace");
+        assert_eq!(decision.detail, "mailboxOverwrite");
         assert_eq!(decision.frame_seq, Some(2));
     }
 
@@ -384,7 +432,12 @@ mod tests {
 
         tx.send(RendererMsg::Frame(bad_frame)).expect("bad frame");
         tx.send(RendererMsg::Stop).expect("stop");
-        run_renderer_loop(rx, render_state, runtime_stats_sink);
+        run_renderer_loop(
+            rx,
+            render_state,
+            runtime_stats_sink,
+            Arc::new(Mutex::new(None)),
+        );
 
         let stats = runtime_stats.lock().expect("runtime stats lock");
         assert_eq!(stats.video_renderer_submit_count_total, 1);
@@ -414,7 +467,12 @@ mod tests {
         .expect("lower epoch frame");
         tx.send(RendererMsg::Stop).expect("stop");
 
-        run_renderer_loop(rx, render_state.clone(), runtime_stats_sink);
+        run_renderer_loop(
+            rx,
+            render_state.clone(),
+            runtime_stats_sink,
+            Arc::new(Mutex::new(None)),
+        );
 
         let stats = runtime_stats.lock().expect("runtime stats lock");
         assert_eq!(stats.video_renderer_submit_count_total, 2);
@@ -423,9 +481,97 @@ mod tests {
             .latest_render_mailbox_decision
             .as_ref()
             .expect("latest render decision");
-        assert_eq!(decision.state, "armed-protected");
-        assert_eq!(decision.action, "hold");
-        assert_eq!(decision.detail, "armedPendingProtected");
+        assert_eq!(decision.state, "latest-overwrite");
+        assert_eq!(decision.action, "replace");
+        assert_eq!(decision.detail, "mailboxOverwrite");
         assert_eq!(decision.frame_seq, Some(200));
+    }
+
+    struct RecordingHostPush {
+        pushed_seqs: Arc<Mutex<Vec<u64>>>,
+    }
+
+    impl XbxHostRenderFramePush for RecordingHostPush {
+        fn push_render_frame_for_host_present(
+            &self,
+            frame: XbxEngineRenderFrame,
+        ) -> XbxHostRenderFramePushOutcome {
+            self.pushed_seqs
+                .lock()
+                .expect("lock pushed")
+                .push(frame.frame_seq);
+            XbxHostRenderFramePushOutcome::Accepted
+        }
+    }
+
+    #[test]
+    fn renderer_actor_pushes_latest_mailbox_frame_to_host_sink_after_accept() {
+        let pushed_seqs = Arc::new(Mutex::new(Vec::new()));
+        let push: Arc<dyn XbxHostRenderFramePush> = Arc::new(RecordingHostPush {
+            pushed_seqs: pushed_seqs.clone(),
+        });
+        let host_render_frame_push = Arc::new(Mutex::new(Some(push)));
+
+        let (tx, rx) = mpsc::sync_channel(2);
+        let render_state = Arc::new(Mutex::new(XbxRenderState::default()));
+        let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
+        let runtime_stats_sink = RuntimeStatsSink::new(runtime_stats.clone());
+
+        tx.send(RendererMsg::Frame(make_decoded_frame(9, 2, 2)))
+            .expect("frame");
+        tx.send(RendererMsg::Stop).expect("stop");
+
+        run_renderer_loop(rx, render_state, runtime_stats_sink, host_render_frame_push);
+
+        let seqs = pushed_seqs.lock().expect("lock");
+        assert_eq!(seqs.as_slice(), &[9]);
+        assert!(
+            runtime_stats
+                .lock()
+                .expect("stats")
+                .latest_host_mailbox_submit_time_ms
+                .is_some(),
+            "submit time should be recorded on push path"
+        );
+    }
+
+    struct RejectingHostPush;
+
+    impl XbxHostRenderFramePush for RejectingHostPush {
+        fn push_render_frame_for_host_present(
+            &self,
+            _frame: XbxEngineRenderFrame,
+        ) -> XbxHostRenderFramePushOutcome {
+            XbxHostRenderFramePushOutcome::RouteUnavailable
+        }
+    }
+
+    #[test]
+    fn renderer_actor_does_not_record_submit_time_when_host_push_is_not_accepted() {
+        let host_render_frame_push = Arc::new(Mutex::new(Some(
+            Arc::new(RejectingHostPush) as Arc<dyn XbxHostRenderFramePush>
+        )));
+
+        let (tx, rx) = mpsc::sync_channel(2);
+        let render_state = Arc::new(Mutex::new(XbxRenderState::default()));
+        let runtime_stats = Arc::new(Mutex::new(XbxEngineMediaRuntimeStats::default()));
+        let runtime_stats_sink = RuntimeStatsSink::new(runtime_stats.clone());
+
+        tx.send(RendererMsg::Frame(make_decoded_frame(10, 2, 2)))
+            .expect("frame");
+        tx.send(RendererMsg::Stop).expect("stop");
+
+        run_renderer_loop(rx, render_state, runtime_stats_sink, host_render_frame_push);
+
+        let stats = runtime_stats.lock().expect("stats");
+        assert_eq!(stats.latest_host_mailbox_submit_time_ms, None);
+        assert_eq!(
+            stats.latest_observation_label.as_deref(),
+            Some("hostPresentRouteUnavailable")
+        );
+        assert_eq!(
+            stats.latest_observation_summary.as_deref(),
+            Some("rendererPushDropped:routeUnavailable")
+        );
     }
 }

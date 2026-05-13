@@ -83,6 +83,7 @@ impl RecoveryObservation {
 
             // RFC: decode 后显示域问题只做本地吸收/自愈，不得直接驱动媒体恢复动作。
             VideoEscalationReason::DisplaySupplyCritical
+            | VideoEscalationReason::LocalSupplySuspect
             | VideoEscalationReason::AdapterIdleTimeout
             | VideoEscalationReason::AdapterThinStream
             | VideoEscalationReason::TransportLowValueDeadline

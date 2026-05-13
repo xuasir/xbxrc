@@ -1,5 +1,8 @@
+use std::sync::Arc;
+
 use crate::{
-    XbxEngineInputBackend, XbxEngineMediaBackend, XbxEngineRuntimeConfig, XbxNegotiationBackend,
+    XbxEngineInputBackend, XbxEngineMediaBackend, XbxEngineRuntimeConfig, XbxHostRenderFramePush,
+    XbxNegotiationBackend,
 };
 
 /**
@@ -11,6 +14,11 @@ use crate::{
 pub fn create_active_media_backend(
     input_backend: Box<dyn XbxEngineInputBackend>,
     runtime_config: XbxEngineRuntimeConfig,
+    host_render_frame_push: Option<Arc<dyn XbxHostRenderFramePush>>,
 ) -> Box<dyn XbxEngineMediaBackend> {
-    Box::new(XbxNegotiationBackend::new(input_backend, runtime_config))
+    Box::new(XbxNegotiationBackend::new(
+        input_backend,
+        runtime_config,
+        host_render_frame_push,
+    ))
 }

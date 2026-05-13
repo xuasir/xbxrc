@@ -124,12 +124,12 @@ fn start_negotiates_remote_and_reaches_running() {
 }
 
 #[test]
-fn runtime_tick_presents_frame_before_snapshotting_runtime_stats() {
+fn runtime_tick_snapshots_runtime_stats_without_tick_pull_present() {
     let requests = Rc::new(RefCell::new(Vec::new()));
     let events = Rc::new(RefCell::new(Vec::new()));
     let call_order = Arc::new(Mutex::new(Vec::new()));
     let rendered_at_ms = 1_000.0;
-    let frame = render_frame(7, rendered_at_ms);
+    let _frame = render_frame(7, rendered_at_ms);
     let backend = ScriptedMediaBackend::new(
         XbxEngineMediaNegotiation {
             local_offer_sdp: "offer".to_string(),
@@ -164,7 +164,7 @@ fn runtime_tick_presents_frame_before_snapshotting_runtime_stats() {
         },
     )
     .with_call_order(call_order.clone())
-    .with_latest_render_frame(frame.clone());
+    .with_latest_render_frame(_frame.clone());
     let mut runtime = XbxEngineRuntime::with_media_backend(
         XbxEngineRuntimeConfig::default(),
         TestHostBridge::new(requests).with_call_order(call_order.clone()),
@@ -181,11 +181,11 @@ fn runtime_tick_presents_frame_before_snapshotting_runtime_stats() {
 
     assert_eq!(
         call_order.lock().expect("lock call order").as_slice(),
-        &["take_latest_frame", "present", "snapshot"]
+        &["snapshot"]
     );
-    assert_eq!(
-        runtime.snapshot().frame_rendered_time_ms,
-        Some(rendered_at_ms)
+    assert!(
+        runtime.snapshot().frame_rendered_time_ms.is_none(),
+        "tick 不再经 pull-present 写回 frame_rendered_time_ms；上屏由 renderer 推式路径负责"
     );
 }
 
@@ -251,13 +251,7 @@ fn runtime_tick_prioritizes_present_before_budgeted_rumble_work() {
 
     assert_eq!(
         call_order.lock().expect("lock call order").as_slice(),
-        &[
-            "take_latest_frame",
-            "present",
-            "snapshot",
-            "rumble_submit",
-            "rumble_submit",
-        ]
+        &["snapshot", "rumble_submit", "rumble_submit"]
     );
     assert_eq!(
         rumble_requests.lock().expect("lock rumble requests").len(),

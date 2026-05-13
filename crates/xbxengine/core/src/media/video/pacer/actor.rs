@@ -1,3 +1,5 @@
+//! Decode 后主决策层：latest-only mailbox、`release`/`hold`/`drop` 与 recovery 排序语义集中在此（RFC 2026-04-28）。
+//! `render` 侧队列只做容量与背压执行，不再引入第二套价值序。
 use std::collections::VecDeque;
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, SyncSender, TrySendError};
 use std::sync::{Arc, Mutex};
@@ -34,6 +36,7 @@ const HOST_PRIMING_REUSE_WAIT_RATIO: u64 = 2;
 const RENDER_QUEUE_STALE_SLACK_DELTA_MS: u64 = 4;
 const RENDER_QUEUE_STALE_SLACK_REFERENCE_MS: u64 = 8;
 const RENDER_QUEUE_STALE_SLACK_KEYFRAME_MS: u64 = 12;
+const RENDER_QUEUE_STALE_SLACK_GUARD_MS: u64 = 2;
 
 impl PacerActorHandle {
     pub fn new(
@@ -210,7 +213,12 @@ fn apply_pacing_mailbox_on_submit(
                 pacing_queue.push_back(incoming);
                 return;
             };
-            if should_replace_render_queue_head(&existing_candidate, &incoming, now) {
+            if should_replace_render_queue_head(
+                &existing_candidate,
+                &incoming,
+                now,
+                Some(host_context.release_interval_ms),
+            ) {
                 record_pacer_frame_drop(
                     runtime_stats,
                     frame_drop_observation_id,
@@ -482,7 +490,12 @@ fn enqueue_render_frame(
     if render_queue.len() >= render_queue_capacity {
         let now = Instant::now();
         if let Some(existing_frame) = render_queue.front() {
-            if !should_replace_render_queue_head(existing_frame, &frame, now) {
+            if !should_replace_render_queue_head(
+                existing_frame,
+                &frame,
+                now,
+                host_context.map(|context| context.release_interval_ms),
+            ) {
                 log_pacer_flow(
                     "renderQueueReject",
                     &frame,
@@ -507,7 +520,11 @@ fn enqueue_render_frame(
             }
         }
         if let Some(replaced_frame) = render_queue.pop_front() {
-            let detail = if render_frame_is_stale(&replaced_frame, now) {
+            let detail = if render_frame_is_stale(
+                &replaced_frame,
+                now,
+                host_context.map(|context| context.release_interval_ms),
+            ) {
                 "rendererQueueReplaceStale"
             } else {
                 "rendererQueueOverflow"
@@ -547,12 +564,14 @@ fn enqueue_render_frame(
     render_queue.push_back(frame);
 }
 
+/// 与 `apply_pacing_mailbox_on_submit` 对齐：同一套 clean-anchor epoch 与 `compare_latest_only_frame_meta`，避免 render 队列独立价值序。
 fn should_replace_render_queue_head(
     existing_frame: &DecodedFrame,
     incoming_frame: &DecodedFrame,
     now: Instant,
+    release_interval_ms: Option<u64>,
 ) -> bool {
-    if render_frame_is_stale(existing_frame, now) {
+    if render_frame_is_stale(existing_frame, now, release_interval_ms) {
         return true;
     }
     match (
@@ -597,17 +616,37 @@ fn decoded_frame_latest_only_meta(frame: &DecodedFrame) -> XbxEngineLatestOnlyFr
     }
 }
 
-fn render_frame_is_stale(frame: &DecodedFrame, now: Instant) -> bool {
-    now > frame.pts + render_frame_stale_slack(frame)
+fn render_frame_is_stale(
+    frame: &DecodedFrame,
+    now: Instant,
+    release_interval_ms: Option<u64>,
+) -> bool {
+    now > frame.pts + render_frame_stale_slack(frame, release_interval_ms)
 }
 
-fn render_frame_stale_slack(frame: &DecodedFrame) -> Duration {
-    let millis = match frame.budget.recovery_value_tier() {
+fn render_frame_stale_slack(frame: &DecodedFrame, release_interval_ms: Option<u64>) -> Duration {
+    let base_millis = match frame.budget.recovery_value_tier() {
         "anchor" => RENDER_QUEUE_STALE_SLACK_KEYFRAME_MS,
         "supply" => RENDER_QUEUE_STALE_SLACK_REFERENCE_MS,
         _ => RENDER_QUEUE_STALE_SLACK_DELTA_MS,
     };
-    Duration::from_millis(millis)
+    let interval_scaled_millis = match frame.budget.recovery_value_tier() {
+        "anchor" => release_interval_ms.map(|interval_ms| {
+            interval_ms
+                .saturating_mul(2)
+                .saturating_add(RENDER_QUEUE_STALE_SLACK_GUARD_MS)
+        }),
+        "supply" => release_interval_ms.map(|interval_ms| {
+            interval_ms
+                .saturating_mul(3)
+                .saturating_div(2)
+                .saturating_add(RENDER_QUEUE_STALE_SLACK_GUARD_MS)
+        }),
+        _ => release_interval_ms
+            .map(|interval_ms| interval_ms.saturating_add(RENDER_QUEUE_STALE_SLACK_GUARD_MS)),
+    }
+    .unwrap_or(base_millis);
+    Duration::from_millis(base_millis.max(interval_scaled_millis))
 }
 
 fn should_force_recovery_keyframe_delivery(frame: &DecodedFrame) -> bool {
@@ -986,7 +1025,7 @@ fn pacer_supersede_reason(keep: &DecodedFrame, dropped: &DecodedFrame) -> &'stat
     {
         return "newerWithinSameRecoveryChain";
     }
-    if render_frame_is_stale(dropped, Instant::now()) {
+    if render_frame_is_stale(dropped, Instant::now(), None) {
         return "displayDeadlineExpired";
     }
     "newerWithinSameRole"

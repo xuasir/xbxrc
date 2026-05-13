@@ -369,12 +369,17 @@ export interface XbxEngineStatsDto {
     action_selected: string
     frame_value?: string | null
     gap_severity?: string | null
+    repairability?: number | null
     recovery_episode_stage?: string | null
     recovery_episode_progress_at_ms?: number | null
     coalescing_mode?: string | null
     unlock_reason?: string | null
     preempt_reason?: string | null
     recovery_primary_action?: string | null
+    owner_surface_state?: string | null
+    anchor_evidence?: string | null
+    keyframe_episode_health?: string | null
+    escalation_basis?: string | null
     budget_before?: {
       recovery_epoch: number
       keyframe_budget_used: number

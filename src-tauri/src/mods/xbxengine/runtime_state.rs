@@ -7,8 +7,9 @@ use ohmygamepad_protocol::OhMyGamepadRumbleRequestDto;
 use tauri::{AppHandle, Manager};
 use xbxengine::{
     create_active_media_backend, OhMyGamepadXbxEngineInputBackend, XbxEngineEventSink,
-    XbxEngineHostBridge, XbxEngineHostVideoPresentMetrics, XbxEngineMediaBackend, XbxEngineRuntime,
-    XbxEngineRuntimeConfig, XbxEngineRuntimeError,
+    XbxEngineHostBridge, XbxEngineHostPresentRoute, XbxEngineHostVideoPresentMetrics,
+    XbxEngineMediaBackend, XbxEngineRenderFrame, XbxEngineRuntime, XbxEngineRuntimeConfig,
+    XbxEngineRuntimeError, XbxHostRenderFramePush, XbxHostRenderFramePushOutcome,
 };
 use xbxengine_protocol::XbxEngineStatsDto;
 use xbxengine_protocol::{
@@ -32,6 +33,68 @@ use crate::mods::xbxengine::trace_projection::{
 use crate::shell::bridge::{TauriEngineEventBridge, TauriEngineWindowHost};
 use crate::AppState;
 
+/// 推式 host present：`renderer` 线程调用；`route` 由 engine runtime 快照同步。
+struct NativeVideoHostRenderFramePush {
+    native_video: NativeVideoRegistryRef,
+    route: Arc<StdMutex<XbxEngineHostPresentRoute>>,
+    runtime_trace: RuntimeTraceRecorderRef,
+}
+
+impl XbxHostRenderFramePush for NativeVideoHostRenderFramePush {
+    fn push_render_frame_for_host_present(
+        &self,
+        frame: XbxEngineRenderFrame,
+    ) -> XbxHostRenderFramePushOutcome {
+        let Ok(route_guard) = self.route.lock() else {
+            self.runtime_trace.record_event(
+                "xbxengine-host",
+                "nativeHostPushDropped",
+                None,
+                serde_json::json!({
+                    "reason": "routeUnavailable",
+                    "frameSeq": frame.frame_seq,
+                }),
+            );
+            return XbxHostRenderFramePushOutcome::RouteUnavailable;
+        };
+        let Some(viewport) = route_guard.viewport.as_ref() else {
+            self.runtime_trace.record_event(
+                "xbxengine-host",
+                "nativeHostPushDropped",
+                None,
+                serde_json::json!({
+                    "reason": "routeUnavailable",
+                    "frameSeq": frame.frame_seq,
+                }),
+            );
+            return XbxHostRenderFramePushOutcome::RouteUnavailable;
+        };
+        let Ok(mut registry) = self.native_video.lock() else {
+            self.runtime_trace.record_event(
+                "xbxengine-host",
+                "nativeHostPushDropped",
+                None,
+                serde_json::json!({
+                    "reason": "registryUnavailable",
+                    "frameSeq": frame.frame_seq,
+                    "viewportId": viewport.viewport_id,
+                    "surfaceId": route_guard.surface_id,
+                }),
+            );
+            return XbxHostRenderFramePushOutcome::RegistryUnavailable;
+        };
+        if registry.present_frame(
+            &viewport.viewport_id,
+            route_guard.surface_id.as_deref(),
+            &frame,
+        ) {
+            XbxHostRenderFramePushOutcome::Accepted
+        } else {
+            XbxHostRenderFramePushOutcome::Rejected
+        }
+    }
+}
+
 type TauriXbxEngineRuntime = XbxEngineRuntime<
     TauriXbxEngineHostBridge,
     TauriXbxEngineEventSink,
@@ -52,6 +115,8 @@ pub struct XbxEngineRuntimeState {
     runtime: StdMutex<TauriXbxEngineRuntime>,
     native_video: NativeVideoRegistryRef,
     runtime_trace: RuntimeTraceRecorderRef,
+    /// 与 `XbxEngineRuntime` 快照同步，供 `NativeVideoHostRenderFramePush` 在 renderer 线程读取。
+    host_present_route: Arc<StdMutex<XbxEngineHostPresentRoute>>,
     /// `statsSnapshot` / `observabilitySnapshot` 最小间隔（毫秒），可由设置 `runtime_trace_mode` 运行时更新。
     stats_snapshot_interval_ms: Arc<AtomicU64>,
     last_stats_trace_at: StdMutex<Option<Instant>>,
@@ -77,8 +142,18 @@ impl XbxEngineRuntimeState {
             runtime_trace: runtime_trace.clone(),
         };
         let input_backend = Box::new(OhMyGamepadXbxEngineInputBackend::new());
-        let media_backend =
-            create_active_media_backend(input_backend, XbxEngineRuntimeConfig::default());
+        let host_present_route = Arc::new(StdMutex::new(XbxEngineHostPresentRoute::default()));
+        let host_render_frame_push: Arc<dyn XbxHostRenderFramePush> =
+            Arc::new(NativeVideoHostRenderFramePush {
+                native_video: native_video.clone(),
+                route: host_present_route.clone(),
+                runtime_trace: runtime_trace.clone(),
+            });
+        let media_backend = create_active_media_backend(
+            input_backend,
+            XbxEngineRuntimeConfig::default(),
+            Some(host_render_frame_push),
+        );
         let rumble_worker =
             GamepadRumbleWorkerHandle::new(app_handle.clone(), runtime_trace.clone());
         let runtime = XbxEngineRuntime::with_media_backend(
@@ -87,6 +162,7 @@ impl XbxEngineRuntimeState {
                 app_handle,
                 native_video: native_video.clone(),
                 runtime_trace: runtime_trace.clone(),
+                host_present_route: host_present_route.clone(),
                 cancellation_epoch: cancellation_epoch.clone(),
                 rumble_worker: rumble_worker.clone(),
             },
@@ -99,6 +175,7 @@ impl XbxEngineRuntimeState {
             runtime: StdMutex::new(runtime),
             native_video,
             runtime_trace,
+            host_present_route,
             stats_snapshot_interval_ms: Arc::new(AtomicU64::new(
                 stats_snapshot_interval.as_millis() as u64,
             )),
@@ -113,6 +190,14 @@ impl XbxEngineRuntimeState {
     pub fn set_stats_snapshot_interval(&self, interval: Duration) {
         self.stats_snapshot_interval_ms
             .store(interval.as_millis() as u64, Ordering::Relaxed);
+    }
+
+    fn sync_host_present_route_from_runtime(&self, runtime: &TauriXbxEngineRuntime) {
+        let snap = runtime.snapshot();
+        if let Ok(mut guard) = self.host_present_route.lock() {
+            guard.viewport = snap.viewport.clone();
+            guard.surface_id = snap.surface_id.clone();
+        }
     }
 
     pub fn apply_control(
@@ -159,6 +244,7 @@ impl XbxEngineRuntimeState {
         let started_at = Instant::now();
         let command_for_trace = command.clone();
         let result = runtime.apply_control(command);
+        self.sync_host_present_route_from_runtime(&runtime);
         record_control_apply_trace(
             &self.runtime_trace,
             &command_for_trace,
@@ -177,6 +263,7 @@ impl XbxEngineRuntimeState {
                 .runtime
                 .lock()
                 .map_err(|_| XbxEngineRuntimeError::new("xbxEngineRuntimeLockPoisoned"))?;
+            self.sync_host_present_route_from_runtime(&runtime);
             self.apply_native_video_host_feedback(&mut runtime, native_video_feedback);
             runtime.tick();
             let mut stats_snapshot = runtime.snapshot_stats();
@@ -231,6 +318,7 @@ impl XbxEngineRuntimeState {
                 .runtime
                 .lock()
                 .map_err(|_| AppError::XbxEngine("Failed to lock xbxengine runtime".to_string()))?;
+            self.sync_host_present_route_from_runtime(&runtime);
             self.apply_native_video_host_feedback(&mut runtime, native_video_feedback);
             let mut stats = runtime.snapshot_stats();
             self.apply_build_fingerprint(&mut stats);
@@ -460,11 +548,39 @@ fn summarize_sdp_capabilities(sdp: &str) -> serde_json::Value {
     })
 }
 
+fn update_host_present_route_on_attach(
+    route: &Arc<StdMutex<XbxEngineHostPresentRoute>>,
+    viewport: &xbxengine_protocol::XbxEngineViewportDto,
+    surface_id: Option<&str>,
+) {
+    if let Ok(mut guard) = route.lock() {
+        guard.viewport = Some(viewport.clone());
+        guard.surface_id = surface_id.map(str::to_string);
+    }
+}
+
+fn update_host_present_route_on_detach(
+    route: &Arc<StdMutex<XbxEngineHostPresentRoute>>,
+    viewport_id: &str,
+) {
+    if let Ok(mut guard) = route.lock() {
+        if guard
+            .viewport
+            .as_ref()
+            .is_some_and(|viewport| viewport.viewport_id == viewport_id)
+        {
+            guard.viewport = None;
+            guard.surface_id = None;
+        }
+    }
+}
+
 #[derive(Clone)]
 struct TauriXbxEngineHostBridge {
     app_handle: AppHandle,
     native_video: NativeVideoRegistryRef,
     runtime_trace: RuntimeTraceRecorderRef,
+    host_present_route: Arc<StdMutex<XbxEngineHostPresentRoute>>,
     cancellation_epoch: Arc<AtomicU64>,
     rumble_worker: GamepadRumbleWorkerHandle,
 }
@@ -639,6 +755,7 @@ impl TauriXbxEngineHostBridge {
         viewport: &xbxengine_protocol::XbxEngineViewportDto,
         surface_id: Option<&str>,
     ) -> Result<(), XbxEngineRuntimeError> {
+        update_host_present_route_on_attach(&self.host_present_route, viewport, surface_id);
         let Ok(mut registry) = self.native_video.lock() else {
             return Err(XbxEngineRuntimeError::new(
                 "xbxEngineNativeVideoRegistryLockFailed",
@@ -660,6 +777,7 @@ impl TauriXbxEngineHostBridge {
     }
 
     fn detach_native_viewport(&self, viewport_id: &str) -> Result<(), XbxEngineRuntimeError> {
+        update_host_present_route_on_detach(&self.host_present_route, viewport_id);
         let Ok(mut registry) = self.native_video.lock() else {
             return Err(XbxEngineRuntimeError::new(
                 "xbxEngineNativeVideoRegistryLockFailed",
@@ -927,7 +1045,14 @@ fn record_control_apply_trace(
 
 #[cfg(test)]
 mod tests {
-    use super::summarize_sdp_capabilities;
+    use std::sync::{Arc, Mutex as StdMutex};
+
+    use super::{
+        summarize_sdp_capabilities, update_host_present_route_on_attach,
+        update_host_present_route_on_detach,
+    };
+    use xbxengine::XbxEngineHostPresentRoute;
+    use xbxengine_protocol::XbxEngineViewportDto;
 
     #[test]
     fn summarize_sdp_capabilities_detects_video_repair_streams() {
@@ -982,5 +1107,41 @@ mod tests {
         assert_eq!(summary["hasSsrcGroupFid"], false);
         assert_eq!(summary["videoRepairCodecs"], serde_json::json!([]));
         assert_eq!(summary["videoCodecs"], serde_json::json!(["h264"]));
+    }
+
+    #[test]
+    fn attach_updates_host_present_route_immediately() {
+        let route = Arc::new(StdMutex::new(XbxEngineHostPresentRoute::default()));
+        let viewport = XbxEngineViewportDto {
+            viewport_id: "vp-1".to_string(),
+        };
+
+        update_host_present_route_on_attach(&route, &viewport, Some("wgpu:surface-1"));
+
+        let guard = route.lock().expect("route lock");
+        assert_eq!(
+            guard
+                .viewport
+                .as_ref()
+                .map(|value| value.viewport_id.as_str()),
+            Some("vp-1")
+        );
+        assert_eq!(guard.surface_id.as_deref(), Some("wgpu:surface-1"));
+    }
+
+    #[test]
+    fn detach_clears_matching_host_present_route() {
+        let route = Arc::new(StdMutex::new(XbxEngineHostPresentRoute {
+            viewport: Some(XbxEngineViewportDto {
+                viewport_id: "vp-1".to_string(),
+            }),
+            surface_id: Some("wgpu:surface-1".to_string()),
+        }));
+
+        update_host_present_route_on_detach(&route, "vp-1");
+
+        let guard = route.lock().expect("route lock");
+        assert!(guard.viewport.is_none());
+        assert!(guard.surface_id.is_none());
     }
 }

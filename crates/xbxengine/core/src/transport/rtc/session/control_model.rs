@@ -75,6 +75,7 @@ pub(crate) fn owner_recovery_reason_to_media_escalation_reason(
         OwnerRecoveryReason::TransportAwaitRecoveryKeyframe => {
             Some(VideoEscalationReason::TransportAwaitRecoveryKeyframe)
         }
+        OwnerRecoveryReason::LocalSupplySuspect => Some(VideoEscalationReason::LocalSupplySuspect),
         // RFC: decode 后显示域信号不得直接驱动媒体恢复动作。
         OwnerRecoveryReason::DisplaySupplyCritical
         | OwnerRecoveryReason::DisplaySupplyDegraded
@@ -87,6 +88,7 @@ pub(crate) fn resolve_session_fault_domain_from_owner_recovery_reason(
 ) -> SessionFaultDomain {
     match reason {
         OwnerRecoveryReason::TransportAwaitRecoveryKeyframe => SessionFaultDomain::ReferenceChain,
+        OwnerRecoveryReason::LocalSupplySuspect => SessionFaultDomain::DisplaySupply,
         OwnerRecoveryReason::DisplaySupplyCritical
         | OwnerRecoveryReason::DisplaySupplyDegraded
         | OwnerRecoveryReason::HostPresentStalled => SessionFaultDomain::DisplaySupply,
@@ -104,6 +106,7 @@ pub(crate) fn resolve_session_fault_domain(reason: VideoEscalationReason) -> Ses
         | VideoEscalationReason::TransportAwaitRecoveryKeyframe => {
             SessionFaultDomain::ReferenceChain
         }
+        VideoEscalationReason::LocalSupplySuspect => SessionFaultDomain::DisplaySupply,
         VideoEscalationReason::Reconfigure | VideoEscalationReason::DecoderBackendFailure => {
             SessionFaultDomain::DecodePipeline
         }

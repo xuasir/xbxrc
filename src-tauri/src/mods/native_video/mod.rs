@@ -338,7 +338,7 @@ impl NativeVideoRegistry {
         viewport_id: &str,
         surface_id: Option<&str>,
         frame: &XbxEngineRenderFrame,
-    ) {
+    ) -> bool {
         let target = self.resolve_viewport_target(viewport_id);
         let decoded_surface = DecodedVideoSurface::from_render_frame(frame);
         let pipeline_plan =
@@ -382,14 +382,15 @@ impl NativeVideoRegistry {
             .get(viewport_id)
             .is_some_and(|pipeline| !pipeline.can_process(&decoded_surface))
         {
-            return;
+            return false;
         }
         let presenter = match self.presenters.get_mut(viewport_id) {
             Some(presenter) => presenter,
-            None => return,
+            None => return false,
         };
-        presenter.present(surface_id, frame);
+        let accepted = presenter.present(surface_id, frame);
         self.sync_presenter_diagnostics(viewport_id);
+        accepted
     }
 
     #[allow(dead_code)]

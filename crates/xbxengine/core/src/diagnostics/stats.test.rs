@@ -231,6 +231,10 @@ fn latest_decision_summary_surfaces_reconnect_gate_detail_when_present() {
             unlock_reason: None,
             preempt_reason: None,
             recovery_primary_action: None,
+            owner_surface_state: None,
+            anchor_evidence: None,
+            keyframe_episode_health: None,
+            escalation_basis: None,
             budget_before: None,
             budget_after: None,
             trigger_observation_label: None,
@@ -269,6 +273,10 @@ fn latest_decision_summary_marks_local_decoder_maintenance_family() {
             unlock_reason: None,
             preempt_reason: None,
             recovery_primary_action: None,
+            owner_surface_state: None,
+            anchor_evidence: None,
+            keyframe_episode_health: None,
+            escalation_basis: None,
             budget_before: None,
             budget_after: None,
             trigger_observation_label: None,
@@ -285,6 +293,59 @@ fn latest_decision_summary_marks_local_decoder_maintenance_family() {
         dto.latest_decision_summary.as_deref(),
         Some("local_decoder_maintenance:local-self-healing:requestDecoderReset")
     );
+}
+
+#[test]
+fn latest_recovery_decision_ledger_projects_extended_observability_fields() {
+    let stats = XbxEngineMediaRuntimeStats {
+        transport_state: XbxEngineTransportStateDto::Connected,
+        latest_recovery_decision_ledger: Some(crate::XbxEngineRecoveryDecisionLedgerObservation {
+            decision_id: 43,
+            state_before: "recovery-eligible".to_string(),
+            state_after: "active-recovery".to_string(),
+            input_signal: "transportAwaitRecoveryAnchor:transportAwaitRecoveryAnchor".to_string(),
+            gate_result: "pass".to_string(),
+            action_selected: "requestPli".to_string(),
+            frame_value: Some("delta".to_string()),
+            gap_severity: Some("anchor-gap".to_string()),
+            repairability: Some(0.25),
+            recovery_episode_stage: Some("waiting-response".to_string()),
+            recovery_episode_progress_at_ms: Some(120.0),
+            coalescing_mode: Some("refresh".to_string()),
+            unlock_reason: Some("continuationOnlyRefreshIntervalElapsed".to_string()),
+            preempt_reason: None,
+            recovery_primary_action: Some("requestPli".to_string()),
+            owner_surface_state: Some("await-anchor".to_string()),
+            anchor_evidence: Some("fresh-post-suspect".to_string()),
+            keyframe_episode_health: Some("continuation-only".to_string()),
+            escalation_basis: Some("anchor_missing".to_string()),
+            budget_before: None,
+            budget_after: None,
+            trigger_observation_label: None,
+            trigger_observation_summary: None,
+            command_result: None,
+            command_detail: None,
+            observed_at_ms: 1_100.0,
+        }),
+        ..XbxEngineMediaRuntimeStats::default()
+    };
+
+    let dto = build_xbxengine_stats(&test_snapshot(), Some(&stats));
+    let ledger = dto
+        .latest_recovery_decision_ledger
+        .as_ref()
+        .expect("latest recovery decision ledger dto");
+    assert_eq!(ledger.repairability, Some(0.25));
+    assert_eq!(ledger.owner_surface_state.as_deref(), Some("await-anchor"));
+    assert_eq!(
+        ledger.anchor_evidence.as_deref(),
+        Some("fresh-post-suspect")
+    );
+    assert_eq!(
+        ledger.keyframe_episode_health.as_deref(),
+        Some("continuation-only")
+    );
+    assert_eq!(ledger.escalation_basis.as_deref(), Some("anchor_missing"));
 }
 
 #[test]
@@ -756,6 +817,45 @@ fn build_stats_reports_recovering_after_first_present_when_output_turns_stale() 
     assert_eq!(
         dto.primary_issue_chain.as_deref(),
         Some("active-recovery:adapterIdleTimeout")
+    );
+}
+
+#[test]
+fn build_stats_keeps_recovering_when_decode_or_submit_is_still_fresh() {
+    let now_ms = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as f64;
+    let stats = XbxEngineMediaRuntimeStats {
+        transport_state: XbxEngineTransportStateDto::Connected,
+        transport_policy_profile: Some("cloud".to_string()),
+        session_phase: Some("recovering".to_string()),
+        direct_gaming_bitrate_band: Some("steady".to_string()),
+        message_handshake_acked_at_ms: Some(now_ms - 1_000.0),
+        control_ready_at_ms: Some(now_ms - 990.0),
+        latest_video_host_present_time_ms: Some(now_ms - 1_200.0),
+        latest_video_decode_ok_time_ms: Some(now_ms - 40.0),
+        latest_host_mailbox_submit_time_ms: Some(now_ms - 24.0),
+        host_mailbox_enqueue_count_total: 12,
+        host_no_pending_pressure_level: Some("critical".to_string()),
+        host_no_pending_streak: 320,
+        host_no_pending_max_streak: 320,
+        video_owner_state: Some("rebuilding-supply".to_string()),
+        video_owner_reason: Some("transportAwaitRecoveryAnchor".to_string()),
+        video_owner_source: Some("anchor".to_string()),
+        video_owner_observed_at_ms: Some(now_ms - 10.0),
+        video_decoder_stalled: Some(false),
+        ..XbxEngineMediaRuntimeStats::default()
+    };
+
+    let dto = build_xbxengine_stats(&test_snapshot(), Some(&stats));
+
+    assert_eq!(dto.session_phase.as_deref(), Some("recovering"));
+    assert_eq!(dto.stream_lifecycle_phase.as_deref(), Some("recovering"));
+    assert_eq!(dto.video_health.as_deref(), Some("recovering"));
+    assert_eq!(
+        dto.primary_issue_chain.as_deref(),
+        Some("active-recovery:transportAwaitRecoveryAnchor")
     );
 }
 

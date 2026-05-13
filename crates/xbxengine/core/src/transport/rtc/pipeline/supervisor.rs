@@ -17,6 +17,8 @@ pub(crate) struct MediaSupervisorContext {
     pub(crate) runtime_config: XbxEngineRuntimeConfig,
     pub(crate) local_decoder_reset_handle:
         Arc<Mutex<Option<Arc<crate::media::video::decode::actor::DecodeActorHandle>>>>,
+    pub(crate) host_render_frame_push:
+        Arc<Mutex<Option<Arc<dyn crate::api::backend::XbxHostRenderFramePush>>>>,
 }
 
 pub(crate) fn spawn_media_supervisor(
@@ -50,6 +52,7 @@ pub(crate) fn spawn_media_supervisor(
                     render_state: context.render_state.clone(),
                     transport_fact_sink: context.transport_fact_sink.clone(),
                     runtime_config: context.runtime_config.clone(),
+                    host_render_frame_push: context.host_render_frame_push.clone(),
                 },
             );
             if let Ok(mut handle) = context.local_decoder_reset_handle.lock() {

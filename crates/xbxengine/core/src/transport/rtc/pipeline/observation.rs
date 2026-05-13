@@ -192,7 +192,7 @@ pub(super) fn map_transport_observation_to_hint_label(
     match observation {
         TransportObservation::Admission(
             crate::transport::rtc::stream::adapter_types::TransportAdmissionObservation::AwaitRecoveryKeyframe,
-        ) => "transportAwaitRecoveryAnchor",
+        ) => "transportAwaitRecoverySuspect",
         TransportObservation::Loss(
             crate::transport::rtc::stream::adapter_types::TransportLossObservation::PacketLossDetected,
         ) => "transportSampleLoss",
@@ -201,7 +201,7 @@ pub(super) fn map_transport_observation_to_hint_label(
         ) => "transportRecoveryKeyframeRequested",
         TransportObservation::Loss(
             crate::transport::rtc::stream::adapter_types::TransportLossObservation::AwaitRecoveryKeyframe,
-        ) => "transportAwaitRecoveryAnchor",
+        ) => "transportAwaitRecoverySuspect",
         TransportObservation::StreamIdleTimeout => "adapterIdleTimeout",
         TransportObservation::StreamThinStall => "adapterThinStream",
         TransportObservation::NackRecoveredLate => "transportRecoveredLate",

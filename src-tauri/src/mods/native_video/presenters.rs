@@ -80,7 +80,7 @@ pub(super) enum NativeVideoPresenterKind {
 pub(super) trait NativeVideoPresenter: Send {
     fn kind(&self) -> NativeVideoPresenterKind;
     fn attach(&mut self, surface_id: Option<&str>);
-    fn present(&mut self, surface_id: Option<&str>, frame: &XbxEngineRenderFrame);
+    fn present(&mut self, surface_id: Option<&str>, frame: &XbxEngineRenderFrame) -> bool;
     fn detach(&mut self);
     fn begin_media_epoch(&mut self) {}
     fn apply_viewport_diagnostics(&self, _viewport: &mut NativeVideoViewportState) {}
@@ -117,10 +117,11 @@ impl NativeVideoPresenter for NoopVideoPresenter {
         self.surface_id = surface_id.map(str::to_string);
     }
 
-    fn present(&mut self, surface_id: Option<&str>, _frame: &XbxEngineRenderFrame) {
+    fn present(&mut self, surface_id: Option<&str>, _frame: &XbxEngineRenderFrame) -> bool {
         self.surface_id = surface_id
             .map(str::to_string)
             .or_else(|| self.surface_id.clone());
+        true
     }
 
     fn detach(&mut self) {
@@ -322,15 +323,12 @@ impl NativeVideoPresenter for WindowsWgpuPresenter {
         self.render_loop_pending.store(false, Ordering::Relaxed);
     }
 
-    fn present(&mut self, surface_id: Option<&str>, frame: &XbxEngineRenderFrame) {
+    fn present(&mut self, surface_id: Option<&str>, frame: &XbxEngineRenderFrame) -> bool {
         self.surface_id = surface_id
             .map(str::to_string)
             .or_else(|| self.surface_id.clone());
         self.ensure_render_loop();
         let now_ms = now_ms_f64();
-        if let Ok(mut telemetry) = self.telemetry.lock() {
-            telemetry.latest_submit_time_ms = Some(now_ms);
-        }
         if self.should_drop_submitted_frame(frame, now_ms) {
             if let Ok(mut telemetry) = self.telemetry.lock() {
                 telemetry.present_enqueue_count_total =
@@ -351,7 +349,7 @@ impl NativeVideoPresenter for WindowsWgpuPresenter {
                     })
                 },
             );
-            return;
+            return false;
         }
         let Ok(mut telemetry) = self.telemetry.lock() else {
             record_native_video_timing_event_lazy(
@@ -362,8 +360,9 @@ impl NativeVideoPresenter for WindowsWgpuPresenter {
                 &self.window_label,
                 || serde_json::json!({ "reason": "telemetryLockFailed", "frameSeq": frame.frame_seq }),
             );
-            return;
+            return false;
         };
+        let previous_submit_time_ms = telemetry.latest_submit_time_ms;
         let submit_gap_ms = telemetry.record_submit(now_ms);
         let no_pending_streak_before_submit = telemetry.no_pending_streak;
         let should_warn_submit_gap =
@@ -380,7 +379,7 @@ impl NativeVideoPresenter for WindowsWgpuPresenter {
                 &self.window_label,
                 || serde_json::json!({ "reason": "frameSlotLockFailed", "frameSeq": frame.frame_seq }),
             );
-            return;
+            return false;
         };
         match frame_slot.submit_frame(frame, now_ms, &mut telemetry) {
             super::scheduling::ScheduledFrameSubmitOutcome::Accepted {
@@ -453,6 +452,8 @@ impl NativeVideoPresenter for WindowsWgpuPresenter {
                         },
                     );
                 }
+                self.request_immediate_render_tick();
+                true
             }
             super::scheduling::ScheduledFrameSubmitOutcome::DroppedStale {
                 frame_seq,
@@ -491,6 +492,8 @@ impl NativeVideoPresenter for WindowsWgpuPresenter {
                         })
                     },
                 );
+                telemetry.latest_submit_time_ms = previous_submit_time_ms;
+                false
             }
             super::scheduling::ScheduledFrameSubmitOutcome::RejectedAlreadyPresented {
                 frame_seq,
@@ -527,9 +530,10 @@ impl NativeVideoPresenter for WindowsWgpuPresenter {
                         })
                     },
                 );
+                telemetry.latest_submit_time_ms = previous_submit_time_ms;
+                false
             }
         }
-        self.request_immediate_render_tick();
     }
 
     fn detach(&mut self) {
@@ -949,15 +953,12 @@ impl NativeVideoPresenter for MacOsWgpuPresenter {
         );
     }
 
-    fn present(&mut self, surface_id: Option<&str>, frame: &XbxEngineRenderFrame) {
+    fn present(&mut self, surface_id: Option<&str>, frame: &XbxEngineRenderFrame) -> bool {
         self.surface_id = surface_id
             .map(str::to_string)
             .or_else(|| self.surface_id.clone());
         self.ensure_render_loop();
         let now_ms = now_ms_f64();
-        if let Ok(mut telemetry) = self.telemetry.lock() {
-            telemetry.latest_submit_time_ms = Some(now_ms);
-        }
         if self.should_drop_submitted_frame(frame, now_ms) {
             if let Ok(mut telemetry) = self.telemetry.lock() {
                 telemetry.present_enqueue_count_total =
@@ -985,7 +986,7 @@ impl NativeVideoPresenter for MacOsWgpuPresenter {
                 frame.frame_seq,
                 now_ms - frame.rendered_at_ms
             );
-            return;
+            return false;
         }
         let Ok(mut telemetry) = self.telemetry.lock() else {
             record_native_video_timing_event_lazy(
@@ -996,8 +997,9 @@ impl NativeVideoPresenter for MacOsWgpuPresenter {
                 &self.window_label,
                 || serde_json::json!({ "reason": "telemetryLockFailed", "frameSeq": frame.frame_seq }),
             );
-            return;
+            return false;
         };
+        let previous_submit_time_ms = telemetry.latest_submit_time_ms;
         let submit_gap_ms = telemetry.record_submit(now_ms);
         let no_pending_streak_before_submit = telemetry.no_pending_streak;
         let should_warn_submit_gap =
@@ -1014,7 +1016,7 @@ impl NativeVideoPresenter for MacOsWgpuPresenter {
                 &self.window_label,
                 || serde_json::json!({ "reason": "frameSlotLockFailed", "frameSeq": frame.frame_seq }),
             );
-            return;
+            return false;
         };
         match frame_slot.submit_frame(frame, now_ms, &mut telemetry) {
             super::scheduling::ScheduledFrameSubmitOutcome::Accepted {
@@ -1087,6 +1089,8 @@ impl NativeVideoPresenter for MacOsWgpuPresenter {
                         },
                     );
                 }
+                self.request_immediate_render_tick();
+                true
             }
             super::scheduling::ScheduledFrameSubmitOutcome::DroppedStale {
                 frame_seq,
@@ -1125,6 +1129,8 @@ impl NativeVideoPresenter for MacOsWgpuPresenter {
                         })
                     },
                 );
+                telemetry.latest_submit_time_ms = previous_submit_time_ms;
+                false
             }
             super::scheduling::ScheduledFrameSubmitOutcome::RejectedAlreadyPresented {
                 frame_seq,
@@ -1161,9 +1167,10 @@ impl NativeVideoPresenter for MacOsWgpuPresenter {
                         })
                     },
                 );
+                telemetry.latest_submit_time_ms = previous_submit_time_ms;
+                false
             }
         }
-        self.request_immediate_render_tick();
     }
 
     fn detach(&mut self) {
@@ -1447,7 +1454,7 @@ impl NativeVideoPresenter for MacOsVideoPresenter {
         self.render_loop_pending.store(false, Ordering::Relaxed);
     }
 
-    fn present(&mut self, surface_id: Option<&str>, frame: &XbxEngineRenderFrame) {
+    fn present(&mut self, surface_id: Option<&str>, frame: &XbxEngineRenderFrame) -> bool {
         self.surface_id = surface_id
             .map(str::to_string)
             .or_else(|| self.surface_id.clone());
@@ -1466,12 +1473,9 @@ impl NativeVideoPresenter for MacOsVideoPresenter {
                     })
                 },
             );
-            return;
+            return false;
         }
         let now_ms = now_ms_f64();
-        if let Ok(mut telemetry) = self.telemetry.lock() {
-            telemetry.latest_submit_time_ms = Some(now_ms);
-        }
         if self.should_drop_submitted_frame(frame, now_ms) {
             if let Ok(mut telemetry) = self.telemetry.lock() {
                 telemetry.present_enqueue_count_total =
@@ -1492,7 +1496,7 @@ impl NativeVideoPresenter for MacOsVideoPresenter {
                     })
                 },
             );
-            return;
+            return false;
         }
         let Ok(mut telemetry) = self.telemetry.lock() else {
             record_native_video_timing_event_lazy(
@@ -1508,8 +1512,9 @@ impl NativeVideoPresenter for MacOsVideoPresenter {
                     })
                 },
             );
-            return;
+            return false;
         };
+        let previous_submit_time_ms = telemetry.latest_submit_time_ms;
         let submit_gap_ms = telemetry.record_submit(now_ms);
         let no_pending_streak_before_submit = telemetry.no_pending_streak;
         let should_warn_submit_gap =
@@ -1531,7 +1536,7 @@ impl NativeVideoPresenter for MacOsVideoPresenter {
                     })
                 },
             );
-            return;
+            return false;
         };
         match frame_slot.submit_frame(frame, now_ms, &mut telemetry) {
             super::scheduling::ScheduledFrameSubmitOutcome::Accepted {
@@ -1605,6 +1610,8 @@ impl NativeVideoPresenter for MacOsVideoPresenter {
                         },
                     );
                 }
+                self.request_immediate_present_tick();
+                true
             }
             super::scheduling::ScheduledFrameSubmitOutcome::DroppedStale {
                 frame_seq,
@@ -1643,6 +1650,8 @@ impl NativeVideoPresenter for MacOsVideoPresenter {
                         })
                     },
                 );
+                telemetry.latest_submit_time_ms = previous_submit_time_ms;
+                false
             }
             super::scheduling::ScheduledFrameSubmitOutcome::RejectedAlreadyPresented {
                 frame_seq,
@@ -1679,9 +1688,10 @@ impl NativeVideoPresenter for MacOsVideoPresenter {
                         })
                     },
                 );
+                telemetry.latest_submit_time_ms = previous_submit_time_ms;
+                false
             }
         }
-        self.request_immediate_present_tick();
     }
 
     fn detach(&mut self) {

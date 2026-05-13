@@ -65,6 +65,9 @@ use crate::transport::rtc::session::startup_compat::{
     first_frame_acquisition_priority_active, should_hold_pre_first_frame_connected_idle_timeout,
     should_hold_pre_first_frame_display_supply_degraded,
 };
+use crate::transport::rtc::session::suspect_anchor_gate::{
+    recovery_anchor_evidence_trace_code, upgrade_local_supply_suspect_signal_if_ready,
+};
 
 const DEFAULT_BWE_TARGET_KBPS: u32 = 16_000;
 const BWE_UNSTABLE_HOLD_CONFIRMATION_TICKS: u8 = 2;
@@ -121,6 +124,79 @@ fn ledger_input_signals_transport_await_recovery_picture(
         .contains(TRANSPORT_AWAIT_RECOVERY_KEYFRAME_DIAGNOSIS)
 }
 
+fn recovery_owner_surface_state_for_reason(
+    reason: VideoEscalationReason,
+    action: RecoveryAction,
+) -> &'static str {
+    match reason {
+        VideoEscalationReason::LocalSupplySuspect => "suspect",
+        VideoEscalationReason::TransportAwaitRecoveryKeyframe => "await-anchor",
+        VideoEscalationReason::LifecycleRecovering => {
+            if action == RecoveryAction::RequestReconnectCandidate {
+                "connectivity-recovery"
+            } else {
+                "local-recovery"
+            }
+        }
+        VideoEscalationReason::TransportExpiredDeadline
+        | VideoEscalationReason::TransportSevereDeadline
+        | VideoEscalationReason::TransportRecoveredLate
+        | VideoEscalationReason::TransportSampleLoss => "connectivity-recovery",
+        VideoEscalationReason::WaitKeyframe
+        | VideoEscalationReason::DisplaySupplyCritical
+        | VideoEscalationReason::AdapterIdleTimeout
+        | VideoEscalationReason::AdapterThinStream
+        | VideoEscalationReason::TransportLowValueDeadline
+        | VideoEscalationReason::TransportRepairableDeadline => "suspect",
+        VideoEscalationReason::Reconfigure | VideoEscalationReason::DecoderBackendFailure => {
+            "local-recovery"
+        }
+    }
+}
+
+fn recovery_escalation_basis_for_reason(reason: VideoEscalationReason) -> &'static str {
+    match reason {
+        VideoEscalationReason::TransportAwaitRecoveryKeyframe => "anchor_missing",
+        VideoEscalationReason::LifecycleRecovering
+        | VideoEscalationReason::TransportExpiredDeadline
+        | VideoEscalationReason::TransportSevereDeadline
+        | VideoEscalationReason::TransportRecoveredLate
+        | VideoEscalationReason::TransportSampleLoss => "connectivity_bad",
+        _ => "local_supply",
+    }
+}
+
+fn recovery_keyframe_episode_health_for_proposal(
+    reason: VideoEscalationReason,
+    action: RecoveryAction,
+    unlock_reason: Option<&str>,
+) -> Option<&'static str> {
+    let stalled_unlock = unlock_reason == Some("keyframeEpisodeHealth:stalled");
+    let continuation_refresh_unlock =
+        unlock_reason == Some("continuationOnlyRefreshIntervalElapsed");
+    match (reason, action) {
+        (VideoEscalationReason::TransportAwaitRecoveryKeyframe, _) if stalled_unlock => {
+            Some("stalled")
+        }
+        (VideoEscalationReason::TransportAwaitRecoveryKeyframe, _)
+            if continuation_refresh_unlock =>
+        {
+            Some("continuation-only")
+        }
+        (
+            VideoEscalationReason::TransportAwaitRecoveryKeyframe,
+            RecoveryAction::CoalescedKeyframeInFlight,
+        ) => Some("waiting-response"),
+        (VideoEscalationReason::TransportAwaitRecoveryKeyframe, RecoveryAction::RequestFir) => {
+            Some("continuation-only")
+        }
+        (VideoEscalationReason::TransportAwaitRecoveryKeyframe, RecoveryAction::RequestPli) => {
+            Some("waiting-response")
+        }
+        _ => None,
+    }
+}
+
 fn is_transport_await_picture_recovery_episode(
     episode: &XbxEnginePictureRecoveryEpisodeObservation,
 ) -> bool {
@@ -156,6 +232,43 @@ fn current_transport_await_keyframe_episode(
                 .then_with(|| left.episode_id.cmp(&right.episode_id))
         })
         .cloned()
+}
+
+/// RFC 2026-05-13：`Stalled` 档释放 `coalesced:keyframeInFlight` 占位，避免 continuation-only 长期挂死。
+fn coalesced_transport_await_should_unlock_for_stall(
+    runtime_stats: &Mutex<XbxEngineMediaRuntimeStats>,
+    observed_at_ms: f64,
+) -> bool {
+    let profile = resolve_recovery_profile(runtime_stats);
+    RuntimeStatsSink::read_shared(runtime_stats, |stats| {
+        if has_current_clean_anchor_from_stats(stats) {
+            return false;
+        }
+        let Some(episode) = current_transport_await_keyframe_episode(stats) else {
+            return false;
+        };
+        let age = (observed_at_ms - episode.requested_at_ms).max(0.0);
+        if age < profile.decoded_pending_commit_hold_ms {
+            return false;
+        }
+        let decode_advanced = stats.latest_video_decode_ok_time_ms.is_some_and(|t| {
+            t > episode.requested_at_ms
+                && (observed_at_ms - t).max(0.0)
+                    <= profile.playback_recovered_decode_progress_fresh_ms
+        });
+        let present_advanced = stats.latest_video_host_present_time_ms.is_some_and(|t| {
+            t > episode.requested_at_ms
+                && (observed_at_ms - t).max(0.0) <= profile.playback_recovered_host_present_fresh_ms
+        });
+        if decode_advanced || present_advanced {
+            return false;
+        }
+        let packets_recent = stats.latest_video_packet_arrival_time_ms.is_some_and(|t| {
+            (observed_at_ms - t).max(0.0) <= TRANSPORT_AWAIT_CONTINUATION_REFRESH_PACKET_AGE_MS
+        });
+        !packets_recent || age >= profile.fir_retry_interval_ms
+    })
+    .unwrap_or(false)
 }
 
 fn transport_await_anchor_candidate_stalled(
@@ -376,6 +489,8 @@ pub struct RtcSessionPolicy {
     reconnect_grants_without_success_edge: u8,
     last_recovery_state: Option<RecoveryLedgerNarrativeState>,
     next_recovery_decision_ledger_id: u64,
+    /// `LocalSupplySuspect` 进入时刻，用于 dwell 升级到 `TransportAwaitRecoveryKeyframe`。
+    local_supply_suspect_since_ms: Option<f64>,
 }
 
 impl RtcSessionPolicy {
@@ -444,6 +559,7 @@ impl RtcSessionPolicy {
             reconnect_grants_without_success_edge: 0,
             last_recovery_state: None,
             next_recovery_decision_ledger_id: 0,
+            local_supply_suspect_since_ms: None,
         }
     }
 }
@@ -688,6 +804,71 @@ impl RtcSessionPolicy {
         self.last_recovery_epoch = recovery_epoch;
     }
 
+    /// 首帧前 bootstrap reject 仍需要尽快发 PLI：在尚无 decode/present 边沿时保留 `TransportAwait` 语义。
+    fn maybe_bootstrap_suspect_to_transport_await_pre_output(
+        reason: VideoEscalationReason,
+        label: &str,
+        runtime_stats: &Mutex<XbxEngineMediaRuntimeStats>,
+    ) -> VideoEscalationReason {
+        if reason != VideoEscalationReason::LocalSupplySuspect {
+            return reason;
+        }
+        if !matches!(
+            label,
+            "bootstrapMissingSps" | "bootstrapMissingPps" | "inspectionRejectInvalidSliceHeader"
+        ) {
+            return reason;
+        }
+        let acquisition = RuntimeStatsSink::read_shared(runtime_stats, |stats| {
+            matches!(
+                stats.session_phase.as_deref(),
+                Some("priming" | "connecting" | "handshaking")
+            ) || (stats.latest_video_decode_ok_time_ms.is_none()
+                && stats.latest_video_host_present_time_ms.is_none()
+                && stats.first_video_packet_arrival_time_ms.is_some())
+        })
+        .unwrap_or(false);
+        if acquisition {
+            VideoEscalationReason::TransportAwaitRecoveryKeyframe
+        } else {
+            reason
+        }
+    }
+
+    fn apply_local_supply_suspect_anchor_gate(
+        &mut self,
+        owner_signal: RecoveryOwnerSignal,
+        observed_at_ms: f64,
+    ) -> RecoveryOwnerSignal {
+        if owner_signal.reason == VideoEscalationReason::LocalSupplySuspect {
+            if self.local_supply_suspect_since_ms.is_none() {
+                self.local_supply_suspect_since_ms = Some(observed_at_ms);
+            }
+        } else {
+            self.local_supply_suspect_since_ms = None;
+        }
+        let profile = resolve_recovery_profile(self.runtime_stats.as_ref());
+        let suspect_since = self.local_supply_suspect_since_ms;
+        let input = owner_signal.clone();
+        let upgraded = RuntimeStatsSink::read_shared(self.runtime_stats.as_ref(), |stats| {
+            upgrade_local_supply_suspect_signal_if_ready(
+                owner_signal,
+                suspect_since,
+                stats,
+                &profile,
+            )
+        })
+        .unwrap_or(input);
+        if upgraded.reason != VideoEscalationReason::LocalSupplySuspect {
+            self.local_supply_suspect_since_ms = None;
+        }
+        upgraded
+    }
+
+    fn clear_local_supply_suspect(&mut self) {
+        self.local_supply_suspect_since_ms = None;
+    }
+
     fn read_owner_signal_evidence(
         &self,
         _observed_at_ms: f64,
@@ -731,6 +912,7 @@ impl RtcSessionPolicy {
     ) -> Option<RecoveryPolicyProposal> {
         self.maybe_clear_failed_terminal(snapshot, owner_state);
         if self.failed_terminal_since_ms.is_some() {
+            self.clear_local_supply_suspect();
             return None;
         }
         let observed_at_ms = Self::resolve_policy_observed_at_ms(snapshot);
@@ -796,10 +978,12 @@ impl RtcSessionPolicy {
                     observed_at_ms,
                 ) {
                     self.mark_failed_terminal(snapshot, "livenessReconnectAttemptLimitExceeded");
+                    self.clear_local_supply_suspect();
                     return None;
                 }
             }
             if !self.should_emit_lifecycle_reconnect(snapshot, observed_at_ms, twcc_warmup_state) {
+                self.clear_local_supply_suspect();
                 return None;
             }
             if !has_current_clean_anchor {
@@ -843,6 +1027,7 @@ impl RtcSessionPolicy {
                     intent.reason_label.as_str(),
                     observed_at_ms,
                 ) {
+                    self.clear_local_supply_suspect();
                     return None;
                 }
                 if self.should_hold_pre_first_frame_display_supply_degraded(
@@ -852,9 +1037,15 @@ impl RtcSessionPolicy {
                     intent.reason_label.as_str(),
                     observed_at_ms,
                 ) {
+                    self.clear_local_supply_suspect();
                     return None;
                 }
-                let media_reason = owner_recovery_reason_to_media_escalation_reason(intent.reason)?;
+                let Some(media_reason) =
+                    owner_recovery_reason_to_media_escalation_reason(intent.reason)
+                else {
+                    self.clear_local_supply_suspect();
+                    return None;
+                };
                 RecoveryOwnerSignal {
                     reason: media_reason,
                     reason_label: intent.reason_label.clone(),
@@ -863,15 +1054,21 @@ impl RtcSessionPolicy {
                     repairability: owner_signal_repairability,
                 }
             } else if has_media_recovery_surface {
+                self.clear_local_supply_suspect();
                 return None;
             } else {
-                let fallback_label = snapshot.recovery.latest_diagnosis_label.as_deref()?;
+                let Some(fallback_label) = snapshot.recovery.latest_diagnosis_label.as_deref()
+                else {
+                    self.clear_local_supply_suspect();
+                    return None;
+                };
                 if self.should_hold_pre_first_frame_connected_idle_timeout(
                     snapshot,
                     owner_state,
                     fallback_label,
                     observed_at_ms,
                 ) {
+                    self.clear_local_supply_suspect();
                     return None;
                 }
                 if self.should_absorb_render_aware_realtime_adapter_idle_timeout(
@@ -880,6 +1077,7 @@ impl RtcSessionPolicy {
                     fallback_label,
                     observed_at_ms,
                 ) {
+                    self.clear_local_supply_suspect();
                     return None;
                 }
                 if self.should_absorb_stale_transport_await_replay(
@@ -888,15 +1086,25 @@ impl RtcSessionPolicy {
                     fallback_label,
                     observed_at_ms,
                 ) {
+                    self.clear_local_supply_suspect();
                     return None;
                 }
                 if self.should_suppress_adapter_idle_timeout_with_render_slack(
                     fallback_label,
                     observed_at_ms,
                 ) {
+                    self.clear_local_supply_suspect();
                     return None;
                 }
-                let fallback_reason = map_label_to_escalation_reason(fallback_label)?;
+                let Some(fallback_reason) = map_label_to_escalation_reason(fallback_label) else {
+                    self.clear_local_supply_suspect();
+                    return None;
+                };
+                let fallback_reason = Self::maybe_bootstrap_suspect_to_transport_await_pre_output(
+                    fallback_reason,
+                    fallback_label,
+                    self.runtime_stats.as_ref(),
+                );
                 // RFC: decode 后显示域信号不得直接进入媒体恢复动作链。
                 if matches!(
                     fallback_reason,
@@ -904,6 +1112,7 @@ impl RtcSessionPolicy {
                         | VideoEscalationReason::AdapterIdleTimeout
                         | VideoEscalationReason::AdapterThinStream
                 ) {
+                    self.clear_local_supply_suspect();
                     return None;
                 }
                 RecoveryOwnerSignal {
@@ -915,9 +1124,12 @@ impl RtcSessionPolicy {
                 }
             }
         };
+        let owner_signal =
+            self.apply_local_supply_suspect_anchor_gate(owner_signal, observed_at_ms);
         if owner_signal.reason_label == "transportAwaitRecoveryAnchor"
             && !owner_signal_missing_anchor
         {
+            self.clear_local_supply_suspect();
             return None;
         }
         // intent 路径可能把 transport-await 表面映射成 `WaitKeyframe` 等枚举，但仍携带同一诊断标签；
@@ -990,6 +1202,17 @@ impl RtcSessionPolicy {
             proposal.decision.action = RecoveryAction::RequestFir;
             proposal.coalescing_mode = Some(CoalescingMode::Refresh);
             proposal.unlock_reason = Some(unlock_reason.to_string());
+        }
+        if proposal.decision.action == RecoveryAction::CoalescedKeyframeInFlight
+            && owner_signal.reason == VideoEscalationReason::TransportAwaitRecoveryKeyframe
+            && coalesced_transport_await_should_unlock_for_stall(
+                self.runtime_stats.as_ref(),
+                observed_at_ms,
+            )
+        {
+            proposal.decision.action = RecoveryAction::RequestPli;
+            proposal.coalescing_mode = Some(CoalescingMode::Refresh);
+            proposal.unlock_reason = Some("keyframeEpisodeHealth:stalled".to_string());
         }
         if Self::should_suppress_display_picture_recovery_action(&proposal, &owner_signal) {
             proposal.decision.action = RecoveryAction::CooldownSuppressed;
@@ -1522,7 +1745,10 @@ impl RtcSessionPolicy {
     ) -> bool {
         if !matches!(
             owner_state,
-            VideoSchedulingOwnerState::RebuildingSupply | VideoSchedulingOwnerState::SupplyStarved
+            VideoSchedulingOwnerState::RebuildingSupply
+                | VideoSchedulingOwnerState::SupplyStarved
+                | VideoSchedulingOwnerState::DegradedServing
+                | VideoSchedulingOwnerState::StableServing
         ) {
             return false;
         }
@@ -1599,7 +1825,10 @@ impl RtcSessionPolicy {
     ) -> Option<&'static str> {
         if !matches!(
             owner_state,
-            VideoSchedulingOwnerState::RebuildingSupply | VideoSchedulingOwnerState::SupplyStarved
+            VideoSchedulingOwnerState::RebuildingSupply
+                | VideoSchedulingOwnerState::SupplyStarved
+                | VideoSchedulingOwnerState::DegradedServing
+                | VideoSchedulingOwnerState::StableServing
         ) {
             return None;
         }
@@ -2540,6 +2769,25 @@ impl RtcSessionPolicy {
                     None,
                 )
             };
+        let owner_surface_state = proposal.map(|p| {
+            recovery_owner_surface_state_for_reason(p.reason, p.decision.action).to_string()
+        });
+        let anchor_evidence = proposal.map(|_| {
+            RuntimeStatsSink::read_shared(self.runtime_stats.as_ref(), |stats| {
+                recovery_anchor_evidence_trace_code(stats)
+            })
+            .unwrap_or(None)
+        });
+        let keyframe_episode_health = proposal.and_then(|p| {
+            recovery_keyframe_episode_health_for_proposal(
+                p.reason,
+                p.decision.action,
+                p.unlock_reason.as_deref(),
+            )
+            .map(str::to_string)
+        });
+        let escalation_basis =
+            proposal.map(|p| recovery_escalation_basis_for_reason(p.reason).to_string());
         let ledger = XbxEngineRecoveryDecisionLedgerObservation {
             decision_id,
             state_before: state_before.as_str().to_string(),
@@ -2573,6 +2821,10 @@ impl RtcSessionPolicy {
                 }
                 .to_string()
             }),
+            owner_surface_state,
+            anchor_evidence: anchor_evidence.flatten(),
+            keyframe_episode_health,
+            escalation_basis,
             budget_before,
             budget_after,
             trigger_observation_label: None,
@@ -2599,11 +2851,19 @@ impl RtcSessionPolicy {
                         .to_string(),
                 );
                 stats.recovery_active_escalation_reason = Some(p.reason.label().to_string());
+                stats.recovery_anchor_evidence = ledger.anchor_evidence.clone();
+                stats.recovery_owner_surface_state = ledger.owner_surface_state.clone();
+                stats.recovery_escalation_basis = ledger.escalation_basis.clone();
+                stats.recovery_keyframe_episode_health = ledger.keyframe_episode_health.clone();
             } else {
                 stats.recovery_rfc_authoritative_ceiling = None;
                 stats.recovery_rfc_authoritative_fault_domain = None;
                 stats.recovery_rfc_authoritative_stage = None;
                 stats.recovery_active_escalation_reason = None;
+                stats.recovery_owner_surface_state = None;
+                stats.recovery_anchor_evidence = None;
+                stats.recovery_keyframe_episode_health = None;
+                stats.recovery_escalation_basis = None;
             }
             stats.recent_recovery_decision_ledgers.push(ledger.clone());
             if stats.recent_recovery_decision_ledgers.len()

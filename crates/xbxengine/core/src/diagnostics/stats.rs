@@ -1,4 +1,6 @@
-use xbxengine_protocol::{XbxEnginePresentationMilestoneDto, XbxEngineStatsDto};
+use xbxengine_protocol::{
+    XbxEnginePresentationMilestoneDto, XbxEngineStatsDto, XbxEngineTransportStateDto,
+};
 
 use crate::transport::rtc::recovery::escalation_label::escalation_structured_label;
 use crate::transport::rtc::recovery::remote_profile_runtime::classify_runtime_remote_profile;
@@ -221,6 +223,11 @@ fn resolve_presentation_health(
     );
     let present_stale = present_age_ms.is_some_and(|age| age >= 600.0);
     if has_present_history && (supply_pressure || present_stale) {
+        if recovery_progress_is_still_serviceable(stats, now_ms) {
+            return chain_health
+                .map(str::to_string)
+                .or(Some("recovering".to_string()));
+        }
         return Some("displaySupplyStarved".to_string());
     }
     if renderer_shadow_blocks_serviceability(stats, now_ms) {
@@ -230,6 +237,30 @@ fn resolve_presentation_health(
         return Some("healthy".to_string());
     }
     chain_health.map(str::to_string)
+}
+
+fn recovery_progress_is_still_serviceable(stats: &XbxEngineMediaRuntimeStats, now_ms: f64) -> bool {
+    const RECOVERY_PROGRESS_SERVICEABLE_WINDOW_MS: f64 = 480.0;
+    if !matches!(
+        stats.session_phase.as_deref(),
+        Some("recovering" | "recovery-eligible" | "active-recovery" | "recovery-blocked")
+    ) {
+        return false;
+    }
+    if stats.transport_state != XbxEngineTransportStateDto::Connected {
+        return false;
+    }
+    if stats.video_decoder_stalled == Some(true) {
+        return false;
+    }
+    stats
+        .latest_video_decode_ok_time_ms
+        .is_some_and(|at_ms| (now_ms - at_ms).max(0.0) <= RECOVERY_PROGRESS_SERVICEABLE_WINDOW_MS)
+        || stats
+            .latest_host_mailbox_submit_time_ms
+            .is_some_and(|at_ms| {
+                (now_ms - at_ms).max(0.0) <= RECOVERY_PROGRESS_SERVICEABLE_WINDOW_MS
+            })
 }
 
 fn merge_video_health(
@@ -1135,7 +1166,9 @@ pub fn build_xbxengine_stats(
         last_recovery_reason: snapshot.last_recovery_reason.clone(),
         reconnect_trigger_source: snapshot.reconnect_trigger_source.clone(),
         host_present_take_empty_streak: Some(snapshot.host_present_take_empty_streak),
-        host_mailbox_latest_submit_at_ms: snapshot.host_mailbox_latest_submit_at_ms,
+        host_mailbox_latest_submit_at_ms: runtime_stats
+            .and_then(|stats| stats.latest_host_mailbox_submit_time_ms)
+            .or(snapshot.host_mailbox_latest_submit_at_ms),
         ice_policy_mode: snapshot.ice_policy_mode.clone(),
         ice_policy_digest: snapshot.ice_policy_digest.clone(),
         ice_policy_source: snapshot.ice_policy_source.clone(),
@@ -1344,12 +1377,17 @@ pub fn build_xbxengine_stats(
                         action_selected: ledger.action_selected.clone(),
                         frame_value: ledger.frame_value.clone(),
                         gap_severity: ledger.gap_severity.clone(),
+                        repairability: ledger.repairability,
                         recovery_episode_stage: ledger.recovery_episode_stage.clone(),
                         recovery_episode_progress_at_ms: ledger.recovery_episode_progress_at_ms,
                         coalescing_mode: ledger.coalescing_mode.clone(),
                         unlock_reason: ledger.unlock_reason.clone(),
                         preempt_reason: ledger.preempt_reason.clone(),
                         recovery_primary_action: ledger.recovery_primary_action.clone(),
+                        owner_surface_state: ledger.owner_surface_state.clone(),
+                        anchor_evidence: ledger.anchor_evidence.clone(),
+                        keyframe_episode_health: ledger.keyframe_episode_health.clone(),
+                        escalation_basis: ledger.escalation_basis.clone(),
                         budget_before: ledger.budget_before.as_ref().map(|budget| {
                             xbxengine_protocol::XbxEngineRecoveryBudgetSnapshotDto {
                                 recovery_epoch: budget.recovery_epoch,

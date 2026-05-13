@@ -108,6 +108,7 @@ pub(crate) fn resolve_runtime_reconnect_reason_domain(
         | VideoEscalationReason::TransportRepairableDeadline
         | VideoEscalationReason::WaitKeyframe
         | VideoEscalationReason::TransportAwaitRecoveryKeyframe
+        | VideoEscalationReason::LocalSupplySuspect
         | VideoEscalationReason::DisplaySupplyCritical
         | VideoEscalationReason::Reconfigure
         | VideoEscalationReason::DecoderBackendFailure
@@ -195,6 +196,10 @@ mod tests {
             unlock_reason: None,
             preempt_reason: None,
             recovery_primary_action: None,
+            owner_surface_state: None,
+            anchor_evidence: None,
+            keyframe_episode_health: None,
+            escalation_basis: None,
             budget_before: None,
             budget_after: None,
             trigger_observation_label: None,

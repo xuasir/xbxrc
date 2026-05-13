@@ -232,7 +232,7 @@ impl MediaSessionLoop {
             let reason = match &decision {
                 IngressDecision::WaitKeyframe => VideoEscalationReason::WaitKeyframe,
                 IngressDecision::Reconfigure => VideoEscalationReason::Reconfigure,
-                IngressDecision::DropUnrecoverable => VideoEscalationReason::WaitKeyframe, // frameAbandoned也映射到WaitKeyframe
+                IngressDecision::DropUnrecoverable => VideoEscalationReason::LocalSupplySuspect,
                 _ => VideoEscalationReason::WaitKeyframe,
             };
             let hint_label = reason.label();

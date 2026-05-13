@@ -256,9 +256,8 @@ where
             return;
         }
 
-        // 先把本拍的 present 落到 render/runtime 侧，再拍 policy 需要的 stats，
-        // 避免 owner 读到上一拍的 present 事实。
-        self.present_latest_render_frame();
+        // 上屏投递已由 renderer 线程在 accept 后推式触发（见 `XbxHostRenderFramePush`），
+        // tick 只聚合 stats / policy，避免 16ms pull 与 decode 节拍失配造成 host mailbox 供给洞。
         let runtime_stats = match self.media_backend.snapshot_runtime_stats() {
             Ok(stats) => stats,
             Err(error) => {

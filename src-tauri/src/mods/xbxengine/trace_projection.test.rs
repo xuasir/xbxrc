@@ -1503,7 +1503,19 @@ fn record_runtime_trace_observations_projects_keyframe_episode_recovery_diagnost
             "input_signal": "transportAwaitRecoveryAnchor:transportAwaitRecoveryAnchor",
             "gate_result": "coalesced:keyframeInFlight",
             "action_selected": "coalesced:keyframeInFlight",
+            "frame_value": "RecoveryAnchor",
+            "gap_severity": "AnchorGap",
+            "repairability": 0.25,
             "recovery_episode_stage": "bootstrap",
+            "recovery_episode_progress_at_ms": 1234.5,
+            "coalescing_mode": "refresh",
+            "unlock_reason": "continuationOnlyRefreshIntervalElapsed",
+            "preempt_reason": "familyUpgrade:keyframeInFlight->decoderReset",
+            "recovery_primary_action": "requestPli",
+            "owner_surface_state": "await-anchor",
+            "anchor_evidence": "fresh-post-suspect",
+            "keyframe_episode_health": "continuation-only",
+            "escalation_basis": "anchor_missing",
             "budget_after": {
                 "recovery_epoch": 9,
                 "keyframe_budget_used": 1,
@@ -1520,6 +1532,26 @@ fn record_runtime_trace_observations_projects_keyframe_episode_recovery_diagnost
     record_runtime_trace_observations(&recorder, &mut state, Some("session-1"), &stats);
 
     let entries = read_trace_lines(recorder.as_ref());
+    let recovery_payload = find_event_payload(&entries, "recoveryDecisionLedger");
+    assert_eq!(recovery_payload["repairability"], 0.25);
+    assert_eq!(recovery_payload["ownerSurfaceState"], "await-anchor");
+    assert_eq!(recovery_payload["anchorEvidence"], "fresh-post-suspect");
+    assert_eq!(
+        recovery_payload["keyframeEpisodeHealth"],
+        "continuation-only"
+    );
+    assert_eq!(recovery_payload["escalationBasis"], "anchor_missing");
+    assert_eq!(recovery_payload["recoveryEpisodeProgressAtMs"], 1234.5);
+    assert_eq!(recovery_payload["coalescingMode"], "refresh");
+    assert_eq!(
+        recovery_payload["unlockReason"],
+        "continuationOnlyRefreshIntervalElapsed"
+    );
+    assert_eq!(
+        recovery_payload["preemptReason"],
+        "familyUpgrade:keyframeInFlight->decoderReset"
+    );
+    assert_eq!(recovery_payload["recoveryPrimaryAction"], "requestPli");
     let payload = find_event_payload(&entries, "keyframeRequestEpisode");
     assert_eq!(
         payload["diagnosticPendingReason"],

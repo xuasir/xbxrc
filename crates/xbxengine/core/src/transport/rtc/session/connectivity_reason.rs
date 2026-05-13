@@ -10,16 +10,24 @@ pub(crate) fn parse_session_phase(value: Option<&str>) -> SessionPhase {
 }
 
 pub(crate) fn map_label_to_escalation_reason(label: &str) -> Option<VideoEscalationReason> {
+    if label.contains("waitKeyframeEntered:config_changed")
+        || label.contains("waitKeyframeEntered:config_mismatch")
+    {
+        return Some(VideoEscalationReason::LocalSupplySuspect);
+    }
     match label {
         "ingressWaitKeyframe" => Some(VideoEscalationReason::WaitKeyframe),
-        "ingressFrameAbandoned" => Some(VideoEscalationReason::WaitKeyframe),
+        "ingressFrameAbandoned" => Some(VideoEscalationReason::LocalSupplySuspect),
         "waitKeyframeEntered" => Some(VideoEscalationReason::WaitKeyframe),
-        "frameAbandoned" => Some(VideoEscalationReason::WaitKeyframe),
+        "frameAbandoned" => Some(VideoEscalationReason::LocalSupplySuspect),
         "transportAwaitRecoveryAnchor" => {
             Some(VideoEscalationReason::TransportAwaitRecoveryKeyframe)
         }
+        "transportAwaitRecoverySuspect" | "localSupplySuspect" | "rebuildingSupplySuspect" => {
+            Some(VideoEscalationReason::LocalSupplySuspect)
+        }
         "bootstrapMissingSps" | "bootstrapMissingPps" | "inspectionRejectInvalidSliceHeader" => {
-            Some(VideoEscalationReason::TransportAwaitRecoveryKeyframe)
+            Some(VideoEscalationReason::LocalSupplySuspect)
         }
         "displaySupplyCritical" => Some(VideoEscalationReason::DisplaySupplyCritical),
         "ingressReconfigure" => Some(VideoEscalationReason::Reconfigure),

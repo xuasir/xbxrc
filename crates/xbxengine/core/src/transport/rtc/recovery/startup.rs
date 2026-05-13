@@ -165,6 +165,9 @@ fn resolve_session_phase_from_stats(
                 | "decoderBackendFailure"
                 | "ingressReconfigure"
                 | "reconfigure"
+                | "adapterThinStream"
+                | "displaySupplyCritical"
+                | "localSupplySuspect"
         )
     );
     let stalled_output = stats.video_decoder_stalled.unwrap_or(false)
@@ -204,6 +207,7 @@ pub fn should_fast_reset_startup_recovery(
             VideoEscalationReason::TransportSampleLoss
                 | VideoEscalationReason::WaitKeyframe
                 | VideoEscalationReason::DisplaySupplyCritical
+                | VideoEscalationReason::LocalSupplySuspect
                 | VideoEscalationReason::AdapterIdleTimeout
         )
 }
@@ -492,7 +496,7 @@ mod tests {
         let mut stats = XbxEngineMediaRuntimeStats::default();
         stats.inbound_video_bitrate_kbps = Some(9_000.0);
         stats.video_present_fps = 42.0;
-        stats.recovery_active_escalation_reason = Some("adapterIdleTimeout".to_string());
+        stats.recovery_active_escalation_reason = Some("transportAwaitRecoveryAnchor".to_string());
         assert_eq!(
             resolve_session_phase_from_stats(
                 Some(&stats),

@@ -4,6 +4,7 @@ use std::time::Duration;
 use tokio::sync::mpsc;
 
 use crate::{
+    api::backend::XbxHostRenderFramePush,
     media::video::render::renderer::XbxRenderState,
     media::video::types::AssembledVideoFrame,
     transport::rtc::facts::TransportFact,
@@ -19,6 +20,7 @@ pub(super) struct MediaSessionContext {
     pub(super) render_state: Arc<Mutex<XbxRenderState>>,
     pub(super) transport_fact_sink: Arc<Mutex<Vec<TransportFact>>>,
     pub(super) runtime_config: XbxEngineRuntimeConfig,
+    pub(super) host_render_frame_push: Arc<Mutex<Option<Arc<dyn XbxHostRenderFramePush>>>>,
 }
 
 pub(super) struct ActiveMediaSession {
@@ -56,6 +58,7 @@ pub(super) fn spawn_media_session(
         crate::media::video::render::actor::RendererActorHandle::new(
             context.render_state.clone(),
             context.runtime_stats.clone(),
+            context.host_render_frame_push.clone(),
         ),
     );
     let pacer_handle = Arc::new(crate::media::video::pacer::actor::PacerActorHandle::new(

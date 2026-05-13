@@ -3,10 +3,10 @@ use xbxengine_protocol::{
     XbxEngineTransportStateDto, XbxEngineVideoTrackStatusDto,
 };
 
-use super::{now_ms_f64, XbxEngineEventSink, XbxEngineHostBridge, XbxEngineRuntime};
+use super::{XbxEngineEventSink, XbxEngineHostBridge, XbxEngineRuntime};
 use crate::{
     XbxEngineInputStatus, XbxEngineMediaBackend, XbxEngineMediaNegotiation,
-    XbxEngineMediaRuntimeStats, XbxEngineRuntimeState,
+    XbxEngineMediaRuntimeStats,
 };
 
 const MEDIA_READY_PRESENT_FRESHNESS_WINDOW_MS: f64 = 1_500.0;
@@ -59,42 +59,6 @@ where
             self.event_sink
                 .emit(XbxEngineRuntimeEventDto::MediaVideoTrackStatusChanged { status });
         }
-    }
-
-    pub(super) fn present_latest_render_frame(&mut self) {
-        let Some(viewport) = self.snapshot.viewport.clone() else {
-            return;
-        };
-        let frame = match self.media_backend.take_latest_render_frame() {
-            Ok(frame) => frame,
-            Err(error) => {
-                self.emit_error("takeLatestRenderFrameFailed", error.to_string());
-                return;
-            }
-        };
-        let Some(frame) = frame else {
-            if matches!(
-                self.state,
-                XbxEngineRuntimeState::Running | XbxEngineRuntimeState::Reconnecting
-            ) {
-                self.snapshot.host_present_take_empty_streak = self
-                    .snapshot
-                    .host_present_take_empty_streak
-                    .saturating_add(1);
-            }
-            return;
-        };
-        self.snapshot.host_present_take_empty_streak = 0;
-        self.snapshot.host_mailbox_latest_submit_at_ms = Some(now_ms_f64());
-        if let Err(error) =
-            self.host_bridge
-                .present_frame(&viewport, self.snapshot.surface_id.as_deref(), &frame)
-        {
-            self.emit_error("presentFrameFailed", error.to_string());
-            return;
-        }
-        self.snapshot.video_size = Some((frame.width, frame.height));
-        self.snapshot.frame_rendered_time_ms = Some(frame.rendered_at_ms);
     }
 
     pub(super) fn record_input_status(&mut self, status: &XbxEngineInputStatus) {

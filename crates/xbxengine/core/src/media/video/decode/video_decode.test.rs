@@ -2269,6 +2269,162 @@ fn enqueue_decoded_frame_recovery_window_gets_extra_stale_slack() {
 }
 
 #[test]
+fn enqueue_decoded_frame_uses_30fps_mailbox_interval_hint_before_stale_drop() {
+    let decoder = SpyHardwareDecoder;
+    let mut state = XbxVideoDecodeState::new_for_test(20, 30, Box::new(decoder));
+
+    let existing = DecodedFrame {
+        pts: Instant::now() - Duration::from_millis(35),
+        rtp_timestamp: 30,
+        recovery_epoch_tag: None,
+        recovery_owner_rtp_timestamp: None,
+        is_keyframe: false,
+        clean_anchor_commit_recovery_epoch: None,
+        presentation_value_role: None,
+        budget: crate::media::video::ingress::budget::FrameBudgetContext::for_transport(
+            crate::media::video::types::FrameValue::new(false, false, 1024),
+            false,
+            Some(30.0),
+            Some(1_000.0),
+            Some(1_016.0),
+            false,
+            FrameBudgetWindowSource::Recovery,
+        ),
+        frame_recovery_disposition: FrameRecoveryDisposition::Repairing,
+        frame_unrecoverable_reason: None,
+        surface: XbxRenderFrame {
+            width: 2,
+            height: 2,
+            frame_seq: 30,
+            rendered_at_ms: 30.0,
+            rtp_timestamp: Some(30),
+            recovery_epoch_tag: None,
+            recovery_owner_rtp_timestamp: None,
+            is_keyframe: false,
+            frame_recovery_disposition: Some("repairing".to_string()),
+            frame_unrecoverable_reason: None,
+            presentation_value_role: None,
+            pixel_data: XbxEngineRenderPixelData::Rgba {
+                bytes: Arc::<[u8]>::from([30u8; 16]),
+            },
+        },
+    };
+    assert!(state.enqueue_decoded_frame(existing).is_none());
+
+    let dropped = state.enqueue_decoded_frame(DecodedFrame {
+        pts: Instant::now() - Duration::from_millis(1),
+        rtp_timestamp: 31,
+        recovery_epoch_tag: None,
+        recovery_owner_rtp_timestamp: None,
+        is_keyframe: false,
+        clean_anchor_commit_recovery_epoch: None,
+        presentation_value_role: None,
+        budget: crate::media::video::ingress::budget::FrameBudgetContext::default(),
+        frame_recovery_disposition: FrameRecoveryDisposition::Repairing,
+        frame_unrecoverable_reason: None,
+        surface: XbxRenderFrame {
+            width: 2,
+            height: 2,
+            frame_seq: 31,
+            rendered_at_ms: 31.0,
+            rtp_timestamp: Some(31),
+            recovery_epoch_tag: None,
+            recovery_owner_rtp_timestamp: None,
+            is_keyframe: false,
+            frame_recovery_disposition: Some("repairing".to_string()),
+            frame_unrecoverable_reason: None,
+            presentation_value_role: None,
+            pixel_data: XbxEngineRenderPixelData::Rgba {
+                bytes: Arc::<[u8]>::from([31u8; 16]),
+            },
+        },
+    });
+
+    assert!(
+        dropped.is_some(),
+        "newer 30fps frame should supersede old candidate, not be stale"
+    );
+    let decision = state
+        .latest_decode_candidate_decision()
+        .expect("candidate decision");
+    assert_ne!(decision.detail, "staleAfterDecode");
+}
+
+#[test]
+fn enqueue_decoded_frame_uses_60fps_mailbox_interval_hint_before_stale_drop() {
+    let decoder = SpyHardwareDecoder;
+    let mut state = XbxVideoDecodeState::new_for_test(20, 30, Box::new(decoder));
+
+    let existing = DecodedFrame {
+        pts: Instant::now() - Duration::from_millis(17),
+        rtp_timestamp: 60,
+        recovery_epoch_tag: None,
+        recovery_owner_rtp_timestamp: None,
+        is_keyframe: false,
+        clean_anchor_commit_recovery_epoch: None,
+        presentation_value_role: None,
+        budget: crate::media::video::ingress::budget::FrameBudgetContext::default(),
+        frame_recovery_disposition: FrameRecoveryDisposition::Repairing,
+        frame_unrecoverable_reason: None,
+        surface: XbxRenderFrame {
+            width: 2,
+            height: 2,
+            frame_seq: 60,
+            rendered_at_ms: 60.0,
+            rtp_timestamp: Some(60),
+            recovery_epoch_tag: None,
+            recovery_owner_rtp_timestamp: None,
+            is_keyframe: false,
+            frame_recovery_disposition: Some("repairing".to_string()),
+            frame_unrecoverable_reason: None,
+            presentation_value_role: None,
+            pixel_data: XbxEngineRenderPixelData::Rgba {
+                bytes: Arc::<[u8]>::from([60u8; 16]),
+            },
+        },
+    };
+    assert!(state.enqueue_decoded_frame(existing).is_none());
+
+    let dropped = state.enqueue_decoded_frame(DecodedFrame {
+        pts: Instant::now() - Duration::from_millis(1),
+        rtp_timestamp: 61,
+        recovery_epoch_tag: None,
+        recovery_owner_rtp_timestamp: None,
+        is_keyframe: false,
+        clean_anchor_commit_recovery_epoch: None,
+        presentation_value_role: None,
+        budget: crate::media::video::ingress::budget::FrameBudgetContext::default(),
+        frame_recovery_disposition: FrameRecoveryDisposition::Repairing,
+        frame_unrecoverable_reason: None,
+        surface: XbxRenderFrame {
+            width: 2,
+            height: 2,
+            frame_seq: 61,
+            rendered_at_ms: 61.0,
+            rtp_timestamp: Some(61),
+            recovery_epoch_tag: None,
+            recovery_owner_rtp_timestamp: None,
+            is_keyframe: false,
+            frame_recovery_disposition: Some("repairing".to_string()),
+            frame_unrecoverable_reason: None,
+            presentation_value_role: None,
+            pixel_data: XbxEngineRenderPixelData::Rgba {
+                bytes: Arc::<[u8]>::from([61u8; 16]),
+            },
+        },
+    });
+
+    assert!(
+        dropped.is_some(),
+        "newer 60fps frame should supersede old candidate, not be stale"
+    );
+    let decision = state
+        .latest_decode_candidate_decision()
+        .expect("candidate decision");
+    assert_ne!(decision.detail, "staleAfterDecode");
+}
+
+#[test]
 fn repairing_frame_is_kept_over_plain_delta_with_same_epoch() {
     let decoder = SpyHardwareDecoder;
     let mut state = XbxVideoDecodeState::new_for_test(20, 30, Box::new(decoder));
@@ -3205,6 +3361,7 @@ async fn rtp_to_decode_to_pacer_to_renderer_pipeline_reaches_shadow_frame_and_ar
         crate::media::video::render::actor::RendererActorHandle::new(
             render_state.clone(),
             runtime_stats.clone(),
+            std::sync::Arc::new(std::sync::Mutex::new(None)),
         ),
     );
     let pacer = crate::media::video::pacer::actor::PacerActorHandle::new(
@@ -3272,22 +3429,23 @@ async fn rtp_to_decode_to_pacer_to_renderer_pipeline_reaches_shadow_frame_and_ar
     assert!(latest_rendered_at_ms.is_some());
     assert!(renderer_submit_count >= 2);
     let mut render_state_guard = render_state.lock().expect("render state lock");
-    let armed_frame = render_state_guard
+    // Render mailbox keeps a single latest handoff slot (`RENDER_MAILBOX_CAPACITY = 1`).
+    let latest_frame = render_state_guard
         .take_latest_renderable_frame()
-        .expect("armed frame should exist");
-    assert_eq!(armed_frame.frame_seq, 1);
-    assert_eq!(armed_frame.recovery_epoch_tag, Some(1));
-    let deferred_frame = render_state_guard
-        .take_latest_renderable_frame()
-        .expect("deferred latest frame should exist");
-    assert!(deferred_frame.frame_seq >= 2);
-    assert_eq!(deferred_frame.recovery_epoch_tag, Some(1));
+        .expect("latest staged frame should exist");
+    assert!(
+        (2..=3).contains(&latest_frame.frame_seq),
+        "expected last accepted renderer frame 2 or 3 depending on pacer/renderer shutdown timing; got {}",
+        latest_frame.frame_seq
+    );
+    assert_eq!(latest_frame.recovery_epoch_tag, Some(1));
+    assert!(render_state_guard.take_latest_renderable_frame().is_none());
     let stats = runtime_stats.lock().expect("runtime stats lock");
     assert!(stats.video_renderer_submit_count_total >= 2);
     let decision = stats
         .latest_render_mailbox_decision
         .clone()
         .expect("render candidate decision should exist");
-    assert_eq!(decision.state, "armed-protected");
-    assert_eq!(decision.detail, "armedPendingProtected");
+    assert_eq!(decision.state, "latest-overwrite");
+    assert_eq!(decision.detail, "mailboxOverwrite");
 }

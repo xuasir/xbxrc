@@ -96,11 +96,13 @@ fn higher_recovery_epoch_replaces_render_queue_head_even_with_lower_seq() {
         &existing,
         &incoming,
         Instant::now(),
+        None,
     ));
     assert!(!should_replace_render_queue_head(
         &incoming,
         &existing,
         Instant::now(),
+        None,
     ));
 }
 
@@ -121,12 +123,14 @@ fn owner_frame_in_same_epoch_replaces_non_owner_render_candidate() {
     assert!(should_replace_render_queue_head(
         &existing,
         &incoming,
-        Instant::now()
+        Instant::now(),
+        None,
     ));
     assert!(!should_replace_render_queue_head(
         &incoming,
         &existing,
-        Instant::now()
+        Instant::now(),
+        None,
     ));
 }
 
@@ -208,12 +212,14 @@ fn render_queue_prefers_newer_plain_delta_over_old_keyframe_without_recovery_sig
     assert!(should_replace_render_queue_head(
         &existing,
         &incoming,
-        Instant::now()
+        Instant::now(),
+        None,
     ));
     assert!(!should_replace_render_queue_head(
         &incoming,
         &existing,
-        Instant::now()
+        Instant::now(),
+        None,
     ));
 }
 
@@ -232,12 +238,14 @@ fn steady_continuation_does_not_replace_recovery_window_continuation_in_same_epo
     assert!(!should_replace_render_queue_head(
         &existing,
         &incoming,
-        Instant::now()
+        Instant::now(),
+        None,
     ));
     assert!(should_replace_render_queue_head(
         &incoming,
         &existing,
-        Instant::now()
+        Instant::now(),
+        None,
     ));
 }
 
@@ -264,12 +272,14 @@ fn owner_rebuilding_supply_beats_non_owner_candidate_in_same_epoch() {
     assert!(should_replace_render_queue_head(
         &existing,
         &incoming,
-        Instant::now()
+        Instant::now(),
+        None,
     ));
     assert!(!should_replace_render_queue_head(
         &incoming,
         &existing,
-        Instant::now()
+        Instant::now(),
+        None,
     ));
 }
 
@@ -278,12 +288,43 @@ fn render_queue_replaces_existing_stale_frame_even_if_priority_is_lower() {
     let mut existing = make_keyframe_decoded_frame(201);
     existing.pts = Instant::now() - Duration::from_millis(20);
     let incoming = make_decoded_frame(202);
-    assert!(render_frame_is_stale(&existing, Instant::now()));
+    assert!(render_frame_is_stale(&existing, Instant::now(), None));
     assert!(should_replace_render_queue_head(
         &existing,
         &incoming,
-        Instant::now()
+        Instant::now(),
+        None,
     ));
+}
+
+#[test]
+fn render_frame_stale_window_tracks_30fps_release_interval() {
+    let mut frame = make_decoded_frame(401);
+    frame.pts = Instant::now() - Duration::from_millis(30);
+    assert!(
+        !render_frame_is_stale(&frame, Instant::now(), Some(33)),
+        "30fps frame should survive one frame interval"
+    );
+    frame.pts = Instant::now() - Duration::from_millis(38);
+    assert!(
+        render_frame_is_stale(&frame, Instant::now(), Some(33)),
+        "30fps frame should expire beyond interval+guard"
+    );
+}
+
+#[test]
+fn render_frame_stale_window_tracks_60fps_release_interval() {
+    let mut frame = make_decoded_frame(402);
+    frame.pts = Instant::now() - Duration::from_millis(15);
+    assert!(
+        !render_frame_is_stale(&frame, Instant::now(), Some(16)),
+        "60fps frame should survive one frame interval"
+    );
+    frame.pts = Instant::now() - Duration::from_millis(20);
+    assert!(
+        render_frame_is_stale(&frame, Instant::now(), Some(16)),
+        "60fps frame should expire beyond interval+guard"
+    );
 }
 
 #[test]
@@ -589,6 +630,7 @@ fn host_cadence_gate_submits_frame_to_renderer_without_extra_wait() {
     let renderer = Arc::new(RendererActorHandle::new(
         render_state.clone(),
         runtime_stats.clone(),
+        std::sync::Arc::new(std::sync::Mutex::new(None)),
     ));
     let pacer = PacerActorHandle::new(renderer.clone(), runtime_stats.clone(), 16);
 

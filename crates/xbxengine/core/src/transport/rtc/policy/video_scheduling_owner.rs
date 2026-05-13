@@ -142,6 +142,8 @@ pub(crate) struct RecoveryIntentContract {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum OwnerRecoveryReason {
     TransportAwaitRecoveryKeyframe,
+    /// 供给重建或入口噪声：先停在怀疑层，由 session policy 门控升级。
+    LocalSupplySuspect,
     DisplaySupplyCritical,
     DisplaySupplyDegraded,
     /// Host tick 持续前进但 present epoch 卡住：优先走显示域本地恢复梯子。
@@ -162,6 +164,7 @@ impl OwnerRecoveryReason {
     pub(crate) fn source(self) -> RecoveryIntentSource {
         match self {
             Self::TransportAwaitRecoveryKeyframe => RecoveryIntentSource::Anchor,
+            Self::LocalSupplySuspect => RecoveryIntentSource::Supply,
             Self::DisplaySupplyCritical
             | Self::DisplaySupplyDegraded
             | Self::HostPresentStalled => RecoveryIntentSource::Supply,
@@ -171,6 +174,7 @@ impl OwnerRecoveryReason {
     pub(crate) fn as_reason_label(self) -> &'static str {
         match self {
             Self::TransportAwaitRecoveryKeyframe => "transportAwaitRecoveryAnchor",
+            Self::LocalSupplySuspect => "rebuildingSupplySuspect",
             Self::DisplaySupplyCritical => "displaySupplyCritical",
             Self::DisplaySupplyDegraded => "displaySupplyDegraded",
             Self::HostPresentStalled => "hostPresentStalled",
@@ -1891,6 +1895,28 @@ impl VideoSchedulingOwner {
         (input.observed_at_ms - since_ms).max(0.0) < DISPLAY_SUPPLY_STARVED_CONFIRM_MS
     }
 
+    fn rebuilding_supply_strong_anchor_intent(
+        input: &VideoSchedulingOwnerInput,
+        completion_evidence: RecoveryCompletionEvidence,
+    ) -> bool {
+        input.anchor_reason_label.is_some()
+            || Self::timeline_indicates_anchor_issue(input)
+            || Self::has_transport_await_hard_rebuild_evidence(input)
+            || Self::recovery_sustaining_phase_active(input, completion_evidence)
+            || Self::latest_h264_shows_continuation_awaiting_idr(input)
+    }
+
+    fn latest_h264_shows_continuation_awaiting_idr(input: &VideoSchedulingOwnerInput) -> bool {
+        input.latest_h264_bootstrap_ready == Some(false)
+            && matches!(
+                input.latest_h264_bootstrap_reject_reason.as_deref(),
+                Some("bootstrapMissingIdr" | "NonIdrVcl")
+            )
+            && input.latest_h264_committed_sps_present.unwrap_or(false)
+            && input.latest_h264_committed_pps_present.unwrap_or(false)
+            && input.latest_h264_delta_continuation_ready.unwrap_or(false)
+    }
+
     fn build_recovery_intent(
         &mut self,
         state: VideoSchedulingOwnerState,
@@ -1901,14 +1927,24 @@ impl VideoSchedulingOwner {
     ) -> Option<RecoveryIntentContract> {
         let contract = match state {
             VideoSchedulingOwnerState::RebuildingSupply => {
-                let reason = OwnerRecoveryReason::TransportAwaitRecoveryKeyframe;
-                let label = if Self::recovery_sustaining_phase_active(input, completion_evidence) {
-                    "recoverySustaining".to_string()
+                let strong_anchor =
+                    Self::rebuilding_supply_strong_anchor_intent(input, completion_evidence);
+                let (reason, label) = if strong_anchor {
+                    let reason = OwnerRecoveryReason::TransportAwaitRecoveryKeyframe;
+                    let label =
+                        if Self::recovery_sustaining_phase_active(input, completion_evidence) {
+                            "recoverySustaining".to_string()
+                        } else {
+                            input
+                                .anchor_reason_label
+                                .clone()
+                                .unwrap_or_else(|| reason.as_reason_label().to_string())
+                        };
+                    (reason, label)
                 } else {
-                    input
-                        .anchor_reason_label
-                        .clone()
-                        .unwrap_or_else(|| reason.as_reason_label().to_string())
+                    let reason = OwnerRecoveryReason::LocalSupplySuspect;
+                    let label = reason.as_reason_label().to_string();
+                    (reason, label)
                 };
                 Some(RecoveryIntentContract {
                     emit: self.should_emit_intent(reason.source(), &label, input.observed_at_ms),

@@ -238,6 +238,29 @@ pub struct XbxEngineRenderFrame {
     pub pixel_data: XbxEngineRenderPixelData,
 }
 
+/// Viewport / surface route mirrored from engine runtime for decode→host 推式投递（renderer 线程读取）。
+#[derive(Clone, Debug, Default)]
+pub struct XbxEngineHostPresentRoute {
+    pub viewport: Option<XbxEngineViewportDto>,
+    pub surface_id: Option<String>,
+}
+
+/// 在 renderer 接受帧后立即投递到宿主 mailbox，避免依赖 `runtime.tick` 周期性 pull。
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum XbxHostRenderFramePushOutcome {
+    Accepted,
+    RouteUnavailable,
+    RegistryUnavailable,
+    Rejected,
+}
+
+pub trait XbxHostRenderFramePush: Send + Sync {
+    fn push_render_frame_for_host_present(
+        &self,
+        frame: XbxEngineRenderFrame,
+    ) -> XbxHostRenderFramePushOutcome;
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum XbxEnginePresentationValueRole {
     FreshAnchor,
@@ -719,6 +742,14 @@ pub struct XbxEngineRecoveryDecisionLedgerObservation {
     pub unlock_reason: Option<String>,
     pub preempt_reason: Option<String>,
     pub recovery_primary_action: Option<String>,
+    /// RFC 2026-05-13：owner 表面状态（suspect / await-anchor / local-recovery / connectivity-recovery）。
+    pub owner_surface_state: Option<String>,
+    /// RFC 2026-05-13：锚点证据摘要。
+    pub anchor_evidence: Option<String>,
+    /// RFC 2026-05-13：IDR episode 健康度（waiting-response / continuation-only / stalled）。
+    pub keyframe_episode_health: Option<String>,
+    /// RFC 2026-05-13：升级依据（local_supply / anchor_missing / connectivity_bad）。
+    pub escalation_basis: Option<String>,
     pub budget_before: Option<XbxEngineRecoveryBudgetSnapshot>,
     pub budget_after: Option<XbxEngineRecoveryBudgetSnapshot>,
     pub trigger_observation_label: Option<String>,
@@ -1241,6 +1272,14 @@ pub struct XbxEngineMediaRuntimeStats {
     pub recovery_rfc_authoritative_stage: Option<String>,
     /// 当拍 `RecoveryPolicyProposal.reason` 的稳定标签（`VideoEscalationReason::label()`）；供控制面替代 `recovery_diagnosis`。
     pub recovery_active_escalation_reason: Option<String>,
+    /// RFC 2026-05-13：owner 表面状态（仅 trace/diagnostics）。
+    pub recovery_owner_surface_state: Option<String>,
+    /// RFC 2026-05-13：锚点证据摘要。
+    pub recovery_anchor_evidence: Option<String>,
+    /// RFC 2026-05-13：IDR episode 健康度（waiting-response / continuation-only / stalled）。
+    pub recovery_keyframe_episode_health: Option<String>,
+    /// RFC 2026-05-13：升级依据（local_supply / anchor_missing / connectivity_bad）。
+    pub recovery_escalation_basis: Option<String>,
     pub recovery_phase: Option<String>,
     pub recovery_exit_gate: Option<String>,
     pub recovery_ingress_waiting: Option<bool>,
@@ -1460,6 +1499,10 @@ impl Default for XbxEngineMediaRuntimeStats {
             recovery_rfc_authoritative_fault_domain: None,
             recovery_rfc_authoritative_stage: None,
             recovery_active_escalation_reason: None,
+            recovery_owner_surface_state: None,
+            recovery_anchor_evidence: None,
+            recovery_keyframe_episode_health: None,
+            recovery_escalation_basis: None,
             recovery_phase: None,
             recovery_exit_gate: None,
             recovery_ingress_waiting: None,
