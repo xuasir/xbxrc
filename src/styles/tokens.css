@@ -145,6 +145,8 @@
   --z-sticky: 20;
   /* 串流页角标按钮：高于画面内 HUD（~14），低于全屏遮罩与 ActionSheet（--z-overlay） */
   --z-stream-chrome: 40;
+  /* 串流页加载/连接中 dim：盖住视频与内嵌 HUD，但低于角标与弹层（须 < --z-stream-chrome 且远 < --z-overlay） */
+  --z-stream-busy-overlay: 30;
   --z-overlay: 100;
   --z-drawer: 120;
   --z-modal: 140;

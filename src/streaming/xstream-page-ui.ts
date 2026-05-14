@@ -1,9 +1,9 @@
+import type { GamepadRuntimeSnapshotDto, LogicalPadSnapshotDto, LogicalPadStateDto } from '@shared/gamepad/contract'
 import type { StreamErrorKind } from './types'
 import { businessInputArbiter } from '@shared/gamepad/business-input-arbiter'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { events } from '../services/events'
 import { rpc } from '../services/rpc'
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import type { GamepadRuntimeSnapshotDto, LogicalPadSnapshotDto, LogicalPadStateDto } from '@shared/gamepad/contract'
 
 type BrowserTimeout = number
 

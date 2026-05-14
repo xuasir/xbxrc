@@ -1,7 +1,8 @@
+import type { BusinessInputTracePayload } from '@shared/gamepad/business-input-arbiter'
 import type { GamepadRuntimeSnapshotDto, LogicalPadSnapshotDto } from '@shared/gamepad/contract'
 import {
   businessInputArbiter,
-  type BusinessInputTracePayload,
+
   toBusinessInputTracePayload,
 } from '@shared/gamepad/business-input-arbiter'
 import { events } from '../../services/events'

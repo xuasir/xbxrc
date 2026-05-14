@@ -1,3 +1,4 @@
+import type { BusinessInputTracePayload } from '@shared/gamepad/business-input-arbiter'
 import type {
   GamepadRuntimeSnapshotDto,
   LogicalButtonDto,
@@ -11,7 +12,7 @@ import type {
 } from '../../domain/input'
 import {
   businessInputArbiter,
-  type BusinessInputTracePayload,
+
   toBusinessInputTracePayload,
 } from '@shared/gamepad/business-input-arbiter'
 import { events } from '../../../services/events'

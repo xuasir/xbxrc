@@ -883,7 +883,7 @@ async function handleDiagnosticsMenuAction(id: string): Promise<void> {
 
       <!-- 沉浸式加载层 -->
       <Transition name="overlay-fade">
-        <div v-if="overlayState === 'loading'" class="stream-page__overlay stream-page__overlay--immersive">
+        <div v-if="overlayState === 'loading'" class="stream-page__overlay stream-page__overlay--immersive stream-page__overlay--keep-chrome">
           <div class="stream-page__loading-stack">
             <BrandedLoading size="xl" :label="statusText || t('streamPage.status.preparing')" />
             <p v-if="hostRegistrationRetryingNotice" class="stream-page__loading-detail stream-page__loading-detail--notice">
@@ -949,7 +949,7 @@ async function handleDiagnosticsMenuAction(id: string): Promise<void> {
       <Transition name="overlay-fade">
         <div
           v-if="overlayState === 'connecting'"
-          class="stream-page__overlay stream-page__overlay--subtle"
+          class="stream-page__overlay stream-page__overlay--subtle stream-page__overlay--keep-chrome"
         >
           <BrandedLoading size="lg" :label="statusText || t('streamPage.status.connecting')" />
         </div>
@@ -1114,7 +1114,7 @@ async function handleDiagnosticsMenuAction(id: string): Promise<void> {
   height: var(--ui-size-icon-lg) !important;
 }
 
-/* 覆盖层 Overlays：与 ActionSheet 同级，盖住角标按钮 */
+/* 覆盖层 Overlays：默认与 ActionSheet 同级（盖住角标）；加载/连接中加 --keep-chrome 例外 */
 .stream-page__overlay {
   position: absolute;
   inset: 0;
@@ -1122,6 +1122,10 @@ async function handleDiagnosticsMenuAction(id: string): Promise<void> {
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+.stream-page__overlay--keep-chrome {
+  z-index: var(--z-stream-busy-overlay);
 }
 
 .stream-page__overlay--immersive {
